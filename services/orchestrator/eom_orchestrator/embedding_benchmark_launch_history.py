@@ -6,6 +6,13 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 
+from eom_catalog_contracts.embedding_benchmark_prelaunch_failure import (
+    PRELAUNCH_FAILURE_CODE,
+    PRELAUNCH_FAILURE_EVENT,
+    BenchmarkPrelaunchFailureDecision,
+    BenchmarkPrelaunchObservation,
+    BenchmarkPrelaunchPredecessorReference,
+)
 from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkLaunchReceipt,
     BenchmarkOwnerRequest,
@@ -19,12 +26,14 @@ from eom_catalog_contracts.embedding_device_benchmark import (
 )
 from eom_identifiers import sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
+from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from eom_orchestrator.embedding_benchmark_jobs import (
     BenchmarkJobAdmissionError,
     BenchmarkSourceAdmission,
+    read_terminal_benchmark_job_in_session,
     require_benchmark_job_in_session,
 )
 from eom_orchestrator.models import JobEventRecord, JobRecord
@@ -32,6 +41,7 @@ from eom_orchestrator.state_machine import ALLOWED_TRANSITIONS, JobState
 
 RESERVED_EVENT = "BENCHMARK_LAUNCH_RESERVED"
 RECORDED_EVENT = "BENCHMARK_LAUNCH_RECORDED"
+PREDECESSOR_EVENT = "BENCHMARK_PRELAUNCH_SUCCESSOR_REGISTERED"
 
 
 class BenchmarkResultReader(Protocol):
@@ -56,6 +66,14 @@ class BenchmarkLaunchRecord:
 class BenchmarkLaunchHistory:
     job_state: str
     launches: tuple[BenchmarkLaunchRecord, ...]
+    prelaunch_failure: BenchmarkPrelaunchFailureRecord | None = None
+    predecessor: BenchmarkPrelaunchPredecessorReference | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkPrelaunchFailureRecord:
+    decision: BenchmarkPrelaunchFailureDecision
+    event_sequence: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,8 +98,18 @@ def _require_receipt(
 
 
 def _history(
-    session: Session, job: JobRecord, request: BenchmarkOwnerRequest, inputs: BenchmarkStagedInputs
+    session: Session,
+    job: JobRecord,
+    request: BenchmarkOwnerRequest,
+    inputs: BenchmarkStagedInputs,
+    *,
+    ancestors: frozenset[str] = frozenset(),
 ) -> BenchmarkLaunchHistory:
+    # Each recovery revision has at most one pinned parent. Bound corrupt/cyclic
+    # chains rather than recurse through caller-selected latest revisions forever.
+    if job.job_id in ancestors or len(ancestors) >= 32:
+        raise BenchmarkJobAdmissionError("BENCHMARK_PREDECESSOR_HISTORY_INVALID")
+    ancestors = ancestors | {job.job_id}
     rows = tuple(
         session.scalars(
             select(JobEventRecord)
@@ -95,7 +123,48 @@ def _history(
     if len(rows) > 32 or tuple(row.sequence for row in rows) != tuple(range(1, len(rows) + 1)):
         raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_HISTORY_INVALID")
     state = JobState.VALIDATED
+    failure = None
+    predecessor = None
     for row in rows[2:]:
+        if row.event == PREDECESSOR_EVENT:
+            if (
+                state != JobState.VALIDATED
+                or (row.from_state, row.to_state) != ("VALIDATED", "VALIDATED")
+                or row.sequence != 3
+                or predecessor is not None
+            ):
+                raise BenchmarkJobAdmissionError("BENCHMARK_PREDECESSOR_HISTORY_INVALID")
+            try:
+                predecessor = BenchmarkPrelaunchPredecessorReference.model_validate(row.data)
+            except (ValueError, SchemaError):
+                raise BenchmarkJobAdmissionError("BENCHMARK_PREDECESSOR_HISTORY_INVALID") from None
+            require_benchmark_prelaunch_predecessor(
+                session, request, inputs, predecessor, ancestors=ancestors
+            )
+            continue
+        if row.event == PRELAUNCH_FAILURE_EVENT:
+            try:
+                decision = BenchmarkPrelaunchFailureDecision.model_validate(row.data)
+            except (ValueError, SchemaError):
+                raise BenchmarkJobAdmissionError("BENCHMARK_PRELAUNCH_HISTORY_INVALID") from None
+            if (
+                state != JobState.RUNNING
+                or (row.from_state, row.to_state) != ("RUNNING", "FAILED")
+                or failure is not None
+                or len(launches) != 1
+                or launches[0].receipt is not None
+                or decision.actor_id != request.operator_audit_id
+                or decision.decided_at < decision.observation.observed_at
+                or job.error_code != PRELAUNCH_FAILURE_CODE
+                or job.completed_at is None
+            ):
+                raise BenchmarkJobAdmissionError("BENCHMARK_PRELAUNCH_HISTORY_INVALID")
+            require_benchmark_prelaunch_observation(
+                request, launches[0].invocation, decision.observation
+            )
+            failure = BenchmarkPrelaunchFailureRecord(decision, row.sequence)
+            state = JobState.FAILED
+            continue
         if row.event not in {RESERVED_EVENT, RECORDED_EVENT}:
             if row.from_state != state or row.to_state not in ALLOWED_TRANSITIONS[state]:
                 raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_HISTORY_INVALID")
@@ -134,7 +203,132 @@ def _history(
             launches[-1] = BenchmarkLaunchRecord(launches[-1].invocation, value)
     if state != job.status or len(launches) > 6:
         raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_HISTORY_INVALID")
-    return BenchmarkLaunchHistory(job.status, tuple(launches))
+    return BenchmarkLaunchHistory(job.status, tuple(launches), failure, predecessor)
+
+
+def require_benchmark_prelaunch_observation(
+    request: BenchmarkOwnerRequest,
+    invocation: BenchmarkWorkerInvocation,
+    observation: BenchmarkPrelaunchObservation,
+) -> BenchmarkPrelaunchObservation:
+    """Pure original-invocation linkage, never proof of root origin or current OS state."""
+    try:
+        checked = BenchmarkPrelaunchObservation.model_validate(observation)
+    except (ValueError, SchemaError):
+        raise BenchmarkJobAdmissionError("BENCHMARK_PRELAUNCH_OBSERVATION_INVALID") from None
+    if (
+        invocation.device != "CPU"
+        or invocation.launch_ordinal != 1
+        or checked.job_id != invocation.job_id
+        or checked.execution_id != invocation.execution_id
+        or checked.request_sha256 != request.request_sha256
+        or checked.request_sha256 != invocation.owner_request_sha256
+        or checked.invocation_sha256 != invocation.invocation_sha256
+        or checked.invocation_raw_sha256
+        != sha256_bytes(embedding_device_benchmark_bytes(invocation))
+    ):
+        raise BenchmarkJobAdmissionError("BENCHMARK_PRELAUNCH_OBSERVATION_CONFLICT")
+    return checked
+
+
+def require_benchmark_prelaunch_predecessor(
+    session: Session,
+    request: BenchmarkOwnerRequest,
+    inputs: BenchmarkStagedInputs,
+    reference: BenchmarkPrelaunchPredecessorReference,
+    *,
+    ancestors: frozenset[str] = frozenset(),
+) -> BenchmarkOwnerRequest:
+    """Resolve only the indexed pinned terminal parent; no latest/JSON scan or parent lock.
+
+    Terminal parent state/history is immutable through supported application APIs.
+    Avoid acquiring an old parent lock while already holding the new Job lock.
+    Current source authority belongs to the caller; all semantic source/runtime
+    pins are equal, and the admitted inputs must reproduce the parent's exact bytes
+    when only the immutable benchmark revision is restored.
+    """
+    try:
+        reference = BenchmarkPrelaunchPredecessorReference.model_validate(reference)
+    except (ValueError, SchemaError):
+        raise BenchmarkJobAdmissionError("BENCHMARK_PREDECESSOR_REFERENCE_INVALID") from None
+    row = session.get(JobRecord, reference.job_id, populate_existing=True)
+    if row is None:
+        raise BenchmarkJobAdmissionError("BENCHMARK_PREDECESSOR_MISSING")
+    try:
+        parent = BenchmarkOwnerRequest.model_validate(row.request)
+    except (ValueError, SchemaError):
+        raise BenchmarkJobAdmissionError("BENCHMARK_PREDECESSOR_HISTORY_INVALID") from None
+    excluded = {"benchmark_revision_id", "input_manifest", "request_sha256"}
+    if (
+        parent.benchmark_revision_id == request.benchmark_revision_id
+        or parent.model_dump(mode="json", exclude=excluded)
+        != request.model_dump(mode="json", exclude=excluded)
+        or parent.request_sha256 != reference.request_sha256
+    ):
+        raise BenchmarkJobAdmissionError("BENCHMARK_PREDECESSOR_SELECTION_CONFLICT")
+    job = read_terminal_benchmark_job_in_session(session, parent, job_id=reference.job_id)
+    # A shallow immutable projection reuses row/text values; no second canonical
+    # Item payload or large DB value is created for predecessor resolution.
+    parent_inputs = inputs.model_copy(
+        update={"benchmark_revision_id": parent.benchmark_revision_id}
+    )
+    history = _history(session, job, parent, parent_inputs, ancestors=ancestors)
+    failure = history.prelaunch_failure
+    if (
+        job.status != JobState.FAILED
+        or failure is None
+        or BenchmarkPrelaunchPredecessorReference.from_decision(
+            failure.decision, event_sequence=failure.event_sequence
+        )
+        != reference
+    ):
+        raise BenchmarkJobAdmissionError("BENCHMARK_PREDECESSOR_CLOSURE_REQUIRED")
+    return parent
+
+
+def record_benchmark_prelaunch_predecessor_in_session(
+    session: Session,
+    request: BenchmarkOwnerRequest,
+    inputs: BenchmarkStagedInputs,
+    reference: BenchmarkPrelaunchPredecessorReference,
+    *,
+    job_id: str,
+) -> bool:
+    """Append the explicit successor pin under the caller's current source fence.
+
+    Must run in the same root as original target registration. It never creates
+    a Job, authenticates an actor, or grants permission to launch a model.
+    """
+    job = require_benchmark_job_in_session(session, request, job_id=job_id)
+    history = _history(session, job, request, inputs)
+    if history.predecessor is not None:
+        if history.predecessor != reference:
+            raise BenchmarkJobAdmissionError("BENCHMARK_PREDECESSOR_REFERENCE_CONFLICT")
+        return False
+    if job.status != JobState.VALIDATED or history.launches:
+        raise BenchmarkJobAdmissionError("BENCHMARK_PREDECESSOR_TARGET_ALREADY_STARTED")
+    require_benchmark_prelaunch_predecessor(session, request, inputs, reference)
+    sequence = session.scalar(
+        select(func.coalesce(func.max(JobEventRecord.sequence), 0) + 1).where(
+            JobEventRecord.job_id == job_id
+        )
+    )
+    if sequence != 3:
+        raise BenchmarkJobAdmissionError("BENCHMARK_PREDECESSOR_HISTORY_INVALID")
+    job.updated_at = datetime.now(UTC)
+    session.add(
+        JobEventRecord(
+            job_id=job_id,
+            sequence=sequence,
+            from_state="VALIDATED",
+            to_state="VALIDATED",
+            event=PREDECESSOR_EVENT,
+            data=reference.model_dump(mode="json"),
+        )
+    )
+    session.flush()
+    _history(session, job, request, inputs)
+    return True
 
 
 def _append(

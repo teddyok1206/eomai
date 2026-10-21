@@ -1,4 +1,4 @@
-"""Explicit fresh-operator six-launch composition; no login, root helper or implicit run."""
+"""Explicit fresh-operator benchmark composition; no login, root helper or implicit run."""
 
 from __future__ import annotations
 
@@ -12,6 +12,9 @@ from eom_catalog_contracts.embedding_device_benchmark import (
 )
 from eom_identifiers import sha256_bytes
 from eom_identity_service import AuthenticatedOperatorSession, AuthenticatedSessionFence
+from eom_orchestrator.embedding_benchmark_prelaunch_failure import (
+    BenchmarkPrelaunchFailureApplication,
+)
 from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkExecutionOwner
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.inference_transfer_cpu_handoff import fixed_owner_identity
@@ -25,8 +28,56 @@ from eom_catalog_service.embedding_benchmark_owner_admission import (
     BenchmarkOwnerConfiguration,
     CatalogBenchmarkOwnerAdmission,
 )
+from eom_catalog_service.embedding_benchmark_prelaunch_inspection import (
+    FixedBenchmarkPrelaunchInspection,
+)
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_catalog_service.settings import CatalogSettings
+
+
+def _owner_admission(
+    publisher: ControlFileSetPublisher,
+    *,
+    request: BenchmarkOwnerRequest,
+    configuration: BenchmarkOwnerConfiguration,
+    capture: AuthenticatedOperatorSession,
+    session_fence: AuthenticatedSessionFence,
+) -> tuple[BenchmarkOwnerRequest, str, CatalogBenchmarkOwnerAdmission]:
+    """Shared construction checks, not a cached operator/source authorization grant."""
+    identity = fixed_owner_identity()
+    if (
+        os.getresuid() != (identity.owner_uid,) * 3
+        or os.getresgid() != (identity.owner_gid,) * 3
+        or os.getgroups()
+        or type(publisher) is not ControlFileSetPublisher
+        or type(configuration) is not BenchmarkOwnerConfiguration
+        or type(capture) is not AuthenticatedOperatorSession
+        or type(session_fence) is not AuthenticatedSessionFence
+    ):
+        raise ValueError()
+    configuration.__post_init__()
+    session_fence.__post_init__()
+    checked = parse_embedding_device_benchmark_bytes(embedding_device_benchmark_bytes(request))
+    commit = publisher.settings.runtime_source_commit
+    if not isinstance(checked, BenchmarkOwnerRequest) or (
+        type(commit) is not str
+        or re.fullmatch(r"[0-9a-f]{40}", commit) is None
+        or capture.operator_id != checked.operator_audit_id
+        or session_fence.owner.fresh_auth_seconds > 900
+        or configuration.request_sha256 != checked.request_sha256
+        or configuration.execution_policy_sha256 != checked.execution_policy.policy_sha256
+        or configuration.execution_policy.sha256
+        != sha256_bytes(embedding_device_benchmark_bytes(checked.execution_policy))
+    ):
+        raise ValueError()
+    admission = CatalogBenchmarkOwnerAdmission(
+        publisher.engine,
+        configuration,
+        capture=capture,
+        session_fence=session_fence,
+        settings=CatalogSettings(nas_artifact_root=publisher.settings.nas_artifact_root),
+    )
+    return checked, commit, admission
 
 
 def build_benchmark_execution_owner(
@@ -48,45 +99,25 @@ def build_benchmark_execution_owner(
     original stage; this function cannot start/retry it or authenticate a user.
     """
     try:
-        identity = fixed_owner_identity()
+        checked, commit, admission = _owner_admission(
+            publisher,
+            request=request,
+            configuration=configuration,
+            capture=capture,
+            session_fence=session_fence,
+        )
         if (
-            os.getresuid() != (identity.owner_uid,) * 3
-            or os.getresgid() != (identity.owner_gid,) * 3
-            or os.getgroups()
-            or type(publisher) is not ControlFileSetPublisher
-            or type(configuration) is not BenchmarkOwnerConfiguration
-            or type(capture) is not AuthenticatedOperatorSession
-            or type(session_fence) is not AuthenticatedSessionFence
-            or type(cpu) is not NativeEmbeddingBackendPins
+            type(cpu) is not NativeEmbeddingBackendPins
             or type(cuda) is not NativeEmbeddingBackendPins
         ):
             raise ValueError()
-        configuration.__post_init__()
-        session_fence.__post_init__()
         cpu.__post_init__()
         cuda.__post_init__()
-        checked = parse_embedding_device_benchmark_bytes(embedding_device_benchmark_bytes(request))
-        commit = publisher.settings.runtime_source_commit
-        if not isinstance(checked, BenchmarkOwnerRequest) or (
-            type(commit) is not str
-            or re.fullmatch(r"[0-9a-f]{40}", commit) is None
-            or controller_release != commit
-            or capture.operator_id != checked.operator_audit_id
-            or session_fence.owner.fresh_auth_seconds > 900
-            or configuration.request_sha256 != checked.request_sha256
-            or configuration.execution_policy_sha256 != checked.execution_policy.policy_sha256
-            or configuration.execution_policy.sha256
-            != sha256_bytes(embedding_device_benchmark_bytes(checked.execution_policy))
+        if (
+            controller_release != commit
             or cpu.configuration_revision_id == cuda.configuration_revision_id
         ):
             raise ValueError()
-        admission = CatalogBenchmarkOwnerAdmission(
-            publisher.engine,
-            configuration,
-            capture=capture,
-            session_fence=session_fence,
-            settings=CatalogSettings(nas_artifact_root=publisher.settings.nas_artifact_root),
-        )
         execution = FixedBenchmarkLaunchExecution(
             checked,
             cpu=cpu,
@@ -98,3 +129,37 @@ def build_benchmark_execution_owner(
     except (ValueError, TypeError, SchemaError, AttributeError, KeyError, OSError):
         # Schema representations can contain untrusted extras or private input.
         raise ValueError("BENCHMARK_OWNER_COMPOSITION_INVALID") from None
+
+
+def build_benchmark_prelaunch_failure_application(
+    publisher: ControlFileSetPublisher,
+    *,
+    request: BenchmarkOwnerRequest,
+    configuration: BenchmarkOwnerConfiguration,
+    capture: AuthenticatedOperatorSession,
+    session_fence: AuthenticatedSessionFence,
+    inspection: FixedBenchmarkPrelaunchInspection,
+) -> BenchmarkPrelaunchFailureApplication:
+    """Select the protected root-proof adapter and actual fresh operator admission.
+
+    Construction reads neither proof/OS observations nor SQL/Artifact bytes. Root
+    provenance, current OS state and real administrator/source authority are still
+    independently checked by the application before its failure-recording effect.
+    Closure starts no compute and requires no native backend or capacity claim.
+    """
+    try:
+        if type(inspection) is not FixedBenchmarkPrelaunchInspection:
+            raise ValueError()
+        inspection.__post_init__()
+        _checked, _commit, admission = _owner_admission(
+            publisher,
+            request=request,
+            configuration=configuration,
+            capture=capture,
+            session_fence=session_fence,
+        )
+        return BenchmarkPrelaunchFailureApplication(
+            publisher.sessions, admission=admission, inspection=inspection
+        )
+    except (ValueError, TypeError, SchemaError, AttributeError, KeyError, OSError):
+        raise ValueError("BENCHMARK_PRELAUNCH_COMPOSITION_INVALID") from None

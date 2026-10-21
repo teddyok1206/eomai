@@ -321,3 +321,43 @@
   frozen series의 재시작 금지를 묵시적으로 바꾸지 말고, 사전 실패 증거와 fresh actor를
   검증하는 명시적 supported application/append-only 판정부터 설계해야 한다.
   이번 source 수정은 그 복구 기능이나 실제 CPU/GPU 측정 완료를 뜻하지 않으며 아직 미배포다.
+
+### 2026-10-21: 원 pre-launch 실패의 명시적 정리 경로
+
+- 설계 문서 `docs/architecture/EMBEDDING_BENCHMARK_PRELAUNCH_FAILURE_RECOVERY.md`와
+  additive JSON Schema2020-12/Pydantic 계약을 먼저 추가했다. released benchmark1.0,
+  launch-control1.0, 원 Job/예약/uncertainty와 출력16개는 바꾸지 않았다.
+- 새 use case는 실제 root가 확인한 never-started 근거와 현재 실제 관리자/GraphRAG source
+  인가를 대조해 원 RUNNING Job을 FAILED로 기록한다. 재실행·성공 receipt·모델 실행이
+  아니며, 정확 replay는 원 결정/시간/sequence를 반환한다. 종료 전 OS/source/Identity
+  검증 실패는 같은 SQL transaction을 rollback한다. 원 행 직접 수정이나 private `_fail`
+  호출은 하지 않았다.
+- root proof는 원 handoff 밖의 고정 recovery 경로에 create-once0440으로 둔다. 원 invocation과
+  빈 output은 read-only FD로 검증하고, owner는 root-origin/hash/ACL/inode·ctime와 실제
+  controller/CPU service/socket/boot/process/deadline 상태를 독립적으로 재확인한다.
+  parsed JSON은 권한이 아니며, source와 ADMIN 인가는 기존 genuine capture/fence로 수행한다.
+- 후속 revision은 원 FAILED 판정의 Job/event/hash를 명시적으로 pin해야 한다. logical
+  benchmark/source/모델/recipe/행/input-set은 그대로이고 원 revision과 input Artifact도
+  보존한다. source 입력을 다시 만들거나 토큰화하지 않는다. 후속 등록 시 원 input Artifact의
+  현재 lifecycle/권한 검증은 기존 Catalog admission으로 별도 수행해야 하며, projected hash
+  일치만으로 대신하지 않는다.
+- 관련 최종 source gate는327 PASS/5 opt-in SKIP였다. 개별 suite의 이전 결과를 여기에 더해
+  총계로 부르지 않는다. core7개 strict mypy와 변경 Python15개 Ruff/format도 PASS다.
+  중간 회귀에서 partial proof write의 OSError를 기존 directory adapter가 CpuHandoffError로
+  변환하는 것을 확인해 새 inspection 경계에서 안정된 코드로 정규화했다. 부분 파일은
+  삭제/수리/덮어쓰지 않는다. capture context 종료는 FD/lifecycle 정리만 하고, 의미 검사는
+  application이 commit 전에 명시적으로 수행해 commit 이후 검사가 허위 실패를 만들지 않게 했다.
+  disposable PostgreSQL 동시성4건과 실제
+  root/owner/native DAC gate는 아직 NOT_RUN이다. 새 코드도 아직 운영 SDK에 설치하지 않았다.
+  실제 원 Job closure0, 새 measurement launch0, 모델 forward0, 기본값CPU 유지다.
+
+### 별도 운영 상태: INDEX owner 중단
+
+- read-only 확인에서 INDEX owner가2026-10-21 06:18:20.957361 UTC에
+  `EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE`/`LOCAL_INDEXING_RUNTIME_UNAVAILABLE`로
+  종료했다. 당시 installed source는 `e013d35013851a8a5a7b50b8bee9c40edd90568c`다.
+  마지막 관찰된 INDEX command는06:16:08.881656 UTC에 SUCCEEDED였다.
+- 같은 초에 apt-daily-upgrade가 PID1 reexec를 요청했으므로 일시적인 systemd/D-Bus 영향이
+  후보이지만, 거부된 subprocess의 stderr/return code가 없어 원인 확정은 아니다. GPU 실험이
+  원인이라고 단정하지 않는다. API/기존 QUERY 서비스는 active이며, API ready가 INDEX의
+  가동/신선도까지 보장하는 것은 아니다. 이 확인 과정에서 restart/reset/DB 변경은 하지 않았다.

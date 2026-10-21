@@ -301,7 +301,8 @@ if [[ "${action}" == "embedding-encoding-tests" ]]; then
   export EOM_API_TEST_STATE="${state_directory}"
   "${PYTHON}" -m pytest -q tests/integration/test_embedding_encoding_reservations.py \
     tests/integration/test_mixed_embedding_encoding_reservations.py \
-    tests/integration/test_embedding_benchmark_jobs.py
+    tests/integration/test_embedding_benchmark_jobs.py \
+    tests/integration/test_embedding_benchmark_prelaunch_failure.py
   printf 'Disposable model-free embedding encoding reservation tests passed.\n'
   exit 0
 fi
