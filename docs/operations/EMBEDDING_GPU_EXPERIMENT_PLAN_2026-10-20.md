@@ -569,7 +569,7 @@
   보고했다. 다음 실제 CUDA 단계용 SDK072도 별도로 설치했지만 native prefix/GPU device/
   backend/default는 활성화하지 않았다. GPU 비교를 위해 Studio 재로그인을 아직 요구하지 않았다.
 
-### CUDA host34ed — retained complete stage, final rename recovery pending
+### CUDA host34ed — same-ID completion PASS, native admission pending
 
 - 기존 source와 같은 일곱 library/driver580.126.09/tool을 실제 해시로 확인하고,072 SDK의
   stdlib publication owner를 설치했다. original RDMA 파일의 private0700 부모/UID1000/
@@ -581,22 +581,43 @@
   원인은 outer unit의 두 별도 ReadWritePaths bind mount였다. underlying device가 같아도
   mount 경계가 갈리면 atomic rename이 거부된다. CPU 두 서비스는 같은 PID/invocation으로
   계속 active/READY이며 실제 Catalog 조회도 진행됐다. GPU/model forward는0이다.
-- complete stage와 failed unit을 그대로 보존했다. 새 ID로 우회하거나 publish를 반복하지
-  않는다. 기존 publication owner에 exact typed pointer를 받는 explicit completion 경로를
-  설계한 뒤 구현·회귀 검증한다. 후속 namespace는 common CUDA root 한 mount와 lock만
-  writable로 지정하고, 같은 revision의 검증된 stage를 한 번 atomic commit한다.
+- 실패 당시 complete stage와 failed unit을 보존했다. 새 ID로 우회하거나 publish를 반복하지
+  않고, 기존 publication owner에 exact typed pointer를 받는 explicit completion 경로를
+  설계·구현·회귀 검증했다. 후속 namespace는 common CUDA root 한 mount와 lock만
+  writable로 지정하고, 같은 revision의 검증된 stage를 atomic commit하도록 한정했다.
 - root read-only 관찰에서 staged manifest는2325 bytes,
   raw `34b9427d01f5d9cdeb956147cbe4809fd2c39578510982fa9dc82972559eb482`, semantic
   `486dd1ca5de50596ea7f9252ec9aae5fac85c93e74af0ab78bcf8a50ab6b529f`다.
   새 loader cache는2319 bytes,
   `65171e487533d81862e3e56df880e600a683517b72aae2364179cd8a1810097c`, CUDA host seed는
   `8d9e9e5befeb5ec2a322ae2444ea3ec70800762b15595b122ce63f6c2bbc1330`다.
-  base는 정확한 c126이고, 일곱 library/driver는 기존 값과 같다. 이 값은 **STAGED_ONLY**며
-  아직 published pointer나 native admission이 아니다. 후속 audit generator는 DRAFT를 유지한다.
+  base는 정확한 c126이고, 일곱 library/driver는 기존 값과 같다. 이 관찰 시점의 상태는
+  **STAGED_ONLY**였으며, 아래 실제 completion 결과와 구별한다. host publication 자체는
+  native admission이 아니고, 후속 audit generator는 DRAFT를 유지한다.
 - 기존 publication adapter에 public `complete_cuda_host_extension_publication(request,
   expected_pointer)`를 추가했다. typed pin/manifest/base/compiled recipe, 전체 retained tree,
   modes/ACL/link/hash/cache outcome/late epochs와 같은 lock을 확인한 뒤 기존 ID의 rename만
   수행한다. 원 publish의 partial-workspace 거부는 유지했다. shared commit은 최종 디렉터리와
   양쪽 변경 부모를 fsync한다. builder/모델/worker는 다시 실행하지 않는다.
   focused80 PASS, 관련 cohort379 PASS/known registry-count assertion1건만 명시적 제외,
-  Ruff/format/strict mypy/diff check PASS다. source PASS는 아직 실제 completion PASS가 아니다.
+  Ruff/format/strict mypy/diff check PASS다. 이 source 검증과 실제 completion은 별도 gate다.
+- 검토한 completion만 기존072 owner에 backport한 SDK
+  `532a2f43c99055d2abed1bd6ab99fcca91991c4c`를 별도 immutable 경로에 설치·검증했다.
+  platform wheel raw는 `94ef9f26597b31e41d74bf5de24c38595a8882c8a28de2d6316c834ba50debfd`다.
+  API contracts91ff pair의 RECORD 검증과 실제 설치 검증은 PASS였고, numerical3개
+  `3487…/440d…/f667…`와 CPU numerical prefix·owner selection은 바꾸지 않았다.
+  유한 completion helper raw는
+  `87404626cd5106ed6bd40c3df142a83eceac0039b3b078f480fd255f2b5845b6`다.
+  원 helper의 root 보호 ancestor/regular444/단일 링크와 FD epochs를 확인하고, 정확히
+  hash한 동일 bytes만 실행한다. OLD Python3.12.13/고정 self path도 확인한다.
+- 실제 `eom-cuda-host-complete-34edecbf.service` invocation
+  `7a7cc84733274521be45f3ac70df950e`가 같은 logical99ec/revision34ed를 `CREATED`로
+  완료했고, 독립 public resolver readback도 PASS했다. 위2325-byte manifest raw/semantic,
+  2319-byte cache SHA와 CUDA host seed가 정확히 같았다. root-private payload를 common
+  CUDA root 안에서 한 번 rename하고0555로 봉인했으며, 별도 cache builder·ldconfig·모델
+  실행은 모두0이다. RDMA source/view를 다시 읽거나 bind하지 않았다. 원 실패 invocation
+  `98588123156e4dc2b0f1df4e790bae19`와 retained builder evidence는 그대로 보존했다.
+- 따라서 `CUDA_HOST_PUBLICATION=PASS_NOT_NATIVE_ADMITTED`다. CPU INDEX/QUERY는
+  PID1983190/1983188과 invocation6f2e/90db가 그대로 active였다. CUDA prefix successor,
+  실제 no-forward native probe/seal, benchmark 원 Job closure와 여섯 비교는 아직 pending이며,
+  GPU default는 활성화하지 않았다. host 발행 성공을 GPU admission·성능 PASS로 확대하지 않는다.
