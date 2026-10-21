@@ -50,16 +50,34 @@ def require_benchmark_job_in_session(
     session: Session, request: BenchmarkOwnerRequest, *, job_id: str
 ) -> JobRecord:
     """Lock and validate the original Job, not current source or compute authority."""
+    return _validated_benchmark_job(session, request, job_id=job_id, lock=True)
+
+
+def read_terminal_benchmark_job_in_session(
+    session: Session, request: BenchmarkOwnerRequest, *, job_id: str
+) -> JobRecord:
+    """Read an immutable terminal predecessor without new->old row-lock ordering.
+
+    Supported state transitions cannot change a terminal Job or its event history.
+    This read is not source authority and cannot be used to mutate the predecessor.
+    """
+    job = _validated_benchmark_job(session, request, job_id=job_id, lock=False)
+    if job.status not in {JobState.FAILED, JobState.CANCELLED, JobState.SUCCEEDED}:
+        raise BenchmarkJobAdmissionError("BENCHMARK_PREDECESSOR_NOT_TERMINAL")
+    return job
+
+
+def _validated_benchmark_job(
+    session: Session, request: BenchmarkOwnerRequest, *, job_id: str, lock: bool
+) -> JobRecord:
     embedding_device_benchmark_bytes(request)
     root = session.get_transaction()
     if root is None or not root.is_active or session.in_nested_transaction():
         raise BenchmarkJobAdmissionError("BENCHMARK_JOB_ROOT_TRANSACTION_REQUIRED")
-    job = session.scalar(
-        select(JobRecord)
-        .where(JobRecord.job_id == job_id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
+    query = select(JobRecord).where(JobRecord.job_id == job_id)
+    if lock:
+        query = query.with_for_update()
+    job = session.scalar(query.execution_options(populate_existing=True))
     protocol = session.get(ProtocolVersionRecord, BENCHMARK_JOB_PROTOCOL, populate_existing=True)
     if (
         protocol is None

@@ -602,3 +602,78 @@ def test_real_root_environment_private_access_and_process_exit_fence(
                     _, status = os.waitpid(child, 0)
                     assert os.waitstatus_to_exitcode(status) == 0
         assert path.stat().st_mode & 0o777 == 0o600
+
+
+def test_restricted_root_environment_reads_native_outputs_without_write_bypass(monkeypatch):
+    """Actual UID0/native DAC separation, with only the finite controller's capabilities."""
+    if os.environ.get("EOM_RUN_BENCHMARK_RESTRICTED_ROOT_PRIVILEGED") != "1":
+        pytest.skip("explicit restricted-root benchmark filesystem OS gate required")
+    assert os.getresuid() == (0, 0, 0) and os.getresgid() == (0, 0, 0)
+    fields = dict(
+        line.split(":", 1)
+        for line in Path("/proc/self/status").read_text().splitlines()
+        if ":" in line
+    )
+    effective = int(fields["CapEff"].strip(), 16)
+    assert fields["NoNewPrivs"].strip() == "1"
+    assert effective & (1 << 2)  # CAP_DAC_READ_SEARCH permits inspection only.
+    assert not effective & (1 << 1)  # CAP_DAC_OVERRIDE must not hide a write-open regression.
+    assert not os.getgroups()
+    metadata = environment_metadata()
+    native = pwd.getpwnam("eom-embedding-index-cpu")
+    owner = pwd.getpwnam("eom-workflow-runner")
+    assert native.pw_uid != owner.pw_uid != 0 and native.pw_uid != 0
+    with tempfile.TemporaryDirectory(prefix="eom-bench-restricted-root-", dir="/run") as temporary:
+        root = Path(temporary)
+        root.chmod(0o711)
+        namespace = root / "benchmark"
+        namespace.mkdir(mode=0o711)
+        config, evidence = stage_installation(root, metadata)
+        monkeypatch.setattr(handoff, "_HANDOFF_ROOT", namespace)
+        monkeypatch.setattr(capture, "_HANDOFF_ROOT", namespace)
+        monkeypatch.setattr(handoff, "_CONFIG_ROOT", config)
+        monkeypatch.setattr(handoff, "_EVIDENCE_ROOT", evidence)
+        prepared = handoff.prepare_benchmark_handoff(
+            metadata.request, metadata.invocation, metadata.inputs
+        )
+        execution = namespace / prepared.execution_id
+        for path in (execution / "outputs").iterdir():
+            value = path.stat()
+            assert (value.st_uid, value.st_gid, value.st_mode & 0o777, value.st_size) == (
+                native.pw_uid,
+                owner.pw_gid,
+                0o640,
+                0,
+            )
+        with pytest.raises(PermissionError):
+            descriptor = os.open(
+                execution / "outputs/cold-documents.f32",
+                os.O_WRONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK,
+            )
+            os.close(descriptor)
+        borrowed = os.open(execution / "invocation.json", os.O_RDONLY | os.O_CLOEXEC)
+        try:
+            with capture.BenchmarkRootStagedFiles(
+                borrowed,
+                profile=metadata.invocation.runtime.profile,
+                execution_id=prepared.execution_id,
+                invocation_raw_sha256=prepared.invocation_raw_sha256,
+            ) as files:
+                assert files.read_invocation() == metadata.invocation
+                assert not hasattr(files, "write_vectors")
+                files.assert_current()
+            assert os.lseek(borrowed, 0, os.SEEK_CUR) == 0
+        finally:
+            os.close(borrowed)
+        with actual_workflow_owner() as (owner_pid, _stop):
+            environment = handoff.prepare_benchmark_environment(
+                prepared,
+                metadata.invocation,
+                backend=metadata.backend,
+                owner_pid=owner_pid,
+                expires_ns=time.monotonic_ns() + 10 * 10**9,
+            )
+            assert environment.state == "STAGED_NOT_LAUNCHED"
+            value = (execution / "launch.env").stat()
+            assert (value.st_uid, value.st_gid, value.st_mode & 0o777) == (0, 0, 0o600)
+        assert all(path.stat().st_size == 0 for path in (execution / "outputs").iterdir())

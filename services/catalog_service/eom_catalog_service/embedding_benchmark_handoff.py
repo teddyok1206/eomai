@@ -32,7 +32,7 @@ from eom_catalog_service.embedding_benchmark_layout import (
     BENCHMARK_HANDOFF_ROOT,
     benchmark_read_acl,
 )
-from eom_catalog_service.embedding_device_benchmark_files import BenchmarkWorkerLocalFiles
+from eom_catalog_service.embedding_device_benchmark_files import BenchmarkRootStagedFiles
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_catalog_service.embedding_runtime_files import (
     NumericalRuntimeFileSnapshots,
@@ -434,7 +434,7 @@ def prepare_benchmark_environment(
                 "invocation.json", os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=execution
             )
             stack.callback(os.close, descriptor)
-            with BenchmarkWorkerLocalFiles(
+            with BenchmarkRootStagedFiles(
                 descriptor,
                 profile=invocation.runtime.profile,
                 execution_id=prepared.execution_id,

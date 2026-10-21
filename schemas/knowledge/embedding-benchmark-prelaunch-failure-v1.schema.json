@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-benchmark-prelaunch-failure/1.0",
+  "title": "Explicit CPU1 pre-launch failure closure; parsed values grant no authority or retry",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/observation"
+    },
+    {
+      "$ref": "#/$defs/decision"
+    },
+    {
+      "$ref": "#/$defs/predecessor"
+    }
+  ],
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "jobId": {
+      "type": "string",
+      "pattern": "^job_[0-9a-f]{32}$"
+    },
+    "executionId": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$|\\+00:00$"
+    },
+    "controller": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unit",
+        "invocation_id",
+        "source_commit",
+        "supervisor_raw_sha256"
+      ],
+      "properties": {
+        "unit": {
+          "type": "string",
+          "pattern": "^eom-gpu-benchmark-[A-Za-z0-9-]+\\.service$"
+        },
+        "invocation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "supervisor_raw_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "job_id",
+        "execution_id",
+        "request_sha256",
+        "invocation_sha256",
+        "device",
+        "launch_ordinal",
+        "association_sha256",
+        "uncertainty_sha256",
+        "invocation_raw_sha256",
+        "uncertainty_raw_sha256",
+        "controller",
+        "boot_id",
+        "snapshot_sha256",
+        "output_count",
+        "disposition",
+        "observed_at",
+        "observation_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-benchmark-prelaunch-failure/1.0"
+        },
+        "kind": {
+          "const": "ROOT_OBSERVATION"
+        },
+        "job_id": {
+          "$ref": "#/$defs/jobId"
+        },
+        "execution_id": {
+          "$ref": "#/$defs/executionId"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "invocation_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "device": {
+          "const": "CPU"
+        },
+        "launch_ordinal": {
+          "type": "integer",
+          "const": 1
+        },
+        "association_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "uncertainty_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "invocation_raw_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "uncertainty_raw_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "controller": {
+          "$ref": "#/$defs/controller"
+        },
+        "boot_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "snapshot_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "output_count": {
+          "type": "integer",
+          "const": 16
+        },
+        "disposition": {
+          "const": "PREPARATION_FAILED_BEFORE_NATIVE_START"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "observation_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "job_id",
+        "execution_id",
+        "request_sha256",
+        "invocation_sha256",
+        "from_state",
+        "to_state",
+        "error_code",
+        "observation",
+        "actor_id",
+        "decided_at",
+        "decision_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-benchmark-prelaunch-failure/1.0"
+        },
+        "kind": {
+          "const": "FAILURE_DECISION"
+        },
+        "job_id": {
+          "$ref": "#/$defs/jobId"
+        },
+        "execution_id": {
+          "$ref": "#/$defs/executionId"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "invocation_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "from_state": {
+          "const": "RUNNING"
+        },
+        "to_state": {
+          "const": "FAILED"
+        },
+        "error_code": {
+          "const": "BENCHMARK_PRELAUNCH_PREPARATION_FAILED"
+        },
+        "observation": {
+          "$ref": "#/$defs/observation"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+        },
+        "decided_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "decision_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "predecessor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "job_id",
+        "execution_id",
+        "request_sha256",
+        "invocation_sha256",
+        "event_sequence",
+        "decision_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-benchmark-prelaunch-failure/1.0"
+        },
+        "kind": {
+          "const": "PREDECESSOR_REFERENCE"
+        },
+        "job_id": {
+          "$ref": "#/$defs/jobId"
+        },
+        "execution_id": {
+          "$ref": "#/$defs/executionId"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "invocation_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "event_sequence": {
+          "type": "integer",
+          "minimum": 7,
+          "maximum": 32
+        },
+        "decision_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    }
+  }
+}

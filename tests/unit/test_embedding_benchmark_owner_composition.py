@@ -12,13 +12,20 @@ from eom_catalog_contracts.embedding_device_benchmark import (
 )
 from eom_catalog_service import embedding_benchmark_owner_composition as module
 from eom_catalog_service.embedding_benchmark_owner_admission import BenchmarkOwnerConfiguration
+from eom_catalog_service.embedding_benchmark_prelaunch_inspection import (
+    FixedBenchmarkPrelaunchInspection,
+)
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_identifiers import sha256_bytes
 from eom_identity_service import AuthenticatedOperatorSession, AuthenticatedSessionFence
+from eom_orchestrator.embedding_benchmark_prelaunch_failure import (
+    BenchmarkPrelaunchFailureApplication,
+)
 from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkExecutionOwner
 from eom_orchestrator.models import JobRecord
 from sqlalchemy import func, select
 
+from tests.unit.embedding_benchmark_prelaunch_failure_fixtures import observation
 from tests.unit.embedding_device_benchmark_fixtures import owner_request
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_authenticated_session_fence import PIN, verified_capture
@@ -86,6 +93,22 @@ def build(value, **changes):
                 cpu=value.cpu,
                 cuda=value.cuda,
                 controller_release="a" * 40,
+            )
+            | changes
+        ),
+    )
+
+
+def build_closure(value, **changes):
+    return module.build_benchmark_prelaunch_failure_application(
+        value.publisher,
+        **(
+            dict(
+                request=value.request,
+                configuration=value.configuration,
+                capture=value.capture,
+                session_fence=value.session_fence,
+                inspection=FixedBenchmarkPrelaunchInspection("1" * 32, "sha256:" + "a" * 64),
             )
             | changes
         ),
@@ -207,4 +230,166 @@ def test_construction_does_not_bypass_actual_caller_root_fencing(composition, mo
         owner.run_launches(value.request)
     probe.assert_not_called()
     with value.publisher.sessions.begin() as session:
+        assert session.scalar(select(func.count()).select_from(JobRecord)) == 0
+
+
+def test_closure_composition_selects_exact_inspector_and_fresh_admission_without_compute(
+    composition, monkeypatch
+):
+    value = composition
+    inspection = FixedBenchmarkPrelaunchInspection("1" * 32, "sha256:" + "b" * 64)
+
+    def no_compute(*_args, **_kwargs):
+        pytest.fail("closure construction must not inspect native backends or allocate compute")
+
+    monkeypatch.setattr(module, "FixedBenchmarkLaunchExecution", no_compute)
+    monkeypatch.setattr(module, "BenchmarkLaunchArtifactPublisher", no_compute)
+    monkeypatch.setattr(NativeEmbeddingBackendPins, "__post_init__", no_compute)
+    monkeypatch.setattr(FixedBenchmarkPrelaunchInspection, "capture", no_compute)
+    with value.publisher.sessions.begin() as session:
+        before = session.scalar(select(func.count()).select_from(JobRecord))
+    application = build_closure(value, inspection=inspection)
+    assert type(application) is BenchmarkPrelaunchFailureApplication
+    assert application.sessions is value.publisher.sessions
+    assert application.inspection is inspection
+    assert application.admission.configuration == value.configuration
+    assert application.admission._control.capture is value.capture
+    assert application.admission._control.fence is value.session_fence
+    assert not hasattr(application, "execution")
+    with value.publisher.sessions.begin() as session:
+        assert session.scalar(select(func.count()).select_from(JobRecord)) == before == 0
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ("parsed", "dict", "mock", "subclass", "unissued", "execution", "hash"),
+)
+def test_closure_composition_never_accepts_parsed_mocked_or_invalid_proof_adapter(
+    composition, fault
+):
+    if fault == "parsed":
+        inspection = observation()
+    elif fault == "dict":
+        inspection = observation().model_dump(mode="json")
+    elif fault == "mock":
+        inspection = Mock(spec=FixedBenchmarkPrelaunchInspection)
+    elif fault == "subclass":
+
+        class UntrustedInspection(FixedBenchmarkPrelaunchInspection):
+            pass
+
+        inspection = UntrustedInspection("1" * 32, "sha256:" + "a" * 64)
+    else:
+        inspection = object.__new__(FixedBenchmarkPrelaunchInspection)
+        if fault != "unissued":
+            object.__setattr__(inspection, "execution_id", "1" * 32 if fault == "hash" else "../1")
+            object.__setattr__(
+                inspection,
+                "expected_raw_sha256",
+                "invalid" if fault == "hash" else "sha256:" + "a" * 64,
+            )
+    with pytest.raises(ValueError, match="BENCHMARK_PRELAUNCH_COMPOSITION_INVALID"):
+        build_closure(composition, inspection=inspection)
+
+
+@pytest.mark.parametrize(
+    "fault",
+    (
+        "raw",
+        "request",
+        "semantic",
+        "audit_only",
+        "unissued_capture",
+        "freshness",
+        "actor",
+        "extras",
+    ),
+)
+def test_closure_reuses_exact_policy_actor_capture_and_freshness_invariants(composition, fault):
+    value = composition
+    changes = {}
+    if fault in {"raw", "request", "semantic"}:
+        config = value.configuration
+        if fault == "raw":
+            config = replace(
+                config,
+                execution_policy=config.execution_policy.model_copy(
+                    update={"sha256": "sha256:" + "f" * 64}
+                ),
+            )
+        elif fault == "request":
+            config = replace(config, request_sha256="sha256:" + "f" * 64)
+        else:
+            config = replace(config, execution_policy_sha256="sha256:" + "f" * 64)
+        changes["configuration"] = config
+    elif fault == "audit_only":
+        changes["capture"] = SimpleNamespace(operator_id=value.request.operator_audit_id)
+    elif fault == "unissued_capture":
+        changes["capture"] = object.__new__(AuthenticatedOperatorSession)
+    elif fault == "freshness":
+        changes["session_fence"] = AuthenticatedSessionFence(replace(PIN, fresh_auth_seconds=1800))
+    elif fault == "actor":
+        request = BenchmarkOwnerRequest.model_validate(
+            seal(
+                value.request.model_dump(mode="json") | {"operator_audit_id": "foreign_admin"},
+                "request_sha256",
+            )
+        )
+        changes.update(
+            request=request,
+            configuration=replace(value.configuration, request_sha256=request.request_sha256),
+        )
+    else:
+        changes["request"] = value.request.model_copy(
+            update={"private_note": "PRIVATE_VALUE_NOT_FOR_ERRORS"}
+        )
+    with pytest.raises(ValueError, match="BENCHMARK_PRELAUNCH_COMPOSITION_INVALID") as error:
+        build_closure(value, **changes)
+    assert "PRIVATE_VALUE_NOT_FOR_ERRORS" not in str(error.value)
+
+
+@pytest.mark.parametrize("fault", ("root", "mixed_uid", "mixed_gid", "groups", "ambient_release"))
+def test_closure_composition_rejects_untrusted_caller_or_unpinned_source(
+    composition, monkeypatch, fault
+):
+    if fault == "root":
+        monkeypatch.setattr(module.os, "getresuid", lambda: (0, 0, 0))
+    elif fault == "mixed_uid":
+        monkeypatch.setattr(module.os, "getresuid", lambda: (0, 2000, 2000))
+    elif fault == "mixed_gid":
+        monkeypatch.setattr(module.os, "getresgid", lambda: (0, 2001, 2001))
+    elif fault == "groups":
+        monkeypatch.setattr(module.os, "getgroups", lambda: [123])
+    else:
+        composition.publisher.settings = replace(
+            composition.publisher.settings, runtime_source_commit=None
+        )
+    with pytest.raises(ValueError, match="BENCHMARK_PRELAUNCH_COMPOSITION_INVALID"):
+        build_closure(composition)
+
+
+@pytest.mark.parametrize("field", ("publisher", "configuration", "session_fence"))
+def test_closure_requires_exact_supported_publisher_configuration_and_fence(composition, field):
+    mocked = Mock(spec=type(getattr(composition, field)))
+    if field == "publisher":
+        values = vars(composition) | {"publisher": mocked}
+        with pytest.raises(ValueError, match="BENCHMARK_PRELAUNCH_COMPOSITION_INVALID"):
+            build_closure(SimpleNamespace(**values))
+    else:
+        with pytest.raises(ValueError, match="BENCHMARK_PRELAUNCH_COMPOSITION_INVALID"):
+            build_closure(composition, **{field: mocked})
+
+
+def test_closure_preserves_stricter_freshness_and_defers_actual_authority_to_current_root(
+    composition, monkeypatch
+):
+    fence = AuthenticatedSessionFence(replace(PIN, fresh_auth_seconds=600))
+    application = build_closure(composition, session_fence=fence)
+    assert application.admission._control.fence is fence
+    probe = Mock(side_effect=AssertionError("inspection before current source/operator admission"))
+    monkeypatch.setattr(FixedBenchmarkPrelaunchInspection, "capture", probe)
+    with pytest.raises(ValueError):
+        application.close(composition.request, job_id="job_" + "1" * 32)
+    probe.assert_not_called()
+    with composition.publisher.sessions.begin() as session:
         assert session.scalar(select(func.count()).select_from(JobRecord)) == 0
