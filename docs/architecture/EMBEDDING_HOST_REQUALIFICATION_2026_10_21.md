@@ -73,6 +73,13 @@ strictly on the predecessor. New named reviewed-baseline functions serve only
 explicit snapshot selection. CPU and CUDA base capture both use that selection;
 CUDA must not silently rebuild its base with the old table.
 
+The CUDA publication adapter also passes the already-resolved base snapshot to
+its existing cache builder. Its closed SONAME routes verify against that exact
+reviewed baseline, including the snapshot's cache metadata, before starting
+ldconfig. Retained base epochs are checked again after the cache unit; unknown
+baselines or changed source bytes cannot become a published host revision. This
+is a correction inside the current publication owner, not a new update API.
+
 No benchmark request change is required. `BenchmarkRuntime` separates numerical
 identity from `NativeEmbeddingBackendPins`. Keep the exact model/bundle/proof,
 numerical fingerprint, family/spaces, recipe, source/Graph/policy, rows and 29 token
@@ -96,6 +103,19 @@ predecessor request delta remains exactly revision/input manifest/request hash.
 5. Close the old never-started benchmark through its fresh-authorized application;
    run the explicit successor with selected new backends and unchanged six-launch
    sequence. No new Studio login until installation/admission are ready.
+
+The CPU template's mutable `selected-cache` link is part of the stopped release
+selection, not an immutable snapshot member. Equal cache bytes do not mean equal
+file identity: a new host revision has a different cache inode. After OLD prefix
+byte audit and new config publication, but before the native no-forward probe,
+the existing root installation owner must compare-and-swap the exact old link to
+the new revision under the CPU publication lock. Keep both owners stopped, retain
+old target/revision and activation metadata, and independently resolve the same
+new pointer after the intentional parent-directory change. Never relax mount inode
+checks, add a probe-only template override, or start old controls with the new link.
+The later linked-control selection requires this exact new link and its unchanged
+epochs; only fresh native probe/seal permits normal owner start. A partial result
+is observed explicitly, not blindly retried or automatically rolled back.
 
 CPU/GPU timing, correctness, physical lease/cleanup and coexistence remain separate
 gates. A source or host admission PASS does not activate GPU default. If numerical

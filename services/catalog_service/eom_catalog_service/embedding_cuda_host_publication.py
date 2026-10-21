@@ -342,14 +342,25 @@ def _generate_cache(
     stage: Path,
     cpu_files: NumericalRuntimeFileSnapshots,
     *,
+    base_configuration: base_capture.CapturedHostConfiguration,
     schema_ref: str = capture.CUDA_HOST_SCHEMA_REF,
 ) -> bytes:
     recipe = capture.cuda_host_library_recipe(schema_ref)
+    base_configuration.assert_unchanged()
+    # The cache must describe the exact reviewed base selected by this request,
+    # not reinterpret a successor through the immutable legacy host table.
+    fixed = {
+        path: (size, sha)
+        for path, size, sha in host.reviewed_embedding_host_files(
+            baseline_host_seed_sha256=base_configuration.baseline_host_seed_sha256,
+            cache_byte_count=base_configuration.cache_byte_count,
+            cache_sha256=base_configuration.cache_sha256,
+        )
+    }
     build = workspace / "build"
     for relative in ("etc", "var/cache/ldconfig", "lib", "usr/lib"):
         _private_parents(workspace, build / relative)
     _write(build / "etc/ld.so.conf", ("/lib/x86_64-linux-gnu\n" + str(final) + "\n").encode())
-    fixed = {path: (size, sha) for path, size, sha in host._FILES}
     bindings = []
     for name, route in host.embedding_host_loader_cache_routes():
         source = host._SONAMES[name]
@@ -402,6 +413,7 @@ def _generate_cache(
     )
     _require(result.returncode == 0, "CACHE_UNIT_FAILED")
     cpu_files.assert_unchanged()
+    base_configuration.assert_unchanged()
     observed = NumericalRuntimeFileSnapshots(_ROOT_UID).observe_protected_member_bytes(
         build / "etc/ld.so.cache", maximum=128 * 1024
     )
@@ -547,6 +559,7 @@ def publish_cuda_host_extension(
             final,
             stage,
             NumericalRuntimeFileSnapshots(_ROOT_UID),
+            base_configuration=base,
             schema_ref=request.schema_ref,
         )
         _write(stage / "ld.so.cache", cache)

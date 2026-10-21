@@ -6,8 +6,9 @@ import fcntl
 import hashlib
 import os
 import subprocess
+from dataclasses import replace
 from pathlib import Path
-from types import SimpleNamespace
+from types import MappingProxyType, SimpleNamespace
 
 import pytest
 from eom_catalog_contracts.embedding_cuda_host_extension import parse_cuda_host_extension_bytes
@@ -17,12 +18,15 @@ from eom_catalog_service import embedding_host_configuration_capture as base_cap
 from eom_catalog_service import embedding_runtime_host_closure as host
 
 from tests.unit.test_embedding_host_configuration_files import _fixture, _write
+from tests.unit.test_embedding_host_requalification import successor
 from tests.unit.test_embedding_runtime_host_closure import _cache
 
 
-def fixture(tmp_path, monkeypatch, *, schema_ref=capture.CUDA_HOST_SCHEMA_REF):
+def fixture(tmp_path, monkeypatch, *, schema_ref=capture.CUDA_HOST_SCHEMA_REF, reviewed=False):
     recipe = capture.cuda_host_library_recipe(schema_ref)
     base = _fixture(tmp_path / "base", monkeypatch)
+    if reviewed:
+        base = successor(base)
     root = tmp_path / "published"
     source = tmp_path / "source"
     source.mkdir(mode=0o700)
@@ -53,8 +57,11 @@ def fixture(tmp_path, monkeypatch, *, schema_ref=capture.CUDA_HOST_SCHEMA_REF):
     )
     generated = []
 
-    def generate(workspace, final, stage, cpu_files, *, schema_ref):
+    def generate(workspace, final, stage, cpu_files, *, base_configuration, schema_ref):
         assert capture.cuda_host_library_recipe(schema_ref) == recipe
+        assert base_configuration.selection == base_capture.parse_host_configuration_snapshot_pin(
+            base.pointer.model_dump(mode="json")
+        )
         generated.append(workspace)
         assert len(tuple(stage.iterdir())) == len(recipe.libraries)
         assert all(p.stat().st_mode & 0o777 == 0o444 for p in stage.iterdir())
@@ -329,12 +336,16 @@ print('STDLIB_PUBLICATION_IMPORT=PASS')
     assert result.stdout.strip() == "STDLIB_PUBLICATION_IMPORT=PASS"
 
 
-@pytest.mark.parametrize("outcome", (0, 1, "timeout"))
+@pytest.mark.parametrize("reviewed", (False, True))
+@pytest.mark.parametrize(
+    "outcome", (0, 1, "timeout", "unknown-baseline", "source-mismatch", "late-base")
+)
 def test_cache_generator_records_terminal_or_unknown_outcome_without_native_execution(
-    tmp_path, monkeypatch, outcome
+    tmp_path, monkeypatch, outcome, reviewed
 ):
     actual_generate = publication._generate_cache
-    request, _root, _source, _generated = fixture(tmp_path, monkeypatch)
+    request, _root, _source, _generated = fixture(tmp_path, monkeypatch, reviewed=reviewed)
+    base = base_capture.resolve_host_configuration_snapshot(request.base_configuration)
     workspace = tmp_path / "real-generator-port"
     workspace.mkdir(mode=0o700)
     stage = workspace / "revision"
@@ -342,14 +353,35 @@ def test_cache_generator_records_terminal_or_unknown_outcome_without_native_exec
     final = publication._ROOT / request.configuration_id / request.configuration_revision_id
     sources = {}
     fixed = []
+    successor_fixed = []
     for name, _route in host.embedding_host_loader_cache_routes():
         path = tmp_path / name
         raw = b"syntheticCPU:" + name.encode()
-        _write(path, raw)
+        updated = raw + b":reviewed" if name == "liblzma.so.5" else raw
+        _write(path, updated if reviewed else raw)
         sources[name] = path
         fixed.append((path, len(raw), hashlib.sha256(raw).hexdigest()))
+        successor_fixed.append((path, len(updated), hashlib.sha256(updated).hexdigest()))
+    # The production selector replaces the sole cache member in either reviewed
+    # table. Synthetic SONAME bytes remain real no-follow/epoch-checked files.
+    fixed.append((host._CACHE, 48, "0" * 64))
+    successor_fixed.append((host._CACHE, 48, "0" * 64))
     monkeypatch.setattr(host, "_SONAMES", sources)
     monkeypatch.setattr(host, "_FILES", tuple(fixed))
+    monkeypatch.setattr(
+        host,
+        "_REVIEWED_HOST_BASELINES",
+        MappingProxyType(
+            {
+                host.FIXED_EMBEDDING_HOST_SEED_SHA256: tuple(fixed),
+                host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256: tuple(successor_fixed),
+            }
+        ),
+    )
+    if outcome == "unknown-baseline":
+        base = replace(base, baseline_host_seed_sha256="sha256:" + "f" * 64)
+    elif outcome == "source-mismatch":
+        _write(sources["liblzma.so.5"], b"not-the-selected-reviewed-bytes")
     calls = []
 
     def run(command, **kwargs):
@@ -369,7 +401,7 @@ def test_cache_generator_records_terminal_or_unknown_outcome_without_native_exec
         kwargs["stderr"].write(b"synthetic diagnostic only\n")
         if outcome == "timeout":
             raise subprocess.TimeoutExpired(command, 45)
-        if outcome == 0:
+        if outcome in (0, "late-base"):
             raw = _cache(
                 tuple(
                     (name, path, 0x303, 0, 0)
@@ -380,21 +412,52 @@ def test_cache_generator_records_terminal_or_unknown_outcome_without_native_exec
                 )
             )
             _write(workspace / "build/etc/ld.so.cache", raw)
-        return SimpleNamespace(returncode=outcome)
+            if outcome == "late-base":
+                _write(base.cache_path, b"changed-after-the-cache-unit")
+        return SimpleNamespace(returncode=0 if outcome == "late-base" else outcome)
 
     monkeypatch.setattr(subprocess, "run", run)
     owner = publication.NumericalRuntimeFileSnapshots(os.geteuid())
     if outcome == 0:
-        raw = actual_generate(workspace, final, stage, owner)
+        raw = actual_generate(workspace, final, stage, owner, base_configuration=base)
         capture.validate_cuda_host_loader_cache(raw, final)
+    elif outcome in ("unknown-baseline", "source-mismatch", "late-base"):
+        with pytest.raises(ValueError):
+            actual_generate(workspace, final, stage, owner, base_configuration=base)
+        if outcome != "late-base":
+            assert calls == [] and not (workspace / "cache-unit-outcome.json").exists()
+            return
     else:
         with pytest.raises(publication.CudaHostPublicationError):
-            actual_generate(workspace, final, stage, owner)
+            actual_generate(workspace, final, stage, owner, base_configuration=base)
     import json
 
     recorded = json.loads((workspace / "cache-unit-outcome.json").read_bytes())
     assert recorded["state"] == (
-        "SUCCEEDED" if outcome == 0 else "FAILED" if outcome == 1 else "OUTCOME_UNKNOWN"
+        "SUCCEEDED"
+        if outcome in (0, "late-base")
+        else "FAILED"
+        if outcome == 1
+        else "OUTCOME_UNKNOWN"
     )
     assert recorded["scope"] == "CACHE_ONLY_NOT_NATIVE_ADMISSION" and len(calls) == 1
     assert (workspace / "cache-unit.stderr").read_bytes() == b"synthetic diagnostic only\n"
+
+
+def test_late_base_snapshot_drift_preserves_workspace_without_publishing(tmp_path, monkeypatch):
+    request, root, _source, generated = fixture(tmp_path, monkeypatch, reviewed=True)
+    generate = publication._generate_cache
+
+    def changed(*args, **kwargs):
+        cache = generate(*args, **kwargs)
+        _write(kwargs["base_configuration"].cache_path, b"changed-before-publication")
+        return cache
+
+    monkeypatch.setattr(publication, "_generate_cache", changed)
+    with pytest.raises(base_capture.HostConfigurationSnapshotError, match="CHANGED"):
+        publication.publish_cuda_host_extension(request)
+    assert len(generated) == 1
+    assert not (root / request.configuration_id / request.configuration_revision_id).exists()
+    assert (
+        root / ".publication" / request.configuration_id / request.configuration_revision_id
+    ).is_dir()

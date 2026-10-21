@@ -443,7 +443,7 @@
   `0a92d35b5a8c5757adc30c37a0b19a4b4704b3663fca7bf390842026a15438a2`다.
   API contracts91ffbea4는 유지했다. 설치된 host readers의 actual OLD `-I -S -B` import는
   stdlib-only PASS이며 모델/DB dependency를 불러오지 않았다. 이는 native admission이 아니다.
--16:41:04 UTC 새 snapshot revision `embeddinghostconfigrev_c1266b6dbab44ffea078ea6dd455f935`
+- 16:41:04 UTC 새 snapshot revision `embeddinghostconfigrev_c1266b6dbab44ffea078ea6dd455f935`
   (logical bd45 유지)을 root create-once로 발행했다. raw721-byte SHA는
   `466b8169012fc4d2931e64d1bf04463414237d15328dd463eaa0d68757f97d94`, semantic은
   `b1b42f01f656dfbff7a5ce35266371eec86786ff44d00aae49e6ab18e5151023`다.
@@ -462,3 +462,59 @@
   기존 private-successor 설치·OLD byte audit·actual no-forward probe/seal·linked control 전환이다.
   전역 Codex 작업 부재를 이 prefix의 필수 계약으로 오용하지 않는다. 별도 원 benchmark의
   never-started OS proof와 unresolved Job은 보존하고, 실제 인가된 closure는 뒤에서 수행한다.
+
+### Scoped CPU 전환 — 실제 byte audit와 host-only 설정 게시
+
+- 16:53:50 UTC 현재 INDEX/QUERY의 유효 claim이0임을 실제 read-only 조회로 확인한 후
+  QUERY만 정상 중지했다. INDEX의 failed invocation `1002a26157454e4189fbd291a2942bf7`는
+  reset하거나 성공으로 바꾸지 않았다. 원 benchmark Job과 pending command도 보존했다.
+  root stopped-unit snapshot raw는
+  `11c66291df7ee00b8f2944d7c779ba9709f2126b77c8b8cd48f3d18d187ae4da`다.
+  quiescence는 세 local-embedding queue의 유효 claim, 실제 native/prefix holder와 원
+  never-started proof를 검사하며, 전역 Codex 작업이 없을 것을 요구하지 않는다.
+- 첫 CPU publication invocation `7208e8829a05403187f82339a6d0fcf9`는 사용자 입력 경로의
+  첫 임시 디렉터리 mode가775라서 기존 source 경로 guard가 거부했다. prefix 이동/overlay
+  전 실패였으며 검사를 완화하지 않았다. 당시 생긴 빈 root archive 예약은 실제 비어 있고
+  accepted bytes가 없음을 확인한 뒤 `.failed-empty-<invocation>-11467ef0` 이름으로 보존했다.
+  보존 record raw는 `28dca439a9451f15e629968c5216658481ea1018b581bf174c556238e853e76c`다.
+  같은 wheel/source bytes를 명시적0700 input 경계에 materialize하고 기존 guard PASS 후
+  별도의 유한한 두 번째 operation을 실행했다. 이는 모델/benchmark retry가 아니다.
+- 두 번째 publication invocation `7c577e85c1594701aafe1933abea12c5`는 기존 installer의
+  OLD Python 기반 전체 prefix byte/source/ELF audit를 통과했다. inventory raw는
+  `7323f2005af2e82e6eea3f747b16df7d1e4ae080b380c12f4ff95a1d6d649a25`, semantic은
+  `1ee572cbec0c5e73f648746547190b8cceda6d05dc03fbb6271abf172b0f8cca`다.
+  regular27509/link1380/ELF356, 전체30984 entries를 검사했다. old CPU prefix는
+  `/opt/eom/conda/envs/.embedding-index-prepublication-CPU_INDEX_FP32-.embedding-index-install-ayICWfww`
+  에 보존했다. 별도 root reader도 실제 inventory/boot와 수치 구현3개 bytes를 확인했다.
+  이 시점의 상태는 `BYTE_AUDITED_NOT_ADMITTED`이며 runtime 성공 receipt가 아니다.
+- host-only native configuration revision `embeddingnativeconfigrev_38786bb0953d4835ae05b1c0fd5e06d6`
+  를 root create-once로 게시했다. raw는
+  `b3a92c7c9f272fc82bc4c92739423d992dd1b03bc710307691c1bf35ffe4e1d2`, semantic은
+  `84c7eb05deeb4e295133afce373ae01b7103561f47b6f3ca82df26f16536a3e9`다.
+  기존 bundle/proof/수치 runtime/모델/ACL은 그대로 재검증했다. 실제 생성된 native probe
+  execution은 `0e44028083874e07b7521e9db167a78d`, input raw는
+  `5528a43e878feb6139f8e6e9cb11b4a35121b5b73f7ac20a31cdc0c2150ef9a0`다.
+  이 metadata publication은 모델을 생성하거나 forward하지 않았다.
+- owners가 계속 중지된 상태에서 `selected-cache`를 기존 snapshot의 절대 경로에서 정확한
+  새 c126 snapshot의 절대 경로로 CAS했다. old/new cache bytes는 같지만 inode는 다르므로
+  hash만으로 mount identity 검사를 대체하지 않았다. 두 immutable snapshot은 모두 보존했다.
+  actual scoped root observation과 cache CAS가 PASS했다. 이후 실제 native probe/seal,
+  연결된 여섯 control 전환과 서비스 복구가 필요하며, 이 기록만으로 완료를 선언하지 않는다.
+- CUDA host publication의 별도 source 검토에서 cache builder가 옛 `_FILES`를 직접 사용하는
+  경계를 발견했다. 새 baseline을 허용하는 capture/closure와 별개인 실제 누락이므로
+  reviewed baseline 선택 helper를 cache builder에도 명시적으로 전달하는 좁은 수정과
+  old/new/unknown/drift 회귀를 준비한다. old host 파일을 bind하거나 검증을 우회하지 않는다.
+- 첫 native metadata probe invocation `b08e3e1ca10d499c820be2b594afdd13`는 UID978/GID975,
+  모델 constructor/tokenizer/forward0으로 실제 report/live process maps/ACK/terminal 검사에
+  성공했다. 그러나 같은 root operation의 seal helper가 이미 읽은 config를 같은 file ledger로
+  다시 읽어서 `INSTALLED_RUNTIME_REPEATED_BYTE_READ`로 거부됐다. 뒤이어 inventory schema도
+  같은 문제가 있음을 source 검토로 확인했다. 제품의 중복 읽기 guard는 올바르게 동작했으며
+  이를 완화하지 않는다. root operation `2b63f47cb04c4786aa0e5bff589eefd0`의 실패/observation,
+  실제 native 성공 unit과 모든 원 파일을 보존했다. 설치 receipt는 아직 성공으로 게시되지 않았다.
+- 수정은 같은 live observation의 sealer에 이미 검증한 typed config/raw와 schema raw를 전달하는
+  것이다. saved observation JSON을 새로운 admission 근거로 재사용하지 않는다. old probe가
+  실제 성공 종료/PID0/cgroup empty이고 owners가 계속 quiescent임을 root에서 재확인한 후,
+  설정·prefix·모델을 다시 만들지 않고 metadata 검사 한 건만 새로 준비했다. execution은
+  `0091eefed7394700a1f5f2d9accde0c3`, input raw는
+  `338f5e4dcbba48761fdda0c96160c582cdc0f5111240212b0d7c92f126d0c256`다.
+  이전 attempt 디렉터리를 덮거나 같은 unit을 재시작하지 않으며 native probe forward는0이다.
