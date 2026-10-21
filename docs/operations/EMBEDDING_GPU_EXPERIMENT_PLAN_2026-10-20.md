@@ -621,3 +621,74 @@
   PID1983190/1983188과 invocation6f2e/90db가 그대로 active였다. CUDA prefix successor,
   실제 no-forward native probe/seal, benchmark 원 Job closure와 여섯 비교는 아직 pending이며,
   GPU default는 활성화하지 않았다. host 발행 성공을 GPU admission·성능 PASS로 확대하지 않는다.
+
+### CUDA prefix·no-forward probe·receipt·retirement — 실제 PASS
+
+2026-10-21 18:36:03 UTC 기준 후속 결과다. 위 host publication 직후의 pending 기록을
+덮어쓰지 않고, 실제 설치 검증과 실제 native no-forward 검증이 끝난 시점을 구분한다.
+**여섯 CPU/GPU 모델 비교와 조건부 GPU 기본값 전환은 아직 완료되지 않았다.**
+
+- 기존 `publish-private-successor CUDA_INDEX_FP32`를 실제 physical GPU lease가 유지되는
+  유한 parent 안에서 실행했다. publisher invocation은
+  `392cfc21c25740e89650f97f43265319`이며 성공 종료했다. installer만 기존 CUDA profile
+  lock을 획득했고, OLD Python이 candidate 코드 실행 없이 byte/source/ELF audit를 수행했다.
+  수치 prefix의 private source는 `87cc21d68b0b2584c2b683844aea67d759e5bb02`다.
+  공통 `/opt/eom` 쓰기 mount를 사용해 이전 EXDEV 조건을 반복하지 않았다. CPU·OLD
+  interpreter·model 경로는 읽기 전용이고 CPU owners는 중지하지 않았다.
+- 보호 audit stage는 `/opt/eom/.embedding-index-install-boFUiSkR`다. 독립 root inventory
+  reader도 PASS했으며 총31656 entries/7085437688 bytes, regular28083/link1380/ELF287을
+  확인했다. inventory는8946502 bytes, raw
+  `2b533b7aebfc0f4ea5218c2337a5eb671ccdb804c5c715d65eb41dba3888f0be`, semantic
+  `b0d30323cce5de382b6c467e6899febffdf5466dc7c3dc8900674d9177bb2008`다.
+  final phase는 `PREFIX_BYTES_AUDITED_NOT_ADMITTED`이고 phase raw는
+  `38479ffb601585f33b1021d9376bdeee3651e8ea8205e6022afdf0acc5356324`, prefix-byte receipt
+  raw는 `8c0cd73e699420ffc49eceee9ba56c2e97dd880d304718c545da9f40af0d3d62`다.
+  frozen numerical implementation3개와 fixed benchmark 파일2개의 원 bytes도 확인했다.
+  기존 prefix는
+  `/opt/eom/conda/envs/.embedding-index-prepublication-CUDA_INDEX_FP32-.embedding-index-install-boFUiSkR`
+  에 보존했다. 이 byte audit와 독립 metadata read를 native 모델 실행 승인으로 해석하지 않는다.
+- 같은 logical `embeddingnativeconfig_3e98a13d3d164e2db5f861c2e5f73e08` 아래 host-only
+  successor `embeddingnativeconfigrev_6d5b478396494300bb24ea217685b9a4`를 create-once로
+  게시했다. config는2618 bytes, raw
+  `11d56625a72acedbf46ac8e5188d8a9fffa1b3061f47ce1c7862778378c0547c`, semantic
+  `d9fb71267be9bf38160bde77e7c3cf66ab99a2f1883998b5c9d280f03ced4674`다.
+  원 config/proof/bundle/schema를 같은 file ledger에서 읽고 정확한 host34ed/basec126을
+  typed public resolver로 확인했다. 변경은 revision/config hash/명시적 CUDA host pointer뿐이며
+  bundle/proof/resources와 수치 runtime
+  `d0887315a3b7afd0d86dceb10228c157c72f7161dbdbb01a582d97be1d8c7560`은 유지했다.
+- 이후 actual successful byte evidence와 현재 physical/profile quiescence를 확인한 CAS
+  invocation `00a7e538a3b84f569df000d3c74fdc3a`가 PASS했다. CUDA `selected-cache`만 기존
+  b103 절대 경로에서 새34ed 절대 경로로 전환했다. root symlink epoch/target과 old cache
+  `7276f7a0f80cbcb2cf877a51021f96b0f2f9ea4ca553e061b4f38146c6fb6d20`, new cache
+  `65171e487533d81862e3e56df880e600a683517b72aae2364179cd8a1810097c`를 확인한 뒤 exclusive
+  temporary symlink/rename/fsync와 같은 pinned host의 fresh resolver readback을 수행했다.
+  이미 unload된 transient unit의 상태를 현재 권한 근거로 요구하지 않았다. CPU selected-cache,
+  서비스 설정과 기본 backend 정책은 바꾸지 않았고, 두 host revision은 모두 보존했다.
+- 실제 native no-forward execution은 `9ceda2b7bb7a4187a2947dde6bbf0704`, worker invocation은
+  `5ee073da72c845d689bf71d90b35733d`다. 같은 live PID2196219의 READY를
+  18:34:41.517314 UTC, FINAL을18:35:39.474188 UTC에 관찰·검증한 후 각각 ACK했다.
+  동일 root operation이 실제 typed observations와 이미 읽은 config/proof/bundle/schema를
+  직접 sealer에 전달했다. saved observation JSON이나 새 file ledger로 대체하지 않았다.
+  READY raw는 `5c4d71069fb497fce10d04432dd636152cd124bb45e5c640332268f24db73f90`,
+  final result raw는 `41ef728cefa9b8590f81b52b6b154281f6c5b513968b1845539b3ebed985ff24`다.
+- receipt2.1을 immutable 게시하고 같은 live PID1 lease가 유지되는 동안 기존
+  `ProtectedCudaInstallationFiles` root metadata reader로 독립 readback PASS했다.
+  receipt raw는 `d4df79e16d6b8332164cef99debaa5de711c577c055d5c05c8593b92b5487e98`, semantic은
+  `9f59a7fd5944e82ba714e6e145388ce16e19a35d1b999232789311d2b224afd4`다.
+  이 reader는 root metadata 검증이며 NEW CUDA interpreter에서의
+  `ProtectedNativeCudaEmbeddingInstallationAdmission`을 대신 수행한 것이 아니다.
+  다음 실제 benchmark worker가 해당 native admission 경계를 그대로 통과해야 한다.
+- 실제 terminal PID0/empty cgroup 확인 후 supported successful-probe retirement와
+  same-inode FD-store lease 해제 readback도 PASS했다. 원 successful probe/report/receipt는
+  보존했으며 generic stop/reset-failed나 과거 실패의 성공 재해석은 하지 않았다.
+  root operation은18:36:03.271076 UTC에 `ACTUAL_CUDA_PROBE_SEAL_ROOT_READER_RETIREMENT_PASS`
+  로 완료됐다. unit 전체 runtime은1분43.621초다. CUDA initialization/synchronize는 각각1회,
+  model constructor/tokenizer constructor/forward는 모두0회다.
+- 이 milestone 동안 CPU INDEX/QUERY는 같은 PID1983190/1983188과 기존 invocation으로
+  계속 active였다. 상태는 `CUDA_PREFIX_BYTE_AUDIT=PASS`,
+  `CUDA_NO_FORWARD_PROBE_SEAL_READBACK_RETIREMENT=PASS`, `GPU_MODEL_COMPARISON=PENDING`,
+  `GPU_DEFAULT=NOT_ACTIVATED`다. 남은 순서는 양쪽 runtime preflight 확인 후 새 genuine
+  operator 인증, 원 benchmark의 supported prelaunch closure 및 guarded successor, 보존된29개
+  token witness를 사용하는 기존 여섯 CPU/GPU 비교다. 수치 동등성·성능·cleanup/coexistence
+  gate가 실제로 충족된 경우에만 GPU 기본값을 검토한다. 이 milestone만으로 전체 goal 또는
+  GPU 성능을 PASS로 선언하지 않는다.
