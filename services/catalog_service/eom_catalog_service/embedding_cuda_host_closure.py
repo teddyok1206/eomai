@@ -139,8 +139,10 @@ def capture_cuda_embedding_host(
     base = base_host._capture_embedding_host(
         expected_seed_sha256=expected_seed_sha256,
         files=files,
-        fixed_files=base_host._files_with_loader_cache(
-            cache_byte_count=captured.cache_byte_count, cache_sha256=captured.cache_sha256
+        fixed_files=base_host.reviewed_embedding_host_files(
+            baseline_host_seed_sha256=captured.baseline_host_seed_sha256,
+            cache_byte_count=captured.cache_byte_count,
+            cache_sha256=captured.cache_sha256,
         ),
         assert_mount_current=snapshot_mount.assert_unchanged,
     )

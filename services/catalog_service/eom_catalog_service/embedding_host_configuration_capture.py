@@ -117,6 +117,17 @@ def _hash(raw: bytes) -> str:
     return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
+def _reviewed_seed(*, baseline: str, cache_byte_count: int, cache_sha256: str) -> str:
+    try:
+        return host.reviewed_embedding_host_configuration_seed(
+            baseline_host_seed_sha256=baseline,
+            cache_byte_count=cache_byte_count,
+            cache_sha256=cache_sha256,
+        )
+    except InstalledRuntimeProofError:
+        raise HostConfigurationSnapshotError("HOST_CONFIGURATION_SEED_PIN_INVALID") from None
+
+
 @dataclass(frozen=True, slots=True)
 class HostConfigurationSnapshotPin:
     """The existing six-field pointer before third-party packages can be trusted."""
@@ -252,10 +263,11 @@ def _manifest_values(raw: bytes, pin: HostConfigurationSnapshotPin) -> tuple[str
             "POINTER_INVALID",
         )
         _require(
-            baseline == host.FIXED_EMBEDDING_HOST_SEED_SHA256
-            and seed
-            == host.embedding_host_configuration_seed(
-                cache_byte_count=cache["byte_count"], cache_sha256=cache["sha256"]
+            seed
+            == _reviewed_seed(
+                baseline=baseline,
+                cache_byte_count=cache["byte_count"],
+                cache_sha256=cache["sha256"],
             ),
             "SEED_PIN_INVALID",
         )
@@ -417,19 +429,22 @@ def capture_snapshot_embedding_host[Configuration: HostConfigurationFiles](
     configuration = snapshot_mount.configuration
     _require(
         type(expected_seed_sha256) is str
-        and configuration.baseline_host_seed_sha256 == host.FIXED_EMBEDDING_HOST_SEED_SHA256
         and expected_seed_sha256
         == configuration.host_seed_sha256
-        == host.embedding_host_configuration_seed(
-            cache_byte_count=configuration.cache_byte_count, cache_sha256=configuration.cache_sha256
+        == _reviewed_seed(
+            baseline=configuration.baseline_host_seed_sha256,
+            cache_byte_count=configuration.cache_byte_count,
+            cache_sha256=configuration.cache_sha256,
         ),
         "SEED_PIN_INVALID",
     )
     return host._capture_embedding_host(
         expected_seed_sha256=expected_seed_sha256,
         files=files,
-        fixed_files=host._files_with_loader_cache(
-            cache_byte_count=configuration.cache_byte_count, cache_sha256=configuration.cache_sha256
+        fixed_files=host.reviewed_embedding_host_files(
+            baseline_host_seed_sha256=configuration.baseline_host_seed_sha256,
+            cache_byte_count=configuration.cache_byte_count,
+            cache_sha256=configuration.cache_sha256,
         ),
         assert_mount_current=snapshot_mount.assert_unchanged,
     )

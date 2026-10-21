@@ -387,8 +387,25 @@ def _seed_bytes(files: tuple[tuple[Path, int, str], ...] | None = None) -> bytes
 
 FIXED_EMBEDDING_HOST_SEED_SHA256 = _hash(_seed_bytes())
 
+# A successor names reviewed bytes, not whatever the current OS happens to contain.
+# Keep the predecessor tuple and default entry points immutable for old receipts.
+_UBUNTU_LIBLZMA_20261021_FILES = tuple(
+    (path, 202904, "26b37d25f7ca2a2d348de8ecabacda12e921cd933b21fa069a179760db77219d")
+    if path == _LIB / "liblzma.so.5.4.5"
+    else (path, size, sha)
+    for path, size, sha in _FILES
+)
+UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256 = _hash(_seed_bytes(_UBUNTU_LIBLZMA_20261021_FILES))
+_REVIEWED_HOST_BASELINES = MappingProxyType(
+    {
+        FIXED_EMBEDDING_HOST_SEED_SHA256: _FILES,
+        UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256: _UBUNTU_LIBLZMA_20261021_FILES,
+    }
+)
 
-def _files_with_loader_cache(
+
+def _replace_loader_cache(
+    fixed_files: tuple[tuple[Path, int, str], ...],
     *,
     cache_byte_count: int,
     cache_sha256: str,
@@ -400,12 +417,22 @@ def _files_with_loader_cache(
         and re.fullmatch(r"sha256:[0-9a-f]{64}", cache_sha256) is not None,
         "SEED_INVALID",
     )
-    _require(sum(path == _CACHE for path, _size, _sha in _FILES) == 1, "SEED_INVALID")
+    _require(sum(path == _CACHE for path, _size, _sha in fixed_files) == 1, "SEED_INVALID")
     return tuple(
         (path, cache_byte_count, cache_sha256.removeprefix("sha256:"))
         if path == _CACHE
         else (path, size, sha)
-        for path, size, sha in _FILES
+        for path, size, sha in fixed_files
+    )
+
+
+def _files_with_loader_cache(
+    *,
+    cache_byte_count: int,
+    cache_sha256: str,
+) -> tuple[tuple[Path, int, str], ...]:
+    return _replace_loader_cache(
+        _FILES, cache_byte_count=cache_byte_count, cache_sha256=cache_sha256
     )
 
 
@@ -414,6 +441,44 @@ def embedding_host_configuration_seed(*, cache_byte_count: int, cache_sha256: st
     return _hash(
         _seed_bytes(
             _files_with_loader_cache(cache_byte_count=cache_byte_count, cache_sha256=cache_sha256)
+        )
+    )
+
+
+def reviewed_embedding_host_files(
+    *,
+    baseline_host_seed_sha256: str,
+    cache_byte_count: int,
+    cache_sha256: str,
+) -> tuple[tuple[Path, int, str], ...]:
+    """Select one reviewed baseline; only the pinned snapshot cache may vary."""
+    _require(type(baseline_host_seed_sha256) is str, "SEED_PIN_INVALID")
+    if baseline_host_seed_sha256 == FIXED_EMBEDDING_HOST_SEED_SHA256:
+        return _files_with_loader_cache(
+            cache_byte_count=cache_byte_count, cache_sha256=cache_sha256
+        )
+    _require(baseline_host_seed_sha256 in _REVIEWED_HOST_BASELINES, "SEED_PIN_INVALID")
+    return _replace_loader_cache(
+        _REVIEWED_HOST_BASELINES[baseline_host_seed_sha256],
+        cache_byte_count=cache_byte_count,
+        cache_sha256=cache_sha256,
+    )
+
+
+def reviewed_embedding_host_configuration_seed(
+    *,
+    baseline_host_seed_sha256: str,
+    cache_byte_count: int,
+    cache_sha256: str,
+) -> str:
+    """Derive an exact target seed without reading or admitting any host bytes."""
+    return _hash(
+        _seed_bytes(
+            reviewed_embedding_host_files(
+                baseline_host_seed_sha256=baseline_host_seed_sha256,
+                cache_byte_count=cache_byte_count,
+                cache_sha256=cache_sha256,
+            )
         )
     )
 
