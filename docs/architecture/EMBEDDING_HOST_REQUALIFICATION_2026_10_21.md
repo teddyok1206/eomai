@@ -117,6 +117,29 @@ The later linked-control selection requires this exact new link and its unchange
 epochs; only fresh native probe/seal permits normal owner start. A partial result
 is observed explicitly, not blindly retried or automatically rolled back.
 
+### Keep maintenance SDK and numerical runtime identities separate
+
+The older benchmark SDK lacks the current mixed owner configuration contracts.
+Use one coherent, current-owner-compatible metadata SDK before its first EOM
+import; never mix imported modules from two SDKs or lower an existing schema.
+Its package bytes and origins must be verified against pinned installed wheels.
+The metadata selector keeps the actual native inventory/admission ledger and
+invokes the separately pinned numerical verifier. It does not observe numerical
+implementation pins, load an encoder, or import numerical implementation modules.
+
+| Responsibility | Exact source selection | Meaning |
+| --- | --- | --- |
+| CPU numerical prefix/verifier | `6c4cd95f709ba66756bfcbe2c4528b94cf3622ea` | Byte-audited and actual native admission PASS |
+| Installed INDEX/QUERY services | `e013d35013851a8a5a7b50b8bee9c40edd90568c` | Existing service code preserved |
+| Maintenance configuration SDK | `2e5b22f35cb9e1bdaf7109aab461bfc0332fb33d` | Current-owner DTOs plus only three reviewed host modules |
+| CUDA host publication SDK | `072230c2a0450edfa03af55fa69f5492ba095769` | Explicit-base cache builder fix; no native activation |
+| CUDA numerical candidate | `87cc21d68b0b2584c2b683844aea67d759e5bb02` | Built candidate only; qualification remains separate |
+
+E013's inherited ranking helper bytes differ from the frozen native prefix.
+That is not numerical equality and does not authorize changing either benchmark
+backend. The metadata-only import guard and the separate native verifier enforce
+this boundary. No new worker protocol or projection service is needed.
+
 CPU/GPU timing, correctness, physical lease/cleanup and coexistence remain separate
 gates. A source or host admission PASS does not activate GPU default. If numerical
 identity, driver, resources or authority differs, stop and report that actual delta.

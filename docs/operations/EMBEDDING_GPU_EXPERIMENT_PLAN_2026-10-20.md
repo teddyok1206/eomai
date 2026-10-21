@@ -518,3 +518,52 @@
   `0091eefed7394700a1f5f2d9accde0c3`, input raw는
   `338f5e4dcbba48761fdda0c96160c582cdc0f5111240212b0d7c92f126d0c256`다.
   이전 attempt 디렉터리를 덮거나 같은 unit을 재시작하지 않으며 native probe forward는0이다.
+- 두 번째 실제 native invocation `49a1aafe00b24734bfb89564ff06a088`는 같은 UID/GID/수치
+  runtime으로 live process/ACK/terminal 검사를 통과했고, 같은 live 관측에서 seal과 독립
+  installation reader도 PASS했다. receipt raw는
+  `04185f7a8563fd46a9124b3d64f30959cda8cc52b774fee890a2dfb690f7f14c`, semantic은
+  `d94915c67b1bb666004d06dc1efd8e90b6307ca978dc5409aaf22d465b23e78e`다.
+  root final-seal record raw는
+  `8f57ecc8f5ecd519459c7b18a6cdad5e72a818f8227289fd1c10134034dd33c3`다.
+  이는 새 CPU 설치 승인이지 서비스 전환/원 benchmark closure/GPU 측정 완료가 아니다.
+- 첫 linked PREPARE operation `bf85ae1dc1b24943a0c291dd0902ba5f`는 staging이나 control 수정
+  전 mixed owner DTO import에서 거부됐다. 숫자용 prefix6c4는 c535 SDK에 기반해 운영 e013의
+  mixed owner4.0/V2 DTO가 없었다. 운영 schema를 낮추거나 임의 JSON으로 수정하지 않는다.
+  해결 범위는 현재 e013에 검토된 host3개 모듈만 적용한 별도 maintenance SDK다. root selector는
+  첫 EOM import 전에 그 한 SDK를 명시적으로 선택하고, numerical prefix/interpreter와 새
+  receipt는 유지한다. 서로 다른 SDK의 module 객체를 섞거나 새 projection protocol을 만들지
+  않는다. 실제 설치 SDK를 사용하는 pure projection 검사를 activation 전에 추가한다.
+- maintenance SDK `2e5b22f35cb9e1bdaf7109aab461bfc0332fb33d`를 기존 installer로 별도
+  root 보호 경로에 설치했다. 설치 platform wheel raw는
+  `805a657001bb583cfc042f874ad4acc2cc3d5970e0b127ef62a44f67e6b86c91`, 현재 e013과 짝인
+  API contracts wheel raw는 `54beca4d3e9a9074f2676fd53e2174c4f787e5af852ac7daa8f123531f06c182`,
+  installed RECORD raw는 `2417cb35405200df03d86d6be88afe4eba23097ebb064e4ed3dc9e03b07c207e`다.
+  e013과 다른 source 파일은 host3개뿐이며, 기존205+host5 source tests와 Ruff/strict types가
+  PASS했다. **metadata SDK는 numerical backend가 아니다.** e013의 기존 ranking helper 파일
+  bytes가 native6c4와 다르므로 numerical3개가 모두 같다고 주장하거나 이 SDK로 backend를
+  교체하지 않는다. 실제 native inventory/receipt와 별도6c4 verifier는 그대로 사용한다.
+- v2 selector는 import 전에 두 보호 wheel의 EOM package payload와 설치 파일을 대조하고,
+  예상하지 않은 최상위 EOM namespace를 거부한다. 이후 EOM module이 모두 같은 SDK에서
+  왔는지와 파일 epochs를 유지·확인한다. ML 및 numerical 구현 module import도 금지해
+  metadata-only 경계를 검사한다. source main의 임시 PYTHONPATH 성공으로 대신하지 않고,
+  실제 NEW CPU interpreter + 실제 설치 SDK의 pure projection이 PASS했다. 여섯 output과
+  verifier `04294a14748dbacd2dd0043320103211b43e28aaac80e320bc1c17f44fdf9ef8`가 고정 기대값과
+  같았으며, 이 smoke의 service/DB/file write/model run은 모두0이다.
+- v2 실제 PREPARE는 같은 새 host namespace의 native admission, scoped quiescence, 여섯
+  old control/unchanged control pins를 확인하고 새 verifier/전환 manifest만 준비해 PASS했다.
+  manifest raw는 `cdd61fc44d56cd043968b6b559def78e2e9eb8800cc4a1e3f24eb178cc26b9ca`다.
+  실제 SELECT와 서비스 시작 성공은 별도로 관찰해야 하며 이 기록으로 선취하지 않는다.
+- 실제 v2 SELECT도 같은 manifest로 PASS했다. 여섯 control CAS/readback 후 한 번만
+  daemon-reload했고, 이전 failed INDEX 기록과 QUERY의 quiescent 상태를 재검사했다.
+  이후 supported start로 INDEX 새 invocation `6f2efbb34a8b4744ab30bf876a7fd612`/PID1983190,
+  QUERY 새 invocation `90dbe3e364fa4589930e4a33f5b0e60f`/PID1983188이 시작됐다.
+  INDEX `LOCAL_INDEXING_SERVICE_STARTED`는17:45:50.303152 UTC,
+  QUERY `REFERENCE_QUERY_OWNER_READY`는17:46:06.149327 UTC에 실제 기록됐다.
+  Catalog 자료 조회의 lock/provenance/candidate/solution-profile/materialization 단계도
+  COMPLETED로 진행됐고, 두 서비스는 후속 관찰에서도 같은 invocation으로 active였다.
+  기존 service source e013/Identity/policy/grants는 그대로이며 실패 이력도 보존했다.
+  따라서 `CPU_INDEX_QUERY_RECOVERY=PASS`다. 이는 GPU/default 또는 교육 품질 PASS가 아니다.
+- Slack `devreport_fd44c1dc3c80408a82b9680c9767dbb4`에는 실제 native admission과 전환 전
+  상태를, `devreport_63624820801c405888336c32a00552b0`에는 복구 완료를 한국어 요약 먼저
+  보고했다. 다음 실제 CUDA 단계용 SDK072도 별도로 설치했지만 native prefix/GPU device/
+  backend/default는 활성화하지 않았다. GPU 비교를 위해 Studio 재로그인을 아직 요구하지 않았다.
