@@ -421,3 +421,44 @@
   실제6회 진입은 보류한다. 다음에는 기존 승인 기록을 보존하는 명시적 host compatibility
   재검증과 필요한 successor runtime/configuration 범위를 먼저 검토·승인해야 한다. 이는 현재
   'runtime pin 불변' 실행 범위의 변경점이며, 추가 로그인만으로 해결되지 않는다.
+
+### 승인된 host successor — source와 실제 host bytes PASS, native 전환 전
+
+- 사용자는 이전 승인 기록을 보존하는 별도 OS 환경 재검증을 승인했다. 설계는
+  `docs/architecture/EMBEDDING_HOST_REQUALIFICATION_2026_10_21.md`에 기록했다.
+  Main source `2e6bae5e`는 기존 host tuple/hash/default를 보존하고 liblzma 한 파일만 다른
+  명시적 baseline을 추가했다. 기존 snapshot1.0/runtime config1.1/1.3 포맷은 바꾸지 않았다.
+  관련 source cohort306 PASS, Ruff/format/strict mypy PASS다. 넓은 검사에서 발견한
+  schema-count4건은 clean predecessor75755294에서도 같은 실패이며 별도 미해결로 남긴다.
+- CPU/owner compatible source `6c4cd95f709ba66756bfcbe2c4528b94cf3622ea`와 CUDA source
+  `87cc21d68b0b2584c2b683844aea67d759e5bb02`는 각 기존 릴리스에 같은 host 변경만 적용했다.
+  각각 같은 관련 source306 PASS이며, 이를 합산해612개의 독립 검증이라고 표현하지 않는다.
+  두 공개 수치 runtime/세 numerical implementation 원본 bytes는 각각의 predecessor와 같다.
+  두 wheel의 RECORD 검증도 PASS다. CPU/owner wheel raw SHA는
+  `11467ef059c8b4ea2bbeb9ac1c1cc72c04cde514649cca9d304547d2f02f0ee5`, source tar는
+  `51b4b800859dd8fb0ffd1489d31c1c8a2b8f50d8b6340e60ae352292df982a45`다.
+  CUDA wheel raw는 `ec5cb5ef02d2f72776b39013dd0e64313c07931a158017a63ba06efdec7ea19b`,
+  source tar는 `245716057beafe7f59a686a438d05aa3c62a8277432bdba850bdae05998f7399`다.
+- 기존 설치기로6c4 owner SDK만 새 immutable 경로에 설치했다. RECORD raw는
+  `0a92d35b5a8c5757adc30c37a0b19a4b4704b3663fca7bf390842026a15438a2`다.
+  API contracts91ffbea4는 유지했다. 설치된 host readers의 actual OLD `-I -S -B` import는
+  stdlib-only PASS이며 모델/DB dependency를 불러오지 않았다. 이는 native admission이 아니다.
+-16:41:04 UTC 새 snapshot revision `embeddinghostconfigrev_c1266b6dbab44ffea078ea6dd455f935`
+  (logical bd45 유지)을 root create-once로 발행했다. raw721-byte SHA는
+  `466b8169012fc4d2931e64d1bf04463414237d15328dd463eaa0d68757f97d94`, semantic은
+  `b1b42f01f656dfbff7a5ce35266371eec86786ff44d00aae49e6ab18e5151023`다.
+  기존 snapshot raw c0f405d7는 그대로이고 selected-cache도 바꾸지 않았다.
+  실제 root 보호 코드/캐시 mount namespace에서 shared stdlib host closure가 PASS했다.
+  두 root unit은 capability를 비우고 NAS/인증/DB secrets/모델 접근을 막았다.
+  host-byte unit Invocation은 `b629e3dbe3e746e49f5bcac638260be4`다.
+- CPU audit1.1 준비 입력은 `/tmp/eom-host-requalification-20261021.pZw7NbCi/prefix-audit-input.json`,
+  raw `6dd3608901491d425b85e9e4edd7135bfd845587e31a33720f6e85dfe2b5def6`이며
+  host pointer/seed, private archive, 필요한 bootstrap2개만 predecessor19a559b3에서 달라졌다.
+  이 사용자 소유 입력은 UNTRUSTED이며 root byte audit/admission을 대신하지 않는다.
+  native CPU config candidate revision38786bb0은 아직 게시·승인되지 않은 계획 값이다.
+- 이 시점 native CPU/CUDA prefix 교체0, 서비스 설정 전환0, 실제 모델/GPU forward0,
+  원 benchmark Job closure0, GPU default 미활성이다. INDEX는 여전히 같은 failed invocation이며
+  QUERY는 active다. 다음 단계는 scoped INDEX/QUERY 유효 claim/실제 native holder 부재 확인,
+  기존 private-successor 설치·OLD byte audit·actual no-forward probe/seal·linked control 전환이다.
+  전역 Codex 작업 부재를 이 prefix의 필수 계약으로 오용하지 않는다. 별도 원 benchmark의
+  never-started OS proof와 unresolved Job은 보존하고, 실제 인가된 closure는 뒤에서 수행한다.
