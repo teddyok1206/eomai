@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import pwd
 import tempfile
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -69,7 +70,10 @@ def test_actual_owner_captures_only_root_produced_proof_without_question_read(mo
         lambda *_a: pytest.fail("no question text read"),
     )
     request, invocation = owner_request(), worker_invocation(1)
-    with tempfile.TemporaryDirectory(prefix="eom-prelaunch-proof-dac-", dir="/run") as temporary:
+    with (
+        tempfile.TemporaryDirectory(prefix="eom-prelaunch-proof-dac-", dir="/run") as temporary,
+        ExitStack() as cleanup,
+    ):
         parent = Path(temporary)
         os.chown(parent, 0, owner.pw_gid)
         parent.chmod(0o750)
@@ -82,6 +86,11 @@ def test_actual_owner_captures_only_root_produced_proof_without_question_read(mo
         workspace = owner_root / invocation.execution_id
         owner_inputs = workspace / "inputs"
         owner_inputs.mkdir(parents=True, mode=0o700)
+        # ExitStack restores only these new fixture directories before temporary
+        # removal; restricted root cannot unlink beneath the actual owner's0700 dirs.
+        for directory in (owner_inputs, workspace, owner_root):
+            cleanup.callback(directory.chmod, 0o700)
+            cleanup.callback(os.chown, directory, 0, 0)
         body = association().model_dump(mode="json", exclude={"association_sha256"})
         body.update(owner_pid=2**30, expires_ns=1)
         associated = BenchmarkLaunchAssociation.model_validate(seal(body, "association_sha256"))
