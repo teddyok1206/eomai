@@ -561,7 +561,8 @@
   QUERY `REFERENCE_QUERY_OWNER_READY`는17:46:06.149327 UTC에 실제 기록됐다.
   Catalog 자료 조회의 lock/provenance/candidate/solution-profile/materialization 단계도
   COMPLETED로 진행됐고, 두 서비스는 후속 관찰에서도 같은 invocation으로 active였다.
-  기존 service source e013/Identity/policy/grants는 그대로이며 실패 이력도 보존했다.
+  기존 INDEX source e013과 QUERY source `2eef9b20bbd9f1394efc8d1566fada8d37769f66`의
+  실제 ExecStart는 그대로다. Identity/policy/grants와 실패 이력도 보존했다.
   따라서 `CPU_INDEX_QUERY_RECOVERY=PASS`다. 이는 GPU/default 또는 교육 품질 PASS가 아니다.
 - Slack `devreport_fd44c1dc3c80408a82b9680c9767dbb4`에는 실제 native admission과 전환 전
   상태를, `devreport_63624820801c405888336c32a00552b0`에는 복구 완료를 한국어 요약 먼저

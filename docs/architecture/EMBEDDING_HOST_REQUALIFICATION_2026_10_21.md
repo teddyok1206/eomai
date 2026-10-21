@@ -130,7 +130,8 @@ implementation pins, load an encoder, or import numerical implementation modules
 | Responsibility | Exact source selection | Meaning |
 | --- | --- | --- |
 | CPU numerical prefix/verifier | `6c4cd95f709ba66756bfcbe2c4528b94cf3622ea` | Byte-audited and actual native admission PASS |
-| Installed INDEX/QUERY services | `e013d35013851a8a5a7b50b8bee9c40edd90568c` | Existing service code preserved |
+| Installed INDEX service | `e013d35013851a8a5a7b50b8bee9c40edd90568c` | Existing service code preserved |
+| Installed QUERY service | `2eef9b20bbd9f1394efc8d1566fada8d37769f66` | Existing service code preserved; actual ExecStart rechecked |
 | Maintenance configuration SDK | `2e5b22f35cb9e1bdaf7109aab461bfc0332fb33d` | Current-owner DTOs plus only three reviewed host modules |
 | CUDA host publication SDK | `072230c2a0450edfa03af55fa69f5492ba095769` | Explicit-base cache builder fix; no native activation |
 | CUDA numerical candidate | `87cc21d68b0b2584c2b683844aea67d759e5bb02` | Built candidate only; qualification remains separate |
