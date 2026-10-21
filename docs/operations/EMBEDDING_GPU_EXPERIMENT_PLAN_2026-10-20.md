@@ -361,3 +361,63 @@
   후보이지만, 거부된 subprocess의 stderr/return code가 없어 원인 확정은 아니다. GPU 실험이
   원인이라고 단정하지 않는다. API/기존 QUERY 서비스는 active이며, API ready가 INDEX의
   가동/신선도까지 보장하는 것은 아니다. 이 확인 과정에서 restart/reset/DB 변경은 하지 않았다.
+
+### 실제 복구 gate와 좁은 owner SDK 설치
+
+- Main `b8f3e411`은 pre-launch 실패 정리 계약/application/inspection과 source327 PASS다.
+  `6570049d`는 실제 제한된 root 테스트의 임시 owner0700 디렉터리 정리만 고친 test 변경이다.
+  최초 DAC 실행은 핵심 assertion 이후 fixture cleanup 권한 오류로1 FAIL/1 PASS였으며,
+  실패 unit/출력을 보존했다. CAP_DAC_OVERRIDE를 추가하거나 제품 검사를 완화하지 않았다.
+  새 별도 unit의 같은 두 실제 root/owner/native filesystem gate는2 PASS/2.96초다.
+  proof DAC fixture의 machine 관측은 합성이며 실제 원 실행 관측과 구분한다.
+- 새 guarded disposable DB `/tmp/eom-api-testdb-20261021152609_40fe6f19`에서 공식 prepare,
+  migration cycle/reconcile 후 embedding-encoding cohort29 PASS/45.80초였다. 그 안에 새
+  prelaunch 동시 closure/replay/rollback/successor4건이 포함된다. 공식 `--confirm` cleanup으로
+  DB/임시 role을 제거했다. 운영 DB를 pytest 대상으로 사용하지 않았다.
+- 동일 필요한 수정만 c535 SDK에 backport한 source는
+  `c7dd3288bd6793d67885de99b7511043da6f3386`이며 compatible SDK source327 PASS,
+  core9개 strict mypy와 Ruff/format PASS다. 기존 installer로 별도 immutable prefix에 설치했고,
+  numerical CPU/CUDA prefix·기존 API/INDEX/QUERY release는 교체하지 않았다.
+  platform wheel SHA `206f036bc9d99943322e8a25a81b86a9281c9e4d0afb6c78fa4a913f4d85c7e7`,
+  installed RECORD `32003c456baec90e340dc38efd134feaf8a05b265bdcd83c9d440c9f5dc7436c`.
+  기존 API contracts wheel `91ffbea4f187ae3c5323c244c4e6a65780152959b5fff3586517f8ebf9fcaa50`
+  는 그대로다. wheel600 사전조건과 installer의 Bash invocation 오류는 실제 설치 전 발생했고,
+  bytes/검증을 완화하지 않고 정정했다. OWNER_ACTIVATION=NOT_PERFORMED다.
+- 실제 원 v6 controller/CPU service/socket/boot/process/빈 output을 새 설치 SDK로 확인하고
+  root proof1개를 원 handoff 밖에 create-once로 생성했다. root helper는 NAS/DB 접근이 막힌
+  제한된 capability unit에서 성공했다. proof RAW SHA는
+  `4f155e819e848eba1e4bd6c1487e384aa6b30d68c192b8bb9bb26fd11dcfb681`, observation SHA는
+  `ed30220cdeb5482291fcf2930dd782a30ea5d28d08b05339cc18d3faf1d9352b`다.
+  이것은 OS 관측이지 current actor 인가나 Job closure가 아니다. 원 Job/예약/uncertainty는
+  그대로이며 actual closure0/모델0/defaultCPU다. 실제 owner read-only proof probe는 준비만 했고
+  아직 NOT_RUN이다. Studio 로그인을 추가 요청하지 않았다. 기존 pane의 sudo cache를 재사용했다.
+- 후속 finite wrapper는 `/tmp/eom-gpu-recovery-20261021.RFshJFka`에 DRAFT로만 있다.
+  pure/mocked10 PASS이며 root proof→genuine capture→원 실패 closure commit→실제 parent
+  admission→revision-only input→같은 SQL root의 guarded successor→기존6회 순서다.
+  새 revision `embeddingbenchmarkrev_4e40dad6e4c946abaa01815537d28952`는 계획 값일 뿐,
+  Artifact/Job/launch로 등록되지 않았다. 토큰 재생성도0이다.
+
+### 새로운 STOP: OS 보안 업데이트와 고정 host closure의 불일치
+
+- 기존 INDEX service를 정확한 기존 release 그대로1회 supported start했다. Invocation
+  `1002a26157454e4189fbd291a2942bf7`는 잠시 running 후15:36:08 UTC에 실패했다.
+  이번 실패는 이전06:18의 systemctl 경계와 다르게 fixed no-forward CPU verifier의 nonzero
+  결과(`local_indexing_runtime_verification.py:40`)다. verifier stdout/stderr가 폐기돼 직접
+  exception은 확인되지 않았으며, 추가 실패가 전혀 없다고 주장하지 않는다.
+- 별도 read-only 확인으로 현재 host의 필수 불일치가 확정됐다. 설치된
+  `embedding_runtime_host_closure.py:209`는 `/usr/lib/x86_64-linux-gnu/liblzma.so.5.4.5`의
+  SHA `696e868dd0700a19a6d65fc01608ec2d70d3cb91f65710e89180cd2e688f30cb`를 요구하지만,
+  현재202904-byte 파일 SHA는
+  `26b37d25f7ca2a2d348de8ecabacda12e921cd933b21fa069a179760db77219d`다.
+  dpkg.log는06:18:18 UTC의 `5.6.1+really5.4.5-1ubuntu0.3`→`…0.4` 업그레이드를 기록하고,
+  파일 ctime도06:18:18.961272845 UTC다. host snapshot 예외는 ld.so.cache만 대체하며
+  liblzma에는 적용되지 않는다. 따라서 현재 host는 기존 승인 검사를 통과할 수 없다.
+- 현재 eom 사용자의 같은 nine-property systemctl read는 rc0/stderr0/272bytes였지만,
+  이것은 실제 service UID 인가 증거도, 이전06:18 실패 원인의 확정도 아니다. API/QUERY
+  service는 active지만 새 native 작업/색인의 정상 동작까지 PASS로 확대하지 않는다.
+  INDEX는 failed/Restart=no/NRestarts0다. 추가 start/reset/검증 우회는 하지 않는다.
+- 기존 host hash/receipt/configuration을 현재 bytes로 덮거나 OS 보안 패키지를 downgrade하지 않는다.
+  기존 numerical runtime을 고정한 benchmark successor에 새 host를 묵시적으로 섞어서도 안 된다.
+  실제6회 진입은 보류한다. 다음에는 기존 승인 기록을 보존하는 명시적 host compatibility
+  재검증과 필요한 successor runtime/configuration 범위를 먼저 검토·승인해야 한다. 이는 현재
+  'runtime pin 불변' 실행 범위의 변경점이며, 추가 로그인만으로 해결되지 않는다.
