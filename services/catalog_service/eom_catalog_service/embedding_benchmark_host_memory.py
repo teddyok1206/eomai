@@ -8,6 +8,9 @@ import stat
 from pathlib import Path
 from typing import Literal
 
+from eom_catalog_contracts.embedding_device_benchmark import BenchmarkExecutionPolicy
+
+from eom_catalog_service.embedding_benchmark_unit_policy import benchmark_unit_family
 from eom_catalog_service.embedding_execution_ports import BenchmarkHostObservationError
 from eom_catalog_service.embedding_runtime_files import read_live_runtime_os_file
 
@@ -82,7 +85,13 @@ class OwnBenchmarkHostOomObserver:
     recreating it is not a supported retry. Source/installation/physical lease are external.
     """
 
-    def __init__(self, *, device: Literal["CPU", "CUDA"], execution_id: str) -> None:
+    def __init__(
+        self,
+        *,
+        device: Literal["CPU", "CUDA"],
+        execution_id: str,
+        policy: BenchmarkExecutionPolicy | None = None,
+    ) -> None:
         self._failed = True
         try:
             _require(type(device) is str and device in ("CPU", "CUDA"))
@@ -92,7 +101,8 @@ class OwnBenchmarkHostOomObserver:
             )
             self._pid, self._uid = os.getpid(), os.geteuid()
             self._proc = Path("/proc") / str(self._pid)
-            unit = f"eom-embedding-benchmark-{device.lower()}@{execution_id}.service"
+            family = benchmark_unit_family(device, policy)
+            unit = family.service_template.replace("@.service", f"@{execution_id}.service")
             self._membership = f"0::/system.slice/{unit}\n".encode("ascii")
             self._events = _CGROUP_ROOT / "system.slice" / unit / "memory.events"
             self._mount = _mount_identity(self._read_proc("mountinfo", maximum=1024**2))

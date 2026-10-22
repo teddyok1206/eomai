@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-import re
 import subprocess
 from typing import Literal
 
 from eom_identifiers import sha256_bytes
 
+from eom_catalog_service.embedding_benchmark_unit_policy import benchmark_unit_family_from_service
 from eom_catalog_service.image_gpu_unit_identity import image_gpu_unit_template
 
 _ENV = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
@@ -22,8 +22,10 @@ def observe_gpu_unit_policy(
     if worker_account == "eom-image":
         image_gpu_unit_template(unit)
     elif worker_account == "eom-embedding-cuda":
-        if re.fullmatch(r"eom-embedding-benchmark-cuda@[0-9a-f]{32}\.service", unit) is None:
-            raise ValueError("GPU_UNIT_POLICY_INVALID")
+        try:
+            benchmark_unit_family_from_service("CUDA", unit)
+        except ValueError:
+            raise ValueError("GPU_UNIT_POLICY_INVALID") from None
     else:
         raise ValueError("GPU_UNIT_POLICY_INVALID")
     expected = {

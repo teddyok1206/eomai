@@ -11,6 +11,7 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     BENCHMARK_LAUNCH_ARTIFACT_TYPE,
     BENCHMARK_POLICY_ARTIFACT_TYPE,
     BENCHMARK_POLICY_SCHEMA_REF,
+    BENCHMARK_POLICY_V11_SCHEMA_REF,
     EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF,
     MAX_BENCHMARK_ENVELOPE_BYTES,
     MAX_BENCHMARK_OUTPUT_BYTES,
@@ -23,6 +24,7 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkStagedInputs,
     BenchmarkTokenWitness,
     benchmark_local_output_members,
+    benchmark_policy_schema_ref,
     embedding_device_benchmark_bytes,
     parse_embedding_device_benchmark_bytes,
     validate_benchmark_invocation,
@@ -74,7 +76,8 @@ class BenchmarkOwnerConfiguration:
         adapter.validate_python(self.execution_policy_sha256)
         if (
             pointer.member_path != "policy.json"
-            or pointer.schema_ref != BENCHMARK_POLICY_SCHEMA_REF
+            or pointer.schema_ref
+            not in {BENCHMARK_POLICY_SCHEMA_REF, BENCHMARK_POLICY_V11_SCHEMA_REF}
             or pointer.media_type != "application/json"
         ):
             raise ValueError("BENCHMARK_OWNER_CONFIGURATION_INVALID")
@@ -139,6 +142,8 @@ class CatalogBenchmarkOwnerAdmission:
         if (
             request.request_sha256 != self.configuration.request_sha256
             or request.execution_policy.policy_sha256 != self.configuration.execution_policy_sha256
+            or self.configuration.execution_policy.schema_ref
+            != benchmark_policy_schema_ref(request.execution_policy)
             or request.operator_audit_id != self._control.capture.operator_id
         ):
             raise ValueError("BENCHMARK_OWNER_SELECTION_MISMATCH")
@@ -150,6 +155,8 @@ class CatalogBenchmarkOwnerAdmission:
 
     def _policy(self, session: Session, request: BenchmarkOwnerRequest) -> None:
         pointer = self.configuration.execution_policy
+        if pointer.schema_ref != benchmark_policy_schema_ref(request.execution_policy):
+            raise ValueError("BENCHMARK_OWNER_POLICY_MISMATCH")
         reader = PinnedArtifactReadContext(session, self._settings)
         reader.prefetch(((pointer.artifact_id, pointer.artifact_revision_id),))
         reader.require_file_set(

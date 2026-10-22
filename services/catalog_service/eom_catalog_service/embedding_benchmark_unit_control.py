@@ -7,46 +7,32 @@ import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
-from types import MappingProxyType
 from typing import Literal
 
-from eom_catalog_contracts.embedding_device_benchmark import BenchmarkDevice
+from eom_catalog_contracts.embedding_device_benchmark import (
+    BenchmarkDevice,
+    BenchmarkExecutionPolicy,
+)
 from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation, inspect_cpu_unit
 
+from eom_catalog_service.embedding_benchmark_unit_policy import (
+    BenchmarkUnitFamily as BenchmarkUnitFamily,
+)
+from eom_catalog_service.embedding_benchmark_unit_policy import (
+    benchmark_unit_family as benchmark_unit_family,
+)
 from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
 
-CPU_BENCHMARK_TEMPLATE = "eom-embedding-benchmark-cpu@.service"
-CPU_BENCHMARK_SOCKET = "eom-embedding-benchmark-cpu@.socket"
-CPU_BENCHMARK_TEMPLATE_SHA256 = (
-    "sha256:512d2b563c8e73ec0cc39a4679f7acb9bb1ccf4a380eeb22a417a1c6cc275350"
-)
-CPU_BENCHMARK_SOCKET_SHA256 = (
-    "sha256:ea94f5a5bf5d28373dad0ae0260c0c7cc3c477216d4201e0e904e2d9245b3c02"
-)
-CUDA_BENCHMARK_TEMPLATE = "eom-embedding-benchmark-cuda@.service"
-CUDA_BENCHMARK_SOCKET = "eom-embedding-benchmark-cuda@.socket"
-CUDA_BENCHMARK_TEMPLATE_SHA256 = (
-    "sha256:5955e54a578c5f547019298525eb44a8d8814fcbf8afb0070861a3b0a815b6eb"
-)
-CUDA_BENCHMARK_SOCKET_SHA256 = (
-    "sha256:63bfab8b2be928e92ccb8b8c500186e3b49cbdff1fd2e4b8f0aaec4df724c522"
-)
-_TEMPLATES = MappingProxyType(
-    {
-        "CPU": (
-            CPU_BENCHMARK_TEMPLATE,
-            CPU_BENCHMARK_SOCKET,
-            CPU_BENCHMARK_TEMPLATE_SHA256,
-            CPU_BENCHMARK_SOCKET_SHA256,
-        ),
-        "CUDA": (
-            CUDA_BENCHMARK_TEMPLATE,
-            CUDA_BENCHMARK_SOCKET,
-            CUDA_BENCHMARK_TEMPLATE_SHA256,
-            CUDA_BENCHMARK_SOCKET_SHA256,
-        ),
-    }
-)
+_CPU_FAMILY = benchmark_unit_family("CPU")
+_CUDA_FAMILY = benchmark_unit_family("CUDA")
+CPU_BENCHMARK_TEMPLATE = _CPU_FAMILY.service_template
+CPU_BENCHMARK_SOCKET = _CPU_FAMILY.socket_template
+CPU_BENCHMARK_TEMPLATE_SHA256 = _CPU_FAMILY.service_sha256
+CPU_BENCHMARK_SOCKET_SHA256 = _CPU_FAMILY.socket_sha256
+CUDA_BENCHMARK_TEMPLATE = _CUDA_FAMILY.service_template
+CUDA_BENCHMARK_SOCKET = _CUDA_FAMILY.socket_template
+CUDA_BENCHMARK_TEMPLATE_SHA256 = _CUDA_FAMILY.service_sha256
+CUDA_BENCHMARK_SOCKET_SHA256 = _CUDA_FAMILY.socket_sha256
 _ENV = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
 _SOCKET_PROPERTIES = (
     "LoadState",
@@ -70,24 +56,30 @@ class FixedRootBenchmarkUnits:
 
     device: BenchmarkDevice
     execution_id: str
+    policy: BenchmarkExecutionPolicy | None = None
 
     def __post_init__(self) -> None:
         require_root_benchmark_control()
         if (
             type(self.device) is not str
-            or self.device not in _TEMPLATES
+            or self.device not in {"CPU", "CUDA"}
             or type(self.execution_id) is not str
             or re.fullmatch(r"[0-9a-f]{32}", self.execution_id, re.ASCII) is None
         ):
             raise ValueError("BENCHMARK_UNIT_IDENTITY_INVALID")
+        benchmark_unit_family(self.device, self.policy)
+
+    @property
+    def family(self) -> BenchmarkUnitFamily:
+        return benchmark_unit_family(self.device, self.policy)
 
     @property
     def template(self) -> str:
-        return _TEMPLATES[self.device][0]
+        return self.family.service_template
 
     @property
     def socket_template(self) -> str:
-        return _TEMPLATES[self.device][1]
+        return self.family.socket_template
 
     @property
     def service(self) -> str:
@@ -100,7 +92,13 @@ class FixedRootBenchmarkUnits:
     def capture_installed(self) -> NumericalRuntimeFileSnapshots:
         require_root_benchmark_control()
         files = NumericalRuntimeFileSnapshots(0)
-        service, listener, service_sha, socket_sha = _TEMPLATES[self.device]
+        family = self.family
+        service, listener, service_sha, socket_sha = (
+            family.service_template,
+            family.socket_template,
+            family.service_sha256,
+            family.socket_sha256,
+        )
         for name, digest in ((service, service_sha), (listener, socket_sha)):
             files.read(Path("/etc/systemd/system") / name, sha256=digest, maximum=65536)
         files.assert_unchanged()

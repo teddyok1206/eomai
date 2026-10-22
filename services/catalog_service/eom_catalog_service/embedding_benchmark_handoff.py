@@ -398,6 +398,9 @@ def prepare_benchmark_environment(
     if os.geteuid() != _ROOT_UID:
         raise BenchmarkHandoffError("BENCHMARK_HANDOFF_ROOT_REQUIRED")
     raw = embedding_device_benchmark_bytes(invocation)
+    from eom_catalog_contracts.embedding_device_benchmark import benchmark_timeout_seconds
+
+    seconds = benchmark_timeout_seconds(invocation.execution_policy)
     _require(
         type(prepared) is PreparedBenchmarkHandoff
         and prepared == _prepared_handoff(invocation, sha256_bytes(raw))
@@ -407,7 +410,7 @@ def prepare_benchmark_environment(
         and type(owner_pid) is int
         and 0 < owner_pid <= 2**31 - 1
         and type(expires_ns) is int
-        and time.monotonic_ns() < expires_ns <= time.monotonic_ns() + 180 * 10**9
+        and time.monotonic_ns() < expires_ns <= time.monotonic_ns() + seconds * 10**9
     )
     backend.__post_init__()
     owner = pwd.getpwnam("eom-workflow-runner")

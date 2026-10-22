@@ -11,10 +11,16 @@ from tests.unit.test_image_gpu_unit_observation import UNIT as IMAGE_UNIT
 from tests.unit.test_image_gpu_unit_observation import policy as image_policy
 
 CUDA_UNIT = "eom-embedding-benchmark-cuda@" + "1" * 32 + ".service"
+CUDA_BUDGET_UNIT = "eom-embedding-benchmark-cuda-budget600@" + "1" * 32 + ".service"
 
 
 @pytest.mark.parametrize(
-    "account,unit", (("eom-image", IMAGE_UNIT), ("eom-embedding-cuda", CUDA_UNIT))
+    "account,unit",
+    (
+        ("eom-image", IMAGE_UNIT),
+        ("eom-embedding-cuda", CUDA_UNIT),
+        ("eom-embedding-cuda", CUDA_BUDGET_UNIT),
+    ),
 )
 @pytest.mark.parametrize(
     "fault",
@@ -82,6 +88,10 @@ def test_exact_family_device_allowlist_and_bounded_read_fail_closed(
         ("--all", "eom-image"),
         ("other.service", "eom-embedding-cuda"),
         (CUDA_UNIT, "root"),
+        (CUDA_BUDGET_UNIT, "eom-image"),
+        ("eom-embedding-benchmark-cpu-budget600@" + "a" * 32 + ".service", "eom-embedding-cuda"),
+        ("eom-embedding-benchmark-cuda-budget601@" + "a" * 32 + ".service", "eom-embedding-cuda"),
+        ("eom-embedding-benchmark-cuda-budget600@" + "A" * 32 + ".service", "eom-embedding-cuda"),
         (None, "eom-embedding-cuda"),
     ),
 )

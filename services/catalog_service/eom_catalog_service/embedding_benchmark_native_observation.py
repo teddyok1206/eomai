@@ -5,10 +5,14 @@ Concrete owner adapter; state/Artifact commit remain Orchestrator responsibiliti
 
 from __future__ import annotations
 
+import logging
 import os
 import pwd
 import time
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass
+from enum import StrEnum
 
 from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkCheckpoint,
@@ -22,12 +26,14 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     embedding_device_benchmark_bytes,
 )
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
+from eom_identifiers import canonical_json_bytes
 from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
 from eom_orchestrator.inference_transfer_cpu_handoff import (
     fixed_owner_identity,
     protected_cpu_handoff_directory,
     read_protected_cpu_handoff_member,
 )
+from eom_orchestrator.logging import JsonFormatter, log_event
 
 from eom_catalog_service.embedding_benchmark_channel import BenchmarkOwnerChannel
 from eom_catalog_service.embedding_benchmark_gpu_resource_client import (
@@ -39,6 +45,82 @@ from eom_catalog_service.embedding_benchmark_native_connection import (
 )
 from eom_catalog_service.embedding_benchmark_ranking import rank_benchmark_rows
 from eom_catalog_service.embedding_runtime_files import fixed_native_embedding_profile
+
+
+class _OwnerPhase(StrEnum):
+    CHECKPOINT_RECEIVE = "CHECKPOINT_RECEIVE"
+    AUTHORIZATION = "AUTHORIZATION"
+    ACK = "ACK"
+    RESOURCE_FINALIZATION = "RESOURCE_FINALIZATION"
+
+
+# At most21 checkpoints, each with receive/authorization/ACK, plus final resources.
+# This is transient diagnostic metadata, not an authoritative measurement receipt.
+# Receive spans are owner-side waits, not native model load or encode timings.
+_MAX_OWNER_PHASES = 64
+type _OwnerPhaseTiming = tuple[_OwnerPhase, int, int, bool]
+_LOGGER = logging.getLogger(__name__)
+
+
+def configure_benchmark_observation_logging() -> None:
+    """Enable only this content-free owner channel, outside native measurement."""
+    with suppress(Exception):
+        handler = logging.StreamHandler()
+        handler.setFormatter(JsonFormatter())
+        _LOGGER.handlers[:] = [handler]
+        _LOGGER.setLevel(logging.INFO)
+        _LOGGER.propagate = False
+
+
+@contextmanager
+def _observe_owner_phase(
+    observations: list[_OwnerPhaseTiming], phase: _OwnerPhase, sequence: int
+) -> Iterator[None]:
+    """Only bounded in-memory timestamps; never perform I/O in a measured window."""
+    started_ns: int | None = None
+    with suppress(Exception):
+        started_ns = time.monotonic_ns()
+    completed = False
+    try:
+        yield
+        completed = True
+    finally:
+        with suppress(Exception):
+            if started_ns is not None and len(observations) < _MAX_OWNER_PHASES:
+                observations.append(
+                    (phase, sequence, max(0, time.monotonic_ns() - started_ns), completed)
+                )
+
+
+def _flush_owner_phases(observations: list[_OwnerPhaseTiming]) -> None:
+    """Optional diagnostics cannot replace an outcome or expose source/exception values."""
+    for phase, sequence, elapsed_ns, completed in observations:
+        with suppress(Exception):
+            if (
+                type(phase) is not _OwnerPhase
+                or type(sequence) is not int
+                or not 0 <= sequence <= 21
+                or type(elapsed_ns) is not int
+                or elapsed_ns < 0
+                or type(completed) is not bool
+            ):
+                continue
+            log_event(
+                _LOGGER,
+                logging.INFO,
+                canonical_json_bytes(
+                    {
+                        "phase": phase.value,
+                        "checkpoint_sequence": sequence,
+                        "elapsed_ms": elapsed_ns // 1_000_000,
+                        "outcome": "COMPLETED" if completed else "ABORTED",
+                    }
+                ).decode("utf-8"),
+                job_id=None,
+                worker_slot=None,
+                component="catalog_embedding_benchmark",
+                event="BENCHMARK_OWNER_PHASE",
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,8 +186,10 @@ def observe_benchmark_native_session(
     The installed caller owns actual unit/listener/PID-birth capture and the root
     resource context. Data ranked here is validated local f32, not invented scores.
     The cold matrix is materialized once and reused for ten bounded exact queries.
+    Diagnostic timestamps stay in memory until all measured work and cleanup end.
     """
     channel = None
+    observations: list[_OwnerPhaseTiming] = []
     try:
         owner = fixed_owner_identity()
         if (
@@ -126,9 +210,10 @@ def observe_benchmark_native_session(
         authorization_ns: dict[tuple[int, int], int] = {}
 
         def continuation(checkpoint: BenchmarkCheckpoint) -> None:
-            started = time.monotonic_ns()
-            authorization.authorize_checkpoint(checkpoint)
-            elapsed = time.monotonic_ns() - started
+            with _observe_owner_phase(observations, _OwnerPhase.AUTHORIZATION, checkpoint.sequence):
+                started = time.monotonic_ns()
+                authorization.authorize_checkpoint(checkpoint)
+                elapsed = time.monotonic_ns() - started
             if checkpoint.phase == "QUERY_PREPARED":
                 assert (
                     checkpoint.query_ordinal is not None and checkpoint.query_repetition is not None
@@ -149,16 +234,18 @@ def observe_benchmark_native_session(
         cold_completed_ns = 0
         query_started: dict[tuple[int, int], int] = {}
         timings = []
-        for _ in range(benchmark_checkpoint_count(invocation)):
-            checkpoint = channel.receive_checkpoint()
-            if checkpoint.phase == "QUERY_PREPARED":
-                assert (
-                    checkpoint.query_ordinal is not None and checkpoint.query_repetition is not None
-                )
-                query_started[(checkpoint.query_ordinal, checkpoint.query_repetition)] = (
-                    time.monotonic_ns()
-                )
-            else:
+        for sequence in range(1, benchmark_checkpoint_count(invocation) + 1):
+            with _observe_owner_phase(observations, _OwnerPhase.CHECKPOINT_RECEIVE, sequence):
+                checkpoint = channel.receive_checkpoint()
+                if checkpoint.phase == "QUERY_PREPARED":
+                    assert (
+                        checkpoint.query_ordinal is not None
+                        and checkpoint.query_repetition is not None
+                    )
+                    query_started[(checkpoint.query_ordinal, checkpoint.query_repetition)] = (
+                        time.monotonic_ns()
+                    )
+            if checkpoint.phase != "QUERY_PREPARED":
                 assert checkpoint.vector is not None
                 rows = read_benchmark_ready_vectors(invocation, checkpoint.vector)
                 if checkpoint.phase == "COLD_READY":
@@ -180,7 +267,8 @@ def observe_benchmark_native_session(
                     )
             # Freeze the original prescribed end before result/cold continuation.
             completed_ns = time.monotonic_ns()
-            channel.acknowledge()
+            with _observe_owner_phase(observations, _OwnerPhase.ACK, sequence):
+                channel.acknowledge()
             if checkpoint.phase == "COLD_READY":
                 cold_completed_ns = completed_ns
             elif checkpoint.phase == "QUERY_READY":
@@ -208,14 +296,18 @@ def observe_benchmark_native_session(
             transport.allow_writer_exit_after_resources()
             return result
 
-        resources = channel.finalize_resources(finalizer=finalize)
+        with _observe_owner_phase(observations, _OwnerPhase.RESOURCE_FINALIZATION, 0):
+            resources = channel.finalize_resources(finalizer=finalize)
         return ObservedBenchmarkNativeSession(
             channel.transcript(), resources, cold_completed_ns, tuple(timings), owner_started_ns
         )
     finally:
-        if channel is not None:
-            channel.close()
-        else:
-            transport.close()
-        if gpu_resources is not None:
-            gpu_resources.close()
+        try:
+            if channel is not None:
+                channel.close()
+            else:
+                transport.close()
+            if gpu_resources is not None:
+                gpu_resources.close()
+        finally:
+            _flush_owner_phases(observations)

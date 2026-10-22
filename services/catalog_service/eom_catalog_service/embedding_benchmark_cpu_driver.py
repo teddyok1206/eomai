@@ -11,6 +11,7 @@ from typing import Literal
 
 from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkWorkerInvocation,
+    benchmark_timeout_seconds,
     embedding_device_benchmark_bytes,
     parse_embedding_device_benchmark_bytes,
 )
@@ -103,13 +104,14 @@ class FixedRootBenchmarkCpuDriver:
         )
         assert isinstance(checked, BenchmarkWorkerInvocation)
         self._invocation, self._environment, self._backend = checked, environment, backend
-        self._units = FixedRootBenchmarkUnits("CPU", checked.execution_id)
+        self._units = FixedRootBenchmarkUnits("CPU", checked.execution_id, checked.execution_policy)
         owner = pwd.getpwnam("eom-workflow-runner")
         _require(owner.pw_uid > 0 and owner.pw_gid > 0, "OWNER_INVALID")
         self._owner = (owner.pw_uid, owner.pw_gid)
         self._used = False
         now = time.monotonic_ns()
-        _require(now < environment.expires_ns <= now + 180 * 10**9, "EXPIRED")
+        seconds = benchmark_timeout_seconds(checked.execution_policy)
+        _require(now < environment.expires_ns <= now + seconds * 10**9, "EXPIRED")
         self._fence()
 
     def _fence(self) -> None:

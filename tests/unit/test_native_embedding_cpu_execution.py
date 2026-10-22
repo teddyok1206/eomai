@@ -39,6 +39,8 @@ def test_fixed_unit_names_are_purpose_bound_and_no_arbitrary_units(
         "eom-embedding-native-query-prepare@",
         "eom-embedding-benchmark-cpu@",
         "eom-embedding-benchmark-cuda@",
+        "eom-embedding-benchmark-cpu-budget600@",
+        "eom-embedding-benchmark-cuda-budget600@",
     ),
 )
 def test_active_prepare_or_worker_of_either_purpose_blocks_new_inference(
@@ -223,6 +225,8 @@ def test_resource_guard_revalidates_raw_values_without_silently_dropping_fields(
         "eom-embedding-native-index-prepare",
         "eom-embedding-benchmark-cpu",
         "eom-embedding-benchmark-cuda",
+        "eom-embedding-benchmark-cpu-budget600",
+        "eom-embedding-benchmark-cuda-budget600",
     ),
 )
 def test_actual_file_reads_detect_surviving_child_in_flat_or_default_template_slice(
@@ -256,6 +260,37 @@ def test_actual_file_reads_detect_surviving_child_in_flat_or_default_template_sl
 def test_observing_benchmark_capacity_never_grants_index_query_dispatch() -> None:
     with pytest.raises(cpu.NativeCpuExecutionError):
         cpu.native_cpu_unit_names("BENCHMARK", "a" * 32)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    (
+        "eom-embedding-benchmark-cpu-budget601",
+        "eom-embedding-benchmark-cuda-budget900",
+        "eom-embedding-benchmark-cpu-budget600-extra",
+        "eom-embedding-native-cpu-index-budget600",
+    ),
+)
+def test_unknown_budget_is_not_a_capacity_or_cgroup_observation_family(
+    prefix: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    unit = prefix + "@" + "a" * 32 + ".service"
+    monkeypatch.setattr(
+        cpu,
+        "_root_cgroup_directory",
+        lambda *_a: pytest.fail("unknown family entered kernel read"),
+    )
+    with pytest.raises(cpu.NativeCpuExecutionError, match="UNCERTAIN"):
+        cpu.require_empty_native_cpu_cgroup(unit)
+    monkeypatch.setattr(
+        cpu.subprocess,
+        "run",
+        lambda *args, **kwargs: subprocess.CompletedProcess(
+            args, 0, f"{unit} loaded active running title\n".encode(), b""
+        ),
+    )
+    with pytest.raises(cpu.NativeCpuExecutionError, match="CAPACITY_UNAVAILABLE"):
+        cpu.require_no_active_native_cpu_execution()
 
 
 def test_missing_kernel_base_or_symlinked_slice_is_not_a_quiescence_proof(

@@ -61,6 +61,59 @@ class StoppedGpuUnit:
     stored_descriptors: Literal[0, 1]
 
 
+def observe_failed_gpu_unit_metadata(
+    unit: str, *, template: str, expected: CpuUnitObservation
+) -> tuple[int, Literal[0, 1]]:
+    """Read actual dead main PID/store, without inventing a missing process birth."""
+    if (
+        os.getresuid() != (0, 0, 0)
+        or type(unit) is not str
+        or type(template) is not str
+        or re.fullmatch(r"eom-[a-z0-9-]+@\.service", template) is None
+        or re.fullmatch(re.escape(template).replace("@", r"@[0-9a-f]{32}"), unit) is None
+        or type(expected) is not CpuUnitObservation
+        or re.fullmatch(r"[0-9a-f]{32}", expected.invocation_id) is None
+        or expected.fragment_path != "/etc/systemd/system/" + template
+        or gpu_unit_terminal_outcome(expected) != "FAILED"
+    ):
+        raise ValueError("GPU_UNIT_TERMINATION_UNCERTAIN")
+    properties = (
+        "ExecMainPID",
+        "NFileDescriptorStore",
+        "InvocationID",
+        "ExecMainStartTimestampMonotonic",
+    )
+    try:
+        result = subprocess.run(
+            ("/usr/bin/systemctl", "show", unit, *("--property=" + key for key in properties)),
+            capture_output=True,
+            check=False,
+            timeout=10,
+            env=_ENV,
+        )
+        if result.returncode != 0 or len(result.stdout) > 16384 or len(result.stderr) > 16384:
+            raise ValueError("GPU_UNIT_TERMINATION_UNCERTAIN")
+        fields: dict[str, str] = {}
+        for line in result.stdout.decode("ascii").splitlines():
+            key, separator, value = line.partition("=")
+            if not separator or key not in properties or key in fields:
+                raise ValueError("GPU_UNIT_TERMINATION_UNCERTAIN")
+            fields[key] = value
+        if not (
+            set(fields) == set(properties)
+            and fields["InvocationID"] == expected.invocation_id
+            and fields["ExecMainStartTimestampMonotonic"]
+            == str(expected.status.exec_main_started_monotonic)
+            and fields["NFileDescriptorStore"] in {"0", "1"}
+            and re.fullmatch(r"[1-9][0-9]{0,9}", fields["ExecMainPID"]) is not None
+            and int(fields["ExecMainPID"]) <= 2147483647
+        ):
+            raise ValueError("GPU_UNIT_TERMINATION_UNCERTAIN")
+        return int(fields["ExecMainPID"]), 1 if fields["NFileDescriptorStore"] == "1" else 0
+    except (OSError, subprocess.TimeoutExpired, UnicodeError):
+        raise ValueError("GPU_UNIT_TERMINATION_UNCERTAIN") from None
+
+
 def observe_stopped_gpu_unit(unit: str, *, template: str, invocation: str) -> StoppedGpuUnit:
     """Only read actual post-effect state; caller owns the concrete fixed unit family."""
     if (

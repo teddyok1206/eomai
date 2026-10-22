@@ -56,6 +56,10 @@ from eom_catalog_service.embedding_benchmark_unit_control import (
 from eom_catalog_service.embedding_benchmark_unit_control import (
     CUDA_BENCHMARK_TEMPLATE_SHA256 as CUDA_BENCHMARK_TEMPLATE_SHA256,
 )
+from eom_catalog_service.embedding_benchmark_unit_policy import (
+    benchmark_unit_family,
+    benchmark_unit_family_from_fragment,
+)
 from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_probe_gpu_clients
 from eom_catalog_service.embedding_cuda_probe_resource_observation import (
     CudaProbeResourceObservation,
@@ -100,6 +104,13 @@ _READY_IMPLEMENTATIONS = (
         "embedding_benchmark_cuda.py",
         "sha256:d1542cbf1f57e2edc016958690d33a9892b47850e62d7b8e1016a436f3d397e8",
     ),
+)
+_READY_IMPLEMENTATIONS_V11 = (
+    (
+        "embedding_device_benchmark_files.py",
+        "sha256:4bc5d315e3f4ec25c49fd11feeac0132bdb88f0354cc2d562bf6f6c2e97c69f9",
+    ),
+    _READY_IMPLEMENTATIONS[1],
 )
 
 
@@ -184,6 +195,7 @@ class CapturedBenchmarkCudaLaunchFiles:
     owner_uid: int
     owner_gid: int
     files: NumericalRuntimeFileSnapshots
+    service_template: str = CUDA_BENCHMARK_TEMPLATE
 
     def assert_current(self) -> None:
         self.files.assert_unchanged()
@@ -200,6 +212,7 @@ class CapturedBenchmarkCudaPinnedFiles:
     owner_gid: int
     root_files: NumericalRuntimeFileSnapshots
     ready_files: NumericalRuntimeFileSnapshots
+    service_template: str = CUDA_BENCHMARK_TEMPLATE
 
     def assert_current(self) -> None:
         self.root_files.assert_unchanged()
@@ -221,6 +234,7 @@ def capture_benchmark_cuda_launch_files(
         "INVOCATION_INVALID",
     )
     _require(type(environment) is PreparedBenchmarkEnvironment, "ENVIRONMENT_INVALID")
+    family = benchmark_unit_family("CUDA", invocation.execution_policy)
     pins = BenchmarkLaunchPins(
         invocation.execution_id,
         sha256_bytes(invocation_raw),
@@ -238,7 +252,12 @@ def capture_benchmark_cuda_launch_files(
         "ENVIRONMENT_INVALID",
     )
     entries = {entry.relative_member: entry for entry in inventory.entries}
-    for name, digest in _READY_IMPLEMENTATIONS:
+    # Legacy readiness pins its admitted bytes, not whatever source is current.
+    # The explicit budget successor selects the later read-only staging contract.
+    implementations = (
+        _READY_IMPLEMENTATIONS if family.timeout_seconds == 180 else _READY_IMPLEMENTATIONS_V11
+    )
+    for name, digest in implementations:
         member = entries.get("lib/python3.12/site-packages/eom_catalog_service/" + name)
         _require(
             member is not None and stat.S_ISREG(member.epoch[4]) and member.sha256 == digest,
@@ -252,8 +271,8 @@ def capture_benchmark_cuda_launch_files(
     )
     files = NumericalRuntimeFileSnapshots(0)
     for name, digest in (
-        (CUDA_BENCHMARK_TEMPLATE, CUDA_BENCHMARK_TEMPLATE_SHA256),
-        (CUDA_BENCHMARK_SOCKET, CUDA_BENCHMARK_SOCKET_SHA256),
+        (family.service_template, family.service_sha256),
+        (family.socket_template, family.socket_sha256),
     ):
         files.read(Path("/etc/systemd/system") / name, sha256=digest, maximum=65536)
     files.observe_empty_directory(CUDA_LOADER_EMPTY_DIRECTORY)
@@ -314,6 +333,7 @@ def capture_benchmark_cuda_launch_files(
         owner.pw_uid,
         owner.pw_gid,
         files,
+        family.service_template,
     )
     captured.assert_current()
     inventory.assert_unchanged()
@@ -362,6 +382,7 @@ def capture_benchmark_cuda_pinned_files(
         launch.owner_gid,
         launch.files,
         ready_files,
+        launch.service_template,
     )
     captured.assert_current()
     inventory.assert_unchanged()
@@ -382,9 +403,11 @@ def observe_benchmark_cuda_ready(
     )
     ready, pins = captured.ready, captured.pins
     uid, gid, lease_gid = ready.worker_uid, ready.worker_gid, ready.supplementary_gids[0]
-    unit = CUDA_BENCHMARK_TEMPLATE.replace("@.service", f"@{invocation.execution_id}.service")
+    family = benchmark_unit_family("CUDA", invocation.execution_policy)
+    _require(captured.service_template == family.service_template, "TEMPLATE_CHANGED")
+    unit = family.service_template.replace("@.service", f"@{invocation.execution_id}.service")
     cgroup = "/system.slice/" + unit
-    before = inspect_cpu_unit(unit, template=CUDA_BENCHMARK_TEMPLATE)
+    before = inspect_cpu_unit(unit, template=family.service_template)
     _require(
         before.main_pid == ready.pid
         and before.status.active_state == "activating"
@@ -401,7 +424,7 @@ def observe_benchmark_cuda_ready(
         "-I",
         "-B",
         "-m",
-        "eom_catalog_service.embedding_benchmark_cuda",
+        family.entrypoint_module,
         *benchmark_launch_arguments(pins),
     )
 
@@ -445,7 +468,7 @@ def observe_benchmark_cuda_ready(
         )
         expected, cwd = CUDA_LOADER_EMPTY_DIRECTORY.lstat(), (process / "cwd").stat()
         _require((expected.st_dev, expected.st_ino) == (cwd.st_dev, cwd.st_ino), "CWD_CHANGED")
-        _require(inspect_cpu_unit(unit, template=CUDA_BENCHMARK_TEMPLATE) == before, "UNIT_CHANGED")
+        _require(inspect_cpu_unit(unit, template=family.service_template) == before, "UNIT_CHANGED")
         captured.assert_current()
 
     current()
@@ -525,16 +548,34 @@ def require_benchmark_cuda_observation_basis(
         and ready.device == captured.ready.expected_device_capture,
         "PINNED_BASIS_CHANGED",
     )
-    unit = CUDA_BENCHMARK_TEMPLATE.replace("@.service", f"@{ready.execution_id}.service")
+    _require(
+        benchmark_cuda_unit_template(ready.unit) == captured.service_template,
+        "PINNED_TEMPLATE_CHANGED",
+    )
+    unit = benchmark_cuda_unit_name(ready.unit, ready.execution_id)
     _require(ready.cgroup == "/system.slice/" + unit, "IDENTITY_INVALID")
     return unit
+
+
+def benchmark_cuda_unit_template(observed: CpuUnitObservation) -> str:
+    """Select the exact captured fragment, never a widened unit-name pattern."""
+    _require(type(observed) is CpuUnitObservation, "IDENTITY_INVALID")
+    return benchmark_unit_family_from_fragment("CUDA", observed.fragment_path).service_template
+
+
+def benchmark_cuda_unit_name(observed: CpuUnitObservation, execution_id: str) -> str:
+    _require(
+        type(execution_id) is str and re.fullmatch(r"[0-9a-f]{32}", execution_id) is not None,
+        "IDENTITY_INVALID",
+    )
+    return benchmark_cuda_unit_template(observed).replace("@.service", f"@{execution_id}.service")
 
 
 def require_benchmark_cuda_processes_ended(ready: BenchmarkCudaReadyObservation) -> None:
     """Original PID/birth and exact empty-cgroup proof; never control a reused PID."""
     _require(os.getresuid() == (0, 0, 0), "ROOT_REQUIRED")
     _require(type(ready) is BenchmarkCudaReadyObservation, "IDENTITY_INVALID")
-    unit = CUDA_BENCHMARK_TEMPLATE.replace("@.service", f"@{ready.execution_id}.service")
+    unit = benchmark_cuda_unit_name(ready.unit, ready.execution_id)
     _require(ready.cgroup == "/system.slice/" + unit, "IDENTITY_INVALID")
     original = Path("/proc") / str(ready.pid)
     try:
@@ -571,7 +612,8 @@ def verify_benchmark_cuda_terminal(
         invocation, environment, backend=backend, inventory=inventory
     )
     unit = require_benchmark_cuda_observation_basis(ready, captured)
-    before = inspect_cpu_unit(unit, template=CUDA_BENCHMARK_TEMPLATE)
+    template = captured.service_template
+    before = inspect_cpu_unit(unit, template=template)
     _require(
         before.invocation_id == ready.unit.invocation_id
         and before.status.exec_main_started_monotonic
@@ -586,7 +628,7 @@ def verify_benchmark_cuda_terminal(
     def ended() -> None:
         require_benchmark_cuda_processes_ended(ready)
         _require(
-            inspect_cpu_unit(unit, template=CUDA_BENCHMARK_TEMPLATE) == before,
+            inspect_cpu_unit(unit, template=template) == before,
             "TERMINATION_UNCERTAIN",
         )
 

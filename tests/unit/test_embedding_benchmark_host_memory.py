@@ -11,6 +11,9 @@ from eom_catalog_service import embedding_benchmark_host_memory as host
 from eom_catalog_service.embedding_execution_ports import BenchmarkHostObservationError
 from eom_catalog_service.embedding_runtime_files import read_live_runtime_os_file
 
+from tests.unit.embedding_device_benchmark_fixtures import benchmark_policy
+from tests.unit.test_embedding_device_benchmark_budget import successor_policy
+
 EXECUTION_ID = "a" * 32
 
 
@@ -24,8 +27,10 @@ def kernel(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
 ) -> dict[str, Any]:
     root = tmp_path / "cgroup"
-    device_kind = getattr(request, "param", "CPU")
-    unit = f"eom-embedding-benchmark-{device_kind.lower()}@{EXECUTION_ID}.service"
+    selection = getattr(request, "param", "CPU")
+    device_kind, budget = selection if isinstance(selection, tuple) else (selection, 180)
+    suffix = "-budget600" if budget == 600 else ""
+    unit = f"eom-embedding-benchmark-{device_kind.lower()}{suffix}@{EXECUTION_ID}.service"
     directory = root / "system.slice" / unit
     directory.mkdir(parents=True)
     for path in (root, directory.parent, directory):
@@ -227,6 +232,68 @@ def test_cuda_uses_only_its_exact_benchmark_unit_without_gpu_calls(kernel: dict[
     assert observer.observe_delta() == 0
     with pytest.raises(BenchmarkHostObservationError, match="CAPTURE_INVALID"):
         host.OwnBenchmarkHostOomObserver(device="CPU", execution_id=EXECUTION_ID)
+
+
+@pytest.mark.parametrize("kernel", (("CPU", 600), ("CUDA", 600)), indirect=True)
+def test_budget600_observes_only_selected_original_unit_and_keeps_counter_baseline(
+    kernel: dict[str, Any],
+) -> None:
+    overwrite(kernel["events"], counters(oom=3, oom_kill=1))
+    observer = host.OwnBenchmarkHostOomObserver(
+        device=kernel["device"], execution_id=EXECUTION_ID, policy=successor_policy()
+    )
+    assert observer.observe_delta() == 0
+    overwrite(kernel["events"], counters(oom=5, oom_kill=1))
+    assert observer.observe_delta() == 2
+    assert kernel["read_count"] == 3
+
+
+@pytest.mark.parametrize(
+    ("kernel", "policy"),
+    (
+        (("CPU", 180), successor_policy()),
+        (("CUDA", 180), successor_policy()),
+        (("CPU", 600), None),
+        (("CUDA", 600), None),
+        (("CPU", 600), benchmark_policy()),
+        (("CUDA", 600), benchmark_policy()),
+    ),
+    indirect=("kernel",),
+)
+def test_policy_and_actual_unit_family_mismatch_cannot_invent_an_oom_baseline(
+    kernel: dict[str, Any], policy: Any
+) -> None:
+    with pytest.raises(BenchmarkHostObservationError, match="CAPTURE_INVALID"):
+        host.OwnBenchmarkHostOomObserver(
+            device=kernel["device"], execution_id=EXECUTION_ID, policy=policy
+        )
+    assert kernel["read_count"] == 0
+
+
+@pytest.mark.parametrize(
+    "policy",
+    (
+        successor_policy().model_copy(update={"timeout_seconds": 900}),
+        successor_policy().model_copy(update={"schema_version": "future"}),
+        {"timeout_seconds": 600},
+    ),
+)
+def test_unknown_or_inexact_policy_cannot_select_a_native_unit(
+    kernel: dict[str, Any], policy: Any
+) -> None:
+    with pytest.raises(BenchmarkHostObservationError, match="CAPTURE_INVALID"):
+        host.OwnBenchmarkHostOomObserver(device="CPU", execution_id=EXECUTION_ID, policy=policy)
+    assert kernel["read_count"] == 0
+
+
+@pytest.mark.parametrize("kernel", (("CPU", 600), ("CUDA", 600)), indirect=True)
+def test_unknown_budget_suffix_is_not_accepted_as_a_known_family(kernel: dict[str, Any]) -> None:
+    kernel["cgroup"] = kernel["cgroup"].replace(b"-budget600@", b"-budget900@")
+    with pytest.raises(BenchmarkHostObservationError, match="CAPTURE_INVALID"):
+        host.OwnBenchmarkHostOomObserver(
+            device=kernel["device"], execution_id=EXECUTION_ID, policy=successor_policy()
+        )
+    assert kernel["read_count"] == 0
 
 
 def test_captured_process_cannot_be_reused_after_fork(

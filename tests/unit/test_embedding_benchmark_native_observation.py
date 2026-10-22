@@ -1,5 +1,6 @@
 """Full real Unix credential framing and synthetic encoder; no installed/PID1/GPU claim."""
 
+import json
 import os
 import socket
 import threading
@@ -27,8 +28,9 @@ from tests.unit.test_embedding_device_benchmark_worker import FakeBackend, HostO
 
 @pytest.mark.parametrize("ordinal", (1, 4))
 @pytest.mark.parametrize("late_ack_delay", (False, True))
+@pytest.mark.parametrize("diagnostic_failure", (False, True))
 def test_actual_owner_clocks_include_each_fresh_authorization_and_ranking(
-    tmp_path, monkeypatch, ordinal, late_ack_delay
+    tmp_path, monkeypatch, ordinal, late_ack_delay, diagnostic_failure
 ):
     files, root, borrowed = stage_files(tmp_path, monkeypatch, ordinal)
     invocation = worker_invocation(ordinal)
@@ -76,6 +78,17 @@ def test_actual_owner_clocks_include_each_fresh_authorization_and_ranking(
     transport.peer_fence = lambda actual: (
         calls.append("peer") if actual == peer else pytest.fail("peer changed")
     )
+    diagnostics = []
+
+    def record_diagnostic(_logger, _level, message, **fields):
+        # Optional stderr/JSON work starts only after the final frozen clocks,
+        # resource exchange and channel cleanup, never inside a measured query.
+        assert transport._writer_may_exit and right.fileno() == -1
+        diagnostics.append((json.loads(message), fields))
+        if diagnostic_failure:
+            raise OSError("synthetic private logging failure must not escape")
+
+    monkeypatch.setattr(owner, "log_event", record_diagnostic)
     expires = time.monotonic_ns() + 30 * 10**9
     worker = BenchmarkWorkerChannel(
         left, invocation, expected_peer=peer, peer_fence=lambda _: None, expires_ns=expires
@@ -130,6 +143,24 @@ def test_actual_owner_clocks_include_each_fresh_authorization_and_ranking(
     assert calls.count("read-QUERY") == (10 if ordinal == 1 else 0)
     assert len(observed[0].queries) == (10 if ordinal == 1 else 0)
     assert all(t.end_to_end_ns >= t.authorization_ns + t.encode_ns for t in observed[0].queries)
+    count = 21 if ordinal == 1 else 1
+    assert len(diagnostics) == count * 3 + 1 <= owner._MAX_OWNER_PHASES
+    assert [record["phase"] for record, _fields in diagnostics] == [
+        phase for _ in range(count) for phase in ("CHECKPOINT_RECEIVE", "AUTHORIZATION", "ACK")
+    ] + ["RESOURCE_FINALIZATION"]
+    assert [record["checkpoint_sequence"] for record, _fields in diagnostics] == [
+        sequence for sequence in range(1, count + 1) for _ in range(3)
+    ] + [0]
+    for record, fields in diagnostics:
+        assert set(record) == {"phase", "checkpoint_sequence", "elapsed_ms", "outcome"}
+        assert type(record["elapsed_ms"]) is int and record["elapsed_ms"] >= 0
+        assert record["outcome"] == "COMPLETED"
+        assert fields == {
+            "job_id": None,
+            "worker_slot": None,
+            "component": "catalog_embedding_benchmark",
+            "event": "BENCHMARK_OWNER_PHASE",
+        }
     if late_ack_delay:
         cold_authorization = next(span for span in authorization_spans if span[0] == "COLD_READY")
         assert observed[0].cold_completed_ns <= cold_authorization[1]
@@ -150,3 +181,59 @@ def test_terminal_send_does_not_race_root_unlink_or_imply_cleanup(tmp_path):
     value.peer_fence(value.listener)
     with pytest.raises(ValueError, match="LISTENER_CHANGED"):
         value.peer_fence(BenchmarkUnixPeer(2, 0, 0))
+
+
+def test_failed_receive_flushes_only_safe_diagnostics_after_close_without_replacing_failure(
+    monkeypatch,
+):
+    invocation = worker_invocation(4)
+    identity = CpuHandoffIdentity(os.getuid(), os.getgid())
+    monkeypatch.setattr(owner, "fixed_owner_identity", lambda: identity)
+    authorization = object.__new__(BenchmarkLaunchAuthorization)
+    authorization._invocation = invocation
+    monkeypatch.setattr(BenchmarkLaunchAuthorization, "assert_current", lambda self: None)
+    left, right = socket.socketpair()
+    peer = BenchmarkUnixPeer(os.getpid(), os.getuid(), os.getgid())
+    transport = object.__new__(CapturedBenchmarkNativeConnection)
+    transport.connection, transport.listener, transport.sender = right, peer, peer
+    original = ValueError("private source token prompt and password must not be logged")
+
+    class FailedChannel:
+        def receive_checkpoint(self):
+            raise original
+
+        def close(self):
+            right.close()
+
+    monkeypatch.setattr(
+        owner.BenchmarkOwnerChannel,
+        "from_activated_listener",
+        lambda *_args, **_kwargs: FailedChannel(),
+    )
+    diagnostics = []
+
+    def failed_diagnostic(_logger, _level, message, **_fields):
+        assert right.fileno() == -1
+        diagnostics.append(json.loads(message))
+        raise OSError("synthetic private handler failure")
+
+    monkeypatch.setattr(owner, "log_event", failed_diagnostic)
+    try:
+        with pytest.raises(ValueError) as caught:
+            owner.observe_benchmark_native_session(
+                transport,
+                invocation,
+                staged_inputs(),
+                authorization=authorization,
+                owner_started_ns=time.monotonic_ns() - 1_000_000,
+                expires_ns=time.monotonic_ns() + 30 * 10**9,
+            )
+        assert caught.value is original
+        assert len(diagnostics) == 1
+        assert diagnostics[0]["phase"] == "CHECKPOINT_RECEIVE"
+        assert diagnostics[0]["checkpoint_sequence"] == 1
+        assert diagnostics[0]["outcome"] == "ABORTED"
+        assert "private" not in json.dumps(diagnostics)
+    finally:
+        left.close()
+        right.close()

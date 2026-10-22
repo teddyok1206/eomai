@@ -1,0 +1,252 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-device-benchmark/1.1",
+  "title": "Fixed native device benchmark execution-budget successor V1.1",
+  "description": "Explicit 600-second benchmark budget only. Shared model/input/recipe/numerical/resource definitions retain their immutable V1.0 meaning. No authentication extension, compute authority, automatic retry or GPU activation follows from validation.",
+  "$defs": {
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "purpose",
+        "policy_id",
+        "policy_revision_id",
+        "timeout_seconds",
+        "cpu_quota_percent",
+        "tasks_max",
+        "rss_limit_bytes",
+        "gpu_limit_bytes",
+        "maximum_envelope_bytes",
+        "maximum_staged_bytes",
+        "maximum_output_bytes",
+        "maximum_output_members",
+        "policy_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-policy/1.1"
+        },
+        "purpose": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/policy/properties/purpose"
+        },
+        "policy_id": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/policy/properties/policy_id"
+        },
+        "policy_revision_id": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/policy/properties/policy_revision_id"
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "const": 600
+        },
+        "cpu_quota_percent": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/policy/properties/cpu_quota_percent"
+        },
+        "tasks_max": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/policy/properties/tasks_max"
+        },
+        "rss_limit_bytes": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/policy/properties/rss_limit_bytes"
+        },
+        "gpu_limit_bytes": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/policy/properties/gpu_limit_bytes"
+        },
+        "maximum_envelope_bytes": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/policy/properties/maximum_envelope_bytes"
+        },
+        "maximum_staged_bytes": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/policy/properties/maximum_staged_bytes"
+        },
+        "maximum_output_bytes": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/policy/properties/maximum_output_bytes"
+        },
+        "maximum_output_members": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/policy/properties/maximum_output_members"
+        },
+        "policy_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/policy/properties/policy_sha256"
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "purpose",
+        "benchmark_id",
+        "benchmark_revision_id",
+        "operator_audit_id",
+        "graph_snapshot",
+        "policy_revision_id",
+        "policy_sha256",
+        "sources",
+        "document_rows",
+        "query_rows",
+        "input_manifest",
+        "input_set_sha256",
+        "view_recipe",
+        "family",
+        "cpu",
+        "cuda",
+        "recipe",
+        "execution_policy",
+        "request_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-request/1.1"
+        },
+        "kind": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/kind"
+        },
+        "purpose": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/purpose"
+        },
+        "benchmark_id": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/benchmark_id"
+        },
+        "benchmark_revision_id": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/benchmark_revision_id"
+        },
+        "operator_audit_id": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/operator_audit_id"
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/graph_snapshot"
+        },
+        "policy_revision_id": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/policy_revision_id"
+        },
+        "policy_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/policy_sha256"
+        },
+        "sources": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/sources"
+        },
+        "document_rows": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/document_rows"
+        },
+        "query_rows": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/query_rows"
+        },
+        "input_manifest": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/input_manifest"
+        },
+        "input_set_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/input_set_sha256"
+        },
+        "view_recipe": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/view_recipe"
+        },
+        "family": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/family"
+        },
+        "cpu": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/cpu"
+        },
+        "cuda": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/cuda"
+        },
+        "recipe": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/recipe"
+        },
+        "execution_policy": {
+          "$ref": "#/$defs/policy"
+        },
+        "request_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/request/properties/request_sha256"
+        }
+      }
+    },
+    "invocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "purpose",
+        "benchmark_id",
+        "benchmark_revision_id",
+        "job_id",
+        "execution_id",
+        "owner_request_sha256",
+        "launch_ordinal",
+        "device",
+        "local_input",
+        "input_set_sha256",
+        "family",
+        "runtime",
+        "recipe",
+        "execution_policy",
+        "invocation_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-benchmark-invocation/1.1"
+        },
+        "kind": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/invocation/properties/kind"
+        },
+        "purpose": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/invocation/properties/purpose"
+        },
+        "benchmark_id": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/invocation/properties/benchmark_id"
+        },
+        "benchmark_revision_id": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/invocation/properties/benchmark_revision_id"
+        },
+        "job_id": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/invocation/properties/job_id"
+        },
+        "execution_id": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/invocation/properties/execution_id"
+        },
+        "owner_request_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/invocation/properties/owner_request_sha256"
+        },
+        "launch_ordinal": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/invocation/properties/launch_ordinal"
+        },
+        "device": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/invocation/properties/device"
+        },
+        "local_input": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/invocation/properties/local_input"
+        },
+        "input_set_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/invocation/properties/input_set_sha256"
+        },
+        "family": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/invocation/properties/family"
+        },
+        "runtime": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/invocation/properties/runtime"
+        },
+        "recipe": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/invocation/properties/recipe"
+        },
+        "execution_policy": {
+          "$ref": "#/$defs/policy"
+        },
+        "invocation_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-device-benchmark/1.0#/$defs/invocation/properties/invocation_sha256"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/policy"
+    },
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/invocation"
+    }
+  ]
+}

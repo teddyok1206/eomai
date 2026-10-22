@@ -21,7 +21,9 @@ from eom_orchestrator.inference_transfer_cpu_systemd import inspect_cpu_unit
 from eom_orchestrator.systemd_unit_processes import root_owned_unit_processes
 
 from eom_catalog_service.embedding_benchmark_cuda_observation import (
-    CUDA_BENCHMARK_TEMPLATE,
+    CUDA_BENCHMARK_TEMPLATE as CUDA_BENCHMARK_TEMPLATE,
+)
+from eom_catalog_service.embedding_benchmark_cuda_observation import (
     BenchmarkCudaReadyObservation,
     capture_benchmark_cuda_pinned_files,
     observe_benchmark_cuda_ready,
@@ -149,7 +151,7 @@ class BenchmarkGpuMemoryObserver:
             == self._environment.owner_start_ticks,
             "OWNER_CHANGED",
         )
-        actual = inspect_cpu_unit(self._unit, template=CUDA_BENCHMARK_TEMPLATE)
+        actual = inspect_cpu_unit(self._unit, template=self._capture.service_template)
         _require(
             actual.invocation_id == ready.unit.invocation_id
             and actual.main_pid == ready.pid

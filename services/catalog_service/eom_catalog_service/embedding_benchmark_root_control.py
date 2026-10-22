@@ -92,6 +92,7 @@ def serve_root_benchmark_launch(
             expected_peer=peer,
             peer_fence=fence,
             controller_release=controller_release,
+            policy=staged.request.execution_policy,
         )
         channel.receive_association()
         return serve_associated_root_benchmark_launch(

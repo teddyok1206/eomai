@@ -21,11 +21,13 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     MAX_BENCHMARK_ENVELOPE_BYTES,
     BenchmarkAck,
     BenchmarkCheckpoint,
+    BenchmarkExecutionPolicy,
     BenchmarkResourceEvidence,
     BenchmarkSession,
     BenchmarkWorkerInvocation,
     benchmark_ack_for_checkpoint,
     benchmark_checkpoint_count,
+    benchmark_timeout_seconds,
     embedding_device_benchmark_bytes,
     parse_embedding_device_benchmark_bytes,
     validate_benchmark_ack,
@@ -80,7 +82,8 @@ class _Frames:
         *,
         wait_observer: Callable[[], None] | None = None,
         expected_sender: BenchmarkUnixPeer | None = None,
-        maximum_lifetime_seconds: int = 180,
+        maximum_lifetime_seconds: int | None = None,
+        policy: BenchmarkExecutionPolicy | None = None,
     ) -> None:
         self.connection = connection
         self.peer = expected_peer
@@ -91,6 +94,9 @@ class _Frames:
         self.failed = False
         self.closed = False
         try:
+            seconds = 180 if policy is None else benchmark_timeout_seconds(policy)
+            if maximum_lifetime_seconds is None:
+                maximum_lifetime_seconds = seconds
             now = time.monotonic_ns()
             if (
                 not isinstance(connection, socket.socket)
@@ -98,7 +104,7 @@ class _Frames:
                 or not callable(peer_fence)
                 or type(expires_ns) is not int
                 or type(maximum_lifetime_seconds) is not int
-                or maximum_lifetime_seconds not in (180, 210)
+                or maximum_lifetime_seconds not in (seconds, seconds + 30)
                 or not now < expires_ns <= now + maximum_lifetime_seconds * 10**9
                 or (wait_observer is not None and not callable(wait_observer))
                 or (expected_sender is not None and type(expected_sender) is not BenchmarkUnixPeer)
@@ -305,7 +311,12 @@ class BenchmarkResourceChannel:
         wait_observer: Callable[[], None] | None = None,
     ) -> None:
         self._frames = _Frames(
-            connection, expected_peer, peer_fence, expires_ns, wait_observer=wait_observer
+            connection,
+            expected_peer,
+            peer_fence,
+            expires_ns,
+            wait_observer=wait_observer,
+            policy=invocation.execution_policy,
         )
         self._sent = self._received = False
         try:
@@ -427,8 +438,20 @@ class BenchmarkWorkerChannel:
         expires_ns: int,
     ) -> None:
         self._exchange = _Exchange(
-            _Frames(connection, expected_peer, peer_fence, expires_ns), invocation
+            _Frames(
+                connection,
+                expected_peer,
+                peer_fence,
+                expires_ns,
+                policy=invocation.execution_policy,
+            ),
+            invocation,
         )
+
+    @property
+    def execution_policy(self) -> BenchmarkExecutionPolicy:
+        """Read the validated immutable selection; this grants no continuation authority."""
+        return self._exchange.invocation.execution_policy
 
     def assert_initial_invocation(self, invocation: BenchmarkWorkerInvocation) -> None:
         """Bind the staged invocation before model entry; this is not a source grant."""
@@ -507,7 +530,9 @@ class BenchmarkOwnerChannel:
         continuation_fence: ContinuationFence,
         expires_ns: int,
     ) -> None:
-        frames = _Frames(connection, expected_peer, peer_fence, expires_ns)
+        frames = _Frames(
+            connection, expected_peer, peer_fence, expires_ns, policy=invocation.execution_policy
+        )
         self._initialize(frames, invocation, continuation_fence)
 
     def _initialize(
@@ -546,6 +571,7 @@ class BenchmarkOwnerChannel:
             peer_fence,
             expires_ns,
             expected_sender=expected_sender,
+            policy=invocation.execution_policy,
         )
         endpoint = cls.__new__(cls)
         endpoint._initialize(frames, invocation, continuation_fence)

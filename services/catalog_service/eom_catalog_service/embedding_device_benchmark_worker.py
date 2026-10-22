@@ -376,17 +376,20 @@ def run_embedding_device_benchmark(
             "BENCHMARK_WORKER_CAPTURE_INVALID",
         )
         _require(
-            type(expires_ns) is int
-            and time.monotonic_ns() < expires_ns <= time.monotonic_ns() + 180 * 10**9,
-            "BENCHMARK_WORKER_CAPTURE_INVALID",
-        )
-        _require(
             callable(backend_scope) and callable(getattr(host_oom_observer, "observe_delta", None)),
             "BENCHMARK_WORKER_CAPTURE_INVALID",
         )
-        files.__enter__()
+        files.begin_worker_execution()
         entered = True
         invocation = files.read_invocation()
+        from eom_catalog_contracts.embedding_device_benchmark import benchmark_timeout_seconds
+
+        seconds = benchmark_timeout_seconds(invocation.execution_policy)
+        _require(
+            type(expires_ns) is int
+            and time.monotonic_ns() < expires_ns <= time.monotonic_ns() + seconds * 10**9,
+            "BENCHMARK_WORKER_CAPTURE_INVALID",
+        )
         channel.assert_initial_invocation(invocation)
         inputs = files.read_inputs(invocation)
         check()

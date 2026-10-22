@@ -187,6 +187,7 @@ def _connect_benchmark_control(
                 expected_peer=peer,
                 peer_fence=fence,
                 controller_release=controller_release,
+                policy=request.execution_policy if request is not None else None,
             )
             authorization.assert_current()
             channel.send_association()

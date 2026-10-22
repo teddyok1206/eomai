@@ -46,6 +46,64 @@ def test_ready_is_once_only_separate_from_numerical_members_and_budget(tmp_path,
         os.close(borrowed)
 
 
+def test_sealed_cuda_ready_capture_hands_off_once_without_context_reentry(tmp_path, monkeypatch):
+    files, execution, borrowed = stage_files(tmp_path, monkeypatch, 2)
+    ready_path = execution / "cuda-ready.json"
+    ready_path.touch(mode=0o640)
+    ready_path.chmod(0o640)
+    try:
+        with files:
+            files.write_cuda_ready(ready_for_process(monkeypatch))
+            descriptor = files._input
+            assert files.begin_worker_execution() is files
+            assert files._input == descriptor and files._budget == 0
+            with pytest.raises(BenchmarkFilesError):
+                files.begin_worker_execution()
+            files.assert_current()
+            assert all(path.stat().st_size == 0 for path in (execution / "outputs").iterdir())
+        assert os.fstat(borrowed).st_size > 0
+    finally:
+        files.close()
+        os.close(borrowed)
+
+
+@pytest.mark.parametrize("fault", ("unsealed", "poisoned", "changed_ready", "output_started"))
+def test_cuda_capture_handoff_refuses_unsealed_changed_or_already_used_files(
+    tmp_path, monkeypatch, fault
+):
+    files, execution, borrowed = stage_files(tmp_path, monkeypatch, 2)
+    ready_path = execution / "cuda-ready.json"
+    ready_path.touch(mode=0o640)
+    ready_path.chmod(0o640)
+    try:
+        with files:
+            if fault != "unsealed":
+                files.write_cuda_ready(ready_for_process(monkeypatch))
+            if fault == "poisoned":
+                files._ready_state = "POISONED"
+            elif fault == "changed_ready":
+                ready_path.write_bytes(b"changed")
+            elif fault == "output_started":
+                files.write_vectors(benchmark_sample_program(2)[0], b"\0" * 24576)
+            with pytest.raises(BenchmarkFilesError):
+                files.begin_worker_execution()
+    finally:
+        files.close()
+        os.close(borrowed)
+
+
+def test_cpu_capture_does_not_gain_general_reentrant_context_semantics(tmp_path, monkeypatch):
+    files, _, borrowed = stage_files(tmp_path, monkeypatch, 1)
+    try:
+        with files, pytest.raises(BenchmarkFilesError):
+            files.begin_worker_execution()
+        with pytest.raises(BenchmarkFilesError):
+            files.begin_worker_execution()
+    finally:
+        files.close()
+        os.close(borrowed)
+
+
 @pytest.mark.parametrize("fault", ("missing", "nonempty", "symlink", "hardlink", "mode", "acl"))
 def test_untrusted_ready_member_is_not_created_or_overwritten(tmp_path, monkeypatch, fault):
     files, execution, borrowed = stage_files(tmp_path, monkeypatch, 2)

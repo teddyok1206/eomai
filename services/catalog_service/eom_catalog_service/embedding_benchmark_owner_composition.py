@@ -7,11 +7,15 @@ import re
 
 from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkOwnerRequest,
+    benchmark_policy_schema_ref,
     embedding_device_benchmark_bytes,
     parse_embedding_device_benchmark_bytes,
 )
 from eom_identifiers import sha256_bytes
 from eom_identity_service import AuthenticatedOperatorSession, AuthenticatedSessionFence
+from eom_orchestrator.embedding_benchmark_poststart_failure import (
+    BenchmarkPoststartFailureApplication,
+)
 from eom_orchestrator.embedding_benchmark_prelaunch_failure import (
     BenchmarkPrelaunchFailureApplication,
 )
@@ -27,6 +31,9 @@ from eom_catalog_service.embedding_benchmark_launch_publication import (
 from eom_catalog_service.embedding_benchmark_owner_admission import (
     BenchmarkOwnerConfiguration,
     CatalogBenchmarkOwnerAdmission,
+)
+from eom_catalog_service.embedding_benchmark_poststart_inspection import (
+    FixedBenchmarkPoststartInspection,
 )
 from eom_catalog_service.embedding_benchmark_prelaunch_inspection import (
     FixedBenchmarkPrelaunchInspection,
@@ -66,6 +73,8 @@ def _owner_admission(
         or session_fence.owner.fresh_auth_seconds > 900
         or configuration.request_sha256 != checked.request_sha256
         or configuration.execution_policy_sha256 != checked.execution_policy.policy_sha256
+        or configuration.execution_policy.schema_ref
+        != benchmark_policy_schema_ref(checked.execution_policy)
         or configuration.execution_policy.sha256
         != sha256_bytes(embedding_device_benchmark_bytes(checked.execution_policy))
     ):
@@ -163,3 +172,31 @@ def build_benchmark_prelaunch_failure_application(
         )
     except (ValueError, TypeError, SchemaError, AttributeError, KeyError, OSError):
         raise ValueError("BENCHMARK_PRELAUNCH_COMPOSITION_INVALID") from None
+
+
+def build_benchmark_poststart_failure_application(
+    publisher: ControlFileSetPublisher,
+    *,
+    request: BenchmarkOwnerRequest,
+    configuration: BenchmarkOwnerConfiguration,
+    capture: AuthenticatedOperatorSession,
+    session_fence: AuthenticatedSessionFence,
+    inspection: FixedBenchmarkPoststartInspection,
+) -> BenchmarkPoststartFailureApplication:
+    """Select actual protected partial-failure inspection; no launch or source grant."""
+    try:
+        if type(inspection) is not FixedBenchmarkPoststartInspection:
+            raise ValueError()
+        inspection.__post_init__()
+        _checked, _commit, admission = _owner_admission(
+            publisher,
+            request=request,
+            configuration=configuration,
+            capture=capture,
+            session_fence=session_fence,
+        )
+        return BenchmarkPoststartFailureApplication(
+            publisher.sessions, admission=admission, inspection=inspection
+        )
+    except (ValueError, TypeError, SchemaError, AttributeError, KeyError, OSError):
+        raise ValueError("BENCHMARK_POSTSTART_COMPOSITION_INVALID") from None
