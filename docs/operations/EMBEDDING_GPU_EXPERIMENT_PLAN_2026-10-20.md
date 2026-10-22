@@ -922,3 +922,41 @@ Inh/Prm/Eff/Amb를 모두0으로 내렸다. NoNewPrivileges와 기존 filesystem
 조회는 원 proof929e/observationd739를 그대로 재검증하고 성공 종료했다. supervisor/proof/
 association 모두 실제로 읽을 수 있었다. 이전 실패 preflight·진단 기록은 보존했다.
 Job closure·새 benchmark 등록·CPU prefix 교체·여섯 모델 비교는 아직 수행하지 않았다.
+
+### 원 실제 시간초과의 공식 closure — 2026-10-22 18:24 UTC
+
+`eom-benchmark-original-poststart-close-20261022.service` invocation
+`0397d7e8152c4d3299f7978b4a7e9c33`는 실제 guiadmin 인증 뒤 원 request4e40의 Job
+`job_25b047f39709405190942c42c619a441`을 지원된 post-start application으로 정리했다.
+18:24:33.913306 UTC에 append-only event8과 함께 RUNNING→FAILED가 확정됐으며 decision은
+`3b07acf382bbbbdf81b4e2a9f1721ef514d601933ce9fd00ddd250446ca5e23f`다.
+같은 세션의 같은 요청을18:24:35.545943 UTC에 다시 실행해 동일 decision/event와
+`created=false`를 확인했다. 원 실패·부분 출력·root proof는 그대로다.
+
+제한 계정은 실제 현재 operator/source/Graph/policy fence와 root 증명을 재검증했다.
+직접 row UPDATE, 실패의 성공 재해석, 새 Job/Artifact/native/model 실행은 없었다.
+정리 전 실제 SDK/원 파일·provider·capability/FD·proof 검사를 마친 뒤에만 getpass를
+표시했다. 비밀번호는 저장하지 않았고 bearer는 child process 밖으로 보내지 않았다.
+공식 close/replay 뒤 실제 memory session은 닫았으며 향후 계산의 인증으로 가장하지 않는다.
+CPU INDEX/QUERY는 원 PID/invocation으로 유지했고, 새600초 비교 request 등록·CPU
+prefix 교체·여섯 수치/성능 비교·GPU 기본값 활성화는 여전히 미완료다.
+
+### 다음 CPU 전환의 준비 범위와 인증 경계
+
+CPU 전환/복구 초안은 `/tmp/eom-benchmark-cpu-cutover-prep-1RNjsY0A`에 보존했다.
+정확한 retained tree를 검증하는 복구 알고리즘30개와 revision-only config/연결 설정의
+합성·정적 검사10개, 총40개가 통과했다. 기존 metadata2e5 SDK의 실제 공개 모델로 여섯
+현재 control의 순수 projection도 검사했다. 이는 CPU cutover·runtime admission·rollback의
+실제 PASS가 아니며 **CUTOVER_READY=NO**다. 현재 서비스는 멈추지 않았다.
+
+앞으로 필요한 것은 별도 queue나 인증 우회가 아니라, 기존 finite installer와 새 config/
+실제 no-forward probe/seal, 멈춘 INDEX/QUERY의 여섯 연결 control을 동일한 호환 조합으로
+전환하는 준비다. 실제 설치 후 생기는 inventory/epoch/receipt를 미리 만들어 채우지 않는다.
+전환 전에 forward·실패시 보존/복원 알고리즘과 원본 재감사 입력을 검토하고, 각 effect 뒤의
+실제 관찰 값을 다음 고정 단계의 입력으로 검증한다. 복원도 새 자격 검증이 필요하다.
+
+이번 closure용 인증은 정확한 close/replay 후 종료됐다. 비밀번호·bearer를 저장하거나
+운영자 인증을24시간 받은 것으로 간주하지 않는다. 실제600초 비교는 모든 설치와 root/
+owner 준비가 끝난 뒤 현재 인증으로만 시작한다. 여섯 실행 중에도 이미 완료·게시된
+clean prefix 사이에서만 진짜 재인증할 수 있다. 준비되지 않은 도구 때문에 반복 로그인하는
+경로를 만들지 않으며, 인증900초의 계약을 조용히 완화하지 않는다.
