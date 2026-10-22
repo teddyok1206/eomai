@@ -827,3 +827,38 @@ prefix를 바꾸려면 건강한 INDEX/QUERY의 scoped drain과 연결된 verifi
 Slack milestone은 `devreport_9e613db548cb4735a9355258972f93f7`로 전송했다.
 이 소스 checkpoint의 실제 새 모델/GPU 추론0, 여섯 비교 Artifact0, GPU 기본값 미활성이다.
 정상 INDEX/QUERY는 PID2935655/1983188과 원 invocation으로 계속 active였다.
+
+### 별도 호환 SDK 설치와 원 실제 실패 증명 — 2026-10-22 17:56 UTC
+
+- main 수정은 `a4be4f528631c455060c9af10abb47585c5e9163`으로 커밋·push했다.
+  원6c4 기반의 독립 native/owner 후보는
+  `fea7fe57bd7d8b6aa6601fe324cf5866ef7d1f09`이며 별도 maintenance branch도 push했다.
+  해당 후보의716개 집중,73개 READY,3개 schema 검사와 정적 검증은 별도 기록한다.
+- 동일한 원 numerical3을 유지한 source tar는65925120 bytes,
+  raw `4d6c6b9fc19694c02ea0b8ea57f85dcd5947f798007546651840c9b4ed687e41`다.
+  platform wheel은4307929 bytes, raw
+  `6c22233cafbfaa20ea1d8ce116500611b1e0891f1d926337341d9e6b46ca2e20`다.
+  원 API contracts91ff pair의 wheel RECORD 검증이 PASS했다.
+- 공식 owner installer로 별도 `/opt/eom/embedding-owner-releases/fea7fe57…`에만 설치했다.
+  installed platform RECORD raw는
+  `420d1e2afb69e48bb9010fb06a8b260d44104459fa88a39882bd9f5142e6b9b1`이다.
+  실제 CPU/CUDA 수치 prefix와 서비스 설정·기본값은 바꾸지 않았다.
+- root proof minter는 이 보호된 SDK/RECORD와 원 request raw d164bff8/invocation raw28a01e02,
+  정확한 auth5 controller6c4/eececd1a를 pin했다. source·형식·권한 guard7개가 통과했다.
+  첫 로컬 staging은 계정과 primary group 이름이 같다고 잘못 가정해 unit 생성 전에 멈췄다.
+  이미 설치된 helper bytes/권한과 미생성 unit/부재 proof를 확인한 뒤 실제 primary GID1000을
+  조회해 사용했다. 계정·그룹·권한 정책을 바꾸거나 원 실패를 재실행하지 않았다.
+- 실제 `eom-benchmark-original-poststart-proof-20261022.service` invocation
+  `970d640894de4f6899650374b80bad44`는17:56:31.407226 UTC에 create-once proof를 생성하고
+  성공 종료했다. 원 execution은 b7f5a692이며 proof raw는
+  `929e82552ff83e41bf1c1720a770e0eb3c8007c6196f386ff3274eb9970cfdf2`, semantic은
+  `d7399026241fbebf3b77baad55ec7b5e7320c72f59b11059e73672b35db7cbed`다.
+  `/run/eom-incremental-embeddings/benchmark-poststart-recovery/b7f5a692b8b24dc5b886821b8635f567.json`
+  의 root-owned proof다. 원 root completion·retirement·부분 파일을 수정하지 않았다.
+  root unit은 원 파일을 읽기 전용으로 두고 proof 디렉터리만 쓰기 가능했으며 NAS/인증/모델,
+  네트워크·GPU 장치를 차단했다. Job state 변경·DB·native/model 실행은0이다.
+- 두 후속 prefix audit 입력은 OLD stdlib reader로 검증된 **UNTRUSTED DRAFT**다.
+  CPU raw599b9e98/CUDA rawa3e33780은 platform private archive만 새 후보로 바꾸고,
+  기존 host·bootstrap·Conda/public archive·실제 created_at 파일 pin·GPU lease를 보존한다.
+  실제 prefix 교체, 새 native config/receipt/probe/seal은 아직 수행하지 않았다.
+  실제 owner capture와 genuine operator/source admission 뒤의 원 Job failure closure도 남아 있다.
