@@ -124,8 +124,11 @@ INDEX·QUERY 연결의 Codex 풀이 호출은0이며 외부 LLM API는 사용하
 실제 시작 후 실패를 정리하는 application 경계, 완료한 측정만 이어가는 실행 단위를
 추가합니다. 실제 임시 PostgreSQL 동시성·재전송34개와 제한된 root 권한의 파일 보호
 검증1개가 통과했습니다. 이 검증은 모델 추론·운영 배포·비교 성공을 뜻하지 않습니다.
-새 native prefix의 전체 설치 검증과 새 admission, 운영 CPU 연결 설정의 호환 전환은
-별도 미완료 gate입니다. 기존 receipt 아래 코드를 덮거나 인증 시간을 늘리지 않습니다.
+18:18 UTC 현재 새 CUDA prefix의 전체 파일 감사와 실제 무모델 CUDA 초기화·동기화,
+새 config/receipt 봉인·독립 조회·지원된 잠금 반환은 통과했습니다. 원 실패 증명도
+실제 제한 계정으로 재조회했습니다. 이는 모델 계산·성능 비교 성공과는 다릅니다.
+CPU prefix 및 연결 설정의 호환 전환과 여섯 비교는 별도 미완료 gate입니다.
+기존 receipt 아래 코드를 덮거나 인증 시간을 늘리지 않습니다.
 [설계와 배포 경계](docs/architecture/EMBEDDING_BENCHMARK_BUDGET_SUCCESSOR_2026_10_22.md) ·
 [실제 실행·실패·복구 기록](docs/operations/EMBEDDING_GPU_EXPERIMENT_PLAN_2026-10-20.md)
 

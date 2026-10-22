@@ -862,3 +862,63 @@ Slack milestone은 `devreport_9e613db548cb4735a9355258972f93f7`로 전송했다.
   기존 host·bootstrap·Conda/public archive·실제 created_at 파일 pin·GPU lease를 보존한다.
   실제 prefix 교체, 새 native config/receipt/probe/seal은 아직 수행하지 않았다.
   실제 owner capture와 genuine operator/source admission 뒤의 원 Job failure closure도 남아 있다.
+
+### CUDA private-prefix 교체·byte audit — 2026-10-22 18:05 UTC
+
+`eom-cuda-budget600-prefix-fea7fe57.service`의 실제 invocation은
+`3b9fc4327e1742388fe919aff97e6bac`이며 기존 보호된 installer와 물리 GPU lease를
+사용해 한 번 실행하고 성공 종료했다. 새 prefix는 fea7 private source이며 원 numerical3,
+모델·public/Conda archive·CUDA host34ed와 GPU lease 의미를 유지했다. CPU 두 owner의
+PID/invocation과 CPU 기본값은 바꾸지 않았다. 새 budget600 unit은 아직 설치하지 않았다.
+
+- 실제 audit: `/opt/eom/.embedding-index-install-ADAWDfi1`.
+- retained predecessor:
+  `/opt/eom/conda/envs/.embedding-index-prepublication-CUDA_INDEX_FP32-.embedding-index-install-ADAWDfi1`.
+- root600 inventory는8970837 bytes, raw
+  `16e0a154bf9776d682061d509cb85123e205f49674170b7071f1b34de76ff221`, semantic
+  `10bdc00156387c84e0d53c33e2a3bfa84df360ce166b8680f2a94dd738014e61`이다.
+  entries31733, regular28160, link1380, ELF287, declared bytes7086259962다.
+- 판정은 **BYTE_AUDITED_NOT_ADMITTED**다. 이전6d5 config/receipt는 새 prefix의 승인이
+  아니며, 새 config revision과 실제 no-forward probe·same-live seal/readback이 남았다.
+- 별도 owner-only 원 실패 증명 preflight는18:04:30에 실패했다. 원 root proof와 Job을
+  수정하지 않았으며, 재로그인이나 모델 재실행 전에 content-free 진단으로 실제 실패
+  경계를 확인한다. 감독 코드의 경로가 root700이라는 초기 추정은 실제 root755/444
+  관찰과 달라 원인으로 확정하지 않았다. 실패 기록도 보존한다.
+
+이 checkpoint의 새 모델 추론0, DB 상태 변경0, GPU 기본값 전환0이다.
+Slack `devreport_535b2583f6914bbc83db7ebed4db8e5f`는 설치 PASS와 남은 owner 경계를
+구분해 보고했다. 설치 성공을 여섯 실행의 수치·성능 PASS로 확대하지 않는다.
+
+### 실제 CUDA 자격 검증과 owner proof 조회 복구 — 2026-10-22 18:18 UTC
+
+새 CUDA config는 동일 logical ID의 revision
+`embeddingnativeconfigrev_a04c2b17b3124f93bd04d5735f623235`다. 기존 config와 다른 것은
+revision과 그 hash뿐이며 원 bundle/proof/host/resource/numerical 의미는 같다. raw는
+`477de895adfd1399b84ec429d6021c5e0c5499ee30f1815a6bb49c341a3f02df`, semantic은
+`0854fdad278a7b28e4d6ff3fef33d7578dd17ba9a277ecf4a2f919e5986e1fb0`이다.
+config 발행 unit의 실제 invocation은 `070015f04f2b436f82fba2182d4bfd79`다.
+
+`eom-cuda-budget600-probe-seal-fea7fe57.service` invocation
+`dcce266b170042cd85ff929d881e6c2b`는18:17:41.060244 UTC에 성공했다. 고정 native probe
+execution은 `649d59622f1740d6826497708faae14c`, 실제 native invocation은
+`6c6d851f05cc45d3ad0824c42d1940d6`이다. READY/final ACK, 실제 CUDA 초기화1회·동기화1회,
+same-live seal, 새 root metadata reader와 정확한 supported retirement/lease 해제까지
+확인했다. 모델·tokenizer 생성과 forward는0이다. 새 receipt2.1 raw는
+`579d5e6aa9b5fe6c06a6b9c1a8adf37e353b06c3e4bd4db47c7caa1d86f2bec7`, semantic은
+`aabac42025851aea49454954650d527c6e31a854d4bba31bd670933dc5c5294f`다.
+보호된 실제 summary는
+`/var/lib/eom-cuda-budget600-qualification-fea7fe57/native-probe/summary.json`에 남겼다.
+root metadata reader의 PASS를 향후 실제 numerical interpreter의 입장 검증으로 대체하지 않는다.
+
+owner proof preflight의 실패는 본체 proof adapter가 아니라 진단 launcher의 root→owner
+전환 이전이었다. EOM-free 실제 두 kernel probe에서 ambient가 비어 있으면 root의 실제
+permitted/effective에 SETUID가 없었고, 기존 운영 방식인 parent ambient SETUID를 사용하면
+정확히 UID990으로 전환됐다. owner는 전환 직후 V3 capset의 두 all-zero word와 ambient-clear로
+Inh/Prm/Eff/Amb를 모두0으로 내렸다. NoNewPrivileges와 기존 filesystem/네트워크 격리는
+유지했다. worker 권한이나 계정 그룹을 늘리지 않았고, 이 원인 때문에 본체 source/SDK를
+덧붙여 수정하지 않았다.
+
+`eom-benchmark-owner-poststart-capclear-20261022.service`의 실제 root→UID990/GID1000
+조회는 원 proof929e/observationd739를 그대로 재검증하고 성공 종료했다. supervisor/proof/
+association 모두 실제로 읽을 수 있었다. 이전 실패 preflight·진단 기록은 보존했다.
+Job closure·새 benchmark 등록·CPU prefix 교체·여섯 모델 비교는 아직 수행하지 않았다.
