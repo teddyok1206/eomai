@@ -692,3 +692,94 @@
   token witness를 사용하는 기존 여섯 CPU/GPU 비교다. 수치 동등성·성능·cleanup/coexistence
   gate가 실제로 충족된 경우에만 GPU 기본값을 검토한다. 이 milestone만으로 전체 goal 또는
   GPU 성능을 PASS로 선언하지 않는다.
+
+### 실제 인증·원 실행 정리 성공 / 최초 CPU 실행의 제한시간 종료 — 2026-10-22 UTC
+
+이번 기록은 위 준비 성공 이후의 실제 모델 실행 결과다. 전체 비교나 GPU 성능의 PASS가
+아니며, 이전 인증 대기와 이번 계산 실패를 구분한다.
+
+- operator unit `eom-gpu-benchmark-recovery-20261021-4e40dad6-auth5.service`, invocation
+  `edb79156ff69400a8907578983dde388`에서16:52:44.723746 UTC에 실제 guiadmin 로그인이
+  성공했다. 비밀번호·bearer는 파일에 저장하지 않았다. auth3/auth4의 입력 대기 timeout과
+  auth2의 로그인 거부 이력은 그대로 남겼다.
+- 16:53:25.642188 UTC에 기존 지원된 application으로 원 Job
+  `job_324b59d7fde242bca60437cdacdf5def`의 실제 시작 전 실패를 정리했다. event sequence7,
+  decision semantic hash는
+  `03db9fe0cbe38230b793871de259622ea189652ce638d8fed2d650872066f6a2`다.
+  원 RUNNING row를 직접 UPDATE하거나 실패를 성공으로 바꾸지 않았다.
+- 16:53:28.591675 UTC에 사전 고정된 successor revision
+  `embeddingbenchmarkrev_4e40dad6e4c946abaa01815537d28952`가 Job
+  `job_25b047f39709405190942c42c619a441`로 등록됐다. request semantic hash는
+  `8f0ceae4905441fded0ccd198a70a338685d6f7c1df78b006e12e537cf05f32c`다.
+  원18 DOCUMENT·2 QUERY·synthetic/capacity 입력29행의 token witness, 모델·Graph·정책·
+  수치 기준과 CPU→CUDA→CUDA→CPU→CPU→CUDA 순서는 유지했다.
+- 최초 CPU execution `b7f5a692b8b24dc5b886821b8635f567`의 root preparation은
+  16:53:39.672942 UTC였고, cold18행 벡터73728 bytes의 mtime은16:56:12.066754 UTC다.
+  이152.4초는 **준비부터 파일 관측까지의 경과**이며, 검증된 encode 시간이나 GPU 비교
+  수치가 아니다. supplementary/query/worker-result/timing/resource 파일은 모두0 bytes다.
+- PID1이 native unit의 고정 `TimeoutStartSec=180`에 도달해 TERM으로 종료했다.
+  journal의 CPU time은287.662초, RSS peak는 약4.5GiB이고 swap peak는0이다.
+  worker 결과나 capacity 측정이 없으므로 이를 완전한 자원 검증으로 보지 않는다.
+  16:56:36.455207 UTC에 owner phase `SERIES`가 중단됐고 MemorySession도 닫혔다.
+  **CPU model invocation1 / GPU invocation0 / 완성된 비교 결과0**이다.
+- 정확한 local root completion에는 `original_outcome=FAILED`, `cleanup=CONFIRMED`가
+  기록됐다. raw hash는
+  `5c599d55c803e030a4f1f2992585f30bb3c1b56fd9017ffc16327e2832abd41e`이고,
+  별도 root uncertainty raw hash는
+  `31b53c923f11c14de0f4ea89dbec0889d62f4da8f206df0b3e6d4b538ff81e44`다.
+  cold partial raw hash는
+  `771bdd4e96f5926ebb0483de1e382bacd52eebc25f19ea4a456d0e9dd604173d`다.
+  위치는 `/run/eom-incremental-embeddings/benchmark/<execution_id>/`이고 이 local
+  중간 증거를 정식 measurement Artifact로 게시한 것으로 주장하지 않는다.
+- 실패 native unit은 기존 root driver가 terminal/empty cgroup/동일 실행 retirement를
+  수행해 inactive로 정리했다. operator도 PID0/empty cgroup이다. 원 reservation은
+  성공 receipt 없이 남아 있으며 새 identity·key로 우회하거나 자동 재실행하지 않았다.
+  새로운 비교를 위한 재로그인 입력창도 만들지 않았다.
+
+남은 원인 구분: worker는 cold 파일을 쓴 뒤 `COLD_READY`와 owner ACK를 거쳐 첫 synthetic
+계산으로 이동한다. supplementary 파일은 각 sample 때 즉시 append되므로, 이 partial 결과는
+진행 위치가 cold checkpoint/ACK 또는 첫 synthetic 부근임을 나타낸다. 그러나 saved 결과만으로
+긴 모델 기동·cold 계산, owner 재승인/ACK 지연, 첫 synthetic 지연을 분리할 수 없다.
+고정180초가 종료의 직접 원인이라는 사실과 ACK 결함이 증명됐다는 주장은 구분한다.
+
+현재 계약은 timeout `Literal[180]`을 schema·worker·channel·owner·root driver와 systemd에서
+같이 강제한다. `TimeoutStartSec` 하나만 늘리거나 released1.0 의미를 바꾸지 않는다.
+또 기존 prelaunch closure는 시작 전·빈 출력에만 적용된다. 이번처럼 실제 시작하고 부분
+출력이 생긴 실패에는 사용할 수 없다. 후속 작업은 다음 순서이며 아직 구현·활성화하지 않았다.
+
+1. 동일 execution의 실제 terminal/cleanup/partial hash를 고정하고 현재 권한으로 확인하는
+   좁은 **시작 후 실패 정리 계약**을 먼저 정의한다. append-only/idempotent하게 FAILED를
+   기록하며, native 재실행·worker 결과 합성·기존 성공 Artifact 변경 권한을 주지 않는다.
+2. 내용 없는 cold/checkpoint/ACK 경과시간으로 지연 구간을 구분한다. 입력 텍스트·token·
+   비밀번호·prompt·전체 exception은 진단에 싣지 않는다.
+3. 시간이 부족한 경우에만 explicit recipe/resource-policy successor로 수정한다. 원 입력·
+   모델·순서·수치 gate는 보존하고, native/owner/root series의 수명을 일치시킨다. 실제
+   인증의 유효기간·권한을 늘리거나 이미 종료된 세션을 인증된 것으로 간주하지 않는다.
+4. 원 failure reference와 새 실행 예산을 명시한 검토된 실행만 허용한다. 현재 successor를
+   단순 재호출하거나 새 key를 발급해 unresolved guard를 피하지 않는다.
+
+이 후속 계약의 canonical source는 원 benchmark Job/launch append-only journal과 protected
+root completion·retirement다. logical benchmark/revision/Job/execution/hash를 구분하고
+schema·hash·원 invocation·권한·lifecycle·terminal process/FD/cgroup을 함께 확인한다.
+주 access pattern은 Job/execution indexed lookup과 monotonic history, small typed evidence의
+map/set 검증이다. 시간/공간은 원 launch 수에 선형이며 새 queue/cache/registry는 만들지 않는다.
+current-source/Identity fence와 원 Job row lock 안에서 동일 failure 결정 및 replay를 검증한다.
+application이 transaction/idempotency를, root adapter가 OS 관찰을 소유한다. 더 단순한 대안인
+systemd timeout만 변경하거나 새 Job부터 만드는 방식은 immutable180초 계약과 원 실행
+미해결 guard를 우회하므로 불충분하다. 이 설계 기록은 새 실행이나 migration의 PASS가 아니다.
+
+### 별도 CPU INDEX 서비스 복구 — 2026-10-22 17:00 UTC
+
+실험 점검 중 INDEX가 당일06:56:27.843897 UTC의 protected no-forward verifier 실패로
+중단돼 있던 사실을 확인했다. 당시 wrapper가 세부 원인을 숨기므로 일시적 timeout과 다른
+검증 실패를 구분하지 못한다. apt 종료 직후라는 이유만으로 지속적인 host drift라고 단정하지
+않는다. 현재 cache 내용 및 verifier/loader/liblzma/readelf 해시는 고정 값과 일치했다.
+
+benchmark operator와 native CPU가 모두 종료된 뒤, 기존 설정·release를 바꾸지 않고 INDEX를
+한 번 정상 기동했다. 설치된 시작 경로가 동일 namespace·실제 service identity의 protected
+no-forward 검증을 먼저 수행한 후에만 claim을 허용한다.17:00:29.418244 UTC의
+`LOCAL_INDEXING_SERVICE_STARTED`와 이후 정상 read-stage 완료를 확인했다.
+새 PID2935655, invocation `3d028f973ec841359ca0bed8a0232e7e`다.
+QUERY는 PID1983188/invocation90db로 계속 active였다. 별도 모델·GPU 측정, 설정·권한·DB
+schema 변경과 과거 실패 재해석은 하지 않았다. 이 서비스 복구는 benchmark 시간초과의
+원인이나 여섯 비교 PASS 증거를 대신하지 않는다.
