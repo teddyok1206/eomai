@@ -302,7 +302,8 @@ if [[ "${action}" == "embedding-encoding-tests" ]]; then
   "${PYTHON}" -m pytest -q tests/integration/test_embedding_encoding_reservations.py \
     tests/integration/test_mixed_embedding_encoding_reservations.py \
     tests/integration/test_embedding_benchmark_jobs.py \
-    tests/integration/test_embedding_benchmark_prelaunch_failure.py
+    tests/integration/test_embedding_benchmark_prelaunch_failure.py \
+    tests/integration/test_embedding_benchmark_poststart_failure.py
   printf 'Disposable model-free embedding encoding reservation tests passed.\n'
   exit 0
 fi

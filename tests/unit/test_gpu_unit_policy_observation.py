@@ -11,6 +11,7 @@ from tests.unit.test_image_gpu_unit_observation import UNIT as IMAGE_UNIT
 from tests.unit.test_image_gpu_unit_observation import policy as image_policy
 
 CUDA_UNIT = "eom-embedding-benchmark-cuda@" + "1" * 32 + ".service"
+CUDA_BUDGET_UNIT = "eom-embedding-benchmark-cuda-budget600@" + "1" * 32 + ".service"
 INDEX_UNIT = "eom-embedding-native-cuda-index@" + "2" * 32 + ".service"
 
 
@@ -19,6 +20,7 @@ INDEX_UNIT = "eom-embedding-native-cuda-index@" + "2" * 32 + ".service"
     (
         ("eom-image", IMAGE_UNIT),
         ("eom-embedding-cuda", CUDA_UNIT),
+        ("eom-embedding-cuda", CUDA_BUDGET_UNIT),
         ("eom-embedding-cuda", INDEX_UNIT),
     ),
 )
@@ -94,6 +96,10 @@ def test_exact_family_device_allowlist_and_bounded_read_fail_closed(
         ("--all", "eom-image"),
         ("other.service", "eom-embedding-cuda"),
         (CUDA_UNIT, "root"),
+        (CUDA_BUDGET_UNIT, "eom-image"),
+        ("eom-embedding-benchmark-cpu-budget600@" + "a" * 32 + ".service", "eom-embedding-cuda"),
+        ("eom-embedding-benchmark-cuda-budget601@" + "a" * 32 + ".service", "eom-embedding-cuda"),
+        ("eom-embedding-benchmark-cuda-budget600@" + "A" * 32 + ".service", "eom-embedding-cuda"),
         (INDEX_UNIT, "eom-embedding-cuda"),
         (None, "eom-embedding-cuda"),
     ),
@@ -110,7 +116,9 @@ def test_arbitrary_or_cross_family_unit_is_refused_before_process_execution(
         policy.observe_gpu_unit_policy(unit, worker_account=account)
 
 
-@pytest.mark.parametrize("unit", (IMAGE_UNIT, CUDA_UNIT, "--all", None, INDEX_UNIT + "\n"))
+@pytest.mark.parametrize(
+    "unit", (IMAGE_UNIT, CUDA_UNIT, CUDA_BUDGET_UNIT, "--all", None, INDEX_UNIT + "\n")
+)
 def test_index_policy_cannot_borrow_other_gpu_families(monkeypatch, unit):
     monkeypatch.setattr(
         policy,

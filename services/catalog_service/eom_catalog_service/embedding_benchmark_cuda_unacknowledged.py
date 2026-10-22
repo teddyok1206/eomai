@@ -16,8 +16,12 @@ from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation, 
 from eom_orchestrator.systemd_unit_processes import root_owned_unit_processes
 
 from eom_catalog_service.embedding_benchmark_cuda_observation import (
-    CUDA_BENCHMARK_TEMPLATE,
+    CUDA_BENCHMARK_TEMPLATE as CUDA_BENCHMARK_TEMPLATE,
+)
+from eom_catalog_service.embedding_benchmark_cuda_observation import (
     CapturedBenchmarkCudaLaunchFiles,
+    benchmark_cuda_unit_name,
+    benchmark_cuda_unit_template,
     capture_benchmark_cuda_launch_files,
 )
 from eom_catalog_service.embedding_benchmark_handoff import PreparedBenchmarkEnvironment
@@ -25,6 +29,7 @@ from eom_catalog_service.embedding_benchmark_layout import (
     BENCHMARK_CUDA_LIFETIME_ROOT,
     BENCHMARK_HANDOFF_ROOT,
 )
+from eom_catalog_service.embedding_benchmark_unit_policy import benchmark_unit_family_from_service
 from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_probe_gpu_clients
 from eom_catalog_service.embedding_cuda_probe_resource_observation import (
     UnacknowledgedBenchmarkGpuResources,
@@ -155,7 +160,11 @@ def require_unacknowledged_benchmark_basis(
         and terminal.environment_raw_sha256 == files.environment_raw_sha256,
         "PINNED_BASIS_CHANGED",
     )
-    unit = CUDA_BENCHMARK_TEMPLATE.replace("@.service", f"@{terminal.execution_id}.service")
+    _require(
+        benchmark_cuda_unit_template(terminal.terminal_unit) == launch.service_template,
+        "PINNED_BASIS_CHANGED",
+    )
+    unit = benchmark_cuda_unit_name(terminal.terminal_unit, terminal.execution_id)
     require_unacknowledged_benchmark_ack_absent(terminal)
     return unit
 
@@ -166,7 +175,7 @@ def require_unacknowledged_benchmark_ack_absent(
     _require(os.getresuid() == (0, 0, 0), "ROOT_REQUIRED")
     _require(type(terminal) is UnacknowledgedBenchmarkCudaTerminal, "IDENTITY_INVALID")
     _require(re.fullmatch(r"[0-9a-f]{32}", terminal.execution_id) is not None, "IDENTITY_INVALID")
-    unit = CUDA_BENCHMARK_TEMPLATE.replace("@.service", f"@{terminal.execution_id}.service")
+    unit = benchmark_cuda_unit_name(terminal.terminal_unit, terminal.execution_id)
     require_unit_effect_phase_absent(
         BENCHMARK_CUDA_LIFETIME_ROOT, unit, terminal.terminal_unit.invocation_id, "ack"
     )
@@ -174,10 +183,7 @@ def require_unacknowledged_benchmark_ack_absent(
 
 def require_empty_benchmark_cuda_cgroup(unit: str) -> None:
     _require(os.getresuid() == (0, 0, 0), "ROOT_REQUIRED")
-    _require(
-        re.fullmatch(r"eom-embedding-benchmark-cuda@[0-9a-f]{32}\.service", unit) is not None,
-        "IDENTITY_INVALID",
-    )
+    benchmark_unit_family_from_service("CUDA", unit)
     try:
         members = root_owned_unit_processes(unit)
     except FileNotFoundError:
@@ -191,7 +197,7 @@ def require_empty_benchmark_cuda_cgroup(unit: str) -> None:
 def _terminal_metadata(unit: str, expected: CpuUnitObservation) -> tuple[int, Literal[0, 1]]:
     try:
         return observe_failed_gpu_unit_metadata(
-            unit, template=CUDA_BENCHMARK_TEMPLATE, expected=expected
+            unit, template=benchmark_cuda_unit_template(expected), expected=expected
         )
     except ValueError:
         raise ValueError("BENCHMARK_CUDA_UNACKNOWLEDGED_TERMINATION_UNCERTAIN") from None
@@ -216,7 +222,9 @@ def observe_unacknowledged_benchmark_cuda_terminal(
     captured = capture_unacknowledged_benchmark_files(
         invocation, environment, backend=backend, inventory=inventory
     )
-    unit = CUDA_BENCHMARK_TEMPLATE.replace("@.service", f"@{invocation.execution_id}.service")
+    template = captured.launch.service_template
+    _require(benchmark_cuda_unit_template(expected_unit) == template, "PINNED_BASIS_CHANGED")
+    unit = benchmark_cuda_unit_name(expected_unit, invocation.execution_id)
     policy = observe_gpu_unit_policy(unit, worker_account="eom-embedding-cuda")
 
     def current() -> tuple[int, Literal[0, 1]]:
@@ -224,7 +232,7 @@ def observe_unacknowledged_benchmark_cuda_terminal(
             BENCHMARK_CUDA_LIFETIME_ROOT, unit, expected_unit.invocation_id, "ack"
         )
         _require(
-            inspect_cpu_unit(unit, template=CUDA_BENCHMARK_TEMPLATE) == expected_unit,
+            inspect_cpu_unit(unit, template=template) == expected_unit,
             "TERMINATION_UNCERTAIN",
         )
         require_empty_benchmark_cuda_cgroup(unit)

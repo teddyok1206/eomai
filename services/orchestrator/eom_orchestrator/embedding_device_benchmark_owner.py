@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from typing import Protocol
+from typing import Literal, Protocol
 from uuid import uuid4
 
 from eom_catalog_contracts.embedding_device_benchmark import (
@@ -83,6 +83,21 @@ class BenchmarkLaunchSeries:
     receipts: tuple[BenchmarkLaunchReceipt, ...]
     dispatch_count: int
     state: str
+
+
+@dataclass(frozen=True, slots=True)
+class BenchmarkLaunchProgress:
+    """A clean recorded prefix, not a complete series or an authentication grant."""
+
+    job_id: str
+    request_sha256: str
+    receipts: tuple[BenchmarkLaunchReceipt, ...]
+    dispatch_count: int
+    state: str
+
+    @property
+    def next_launch_ordinal(self) -> int | None:
+        return len(self.receipts) + 1 if self.state == JobState.RUNNING else None
 
 
 class BenchmarkLaunchAuthorization:
@@ -179,7 +194,10 @@ def _invocation(
     device = BENCHMARK_DEVICE_SEQUENCE[ordinal - 1]
     raw = embedding_device_benchmark_bytes(inputs)
     body = {
-        "schema_version": "embedding-device-benchmark-invocation/1.0",
+        "schema_version": {
+            "embedding-device-benchmark-request/1.0": "embedding-device-benchmark-invocation/1.0",
+            "embedding-device-benchmark-request/1.1": "embedding-device-benchmark-invocation/1.1",
+        }[request.schema_version],
         "kind": "WORKER_INVOCATION",
         "purpose": "LOCAL_EMBEDDING_DEVICE_BENCHMARK",
         "benchmark_id": request.benchmark_id,
@@ -255,10 +273,38 @@ class BenchmarkExecutionOwner:
             return None
 
     def run_launches(self, request: BenchmarkOwnerRequest) -> BenchmarkLaunchSeries:
+        """Complete the original six-launch series without implicit reauthentication."""
+        progress = self._run_launches(request, maximum_dispatches=6)
+        return BenchmarkLaunchSeries(
+            progress.job_id,
+            progress.request_sha256,
+            progress.receipts,
+            progress.dispatch_count,
+            progress.state,
+        )
+
+    def run_next_launch(self, request: BenchmarkOwnerRequest) -> BenchmarkLaunchProgress:
+        """Dispatch at most one new launch and return only its validated clean prefix.
+
+        A trusted operator may obtain fresh actual authentication between calls;
+        this method neither authenticates nor extends/caches current authority.
+        Unresolved work must be closed through its supported application first.
+        """
+        return self._run_launches(request, maximum_dispatches=1)
+
+    def _run_launches(
+        self, request: BenchmarkOwnerRequest, *, maximum_dispatches: Literal[1, 6]
+    ) -> BenchmarkLaunchProgress:
         embedding_device_benchmark_bytes(request)
         replay = self._read_validated_series(request)
         if replay is not None:
-            return replay
+            return BenchmarkLaunchProgress(
+                replay.job_id,
+                replay.request_sha256,
+                replay.receipts,
+                replay.dispatch_count,
+                replay.state,
+            )
         if self.execution is None:
             raise BenchmarkOwnerError("BENCHMARK_OWNER_EXECUTION_UNAVAILABLE")
         # No Job/claim is allocated when actual installed/capacity admission is unavailable.
@@ -290,7 +336,7 @@ class BenchmarkExecutionOwner:
                 elif job.status not in {JobState.RUNNING, JobState.VALIDATING_RESULT}:
                     raise BenchmarkOwnerError("BENCHMARK_OWNER_TERMINAL_OR_FOREIGN")
             dispatches = 0
-            while True:
+            while dispatches < maximum_dispatches:
                 with self.sessions() as session, session.begin():
                     history = self.journal.read(session, request, job_id=job_id)
                 if history.launches and history.launches[-1].receipt is None:
@@ -323,8 +369,22 @@ class BenchmarkExecutionOwner:
                 with self.sessions() as session, session.begin():
                     self.journal.record(session, request, receipt)
             with self.sessions() as session, session.begin():
-                receipts = self.journal.require_completed(session, request, job_id=job_id)
+                history = self.journal.read(session, request, job_id=job_id)
                 job = require_benchmark_job_in_session(session, request, job_id=job_id)
+                if len(history.launches) < 6:
+                    completed = self.journal.require_completed_prefix(
+                        session, request, job_id=job_id
+                    )
+                    if job.status != JobState.RUNNING:
+                        raise BenchmarkOwnerError("BENCHMARK_OWNER_TERMINAL_OR_FOREIGN")
+                    return BenchmarkLaunchProgress(
+                        job_id,
+                        request.request_sha256,
+                        tuple(launch.receipt for launch in completed),
+                        dispatches,
+                        JobState.RUNNING,
+                    )
+                receipts = self.journal.require_completed(session, request, job_id=job_id)
                 if job.status == JobState.RUNNING:
                     with self.admission.admit_in_session(session, request):
                         transition_job(
@@ -335,6 +395,6 @@ class BenchmarkExecutionOwner:
                         )
                 elif job.status != JobState.VALIDATING_RESULT:
                     raise BenchmarkOwnerError("BENCHMARK_OWNER_TERMINAL_OR_FOREIGN")
-            return BenchmarkLaunchSeries(
+            return BenchmarkLaunchProgress(
                 job_id, request.request_sha256, receipts, dispatches, JobState.VALIDATING_RESULT
             )

@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, Literal
 from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkResourceEvidence,
     BenchmarkWorkerInvocation,
+    benchmark_timeout_seconds,
     embedding_device_benchmark_bytes,
     parse_embedding_device_benchmark_bytes,
 )
@@ -25,7 +26,9 @@ from eom_catalog_service.embedding_benchmark_cuda_lifetime import (
     retire_benchmark_cuda_unit,
 )
 from eom_catalog_service.embedding_benchmark_cuda_observation import (
-    CUDA_BENCHMARK_TEMPLATE,
+    CUDA_BENCHMARK_TEMPLATE as CUDA_BENCHMARK_TEMPLATE,
+)
+from eom_catalog_service.embedding_benchmark_cuda_observation import (
     BenchmarkCudaReadyObservation,
     capture_benchmark_cuda_launch_files,
     observe_benchmark_cuda_ready,
@@ -126,11 +129,14 @@ class FixedRootBenchmarkCudaDriver:
             metadata = os.fstat(descriptor)
             _require(stat.S_ISSOCK(metadata.st_mode), "SOCKET_INVALID")
             self._socket_epoch = (descriptor, metadata.st_dev, metadata.st_ino)
-            self._units = FixedRootBenchmarkUnits("CUDA", checked.execution_id)
+            self._units = FixedRootBenchmarkUnits(
+                "CUDA", checked.execution_id, checked.execution_policy
+            )
             self._unit = self._units.service
             self._used = False
             now = time.monotonic_ns()
-            _require(now < environment.expires_ns <= now + 180 * 10**9, "EXPIRED")
+            seconds = benchmark_timeout_seconds(checked.execution_policy)
+            _require(now < environment.expires_ns <= now + seconds * 10**9, "EXPIRED")
             self._fence()
         except BaseException:
             if isinstance(connection, socket.socket):
@@ -168,7 +174,7 @@ class FixedRootBenchmarkCudaDriver:
         original_unit_invocation: str | None = None
         while True:
             self._fence()
-            current = inspect_cpu_unit(self._unit, template=CUDA_BENCHMARK_TEMPLATE)
+            current = inspect_cpu_unit(self._unit, template=self._units.template)
             if current.invocation_id:
                 if original_unit_invocation is None:
                     original_unit_invocation = current.invocation_id
@@ -204,7 +210,7 @@ class FixedRootBenchmarkCudaDriver:
     def _wait_terminal(self, ready: BenchmarkCudaReadyObservation) -> BenchmarkCudaRetirement:
         # The resource relay closes only its socket after finalization. Process/GPU
         # cleanup uses pinned root observations, not the now-closed transport fence.
-        # Compute never gains an extension. PID1 has its frozen180s execution and
+        # Compute never gains an extension. PID1 has its selected fixed execution and
         # 5s stop bounds; allow15s observation/cleanup grace for an actual timeout
         # terminal. Existing late-retirement verifiers independently prove emptiness.
         terminal_deadline = self._environment.expires_ns + 15 * 10**9
@@ -214,7 +220,7 @@ class FixedRootBenchmarkCudaDriver:
                 "ROOT_REQUIRED",
             )
             _require(time.monotonic_ns() < terminal_deadline, "TERMINATION_UNCERTAIN")
-            current = inspect_cpu_unit(self._unit, template=CUDA_BENCHMARK_TEMPLATE)
+            current = inspect_cpu_unit(self._unit, template=self._units.template)
             _require(
                 current.invocation_id == ready.unit.invocation_id
                 and current.status.exec_main_started_monotonic
@@ -258,7 +264,7 @@ class FixedRootBenchmarkCudaDriver:
             self._host.assert_current()
             self._units.require_socket_state(active=False)
             _require(
-                inspect_cpu_unit(self._unit, template=CUDA_BENCHMARK_TEMPLATE).fresh,
+                inspect_cpu_unit(self._unit, template=self._units.template).fresh,
                 "UNIT_NOT_FRESH",
             )
             require_empty_benchmark_cuda_cgroup(self._unit)

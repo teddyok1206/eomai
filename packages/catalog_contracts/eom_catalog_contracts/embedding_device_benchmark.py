@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from types import MappingProxyType
 from typing import Annotated, Any, Final, Literal
 
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
@@ -44,7 +45,14 @@ EMBEDDING_DEVICE_BENCHMARK_SCHEMA: Final = "embedding-device-benchmark"
 EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF: Final = (
     "eom://schemas/knowledge/embedding-device-benchmark/1.0"
 )
+EMBEDDING_DEVICE_BENCHMARK_V11_SCHEMA: Final = "embedding-device-benchmark-v1.1"
+EMBEDDING_DEVICE_BENCHMARK_V11_SCHEMA_REF: Final = (
+    "eom://schemas/knowledge/embedding-device-benchmark/1.1"
+)
 BENCHMARK_POLICY_SCHEMA_REF: Final = EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF + "#/$defs/policy"
+BENCHMARK_POLICY_V11_SCHEMA_REF: Final = (
+    EMBEDDING_DEVICE_BENCHMARK_V11_SCHEMA_REF + "#/$defs/policy"
+)
 BENCHMARK_POLICY_ARTIFACT_TYPE: Final = "control_embedding_benchmark_policy"
 BENCHMARK_LAUNCH_ARTIFACT_TYPE: Final = "control_embedding_benchmark_launch"
 MAX_BENCHMARK_ENVELOPE_BYTES: Final = 64 * 1024
@@ -61,6 +69,39 @@ BENCHMARK_GATE_ORDER: Final = (
     "GPU_LEASE",
     "CLEANUP",
     "IMAGE_TRAINER_REGRESSION",
+)
+_BENCHMARK_TIMEOUT_SECONDS: Final = MappingProxyType(
+    {
+        "embedding-device-benchmark-policy/1.0": 180,
+        "embedding-device-benchmark-policy/1.1": 600,
+    }
+)
+_BENCHMARK_POLICY_SCHEMA_REFS: Final = MappingProxyType(
+    {
+        "embedding-device-benchmark-policy/1.0": BENCHMARK_POLICY_SCHEMA_REF,
+        "embedding-device-benchmark-policy/1.1": BENCHMARK_POLICY_V11_SCHEMA_REF,
+    }
+)
+_BENCHMARK_LISTENER_SECONDS: Final = MappingProxyType(
+    {
+        "embedding-device-benchmark-policy/1.0": 900,
+        "embedding-device-benchmark-policy/1.1": 3600,
+    }
+)
+_BENCHMARK_ENVELOPE_POLICY_VERSION: Final = MappingProxyType(
+    {
+        "embedding-device-benchmark-request/1.0": "embedding-device-benchmark-policy/1.0",
+        "embedding-device-benchmark-request/1.1": "embedding-device-benchmark-policy/1.1",
+        "embedding-device-benchmark-invocation/1.0": "embedding-device-benchmark-policy/1.0",
+        "embedding-device-benchmark-invocation/1.1": "embedding-device-benchmark-policy/1.1",
+    }
+)
+_BENCHMARK_SUCCESSOR_SCHEMAS: Final = MappingProxyType(
+    {
+        "embedding-device-benchmark-policy/1.1": EMBEDDING_DEVICE_BENCHMARK_V11_SCHEMA,
+        "embedding-device-benchmark-request/1.1": EMBEDDING_DEVICE_BENCHMARK_V11_SCHEMA,
+        "embedding-device-benchmark-invocation/1.1": EMBEDDING_DEVICE_BENCHMARK_V11_SCHEMA,
+    }
 )
 type BenchmarkDevice = Literal["CPU", "CUDA"]
 type BenchmarkPurpose = Literal["DOCUMENT", "QUERY"]
@@ -566,13 +607,13 @@ class BenchmarkStagedInputs(_BenchmarkContract):
 class BenchmarkExecutionPolicy(_BenchmarkContract):
     """Numerical/resource limits only; no actor, principal, device lease or admission grant."""
 
-    schema_version: Literal["embedding-device-benchmark-policy/1.0"] = (
-        "embedding-device-benchmark-policy/1.0"
-    )
+    schema_version: Literal[
+        "embedding-device-benchmark-policy/1.0", "embedding-device-benchmark-policy/1.1"
+    ] = "embedding-device-benchmark-policy/1.0"
     purpose: Literal["LOCAL_EMBEDDING_DEVICE_BENCHMARK"] = "LOCAL_EMBEDDING_DEVICE_BENCHMARK"
     policy_id: str = Field(pattern=r"^embeddingbenchmarkpolicy_[0-9a-f]{32}$")
     policy_revision_id: str = Field(pattern=r"^embeddingbenchmarkpolicyrev_[0-9a-f]{32}$")
-    timeout_seconds: Literal[180] = 180
+    timeout_seconds: Literal[180, 600] = 180
     cpu_quota_percent: Literal[400] = 400
     tasks_max: Literal[64] = 64
     rss_limit_bytes: Literal[6442450944] = 6442450944
@@ -585,16 +626,43 @@ class BenchmarkExecutionPolicy(_BenchmarkContract):
 
     @model_validator(mode="after")
     def exact_policy(self) -> BenchmarkExecutionPolicy:
+        if self.timeout_seconds != _BENCHMARK_TIMEOUT_SECONDS[self.schema_version]:
+            raise ValueError("benchmark timeout differs from its exact released policy version")
         _hash(self, "policy_sha256")
         return self
+
+
+def _checked_benchmark_policy(policy: BenchmarkExecutionPolicy) -> BenchmarkExecutionPolicy:
+    _integer_json(policy)
+    if type(policy) is not BenchmarkExecutionPolicy:
+        raise ValueError("benchmark selection requires an exact policy model")
+    return BenchmarkExecutionPolicy.model_validate(policy.model_dump(mode="json"))
+
+
+def benchmark_timeout_seconds(policy: BenchmarkExecutionPolicy) -> int:
+    """Read a validated version's fixed budget, never grant authority or extend a deadline."""
+    checked = _checked_benchmark_policy(policy)
+    return _BENCHMARK_TIMEOUT_SECONDS[checked.schema_version]
+
+
+def benchmark_policy_schema_ref(policy: BenchmarkExecutionPolicy) -> str:
+    """Select the exact released Artifact schema; never substitute a latest policy."""
+    checked = _checked_benchmark_policy(policy)
+    return _BENCHMARK_POLICY_SCHEMA_REFS[checked.schema_version]
+
+
+def benchmark_listener_timeout_seconds(policy: BenchmarkExecutionPolicy) -> int:
+    """Bound root rendezvous only; this never extends session freshness or compute."""
+    checked = _checked_benchmark_policy(policy)
+    return _BENCHMARK_LISTENER_SECONDS[checked.schema_version]
 
 
 class BenchmarkOwnerRequest(_BenchmarkContract):
     """Owner-built pointer metadata; audit identity is not authentication/authorization."""
 
-    schema_version: Literal["embedding-device-benchmark-request/1.0"] = (
-        "embedding-device-benchmark-request/1.0"
-    )
+    schema_version: Literal[
+        "embedding-device-benchmark-request/1.0", "embedding-device-benchmark-request/1.1"
+    ] = "embedding-device-benchmark-request/1.0"
     kind: Literal["OWNER_REQUEST"] = "OWNER_REQUEST"
     purpose: Literal["LOCAL_EMBEDDING_DEVICE_BENCHMARK"] = "LOCAL_EMBEDDING_DEVICE_BENCHMARK"
     benchmark_id: BenchmarkId
@@ -618,6 +686,11 @@ class BenchmarkOwnerRequest(_BenchmarkContract):
 
     @model_validator(mode="after")
     def exact_plan(self) -> BenchmarkOwnerRequest:
+        if (
+            self.execution_policy.schema_version
+            != _BENCHMARK_ENVELOPE_POLICY_VERSION[self.schema_version]
+        ):
+            raise ValueError("benchmark request and execution policy versions differ")
         _rows(self.document_rows, "DOCUMENT")
         _rows(self.query_rows, "QUERY")
         keys = tuple(profile_key(source.profile) for source in self.sources)
@@ -688,9 +761,9 @@ class BenchmarkLocalInput(_BenchmarkContract):
 
 
 class BenchmarkWorkerInvocation(_BenchmarkContract):
-    schema_version: Literal["embedding-device-benchmark-invocation/1.0"] = (
-        "embedding-device-benchmark-invocation/1.0"
-    )
+    schema_version: Literal[
+        "embedding-device-benchmark-invocation/1.0", "embedding-device-benchmark-invocation/1.1"
+    ] = "embedding-device-benchmark-invocation/1.0"
     kind: Literal["WORKER_INVOCATION"] = "WORKER_INVOCATION"
     purpose: Literal["LOCAL_EMBEDDING_DEVICE_BENCHMARK"] = "LOCAL_EMBEDDING_DEVICE_BENCHMARK"
     benchmark_id: BenchmarkId
@@ -710,6 +783,11 @@ class BenchmarkWorkerInvocation(_BenchmarkContract):
 
     @model_validator(mode="after")
     def exact_invocation(self) -> BenchmarkWorkerInvocation:
+        if (
+            self.execution_policy.schema_version
+            != _BENCHMARK_ENVELOPE_POLICY_VERSION[self.schema_version]
+        ):
+            raise ValueError("benchmark invocation and execution policy versions differ")
         _device_ordinal(self.device, self.launch_ordinal)
         if (
             self.runtime.numerical_runtime.device.kind != self.device
@@ -2059,7 +2137,13 @@ def parse_embedding_device_benchmark(document: dict[str, Any]) -> EmbeddingDevic
     _integer_json(document)
     if len(canonical_json_bytes(document)) > MAX_BENCHMARK_STAGED_BYTES:
         raise ValueError("benchmark JSON exceeds the external byte bound")
-    validate_contract(EMBEDDING_DEVICE_BENCHMARK_SCHEMA, document)
+    version = document.get("schema_version")
+    schema = (
+        _BENCHMARK_SUCCESSOR_SCHEMAS.get(version, EMBEDDING_DEVICE_BENCHMARK_SCHEMA)
+        if isinstance(version, str)
+        else EMBEDDING_DEVICE_BENCHMARK_SCHEMA
+    )
+    validate_contract(schema, document)
     return TypeAdapter(EmbeddingDeviceBenchmarkMessage).validate_python(document)
 
 

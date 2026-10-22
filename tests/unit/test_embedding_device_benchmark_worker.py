@@ -188,7 +188,12 @@ def finalized(local: BenchmarkResourceEvidence) -> BenchmarkResourceEvidence:
 
 
 def run_scenario(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, ordinal: int = 1, *, fault: str = ""
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    ordinal: int = 1,
+    *,
+    fault: str = "",
+    deadline_seconds: int = 30,
 ) -> tuple[Any, FakeBackend, list[str], Path, list[BenchmarkCheckpoint]]:
     files, root, borrowed = stage_files(tmp_path, monkeypatch, ordinal)
     events: list[str] = []
@@ -231,6 +236,14 @@ def run_scenario(
         )
     elif fault == "capture":
         files._raw_pin = "sha256:" + "f" * 64
+    elif fault == "cuda_preentered":
+        from tests.unit.test_embedding_benchmark_cuda_files import ready_for_process
+
+        ready_path = root / "cuda-ready.json"
+        ready_path.touch(mode=0o640)
+        ready_path.chmod(0o640)
+        files.__enter__()
+        files.write_cuda_ready(ready_for_process(monkeypatch))
 
     @contextmanager
     def scope() -> Iterator[BenchmarkNativeEmbeddingBackend]:
@@ -248,7 +261,7 @@ def run_scenario(
                 raise NativeEmbeddingFactoryError("NATIVE_EMBEDDING_FACTORY_TEARDOWN_UNCERTAIN")
 
     left, right = socket.socketpair()
-    deadline = time.monotonic_ns() + 30 * 10**9
+    deadline = time.monotonic_ns() + deadline_seconds * 10**9
     invocation = worker_invocation(ordinal)
     checkpoints: list[BenchmarkCheckpoint] = []
     owner_errors: list[str] = []
@@ -474,6 +487,20 @@ def test_native_library_composition_runs_same_full_worker_program_over_real_loca
     assert len(checkpoints) == 21
     assert (root / "outputs/worker-result.json").stat().st_size > 0
     # Identity/host capture and numerical backend are synthetic, not production admission.
+
+
+def test_cuda_full_program_accepts_leaf_sealed_capture_without_second_context_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result, backend, events, root, checkpoints = run_scenario(
+        tmp_path, monkeypatch, 2, fault="cuda_preentered"
+    )
+    assert result.status == "COMPLETED" and backend.closed
+    assert len(checkpoints) == benchmark_checkpoint_count(worker_invocation(2))
+    assert "constructor" in events and "resource-finalizer" in events
+    assert (root / "cuda-ready.json").stat().st_size > 0
+    assert (root / "outputs/worker-result.json").stat().st_size > 0
+    # Actual file/socket ownership is synthetic; this is no GPU/model/admission claim.
 
 
 def test_foreign_channel_invocation_fails_before_backend_construction(

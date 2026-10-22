@@ -15,6 +15,7 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkOwnerRequest,
     BenchmarkStagedInputs,
     BenchmarkWorkerInvocation,
+    benchmark_timeout_seconds,
     embedding_device_benchmark_bytes,
     validate_benchmark_invocation,
 )
@@ -45,16 +46,7 @@ from eom_catalog_service.embedding_benchmark_root_connection import (
     connect_benchmark_series_root,
     require_benchmark_series_listener,
 )
-from eom_catalog_service.embedding_benchmark_unit_control import (
-    CPU_BENCHMARK_SOCKET,
-    CPU_BENCHMARK_SOCKET_SHA256,
-    CPU_BENCHMARK_TEMPLATE,
-    CPU_BENCHMARK_TEMPLATE_SHA256,
-    CUDA_BENCHMARK_SOCKET,
-    CUDA_BENCHMARK_SOCKET_SHA256,
-    CUDA_BENCHMARK_TEMPLATE,
-    CUDA_BENCHMARK_TEMPLATE_SHA256,
-)
+from eom_catalog_service.embedding_benchmark_unit_policy import benchmark_unit_family
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_catalog_service.embedding_runtime_files import (
     NumericalRuntimeFileSnapshots,
@@ -104,13 +96,13 @@ class FixedBenchmarkLaunchExecution:
         require_benchmark_series_listener(request)
         if self._installation is None:
             files = NumericalRuntimeFileSnapshots(0)
-            for name, digest in (
-                (CPU_BENCHMARK_TEMPLATE, CPU_BENCHMARK_TEMPLATE_SHA256),
-                (CPU_BENCHMARK_SOCKET, CPU_BENCHMARK_SOCKET_SHA256),
-                (CUDA_BENCHMARK_TEMPLATE, CUDA_BENCHMARK_TEMPLATE_SHA256),
-                (CUDA_BENCHMARK_SOCKET, CUDA_BENCHMARK_SOCKET_SHA256),
-            ):
-                files.read(Path("/etc/systemd/system") / name, sha256=digest, maximum=65536)
+            for device in ("CPU", "CUDA"):
+                family = benchmark_unit_family(device, request.execution_policy)
+                for name, digest in (
+                    (family.service_template, family.service_sha256),
+                    (family.socket_template, family.socket_sha256),
+                ):
+                    files.read(Path("/etc/systemd/system") / name, sha256=digest, maximum=65536)
             for runtime in (request.cpu, request.cuda):
                 prefix = fixed_native_embedding_profile(runtime.profile).prefix
                 files.observe_protected_member_identity(
@@ -118,6 +110,18 @@ class FixedBenchmarkLaunchExecution:
                     / "lib/python3.12/site-packages/eom_catalog_service"
                     / "embedding_benchmark_entrypoint.py"
                 )
+                family = benchmark_unit_family(
+                    runtime.numerical_runtime.device.kind, request.execution_policy
+                )
+                if family.timeout_seconds == 600:
+                    for member in (
+                        family.entrypoint_module.rsplit(".", 1)[-1] + ".py",
+                        "embedding_benchmark_budget_entrypoint.py",
+                        "embedding_benchmark_unit_policy.py",
+                    ):
+                        files.observe_protected_member_identity(
+                            prefix / "lib/python3.12/site-packages/eom_catalog_service" / member
+                        )
             self._installation = (
                 files,
                 capture_benchmark_runtime_installation(request.cpu, backend=self._cpu),
@@ -138,7 +142,9 @@ class FixedBenchmarkLaunchExecution:
         authorization.assert_invocation(invocation)
         if invocation.launch_ordinal > 1:
             authorization.require_cpu_reference()
-        expires = time.monotonic_ns() + 180 * 10**9
+        expires = (
+            time.monotonic_ns() + benchmark_timeout_seconds(invocation.execution_policy) * 10**9
+        )
         staged = stage_owner_benchmark_launch(
             self._request, invocation, inputs, authorization=authorization, expires_ns=expires
         )

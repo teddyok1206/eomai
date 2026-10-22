@@ -27,8 +27,7 @@ from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer
 from eom_catalog_service.embedding_benchmark_handoff import benchmark_owner_start_ticks
 from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_HANDOFF_ROOT
 from eom_catalog_service.embedding_benchmark_unit_control import (
-    CPU_BENCHMARK_TEMPLATE,
-    CUDA_BENCHMARK_TEMPLATE,
+    benchmark_unit_family,
 )
 from eom_catalog_service.embedding_runtime_files import (
     fixed_native_embedding_profile,
@@ -73,7 +72,9 @@ class CapturedBenchmarkNativeConnection:
         ):
             raise ValueError("BENCHMARK_NATIVE_OWNER_REQUIRED")
         authorization.assert_invocation(invocation)
-        template = CPU_BENCHMARK_TEMPLATE if invocation.device == "CPU" else CUDA_BENCHMARK_TEMPLATE
+        template = benchmark_unit_family(
+            invocation.device, invocation.execution_policy
+        ).service_template
         unit_name = template.replace("@.service", f"@{invocation.execution_id}.service")
         account = pwd.getpwnam(
             fixed_native_embedding_profile(invocation.runtime.profile).worker_user

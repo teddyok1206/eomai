@@ -10,8 +10,8 @@ from pathlib import Path
 
 from eom_catalog_contracts.embedding_device_benchmark import (
     BENCHMARK_POLICY_ARTIFACT_TYPE,
-    BENCHMARK_POLICY_SCHEMA_REF,
     BenchmarkExecutionPolicy,
+    benchmark_policy_schema_ref,
     embedding_device_benchmark_bytes,
 )
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
@@ -275,7 +275,7 @@ class LocalEmbeddingControlArtifactPublisher:
             raw=raw,
             semantic_sha256=policy.policy_sha256,
             member="policy.json",
-            schema=BENCHMARK_POLICY_SCHEMA_REF,
+            schema=benchmark_policy_schema_ref(policy),
             artifact_type=BENCHMARK_POLICY_ARTIFACT_TYPE,
             idempotency_key=idempotency_key,
             created_at=created_at,

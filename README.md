@@ -111,8 +111,23 @@ INDEX·QUERY 연결의 Codex 풀이 호출은0이며 외부 LLM API는 사용하
 앞선 GPU 준비 실패와 인증된 기존 검색 성공은
 [이전 운영 기록](docs/operations/PRIVATE_CHAT_COMPATIBLE_RELEASE_PREPARATION_2026-10-18.md)에
 별도로 보존합니다. 기존 CPU 검색은 실제 인증된 두 번 조회·같은-key 재전송을 통과했지만,
-원래 여섯 CPU/CUDA 수치 비교는 **NOT_STARTED**이며 이번 목표의 선행조건이 아닙니다.
-GPU 기본값 전환이나 측정 완료를 주장하지 않습니다.
+10월20일 통합 acceptance 당시 여섯 CPU/CUDA 수치 비교는 **NOT_STARTED**였으며,
+해당 통합 목표의 선행조건이 아니었습니다. 이후 GPU 실험의 최신 상태는 다음과 같습니다.
+
+### GPU 비교 복구 — 2026-10-22 UTC
+
+실제 인증 후 최초 CPU 계산은 실행됐지만 기존180초 제한으로 종료됐습니다.
+완료된 여섯 비교·GPU 성능 결과는 없으며 **GPU 기본값은 미활성**입니다.
+실패 실행·부분 출력·원 Job은 보존했고, 정상 CPU 검색·인덱싱은 복구해 유지합니다.
+
+후속 소스는 기존180초 계약을 보존하는 명시적600초 정책과 별도 실행 unit,
+실제 시작 후 실패를 정리하는 application 경계, 완료한 측정만 이어가는 실행 단위를
+추가합니다. 실제 임시 PostgreSQL 동시성·재전송34개와 제한된 root 권한의 파일 보호
+검증1개가 통과했습니다. 이 검증은 모델 추론·운영 배포·비교 성공을 뜻하지 않습니다.
+새 native prefix의 전체 설치 검증과 새 admission, 운영 CPU 연결 설정의 호환 전환은
+별도 미완료 gate입니다. 기존 receipt 아래 코드를 덮거나 인증 시간을 늘리지 않습니다.
+[설계와 배포 경계](docs/architecture/EMBEDDING_BENCHMARK_BUDGET_SUCCESSOR_2026_10_22.md) ·
+[실제 실행·실패·복구 기록](docs/operations/EMBEDDING_GPU_EXPERIMENT_PLAN_2026-10-20.md)
 
 ## 현재 저장소 릴리스 선
 

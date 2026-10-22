@@ -17,6 +17,7 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkOwnerRequest,
     BenchmarkStagedInputs,
     BenchmarkWorkerInvocation,
+    benchmark_timeout_seconds,
     embedding_device_benchmark_bytes,
     parse_embedding_device_benchmark_bytes,
     validate_benchmark_invocation,
@@ -68,7 +69,8 @@ def stage_owner_benchmark_launch(
         raise ValueError("BENCHMARK_OWNER_STAGE_IDENTITY_INVALID")
     authorization.assert_invocation(invocation)
     now = time.monotonic_ns()
-    if type(expires_ns) is not int or not now < expires_ns <= now + 180 * 10**9:
+    seconds = benchmark_timeout_seconds(invocation.execution_policy)
+    if type(expires_ns) is not int or not now < expires_ns <= now + seconds * 10**9:
         raise ValueError("BENCHMARK_OWNER_STAGE_DEADLINE_INVALID")
     owner_start_ticks = benchmark_owner_start_ticks(
         os.getpid(), uid=owner.owner_uid, gid=owner.owner_gid

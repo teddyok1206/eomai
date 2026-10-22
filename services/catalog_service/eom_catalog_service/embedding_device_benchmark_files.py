@@ -165,6 +165,7 @@ class _BenchmarkLocalFileCapture:
         self._budget = 0
         self._ready_state: Literal["EMPTY", "WRITING", "SEALED", "POISONED"] = "EMPTY"
         self._ready_epoch: tuple[int, ...] | None = None
+        self._worker_execution_started = False
         self._closed = False
 
     @property
@@ -533,6 +534,32 @@ class BenchmarkWorkerLocalFiles(_BenchmarkLocalFileCapture):
             invocation_raw_sha256=invocation_raw_sha256,
             output_access=_OutputAccess.WRITE_ONLY,
         )
+
+    def begin_worker_execution(self) -> Self:
+        """Capture once, or accept CUDA's sealed READY capture without entering it twice.
+
+        The CUDA leaf must already hold these FDs while root validates READY.
+        Ordinary context re-entry remains invalid; this explicit handoff is only
+        for the same fresh CUDA capture, before any numerical inputs/outputs.
+        Physical ownership, root ACK and peer authority remain separate fences.
+        """
+        _require(not self._closed and not self._worker_execution_started)
+        if self._input == -1:
+            self.__enter__()
+        else:
+            _require(
+                self.profile == "CUDA_INDEX_FP32"
+                and self._ready_state == "SEALED"
+                and self._staged is None
+                and all(
+                    member.state == "EMPTY" and member.byte_count == 0
+                    for member in self._members.values()
+                )
+                and self._budget == 0
+            )
+            self.assert_current()
+        self._worker_execution_started = True
+        return self
 
     def write_cuda_ready(self, ready: BenchmarkCudaReady) -> None:
         """Seal one precreated operational member; never alter numerical output/budget."""

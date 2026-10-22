@@ -12,6 +12,7 @@ from dataclasses import dataclass
 from eom_catalog_contracts.embedding_device_benchmark import (
     BENCHMARK_DEVICE_SEQUENCE,
     BenchmarkOwnerRequest,
+    benchmark_listener_timeout_seconds,
     embedding_device_benchmark_bytes,
 )
 from eom_orchestrator.inference_transfer_cpu_handoff import fixed_owner_identity
@@ -57,13 +58,14 @@ class BenchmarkRootSeriesSelection:
         self.cpu.__post_init__()
         self.cuda.__post_init__()
         now = time.monotonic_ns()
+        accept_seconds = benchmark_listener_timeout_seconds(self.request.execution_policy)
         if (
             type(self.owner_pid) is not int
             or not 1 <= self.owner_pid <= 2**31 - 1
             or type(self.owner_start_ticks) is not int
             or not 1 <= self.owner_start_ticks < 2**63
             or type(self.accept_until_ns) is not int
-            or not now < self.accept_until_ns <= now + 900 * 10**9
+            or not now < self.accept_until_ns <= now + accept_seconds * 10**9
             or type(self.controller_release) is not str
             or re.fullmatch(r"[0-9a-f]{40}", self.controller_release) is None
             or self.cpu.configuration_revision_id == self.cuda.configuration_revision_id
@@ -171,6 +173,7 @@ def serve_root_benchmark_series(
                     peer_fence=fence,
                     controller_release=selection.controller_release,
                     accept_until_ns=selection.accept_until_ns,
+                    policy=selection.request.execution_policy,
                 )
                 association = channel.association
                 staged = read_owner_benchmark_launch(association.execution_id, expected=association)

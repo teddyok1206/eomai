@@ -1,0 +1,95 @@
+[Unit]
+Description=EOM explicit 600-second native CUDA benchmark execution %i
+Requires=eom-embedding-benchmark-cuda-budget600@%i.socket
+After=eom-embedding-benchmark-cuda-budget600@%i.socket
+StartLimitIntervalSec=infinity
+StartLimitBurst=1
+CollectMode=inactive
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Sockets=eom-embedding-benchmark-cuda-budget600@%i.socket
+NonBlocking=yes
+User=eom-embedding-cuda
+Group=eom-embedding-cuda
+SupplementaryGroups=eom-gpu-lease
+Slice=system.slice
+WorkingDirectory=/opt/eom/embedding-cuda-loader-empty
+EnvironmentFile=/run/eom-incremental-embeddings/benchmark/%i/launch.env
+Environment=TZ=UTC
+Environment=LANG=C.UTF-8
+Environment=PATH=/usr/bin:/bin
+Environment=PYTHONNOUSERSITE=1
+Environment=HF_HUB_OFFLINE=1
+Environment=TRANSFORMERS_OFFLINE=1
+Environment=HF_HUB_DISABLE_TELEMETRY=1
+Environment=TOKENIZERS_PARALLELISM=false
+Environment=OMP_NUM_THREADS=4
+Environment=MKL_NUM_THREADS=4
+Environment=CUDA_VISIBLE_DEVICES=0
+Environment=CUBLAS_WORKSPACE_CONFIG=:4096:8
+UnsetEnvironment=LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT PYTHONPATH PYTHONHOME PYTHONSTARTUP PYTHONUSERBASE
+ExecStart=/opt/eom/conda/envs/eom-embedding-cuda/bin/python3.12 -I -B -m eom_catalog_service.embedding_benchmark_budget600_cuda %i ${EOM_BENCHMARK_INVOCATION_RAW_SHA256} ${EOM_BENCHMARK_OWNER_PID} ${EOM_BENCHMARK_EXPIRES_NS} ${EOM_EMBEDDING_CONFIGURATION_ID} ${EOM_EMBEDDING_CONFIGURATION_REVISION_ID} ${EOM_EMBEDDING_CONFIGURATION_SHA256} ${EOM_EMBEDDING_CONFIGURATION_RAW_SHA256} ${EOM_EMBEDDING_RECEIPT_RAW_SHA256}
+
+NotifyAccess=main
+FileDescriptorStoreMax=1
+FileDescriptorStorePreserve=yes
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+PrivateDevices=no
+DevicePolicy=closed
+DeviceAllow=/dev/nvidia0 rw
+DeviceAllow=/dev/nvidiactl rw
+DeviceAllow=/dev/nvidia-uvm rw
+DeviceAllow=/dev/nvidia-uvm-tools rw
+ProtectSystem=strict
+BindReadOnlyPaths=/opt/eom/embedding-cuda-host-extensions/selected-cache:/etc/ld.so.cache
+ProtectHome=yes
+ProtectProc=invisible
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX
+SystemCallArchitectures=native
+ReadOnlyPaths=/opt/eom/conda/envs/eom-embedding-cuda
+ReadOnlyPaths=/opt/eom/embedding-models /opt/eom/embedding-runtime-proofs
+ReadOnlyPaths=/opt/eom/embedding-runtime-archives /opt/eom/embedding-runtime-bundles
+ReadOnlyPaths=/opt/eom/embedding-native-config /opt/eom/embedding-runtime-admission
+ReadOnlyPaths=/run/eom-gpu-lease
+ReadOnlyPaths=/etc/systemd/system/eom-embedding-native-cuda-probe@.service
+TemporaryFileSystem=/run/eom-incremental-embeddings/benchmark:ro,mode=0711
+BindPaths=/run/eom-incremental-embeddings/benchmark/%i
+ReadWritePaths=/run/eom-incremental-embeddings/benchmark/%i/outputs
+ReadWritePaths=/run/eom-incremental-embeddings/benchmark/%i/cuda-ready.json
+InaccessiblePaths=/run/eom-embedding-native-cuda-probe /run/eom-embedding-native-probe
+InaccessiblePaths=/run/eom-embedding-native-index /run/eom-embedding-native-query
+InaccessiblePaths=/run/eom-embedding-experiments /var/lib/eom-workflow-runner
+InaccessiblePaths=/mnt/nas /home/eom/EOM /home/eom/EOMIS /etc/eom
+InaccessiblePaths=/root/.codex /srv/eom/worker-homes /srv/eom/models/image
+InaccessiblePaths=/srv/eom/conda/envs/eom-api
+InaccessiblePaths=-/var/run/docker.sock -/run/postgresql -/var/run/postgresql
+InaccessiblePaths=-/run/dbus -/run/systemd/private
+
+UMask=0077
+MemoryMax=6G
+CPUQuota=400%
+TasksMax=64
+TimeoutStartSec=600
+TimeoutStopSec=5
+KillMode=control-group
+Restart=no
+LimitFSIZE=16M
+LimitCORE=0
+StandardInput=file:/run/eom-incremental-embeddings/benchmark/%i/invocation.json
+StandardOutput=null
+StandardError=null

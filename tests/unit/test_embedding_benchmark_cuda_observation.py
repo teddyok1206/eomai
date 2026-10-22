@@ -490,7 +490,19 @@ def test_fresh_actual_api_identity_cannot_enter_root_observation():
 
 
 def test_reviewed_ready_implementations_and_fixed_unit_bytes_are_exact():
-    for name, digest in owner._READY_IMPLEMENTATIONS:
+    # Legacy CUDA remains pinned to its admitted source, not to a later checkout
+    # used to prepare a distinct installation and its new admission receipt.
+    assert owner._READY_IMPLEMENTATIONS == (
+        (
+            "embedding_device_benchmark_files.py",
+            "sha256:0f93acf5746fd65a2aadcabd6fd6b275a243cdde542ac250f6e265d45f31f5dd",
+        ),
+        (
+            "embedding_benchmark_cuda.py",
+            "sha256:d1542cbf1f57e2edc016958690d33a9892b47850e62d7b8e1016a436f3d397e8",
+        ),
+    )
+    for name, digest in owner._READY_IMPLEMENTATIONS_V11:
         assert (
             sha256_bytes(
                 (ROOT / "services/catalog_service/eom_catalog_service" / name).read_bytes()

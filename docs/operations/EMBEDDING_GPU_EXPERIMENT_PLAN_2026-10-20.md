@@ -783,3 +783,47 @@ no-forward 검증을 먼저 수행한 후에만 claim을 허용한다.17:00:29.4
 QUERY는 PID1983188/invocation90db로 계속 active였다. 별도 모델·GPU 측정, 설정·권한·DB
 schema 변경과 과거 실패 재해석은 하지 않았다. 이 서비스 복구는 benchmark 시간초과의
 원인이나 여섯 비교 PASS 증거를 대신하지 않는다.
+
+### 시간 제한·실제 시작 후 실패 복구 — 2026-10-22 소스 검증
+
+[명시적 예산 successor 설계](../architecture/EMBEDDING_BENCHMARK_BUDGET_SUCCESSOR_2026_10_22.md)에
+따라180초의 원 계약·leaf·네 unit bytes를 유지하고 정책/요청/invocation1.1의600초와
+별도 CPU/CUDA 실행 unit을 추가했다. listener3600초는 operator 인증 freshness900초를
+늘리지 않는다. 같은 Job의 완전히 기록된 ordinal까지만 반환하는 한 실행 단위도 추가했다.
+
+원 실제 CPU ordinal1의 실패는 새 post-start schema/공식 application이 원 root 완료·실제
+retirement·16개 부분 파일의 크기/hash·현재 terminal unit/PID/cgroup/FD를 대조해 닫는다.
+실패 controller의 생존 시간도 원 실행 시간 전체를 포함해야 한다. root-only 증명과
+owner가 다시 확인하는 증거를 구분하며, DB 직접 수정·실패 성공 처리·새 key 우회는 없다.
+이 시점에는 실제 원 Job closure를 아직 수행하지 않았다.
+
+재검토에서 실제600초 경로의 세 미연결 소비 지점(GPU effective policy, CPU capacity와
+cgroup, native OOM 관측)을 수정했다. CUDA leaf의 READY용 file capture를 공유 worker가
+다시 context-enter하던 결함도 같은 FD를 한 번만 전달하는 명시적 API로 수정했다.
+일반 재진입은 계속 거부하고, sealed READY·미사용 출력·원 FD/hash/current 검증을 유지한다.
+legacy readiness의0f93 pin은 보존하며, 새1.1은 정확한4bc5d315 staging 구현을 선택한다.
+
+실제 임시 PostgreSQL 검증은34 PASS이며, 첫33 PASS/1 FAIL은 비동기 advisory lock의
+정상 BUSY를 테스트가 잘못 해석한 것이었다. production lock은 바꾸지 않고 동일 요청
+rollback 후 replay가 한 winner만 반환하는지 확인했다. 공식 cleanup은 정확한 임시 DB와
+그 전용 credential/state만 제거했고 운영 DB·Artifact·실패 이력은 건드리지 않았다.
+controller-time 보완 후 제한된 root/owner/native DAC 재검증은1 PASS/2.67초다
+(`eom-benchmark-poststart-dac-20261022-review.service`). Machine/retirement의 의미는
+이 DAC test에서 합성이므로 실제 원 실행 증명을 이미 게시한 것으로 확대하지 않는다.
+
+현재 소스의 집중 검증은484/139/205/84/73/191 PASS의 서로 겹치는 cohort이고 합산하지
+않는다. 의존·설계 경계44 PASS, 변경된 core41개 mypy와 Python63개 Ruff/format도 PASS다.
+넓은 benchmark 회귀는 수정 도중 collection되어2021 PASS/2 FAIL로 끝났고, 이전 CUDA
+pin 상태였던 두 실패는 최종 소스로 정확히 다시 실행해2 PASS였다. 이후 변경까지 포함한
+완전히 새 전체 회귀 PASS라고 주장하지 않는다.
+
+current main의 HOST_L2 bytes가 운영 native와 다르므로 main wheel 전체를 수치 prefix에
+설치하지 않는다. 원6c4 native 기반의 최소 호환 backport를 별도 준비했으며 해당 후보의
+집중716 PASS/타입42개/format·lint64개가 통과했다. 원 numerical3/모델/라이브러리/표본은
+보존하지만 새 전체 prefix inventory·config/admission은 여전히 필요하다. CPU shared
+prefix를 바꾸려면 건강한 INDEX/QUERY의 scoped drain과 연결된 verifier/control 전환 및
+재자격검증 가능한 rollback 입력을 먼저 준비한다. 원 receipt를 새 bytes에 재사용하지 않는다.
+
+Slack milestone은 `devreport_9e613db548cb4735a9355258972f93f7`로 전송했다.
+이 소스 checkpoint의 실제 새 모델/GPU 추론0, 여섯 비교 Artifact0, GPU 기본값 미활성이다.
+정상 INDEX/QUERY는 PID2935655/1983188과 원 invocation으로 계속 active였다.

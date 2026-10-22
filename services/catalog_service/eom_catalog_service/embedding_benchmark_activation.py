@@ -11,7 +11,10 @@ import time
 from collections.abc import Callable
 from pathlib import Path
 
-from eom_catalog_contracts.embedding_device_benchmark import BenchmarkWorkerInvocation
+from eom_catalog_contracts.embedding_device_benchmark import (
+    BenchmarkWorkerInvocation,
+    benchmark_timeout_seconds,
+)
 
 from eom_catalog_service.embedding_benchmark_channel import (
     BenchmarkChannelError,
@@ -73,6 +76,8 @@ def capture_benchmark_worker_channel(
     PID1 must pass a nonblocking AF_UNIX listener. The fixed root/owner own the socket
     pathname; the numerical worker cannot bind, chmod, unlink, reconnect or choose a peer.
     """
+    invocation = BenchmarkWorkerInvocation.model_validate(invocation)
+    seconds = benchmark_timeout_seconds(invocation.execution_policy)
     now = time.monotonic_ns()
     _require(
         type(activation_fd) is int
@@ -80,7 +85,7 @@ def capture_benchmark_worker_channel(
         and type(expected_peer) is BenchmarkUnixPeer
         and callable(peer_fence)
         and type(expires_ns) is int
-        and now < expires_ns <= now + 180 * 10**9
+        and now < expires_ns <= now + seconds * 10**9
     )
     invocation = BenchmarkWorkerInvocation.model_validate(invocation)
     expected_peer.__post_init__()

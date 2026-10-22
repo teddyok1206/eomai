@@ -58,6 +58,7 @@ def run_native_embedding_benchmark(
             host = OwnBenchmarkHostOomObserver(
                 device="CPU" if profile == "CPU_INDEX_FP32" else "CUDA",
                 execution_id=files.execution_id,
+                policy=channel.execution_policy,
             )
             return run_embedding_device_benchmark(
                 files,

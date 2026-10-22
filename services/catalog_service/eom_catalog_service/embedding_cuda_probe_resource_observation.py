@@ -31,6 +31,7 @@ from eom_catalog_contracts.embedding_native_installation_evidence import (
 )
 from jsonschema.exceptions import ValidationError as JsonSchemaError
 
+from eom_catalog_service.embedding_benchmark_unit_policy import benchmark_unit_family_from_service
 from eom_catalog_service.embedding_runtime_files import read_live_runtime_os_file
 from eom_catalog_service.embedding_runtime_process_identity import require_exclusive_flock_fdinfo
 
@@ -244,11 +245,7 @@ def observe_benchmark_cuda_retained_resources(
     """Benchmark-only retained fence, not installation-probe admission or cleanup authority."""
     try:
         _require(os.getresuid() == (0, 0, 0) and type(observed) is CudaProbeResourceObservation)
-        _require(
-            type(unit) is str
-            and re.fullmatch(r"eom-embedding-benchmark-cuda@[0-9a-f]{32}\.service", unit)
-            is not None
-        )
+        benchmark_unit_family_from_service("CUDA", unit)
         _assert_retained_resources(observed, unit)
         return observed
     except (ValueError, OSError, subprocess.TimeoutExpired, JsonSchemaError):
@@ -312,11 +309,7 @@ def observe_unacknowledged_benchmark_gpu_resources(
     """Actual unit/PID1 physical fence; caller proves failed terminal and absent ACK."""
     try:
         _require(os.getresuid() == (0, 0, 0))
-        _require(
-            type(unit) is str
-            and re.fullmatch(r"eom-embedding-benchmark-cuda@[0-9a-f]{32}\.service", unit)
-            is not None
-        )
+        benchmark_unit_family_from_service("CUDA", unit)
         lease = TerminalCudaLeaseIdentity(
             lease_gid, _epoch(_LOCK.parent.lstat())[:5], _epoch(_LOCK.lstat()), terminal_pid
         )
@@ -581,7 +574,10 @@ def observe_benchmark_cuda_ready_resources(
 
         _require(type(report) is BenchmarkCudaReady)
         report = BenchmarkCudaReady.model_validate(report)
-        _require(unit == f"eom-embedding-benchmark-cuda@{report.execution_id}.service")
+        family = benchmark_unit_family_from_service("CUDA", unit)
+        _require(
+            unit == family.service_template.replace("@.service", f"@{report.execution_id}.service")
+        )
         return _observe_native_report_resources(report, unit=unit, lease_gid=lease_gid)
     except (ValueError, OSError, JsonSchemaError):
         raise ValueError("BENCHMARK_CUDA_RESOURCE_OBSERVATION_INVALID") from None

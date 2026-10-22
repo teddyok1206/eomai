@@ -11,8 +11,12 @@ from contextlib import contextmanager
 from enum import StrEnum
 from typing import Literal
 
+from eom_catalog_contracts.embedding_device_benchmark import (
+    BenchmarkExecutionPolicy,
+    benchmark_listener_timeout_seconds,
+    benchmark_timeout_seconds,
+)
 from eom_workflow.embedding_benchmark_launch_control import (
-    BENCHMARK_CONTROL_SECONDS,
     BenchmarkLaunchAssociation,
     BenchmarkLaunchCompleted,
     BenchmarkLaunchPrepared,
@@ -60,6 +64,7 @@ class BenchmarkLaunchControlChannel:
         expected_peer: BenchmarkUnixPeer,
         peer_fence: PeerFence,
         controller_release: str,
+        policy: BenchmarkExecutionPolicy | None = None,
     ) -> None:
         self._frames: _Frames | None = None
         try:
@@ -76,12 +81,14 @@ class BenchmarkLaunchControlChannel:
             self.association, self._side, self._release = checked, side, controller_release
             self._phase = _Phase.NEW
             self._prepared: BenchmarkLaunchPrepared | None = None
+            seconds = 180 if policy is None else benchmark_timeout_seconds(policy)
             self._frames = _Frames(
                 connection,
                 expected_peer,
                 peer_fence,
                 checked.expires_ns + 30 * 10**9,
-                maximum_lifetime_seconds=BENCHMARK_CONTROL_SECONDS,
+                maximum_lifetime_seconds=seconds + 30,
+                policy=policy,
             )
         except BaseException:
             connection.close()
@@ -102,6 +109,7 @@ class BenchmarkLaunchControlChannel:
         peer_fence: PeerFence,
         controller_release: str,
         accept_until_ns: int,
+        policy: BenchmarkExecutionPolicy | None = None,
     ) -> BenchmarkLaunchControlChannel:
         """Consume one existing association from the exact selected owner, once.
 
@@ -112,7 +120,12 @@ class BenchmarkLaunchControlChannel:
         bootstrap = None
         try:
             now = time.monotonic_ns()
-            if type(accept_until_ns) is not int or not now < accept_until_ns <= now + 900 * 10**9:
+            seconds = 180 if policy is None else benchmark_timeout_seconds(policy)
+            accept_seconds = 900 if policy is None else benchmark_listener_timeout_seconds(policy)
+            if (
+                type(accept_until_ns) is not int
+                or not now < accept_until_ns <= now + accept_seconds * 10**9
+            ):
                 raise ValueError("BENCHMARK_CONTROL_ACCEPT_DEADLINE_INVALID")
             bootstrap = _Frames(
                 connection,
@@ -123,7 +136,7 @@ class BenchmarkLaunchControlChannel:
             value = parse_benchmark_launch_control_bytes(bootstrap.receive_raw())
             now = time.monotonic_ns()
             if not isinstance(value, BenchmarkLaunchAssociation) or not (
-                now < value.expires_ns <= now + 180 * 10**9
+                now < value.expires_ns <= now + seconds * 10**9
             ):
                 raise ValueError("BENCHMARK_CONTROL_ASSOCIATION_INVALID")
             bootstrap.check()
@@ -134,6 +147,7 @@ class BenchmarkLaunchControlChannel:
                 expected_peer=expected_peer,
                 peer_fence=peer_fence,
                 controller_release=controller_release,
+                policy=policy,
             )
             channel._phase = _Phase.ASSOCIATED
             # Transfer the same owned socket; an inactive bootstrap must no

@@ -8,6 +8,10 @@ import time
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from eom_catalog_contracts.embedding_device_benchmark import BenchmarkExecutionPolicy
 
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 
@@ -88,12 +92,19 @@ def benchmark_launch_environment_bytes(pins: BenchmarkLaunchPins) -> bytes:
 
 
 @contextmanager
-def benchmark_socket_activation(pins: BenchmarkLaunchPins) -> Iterator[None]:
+def benchmark_socket_activation(
+    pins: BenchmarkLaunchPins, *, policy: BenchmarkExecutionPolicy | None = None
+) -> Iterator[None]:
     if type(pins) is not BenchmarkLaunchPins:
         raise ValueError("BENCHMARK_ACTIVATION_INVALID")
     pins.__post_init__()
+    seconds = 180
+    if policy is not None:
+        from eom_catalog_contracts.embedding_device_benchmark import benchmark_timeout_seconds
+
+        seconds = benchmark_timeout_seconds(policy)
     now = time.monotonic_ns()
-    if not now < pins.expires_ns <= now + 180 * 10**9 or (
+    if not now < pins.expires_ns <= now + seconds * 10**9 or (
         os.environ.get("LISTEN_PID") != str(os.getpid())
         or os.environ.get("LISTEN_FDS") != "1"
         or os.environ.get("LISTEN_FDNAMES") != "benchmark-control"

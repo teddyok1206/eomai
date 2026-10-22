@@ -15,9 +15,13 @@ from eom_identifiers import canonical_json_bytes
 from pydantic import TypeAdapter
 
 from eom_catalog_service.embedding_benchmark_cuda_observation import (
-    CUDA_BENCHMARK_TEMPLATE,
+    CUDA_BENCHMARK_TEMPLATE as CUDA_BENCHMARK_TEMPLATE,
+)
+from eom_catalog_service.embedding_benchmark_cuda_observation import (
     BenchmarkCudaReadyObservation,
     BenchmarkCudaTerminalObservation,
+    benchmark_cuda_unit_name,
+    benchmark_cuda_unit_template,
     capture_benchmark_cuda_pinned_files,
     observe_benchmark_cuda_ready,
     require_benchmark_cuda_observation_basis,
@@ -34,6 +38,7 @@ from eom_catalog_service.embedding_benchmark_cuda_unacknowledged import (
 )
 from eom_catalog_service.embedding_benchmark_handoff import PreparedBenchmarkEnvironment
 from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_CUDA_LIFETIME_ROOT
+from eom_catalog_service.embedding_benchmark_unit_policy import benchmark_unit_family_from_service
 from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_probe_gpu_clients
 from eom_catalog_service.embedding_cuda_probe_resource_observation import (
     hold_released_cuda_probe_resources,
@@ -115,7 +120,7 @@ def _save(
 
 
 def _reserve(ready: BenchmarkCudaReadyObservation, phase: Literal["ack", "retirement"]) -> int:
-    unit = CUDA_BENCHMARK_TEMPLATE.replace("@.service", f"@{ready.execution_id}.service")
+    unit = benchmark_cuda_unit_name(ready.unit, ready.execution_id)
     return _reserve_original_unit(unit, ready.unit.invocation_id, phase)
 
 
@@ -132,10 +137,7 @@ def _reserve_original_unit(unit: str, invocation: str, phase: Literal["ack", "re
 
 def _effect(action: Literal["ACK", "STOP", "RESET_FAILED", "CLEAN_FDSTORE"], unit: str) -> None:
     _require(os.getresuid() == (0, 0, 0), "ROOT_REQUIRED")
-    _require(
-        re.fullmatch(r"eom-embedding-benchmark-cuda@[0-9a-f]{32}\.service", unit) is not None,
-        "IDENTITY_INVALID",
-    )
+    benchmark_unit_family_from_service("CUDA", unit)
     arguments = {
         "ACK": ("kill", "--kill-whom=main", "--signal=SIGUSR1"),
         "STOP": ("stop",),
@@ -180,7 +182,7 @@ def acknowledge_benchmark_cuda_ready(
         and re.fullmatch(r"[0-9a-f]{32}", ready.unit.invocation_id) is not None,
         "IDENTITY_INVALID",
     )
-    unit = CUDA_BENCHMARK_TEMPLATE.replace("@.service", f"@{ready.execution_id}.service")
+    unit = benchmark_cuda_unit_name(ready.unit, ready.execution_id)
     _require(ready.cgroup == "/system.slice/" + unit, "IDENTITY_INVALID")
 
     def recheck() -> None:
@@ -235,7 +237,7 @@ def observe_retired_benchmark_cuda_unit(
     )
     unit = require_benchmark_cuda_observation_basis(ready, captured)
     before = observe_stopped_gpu_unit(
-        unit, template=CUDA_BENCHMARK_TEMPLATE, invocation=ready.unit.invocation_id
+        unit, template=benchmark_cuda_unit_template(ready.unit), invocation=ready.unit.invocation_id
     )
     _require(before.stored_descriptors == 0, "RETIREMENT_UNCERTAIN")
     require_benchmark_cuda_processes_ended(ready)
@@ -246,7 +248,9 @@ def observe_retired_benchmark_cuda_unit(
         observe_runtime_device(ready.device)
         _require(
             observe_stopped_gpu_unit(
-                unit, template=CUDA_BENCHMARK_TEMPLATE, invocation=ready.unit.invocation_id
+                unit,
+                template=benchmark_cuda_unit_template(ready.unit),
+                invocation=ready.unit.invocation_id,
             )
             == before,
             "RETIREMENT_UNCERTAIN",
@@ -274,7 +278,7 @@ def retire_benchmark_cuda_unit(
     _require(os.getresuid() == (0, 0, 0), "ROOT_REQUIRED")
     _require(type(terminal) is BenchmarkCudaTerminalObservation, "IDENTITY_INVALID")
     ready = terminal.ready
-    unit = CUDA_BENCHMARK_TEMPLATE.replace("@.service", f"@{ready.execution_id}.service")
+    unit = benchmark_cuda_unit_name(ready.unit, ready.execution_id)
 
     def recheck() -> None:
         fresh = verify_benchmark_cuda_terminal(
@@ -294,7 +298,9 @@ def retire_benchmark_cuda_unit(
         recheck()
         _effect("STOP" if terminal.original_outcome == "SUCCEEDED" else "RESET_FAILED", unit)
         stopped = observe_stopped_gpu_unit(
-            unit, template=CUDA_BENCHMARK_TEMPLATE, invocation=ready.unit.invocation_id
+            unit,
+            template=benchmark_cuda_unit_template(ready.unit),
+            invocation=ready.unit.invocation_id,
         )
         if stopped.stored_descriptors == 1:
             observe_runtime_device(ready.device)
@@ -302,7 +308,9 @@ def retire_benchmark_cuda_unit(
             _require(observe_cuda_probe_gpu_clients(ready.device) == (), "RETIREMENT_UNCERTAIN")
             _require(
                 observe_stopped_gpu_unit(
-                    unit, template=CUDA_BENCHMARK_TEMPLATE, invocation=ready.unit.invocation_id
+                    unit,
+                    template=benchmark_cuda_unit_template(ready.unit),
+                    invocation=ready.unit.invocation_id,
                 )
                 == stopped,
                 "RETIREMENT_UNCERTAIN",
@@ -341,7 +349,9 @@ def observe_retired_unacknowledged_benchmark_cuda_unit(
         require_unacknowledged_benchmark_basis(terminal, files)
         require_empty_benchmark_cuda_cgroup(unit)
         value = observe_stopped_gpu_unit(
-            unit, template=CUDA_BENCHMARK_TEMPLATE, invocation=terminal.terminal_unit.invocation_id
+            unit,
+            template=benchmark_cuda_unit_template(terminal.terminal_unit),
+            invocation=terminal.terminal_unit.invocation_id,
         )
         _require(value.stored_descriptors == 0, "RETIREMENT_UNCERTAIN")
         return value
@@ -397,14 +407,16 @@ def retire_unacknowledged_benchmark_cuda_unit(
         )
 
     recheck()
-    unit = CUDA_BENCHMARK_TEMPLATE.replace("@.service", f"@{terminal.execution_id}.service")
+    unit = benchmark_cuda_unit_name(terminal.terminal_unit, terminal.execution_id)
     directory = _reserve_original_unit(unit, terminal.terminal_unit.invocation_id, "retirement")
     try:
         _save(directory, "intent.json", "BENCHMARK_CUDA_UNACKNOWLEDGED_RETIREMENT_INTENT", terminal)
         recheck()
         _effect("RESET_FAILED", unit)
         stopped = observe_stopped_gpu_unit(
-            unit, template=CUDA_BENCHMARK_TEMPLATE, invocation=terminal.terminal_unit.invocation_id
+            unit,
+            template=benchmark_cuda_unit_template(terminal.terminal_unit),
+            invocation=terminal.terminal_unit.invocation_id,
         )
         if stopped.stored_descriptors == 1:
             _require(terminal.resources is not None, "RETIREMENT_UNCERTAIN")
@@ -421,7 +433,7 @@ def retire_unacknowledged_benchmark_cuda_unit(
             _require(
                 observe_stopped_gpu_unit(
                     unit,
-                    template=CUDA_BENCHMARK_TEMPLATE,
+                    template=benchmark_cuda_unit_template(terminal.terminal_unit),
                     invocation=terminal.terminal_unit.invocation_id,
                 )
                 == stopped,
