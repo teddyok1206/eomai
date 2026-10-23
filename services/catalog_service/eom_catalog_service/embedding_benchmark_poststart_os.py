@@ -31,6 +31,7 @@ from eom_catalog_service.embedding_benchmark_unit_control import (
     CPU_BENCHMARK_TEMPLATE,
     CPU_BENCHMARK_TEMPLATE_SHA256,
 )
+from eom_catalog_service.embedding_benchmark_unit_policy import benchmark_unit_family
 from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
 from eom_catalog_service.gpu_unit_terminal_observation import gpu_unit_terminal_outcome
 
@@ -307,7 +308,8 @@ def read_root_poststart_retirement(
 ) -> CapturedBenchmarkPoststartRetirement:
     """Root-only original saved record. Owner trusts its root-minted hash, not a fake reread."""
     _require(os.getresuid() == (_ROOT_UID,) * 3 and os.getresgid() == (_ROOT_GID,) * 3)
-    unit = CPU_BENCHMARK_TEMPLATE.replace("@.service", "@" + invocation.execution_id + ".service")
+    template = benchmark_unit_family("CPU", request.execution_policy).service_template
+    unit = template.replace("@.service", "@" + invocation.execution_id + ".service")
     root = BENCHMARK_LIFETIME_ROOT / unit
     names = os.listdir(root)
     _require(len(names) == 1 and re.fullmatch(r"[0-9a-f]{32}", names[0]) is not None)
@@ -364,7 +366,7 @@ def read_root_poststart_retirement(
     original, stopped = retirement.original_terminal, retirement.stopped_unit
     _require(
         original.invocation_id == native_invocation
-        and original.fragment_path == "/etc/systemd/system/" + CPU_BENCHMARK_TEMPLATE
+        and original.fragment_path == "/etc/systemd/system/" + template
         and original.drop_in_paths == ""
         and not original.status.need_daemon_reload
         and original.status.load_state == "loaded"

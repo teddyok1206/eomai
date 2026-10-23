@@ -6,6 +6,10 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 
+from eom_catalog_contracts.embedding_benchmark_budget600_failure import (
+    BenchmarkBudget600FailureDecision,
+    BenchmarkBudget600PoststartObservation,
+)
 from eom_catalog_contracts.embedding_benchmark_poststart_failure import (
     POSTSTART_FAILURE_CODE,
     POSTSTART_FAILURE_EVENT,
@@ -90,7 +94,7 @@ class BenchmarkPrelaunchFailureRecord:
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkPoststartFailureRecord:
-    decision: BenchmarkPoststartFailureDecision
+    decision: BenchmarkPoststartFailureDecision | BenchmarkBudget600FailureDecision
     event_sequence: int
 
 
@@ -191,7 +195,11 @@ def _history(
             continue
         if row.event == POSTSTART_FAILURE_EVENT:
             try:
-                poststart_decision = BenchmarkPoststartFailureDecision.model_validate(row.data)
+                poststart_decision = (
+                    BenchmarkBudget600FailureDecision.model_validate(row.data)
+                    if row.data.get("schema_version") == "embedding-benchmark-poststart-failure/1.1"
+                    else BenchmarkPoststartFailureDecision.model_validate(row.data)
+                )
             except (ValueError, SchemaError):
                 raise BenchmarkJobAdmissionError("BENCHMARK_POSTSTART_HISTORY_INVALID") from None
             if (
@@ -258,16 +266,22 @@ def _history(
 def require_benchmark_poststart_observation(
     request: BenchmarkOwnerRequest,
     invocation: BenchmarkWorkerInvocation,
-    observation: BenchmarkPoststartObservation,
-) -> BenchmarkPoststartObservation:
+    observation: BenchmarkPoststartObservation | BenchmarkBudget600PoststartObservation,
+) -> BenchmarkPoststartObservation | BenchmarkBudget600PoststartObservation:
     """Link actual-start failure metadata; a parsed value is never root/OS authority."""
     try:
-        checked = BenchmarkPoststartObservation.model_validate(observation)
+        checked = (
+            BenchmarkBudget600PoststartObservation.model_validate(observation)
+            if isinstance(observation, BenchmarkBudget600PoststartObservation)
+            else BenchmarkPoststartObservation.model_validate(observation)
+        )
     except (ValueError, SchemaError):
         raise BenchmarkJobAdmissionError("BENCHMARK_POSTSTART_OBSERVATION_INVALID") from None
     if (
         invocation.device != "CPU"
         or invocation.launch_ordinal != 1
+        or request.execution_policy.timeout_seconds
+        != (600 if isinstance(checked, BenchmarkBudget600PoststartObservation) else 180)
         or checked.job_id != invocation.job_id
         or checked.execution_id != invocation.execution_id
         or checked.request_sha256 != request.request_sha256
@@ -431,6 +445,7 @@ def require_benchmark_poststart_predecessor(
     if (
         job.status != JobState.FAILED
         or failure is None
+        or not isinstance(failure.decision, BenchmarkPoststartFailureDecision)
         or BenchmarkPoststartPredecessorReference.from_decision(
             failure.decision, event_sequence=failure.event_sequence
         )

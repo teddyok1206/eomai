@@ -1261,3 +1261,25 @@ versioned policy/recovery가 준비된 뒤에만 고려한다.
 
 이 중단/운영 복구의 Slack 보고는
 `devreport_7daf94ac0a1949c1a5c2872dd0df2c1f`(06:18:54 UTC, SENT/HTTP200)다.
+
+### budget600 실패 계약의 저장소 후보 — 2026-10-23 UTC
+
+원 1.0 post-start 실패 schema와 기존 실패 Job/Artifact bytes는 수정하지 않고,
+`embedding-benchmark-poststart-failure/1.1` JSON Schema 2020-12와 Pydantic
+계약을 추가했다. 새 관측은 budget600 CPU unit, 원 `FAILED`/`CONFIRMED` root
+completion, 별도 `UNCERTAIN` record, 보존된 retirement, 임시 template과
+before/stopped/restored window의 정확한 hash를 pin하도록 설계했다. 계약 파싱은
+실행 권한이나 재시도 허가가 아니다.
+
+기존 Orchestrator failure closure/Journaling 경계를 재사용해 1.1 결정을 같은
+RUNNING→FAILED append-only 전이로 다룰 수 있는 source candidate를 추가했다.
+합성 SQLite에서 새 successor의 첫 예약 1건을 실패로 닫고, 원 실패 Job과 새 실패
+Job의 이력을 모두 보존하며 동일 결정 재조회가 새 전이를 만들지 않는 것을 검사했다.
+1.0 경로의 기존 검증과 함께 집중179 PASS, release schema inventory33 PASS,
+core source strict mypy와 Ruff를 확인했다. 합성 검사이므로 실제 root proof,
+운영 DB closure, 모델 실행, GPU 실행 또는 GPU 기본값 승인을 뜻하지 않는다.
+
+특히 **운영의 새 Job은 아직 정식 closure 전**이다. 보호된 window/retired-template
+bytes와 현재 PID1/cgroup을 재검증하고 1.1 관측을 mint/read하는 설치 어댑터,
+그 어댑터의 격리 검증·배포·실제 사용자/자료 재인가가 다음 단계다. 그 전에는
+기존 Job row를 직접 바꾸거나 새 benchmark successor를 제출하지 않는다.

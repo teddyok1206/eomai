@@ -7,6 +7,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
 
+from eom_catalog_contracts.embedding_benchmark_budget600_failure import (
+    BenchmarkBudget600FailureDecision,
+    BenchmarkBudget600PoststartObservation,
+    BenchmarkBudget600PredecessorReference,
+)
 from eom_catalog_contracts.embedding_benchmark_poststart_failure import (
     POSTSTART_FAILURE_CODE,
     POSTSTART_FAILURE_EVENT,
@@ -51,7 +56,9 @@ class CapturedBenchmarkPoststartInspection(Protocol):
     """Live adapter-owned capture; parsing a user/model observation is insufficient."""
 
     @property
-    def observation(self) -> BenchmarkPoststartObservation: ...
+    def observation(
+        self,
+    ) -> BenchmarkPoststartObservation | BenchmarkBudget600PoststartObservation: ...
 
     def assert_current(self) -> None: ...
 
@@ -64,12 +71,18 @@ class BenchmarkPoststartInspection(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkPoststartFailureClosure:
-    decision: BenchmarkPoststartFailureDecision
+    decision: BenchmarkPoststartFailureDecision | BenchmarkBudget600FailureDecision
     event_sequence: int
     created: bool
 
     @property
-    def predecessor(self) -> BenchmarkPoststartPredecessorReference:
+    def predecessor(
+        self,
+    ) -> BenchmarkPoststartPredecessorReference | BenchmarkBudget600PredecessorReference:
+        if isinstance(self.decision, BenchmarkBudget600FailureDecision):
+            return BenchmarkBudget600PredecessorReference.from_decision(
+                self.decision, event_sequence=self.event_sequence
+            )
         return BenchmarkPoststartPredecessorReference.from_decision(
             self.decision, event_sequence=self.event_sequence
         )
@@ -149,7 +162,7 @@ class BenchmarkPoststartFailureApplication:
                         )
                     captured.assert_current()
                     body = dict(
-                        schema_version="embedding-benchmark-poststart-failure/1.0",
+                        schema_version=observation.schema_version,
                         kind="FAILURE_DECISION",
                         job_id=job_id,
                         execution_id=invocation.execution_id,
@@ -164,9 +177,15 @@ class BenchmarkPoststartFailureApplication:
                         .isoformat(timespec="microseconds")
                         .replace("+00:00", "Z"),
                     )
-                    decision = BenchmarkPoststartFailureDecision.model_validate(
-                        body | {"decision_sha256": content_sha256(body)}
-                    )
+                    decision: BenchmarkPoststartFailureDecision | BenchmarkBudget600FailureDecision
+                    if isinstance(observation, BenchmarkBudget600PoststartObservation):
+                        decision = BenchmarkBudget600FailureDecision.model_validate(
+                            body | {"decision_sha256": content_sha256(body)}
+                        )
+                    else:
+                        decision = BenchmarkPoststartFailureDecision.model_validate(
+                            body | {"decision_sha256": content_sha256(body)}
+                        )
                     job = transition_job(
                         session,
                         job_id,
