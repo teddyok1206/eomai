@@ -4,6 +4,56 @@ Status: source implementation candidate. No deployment, inference, authenticatio
 automatic retry or GPU-default activation follows from this document or schema validation.
 600 seconds is a bounded experimental budget, not a guarantee that the full first run will finish.
 
+## Actual 600-second result and next contract boundary — 2026-10-23 UTC
+
+The installed 1.1 successor reached its first CPU native launch, then systemd terminated that
+launch at the exact 600-second start bound. No CUDA launch ran and no result was published. The
+official owner left the one reserved invocation unresolved rather than silently retrying it.
+Root-local metadata records both `original_outcome=FAILED, cleanup=CONFIRMED` and a later
+`UNCERTAIN` control record; the actual native retirement intent/result also exists. These facts
+must be reconciled by a supported application, not by editing the Job row or selecting one file
+as an unvalidated receipt. The affected service window was closed and the original INDEX/QUERY
+owners restarted. The [operations record](../operations/EMBEDDING_GPU_EXPERIMENT_PLAN_2026-10-20.md)
+pins the execution, unit and timestamps.
+
+Read-only partial-file metadata shows cold DOCUMENT bytes at 06:08:24 UTC and the fixed
+synthetic-vector bytes at 06:15:29 UTC. The first process still had the unmeasured warm-up, five
+warm DOCUMENT calls, ten QUERY calls and two capacity calls outstanding. Hence replacing600 with
+an arbitrary slightly larger number is not evidence-based. The canonical29 input rows, CPU/CUDA
+model and numerical recipe, fixed sample sequence, tolerances and comparison order remain fixed.
+
+The next implementation requires two explicit, separately reviewed successors:
+
+1. A versioned post-start failure observation/decision for the exact budget600 first CPU
+   execution. Its canonical source is the existing immutable request/Job reservation, exact
+   root completion and retirement bytes, actual terminal PID1/socket/cgroup properties, protected
+   partial member hashes and restored-window record. An installed read-only adapter, not the
+   operator's supplied JSON, captures and rechecks these. The existing1.0 schema and its
+   original180-second proof remain unchanged. One indexed Job lookup and one bounded fixed-file
+   scan suffice; a single transaction appends the terminal failure event with source/user fences.
+   Duplicate closure is a replay only when the same decision is already accepted. Missing or
+   contradictory root records, current source revocation or nonempty native cgroup fail closed.
+2. A distinct, explicitly bounded execution-policy/worker-protocol successor for the unchanged
+   full sample program. It must establish a measured upper bound from stage timings before
+   selecting a wall budget. A native process may pause at fixed stage checkpoints; the owner can
+   require **genuine fresh operator authorization** there and recheck current source permission
+   before continuation. Checkpoint ACK is not authority and cannot extend an expired session.
+   Worker has no password/DB/NAS access. The root/native deadline, owner freshness, root listener,
+   GPU lease and cleanup grace must be finite and independently represented. A bounded wait for
+   user reauthentication may retain a CPU model only where safe; it cannot leave a CUDA GPU lease
+   blocking other work indefinitely. If this cannot be made safe, record the limitation and keep
+   CPU as default rather than changing the benchmark's meaning.
+
+The dominant access patterns are keyed exact revision/Job/execution lookups, ordered append-only
+launch/checkpoint histories and one exclusive native/GPU claim. Existing indexed Job/launch tables,
+unique claims and typed manifests are sufficient unless a measured query plan proves otherwise.
+No new search engine, queue or worker-to-worker channel is warranted. Memory/space cost is bounded
+by the same fixed input and protected partial member set; stage count is constant. The smaller
+alternative—raising only `TimeoutStartSec`—would conflict with the owner/native monotonic
+deadlines, 900-second user freshness and immutable policy1.1, and could leave uncertain work or
+GPU ownership unaccounted for. First prove the 600-second failure closure; then schema-first
+model the longer run and its checkpoint/auth lifetime before another model execution.
+
 1. Responsibility and boundary: the existing Orchestrator benchmark owner authorizes and records
    work; Catalog's installed adapters stage and observe it; fixed PID1 units execute local numerical
    workers. The successor changes the benchmark's effective execution budget only.

@@ -1220,6 +1220,29 @@ systemd는 06:15:55 UTC에 위 native unit의 **600초 start timeout**과 SIGTER
 없고, CUDA launch와 여섯 번의 비교가 없다는 점이다. 새 Job의 RUNNING/실패 여부도
 공식 Journal/closure 조회 전에는 추정하지 않는다.
 
+기존 sudo 인증이 남아 있는 운영 pane에서 파일 **내용이 아닌 이름·길이·보호 메타데이터**를
+읽기 전용으로 더 확인했다. 같은 execution의 `cold-documents.f32`는73,728 bytes
+(18×1024×4), `supplementary-documents.f32`는122,880 bytes(30×1024×4)다.
+`worker-result.json`·`timings.json`과 QUERY 결과는0 bytes다. 이는 cold 행렬과
+30개 보조 벡터의 부분 materialization을 보여줄 뿐, 유효한 benchmark 완료나
+개별 phase의 채택 판정이 아니다. 고정 첫 launch 프로그램은 cold1,
+synthetic12, warm5, query10, capacity2 sample로 구성되고 첫 warm 직전
+unmeasured warm-up도 실행한다. 따라서 현재의600초가 전체 첫 launch에 충분하다고
+가정해 재제출할 근거는 없다.
+각 파일의 실제 mtime은 cold `06:08:24.351659 UTC`, supplementary
+`06:15:29.412350 UTC`다. native 시작06:05:55부터 cold materialization까지 약2분29초,
+그 뒤 supplementary materialization까지 약7분5초가 경과했다. 파일 생성 시각은
+phase 전체 wall-time이나 안정적인 미래 처리량을 증명하지 않지만, warm/query/capacity가
+남은 채600초 상한에 도달했다는 판단에는 직접적인 근거다. 같은 실패 입력을 시간을
+조금만 늘려 자동 재시도하는 접근은 적절하지 않다.
+
+별도로 root가 남긴 `root-completion.json`에는 같은 execution/ordinal1의
+`original_outcome=FAILED`, `cleanup=CONFIRMED`가 있고,
+`root-uncertain.json`도 존재한다. 실제 native retirement의 intent/result 파일이
+같은 invocation 아래 보존되어 있다. 이 두 control record를 마음대로 하나의
+성공 receipt로 합치지 않는다. 원인 분류와 공식 failure closure는 둘의 관계와
+실제 systemd timeout·부분 출력·파일 보호 상태를 함께 검증해야 한다.
+
 보호된 window는 06:15:57.096600 UTC에 닫혔고, 실험 template instance는 더는
 활성화되어 있지 않다. 정상 INDEX와 QUERY owner는 각각 새 PID3916708/3916710으로
 `active/running`, API `/api/v1/health/ready`는 `READY`를 확인했다. GPU 기본값과
