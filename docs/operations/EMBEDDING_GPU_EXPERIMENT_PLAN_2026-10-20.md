@@ -1370,3 +1370,21 @@ retired budget600 unit과 보호된 finite window를 별도 관측하는 adapter
 이 과정에서 모델 forward, 새 Job, 운영 DB 전이, NAS 게시, canonical proof 발행은
 수행하지 않았다. 다음은 이 source candidate의 회귀 검증·설치 후 canonical proof를
 발급하고, 재인가된 Orchestrator application으로 원 Job만 정식 FAILED 종료하는 것이다.
+
+### budget600 원 CPU Job 정식 종료 — 2026-10-23 08:24 UTC
+
+source `0e332c5dcec306bb7febfa696672accf3571f1e4`의 설치 wheel/RECORD와
+원 실행의 보호된 증명을 owner UID로 검증했다. 실제 `guiadmin` 로그인 뒤 지원된
+Orchestrator application이 원 Job `job_26e206dc11434d52870f51737d15fdbd`를
+`RUNNING→FAILED`로 기록했다. event sequence는 8, 결정 SHA-256은
+`1181768f0d92103982ed1dffd8c391a1a6659f6abe77c1a7dbdb7f92bd89db4b`다.
+동일 요청의 즉시 재확인은 `created=false`였고 새 Job·native launch·model forward는
+모두 0이다. 과거 실패, 부분 출력 및 원 Artifact는 보존했다. Slack milestone
+`devreport_24da82656736481db06c854c2f151ee5`는 SENT/HTTP200이다.
+
+첫 CPU 실행은 cold 18행 파일까지 약 2분 29초, 보조 30벡터 파일까지 약 9분
+34초가 걸렸고 warm/query/capacity 완료 전에 600초에 종료됐다. 따라서 동일
+600초 작업의 무조건 재시도는 하지 않는다. 다음 실험은 같은 모델·고정 입력·검색
+축에서 먼저 실제 CPU/GPU 처리량을 작은 범위로 측정하여 적정 실행 상한을
+결정하고, 그 결과에 맞는 새 versioned recipe로 원래의 수치·순위·자원·공존
+acceptance를 진행한다. 이 진단만으로 GPU 기본값은 전환하지 않는다.
