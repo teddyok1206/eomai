@@ -1,6 +1,6 @@
 # 임베딩 비교 실험의 운영 서비스 공존 설계
 
-상태: 설계 결정, 구현 전  
+상태: 구현·소스 검증 완료, 운영 설치 대기
 기준: 2026-10-23  
 범위: 기존 고정 입력·모델·검색축을 사용하는 CPU/GPU 비교 실행의 서비스 격리
 
@@ -34,6 +34,8 @@
 `Orchestrator use case → typed benchmark contract → fixed executor port` 방향을 유지한다. systemd와 GPU 장치 접근은 Catalog의 기존 native launch adapter가 소유하고, 도메인/contract는 systemd나 파일 경로를 import하지 않는다. 외부 API·worker 직통 호출·root Codex auth·운영 owner unit 변경은 금지한다.
 
 새 systemd template는 기존 benchmark unit policy에서 지원하는 고정 실행 값만 담고, 첫 설치 전에 unit bytes/hash, `DeviceAllow`, `ReadWritePaths`, `InaccessiblePaths`, UID/GID, cgroup, timeout, cleanup, 설치/복구 순서를 검증한다. 운영 owner가 실행 중인 상태에서 isolated systemd admission test를 먼저 통과해야 한다. 배포 전후 실제 HTTPS similarity read, owner PID/InvocationID, API health를 확인한다. 회귀 시 새 benchmark unit만 비활성화하며 기존 owner와 native data는 변경하지 않는다.
+
+2026-10-23: v1.2 CPU/CUDA unit family와 post-start failure closure가 구현되었고 571개 회귀 테스트, lint/type/systemd 검증을 통과했다. Commit `e1494d2f8585bd3777d1c72ef500f90891f2c1bc`의 API/platform/contracts wheel도 build-only 검증 PASS다. 표준 `deploy_release.sh --install`은 필요한 고정 release-operator 실행 문맥이 제공되지 않아 `RELEASE_OPERATOR_BOUNDARY_REJECTED`로 변경 전 종료했다. 이 거부는 sudo 비밀번호나 GPU 상태 문제가 아니다. 운영 API/INDEX/QUERY는 계속 active이며 GPU 비교 실행은 아직 시작하지 않았다. 다음 단계는 기존 protected release-operator 설치/ADMIT 경로로 호환 runtime과 unit family를 게시한 뒤 같은 입력의 benchmark를 다시 제출하는 것이다. 직접 root 복사나 owner 중지는 대체 경로로 사용하지 않는다.
 
 ## 검증 게이트
 
