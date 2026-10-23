@@ -66,3 +66,34 @@ failure는 그대로 남고, 다른 actor/source/model/runtime/access-policy/검
   여전히 미실행이며 GPU default는 변경하지 않았다.
 - 14:10 UTC read-only 관측에서는 INDEX/QUERY owner가 active였고 benchmark native unit은
   없었다. RTX 5080은 0%/2 MiB였다. 이 관측만으로 다음 시점의 quiescence를 보증하지 않는다.
+
+### 2026-10-23 14:34 UTC — 운영 인덱싱을 유지한 분리 릴리스 준비
+
+- 수정 commit `2690bf73d8fc71e7a33d10219ee89cd6202e543d`는 main에 게시됐다.
+  API build-only/RECORD와 600초 실패→1200초 successor 관련 118개 단위 시험이 통과했다.
+- exact source/wheel은 `/var/lib/eom-release-operator-stage.2690bf73-6f1biw_d`에
+  별도 materialize됐다. context SHA-256은
+  `ae2f9bdb363a3ad4bcbcc27121a2028628fe0c8e2dbf5ab3a480be93a9295e90`이며
+  protected operator `ADMIT_PASS`와 migration `0058` read-only verify가 통과했다.
+- 공용 API와 현재 INDEX/QUERY owner는 교체하지 않았다. 기존 지원된 owner-release
+  installer로 위 commit의 platform/contracts wheel만
+  `/opt/eom/embedding-owner-releases/2690bf73d8fc71e7a33d10219ee89cd6202e543d`에
+  별도로 설치했다. wheel SHA-256은 각각
+  `7cef6555501a386f604de55f7c88cd44eeae586b4423d1bdd76f2ae2f26a1b75`,
+  `0a1072a0ffcf7ea6728ef2559b7a5dd9165896efbcedbed5f74c126bb386daa2`다.
+  설치기는 `OWNER_ACTIVATION=NOT_PERFORMED`, `CPU_RUNTIME=UNCHANGED`를 보고했다.
+- 이전 600초 실행의 정확한 invocation은
+  `a038b51d231a47e9866766c8a6b6e476` / Job
+  `job_26e206dc11434d52870f51737d15fdbd`다. 이미 존재하던 root 관찰 증거
+  `/run/eom-incremental-embeddings/benchmark-poststart-recovery/a038b51d231a47e9866766c8a6b6e476.json`
+  의 SHA-256은 `5d7b4325b0015b212530dbfa991b23e229d157542cfe5d27dac57ecd2fcdfdf7`이고,
+  `BUDGET600_TIMEOUT`, `cleanup=CONFIRMED`를 기록한다. 이는 공식 Job failure closure나
+  1200초 후속 Job 생성의 증거는 아니다.
+- 다른 과거 invocation `9b37158957804beeb4be83a8fd04f118`을 600초 실행으로
+  잘못 선택한 단발성 proof-mint 진단은 입력 연계 assertion에서 거부됐다. 새 proof,
+  DB 변경, 모델 실행은 없었고 해당 실패 helper는 제거했다. 과거 root proof는 변경하지 않았다.
+- 14:23 UTC read-only 관측에서 운영 INDEX owner는 실제 CPU를 쓰며 active였고
+  Workflow 명령 하나가 유효 lease를 갱신 중이었다. 공용 API 배포로 이를 중단하지
+  않는다. 다음은 기존 600초 Job의 지원된 post-start closure를 확인/완료하고,
+  위 분리 owner release로 v1.2 successor를 등록한 뒤 운영 owner와 공존하는
+  전용 1200초 controller에서 원 6회 측정을 실행하는 것이다. GPU 기본값은 CPU다.
