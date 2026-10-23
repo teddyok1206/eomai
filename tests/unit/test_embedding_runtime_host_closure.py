@@ -287,12 +287,13 @@ def test_configuration_seed_replaces_only_cache_and_preserves_fixed_host_seed() 
     assert not hasattr(host, "NativeEmbeddingInstallationAdmission")
 
 
-def test_reviewed_host_baselines_are_closed_immutable_and_change_only_liblzma() -> None:
+def test_reviewed_host_baselines_are_closed_immutable_successors() -> None:
     legacy = host.FIXED_EMBEDDING_HOST_SEED_SHA256
     successor = host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256
     assert legacy == "sha256:fd1fc7c52afd572b04c818925a47d23d14ef15f87c842931584ae83e6a761a40"
     assert successor == "sha256:e896af20bceb93494f9dd0b724dd0ef01d3ba718c64836b8c4546f4a8a8d7960"
-    assert set(host._REVIEWED_HOST_BASELINES) == {legacy, successor}
+    zlib = host.UBUNTU_LIBZ_20261023_HOST_SEED_SHA256
+    assert set(host._REVIEWED_HOST_BASELINES) == {legacy, successor, zlib}
     assert host._REVIEWED_HOST_BASELINES[legacy] is host._FILES
     previous = host._REVIEWED_HOST_BASELINES[legacy]
     current = host._REVIEWED_HOST_BASELINES[successor]
@@ -314,6 +315,22 @@ def test_reviewed_host_baselines_are_closed_immutable_and_change_only_liblzma() 
     ]
     assert _hash(host._seed_bytes(previous)) == legacy
     assert _hash(host._seed_bytes(current)) == successor
+    zlib_files = host._REVIEWED_HOST_BASELINES[zlib]
+    assert [(old, new) for old, new in zip(current, zlib_files, strict=True) if old != new] == [
+        (
+            (
+                Path("/usr/lib/x86_64-linux-gnu/libz.so.1.3"),
+                113000,
+                "86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892",
+            ),
+            (
+                Path("/usr/lib/x86_64-linux-gnu/libz.so.1.3"),
+                113000,
+                "f61677c7bdb7c2aa2a243ea781bfd16afcb361cede7b4ef76127a9d8eb9a5242",
+            ),
+        )
+    ]
+    assert _hash(host._seed_bytes(zlib_files)) == zlib
     with pytest.raises(TypeError):
         cast(dict[str, tuple[tuple[Path, int, str], ...]], host._REVIEWED_HOST_BASELINES)[
             "sha256:" + "f" * 64
@@ -348,7 +365,7 @@ def test_reviewed_profile_replaces_only_cache_and_keeps_predecessor_target_disti
             assert derived == host.embedding_host_configuration_seed(
                 cache_byte_count=byte_count, cache_sha256="sha256:" + "e" * 64
             )
-    assert len(targets) == 2
+    assert len(targets) == len(host._REVIEWED_HOST_BASELINES)
 
 
 def test_reviewed_legacy_dispatch_preserves_existing_fixed_fixture_behavior(
@@ -398,7 +415,11 @@ def test_reviewed_unknown_baseline_denies_before_cache_resolution_or_io(
 
 @pytest.mark.parametrize(
     "baseline",
-    [host.FIXED_EMBEDDING_HOST_SEED_SHA256, host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256],
+    [
+        host.FIXED_EMBEDDING_HOST_SEED_SHA256,
+        host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256,
+        host.UBUNTU_LIBZ_20261023_HOST_SEED_SHA256,
+    ],
 )
 @pytest.mark.parametrize(
     ("size", "sha"),
@@ -1033,7 +1054,7 @@ for forbidden in ('pydantic','jsonschema','eom_catalog_contracts','eom_identifie
                   'torch','transformers','numpy','safetensors','tokenizers'):
  assert not any(n==forbidden or n.startswith(forbidden+'.') for n in sys.modules)
 assert len(host._FILES)==23 and hasattr(conda.CondaArchiveToolAdmission,'open_zstd')
-assert len(host._REVIEWED_HOST_BASELINES)==2
+assert len(host._REVIEWED_HOST_BASELINES)==3
 assert host.reviewed_embedding_host_configuration_seed(
  baseline_host_seed_sha256=host.UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256,
  cache_byte_count=48,cache_sha256='sha256:'+'e'*64).startswith('sha256:')

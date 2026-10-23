@@ -1298,3 +1298,30 @@ mypy PASS다. 첫 직접 실행에서는 운영 root stage가 `0755`이고 retir
 `c6705352...` 해시**로 운영 파일을 읽기 전용 검증해 PASS했다. 이 검사는
 root proof 출판, 원 Job failure closure, 새 모델 실행 또는 GPU 기본값 전환이 아니다.
 현재 normal INDEX/QUERY 경로는 유지한다.
+
+### 06:28 UTC OS zlib 갱신에 따른 CPU INDEX 중단 — 2026-10-23 UTC
+
+이전 문단의 서비스 상태는 그 시각의 스냅샷이다. 이후 `dpkg.log`에
+`zlib1g`/`zlib1g-dev`의 `...2.2 → ...2.3` 갱신이 06:28:00 UTC 기록됐다.
+실제 `/usr/lib/x86_64-linux-gnu/libz.so.1.3`는 같은 시각 ctime이 바뀌었고
+현재 SHA-256은 `f61677c7bdb7c2aa2a243ea781bfd16afcb361cede7b4ef76127a9d8eb9a5242`,
+기존 승인 해시 `86200da370f20476a2507e9097a789b5ef97269b4ca8d5e164ad82dab9d99892`와
+다르다. 이 OS 변화 후 INDEX owner는 06:29:57 UTC에 실행 준비 검증 거부로
+종료됐다. 한 번의 기존 unit 재시작은 시작 직후 06:53:21 UTC 실패했고,
+별도 격리 read-only verifier가 정확히 이 `libz.so.1.3`의
+`INSTALLED_RUNTIME_FILE_HASH_MISMATCH`를 반환했다. QUERY owner는 별도
+실행 중이다. INDEX는 현재 `failed`이며 정상으로 보고하지 않는다.
+
+처음에는 `WorkflowRuntimeNotReady`를 일시적 큐 준비 거부로 해석했으나,
+보호된 설치 검증을 추적하면서 같은 OS 파일 교체가 근본 원인임을 확인했다.
+이를 서비스 안에서 무조건 catch해 정상 실행처럼 남기는 source 변경은
+철회했고 작업 트리는 원상 복구했다. 기존 실패/승인 기록이나 DB row를
+수정하지 않았고 GPU launch/default 전환도 하지 않았다.
+
+다음 순서는 OS 갱신 완료 여부와 전체 고정 host closure를 확인하고,
+기존 snapshot/config/receipt를 보존한 새 host configuration 및 native
+installation 증거를 지원된 경계로 발급·검증한 뒤 INDEX를 복구하는 것이다.
+기존 verifier의 hash 검사 완화, 이전 `libz` 파일 되돌리기, 무조건 재시작,
+미해결 benchmark Job의 직접 DB 수정은 금지한다. 이 CPU 복구가 끝나기 전
+GPU 비교의 새 실행을 시작하지 않는다. 개발 Slack 보고
+`devreport_ed5d0793ca8e411ba0b0a9aa7ffe026d`가 07:02:49 UTC 발송됐다.

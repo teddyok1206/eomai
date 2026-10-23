@@ -396,10 +396,20 @@ _UBUNTU_LIBLZMA_20261021_FILES = tuple(
     for path, size, sha in _FILES
 )
 UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256 = _hash(_seed_bytes(_UBUNTU_LIBLZMA_20261021_FILES))
+# The 2026-10-23 zlib package update changed one additional fixed library. Keep
+# both earlier baselines immutable; a new installation must explicitly select this.
+_UBUNTU_LIBZ_20261023_FILES = tuple(
+    (path, 113000, "f61677c7bdb7c2aa2a243ea781bfd16afcb361cede7b4ef76127a9d8eb9a5242")
+    if path == _LIB / "libz.so.1.3"
+    else (path, size, sha)
+    for path, size, sha in _UBUNTU_LIBLZMA_20261021_FILES
+)
+UBUNTU_LIBZ_20261023_HOST_SEED_SHA256 = _hash(_seed_bytes(_UBUNTU_LIBZ_20261023_FILES))
 _REVIEWED_HOST_BASELINES = MappingProxyType(
     {
         FIXED_EMBEDDING_HOST_SEED_SHA256: _FILES,
         UBUNTU_LIBLZMA_20261021_HOST_SEED_SHA256: _UBUNTU_LIBLZMA_20261021_FILES,
+        UBUNTU_LIBZ_20261023_HOST_SEED_SHA256: _UBUNTU_LIBZ_20261023_FILES,
     }
 )
 
