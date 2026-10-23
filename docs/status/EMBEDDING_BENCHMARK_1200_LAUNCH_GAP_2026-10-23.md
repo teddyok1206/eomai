@@ -260,3 +260,52 @@ admission은 아직 별도 검증이 필요하며 정식 v1.2 Job은 여전히 �
   로그인 약 80초 후부터 재인증을 요구했다. 임시 실행기에서는 깨끗한 launch 경계의
   시작 여유만 30초로 수정했다. 실제 `AuthenticatedSessionFence(...,900)`와 원
   authenticated_at·token expiry·실행 중 인가 검증은 변경하지 않았다.
+
+### 2026-10-23 17:18 UTC — 수치 보존 설치·실제 CUDA 증명·로그인 전 점검 PASS
+
+- 검색용 보조 함수를 기존 similarity application으로 옮겨 HOST_L2 정본 bytes를
+  `440d7406…`로 복원했다. coherent worker source는
+  `d381e6bc480606a828898ebe2e9942dd8a143677`, controller source는
+  `8c24720c11bc4512e5fa4377bfbcd32faac36c0a`로 분리했다. worker의 실제 세 구현
+  hash는 CPU/CUDA bundle의 `3487cae0… / 440d7406… / f667e54d…`와 같다.
+  source 700 PASS, 추가 six-launch/replay 1 PASS, root/unit 관련 207 PASS와 최종
+  pin 수정 후 66 PASS, strict mypy·Ruff·format·세 wheel RECORD·설치 app simulation이
+  통과했다. 테스트 묶음은 일부 중첩되므로 합산 총계로 표시하지 않는다.
+- CUDA numerical-preserving prefix의 최종 byte audit operation은
+  `/opt/eom/.embedding-index-install-Ttqz0Vmk`다. input SHA
+  `f6fe4184f1b5fd66a958d95b029b1eaa28400085c6a0346c33d00cb0cb1d7550`, inventory raw SHA
+  `f37ad2b8193b51fe470757fc7f6b0725635af5a7800a88a12872fd1e98c12c2c`, semantic SHA
+  `9c961fe95239d72a3e202455a47c779e2c981df8ef1a46f88e1611411b3a4616`이며
+  31,804 entries / 8,993,677 bytes다. 두 이전 prefix와 실패/미승인 단계는 보존했다.
+- CUDA cache를 기존 exact CAS 경계로 34ed→9f0a로 선택했다. 실제 no-forward probe
+  `6240ba87aac94954bf78bb1dfbc1ff56` / invocation
+  `48a8d6199a1c436596f10c61f164813f`의 READY·FINAL ACK와 종료 검증을 통과해 config948의
+  설치 receipt를 새로 seal했다. raw SHA는
+  `246b12d92854ac0fb9d456129136c251f05274d3f5b8aa7af8a249a07f4e793a`다.
+  runtime `d0887315…`, model/tokenizer constructors 및 forward는 모두 0이었다.
+- seal·root readback 뒤 retirement 기록 디렉터리의 namespace가 read-only라 정리만
+  실패했다. 원 성공/receipt/terminal 관찰을 보존하고, 별도 설치된 일회성 operator가
+  exact hash와 실제 PID1·GPU 자원을 재검증해 **같은 실행만** 지원된 retirement로
+  정리했다. 새 probe나 모델 실행은 없었다. 최종 probe는 inactive/dead, MainPID0,
+  FDSTORE0, GPU2MiB/0%다. 원 실패를 성공으로 바꾸거나 root stage를 덮지 않았다.
+- v1.2 CPU/CUDA unit은 d381 worker를 선택하며, root8c는 그 정확한 unit/member bytes를
+  pin한다. 이전 두 template은 `/var/lib/eom-benchmark-unit-release-8c24720c`에 보존했다.
+  unit 교체 전에 private source mode/atime 검증 두 시도가 효과 전에 거부됐으며, 정본
+  template은 변경되지 않았음을 확인한 뒤 보호 입력과 안정 epoch로 수정해 선택했다.
+  기존 v1.0/v1.1·180/600 unit/schema bytes와 운영 CPU prefix는 변경하지 않았다.
+- 새 backend selection은 CPU의 이미 승인된 configfa/receipta090와 새 CUDA config948/
+  receipt246b를 사용한다. 보호 파일 SHA는
+  `d9b9b649aed528d5af27452102fef02976492a0311f8dab9f783f73e93ff30df`다. 실제 설치
+  config/bundle/proof, 두 interpreter+worker의 실제 세 수치 hash, v1.2 unit hashes,
+  root CUDA 설치 캡처 및 native CPU quiescence를 **인증 없이** 점검해 PASS했다.
+  이 점검의 model forward와 DB writes는 0이다.
+- root controller bootstrap의 누락된 namespace 경로(없는 Slack 파일, private `/tmp`의
+  API wheel, Identity provider가 O_PATH로만 보유하는 api.env metadata)를 로그인 전에
+  확인·바로잡았다. 실패한 세 bootstrap은 Python 미시작 또는 인증 전 종료였으며
+  Job/Artifact/모델 효과가 없다. 보호 경계는 actual 입력만 정확히 노출하도록 수정했다.
+- 현재 유한 controller `eom-embedding-benchmark-series-ready-8c24720c.service`가 실제
+  `BUDGET1200_LOGIN_READY`로 입력 대기 중이다. tmux `EOM:2 gpu-embedding`의 기존
+  입력창을 유지하며 원 Job25ebde의 exact replay만 허용한다. series.py SHA는
+  `37e64873e98f834519fd1f80487df446bbd01725987663621c92b295f2508c54`다.
+  이 시각 정식 6회 실행과 결과 finalization은 아직 시작 전이며 CPU 기본값을 유지한다.
+  Slack readiness milestone `devreport_9513dec846da4005b0df4ddf7ca08d5f`는 SENT/HTTP200이다.
