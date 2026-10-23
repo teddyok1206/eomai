@@ -194,10 +194,14 @@ failure는 그대로 남고, 다른 actor/source/model/runtime/access-policy/검
   게시 전 원본·host·proof·bundle 계약과 정확히 세 필드만 바뀐 delta를 검증했다.
   상태는 **PUBLISHED_NOT_ADMITTED**이다. native prefix audit, no-forward probe,
   새 receipt/seal 없이는 이 설정으로 benchmark를 시작하거나 GPU 기본값을 바꾸지 않는다.
-- 기존 1200초 Job 요청은 구 CUDA config/revision을 고정한다. 새 설정으로 조용히
-  치환할 수 없다. 다음은 지원된 application에서 그 Job의 무실행/상태를 조회·정식
-  종료하고, 새 native config를 audit/probe/seal한 후에만 별도 successor를 제출하는
-  순서다. INDEX/QUERY 서비스와 정본 인덱스는 그대로 active이며 GPU default는 CPU다.
+- 당시 controller의 별도 backend selection은 구 CUDA config/revision을 고정한다.
+  후속 source 재검토에서 **BenchmarkOwnerRequest 자체는 이 설치 pin을 포함하지
+  않는다**는 것을 확인했다. `embedding_benchmark_handoff.py`의 설치 검증은 같은
+  profile·bundle·installed proof·numerical runtime을 유지하는 새 host-only config와
+  그 config의 새 receipt를 별도로 검증한다. 따라서 새 native config를 audit/probe/seal하고,
+  실제 Job이 VALIDATED/launch0/PREPARED0임을 확인하면 **원 요청·원 Job의 정확한 replay**를
+  우선한다. controller pin과 요청 불변성을 혼동한 이전의 'Job 종료 후 successor 필수'
+  판단은 철회한다. INDEX/QUERY 서비스와 정본 인덱스는 그대로 active이며 GPU default는 CPU다.
 
 ### 2026-10-23 16:18 UTC — 빠른 격리 CPU/GPU 실측 (운영 acceptance 아님)
 
@@ -229,3 +233,30 @@ unit은 `success/exit0`로 종료했고 종료 후 `nvidia-smi` 사용량은 다
 CPU 18문장 한 번의 0.898초보다 길다. 따라서 이 단발 측정만으로 GPU 기본값을
 바꾸지 않는다. 긴 문항 입력, 반복 배치, 실제 corpus/검색, 공존 및 운영 native
 admission은 아직 별도 검증이 필요하며 정식 v1.2 Job은 여전히 미완료다.
+
+### 2026-10-23 16:41 UTC — 인증 전 실행 호환성 재검토
+
+- 지원된 CUDA private-successor installer가 source `801672a6…`의 새 prefix를
+  전체 byte audit했다. operation은 `/opt/eom/.embedding-index-install-X7vh446f`,
+  input SHA는 `sha256:8069898a0aca40a3d9eb8b8d721840399933562ec812ba4700017b95cfaa31fc`다.
+  이전 prefix는 `.embedding-index-prepublication-CUDA_INDEX_FP32-.embedding-index-install-X7vh446f`
+  에 보존했다. 아직 **AUDITED_NOT_ADMITTED**이며 runtime 활성화·모델 실행은 없다.
+- 동시에 실제 설치된 v1.2 worker overlay를 모델 없이 검사해 다른 불일치를 확인했다.
+  원 CPU/CUDA bundle의 HOST_L2 구현은 `440d7406…`인데, main 전체 wheel 및
+  overlay `9e6efc…`의 같은 파일은 `e913b2a0…`다. 차이는 정규화 계산이 아니라
+  나중에 추가된 혼합 profile 검색 보조 함수다. 그러나 기존 계약은 실제 전체 member
+  hash를 pin하므로 수치가 같다고 무시할 수 없다. 위 새 prefix도 같은 차이가 있으므로
+  이 상태로 native probe/seal하거나 사용자에게 로그인시키지 않는다.
+- 가장 작은 일관된 수정은 비수치 검색 helper를 그 유일한 소비자인
+  `similarity_context_service`로 옮기고, 기존 numerical member bytes를 정확히
+  복원하는 것이다. 별도 작업 트리에서 현재 v1.2·host·성능 수정은 유지한 채 이
+  경계 수정과 parity/no-ML 회귀 검사를 준비 중이다. 기존 main이나 불변 설치 release를
+  덮어쓰지 않는다. 새 coherent worker release와 그 release를 고정한 unit/root adapter를
+  검증한 뒤 원 Job을 replay한다. CPU 운영 prefix와 INDEX/QUERY는 교체하지 않는다.
+- 기존 v1.2 owner/launch history/backend selection/unit composition 집중 시험
+  **52 PASS**다. 실제 설치 file/member 비교는 이 source 시험과 별도이며, 위
+  불일치는 source 시험 PASS를 runtime PASS로 확대하지 않고 찾아낸 결과다.
+- 실행기의 `session_covers(memory,820)`는 서버 정책이 아닌 과도한 사전 heuristic으로,
+  로그인 약 80초 후부터 재인증을 요구했다. 임시 실행기에서는 깨끗한 launch 경계의
+  시작 여유만 30초로 수정했다. 실제 `AuthenticatedSessionFence(...,900)`와 원
+  authenticated_at·token expiry·실행 중 인가 검증은 변경하지 않았다.
