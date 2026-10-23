@@ -117,7 +117,7 @@ failure는 그대로 남고, 다른 actor/source/model/runtime/access-policy/검
   CPU capacity, GPU lease, six-launch series, Artifact finalization을 그대로 사용한다.
   운영 INDEX/QUERY 서비스는 중지·재구성하지 않는다. 한시적 root-owned 실행기는
   `/usr/local/libexec/eom-benchmark-budget600-closure-2690bf73/series.py`에 설치했고,
-  SHA-256은 `f9027f8d9889e733a679671d79a07c26c63edce46fbfb3eadb142e77d3d895d6`이다.
+  현재 SHA-256은 `781b5fc966d7f80dd6e5b68adcfb6b48a4e88d2c347c4e203bd5b0fc20aedfa1`이다.
 - 분리 owner release에서 successor/series 관련 단위 시험 54개와
   unit-control/launch/CUDA capture 단위 시험 78개가 통과했다. 설치된 구형 API 환경만으로
   시험하면 1건이 실패했으나, 원인은 source가 아닌 pre-successor wheel을 불러온
@@ -125,3 +125,7 @@ failure는 그대로 남고, 다른 actor/source/model/runtime/access-policy/검
   재실행에서는 54/54 PASS였다.
 - 현재 후속 실행기는 Studio 인증 입력을 기다리고 있다. 이 시점까지 1200초 Job
   등록·native CPU/GPU forward·측정 결과 publication은 아직 없다. GPU 기본값도 CPU다.
+- 첫 로그인 대기의 30분 controller timeout이 Job 등록 전에 다가오는 것을 발견해,
+  인증 전 대기만 24시간으로 늘리고 미시작 프로세스를 종료·재실행했다. 종료 당시
+  parent frame은 닫혔으며 Job·Artifact·model effect는 없었다. 실제 1200초
+  measurement/listener budget과 900초 인증 freshness는 변경하지 않았다.
