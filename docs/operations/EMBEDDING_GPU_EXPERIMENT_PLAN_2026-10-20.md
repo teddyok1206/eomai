@@ -1199,3 +1199,42 @@ clean-prefix genuine 재인증은 그대로이며 root의2시간/series3600초�
 
 인증 대기 해소/정상 drain 진행 Slack은
 `devreport_db8ff7d6ede44a46b5ee35f6baf0908c`(05:59:38 UTC, SENT/HTTP200)다.
+
+### 첫 budget600 CPU 실행의 실제 상한 도달 — 2026-10-23 06:16 UTC
+
+같은 제어 unit/invocation과 새 Job `job_26e206dc11434d52870f51737d15fdbd`에서
+05:55:47의 첫 인증에 이어 06:05:43.657032 UTC에 clean-prefix 재인증이 성공했다.
+첫 launch는 CPU ordinal1이며, native unit
+`eom-embedding-benchmark-cpu-budget600@a038b51d231a47e9866766c8a6b6e476.service`
+invocation `4dcc0272a3c14e32955c08ac45355154`가 06:05:55 UTC에 실제 시작했다.
+프로세스는 실행 중 CPU를 사용하고 있었고 GPU 사용량은 0%/2 MiB였다. GPU launch는
+한 번도 시작되지 않았다.
+
+06:15:51.978899 UTC에 owner가 `BUDGET600_OPERATION_FAILED`와
+`BENCHMARK_OWNER_EXECUTION_UNCERTAIN`을 기록했고 자동 재시도를 거부했다.
+systemd는 06:15:55 UTC에 위 native unit의 **600초 start timeout**과 SIGTERM,
+`Result=timeout`을 기록했다. 이는 성공 측정이나 GPU 성능 판정이 아니다. 정확히
+어느 계산 단계에서 상한에 도달했는지, 그리고 별도로 기록된 root의
+`InstalledRuntimeProofError`가 같은 실패의 후속 관측인지 독립 실패인지는
+현재 증거만으로 확정하지 않는다. 확인된 것은 첫 CPU launch에 유효한 완료 receipt가
+없고, CUDA launch와 여섯 번의 비교가 없다는 점이다. 새 Job의 RUNNING/실패 여부도
+공식 Journal/closure 조회 전에는 추정하지 않는다.
+
+보호된 window는 06:15:57.096600 UTC에 닫혔고, 실험 template instance는 더는
+활성화되어 있지 않다. 정상 INDEX와 QUERY owner는 각각 새 PID3916708/3916710으로
+`active/running`, API `/api/v1/health/ready`는 `READY`를 확인했다. GPU 기본값과
+정본·기존 벡터는 바꾸지 않았다. 실험 제어 unit은 `failed/exit-code`이고 그 실패
+기록을 보존한다. 구식 systemd 실패 unit들을 현재 서비스 장애로 합산하지 않는다.
+
+다음 단계는 새 요청을 제출하거나 timeout만 높여 재실행하는 것이 아니다. 정확한
+첫 launch 예약·부분 출력·native/cgroup/retirement와 root proof를 읽기 전용으로
+분류하고, **600초 family의 timeout 관측을 표현하는 지원된 post-start closure**가
+필요한지 확인한다. 현재 기존 closure는 원 180초 CPU service/socket, 원 supervisor
+identity와 native `Result=success`를 pin하므로 이 600초 timeout을 그대로 성공/실패로
+재해석할 수 없다. 실제 CPU 처리량과 checkpoint를 근거로 적정 실행 경계 및 900초
+사람 인증 freshness의 관계를 별도 설계·검증한다. 숫자·입력·dtype·허용오차를
+조용히 변경하지 않는다. 실패한 이 Job은 유지하고, 새 successor는 정식 closure와
+versioned policy/recovery가 준비된 뒤에만 고려한다.
+
+이 중단/운영 복구의 Slack 보고는
+`devreport_7daf94ac0a1949c1a5c2872dd0df2c1f`(06:18:54 UTC, SENT/HTTP200)다.
