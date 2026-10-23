@@ -960,3 +960,68 @@ CPU 전환/복구 초안은 `/tmp/eom-benchmark-cpu-cutover-prep-1RNjsY0A`에 �
 owner 준비가 끝난 뒤 현재 인증으로만 시작한다. 여섯 실행 중에도 이미 완료·게시된
 clean prefix 사이에서만 진짜 재인증할 수 있다. 준비되지 않은 도구 때문에 반복 로그인하는
 경로를 만들지 않으며, 인증900초의 계약을 조용히 완화하지 않는다.
+
+### CPU 전환·복구 recipe와 실제 read-only preflight — 2026-10-23 UTC
+
+이번 checkpoint도 실제 CPU 교체나 모델 성능 비교 완료를 뜻하지 않는다. 두 정상
+owner는 기존 PID/invocation을 유지하며 CPU 기본값, Graph/문항/벡터 정본과 원 실패
+event8은 그대로다. 다음 실제 경계는 CPU 설치·새 자격 검증·연결 control 선택이다.
+
+정상 CPU interpreter에서 기존 전체 tree30eaaede와 원 설치 승인을 먼저 확인한 뒤,
+전환용·복구용 config만 각각 create-once로 준비했다. configuration은 수치 recipe를,
+별도의 future receipt는 실제 prefix inventory/probe를 고정하므로 metadata를 미리 준비할
+수 있다. 선택 중인38786 config/receipt/verifier를 바꾸거나 모델을 생성하지 않았다.
+
+| 구분 | 실제 unit / invocation | 실제 결과 |
+| --- | --- | --- |
+| 전환 recipe | `eom-cpu-budget600-config-3d499bbc-20261023.service` / `bf1d3d8595f546b082465dff250e2583` | 03:44 UTC 성공, config3d499 준비·미선택 |
+| read-only preflight v2 | `eom-cpu-budget600-live-preflight-v2-20261023.service` / `622962bfe6714634882f140847d575c2` | 성공, 원 event8/decision/proof 일치·유효 claim0 |
+| 복구 recipe | `eom-cpu-budget600-rollback-config-48d83553-20261023.service` / `cc47e1ddc06b41159e143cc15aae5208` | 04:05:09.116739 UTC 성공, config48d8 준비·미선택 |
+
+전환 config raw는 `ff4a2b979b8ee4d2e90b753e31b32560297a9f2156a3b80ac39c7de438748353`,
+semantic은 `6d1dedfe614b6f6d5b5176168ebeb8ded6f978116ce0ad8668d55186ae757887`이다.
+probe execution은 `c400c2cf073b4dfa81b88fb7dfcdf826`, staged input raw는
+`0391815c35af9e1f621d18ebcc77788c5f9bacc89165ae55c1d5ca8efed5ed7d`다.
+
+복구 config revision은 `embeddingnativeconfigrev_48d8355309644541a1e326124e43c83b`, raw는
+`9c9c08a87636057a6fa455613b342fbd6900121bddc80bc2896bdcef2c16747d`, semantic은
+`e6e6f7b76a0e8979003ed81e38dbcd83cc2ded58d6eac8028d3a20b29306f0da`다. staged probe
+execution은 `0af0fc9f94534dcab02b056fe5d99153`, input raw는
+`773f1fabd87e3183ec7980df22cc65bb580b4cd50606af449e24de54dbd020a7`이다.
+두 상태 모두 **PREPARED_NOT_ADMITTED**이며 native probe는 시작하지 않았다. 복원할 때
+실제 OLD 재감사와 새 probe/receipt가 필요하고, 원04185 receipt를 재사용하지 않는다.
+
+실제 preflight v1은 QUERY supervisor까지 INDEX와 같은 비특권 계정이라고 잘못 가정해
+`CPU_MAINTENANCE_OWNER_IDENTITY`로 거부됐다. 실패 unit/소스는 보존했다. v2는 각 실제
+service identity를 각각 pin했으며 QUERY의 root supervisor→UID990 child 구조는 변경하지
+않았다. root maintenance의 read-only SQL은 기존 scoped claim query와 정확한 원 Job/event
+검증에만 사용하고, Studio 사용자 권한이나 새 모델 실행 권한으로 가장하지 않았다.
+운영 DB 변경, 테스트 DB 대용, worker 권한 확대는 없었다.
+
+보호된 operational metadata는 `/var/lib/eom-benchmark-budget600-20261023` 아래 각 config
+디렉터리에, 실행 정의는 `/usr/local/libexec/eom-benchmark-budget600-20261023`에 남겼다.
+복구 알고리즘·STOPPED observer adapter·전환/복구 same-live seal·정확한 owner main-only
+종료·기존 CPU installer 호출 정의를 검토했으며, **정의를 설치했을 뿐 실행하지 않았다.**
+복구 알고리즘 v2는 고정 경로 변경과 formatting 외에 기존 검증된 함수 body를 보존한다.
+원 root444 정의도 덮어쓰지 않는다. 전환에 필요한 실제 미래 inventory/receipt/epoch는
+여전히 미생성 상태이며 임의로 채우지 않았다.
+
+이번 준비의 집중 검증은 **113 PASS**다: config/원 실패 관측44, 복구·quiescence43,
+same-live seal body 보존5, main-only 종료7, installer 인수·출력·create-once14.
+명시적 eom-api Python과 보호된 fea7 SDK를 사용했으며, 초기 ambient package 경로의
+8개 import 실패는 동일 테스트를 올바른 SDK로 다시 실행해 구분했다. core source나
+운영 package를 이 import 실패 때문에 수정하지 않았다. 새 typed operational 모듈4개
+strict mypy와 새 source Ruff 검사, shell syntax 검사도 통과했다. 합성 검사이며 실제
+prefix 교체·복원·한 번의 모델 추론이나 성능 우위를 증명하지 않는다.
+
+installer 준비 중 발견한 두 로컬 결합 문제는 실행 전에 수정했다. 기존 installer stdout은
+bare preparation marker 다음에 여덟 key/value가 오므로 이를 정확히 검증한다. CPU 입력은
+group-writable build 상위 경로를 직접 사용하지 않고, 이미 CUDA 설치에 사용한 동일
+fea7 wheel/source의 private0700 materialization을 hash로 재사용한다. 큰 archive를 또
+복사하거나 installer/public protocol을 바꾸지 않았다. intent와 결과는 create-once로 남기며
+실패·불명확 상태를 새 호출로 우회하지 않는다.
+
+현재 남은 작업은 검토된 실제 CPU 전환·자격 검증·여섯 연결 control의 선택/복구,
+600초 실험 실행 도구의 최종 조립, 현재 operator 인증 뒤 동일 입력6회 측정, 수치/순위/
+시간/메모리·공존/복구 판정, 조건부 기본값 결정과 정본 결과 게시다. 준비가 끝나기 전
+새 Studio 로그인을 요청하지 않는다. GPU 기본값은 **미활성**, 여섯 측정은 **미완료**다.

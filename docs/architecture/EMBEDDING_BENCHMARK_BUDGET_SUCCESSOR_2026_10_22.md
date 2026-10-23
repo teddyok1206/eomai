@@ -52,6 +52,18 @@ Preserve the three true numerical implementation bytes, original model weights a
 do not introduce a cross-prefix bootstrap or patch an admitted prefix under its old receipt.
 Actual installation, admission and successful comparison remain separate pending gates.
 
+CPU recipe preparation need not replace the shared CPU prefix. A native configuration pins
+the numerical recipe/model/bundle/proof/host, while its distinct admission receipt pins the
+actual whole-prefix inventory and probe. Publish the already planned revision-only CPU
+configuration with the existing admitted CPU interpreter and original references first;
+this creates no installation receipt, changes no selected control and starts no native probe.
+The original file set, observed numerical implementation and model ACL checks stay intact.
+Only the explicit root/isolated-interpreter context is accepted. This small ordered metadata
+publication reuses the prior finite operator, profile lock and create-once files; it introduces
+no new registry/schema/queue or default lookup. Failure preserves partial files for inspection
+instead of replaying or overwriting. The simpler alternative—publishing during prefix
+maintenance—unnecessarily lengthens the healthy-service interruption and gains no invariant.
+
 The legacy CUDA readiness closure retains the installed staging-file pin `0f93acf5...`.
 Policy1.1 explicitly selects the reviewed staging-file implementation `4bc5d315...` and the
 unchanged legacy CUDA numerical leaf `d1542cbf...`; these pins must never be interchanged by a
@@ -115,6 +127,36 @@ The installer retains an old prefix but changes its directory metadata. Moving i
 restoring an old receipt is not sufficient: inode/mode/time closure is exact. Recovery requires
 fresh whole-prefix inventory/config/admission for those restored bytes too. Prepare that recovery
 path before cutover; do not promise a fixed maintenance duration without measuring it.
+
+The finite maintenance observer reuses the existing scoped INDEX/QUERY claim query, actual
+PID1/cgroup/socket/prefix-user checks and accepted root post-start proof. Root maintenance is
+a read-only operational role, not an impersonated human benchmark operator. Its indexed reads
+of the exact original Job/event8 verify the already committed typed failure decision against
+that live proof; they authorize no new computation or source access. SQL is explicitly READ ONLY
+with bounded statement/lock timeouts. A live preflight checks the currently selected owner
+invocations without stopping them; the stopped phase additionally compares a root-owned
+create-once stopped-unit record. No file/DB mutation or global Codex-job drain occurs in either
+observation. This avoids reusing the old never-started proof for a different actual failure.
+
+The finite drain pins INDEX's existing non-root identity and QUERY's existing root
+supervisor separately; QUERY continues to drop its serving child to UID990. Do not
+generalize either identity to make a check pass. Only exact observed owner mains receive
+SIGTERM, and native children drain naturally. Preserve an exclusive intent before signals
+and a separate actual stopped record afterward. Timeout never means force-kill, restart,
+successful retirement or permission to publish. The fixed publication operator then rechecks
+the stopped guard and delegates to the existing installer exactly once. Reuse the already
+materialized fea7 private wheel/tar by their exact hashes; do not duplicate them into a new
+CPU folder. The installer's one bare preparation marker precedes eight key/value lines and
+is part of its existing CLI output, not a malformed result or a new runtime contract.
+
+Recovery definitions and both forward/rollback same-live seal functions can be protected
+before cutover, while actual backup paths, epochs, inventory and receipts cannot be filled
+until the corresponding effects occur. Future exact pins are a required observation between
+stages, not a reason to invent them. A staged definition is not an executed restore or an
+admission. Keep the healthy owners up until the reviewed forward/recovery execution
+compositions are ready. If owners resume after CPU qualification but before the numerical
+window, all budget600 templates must still be absent: unchanged outer owner guards do not
+cover that family. Record new owner invocations rather than pretending the old ones survived.
 
 ## Source and isolated verification checkpoint — 2026-10-22 UTC
 

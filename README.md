@@ -130,6 +130,12 @@ INDEX·QUERY 연결의 Codex 풀이 호출은0이며 외부 LLM API는 사용하
 중복 방지까지 확인했습니다. 이는 모델 계산·성능 비교 성공과는 다릅니다.
 CPU prefix 및 연결 설정의 호환 전환과 여섯 비교는 별도 미완료 gate입니다.
 기존 receipt 아래 코드를 덮거나 인증 시간을 늘리지 않습니다.
+10월23일 후속으로 정상 CPU 환경을 그대로 둔 채 전환용·복구용 config revision을
+각각 보호 경로에 준비했고, 실제 읽기 전용 사전검사에서 원 실패 정리와 유효한
+INDEX/QUERY 점유0건을 확인했습니다. 복구·same-live seal·정확한 두 서비스의 정상
+종료·기존 설치 도구 연결은 집중113개 검사로 점검하고 실행 도구만 보호 설치했습니다.
+**아직 CPU 환경 교체나 새 모델 계산을 실행한 것은 아닙니다.** 현재 두 서비스와
+CPU 기본값은 유지하며, 실제 전환·자격 검증·여섯 비교 결과는 미완료입니다.
 [설계와 배포 경계](docs/architecture/EMBEDDING_BENCHMARK_BUDGET_SUCCESSOR_2026_10_22.md) ·
 [실제 실행·실패·복구 기록](docs/operations/EMBEDDING_GPU_EXPERIMENT_PLAN_2026-10-20.md)
 
