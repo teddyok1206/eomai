@@ -1283,3 +1283,18 @@ core source strict mypy와 Ruff를 확인했다. 합성 검사이므로 실제 r
 bytes와 현재 PID1/cgroup을 재검증하고 1.1 관측을 mint/read하는 설치 어댑터,
 그 어댑터의 격리 검증·배포·실제 사용자/자료 재인가가 다음 단계다. 그 전에는
 기존 Job row를 직접 바꾸거나 새 benchmark successor를 제출하지 않는다.
+
+### budget600 운영 window의 읽기 전용 검증 — 2026-10-23 UTC
+
+저장소 후보에 유한 window 전용 보호 파일 리더를 추가했다. 원 root-owned
+`before`/`stopped`/`restored` 기록의 정본 JSON·고정 service 집합·실제 controller
+invocation·상태 전이·서로 다른 복구 invocation, CPU service/socket의 보존된
+template SHA, 원 systemd load path 부재를 함께 확인한다. 파일/상위 디렉터리
+identity와 ACL을 capture 후에도 다시 확인한다. 가짜/변조 기록을 거부하는
+합성 검사 8 PASS, 새 실패 계약·application 포함 집중 18 PASS, 새 리더 strict
+mypy PASS다. 첫 직접 실행에서는 운영 root stage가 `0755`이고 retired-template
+디렉터리가 `0700`이라는 차이가 드러나 리더를 실제 보호 모드에 맞게 바로잡았다.
+수정 후 정확히 **원 before `9bd7daea...`, stopped `f7f5788c...`, restored
+`c6705352...` 해시**로 운영 파일을 읽기 전용 검증해 PASS했다. 이 검사는
+root proof 출판, 원 Job failure closure, 새 모델 실행 또는 GPU 기본값 전환이 아니다.
+현재 normal INDEX/QUERY 경로는 유지한다.
