@@ -144,3 +144,19 @@ failure는 그대로 남고, 다른 actor/source/model/runtime/access-policy/검
   실패한 실행 프로세스에서 종료됐으므로 코드·릴리스 준비를 끝낸 뒤에만 새 인증을 받는다.
 - 관련 158개 단위 시험과 Ruff/format/diff 검사가 통과했다. 운영 분리 owner release
   반영 및 실제 CPU/GPU 측정 결과는 아직 남아 있으며 GPU 기본값은 변경하지 않았다.
+
+### 2026-10-23 15:25 UTC — 수정된 분리 owner release 설치
+
+- 수정 commit `801672a6bd8bf02416a642734e05a27071333c49`를 GitHub main에 게시하고
+  source/wheel RECORD 검증을 통과했다. 이를 분리 owner release
+  `/opt/eom/embedding-owner-releases/801672a6bd8bf02416a642734e05a27071333c49`
+  에 설치했다. 공용 API, CPU 숫자 환경, INDEX/QUERY owner는 교체하지 않았다.
+- root controller는 이전 실행 파일을 덮지 않고 새 경로
+  `/usr/local/libexec/eom-benchmark-budget600-closure-801672a6/series.py`에 설치했다.
+  SHA-256은 `4fd7a62194220fe8f20f0c1400cf06eb787b44f67a76beb122fedf83d8656751`이다.
+  이전에 발행된 정책·입력 Artifact의 replay에는 기존 publication source commit을
+  고정하고, 새 실제 실행의 owner source는 위 수정 commit으로 분리한다.
+- 설치본에서 v1.2 policy pointer 검증과 invocation 생성·계약 검증을 직접 실행해
+  `INSTALLED_V12_POLICY_AND_INVOCATION=PASS`를 확인했다. 새 실행 프로세스는 현재
+  실제 `guiadmin` 인증 입력을 기다린다. Job 등록·native CPU/GPU forward·측정 완료는
+  아직 주장하지 않는다.
