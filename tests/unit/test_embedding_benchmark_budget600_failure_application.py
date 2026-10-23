@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
 from eom_catalog_contracts.embedding_benchmark_budget600_failure import (
@@ -10,8 +11,13 @@ from eom_catalog_contracts.embedding_benchmark_budget600_failure import (
     BenchmarkBudget600PoststartObservation,
     BenchmarkBudget600PredecessorReference,
 )
-from eom_catalog_contracts.embedding_device_benchmark import BenchmarkWorkerInvocation
-from eom_identifiers import content_sha256
+from eom_catalog_contracts.embedding_device_benchmark import (
+    BenchmarkOwnerRequest,
+    BenchmarkStagedInputs,
+    BenchmarkWorkerInvocation,
+    embedding_device_benchmark_bytes,
+)
+from eom_identifiers import content_sha256, new_revision_id, sha256_bytes
 from eom_orchestrator.embedding_benchmark_launch_history import (
     BenchmarkLaunchJournal,
     require_benchmark_poststart_observation,
@@ -23,6 +29,7 @@ from eom_orchestrator.models import JobEventRecord, JobRecord
 from eom_orchestrator.state_machine import JobState, transition_job
 from sqlalchemy import func, select
 
+from tests.unit.embedding_benchmark_job_fixtures import SyntheticBenchmarkAdmission
 from tests.unit.embedding_benchmark_poststart_failure_fixtures import observation
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_embedding_benchmark_launch_history import invocation_for
@@ -91,9 +98,7 @@ def test_budget600_timeout_closes_only_exact_reserved_successor_once(closure) ->
     )
     inspected = BenchmarkBudget600PoststartObservation.model_validate(body)
     with pytest.raises(ValueError, match="OBSERVATION_CONFLICT"):
-        require_benchmark_poststart_observation(
-            original.request, original.invocation, inspected
-        )
+        require_benchmark_poststart_observation(original.request, original.invocation, inspected)
     inspection = SyntheticInspection(inspected)
     admission = SyntheticOwnerAdmission(request, source.inputs, reader)
     application = BenchmarkPoststartFailureApplication(
@@ -117,3 +122,64 @@ def test_budget600_timeout_closes_only_exact_reserved_successor_once(closure) ->
     replay = close(case)
     assert replay.decision == result.decision and not replay.created
     assert inspection.captures == 1
+
+    # A proven 600-second failure can lead only to an immutable 1200-second
+    # successor; its parent failure and partial output remain unchanged.
+    successor_revision = "embeddingbenchmarkrev_" + uuid4().hex
+    successor_inputs = BenchmarkStagedInputs.model_validate(
+        source.inputs.model_dump(mode="json") | {"benchmark_revision_id": successor_revision}
+    )
+    policy = request.execution_policy.model_dump(mode="json") | {
+        "schema_version": "embedding-device-benchmark-policy/1.2",
+        "policy_revision_id": "embeddingbenchmarkpolicyrev_" + uuid4().hex,
+        "timeout_seconds": 1200,
+    }
+    manifest = request.input_manifest.model_dump(mode="json") | {
+        "artifact_revision_id": new_revision_id(),
+        "sha256": sha256_bytes(embedding_device_benchmark_bytes(successor_inputs)),
+    }
+    successor_body = request.model_dump(mode="json", exclude={"request_sha256"}) | {
+        "schema_version": "embedding-device-benchmark-request/1.2",
+        "benchmark_revision_id": successor_revision,
+        "input_manifest": manifest,
+        "execution_policy": seal(policy, "policy_sha256"),
+    }
+    successor_request = BenchmarkOwnerRequest.model_validate(seal(successor_body, "request_sha256"))
+    altered_body = successor_request.model_dump(mode="json", exclude={"request_sha256"}) | {
+        "operator_audit_id": "operator_" + "f" * 32,
+    }
+    altered_request = BenchmarkOwnerRequest.model_validate(seal(altered_body, "request_sha256"))
+    with pytest.raises(ValueError, match="SUCCESSOR_SELECTION_CONFLICT"):
+        submit(
+            original,
+            altered_request,
+            SyntheticBenchmarkAdmission(altered_request, successor_inputs),
+            result.predecessor,
+        )
+    successor_admission = SyntheticBenchmarkAdmission(successor_request, successor_inputs)
+    successor_job_id, successor_created = submit(
+        original, successor_request, successor_admission, result.predecessor
+    )
+    assert successor_created and successor_job_id != job_id
+    assert submit(original, successor_request, successor_admission, result.predecessor) == (
+        successor_job_id,
+        False,
+    )
+    with sessions() as session, session.begin():
+        parent = session.get(JobRecord, job_id)
+        child = session.get(JobRecord, successor_job_id)
+        assert parent.status == "FAILED"
+        assert child.status == "VALIDATED"
+        history = BenchmarkLaunchJournal(successor_admission, reader).read(
+            session, successor_request, job_id=successor_job_id
+        )
+        assert history.predecessor == result.predecessor
+        assert (
+            session.scalar(
+                select(func.count()).where(
+                    JobEventRecord.job_id == successor_job_id,
+                    JobEventRecord.event == "BENCHMARK_POSTSTART_SUCCESSOR_REGISTERED",
+                )
+            )
+            == 1
+        )

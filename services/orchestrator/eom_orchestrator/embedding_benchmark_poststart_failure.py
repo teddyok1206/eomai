@@ -240,7 +240,11 @@ class BenchmarkPoststartFailureApplication:
 def submit_benchmark_poststart_successor_in_session(
     session: Session,
     request: BenchmarkOwnerRequest,
-    predecessor: BenchmarkPoststartPredecessorReference | BenchmarkBudget1200PredecessorReference,
+    predecessor: (
+        BenchmarkPoststartPredecessorReference
+        | BenchmarkBudget600PredecessorReference
+        | BenchmarkBudget1200PredecessorReference
+    ),
     *,
     source_admission: BenchmarkSourceAdmission,
 ) -> tuple[JobRecord, bool]:
@@ -248,9 +252,13 @@ def submit_benchmark_poststart_successor_in_session(
     try:
         embedding_device_benchmark_bytes(request)
         predecessor = (
-            BenchmarkBudget1200PredecessorReference.model_validate(predecessor)
-            if isinstance(predecessor, BenchmarkBudget1200PredecessorReference)
-            else BenchmarkPoststartPredecessorReference.model_validate(predecessor)
+            BenchmarkBudget600PredecessorReference.model_validate(predecessor)
+            if isinstance(predecessor, BenchmarkBudget600PredecessorReference)
+            else (
+                BenchmarkBudget1200PredecessorReference.model_validate(predecessor)
+                if isinstance(predecessor, BenchmarkBudget1200PredecessorReference)
+                else BenchmarkPoststartPredecessorReference.model_validate(predecessor)
+            )
         )
     except (ValueError, TypeError, SchemaError):
         raise BenchmarkJobAdmissionError("BENCHMARK_POSTSTART_SUCCESSOR_INVALID") from None

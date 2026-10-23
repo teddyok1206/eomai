@@ -27,6 +27,7 @@
 - CUDA launch는 기존 GPU lease, VRAM/resource limit, invocation-bound cgroup 및 cleanup proof를 유지한다. GPU 작업이 이미 점유 중일 때 우선순위를 강제로 뺏지 않는다. admission에서 거부하거나 정해진 capacity가 확보될 때까지 요청을 제출하지 않는다.
 - benchmark 전용 unit은 invocation ID와 고정 service family로 결합한다. 운영 INDEX/QUERY owner의 PID·InvocationID·설정 hash는 전후 동일해야 한다.
 - timeout, process 종료, lease 불명 또는 cleanup 실패는 실패/불확정으로 보존한다. 같은 ordinal을 재발행하지 않는다. supported post-start closure 후에만 successor revision을 만들 수 있다.
+- 600초 실행이 실패한 뒤 1200초 정책으로 이동할 때는 기존 `/1.1` 실패 결정의 `BenchmarkBudget600PredecessorReference`를 새 `/1.2` 요청의 append-only predecessor event로 기록한다. 기존 `/1.0→/1.1` 및 `/1.2→/1.2` 전환 규칙은 바꾸지 않는다. source, corpus, model, runtime, 검색축은 동일해야 하며 revision/policy budget 이외의 변경은 거부한다. 새 Job은 원 600초 실패의 지원된 closure가 확인된 뒤에만 등록한다.
 - launch 종료 뒤에도 Artifact/receipt/hash를 재검증하고 같은 request의 idempotent replay가 기존 receipt를 돌려주는지 확인한다.
 
 ## 의존 방향과 배포

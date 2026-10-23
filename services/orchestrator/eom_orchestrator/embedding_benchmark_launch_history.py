@@ -9,6 +9,7 @@ from typing import Protocol
 from eom_catalog_contracts.embedding_benchmark_budget600_failure import (
     BenchmarkBudget600FailureDecision,
     BenchmarkBudget600PoststartObservation,
+    BenchmarkBudget600PredecessorReference,
 )
 from eom_catalog_contracts.embedding_benchmark_budget1200_failure import (
     BenchmarkBudget1200FailureDecision,
@@ -62,6 +63,7 @@ POSTSTART_PREDECESSOR_EVENT = "BENCHMARK_POSTSTART_SUCCESSOR_REGISTERED"
 type BenchmarkPredecessorReference = (
     BenchmarkPrelaunchPredecessorReference
     | BenchmarkPoststartPredecessorReference
+    | BenchmarkBudget600PredecessorReference
     | BenchmarkBudget1200PredecessorReference
 )
 
@@ -173,10 +175,15 @@ def _history(
                     BenchmarkPrelaunchPredecessorReference.model_validate(row.data)
                     if row.event == PREDECESSOR_EVENT
                     else (
-                        BenchmarkBudget1200PredecessorReference.model_validate(row.data)
+                        BenchmarkBudget600PredecessorReference.model_validate(row.data)
                         if row.data.get("schema_version")
-                        == "embedding-benchmark-poststart-failure/1.2"
-                        else BenchmarkPoststartPredecessorReference.model_validate(row.data)
+                        == "embedding-benchmark-poststart-failure/1.1"
+                        else (
+                            BenchmarkBudget1200PredecessorReference.model_validate(row.data)
+                            if row.data.get("schema_version")
+                            == "embedding-benchmark-poststart-failure/1.2"
+                            else BenchmarkPoststartPredecessorReference.model_validate(row.data)
+                        )
                     )
                 )
             except (ValueError, SchemaError):
@@ -424,20 +431,28 @@ def require_benchmark_poststart_predecessor(
     session: Session,
     request: BenchmarkOwnerRequest,
     inputs: BenchmarkStagedInputs,
-    reference: BenchmarkPoststartPredecessorReference | BenchmarkBudget1200PredecessorReference,
+    reference: (
+        BenchmarkPoststartPredecessorReference
+        | BenchmarkBudget600PredecessorReference
+        | BenchmarkBudget1200PredecessorReference
+    ),
     *,
     ancestors: frozenset[str] = frozenset(),
 ) -> BenchmarkOwnerRequest:
-    """Resolve the exact failed parent and only the reviewed180->600 policy successor.
+    """Resolve exact failed-parent links across the fixed 180→600→1200 budget path.
 
     Source text, tokens, numerical recipe, runtime, model, Graph and access-policy
     pins stay equal. A new budget cannot launder an arbitrary content/model change.
     """
     try:
         reference = (
-            BenchmarkBudget1200PredecessorReference.model_validate(reference)
-            if isinstance(reference, BenchmarkBudget1200PredecessorReference)
-            else BenchmarkPoststartPredecessorReference.model_validate(reference)
+            BenchmarkBudget600PredecessorReference.model_validate(reference)
+            if isinstance(reference, BenchmarkBudget600PredecessorReference)
+            else (
+                BenchmarkBudget1200PredecessorReference.model_validate(reference)
+                if isinstance(reference, BenchmarkBudget1200PredecessorReference)
+                else BenchmarkPoststartPredecessorReference.model_validate(reference)
+            )
         )
     except (ValueError, SchemaError):
         raise BenchmarkJobAdmissionError("BENCHMARK_POSTSTART_REFERENCE_INVALID") from None
@@ -461,18 +476,32 @@ def require_benchmark_poststart_predecessor(
         "timeout_seconds",
         "policy_sha256",
     }
+    predecessor_v11 = isinstance(reference, BenchmarkBudget600PredecessorReference)
     predecessor_v12 = isinstance(reference, BenchmarkBudget1200PredecessorReference)
-    expected_parent_version = (
-        "embedding-device-benchmark-request/1.2"
-        if predecessor_v12
-        else "embedding-device-benchmark-request/1.0"
+    expected_parent_version, expected_successor_version, expected_timeout, successor_timeout = (
+        (
+            "embedding-device-benchmark-request/1.1",
+            "embedding-device-benchmark-request/1.2",
+            600,
+            1200,
+        )
+        if predecessor_v11
+        else (
+            (
+                "embedding-device-benchmark-request/1.2",
+                "embedding-device-benchmark-request/1.2",
+                1200,
+                1200,
+            )
+            if predecessor_v12
+            else (
+                "embedding-device-benchmark-request/1.0",
+                "embedding-device-benchmark-request/1.1",
+                180,
+                600,
+            )
+        )
     )
-    expected_successor_version = (
-        "embedding-device-benchmark-request/1.2"
-        if predecessor_v12
-        else "embedding-device-benchmark-request/1.1"
-    )
-    expected_timeout = 1200 if predecessor_v12 else 180
     if (
         parent.benchmark_revision_id == request.benchmark_revision_id
         or parent.request_sha256 != reference.request_sha256
@@ -481,7 +510,7 @@ def require_benchmark_poststart_predecessor(
         or parent.model_dump(mode="json", exclude=excluded)
         != request.model_dump(mode="json", exclude=excluded)
         or parent.execution_policy.timeout_seconds != expected_timeout
-        or request.execution_policy.timeout_seconds != (1200 if predecessor_v12 else 600)
+        or request.execution_policy.timeout_seconds != successor_timeout
         or parent.execution_policy.policy_revision_id == request.execution_policy.policy_revision_id
         or parent.execution_policy.model_dump(mode="json", exclude=policy_excluded)
         != request.execution_policy.model_dump(mode="json", exclude=policy_excluded)
@@ -495,7 +524,15 @@ def require_benchmark_poststart_predecessor(
     failure = history.poststart_failure
     if job.status != JobState.FAILED or failure is None:
         raise BenchmarkJobAdmissionError("BENCHMARK_POSTSTART_PREDECESSOR_CLOSURE_REQUIRED")
-    if predecessor_v12:
+    if predecessor_v11:
+        if not isinstance(failure.decision, BenchmarkBudget600FailureDecision) or (
+            BenchmarkBudget600PredecessorReference.from_decision(
+                failure.decision, event_sequence=failure.event_sequence
+            )
+            != reference
+        ):
+            raise BenchmarkJobAdmissionError("BENCHMARK_POSTSTART_PREDECESSOR_CLOSURE_REQUIRED")
+    elif predecessor_v12:
         if not isinstance(failure.decision, BenchmarkBudget1200FailureDecision) or (
             BenchmarkBudget1200PredecessorReference.from_decision(
                 failure.decision, event_sequence=failure.event_sequence
@@ -522,7 +559,12 @@ def _require_predecessor_in_session(
     ancestors: frozenset[str] = frozenset(),
 ) -> BenchmarkOwnerRequest:
     if isinstance(
-        reference, (BenchmarkPoststartPredecessorReference, BenchmarkBudget1200PredecessorReference)
+        reference,
+        (
+            BenchmarkPoststartPredecessorReference,
+            BenchmarkBudget600PredecessorReference,
+            BenchmarkBudget1200PredecessorReference,
+        ),
     ):
         return require_benchmark_poststart_predecessor(
             session, request, inputs, reference, ancestors=ancestors
@@ -536,7 +578,11 @@ def record_benchmark_poststart_predecessor_in_session(
     session: Session,
     request: BenchmarkOwnerRequest,
     inputs: BenchmarkStagedInputs,
-    reference: BenchmarkPoststartPredecessorReference | BenchmarkBudget1200PredecessorReference,
+    reference: (
+        BenchmarkPoststartPredecessorReference
+        | BenchmarkBudget600PredecessorReference
+        | BenchmarkBudget1200PredecessorReference
+    ),
     *,
     job_id: str,
 ) -> bool:
@@ -580,7 +626,14 @@ def _record_predecessor_in_session(
             from_state="VALIDATED",
             to_state="VALIDATED",
             event=POSTSTART_PREDECESSOR_EVENT
-            if isinstance(reference, BenchmarkPoststartPredecessorReference)
+            if isinstance(
+                reference,
+                (
+                    BenchmarkPoststartPredecessorReference,
+                    BenchmarkBudget600PredecessorReference,
+                    BenchmarkBudget1200PredecessorReference,
+                ),
+            )
             else PREDECESSOR_EVENT,
             data=reference.model_dump(mode="json"),
         )
