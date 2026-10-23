@@ -11,6 +11,9 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     embedding_device_benchmark_bytes,
 )
 from eom_catalog_service import embedding_benchmark_owner_composition as composition_module
+from eom_catalog_service.embedding_benchmark_budget600_poststart_inspection import (
+    FixedBudget600PoststartInspection,
+)
 from eom_catalog_service.embedding_benchmark_owner_admission import BenchmarkOwnerConfiguration
 from eom_catalog_service.embedding_benchmark_poststart_inspection import (
     FixedBenchmarkPoststartInspection,
@@ -104,3 +107,31 @@ def test_poststart_composition_selects_only_concrete_proof_adapter_without_effec
             **(arguments | {"inspection": SimpleNamespace(capture=lambda: None)}),
         )
     assert embedding_device_benchmark_bytes(value.request)
+
+
+def test_budget600_poststart_composition_keeps_the_same_fresh_operator_boundary(composition):
+    value = composition
+    inspection = FixedBudget600PoststartInspection("1" * 32, "sha256:" + "a" * 64)
+    arguments = dict(
+        request=value.request,
+        configuration=value.configuration,
+        capture=value.capture,
+        session_fence=value.session_fence,
+        inspection=inspection,
+    )
+    application = composition_module.build_benchmark_poststart_failure_application(
+        value.publisher, **arguments
+    )
+    assert type(application) is BenchmarkPoststartFailureApplication
+    assert application.inspection is inspection
+    assert application.admission._control.capture is value.capture
+    assert application.admission._control.fence is value.session_fence
+
+    class UntrustedInspector(FixedBudget600PoststartInspection):
+        pass
+
+    with pytest.raises(ValueError, match="POSTSTART_COMPOSITION_INVALID"):
+        composition_module.build_benchmark_poststart_failure_application(
+            value.publisher,
+            **(arguments | {"inspection": UntrustedInspector("1" * 32, "sha256:" + "a" * 64)}),
+        )

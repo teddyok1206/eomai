@@ -24,6 +24,9 @@ from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.inference_transfer_cpu_handoff import fixed_owner_identity
 from jsonschema.exceptions import ValidationError as SchemaError
 
+from eom_catalog_service.embedding_benchmark_budget600_poststart_inspection import (
+    FixedBudget600PoststartInspection,
+)
 from eom_catalog_service.embedding_benchmark_launch_execution import FixedBenchmarkLaunchExecution
 from eom_catalog_service.embedding_benchmark_launch_publication import (
     BenchmarkLaunchArtifactPublisher,
@@ -181,11 +184,14 @@ def build_benchmark_poststart_failure_application(
     configuration: BenchmarkOwnerConfiguration,
     capture: AuthenticatedOperatorSession,
     session_fence: AuthenticatedSessionFence,
-    inspection: FixedBenchmarkPoststartInspection,
+    inspection: FixedBenchmarkPoststartInspection | FixedBudget600PoststartInspection,
 ) -> BenchmarkPoststartFailureApplication:
     """Select actual protected partial-failure inspection; no launch or source grant."""
     try:
-        if type(inspection) is not FixedBenchmarkPoststartInspection:
+        if type(inspection) not in (
+            FixedBenchmarkPoststartInspection,
+            FixedBudget600PoststartInspection,
+        ):
             raise ValueError()
         inspection.__post_init__()
         _checked, _commit, admission = _owner_admission(
