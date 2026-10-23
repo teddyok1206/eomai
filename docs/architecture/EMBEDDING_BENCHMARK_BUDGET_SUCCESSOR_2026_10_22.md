@@ -158,6 +158,14 @@ compositions are ready. If owners resume after CPU qualification but before the 
 window, all budget600 templates must still be absent: unchanged outer owner guards do not
 cover that family. Record new owner invocations rather than pretending the old ones survived.
 
+The existing runtime-verifier pin locates an independently hashed root-owned script in
+a released directory; it is not numerical-source or user-compute authority. A restored
+numerical6c4 prefix still requires a fresh receipt/verifier and must not overwrite the
+historical6c4 verifier. Use an unused, actually installed and verified metadata-release
+namespace for that distinct script identity if rollback becomes necessary, explicitly
+recording numerical source and verifier-release identity separately. No successful restore
+is implied by preparing this branch.
+
 ## Source and isolated verification checkpoint — 2026-10-22 UTC
 
 - Actual marker-guarded disposable PostgreSQL group:34 PASS, including new post-start closure,

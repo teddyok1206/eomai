@@ -1025,3 +1025,83 @@ fea7 wheel/source의 private0700 materialization을 hash로 재사용한다. 큰
 600초 실험 실행 도구의 최종 조립, 현재 operator 인증 뒤 동일 입력6회 측정, 수치/순위/
 시간/메모리·공존/복구 판정, 조건부 기본값 결정과 정본 결과 게시다. 준비가 끝나기 전
 새 Studio 로그인을 요청하지 않는다. GPU 기본값은 **미활성**, 여섯 측정은 **미완료**다.
+
+### 실제 CPU 전환·설치 승인·서비스 기동 복구 — 2026-10-23 04:41 UTC
+
+앞 checkpoint에서 남아 있던 **CPU 전환·새 설치 승인·연결 control 선택·서비스 기동
+복구는 완료**했다. 아래는 실제 관찰이며 모델 성능 비교나 원 목표 전체의 완료는 아니다.
+
+- 첫 전환 wrapper unit `eom-cpu-budget600-prefix-fea7fe57-20261023.service`, invocation
+  `75145666b4424c32bc4bbe2ae89d7ad8`는 이 systemd에서 template 자체를 `show`하는
+  조회 형식이 지원되지 않아 첫 guard에서 실패했다. 두 owner와 prefix를 변경하기
+  전이었다. 실패 기록과 source는 보존했고, 실제 지원되는 미생성 instance 조회만
+  사용한 v2로 수정했다. reset-failed·실패 성공 처리·작업 우회 생성은 없었다.
+- `eom-cpu-budget600-prefix-fea7fe57-v2-20261023.service` invocation
+  `17d458b2b11c414bb006997bd98a3f16`는 fresh read-only preflight 뒤 정확한 owner main
+  두 개에만 SIGTERM을 보냈고 정상 종료를 기다렸다. 자연 종료한 INDEX/QUERY를
+  기록한 root400 `stopped-units.json` raw는
+  `5bd53aebfe40cdee9ca6470d1db7fddbee1328e867ac3ca0bba4b67175d3a8d6`이다.
+  stopped/claim/원 failure proof를 다시 검증한 뒤 기존 installer를 한 번 호출했다.
+- 실제 OLD byte audit operation은 `/opt/eom/.embedding-index-install-neDH039m`이며
+  04:30:39.656471 UTC에 성공 종료했다. retained predecessor는
+  `/opt/eom/conda/envs/.embedding-index-prepublication-CPU_INDEX_FP32-.embedding-index-install-neDH039m`이다.
+  이전 root device64512/inode19578306과 원 tree30eaaede를 확인해 보존했다.
+  새 inventory raw는 `d366530a68bf786a9899eada16dceac371417364b512f135c9e2099868b2f797`,
+  semantic은 `f809c6afab1bbfb30adf3fb97f4a7352284042cb3f934ee7221ef6b44c05282e`다.
+- `eom-cpu-budget600-probe-seal-fea7fe57-20261023.service` invocation
+  `19a41c2acc654b62b3908cde9ab337ef`는 실제 native probe `c400c2cf...`, PID3840911,
+  native invocation `bcec0222693d4b4ca0ae9ff0b00f3854`의 live maps/ACK/정상 종료를
+  확인하고 같은 live 관찰에서 봉인했다. UID978/GID975, model member8개·denial 검증,
+  실제 runtime `f02cfc2b...` 보존, root의 ML import0·model/tokenizer/forward0을 확인했다.
+  report raw는 `5632611ccdb295ece401a03aa8f9efa04f4aeeb46c9fdc89e9a0d5edc1a12070`이다.
+- 04:33:45.085946 UTC의 config3d499 receipt raw는
+  `80415754bb21ef2ff7d5d5bc66edd10cd2382cc42c0f967b6c2fbc7aa38a4f8e`, semantic은
+  `f292d624ed0cff8a5b0f02c76a24e9c6de74f4aec527a75653f2434fcdb546a9`다. 실제
+  `ProtectedNativeEmbeddingInstallationAdmission` reader도 PASS했다. final seal raw는
+  `50f9f5e34fbceb507a2e05ae71d9218a9bfb58cae1f726b369b5d13eb6c2a778`이며 root 운영
+  기록 `cpu-fea7fe57-seal/final-installation-seal.json`에 보관했다.
+- `eom-cpu-budget600-select-fea7fe57-20261023.service` invocation
+  `59e710f758ed43c28c4d5eb94d92024f`는 보호된 metadata2e5 SDK로 PREPARE와 SELECT를
+  순서대로 통과하고04:38:57.795410 UTC에 성공 종료했다. before/after/epoch/receipt/
+  host/claim/물리 상태를 확인해 여섯 파일을 sequential CAS하고 마지막에 한 번만
+  daemon-reload했다. manifest SHA는
+  `e50e1bb8a10e9d86fae75b9b9d50dd5846840955fc9372d2eb23a623b1c82acc`다.
+  새 fea7 verifier raw는 `8fc388054a921c76092296f6cf21a80f6e1f3b90c1b00141901ef588cc22fad3`다.
+
+| 새 선택 파일 | 실제 raw SHA-256 |
+| --- | --- |
+| CPU env | `3d15b83d01133a3ad46692bd636f13135860a31130d974804f884cfa8886c308` |
+| INDEX owner | `e3f9e6bb569988bff95ed3a1151c58b29d06b9eda699d4fd2db6f19ae42f9823` |
+| REFERENCE owner | `91ac9c0ec0e334659a128432dc24ec30d0a84dcd4e344eb6ddafcb97e49021f5` |
+| MIXED owner | `10b0cd8556f3506f0d799ce7392f5213265eceb53239c37710316e1061551f24` |
+| PRIVATE owner | `b31fd2c4c0d791d3b2bedc2908ff0e8abd72a3cb9a2d97376c00a79c3042cd81` |
+| QUERY unit | `e532cd7069e0c8e0cd3f63a5b6319f198f019b84e65ec7c786b48d18caaee664` |
+
+기존 before bytes와 새 verifier/여섯 after bytes는 root700 `linked-fea7fe57`에 유지한다.
+기존 runtime/source grant·Identity·Graph·모델·벡터 공간·CPU 기본값은 바꾸지 않았다.
+새로운 schema/migration/queue를 추가하거나 DB row를 수정하지 않았다.
+
+budget600 네 template과 instance가 미설치/미실행임을 확인한 뒤 두 기존 owner를 재개했다.
+INDEX PID3844518/invocation `84cf9411d71e438a9cff64cfbc695b0f`는04:40:32.179061 UTC에
+STARTED, QUERY PID3844513/invocation `e11b59a3c3364c3c95f0c5a07a07c070`는
+04:40:48.122954 UTC에 READY였다. 새 invocation의 journal만으로 확인했고 이전 READY를
+재사용하지 않았다. 04:41:28의 실제 `/api/v1/health/live`와 `/api/v1/health/ready`는
+각각 LIVE/READY였다. 처음 잘못 조회한 `/health/live`의404는 서비스 장애로 해석하거나
+API를 바꾸지 않고, 기존 배포 smoke에 정의된 실제 route로 조회했다.
+이는 기동 복구 증거이며 이번 변경 후 인증된 사용자 검색 smoke는 별도로 남아 있다.
+
+집중 검증은 후속 actual-pin/기존 installer arity/disabled-plan 검사까지 **121 PASS**다.
+명시적 CPU private publication 인수에는 기존 installer가 요구하는 common wheelhouse를
+추가했으며 공용 dependency를 새로 설치하지 않았다. 앞서 보호 설치한 미실행 정의는
+덮지 않고 v2 이름으로 보존했다. 원 failure·부분 출력·Job event8은 그대로다.
+
+다음 비교 준비용 작은 pointer 파일은
+`/tmp/eom-cpu-budget600-config-20261023.7549egJj/budget600-pins.CPU_ADMITTED.json`이다.
+원 disabled plan의 CPU backend만 실제 config3d499/receipt80415754로 채웠고 다른 필드는
+같다. **execution_enabled=false**이며 이 파일은 사용자 인증·root series tool·공식
+benchmark 접수/실행의 대체물이 아니다. 원 DRAFT는 보존했다.
+
+남은 목표: 실제 root/owner 비교 실행 도구 마무리 → 현재 operator/source 권한 확인 →
+동일 고정 입력 CPU/CUDA6회 실측과 수치/검색 순위·시간·메모리 검증 → 다른 GPU 작업과의
+공존·복구 검증 → 실측에 따른 기본값 결정·필요한 운영 반영 → 정본 결과·한국어/Slack 보고.
+현재 여섯 측정은 **미완료**, GPU 기본값은 **미활성**이며 원 목표는 계속 ACTIVE다.
