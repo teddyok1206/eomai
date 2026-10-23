@@ -3,22 +3,10 @@
 from __future__ import annotations
 
 import math
-from typing import Protocol
 
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
 
 from eom_catalog_service.inference_transfer_ports import ScoredInferenceTransferProfile
-
-
-class RankedProfileIdentity(Protocol):
-    @property
-    def profile_id(self) -> str: ...
-
-    @property
-    def profile_revision_id(self) -> str: ...
-
-    @property
-    def profile_sha256(self) -> str: ...
 
 
 def normalized_vector(vector: tuple[float, ...], dimension: int) -> tuple[float, ...]:
@@ -54,30 +42,21 @@ def rank_normalized_vectors(
     top_k: int,
 ) -> tuple[ScoredInferenceTransferProfile, ...]:
     """Caller normalizes once; ties use exact refs rather than rounded wire scores."""
-    return tuple(
-        ScoredInferenceTransferProfile(pointer, score)
-        for pointer, score in rank_normalized_values(query, candidates, top_k=top_k)
-    )
-
-
-def rank_normalized_values[Profile: RankedProfileIdentity](
-    query: tuple[float, ...],
-    candidates: tuple[tuple[Profile, tuple[float, ...]], ...],
-    *,
-    top_k: int,
-) -> tuple[tuple[Profile, float], ...]:
-    """Same exact score/tie rule for genuine profile1 and registered-review profile2."""
     scores = tuple(
-        (pointer, normalized_cosine_similarity(query, vector)) for pointer, vector in candidates
+        ScoredInferenceTransferProfile(
+            pointer,
+            normalized_cosine_similarity(query, vector),
+        )
+        for pointer, vector in candidates
     )
     return tuple(
         sorted(
             scores,
             key=lambda row: (
-                -row[1],
-                row[0].profile_id,
-                row[0].profile_revision_id,
-                row[0].profile_sha256,
+                -row.cosine_similarity,
+                row.profile.profile_id,
+                row.profile.profile_revision_id,
+                row.profile.profile_sha256,
             ),
         )[:top_k]
     )

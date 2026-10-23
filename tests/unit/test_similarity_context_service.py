@@ -29,6 +29,7 @@ from eom_catalog_contracts.inference_transfer_experiment import (
     experiment_view_text,
 )
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
+from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import (
     ApprovedReferenceItemAnchor,
     SimilarityConsumerPurpose,
@@ -38,6 +39,7 @@ from eom_catalog_contracts.similarity_context import (
     SimilarityViewSelection,
     parse_similarity_context_request,
 )
+from eom_catalog_contracts.similarity_context_v2 import MixedSimilarityProfilePointer
 from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
 from eom_catalog_service.embedding_registry_ports import (
     AuthorizedEmbeddingReadProfile,
@@ -47,6 +49,7 @@ from eom_catalog_service.embedding_registry_ports import (
     MaterializedEmbeddingReadRow,
     ResolvedPinnedEmbeddingIndex,
 )
+from eom_catalog_service.inference_transfer_vectors import rank_normalized_vectors
 from eom_catalog_service.similarity_context_ports import (
     PreparedSimilarityContext,
     PreparedSimilaritySource,
@@ -54,7 +57,10 @@ from eom_catalog_service.similarity_context_ports import (
     SimilarityQueryUnavailable,
     VerifiedReferenceQueryRead,
 )
-from eom_catalog_service.similarity_context_service import SimilarityContextApplicationService
+from eom_catalog_service.similarity_context_service import (
+    SimilarityContextApplicationService,
+    _rank_similarity_profiles,
+)
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 
@@ -297,6 +303,54 @@ def case(
                 query_input, result, member, shard_pointer(shard, "e"), binary
             )
         ),
+    )
+
+
+@pytest.mark.parametrize("top_k", (1, 2, 4))
+def test_similarity_ranker_preserves_legacy_accepted_order_and_full_scores(top_k: int) -> None:
+    query = (1.0, 0.0)
+    scores = (0.60000001, 0.60000002, 0.60000002, -0.5)
+    candidates = tuple(
+        (
+            InferenceTransferProfilePointer.from_profile(embedding_entry(seed).profile),
+            (score, sqrt(1 - score * score)),
+        )
+        for seed, score in zip("abcd", scores, strict=True)
+    )
+    legacy = rank_normalized_vectors(query, candidates, top_k=top_k)
+    expected = tuple((row.profile, row.cosine_similarity) for row in legacy)
+    assert _rank_similarity_profiles(query, candidates, top_k=top_k) == expected
+    assert _rank_similarity_profiles(query, tuple(reversed(candidates)), top_k=top_k) == expected
+    if top_k == 4:
+        assert sorted(score for _profile, score in expected) == sorted(scores)
+
+
+def test_mixed_similarity_ranker_keeps_exact_profile_revision_hash_tie_order() -> None:
+    accepted = InferenceTransferProfilePointer.from_profile(embedding_entry("a").profile)
+    base = accepted.model_dump(mode="json", exclude={"schema_ref"})
+    identity = {"profile_id": "inferenceprofile_" + "1" * 32}
+    revision = {"profile_revision_id": "inferenceprofilerev_" + "1" * 32}
+    first = RegisteredReviewProfilePointer.model_validate(
+        base | identity | revision | {"profile_sha256": sha("1")}
+    )
+    second = InferenceTransferProfilePointer.model_validate(
+        base | identity | revision | {"profile_sha256": sha("2")}
+    )
+    third = RegisteredReviewProfilePointer.model_validate(
+        base | identity | {"profile_revision_id": "inferenceprofilerev_" + "2" * 32}
+    )
+    fourth = InferenceTransferProfilePointer.model_validate(
+        base | {"profile_id": "inferenceprofile_" + "2" * 32} | revision
+    )
+    expected: tuple[tuple[MixedSimilarityProfilePointer, float], ...] = tuple(
+        (profile, 1.0) for profile in (first, second, third, fourth)
+    )
+    candidates: tuple[tuple[MixedSimilarityProfilePointer, tuple[float, ...]], ...] = tuple(
+        (profile, (1.0, 0.0)) for profile in (fourth, third, second, first)
+    )
+    assert _rank_similarity_profiles((1.0, 0.0), candidates, top_k=4) == expected
+    assert (
+        _rank_similarity_profiles((1.0, 0.0), tuple(reversed(candidates)), top_k=2) == expected[:2]
     )
 
 
