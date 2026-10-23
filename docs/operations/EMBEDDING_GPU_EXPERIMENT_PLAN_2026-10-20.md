@@ -1105,3 +1105,61 @@ benchmark 접수/실행의 대체물이 아니다. 원 DRAFT는 보존했다.
 동일 고정 입력 CPU/CUDA6회 실측과 수치/검색 순위·시간·메모리 검증 → 다른 GPU 작업과의
 공존·복구 검증 → 실측에 따른 기본값 결정·필요한 운영 반영 → 정본 결과·한국어/Slack 보고.
 현재 여섯 측정은 **미완료**, GPU 기본값은 **미활성**이며 원 목표는 계속 ACTIVE다.
+
+### 실제 유한 실행 도구 사전 점검·로그인 대기 — 2026-10-23 05:48 UTC
+
+CPU/CUDA 설치 준비와 별도로 남아 있던 유한 root/owner 실행 도구를 조립하고 실제
+서버의 보호된 파일·정확한 계정·API provider로 사전 점검했다. **새 benchmark Job과
+모델 forward는 0**이다. 아래 사전 점검 성공은 성능 비교나 실제 사용자 인가 성공이 아니다.
+
+- 현재 고정 운영 도구 위치는
+  `/var/lib/eom-gpu-benchmark-budget600-20261022-a7a80a1c`다. 파일은 root444,
+  복구 기록 디렉터리는 root700이며, 기존 helper/SDK를 원 hash로 참조한다. 새 schema,
+  migration, queue, 검색 엔진이나 인증 방식을 제품에 추가하지 않았다.
+- 현재 진입점 `benchmark_budget600_supervisor_v4.py` raw SHA는
+  `dde6200d180c2cec9ffa252a177b783b4b4f79077135ececff58debc3bcbffab`,
+  작은 선택 파일 `pins-v4.json` raw SHA는
+  `4fb2c4c44a6de47dd18f1cd66e61a3391cda1447b0fb945d09b119f8868a9041`이다.
+  비교 phase raw64013c36, marker raw8e7d7356은 원 측정/출판/인가 동작을 보존한다.
+  유지보수 창 helper raw는
+  `ebb08e3a793c40838b6042627c2c38a5924a6fb17e9a45b0c97a2f421d6cf06c`다.
+- `eom-gpu-benchmark-budget600-a7a80a1c-v4-preflight.service` invocation
+  `09e330ca71954004a7018645ca3fee7f`는05:48:28.599738 UTC에 PASS를 기록했다.
+  실제 owner UID990/GID1000/groups[], 변경 가능한 capability0, NoNewPrivs1,
+  설치된 API60af9e5d provider와 원 proof의 typed pin 연결을 확인했다. 사용자
+  로그인·새 Job·model forward는 없었다. PID1의 최종 상태도 MainPID0,
+  active/exited, success/0으로 확인했다. `RemainAfterExit`로 이 사전 점검 결과를
+  보존하며, 사라진 transient unit의 기본 `Result=success`를 PASS로 오인하지 않는다.
+- 초기 v1 사전 점검 invocation7089e79d와1e3945ba의 실패, v2 실제 실행
+  invocation `2c0fc831ce344db8aa1166f04a175c6c`의 초기 CPU-prefix 점유 거부,
+  v3 사전 점검 invocation `63ae24e65c6e4556834d644b7d7c3bee`의
+  `CPU_SCOPE_UNEXPIRED_INDEX_QUERY_CLAIM` 거부는 보존했다. v1의 일반화된 오류를
+  확인하지 않은 상세 원인으로 소급 해석하지 않는다. v2의 별도 read-only 사전 점검은
+  두 번 통과했으나 그것으로 이후 순간의 quiescence를 보증하지 않았다.
+- 사전 점검은 아직 정상 동작 중인 INDEX/QUERY의 작업·metadata reader가 존재할 수
+  있는 **읽기 단계**다. 그 단계부터 이미 정지된 유지보수 창을 요구한 초기 조건을
+  분리했다. 진짜 로그인 성공 후 두 owner main만 정상 종료·drain하고, **그 다음에
+  전체 native/socket/cgroup/prefix 점유와 유효 claim 부재·실제 DB role·원 closure를
+  확인한 뒤** 네 개 template을 활성화한다. 실제 실행 전 검사를 생략하거나 busy
+  작업을 강제 종료·성공 처리·DB row 변경한 것이 아니다.
+- 네 작은 template의 복구는 별도 bind mount 간 rename에 의존하지 않는다. 정확한
+  byte를 복구 디렉터리에 create-once/fsync하고 일치·source epoch를 확인한 뒤
+  지정 임시 load path만 제거·directory fsync한다. 부분 보존 이후 복구와 틀린
+  보존 byte의 거부, native/claim이 불명확할 때 복구/활성화 금지를 검사했다.
+- 최종 집중 검증27개, 원 phase의 별도 합성 검증14개, Ruff/format과4개 모듈의
+  구조적 mypy 검사를 통과했다. 같은 실험의 통과 수를 중복 합산하지 않는다.
+  집중 검증에는 실제 보호 설치 byte/시험 대상 byte/hash 대조1개도 포함한다. 이것은
+  운영 DB 테스트나 모델 시간 측정이 아니다. 새 의존성은 없다.
+
+실제 비교 제어 unit `eom-gpu-benchmark-budget600-a7a80a1c-v4.service` invocation
+`9f1f123729f342339bd61a4613581f24`는05:48:55.463745 UTC에
+`READY_FOR_GENUINE_LOGIN`을 표시했다. tmux `EOM`의3번 `gpu-embedding`에서
+실제 Studio guiadmin 비밀번호를 기다리며, 비밀번호/bearer를 저장하지 않는다.
+이 관측 시점에 기존 INDEX PID3844518/QUERY PID3844513과 두 invocation은 유지됐다.
+로그인 대기 때문에 서비스를 미리 정지하지 않는다. 원900초 human freshness와
+clean-prefix genuine 재인증은 그대로이며 root의2시간/series3600초는 인증 연장이 아니다.
+
+이 checkpoint의 Slack 보고는 `devreport_dfdda64a42494d4290ae6857aa3469da`,
+05:48:49 UTC, HTTP200/SENT다. 한국어 한 문장 요약을 맨 앞에 두었고 문항·prompt·secret은
+전송하지 않았다. 인증 뒤 원 closure의 지원된 replay/새 successor 접수와 같은 입력6회,
+수치·순위·시간·메모리·실제 GPU 공존/복구, 조건부 기본값 결정은 **계속 미완료**다.

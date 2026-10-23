@@ -75,6 +75,66 @@ The outer operator service's finite runtime must cover its login wait, admitted 
 last accepted launch and terminal cleanup. A long listener is not permission to extend any compute
 deadline, retry an uncertain invocation or treat an expired human session as current authentication.
 
+### Finite operator composition after both actual installations qualify
+
+The existing Orchestrator applications remain the only source/Job/Artifact authority. The
+one-off root operator owns only its fork/channel, the fixed experimental templates and a
+bounded maintenance window for the two existing INDEX/QUERY services. No new runtime service,
+queue, registry, migration, model, worker protocol or authentication mechanism is introduced.
+
+Canonical inputs are the original request/config/invocation, committed failure event8, both
+actual installation pins and the exact reviewed helper/SDK/provider bytes. A typed expected
+predecessor is a reference to that existing event, not an invented closure receipt: genuine
+authorized `close` replay must return that same reference before successor registration. The
+new plan pins the original sources/Graph/policy/model/rows and the allocated successor IDs.
+Independent root captures and the actual current operator fences still decide admission.
+An accepted closure replay does not require repeating the historical kernel inspection: the
+existing application returns its immutable decision after current user/source reauthorization.
+The read-only preflight checks that exact decision/event and proof binding, without inventing
+another closure receipt or treating a caller-supplied expected reference as authority.
+
+Do not stop healthy owners while waiting for the initial password. The same protected owner
+child authenticates, then sends a bounded closed-enum local rendezvous marker without a bearer,
+capture or source content. Root opens the reviewed window and replies before the child invokes
+the unchanged official phase. These internal coordination markers convey readiness, not source
+or compute authority. Define/validate their JSON Schema 2020-12 and typed values before use.
+
+The window uses constant-time keyed lookup for two services/four templates, stable ordered
+SIGTERM/drain and append-only create-once operational metadata. Its before-state is small
+root-owned metadata, never DB content or a copy of an Item. Verify actual service/config bytes,
+PID/invocation, native/socket/cgroup/prefix users and the existing scoped claim query. Root may
+exclude only its own exactly identified live coordinator from the coordinator check; this does
+not exclude any native execution, socket, other controller or physical capacity holder. Existing
+outer owner releases do not cover budget600, so keep them stopped while those templates exist.
+The initial read-only/login preflight may coexist with ordinary INDEX/QUERY claims and native
+metadata readers. It checks the two running owners, protected controls and this exact operator's
+coordinator identity, not an already-drained maintenance window. After genuine authorization,
+signal only the two frozen owner mains and wait for their supported graceful drain. Before any
+experimental template activation, enforce the full native/socket/cgroup/prefix and scoped
+unexpired-claim guards, actual DB role and immutable original closure. A busy/uncertain result at
+that boundary prevents activation and is never bypassed or repaired by direct DB mutation.
+
+On completion or failure, terminate/reap the one owned child before recovery; independently
+verify physical quiescence, preserve the exact four template bytes outside PID1's load path,
+reload and restart only the previously running two owners. Uncertain native retirement, changed
+files or a different owner invocation fails closed; it never becomes a cleanup/retry grant.
+A protected stop-post recovery entry must use the same checked operational record and rules,
+not a second implementation. Existing Jobs, failures, partial outputs and receipts are retained.
+Separate systemd `ReadWritePaths` mounts can make cross-directory rename return `EXDEV` even
+on one filesystem. For these four small temporary units, preserve and fsync exact pinned bytes
+in the protected recovery directory, verify source identity again, then unlink only the exact
+temporary load path and fsync its directory. A crash between preservation and unlink resumes
+only if the retained bytes still match. Do not restart owners when retirement is unproven.
+After a durable verified restoration, stop-post validates that same restoration without
+requiring already-resumed production to become idle again.
+
+Root's finite outer deadline must reserve setup/login, the 3600-second accept window, a last
+accepted 600-second launch and terminal cleanup. Check the remaining real operator window before
+fork/activation, rather than adding those maxima to an insufficient 7200-second outer limit.
+The 900-second actual human freshness fence and clean-prefix reauthentication remain unchanged.
+This is the smallest finite extension of the reviewed operator; an always-on supervisor/resume
+framework or leaving services stopped through an overnight login wait is unnecessary.
+
 ## Started failure and clean progress boundary
 
 The original CPU launch actually started and produced partial bytes. The existing never-started
