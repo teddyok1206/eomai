@@ -1163,3 +1163,39 @@ clean-prefix genuine 재인증은 그대로이며 root의2시간/series3600초�
 05:48:49 UTC, HTTP200/SENT다. 한국어 한 문장 요약을 맨 앞에 두었고 문항·prompt·secret은
 전송하지 않았다. 인증 뒤 원 closure의 지원된 replay/새 successor 접수와 같은 입력6회,
 수치·순위·시간·메모리·실제 GPU 공존/복구, 조건부 기본값 결정은 **계속 미완료**다.
+
+### 실제 인증·정상 drain·공식 successor 접수 — 2026-10-23 06:00 UTC
+
+앞의 인증 대기는05:55:47.256344 UTC에 실제 Studio 로그인 성공으로 해소됐다.
+새 로그인 실행/Job을 복제하지 않고 같은 root invocation9f1f1237과 owner child를 유지했다.
+원래 INDEX는 기존 command `wfcmd_29f317756bfa46de9d3ef90e3a11e055`를
+06:00:47.308054 UTC에 SUCCEEDED로 마친 뒤 정상 종료했다. main-only SIGTERM에서
+약5분이 걸렸지만 강제 종료나 DB 상태 수정은 없었다. QUERY도 success/0으로 종료했다.
+과거 원 command 완료가 최근 약5~7분 간격이었다는 journal을 확인했으며, 단순 대기를
+새 state-machine defect 또는 실패로 해석하지 않았다.
+
+두 owner의 정상 종료 후 전체 physical/claim/실제 role/원 closure 검사를 통과해
+06:00:50.222850 UTC에 네 실험 template의 window가 열렸다. owner는 실제 현재 세션으로
+원 closure를 replay해 created=false/동일 predecessor를 확인하고, 원 입력을 유지하는
+새 policy1.1/600과 staged-inputs를 공식 Orchestrator publisher로 게시했다.
+
+- 새 Job: `job_26e206dc11434d52870f51737d15fdbd`, created=true,
+  06:00:55.071729 UTC의 공식 successor 등록1건.
+- 새 request semantic SHA:
+  `4208355fa95249743bd71ff8022650d4b51f2d91ddc44140d68a8b5647c7070f`.
+- 원 benchmark logical ID7255032e와 배정된 새 revision88769635를 사용했다.
+  원 실패 Job25b047f3·event8·failure decision3b07acf3은 보존했다.
+- 아직 launch ordinal1도 dispatch하지 않았다.06:00:55.708719 UTC에
+  `CLEAN_PREFIX_GENUINE_REAUTH_REQUIRED`에 도달했다. 직전 인증은 성공했으나
+  정상 drain에 사용한 약5분 때문에 남은900초 freshness가 다음600초 계산+60초
+  준비/정리 reserve보다 짧아졌기 때문이다. 인증 자체가 만료됐거나 잘못된 암호라는
+  의미가 아니다. 새 key/Job으로 우회하거나 인증 시간을 늘리지 않았다.
+
+이 관측 시점의 INDEX/QUERY는 실험 window 때문에 **의도적으로 inactive/dead**이며,
+기동 상태를 정상 운영 중이라고 표시하지 않는다. API 자체와 구분한다. 같은 tmux3
+입력창에서 실제 인증 갱신을 기다린다. 서비스 재개는 같은 보호된 window-close/stop-post
+규칙이 담당한다. 후속 재개 시 새 Job을 제출하지 않고 위 Job/원 실행의 현재 상태부터
+조회한다. 아직 CPU/GPU 측정·수치 판정·GPU 기본값 완료는 아니다.
+
+인증 대기 해소/정상 drain 진행 Slack은
+`devreport_db8ff7d6ede44a46b5ee35f6baf0908c`(05:59:38 UTC, SENT/HTTP200)다.
