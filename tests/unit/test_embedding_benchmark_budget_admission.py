@@ -7,6 +7,7 @@ import pytest
 from eom_catalog_contracts.embedding_device_benchmark import (
     BENCHMARK_POLICY_SCHEMA_REF,
     BENCHMARK_POLICY_V11_SCHEMA_REF,
+    BENCHMARK_POLICY_V12_SCHEMA_REF,
     BenchmarkOwnerRequest,
     embedding_device_benchmark_bytes,
 )
@@ -29,19 +30,22 @@ from tests.unit.test_embedding_benchmark_owner_admission import admitted as admi
 from tests.unit.test_embedding_benchmark_owner_composition import composition as composition
 
 
-def select_successor(value):
+def select_successor(value, *, version="1.1"):
+    assert version in {"1.1", "1.2"}
     policy = value.request.execution_policy.model_dump(mode="json") | {
-        "schema_version": "embedding-device-benchmark-policy/1.1",
+        "schema_version": f"embedding-device-benchmark-policy/{version}",
         "policy_revision_id": "embeddingbenchmarkpolicyrev_" + "f" * 32,
-        "timeout_seconds": 600,
+        "timeout_seconds": 600 if version == "1.1" else 1200,
     }
     body = value.request.model_dump(mode="json") | {
-        "schema_version": "embedding-device-benchmark-request/1.1",
+        "schema_version": f"embedding-device-benchmark-request/{version}",
         "execution_policy": seal(policy, "policy_sha256"),
     }
     request = BenchmarkOwnerRequest.model_validate(seal(body, "request_sha256"))
     published = value.policy_publisher.publish_benchmark_policy(
-        request.execution_policy, idempotency_key="synthetic-budget600-policy", created_at=NOW
+        request.execution_policy,
+        idempotency_key=f"synthetic-budget-{version}-policy",
+        created_at=NOW,
     )
     value.owner.configuration = BenchmarkOwnerConfiguration(
         request.request_sha256, published.member, published.semantic_sha256
@@ -62,6 +66,18 @@ def test_successor_policy_uses_exact_registered_v11_member_and_current_owner_fen
     assert published.semantic_sha256 == request.execution_policy.policy_sha256
     assert published.member.sha256 != published.semantic_sha256
     assert published.member.artifact_id != value.published.member.artifact_id
+
+
+def test_v12_policy_uses_exact_registered_member_and_current_owner_fence(admitted):
+    value = admitted
+    request, published = select_successor(value, version="1.2")
+    assert published.member.schema_ref == BENCHMARK_POLICY_V12_SCHEMA_REF
+    with value.publisher.sessions() as session, session.begin():
+        with value.owner.admit_execution_in_session(session, request) as inputs:
+            assert inputs == value.inputs
+        assert value.owner._control.fence_current_operator.call_count == 2
+    assert published.semantic_sha256 == request.execution_policy.policy_sha256
+    assert published.member.sha256 != published.semantic_sha256
 
 
 def test_predecessor_pointer_cannot_alias_a_successor_policy_before_any_source_read(admitted):

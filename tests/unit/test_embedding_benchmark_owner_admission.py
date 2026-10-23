@@ -9,6 +9,7 @@ import pytest
 from eom_catalog_contracts.embedding_device_benchmark import (
     BENCHMARK_LAUNCH_ARTIFACT_TYPE,
     BENCHMARK_POLICY_ARTIFACT_TYPE,
+    BENCHMARK_POLICY_V12_SCHEMA_REF,
     EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF,
     embedding_device_benchmark_bytes,
 )
@@ -147,6 +148,24 @@ def test_other_purpose_policy_is_not_a_benchmark_selection(admitted, field, valu
     config = admitted.owner.configuration
     with pytest.raises(ValueError, match="CONFIGURATION_INVALID"):
         replace(config, execution_policy=config.execution_policy.model_copy(update={field: value}))
+
+
+def test_v12_policy_pointer_is_valid_but_does_not_match_v10_request(admitted):
+    config = admitted.owner.configuration
+    pointer = config.execution_policy.model_copy(
+        update={"schema_ref": BENCHMARK_POLICY_V12_SCHEMA_REF}
+    )
+    selected = replace(config, execution_policy=pointer)
+    assert selected.execution_policy.schema_ref == BENCHMARK_POLICY_V12_SCHEMA_REF
+    admitted.owner.configuration = selected
+    with (
+        pytest.raises(ValueError, match="BENCHMARK_OWNER_SELECTION_MISMATCH"),
+        admitted.publisher.sessions() as session,
+        session.begin(),
+        admitted.owner.admit_execution_in_session(session, admitted.request),
+    ):
+        pytest.fail("foreign policy version reached source admission")
+    assert admitted.owner._source.entered == 0
 
 
 def test_raw_publication_hash_and_semantic_policy_identity_remain_distinct(admitted):

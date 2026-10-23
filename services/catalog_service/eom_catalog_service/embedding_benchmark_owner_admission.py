@@ -12,6 +12,7 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     BENCHMARK_POLICY_ARTIFACT_TYPE,
     BENCHMARK_POLICY_SCHEMA_REF,
     BENCHMARK_POLICY_V11_SCHEMA_REF,
+    BENCHMARK_POLICY_V12_SCHEMA_REF,
     EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF,
     MAX_BENCHMARK_ENVELOPE_BYTES,
     MAX_BENCHMARK_OUTPUT_BYTES,
@@ -77,7 +78,11 @@ class BenchmarkOwnerConfiguration:
         if (
             pointer.member_path != "policy.json"
             or pointer.schema_ref
-            not in {BENCHMARK_POLICY_SCHEMA_REF, BENCHMARK_POLICY_V11_SCHEMA_REF}
+            not in {
+                BENCHMARK_POLICY_SCHEMA_REF,
+                BENCHMARK_POLICY_V11_SCHEMA_REF,
+                BENCHMARK_POLICY_V12_SCHEMA_REF,
+            }
             or pointer.media_type != "application/json"
         ):
             raise ValueError("BENCHMARK_OWNER_CONFIGURATION_INVALID")

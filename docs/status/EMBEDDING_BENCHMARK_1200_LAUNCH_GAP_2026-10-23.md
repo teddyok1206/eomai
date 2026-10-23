@@ -129,3 +129,18 @@ failure는 그대로 남고, 다른 actor/source/model/runtime/access-policy/검
   인증 전 대기만 24시간으로 늘리고 미시작 프로세스를 종료·재실행했다. 종료 당시
   parent frame은 닫혔으며 Job·Artifact·model effect는 없었다. 실제 1200초
   measurement/listener budget과 900초 인증 freshness는 변경하지 않았다.
+
+### 2026-10-23 15:17 UTC — 실제 인증 이후 v1.2 조합 누락 발견
+
+- `guiadmin` 인증은 성공했다. 이전 600초 실패 closure 재현과 후속 1200초 정책·입력
+  Artifact publication 뒤, `BenchmarkOwnerConfiguration`이 v1.2 정책 member schema를
+  허용하지 않아 후속 Job 등록 **전**에 중단됐다. parent의 `BENCHMARK_ROOT_FRAME_CLOSED`는
+  이 child 오류의 후속 증상이다. CPU/CUDA 모델 계산은 시작되지 않았다.
+- 동일 경로를 정적으로 검토해, 계산 시점에 v1.2 요청을 invocation으로 바꾸는
+  Orchestrator mapping에도 v1.2가 빠진 두 번째 누락을 발견했다. 두 mapping을 수정하고
+  실제 v1.2 정책 Artifact admission과 invocation 생성 회귀 시험을 추가했다.
+- 기존 정책·입력 publication은 불변 이력으로 보존한다. 동일 idempotency key·내용으로
+  재실행 시 정확한 replay만 허용하며, 새 identity로 실패를 덮지 않는다. 인증 세션은
+  실패한 실행 프로세스에서 종료됐으므로 코드·릴리스 준비를 끝낸 뒤에만 새 인증을 받는다.
+- 관련 158개 단위 시험과 Ruff/format/diff 검사가 통과했다. 운영 분리 owner release
+  반영 및 실제 CPU/GPU 측정 결과는 아직 남아 있으며 GPU 기본값은 변경하지 않았다.

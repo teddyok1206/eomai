@@ -4,14 +4,25 @@ from contextlib import contextmanager
 from types import SimpleNamespace
 
 import pytest
+from eom_catalog_contracts.embedding_device_benchmark import validate_benchmark_invocation
 from eom_orchestrator import embedding_device_benchmark_owner as module
 from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkExecutionOwner
 from eom_orchestrator.models import ArtifactRecord, JobEventRecord, JobRecord
 from sqlalchemy import event, func, select
 
 from tests.unit.embedding_benchmark_job_fixtures import SyntheticBenchmarkAdmission, benchmark_case
+from tests.unit.embedding_device_benchmark_fixtures import staged_inputs
 from tests.unit.test_control_file_set_publication import _publisher
 from tests.unit.test_embedding_benchmark_launch_history import SyntheticResultReader, receipt_for
+from tests.unit.test_embedding_device_benchmark_budget import successor_request_v12
+
+
+def test_v12_owner_creates_matching_invocation_without_launching_model():
+    request = successor_request_v12()
+    inputs = staged_inputs()
+    invocation = module._invocation(request, inputs, "job_" + "a" * 32, 1)
+    assert invocation.schema_version == "embedding-device-benchmark-invocation/1.2"
+    validate_benchmark_invocation(request, invocation, inputs)
 
 
 class SyntheticOwnerAdmission(SyntheticBenchmarkAdmission):

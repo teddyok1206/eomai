@@ -197,6 +197,7 @@ def _invocation(
         "schema_version": {
             "embedding-device-benchmark-request/1.0": "embedding-device-benchmark-invocation/1.0",
             "embedding-device-benchmark-request/1.1": "embedding-device-benchmark-invocation/1.1",
+            "embedding-device-benchmark-request/1.2": "embedding-device-benchmark-invocation/1.2",
         }[request.schema_version],
         "kind": "WORKER_INVOCATION",
         "purpose": "LOCAL_EMBEDDING_DEVICE_BENCHMARK",
