@@ -1325,3 +1325,24 @@ installation 증거를 지원된 경계로 발급·검증한 뒤 INDEX를 복구
 미해결 benchmark Job의 직접 DB 수정은 금지한다. 이 CPU 복구가 끝나기 전
 GPU 비교의 새 실행을 시작하지 않는다. 개발 Slack 보고
 `devreport_ed5d0793ca8e411ba0b0a9aa7ffe026d`가 07:02:49 UTC 발송됐다.
+
+### 06:28 OS zlib 갱신 후 CPU 서비스 복구 — 2026-10-23 07:44 UTC
+
+`libz.so.1.3`의 실제 새 SHA-256을 반영한 host snapshot
+`embeddinghostconfigrev_76048812b8d740ad9ebedfe76bbf5ed4`와 같은 numerical
+runtime을 가리키는 CPU native config
+`embeddingnativeconfigrev_fa612fc539d34effbfb4bfcaf875928a`를 발급했다.
+보호된 CPU prefix는 원본을 보존한 상태로 설치했고, 실제 host bytes probe 및
+installation seal `31675d57ff9cb7f3d17acb230a34823c969f1635859ee394d674919b80573092`
+검증을 통과했다. 모델 forward는 실행하지 않았다.
+
+INDEX와 세 QUERY 소비자의 설정 및 연동된 systemd unit 환경값을 동일한 새
+설치 revision으로 전환했다. 전환 전/후의 6개 파일 해시와 서비스 quiescence를
+검증했고, 기존 정본 DB/Artifact/benchmark 실패 기록은 수정하지 않았다.
+INDEX는 07:43:40 UTC `LOCAL_INDEXING_SERVICE_STARTED`, QUERY는 07:44:01 UTC
+`REFERENCE_QUERY_OWNER_READY`를 기록했다. 두 owner는 07:44 UTC 현재
+`active/running`이며 CPU 기본값을 유지한다. 이 복구는 이전 budget600 CPU 실패를
+성공으로 바꾸거나 GPU 비교를 완료한 것이 아니다. 최초 설정 준비 시 새 cache bind가
+빠진 시도는 설치 admission에서 거부됐고, 정확한 cache를 bind한 후속 준비와
+설정 선택이 PASS했다. 개발 Slack 복구 milestone은
+`devreport_ab754716b5734297ad9013553739c325`(SENT/HTTP200)다.
