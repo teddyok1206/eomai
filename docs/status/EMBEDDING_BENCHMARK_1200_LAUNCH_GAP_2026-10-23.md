@@ -198,3 +198,34 @@ failure는 그대로 남고, 다른 actor/source/model/runtime/access-policy/검
   치환할 수 없다. 다음은 지원된 application에서 그 Job의 무실행/상태를 조회·정식
   종료하고, 새 native config를 audit/probe/seal한 후에만 별도 successor를 제출하는
   순서다. INDEX/QUERY 서비스와 정본 인덱스는 그대로 active이며 GPU default는 CPU다.
+
+### 2026-10-23 16:18 UTC — 빠른 격리 CPU/GPU 실측 (운영 acceptance 아님)
+
+사용자 요청에 따라 정식 native 재인증과 분리해, 기존 BGE-M3 payload 모델
+`embeddingmodelrev_32de764c92823791bc6ba4f35fffedd9`을 같은 프로세스에서
+CPU→GPU로 옮기며 짧은 합성 과학 문장 18개를 측정했다. 외부 API, DB, NAS,
+INDEX/QUERY 서비스, benchmark Job에는 접근·변경하지 않았다. root-owned 일회성
+진단 스크립트는
+`/usr/local/libexec/eom-quick-embedding-benchmark-20261023/bench.py`, SHA-256
+`6e5413a0f9e63bd789782f6d70309bb457b5c4fadc7da21450456fdfe7e14bf6`다.
+격리된 transient unit에서 기존 공유 GPU lease를 획득했고, offline/local-only
+로딩과 동일 토큰 입력·CLS/L2/FP32 경로를 사용했다. 각각 warmup 후 한 번씩
+추론 시간을 측정했다.
+
+| 지표 | 실측 |
+| --- | ---: |
+| 18문장 CPU 추론 | 0.898초 |
+| 18문장 GPU 추론 | 0.022초 |
+| 추론 구간 GPU 속도비 | 40.46배 |
+| 모델 CPU 로딩 | 0.812초 |
+| CPU→GPU 모델 이동 | 1.557초 |
+| GPU peak allocated | 2,200MiB |
+| 정규화 벡터 최대 절대차 | 2.9×10⁻⁷ |
+| 첫 문장 기준 상위 5개 순위 | CPU/GPU 동일 |
+
+unit은 `success/exit0`로 종료했고 종료 후 `nvidia-smi` 사용량은 다시 2MiB/0%였다.
+입력 hash는 `03f12f15def95d7a511a79e3e0c93745d43e0ffd068b3e7c9150f752f6f1bb44`다.
+짧은 입력 한 번의 GPU 추론만 보면 빠르지만, 처음 모델을 GPU로 옮기는 1.557초가
+CPU 18문장 한 번의 0.898초보다 길다. 따라서 이 단발 측정만으로 GPU 기본값을
+바꾸지 않는다. 긴 문항 입력, 반복 배치, 실제 corpus/검색, 공존 및 운영 native
+admission은 아직 별도 검증이 필요하며 정식 v1.2 Job은 여전히 미완료다.
