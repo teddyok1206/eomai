@@ -1388,3 +1388,29 @@ Orchestrator application이 원 Job `job_26e206dc11434d52870f51737d15fdbd`를
 축에서 먼저 실제 CPU/GPU 처리량을 작은 범위로 측정하여 적정 실행 상한을
 결정하고, 그 결과에 맞는 새 versioned recipe로 원래의 수치·순위·자원·공존
 acceptance를 진행한다. 이 진단만으로 GPU 기본값은 전환하지 않는다.
+
+#### 다음 실행의 경계: 짧은 비교 진단
+
+책임은 기존 Orchestrator owner가 지며 정본은 고정된 source/Graph/모델·설치
+revision과 staged-input Artifact다. 새 실험은 새 logical revision으로 만들고,
+원 1.0/1.1 요청·실패 기록을 재해석하지 않는다. source·policy·모델·입력 hash와
+operator 권한을 실행 전에 재확인하며 worker는 로컬 입력·출력만 다룬다.
+키 조회는 revision/Job/ordinal, 고정 출력은 순서 있는 manifest, 중복 제출은
+기존 idempotency key/unique constraint로 처리한다. 최대 수십 행이므로 메모리는
+`O(rows × 1024)`, 각 encode는 모델 비용이 지배한다. DB transaction은 예약과
+Artifact 게시에만 사용하고 모델 실행 중에는 열어두지 않는다. 실패·timeout은
+같은 Job을 재시작하지 않고 원 기록을 정식 종료한 뒤 successor로만 재시도한다.
+단순히 600초를 늘리는 대안은 첫 실행의 CPU 처리량과 900초 인증 신선도에
+맞지 않아 제외한다. 이 진단의 수치가 좋아도 별도의 원래 acceptance에 필요한
+반복·긴 입력·GPU 공존/복구를 생략하지 않는다.
+
+첫 지연 원인 조사에서 설치된 CPU prefix의 일반 파일은 약 27,509개다.
+`NumericalRuntimeFileSnapshots.assert_unchanged()`가 검증 대상 파일마다 공통
+상위 경로를 반복 `lstat`하는 경로를 확인했다. 단일 snapshot 검증 안에서
+상위 경로의 예상 identity를 deduplicate하고 파일 identity는 모두 그대로
+검사하도록 바꿨다. 공통 상위 경로를 검사 전후 한 번씩 확인한다. 합성
+64파일 검사에서는 공통 경로 확인이 64회에서 2회가 됐고, 설치된 CPU
+prefix의 실제 torch 파일 1,000개를 대상으로 한 읽기 전용 메타데이터
+중앙값은 기존 27.6ms, 새 방식 5.4ms(5.10배)였다. 관련 source 테스트
+429 PASS, Ruff·strict mypy PASS다. 이는 모델 추론 시간 개선의 증거가
+아니므로 새 설치 runtime의 실제 CPU/GPU 실행 시간은 별도로 측정한다.

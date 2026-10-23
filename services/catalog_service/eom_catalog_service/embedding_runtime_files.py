@@ -397,10 +397,26 @@ class NumericalRuntimeFileSnapshots:
             return raw
 
     def assert_unchanged(self) -> None:
+        # Numeric wheels contain thousands of members sharing a handful of ancestors.
+        # Rechecking every ancestor for every member made each model encode pay for
+        # depth * members filesystem calls. Check each pinned directory once on
+        # either side of the member scan; no member/namespace identity is skipped.
+        ancestors: dict[Path, tuple[int, ...]] = {}
         for epoch in self._epochs.values():
-            epoch.assert_unchanged()
-        for path, initial in self._namespace_directories.items():
-            _require(_identity(path.lstat()) == initial, "NAMESPACE_CHANGED")
+            for path, expected in epoch.ancestors:
+                previous = ancestors.setdefault(path, expected)
+                _require(previous == expected, "ANCESTOR_CHANGED")
+        try:
+            for path, expected in ancestors.items():
+                _require(_directory_identity(path.lstat()) == expected, "ANCESTOR_CHANGED")
+            for epoch in self._epochs.values():
+                _require(_identity(epoch.path.lstat()) == epoch.identity, "FILE_CHANGED")
+            for path, expected in ancestors.items():
+                _require(_directory_identity(path.lstat()) == expected, "ANCESTOR_CHANGED")
+            for path, initial in self._namespace_directories.items():
+                _require(_identity(path.lstat()) == initial, "NAMESPACE_CHANGED")
+        except OSError as exc:
+            raise InstalledRuntimeProofError("INSTALLED_RUNTIME_FILE_CHANGED") from exc
 
 
 def capture_cuda_loader_directory(files: NumericalRuntimeFileSnapshots) -> RuntimeFileEpoch:
