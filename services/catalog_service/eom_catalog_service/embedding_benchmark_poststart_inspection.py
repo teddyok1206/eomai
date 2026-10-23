@@ -7,12 +7,16 @@ import os
 import pwd
 import re
 import stat
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Protocol
 
+from eom_catalog_contracts.embedding_benchmark_budget600_failure import (
+    BenchmarkBudget600TerminalProof,
+)
 from eom_catalog_contracts.embedding_benchmark_poststart_failure import (
     MAX_POSTSTART_FAILURE_BYTES,
     BenchmarkPoststartObservation,
@@ -50,6 +54,7 @@ from eom_catalog_service.embedding_benchmark_layout import (
     benchmark_read_acl,
 )
 from eom_catalog_service.embedding_benchmark_poststart_os import (
+    BenchmarkPoststartMachineObservation,
     CapturedBenchmarkPoststartMachine,
     read_root_poststart_retirement,
 )
@@ -204,6 +209,10 @@ def _selection(request: BenchmarkOwnerRequest, invocation: BenchmarkWorkerInvoca
     )
 
 
+class _PoststartMachine(Protocol):
+    def observe(self) -> BenchmarkPoststartMachineObservation: ...
+
+
 @dataclass(frozen=True, slots=True)
 class _Inspection:
     request: BenchmarkOwnerRequest
@@ -213,8 +222,8 @@ class _Inspection:
     completion: BenchmarkLaunchCompleted
     records: tuple[_Member, ...]
     outputs: tuple[BenchmarkPoststartOutputMember, ...]
-    terminal: BenchmarkPoststartTerminalProof
-    machine: CapturedBenchmarkPoststartMachine
+    terminal: BenchmarkPoststartTerminalProof | BenchmarkBudget600TerminalProof
+    machine: _PoststartMachine
     invocation_epoch: tuple[int, ...]
 
     def snapshot(self) -> tuple[str, str]:
@@ -262,7 +271,8 @@ def _capture(
     request: BenchmarkOwnerRequest,
     invocation: BenchmarkWorkerInvocation,
     controller: BenchmarkFailedControllerPin,
-    terminal: BenchmarkPoststartTerminalProof,
+    terminal: BenchmarkPoststartTerminalProof | BenchmarkBudget600TerminalProof,
+    machine_factory: Callable[[BenchmarkLaunchAssociation], _PoststartMachine] | None = None,
 ) -> _Inspection:
     owner = fixed_owner_identity()
     root = BENCHMARK_HANDOFF_ROOT / invocation.execution_id
@@ -398,7 +408,9 @@ def _capture(
         (associated, prepared_raw, completed_raw, *output_records),
         outputs,
         terminal,
-        CapturedBenchmarkPoststartMachine(
+        machine_factory(association)
+        if machine_factory is not None
+        else CapturedBenchmarkPoststartMachine(
             controller,
             execution_id=invocation.execution_id,
             native_invocation_id=terminal.native_invocation_id,

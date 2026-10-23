@@ -1346,3 +1346,27 @@ INDEX는 07:43:40 UTC `LOCAL_INDEXING_SERVICE_STARTED`, QUERY는 07:44:01 UTC
 빠진 시도는 설치 admission에서 거부됐고, 정확한 cache를 bind한 후속 준비와
 설정 선택이 PASS했다. 개발 Slack 복구 milestone은
 `devreport_ab754716b5734297ad9013553739c325`(SENT/HTTP200)다.
+
+### budget600 원 실패의 정식 종료 준비 — 2026-10-23 UTC
+
+원 실행 `a038b51d231a47e9866766c8a6b6e476`의 `COMPLETED`/`UNCERTAIN`
+root control 두 기록은 같은 Job·execution·invocation·association을 가리킨다.
+`COMPLETED`는 원 native 결과 `FAILED`와 cleanup `CONFIRMED`를 보존한다.
+이는 성공 결과가 아니며 중복 재실행 허가도 아니다. 현재 PID1의 원 controller는
+동일 invocation의 `failed/exit-code`, retired budget600 native service/socket은
+`not-found/inactive`이고 해당 cgroup은 비어 있다.
+
+저장소 후보는 기존 bounded handoff/partial-output capture를 재사용하고,
+retired budget600 unit과 보호된 finite window를 별도 관측하는 adapter를 추가했다.
+정본은 원 request/invocation, 원 root control, 원 retirement/window 기록이다.
+키 조회는 execution ID, append-only 실패 이력은 원 Job sequence이며,
+새 증명은 원 revision/hash들을 고정해 root-local 한 번만 생성한다. 동시 생성은
+`O_EXCL`, 기존 증명의 재조회는 동일 해시·현재 출처 재검증으로 처리한다.
+별도 DB/schema/queue나 worker-to-worker 경로는 추가하지 않는다.
+
+원 파일·PID1의 읽기 전용 capture가 격리 unit에서 PASS했다. 정식 증명 경로와
+분리된 보호된 canary 위치에서 root proof 생성 `created=True`, 동일 입력 재조회
+`created=False`(같은 raw SHA), 실제 owner UID의 proof 재검증도 PASS했다.
+이 과정에서 모델 forward, 새 Job, 운영 DB 전이, NAS 게시, canonical proof 발행은
+수행하지 않았다. 다음은 이 source candidate의 회귀 검증·설치 후 canonical proof를
+발급하고, 재인가된 Orchestrator application으로 원 Job만 정식 FAILED 종료하는 것이다.
