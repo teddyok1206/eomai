@@ -27,7 +27,7 @@ Environment=OMP_NUM_THREADS=4
 Environment=MKL_NUM_THREADS=4
 Environment=CUDA_VISIBLE_DEVICES=
 UnsetEnvironment=LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT PYTHONPATH PYTHONHOME PYTHONSTARTUP PYTHONUSERBASE
-ExecStart=/opt/eom/conda/envs/eom-embedding-index-cpu/bin/python3.12 -I -B -c 'import runpy,sys;sys.path.insert(0,"/opt/eom/embedding-owner-releases/9e6efc165d97e57f1bc089134f229bff1a0c2df6/site-packages");runpy.run_module("eom_catalog_service.embedding_benchmark_budget1200_cpu",run_name="__main__")' %i ${EOM_BENCHMARK_INVOCATION_RAW_SHA256} ${EOM_BENCHMARK_OWNER_PID} ${EOM_BENCHMARK_EXPIRES_NS} ${EOM_EMBEDDING_CONFIGURATION_ID} ${EOM_EMBEDDING_CONFIGURATION_REVISION_ID} ${EOM_EMBEDDING_CONFIGURATION_SHA256} ${EOM_EMBEDDING_CONFIGURATION_RAW_SHA256} ${EOM_EMBEDDING_RECEIPT_RAW_SHA256}
+ExecStart=/opt/eom/conda/envs/eom-embedding-index-cpu/bin/python3.12 -I -B -c 'import runpy,sys;sys.path.insert(0,"/opt/eom/embedding-owner-releases/d381e6bc480606a828898ebe2e9942dd8a143677/site-packages");runpy.run_module("eom_catalog_service.embedding_benchmark_budget1200_cpu",run_name="__main__")' %i ${EOM_BENCHMARK_INVOCATION_RAW_SHA256} ${EOM_BENCHMARK_OWNER_PID} ${EOM_BENCHMARK_EXPIRES_NS} ${EOM_EMBEDDING_CONFIGURATION_ID} ${EOM_EMBEDDING_CONFIGURATION_REVISION_ID} ${EOM_EMBEDDING_CONFIGURATION_SHA256} ${EOM_EMBEDDING_CONFIGURATION_RAW_SHA256} ${EOM_EMBEDDING_RECEIPT_RAW_SHA256}
 
 NoNewPrivileges=yes
 PrivateTmp=yes
@@ -51,7 +51,7 @@ AmbientCapabilities=
 RestrictAddressFamilies=AF_UNIX
 SystemCallArchitectures=native
 ReadOnlyPaths=/opt/eom/conda/envs/eom-embedding-index-cpu
-ReadOnlyPaths=/opt/eom/embedding-owner-releases/9e6efc165d97e57f1bc089134f229bff1a0c2df6
+ReadOnlyPaths=/opt/eom/embedding-owner-releases/d381e6bc480606a828898ebe2e9942dd8a143677
 ReadOnlyPaths=/opt/eom/embedding-models /opt/eom/embedding-runtime-proofs
 ReadOnlyPaths=/opt/eom/embedding-runtime-archives /opt/eom/embedding-runtime-bundles
 ReadOnlyPaths=/opt/eom/embedding-native-config /opt/eom/embedding-runtime-admission

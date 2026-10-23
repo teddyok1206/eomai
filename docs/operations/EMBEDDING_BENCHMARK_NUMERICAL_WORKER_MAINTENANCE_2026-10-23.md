@@ -26,3 +26,18 @@ The v1.2 unit's import overlay selects a whole package, not only its entrypoint.
 requesting a fresh operator login, compare `observed_embedding_implementation_pins()`
 from that exact interpreter/overlay with both pinned numerical runtimes. This function
 reads the three protected implementation modules and does not import ML libraries.
+
+## Separate worker and controller release identities
+
+The coherent worker is immutable source `d381e6bc480606a828898ebe2e9942dd8a143677`.
+The two existing v1.2 service templates now select that exact installed release;
+the controller adapter pins its four entry/policy members and the new complete
+template hashes. A later controller build owns these deployment selections. The
+worker does not need a self-referential build identity: its native path checks the
+unchanged unit family and timeout, while root/owner adapters validate exact bytes.
+
+This corrects installation composition, not v1.2 request/policy/schema meaning.
+Legacy v1.0/v1.1 templates and constants remain unchanged. Preserve the previous
+v1.2 templates and installed releases; replace only inactive deployment templates
+after proving no loaded execution/retained resource exists. No request or prior
+Job is regenerated for this host-only, numerical-preserving correction.

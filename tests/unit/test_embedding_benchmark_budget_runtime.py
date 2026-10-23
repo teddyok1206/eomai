@@ -103,11 +103,11 @@ def test_selected_unit_family_is_exact_pinned_bytes_and_matching_closed_observat
         assert "runpy.run_module(" in raw
         assert family.entrypoint_module in raw
         assert (
-            "/opt/eom/embedding-owner-releases/9e6efc165d97e57f1bc089134f229bff1a0c2df6/site-packages"
+            "/opt/eom/embedding-owner-releases/d381e6bc480606a828898ebe2e9942dd8a143677/site-packages"
             in raw
         )
         assert (
-            "ReadOnlyPaths=/opt/eom/embedding-owner-releases/9e6efc165d97e57f1bc089134f229bff1a0c2df6\n"
+            "ReadOnlyPaths=/opt/eom/embedding-owner-releases/d381e6bc480606a828898ebe2e9942dd8a143677\n"
             in raw
         )
     else:

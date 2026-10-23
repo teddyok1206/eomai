@@ -56,7 +56,7 @@ from eom_catalog_service.embedding_runtime_files import (
 # The fixed numeric environments intentionally stay immutable. Budgeted benchmark
 # entrypoints live in the separately pinned owner release and are added to sys.path
 # only by the exact 1200-second unit invocation.
-_BUDGET1200_OWNER_RELEASE = "9e6efc165d97e57f1bc089134f229bff1a0c2df6"
+_BUDGET1200_OWNER_RELEASE = "d381e6bc480606a828898ebe2e9942dd8a143677"
 _BUDGET1200_OWNER_SITE = (
     Path("/opt/eom/embedding-owner-releases") / _BUDGET1200_OWNER_RELEASE / "site-packages"
 )
@@ -71,7 +71,7 @@ _BUDGET1200_MODULE_SHA256 = {
         "sha256:57798ac413fc38fb1de6cc5a437ac9c3b7297d4dcc4dc3161ef055078e2c0cf7"
     ),
     "embedding_benchmark_unit_policy.py": (
-        "sha256:17aeaeb4a12ccaef5ebfc3fd68d2e687cebe97a3fe730b7c0be805dfe95d6352"
+        "sha256:d48ef789253e565b786bbc6a0e65a54c3db8be6289703978b9e41b50393a68c4"
     ),
 }
 
