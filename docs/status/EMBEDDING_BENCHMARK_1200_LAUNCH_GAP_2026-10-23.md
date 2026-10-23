@@ -31,8 +31,16 @@ Orchestrator execution is admitted.
 
 ## Next
 
-Install the compatible owner/API release plus the four v1.2 systemd templates and the
-narrow Polkit rule. Then start a fresh admitted benchmark request using the existing
-pinned CPU/GPU configuration and the same source window; preserve all prior failed
-attempts as history. Do not change the production embedding default until numerical,
-ranking, timing, GPU memory and coexistence checks pass.
+Install the four v1.2 systemd templates and the narrow Polkit rule. Then start a fresh
+admitted benchmark request using the existing pinned CPU/GPU configuration and the same
+source window; preserve all prior failed attempts as history. Do not change the production
+embedding default until numerical, ranking, timing, GPU memory and coexistence checks pass.
+
+## Live follow-up
+
+The source commit was published as `19df8a63bb80b1a1b0959457e9a66b3ce296eaac`.
+The protected release operator admitted that exact source and the standard API install
+completed. API live/ready health checks passed, and the deployment record is
+`/var/lib/eom-api/deployments/19df8a63bb80b1a1b0959457e9a66b3ce296eaac.json`.
+The remaining host-level action is installing the two v1.2 service/socket pairs and
+their narrow Polkit rule; no benchmark has been launched yet.
