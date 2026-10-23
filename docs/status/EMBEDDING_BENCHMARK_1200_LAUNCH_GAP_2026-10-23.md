@@ -309,3 +309,29 @@ admission은 아직 별도 검증이 필요하며 정식 v1.2 Job은 여전히 �
   `37e64873e98f834519fd1f80487df446bbd01725987663621c92b295f2508c54`다.
   이 시각 정식 6회 실행과 결과 finalization은 아직 시작 전이며 CPU 기본값을 유지한다.
   Slack readiness milestone `devreport_9513dec846da4005b0df4ddf7ca08d5f`는 SENT/HTTP200이다.
+
+### 2026-10-23 17:48 UTC — 인증 오류 분류와 같은 창 재입력 지원
+
+- 17:23의 기존 controller 입력은 API audit에서 HTTP401 /
+  `AUTH_INVALID_CREDENTIALS`로 확인했다. 계정은 ACTIVE·미삭제·잠금 없음이며,
+  비밀번호 불일치 실패 1회였다. 비밀번호나 그 hash는 조회하지 않았다. 이 실패는
+  GPU·모델 오류가 아니며 정식 비교 launch와 Job/Artifact 변경 전에 발생했다.
+- 현재 controller는 `eom-embedding-benchmark-verified-8c24720c.service`다.
+  이전 `series-ready` unit과 구분한다. `EOM:2 gpu-embedding`의 한 입력창에서
+  실제 HTTP401 비밀번호 불일치일 때만 새 사용자 입력을 최대 3회 받는다.
+  비밀번호 저장·재사용·인증 생략·권한 확대는 없다. 다른 오류는 명시적으로 중단한다.
+- 로그인 전에 기존 Orchestrator DB 설정으로 실제 `eom_app` / OID16385 연결을
+  확인했다. 실행 service에 reference-query 전용 DB 자격을 주입하지 않는다.
+  `BUDGET1200_CONTROLLER_DATABASE_READY`와 `BUDGET1200_LOGIN_READY`가 출력됐으며,
+  이 시각 실제 프로세스는 살아 있고 사용자 입력을 기다린다. 인증 성공이나
+  six-launch 완료로 해석하지 않는다.
+- 현재 보호 controller SHA는
+  `c8494a6b21235eae52511cb9b803c0f558c285d3fb53a6ee71e145f794174b40`,
+  HTTP helper SHA는
+  `2fb8c3bdd7a81a22ef2593c8acad16a40dfea3de7aeecce8174cd9d2d4c11589`다.
+  helper의 mock/non-network 시험 36 PASS, Ruff·format·strict mypy PASS다.
+- 각 ordinal 완료 후 동일한 기존 completed-query selector를 공개 API로 read-only
+  조회해 운영 검색과의 공존을 확인한다. 새 검색·임베딩·문항은 생성하지 않는다.
+  6회 뒤에는 새 owner instance로 finalization을 replay하여 `created=false`와
+  동일 결과 pointer/hash를 요구한다. 원 Job25ebde와 request SHA는 변경하지 않는다.
+  정식 비교·공존·정리는 아직 미완료이고 운영 CPU 기본값은 유지한다.
