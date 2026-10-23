@@ -35,7 +35,7 @@
 
 새 systemd template는 기존 benchmark unit policy에서 지원하는 고정 실행 값만 담고, 첫 설치 전에 unit bytes/hash, `DeviceAllow`, `ReadWritePaths`, `InaccessiblePaths`, UID/GID, cgroup, timeout, cleanup, 설치/복구 순서를 검증한다. 운영 owner가 실행 중인 상태에서 isolated systemd admission test를 먼저 통과해야 한다. 배포 전후 실제 HTTPS similarity read, owner PID/InvocationID, API health를 확인한다. 회귀 시 새 benchmark unit만 비활성화하며 기존 owner와 native data는 변경하지 않는다.
 
-2026-10-23: v1.2 CPU/CUDA unit family와 post-start failure closure가 구현되었고 571개 회귀 테스트, lint/type/systemd 검증을 통과했다. Commit `e1494d2f8585bd3777d1c72ef500f90891f2c1bc`의 API/platform/contracts wheel도 build-only 검증 PASS다. 표준 `deploy_release.sh --install`은 필요한 고정 release-operator 실행 문맥이 제공되지 않아 `RELEASE_OPERATOR_BOUNDARY_REJECTED`로 변경 전 종료했다. 이 거부는 sudo 비밀번호나 GPU 상태 문제가 아니다. 운영 API/INDEX/QUERY는 계속 active이며 GPU 비교 실행은 아직 시작하지 않았다. 다음 단계는 기존 protected release-operator 설치/ADMIT 경로로 호환 runtime과 unit family를 게시한 뒤 같은 입력의 benchmark를 다시 제출하는 것이다. 직접 root 복사나 owner 중지는 대체 경로로 사용하지 않는다.
+2026-10-23: v1.2 CPU/CUDA unit family와 post-start failure closure가 구현되었고 571개 회귀 테스트, lint/type/systemd 검증을 통과했다. Commit `9e6efc165d97e57f1bc089134f229bff1a0c2df6`의 API/platform/contracts release는 protected release-operator `ADMIT_PASS`, migration/role/isolation verification PASS, build/RECORD PASS와 installed API health verification PASS 후 배포됐다. API와 Catalog runner가 새 invocation으로 active다. INDEX owner는 원 invocation으로 계속 active지만 QUERY owner는 표준 배포 과정에서 재시작되어 새 invocation으로 active다. 이 짧은 query-owner 교체는 무중단 공존 gate의 성공으로 간주하지 않고 보고서에 남긴다. 운영 GPU는 RTX 5080 0%/2 MiB였고 GPU 비교 실행은 아직 시작하지 않았다. 1200초 entrypoint는 `/opt`의 고정 CPU/CUDA runtime에 아직 게시되지 않았으며, 다음은 기존 격리 runtime successor/admission 경계로 이를 연결하는 것이다. 보호 경계를 우회하는 직접 root 복사나 owner 중지는 대체 경로로 사용하지 않는다.
 
 ## 검증 게이트
 
