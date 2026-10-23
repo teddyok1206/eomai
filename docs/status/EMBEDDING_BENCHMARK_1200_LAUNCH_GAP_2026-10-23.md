@@ -89,6 +89,10 @@ failure는 그대로 남고, 다른 actor/source/model/runtime/access-policy/검
   의 SHA-256은 `5d7b4325b0015b212530dbfa991b23e229d157542cfe5d27dac57ecd2fcdfdf7`이고,
   `BUDGET600_TIMEOUT`, `cleanup=CONFIRMED`를 기록한다. 이는 공식 Job failure closure나
   1200초 후속 Job 생성의 증거는 아니다.
+- 위 proof와 원 요청·invocation을 exact hash로 고정하고 설치된
+  `FixedBudget600PoststartInspection`으로 다시 검사한 결과
+  `BUDGET600_PROOF_VERIFIED=PASS`였다. 이는 기존 proof를 읽고 OS/출력/retirement
+  linkage를 재검증한 read-only 결과이며 Job을 FAILED로 전환하지 않았다.
 - 다른 과거 invocation `9b37158957804beeb4be83a8fd04f118`을 600초 실행으로
   잘못 선택한 단발성 proof-mint 진단은 입력 연계 assertion에서 거부됐다. 새 proof,
   DB 변경, 모델 실행은 없었고 해당 실패 helper는 제거했다. 과거 root proof는 변경하지 않았다.
