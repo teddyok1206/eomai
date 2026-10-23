@@ -101,3 +101,27 @@ failure는 그대로 남고, 다른 actor/source/model/runtime/access-policy/검
   않는다. 다음은 기존 600초 Job의 지원된 post-start closure를 확인/완료하고,
   위 분리 owner release로 v1.2 successor를 등록한 뒤 운영 owner와 공존하는
   전용 1200초 controller에서 원 6회 측정을 실행하는 것이다. GPU 기본값은 CPU다.
+
+### 2026-10-23 14:57 UTC — 실패 기록 확인과 측정 실행 준비
+
+- 실제 설치된 API release `19df8a63bb80b1a1b0959457e9a66b3ce296eaac`의
+  code-member SHA 12개가 pinned wheel과 일치했다. 새 owner release `2690bf73…`는
+  공용 API/INDEX/QUERY를 재시작하지 않은 채 별도 설치된 상태다.
+- 정해진 Job `job_26e206dc11434d52870f51737d15fdbd`와 실행
+  `a038b51d231a47e9866766c8a6b6e476`에 대해 genuine guiadmin 인증과 설치된
+  `FixedBudget600PoststartInspection`을 사용한 공식 closure/replay가 통과했다.
+  결정 SHA는 `sha256:1181768f0d92103982ed1dffd8c391a1a6659f6abe77c1a7dbdb7f92bd89db4b`이다.
+  `created=False`였으므로 이 확인은 이미 존재한 terminal decision의 재현이며,
+  새 실패나 성공 Job을 만들지 않았다.
+- 후속 1200초 실행은 기존 Orchestrator의 source admission, append-only predecessor,
+  CPU capacity, GPU lease, six-launch series, Artifact finalization을 그대로 사용한다.
+  운영 INDEX/QUERY 서비스는 중지·재구성하지 않는다. 한시적 root-owned 실행기는
+  `/usr/local/libexec/eom-benchmark-budget600-closure-2690bf73/series.py`에 설치했고,
+  SHA-256은 `f9027f8d9889e733a679671d79a07c26c63edce46fbfb3eadb142e77d3d895d6`이다.
+- 분리 owner release에서 successor/series 관련 단위 시험 54개와
+  unit-control/launch/CUDA capture 단위 시험 78개가 통과했다. 설치된 구형 API 환경만으로
+  시험하면 1건이 실패했으나, 원인은 source가 아닌 pre-successor wheel을 불러온
+  테스트 실행 환경 차이였다. 정확한 owner release를 선두 import 경로에 고정한
+  재실행에서는 54/54 PASS였다.
+- 현재 후속 실행기는 Studio 인증 입력을 기다리고 있다. 이 시점까지 1200초 Job
+  등록·native CPU/GPU forward·측정 결과 publication은 아직 없다. GPU 기본값도 CPU다.
