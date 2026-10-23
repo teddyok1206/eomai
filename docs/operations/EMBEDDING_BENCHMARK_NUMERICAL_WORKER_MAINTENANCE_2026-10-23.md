@@ -17,8 +17,10 @@ There is no new dependency, registry, protocol, cache or persistence boundary.
 This is a coherent separate maintenance release, not a production/API rollback.
 Source validation and a wheel build do not admit a native installation, authorize a
 benchmark Job, run a model or activate a device. The orchestrator still validates the
-exact request, installation receipts, worker release and actual imported implementation
-pins before dispatch. Production CPU owners and their fixed prefix remain unchanged.
+exact request, installation receipts and worker release before dispatch. The native
+backend independently validates actual imported implementation pins; the pre-login
+comparison below detects a mismatch before allocating another execution. Production
+CPU owners and their fixed prefix remain unchanged.
 
 The v1.2 unit's import overlay selects a whole package, not only its entrypoint. Before
 requesting a fresh operator login, compare `observed_embedding_implementation_pins()`
