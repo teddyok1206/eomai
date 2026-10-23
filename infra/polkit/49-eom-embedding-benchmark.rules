@@ -1,0 +1,11 @@
+/* Only the workflow runner may start the two pinned 1200-second benchmark units. */
+polkit.addRule(function(action, subject) {
+    var benchmark1200 = /^eom-embedding-benchmark-(cpu|cuda)-budget1200@[0-9a-f]{32}\.service$/;
+    if (action.id === "org.freedesktop.systemd1.manage-units"
+        && action.lookup("verb") === "start"
+        && subject.user === "eom-workflow-runner"
+        && benchmark1200.test(action.lookup("unit"))) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

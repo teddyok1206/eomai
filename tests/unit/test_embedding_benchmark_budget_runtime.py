@@ -99,7 +99,19 @@ def test_selected_unit_family_is_exact_pinned_bytes_and_matching_closed_observat
     raw = (ROOT / "infra/systemd" / family.service_template).read_text()
     expected_unit_timeout = 1500 if expected_seconds == 1200 else expected_seconds
     assert f"TimeoutStartSec={expected_unit_timeout}\n" in raw
-    assert f"-m {family.entrypoint_module} " in raw
+    if expected_seconds == 1200:
+        assert "runpy.run_module(" in raw
+        assert family.entrypoint_module in raw
+        assert (
+            "/opt/eom/embedding-owner-releases/9e6efc165d97e57f1bc089134f229bff1a0c2df6/site-packages"
+            in raw
+        )
+        assert (
+            "ReadOnlyPaths=/opt/eom/embedding-owner-releases/9e6efc165d97e57f1bc089134f229bff1a0c2df6\n"
+            in raw
+        )
+    else:
+        assert f"-m {family.entrypoint_module} " in raw
     expected_stop = "TimeoutStopSec=10" if expected_seconds == 1200 else "TimeoutStopSec=5"
     for unchanged in ("MemoryMax=6G", "CPUQuota=400%", "TasksMax=64", expected_stop):
         assert unchanged in raw

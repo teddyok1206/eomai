@@ -60,7 +60,7 @@ _FAMILIES = MappingProxyType(
         ("CPU", 1200): BenchmarkUnitFamily(
             "eom-embedding-benchmark-cpu-budget1200@.service",
             "eom-embedding-benchmark-cpu-budget1200@.socket",
-            "sha256:0432e7664689274086a0a8c76b165ffa549e98017df3d02bed295a538570e33d",
+            "sha256:f769c395df8acf0f8667a7cbb5886a0d3b1192cd12d3ae67279339f3215a5d4e",
             "sha256:1bd3fca6c88b8f58de33393617b6d3213762d0c45020eba09cb58ab6296d72a7",
             "eom_catalog_service.embedding_benchmark_budget1200_cpu",
             1200,
@@ -68,7 +68,7 @@ _FAMILIES = MappingProxyType(
         ("CUDA", 1200): BenchmarkUnitFamily(
             "eom-embedding-benchmark-cuda-budget1200@.service",
             "eom-embedding-benchmark-cuda-budget1200@.socket",
-            "sha256:7df6de00eb10df741660b13f0edeca75928f4a721da5705aaf386b9b068d1a8f",
+            "sha256:8dd6576bef40bf51bdee43c5603fd95c79008ba53f2b7fa71d02393f09835b6b",
             "sha256:32213967e9fb94d508b9db525c33090545f5a195d3f662c7481d70f5599b9770",
             "eom_catalog_service.embedding_benchmark_budget1200_cuda",
             1200,

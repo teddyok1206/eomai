@@ -53,6 +53,28 @@ from eom_catalog_service.embedding_runtime_files import (
     fixed_native_embedding_profile,
 )
 
+# The fixed numeric environments intentionally stay immutable. Budgeted benchmark
+# entrypoints live in the separately pinned owner release and are added to sys.path
+# only by the exact 1200-second unit invocation.
+_BUDGET1200_OWNER_RELEASE = "9e6efc165d97e57f1bc089134f229bff1a0c2df6"
+_BUDGET1200_OWNER_SITE = (
+    Path("/opt/eom/embedding-owner-releases") / _BUDGET1200_OWNER_RELEASE / "site-packages"
+)
+_BUDGET1200_MODULE_SHA256 = {
+    "embedding_benchmark_budget1200_cpu.py": (
+        "sha256:600451a58941abd41f49b21effd5de5a244baa0a122ccb912208959b98acddb0"
+    ),
+    "embedding_benchmark_budget1200_cuda.py": (
+        "sha256:04881926b1a09897bd036daedfe77e83b6eda0f79be11f505f7c7bb43d070b87"
+    ),
+    "embedding_benchmark_budget_entrypoint.py": (
+        "sha256:57798ac413fc38fb1de6cc5a437ac9c3b7297d4dcc4dc3161ef055078e2c0cf7"
+    ),
+    "embedding_benchmark_unit_policy.py": (
+        "sha256:17aeaeb4a12ccaef5ebfc3fd68d2e687cebe97a3fe730b7c0be805dfe95d6352"
+    ),
+}
+
 
 class FixedBenchmarkLaunchExecution:
     """Installed caller selects both exact backends and a root-controller release.
@@ -114,14 +136,25 @@ class FixedBenchmarkLaunchExecution:
                     runtime.numerical_runtime.device.kind, request.execution_policy
                 )
                 if family.timeout_seconds in {600, 1200}:
+                    package_root = (
+                        _BUDGET1200_OWNER_SITE
+                        if family.timeout_seconds == 1200
+                        else prefix / "lib/python3.12/site-packages"
+                    )
                     for member in (
                         family.entrypoint_module.rsplit(".", 1)[-1] + ".py",
                         "embedding_benchmark_budget_entrypoint.py",
                         "embedding_benchmark_unit_policy.py",
                     ):
-                        files.observe_protected_member_identity(
-                            prefix / "lib/python3.12/site-packages/eom_catalog_service" / member
-                        )
+                        path = package_root / "eom_catalog_service" / member
+                        if family.timeout_seconds == 1200:
+                            files.read(
+                                path,
+                                sha256=_BUDGET1200_MODULE_SHA256[member],
+                                maximum=65536,
+                            )
+                        else:
+                            files.observe_protected_member_identity(path)
             self._installation = (
                 files,
                 capture_benchmark_runtime_installation(request.cpu, backend=self._cpu),
