@@ -1,4 +1,4 @@
-"""Explicit budget600 entry selection; existing numerical leaf execution stays unchanged."""
+"""Explicit bounded benchmark entry selection; numerical execution stays unchanged."""
 
 from __future__ import annotations
 
@@ -18,11 +18,12 @@ from eom_catalog_service.embedding_device_benchmark_files import BenchmarkWorker
 from eom_catalog_service.embedding_runtime_files import read_live_runtime_os_file
 
 
-def execute_budget600_benchmark(
+def execute_budget_benchmark(
     pins: BenchmarkLaunchPins,
     started_ns: int,
     *,
     profile: Literal["CPU_INDEX_FP32", "CUDA_INDEX_FP32"],
+    timeout_seconds: Literal[600, 1200],
     execute: Callable[[BenchmarkLaunchPins, int], int],
 ) -> int:
     """Read and bind real protected invocation/unit before any model or GPU acquisition."""
@@ -33,10 +34,12 @@ def execute_budget600_benchmark(
         invocation_raw_sha256=pins.invocation_raw_sha256,
     ) as files:
         invocation = files.read_invocation()
-    if (
-        invocation.schema_version != "embedding-device-benchmark-invocation/1.1"
-        or invocation.execution_id != pins.execution_id
-        or benchmark_timeout_seconds(invocation.execution_policy) != 600
+    expected_version = "embedding-device-benchmark-invocation/1.1"
+    if timeout_seconds == 1200:
+        expected_version = "embedding-device-benchmark-invocation/1.2"
+    if invocation.schema_version != expected_version or (
+        invocation.execution_id != pins.execution_id
+        or benchmark_timeout_seconds(invocation.execution_policy) != timeout_seconds
     ):
         raise ValueError("BENCHMARK_BUDGET_ENTRY_SELECTION_INVALID")
     family = benchmark_unit_family(invocation.device, invocation.execution_policy)
@@ -48,3 +51,16 @@ def execute_budget600_benchmark(
         raise ValueError("BENCHMARK_BUDGET_ENTRY_UNIT_MISMATCH")
     with benchmark_socket_activation(pins, policy=invocation.execution_policy):
         return execute(pins, started_ns)
+
+
+def execute_budget600_benchmark(
+    pins: BenchmarkLaunchPins,
+    started_ns: int,
+    *,
+    profile: Literal["CPU_INDEX_FP32", "CUDA_INDEX_FP32"],
+    execute: Callable[[BenchmarkLaunchPins, int], int],
+) -> int:
+    """Preserve the released v1.1/600-second entry unchanged."""
+    return execute_budget_benchmark(
+        pins, started_ns, profile=profile, timeout_seconds=600, execute=execute
+    )

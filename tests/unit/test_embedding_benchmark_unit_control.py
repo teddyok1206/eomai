@@ -6,14 +6,49 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from eom_catalog_contracts.embedding_device_benchmark import BenchmarkExecutionPolicy
 from eom_catalog_service import embedding_benchmark_unit_control as control
 from eom_catalog_service.embedding_benchmark_cuda_observation import (
     CUDA_BENCHMARK_SOCKET_SHA256,
     CUDA_BENCHMARK_TEMPLATE_SHA256,
 )
-from eom_identifiers import sha256_bytes
+from eom_identifiers import content_sha256, sha256_bytes
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_v12_1200_second_policy_selects_separate_cpu_and_cuda_unit_families():
+    body = {
+        "schema_version": "embedding-device-benchmark-policy/1.2",
+        "purpose": "LOCAL_EMBEDDING_DEVICE_BENCHMARK",
+        "policy_id": "embeddingbenchmarkpolicy_" + "a" * 32,
+        "policy_revision_id": "embeddingbenchmarkpolicyrev_" + "b" * 32,
+        "timeout_seconds": 1200,
+        "cpu_quota_percent": 400,
+        "tasks_max": 64,
+        "rss_limit_bytes": 6442450944,
+        "gpu_limit_bytes": 8589934592,
+        "maximum_envelope_bytes": 65536,
+        "maximum_staged_bytes": 67108864,
+        "maximum_output_bytes": 16777216,
+        "maximum_output_members": 64,
+    }
+    policy = BenchmarkExecutionPolicy.model_validate(body | {"policy_sha256": content_sha256(body)})
+    cpu = control.benchmark_unit_family("CPU", policy)
+    cuda = control.benchmark_unit_family("CUDA", policy)
+    assert cpu.timeout_seconds == cuda.timeout_seconds == 1200
+    assert cpu.service_template != control.benchmark_unit_family("CPU").service_template
+    assert cuda.service_template != control.benchmark_unit_family("CUDA").service_template
+    assert cpu.entrypoint_module.endswith("embedding_benchmark_budget1200_cpu")
+    assert cuda.entrypoint_module.endswith("embedding_benchmark_budget1200_cuda")
+    for family in (cpu, cuda):
+        for filename, expected in (
+            (family.service_template, family.service_sha256),
+            (family.socket_template, family.socket_sha256),
+        ):
+            raw = (ROOT / "infra/systemd" / filename).read_bytes()
+            assert sha256_bytes(raw) == expected
+            assert b"TimeoutStartSec=1500\n" in raw if filename.endswith("service") else True
 
 
 @pytest.fixture

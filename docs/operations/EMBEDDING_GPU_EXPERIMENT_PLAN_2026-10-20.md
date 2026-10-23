@@ -1389,6 +1389,35 @@ Orchestrator application이 원 Job `job_26e206dc11434d52870f51737d15fdbd`를
 결정하고, 그 결과에 맞는 새 versioned recipe로 원래의 수치·순위·자원·공존
 acceptance를 진행한다. 이 진단만으로 GPU 기본값은 전환하지 않는다.
 
+### 09:03 UTC 재점검 — 작은 표본은 진단일 뿐 최종 acceptance가 아님
+
+- 실제 현재 DB에서 budget600 후속 Job `job_26e206dc11434d52870f51737d15fdbd`를
+  조회했다. 최종 상태는 `FAILED / BENCHMARK_POSTSTART_EXECUTION_FAILED`이며,
+  승인된 단일 launch 기록은 `CPU ordinal 1`뿐이다. terminal proof는
+  `BUDGET600_TIMEOUT`, cleanup 확인 완료, GPU launch 0회다.
+- 부분 산출물은 `cold-documents.f32` 73,728 bytes와
+  `supplementary-documents.f32` 122,880 bytes뿐이다. QUERY 10회, token witness,
+  timing/resource evidence와 worker result는 모두 0 bytes다. 따라서 CPU/GPU 비교나
+  속도·수치 동등성 결론은 아직 없다.
+- `BenchmarkStagedInputs`가 허용하는 6개 문서 표본은 처리량을 가늠하는 진단에만
+  사용할 수 있다. 원 목표인 고정 18개 문서·2개 질의의 여섯 번 interleaved 비교,
+  최종 수치/순위·자원·공존 acceptance를 대체하지 않는다. 원 요청과 실패 기록을
+  수정하거나 성공으로 해석하지 않는다.
+- 실제 CPU와 CUDA prefix의 `embedding_runtime_files.py` SHA는 둘 다
+  `5d24c672e2a59365ef72f6a5f48696e014c881d0a7eaf708ca4d7134c3b4bda3`이고,
+  현재 후보 source SHA는 `05d0fa8a6d66e9a63907ce4d475e7cc874219c1cd56719196d3f25e429fe98fb`다.
+  설치본은 각 파일을 검사할 때 공통 상위 디렉터리를 반복 검사하는 이전 구현이다.
+  즉 최근 source 최적화는 측정·테스트됐지만 운영 CPU/CUDA prefix에는 아직 반영되지
+  않았다. 같은 고정 18개 입력을 유지하는 다음 조치는 전체 runtime/owner 재인증과
+  rollback 자료를 갖춘 뒤 양쪽의 보호 검사 구현을 함께 갱신하는 것이 우선이다.
+- source 회귀 확인으로 benchmark 계약/예산 테스트 258개가 현재 코드에서 통과했고,
+  별도 합성 검증에서 6개 profile 각 1개 + 2개 query의 staged/request 직렬화도
+  계약 검증을 통과했다. 이것은 실운영 입력 등록이나 모델/GPU 실행 증거가 아니다.
+- 다음 단계는 전체 입력 목표를 유지한 채, 기존 600초보다 충분한 새 versioned 실행
+  정책/worker 경계를 마련하거나 측정으로 정당화된 성능 개선을 적용하는 것이다.
+  GPU ordinal은 CPU ordinal 1이 완결돼야 시작한다. 운영 CPU/GPU prefix와 owner는
+  실제 재설치·호환성·rollback 계획이 준비되기 전에는 변경하지 않는다.
+
 #### 다음 실행의 경계: 짧은 비교 진단
 
 책임은 기존 Orchestrator owner가 지며 정본은 고정된 source/Graph/모델·설치
@@ -1415,3 +1444,166 @@ prefix의 실제 torch 파일 1,000개를 대상으로 한 읽기 전용 메타�
 429 PASS, Ruff·strict mypy PASS다. 같은 방식의 실제 5,000파일 표본은
 150.0ms→28.5ms(5.27배)였다. 이는 모델 추론 시간 개선의 증거가
 아니므로 새 설치 runtime의 실제 CPU/GPU 실행 시간은 별도로 측정한다.
+
+### 09:16 UTC 격리 runtime 후보 준비 — 실제 운영 전환 아님
+
+사용자 피드백에 따라 반복 설명보다 실행을 우선했다. 이전 시도에서 남은
+platform wheel SHA 디렉터리는 root 소유·0700·정확히 비어 있었고, 이 실행이
+만든 미완료 reservation임을 확인했다. 디렉터리를 삭제하지 않고 같은 archive
+root의 `.incomplete-985f5cae-gpu-experiment-20261023`로 이동해 보존했다.
+지원된 private-successor assembler를 사용해 기존 CPU/CUDA prefix의 복사본을
+각각 격리 후보로 만들고 pinned platform/lease 자료를 적용했다.
+
+```text
+CPU candidate  /opt/eom/conda/envs/.embedding-index-runtime-22334455
+CUDA candidate /opt/eom/conda/envs/.embedding-index-runtime-66778899
+runtime module SHA-256 (both)
+05d0fa8a6d66e9a63907ce4d475e7cc874219c1cd56719196d3f25e429fe98fb
+candidate state: PREPARED_NOT_AUDITED
+```
+
+현재 보호 prefix 지문은 CPU `c84b7750a1b235b1a9f12ebeb48099ba92231a3a15f87e319d1101099240f661`,
+CUDA `01988cdfdd8c0f7a8ee27906bb213b9e886cae99015d40231db3f184e372b731`로 다시
+계산했다. CUDA 후보 Python에서 `torch 2.7.1+cu128`, `torch.cuda.is_available()=True`,
+RTX 5080 장치 접근을 확인했다. 이는 device 초기화 확인이며 모델 forward/벤치마크는 아니다.
+
+첫 준비 시도는 protected archive reservation 경로와 0700 입력 경계가 맞지 않아
+assembler에서 거부됐다. 두 번째 시도에서는 원래 private `/tmp/eom-*` 입력을
+그대로 전달하고, 검증된 정확한 empty reservation만 보존 위치로 옮긴 뒤 두
+후보 준비가 완료됐다. 첫 거부 기록과 후보 디렉터리는 삭제·덮어쓰지 않았다.
+현재 CPU/CUDA production prefix, owner service, DB와 설정은 바꾸지 않았고,
+GPU forward 및 여섯 benchmark 실행도 0이다. 다음은 이 후보들의 기존 full-tree/
+host/worker admission과 rollback 증거를 마친 후 기존 owner 경계로 짧은 실제
+CPU/CUDA 진단을 실행하는 것이다. 이 후보가 성능 비교나 GPU 기본값 활성화를
+대신하지 않는다.
+
+### 2026-10-23 09:32 UTC 재개 점검 — 현재 운영 설정과 오래된 관측기 불일치
+
+사용자 재개 후 GPU 점유와 owner 상태를 실제로 재조회했다. RTX 5080은 0% / 2 MiB,
+INDEX와 QUERY owner는 모두 active/running이며, 실행 중인 embedding benchmark unit은
+없다. 따라서 이 시점에는 GPU forward가 실행 중이지 않다.
+
+저장소의 embedding benchmark 실패·종료·runtime 검사 unit 테스트 10개 파일을 명시적
+`/srv/eom/conda/envs/eom-core` 환경에서 다시 실행해 471 PASS를 확인했다. 처음에는
+`services/*/eom_*` 디렉터리를 통째로 PYTHONPATH에 넣어 `eom_hwpx_manager/logging.py`가
+표준 `logging`을 가리는 테스트 수집 실패가 있었고, 서비스/패키지 루트만 넣어 다시
+실행한 결과다. 첫 invocation 오류는 성공 근거로 세지 않는다.
+
+현재 설치 점검기 `/usr/local/libexec/eom-release-operator-indexing-4cf6ac9a/`
+`inspect-benchmark-cpu-maintenance-42a1c5c6.py`는 read-only 실행에서
+`InstalledRuntimeProofError`로 종료했다. 점검기가 예상하는 기존 설정 hash와 현재
+설치 파일 hash가 일치하지 않는 것을 별도로 읽기 전용 확인했다.
+
+| 보호 설정 | 점검기 예상 SHA-256 | 현재 파일 SHA-256 |
+|---|---|---|
+| local-indexing-runtime.json | `cd1569f5…` | `d001d57b…` |
+| local-indexing-owner.json | `c426bb83…` | `977df5bc…` |
+| INDEX systemd unit | `6c3b5a58…` | `29b26927…` |
+| reference-query-owner.json | `b5abff12…` | `047f160f…` |
+| QUERY systemd unit | `3b6e8d82…` | `a3a28ef9…` |
+
+owner 설정의 runtime verifier source는 `e9807d7719bec5190028bd05712b32e2597cb6ce`,
+QUERY 설정의 owner source는 `2eef9b20bbd9f1394efc8d1566fada8d37769f66`로 현재 값이
+예전 관측기의 설치 기준과 다르다. 이 결과는 운영 파일이 손상되었다는 뜻이 아니라,
+해당 관측기가 이전 release 설정을 pin하고 있어 현 상태를 판정하지 못한다는 뜻이다.
+따라서 observer 오류를 무시하거나 현재 설정을 예전 hash로 되돌리는 대신, 현재
+설치된 서비스·설정·revision과 기존 benchmark closure를 읽는 후속 observer가 필요하다.
+
+이번 점검은 DB 쓰기, 서비스 stop/restart, prefix 교체, benchmark 제출, 모델 forward를
+수행하지 않았다. GPU 기본값과 CPU 경로는 그대로다. 다음 실제 진행 단계는 current
+installed owner release의 typed runtime 설정·서비스 identity·유효 claim·benchmark
+terminal receipt를 한 번의 read-only preflight에서 일치시킨 뒤, 기존 guarded installer와
+Orchestrator owner를 재사용하는 것이다. 현재 후보 05d0fa8a…의 full admission이나
+GPU 성능은 아직 검증되지 않았다.
+
+### 2026-10-23 09:35 UTC 현행 owner read-only 관측
+
+현행 owner release에 맞춰 위 observer를 좁게 갱신한 뒤 read-only로 한 번 실행했다.
+현재 INDEX entry는 `e013d35013851a8a5a7b50b8bee9c40edd90568c`, QUERY entry는
+`2eef9b20bbd9f1394efc8d1566fada8d37769f66`이며 둘 다 설치된 runtime-file verifier
+source `e9807d7719bec5190028bd05712b32e2597cb6ce`와 파일 검사 구현
+`5d24c672e2a59365ef72f6a5f48696e014c881d0a7eaf708ca4d7134c3b4bda3`를 사용한다.
+현재 서비스 PIDs/invocations는 INDEX `130161 / 053c5ab467ff4e29b4901cfabf037b4b`,
+QUERY `130232 / 73c4e10365854589880bcd0a2f0df9b8`이고 둘 다 active/running이다.
+
+이 관측기는 이전의 `65개 초과 시 거부` 규칙 때문에 현황 출력에 실패했다. native job
+상태를 task/status별 개수와 가장 오래된/최근 updated_at으로 집계하도록 바꾼 후 읽기에
+성공했다. 현재 DB에는 `native_embedding_encoding/RUNNING` 64개가 10월19일에 마지막
+갱신된 상태로 남아 있고, `native_embedding_launch/RUNNING` 2개도 마지막 갱신이
+10월19일이다. 이들은 활성 worker 실행 증거가 아니며, 오래된 non-terminal 상태로
+별도 처리 판단이 필요하다. 이를 임의로 종료하거나 재해석하지 않는다.
+
+반면 Workflow command 쪽에는 현재 유효 lease가 있는 `local-embedding-index`의
+`encode_batch` 처리 1건이 있고, INDEX owner의 CPU 사용량도 약69%로 관측됐다. 해당
+lease는 조회 시점 `2026-10-23 09:48:46 UTC`까지 유효했다. 별도로 시작조차 안 된
+pending command 1건과 10월15일 만료 lease를 가진 오래된 처리 command 1건도 조회됐다.
+따라서 단순히 native benchmark unit이 없다는 이유만으로 owner를 중지할 수 없다.
+현재 실행 중인 indexing command가 자연스럽게 끝나거나 supported recovery로 분류될 때까지
+prefix 변경을 보류한다. 해당 관측 시점 GPU는 RTX 5080 0%/2 MiB였고 benchmark GPU
+forward도 없었다.
+
+현재 운영 observer v3는 root-only, read-only로 다음 경로에 보존했다.
+`/usr/local/libexec/eom-benchmark-cpu-current-state-20261023/`
+`inspect_current_cpu_owner_state_v3.py` (SHA-256
+`e3b40d8e9e706e6a0c2f0b90d95037b031529c9a829ab909b5d50c4528e4e610`). 저장소 사본은
+임시 진단 코드이며 제품 변경으로 간주하지 않는다. DB mutation·owner stop·prefix 교체·
+benchmark submission은 수행하지 않았다.
+
+### 2026-10-23 09:36 UTC 현재 CPU 인덱싱 step 추가 확인
+
+동일 read-only observer를 보강해 실행 중인 `encode_batch` step의 최소 상태만 조회했다.
+현재 corpus에서 RUNNING인 step은3개이며 시작 기록은 모두10월19일이다. 그 중 하나의
+Workflow command는 조회 시점에도 유효 lease가 있었고 만료 예정은09:50:34 UTC였다.
+INDEX owner는 같은 시점에도 실행 중(CPU 약69.5%, process elapsed 약1시간52분)이었다.
+따라서 이는 가만히 남은 DB 상태만으로 판단할 수 있는 일이 아니며, 실제 CPU 작업을
+중단하거나 prefix를 바꾸지 않는다. 나머지 두 step에 대해선 유효 lease나 실행 증거가
+없으므로 이 조회만으로 재시작/취소하지 않는다. source-plan pointer는 revision/hash까지
+확인했지만 내용을 읽거나 데이터 개수를 추정하지 않았다.
+
+이 추가 조회를 포함한 root-only observer v5는
+`/usr/local/libexec/eom-benchmark-cpu-current-state-20261023/`
+`inspect_current_cpu_owner_state_v5.py` (SHA-256
+`8e4c299be470814596ef4b21cf7f7e7e93fe625914acb2f325431426db9db2e3`)로 보존했다.
+관측은 read-only이며 모델 forward, DB write, service control은 수행하지 않았다.
+
+### 2026-10-23 09:38 UTC source-plan Artifact 크기 확인
+
+현재 실행 중인 `encode_batch`의 고정 source-plan pointer 세 건을 DB의 Artifact 메타데이터
+경계에서 조회했다. 승인된 source-plan Artifact Revision 크기는 각각 약470–482 KiB였고,
+현재 lease가 있는 step의 고정 pointer는 약470 KiB다. Artifact member 내용은 읽지 않았다.
+따라서 단순히 source-plan 파일 자체가 수백 MiB라서 오래 걸린다고 볼 근거는 없다.
+다만 이 byte 수만으로 source 개수·토큰량·남은 계산시간을 알 수는 없다.
+
+해당 메타데이터 조회를 포함한 read-only v6 observer는 같은 보호 경로의
+`inspect_current_cpu_owner_state_v6.py` (SHA-256
+`61ee48bce27e02870fa9bf49024a6d6f9da4a10679c468c8118d36bd320270fe`)다. 현재 유효 lease와
+CPU owner가 여전히 실행 중인 상태라 서비스/prefix 변경은 진행하지 않았다.
+
+### 2026-10-23 09:45 UTC 재확인 — CPU owner는 similarity read도 처리 중
+
+INDEX owner 프로세스는 계속 실행 중이고 GPU는 0%/2 MiB다. 다만 앞서 “현재 인덱싱 작업이
+CPU를 사용 중”이라고 표현한 것은 프로세스 사용량만으로 단정한 설명이었다. owner journal의
+최근 항목은 `catalog_similarity_read`의 `SOLUTION_PROFILES`, `MATERIALIZE_ENTRIES` 등 읽기
+단계가 반복 완료된 기록이다. 읽기 요청이 실제 처리되는 동안 benchmark가 owner의 HTTP
+경계를 잠시 pause하는 것이 사용자 조회에 미칠 영향을 먼저 확인해야 한다. 로그에는 요청자나
+검색 내용을 남기지 않으며, 이를 특정 사용자나 corpus indexing 진행 증거로 해석하지 않는다.
+서비스·lease를 건드리지 않았고 GPU forward·DB 변경·benchmark 재제출도 0이다.
+
+코드를 확인해 보니 budget600 finite window는 `eom-embedding-index-owner.service`와
+`eom-reference-query-owner.service` 두 owner에 SIGTERM을 보내 정상 종료를 기다린 다음,
+기존 이름을 benchmark template으로 바꾸고 시리즈가 끝난 뒤 복구한다. 따라서 active read가
+있는 동안 이 window를 그대로 열면 실제 유사도 조회가 중단될 수 있다. 다음 실행을 위해
+기존 owner를 그대로 둔 benchmark 전용 unit family를 사용하는 설계를
+[`EMBEDDING_BENCHMARK_LIVE_COEXISTENCE_DESIGN.md`](../architecture/EMBEDDING_BENCHMARK_LIVE_COEXISTENCE_DESIGN.md)에
+기록했다. 이 설계는 아직 구현/운영 승인되지 않았다.
+
+이전 v1.1 비교는 첫 CPU ordinal이 600초 제한을 넘겨 부분 결과만 남겼고 CUDA ordinal은
+시작하지 못했다. 해당 실행은 실패 이력으로 보존했으며 같은 identity를 재시도하지 않는다.
+v1.2의 1200초 제한은 JSON Schema/Pydantic, CPU/CUDA 전용 진입점과 systemd unit family,
+CPU-capacity 관측 allowlist, CPU1 post-start failure closure까지 구현했고 관련 회귀 571개,
+strict mypy, Ruff, systemd 문법 검증을 통과했다. root 설치·실제 실행은 아직 미완료이므로
+실제 GPU 비교와 GPU 기본값 변경은 아직 완료되지 않았다. 기존 600초 계약은 바꾸지 않는다.
+
+2026-10-23 검증: 관련 unit test 225개, Ruff, strict mypy 통과. 운영 INDEX/QUERY owner는
+계속 active이고 RTX 5080은 0%/2 MiB로 관측됐다. 이번 작업은 운영 서비스/DB를 변경하거나
+모델을 실행하지 않았다.

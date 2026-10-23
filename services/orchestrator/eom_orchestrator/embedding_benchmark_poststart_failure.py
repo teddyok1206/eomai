@@ -12,6 +12,11 @@ from eom_catalog_contracts.embedding_benchmark_budget600_failure import (
     BenchmarkBudget600PoststartObservation,
     BenchmarkBudget600PredecessorReference,
 )
+from eom_catalog_contracts.embedding_benchmark_budget1200_failure import (
+    BenchmarkBudget1200FailureDecision,
+    BenchmarkBudget1200PoststartObservation,
+    BenchmarkBudget1200PredecessorReference,
+)
 from eom_catalog_contracts.embedding_benchmark_poststart_failure import (
     POSTSTART_FAILURE_CODE,
     POSTSTART_FAILURE_EVENT,
@@ -58,7 +63,11 @@ class CapturedBenchmarkPoststartInspection(Protocol):
     @property
     def observation(
         self,
-    ) -> BenchmarkPoststartObservation | BenchmarkBudget600PoststartObservation: ...
+    ) -> (
+        BenchmarkPoststartObservation
+        | BenchmarkBudget600PoststartObservation
+        | BenchmarkBudget1200PoststartObservation
+    ): ...
 
     def assert_current(self) -> None: ...
 
@@ -71,16 +80,28 @@ class BenchmarkPoststartInspection(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkPoststartFailureClosure:
-    decision: BenchmarkPoststartFailureDecision | BenchmarkBudget600FailureDecision
+    decision: (
+        BenchmarkPoststartFailureDecision
+        | BenchmarkBudget600FailureDecision
+        | BenchmarkBudget1200FailureDecision
+    )
     event_sequence: int
     created: bool
 
     @property
     def predecessor(
         self,
-    ) -> BenchmarkPoststartPredecessorReference | BenchmarkBudget600PredecessorReference:
+    ) -> (
+        BenchmarkPoststartPredecessorReference
+        | BenchmarkBudget600PredecessorReference
+        | BenchmarkBudget1200PredecessorReference
+    ):
         if isinstance(self.decision, BenchmarkBudget600FailureDecision):
             return BenchmarkBudget600PredecessorReference.from_decision(
+                self.decision, event_sequence=self.event_sequence
+            )
+        if isinstance(self.decision, BenchmarkBudget1200FailureDecision):
+            return BenchmarkBudget1200PredecessorReference.from_decision(
                 self.decision, event_sequence=self.event_sequence
             )
         return BenchmarkPoststartPredecessorReference.from_decision(
@@ -177,9 +198,17 @@ class BenchmarkPoststartFailureApplication:
                         .isoformat(timespec="microseconds")
                         .replace("+00:00", "Z"),
                     )
-                    decision: BenchmarkPoststartFailureDecision | BenchmarkBudget600FailureDecision
+                    decision: (
+                        BenchmarkPoststartFailureDecision
+                        | BenchmarkBudget600FailureDecision
+                        | BenchmarkBudget1200FailureDecision
+                    )
                     if isinstance(observation, BenchmarkBudget600PoststartObservation):
                         decision = BenchmarkBudget600FailureDecision.model_validate(
+                            body | {"decision_sha256": content_sha256(body)}
+                        )
+                    elif isinstance(observation, BenchmarkBudget1200PoststartObservation):
+                        decision = BenchmarkBudget1200FailureDecision.model_validate(
                             body | {"decision_sha256": content_sha256(body)}
                         )
                     else:
@@ -211,14 +240,18 @@ class BenchmarkPoststartFailureApplication:
 def submit_benchmark_poststart_successor_in_session(
     session: Session,
     request: BenchmarkOwnerRequest,
-    predecessor: BenchmarkPoststartPredecessorReference,
+    predecessor: BenchmarkPoststartPredecessorReference | BenchmarkBudget1200PredecessorReference,
     *,
     source_admission: BenchmarkSourceAdmission,
 ) -> tuple[JobRecord, bool]:
     """One explicit budget successor after durable failure closure, never automatic retry."""
     try:
         embedding_device_benchmark_bytes(request)
-        predecessor = BenchmarkPoststartPredecessorReference.model_validate(predecessor)
+        predecessor = (
+            BenchmarkBudget1200PredecessorReference.model_validate(predecessor)
+            if isinstance(predecessor, BenchmarkBudget1200PredecessorReference)
+            else BenchmarkPoststartPredecessorReference.model_validate(predecessor)
+        )
     except (ValueError, TypeError, SchemaError):
         raise BenchmarkJobAdmissionError("BENCHMARK_POSTSTART_SUCCESSOR_INVALID") from None
     with source_admission.admit_in_session(session, request) as inputs:

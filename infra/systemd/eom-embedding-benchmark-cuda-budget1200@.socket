@@ -1,0 +1,20 @@
+[Unit]
+Description=EOM explicit 1200-second CUDA benchmark control socket %i
+ConditionPathIsDirectory=/run/eom-incremental-embeddings/benchmark/%i
+ConditionPathExists=/run/eom-incremental-embeddings/benchmark/%i/invocation.json
+ConditionPathExists=/run/eom-incremental-embeddings/benchmark/%i/launch.env
+ConditionPathExists=/run/eom-incremental-embeddings/benchmark/%i/cuda-ready.json
+StartLimitIntervalSec=infinity
+StartLimitBurst=1
+
+[Socket]
+ListenStream=/run/eom-incremental-embeddings/benchmark/%i/control.sock
+Accept=no
+Service=eom-embedding-benchmark-cuda-budget1200@%i.service
+SocketUser=eom-workflow-runner
+SocketGroup=eom
+SocketMode=0600
+DirectoryMode=0750
+FileDescriptorName=benchmark-control
+RemoveOnStop=yes
+Backlog=1

@@ -17,6 +17,12 @@ from typing import Protocol
 from eom_catalog_contracts.embedding_benchmark_budget600_failure import (
     BenchmarkBudget600TerminalProof,
 )
+from eom_catalog_contracts.embedding_benchmark_budget1200_failure import (
+    BenchmarkBudget1200PoststartObservation,
+    BenchmarkBudget1200TerminalProof,
+    benchmark_budget1200_failure_bytes,
+    parse_benchmark_budget1200_failure,
+)
 from eom_catalog_contracts.embedding_benchmark_poststart_failure import (
     MAX_POSTSTART_FAILURE_BYTES,
     BenchmarkPoststartObservation,
@@ -32,6 +38,9 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkWorkerInvocation,
     benchmark_local_output_members,
     embedding_device_benchmark_bytes,
+)
+from eom_catalog_contracts.embedding_native_installation_evidence import (
+    parse_rootlocal_evidence_document,
 )
 from eom_identifiers import content_sha256, sha256_bytes
 from eom_orchestrator.inference_transfer_cpu_handoff import (
@@ -58,6 +67,7 @@ from eom_catalog_service.embedding_benchmark_poststart_os import (
     CapturedBenchmarkPoststartMachine,
     read_root_poststart_retirement,
 )
+from eom_catalog_service.embedding_benchmark_unit_policy import benchmark_unit_family
 
 _PROOF_ROOT = Path("/run/eom-incremental-embeddings/benchmark-poststart-recovery")
 _ROOT_UID = 0
@@ -222,7 +232,11 @@ class _Inspection:
     completion: BenchmarkLaunchCompleted
     records: tuple[_Member, ...]
     outputs: tuple[BenchmarkPoststartOutputMember, ...]
-    terminal: BenchmarkPoststartTerminalProof | BenchmarkBudget600TerminalProof
+    terminal: (
+        BenchmarkPoststartTerminalProof
+        | BenchmarkBudget600TerminalProof
+        | BenchmarkBudget1200TerminalProof
+    )
     machine: _PoststartMachine
     invocation_epoch: tuple[int, ...]
 
@@ -271,7 +285,9 @@ def _capture(
     request: BenchmarkOwnerRequest,
     invocation: BenchmarkWorkerInvocation,
     controller: BenchmarkFailedControllerPin,
-    terminal: BenchmarkPoststartTerminalProof | BenchmarkBudget600TerminalProof,
+    terminal: BenchmarkPoststartTerminalProof
+    | BenchmarkBudget600TerminalProof
+    | BenchmarkBudget1200TerminalProof,
     machine_factory: Callable[[BenchmarkLaunchAssociation], _PoststartMachine] | None = None,
 ) -> _Inspection:
     owner = fixed_owner_identity()
@@ -410,12 +426,23 @@ def _capture(
         terminal,
         machine_factory(association)
         if machine_factory is not None
-        else CapturedBenchmarkPoststartMachine(
-            controller,
-            execution_id=invocation.execution_id,
-            native_invocation_id=terminal.native_invocation_id,
-            owner_pid=association.owner_pid,
-            expires_ns=association.expires_ns,
+        else (
+            CapturedBenchmarkPoststartMachine(
+                controller,
+                execution_id=invocation.execution_id,
+                native_invocation_id=terminal.native_invocation_id,
+                owner_pid=association.owner_pid,
+                expires_ns=association.expires_ns,
+                policy=request.execution_policy,
+            )
+            if request.execution_policy.timeout_seconds == 1200
+            else CapturedBenchmarkPoststartMachine(
+                controller,
+                execution_id=invocation.execution_id,
+                native_invocation_id=terminal.native_invocation_id,
+                owner_pid=association.owner_pid,
+                expires_ns=association.expires_ns,
+            )
         ),
         _epoch(metadata),
     )
@@ -423,7 +450,10 @@ def _capture(
     return state
 
 
-def _validate(observation: BenchmarkPoststartObservation, state: _Inspection) -> None:
+def _validate(
+    observation: BenchmarkPoststartObservation | BenchmarkBudget1200PoststartObservation,
+    state: _Inspection,
+) -> None:
     boot, digest = state.snapshot()
     completed = state.completion
     _require(
@@ -467,7 +497,7 @@ def _validate(observation: BenchmarkPoststartObservation, state: _Inspection) ->
 
 def _proof(
     stack: ExitStack, execution: str, expected: str | None
-) -> tuple[_Member, BenchmarkPoststartObservation]:
+) -> tuple[_Member, BenchmarkPoststartObservation | BenchmarkBudget1200PoststartObservation]:
     owner = fixed_owner_identity()
     # Preserve absence as absence before a yielded-directory wrapper normalizes OS errors.
     (_PROOF_ROOT / (execution + ".json")).lstat()
@@ -482,16 +512,30 @@ def _proof(
         maximum=MAX_POSTSTART_FAILURE_BYTES,
     )
     _require(expected is None or expected == record.sha256, "PROOF_HASH_INVALID")
-    observation = parse_benchmark_poststart_failure(record.raw)
-    _require(isinstance(observation, BenchmarkPoststartObservation), "PROOF_KIND_INVALID")
-    assert isinstance(observation, BenchmarkPoststartObservation)
+    document = parse_rootlocal_evidence_document(record.raw, MAX_POSTSTART_FAILURE_BYTES)
+    if not isinstance(document, dict):
+        raise BenchmarkPoststartInspectionError("PROOF_KIND_INVALID")
+    observation: BenchmarkPoststartObservation | BenchmarkBudget1200PoststartObservation
+    if document.get("schema_version") == "embedding-benchmark-poststart-failure/1.2":
+        parsed_v12 = parse_benchmark_budget1200_failure(record.raw)
+        if not isinstance(parsed_v12, BenchmarkBudget1200PoststartObservation):
+            raise BenchmarkPoststartInspectionError("PROOF_KIND_INVALID")
+        observation = parsed_v12
+    else:
+        parsed_v10 = parse_benchmark_poststart_failure(record.raw)
+        if not isinstance(parsed_v10, BenchmarkPoststartObservation):
+            raise BenchmarkPoststartInspectionError("PROOF_KIND_INVALID")
+        observation = parsed_v10
     _require(observation.execution_id == execution, "PROOF_ID_INVALID")
     return record, observation
 
 
 class CapturedBenchmarkPoststartInspection:
     def __init__(
-        self, record: _Member, observation: BenchmarkPoststartObservation, state: _Inspection
+        self,
+        record: _Member,
+        observation: BenchmarkPoststartObservation | BenchmarkBudget1200PoststartObservation,
+        state: _Inspection,
     ) -> None:
         self._record, self._observation, self._state, self._active = (
             record,
@@ -501,7 +545,9 @@ class CapturedBenchmarkPoststartInspection:
         )
 
     @property
-    def observation(self) -> BenchmarkPoststartObservation:
+    def observation(
+        self,
+    ) -> BenchmarkPoststartObservation | BenchmarkBudget1200PoststartObservation:
         return self._observation
 
     def assert_current(self) -> None:
@@ -562,7 +608,7 @@ class FixedBenchmarkPoststartInspection:
 
 @dataclass(frozen=True, slots=True)
 class MintedBenchmarkPoststartProof:
-    observation: BenchmarkPoststartObservation
+    observation: BenchmarkPoststartObservation | BenchmarkBudget1200PoststartObservation
     raw_sha256: str
     created: bool
 
@@ -597,10 +643,15 @@ def mint_benchmark_poststart_observation(
                 local.raw == embedding_device_benchmark_bytes(invocation), "INVOCATION_INVALID"
             )
             retired = read_root_poststart_retirement(request, invocation)
-            service = "eom-embedding-benchmark-cpu@" + invocation.execution_id
-            terminal = BenchmarkPoststartTerminalProof(
-                native_service=service + ".service",
-                native_socket=service + ".socket",
+            service_template = benchmark_unit_family(
+                "CPU", request.execution_policy
+            ).service_template
+            service = service_template.replace(
+                "@.service", "@" + invocation.execution_id + ".service"
+            )
+            terminal_values = dict(
+                native_service=service,
+                native_socket=service.replace(".service", ".socket"),
                 native_invocation_id=retired.native_invocation_id,
                 retirement_raw_sha256=retired.raw_sha256,
                 main_pid=0,
@@ -609,6 +660,11 @@ def mint_benchmark_poststart_observation(
                 cgroup_empty=True,
                 socket_inactive=True,
                 retirement="CONFIRMED",
+            )
+            terminal = (
+                BenchmarkBudget1200TerminalProof.model_validate(terminal_values)
+                if request.execution_policy.timeout_seconds == 1200
+                else BenchmarkPoststartTerminalProof.model_validate(terminal_values)
             )
             state = _capture(stack, request, invocation, controller, terminal)
             original = retired.retirement.original_terminal
@@ -632,8 +688,13 @@ def mint_benchmark_poststart_observation(
                 return MintedBenchmarkPoststartProof(existing, proof.sha256, False)
             boot, snapshot = state.snapshot()
             completed = state.completion
+            budget1200 = request.execution_policy.timeout_seconds == 1200
             body = dict(
-                schema_version="embedding-benchmark-poststart-failure/1.0",
+                schema_version=(
+                    "embedding-benchmark-poststart-failure/1.2"
+                    if budget1200
+                    else "embedding-benchmark-poststart-failure/1.0"
+                ),
                 kind="ROOT_OBSERVATION",
                 job_id=invocation.job_id,
                 execution_id=invocation.execution_id,
@@ -657,10 +718,19 @@ def mint_benchmark_poststart_observation(
                 snapshot_sha256=snapshot,
                 observed_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             )
-            observation = BenchmarkPoststartObservation.model_validate(
-                body | {"observation_sha256": content_sha256(body)}
+            observation = (
+                BenchmarkBudget1200PoststartObservation.model_validate(
+                    body | {"observation_sha256": content_sha256(body)}
+                )
+                if budget1200
+                else BenchmarkPoststartObservation.model_validate(
+                    body | {"observation_sha256": content_sha256(body)}
+                )
             )
-            raw = benchmark_poststart_failure_bytes(observation)
+            if isinstance(observation, BenchmarkBudget1200PoststartObservation):
+                raw = benchmark_budget1200_failure_bytes(observation)
+            else:
+                raw = benchmark_poststart_failure_bytes(observation)
             retired.assert_current()
             local.assert_current()
             _validate(observation, state)

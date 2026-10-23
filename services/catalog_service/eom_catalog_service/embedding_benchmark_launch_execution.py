@@ -113,7 +113,7 @@ class FixedBenchmarkLaunchExecution:
                 family = benchmark_unit_family(
                     runtime.numerical_runtime.device.kind, request.execution_policy
                 )
-                if family.timeout_seconds == 600:
+                if family.timeout_seconds in {600, 1200}:
                     for member in (
                         family.entrypoint_module.rsplit(".", 1)[-1] + ".py",
                         "embedding_benchmark_budget_entrypoint.py",

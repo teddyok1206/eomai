@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from eom_catalog_service import embedding_benchmark_poststart_os as module
+from eom_catalog_service import embedding_benchmark_unit_control as unit_control
 from eom_catalog_service.embedding_benchmark_cpu_driver import RootBenchmarkCpuRetirement
 from eom_catalog_service.gpu_unit_terminal_observation import StoppedGpuUnit
 from eom_identifiers import canonical_json_bytes, sha256_bytes
@@ -100,8 +101,8 @@ def machine(monkeypatch, tmp_path):
                 f"{{ path={module._PYTHON} ; argv[]={module._PYTHON} -I -B {supervisor} ; }}"
             ),
         },
-        native: dead(native, "/etc/systemd/system/" + module.CPU_BENCHMARK_TEMPLATE, True),
-        socket: dead(socket, "/etc/systemd/system/" + module.CPU_BENCHMARK_SOCKET, False),
+        native: dead(native, "/etc/systemd/system/" + unit_control.CPU_BENCHMARK_TEMPLATE, True),
+        socket: dead(socket, "/etc/systemd/system/" + unit_control.CPU_BENCHMARK_SOCKET, False),
     }
     calls = []
 
@@ -244,7 +245,7 @@ def retired(tmp_path, monkeypatch):
         0,
         200,
         native,
-        "/etc/systemd/system/" + module.CPU_BENCHMARK_TEMPLATE,
+        "/etc/systemd/system/" + unit_control.CPU_BENCHMARK_TEMPLATE,
         "",
     )
     retirement = RootBenchmarkCpuRetirement(

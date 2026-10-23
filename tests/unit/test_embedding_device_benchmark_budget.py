@@ -54,6 +54,16 @@ def successor_policy() -> BenchmarkExecutionPolicy:
     return BenchmarkExecutionPolicy.model_validate(seal(body, "policy_sha256"))
 
 
+def successor_policy_v12() -> BenchmarkExecutionPolicy:
+    body = successor_policy().model_dump(mode="json")
+    body.update(
+        schema_version="embedding-device-benchmark-policy/1.2",
+        policy_revision_id="embeddingbenchmarkpolicyrev_" + "9" * 32,
+        timeout_seconds=1200,
+    )
+    return BenchmarkExecutionPolicy.model_validate(seal(body, "policy_sha256"))
+
+
 def successor_request() -> BenchmarkOwnerRequest:
     body = owner_request().model_dump(mode="json")
     body.update(
@@ -63,11 +73,31 @@ def successor_request() -> BenchmarkOwnerRequest:
     return BenchmarkOwnerRequest.model_validate(seal(body, "request_sha256"))
 
 
+def successor_request_v12() -> BenchmarkOwnerRequest:
+    body = successor_request().model_dump(mode="json")
+    body.update(
+        schema_version="embedding-device-benchmark-request/1.2",
+        execution_policy=successor_policy_v12().model_dump(mode="json"),
+    )
+    return BenchmarkOwnerRequest.model_validate(seal(body, "request_sha256"))
+
+
 def successor_invocation(ordinal: int = 1) -> BenchmarkWorkerInvocation:
     request = successor_request()
     body = worker_invocation(ordinal).model_dump(mode="json")
     body.update(
         schema_version="embedding-device-benchmark-invocation/1.1",
+        owner_request_sha256=request.request_sha256,
+        execution_policy=request.execution_policy.model_dump(mode="json"),
+    )
+    return BenchmarkWorkerInvocation.model_validate(seal(body, "invocation_sha256"))
+
+
+def successor_invocation_v12(ordinal: int = 1) -> BenchmarkWorkerInvocation:
+    request = successor_request_v12()
+    body = worker_invocation(ordinal).model_dump(mode="json")
+    body.update(
+        schema_version="embedding-device-benchmark-invocation/1.2",
         owner_request_sha256=request.request_sha256,
         execution_policy=request.execution_policy.model_dump(mode="json"),
     )

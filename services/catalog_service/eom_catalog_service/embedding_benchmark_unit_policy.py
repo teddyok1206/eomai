@@ -57,6 +57,22 @@ _FAMILIES = MappingProxyType(
             "eom_catalog_service.embedding_benchmark_budget600_cuda",
             600,
         ),
+        ("CPU", 1200): BenchmarkUnitFamily(
+            "eom-embedding-benchmark-cpu-budget1200@.service",
+            "eom-embedding-benchmark-cpu-budget1200@.socket",
+            "sha256:0432e7664689274086a0a8c76b165ffa549e98017df3d02bed295a538570e33d",
+            "sha256:1bd3fca6c88b8f58de33393617b6d3213762d0c45020eba09cb58ab6296d72a7",
+            "eom_catalog_service.embedding_benchmark_budget1200_cpu",
+            1200,
+        ),
+        ("CUDA", 1200): BenchmarkUnitFamily(
+            "eom-embedding-benchmark-cuda-budget1200@.service",
+            "eom-embedding-benchmark-cuda-budget1200@.socket",
+            "sha256:7df6de00eb10df741660b13f0edeca75928f4a721da5705aaf386b9b068d1a8f",
+            "sha256:32213967e9fb94d508b9db525c33090545f5a195d3f662c7481d70f5599b9770",
+            "eom_catalog_service.embedding_benchmark_budget1200_cuda",
+            1200,
+        ),
     }
 )
 _FRAGMENT_FAMILIES = MappingProxyType(
@@ -80,7 +96,10 @@ def benchmark_unit_family(
     if type(device) is not str or device not in {"CPU", "CUDA"}:
         raise ValueError("BENCHMARK_UNIT_IDENTITY_INVALID")
     seconds = 180 if policy is None else benchmark_timeout_seconds(policy)
-    return _FAMILIES[device, seconds]
+    family = _FAMILIES.get((device, seconds))
+    if family is None:
+        raise ValueError("BENCHMARK_UNIT_FAMILY_NOT_RELEASED")
+    return family
 
 
 def benchmark_unit_family_from_fragment(

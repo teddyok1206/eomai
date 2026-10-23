@@ -12,6 +12,7 @@ from pathlib import Path
 
 from eom_catalog_contracts.embedding_benchmark_prelaunch_failure import BenchmarkFailedControllerPin
 from eom_catalog_contracts.embedding_device_benchmark import (
+    BenchmarkExecutionPolicy,
     BenchmarkOwnerRequest,
     BenchmarkWorkerInvocation,
 )
@@ -25,12 +26,6 @@ from pydantic import TypeAdapter
 
 from eom_catalog_service.embedding_benchmark_cpu_driver import RootBenchmarkCpuRetirement
 from eom_catalog_service.embedding_benchmark_layout import BENCHMARK_LIFETIME_ROOT
-from eom_catalog_service.embedding_benchmark_unit_control import (
-    CPU_BENCHMARK_SOCKET,
-    CPU_BENCHMARK_SOCKET_SHA256,
-    CPU_BENCHMARK_TEMPLATE,
-    CPU_BENCHMARK_TEMPLATE_SHA256,
-)
 from eom_catalog_service.embedding_benchmark_unit_policy import benchmark_unit_family
 from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
 from eom_catalog_service.gpu_unit_terminal_observation import gpu_unit_terminal_outcome
@@ -143,6 +138,7 @@ class CapturedBenchmarkPoststartMachine:
         native_invocation_id: str,
         owner_pid: int,
         expires_ns: int,
+        policy: BenchmarkExecutionPolicy | None = None,
     ) -> None:
         self.controller = BenchmarkFailedControllerPin.model_validate(
             controller.model_dump(mode="json")
@@ -159,6 +155,8 @@ class CapturedBenchmarkPoststartMachine:
         )
         self.execution_id, self.native_invocation_id = execution_id, native_invocation_id
         self.owner_pid, self.expires_ns = owner_pid, expires_ns
+        self._policy = policy
+        family = benchmark_unit_family("CPU", policy)
         self._files = NumericalRuntimeFileSnapshots(_ROOT_UID)
         observed = _unit(self.controller.unit, _COMMON + _SERVICE + _CONTROLLER)
         command = re.findall(r"argv\[\]=([^;]+) ;", observed["ExecStart"])
@@ -179,8 +177,8 @@ class CapturedBenchmarkPoststartMachine:
                     p
                     for path in (
                         supervisor,
-                        Path("/etc/systemd/system") / CPU_BENCHMARK_TEMPLATE,
-                        Path("/etc/systemd/system") / CPU_BENCHMARK_SOCKET,
+                        Path("/etc/systemd/system") / family.service_template,
+                        Path("/etc/systemd/system") / family.socket_template,
                     )
                     for p in (path, *path.parents)
                 }
@@ -205,8 +203,8 @@ class CapturedBenchmarkPoststartMachine:
         ]
         _require(sources == [self.controller.source_commit])
         for name, sha in (
-            (CPU_BENCHMARK_TEMPLATE, CPU_BENCHMARK_TEMPLATE_SHA256),
-            (CPU_BENCHMARK_SOCKET, CPU_BENCHMARK_SOCKET_SHA256),
+            (family.service_template, family.service_sha256),
+            (family.socket_template, family.socket_sha256),
         ):
             self._files.read(Path("/etc/systemd/system") / name, sha256=sha, maximum=65536)
         self._original_command = observed["ExecStart"]
@@ -254,19 +252,20 @@ class CapturedBenchmarkPoststartMachine:
             and re.fullmatch(r"[1-9][0-9]{0,18}", end) is not None
             and int(end) >= int(start)
         )
-        service = CPU_BENCHMARK_TEMPLATE.replace("@.service", "@" + self.execution_id + ".service")
-        socket = CPU_BENCHMARK_SOCKET.replace("@.socket", "@" + self.execution_id + ".socket")
+        family = benchmark_unit_family("CPU", self._policy)
+        service = family.service_template.replace("@.service", "@" + self.execution_id + ".service")
+        socket = family.socket_template.replace("@.socket", "@" + self.execution_id + ".socket")
         native, channel = _unit(service, _COMMON + _SERVICE), _unit(socket, _COMMON)
         _dead(
             native,
             name=service,
-            fragment="/etc/systemd/system/" + CPU_BENCHMARK_TEMPLATE,
+            fragment="/etc/systemd/system/" + family.service_template,
             controller=False,
         )
         _dead(
             channel,
             name=socket,
-            fragment="/etc/systemd/system/" + CPU_BENCHMARK_SOCKET,
+            fragment="/etc/systemd/system/" + family.socket_template,
             controller=False,
         )
         _require(

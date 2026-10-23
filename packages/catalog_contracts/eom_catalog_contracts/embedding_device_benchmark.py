@@ -49,9 +49,16 @@ EMBEDDING_DEVICE_BENCHMARK_V11_SCHEMA: Final = "embedding-device-benchmark-v1.1"
 EMBEDDING_DEVICE_BENCHMARK_V11_SCHEMA_REF: Final = (
     "eom://schemas/knowledge/embedding-device-benchmark/1.1"
 )
+EMBEDDING_DEVICE_BENCHMARK_V12_SCHEMA: Final = "embedding-device-benchmark-v1.2"
+EMBEDDING_DEVICE_BENCHMARK_V12_SCHEMA_REF: Final = (
+    "eom://schemas/knowledge/embedding-device-benchmark/1.2"
+)
 BENCHMARK_POLICY_SCHEMA_REF: Final = EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF + "#/$defs/policy"
 BENCHMARK_POLICY_V11_SCHEMA_REF: Final = (
     EMBEDDING_DEVICE_BENCHMARK_V11_SCHEMA_REF + "#/$defs/policy"
+)
+BENCHMARK_POLICY_V12_SCHEMA_REF: Final = (
+    EMBEDDING_DEVICE_BENCHMARK_V12_SCHEMA_REF + "#/$defs/policy"
 )
 BENCHMARK_POLICY_ARTIFACT_TYPE: Final = "control_embedding_benchmark_policy"
 BENCHMARK_LAUNCH_ARTIFACT_TYPE: Final = "control_embedding_benchmark_launch"
@@ -74,26 +81,31 @@ _BENCHMARK_TIMEOUT_SECONDS: Final = MappingProxyType(
     {
         "embedding-device-benchmark-policy/1.0": 180,
         "embedding-device-benchmark-policy/1.1": 600,
+        "embedding-device-benchmark-policy/1.2": 1200,
     }
 )
 _BENCHMARK_POLICY_SCHEMA_REFS: Final = MappingProxyType(
     {
         "embedding-device-benchmark-policy/1.0": BENCHMARK_POLICY_SCHEMA_REF,
         "embedding-device-benchmark-policy/1.1": BENCHMARK_POLICY_V11_SCHEMA_REF,
+        "embedding-device-benchmark-policy/1.2": BENCHMARK_POLICY_V12_SCHEMA_REF,
     }
 )
 _BENCHMARK_LISTENER_SECONDS: Final = MappingProxyType(
     {
         "embedding-device-benchmark-policy/1.0": 900,
         "embedding-device-benchmark-policy/1.1": 3600,
+        "embedding-device-benchmark-policy/1.2": 7200,
     }
 )
 _BENCHMARK_ENVELOPE_POLICY_VERSION: Final = MappingProxyType(
     {
         "embedding-device-benchmark-request/1.0": "embedding-device-benchmark-policy/1.0",
         "embedding-device-benchmark-request/1.1": "embedding-device-benchmark-policy/1.1",
+        "embedding-device-benchmark-request/1.2": "embedding-device-benchmark-policy/1.2",
         "embedding-device-benchmark-invocation/1.0": "embedding-device-benchmark-policy/1.0",
         "embedding-device-benchmark-invocation/1.1": "embedding-device-benchmark-policy/1.1",
+        "embedding-device-benchmark-invocation/1.2": "embedding-device-benchmark-policy/1.2",
     }
 )
 _BENCHMARK_SUCCESSOR_SCHEMAS: Final = MappingProxyType(
@@ -101,6 +113,9 @@ _BENCHMARK_SUCCESSOR_SCHEMAS: Final = MappingProxyType(
         "embedding-device-benchmark-policy/1.1": EMBEDDING_DEVICE_BENCHMARK_V11_SCHEMA,
         "embedding-device-benchmark-request/1.1": EMBEDDING_DEVICE_BENCHMARK_V11_SCHEMA,
         "embedding-device-benchmark-invocation/1.1": EMBEDDING_DEVICE_BENCHMARK_V11_SCHEMA,
+        "embedding-device-benchmark-policy/1.2": EMBEDDING_DEVICE_BENCHMARK_V12_SCHEMA,
+        "embedding-device-benchmark-request/1.2": EMBEDDING_DEVICE_BENCHMARK_V12_SCHEMA,
+        "embedding-device-benchmark-invocation/1.2": EMBEDDING_DEVICE_BENCHMARK_V12_SCHEMA,
     }
 )
 type BenchmarkDevice = Literal["CPU", "CUDA"]
@@ -608,12 +623,14 @@ class BenchmarkExecutionPolicy(_BenchmarkContract):
     """Numerical/resource limits only; no actor, principal, device lease or admission grant."""
 
     schema_version: Literal[
-        "embedding-device-benchmark-policy/1.0", "embedding-device-benchmark-policy/1.1"
+        "embedding-device-benchmark-policy/1.0",
+        "embedding-device-benchmark-policy/1.1",
+        "embedding-device-benchmark-policy/1.2",
     ] = "embedding-device-benchmark-policy/1.0"
     purpose: Literal["LOCAL_EMBEDDING_DEVICE_BENCHMARK"] = "LOCAL_EMBEDDING_DEVICE_BENCHMARK"
     policy_id: str = Field(pattern=r"^embeddingbenchmarkpolicy_[0-9a-f]{32}$")
     policy_revision_id: str = Field(pattern=r"^embeddingbenchmarkpolicyrev_[0-9a-f]{32}$")
-    timeout_seconds: Literal[180, 600] = 180
+    timeout_seconds: Literal[180, 600, 1200] = 180
     cpu_quota_percent: Literal[400] = 400
     tasks_max: Literal[64] = 64
     rss_limit_bytes: Literal[6442450944] = 6442450944
@@ -661,7 +678,9 @@ class BenchmarkOwnerRequest(_BenchmarkContract):
     """Owner-built pointer metadata; audit identity is not authentication/authorization."""
 
     schema_version: Literal[
-        "embedding-device-benchmark-request/1.0", "embedding-device-benchmark-request/1.1"
+        "embedding-device-benchmark-request/1.0",
+        "embedding-device-benchmark-request/1.1",
+        "embedding-device-benchmark-request/1.2",
     ] = "embedding-device-benchmark-request/1.0"
     kind: Literal["OWNER_REQUEST"] = "OWNER_REQUEST"
     purpose: Literal["LOCAL_EMBEDDING_DEVICE_BENCHMARK"] = "LOCAL_EMBEDDING_DEVICE_BENCHMARK"
@@ -762,7 +781,9 @@ class BenchmarkLocalInput(_BenchmarkContract):
 
 class BenchmarkWorkerInvocation(_BenchmarkContract):
     schema_version: Literal[
-        "embedding-device-benchmark-invocation/1.0", "embedding-device-benchmark-invocation/1.1"
+        "embedding-device-benchmark-invocation/1.0",
+        "embedding-device-benchmark-invocation/1.1",
+        "embedding-device-benchmark-invocation/1.2",
     ] = "embedding-device-benchmark-invocation/1.0"
     kind: Literal["WORKER_INVOCATION"] = "WORKER_INVOCATION"
     purpose: Literal["LOCAL_EMBEDDING_DEVICE_BENCHMARK"] = "LOCAL_EMBEDDING_DEVICE_BENCHMARK"

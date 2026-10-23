@@ -3,6 +3,13 @@
 from pathlib import Path
 
 import pytest
+from eom_catalog_contracts.embedding_benchmark_budget1200_failure import (
+    BenchmarkBudget1200FailureDecision,
+    BenchmarkBudget1200PoststartObservation,
+    BenchmarkBudget1200PredecessorReference,
+    benchmark_budget1200_failure_bytes,
+    parse_benchmark_budget1200_failure,
+)
 from eom_catalog_contracts.embedding_benchmark_poststart_failure import (
     MAX_POSTSTART_FAILURE_BYTES,
     POSTSTART_FAILURE_SCHEMA,
@@ -49,6 +56,61 @@ def test_additive_schema_pin_mirror_and_three_canonical_kinds():
         assert not hasattr(value, "assert_current") and not hasattr(value, "capture")
         with pytest.raises(INVALID):
             parse_benchmark_prelaunch_failure(raw)
+
+
+def test_budget1200_failure_successor_has_its_own_exact_terminal_identity_and_schema():
+    root = Path(__file__).resolve().parents[2]
+    resource = CATALOG_SCHEMA_RESOURCES["embedding-benchmark-poststart-failure-v1.2"]
+    canonical = (root / resource.canonical_path).read_bytes()
+    packaged = (
+        root / "packages/catalog_contracts/eom_catalog_contracts" / resource.resource_path
+    ).read_bytes()
+    assert canonical == packaged and sha256_bytes(canonical) == resource.sha256
+    schema = load_schema("embedding-benchmark-poststart-failure-v1.2")
+    Draft202012Validator.check_schema(schema)
+
+    body = observation().model_dump(mode="json")
+    body["schema_version"] = "embedding-benchmark-poststart-failure/1.2"
+    prefix = "eom-embedding-benchmark-cpu-budget1200@" + body["execution_id"]
+    body["terminal"]["native_service"] = prefix + ".service"
+    body["terminal"]["native_socket"] = prefix + ".socket"
+    value = BenchmarkBudget1200PoststartObservation.model_validate(seal(body, "observation_sha256"))
+    raw = benchmark_budget1200_failure_bytes(value)
+    assert parse_benchmark_budget1200_failure(raw) == value
+    assert len(raw) < MAX_POSTSTART_FAILURE_BYTES
+    with pytest.raises(INVALID):
+        BenchmarkBudget1200PoststartObservation.model_validate(
+            seal(
+                body
+                | {
+                    "terminal": body["terminal"]
+                    | {"native_service": prefix.replace("budget1200", "budget600") + ".service"}
+                },
+                "observation_sha256",
+            )
+        )
+
+    decision_body = {
+        "schema_version": "embedding-benchmark-poststart-failure/1.2",
+        "kind": "FAILURE_DECISION",
+        "job_id": value.job_id,
+        "execution_id": value.execution_id,
+        "request_sha256": value.request_sha256,
+        "invocation_sha256": value.invocation_sha256,
+        "from_state": "RUNNING",
+        "to_state": "FAILED",
+        "error_code": "BENCHMARK_POSTSTART_EXECUTION_FAILED",
+        "observation": value.model_dump(mode="json"),
+        "actor_id": "operator_test",
+        "decided_at": "2026-10-23T12:00:01Z",
+    }
+    decision_value = BenchmarkBudget1200FailureDecision.model_validate(
+        seal(decision_body, "decision_sha256")
+    )
+    reference = BenchmarkBudget1200PredecessorReference.from_decision(
+        decision_value, event_sequence=8
+    )
+    assert reference.schema_version == "embedding-benchmark-poststart-failure/1.2"
 
 
 @pytest.mark.parametrize("field", ("launch_ordinal", "started_ns", "completed_ns"))

@@ -46,6 +46,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.1",
             "sha256:da020334f6a7ad88ea3f12308f0f357e821bb2a04ab6e8ef4f9d55180aedc52a",
         ),
+        "embedding-benchmark-poststart-failure-v1.2": CatalogSchemaResource(
+            "schemas/knowledge/embedding-benchmark-poststart-failure-v1.2.schema.json",
+            "resources/knowledge/embedding-benchmark-poststart-failure-v1.2.schema.json",
+            "1.2",
+            "sha256:33547b07d145e231cf9acc7ec9eff1ed940069e880dd09ef1b60d5e76eba39c3",
+        ),
         "embedding-benchmark-prelaunch-failure": CatalogSchemaResource(
             "schemas/knowledge/embedding-benchmark-prelaunch-failure-v1.schema.json",
             "resources/knowledge/embedding-benchmark-prelaunch-failure-v1.schema.json",
@@ -363,6 +369,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/embedding-device-benchmark-v1.1.schema.json",
             "1.1",
             "sha256:6837c3abe6de51e00e149331422f144223f5b67579ddc41d269d9cdd2f01e690",
+        ),
+        "embedding-device-benchmark-v1.2": CatalogSchemaResource(
+            "schemas/knowledge/embedding-device-benchmark-v1.2.schema.json",
+            "resources/knowledge/embedding-device-benchmark-v1.2.schema.json",
+            "1.2",
+            "sha256:df59b77de1e2dce88431396be3c01d1ac89700f18c899775fcb43de1189334e3",
         ),
         "embedding-installed-runtime-proof": CatalogSchemaResource(
             "schemas/knowledge/embedding-installed-runtime-proof-v1.schema.json",

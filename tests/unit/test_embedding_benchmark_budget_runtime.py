@@ -47,7 +47,9 @@ from tests.unit.embedding_device_benchmark_fixtures import (
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_embedding_device_benchmark_budget import (
     successor_invocation,
+    successor_invocation_v12,
     successor_policy,
+    successor_policy_v12,
     successor_request,
 )
 
@@ -75,12 +77,18 @@ def pins(expires_ns: int) -> launch.BenchmarkLaunchPins:
 
 
 @pytest.mark.parametrize("device", ("CPU", "CUDA"))
-@pytest.mark.parametrize("policy", (None, benchmark_policy(), successor_policy()))
+@pytest.mark.parametrize(
+    "policy", (None, benchmark_policy(), successor_policy(), successor_policy_v12())
+)
 def test_selected_unit_family_is_exact_pinned_bytes_and_matching_closed_observations(
     device: Any, policy: BenchmarkExecutionPolicy | None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     family = benchmark_unit_family(device, policy)
-    expected_seconds = 600 if policy is not None and policy.timeout_seconds == 600 else 180
+    expected_seconds = (
+        1200
+        if policy is not None and policy.timeout_seconds == 1200
+        else (600 if policy is not None and policy.timeout_seconds == 600 else 180)
+    )
     assert family.timeout_seconds == expected_seconds
     assert sha256_bytes((ROOT / "infra/systemd" / family.service_template).read_bytes()) == (
         family.service_sha256
@@ -89,9 +97,11 @@ def test_selected_unit_family_is_exact_pinned_bytes_and_matching_closed_observat
         family.socket_sha256
     )
     raw = (ROOT / "infra/systemd" / family.service_template).read_text()
-    assert f"TimeoutStartSec={expected_seconds}\n" in raw
+    expected_unit_timeout = 1500 if expected_seconds == 1200 else expected_seconds
+    assert f"TimeoutStartSec={expected_unit_timeout}\n" in raw
     assert f"-m {family.entrypoint_module} " in raw
-    for unchanged in ("MemoryMax=6G", "CPUQuota=400%", "TasksMax=64", "TimeoutStopSec=5"):
+    expected_stop = "TimeoutStopSec=10" if expected_seconds == 1200 else "TimeoutStopSec=5"
+    for unchanged in ("MemoryMax=6G", "CPUQuota=400%", "TasksMax=64", expected_stop):
         assert unchanged in raw
     fragment = "/etc/systemd/system/" + family.service_template
     service = family.service_template.replace("@.service", "@" + "a" * 32 + ".service")
@@ -423,6 +433,56 @@ def test_new_entry_binds_real_invocation_and_exact_unit_before_old_leaf_executio
                 selection, 1, profile="CPU_INDEX_FP32", execute=execute
             )
         assert events == ["capture", "close"]
+
+
+@pytest.mark.parametrize("profile,device", (("CPU_INDEX_FP32", "CPU"), ("CUDA_INDEX_FP32", "CUDA")))
+def test_v12_budget_entry_binds_1200_second_invocation_and_dedicated_unit(
+    profile: str, device: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    events: list[str] = []
+    ordinal = 1 if device == "CPU" else 2
+    value = successor_invocation_v12(ordinal)
+    selection = replace(pins(10**18), execution_id=value.execution_id)
+
+    class Files:
+        def __init__(self, *args: Any, **kwargs: Any) -> None:
+            events.append("capture")
+
+        def __enter__(self) -> Files:
+            return self
+
+        def __exit__(self, *args: Any) -> None:
+            events.append("close")
+
+        def read_invocation(self) -> Any:
+            return value
+
+    family = benchmark_unit_family(device, successor_policy_v12())
+    unit = family.service_template.replace("@.service", "@" + value.execution_id + ".service")
+    monkeypatch.setattr(entry, "BenchmarkWorkerLocalFiles", Files)
+    monkeypatch.setattr(
+        entry, "read_live_runtime_os_file", lambda *a, **k: f"0::/system.slice/{unit}\n".encode()
+    )
+
+    @contextmanager
+    def activation(*args: Any, **kwargs: Any) -> Any:
+        assert kwargs["policy"] == successor_policy_v12()
+        events.append("activation")
+        yield
+
+    monkeypatch.setattr(entry, "benchmark_socket_activation", activation)
+
+    def execute(*args: Any) -> int:
+        events.append("execute")
+        return 0
+
+    assert (
+        entry.execute_budget_benchmark(
+            selection, 1, profile=profile, timeout_seconds=1200, execute=execute
+        )
+        == 0
+    )
+    assert events == ["capture", "close", "activation", "execute"]
 
 
 @pytest.mark.parametrize("missing", (None, "embedding_benchmark_budget_entrypoint.py"))

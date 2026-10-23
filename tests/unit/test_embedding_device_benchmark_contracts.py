@@ -14,9 +14,11 @@ from eom_catalog_contracts import embedding_device_benchmark as contracts
 from eom_catalog_contracts.embedding_device_benchmark import (
     EMBEDDING_DEVICE_BENCHMARK_SCHEMA,
     EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF,
+    EMBEDDING_DEVICE_BENCHMARK_V12_SCHEMA,
     BenchmarkAck,
     BenchmarkCheckpoint,
     BenchmarkDevice,
+    BenchmarkExecutionPolicy,
     BenchmarkInvocationTimings,
     BenchmarkModelFamily,
     BenchmarkNearTieReference,
@@ -540,6 +542,41 @@ def test_exact_cold_prepared_ready_program_and_matching_acks(ordinal: int) -> No
             assert checkpoint.vector is not None and checkpoint.vector.purpose == "QUERY"
             assert checkpoint.vector.row_count == 1
     validate_contract(EMBEDDING_DEVICE_BENCHMARK_SCHEMA, value.model_dump(mode="json"))
+
+
+def test_v12_policy_and_request_pin_1200_second_budget_without_rewriting_v11() -> None:
+    parent = benchmark_policy()
+    policy_body = parent.model_dump(mode="json", exclude={"policy_sha256"}) | {
+        "schema_version": "embedding-device-benchmark-policy/1.2",
+        "timeout_seconds": 1200,
+        "policy_revision_id": "embeddingbenchmarkpolicyrev_" + "8" * 32,
+    }
+    policy = BenchmarkExecutionPolicy.model_validate(
+        policy_body | {"policy_sha256": content_sha256(policy_body)}
+    )
+    assert contracts.benchmark_timeout_seconds(policy) == 1200
+    assert contracts.benchmark_listener_timeout_seconds(policy) == 7200
+    validate_contract(EMBEDDING_DEVICE_BENCHMARK_V12_SCHEMA, policy.model_dump(mode="json"))
+
+    original = owner_request()
+    request_body = original.model_dump(mode="json", exclude={"request_sha256"}) | {
+        "schema_version": "embedding-device-benchmark-request/1.2",
+        "benchmark_revision_id": "embeddingbenchmarkrev_" + "8" * 32,
+        "execution_policy": policy.model_dump(mode="json"),
+    }
+    request = BenchmarkOwnerRequest.model_validate(
+        request_body | {"request_sha256": content_sha256(request_body)}
+    )
+    validate_contract(EMBEDDING_DEVICE_BENCHMARK_V12_SCHEMA, request.model_dump(mode="json"))
+
+    legacy_policy = benchmark_policy()
+    assert contracts.benchmark_timeout_seconds(legacy_policy) == 180
+    legacy_request = original
+    assert legacy_request.execution_policy.schema_version == "embedding-device-benchmark-policy/1.0"
+    with pytest.raises(ValueError):
+        BenchmarkExecutionPolicy.model_validate(
+            policy.model_dump(mode="json") | {"timeout_seconds": 600}
+        )
 
 
 @pytest.mark.parametrize(

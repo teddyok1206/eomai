@@ -10,6 +10,11 @@ from eom_catalog_contracts.embedding_benchmark_budget600_failure import (
     BenchmarkBudget600FailureDecision,
     BenchmarkBudget600PoststartObservation,
 )
+from eom_catalog_contracts.embedding_benchmark_budget1200_failure import (
+    BenchmarkBudget1200FailureDecision,
+    BenchmarkBudget1200PoststartObservation,
+    BenchmarkBudget1200PredecessorReference,
+)
 from eom_catalog_contracts.embedding_benchmark_poststart_failure import (
     POSTSTART_FAILURE_CODE,
     POSTSTART_FAILURE_EVENT,
@@ -55,7 +60,9 @@ RECORDED_EVENT = "BENCHMARK_LAUNCH_RECORDED"
 PREDECESSOR_EVENT = "BENCHMARK_PRELAUNCH_SUCCESSOR_REGISTERED"
 POSTSTART_PREDECESSOR_EVENT = "BENCHMARK_POSTSTART_SUCCESSOR_REGISTERED"
 type BenchmarkPredecessorReference = (
-    BenchmarkPrelaunchPredecessorReference | BenchmarkPoststartPredecessorReference
+    BenchmarkPrelaunchPredecessorReference
+    | BenchmarkPoststartPredecessorReference
+    | BenchmarkBudget1200PredecessorReference
 )
 
 
@@ -94,7 +101,11 @@ class BenchmarkPrelaunchFailureRecord:
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkPoststartFailureRecord:
-    decision: BenchmarkPoststartFailureDecision | BenchmarkBudget600FailureDecision
+    decision: (
+        BenchmarkPoststartFailureDecision
+        | BenchmarkBudget600FailureDecision
+        | BenchmarkBudget1200FailureDecision
+    )
     event_sequence: int
 
 
@@ -161,7 +172,12 @@ def _history(
                 predecessor = (
                     BenchmarkPrelaunchPredecessorReference.model_validate(row.data)
                     if row.event == PREDECESSOR_EVENT
-                    else BenchmarkPoststartPredecessorReference.model_validate(row.data)
+                    else (
+                        BenchmarkBudget1200PredecessorReference.model_validate(row.data)
+                        if row.data.get("schema_version")
+                        == "embedding-benchmark-poststart-failure/1.2"
+                        else BenchmarkPoststartPredecessorReference.model_validate(row.data)
+                    )
                 )
             except (ValueError, SchemaError):
                 raise BenchmarkJobAdmissionError("BENCHMARK_PREDECESSOR_HISTORY_INVALID") from None
@@ -198,7 +214,12 @@ def _history(
                 poststart_decision = (
                     BenchmarkBudget600FailureDecision.model_validate(row.data)
                     if row.data.get("schema_version") == "embedding-benchmark-poststart-failure/1.1"
-                    else BenchmarkPoststartFailureDecision.model_validate(row.data)
+                    else (
+                        BenchmarkBudget1200FailureDecision.model_validate(row.data)
+                        if row.data.get("schema_version")
+                        == "embedding-benchmark-poststart-failure/1.2"
+                        else BenchmarkPoststartFailureDecision.model_validate(row.data)
+                    )
                 )
             except (ValueError, SchemaError):
                 raise BenchmarkJobAdmissionError("BENCHMARK_POSTSTART_HISTORY_INVALID") from None
@@ -266,14 +287,24 @@ def _history(
 def require_benchmark_poststart_observation(
     request: BenchmarkOwnerRequest,
     invocation: BenchmarkWorkerInvocation,
-    observation: BenchmarkPoststartObservation | BenchmarkBudget600PoststartObservation,
-) -> BenchmarkPoststartObservation | BenchmarkBudget600PoststartObservation:
+    observation: BenchmarkPoststartObservation
+    | BenchmarkBudget600PoststartObservation
+    | BenchmarkBudget1200PoststartObservation,
+) -> (
+    BenchmarkPoststartObservation
+    | BenchmarkBudget600PoststartObservation
+    | BenchmarkBudget1200PoststartObservation
+):
     """Link actual-start failure metadata; a parsed value is never root/OS authority."""
     try:
         checked = (
             BenchmarkBudget600PoststartObservation.model_validate(observation)
             if isinstance(observation, BenchmarkBudget600PoststartObservation)
-            else BenchmarkPoststartObservation.model_validate(observation)
+            else (
+                BenchmarkBudget1200PoststartObservation.model_validate(observation)
+                if isinstance(observation, BenchmarkBudget1200PoststartObservation)
+                else BenchmarkPoststartObservation.model_validate(observation)
+            )
         )
     except (ValueError, SchemaError):
         raise BenchmarkJobAdmissionError("BENCHMARK_POSTSTART_OBSERVATION_INVALID") from None
@@ -281,7 +312,11 @@ def require_benchmark_poststart_observation(
         invocation.device != "CPU"
         or invocation.launch_ordinal != 1
         or request.execution_policy.timeout_seconds
-        != (600 if isinstance(checked, BenchmarkBudget600PoststartObservation) else 180)
+        != (
+            600
+            if isinstance(checked, BenchmarkBudget600PoststartObservation)
+            else (1200 if isinstance(checked, BenchmarkBudget1200PoststartObservation) else 180)
+        )
         or checked.job_id != invocation.job_id
         or checked.execution_id != invocation.execution_id
         or checked.request_sha256 != request.request_sha256
@@ -389,7 +424,7 @@ def require_benchmark_poststart_predecessor(
     session: Session,
     request: BenchmarkOwnerRequest,
     inputs: BenchmarkStagedInputs,
-    reference: BenchmarkPoststartPredecessorReference,
+    reference: BenchmarkPoststartPredecessorReference | BenchmarkBudget1200PredecessorReference,
     *,
     ancestors: frozenset[str] = frozenset(),
 ) -> BenchmarkOwnerRequest:
@@ -399,7 +434,11 @@ def require_benchmark_poststart_predecessor(
     pins stay equal. A new budget cannot launder an arbitrary content/model change.
     """
     try:
-        reference = BenchmarkPoststartPredecessorReference.model_validate(reference)
+        reference = (
+            BenchmarkBudget1200PredecessorReference.model_validate(reference)
+            if isinstance(reference, BenchmarkBudget1200PredecessorReference)
+            else BenchmarkPoststartPredecessorReference.model_validate(reference)
+        )
     except (ValueError, SchemaError):
         raise BenchmarkJobAdmissionError("BENCHMARK_POSTSTART_REFERENCE_INVALID") from None
     row = session.get(JobRecord, reference.job_id, populate_existing=True)
@@ -422,15 +461,27 @@ def require_benchmark_poststart_predecessor(
         "timeout_seconds",
         "policy_sha256",
     }
+    predecessor_v12 = isinstance(reference, BenchmarkBudget1200PredecessorReference)
+    expected_parent_version = (
+        "embedding-device-benchmark-request/1.2"
+        if predecessor_v12
+        else "embedding-device-benchmark-request/1.0"
+    )
+    expected_successor_version = (
+        "embedding-device-benchmark-request/1.2"
+        if predecessor_v12
+        else "embedding-device-benchmark-request/1.1"
+    )
+    expected_timeout = 1200 if predecessor_v12 else 180
     if (
         parent.benchmark_revision_id == request.benchmark_revision_id
         or parent.request_sha256 != reference.request_sha256
-        or parent.schema_version != "embedding-device-benchmark-request/1.0"
-        or request.schema_version != "embedding-device-benchmark-request/1.1"
+        or parent.schema_version != expected_parent_version
+        or request.schema_version != expected_successor_version
         or parent.model_dump(mode="json", exclude=excluded)
         != request.model_dump(mode="json", exclude=excluded)
-        or parent.execution_policy.timeout_seconds != 180
-        or request.execution_policy.timeout_seconds != 600
+        or parent.execution_policy.timeout_seconds != expected_timeout
+        or request.execution_policy.timeout_seconds != (1200 if predecessor_v12 else 600)
         or parent.execution_policy.policy_revision_id == request.execution_policy.policy_revision_id
         or parent.execution_policy.model_dump(mode="json", exclude=policy_excluded)
         != request.execution_policy.model_dump(mode="json", exclude=policy_excluded)
@@ -442,11 +493,18 @@ def require_benchmark_poststart_predecessor(
     )
     history = _history(session, job, parent, parent_inputs, ancestors=ancestors)
     failure = history.poststart_failure
-    if (
-        job.status != JobState.FAILED
-        or failure is None
-        or not isinstance(failure.decision, BenchmarkPoststartFailureDecision)
-        or BenchmarkPoststartPredecessorReference.from_decision(
+    if job.status != JobState.FAILED or failure is None:
+        raise BenchmarkJobAdmissionError("BENCHMARK_POSTSTART_PREDECESSOR_CLOSURE_REQUIRED")
+    if predecessor_v12:
+        if not isinstance(failure.decision, BenchmarkBudget1200FailureDecision) or (
+            BenchmarkBudget1200PredecessorReference.from_decision(
+                failure.decision, event_sequence=failure.event_sequence
+            )
+            != reference
+        ):
+            raise BenchmarkJobAdmissionError("BENCHMARK_POSTSTART_PREDECESSOR_CLOSURE_REQUIRED")
+    elif not isinstance(failure.decision, BenchmarkPoststartFailureDecision) or (
+        BenchmarkPoststartPredecessorReference.from_decision(
             failure.decision, event_sequence=failure.event_sequence
         )
         != reference
@@ -463,7 +521,9 @@ def _require_predecessor_in_session(
     *,
     ancestors: frozenset[str] = frozenset(),
 ) -> BenchmarkOwnerRequest:
-    if isinstance(reference, BenchmarkPoststartPredecessorReference):
+    if isinstance(
+        reference, (BenchmarkPoststartPredecessorReference, BenchmarkBudget1200PredecessorReference)
+    ):
         return require_benchmark_poststart_predecessor(
             session, request, inputs, reference, ancestors=ancestors
         )
@@ -476,7 +536,7 @@ def record_benchmark_poststart_predecessor_in_session(
     session: Session,
     request: BenchmarkOwnerRequest,
     inputs: BenchmarkStagedInputs,
-    reference: BenchmarkPoststartPredecessorReference,
+    reference: BenchmarkPoststartPredecessorReference | BenchmarkBudget1200PredecessorReference,
     *,
     job_id: str,
 ) -> bool:
