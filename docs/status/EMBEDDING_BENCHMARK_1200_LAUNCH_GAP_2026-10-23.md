@@ -160,3 +160,6 @@ failure는 그대로 남고, 다른 actor/source/model/runtime/access-policy/검
   `INSTALLED_V12_POLICY_AND_INVOCATION=PASS`를 확인했다. 새 실행 프로세스는 현재
   실제 `guiadmin` 인증 입력을 기다린다. Job 등록·native CPU/GPU forward·측정 완료는
   아직 주장하지 않는다.
+- 인증 대기 중에는 합성 실행 adapter로 v1.2의 CPU/CUDA 여섯 순서, 같은 Job 내
+  invocation 계약, 완료 후 중복 dispatch 없는 정확한 replay를 추가 검증했다.
+  owner 관련 13개 시험은 PASS다. 이는 실제 모델·GPU 실행 결과가 아니다.

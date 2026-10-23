@@ -146,6 +146,37 @@ def test_complete_series_uses_one_job_six_original_executions_and_no_replay_disp
         assert session.scalar(select(func.count()).select_from(JobEventRecord)) == 18
 
 
+def test_v12_complete_series_preserves_six_ordered_invocations_and_exact_replay(owner_case):
+    case = owner_case
+    case.request = successor_request_v12()
+    case.inputs = staged_inputs()
+    case.admission.request = case.request
+    case.admission.inputs = case.inputs
+
+    result = case.owner.run_launches(case.request)
+    assert result.dispatch_count == 6 and result.state == "VALIDATING_RESULT"
+    assert [value.schema_version for value in case.execution.calls] == [
+        "embedding-device-benchmark-invocation/1.2"
+    ] * 6
+    assert [value.device for value in case.execution.calls] == [
+        "CPU",
+        "CUDA",
+        "CUDA",
+        "CPU",
+        "CPU",
+        "CUDA",
+    ]
+    assert all(
+        validate_benchmark_invocation(case.request, value, case.inputs) is None
+        for value in case.execution.calls
+    )
+    replay = case.owner.run_launches(case.request)
+    assert replay.job_id == result.job_id
+    assert replay.dispatch_count == 0
+    assert replay.receipts == result.receipts
+    assert len(case.execution.calls) == 6
+
+
 @pytest.mark.parametrize("ordinal", (1, 2, 6))
 def test_timeout_keeps_original_unresolved_invocation_and_blocks_automatic_restart(
     owner_case, ordinal
