@@ -163,3 +163,38 @@ failure는 그대로 남고, 다른 actor/source/model/runtime/access-policy/검
 - 인증 대기 중에는 합성 실행 adapter로 v1.2의 CPU/CUDA 여섯 순서, 같은 Job 내
   invocation 계약, 완료 후 중복 dispatch 없는 정확한 replay를 추가 검증했다.
   owner 관련 13개 시험은 PASS다. 이는 실제 모델·GPU 실행 결과가 아니다.
+
+### 2026-10-23 16:11 UTC — 반복 인증 실패의 원인과 GPU 호스트 후속본
+
+- 실제 인증 후 v1.2 Job `job_25ebde2af2fd42c9804e1f4743b0b406`은 등록됐으나
+  CPU/GPU launch 전에 root CUDA 설치 캡처가 실패했다. 새 요청을 중복 제출하거나
+  모델을 실행하지 않았다. Job의 현 상태와 영구 종료 경계는 후속 application 조회로
+  확인해야 한다.
+- 인증 입력이나 CUDA 장치/lease가 근본 원인이 아니었다. root 실행기의 cwd가
+  `/opt/eom/embedding-cuda-loader-empty`여야 하고, 고정된 CUDA loader cache를
+  `/etc/ld.so.cache`에 읽기 전용 bind한 namespace가 필요하다. 격리 preflight에서
+  이 두 경계를 만족시키자 설치 검사가 다음 단계로 진행됐고,
+  `INSTALLED_RUNTIME_FILE_HASH_MISMATCH`로 정확히 거부됐다.
+- 차이는 10월 23일 OS `libz.so.1.3` 갱신이다. 기존 CUDA host extension 1.1은
+  10월 21일 CPU host 기준선과 구 `libz` SHA에 고정돼 있었다. 현재 `libz` SHA는
+  `f61677c7bdb7c2aa2a243ea781bfd16afcb361cede7b4ef76127a9d8eb9a5242`이며,
+  이미 복구된 CPU host snapshot revision은
+  `embeddinghostconfigrev_76048812b8d740ad9ebedfe76bbf5ed4`다. 해시 검사나
+  fail-closed 판정을 완화하지 않았다.
+- 기존 Catalog publication owner를 사용해 새 CPU 기준선에 묶인 CUDA host extension
+  1.1 `embeddingcudahostrev_9f0a51460391d3c89ed1863cc55ddb96`을 별도 revision으로
+  게시했다. snapshot raw SHA는
+  `sha256:850bc785fa28a64b87c1124470c1a2a5ae47f0289dac46af33c239c97dc12da7`다.
+  먼저 생성된 1.0 revision `embeddingcudahostrev_aa36304eb33100768779a975cc59b17c`은
+  필요한 NVML 계약이 없어 선택하지 않는다. 두 이력 모두 덮어쓰지 않는다.
+- 기존 native config의 model/bundle/proof/numerical runtime을 그대로 둔 host-only
+  successor `embeddingnativeconfigrev_948f76281b8b01e361de1a3b9d8884a5`를
+  게시했다. raw SHA는
+  `sha256:7d8aef012c9e957f41ad888eadc6e214568e01aae490aa134851dcdb22cbe087`다.
+  게시 전 원본·host·proof·bundle 계약과 정확히 세 필드만 바뀐 delta를 검증했다.
+  상태는 **PUBLISHED_NOT_ADMITTED**이다. native prefix audit, no-forward probe,
+  새 receipt/seal 없이는 이 설정으로 benchmark를 시작하거나 GPU 기본값을 바꾸지 않는다.
+- 기존 1200초 Job 요청은 구 CUDA config/revision을 고정한다. 새 설정으로 조용히
+  치환할 수 없다. 다음은 지원된 application에서 그 Job의 무실행/상태를 조회·정식
+  종료하고, 새 native config를 audit/probe/seal한 후에만 별도 successor를 제출하는
+  순서다. INDEX/QUERY 서비스와 정본 인덱스는 그대로 active이며 GPU default는 CPU다.
