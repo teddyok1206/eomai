@@ -130,6 +130,15 @@ Codex 로그인 변경 후 자동 모델 검증 기능은 호환 platform/API/We
 실제 device 로그인1회 및 후속 OBSERVE 확인은 별도 진행 상태입니다.
 [운영 범위와 검증 기록](docs/operations/CODEX_AUTH_AUTOMATIC_MODEL_VERIFICATION_RELEASE.md).
 
+### ChatGPT 부가 알림 호환 수정 — 2026-10-24 UTC
+
+Codex0.162.1의 `turn/moderationMetadata`를 기존 대화·turn 검증 뒤 처리하는 좁은 수정을
+공유 platform/API `1a4e3c67`로 배포했습니다. QUERY provider도 실제 설치본과 정렬했고,
+기존 numerical SDK·INDEX·Web은 유지했습니다. 사용자 새 메시지1건은 약8.1초 뒤
+COMPLETED/SUCCEEDED였으며 실제 화면 답변도 확인했습니다. 기존 FAILED 대화·계정
+비밀번호·Codex 인증 파일은 보존했고, 별도 GPU 후보 소스는 이번 릴리스에서 제외했습니다.
+[원인·테스트·실제 배포/응답 증거](docs/operations/GENERAL_CHAT_MODERATION_METADATA_FIX_2026-10-24.md).
+
 ### 과거 GPU 준비·복구 기록 — 2026-10-22–23 UTC
 
 아래는 해당 시점의 기록이며 현재 실측 완료 상태는 위 항목을 기준으로 합니다.

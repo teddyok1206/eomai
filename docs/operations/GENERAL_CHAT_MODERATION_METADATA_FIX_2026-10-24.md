@@ -1,7 +1,9 @@
 # ChatGPT 답변 실패 — Codex moderation metadata 호환 수정 인계
 
-2026-10-24 UTC. 보조 대화에서 확인·수정한 소스 후보이며 **운영 미반영**이다.
-메인 대화의 GPU 우선·묶음 임베딩 작업과 독립된 변경이다.
+2026-10-24 UTC. **호환 운영 배포와 새 채팅 실제 응답 검증을 완료**했다.
+수정 source는 `1a4e3c678bedb1ad5b57497f01c3577ce0d3f6e1`이며 main에 push했다.
+메인 대화의 GPU 우선·묶음 임베딩 작업과 독립된 변경이다. 아래 소스 인계 시점의
+미배포 기록은 역사적 상태이며, 최신 결과는 마지막 운영 검증 절을 따른다.
 
 ## 확인한 장애와 원인
 
@@ -76,3 +78,54 @@ release source pin 갱신을 실행하지 않았고, 다른 작업의 파일도 
    원 FAILED turn을 성공으로 바꾸거나 자동 재실행하지 않는다.
 
 `SOURCE_FIX=READY`, `PRODUCTION_DEPLOYMENT=PENDING`, `LIVE_CHAT_VERIFICATION=NOT_RUN`.
+
+## 운영 배포와 실제 검증 — 2026-10-24 14:27 UTC
+
+- 위 코드·회귀 테스트·인계 문서3개만 별도 commit/push했다. 미완성 GPU 소스15개는
+  명시적 경로의 recoverable Git stash로 보존했고 실제 release archive/wheel에서 제외했다.
+  GPU 기본값·새 batching 모듈이 이번 채팅 수정과 함께 운영 활성화된 것은 아니다.
+- 메인 재검증: 관련4개 묶음174 PASS, worker 포함184 PASS, 추가 native 계약/선택/인계
+  92 PASS. 서로 겹치는 테스트를 합산하지 않는다. 전체 채팅은833 PASS / 인계에 기록된
+  기존 owner SupplementaryGroups 기대값 불일치1 FAIL를 재확인했다. unit/해당 test는
+  이번 수정 전후 동일하다. scoped Ruff·format·native strict mypy PASS다.
+- 활성 채팅0, 인증 변경0, 유효 worker lease0, 실제 native/GPU 실행 없음 확인 후 공유
+  consumer를 정상 중지하고 기존 release operator와 installer로 platform/API를 설치했다.
+  source archive·wheel RECORD·설치 metadata·API 실제 격리 검사 PASS, DB head0058 유지다.
+- 독립 build-only 후보는 `/tmp/eom-api-build/1a4e3c678bedb1ad5b57497f01c3577ce0d3f6e1.WABb5c`;
+  실제 설치 delivery는 같은 source의 `1a4e3c678bedb1ad5b57497f01c3577ce0d3f6e1.vusL3p`다.
+  두 ZIP raw hash는 동일 source라고 해서 같다고 주장하지 않는다. 실제 설치 SHA-256:
+  - platform: `ebe95db10b25c19f151994c58f58002d8a1dddb8b37dcbf572d24222350958a2`
+  - API: `1b663b52b7b6e743fd96b136c02c61a41037805961474410745f6776b996119b`
+  - API contracts: `ffd19c9674b4b9c66d19ad7700e7e80dbce4c6ec406ed83f1ef050084dc91247`
+- 보호된 operator context는 `/var/lib/eom-release-operator-stage.1a4e3c67-ts8ixz2m`이며,
+  context SHA는 `fc9b47c7acab9c665ff7387487d32d87fb01e0b70a4b762d67d1bd3e448e6dd8`다.
+  기존 QUERY SDK `2eef9b20`은 유지하고 실제 API source/wheel과 기존12개 provider code의
+  동일 bytes를 확인해 네 public 설정만 CAS successor로 연결했다. 원 Graph·access policy·
+  namespace·model은 불변이며 변경 전/후/intent는 `/var/lib/eom-query-provider-chat-1a4e3c67`에 있다.
+- 일반 대화 owner의 비밀이 아닌 source provenance pin만 새 commit으로 정렬했다.
+  prompt/model/tool policy, 계정 비밀번호·Codex 인증 파일은 변경하지 않았다. Web은 이번
+  변경 대상이 아니며 기존 f15e66b8을 유지했다. 공유 API wire 계약 변경은 없다.
+- 설치된 handler raw SHA가 인계 수정본 `39d9e1…f2630`과 일치한다. API/Chat owner·worker/
+  QUERY/auth broker 정상 기동, HTTPS login200·readiness READY, 실제 QUERY OWNER_READY 확인.
+  INDEX PID130161 / invocation053c5ab467ff4e29b4901cfabf037b4b는 변경하지 않았다.
+- 사용자 새 메시지1건 `chatturn_abecc515cf9a8ea50b8c800981c331ce`는
+  14:27:18.547924→14:27:26.612505 UTC, 약8.065초 뒤 COMPLETED / SUCCEEDED다.
+  output Artifact `artifact_5ff92ae2c3554e65977ae1b4edf16fba`, revision
+  `rev_e5bbd82ae73d4fef97c3ee72eff0eeee`가 기록됐고 output/result hash는
+  `sha256:3dfe318f6e67f450f54690994ab32e8420a01f9c3208afbdf20cf3553c2b7ff7`다.
+  사용자가 실제 답변 표시를 확인했다. 여기의 hash는 운영 metadata 관찰이며 별도 NAS byte
+  재검증이나 두 번째 모델 호출을 수행했다는 뜻이 아니다.
+- 원 실패 turn의 FAILED/code/생성·종료 시각이 전후 동일함을 읽기 전용으로 확인했다.
+  기존 실패 대화의 재실행·성공 변환·DB 직접 수정은 하지 않았다. 실제 canary 외 모델 재호출0.
+- rollback record: `/var/lib/eom-api/deployments/1a4e3c678bedb1ad5b57497f01c3577ce0d3f6e1.json`.
+
+```text
+SOURCE_FIX=COMMITTED_AND_PUSHED
+PLATFORM_API_INSTALLED=1a4e3c67
+QUERY_PROVIDER_ALIGNMENT=PASS
+HTTPS_READY=PASS
+USER_VISIBLE_REPLY=PASS
+LIVE_NEW_TURN_COMPLETED=PASS
+ORIGINAL_FAILED_HISTORY=PRESERVED
+GPU_CANDIDATE_IN_THIS_RELEASE=EXCLUDED
+```
