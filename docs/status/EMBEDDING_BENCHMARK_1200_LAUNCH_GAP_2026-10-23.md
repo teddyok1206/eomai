@@ -477,3 +477,30 @@ admission은 아직 별도 검증이 필요하며 정식 v1.2 Job은 여전히 �
 - 수정본 private SDK 설치와 실제 suffix5회는 아직 PENDING이다. 별도로 변경 중인
   계정 enrollment/UI 파일은 이번 commit/build에 포함하지 않는다. 공용 API/Web의
   로그인 복구 release와 native numerical worker/model/unit은 유지한다.
+
+### 2026-10-24 06:47 UTC — suffix 전용 수정본 설치 및 실제 인증 대기
+
+- 수정 source `e4e53e8715e3a05567fb930b5e3205b29822381c`을 commit/push했다.
+  별도 clean clone `/tmp/eom-benchmark-resume-source.JW1zLseW`의 정확한 commit으로
+  기존 빌드 스크립트를 실행했다. 임시 caller의 repository root 한 줄만 바꿨다.
+  별도 계정 enrollment/UI 변경은 staged/commit/build하지 않았다.
+- `/tmp/eom-api-build/e4e53e87…lBZlYD/dist`의 platform wheel SHA는
+  `5243e4aab9bc43eab91939069241e078d7be742f4773ccbe7d25eff492712e3d`, API contracts
+  wheel SHA는 `411a3dc44252ef49f7fb5bd7a6f8cbcc4ab16e14826d4b91704b3b033c8a94a1`이다.
+  기존 installer의 RECORD 검증 후 private SDK만 설치했다. 해당 platform RECORD SHA는
+  `86fbc558216329fb45cc0b257742f20118a48385c9023a8e8afe5ae091650e98`이다.
+  API/Web/INDEX/QUERY와 numerical SDK/environment는 바꾸지 않았다.
+- 동일 sandbox no-model 설치 점검은18.494초에 PASS였다. finite operator5개 점검과
+  scoped strict mypy도 다시 통과했다. 보호된 설치본의 old/new measurement inventory
+  비교가 실제로 통과했다. 최초 operator prelogin은 기존 QUERY selector SHA의
+  `sha256:` 표기를 bare-hex reader에 전달해 인증 전에 거부됐다. 이를 임시 caller에서
+  바로잡았다. 원 script/hash와 거부 기록은 보호된 `prelogin-rejected-7ce970d5.*`에
+  보존하고, PID1의 원 invocation `7ce970d57bcb4c4cb61adb10b15ef943` 실패도 구별한다.
+  이 시도는 사용자 인증0·새 Job0·model forward0이었다.
+- 수정된 protected program SHA는
+  `20f1d79d4a96a93d3e63c71493b56a850a4a19f8f8f19d52e2b17ee901ab1b1f`이다.
+  같은 named unit의 새 invocation은 `34d877d9231a420bb8d2922e9f21173a`이며,
+  실제 API provider·original request/policy·installed equivalence와 DB role 확인 뒤
+  `COMPLETED_PREFIX_LOGIN_READY preserved_cpu=1 new_jobs=0`에 도달했다.
+  tmux EOM2의 실제 Studio 인증 입력을 기다리고 있다. 현재 모델은 실행하지 않았고
+  원 Job/CPU1 결과를 바꾸지 않았다. 이 기록을 suffix 완료로 확대 해석하지 않는다.
