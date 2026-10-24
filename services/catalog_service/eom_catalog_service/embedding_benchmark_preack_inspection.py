@@ -25,7 +25,10 @@ from eom_orchestrator.systemd_unit_processes import root_owned_unit_processes
 
 from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
 
-PREACK_PROOF_ROOT = Path("/run/eom-incremental-embeddings/benchmark-preack-recovery")
+# The protected byte reader opens each ancestor read-only. The /run runtime root
+# intentionally grants only traversal to the owner, so keep readable root proofs
+# under the existing root-owned /opt hierarchy instead of broadening /run access.
+PREACK_PROOF_ROOT = Path("/opt/eom/embedding-benchmark-preack-proofs")
 
 
 def _require(value: bool) -> None:

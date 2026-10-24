@@ -48,6 +48,10 @@ def test_actual_read_only_owner_observation_of_retired_unit(stopped):
     module._require_original_unit_retired(observation())
 
 
+def test_proof_uses_owner_readable_root_not_private_runtime_parent():
+    assert str(module.PREACK_PROOF_ROOT) == "/opt/eom/embedding-benchmark-preack-proofs"
+
+
 @pytest.mark.parametrize(
     "key,value",
     [

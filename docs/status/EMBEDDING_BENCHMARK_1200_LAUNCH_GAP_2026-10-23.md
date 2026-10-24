@@ -618,3 +618,18 @@ rollback까지 연결해야 한다. 이 구현 미완료 자체를 성능 NO-GO�
   EOM2의 실제 guiadmin 입력창에서 대기 중이다. 입력창을 다시 만들거나 종료하지
   않는다. 앞선 사용자 인증은 성공했지만 원 실패 controller 종료 시 memory-only
   token도 폐기됐다. 새 입력 전에는 Job 복구 이벤트나 새 모델 실행을 하지 않는다.
+
+### 2026-10-24 07:42 UTC — 실제 owner 권한 차이 보완
+
+- 47d3e538 controller의 실제 guiadmin 로그인은 정상 통과했다. 그 뒤 proof capture가
+  `INSTALLED_RUNTIME_FILE_UNAVAILABLE`/PermissionError로 거부됐다. root-only 사전
+  점검은 통과했지만 UID990/GID1000·supplementary groups0인 실제 owner에서는
+  protected byte reader가 `/run/eom-incremental-embeddings`의0711 ancestor를
+  O_RDONLY|O_DIRECTORY로 열 수 없었다. 모델0회·Job 복구 event0회이며 앞선 CPU1과
+  원 f4 reservation은 그대로다. 이 실패는 인증 오류가 아니다.
+- 기존 /run runtime parent의 읽기 권한을 넓히지 않는다. 같은 root proof bytes와
+  SHA를 `/opt/eom/embedding-benchmark-preack-proofs`의 root:eom0750/0440으로
+  이동해 하나의 canonical file만 유지한다. 새 reader는 이 고정 경로만 사용한다.
+  root 점검에 더해 정확한 실제 owner UID/GID·groups0·capabilities0으로 proof
+  capture가 성공하는 검사를 인증 전에 추가한다. 별도 auth/token 저장소는 만들지
+  않는다. 기존 실패 controller와 프로그램은 보존한다.
