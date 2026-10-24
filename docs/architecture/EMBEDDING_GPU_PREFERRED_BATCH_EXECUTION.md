@@ -495,3 +495,17 @@ commit/replay 연결이다. 그 뒤 현재 target을 일치시키는 CPU/CUDA vi
 P2_E_OBSERVATION_AND_ACQUIRED_RETIREMENT=SOURCE_VERIFIED,
 ROOT_FILE_DAC_AND_CONCURRENCY=PASS, LIVE_GPU_BATCH_UNIT=NOT_RUN,
 CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
+
+### P2-E 패키징 확인
+
+source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존
+`scripts/api/deploy_release.sh --build-only`로3개 wheel의 archive/RECORD·build metadata
+검사를 통과했다. build-only이며 운영 API나 CUDA prefix에 설치한 것은 아니다.
+후보 경로는 `/tmp/eom-api-build/2a819d7dd2c51a1ab104f5275571b337709ca466.A56BzZ/dist`다.
+platform wheel SHA-256은 `061bb65213050a05689bd06cc03e3bf0551717b4e611ec3263042fc9b561b3dc`다.
+
+그 wheel만 임시 `/tmp/eom-gpu-batch-wheel-import.Mm5piv`에 추출하고, explicit API Python의
+`-I -B`, cwd `/`에서 신규8개 module과 제어 schema를 읽었다. 모든 module이 그 추출본에서
+해결되고 torch/transformers를 import하거나 모델을 초기화하지 않음을 확인했다. repository
+PYTHONPATH나 editable install은 쓰지 않았다. **격리 wheel import probe**이며 실제 native
+identity·worker sandbox·GPU 연산·source owner의 운영 연결 PASS는 여전히 아니다.
