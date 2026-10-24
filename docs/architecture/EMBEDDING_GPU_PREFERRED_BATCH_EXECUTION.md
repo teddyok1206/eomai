@@ -1492,3 +1492,16 @@ GRANT는 시작하지 않았다. fixture가 관측 adapter 전체를 대체해 �
 공통 parser/CPU 거부·batch 전용 projection/원 dispatch·중단·retirement/dependency 회귀195
 PASS/34.28초, strict mypy5 source PASS, Ruff PASS다. 결과는
 `/tmp/eom-gpu-batch-unit-parser-tests-20261024-r3.log`다. 실제 GPU READY는 아직 다음 gate다.
+
+933a644b owner의 실제 r3(c6b4791b…)는 공통 관측/dispatch/OpenFile을 통과하고 native unit을
+시작했다. PID1 namespace 구성에서 현재 사용하지 않는 다른 CUDA-index 임시 디렉터리가 없어서
+status226/NAMESPACE로 거부됐다. Python/model/GRANT는 시작하지 않았고 원 실패 기록은 유지했다.
+다른 서비스의 ephemeral staging 경로는 `InaccessiblePaths=-…`로 선언해 **존재하면 차단**하되
+존재 자체를 이 unit의 의존성으로 만들지 않는다. 원 batch runtime 경로는 여전히 필수 차단이다.
+다른 runtime을 설치하거나 디렉터리를 임의로 생성하지 않는다. parent들의 기존 root/owner DAC와
+worker UID/group 분리도 그대로 유지한다. 고정 unit raw SHA와 root 관측 pin을 함께 갱신한다.
+수치 SDK/config/receipt나 Source/IAM/DB는 변경하지 않는다.
+
+optional namespace/fixed unit bytes·descriptor·OS observation/entry 회귀95 PASS/12.32초,
+Ruff PASS다(`/tmp/eom-gpu-batch-optional-namespace-tests-20261024.log`). 다음 actual unit gate는
+기존 r3를 재시작하지 않고 새 진단 identity를 사용하며 원 실패는 보존한다.

@@ -163,4 +163,13 @@ def test_native_unit_keeps_late_bound_input_root_metadata_and_no_worker_path_acc
         assert required in socket
     assert "Environment=PYTHONPATH=" not in service and "User=root" not in service
     assert "OpenFile=" not in service  # Bound once by root with an absolute instance path.
+    # Other owners' ephemeral workspaces need not exist for this independent unit.
+    # Existing paths stay inaccessible; no unrelated service is installed or started.
+    for line in service.splitlines():
+        if line.startswith("InaccessiblePaths="):
+            for path in line.partition("=")[2].split():
+                if path.lstrip("-").startswith("/run/eom-"):
+                    assert path == "/run/eom-native-embedding-gpu-batch" or path.startswith(
+                        "-/run/"
+                    )
     assert "--model" not in service and "ReadWritePaths=/mnt/nas" not in service
