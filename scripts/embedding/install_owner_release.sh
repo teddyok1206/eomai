@@ -72,6 +72,14 @@ fi
 [[ -f "$stage/site-packages/eom_workflow_runner/local_embedding_native_executor.py" \
   && -f "$stage/site-packages/eom_workflow/resources/native-embedding-coordinator-v1.schema.json" ]] || fail NATIVE_OWNER_EXECUTOR_MISSING
 [[ -z "$(find -P "$stage" -type l -print -quit)" ]] || fail NATIVE_OWNER_RELEASE_LINK_INVALID
+bootstrap="$stage/site-packages/share/eom/bootstrap/prepare_native_index.py"
+bootstrap_installed=NO
+if [[ -f "$bootstrap" && ! -L "$bootstrap" ]]; then
+  # This small runtime materialization comes from the already verified wheel,
+  # not another mutable checkout file. Older owner wheels remain installable.
+  install -o root -g root -m 0444 "$bootstrap" "$stage/prepare_native_index.py"
+  bootstrap_installed=YES
+fi
 chown -R root:root "$stage"
 find -P "$stage" -type d -exec chmod 0755 {} +
 find -P "$stage" -type f -exec chmod 0444 {} +
@@ -79,6 +87,9 @@ find -P "$stage" -type f -exec chmod 0444 {} +
 mkdir -m 0755 "$target" || fail NATIVE_OWNER_RELEASE_EXISTS
 mv -T "$stage/site-packages" "$target/site-packages"
 mv -T "$stage/eom_platform-0.1.0-py3-none-any.whl" "$target/eom_platform-0.1.0-py3-none-any.whl"
+if [[ "$bootstrap_installed" == YES ]]; then
+  mv -T "$stage/prepare_native_index.py" "$target/prepare_native_index.py"
+fi
 if [[ -n "$contracts_wheel" ]]; then
   mv -T "$stage/eom_api_contracts-0.1.0-py3-none-any.whl" "$target/eom_api_contracts-0.1.0-py3-none-any.whl"
   printf 'NATIVE_OWNER_API_CONTRACTS_INSTALLED=PASS\napi_contracts_wheel_sha256=%s\n' "$contracts_sha256"
@@ -86,3 +97,4 @@ fi
 printf 'NATIVE_OWNER_WHEEL_INSTALLED=PASS\nsource_commit=%s\nwheel_sha256=%s\nowner_release=%s\n' \
   "$source_commit" "$wheel_sha256" "$target"
 printf '%s\n' 'CPU_RUNTIME=UNCHANGED' 'OWNER_ACTIVATION=NOT_PERFORMED'
+printf 'NATIVE_OWNER_BOOTSTRAP_INSTALLED=%s\n' "$bootstrap_installed"

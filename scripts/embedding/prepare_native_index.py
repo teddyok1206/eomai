@@ -38,6 +38,9 @@ def main() -> int:
         elif len(sys.argv) == 3 and sys.argv[1] == "CUDA_INDEX":
             sys.argv.pop(1)
             from eom_catalog_service.embedding_native_cuda_index_controller import main as prepare
+        elif len(sys.argv) == 3 and sys.argv[1] == "GPU_BATCH":
+            sys.argv.pop(1)
+            from eom_catalog_service.embedding_gpu_batch_owner_entry import main as prepare
         else:
             return 1
 

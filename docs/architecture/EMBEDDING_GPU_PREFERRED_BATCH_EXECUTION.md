@@ -1015,3 +1015,74 @@ kernel peer/birth를 연결한다. bootstrap은 작은 metadata/socket만, 큰 b
 owner workspace 한 곳만 사용한다. root는 설치된 policy/config만 읽고 DB/NAS/source 권한은
 actual owner의 기존 application callback에 남긴다. 구체 wire/설치 변경 전에 기존 installer와
 Polkit whitelist의 실제 지원 범위를 대조하며, 지원된 경계가 있다는 추정만으로 활성화하지 않는다.
+
+## P2-M 실제 fixed root 시작과 owner rendezvous
+
+기존 CUDA INDEX owner의 one-shot systemd/Polkit·`prepare_native_index.py` 보호 release bootstrap을
+재사용한다. 추가 mode는 `GPU_BATCH <original-attempt-hex>` 하나이며 임의 path/명령/사용자/단위를
+받지 않는다. 기존 JSON Schema의 ALLOCATION_REQUEST를 canonical600 파일로 한 번 staging한다.
+별도 worker 메시지/schema나 새 큐는 없다. 정본 parent Job은 DB에 남고 작은 로컬 metadata와
+Unix socket은 `/var/lib/eom-workflow-runner/embedding-batch-control/<attempt>`에 둔다. 큰 batch
+input은 기존 embedding-work-batches workspace에만 보유한다.
+
+실제 owner는 기존 protected workspace와 no-clobber dispatch marker를 쓴다. root는 고정
+Root0 policy 파일의 raw/self hash·purpose/config/profile을 확인하고 원 caller socket으로 연결한다.
+SO_PEERCRED/SCM_CREDENTIALS·원 PID/birth/pidfd를 검증한 기존 channel/proxy가 source callback을
+운반한다. owner도 실제 root unit MainPID/원 invocation·고정 template를 확인한 뒤 원 channel에
+바인딩한다. PID나 JSON이 source permission이 되는 것은 아니며 actual owner의 기존 Catalog
+source/lease 검증이 계속 필요하다.
+
+주 접근은 attempt map/key lookup, bounded metadata read, 고정4개 member와 socket inode 비교다.
+공간은 O(1) metadata, 시간은 bounded bytes/고정 member 수다. No-follow retained directory FD와
+원 socket inode만 정리하며 기존 allocation/dispatch/부분 파일은 보존한다. dispatch marker는
+systemctl side effect 전에 한 번 기록한다. timeout/실패/관측 불명 때 재시작·새 ID·CPU fallback을
+추정하지 않는다. Root native retirement와 canonical 결과 저장은 기존 owner/controller를 사용한다.
+코드/IPC adapter에는 SQL·NAS가 없고 source application과 physical adapter의 의존 방향을 유지한다.
+
+Root가 arbitrary owner path를 읽거나 상시 broker를 만드는 대안은 불필요한 실행 표면과 상태를
+늘리므로 채택하지 않는다. 기존 protected owner-release와 purpose별 fixed unit/Polkit만 확장한다.
+정상 source/DB 테스트나 OS rendezvous 검증을 실제 GPU/numerical admission으로 확대하지 않는다.
+
+P2-M 구현·검증:
+
+- 실제 source owner가 원 allocation의 local listener를 먼저 준비하고 no-clobber marker를 기록한
+  뒤 fixed root unit만 시작한다. root/owner 양쪽은 실제 kernel UID/GID·sender·원 PID/birth/pidfd를
+  확인한다. template/MainPID/invocation/drop-in 관측도 대조한다. timeout·부분 dispatch는 같은
+  attempt의 재기동이나 CPU fallback 허가가 아니다.
+- 기존 stdlib bootstrap을 platform wheel/RECORD에 포함하고 owner-release installer가 그 검증된
+  작은 파일만 runtime 경계에 materialize한다. runtime Git/source 의존이나 새 dependency가 없다.
+  실제 offline `pip --target`의 data-file 배치와 이전 wheel 호환도 검사했다.
+- 실제 권한 하강 후 non-dumpable 프로세스의 `/proc/<pid>` directory UID와 일부 leaf의 root
+  storage UID가 다를 수 있었다. 임의 dumpability 활성화로 우회하지 않고, 기존 protected reader에
+  명시적 kernel leaf 소유 구분만 추가했다. batch owner는 모든 real/effective/saved/fs UID·GID와
+  같은 active birth를 전후 확인하고 원 pidfd로 생존을 확인한다. 기존 numerical/benchmark의
+  strict parser와 보호된 runtime 파일의 기본 소유 규칙은 변경하지 않았다.
+- 계산의 검증/ACK 뒤에는 immutable terminal metadata를 보존한다. canonical publication이 종료된
+  socket/PID나 계산 deadline의 생존을 요구하지 않도록 했지만, 현재 source/권한/lease와 parent
+  history 검증은 계속 별도 application 경계에서 수행한다. wire ACK는 publication 성공이 아니다.
+- 집중 unit/packaging133 PASS(49.65s), 별도 installed-runtime/snapshot/receipt/dependency53 PASS
+  (25.66s)다. scoped Python19개 Ruff/format와 production9모듈 strict mypy, shell syntax/diff PASS다.
+  두 test 목록의 최초 invocation에는 존재하지 않는 파일명으로 collection error가 있었고 실제
+  파일을 확인해 위 범위로 실행했다. 실행하지 않은 검사를 PASS로 포함하지 않는다.
+- guarded disposable PostgreSQL50 PASS(82.83s), 공식 cleanup PASS다. 로그:
+  `/tmp/eom-gpu-batch-admission-20261024-r9.log`. terminal ACK snapshot 변경 뒤에도 원 child
+  publication/replay·중단/동시성·current source 거부 경계를 확인했다. actual IAM/numerical leaf는
+  해당 fixture의 명시적 합성 seam이며 운영 실행 증거가 아니다.
+- root/runner 실제 OS16 PASS(8.05s), 로그 `/tmp/eom-gpu-batch-owner-os-20261024-r11.log`다.
+  실제 nondumpable source owner의 rendezvous와 unavailable/ready 교환, sender/pidfd/local DAC,
+  ACK 뒤 metadata 보존을 포함한다. r8의 socket timeout2건 및 r10의 proc ancestor2건 실패 로그는
+  보존한다. r9는 nondumpable case 추가 전14 PASS였다. unit/systemd/source/GPU leaf는 합성으로,
+  실제 fixed-unit sandbox·GPU 격리·그림/trainer 공존 PASS로 확대하지 않는다.
+- API/Web·일반채팅·INDEX owner active, GPU0%/2MiB를 확인했다. 이번 source 검증 중 운영 release,
+  device default, 계정/credential, 기존 실패 기록은 바꾸지 않았다.
+
+P2_M_ROOT_OWNER_RENDEZVOUS=SOURCE_AND_OS_VERIFIED, CANONICAL_QUERY_REPLAY=DB_VERIFIED,
+ACTUAL_SELECTED_CHILD_DISPATCH=PENDING, LIVE_GPU_BATCH=NOT_RUN,
+GPU_PREFERRED_ACTIVE=NO, CURRENT_DEFAULT=CPU, GOAL=ACTIVE.
+
+사용자 후속 검토 순서: GPU 목표를 실제 운영까지 완료한 뒤 완료 commit과 실제 installed/active
+release set을 체크포인트로 기록한다. 그때
+`/home/eom/EOM_CODE_REVIEW_POST_CHECKPOINT_2026-10-24.md`의 정적 후보를 대조하고 이미 해결된
+항목은 제외한다. HWPX 중단 복구 → token/account 잠금 순서 → admin version/idempotent replay →
+document lease/응답 시간 순서다. 후보를 재현된 장애로 간주하거나 현재 GPU 작업을 되돌리지 않는다.
+README 정리 `4e9c962e`는 별도 승인된 기존 commit으로 유지하며 중복 반영하지 않는다.

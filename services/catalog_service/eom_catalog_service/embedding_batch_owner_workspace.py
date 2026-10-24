@@ -33,7 +33,7 @@ from eom_workflow.embedding_batch_owner_control import (
 )
 from eom_workflow.embedding_batch_plan import EmbeddingBatchBound
 
-from eom_catalog_service.embedding_benchmark_handoff import benchmark_owner_start_ticks
+from eom_catalog_service.embedding_batch_owner_identity import embedding_batch_owner_start_ticks
 
 BATCH_OWNER_ROOT = Path("/var/lib/eom-workflow-runner/embedding-work-batches")
 _INPUT = "batch-input.json"
@@ -137,7 +137,7 @@ def stage_owner_embedding_batch(
     raw = canonical_json_bytes(batch.model_dump(mode="json"))
     _require(0 < len(raw) <= MAX_EMBEDDING_WORK_BATCH_BYTES)
     pid = os.getpid()
-    birth = benchmark_owner_start_ticks(pid, uid=owner.owner_uid, gid=owner.owner_gid)
+    birth = embedding_batch_owner_start_ticks(pid, uid=owner.owner_uid, gid=owner.owner_gid)
     body = dict(
         schema_version="embedding-batch-owner-control/1.0",
         message_type="OWNER_BOUND",
@@ -175,7 +175,7 @@ def stage_owner_embedding_batch(
             _epoch(os.stat(_BOUND, dir_fd=directory, follow_symlinks=False)),
         )
     _require(
-        benchmark_owner_start_ticks(pid, uid=owner.owner_uid, gid=owner.owner_gid) == birth
+        embedding_batch_owner_start_ticks(pid, uid=owner.owner_uid, gid=owner.owner_gid) == birth
         and time.monotonic_ns() < request.expires_monotonic_ns
     )
     staged.assert_current()
@@ -192,7 +192,9 @@ def read_owner_embedding_batch(
     notice = EmbeddingBatchOwnerBound.model_validate(notice)
     validate_embedding_batch_owner_context(request, notice.controller_release, notice)
     _require(
-        benchmark_owner_start_ticks(notice.owner_pid, uid=owner.owner_uid, gid=owner.owner_gid)
+        embedding_batch_owner_start_ticks(
+            notice.owner_pid, uid=owner.owner_uid, gid=owner.owner_gid
+        )
         == notice.owner_start_ticks
     )
     instance = notice.allocation_attempt_id.removeprefix("embeddingallocation_")

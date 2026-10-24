@@ -109,7 +109,7 @@ class VerifiedLocalEmbeddingBatchResult:
         """Build small verified metadata only; caller separately validates parent history."""
         self.assert_current()
         _require(
-            channel.received_completion == self.completed
+            channel.acknowledged_completion == self.completed
             and channel.request.parent_request_sha256 == self.staged.notice.binding.request_sha256
         )
         children: list[dict[str, Any]] = []

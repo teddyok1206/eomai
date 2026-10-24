@@ -144,7 +144,7 @@ def publication_case(value, monkeypatch, *, stage="BOUND"):
     channel.request = control
     monkeypatch.setattr(
         EmbeddingBatchOwnerChannel,
-        "received_completion",
+        "acknowledged_completion",
         property(lambda actual: numeric.completed if actual is channel else None),
     )
     verified = VerifiedLocalEmbeddingBatchResult(

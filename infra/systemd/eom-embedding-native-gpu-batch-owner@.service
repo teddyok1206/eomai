@@ -1,0 +1,71 @@
+[Unit]
+Description=EOM fixed root finite GPU batch controller %i
+StartLimitIntervalSec=infinity
+StartLimitBurst=1
+CollectMode=inactive
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+User=root
+Group=root
+SupplementaryGroups=eom-workflow-runner
+Slice=system.slice
+WorkingDirectory=/opt/eom/embedding-cuda-loader-empty
+EnvironmentFile=/etc/eom/embedding-gpu-batch-owner.env
+Environment=PATH=/usr/bin:/bin
+Environment=TZ=UTC
+Environment=LANG=C.UTF-8
+UnsetEnvironment=LD_PRELOAD LD_LIBRARY_PATH LD_AUDIT PYTHONPATH PYTHONHOME PYTHONSTARTUP PYTHONUSERBASE
+ExecStart=/opt/eom/conda/envs/eom-embedding-index-cpu/bin/python3.12 -I -B ${EOM_EMBEDDING_INDEX_PREPARE_ENTRYPOINT} GPU_BATCH %i
+NoNewPrivileges=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+PrivateDevices=no
+DevicePolicy=closed
+DeviceAllow=/dev/nvidia0 rw
+DeviceAllow=/dev/nvidiactl rw
+DeviceAllow=/dev/nvidia-uvm rw
+DeviceAllow=/dev/nvidia-uvm-tools rw
+ProtectSystem=strict
+BindReadOnlyPaths=/opt/eom/embedding-cuda-host-extensions/selected-cache:/etc/ld.so.cache
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictRealtime=yes
+CapabilityBoundingSet=CAP_CHOWN CAP_DAC_READ_SEARCH CAP_SYS_PTRACE
+AmbientCapabilities=
+RestrictAddressFamilies=AF_UNIX AF_NETLINK
+SystemCallArchitectures=native
+ReadOnlyPaths=/var/lib/eom-workflow-runner/embedding-batch-control
+ReadOnlyPaths=/var/lib/eom-workflow-runner/embedding-work-batches
+ReadOnlyPaths=/opt/eom/embedding-owner-releases /opt/eom/conda/envs/eom-embedding-cuda
+ReadOnlyPaths=/opt/eom/embedding-models /opt/eom/embedding-runtime-proofs
+ReadOnlyPaths=/opt/eom/embedding-runtime-archives /opt/eom/embedding-runtime-bundles
+ReadOnlyPaths=/opt/eom/embedding-native-config /opt/eom/embedding-runtime-admission
+ReadOnlyPaths=/opt/eom/embedding-batch-policies
+ReadOnlyPaths=/run/eom-gpu-lease
+ReadWritePaths=/run/eom-native-embedding-gpu-batch
+ReadWritePaths=/opt/eom/embedding-gpu-batch-lifetimes
+InaccessiblePaths=/mnt/nas /home/eom/EOM /home/eom/EOMIS
+InaccessiblePaths=/root/.codex /srv/eom/worker-homes /srv/eom/models/image
+InaccessiblePaths=-/var/run/docker.sock -/run/postgresql -/var/run/postgresql
+InaccessiblePaths=/etc/eom
+UMask=0077
+MemoryMax=2G
+CPUQuota=200%
+TasksMax=64
+TimeoutStartSec=240
+TimeoutStopSec=5
+KillMode=control-group
+Restart=no
+LimitCORE=0
+StandardInput=null
+StandardOutput=null
+StandardError=null

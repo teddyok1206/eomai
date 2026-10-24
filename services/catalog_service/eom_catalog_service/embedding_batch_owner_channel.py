@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import re
 import socket
+import time
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from enum import StrEnum
@@ -30,9 +31,9 @@ from eom_workflow.embedding_batch_owner_control import (
     validate_embedding_batch_owner_context,
 )
 
+from eom_catalog_service.embedding_batch_owner_identity import embedding_batch_owner_start_ticks
 from eom_catalog_service.embedding_batch_owner_pidfd import EmbeddingBatchOwnerPidfd
 from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer, PeerFence, _Frames
-from eom_catalog_service.embedding_benchmark_handoff import benchmark_owner_start_ticks
 
 type _Side = Literal["ROOT", "OWNER"]
 
@@ -361,6 +362,20 @@ class EmbeddingBatchOwnerChannel:
             assert self._completed is not None
             return self._completed
 
+    @property
+    def acknowledged_completion(self) -> EmbeddingBatchRootCompleted:
+        """Immutable verified terminal metadata, not a live peer/source capability.
+
+        Successful output verification and ACK close the physical exchange.
+        Canonical publication must retain fresh source/lease authority, but must
+        not require this completed socket/PID or compute deadline to stay alive.
+        """
+        _require(
+            self.side == "OWNER" and self._phase is _Phase.DONE and self._completed is not None
+        )
+        assert self._completed is not None
+        return self._completed
+
 
 def bind_original_embedding_batch_owner_channel(
     connection: socket.socket,
@@ -391,14 +406,14 @@ def bind_original_embedding_batch_owner_channel(
             and 0 < peer_start_ticks < 2**63
         )
         _require(
-            benchmark_owner_start_ticks(
+            embedding_batch_owner_start_ticks(
                 expected_peer.pid, uid=expected_peer.uid, gid=expected_peer.gid
             )
             == peer_start_ticks
         )
         lifetime = EmbeddingBatchOwnerPidfd(expected_peer.pid)
         _require(
-            benchmark_owner_start_ticks(
+            embedding_batch_owner_start_ticks(
                 expected_peer.pid, uid=expected_peer.uid, gid=expected_peer.gid
             )
             == peer_start_ticks
@@ -410,19 +425,28 @@ def bind_original_embedding_batch_owner_channel(
                 and os.getresuid() == (local[0],) * 3
                 and os.getresgid() == (local[1],) * 3
             )
+            assert lifetime is not None
+            terminal = channel is not None and channel.terminal_peer_exit_allowed
+            if lifetime.wait_exited(until_ns=time.monotonic_ns()):
+                _require(terminal)
+                return
             try:
-                observed = benchmark_owner_start_ticks(actual.pid, uid=actual.uid, gid=actual.gid)
+                observed = embedding_batch_owner_start_ticks(
+                    actual.pid, uid=actual.uid, gid=actual.gid
+                )
             except (ValueError, OSError):
                 # /proc can become root-owned while the original process is
                 # exiting, even before its State becomes Z. Only the original
                 # kernel pidfd proves exit; no active-process parser is relaxed.
-                if channel is None or not channel.terminal_peer_exit_allowed:
+                if not terminal:
                     raise
                 assert lifetime is not None
                 if lifetime.wait_exited(until_ns=request.expires_monotonic_ns):
                     return
                 raise
             _require(observed == peer_start_ticks)
+            if lifetime.wait_exited(until_ns=time.monotonic_ns()):
+                _require(terminal)
 
         channel = EmbeddingBatchOwnerChannel(
             connection,

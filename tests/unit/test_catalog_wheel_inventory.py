@@ -15,6 +15,12 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
     source = tmp_path / "source"
     source.mkdir()
     copy2(ROOT / "pyproject.toml", source / "pyproject.toml")
+    bootstrap_root = source / "scripts/embedding"
+    bootstrap_root.mkdir(parents=True)
+    copy2(
+        ROOT / "scripts/embedding/prepare_native_index.py",
+        bootstrap_root / "prepare_native_index.py",
+    )
     for package_root in ("packages", "services", "apps", "tools"):
         copytree(
             ROOT / package_root,
@@ -59,6 +65,37 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
             "eom_workflow/resources/reference-query-owner-configuration-v2.schema.json",
         }
         assert required_members <= set(archive.namelist())
+        bootstrap_member = (
+            "eom_platform-0.1.0.data/data/share/eom/bootstrap/prepare_native_index.py"
+        )
+        assert (
+            archive.read(bootstrap_member)
+            == (ROOT / "scripts/embedding/prepare_native_index.py").read_bytes()
+        )
+
+    installed = tmp_path / "owner-install"
+    staged = subprocess.run(
+        (
+            sys.executable,
+            "-m",
+            "pip",
+            "install",
+            "--no-deps",
+            "--no-index",
+            "--no-compile",
+            "--no-cache-dir",
+            "--target",
+            str(installed),
+            str(wheel),
+        ),
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert staged.returncode == 0, staged.stderr
+    assert (installed / "share/eom/bootstrap/prepare_native_index.py").read_bytes() == (
+        ROOT / "scripts/embedding/prepare_native_index.py"
+    ).read_bytes()
 
     imported = subprocess.run(
         (

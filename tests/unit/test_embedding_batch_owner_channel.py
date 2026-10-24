@@ -189,6 +189,26 @@ def test_output_verifier_failure_does_not_confirm_receipt_or_permit_replay():
                 future.result(timeout=2)
         with pytest.raises(EmbeddingBatchOwnerChannelError):
             owner.acknowledge_completion(lambda _: None)
+        with pytest.raises(EmbeddingBatchOwnerChannelError):
+            _ = owner.acknowledged_completion
+
+
+def test_acked_terminal_metadata_survives_closed_socket_without_new_peer_or_compute_authority():
+    with endpoints() as (root, owner, value, _, left, _):
+        with pytest.raises(EmbeddingBatchOwnerChannelError):
+            _ = owner.acknowledged_completion
+        checked_once(root, owner, value)
+        raw_send(left, value.completed)
+        assert owner.authorize_next(lambda *_: None) == value.completed
+        with pytest.raises(EmbeddingBatchOwnerChannelError):
+            _ = owner.acknowledged_completion
+        owner.acknowledge_completion(lambda _: None)
+        owner.close()
+        assert owner.acknowledged_completion == value.completed
+        with pytest.raises(EmbeddingBatchOwnerChannelError):
+            _ = owner.received_completion
+        with pytest.raises(EmbeddingBatchOwnerChannelError):
+            _ = root.acknowledged_completion
 
 
 def test_source_fence_replay_or_wrong_check_ack_is_rejected():
@@ -317,7 +337,7 @@ def test_original_peer_guard_only_allows_kernel_confirmed_exit_after_terminal_ex
                 return birth + 1
             raise ValueError("synthetic proc unavailable")
 
-        monkeypatch.setattr(channel_module, "benchmark_owner_start_ticks", observed)
+        monkeypatch.setattr(channel_module, "embedding_batch_owner_start_ticks", observed)
         # Synthetic exit proof only in this guard unit test. The privileged test
         # exercises the actual pidfd when the real runner exits immediately at ACK.
         monkeypatch.setattr(channel._peer_lifetime, "wait_exited", lambda **_: fault == "gone")

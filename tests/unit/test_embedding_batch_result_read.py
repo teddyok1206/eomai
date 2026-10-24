@@ -121,6 +121,8 @@ def test_owner_checks_original_output_and_shares_one_readonly_binary_buffer(loca
         assert all(view.readonly for view in verified.child_vectors)
         assert len({id(view.obj) for view in verified.child_vectors}) == 1
         assert b"".join(verified.child_vectors) == local.vectors
+        owner.acknowledge_completion(lambda _: verified.assert_current())
+        owner.close()
         receipt = verified.receipt("job_" + "9" * 32, owner)
         assert receipt.bound == local.staged.notice
         assert receipt.children == local.receipt.children

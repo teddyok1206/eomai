@@ -18,11 +18,11 @@ from eom_workflow.embedding_batch_owner_control import (
 )
 
 from eom_catalog_service.embedding_batch_owner_channel import EmbeddingBatchOwnerChannel
+from eom_catalog_service.embedding_batch_owner_identity import embedding_batch_owner_start_ticks
 from eom_catalog_service.embedding_batch_owner_workspace import (
     StagedOwnerEmbeddingBatch,
     read_owner_embedding_batch,
 )
-from eom_catalog_service.embedding_benchmark_handoff import benchmark_owner_start_ticks
 from eom_catalog_service.embedding_gpu_batch_controller import (
     CompletedEmbeddingGpuBatch,
     UnavailableEmbeddingGpuBatch,
@@ -81,7 +81,9 @@ class RootEmbeddingBatchOwnerProxy:
             and os.getresuid() == (0, 0, 0)
             and os.getresgid() == (0, 0, 0)
             and self._channel.require_direct_peer() == self._peer
-            and benchmark_owner_start_ticks(self._peer.pid, uid=self._peer.uid, gid=self._peer.gid)
+            and embedding_batch_owner_start_ticks(
+                self._peer.pid, uid=self._peer.uid, gid=self._peer.gid
+            )
             == self._owner_birth
         )
         # The actual GPU controller owns installation/retirement proofs. Rewalking

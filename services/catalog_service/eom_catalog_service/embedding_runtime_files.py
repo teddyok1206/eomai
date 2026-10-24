@@ -106,7 +106,11 @@ class ObservedRuntimeMemberBytes:
 
 @contextmanager
 def _protected_open(
-    path: Path, owner_uid: int, *, kind: Literal["REGULAR", "EMPTY_DIRECTORY"] = "REGULAR"
+    path: Path,
+    owner_uid: int,
+    *,
+    kind: Literal["REGULAR", "EMPTY_DIRECTORY"] = "REGULAR",
+    leaf_owner_uid: int | None = None,
 ) -> Iterator[tuple[int, tuple[tuple[Path, tuple[int, ...]], ...]]]:
     _require(path.is_absolute() and ".." not in path.parts, "PATH_INVALID")
     descriptors: list[tuple[int, int | None, str, Path, tuple[int, ...]]] = []
@@ -157,7 +161,7 @@ def _protected_open(
         else:
             _require(
                 stat.S_ISREG(value.st_mode)
-                and value.st_uid == owner_uid
+                and value.st_uid == (owner_uid if leaf_owner_uid is None else leaf_owner_uid)
                 and value.st_nlink == 1
                 and not value.st_mode & 0o6022,
                 "FILE_UNPROTECTED",
@@ -437,9 +441,18 @@ def require_cuda_loader_working_directory(files: NumericalRuntimeFileSnapshots) 
     epoch.assert_unchanged()
 
 
-def read_live_runtime_os_file(path: Path, *, maximum: int, owner_uid: int = 0) -> bytes:
-    """Fixed kernel/proc observation: st_size may be zero; live bytes are never cached."""
-    with _protected_open(path, owner_uid) as (descriptor, _ancestors):
+def read_live_runtime_os_file(
+    path: Path, *, maximum: int, owner_uid: int = 0, leaf_owner_uid: int | None = None
+) -> bytes:
+    """Bounded kernel observation; nondumpable proc leaves can have root storage ownership.
+
+    The process directory still belongs to its actual UID. This explicit leaf
+    distinction does not relax ancestor protection or installed-runtime reads.
+    """
+    with _protected_open(path, owner_uid, leaf_owner_uid=leaf_owner_uid) as (
+        descriptor,
+        _ancestors,
+    ):
         chunks: list[bytes] = []
         count = 0
         while chunk := os.read(descriptor, min(65536, maximum + 1 - count)):
