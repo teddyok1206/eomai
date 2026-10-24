@@ -112,3 +112,45 @@ untouched. Rollback record is
 `/var/lib/eom-api/deployments/b87cc11c9a7a853c80877fdd39838b01292fb6e5.json`;
 predecessor API19df and Webd265 artifacts remain available. No password recovery,
 global session revocation or deliberate real-account login failure was performed.
+
+## Actual authenticated HTTPS verification (recorded2026-10-24 04:47 UTC)
+
+The authorized genuine HTTPS check against the deployed `eomai.duckdns.org` Studio
+release passed. One genuine password entry created the test browser session with
+`POST /studio/api/v1/session` returning201. The checker required its session cookie
+to be Secure, HttpOnly, SameSite=Strict and scoped to `/studio`; an authenticated
+`GET /studio/api/v1/session` returned200 with the same Operator ID, and
+`GET /studio/` returned200. Only that newly created test session was logged out,
+using its own cookie and CSRF token; `POST /studio/api/v1/logout` returned204.
+The bounded actual completion evidence was:
+
+```text
+LOGIN_RELEASE_HTTPS_AUTHENTICATED_PASS session_read=200 studio=200 own_logout=204
+```
+
+This resolves the authenticated-HTTPS PENDING statements above. No password was
+changed, no deliberate failed login was injected, and no global logout or other
+session revocation was performed. Passwords, cookies, CSRF values and tokens are
+not included in this evidence. The separate temporary client suite passed69
+no-network mocked tests (47 baseline plus22 HTTPS-focused cases), including
+one-prompt failure behavior, cookie/operator binding, own-session-only logout and
+verified TLS connection cleanup; those synthetic tests are not substituted for
+the actual successful check.
+
+The public API and Web remain on login source
+`b87cc11c9a7a853c80877fdd39838b01292fb6e5`. The operational QUERY provider's12 selected
+code members remain unchanged; the login deployment did not repin its provider or
+rewrite those members. The separately installed private benchmark SDK from
+`e0d309e9…` is not a public API deployment and does not change the numerical worker
+`d381e6bc480606a828898ebe2e9942dd8a143677`, native CPU/CUDA environments, model bytes
+or numerical runtime pins.
+
+This completes the permanent login recovery deployment and its actual HTTPS
+verification only. It does not complete the separate six-launch embedding
+comparison, original failure closure, coexistence/resource acceptance or any GPU
+default activation; the production default remains CPU.
+
+The Korean-first `COMPLETED / Login permanent recovery` milestone was delivered
+at2026-10-24 04:47:23UTC: report
+`devreport_ba42c71a05d248b2acced9fb11cd4d43`, SENT/HTTP200. It reports login completion
+only and explicitly leaves the embedding comparison incomplete.
