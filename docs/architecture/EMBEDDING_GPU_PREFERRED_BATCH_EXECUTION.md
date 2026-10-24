@@ -928,6 +928,32 @@ P2-K 검증 결과:
 P2_K_RECEIPT=SOURCE_AND_DB_AND_OS_VERIFIED, CHILD_CANONICAL_COMPLETION=PENDING,
 LIVE_GPU_BATCH=NOT_RUN, GPU_PREFERRED_ACTIVE=NO, CURRENT_DEFAULT=CPU, GOAL=ACTIVE.
 
+P2-O source commit `56e545c4978db96d94a134f4c3d27fd29109f8f8`를 main에 push했다.
+공식 API/platform build-only/RECORD PASS이며 산출물은
+`/tmp/eom-api-build/56e545c4978db96d94a134f4c3d27fd29109f8f8.EhuwNA/dist`다.
+API Python `-I -B`, cwd `/`에서20모듈/dependency470개를 해당3개 wheel에서 import했고
+namespace bootstrap/schema pin 일치와 모델 import 없음도 확인했다.
+추출 위치는 `/tmp/eom-gpu-query-wheel-S3rs43qc`다.
+
+이어 이 owner release만 공식 보호된 installer로 root-owned immutable 경로
+`/opt/eom/embedding-owner-releases/56e545c4978db96d94a134f4c3d27fd29109f8f8`에 준비했다.
+platform rawSHA `9581f722436c083c8a715c1a25370d72effb7100e296d4bae165e72640394b25`,
+API contracts rawSHA `49626770061db0c5e9dc4eb74f6800318c41d0fd60996f4db93b9387bd3127ed`다.
+wheel RECORD와 새 namespace bootstrap의 기존 sibling 위치 materialization PASS,
+그 설치본의20모듈/dependency470 import도 PASS다. 로그
+`/tmp/eom-gpu-batch-owner-stage-20261024.log`, exit0.
+
+보호된 installer 자체는 기존 rawSHA `559ada516fe9d46f57926aad70699e81deba5f1a18b4e25e3f6e6bcdf1384b71`
+에서 검토한 rawSHA `a603fea5ac3e1846e3975a15333f688935e75596e35fe1a94949f4f2c741be12`로
+원자적으로 갱신했고 원본은 같은 root-owned 디렉터리의 `install_owner_release.sh.pre-56e545c4`에
+보존했다. 변경은 검증된 package bootstrap의 materialization뿐이며 구형 wheel 지원도 유지한다.
+
+**이것은 owner 코드 준비이지 실제 운영 활성화가 아니다.** API/platform의 active1a4e3c67,
+Web f15e66b8, private QUERY2eef9b20와 CPU 기본값, 수치 interpreter/prefix/모델/Graph/계정·인증은
+그대로다. 실제 fixed-unit sandbox·CUDA batch numerical canary·DOCUMENT 결합·CPU busy fallback·
+양쪽 인덱스 coverage·이미지/trainer 공존 및 최종 activation/rollback은 아직 남았다.
+따라서 이 source/staging commit은 사용자가 요청한 **GPU 목표 완료 후 리뷰 checkpoint가 아니다**.
+
 P2-K source commit `ecb653fce3e8968bb50d2e083f64b402b2e6e215`를 main에 push했다.
 공식 API/platform build-only와 wheel RECORD 검사 PASS이며 산출물은
 `/tmp/eom-api-build/ecb653fce3e8968bb50d2e083f64b402b2e6e215.XUMSQL/dist`다.
