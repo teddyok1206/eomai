@@ -510,6 +510,20 @@ P2_E_OBSERVATION_AND_ACQUIRED_RETIREMENT=SOURCE_VERIFIED,
 ROOT_FILE_DAC_AND_CONCURRENCY=PASS, LIVE_GPU_BATCH_UNIT=NOT_RUN,
 CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
 
+### P2-E 패키징 확인
+
+source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존
+`scripts/api/deploy_release.sh --build-only`로3개 wheel의 archive/RECORD·build metadata
+검사를 통과했다. build-only이며 운영 API나 CUDA prefix에 설치한 것은 아니다.
+후보 경로는 `/tmp/eom-api-build/2a819d7dd2c51a1ab104f5275571b337709ca466.A56BzZ/dist`다.
+platform wheel SHA-256은 `061bb65213050a05689bd06cc03e3bf0551717b4e611ec3263042fc9b561b3dc`다.
+
+그 wheel만 임시 `/tmp/eom-gpu-batch-wheel-import.Mm5piv`에 추출하고, explicit API Python의
+`-I -B`, cwd `/`에서 신규8개 module과 제어 schema를 읽었다. 모든 module이 그 추출본에서
+해결되고 torch/transformers를 import하거나 모델을 초기화하지 않음을 확인했다. repository
+PYTHONPATH나 editable install은 쓰지 않았다. **격리 wheel import probe**이며 실제 native
+identity·worker sandbox·GPU 연산·source owner의 운영 연결 PASS는 여전히 아니다.
+
 ## P2-F root 실행 제어 연결
 
 새 root adapter는 이미 준비한 원 attempt의 socket activation, 제어 교환, local 결과 검증,
@@ -777,16 +791,75 @@ P2-I source commit `d08eaf710d002d2bbeb905817c13a369d09f206c`는 main에 push했
 설치·activation·실제 GPU/CPU 수치 실행은 하지 않았다. 이 문서 정리는 candidate code나 운영
 runtime pin을 바꾸지 않으며 README의 별도 완료 작업도 다시 반영하지 않는다.
 
-### P2-E 패키징 확인
+## P2-J root↔actual owner의 유한 연결
 
-source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존
-`scripts/api/deploy_release.sh --build-only`로3개 wheel의 archive/RECORD·build metadata
-검사를 통과했다. build-only이며 운영 API나 CUDA prefix에 설치한 것은 아니다.
-후보 경로는 `/tmp/eom-api-build/2a819d7dd2c51a1ab104f5275571b337709ca466.A56BzZ/dist`다.
-platform wheel SHA-256은 `061bb65213050a05689bd06cc03e3bf0551717b4e611ec3263042fc9b561b3dc`다.
+기존 GPU controller는 root 자원 관찰/원 worker 수명만 소유한다. DB/NAS/인증을 root 수치
+adapter에 넣지 않는다. actual owner는 기존 runner UID의 Catalog/Orchestrator application이며
+actor/source/lease와 child의 등록을 소유한다. native worker는 계속 root와만 통신한다.
 
-그 wheel만 임시 `/tmp/eom-gpu-batch-wheel-import.Mm5piv`에 추출하고, explicit API Python의
-`-I -B`, cwd `/`에서 신규8개 module과 제어 schema를 읽었다. 모든 module이 그 추출본에서
-해결되고 torch/transformers를 import하거나 모델을 초기화하지 않음을 확인했다. repository
-PYTHONPATH나 editable install은 쓰지 않았다. **격리 wheel import probe**이며 실제 native
-identity·worker sandbox·GPU 연산·source owner의 운영 연결 PASS는 여전히 아니다.
+새 `embedding-batch-owner-control/1.0`은 이 둘의 동일 host Unix 연결이다. 기존 bounded framing,
+SO_PEERCRED와 매 frame SCM_CREDENTIALS/원 PID birth fence를 재사용하고 exact controller release,
+원 allocation request hash, 순서와 self hash를 검증한다. root READY는 신뢰된 root adapter의
+하드웨어 관찰 요약일 뿐 actor permission이나 양도 가능한 lease가 아니다. owner BOUND도 물리
+GPU 관찰을 대신하지 않는다. 서로의 책임을 DTO의 boolean으로 합치지 않는다.
+
+큰 batch input은 owner 전용 고정 작업 root의 attempt/`batch-input.json`에 한 번 materialize하고
+root가 bounded canonical/schema/hash/inode/owner/mode 검증 후 자신의 원 empty input inode에
+한 번 bind한다. wire에는 이 위치에서 유도 가능한 attempt identity와 byte/hash metadata 및
+작은 원 planning binding만 보낸다. 임의 path, credential, prompt, vector payload는 보내지 않는다.
+결과도 기존 root handoff의 read-only member를 가리키는 작은 완료 요약이며 binary를 IPC로 복사하지
+않는다. 최종 Artifact 정본·child commit은 기존 Orchestrator 소유권이다.
+
+상태는 READY→BOUND→(CHECK→CHECKED)*→COMPLETED→ACK의 유한 전이표다. 입구 BUSY는 별도의
+terminal이며 actual root의 원 unit/비실행/retirement 증거가 있어야만 owner가 CPU route를
+고정할 수 있다. 완료 ACK는 수신 확인이지 canonical publication 성공이 아니다. 임의 reconnect,
+재계산, timeout 후 새 identity 생성은 없다. 실패 시 원 작업·파일·history를 남긴다.
+
+한 묶음≤32 child에 대한 hash-keyed map과 monotonic check sequence를 사용한다. 시간/공간 O(n),
+frame≤64KiB, child check≤352(native≤256+root pre/post≤96), 하나의 원180초 deadline이다. 원
+peer/release를 확인한 owner handler가 짧은 기존 DB roots를 열며 root는 SQL transaction을
+유지하지 않는다. 프로토콜은 새 DB/queue/schema migration을 만들지 않는다.
+
+단순히 root에 Catalog 객체를 넣는 대안은 실제 runner UID/인증·DB 역할 경계를 깨뜨리므로 쓰지
+않는다. 새 네트워크 RPC framework나 FD로 GPU lease를 넘기는 우회도 필요하지 않다. source 선택,
+예약, child 결과 commit의 실제 application 연결과 설치 검증은 별도 완료 조건으로 남는다.
+
+### P2-J 검증 체크포인트 — 2026-10-24 UTC
+
+- 새 제어 schema canonical/mirror SHA는
+  `c253a518f30cf1f12fbe5644b7758ce50b726143ebe4334078cfba6cabdc437b`다.
+  closed JSON Schema2020-12와 frozen/raw-preserving Pydantic은 임의 path/role/token/vector,
+  다른 원 allocation/release/순서·check ACK와 중복 완료를 거부한다. ACK는 publication이 아니다.
+- `RootEmbeddingBatchOwnerProxy`가 실제 기존 GPU controller의 mandatory source port를 이
+  연결로 구현한다. source 입력은 고정 owner workspace에서 검증해 한 번 읽고, 실행 중에는 작은
+  원 child hash와 metadata epoch만 검사한다. 매 child마다 numerical prefix 전체를 순회하지
+  않는 회귀를 추가했다. root에는 DB/NAS/auth/source 판단을 추가하지 않았다.
+- 기존 controller 결과는 이미 검증한 원 worker output claim을 함께 보존한다. 결과 bytes를
+  재직렬화·재해시해서 두 번째 identity를 만들지 않고 원 result/vector hash·count를 전달한다.
+  원 unit의 SUCCEEDED/retirement/FD-store0이 아닌 완료는 전달하지 않는다.
+- 실제 OS 검사에서 마지막 ACK 직후 `/proc`가 아직 R 상태인데 root 소유로 변하는 종료 경합을
+  재현했다(r3/r4 로그 보존). active peer parser를 느슨하게 바꾸지 않고 원 PID에 대한 pidfd를
+  배정 전 birth 양쪽 확인 사이에 보유한다. 종료 교환에만 원 deadline 안에서 최대100ms pidfd
+  exit 관찰을 허용한다. 살아 있는 권한 오류·PID 재사용·active 상태의 종료는 계속 거부한다.
+  설치 Conda에 os.pidfd_open이 없어 표준 ctypes/libc wrapper를 쓴다. 새 외부 dependency,
+  signal 권한 또는 약한 PID-only fallback은 없다. 소유 FD 교체 시 다른 FD를 닫지도 않는다.
+- 최종 관련214 PASS, 별도 기존 handoff/observation/lifetime/stdio/binary/wheel377 PASS,
+  신설 연결 집중100 PASS다. 범위는 겹치므로 합산하지 않는다. production6개 모듈 strict mypy,
+  scoped Python12개 Ruff/format 및 diff whitespace PASS다.
+- 실제 root와 runner UID의 Unix peer/sender·birth/pidfd, 즉시 종료 ACK, owner-local input 읽기,
+  다른 UID의 source workspace 거부, 상속한 socket sender 거부 및 기존 original handoff를
+  `/run`의 자동 정리되는 임시 root에서 확인했다. 최종10 PASS 로그는
+  `/tmp/eom-gpu-batch-owner-os-20261024-r6.log`다. 실제 source/IAM/unit/GPU 연산은 합성 seam인
+  검사이므로 live RAG/GPU/sandbox PASS로 확대하지 않는다. 운영 DB/계정/원 실패 이력은 그대로다.
+- API·일반 대화·INDEX owner는 active, 마지막 GPU 관측0%/2MiB다. 새 모델·GPU unit 실행, 운영
+  설치·activation·credential 변경은 없었다. parent planning/source admission의 이전 disposable
+  DB22 PASS는 보존하며 이번에는 DB·migration·queue 변경이 없었다.
+
+다음은 실제 owner의 선택된 device child 준비/예약·BOUND와 이 channel handler를 연결하고,
+원 batch 완료 요약으로 canonical child 결과를 commit/reconcile하는 application 경계다.
+이어서 numerical successor 설치, exact paired indexes, 실제 GPU/CPU fallback·그림/trainer 공존·
+처리량·호환 운영 활성화와 rollback을 확인한다. source/OS 검사만으로 목표를 완료하지 않는다.
+
+P2_J_ROOT_OWNER_BRIDGE=SOURCE_AND_OS_VERIFIED,
+ACTUAL_OWNER_ALLOCATION_AND_CHILD_COMMIT=PENDING, LIVE_GPU_BATCH_UNIT=NOT_RUN,
+CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.

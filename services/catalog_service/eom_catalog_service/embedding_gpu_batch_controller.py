@@ -115,6 +115,7 @@ class CompletedEmbeddingGpuBatch:
     result: EmbeddingWorkBatchResult
     child_vectors: tuple[memoryview, ...]
     retirement: EmbeddingGpuBatchRetirement
+    output_claim: EmbeddingGpuResultReady
 
 
 @dataclass(frozen=True, slots=True)
@@ -533,7 +534,7 @@ def run_embedding_gpu_batch(
         _require(terminal.original_outcome == "SUCCEEDED")
         for child in children:
             authorize(child)
-        return CompletedEmbeddingGpuBatch(batch, grant, result, ranges, retirement)
+        return CompletedEmbeddingGpuBatch(batch, grant, result, ranges, retirement, claim)
     except BaseException as error:
         # Closing the original channel makes the worker leave its finite scope. Never
         # resubmit work. A verified READY permits the existing exact-unit cleanup only.

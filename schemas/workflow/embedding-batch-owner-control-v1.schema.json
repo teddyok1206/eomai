@@ -1,0 +1,366 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/embedding-batch-owner-control/1.0",
+  "title": "Finite exact-peer root/Catalog-owner batch exchange; no actor or GPU authority from JSON",
+  "description": "Small metadata only. Actual root proves original GPU allocation/retirement; the existing source owner reauthorizes current actor and canonical child sources. No model text, vectors, credentials, arbitrary paths, reconnect or automatic retry.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/ready"
+    },
+    {
+      "$ref": "#/$defs/bound"
+    },
+    {
+      "$ref": "#/$defs/check"
+    },
+    {
+      "$ref": "#/$defs/checked"
+    },
+    {
+      "$ref": "#/$defs/completed"
+    },
+    {
+      "$ref": "#/$defs/ack"
+    },
+    {
+      "$ref": "#/$defs/busy"
+    }
+  ],
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{32}$"
+    },
+    "tick": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854776000
+    },
+    "base": {
+      "type": "object",
+      "required": [
+        "schema_version",
+        "message_type",
+        "allocation_attempt_id",
+        "allocation_request_sha256",
+        "controller_release",
+        "message_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-batch-owner-control/1.0"
+        },
+        "message_type": {
+          "enum": [
+            "ROOT_READY",
+            "OWNER_BOUND",
+            "ROOT_CHECK",
+            "OWNER_CHECKED",
+            "ROOT_COMPLETED",
+            "OWNER_ACK",
+            "ROOT_BUSY"
+          ]
+        },
+        "allocation_attempt_id": {
+          "type": "string",
+          "pattern": "^embeddingallocation_[0-9a-f]{32}$"
+        },
+        "allocation_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "controller_release": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "message_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "ready": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "required": [
+            "readiness",
+            "unit_invocation_id",
+            "unit_started_monotonic",
+            "effective_policy_sha256",
+            "observed_at"
+          ],
+          "properties": {
+            "message_type": {
+              "const": "ROOT_READY"
+            },
+            "readiness": {
+              "$ref": "eom://schemas/knowledge/embedding-gpu-allocation-control/1.0#/$defs/ready"
+            },
+            "unit_invocation_id": {
+              "$ref": "#/$defs/hex"
+            },
+            "unit_started_monotonic": {
+              "$ref": "#/$defs/tick"
+            },
+            "effective_policy_sha256": {
+              "$ref": "#/$defs/hash"
+            },
+            "observed_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      ]
+    },
+    "bound": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "required": [
+            "binding",
+            "ready_message_sha256",
+            "input_raw_sha256",
+            "input_byte_count",
+            "owner_pid",
+            "owner_start_ticks"
+          ],
+          "properties": {
+            "message_type": {
+              "const": "OWNER_BOUND"
+            },
+            "binding": {
+              "$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/bound"
+            },
+            "ready_message_sha256": {
+              "$ref": "#/$defs/hash"
+            },
+            "input_raw_sha256": {
+              "$ref": "#/$defs/hash"
+            },
+            "input_byte_count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 67108864
+            },
+            "owner_pid": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2147483647
+            },
+            "owner_start_ticks": {
+              "$ref": "#/$defs/tick"
+            }
+          }
+        }
+      ]
+    },
+    "check": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "required": [
+            "batch_request_sha256",
+            "child_request_sha256",
+            "sequence"
+          ],
+          "properties": {
+            "message_type": {
+              "const": "ROOT_CHECK"
+            },
+            "batch_request_sha256": {
+              "$ref": "#/$defs/hash"
+            },
+            "child_request_sha256": {
+              "$ref": "#/$defs/hash"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 352
+            }
+          }
+        }
+      ]
+    },
+    "checked": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "required": [
+            "batch_request_sha256",
+            "child_request_sha256",
+            "sequence",
+            "check_message_sha256"
+          ],
+          "properties": {
+            "message_type": {
+              "const": "OWNER_CHECKED"
+            },
+            "batch_request_sha256": {
+              "$ref": "#/$defs/hash"
+            },
+            "child_request_sha256": {
+              "$ref": "#/$defs/hash"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 352
+            },
+            "check_message_sha256": {
+              "$ref": "#/$defs/hash"
+            }
+          }
+        }
+      ]
+    },
+    "completed": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "required": [
+            "bound_message_sha256",
+            "grant",
+            "unit_invocation_id",
+            "unit_exited_monotonic",
+            "retired_at",
+            "result_raw_sha256",
+            "result_sha256",
+            "result_byte_count",
+            "vectors_sha256",
+            "vectors_byte_count"
+          ],
+          "properties": {
+            "message_type": {
+              "const": "ROOT_COMPLETED"
+            },
+            "bound_message_sha256": {
+              "$ref": "#/$defs/hash"
+            },
+            "grant": {
+              "$ref": "eom://schemas/knowledge/embedding-gpu-allocation-control/1.0#/$defs/grant"
+            },
+            "unit_invocation_id": {
+              "$ref": "#/$defs/hex"
+            },
+            "unit_exited_monotonic": {
+              "$ref": "#/$defs/tick"
+            },
+            "retired_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "result_raw_sha256": {
+              "$ref": "#/$defs/hash"
+            },
+            "result_sha256": {
+              "$ref": "#/$defs/hash"
+            },
+            "result_byte_count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 67108864
+            },
+            "vectors_sha256": {
+              "$ref": "#/$defs/hash"
+            },
+            "vectors_byte_count": {
+              "type": "integer",
+              "minimum": 4,
+              "maximum": 16777216
+            }
+          }
+        }
+      ]
+    },
+    "ack": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "required": [
+            "completion_message_sha256",
+            "evidence_state"
+          ],
+          "properties": {
+            "message_type": {
+              "const": "OWNER_ACK"
+            },
+            "completion_message_sha256": {
+              "$ref": "#/$defs/hash"
+            },
+            "evidence_state": {
+              "const": "RECEIVED_NOT_CANONICAL_PUBLICATION"
+            }
+          }
+        }
+      ]
+    },
+    "busy": {
+      "unevaluatedProperties": false,
+      "allOf": [
+        {
+          "$ref": "#/$defs/base"
+        },
+        {
+          "type": "object",
+          "required": [
+            "allocation",
+            "unit_invocation_id",
+            "unit_started_monotonic",
+            "unit_exited_monotonic",
+            "retired_at"
+          ],
+          "properties": {
+            "message_type": {
+              "const": "ROOT_BUSY"
+            },
+            "allocation": {
+              "$ref": "eom://schemas/knowledge/embedding-gpu-allocation-control/1.0#/$defs/busy"
+            },
+            "unit_invocation_id": {
+              "$ref": "#/$defs/hex"
+            },
+            "unit_started_monotonic": {
+              "$ref": "#/$defs/tick"
+            },
+            "unit_exited_monotonic": {
+              "$ref": "#/$defs/tick"
+            },
+            "retired_at": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        }
+      ]
+    }
+  }
+}
