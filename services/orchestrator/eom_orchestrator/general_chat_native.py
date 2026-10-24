@@ -570,6 +570,12 @@ class CodexChatSession:
                 return reply
             if params.get("turnId") != turn_id:
                 raise NativeChatError()
+            if method == "turn/moderationMetadata":
+                # Codex 0.162 emits opaque metadata, not an answer or tool grant.
+                # Keep the existing thread/turn fences and require its schema key.
+                if "metadata" not in params:
+                    raise NativeChatError()
+                continue
             if method == "item/tool/call":
                 self._diagnostic_stage = "TOOL_NAMESPACE"
                 if self._tools is None or params.get("namespace") is not None:

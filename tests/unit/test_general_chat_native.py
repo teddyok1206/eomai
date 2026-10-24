@@ -239,6 +239,64 @@ def test_actual_warning_queued_before_turn_start_response_is_metadata_not_a_fail
     assert result.status == "SUCCEEDED" and result.reply == "안녕하세요!"
 
 
+@pytest.mark.parametrize("early", [False, True])
+@pytest.mark.parametrize("metadata", [None, {}, {"private": "not conversation content"}])
+def test_turn_moderation_metadata_keeps_exact_turn_and_does_not_become_answer(
+    early, metadata, caplog
+):
+    channel = Channel(
+        [
+            event("turn/moderationMetadata", metadata=metadata),
+            event("item/completed", item=answer_item()),
+            final_event(),
+        ]
+    )
+    channel.early_events = early
+    native, _ = session(channel)
+    result = native.answer(request())
+    assert result.status == "SUCCEEDED" and result.reply == "안녕하세요!"
+    assert native.ready and not channel.closed
+    assert "private" not in result.model_dump_json() + caplog.text
+    assert sum(value.get("method") == "turn/start" for value in channel.sent) == 1
+
+
+@pytest.mark.parametrize(
+    "patch", [{"threadId": "wrong-thread"}, {"turnId": "wrong-turn"}, {"turnId": None}]
+)
+def test_turn_moderation_metadata_cannot_bypass_thread_and_turn_identity(patch):
+    metadata = event("turn/moderationMetadata", metadata={})
+    metadata["params"].update(patch)
+    native, channel = session(Channel([metadata, final_event(items=[answer_item()])]))
+    result = native.answer(request())
+    assert result.status == "FAILED" and result.reply == ""
+    assert channel.closed and not native.ready
+
+
+def test_turn_moderation_metadata_requires_the_installed_notification_shape():
+    native, channel = session(Channel([event("turn/moderationMetadata"), final_event()]))
+    assert native.answer(request()).status == "FAILED"
+    assert channel.closed
+
+
+def test_turn_moderation_metadata_is_not_a_success_without_a_completed_answer():
+    native, channel = session(Channel([event("turn/moderationMetadata", metadata={})]))
+    result = native.answer(request())
+    assert result.status == "FAILED" and result.reply == ""
+    assert channel.closed
+
+
+def test_turn_moderation_metadata_cannot_be_a_server_execution_request():
+    metadata = event("turn/moderationMetadata", metadata={}) | {"id": "request-1"}
+    native, channel = session(Channel([metadata, final_event(items=[answer_item()])]))
+    result = native.answer(request())
+    assert result.status == "FAILED" and result.reply == ""
+    assert channel.closed
+    assert channel.sent[-1] == {
+        "id": "request-1",
+        "error": {"code": -32601, "message": "Not supported"},
+    }
+
+
 @pytest.mark.parametrize("method", ["item/completed", "turn/started", "unknown/admin/event"])
 def test_other_startup_events_are_still_rejected(method):
     channel = Channel()
