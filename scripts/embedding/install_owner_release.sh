@@ -72,7 +72,7 @@ fi
 [[ -f "$stage/site-packages/eom_workflow_runner/local_embedding_native_executor.py" \
   && -f "$stage/site-packages/eom_workflow/resources/native-embedding-coordinator-v1.schema.json" ]] || fail NATIVE_OWNER_EXECUTOR_MISSING
 [[ -z "$(find -P "$stage" -type l -print -quit)" ]] || fail NATIVE_OWNER_RELEASE_LINK_INVALID
-bootstrap="$stage/site-packages/share/eom/bootstrap/prepare_native_index.py"
+bootstrap="$stage/site-packages/eom_catalog_service/embedding_owner_bootstrap.py"
 bootstrap_installed=NO
 if [[ -f "$bootstrap" && ! -L "$bootstrap" ]]; then
   # This small runtime materialization comes from the already verified wheel,

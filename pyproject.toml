@@ -108,11 +108,6 @@ eom_operator_identity = [
   "resources/local-indexing-runtime-v1.schema.json",
 ]
 
-[tool.setuptools.data-files]
-# One canonical stdlib-first bootstrap, transported by the verified wheel/RECORD.
-# The owner installer materializes it in the immutable owner release; never runtime Git.
-"share/eom/bootstrap" = ["scripts/embedding/prepare_native_index.py"]
-
 [tool.pytest.ini_options]
 pythonpath = ["packages/gpu_lease"]
 addopts = "-ra --strict-markers"

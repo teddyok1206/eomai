@@ -165,7 +165,9 @@ def test_fixed_unit_hash_bootstrap_and_secret_boundaries():
     ):
         assert expected in source
     assert "CAP_DAC_OVERRIDE" not in source
-    bootstrap = (ROOT / "scripts/embedding/prepare_native_index.py").read_text()
+    bootstrap = (
+        ROOT / "services/catalog_service/eom_catalog_service/embedding_owner_bootstrap.py"
+    ).read_text()
     assert (
         'sys.argv[1] == "GPU_BATCH"' in bootstrap and "embedding_gpu_batch_owner_entry" in bootstrap
     )

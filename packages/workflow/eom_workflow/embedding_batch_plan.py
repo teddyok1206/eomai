@@ -50,6 +50,10 @@ from eom_workflow.native_embedding_backend_selection import (
     NativeCudaBackendSelection,
     native_embedding_backend_selection_schema,
 )
+from eom_workflow.reference_query_execution import (
+    SupportedReferenceQueryWorkflowRequest,
+    parse_supported_reference_query_workflow_request,
+)
 from eom_workflow.schemas import local_embedding_admission_schema_registry
 
 BATCH_PLAN_PROTOCOL = "embedding-batch-plan/1.0"
@@ -400,3 +404,68 @@ def validate_embedding_batch_binding(
             and tuple(child.request.job_id for child in batch.children)
             == tuple(child.native_job_id for child in bound.children)
         )
+
+
+def embedding_batch_query_key(request: EmbeddingBatchPlanRequest, ordinal: int) -> str:
+    """Immutable parent→QUERY relationship in the existing unique Workflow key.
+
+    This is identity, not authority. Reusing another parent's allocated Workflow
+    is rejected before a native Job exists, without another registry or table.
+    """
+    request = EmbeddingBatchPlanRequest.model_validate(request)
+    _require(
+        request.purpose == "REFERENCE_QUERY"
+        and type(ordinal) is int
+        and 0 <= ordinal < len(request.child_selection_sha256s)
+    )
+    return "embedding-batch-query:" + content_sha256(
+        {"parent_request_sha256": request.request_sha256, "child_ordinal": ordinal}
+    ).removeprefix("sha256:")
+
+
+def validate_embedding_batch_query_context(
+    selection: EmbeddingBatchSelection,
+    decision: EmbeddingDeviceRoutingDecision,
+    ordinal: int,
+    request: SupportedReferenceQueryWorkflowRequest,
+) -> None:
+    """One pure selection/profile closure before compute and on canonical replay.
+
+    Actual Catalog source, original physical allocation and command/lease remain
+    independent checks. An input-shaped selection never supplies permission.
+    """
+    selection = EmbeddingBatchSelection.model_validate(selection)
+    decision = EmbeddingDeviceRoutingDecision.model_validate(decision)
+    request = parse_supported_reference_query_workflow_request(request)
+    context, query, profile = request.context_request, selection.query, decision.selected.profile
+    _require(
+        selection.purpose == "REFERENCE_QUERY"
+        and selection.scope.actor_kind == "OPERATOR"
+        and selection.scope.actor_id == request.operator_audit.operator_id
+        and query is not None
+        and type(ordinal) is int
+        and 0 <= ordinal < len(selection.anchors)
+    )
+    assert query is not None
+    indexes = tuple(row.index for row in context.views if row.index is not None)
+    _require(
+        context.anchor == selection.anchors[ordinal]
+        and context.graph_snapshot == selection.graph_snapshot
+        and context.policy_revision_id == selection.access_policy_revision_id
+        and context.policy_sha256 == selection.scope.access_policy_sha256
+        and tuple(row.view for row in context.views) == selection.views
+        and context.consumer_purpose == query.consumer_purpose
+        and context.topics == query.topics
+        and context.unit_ids == query.unit_ids
+        and context.maximum_sources == query.maximum_sources
+        and context.top_k == query.top_k
+        and all(row.recipe == selection.recipe for row in context.views)
+        and bool(indexes)
+        and all(
+            index.storage_partition == selection.scope.storage_partition
+            and index.spaces.document == profile.space
+            for index in indexes
+        )
+        and request.resource_profile == profile.resource_profile
+        and request.runtime_bundle == profile.runtime_bundle
+    )

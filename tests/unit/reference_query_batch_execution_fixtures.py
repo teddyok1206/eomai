@@ -17,7 +17,11 @@ from eom_workflow.embedding_device_routing import (
     plan_embedding_device_route,
 )
 from eom_workflow.native_reference_query_coordinator import NativeQueryBatchExecuted
-from eom_workflow.reference_query_execution import parse_reference_query_launch_association
+from eom_workflow.reference_query_execution import (
+    parse_reference_query_launch_association,
+    parse_supported_reference_query_workflow_request,
+)
+from eom_workflow_runner.reference_query_source_read import build_reference_query_native_input
 
 from tests.unit.embedding_batch_publication_fixtures import publication_case
 from tests.unit.inference_transfer_embedding_fixtures import seal
@@ -30,8 +34,9 @@ from tests.unit.test_reference_query_execution_contracts import case
 from tests.unit.test_reference_query_launch_preparation import sources_for
 
 
-def query_batch_case(tmp_path, monkeypatch, publisher, *, key):
-    query = case(device="CUDA")
+def query_plan_case(*, key, query=None):
+    """Pure immutable QUERY/plan values, with no storage or authority leaf."""
+    query = query or case(device="CUDA")
     native = type(query.native_input).model_validate(
         seal(
             query.native_input.model_dump(mode="json")
@@ -156,6 +161,11 @@ def query_batch_case(tmp_path, monkeypatch, publisher, *, key):
             "record_sha256",
         )
     )
+    return query, template
+
+
+def query_batch_case(tmp_path, monkeypatch, publisher, *, key):
+    query, template = query_plan_case(key=key)
     value = source_case(tmp_path, monkeypatch, publisher=publisher, key=key, planned=template)
     # Distinct application request per disposable test, not a new identity on replay.
     value.request = type(value.request).model_validate(
@@ -179,3 +189,56 @@ def query_batch_case(tmp_path, monkeypatch, publisher, *, key):
         list(value.request.child_selection_sha256s)
     )
     return value
+
+
+def two_query_plan_case(*, definition_sha256=None):
+    """Two distinct selected anchors; all numerical/source text remains synthetic."""
+    first, template = query_plan_case(
+        key="a" * 32, query=case(device="CUDA", definition_sha256=definition_sha256)
+    )
+    other_anchor = planning_case().selection.anchors[1]
+    context = seal(
+        first.request.context_request.model_dump(mode="json")
+        | {
+            "request_id": "similarityrequest_" + "b" * 32,
+            "anchor": other_anchor.model_dump(mode="json"),
+        },
+        "request_sha256",
+    )
+    request = parse_supported_reference_query_workflow_request(
+        seal(first.request.model_dump(mode="json") | {"context_request": context}, "request_sha256")
+    )
+    second = replace(first, request=request)
+    native = build_reference_query_native_input(
+        sources_for(second), job_id="job_" + "b" * 32, query_request_id="embeddingquery_" + "b" * 32
+    )
+    launch = parse_reference_query_launch_association(
+        seal(
+            first.launch.model_dump(mode="json")
+            | {
+                "workflow_id": "workflow_" + "b" * 32,
+                "step_run_id": "steprun_" + "b" * 32,
+                "workflow_request_sha256": request.request_sha256,
+                "context_request_sha256": request.context_request.request_sha256,
+                "native_launch_job_id": native.job_id,
+                "query_request_id": native.query_request_id,
+                "query_request_sha256": native.request_sha256,
+                "query_input_set_sha256": native.input_set_sha256,
+            },
+            "association_sha256",
+        )
+    )
+    second = replace(second, native_input=native, launch=launch)
+    template.selection = EmbeddingBatchSelection.model_validate(
+        seal(
+            template.selection.model_dump(mode="json")
+            | {
+                "anchors": [
+                    first.request.context_request.anchor.model_dump(mode="json"),
+                    other_anchor.model_dump(mode="json"),
+                ]
+            },
+            "selection_sha256",
+        )
+    )
+    return (first, second), template

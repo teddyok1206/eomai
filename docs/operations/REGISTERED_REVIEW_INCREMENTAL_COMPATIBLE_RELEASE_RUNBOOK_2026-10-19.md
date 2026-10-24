@@ -123,10 +123,14 @@ feature rollback baseline으로 남긴다. 아래 mixed2/config4 값은 미리 P
   owner release에 설치한다: `SOURCE platform-wheel platform-rawSHA contracts-wheel contracts-rawSHA`.
   이는 numerical prefix 설치나 owner 활성화가 아니다. API/INDEX/QUERY가 모두 같은 SDK 기능을 필요로 하지만
   benchmark EE source/원6 allocation은 바꾸지 않는다.
-- 같은 release sibling에 공식 `scripts/embedding/prepare_native_index.py`를 보호된 exclusive
+- 같은 release sibling에 공식 bootstrap을 보호된 exclusive
   `prepare-native-index.py`로 준비한다. `/etc/eom/embedding-native-owner.env`가 실제 새 fixed INDEX/QUERY
   prepare entry를 선택해야 한다. 이 bootstrap은 자기 sibling SDK를 import하므로 old EE/eecf path를 남기면
   association2를 처리하지 못한다. 새 owner-env rawSHA를 INDEX/QUERY 관련 선택들에 함께 반영한다.
+  2026-10-24 후속 후보에서는 정본을 wheel member
+  `eom_catalog_service/embedding_owner_bootstrap.py`로 이동했다. 최신 owner installer는 검증된 그 member를
+  sibling `prepare_native_index.py`로 materialize한다. checkout 파일을 복사하거나 wheel `.data`를 설치하지
+  않는다. 종전 immutable release/선택은 보존하고 실제 prepare path·rawSHA는 함께 명시적으로 선택한다.
 - 공개 `register_local_indexing_service`→`activate_local_indexing_service`와
   `publish_local_indexing_access_policy`를 기존 deployment owner transaction에서 사용한다.
   새19/새 runtime.json SHA에 귀속한 legacy grant1.1와 mixed grant1.2가 필요하다. old18 grant를 빌리지 않는다.

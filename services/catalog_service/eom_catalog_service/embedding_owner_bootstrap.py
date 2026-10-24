@@ -1,4 +1,4 @@
-"""Protected owner-release bootstrap for fixed INDEX and explicit QUERY root prepare."""
+"""Canonical stdlib bootstrap, materialized from its verified wheel into the owner release."""
 
 from __future__ import annotations
 

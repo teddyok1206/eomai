@@ -17,7 +17,10 @@ from eom_workflow.embedding_batch_execution_receipt import (
     EmbeddingBatchExecutedChild,
     EmbeddingBatchExecutionReceipt,
 )
-from eom_workflow.embedding_batch_plan import EmbeddingBatchPlanRequest
+from eom_workflow.embedding_batch_plan import (
+    EmbeddingBatchPlanRequest,
+    validate_embedding_batch_query_context,
+)
 from eom_workflow.native_reference_query_coordinator import NativeQueryBatchExecuted
 from eom_workflow.reference_query_execution import ReferenceQueryLaunchAssociation
 from sqlalchemy.orm import Session
@@ -101,27 +104,14 @@ def resolve_reference_query_batch_execution(
         and history.bound == receipt.bound.binding
         and history.allocation.control_request == receipt.allocation
         and parent.scope == receipt.scope
-        and selection.purpose == "REFERENCE_QUERY"
-        and selection.graph_snapshot == context.graph_snapshot
-        and selection.access_policy_revision_id == context.policy_revision_id
         and selection.recipe == native_input.recipe
-        and tuple(view.view for view in context.views) == selection.views
-        and ordinal < len(selection.anchors)
-        and selection.anchors[ordinal] == context.anchor
-        and selection.query is not None
-        and selection.query.model_dump(mode="json")
-        == {
-            "consumer_purpose": context.consumer_purpose,
-            "topics": list(context.topics),
-            "unit_ids": list(context.unit_ids),
-            "maximum_sources": context.maximum_sources,
-            "top_k": context.top_k,
-        }
         and policy.cuda.profile.space == native_input.spaces.document
-        and policy.cuda.profile.resource_profile == request.resource_profile
-        and policy.cuda.profile.runtime_bundle == request.runtime_bundle
     )
     assert history is not None and history.route is not None
+    try:
+        validate_embedding_batch_query_context(selection, history.route.decision, ordinal, request)
+    except ValueError:
+        raise ValueError("REFERENCE_QUERY_BATCH_EXECUTION_INVALID") from None
     _require(
         history.route.decision.selected == policy.cuda
         and receipt.completed.grant.routing_decision_sha256

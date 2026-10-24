@@ -191,7 +191,9 @@ def test_missing_actual_staging_root_fails_preflight_before_any_unit_observation
 
 def test_bootstrap_preserves_legacy_index_arity_and_requires_explicit_query_purpose() -> None:
     root = Path(__file__).resolve().parents[2]
-    source = (root / "scripts/embedding/prepare_native_index.py").read_text()
+    source = (
+        root / "services/catalog_service/eom_catalog_service/embedding_owner_bootstrap.py"
+    ).read_text()
     assert source.index("value.st_uid != 0") < source.index("native_embedding_query_handoff")
     assert "len(sys.argv) == 2" in source
     assert 'len(sys.argv) == 3 and sys.argv[1] == "QUERY"' in source

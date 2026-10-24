@@ -1146,3 +1146,72 @@ P2-N source commit `99186fdc080adf58a8cbb7013aa953eca5b0f640`를 main에 push했
 schema/bootstrap도 확인했다. 모델 import·실제 실행·운영 설치·activation은 없다.
 21:35 UTC milestone Slack `devreport_903c66f694f24b54aa466e7082f6e4c0` 전송도 성공했다.
 그 보고는 source/DB/OS와 실제 GPU/운영 gate를 구분하며 GPU goal을 완료로 보고하지 않았다.
+
+## P2-O 선택된 QUERY의 기존 Workflow 실행 결합
+
+CUDA child는 별도 queue/state machine이 아니라 기존 atomic QUERY/START, `WorkflowRunner`,
+command claim/heartbeat, native checkpoint1.2와 canonical completion을 사용한다. 원 parent
+request hash와 child ordinal에서 한 authoritative idempotency key를 만들고 실제 Workflow의
+immutable key와 대조한다. 다른 parent가 이미 할당된 QUERY를 자기 묶음으로 다시 계산할 수
+없게 native Job 생성 전에 관계를 고정한다. key는 authority가 아니며 actual owner/source/lease
+검증은 그대로다. 기존 CPU executor/handoff의 CUDA 거부도 유지한다.
+
+같은 Orchestrator 프로세스 안의 유한 child 실행들은 bounded map/Condition으로 입력 준비만
+모은다. 이것은 worker 간 통신, 새 persistent queue, 상시 모델 cache가 아니다. 자식들은 기존
+Runner의 독립 command/SQL root/heartbeat를 유지하며, 마지막 준비자가 P2-N의 원 root channel을
+한 번만 구동한다. 다른 자식은 SQL root 없이 같은 immutable 결과를 기다린다. source callback은
+각 child의 명시적 request/workflow/lease를 담은 기존 native transaction을 사용한다. 다른 스레드의
+ContextVar를 현재 child 권한으로 오인하지 않는다.
+
+정본은 기존 parent/child Job과 canonical batch receipt·child Artifact다. 큰 input은 원 batch
+workspace에 한 번 staging한다. 결과의 각 QUERY 범위는 기존 Artifact publisher가 요구하는
+보호된 child publication workspace에서만 materialize한다. 이는 canonical 복사본이 아니라
+명시적인 local→commit 경계다. memoryview는 그 경계까지 한 vector buffer를 공유한다.
+
+주 접근은 source revision→ordinal map, Workflow/Job indexed lookup, 최대32 child의 ordered
+tuple이다. 시간·공간 O(n) bounded이며 DB schema/index/migration과 새 dependency는 없다.
+중복 ordinal, 다른 parent/Graph/policy/index profile, 기한 경과나 중단은 fail-closed한다. 부분·미상
+실행을 CPU로 재분류하지 않고 실패 이력을 보존한다. legacy CPU executor에 CUDA flag를 추가하거나
+Runner claim/완료 로직을 복사하는 대안 대신, 기존 executor port에 유한 CUDA 구현을 결합한다.
+
+P2-O 구현·검증:
+
+- `start_batch_reference_queries`는 기존 원자적 QUERY/START를 호출하며, 실제 actor와 원 parent의
+  child key로 새 logical query intent를 만든다. supplied context의 source/index/Graph 핀은 그대로다.
+  generic Workflow equivalence를 완화하거나 다른 parent의 기존 QUERY를 덮어쓰지 않는다.
+  `drive_batch_reference_queries`는 기존 Runner의 claim/heartbeat/완료와 canonical completed-read를
+  재사용한다. child 준비와 root callback은 각 child의 명시적 transaction/lease를 유지한다.
+- 실제 disposable PostgreSQL의 두 QUERY Workflow/step/command/lease/native checkpoint/Artifact를
+  끝까지 연결했다. 저장 직전·직후 네 interruption은 원 command의 만료/재claim 경계를 통해
+  같은 native Job/producer/checkpoint로 복구했다. 한 원 batch 계산과 canonical replay를 확인했고
+  기존 FAILED 이력은 변경하지 않았다. current IAM/source leaf와 root/numerical leaf는 이 fixture의
+  명시적 합성 seam이다. 실제 GPU·운영 권한·sandbox 검증이라고 보고하지 않는다.
+- 첫 DB r12는5 failed/1 passed(47.76s)였다. 서로 다른 시험 parent들이 같은 fixture context ID를
+  재사용하여, 기존 Workflow equivalence가 올바르게 이전 QUERY를 반환한 것이 원인이었다.
+  parent/ordinal에 귀속된 새 query intent를 기존 logical-ID 함수로 만들도록 정리했다. 같은 guarded
+  DB의 r13은6 PASS(168.69s), 새 disposable DB의 기존 회귀 포함 r14는68 PASS(260.41s)이며 두 번
+  모두 공식 cleanup PASS다. `/tmp/eom-gpu-batch-admission-20261024-r12.log`부터 r14까지 보존한다.
+- 계산 deadline180초는 유지한다. 계산이 끝난 원 결과의 ACK/canonical metadata 정리는 기존
+  root unit의240초 범위 안에서 기다릴 수 있지만 새 입력/권한/GPU grant를 연장하지 않는다.
+  완료된 같은 operation-local material만 원 결과를 재사용한다. cold-process 재시작과 아직 없는
+  DOCUMENT 실행 연결까지 이 in-process 복구 시험으로 검증했다고 확대하지 않는다.
+- 설치 검토에서 이전 build-only wheel의 bootstrap `.data` member가 실제 numerical successor의
+  strict namespace/source-payload 검증과 맞지 않음을 발견했다. 그 후보는 운영 설치하지 않았다.
+  installer/audit 예외를 추가하지 않고 stdlib bootstrap의 정본을 Python package 안의
+  `eom_catalog_service.embedding_owner_bootstrap`로 옮겼다. owner installer가 검증한 wheel member를
+  기존 release의 `prepare_native_index.py` 위치로만 materialize한다. unit/config ABI와 옛 release는
+  유지하며 새 dependency/schema/migration은 없다. 원 scripts 파일은 Git history로 복구 가능하다.
+- source→wheel byte parity, namespace-only wheel, offline installed imports와 기존 root/QUERY/CUDA/
+  private successor/dependency 검사를 포함해278 PASS, opt-in protected old-pip 검사2 SKIPPED다
+  (45.66s). 로그 `/tmp/eom-gpu-batch-packaging-20261024-r16.log`. 앞선 검사의 종료 출력이 인계에서
+  보존되지 않아 실행 중 프로세스가 없음을 확인한 뒤 이 비수치 검사를 재실행했다.
+- QUERY context/child material/finite group와 기존 CPU executor/completion/launch preparation/
+  preparation 회귀102 PASS(114.38s)다. 로그 `/tmp/eom-gpu-batch-query-20261024-r17.log`.
+  packaging278건 및 DB68건과 실행 환경/범위를 구분하며 중복 합산한 총 PASS 수로 보고하지 않는다.
+- scoped Python17개 Ruff/format, production7모듈 strict mypy, installer shell syntax/diff PASS다.
+  운영 API/Web/일반 채팅/INDEX owner는 active이며 이번 source/DB 검증에서 실제 모델 호출,
+  numerical prefix 교체, 서비스 activation, credential 변경은 없었다.
+
+P2_O_QUERY_RUNNER_FLOW=SOURCE_AND_DB_VERIFIED,
+DOCUMENT_BATCH_COMPOSITION=PENDING, INSTALLED_BATCH_COMPOSITION=PENDING,
+LIVE_GPU_BATCH=NOT_RUN, GPU_PREFERRED_ACTIVE=NO, CURRENT_DEFAULT=CPU, GOAL=ACTIVE.

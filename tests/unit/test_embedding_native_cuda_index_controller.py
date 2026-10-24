@@ -374,7 +374,9 @@ def test_unit_and_start_only_polkit_preserve_separate_root_and_worker_boundaries
     assert 'action.lookup("verb") === "start"' in rules
     assert rules.count("return polkit.Result.YES") == 1
     assert "eom-embedding-native-cuda-index@" in rules
-    source = (ROOT / "scripts/embedding/prepare_native_index.py").read_text()
+    source = (
+        ROOT / "services/catalog_service/eom_catalog_service/embedding_owner_bootstrap.py"
+    ).read_text()
     assert 'sys.argv[1] == "CUDA_INDEX"' in source
     assert 'release.parent != Path("/opt/eom/embedding-owner-releases")' in source
 
