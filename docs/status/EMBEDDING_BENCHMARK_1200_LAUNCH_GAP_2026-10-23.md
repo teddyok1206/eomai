@@ -357,3 +357,28 @@ admission은 아직 별도 검증이 필요하며 정식 v1.2 Job은 여전히 �
   v1.2 template·계약·GPU receipt는 변경하지 않는다. 새 controller wheel만 별도로
   설치하고 동일 원 Job을 다시 확인할 예정이며, 현재 정식 측정 결과는 미완료다.
   운영 INDEX PID130161 / QUERY PID898231은 그대로 active이고 GPU는 2MiB/0%다.
+
+### 2026-10-24 01:26 UTC — 수정 controller 설치·인증 전 점검 완료
+
+- source `3625ffd979788111d64c2fc06b708247f786b950`를 main에 push하고 기존
+  build-only 경로의 wheel RECORD 검증을 통과했다. platform wheel SHA는
+  `f2004f116e3fe88efa97e2a99a67a4f0e12f5f9a7773139495fb775ea582d159`,
+  API contracts wheel SHA는
+  `4148edb24441dc38262c09a347bb3830651183a1a7faad140128dff99213e748`다.
+  지원된 immutable owner installer로 새 release만 설치했다. 설치 스크립트가
+  read-only/non-executable라 직접 실행 1회는 효과 전에 거부됐고, 동일 보호 파일을
+  명시적 `/bin/bash`로 호출해 정상 설치했다. 기존 release는 변경하지 않았다.
+- `eom-benchmark-prelogin-3625ffd9.service`의 실제 CPU/CUDA 선택·수치 pin·root
+  host capture 점검은 success/exit0, **18.052초**, model forward0 / DB writes0다.
+  preflight는 `FixedBenchmarkLaunchExecution.assert_installed()` 전체 실행의 대체가
+  아니며, 그 공통 file-read 경로는 앞서 기록한 실제 snapshot 회귀 시험으로 검증했다.
+- 새 유한 controller는 `eom-embedding-benchmark-retry-3625ffd9.service`, 보호 경로는
+  `/usr/local/libexec/eom-benchmark-budget1200-retry-3625ffd9/series.py`, SHA는
+  `5cf3393574fbc5f7b419fd681f30abd1fde73418fdc7fe9aba9cab14c862a8e3`다.
+  실제 DB role 점검 후 동일 `EOM:2 gpu-embedding`에서 Studio 입력 대기 중이다.
+  실패로 종료한 이전 프로세스의 인증을 재사용·저장하지 않는다. 이번 정식 6회
+  측정은 아직 미완료이고 GPU 기본값은 변경하지 않았다.
+- 수정·설치 milestone Slack `devreport_a638da9b4bdd47eea899d2c31e73041b`는
+  SENT/HTTP200이다. 향후 공존 판정에는 service PID 유지뿐 아니라
+  `PUBLIC_READ_SUMMARY failed=0`도 별도로 요구한다. `MEASUREMENT_PASS`를
+  모든 안전 gate PASS나 GPU 활성화 승인으로 확대하지 않는다.
