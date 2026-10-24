@@ -22,6 +22,7 @@ from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import and_, or_, select
 from sqlalchemy.orm import Session
 
+from eom_orchestrator.auth_enrollment import require_no_active_auth_enrollment
 from eom_orchestrator.control_models import CodexAuthBindingRecord, CodexControlCommandRecord
 from eom_orchestrator.control_service import ControlPlaneError, compute_control_document_hash
 
@@ -101,6 +102,8 @@ def enqueue_codex_control_command(
         raise ControlPlaneError("CONTROL_AUTH_BINDING_MISSING", "auth binding is missing")
     if binding.resource_version != command.expected_resource_version:
         raise ControlPlaneError("CONTROL_RESOURCE_VERSION_CONFLICT", "auth binding version changed")
+    if command.command_type in {"OBSERVE", "ENABLE"}:
+        require_no_active_auth_enrollment(session, binding_id=binding.binding_id)
     operator = session.get(OperatorRecord, command.requested_by_operator_id)
     if operator is None or operator.status != "ACTIVE":
         raise ControlPlaneError("CONTROL_OPERATOR_INVALID", "requesting operator is unavailable")

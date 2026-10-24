@@ -10,6 +10,53 @@ from pathlib import Path
 APP = Path(__file__).resolve().parents[2] / "apps/web_gui/eom_web_gui/static/app.js"
 
 
+def test_model_verification_keeps_polling_without_asking_for_device_login_again() -> None:
+    node = shutil.which("node")
+    assert node is not None
+    source = APP.read_text(encoding="utf-8")
+    functions = source[
+        source.index("async function pollCodexAuthEnrollment(") : source.index(
+            "async function revealCodexDeviceChallenge("
+        )
+    ]
+    script = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const elements = new Map();
+const messages = [], requests = [], timers = [];
+let stateName = 'VERIFYING', cleared = 0, reloads = 0;
+const context = {
+  state: {codexAuthEnrollmentId: 'authflow_test'},
+  api: async (path) => {
+    requests.push(path); return {state: stateName, challenge_available: false};
+  },
+  $: (key) => { if (!elements.has(key)) elements.set(key, {}); return elements.get(key); },
+  statePresentation: () => ({label: 'state'}),
+  showMessage: (...args) => messages.push(args[1]),
+  clearCodexDeviceChallenge: () => ++cleared,
+  setStatus: () => {},
+  loadCodexAccounts: async () => ++reloads,
+  window: {setTimeout: (fn, delay) => timers.push(delay)},
+};
+vm.createContext(context);
+vm.runInContext(FUNCTIONS, context);
+(async () => {
+  await context.pollCodexAuthEnrollment('authflow_test');
+  assert.equal(elements.get('#codex-reauth-state').textContent, '로그인 및 모델 사용 확인 중');
+  assert.equal(timers[0], 2000);
+  assert.ok(messages.some((message) => message.includes('다시 로그인할 필요는 없습니다')));
+  assert.equal(cleared, 1);
+  stateName = 'SUCCEEDED';
+  await context.pollCodexAuthEnrollment('authflow_test');
+  assert.equal(reloads, 1);
+  assert.equal(timers.length, 1);
+  assert.ok(requests.every((path) => path.endsWith('/authflow_test')));
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+""".replace("FUNCTIONS", json.dumps(functions))
+    completed = subprocess.run([node, "-e", script], capture_output=True, text=True, check=False)
+    assert completed.returncode == 0, completed.stderr
+
+
 def test_denied_slot_reads_stop_polling_and_remove_cached_management_actions() -> None:
     node = shutil.which("node")
     assert node is not None, "Node is required for the browser behavior gate"

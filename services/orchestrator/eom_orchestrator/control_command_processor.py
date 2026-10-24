@@ -12,6 +12,7 @@ from eom_workflow import CodexUsageObservationV2
 from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from eom_orchestrator.auth_enrollment import require_no_active_auth_enrollment
 from eom_orchestrator.capability_observer import (
     ReviewedCapabilityPolicy,
     load_reviewed_capability_policy,
@@ -19,6 +20,7 @@ from eom_orchestrator.capability_observer import (
     record_reviewed_capability_snapshot,
     reviewed_capabilities_for_binding,
 )
+from eom_orchestrator.capability_snapshot_queries import current_assignment_snapshot_clause
 from eom_orchestrator.capacity_controller import set_auth_binding_operational_state
 from eom_orchestrator.control_commands import (
     claim_next_codex_control_command,
@@ -244,6 +246,7 @@ class CodexControlCommandProcessor:
         collect_usage: bool,
     ) -> None:
         with self.sessions() as session:
+            require_no_active_auth_enrollment(session, binding_id=binding_id)
             binding = session.get(CodexAuthBindingRecord, binding_id)
             if binding is None or binding.resource_version != expected_resource_version:
                 raise ControlPlaneError(
@@ -292,6 +295,7 @@ class CodexControlCommandProcessor:
                 binding_id=binding_id,
                 expected_resource_version=expected_resource_version,
             )
+            require_no_active_auth_enrollment(session, binding_id=binding_id)
             updated = persist_worker_auth_observation(session, observation)
             if (
                 observation.state == "READY"
@@ -379,7 +383,10 @@ def _next_automatic_observation_target(
 ) -> _ObservationTarget | None:
     latest_capability_expiry = (
         select(func.max(CodexCapabilitySnapshotRecord.valid_until))
-        .where(CodexCapabilitySnapshotRecord.binding_id == CodexAuthBindingRecord.binding_id)
+        .where(
+            CodexCapabilitySnapshotRecord.binding_id == CodexAuthBindingRecord.binding_id,
+            current_assignment_snapshot_clause(),
+        )
         .correlate(CodexAuthBindingRecord)
         .scalar_subquery()
     )
@@ -451,8 +458,14 @@ def _automatic_observation_is_due(
         return False
     if binding.state == "READY":
         latest_capability_expiry = session.scalar(
-            select(func.max(CodexCapabilitySnapshotRecord.valid_until)).where(
-                CodexCapabilitySnapshotRecord.binding_id == binding.binding_id
+            select(func.max(CodexCapabilitySnapshotRecord.valid_until))
+            .join(
+                CodexAuthBindingRecord,
+                CodexAuthBindingRecord.binding_id == CodexCapabilitySnapshotRecord.binding_id,
+            )
+            .where(
+                CodexCapabilitySnapshotRecord.binding_id == binding.binding_id,
+                current_assignment_snapshot_clause(),
             )
         )
         refresh_before = as_of + AUTOMATIC_OBSERVATION_REFRESH_LEAD

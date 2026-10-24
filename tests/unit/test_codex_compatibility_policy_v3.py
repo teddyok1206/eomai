@@ -24,6 +24,7 @@ from eom_orchestrator.capability_observer import (
 from eom_orchestrator.codex_compatibility_policy import current_admission_bindings
 from eom_orchestrator.control_models import CodexAuthBindingRecord
 from eom_orchestrator.control_service import ControlPlaneError
+from eom_orchestrator.models import WorkerSlotRecord
 from eom_workflow.control_schemas import CONTROL_SCHEMA_RESOURCES, validate_control_contract
 from jsonschema.exceptions import ValidationError as SchemaValidationError
 from pydantic import ValidationError
@@ -320,7 +321,7 @@ def test_v3_snapshot_reauthorizes_actual_binding_slot_role_assignment_and_runtim
         get=lambda model, *_args: (
             binding
             if model is CodexAuthBindingRecord
-            else (None if mutation == "missing" else slot)
+            else (None if mutation == "missing" or model is not WorkerSlotRecord else slot)
         )
     )
     with pytest.raises(ControlPlaneError):

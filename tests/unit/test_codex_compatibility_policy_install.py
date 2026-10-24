@@ -41,6 +41,7 @@ from eom_orchestrator.models import (
     ArtifactRecord,
     ArtifactRevisionRecord,
     JobRecord,
+    WorkerSlotRecord,
 )
 from eom_orchestrator.worker_auth import WorkerAuthObservation
 from eom_orchestrator.worker_registry import WorkerSlot
@@ -517,7 +518,11 @@ def test_automatic_refresh_degrades_unverified_v2_without_crashing_or_writing_sn
         get=lambda model, *_args, **_kwargs: (
             binding
             if model is CodexAuthBindingRecord
-            else SimpleNamespace(enabled=True, slot_id="01", role="authoring")
+            else (
+                SimpleNamespace(enabled=True, slot_id="01", role="authoring")
+                if model is WorkerSlotRecord
+                else None
+            )
         )
     )
 

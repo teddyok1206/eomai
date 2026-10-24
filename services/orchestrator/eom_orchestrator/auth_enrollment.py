@@ -44,6 +44,7 @@ ACTIVE_STATES = (
 TERMINAL_STATES = ("SUCCEEDED", "FAILED", "CANCELLED", "EXPIRED")
 ENROLLMENT_TTL = timedelta(minutes=15)
 PROCESSOR_LEASE_TTL = timedelta(seconds=30)
+MODEL_VERIFICATION_REASON = "CODEX_AUTH_MODEL_VERIFYING"
 POLL_INTERVAL = timedelta(seconds=2)
 MAX_DOCUMENT_BYTES = 16 * 1024
 
@@ -414,6 +415,23 @@ def held_lease_exists(session: Session, *, binding_id: str) -> bool:
         )
         or 0
     ) > 0
+
+
+def require_no_active_auth_enrollment(session: Session, *, binding_id: str) -> None:
+    """OBSERVE/ENABLE must not replace the drained verification projection."""
+
+    active = session.scalar(
+        select(CodexAuthEnrollmentRecord.enrollment_id)
+        .where(
+            CodexAuthEnrollmentRecord.binding_id == binding_id,
+            CodexAuthEnrollmentRecord.state.in_(ACTIVE_STATES),
+        )
+        .limit(1)
+    )
+    if active is not None:
+        raise ControlPlaneError(
+            "CODEX_AUTH_ENROLLMENT_ALREADY_ACTIVE", "login and model verification are in progress"
+        )
 
 
 def enrollment_status_document(

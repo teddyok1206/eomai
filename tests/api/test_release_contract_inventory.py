@@ -122,6 +122,25 @@ def test_model_selection_runtime_is_required_in_release_wheel_inventory() -> Non
     } <= assignments["control_plane_runtime"]
 
 
+def test_automatic_auth_verification_modules_are_required_in_release_wheels() -> None:
+    assignments = {
+        node.targets[0].id: ast.literal_eval(node.value)
+        for node in ast.walk(ast.parse(release_inspector_source()))
+        if isinstance(node, ast.Assign)
+        and len(node.targets) == 1
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "control_plane_runtime"
+        and isinstance(node.value, ast.Set)
+    }
+    assert {
+        "eom_orchestrator/auth_enrollment_processor.py",
+        "eom_orchestrator/auth_enrollment_capabilities.py",
+        "eom_orchestrator/auth_enrollment_capability_admission.py",
+        "eom_orchestrator/capability_snapshot_queries.py",
+        "eom_orchestrator/reviewed_capability_policy.py",
+    } <= assignments["control_plane_runtime"]
+
+
 def test_query_preparation_http_runtime_is_required_in_release_wheels() -> None:
     assignments = {
         node.targets[0].id: ast.literal_eval(node.value)

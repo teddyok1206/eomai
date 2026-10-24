@@ -25,6 +25,7 @@ from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from eom_orchestrator.capability_snapshot_queries import current_assignment_snapshot_clause
 from eom_orchestrator.control_models import (
     CodexAuthBindingRecord,
     CodexCapabilitySnapshotRecord,
@@ -362,7 +363,14 @@ def _available_capacity_models(
         # DISTINCT ON is an indexed, bounded latest-per-binding lookup in production PostgreSQL.
         statement = (
             select(CodexCapabilitySnapshotRecord)
-            .where(CodexCapabilitySnapshotRecord.binding_id.in_(binding_ids))
+            .join(
+                CodexAuthBindingRecord,
+                CodexAuthBindingRecord.binding_id == CodexCapabilitySnapshotRecord.binding_id,
+            )
+            .where(
+                CodexCapabilitySnapshotRecord.binding_id.in_(binding_ids),
+                current_assignment_snapshot_clause(),
+            )
             .distinct(CodexCapabilitySnapshotRecord.binding_id)
             .order_by(
                 CodexCapabilitySnapshotRecord.binding_id,

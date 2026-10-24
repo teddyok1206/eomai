@@ -32,6 +32,7 @@ from eom_orchestrator.auth_enrollment import (
     enrollment_status_document,
     record_challenge_revealed,
 )
+from eom_orchestrator.capability_snapshot_queries import current_assignment_snapshot_clause
 from eom_orchestrator.codex_auth_broker_client import (
     CodexAuthBrokerClient,
     CodexAuthBrokerError,
@@ -106,7 +107,14 @@ class ControlPlaneAdapter:
                     )
                     .label("rank"),
                 )
-                .where(CodexCapabilitySnapshotRecord.binding_id.in_(binding_ids))
+                .join(
+                    CodexAuthBindingRecord,
+                    CodexAuthBindingRecord.binding_id == CodexCapabilitySnapshotRecord.binding_id,
+                )
+                .where(
+                    CodexCapabilitySnapshotRecord.binding_id.in_(binding_ids),
+                    current_assignment_snapshot_clause(),
+                )
                 .subquery()
             )
             latest: dict[str, str] = {

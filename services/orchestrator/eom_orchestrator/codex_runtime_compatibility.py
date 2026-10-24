@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import stat
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from itertools import islice, product
@@ -231,6 +233,22 @@ def _ledger_root(settings: Settings, run_id: str) -> Path:
     return root
 
 
+def load_checkpointed_codex_compatibility_request(
+    settings: Settings, run_id: str
+) -> CodexCompatibilityRequest | None:
+    """Recover the same local request before discovering any new model candidates."""
+
+    if re.fullmatch(r"codexcompat_[0-9a-f]{32}", run_id) is None:
+        raise ControlPlaneError("CONTROL_COMPATIBILITY_REQUEST_INVALID", "invalid run identity")
+    path = _ledger_root(settings, run_id) / "request.json"
+    if not path.exists():
+        return None
+    request = load_compatibility_request(_read_document(path))
+    if request.run_id != run_id:
+        raise ControlPlaneError("CONTROL_COMPATIBILITY_REPLAY_CONFLICT", "checkpoint run differs")
+    return request
+
+
 def _require_binding(engine: Engine, case: CodexCompatibilityCase) -> None:
     sessions = build_session_factory(engine)
     with sessions() as session:
@@ -389,7 +407,31 @@ def run_codex_compatibility(
 ) -> PublishedCodexCompatibility:
     """Execute only inside a held maintenance fence; exact replay never starts a new call."""
 
-    settings = settings or Settings.from_environment()
+    return execute_pinned_codex_compatibility(
+        engine,
+        request,
+        settings=settings or Settings.from_environment(),
+        worker=worker,
+        fence_factory=lambda: CodexCompatibilityMaintenance(engine),
+        require_binding=lambda case: _require_binding(engine, case),
+    )
+
+
+def execute_pinned_codex_compatibility(
+    engine: Engine,
+    request: CodexCompatibilityRequest,
+    *,
+    settings: Settings,
+    worker: CodexWorkerAdapter | None,
+    fence_factory: Callable[[], CodexCompatibilityMaintenance],
+    require_binding: Callable[[CodexCompatibilityCase], None],
+) -> PublishedCodexCompatibility:
+    """Shared checkpoint/probe/publication boundary for maintenance and enrollment.
+
+    The caller owns a real capacity fence and exact binding admission. Neither a
+    diagnostic invocation nor a successful file publication grants ordinary work.
+    """
+
     request = load_compatibility_request(request.model_dump(mode="json"))
     if settings.runtime_source_commit != request.source_commit:
         raise ControlPlaneError(
@@ -422,7 +464,7 @@ def run_codex_compatibility(
         if any(case.slot_id not in slots for case in request.cases):
             raise ControlPlaneError("CONTROL_COMPATIBILITY_BINDING_INVALID", "disabled worker slot")
         adapter = worker or CodexWorkerAdapter(settings)
-        with CodexCompatibilityMaintenance(engine) as fence:
+        with fence_factory() as fence:
             runtime_guard = observe_compatibility_runtime_guard()
             epoch_path = root / "epoch.json"
             if epoch_path.exists():
@@ -481,7 +523,7 @@ def run_codex_compatibility(
                 else:
                     fence.assert_quiescent()
                     runtime_guard.assert_current()
-                    _require_binding(engine, case)
+                    require_binding(case)
                     invocation = _invocation(request, case, identity.job_id, image)
                     result = _run_case(
                         adapter=adapter,

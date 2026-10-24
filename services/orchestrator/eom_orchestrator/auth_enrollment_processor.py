@@ -7,9 +7,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from sqlalchemy import Connection, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from eom_orchestrator.auth_enrollment import (
+    MODEL_VERIFICATION_REASON,
     POLL_INTERVAL,
     claim_due_codex_auth_enrollment,
     create_auth_assignment_revision,
@@ -19,6 +21,7 @@ from eom_orchestrator.auth_enrollment import (
     transition_codex_auth_enrollment,
 )
 from eom_orchestrator.capability_observer import (
+    UnverifiedCapabilityAssignment,
     load_reviewed_capability_policy,
     observe_codex_cli_surface,
     record_reviewed_capability_snapshot,
@@ -29,12 +32,14 @@ from eom_orchestrator.codex_auth_broker_client import (
     CodexAuthBrokerError,
 )
 from eom_orchestrator.control_models import (
+    CodexAuthAssignmentRevisionRecord,
     CodexAuthBindingRecord,
     CodexAuthEnrollmentRecord,
 )
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import transaction
 from eom_orchestrator.models import WorkerSlotRecord
+from eom_orchestrator.settings import Settings
 from eom_orchestrator.worker_auth import observe_worker_auth, persist_worker_auth_observation
 from eom_orchestrator.worker_registry import WorkerSlot
 from eom_orchestrator.worker_systemd import launch_device_login_unit
@@ -68,6 +73,7 @@ class CodexAuthEnrollmentProcessor:
         capability_policy_path: Path,
         runner_id: str,
         broker: CodexAuthBrokerClient | None = None,
+        settings: Settings | None = None,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
     ) -> None:
         self.sessions = sessions
@@ -75,6 +81,7 @@ class CodexAuthEnrollmentProcessor:
         self.runner_id = runner_id
         self.broker = broker or CodexAuthBrokerClient()
         self.now = now
+        self.settings = settings or Settings.from_environment()
 
     def process_once(self) -> str | None:
         claimed_at = self.now()
@@ -304,6 +311,16 @@ class CodexAuthEnrollmentProcessor:
         self._terminal_failure(target.enrollment_id, target_terminal, reason)
 
     def _verify_and_assign(self, target: _EnrollmentTarget, observed_at: datetime) -> None:
+        with self.sessions() as session:
+            existing = session.scalar(
+                select(CodexAuthAssignmentRevisionRecord).where(
+                    CodexAuthAssignmentRevisionRecord.enrollment_id == target.enrollment_id
+                )
+            )
+            assigned_revision_id = existing.assignment_revision_id if existing is not None else None
+        if assigned_revision_id is not None:
+            self._verify_assigned_models(target, assigned_revision_id, observed_at)
+            return
         observation = observe_worker_auth(
             slot=target.slot,
             binding_id=target.binding_id,
@@ -343,23 +360,43 @@ class CodexAuthEnrollmentProcessor:
             # lookup in the health projection from flushing only the pointer.
             with session.no_autoflush:
                 persist_worker_auth_observation(session, observation)
-            record_reviewed_capability_snapshot(
-                session,
-                binding_id=binding.binding_id,
-                policy=policy,
-                observed_at=observed_at,
-                ttl=CAPABILITY_OBSERVATION_TTL,
-                cli_observation=cli_observation,
-                source="LOCAL_OBSERVATION",
-            )
-            set_auth_binding_operational_state(
-                session,
-                binding_id=binding.binding_id,
-                state="DRAINING",
-                reason_code=REAUTH_COMPLETE_REASON,
-                observed_at=observed_at + timedelta(microseconds=1),
-                ttl=AUTH_OBSERVATION_TTL,
-            )
+            completion_reason = REAUTH_COMPLETE_REASON
+            try:
+                record_reviewed_capability_snapshot(
+                    session,
+                    binding_id=binding.binding_id,
+                    policy=policy,
+                    observed_at=observed_at,
+                    ttl=CAPABILITY_OBSERVATION_TTL,
+                    cli_observation=cli_observation,
+                    source="LOCAL_OBSERVATION",
+                )
+            except UnverifiedCapabilityAssignment as exc:
+                if (
+                    exc.binding_id != binding.binding_id
+                    or exc.assignment_revision_id != assignment.assignment_revision_id
+                ):
+                    raise
+                # Commit successful authentication before usage-consuming tests.
+                # The same durable enrollment resumes VERIFYING without another
+                # device login; the slot cannot dispatch ordinary work meanwhile.
+                completion_reason = MODEL_VERIFICATION_REASON
+            if completion_reason == MODEL_VERIFICATION_REASON:
+                set_auth_binding_operational_state(
+                    session,
+                    binding_id=binding.binding_id,
+                    state="DRAINING",
+                    reason_code=completion_reason,
+                    observed_at=observed_at + timedelta(microseconds=1),
+                    ttl=AUTH_OBSERVATION_TTL,
+                )
+                defer_codex_auth_enrollment(
+                    session,
+                    enrollment_id=enrollment.enrollment_id,
+                    lease_owner=self.runner_id,
+                    next_action_at=observed_at + POLL_INTERVAL,
+                )
+                return
             transition_codex_auth_enrollment(
                 session,
                 enrollment_id=enrollment.enrollment_id,
@@ -367,6 +404,112 @@ class CodexAuthEnrollmentProcessor:
                 target_state="SUCCEEDED",
                 transitioned_at=observed_at,
                 assignment_revision_id=assignment.assignment_revision_id,
+                next_action_at=None,
+            )
+
+    def _verify_assigned_models(
+        self, target: _EnrollmentTarget, assignment_revision_id: str, observed_at: datetime
+    ) -> None:
+        from eom_orchestrator.auth_enrollment_capabilities import run_enrollment_model_verification
+
+        with transaction(self.sessions) as session:
+            enrollment = self._locked_claim(session, target.enrollment_id, "VERIFYING")
+            # A bounded multi-case probe must not be claimed by another producer
+            # after the normal 30-second polling lease. Crash recovery retains
+            # the checkpoint ledger and never blindly repeats started inference.
+            enrollment.lease_expires_at = target.expires_at
+            bind = session.get_bind()
+            engine = bind.engine if isinstance(bind, Connection) else bind
+        policy = load_reviewed_capability_policy(self.capability_policy_path)
+        try:
+            run_enrollment_model_verification(
+                engine,
+                enrollment_id=target.enrollment_id,
+                assignment_revision_id=assignment_revision_id,
+                policy=policy,
+                settings=self.settings,
+            )
+        except ControlPlaneError as exc:
+            if exc.code in {"CODEX_AUTH_VERIFICATION_BUSY", "CODEX_COMPATIBILITY_FENCE_BUSY"}:
+                self._defer(target.enrollment_id, "VERIFYING", self.now())
+                return
+            if (
+                isinstance(exc, UnverifiedCapabilityAssignment)
+                and exc.binding_id == target.binding_id
+                and exc.assignment_revision_id == assignment_revision_id
+            ):
+                # A fresh catalog can honestly contain no eligible candidate.
+                # Finish login, but the final admission below keeps it drained.
+                pass
+            else:
+                raise
+        verified_at = self.now()
+        observation = observe_worker_auth(
+            slot=target.slot,
+            binding_id=target.binding_id,
+            account_label=target.account_label,
+            observed_at=verified_at,
+            ttl=AUTH_OBSERVATION_TTL,
+        )
+        if observation.state != "READY":
+            raise ControlPlaneError(
+                "CONTROL_AUTH_NOT_READY", "authentication changed during model verification"
+            )
+        # Reload the protected policy; a policy/runtime change must invalidate
+        # the old report rather than authorize an implicit latest configuration.
+        final_policy = load_reviewed_capability_policy(self.capability_policy_path)
+        if final_policy != policy:
+            raise ControlPlaneError(
+                "CONTROL_CAPABILITY_POLICY_MISMATCH", "policy changed during verification"
+            )
+        cli = observe_codex_cli_surface()
+        with transaction(self.sessions) as session:
+            enrollment = self._locked_claim(session, target.enrollment_id, "VERIFYING")
+            binding = session.get(CodexAuthBindingRecord, target.binding_id, with_for_update=True)
+            if (
+                binding is None
+                or binding.state != "DRAINING"
+                or binding.reason_code != MODEL_VERIFICATION_REASON
+                or binding.current_assignment_revision_id != assignment_revision_id
+            ):
+                raise ControlPlaneError(
+                    "CODEX_AUTH_DRAIN_STATE_CHANGED", "verification assignment changed"
+                )
+            try:
+                record_reviewed_capability_snapshot(
+                    session,
+                    binding_id=binding.binding_id,
+                    policy=final_policy,
+                    observed_at=verified_at,
+                    ttl=CAPABILITY_OBSERVATION_TTL,
+                    cli_observation=cli,
+                    source="LOCAL_OBSERVATION",
+                )
+            except UnverifiedCapabilityAssignment as exc:
+                if (
+                    exc.binding_id != binding.binding_id
+                    or exc.assignment_revision_id != assignment_revision_id
+                ):
+                    raise
+                set_auth_binding_operational_state(
+                    session,
+                    binding_id=binding.binding_id,
+                    state="DRAINING",
+                    reason_code=exc.code,
+                    observed_at=verified_at,
+                    ttl=AUTH_OBSERVATION_TTL,
+                )
+            else:
+                # READY only follows a fresh auth observation plus canonical,
+                # current-assignment live model evidence, never old snapshots.
+                persist_worker_auth_observation(session, observation)
+            transition_codex_auth_enrollment(
+                session,
+                enrollment_id=enrollment.enrollment_id,
+                lease_owner=self.runner_id,
+                target_state="SUCCEEDED",
+                transitioned_at=verified_at,
+                assignment_revision_id=assignment_revision_id,
                 next_action_at=None,
             )
 

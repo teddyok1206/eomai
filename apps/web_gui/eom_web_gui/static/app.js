@@ -3404,6 +3404,12 @@ function renderCodexAccounts(accounts) {
       actionButton("사용 중지", () => sendAccountCommand(account, "DISABLE"), true),
     );
     const usageButton = actions.firstElementChild;
+    if (account.active_auth_enrollment_id) {
+      for (const button of [...actions.children].slice(0, 2)) {
+        button.disabled = true;
+        button.title = "로그인 변경과 자동 모델 확인이 끝나면 사용할 수 있습니다.";
+      }
+    }
     if (account.active_lease_count > 0 && usageButton) {
       usageButton.disabled = true;
       usageButton.title = "현재 슬롯 작업이 끝난 뒤 사용량을 새로고침할 수 있습니다.";
@@ -3542,24 +3548,33 @@ async function pollCodexAuthEnrollment(enrollmentId) {
     const value = await api(`/admin/codex-auth-enrollments/${encodeURIComponent(enrollmentId)}`);
     if (state.codexAuthEnrollmentId !== enrollmentId) return;
     const enrollmentPresentation = statePresentation("generic", value.state);
-    $("#codex-reauth-state").textContent = enrollmentPresentation.label;
+    $("#codex-reauth-state").textContent = value.state === "VERIFYING"
+      ? "로그인 및 모델 사용 확인 중" : enrollmentPresentation.label;
     $("#codex-reauth-expires").textContent = value.expires_at || "-";
     $("#codex-reauth-result").textContent = value.state === "SUCCEEDED"
       ? "계정 연결 갱신 완료"
       : value.error_code || "진행 중";
     const terminal = ["SUCCEEDED", "FAILED", "CANCELLED", "EXPIRED"].includes(value.state);
     $("#codex-challenge-reveal").hidden = !value.challenge_available;
+    if (value.state === "VERIFYING") {
+      clearCodexDeviceChallenge();
+      showMessage($("#codex-reauth-message"), "사용할 모델을 자동으로 확인하고 있습니다. 다시 로그인할 필요는 없습니다.");
+    }
     if (terminal) {
       clearCodexDeviceChallenge();
       setStatus($("#codex-reauth-badge"), value.state === "SUCCEEDED" ? "success" : "danger", value.state === "SUCCEEDED" ? "✓" : "!", enrollmentPresentation.label);
       showMessage(
         $("#codex-reauth-message"),
         value.state === "SUCCEEDED"
-          ? "로그인이 검증되었습니다. 작업 슬롯은 새 작업 중지 상태를 유지하며, 사용할 때 ‘사용 시작’을 눌러야 합니다."
+          ? "로그인 변경과 자동 모델 확인이 끝났습니다. 사용 가능한 모델이 확인된 슬롯은 자동으로 사용을 시작합니다. 제한이 표시되면 슬롯 상태를 확인하세요."
           : `로그인 변경 종료: ${value.error_code || value.state}`,
         value.state === "SUCCEEDED" ? "success" : "error",
       );
       await loadCodexAccounts();
+      const account = (state.codexAccounts || []).find((item) => item.binding_id === value.binding_id);
+      if (value.state === "SUCCEEDED" && account && account.state !== "READY") {
+        showMessage($("#codex-reauth-message"), "로그인은 완료됐지만 사용 가능한 모델이 확인되지 않아 작업을 시작하지 않았습니다. 슬롯의 상세 상태를 확인해 주세요.", "warning");
+      }
       return;
     }
     state.codexAuthPollTimer = window.setTimeout(() => pollCodexAuthEnrollment(enrollmentId), 2000);

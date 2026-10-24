@@ -40,6 +40,10 @@ from sqlalchemy import and_, exists, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from eom_orchestrator.capability_snapshot_queries import (
+    current_assignment_snapshot_clause,
+    latest_binding_snapshot_clause,
+)
 from eom_orchestrator.control_models import (
     CodexAuthAssignmentRevisionRecord,
     CodexAuthBindingRecord,
@@ -1559,6 +1563,8 @@ def acquire_worker_lease(
             CodexAuthBindingRecord.state == "READY",
             CodexAuthBindingRecord.valid_until > acquired_at,
             CodexCapabilitySnapshotRecord.valid_until > acquired_at,
+            current_assignment_snapshot_clause(),
+            latest_binding_snapshot_clause(),
             CodexCapabilitySnapshotRecord.codex_cli_version
             == CodexAuthBindingRecord.codex_cli_version,
             ~exists(

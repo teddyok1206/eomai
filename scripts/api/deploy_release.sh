@@ -1273,6 +1273,11 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eomctl/operator.py",
     }
     control_plane_runtime = {
+        "eom_orchestrator/auth_enrollment_processor.py",
+        "eom_orchestrator/auth_enrollment_capabilities.py",
+        "eom_orchestrator/auth_enrollment_capability_admission.py",
+        "eom_orchestrator/capability_snapshot_queries.py",
+        "eom_orchestrator/reviewed_capability_policy.py",
         "eom_orchestrator/capability_observer.py",
         "eom_orchestrator/capacity_controller.py",
         "eom_orchestrator/control_artifacts.py",

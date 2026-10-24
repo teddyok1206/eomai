@@ -261,9 +261,11 @@ class CodexCompatibilityMaintenance:
         engine: Engine,
         *,
         host_reader: Callable[[], None] = assert_codex_producers_quiescent,
+        database_reader: Callable[[Connection], None] = _assert_existing_work_absent,
     ) -> None:
         self._engine = engine
         self._host_reader = host_reader
+        self._database_reader = database_reader
         self._connection: Connection | None = None
 
     def __enter__(self) -> CodexCompatibilityMaintenance:
@@ -336,7 +338,7 @@ class CodexCompatibilityMaintenance:
                 raise ControlPlaneError(
                     "CODEX_COMPATIBILITY_FENCE_LOST", "Codex maintenance host fence not held"
                 )
-            _assert_existing_work_absent(connection)
+            self._database_reader(connection)
             connection.commit()
         except SQLAlchemyError as exc:
             try:

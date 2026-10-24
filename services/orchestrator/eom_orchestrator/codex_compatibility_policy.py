@@ -20,12 +20,6 @@ from eom_workflow.control_schemas import validate_control_contract
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from sqlalchemy import Engine, select
 
-from eom_orchestrator.capability_observer import (
-    COMPATIBILITY_SLOT_ROLES,
-    ReviewedCapabilityBindingV3,
-    ReviewedCapabilityPolicy,
-    ReviewedModelCapability,
-)
 from eom_orchestrator.codex_compatibility_probe import synthetic_probe_png, validate_probe_result
 from eom_orchestrator.control_artifact_resolution import (
     BoundedControlArtifactRead,
@@ -45,6 +39,12 @@ from eom_orchestrator.models import (
     JobRecord,
     ProtocolVersionRecord,
     WorkerSlotRecord,
+)
+from eom_orchestrator.reviewed_capability_policy import (
+    COMPATIBILITY_SLOT_ROLES,
+    ReviewedCapabilityBindingV3,
+    ReviewedCapabilityPolicy,
+    ReviewedModelCapability,
 )
 
 COMPATIBILITY_ARTIFACT_TYPE = "control_codex_runtime_compatibility"

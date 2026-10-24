@@ -72,9 +72,81 @@ enrollment or create two assignment revisions. There is no automatic second enro
 
 `REQUESTED` first drives the existing binding to `DRAINING`. `READY_FOR_LOGIN` is reachable only
 when no `ACTIVE`/`RECONCILING` lease and no active fixed worker unit exists. The login helper starts
-only then. A login success is not enough to enable work: the exact-identity non-generating auth and
-capability probes must pass before `SUCCEEDED`; the slot remains drained until an explicit existing
-`ENABLE` command.
+only then. The exact-identity non-generating auth and CLI/runtime probes must pass. Authentication
+is committed before model tests, with the new assignment still `DRAINING`. The same enrollment
+continues in `VERIFYING` and automatically executes the released synthetic compatibility probes.
+The user does not start a separate verification or repeat device login for this phase. A fresh
+auth observation plus admitted execution evidence makes the slot `READY` automatically. With no
+passing model/effort pair, login may finish but the slot remains `DRAINING` with
+`CONTROL_CAPABILITY_BINDING_UNVERIFIED`; it never inherits the old assignment's capabilities.
+
+This changes no request/status schema, DB lifecycle, historical assignment or failed enrollment.
+`SUCCEEDED` identifies a verified login assignment, not permission to dispatch model work. Only
+the typed `UnverifiedCapabilityAssignment` for the just-created binding/revision is nonfatal here;
+role, slot, runtime, policy, hash and persistence errors remain terminal. Before authentication is
+committed they roll back its assignment; failures during subsequent model tests preserve the
+successful authentication and leave the slot unavailable. Indexed binding/assignment and canonical
+publication lookups plus the bounded policy replace no existing queue or storage owner.
+
+### 4.1 Automatic model verification (2026-10-24)
+
+- Contracts first: reuse the released JSON Schema 2020-12 and Pydantic
+  `codex-compatibility-request/1.0`, invocation, probe result, and report contracts unchanged.
+  No worker protocol, request/status family or DB migration is introduced.
+- The exact new assignment and the complete protected policy determine a stable run identity.
+  A policy change, including same-version runtime hashes or scopes, invalidates lookup. The
+  request pins the installed source, binding, assignment, resource version and ordered pairs.
+- Existing scopes on the fixed binding provide only the **candidate** model/effort pairs. Old
+  assignment proofs are not admission. The probe executes on the newly authenticated worker using
+  the normal fixed unit, an attached synthetic PNG and strict JSON output. Native model catalog
+  visibility alone is not PASS, and no external LLM API or API-key billing path is added.
+- A fresh fixed-slot native catalog narrows candidates to visible models/efforts with the required
+  text/image modalities before inference; it does not grant admission. The resulting request is
+  frozen. Replay uses that same checkpoint, not a newly discovered/latest catalog. A canonical
+  completed report is reused even if local staging has been removed; an incomplete publication
+  without its checkpoint is uncertain and cannot trigger a replacement inference.
+- The released diagnostic stops at the first failure/uncertain call. Only its preceding PASS
+  pairs can be admitted; FAIL/NOT_RUN pairs remain unavailable. Consequently completion does not
+  claim that every configured model passed. The maximum call budget equals the bounded candidate
+  set, with the released maximum of 64, inside the enrollment expiry window.
+- Reuse the existing host-capacity advisory fence with enrollment-specific read checks rather than
+  stopping producers: exact target `DRAINING`, valid enrollment, no held target lease, idle target
+  unit, and spare current global/pool capacity. Already-running work continues, but **new host
+  worker claims wait while the synchronous diagnostic holds this fence**. This explicit rare-login
+  trade-off avoids a second queue/lease system; it is not a claim of zero scheduling impact.
+- Normal 30-second polling claims are extended to the enrollment deadline for the bounded probe.
+  A crash reuses the immutable local ledger: completed results/publication are replayed, and
+  started-but-uncertain execution is never automatically inferred again. Capacity contention
+  defers the same enrollment, rather than creating another login request.
+- Only Orchestrator publishes the validated report and result members to NAS through the existing
+  `ControlFileSetPublisher`. DB rows contain existing small job/manifest metadata and immutable
+  pointers. Read admission resolves the canonical approved Artifact, protocol, lifecycle, manifest,
+  member schemas and hashes, then checks runtime/policy identity and current assignment again.
+  Local report files alone grant no permission.
+- Authoring/review continue to require an identical passing pair on both **current** accounts.
+  Other fixed roles are independently scoped. Periodic observation and ENABLE use this same
+  read-admission resolver, so a successful automatic proof is not lost at the next health refresh.
+- Existing V1 snapshots stay immutable. The shared SQL predicate excludes observations preceding
+  the current assignment time (a dangling assigned revision fails closed). Account display, model
+  selection and automatic health freshness use this same predicate. Worker acquisition additionally
+  accepts only the latest snapshot for the binding, so a missing pair in the latest proof cannot
+  fall back to an older snapshot that still advertises it. Legacy NULL assignments stay supported.
+- OBSERVE/ENABLE are rejected during an active enrollment, including at the final locked write,
+  so a stale manual refresh cannot replace its drained projection. Explicit DRAIN/DISABLE remain
+  available as safety controls and invalidate an in-progress test rather than enabling work.
+- Dependency direction: immutable policy values live in `reviewed_capability_policy`; canonical
+  proof reads in `auth_enrollment_capability_admission`; execution/fencing in
+  `auth_enrollment_capabilities`; the existing enrollment processor owns lifecycle. Existing policy
+  class imports remain supported re-exports. Admission does not import the worker executor and no
+  circular import is needed.
+
+Access patterns remain indexed binding/assignment/publication lookup and ordered immutable
+diagnostic iteration. Pair aggregation uses sets/maps, O(cases + policy entries), bounded to the
+released limits. No binary DB values, extra cache, parallel queue, new dependency, root policy-file
+writer or credential access is introduced. Before rollout, run disposable PostgreSQL concurrency
+tests and an installed-release login canary; source test PASS is not live acceptance. Rollback first
+drains the changed slot, restores the compatible prior release, and preserves assignment/report
+history. Already FAILED enrollments are not reinterpreted as successful.
 
 ## 5. Transaction and concurrency boundary
 

@@ -11,11 +11,9 @@ from typing import Literal
 
 import yaml
 from eom_identifiers import new_capability_snapshot_id
-from eom_workflow.codex_compatibility import CodexCompatibilityRuntime
 from eom_workflow.control_plane import CodexCapabilitySnapshot, ModelCapability, ReasoningEffort
 from eom_workflow.control_schemas import validate_control_contract
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy.orm import Session
 
 from eom_orchestrator.control_models import CodexAuthBindingRecord, CodexCapabilitySnapshotRecord
@@ -25,11 +23,24 @@ from eom_orchestrator.control_service import (
     record_capability_snapshot,
 )
 from eom_orchestrator.models import WorkerSlotRecord
+from eom_orchestrator.reviewed_capability_policy import (
+    COMPATIBILITY_SLOT_ROLES as COMPATIBILITY_SLOT_ROLES,
+)
+from eom_orchestrator.reviewed_capability_policy import (
+    ReviewedCapabilityBinding as ReviewedCapabilityBinding,
+)
+from eom_orchestrator.reviewed_capability_policy import (
+    ReviewedCapabilityBindingV3 as ReviewedCapabilityBindingV3,
+)
+from eom_orchestrator.reviewed_capability_policy import (
+    ReviewedCapabilityPolicy as ReviewedCapabilityPolicy,
+)
+from eom_orchestrator.reviewed_capability_policy import (
+    ReviewedModelCapability as ReviewedModelCapability,
+)
 from eom_orchestrator.worker_auth import CLI_ENVIRONMENT, CODEX_BINARY, observe_codex_cli_version
-from eom_orchestrator.worker_registry import FIXED_WORKER_SLOT_ROLES
 
 MAX_POLICY_BYTES = 64 * 1024
-COMPATIBILITY_SLOT_ROLES = FIXED_WORKER_SLOT_ROLES
 REQUIRED_EXEC_HELP_FLAGS = frozenset(
     {
         "--model",
@@ -42,92 +53,16 @@ REQUIRED_EXEC_HELP_FLAGS = frozenset(
 )
 
 
-class ReviewedCapabilityBinding(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
+class UnverifiedCapabilityAssignment(ControlPlaneError):
+    """The exact assignment has no admitted models; this is not an auth failure."""
 
-    binding_id: str = Field(pattern=r"^authbinding_[0-9a-f]{32}$")
-    assignment_revision_id: str | None = Field(pattern=r"^authassignrev_[0-9a-f]{32}$")
-
-
-class ReviewedCapabilityBindingV3(ReviewedCapabilityBinding):
-    slot_id: Literal["01", "02", "03", "04", "05", "06"]
-    role: Literal["authoring", "review", "image", "item_management", "support"]
-
-    @model_validator(mode="after")
-    def fixed_slot_role(self) -> ReviewedCapabilityBindingV3:
-        if self.role != COMPATIBILITY_SLOT_ROLES[self.slot_id]:
-            raise ValueError("V3 capability binding role must match its fixed slot")
-        return self
-
-
-class ReviewedModelCapability(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, use_enum_values=True)
-
-    model: str = Field(pattern=r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
-    reasoning_efforts: tuple[ReasoningEffort, ...] = Field(min_length=1, max_length=5)
-    bindings: tuple[ReviewedCapabilityBinding | ReviewedCapabilityBindingV3, ...] | None = Field(
-        default=None, min_length=1, max_length=6
-    )
-
-    @model_validator(mode="after")
-    def unique_efforts(self) -> ReviewedModelCapability:
-        if len(self.reasoning_efforts) != len(set(self.reasoning_efforts)):
-            raise ValueError("reviewed reasoning efforts must be unique")
-        if self.bindings is not None and (
-            len({item.binding_id for item in self.bindings}) != len(self.bindings)
-            or self.bindings != tuple(sorted(self.bindings, key=lambda item: item.binding_id))
-        ):
-            raise ValueError("reviewed binding scopes must be unique and sorted")
-        if self.bindings is not None:
-            slots = [
-                pin.slot_id for pin in self.bindings if isinstance(pin, ReviewedCapabilityBindingV3)
-            ]
-            if len(slots) != len(set(slots)):
-                raise ValueError("V3 capability scope must have unique slots")
-        return self
-
-
-class ReviewedCapabilityPolicy(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    version: Literal[1, 2, 3]
-    expected_codex_cli_version: str = Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$")
-    models: tuple[ReviewedModelCapability, ...] = Field(min_length=1, max_length=32)
-    compatibility_runtime: CodexCompatibilityRuntime | None = None
-
-    @field_validator("version", mode="before")
-    @classmethod
-    def integer_policy_version(cls, value: object) -> object:
-        if type(value) is not int:
-            raise ValueError("reviewed policy version must be an integer")
-        return value
-
-    @model_validator(mode="after")
-    def unique_models(self) -> ReviewedCapabilityPolicy:
-        if self.version == 1:
-            names = [item.model for item in self.models]
-            if (
-                len(self.models) > 16
-                or len(names) != len(set(names))
-                or self.compatibility_runtime is not None
-                or any(item.bindings is not None for item in self.models)
-            ):
-                raise ValueError("V1 reviewed models must be unique, global and runtime-unscoped")
-        elif (
-            self.compatibility_runtime is None
-            or self.compatibility_runtime.cli_version != self.expected_codex_cli_version
-            or len({(item.model, item.bindings) for item in self.models}) != len(self.models)
-        ):
-            raise ValueError(
-                "scoped reviewed policy requires exact runtime and unique model scopes"
-            )
-        if self.version in {2, 3} and any(
-            isinstance(pin, ReviewedCapabilityBindingV3) != (self.version == 3)
-            for item in self.models
-            for pin in item.bindings or ()
-        ):
-            raise ValueError("reviewed binding shape must match its policy version")
-        return self
+    def __init__(self, *, binding_id: str, assignment_revision_id: str | None) -> None:
+        super().__init__(
+            "CONTROL_CAPABILITY_BINDING_UNVERIFIED",
+            "no reviewed model capability is admitted for this binding assignment",
+        )
+        self.binding_id = binding_id
+        self.assignment_revision_id = assignment_revision_id
 
 
 def load_reviewed_capability_policy(
@@ -267,10 +202,18 @@ def reviewed_capabilities_for_binding(
         )
         for model, efforts in sorted(admitted.items())
     )
+    if not capabilities and binding is not None:
+        from eom_orchestrator.auth_enrollment_capability_admission import (
+            enrollment_verified_capabilities,
+        )
+
+        capabilities = enrollment_verified_capabilities(session, binding=binding, policy=policy)
     if not capabilities:
-        raise ControlPlaneError(
-            "CONTROL_CAPABILITY_BINDING_UNVERIFIED",
-            "no reviewed model capability is admitted for this binding assignment",
+        raise UnverifiedCapabilityAssignment(
+            binding_id=binding_id,
+            assignment_revision_id=(
+                binding.current_assignment_revision_id if binding is not None else None
+            ),
         )
     if policy.version == 1:
         # Keep legacy policy ordering and snapshot hashes unchanged.

@@ -112,6 +112,7 @@ def build_workflow_runtime(
         control_sessions,
         capability_policy_path=actual_platform_settings.codex_capability_policy,
         runner_id=runner_id,
+        settings=actual_platform_settings,
     )
     control_processor = CodexControlCommandProcessor(
         control_sessions,

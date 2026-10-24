@@ -93,6 +93,20 @@ def test_read_only_pre_stop_check_reuses_work_queries_without_a_session_lock() -
     connection.invalidate.assert_not_called()
 
 
+def test_enrollment_reader_uses_the_same_owned_host_fence_without_stopping_producers() -> None:
+    engine, connection = _database([True, True, True, True])
+    database_reader = Mock()
+    host_reader = Mock()
+    with maintenance.CodexCompatibilityMaintenance(
+        engine, host_reader=host_reader, database_reader=database_reader
+    ) as fence:
+        fence.assert_quiescent()
+    assert database_reader.call_count == host_reader.call_count == 2
+    assert all(call.args == (connection,) for call in database_reader.call_args_list)
+    assert "pg_try_advisory_lock" in str(connection.scalar.call_args_list[0].args[0])
+    assert "pg_advisory_unlock" in str(connection.scalar.call_args_list[-1].args[0])
+
+
 @pytest.mark.parametrize(
     ("position", "code"),
     [
