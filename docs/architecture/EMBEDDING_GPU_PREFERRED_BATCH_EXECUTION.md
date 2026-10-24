@@ -871,3 +871,59 @@ P2-J source commit `f156e6a28280668f65cc049416866c01874cc40c`는 main에 push했
 `-I -B`, cwd `/`에서 신규 연결6개 모듈과 packaged schema를 읽었다. EOM dependency225개도
 모두 추출 wheel에서 해결됐고 torch/transformers import·모델 초기화는 없었다. source Git,
 editable import, native identity/sandbox/GPU 실행 또는 운영 설치 검증으로 대체한 것이 아니다.
+
+## P2-K actual owner 결과 검증과 canonical 실행 근거
+
+root의 완료 ACK는 publication이 아니다. actual owner가 원 채널의 완료 요약과 root 소유의
+고정 result/vector member, 자기 원 input을 대조하고 실제 Catalog child source/lease를 전후
+재검증한 뒤 기존 Orchestrator file-set owner로 작은 실행 영수증을 발행한다. root나 native
+worker에 DB/NAS 쓰기를 주지 않는다. 입력 text·vector payload를 영수증/DB/IPC에 복제하지 않는다.
+
+새 receipt1은 현재 구현된 CUDA root 완료 의미만 다룬다. CPU 결과를 CUDA proof로 위장하지
+않으며 CPU batch의 실제 unit/proof 연결에서 별도 명시적 variant를 추가한다. 기존 receipt와
+CPU 실행 이력은 그대로 보존한다. 영수증은 parent planning Job ID와 원 request/route/binding,
+root READY/완료의 작은 불변 값, child별 Job/input/result/shard/binary hash·range만 보유한다.
+Root observations는 독립 lifecycle이 없는 small values여서 별도 Artifact들로 분해하지 않는다.
+
+원 parent BOUND history와 actual child bindings를 official application 경계에서 확인해야만
+발행할 수 있다. Artifact 승인만으로 실제 실행이나 사람 권한을 추정하지 않는다. 이후 QUERY의
+기존 continuation에 batch 실행 proof successor를 연결하고 DOCUMENT의 기존 encoding 예약과
+결과 등록을 재사용한다. CPU legacy executor가 batch child를 새로 실행하지 못하는 모드 경계도
+같은 allocation transaction에 고정해야 한다.
+
+주 접근은 원 attempt 고정 경로 두 개의 bounded read, child ordinal/hash map lookup과 ordered
+iteration이다. metadata O(n), binary는 한 버퍼와 read-only memoryviews다(최대32 child/16MiB).
+immutable bytes는 명시적 root→owner 검증 경계에서만 materialize하며 각 child의 canonical 결과
+등록 때 필요한 범위만 별도 commit한다. 큰 binary나 aggregate input은 DB에 넣지 않는다.
+
+모델 실행과 큰 입력·binary 읽기 동안 SQL lock을 유지하지 않는다. 작은 실행 영수증의 공식
+publication 때는 기존 query completion과 같이 실제 source/lease read fence를 유지하되,
+parent/child의 미커밋 write를 독립 Artifact commit에 걸쳐 보유하지 않는다. 기존 publisher의
+key/transaction/first-observation replay를 쓰며 같은 원 실행의 영수증만 재조회한다.
+부분·불명 결과는 보존하고 재계산/CPU fallback으로 바꾸지 않는다. 단순히 wire ACK나 shape-valid
+JSON을 성공으로 등록하는 대안은 실제 source·hash·원 실행 closure가 없어 사용하지 않는다.
+
+P2-K 검증 결과:
+
+- receipt/result-read/channel/기존 control publisher 집중74 PASS다. native 연산은 합성 backend,
+  unit의 root/IAM leaf도 명시적 합성 seam이며 실제 GPU/운영 source PASS가 아니다.
+- marker-guarded disposable PostgreSQL에서 실행 영수증10건과 기존 planning/admission/source22건,
+  총32 PASS(37.62s)다. 동시 publication의 한 Artifact 수렴, 중단 전 미발행, 원 key의 변경 거부,
+  parent 계획/실패를 계산 성공으로 사용하지 않음, 재전송 때 현재 권한 재확인, 발행 직후 권한
+  취소 때 이미 commit한 기술 Artifact를 보존하고 child 완료는 차단함을 확인했다. large binary는
+  DB request에 없고 parent history도 바뀌지 않는다. 실제 IAM/source/numerical leaf는 합성이다.
+- 첫 DB r3은 fixture batch ID 중복으로3 failed/23 passed/6 errors였다. 실제 정책을 완화하지 않고
+  case별 identity를 고친 r4에서 위32 PASS를 확인했다. 실패 로그는 보존하고 같은 marker DB를
+  공식 cleanup으로 제거했다. 운영 DB·계정·원 FAILED 기록은 변경하지 않았다.
+  로그: `/tmp/eom-gpu-batch-admission-20261024-r3.log`, 같은 prefix의 `r4.log`.
+- 실제 root/runner UID·sender·birth/pidfd/local DAC suite는 root-owned640 결과와 read-only 공유
+  vector buffer의 owner 검증을 추가해12 PASS(6.84s)다. 로그는
+  `/tmp/eom-gpu-batch-owner-os-20261024-r7.log`다. source/IAM·unit·GPU 연산은 여전히 합성이다.
+- 별도 기존 plan/admission/source/proxy/결과 및 dependency·wheel inventory103 PASS(57.79s)다.
+  위74/DB32/OS12와 겹치는 경계가 있으므로 전체 고유 테스트 수처럼 합산하지 않는다.
+- production7모듈 strict mypy, scoped Python14개 Ruff/format, diff whitespace PASS다.
+  API/Web·채팅·INDEX owner는 active이고 GPU0%/2MiB다. 모델 import·추론·운영 배포·activation은
+  하지 않았다.
+
+P2_K_RECEIPT=SOURCE_AND_DB_AND_OS_VERIFIED, CHILD_CANONICAL_COMPLETION=PENDING,
+LIVE_GPU_BATCH=NOT_RUN, GPU_PREFERRED_ACTIVE=NO, CURRENT_DEFAULT=CPU, GOAL=ACTIVE.

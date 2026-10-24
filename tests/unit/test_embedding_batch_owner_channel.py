@@ -31,8 +31,8 @@ from tests.unit.test_embedding_batch_owner_control import RELEASE, control_frame
 
 
 @contextmanager
-def endpoints(*, ready=True, bound=True, peer_fence=None):
-    value = control_frames()
+def endpoints(*, ready=True, bound=True, peer_fence=None, value=None):
+    value = value or control_frames()
     left, right = socket.socketpair()
     for connection in (left, right):
         connection.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)

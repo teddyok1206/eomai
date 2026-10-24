@@ -26,6 +26,7 @@ from eom_workflow.embedding_batch_owner_control import (
     embedding_batch_owner_control_bytes,
     parse_embedding_batch_owner_control,
     parse_embedding_batch_owner_control_bytes,
+    validate_embedding_batch_owner_completion,
     validate_embedding_batch_owner_context,
 )
 
@@ -246,17 +247,8 @@ class EmbeddingBatchOwnerChannel:
     def _completion(self, value: EmbeddingBatchRootCompleted) -> None:
         _require(self._ready is not None and self._bound is not None)
         assert self._ready is not None and self._bound is not None
-        grant = value.grant
-        _require(
-            value.bound_message_sha256 == self._bound.message_sha256
-            and value.unit_invocation_id == self._ready.unit_invocation_id
-            and value.unit_exited_monotonic >= self._ready.unit_started_monotonic
-            and grant.ready_message_sha256 == self._ready.readiness.message_sha256
-            and grant.batch_request_sha256 == self._bound.binding.batch_request_sha256
-            and grant.batch_input_raw_sha256 == self._bound.input_raw_sha256
-            and grant.batch_input_byte_count == self._bound.input_byte_count
-            and self._sequence > 0
-        )
+        _require(self._sequence > 0)
+        validate_embedding_batch_owner_completion(self.request, self._ready, self._bound, value)
         self._completed = value
 
     def authorize_next(
@@ -356,6 +348,18 @@ class EmbeddingBatchOwnerChannel:
     def terminal_peer_exit_allowed(self) -> bool:
         """No new source/compute exchanges after this original terminal exchange starts."""
         return self._phase in {_Phase.COMPLETED, _Phase.DONE}
+
+    @property
+    def received_completion(self) -> EmbeddingBatchRootCompleted:
+        """Only a validated original OWNER-side terminal exchange, not arbitrary JSON."""
+        with self._operation():
+            _require(
+                self.side == "OWNER"
+                and self._phase in {_Phase.COMPLETED, _Phase.DONE}
+                and self._completed is not None
+            )
+            assert self._completed is not None
+            return self._completed
 
 
 def bind_original_embedding_batch_owner_channel(

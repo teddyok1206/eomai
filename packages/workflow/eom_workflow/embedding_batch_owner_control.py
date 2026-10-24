@@ -242,3 +242,28 @@ def validate_embedding_batch_owner_context(
         )
     elif isinstance(message, EmbeddingBatchRootBusy):
         validate_embedding_gpu_allocation_link(request, message.allocation)
+
+
+def validate_embedding_batch_owner_completion(
+    request: EmbeddingGpuAllocationRequest,
+    ready: EmbeddingBatchRootReady,
+    bound: EmbeddingBatchOwnerBound,
+    completed: EmbeddingBatchRootCompleted,
+) -> None:
+    """One pure original completion closure, not transport state or physical/source proof."""
+    ready = EmbeddingBatchRootReady.model_validate(ready)
+    bound = EmbeddingBatchOwnerBound.model_validate(bound)
+    completed = EmbeddingBatchRootCompleted.model_validate(completed)
+    for value in (ready, bound, completed):
+        validate_embedding_batch_owner_context(request, ready.controller_release, value)
+    grant = completed.grant
+    _require(
+        bound.ready_message_sha256 == ready.message_sha256
+        and completed.bound_message_sha256 == bound.message_sha256
+        and completed.unit_invocation_id == ready.unit_invocation_id
+        and completed.unit_exited_monotonic >= ready.unit_started_monotonic
+        and grant.ready_message_sha256 == ready.readiness.message_sha256
+        and grant.batch_request_sha256 == bound.binding.batch_request_sha256
+        and grant.batch_input_raw_sha256 == bound.input_raw_sha256
+        and grant.batch_input_byte_count == bound.input_byte_count
+    )

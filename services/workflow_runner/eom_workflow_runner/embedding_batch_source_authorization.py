@@ -179,6 +179,11 @@ class CatalogEmbeddingBatchSourceAuthorization:
         for child in self._batch.children:
             self.authorize_child(self._batch.request_sha256, child.request.request_sha256)
 
+    @property
+    def batch_request_sha256(self) -> str:
+        """Original immutable identity only; not cached authority or a launch grant."""
+        return self._batch.request_sha256
+
     def authorize_binding(self, binding: EmbeddingBatchChildBinding) -> None:
         """Validate the original canonical Workflow/Job references before plan BOUND writes."""
         binding = EmbeddingBatchChildBinding.model_validate(binding)

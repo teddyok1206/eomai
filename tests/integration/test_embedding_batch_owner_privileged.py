@@ -10,6 +10,7 @@ import struct
 import tempfile
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from eom_catalog_service import embedding_batch_owner_workspace as workspace
@@ -24,7 +25,12 @@ from eom_workflow.embedding_batch_owner_control import (
     EmbeddingBatchRootCompleted,
     embedding_batch_owner_control_bytes,
 )
+from eom_workflow_runner import embedding_batch_result_read as result_read
+from eom_workflow_runner.embedding_batch_source_authorization import (
+    CatalogEmbeddingBatchSourceAuthorization,
+)
 
+from tests.unit.embedding_batch_execution_fixtures import execution_case
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_embedding_batch_owner_control import RELEASE, control_frames
 
@@ -73,10 +79,41 @@ def _wait(child):
 
 
 @pytest.mark.parametrize("wait_after_ack", [False, True])
+@pytest.mark.parametrize("verify_outputs", [False, True])
 def test_actual_source_owner_pid_uid_sender_and_root_read_only_input_round_trip(
-    owned, wait_after_ack
+    owned, wait_after_ack, verify_outputs, monkeypatch
 ):
     case, account, parent, _root = owned
+    authorization = None
+    numeric = None
+    if verify_outputs:
+        numeric = execution_case(
+            planned=SimpleNamespace(
+                allocation=SimpleNamespace(control_request=case.request),
+                batch=case.batch,
+                bound=case.binding,
+            )
+        )
+        case.completed = numeric.completed
+        runtime = parent / "root-result"
+        runtime.mkdir(mode=0o750)
+        os.chown(runtime, 0, account.pw_gid)
+        monkeypatch.setattr(result_read, "GPU_BATCH_RUNTIME_ROOT", runtime)
+        output = runtime / case.request.allocation_attempt_id.removeprefix("embeddingallocation_")
+        output.mkdir(mode=0o750)
+        os.chown(output, 0, account.pw_gid)
+        for name, raw in (("result.json", numeric.raw), ("vectors.f32", numeric.vectors)):
+            path = output / name
+            path.write_bytes(raw)
+            path.chmod(0o640)
+            os.chown(path, 0, account.pw_gid)
+        authorization = object.__new__(CatalogEmbeddingBatchSourceAuthorization)
+        authorization._batch = case.batch
+        # Real root/owner DAC, peer and file proof; IAM and numerical leaves
+        # remain synthetic and confer no access to DB/NAS or source material.
+        monkeypatch.setattr(
+            CatalogEmbeddingBatchSourceAuthorization, "authorize_batch", lambda _: None
+        )
     address = str(parent / "root.sock")
     listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     listener.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
@@ -115,7 +152,17 @@ def test_actual_source_owner_pid_uid_sender_and_root_read_only_input_round_trip(
             assert owner.authorize_next(lambda *_: None) is None  # synthetic source seam
             completed = owner.authorize_next(lambda *_: None)
             assert completed.grant.batch_request_sha256 == case.batch.request_sha256
-            owner.acknowledge_completion(lambda _: staged.assert_current())
+            if verify_outputs:
+                verified = result_read.read_verified_embedding_batch_result(
+                    owner, ready, staged, authorization=authorization
+                )
+                assert verified.result == numeric.result
+                assert b"".join(verified.child_vectors) == numeric.vectors
+                receipt = verified.receipt("job_" + "9" * 32, owner)
+                assert receipt.bound == staged.notice and receipt.completed == completed
+                owner.acknowledge_completion(lambda _: verified.assert_current())
+            else:
+                owner.acknowledge_completion(lambda _: staged.assert_current())
             if wait_after_ack:
                 assert os.read(release_read, 1) == b"1"
             owner.close()

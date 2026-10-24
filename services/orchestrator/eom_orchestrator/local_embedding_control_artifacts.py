@@ -24,6 +24,10 @@ from eom_catalog_contracts.models import Sha256, UtcDatetime
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.models import JobId
+from eom_workflow.embedding_batch_execution_receipt import (
+    BATCH_EXECUTION_RECEIPT_SCHEMA_REF,
+    EmbeddingBatchExecutionReceipt,
+)
 from eom_workflow.embedding_batch_plan import (
     BATCH_SELECTION_SCHEMA_REF,
     EmbeddingBatchSelection,
@@ -76,6 +80,7 @@ PRIVATE_CHAT_QUERY_POLICY_ARTIFACT_TYPE = "control_private_chat_query_execution_
 OWNED_INPUT_ARTIFACT_TYPE = "control_local_embedding_owned_input"
 BATCH_SELECTION_ARTIFACT_TYPE = "control_embedding_batch_selection"
 DEVICE_ROUTING_POLICY_ARTIFACT_TYPE = "control_embedding_device_routing_policy"
+BATCH_EXECUTION_RECEIPT_ARTIFACT_TYPE = "control_embedding_batch_execution_receipt"
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,6 +134,23 @@ class LocalEmbeddingControlArtifactPublisher:
             member="selection.json",
             schema=BATCH_SELECTION_SCHEMA_REF,
             artifact_type=BATCH_SELECTION_ARTIFACT_TYPE,
+            idempotency_key=idempotency_key,
+            created_at=ControlPublicationTime.FIRST_OBSERVATION,
+        )
+
+    def publish_batch_execution_receipt(
+        self, receipt: EmbeddingBatchExecutionReceipt, *, idempotency_key: str
+    ) -> PublishedLocalEmbeddingControl:
+        """Current application authority is mandatory outside this publication leaf."""
+        checked = EmbeddingBatchExecutionReceipt.model_validate(
+            raw_similarity_contract_value(receipt)
+        )
+        return self._publish(
+            raw=canonical_json_bytes(checked.model_dump(mode="json")),
+            semantic_sha256=checked.receipt_sha256,
+            member="receipt.json",
+            schema=BATCH_EXECUTION_RECEIPT_SCHEMA_REF,
+            artifact_type=BATCH_EXECUTION_RECEIPT_ARTIFACT_TYPE,
             idempotency_key=idempotency_key,
             created_at=ControlPublicationTime.FIRST_OBSERVATION,
         )
