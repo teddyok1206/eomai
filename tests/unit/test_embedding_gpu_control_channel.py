@@ -39,7 +39,9 @@ def send_raw(connection, value):
 
 
 @contextmanager
-def endpoints(*, ready=True, granted=True, bound=True, sender=None, peer_fence=None):
+def endpoints(
+    *, requested=True, ready=True, granted=True, bound=True, sender=None, peer_fence=None
+):
     case = control_case(expires_ns=time.monotonic_ns() + 15 * 10**9)
     request, allocation, _, grant, _, _, batch, raw = case
     left, right = socket.socketpair()
@@ -66,8 +68,9 @@ def endpoints(*, ready=True, granted=True, bound=True, sender=None, peer_fence=N
         right, request, side="WORKER", expected_peer=peer, peer_fence=fence
     )
     try:
-        root.send_request()
-        worker.receive_request()
+        if requested:
+            root.send_request()
+            worker.receive_request()
         if ready:
             worker.send_allocation(allocation)
             assert root.receive_allocation() == allocation

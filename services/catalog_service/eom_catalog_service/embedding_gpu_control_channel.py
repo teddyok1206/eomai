@@ -249,6 +249,12 @@ class EmbeddingGpuControlChannel:
             self._batch = checked
             self._children = {child.request.request_sha256: child for child in checked.children}
 
+    def assert_compute_granted(self) -> None:
+        """Worker checks the original root grant before touching the late-bound input FD."""
+        with self._operation():
+            if self._side != "WORKER" or self._phase != _Phase.GRANTED or self._grant is None:
+                raise EmbeddingGpuChannelError()
+
     def assert_batch_current(self, batch: EmbeddingWorkBatchInput) -> None:
         with self._operation():
             if (

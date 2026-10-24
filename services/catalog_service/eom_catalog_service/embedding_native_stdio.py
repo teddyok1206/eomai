@@ -10,7 +10,7 @@ import stat
 from collections.abc import Callable
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from eom_catalog_contracts.embedding_private_chat_query import (
     MAX_PRIVATE_CHAT_QUERY_BYTES,
@@ -29,9 +29,11 @@ from eom_catalog_contracts.embedding_vector_binary import (
 )
 from eom_catalog_contracts.embedding_work_batch import (
     MAX_EMBEDDING_WORK_BATCH_BYTES,
+    EmbeddingWorkBatchInput,
     parse_embedding_work_batch_input,
 )
 from eom_catalog_contracts.embedding_work_batch_result import (
+    EmbeddingWorkBatchResult,
     build_embedding_work_batch_result,
     embedding_work_batch_result_bytes,
 )
@@ -42,7 +44,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     parse_incremental_embedding_input,
     validate_incremental_embedding_result,
 )
-from eom_identifiers import canonical_json_bytes
+from eom_identifiers import canonical_json_bytes, sha256_bytes
 from jsonschema.exceptions import ValidationError as JsonSchemaError
 from pydantic import BaseModel
 
@@ -61,6 +63,9 @@ from eom_catalog_service.embedding_work_batch_execution import (
     EmbeddingWorkBatchFence,
     execute_embedding_work_batch,
 )
+
+if TYPE_CHECKING:
+    from eom_catalog_service.embedding_gpu_control_channel import EmbeddingGpuControlChannel
 
 _ROOT_UID = 0
 _CHUNK_BYTES = 1024**2
@@ -154,12 +159,20 @@ def _read_canonical_request[InputValue: BaseModel](
     initial: os.stat_result,
     parse: Callable[[dict[str, Any]], InputValue],
 ) -> InputValue:
+    return _read_canonical_capture(descriptor, initial, parse)[0]
+
+
+def _read_canonical_capture[InputValue: BaseModel](
+    descriptor: int,
+    initial: os.stat_result,
+    parse: Callable[[dict[str, Any]], InputValue],
+) -> tuple[InputValue, bytes]:
     payload, value = _read_payload(descriptor, initial)
     try:
         request = parse(value)
         if payload != canonical_json_bytes(request.model_dump(mode="json")):
             raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_REQUEST_INVALID")
-        return request
+        return request, payload
     except NativeEmbeddingHandoffError:
         raise
     except (JsonSchemaError, ValueError, TypeError, UnicodeError):
@@ -300,6 +313,33 @@ def _require_finished_outputs(
         raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_OUTPUT_CHANGED")
 
 
+@dataclass(frozen=True, slots=True)
+class _CapturedWorkBatch:
+    """One-call temporary FD observations, never an external capability or Artifact."""
+
+    descriptors: NativeEmbeddingDescriptors
+    initial: tuple[os.stat_result, os.stat_result, os.stat_result]
+    request: EmbeddingWorkBatchInput
+    input_raw_sha256: str
+    input_byte_count: int
+
+
+def _capture_work_batch(
+    descriptors: NativeEmbeddingDescriptors, maximum_total_output_bytes: int
+) -> _CapturedWorkBatch:
+    if (
+        type(maximum_total_output_bytes) is not int
+        or not 1 <= maximum_total_output_bytes <= MAX_EMBEDDING_INPUT_BYTES
+    ):
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
+    initial = _prepare_descriptors(descriptors, MAX_EMBEDDING_WORK_BATCH_BYTES)
+    request, raw = _read_canonical_capture(
+        descriptors.input, initial[0], parse_embedding_work_batch_input
+    )
+    _ready_outputs(descriptors, initial)
+    return _CapturedWorkBatch(descriptors, initial, request, sha256_bytes(raw), len(raw))
+
+
 def run_native_embedding_work_batch_descriptors(
     descriptors: NativeEmbeddingDescriptors,
     backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
@@ -307,7 +347,7 @@ def run_native_embedding_work_batch_descriptors(
     resources: EmbeddingWorkBatchExecutionResources,
     maximum_total_output_bytes: int,
     fence: EmbeddingWorkBatchFence,
-) -> None:
+) -> EmbeddingWorkBatchResult:
     """Finite batch source-only FD seam; no lease acquisition, launch or Artifact commit.
 
     A separately admitted native owner must pin these resources/fences and enforce
@@ -315,52 +355,13 @@ def run_native_embedding_work_batch_descriptors(
     Metadata is the last write, after every child and the whole binary are checked.
     """
     try:
-        if (
-            type(maximum_total_output_bytes) is not int
-            or not 1 <= maximum_total_output_bytes <= MAX_EMBEDDING_INPUT_BYTES
-        ):
-            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
-        initial = _prepare_descriptors(descriptors, MAX_EMBEDDING_WORK_BATCH_BYTES)
-        request = _read_canonical_request(
-            descriptors.input, initial[0], parse_embedding_work_batch_input
+        return _execute_captured_work_batch(
+            _capture_work_batch(descriptors, maximum_total_output_bytes),
+            backend_scope,
+            resources=resources,
+            maximum_total_output_bytes=maximum_total_output_bytes,
+            fence=fence,
         )
-        if request.expected_vector_bytes >= maximum_total_output_bytes:
-            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
-        _ready_outputs(descriptors, initial)
-        encoded = execute_embedding_work_batch(
-            request, resources=resources, backend_scope=backend_scope, fence=fence
-        )
-        digest = hashlib.sha256()
-        for child in encoded.children:
-            shard = child.result.shard
-            read_unit_vectors(
-                child.vectors,
-                dimension=shard.dimension,
-                row_count=shard.row_count,
-                expected_sha256=shard.binary.sha256,
-            )
-            digest.update(child.vectors)
-        result = build_embedding_work_batch_result(
-            request,
-            tuple(child.result for child in encoded.children),
-            "sha256:" + digest.hexdigest(),
-        )
-        payload = embedding_work_batch_result_bytes(result)
-        if len(payload) + result.vectors.byte_count > maximum_total_output_bytes:
-            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
-        fence.assert_batch_current(request)
-        for child_request in request.children:
-            fence.assert_child_current(request, child_request)
-        _ready_outputs(descriptors, initial)
-        vectors_final = _write_contiguous_members(
-            descriptors.vectors, initial[2], tuple(child.vectors for child in encoded.children)
-        )
-        _unchanged_input(descriptors.input, initial[0])
-        result_final = _write_member(descriptors.result, initial[1], payload)
-        _require_finished_outputs(descriptors, initial[0], vectors_final, result_final)
-        fence.assert_batch_current(request)
-        for child_request in request.children:
-            fence.assert_child_current(request, child_request)
     except (
         NativeEmbeddingHandoffError,
         EmbeddingWorkBatchExecutionError,
@@ -371,6 +372,102 @@ def run_native_embedding_work_batch_descriptors(
         raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_IO_FAILED") from None
     except Exception:
         raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_EXECUTION_FAILED") from None
+
+
+def run_granted_native_embedding_gpu_batch_descriptors(
+    descriptors: NativeEmbeddingDescriptors,
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+    *,
+    resources: EmbeddingWorkBatchExecutionResources,
+    maximum_total_output_bytes: int,
+    channel: EmbeddingGpuControlChannel,
+) -> EmbeddingWorkBatchResult:
+    """Connect an original root grant to one FD batch and wait for actual output ACK.
+
+    Caller separately admits native identity, unit, retained physical lease and backend.
+    This adapter neither claims hardware nor authorizes sources nor commits any Artifact.
+    A lost final ACK is an uncertain original execution, not permission to repeat/fallback.
+    """
+    try:
+        from eom_catalog_service.embedding_gpu_control_channel import EmbeddingGpuControlChannel
+
+        if type(channel) is not EmbeddingGpuControlChannel:
+            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_GRANT_INVALID")
+        channel.assert_compute_granted()
+        captured = _capture_work_batch(descriptors, maximum_total_output_bytes)
+        channel.bind_batch(
+            captured.request,
+            input_raw_sha256=captured.input_raw_sha256,
+            input_byte_count=captured.input_byte_count,
+        )
+        result = _execute_captured_work_batch(
+            captured,
+            backend_scope,
+            resources=resources,
+            maximum_total_output_bytes=maximum_total_output_bytes,
+            fence=channel,
+        )
+        channel.announce_result(result)
+        return result
+    except (
+        NativeEmbeddingHandoffError,
+        EmbeddingWorkBatchExecutionError,
+        EmbeddingVectorBinaryError,
+    ):
+        raise
+    except OSError:
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_IO_FAILED") from None
+    except Exception:
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_EXECUTION_FAILED") from None
+
+
+def _execute_captured_work_batch(
+    captured: _CapturedWorkBatch,
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+    *,
+    resources: EmbeddingWorkBatchExecutionResources,
+    maximum_total_output_bytes: int,
+    fence: EmbeddingWorkBatchFence,
+) -> EmbeddingWorkBatchResult:
+    descriptors, initial, request = captured.descriptors, captured.initial, captured.request
+    if request.expected_vector_bytes >= maximum_total_output_bytes:
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
+    _ready_outputs(descriptors, initial)
+    encoded = execute_embedding_work_batch(
+        request, resources=resources, backend_scope=backend_scope, fence=fence
+    )
+    digest = hashlib.sha256()
+    for child in encoded.children:
+        shard = child.result.shard
+        read_unit_vectors(
+            child.vectors,
+            dimension=shard.dimension,
+            row_count=shard.row_count,
+            expected_sha256=shard.binary.sha256,
+        )
+        digest.update(child.vectors)
+    result = build_embedding_work_batch_result(
+        request,
+        tuple(child.result for child in encoded.children),
+        "sha256:" + digest.hexdigest(),
+    )
+    payload = embedding_work_batch_result_bytes(result)
+    if len(payload) + result.vectors.byte_count > maximum_total_output_bytes:
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
+    fence.assert_batch_current(request)
+    for child_request in request.children:
+        fence.assert_child_current(request, child_request)
+    _ready_outputs(descriptors, initial)
+    vectors_final = _write_contiguous_members(
+        descriptors.vectors, initial[2], tuple(child.vectors for child in encoded.children)
+    )
+    _unchanged_input(descriptors.input, initial[0])
+    result_final = _write_member(descriptors.result, initial[1], payload)
+    _require_finished_outputs(descriptors, initial[0], vectors_final, result_final)
+    fence.assert_batch_current(request)
+    for child_request in request.children:
+        fence.assert_child_current(request, child_request)
+    return result
 
 
 def _run_native_embedding_descriptors(
