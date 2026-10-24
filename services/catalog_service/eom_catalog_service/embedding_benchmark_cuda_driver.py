@@ -253,6 +253,7 @@ class FixedRootBenchmarkCudaDriver:
         _require(not self._used, "ALREADY_USED")
         self._used = True
         relay: RootBenchmarkGpuResourceRelay | None = None
+        socket_requested = False
         try:
             self._fence()
             captured = capture_benchmark_cuda_launch_files(
@@ -278,6 +279,7 @@ class FixedRootBenchmarkCudaDriver:
             self._inventory.assert_unchanged()
             self._fence()
             started_ns = time.monotonic_ns()
+            socket_requested = True
             self._units.start_socket()
             self._units.require_socket_state(active=True)
             self._fence()
@@ -315,6 +317,13 @@ class FixedRootBenchmarkCudaDriver:
                 resources,
                 retirement,
             )
+        except BaseException:
+            if socket_requested:
+                # Close the exact owned activation endpoint, not the GPU process
+                # or retained lease. Queued owner traffic must not restart a failed leaf.
+                self._units.stop_socket()
+                self._units.require_socket_state(active=False)
+            raise
         finally:
             if relay is not None:
                 relay.close()

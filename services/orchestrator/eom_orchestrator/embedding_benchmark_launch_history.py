@@ -70,6 +70,7 @@ RESERVED_EVENT = "BENCHMARK_LAUNCH_RESERVED"
 RECORDED_EVENT = "BENCHMARK_LAUNCH_RECORDED"
 PREDECESSOR_EVENT = "BENCHMARK_PRELAUNCH_SUCCESSOR_REGISTERED"
 POSTSTART_PREDECESSOR_EVENT = "BENCHMARK_POSTSTART_SUCCESSOR_REGISTERED"
+MAX_PREACK_RECOVERIES = 2
 type BenchmarkPredecessorReference = (
     BenchmarkPrelaunchPredecessorReference
     | BenchmarkPoststartPredecessorReference
@@ -176,7 +177,7 @@ def _history(
     launches: list[BenchmarkLaunchRecord] = []
     execution_ids: set[str] = set()
     retired: list[RetiredBenchmarkPreackLaunch] = []
-    recovered_ordinals: set[int] = set()
+    recovered_phases: set[tuple[int, str]] = set()
     if len(rows) > 32 or tuple(row.sequence for row in rows) != tuple(range(1, len(rows) + 1)):
         raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_HISTORY_INVALID")
     state = JobState.VALIDATED
@@ -193,7 +194,9 @@ def _history(
                     or not launches
                     or launches[-1].receipt is not None
                     or recovery.actor_id != request.operator_audit_id
-                    or launches[-1].invocation.launch_ordinal in recovered_ordinals
+                    or len(retired) >= MAX_PREACK_RECOVERIES
+                    or (launches[-1].invocation.launch_ordinal, recovery.observation.phase)
+                    in recovered_phases
                 ):
                     raise ValueError()
                 original = launches[-1].invocation
@@ -203,7 +206,7 @@ def _history(
             # Remove only from the executable projection. The original reservation,
             # failure proof and used execution identity remain append-only history.
             launches.pop()
-            recovered_ordinals.add(original.launch_ordinal)
+            recovered_phases.add((original.launch_ordinal, recovery.observation.phase))
             retired.append(RetiredBenchmarkPreackLaunch(original, recovery, row.sequence))
             continue
         if row.event in {PREDECESSOR_EVENT, POSTSTART_PREDECESSOR_EVENT}:
@@ -865,8 +868,12 @@ class BenchmarkLaunchJournal:
                 or not history.launches
                 or history.launches[-1].receipt is not None
                 or checked.actor_id != request.operator_audit_id
-                or checked.observation.launch_ordinal
-                in {row.invocation.launch_ordinal for row in history.retired_preack_launches}
+                or len(history.retired_preack_launches) >= MAX_PREACK_RECOVERIES
+                or (checked.observation.launch_ordinal, checked.observation.phase)
+                in {
+                    (row.invocation.launch_ordinal, row.decision.observation.phase)
+                    for row in history.retired_preack_launches
+                }
             ):
                 raise BenchmarkJobAdmissionError("BENCHMARK_PREACK_NOT_RECOVERABLE")
             require_benchmark_preack_observation(

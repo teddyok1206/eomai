@@ -633,3 +633,37 @@ rollback까지 연결해야 한다. 이 구현 미완료 자체를 성능 NO-GO�
   root 점검에 더해 정확한 실제 owner UID/GID·groups0·capabilities0으로 proof
   capture가 성공하는 검사를 인증 전에 추가한다. 별도 auth/token 저장소는 만들지
   않는다. 기존 실패 controller와 프로그램은 보존한다.
+
+### 2026-10-24 07:54 UTC — argv 전체 검증과 BEFORE_READY 실패 증거
+
+- 6cdc0f7e private owner 설치/RECORD 검사와 실제 owner UID990/GID1000/groups0/
+  capabilities0 proof capture까지 통과했다. 새 실제 로그인 후 f4 실패에 대한
+  supported recovery event가 같은 Job에1회 추가됐고 CPU1 receipt를 유지했다.
+- 이어 예약된 CUDA2 `2aead923e171419486ad6f497715d7a8`은 모델 호출 전 종료했다.
+  47d3e538의 CUDA unit 수정에서 `EOM_EMBEDDING_CONFIGURATION_RAW_SHA256` 인자를
+  빠뜨린 개발 실수였다. 원8개 argv를 고정된 실제 native parser에 대입해
+  `BENCHMARK_OWNER_PINS_INVALID`가 재현됐다. READY조차0bytes,16출력0bytes,
+  GPU clients0/fdstore0이며 model/constructor/CUDA init은 불가능한 선행 단계다.
+  앞선9인자 unit은 CPU1에서 정상 사용됐으며 이 실패를 GPU 성능 문제로 보지 않는다.
+- 원 PID1 failed/start-limit-hit·last invocation
+  `0977355d5a09455ebbe3db7cdbff4058`, 실제 unit986b6f…/native parser/entry bytes,
+  원 environment·반드시 거부되는 argv·ACK 부재·empty outputs를 root intent에
+  먼저 보존했다. 정확한 원 socket stop와 failed metadata reset 후 inactive/dead/
+  store0를 재검사했다. 원 실패를 success로 바꾸거나 모델을 재시작하지 않았다.
+- 새 sealed proof는 `/opt/eom/embedding-benchmark-preack-proofs/2aead923e171419486ad6f497715d7a8.json`,
+  raw SHA `907842cb66fcfe4d5acdee06546ac15fa2b3ee140e1272ec338ac9561fd218c4`이다.
+  원 실행의 GPU lease 획득/READY는 없으며 physical-fence는 명시적 null hash다.
+  root minter는5.016초, model0·DB write0이었다.
+- 현재 owner protocol은 empty READY도 표현하지만 최초 journal 제한은 ordinal당
+ 1회였다. BEFORE_READY와 RETAINED_BEFORE_ACK를 분리하고 같은 (ordinal,phase)당1회,
+  전체 series 최대2회로 제한한다. 기존 root/schema bytes와 f4 event 의미는 보존한다.
+  추가 반복/ACK/nonempty output/unknown compute는 계속 거부하며 event32 상한도 유지한다.
+- 누락 인자를 복원한 CUDA unit raw SHA는
+  `e28a653509229b6e073d107924a06eac0861f8fa7ffdbced163b1ed63b66336e`이다.
+  모든6개 CPU/CUDA/budget family의 전체 environment 확장 argv를 실제 parser에
+  대입하는 테스트를 추가했다. native start 실패 시 owned socket만 닫아 같은
+  실패 instance의 자동 재활성화를 막으며 GPU service/lease cleanup은 추측하지 않는다.
+- history/budget/전체 argv/bootstrap/phase recovery/CUDA lifecycle134 PASS,
+  전체2회 cap 보강 후 focused57 PASS, scoped strict mypy4 modules·Ruff/format PASS.
+  아직 수정 unit 설치/다음 실제 GPU 측정 완료를 주장하지 않는다. CPU1/3,
+  GPU0/3 완료 상태이며 원 request/input/model/수치/예산은 그대로다.

@@ -260,13 +260,14 @@ def test_failed_preflight_has_no_start_and_cannot_be_retried(lifecycle, fault):
 @pytest.mark.parametrize(
     "fault", ("start_timeout", "ack", "sample", "resources", "verify_terminal", "retire")
 )
-def test_effect_failure_never_restarts_or_speculatively_stops_a_unit(lifecycle, fault):
+def test_effect_failure_closes_only_control_socket_never_restarts_or_stops_gpu(lifecycle, fault):
     state = lifecycle
     runtime = make(state)
     state.fault = fault
     with pytest.raises(ValueError):
         runtime.run()
-    assert all(row[0] != "stop" for row in effects(state))
+    stops = [row for row in effects(state) if row[0] == "stop"]
+    assert len(stops) == 1 and stops[0][1].endswith(".socket")
     assert len([row for row in effects(state) if row[0] == "start"]) == 1
     assert state.calls.count("ack") <= 1 and state.calls.count("retire") <= 1
     assert state.connection.fileno() == -1
@@ -313,7 +314,7 @@ def test_live_not_ready_wait_keeps_original_handle_and_absolute_deadline(lifecyc
     state.observations = [state.fresh] + [state.running] * 20
     with pytest.raises(ValueError, match="EXPIRED"):
         make(state).run()
-    assert state.sleeps == 10 and len(effects(state)) == 2
+    assert state.sleeps == 10 and len(effects(state)) == 3
     assert "ack" not in state.calls and "retire" not in state.calls
 
 
@@ -340,7 +341,7 @@ def test_terminal_before_ready_preserves_history_for_unacknowledged_reconciliati
         and "ack" not in state.calls
         and "retire" not in state.calls
     )
-    assert len(effects(state)) == 2
+    assert len(effects(state)) == 3
 
 
 def test_existing_execution_is_refused_before_any_start(lifecycle):
@@ -381,7 +382,8 @@ def test_replaced_unit_after_finalization_is_not_retired(lifecycle):
     state.observations[-1] = replace(state.terminal, invocation_id="b" * 32)
     with pytest.raises(ValueError, match="UNIT_CHANGED"):
         make(state).run()
-    assert "retire" not in state.calls and all(row[0] != "stop" for row in effects(state))
+    assert "retire" not in state.calls
+    assert all(row[1].endswith(".socket") for row in effects(state) if row[0] == "stop")
 
 
 def test_timeout_terminal_is_still_failure_when_cleanup_runs_after_admission_expires(lifecycle):

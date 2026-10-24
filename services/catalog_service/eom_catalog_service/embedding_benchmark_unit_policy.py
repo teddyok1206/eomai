@@ -92,7 +92,7 @@ _FAMILIES = MappingProxyType(
         ("CUDA", 1200): BenchmarkUnitFamily(
             "eom-embedding-benchmark-cuda-budget1200@.service",
             "eom-embedding-benchmark-cuda-budget1200@.socket",
-            "sha256:986b6fb9e8432e2288163e7a092b9e025c4e974e6f7fb28dc7c3a63e2dc37f33",
+            "sha256:e28a653509229b6e073d107924a06eac0861f8fa7ffdbced163b1ed63b66336e",
             "sha256:32213967e9fb94d508b9db525c33090545f5a195d3f662c7481d70f5599b9770",
             "eom_catalog_service.embedding_benchmark_budget1200_cuda",
             1200,

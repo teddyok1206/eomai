@@ -16,7 +16,7 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     benchmark_local_output_members,
     embedding_device_benchmark_bytes,
 )
-from eom_identifiers import sha256_bytes
+from eom_identifiers import content_sha256, sha256_bytes
 from eom_orchestrator.embedding_benchmark_jobs import submit_benchmark_job_in_session
 from eom_orchestrator.embedding_benchmark_launch_history import BenchmarkLaunchJournal
 from eom_orchestrator.embedding_benchmark_preack_recovery import BenchmarkPreackRecoveryApplication
@@ -159,7 +159,7 @@ def test_append_only_same_job_preserves_cpu_and_failed_identity(recovery):
             case.journal.reserve(session, case.request, case.calls[1])
 
 
-def test_exactly_one_recovery_per_ordinal(recovery):
+def test_exactly_one_recovery_per_ordinal_and_phase(recovery):
     case = recovery
     recover(case)
     invocation = BenchmarkWorkerInvocation.model_validate(
@@ -172,6 +172,47 @@ def test_exactly_one_recovery_per_ordinal(recovery):
         case.journal.reserve(session, case.request, invocation)
     case.calls[-1] = invocation
     case.inspection.observation = root_observation(case.request, invocation)
+    with pytest.raises(ValueError, match="NOT_RECOVERABLE"):
+        recover(case)
+
+
+def test_before_ready_is_a_distinct_single_bounded_recovery_phase(recovery):
+    case = recovery
+    recover(case)
+    invocation = BenchmarkWorkerInvocation.model_validate(
+        seal(
+            case.calls[-1].model_dump(mode="json") | {"execution_id": uuid4().hex},
+            "invocation_sha256",
+        )
+    )
+    with case.sessions() as session, session.begin():
+        case.journal.reserve(session, case.request, invocation)
+    case.calls[-1] = invocation
+    body = root_observation(case.request, invocation).model_dump(mode="json") | {
+        "ready_raw_sha256": EMPTY_SHA256,
+        "physical_fence_sha256": content_sha256(None),
+    }
+    case.inspection.observation = BenchmarkPreackObservation.model_validate(
+        seal(body, "observation_sha256")
+    )
+    assert recover(case).created
+    assert not recover(case).created
+    third = BenchmarkWorkerInvocation.model_validate(
+        seal(
+            invocation.model_dump(mode="json") | {"execution_id": uuid4().hex}, "invocation_sha256"
+        )
+    )
+    with case.sessions() as session, session.begin():
+        history, _ = case.journal.reserve(session, case.request, third)
+        assert len(history.retired_preack_launches) == 2
+    case.calls[-1] = third
+    body = root_observation(case.request, third).model_dump(mode="json") | {
+        "ready_raw_sha256": EMPTY_SHA256,
+        "physical_fence_sha256": content_sha256(None),
+    }
+    case.inspection.observation = BenchmarkPreackObservation.model_validate(
+        seal(body, "observation_sha256")
+    )
     with pytest.raises(ValueError, match="NOT_RECOVERABLE"):
         recover(case)
 

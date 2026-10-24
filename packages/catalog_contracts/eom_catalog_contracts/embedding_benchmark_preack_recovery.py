@@ -77,6 +77,10 @@ class BenchmarkPreackObservation(_PreackContract):
     observed_at: UtcDatetime
     observation_sha256: Sha256
 
+    @property
+    def phase(self) -> Literal["BEFORE_READY", "RETAINED_BEFORE_ACK"]:
+        return "BEFORE_READY" if self.ready_raw_sha256 == EMPTY_SHA256 else "RETAINED_BEFORE_ACK"
+
     @model_validator(mode="after")
     def exact_execution(self) -> BenchmarkPreackObservation:
         if (
@@ -86,6 +90,8 @@ class BenchmarkPreackObservation(_PreackContract):
             != benchmark_local_output_members(self.launch_ordinal)
         ):
             raise ValueError("BENCHMARK_PREACK_EXECUTION_INVALID")
+        if self.phase == "BEFORE_READY" and self.physical_fence_sha256 != content_sha256(None):
+            raise ValueError("BENCHMARK_PREACK_BEFORE_READY_FENCE_INVALID")
         _require_hash(self, "observation_sha256")
         return self
 

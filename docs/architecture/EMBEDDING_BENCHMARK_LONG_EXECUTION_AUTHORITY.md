@@ -216,3 +216,34 @@ attempt. Add a narrow recovery event, not a new queue or a general retry framewo
     rerunning CPU1 or calling the bootstrap defect a GPU performance failure—do
     not preserve the requested experiment. This bounded event extends its existing
     checkpoint ownership and keeps every failed attempt distinguishable.
+
+### Distinguish two zero-compute startup phases (2026-10-24)
+
+The first replacement stopped even earlier: the changed unit accidentally omitted
+the configuration raw-hash CLI argument. The immutable native parser requires9
+arguments and received8, so it exited before READY, lease retention or model
+construction. This is a controller repair defect, not a measured GPU failure.
+
+Keep the existing wire bytes and historical decisions. The observation already
+pins READY's raw SHA and physical-fence SHA. Define two closed derived phases:
+BEFORE_READY means the READY member is empty and the physical-fence value is null;
+RETAINED_BEFORE_ACK means a nonempty validated READY with retained-resource proof.
+Allow at most one recovery per (CUDA ordinal, phase), with at most two recoveries
+in the whole series (journal remains bounded below32 events). Repeated failure
+of either phase, any output/ACK or ambiguous compute remains blocked. This replaces
+the initial one-per-ordinal operational restriction; it is not an unlimited retry.
+
+For BEFORE_READY the root inspector must additionally bind the actually loaded unit
+bytes, immutable native entry/parser bytes, exact original environment and a
+deterministically rejected original argv. Root records original failed PID1 metadata,
+no READY, all empty outputs, zero stored FDs/cgroup/GPU clients and absence of every
+ACK before any targeted stop/reset. No worker READY or completed result is invented.
+Seal the original observation and actual quiescent result, preserving all failed
+socket-activation invocations. The next invocation uses the complete nine-argument
+unit and the same request/input/model/budget. Test full expanded argv for every
+family with the real parser, not just an executable/module prefix.
+
+On a failed native start, stop only the owned control socket before closing the
+root transport, so queued traffic cannot trigger another activation of that failed
+instance. This does not stop/reset a GPU process or release its retained lease.
+Physical cleanup remains a separate confirmed root observation.
