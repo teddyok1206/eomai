@@ -114,7 +114,25 @@ INDEX·QUERY 연결의 Codex 풀이 호출은0이며 외부 LLM API는 사용하
 10월20일 통합 acceptance 당시 여섯 CPU/CUDA 수치 비교는 **NOT_STARTED**였으며,
 해당 통합 목표의 선행조건이 아니었습니다. 이후 GPU 실험의 최신 상태는 다음과 같습니다.
 
-### GPU 비교 복구 — 2026-10-22–23 UTC
+### GPU 비교 실측 완료 — 2026-10-24 UTC
+
+동일 입력의 **CPU3회·CUDA3회 비교를 완료**했고 수치·순위·용량·GPU lease·정리 검사를
+통과했습니다. warm 배치 중앙값은 CPU61.2초 → GPU15.4초로 약3.97배 빨랐지만,
+cold end-to-end 중앙값은 CPU130.5초/GPU141.7초여서 전환 기준을 통과하지 못했습니다.
+따라서 결정은 **KEEP_CPU**, 운영 기본값은 CPU 그대로입니다. 전체 서비스 응답이4배
+빨라졌거나 GPU 기본값이 활성화됐다는 뜻은 아닙니다. 기존 CPU1과 실패 이력을 보존했고,
+기존 검색 재조회6회와 최종 게시/replay도 통과했습니다. 독립 sandbox·이미지/학습 회귀
+gate는 NOT_RUN으로 남겼으며 이번 전환 PASS로 꾸미지 않았습니다.
+[실측 결과·정본·한계](docs/operations/EMBEDDING_GPU_MEASURED_2026-10-24.md).
+
+Codex 로그인 변경 후 자동 모델 검증 기능은 호환 platform/API/Web 릴리스로 반영했습니다.
+새 assignment의 실제 probe PASS만 허용하며 관리자 중지와 과거 FAILED는 보존합니다.
+실제 device 로그인1회 및 후속 OBSERVE 확인은 별도 진행 상태입니다.
+[운영 범위와 검증 기록](docs/operations/CODEX_AUTH_AUTOMATIC_MODEL_VERIFICATION_RELEASE.md).
+
+### 과거 GPU 준비·복구 기록 — 2026-10-22–23 UTC
+
+아래는 해당 시점의 기록이며 현재 실측 완료 상태는 위 항목을 기준으로 합니다.
 
 실제 인증 후 최초 CPU 계산은 실행됐지만 기존180초 제한으로 종료됐습니다.
 완료된 여섯 비교·GPU 성능 결과는 없으며 **GPU 기본값은 미활성**입니다.
@@ -299,8 +317,9 @@ DB migration·새 queue·권한 확대는 없습니다. 역사적 suite와 이 �
 이후 증분 갱신은 별도 구현·검증 단계입니다. 1~2일 핵심 실행 계획과 대화 삭제 후속 항목을
 포함하며, 이 문서만으로 새 기능이 운영 활성화됐다고 판단하지 않습니다.
 추가 요청에 따라 동일 모델·입력의 CPU/GPU 성능·검색 일관성을 비교하고, GPU가 우수하며
-격리·자원 경합 검증을 통과하면 운영 기본값 전환까지 진행합니다. 아직 비교 결과나
-GPU 기본값 활성화가 완료됐다는 뜻은 아닙니다.
+격리·자원 경합 검증을 통과하면 운영 기본값 전환까지 진행하는 계획이었습니다.
+10월24일 비교는 완료됐지만 cold 성능 기준을 통과하지 못해 CPU를 유지했습니다.
+[최신 실측 결과](docs/operations/EMBEDDING_GPU_MEASURED_2026-10-24.md).
 
 2026-10-21에는 OS 라이브러리 갱신을 별도 host revision으로 재검증하고 CPU INDEX·QUERY를
 정상 복구했습니다. CUDA 환경도 전체 파일 검사, 실제 no-forward probe, 봉인된 설치 증거와

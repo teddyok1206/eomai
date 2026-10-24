@@ -143,3 +143,86 @@ PYTHONPATH=services/orchestrator:apps/web_gui:apps/application_api \
 probe를 유지한다. [인증 안내](https://developers.openai.com/codex/auth),
 [모델 안내](https://developers.openai.com/codex/models). 이 문서는 EOM의 외부 LLM API
 금지 원칙을 변경하지 않는다.
+
+## 운영 배포 — 2026-10-24 09:11 UTC
+
+```text
+SOURCE_IMPLEMENTATION=COMMITTED_AND_PUSHED
+INSTALLED_PLATFORM_API_WEB=f15e66b8110900296fc37676502469dee15df741
+DISPOSABLE_POSTGRES_CONCURRENCY=60_PASS_AND_CLEANED
+INSTALLED_CANDIDATE_IMPORTS=7_PASS_NO_MODEL_NO_DB_WRITES
+INSTALLED_API_RECORD_AND_ISOLATION=PASS
+INSTALLED_WEB_SERVICE_IDENTITY=48_FILES_PASS
+HTTPS_LOGIN_PAGE=200
+HTTPS_READINESS=READY
+LIVE_DEVICE_LOGIN_CANARY=PENDING_USER_DEVICE_APPROVAL
+LIVE_OBSERVE_RETENTION=PENDING
+HOST_LOCK_LIVE_DURATION=NOT_YET_MEASURED
+```
+
+- source 회귀942 PASS, release inventory/RECORD/deployment111 PASS, 최종 UI9 PASS,
+  strict mypy15 modules 및 scoped Ruff/format을 확인했다. 마지막 변경은 관리자 중지 상태를
+  모델 검증 실패로 단정하지 않는 안내 문구와 테스트 줄바꿈뿐이다. 새 schema/migration/
+  dependency는 없다. 실제 device canary의 성공으로 확대하지 않는다.
+- 선행 고정 GPU 실험은 원 CPU1을 보존한 CPU3/CUDA3 실측과 검색 재조회6회, 최종 게시/
+  replay까지 완료했다. controller success/status0을 확인한 후에만 shared runtime을 교체했다.
+  최종 성능 판단은 KEEP_CPU이며 [실측 기록](EMBEDDING_GPU_MEASURED_2026-10-24.md)에 있다.
+- 보호된 context `/var/lib/eom-release-operator-stage.f15e66b8-6qxurhk6/operator-context.json`,
+  SHA `82bfa9e975b54c2d3eb6232241b81aea3ca8867d3ce59df8bd6e6c52741062dd`를 기존
+  operator로 ADMIT했다. 생산 migration은0058 그대로다. 실제 실행 중 Codex lease,
+  활성 일반 대화, 진행 중 로그인 요청이 없는 시점을 확인해 shared consumer를 정상 stop했다.
+- 일반적인 전체 Codex maintenance 검사는 과거 native embedding RUNNING metadata 때문에
+  BUSY였다. 이를 성공으로 바꾸거나 DB를 보정하지 않았다. shared consumer의 두 workflow
+  잔여 row는 실제 부모/단계가 FAILED 또는 CANCELLED이고 실행 가능 command가 없었다.
+  실제 INDEX는 별도 고정 runtime에서 계속 active였다. 이력 분류를 release 권한으로
+  위장하지 않고 기존 승인된 shared release 절차와 실제 idle 확인을 사용했다.
+
+### 실제 설치 artifact와 호환 구성
+
+사전 검증 후보는 `f15e66b8.gdGPzd`, 실제 standard installer delivery는
+`/tmp/eom-api-build/f15e66b8110900296fc37676502469dee15df741.NgQeb3/dist`다.
+같은 source라도 build timestamp로 raw wheel SHA가 다르며 동일 ZIP으로 취급하지 않는다.
+
+| 실제 설치 wheel | raw SHA-256 |
+|---|---|
+| API | `d73de300637fbfaacda3e98392c606d7b642ae2f5df0ab37c505b008c8eb1c58` |
+| platform | `ab168c436e2b48808589941000c47bcfc85ce6fdd95df07334805e9a8ed58251` |
+| API contracts | `6d9109624bf17eae5d0e48af2cee8ea0f4cb86f56190370880591678cd06a07b` |
+| Web | `d4d2a53556af0b4f19df6fb2260ba6352c04e1826a4ab80e5e82c0c0922bddab` |
+
+Web wheel은 `f15e66b8.WTvhKd`다. 실제 API metadata/RECORD/isolation과 Web 서비스 계정의
+48-file integrity 검사가 PASS했다. rollback 기록은
+`/var/lib/eom-api/deployments/f15e66b8110900296fc37676502469dee15df741.json`이며,
+이전 b87cc11c API/Web wheel과 이전 설정 bytes는 보존했다. 같은0058 schema를 유지하고,
+복구할 때도 서로 맞는 API/provider/consumer 선택을 함께 복구해야 한다.
+
+- 최신 shared source의 `authenticated_session_fence.py`가 QUERY의 이전12-member pin 중
+  하나와 달랐다. 원 QUERY SDK `2eef9b20…`를 교체하거나 pin을 무시하지 않았다.
+  실제 설치 API/RECORD와 독립 검증 후보 bytes를 대조하고 기존 root provider observation을
+  사용해 primary/mixed/private 설정3개와 unit의 파생 hash만 명시적으로 갱신했다.
+  pure 정상/거부 검사7 PASS 후 stopped-file CAS를1회 수행했다. namespace·Graph·정책·
+  source class·모델·INDEX 설정과 원 검색 결과는 변경하지 않았다.
+- QUERY before/after와 선택 intent는 `/var/lib/eom-query-provider-auth-f15e66b8`에 보존했다.
+  source-only 일반 대화 release pin은 실제 기존66f387bf를 확인해 f15e66b8로 정렬했고,
+  root:root0600과 이전 bytes를 유지했다. b87을 예상한 최초 비교는 변경 전에 거부됐다.
+  이미 성공한 QUERY SELECT를 재실행하지 않고 실제 after4개가 일치함을 확인한 뒤 남은
+  source-only 선택을 수행했다. 비밀번호·토큰·일반 대화 secret 파일은 변경하지 않았다.
+- API PID2362854, Web2365464, QUERY2365463은 active다. QUERY는09:11:45 UTC 실제
+  OWNER_READY를 기록했다. INDEX PID130161/invocation053c5ab467ff4e29b4901cfabf037b4b는
+  그대로다. 일반 대화 owner/worker와 Codex auth broker도 active로 복구했다.
+- HTTPS `/studio/login`은200, 실제 `/studio/api/v1/health/ready`는 READY이고 API,
+  API readiness, observability가 ACTIVE다. Web smoke PASS다. 존재하지 않는
+  `/studio/health/ready`를 처음 확인한404는 실제 ready 경로의 실패로 취급하지 않는다.
+
+### 실제 사용자 canary 대기
+
+로그인 변경1회는 사용자에게 Studio의 **시스템 → Codex 실행 관리 → 슬롯06**에서 요청했다.
+OpenAI 기기 승인은 사용자가 직접 수행해야 한다. terminal에 비밀번호를 새로 보관하거나
+다른 슬롯의 인증을 복사하지 않는다. 완료 후 같은 슬롯의 `사용량 새로고침`1회로 OBSERVE의
+정확한 assignment/READY 유지와 canonical report를 확인한다.
+
+09:11:45 UTC read-only 관측 시작 시 과거 FAILED enrollment는3개였다. 추가된 마지막 실패도
+08:40:59 UTC, 즉 이번 배포 전에 이전 구현에서 발생했다. 이3개를 baseline으로 보존하고
+새 canary가 끝날 때 동일 row가 바뀌지 않았는지 확인한다. 슬롯01/02의 이전 사용자 DRAINING은
+자동으로 풀지 않았다. 새 사용자 승인·model probe·완료·후속 OBSERVE와 host lock의 실제
+유지 시간/관측된 claim 대기는 아직 PENDING이며 source/health PASS로 대신하지 않는다.
