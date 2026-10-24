@@ -34,6 +34,7 @@ _CATALOG_MEASUREMENT_MEMBERS = (
     "embedding_benchmark_entrypoint.py",
     "embedding_benchmark_gpu_observation.py",
     "embedding_benchmark_gpu_resource_client.py",
+    "embedding_benchmark_gpu_sampling.py",
     "embedding_benchmark_handoff.py",
     "embedding_benchmark_host_memory.py",
     "embedding_benchmark_launch.py",
@@ -94,7 +95,13 @@ _CUDA_MEMBERS = tuple(
     for name in _MEASUREMENT_MEMBERS
     if "/embedding_benchmark_cuda" in name
     or "/embedding_benchmark_gpu" in name
-    or name.endswith(("/embedding_cuda_host_closure.py", "/gpu_unit_terminal_observation.py"))
+    or name.endswith(
+        (
+            "/embedding_cuda_host_closure.py",
+            "/gpu_unit_terminal_observation.py",
+            "/embedding_benchmark_resource_relay.py",
+        )
+    )
 )
 _SHARED_MEMBERS = tuple(
     name

@@ -689,3 +689,37 @@ rollback까지 연결해야 한다. 이 구현 미완료 자체를 성능 NO-GO�
   기존 f4 recovery event는 유지하고 새로운 Job/CPU1 재실행은 하지 않는다.
 - public API2047173/Web2049670/QUERY2047176/INDEX130161의 원 invocation과 active
   상태가 모두 유지됨을 다시 확인했다. 아직 GPU 실측 시작/성능 완료가 아니다.
+
+### 2026-10-24 08:25 UTC — ACK 후 관측 중단 원인과 제한된 복구
+
+- 5d967eff controller의 실제 로그인과 원2a recovery는 성공했다. 새 CUDA2
+  `f8f2ef156d344e63bd430bc8dcaa5ba6`은 native invocation
+  `3f71c51e429a442e86455e3a28524ca2`에서 READY와 root ACK까지 진행했지만,
+  동기식 ACK 검증이 GPU sampler를 막아 `BENCHMARK_GPU_OBSERVATION_SAMPLING_GAP`으로
+  08:00:23 UTC 중단됐다. 이후 socket stop이 Requires 관계의 native service도
+  종료시켰다. ACK 이후이므로 모델 진행량은 NOT_RECORDED이며 모델0회로 주장하지 않는다.
+- 원 ACK/실패/SIGTERM/empty outputs를 보존한 채 기존 supported retirement로
+  inactive/dead, fdstore0, empty cgroup, GPU clients0를 확인했다. 첫 retirement
+  helper는 출력 필드 오류로 side effect 전 실패했고 v2가 공식 정리를 완료했다.
+  v2 stdout의 PREACK 표시는 잘못된 출력 문구이며 canonical retirement는 ACK 이후
+  실패에 대한 BenchmarkCudaRetirement다. 원 FAILED 기록은 그대로 유지한다.
+- sealed failed-attempt proof의 raw SHA는
+  `bba9be08fdbb4d2800983fe30dbdd497d141a3b0f48c649b2ee7b1ed5328718f`이며
+  `/opt/eom/embedding-benchmark-preack-proofs/f8f2ef156d344e63bd430bc8dcaa5ba6.json`에 있다.
+  새 `embedding-benchmark-failed-attempt/1.0`은 진행량 불명, 원 ACK와 terminal
+  cleanup, empty outputs를 요구한다. 실패 출력을 재사용하거나 성공으로 바꾸지 않는다.
+- 기존 GPU observer를 하나의 root read-only sampler thread가 소유하도록 분리했다.
+  0.5초 주기와 2초 gap 거부, 4096 sample 상한은 유지하며 ACK controller는 검증된
+  immutable snapshot만 읽는다. 실패 시 socket을 임의 stop하는 경로를 제거했다.
+- pre-ACK와 ACK 이후 recovery는 하나의 application/journal/inspection 경계를
+  공유한다. 이전 public import는 호환 facade로 보존한다. 기존 pre-ACK 최대2회와
+  별도로 알려진 terminal post-ACK 실패의 명시적 recovery는 전체1회만 허용한다.
+  같은 Job에서 CPU1을 보존하고 ordinal2의 실패 ID를 이력에 남긴 채 이어간다.
+- focused source suite 222 PASS, 추가 six-receipt journal completion 1 PASS,
+  disposable PostgreSQL concurrency/late-auth rollback 4 PASS, strict mypy11 modules와
+  scoped Ruff/format/diff PASS. 임시 DB `20261024081602_c731c863`은 공식 cleanup을
+  완료했다. positive Unix fixture의 대기만3→10초로 바꿨고 production 한도는 그대로다.
+- 현재 CPU1/3·GPU0/3이다. 수정 source의 private 설치/실제 owner preflight/남은5회는
+  아직 실행 전이며 GPU 수치·속도·기본값 PASS를 주장하지 않는다. public API/Web와
+  numerical SDK/model pins는 변경하지 않았다. 새 Codex auth 자동 검증 배포는 이
+  고정 실험을 수집한 후에 수행한다.

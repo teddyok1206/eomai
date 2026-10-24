@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "embedding-benchmark-failed-attempt": CatalogSchemaResource(
+            "schemas/knowledge/embedding-benchmark-failed-attempt-v1.schema.json",
+            "resources/knowledge/embedding-benchmark-failed-attempt-v1.schema.json",
+            "1.0",
+            "sha256:2437de9ac5fafea4b2e3096d918fcdeac396bd529b117aa239138e9fdc287067",
+        ),
         "embedding-benchmark-preack-recovery": CatalogSchemaResource(
             "schemas/knowledge/embedding-benchmark-preack-recovery-v1.schema.json",
             "resources/knowledge/embedding-benchmark-preack-recovery-v1.schema.json",

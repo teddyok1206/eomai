@@ -20,6 +20,7 @@ from eom_catalog_service.embedding_benchmark_channel import (
     BenchmarkResourceChannel,
     BenchmarkUnixPeer,
 )
+from eom_catalog_service.embedding_benchmark_gpu_observation import BenchmarkGpuObservedPeaks
 from eom_catalog_service.embedding_benchmark_gpu_resource_client import (
     OwnerBenchmarkGpuResourceClient,
 )
@@ -42,7 +43,9 @@ def endpoint(connection, *, tick=None, expires=None):
         worker_invocation(2),
         expected_peer=actual_peer(),
         peer_fence=lambda value: None if value == actual_peer() else pytest.fail("wrong peer"),
-        expires_ns=expires or time.monotonic_ns() + 3 * 10**9,
+        # Cold schema validation and concurrent tests are not the deadline under test.
+        # Deadline-negative cases below pass their own exact short budget.
+        expires_ns=expires or time.monotonic_ns() + 10 * 10**9,
         wait_observer=tick,
     )
 
@@ -223,7 +226,8 @@ def test_concrete_root_relay_uses_one_observer_and_never_manufactures_counters(m
             return resources(2)
 
         def observed_peaks(self):
-            return SimpleNamespace(state=self.state)
+            now = time.monotonic_ns()
+            return BenchmarkGpuObservedPeaks(self.state, self.samples, now, now, 0, 0, 0, 0)
 
     monkeypatch.setattr(root_module.os, "getresuid", lambda: (0, 0, 0))
     monkeypatch.setattr(
@@ -239,7 +243,8 @@ def test_concrete_root_relay_uses_one_observer_and_never_manufactures_counters(m
         None, invocation, environment, backend=None, inventory=None, host=None
     )
     assert relay.serve() == resources(2)
-    assert len(made) == 1 and made[0].samples == 3 and relay._channel.closed
+    assert len(made) == 1 and made[0].samples >= 1 and relay._channel.closed
+    relay.close()
     with pytest.raises(ValueError, match="ALREADY_USED"):
         relay.serve()
     assert len(made) == 1
@@ -257,6 +262,20 @@ def test_root_relay_denies_actual_nonroot_before_kernel_observation(monkeypatch)
         RootBenchmarkGpuResourceRelay(
             None, worker_invocation(2), None, backend=None, inventory=None, host=None
         )
+
+
+def test_relay_closes_channel_even_when_sampler_termination_is_uncertain():
+    closed = []
+
+    def stop():
+        raise ValueError("SYNTHETIC_SAMPLER_TERMINATION_UNCERTAIN")
+
+    relay = object.__new__(RootBenchmarkGpuResourceRelay)
+    relay._observer = SimpleNamespace(close=stop)
+    relay._channel = SimpleNamespace(close=lambda: closed.append(True))
+    with pytest.raises(ValueError, match="TERMINATION_UNCERTAIN"):
+        relay.close()
+    assert closed == [True]
 
 
 def test_resource_client_denies_actual_wrong_os_owner_before_frame_or_auth(monkeypatch):

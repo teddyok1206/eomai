@@ -13,6 +13,7 @@ from eom_catalog_contracts.embedding_device_benchmark import (
 )
 from eom_identifiers import sha256_bytes
 from eom_identity_service import AuthenticatedOperatorSession, AuthenticatedSessionFence
+from eom_orchestrator.embedding_benchmark_launch_recovery import BenchmarkLaunchRecoveryApplication
 from eom_orchestrator.embedding_benchmark_poststart_failure import (
     BenchmarkPoststartFailureApplication,
 )
@@ -41,7 +42,10 @@ from eom_catalog_service.embedding_benchmark_owner_admission import (
 from eom_catalog_service.embedding_benchmark_poststart_inspection import (
     FixedBenchmarkPoststartInspection,
 )
-from eom_catalog_service.embedding_benchmark_preack_inspection import FixedBenchmarkPreackInspection
+from eom_catalog_service.embedding_benchmark_preack_inspection import (
+    FixedBenchmarkFailedAttemptInspection,
+    FixedBenchmarkPreackInspection,
+)
 from eom_catalog_service.embedding_benchmark_prelaunch_inspection import (
     FixedBenchmarkPrelaunchInspection,
 )
@@ -244,5 +248,30 @@ def build_benchmark_preack_recovery_application(
         session_fence=session_fence,
     )
     return BenchmarkPreackRecoveryApplication(
+        publisher.sessions, admission=admission, inspection=inspection
+    )
+
+
+def build_benchmark_failed_attempt_recovery_application(
+    publisher: ControlFileSetPublisher,
+    *,
+    request: BenchmarkOwnerRequest,
+    configuration: BenchmarkOwnerConfiguration,
+    capture: AuthenticatedOperatorSession,
+    session_fence: AuthenticatedSessionFence,
+    inspection: FixedBenchmarkFailedAttemptInspection,
+) -> BenchmarkLaunchRecoveryApplication:
+    """Only a pinned root terminal proof, with the same actual caller/source admission."""
+    if type(inspection) is not FixedBenchmarkFailedAttemptInspection:
+        raise ValueError("BENCHMARK_FAILED_ATTEMPT_COMPOSITION_INVALID")
+    inspection.__post_init__()
+    _checked, _commit, admission = _owner_admission(
+        publisher,
+        request=request,
+        configuration=configuration,
+        capture=capture,
+        session_fence=session_fence,
+    )
+    return BenchmarkLaunchRecoveryApplication(
         publisher.sessions, admission=admission, inspection=inspection
     )

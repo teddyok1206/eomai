@@ -23,6 +23,7 @@ from eom_catalog_service.embedding_benchmark_gpu_observation import (
     BenchmarkGpuMemoryObserver,
     BenchmarkGpuObservedPeaks,
 )
+from eom_catalog_service.embedding_benchmark_gpu_sampling import OwnedBenchmarkGpuSampler
 from eom_catalog_service.embedding_benchmark_handoff import (
     PreparedBenchmarkEnvironment,
     benchmark_owner_start_ticks,
@@ -52,6 +53,7 @@ class RootBenchmarkGpuResourceRelay:
         inventory: PrefixRuntimeInventory,
         host: ProtectedCudaEmbeddingHostClosure,
     ) -> None:
+        sampler: OwnedBenchmarkGpuSampler | None = None
         try:
             if os.getresuid() != (0, 0, 0):
                 raise ValueError("BENCHMARK_RESOURCE_RELAY_ROOT_REQUIRED")
@@ -72,9 +74,12 @@ class RootBenchmarkGpuResourceRelay:
             ready = observe_benchmark_cuda_ready(
                 invocation, environment, backend=backend, inventory=inventory, host=host
             )
-            self._observer = BenchmarkGpuMemoryObserver(
-                ready, invocation, environment, backend=backend, inventory=inventory, host=host
+            sampler = OwnedBenchmarkGpuSampler(
+                lambda: BenchmarkGpuMemoryObserver(
+                    ready, invocation, environment, backend=backend, inventory=inventory, host=host
+                )
             )
+            self._observer = sampler
             self._channel = BenchmarkResourceChannel(
                 connection,
                 invocation,
@@ -85,8 +90,12 @@ class RootBenchmarkGpuResourceRelay:
             )
             self._used = False
         except BaseException:
-            if isinstance(connection, socket.socket):
-                connection.close()
+            try:
+                if sampler is not None:
+                    sampler.close()
+            finally:
+                if isinstance(connection, socket.socket):
+                    connection.close()
             raise
 
     def _fence_owner(self, actual: BenchmarkUnixPeer) -> None:
@@ -99,8 +108,8 @@ class RootBenchmarkGpuResourceRelay:
             raise ValueError("BENCHMARK_RESOURCE_RELAY_OWNER_CHANGED")
 
     def sample(self) -> None:
-        """Allow the real lifecycle control thread to sample during its other bounded work."""
-        self._observer.sample()
+        """Require a current independently sampled value; never synthesize another reading."""
+        self._observer.check_current()
 
     def observed_peaks(self) -> BenchmarkGpuObservedPeaks:
         return self._observer.observed_peaks()
@@ -110,7 +119,7 @@ class RootBenchmarkGpuResourceRelay:
         # ended. Keep peer/deadline checks, never mutate the frozen original metrics.
         state = self._observer.observed_peaks().state
         if state == "OPEN":
-            self._observer.sample()
+            self._observer.check_current()
         elif state != "FROZEN":
             raise ValueError("BENCHMARK_RESOURCE_RELAY_OBSERVATION_INVALID")
 
@@ -126,8 +135,11 @@ class RootBenchmarkGpuResourceRelay:
             self._channel.send_resources(finalized)
             return finalized
         finally:
-            self._channel.close()
+            self.close()
 
     def close(self) -> None:
         """Close only this socket; physical GPU ownership is retained by its real owner."""
-        self._channel.close()
+        try:
+            self._observer.close()
+        finally:
+            self._channel.close()

@@ -3,7 +3,7 @@
 from types import SimpleNamespace
 
 import pytest
-from eom_catalog_service import embedding_benchmark_preack_inspection as module
+from eom_catalog_service import embedding_benchmark_launch_recovery_inspection as module
 from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
 
 from tests.unit.embedding_device_benchmark_fixtures import worker_invocation
@@ -49,7 +49,7 @@ def test_actual_read_only_owner_observation_of_retired_unit(stopped):
 
 
 def test_proof_uses_owner_readable_root_not_private_runtime_parent():
-    assert str(module.PREACK_PROOF_ROOT) == "/opt/eom/embedding-benchmark-preack-proofs"
+    assert str(module.RECOVERY_PROOF_ROOT) == "/opt/eom/embedding-benchmark-preack-proofs"
 
 
 @pytest.mark.parametrize(
@@ -78,7 +78,7 @@ def test_original_cgroup_must_be_empty(stopped, monkeypatch):
 
 
 def test_captured_proof_cannot_outlive_its_context(stopped):
-    captured = module.CapturedBenchmarkPreackInspection(
+    captured = module.CapturedBenchmarkLaunchInspection(
         observation(), NumericalRuntimeFileSnapshots(0)
     )
     captured.active = False

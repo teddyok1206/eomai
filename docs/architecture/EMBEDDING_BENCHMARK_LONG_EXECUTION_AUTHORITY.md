@@ -247,3 +247,59 @@ On a failed native start, stop only the owned control socket before closing the
 root transport, so queued traffic cannot trigger another activation of that failed
 instance. This does not stop/reset a GPU process or release its retained lease.
 Physical cleanup remains a separate confirmed root observation.
+
+## Root GPU sampling must not depend on ACK-validation latency
+
+The first complete-argv run reached the real root ACK, then the main-thread sample
+failed the existing2s gap. Synchronous ready/ACK revalidation monopolized that same
+thread. This is controller latency, not a GPU benchmark or model-performance result.
+
+Keep resource schema,2s threshold, numerical code, policies and baseline unchanged.
+One bounded root-only sampling thread owns the existing observer for its full life:
+construction/baseline, periodic samples, one finalization. The root control thread
+continues identity/ACK/channel work, reads immutable snapshots under a lock and
+submits only one typed finalization value through a size1 in-process queue. No
+worker protocol, external queue, persistent state, GPU constructor or dependency
+is added. The observer's own control-thread/permission/source/resource checks stay
+in that dedicated thread. Its failure, stale snapshot or join timeout fails closed;
+sampling gaps are never reset, clamped or reinterpreted as zero. Existing maxima
+include pre-ACK samples and the complete validated observation window.
+
+Access patterns are single-writer ordered observation, constant-size snapshot
+lookup, one FIFO finalization and append-only counters (at most4096). O(1) memory
+and queue operations; original periodic kernel/NVIDIA reads remain independently
+bounded. Main-thread readiness checks cannot block sampling. Finalization is
+single-use; errors cannot produce a successful resource reply. Stop/join the read
+thread on every relay exit. It owns no physical lease, Job or Artifact effects.
+
+The prior error-path socket stop also had a hidden dependency: service Requires
+socket, so stopping a live socket stops its live service. Remove that error-path
+stop entirely; StartLimitBurst1 already prevents another execution of the instance.
+The explicit terminal-retirement owner closes activation only after proving its
+native outcome. Retain GPU resources until actual terminal retirement is verified.
+After ACK, progress not durably recorded is NOT_RECORDED, never zero-compute proof.
+
+### Explicit reconciliation of one confirmed failed post-ACK attempt
+
+The f8 attempt is already root-ACKed and must never use pre-ACK recovery. Preserve
+the old pre-ACK schema/restrictions. Add a separate schema-first failed-attempt
+observation/decision with model_progress=NOT_RECORDED, original_outcome=FAILED,
+root ACK and terminal-retirement hashes, empty outputs and no result reuse. The
+real root retirement must prove the original process gone, cgroup empty, FD store0,
+GPU idle and original physical lease released before this command is eligible.
+Unknown/live execution, missing retirement, any committed successful result or
+nonempty outputs remain ineligible. No scientific success or zero-model claim.
+
+The same authenticated Orchestrator recovery application admits both typed cases;
+their guards differ, not their DB/authority/idempotency machinery. Preserve old
+imports as aliases to the common launch-recovery application, not parallel state
+machines. Existing Job row lock and append-only sequence cover both. Retire the
+failed invocation in a separate history projection, keep its identity used, then
+reserve a new execution ID for that same ordinal and unchanged completed prefix.
+Permit at most one explicit post-ACK reconciliation in the whole series, separate
+from the existing maximum2 pre-ACK recoveries. No automatic worker/HTTP/unit retry.
+Current caller/source/policy/root-proof fences are rechecked before and after the
+single recovery append; replay adds nothing. Final scientific comparison uses only
+the six actually completed original-input measurements. Report failed/unknown
+attempt work separately. No failed bytes are reused, relabeled or registered as a
+successful measurement, and the first accepted CPU measurement is not rerun.
