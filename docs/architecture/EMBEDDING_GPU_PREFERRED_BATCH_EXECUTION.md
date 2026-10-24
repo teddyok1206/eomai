@@ -510,85 +510,6 @@ P2_E_OBSERVATION_AND_ACQUIRED_RETIREMENT=SOURCE_VERIFIED,
 ROOT_FILE_DAC_AND_CONCURRENCY=PASS, LIVE_GPU_BATCH_UNIT=NOT_RUN,
 CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
 
-## P2-I canonical controls와 GPU 이전 source admission
-
-selection과 routing policy는 기존 `LocalEmbeddingControlArtifactPublisher`와
-`ControlFileSetPublisher`로만 발행한다. parent Job에는 정확한 member/revision/raw hash와
-self hash만 남기며 새 Artifact store, queue 또는 DB schema를 만들지 않는다. 정책을 발행하는
-행위와 설치된 owner가 그 정책을 활성화하는 행위는 다르다.
-
-owner의 installed configuration은 Catalog source scope와 허용된 routing policy pointer/hash를
-고정한다. 실제 호출자는 ingress가 캡처한 기존 Registry actor다. request의 actor 문자열은 권한이
-아니다. GPU 배정 전에 공식 `authorize_scope` → pinned control resolution →
-`resolve_selected_sources`를 호출하며 원 source/profile/report와 Graph/recipe/정책을 정확히
-대조한다. 종료 직전에는 같은 root의 provenance와 현재 source/actor를 다시 확인한다. 실행·발행
-중 권한 변경이나 원자료 불일치는 CPU fallback이나 latest 재선택 사유가 아니다.
-
-현재 미배포 planning 후보의 INDEX selection에는 기존 registered-review source/profile/evidence
-pointer도 명시적으로 수용한다. 이는 V10 solution-report로 위장하지 않는 별도 anchor다. QUERY의
-기존 reference anchor 의미는 유지한다. 기존 released schema와 운영 Job은 바꾸지 않는다.
-
-주 접근은 최대32개 revision의 indexed lookup, bounded ordered iteration, hash-map membership다.
-source와 entry는 revision map으로 한 번 대조해 O(n) 시간/공간을 사용하며 전체 corpus를 복사하지
-않는다. 공식 Catalog source fence를 먼저 획득하고 parent planning row를 뒤에 다루는 순서를
-유지한다. caller가 소유한 하나의 root transaction이며 nested transaction으로 승인 오류를
-숨기지 않는다. retry는 같은 pinned controls의 재조회일 뿐 GPU dispatch 허가가 아니다.
-
-request의 JSON을 직접 신뢰하는 대안은 current permissions, accepted report, canonical Artifact
-lifecycle을 보장하지 못하므로 사용하지 않는다. 이 단계는 admission/publication 연결이며 실제
-root IPC·수치 실행·child commit·운영 활성화의 완료 증거를 대신하지 않는다.
-
-### P2-I 검증 체크포인트 — 2026-10-24 UTC
-
-- 실제 기존 file-set owner로 `selection.json`/`policy.json`을 발행·재전송한다. first-observation
-  UTC와 원 Artifact를 재사용하며 다른 종류/내용을 같은 key로 바꾸지 못한다. raw hash와 semantic
-  hash를 분리하고 planning/control 계약의 JSON timestamp 직렬화 방식에 맞춘다. 후보 발행만으로
-  runtime policy가 활성화되지 않는다.
-- 새 `CatalogEmbeddingBatchPlanAdmission`은 설치된 routing selection과 exact source scope,
-  실제 사람/서비스 actor를 대조한다. 첫 scope 거부는 control bytes를 읽기 전에 발생한다.
-  canonical Artifact producer/lifecycle/schema/member/hash, 원 Graph/profile/report와 recipe를
-  확인하고 마지막 provenance/source/actor fence 및 root transaction identity를 재확인한다.
-  원 API/child source owner를 우회하는 DB/NAS reader나 대체 검색 엔진은 추가하지 않았다.
-- 미배포 planning schema에 INDEX 전용 registered-review anchor를 추가했다. 원 검토 evidence와
-  profile2 pointer를 유지하며 QUERY의 기존 reference anchor로 위장하지 못한다. canonical/mirror
-  SHA는 `94fe09d2dc756e15b77c3f61883a4dd76f6028b463199a5ad62bd6bf700f1337`다.
-  released predecessor schema/운영 history는 변경하지 않았다.
-- 관련 계약·source·routing·result·dependency251 PASS, root controller/handoff/observation와
-  numerical wheel/resource packaging285 PASS다. 범위가 겹치므로 합산하지 않는다. production3개
-  모듈 strict mypy, scoped Python5개 Ruff/format, diff whitespace PASS다.
-- 공식 marker-guarded disposable PostgreSQL에서22 PASS다. canonical control 발행 동시성,
-  source window 안의 parent allocation 경쟁, exact replay, 중단/늦은 권한 거부 rollback과
-  기존 child source/plan 동시성 suite를 함께 확인했다. IAM/source leaves는 합성이며 이를 실제
-  RAG/GPU 운영 검증으로 보고하지 않는다. 최종 로그는
-  `/tmp/eom-gpu-batch-admission-20261024-r2.log`다. 초기 r1의 synthetic allocation fixture에서
-  actor 변경 후 child-set hash 재봉인이 누락된 실패를 바로잡았고 그 로그는 보존했다.
-- 최종 DB `/tmp/eom-api-testdb-20261024184559_f7600f99`와 초기 fixture 실패 DB
-  `/tmp/eom-api-testdb-20261024184440_39453aea`는 해당 official guard로 확인한 뒤 정리했다.
-  운영 DB/계정/실패 history와 기존 runtime pin은 변경하지 않았다. API·일반 대화·INDEX owner는
-  active이고 마지막 GPU 관측은0%/2MiB다. 새 인증 요청·모델 실행·GPU unit 실행은 없었다.
-
-다음은 root↔actual-owner peer/release 연결과 선택된 child 예약·원 출력 commit/replay다.
-그 뒤 successor runtime/paired indexes와 실제 finite GPU/CPU fallback·그림/trainer 공존·처리량을
-검증하고 호환 운영 release로 활성화한다. 이 단계 commit은 GPU 목표의 완료 체크포인트가 아니다.
-
-P2_I_CANONICAL_CONTROLS_AND_ADMISSION=SOURCE_VERIFIED,
-PUBLICATION_AND_PLAN_DB_CONCURRENCY=PASS, OWNER_RUNTIME_CONNECTION=PENDING,
-LIVE_GPU_BATCH_UNIT=NOT_RUN, CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
-
-### P2-E 패키징 확인
-
-source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존
-`scripts/api/deploy_release.sh --build-only`로3개 wheel의 archive/RECORD·build metadata
-검사를 통과했다. build-only이며 운영 API나 CUDA prefix에 설치한 것은 아니다.
-후보 경로는 `/tmp/eom-api-build/2a819d7dd2c51a1ab104f5275571b337709ca466.A56BzZ/dist`다.
-platform wheel SHA-256은 `061bb65213050a05689bd06cc03e3bf0551717b4e611ec3263042fc9b561b3dc`다.
-
-그 wheel만 임시 `/tmp/eom-gpu-batch-wheel-import.Mm5piv`에 추출하고, explicit API Python의
-`-I -B`, cwd `/`에서 신규8개 module과 제어 schema를 읽었다. 모든 module이 그 추출본에서
-해결되고 torch/transformers를 import하거나 모델을 초기화하지 않음을 확인했다. repository
-PYTHONPATH나 editable install은 쓰지 않았다. **격리 wheel import probe**이며 실제 native
-identity·worker sandbox·GPU 연산·source owner의 운영 연결 PASS는 여전히 아니다.
-
 ## P2-F root 실행 제어 연결
 
 새 root adapter는 이미 준비한 원 attempt의 socket activation, 제어 교환, local 결과 검증,
@@ -784,3 +705,88 @@ runtime 설치와 실제 finite GPU/CPU fallback·그림/trainer 공존·처리�
 P2_H_PLANNING=SOURCE_VERIFIED, PLANNING_DB_CONCURRENCY=PASS,
 OWNER_RUNTIME_CONNECTION=PENDING, LIVE_GPU_BATCH_UNIT=NOT_RUN,
 CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
+
+## P2-I canonical controls와 GPU 이전 source admission
+
+selection과 routing policy는 기존 `LocalEmbeddingControlArtifactPublisher`와
+`ControlFileSetPublisher`로만 발행한다. parent Job에는 정확한 member/revision/raw hash와
+self hash만 남기며 새 Artifact store, queue 또는 DB schema를 만들지 않는다. 정책을 발행하는
+행위와 설치된 owner가 그 정책을 활성화하는 행위는 다르다.
+
+owner의 installed configuration은 Catalog source scope와 허용된 routing policy pointer/hash를
+고정한다. 실제 호출자는 ingress가 캡처한 기존 Registry actor다. request의 actor 문자열은 권한이
+아니다. GPU 배정 전에 공식 `authorize_scope` → pinned control resolution →
+`resolve_selected_sources`를 호출하며 원 source/profile/report와 Graph/recipe/정책을 정확히
+대조한다. 종료 직전에는 같은 root의 provenance와 현재 source/actor를 다시 확인한다. 실행·발행
+중 권한 변경이나 원자료 불일치는 CPU fallback이나 latest 재선택 사유가 아니다.
+
+현재 미배포 planning 후보의 INDEX selection에는 기존 registered-review source/profile/evidence
+pointer도 명시적으로 수용한다. 이는 V10 solution-report로 위장하지 않는 별도 anchor다. QUERY의
+기존 reference anchor 의미는 유지한다. 기존 released schema와 운영 Job은 바꾸지 않는다.
+
+주 접근은 최대32개 revision의 indexed lookup, bounded ordered iteration, hash-map membership다.
+source와 entry는 revision map으로 한 번 대조해 O(n) 시간/공간을 사용하며 전체 corpus를 복사하지
+않는다. 공식 Catalog source fence를 먼저 획득하고 parent planning row를 뒤에 다루는 순서를
+유지한다. caller가 소유한 하나의 root transaction이며 nested transaction으로 승인 오류를
+숨기지 않는다. retry는 같은 pinned controls의 재조회일 뿐 GPU dispatch 허가가 아니다.
+
+request의 JSON을 직접 신뢰하는 대안은 current permissions, accepted report, canonical Artifact
+lifecycle을 보장하지 못하므로 사용하지 않는다. 이 단계는 admission/publication 연결이며 실제
+root IPC·수치 실행·child commit·운영 활성화의 완료 증거를 대신하지 않는다.
+
+### P2-I 검증 체크포인트 — 2026-10-24 UTC
+
+- 실제 기존 file-set owner로 `selection.json`/`policy.json`을 발행·재전송한다. first-observation
+  UTC와 원 Artifact를 재사용하며 다른 종류/내용을 같은 key로 바꾸지 못한다. raw hash와 semantic
+  hash를 분리하고 planning/control 계약의 JSON timestamp 직렬화 방식에 맞춘다. 후보 발행만으로
+  runtime policy가 활성화되지 않는다.
+- 새 `CatalogEmbeddingBatchPlanAdmission`은 설치된 routing selection과 exact source scope,
+  실제 사람/서비스 actor를 대조한다. 첫 scope 거부는 control bytes를 읽기 전에 발생한다.
+  canonical Artifact producer/lifecycle/schema/member/hash, 원 Graph/profile/report와 recipe를
+  확인하고 마지막 provenance/source/actor fence 및 root transaction identity를 재확인한다.
+  원 API/child source owner를 우회하는 DB/NAS reader나 대체 검색 엔진은 추가하지 않았다.
+- 미배포 planning schema에 INDEX 전용 registered-review anchor를 추가했다. 원 검토 evidence와
+  profile2 pointer를 유지하며 QUERY의 기존 reference anchor로 위장하지 못한다. canonical/mirror
+  SHA는 `94fe09d2dc756e15b77c3f61883a4dd76f6028b463199a5ad62bd6bf700f1337`다.
+  released predecessor schema/운영 history는 변경하지 않았다.
+- 관련 계약·source·routing·result·dependency251 PASS, root controller/handoff/observation와
+  numerical wheel/resource packaging285 PASS다. 범위가 겹치므로 합산하지 않는다. production3개
+  모듈 strict mypy, scoped Python5개 Ruff/format, diff whitespace PASS다.
+- 공식 marker-guarded disposable PostgreSQL에서22 PASS다. canonical control 발행 동시성,
+  source window 안의 parent allocation 경쟁, exact replay, 중단/늦은 권한 거부 rollback과
+  기존 child source/plan 동시성 suite를 함께 확인했다. IAM/source leaves는 합성이며 이를 실제
+  RAG/GPU 운영 검증으로 보고하지 않는다. 최종 로그는
+  `/tmp/eom-gpu-batch-admission-20261024-r2.log`다. 초기 r1의 synthetic allocation fixture에서
+  actor 변경 후 child-set hash 재봉인이 누락된 실패를 바로잡았고 그 로그는 보존했다.
+- 최종 DB `/tmp/eom-api-testdb-20261024184559_f7600f99`와 초기 fixture 실패 DB
+  `/tmp/eom-api-testdb-20261024184440_39453aea`는 해당 official guard로 확인한 뒤 정리했다.
+  운영 DB/계정/실패 history와 기존 runtime pin은 변경하지 않았다. API·일반 대화·INDEX owner는
+  active이고 마지막 GPU 관측은0%/2MiB다. 새 인증 요청·모델 실행·GPU unit 실행은 없었다.
+
+다음은 root↔actual-owner peer/release 연결과 선택된 child 예약·원 출력 commit/replay다.
+그 뒤 successor runtime/paired indexes와 실제 finite GPU/CPU fallback·그림/trainer 공존·처리량을
+검증하고 호환 운영 release로 활성화한다. 이 단계 commit은 GPU 목표의 완료 체크포인트가 아니다.
+
+P2_I_CANONICAL_CONTROLS_AND_ADMISSION=SOURCE_VERIFIED,
+PUBLICATION_AND_PLAN_DB_CONCURRENCY=PASS, OWNER_RUNTIME_CONNECTION=PENDING,
+LIVE_GPU_BATCH_UNIT=NOT_RUN, CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
+
+P2-I source commit `d08eaf710d002d2bbeb905817c13a369d09f206c`는 main에 push했다.
+해당 commit의 공식 API/platform build-only 및 wheel RECORD 검증은 PASS다.
+산출물은 `/tmp/eom-api-build/d08eaf710d002d2bbeb905817c13a369d09f206c.7lyt0B/dist`이며
+설치·activation·실제 GPU/CPU 수치 실행은 하지 않았다. 이 문서 정리는 candidate code나 운영
+runtime pin을 바꾸지 않으며 README의 별도 완료 작업도 다시 반영하지 않는다.
+
+### P2-E 패키징 확인
+
+source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존
+`scripts/api/deploy_release.sh --build-only`로3개 wheel의 archive/RECORD·build metadata
+검사를 통과했다. build-only이며 운영 API나 CUDA prefix에 설치한 것은 아니다.
+후보 경로는 `/tmp/eom-api-build/2a819d7dd2c51a1ab104f5275571b337709ca466.A56BzZ/dist`다.
+platform wheel SHA-256은 `061bb65213050a05689bd06cc03e3bf0551717b4e611ec3263042fc9b561b3dc`다.
+
+그 wheel만 임시 `/tmp/eom-gpu-batch-wheel-import.Mm5piv`에 추출하고, explicit API Python의
+`-I -B`, cwd `/`에서 신규8개 module과 제어 schema를 읽었다. 모든 module이 그 추출본에서
+해결되고 torch/transformers를 import하거나 모델을 초기화하지 않음을 확인했다. repository
+PYTHONPATH나 editable install은 쓰지 않았다. **격리 wheel import probe**이며 실제 native
+identity·worker sandbox·GPU 연산·source owner의 운영 연결 PASS는 여전히 아니다.
