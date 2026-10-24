@@ -125,6 +125,11 @@ cold end-to-end 중앙값은 CPU130.5초/GPU141.7초여서 전환 기준을 통�
 gate는 NOT_RUN으로 남겼으며 이번 전환 PASS로 꾸미지 않았습니다.
 [실측 결과·정본·한계](docs/operations/EMBEDDING_GPU_MEASURED_2026-10-24.md).
 
+**후속 GPU 우선·CPU 대체 실행 goal:** 장치별 정확한 인덱스 선택과 유한 묶음 모델 재사용의
+후보 계약/소스는 통합503개 회귀를 통과했습니다. 실제 GPU 할당·worker 인계·운영 배포와
+기본값 전환은 후속 단계이며 **현재 운영 기본값은 CPU**입니다.
+[설계·단계별 검증](docs/architecture/EMBEDDING_GPU_PREFERRED_BATCH_EXECUTION.md).
+
 Codex 로그인 변경 후 자동 모델 검증 기능은 호환 platform/API/Web 릴리스로 반영했습니다.
 새 assignment의 실제 probe PASS만 허용하며 관리자 중지와 과거 FAILED는 보존합니다.
 실제 device 로그인1회 및 후속 OBSERVE 확인은 별도 진행 상태입니다.

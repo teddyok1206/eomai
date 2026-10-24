@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-work-batch-input/1.0",
+  "title": "Finite same-owner embedding work batch",
+  "description": "A staged materialization envelope for existing independent numerical requests. Scope hashes and resource labels are not source or compute authority. Every child requires current owner authorization before model load and execution. No queue, launch, implicit fallback or Artifact publication is defined here.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "purpose", "scope", "routing_decision_sha256", "resource_profile_sha256", "timeout_seconds", "vector_max_bytes", "children", "request_sha256"],
+  "properties": {
+    "schema_version": {"const": "embedding-work-batch-input/1.0"},
+    "purpose": {"enum": ["REFERENCE_QUERY", "DOCUMENT"]},
+    "scope": {"$ref": "#/$defs/scope"},
+    "routing_decision_sha256": {"$ref": "#/$defs/hash"},
+    "resource_profile_sha256": {"$ref": "#/$defs/hash"},
+    "timeout_seconds": {"type": "integer", "minimum": 1, "maximum": 180},
+    "vector_max_bytes": {"type": "integer", "minimum": 4, "maximum": 16777216},
+    "children": {
+      "type": "array", "minItems": 1, "maxItems": 32,
+      "items": {"oneOf": [{"$ref": "#/$defs/queryChild"}, {"$ref": "#/$defs/documentChild"}]}
+    },
+    "request_sha256": {"$ref": "#/$defs/hash"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"purpose": {"const": "REFERENCE_QUERY"}}},
+      "then": {"properties": {"children": {"items": {"$ref": "#/$defs/queryChild"}}}}
+    },
+    {
+      "if": {"properties": {"purpose": {"const": "DOCUMENT"}}},
+      "then": {"properties": {"children": {"items": {"$ref": "#/$defs/documentChild"}}}}
+    }
+  ],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "scope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["actor_kind", "actor_id", "storage_partition", "access_policy_sha256", "scope_sha256"],
+      "properties": {
+        "actor_kind": {"enum": ["OPERATOR", "LOCAL_INDEXING_SERVICE"]},
+        "actor_id": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+        "storage_partition": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/partition"},
+        "access_policy_sha256": {"$ref": "#/$defs/hash"},
+        "scope_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "queryChild": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope_sha256", "request"],
+      "properties": {
+        "scope_sha256": {"$ref": "#/$defs/hash"},
+        "request": {"$ref": "eom://schemas/knowledge/embedding-reference-query-input/1.1"}
+      }
+    },
+    "documentChild": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope_sha256", "request"],
+      "properties": {
+        "scope_sha256": {"$ref": "#/$defs/hash"},
+        "request": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/input"}
+      }
+    }
+  }
+}

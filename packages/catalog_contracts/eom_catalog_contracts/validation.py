@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "embedding-work-batch-input": CatalogSchemaResource(
+            "schemas/knowledge/embedding-work-batch-input-v1.schema.json",
+            "resources/knowledge/embedding-work-batch-input-v1.schema.json",
+            "1.0",
+            "sha256:feecd2bebde435773b715c9dc3af0d6a77cb7ef74768165359e13e2f82935005",
+        ),
         "embedding-benchmark-failed-attempt": CatalogSchemaResource(
             "schemas/knowledge/embedding-benchmark-failed-attempt-v1.schema.json",
             "resources/knowledge/embedding-benchmark-failed-attempt-v1.schema.json",

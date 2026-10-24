@@ -1,0 +1,212 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/embedding-device-routing/1.0",
+  "title": "GPU preferred routing values; never allocation, authority or activation evidence",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/policy"
+    },
+    {
+      "$ref": "#/$defs/observation"
+    },
+    {
+      "$ref": "#/$defs/decision"
+    }
+  ],
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "binding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "backend",
+        "profile"
+      ],
+      "properties": {
+        "backend": {
+          "$ref": "eom://schemas/workflow/native-embedding-backend-selection/1.0"
+        },
+        "profile": {
+          "$ref": "eom://schemas/workflow/local-embedding-execution-policy/1.0#/$defs/runtimeProfile"
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "message_type",
+        "policy_id",
+        "policy_revision_id",
+        "purpose",
+        "preferred_device",
+        "fallback_device",
+        "fallback_on",
+        "view_recipe_sha256",
+        "cpu",
+        "cuda",
+        "created_at",
+        "policy_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-routing/1.0"
+        },
+        "message_type": {
+          "const": "POLICY"
+        },
+        "policy_id": {
+          "type": "string",
+          "pattern": "^embeddingroutingpolicy_[0-9a-f]{32}$"
+        },
+        "policy_revision_id": {
+          "type": "string",
+          "pattern": "^embeddingroutingpolicyrev_[0-9a-f]{32}$"
+        },
+        "purpose": {
+          "enum": [
+            "INDEX",
+            "REFERENCE_QUERY",
+            "PRIVATE_CHAT_QUERY"
+          ]
+        },
+        "preferred_device": {
+          "const": "CUDA"
+        },
+        "fallback_device": {
+          "const": "CPU"
+        },
+        "fallback_on": {
+          "const": "PRE_EXECUTION_ALLOCATION_UNAVAILABLE"
+        },
+        "view_recipe_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "cpu": {
+          "$ref": "#/$defs/binding"
+        },
+        "cuda": {
+          "$ref": "#/$defs/binding"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "policy_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "message_type",
+        "allocation_attempt_id",
+        "request_sha256",
+        "policy_sha256",
+        "phase",
+        "cuda_launch_state",
+        "status",
+        "allocation_reference_sha256",
+        "observed_at",
+        "observation_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-routing/1.0"
+        },
+        "message_type": {
+          "const": "ALLOCATION_OBSERVATION"
+        },
+        "allocation_attempt_id": {
+          "type": "string",
+          "pattern": "^embeddingallocation_[0-9a-f]{32}$"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "policy_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "phase": {
+          "const": "PRE_EXECUTION"
+        },
+        "cuda_launch_state": {
+          "const": "NOT_STARTED"
+        },
+        "status": {
+          "enum": [
+            "ACQUIRED",
+            "BUSY",
+            "CAPACITY_UNAVAILABLE"
+          ]
+        },
+        "allocation_reference_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "observation_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "message_type",
+        "request_sha256",
+        "policy_sha256",
+        "allocation_attempt_id",
+        "allocation_observation_sha256",
+        "reason",
+        "selected",
+        "decision_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-device-routing/1.0"
+        },
+        "message_type": {
+          "const": "DECISION"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "policy_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "allocation_attempt_id": {
+          "type": "string",
+          "pattern": "^embeddingallocation_[0-9a-f]{32}$"
+        },
+        "allocation_observation_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "reason": {
+          "enum": [
+            "GPU_ALLOCATION_ACQUIRED",
+            "GPU_BUSY_CPU_FALLBACK",
+            "GPU_CAPACITY_CPU_FALLBACK"
+          ]
+        },
+        "selected": {
+          "$ref": "#/$defs/binding"
+        },
+        "decision_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    }
+  }
+}
