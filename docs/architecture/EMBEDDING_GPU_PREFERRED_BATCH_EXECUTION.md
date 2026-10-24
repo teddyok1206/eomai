@@ -430,3 +430,68 @@ CPU fallback·rollback gate는 여전히 남아 있다. 기존 비교 결과 KEE
 
 P2_D_BOOTSTRAP=SOURCE_VERIFIED, ROOT_FILE_DAC_AND_CONCURRENCY=PASS,
 LIVE_GPU_BATCH_UNIT=NOT_RUN, CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
+
+## P2-E 실제 root 관찰과 종료
+
+root의 pre-compute 판정은 worker의 READY만으로 성립하지 않는다. 고정 service/socket과
+entry의 installed bytes, backend/receipt/prefix/host closure, 원 allocation/env와 빈 numeric
+inode, unit invocation/start stamp, 실제 PID/birth/UID/GID/cgroup/argv/cwd/단일 thread,
+실제 worker/PID1 flock/device FD, GPU client 미시작을 별도로 관찰한다. 원 unit의 전후
+read-back이 같아야 GRANT 가능한 machine 사실이 된다. source/actor 허가는 기존 owner의
+별도 책임이며 이 관찰값이 권한을 대신하지 않는다.
+
+bounded 검사는 GRANT와 terminal 경계에 모으고 frame마다 systemctl이나 prefix 전체 scan을
+반복하지 않는다. transport peer fence는 원 PID/birth/cgroup과 kernel sender를 가볍게 확인한다.
+전체 prefix와 host capture는 같은 실행에서 보유하고 GRANT/terminal에서 다시 확인한다.
+관찰값은 작은 frozen metadata이며 model/문항 text/output binary의 복사나 새 registry가 아니다.
+
+획득한 GPU의 terminal/retirement는 원 invocation과 start stamp, 원 PID/birth 종료,
+cgroup 비어 있음, 원 PID1 retention, 실제 GPU client 없음과 같은 unit policy를 다시 확인한다.
+STOP/실패 unit 정리/FDSTORE clean은 기존 protected intent/result primitive로 먼저 원 phase를
+exclusive reserve하고 같은 원 unit에만 적용한다. phase가 이미 있거나 결과가 불명이면
+다시 실행하지 않는다. 원 FAILED 판정은 별도 불변 terminal 기록에 보존하며 성공으로 바꾸지 않는다.
+
+최종 반환은 PID1 store0, 원 process/cgroup 종료, 같은 lease inode의 독립 재획득과 GPU client
+없음을 함께 확인한다. read-only reconcile은 이 상태만 재관찰하며 STOP/clean이나 모델 계산을
+재시도하지 않는다. 이 acquired-READY 경로는 BUSY의 미실행/CPU 선택 경로가 아니며 서로
+위장하지 않는다. 정리 성공도 source 권한·수치 결과 검증·Artifact commit을 대신하지 않는다.
+
+재시작을 검토하면서 cleanup까지 원 controller PID를 요구하면, 그 프로세스가 죽은 뒤
+재관찰이 막힐 수 있음을 확인했다. 따라서 원 실행 controller만 가능한 staging/bind/precompute와
+다른 root process도 가능한 **읽기 전용** 원 pin/파일 재확인을 별도 public 함수로 나눴다.
+READY 관찰에는 원 input/allocation epoch와 output inode identities를 함께 고정한다. 복구는
+그 기록과 같은 파일·설치·unit/process/GPU 종료를 확인하며 새 계산을 허용하지 않는다.
+원 PID를 현재 PID로 치환하거나 기존 실패를 성공으로 재해석하지 않는다.
+
+### P2-E 검증 체크포인트 — 2026-10-24 UTC
+
+- 실제 root adapter의 precompute/원 terminal/retirement·read-only reconcile 후보를 작성했다.
+  주 검증은 controlled OS ports를 사용한 합성 검증이며 실제 GPU unit 실행의 PASS가 아니다.
+  root의 원 unit/hash/UID/cgroup/FD/retention 확인과 source owner 권한은 계속 분리한다.
+- 현재 source와 기존 INDEX·자원 관찰·계약 packaging·dependency boundary의 관련508 PASS,
+  마지막 복구/기존 terminal metadata/phase guard 집중159 PASS다. 겹치는 숫자는 합산하지 않는다.
+  production4개 모듈 strict mypy와 변경 Python scoped Ruff/format PASS다.
+- 원 controller 종료 후에도 같은 immutable pin/OS identity를 재확인할 수 있으나 precompute는
+  거부함을 검증했다. 바뀐 input/allocation/output inode는 복구의 최신값으로 대체하지 않는다.
+  dangling grant intent도 없는 것으로 처리하지 않는다. side effect 결과 불명에는 원 phase를
+  다시 reserve하거나 STOP/clean을 재실행하지 않으며 read-only 상태 관찰만 허용한다.
+- acquired READY의 원 SUCCEEDED/FAILED를 보존하고, 원 PID/cgroup/GPU client 종료 확인 후에만
+  원 unit의 FDSTORE를 정리한다. 최종 store0와 같은 lease inode의 독립 재획득까지 확인한다.
+  단위 테스트에서 unrelated GPU client·살아 있는 PID·새 invocation·파일/자원 drift·권한 변화는
+  정리 승인이 되지 않음을 확인했다. 실제 GPU 반환/공존 시험은 별도 live gate로 남아 있다.
+- 빠른 pre-compute BUSY가 정상 종료한 경우에도 실제 systemd의 원 ExecMainPID/store를 읽을
+  수 있도록 batch 전용 terminal metadata 경계를 추가했다. old FAILED-only 경계는 유지한다.
+  이 tuple만으로 BUSY/CPU fallback을 승인하지 않으며 원 request·미GRANT·빈 수치 출력·정상
+  종료·안전한 unit 정리까지 root controller가 확인해야 한다. 아직 그 full driver는 미연결이다.
+- public handoff 검증 분리 후 실제 root 임시 파일/DAC/concurrency6 PASS를 재확인했다.
+  `/tmp/eom-gpu-batch-os-20261024-r6.log`. 새 로그인·운영 DB 변경·prefix 설치·서비스 재시작·
+  모델/GPU 실행은0이며 이전 failed 테스트 기록과 과거 비교 KEEP_CPU는 보존한다.
+
+다음 필수 작업은 실제 root controller의 socket 시작/원 sender 연결/GRANT와 terminal-aware
+peer fence, pre-compute BUSY 및 pre-READY 실패의 독립 정리, 실제 source-owner child 권한/
+commit/replay 연결이다. 그 뒤 현재 target을 일치시키는 CPU/CUDA view 인덱스와 live canary,
+배포·GPU default/CPU fallback·rollback을 검증한다. 현재 checkpoint는 전체 goal 완료가 아니다.
+
+P2_E_OBSERVATION_AND_ACQUIRED_RETIREMENT=SOURCE_VERIFIED,
+ROOT_FILE_DAC_AND_CONCURRENCY=PASS, LIVE_GPU_BATCH_UNIT=NOT_RUN,
+CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.

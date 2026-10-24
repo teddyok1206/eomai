@@ -85,3 +85,13 @@ def test_new_late_bound_primitive_never_relaxes_original_nonempty_input(monkeypa
         shared.create_native_cpu_descriptor_handoff(
             handoff.GPU_BATCH_RUNTIME_ROOT, "a" * 32, b"", owner=owner
         )
+
+
+def test_new_root_controller_can_validate_history_not_bind_original_work(monkeypatch):
+    pins, original = case(monkeypatch)
+    monkeypatch.setattr(handoff.os, "getpid", lambda: pins.root_pid + 1)
+    assert handoff.validate_embedding_gpu_batch_reconciliation_pins(
+        pins, original[0]
+    ) == embedding_gpu_control_bytes(original[0])
+    with pytest.raises(ValueError):
+        handoff.validate_embedding_gpu_batch_original(pins, original[0])

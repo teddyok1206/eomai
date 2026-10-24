@@ -201,3 +201,66 @@ def test_reject_bad_root_or_original_before_systemctl(facts, monkeypatch, fault)
     with pytest.raises(ValueError, match="GPU_UNIT_TERMINATION_UNCERTAIN"):
         observe(facts)
     assert facts.calls == 0
+
+
+@pytest.mark.parametrize("outcome", ["SUCCEEDED", "FAILED"])
+@pytest.mark.parametrize("store", ["0", "1"])
+def test_batch_reads_original_exited_pid_for_both_outcomes_without_inventing_birth(
+    facts, outcome, store
+):
+    facts.template = "eom-embedding-native-gpu-batch@.service"
+    facts.unit = facts.template.replace("@", "@" + "a" * 32)
+    facts.expected = replace(facts.expected, fragment_path="/etc/systemd/system/" + facts.template)
+    if outcome == "SUCCEEDED":
+        facts.expected = replace(
+            facts.expected,
+            status=replace(
+                facts.expected.status,
+                active_state="active",
+                sub_state="exited",
+                result="success",
+                exec_main_status=0,
+            ),
+        )
+    facts.store = store
+    assert reader.observe_embedding_gpu_batch_terminal_metadata(
+        facts.unit, expected=facts.expected
+    ) == (123, int(store))
+    assert facts.calls == 1
+
+
+@pytest.mark.parametrize("fault", ["root", "family", "running", "dropin", "reload", "fragment"])
+def test_batch_does_not_reinterpret_other_family_or_nonterminal_as_busy(facts, monkeypatch, fault):
+    facts.template = "eom-embedding-native-gpu-batch@.service"
+    facts.unit = facts.template.replace("@", "@" + "a" * 32)
+    facts.expected = replace(facts.expected, fragment_path="/etc/systemd/system/" + facts.template)
+    if fault == "root":
+        monkeypatch.setattr(reader.os, "getresuid", lambda: (0, 1234, 0))
+    elif fault == "family":
+        facts.unit = "eom-embedding-native-cuda-index@" + "a" * 32 + ".service"
+    elif fault == "running":
+        facts.expected = replace(facts.expected, main_pid=123)
+    elif fault == "dropin":
+        facts.expected = replace(facts.expected, drop_in_paths="/unreviewed.conf")
+    elif fault == "reload":
+        facts.expected = replace(
+            facts.expected, status=replace(facts.expected.status, need_daemon_reload=True)
+        )
+    else:
+        facts.expected = replace(facts.expected, fragment_path="/unreviewed.service")
+    with pytest.raises(ValueError, match="GPU_UNIT_TERMINATION_UNCERTAIN"):
+        reader.observe_embedding_gpu_batch_terminal_metadata(facts.unit, expected=facts.expected)
+    assert facts.calls == 0
+
+
+@pytest.mark.parametrize(
+    "fault",
+    ["ExecMainPID", "InvocationID", "ExecMainStartTimestampMonotonic", "NFileDescriptorStore"],
+)
+def test_batch_original_metadata_mismatch_is_uncertain_not_cpu_fallback(facts, fault):
+    facts.template = "eom-embedding-native-gpu-batch@.service"
+    facts.unit = facts.template.replace("@", "@" + "a" * 32)
+    facts.expected = replace(facts.expected, fragment_path="/etc/systemd/system/" + facts.template)
+    facts.fault = fault
+    with pytest.raises(ValueError, match="GPU_UNIT_TERMINATION_UNCERTAIN"):
+        reader.observe_embedding_gpu_batch_terminal_metadata(facts.unit, expected=facts.expected)

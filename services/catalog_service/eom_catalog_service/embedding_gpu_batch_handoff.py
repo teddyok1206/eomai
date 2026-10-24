@@ -65,9 +65,19 @@ class PreparedEmbeddingGpuBatch:
     input_epoch: tuple[int, ...]
 
 
-def _validate_original(
+def validate_embedding_gpu_batch_original(
     launch: NativeEmbeddingGpuBatchLaunchPins, request: EmbeddingGpuAllocationRequest
 ) -> bytes:
+    """Current original controller only; required before staging or binding compute input."""
+    raw = validate_embedding_gpu_batch_reconciliation_pins(launch, request)
+    _require(launch.root_pid == os.getpid())
+    return raw
+
+
+def validate_embedding_gpu_batch_reconciliation_pins(
+    launch: NativeEmbeddingGpuBatchLaunchPins, request: EmbeddingGpuAllocationRequest
+) -> bytes:
+    """Validate immutable original root metadata only, never permission to resume compute."""
     _require(os.getresuid() == (0, 0, 0) and type(launch) is NativeEmbeddingGpuBatchLaunchPins)
     launch.__post_init__()
     checked = parse_embedding_gpu_control(request)
@@ -75,8 +85,7 @@ def _validate_original(
     assert isinstance(checked, EmbeddingGpuAllocationRequest)
     raw = embedding_gpu_control_bytes(checked)
     _require(
-        launch.root_pid == os.getpid()
-        and checked.allocation_attempt_id == "embeddingallocation_" + launch.attempt_hex
+        checked.allocation_attempt_id == "embeddingallocation_" + launch.attempt_hex
         and sha256_bytes(raw) == launch.allocation_raw_sha256
         and checked.purpose in ("INDEX", "REFERENCE_QUERY")
         and launch.backend
@@ -95,7 +104,7 @@ def prepare_embedding_gpu_batch_handoff(
     launch: NativeEmbeddingGpuBatchLaunchPins, request: EmbeddingGpuAllocationRequest
 ) -> PreparedEmbeddingGpuBatch:
     """Exclusive original files; preserve every partial/existing attempt for reconciliation."""
-    raw = _validate_original(launch, request)
+    raw = validate_embedding_gpu_batch_original(launch, request)
     now = time.monotonic_ns()
     _require(now < request.expires_monotonic_ns <= now + 180 * 10**9)
     owner = fixed_owner_identity()
@@ -137,7 +146,7 @@ def bind_embedding_gpu_batch_handoff(
     An exact completed replay only reads; partial/unknown output is an explicit error.
     """
     _require(type(prepared) is PreparedEmbeddingGpuBatch)
-    original = _validate_original(prepared.launch, prepared.request)
+    original = validate_embedding_gpu_batch_original(prepared.launch, prepared.request)
     batch = parse_embedding_work_batch_input(batch)
     raw = canonical_json_bytes(batch.model_dump(mode="json"))
     _require(

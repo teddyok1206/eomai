@@ -77,6 +77,38 @@ def observe_failed_gpu_unit_metadata(
         or gpu_unit_terminal_outcome(expected) != "FAILED"
     ):
         raise ValueError("GPU_UNIT_TERMINATION_UNCERTAIN")
+    return _observe_original_terminal_process(unit, expected)
+
+
+def observe_embedding_gpu_batch_terminal_metadata(
+    unit: str, *, expected: CpuUnitObservation
+) -> tuple[int, Literal[0, 1]]:
+    """Batch-only actual exited PID/store, including a successful pre-compute BUSY exit.
+
+    The caller must still prove original allocation linkage, absent compute grant,
+    unchanged empty numerical files and safe retirement before selecting CPU. This
+    observation alone is neither BUSY proof nor permission to retry or fall back.
+    """
+    template = "eom-embedding-native-gpu-batch@.service"
+    if (
+        os.getresuid() != (0, 0, 0)
+        or type(unit) is not str
+        or re.fullmatch(r"eom-embedding-native-gpu-batch@[0-9a-f]{32}\.service", unit) is None
+        or type(expected) is not CpuUnitObservation
+        or re.fullmatch(r"[0-9a-f]{32}", expected.invocation_id) is None
+        or expected.fragment_path != "/etc/systemd/system/" + template
+        or expected.drop_in_paths
+        or expected.status.need_daemon_reload
+    ):
+        raise ValueError("GPU_UNIT_TERMINATION_UNCERTAIN")
+    gpu_unit_terminal_outcome(expected)  # Real terminal success/failure, not a fresh/running unit.
+    return _observe_original_terminal_process(unit, expected)
+
+
+def _observe_original_terminal_process(
+    unit: str, expected: CpuUnitObservation
+) -> tuple[int, Literal[0, 1]]:
+    """Shared bounded projection after each purpose/outcome-specific root guard."""
     properties = (
         "ExecMainPID",
         "NFileDescriptorStore",
