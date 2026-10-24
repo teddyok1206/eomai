@@ -11,9 +11,11 @@ from eom_orchestrator.inference_transfer_cpu_handoff import (
     fixed_owner_identity,
     protected_cpu_handoff_directory,
 )
+from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation, inspect_fixed_unit
 
 from eom_catalog_service.embedding_gpu_batch_launch import (
     GPU_BATCH_RUNTIME_ROOT,
+    GPU_BATCH_TEMPLATE,
     native_embedding_gpu_batch_unit,
 )
 
@@ -38,6 +40,17 @@ def embedding_gpu_batch_descriptor_bytes(attempt_hex: str) -> bytes:
 def require_embedding_gpu_batch_descriptor(attempt_hex: str, drop_in_paths: str) -> None:
     if drop_in_paths != str(embedding_gpu_batch_descriptor_path(attempt_hex)):
         raise ValueError("EMBEDDING_GPU_BATCH_UNIT_DESCRIPTOR_INVALID")
+
+
+def inspect_embedding_gpu_batch_unit(unit_name: str, *, template: str) -> CpuUnitObservation:
+    attempt = unit_name.partition("@")[2].removesuffix(".service")
+    if template != GPU_BATCH_TEMPLATE or unit_name != native_embedding_gpu_batch_unit(attempt):
+        raise ValueError("EMBEDDING_GPU_BATCH_UNIT_DESCRIPTOR_INVALID")
+    return inspect_fixed_unit(
+        unit_name,
+        template=GPU_BATCH_TEMPLATE,
+        expected_drop_in_paths=(str(embedding_gpu_batch_descriptor_path(attempt)),),
+    )
 
 
 def prepare_embedding_gpu_batch_descriptor(attempt_hex: str) -> None:

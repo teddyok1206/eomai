@@ -11,6 +11,9 @@ from unittest.mock import Mock
 
 import pytest
 from eom_catalog_service import embedding_gpu_batch_unit_descriptor as descriptor
+from eom_orchestrator import inference_transfer_cpu_systemd as cpu_units
+
+from tests.unit.test_inference_transfer_cpu_systemd import status_document
 
 
 def test_descriptor_contains_only_the_original_absolute_allocation_path():
@@ -31,6 +34,39 @@ def test_descriptor_contains_only_the_original_absolute_allocation_path():
 def test_no_path_or_property_injection(attempt):
     with pytest.raises(ValueError):
         descriptor.embedding_gpu_batch_descriptor_bytes(attempt)
+
+
+@pytest.mark.parametrize("fault", (None, "absent", "other_instance", "extra"))
+def test_batch_uses_real_fixed_unit_parser_without_weakening_cpu_no_drop_in(monkeypatch, fault):
+    attempt = "a" * 32
+    unit = descriptor.native_embedding_gpu_batch_unit(attempt)
+    expected = str(descriptor.embedding_gpu_batch_descriptor_path(attempt))
+    actual = {
+        None: expected,
+        "absent": "",
+        "other_instance": expected.replace(attempt, "b" * 32),
+        "extra": expected + " /etc/systemd/system/extra.conf",
+    }[fault]
+    raw = status_document(
+        FragmentPath="/etc/systemd/system/" + descriptor.GPU_BATCH_TEMPLATE, DropInPaths=actual
+    )
+    monkeypatch.setattr(
+        cpu_units.subprocess,
+        "run",
+        lambda *_a, **_kw: SimpleNamespace(returncode=0, stdout=raw, stderr=b""),
+    )
+    if fault:
+        with pytest.raises(ValueError, match="INFERENCE_CPU_STATUS_INVALID"):
+            descriptor.inspect_embedding_gpu_batch_unit(
+                unit, template=descriptor.GPU_BATCH_TEMPLATE
+            )
+    else:
+        observed = descriptor.inspect_embedding_gpu_batch_unit(
+            unit, template=descriptor.GPU_BATCH_TEMPLATE
+        )
+        assert observed.drop_in_paths == expected
+        with pytest.raises(ValueError, match="INFERENCE_CPU_STATUS_INVALID"):
+            cpu_units.inspect_cpu_unit(unit, template=descriptor.GPU_BATCH_TEMPLATE)
 
 
 @pytest.mark.parametrize("fault", ("absent", "other_instance", "extra"))

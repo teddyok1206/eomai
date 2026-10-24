@@ -335,7 +335,7 @@ def machine(monkeypatch):
         ),
     )
     monkeypatch.setattr(observer, "read_live_runtime_os_file", read)
-    monkeypatch.setattr(observer, "inspect_cpu_unit", unit)
+    monkeypatch.setattr(observer, "inspect_embedding_gpu_batch_unit", unit)
     monkeypatch.setattr(observer, "root_owned_unit_processes", lambda _: state.pids)
     monkeypatch.setattr(observer, "observe_embedding_gpu_batch_unit_policy", policy)
     monkeypatch.setattr(observer, "observe_embedding_gpu_allocation_resources", resources)

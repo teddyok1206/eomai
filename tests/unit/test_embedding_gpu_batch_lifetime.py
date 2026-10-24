@@ -107,7 +107,9 @@ def ending(machine, monkeypatch):
         SimpleNamespace(getresuid=lambda: (0, 0, 0), close=lambda fd: state.closed.append(fd)),
     )
     monkeypatch.setattr(Path, "lstat", process)
-    monkeypatch.setattr(lifetime, "inspect_cpu_unit", lambda *_a, **_kw: state.terminal)
+    monkeypatch.setattr(
+        lifetime, "inspect_embedding_gpu_batch_unit", lambda *_a, **_kw: state.terminal
+    )
     monkeypatch.setattr(
         lifetime,
         "read_live_runtime_os_file",

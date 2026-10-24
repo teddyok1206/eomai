@@ -246,7 +246,7 @@ def driver(machine, monkeypatch):
         controller, "_socket_effect", lambda action, _: state.events.append("socket-" + action)
     )
     monkeypatch.setattr(controller, "_wait_started", lambda _: ready.unit)
-    monkeypatch.setattr(controller, "inspect_cpu_unit", inspect)
+    monkeypatch.setattr(controller, "inspect_embedding_gpu_batch_unit", inspect)
     monkeypatch.setattr(controller, "read_live_runtime_os_file", process)
     monkeypatch.setattr(controller, "EmbeddingGpuControlChannel", Channel)
     monkeypatch.setattr(controller, "protected_cpu_handoff_directory", directory)
@@ -422,7 +422,7 @@ def test_active_peer_fence_is_cheap_and_rejects_process_birth_or_cgroup_change(d
     fence.phase = "ACTIVE"
     monkeypatch.setattr(
         controller,
-        "inspect_cpu_unit",
+        "inspect_embedding_gpu_batch_unit",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("systemctl per active frame")),
     )
     fence(controller._ACTIVATOR)
@@ -476,7 +476,9 @@ def test_terminal_wait_observes_settling_without_extending_numeric_deadline(driv
         [replace(driver.original, main_pid=0, exited_monotonic=200), driver.terminal]
     )
     sleeps = []
-    monkeypatch.setattr(controller, "inspect_cpu_unit", lambda *args, **kwargs: next(observations))
+    monkeypatch.setattr(
+        controller, "inspect_embedding_gpu_batch_unit", lambda *args, **kwargs: next(observations)
+    )
     monkeypatch.setattr(controller.time, "sleep", sleeps.append)
     assert controller._wait_terminal(driver.captured, driver.original) == driver.terminal
     assert sleeps == [0.05]
@@ -491,7 +493,9 @@ def test_dispatch_marker_is_exclusive_before_any_start_effect(driver, monkeypatc
         invocation_id="",
         status=FixedUnitStatus("loaded", "inactive", "dead", "success", 0, 0, 0, False),
     )
-    monkeypatch.setattr(controller, "inspect_cpu_unit", lambda *args, **kwargs: fresh)
+    monkeypatch.setattr(
+        controller, "inspect_embedding_gpu_batch_unit", lambda *args, **kwargs: fresh
+    )
     driver.claim_dispatch(driver.captured)
     with pytest.raises(FileExistsError):
         driver.claim_dispatch(driver.captured)

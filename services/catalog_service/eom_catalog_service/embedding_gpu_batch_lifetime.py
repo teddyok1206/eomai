@@ -12,7 +12,7 @@ from typing import Literal
 
 from eom_catalog_contracts.embedding_gpu_control import validate_embedding_gpu_allocation_link
 from eom_identifiers import canonical_json_bytes
-from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation, inspect_cpu_unit
+from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation
 from eom_orchestrator.systemd_unit_processes import root_owned_unit_processes
 from pydantic import TypeAdapter
 
@@ -33,6 +33,7 @@ from eom_catalog_service.embedding_gpu_batch_observation import (
     EmbeddingGpuBatchReadyObservation,
 )
 from eom_catalog_service.embedding_gpu_batch_unit_descriptor import (
+    inspect_embedding_gpu_batch_unit,
     require_embedding_gpu_batch_descriptor,
 )
 from eom_catalog_service.embedding_runtime_files import read_live_runtime_os_file
@@ -146,7 +147,7 @@ def observe_embedding_gpu_batch_terminal(
     ready: EmbeddingGpuBatchReadyObservation, captured: CapturedEmbeddingGpuBatchMachine
 ) -> EmbeddingGpuBatchTerminalObservation:
     unit = _basis(ready, captured)
-    before = inspect_cpu_unit(unit, template=GPU_BATCH_TEMPLATE)
+    before = inspect_embedding_gpu_batch_unit(unit, template=GPU_BATCH_TEMPLATE)
     _require(
         before.invocation_id == ready.unit.invocation_id
         and before.status.exec_main_started_monotonic
@@ -161,7 +162,7 @@ def observe_embedding_gpu_batch_terminal(
     captured.assert_current()
     observe_embedding_gpu_batch_retained_resources(ready.resources, unit=unit)
     require_embedding_gpu_batch_processes_ended(ready)
-    _require(inspect_cpu_unit(unit, template=GPU_BATCH_TEMPLATE) == before)
+    _require(inspect_embedding_gpu_batch_unit(unit, template=GPU_BATCH_TEMPLATE) == before)
     return EmbeddingGpuBatchTerminalObservation(ready, before, outcome)
 
 
@@ -322,7 +323,7 @@ def retire_failed_ungranted_embedding_gpu_batch(
         and type(original) is CpuUnitObservation
     )
     unit = native_embedding_gpu_batch_unit(captured.prepared.launch.attempt_hex)
-    terminal = inspect_cpu_unit(unit, template=GPU_BATCH_TEMPLATE)
+    terminal = inspect_embedding_gpu_batch_unit(unit, template=GPU_BATCH_TEMPLATE)
     require_embedding_gpu_batch_descriptor(
         captured.prepared.launch.attempt_hex, terminal.drop_in_paths
     )
@@ -349,7 +350,7 @@ def retire_failed_ungranted_embedding_gpu_batch(
 
     def current() -> None:
         pregrant()
-        _require(inspect_cpu_unit(unit, template=GPU_BATCH_TEMPLATE) == terminal)
+        _require(inspect_embedding_gpu_batch_unit(unit, template=GPU_BATCH_TEMPLATE) == terminal)
         _require(
             observe_embedding_gpu_batch_terminal_metadata(unit, expected=terminal) == (pid, store)
         )

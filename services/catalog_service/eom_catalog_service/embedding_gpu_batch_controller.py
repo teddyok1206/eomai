@@ -43,7 +43,7 @@ from eom_orchestrator.inference_transfer_cpu_handoff import (
     protected_cpu_handoff_directory,
     read_protected_cpu_handoff_member,
 )
-from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation, inspect_cpu_unit
+from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation
 
 from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer
 from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_probe_gpu_clients
@@ -67,6 +67,7 @@ from eom_catalog_service.embedding_gpu_batch_observation import (
     observe_embedding_gpu_batch_ready,
 )
 from eom_catalog_service.embedding_gpu_batch_unit_descriptor import (
+    inspect_embedding_gpu_batch_unit,
     require_embedding_gpu_batch_descriptor,
 )
 from eom_catalog_service.embedding_gpu_control_channel import EmbeddingGpuControlChannel
@@ -161,7 +162,7 @@ def _socket_effect(action: Literal["start", "stop"], unit: str) -> None:
 def _claim_dispatch(captured: CapturedEmbeddingGpuBatchMachine) -> None:
     """No-clobber intent before socket effects; never repair/restart an uncertain attempt."""
     captured.assert_precompute()
-    fresh = inspect_cpu_unit(_unit(captured), template=GPU_BATCH_TEMPLATE)
+    fresh = inspect_embedding_gpu_batch_unit(_unit(captured), template=GPU_BATCH_TEMPLATE)
     require_embedding_gpu_batch_descriptor(
         captured.prepared.launch.attempt_hex, fresh.drop_in_paths
     )
@@ -215,7 +216,7 @@ def _original_unit(
 
 def _wait_started(captured: CapturedEmbeddingGpuBatchMachine) -> CpuUnitObservation:
     while time.monotonic_ns() < captured.prepared.request.expires_monotonic_ns:
-        observed = inspect_cpu_unit(_unit(captured), template=GPU_BATCH_TEMPLATE)
+        observed = inspect_embedding_gpu_batch_unit(_unit(captured), template=GPU_BATCH_TEMPLATE)
         if observed.main_pid > 0:
             _original_unit(observed, observed, attempt_hex=captured.prepared.launch.attempt_hex)
             _require(
@@ -239,7 +240,7 @@ def _wait_terminal(
         time.monotonic_ns() + 30 * 10**9,
     )
     while time.monotonic_ns() < deadline:
-        observed = inspect_cpu_unit(_unit(captured), template=GPU_BATCH_TEMPLATE)
+        observed = inspect_embedding_gpu_batch_unit(_unit(captured), template=GPU_BATCH_TEMPLATE)
         _original_unit(observed, original, attempt_hex=captured.prepared.launch.attempt_hex)
         if observed.main_pid == 0:
             if observed.succeeded or observed.status.active_state == "failed":
@@ -289,7 +290,9 @@ class _WorkerFence:
         if self.phase == "ACTIVE":
             _require(self._live() == self.start_ticks)
             return
-        observed = inspect_cpu_unit(_unit(self.captured), template=GPU_BATCH_TEMPLATE)
+        observed = inspect_embedding_gpu_batch_unit(
+            _unit(self.captured), template=GPU_BATCH_TEMPLATE
+        )
         _original_unit(
             observed, self.original, attempt_hex=self.captured.prepared.launch.attempt_hex
         )
@@ -397,7 +400,7 @@ def _prove_busy(
     observe_runtime_device(captured.device)
     # An unrelated image/trainer GPU holder is allowed. Only this PID must not be a client.
     _require(busy.pid not in observe_cuda_probe_gpu_clients(captured.device))
-    _require(inspect_cpu_unit(unit, template=GPU_BATCH_TEMPLATE) == terminal)
+    _require(inspect_embedding_gpu_batch_unit(unit, template=GPU_BATCH_TEMPLATE) == terminal)
     record = reserve_unit_effect_phase(
         GPU_BATCH_LIFETIME_ROOT, unit, terminal.invocation_id, "retirement"
     )
@@ -415,7 +418,7 @@ def _prove_busy(
             ),
         )
         captured.assert_precompute()
-        _require(inspect_cpu_unit(unit, template=GPU_BATCH_TEMPLATE) == terminal)
+        _require(inspect_embedding_gpu_batch_unit(unit, template=GPU_BATCH_TEMPLATE) == terminal)
         apply_embedding_gpu_batch_effect("STOP", unit)
         _socket_effect("stop", unit)
         stopped = observe_stopped_gpu_unit(

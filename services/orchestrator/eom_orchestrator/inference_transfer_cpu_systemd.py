@@ -252,6 +252,24 @@ def require_cpu_runtime(*, profile: CpuResourceProfile = CpuResourceProfile.E5) 
 
 
 def inspect_cpu_unit(unit_name: str, *, template: str) -> CpuUnitObservation:
+    return inspect_fixed_unit(unit_name, template=template, expected_drop_in_paths=())
+
+
+def inspect_fixed_unit(
+    unit_name: str, *, template: str, expected_drop_in_paths: tuple[str, ...]
+) -> CpuUnitObservation:
+    """Bounded OS projection; caller owns and verifies the exact declared unit materialization.
+
+    CPU callers retain the no-drop-in wrapper. This read-only port confers neither
+    execution nor permission to install any of the expected paths.
+    """
+    if type(expected_drop_in_paths) is not tuple or any(
+        type(path) is not str
+        or not path.startswith("/")
+        or any(char.isspace() or char == "\0" for char in path)
+        for path in expected_drop_in_paths
+    ):
+        raise ValueError("INFERENCE_CPU_STATUS_INVALID")
     result = subprocess.run(
         (
             SYSTEMCTL,
@@ -290,7 +308,7 @@ def inspect_cpu_unit(unit_name: str, *, template: str) -> CpuUnitObservation:
         or status.need_daemon_reload
         or values["NeedDaemonReload"] != "no"
         or observation.fragment_path != str(UNIT_ROOT / template)
-        or observation.drop_in_paths
+        or observation.drop_in_paths != " ".join(expected_drop_in_paths)
         or min(
             observation.main_pid, observation.exited_monotonic, status.exec_main_started_monotonic
         )

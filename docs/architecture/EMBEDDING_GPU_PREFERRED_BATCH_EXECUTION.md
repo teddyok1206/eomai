@@ -1474,3 +1474,21 @@ file identity/DAC는 별도 privileged gate다. strict mypy6 source PASS, Ruff �
 로그는 `/tmp/eom-gpu-batch-systemd-compat-tests-20261024-r2.log`,
 `/tmp/eom-gpu-batch-owner-os-20261024-r13.log`다. source PASS를 다음 실제 고정 unit 실행으로
 확인하기 전에는 hardware READY·CPU fallback·batch computation PASS로 표시하지 않는다.
+
+후속9d34335a owner의 실제 r2는 PID1 RuntimeDirectory/absolute descriptor materialization과
+reload까지 통과했다. 실제 `OpenFile` read-back은 원0a72f542…/allocation.json의 absolute path다.
+다만 native dispatch marker가 생성되기 전에 재사용한 CPU 관측 adapter가 모든 drop-in을 거부해
+중단됐다. 원 root failed 기록과 root0444 descriptor/빈 input은 보존했으며 numerical unit/model/
+GRANT는 시작하지 않았다. fixture가 관측 adapter 전체를 대체해 이 아래 parser 규칙을 가렸으므로,
+후속 회귀에서는 실제 공통 parser까지 이어 검증한다.
+
+공통 bounded read-only projection을 `inspect_fixed_unit`으로 노출하고 기존 `inspect_cpu_unit`은
+계속 empty allow-list로만 호출한다. GPU batch 전용 adapter만 원 instance의 exact descriptor
+하나를 선언한다. CPU/기존 GPU 경계를 전역적으로 느슨하게 바꾸지 않는다. 실제 현재 PID1의
+0a72… unit에 read-only 적용해 batch projection PASS와 기존 CPU 거부 guard PASS를 동시에
+확인했다. 새 unit/모델/DB 작업·권한 부여는 이 read-only 확인에 없었다. CUDA56/config2c3b/receipt는
+다시 만들지 않는다.
+
+공통 parser/CPU 거부·batch 전용 projection/원 dispatch·중단·retirement/dependency 회귀195
+PASS/34.28초, strict mypy5 source PASS, Ruff PASS다. 결과는
+`/tmp/eom-gpu-batch-unit-parser-tests-20261024-r3.log`다. 실제 GPU READY는 아직 다음 gate다.

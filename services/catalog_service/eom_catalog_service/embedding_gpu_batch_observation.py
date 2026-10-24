@@ -19,7 +19,7 @@ from eom_catalog_contracts.embedding_gpu_control import (
 from eom_catalog_contracts.embedding_installed_runtime_proof import CudaRuntimeDeviceCapture
 from eom_identifiers import sha256_bytes
 from eom_orchestrator.inference_transfer_cpu_handoff import fixed_owner_identity
-from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation, inspect_cpu_unit
+from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation
 from eom_orchestrator.systemd_unit_processes import root_owned_unit_processes
 
 from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_probe_gpu_clients
@@ -43,6 +43,7 @@ from eom_catalog_service.embedding_gpu_batch_launch import (
 from eom_catalog_service.embedding_gpu_batch_unit_descriptor import (
     embedding_gpu_batch_descriptor_bytes,
     embedding_gpu_batch_descriptor_path,
+    inspect_embedding_gpu_batch_unit,
     require_embedding_gpu_batch_descriptor,
 )
 from eom_catalog_service.embedding_native_installation_admission import (
@@ -435,7 +436,7 @@ def observe_embedding_gpu_batch_ready(
     launch = captured.prepared.launch
     unit = native_embedding_gpu_batch_unit(launch.attempt_hex)
     cgroup = "/system.slice/" + unit
-    before = inspect_cpu_unit(unit, template=GPU_BATCH_TEMPLATE)
+    before = inspect_embedding_gpu_batch_unit(unit, template=GPU_BATCH_TEMPLATE)
     require_embedding_gpu_batch_descriptor(launch.attempt_hex, before.drop_in_paths)
     _require(
         before.main_pid == checked.pid
@@ -488,7 +489,7 @@ def observe_embedding_gpu_batch_ready(
         _require(read("cmdline", 8192) == b"\0".join(value.encode() for value in arguments) + b"\0")
         actual, expected = (process / "cwd").stat(), CUDA_LOADER_EMPTY_DIRECTORY.lstat()
         _require((actual.st_dev, actual.st_ino) == (expected.st_dev, expected.st_ino))
-        _require(inspect_cpu_unit(unit, template=GPU_BATCH_TEMPLATE) == before)
+        _require(inspect_embedding_gpu_batch_unit(unit, template=GPU_BATCH_TEMPLATE) == before)
 
     current()
     descriptors = _handoff_descriptors(captured, checked.pid)
