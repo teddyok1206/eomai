@@ -578,3 +578,63 @@ unknown으로 보존한다. 새 identity의 재실행이나 성공/CPU 선택으
 
 P2_F_ROOT_CONTROLLER=SOURCE_VERIFIED, SOURCE_OWNER_RUNTIME_LINK=PENDING,
 LIVE_GPU_BATCH_UNIT=NOT_RUN, CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
+
+## P2-G 기존 source-owner 재인가 연결
+
+계산용 batch가 source authority를 만들지 않도록 실제 runner의 기존 source owners를 재사용한다.
+DOCUMENT child는 `CatalogEncodingOwnerAdmission.resolve_launch`가 원 actor/command/step/Job,
+encoding ownership·원 input Artifact·source plan을 다시 확인한다. QUERY child는 기존
+`CatalogReferenceQueryOwnerAdmission.resolve_execution_sources`와 원 launch/native input closure를
+사용한다. selected device의 원 Workflow/launch만 받으며 기존 CPU 요청을 CUDA로 재해석하지 않는다.
+
+이 연결은 짧은 기존 fenced transaction마다 현재 source를 다시 읽는다. 대형 batch 전체를
+매 frame마다 복사·parse·hash하지 않는다. 원 batch/child SHA 두 개로 immutable child map을
+조회하고, 해당 child의 원 입력과 scope/profile을 검증한 뒤 늦은 actor/lease fence를 적용한다.
+순서와 중복은 최초 tuple/set 검증으로 고정한다. lookup O(1), 해당 child의 source 검증은 기존
+owner의 indexed lookup/Artifact materialization 비용이며 DB binary·새 queue/table/cache는 없다.
+
+이는 source 재인가 adapter이지 root allocation 증거나 route/reservation·실행 완료 승인이 아니다.
+root↔owner 연결의 kernel peer/release fence와 원자적 장치 결정/예약 및 기존 child commit의
+후속 실행 영수증은 별도로 연결해야 한다. 입력 hash나 actor label만으로 그 권한을 추측하지 않는다.
+
+묶음의 schema 상한1024행이 원180초 안의 실행을 보장하지 않는다. 원 cold/warm 실측과
+실제 길이·child 수를 기준으로 후속 owner packing을 canary에서 검증하고 유한 묶음을 나눈다.
+상한을 채우기 위해 원 native timeout을 늘리거나 partial 계산을 CPU로 재실행하지 않는다.
+
+### P2-G 검증 체크포인트 — 2026-10-24 UTC
+
+- `CatalogEmbeddingBatchSourceAuthorization`을 실제 기존 DOCUMENT encoding owner와 QUERY
+  source owner에 연결했다. child마다 원 Workflow/command/step/Job·input Artifact 또는 원
+  launch·현재 source/control closure를 다시 확인하고, 마지막 actor/lease 확인을 반복한다.
+  OPERATOR와 LOCAL_INDEXING_SERVICE를 구분하며 서비스 작업을 사람 계정으로 위장하지 않는다.
+- root port도 batch/child SHA 두 개만 전달하도록 좁혔다. 원 batch는 최초 한 번만 검증하고,
+  child map의 고정 참조로 조회한다. 잘못된 scope/profile/actor/원 input·missing launch·현재
+  권한 철회·만료 lease는 실패하며 최신 입력이나 성공한 과거 fence로 대신하지 않는다.
+- source/root controller·기존 owner/executor·routing·dependency 회귀292 PASS, source 집중18 PASS,
+  production2개 모듈 strict mypy, Python5개 scoped Ruff/format 및 diff whitespace PASS다.
+  겹치는 수는 합산하지 않는다. 테스트의 IAM/수치 실행 seam은 합성이며 운영 권한 승인이나
+  실제 GPU canary의 PASS가 아니다.
+- 공식 marker-guarded disposable PostgreSQL에서 source 재인가 신규2개, 원 QUERY checkpoint/
+  producer/receipt/replay와 일반·mixed encoding reservation 회귀를 함께 실행해 **37 PASS**다.
+  동시 두 root가 원 command lock과 원 Job 이력을 유지함을 확인했고, 실제 synthetic command
+  lease를 만료시키면 새 source fence가 거부되고 기존 이력은 바뀌지 않는다. 새 source 검사만을
+  근거로 아직 미연결인 원자적 route/batch claim까지 검증됐다고 확대하지 않는다.
+- 처음에는 fixture seed request 대신 실제 저장된 원 request를 사용하도록 바로잡았고,
+  기존 generic fixture의300초 profile을 느슨하게 허용하지 않고 정확한180초 정책을 별도 test
+  Artifact로 발행했다. 기존 nonowner 회귀가 요구하는 runtime role도 공식 `--reconcile`로
+  같은 임시 DB에 준비했다. 실패한 r1/r2/r4 로그는 보존했으며 생산 코드의 검증을 완화하지 않았다.
+- 실제 migration cycle `20261019_0058`과 test role 준비·정리까지 완료했다. 테스트 DB
+  `/tmp/eom-api-testdb-20261024174055_151c4d7f`는 공식 guard/marker 검사 후 삭제했으며 운영
+  DB/계정/Artifact는 변경하지 않았다. 최종 기록은 `/tmp/eom-gpu-batch-source-20261024-r5.log`다.
+  원37개 테스트의 실패 로그와 임시 준비 script는 Git 밖에 보존한다.
+- 기존 tmux EOM2의 Linux 인증을 그대로 재사용했다. 새 로그인·서비스 배포/재시작·GPU/모델
+  실행은0이며 API/채팅/INDEX owner는 active다. 기존 CPU 운영 기본값과 과거 비교 결과를 유지했다.
+
+다음은 route를 원자적으로 고정하는 owner의 batch allocation/reservation, root 서비스의 실제
+peer/release 연결, 자식별 canonical commit/replay의 successor 관찰 영수증이다. 이어 paired
+current-target indexes와 numerical runtime 설치, 실제 bounded CUDA/CPU fallback·공존·처리량·
+배포/activation/rollback을 검증한다. 이번 source/DB 검증은 전체 goal 완료가 아니다.
+
+P2_G_SOURCE_AUTHORIZATION=SOURCE_VERIFIED, SOURCE_COMMAND_DB_CONCURRENCY=PASS,
+BATCH_ROUTE_RESERVATION_AND_RUNTIME_LINK=PENDING, LIVE_GPU_BATCH_UNIT=NOT_RUN,
+CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.

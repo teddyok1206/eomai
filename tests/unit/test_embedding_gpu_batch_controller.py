@@ -96,8 +96,9 @@ def driver(machine, monkeypatch):
             state.events.append("actual-owner-admission")
             return batch
 
-        def authorize_child(self, original_batch, child):
-            assert original_batch == batch and child in batch.children
+        def authorize_child(self, batch_sha256, child_sha256):
+            assert batch_sha256 == batch.request_sha256
+            assert child_sha256 in {child.request.request_sha256 for child in batch.children}
             state.authorization_count += 1
             state.events.append("source-fence")
             if state.authorize_fault == "deny":

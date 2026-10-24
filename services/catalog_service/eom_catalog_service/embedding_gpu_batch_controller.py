@@ -28,7 +28,6 @@ from eom_catalog_contracts.embedding_native_installation_evidence import (
     parse_rootlocal_evidence_document,
 )
 from eom_catalog_contracts.embedding_work_batch import (
-    EmbeddingWorkBatchChild,
     EmbeddingWorkBatchInput,
     parse_embedding_work_batch_input,
 )
@@ -104,9 +103,7 @@ class EmbeddingGpuBatchSourceOwner(Protocol):
         """Atomically pin original allocation/route and reserve exact authorized child work."""
         ...
 
-    def authorize_child(
-        self, batch: EmbeddingWorkBatchInput, child: EmbeddingWorkBatchChild
-    ) -> None:
+    def authorize_child(self, batch_request_sha256: str, child_request_sha256: str) -> None:
         """Reauthorize the original actual actor, sources, policy and immutable references."""
         ...
 
@@ -480,15 +477,13 @@ def run_embedding_gpu_batch(
         batch = parse_embedding_work_batch_input(
             source_owner.admit_allocation(captured.prepared.request, ready)
         )
-        children = {child.request.request_sha256: child for child in batch.children}
+        children = tuple(child.request.request_sha256 for child in batch.children)
 
-        def authorize(child: EmbeddingWorkBatchChild) -> None:
-            check: Callable[[EmbeddingWorkBatchInput, EmbeddingWorkBatchChild], object] = (
-                source_owner.authorize_child
-            )
-            _require(check(batch, child) is None)
+        def authorize(child_sha256: str) -> None:
+            check: Callable[[str, str], object] = source_owner.authorize_child
+            _require(check(batch.request_sha256, child_sha256) is None)
 
-        for child in batch.children:
+        for child in children:
             authorize(child)
         captured.assert_precompute()
         grant, raw = _grant(captured, ready, batch)
@@ -514,7 +509,7 @@ def run_embedding_gpu_batch(
             os.close(directory)
 
         def authorize_check(check: EmbeddingGpuCheckChild) -> None:
-            authorize(children[check.child_request_sha256])
+            authorize(check.child_request_sha256)
 
         while (claim := channel.authorize_next(authorize_check)) is None:
             pass
@@ -522,7 +517,7 @@ def run_embedding_gpu_batch(
 
         def verify(original_claim: EmbeddingGpuResultReady) -> None:
             _require(original_claim == claim)
-            for child in batch.children:
+            for child in children:
                 authorize(child)
             captured.assert_current()
             # Worker may exit as soon as ACK arrives, including before send() returns.
@@ -536,7 +531,7 @@ def run_embedding_gpu_batch(
         retirement = retire_embedding_gpu_batch(terminal, captured)
         _socket_effect("stop", _unit(captured))
         _require(terminal.original_outcome == "SUCCEEDED")
-        for child in batch.children:
+        for child in children:
             authorize(child)
         return CompletedEmbeddingGpuBatch(batch, grant, result, ranges, retirement)
     except BaseException as error:
