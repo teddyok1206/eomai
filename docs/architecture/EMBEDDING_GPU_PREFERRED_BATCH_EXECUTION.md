@@ -927,3 +927,11 @@ P2-K 검증 결과:
 
 P2_K_RECEIPT=SOURCE_AND_DB_AND_OS_VERIFIED, CHILD_CANONICAL_COMPLETION=PENDING,
 LIVE_GPU_BATCH=NOT_RUN, GPU_PREFERRED_ACTIVE=NO, CURRENT_DEFAULT=CPU, GOAL=ACTIVE.
+
+P2-K source commit `ecb653fce3e8968bb50d2e083f64b402b2e6e215`를 main에 push했다.
+공식 API/platform build-only와 wheel RECORD 검사 PASS이며 산출물은
+`/tmp/eom-api-build/ecb653fce3e8968bb50d2e083f64b402b2e6e215.XUMSQL/dist`다.
+그3개 wheel을 `/tmp/eom-batch-receipt-wheel-P0OSvTh3`에 추출해 API Python `-I -B`, cwd `/`에서
+신규 receipt/publication/read를 포함한9개 모듈과 packaged schema를 읽었다. EOM dependency413개가
+모두 추출 wheel에서 해결됐으며 torch/transformers import는 없었다. 이는 설치된 실제 service
+identity/sandbox/GPU 실행·activation을 대신하지 않는 data-only wheel 검증이다.
