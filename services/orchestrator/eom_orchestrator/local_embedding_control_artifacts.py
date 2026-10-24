@@ -24,6 +24,14 @@ from eom_catalog_contracts.models import Sha256, UtcDatetime
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.models import JobId
+from eom_workflow.embedding_batch_plan import (
+    BATCH_SELECTION_SCHEMA_REF,
+    EmbeddingBatchSelection,
+)
+from eom_workflow.embedding_device_routing import (
+    EMBEDDING_DEVICE_ROUTING_SCHEMA_REF,
+    EmbeddingDeviceRoutingPolicy,
+)
 from eom_workflow.local_embedding_execution_policy import (
     LOCAL_EMBEDDING_POLICY_SCHEMA_REF,
     LOCAL_EMBEDDING_SERVICE_POLICY_SCHEMA_REF,
@@ -66,6 +74,8 @@ EXECUTION_POLICY_ARTIFACT_TYPE = "control_local_embedding_execution_policy"
 REFERENCE_QUERY_POLICY_ARTIFACT_TYPE = "control_reference_query_execution_policy"
 PRIVATE_CHAT_QUERY_POLICY_ARTIFACT_TYPE = "control_private_chat_query_execution_policy"
 OWNED_INPUT_ARTIFACT_TYPE = "control_local_embedding_owned_input"
+BATCH_SELECTION_ARTIFACT_TYPE = "control_embedding_batch_selection"
+DEVICE_ROUTING_POLICY_ARTIFACT_TYPE = "control_embedding_device_routing_policy"
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,6 +113,42 @@ class LocalEmbeddingControlArtifactPublisher:
             artifact_type=SOURCE_PLAN_ARTIFACT_TYPE,
             idempotency_key=idempotency_key,
             created_at=created_at,
+        )
+
+    def publish_batch_selection(
+        self,
+        selection: EmbeddingBatchSelection,
+        *,
+        idempotency_key: str,
+    ) -> PublishedLocalEmbeddingControl:
+        """Canonical bounded selection, not source permission or a compute grant."""
+        checked = EmbeddingBatchSelection.model_validate(raw_similarity_contract_value(selection))
+        return self._publish(
+            raw=canonical_json_bytes(checked.model_dump(mode="json")),
+            semantic_sha256=checked.selection_sha256,
+            member="selection.json",
+            schema=BATCH_SELECTION_SCHEMA_REF,
+            artifact_type=BATCH_SELECTION_ARTIFACT_TYPE,
+            idempotency_key=idempotency_key,
+            created_at=ControlPublicationTime.FIRST_OBSERVATION,
+        )
+
+    def publish_device_routing_policy(
+        self,
+        policy: EmbeddingDeviceRoutingPolicy,
+        *,
+        idempotency_key: str,
+    ) -> PublishedLocalEmbeddingControl:
+        """Publish a candidate without implicitly activating either runtime."""
+        checked = EmbeddingDeviceRoutingPolicy.model_validate(raw_similarity_contract_value(policy))
+        return self._publish(
+            raw=canonical_json_bytes(checked.model_dump(mode="json")),
+            semantic_sha256=checked.policy_sha256,
+            member="policy.json",
+            schema=EMBEDDING_DEVICE_ROUTING_SCHEMA_REF,
+            artifact_type=DEVICE_ROUTING_POLICY_ARTIFACT_TYPE,
+            idempotency_key=idempotency_key,
+            created_at=ControlPublicationTime.FIRST_OBSERVATION,
         )
 
     def publish_observed_source_plan(

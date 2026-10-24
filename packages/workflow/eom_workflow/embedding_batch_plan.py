@@ -18,8 +18,15 @@ from eom_catalog_contracts.inference_transfer_experiment import (
     ExperimentView,
     ExperimentViewRecipe,
 )
-from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
+from eom_catalog_contracts.knowledge import (
+    ApprovedItemKnowledgeSourceV2,
+    KnowledgeGraphSnapshotPointer,
+)
 from eom_catalog_contracts.models import Sha256
+from eom_catalog_contracts.registered_item_review_solution import (
+    RegisteredItemReviewSolutionEvidence,
+)
+from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import (
     ApprovedReferenceItemAnchor,
     SimilarityConsumerPurpose,
@@ -47,7 +54,7 @@ from eom_workflow.schemas import local_embedding_admission_schema_registry
 
 BATCH_PLAN_PROTOCOL = "embedding-batch-plan/1.0"
 BATCH_PLAN_SCHEMA_REF = "eom://schemas/workflow/embedding-batch-plan/1.0"
-BATCH_PLAN_SCHEMA_SHA256 = "sha256:0875e9c224653515f8f13c82a7159987f448a28efee8afe4c583c1788655cc6b"
+BATCH_PLAN_SCHEMA_SHA256 = "sha256:94fe09d2dc756e15b77c3f61883a4dd76f6028b463199a5ad62bd6bf700f1337"
 BATCH_SELECTION_SCHEMA_REF = BATCH_PLAN_SCHEMA_REF + "#/$defs/selection"
 MAX_BATCH_PLAN_BYTES = 512 * 1024
 
@@ -139,6 +146,20 @@ class EmbeddingBatchQueryOptions(_PlanValue):
         return self
 
 
+class RegisteredReviewBatchAnchor(_PlanValue):
+    """INDEX-only original review pointers; never manufacture a V10 solution report."""
+
+    basis: Literal["REGISTERED_ITEM_REVIEW"]
+    source: ApprovedItemKnowledgeSourceV2
+    profile: RegisteredReviewProfilePointer
+    review_evidence: RegisteredItemReviewSolutionEvidence
+
+    @model_validator(mode="after")
+    def exact_source(self) -> Self:
+        _require(self.source == self.review_evidence.source)
+        return self
+
+
 class EmbeddingBatchSelection(_PlanMessage):
     message_type: Literal["SELECTION"]
     purpose: Literal["INDEX", "REFERENCE_QUERY"]
@@ -146,7 +167,9 @@ class EmbeddingBatchSelection(_PlanMessage):
     corpus_id: str = Field(pattern=r"^corpus_[0-9a-f]{32}$")
     graph_snapshot: KnowledgeGraphSnapshotPointer
     access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
-    anchors: tuple[ApprovedReferenceItemAnchor, ...] = Field(min_length=1, max_length=32)
+    anchors: tuple[ApprovedReferenceItemAnchor | RegisteredReviewBatchAnchor, ...] = Field(
+        min_length=1, max_length=32
+    )
     recipe: ExperimentViewRecipe
     views: tuple[ExperimentView, ...] = Field(min_length=1, max_length=3)
     query: EmbeddingBatchQueryOptions | None
@@ -162,6 +185,10 @@ class EmbeddingBatchSelection(_PlanMessage):
         _require(self.views == tuple(view for view in VIEWS if view in self.views))
         _require((self.query is None) == (self.purpose == "INDEX"))
         _require(self.purpose != "REFERENCE_QUERY" or self.scope.actor_kind == "OPERATOR")
+        _require(
+            self.purpose != "REFERENCE_QUERY"
+            or all(isinstance(anchor, ApprovedReferenceItemAnchor) for anchor in self.anchors)
+        )
         _require(
             self.graph_snapshot.manifest_artifact.sha256 == self.graph_snapshot.manifest_sha256
         )

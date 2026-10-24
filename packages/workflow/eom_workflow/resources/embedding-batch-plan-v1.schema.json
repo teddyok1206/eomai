@@ -24,6 +24,17 @@
     }
   ],
   "$defs": {
+    "registeredReviewAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["basis", "source", "profile", "review_evidence"],
+      "properties": {
+        "basis": {"const": "REGISTERED_ITEM_REVIEW"},
+        "source": {"$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/approvedItemSource"},
+        "profile": {"$ref": "eom://schemas/knowledge/item-inference-transfer/2.0#/$defs/profilePointer"},
+        "review_evidence": {"$ref": "eom://schemas/knowledge/registered-item-review-solution-evidence/1.0"}
+      }
+    },
     "failed": {
       "type": "object",
       "additionalProperties": false,
@@ -149,7 +160,10 @@
           "minItems": 1,
           "maxItems": 32,
           "items": {
-            "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/anchor"
+            "oneOf": [
+              {"$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/anchor"},
+              {"$ref": "#/$defs/registeredReviewAnchor"}
+            ]
           }
         },
         "recipe": {
@@ -181,7 +195,19 @@
         "selection_sha256": {
           "$ref": "#/$defs/hash"
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"purpose": {"const": "REFERENCE_QUERY"}}},
+          "then": {
+            "properties": {
+              "anchors": {
+                "items": {"$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/anchor"}
+              }
+            }
+          }
+        }
+      ]
     },
     "request": {
       "type": "object",
