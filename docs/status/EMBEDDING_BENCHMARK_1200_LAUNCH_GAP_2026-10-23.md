@@ -667,3 +667,25 @@ rollback까지 연결해야 한다. 이 구현 미완료 자체를 성능 NO-GO�
   전체2회 cap 보강 후 focused57 PASS, scoped strict mypy4 modules·Ruff/format PASS.
   아직 수정 unit 설치/다음 실제 GPU 측정 완료를 주장하지 않는다. CPU1/3,
   GPU0/3 완료 상태이며 원 request/input/model/수치/예산은 그대로다.
+
+### 2026-10-24 07:57 UTC — 실제 native 전체 argv 점검 통과
+
+- 수정 source `5d967eff36322db029e8228fa17fb4bd0b369870`을 commit/push하고 clean
+  source에서 wheel build/RECORD 검증 후 private owner만 설치했다. platform SHA는
+  `4c7b58ee0fb74635409d256ae326e9ecdcd53e73c5b43d28635fbb82a0dcb9e8`, contracts는
+  `4b8de08fae1cb19862fe12a5fa661672e7d9d523c854df28d87ecb9f5e56e71c`.
+  설치 RECORD SHA는 `6c30c2fb469b2ed7b3fd08db734943eac87c1d84d0c4c71b07cbaa7eb10aea95`.
+- 원986b6f…template와2a 실패 evidence를 보존하고 corrected e28a65…CUDA unit만
+  설치·daemon-reload했다. CPU template/numerical SDK/model은 그대로다.
+- 같은 root sandbox의18.530초 preflight에서 실제 owner proof 접근과 실제 CPU/CUDA
+  numerical interpreter·각 native UID/GID에서 전체9개 argv/원 bootstrap/SIGUSR1
+  예약을 검증했다. runpy callback을 parser-only 검사로 대체해 model/CUDA imports가
+  없음을 확인했다. 두 device 모두 PASS이며 model0·DB write0이다. 코드 prefix만
+  확인한 이전 preflight와 구별한다. 수치 구현/selected backend pin도 PASS다.
+- finite program SHA는
+  `58fedfeefb049f7f6450899ef9c6d3b92ccfd56d324965393380288abc37fc93`이며,
+  unit `eom-embedding-benchmark-retry-5d967eff.service`가 EOM2 실제 입력창에 유지돼 있다.
+  새 로그인 뒤 원2a의 BEFORE_READY recovery1회와 남은 ordinal2..6만 실행한다.
+  기존 f4 recovery event는 유지하고 새로운 Job/CPU1 재실행은 하지 않는다.
+- public API2047173/Web2049670/QUERY2047176/INDEX130161의 원 invocation과 active
+  상태가 모두 유지됨을 다시 확인했다. 아직 GPU 실측 시작/성능 완료가 아니다.
