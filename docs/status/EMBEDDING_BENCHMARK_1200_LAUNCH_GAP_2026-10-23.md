@@ -591,3 +591,30 @@ rollback까지 연결해야 한다. 이 구현 미완료 자체를 성능 NO-GO�
   scoped strict mypy11 modules·Ruff/format·diff check PASS. 새 GPU model 실행0,
   새 Job0, 기존 public API/Web/INDEX/QUERY process/invocation은 유지했다.
   아직 suffix/성능 실험 완료나 GPU 기본 활성화를 의미하지 않는다.
+
+### 2026-10-24 07:41 UTC — 47d3e538 설치 및 실제 입력창 유지
+
+- source `47d3e5388c9dd2fca3509ef4b3911c663e0be4f7`을 commit/push하고 clean clone에서
+  표준 build-only를 실행했다. platform wheel SHA는
+  `e3c398f2784b9551b433e5eedddebb829f174044aea1b4aa1190db9fffa6bb5a`, API contracts는
+  `acef95fe4498129385ef79dfbbfe33f129fbb506718527a751470f9ee61489d5`이다.
+  private owner SDK RECORD 검증·설치 후 RECORD raw SHA는
+  `495fd3b648a75d7b8b6867836aaf4c09b8c686f6dd8396ee0e161412cdb978cc`이다.
+- 원 failed CUDA unit의 fdstore0와 실행 중 CUDA benchmark 부재를 확인한 뒤 원
+  template를 보호된 root helper 폴더에 보존하고 CUDA bootstrap만 새986b6f…bytes로
+  교체·daemon-reload했다. CPU template c34214…와 numerical d381 SDK는 그대로다.
+  public API/Web/INDEX/QUERY는 재시작하거나 재배포하지 않았다.
+- 같은 sandbox에서 설치된 CPU/CUDA selection·numerical implementation pins·원
+  pre-ACK proof·CPU1/new CPU measurement code equivalence 검사가18.663초에 PASS했다.
+  모델0회·DB write0회다. 아직 GPU 수치/성능 PASS를 의미하지 않는다.
+- finalization 전체 재검증은 변경된 mixed-device 정상/거부 경로를 포함한 앞선
+  사례 통과 후 중단했다. 나머지는 이번 diff와 무관한 기존 coverage이며, 실측 중
+  synthetic 검증의 CPU 경합을 피했다. 종료 과정 pytest의 interrupted fixture
+  stash KeyError도 발생했으므로 전체 suite PASS로 기록하지 않는다. 이전20 PASS
+  증거는 별개이며 이번 source 전체 PASS의 대체 근거로 쓰지 않는다.
+- 보호된 finite controller `series.py` SHA는
+  `8eb7491b2629c98f871a5d53897838caf3750b4892a579285f97b99846212b1e`.
+  unit `eom-embedding-benchmark-retry-47d3e538.service`는 root prelogin 검사를 마치고
+  EOM2의 실제 guiadmin 입력창에서 대기 중이다. 입력창을 다시 만들거나 종료하지
+  않는다. 앞선 사용자 인증은 성공했지만 원 실패 controller 종료 시 memory-only
+  token도 폐기됐다. 새 입력 전에는 Job 복구 이벤트나 새 모델 실행을 하지 않는다.
