@@ -1080,9 +1080,60 @@ P2_M_ROOT_OWNER_RENDEZVOUS=SOURCE_AND_OS_VERIFIED, CANONICAL_QUERY_REPLAY=DB_VER
 ACTUAL_SELECTED_CHILD_DISPATCH=PENDING, LIVE_GPU_BATCH=NOT_RUN,
 GPU_PREFERRED_ACTIVE=NO, CURRENT_DEFAULT=CPU, GOAL=ACTIVE.
 
-사용자 후속 검토 순서: GPU 목표를 실제 운영까지 완료한 뒤 완료 commit과 실제 installed/active
-release set을 체크포인트로 기록한다. 그때
-`/home/eom/EOM_CODE_REVIEW_POST_CHECKPOINT_2026-10-24.md`의 정적 후보를 대조하고 이미 해결된
-항목은 제외한다. HWPX 중단 복구 → token/account 잠금 순서 → admin version/idempotent replay →
-document lease/응답 시간 순서다. 후보를 재현된 장애로 간주하거나 현재 GPU 작업을 되돌리지 않는다.
-README 정리 `4e9c962e`는 별도 승인된 기존 commit으로 유지하며 중복 반영하지 않는다.
+P2-M source commit `933466502dce27de3ef176a81d94eea04329ea3a`를 main에 push했다.
+공식 API/platform build-only 및 RECORD PASS이며 산출물은
+`/tmp/eom-api-build/933466502dce27de3ef176a81d94eea04329ea3a.KAQYI5/dist`다.
+그3개 wheel을 `/tmp/eom-gpu-batch-root-wheel-2QBtiu9X`에 추출해 API Python `-I -B`, cwd `/`에서
+새 root/control 진입점 등을 포함한17모듈을 import했다. dependency421개가 모두 추출 wheel에서
+해결됐고 bootstrap member와 packaged schema pin도 일치했다. torch/transformers import는 없었다.
+이 build-only 결과는 실제 service identity/sandbox/GPU 실행·운영 설치·activation 증거가 아니다.
+
+## P2-N 기존 parent 계획과 실제 owner 실행 연결
+
+별도 실행 tracker/queue/schema를 만들지 않고 P2-I parent admission/store, P2-M fixed root
+rendezvous, P2-G 실제 child source/lease와 P2-K 결과 publication을 한 application use case로
+연결한다. 정본은 기존 parent Job history와 canonical execution receipt이며 로컬 channel은
+원 physical lifecycle 동안만 유지한다. child 준비/예약/완료는 QUERY/DOCUMENT의 기존 owner에
+남기고 GPU READY 이후 확정된 route를 받아 실행 입력을 만들게 한다.
+
+첫 allocation transaction만 원 dispatch를 소유한다. 이미 존재하는 parent는 같은 history를
+반환하되 root를 시작하거나 현재 GPU 상태로 재선택하지 않는다. actual ROOT_READY/ROOT_BUSY에서
+관측 hash와 route를 만들고 짧은 admitted SQL root에서 고정한다. source·input/binary IO·연산 동안
+SQL root를 유지하지 않는다. CUDA run은 BOUND → staging → source CHECK → 검증 → ACK → 기존
+receipt publisher 순서이며 ACK 뒤 current source/lease를 다시 확인한다. BUSY 경로는 원 CPU
+route만 반환하고 아직 실행되지 않은 CPU 결과를 만들어내지 않는다.
+
+주 접근은 indexed parent key와 bounded child 순서/원 control 메시지다. 시간/공간 O(children),
+벡터는 기존 단일 버퍼를 공유한다. root grant와 실제 source 권한은 별개이며 어느 하나만으로
+실행/성공을 허용하지 않는다. context 중단·관측 불명은 원 기록/dispatch marker를 보존한다.
+자동 재시작·새 identity·failed→success·unknown→CPU fallback은 없다. 직접 SQL/소켓 처리를
+각 runtime에 복사하는 대안 대신 기존 adapter와 공식 application owner를 조합한다.
+
+P2-N 구현·검증:
+
+- `CatalogEmbeddingBatchExecution.open`은 새 parent allocation의 commit을 확인한 뒤 실제 fixed
+  root adapter를 호출한다. replay는 원 planning history만 돌려주며 새 dispatch를 하지 않는다.
+  actual root READY/BUSY의 **전체 frame hash**와 시각으로 route를 기록하고 current source를
+  재확인한다. BUSY는 CPU route만 허용하고 CPU 계산/완료를 대신하지 않는다.
+- CUDA active handle은 한 번만 실행할 수 있다. exact child binding과 실제 authorization owner를
+  확인한 뒤 원 input staging, root CHECK/완료, local result 검증, fresh source 검증/ACK, 기존
+  canonical receipt publication을 순서대로 연결했다. context/결과 오류 뒤 handle 재사용도 거부한다.
+  소켓은 ACK 뒤 닫을 수 있고 publisher는 현재 권한/lease와 terminal snapshot으로 재확인한다.
+- guarded disposable PostgreSQL62 PASS(93.57s), 공식 cleanup PASS다. 신규 application12건과
+  기존50건이며 로그 `/tmp/eom-gpu-batch-admission-20261024-r11.log`다. parent/Artifact SQL은
+  실제로 실행했고 동시 두 caller의 한 dispatch 수렴, 미상 dispatch/Root 응답의 재실행 금지,
+  late parent 거부, child 준비 중 중단, child 권한/결과 실패, CPU route replay 고정, 정확한
+  receipt 발행을 확인했다. root IPC·unit·숫자·current IAM leaf는 명시적 합성 seam으로 실제
+  GPU/sandbox/운영 admission 근거가 아니다.
+- 첫 DB r10은 schema 재검증으로 값은 같지만 Python object가 달라진다는 fixture의 잘못된
+  `is` 검사 때문에9 failed/50 passed였다. 객체 identity 대신 immutable value 일치로 수정하고
+  원 marker DB에서 r11을 재실행한 뒤 공식 cleanup했다. 원 실패 로그는 보존한다.
+- pure route7건과 dependency6건, 총13 PASS(13.84s)다. 최초 unit의2건은 wire에 datetime 객체를
+  넣은 새 adapter 오류를 발견했다. UTC JSON 문자열로 직렬화한 뒤 재검증했으며 schema나
+  hash 검증을 완화하지 않았다. production1모듈 strict mypy, Python3개 Ruff/format/diff PASS다.
+- 실제 selected QUERY/DOCUMENT child 준비/예약과 설치 runtime composition은 다음 단계다.
+  이번 application 연결만으로 새로운 GPU 정책을 활성화하거나 기존 CPU 검색을 바꾸지 않았다.
+
+P2_N_FINITE_OWNER_APPLICATION=SOURCE_AND_DB_VERIFIED,
+ACTUAL_SELECTED_CHILD_DISPATCH=PENDING, LIVE_GPU_BATCH=NOT_RUN,
+GPU_PREFERRED_ACTIVE=NO, CURRENT_DEFAULT=CPU, GOAL=ACTIVE.
