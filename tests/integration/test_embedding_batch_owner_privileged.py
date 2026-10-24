@@ -82,6 +82,11 @@ def _wait(child):
     pytest.fail("test-only child failed to terminate within its original deadline")
 
 
+def test_fixed_root_socket_group_matches_actual_application_primary_group(owned):
+    # Actual host account/group lookup only: no user/group mutation or GPU work.
+    control_connection._require_controller_socket_group()
+
+
 @pytest.mark.parametrize("wait_after_ack", [False, True])
 @pytest.mark.parametrize("verify_outputs", [False, True])
 def test_actual_source_owner_pid_uid_sender_and_root_read_only_input_round_trip(

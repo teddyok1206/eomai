@@ -24,6 +24,9 @@ def local(control_local, monkeypatch):
         connection, "fixed_owner_identity", lambda: CpuHandoffIdentity(os.getuid(), os.getgid())
     )
     monkeypatch.setattr(connection, "require_fixed_cpu_unit_template", Mock())
+    monkeypatch.setattr(
+        connection.grp, "getgrnam", Mock(return_value=SimpleNamespace(gr_gid=os.getgid()))
+    )
     status = SimpleNamespace(
         process_started=False, active_state="inactive", need_daemon_reload=False
     )
@@ -101,6 +104,26 @@ def test_unavailable_or_changed_boundary_never_consumes_dispatch(local, monkeypa
         with pytest.raises(ValueError):
             connection.dispatch_embedding_batch_control(listener)
     run.assert_not_called()
+    assert not (staged.path / ".dispatch-attempted").exists()
+
+
+@pytest.mark.parametrize("fault", ("missing", "different_primary_gid"))
+def test_root_socket_group_mismatch_is_rejected_before_dispatch(local, monkeypatch, fault):
+    staged, _ = local
+    lookup = Mock(return_value=SimpleNamespace(gr_gid=os.getgid() + 1))
+    if fault == "missing":
+        lookup.side_effect = KeyError("eom")
+    monkeypatch.setattr(connection.grp, "getgrnam", lookup)
+    run = Mock()
+    monkeypatch.setattr(connection.subprocess, "run", run)
+    with (
+        connection.owner_embedding_batch_listener(staged) as listener,
+        pytest.raises(ValueError, match="EMBEDDING_BATCH_CONTROL_CONNECTION_INVALID"),
+    ):
+        connection.dispatch_embedding_batch_control(listener)
+    lookup.assert_called_once_with("eom")
+    run.assert_not_called()
+    connection.inspect_cpu_unit.assert_not_called()
     assert not (staged.path / ".dispatch-attempted").exists()
 
 

@@ -159,7 +159,7 @@ def test_fixed_unit_hash_bootstrap_and_secret_boundaries():
         "GPU_BATCH %i",
         "StartLimitBurst=1",
         "Restart=no",
-        "SupplementaryGroups=eom-workflow-runner",
+        "SupplementaryGroups=eom\n",
         "InaccessiblePaths=/etc/eom",
         "CAP_DAC_READ_SEARCH",
     ):

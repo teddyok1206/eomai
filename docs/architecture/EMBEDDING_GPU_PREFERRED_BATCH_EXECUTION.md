@@ -1366,3 +1366,77 @@ image/trainer 공존·처리량·GPU 기본값 activation/rollback은 여전히 
 
 P2_P_CUDA_PREFIX=BYTE_AUDITED_NOT_ADMITTED, P2_P_OWNER_CANDIDATE=STAGED_NOT_ACTIVE,
 ACTUAL_GPU_BATCH=NOT_RUN, GPU_PREFERRED_ACTIVE=NO, CURRENT_DEFAULT=CPU, GOAL=ACTIVE.
+
+## P2-Q 실제 native CUDA 자격 검증
+
+byte-audited numerical56e545c4와 immutable owner c34ef319를 명시적으로 구분해 사용한다.
+기존 config1.3/probe1.0/receipt2.1 schema·고정 native probe unit·두 ACK/live OS 관측·same-live
+seal/read-back/retirement를 그대로 재사용한다. 새 configuration은 원3e98/948f의 독립 raw/semantic
+pin으로부터 순수 revision 함수로 만들며 수치/모델/host/resource/schema 핀은 바꾸지 않는다.
+정본은 protected root-local config/설치 증거와 원 prefix inventory다. 준비된 config만으로 GPU
+source 권한이나 실행 grant를 얻지 않는다. 별도 queue/table/DB write나 새 worker protocol은 없다.
+
+주 접근은 고정 revision/hash lookup과 한 유한 unit 관측이다. 작은 config 값 외 prefix/모델을
+재복사하지 않는다. root owner는 보호된 wheel의 실제 installed bytes를 확인한 뒤 SDK를 import하고
+원 prefix publication lock을 유지한다. probe는 새 고정 execution identity로 한 번만 실행한다.
+실패/미상 시 원 unit/lease/proof를 보존하고 실제 상태를 확인하며 자동으로 새 unit을 실행하지 않는다.
+기존 성공 probe JSON을 새 설치의 증명으로 재사용하거나 old FAILED를 고치지 않는다. 성공해도
+모델/tokenizer/forward0의 설치 자격만 확인하며, batch source/권한·계산·CPU fallback·운영 activation은
+별도 gate다. 필요 bootstrap은 이미 검증된 기존 root operation을 pin 갱신해 사용하고 원본은 보존한다.
+
+## P2-R 고정 GPU batch unit 준비와 실제 물리 경계
+
+기존 schema-first Root/owner/worker adapter를 운영 고정 unit으로 설치하되 enable/default/claim은
+하지 않는다. 실제 CPU selection977df5…와 새 CUDA config2c3b/receiptcee52e…/bundle의 exact profile로
+INDEX/QUERY policy 후보를 만든다. 합성 CPU profile이나 가짜 admission을 정책에 넣지 않는다.
+기존 closed native backend-env codec을 사용하며 CPU/CUDA space는8a2f…/39bc…로 별개다.
+
+정본은 보호된 config/설치 증거 및 원 verified wheel이다. root policy 파일은 명시적 실행 입력
+materialization이며 아직 Catalog에 released/activated된 source policy나 정본 parent Job이 아니다.
+실제 Source/Catalog/Artifact 경계는 계속 필요하다. 고정 unit의 세 파일/Polkit49와 새 폴더/환경만
+준비한다. 기존 파일은 덮어쓰지 않고 identity/소유/권한을 확인한다. O(고정 파일 수)이며 새 DB,
+service actor, queue나 Worker sudo/group grant는 없다. 실제 hardware-only READY/BUSY/중단 검사는
+원 controlled unit과 원 actor UID로 수행하고 source/교육 품질/최종 GPU 배포 PASS로 확대하지 않는다.
+오류는 원 unit/lease/record를 보존해 조사한다. 이 stage의 rollback은 아직 사용하지 않는 새 unit/
+selection의 비활성 유지이며 기존 CPU 서비스·인덱스·실패 이력은 그대로다.
+
+### P2-Q 실제 결과와 P2-R 배포 전 발견
+
+2026-10-24 UTC에 native CUDA no-forward 자격 검증을 실제로 완료했다. config logical3e98의
+새 revision2c3bb102308440b18f7887939aeeaa3c는 rawSHA
+`ebf0f0be479fde046d440759fe7231095998d0ff6d320b61afb6888e188f443c`, semanticSHA
+`9144e66d7eaaa5339b97ffe6a31e00d87cf95019c2f32f1b67f4b5c715788fd0`다. 원 수치 runtime
+`d0887315a3b7afd0d86dceb10228c157c72f7161dbdbb01a582d97be1d8c7560` 및 model/resource 핀은
+불변이며 새 receipt rawSHA는
+`cee52e34ba376fb1f4fb7c16ca2d52a3b873c03dd290c63d996e16e5d8ea9917`다.
+
+원 probe execution8250f571af28416eb239c323495b8c5b는 READY ACK23:07:38.804099 UTC,
+FINAL ACK23:08:34.516842 UTC, terminal23:08:58.574080 UTC로 종료했다. same-live seal,
+독립 root metadata read-back, 원 성공 unit retirement 및 PID1 FDSTORE release PASS다.
+root controller exit0/101.214초, native MainPID0/ExecMainStatus0/NFileDescriptorStore0이며
+GPU는0%/2MiB로 반환됐다. model/tokenizer/forward0, CUDA init1/synchronize1이다.
+로그는 `/tmp/eom-gpu-batch-native-qualification-20261024.log`, 보호된 요약은
+`/var/lib/eom-gpu-batch-qualification-20261024/native-probe/summary.json`다.
+이는 실제 numerical batch 실행이나 현재 Source/IAM·운영 default의 PASS가 아니다.
+
+고정 root batch unit 설치 전에 잘못된 `SupplementaryGroups=eom-workflow-runner`를 발견했다.
+실제 trusted application 계정은 UID990/primary GID1000(`eom`)이며 같은 이름의 Unix group은
+없다. 아직 설치/시작하지 않은 후보의 설정 오류이지 실패한 운영 unit 재현이라고 주장하지 않는다.
+root peer UID/GID0과 기존 capability 제한은 유지하고 root supplementary group만 실제 socket
+GID1000의 `eom`으로 지정한다. workers나 기존 계정·그룹은 변경하지 않는다. 원 dispatch adapter에서
+고정 group의 존재 및 actual owner primary GID 일치를 **dispatch marker 소비 전** 확인한다.
+누락/불일치 회귀는 systemctl 실행과 marker 생성을 모두 막는다. 고정 unit hash는 새 bytes와 함께
+갱신하며 별도 schema/DB/queue/worker protocol은 바꾸지 않는다. 이 변경은 root owner SDK만
+후속 release로 준비한다. 이미 검증한 numericalSDK56e545c4/config2c3b/receipt를 재설치하지 않는다.
+
+실제 CPU selection977df5…로 만든 INDEX/QUERY physical policy 후보의 rawSHA는 각각
+`bc340fc04659d1c57cb7ea3c5f4a62815ddd2c240deb978e28867d071d57c4d0`,
+`df44e6bf2c841338a0e302ce243ebe60e7a4195d647ec9c0ac05c1018b8d3727`이다.
+CPU space8a2fcad6…/CUDA space39bc2c31…는 별개이며 policy는 아직 canonical source authority나
+운영 released selection이 아니다. CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO,
+ACTUAL_GPU_BATCH=NOT_RUN, GOAL=ACTIVE를 유지한다.
+
+그룹 수정 집중 unit46 PASS/12.06초, strict mypy1 PASS, Ruff/lint/format 및 diff-check PASS다.
+실제 root/runner UID·소켓/DAC·고정 그룹 조회의 opt-in 격리 suite17 PASS/8.18초
+(`/tmp/eom-gpu-batch-owner-os-20261024-r12.log`, exit0), dependency/resource packaging16
+PASS/32.87초다. actual unit/numerical/IAM/DB 검증을 이 테스트로 대체하지 않는다.

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import grp
 import os
 import re
 import selectors
@@ -36,8 +37,9 @@ from eom_catalog_service.embedding_batch_owner_channel import (
 from eom_catalog_service.embedding_batch_owner_identity import embedding_batch_owner_start_ticks
 from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer
 
-BATCH_CONTROL_TEMPLATE_SHA256 = "a1d7f9a228d865e98d57306dd127f8beb98576481a393f0990e2ed514e6a824c"
+BATCH_CONTROL_TEMPLATE_SHA256 = "86701226a9d69144f327abad442d8c627ec6e075c143146f88b4dddfde067e63"
 _ENV = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
+_CONTROLLER_SOCKET_GROUP = "eom"
 
 
 def _require(condition: bool) -> None:
@@ -48,6 +50,16 @@ def _require(condition: bool) -> None:
 def _owner() -> None:
     value = fixed_owner_identity()
     _require(os.getresuid() == (value.owner_uid,) * 3 and os.getresgid() == (value.owner_gid,) * 3)
+
+
+def _require_controller_socket_group() -> None:
+    # The root controller keeps peer GID 0 and connects through this supplementary
+    # group; the trusted application account's name is not its primary group.
+    try:
+        group = grp.getgrnam(_CONTROLLER_SOCKET_GROUP)
+    except KeyError as exc:
+        raise ValueError("EMBEDDING_BATCH_CONTROL_CONNECTION_INVALID") from exc
+    _require(group.gr_gid == fixed_owner_identity().owner_gid)
 
 
 def _peer(connection: socket.socket) -> BenchmarkUnixPeer:
@@ -200,6 +212,7 @@ def dispatch_embedding_batch_control(listener: OwnerEmbeddingBatchListener) -> N
     listener.assert_current()
     staged = listener.staged
     require_fixed_cpu_unit_template(BATCH_CONTROL_TEMPLATE, BATCH_CONTROL_TEMPLATE_SHA256)
+    _require_controller_socket_group()
     unit = embedding_batch_control_unit(staged.attempt_hex)
     before = inspect_cpu_unit(unit, template=BATCH_CONTROL_TEMPLATE)
     _require(
