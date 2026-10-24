@@ -478,7 +478,7 @@ admission은 아직 별도 검증이 필요하며 정식 v1.2 Job은 여전히 �
   계정 enrollment/UI 파일은 이번 commit/build에 포함하지 않는다. 공용 API/Web의
   로그인 복구 release와 native numerical worker/model/unit은 유지한다.
 
-### 2026-10-24 06:47 UTC — suffix 전용 수정본 설치 및 실제 인증 대기
+### 2026-10-24 06:46 UTC — suffix 전용 수정본 설치 및 실제 인증 대기
 
 - 수정 source `e4e53e8715e3a05567fb930b5e3205b29822381c`을 commit/push했다.
   별도 clean clone `/tmp/eom-benchmark-resume-source.JW1zLseW`의 정확한 commit으로
@@ -504,3 +504,27 @@ admission은 아직 별도 검증이 필요하며 정식 v1.2 Job은 여전히 �
   `COMPLETED_PREFIX_LOGIN_READY preserved_cpu=1 new_jobs=0`에 도달했다.
   tmux EOM2의 실제 Studio 인증 입력을 기다리고 있다. 현재 모델은 실행하지 않았고
   원 Job/CPU1 결과를 바꾸지 않았다. 이 기록을 suffix 완료로 확대 해석하지 않는다.
+
+### 재개 goal의 종료 증거 목록
+
+- [x] 실제 TCP peer pending 경쟁 조건 수정과 wrong accepted UID/중복/timeout 거부 회귀.
+- [x] 기존 CPU1의 canonical receipt를 유지하는 suffix 제어·실제 old/new measurement
+  파일 동등성 검증·원 Job 유지. private 설치 및 무모델 사전 검사와 API peer 관찰.
+- [ ] 실제 재인증 후 원 Job의 ordinal2..6 실행 및 registered receipt6개 확인.
+- [ ] 고정 입력/token/runtime의 수치·순위·동일 device 반복과 원 성능 threshold 판정.
+- [ ] peak RSS/VRAM, capacity, physical lease, native cgroup/PID/fdstore/GPU 정리 증거.
+- [ ] 기존 완료 QUERY에 대한 남은5회 재조회와 INDEX/QUERY identity 유지 결과.
+- [ ] 최종 canonical result/Artifact/hash와 원 요청 finalization replay(dispatch0).
+- [ ] 실제 sandbox 및 image/trainer 공존·복구 증거를 해당 실행/설치에 대조.
+- [ ] GPU 전환 또는 CPU 유지의 실측 기반 운영 결정과 관련 read-back/rollback 증거.
+- [ ] 최종 한국어 문서·Slack 및 원 설계 대비 requirement-by-requirement audit.
+
+기본값 단계는 단순 flag가 아니다. 현재 source의
+`local_indexing_service_runtime.py`는 non-CPU profile을 거부하고,
+`reference_query_owner_runtime.py`는 CPU resource validator/launcher를 구성한다.
+측정에서 GPU가 실제로 우수하고 다른 gate도 통과하면 원 GPU runtime 설계§8에 따라
+compatible DOCUMENT/QUERY family·별도 CUDA index/current policy·실제 GPU query·CPU
+rollback까지 연결해야 한다. 이 구현 미완료 자체를 성능 NO-GO로 포장하지 않는다.
+반대로 실제 correctness/performance/resource gate가 실패하면 임계값이나 입력을
+바꾸지 않고 CPU 유지 사유와 실제 측정 결과를 남긴다. `MEASURED`와 안전한 GPU 기본
+활성화는 서로 다른 판정이며, 현재는 둘 다 아직 완료하지 않았다.
