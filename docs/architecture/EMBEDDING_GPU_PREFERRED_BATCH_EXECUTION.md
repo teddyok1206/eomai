@@ -1242,3 +1242,72 @@ Web f15e66b8, private QUERY2eef9b20와 CPU 기본값, 수치 interpreter/prefix/
 양쪽 인덱스 coverage·이미지/trainer 공존 및 최종 activation/rollback은 아직 남았다.
 따라서 이 source/staging commit은 사용자가 요청한 **GPU 목표 완료 후 리뷰 checkpoint가 아니다**.
 22:28 UTC milestone Slack `devreport_a0c5c951587a47dc8edd0e5ce8b4fe32`도 SENT/HTTP200이다.
+
+## P2-P 설치된 CUDA 수치 코드의 후속 준비
+
+P2-O owner 설치만으로 고정 numerical leaf가 새 batch entry를 import할 수는 없다. 다음 경계는
+기존 `install_index_runtime.sh publish-private-successor CUDA_INDEX_FP32`다. 그 공식 installer와
+accepted OLD interpreter의 byte/host audit를 재사용하며 runtime admission/activation을 대신하지
+않는다. 정본은 검증한56e545c4 source archive/wheel과 기존 GPU lease archive다. 기존 Conda/
+공개 numerical package·모델을 재설치하거나 CPU/private QUERY prefix를 바꾸지 않는다.
+
+주 접근은 immutable archive hash→고정 경로 lookup, source/wheel payload의 단회 선형 검증과
+보호된 prefix 복사다. 새 DB/table/queue/schema/dependency는 없다. 기존 설치 입력1.3에 새 SDK
+source/wheel 및 audit bootstrap byte pin만 반영한다. host/CUDA extension/Conda/public package
+pins와 원 created_at/history는 보존하며, 현재 host가 그 핀과 다르면 preflight에서 중단한다.
+새 SDK를 실행하기 전 accepted OLD의 비실행 source→wheel/prefix 검사를 통과해야 한다.
+
+현재 CUDA interpreter 사용자와 실제 GPU 계산이 없는 시점에만 수행한다. installer의 기존
+root-private lock/quarantine/copy/audit와 predecessor backup을 사용한다. 실패 후에는 phase와
+실제 prefix 상태부터 확인하고 맹목적으로 재실행하지 않는다. 성공해도 새 configuration/
+installed proof/probe/service selection이 없으면 GPU 실행은 여전히 불가하다. rollback 대상은
+보존한 numerical predecessor와 명시적 config 선택이며 기존 결과/FAILED 기록은 지우지 않는다.
+검증을 생략한 pip inplace 교체나 CPU/CUDA space 재사용은 대안으로 채택하지 않는다.
+
+새 prefix의 자격 증거는 새 configuration revision에 귀속시킨다. 기존 운영 one-off의 순수
+revision 투영 규칙을 `derive_native_configuration_revision`으로 재사용한다. 기존 schema1.0–1.3을
+그대로 파싱하고 독립 raw/semantic pin·logical ID·원 revision을 확인한 뒤 revision과 self-hash만
+바꾼다. 시간/공간 O(작은 config bytes), 새 DB/프로토콜/permission 또는 publication side effect는
+없다. 파일 보호·현재 prefix/host·실제 no-forward probe/same-live seal은 기존 root owner가 따로
+검증한다. 이 함수가 성공했다고 admission을 발급하지 않는다. 모델/장치/host/resource 핀까지
+같이 바꾸는 범용 patch API는 만들지 않고, 원 고정 one-off를 매번 복사하는 대안을 줄인다.
+
+P2-P source 체크포인트:
+
+- 순수 configuration revision 투영과 기존 native config/host/CUDA 계약222 PASS(9.99s),
+  wheel payload/import·dependency7 PASS(17.91s)다. 로그는 각각
+  `/tmp/eom-gpu-native-configuration-revision-20261024.log`,
+  `/tmp/eom-gpu-native-revision-packaging-20261024.log`다. production1모듈 strict mypy,
+  scoped Python2개 Ruff/format와 diff PASS다. 첫 Ruff import 정렬 지적은 formatter로 수정했고
+  최종 lint는 PASS다. 이 pure helper는 config를 발급/활성화하지 않는다.
+- 실제 CPU root-controller interpreter로 준비한56e545c4 owner의20모듈/dependency470개를
+  `-I -B`, cwd `/`에서 import했다. 모델 import와 실행은 없었으며 API Python만의 결과와
+  구분한다. 실제 service identity/sandbox의 실행 성공이라고 확대하지 않는다.
+- 최초 numerical 입력 생성에서 전체 API source archive70,144,000 bytes가 기존64MiB
+  제한에 걸렸다. 제한을 늘리지 않고, 같은56e545c4의 선언된 package roots·원 helper/lock을
+  포함하는 별도 Git source archive22,056,960 bytes를 준비했다. 이 archive의 rawSHA는
+  `ecf437c78dc888b48f25a6ddc2ac31a2a7bc59070d45e6937239125e76766882`다.
+  원 API source archive/설치 release는 바꾸지 않았다.
+- 기존 input1.3을 재사용한 새 audit input rawSHA는
+  `b1e8636b79979acfbfdd7fef901d0a2f7a4e699c63dcf110a2147278bd1553ec`다.
+  CUDA predecessor tree는 `b1abe7a028298666d590803db28c8960ef18bfa3d750c62eb291fa8e9b047c34`로
+  공식 fingerprint했다. 이 값들은 source bytes/설치 계획의 핀이지 GPU 실행 권한이 아니다.
+- 첫 설치 호출은 wheelhouse 인수 누락으로 NOT_STAGED에서 거부됐다. r2는 필수 CUDA cache
+  mount가 없는 일반 host namespace라 BEFORE_HOST_BYTES_PREFLIGHT에서 거부됐다. 원 prefix를
+  교체하지 않았으며 각 실패 로그를 보존한다. protected/cache-bound r3도 계산/설치 전 짧게
+  종료됐다. 그 단계의 GPU process 검사는 device를 숨긴 비실행 sandbox 밖으로 옮겼다.
+- cache-bound r4는 실제 HOST_BYTES_PREFLIGHT_PASS_NOT_ADMITTED 뒤 최초 archive retention에서
+  거부됐다. 공식 API build의 상위 `/tmp/eom-api-build`가775인 반면 설치 입력은 바로 아래의
+  전용700 root를 요구한다는 것을 원 `_index_source`의 read-only 재현으로 확인했다.
+  package ZIP32/필수 source member는 양쪽 archive 모두 PASS였다. 공유 build의 권한을 바꾸거나
+  검증을 완화하지 않고 전용700 input workspace에 같은 wheel bytes를 materialize했다.
+- 실패한 r4 creator의 empty/uncommitted archive reservation은 실제 원 unit FAILED/MainPID0,
+  root700·빈 디렉터리를 확인한 뒤 `.failed-empty-9581f722-gpu-batch-20261024-r4`로 이동해
+  보존했다. bytes/committed archive/Artifact 삭제는 없다. 네 입력의 공식 source DAC preflight는
+  모두 PASS다. r5는 보호된 새 root operation으로 시작했으며 원 실패를 성공으로 바꾸지 않았다.
+  설치 안의 `fuser`는 네트워크 socket 경고를 출력했다. 그것만으로 전체 process 부재를
+  증명했다고 간주하지 않으며 별도 fixed CUDA process/unit 및 GPU 관찰과 구분한다.
+
+P2_P_NATIVE_CONFIGURATION_REVISION=SOURCE_VERIFIED,
+CUDA_SUCCESSOR_INSTALLATION=IN_PROGRESS, ACTUAL_GPU_BATCH=NOT_RUN,
+GPU_PREFERRED_ACTIVE=NO, CURRENT_DEFAULT=CPU, GOAL=ACTIVE.
