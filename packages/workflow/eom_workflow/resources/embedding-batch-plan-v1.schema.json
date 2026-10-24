@@ -1,0 +1,401 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/embedding-batch-plan/1.0",
+  "title": "Immutable finite embedding planning history; not numerical execution or authority",
+  "description": "Device-neutral selection metadata is canonical in an Artifact. Planning completion is not GPU/CPU execution, permission, output publication or retry authority. All actor/source and physical root observations require installed independent owners.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/selection"
+    },
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/allocation"
+    },
+    {
+      "$ref": "#/$defs/routed"
+    },
+    {
+      "$ref": "#/$defs/bound"
+    },
+    {
+      "$ref": "#/$defs/failed"
+    }
+  ],
+  "$defs": {
+    "failed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "message_type", "request_sha256", "error_code", "evidence", "record_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-batch-plan/1.0"},
+        "message_type": {"const": "FAILED"},
+        "request_sha256": {"$ref": "#/$defs/hash"},
+        "error_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{0,63}$"},
+        "evidence": {"$ref": "#/$defs/member"},
+        "record_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "scope": {
+      "$ref": "eom://schemas/knowledge/embedding-work-batch-input/1.0#/$defs/scope"
+    },
+    "member": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+    },
+    "queryOptions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "consumer_purpose",
+        "topics",
+        "unit_ids",
+        "maximum_sources",
+        "top_k"
+      ],
+      "properties": {
+        "consumer_purpose": {
+          "enum": [
+            "PAST_EXAM_VARIATION",
+            "ITEM_AUTHORING",
+            "ITEM_REVIEW",
+            "GENERAL_CHAT_READ",
+            "MOCK_EXAM_OBSERVATION"
+          ]
+        },
+        "topics": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "unit_ids": {
+          "type": "array",
+          "minItems": 0,
+          "maxItems": 20,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$"
+          }
+        },
+        "maximum_sources": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1024
+        },
+        "top_k": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "message_type",
+        "purpose",
+        "scope",
+        "corpus_id",
+        "graph_snapshot",
+        "access_policy_revision_id",
+        "anchors",
+        "recipe",
+        "views",
+        "query",
+        "selection_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-batch-plan/1.0"
+        },
+        "message_type": {
+          "const": "SELECTION"
+        },
+        "purpose": {
+          "enum": [
+            "INDEX",
+            "REFERENCE_QUERY"
+          ]
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "corpus_id": {
+          "type": "string",
+          "pattern": "^corpus_[0-9a-f]{32}$"
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+        },
+        "access_policy_revision_id": {
+          "type": "string",
+          "pattern": "^accessrev_[0-9a-f]{32}$"
+        },
+        "anchors": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/anchor"
+          }
+        },
+        "recipe": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/recipe"
+        },
+        "views": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 3,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "CONTENT_ONLY",
+                "CONCRETE_FACETS",
+                "METADATA_ONLY"
+            ]
+          }
+        },
+        "query": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/queryOptions"
+            }
+          ]
+        },
+        "selection_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "message_type",
+        "batch_id",
+        "parent_request_sha256",
+        "purpose",
+        "scope",
+        "selection_manifest",
+        "selection_sha256",
+        "routing_policy",
+        "routing_policy_sha256",
+        "child_selection_sha256s",
+        "request_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-batch-plan/1.0"
+        },
+        "message_type": {
+          "const": "REQUEST"
+        },
+        "batch_id": {
+          "type": "string",
+          "pattern": "^embeddingbatch_[0-9a-f]{32}$"
+        },
+        "parent_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "purpose": {
+          "enum": [
+            "INDEX",
+            "REFERENCE_QUERY"
+          ]
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "selection_manifest": {
+          "$ref": "#/$defs/member"
+        },
+        "selection_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "routing_policy": {
+          "$ref": "#/$defs/member"
+        },
+        "routing_policy_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "child_selection_sha256s": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/hash"
+          }
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "allocation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "message_type",
+        "request_sha256",
+        "control_request",
+        "record_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-batch-plan/1.0"
+        },
+        "message_type": {
+          "const": "ALLOCATION"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "control_request": {
+          "$ref": "eom://schemas/knowledge/embedding-gpu-allocation-control/1.0#/$defs/request"
+        },
+        "record_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "routed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "message_type",
+        "request_sha256",
+        "allocation_record_sha256",
+        "observation",
+        "decision",
+        "record_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-batch-plan/1.0"
+        },
+        "message_type": {
+          "const": "ROUTED"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "allocation_record_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "observation": {
+          "$ref": "eom://schemas/workflow/embedding-device-routing/1.0#/$defs/observation"
+        },
+        "decision": {
+          "$ref": "eom://schemas/workflow/embedding-device-routing/1.0#/$defs/decision"
+        },
+        "record_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "childBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection_sha256",
+        "workflow_id",
+        "step_run_id",
+        "native_job_id",
+        "workflow_request_sha256",
+        "launch_association_sha256",
+        "native_input_sha256"
+      ],
+      "properties": {
+        "selection_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "workflow_id": {
+          "type": "string",
+          "pattern": "^workflow_[0-9a-f]{32}$"
+        },
+        "step_run_id": {
+          "type": "string",
+          "pattern": "^steprun_[0-9a-f]{32}$"
+        },
+        "native_job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "workflow_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "launch_association_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "native_input_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "bound": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "message_type",
+        "request_sha256",
+        "route_record_sha256",
+        "batch_request_sha256",
+        "resource_profile_sha256",
+        "children",
+        "record_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-batch-plan/1.0"
+        },
+        "message_type": {
+          "const": "BOUND"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "route_record_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "batch_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "resource_profile_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "children": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 32,
+          "items": {
+            "$ref": "#/$defs/childBinding"
+          }
+        },
+        "record_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    }
+  }
+}

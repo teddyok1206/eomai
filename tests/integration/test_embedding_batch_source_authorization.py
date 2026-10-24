@@ -8,8 +8,10 @@ from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from threading import Barrier
 from types import SimpleNamespace
+from uuid import uuid4
 
 import pytest
+from eom_identifiers import content_sha256
 from eom_orchestrator.local_embedding_control_artifacts import (
     LocalEmbeddingControlArtifactPublisher,
 )
@@ -18,6 +20,7 @@ from eom_orchestrator.native_reference_query_coordinator import (
     read_native_reference_query_launch,
 )
 from eom_workflow.compiler import compile_definition_data
+from eom_workflow.embedding_batch_plan import EmbeddingBatchChildBinding
 from eom_workflow.reference_query_execution import (
     parse_reference_query_execution_policy,
     parse_supported_reference_query_workflow_request,
@@ -193,6 +196,7 @@ def authorized(prepared_query, monkeypatch):
         request=selected_request,
         launch=launch,
         history=original,
+        batch=batch,
     )
 
 
@@ -229,5 +233,30 @@ def test_disposable_expired_command_revokes_child_fence_without_new_job_or_state
     with authorized.publisher.sessions.begin() as session:
         assert (
             NativeReferenceQueryCoordinator(authorized.request, authorized.launch).read(session)
+            == authorized.history
+        )
+
+
+def test_disposable_binding_callback_matches_actual_original_native_job_and_workflow(authorized):
+    launch = authorized.launch
+    body = dict(
+        selection_sha256=content_sha256({"synthetic_logical_source": 1}),
+        workflow_id=launch.workflow_id,
+        step_run_id=launch.step_run_id,
+        native_job_id=launch.native_launch_job_id,
+        workflow_request_sha256=authorized.request.request_sha256,
+        launch_association_sha256=launch.association_sha256,
+        native_input_sha256=authorized.batch.children[0].request.request_sha256,
+    )
+    authorized.fence.authorize_binding(EmbeddingBatchChildBinding.model_validate(body))
+    with pytest.raises(ValueError):
+        authorized.fence.authorize_binding(
+            EmbeddingBatchChildBinding.model_validate(
+                body | {"native_job_id": "job_" + uuid4().hex}
+            )
+        )
+    with authorized.publisher.sessions.begin() as session:
+        assert (
+            NativeReferenceQueryCoordinator(authorized.request, launch).read(session)
             == authorized.history
         )

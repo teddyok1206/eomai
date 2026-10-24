@@ -11,6 +11,11 @@ from typing import Any, Literal
 
 from eom_catalog_contracts.embedding_contract_values import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_model_recipe import same_embedding_payload_recipe
+from eom_catalog_contracts.embedding_reference_query_v11 import EmbeddingReferenceQueryInputV11
+from eom_catalog_contracts.embedding_work_batch import (
+    EmbeddingWorkBatchInput,
+    parse_embedding_work_batch_input,
+)
 from eom_catalog_contracts.models import Sha256, UtcDatetime
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from jsonschema import Draft202012Validator, FormatChecker
@@ -255,3 +260,45 @@ def validate_embedding_device_route_replay(
         return original
     except Exception:
         raise EmbeddingDeviceRoutingError() from None
+
+
+def validate_embedding_device_batch_profile(
+    policy: EmbeddingDeviceRoutingPolicy,
+    decision: EmbeddingDeviceRoutingDecision,
+    batch: EmbeddingWorkBatchInput,
+) -> EmbeddingWorkBatchInput:
+    """One numerical profile invariant for planning and actual index-route composition."""
+    policy = EmbeddingDeviceRoutingPolicy.model_validate(policy)
+    decision = EmbeddingDeviceRoutingDecision.model_validate(decision)
+    batch = parse_embedding_work_batch_input(batch)
+    selected = decision.selected
+    profile, resources = selected.profile, selected.profile.resource_profile
+    if (
+        decision.policy_sha256 != policy.policy_sha256
+        or selected != (policy.cuda if selected.backend.device == "CUDA" else policy.cpu)
+        or batch.purpose
+        != {"INDEX": "DOCUMENT", "REFERENCE_QUERY": "REFERENCE_QUERY"}.get(policy.purpose)
+        or batch.routing_decision_sha256 != decision.decision_sha256
+        or batch.resource_profile_sha256 != resources.resource_profile_sha256
+        or batch.timeout_seconds > resources.timeout_seconds
+        or batch.expected_vector_bytes >= resources.output_max_bytes
+    ):
+        raise EmbeddingDeviceRoutingError()
+    for child in batch.children:
+        request = child.request
+        if (
+            child.space.model_spec != profile.space.model_spec
+            or child.space.runtime != profile.space.runtime
+            or request.batch_size != resources.batch_size
+            or request.threads != resources.threads
+        ):
+            raise EmbeddingDeviceRoutingError()
+        if isinstance(request, EmbeddingReferenceQueryInputV11):
+            if (
+                request.spaces.document != profile.space
+                or request.recipe.recipe_sha256 != policy.view_recipe_sha256
+            ):
+                raise EmbeddingDeviceRoutingError()
+        elif request.space != profile.space:
+            raise EmbeddingDeviceRoutingError()
+    return batch

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 import pytest
 from eom_catalog_contracts.embedding_work_batch import parse_embedding_work_batch_input
 from eom_identifiers import content_sha256
+from eom_workflow.embedding_batch_plan import EmbeddingBatchChildBinding
 from eom_workflow.reference_query_execution import parse_reference_query_launch_association
 from eom_workflow_runner import embedding_batch_source_authorization as module
 from eom_workflow_runner.local_embedding_admission import ResolvedLocalEmbeddingAdmission
@@ -322,3 +323,40 @@ def test_missing_or_wrong_purpose_source_binding_is_rejected_before_io(document,
         with pytest.raises(ValueError):
             module.CatalogEmbeddingBatchSourceAuthorization(document.batch, sources)
     assert not document.roots and not query.roots
+
+
+@pytest.mark.parametrize("fixture_name", ["document", "query"])
+def test_plan_child_pointer_uses_exact_original_workflow_step_job_and_launch(request, fixture_name):
+    value = request.getfixturevalue(fixture_name)
+    if fixture_name == "document":
+        original = value.source.association.intent
+        launch_sha = value.source.association.association_sha256
+        request_sha = value.source.owner.execution.request.request_sha256
+    else:
+        original = value.binding.launch
+        launch_sha = original.association_sha256
+        request_sha = value.binding.request.request_sha256
+    body = dict(
+        selection_sha256=content_sha256({"logical_child": 1}),
+        workflow_id=original.workflow_id,
+        step_run_id=original.step_run_id,
+        native_job_id=original.native_launch_job_id,
+        workflow_request_sha256=request_sha,
+        launch_association_sha256=launch_sha,
+        native_input_sha256=value.batch.children[0].request.request_sha256,
+    )
+    binding = EmbeddingBatchChildBinding.model_validate(body)
+    value.fence.authorize_binding(binding)
+    assert value.roots == ["open", "close"]
+    for field, replacement in (
+        ("workflow_id", "workflow_" + "f" * 32),
+        ("step_run_id", "steprun_" + "f" * 32),
+        ("native_job_id", "job_" + "f" * 32),
+        ("workflow_request_sha256", "sha256:" + "f" * 64),
+        ("launch_association_sha256", "sha256:" + "f" * 64),
+    ):
+        with pytest.raises(ValueError):
+            value.fence.authorize_binding(
+                EmbeddingBatchChildBinding.model_validate(body | {field: replacement})
+            )
+    assert value.roots == ["open", "close"]

@@ -12,6 +12,7 @@ from eom_catalog_contracts.embedding_work_batch import (
     parse_embedding_work_batch_input,
 )
 from eom_orchestrator.native_reference_query_coordinator import read_native_reference_query_launch
+from eom_workflow.embedding_batch_plan import EmbeddingBatchChildBinding
 from eom_workflow.local_embedding_encoding_dispatch import (
     SupportedEmbeddingAssociation,
     parse_supported_embedding_association,
@@ -177,3 +178,39 @@ class CatalogEmbeddingBatchSourceAuthorization:
     def authorize_batch(self) -> None:
         for child in self._batch.children:
             self.authorize_child(self._batch.request_sha256, child.request.request_sha256)
+
+    def authorize_binding(self, binding: EmbeddingBatchChildBinding) -> None:
+        """Validate the original canonical Workflow/Job references before plan BOUND writes."""
+        binding = EmbeddingBatchChildBinding.model_validate(binding)
+        _require(binding.native_input_sha256 in self._sources)
+        source = self._sources[binding.native_input_sha256]
+        if isinstance(source, DocumentBatchSource):
+            association = source.association
+            intent = association.intent
+            expected = (
+                intent.workflow_id,
+                intent.step_run_id,
+                intent.native_launch_job_id,
+                source.owner.execution.request.request_sha256,
+                association.association_sha256,
+            )
+        else:
+            launch = source.launch
+            expected = (
+                launch.workflow_id,
+                launch.step_run_id,
+                launch.native_launch_job_id,
+                source.request.request_sha256,
+                launch.association_sha256,
+            )
+        _require(
+            (
+                binding.workflow_id,
+                binding.step_run_id,
+                binding.native_job_id,
+                binding.workflow_request_sha256,
+                binding.launch_association_sha256,
+            )
+            == expected
+        )
+        self.authorize_child(self._batch.request_sha256, binding.native_input_sha256)

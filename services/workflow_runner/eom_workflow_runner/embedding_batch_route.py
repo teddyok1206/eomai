@@ -5,7 +5,6 @@ from __future__ import annotations
 from eom_catalog_contracts.embedding_reference_query_v11 import EmbeddingReferenceQueryInputV11
 from eom_catalog_contracts.embedding_work_batch import (
     EmbeddingWorkBatchInput,
-    parse_embedding_work_batch_input,
 )
 from eom_catalog_contracts.inference_transfer_experiment import VIEWS, ExperimentView
 from eom_catalog_service.embedding_device_index_pair import (
@@ -16,6 +15,7 @@ from eom_workflow.embedding_device_routing import (
     EmbeddingDeviceRoutingDecision,
     EmbeddingDeviceRoutingPolicy,
     EmbeddingGpuAllocationObservation,
+    validate_embedding_device_batch_profile,
     validate_embedding_device_route_replay,
 )
 
@@ -41,37 +41,13 @@ def validate_embedding_batch_route(
     Its selected index is immutable: no latest or incomplete-device substitution.
     """
     selected = validate_embedding_device_route_replay(policy, allocation, decision).selected
-    batch = parse_embedding_work_batch_input(batch)
-    profile, resources = selected.profile, selected.profile.resource_profile
-    expected_purpose = {"INDEX": "DOCUMENT", "REFERENCE_QUERY": "REFERENCE_QUERY"}.get(
-        policy.purpose
-    )
-    if (
-        type(indexes) is not tuple
-        or batch.purpose != expected_purpose
-        or batch.routing_decision_sha256 != decision.decision_sha256
-        or batch.resource_profile_sha256 != resources.resource_profile_sha256
-        or batch.timeout_seconds > resources.timeout_seconds
-        or batch.expected_vector_bytes >= resources.output_max_bytes
-    ):
+    profile = selected.profile
+    if type(indexes) is not tuple:
         raise EmbeddingBatchRouteError()
-    for child in batch.children:
-        request = child.request
-        if (
-            child.space.model_spec != profile.space.model_spec
-            or child.space.runtime != profile.space.runtime
-            or request.batch_size != resources.batch_size
-            or request.threads != resources.threads
-        ):
-            raise EmbeddingBatchRouteError()
-        if isinstance(request, EmbeddingReferenceQueryInputV11):
-            if (
-                request.spaces.document != profile.space
-                or request.recipe.recipe_sha256 != policy.view_recipe_sha256
-            ):
-                raise EmbeddingBatchRouteError()
-        elif request.space != profile.space:
-            raise EmbeddingBatchRouteError()
+    try:
+        batch = validate_embedding_device_batch_profile(policy, decision, batch)
+    except ValueError:
+        raise EmbeddingBatchRouteError() from None
     if batch.purpose == "DOCUMENT":
         if indexes:
             raise EmbeddingBatchRouteError()

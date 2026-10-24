@@ -12,6 +12,20 @@
 - API·Codex worker에 GPU 할당, DB/NAS 직접 접근 또는 임의 실행 권한을 추가하지 않는다.
 - 새 vector engine, 작업 큐, 상시 모델 daemon, 외부 LLM API는 도입하지 않는다.
 
+### 사용자가 지정한 GPU 완료 이후의 작업 순서
+
+2026-10-24에 사용자가 GPU 목표를 먼저 실제 운영까지 완료한 뒤 다음 정적 리뷰를 대조하도록
+요청했다. 이 후속 요청 때문에 진행 중 GPU 작업을 되돌리거나 현재 목표의 완료 조건을 줄이지 않는다.
+GPU 완료 commit과 실제 installed/active compatible release set을 먼저 checkpoint로 기록한다.
+그 이후 `/home/eom/EOM_CODE_REVIEW_POST_CHECKPOINT_2026-10-24.md`의 수정 후보12건과 추가
+확인4건을 해당 checkpoint의 코드·운영 상태와 대조한다. 건수와 성격은 사용자 인계 정보이며
+아직 검증한 결함이나 실제 재현 결과로 분류하지 않는다. 이미 해결된 후보는 제외한다.
+
+후속 우선순위는 단일 문항 HWPX의 중단 후 복구 → 토큰 갱신/계정 변경 잠금 순서 → 관리자
+버전 검사/멱등 재전송 복구 → 문서 처리 lease/응답 대기 정렬이다. 기존 모듈·공식 application
+경계를 유지하고 동시성·중단·재전송은 disposable DB에서 검증한다. 원 실패 기록을 성공으로
+바꾸지 않는다. README 정리 `4e9c962e`는 이미 commit/push됐으므로 중복 반영하지 않는다.
+
 [완료한 비교](../operations/EMBEDDING_GPU_MEASURED_2026-10-24.md)의 원 판정은 KEEP_CPU다.
 warm 문서 배치는 GPU가 약3.97배 빨랐지만 단일 질의 전체 시간은 비슷했다. 새 정책은
 유한 묶음 처리량과 GPU 가용성을 위한 별도 결정이며, 과거 기준·결과를 바꾸지 않는다.
@@ -637,4 +651,71 @@ current-target indexes와 numerical runtime 설치, 실제 bounded CUDA/CPU fall
 
 P2_G_SOURCE_AUTHORIZATION=SOURCE_VERIFIED, SOURCE_COMMAND_DB_CONCURRENCY=PASS,
 BATCH_ROUTE_RESERVATION_AND_RUNTIME_LINK=PENDING, LIVE_GPU_BATCH_UNIT=NOT_RUN,
+CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
+
+## P2-H 원자적 계획·장치 결정·child binding
+
+이 단계의 책임은 수치 실행이 아닌 **유한 묶음의 계획**이다. 기존 Orchestrator Job과 append-only
+JobEvent를 재사용한다. 새 queue/table/worker protocol은 만들지 않는다. 원 선택은 장치와 무관한
+Graph/accepted anchor/recipe/view/scope metadata의 canonical `selection.json` Artifact다. 큰 입력과
+벡터는 기존 경계에 남기고 DB 계획에는 source-selection/policy의 immutable member pointer와
+순서 있는 작은 child commitment만 저장한다. source selection을 단순 SHA로 대체하지 않는다.
+
+logical batch ID + 실제 actor scope의 idempotency key로 원 Job을 식별하며 request hash는 별도로
+비교한다. 원 allocation attempt/control frame을 먼저 독점 기록하고, 검증된 원 물리 결과에 따른
+장치 결정을 한 번 고정한다. 다른 attempt/나중의 GPU 상태는 기존 결정을 바꾸지 않는다. Caller가
+이미 성공한 계획을 읽었다고 새 root unit을 시작할 권한을 얻는 것은 아니다.
+
+선택된 child들은 기존 실제 source owner의 Workflow/step/native Job/launch를 가진다. binding은
+그 identity와 original native input hash만 참조한다. 계획의 BOUND는 그 순서·장치·scope·profile과
+원 decision을 고정할 뿐 **GPU 실행 성공이나 child Artifact 등록 완료를 뜻하지 않는다.** planning
+Job 종료와 numerical/child commit 상태는 구분한다. 실제 actor/source admission과 물리 증거
+검증, encoding reservation·child completion은 기존 별도 owner 경계다.
+
+주 연산은 idempotency indexed lookup, 원 Job row lock, O(n) tuple/set 검증과 monotonic event
+append다. 규모는32 children·작은 metadata이며 binary는 DB에 없다. 동일 root에서 allocation/route
+또는 binding과 해당 planning 상태 전이를 함께 commit한다. 독립 root의 동시 생성은 기존 unique
+key와 한정된 insert-conflict read로 원 history를 반환한다. 불명 실행을 새 identity/장치로 복구하지
+않고 partial transaction·schema/hash/order 오류는 rollback한다. replay는 read-only이며 원 실패를
+성공으로 바꾸지 않는다. 단순 mutable device column이나 file-only lock은 crash/replay 및 실제 DB
+소유권과 장치 선택의 원자성을 보장하지 못하므로 사용하지 않는다. Contracts → pure values,
+Orchestrator → SQL adapter, runner → 실제 source/물리 admission의 의존 방향을 유지한다.
+
+### P2-H 검증 체크포인트 — 2026-10-24 UTC
+
+- schema-first `embedding-batch-plan/1.0` 후보를 정의했다. device-neutral selection은 원 Graph/
+  anchor/recipe/view와 실제 actor scope를 고정하고, request는 정확한 selection/policy Artifact
+  member·revision·raw/self hash와 순서 있는 작은 child commitment를 참조한다. 이 schema와
+  실제 selection/policy 발행·운영 activation은 서로 다른 상태다.
+- `EmbeddingBatchPlanStore`는 기존 Job unique key와 row lock/append-only history를 사용한다.
+  동시 allocation 중 하나만 created=True이고, 다른 root는 원 attempt와 선택을 조회한다. CPU/GPU
+  상태가 바뀌어도 원 route를 교체하지 않는다. BOUND와 planning 종료는 같은 transaction이며
+  중단 시 전부 rollback한다. planning SUCCEEDED는 numerical SUCCEEDED가 아니다.
+- child binding에는 필수 source authorizer가 있고 false 반환도 거부한다. 실제 source adapter는
+  원 Workflow/step/native Job/launch/request/input identity를 대조하고 현재 actor/lease/source를
+  확인한다. 소스·수치 profile 규칙은 workflow의 공통 순수 함수로 이동해 계획과 실제 index-route가
+  같은 규칙을 사용하도록 했다. released predecessor schema/의미/실행 핀은 바꾸지 않았다.
+- 관련 source/route/root-control/index-pair/binary/packaging/dependency283 PASS와 집중133 PASS,
+  production5개 모듈 strict mypy, scoped Python9개 Ruff/format, diff whitespace PASS다. 겹치는
+  수는 합산하지 않는다. 신규 schema의 canonical/mirror hash·JSON Schema2020-12도 확인했다.
+- 공식 marker-guarded disposable PostgreSQL에서17 PASS다. 실제 동시 allocation, 원 요청
+  conflict, route/BOUND replay·중단 rollback·실패 보존, child authority 거부, autoflush on/off와
+  기존 B-tree lookup capability를 확인했다. 실제 원 QUERY Job/command를 사용하는 source binding
+  callback도 확인했다. child 권한이 마지막 확인 중 철회되거나 false를 반환해도 BOUND를 쓰지
+  않으며 exact replay도 늦은 fence를 건너뛰지 않는다. planning fixture의 child authority 및
+  IAM/수치 seam은 합성이므로 이를
+  실제 RAG/GPU 운영 실행으로 보고하지 않는다.
+- 최종 로그는 `/tmp/eom-gpu-batch-plan-20261024-r5.log`이며 임시 DB
+  `/tmp/eom-api-testdb-20261024182722_429882af`를 공식 guard로 검증한 뒤 제거했다. 추가
+  source-binding negative test의 누락된 test import만 보정했고 그 실패 r3 로그는 보존했다.
+  앞선 r1/r2/r4도 각각12/14/15 PASS 및 해당 임시 DB 정리 기록으로 남겨뒀다. 운영 DB/Artifact/계정,
+  기존 실패 이력, 서비스 release/prefix는 변경하지 않았다. Linux 인증은 기존 창을 재사용했다.
+
+다음은 실제 canonical selection/policy 발행·parent request admission과 root↔owner peer/release
+연결, 선택된 child의 기존 예약/완료를 묶는 실행 adapter다. 이어 exact paired indexes, successor
+runtime 설치와 실제 finite GPU/CPU fallback·그림/trainer 공존·처리량·배포/rollback을 검증한다.
+사용자 지정 후속 정적 리뷰는 위 목표를 완료하고 실제 운영 release checkpoint를 고정한 뒤 한다.
+
+P2_H_PLANNING=SOURCE_VERIFIED, PLANNING_DB_CONCURRENCY=PASS,
+OWNER_RUNTIME_CONNECTION=PENDING, LIVE_GPU_BATCH_UNIT=NOT_RUN,
 CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
