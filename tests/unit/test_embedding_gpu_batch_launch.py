@@ -147,7 +147,6 @@ def test_native_unit_keeps_late_bound_input_root_metadata_and_no_worker_path_acc
         "ProtectProc=invisible",
         "CapabilityBoundingSet=\n",
         "InaccessiblePaths=/run/eom-native-embedding-gpu-batch",
-        ":gpu-batch-allocation:read-only",
         " -I -B -m eom_catalog_service.embedding_gpu_batch_entry %i ",
         "StandardInput=file:/run/eom-native-embedding-gpu-batch/%i/input.json",
     ):
@@ -163,4 +162,5 @@ def test_native_unit_keeps_late_bound_input_root_metadata_and_no_worker_path_acc
     ):
         assert required in socket
     assert "Environment=PYTHONPATH=" not in service and "User=root" not in service
+    assert "OpenFile=" not in service  # Bound once by root with an absolute instance path.
     assert "--model" not in service and "ReadWritePaths=/mnt/nas" not in service

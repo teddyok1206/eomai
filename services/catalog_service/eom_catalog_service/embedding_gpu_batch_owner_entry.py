@@ -33,6 +33,9 @@ from eom_catalog_service.embedding_gpu_batch_launch import (
     native_embedding_gpu_batch_unit,
 )
 from eom_catalog_service.embedding_gpu_batch_observation import capture_embedding_gpu_batch_machine
+from eom_catalog_service.embedding_gpu_batch_unit_descriptor import (
+    prepare_embedding_gpu_batch_descriptor,
+)
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
 
@@ -121,6 +124,7 @@ def run_root_embedding_batch_control(attempt_hex: str, *, controller_release: st
         files.assert_unchanged()
         staged.assert_current()
         prepared = prepare_embedding_gpu_batch_handoff(pins, staged.request)
+        prepare_embedding_gpu_batch_descriptor(attempt_hex)
         with capture_embedding_gpu_batch_machine(prepared) as captured:
             files.assert_unchanged()
             run_embedding_gpu_batch_with_owner(captured, channel, owner_start_ticks=birth)

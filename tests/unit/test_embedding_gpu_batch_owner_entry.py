@@ -81,6 +81,8 @@ def test_root_entry_uses_installed_policy_then_original_peer_before_existing_gpu
     prepared = object()
     prepare = Mock(return_value=prepared)
     monkeypatch.setattr(entry, "prepare_embedding_gpu_batch_handoff", prepare)
+    descriptor = Mock()
+    monkeypatch.setattr(entry, "prepare_embedding_gpu_batch_descriptor", descriptor)
     captured = object()
 
     @contextmanager
@@ -92,6 +94,7 @@ def test_root_entry_uses_installed_policy_then_original_peer_before_existing_gpu
     drive = Mock()
     monkeypatch.setattr(entry, "run_embedding_gpu_batch_with_owner", drive)
     entry.run_root_embedding_batch_control("a" * 32, controller_release="a" * 40)
+    descriptor.assert_called_once_with("a" * 32)
     pins, original = prepare.call_args.args
     assert original == request and pins.root_pid == os.getpid()
     assert (pins.timeout_seconds, pins.vector_max_bytes, pins.total_output_max_bytes) == (
@@ -160,6 +163,9 @@ def test_fixed_unit_hash_bootstrap_and_secret_boundaries():
         "StartLimitBurst=1",
         "Restart=no",
         "SupplementaryGroups=eom\n",
+        "RuntimeDirectory=systemd/system/eom-embedding-native-gpu-batch@%i.service.d",
+        "RuntimeDirectoryMode=0700",
+        "RuntimeDirectoryPreserve=yes",
         "InaccessiblePaths=/etc/eom",
         "CAP_DAC_READ_SEARCH",
     ):

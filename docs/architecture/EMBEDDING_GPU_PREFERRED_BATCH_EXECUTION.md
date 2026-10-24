@@ -1440,3 +1440,37 @@ ACTUAL_GPU_BATCH=NOT_RUN, GOAL=ACTIVE를 유지한다.
 실제 root/runner UID·소켓/DAC·고정 그룹 조회의 opt-in 격리 suite17 PASS/8.18초
 (`/tmp/eom-gpu-batch-owner-os-20261024-r12.log`, exit0), dependency/resource packaging16
 PASS/32.87초다. actual unit/numerical/IAM/DB 검증을 이 테스트로 대체하지 않는다.
+
+### P2-S 실제 systemd255 OpenFile 경계와 좁은 후속 수정
+
+그룹 수정20d0b910 owner를 별도 immutable release로 준비하고 고정 batch unit을 설치했다.
+기존 CPU selection/API/Web은 바꾸지 않았다. 실제 hardware-only pre-grant 요청
+`embeddingallocation_ba055c2b768140c2ba832d20af625100`은 PID1이 OpenFile의 `%i`를 문자 그대로
+취급해 status202/FDS로 종료했다. 모델/GRANT/Source binding은0이며 GPU0%/2MiB다.
+실패 root/socket 기록은 보존한다. 이는 source unit 검사만으로 놓친 실제 OS 호환 결함이다.
+systemd255의 [공식 parser](https://github.com/systemd/systemd/blob/v255/src/core/load-fragment.c)는
+OpenFile을 parse만 하고 instance specifier를 확장하지 않는다. OS 업그레이드나 worker 권한 확대,
+검증된 CUDA prefix 재설치로 우회하지 않는다.
+
+책임은 기존 root unit/handoff adapter에 둔다. PID1의 `RuntimeDirectory`가 생성한 **해당 원
+instance 전용** root0700 drop-in 디렉터리에 absolute allocation path만 담은0444 파일을 한 번
+생성한다. root controller는 원 고정 template에 대한 이 exact drop-in 하나만 허용하고 reload 후
+actual DropInPaths와 bytes/hash/inode를 검사한다. 임의 property/path/명령/추가 drop-in은 거부한다.
+정본 allocation.json과 inherited original inode/FD 검증, CUDA56 entry/ABI 및 원 shared GPU lease는
+그대로다. payload 복사나 새 worker protocol/schema/queue/DB는 없다.
+
+접근은 instance→고정 path lookup/상수 크기 파일1개(O(1))다. canonical identity는 기존 allocation
+ID/hash와 immutable protected template이며 파일은 명시적 실행 materialization이다. 원 root 단일
+dispatch 이전에 exclusive create/fsync/reload를 수행한다. 이미 있는/부분 파일은 덮거나 재전송하지
+않고 reconciliation 대상으로 보존한다. `RuntimeDirectoryPreserve=yes`로 종료 후 증거를 유지한다.
+root sandbox의 쓰기는 해당 instance 디렉터리에만 열고 workers에게 systemd/NAS/DB 권한은 주지
+않는다. 단순 `%i` OpenFile은 실제로 실패했고, 전체 unit 생성·전역 경로/심볼릭 링크·임의 drop-in
+허용은 더 넓은 권한/경합을 만들므로 선택하지 않는다. 기존 failed 이력은 고치지 않는다.
+
+후속 source 회귀366 PASS/66.70초(이미지 GPU lifetime 및 shared terminal/policy/dependency/
+package resource 포함), exact descriptor 생성·중복·동시성12 PASS/0.98초, actual root/runner
+filesystem/peer18 PASS/8.30초다. descriptor 테스트의 PID1 reload는 synthetic이고 actual Unix
+file identity/DAC는 별도 privileged gate다. strict mypy6 source PASS, Ruff 및 diff-check PASS다.
+로그는 `/tmp/eom-gpu-batch-systemd-compat-tests-20261024-r2.log`,
+`/tmp/eom-gpu-batch-owner-os-20261024-r13.log`다. source PASS를 다음 실제 고정 unit 실행으로
+확인하기 전에는 hardware READY·CPU fallback·batch computation PASS로 표시하지 않는다.

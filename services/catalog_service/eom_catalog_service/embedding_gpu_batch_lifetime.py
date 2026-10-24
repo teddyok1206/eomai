@@ -32,6 +32,9 @@ from eom_catalog_service.embedding_gpu_batch_observation import (
     CapturedEmbeddingGpuBatchMachine,
     EmbeddingGpuBatchReadyObservation,
 )
+from eom_catalog_service.embedding_gpu_batch_unit_descriptor import (
+    require_embedding_gpu_batch_descriptor,
+)
 from eom_catalog_service.embedding_runtime_files import read_live_runtime_os_file
 from eom_catalog_service.embedding_runtime_os_identity import observe_runtime_device
 from eom_catalog_service.embedding_runtime_process_identity import native_process_start_ticks
@@ -320,6 +323,9 @@ def retire_failed_ungranted_embedding_gpu_batch(
     )
     unit = native_embedding_gpu_batch_unit(captured.prepared.launch.attempt_hex)
     terminal = inspect_cpu_unit(unit, template=GPU_BATCH_TEMPLATE)
+    require_embedding_gpu_batch_descriptor(
+        captured.prepared.launch.attempt_hex, terminal.drop_in_paths
+    )
     _require(
         terminal.invocation_id == original.invocation_id
         and re.fullmatch(r"[0-9a-f]{32}", original.invocation_id) is not None
@@ -327,7 +333,6 @@ def retire_failed_ungranted_embedding_gpu_batch(
         == original.status.exec_main_started_monotonic
         and original.status.exec_main_started_monotonic > 0
         and terminal.fragment_path == "/etc/systemd/system/" + GPU_BATCH_TEMPLATE
-        and not terminal.drop_in_paths
         and not terminal.status.need_daemon_reload
         and gpu_unit_terminal_outcome(terminal) == "FAILED"
     )

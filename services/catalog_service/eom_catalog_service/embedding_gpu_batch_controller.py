@@ -66,6 +66,9 @@ from eom_catalog_service.embedding_gpu_batch_observation import (
     EmbeddingGpuBatchReadyObservation,
     observe_embedding_gpu_batch_ready,
 )
+from eom_catalog_service.embedding_gpu_batch_unit_descriptor import (
+    require_embedding_gpu_batch_descriptor,
+)
 from eom_catalog_service.embedding_gpu_control_channel import EmbeddingGpuControlChannel
 from eom_catalog_service.embedding_runtime_files import read_live_runtime_os_file
 from eom_catalog_service.embedding_runtime_os_identity import observe_runtime_device
@@ -159,10 +162,12 @@ def _claim_dispatch(captured: CapturedEmbeddingGpuBatchMachine) -> None:
     """No-clobber intent before socket effects; never repair/restart an uncertain attempt."""
     captured.assert_precompute()
     fresh = inspect_cpu_unit(_unit(captured), template=GPU_BATCH_TEMPLATE)
+    require_embedding_gpu_batch_descriptor(
+        captured.prepared.launch.attempt_hex, fresh.drop_in_paths
+    )
     _require(
         fresh.fresh
         and fresh.fragment_path == "/etc/systemd/system/" + GPU_BATCH_TEMPLATE
-        and not fresh.drop_in_paths
         and not fresh.status.need_daemon_reload
     )
     try:
@@ -193,10 +198,13 @@ def _claim_dispatch(captured: CapturedEmbeddingGpuBatchMachine) -> None:
         )
 
 
-def _original_unit(unit: CpuUnitObservation, original: CpuUnitObservation) -> None:
+def _original_unit(
+    unit: CpuUnitObservation, original: CpuUnitObservation, *, attempt_hex: str
+) -> None:
+    require_embedding_gpu_batch_descriptor(attempt_hex, unit.drop_in_paths)
+    require_embedding_gpu_batch_descriptor(attempt_hex, original.drop_in_paths)
     _require(
         unit.fragment_path == original.fragment_path == "/etc/systemd/system/" + GPU_BATCH_TEMPLATE
-        and not unit.drop_in_paths
         and not unit.status.need_daemon_reload
         and unit.invocation_id == original.invocation_id
         and re.fullmatch(r"[0-9a-f]{32}", unit.invocation_id) is not None
@@ -209,7 +217,7 @@ def _wait_started(captured: CapturedEmbeddingGpuBatchMachine) -> CpuUnitObservat
     while time.monotonic_ns() < captured.prepared.request.expires_monotonic_ns:
         observed = inspect_cpu_unit(_unit(captured), template=GPU_BATCH_TEMPLATE)
         if observed.main_pid > 0:
-            _original_unit(observed, observed)
+            _original_unit(observed, observed, attempt_hex=captured.prepared.launch.attempt_hex)
             _require(
                 observed.status.active_state == "activating"
                 and observed.status.sub_state == "start"
@@ -232,7 +240,7 @@ def _wait_terminal(
     )
     while time.monotonic_ns() < deadline:
         observed = inspect_cpu_unit(_unit(captured), template=GPU_BATCH_TEMPLATE)
-        _original_unit(observed, original)
+        _original_unit(observed, original, attempt_hex=captured.prepared.launch.attempt_hex)
         if observed.main_pid == 0:
             if observed.succeeded or observed.status.active_state == "failed":
                 gpu_unit_terminal_outcome(observed)
@@ -282,7 +290,9 @@ class _WorkerFence:
             _require(self._live() == self.start_ticks)
             return
         observed = inspect_cpu_unit(_unit(self.captured), template=GPU_BATCH_TEMPLATE)
-        _original_unit(observed, self.original)
+        _original_unit(
+            observed, self.original, attempt_hex=self.captured.prepared.launch.attempt_hex
+        )
         if observed.main_pid == self.original.main_pid:
             try:
                 _require(self._live() == self.start_ticks)

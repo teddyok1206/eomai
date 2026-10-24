@@ -20,6 +20,10 @@ from eom_catalog_service.embedding_gpu_batch_launch import (
     native_embedding_gpu_batch_environment,
     native_embedding_gpu_batch_launch_arguments,
 )
+from eom_catalog_service.embedding_gpu_batch_unit_descriptor import (
+    embedding_gpu_batch_descriptor_bytes,
+    embedding_gpu_batch_descriptor_path,
+)
 from eom_catalog_service.embedding_native_probe_observation import parse_native_executable_mappings
 from eom_identifiers import sha256_bytes
 
@@ -68,6 +72,9 @@ def machine(monkeypatch):
         ).read_bytes(),
         execution / "allocation.json": embedding_gpu_control_bytes(request),
         execution / "launch.env": native_embedding_gpu_batch_environment(launch),
+        embedding_gpu_batch_descriptor_path(
+            launch.attempt_hex
+        ): embedding_gpu_batch_descriptor_bytes(launch.attempt_hex),
     }
     identities = {
         path: metadata(
@@ -96,7 +103,11 @@ def machine(monkeypatch):
         prepared=PreparedEmbeddingGpuBatch(
             launch, request, observer._epoch(identities[execution / "input.json"])
         ),
-        unit=replace(running(), fragment_path="/etc/systemd/system/" + observer.GPU_BATCH_TEMPLATE),
+        unit=replace(
+            running(),
+            fragment_path="/etc/systemd/system/" + observer.GPU_BATCH_TEMPLATE,
+            drop_in_paths=str(embedding_gpu_batch_descriptor_path(launch.attempt_hex)),
+        ),
         unit_name="eom-embedding-native-gpu-batch@" + launch.attempt_hex + ".service",
         now=10**9,
         start=ready.start_time_ticks,

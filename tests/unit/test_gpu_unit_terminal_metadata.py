@@ -67,10 +67,16 @@ def observe(state):
     )
 
 
+@pytest.mark.parametrize("batch", (False, True))
 @pytest.mark.parametrize(
     "substate,store", [("dead", "0"), ("dead", "1"), ("dead-resources-pinned", "1")]
 )
-def test_stopped_unit_may_retain_only_its_one_descriptor(facts, monkeypatch, substate, store):
+def test_stopped_unit_may_retain_only_its_one_descriptor(
+    facts, monkeypatch, substate, store, batch
+):
+    if batch:
+        facts.template = "eom-embedding-native-gpu-batch@.service"
+        facts.unit = facts.template.replace("@", "@" + "a" * 32)
     fields = dict(
         LoadState="loaded",
         ActiveState="inactive",
@@ -80,7 +86,7 @@ def test_stopped_unit_may_retain_only_its_one_descriptor(facts, monkeypatch, sub
         InvocationID=facts.expected.invocation_id,
         NeedDaemonReload="no",
         FragmentPath="/etc/systemd/system/" + facts.template,
-        DropInPaths="",
+        DropInPaths=str(reader.embedding_gpu_batch_descriptor_path("a" * 32)) if batch else "",
         Job="",
         ControlGroup="",
     )
@@ -210,7 +216,11 @@ def test_batch_reads_original_exited_pid_for_both_outcomes_without_inventing_bir
 ):
     facts.template = "eom-embedding-native-gpu-batch@.service"
     facts.unit = facts.template.replace("@", "@" + "a" * 32)
-    facts.expected = replace(facts.expected, fragment_path="/etc/systemd/system/" + facts.template)
+    facts.expected = replace(
+        facts.expected,
+        fragment_path="/etc/systemd/system/" + facts.template,
+        drop_in_paths=str(reader.embedding_gpu_batch_descriptor_path("a" * 32)),
+    )
     if outcome == "SUCCEEDED":
         facts.expected = replace(
             facts.expected,
@@ -233,7 +243,11 @@ def test_batch_reads_original_exited_pid_for_both_outcomes_without_inventing_bir
 def test_batch_does_not_reinterpret_other_family_or_nonterminal_as_busy(facts, monkeypatch, fault):
     facts.template = "eom-embedding-native-gpu-batch@.service"
     facts.unit = facts.template.replace("@", "@" + "a" * 32)
-    facts.expected = replace(facts.expected, fragment_path="/etc/systemd/system/" + facts.template)
+    facts.expected = replace(
+        facts.expected,
+        fragment_path="/etc/systemd/system/" + facts.template,
+        drop_in_paths=str(reader.embedding_gpu_batch_descriptor_path("a" * 32)),
+    )
     if fault == "root":
         monkeypatch.setattr(reader.os, "getresuid", lambda: (0, 1234, 0))
     elif fault == "family":
@@ -260,7 +274,11 @@ def test_batch_does_not_reinterpret_other_family_or_nonterminal_as_busy(facts, m
 def test_batch_original_metadata_mismatch_is_uncertain_not_cpu_fallback(facts, fault):
     facts.template = "eom-embedding-native-gpu-batch@.service"
     facts.unit = facts.template.replace("@", "@" + "a" * 32)
-    facts.expected = replace(facts.expected, fragment_path="/etc/systemd/system/" + facts.template)
+    facts.expected = replace(
+        facts.expected,
+        fragment_path="/etc/systemd/system/" + facts.template,
+        drop_in_paths=str(reader.embedding_gpu_batch_descriptor_path("a" * 32)),
+    )
     facts.fault = fault
     with pytest.raises(ValueError, match="GPU_UNIT_TERMINATION_UNCERTAIN"):
         reader.observe_embedding_gpu_batch_terminal_metadata(facts.unit, expected=facts.expected)

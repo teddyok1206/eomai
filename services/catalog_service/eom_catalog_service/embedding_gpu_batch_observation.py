@@ -40,6 +40,11 @@ from eom_catalog_service.embedding_gpu_batch_launch import (
     native_embedding_gpu_batch_launch_arguments,
     native_embedding_gpu_batch_unit,
 )
+from eom_catalog_service.embedding_gpu_batch_unit_descriptor import (
+    embedding_gpu_batch_descriptor_bytes,
+    embedding_gpu_batch_descriptor_path,
+    require_embedding_gpu_batch_descriptor,
+)
 from eom_catalog_service.embedding_native_installation_admission import (
     ProtectedCudaInstallationFiles,
     read_pinned_cuda_admission_receipt,
@@ -62,7 +67,7 @@ from eom_catalog_service.embedding_runtime_process_identity import (
 from eom_catalog_service.gpu_unit_policy_observation import observe_embedding_gpu_batch_unit_policy
 
 _PREFIX = Path("/opt/eom/conda/envs/eom-embedding-cuda")
-_SERVICE_SHA = "sha256:4c576d44e1fea71113775f8a866262b1e3367ceeb1852cf5b3df426e22786621"
+_SERVICE_SHA = "sha256:65b46025623c85260c39f50ac51318ad26ce4af260cef46c10b663f513e4c6da"
 _SOCKET_SHA = "sha256:77be677e8333c36b2b11b7542c2eed6be4421d9a927af0aa5a53f76b0cff2bfb"
 _ENTRY_SHA = "sha256:da1c1ef262ff2a52adfdd0b9dc726f1cc6df31c1aef2d51478a54e5f6edd3909"
 _ENTRY_MEMBER = "lib/python3.12/site-packages/eom_catalog_service/embedding_gpu_batch_entry.py"
@@ -252,6 +257,12 @@ def _capture_embedding_gpu_batch_files(
             sha256=_SOCKET_SHA,
             maximum=65536,
         )
+        descriptor_raw = embedding_gpu_batch_descriptor_bytes(launch.attempt_hex)
+        files.read(
+            embedding_gpu_batch_descriptor_path(launch.attempt_hex),
+            sha256=sha256_bytes(descriptor_raw),
+            maximum=4096,
+        )
         entries = {entry.relative_member: entry for entry in installation.inventory.entries}
         _require(_ENTRY_MEMBER in entries and entries[_ENTRY_MEMBER].sha256 == _ENTRY_SHA)
         files.verify(
@@ -425,6 +436,7 @@ def observe_embedding_gpu_batch_ready(
     unit = native_embedding_gpu_batch_unit(launch.attempt_hex)
     cgroup = "/system.slice/" + unit
     before = inspect_cpu_unit(unit, template=GPU_BATCH_TEMPLATE)
+    require_embedding_gpu_batch_descriptor(launch.attempt_hex, before.drop_in_paths)
     _require(
         before.main_pid == checked.pid
         and before.status.active_state == "activating"

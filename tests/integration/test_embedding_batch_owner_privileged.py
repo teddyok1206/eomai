@@ -16,6 +16,7 @@ import pytest
 from eom_catalog_service import embedding_batch_control_connection as control_connection
 from eom_catalog_service import embedding_batch_control_workspace as control_workspace
 from eom_catalog_service import embedding_batch_owner_workspace as workspace
+from eom_catalog_service import embedding_gpu_batch_unit_descriptor as unit_descriptor
 from eom_catalog_service.embedding_batch_owner_channel import (
     EmbeddingBatchOwnerChannel,
     EmbeddingBatchOwnerChannelError,
@@ -85,6 +86,27 @@ def _wait(child):
 def test_fixed_root_socket_group_matches_actual_application_primary_group(owned):
     # Actual host account/group lookup only: no user/group mutation or GPU work.
     control_connection._require_controller_socket_group()
+
+
+def test_original_descriptor_file_is_root_immutable_and_exclusive(owned, monkeypatch):
+    _case, _account, parent, _root = owned
+    monkeypatch.setattr(unit_descriptor, "_UNIT_ROOT", parent)
+    path = unit_descriptor.embedding_gpu_batch_descriptor_path("a" * 32)
+    path.parent.mkdir(mode=0o700)
+    reloads = []
+
+    def reload(arguments, **kwargs):
+        reloads.append(arguments)
+        return SimpleNamespace(returncode=0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(unit_descriptor.subprocess, "run", reload)
+    unit_descriptor.prepare_embedding_gpu_batch_descriptor("a" * 32)
+    value = path.stat()
+    assert (value.st_uid, value.st_gid, value.st_mode & 0o777, value.st_nlink) == (0, 0, 0o444, 1)
+    assert path.read_bytes() == unit_descriptor.embedding_gpu_batch_descriptor_bytes("a" * 32)
+    with pytest.raises(ValueError, match="ALREADY_PRESENT"):
+        unit_descriptor.prepare_embedding_gpu_batch_descriptor("a" * 32)
+    assert len(reloads) == 1 and path.stat().st_ino == value.st_ino
 
 
 @pytest.mark.parametrize("wait_after_ack", [False, True])

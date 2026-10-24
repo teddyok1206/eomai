@@ -10,6 +10,10 @@ from typing import Literal
 
 from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation
 
+from eom_catalog_service.embedding_gpu_batch_unit_descriptor import (
+    embedding_gpu_batch_descriptor_path,
+)
+
 _ENV = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
 _PROPERTIES = (
     "LoadState",
@@ -98,6 +102,7 @@ def observe_embedding_gpu_batch_terminal_metadata(
         or re.fullmatch(r"[0-9a-f]{32}", expected.invocation_id) is None
         or expected.fragment_path != "/etc/systemd/system/" + template
         or expected.drop_in_paths
+        != str(embedding_gpu_batch_descriptor_path(unit.partition("@")[2].removesuffix(".service")))
         or expected.status.need_daemon_reload
     ):
         raise ValueError("GPU_UNIT_TERMINATION_UNCERTAIN")
@@ -155,6 +160,10 @@ def observe_stopped_gpu_unit(unit: str, *, template: str, invocation: str) -> St
         or re.fullmatch(r"eom-[a-z0-9-]+@\.service", template) is None
         or not unit.startswith(template.removesuffix("@.service") + "@")
         or not unit.endswith(".service")
+        or (
+            template == "eom-embedding-native-gpu-batch@.service"
+            and re.fullmatch(r"eom-embedding-native-gpu-batch@[0-9a-f]{32}\.service", unit) is None
+        )
         or any(char in unit for char in ("/", "\0", "\n", "\r"))
         or type(invocation) is not str
         or re.fullmatch(r"[0-9a-f]{32}", invocation) is None
@@ -185,6 +194,11 @@ def observe_stopped_gpu_unit(unit: str, *, template: str, invocation: str) -> St
     if set(values) != set(_PROPERTIES):
         raise ValueError("GPU_UNIT_RETIREMENT_UNCERTAIN")
     loaded = values["LoadState"] == "loaded"
+    expected_drop_in = ""
+    if loaded and template == "eom-embedding-native-gpu-batch@.service":
+        expected_drop_in = str(
+            embedding_gpu_batch_descriptor_path(unit.partition("@")[2].removesuffix(".service"))
+        )
     if not (
         values["LoadState"] in {"loaded", "not-found"}
         and values["ActiveState"] == "inactive"
@@ -201,7 +215,7 @@ def observe_stopped_gpu_unit(unit: str, *, template: str, invocation: str) -> St
         and (loaded or values["NFileDescriptorStore"] == "0")
         and values["InvocationID"] in {"", invocation}
         and values["NeedDaemonReload"] == "no"
-        and values["DropInPaths"] == ""
+        and values["DropInPaths"] == expected_drop_in
         and values["Job"] in {"", "0"}
         and values["ControlGroup"] == ""
         and values["FragmentPath"] == ("/etc/systemd/system/" + template if loaded else "")

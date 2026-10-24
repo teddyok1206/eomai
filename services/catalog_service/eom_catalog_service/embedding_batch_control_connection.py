@@ -37,7 +37,7 @@ from eom_catalog_service.embedding_batch_owner_channel import (
 from eom_catalog_service.embedding_batch_owner_identity import embedding_batch_owner_start_ticks
 from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer
 
-BATCH_CONTROL_TEMPLATE_SHA256 = "86701226a9d69144f327abad442d8c627ec6e075c143146f88b4dddfde067e63"
+BATCH_CONTROL_TEMPLATE_SHA256 = "85422d53d9e78673b637198720c93a63ca6b9d469be843d801d506bf14e29bff"
 _ENV = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
 _CONTROLLER_SOCKET_GROUP = "eom"
 
