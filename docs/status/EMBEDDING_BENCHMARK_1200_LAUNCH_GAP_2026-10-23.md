@@ -382,3 +382,41 @@ admission은 아직 별도 검증이 필요하며 정식 v1.2 Job은 여전히 �
   SENT/HTTP200이다. 향후 공존 판정에는 service PID 유지뿐 아니라
   `PUBLIC_READ_SUMMARY failed=0`도 별도로 요구한다. `MEASUREMENT_PASS`를
   모든 안전 gate PASS나 GPU 활성화 승인으로 확대하지 않는다.
+
+### 2026-10-24 03:25–04:40 UTC — 실제 CPU1 실패와 실행 시간/복구 경계 수정
+
+- retry3625 controller에서 실제 guiadmin 인증과 원 Job25ebde replay가 성공했다.
+  원 native CPU1 execution `219a126ed01241569a7d62ad3f2fc7cc` / systemd invocation
+  `94024f6b0d244e5da2d1e58591d2ca77`은03:26:07에 실제 시작했다. cold18 rows,
+  수치 검증용30 rows, warm5회와 query2개까지 materialize했으나 나머지8 query와
+  capacity는 미완료다.03:40:47 worker는 `EMBEDDING_BENCHMARK_ACK_RECEIVE_FAILED`로
+  exit1했다. native journal은 CPU27분50.616초, peak3.5G/swap0을 기록했다.
+  root completion의 `FAILED / cleanup=CONFIRMED`, PID0·FDSTORE0·GPU2MiB를 확인했다.
+  종료 정리 후 systemd Result=success만으로 원 실행을 성공으로 재분류하지 않는다.
+- 원 worker-result raw SHA는 `d94ee67eaa9ca880d0378b58c0e36cace6d1846b52649370e86598773b6edbdc`,
+  root completion은 `ec432eecdeef9201dc574b1f20b850695e7d28c38ab650b35429c3526c24d024`,
+  root uncertainty는 `e98db52ad76dc9ab5b9ee17605f964e091d821f558f4bc125574a9a261b6e402`다.
+  폐기된 내부 continuation 예외를 뒤늦게 발명하지 않는다. 실패 checkpoint의 정확한
+  하위 예외는 미기록이지만, 독립 read-only 점검으로03:25:37.795356 인증이 실패 시각
+  909.204644초 전이었음을 확인했다. 토큰은03:55:37.795356까지 유효하고 세션·계정도
+  정상인데900초 fence는 반드시 거부한다.1200초 compute와의 시간 제한 충돌은 확인됐다.
+- 설계 `EMBEDDING_BENCHMARK_LONG_EXECUTION_AUTHORITY.md`에 따라 v1.2/1200에만
+  기존 Identity의 최대3600초 내 caller-selected bound를 허용한다.180/600 요청은
+  900초를 유지한다. 일반 로그인/Graph 접근 정책·실제 authenticated_at·권한·revocation
+  검증은 바꾸지 않는다. 기존 공식 refresh adapter를 재사용하고 매 launch 전 Identity가
+  opaque capture/current idle을 포함한1320초 남은 창을 검사한다. 비밀번호/토큰을 저장하거나
+  새 로그인으로 간주하지 않는다. 관련 combined source 시험422 PASS/5 intentional skips,
+  별도 source/schema/resource/adapter focused 시험 및 strict type/lint가 통과했다.
+- 실제 retry controller는 기존 failure evidence의 구형 unit/program 정규식으로 표현되지
+  않았다. 구형 schema bytes를 바꾸지 않고 failure evidence1.3을 추가하고 기존 capture,
+  closure, predecessor/successor 경계에 연결했다. request/native/compute는1.2/1200 그대로다.
+  source `e0d309e9…`의 private SDK만 설치했으며 공용 API에는 이 GPU 변경을 배포하지 않았다.
+- 첫 실제 root attester는 원 retirement의 정상적인 `exit-code1`을 읽었으나, reader의
+  timeout-only 조건에서 **proof 생성 전에** 거부됐다. 같은 원 실패를 timeout으로 바꾸지
+  않는다. 후속 수정은 canonical1.2/1200 CPU1에만 normal CLD_EXITED/nonzero1..255를
+  허용하고 legacy timeout-only 및 success/signal/unknown 거부를 유지한다. 이 수정의
+  focused 시험203 PASS/5 intentional skips, Ruff·format·strict mypy PASS다.
+- 사용자의 우선 요청으로 로그인 영구 수정은 GPU 변경과 분리한 b87cc11c release로
+  API/Web에 배포했다. HTTPS readiness와 QUERY OWNER_READY는 확인했고 실제 사용자
+  HTTPS 인증 검증은 별도 입력 대기 중이다. 계정 비밀번호 재설정이나 고의 실패 주입은 없다.
+  현재 정식 six-launch 비교·failure closure·GPU 기본값 변경은 여전히 미완료다.

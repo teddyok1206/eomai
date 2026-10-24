@@ -9,7 +9,6 @@ from eom_catalog_contracts.embedding_benchmark_budget1200_retry_failure import (
     BenchmarkBudget1200RetryControllerPin,
 )
 from eom_catalog_service import embedding_benchmark_poststart_os as module
-from eom_catalog_service import embedding_benchmark_unit_control as unit_control
 from eom_catalog_service.embedding_benchmark_cpu_driver import RootBenchmarkCpuRetirement
 from eom_catalog_service.gpu_unit_terminal_observation import StoppedGpuUnit
 from eom_identifiers import canonical_json_bytes, sha256_bytes
@@ -19,7 +18,13 @@ from pydantic import TypeAdapter
 
 from tests.unit.embedding_benchmark_poststart_failure_fixtures import observation
 from tests.unit.embedding_device_benchmark_fixtures import owner_request, worker_invocation
-from tests.unit.test_embedding_device_benchmark_budget import successor_policy_v12
+from tests.unit.test_embedding_device_benchmark_budget import (
+    successor_invocation,
+    successor_invocation_v12,
+    successor_policy_v12,
+    successor_request,
+    successor_request_v12,
+)
 
 
 @pytest.fixture(params=(False, True), ids=("legacy", "retry1200"))
@@ -302,13 +307,19 @@ def test_boot_identity_is_bounded_and_never_invented(machine, raw):
         captured.observe()
 
 
-@pytest.fixture
-def retired(tmp_path, monkeypatch):
+@pytest.fixture(params=(180, 600, 1200), ids=("legacy180", "legacy600", "budget1200"))
+def retired(tmp_path, monkeypatch, request):
     root = tmp_path / "lifetimes"
     root.mkdir(mode=0o700)
-    request, invocation = owner_request(), worker_invocation(1)
+    request_factory, invocation_factory = {
+        180: (owner_request, worker_invocation),
+        600: (successor_request, successor_invocation),
+        1200: (successor_request_v12, successor_invocation_v12),
+    }[request.param]
+    request, invocation = request_factory(), invocation_factory(1)
     native = "c" * 32
-    unit = "eom-embedding-benchmark-cpu@" + invocation.execution_id + ".service"
+    template = module.benchmark_unit_family("CPU", request.execution_policy).service_template
+    unit = template.replace("@.service", "@" + invocation.execution_id + ".service")
     phase = root / unit / native / "retirement"
     phase.mkdir(parents=True, mode=0o700)
     for path in (root, phase.parent.parent, phase.parent, phase):
@@ -318,7 +329,7 @@ def retired(tmp_path, monkeypatch):
         0,
         200,
         native,
-        "/etc/systemd/system/" + unit_control.CPU_BENCHMARK_TEMPLATE,
+        "/etc/systemd/system/" + template,
         "",
     )
     retirement = RootBenchmarkCpuRetirement(
@@ -360,6 +371,53 @@ def test_root_reader_pins_actual_saved_original_timeout_and_intent_without_effec
     assert captured.native_invocation_id == "c" * 32
     assert captured.retirement.original_terminal.status.result == "timeout"
     captured.assert_current()
+
+
+@pytest.mark.parametrize(
+    ("result", "code", "status"),
+    (
+        ("exit-code", 1, 1),
+        ("exit-code", 1, 255),
+        ("exit-code", 1, 0),
+        ("exit-code", 1, -1),
+        ("exit-code", 1, 256),
+        ("exit-code", 2, 15),
+        ("signal", 2, 15),
+        ("core-dump", 3, 11),
+        ("success", 1, 0),
+        ("unknown", 1, 1),
+    ),
+)
+def test_only_v12_saved_normal_nonzero_exit_is_an_additional_failure(retired, result, code, status):
+    request, invocation, path, document, _root = retired
+    original = document["observation"]["original_terminal"]
+    original["status"].update(result=result, exec_main_code=code, exec_main_status=status)
+    path.chmod(0o600)
+    path.write_bytes(canonical_json_bytes(document))
+    path.chmod(0o400)
+    intent = path.with_name("intent.json")
+    intent.chmod(0o600)
+    intent.write_bytes(
+        canonical_json_bytes(
+            document | {"event": "BENCHMARK_CPU_RETIREMENT_INTENT", "observation": original}
+        )
+    )
+    intent.chmod(0o400)
+    accepted = (
+        request.execution_policy.timeout_seconds == 1200
+        and result == "exit-code"
+        and code == 1
+        and 1 <= status <= 255
+    )
+    if accepted:
+        captured = module.read_root_poststart_retirement(request, invocation)
+        assert captured.retirement.original_terminal.status.result == "exit-code"
+        assert captured.retirement.original_terminal.status.exec_main_status == status
+        assert captured.raw_sha256 == sha256_bytes(path.read_bytes())
+        captured.assert_current()
+    else:
+        with pytest.raises(ValueError):
+            module.read_root_poststart_retirement(request, invocation)
 
 
 @pytest.mark.parametrize(

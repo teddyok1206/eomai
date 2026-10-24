@@ -1,4 +1,4 @@
-"""Read-only original CPU timeout/retirement and current PID1 facts; no execution authority."""
+"""Read-only original CPU failure/retirement and current PID1 facts; no execution authority."""
 
 from __future__ import annotations
 
@@ -18,6 +18,7 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkExecutionPolicy,
     BenchmarkOwnerRequest,
     BenchmarkWorkerInvocation,
+    embedding_device_benchmark_bytes,
 )
 from eom_catalog_contracts.embedding_native_installation_evidence import (
     parse_rootlocal_evidence_document,
@@ -381,13 +382,37 @@ def read_root_poststart_retirement(
         )
     )
     original, stopped = retirement.original_terminal, retirement.stopped_unit
+    if original.status.result == "exit-code":
+        embedding_device_benchmark_bytes(request)
+        embedding_device_benchmark_bytes(invocation)
     _require(
         original.invocation_id == native_invocation
         and original.fragment_path == "/etc/systemd/system/" + template
         and original.drop_in_paths == ""
         and not original.status.need_daemon_reload
         and original.status.load_state == "loaded"
-        and original.status.result == "timeout"
+        and (
+            original.status.result == "timeout"
+            # v1.2 can fail during an authenticated continuation, not only at
+            # its compute deadline. Preserve the actual saved nonzero exit;
+            # legacy retirement stays timeout-only and signals stay excluded.
+            or (
+                request.schema_version == "embedding-device-benchmark-request/1.2"
+                and invocation.schema_version == "embedding-device-benchmark-invocation/1.2"
+                and request.execution_policy.schema_version
+                == "embedding-device-benchmark-policy/1.2"
+                and request.execution_policy.timeout_seconds == 1200
+                and invocation.execution_policy == request.execution_policy
+                and invocation.device == "CPU"
+                and invocation.launch_ordinal == 1
+                and invocation.runtime == request.cpu
+                and invocation.benchmark_id == request.benchmark_id
+                and invocation.benchmark_revision_id == request.benchmark_revision_id
+                and original.status.result == "exit-code"
+                and original.status.exec_main_code == 1
+                and 1 <= original.status.exec_main_status <= 255
+            )
+        )
         and gpu_unit_terminal_outcome(original) == "FAILED"
         and stopped.load_state == "loaded"
         and stopped.invocation_id in {"", native_invocation}
