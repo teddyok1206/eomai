@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "embedding-work-batch-result": CatalogSchemaResource(
+            "schemas/knowledge/embedding-work-batch-result-v1.schema.json",
+            "resources/knowledge/embedding-work-batch-result-v1.schema.json",
+            "1.0",
+            "sha256:552d31aec38a905623ea608a7b0006d4c706f21a73fad3948abe71c5e4886c18",
+        ),
         "embedding-work-batch-input": CatalogSchemaResource(
             "schemas/knowledge/embedding-work-batch-input-v1.schema.json",
             "resources/knowledge/embedding-work-batch-input-v1.schema.json",

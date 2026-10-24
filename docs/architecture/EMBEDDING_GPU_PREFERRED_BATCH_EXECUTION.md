@@ -167,3 +167,54 @@ GPU_PREFERRED_INSTALLED=NO, GPU_PREFERRED_ACTIVE=NO, CURRENT_DEFAULT=CPU.
 기존 physical lease·root READY/ACK/retirement로 실제 할당을 연결한다. native 수명은
 고정180초를 임의로 늘리지 않고 유한 묶음을 나눈다. PRIVATE_CHAT_QUERY도 목적·사용자
 경계를 따로 유지하며 기존 private 입력/출력을 공개 문항 batch로 변환하지 않는다.
+
+## P2-A 로컬 결과와 보호 FD 인계
+
+책임은 기존 native stdio/encoding adapter의 확장이다. 새 `embedding-work-batch-result/1.0`
+metadata는 원 batch request/route decision hash와 순서 있는 자식 결과(기존 QUERY1.0 또는
+DOCUMENT1.0)를 담는다. 각 자식의 `vector_offset`은 하나의 `vectors.f32` 안에서 연속된
+영역을 가리키며 길이·해시는 기존 자식 shard.binary가 정본이다. aggregate binary는 별도의
+전체 hash/byte_count를 가진다. offset은 storage identity나 권한이 아닌 작은 불변 값이다.
+
+이 parent result/aggregate binary는 **로컬 precommit materialization**이다. NAS에 aggregate와
+같은 bytes의 자식 binary를 모두 정본으로 등록하지 않는다. 기존 owner가 자식의 canonical
+shard/result를 한 번 commit하고, 원 group의 완료 이력은 자식 Artifact pointers와 원 local
+hash들을 고정한 receipt로 연결해야 한다. 부모 임시 파일을 영속 pointer로 남기지 않는다.
+
+부모 hash만 맞추고 자식 job/context/input/result를 바꾸거나, 영역의 overlap/gap/reorder,
+다른 space/recipe/purpose를 섞는 것을 거부한다. 전체/자식 hash와 FLOAT32 shape·unit norm,
+실제 input closure를 확인하고 나서만 기존 owner가 각 자식을 commit한다. DB binary 저장이나
+새 registry/queue는 없다. 합성 테스트는 모델 실행이나 실제 GPU 소유권 증거가 아니다.
+
+입력·결과·binary는 기존 root-created regular FD 세 개를 사용하고 alias·offset·소유자·mode·
+epoch 검사를 재사용한다. 결과의 실제 metadata+binary 크기가 owner의 total output 한도를
+초과하면 결과를 성공으로 쓰지 않는다. binary는 각 자식 조각을 한 번씩 연속 write/hash하여
+추가 concatenate 복사를 피한다. 처리/해시 O(total bytes), metadata O(children), 메모리는
+기존 유한 encoded 결과 외 전체 binary의 중복 사본을 만들지 않는다.
+
+마지막 metadata write는 모든 자식 검증과 binary write/FSYNC 후다. 부분 write, input 변경,
+권한 철회, deadline/cleanup 불명은 성공 결과가 아니다. 이미 시작한 계산에 CPU fallback을
+적용하지 않는다. 기존 completion owner가 원 launch identity로 reconcile하며 새 key로
+중복 계산하지 않는다. 하위 scalar·hash 규칙은 각 released parser를 그대로 사용한다.
+
+owner-local binary reader는 원 batch/result closure와 전체/자식 hash·shape·unit norm을
+검증하고 단일 immutable bytes buffer를 공유하는 read-only memoryview 범위를 반환한다.
+이는 Python의 안전한 로컬 buffer view이며 protocol pointer나 DB 저장값이 아니다.
+
+부모 요청의 일괄 출력만으로 자식별 영속 checkpoint가 생기지 않는다. P2-B에서 기존 owner의
+commit/replay를 연결하고, Artifact commit까지 끝난 자식은 재실행하지 않아야 한다. 이 단계의
+로컬 codec/stdio만으로 생산 연결이나 기본 장치 변경을 선언하지 않는다.
+
+### P2-A 검증 체크포인트
+
+새 결과/owner-local binary/보호 FD 인계와 P1·기존 직렬 경로·패키징·의존 경계를 포함해
+527 PASS다. 변경3개 소스 strict mypy, 변경4개 Python의 scoped Ruff/format도 PASS다.
+합성 CPU/CUDA 양쪽의 동일 원 자식 결과·연속 offset·전체/자식 hash·unit norm과 단일
+모델 scope를 확인했다. overlap/gap/reorder, 위조 extra, immutable Artifact member 충돌,
+descriptor alias, model 종료 후 input 변경, partial binary write와 총 metadata+binary
+상한 초과를 거부하며 실패 출력은 보존한다. 실제 모델/GPU/DB/서비스 변경은0이다.
+
+현재 INDEX PID130161/invocation053c5ab467ff4e29b4901cfabf037b4b 유지, GPU 관측2MiB/0%다.
+이는 GPU 경로를 검증했다는 뜻이 아니라 이번 회차가 source/합성 단계임을 확인한 것이다.
+P2-B 실제 할당·새 native 목적의 unit/READY/ACK/retirement·원 child commit/replay 연결,
+P3 인덱스 준비/실제 안전·처리량 canary, P4 운영 기본값/CPU fallback/rollback은 남았다.

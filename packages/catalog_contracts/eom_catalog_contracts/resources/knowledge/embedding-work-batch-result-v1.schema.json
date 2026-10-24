@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-work-batch-result/1.0",
+  "title": "Finite embedding batch result and contiguous binary child ranges",
+  "description": "Staged local result only. Every child keeps its released result schema and identity. Binary bytes are separate; the owner validates input closure, hashes, access and lifecycle before per-child Artifact commits.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "purpose",
+    "request_sha256",
+    "routing_decision_sha256",
+    "children",
+    "vectors",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "embedding-work-batch-result/1.0"
+    },
+    "purpose": {
+      "enum": [
+        "REFERENCE_QUERY",
+        "DOCUMENT"
+      ]
+    },
+    "request_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "routing_decision_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "children": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/child"
+      }
+    },
+    "vectors": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/binary"
+    },
+    "result_sha256": {
+      "$ref": "#/$defs/hash"
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "child": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "vector_offset",
+        "result"
+      ],
+      "properties": {
+        "vector_offset": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16777212,
+          "multipleOf": 4
+        },
+        "result": {
+          "oneOf": [
+            {
+              "$ref": "eom://schemas/knowledge/embedding-reference-query-result/1.0"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/result"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

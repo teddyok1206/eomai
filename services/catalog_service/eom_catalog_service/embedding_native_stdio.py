@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import os
 import stat
@@ -26,6 +27,14 @@ from eom_catalog_contracts.embedding_vector_binary import (
     EmbeddingVectorBinaryError,
     read_unit_vectors,
 )
+from eom_catalog_contracts.embedding_work_batch import (
+    MAX_EMBEDDING_WORK_BATCH_BYTES,
+    parse_embedding_work_batch_input,
+)
+from eom_catalog_contracts.embedding_work_batch_result import (
+    build_embedding_work_batch_result,
+    embedding_work_batch_result_bytes,
+)
 from eom_catalog_contracts.inference_transfer_embedding import (
     MAX_EMBEDDING_INPUT_BYTES,
     EmbeddingVectorShardManifest,
@@ -46,6 +55,12 @@ from eom_catalog_service.embedding_encoder_adapter import (
     encode_reference_query_batch,
 )
 from eom_catalog_service.embedding_execution_ports import NativeEmbeddingBackend
+from eom_catalog_service.embedding_work_batch_execution import (
+    EmbeddingWorkBatchExecutionError,
+    EmbeddingWorkBatchExecutionResources,
+    EmbeddingWorkBatchFence,
+    execute_embedding_work_batch,
+)
 
 _ROOT_UID = 0
 _CHUNK_BYTES = 1024**2
@@ -175,19 +190,29 @@ def _empty_output(descriptor: int, initial: os.stat_result) -> None:
 
 
 def _write_member(descriptor: int, initial: os.stat_result, payload: bytes) -> os.stat_result:
+    return _write_contiguous_members(descriptor, initial, (payload,))
+
+
+def _write_contiguous_members(
+    descriptor: int, initial: os.stat_result, payloads: tuple[bytes, ...]
+) -> os.stat_result:
+    """Stream existing immutable buffers without constructing a concatenated copy."""
     _empty_output(descriptor, initial)
-    remaining = memoryview(payload)
-    while remaining:
-        count = os.write(descriptor, remaining[:_CHUNK_BYTES])
-        if count <= 0 or count > min(len(remaining), _CHUNK_BYTES):
-            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_WRITE_FAILED")
-        remaining = remaining[count:]
+    total = 0
+    for payload in payloads:
+        remaining = memoryview(payload)
+        while remaining:
+            count = os.write(descriptor, remaining[:_CHUNK_BYTES])
+            if count <= 0 or count > min(len(remaining), _CHUNK_BYTES):
+                raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_WRITE_FAILED")
+            remaining = remaining[count:]
+        total += len(payload)
     os.fsync(descriptor)
     after = os.fstat(descriptor)
     if (
         _identity(initial) != _identity(after)
-        or after.st_size != len(payload)
-        or os.lseek(descriptor, 0, os.SEEK_CUR) != len(payload)
+        or after.st_size != total
+        or os.lseek(descriptor, 0, os.SEEK_CUR) != total
         or fcntl.fcntl(descriptor, fcntl.F_GETFL) & (os.O_ACCMODE | os.O_APPEND) != os.O_WRONLY
     ):
         raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_OUTPUT_CHANGED")
@@ -252,6 +277,15 @@ def _write_outputs(
     vectors_final = _write_member(descriptors.vectors, vectors_initial, vectors)
     _unchanged_input(descriptors.input, input_initial)
     result_final = _write_member(descriptors.result, result_initial, result_payload)
+    _require_finished_outputs(descriptors, input_initial, vectors_final, result_final)
+
+
+def _require_finished_outputs(
+    descriptors: NativeEmbeddingDescriptors,
+    input_initial: os.stat_result,
+    vectors_final: os.stat_result,
+    result_final: os.stat_result,
+) -> None:
     _unchanged_input(descriptors.input, input_initial)
     if (
         _epoch(vectors_final) != _epoch(os.fstat(descriptors.vectors))
@@ -264,6 +298,79 @@ def _write_outputs(
         )
     ):
         raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_OUTPUT_CHANGED")
+
+
+def run_native_embedding_work_batch_descriptors(
+    descriptors: NativeEmbeddingDescriptors,
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+    *,
+    resources: EmbeddingWorkBatchExecutionResources,
+    maximum_total_output_bytes: int,
+    fence: EmbeddingWorkBatchFence,
+) -> None:
+    """Finite batch source-only FD seam; no lease acquisition, launch or Artifact commit.
+
+    A separately admitted native owner must pin these resources/fences and enforce
+    the hard process deadline. The input cannot select an interpreter, path or scope.
+    Metadata is the last write, after every child and the whole binary are checked.
+    """
+    try:
+        if (
+            type(maximum_total_output_bytes) is not int
+            or not 1 <= maximum_total_output_bytes <= MAX_EMBEDDING_INPUT_BYTES
+        ):
+            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
+        initial = _prepare_descriptors(descriptors, MAX_EMBEDDING_WORK_BATCH_BYTES)
+        request = _read_canonical_request(
+            descriptors.input, initial[0], parse_embedding_work_batch_input
+        )
+        if request.expected_vector_bytes >= maximum_total_output_bytes:
+            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
+        _ready_outputs(descriptors, initial)
+        encoded = execute_embedding_work_batch(
+            request, resources=resources, backend_scope=backend_scope, fence=fence
+        )
+        digest = hashlib.sha256()
+        for child in encoded.children:
+            shard = child.result.shard
+            read_unit_vectors(
+                child.vectors,
+                dimension=shard.dimension,
+                row_count=shard.row_count,
+                expected_sha256=shard.binary.sha256,
+            )
+            digest.update(child.vectors)
+        result = build_embedding_work_batch_result(
+            request,
+            tuple(child.result for child in encoded.children),
+            "sha256:" + digest.hexdigest(),
+        )
+        payload = embedding_work_batch_result_bytes(result)
+        if len(payload) + result.vectors.byte_count > maximum_total_output_bytes:
+            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
+        fence.assert_batch_current(request)
+        for child_request in request.children:
+            fence.assert_child_current(request, child_request)
+        _ready_outputs(descriptors, initial)
+        vectors_final = _write_contiguous_members(
+            descriptors.vectors, initial[2], tuple(child.vectors for child in encoded.children)
+        )
+        _unchanged_input(descriptors.input, initial[0])
+        result_final = _write_member(descriptors.result, initial[1], payload)
+        _require_finished_outputs(descriptors, initial[0], vectors_final, result_final)
+        fence.assert_batch_current(request)
+        for child_request in request.children:
+            fence.assert_child_current(request, child_request)
+    except (
+        NativeEmbeddingHandoffError,
+        EmbeddingWorkBatchExecutionError,
+        EmbeddingVectorBinaryError,
+    ):
+        raise
+    except OSError:
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_IO_FAILED") from None
+    except Exception:
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_EXECUTION_FAILED") from None
 
 
 def _run_native_embedding_descriptors(
