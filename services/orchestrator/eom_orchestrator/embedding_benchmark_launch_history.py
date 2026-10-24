@@ -28,6 +28,11 @@ from eom_catalog_contracts.embedding_benchmark_poststart_failure import (
     BenchmarkPoststartObservation,
     BenchmarkPoststartPredecessorReference,
 )
+from eom_catalog_contracts.embedding_benchmark_preack_recovery import (
+    PREACK_RECOVERY_EVENT,
+    BenchmarkPreackRecoveryDecision,
+    require_benchmark_preack_observation,
+)
 from eom_catalog_contracts.embedding_benchmark_prelaunch_failure import (
     PRELAUNCH_FAILURE_CODE,
     PRELAUNCH_FAILURE_EVENT,
@@ -99,6 +104,14 @@ class BenchmarkLaunchHistory:
     prelaunch_failure: BenchmarkPrelaunchFailureRecord | None = None
     predecessor: BenchmarkPredecessorReference | None = None
     poststart_failure: BenchmarkPoststartFailureRecord | None = None
+    retired_preack_launches: tuple[RetiredBenchmarkPreackLaunch, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class RetiredBenchmarkPreackLaunch:
+    invocation: BenchmarkWorkerInvocation
+    decision: BenchmarkPreackRecoveryDecision
+    event_sequence: int
 
 
 @dataclass(frozen=True, slots=True)
@@ -162,6 +175,8 @@ def _history(
     )
     launches: list[BenchmarkLaunchRecord] = []
     execution_ids: set[str] = set()
+    retired: list[RetiredBenchmarkPreackLaunch] = []
+    recovered_ordinals: set[int] = set()
     if len(rows) > 32 or tuple(row.sequence for row in rows) != tuple(range(1, len(rows) + 1)):
         raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_HISTORY_INVALID")
     state = JobState.VALIDATED
@@ -169,6 +184,28 @@ def _history(
     poststart_failure = None
     predecessor = None
     for row in rows[2:]:
+        if row.event == PREACK_RECOVERY_EVENT:
+            try:
+                recovery = BenchmarkPreackRecoveryDecision.model_validate(row.data)
+                if (
+                    state != JobState.RUNNING
+                    or (row.from_state, row.to_state) != ("RUNNING", "RUNNING")
+                    or not launches
+                    or launches[-1].receipt is not None
+                    or recovery.actor_id != request.operator_audit_id
+                    or launches[-1].invocation.launch_ordinal in recovered_ordinals
+                ):
+                    raise ValueError()
+                original = launches[-1].invocation
+                require_benchmark_preack_observation(request, original, recovery.observation)
+            except (ValueError, SchemaError):
+                raise BenchmarkJobAdmissionError("BENCHMARK_PREACK_HISTORY_INVALID") from None
+            # Remove only from the executable projection. The original reservation,
+            # failure proof and used execution identity remain append-only history.
+            launches.pop()
+            recovered_ordinals.add(original.launch_ordinal)
+            retired.append(RetiredBenchmarkPreackLaunch(original, recovery, row.sequence))
+            continue
         if row.event in {PREDECESSOR_EVENT, POSTSTART_PREDECESSOR_EVENT}:
             if (
                 state != JobState.VALIDATED
@@ -304,7 +341,7 @@ def _history(
     if state != job.status or len(launches) > 6:
         raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_HISTORY_INVALID")
     return BenchmarkLaunchHistory(
-        job.status, tuple(launches), failure, predecessor, poststart_failure
+        job.status, tuple(launches), failure, predecessor, poststart_failure, tuple(retired)
     )
 
 
@@ -709,7 +746,7 @@ def _append(
     session: Session,
     job: JobRecord,
     event: str,
-    value: BenchmarkWorkerInvocation | BenchmarkLaunchReceipt,
+    value: BenchmarkWorkerInvocation | BenchmarkLaunchReceipt | BenchmarkPreackRecoveryDecision,
 ) -> None:
     # The original Job row is already locked, including exact event replays.
     sequence = session.scalar(
@@ -799,9 +836,43 @@ class BenchmarkLaunchJournal:
                     != "COMPLETED"
                 ):
                     raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_PREVIOUS_NOT_COMPLETED")
-            if invocation.execution_id in {row.invocation.execution_id for row in history.launches}:
+            used = {row.invocation.execution_id for row in history.launches} | {
+                row.invocation.execution_id for row in history.retired_preack_launches
+            }
+            if invocation.execution_id in used:
                 raise BenchmarkJobAdmissionError("BENCHMARK_LAUNCH_EXECUTION_REUSED")
             _append(session, job, RESERVED_EVENT, invocation)
+            return _history(session, job, request, inputs), True
+
+    def recover_preack(
+        self,
+        session: Session,
+        request: BenchmarkOwnerRequest,
+        decision: BenchmarkPreackRecoveryDecision,
+    ) -> tuple[BenchmarkLaunchHistory, bool]:
+        """Append under the original Job row lock; caller owns live root/source fences."""
+        checked = BenchmarkPreackRecoveryDecision.model_validate(decision)
+        with self.source_admission.admit_in_session(session, request) as inputs:
+            job = require_benchmark_job_in_session(session, request, job_id=checked.job_id)
+            history = _history(session, job, request, inputs)
+            for retired in history.retired_preack_launches:
+                if retired.invocation.execution_id == checked.execution_id:
+                    if retired.decision.observation != checked.observation:
+                        raise BenchmarkJobAdmissionError("BENCHMARK_PREACK_REPLAY_CONFLICT")
+                    return history, False
+            if (
+                job.status != JobState.RUNNING
+                or not history.launches
+                or history.launches[-1].receipt is not None
+                or checked.actor_id != request.operator_audit_id
+                or checked.observation.launch_ordinal
+                in {row.invocation.launch_ordinal for row in history.retired_preack_launches}
+            ):
+                raise BenchmarkJobAdmissionError("BENCHMARK_PREACK_NOT_RECOVERABLE")
+            require_benchmark_preack_observation(
+                request, history.launches[-1].invocation, checked.observation
+            )
+            _append(session, job, PREACK_RECOVERY_EVENT, checked)
             return _history(session, job, request, inputs), True
 
     def record(

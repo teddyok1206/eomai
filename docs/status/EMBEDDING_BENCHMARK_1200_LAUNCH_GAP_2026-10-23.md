@@ -553,3 +553,41 @@ rollback까지 연결해야 한다. 이 구현 미완료 자체를 성능 NO-GO�
   pinned 상태/store0 및 live/changed unit은 계속 거부한다. 기존 dead0/dead1 의미는
   유지한다. 관련 terminal/benchmark-lifetime 회귀48 PASS, Ruff/format PASS다.
   이번 변경은 cleanup 관찰이며 compute admission이나 실패 실행 retry가 아니다.
+
+### 2026-10-24 07:39 UTC — 원 CUDA 실패 보존·정리 완료와 제한된 복구 후보
+
+- private SDK `330da0e1…`를 RECORD 검증 후 별도 설치했다. 원 retirement intent
+  `sha256:1ecf9f67d0ccdf9400724ed6897d40d94df13003e501780db768ab1e09e4eeb7`을
+  재사용해 미실행 CLEAN만 수행했다. 실제 결과 SHA는
+  `sha256:9275f8306b1aa6910b8f7394abff793986eddf89a9c630b2ba398dc90b67b9f0`이다.
+  원 unit은 inactive/dead/PID0/fdstore0이며 root terminal FAILED는 보존했다.
+- root가 원 staged association, ready, root prepared, 원 intent/result와 GPU 정리를
+  다시 읽고16개 출력 모두0bytes·ACK 없음·constructor/tokenizer/CUDA/forward0을
+  확인했다. 봉인된 root proof는
+  `/run/eom-incremental-embeddings/benchmark-preack-recovery/f4ffefb468594414bcea524d4f5ebb98.json`,
+  raw SHA `979ccff7703b600e4ed3d914a949c6a01c2eb5fedc61c3ff2876a8a64cc37083`이다.
+  proof minter의 필드명/전용 writer 선택 오류2회는 compute/DB/output 등록 전에
+  거부됐으며 v1/v2 프로그램과 실패 unit 이력을 보존했다. v3만 proof를 생성했다.
+- additive `embedding-benchmark-preack-recovery/1.0` JSON Schema를 먼저 정의했다.
+  같은 Job에 RUNNING→RUNNING 이벤트만 추가하며 원 reserved execution은 별도
+  retired projection에 남긴다. CUDA ordinal당 최대1회, 새 실행 ID만 허용한다.
+  실패를 성공 receipt로 바꾸거나 CPU1을 재실행하지 않는다. 현재 actor/source
+  재승인·root proof hash/boot/live stopped-unit 검증·Job row lock·late rollback을
+  유지하며 새 DB table/migration/queue/framework는 없다.
+- operational CUDA bootstrap에서 SIGUSR1을 EOM import 전에 reserve한다. root argv
+  검증은 같은 typed family의 정확한 interpreter arguments를 사용한다. 새 CUDA
+  template raw SHA는 `986b6fb9e8432e2288163e7a092b9e025c4e974e6f7fb28dc7c3a63e2dc37f33`.
+  CPU template와 d381 numerical SDK/prefix/model/입력/timeout/memory는 그대로다.
+- 공유 numerical/timing 코드는 전 측정 간 비교하고 CPU/GPU 전용 코드는 실제로
+  완료된 해당 device 측정끼리 비교한다. routing/composition은 수치 알고리즘이
+  아니며 각 실행의 실제 unit bytes·producer/source·backend는 독립 검증한다.
+- 회귀: source history/budget/bootstrap/equivalence 첫 실행111 PASS·negative test
+  예외 기대 종류6건 보정, 이후 관련 application/contract/composition192 PASS,
+  추가 pre-ACK/inspection/bootstrap/equivalence57 PASS, CUDA 관찰/retirement/driver121
+  PASS, compatibility21 PASS. 중복 집합이므로 합산하지 않는다. finalization 새
+  mixed-device 두 경로도 PASS; 나머지 전체 suite는 별도 실행 중이다.
+- marker-guarded disposable PostgreSQL의 동시 복구 단일 append/같은 decision replay와
+  late 권한 철회 전체 rollback2 PASS. 생성한 임시 DB만 공식 cleanup했다.
+  scoped strict mypy11 modules·Ruff/format·diff check PASS. 새 GPU model 실행0,
+  새 Job0, 기존 public API/Web/INDEX/QUERY process/invocation은 유지했다.
+  아직 suffix/성능 실험 완료나 GPU 기본 활성화를 의미하지 않는다.

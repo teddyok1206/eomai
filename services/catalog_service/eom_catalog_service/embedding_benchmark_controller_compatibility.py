@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from eom_catalog_contracts.embedding_device_benchmark import BenchmarkDevice
+
 from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
 
 _RELEASE_ROOT = Path("/opt/eom/embedding-owner-releases")
@@ -71,6 +73,80 @@ _MEASUREMENT_MEMBERS = (
     "eom_workflow/embedding_benchmark_launch_control.py",
     "eom_catalog_contracts/embedding_device_benchmark.py",
 )
+
+# Control-plane routing/argv is checked against the actual unit bytes per launch,
+# not treated as a numerical algorithm executed by the other device's old run.
+_ROUTING_MEMBERS = frozenset(
+    "eom_catalog_service/" + name
+    for name in (
+        "embedding_benchmark_unit_policy.py",
+        "embedding_benchmark_launch_execution.py",
+        "embedding_benchmark_owner_composition.py",
+    )
+)
+_CPU_MEMBERS = tuple(
+    name
+    for name in _MEASUREMENT_MEMBERS
+    if "/embedding_benchmark_cpu" in name or name.endswith("/inference_transfer_cpu_systemd.py")
+)
+_CUDA_MEMBERS = tuple(
+    name
+    for name in _MEASUREMENT_MEMBERS
+    if "/embedding_benchmark_cuda" in name
+    or "/embedding_benchmark_gpu" in name
+    or name.endswith(("/embedding_cuda_host_closure.py", "/gpu_unit_terminal_observation.py"))
+)
+_SHARED_MEMBERS = tuple(
+    name
+    for name in _MEASUREMENT_MEMBERS
+    if name not in {*_CPU_MEMBERS, *_CUDA_MEMBERS, *_ROUTING_MEMBERS}
+)
+
+
+def capture_equivalent_device_measurements(
+    launches: tuple[tuple[BenchmarkDevice, str], ...],
+) -> NumericalRuntimeFileSnapshots:
+    """Compare shared math across all runs and device code among that device's runs.
+
+    A failed pre-ACK attempt is not a measurement. Fixing its GPU admission must
+    not invalidate a completed CPU measurement that never ran that GPU code.
+    All successful runs retain their exact producer/source and native unit pins.
+    """
+    if (
+        not isinstance(launches, tuple)
+        or not 1 <= len(launches) <= 6
+        or any(
+            type(pair) is not tuple
+            or len(pair) != 2
+            or type(pair[0]) is not str
+            or pair[0] not in {"CPU", "CUDA"}
+            or type(pair[1]) is not str
+            or re.fullmatch(r"[0-9a-f]{40}", pair[1]) is None
+            for pair in launches
+        )
+    ):
+        raise ValueError("BENCHMARK_CONTROLLER_MEASUREMENT_SELECTION_INVALID")
+    files = NumericalRuntimeFileSnapshots(0)
+    groups = (
+        ({source for _device, source in launches}, _SHARED_MEMBERS),
+        ({source for device, source in launches if device == "CPU"}, _CPU_MEMBERS),
+        ({source for device, source in launches if device == "CUDA"}, _CUDA_MEMBERS),
+    )
+    for sources, members in groups:
+        if len(sources) < 2:
+            continue
+        expected = None
+        for source in sorted(sources):
+            root = _RELEASE_ROOT / source / "site-packages"
+            hashes = tuple(
+                files.observe_protected_member_bytes(root / name, maximum=131072).sha256
+                for name in members
+            )
+            if expected is not None and hashes != expected:
+                raise ValueError("BENCHMARK_CONTROLLER_MEASUREMENT_CHANGED")
+            expected = hashes
+    files.assert_unchanged()
+    return files
 
 
 def capture_equivalent_controller_measurements(

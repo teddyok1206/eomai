@@ -12,6 +12,21 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     benchmark_timeout_seconds,
 )
 
+BUDGET1200_OWNER_RELEASE = "d381e6bc480606a828898ebe2e9942dd8a143677"
+_BUDGET1200_SITE = (
+    "/opt/eom/embedding-owner-releases/" + BUDGET1200_OWNER_RELEASE + "/site-packages"
+)
+_BUDGET1200_CPU_BOOTSTRAP = (
+    'import runpy,sys;sys.path.insert(0,"' + _BUDGET1200_SITE + '");'
+    'runpy.run_module("eom_catalog_service.embedding_benchmark_budget1200_cpu",run_name="__main__")'
+)
+_BUDGET1200_CUDA_BOOTSTRAP = (
+    "import runpy,signal,sys;signal.pthread_sigmask(signal.SIG_BLOCK,{signal.SIGUSR1});"
+    "sys.exit(1) if signal.SIGUSR1 in signal.sigpending() else None;"
+    'sys.path.insert(0,"' + _BUDGET1200_SITE + '");'
+    'runpy.run_module("eom_catalog_service.embedding_benchmark_budget1200_cuda",run_name="__main__")'
+)
+
 
 @dataclass(frozen=True, slots=True)
 class BenchmarkUnitFamily:
@@ -21,6 +36,14 @@ class BenchmarkUnitFamily:
     socket_sha256: str
     entrypoint_module: str
     timeout_seconds: int
+    bootstrap_program: str | None = None
+
+    @property
+    def interpreter_arguments(self) -> tuple[str, ...]:
+        """Exact admitted argv, shared by unit-byte tests and live process verification."""
+        if self.bootstrap_program is not None:
+            return ("-I", "-B", "-c", self.bootstrap_program)
+        return ("-I", "-B", "-m", self.entrypoint_module)
 
 
 _FAMILIES = MappingProxyType(
@@ -64,14 +87,16 @@ _FAMILIES = MappingProxyType(
             "sha256:1bd3fca6c88b8f58de33393617b6d3213762d0c45020eba09cb58ab6296d72a7",
             "eom_catalog_service.embedding_benchmark_budget1200_cpu",
             1200,
+            _BUDGET1200_CPU_BOOTSTRAP,
         ),
         ("CUDA", 1200): BenchmarkUnitFamily(
             "eom-embedding-benchmark-cuda-budget1200@.service",
             "eom-embedding-benchmark-cuda-budget1200@.socket",
-            "sha256:8d637284f122b97c9c23362917ce921b7991e224895224ead3d81082ef776cb2",
+            "sha256:986b6fb9e8432e2288163e7a092b9e025c4e974e6f7fb28dc7c3a63e2dc37f33",
             "sha256:32213967e9fb94d508b9db525c33090545f5a195d3f662c7481d70f5599b9770",
             "eom_catalog_service.embedding_benchmark_budget1200_cuda",
             1200,
+            _BUDGET1200_CUDA_BOOTSTRAP,
         ),
     }
 )

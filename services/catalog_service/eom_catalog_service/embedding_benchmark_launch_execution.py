@@ -46,6 +46,13 @@ from eom_catalog_service.embedding_benchmark_root_connection import (
     connect_benchmark_series_root,
     require_benchmark_series_listener,
 )
+
+# The fixed numeric environments intentionally stay immutable. Budgeted benchmark
+# entrypoints live in the separately pinned owner release and are added to sys.path
+# only by the exact 1200-second unit invocation.
+from eom_catalog_service.embedding_benchmark_unit_policy import (
+    BUDGET1200_OWNER_RELEASE as _BUDGET1200_OWNER_RELEASE,
+)
 from eom_catalog_service.embedding_benchmark_unit_policy import benchmark_unit_family
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_catalog_service.embedding_runtime_files import (
@@ -53,10 +60,6 @@ from eom_catalog_service.embedding_runtime_files import (
     fixed_native_embedding_profile,
 )
 
-# The fixed numeric environments intentionally stay immutable. Budgeted benchmark
-# entrypoints live in the separately pinned owner release and are added to sys.path
-# only by the exact 1200-second unit invocation.
-_BUDGET1200_OWNER_RELEASE = "d381e6bc480606a828898ebe2e9942dd8a143677"
 _BUDGET1200_OWNER_SITE = (
     Path("/opt/eom/embedding-owner-releases") / _BUDGET1200_OWNER_RELEASE / "site-packages"
 )

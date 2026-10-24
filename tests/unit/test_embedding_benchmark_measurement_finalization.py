@@ -285,10 +285,16 @@ def test_compatible_transport_repair_preserves_actual_per_launch_sources(measure
         observations.append(releases)
         return Capture()
 
-    monkeypatch.setattr(module, "capture_equivalent_controller_measurements", capture)
+    monkeypatch.setattr(module, "capture_equivalent_device_measurements", capture)
     result = finalize(measurement)
     assert result.result.status == "MEASURED"
-    assert observations == [("a" * 40,) + ("b" * 40,) * 5, "revalidated"]
+    assert observations == [
+        tuple(
+            (device, ("a" if ordinal == 1 else "b") * 40)
+            for ordinal, device in enumerate(("CPU", "CUDA", "CUDA", "CPU", "CPU", "CUDA"), 1)
+        ),
+        "revalidated",
+    ]
     assert not finalize(measurement).created
     assert len(measurement.calls) == 6
 
@@ -298,7 +304,7 @@ def test_incompatible_measurement_repair_cannot_promote_completed_series(measure
     def reject(releases):
         raise ValueError("BENCHMARK_CONTROLLER_MEASUREMENT_CHANGED")
 
-    monkeypatch.setattr(module, "capture_equivalent_controller_measurements", reject)
+    monkeypatch.setattr(module, "capture_equivalent_device_measurements", reject)
     with pytest.raises(ValueError, match="MEASUREMENT_CHANGED"):
         finalize(measurement)
     with measurement.owner.sessions() as session:

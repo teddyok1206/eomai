@@ -1,0 +1,269 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-benchmark-preack-recovery/1.0",
+  "title": "Bounded pre-ACK CUDA recovery without a measurement receipt",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/observation"
+    },
+    {
+      "$ref": "#/$defs/decision"
+    }
+  ],
+  "$defs": {
+    "empty_output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "member_name",
+        "byte_count",
+        "sha256"
+      ],
+      "properties": {
+        "member_name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "byte_count": {
+          "const": 0
+        },
+        "sha256": {
+          "const": "sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "job_id",
+        "execution_id",
+        "request_sha256",
+        "invocation_sha256",
+        "kind",
+        "device",
+        "launch_ordinal",
+        "invocation_raw_sha256",
+        "association_sha256",
+        "prepared_sha256",
+        "ready_raw_sha256",
+        "retirement_intent_raw_sha256",
+        "retirement_result_raw_sha256",
+        "native_service",
+        "native_invocation_id",
+        "original_service_raw_sha256",
+        "original_outcome",
+        "cleanup",
+        "root_ack_absent",
+        "constructor_calls",
+        "tokenizer_calls",
+        "cuda_init_calls",
+        "forward_calls",
+        "stored_descriptors",
+        "cgroup_empty",
+        "gpu_client_count",
+        "outputs",
+        "physical_fence_sha256",
+        "boot_id",
+        "observed_at",
+        "observation_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-benchmark-preack-recovery/1.0"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "execution_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "invocation_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "kind": {
+          "const": "ROOT_OBSERVATION"
+        },
+        "device": {
+          "const": "CUDA"
+        },
+        "launch_ordinal": {
+          "enum": [
+            2,
+            3,
+            6
+          ]
+        },
+        "invocation_raw_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "association_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "prepared_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "ready_raw_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "retirement_intent_raw_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "retirement_result_raw_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "native_service": {
+          "type": "string",
+          "pattern": "^eom-embedding-benchmark-cuda-budget1200@[0-9a-f]{32}\\.service$"
+        },
+        "native_invocation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "original_service_raw_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "original_outcome": {
+          "const": "FAILED"
+        },
+        "cleanup": {
+          "const": "CONFIRMED"
+        },
+        "root_ack_absent": {
+          "const": true
+        },
+        "constructor_calls": {
+          "const": 0
+        },
+        "tokenizer_calls": {
+          "const": 0
+        },
+        "cuda_init_calls": {
+          "const": 0
+        },
+        "forward_calls": {
+          "const": 0
+        },
+        "stored_descriptors": {
+          "const": 0
+        },
+        "cgroup_empty": {
+          "const": true
+        },
+        "gpu_client_count": {
+          "const": 0
+        },
+        "outputs": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/empty_output"
+          }
+        },
+        "physical_fence_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "boot_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "observed_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "observation_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "job_id",
+        "execution_id",
+        "request_sha256",
+        "invocation_sha256",
+        "kind",
+        "from_state",
+        "to_state",
+        "reason",
+        "observation",
+        "actor_id",
+        "decided_at",
+        "decision_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-benchmark-preack-recovery/1.0"
+        },
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "execution_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "request_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "invocation_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "kind": {
+          "const": "RECOVERY_DECISION"
+        },
+        "from_state": {
+          "const": "RUNNING"
+        },
+        "to_state": {
+          "const": "RUNNING"
+        },
+        "reason": {
+          "const": "CUDA_PREACK_FAILED_NO_COMPUTE"
+        },
+        "observation": {
+          "$ref": "#/$defs/observation"
+        },
+        "actor_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "decided_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "Z$"
+        },
+        "decision_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

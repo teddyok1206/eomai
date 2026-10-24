@@ -111,3 +111,29 @@ def test_inventory_is_unique_and_covers_the_actual_root_and_timing_implementatio
         "eom_catalog_service/embedding_benchmark_root_control.py",
         "eom_catalog_service/embedding_benchmark_unit_policy.py",
     } <= set(members)
+
+
+def test_gpu_only_admission_repair_does_not_reject_retained_cpu(releases):
+    root, sources = releases
+    for name in (*module._CUDA_MEMBERS, *module._ROUTING_MEMBERS):
+        (root / sources[1] / "site-packages" / name).write_text("changed GPU control")
+    launches = (("CPU", sources[0]), ("CUDA", sources[1]), ("CPU", sources[1]))
+    module.capture_equivalent_device_measurements(launches).assert_unchanged()
+    with pytest.raises(ValueError, match="MEASUREMENT_CHANGED"):
+        module.capture_equivalent_device_measurements((("CUDA", sources[0]), ("CUDA", sources[1])))
+
+
+@pytest.mark.parametrize("members", (module._SHARED_MEMBERS, module._CPU_MEMBERS))
+def test_shared_math_or_cpu_changes_still_reject_old_cpu_measurement(releases, members):
+    root, sources = releases
+    (root / sources[1] / "site-packages" / members[0]).write_text("changed numeric code")
+    with pytest.raises(ValueError, match="MEASUREMENT_CHANGED"):
+        module.capture_equivalent_device_measurements((("CPU", sources[0]), ("CPU", sources[1])))
+
+
+@pytest.mark.parametrize(
+    "value", [(), (("CPU", "x"),), (("OTHER", "a" * 40),), [("CPU", "a" * 40)]]
+)
+def test_device_measurement_selection_is_closed(value):
+    with pytest.raises(ValueError, match="SELECTION_INVALID"):
+        module.capture_equivalent_device_measurements(value)

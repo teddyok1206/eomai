@@ -154,3 +154,65 @@ Continuation design:
 11. Alternative: rerun CPU1 after every nonnumerical release change. It wastes a
     validated long measurement and couples HTTP maintenance to scientific output.
     Arbitrarily accepting mixed releases or relabeling old receipts is unsafe.
+
+## Proven pre-ACK CUDA failure: one bounded same-Job recovery
+
+Actual ordinal2 `f4ffefb468594414bcea524d4f5ebb98` exited before root ACK. Its
+ready record and every output remain original; worker-result is empty. The
+1200-second unit's bootstrap omitted SIGUSR1 reservation, and root observation
+expected `-m` although the installed unit uses `-c`. Correct only the unit's
+operational bootstrap/argv binding. Keep the numerical interpreter, SDK d381,
+encoder/normalizer/codec, payload, recipe, input and time/memory limits unchanged.
+
+The supported retirement preserved its original failed terminal before RESET.
+PID1 then reported inactive/dead-resources-pinned/store1, not an active process.
+Accept that narrow stopped state only with loaded unit, PID0, empty cgroup, no
+pending Job/override and the original invocation. Finish only the not-yet-executed
+fdstore clean using the preserved intent and current resource checks; never replay
+RESET, send ACK, restart the unit or reinterpret the failed original as success.
+
+The original six-stage journal cannot currently represent this proven zero-compute
+attempt. Add a narrow recovery event, not a new queue or a general retry framework:
+
+1. Orchestrator owns the same Job's append-only recovery and next reservation;
+   Catalog infrastructure validates a pinned root-produced inspection. Root only
+   observes/retires OS resources and seals evidence, never mutates Job rows.
+2. Canonical sources remain the original request/policy/CPU1 receipt and immutable
+   failed invocation, ready/empty-output/retirement records. A path is not identity.
+3. Keep original Job/benchmark/input/policy revisions. A recovered failed attempt
+   stays in history with its own execution ID. The next actual attempt gets a new
+   execution ID for the same ordinal; no copying or relabeling numerical results.
+4. The new JSON Schema2020-12 owner protocol precedes typed models and application
+   behavior. Root observations and recovery decisions pin all identities/hashes,
+   exact failed native invocation, absent ACK, zero constructor/forward counts,
+   empty output manifest and confirmed resource retirement. This small immutable
+   value belongs in existing event metadata; no binaries or new DB tables.
+5. Dominant access is indexed Job lookup and ordered history (maximum32 events),
+   plus set membership of execution IDs and recovered ordinals. One pre-ACK
+   recovery per CUDA ordinal2/3/6 only; never an unbounded retry loop.
+6. Lock the existing Job row in the current root transaction. Require actual
+   caller/source/policy admission, last unresolved reservation matching the proof
+   and unchanged completed prefix. Append RUNNING-to-RUNNING recovery once; do not
+   update/delete old events. Concurrent recovery has one winner; exact replay
+   creates no second event or unit. No migration/index change is needed.
+7. History projection retains retired attempts separately and exposes the original
+   completed prefix plus current ordinal. Execution IDs remain unique including
+   retired attempts. Only a proven pre-ACK/no-output failure can leave this state.
+8. Missing/stale/hash-different proof, any ACK, nonempty output, live process,
+   retained resource, wrong actor or current source denial blocks recovery. A
+   post-ACK/OOM/unknown model run is not eligible. Historical replay verifies the
+   stored decision, not a mutable latest unit or invented successful worker result.
+9. Bootstrap routing and GPU safety observation are not numerical measurement
+   algorithms. Compare shared numerical/timing implementations across releases,
+   and device-specific measurement code only among completed runs of that device.
+   The old CPU1 did not execute GPU ready/retirement code. Every launch still pins
+   actual source, exact backend and independent immutable numerical implementation
+   hashes. Actual CPU unit bytes must stay unchanged; no threshold is relaxed.
+10. Keep interfaces/application/domain/contracts dependency direction. CLI composes
+    genuine authentication, typed fixed inspection and supported application; the
+    journal owns concurrency/state. Source resolution stays at official Catalog
+    and Identity boundaries, never model-supplied authority or worker DB/NAS access.
+11. The simpler alternatives—direct row edits, ignoring the uncertain reservation,
+    rerunning CPU1 or calling the bootstrap defect a GPU performance failure—do
+    not preserve the requested experiment. This bounded event extends its existing
+    checkpoint ownership and keeps every failed attempt distinguishable.

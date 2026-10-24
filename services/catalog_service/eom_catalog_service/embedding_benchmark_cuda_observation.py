@@ -421,10 +421,7 @@ def observe_benchmark_cuda_ready(
     process = Path("/proc") / str(ready.pid)
     arguments = (
         str(_PREFIX / "bin/python3.12"),
-        "-I",
-        "-B",
-        "-m",
-        family.entrypoint_module,
+        *family.interpreter_arguments,
         *benchmark_launch_arguments(pins),
     )
 

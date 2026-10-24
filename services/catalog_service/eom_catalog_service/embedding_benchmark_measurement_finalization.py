@@ -56,7 +56,7 @@ from eom_workflow.embedding_benchmark_launch_control import (
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.embedding_benchmark_controller_compatibility import (
-    capture_equivalent_controller_measurements,
+    capture_equivalent_device_measurements,
 )
 from eom_catalog_service.embedding_benchmark_numerical_assessment import (
     assess_benchmark_series_numerics,
@@ -289,8 +289,11 @@ def _collect_measurement(
             )
         )
         evidence = tuple(_read_launch_evidence(session, reader, launch) for launch in launches)
-        controllers = capture_equivalent_controller_measurements(
-            tuple(row.prepared.controller_release for row in evidence)
+        controllers = capture_equivalent_device_measurements(
+            tuple(
+                (launch.invocation.device, row.prepared.controller_release)
+                for launch, row in zip(launches, evidence, strict=True)
+            )
         )
         if any(
             len(
