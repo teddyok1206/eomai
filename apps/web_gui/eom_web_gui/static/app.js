@@ -3573,7 +3573,7 @@ async function pollCodexAuthEnrollment(enrollmentId) {
       await loadCodexAccounts();
       const account = (state.codexAccounts || []).find((item) => item.binding_id === value.binding_id);
       if (value.state === "SUCCEEDED" && account && account.state !== "READY") {
-        showMessage($("#codex-reauth-message"), "로그인은 완료됐지만 사용 가능한 모델이 확인되지 않아 작업을 시작하지 않았습니다. 슬롯의 상세 상태를 확인해 주세요.", "warning");
+        showMessage($("#codex-reauth-message"), "로그인은 완료됐지만 슬롯은 아직 사용 중지 또는 제한 상태입니다. 슬롯의 상세 상태를 확인해 주세요.", "warning");
       }
       return;
     }

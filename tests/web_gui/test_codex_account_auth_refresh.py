@@ -24,18 +24,20 @@ const assert = require('node:assert/strict');
 const vm = require('node:vm');
 const elements = new Map();
 const messages = [], requests = [], timers = [];
-let stateName = 'VERIFYING', cleared = 0, reloads = 0;
+let stateName = 'VERIFYING', cleared = 0, reloads = 0, accountState = 'READY';
 const context = {
   state: {codexAuthEnrollmentId: 'authflow_test'},
   api: async (path) => {
-    requests.push(path); return {state: stateName, challenge_available: false};
+    requests.push(path); return {state: stateName, binding_id: 'binding', challenge_available: false};
   },
   $: (key) => { if (!elements.has(key)) elements.set(key, {}); return elements.get(key); },
   statePresentation: () => ({label: 'state'}),
   showMessage: (...args) => messages.push(args[1]),
   clearCodexDeviceChallenge: () => ++cleared,
   setStatus: () => {},
-  loadCodexAccounts: async () => ++reloads,
+  loadCodexAccounts: async () => {
+    ++reloads; context.state.codexAccounts = [{binding_id: 'binding', state: accountState}];
+  },
   window: {setTimeout: (fn, delay) => timers.push(delay)},
 };
 vm.createContext(context);
@@ -50,6 +52,11 @@ vm.runInContext(FUNCTIONS, context);
   await context.pollCodexAuthEnrollment('authflow_test');
   assert.equal(reloads, 1);
   assert.equal(timers.length, 1);
+  // A later administrator stop is not evidence that model verification failed.
+  accountState = 'DISABLED';
+  await context.pollCodexAuthEnrollment('authflow_test');
+  assert.ok(messages.at(-1).includes('사용 중지 또는 제한 상태'));
+  assert.ok(!messages.at(-1).includes('모델이 확인되지 않아'));
   assert.ok(requests.every((path) => path.endsWith('/authflow_test')));
 })().catch((error) => { console.error(error); process.exitCode = 1; });
 """.replace("FUNCTIONS", json.dumps(functions))
