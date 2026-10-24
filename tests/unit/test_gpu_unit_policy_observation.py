@@ -13,6 +13,7 @@ from tests.unit.test_image_gpu_unit_observation import policy as image_policy
 CUDA_UNIT = "eom-embedding-benchmark-cuda@" + "1" * 32 + ".service"
 CUDA_BUDGET_UNIT = "eom-embedding-benchmark-cuda-budget600@" + "1" * 32 + ".service"
 INDEX_UNIT = "eom-embedding-native-cuda-index@" + "2" * 32 + ".service"
+BATCH_UNIT = "eom-embedding-native-gpu-batch@" + "3" * 32 + ".service"
 
 
 @pytest.mark.parametrize(
@@ -22,6 +23,7 @@ INDEX_UNIT = "eom-embedding-native-cuda-index@" + "2" * 32 + ".service"
         ("eom-embedding-cuda", CUDA_UNIT),
         ("eom-embedding-cuda", CUDA_BUDGET_UNIT),
         ("eom-embedding-cuda", INDEX_UNIT),
+        ("eom-embedding-cuda", BATCH_UNIT),
     ),
 )
 @pytest.mark.parametrize(
@@ -78,6 +80,8 @@ def test_exact_family_device_allowlist_and_bounded_read_fail_closed(
     def reader():
         if unit == INDEX_UNIT:
             return policy.observe_native_cuda_index_unit_policy(unit)
+        if unit == BATCH_UNIT:
+            return policy.observe_embedding_gpu_batch_unit_policy(unit)
         return policy.observe_gpu_unit_policy(unit, worker_account=account)
 
     if fault is None:
@@ -101,6 +105,7 @@ def test_exact_family_device_allowlist_and_bounded_read_fail_closed(
         ("eom-embedding-benchmark-cuda-budget601@" + "a" * 32 + ".service", "eom-embedding-cuda"),
         ("eom-embedding-benchmark-cuda-budget600@" + "A" * 32 + ".service", "eom-embedding-cuda"),
         (INDEX_UNIT, "eom-embedding-cuda"),
+        (BATCH_UNIT, "eom-embedding-cuda"),
         (None, "eom-embedding-cuda"),
     ),
 )
@@ -127,3 +132,18 @@ def test_index_policy_cannot_borrow_other_gpu_families(monkeypatch, unit):
     )
     with pytest.raises(ValueError, match="GPU_UNIT_POLICY_INVALID"):
         policy.observe_native_cuda_index_unit_policy(unit)
+
+
+@pytest.mark.parametrize(
+    "unit", (IMAGE_UNIT, CUDA_UNIT, INDEX_UNIT, "--all", None, BATCH_UNIT + "\n")
+)
+def test_batch_policy_cannot_borrow_existing_gpu_families(monkeypatch, unit):
+    monkeypatch.setattr(
+        policy,
+        "subprocess",
+        SimpleNamespace(
+            run=lambda *_a, **_kw: pytest.fail("untrusted batch unit executed"),
+        ),
+    )
+    with pytest.raises(ValueError, match="GPU_UNIT_POLICY_INVALID"):
+        policy.observe_embedding_gpu_batch_unit_policy(unit)

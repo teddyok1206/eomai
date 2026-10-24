@@ -424,6 +424,30 @@ def create_native_cpu_descriptor_handoff(
         raise CpuHandoffError("NATIVE_CPU_EXECUTION_ID_INVALID")
     if type(input_bytes) is not bytes or not 1 <= len(input_bytes) <= MAX_EXPERIMENT_MEMBER_BYTES:
         raise CpuHandoffError("NATIVE_CPU_INPUT_INVALID")
+    _create_native_descriptor_files(runtime_root, execution_id, input_bytes, owner=owner)
+
+
+def create_native_late_bound_descriptor_handoff(
+    runtime_root: Path, execution_id: str, *, owner: CpuHandoffIdentity
+) -> None:
+    """Create a distinct root-only empty input for a later admitted compute grant.
+
+    This does not relax the existing nonempty CPU/INDEX handoff. The caller must
+    journal and validate the exact late-bound input before allowing any worker read.
+    """
+    if os.geteuid() != 0:
+        raise CpuHandoffError("NATIVE_CPU_ROOT_REQUIRED")
+    if (
+        type(execution_id) is not str
+        or re.fullmatch(r"[0-9a-f]{32}", execution_id, re.ASCII) is None
+    ):
+        raise CpuHandoffError("NATIVE_CPU_EXECUTION_ID_INVALID")
+    _create_native_descriptor_files(runtime_root, execution_id, b"", owner=owner)
+
+
+def _create_native_descriptor_files(
+    runtime_root: Path, execution_id: str, input_bytes: bytes, *, owner: CpuHandoffIdentity
+) -> None:
     with protected_cpu_handoff_directory(
         runtime_root, owner=owner, uid=0, gid=owner.owner_gid, mode=0o750
     ) as parent:

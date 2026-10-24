@@ -1,0 +1,20 @@
+[Unit]
+Description=EOM root-only GPU batch control %i
+ConditionPathIsDirectory=/run/eom-native-embedding-gpu-batch/%i
+ConditionPathExists=/run/eom-native-embedding-gpu-batch/%i/allocation.json
+ConditionPathExists=/run/eom-native-embedding-gpu-batch/%i/launch.env
+StartLimitIntervalSec=infinity
+StartLimitBurst=1
+
+[Socket]
+ListenStream=/run/eom-native-embedding-gpu-batch/%i/control.sock
+Accept=no
+Service=eom-embedding-native-gpu-batch@%i.service
+SocketUser=root
+SocketGroup=root
+SocketMode=0600
+DirectoryMode=0750
+FileDescriptorName=gpu-batch-control
+PassCredentials=yes
+RemoveOnStop=yes
+Backlog=1
