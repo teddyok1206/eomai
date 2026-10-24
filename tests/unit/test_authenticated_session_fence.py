@@ -224,6 +224,75 @@ def assert_current(
     )
 
 
+def test_execution_window_uses_real_capture_without_extending_or_serializing_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, capture = verified_capture(monkeypatch)
+    original = (source.api_session.authenticated_at, source.token.expires_at)
+    adapter = AuthenticatedSessionFence(replace(PIN, fresh_auth_seconds=3600))
+    adapter.assert_execution_window(
+        cast(Session, source),
+        capture,
+        required_permission=PermissionKey.WORKFLOW_START,
+        minimum_seconds=1320,
+    )
+    assert source.order == ["OperatorRecord", "ApiSessionRecord", "ApiTokenRecord"]
+    assert (source.api_session.authenticated_at, source.token.expires_at) == original
+    assert not source.new and not source.dirty and not source.deleted
+
+
+@pytest.mark.parametrize("limit", ("access", "idle", "freshness"))
+def test_execution_window_rejects_current_but_insufficient_capture_lifetime(
+    monkeypatch: pytest.MonkeyPatch, limit: str
+) -> None:
+    source = SyntheticSession()
+    if limit == "access":
+        source.token.expires_at = datetime.now(UTC) + timedelta(seconds=400)
+    elif limit == "freshness":
+        source.api_session.authenticated_at = datetime.now(UTC) - timedelta(seconds=500)
+    source, capture = verified_capture(monkeypatch, source)
+    if limit == "idle":
+        source.api_session.idle_expires_at = datetime.now(UTC) + timedelta(seconds=400)
+    adapter = AuthenticatedSessionFence(PIN)
+    assert_current(source, capture, adapter)
+    with pytest.raises(AuthenticatedSessionFenceError, match="EXECUTION_WINDOW_INSUFFICIENT"):
+        adapter.assert_execution_window(
+            cast(Session, source),
+            capture,
+            required_permission=PermissionKey.WORKFLOW_START,
+            minimum_seconds=600,
+        )
+
+
+@pytest.mark.parametrize("minimum", (True, 0, -1, 3601, "1200", None))
+def test_execution_window_rejects_invalid_duration_before_any_database_read(
+    monkeypatch: pytest.MonkeyPatch, minimum: Any
+) -> None:
+    source, capture = verified_capture(monkeypatch)
+    with pytest.raises(AuthenticatedSessionFenceError, match="EXECUTION_WINDOW_INVALID"):
+        AuthenticatedSessionFence(PIN).assert_execution_window(
+            cast(Session, source),
+            capture,
+            required_permission=PermissionKey.WORKFLOW_START,
+            minimum_seconds=minimum,
+        )
+    assert source.order == []
+
+
+def test_execution_window_never_bypasses_revoked_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, capture = verified_capture(monkeypatch)
+    source.api_session.revoked_at = datetime.now(UTC)
+    with pytest.raises(AuthenticatedSessionFenceError, match="FORBIDDEN"):
+        AuthenticatedSessionFence(PIN).assert_execution_window(
+            cast(Session, source),
+            capture,
+            required_permission=PermissionKey.WORKFLOW_START,
+            minimum_seconds=60,
+        )
+
+
 def test_actual_hmac_capture_is_opaque_and_fences_exact_share_order_without_activity_mutation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

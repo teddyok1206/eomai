@@ -23,6 +23,12 @@ from eom_catalog_contracts.embedding_benchmark_budget1200_failure import (
     benchmark_budget1200_failure_bytes,
     parse_benchmark_budget1200_failure,
 )
+from eom_catalog_contracts.embedding_benchmark_budget1200_retry_failure import (
+    BenchmarkBudget1200RetryControllerPin,
+    BenchmarkBudget1200RetryPoststartObservation,
+    benchmark_budget1200_retry_failure_bytes,
+    parse_benchmark_budget1200_retry_failure,
+)
 from eom_catalog_contracts.embedding_benchmark_poststart_failure import (
     MAX_POSTSTART_FAILURE_BYTES,
     BenchmarkPoststartObservation,
@@ -73,6 +79,11 @@ _PROOF_ROOT = Path("/run/eom-incremental-embeddings/benchmark-poststart-recovery
 _ROOT_UID = 0
 _ROOT_GID = 0
 _ACL_NAMES = frozenset(("system.posix_acl_access", "system.posix_acl_default"))
+type _PoststartObservation = (
+    BenchmarkPoststartObservation
+    | BenchmarkBudget1200PoststartObservation
+    | BenchmarkBudget1200RetryPoststartObservation
+)
 
 
 class BenchmarkPoststartInspectionError(ValueError):
@@ -284,12 +295,21 @@ def _capture(
     stack: ExitStack,
     request: BenchmarkOwnerRequest,
     invocation: BenchmarkWorkerInvocation,
-    controller: BenchmarkFailedControllerPin,
+    controller: BenchmarkFailedControllerPin | BenchmarkBudget1200RetryControllerPin,
     terminal: BenchmarkPoststartTerminalProof
     | BenchmarkBudget600TerminalProof
     | BenchmarkBudget1200TerminalProof,
     machine_factory: Callable[[BenchmarkLaunchAssociation], _PoststartMachine] | None = None,
 ) -> _Inspection:
+    if isinstance(controller, BenchmarkBudget1200RetryControllerPin):
+        _require(
+            request.schema_version == "embedding-device-benchmark-request/1.2"
+            and invocation.schema_version == "embedding-device-benchmark-invocation/1.2"
+            and request.execution_policy.schema_version == "embedding-device-benchmark-policy/1.2"
+            and request.execution_policy.timeout_seconds == 1200
+            and invocation.execution_policy == request.execution_policy,
+            "CONTROLLER_SELECTION_INVALID",
+        )
     owner = fixed_owner_identity()
     root = BENCHMARK_HANDOFF_ROOT / invocation.execution_id
     associated = _member(
@@ -451,7 +471,7 @@ def _capture(
 
 
 def _validate(
-    observation: BenchmarkPoststartObservation | BenchmarkBudget1200PoststartObservation,
+    observation: _PoststartObservation,
     state: _Inspection,
 ) -> None:
     boot, digest = state.snapshot()
@@ -497,7 +517,7 @@ def _validate(
 
 def _proof(
     stack: ExitStack, execution: str, expected: str | None
-) -> tuple[_Member, BenchmarkPoststartObservation | BenchmarkBudget1200PoststartObservation]:
+) -> tuple[_Member, _PoststartObservation]:
     owner = fixed_owner_identity()
     # Preserve absence as absence before a yielded-directory wrapper normalizes OS errors.
     (_PROOF_ROOT / (execution + ".json")).lstat()
@@ -515,8 +535,13 @@ def _proof(
     document = parse_rootlocal_evidence_document(record.raw, MAX_POSTSTART_FAILURE_BYTES)
     if not isinstance(document, dict):
         raise BenchmarkPoststartInspectionError("PROOF_KIND_INVALID")
-    observation: BenchmarkPoststartObservation | BenchmarkBudget1200PoststartObservation
-    if document.get("schema_version") == "embedding-benchmark-poststart-failure/1.2":
+    observation: _PoststartObservation
+    if document.get("schema_version") == "embedding-benchmark-poststart-failure/1.3":
+        parsed_v13 = parse_benchmark_budget1200_retry_failure(record.raw)
+        if not isinstance(parsed_v13, BenchmarkBudget1200RetryPoststartObservation):
+            raise BenchmarkPoststartInspectionError("PROOF_KIND_INVALID")
+        observation = parsed_v13
+    elif document.get("schema_version") == "embedding-benchmark-poststart-failure/1.2":
         parsed_v12 = parse_benchmark_budget1200_failure(record.raw)
         if not isinstance(parsed_v12, BenchmarkBudget1200PoststartObservation):
             raise BenchmarkPoststartInspectionError("PROOF_KIND_INVALID")
@@ -534,7 +559,7 @@ class CapturedBenchmarkPoststartInspection:
     def __init__(
         self,
         record: _Member,
-        observation: BenchmarkPoststartObservation | BenchmarkBudget1200PoststartObservation,
+        observation: _PoststartObservation,
         state: _Inspection,
     ) -> None:
         self._record, self._observation, self._state, self._active = (
@@ -547,7 +572,7 @@ class CapturedBenchmarkPoststartInspection:
     @property
     def observation(
         self,
-    ) -> BenchmarkPoststartObservation | BenchmarkBudget1200PoststartObservation:
+    ) -> _PoststartObservation:
         return self._observation
 
     def assert_current(self) -> None:
@@ -608,7 +633,7 @@ class FixedBenchmarkPoststartInspection:
 
 @dataclass(frozen=True, slots=True)
 class MintedBenchmarkPoststartProof:
-    observation: BenchmarkPoststartObservation | BenchmarkBudget1200PoststartObservation
+    observation: _PoststartObservation
     raw_sha256: str
     created: bool
 
@@ -617,14 +642,18 @@ def mint_benchmark_poststart_observation(
     request: BenchmarkOwnerRequest,
     invocation: BenchmarkWorkerInvocation,
     *,
-    controller: BenchmarkFailedControllerPin,
+    controller: BenchmarkFailedControllerPin | BenchmarkBudget1200RetryControllerPin,
 ) -> MintedBenchmarkPoststartProof:
     """Root-only proof publication; preserve original partial files and all history."""
     _require(
         os.getresuid() == (_ROOT_UID,) * 3 and os.getresgid() == (_ROOT_GID,) * 3, "ROOT_REQUIRED"
     )
     _selection(request, invocation)
-    controller = BenchmarkFailedControllerPin.model_validate(controller)
+    controller = (
+        BenchmarkBudget1200RetryControllerPin.model_validate(controller)
+        if isinstance(controller, BenchmarkBudget1200RetryControllerPin)
+        else BenchmarkFailedControllerPin.model_validate(controller)
+    )
     owner = fixed_owner_identity()
     try:
         with ExitStack() as stack:
@@ -689,11 +718,16 @@ def mint_benchmark_poststart_observation(
             boot, snapshot = state.snapshot()
             completed = state.completion
             budget1200 = request.execution_policy.timeout_seconds == 1200
+            retry_controller = isinstance(controller, BenchmarkBudget1200RetryControllerPin)
             body = dict(
                 schema_version=(
-                    "embedding-benchmark-poststart-failure/1.2"
-                    if budget1200
-                    else "embedding-benchmark-poststart-failure/1.0"
+                    "embedding-benchmark-poststart-failure/1.3"
+                    if retry_controller
+                    else (
+                        "embedding-benchmark-poststart-failure/1.2"
+                        if budget1200
+                        else "embedding-benchmark-poststart-failure/1.0"
+                    )
                 ),
                 kind="ROOT_OBSERVATION",
                 job_id=invocation.job_id,
@@ -719,15 +753,23 @@ def mint_benchmark_poststart_observation(
                 observed_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
             )
             observation = (
-                BenchmarkBudget1200PoststartObservation.model_validate(
+                BenchmarkBudget1200RetryPoststartObservation.model_validate(
                     body | {"observation_sha256": content_sha256(body)}
                 )
-                if budget1200
-                else BenchmarkPoststartObservation.model_validate(
-                    body | {"observation_sha256": content_sha256(body)}
+                if retry_controller
+                else (
+                    BenchmarkBudget1200PoststartObservation.model_validate(
+                        body | {"observation_sha256": content_sha256(body)}
+                    )
+                    if budget1200
+                    else BenchmarkPoststartObservation.model_validate(
+                        body | {"observation_sha256": content_sha256(body)}
+                    )
                 )
             )
-            if isinstance(observation, BenchmarkBudget1200PoststartObservation):
+            if isinstance(observation, BenchmarkBudget1200RetryPoststartObservation):
+                raw = benchmark_budget1200_retry_failure_bytes(observation)
+            elif isinstance(observation, BenchmarkBudget1200PoststartObservation):
                 raw = benchmark_budget1200_failure_bytes(observation)
             else:
                 raw = benchmark_poststart_failure_bytes(observation)

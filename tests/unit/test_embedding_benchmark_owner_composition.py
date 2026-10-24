@@ -8,6 +8,7 @@ import pytest
 from eom_catalog_contracts.embedding_device_benchmark import (
     BENCHMARK_POLICY_SCHEMA_REF,
     BenchmarkOwnerRequest,
+    benchmark_policy_schema_ref,
     embedding_device_benchmark_bytes,
 )
 from eom_catalog_service import embedding_benchmark_owner_composition as module
@@ -30,6 +31,10 @@ from tests.unit.embedding_device_benchmark_fixtures import owner_request
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_authenticated_session_fence import PIN, verified_capture
 from tests.unit.test_control_file_set_publication import _publisher
+from tests.unit.test_embedding_device_benchmark_budget import (
+    successor_request,
+    successor_request_v12,
+)
 from tests.unit.test_reference_query_execution_contracts import pointer
 
 
@@ -200,6 +205,131 @@ def test_stricter_actual_freshness_is_preserved_not_replaced_with_a_default(comp
     owner = build(composition, session_fence=fence)
     assert owner.admission._control.fence is fence
     assert owner.admission._control.fence.owner.fresh_auth_seconds == 600
+
+
+def budget_selection(value, factory):
+    request = BenchmarkOwnerRequest.model_validate(
+        seal(
+            factory().model_dump(mode="json") | {"operator_audit_id": value.capture.operator_id},
+            "request_sha256",
+        )
+    )
+    configuration = BenchmarkOwnerConfiguration(
+        request.request_sha256,
+        pointer(
+            "policy.json",
+            benchmark_policy_schema_ref(request.execution_policy),
+            sha256_bytes(embedding_device_benchmark_bytes(request.execution_policy)),
+        ),
+        request.execution_policy.policy_sha256,
+    )
+    return request, configuration
+
+
+@pytest.mark.parametrize("fresh_auth_seconds", (900, 1800, 3600))
+def test_valid_v12_preserves_actual_caller_freshness_capture_and_fence_without_sql(
+    composition, monkeypatch, fresh_auth_seconds
+):
+    request, configuration = budget_selection(composition, successor_request_v12)
+    fence = AuthenticatedSessionFence(replace(PIN, fresh_auth_seconds=fresh_auth_seconds))
+    sessions = Mock(side_effect=AssertionError("construction must not open a SQL root"))
+    monkeypatch.setattr(composition.publisher, "sessions", sessions)
+    owner = build(composition, request=request, configuration=configuration, session_fence=fence)
+    assert owner.sessions is sessions
+    assert owner.admission._control.capture is composition.capture
+    assert owner.admission._control.fence is fence
+    assert owner.admission._source._identity.capture is composition.capture
+    assert owner.admission._source._identity.fence is fence
+    assert owner.admission._control.fence.owner.fresh_auth_seconds == fresh_auth_seconds
+    assert owner.execution._request == request
+    sessions.assert_not_called()
+
+
+@pytest.mark.parametrize("factory", (owner_request, successor_request))
+@pytest.mark.parametrize("fresh_auth_seconds", (900, 1800))
+def test_legacy_budget_keeps_900_second_freshness_ceiling_without_sql(
+    composition, monkeypatch, factory, fresh_auth_seconds
+):
+    request, configuration = budget_selection(composition, factory)
+    fence = AuthenticatedSessionFence(replace(PIN, fresh_auth_seconds=fresh_auth_seconds))
+    sessions = Mock(side_effect=AssertionError("construction must not open a SQL root"))
+    monkeypatch.setattr(composition.publisher, "sessions", sessions)
+    if fresh_auth_seconds == 900:
+        owner = build(
+            composition, request=request, configuration=configuration, session_fence=fence
+        )
+        assert owner.admission._control.fence is fence
+        assert owner.admission._control.capture is composition.capture
+    else:
+        with pytest.raises(ValueError, match="BENCHMARK_OWNER_COMPOSITION_INVALID"):
+            build(composition, request=request, configuration=configuration, session_fence=fence)
+    sessions.assert_not_called()
+
+
+@pytest.mark.parametrize("fault", ("over_limit", "mock", "subclass"))
+def test_v12_cannot_bypass_identity_fence_type_or_global_3600_second_bound(
+    composition, monkeypatch, fault
+):
+    request, configuration = budget_selection(composition, successor_request_v12)
+    fence = AuthenticatedSessionFence(replace(PIN, fresh_auth_seconds=3600))
+    if fault == "over_limit":
+        object.__setattr__(fence.owner, "fresh_auth_seconds", 3601)
+    elif fault == "mock":
+        fence = Mock(spec=AuthenticatedSessionFence)
+    else:
+
+        class UntrustedFence(AuthenticatedSessionFence):
+            pass
+
+        fence = UntrustedFence(replace(PIN, fresh_auth_seconds=3600))
+    sessions = Mock(side_effect=AssertionError("construction must not open a SQL root"))
+    monkeypatch.setattr(composition.publisher, "sessions", sessions)
+    with pytest.raises(ValueError, match="BENCHMARK_OWNER_COMPOSITION_INVALID"):
+        build(composition, request=request, configuration=configuration, session_fence=fence)
+    sessions.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "fault", ("request_version", "policy_version", "timeout", "policy_pointer", "extras")
+)
+def test_wider_freshness_requires_validated_exact_v12_request_policy_and_pointer(
+    composition, monkeypatch, fault
+):
+    request, configuration = budget_selection(composition, successor_request_v12)
+    if fault == "request_version":
+        request = request.model_copy(
+            update={"schema_version": "embedding-device-benchmark-request/1.1"}
+        )
+    elif fault == "policy_version":
+        request = request.model_copy(
+            update={"execution_policy": successor_request().execution_policy}
+        )
+    elif fault == "timeout":
+        request = request.model_copy(
+            update={
+                "execution_policy": request.execution_policy.model_copy(
+                    update={"timeout_seconds": 600}
+                )
+            }
+        )
+    elif fault == "policy_pointer":
+        configuration = replace(
+            configuration,
+            execution_policy=configuration.execution_policy.model_copy(
+                update={
+                    "schema_ref": benchmark_policy_schema_ref(successor_request().execution_policy)
+                }
+            ),
+        )
+    else:
+        request = request.model_copy(update={"private_note": "PRIVATE_VALUE_NOT_FOR_ERRORS"})
+    fence = AuthenticatedSessionFence(replace(PIN, fresh_auth_seconds=1800))
+    sessions = Mock(side_effect=AssertionError("construction must not open a SQL root"))
+    monkeypatch.setattr(composition.publisher, "sessions", sessions)
+    with pytest.raises(ValueError, match="BENCHMARK_OWNER_COMPOSITION_INVALID") as caught:
+        build(composition, request=request, configuration=configuration, session_fence=fence)
+    assert "PRIVATE_VALUE_NOT_FOR_ERRORS" not in str(caught.value)
+    sessions.assert_not_called()
 
 
 @pytest.mark.parametrize("fault", ["root", "mixed_uid", "group", "ambient_release"])

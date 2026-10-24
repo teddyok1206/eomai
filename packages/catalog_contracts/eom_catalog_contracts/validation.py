@@ -52,6 +52,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.2",
             "sha256:33547b07d145e231cf9acc7ec9eff1ed940069e880dd09ef1b60d5e76eba39c3",
         ),
+        "embedding-benchmark-poststart-failure-v1.3": CatalogSchemaResource(
+            "schemas/knowledge/embedding-benchmark-poststart-failure-v1.3.schema.json",
+            "resources/knowledge/embedding-benchmark-poststart-failure-v1.3.schema.json",
+            "1.3",
+            "sha256:fbf4f8ca7b80f3d03c297822048289e8c2270164db2987e98cef7de69423343f",
+        ),
         "embedding-benchmark-prelaunch-failure": CatalogSchemaResource(
             "schemas/knowledge/embedding-benchmark-prelaunch-failure-v1.schema.json",
             "resources/knowledge/embedding-benchmark-prelaunch-failure-v1.schema.json",

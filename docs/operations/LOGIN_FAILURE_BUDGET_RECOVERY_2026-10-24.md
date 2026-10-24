@@ -74,3 +74,41 @@ source tests and prior user verification do not prove this release's live result
 
 Deployment and final authenticated HTTPS verification are pending at this note's
 initial commit. Update operational evidence after the actual release.
+
+## Actual release (2026-10-24 04:24 UTC)
+
+Login-only source `b87cc11c9a7a853c80877fdd39838b01292fb6e5`, tree
+`c10b628ddabeead8c85d6cf1e3859da2527f47ca`, was committed/pushed separately from the
+still-uncommitted GPU changes. A clean local clone at that exact commit supplied
+the existing build/release scripts; only temporary caller script root assignments
+changed. The shared dirty checkout was not stashed, overwritten or used as source.
+
+Standard protected release context1.7 stage
+`/var/lib/eom-release-operator-stage.b87cc11c-l6ijys6t`, context SHA
+`aed679fb2b12e1f0dc4a07f29379ffae323b59b5451a840401dd2d2de9d38847`, passed ADMIT.
+The normal installer passed PDF runtime, migration0058 verification (no upgrade),
+API role bootstrap, Catalog/HWPX reconciliation, RECORD/metadata and API isolation.
+Actual installed API wheels are from `b87cc11c…Mh55ks`, not the earlier build-only
+materialization. Their SHA-256 values are:
+
+- API: `2a1245cf2ebf83219ae4036c3d4a75bae778f3bb8aa3334e9abbf91f67b2f7e2`
+- platform: `60dfcf24004b3227b64a538323a194f466f70938698dc043c58dadced69c46bf`
+- API contracts: `2afbaa2dcee0bf6abed7944f4e31d8b0749aeff604f1d5957b20d7ab897d885f`
+
+The existing Web installer verified48 installed members and installed the same
+source b87cc11c; wheel SHA
+`ab8cb0ff850f9a76e9ee7fa9d4eb68479d48c9769594b316a9affc4e1407c1a7`.
+Post-deployment HTTPS login page returned200 and HTTPS readiness reported API,
+API readiness and observability ACTIVE. Web smoke and24 frontend/backend,
+reference-start/default-off and release-integrity regressions passed. Actual
+authenticated HTTPS login remains **PENDING**, not inferred from these checks.
+
+API PID2047173, Web PID2049670 and QUERY PID2047176 are active. QUERY emitted actual
+OWNER_READY at04:23:15UTC using its unchanged selected owner/configuration/provider;
+INDEX PID130161/invocation053c5ab467ff4e29b4901cfabf037b4b is unchanged. The existing
+QUERY provider's selected auth-code members are unchanged by this login release;
+it did not require an invented source substitution. Numerical environments remain
+untouched. Rollback record is
+`/var/lib/eom-api/deployments/b87cc11c9a7a853c80877fdd39838b01292fb6e5.json`;
+predecessor API19df and Webd265 artifacts remain available. No password recovery,
+global session revocation or deliberate real-account login failure was performed.

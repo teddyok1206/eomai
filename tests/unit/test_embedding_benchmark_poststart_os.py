@@ -5,6 +5,9 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from eom_catalog_contracts.embedding_benchmark_budget1200_retry_failure import (
+    BenchmarkBudget1200RetryControllerPin,
+)
 from eom_catalog_service import embedding_benchmark_poststart_os as module
 from eom_catalog_service import embedding_benchmark_unit_control as unit_control
 from eom_catalog_service.embedding_benchmark_cpu_driver import RootBenchmarkCpuRetirement
@@ -16,14 +19,27 @@ from pydantic import TypeAdapter
 
 from tests.unit.embedding_benchmark_poststart_failure_fixtures import observation
 from tests.unit.embedding_device_benchmark_fixtures import owner_request, worker_invocation
+from tests.unit.test_embedding_device_benchmark_budget import successor_policy_v12
 
 
-@pytest.fixture
-def machine(monkeypatch, tmp_path):
+@pytest.fixture(params=(False, True), ids=("legacy", "retry1200"))
+def machine(monkeypatch, tmp_path, request):
     seen = observation()
     controller = seen.controller
     execution = seen.execution_id
-    supervisor = Path("/var/lib/eom-gpu-benchmark-synthetic/benchmark_recovery_supervisor.py")
+    policy = successor_policy_v12() if request.param else None
+    if request.param:
+        controller = BenchmarkBudget1200RetryControllerPin.model_validate(
+            controller.model_dump(mode="json")
+            | {"unit": "eom-embedding-benchmark-retry-" + controller.source_commit[:8] + ".service"}
+        )
+        supervisor = (
+            Path("/usr/local/libexec")
+            / ("eom-benchmark-budget1200-retry-" + controller.source_commit[:8])
+            / "series.py"
+        )
+    else:
+        supervisor = Path("/var/lib/eom-gpu-benchmark-synthetic/benchmark_recovery_supervisor.py")
     monkeypatch.setattr(module.os, "listxattr", lambda *_a, **_kw: [])
     boot = tmp_path / "boot"
     boot.write_bytes(b"00000000-0000-0000-0000-000000000001\n")
@@ -49,6 +65,8 @@ def machine(monkeypatch, tmp_path):
 
         def read(self, path, *, sha256, maximum):
             self.reads.append((path, sha256, maximum))
+            if path == supervisor and sha256 != controller.supervisor_raw_sha256:
+                raise ValueError("INSTALLED_RUNTIME_FILE_HASH_MISMATCH")
             return f'SOURCE = "{self.source}"\n'.encode() if path == supervisor else b"unit"
 
         def assert_unchanged(self):
@@ -85,8 +103,9 @@ def machine(monkeypatch, tmp_path):
             )
         )
 
-    native = seen.terminal.native_service
-    socket = seen.terminal.native_socket
+    family = module.benchmark_unit_family("CPU", policy)
+    native = family.service_template.replace("@.service", "@" + execution + ".service")
+    socket = family.socket_template.replace("@.socket", "@" + execution + ".socket")
     units = {
         controller.unit: dead(controller.unit, "/run/systemd/transient/" + controller.unit, True)
         | {
@@ -101,8 +120,8 @@ def machine(monkeypatch, tmp_path):
                 f"{{ path={module._PYTHON} ; argv[]={module._PYTHON} -I -B {supervisor} ; }}"
             ),
         },
-        native: dead(native, "/etc/systemd/system/" + unit_control.CPU_BENCHMARK_TEMPLATE, True),
-        socket: dead(socket, "/etc/systemd/system/" + unit_control.CPU_BENCHMARK_SOCKET, False),
+        native: dead(native, "/etc/systemd/system/" + family.service_template, True),
+        socket: dead(socket, "/etc/systemd/system/" + family.socket_template, False),
     }
     calls = []
 
@@ -123,8 +142,60 @@ def machine(monkeypatch, tmp_path):
         native_invocation_id=seen.terminal.native_invocation_id,
         owner_pid=2**30,
         expires_ns=1000,
+        policy=policy,
     )
     return capture, units, native, socket, boot, calls, cgroups
+
+
+@pytest.mark.parametrize("fault", ("legacy_program", "source_prefix", "source_literal", "policy"))
+def test_retry_controller_requires_exact_program_source_and_v12_policy(machine, monkeypatch, fault):
+    capture, units, _native, _socket, _boot, _calls, _cgroups = machine
+    if not isinstance(capture.controller, BenchmarkBudget1200RetryControllerPin):
+        pytest.skip("new controller recognition only")
+    command = units[capture.controller.unit]
+    policy = capture._policy
+    if fault == "legacy_program":
+        path = "/var/lib/eom-gpu-benchmark-synthetic/benchmark_recovery_supervisor.py"
+        command["ExecStart"] = f"{{ argv[]={module._PYTHON} -I -B {path} ; }}"
+    elif fault == "source_prefix":
+        path = "/usr/local/libexec/eom-benchmark-budget1200-retry-ffffffff/series.py"
+        command["ExecStart"] = f"{{ argv[]={module._PYTHON} -I -B {path} ; }}"
+    elif fault == "source_literal":
+        original = type(capture._files)
+
+        class ChangedSource(original):
+            def read(self, path, *, sha256, maximum):
+                raw = super().read(path, sha256=sha256, maximum=maximum)
+                return b'SOURCE = "' + b"f" * 40 + b'"\n' if path.name == "series.py" else raw
+
+        monkeypatch.setattr(module, "NumericalRuntimeFileSnapshots", ChangedSource)
+    else:
+        policy = None
+    with pytest.raises(ValueError, match="POSTSTART_MACHINE_UNAVAILABLE"):
+        module.CapturedBenchmarkPoststartMachine(
+            capture.controller,
+            execution_id=capture.execution_id,
+            native_invocation_id=capture.native_invocation_id,
+            owner_pid=capture.owner_pid,
+            expires_ns=capture.expires_ns,
+            policy=policy,
+        )
+
+
+def test_retry_controller_program_hash_is_checked_by_protected_file_capture(machine):
+    capture, _units, _native, _socket, _boot, _calls, _cgroups = machine
+    if not isinstance(capture.controller, BenchmarkBudget1200RetryControllerPin):
+        pytest.skip("new controller recognition only")
+    forged = capture.controller.model_copy(update={"supervisor_raw_sha256": "sha256:" + "f" * 64})
+    with pytest.raises(ValueError, match="FILE_HASH_MISMATCH"):
+        module.CapturedBenchmarkPoststartMachine(
+            forged,
+            execution_id=capture.execution_id,
+            native_invocation_id=capture.native_invocation_id,
+            owner_pid=capture.owner_pid,
+            expires_ns=capture.expires_ns,
+            policy=capture._policy,
+        )
 
 
 def test_current_snapshot_reads_only_fixed_metadata_and_hashes_program_once(machine):
@@ -166,6 +237,8 @@ def test_native_live_changed_or_uncertain_metadata_is_not_retired(machine, field
 @pytest.mark.parametrize(
     ("field", "bad"),
     (
+        ("ActiveState", "active"),
+        ("SubState", "running"),
         ("InvocationID", "f" * 32),
         ("MainPID", "2"),
         ("ControlPID", "2"),

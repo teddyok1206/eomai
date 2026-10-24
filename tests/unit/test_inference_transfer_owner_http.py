@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from eom_api_contracts.auth import CurrentOperator
+from eom_api_contracts.auth import CurrentOperator, TokenPair
 from eom_catalog_contracts.inference_transfer_snapshot import (
     InferenceTransferSnapshotAuthorizeRequest,
     InferenceTransferSnapshotAuthorizeResult,
@@ -446,6 +446,159 @@ def refresh_reply(now: datetime, **changes: Any) -> dict[str, Any]:
         }
         | changes
     )
+
+
+@pytest.mark.parametrize("expired", [False, True])
+def test_public_rotation_retains_real_identity_and_current_permissions_in_memory(
+    monkeypatch: pytest.MonkeyPatch, expired: bool
+) -> None:
+    now = datetime.now(UTC)
+    current = principal(access_expires_at=now + timedelta(seconds=-1 if expired else 30))
+    renewed = principal(
+        access_expires_at=now + timedelta(minutes=30),
+        roles=["USER"],
+        effective_permissions=["knowledge:analysis:read"],
+    )
+    events: list[str] = []
+
+    def refresh(path: str, body: Any, **kwargs: Any) -> tuple[int, object]:
+        assert path == http._REFRESH and kwargs == {}
+        assert json.loads(body()) == {"refresh_token": REFRESH_TOKEN}
+        events.append("REFRESH")
+        return 200, refresh_reply(now)
+
+    def reader(bearer: SecretStr) -> Any:
+        assert bearer.get_secret_value() == NEXT_TOKEN
+
+        def read() -> CurrentOperator:
+            events.append("NEW_ME")
+            return renewed
+
+        return SimpleNamespace(read=read)
+
+    monkeypatch.setattr(http, "_post", refresh)
+    monkeypatch.setattr(http, "FixedApiControlPrincipalReader", reader)
+    tokens, actor = http.rotate_genuine_operator_session(
+        current, SecretStr(TOKEN), SecretStr(REFRESH_TOKEN), minimum_access_seconds=1200
+    )
+    assert isinstance(tokens, TokenPair) and actor == renewed
+    assert actor.authenticated_at == current.authenticated_at == AUTHENTICATED_AT
+    assert actor.session_id == current.session_id and actor.operator_id == current.operator_id
+    assert actor.roles == ("USER",) and actor.effective_permissions == ("knowledge:analysis:read",)
+    assert current.roles == ("ADMIN",) and current.effective_permissions == ("item:read",)
+    assert events == ["REFRESH", "NEW_ME"]
+    assert tokens.access_token == NEXT_TOKEN and tokens.refresh_token == NEXT_REFRESH
+
+
+@pytest.mark.parametrize("seconds", [True, False, 0, -1, 3601, 180.0, "180", None])
+def test_public_rotation_rejects_invalid_access_windows_before_http(
+    monkeypatch: pytest.MonkeyPatch, seconds: Any
+) -> None:
+    monkeypatch.setattr(http, "_post", lambda *_a, **_kw: pytest.fail("invalid refresh sent"))
+    with pytest.raises(ControlPlaneError) as caught:
+        http.rotate_genuine_operator_session(
+            principal(), SecretStr(TOKEN), SecretStr(REFRESH_TOKEN), minimum_access_seconds=seconds
+        )
+    assert caught.value.code == "CONTROL_AUTH_SERVICE_UNAVAILABLE"
+    assert TOKEN not in str(caught.value) and REFRESH_TOKEN not in str(caught.value)
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"operator_id": "invalid"},
+        {"session_id": "invalid"},
+        {"authenticated_at": datetime(2100, 1, 1, tzinfo=UTC)},
+        {"password_change_required": True},
+        {"private_extra": REFRESH_TOKEN},
+    ],
+)
+def test_public_rotation_revalidates_current_before_refresh(
+    monkeypatch: pytest.MonkeyPatch, changes: dict[str, Any]
+) -> None:
+    monkeypatch.setattr(http, "_post", lambda *_a, **_kw: pytest.fail("invalid refresh sent"))
+    with pytest.raises(ControlPlaneError) as caught:
+        http.rotate_genuine_operator_session(
+            principal().model_copy(update=changes), SecretStr(TOKEN), SecretStr(REFRESH_TOKEN)
+        )
+    assert REFRESH_TOKEN not in str(caught.value) and caught.value.__cause__ is None
+
+
+@pytest.mark.parametrize("remaining", [1200, 1201])
+def test_public_rotation_requires_strict_requested_access_window(
+    monkeypatch: pytest.MonkeyPatch, remaining: int
+) -> None:
+    now = datetime.now(UTC)
+    monkeypatch.setattr(http, "datetime", SimpleNamespace(now=lambda _tz: now))
+    expiry = now + timedelta(seconds=remaining)
+    monkeypatch.setattr(
+        http,
+        "_post",
+        lambda *_a, **_kw: (200, refresh_reply(now, access_expires_at=expiry.isoformat())),
+    )
+    renewed = principal(access_expires_at=expiry)
+    monkeypatch.setattr(
+        http, "FixedApiControlPrincipalReader", lambda *_a: SimpleNamespace(read=lambda: renewed)
+    )
+    if remaining == 1200:
+        with pytest.raises(ControlPlaneError):
+            http.rotate_genuine_operator_session(
+                principal(),
+                SecretStr(TOKEN),
+                SecretStr(REFRESH_TOKEN),
+                minimum_access_seconds=1200,
+            )
+    else:
+        tokens, _ = http.rotate_genuine_operator_session(
+            principal(), SecretStr(TOKEN), SecretStr(REFRESH_TOKEN), minimum_access_seconds=1200
+        )
+        assert tokens.access_expires_at == expiry
+
+
+def test_public_rotation_rechecks_access_window_after_actual_me(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime.now(UTC)
+    clock = {"now": now}
+    monkeypatch.setattr(http, "datetime", SimpleNamespace(now=lambda _tz: clock["now"]))
+    expiry = now + timedelta(seconds=1201)
+    monkeypatch.setattr(
+        http,
+        "_post",
+        lambda *_a, **_kw: (200, refresh_reply(now, access_expires_at=expiry.isoformat())),
+    )
+
+    def read() -> CurrentOperator:
+        clock["now"] += timedelta(seconds=1)
+        return principal(access_expires_at=expiry)
+
+    monkeypatch.setattr(
+        http, "FixedApiControlPrincipalReader", lambda *_a: SimpleNamespace(read=read)
+    )
+    with pytest.raises(ControlPlaneError):
+        http.rotate_genuine_operator_session(
+            principal(), SecretStr(TOKEN), SecretStr(REFRESH_TOKEN), minimum_access_seconds=1200
+        )
+
+
+def test_public_rotation_unknown_http_outcome_has_one_attempt_and_redacted_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+
+    def uncertain(path: str, *_args: Any, **_kwargs: Any) -> tuple[int, object]:
+        calls.append(path)
+        raise ControlPlaneError("UNTRUSTED_" + REFRESH_TOKEN, TOKEN)
+
+    monkeypatch.setattr(http, "_post", uncertain)
+    with pytest.raises(ControlPlaneError) as caught:
+        http.rotate_genuine_operator_session(
+            principal(), SecretStr(TOKEN), SecretStr(REFRESH_TOKEN)
+        )
+    assert calls == [http._REFRESH]
+    assert caught.value.code == "CONTROL_AUTH_SERVICE_UNAVAILABLE"
+    assert TOKEN not in str(caught.value) and REFRESH_TOKEN not in str(caught.value)
+    assert caught.value.__cause__ is None
 
 
 @pytest.mark.parametrize("expired", [False, True])

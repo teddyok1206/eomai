@@ -10,6 +10,9 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from eom_catalog_contracts.embedding_benchmark_budget1200_retry_failure import (
+    BenchmarkBudget1200RetryControllerPin,
+)
 from eom_catalog_contracts.embedding_benchmark_prelaunch_failure import BenchmarkFailedControllerPin
 from eom_catalog_contracts.embedding_device_benchmark import (
     BenchmarkExecutionPolicy,
@@ -132,7 +135,7 @@ class CapturedBenchmarkPoststartMachine:
 
     def __init__(
         self,
-        controller: BenchmarkFailedControllerPin,
+        controller: BenchmarkFailedControllerPin | BenchmarkBudget1200RetryControllerPin,
         *,
         execution_id: str,
         native_invocation_id: str,
@@ -140,8 +143,10 @@ class CapturedBenchmarkPoststartMachine:
         expires_ns: int,
         policy: BenchmarkExecutionPolicy | None = None,
     ) -> None:
-        self.controller = BenchmarkFailedControllerPin.model_validate(
-            controller.model_dump(mode="json")
+        self.controller = (
+            BenchmarkBudget1200RetryControllerPin.model_validate(controller.model_dump(mode="json"))
+            if isinstance(controller, BenchmarkBudget1200RetryControllerPin)
+            else BenchmarkFailedControllerPin.model_validate(controller.model_dump(mode="json"))
         )
         _require(
             re.fullmatch(r"[0-9a-f]{32}", execution_id) is not None
@@ -164,13 +169,26 @@ class CapturedBenchmarkPoststartMachine:
         arguments = command[0].split()
         _require(len(arguments) == 4 and arguments[:3] == [_PYTHON, "-I", "-B"])
         supervisor = Path(arguments[3])
-        _require(
-            re.fullmatch(
-                r"/var/lib/eom-gpu-benchmark-[A-Za-z0-9-]+/benchmark_(?:goal|recovery)_supervisor\.py",
-                str(supervisor),
+        if isinstance(self.controller, BenchmarkBudget1200RetryControllerPin):
+            # A new proof family recognizes the actual protected program; it cannot
+            # reinterpret a legacy controller or substitute another source prefix.
+            _require(
+                policy is not None
+                and policy.schema_version == "embedding-device-benchmark-policy/1.2"
+                and family.timeout_seconds == 1200
+                and supervisor
+                == Path("/usr/local/libexec")
+                / ("eom-benchmark-budget1200-retry-" + self.controller.source_commit[:8])
+                / "series.py"
             )
-            is not None
-        )
+        else:
+            _require(
+                re.fullmatch(
+                    r"/var/lib/eom-gpu-benchmark-[A-Za-z0-9-]+/benchmark_(?:goal|recovery)_supervisor\.py",
+                    str(supervisor),
+                )
+                is not None
+            )
         self._protected = tuple(
             sorted(
                 {

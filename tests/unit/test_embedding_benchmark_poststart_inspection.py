@@ -1,18 +1,34 @@
 """Synthetic current-file/root-origin fences; no production identity, DB, model or unit actions."""
 
+import json
 import os
 
 import pytest
+from eom_catalog_contracts.embedding_benchmark_budget1200_retry_failure import (
+    BenchmarkBudget1200RetryControllerPin,
+    BenchmarkBudget1200RetryPoststartObservation,
+)
 from eom_catalog_contracts.embedding_benchmark_poststart_failure import (
     benchmark_poststart_failure_bytes,
 )
 from eom_catalog_service import embedding_benchmark_poststart_inspection as module
-from eom_identifiers import sha256_bytes
+from eom_identifiers import canonical_json_bytes, sha256_bytes
+from eom_workflow.embedding_benchmark_launch_control import (
+    BenchmarkLaunchAssociation,
+    BenchmarkLaunchCompleted,
+    BenchmarkLaunchPrepared,
+    benchmark_launch_control_bytes,
+)
+from jsonschema.exceptions import ValidationError as SchemaError
 
 from tests.unit.embedding_benchmark_poststart_inspection_fixtures import (
     staged_poststart as staged_poststart,
 )
 from tests.unit.inference_transfer_embedding_fixtures import seal
+from tests.unit.test_embedding_device_benchmark_budget import (
+    successor_invocation_v12,
+    successor_request_v12,
+)
 
 
 def mint(case):
@@ -23,6 +39,91 @@ def mint(case):
 
 def inspector(case, raw_sha256):
     return module.FixedBenchmarkPoststartInspection(case.invocation.execution_id, raw_sha256)
+
+
+@pytest.fixture
+def staged_retry_poststart(staged_poststart, monkeypatch):
+    case = staged_poststart
+    case.request, case.invocation = successor_request_v12(), successor_invocation_v12(1)
+    case.controller = BenchmarkBudget1200RetryControllerPin.model_validate(
+        case.controller.model_dump(mode="json")
+        | {
+            "unit": "eom-embedding-benchmark-retry-"
+            + case.controller.source_commit[:8]
+            + ".service"
+        }
+    )
+    raw_request = module.embedding_device_benchmark_bytes(case.request)
+    raw_invocation = module.embedding_device_benchmark_bytes(case.invocation)
+    body = json.loads(case.association.read_bytes())
+    body.update(
+        owner_request_sha256=case.request.request_sha256,
+        invocation_sha256=case.invocation.invocation_sha256,
+        request=body["request"]
+        | {"sha256": sha256_bytes(raw_request), "byte_count": len(raw_request)},
+        invocation=body["invocation"]
+        | {"sha256": sha256_bytes(raw_invocation), "byte_count": len(raw_invocation)},
+        inputs=case.invocation.local_input.model_dump(mode="json"),
+    )
+    association = BenchmarkLaunchAssociation.model_validate(seal(body, "association_sha256"))
+    case.association.write_bytes(benchmark_launch_control_bytes(association))
+    (case.execution / "invocation.json").write_bytes(raw_invocation)
+    body = json.loads((case.execution / "root-prepared.json").read_bytes())
+    body.update(
+        association_sha256=association.association_sha256,
+        invocation_sha256=case.invocation.invocation_sha256,
+    )
+    prepared = BenchmarkLaunchPrepared.model_validate(seal(body, "prepared_sha256"))
+    (case.execution / "root-prepared.json").write_bytes(benchmark_launch_control_bytes(prepared))
+    body = json.loads((case.execution / "root-completion.json").read_bytes())
+    body.update(
+        association_sha256=association.association_sha256,
+        invocation_sha256=case.invocation.invocation_sha256,
+        prepared_sha256=prepared.prepared_sha256,
+    )
+    completion = BenchmarkLaunchCompleted.model_validate(seal(body, "completion_sha256"))
+    (case.execution / "root-completion.json").write_bytes(
+        benchmark_launch_control_bytes(completion)
+    )
+    original = module.CapturedBenchmarkPoststartMachine
+
+    class RetryMachine(original):
+        def __init__(self, controller, *, policy, **kwargs):
+            assert type(controller) is BenchmarkBudget1200RetryControllerPin
+            assert policy == case.request.execution_policy
+            super().__init__(controller, **kwargs)
+
+    monkeypatch.setattr(module, "CapturedBenchmarkPoststartMachine", RetryMachine)
+    return case
+
+
+def test_retry_controller_mints_v13_once_and_owner_revalidates_original_v12(staged_retry_poststart):
+    case = staged_retry_poststart
+    result = mint(case)
+    assert type(result.observation) is BenchmarkBudget1200RetryPoststartObservation
+    assert result.observation.schema_version == "embedding-benchmark-poststart-failure/1.3"
+    assert result.observation.controller == case.controller
+    assert result.raw_sha256 == sha256_bytes(case.proof.read_bytes())
+    assert result.created and not mint(case).created
+    with inspector(case, result.raw_sha256).capture(case.request, case.invocation) as captured:
+        assert captured.observation == result.observation
+        captured.assert_current()
+
+
+def test_actual_retry_controller_proof_cannot_be_downgraded_to_old_layout(staged_retry_poststart):
+    case = staged_retry_poststart
+    result = mint(case)
+    body = result.observation.model_dump(mode="json")
+    body["schema_version"] = "embedding-benchmark-poststart-failure/1.2"
+    raw = canonical_json_bytes(seal(body, "observation_sha256"))
+    case.proof.chmod(0o600)
+    case.proof.write_bytes(raw)
+    case.proof.chmod(0o440)
+    with (
+        pytest.raises((ValueError, SchemaError)),
+        inspector(case, sha256_bytes(raw)).capture(case.request, case.invocation),
+    ):
+        pytest.fail("actual controller must not be interpreted through the old proof family")
 
 
 def test_root_create_once_exact_partial_hashes_and_owner_rereads_no_private_retirement(

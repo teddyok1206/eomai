@@ -17,6 +17,11 @@ from eom_catalog_contracts.embedding_benchmark_budget1200_failure import (
     BenchmarkBudget1200PoststartObservation,
     BenchmarkBudget1200PredecessorReference,
 )
+from eom_catalog_contracts.embedding_benchmark_budget1200_retry_failure import (
+    BenchmarkBudget1200RetryFailureDecision,
+    BenchmarkBudget1200RetryPoststartObservation,
+    BenchmarkBudget1200RetryPredecessorReference,
+)
 from eom_catalog_contracts.embedding_benchmark_poststart_failure import (
     POSTSTART_FAILURE_CODE,
     POSTSTART_FAILURE_EVENT,
@@ -67,6 +72,7 @@ class CapturedBenchmarkPoststartInspection(Protocol):
         BenchmarkPoststartObservation
         | BenchmarkBudget600PoststartObservation
         | BenchmarkBudget1200PoststartObservation
+        | BenchmarkBudget1200RetryPoststartObservation
     ): ...
 
     def assert_current(self) -> None: ...
@@ -84,6 +90,7 @@ class BenchmarkPoststartFailureClosure:
         BenchmarkPoststartFailureDecision
         | BenchmarkBudget600FailureDecision
         | BenchmarkBudget1200FailureDecision
+        | BenchmarkBudget1200RetryFailureDecision
     )
     event_sequence: int
     created: bool
@@ -95,7 +102,12 @@ class BenchmarkPoststartFailureClosure:
         BenchmarkPoststartPredecessorReference
         | BenchmarkBudget600PredecessorReference
         | BenchmarkBudget1200PredecessorReference
+        | BenchmarkBudget1200RetryPredecessorReference
     ):
+        if isinstance(self.decision, BenchmarkBudget1200RetryFailureDecision):
+            return BenchmarkBudget1200RetryPredecessorReference.from_decision(
+                self.decision, event_sequence=self.event_sequence
+            )
         if isinstance(self.decision, BenchmarkBudget600FailureDecision):
             return BenchmarkBudget600PredecessorReference.from_decision(
                 self.decision, event_sequence=self.event_sequence
@@ -202,8 +214,13 @@ class BenchmarkPoststartFailureApplication:
                         BenchmarkPoststartFailureDecision
                         | BenchmarkBudget600FailureDecision
                         | BenchmarkBudget1200FailureDecision
+                        | BenchmarkBudget1200RetryFailureDecision
                     )
-                    if isinstance(observation, BenchmarkBudget600PoststartObservation):
+                    if isinstance(observation, BenchmarkBudget1200RetryPoststartObservation):
+                        decision = BenchmarkBudget1200RetryFailureDecision.model_validate(
+                            body | {"decision_sha256": content_sha256(body)}
+                        )
+                    elif isinstance(observation, BenchmarkBudget600PoststartObservation):
                         decision = BenchmarkBudget600FailureDecision.model_validate(
                             body | {"decision_sha256": content_sha256(body)}
                         )
@@ -244,6 +261,7 @@ def submit_benchmark_poststart_successor_in_session(
         BenchmarkPoststartPredecessorReference
         | BenchmarkBudget600PredecessorReference
         | BenchmarkBudget1200PredecessorReference
+        | BenchmarkBudget1200RetryPredecessorReference
     ),
     *,
     source_admission: BenchmarkSourceAdmission,
@@ -252,12 +270,16 @@ def submit_benchmark_poststart_successor_in_session(
     try:
         embedding_device_benchmark_bytes(request)
         predecessor = (
-            BenchmarkBudget600PredecessorReference.model_validate(predecessor)
-            if isinstance(predecessor, BenchmarkBudget600PredecessorReference)
+            BenchmarkBudget1200RetryPredecessorReference.model_validate(predecessor)
+            if isinstance(predecessor, BenchmarkBudget1200RetryPredecessorReference)
             else (
-                BenchmarkBudget1200PredecessorReference.model_validate(predecessor)
-                if isinstance(predecessor, BenchmarkBudget1200PredecessorReference)
-                else BenchmarkPoststartPredecessorReference.model_validate(predecessor)
+                BenchmarkBudget600PredecessorReference.model_validate(predecessor)
+                if isinstance(predecessor, BenchmarkBudget600PredecessorReference)
+                else (
+                    BenchmarkBudget1200PredecessorReference.model_validate(predecessor)
+                    if isinstance(predecessor, BenchmarkBudget1200PredecessorReference)
+                    else BenchmarkPoststartPredecessorReference.model_validate(predecessor)
+                )
             )
         )
     except (ValueError, TypeError, SchemaError):

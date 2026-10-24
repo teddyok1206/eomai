@@ -68,12 +68,23 @@ def _owner_admission(
     configuration.__post_init__()
     session_fence.__post_init__()
     checked = parse_embedding_device_benchmark_bytes(embedding_device_benchmark_bytes(request))
+    if not isinstance(checked, BenchmarkOwnerRequest):
+        raise ValueError()
+    # Only the released long-running benchmark may select Identity's existing
+    # one-hour ceiling; the actual session/token/permission fences stay unchanged.
+    maximum_fresh_auth_seconds = (
+        3600
+        if checked.schema_version == "embedding-device-benchmark-request/1.2"
+        and checked.execution_policy.schema_version == "embedding-device-benchmark-policy/1.2"
+        and checked.execution_policy.timeout_seconds == 1200
+        else 900
+    )
     commit = publisher.settings.runtime_source_commit
-    if not isinstance(checked, BenchmarkOwnerRequest) or (
+    if (
         type(commit) is not str
         or re.fullmatch(r"[0-9a-f]{40}", commit) is None
         or capture.operator_id != checked.operator_audit_id
-        or session_fence.owner.fresh_auth_seconds > 900
+        or session_fence.owner.fresh_auth_seconds > maximum_fresh_auth_seconds
         or configuration.request_sha256 != checked.request_sha256
         or configuration.execution_policy_sha256 != checked.execution_policy.policy_sha256
         or configuration.execution_policy.schema_ref

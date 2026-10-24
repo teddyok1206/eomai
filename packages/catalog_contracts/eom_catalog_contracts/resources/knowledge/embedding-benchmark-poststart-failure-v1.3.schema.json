@@ -1,0 +1,334 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-benchmark-poststart-failure/1.3",
+  "title": "Exact budget1200 CPU1 failure with protected retry controller; no retry authority",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/observation"
+    },
+    {
+      "$ref": "#/$defs/decision"
+    },
+    {
+      "$ref": "#/$defs/predecessor"
+    }
+  ],
+  "$defs": {
+    "sha": {
+      "$ref": "eom://schemas/knowledge/embedding-benchmark-poststart-failure/1.0#/$defs/sha"
+    },
+    "jobId": {
+      "$ref": "eom://schemas/knowledge/embedding-benchmark-poststart-failure/1.0#/$defs/jobId"
+    },
+    "executionId": {
+      "$ref": "eom://schemas/knowledge/embedding-benchmark-poststart-failure/1.0#/$defs/executionId"
+    },
+    "utc": {
+      "$ref": "eom://schemas/knowledge/embedding-benchmark-poststart-failure/1.0#/$defs/utc"
+    },
+    "controller": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "unit",
+        "invocation_id",
+        "source_commit",
+        "supervisor_raw_sha256"
+      ],
+      "properties": {
+        "unit": {
+          "type": "string",
+          "pattern": "^eom-embedding-benchmark-retry-[0-9a-f]{8}\\.service$"
+        },
+        "invocation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "supervisor_raw_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "outputMember": {
+      "$ref": "eom://schemas/knowledge/embedding-benchmark-poststart-failure/1.0#/$defs/outputMember"
+    },
+    "terminal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "native_service",
+        "native_socket",
+        "native_invocation_id",
+        "retirement_raw_sha256",
+        "main_pid",
+        "control_pid",
+        "descriptor_store_count",
+        "cgroup_empty",
+        "socket_inactive",
+        "retirement"
+      ],
+      "properties": {
+        "native_service": {
+          "type": "string",
+          "pattern": "^eom-embedding-benchmark-cpu-budget1200@[0-9a-f]{32}\\.service$"
+        },
+        "native_socket": {
+          "type": "string",
+          "pattern": "^eom-embedding-benchmark-cpu-budget1200@[0-9a-f]{32}\\.socket$"
+        },
+        "native_invocation_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        },
+        "retirement_raw_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "main_pid": {
+          "type": "integer",
+          "const": 0
+        },
+        "control_pid": {
+          "type": "integer",
+          "const": 0
+        },
+        "descriptor_store_count": {
+          "type": "integer",
+          "const": 0
+        },
+        "cgroup_empty": {
+          "type": "boolean",
+          "const": true
+        },
+        "socket_inactive": {
+          "type": "boolean",
+          "const": true
+        },
+        "retirement": {
+          "const": "CONFIRMED"
+        }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "job_id",
+        "execution_id",
+        "request_sha256",
+        "invocation_sha256",
+        "device",
+        "launch_ordinal",
+        "association_sha256",
+        "prepared_sha256",
+        "completion_sha256",
+        "invocation_raw_sha256",
+        "completion_raw_sha256",
+        "original_outcome",
+        "cleanup",
+        "started_ns",
+        "completed_ns",
+        "controller",
+        "terminal",
+        "outputs",
+        "boot_id",
+        "snapshot_sha256",
+        "observed_at",
+        "observation_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-benchmark-poststart-failure/1.3"
+        },
+        "kind": {
+          "const": "ROOT_OBSERVATION"
+        },
+        "job_id": {
+          "$ref": "#/$defs/jobId"
+        },
+        "execution_id": {
+          "$ref": "#/$defs/executionId"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "invocation_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "device": {
+          "const": "CPU"
+        },
+        "launch_ordinal": {
+          "type": "integer",
+          "const": 1
+        },
+        "association_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "prepared_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "completion_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "invocation_raw_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "completion_raw_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "original_outcome": {
+          "const": "FAILED"
+        },
+        "cleanup": {
+          "const": "CONFIRMED"
+        },
+        "started_ns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854775807
+        },
+        "completed_ns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854775807
+        },
+        "controller": {
+          "$ref": "#/$defs/controller"
+        },
+        "terminal": {
+          "$ref": "#/$defs/terminal"
+        },
+        "outputs": {
+          "type": "array",
+          "minItems": 16,
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/outputMember"
+          }
+        },
+        "boot_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+        },
+        "snapshot_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "observed_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "observation_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "job_id",
+        "execution_id",
+        "request_sha256",
+        "invocation_sha256",
+        "from_state",
+        "to_state",
+        "error_code",
+        "observation",
+        "actor_id",
+        "decided_at",
+        "decision_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-benchmark-poststart-failure/1.3"
+        },
+        "kind": {
+          "const": "FAILURE_DECISION"
+        },
+        "job_id": {
+          "$ref": "#/$defs/jobId"
+        },
+        "execution_id": {
+          "$ref": "#/$defs/executionId"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "invocation_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "from_state": {
+          "const": "RUNNING"
+        },
+        "to_state": {
+          "const": "FAILED"
+        },
+        "error_code": {
+          "const": "BENCHMARK_POSTSTART_EXECUTION_FAILED"
+        },
+        "observation": {
+          "$ref": "#/$defs/observation"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+        },
+        "decided_at": {
+          "$ref": "#/$defs/utc"
+        },
+        "decision_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "predecessor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "kind",
+        "job_id",
+        "execution_id",
+        "request_sha256",
+        "invocation_sha256",
+        "event_sequence",
+        "decision_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-benchmark-poststart-failure/1.3"
+        },
+        "kind": {
+          "const": "PREDECESSOR_REFERENCE"
+        },
+        "job_id": {
+          "$ref": "#/$defs/jobId"
+        },
+        "execution_id": {
+          "$ref": "#/$defs/executionId"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "invocation_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "event_sequence": {
+          "type": "integer",
+          "minimum": 7,
+          "maximum": 32
+        },
+        "decision_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    }
+  }
+}

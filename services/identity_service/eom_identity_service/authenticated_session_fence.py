@@ -9,7 +9,7 @@ from __future__ import annotations
 import re
 from _thread import LockType
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from threading import Lock, Thread, current_thread
 from typing import TYPE_CHECKING
 from weakref import ReferenceType, WeakKeyDictionary, ref
@@ -279,6 +279,28 @@ class AuthenticatedSessionFence:
         _require(type(self.owner) is AuthenticatedSessionFenceOwnerPin, "CONFIGURATION_INVALID")
         self.owner.__post_init__()
 
+    def assert_execution_window(
+        self,
+        session: Session,
+        capture: AuthenticatedOperatorSession,
+        *,
+        required_permission: PermissionKey,
+        minimum_seconds: int,
+    ) -> None:
+        """Plan a bounded launch without exposing or extending opaque session values.
+
+        Current authority is checked normally under the same caller-root locks.
+        This is not a reservation or cached grant: continuation checks must still
+        reject revocation, expiry or permission changes throughout the operation.
+        """
+        _require(
+            type(minimum_seconds) is int and 0 < minimum_seconds <= 3600,
+            "EXECUTION_WINDOW_INVALID",
+        )
+        expires = self._assert_current(session, capture, required_permission=required_permission)
+        deadline = datetime.now(UTC) + timedelta(seconds=minimum_seconds)
+        _require(deadline < expires, "EXECUTION_WINDOW_INSUFFICIENT")
+
     def assert_current(
         self,
         session: Session,
@@ -286,6 +308,15 @@ class AuthenticatedSessionFence:
         *,
         required_permission: PermissionKey,
     ) -> None:
+        self._assert_current(session, capture, required_permission=required_permission)
+
+    def _assert_current(
+        self,
+        session: Session,
+        capture: AuthenticatedOperatorSession,
+        *,
+        required_permission: PermissionKey,
+    ) -> datetime:
         values = _capture_values(capture)
         _require(type(required_permission) is PermissionKey, "CONTEXT_INVALID")
         self.owner.__post_init__()
@@ -464,6 +495,13 @@ class AuthenticatedSessionFence:
                         context["backend_pid"],
                         context["transaction_id"],
                     )
+            return min(
+                values.access_expires_at,
+                values.absolute_expires_at,
+                values.idle_expires_at,
+                api_session.idle_expires_at,
+                values.authenticated_at + timedelta(seconds=self.owner.fresh_auth_seconds),
+            )
         except AuthenticatedSessionFenceError:
             raise
         except (SQLAlchemyError, ValueError, TypeError, KeyError):

@@ -392,6 +392,89 @@ def _get(path: str, *, bearer: SecretStr) -> tuple[int, object]:
     return _request("GET", path, None, bearer=bearer)
 
 
+def rotate_genuine_operator_session(
+    current: CurrentOperator,
+    access_token: SecretStr,
+    refresh_token: SecretStr,
+    *,
+    minimum_access_seconds: int = 180,
+) -> tuple[TokenPair, CurrentOperator]:
+    """Rotate once in memory; callers must never retry an uncertain consumed refresh.
+
+    ACCESS may already have expired. Only the official refresh and subsequent /me
+    establish the replacement; neither rotation nor this client renews human recency.
+    """
+    try:
+        if (
+            type(current) is not CurrentOperator
+            or type(access_token) is not SecretStr
+            or type(refresh_token) is not SecretStr
+            or type(minimum_access_seconds) is not int
+            or not 0 < minimum_access_seconds <= 3600
+        ):
+            raise ValueError("actual session and bounded access window required")
+        current = CurrentOperator.model_validate(vars(current))
+        if (
+            _ACTOR.fullmatch(current.operator_id) is None
+            or _SESSION.fullmatch(current.session_id) is None
+            or current.password_change_required
+            or current.authenticated_at > datetime.now(UTC)
+        ):
+            raise ValueError("actual session unavailable")
+        request = RefreshRequest(refresh_token=refresh_token)
+
+        def refresh_body() -> bytes:
+            return canonical_json_bytes({"refresh_token": request.refresh_token.get_secret_value()})
+
+        status, raw = _post(_REFRESH, refresh_body)
+        if status in {401, 403, 429}:
+            raise ControlPlaneError(
+                "CONTROL_AUTHORIZATION_REQUIRED", "actual session renewal denied"
+            )
+        if status != 200:
+            raise ValueError("session renewal unavailable")
+        _LOGIN_VALIDATOR.validate(raw)
+        tokens = _LOGIN_RESPONSE.model_validate(raw).data
+        margin, now = timedelta(seconds=minimum_access_seconds), datetime.now(UTC)
+        if (
+            tokens.session_id != current.session_id
+            or tokens.password_change_required
+            or tokens.access_expires_at - now <= margin
+            or tokens.refresh_expires_at <= now
+            or tokens.access_token == access_token.get_secret_value()
+            or tokens.refresh_token == refresh_token.get_secret_value()
+        ):
+            raise ValueError("renewed session differs or expires too soon")
+        RefreshRequest(refresh_token=SecretStr(tokens.refresh_token))
+        principal = FixedApiControlPrincipalReader(SecretStr(tokens.access_token)).read()
+        principal = CurrentOperator.model_validate(vars(principal))
+        now = datetime.now(UTC)
+        if (
+            principal.operator_id != current.operator_id
+            or principal.username != current.username
+            or principal.session_id != current.session_id
+            or principal.authenticated_at != current.authenticated_at
+            or principal.authenticated_at > now
+            or principal.password_change_required
+            or principal.access_expires_at != tokens.access_expires_at
+            or tokens.access_expires_at - now <= margin
+            or tokens.refresh_expires_at <= now
+        ):
+            raise ValueError("renewed principal differs or expires too soon")
+        return tokens, principal
+    except ControlPlaneError as exc:
+        raise ControlPlaneError(
+            exc.code
+            if exc.code in {"CONTROL_AUTHORIZATION_REQUIRED", "CONTROL_AUTH_SERVICE_UNAVAILABLE"}
+            else "CONTROL_AUTH_SERVICE_UNAVAILABLE",
+            "official session renewal unavailable",
+        ) from None
+    except Exception:
+        raise ControlPlaneError(
+            "CONTROL_AUTH_SERVICE_UNAVAILABLE", "official session renewal reply invalid"
+        ) from None
+
+
 class AuthenticatedInferenceTransferHttpSession:
     """Session identity is captured from /me, not a caller-supplied actor string."""
 
@@ -402,6 +485,7 @@ class AuthenticatedInferenceTransferHttpSession:
         self._session_id: str | None = None
         self._authenticated_at: datetime | None = None
         self._access_expires_at: datetime | None = None
+        self._current: CurrentOperator | None = None
         self._refresh_failed = False
 
     @classmethod
@@ -484,39 +568,14 @@ class AuthenticatedInferenceTransferHttpSession:
         # after an unknown outcome or install new secrets before independent /me.
         self._refresh_failed = True
         try:
-            request = RefreshRequest(refresh_token=self._refresh)
-
-            def refresh_body() -> bytes:
-                return canonical_json_bytes(
-                    {"refresh_token": request.refresh_token.get_secret_value()}
-                )
-
-            status, raw = _post(_REFRESH, refresh_body)
-            if status in {401, 403, 429}:
-                raise ControlPlaneError(
-                    "CONTROL_AUTHORIZATION_REQUIRED", "actual session renewal denied"
-                )
-            if status != 200:
-                raise ValueError("session renewal unavailable")
-            _LOGIN_VALIDATOR.validate(raw)
-            tokens = _LOGIN_RESPONSE.model_validate(raw).data
-            now = datetime.now(UTC)
-            if (
-                tokens.session_id != self._session_id
-                or tokens.password_change_required
-                or tokens.access_expires_at - now <= _REFRESH_MARGIN
-                or tokens.refresh_expires_at <= now
-                or tokens.access_token == self._bearer.get_secret_value()
-                or tokens.refresh_token == self._refresh.get_secret_value()
-            ):
-                raise ValueError("renewed session differs or expires too soon")
+            if self._current is None:
+                raise ValueError("actual current session unavailable")
+            tokens, principal = rotate_genuine_operator_session(
+                self._current, self._bearer, self._refresh
+            )
+            principal = self._validated_principal(principal)
             bearer, refresh = SecretStr(tokens.access_token), SecretStr(tokens.refresh_token)
-            # Validate the next refresh request before committing its credential.
-            RefreshRequest(refresh_token=refresh)
             reader = FixedApiControlPrincipalReader(bearer)
-            principal = self._validated_principal(reader.read())
-            if principal.access_expires_at != tokens.access_expires_at:
-                raise ValueError("renewed bearer expiry differs")
             self._reader, self._bearer, self._refresh = reader, bearer, refresh
             self._access_expires_at = principal.access_expires_at
             self._refresh_failed = False
@@ -543,6 +602,7 @@ class AuthenticatedInferenceTransferHttpSession:
                 self._operator_id, self._session_id = value.operator_id, value.session_id
                 self._authenticated_at = value.authenticated_at
             self._access_expires_at = value.access_expires_at
+            self._current = value
             return value
         except ControlPlaneError as exc:
             raise ControlPlaneError(
