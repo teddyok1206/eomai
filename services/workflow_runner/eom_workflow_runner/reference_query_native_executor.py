@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Literal
 
-from eom_identifiers import content_sha256, new_job_id, new_revision_id
 from eom_orchestrator.embedding_artifact_store import EmbeddingArtifactStore
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.native_embedding_cpu_execution import validate_fixed_native_cpu_resources
@@ -35,7 +34,6 @@ from eom_workflow.reference_query_execution import (
     ReferenceQueryLaunchAssociation,
     ReferenceQueryStepOutput,
     SupportedReferenceQueryWorkflowRequest,
-    parse_reference_query_launch_association,
     parse_supported_reference_query_workflow_request,
 )
 from sqlalchemy.orm import Session
@@ -53,10 +51,12 @@ from eom_workflow_runner.readiness import (
 )
 from eom_workflow_runner.reference_query_completion import NativeReferenceQueryCompletion
 from eom_workflow_runner.reference_query_execution_port import ReferenceQueryStepPending
+from eom_workflow_runner.reference_query_launch_preparation import (
+    prepare_reference_query_launch_candidate,
+)
 from eom_workflow_runner.reference_query_owner_admission import (
     CatalogReferenceQueryOwnerAdmission,
     ResolvedReferenceQuerySources,
-    build_reference_query_native_input,
     validate_current_reference_query_input,
 )
 from eom_workflow_runner.repository import CommandLeaseIdentity
@@ -153,57 +153,29 @@ class CatalogNativeReferenceQueryExecutor:
         launch = read_native_reference_query_launch(
             session, request=request, workflow_id=workflow_id, step_run_id=step_run_id
         )
-        job_id = new_job_id() if launch is None else launch.native_launch_job_id
-        query_id = (
-            "embeddingquery_" + new_revision_id().removeprefix("rev_")
-            if launch is None
-            else launch.query_request_id
+        candidate = prepare_reference_query_launch_candidate(
+            sources,
+            workflow_id=workflow_id,
+            step_run_id=step_run_id,
+            command_lease=lease,
+            existing=launch,
         )
-        native_input = build_reference_query_native_input(
-            sources, job_id=job_id, query_request_id=query_id
-        )
-        if launch is None:
-            body = {
-                "schema_version": "reference-query-launch-association/1.0",
-                "purpose": "REFERENCE_QUERY",
-                "workflow_id": workflow_id,
-                "step_run_id": step_run_id,
-                "step_key": "encode_reference_query",
-                "attempt": 1,
-                "workflow_request_sha256": request.request_sha256,
-                "context_request_sha256": request.context_request.request_sha256,
-                "native_launch_job_id": job_id,
-                "query_request_id": query_id,
-                "query_request_sha256": native_input.request_sha256,
-                "query_input_set_sha256": native_input.input_set_sha256,
-                "recipe_sha256": native_input.recipe.recipe_sha256,
-                "runtime_bundle": request.runtime_bundle.model_dump(mode="json"),
-                "resource_profile_sha256": request.resource_profile.resource_profile_sha256,
-                "original_command_id": lease.command_id,
-                "original_command_generation": lease.lease_generation,
-                "launched_at": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-            }
-            launch = parse_reference_query_launch_association(
-                body | {"association_sha256": content_sha256(body)}
-            )
-            # Check the complete handoff before allocating the durable Job.
-            PreparedNativeQuery(
-                job_id.removeprefix("job_"),
-                request,
-                sources.policy,
-                sources.bundle,
-                launch,
-                native_input,
-            )
-            launch = create_native_reference_query_launch(session, request=request, launch=launch)
-        return PreparedNativeQuery(
-            launch.native_launch_job_id.removeprefix("job_"),
+        prepared = PreparedNativeQuery(
+            candidate.association.native_launch_job_id.removeprefix("job_"),
             request,
             sources.policy,
             sources.bundle,
-            launch,
-            native_input,
+            candidate.association,
+            candidate.request,
         )
+        if launch is None:
+            # The exact CPU handoff guard above remains before any durable Job.
+            launch = create_native_reference_query_launch(
+                session, request=request, launch=candidate.association
+            )
+            if launch != candidate.association:
+                raise ValueError("REFERENCE_QUERY_ORIGINAL_ALLOCATION_CHANGED")
+        return prepared
 
     def _pending(
         self,

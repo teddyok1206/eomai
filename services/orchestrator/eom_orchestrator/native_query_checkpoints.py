@@ -22,6 +22,7 @@ from eom_workflow.schemas import (
     NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_SCHEMA_RESOURCE,
     NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE,
     NATIVE_REFERENCE_QUERY_COORDINATOR_V11_SCHEMA_RESOURCE,
+    NATIVE_REFERENCE_QUERY_COORDINATOR_V12_SCHEMA_RESOURCE,
 )
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -55,6 +56,14 @@ _EVENTS = tuple(
     for prefix in ("REFERENCE_QUERY", "PRIVATE_CHAT_QUERY")
     for phase in _STAGES
 )
+_FAILURE_MESSAGES = MappingProxyType(
+    {
+        "native-reference-query-coordinator/1.0": "fixed CPU QUERY unit failed",
+        "native-reference-query-coordinator/1.1": "fixed CPU QUERY unit failed",
+        "native-reference-query-coordinator/1.2": "original finite CUDA QUERY batch failed",
+        "native-private-chat-query-coordinator/1.0": "fixed CPU private QUERY unit failed",
+    }
+)
 
 
 class NativeQueryHistoryError(ValueError):
@@ -78,6 +87,11 @@ def _checkpoint_protocol(record: NativeQueryCheckpoint) -> tuple[str, str]:
         return (
             "native-query-coordinator/1.1",
             NATIVE_REFERENCE_QUERY_COORDINATOR_V11_SCHEMA_RESOURCE[2],
+        )
+    if record.schema_version == "native-reference-query-coordinator/1.2":
+        return (
+            "native-query-coordinator/1.2",
+            NATIVE_REFERENCE_QUERY_COORDINATOR_V12_SCHEMA_RESOURCE[2],
         )
     return (
         NATIVE_REFERENCE_QUERY_COORDINATOR_PROTOCOL,
@@ -232,10 +246,6 @@ class NativeQueryCheckpointStore:
             data={"code": code},
         )
         job.error_code = code
-        job.error_message = (
-            "fixed CPU private QUERY unit failed"
-            if isinstance(self.request, PrivateChatQueryWorkflowRequest)
-            else "fixed CPU QUERY unit failed"
-        )
+        job.error_message = _FAILURE_MESSAGES[history.records[0].schema_version]
         session.flush()
         return self.read(session)

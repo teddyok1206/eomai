@@ -54,9 +54,10 @@ def source_case(
     mixed=False,
     publisher=None,
     key="synthetic",
+    planned=None,
 ):
-    case = planning_case(purpose=purpose)
-    entries = tuple(embedding_entry(seed) for seed in ("a", "b"))
+    case = planned or planning_case(purpose=purpose)
+    entries = tuple(embedding_entry(seed) for seed in ("a", "b"))[: len(case.selection.anchors)]
     body = case.selection.model_dump(mode="json")
     if service:
         caller = EmbeddingRegistryServiceCaller(
@@ -107,6 +108,7 @@ def source_case(
                 "selection_manifest": saved_selection.member.model_dump(mode="json"),
                 "selection_sha256": selection.selection_sha256,
                 "routing_policy": saved_policy.member.model_dump(mode="json"),
+                "routing_policy_sha256": case.policy.policy_sha256,
                 "child_selection_sha256s": list(selection.child_selection_sha256s),
             },
             "request_sha256",

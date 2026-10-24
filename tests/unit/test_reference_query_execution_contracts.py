@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta, timezone
+from typing import Literal
 
 import pytest
 from eom_catalog_contracts.embedding_reference_query import (
@@ -81,8 +82,9 @@ def case(
     *,
     definition_sha256: str | None = None,
     consumer_purpose: SimilarityConsumerPurpose = "PAST_EXAM_VARIATION",
+    device: Literal["CPU", "CUDA"] = "CPU",
 ) -> Case:
-    profile, bundle = runtime_profile("CPU"), _bundle("CPU")
+    profile, bundle = runtime_profile(device), _bundle(device)
     query = EmbeddingSpace.model_validate(
         seal(profile.space.model_dump(mode="json") | {"purpose": "QUERY"}, "space_sha256")
     )

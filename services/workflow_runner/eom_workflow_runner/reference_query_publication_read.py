@@ -18,6 +18,7 @@ from eom_orchestrator.native_reference_query_coordinator import (
 )
 from eom_workflow.native_reference_query_coordinator import (
     NativeQueryAllocation,
+    NativeQueryBatchExecuted,
     NativeQueryCompleted,
     NativeQueryExecuted,
     NativeQueryExecutedV11,
@@ -32,6 +33,10 @@ from eom_workflow.reference_query_execution import (
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
+from eom_workflow_runner.reference_query_batch_execution_read import (
+    resolve_reference_query_batch_execution,
+    validate_reference_query_batch_child_result,
+)
 from eom_workflow_runner.reference_query_source_read import (
     ResolvedReferenceQuerySources,
     build_reference_query_native_input,
@@ -76,7 +81,9 @@ def resolve_reference_query_publication(
         raise ValueError("REFERENCE_QUERY_COMPLETION_NOT_PUBLISHED")
     allocation, executed, published = (r.payload for r in history.records[:3])
     assert isinstance(allocation, NativeQueryAllocation)
-    assert isinstance(executed, (NativeQueryExecuted, NativeQueryExecutedV11))
+    assert isinstance(
+        executed, (NativeQueryExecuted, NativeQueryExecutedV11, NativeQueryBatchExecuted)
+    )
     assert isinstance(published, NativeQueryPublished)
     # Read the current step row, never trust a detached caller's producer field.
     current_step = session.get(WorkflowStepRunRecord, step.step_run_id, populate_existing=True)
@@ -121,5 +128,15 @@ def resolve_reference_query_publication(
     )
     if native_input != resolved.request or executed.result_sha256 != resolved.result.result_sha256:
         raise ValueError("REFERENCE_QUERY_COMPLETION_CURRENT_INPUT_MISMATCH")
+    if isinstance(executed, NativeQueryBatchExecuted):
+        child = resolve_reference_query_batch_execution(
+            session,
+            reader=reader,
+            sources=sources,
+            launch=launch,
+            native_input=native_input,
+            executed=executed,
+        )
+        validate_reference_query_batch_child_result(child, resolved.result)
     reader.revalidate_provenance()
     return resolved, history

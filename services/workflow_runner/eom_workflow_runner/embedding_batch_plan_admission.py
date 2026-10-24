@@ -209,25 +209,7 @@ class CatalogEmbeddingBatchPlanAdmission:
         scope = self.configuration.source_scope
         self.catalog.authorize_scope(session, self.caller, scope)
         reader = PinnedArtifactReadContext.for_session(session, self.catalog.settings)
-        pointers = (request.selection_manifest, request.routing_policy)
-        reader.prefetch(tuple((p.artifact_id, p.artifact_revision_id) for p in pointers))
-        selection = EmbeddingBatchSelection.model_validate(
-            self._read_control(
-                reader,
-                request.selection_manifest,
-                BATCH_SELECTION_ARTIFACT_TYPE,
-                MAX_BATCH_PLAN_BYTES,
-            )
-        )
-        policy = EmbeddingDeviceRoutingPolicy.model_validate(
-            self._read_control(
-                reader,
-                request.routing_policy,
-                DEVICE_ROUTING_POLICY_ARTIFACT_TYPE,
-                MAX_EMBEDDING_DEVICE_ROUTING_BYTES,
-            )
-        )
-        validate_embedding_batch_plan_controls(request, selection, policy)
+        selection, policy = resolve_embedding_batch_plan_controls(reader, request)
         _require(policy.cpu.profile.space == self.catalog.configuration.space)
         selected = self._validate_selection(request, selection)
         current = self.catalog.resolve_selected_sources(session, self.caller, selected)
@@ -240,3 +222,31 @@ class CatalogEmbeddingBatchPlanAdmission:
         _require(self.catalog.resolve_selected_sources(session, self.caller, selected) == current)
         self.catalog.authorize_scope(session, self.caller, scope)
         _require(session.get_transaction() is root and root.is_active)
+
+
+def resolve_embedding_batch_plan_controls(
+    reader: PinnedArtifactReadContext, request: EmbeddingBatchPlanRequest
+) -> tuple[EmbeddingBatchSelection, EmbeddingDeviceRoutingPolicy]:
+    """Canonical original controls only, not current actor/source or compute authority.
+
+    Admission and historical child completion use one file/schema/hash rule.
+    Each caller retains its actual current authority and late provenance fence.
+    """
+    request = EmbeddingBatchPlanRequest.model_validate(request)
+    pointers = (request.selection_manifest, request.routing_policy)
+    reader.prefetch(tuple((p.artifact_id, p.artifact_revision_id) for p in pointers))
+    selection = EmbeddingBatchSelection.model_validate(
+        CatalogEmbeddingBatchPlanAdmission._read_control(
+            reader, request.selection_manifest, BATCH_SELECTION_ARTIFACT_TYPE, MAX_BATCH_PLAN_BYTES
+        )
+    )
+    policy = EmbeddingDeviceRoutingPolicy.model_validate(
+        CatalogEmbeddingBatchPlanAdmission._read_control(
+            reader,
+            request.routing_policy,
+            DEVICE_ROUTING_POLICY_ARTIFACT_TYPE,
+            MAX_EMBEDDING_DEVICE_ROUTING_BYTES,
+        )
+    )
+    validate_embedding_batch_plan_controls(request, selection, policy)
+    return selection, policy

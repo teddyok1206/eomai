@@ -42,6 +42,7 @@ def publication_case(value, monkeypatch, *, stage="BOUND"):
             original.allocation.control_request.model_dump(mode="json")
             | {
                 "parent_request_sha256": request.request_sha256,
+                "routing_policy_sha256": original.policy.policy_sha256,
                 "child_set_sha256": content_sha256(list(request.child_selection_sha256s)),
                 "expires_monotonic_ns": time.monotonic_ns() + 180 * 10**9,
             },

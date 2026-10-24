@@ -935,3 +935,67 @@ P2-K source commit `ecb653fce3e8968bb50d2e083f64b402b2e6e215`를 main에 push했
 신규 receipt/publication/read를 포함한9개 모듈과 packaged schema를 읽었다. EOM dependency413개가
 모두 추출 wheel에서 해결됐으며 torch/transformers import는 없었다. 이는 설치된 실제 service
 identity/sandbox/GPU 실행·activation을 대신하지 않는 data-only wheel 검증이다.
+
+## P2-L 기존 QUERY continuation에 batch 실행 근거 연결
+
+기존 CPU checkpoint1.0/1.1의 고정 prepare/query unit proof를 GPU 실행처럼 해석하지 않는다.
+후속1.2의 EXECUTED는 P2-K canonical batch receipt의 immutable member/hash와 child ordinal,
+원 child result hash·완료 시각만 보유한다. ALLOCATION/PUBLISHED/COMPLETED와 공개 검색
+결과 receipt1은 재사용한다. 기존 성공/실패 Job·checkpoint bytes는 수정하지 않는다.
+
+정본은 원 native QUERY Job의 append-only checkpoint와 기존 Orchestrator가 commit한 batch
+receipt Artifact다. 결과 조회/등록 때 actual child source 권한과 원 parent planning history,
+receipt producer·member raw/self hash·schema·lifecycle, route/binding/Job/input/result/shard/binary를
+대조한다. GPU unavailable과 무관한 누락·오류는 명시적으로 실패하며 모델을 다시 실행하지 않는다.
+현재 receipt1이 CUDA 전용이므로 CPU fallback batch를1.2 CUDA proof로 통과시키지 않는다.
+
+원 parent/child는 indexed ID/key lookup, child는 ordinal 접근, history는 최대4개의 ordered tuple이다.
+추가 DB/table/index/queue나 큰 binary 저장은 없다. lookup O(1) indexed, metadata O(children) bounded다.
+기존 native Job row lock과 원 caller transaction이 append/replay를 소유한다. module 방향은
+workflow 순수 계약 → Orchestrator 기존 checkpoint adapter → runner 현재 owner/Artifact read다.
+일반 조회에 historical unit 재기동/모델 재실행을 요구하지 않는다. 원 RPC ACK만 조회 성공으로
+사용하는 더 단순한 대안은 canonical producer와 child 원 실행 closure가 없어 충분하지 않다.
+
+QUERY ID/input 준비도 기존 CPU executor에서 작은 순수 함수로 공통화한다. replay는 원 Job/query
+ID·최초 command·시각을 유지한다. CPU handoff guard는 durable Job 생성 전에 그대로 적용한다.
+후속 batch owner도 같은 준비 함수를 사용하지만 이 값만으로 compute/source 권한은 생기지 않는다.
+
+P2-L 구현·검증:
+
+- checkpoint1.2 schema를 먼저 정의하고 package mirror/raw SHA를 고정했다.
+  `8e00ce9ceb8f0717bf6eb0c9a42481df4585b055d449a986e0471839df65bf65`이며1.0/1.1의
+  기존 schema SHA는 그대로다. 원 allocation의 checkpoint family를 유지하고 CPU unit proof와
+  batch receipt를 섞거나 재해석하지 않는다.1.2를 CPU profile에 적용하는 것도 거부한다.
+- launch/input 순수 준비는 `reference_query_launch_preparation`이 소유하고 기존 CPU executor가
+  재사용한다. 원 ID/time/command replay와 durable Job 이전 exact CPU guard가 유지된다.
+- `reference_query_batch_execution_read`는 current source 경계 안에서 원 receipt와 parent Job/
+  controls/route/binding을 대조한다. 실제 actor·Graph·권한 정책·anchor·query options·recipe·
+  CUDA profile/bundle과 원 child Workflow/Job/input/result/range가 일치해야 한다. native result의
+  실제 binary 검증은 기존 canonical reader에 두며 작은 receipt 검증 때문에 vector를 다시 읽지 않는다.
+- 기존 completion은 작은 readonly publication-material interface로 CPU와 batch의 결과 등록을
+  공유한다. batch proof는 첫 child Artifact publication 전, canonical result/receipt 등록과 완료
+  조회 경계에서 확인한다. 별도 publication framework나 DB/queue/migration은 추가하지 않았다.
+- final disposable PostgreSQL50 PASS(85.12s), 공식 cleanup PASS다. 이 중18개가 신규 QUERY batch
+  read/completion 경계이며 기존32개도 회귀 확인했다. canonical member/parent/route/child 검증,
+  stale revision/raw/self hash 실패, 동시 checkpoint replay, QUERY Artifact 직후/receipt 전/receipt
+  직후 중단에서 원 producer 재사용과 completed canonical-only 재조회가 포함된다.
+  로그는 `/tmp/eom-gpu-batch-admission-20261024-r8.log`다. 앞선 r5(42 PASS), r6(46 PASS),
+  r7(47 PASS)는 이후 추가 case 이전 기록으로 보존하고 final50을 대체하지 않는다. 실제 SQL/
+  Artifact/typed source derivation은 사용했지만 current IAM/Workflow·command 및 숫자/GPU leaf는
+  명시적인 합성 seam이다. 실제 GPU/sandbox/서비스 admission 성공으로 확대하지 않는다.
+- 관련 unit75 PASS, 별도 CPU completion/consumer/Artifact·dependency/wheel inventory103 PASS,
+  최종1.2/launch/private continuation77 PASS다. 범위가 겹쳐 합산하지 않는다. 단위 검사 첫20건 중
+  1건은 예상 schema 예외 타입을 좁게 지정한 fixture 문제였고 실패 의미를 약화시키지 않고 수정했다.
+  production9모듈 strict mypy 및 scoped Python16개 Ruff/format, diff whitespace PASS다.
+- API/Web·채팅·INDEX owner active, GPU0%/2MiB다. 운영 설치·activation·모델 추론·credential 변경은
+  없었다. 기존 root/runner OS12 PASS는 변경 없는 어댑터의 이전 근거로 유지하며 이번 재실행으로
+  보고하지 않는다. README의 별도 승인 commit도 건드리지 않았다.
+
+P2_L_QUERY_BATCH_COMPLETION=SOURCE_AND_DB_VERIFIED, ACTUAL_SELECTED_CHILD_DISPATCH=PENDING,
+LIVE_GPU_BATCH=NOT_RUN, GPU_PREFERRED_ACTIVE=NO, CURRENT_DEFAULT=CPU, GOAL=ACTIVE.
+
+다음은 root↔actual owner channel의 설치된 시작 진입점, 선택된 device의 기존 QUERY/START·
+command claim/native1.2 allocation과 DOCUMENT reservation/commit을 연결하는 실제 실행 경계다.
+이후 sealed numerical successor·CPU finite fallback·exact paired indexes, 실제 GPU/자원 부족 CPU·
+sandbox·image/trainer 공존·처리량과 호환 release/default/rollback 검증을 닫는다. 이 source/DB
+체크포인트를 GPU 목표 완료 commit 또는 실제 운영 release로 부르지 않는다.

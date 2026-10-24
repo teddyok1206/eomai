@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/native-reference-query-coordinator/1.2",
+  "title": "Native reference QUERY checkpoint1.2 for canonical finite batch execution",
+  "description": "Immutable canonical execution receipt reference, not source authority, a CPU unit observation, launch grant or child publication.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "record_type", "native_launch_job_id", "association_sha256", "payload", "checkpoint_sha256"],
+  "properties": {
+    "schema_version": {"const": "native-reference-query-coordinator/1.2"},
+    "record_type": {"enum": ["ALLOCATION", "EXECUTED", "PUBLISHED", "COMPLETED"]},
+    "native_launch_job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+    "association_sha256": {"$ref": "#/$defs/hash"},
+    "checkpoint_sha256": {"$ref": "#/$defs/hash"},
+    "payload": {"oneOf": [
+      {"$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.0#/$defs/allocation"},
+      {"$ref": "#/$defs/executed"},
+      {"$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.0#/$defs/published"},
+      {"$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.0#/$defs/completed"}
+    ]}
+  },
+  "allOf": [
+    {"if": {"properties": {"record_type": {"const": "ALLOCATION"}}}, "then": {"properties": {"payload": {"$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.0#/$defs/allocation"}}}},
+    {"if": {"properties": {"record_type": {"const": "EXECUTED"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/executed"}}}},
+    {"if": {"properties": {"record_type": {"const": "PUBLISHED"}}}, "then": {"properties": {"payload": {"$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.0#/$defs/published"}}}},
+    {"if": {"properties": {"record_type": {"const": "COMPLETED"}}}, "then": {"properties": {"payload": {"$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.0#/$defs/completed"}}}}
+  ],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "executed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["batch_receipt", "batch_receipt_sha256", "child_ordinal", "result_sha256", "completed_observed_at"],
+      "properties": {
+        "batch_receipt": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"},
+        "batch_receipt_sha256": {"$ref": "#/$defs/hash"},
+        "child_ordinal": {"type": "integer", "minimum": 0, "maximum": 31},
+        "result_sha256": {"$ref": "#/$defs/hash"},
+        "completed_observed_at": {"$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.0#/$defs/utc"}
+      }
+    }
+  }
+}
