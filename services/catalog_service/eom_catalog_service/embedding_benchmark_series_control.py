@@ -46,6 +46,7 @@ class BenchmarkRootSeriesSelection:
     cpu: NativeEmbeddingBackendPins
     cuda: NativeEmbeddingBackendPins
     controller_release: str
+    first_ordinal: int = 1
 
     def __post_init__(self) -> None:
         require_root_benchmark_control()
@@ -69,6 +70,8 @@ class BenchmarkRootSeriesSelection:
             or type(self.controller_release) is not str
             or re.fullmatch(r"[0-9a-f]{40}", self.controller_release) is None
             or self.cpu.configuration_revision_id == self.cuda.configuration_revision_id
+            or type(self.first_ordinal) is not int
+            or not 1 <= self.first_ordinal <= len(BENCHMARK_DEVICE_SEQUENCE)
         ):
             raise ValueError("BENCHMARK_SERIES_SELECTION_INVALID")
         _selected_owner(self)
@@ -154,6 +157,8 @@ def serve_root_benchmark_series(
     name = benchmark_series_socket_name(selection.request.benchmark_revision_id)
     with root_benchmark_listener(name) as listener:
         for ordinal, device in enumerate(BENCHMARK_DEVICE_SEQUENCE, 1):
+            if ordinal < selection.first_ordinal:
+                continue
             for captured in files:
                 captured.assert_unchanged()
             connection = _accept_owner(listener, selection)

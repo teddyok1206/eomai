@@ -78,7 +78,8 @@ def test_listener_other_connection_or_forward_tuple_is_not_peer_identity(
     [
         b"garbage",
         _HEADER.encode() + b"short\n",
-        _table(inode=0),
+        _table(inode=-1),
+        _table(uid=-1),
         _table() + _table().split(b"\n", 1)[1],
     ],
 )
@@ -174,6 +175,60 @@ def test_verified_reverse_kernel_uid_allows_connected_socket(
     values = iter([_table(), b""])
     monkeypatch.setattr(os, "read", lambda *args: next(values))
     auth._require_api_peer_socket(_Socket())  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize("uid", [0, 991, 1234])
+def test_unaccepted_connection_is_not_an_identity(uid: int) -> None:
+    assert auth._reverse_tcp_uid(_table(uid=uid, inode=0), local=_LOCAL, remote=_REMOTE) is None
+
+
+def test_pending_then_accepted_connection_uses_same_bounded_peer_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(pwd, "getpwnam", lambda name: SimpleNamespace(pw_uid=991))
+    monkeypatch.setattr(os, "open", lambda *args: 10)
+    monkeypatch.setattr(os, "close", lambda fd: None)
+    values = iter([_table(uid=0, inode=0), b"", _table(), b""])
+    monkeypatch.setattr(os, "read", lambda *args: next(values))
+    waits: list[float] = []
+    monkeypatch.setattr(time, "sleep", waits.append)
+    auth._require_api_peer_socket(_Socket())  # type: ignore[arg-type]
+    assert waits == [0.01]
+
+
+def test_pending_connection_never_authorizes_wrong_accepted_peer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(pwd, "getpwnam", lambda name: SimpleNamespace(pw_uid=991))
+    monkeypatch.setattr(os, "open", lambda *args: 10)
+    monkeypatch.setattr(os, "close", lambda fd: None)
+    values = iter([_table(uid=0, inode=0), b"", _table(uid=1234), b""])
+    monkeypatch.setattr(os, "read", lambda *args: next(values))
+    monkeypatch.setattr(time, "sleep", lambda seconds: None)
+    with pytest.raises(ControlPlaneError, match="fixed API connected peer is unavailable"):
+        auth._require_api_peer_socket(_Socket())  # type: ignore[arg-type]
+
+
+def test_duplicate_pending_and_accepted_identity_is_still_ambiguous() -> None:
+    with pytest.raises(ValueError, match="ambiguous"):
+        auth._reverse_tcp_uid(
+            _table(inode=0) + _table().split(b"\n", 1)[1], local=_LOCAL, remote=_REMOTE
+        )
+
+
+def test_never_accepted_peer_times_out_before_any_http_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(pwd, "getpwnam", lambda name: SimpleNamespace(pw_uid=991))
+    monkeypatch.setattr(os, "open", lambda *args: 10)
+    monkeypatch.setattr(os, "close", lambda fd: None)
+    values = iter([member for _ in range(auth._TCP_ATTEMPTS) for member in (_table(inode=0), b"")])
+    monkeypatch.setattr(os, "read", lambda *args: next(values))
+    waits: list[float] = []
+    monkeypatch.setattr(time, "sleep", waits.append)
+    with pytest.raises(ControlPlaneError):
+        auth._require_api_peer_socket(_Socket())  # type: ignore[arg-type]
+    assert waits == [0.01] * (auth._TCP_ATTEMPTS - 1)
 
 
 def test_peer_acceptance_wait_is_bounded_and_never_substitutes_listener(

@@ -60,7 +60,7 @@ SCHEMA = EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF
 CONTROL = "eom://schemas/workflow/embedding-benchmark-launch-control/1.0#/$defs/"
 
 
-def publish_launch(value, root, source, invocation):
+def publish_launch(value, root, source, invocation, *, controller_release="a" * 40):
     """Build complete synthetic canonical owner proof under preselected launch IDs."""
     numerical = reseal_launch(source, invocation=invocation)
     ordinal = invocation.launch_ordinal
@@ -103,7 +103,7 @@ def publish_launch(value, root, source, invocation):
         job_id=invocation.job_id,
         execution_id=invocation.execution_id,
         invocation_sha256=invocation.invocation_sha256,
-        controller_release="a" * 40,
+        controller_release=controller_release,
     )
     before = BenchmarkLaunchPrepared.model_validate(seal(before, "prepared_sha256"))
     after = completed(assoc, prepared(assoc)).model_dump(mode="json")
@@ -205,14 +205,14 @@ def publish_launch(value, root, source, invocation):
         artifact_type=BENCHMARK_LAUNCH_ARTIFACT_TYPE,
         manifest_version=CONTROL_FILE_SET_PROTOCOL,
         idempotency_key=f"synthetic-full-{ordinal}",
-        source_commit="a" * 40,
+        source_commit=controller_release,
         created_at=NOW,
     )
     return receipt
 
 
 @pytest.fixture
-def measurement(admitted, series, monkeypatch, tmp_path):
+def measurement(admitted, series, monkeypatch, tmp_path, request):
     value = admitted
     value.publisher.settings = replace(value.publisher.settings, runtime_source_commit="a" * 40)
     engine = value.publisher.engine
@@ -243,7 +243,18 @@ def measurement(admitted, series, monkeypatch, tmp_path):
             authorization.assert_current()
             root = tmp_path / f"launch-{invocation.launch_ordinal}"
             root.mkdir()
-            receipt = publish_launch(value, root, series[invocation.launch_ordinal - 1], invocation)
+            release = (
+                "b" * 40
+                if getattr(request, "param", None) == "mixed" and invocation.launch_ordinal > 1
+                else "a" * 40
+            )
+            receipt = publish_launch(
+                value,
+                root,
+                series[invocation.launch_ordinal - 1],
+                invocation,
+                controller_release=release,
+            )
             authorization.assert_current()
             return receipt
 
@@ -260,6 +271,39 @@ def finalize(case):
     return finalize_completed_benchmark_measurement(
         case.owner, case.admitted.publisher, case.admitted.request, job_id=case.launched.job_id
     )
+
+
+@pytest.mark.parametrize("measurement", ["mixed"], indirect=True)
+def test_compatible_transport_repair_preserves_actual_per_launch_sources(measurement, monkeypatch):
+    observations = []
+
+    class Capture:
+        def assert_unchanged(self):
+            observations.append("revalidated")
+
+    def capture(releases):
+        observations.append(releases)
+        return Capture()
+
+    monkeypatch.setattr(module, "capture_equivalent_controller_measurements", capture)
+    result = finalize(measurement)
+    assert result.result.status == "MEASURED"
+    assert observations == [("a" * 40,) + ("b" * 40,) * 5, "revalidated"]
+    assert not finalize(measurement).created
+    assert len(measurement.calls) == 6
+
+
+@pytest.mark.parametrize("measurement", ["mixed"], indirect=True)
+def test_incompatible_measurement_repair_cannot_promote_completed_series(measurement, monkeypatch):
+    def reject(releases):
+        raise ValueError("BENCHMARK_CONTROLLER_MEASUREMENT_CHANGED")
+
+    monkeypatch.setattr(module, "capture_equivalent_controller_measurements", reject)
+    with pytest.raises(ValueError, match="MEASUREMENT_CHANGED"):
+        finalize(measurement)
+    with measurement.owner.sessions() as session:
+        job = session.get(JobRecord, measurement.launched.job_id)
+        assert job.status == "VALIDATING_RESULT"
 
 
 def test_real_local_canonical_publication_and_original_request_replay_dispatch_zero(measurement):

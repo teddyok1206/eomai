@@ -101,3 +101,56 @@ direct row update is justified. Lookup/validation remains bounded O(1) plus the
 existing fixed manifest member count; concurrency/idempotency remain in the existing
 transactional append-only closure. Negative tests must reject mixed unit/program
 families, forged hashes, active controllers, wrong source identities and missing cleanup.
+
+## Completed-prefix continuation after a transport-only correction
+
+The successor `job_a930cfc8b08b4cf385c5cf95370cbcb4` committed CPU ordinal1 and
+successfully re-read its existing QUERY. Before ordinal2 the official refresh
+adapter rejected a TCP child with inode0, before emitting HTTP headers/body. The
+shared peer parser must treat this as pending acceptance and use its existing
+bounded observation loop. Wrong accepted UID, ambiguity, malformed input and
+timeout still reject before any credentials are sent. No HTTP/refresh replay is
+introduced. The later owner-process check observed the already exited child; it
+is secondary fail-closed evidence, not permission to weaken process identity.
+
+Continuation design:
+
+1. Existing Orchestrator journal is canonical for completed prefix, unresolved
+   reservations and the next ordinal. Never manufacture receipts or copy vectors
+   into a new Job. Reauthorize the pinned existing request and its original policy.
+2. Keep the logical Job, benchmark revision, immutable CPU receipt/Artifact and all
+   numerical/backend/Graph/source hashes. New controller source stays explicit in
+   each later launch's preparation and producing Job; do not claim the old source.
+3. The root-only local series selection gains a bounded first ordinal (default1).
+   This is scheduling, not authority or a worker-wire/schema change. Existing
+   association/request/owner/ordinal/device/Job checks still fence every launch.
+4. Access pattern is a fixed ordered suffix of6 stages; O(6) time/O(6) receipt
+   storage. Prefix membership remains in the indexed journal, not a parallel queue.
+5. Controller-source equality alone is too coarse for resuming after an HTTP-only
+   repair. Mixed controller releases are accepted only when their installed,
+   root-protected measurement implementations match byte-for-byte across an
+   explicit fixed member inventory. Numerical runtime/model pins and per-launch
+   source/provenance/cleanup checks remain mandatory. Same-release paths retain
+   their existing behavior; absent, mutable or differing implementations reject.
+6. Implementation snapshots are temporary bounded materialization from immutable
+   installed releases, not a persisted cache, runtime Git dependency or new
+   registry. Deduplicate release IDs with a set; compare one fixed manifest per
+   release, O(releases × fixed members) and bounded bytes. Hold/revalidate file
+   identity through final measurement collection using existing runtime file
+   snapshots. Installed releases remain immutable; registered producer/source
+   and original Artifact provenance are separately revalidated during publication.
+7. The Catalog infrastructure adapter owns protected installed-file resolution;
+   the existing finalizer owns comparability and publication. Domain/contracts do
+   not import filesystems or infrastructure. No new dependency or DB migration.
+8. New real login/official refresh is required normally; no persisted credentials,
+   impersonation or altered authentication timestamps. Restart no active native
+   execution. Never turn a historical failed controller into a successful run.
+9. Replays reuse the same request, registered prefix and original result pointer.
+   Changed measurement code requires a separate cohort; an incomplete prefix or
+   uncertain reservation requires its existing supported recovery, not skipping.
+10. Tests cover pending→accepted peer proof, persistent pending, wrong UID and
+    duplicate matches; root suffix order/bounds/mismatches; equal/changed/missing/
+    writable controller members and immutable file snapshots; finalization replay.
+11. Alternative: rerun CPU1 after every nonnumerical release change. It wastes a
+    validated long measurement and couples HTTP maintenance to scientific output.
+    Arbitrarily accepting mixed releases or relabeling old receipts is unsafe.

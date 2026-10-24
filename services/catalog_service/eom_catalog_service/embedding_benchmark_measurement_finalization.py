@@ -55,6 +55,9 @@ from eom_workflow.embedding_benchmark_launch_control import (
 )
 from sqlalchemy.orm import Session
 
+from eom_catalog_service.embedding_benchmark_controller_compatibility import (
+    capture_equivalent_controller_measurements,
+)
 from eom_catalog_service.embedding_benchmark_numerical_assessment import (
     assess_benchmark_series_numerics,
 )
@@ -286,7 +289,10 @@ def _collect_measurement(
             )
         )
         evidence = tuple(_read_launch_evidence(session, reader, launch) for launch in launches)
-        if len({row.prepared.controller_release for row in evidence}) != 1 or any(
+        controllers = capture_equivalent_controller_measurements(
+            tuple(row.prepared.controller_release for row in evidence)
+        )
+        if any(
             len(
                 {
                     row.prepared.backend
@@ -467,6 +473,7 @@ def _collect_measurement(
             result_body | {"result_sha256": content_sha256(result_body)}
         )
         put("result.json", result)
+        controllers.assert_unchanged()
         reader.revalidate_provenance()
         if owner.journal.read(session, request, job_id=job_id) != history:
             raise ValueError("BENCHMARK_MEASUREMENT_HISTORY_CHANGED")

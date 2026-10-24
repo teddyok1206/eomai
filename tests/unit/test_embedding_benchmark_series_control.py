@@ -265,6 +265,56 @@ def test_six_original_stages_use_one_listener_and_the_same_root_driver_and_resou
     assert not case.path.exists()
 
 
+def test_completed_prefix_is_not_redispatched_when_root_serves_original_suffix(rendezvous):
+    case = rendezvous
+    selection = replace(case.selection, first_ordinal=2)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(series.serve_root_benchmark_series, selection, cuda=case.cuda)
+        assert case.ready.wait(3)
+        completed = []
+        for ordinal in range(2, 7):
+            staged = staged_launch(ordinal)
+            owner = connect_owner(case, staged)
+            try:
+                completed.append(finish_launch(owner, staged, case.peer))
+            finally:
+                owner.close()
+        assert future.result(timeout=3) == tuple(completed)
+    assert len(case.effects) == len(set(case.effects)) == 5
+    assert case.selected_backends == [
+        selection.cuda,
+        selection.cuda,
+        selection.cpu,
+        selection.cpu,
+        selection.cuda,
+    ]
+
+
+@pytest.mark.parametrize("ordinal", [0, 7, True, 2.0, "2"])
+def test_suffix_selection_is_bounded_before_listener_or_effects(rendezvous, ordinal):
+    with pytest.raises(ValueError, match="SELECTION_INVALID"):
+        replace(rendezvous.selection, first_ordinal=ordinal)
+    assert not rendezvous.effects
+
+
+def test_suffix_listener_cannot_reexecute_completed_cpu1(rendezvous):
+    case = rendezvous
+    selection = replace(case.selection, first_ordinal=2)
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(series.serve_root_benchmark_series, selection, cuda=case.cuda)
+        assert case.ready.wait(3)
+        staged = staged_launch(1)
+        owner = connect_owner(case, staged)
+        try:
+            with pytest.raises(ValueError):
+                finish_launch(owner, staged, case.peer)
+        finally:
+            owner.close()
+        with pytest.raises(ValueError):
+            future.result(timeout=3)
+    assert not case.effects
+
+
 @pytest.mark.parametrize("fault", ["order", "request", "birth", "job", "failed", "uncertain"])
 def test_wrong_original_or_failed_or_uncertain_launch_stops_without_a_replacement(
     rendezvous, fault

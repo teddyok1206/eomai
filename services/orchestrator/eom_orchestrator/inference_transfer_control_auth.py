@@ -95,7 +95,12 @@ def _tcp_endpoint(endpoint: tuple[str, int]) -> str:
 
 
 def _reverse_tcp_uid(raw: bytes, *, local: str, remote: str) -> int | None:
-    """Lookup one exact established reverse four-tuple in bounded kernel data."""
+    """Lookup one accepted reverse four-tuple, not an unaccepted kernel request.
+
+    An established child can appear before accept() attaches its inode/owner.
+    That is pending evidence, never a UID proof; the caller's bounded read loop
+    waits for acceptance without sending any credential or HTTP request.
+    """
     if len(raw) > _TCP_TABLE_BYTES:
         raise ValueError("TCP table byte bound exceeded")
     lines = raw.decode("ascii").splitlines()
@@ -103,19 +108,19 @@ def _reverse_tcp_uid(raw: bytes, *, local: str, remote: str) -> int | None:
         raise ValueError("TCP table row bound exceeded")
     if "local_address" not in lines[0] or "rem_address" not in lines[0]:
         raise ValueError("TCP table header differs")
-    matches: list[int] = []
+    matches: list[tuple[int, int]] = []
     for line in lines[1:]:
         fields = line.split()
         if len(fields) < 10:
             raise ValueError("TCP table row is incomplete")
         if fields[1] == remote and fields[2] == local and fields[3] == "01":
-            uid = int(fields[7])
-            if uid < 0 or int(fields[9]) <= 0:
+            uid, inode = int(fields[7]), int(fields[9])
+            if uid < 0 or inode < 0:
                 raise ValueError("TCP peer identity is incomplete")
-            matches.append(uid)
+            matches.append((uid, inode))
     if len(matches) > 1:
         raise ValueError("connected peer identity is ambiguous")
-    return matches[0] if matches else None
+    return matches[0][0] if matches and matches[0][1] > 0 else None
 
 
 def _require_api_peer_socket(connection: socket.socket) -> None:

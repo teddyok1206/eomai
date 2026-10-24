@@ -444,3 +444,36 @@ admission은 아직 별도 검증이 필요하며 정식 v1.2 Job은 여전히 �
 - 이 기록은 실행 시작 증거이며 측정 완료나 GPU 기본값 활성화 증거가 아니다.
   운영 INDEX/QUERY 프로세스는 유지하고, 각 실제 측정·기존 QUERY 재조회·정리·최종
   불변 결과와 replay가 끝난 뒤 비교 판정을 기록한다. 기본값은 아직 CPU다.
+
+### 2026-10-24 06:41 UTC — CPU1 보존 및 갱신 연결 경쟁 조건 수정
+
+- 7b9 controller는05:16:22UTC에 exit1했다. CPU ordinal1은 실제 PASS로 등록됐고,
+  기존 QUERY 재조회도 PASS(`req_09738c51002fe6cb3d3d0f5f02abce18`,31.448초,
+  PARTIAL/candidates8)였다. ordinal2 전에 official refresh의 API peer 검사에서
+  inode0인 미수락 TCP child를 즉시 거부했다. 요청 본문 생성/전송 전의 실패이므로
+  비밀번호 오류나 운영 로그인 limiter 재발로 분류하지 않는다.
+- 중단 후 root가 이미 종료된 owner의 `/proc` identity를 검사한 오류는 이차적인
+  fail-closed 결과다. process/UID 검사를 약화하지 않는다. 운영 서비스는 ACTIVE,
+  GPU는2MiB였다. 원 controller 실패·첫 CPU Artifact/receipt는 보존한다.
+- 실제 developer UID1000의 read-only 진단에서 원 Job `job_a930cfc8…`은 RUNNING,
+  reserved1/recorded1이었다. 새 pending reservation·GPU 실행·직접 DB UPDATE는 없다.
+  원 policy Artifact `artifact_0f2e50df18a04250bb6f3ed0dd4d5e55` /
+  `rev_35b839694ac743c598117a3c987f21f1` / member`policy.json`을 다시 고정한다.
+- peer parser는 inode0을 authority가 아닌 pending으로 반환해 기존5회 bounded
+  kernel observation을 사용한다. wrong accepted UID, duplicate tuple, malformed
+  값과 timeout은 계속 거부하며 HTTP/refresh 자체를 재전송하지 않는다.
+  실제 API에 HTTP/비밀번호/토큰을 보내지 않은 TCP identity 관찰3회가 PASS였다.
+- root-local series selection에 first ordinal을 추가해 기존 journal의 원 CPU1을
+  재실행하지 않고2..6만 제공한다. 새 Job·benchmark/input/policy revision을 만들지
+  않는다. 각 launch의 실제 controller source를 보존하고, 고정 measurement 코드
+  inventory의 보호된 설치 파일이 동일할 때만 controller release 간 이어받기를
+  허용한다. 변경/누락/쓰기 가능 파일, backend 혼합, 원 source/hash 불일치는 거부한다.
+- peer/client focused126 PASS, Identity fence/composition127 PASS, 보호된 code
+  compatibility14 PASS, suffix rendezvous20 PASS, final publication/replay20 PASS
+  (620.29초), finite operator prelogin/no-new-Job5 PASS다. 겹치는 cohort는 합산하지
+  않는다. Ruff·format·4개 production module scoped strict mypy가 통과했다.
+  최초 새 test fixture의 group-writable 임시 경로 거부3건은 fixture 권한을 고쳐
+  재실행했다. production 보호 규칙은 완화하지 않았다.
+- 수정본 private SDK 설치와 실제 suffix5회는 아직 PENDING이다. 별도로 변경 중인
+  계정 enrollment/UI 파일은 이번 commit/build에 포함하지 않는다. 공용 API/Web의
+  로그인 복구 release와 native numerical worker/model/unit은 유지한다.
