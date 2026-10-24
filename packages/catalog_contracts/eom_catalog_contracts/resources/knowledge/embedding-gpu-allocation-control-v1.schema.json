@@ -1,0 +1,485 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-gpu-allocation-control/1.0",
+  "title": "Fixed root/native embedding allocation metadata and child fences",
+  "description": "Untrusted claims until exact peer, actual unit, retained resource, original actor and source validation. No model input, vector, credentials, execution authority or implicit fallback is supplied by parsing these frames.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/ready"
+    },
+    {
+      "$ref": "#/$defs/busy"
+    },
+    {
+      "$ref": "#/$defs/grant"
+    },
+    {
+      "$ref": "#/$defs/check"
+    },
+    {
+      "$ref": "#/$defs/ack"
+    },
+    {
+      "$ref": "#/$defs/result"
+    },
+    {
+      "$ref": "#/$defs/resultAck"
+    }
+  ],
+  "$defs": {
+    "resultAck": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "allocation_attempt_id",
+        "message_sha256",
+        "message_type",
+        "allocation_request_sha256",
+        "grant_message_sha256",
+        "batch_request_sha256",
+        "result_message_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-gpu-allocation-control/1.0"
+        },
+        "allocation_attempt_id": {
+          "type": "string",
+          "pattern": "^embeddingallocation_[0-9a-f]{32}$"
+        },
+        "message_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "message_type": {
+          "const": "RESULT_ACK"
+        },
+        "allocation_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "grant_message_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "batch_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "result_message_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "allocation_attempt_id",
+        "message_sha256",
+        "message_type",
+        "allocation_request_sha256",
+        "grant_message_sha256",
+        "batch_request_sha256",
+        "result_raw_sha256",
+        "result_sha256",
+        "vectors_sha256",
+        "result_byte_count",
+        "vectors_byte_count"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-gpu-allocation-control/1.0"
+        },
+        "allocation_attempt_id": {
+          "type": "string",
+          "pattern": "^embeddingallocation_[0-9a-f]{32}$"
+        },
+        "message_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "message_type": {
+          "const": "RESULT_READY"
+        },
+        "allocation_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "grant_message_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "batch_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "result_raw_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "result_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "vectors_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "result_byte_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        },
+        "vectors_byte_count": {
+          "type": "integer",
+          "minimum": 4,
+          "maximum": 16777216
+        }
+      }
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "allocation_attempt_id",
+        "message_sha256",
+        "message_type",
+        "parent_request_sha256",
+        "child_set_sha256",
+        "routing_policy_sha256",
+        "purpose",
+        "configuration",
+        "receipt_raw_sha256",
+        "expires_monotonic_ns"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-gpu-allocation-control/1.0"
+        },
+        "allocation_attempt_id": {
+          "type": "string",
+          "pattern": "^embeddingallocation_[0-9a-f]{32}$"
+        },
+        "message_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "message_type": {
+          "const": "ALLOCATION_REQUEST"
+        },
+        "parent_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "child_set_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "routing_policy_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "purpose": {
+          "enum": [
+            "INDEX",
+            "REFERENCE_QUERY",
+            "PRIVATE_CHAT_QUERY"
+          ]
+        },
+        "configuration": {
+          "$ref": "eom://schemas/knowledge/embedding-native-cuda-probe/1.0#/$defs/configurationPin"
+        },
+        "receipt_raw_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "expires_monotonic_ns": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9223372036854776000
+        }
+      }
+    },
+    "ready": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "allocation_attempt_id",
+        "message_sha256",
+        "message_type",
+        "allocation_request_sha256",
+        "evidence_state",
+        "pid",
+        "start_time_ticks",
+        "worker_uid",
+        "worker_gid",
+        "supplementary_gids",
+        "resource_fds",
+        "expected_device_capture",
+        "fdstore_name"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-gpu-allocation-control/1.0"
+        },
+        "allocation_attempt_id": {
+          "type": "string",
+          "pattern": "^embeddingallocation_[0-9a-f]{32}$"
+        },
+        "message_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "message_type": {
+          "const": "ALLOCATION_READY"
+        },
+        "allocation_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "evidence_state": {
+          "const": "RETENTION_REQUESTED_NOT_COMPUTE_ADMITTED"
+        },
+        "pid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "start_time_ticks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18446744073709552000
+        },
+        "worker_uid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967294
+        },
+        "worker_gid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967294
+        },
+        "supplementary_gids": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 4294967294
+          }
+        },
+        "resource_fds": {
+          "$ref": "eom://schemas/knowledge/embedding-native-cuda-probe/1.0#/$defs/result/properties/resource_fds"
+        },
+        "expected_device_capture": {
+          "$ref": "eom://schemas/knowledge/embedding-installed-runtime-proof/1.0#/$defs/cudaDeviceCapture"
+        },
+        "fdstore_name": {
+          "const": "eom-gpu0-lease"
+        }
+      }
+    },
+    "busy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "allocation_attempt_id",
+        "message_sha256",
+        "message_type",
+        "allocation_request_sha256",
+        "evidence_state",
+        "pid",
+        "start_time_ticks",
+        "worker_uid",
+        "worker_gid"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-gpu-allocation-control/1.0"
+        },
+        "allocation_attempt_id": {
+          "type": "string",
+          "pattern": "^embeddingallocation_[0-9a-f]{32}$"
+        },
+        "message_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "message_type": {
+          "const": "ALLOCATION_BUSY"
+        },
+        "allocation_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "evidence_state": {
+          "const": "ALLOCATION_UNAVAILABLE_NOT_EXECUTED"
+        },
+        "pid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483647
+        },
+        "start_time_ticks": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 18446744073709552000
+        },
+        "worker_uid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967294
+        },
+        "worker_gid": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967294
+        }
+      }
+    },
+    "grant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "allocation_attempt_id",
+        "message_sha256",
+        "message_type",
+        "allocation_request_sha256",
+        "ready_message_sha256",
+        "routing_decision_sha256",
+        "batch_input_raw_sha256",
+        "batch_request_sha256",
+        "batch_input_byte_count"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-gpu-allocation-control/1.0"
+        },
+        "allocation_attempt_id": {
+          "type": "string",
+          "pattern": "^embeddingallocation_[0-9a-f]{32}$"
+        },
+        "message_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "message_type": {
+          "const": "COMPUTE_GRANT"
+        },
+        "allocation_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "ready_message_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "routing_decision_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "batch_input_raw_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "batch_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "batch_input_byte_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        }
+      }
+    },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "allocation_attempt_id",
+        "message_sha256",
+        "message_type",
+        "allocation_request_sha256",
+        "grant_message_sha256",
+        "batch_request_sha256",
+        "child_request_sha256",
+        "sequence"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-gpu-allocation-control/1.0"
+        },
+        "allocation_attempt_id": {
+          "type": "string",
+          "pattern": "^embeddingallocation_[0-9a-f]{32}$"
+        },
+        "message_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "message_type": {
+          "const": "CHECK_CHILD"
+        },
+        "allocation_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "grant_message_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "batch_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "child_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        }
+      }
+    },
+    "ack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "allocation_attempt_id",
+        "message_sha256",
+        "message_type",
+        "allocation_request_sha256",
+        "grant_message_sha256",
+        "batch_request_sha256",
+        "child_request_sha256",
+        "sequence",
+        "check_message_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "embedding-gpu-allocation-control/1.0"
+        },
+        "allocation_attempt_id": {
+          "type": "string",
+          "pattern": "^embeddingallocation_[0-9a-f]{32}$"
+        },
+        "message_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "message_type": {
+          "const": "FENCE_ACK"
+        },
+        "allocation_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "grant_message_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "batch_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "child_request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "check_message_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    }
+  }
+}

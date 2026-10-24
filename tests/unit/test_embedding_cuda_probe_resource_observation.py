@@ -825,3 +825,107 @@ def test_index_release_does_not_relabel_caller_failure_as_retirement(index_relea
         raise failure
     assert error.value is failure
     assert events == ["open", "flock", "close"]
+
+
+def allocation_report(kernel):
+    from eom_catalog_contracts.embedding_gpu_control import parse_embedding_gpu_control
+
+    from tests.unit.test_embedding_gpu_control import control_case
+
+    prototype, _, state, _ = kernel
+    body = control_case()[1].model_dump(mode="json")
+    for field in (
+        "pid",
+        "start_time_ticks",
+        "worker_uid",
+        "worker_gid",
+        "supplementary_gids",
+        "resource_fds",
+        "expected_device_capture",
+    ):
+        body[field] = prototype.model_dump(mode="json")[field]
+    report = parse_embedding_gpu_control(seal(body, "message_sha256"))
+    instance = report.allocation_attempt_id.removeprefix("embeddingallocation_")
+    state["expected_unit"] = f"eom-embedding-native-gpu-batch@{instance}.service"
+    return report
+
+
+def test_allocation_uses_its_own_ready_and_unit_for_both_kernel_locks(kernel):
+    report = allocation_report(kernel)
+    observed = owner.observe_embedding_gpu_allocation_resources(
+        report, unit=kernel[2]["expected_unit"], lease_gid=2468
+    )
+    assert observed.pid1_descriptor == 80
+    assert observed.shared_gpu_lease.holder_pid == report.pid
+    assert observed.shared_gpu_lease.holder_start_time_ticks == report.start_time_ticks
+    with pytest.raises(ValueError):
+        owner.observe_native_cuda_index_ready_resources(
+            report, unit=kernel[2]["expected_unit"], lease_gid=2468
+        )
+    kernel[2]["unheld_worker"] = True
+    assert (
+        owner.observe_embedding_gpu_batch_retained_resources(
+            observed, unit=kernel[2]["expected_unit"]
+        )
+        is observed
+    )  # terminal phase uses PID1; no dead-worker FD is invented
+
+
+@pytest.mark.parametrize(
+    "fault",
+    [
+        "dict",
+        "probe_report",
+        "unit",
+        "other_attempt",
+        "uid",
+        "group",
+        "worker",
+        "pid1",
+        "store",
+        "hash",
+        "extra",
+        "timeout",
+    ],
+)
+def test_allocation_does_not_borrow_other_authority_or_ignore_physical_fences(
+    kernel, monkeypatch, fault
+):
+    report = allocation_report(kernel)
+    unit, group = kernel[2]["expected_unit"], 2468
+    if fault == "dict":
+        report = report.model_dump(mode="json")
+    elif fault == "probe_report":
+        report = kernel[0]
+    elif fault == "unit":
+        unit = "eom-embedding-native-cuda-index@" + "a" * 32 + ".service"
+    elif fault == "other_attempt":
+        unit = "eom-embedding-native-gpu-batch@" + "b" * 32 + ".service"
+    elif fault == "uid":
+        monkeypatch.setattr(owner.os, "getresuid", lambda: (0, 1234, 0))
+    elif fault == "group":
+        group = 1234
+    elif fault in ("worker", "pid1"):
+        kernel[2]["unheld_" + fault] = True
+    elif fault == "store":
+        kernel[2]["store"] = b"[]"
+    elif fault == "hash":
+        report = report.model_copy(update={"message_sha256": "sha256:" + "0" * 64})
+    elif fault == "extra":
+        report = report.model_copy(update={"authority": "ROOT"})
+    else:
+
+        def timed_out(*args, **kwargs):
+            raise subprocess.TimeoutExpired(args[0], 10)
+
+        monkeypatch.setattr(owner.subprocess, "run", timed_out)
+    with pytest.raises(ValueError, match="EMBEDDING_GPU_ALLOCATION_RESOURCE_OBSERVATION_INVALID"):
+        owner.observe_embedding_gpu_allocation_resources(report, unit=unit, lease_gid=group)
+
+
+def test_gpu_batch_release_retains_same_inode_and_never_unlocks_old_description(index_released):
+    observed, _, _, events, _ = index_released
+    unit = "eom-embedding-native-gpu-batch@" + "a" * 32 + ".service"
+    with owner.hold_released_embedding_gpu_batch_resources(observed, unit=unit):
+        assert events == ["open", "flock"]
+    assert events == ["open", "flock", "close"]

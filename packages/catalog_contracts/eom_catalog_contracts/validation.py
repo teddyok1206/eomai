@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "embedding-gpu-allocation-control": CatalogSchemaResource(
+            "schemas/knowledge/embedding-gpu-allocation-control-v1.schema.json",
+            "resources/knowledge/embedding-gpu-allocation-control-v1.schema.json",
+            "1.0",
+            "sha256:df9b7d472b337d89c0f06dad49b0ca31c886bdc7b9f63664453dd6330975922b",
+        ),
         "embedding-work-batch-result": CatalogSchemaResource(
             "schemas/knowledge/embedding-work-batch-result-v1.schema.json",
             "resources/knowledge/embedding-work-batch-result-v1.schema.json",

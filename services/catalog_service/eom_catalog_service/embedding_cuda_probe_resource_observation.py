@@ -37,6 +37,7 @@ from eom_catalog_service.embedding_runtime_process_identity import require_exclu
 
 if TYPE_CHECKING:
     from eom_catalog_contracts.embedding_benchmark_cuda_ready import BenchmarkCudaReady
+    from eom_catalog_contracts.embedding_gpu_control import EmbeddingGpuAllocationReady
     from eom_catalog_contracts.embedding_native_cuda_index_ready import NativeCudaIndexReady
 
 _LOCK = Path("/run/eom-gpu-lease/gpu0.lock")
@@ -603,8 +604,69 @@ def observe_native_cuda_index_ready_resources(
         raise ValueError("NATIVE_CUDA_INDEX_RESOURCE_OBSERVATION_INVALID") from None
 
 
+def _require_embedding_gpu_batch_unit(unit: str) -> None:
+    _require(os.getresuid() == (0, 0, 0))
+    _require(
+        type(unit) is str
+        and re.fullmatch(r"eom-embedding-native-gpu-batch@[0-9a-f]{32}\.service", unit) is not None
+    )
+
+
+def observe_embedding_gpu_allocation_resources(
+    report: EmbeddingGpuAllocationReady, *, unit: str, lease_gid: int
+) -> CudaProbeResourceObservation:
+    """Observe only actual batch-worker/PID1 resource retention, not a compute grant.
+
+    The root owner separately verifies the original allocation request, process birth,
+    cgroup, executable/configuration and unit policy. No INDEX/probe report is fabricated.
+    """
+    try:
+        _require_embedding_gpu_batch_unit(unit)
+        from eom_catalog_contracts.embedding_gpu_control import (
+            EmbeddingGpuAllocationReady,
+            parse_embedding_gpu_control,
+        )
+
+        _require(type(report) is EmbeddingGpuAllocationReady)
+        checked = parse_embedding_gpu_control(report)
+        _require(type(checked) is EmbeddingGpuAllocationReady)
+        assert isinstance(checked, EmbeddingGpuAllocationReady)
+        instance = checked.allocation_attempt_id.removeprefix("embeddingallocation_")
+        _require(unit == f"eom-embedding-native-gpu-batch@{instance}.service")
+        return _observe_native_report_resources(checked, unit=unit, lease_gid=lease_gid)
+    except (ValueError, OSError, subprocess.TimeoutExpired, JsonSchemaError):
+        raise ValueError("EMBEDDING_GPU_ALLOCATION_RESOURCE_OBSERVATION_INVALID") from None
+
+
+def observe_embedding_gpu_batch_retained_resources(
+    observed: CudaProbeResourceObservation, *, unit: str
+) -> CudaProbeResourceObservation:
+    """Retained physical facts only; the caller owns the original terminal/unit fence."""
+    try:
+        _require_embedding_gpu_batch_unit(unit)
+        _require(type(observed) is CudaProbeResourceObservation)
+        _assert_retained_resources(observed, unit)
+        return observed
+    except (ValueError, OSError, subprocess.TimeoutExpired, JsonSchemaError):
+        raise ValueError("EMBEDDING_GPU_ALLOCATION_RESOURCE_OBSERVATION_INVALID") from None
+
+
+@contextmanager
+def hold_released_embedding_gpu_batch_resources(
+    observed: CudaProbeResourceObservation, *, unit: str
+) -> Iterator[None]:
+    """Same-inode release proof, never permission to stop/reset a live GPU holder."""
+    _require_embedding_gpu_batch_unit(unit)
+    _require(type(observed) is CudaProbeResourceObservation)
+    with _hold_released_resources(observed):
+        yield
+
+
 def _observe_native_report_resources(
-    report: ProbeReport | BenchmarkCudaReady | NativeCudaIndexReady, *, unit: str, lease_gid: int
+    report: ProbeReport | BenchmarkCudaReady | NativeCudaIndexReady | EmbeddingGpuAllocationReady,
+    *,
+    unit: str,
+    lease_gid: int,
 ) -> CudaProbeResourceObservation:
     """Shared physical FD checks after each public closed-purpose/root identity guard."""
     _require(type(lease_gid) is int and report.supplementary_gids == (lease_gid,))
