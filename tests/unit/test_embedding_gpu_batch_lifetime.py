@@ -12,6 +12,10 @@ from types import SimpleNamespace
 import pytest
 from eom_catalog_service import embedding_gpu_batch_lifetime as lifetime
 from eom_catalog_service import embedding_gpu_batch_observation as observer
+from eom_catalog_service.embedding_cuda_probe_resource_observation import (
+    TerminalCudaLeaseIdentity,
+    UngrantedEmbeddingGpuBatchResources,
+)
 from eom_catalog_service.gpu_unit_terminal_observation import StoppedGpuUnit
 from eom_orchestrator.worker_systemd import FixedUnitStatus
 
@@ -242,3 +246,118 @@ def test_effect_dispatch_is_closed_bounded_and_never_accepts_arbitrary_units(mon
         with pytest.raises(ValueError):
             lifetime.apply_embedding_gpu_batch_effect(action, unit)
     assert len(calls) == (0 if fault in ("unit", "action") else 1)
+
+
+@pytest.fixture
+def ungranted(ending, monkeypatch):
+    ending.terminal = replace(
+        ending.terminal,
+        status=FixedUnitStatus("loaded", "failed", "failed", "exit-code", 1, 1, 100, False),
+    )
+    lease = ending.ready.resources.shared_gpu_lease
+    resources = UngrantedEmbeddingGpuBatchResources(
+        ending.ready.resources.device_nodes,
+        TerminalCudaLeaseIdentity(lease.lease_gid, lease.parent_epoch, lease.lock_epoch, 123),
+        80,
+    )
+    ending.store = 1
+    ending.ack = False
+    ending.physical_checks = 0
+    ending.gpu_checks = 0
+
+    def absent(*args):
+        if ending.ack:
+            raise ValueError("grant phase exists")
+
+    def physical(**kwargs):
+        assert kwargs["terminal_pid"] == 123 and kwargs["lease_gid"] == lease.lease_gid
+        ending.physical_checks += 1
+        if not ending.retained:
+            raise ValueError("physical fence lost")
+        return resources
+
+    def gpu(*args):
+        ending.gpu_checks += 1
+        return ending.clients
+
+    @contextmanager
+    def released(value, **kwargs):
+        assert value == resources and ending.stopped.stored_descriptors == 0
+        ending.release.append("hold-same-inode")
+        try:
+            yield
+        finally:
+            ending.release.append("close-new-description")
+
+    monkeypatch.setattr(lifetime, "require_unit_effect_phase_absent", absent)
+    monkeypatch.setattr(
+        lifetime,
+        "observe_embedding_gpu_batch_terminal_metadata",
+        lambda *args, **kwargs: (123, ending.store),
+    )
+    monkeypatch.setattr(lifetime, "observe_ungranted_embedding_gpu_batch_resources", physical)
+    monkeypatch.setattr(lifetime, "hold_released_ungranted_embedding_gpu_batch_resources", released)
+    monkeypatch.setattr(lifetime, "observe_cuda_probe_gpu_clients", gpu)
+    return ending
+
+
+@pytest.mark.parametrize("store", [0, 1])
+def test_pregrant_failure_preserves_failed_and_cleans_only_original_resources(ungranted, store):
+    ungranted.store = store
+    if store == 0:
+        ungranted.stopped = replace(ungranted.stopped, stored_descriptors=0)
+        ungranted.clients = (999,)  # unrelated image holder must not be inspected or stopped
+    result = lifetime.retire_failed_ungranted_embedding_gpu_batch(
+        ungranted.captured, original=ungranted.ready.unit
+    )
+    assert result.stored_descriptors == 0
+    assert ungranted.effects == (["RESET_FAILED", "CLEAN_FDSTORE"] if store else ["RESET_FAILED"])
+    assert [name for name, _ in ungranted.records] == ["intent.json", "result.json"]
+    assert ungranted.records[0][1]["original_outcome"] == "FAILED"
+    assert ungranted.records[-1][1]["original_outcome"] == "FAILED"
+    if store:
+        assert ungranted.physical_checks == 2 and ungranted.gpu_checks >= 2
+        assert ungranted.release == ["hold-same-inode", "close-new-description"]
+    else:
+        assert ungranted.physical_checks == 0 and ungranted.gpu_checks == 0
+
+
+@pytest.mark.parametrize("fault", ["ack", "input", "GPU", "lease", "unit", "running"])
+def test_pregrant_failure_cleanup_requires_no_grant_no_compute_and_original_terminal(
+    ungranted, fault, monkeypatch
+):
+    if fault == "ack":
+        ungranted.ack = True
+    elif fault == "input":
+        monkeypatch.setattr(
+            type(ungranted.captured),
+            "assert_precompute",
+            lambda self: (_ for _ in ()).throw(ValueError("bound input")),
+        )
+    elif fault == "GPU":
+        ungranted.clients = (999,)
+    elif fault == "lease":
+        ungranted.retained = False
+    elif fault == "unit":
+        ungranted.terminal = replace(ungranted.terminal, invocation_id="c" * 32)
+    else:
+        ungranted.terminal = ungranted.ready.unit
+    with pytest.raises(ValueError):
+        lifetime.retire_failed_ungranted_embedding_gpu_batch(
+            ungranted.captured, original=ungranted.ready.unit
+        )
+    assert not ungranted.effects and not ungranted.records
+
+
+def test_uncertain_pregrant_cleanup_is_not_retried(ungranted):
+    ungranted.effect_fault = True
+    with pytest.raises(ValueError, match="effect result unknown"):
+        lifetime.retire_failed_ungranted_embedding_gpu_batch(
+            ungranted.captured, original=ungranted.ready.unit
+        )
+    assert ungranted.effects == ["RESET_FAILED"]
+    with pytest.raises(FileExistsError):
+        lifetime.retire_failed_ungranted_embedding_gpu_batch(
+            ungranted.captured, original=ungranted.ready.unit
+        )
+    assert ungranted.effects == ["RESET_FAILED"] and len(ungranted.records) == 1

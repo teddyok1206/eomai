@@ -20,7 +20,9 @@ from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_pr
 from eom_catalog_service.embedding_cuda_probe_resource_observation import (
     CudaProbeResourceObservation,
     hold_released_embedding_gpu_batch_resources,
+    hold_released_ungranted_embedding_gpu_batch_resources,
     observe_embedding_gpu_batch_retained_resources,
+    observe_ungranted_embedding_gpu_batch_resources,
 )
 from eom_catalog_service.embedding_gpu_batch_launch import (
     GPU_BATCH_TEMPLATE,
@@ -37,14 +39,16 @@ from eom_catalog_service.gpu_unit_policy_observation import observe_embedding_gp
 from eom_catalog_service.gpu_unit_terminal_observation import (
     StoppedGpuUnit,
     gpu_unit_terminal_outcome,
+    observe_embedding_gpu_batch_terminal_metadata,
     observe_stopped_gpu_unit,
 )
 from eom_catalog_service.unit_effect_records import (
+    require_unit_effect_phase_absent,
     reserve_unit_effect_phase,
     write_unit_effect_record,
 )
 
-_ROOT = Path("/opt/eom/embedding-gpu-batch-lifetimes")
+GPU_BATCH_LIFETIME_ROOT = Path("/opt/eom/embedding-gpu-batch-lifetimes")
 _ENV = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
 
 
@@ -106,6 +110,16 @@ def require_embedding_gpu_batch_processes_ended(ready: EmbeddingGpuBatchReadyObs
         _require(
             native_process_start_ticks(raw, ready.readiness.pid) != ready.readiness.start_time_ticks
         )
+    require_embedding_gpu_batch_cgroup_empty(unit)
+
+
+def require_embedding_gpu_batch_cgroup_empty(unit: str) -> None:
+    """Own original batch cgroup only; removal after STOP also means no owned processes."""
+    _require(
+        os.getresuid() == (0, 0, 0)
+        and type(unit) is str
+        and re.fullmatch(r"eom-embedding-native-gpu-batch@[0-9a-f]{32}\.service", unit) is not None
+    )
     try:
         pids = root_owned_unit_processes(unit)
     except FileNotFoundError:
@@ -236,7 +250,9 @@ def retire_embedding_gpu_batch(
     unit = _terminal_basis(terminal, captured)
     ready = terminal.ready
     _require(observe_embedding_gpu_batch_terminal(ready, captured) == terminal)
-    directory = reserve_unit_effect_phase(_ROOT, unit, ready.unit.invocation_id, "retirement")
+    directory = reserve_unit_effect_phase(
+        GPU_BATCH_LIFETIME_ROOT, unit, ready.unit.invocation_id, "retirement"
+    )
     try:
         write_unit_effect_record(
             directory,
@@ -284,5 +300,138 @@ def retire_embedding_gpu_batch(
             ),
         )
         return result
+    finally:
+        os.close(directory)
+
+
+def retire_failed_ungranted_embedding_gpu_batch(
+    captured: CapturedEmbeddingGpuBatchMachine, *, original: CpuUnitObservation
+) -> StoppedGpuUnit:
+    """Failed-before-GRANT cleanup only, never READY, successful computation or fallback.
+
+    Empty original numeric files and an absent grant/ACK are mandatory. A retained
+    descriptor is read independently using actual ExecMainPID, not a claimed birth.
+    Zero-store failures do not inspect or interrupt an unrelated image/trainer holder.
+    """
+    _require(
+        os.getresuid() == (0, 0, 0)
+        and type(captured) is CapturedEmbeddingGpuBatchMachine
+        and type(original) is CpuUnitObservation
+    )
+    unit = native_embedding_gpu_batch_unit(captured.prepared.launch.attempt_hex)
+    terminal = inspect_cpu_unit(unit, template=GPU_BATCH_TEMPLATE)
+    _require(
+        terminal.invocation_id == original.invocation_id
+        and re.fullmatch(r"[0-9a-f]{32}", original.invocation_id) is not None
+        and terminal.status.exec_main_started_monotonic
+        == original.status.exec_main_started_monotonic
+        and original.status.exec_main_started_monotonic > 0
+        and terminal.fragment_path == "/etc/systemd/system/" + GPU_BATCH_TEMPLATE
+        and not terminal.drop_in_paths
+        and not terminal.status.need_daemon_reload
+        and gpu_unit_terminal_outcome(terminal) == "FAILED"
+    )
+    policy = observe_embedding_gpu_batch_unit_policy(unit)
+    pid, store = observe_embedding_gpu_batch_terminal_metadata(unit, expected=terminal)
+    _require(pid == original.main_pid)
+
+    def pregrant() -> None:
+        captured.assert_precompute()
+        require_unit_effect_phase_absent(
+            GPU_BATCH_LIFETIME_ROOT, unit, original.invocation_id, "ack"
+        )
+        require_embedding_gpu_batch_cgroup_empty(unit)
+
+    def current() -> None:
+        pregrant()
+        _require(inspect_cpu_unit(unit, template=GPU_BATCH_TEMPLATE) == terminal)
+        _require(
+            observe_embedding_gpu_batch_terminal_metadata(unit, expected=terminal) == (pid, store)
+        )
+        _require(observe_embedding_gpu_batch_unit_policy(unit) == policy)
+
+    current()
+    resources = None
+    if store == 1:
+        resources = observe_ungranted_embedding_gpu_batch_resources(
+            unit=unit, terminal_pid=pid, lease_gid=captured.lease_gid
+        )
+        observe_runtime_device(captured.device)
+        _require(observe_cuda_probe_gpu_clients(captured.device) == ())
+    current()
+    directory = reserve_unit_effect_phase(
+        GPU_BATCH_LIFETIME_ROOT, unit, original.invocation_id, "retirement"
+    )
+    try:
+        write_unit_effect_record(
+            directory,
+            "intent.json",
+            canonical_json_bytes(
+                {
+                    "event": "EMBEDDING_GPU_BATCH_FAILED_BEFORE_GRANT_RETIREMENT_INTENT",
+                    "allocation_request_sha256": captured.prepared.request.message_sha256,
+                    "original_terminal": TypeAdapter(CpuUnitObservation).dump_python(
+                        terminal, mode="json"
+                    ),
+                    "terminal_pid": pid,
+                    "stored_descriptors": store,
+                    "resources": TypeAdapter(type(resources)).dump_python(resources, mode="json"),
+                    "effective_policy_sha256": policy,
+                    "original_outcome": "FAILED",
+                }
+            ),
+        )
+        current()
+        apply_embedding_gpu_batch_effect("RESET_FAILED", unit)
+        stopped = observe_stopped_gpu_unit(
+            unit, template=GPU_BATCH_TEMPLATE, invocation=original.invocation_id
+        )
+        _require(store == 1 or stopped.stored_descriptors == 0)
+        if stopped.stored_descriptors == 1:
+            _require(resources is not None)
+            _require(
+                observe_ungranted_embedding_gpu_batch_resources(
+                    unit=unit, terminal_pid=pid, lease_gid=captured.lease_gid
+                )
+                == resources
+            )
+            pregrant()
+            observe_runtime_device(captured.device)
+            _require(observe_cuda_probe_gpu_clients(captured.device) == ())
+            _require(
+                observe_stopped_gpu_unit(
+                    unit, template=GPU_BATCH_TEMPLATE, invocation=original.invocation_id
+                )
+                == stopped
+            )
+            apply_embedding_gpu_batch_effect("CLEAN_FDSTORE", unit)
+
+        def released() -> StoppedGpuUnit:
+            pregrant()
+            value = observe_stopped_gpu_unit(
+                unit, template=GPU_BATCH_TEMPLATE, invocation=original.invocation_id
+            )
+            _require(value.stored_descriptors == 0)
+            return value
+
+        final = released()
+        if resources is not None:
+            with hold_released_ungranted_embedding_gpu_batch_resources(resources, unit=unit):
+                observe_runtime_device(captured.device)
+                _require(observe_cuda_probe_gpu_clients(captured.device) == ())
+                _require(released() == final)
+        write_unit_effect_record(
+            directory,
+            "result.json",
+            canonical_json_bytes(
+                {
+                    "event": "EMBEDDING_GPU_BATCH_FAILED_BEFORE_GRANT_RETIRED",
+                    "invocation_id": original.invocation_id,
+                    "original_outcome": "FAILED",
+                    "stored_descriptors": final.stored_descriptors,
+                }
+            ),
+        )
+        return final
     finally:
         os.close(directory)

@@ -509,3 +509,72 @@ platform wheel SHA-256은 `061bb65213050a05689bd06cc03e3bf0551717b4e611ec3263042
 해결되고 torch/transformers를 import하거나 모델을 초기화하지 않음을 확인했다. repository
 PYTHONPATH나 editable install은 쓰지 않았다. **격리 wheel import probe**이며 실제 native
 identity·worker sandbox·GPU 연산·source owner의 운영 연결 PASS는 여전히 아니다.
+
+## P2-F root 실행 제어 연결
+
+새 root adapter는 이미 준비한 원 attempt의 socket activation, 제어 교환, local 결과 검증,
+원 invocation의 종료와 retirement만 담당한다. 실제 actor/source admission과 child 재인가는
+필수 owner port이며 INDEX와 REFERENCE_QUERY가 같은 수명 제어를 사용한다. 이 port는 DB나
+NAS 권한을 worker에게 주지 않는다. 기존 source-owner transaction/encoding reservation과
+canonical child Artifact commit은 이 root adapter 바깥의 기존 경계다.
+
+canonical 입력은 원 allocation/grant와 released batch이며, 출력은 같은 원 inode의 임시
+result/vector다. 결과 schema/hash·child 범위·unit norm을 검사하고 한 immutable local buffer의
+읽기 전용 범위로 반환한다. 최종 ACK 전에 실제 source를 다시 인가하고, ACK 이후 원 worker가
+종료·GPU를 반환한 뒤에만 결과를 성공 반환한다. 임시 buffer/path는 DB 정본이 아니다.
+
+원 root PID의 no-clobber dispatch marker를 socket 시작보다 먼저 남긴다. 원 unit invocation과
+start stamp를 고정하고 grant intent/입력 bind를 먼저 기록한다. 중간 실패·timeout·다른 invocation은
+재전송·새 계산·CPU fallback을 허가하지 않는다. BUSY만으로도 fallback하지 않고 빈 input/output,
+미GRANT, 원 SUCCEEDED/ExecMainPID/store0, own cgroup 종료와 원 socket 정리를 별도로 확인한다.
+다른 image/trainer가 GPU를 사용 중인 것은 정상 BUSY일 수 있으므로 그 프로세스를 멈추거나
+전역 GPU idle/lease 재획득을 BUSY의 조건으로 요구하지 않는다.
+
+transport fence는 ALLOCATION / ACTIVE / TERMINATING으로 나눈다. ACTIVE의 frame마다
+원 PID/birth/cgroup만 확인하고 prefix scan·systemctl을 반복하지 않는다. 최종 결과 검증 후 ACK를
+보낼 때만 TERMINATING으로 바꿔 정상적인 ACK 직후 worker 종료를 허용한다. 원 unit terminal와
+GPU 반환 검증은 별도로 유지한다. 원 terminal 이전 실패는 오류를 보존하고, 확인하지 못한
+retention 정리를 성공이나 CPU 선택으로 바꾸지 않는다.
+
+주 access pattern은 고정 attempt key lookup, child hash map, 순서 고정 iteration, 독점 dispatch와
+append-only effect 기록이다. child lookup O(1), 최종 검사 O(children + vector bytes), buffer는
+기존16MiB 한도이며 새 DB/schema/queue/dependency는 없다. 전체 batch를 다시 복사하거나
+generic retry framework를 추가하는 대안은 identity·중복 실행 위험만 늘리므로 쓰지 않는다.
+
+### P2-F 검증 체크포인트 — 2026-10-24 UTC
+
+- 원 root controller의 exclusive dispatch → 고정 socket activation → 원 kernel sender →
+  독립 READY 관찰 → 필수 source-owner admission → 원 grant journal/input bind → child 재인가 →
+  실제 local output schema/hash/range/unit-norm 검사 → 최종 ACK → 원 terminal/retirement 흐름을
+  연결했다. Source owner는 필수 typed port이며 아직 운영 DB/application owner와의 연결을
+  완료한 것은 아니다. 이 root adapter는 NAS commit이나 실제 actor 권한을 스스로 만들지 않는다.
+- 실제 BUSY claim은 원 PID/birth·SUCCEEDED/ExecMainPID/store0, 원 empty input/output·미GRANT,
+  own cgroup 종료와 원 unit/socket 정리를 통과한 경우에만 별도 unavailable observation을
+  반환한다. unrelated image/trainer client는 허용하되 이 worker PID의 GPU 사용은 거부한다.
+  FAILED·알 수 없는 송수신·수치/hash/권한 오류는 CPU 대체 허가로 변환하지 않는다.
+- GRANT 전 FAILED의 독립 정리도 연결했다. 실제 원 ExecMainPID/PID1 retention으로만
+  physical fence를 읽고, READY나 사라진 process birth를 만들어내지 않는다. store0이면 unrelated
+  GPU holder를 관찰/중단하지 않고, store1이면 원 retention·GPU idle·store 해제·같은 lease inode의
+  독립 재획득을 확인한다. 원 FAILED를 기록하고 OS unit 상태만 정리한다. side effect 결과가
+  불명이면 같은 phase를 다시 실행하지 않으며 원 오류에 reconcile 필요 상태를 남긴다.
+- transport ACTIVE는 원 PID/birth/cgroup/UID만 확인하며 frame마다 systemctl/prefix 전체 scan을
+  반복하지 않는다. 빠른 BUSY의 zombie/terminal 전이와 최종 ACK 직후 PID1 status settling을
+  별도로 검사했다. TERMINATING 허용은 최종 결과·source 검증 후에만 열리고, 별도의 원 terminal/
+  GPU 반환 관찰을 대신하지 않는다.
+- controlled OS/unit ports와 실제 contract/binary 검증을 결합한 관련846 PASS, 마지막 집중186 PASS,
+  production3개 모듈 strict mypy, scoped Python6개 Ruff/format 및 diff whitespace PASS다.
+  겹치는 테스트 수는 합산하지 않는다. 같은 목적의 legacy INDEX/probe·공유 physical resource·
+  image lifetime·dependency boundary 회귀도 포함했다. **합성 kernel/unit ports를 사용한 source
+  검증이며 실제 PID1/GPU 공존·처리량·sandbox acceptance로 보고하지 않는다.**
+- 현재 API/채팅/INDEX owner는 모두 active다. 새 로그인 요청·운영 DB/NAS 쓰기·prefix 설치·unit
+  재시작·새 모델/GPU 실행은0이며 과거 비교6회와 KEEP_CPU 판정을 유지했다. 이번 root 제어
+  adapter와 새 batch unit은 아직 운영에 설치/활성화하지 않았다.
+
+다음은 actual-actor source owner의 route/reservation·child commit/replay 및 root 서비스 연결,
+current target CPU/CUDA companion index, successor numerical runtime 설치다. 그 뒤 disposable DB
+concurrency, 실제 CUDA/CPU fallback·그림/trainer 공존·격리·처리량과 호환 배포/rollback을 검증한다.
+원 controller를 관찰하기 전 실패한 startup처럼 충분한 원 invocation 증거가 없는 경우는 여전히
+unknown으로 보존한다. 새 identity의 재실행이나 성공/CPU 선택으로 추측 복구하지 않는다.
+
+P2_F_ROOT_CONTROLLER=SOURCE_VERIFIED, SOURCE_OWNER_RUNTIME_LINK=PENDING,
+LIVE_GPU_BATCH_UNIT=NOT_RUN, CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.

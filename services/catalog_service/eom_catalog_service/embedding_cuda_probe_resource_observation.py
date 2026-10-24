@@ -144,11 +144,21 @@ class UnacknowledgedNativeCudaIndexGpuResources:
     pid1_descriptor: int
 
 
+@dataclass(frozen=True, slots=True)
+class UngrantedEmbeddingGpuBatchResources:
+    """Batch-only retained dead-PID fence; not a fabricated READY or process birth."""
+
+    device_nodes: tuple[RootLocalCudaDeviceNode, ...]
+    shared_gpu_lease: TerminalCudaLeaseIdentity
+    pid1_descriptor: int
+
+
 type _RetainedGpuUnitResources = (
     CudaProbeResourceObservation
     | ImageUnitGpuResources
     | UnacknowledgedBenchmarkGpuResources
     | UnacknowledgedNativeCudaIndexGpuResources
+    | UngrantedEmbeddingGpuBatchResources
 )
 type _RetainedLease = RootLocalCudaSharedGpuLease | TerminalCudaLeaseIdentity
 
@@ -291,6 +301,7 @@ def _validated_retained_lease(observed: _RetainedGpuUnitResources) -> _RetainedL
     if (
         type(observed) is UnacknowledgedBenchmarkGpuResources
         or type(observed) is UnacknowledgedNativeCudaIndexGpuResources
+        or type(observed) is UngrantedEmbeddingGpuBatchResources
     ):
         lease = observed.shared_gpu_lease
         _require(type(lease) is TerminalCudaLeaseIdentity)
@@ -610,6 +621,36 @@ def _require_embedding_gpu_batch_unit(unit: str) -> None:
         type(unit) is str
         and re.fullmatch(r"eom-embedding-native-gpu-batch@[0-9a-f]{32}\.service", unit) is not None
     )
+
+
+def observe_ungranted_embedding_gpu_batch_resources(
+    *, unit: str, terminal_pid: int, lease_gid: int
+) -> UngrantedEmbeddingGpuBatchResources:
+    """Actual batch/PID1 fence; caller proves failed terminal, no GRANT and empty input."""
+    _require_embedding_gpu_batch_unit(unit)
+    lease = TerminalCudaLeaseIdentity(
+        lease_gid, _epoch(_LOCK.parent.lstat())[:5], _epoch(_LOCK.lstat()), terminal_pid
+    )
+    nodes = _named_device_nodes()
+    validate_rootlocal_cuda_resource_file_identity(
+        nodes, lease.parent_epoch, lease.lock_epoch, lease.lease_gid
+    )
+    _require_tmpfs_device(lease.lock_epoch[0])
+    observed = UngrantedEmbeddingGpuBatchResources(
+        nodes, lease, _observe_retained_store_descriptor(lease, unit)
+    )
+    _assert_retained_resources(observed, unit)
+    return observed
+
+
+@contextmanager
+def hold_released_ungranted_embedding_gpu_batch_resources(
+    observed: UngrantedEmbeddingGpuBatchResources, *, unit: str
+) -> Iterator[None]:
+    _require_embedding_gpu_batch_unit(unit)
+    _require(type(observed) is UngrantedEmbeddingGpuBatchResources)
+    with _hold_released_resources(observed):
+        yield
 
 
 def observe_embedding_gpu_allocation_resources(

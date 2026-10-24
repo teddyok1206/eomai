@@ -128,6 +128,35 @@ def observe(kernel):
     )
 
 
+def test_failed_ungranted_batch_retention_uses_actual_terminal_pid_without_ready(kernel):
+    report, _files, state, _store = kernel
+    unit = "eom-embedding-native-gpu-batch@" + "a" * 32 + ".service"
+    state["expected_unit"] = unit
+    observed = owner.observe_ungranted_embedding_gpu_batch_resources(
+        unit=unit, terminal_pid=report.pid, lease_gid=2468
+    )
+    assert type(observed) is owner.UngrantedEmbeddingGpuBatchResources
+    assert type(observed.shared_gpu_lease) is owner.TerminalCudaLeaseIdentity
+    assert observed.shared_gpu_lease.holder_pid == report.pid
+    assert not hasattr(observed.shared_gpu_lease, "holder_start_time_ticks")
+    assert observed.pid1_descriptor == 80
+    state["unheld_pid1"] = True
+    with pytest.raises(ValueError):
+        owner.observe_ungranted_embedding_gpu_batch_resources(
+            unit=unit, terminal_pid=report.pid, lease_gid=2468
+        )
+
+
+@pytest.mark.parametrize(
+    "unit", ["eom-api.service", "eom-embedding-native-cuda-index@" + "a" * 32 + ".service"]
+)
+def test_ungranted_batch_resource_entry_does_not_accept_other_unit_purposes(kernel, unit):
+    with pytest.raises(ValueError):
+        owner.observe_ungranted_embedding_gpu_batch_resources(
+            unit=unit, terminal_pid=123, lease_gid=2468
+        )
+
+
 def test_worker_and_pid1_real_lock_records_are_both_required_not_display_path(kernel):
     result = observe(kernel)
     assert result.pid1_descriptor == 80
