@@ -28,7 +28,8 @@ let stateName = 'VERIFYING', cleared = 0, reloads = 0, accountState = 'READY';
 const context = {
   state: {codexAuthEnrollmentId: 'authflow_test'},
   api: async (path) => {
-    requests.push(path); return {state: stateName, binding_id: 'binding', challenge_available: false};
+    requests.push(path);
+    return {state: stateName, binding_id: 'binding', challenge_available: false};
   },
   $: (key) => { if (!elements.has(key)) elements.set(key, {}); return elements.get(key); },
   statePresentation: () => ({label: 'state'}),
