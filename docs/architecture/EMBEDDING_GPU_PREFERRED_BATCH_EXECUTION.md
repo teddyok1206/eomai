@@ -863,3 +863,11 @@ peer/release를 확인한 owner handler가 짧은 기존 DB roots를 열며 root
 P2_J_ROOT_OWNER_BRIDGE=SOURCE_AND_OS_VERIFIED,
 ACTUAL_OWNER_ALLOCATION_AND_CHILD_COMMIT=PENDING, LIVE_GPU_BATCH_UNIT=NOT_RUN,
 CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
+
+P2-J source commit `f156e6a28280668f65cc049416866c01874cc40c`는 main에 push했다.
+공식 API/platform build-only와 wheel RECORD 검증은 PASS이며 산출물은
+`/tmp/eom-api-build/f156e6a28280668f65cc049416866c01874cc40c.GgjJdw/dist`다.
+그3개 wheel만 `/tmp/eom-batch-owner-wheel-ttCtRTte`에 추출하고 explicit API Python의
+`-I -B`, cwd `/`에서 신규 연결6개 모듈과 packaged schema를 읽었다. EOM dependency225개도
+모두 추출 wheel에서 해결됐고 torch/transformers import·모델 초기화는 없었다. source Git,
+editable import, native identity/sandbox/GPU 실행 또는 운영 설치 검증으로 대체한 것이 아니다.
