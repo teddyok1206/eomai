@@ -999,3 +999,19 @@ command claim/native1.2 allocation과 DOCUMENT reservation/commit을 연결하�
 이후 sealed numerical successor·CPU finite fallback·exact paired indexes, 실제 GPU/자원 부족 CPU·
 sandbox·image/trainer 공존·처리량과 호환 release/default/rollback 검증을 닫는다. 이 source/DB
 체크포인트를 GPU 목표 완료 commit 또는 실제 운영 release로 부르지 않는다.
+
+P2-L source commit `a3814da3e454618de72029555d54c68d7a19be03`를 main에 push했다.
+공식 API/platform build-only 및 wheel RECORD PASS, 산출물은
+`/tmp/eom-api-build/a3814da3e454618de72029555d54c68d7a19be03.QlSj6V/dist`다.
+그3개 wheel을 `/tmp/eom-batch-query-wheel-timSEz5u`에 추출해 API Python `-I -B`, cwd `/`에서
+신규 QUERY continuation/read/publication을 포함한13개 모듈을 import했다. dependency421개도
+추출 wheel에서 해결됐고 새 packaged1.2 schema SHA도 일치했다. torch/transformers import나
+모델 초기화, 실제 service UID/sandbox/운영 설치·activation은 하지 않았다.
+
+다음 root 시작 연결에서는 기존 CUDA INDEX의 fixed owner systemd/Polkit/보호된 owner-release
+방식을 먼저 재사용한다. 별도 일반-purpose socket broker·queue·daemon을 추가하지 않는다.
+새 진입은 fixed attempt identity만 받고 기존 typed ALLOCATION_REQUEST와 실제 root↔runner
+kernel peer/birth를 연결한다. bootstrap은 작은 metadata/socket만, 큰 batch input은 기존
+owner workspace 한 곳만 사용한다. root는 설치된 policy/config만 읽고 DB/NAS/source 권한은
+actual owner의 기존 application callback에 남긴다. 구체 wire/설치 변경 전에 기존 installer와
+Polkit whitelist의 실제 지원 범위를 대조하며, 지원된 경계가 있다는 추정만으로 활성화하지 않는다.
