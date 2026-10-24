@@ -156,7 +156,14 @@ def observe_stopped_gpu_unit(unit: str, *, template: str, invocation: str) -> St
     if not (
         values["LoadState"] in {"loaded", "not-found"}
         and values["ActiveState"] == "inactive"
-        and values["SubState"] == "dead"
+        and (
+            values["SubState"] == "dead"
+            or (
+                values["SubState"] == "dead-resources-pinned"
+                and loaded
+                and values["NFileDescriptorStore"] == "1"
+            )
+        )
         and values["MainPID"] == "0"
         and values["NFileDescriptorStore"] in {"0", "1"}
         and (loaded or values["NFileDescriptorStore"] == "0")

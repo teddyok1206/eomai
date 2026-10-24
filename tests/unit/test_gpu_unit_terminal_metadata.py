@@ -67,6 +67,81 @@ def observe(state):
     )
 
 
+@pytest.mark.parametrize(
+    "substate,store", [("dead", "0"), ("dead", "1"), ("dead-resources-pinned", "1")]
+)
+def test_stopped_unit_may_retain_only_its_one_descriptor(facts, monkeypatch, substate, store):
+    fields = dict(
+        LoadState="loaded",
+        ActiveState="inactive",
+        SubState=substate,
+        MainPID="0",
+        NFileDescriptorStore=store,
+        InvocationID=facts.expected.invocation_id,
+        NeedDaemonReload="no",
+        FragmentPath="/etc/systemd/system/" + facts.template,
+        DropInPaths="",
+        Job="",
+        ControlGroup="",
+    )
+    monkeypatch.setattr(
+        reader.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="".join(f"{key}={value}\n" for key, value in fields.items()).encode(),
+            stderr=b"",
+        ),
+    )
+    result = reader.observe_stopped_gpu_unit(
+        facts.unit, template=facts.template, invocation=facts.expected.invocation_id
+    )
+    assert result.stored_descriptors == int(store)
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("NFileDescriptorStore", "0"),
+        ("MainPID", "123"),
+        ("ControlGroup", "/nonempty"),
+        ("ActiveState", "active"),
+        ("Job", "42"),
+        ("DropInPaths", "/override"),
+        ("NeedDaemonReload", "yes"),
+        ("InvocationID", "f" * 32),
+    ],
+)
+def test_pinned_dead_resources_do_not_hide_a_live_or_changed_unit(facts, monkeypatch, field, value):
+    fields = dict(
+        LoadState="loaded",
+        ActiveState="inactive",
+        SubState="dead-resources-pinned",
+        MainPID="0",
+        NFileDescriptorStore="1",
+        InvocationID=facts.expected.invocation_id,
+        NeedDaemonReload="no",
+        FragmentPath="/etc/systemd/system/" + facts.template,
+        DropInPaths="",
+        Job="",
+        ControlGroup="",
+    )
+    fields[field] = value
+    monkeypatch.setattr(
+        reader.subprocess,
+        "run",
+        lambda *args, **kwargs: SimpleNamespace(
+            returncode=0,
+            stdout="".join(f"{key}={value}\n" for key, value in fields.items()).encode(),
+            stderr=b"",
+        ),
+    )
+    with pytest.raises(ValueError, match="GPU_UNIT_RETIREMENT_UNCERTAIN"):
+        reader.observe_stopped_gpu_unit(
+            facts.unit, template=facts.template, invocation=facts.expected.invocation_id
+        )
+
+
 @pytest.mark.parametrize("store", ("0", "1"))
 def test_actual_pid_and_zero_or_one_store_are_retained_without_fake_birth(facts, store):
     facts.store = store

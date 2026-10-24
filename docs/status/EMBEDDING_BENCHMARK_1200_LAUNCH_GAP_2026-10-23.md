@@ -528,3 +528,28 @@ rollback까지 연결해야 한다. 이 구현 미완료 자체를 성능 NO-GO�
 반대로 실제 correctness/performance/resource gate가 실패하면 임계값이나 입력을
 바꾸지 않고 CPU 유지 사유와 실제 측정 결과를 남긴다. `MEASURED`와 안전한 GPU 기본
 활성화는 서로 다른 판정이며, 현재는 둘 다 아직 완료하지 않았다.
+
+### 2026-10-24 — 실제 CUDA2 pre-ACK 종료와 pinned-resource 정리
+
+- 사용자의 실제 인증 후 원 CPU1 receipt 확인과 동일 Job 재개가 통과했다.
+  CUDA ordinal2 `f4ffefb468594414bcea524d4f5ebb98` / PID1 invocation
+  `de317df0e1fb4bc390ba06e2363f311d`는07:05:33–07:05:37UTC 실행됐으나 exit1했다.
+  controller `34d877d9…`도07:05:38 종료했다. 실제 측정 완료로 분류하지 않는다.
+- `cuda-ready.json`은1636bytes/raw SHA
+  `c0e37855f80468737069fca4dc329ee8369a0df3328ffe3bdc8eac3eb99d13e7`이며,
+  worker-result는0bytes, root completion은 없다. 원 root prepared/uncertain과 원
+  reserved ordinal2를 유지한다. 원 실행을 재시작하거나 success로 바꾸지 않았다.
+- 설치된 budget1200 CUDA wrapper는 budget600/main CUDA와 달리 SIGUSR1을 reserve하지
+  않는다. `_wait_root_ack`의 예약 전제와 충돌한다. root ready observer의 argv도 실제
+  v1.2 `-c runpy` 실행과 달리 `-m`을 기대한다. 두 gate를 source/실제 unit bytes에
+  대조했으며 수정 전에 추가 모델 실행을 하지 않는다. numerical/model 파일은 그대로다.
+- GPU clients 없이2MiB였지만 PID1 FD store1이 남았다. 지원된 pre-ACK retirement가
+  원 failed terminal을 검증·intent에 보존한 뒤 RESET_FAILED를 실행했다. 이후 실제
+  PID1 상태는 inactive/`dead-resources-pinned`, PID0/cgroup empty/store1이었다.
+  stopped reader의 `dead` 전용 조건이 이를 거부해 CLEAN_FDSTORE 이전에 중단됐다.
+  RESET을 반복하거나 intent를 삭제하지 않는다.
+- reader는 loaded/inactive/PID0/empty cgroup/no Job/no override/정확한 invocation과
+  store1을 모두 만족할 때만 `dead-resources-pinned`를 허용하도록 보완했다.
+  pinned 상태/store0 및 live/changed unit은 계속 거부한다. 기존 dead0/dead1 의미는
+  유지한다. 관련 terminal/benchmark-lifetime 회귀48 PASS, Ruff/format PASS다.
+  이번 변경은 cleanup 관찰이며 compute admission이나 실패 실행 retry가 아니다.
