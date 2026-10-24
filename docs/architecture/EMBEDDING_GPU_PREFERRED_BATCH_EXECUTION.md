@@ -1311,3 +1311,58 @@ P2-P source 체크포인트:
 P2_P_NATIVE_CONFIGURATION_REVISION=SOURCE_VERIFIED,
 CUDA_SUCCESSOR_INSTALLATION=IN_PROGRESS, ACTUAL_GPU_BATCH=NOT_RUN,
 GPU_PREFERRED_ACTIVE=NO, CURRENT_DEFAULT=CPU, GOAL=ACTIVE.
+
+### P2-P 실제 CUDA prefix byte audit 완료 — 2026-10-24 22:52 UTC
+
+r5 `eom-gpu-batch-numeric-stage-56e545c4-r5.service`가 원 작업에서 exit0/result success로
+종료했다. 실제 elapsed252.013초, CPU212.248초, cgroup memory peak2GiB다. 이는 설치/audit
+리소스 관찰이지 모델 throughput/VRAM 측정이 아니다. 공식 root-private operation은
+`/opt/eom/.embedding-index-install-CIJ3z7uq`이며 로그는
+`/tmp/eom-gpu-batch-numeric-install-20261024-r5.log`다.
+
+- 새 CUDA numerical SDK는 **56e545c4**다. accepted OLD가 source/wheel/installed-prefix의
+  전체 bytes/host closure를 검증했으며 상태는 **BYTE_AUDITED_NOT_ADMITTED / NOT_PROBED**다.
+  원 interpreter로 새 numerical instruction·model/tokenizer/forward는 실행하지 않았다.
+  새 `embedding_gpu_batch_entry.py`의 실제 설치 hash
+  `da1c1ef262ff2a52adfdd0b9dc726f1cc6df31c1aef2d51478a54e5f6edd3909`가 원 source와 일치한다.
+- 이전 실제 CUDA prefix는
+  `/opt/eom/conda/envs/.embedding-index-prepublication-CUDA_INDEX_FP32-.embedding-index-install-CIJ3z7uq`
+  에 root700으로 보존했다. 이전 config/receipt/benchmark 결과·failed unit은 수정하지 않았다.
+  지금 old config/receipt를 새 whole-prefix의 승인처럼 사용하지 않는다.
+- canonical candidate inventory rawSHA는
+  `361cca0700c5f0cb9ff1319260b51618b9c7c61f6b5cb335bae800b1078df356`, semantic SHA는
+  `de96753229b541b81b4d6527e1c33e2aa44dde1ad72b50dba4781e1d5dcc2c59`다.
+  9,014,639 bytes/31,871 entries이며 실제 guarded root metadata reader가 schema와 원 audit input
+  hash를 대조했다. root inspection 첫 시도는 stat 전체 비교가 read의 atime 변화까지 포함해
+  거부됐다. 읽기 자체로 변하는 atime을 immutable epoch에서 제외하고 기존 file reader와 같은
+  dev/inode/UID/GID/mode/nlink/size/mtime/ctime을 확인한 r2가 PASS다. 그 실패도 보존한다.
+  별도 non-sandbox host `fuser`의 무경고 exit1, fixed CUDA process/unit 없음과 GPU0%/2MiB를
+  확인했다. read-only 결과는 `/tmp/eom-gpu-batch-audit-summary-20261024-r2.json`,
+  `/tmp/eom-gpu-batch-post-stage-readiness-20261024.log`다. 이는 현재 quiescence이며 이전
+  socket 경고가 난 observation을 소급 PASS로 바꾸지 않는다.
+- 다음 no-forward 자격 검증은 원 bundle/수치 proof/runtime
+  `d0887315a3b7afd0d86dceb10228c157c72f7161dbdbb01a582d97be1d8c7560`을 유지한
+  새 native configuration revision과 same-live probe/seal에 귀속해야 한다. 기존 logical
+  config3e98/948f의 rawSHA `7d8aef012c9e957f41ad888eadc6e214568e01aae490aa134851dcdb22cbe087`,
+  semantic SHA `e070fe5e3b207175f4e4aec85de3b2e085f774cf843b06d0d510ee645f63d32b`를 실제로 읽었다.
+  새 revision/probe는 아직 발행·시작하지 않았다. 별도 실제 batch 계산/현재 source/lease/권한은
+  no-forward probe 성공으로 대신하지 않는다.
+
+순수 revision helper의 source commit **c34ef31982e8d80fc835fac7ed0c4f9ae73aefcf**를 main에
+push했다. 공식 API/platform build-only/RECORD PASS이며 경로는
+`/tmp/eom-api-build/c34ef31982e8d80fc835fac7ed0c4f9ae73aefcf.oEjfTp/dist`다.
+추출 wheel은 `/tmp/eom-gpu-native-revision-wheel-h01LmrC8`에서 API Python `-I -B`, cwd `/`의
+21모듈/dependency471 import PASS다. 같은 owner를 공식 installer로 root-owned immutable
+`/opt/eom/embedding-owner-releases/c34ef31982e8d80fc835fac7ed0c4f9ae73aefcf`에 **준비만** 했으며
+실제 CPU root-controller Python에서도21/471 import PASS/모델 import 없음이다. platform rawSHA
+`c03e2e2366a1f1524f499edbf207b4ce15f64537ffcbff77d09cdc16513dbf27`, contracts rawSHA
+`ee0fe24ed2ef17f4210375e24092ff798ffa092346a5aa97ac4ed27b6675ed53`다. 로그는
+`/tmp/eom-gpu-native-revision-owner-stage-20261024-r2.log`, exit0다.
+
+이 owner candidate와 CUDA numerical SDK56e545c4는 서로 다른 역할의 명시적 핀이다.
+현재 API/Web/private QUERY·CPU INDEX의 active selection은 그대로이고 다섯 서비스가 active다.
+새 config/admission, 실제 GPU batch·CPU fallback, DOCUMENT 연동과 장치별 index coverage,
+image/trainer 공존·처리량·GPU 기본값 activation/rollback은 여전히 남았다.
+
+P2_P_CUDA_PREFIX=BYTE_AUDITED_NOT_ADMITTED, P2_P_OWNER_CANDIDATE=STAGED_NOT_ACTIVE,
+ACTUAL_GPU_BATCH=NOT_RUN, GPU_PREFERRED_ACTIVE=NO, CURRENT_DEFAULT=CPU, GOAL=ACTIVE.
