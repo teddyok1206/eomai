@@ -14,6 +14,7 @@ from eom_operator_identity.contracts import (
     ActorType,
     OperatorStatus,
     RoleKey,
+    validate_username,
 )
 from eom_operator_identity.errors import IdentityError, IdentityErrorCode
 from eom_operator_identity.passwords import PasswordService
@@ -38,6 +39,10 @@ class EmergencyAdminPasswordResetReason(StrEnum):
     """Closed, non-secret reason codes allowed in the append-only event."""
 
     ADMIN_CREDENTIAL_LOSS = "ADMIN_CREDENTIAL_LOSS"
+
+
+class EmergencyOperatorPasswordResetReason(StrEnum):
+    OPERATOR_CREDENTIAL_LOSS = "OPERATOR_CREDENTIAL_LOSS"
 
 
 @dataclass(frozen=True)
@@ -79,6 +84,29 @@ class EmergencyAdminPasswordResetCommand:
 
 
 @dataclass(frozen=True)
+class EmergencyOperatorPasswordResetCommand:
+    """Local-owner recovery pins identity and version without changing roles."""
+
+    operator_id: str
+    expected_username: str
+    expected_resource_version: int
+    temporary_password: str = field(repr=False)
+    reason_code: EmergencyOperatorPasswordResetReason
+    request_id: str
+
+    def __post_init__(self) -> None:
+        if OPERATOR_ID_PATTERN.fullmatch(self.operator_id) is None:
+            raise ValueError("emergency password reset Operator ID is invalid")
+        validate_username(self.expected_username)
+        if type(self.expected_resource_version) is not int or self.expected_resource_version < 1:
+            raise ValueError("expected Operator version is invalid")
+        if not isinstance(self.reason_code, EmergencyOperatorPasswordResetReason):
+            raise ValueError("emergency password reset reason code is invalid")
+        if RECOVERY_REQUEST_ID_PATTERN.fullmatch(self.request_id) is None:
+            raise ValueError("emergency password reset request ID is invalid")
+
+
+@dataclass(frozen=True)
 class EmergencyAdminPasswordResetResult:
     operator_id: str
     password_version: int
@@ -88,7 +116,7 @@ class EmergencyAdminPasswordResetResult:
 
 
 class LocalAdminPasswordRecoveryService:
-    """Reset one active Administrator after the injected OS adapter authorizes the call."""
+    """Local-administrator recovery; the legacy operation retains its ADMIN target gate."""
 
     def __init__(
         self,
@@ -102,6 +130,20 @@ class LocalAdminPasswordRecoveryService:
 
     def reset_admin_password(
         self, command: EmergencyAdminPasswordResetCommand
+    ) -> EmergencyAdminPasswordResetResult:
+        if type(command) is not EmergencyAdminPasswordResetCommand:
+            raise ValueError("Administrator recovery requires its exact command")
+        return self._reset_password(command)
+
+    def reset_operator_password(
+        self, command: EmergencyOperatorPasswordResetCommand
+    ) -> EmergencyAdminPasswordResetResult:
+        if type(command) is not EmergencyOperatorPasswordResetCommand:
+            raise ValueError("Operator recovery requires its exact pinned command")
+        return self._reset_password(command)
+
+    def _reset_password(
+        self, command: EmergencyAdminPasswordResetCommand | EmergencyOperatorPasswordResetCommand
     ) -> EmergencyAdminPasswordResetResult:
         authorization = self.authorizer.authorize()
         if not isinstance(authorization, LocalAdminRecoveryAuthorization):
@@ -125,7 +167,16 @@ class LocalAdminPasswordRecoveryService:
             operator = require_operator(session, command.operator_id, for_update=True)
             if operator.status != OperatorStatus.ACTIVE.value:
                 raise IdentityError(IdentityErrorCode.OPERATOR_DISABLED, "operator is disabled")
-            if not any(
+            if isinstance(command, EmergencyOperatorPasswordResetCommand):
+                if (
+                    operator.username != command.expected_username
+                    or operator.lock_version != command.expected_resource_version
+                ):
+                    raise IdentityError(
+                        IdentityErrorCode.OPERATOR_VERSION_CONFLICT,
+                        "pinned Operator identity or version changed; do not replay the reset",
+                    )
+            elif not any(
                 role.role_key == RoleKey.ADMIN.value
                 for _, role in active_role_assignments(session, operator.operator_id)
             ):
@@ -190,6 +241,8 @@ __all__ = [
     "EmergencyAdminPasswordResetCommand",
     "EmergencyAdminPasswordResetReason",
     "EmergencyAdminPasswordResetResult",
+    "EmergencyOperatorPasswordResetCommand",
+    "EmergencyOperatorPasswordResetReason",
     "LocalAdminPasswordRecoveryService",
     "LocalAdminRecoveryAuthorization",
     "LocalAdminRecoveryAuthorizer",

@@ -13,6 +13,8 @@ from eom_identity_service import local_admin_recovery as recovery_module
 from eom_identity_service.local_admin_recovery import (
     EmergencyAdminPasswordResetCommand,
     EmergencyAdminPasswordResetReason,
+    EmergencyOperatorPasswordResetCommand,
+    EmergencyOperatorPasswordResetReason,
     LocalAdminPasswordRecoveryService,
     LocalAdminRecoveryAuthorization,
 )
@@ -146,6 +148,68 @@ def test_emergency_reset_rejects_non_admin_target(monkeypatch: pytest.MonkeyPatc
     assert raised.value.code is IdentityErrorCode.OPERATOR_ADMIN_REQUIRED
     assert credential.password_hash == "old-hash"
     revoke.assert_not_called()
+
+
+def _operator_command(**overrides: object) -> EmergencyOperatorPasswordResetCommand:
+    values: dict[str, object] = {
+        "operator_id": OPERATOR_ID,
+        "expected_username": "admin",
+        "expected_resource_version": 7,
+        "temporary_password": TEMPORARY_PASSWORD,
+        "reason_code": EmergencyOperatorPasswordResetReason.OPERATOR_CREDENTIAL_LOSS,
+        "request_id": "cli_" + "c" * 24,
+    }
+    values.update(overrides)
+    return EmergencyOperatorPasswordResetCommand(**values)  # type: ignore[arg-type]
+
+
+def test_pinned_local_recovery_accepts_non_admin_without_changing_roles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, operator, credential, _, revoke, event = _service_fixture(monkeypatch, role="VIEWER")
+    result = service.reset_operator_password(_operator_command())
+    assert result.must_change_password and operator.must_change_password
+    assert credential.password_version == 3 and credential.failed_login_count == 0
+    assert credential.locked_until is None
+    assert event.call_args.kwargs["payload"]["reason_code"] == "OPERATOR_CREDENTIAL_LOSS"
+    assert revoke.call_count == 1
+    recovery_module.active_role_assignments.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "overrides", [{"expected_resource_version": 8}, {"expected_username": "otheruser"}]
+)
+def test_pinned_local_recovery_rejects_stale_target_without_mutation(
+    monkeypatch: pytest.MonkeyPatch, overrides: dict[str, object]
+) -> None:
+    service, _, credential, passwords, revoke, event = _service_fixture(monkeypatch, role="VIEWER")
+    with pytest.raises(IdentityError) as raised:
+        service.reset_operator_password(_operator_command(**overrides))
+    assert raised.value.code is IdentityErrorCode.OPERATOR_VERSION_CONFLICT
+    assert credential.password_hash == "old-hash"
+    passwords.hash_password.assert_not_called()
+    revoke.assert_not_called()
+    event.assert_not_called()
+
+
+def test_pinned_local_recovery_rejects_untrusted_owner_before_transaction(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service, _, credential, passwords, _, _ = _service_fixture(monkeypatch, role="VIEWER")
+    service.authorizer.authorize.side_effect = IdentityError(
+        IdentityErrorCode.EMERGENCY_RESET_UNAUTHORIZED, "not the local owner"
+    )
+    transaction = Mock()
+    monkeypatch.setattr(recovery_module, "transaction", transaction)
+    with pytest.raises(IdentityError):
+        service.reset_operator_password(_operator_command())
+    transaction.assert_not_called()
+    passwords.hash_password.assert_not_called()
+    assert credential.password_hash == "old-hash"
+
+
+def test_pinned_operator_recovery_command_omits_password_from_repr() -> None:
+    assert TEMPORARY_PASSWORD not in repr(_operator_command())
 
 
 def test_emergency_reset_rejects_disabled_target(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -430,3 +494,100 @@ def test_emergency_cli_requires_exact_confirmation_and_emits_no_secret(
     )
     assert mismatch.exit_code != 0
     assert service.reset_admin_password.call_count == 1
+
+
+def _operator_reset_arguments(password_file: Path, *, confirmed_id: str = OPERATOR_ID) -> list[str]:
+    return [
+        "emergency-reset-operator-password",
+        OPERATOR_ID,
+        "--expected-username",
+        "reviewer",
+        "--expected-resource-version",
+        "7",
+        "--temporary-password-file",
+        str(password_file),
+        "--confirm-operator-id",
+        confirmed_id,
+    ]
+
+
+def test_pinned_operator_cli_preserves_identity_version_and_omits_credential(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    password_file = tmp_path / "operator-password"
+    _write_password(password_file)
+    service = Mock()
+    service.reset_operator_password.return_value = SimpleNamespace(
+        operator_id=OPERATOR_ID,
+        password_version=4,
+        revoked_sessions=2,
+        reset_at=datetime(2026, 10, 24, tzinfo=UTC),
+        must_change_password=True,
+    )
+    factory = Mock(return_value=service)
+    monkeypatch.setattr(operator_cli, "_emergency_recovery_service", factory)
+
+    result = CliRunner().invoke(operator_cli.operator_app, _operator_reset_arguments(password_file))
+
+    assert result.exit_code == 0, result.output
+    factory.assert_called_once_with()
+    service.reset_operator_password.assert_called_once()
+    submitted = service.reset_operator_password.call_args.args[0]
+    assert type(submitted) is EmergencyOperatorPasswordResetCommand
+    assert submitted.operator_id == OPERATOR_ID
+    assert submitted.expected_username == "reviewer"
+    assert submitted.expected_resource_version == 7
+    assert submitted.temporary_password == TEMPORARY_PASSWORD
+    assert submitted.reason_code is EmergencyOperatorPasswordResetReason.OPERATOR_CREDENTIAL_LOSS
+    assert TEMPORARY_PASSWORD not in result.output
+    assert str(password_file) not in result.output
+    assert result.stdout.count(OPERATOR_ID) == 1
+    assert '"password_version": 4' in result.stdout
+    assert '"revoked_sessions": 2' in result.stdout
+    service.reset_admin_password.assert_not_called()
+
+
+def test_pinned_operator_cli_confirmation_mismatch_never_opens_service_or_password(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    password_file = tmp_path / "operator-password"
+    _write_password(password_file)
+    factory, reader = Mock(), Mock()
+    monkeypatch.setattr(operator_cli, "_emergency_recovery_service", factory)
+    monkeypatch.setattr(operator_cli, "_password_file", reader)
+
+    result = CliRunner().invoke(
+        operator_cli.operator_app,
+        _operator_reset_arguments(password_file, confirmed_id="operator_" + "b" * 32),
+    )
+
+    assert result.exit_code != 0
+    assert "confirmed Operator ID does not match" in result.output
+    factory.assert_not_called()
+    reader.assert_not_called()
+    assert TEMPORARY_PASSWORD not in result.output
+
+
+def test_pinned_operator_cli_rejects_untrusted_local_owner_before_password_read(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    password_file = tmp_path / "operator-password"
+    _write_password(password_file)
+    factory = Mock(
+        side_effect=IdentityError(
+            IdentityErrorCode.EMERGENCY_RESET_UNAUTHORIZED,
+            "not the trusted local eom principal",
+        )
+    )
+    reader = Mock()
+    monkeypatch.setattr(operator_cli, "_emergency_recovery_service", factory)
+    monkeypatch.setattr(operator_cli, "_password_file", reader)
+
+    result = CliRunner().invoke(operator_cli.operator_app, _operator_reset_arguments(password_file))
+
+    assert result.exit_code == 1
+    assert "EMERGENCY_RESET_UNAUTHORIZED" in result.output
+    factory.assert_called_once_with()
+    reader.assert_not_called()
+    assert TEMPORARY_PASSWORD not in result.output
+    assert str(password_file) not in result.output

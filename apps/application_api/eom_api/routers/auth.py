@@ -78,19 +78,14 @@ def login(request: Request, body: LoginRequest) -> SingleResponse[TokenPair]:
         window_seconds=60,
     )
     username_fingerprint = fingerprint(services.fingerprint_key, normalize_username(body.username))
-    username_limit = services.rate_limiter.check(
-        f"login:username:{username_fingerprint}",
-        limit=services.settings.rate_limit.login_username_per_window,
-        window_seconds=services.settings.auth.login_failure_window_seconds,
-    )
-    if not global_limit.allowed or not username_limit.allowed:
-        retry = max(global_limit.retry_after, username_limit.retry_after)
+    failure_key = f"login:username:{username_fingerprint}"
+    if not global_limit.allowed:
         raise ApiError(
             429,
             "API_RATE_LIMITED",
             "Rate limit exceeded",
             "The login request limit has been exceeded.",
-            {"Retry-After": str(retry)},
+            {"Retry-After": str(global_limit.retry_after)},
         )
     try:
         result = services.auth.login(
@@ -99,6 +94,16 @@ def login(request: Request, body: LoginRequest) -> SingleResponse[TokenPair]:
             client_name=body.client_name,
         )
     except AuthenticationFailure as exc:
+        # The DB credential owns password failures, lockout and recovery. A stale
+        # process-local bucket must not reject a verified recovered credential,
+        # nor may successful logins consume a 15-minute failure budget. Keep the
+        # pre-auth global burst cap; pace only failed per-username responses here.
+        username_limit = services.rate_limiter.check(
+            failure_key,
+            limit=services.settings.rate_limit.login_username_per_window,
+            window_seconds=services.settings.auth.login_failure_window_seconds,
+        )
+        limited = not username_limit.allowed
         services.audit.append(
             context(request),
             event_type=(
@@ -106,10 +111,19 @@ def login(request: Request, body: LoginRequest) -> SingleResponse[TokenPair]:
             ),
             operation_id="auth_login",
             outcome="FAILED",
-            http_status=401,
-            error_code="AUTH_INVALID_CREDENTIALS",
+            http_status=429 if limited else 401,
+            error_code="API_RATE_LIMITED" if limited else "AUTH_INVALID_CREDENTIALS",
         )
+        if limited:
+            raise ApiError(
+                429,
+                "API_RATE_LIMITED",
+                "Rate limit exceeded",
+                "The failed login request limit has been exceeded.",
+                {"Retry-After": str(username_limit.retry_after)},
+            ) from exc
         raise
+    services.rate_limiter.discard(failure_key)
     request_context = context(request)
     request_context.authentication = services.auth.authenticate_access(result.pair.access_token)
     services.audit.append(

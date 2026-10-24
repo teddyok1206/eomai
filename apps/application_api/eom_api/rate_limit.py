@@ -27,6 +27,11 @@ class BoundedRateLimiter:
     def bucket_count(self) -> int:
         return len(self._buckets)
 
+    def discard(self, key: str) -> None:
+        """Forget only a verified principal's process-local failure budget in O(1)."""
+        with self._lock:
+            self._buckets.pop(key, None)
+
     def check(
         self,
         key: str,

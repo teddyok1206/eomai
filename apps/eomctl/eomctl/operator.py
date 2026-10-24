@@ -19,6 +19,8 @@ from eom_identity_service.approved_login_id_recovery import (
 from eom_identity_service.local_admin_recovery import (
     EmergencyAdminPasswordResetCommand,
     EmergencyAdminPasswordResetReason,
+    EmergencyOperatorPasswordResetCommand,
+    EmergencyOperatorPasswordResetReason,
     LocalAdminPasswordRecoveryService,
     LocalAdminRecoveryAuthorization,
 )
@@ -352,6 +354,47 @@ def emergency_reset_admin_password(
                 operator_id=operator_id,
                 temporary_password=_password_file(temporary_password_file),
                 reason_code=reason_code,
+                request_id=f"cli_{os.urandom(12).hex()}",
+            )
+        )
+    except IdentityError as exc:
+        _identity_error(exc)
+        return
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
+    _emit(
+        {
+            "operator_id": result.operator_id,
+            "password_version": result.password_version,
+            "revoked_sessions": result.revoked_sessions,
+            "reset_at": result.reset_at,
+            "must_change_password": result.must_change_password,
+        }
+    )
+
+
+@operator_app.command("emergency-reset-operator-password")
+def emergency_reset_operator_password(
+    operator_id: str,
+    expected_username: Annotated[str, typer.Option("--expected-username")],
+    expected_resource_version: Annotated[int, typer.Option("--expected-resource-version", min=1)],
+    temporary_password_file: Annotated[
+        Path, typer.Option("--temporary-password-file", exists=True, dir_okay=False)
+    ],
+    confirm_operator_id: Annotated[str, typer.Option("--confirm-operator-id")],
+) -> None:
+    """Recover one version-pinned active account as the trusted local eom owner."""
+    if confirm_operator_id != operator_id:
+        raise typer.BadParameter("confirmed Operator ID does not match the reset target")
+    try:
+        service = _emergency_recovery_service()
+        result = service.reset_operator_password(
+            EmergencyOperatorPasswordResetCommand(
+                operator_id=operator_id,
+                expected_username=expected_username,
+                expected_resource_version=expected_resource_version,
+                temporary_password=_password_file(temporary_password_file),
+                reason_code=EmergencyOperatorPasswordResetReason.OPERATOR_CREDENTIAL_LOSS,
                 request_id=f"cli_{os.urandom(12).hex()}",
             )
         )
