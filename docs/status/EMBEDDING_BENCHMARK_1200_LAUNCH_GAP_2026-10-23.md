@@ -420,3 +420,27 @@ admission은 아직 별도 검증이 필요하며 정식 v1.2 Job은 여전히 �
   API/Web에 배포했다. HTTPS readiness와 QUERY OWNER_READY는 확인했고 실제 사용자
   HTTPS 인증 검증은 별도 입력 대기 중이다. 계정 비밀번호 재설정이나 고의 실패 주입은 없다.
   현재 정식 six-launch 비교·failure closure·GPU 기본값 변경은 여전히 미완료다.
+
+### 2026-10-24 04:55 UTC — 로그인 검증 완료 및 고정 입력 비교 재개
+
+- 로그인 영구 수정의 실제 HTTPS 인증·동일 사용자 세션 조회·Studio 접근과 해당
+  테스트 세션만의 로그아웃이 통과했다. 운영 API/Web은 `b87cc11c…`이고, 상세 증거는
+  `docs/operations/LOGIN_FAILURE_BUDGET_RECOVERY_2026-10-24.md`에 보존한다.
+- private controller SDK `7b9e59c2105f0f3c7d1517c298f37ef40004d30b`를 별도로
+  설치했다. 고정 numerical worker `d381e6bc…`, 모델, CPU/CUDA prefix, Graph와
+  source-policy 핀은 변경하지 않았다. 동일 sandbox의 설치 검증은18.445초에 PASS,
+  model forward0·DB writes0이었다. 임시 operator/client 회귀 시험은 각각21·69 PASS다.
+- 원 CPU1의 실제 root post-start proof가 생성됐다. raw SHA는
+  `ddd136dee38b15cd30490709681508f3b2deb836c27e6017585d748b6d1637ff`이다.
+  실제 사용자 인증 후 기존 Orchestrator closure가 원 Job
+  `job_25ebde2af2fd42c9804e1f4743b0b406`을 실패로 정리했다. 직접 row 수정,
+  성공 재해석이나 부분 vector 승격은 하지 않았다.
+- 명시적 successor는 `job_a930cfc8b08b4cf385c5cf95370cbcb4`, request SHA는
+  `be62805b128f63a3e825fdf9eb42b98901dcca9686e61896ad60c2b276d7fc97`이다.
+  controller unit `eom-embedding-benchmark-retry-7b9e59c2.service`, invocation
+  `faf2a9fd2a05474ba6fc91c33be4f65b`에서 CPU→CUDA→CUDA→CPU→CPU→CUDA 순서의
+  고정6회 실행을 시작했다. 첫 CPU execution
+  `b3faa85824964cc590e6240728da053d`은04:55:56UTC에 실제 시작했다.
+- 이 기록은 실행 시작 증거이며 측정 완료나 GPU 기본값 활성화 증거가 아니다.
+  운영 INDEX/QUERY 프로세스는 유지하고, 각 실제 측정·기존 QUERY 재조회·정리·최종
+  불변 결과와 replay가 끝난 뒤 비교 판정을 기록한다. 기본값은 아직 CPU다.
