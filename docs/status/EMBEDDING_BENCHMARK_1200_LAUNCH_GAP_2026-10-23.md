@@ -335,3 +335,25 @@ admission은 아직 별도 검증이 필요하며 정식 v1.2 Job은 여전히 �
   6회 뒤에는 새 owner instance로 finalization을 replay하여 `created=false`와
   동일 결과 pointer/hash를 요구한다. 원 Job25ebde와 request SHA는 변경하지 않는다.
   정식 비교·공존·정리는 아직 미완료이고 운영 CPU 기본값은 유지한다.
+
+### 2026-10-24 01:24 UTC — 실제 인증 성공 후 공통 module 중복 읽기 수정
+
+- 기존 verified8c controller에서 실제 로그인이 성공했고, 원 Job25ebde / request
+  `d1dfc45c…`를 `created=false`와 빈 launch history로 replay했다. 이후 첫 모델
+  실행 전 `FixedBenchmarkLaunchExecution.assert_installed()`에서
+  `INSTALLED_RUNTIME_REPEATED_BYTE_READ`로 종료했다. 실제 정식 native 비교 unit은
+  생성되지 않았다. source 순서상 이 검사는 capacity/Job transition/reservation 전이다.
+- v1.2의 CPU·CUDA는 하나의 d381 package를 공유한다. 실행 adapter가 공통
+  budget-entrypoint/policy member를 device별로 두 번 `files.read()`한 것이 원인이다.
+  snapshot의 중복 byte-read 거부는 올바른 동작이므로 이를 완화하지 않는다.
+  adapter에서 exact path→expected hash map으로 네 member를 한 번씩 계획·검증하고,
+  같은 path의 서로 다른 pin은 명시적으로 거부한다. 이후에는 기존 epoch 검증을
+  유지한다. root의 후속 `/proc` owner 오류는 먼저 종료한 child의 cascade다.
+- 실제 `NumericalRuntimeFileSnapshots`를 쓰는 회귀 시험은 unit 4개+module 4개의
+  1회 읽기, 두 번째 검사에서 byte 재읽기 없음, 초기 hash 변조·이후 epoch 변조 거부,
+  충돌 pin 거부를 검증한다. budget/runtime **60 PASS**, launch/owner/progress
+  **38 PASS**, strict mypy·Ruff·format·diff check PASS다. 두 시험 묶음은 별도다.
+- 수정 대상은 controller adapter와 시험뿐이다. native d381 worker·수치 구현·
+  v1.2 template·계약·GPU receipt는 변경하지 않는다. 새 controller wheel만 별도로
+  설치하고 동일 원 Job을 다시 확인할 예정이며, 현재 정식 측정 결과는 미완료다.
+  운영 INDEX PID130161 / QUERY PID898231은 그대로 active이고 GPU는 2MiB/0%다.

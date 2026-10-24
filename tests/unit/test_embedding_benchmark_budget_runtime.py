@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import socket
+from collections import Counter
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
@@ -30,6 +31,10 @@ from eom_catalog_service.embedding_benchmark_unit_policy import (
     benchmark_unit_family_from_service,
 )
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
+from eom_catalog_service.embedding_runtime_files import (
+    InstalledRuntimeProofError,
+    NumericalRuntimeFileSnapshots,
+)
 from eom_identifiers import sha256_bytes
 from eom_orchestrator.embedding_device_benchmark_owner import BenchmarkLaunchAuthorization
 from eom_orchestrator.inference_transfer_cpu_handoff import CpuHandoffIdentity
@@ -51,6 +56,7 @@ from tests.unit.test_embedding_device_benchmark_budget import (
     successor_policy,
     successor_policy_v12,
     successor_request,
+    successor_request_v12,
 )
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -550,3 +556,141 @@ def test_owner600_preflight_requires_explicit_installed_successor_entries_before
     assert members.count("embedding_benchmark_budget_entrypoint.py") == 2
     assert "embedding_benchmark_budget600_cpu.py" in members
     assert "embedding_benchmark_budget600_cuda.py" in members
+
+
+@pytest.fixture
+def owner1200_installation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
+    root = tmp_path / "protected-installation"
+    root.mkdir(mode=0o700)
+    owner_site = root / "owner-site"
+    module_root = owner_site / "eom_catalog_service"
+    module_root.mkdir(parents=True, mode=0o700)
+    modules = {}
+    module_pins = {}
+    for name in execution._BUDGET1200_MODULE_SHA256:
+        path = module_root / name
+        source = ROOT / "services/catalog_service/eom_catalog_service" / name
+        raw = source.read_bytes()
+        path.write_bytes(raw)
+        path.chmod(0o444)
+        modules[name] = path
+        module_pins[name] = sha256_bytes(raw)
+    templates = {}
+    for device in ("CPU", "CUDA"):
+        family = benchmark_unit_family(device, successor_policy_v12())
+        for name in (family.service_template, family.socket_template):
+            path = root / name
+            path.write_bytes((ROOT / "infra/systemd" / name).read_bytes())
+            path.chmod(0o444)
+            templates[Path("/etc/systemd/system") / name] = path
+    prefixes = {}
+    for profile in ("CPU_INDEX_FP32", "CUDA_INDEX_FP32"):
+        prefix = root / profile
+        path = prefix / "lib/python3.12/site-packages/eom_catalog_service"
+        path.mkdir(parents=True, mode=0o700)
+        member = path / "embedding_benchmark_entrypoint.py"
+        member.write_bytes(b"synthetic fixed native entrypoint\n")
+        member.chmod(0o444)
+        prefixes[profile] = SimpleNamespace(prefix=prefix)
+    for directory in root.rglob("*"):
+        if directory.is_dir():
+            directory.chmod(0o700)
+    reads: Counter[tuple[Path, str]] = Counter()
+    captured = []
+
+    class ProtectedFiles(NumericalRuntimeFileSnapshots):
+        def __init__(self, uid: int) -> None:
+            assert uid == 0
+            super().__init__(os.getuid())
+            captured.append(self)
+
+        def read(self, path: Path, **kwargs: Any) -> bytes:
+            path = templates.get(path, path)
+            reads[path, kwargs["sha256"]] += 1
+            return super().read(path, **kwargs)
+
+    monkeypatch.setattr(execution, "NumericalRuntimeFileSnapshots", ProtectedFiles)
+    monkeypatch.setattr(execution, "_BUDGET1200_OWNER_SITE", owner_site)
+    monkeypatch.setattr(execution, "_BUDGET1200_MODULE_SHA256", module_pins)
+    monkeypatch.setattr(execution, "fixed_native_embedding_profile", prefixes.__getitem__)
+    monkeypatch.setattr(execution, "require_benchmark_series_listener", lambda _: None)
+    monkeypatch.setattr(
+        execution, "fixed_owner_identity", lambda: CpuHandoffIdentity(os.getuid(), os.getgid())
+    )
+    monkeypatch.setattr(
+        execution,
+        "capture_benchmark_runtime_installation",
+        lambda *a, **k: NumericalRuntimeFileSnapshots(os.getuid()),
+    )
+    request = successor_request_v12()
+    publisher = BenchmarkLaunchArtifactPublisher(SimpleNamespace(), source_commit="a" * 40)
+    selected = execution.FixedBenchmarkLaunchExecution(
+        request,
+        cpu=pins(1).backend,
+        cuda=pins(1).backend,
+        controller_release="a" * 40,
+        publisher=publisher,
+    )
+    return SimpleNamespace(
+        request=request,
+        selected=selected,
+        modules=modules,
+        templates=templates,
+        reads=reads,
+        captured=captured,
+    )
+
+
+def test_owner1200_shared_module_pins_are_read_once_then_only_epochs_checked(
+    owner1200_installation: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    case = owner1200_installation
+    case.selected.assert_installed(case.request)
+    expected_paths = set(case.templates.values()) | set(case.modules.values())
+    assert {path for path, _digest in case.reads} == expected_paths
+    assert len(case.reads) == 8 and set(case.reads.values()) == {1}
+    first_reads = case.reads.copy()
+
+    def forbid_read(*args: Any, **kwargs: Any) -> bytes:
+        pytest.fail("cached installation must check captured epochs, not reread bytes")
+
+    monkeypatch.setattr(case.captured[0], "read", forbid_read)
+    case.selected.assert_installed(case.request)
+    assert case.reads == first_reads
+
+
+@pytest.mark.parametrize("before_capture", (True, False))
+def test_owner1200_tampered_shared_module_fails_real_hash_or_epoch_validation(
+    owner1200_installation: Any, before_capture: bool
+) -> None:
+    case = owner1200_installation
+    if not before_capture:
+        case.selected.assert_installed(case.request)
+    path = case.modules["embedding_benchmark_budget_entrypoint.py"]
+    path.chmod(0o644)
+    path.write_bytes(b"tampered module bytes\n")
+    path.chmod(0o444)
+    expected = "FILE_HASH_MISMATCH" if before_capture else "FILE_CHANGED"
+    with pytest.raises(InstalledRuntimeProofError, match=expected):
+        case.selected.assert_installed(case.request)
+
+
+def test_owner1200_conflicting_duplicate_module_pin_fails_before_module_reads(
+    owner1200_installation: Any, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    case = owner1200_installation
+    lookups: Counter[str] = Counter()
+
+    class ConflictingPins(dict[str, str]):
+        def __getitem__(self, member: str) -> str:
+            lookups[member] += 1
+            if member == "embedding_benchmark_budget_entrypoint.py" and lookups[member] > 1:
+                return "sha256:" + "f" * 64
+            return super().__getitem__(member)
+
+    monkeypatch.setattr(
+        execution, "_BUDGET1200_MODULE_SHA256", ConflictingPins(execution._BUDGET1200_MODULE_SHA256)
+    )
+    with pytest.raises(ValueError, match="BENCHMARK_EXECUTION_MODULE_PIN_MISMATCH"):
+        case.selected.assert_installed(case.request)
+    assert not any(path in case.modules.values() for path, _digest in case.reads)

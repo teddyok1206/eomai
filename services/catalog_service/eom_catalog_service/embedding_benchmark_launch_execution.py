@@ -118,6 +118,7 @@ class FixedBenchmarkLaunchExecution:
         require_benchmark_series_listener(request)
         if self._installation is None:
             files = NumericalRuntimeFileSnapshots(0)
+            module_pins: dict[Path, str] = {}
             for device in ("CPU", "CUDA"):
                 family = benchmark_unit_family(device, request.execution_policy)
                 for name, digest in (
@@ -148,13 +149,15 @@ class FixedBenchmarkLaunchExecution:
                     ):
                         path = package_root / "eom_catalog_service" / member
                         if family.timeout_seconds == 1200:
-                            files.read(
-                                path,
-                                sha256=_BUDGET1200_MODULE_SHA256[member],
-                                maximum=65536,
-                            )
+                            digest = _BUDGET1200_MODULE_SHA256[member]
+                            if module_pins.setdefault(path, digest) != digest:
+                                raise ValueError("BENCHMARK_EXECUTION_MODULE_PIN_MISMATCH")
                         else:
                             files.observe_protected_member_identity(path)
+            # Both devices share one immutable v1.2 package. Hash each exact member
+            # once; duplicate references must agree and retained epochs fence reuse.
+            for path, digest in module_pins.items():
+                files.read(path, sha256=digest, maximum=65536)
             self._installation = (
                 files,
                 capture_benchmark_runtime_installation(request.cpu, backend=self._cpu),
