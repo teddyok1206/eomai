@@ -1249,6 +1249,32 @@ schema-owner maintenance application의 실제 Workflow/native 실패 종료, in
 공식 recovery protocol 준비와 actual retry canary가 다음 작업이다. 실행 중 INDEX/numerical/QUERY
 pin을 바꾸지 않았다. 이후 full matched coverage/QUERY/default/fallback/coexistence/rollback이 남는다.
 
+P2-AJ 설치본 OS 읽기 체크포인트 `62fab4ce58f68650850bd785df56de9b65008859`:
+
+- 공식 build-only/RECORD와 protected owner installer로 별도 metadata SDK를 설치했다. platform
+  wheel SHA는 `3587542f50bb72997724c43301cbd914c93e9fb005422d7b6afc0106bb9508bf`,
+  API contracts wheel SHA는 `ab279d92b3c41d777a0277e4b96993d198936251243c4317312c898d98eefb9d`다.
+  owner release는 `/opt/eom/embedding-owner-releases/62fab4ce58f68650850bd785df56de9b65008859`.
+  stage만 했으며 active INDEX/QUERY/수치 prefix/정책/서비스 activation은 바꾸지 않았다.
+- 실제 root/isolated installed Python의 reader가 CONTENT/METADATA 원 invocation 각각의
+  protected bytes/hash/terminal FAILED/FDSTORE0/current stopped와 늦은 file/unit fence를 통과했다.
+  실제 allocation-request SHA는 CONTENT `dbbce5dd74efb809592ce8622e3b6ebe7032874957cd043d5f7a69873ead908b`,
+  METADATA `74b66181cde8563c9d633dfecd4e4d4991476d65bc6c4fda64bab520fa795086`다.
+  original parent/native/step metadata는 read-only 감사 r3에 pin했다. Root OS PASS와 DB closure/current
+  source authority PASS는 다르며 후자 둘을 이 probe로 주장하지 않는다. 모델/DB mutation은0이다.
+- 설치 전후 INDEX runtime/owner/unit 및 numerical/root-controller env5개 raw hashes가 같았다.
+  실행 중 source `ae380acd…`/numerical `eae2c0d3…`/CPU QUERY는 그대로다. 실제 owner invocation
+  `1cb1b4a870a542d787b44b7d16333504`의 background 추가16개 묶음3번째가08:56:49 UTC
+  `workflow_79fc0c89fe5d424abd7d5f62358c87d4`로 BATCH_COMPLETED였다. precompute missing467을
+  현재 잔여량이나 full paired-index 완료로 사용하지 않는다.
+
+설치/actual OS 결과는 `/tmp/eom-encoding-recovery-owner-stage-20261025.log` EXIT0,
+read-only exact generation/Job/step 감사는 `/tmp/eom-gpu-original-failed-metadata-audit-20261025-r3.json`
+및 status EXIT0이다. 다음 실제 수정은 root/schema-owner maintenance application이 RECOVER를
+검증해 원 native/encoding/step/command/Workflow를 FAILED로 종료하는 것이다. lease 만료만으로
+처리하지 않고 parent binding/planning SUCCEEDED는 보존한다. 현재 source/lease로 새 producer를
+처음 실행하는 canary는 그 뒤이며, 새 SDK를 stage한 것만으로 운영 복구/활성화했다고 보고하지 않는다.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존
