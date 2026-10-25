@@ -1027,6 +1027,84 @@ history다. 이 milestone은 canonical-source numerical+registration 최초 PASS
 incremental 처리량, matched CPU/CUDA indices, installed batch QUERY, 실제 BUSY fallback/coexistence,
 GPU 우선 default/rollback, 전체 설계 준수 audit가 남아 있다. 후속12+4 리뷰는 아직 시작하지 않는다.
 
+### P2-AH — 공식 현재 읽기를 사용하는 장치별 인덱스 쌍
+
+현재 순수 pair validator만으로 실제 paired index의 권한/등록/수치 검증이 활성화되지는 않는다.
+QUERY 운영 연결의 다음 작은 경계는 기존 Catalog public `read_pinned_embedding_index`를 CPU와
+CUDA 각각에 적용하고, 이미 검증한 pure pair 규칙으로 현재 target closure를 비교하는 것이다.
+
+- 책임/정본: Catalog consumer read application. 정본은 registered immutable index revision과
+  Artifact member, current Graph/source/accepted-profile 관계다. 별도 검색·벡터 저장소는 없다.
+- identity/pointer: 기존 EmbeddingRegistryRead/SimilarityViewSelection의 exact index ID/revision,
+  manifest Artifact/revision/raw hash/schema/media, Graph/policy/recipe/space를 그대로 사용한다.
+  입력은 이미 존재하는 내부 frozen 값이므로 새 wire/schema/DB aggregate를 만들지 않는다.
+- 권한/소유권: 실제 operator로 구성한 두 Catalog owner가 public pinned read를 수행한다.
+  서비스 caller, 서로 다른 corpus/Graph/policy/population, 소스 클래스 확대는 거부한다.
+  실제 권한은 owner가 확인하며 caller ID나 이 함수의 반환값이 권한이 되지 않는다.
+- 접근/구조: view별2개 indexed registered-revision lookup과 기존 bounded bulk binding/encoding
+  lookup이다. 원 bytes는 기존 Artifact read 경계에서만 읽고 root-local reader를 공유한다.
+  target 비교는 기존 pure validator의 O(N) ordered tuples/hash를 재사용한다. 별도 cache나
+  persisted derived target count는 없다. 수치 materialization은 두 공식 read에만 존재한다.
+- 현재 범위: 공개 reader가 반환한 authorized sources/profiles를 서로 비교하고, 각 manifest의
+  binding 전체가 현재 검증된 binding tuple과 일치해야 한다. revoked/미검증 부분을 숨겨서
+  더 작은 인덱스처럼 pairing하지 않는다. incomplete/different targets는 명시 오류다.
+- transaction/동시성: 호출자의 동일 active non-nested read root에서 진행한다. read-only이며
+  새 claim/write는 없다. 끝에서 두 owner의 current scope와 Artifact provenance를 다시 확인한다.
+  반환한 small pair는 권한 cache가 아니며 실제 QUERY 준비/실행/commit은 기존 owner의 새
+  current-source fence를 유지한다. 원 request가 고정한 pair를 latest로 바꾸지 않는다.
+- dependency: application module -> 기존 public Catalog/Registry/Artifact owner + 순수 pair helper다.
+  도메인에 DB/NAS 의존을 추가하거나 다른 모듈의 private 함수를 호출하지 않는다.
+- 실패/retry: missing/stale/hash/권한/target mismatch를 그대로 전달하며 CPU fallback은 하지 않는다.
+  read retry도 같은 exact pins를 사용한다. 기존 GPU canary/실패 이력에 상태 변경이 없다.
+- 단순 대안인 pure pair의 직접 사용은 현재 등록·권한·실제 수치 확인이 없으므로 부족하다.
+  기존 public reader를 재사용해 parallel resolver와 새 evidence registry를 만들지 않는다.
+
+P2-AH source 검증 (2026-10-25 UTC): new application/pure pair/batch-route focused65 PASS,
+기존 pinned-read/hash/authority/warm-model18 PASS(92 deselected), dependency6 PASS,
+production module mypy/두 파일 Ruff·format/diff PASS다. 새 application의 source/SQL/vector
+leaf는 합성이며 실제 사용자 권한·실제 DB pairing·GPU QUERY 증거가 아니다. 이 함수는 아직
+운영 QUERY composition에 연결하지 않았다. 두 공식 read와 bounded manifest 비교를 재사용하며
+성능 향상을 주장하거나 새 manifest cache/framework를 만들지 않았다.
+
+실제 finite bulk 결과 (metadata `ae380acd…`, numerical/controller `eae2c0d3…` 유지):
+
+| 실행 | canonical 결과 | 관찰한 owner 전체 시간 |
+| --- | --- | --- |
+| 새 target4 | Workflow `workflow_1b55a4da4bb54524988ea45ddfe68ed0` COMPLETED, encoding Jobs4 SUCCEEDED | 07:23:31–07:33:45 UTC, 약614초 |
+| 새 target16 | Workflow `workflow_a85f75c56949446b9f634807790b7ce6` COMPLETED, encoding Jobs16 SUCCEEDED | 07:43:01–07:56:31 UTC, 약810초 |
+
+두 실행 모두 attempt/generation1이며 공식 Workflow/Orchestrator/Catalog/Artifact commit을
+사용했다. terminal native unit의 MainPID0/FDSTORE0와 GPU 반환을 확인한 뒤 원 CPU owner로
+복원했다. 서로 다른 입력/OS cache 상태의 연속 실행이므로 controlled CPU/GPU speedup이 아니다.
+16개 실행의 관찰 VRAM4252MiB는 peak 측정이 아니다. 실제 result에는 constructor/forward 횟수
+counter가 없으므로 실제 constructor1이라고 계측된 것처럼 주장하지 않는다. 단일 worker의
+finite model scope 경로와 source test의 scope counter를 구분한다.
+
+4개 실행의 별도 read-only schema-owner metadata audit는 index binding1→5,
+expected-current revision 일치, source-set hash 불변, 옛 binding origin1 유지/new origin4와
+new encoding Jobs4의 hash 일치를 확인했다. 원 encoding은 재실행하지 않았다. 이는 기술
+배포 metadata 감사이지 consumer의 RAG/source 권한이 아니다.16개 성공 후의 delta5→21은
+별도 현재 consumer pairing 증거로 확대 해석하지 않는다. 옛 실패2건은 보존했다.
+
+2026-10-25 08:12 UTC, 검증된 service revision26
+`localindexservicerev_51e0dd4bcda74c728f5daf126dc06ac0`를 기존 public activation/CAS 경계로
+다시 활성화했다. 기존 permanent `eom-embedding-index-owner.service`가 legacy
+CONCRETE_FACETS 한 namespace만 max16의 finite GPU 묶음으로 계속 채운다. 새 queue/daemon,
+DB migration, CUDA prefix/unit 변경은 없다. 원 CPU ref21과 protected3파일 backup을 보존했다.
+activation wrapper EXIT0이며 새 invocation `1cb1b4a870a542d787b44b7d16333504`/MainPID4078724의
+실제 실행을 확인했다. service active 자체를 추가 target의 계산/등록 완료로 세지 않는다.
+
+관찰 기록은 `/tmp/eom-gpu-{bulk,scale}-canary-observation-20261025.log`,
+`/tmp/eom-gpu-{bulk,scale}-native-state-20261025.json`,
+`/tmp/eom-gpu-bulk-incremental-metadata-20261025.json`,
+`/tmp/eom-gpu-concrete-background-activation-20261025.log`다. source gate 기록은
+`/tmp/eom-gpu-paired-read-{final-focused,existing,dependency,mypy}-20261025.log`다.
+
+이 개발 소스는 진행 중 runtime에 설치하지 않았다. user QUERY/default는 여전히 CPU다.
+다른 views의 원 failed-root 정리/정식 재시도, full matched indices, 실제 batch QUERY,
+BUSY fallback/그림 생성 공존/처리량/default/rollback과 최종 요구사항 대조가 남았다.
+**GPU_PREFERRED_FULL=NOT_COMPLETE**이며 사용자 후속12+4 정적 리뷰 문서는 아직 읽지 않았다.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존
