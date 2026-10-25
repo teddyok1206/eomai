@@ -1299,6 +1299,22 @@ disposable PostgreSQL `r45`86 PASS(47.40초), cleanup EXIT0. 실제 DB 검증에
 이 테스트의 OS/source leaf는 fixture이며 실제 production mutation 증거가 아니다. 실제 적용 전에는
 설치된 immutable wheel에서 원 root retirement와 schema owner를 다시 검증한다.
 
+실제 적용 체크포인트 `c72bba2eb194ba49775840dba8e86a3be165c674`(2026-10-25 UTC):
+metadata SDK만 새 immutable prefix에 설치했고 active INDEX/numerical5파일 hash는 불변이었다.
+설치본 application으로 CONTENT 원 Workflow `workflow_744e0f7ba63744098fc9244f10040ea1`를
+09:24:44.665740 UTC, METADATA 원 Workflow `workflow_21d4fa17662d4b34ab87f714265b0aaa`를
+09:24:58.829292 UTC에 FAILED로 종료했다. 각각 원 command/step/native/encoding Job의
+FAILED와 canonical failure event, parent planning SUCCEEDED 보존을 commit 후 read-only로
+검증했다. 모델 실행0, 수치/서비스 pin 변경0이며 원 실패를 성공으로 바꾸지 않았다.
+각 결과는 `/tmp/eom-gpu-original-{content,metadata}-recovery-20261025.log` EXIT0다.
+이는 복구 maintenance 결과이지 새 encoding/GPU QUERY 성공은 아니다.
+
+기존 INDEX invocation `1cb1b4a870a542d787b44b7d16333504`는 SIGTERM stop-event만 전달해
+현재 묶음을 끝내도록 했고,09:27:05.325921 UTC `workflow_09a551c259ca43d8b9152f345d3ff481`
+BATCH_COMPLETED 뒤 MainPID0/inactive를 확인했다. systemd stop timeout이나 강제 kill로
+진행 중 GPU 작업을 끊지 않았다. 이후 동일 numerical/controller에서 CONTENT1 후속 canary를
+준비했다. canary 완료와 successor lineage는 별도 증거로 닫는다.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존
