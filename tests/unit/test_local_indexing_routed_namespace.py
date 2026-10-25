@@ -70,6 +70,12 @@ def test_original_cpu_queue_is_drained_without_new_gpu_discovery(service):
     service.prepare.assert_not_called()
     service.drive.assert_not_called()
 
+    reference = service.case.routed.fence.pin.service
+    assert service.value.gpu_selection.service == reference
+    selection = service.factory.call_args.args[1]
+    assert selection.service == reference
+    assert selection.namespace == service.case.pair.cpu.owner.configuration.registry.namespace
+
 
 def test_new_gpu_reconciliation_pins_original_and_distinguishes_batch_from_corpus_completion(
     service,

@@ -263,7 +263,7 @@ def _build_namespace_runtime(
         local_embedding_executor=executor,
         command_families=frozenset({CommandExecutionFamily.LOCAL_EMBEDDING}),
         command_actor_selection=NativeCommandActorSelection(
-            "local_indexing_service", pin.service.service_id, namespace
+            "local_indexing_service", pin.service.service_id, namespace, pin.service
         ),
         runner_config=RunnerConfig(
             version=1,

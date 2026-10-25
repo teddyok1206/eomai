@@ -69,7 +69,7 @@ class RoutedLocalIndexingNamespaceRuntime:
         service_id = service_fence.pin.service.service_id
         self.namespace = pair.namespace
         self.gpu_selection = NativeCommandActorSelection(
-            "local_indexing_service", service_id, self.namespace
+            "local_indexing_service", service_id, self.namespace, service_fence.pin.service
         )
         cpu = CatalogNativeEmbeddingExecutor(
             owner=pair.cpu.owner,
@@ -84,6 +84,7 @@ class RoutedLocalIndexingNamespaceRuntime:
                 "local_indexing_service",
                 service_id,
                 pair.cpu.owner.configuration.registry.namespace,
+                service_fence.pin.service,
             ),
         )
 

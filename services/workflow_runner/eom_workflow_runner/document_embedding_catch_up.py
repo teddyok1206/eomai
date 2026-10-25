@@ -6,7 +6,10 @@ import time
 from dataclasses import dataclass
 from uuid import uuid4
 
-from eom_catalog_contracts.embedding_gpu_control import EmbeddingGpuAllocationRequest
+from eom_catalog_contracts.embedding_gpu_control import (
+    EmbeddingGpuAllocationRequest,
+    embedding_gpu_allocation_window_seconds,
+)
 from eom_catalog_contracts.embedding_work_batch import MAX_EMBEDDING_WORK_BATCH_SECONDS
 from eom_identifiers import content_sha256
 from eom_orchestrator.document_embedding_reconciliation_store import (
@@ -165,9 +168,11 @@ def _selected(
     body["allocation_attempt_id"] = "embeddingallocation_" + uuid4().hex
     body["expires_monotonic_ns"] = (
         time.monotonic_ns()
-        + min(
-            pair.cuda.runtime_profile.resource_profile.timeout_seconds,
-            MAX_EMBEDDING_WORK_BATCH_SECONDS,
+        + embedding_gpu_allocation_window_seconds(
+            min(
+                pair.cuda.runtime_profile.resource_profile.timeout_seconds,
+                MAX_EMBEDDING_WORK_BATCH_SECONDS,
+            )
         )
         * 10**9
     )

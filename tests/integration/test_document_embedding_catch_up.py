@@ -1,11 +1,13 @@
 """Actual paired Catalog/index/Workflow/Job IO; OS/root/model leaves explicitly synthetic."""
 
+import time
 from concurrent.futures import ThreadPoolExecutor
 from copy import copy
 from threading import Barrier
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_contracts.embedding_gpu_control import embedding_gpu_allocation_window_seconds
 from eom_orchestrator.document_embedding_reconciliation_store import (
     DocumentEmbeddingReconciliationStore,
 )
@@ -123,6 +125,7 @@ def test_concurrent_preparation_selects_same_future_parent_without_allocating_a_
     value = execution
     _original, base = completed_cpu(value)
     gate = Barrier(2)
+    before = time.monotonic_ns()
 
     def select(_index):
         gate.wait(timeout=30)
@@ -132,6 +135,19 @@ def test_concurrent_preparation_selects_same_future_parent_without_allocating_a_
         left, right = tuple(pool.map(select, range(2)))
     assert left.request == right.request and left.intent == right.intent
     assert left.allocation != right.allocation
+    after = time.monotonic_ns()
+    budget = (
+        embedding_gpu_allocation_window_seconds(
+            min(value.gpu.pair.cuda.runtime_profile.resource_profile.timeout_seconds, 180)
+        )
+        * 10**9
+    )
+    for parent in (left, right):
+        assert (
+            before + budget
+            <= parent.allocation.control_request.expires_monotonic_ns
+            <= after + budget
+        )
     assert value.launcher.forwards == 1 and len(value.gpu.dispatches) == 1
 
 

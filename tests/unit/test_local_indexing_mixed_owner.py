@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, Mock
 
 import pytest
 from eom_identifiers import canonical_json_bytes, sha256_bytes
+from eom_operator_identity import LocalIndexingServiceReference
 from eom_workflow.local_indexing_owner_configuration import (
     LOCAL_INDEXING_MIXED_OWNER_SCHEMA_SHA256,
     LOCAL_INDEXING_MULTIVIEW_OWNER_SCHEMA_SHA256,
@@ -238,13 +239,21 @@ def test_factory_leaf_preserves_exact_mixed_namespace_and_current_authority(monk
         monkeypatch.setattr(composition, name, Mock())
     authority, launcher = Mock(), Mock()
     pin = SimpleNamespace(
-        service=SimpleNamespace(service_id="localindexservice_" + "a" * 32),
+        service=LocalIndexingServiceReference(
+            service_id="localindexservice_" + "a" * 32,
+            service_revision_id="localindexservicerev_" + "b" * 32,
+            service_identity_sha256="sha256:" + "c" * 64,
+        ),
         runtime_source_commit="e" * 40,
     )
     result = composition._build_namespace_runtime(
         Mock(), publisher, authority, selected, namespace, pin, Mock(), launcher
     )
     assert result.namespace == namespace
+    assert (
+        composition.WorkflowRunner.call_args.kwargs["command_actor_selection"].service
+        == pin.service
+    )
     assert owner_factory.call_args.args[1].registry.namespace == namespace
     assert owner_factory.call_args.kwargs["source_authority"] is authority
     assert (

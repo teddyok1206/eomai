@@ -25,6 +25,7 @@ from eom_catalog_service.embedding_registry_ports import (
     SelectedEmbeddingSources,
 )
 from eom_catalog_service.settings import CatalogSettings
+from eom_operator_identity import LocalIndexingServiceReference
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.local_embedding_control_artifacts import (
     LocalEmbeddingControlArtifactPublisher,
@@ -43,6 +44,7 @@ from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowInstanceRe
 from eom_workflow_runner.repository import (
     CommandExecutionFamily,
     NativeCommandActorSelection,
+    claim_command_candidate,
     import_workflow_definition,
     peek_command_candidate,
 )
@@ -278,6 +280,91 @@ def test_actual_independent_roots_submit_one_metadata_refresh_without_encoding(
             ),
         )
         assert selected is not None and selected.command_id == first.command_id
+    c.launcher.run.assert_not_called()
+
+
+def test_actual_exact_service_revision_preserves_other_pending_work_and_claims_once(reconciliation):
+    c = reconciliation
+    submitted = c.app.run_once()
+    request = c.source.scope.request
+    audit = request.actor_context
+    reference = LocalIndexingServiceReference(
+        service_id=audit.service_id,
+        service_revision_id=audit.service_revision_id,
+        service_identity_sha256=audit.service_identity_sha256,
+    )
+    selected = NativeCommandActorSelection(
+        "local_indexing_service", reference.service_id, request.namespace, reference
+    )
+    statements = []
+
+    def capture(_connection, _cursor, statement, parameters, _context, _many):
+        statements.append((statement, parameters))
+
+    event.listen(c.publisher.engine, "before_cursor_execute", capture)
+    try:
+        with c.publisher.sessions() as session:
+            for changed in (
+                {"service_revision_id": "localindexservicerev_" + uuid4().hex},
+                {"service_identity_sha256": "sha256:" + uuid4().hex * 2},
+            ):
+                assert (
+                    peek_command_candidate(
+                        session,
+                        family=CommandExecutionFamily.LOCAL_EMBEDDING,
+                        workflow_id=submitted.workflow_id,
+                        actor_selection=replace(
+                            selected, service=reference.model_copy(update=changed)
+                        ),
+                    )
+                    is None
+                )
+            original = peek_command_candidate(
+                session,
+                family=CommandExecutionFamily.LOCAL_EMBEDDING,
+                workflow_id=submitted.workflow_id,
+                actor_selection=selected,
+            )
+            assert original is not None and original.command_id == submitted.command_id
+    finally:
+        event.remove(c.publisher.engine, "before_cursor_execute", capture)
+    assert len(statements) == 3
+    with c.publisher.engine.connect() as connection:
+        for statement, parameters in statements:
+            plan = connection.exec_driver_sql(
+                "EXPLAIN (FORMAT JSON) " + statement, parameters
+            ).scalar_one()
+            assert plan[0]["Plan"]["Node Type"] == "Limit"
+            assert "workflow_events" not in statement
+
+    gate = Barrier(2)
+
+    def claim(ordinal):
+        with c.publisher.sessions.begin() as session:
+            candidate = peek_command_candidate(
+                session,
+                family=CommandExecutionFamily.LOCAL_EMBEDDING,
+                workflow_id=submitted.workflow_id,
+                actor_selection=selected,
+            )
+            assert candidate == original
+            gate.wait(timeout=30)
+            command = claim_command_candidate(
+                session,
+                candidate,
+                runner_id="revision-test-" + str(ordinal),
+                lease_seconds=60,
+                local_embedding_owner=c.app.executor.owner,
+                local_embedding_executor=c.app.executor,
+            )
+            return None if command is None else command.command_id
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(claim, range(2)))
+    assert sorted(results, key=lambda value: value or "") == [None, submitted.command_id]
+    with c.publisher.sessions() as session:
+        command = session.get(WorkflowCommandRecord, submitted.command_id)
+        assert command.state == "LEASED" and command.attempts == command.lease_generation == 1
     c.launcher.run.assert_not_called()
 
 

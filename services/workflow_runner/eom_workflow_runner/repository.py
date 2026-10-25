@@ -13,6 +13,7 @@ from eom_catalog_contracts.embedding_reference_query import raw_similarity_contr
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
 from eom_identifiers import content_sha256
+from eom_operator_identity import LocalIndexingServiceReference
 from eom_operator_identity.contracts import OperatorId
 from eom_operator_identity.local_indexing_service import ServiceId
 from eom_workflow import (
@@ -183,6 +184,7 @@ class NativeCommandActorSelection:
     actor_type: Literal["human", "local_indexing_service"]
     actor_id: str
     namespace: EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace | None = None
+    service: LocalIndexingServiceReference | None = None
 
     def __post_init__(self) -> None:
         if self.actor_type == "human":
@@ -197,6 +199,16 @@ class NativeCommandActorSelection:
             if type(self.namespace) not in (EmbeddingIndexNamespace, MixedEmbeddingIndexNamespace):
                 raise ValueError("NATIVE_COMMAND_ACTOR_SELECTION_INVALID")
             type(self.namespace).model_validate(raw_similarity_contract_value(self.namespace))
+        if self.service is not None:
+            if (
+                self.actor_type != "local_indexing_service"
+                or type(self.service) is not LocalIndexingServiceReference
+                or self.service.service_id != self.actor_id
+            ):
+                raise ValueError("NATIVE_COMMAND_ACTOR_SELECTION_INVALID")
+            LocalIndexingServiceReference.model_validate(
+                raw_similarity_contract_value(self.service)
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -1672,6 +1684,12 @@ def peek_command_candidate(
                 WorkflowInstanceRecord.initial_request["namespace"]
                 == actor_selection.namespace.model_dump(mode="json")
             )
+        if actor_selection.service is not None:
+            if family is not CommandExecutionFamily.LOCAL_EMBEDDING:
+                raise ValueError("NATIVE_COMMAND_ACTOR_SELECTION_INVALID")
+            audit = WorkflowInstanceRecord.initial_request["actor_context"]
+            for key, expected in actor_selection.service.model_dump(mode="json").items():
+                query = query.where(audit[key].as_string() == expected)
     row = session.execute(query).one_or_none()
     if row is None:
         return None

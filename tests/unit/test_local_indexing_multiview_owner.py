@@ -11,6 +11,7 @@ from unittest.mock import Mock
 import pytest
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_identifiers import canonical_json_bytes, sha256_bytes
+from eom_operator_identity import LocalIndexingServiceReference
 from eom_workflow.local_indexing_owner_configuration import (
     LOCAL_INDEXING_MULTIVIEW_OWNER_SCHEMA_SHA256,
     LOCAL_INDEXING_OWNER_SCHEMA_SHA256,
@@ -151,7 +152,11 @@ def test_each_leaf_uses_exact_namespace_with_shared_publisher_authority_and_laun
     monkeypatch.setattr(composition, "WorkflowRunner", runner_factory)
     monkeypatch.setattr(composition, "LocalEmbeddingServiceReconciliation", reconciliation_factory)
     pin = SimpleNamespace(
-        service=SimpleNamespace(service_id="localindexservice_" + "a" * 32),
+        service=LocalIndexingServiceReference(
+            service_id="localindexservice_" + "a" * 32,
+            service_revision_id="localindexservicerev_" + "b" * 32,
+            service_identity_sha256="sha256:" + "c" * 64,
+        ),
         runtime_source_commit="f" * 40,
     )
     result = composition._build_namespace_runtime(
@@ -167,6 +172,7 @@ def test_each_leaf_uses_exact_namespace_with_shared_publisher_authority_and_laun
     assert backend.launcher is launcher
     assert runner_factory.call_args.kwargs["local_embedding_owner"] is owner
     assert runner_factory.call_args.kwargs["command_actor_selection"].namespace == namespace
+    assert runner_factory.call_args.kwargs["command_actor_selection"].service == pin.service
     assert reconciliation_factory.call_args.kwargs["maximum_targets"] == selected.maximum_targets
     assert result.runner is runner_factory.return_value
     assert result.reconciliation is reconciliation_factory.return_value
@@ -203,6 +209,48 @@ def test_exact_namespace_queue_predicate_is_selection_not_permission():
             selection.actor_id,
             namespace.model_copy(update={"permissions": ["ADMIN"]}),
         )
+
+
+def test_exact_revision_queue_predicate_does_not_claim_an_old_service_identity():
+    reference = LocalIndexingServiceReference(
+        service_id="localindexservice_" + "a" * 32,
+        service_revision_id="localindexservicerev_" + "b" * 32,
+        service_identity_sha256="sha256:" + "c" * 64,
+    )
+    namespace = EmbeddingIndexNamespace.model_validate(multiview_document()["namespace"])
+    selection = NativeCommandActorSelection(
+        "local_indexing_service", reference.service_id, namespace, reference
+    )
+    session = Mock()
+    session.execute.return_value.one_or_none.return_value = None
+    assert (
+        peek_command_candidate(
+            session, family=CommandExecutionFamily.LOCAL_EMBEDDING, actor_selection=selection
+        )
+        is None
+    )
+    statement = session.execute.call_args.args[0]
+    compiled = statement.compile(dialect=postgresql.dialect())
+    for key, value in reference.model_dump(mode="json").items():
+        assert key in compiled.params.values() and value in compiled.params.values()
+    assert statement._limit_clause.value == 1
+    session.execute.assert_called_once()
+    with pytest.raises(ValueError):
+        peek_command_candidate(
+            session, family=CommandExecutionFamily.REFERENCE_QUERY, actor_selection=selection
+        )
+    for kind, actor_id, value in (
+        ("human", "operator_" + "a" * 32, reference),
+        ("local_indexing_service", "localindexservice_" + "d" * 32, reference),
+        ("local_indexing_service", reference.service_id, reference.model_dump(mode="json")),
+        (
+            "local_indexing_service",
+            reference.service_id,
+            reference.model_copy(update={"service_identity_sha256": "not-a-hash"}),
+        ),
+    ):
+        with pytest.raises(ValueError):
+            NativeCommandActorSelection(kind, actor_id, service=value)
 
 
 def schedule(monkeypatch, stop, *, busy=False):

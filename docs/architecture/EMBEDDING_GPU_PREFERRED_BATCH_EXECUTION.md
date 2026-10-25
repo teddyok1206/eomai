@@ -912,6 +912,77 @@ unit이 없는 시점의 기존 private-successor byte audit와 qualification, r
 성공으로 수정하지 않는다. 실제 계산·등록, matched indexes/batch QUERY/default/rollback과
 최종 completion audit는 여전히 남아 있다.
 
+### P2-AG — 후속 서비스의 정확한 revision queue 선택 (설계)
+
+실제 CUDA private successor `eae2c0d3…`는 기존 namespace의 read-only mount를 적용한
+공식 installer로 byte audit를 통과했다. 새 config `663b0e85…`의 실제 no-model CUDA probe,
+동일 live process의 두 ACK, receipt2.1 seal/readback와 원 invocation retirement도 PASS다.
+모델/forward 호출은0이며 numerical completion 증거와 구별한다. CPU/API/Web/QUERY는 그대로다.
+새 GPU unit480/controller540와 정확한 qualification receipt를 가진 policy도 idle 상태에서
+정렬했다. 옛 prefix와 physical policy/unit backup을 보존했다.
+
+실제 전환 전 owner read-only 조회에서 original CPU CONCRETE_FACETS의 pending continuation과
+옛 CUDA CONTENT_ONLY/METADATA_ONLY의 nonterminal history를 확인했다. 새 서비스 revision은
+동일 logical service ID라는 이유로 옛 revision의 요청을 claim/resolve해서는 안 된다.
+
+- 책임/정본: 기존 Runner의 queue selection과 immutable Workflow initial_request.actor_context.
+  selection은 권한 부여가 아니다. 실제 source admission/current-service fence는 그대로 수행한다.
+- revision/pointers: 기존 typed LocalIndexingServiceReference(service ID/revision/hash)를 내부
+  NativeCommandActorSelection에 선택적으로 포함한다. wire/schema/DB identity나 bytes 변경은 없다.
+  설치된 후속 INDEX owner의 CPU/GPU queue는 실제 capture의 exact reference를 모두 전달한다.
+- access/구조: 기존 actor+namespace 제한의 단일 SQL FIFO/limit1 lookup에 immutable JSONB audit의
+  service ID/revision/hash equality를 추가한다. 별도 큐/스캔/cache를 만들지 않는다. 기존 claimable
+  index와 Workflow PK join을 사용하며 scoped EXPLAIN/statement-count 검사로 확인한다. queue
+  lookup은 기존 indexed candidate ordering, 추가 비교는 각 후보의 O(1) small metadata다.
+- concurrency: peek는 비잠금 후보일 뿐이다. 기존 candidate content hash/CAS/claim lease와 actual
+  actor authorization이 claim·실행을 보호한다. 동시 root가 같은 요청을 두 번 claim하지 않는다.
+- dependency: Runner 내부 query value -> 기존 operator identity value다. worker/DB/NAS 권한과
+  도메인 계층 방향은 바꾸지 않는다.
+- 실패/replay: 이전 요청을 새 identity로 retry하거나 FAILED를 성공으로 재해석하지 않는다.
+  새 owner는 타 revision의 pending 기록을 그대로 남기며 원 pinned owner/공식 maintenance의
+  책임을 보존한다. 선택한 exact current revision 안의 FIFO/replay/중단 복구는 종전과 같다.
+- 더 단순한 대안: 전환 시 pending row를 없애거나 actor logical ID만으로 원 요청을 인계하는
+  방법은 immutable authority를 깨뜨린다. 전역 큐가 빌 때까지 대기하는 것만으로도 장래의
+  config/release successor가 stale request를 가져가는 결함을 해결하지 못한다.
+
+같은 검토에서 catch-up parent가 초기 parent와 달리 옛180초 allocation window를 만들던 한
+지점을 확인했다. 동일한 P2-AF pure budget 함수를 사용하도록 정렬하되 이미 저장된 request의
+deadline/nonce는 재계산하지 않는다. 이 변경은 metadata owner만의 동작이며 방금 실제 검증한
+numerical worker bytes/ABI를 변경하지 않는다. source/DB 검증 뒤 metadata successor만 설치한다.
+후속 외부 리뷰12+4는 아직 읽거나 시작하지 않았다. 전체 목표는 계속 ACTIVE다.
+
+P2-AG 검증 (2026-10-25 UTC):
+
+- focused104 PASS(20.62s), 관련4 production 모듈 mypy PASS, scoped Ruff/format/diff PASS다.
+  기존 broad selection API는 유지하되 실제 후속 service composition이 current typed reference를
+  사용한다. foreign actor/reference, 미검증 model_copy, 다른 purpose 선택은 거부한다.
+- disposable PostgreSQL r36은14 PASS(124.80s), cleanup PASS다. 실제 SQL의 exact revision/hash
+  필터, 이전 pending command 불변, 세 개 peek의 statement-count/EXPLAIN Limit, 두 concurrent
+  root의 원 command 단일 lease/attempt/generation1, 기존 중단·catch-up·replay/권한 거부를
+  검증했다. 실제 service 인증·GPU/root는 이 DB suite에서 합성이다. 운영 DB pytest는 없다.
+- 실제 CUDA qualification은 execution `9d8ae488a30f44d18c8aa8d817cb90ff`, invocation
+  `672fcd47795e4ad88c92087860cb958d`, config revision `663b0e85…`다. receipt raw SHA는
+  `sha256:18c328e5df04a8419ac67202fe2c59eb64b6b42f7e12d332291682bc49e00b80`이고
+  numerical runtime은 기존 `d0887315…`, CUDA space는 `39bc2c31…`로 유지됐다. 별도 SDK
+  제어 코드 변경을 이유로 새 numerical identity를 만들지 않았다. model/forward0,
+  CUDA init/synchronize 각1, PID1 FDSTORE 반환/원 successful retirement PASS다.
+- 실제 prefix audit는 `/opt/eom/.embedding-index-install-9t38StTq`, old prefix backup은
+  `/opt/eom/conda/envs/.embedding-index-prepublication-CUDA_INDEX_FP32-.embedding-index-install-9t38StTq`다.
+  최초 설치 호출은 namespace mount 누락으로 BEFORE_HOST_BYTES_PREFLIGHT에서 실패해 prefix를
+  교체하지 않았다. 재호출은 기존 read-only mount namespace를 적용해4min17s에 성공했다.
+- idle physical controller SDK는 `eae2c0d3…`, 새 units/qualified policy는 정렬됐지만 실제 source
+  owner와 사용자 검색 기본값은 원 CPU로 유지했다. rollback physical files는
+  `/var/lib/eom-gpu-budget-physical-eae2c0d3`에 보존했다. 이 다음 source의 변경은 Runner
+  metadata/reconciliation뿐이며 방금 qualification한 CUDA numerical bytes/ABI는 바꾸지 않는다.
+
+로그: `/tmp/eom-gpu-budget-numeric-install-20261025-r2.log`,
+`/tmp/eom-gpu-budget-qualification-probe-20261025.log`,
+`/tmp/eom-gpu-budget-physical-stage-20261025.log`,
+`/tmp/eom-gpu-service-revision-final-focused-20261025.log`,
+`/tmp/eom-gpu-service-revision-mypy-20261025.log`,
+`/tmp/eom-document-execution-pg-20261025-r36.log`다. 이 결과는 실제 자료 numerical 계산·등록이나
+GPU 기본값 전환의 완료가 아니다. 새 source owner의 제한된 실제 계산을 다음에 수행한다.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존
