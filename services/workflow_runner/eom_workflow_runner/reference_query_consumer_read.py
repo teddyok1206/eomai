@@ -41,7 +41,10 @@ from sqlalchemy.orm import Session
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.models import WorkflowInstanceRecord
 from eom_workflow_runner.reference_query_publication_read import resolve_reference_query_publication
-from eom_workflow_runner.reference_query_source_read import ReferenceQuerySourceOwner
+from eom_workflow_runner.reference_query_source_read import (
+    ReferenceQuerySourceOwner,
+    select_completed_reference_query_read_owner,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,6 +74,7 @@ def read_completed_reference_query_selection(
     if workflow.state != "COMPLETED":
         raise SimilarityContextReadError("QUERY_RESULT_INVALID")
     request = parse_supported_reference_query_workflow_request(workflow.initial_request)
+    owner = select_completed_reference_query_read_owner(owner, request)
     selection = CompletedSimilarityQuerySelection(
         workflow_id=workflow.workflow_id,
         workflow_request_sha256=request.request_sha256,
@@ -169,11 +173,11 @@ class CatalogCompletedReferenceQueryRead:
         request: SupportedReferenceQueryWorkflowRequest,
         artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> None:
-        self.owner = owner
         self.workflow_id = TypeAdapter(WorkflowId).validate_python(workflow_id)
         self.request = parse_supported_reference_query_workflow_request(request)
+        self.owner = select_completed_reference_query_read_owner(owner, self.request)
         self.artifact_reader = artifact_reader
-        self.sessions = build_session_factory(owner.catalog.engine)
+        self.sessions = build_session_factory(self.owner.catalog.engine)
 
     def resolve_reference_query(
         self,

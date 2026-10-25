@@ -23,6 +23,7 @@ from eom_workflow_runner.reference_query_consumer_read import (
 from eom_workflow_runner.reference_query_source_read import (
     CatalogReferenceQueryReadOwner,
     ReferenceQuerySourceOwner,
+    select_completed_reference_query_read_owner,
 )
 from eom_workflow_runner.similarity_context_session_reader import (
     CatalogSimilaritySessionContextReader,
@@ -90,6 +91,7 @@ class CatalogSimilarityContextReadService:
                     request, SimilarityContextReadRequestV2
                 ):
                     raise SimilarityContextReadError("QUERY_RESULT_INVALID")
+                source_owner = select_completed_reference_query_read_owner(source_owner, original)
                 provenance = PinnedArtifactReadContext(session, source_owner.settings)
                 selected = source_owner.catalog.for_pinned_similarity_request_in_session(
                     session, caller, original.context_request, artifact_reader=provenance

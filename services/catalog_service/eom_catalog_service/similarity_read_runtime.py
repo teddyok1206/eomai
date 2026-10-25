@@ -5,16 +5,22 @@ from __future__ import annotations
 import os
 import re
 import stat
+from dataclasses import replace
 from pathlib import Path
 
 from eom_catalog_contracts.models import Sha256
 from eom_catalog_contracts.similarity_reader_configuration import (
     MAX_SIMILARITY_READER_CONFIGURATION_BYTES,
     SimilarityReaderConfiguration,
+    SimilarityReaderConfigurationV2,
     SupportedSimilarityReaderConfiguration,
     parse_similarity_reader_configuration,
-    parse_similarity_reader_configuration_v2,
     require_mixed_similarity_reader_cohost,
+)
+from eom_catalog_contracts.similarity_reader_routed_configuration import (
+    RoutedSimilarityReaderConfiguration,
+    parse_similarity_reader_installed_selection,
+    require_same_routed_reader_controls,
 )
 from eom_identifiers import sha256_bytes
 from eom_identity_service import (
@@ -30,9 +36,11 @@ from eom_orchestrator.settings import Settings
 from eom_workflow_runner.reference_query_source_read import (
     CatalogReferenceQueryReadOwner,
     ReferenceQueryOwnerConfiguration,
+    read_pinned_reference_query_controls,
 )
 from pydantic import TypeAdapter
 from sqlalchemy import Engine, text
+from sqlalchemy.orm import Session
 
 from eom_catalog_service.embedding_registry_catalog_adapter import CatalogEmbeddingRegistryVerifier
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryOwnerConfiguration
@@ -40,6 +48,7 @@ from eom_catalog_service.exam_similarity_read_service import CatalogExamSimilari
 from eom_catalog_service.item_similarity_publication_service import (
     CatalogItemSimilarityPublicationService,
 )
+from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.similarity_read_service import CatalogSimilarityContextReadService
 from eom_catalog_service.workflow_similarity_read_service import (
@@ -286,38 +295,70 @@ def build_catalog_similarity_context_reads(
     if mode != "ENABLED" or configuration_raw_sha256 is None:
         raise SimilarityReaderRuntimeError()
     try:
-        selection, registry, identity = _admitted_reader_inputs(
-            engine, read_similarity_reader_configuration(configuration_raw_sha256)
-        )
-        owner = CatalogReferenceQueryReadOwner(
+        selection, routed, owner = _configured_reference_read_owner(
             engine,
-            ReferenceQueryOwnerConfiguration(
-                registry,
-                selection.native_execution_policy,
-                selection.native_execution_policy_sha256,
-                selection.runtime_bundle,
-            ),
-            identity_fence=identity,
+            read_similarity_reader_configuration(configuration_raw_sha256),
             settings=settings,
         )
+        if type(selection) is not SimilarityReaderConfiguration:
+            raise SimilarityReaderRuntimeError()
         mixed_owner = None
         if mixed_configuration_raw_sha256 is not None:
-            mixed = parse_similarity_reader_configuration_v2(
-                read_mixed_similarity_reader_configuration(mixed_configuration_raw_sha256)
-            )
-            require_mixed_similarity_reader_cohost(selection, mixed)
-            mixed_registry, mixed_identity = _admit_reader_selection(engine, mixed)
-            mixed_owner = CatalogReferenceQueryReadOwner(
+            mixed, mixed_routed, mixed_owner = _configured_reference_read_owner(
                 engine,
-                ReferenceQueryOwnerConfiguration(
-                    mixed_registry,
-                    mixed.native_execution_policy,
-                    mixed.native_execution_policy_sha256,
-                    mixed.runtime_bundle,
-                ),
-                identity_fence=mixed_identity,
+                read_mixed_similarity_reader_configuration(mixed_configuration_raw_sha256),
                 settings=settings,
             )
+            if type(mixed) is not SimilarityReaderConfigurationV2:
+                raise SimilarityReaderRuntimeError()
+            require_mixed_similarity_reader_cohost(selection, mixed)
+            require_same_routed_reader_controls(routed, mixed_routed)
         return CatalogSimilarityContextReadService(owner, mixed_owner=mixed_owner)
     except Exception:
         raise SimilarityReaderRuntimeError() from None
+
+
+def _configured_reference_read_owner(
+    engine: Engine, raw: bytes, *, settings: CatalogSettings | None
+) -> tuple[
+    SupportedSimilarityReaderConfiguration,
+    RoutedSimilarityReaderConfiguration | None,
+    CatalogReferenceQueryReadOwner,
+]:
+    selection, routed = parse_similarity_reader_installed_selection(raw)
+    registry, identity = _admit_reader_selection(engine, selection)
+    cpu_configuration = ReferenceQueryOwnerConfiguration(
+        registry,
+        selection.native_execution_policy,
+        selection.native_execution_policy_sha256,
+        selection.runtime_bundle,
+    )
+    cuda_owner = None
+    if routed is not None:
+        namespace = type(registry.namespace).model_validate(
+            registry.namespace.model_dump(mode="json")
+            | {"space_sha256": routed.cuda_document_space.space_sha256}
+        )
+        cuda_configuration = ReferenceQueryOwnerConfiguration(
+            replace(registry, namespace=namespace, space=routed.cuda_document_space),
+            routed.cuda_native_execution_policy,
+            routed.cuda_native_execution_policy_sha256,
+            routed.cuda_runtime_bundle,
+        )
+        with Session(engine) as session, session.begin():
+            session.execute(text("SET TRANSACTION READ ONLY"))
+            reader = PinnedArtifactReadContext.for_session(
+                session, settings or CatalogSettings.from_environment()
+            )
+            for configuration in (cpu_configuration, cuda_configuration):
+                policy, _bundle = read_pinned_reference_query_controls(reader, configuration)
+                if policy.spaces.document != configuration.registry.space:
+                    raise SimilarityReaderRuntimeError()
+            reader.revalidate_provenance()
+        cuda_owner = CatalogReferenceQueryReadOwner(
+            engine, cuda_configuration, identity_fence=identity, settings=settings
+        )
+    owner = CatalogReferenceQueryReadOwner(
+        engine, cpu_configuration, identity_fence=identity, settings=settings, cuda_owner=cuda_owner
+    )
+    return selection, routed, owner

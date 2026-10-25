@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import time
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
@@ -302,6 +303,76 @@ def test_paired_original_parent_uses_same_actual_runner_bind_completion_and_repl
     test_actual_runner_executes_two_queries_with_one_batch_and_preserves_exact_canonical_replay(
         finite
     )
+
+
+def test_completed_catalog_device_selection_reads_original_cuda_children_and_replay(
+    finite, monkeypatch
+):
+    """Actual PG/canonical CUDA publication; source/Identity/numerics remain synthetic."""
+    from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
+    from eom_workflow_runner.reference_query_consumer_read import (
+        read_completed_reference_query_selection,
+    )
+    from eom_workflow_runner.reference_query_source_read import CatalogReferenceQueryReadOwner
+
+    from tests.unit.test_reference_query_execution_contracts import case
+
+    with finite.opened() as value:
+        outputs = drive_batch_reference_queries(value.executor, value.workflow_ids)
+        original = histories(value)
+        cuda_configuration = value.owner_query.configuration
+        cuda_owner = CatalogReferenceQueryReadOwner(
+            value.publisher.engine,
+            cuda_configuration,
+            identity_fence=value.owner_query.identity,
+            settings=value.owner_query.settings,
+        )
+        # Reuse exactly the fixture's explicit synthetic source admission. Keep
+        # the real completed-Workflow/step/coordinator/member reader unchanged.
+        monkeypatch.setattr(cuda_owner, "resolve_sources", value.owner_query.resolve_sources)
+        cpu = case()
+        cpu_namespace = type(cuda_configuration.registry.namespace).model_validate(
+            cuda_configuration.registry.namespace.model_dump(mode="json")
+            | {"space_sha256": cpu.policy.spaces.document.space_sha256}
+        )
+        cpu_configuration = ReferenceQueryOwnerConfiguration(
+            replace(
+                cuda_configuration.registry,
+                namespace=cpu_namespace,
+                space=cpu.policy.spaces.document,
+            ),
+            cpu.request.native_execution_policy,
+            cpu.policy.policy_sha256,
+            cpu.request.runtime_bundle,
+        )
+        owner = CatalogReferenceQueryReadOwner(
+            value.publisher.engine,
+            cpu_configuration,
+            identity_fence=value.owner_query.identity,
+            settings=value.owner_query.settings,
+            cuda_owner=cuda_owner,
+        )
+        monkeypatch.setattr(
+            owner,
+            "resolve_sources",
+            Mock(side_effect=AssertionError("CUDA read must not fall back to CPU")),
+        )
+        caller = EmbeddingRegistryCaller(value.selection.scope.actor_id)
+
+        def read(workflow_id):
+            with value.publisher.sessions.begin() as session:
+                return read_completed_reference_query_selection(session, owner, caller, workflow_id)
+
+        first = tuple(read(workflow_id) for workflow_id in value.workflow_ids)
+        assert tuple(item.output for item in first) == outputs
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            replay = tuple(pool.map(read, value.workflow_ids))
+        assert replay == first
+        assert histories(value) == original and len(value.dispatches) == 1
+        assert owner.configuration is cpu_configuration
+        value.denied_child = True
+        with pytest.raises(ValueError, match="access revoked"):
+            read(value.workflow_ids[0])
 
 
 @pytest.mark.parametrize(

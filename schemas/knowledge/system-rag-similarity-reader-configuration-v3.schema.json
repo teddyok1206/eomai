@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-similarity-reader-configuration/3.0",
+  "title": "Explicit CPU/CUDA completed-result reader selection; no execution or user authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "cpu_configuration", "cuda_document_space", "cuda_native_execution_policy", "cuda_native_execution_policy_sha256", "cuda_runtime_bundle"],
+  "properties": {
+    "schema_version": {"const": "system-rag-similarity-reader-configuration/3.0"},
+    "cpu_configuration": {"oneOf": [
+      {"$ref": "eom://schemas/knowledge/system-rag-similarity-reader-configuration/1.0"},
+      {"$ref": "eom://schemas/knowledge/system-rag-similarity-reader-configuration/2.0"}
+    ]},
+    "cuda_document_space": {"allOf": [
+      {"$ref": "eom://schemas/knowledge/system-rag-similarity-reader-configuration/1.0#/properties/document_space"},
+      {"properties": {"runtime": {"properties": {"device": {"const": "CUDA"}}}}}
+    ]},
+    "cuda_native_execution_policy": {"$ref": "eom://schemas/knowledge/system-rag-similarity-reader-configuration/1.0#/properties/native_execution_policy"},
+    "cuda_native_execution_policy_sha256": {"$ref": "eom://schemas/knowledge/system-rag-similarity-reader-configuration/1.0#/properties/native_execution_policy_sha256"},
+    "cuda_runtime_bundle": {"$ref": "eom://schemas/knowledge/system-rag-similarity-reader-configuration/1.0#/properties/runtime_bundle"}
+  }
+}

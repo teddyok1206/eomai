@@ -93,6 +93,32 @@ populations match; existing pinned query history remains readable by its owner.
 
 ## Gates
 
+### Completed Catalog reads must select the original device too
+
+Pre-activation review found that installed Catalog completed-result reads still
+pin only CPU native controls. Merely activating routed QUERY would therefore
+compute CUDA results which the existing Item/read/publication path rejects. Add
+an opt-in reader-configuration3 wrapper around the unchanged CPU reader1/2 plus
+exact CUDA document space/native-policy/bundle pointers. Define the closed JSON
+Schema first. Old configurations and original CPU/private history remain valid.
+
+The installed Catalog owns both read-only device configurations. After actual
+operator fencing and exact completed-Workflow selection, choose the matching
+owner from that stored original request's device, never a caller-supplied device
+or latest index. Canonical policy/bundle validation and every current source,
+permission, Artifact/hash and completed-output check still apply. A missing
+device configuration fails explicitly; it is not a fallback or a compute grant.
+The shared completed-reader constructor also serves Item publication and stored
+authoring/review materialization, preventing parallel per-consumer rules.
+
+Use two bounded immutable configuration values and O(1) device selection; no DB
+schema/index/cache/queue, new worker permission or CUDA import in Catalog. The
+original completion key/revision/hash remains unchanged across replay. Startup
+validates both canonical controls; each read retains its current authorization
+transaction. Preserve failed history and CPU rollback selections. Allowing the
+old CPU owner to trust an arbitrary stored CUDA policy would silently broaden a
+released boundary, so explicit installed successor selection is required.
+
 ### Metadata-only INDEX publication before physical allocation
 
 The 2026-10-25 live INDEX trace exposed a costly ownership mismatch: refreshing
@@ -277,3 +303,70 @@ the original routed batch key and physical allocation.
 These source tests do not complete full paired coverage, actual GPU QUERY,
 GPU-default/fallback or rollback acceptance. The externally supplied12+4 static
 review remains unopened until the full GPU goal and live release checkpoint.
+
+### Completed-read device successor source evidence
+
+The closed reader configuration3.0 has canonical/resource mirror SHA
+`b3cb23f75186fbc219bf0c5c11bcda218197e954e2a541e73205f2ffc2307f53`.
+It explicitly wraps unchanged reader1/2 CPU controls and separate CUDA space,
+native policy and bundle pointers. The nested family is a discriminated union;
+unknown/extra authority fields, ambiguous bytes and missing/mismatched controls
+are rejected, not interpreted as CPU fallback. Protected runtime composition
+validates canonical policy/bundle bytes before constructing two read-only owners.
+
+The common completed-reader constructor selects from the original stored request
+for direct reads, Item context publication and stored authoring/review reads.
+The standalone read service selects the same device owner before resolving exact
+index revisions. It never widens a CPU native-policy pin or chooses latest.
+
+- Source/legacy/mixed/runtime/common reader/dependency regression:123 PASS,
+  117.04seconds (`/tmp/eom-gpu-completed-reader-regression-20261025-r3.log`).
+- Final closed configuration/model-copy negatives:16 PASS,6.99seconds
+  (`/tmp/eom-gpu-completed-reader-contracts-20261025-r4.log`); these overlap the
+  larger suite and are not summed as unique tests. Strict mypy5 modules PASS.
+- Disposable PostgreSQL r61:2 PASS,69.83seconds, cleanup EXIT0. The new actual
+  Runner/publication case reads two original CUDA children through a CPU+CUDA
+  Catalog reader, replays concurrently without another dispatch and denies
+  revoked current authority. The existing paired-parent Runner replay also PASS.
+  Root/IAM/numerics remain explicitly synthetic; no live GPU acceptance is claimed.
+- The existing unstarted-cancellation suite was correctly skipped17 cases in r61
+  because its additional opt-in was missing. It was then run explicitly against
+  another disposable DB in r62:17 PASS,8.92seconds, cleanup EXIT0. This covers
+  cancellation/claim races, interruption rollback, exact replay, owner checks,
+  started work refusal and one immutable cancellation receipt.
+
+Initial reader runs exposed a missing mixed-type import and a nondiscriminated
+nested union whose external schema exceptions did not choose the right branch.
+Both are corrected; failed logs are retained. Predecessor schemas and production
+validation/authority were not relaxed. The reader successor is not yet installed
+or activated and does not itself complete the GPU goal.
+
+### Actual membership-only INDEX successor activation
+
+At12:58 UTC the installed INDEX source became
+`ca0beb2c5502117949eca1a823f83d358022a00b`, service revision
+`localindexservicerev_084877747e944cf2855f2b66484c256a`, invocation
+`ca583a2b415d4582a4fedeefedcb4207`, maximum16 in the same six namespaces.
+The numerical prefixes and API/Web/CPU-private QUERY remained unchanged.
+Evidence: `/tmp/eom-membership-index-activation-20261025-ca0beb2c-r2.log`, EXIT0.
+
+The preceding source completed its current GPU work normally but its standby
+discovery had queued one still-unclaimed CPU request before observing shutdown.
+The first drain correctly refused activation with that nonterminal row present.
+Read-only classification proved REQUESTED/PENDING, attempts/generation0,
+no lease, no step and no failure. After r62's disposable concurrency/replay tests,
+the existing public owner-maintenance use case cancelled exactly that unstarted
+request, retaining its original request/key and append-only receipt. No direct
+row repair, scientific content deletion or failed-to-success transition occurred.
+The two original completed GPU Workflow metadata and the original failed64
+Workflow metadata were unchanged before/after. Same-command replay returned the
+exact receipt `d8714ea81bac6b64a88b0ef28432e0a267126ed65bc6c1a7978f734c0c78135b`.
+The final check found zero preceding nonterminal Workflows and zero held GPU FDs
+before the staged successor was selected. Previous configuration and service
+reference remain in `/var/lib/eom-gpu-standby-index-ca0beb2c/backup` and its plan.
+
+The source process had reached its1GiB cgroup ceiling, but observed cumulative
+memory stall was only0.35seconds and current pressure0; this is not evidence that
+memory pressure caused the long reconciliation. No active memory cap was changed.
+Reconciliation wall time includes source/control validation, publication and CPU
+standby discovery and is not a numerical GPU-forward timing or throughput claim.

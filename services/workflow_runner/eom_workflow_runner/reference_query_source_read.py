@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Protocol
 
 from eom_catalog_contracts.embedding_reference_query import (
@@ -233,6 +233,8 @@ class CatalogReferenceQueryReadOwner:
     construct those actual runtime capabilities, and no expired owner is replaced.
     """
 
+    cuda_owner: CatalogReferenceQueryReadOwner | None
+
     def __init__(
         self,
         engine: Engine,
@@ -240,6 +242,7 @@ class CatalogReferenceQueryReadOwner:
         *,
         identity_fence: OperatorAuthorizationFence | None,
         settings: CatalogSettings | None = None,
+        cuda_owner: CatalogReferenceQueryReadOwner | None = None,
     ) -> None:
         configuration.__post_init__()
         if identity_fence is None or not callable(
@@ -252,6 +255,29 @@ class CatalogReferenceQueryReadOwner:
         self.catalog = CatalogEmbeddingRegistryVerifier(
             engine, configuration.registry, identity_fence=self.identity, settings=self.settings
         )
+        if cuda_owner is not None and (
+            type(cuda_owner) is not CatalogReferenceQueryReadOwner
+            or cuda_owner.cuda_owner is not None
+            or cuda_owner.catalog.engine is not engine
+            or cuda_owner.identity is not self.identity
+            or cuda_owner.settings != self.settings
+            or configuration.registry.space.runtime.device != "CPU"
+            or cuda_owner.configuration.registry.space.runtime.device != "CUDA"
+            or replace(
+                cuda_owner.configuration.registry,
+                namespace=configuration.registry.namespace,
+                space=configuration.registry.space,
+            )
+            != configuration.registry
+            or type(cuda_owner.configuration.registry.namespace)
+            is not type(configuration.registry.namespace)
+            or cuda_owner.configuration.registry.namespace.model_dump(
+                mode="json", exclude={"space_sha256"}
+            )
+            != configuration.registry.namespace.model_dump(mode="json", exclude={"space_sha256"})
+        ):
+            raise ValueError("REFERENCE_QUERY_READ_DEVICE_CONFIGURATION_INVALID")
+        self.cuda_owner = cuda_owner
 
     def resolve_sources(
         self,
@@ -276,6 +302,21 @@ class CatalogReferenceQueryReadOwner:
         return resolve_completed_reference_query_sources(
             self, session, caller, request, workflow_id=workflow_id, artifact_reader=artifact_reader
         )
+
+
+def select_completed_reference_query_read_owner(
+    owner: ReferenceQuerySourceOwner, request: SupportedReferenceQueryWorkflowRequest
+) -> ReferenceQuerySourceOwner:
+    """Pure installed-device choice; caller must bind stored history and actual authority."""
+    if type(owner) is CatalogReferenceQueryReadOwner:
+        checked = parse_supported_reference_query_workflow_request(request)
+        if checked.resource_profile.device == owner.configuration.registry.space.runtime.device:
+            return owner
+        if owner.cuda_owner is not None and checked.resource_profile.device == "CUDA":
+            return owner.cuda_owner
+        raise ValueError("REFERENCE_QUERY_READ_DEVICE_UNAVAILABLE")
+    # Existing actual execution/capture owners already carry their selected device.
+    return owner
 
 
 def read_pinned_reference_query_controls(
@@ -431,6 +472,7 @@ def resolve_completed_reference_query_sources(
 ) -> ResolvedCompletedReferenceQuerySources:
     """Current read authority, never a new claim or a completed-command lease."""
     request = parse_supported_reference_query_workflow_request(request)
+    owner = select_completed_reference_query_read_owner(owner, request)
     if (
         not isinstance(caller, EmbeddingRegistryCaller)
         or caller.operator_id != request.operator_audit.operator_id
