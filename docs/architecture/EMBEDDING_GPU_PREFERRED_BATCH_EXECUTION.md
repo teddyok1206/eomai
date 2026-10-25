@@ -1505,3 +1505,21 @@ worker UID/group 분리도 그대로 유지한다. 고정 unit raw SHA와 root �
 optional namespace/fixed unit bytes·descriptor·OS observation/entry 회귀95 PASS/12.32초,
 Ruff PASS다(`/tmp/eom-gpu-batch-optional-namespace-tests-20261024.log`). 다음 actual unit gate는
 기존 r3를 재시작하지 않고 새 진단 identity를 사용하며 원 실패는 보존한다.
+
+56d868cc actual r4(9acb8703…)는 파일/namespace/실제 Python bootstrap까지 진입했지만 READY 전
+종료했다. 원 단일 진단7b216813…에서는 추적/주입/추론 없이 kernel FD/선택된 activation 변수3개만
+관측했다. 초기 MainPID의 activation 환경이 아직 비어 있다가 정상 LISTEN_FDS2/두 descriptor
+이름으로 정착하고, 원 allocation FD가1096 bytes를 실제로 읽은 것을 확인했다. 원 결과/vector/
+input은 비어 있고 모델/Source grant는0이다. 원 로그와 failed unit은 보존했다.
+
+PID1이 MainPID를 공개하는 시점은 native Python exec/권한 전환보다 빠르다. root controller는
+그 PID를 곧바로 native UID/birth proof로 사용하지 않고, 원 qualified interpreter의 실제
+device/inode가 관측될 때까지 **알려진 systemd executor 전환만** 최대3초, 원 allocation deadline
+이내에서 기다린다. 다른 executable/권한 오류는 즉시 거부하고 timeout/불명은 fallback하지 않는다.
+이는 실행/claim 재시도나 새 timeout 예산이 아니라 최초 exec readiness의 추가 검사다. 그 이후 기존
+실제 UID/GID/cgroup/capability 및 READY/grant 검사는 모두 그대로 필요하다. 실제 r4 실패의 모든
+원인이 이 race라고 확정하지 않으며, 다음 installed fixed-unit gate로 확인한다. numerical prefix나
+worker protocol은 수정하지 않는다.
+
+startup executable settling/거부 및 기존 controller/descriptor/lifetime 회귀76 PASS/24.76초,
+strict mypy1 PASS, Ruff PASS다(`/tmp/eom-gpu-batch-startup-exec-tests-20261025-r2.log`).

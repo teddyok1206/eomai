@@ -91,6 +91,8 @@ from eom_catalog_service.unit_effect_records import (
 
 _ENV = {"PATH": "/usr/bin:/bin", "TZ": "UTC", "LANG": "C.UTF-8"}
 _ACTIVATOR = BenchmarkUnixPeer(1, 0, 0)
+_WORKER_EXECUTABLE = Path("/opt/eom/conda/envs/eom-embedding-cuda/bin/python3.12")
+_STARTUP_EXECUTABLES = frozenset({"/usr/lib/systemd/systemd", "/usr/lib/systemd/systemd-executor"})
 
 
 def _require(condition: bool) -> None:
@@ -224,6 +226,19 @@ def _wait_started(captured: CapturedEmbeddingGpuBatchMachine) -> CpuUnitObservat
                 and observed.status.sub_state == "start"
                 and observed.exited_monotonic == 0
             )
+            executable = Path("/proc") / str(observed.main_pid) / "exe"
+            actual, expected = executable.stat(), _WORKER_EXECUTABLE.stat()
+            if (actual.st_dev, actual.st_ino) != (expected.st_dev, expected.st_ino):
+                # PID1 publishes MainPID before credentials/mounts/exec settle.
+                # Wait only for the known executor, never accept it as the worker
+                # or turn an identity/permission/config error into CPU fallback.
+                _require(
+                    os.readlink(executable) in _STARTUP_EXECUTABLES
+                    and time.monotonic_ns() - observed.status.exec_main_started_monotonic * 1000
+                    <= 3 * 10**9
+                )
+                time.sleep(0.01)
+                continue
             return observed
         # A process that failed before receiving ALLOCATION_REQUEST cannot establish BUSY.
         _require(not observed.status.process_started)

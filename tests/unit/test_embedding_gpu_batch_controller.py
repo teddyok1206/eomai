@@ -89,6 +89,7 @@ def driver(machine, monkeypatch):
 
     state.connection = Connection()
     state.claim_dispatch = controller._claim_dispatch
+    state.wait_started = controller._wait_started
 
     class SourceOwner:
         def admit_allocation(self, request, observed):
@@ -482,6 +483,43 @@ def test_terminal_wait_observes_settling_without_extending_numeric_deadline(driv
     monkeypatch.setattr(controller.time, "sleep", sleeps.append)
     assert controller._wait_terminal(driver.captured, driver.original) == driver.terminal
     assert sleeps == [0.05]
+
+
+@pytest.mark.parametrize("fault", (None, "unrelated_executable", "stale_executor", "permission"))
+def test_mainpid_is_not_native_worker_proof_before_actual_python_exec(driver, monkeypatch, fault):
+    attempts = iter((1, 2))
+    sleeps = []
+    actual_stat = controller.Path.stat
+
+    def stat(path, *args, **kwargs):
+        if path == controller.Path("/proc/123/exe"):
+            if fault == "permission":
+                raise PermissionError("synthetic denied OS observation")
+            return SimpleNamespace(st_dev=1, st_ino=next(attempts))
+        if path == controller._WORKER_EXECUTABLE:
+            return SimpleNamespace(st_dev=1, st_ino=2)
+        return actual_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(controller.Path, "stat", stat)
+    monkeypatch.setattr(
+        controller.os,
+        "readlink",
+        lambda _: (
+            "/unrelated" if fault == "unrelated_executable" else "/usr/lib/systemd/systemd-executor"
+        ),
+        raising=False,
+    )
+    monkeypatch.setattr(controller.time, "sleep", sleeps.append)
+    if fault == "stale_executor":
+        monkeypatch.setattr(controller.time, "monotonic_ns", lambda: 4 * 10**9)
+    if fault:
+        with pytest.raises((ValueError, PermissionError)):
+            driver.wait_started(driver.captured)
+        assert not sleeps
+    else:
+        assert driver.wait_started(driver.captured) == driver.original
+        assert sleeps == [0.01]
+    assert not driver.events  # No request, grant, numerical work or CPU fallback.
 
 
 def test_dispatch_marker_is_exclusive_before_any_start_effect(driver, monkeypatch):
