@@ -1558,3 +1558,36 @@ Root/worker JSON schema, qualified numerical prefix, DB/history와 API/Web selec
 PASS/32.55초, strict mypy1 PASS, Ruff PASS다
 (`/tmp/eom-gpu-batch-cleared-invocation-tests-20261025.log`). 원 BUSY physical result는 보존하며,
 알림 수정 후 새 hardware-only identity로만 최종 전달을 확인한다. CPU 대체 실행은 아직 별도 gate다.
+
+7f041c715ad92dc8e5ec375ef6e8225d6f1b85cf를 main에 push하고 공식 build-only/RECORD를 통과했다.
+private root owner만 해당 immutable release로 준비했다. build 경로는
+`/tmp/eom-api-build/7f041c715ad92dc8e5ec375ef6e8225d6f1b85cf.iDjAmh/dist`, platform rawSHA
+`6ac7d31b800ab624c8bc5c10883dfe57c243b702d4d55152e647f9ed81165112`, contracts rawSHA
+`5043e452f5c6c5d9d913bc432414a09bf83aa6f191de8e8f72ac5b9733c4e843`다.
+실제 CPU root-controller Python에서 installed owner21/dependency472 import PASS/model import NONE다.
+현재 production application에 아직 연결하지 않은 batch-controller environment가 이 owner를 pin하며 로그는
+`/tmp/eom-gpu-batch-retirement-owner-stage-20261025.log`, exit0다. API/Web/private QUERY·CPU INDEX의
+active selection은 이 설치로 바꾸지 않았고 다섯 기존 서비스가 계속 active다.
+
+7f041c71의 첫 BUSY 실행d37de4f3…는 Root/native 모두 정상 종료했다. 진단 출력의 datetime JSON
+직렬화만 실패해 output harness를 수정했다. 운영 source를 그 문제 때문에 또 바꾸지 않았으며
+해당 정상 unit/history도 그대로 남겼다. 그 다음 실제0ed3289f…에서는 actual RootBusy 전달과
+수신 caller 검증, 원 native invocation `abee33a0c19a4e05aa8b96c8ab627d45`, 원 종료·retirement를
+모두 확인했다. 실제 공통 GPU mutex를 별도 프로세스가 끝까지 유지했고 그 holder를 중단하거나
+락을 빼앗지 않았다. elapsed24.9373초, source authority NONE/model0/CPU execution NOT_RUN,
+parent lease validation/close 및 harness exit0다. 로그는
+`/tmp/eom-gpu-batch-busy-hardware-20261025-r4.log`다. 원 native MainPID0/store0/inactive와
+Root MainPID0/success, 최종 GPU0%/2MiB를 다시 확인했다. 이는 acquire-time 비실행/물리 상호배제
+증거이며 실제 image/trainer 모델 실행이나 Canonical Source/CPU 대체 계산의 PASS는 아니다.
+
+CPU metadata owner에 GPU 패키지를 설치하지 않았다. hardware-only mutex holder는 이미 자격
+검증된 CUDA prefix의 stdlib-only public `eom_gpu_lease` 두 파일만 root0444/정확한 SHA로 확인해
+별도 diagnostic namespace로 사용했다. CUDA interpreter/ML factory나 전체 site-packages를
+metadata owner에 혼합하지 않았고 production dependency/environment도 바꾸지 않았다.
+
+LIVE_GPU_READY_INTERRUPTION=PASS, LIVE_ACQUIRE_TIME_BUSY=PASS,
+CANONICAL_SOURCE_BATCH_COMPUTE=NOT_RUN, CPU_FALLBACK_EXECUTION=NOT_RUN,
+CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
+이 시점은 hardware 경계 milestone이지 사용자가 요청한 **전체 GPU 목표 완료 checkpoint**가 아니다.
+DOCUMENT/QUERY 실제 application 연결·device index coverage·CPU 대체·처리량·default/rollback을
+완료하고 source와 실제 compatible release set을 고정한 다음에만 지정된12+4 정적 리뷰를 시작한다.
