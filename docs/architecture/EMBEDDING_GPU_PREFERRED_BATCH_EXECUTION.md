@@ -983,6 +983,50 @@ P2-AG 검증 (2026-10-25 UTC):
 `/tmp/eom-document-execution-pg-20261025-r36.log`다. 이 결과는 실제 자료 numerical 계산·등록이나
 GPU 기본값 전환의 완료가 아니다. 새 source owner의 제한된 실제 계산을 다음에 수행한다.
 
+P2-AG 실제 canonical-source CUDA canary (2026-10-25 07:04–07:14 UTC):
+
+- metadata SDK `ae380acddab0829f80a04b6abf3fc59eaaaf3766`의 기존 owner installer/installed wheel
+  probe(21 entry modules,475 dependency modules,no ML import)가 PASS했다. root controller와
+  qualification한 numerical SDK는 `eae2c0d3…`로 유지했다. API/Web/private QUERY/DB migration은
+  바꾸지 않았다. source와 installed compatible set을 같은 commit이라고 주장하지 않는다.
+- 원 legacy CONCRETE_FACETS view, maximum_targets1, namespace1개로 실제 source-policy/Identity
+  successor를 공식 register/activate/publication 경계에서 연결했다. 새 queue selection은 원 CPU
+  pending continuation을 claim하지 않았다. 옛 CUDA CONTENT_ONLY/METADATA_ONLY 실패 intent나
+  encoding을 다시 만들지 않았다. 별도 numerical identity/space도 만들지 않았다.
+- 실제 service invocation `c93c4848c12a40f1b44945e3f4d70e36`, allocation
+  `embeddingallocation_08f50a49b7cb41c7ae4976e433f61772`다. native GPU unit은 성공 종료됐고
+  MainPID0/FDSTORE0, GPU memory2MiB/idle로 반환됐다. 계산 중 CUDA memory2498MiB를 관찰했다.
+  cgroup의6GiB memory peak 대부분은 file cache였으며 anon 약1GiB, oom/oom_kill0을 관찰했다.
+  단순 cache 한도 도달을 실제 OOM 실패로 분류하지 않았다.
+- 원 Workflow `workflow_e4878583b9894f688825b13cc0d435f8`는 COMPLETED,
+  `wfcmd_6f03e6165763434ebbd478e422dfe325`는 SUCCEEDED/attempt1/lease_generation1이다.
+  encode_batch와 complete step 모두 SUCCEEDED다. 실제 native launch
+  `job_13fe56b5de42484aafe4c20f7f87f7f0`와 encoding
+  `job_566be5806384472d82ad1c44c93eb5b7`도 SUCCEEDED다. state row를 보정하지 않았다.
+- canonical receipt는 Artifact `artifact_e89019859d024142b2969dc78bace62d`, revision
+  `rev_9f8f625824a04a19a7528d6328298d9e`, member receipt.json,
+  raw SHA `sha256:78727e20685bbee6fe4ea5549d610c1cb06713998df9a388d7d3adc0c3d233c0`다.
+  Orchestrator의 owned-result publication, encoding completion, index registration, receipt,
+  Workflow completion까지 실제로 연결됐다. worker/local result 성공만을 canonical 등록으로
+  간주한 것이 아니다. 임시 read-only owner audit는 이 metadata와 typed output pointer만 읽었다.
+- service의 실제 reconciliation 관찰은 BATCH_COMPLETED, selected_targets1, eligible_sources546,
+  missing_reports26, 사전 missing_bindings520이다. 이 수치는 한 view의 당시 범위이며 전체 corpus
+  완료·521/520 분모의 재해석·전체 GPU index 완결을 뜻하지 않는다.
+- 07:13:56 UTC terminal observation 이후 원 pinned CPU Identity/config4/unit/source `e013d350…`
+  로 공식 rollback했고 원 CPU 서비스가 다시 active다. API/Web/runner/INDEX/QUERY5개 active,
+  사용자 검색 기본값은 CPU다. canary source service를 계속 실행해 임의의 추가 묶음을 만들지 않았다.
+- 실제 소요는 service START07:04:30→BATCH_COMPLETED07:13:56, 약566초다. native unit은
+  07:05:31 시작했고 계산 결과 encoding commit은07:09:01, index launch commit은07:12:15,
+  encode step commit은07:13:02다. GPU 계산은 성공했지만 등록·current-source 검증 비용이 크다.
+  07:12경 로그의 stage 집계는 provenance/admission/profile 등의 read145–146회, 그중 다수는
+  selected source read였다. 이 비용을 무시한 채 large batch/default 전환 완료를 선언하지 않는다.
+
+실제 증거는 `/tmp/eom-gpu-concrete-canary-observation-20261025.log`,
+`/tmp/eom-gpu-concrete-native-state-20261025.json`, 원 typed canonical receipt와 DB append-only
+history다. 이 milestone은 canonical-source numerical+registration 최초 PASS다. 여전히 bulk/
+incremental 처리량, matched CPU/CUDA indices, installed batch QUERY, 실제 BUSY fallback/coexistence,
+GPU 우선 default/rollback, 전체 설계 준수 audit가 남아 있다. 후속12+4 리뷰는 아직 시작하지 않는다.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존
