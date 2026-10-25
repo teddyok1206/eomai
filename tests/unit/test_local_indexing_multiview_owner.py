@@ -162,7 +162,9 @@ def test_each_leaf_uses_exact_namespace_with_shared_publisher_authority_and_laun
     assert owner_factory.call_args.kwargs["source_authority"] is authority
     owner.resolve_reconciliation_controls.assert_called_once()
     assert executor_factory.call_args.kwargs["publisher"] is publisher
-    assert executor_factory.call_args.kwargs["launcher"] is launcher
+    backend = executor_factory.call_args.kwargs["execution_backend"]
+    assert type(backend) is composition.FixedCpuDocumentEmbeddingExecution
+    assert backend.launcher is launcher
     assert runner_factory.call_args.kwargs["local_embedding_owner"] is owner
     assert runner_factory.call_args.kwargs["command_actor_selection"].namespace == namespace
     assert reconciliation_factory.call_args.kwargs["maximum_targets"] == selected.maximum_targets

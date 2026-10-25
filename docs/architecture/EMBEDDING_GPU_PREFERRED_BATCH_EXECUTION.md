@@ -1897,3 +1897,64 @@ API/Web/Workflow/INDEX/QUERY owner 장기 서비스5개 active를 확인했고 �
 장치별 matched index coverage와 원 작업의 cold recovery/불필요한 allocation 종료다.
 최종 numerical/default/fallback/coexistence/throughput/rollback은 별도 gate로 남긴다.
 CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE; 후속12+4 정적 검토는 아직 시작하지 않는다.
+
+### P2-Z — 명시적 CPU/CUDA source grant를 가진 운영 composition (설계)
+
+후속 owner configuration5는 기존 CPU configuration1/2/4를 그대로 포함하고 CUDA profile/backend,
+CPU source-policy revision별 CUDA grant/native-policy pointer, routing-policy pointer와 실제 root
+controller release를 별도로 pin한다. 기존 CPU parser/bytes/실행 정책은 넓히지 않는다. CPU와
+CUDA namespaces는 같은 partition/projection/view/recipe/population을 가지되 space만 다르며,
+벡터를 재표기하지 않고 각 장치가 직접 계산·등록한다. mixed+legacy 두 projection도 보존한다.
+
+canonical source는 현재 service capture/Identity와 각각의 Catalog grant/Graph/source이다.
+configuration은 root-owned 비밀 아닌 immutable selection이며 권한 자체가 아니다. model/profile/
+policy/source/Artifact revision와 SHA는 별개로 유지한다. CPU-policy revision keyed map으로 group
+매칭 O(g), namespace tuple O(v), g<=2/v<=3, 실제 source lookup은 기존 indexed Catalog 경계다.
+새 DB/queue/worker 메시지나 numerical SDK 변경은 없다. JSON Schema2020-12부터 정의하고
+공식 Catalog admission/prepare, 원 batch planning/root, 기존 Runner와 등록 owner를 조합한다.
+
+device별 실제 source authority/preparation은 GPU를 잡기 전에 구성한다. 실제 Root READY/BUSY
+후에만 그 장치의 원 request와 executor를 공식 START에 전달한다. current/replay는 각 짧은
+SQL root에서 권한·원 hash·lease를 재확인하며 계산 동안 SQL root를 유지하지 않는다.
+권한/해시/설정/부분 실행은 CPU 전환 조건이 아니다. 중단 시 원 device/request/checkpoint를
+재사용하고 새 root/작업으로 우회하지 않는다. no-numerical 및 cold recovery는 원 상태를
+명시적으로 처리한다. 장치별 preparation/reconcile 전체를 복사하는 단순 대안은 규칙 분기를
+유발하므로 기존 application을 조합한다. 실제 canary/활성화 전까지 configuration5는 source 후보다.
+
+#### P2-Z 구현·검증 결과
+
+- schema5 raw SHA는 `9c04d3d14f4161e2cf2364ed9c422aa86e6629d3a4f6bcfb4c57c97fb4947f60`.
+  source/resource mirror를 먼저 추가했고 기존1/2/3/4 bytes와 CPU parser는 바꾸지 않았다.
+  mixed+legacy 두 CPU group의 순서/한도/분모를 보존하고 각 CPU policy revision별 별도 CUDA
+  grant를 요구한다. 같은 source-policy·Graph·recipe·projection/view/population, 다른 device space다.
+- `build_routed_indexing_sources`는 실제 service fence를 전달받아 기존 Catalog source authority,
+  장치별 Catalog owner와 preparation을 만든다. current actual-actor/source scope와 canonical
+  routing/native policy Artifact를 읽고 양쪽 profile/default/backend와 원 pin을 확인한다.
+  Root/GPU/모델/새 queue를 만들거나 실험용 가짜 session을 운영에 도입하지 않는다.
+- canonical policy 읽기는 기존 resolver의 public 경계로 추출했다. 독립 호출에서도 exact pointer
+  metadata를 prefetch하며 기존 batch caller가 이미 읽은 metadata는 재조회하지 않는다.
+  pointer/hash/semantic/default/policy/Graph 불일치는 거부하며 CPU fallback으로 바꾸지 않는다.
+- schema/group/canonical IO·기존 mixed/legacy/runtime/reconciliation/plan/dependency 회귀
+  **207 PASS,44.44초** (`/tmp/eom-routed-service-source-regression-20261025-r2.log`).
+  최종 추가 model/control/source-scope negative **38 PASS,10.17초**
+  (`/tmp/eom-routed-service-final-focused-20261025-r2.log`). 두 집합은 중복이 있어 합산하지 않는다.
+  wheel-closure 포함 직전 집중 검사 **236 PASS,12.47초**도 보존한다.
+- 기존 parent plan/source-admission의 실제 disposable PostgreSQL 동시성·중단·replay·FAILED
+  보존 및 immutable history **39 PASS,24.59초**
+  (`/tmp/eom-document-execution-pg-20261025-r16.log`), cleanup/exit0.
+- Source composition의 IAM/Graph SQL leaves는 명시적 synthetic이고 control Artifact IO 및
+  concrete Catalog/owner/preparation 구성은 실제다. 위 결과는 운영 service authentication,
+  physical GPU 또는 numerical canary PASS가 아니다. strict mypy4개, Ruff/diff 검사 PASS.
+
+첫 집중 검사의 잘못 선택한 negative-fixture ID, local workspace/key 길이와 Graph SQL fixture
+오류는 테스트에서 수정했다. 독립 policy resolver의 prefetch 누락은 source에서 수정한 뒤
+canonical IO 검사를 재실행했다. 넓힌 회귀에서 이전 numerical-port 추출 전의 `launcher` 인자를
+기대하던 테스트6건은 실제 `FixedCpuDocumentEmbeddingExecution.launcher` 확인으로 갱신했다.
+권한/검증을 완화하거나 운영 권한을 바꾸지 않았다. 이전 실패 로그는 보존한다.
+
+장기 서비스5개 active, GPU 0%/2MiB 관측. API/Web/기존 service/QUERY/물리 root/수치 SDK와
+protected selection을 변경하지 않았다. configuration5는 실제 finite driver/loop 연결 후에만
+선택할 후보이며 현재 CPU runtime이 이를 우연히 활성화할 수 없다. 다음은 original source
+selection/parent 생성과 routed START/finite loop, no-model/cold recovery, 실제 canonical-source
+GPU/CPU canary와 장치별 index coverage/default/rollback이다.
+CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.

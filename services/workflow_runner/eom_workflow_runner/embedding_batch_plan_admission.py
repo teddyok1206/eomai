@@ -226,6 +226,21 @@ class CatalogEmbeddingBatchPlanAdmission:
         _require(session.get_transaction() is root and root.is_active)
 
 
+def resolve_embedding_device_routing_policy(
+    reader: PinnedArtifactReadContext, pointer: ArtifactMemberPointer
+) -> EmbeddingDeviceRoutingPolicy:
+    """Canonical control only; caller retains current actual source/runtime authority."""
+    reader.prefetch(((pointer.artifact_id, pointer.artifact_revision_id),))
+    return EmbeddingDeviceRoutingPolicy.model_validate(
+        CatalogEmbeddingBatchPlanAdmission._read_control(
+            reader,
+            pointer,
+            DEVICE_ROUTING_POLICY_ARTIFACT_TYPE,
+            MAX_EMBEDDING_DEVICE_ROUTING_BYTES,
+        )
+    )
+
+
 def resolve_embedding_batch_plan_controls(
     reader: PinnedArtifactReadContext, request: SupportedEmbeddingBatchRequest
 ) -> tuple[SupportedEmbeddingBatchSelection, EmbeddingDeviceRoutingPolicy]:
@@ -245,13 +260,6 @@ def resolve_embedding_batch_plan_controls(
             embedding_batch_selection_read_maximum(request),
         )
     )
-    policy = EmbeddingDeviceRoutingPolicy.model_validate(
-        CatalogEmbeddingBatchPlanAdmission._read_control(
-            reader,
-            request.routing_policy,
-            DEVICE_ROUTING_POLICY_ARTIFACT_TYPE,
-            MAX_EMBEDDING_DEVICE_ROUTING_BYTES,
-        )
-    )
+    policy = resolve_embedding_device_routing_policy(reader, request.routing_policy)
     validate_embedding_batch_plan_controls(request, selection, policy)
     return selection, policy

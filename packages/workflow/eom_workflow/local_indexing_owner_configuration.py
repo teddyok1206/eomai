@@ -190,6 +190,17 @@ def _mixed_validator() -> Draft202012Validator:
     return Draft202012Validator(schema, registry=registry)
 
 
+def local_indexing_multiview_owner_configuration_schema() -> dict[str, Any]:
+    """Independent public schema value for successor reference closure."""
+    value: dict[str, Any] = json.loads(canonical_json_bytes(_multiview_validator().schema))
+    return value
+
+
+def local_indexing_mixed_owner_configuration_schema() -> dict[str, Any]:
+    value: dict[str, Any] = json.loads(canonical_json_bytes(_mixed_validator().schema))
+    return value
+
+
 def _validate_document(value: object, validator: Draft202012Validator) -> Any:
     try:
         document = raw_similarity_contract_value(value)

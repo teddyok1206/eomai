@@ -251,4 +251,6 @@ def test_factory_leaf_preserves_exact_mixed_namespace_and_current_authority(monk
         composition.WorkflowRunner.call_args.kwargs["command_actor_selection"].namespace
         == namespace
     )
-    assert composition.CatalogNativeEmbeddingExecutor.call_args.kwargs["launcher"] is launcher
+    backend = composition.CatalogNativeEmbeddingExecutor.call_args.kwargs["execution_backend"]
+    assert type(backend) is composition.FixedCpuDocumentEmbeddingExecution
+    assert backend.launcher is launcher

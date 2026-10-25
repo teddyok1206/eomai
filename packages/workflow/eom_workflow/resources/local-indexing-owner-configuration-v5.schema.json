@@ -1,0 +1,139 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-indexing-owner-configuration/5.0",
+  "title": "Explicit GPU-preferred INDEX owner pair; no runtime or data authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "cpu_configuration",
+    "cuda_runtime_profile",
+    "cuda_backend",
+    "cuda_grants",
+    "routing_policy",
+    "routing_policy_sha256",
+    "controller_release"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "local-indexing-owner-configuration/5.0"
+    },
+    "cpu_configuration": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0"
+        },
+        {
+          "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/2.0"
+        },
+        {
+          "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/4.0"
+        }
+      ]
+    },
+    "cuda_runtime_profile": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/runtime_profile"
+        },
+        {
+          "properties": {
+            "resource_profile": {
+              "properties": {
+                "device": {
+                  "const": "CUDA"
+                },
+                "timeout_seconds": {
+                  "maximum": 180
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "cuda_backend": {
+      "$ref": "eom://schemas/workflow/native-embedding-backend-selection/1.0",
+      "properties": {
+        "purpose": {
+          "const": "INDEX"
+        },
+        "backend": {
+          "properties": {
+            "device": {
+              "const": "CUDA"
+            }
+          }
+        }
+      }
+    },
+    "cuda_grants": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/cudaGrant"
+      }
+    },
+    "routing_policy": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+        },
+        {
+          "properties": {
+            "member_path": {
+              "const": "policy.json"
+            },
+            "media_type": {
+              "const": "application/json"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/workflow/embedding-device-routing/1.0"
+            }
+          }
+        }
+      ]
+    },
+    "routing_policy_sha256": {
+      "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/service_policy_sha256"
+    },
+    "controller_release": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$",
+      "minLength": 40,
+      "maxLength": 40
+    }
+  },
+  "$defs": {
+    "cudaGrant": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cpu_service_policy_revision_id",
+        "service_policy_revision_id",
+        "service_policy_sha256",
+        "native_execution_policy",
+        "native_execution_policy_sha256"
+      ],
+      "properties": {
+        "cpu_service_policy_revision_id": {
+          "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/service_policy_revision_id"
+        },
+        "service_policy_revision_id": {
+          "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/service_policy_revision_id"
+        },
+        "service_policy_sha256": {
+          "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/service_policy_sha256"
+        },
+        "native_execution_policy": {
+          "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/native_execution_policy"
+        },
+        "native_execution_policy_sha256": {
+          "$ref": "eom://schemas/workflow/local-indexing-owner-configuration/1.0#/properties/service_policy_sha256"
+        }
+      }
+    }
+  }
+}
