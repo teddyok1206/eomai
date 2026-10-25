@@ -11,11 +11,20 @@ from eom_workflow.local_embedding_request_v2 import (
     parse_supported_local_embedding_request,
     supported_local_embedding_request_actor,
 )
+from sqlalchemy import select
 
+from eom_workflow_runner.document_embedding_batch_context import (
+    document_embedding_batch_workflow_key,
+)
 from eom_workflow_runner.document_embedding_batch_driver import (
     DocumentBatchExecution,
     drive_document_embedding_batch_once,
     start_document_embedding_batch,
+)
+from eom_workflow_runner.document_embedding_catch_up import (
+    DeferredDocumentEmbeddingParent,
+    complete_document_catch_up,
+    confirm_document_catch_up_cpu_backstop,
 )
 from eom_workflow_runner.document_embedding_cpu_batch_execution import (
     CatalogCpuDocumentBatchExecution,
@@ -59,12 +68,40 @@ class DrivenDocumentEmbeddingParent:
     command_state: str
 
 
+def _original_cpu_request(
+    parent: PreparedDocumentEmbeddingParent,
+    pair: PairedIndexingNamespacePreparation,
+    request: SupportedLocalEmbeddingRequest,
+) -> SupportedLocalEmbeddingRequest:
+    """An existing original Workflow keeps its exact request, even across owner releases."""
+    with parent.operation.publisher.sessions.begin() as session:
+        pair.cuda.owner.resolve_sources(session, request)
+        workflow = session.scalar(
+            select(WorkflowInstanceRecord)
+            .where(
+                WorkflowInstanceRecord.idempotency_key
+                == document_embedding_batch_workflow_key(parent.request)
+            )
+            .execution_options(populate_existing=True)
+        )
+        if workflow is not None:
+            chosen = parse_supported_local_embedding_request(workflow.initial_request)
+            pair.cpu.owner.resolve_sources(session, chosen)
+            return chosen
+    return pair.cpu.prepare_matching(pair.cuda, request, maximum_sources=pair.maximum_sources)
+
+
 def drive_routed_document_embedding_parent_once(
     parent: PreparedDocumentEmbeddingParent,
     pair: PairedIndexingNamespacePreparation,
     request: SupportedLocalEmbeddingRequest,
     cpu_launcher: FixedNativeIndexLauncher,
-) -> DrivenDocumentEmbeddingParent | ExistingEmbeddingBatchExecution | LocalEmbeddingCoverageOnly:
+) -> (
+    DrivenDocumentEmbeddingParent
+    | ExistingEmbeddingBatchExecution
+    | LocalEmbeddingCoverageOnly
+    | DeferredDocumentEmbeddingParent
+):
     """One original physical context, no new allocation on a replay or fallback exception.
 
     A nonterminal outcome remains the original pending work. This method does
@@ -85,22 +122,43 @@ def drive_routed_document_embedding_parent_once(
     with parent.operation.open(parent.request, parent.allocation) as lane:
         backend: DocumentBatchExecution
         if isinstance(lane, ExistingEmbeddingBatchExecution):
-            completed = read_document_embedding_completion(parent.operation, parent.request)
-            if completed is None:
-                return lane
-            selected, chosen = pair.cuda, request
-            backend = CatalogRecoveredCudaDocumentEmbeddingExecution(
-                parent.operation, parent.request, completed, selected.owner, chosen
-            )
+            if (
+                parent.reconciliation is not None
+                and lane.history.route is not None
+                and lane.history.route.decision.selected.backend.device == "CPU"
+            ):
+                return confirm_document_catch_up_cpu_backstop(parent, pair, request)
+            if (
+                lane.history.route is not None
+                and lane.history.route.decision.selected.backend.device == "CPU"
+            ):
+                selected = pair.cpu
+                chosen = _original_cpu_request(parent, pair, request)
+                backend = CatalogCpuDocumentBatchExecution(
+                    parent.operation,
+                    parent.request,
+                    lane,
+                    selected.owner,
+                    chosen,
+                    FixedCpuDocumentEmbeddingExecution(cpu_launcher),
+                )
+            else:
+                completed = read_document_embedding_completion(parent.operation, parent.request)
+                if completed is None:
+                    return lane
+                selected, chosen = pair.cuda, request
+                backend = CatalogRecoveredCudaDocumentEmbeddingExecution(
+                    parent.operation, parent.request, completed, selected.owner, chosen
+                )
         elif isinstance(lane, ActiveEmbeddingBatchExecution):
             selected, chosen = pair.cuda, request
             backend = CatalogCudaDocumentEmbeddingExecution(lane, selected.owner, chosen)
         else:
             assert isinstance(lane, UnavailableEmbeddingBatchExecution)
+            if parent.reconciliation is not None:
+                return confirm_document_catch_up_cpu_backstop(parent, pair, request)
             selected = pair.cpu
-            chosen = selected.prepare_matching(
-                pair.cuda, request, maximum_sources=pair.maximum_sources
-            )
+            chosen = _original_cpu_request(parent, pair, request)
             backend = CatalogCpuDocumentBatchExecution(
                 parent.operation,
                 parent.request,
@@ -138,7 +196,7 @@ def drive_routed_document_embedding_parent_once(
             if workflow is None or command is None or command.workflow_id != workflow.workflow_id:
                 raise ValueError("DOCUMENT_BATCH_ROUTED_EXECUTION_INVALID")
             backend.validate_workflow(workflow)
-            return DrivenDocumentEmbeddingParent(
+            outcome = DrivenDocumentEmbeddingParent(
                 backend.device,
                 parent.request.request_sha256,
                 chosen.request_sha256,
@@ -147,3 +205,10 @@ def drive_routed_document_embedding_parent_once(
                 workflow.state,
                 command.state,
             )
+        if (
+            outcome.device == "CUDA"
+            and outcome.workflow_state == "COMPLETED"
+            and outcome.command_state == "SUCCEEDED"
+        ):
+            complete_document_catch_up(parent, pair, request, outcome.workflow_id)
+        return outcome

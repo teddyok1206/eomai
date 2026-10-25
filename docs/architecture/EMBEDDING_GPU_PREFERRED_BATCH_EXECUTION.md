@@ -649,6 +649,74 @@ leaf이며 파일 suite는 실제 임시 파일/hash/epoch를 검사한다. 운�
 activation으로 확대 해석하지 않는다. 기존 live CPU/configuration4와 frozen CUDA/root SDK는
 변경하지 않았다. 새 dependency·schema revision·migration은 없다.
 
+### P2-AD — CPU 완료를 보존하는 GPU 보충 intent (설계)
+
+책임은 Workflow의 실제 source/CPU 완료 검증과 Orchestrator의 append-only 보충 이력으로
+나눈다. 정본은 기존 원 batch-plan Job, 완료된 CPU Workflow의 canonical receipt 및 기존
+Job/Event다. CPU route/Workflow를 GPU로 바꾸지 않는다. 별도 queue/table/worker protocol이나
+장기 모델 상주는 추가하지 않는다. 원 GPU source request, Graph/policy/selection, actor scope와
+원 CPU output pointer/hash를 새 작은 reconciliation request에 pin한다.
+
+주 접근은 원 request hash의 unique Job key 조회와 `(job_id, sequence)`의 최신1–2개 event
+조회다. 기존 unique/B-tree와 append-only sequence를 사용해 O(log n) 조회, O(1) head memory를
+유지한다. event 수만 실제 유한 allocation 시도에 비례한다. 새 intent는 예정된 batch ID/SHA의
+작은 값이지 아직 없는 Plan Job을 가리키는 pointer나 GPU 권한이 아니다. 해당 Plan 생성과
+물리 dispatch는 기존 원자적 allocate owner가 계속 소유한다.
+
+후속 intent 선택은 실제 원 source 권한을 먼저 연 뒤 짧은 Job row lock/CAS 안에서 직전 원
+Plan의 authenticated PRE_EXECUTION/BUSY/NOT_STARTED와 원 CPU의 완료·등록을 다시 확인한다.
+불명 GPU 실행/미완료 CPU/FAILED/CANCELLED는 다음 intent를 허용하지 않는다. 새 GPU 보충이
+다시 BUSY여도 CPU 완료 receipt를 검증해 재사용하며 동일 문항 CPU 추론/Workflow를 새로
+만들지 않는다. 선택 직후 중단되면 같은 intent를 읽고, Plan allocation 후 중단되면 원 Plan의
+지원된 복구만 사용한다. 동시 호출은 같은 head를 읽고 기존 allocate unique key가 dispatch를
+하나로 제한한다. 기존 service loop/round-robin/poll cadence를 그대로 사용한다.
+
+단순 대안인 원 CPU route 변경은 불변 replay를 깨고, 매번 임의 새 batch ID는 중복 계산과
+감사 추적을 깨며, 매번 전체 attempt chain을 스캔하면 장시간 GPU BUSY 시 O(n)이 된다.
+새 이력은 검색 인덱스나 예약/권한 정본이 아니다. Dependency는 interfaces→application→
+domain/contracts이며 SQL은 Orchestrator adapter, 자료/receipt 해석은 기존 Catalog owner에
+유지한다. JSON Schema 2020-12를 먼저 정의하고 concurrency/interruption/replay는 disposable
+PostgreSQL에서 검증한다. 새 dependency/migration은 필요하지 않다.
+
+원 BUSY route 저장 뒤 CPU START 전에 중단된 경우도 새 GPU allocation으로 우회하지 않는다.
+실제 owner가 canonical 원 Plan의 allocation/route를 재해석하고 현재 source/CPU controls를
+재인가한 뒤 같은 원 Workflow key로 공식 CPU START/replay를 사용한다. 원 Workflow가 있으면
+그 요청/plan pointer를 그대로 사용한다. 순수 route DTO나 DB에 없는 새 BUSY 관측은 권한이
+아니다. 최초 runtime이 실제 root 채널을 검증해 저장한 원 이력만 허용하며, CLAIMED/route 없음/
+GPU 실행 불명은 CPU 실행도 새 intent도 허용하지 않는다.
+
+실제 배포용 index-owner unit template는 두 고정 owner metadata workspace만 선택적으로
+write 허용한다. CPU-only 구 설정은 해당 경로가 없어도 그대로 시작하며, configuration5 배포는
+먼저 고정 UID/GID/mode의 실제 디렉터리를 준비·검증해야 한다. parent 전체, root GPU result,
+native config/SDK/model 저장소의 write 권한을 넓히거나 PrivateDevices/NoNewPrivileges를
+해제하지 않는다. 현재 설치 unit/CPU runtime을 이 source 변경만으로 교체하지 않는다.
+
+#### P2-AD source/DB 검증 결과 — 2026-10-25 UTC
+
+독립된 `document-embedding-reconcile/1.0` REQUEST/ATTEMPT/COMPLETED와 JSON Schema/Pydantic을
+추가했으며 released 1.0/1.1 Plan 및 native input/result/control bytes는 변경하지 않았다.
+protocol ID는 기존 DB 길이32 안에 들어간다. 새 table/index/migration/dependency는 없다.
+단위·기존 CPU/다중 view/dual projection/receipt/의존성 회귀216 PASS, 추가 unit layout29 PASS,
+관련10개 source module mypy와 Ruff/format/diff 검사 PASS다(서로 겹치는 suite를 합산하지 않음).
+
+disposable PostgreSQL 최종 r34=13 PASS/공식 cleanup PASS다. 원 CPU 한 번 완료 후 새 GPU
+보충이 BUSY일 때 CPU 추론/Workflow를 중복 생성하지 않고, 후속 CUDA 계산·등록과 canonical
+완료까지 이어지는 통합 흐름을 확인했다. 동시 head 생성/선택, late 권한 거부 rollback,
+만료된 command lease 없이 현재 권한으로 CPU 완료 읽기, 실패 기록 보존, GPU allocation
+불명 시 후속 intent/CPU retry 차단, 원 BUSY 뒤 CPU START 전 중단 복구를 포함한다.
+
+r32의 기존 native seed/delta/중단/refresh·새 recovery 등37 PASS도 보존했다. 그 실행에서
+통계를 갱신하지 않은 합성 bulk fixture의 query-plan assertion1 FAIL이 있었다. 임시 DB에서
+ANALYZE 뒤 실제10,000 event의 역방향 LIMIT5 조회가 기존 unique B-tree로5행 이하만 읽음을
+r33/r34에서 확인했다. r33=3 PASS/cleanup PASS는 추가 CPU-before-START와 terminal replay도
+포함한다. 초기 r27의 미출시 protocol 이름 길이, r28의 test root 누락, r30의 합성 source seam
+누락 실패 로그도 보존했다. 운영 실패 이력을 수정하거나 재해석한 것이 아니다.
+
+이 검증의 SQL/Artifact/등록/Workflow는 실제 임시 PostgreSQL과 파일이며 OS/root/GPU/model
+leaf는 명시적 합성 fixture다. 실제 canonical-source CUDA 계산·GPU 우선 activation/일괄 QUERY/
+그림 생성 공존·처리량 및 rollback은 아직 별도 운영 gate다. live는 CPU/configuration4이며,
+동결된 CPU/CUDA/root SDK와 실제 설치 unit은 변경하지 않았다.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존

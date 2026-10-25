@@ -185,7 +185,7 @@ def execution(
     execution_mode = getattr(request, "param", "operator")
     service_mode = execution_mode == "service"
     cuda_mode = execution_mode in {"cuda", "cuda_bulk", "cuda_deferred"}
-    cpu_fallback = execution_mode == "cpu_fallback"
+    cpu_fallback = execution_mode in {"cpu_fallback", "cpu_fallback_catchup"}
     addfinalizer = request.addfinalizer
     command, capture = _fixture(guarded_engine)
     if service_mode:
@@ -465,6 +465,7 @@ def execution(
             else "embedding-batch-plan/1.0",
             cpu_launcher=launcher if cpu_fallback else None,
             defer_open=execution_mode == "cuda_deferred",
+            paired_catchup=execution_mode == "cpu_fallback_catchup",
         )
         owner, executor = gpu.child_owner, gpu.executor
     else:

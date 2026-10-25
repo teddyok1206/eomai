@@ -57,6 +57,7 @@ def make_document_cuda_execution(
     parent_protocol="embedding-batch-plan/1.0",
     cpu_launcher=None,
     defer_open=False,
+    paired_catchup=False,
 ):
     # The same explicit synthetic Identity/source delegates as the CPU integration
     # fixture; real Catalog/index/encoding/Workflow/Artifact persistence is retained.
@@ -83,6 +84,13 @@ def make_document_cuda_execution(
         policy["cpu"]["profile"] = profile.model_dump(mode="json")
     template = planning_case(purpose="INDEX")
     template.policy = EmbeddingDeviceRoutingPolicy.model_validate(seal(policy, "policy_sha256"))
+    paired = None
+    if paired_catchup:
+        from tests.integration.document_embedding_paired_source import paired_gpu_source
+
+        paired = paired_gpu_source(
+            owner, request, plan, profile, template.policy.cuda.profile, publisher, monkeypatch
+        )
     scope = seal(
         template.selection.scope.model_dump(mode="json")
         | dict(
@@ -151,7 +159,9 @@ def make_document_cuda_execution(
             value.request.model_dump(mode="json")
             | {
                 "batch_id": "embeddingbatch_" + uuid4().hex,
-                "parent_request_sha256": request.request_sha256,
+                "parent_request_sha256": paired.request.request_sha256
+                if paired is not None
+                else request.request_sha256,
             },
             "request_sha256",
         )
@@ -184,6 +194,8 @@ def make_document_cuda_execution(
         )
     )
     value.store = EmbeddingBatchPlanStore(value.request, value.selection, template.policy)
+    if paired is not None:
+        value.pair, value.source_request = paired.pair, paired.request
     configure_synthetic_batch_runtime(
         value, monkeypatch, allocation_status="READY" if cpu_launcher is None else "BUSY"
     )

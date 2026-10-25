@@ -51,6 +51,7 @@ def service(parent_case, monkeypatch):
         )
     )
     monkeypatch.setattr(namespace, "drive_routed_document_embedding_parent_once", drive)
+    monkeypatch.setattr(namespace, "prepare_document_catch_up_parent", lambda base, *_args: base)
     return SimpleNamespace(
         value=value,
         case=case,

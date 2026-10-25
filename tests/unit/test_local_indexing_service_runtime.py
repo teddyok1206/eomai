@@ -358,3 +358,27 @@ def test_packaged_unit_is_single_canonical_template_and_has_no_runtime_repo_or_s
     assert "EnvironmentFile=/etc/eom/secrets/catalog-manager.env" in unit
     assert "StandardInput=null" in unit
     assert "slot" not in unit.lower()
+
+
+def test_routed_owner_writes_only_fixed_metadata_workspaces_not_root_gpu_results():
+    root = Path(__file__).resolve().parents[2]
+    unit = (
+        root
+        / "services/workflow_runner/eom_workflow_runner/resources"
+        / "eom-embedding-index-owner.service.in"
+    ).read_text()
+    mutable = {
+        value.removeprefix("-")
+        for line in unit.splitlines()
+        if line.startswith("ReadWritePaths=")
+        for value in line.partition("=")[2].split()
+    }
+    assert "/var/lib/eom-workflow-runner/embedding-batch-control" in mutable
+    assert "/var/lib/eom-workflow-runner/embedding-work-batches" in mutable
+    assert not {
+        "/var/lib/eom-workflow-runner",
+        "/run/eom-native-embedding-gpu-batch",
+        "/opt/eom/embedding-native-config",
+        "/opt/eom/embedding-owner-releases",
+    }.intersection(mutable)
+    assert "ProtectSystem=strict" in unit and "PrivateDevices=yes" in unit

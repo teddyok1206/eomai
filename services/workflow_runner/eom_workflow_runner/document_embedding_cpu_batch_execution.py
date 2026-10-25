@@ -23,6 +23,7 @@ from eom_workflow_runner.document_embedding_execution import (
 )
 from eom_workflow_runner.embedding_batch_execution import (
     CatalogEmbeddingBatchExecution,
+    ExistingEmbeddingBatchExecution,
     UnavailableEmbeddingBatchExecution,
 )
 from eom_workflow_runner.embedding_batch_source_authorization import (
@@ -52,14 +53,18 @@ class CatalogCpuDocumentBatchExecution:
         self,
         operation: CatalogEmbeddingBatchExecution,
         parent: SupportedEmbeddingBatchRequest,
-        unavailable: UnavailableEmbeddingBatchExecution,
+        unavailable: UnavailableEmbeddingBatchExecution | ExistingEmbeddingBatchExecution,
         owner: CatalogLocalEmbeddingOwnerAdmission,
         request: SupportedLocalEmbeddingRequest,
         execution: FixedCpuDocumentEmbeddingExecution,
     ) -> None:
         _require(
             type(operation) is CatalogEmbeddingBatchExecution
-            and type(unavailable) is UnavailableEmbeddingBatchExecution
+            and type(unavailable)
+            in {
+                UnavailableEmbeddingBatchExecution,
+                ExistingEmbeddingBatchExecution,
+            }
             and type(execution) is FixedCpuDocumentEmbeddingExecution
             and request.resource_profile.device == "CPU"
             and request.resource_profile.timeout_seconds <= MAX_EMBEDDING_WORK_BATCH_SECONDS
@@ -114,16 +119,22 @@ class CatalogCpuDocumentBatchExecution:
                 observation.status == "BUSY"
                 and observation.phase == "PRE_EXECUTION"
                 and observation.cuda_launch_state == "NOT_STARTED"
-                and observation.allocation_reference_sha256
-                == original.root_observation.message_sha256
                 and current.route.decision == context.decision
                 and context.decision.reason == "GPU_BUSY_CPU_FALLBACK"
             )
-            validate_embedding_batch_owner_context(
-                current.allocation.control_request,
-                context.operation.controller_release,
-                original.root_observation,
-            )
+            if isinstance(original, UnavailableEmbeddingBatchExecution):
+                _require(
+                    observation.allocation_reference_sha256
+                    == original.root_observation.message_sha256
+                )
+                validate_embedding_batch_owner_context(
+                    current.allocation.control_request,
+                    context.operation.controller_release,
+                    original.root_observation,
+                )
+            # Existing history is read again from its exact canonical Plan in
+            # this actual-owner root. It preserves the authenticated original
+            # BUSY/NOT_STARTED route, not a fresh observation or GPU grant.
 
     def validate_workflow(self, workflow: WorkflowInstanceRecord) -> None:
         self.context.validate_workflow(workflow)

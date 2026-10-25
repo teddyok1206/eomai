@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/document-embedding-reconcile/1.0",
+  "title": "Original CPU completion and a separate finite GPU catch-up intent",
+  "description": "Metadata only. Not a source capability, claim, queue or physical allocation. Previous CPU and GPU history is immutable.",
+  "oneOf": [{"$ref": "#/$defs/request"}, {"$ref": "#/$defs/attempt"}, {"$ref": "#/$defs/completed"}],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "job": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+    "request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "message_type", "source_request_sha256", "origin_parent_job_id", "origin_parent_request_sha256", "scope", "cpu_request_sha256", "cpu_output", "request_sha256"],
+      "properties": {
+        "schema_version": {"const": "document-embedding-reconcile/1.0"},
+        "message_type": {"const": "REQUEST"},
+        "source_request_sha256": {"$ref": "#/$defs/hash"},
+        "origin_parent_job_id": {"$ref": "#/$defs/job"},
+        "origin_parent_request_sha256": {"$ref": "#/$defs/hash"},
+        "scope": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/scope"},
+        "cpu_request_sha256": {"$ref": "#/$defs/hash"},
+        "cpu_output": {"oneOf": [
+          {"$ref": "eom://schemas/workflow/local-embedding-step-output/1.0"},
+          {"$ref": "eom://schemas/workflow/local-embedding-step-output/2.0"}
+        ]},
+        "request_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "completed": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "message_type", "reconciliation_request_sha256", "intent_sha256", "output", "completion_sha256"],
+      "properties": {
+        "schema_version": {"const": "document-embedding-reconcile/1.0"},
+        "message_type": {"const": "COMPLETED"},
+        "reconciliation_request_sha256": {"$ref": "#/$defs/hash"},
+        "intent_sha256": {"$ref": "#/$defs/hash"},
+        "output": {"oneOf": [
+          {"$ref": "eom://schemas/workflow/local-embedding-step-output/1.0"},
+          {"$ref": "eom://schemas/workflow/local-embedding-step-output/2.0"}
+        ]},
+        "completion_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "attempt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "message_type", "reconciliation_request_sha256", "ordinal", "batch_id", "previous_parent_job_id", "previous_parent_request_sha256", "parent_request_sha256", "intent_sha256"],
+      "properties": {
+        "schema_version": {"const": "document-embedding-reconcile/1.0"},
+        "message_type": {"const": "ATTEMPT"},
+        "reconciliation_request_sha256": {"$ref": "#/$defs/hash"},
+        "ordinal": {"type": "integer", "minimum": 1, "maximum": 1000000},
+        "batch_id": {"type": "string", "pattern": "^embeddingbatch_[0-9a-f]{32}$"},
+        "previous_parent_job_id": {"$ref": "#/$defs/job"},
+        "previous_parent_request_sha256": {"$ref": "#/$defs/hash"},
+        "parent_request_sha256": {"$ref": "#/$defs/hash"},
+        "intent_sha256": {"$ref": "#/$defs/hash"}
+      }
+    }
+  }
+}

@@ -17,6 +17,10 @@ from eom_workflow.local_indexing_routed_owner_configuration import (
 from eom_workflow_runner.document_embedding_batch_context import (
     document_embedding_batch_workflow_key,
 )
+from eom_workflow_runner.document_embedding_catch_up import (
+    DeferredDocumentEmbeddingParent,
+    prepare_document_catch_up_parent,
+)
 from eom_workflow_runner.document_embedding_cpu_execution import FixedCpuDocumentEmbeddingExecution
 from eom_workflow_runner.document_embedding_parent_preparation import (
     prepare_document_embedding_parent,
@@ -122,6 +126,7 @@ class RoutedLocalIndexingNamespaceRuntime:
                 workflow_id=workflow_id,
             )
         parent = prepare_document_embedding_parent(self.pair, request, self.configuration)
+        parent = prepare_document_catch_up_parent(parent, self.pair, request)
         if pending is not None and pending[2] != document_embedding_batch_workflow_key(
             parent.request
         ):
@@ -155,5 +160,11 @@ class RoutedLocalIndexingNamespaceRuntime:
             # No verified original numerical completion was available. Planning
             # SUCCEEDED is not that proof; never dispatch another root here.
             return replace(observed, state=ReconciliationState.RECOVERY_REQUIRED)
+        if isinstance(outcome, DeferredDocumentEmbeddingParent):
+            return replace(
+                observed,
+                state=ReconciliationState.GPU_DEFERRED,
+                workflow_id=outcome.cpu_workflow_id,
+            )
         # Coverage-only is the existing no-demand result, not a zero-row model run.
         return replace(observed, state=ReconciliationState.UP_TO_DATE)

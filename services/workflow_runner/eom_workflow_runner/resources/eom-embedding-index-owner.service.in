@@ -50,6 +50,7 @@ ReadOnlyPaths=/opt/eom/embedding-native-config /opt/eom/embedding-runtime-admiss
 ReadOnlyPaths=/etc/systemd/system
 ReadWritePaths=/mnt/nas/eom/artifacts /var/lib/eom-local-indexing
 ReadWritePaths=/var/lib/eom-workflow-runner/incremental-embeddings/index
+ReadWritePaths=-/var/lib/eom-workflow-runner/embedding-batch-control -/var/lib/eom-workflow-runner/embedding-work-batches
 
 InaccessiblePaths=/home/eom/EOM /home/eom/EOMIS
 InaccessiblePaths=/root/.codex /srv/eom/worker-homes /srv/eom/models/image

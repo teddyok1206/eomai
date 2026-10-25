@@ -17,6 +17,10 @@ from eom_catalog_service.embedding_registry_ports import (
 )
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_identifiers import content_sha256
+from eom_workflow.document_embedding_reconciliation import (
+    DocumentEmbeddingReconciliationAttempt,
+    DocumentEmbeddingReconciliationRequest,
+)
 from eom_workflow.embedding_batch_plan import BATCH_PLAN_PROTOCOL, EmbeddingBatchAllocation
 from eom_workflow.embedding_batch_plan_family import SupportedEmbeddingBatchRequest
 from eom_workflow.embedding_batch_plan_v11 import (
@@ -53,6 +57,18 @@ class PreparedDocumentEmbeddingParent:
     operation: CatalogEmbeddingBatchExecution
     request: SupportedEmbeddingBatchRequest
     allocation: EmbeddingBatchAllocation
+    reconciliation: DocumentEmbeddingReconciliationRequest | None = None
+    intent: DocumentEmbeddingReconciliationAttempt | None = None
+
+    def __post_init__(self) -> None:
+        _require((self.reconciliation is None) == (self.intent is None))
+        if self.reconciliation is not None:
+            assert self.intent is not None
+            _require(
+                self.intent.reconciliation_request_sha256 == self.reconciliation.request_sha256
+                and self.intent.parent_request_sha256 == self.request.request_sha256
+                and self.reconciliation.source_request_sha256 == self.request.parent_request_sha256
+            )
 
 
 def prepare_document_embedding_parent(

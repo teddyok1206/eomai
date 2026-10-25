@@ -10,11 +10,9 @@ from eom_catalog_contracts.embedding_registry import (
 )
 from eom_catalog_contracts.inference_transfer_embedding import (
     INDEX_SCHEMA_REF,
-    EmbeddingIndexManifest,
 )
 from eom_catalog_contracts.mixed_embedding_index import (
     MIXED_EMBEDDING_INDEX_SCHEMA_REF,
-    MixedEmbeddingIndexManifest,
 )
 from eom_catalog_contracts.mixed_embedding_registry import (
     EmbeddingIndexRegistrationResultV2,
@@ -38,7 +36,6 @@ from eom_catalog_service.embedding_registry_application import (
 )
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryActor,
-    ResolvedEmbeddingRegistration,
 )
 from eom_catalog_service.local_embedding_completion_artifacts import (
     resolve_native_embedding_completion,
@@ -93,12 +90,8 @@ from eom_workflow.local_embedding_source_plan_v2 import (
     LocalEmbeddingSourcePlanV2,
     validate_local_embedding_selected_index_coverage_v2,
 )
-from eom_workflow.local_embedding_workflow_receipt import (
-    ResolvedNativeIndexCoverage,
-)
 from eom_workflow.local_embedding_workflow_receipt_v2 import (
     LocalEmbeddingStepOutputV2,
-    ResolvedNativeIndexCoverageV2,
     SupportedLocalEmbeddingStepOutput,
     parse_supported_local_embedding_workflow_receipt,
     validate_supported_local_embedding_workflow_receipt,
@@ -117,6 +110,7 @@ from eom_workflow.native_embedding_coordinator_v2 import (
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.document_embedding_execution import DocumentEmbeddingExecution
+from eom_workflow_runner.local_embedding_completion_coverage import resolved_native_index_coverage
 from eom_workflow_runner.local_embedding_encoding_admission import (
     CatalogEncodingOwnerAdmission,
     CurrentEncodingExecution,
@@ -138,20 +132,6 @@ from eom_workflow_runner.local_embedding_publications import (
 )
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from eom_workflow_runner.repository import CommandLeaseIdentity
-
-
-def _index_coverage(
-    resolved: ResolvedEmbeddingRegistration,
-) -> ResolvedNativeIndexCoverage | ResolvedNativeIndexCoverageV2:
-    if isinstance(resolved.index, MixedEmbeddingIndexManifest):
-        return ResolvedNativeIndexCoverageV2(resolved.index, resolved.sources, resolved.previous)
-    previous = None
-    if resolved.previous is not None:
-        pointer, index = resolved.previous
-        if not isinstance(index, EmbeddingIndexManifest):
-            raise ValueError("LOCAL_EMBEDDING_COMPLETION_FAMILY_MISMATCH")
-        previous = (pointer, index)
-    return ResolvedNativeIndexCoverage(resolved.index, resolved.sources, previous)
 
 
 class NativeEmbeddingIndexCompletion:
@@ -521,7 +501,7 @@ class NativeEmbeddingIndexCompletion:
                 receipt_owner_job_id=allocation.receipt_producer.job_id,
                 launch_association=association,
                 owned_input=native_input,
-                index_coverage=_index_coverage(resolved),
+                index_coverage=resolved_native_index_coverage(resolved),
             )
             output = publications.completions.publish(
                 receipt, identity=native_publication_identity(allocation.receipt_producer)
@@ -650,7 +630,7 @@ class NativeEmbeddingIndexCompletion:
             receipt_owner_job_id=allocation.receipt_producer.job_id,
             launch_association=association,
             owned_input=native_input,
-            index_coverage=_index_coverage(resolved),
+            index_coverage=resolved_native_index_coverage(resolved),
         )
         self.owner.fence_mutation(session, request, command_lease)
         return output
