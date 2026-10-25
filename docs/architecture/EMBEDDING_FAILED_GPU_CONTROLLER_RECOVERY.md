@@ -68,3 +68,26 @@ maintenance-authority suite: 265 PASS in 51.53 seconds
 (`/tmp/eom-gpu-failed-root-recovery-regression-20261025-r7.log`). Strict mypy four
 production modules, scoped Ruff/format and diff checks PASS. No operating default
 or numerical runtime was changed.
+
+## Actual original-invocation recovery — 2026-10-25 10:28 UTC
+
+Installed metadata SDK `8b0ddddeddfb95462d06c2d76d9849240dac0110` was built with
+wheel RECORD verification and staged without replacing any running API/Web/QUERY,
+INDEX pin or numerical prefix. The fixed root helper observed original invocation
+`9cef02484f594f8d9a68e5a034b8387d` of allocation
+`embeddingallocation_ccdbf61548ba42c79f8cde814966cdf3`, persisted its actual FAILED
+witness, retired its retained FDSTORE from 1 to 0, and used the official expired
+claim maintenance application. The original Workflow and native Job plus 64
+encoding producers are now FAILED, not reinterpreted as successful. The original
+planning Job remains SUCCEEDED. No model was run during recovery and no retry of
+the failed64 canary was submitted.
+
+Retirement result SHA:
+`sha256:f688bc88922ac410eaeb5b99626ad585a0904d1d81aa241becd37661bcdcbfd2`.
+Original failed witness intent SHA:
+`sha256:9bdf34de869b048f60d608ab738c9fd06dc35654099934d1e7bbe3ab1b93cc49`.
+The exact protected retirement result is under the original unit/invocation in
+`/opt/eom/embedding-gpu-batch-lifetimes`; execution evidence is
+`/tmp/eom-failed64-recovery-20261025.log` EXIT0. Operational systemd reset/clean
+does not change the canonical original FAILED evidence. This is resource recovery,
+not numerical acceptance, new64 admission or completion of the overall GPU goal.

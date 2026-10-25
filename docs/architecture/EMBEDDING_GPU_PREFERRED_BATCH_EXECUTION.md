@@ -1337,6 +1337,22 @@ SQL 쓰기·ORM dirty/new/deleted가 없음을 검증했다. 이것은 deploymen
 
 ### P2-AL — QUERY 설치 선택과 기존 유한 묶음 composition
 
+같은 installed CPU lifecycle을 확장하는 optional `RoutedReferenceQueryOwnerFactory`를
+추가했다. 시작할 때 실제 선택된 routing/CPU/CUDA policy·bundle을 기존 canonical reader로
+읽고, existing provider/DB role/owner account/설정 guard를 확인한다. 요청마다 기존 CPU
+application과 동일한 genuine capture/fence로 별도 CUDA Catalog owner를 구성하며 factory에
+session/capture를 보관하지 않는다. 새로운 daemon/SQL table/queue/model은 만들지 않는다.
+지배 접근은 작은 config 조회1회, immutable policy indexed read와 operation-local owner 생성이다.
+기존 CPU launcher/driver/private-chat lifecycle을 유지하므로 선택 기능을 제거해도 기존 CPU
+경로가 동작한다. 중단/권한 철회와 실제 실행·retry는 기존 원 selection/parent/Runner가 소유한다.
+설정 바이트를 permission으로 사용하거나 두 장치 index population 검사를 생략하지 않는다.
+단순한 전역 source/device flag는 서로 다른 인덱스 핀과 실제 actor 경계를 잃으므로 사용하지 않는다.
+
+source factory+기존 runtime/config/selection **60 PASS,35.74초**
+(`/tmp/eom-routed-query-owner-factory-20261025.log`), production strict mypy/Ruff/format PASS.
+설치/IAM/control reads는 명시적 synthetic leaf이다. 실제 QUERY transport/default 활성화는
+아직 하지 않았으며 이 factory만으로 전체 GPU 목표가 완료된 것은 아니다.
+
 2026-10-25 추가 source checkpoint: `CatalogRoutedReferenceQuerySelection`은 동일한 실제
 operator capture의 기존 CPU/CUDA Catalog admission을 조합한다. 1–32개 원 요청의 순서와
 정확한 source/profile/index revision을 selection과 작은 preparation manifest로 발행하며,
