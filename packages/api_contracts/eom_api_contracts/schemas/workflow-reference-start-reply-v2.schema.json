@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/v1/workflow-reference-start-reply/2.0",
+  "title": "Original reference preparation pending before optional child Workflow admission",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "reference_query_workflow_id", "reference_query_preparation", "reference_query_parent_sha256", "command"],
+  "properties": {
+    "schema_version": {"const": "workflow-reference-start-reply/2.0"},
+    "status": {"const": "PENDING"},
+    "reference_query_workflow_id": {"type": ["string", "null"], "pattern": "^workflow_[0-9a-f]{32}$"},
+    "reference_query_parent_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "reference_query_preparation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "sha256", "schema_ref", "media_type"],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"const": "preparation.json"},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "schema_ref": {"const": "eom://schemas/workflow/reference-query-routed-preparation/1.0"},
+        "media_type": {"const": "application/json"}
+      }
+    },
+    "command": {"type": "null"}
+  }
+}

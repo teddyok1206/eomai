@@ -5,7 +5,7 @@ from __future__ import annotations
 from eom_api_contracts import SingleResponse
 from eom_api_contracts.reference_queries import SupportedReferenceQueryPrepareInput
 from eom_catalog_contracts.reference_query_prepare import (
-    MAX_REFERENCE_QUERY_PREPARE_REQUEST_BYTES,
+    MAX_ROUTED_QUERY_PREPARE_REQUEST_BYTES,
     SupportedReferenceQueryPrepareReply,
 )
 from eom_operator_identity import PermissionKey
@@ -45,7 +45,7 @@ async def prepare(
     idempotency_key: IdempotencyKey,
 ) -> SingleResponse[SupportedReferenceQueryPrepareReply]:
     del authentication
-    if len(await request.body()) > MAX_REFERENCE_QUERY_PREPARE_REQUEST_BYTES:
+    if len(await request.body()) > MAX_ROUTED_QUERY_PREPARE_REQUEST_BYTES:
         raise ApiError(
             422,
             "REFERENCE_QUERY_PREPARE_REQUEST_INVALID",

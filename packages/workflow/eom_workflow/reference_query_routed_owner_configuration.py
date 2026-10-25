@@ -28,6 +28,7 @@ from eom_workflow.reference_query_owner_configuration import (
     REFERENCE_QUERY_OWNER_SCHEMA_REF,
     ReferenceQueryOwnerConfigurationError,
     SupportedReferenceQueryServiceConfiguration,
+    parse_supported_reference_query_service_configuration,
     reference_query_mixed_owner_configuration_schema,
     reference_query_owner_configuration_schema,
     supported_reference_query_service_configuration_bytes,
@@ -136,6 +137,27 @@ def parse_reference_query_routed_owner_configuration(
         if reference_query_routed_owner_configuration_bytes(checked) != raw:
             raise ReferenceQueryOwnerConfigurationError()
         return checked
+    except Exception:
+        raise ReferenceQueryOwnerConfigurationError() from None
+
+
+def parse_reference_query_installed_owner_selection(
+    raw: bytes,
+) -> tuple[
+    SupportedReferenceQueryServiceConfiguration, RoutedReferenceQueryOwnerConfiguration | None
+]:
+    """Explicit installed dispatcher; predecessor decoders still reject a routed wrapper."""
+    try:
+        if type(raw) is not bytes or not 0 < len(raw) <= MAX_REFERENCE_QUERY_OWNER_BYTES:
+            raise ReferenceQueryOwnerConfigurationError()
+        document = json.loads(raw)
+        if (
+            isinstance(document, dict)
+            and document.get("schema_version") == "reference-query-owner-configuration/3.0"
+        ):
+            routed = parse_reference_query_routed_owner_configuration(raw)
+            return routed.cpu_configuration, routed
+        return parse_supported_reference_query_service_configuration(raw), None
     except Exception:
         raise ReferenceQueryOwnerConfigurationError() from None
 

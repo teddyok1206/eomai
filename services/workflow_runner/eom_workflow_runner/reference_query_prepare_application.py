@@ -16,7 +16,7 @@ from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareRequestV11,
     SupportedReferenceQueryPrepareReply,
     SupportedReferenceQueryPrepareRequest,
-    parse_supported_reference_query_prepare_request,
+    parse_single_reference_query_prepare_request,
 )
 from eom_catalog_contracts.similarity_read import CompletedSimilarityQuerySelection
 from eom_catalog_service.embedding_registry_ports import (
@@ -136,7 +136,7 @@ class NativeReferenceQueryPreparation:
     def prepare(
         self, request: SupportedReferenceQueryPrepareRequest
     ) -> SupportedReferenceQueryPrepareReply:
-        request = parse_supported_reference_query_prepare_request(request)
+        request = parse_single_reference_query_prepare_request(request)
         caller = EmbeddingRegistryCaller(self.owner.identity.capture.operator_id)
         key, context_id = reference_query_prepare_identity(
             caller.operator_id, request.idempotency_key

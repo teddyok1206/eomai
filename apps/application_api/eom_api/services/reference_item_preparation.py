@@ -11,6 +11,7 @@ from eom_catalog_contracts import (
 )
 from eom_catalog_contracts.authoring_reference import AuthoringReferenceSelection
 from eom_catalog_contracts.reference_query_prepare import (
+    ReferenceQueryPrepareReplyV3,
     parse_supported_reference_query_prepare_request,
 )
 from eom_identifiers import content_sha256
@@ -167,6 +168,11 @@ class HttpReferenceItemStartPreparation:
         )
         reply = self.queries.prepare(self.context, query, idempotency_key=key)
         if reply.status == "PENDING":
+            if isinstance(reply, ReferenceQueryPrepareReplyV3):
+                assert reply.preparation is not None and reply.parent_request_sha256 is not None
+                return ReferenceItemStartPending(
+                    reply.workflow_id, reply.preparation, reply.parent_request_sha256
+                )
             assert reply.workflow_id is not None
             return ReferenceItemStartPending(reply.workflow_id)
         if (

@@ -21,6 +21,7 @@ from eom_api.services.reference_query_prepare_client import (
 from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareReply,
     ReferenceQueryPrepareRequest,
+    parse_supported_reference_query_prepare_reply,
     parse_supported_reference_query_prepare_request,
 )
 from eom_identifiers import canonical_json_bytes
@@ -66,10 +67,14 @@ def exchange(
     fault="",
     through_http=False,
     consumer_purpose="PAST_EXAM_VARIATION",
+    request_value=None,
+    reply_factory=None,
 ):
     source, context = api_context(monkeypatch)
     request = parse_supported_reference_query_prepare_request(
-        request_body(consumer_purpose=consumer_purpose)
+        request_value
+        if request_value is not None
+        else request_body(consumer_purpose=consumer_purpose)
     )
     application_calls = []
     final_sends = []
@@ -90,6 +95,8 @@ def exchange(
         if document["schema_version"] in {
             "system-rag-reference-query-prepare-request/1.0",
             "system-rag-reference-query-prepare-request/1.1",
+            "system-rag-reference-query-prepare-request/2.0",
+            "system-rag-reference-query-prepare-request/3.0",
         }:
             preparation_sends.append(document["operation_id"])
             if fault == "noncanonical_request":
@@ -99,7 +106,11 @@ def exchange(
         original_send(connection, document, deadline=deadline, limit=limit)
 
     def server_send(connection, document, *, deadline, limit):
-        if document["schema_version"] == "system-rag-reference-query-prepare-reply/1.0":
+        if document["schema_version"] in {
+            "system-rag-reference-query-prepare-reply/1.0",
+            "system-rag-reference-query-prepare-reply/2.0",
+            "system-rag-reference-query-prepare-reply/3.0",
+        }:
             final_sends.append(document)
             if fault == "partial_final_write":
                 connection.sendall(carrier.STREAM_MAGIC)
@@ -120,7 +131,8 @@ def exchange(
         if fault == "application":
             raise RuntimeError("synthetic private details must not leave the owner")
         return SimpleNamespace(
-            prepare=lambda actual: ReferenceQueryPrepareReply.model_validate(reply_body(actual))
+            prepare=reply_factory
+            or (lambda actual: ReferenceQueryPrepareReply.model_validate(reply_body(actual)))
         )
 
     with tempfile.TemporaryDirectory(prefix="eom-query-wire-") as directory:
@@ -197,14 +209,17 @@ def exchange(
                                     },
                                 )
                             future.result(timeout=10)
-                            assert response.status_code == 202, {
+                            assert response.status_code in {200, 202}, {
                                 "preparation_sends": len(preparation_sends),
                                 "final_statuses": [value["status"] for value in final_sends],
                                 "application_calls": len(application_calls),
                             }
                             assert response.headers["Cache-Control"] == "no-store"
-                            reply = ReferenceQueryPrepareReply.model_validate(
+                            reply = parse_supported_reference_query_prepare_reply(
                                 response.json()["data"]
+                            )
+                            assert response.status_code == (
+                                202 if reply.status == "PENDING" else 200
                             )
                             services.auth.authenticate_and_capture_access.assert_called_once()
                         finally:

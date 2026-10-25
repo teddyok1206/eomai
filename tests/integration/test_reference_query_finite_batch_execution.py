@@ -27,8 +27,10 @@ from eom_orchestrator.settings import Settings
 from eom_workflow.compiler import compile_definition_data
 from eom_workflow.embedding_batch_plan import (
     EmbeddingBatchAllocation,
-    EmbeddingBatchPlanRequest,
+)
+from eom_workflow.embedding_batch_plan_family import (
     embedding_batch_query_key,
+    parse_embedding_batch_plan_request,
 )
 from eom_workflow.reference_query_execution import parse_supported_reference_query_workflow_request
 from eom_workflow_runner import reference_query_batch_material as material_module
@@ -61,7 +63,10 @@ from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
 from tests.unit.inference_transfer_embedding_fixtures import seal
-from tests.unit.reference_query_batch_execution_fixtures import two_query_plan_case
+from tests.unit.reference_query_batch_execution_fixtures import (
+    pair_existing_query_plan,
+    two_query_plan_case,
+)
 from tests.unit.test_embedding_batch_plan_admission import source_case
 from tests.unit.test_reference_query_launch_preparation import sources_for
 from tests.unit.test_reference_query_workflow_contracts import definition_body
@@ -70,7 +75,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
 
 @pytest.fixture
-def finite(guarded_engine, tmp_path, monkeypatch):
+def finite(guarded_engine, tmp_path, monkeypatch, request):
     import os
 
     artifacts = tmp_path / "artifacts"
@@ -80,10 +85,46 @@ def finite(guarded_engine, tmp_path, monkeypatch):
     )
     compiled = compile_definition_data(definition_body(), "synthetic/finite-batch-query", set())
     queries, plan = two_query_plan_case(definition_sha256=compiled.sha256)
+    if getattr(request, "param", None) == "paired":
+        from eom_catalog_service.embedding_device_index_pair import (
+            EmbeddingDeviceIndexPair,
+            EmbeddingDeviceIndexPin,
+        )
+        from eom_workflow_runner import embedding_batch_plan_admission as admission
+
+        queries, plan = pair_existing_query_plan(queries, plan)
+
+        def synthetic_pair(_session, _caller, *, cpu_intent, cuda_intent, **_kwargs):
+            rows = (cpu_intent.selection, cuda_intent.selection)
+            pins = tuple(
+                EmbeddingDeviceIndexPin(
+                    r.index.index_id,
+                    r.index.index_revision_id,
+                    r.index.index_manifest,
+                    r.index.index_sha256,
+                    r.index.spaces.document,
+                )
+                for r in rows
+            )
+            return EmbeddingDeviceIndexPair(
+                pins[0],
+                pins[1],
+                cpu_intent.scope.namespace.storage_partition,
+                rows[0].view,
+                rows[0].recipe.recipe_sha256,
+                "sha256:" + "a" * 64,
+                len(queries),
+            )
+
+        monkeypatch.setattr(
+            admission,
+            "resolve_embedding_device_index_pair",
+            synthetic_pair,
+        )
     with publisher.sessions.begin() as session:
         definition, _created = import_workflow_definition(session, compiled)
     value = source_case(tmp_path, monkeypatch, publisher=publisher, planned=plan, key=uuid4().hex)
-    value.request = EmbeddingBatchPlanRequest.model_validate(
+    value.request = parse_embedding_batch_plan_request(
         seal(
             value.request.model_dump(mode="json") | {"batch_id": "embeddingbatch_" + uuid4().hex},
             "request_sha256",
@@ -253,6 +294,14 @@ def test_actual_runner_executes_two_queries_with_one_batch_and_preserves_exact_c
                 session.get(WorkflowInstanceRecord, workflow_id).state == "COMPLETED"
                 for workflow_id in value.workflow_ids
             )
+
+
+@pytest.mark.parametrize("finite", ["paired"], indirect=True)
+def test_paired_original_parent_uses_same_actual_runner_bind_completion_and_replay(finite):
+    assert finite.request.schema_version == "embedding-batch-plan/1.2"
+    test_actual_runner_executes_two_queries_with_one_batch_and_preserves_exact_canonical_replay(
+        finite
+    )
 
 
 @pytest.mark.parametrize(

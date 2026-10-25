@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from eom_api_contracts import CommandResult
-from eom_api_contracts.workflow_reference_start import WorkflowReferenceStartReply
+from eom_api_contracts.workflow_reference_start import (
+    SupportedWorkflowReferenceStartReply,
+    WorkflowReferencePreparationPending,
+    WorkflowReferenceStartReply,
+)
 from eom_api_contracts.workflows import (
     EducationalRetrievalIntentRequest,
     EducationalRetrievalIntentRequestV2,
@@ -45,7 +49,7 @@ class ReferenceItemStartApplicationService:
 
     def start(
         self, context: RequestContext, request: WorkflowStartRequest, *, idempotency_key: str
-    ) -> WorkflowReferenceStartReply:
+    ) -> SupportedWorkflowReferenceStartReply:
         if not self.enabled:
             raise ApiError(
                 503,
@@ -140,9 +144,23 @@ class ReferenceItemStartApplicationService:
                     operation_id=REFERENCE_ITEM_START_OPERATION,
                     outcome="SUBMITTED",
                     http_status=202,
-                    target_type="reference_query",
-                    target_id=result.reference_query_workflow_id,
+                    target_type="reference_query"
+                    if result.reference_query_workflow_id is not None
+                    else "reference_query_preparation",
+                    target_id=result.reference_query_workflow_id
+                    or (
+                        result.preparation.artifact_revision_id
+                        if result.preparation is not None
+                        else None
+                    ),
                 )
+                if result.preparation is not None:
+                    assert result.parent_request_sha256 is not None
+                    return WorkflowReferencePreparationPending(
+                        reference_query_workflow_id=result.reference_query_workflow_id,
+                        reference_query_preparation=result.preparation,
+                        reference_query_parent_sha256=result.parent_request_sha256,
+                    )
                 return WorkflowReferenceStartReply(
                     status="PENDING",
                     reference_query_workflow_id=result.reference_query_workflow_id,

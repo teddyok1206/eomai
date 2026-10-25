@@ -16,7 +16,10 @@ from eom_api.services.reference_item_start import ReferenceItemStartApplicationS
 from eom_api.services.reference_item_start_ports import ReferenceItemStartPending
 from eom_api.settings import ApiSettings
 from eom_api_contracts import CommandResult
-from eom_api_contracts.workflow_reference_start import WorkflowReferenceStartReply
+from eom_api_contracts.workflow_reference_start import (
+    WorkflowReferencePreparationPending,
+    WorkflowReferenceStartReply,
+)
 from eom_catalog_contracts.reference_query_prepare import ReferenceQueryPrepareReply
 from eom_identifiers import content_sha256
 from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowInstanceRecord
@@ -56,6 +59,43 @@ def pending():
     return WorkflowReferenceStartReply(
         status="PENDING", reference_query_workflow_id=WORKFLOW, command=None
     )
+
+
+def preparation_pending(workflow_id=None):
+    return WorkflowReferencePreparationPending(
+        reference_query_workflow_id=workflow_id,
+        reference_query_preparation=dict(
+            artifact_id="artifact_" + "a" * 32,
+            artifact_revision_id="rev_" + "b" * 32,
+            member_path="preparation.json",
+            sha256="sha256:" + "c" * 64,
+            schema_ref="eom://schemas/workflow/reference-query-routed-preparation/1.0",
+            media_type="application/json",
+        ),
+        reference_query_parent_sha256="sha256:" + "d" * 64,
+    )
+
+
+def test_preworkflow_successor_is_schema_first_and_does_not_weaken_old_pending():
+    canonical = ROOT / "schemas/api/v1/workflow-reference-start-reply-v2.schema.json"
+    packaged = ROOT / "packages/api_contracts/eom_api_contracts/schemas" / canonical.name
+    assert canonical.read_bytes() == packaged.read_bytes()
+    schema = json.loads(canonical.read_bytes())
+    Draft202012Validator.check_schema(schema)
+    validator = Draft202012Validator(schema)
+    for workflow_id in (None, WORKFLOW):
+        value = preparation_pending(workflow_id)
+        validator.validate(value.model_dump(mode="json"))
+        for fault in (
+            {"command": command().model_dump(mode="json")},
+            {"reference_query_preparation": None},
+            {"reference_query_parent_sha256": None},
+            {"actor_id": "ADMIN"},
+        ):
+            invalid = value.model_dump(mode="json") | fault
+            assert not validator.is_valid(invalid)
+            with pytest.raises(ValidationError):
+                WorkflowReferencePreparationPending.model_validate(invalid)
 
 
 def test_reply_schema_first_and_packaged_mirror():
@@ -175,6 +215,27 @@ def test_pending_yields_claim_but_never_completes_or_fails_it(application_case):
     case.idempotency.complete.assert_not_called()
     case.idempotency.fail_final.assert_not_called()
     assert case.audit.append.call_args.kwargs["event_type"] == "REFERENCE_ITEM_PREPARATION_PENDING"
+
+
+@pytest.mark.parametrize("workflow_id", (None, WORKFLOW))
+def test_original_preparation_pointer_yields_claim_without_fake_workflow_or_accepted_command(
+    application_case, workflow_id
+):
+    case = application_case
+    expected = preparation_pending(workflow_id)
+    case.commands.start_reference_workflow.return_value = ReferenceItemStartPending(
+        workflow_id, expected.reference_query_preparation, expected.reference_query_parent_sha256
+    )
+    result = case.service.start(
+        case.context, case.data.request, idempotency_key="same-original-key"
+    )
+    assert result == expected and result.command is None
+    case.idempotency.defer.assert_called_once()
+    case.idempotency.complete.assert_not_called()
+    case.idempotency.fail_final.assert_not_called()
+    assert case.audit.append.call_args.kwargs["target_id"] == (
+        workflow_id or expected.reference_query_preparation.artifact_revision_id
+    )
 
 
 def test_ready_completes_only_the_accepted_command_receipt(application_case):

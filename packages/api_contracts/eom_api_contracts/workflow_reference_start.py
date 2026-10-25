@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import re
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
+from eom_protocol.artifact_members import ArtifactMemberPointer
 from pydantic import Field, model_validator
 
 from eom_api_contracts.common import ApiModel, CommandResult
@@ -64,3 +65,33 @@ class WorkflowReferenceStartReply(ApiModel):
         ):
             raise ValueError("accepted reference Item command target differs")
         return self
+
+
+class WorkflowReferencePreparationPending(ApiModel):
+    """A real preparation pointer, never a fabricated accepted Workflow identity."""
+
+    schema_version: Literal["workflow-reference-start-reply/2.0"] = (
+        "workflow-reference-start-reply/2.0"
+    )
+    status: Literal["PENDING"] = "PENDING"
+    reference_query_workflow_id: str | None = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    reference_query_preparation: ArtifactMemberPointer
+    reference_query_parent_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    command: None = None
+
+    @model_validator(mode="after")
+    def exact_preparation(self) -> Self:
+        pointer = self.reference_query_preparation
+        if (
+            pointer.member_path != "preparation.json"
+            or pointer.schema_ref != "eom://schemas/workflow/reference-query-routed-preparation/1.0"
+            or pointer.media_type != "application/json"
+        ):
+            raise ValueError("pending preparation pointer differs")
+        return self
+
+
+type SupportedWorkflowReferenceStartReply = Annotated[
+    WorkflowReferenceStartReply | WorkflowReferencePreparationPending,
+    Field(discriminator="schema_version"),
+]

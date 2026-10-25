@@ -123,6 +123,9 @@ def test_committed_mixed_similarity_entry_preserves_explicit_wire_families() -> 
             "system-rag-reference-query-prepare-request/2.0": (
                 "#/components/schemas/ReferenceQueryPrepareInputV2"
             ),
+            "system-rag-reference-query-prepare-request/3.0": (
+                "#/components/schemas/ReferenceQueryPrepareInputV3"
+            ),
         },
     }
     assert "consumer_purpose" not in schemas["ReferenceQueryPrepareInput"]["properties"]

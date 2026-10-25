@@ -72,6 +72,7 @@ def installed(source, selected, monkeypatch):
     monkeypatch.setattr(module.os, "getegid", lambda: 1000)
     monkeypatch.setattr(module.os, "getgroups", lambda: [])
     monkeypatch.setattr(module, "PinnedArtifactReadContext", lambda *_a: reader)
+    monkeypatch.setattr(module, "require_routed_query_staging", Mock())
     monkeypatch.setattr(module, "resolve_embedding_device_routing_policy", lambda *_a: routing)
     monkeypatch.setattr(module, "read_selected_reference_query_controls", controls)
     applications = []
@@ -183,3 +184,32 @@ def test_changed_installed_selection_is_rechecked_before_every_new_operation(ins
     with pytest.raises(ValueError, match="withdrawn"):
         factory.session(installed.capture)
     assert not installed.applications
+
+
+@pytest.mark.parametrize("read_only", (False, True))
+def test_fixed_staging_preflight_checks_namespace_mount_without_writing_or_allocating(
+    monkeypatch, read_only
+):
+    entered = []
+    identity = SimpleNamespace(owner_uid=990, owner_gid=1000)
+
+    @contextmanager
+    def directory(path, **kwargs):
+        assert kwargs == dict(owner=identity, uid=990, gid=1000, mode=0o700)
+        entered.append(path)
+        yield 7
+
+    monkeypatch.setattr(module, "fixed_owner_identity", lambda: identity)
+    monkeypatch.setattr(module, "protected_cpu_handoff_directory", directory)
+    monkeypatch.setattr(
+        module.os,
+        "fstatvfs",
+        lambda _fd: SimpleNamespace(f_flag=module.os.ST_RDONLY if read_only else 0),
+    )
+    if read_only:
+        with pytest.raises(ValueError, match="WORKSPACE_READ_ONLY"):
+            module.require_routed_query_staging()
+        assert entered == [module.BATCH_CONTROL_ROOT]
+    else:
+        module.require_routed_query_staging()
+        assert entered == [module.BATCH_CONTROL_ROOT, module.BATCH_OWNER_ROOT]

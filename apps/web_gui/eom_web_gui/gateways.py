@@ -93,7 +93,7 @@ from eom_web_gui.item_preview_projection import (
     resolve_content_capability,
 )
 from eom_web_gui.redaction import sanitize_mapping
-from eom_web_gui.reference_item_contracts import ReferenceItemStartReply
+from eom_web_gui.reference_item_contracts import parse_reference_item_start_reply
 from eom_web_gui.sessions import ApiTokens, WebSession
 
 ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]{7,127}$")
@@ -1370,7 +1370,7 @@ class HttpApplicationGateway:
             timeout=self._workflow_start_timeout,
         )
         try:
-            value = ReferenceItemStartReply.model_validate(self._data(response))
+            value = parse_reference_item_start_reply(self._data(response))
             if value.status == "PENDING":
                 return value.model_dump(mode="json")
             assert value.command is not None

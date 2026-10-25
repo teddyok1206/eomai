@@ -242,3 +242,112 @@ def two_query_plan_case(*, definition_sha256=None):
         )
     )
     return (first, second), template
+
+
+def pair_existing_query_plan(queries, plan):
+    """Version1.2 parent over the unchanged synthetic GPU child inputs/policy."""
+    from eom_catalog_contracts.embedding_reference_query import ReferenceQuerySpaces
+    from eom_catalog_contracts.inference_transfer_embedding import EmbeddingSpace
+    from eom_workflow.embedding_batch_plan_v12 import (
+        BATCH_PLAN_V12_PROTOCOL,
+        BATCH_SELECTION_V12_SCHEMA_REF,
+        EmbeddingBatchPlanRequestV12,
+        EmbeddingBatchSelectionV12,
+    )
+
+    from tests.unit.inference_transfer_embedding_fixtures import encoding_identity
+    from tests.unit.test_embedding_batch_plan import member
+
+    # Routed contexts require vectors explicitly. Old1.0 fixtures legitimately
+    # used OPTIONAL; do not weaken the successor to make that fixture pass.
+    updated = []
+    for query in queries:
+        request = parse_supported_reference_query_workflow_request(
+            seal(
+                query.request.model_dump(mode="json")
+                | {
+                    "context_request": seal(
+                        query.request.context_request.model_dump(mode="json")
+                        | {"vector_mode": "REQUIRED"},
+                        "request_sha256",
+                    )
+                },
+                "request_sha256",
+            )
+        )
+        # The old scalar fixture texts used CONTENT/METADATA while its context
+        # selected CONTENT/CONCRETE. A routed pair must cover the real row views.
+        rows = []
+        for view in request.context_request.views:
+            text = "synthetic paired reference " + view.view
+            rows.append(
+                dict(
+                    view=view.view,
+                    text=text,
+                    encoding=encoding_identity(text, query.policy.spaces.query).model_dump(
+                        mode="json"
+                    ),
+                )
+            )
+        rows.sort(key=lambda r: r["encoding"]["encoding_sha256"])
+        native = type(query.native_input).model_validate(
+            seal(
+                query.native_input.model_dump(mode="json")
+                | dict(
+                    context_request_sha256=request.context_request.request_sha256,
+                    rows=rows,
+                    input_set_sha256=content_sha256([r["encoding"] for r in rows]),
+                ),
+                "request_sha256",
+            )
+        )
+        updated.append(replace(query, request=request, native_input=native))
+    queries = tuple(updated)
+
+    document = plan.policy.cpu.profile.space
+    cpu_spaces = ReferenceQuerySpaces(
+        document=document,
+        query=EmbeddingSpace.model_validate(
+            seal(document.model_dump(mode="json") | {"purpose": "QUERY"}, "space_sha256")
+        ),
+    )
+    pairs = []
+    for ordinal, cuda in enumerate(queries[0].request.context_request.views, 1):
+        cpu_seed = f"{ordinal + 8:x}"
+        cpu = cuda.model_dump(mode="json")
+        cpu["index"].update(
+            index_id="embeddingindex_" + cpu_seed * 32,
+            index_revision_id="embeddingindexrev_" + cpu_seed * 32,
+            spaces=cpu_spaces.model_dump(mode="json"),
+        )
+        cpu["index"]["index_manifest"].update(
+            artifact_id="artifact_" + cpu_seed * 32,
+            artifact_revision_id="rev_" + cpu_seed * 32,
+        )
+        pairs.append(dict(cpu=cpu, cuda=cuda.model_dump(mode="json")))
+    plan.selection = EmbeddingBatchSelectionV12.model_validate(
+        seal(
+            plan.selection.model_dump(mode="json")
+            | dict(
+                schema_version=BATCH_PLAN_V12_PROTOCOL,
+                index_pairs=pairs,
+                source_classes=list(queries[0].request.context_request.source_classes),
+            ),
+            "selection_sha256",
+        )
+    )
+    plan.request = EmbeddingBatchPlanRequestV12.model_validate(
+        seal(
+            plan.request.model_dump(mode="json")
+            | dict(
+                schema_version=BATCH_PLAN_V12_PROTOCOL,
+                selection_manifest=member(
+                    "selection.json", BATCH_SELECTION_V12_SCHEMA_REF, plan.selection, "1"
+                ).model_dump(mode="json"),
+                selection_sha256=plan.selection.selection_sha256,
+                child_selection_sha256s=list(plan.selection.child_selection_sha256s),
+            ),
+            "request_sha256",
+        )
+    )
+    return queries, plan

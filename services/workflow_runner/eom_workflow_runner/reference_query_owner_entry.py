@@ -28,6 +28,9 @@ if TYPE_CHECKING:
     )
     from eom_orchestrator.reference_query_prepare_ports import ReferenceQueryPreparationPort
     from eom_workflow.reference_query_owner_configuration import ReferenceQueryServiceConfiguration
+    from eom_workflow.reference_query_routed_owner_configuration import (
+        RoutedReferenceQueryOwnerConfiguration,
+    )
 
 _RELEASES = Path("/opt/eom/embedding-owner-releases")
 _CONFIGURATION = Path("/etc/eom/reference-query-owner.json")
@@ -204,6 +207,7 @@ def _serve_child(
     *,
     private_raw: bytes | None = None,
     mixed_raw: bytes | None = None,
+    routed_configuration: RoutedReferenceQueryOwnerConfiguration | None = None,
 ) -> int:
     owner = pwd.getpwnam("eom-workflow-runner")
     api = pwd.getpwnam("eom-api")
@@ -249,12 +253,26 @@ def _serve_child(
         snapshots.read(_CONFIGURATION, sha256=raw_sha256, maximum=64 * 1024)
         admission = ProtectedInstalledIdentityProviderAdmission(observation)
         runtime = build_reference_query_owner_runtime(configuration, admission)
+        from eom_workflow_runner.reference_query_routed_runtime import (
+            build_routed_reference_query_owner_factory,
+        )
+
+        routed_factory = (
+            None
+            if routed_configuration is None
+            else build_routed_reference_query_owner_factory(
+                runtime, routed_configuration, configuration_guard=snapshots.assert_unchanged
+            )
+        )
         mixed_snapshots = None
+        mixed_routed_factory = None
         if mixed_raw is not None:
             from eom_workflow.reference_query_owner_configuration import (
                 ReferenceQueryServiceConfigurationV2,
-                parse_supported_reference_query_service_configuration,
                 require_mixed_reference_query_cohost,
+            )
+            from eom_workflow.reference_query_routed_owner_configuration import (
+                parse_reference_query_installed_owner_selection,
             )
 
             mixed_snapshots = NumericalRuntimeFileSnapshots()
@@ -263,11 +281,19 @@ def _serve_child(
                 sha256="sha256:" + hashlib.sha256(mixed_raw).hexdigest(),
                 maximum=64 * 1024,
             )
-            mixed_selection = parse_supported_reference_query_service_configuration(current_mixed)
+            mixed_selection, mixed_routed = parse_reference_query_installed_owner_selection(
+                current_mixed
+            )
             if not isinstance(mixed_selection, ReferenceQueryServiceConfigurationV2):
                 raise ValueError("REFERENCE_QUERY_MIXED_CONFIGURATION_UNAVAILABLE")
             require_mixed_reference_query_cohost(configuration, mixed_selection)
             mixed_runtime = build_reference_query_owner_runtime(mixed_selection, admission)
+            if mixed_routed is not None:
+                mixed_routed_factory = build_routed_reference_query_owner_factory(
+                    mixed_runtime,
+                    mixed_routed,
+                    configuration_guard=mixed_snapshots.assert_unchanged,
+                )
         private_listener = None
         if private_raw is not None:
             from eom_orchestrator.private_chat_query_prepare_client import (
@@ -302,26 +328,30 @@ def _serve_child(
         def application(capture: AuthenticatedOperatorSession) -> ReferenceQueryPreparationPort:
             snapshots.assert_unchanged()
             assert runtime is not None
-            if mixed_runtime is None:
-                # The family router still rejects2 explicitly when not activated;
-                # it must never send a new-family request to the primary owner.
-                from eom_workflow_runner.reference_query_family_selection import (
-                    ReferenceQueryFamilyPreparation,
-                )
-
-                return ReferenceQueryFamilyPreparation(lambda: runtime.application(capture), None)
-
             from eom_workflow_runner.reference_query_family_selection import (
                 ReferenceQueryFamilyPreparation,
             )
+            from eom_workflow_runner.reference_query_routed_application import (
+                RoutedNativeReferenceQueryPreparation,
+            )
+
+            def primary_application() -> ReferenceQueryPreparationPort:
+                assert runtime is not None
+                if routed_factory is not None:
+                    return RoutedNativeReferenceQueryPreparation(routed_factory.session(capture))
+                return runtime.application(capture)
 
             def mixed_application() -> ReferenceQueryPreparationPort:
                 assert mixed_snapshots is not None and mixed_runtime is not None
                 mixed_snapshots.assert_unchanged()
+                if mixed_routed_factory is not None:
+                    return RoutedNativeReferenceQueryPreparation(
+                        mixed_routed_factory.session(capture)
+                    )
                 return mixed_runtime.application(capture)
 
             return ReferenceQueryFamilyPreparation(
-                lambda: runtime.application(capture), mixed_application
+                primary_application, None if mixed_runtime is None else mixed_application
             )
 
         server = ReferenceQueryOwnerServer(
@@ -403,22 +433,28 @@ def main() -> int:
         from eom_identity_service import open_installed_identity_provider_observation
         from eom_identity_service.owner_session_transport import FixedIdentityProviderPin
         from eom_workflow.reference_query_owner_configuration import (
-            parse_reference_query_service_configuration,
+            ReferenceQueryServiceConfiguration,
+        )
+        from eom_workflow.reference_query_routed_owner_configuration import (
+            parse_reference_query_installed_owner_selection,
         )
 
         raw = _configuration_bytes()
-        configuration = parse_reference_query_service_configuration(raw)
+        configuration, routed_configuration = parse_reference_query_installed_owner_selection(raw)
+        if not isinstance(configuration, ReferenceQueryServiceConfiguration):
+            raise ValueError("REFERENCE_QUERY_OWNER_CONFIGURATION_UNAVAILABLE")
         if configuration.owner_source_commit != site.parent.name:
             raise ValueError("REFERENCE_QUERY_OWNER_SOURCE_MISMATCH")
         mixed_raw = _mixed_configuration_bytes()
         if mixed_raw is not None:
             from eom_workflow.reference_query_owner_configuration import (
                 ReferenceQueryServiceConfigurationV2,
-                parse_supported_reference_query_service_configuration,
                 require_mixed_reference_query_cohost,
             )
 
-            mixed_selection = parse_supported_reference_query_service_configuration(mixed_raw)
+            mixed_selection, _mixed_routed = parse_reference_query_installed_owner_selection(
+                mixed_raw
+            )
             if not isinstance(mixed_selection, ReferenceQueryServiceConfigurationV2):
                 raise ValueError("REFERENCE_QUERY_MIXED_CONFIGURATION_UNAVAILABLE")
             require_mixed_reference_query_cohost(configuration, mixed_selection)
@@ -453,6 +489,7 @@ def main() -> int:
                     restore_mask,
                     private_raw=private_raw,
                     mixed_raw=mixed_raw,
+                    routed_configuration=routed_configuration,
                 )
                 sys.stdout.flush()
                 os._exit(status)

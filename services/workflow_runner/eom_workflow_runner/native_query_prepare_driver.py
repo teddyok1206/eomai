@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import Lock, Thread
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from eom_workflow.models import WorkflowId
 from pydantic import TypeAdapter
@@ -16,6 +16,12 @@ from eom_workflow_runner.native_query_prepare_runner import (
     require_reference_query_prepare_runner,
 )
 from eom_workflow_runner.repository import CommandExecutionFamily
+
+if TYPE_CHECKING:
+    from eom_workflow_runner.reference_query_routed_runtime import RoutedReferenceQuerySession
+    from eom_workflow_runner.reference_query_routed_selection import (
+        PreparedRoutedReferenceQuerySelection,
+    )
 
 type NativeQueryDriveOutcome = Literal[
     "PROCESSED", "NO_READY_COMMAND", "UNAVAILABLE", "START_FAILED"
@@ -43,6 +49,7 @@ class NativeQueryPrepareDriver:
         self._workflow_id: str | None = None
         self._outcome: NativeQueryDriveOutcome | None = None
         self._family: CommandExecutionFamily | None = None
+        self._routed_parent_sha256: str | None = None
         self._closed = False
 
     def close(self) -> None:
@@ -72,6 +79,66 @@ class NativeQueryPrepareDriver:
         require_private_chat_query_prepare_runner(runner)
         return self._offer(workflow_id, runner, family=CommandExecutionFamily.PRIVATE_CHAT_QUERY)
 
+    def offer_routed_reference_batch(
+        self,
+        session: RoutedReferenceQuerySession,
+        prepared: PreparedRoutedReferenceQuerySelection,
+    ) -> NativeQueryDriveOffer:
+        """One finite original batch on the existing service handle, never a task registry."""
+        from eom_workflow_runner.reference_query_routed_runtime import RoutedReferenceQuerySession
+        from eom_workflow_runner.reference_query_routed_selection import (
+            PreparedRoutedReferenceQuerySelection,
+        )
+
+        if (
+            type(session) is not RoutedReferenceQuerySession
+            or type(prepared) is not PreparedRoutedReferenceQuerySelection
+        ):
+            raise ValueError("REFERENCE_QUERY_PREPARE_COMPOSITION_INVALID")
+        parent = prepared.preparation.parent.request_sha256
+        with self._lock:
+            if self._closed:
+                return "UNAVAILABLE"
+            if self._thread is not None and self._thread.is_alive():
+                return "ALREADY_ACTIVE" if self._routed_parent_sha256 == parent else "BUSY"
+            self._workflow_id, self._outcome = None, None
+            self._family, self._routed_parent_sha256 = (
+                CommandExecutionFamily.REFERENCE_QUERY,
+                parent,
+            )
+            thread = Thread(
+                target=self._run_routed_once,
+                args=(session, prepared),
+                name="eom-routed-reference-query-driver",
+                daemon=False,
+            )
+            self._thread = thread
+            try:
+                thread.start()
+            except (RuntimeError, OSError):
+                self._thread, self._outcome = None, "START_FAILED"
+                return "UNAVAILABLE"
+            return "STARTED"
+
+    def _run_routed_once(
+        self, session: RoutedReferenceQuerySession, prepared: PreparedRoutedReferenceQuerySelection
+    ) -> None:
+        from eom_workflow_runner.reference_query_routed_execution import (
+            drive_routed_reference_queries_once,
+        )
+
+        try:
+            observed = drive_routed_reference_queries_once(session, prepared)
+            outcome: NativeQueryDriveOutcome = (
+                "PROCESSED" if observed.state == "READY" else "UNAVAILABLE"
+            )
+        except BaseException:
+            # The original preparation/claim may already exist. No retained
+            # exception/capture, automatic retry, fresh identity or CPU fallback.
+            outcome = "UNAVAILABLE"
+        with self._lock:
+            self._outcome = outcome
+
     def _offer(
         self, workflow_id: str, runner: WorkflowRunner, *, family: CommandExecutionFamily
     ) -> NativeQueryDriveOffer:
@@ -86,6 +153,7 @@ class NativeQueryPrepareDriver:
                     else "BUSY"
                 )
             self._workflow_id, self._outcome = workflow_id, None
+            self._routed_parent_sha256 = None
             self._family = family
             thread = Thread(
                 target=self._run_once,

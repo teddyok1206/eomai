@@ -9,8 +9,8 @@ from pathlib import Path
 from time import monotonic
 
 from eom_catalog_contracts.reference_query_prepare import (
-    MAX_REFERENCE_QUERY_PREPARE_REPLY_BYTES,
-    MAX_REFERENCE_QUERY_PREPARE_REQUEST_BYTES,
+    MAX_ROUTED_QUERY_PREPARE_REPLY_BYTES,
+    MAX_ROUTED_QUERY_PREPARE_REQUEST_BYTES,
     REFERENCE_QUERY_PREPARE_SOCKET,
     SupportedReferenceQueryPrepareReply,
     SupportedReferenceQueryPrepareRequest,
@@ -88,7 +88,7 @@ class NativeReferenceQueryPrepareClient:
                     connection,
                     request.model_dump(mode="json"),
                     deadline=deadline,
-                    limit=MAX_REFERENCE_QUERY_PREPARE_REQUEST_BYTES,
+                    limit=MAX_ROUTED_QUERY_PREPARE_REQUEST_BYTES,
                 )
                 capture_deadline = min(deadline, monotonic() + OWNER_SESSION_TRANSPORT_SECONDS)
                 raw = receive_chat_stream_payload(
@@ -113,7 +113,7 @@ class NativeReferenceQueryPrepareClient:
                 raw = receive_chat_stream_payload(
                     connection,
                     deadline=deadline,
-                    limit=MAX_REFERENCE_QUERY_PREPARE_REPLY_BYTES,
+                    limit=MAX_ROUTED_QUERY_PREPARE_REPLY_BYTES,
                 )
                 reply = parse_supported_reference_query_prepare_reply(decode_chat_frame(raw))
                 if canonical_json_bytes(reply.model_dump(mode="json")) != raw:

@@ -6,10 +6,15 @@ import os
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from eom_catalog_service.embedding_batch_control_workspace import BATCH_CONTROL_ROOT
+from eom_catalog_service.embedding_batch_owner_workspace import BATCH_OWNER_ROOT
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryOwnerConfiguration
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_identity_service import AuthenticatedOperatorSession
-from eom_orchestrator.inference_transfer_cpu_handoff import fixed_owner_identity
+from eom_orchestrator.inference_transfer_cpu_handoff import (
+    fixed_owner_identity,
+    protected_cpu_handoff_directory,
+)
 from eom_workflow.embedding_device_routing import EmbeddingDeviceRoutingPolicy
 from eom_workflow.reference_query_execution import ReferenceQueryExecutionPolicy
 from eom_workflow.reference_query_routed_owner_configuration import (
@@ -125,6 +130,7 @@ def build_routed_reference_query_owner_factory(
     identity = fixed_owner_identity()
     if (os.geteuid(), os.getegid()) != (identity.owner_uid, identity.owner_gid) or os.getgroups():
         raise ValueError("REFERENCE_QUERY_ROUTED_OWNER_ACCOUNT_UNAVAILABLE")
+    require_routed_query_staging()
     with runtime.publisher.sessions.begin() as session:
         session.execute(text("SET TRANSACTION READ ONLY"))
         require_reference_query_database_owner(session, runtime.configuration.database_owner)
@@ -160,3 +166,14 @@ def build_routed_reference_query_owner_factory(
     return RoutedReferenceQueryOwnerFactory(
         runtime, configuration, routing, cpu, cuda, configuration_guard
     )
+
+
+def require_routed_query_staging() -> None:
+    """Read-only fixed layout preflight, not directory provisioning or a GPU allocation."""
+    identity = fixed_owner_identity()
+    for path in (BATCH_CONTROL_ROOT, BATCH_OWNER_ROOT):
+        with protected_cpu_handoff_directory(
+            path, owner=identity, uid=identity.owner_uid, gid=identity.owner_gid, mode=0o700
+        ) as directory:
+            if os.fstatvfs(directory).f_flag & os.ST_RDONLY:
+                raise ValueError("REFERENCE_QUERY_ROUTED_OWNER_WORKSPACE_READ_ONLY")

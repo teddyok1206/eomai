@@ -9,6 +9,7 @@ from eom_catalog_contracts import EvidenceBundlePublicationResultV5
 from eom_catalog_contracts.authoring_reference import AuthoringReferenceSelection
 from eom_catalog_contracts.models import Sha256
 from eom_operator_identity import ActorContext
+from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.control_plane import ExecutionPresetRevisionV2
 from eom_workflow.models import ExpectedWorkflowResolution, WorkflowId, WorkflowRequest
 from eom_workflow_runner.item_similarity_preparation import PreparedItemSimilarity
@@ -17,10 +18,19 @@ from pydantic import TypeAdapter
 
 @dataclass(frozen=True, slots=True)
 class ReferenceItemStartPending:
-    reference_query_workflow_id: str
+    reference_query_workflow_id: str | None
+    preparation: ArtifactMemberPointer | None = None
+    parent_request_sha256: str | None = None
 
     def __post_init__(self) -> None:
-        TypeAdapter(WorkflowId).validate_python(self.reference_query_workflow_id, strict=True)
+        if self.reference_query_workflow_id is not None:
+            TypeAdapter(WorkflowId).validate_python(self.reference_query_workflow_id, strict=True)
+        if (self.preparation is None) != (self.parent_request_sha256 is None) or (
+            self.reference_query_workflow_id is None and self.preparation is None
+        ):
+            raise ValueError("reference pending requires an original preparation or Workflow")
+        if self.parent_request_sha256 is not None:
+            TypeAdapter(Sha256).validate_python(self.parent_request_sha256, strict=True)
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-reference-query-prepare/3.0",
+  "title": "Finite routed QUERY preparation and truthful pre-Workflow observation",
+  "description": "Original pointer-only intent. No actor, auth, runtime, resource, path or execution grant. Legacy requests retain their schema bytes; reply3 explicitly binds their family.",
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "operationId": {"type": "string", "pattern": "^queryprepare_[0-9a-f]{32}$"},
+    "workflowId": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+    "singleRequest": {
+      "oneOf": [
+        {"$ref": "eom://schemas/knowledge/system-rag-reference-query-prepare/1.0#/$defs/request"},
+        {"$ref": "eom://schemas/knowledge/system-rag-reference-query-prepare/1.1#/$defs/request"},
+        {"$ref": "eom://schemas/knowledge/system-rag-reference-query-prepare/2.0#/$defs/request"}
+      ]
+    },
+    "selection": {"$ref": "eom://schemas/knowledge/system-rag-similarity-read/1.0#/$defs/selection"},
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation", "operation_id", "idempotency_key", "requests", "request_sha256"],
+      "properties": {
+        "schema_version": {"const": "system-rag-reference-query-prepare-request/3.0"},
+        "operation": {"const": "PREPARE_REFERENCE_QUERY"},
+        "operation_id": {"$ref": "#/$defs/operationId"},
+        "idempotency_key": {"type": "string", "minLength": 8, "maxLength": 128, "pattern": "^[A-Za-z0-9_.:-]{8,128}$"},
+        "requests": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"$ref": "#/$defs/singleRequest"}},
+        "request_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "child": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ordinal", "source_item_revision_id", "workflow_id", "state", "selection"],
+      "properties": {
+        "ordinal": {"type": "integer", "minimum": 0, "maximum": 15},
+        "source_item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+        "workflow_id": {"anyOf": [{"$ref": "#/$defs/workflowId"}, {"type": "null"}]},
+        "state": {"enum": ["PENDING", "COMPLETED", "FAILED"]},
+        "selection": {"anyOf": [{"$ref": "#/$defs/selection"}, {"type": "null"}]}
+      },
+      "allOf": [
+        {"if": {"properties": {"state": {"const": "COMPLETED"}}, "required": ["state"]}, "then": {"properties": {"workflow_id": {"$ref": "#/$defs/workflowId"}, "selection": {"$ref": "#/$defs/selection"}}}, "else": {"properties": {"selection": {"type": "null"}}}},
+        {"if": {"properties": {"state": {"const": "FAILED"}}, "required": ["state"]}, "then": {"properties": {"workflow_id": {"$ref": "#/$defs/workflowId"}}}}
+      ]
+    },
+    "preparation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "sha256", "schema_ref", "media_type"],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"const": "preparation.json"},
+        "sha256": {"$ref": "#/$defs/hash"},
+        "schema_ref": {"const": "eom://schemas/workflow/reference-query-routed-preparation/1.0"},
+        "media_type": {"const": "application/json"}
+      }
+    },
+    "error": {"enum": [
+      "SOURCE_ACCESS_DENIED", "SOURCE_REVOKED", "SOURCE_POINTER_INVALID", "SOURCE_HASH_MISMATCH",
+      "INDEX_POINTER_INVALID", "INDEX_HASH_MISMATCH", "QUERY_RESULT_INVALID", "AUTHORITY_UNAVAILABLE",
+      "REFERENCE_QUERY_PREPARE_REQUEST_INVALID", "REFERENCE_QUERY_PREPARE_UNAVAILABLE",
+      "REFERENCE_QUERY_PREPARE_CONFLICT", "REFERENCE_QUERY_EXECUTION_FAILED",
+      "ANCHOR_REPORT_MISSING", "INDEX_NOT_PREPARED"
+    ]},
+    "reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "operation", "operation_id", "request_sha256", "request_schema_version", "status", "preparation", "parent_request_sha256", "device", "children", "workflow_id", "selection", "error_code"],
+      "properties": {
+        "schema_version": {"const": "system-rag-reference-query-prepare-reply/3.0"},
+        "operation": {"const": "PREPARE_REFERENCE_QUERY"},
+        "operation_id": {"anyOf": [{"$ref": "#/$defs/operationId"}, {"type": "null"}]},
+        "request_sha256": {"anyOf": [{"$ref": "#/$defs/hash"}, {"type": "null"}]},
+        "request_schema_version": {"enum": ["system-rag-reference-query-prepare-request/1.0", "system-rag-reference-query-prepare-request/1.1", "system-rag-reference-query-prepare-request/2.0", "system-rag-reference-query-prepare-request/3.0", null]},
+        "status": {"enum": ["PENDING", "READY", "UNAVAILABLE", "FAILED"]},
+        "preparation": {"anyOf": [{"$ref": "#/$defs/preparation"}, {"type": "null"}]},
+        "parent_request_sha256": {"anyOf": [{"$ref": "#/$defs/hash"}, {"type": "null"}]},
+        "device": {"enum": ["CPU", "CUDA", null]},
+        "children": {"type": "array", "maxItems": 16, "items": {"$ref": "#/$defs/child"}},
+        "workflow_id": {"anyOf": [{"$ref": "#/$defs/workflowId"}, {"type": "null"}]},
+        "selection": {"anyOf": [{"$ref": "#/$defs/selection"}, {"type": "null"}]},
+        "error_code": {"anyOf": [{"$ref": "#/$defs/error"}, {"type": "null"}]}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"enum": ["PENDING", "READY"]}}, "required": ["status"]},
+         "then": {"properties": {"operation_id": {"$ref": "#/$defs/operationId"}, "request_sha256": {"$ref": "#/$defs/hash"}, "request_schema_version": {"type": "string"}, "preparation": {"$ref": "#/$defs/preparation"}, "parent_request_sha256": {"$ref": "#/$defs/hash"}, "children": {"minItems": 1}, "error_code": {"type": "null"}}},
+         "else": {"properties": {"error_code": {"$ref": "#/$defs/error"}, "selection": {"type": "null"}}}},
+        {"if": {"properties": {"status": {"const": "READY"}}, "required": ["status"]}, "then": {"properties": {"device": {"enum": ["CPU", "CUDA"]}, "children": {"items": {"allOf": [{"$ref": "#/$defs/child"}, {"properties": {"state": {"const": "COMPLETED"}}}]}}}}},
+        {"if": {"properties": {"status": {"const": "PENDING"}}, "required": ["status"]}, "then": {"properties": {"selection": {"type": "null"}}}},
+        {"if": {"properties": {"status": {"const": "UNAVAILABLE"}}, "required": ["status"]}, "then": {"properties": {"operation_id": {"$ref": "#/$defs/operationId"}, "request_sha256": {"$ref": "#/$defs/hash"}, "request_schema_version": {"type": "string"}, "preparation": {"type": "null"}, "parent_request_sha256": {"type": "null"}, "device": {"type": "null"}, "children": {"maxItems": 0}, "workflow_id": {"type": "null"}, "error_code": {"enum": ["ANCHOR_REPORT_MISSING", "INDEX_NOT_PREPARED"]}}}}
+      ]
+    }
+  },
+  "oneOf": [{"$ref": "#/$defs/request"}, {"$ref": "#/$defs/reply"}]
+}

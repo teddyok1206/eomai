@@ -33,6 +33,7 @@ from eom_workflow_runner.embedding_batch_execution import ExistingEmbeddingBatch
 from eom_workflow_runner.local_embedding_native_executor import CatalogNativeEmbeddingExecutor
 from eom_workflow_runner.local_embedding_service_reconciliation import (
     LocalEmbeddingReconciliationResult,
+    LocalEmbeddingServiceReconciliation,
     ReconciliationState,
 )
 from eom_workflow_runner.local_indexing_routed_sources import PairedIndexingNamespacePreparation
@@ -87,6 +88,11 @@ class RoutedLocalIndexingNamespaceRuntime:
                 service_fence.pin.service,
             ),
         )
+        # CPU is also the exact-space standby index. Discovery reuses the
+        # ordinary CPU facade; it is not an invented BUSY/fallback observation.
+        self.cpu_reconciliation = LocalEmbeddingServiceReconciliation(
+            cpu, maximum_targets=pair.cpu.maximum_targets
+        )
 
     def run_once(self) -> WorkflowCommandRecord | None:
         """Drain the original CPU queue, never reselect its work as GPU."""
@@ -118,6 +124,7 @@ class RoutedLocalIndexingNamespaceRuntime:
             prepared = self.pair.cuda.prepare_once()
             observed, request = prepared.observed, prepared.request
             if request is None:
+                self.cpu_reconciliation.run_once()
                 return observed
         else:
             request, workflow_id, _key = pending
@@ -145,6 +152,11 @@ class RoutedLocalIndexingNamespaceRuntime:
                 "FAILED",
                 "CANCELLED",
             } or outcome.command_state in {"FAILED", "CANCELLED"}
+            if completed and outcome.device == "CUDA":
+                # Queue bounded standby coverage after the real GPU completion.
+                # The existing CPU Runner drains it on its normal next turn; no
+                # second model runs inside this GPU allocation or SQL root.
+                self.cpu_reconciliation.run_once()
             return replace(
                 observed,
                 state=ReconciliationState.BATCH_COMPLETED

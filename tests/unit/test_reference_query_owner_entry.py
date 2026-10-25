@@ -211,6 +211,8 @@ def test_signal_capability_is_not_added_to_native_units_or_index_owner():
         "eom-embedding-native-cpu-probe@.service",
         "eom-embedding-native-query-prepare@.service",
         "eom-embedding-native-cpu-query@.service",
+        "eom-embedding-native-gpu-batch@.service",
+        "eom-embedding-native-gpu-batch-owner@.service",
         "eom-embedding-native-private-chat-query-prepare@.service",
         "eom-embedding-native-cpu-private-chat-query@.service",
     }
@@ -220,6 +222,20 @@ def test_signal_capability_is_not_added_to_native_units_or_index_owner():
         / "eom-embedding-index-owner.service.in"
     )
     assert all("CAP_KILL" not in path.read_text() for path in (*native, index))
+
+
+def test_gpu_routed_owner_keeps_fixed_minimal_workspaces_and_existing_resource_bounds():
+    root = Path(__file__).resolve().parents[2]
+    unit = (
+        root
+        / "services/workflow_runner/eom_workflow_runner/resources"
+        / "eom-reference-query-owner.service.in"
+    ).read_text()
+    assert "ReadWritePaths=-/var/lib/eom-workflow-runner/embedding-batch-control" in unit
+    assert "ReadWritePaths=-/var/lib/eom-workflow-runner/embedding-work-batches" in unit
+    assert "ReadWritePaths=/var/lib/eom-workflow-runner\n" not in unit
+    assert "TasksMax=64" in unit and "MemoryMax=1G" in unit
+    assert "PrivateDevices=yes" in unit and "NoNewPrivileges=yes" in unit
 
 
 @pytest.mark.parametrize(

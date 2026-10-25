@@ -5,7 +5,7 @@ from __future__ import annotations
 from eom_api_contracts import CommandResult, ListResponse, SingleResponse
 from eom_api_contracts.common import EmptyRequest
 from eom_api_contracts.events import EventView
-from eom_api_contracts.workflow_reference_start import WorkflowReferenceStartReply
+from eom_api_contracts.workflow_reference_start import SupportedWorkflowReferenceStartReply
 from eom_api_contracts.workflows import (
     WorkflowActionRequest,
     WorkflowStartRequest,
@@ -110,7 +110,7 @@ def start_workflow(
     "/reference-starts",
     operation_id=REFERENCE_ITEM_START_OPERATION,
     status_code=202,
-    response_model=SingleResponse[WorkflowReferenceStartReply],
+    response_model=SingleResponse[SupportedWorkflowReferenceStartReply],
     dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_START, fresh=True))],
     openapi_extra={
         "x-eom-additional-permissions": [
@@ -127,7 +127,7 @@ async def start_reference_workflow(
     response: Response,
     authentication: Auth,
     idempotency_key: IdempotencyKey,
-) -> SingleResponse[WorkflowReferenceStartReply]:
+) -> SingleResponse[SupportedWorkflowReferenceStartReply]:
     del authentication
     if len(await request.body()) > 16 * 1024:
         raise ApiError(

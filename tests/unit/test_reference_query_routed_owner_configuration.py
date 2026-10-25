@@ -14,6 +14,7 @@ from eom_workflow.reference_query_owner_configuration import (
 from eom_workflow.reference_query_routed_owner_configuration import (
     ROUTED_QUERY_OWNER_SCHEMA_SHA256,
     RoutedReferenceQueryOwnerConfiguration,
+    parse_reference_query_installed_owner_selection,
     parse_reference_query_routed_owner_configuration,
     reference_query_routed_owner_configuration_bytes,
     reference_query_routed_owner_configuration_schema,
@@ -118,6 +119,8 @@ def test_closed_schema_mirror_roundtrip_and_legacy_decoder_still_closed(selected
     assert require_routed_reference_query_policy(config, routing, cpu, cuda) is None
     with pytest.raises(ReferenceQueryOwnerConfigurationError):
         parse_supported_reference_query_service_configuration(encoded)
+    base, wrapper = parse_reference_query_installed_owner_selection(encoded)
+    assert base == config.cpu_configuration and wrapper == config
 
 
 @pytest.mark.parametrize(

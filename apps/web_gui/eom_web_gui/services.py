@@ -258,7 +258,8 @@ class WebServices:
             idempotency_key,
         )
         if (
-            command.get("schema_version") == "workflow-reference-start-reply/1.0"
+            command.get("schema_version")
+            in {"workflow-reference-start-reply/1.0", "workflow-reference-start-reply/2.0"}
             and command.get("status") == "PENDING"
         ):
             # Preparation is not a completed submission; retain the draft/key but

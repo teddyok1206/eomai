@@ -11,8 +11,12 @@ from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNa
 from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareRequestV2,
     ReferenceQueryPrepareRequestV11,
-    SupportedReferenceQueryPrepareRequest,
-    parse_supported_reference_query_prepare_request,
+)
+from eom_catalog_contracts.reference_query_prepare import (
+    SingleReferenceQueryPrepareRequest as SupportedReferenceQueryPrepareRequest,
+)
+from eom_catalog_contracts.reference_query_prepare import (
+    parse_single_reference_query_prepare_request as parse_supported_reference_query_prepare_request,
 )
 from eom_catalog_contracts.similarity_context import ApprovedReferenceItemAnchor
 from eom_catalog_service.embedding_registry_ports import (

@@ -10,13 +10,15 @@ from datetime import UTC, datetime
 from time import monotonic
 
 from eom_catalog_contracts.reference_query_prepare import (
-    MAX_REFERENCE_QUERY_PREPARE_REPLY_BYTES,
-    MAX_REFERENCE_QUERY_PREPARE_REQUEST_BYTES,
+    MAX_ROUTED_QUERY_PREPARE_REPLY_BYTES,
+    MAX_ROUTED_QUERY_PREPARE_REQUEST_BYTES,
     ReferenceQueryPrepareReply,
     ReferenceQueryPrepareReplyV2,
     ReferenceQueryPrepareRequestV2,
+    ReferenceQueryPrepareRequestV3,
     SupportedReferenceQueryPrepareRequest,
     parse_supported_reference_query_prepare_request,
+    routed_reference_query_error_reply,
     validate_supported_reference_query_prepare_reply,
 )
 from eom_identifiers import canonical_json_bytes
@@ -68,7 +70,7 @@ def handle_reference_query_prepare_connection(
         raw = receive_chat_stream_payload(
             connection,
             deadline=deadline,
-            limit=MAX_REFERENCE_QUERY_PREPARE_REQUEST_BYTES,
+            limit=MAX_ROUTED_QUERY_PREPARE_REQUEST_BYTES,
         )
         parsed = parse_supported_reference_query_prepare_request(decode_chat_frame(raw))
         if canonical_json_bytes(parsed.model_dump(mode="json")) != raw:
@@ -109,22 +111,10 @@ def handle_reference_query_prepare_connection(
     except Exception:
         # No response/capture/traceback contents leave this adapter. In particular,
         # database admission may already have committed before a disconnect.
-        family = "2.0" if isinstance(request, ReferenceQueryPrepareRequestV2) else "1.0"
-        reply_type = ReferenceQueryPrepareReplyV2 if family == "2.0" else ReferenceQueryPrepareReply
-        reply = reply_type.model_validate(
-            dict(
-                schema_version=f"system-rag-reference-query-prepare-reply/{family}",
-                operation="PREPARE_REFERENCE_QUERY",
-                operation_id=None if request is None else request.operation_id,
-                request_sha256=None if request is None else request.request_sha256,
-                status="FAILED",
-                workflow_id=None,
-                selection=None,
-                error_code="REFERENCE_QUERY_PREPARE_REQUEST_INVALID"
-                if request is None
-                else "REFERENCE_QUERY_PREPARE_UNAVAILABLE",
-            )
-        )
+        if isinstance(request, ReferenceQueryPrepareRequestV3):
+            reply = routed_reference_query_error_reply(request)
+        else:
+            reply = _legacy_failure_reply(request)
     # Exactly one final send. A partial/timeout final write must not append a
     # second reply and cannot justify another application invocation.
     with suppress(Exception):
@@ -132,5 +122,26 @@ def handle_reference_query_prepare_connection(
             connection,
             reply.model_dump(mode="json"),
             deadline=deadline,
-            limit=MAX_REFERENCE_QUERY_PREPARE_REPLY_BYTES,
+            limit=MAX_ROUTED_QUERY_PREPARE_REPLY_BYTES,
         )
+
+
+def _legacy_failure_reply(
+    request: SupportedReferenceQueryPrepareRequest | None,
+) -> ReferenceQueryPrepareReply | ReferenceQueryPrepareReplyV2:
+    family = "2.0" if isinstance(request, ReferenceQueryPrepareRequestV2) else "1.0"
+    reply_type = ReferenceQueryPrepareReplyV2 if family == "2.0" else ReferenceQueryPrepareReply
+    return reply_type.model_validate(
+        dict(
+            schema_version=f"system-rag-reference-query-prepare-reply/{family}",
+            operation="PREPARE_REFERENCE_QUERY",
+            operation_id=None if request is None else request.operation_id,
+            request_sha256=None if request is None else request.request_sha256,
+            status="FAILED",
+            workflow_id=None,
+            selection=None,
+            error_code="REFERENCE_QUERY_PREPARE_REQUEST_INVALID"
+            if request is None
+            else "REFERENCE_QUERY_PREPARE_UNAVAILABLE",
+        )
+    )

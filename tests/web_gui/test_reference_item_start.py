@@ -7,9 +7,12 @@ import json
 import httpx
 import pytest
 from eom_web_gui.gateways import GatewayError, HttpApplicationGateway
-from eom_web_gui.reference_item_contracts import ReferenceItemStartReply
+from eom_web_gui.reference_item_contracts import (
+    ReferenceItemStartReply,
+    parse_reference_item_start_reply,
+)
 
-from tests.api.test_reference_item_async_start import accepted, pending
+from tests.api.test_reference_item_async_start import accepted, pending, preparation_pending
 from tests.web_gui.helpers import FakeGateway, login, make_client
 from tests.web_gui.test_gateway import _session, _single
 from tests.web_gui.test_request_default_resolution import _draft, _submit
@@ -24,6 +27,46 @@ def test_api_reply_contract_is_consumable_without_api_runtime_dependency():
     for value in (pending(), accepted()):
         payload = value.model_dump(mode="json")
         assert ReferenceItemStartReply.model_validate(payload).model_dump(mode="json") == payload
+
+
+def test_original_preworkflow_preparation_pointer_is_consumable_without_fake_workflow():
+    for workflow_id in (None, "workflow_" + "b" * 32):
+        payload = preparation_pending(workflow_id).model_dump(mode="json")
+        parsed = parse_reference_item_start_reply(payload)
+        assert parsed.model_dump(mode="json") == payload and parsed.command is None
+
+
+@pytest.mark.anyio
+async def test_preworkflow_pending_round_trip_retains_real_pointer_without_accepted_item():
+    expected = preparation_pending().model_dump(mode="json")
+
+    def handler(request):
+        assert request.url.path == "/api/v1/workflows/reference-starts"
+        return httpx.Response(202, json=_single(expected))
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        reference_item_start_enabled=True,
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        result = await gateway.start_workflow(
+            _session(),
+            {
+                "definition_key": "generic-item-development",
+                "definition_version": "1.16.0",
+                "educational_retrieval": {
+                    "schema_version": "educational-retrieval-requirement/1.0"
+                },
+            },
+            "original-preworkflow-key",
+        )
+        assert result == expected and result["reference_query_workflow_id"] is None
+    finally:
+        await gateway.close()
 
 
 @pytest.mark.anyio

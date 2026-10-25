@@ -28,6 +28,9 @@ def service(parent_case, monkeypatch):
     peek = Mock(return_value=None)
     monkeypatch.setattr(namespace, "peek_command_candidate", peek)
     launcher = Mock(spec=FixedNativeIndexLauncher)
+    standby = Mock()
+    standby_factory = Mock(return_value=standby)
+    monkeypatch.setattr(namespace, "LocalEmbeddingServiceReconciliation", standby_factory)
     value = namespace.RoutedLocalIndexingNamespaceRuntime(
         case.pair, case.sources.configuration, launcher, case.routed.fence
     )
@@ -60,6 +63,8 @@ def service(parent_case, monkeypatch):
         drive=drive,
         peek=peek,
         factory=factory,
+        standby=standby,
+        standby_factory=standby_factory,
     )
 
 
@@ -69,6 +74,7 @@ def test_original_cpu_queue_is_drained_without_new_gpu_discovery(service):
     service.runner.run_once.assert_called_once()
     service.prepare.assert_not_called()
     service.drive.assert_not_called()
+    service.standby.run_once.assert_not_called()
 
     reference = service.case.routed.fence.pin.service
     assert service.value.gpu_selection.service == reference
@@ -89,6 +95,10 @@ def test_new_gpu_reconciliation_pins_original_and_distinguishes_batch_from_corpu
     assert pair is service.case.pair and original == service.case.request
     assert launcher is service.value.launcher
     assert service.case.routed.guard.call_count > 0
+    service.standby.run_once.assert_called_once()
+    assert service.standby_factory.call_args.kwargs == {
+        "maximum_targets": service.case.pair.cpu.maximum_targets
+    }
 
 
 def test_no_work_observation_does_not_allocate_or_submit_model_work(service):
@@ -97,11 +107,13 @@ def test_no_work_observation_does_not_allocate_or_submit_model_work(service):
     )
     assert service.value.reconcile_once().state is ReconciliationState.UP_TO_DATE
     service.drive.assert_not_called()
+    service.standby.run_once.assert_called_once()
 
 
 def test_planning_success_cannot_be_reported_as_child_numerical_completion(service):
     service.drive.return_value = ExistingEmbeddingBatchExecution(SimpleNamespace(state="SUCCEEDED"))
     assert service.value.reconcile_once().state is ReconciliationState.RECOVERY_REQUIRED
+    service.standby.run_once.assert_not_called()
 
 
 def test_other_original_workflow_is_not_replaced_by_new_source_discovery(service, monkeypatch):
@@ -114,6 +126,7 @@ def test_other_original_workflow_is_not_replaced_by_new_source_discovery(service
     )
     service.prepare.assert_not_called()
     service.drive.assert_not_called()
+    service.standby.run_once.assert_not_called()
 
 
 def test_current_service_fence_precedes_even_queue_header_read(service):
@@ -123,3 +136,29 @@ def test_current_service_fence_precedes_even_queue_header_read(service):
     service.peek.assert_not_called()
     service.prepare.assert_not_called()
     service.drive.assert_not_called()
+    service.standby.run_once.assert_not_called()
+
+
+def test_standby_discovery_failure_does_not_reinterpret_or_repeat_completed_gpu(service):
+    service.standby.run_once.side_effect = PermissionError("synthetic current CPU grant revoked")
+    with pytest.raises(PermissionError, match="revoked"):
+        service.value.reconcile_once()
+    service.drive.assert_called_once()
+    service.standby.run_once.assert_called_once()
+
+
+@pytest.mark.parametrize("state,command", (("RUNNING", "PROCESSING"), ("FAILED", "FAILED")))
+def test_uncompleted_gpu_does_not_discover_standby_from_unproven_completion(
+    service, state, command
+):
+    service.drive.return_value = DrivenDocumentEmbeddingParent(
+        "CUDA",
+        "sha256:" + "1" * 64,
+        service.case.request.request_sha256,
+        "workflow_" + "1" * 32,
+        "wfcmd_" + "2" * 32,
+        state,
+        command,
+    )
+    service.value.reconcile_once()
+    service.standby.run_once.assert_not_called()

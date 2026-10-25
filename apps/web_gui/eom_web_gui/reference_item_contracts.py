@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, TypeAdapter, model_validator
 
 from eom_web_gui.contracts import WebModel
 
@@ -38,3 +38,31 @@ class ReferenceItemStartReply(WebModel):
         elif self.reference_query_workflow_id is not None or self.command is None:
             raise ValueError("accepted Item requires its exact command")
         return self
+
+
+class ReferenceQueryPreparationPointer(WebModel):
+    artifact_id: str = Field(pattern=r"^artifact_[0-9a-f]{32}$")
+    artifact_revision_id: str = Field(pattern=r"^rev_[0-9a-f]{32}$")
+    member_path: Literal["preparation.json"]
+    sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    schema_ref: Literal["eom://schemas/workflow/reference-query-routed-preparation/1.0"]
+    media_type: Literal["application/json"]
+
+
+class ReferenceItemPreparationPending(WebModel):
+    schema_version: Literal["workflow-reference-start-reply/2.0"]
+    status: Literal["PENDING"]
+    reference_query_workflow_id: str | None = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    reference_query_preparation: ReferenceQueryPreparationPointer
+    reference_query_parent_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    command: None
+
+
+type SupportedReferenceItemStartReply = Annotated[
+    ReferenceItemStartReply | ReferenceItemPreparationPending,
+    Field(discriminator="schema_version"),
+]
+
+
+def parse_reference_item_start_reply(value: object) -> SupportedReferenceItemStartReply:
+    return TypeAdapter(SupportedReferenceItemStartReply).validate_python(value)

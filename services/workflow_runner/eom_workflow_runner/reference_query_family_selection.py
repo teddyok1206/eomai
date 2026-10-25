@@ -6,6 +6,7 @@ from collections.abc import Callable
 
 from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareRequestV2,
+    ReferenceQueryPrepareRequestV3,
     SupportedReferenceQueryPrepareReply,
     SupportedReferenceQueryPrepareRequest,
     parse_supported_reference_query_prepare_request,
@@ -32,9 +33,10 @@ class ReferenceQueryFamilyPreparation:
         self, request: SupportedReferenceQueryPrepareRequest
     ) -> SupportedReferenceQueryPrepareReply:
         request = parse_supported_reference_query_prepare_request(request)
-        factory = (
-            self.mixed if isinstance(request, ReferenceQueryPrepareRequestV2) else self.primary
+        single = (
+            request.requests[0] if isinstance(request, ReferenceQueryPrepareRequestV3) else request
         )
+        factory = self.mixed if isinstance(single, ReferenceQueryPrepareRequestV2) else self.primary
         if factory is None:
             raise ValueError("REFERENCE_QUERY_PREPARE_UNAVAILABLE")
         reply = factory().prepare(request)
