@@ -1162,6 +1162,17 @@ P2-AI 구현·검증 (2026-10-25 UTC):
 완성된 legacy CONCRETE view 외의 전체 paired coverage, 설치된 routed QUERY와 실제 fallback/
 coexistence/default/rollback은 계속 남았다. 외부12+4 리뷰와 README 정리는 시작하지 않았다.
 
+P2-AI 패키징 체크포인트는 `1ca3835b45473abe8ae1696c5f911b789a23b2e4`다. 공식 build-only의
+wheel RECORD 검증 PASS, checkout 밖 임시 설치본에서 `-I -B`로 새 public pair reader와
+QUERY family/admission/group/executor/receipt reader7개 import 및 schema1.2 hash 확인 PASS다.
+ML imports/model/activation은0이다. platform wheel SHA는
+`bfb61185c0b7a5d3c7bc4cadc6f4cda392e1a96c9036c2d3ffd5bfeb669fb442`,
+API contracts wheel SHA는 `b0f566f451748f7c243fcb383563a9bd18255d9628a6d8b7696b454d0d6b8476`.
+기록은 `/tmp/eom-gpu-query-pinned-pairs-wheel-20261025.log`와
+`/tmp/eom-gpu-query-pair-installed-wheel-20261025.log`다. 이는 소스/설치 후보 gate일 뿐,
+사용자가 요청한 **전체 GPU 목표 완료 commit + 실제 운영 release 체크포인트가 아니다**.
+기존 실행 INDEX `ae380acd…`/numerical `eae2c0d3…`/CPU QUERY pin은 변경하지 않았다.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존
