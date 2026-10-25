@@ -1,4 +1,4 @@
-"""Concrete bounded CPU composition using existing owners and fixed native units."""
+"""Common encoding reservations/publication around one explicitly selected numerical adapter."""
 
 from __future__ import annotations
 
@@ -20,15 +20,6 @@ from eom_orchestrator.file_set_control_artifacts import (
 )
 from eom_orchestrator.native_embedding_coordinator import (
     NativeEmbeddingCoordinator,
-)
-from eom_orchestrator.native_embedding_index_handoff import (
-    PreparedNativeIndex,
-    mark_native_index_launch_started,
-    stage_native_index,
-)
-from eom_orchestrator.native_embedding_index_systemd import (
-    FixedNativeIndexLauncher,
-    NativeIndexLaunchError,
 )
 from eom_orchestrator.native_embedding_launch_identity import (
     create_native_embedding_launch,
@@ -63,6 +54,10 @@ from eom_workflow.native_embedding_coordinator import (
 from eom_workflow.native_embedding_coordinator_v2 import NativeCoordinatorCompletedV2
 from sqlalchemy.orm import Session
 
+from eom_workflow_runner.document_embedding_execution import (
+    DocumentEmbeddingExecution,
+    OwnedDocumentEmbedding,
+)
 from eom_workflow_runner.local_embedding_encoding_admission import (
     CatalogEncodingOwnerAdmission,
     CurrentEncodingExecution,
@@ -154,29 +149,29 @@ def _completion_events(
 
 
 class CatalogNativeEmbeddingExecutor:
-    """No implicit activation. Trusted composition supplies current Identity and admitted CPU."""
+    """No implicit activation/fallback. One common current-owner and completion path."""
 
     def __init__(
         self,
         *,
         owner: CatalogLocalEmbeddingOwnerAdmission,
         publisher: ControlFileSetPublisher,
-        launcher: FixedNativeIndexLauncher,
+        execution_backend: DocumentEmbeddingExecution,
         runtime_profile: LocalEmbeddingRuntimeProfile,
         source_commit: str,
     ) -> None:
-        self.owner, self.publisher, self.launcher = owner, publisher, launcher
+        self.owner, self.publisher, self.execution_backend = owner, publisher, execution_backend
         self.runtime_profile = LocalEmbeddingRuntimeProfile.model_validate(runtime_profile)
         if (
             self.runtime_profile.space != owner.configuration.registry.space
-            or self.runtime_profile.resource_profile.device != "CPU"
+            or self.runtime_profile.resource_profile.device != execution_backend.device
         ):
             raise ValueError("LOCAL_EMBEDDING_EXECUTOR_CONFIGURATION_INVALID")
         native_embedding_publications(
             publisher, source_commit
         )  # validate configured provenance, not activation
         self.source_commit = source_commit
-        self._index_completion = NativeEmbeddingIndexCompletion(owner, publisher, launcher)
+        self._index_completion = NativeEmbeddingIndexCompletion(owner, publisher, execution_backend)
 
     def evaluate(self, request: SupportedLocalEmbeddingRequest) -> RuntimeReadinessReport:
         try:
@@ -194,19 +189,19 @@ class CatalogNativeEmbeddingExecutor:
                 or request.namespace != self.owner.configuration.registry.namespace
             ):
                 raise ValueError("configured native controls differ")
-            self.launcher.assert_current_runtime()
+            self.execution_backend.assert_current_runtime(request)
             check = RuntimeReadinessCheck(
-                "native_cpu_index",
+                "native_document_index",
                 ReadinessStatus.PASS,
                 "LOCAL_EMBEDDING_READY",
-                "exact installed CPU controls are available",
+                "exact selected document controls are available",
             )
         except (ValueError, OSError):
             check = RuntimeReadinessCheck(
-                "native_cpu_index",
+                "native_document_index",
                 ReadinessStatus.FAIL,
                 "LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE",
-                "configured native CPU boundary is unavailable",
+                "configured document boundary is unavailable",
             )
         return RuntimeReadinessReport((check,))
 
@@ -237,7 +232,7 @@ class CatalogNativeEmbeddingExecutor:
         return EmbeddingEncodingReservations(
             self.publisher.sessions,
             CatalogEncodingOwnerAdmission(
-                self.owner, CurrentEncodingExecution(request, intent, lease), self.launcher
+                self.owner, CurrentEncodingExecution(request, intent, lease), self.execution_backend
             ),
         )
 
@@ -392,24 +387,16 @@ class CatalogNativeEmbeddingExecutor:
                         session, self.owner.settings
                     ).resolve_input(association)
             reservations.bind_launch(association)
-            prepared = PreparedNativeIndex(
-                launch.intent.native_launch_job_id.removeprefix("job_"), association, native_input
+            output = self.execution_backend.execute(
+                OwnedDocumentEmbedding(association, native_input),
+                source=CatalogEncodingOwnerAdmission(
+                    self.owner,
+                    CurrentEncodingExecution(request, launch.intent, command_lease),
+                    self.execution_backend,
+                ),
+                transaction=fenced_transaction,
             )
-            with fenced_transaction() as session:
-                self._current(
-                    session,
-                    workflow_id=workflow.workflow_id,
-                    step_run_id=step.step_run_id,
-                    request=request,
-                    lease=command_lease,
-                )
-                stage_native_index(prepared)
-                mark_native_index_launch_started(prepared)
-            try:
-                result = self.launcher.run(prepared)
-            except NativeIndexLaunchError as error:
-                if error.code not in {"NATIVE_INDEX_BUSY", "NATIVE_INDEX_UNCERTAIN"}:
-                    raise
+            if output is None:
                 return LocalEmbeddingStepPending(
                     tuple(
                         sorted(
@@ -439,10 +426,10 @@ class CatalogNativeEmbeddingExecutor:
                     policy=sources.admission.policy,
                     association=association,
                     request=native_input,
-                    workspace=prepared.workspace,
+                    workspace=output.workspace,
                     created_at=allocation.created_at,
                 )
-            reservations.complete(_completion_events(association, result, published))
+            reservations.complete(_completion_events(association, output.result, published))
         readings = tuple(
             sorted(
                 reservations.read(

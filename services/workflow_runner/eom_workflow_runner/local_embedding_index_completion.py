@@ -65,9 +65,6 @@ from eom_orchestrator.native_embedding_coordinator import (
 from eom_orchestrator.native_embedding_index_handoff import (
     ensure_native_index_owner_workspace,
 )
-from eom_orchestrator.native_embedding_index_systemd import (
-    FixedNativeIndexLauncher,
-)
 from eom_orchestrator.native_embedding_launch_identity import (
     read_native_embedding_launch,
     read_native_embedding_launch_association,
@@ -119,6 +116,7 @@ from eom_workflow.native_embedding_coordinator_v2 import (
 )
 from sqlalchemy.orm import Session
 
+from eom_workflow_runner.document_embedding_execution import DocumentEmbeddingExecution
 from eom_workflow_runner.local_embedding_encoding_admission import (
     CatalogEncodingOwnerAdmission,
     CurrentEncodingExecution,
@@ -163,9 +161,9 @@ class NativeEmbeddingIndexCompletion:
         self,
         owner: CatalogLocalEmbeddingOwnerAdmission,
         publisher: ControlFileSetPublisher,
-        launcher: FixedNativeIndexLauncher,
+        execution_backend: DocumentEmbeddingExecution,
     ) -> None:
-        self.owner, self.publisher, self.launcher = owner, publisher, launcher
+        self.owner, self.publisher, self.execution_backend = owner, publisher, execution_backend
 
     def _current(
         self,
@@ -194,7 +192,7 @@ class NativeEmbeddingIndexCompletion:
         return EmbeddingEncodingReservations(
             self.publisher.sessions,
             CatalogEncodingOwnerAdmission(
-                self.owner, CurrentEncodingExecution(request, intent, lease), self.launcher
+                self.owner, CurrentEncodingExecution(request, intent, lease), self.execution_backend
             ),
         )
 

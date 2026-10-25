@@ -86,6 +86,7 @@ from eom_workflow.native_embedding_coordinator import (
     native_coordinator_checkpoint,
 )
 from eom_workflow.schemas import LOCAL_EMBEDDING_SCHEMA_RESOURCES
+from eom_workflow_runner.document_embedding_cpu_execution import FixedCpuDocumentEmbeddingExecution
 from eom_workflow_runner.local_embedding_admission import ResolvedLocalEmbeddingAdmission
 from eom_workflow_runner.local_embedding_native_executor import CatalogNativeEmbeddingExecutor
 from eom_workflow_runner.local_embedding_owner_admission import (
@@ -442,7 +443,7 @@ def execution(
     executor = CatalogNativeEmbeddingExecutor(
         owner=owner,
         publisher=publisher,
-        launcher=launcher,
+        execution_backend=FixedCpuDocumentEmbeddingExecution(launcher),
         runtime_profile=profile,
         source_commit="a" * 40,
     )

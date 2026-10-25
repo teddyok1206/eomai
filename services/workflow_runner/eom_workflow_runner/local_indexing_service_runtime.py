@@ -40,6 +40,7 @@ from eom_workflow_runner.actor_authorization_adapters import (
     OperatorIdentityWorkflowActorAuthorizer,
     SqlAlchemyOperatorActorSource,
 )
+from eom_workflow_runner.document_embedding_cpu_execution import FixedCpuDocumentEmbeddingExecution
 from eom_workflow_runner.engine import WorkflowRunner
 from eom_workflow_runner.local_embedding_native_executor import CatalogNativeEmbeddingExecutor
 from eom_workflow_runner.local_embedding_owner_admission import (
@@ -209,7 +210,7 @@ def _build_namespace_runtime(
     executor = CatalogNativeEmbeddingExecutor(
         owner=owner,
         publisher=publisher,
-        launcher=launcher,
+        execution_backend=FixedCpuDocumentEmbeddingExecution(launcher),
         runtime_profile=selection.runtime_profile,
         source_commit=pin.runtime_source_commit,
     )

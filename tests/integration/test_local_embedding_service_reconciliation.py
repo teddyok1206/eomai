@@ -32,6 +32,7 @@ from eom_orchestrator.local_embedding_control_artifacts import (
 from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
 from eom_orchestrator.native_embedding_index_systemd import FixedNativeIndexLauncher
 from eom_workflow_runner import local_embedding_service_reconciliation as application
+from eom_workflow_runner.document_embedding_cpu_execution import FixedCpuDocumentEmbeddingExecution
 from eom_workflow_runner.local_embedding_native_executor import CatalogNativeEmbeddingExecutor
 from eom_workflow_runner.local_embedding_owner_admission import (
     CatalogLocalEmbeddingOwnerAdmission,
@@ -166,7 +167,7 @@ def reconciliation(guarded_engine, service_owner, tmp_path, monkeypatch):
     executor = CatalogNativeEmbeddingExecutor(
         owner=owner,
         publisher=publisher,
-        launcher=launcher,
+        execution_backend=FixedCpuDocumentEmbeddingExecution(launcher),
         runtime_profile=c.fixture.policy.profiles[0],
         source_commit=source_commit,
     )

@@ -8,6 +8,7 @@ from eom_catalog_service.embedding_registry_catalog_adapter import (
     EmbeddingRegistryOwnerConfiguration,
 )
 from eom_orchestrator.native_embedding_index_systemd import FixedNativeIndexLauncher
+from eom_workflow_runner.document_embedding_cpu_execution import FixedCpuDocumentEmbeddingExecution
 from eom_workflow_runner.local_embedding_native_executor import CatalogNativeEmbeddingExecutor
 from eom_workflow_runner.local_embedding_owner_admission import LocalEmbeddingOwnerConfiguration
 
@@ -39,7 +40,7 @@ def executor(tmp_path):
         CatalogNativeEmbeddingExecutor(
             owner=owner,
             publisher=publisher,
-            launcher=launcher,
+            execution_backend=FixedCpuDocumentEmbeddingExecution(launcher),
             runtime_profile=profile,
             source_commit="a" * 40,
         ),

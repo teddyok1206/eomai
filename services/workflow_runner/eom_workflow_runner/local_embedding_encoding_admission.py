@@ -17,7 +17,6 @@ from eom_orchestrator.embedding_encoding_reservations import (
     ResolvedEncodingLaunch,
     ResolvedEncodingScope,
 )
-from eom_orchestrator.native_embedding_index_systemd import FixedNativeIndexLauncher
 from eom_orchestrator.native_embedding_launch_identity import require_native_embedding_launch
 from eom_workflow.local_embedding_encoding_dispatch import (
     SupportedEmbeddingAssociation,
@@ -41,6 +40,10 @@ from eom_workflow.local_embedding_source_plan_v2 import LocalEmbeddingSourcePlan
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from eom_workflow_runner.document_embedding_execution import (
+    DocumentEmbeddingExecution,
+    DocumentExecutionState,
+)
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.local_embedding_owner_admission import (
     CatalogLocalEmbeddingOwnerAdmission,
@@ -109,9 +112,9 @@ class CatalogEncodingOwnerAdmission:
         self,
         owner: CatalogLocalEmbeddingOwnerAdmission,
         execution: CurrentEncodingExecution,
-        launcher: FixedNativeIndexLauncher,
+        execution_backend: DocumentEmbeddingExecution,
     ) -> None:
-        self.owner, self.execution, self.launcher = owner, execution, launcher
+        self.owner, self.execution, self.execution_backend = owner, execution, execution_backend
 
     def _current_mutation(
         self, session: Session, intent: SupportedEmbeddingIntent
@@ -248,9 +251,11 @@ class CatalogEncodingOwnerAdmission:
                 )
                 if observation.state in {"FAILED", "CANCELLED", "SUCCEEDED"}:
                     raise ValueError("terminal native coordinator")
-                handle = self.execution.intent.native_launch_job_id.removeprefix("job_")
-                units = self.launcher.observe(handle)
-                if not (all(row.fresh for row in units) or all(row.succeeded for row in units)):
+                state = self.execution_backend.observe(self.execution.intent.native_launch_job_id)
+                if (
+                    state is not DocumentExecutionState.NOT_STARTED
+                    and state is not DocumentExecutionState.SUCCEEDED
+                ):
                     uncertain.add(self.execution.intent.native_launch_job_id)
             except WorkflowError:
                 uncertain.add(self.execution.intent.native_launch_job_id)

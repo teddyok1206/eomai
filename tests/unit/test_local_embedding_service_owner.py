@@ -31,6 +31,7 @@ from eom_orchestrator.local_embedding_control_artifacts import (
 from eom_orchestrator.models import ArtifactRevisionRecord
 from eom_orchestrator.native_embedding_index_systemd import FixedNativeIndexLauncher
 from eom_workflow.local_embedding_request import LocalEmbeddingServiceWorkflowRequest
+from eom_workflow_runner.document_embedding_cpu_execution import FixedCpuDocumentEmbeddingExecution
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.local_embedding_admission import ResolvedLocalEmbeddingAdmission
 from eom_workflow_runner.local_embedding_native_executor import CatalogNativeEmbeddingExecutor
@@ -279,7 +280,7 @@ def test_service_readiness_uses_same_numerical_runtime_without_claiming_authenti
     executor = CatalogNativeEmbeddingExecutor(
         owner=c.owner,
         publisher=c.publisher,
-        launcher=launcher,
+        execution_backend=FixedCpuDocumentEmbeddingExecution(launcher),
         runtime_profile=c.fixture.policy.profiles[0],
         source_commit="a" * 40,
     )

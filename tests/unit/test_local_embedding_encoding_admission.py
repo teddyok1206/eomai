@@ -10,6 +10,7 @@ from eom_orchestrator.embedding_encoding_reservations import EncodingReadTarget
 from eom_orchestrator.native_embedding_launch_identity import NativeEmbeddingLaunchObservation
 from eom_workflow.local_embedding_request import require_local_embedding_operator_seed
 from eom_workflow_runner import local_embedding_encoding_admission as admission
+from eom_workflow_runner.document_embedding_cpu_execution import FixedCpuDocumentEmbeddingExecution
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
 from eom_workflow_runner.local_embedding_admission import ResolvedLocalEmbeddingAdmission
 from eom_workflow_runner.local_embedding_owner_admission import ResolvedLocalEmbeddingSources
@@ -42,7 +43,9 @@ def current(monkeypatch):
             intent.command_id, intent.runner_id, "wflease_" + "f" * 32, intent.lease_generation
         ),
     )
-    port = admission.CatalogEncodingOwnerAdmission(owner, execution, launcher)
+    port = admission.CatalogEncodingOwnerAdmission(
+        owner, execution, FixedCpuDocumentEmbeddingExecution(launcher)
+    )
     session = MagicMock(spec=Session)
     session.scalar.side_effect = (
         SimpleNamespace(
@@ -207,6 +210,23 @@ def test_expired_current_command_keeps_pending_ownership_uncertain_and_never_sta
         (fixture.association.intent.native_launch_job_id,)
     )
     assert launcher.observe.call_count == 0 and launcher.run.call_count == 0
+
+
+def test_backend_untyped_success_is_uncertain_not_a_launch_or_retry_grant(current) -> None:
+    fixture, port, session, _owner, launcher, _launch, _lease, _artifacts = current
+    port.execution_backend = Mock()
+    port.execution_backend.observe.return_value = "SUCCEEDED"
+    observed = port.reauthorize_read(
+        session,
+        tuple(
+            EncodingReadTarget(job, fixture.association.intent, None)
+            for job in fixture.association.owned_jobs
+        ),
+    )
+    assert observed.uncertain_launch_job_ids == frozenset(
+        (fixture.association.intent.native_launch_job_id,)
+    )
+    launcher.run.assert_not_called()
 
 
 def test_late_session_revocation_after_artifact_read_is_not_returned_as_authorized(current) -> None:

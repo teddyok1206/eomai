@@ -153,6 +153,12 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
     # Catalog/runner composition cycle, nor can runtime depend on checkout paths.
     import_orders = (
         (
+            "eom_workflow_runner.document_embedding_cpu_execution",
+            "eom_workflow_runner.document_embedding_batch_material",
+            "eom_workflow_runner.document_embedding_execution",
+            "eom_workflow_runner.local_indexing_service_runtime",
+        ),
+        (
             "eom_workflow_runner.reference_query_batch_driver",
             "eom_catalog_service.ordinary_item_graph_publication_service",
             "eom_workflow_runner.local_embedding_native_executor",

@@ -1591,3 +1591,59 @@ CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
 이 시점은 hardware 경계 milestone이지 사용자가 요청한 **전체 GPU 목표 완료 checkpoint**가 아니다.
 DOCUMENT/QUERY 실제 application 연결·device index coverage·CPU 대체·처리량·default/rollback을
 완료하고 source와 실제 compatible release set을 고정한 다음에만 지정된12+4 정적 리뷰를 시작한다.
+
+### P2-U — DOCUMENT 수치 실행 경계 연결 설계 (2026-10-25)
+
+기존 `CatalogNativeEmbeddingExecutor`의 source/claim/encoding reservation/Artifact commit/
+index 등록은 공통 application 한 곳에 유지하고, CPU 고정 unit 실행과 CUDA 묶음 실행만
+작은 `DocumentEmbeddingExecution` port의 별도 adapter로 분리한다. DB/schema/worker wire는
+변경하지 않는다. 입력은 기존 불변 launch association + input, 출력은 검증된 result + 보호된
+publication workspace이며 binary/완전한 문항을 DB나 다른 registry에 복제하지 않는다.
+
+canonical source는 Catalog의 pin된 source plan, 실제 actor/command lease와 기존 encoding
+Job/association이다. CUDA adapter는 실제 parent admission/route를 소유한 active batch에만
+결합한다. 자료형식(view)별 순서 고정 tuple, job/ordinal 조회 map, 유한 Condition gathering을
+사용한다. 최대3개 view와 기존1,024 encoding rows의 O(n) 처리이며 새로운 queue/daemon은 없다.
+각 Runner는 기존 claim/heartbeat를 유지하고 SQL root 밖에서만 다른 child/계산을 기다린다.
+
+GPU 결과는 aggregate의 read-only memoryview에서 기존 child commit workspace로 한 번만
+materialize하고 기존 publication/reservation completion/index 등록을 재사용한다. CPU의
+`PreparedNativeIndex` CPU-only guard는 그대로 둔다. device-neutral liveness enum은 관측일
+뿐 권한/완료 영수증이 아니다. unknown/error/중단은 기존 소유권을 보존하며 다른 장치로
+재실행하지 않는다. source/hash/권한 오류는 전파한다. 완료 후 replay는 원래 child만 받는다.
+
+단순 대안인 CUDA 전용500행 executor 복제는 source fence/등록/중복 방지 규칙을 갈라놓으므로
+배제한다. 이번 경계 분리에서 CPU adapter와 CUDA child publication materializer를 구현한다.
+finite-batch CUDA dispatch를 이 port에 결합하는 단계는 아직 완료하지 않았다.
+이미 재사용 가능하거나 다른 intent가 소유한 child의 no-numerical 처리,
+원 parent의 cold recovery, INDEX selection의32→bulk 범위 확대는 별도 남은 호환 계약이며
+이 경계 분리만으로 GPU default/전체 goal 완료를 선언하지 않는다. released1.0 schema bytes는
+수정하지 않고 필요한 후속 계약에서 명시한다. 테스트는 실제 파일/중단 보존과 disposable
+PostgreSQL reservation/replay를 구분하며 hardware/운영 실행 PASS로 확대 해석하지 않는다.
+
+P2-U 소스 검증: 집중 회귀/파일 경계/의존성/설치 wheel 검사 **186 PASS,87.15초**
+(`/tmp/eom-document-execution-tests-20261025-r1.log`). 새 CPU adapter/CUDA materializer/
+indexing runtime의 cold import 순서를 추가한 wheel 검사를 별도로 다시 실행해
+**1 PASS,15.89초** (`/tmp/eom-document-execution-wheel-tests-20261025-r1.log`)다.
+7개 변경 source strict mypy, scoped Ruff lint/format, diff whitespace PASS다.
+새 dependency/DB migration/external worker message는 없다.
+
+기존 CPU numerical handoff를 실제 보호된 임시 파일에서 사용한 disposable PostgreSQL
+Workflow/encoding reservation/index 등록/중단 재전송 회귀 **36 PASS,208.18초**,
+임시 DB cleanup/실행 exit0 (`/tmp/eom-document-execution-pg-20261025-r1.log`)다.
+동시 동일 encoding claim, 기존 완료 행 재사용, publication 단계 중단 후 원 producer
+재사용과 completion replay를 포함한다. IAM/model/OS 실행 leaves는 해당 suite에 명시된
+synthetic seam이므로 실제 GPU 수치 실행/운영 인증 PASS로 보고하지 않는다.
+
+CUDA child materializer는 실제 임시 파일에 대해 exact replay/inode 유지, partial member/
+symlink/legacy launch marker 보존·거부, raw hash/read-only vector/실행 소유자 검사를 통과했다.
+CPU adapter는 현재 source/lease 확인과 staging을 짧은 root에서 끝내고 수치 실행은 SQL 밖에서
+한다. 기존 BUSY/UNCERTAIN만 pending이며 다른 오류는 전파한다. liveness는 enum 관측값일 뿐
+성공 영수증이나 장치 변경 권한이 아니고, 누락된 unit/문자열 가짜 성공은 uncertain이다.
+
+운영 배포/active selection 변경은 이 단계에서 하지 않았다. 다섯 기존 서비스 active,
+GPU0%/2MiB를 재확인했다. CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO,
+CUDA_DOCUMENT_DISPATCH_COMPOSITION=PENDING, CANONICAL_SOURCE_BATCH_COMPUTE=NOT_RUN,
+CPU_FALLBACK_EXECUTION=NOT_RUN, GOAL=ACTIVE. 기존 API/Web/QUERY/INDEX/private root
+release와 qualification/실패 기록은 그대로다. 이 commit은 경계 분리 중간 체크포인트이며
+요청된 전체 GPU 완료 체크포인트가 아니다. 후속12+4 리뷰는 아직 시작하지 않았다.
