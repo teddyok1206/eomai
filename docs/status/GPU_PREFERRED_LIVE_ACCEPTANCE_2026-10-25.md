@@ -1,6 +1,6 @@
 # GPU-preferred embedding: live acceptance ledger
 
-As of2026-10-25 18:55 UTC. **GOAL=ACTIVE; completion is not proven.**
+As of2026-10-25 19:37 UTC. **GOAL=ACTIVE; completion is not proven.**
 This small ledger preserves the whole approved scope while background catch-up
 continues. Source tests, installed composition and actual execution are separate
 evidence. It is not a new runtime registry or permission grant.
@@ -35,11 +35,11 @@ operating release set: NOT_SET.** README cleanup `4e9c962e` is not repeated.
 | Bounded model lifetime | Actual finite native invocation and the installed single-backend-scope implementation support the DOCUMENT cohort; no direct model-construction counter was measured. Multi-child QUERY reuse remains live-pending. |
 | GPU return | Those three exact numerical invocations succeeded and have canonical retirement receipts; process0/retainedFD0. This is per-cohort closure, not a claim that no newer GPU job is running. |
 | Full CPU/CUDA per-view pair closure | **PENDING**: require the same complete source/profile/input-hash targets through the actual source owner, not equal counts or a smaller intersection. |
-| Continuous CPU standby coverage | The actual blocker was64 producers owned by an original CPU unit timed out on October19. Recovery3 officially closed only that expired original Workflow/native/producers as FAILED, preserving508 earlier SUCCEEDED commands and the failed unit. Current revision CPU CONCRETE work is queued again. Successor producer/completed exact-space coverage is still pending. |
+| Continuous CPU standby coverage | Original64-producer failure was officially recovered without rewriting history. The actual current mixed CPU CONCRETE successor completed8 producers and registered465 bindings; the remaining56 and legacy counterpart still need ordinary catch-up. This is actual successor success, not full standby coverage. |
 | Finite multi-item GPU QUERY | **PENDING**: actual authenticated request3, ordered child completion, original pins and result reads after pair readiness. |
 | Resource-only CPU fallback | **PENDING live**: actual shared-kernel pre-init BUSY, exact CPU pair, no fallback on authority/hash/unknown execution. Source tests alone do not close it. |
 | Original request/device replay | Original replay source/PG evidence preserved. Candidate07 has installed no-forward composition PASS43.839s with actual API07; no authentication/model/claim/selection. Live routed default/replay is still pending. |
-| Image coexistence and release | **PENDING live**. Original independent `IMAGE_TRAINER_REGRESSION=NOT_RUN` is preserved; a synthetic mutex probe must not be labeled a real image/training run. |
+| Image coexistence and release | **Physical INDEX/image exclusion and real image execution/return PASS**,19:33, below. This uses a private synthetic non-Item reference, not scientific source admission or an image-quality acceptance. Actual routed QUERY resource-only CPU fallback remains a separate pending check. Original independent `IMAGE_TRAINER_REGRESSION=NOT_RUN` remains unchanged. |
 | Throughput | Historical CPU/CUDA comparison stays unchanged. Measure finite QUERY/cohort behavior separately from end-to-end source/registration overhead; no new service speedup is claimed. |
 | GPU default, rollback and compatible installed set | **PENDING**. Candidate/backups/preflight exist, but actual default selection, read-back and supported rollback still need live verification. |
 | Git/docs/Slack | Source fixes and evidence pushed. Milestone report `devreport_5555af57a3984798b16e4ec263dd39a7` SENT; final completion report remains pending. |
@@ -193,6 +193,78 @@ record real image execution and resource return separately from a mutex-only
 probe. Keep the actual private-chat CPU configuration unchanged. Stage these
 checks before requesting a fresh operator session; do not lengthen freshness
 limits, retain passwords or pretend that authentication has occurred.
+
+### Actual CPU successor and image resource-sharing checkpoint
+
+The19:25 read-only observation proves current CPU CONCRETE Workflow
+`workflow_30d9d547127e4907ac64888d2032f95a` **COMPLETED**, native Job
+`job_6ea2413ca9a746178bc4d8f22236a366` **SUCCEEDED**, and8 associated producers
+**SUCCEEDED**. Its normal command observation completed at19:08:32. This is
+stronger evidence than a successful planning/deferred command alone. Original
+October19 failed history is not reinterpreted. The legacy counterpart remained
+REQUESTED in that observation.
+
+Technical counts at19:25:35 (`/tmp/eom-current-index-pair-metadata-20261025-r10.json`,
+EXIT0): mixed CPU521/465/521 versus CUDA81/165/56; legacy ALL CPU520/457/520
+versus CUDA81/165/48, in CONTENT/CONCRETE/METADATA order. They remain partial
+counts, **not** canonical pair acceptance. Current legacy CONTENT CUDA Workflow
+`workflow_f1b57881465e437ca9d79fa8648938e3` was genuinely RUNNING with8 owned
+producers; its original root invocation `1df38e11909940b6b76c94e0a03c3876`
+subsequently ended naturally with status0/process0/retainedFD0. Evidence:
+`/tmp/eom-current-index-phase-20261025-1925.json`, EXIT0. No numerical work was
+stopped for the image test.
+
+The existing legacy smoke script was rejected before launching a worker because
+it loads binding1 while production selects binding6. Preserve that result;
+do not weaken the deployed binding discriminator to make the test pass. A
+private, non-Item fixture then used the **actual V6 binding and public adapter**:
+
+- First V6 image unit `imgreq_c2a23af7ba9ebe9d8d93f2d792833275` stopped before
+  a lease was admitted, while the original19:09–19:14 INDEX GPU allocation was
+  held. Its unleased retirement and failure remain intact. A separate actual
+  image-worker-identity mutex diagnostic observed BUSY/errno11 while INDEX held
+  the mutex; neither result is called a successful model run or CPU fallback.
+- Second V6 unit `imgreq_4a2c111677fa6481f748b8407f8a18b7` received its root ACK
+  but correctly rejected the private fixture with `LOCAL_IMAGE_HANDOFF_INVALID`
+  before inference. The fixture was800x500 RGBA; the released conditioning input
+  requires800x504 RGB. This is **not** another GPU-BUSY result. The unchanged
+  public `normalize_reference_image` function corrected only the test input.
+  No production source, binding, model, unit or permission was changed.
+- Correctly normalized V6 unit
+  `eom-image-reference-base-provider@imgreq_4bb218576d959f5c6cfe777e89124adc.service`
+  completed actual GPU inference and the validated V6 adapter handoff at19:33:49.
+  Binding SHA `c77908be126161e5a08082958ebc06af63b6f64fda11ce8154f198a90058843c`
+  remained the real selected V6 binding. The private output SHA is
+  `deb3423863a5aba5e283897a1b89e7bc8659770969ac5fa7b88a79e09abab2ff`;
+  V6 receipt SHA `82c7b9d925b8ea76588911b7bc1117a86cc8dda1be737d6b0bf7182184241ddb`.
+- The actual generation receipt reports RTX5080/CUDA12.8, peak GPU allocation
+  6229452288 bytes and generation duration8967ms. That duration includes its
+  existing generation boundary, **not** an isolated forward-only benchmark or
+  embedding throughput. Exactly one successful model generation occurred; the
+  earlier input/resource refusals are separately preserved.
+- Original image invocation `98c1610ca5c548708e240f9c966805ed` received
+  `IMAGE_GPU_ACK_SENT`, then retired successfully at19:33:50. Retirement SHA
+  `26e56a6497716792bd2e910074fe05e3f831bc75eaee56e3368c13a7954a0e68`.
+  Current unit process0/FD-store0 and GPU memory returned to2MiB. The root event
+  `IMAGE_GPU_RETIRED_NOT_ADMITTED` does not itself grant Catalog/scientific
+  authority; the protected original terminal outcome is SUCCEEDED.
+
+This proves actual physical exclusion/serial resource reuse and a real image
+forward with the same INDEX process still running: PID453623, invocation
+`297d8b…`. It does not claim simultaneous inference on the exclusive GPU,
+registered source admission, image educational quality, trainer execution,
+full CPU/CUDA coverage, or completed routed QUERY/default/rollback acceptance.
+All reference IDs in this private fixture are explicitly synthetic and
+unregistered; no Item, Artifact, production DB row or NAS scientific content was
+created/read. No user authentication was requested and no credential was changed.
+
+Small evidence: `/tmp/eom-image-coexistence-v6-normalized-20261025-r1.log`, EXIT0;
+`/tmp/eom-image-coexistence-v6-success-metadata-20261025.json`, EXIT0;
+`/tmp/eom-image-worker-mutex-diagnostic-20261025-r1.log`, BUSY/EXIT2;
+the separate original refusal/input/preflight logs and protected image lifetime
+receipts. Private operator fixture source SHA
+`cd9838a7bf417de56f04d2140693cc17405d0e3bd9288975c5e8f210403f0fb6`;
+its installed copy exactly matches the reviewed/formatted staging source.
 
 ### Separate observation, not an additional GPU implementation stream
 
