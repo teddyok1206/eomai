@@ -806,6 +806,19 @@ candidate로 검증하고, 원 FAILED/미완료 native history의 supported reco
 GPU_GOAL=ACTIVE, CANARY=FAILED_EXPIRED, CURRENT_DEFAULT=CPU,
 PREVIOUS_COMPATIBLE_OWNER=RESTORED, GPU_PREFERRED_ACTIVE=NO.
 
+P2-AE 비용 수정은 source `154ad94f6b538ddf10b9bab31ccfed1425674197`로 commit/push했다.
+기존 build-only archive/RECORD PASS 후 보호된 metadata owner release에만 별도 설치했다.
+경로는 `/opt/eom/embedding-owner-releases/154ad94f6b538ddf10b9bab31ccfed1425674197`이며
+platform/API-contract wheel SHA-256은 각각
+`2a53dee16cef50303419f5425593d2e4a8191d14d1b6e7efbd059e2f872fd5b3`,
+`4a5132be1017b97e9752e9abe6448dcdc0ce38a48d90d79f617aeed9f0ba0ff6`다.
+source 없는 cwd `/`, explicit experiment Python `-I -B`의 installed import/schema probe도
+PASS이며 모델 import/실행은 없다. candidate는 **STAGED_NOT_ACTIVE**다. 원 실패 canary의
+runtime pin을 이 후보로 대체하지 않았고, 운영 unit/identity/grant/기본 검색과 수치 prefix는
+모두 이전 복귀 상태 그대로다. 로그는 `/tmp/eom-gpu-runtime-cost-build-20261025.log`,
+`/tmp/eom-gpu-runtime-cost-owner-stage-20261025.log`,
+`/tmp/eom-gpu-runtime-cost-installed-import-20261025.log`다.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존
