@@ -185,6 +185,68 @@ def test_observation_replays_actual_plan_and_atomic_workflow_without_model(recon
         assert workflow.created_actor_id == c.source.fixture.grant.service.service_id
 
 
+def test_preparation_needs_no_numerical_executor_and_replays_the_original_plan(reconciliation):
+    c = reconciliation
+    before = counts(c)
+    preparation = application.LocalEmbeddingServicePreparation(
+        c.app.owner,
+        c.source.publisher,
+        c.app.executor.runtime_profile,
+        source_commit=c.app.controls.source_commit,
+    )
+    c.launcher.reset_mock()
+    first, replay = preparation.prepare_once(), preparation.prepare_once()
+    assert first == replay and first.request is not None
+    assert first.observed.state is ReconciliationState.PREPARED
+    assert first.observed.workflow_id is None and first.observed.command_id is None
+    assert counts(c) == (0, 0, before[2] + 1)
+    assert c.launcher.mock_calls == []
+    submitted = c.app.run_once()
+    assert submitted.state is ReconciliationState.QUEUED
+    assert counts(c) == (1, 1, before[2] + 1)
+    with c.source.publisher.sessions() as session:
+        workflow = session.get(WorkflowInstanceRecord, submitted.workflow_id)
+        assert workflow.initial_request == first.request.model_dump(mode="json")
+
+
+def test_revocation_between_preparation_and_start_is_not_cached_authority(
+    reconciliation, monkeypatch
+):
+    c = reconciliation
+    before = counts(c)
+    prepare = c.app.preparation.prepare_once
+
+    def revoke_after_preparation():
+        value = prepare()
+        c.source.deny = True
+        return value
+
+    monkeypatch.setattr(c.app.preparation, "prepare_once", revoke_after_preparation)
+    with pytest.raises(ValueError, match="FORBIDDEN"):
+        c.app.run_once()
+    assert counts(c) == (0, 0, before[2] + 1)
+    c.launcher.run.assert_not_called()
+
+
+def test_preparation_rechecks_source_authority_after_immutable_plan_publication(
+    reconciliation, monkeypatch
+):
+    c = reconciliation
+    before = counts(c)
+    publish = c.app.controls.publish_observed_source_plan
+
+    def revoke_after_publish(*args, **kwargs):
+        saved = publish(*args, **kwargs)
+        c.source.deny = True
+        return saved
+
+    monkeypatch.setattr(c.app.controls, "publish_observed_source_plan", revoke_after_publish)
+    with pytest.raises(ValueError, match="FORBIDDEN"):
+        c.app.preparation.prepare_once()
+    assert counts(c) == (0, 0, before[2] + 1)
+    c.launcher.run.assert_not_called()
+
+
 def test_bounded_targets_are_stable_and_exclude_already_bound_sources(reconciliation):
     c = reconciliation
     c.current.keys = c.current.keys[1:]

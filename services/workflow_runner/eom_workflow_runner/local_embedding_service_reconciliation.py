@@ -27,13 +27,16 @@ from eom_catalog_service.embedding_registry_application import prepare_missing_e
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
 from eom_catalog_service.local_embedding_source_plan_v2 import build_local_embedding_source_plan_v2
 from eom_identifiers import content_sha256
+from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.local_embedding_control_artifacts import (
     LocalEmbeddingControlArtifactPublisher,
 )
+from eom_workflow.local_embedding_execution_policy import LocalEmbeddingRuntimeProfile
 from eom_workflow.local_embedding_index_refresh import (
     IndexMembershipRefreshBasis,
 )
 from eom_workflow.local_embedding_request_v2 import (
+    SupportedLocalEmbeddingRequest,
     parse_supported_local_embedding_request,
     supported_local_embedding_request_actor,
 )
@@ -59,6 +62,7 @@ class ReconciliationState(StrEnum):
     WAITING_FOR_SOLUTION_REPORT = "WAITING_FOR_SOLUTION_REPORT"
     VIEW_UNAVAILABLE = "VIEW_UNAVAILABLE"
     UP_TO_DATE = "UP_TO_DATE"
+    PREPARED = "PREPARED"
     QUEUED = "QUEUED"
     REPLAYED = "REPLAYED"
     TERMINAL_INCOMPLETE = "TERMINAL_INCOMPLETE"
@@ -83,35 +87,52 @@ class LocalEmbeddingReconciliationResult:
     command_state: str | None = None
 
 
-class LocalEmbeddingServiceReconciliation:
-    """One bounded observation/submission; scheduling is the installed owner's job."""
+@dataclass(frozen=True, slots=True)
+class PreparedLocalEmbeddingReconciliation:
+    """A plan pointer and observation, never runtime/source authority or a queue claim."""
 
-    def __init__(self, executor: CatalogNativeEmbeddingExecutor, *, maximum_targets: int = 64):
+    observed: LocalEmbeddingReconciliationResult
+    request: SupportedLocalEmbeddingRequest | None = None
+
+
+class LocalEmbeddingServicePreparation:
+    """Source/coverage preparation before physical allocation, without a numerical executor."""
+
+    def __init__(
+        self,
+        owner: CatalogLocalEmbeddingOwnerAdmission,
+        publisher: ControlFileSetPublisher,
+        runtime_profile: LocalEmbeddingRuntimeProfile,
+        *,
+        source_commit: str,
+        maximum_targets: int = 64,
+    ) -> None:
         if (
-            type(executor) is not CatalogNativeEmbeddingExecutor
-            or type(executor.owner) is not CatalogLocalEmbeddingOwnerAdmission
-            or executor.owner.catalog.engine is not executor.publisher.engine
+            type(owner) is not CatalogLocalEmbeddingOwnerAdmission
+            or type(publisher) is not ControlFileSetPublisher
+            or owner.catalog.engine is not publisher.engine
+            or owner.settings.nas_artifact_root != publisher.settings.nas_artifact_root
+            or type(runtime_profile) is not LocalEmbeddingRuntimeProfile
+            or runtime_profile.space != owner.configuration.registry.space
             or type(maximum_targets) is not int
             or not 1 <= maximum_targets <= 1024
         ):
             raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_CONFIGURATION_INVALID")
-        self.executor, self.maximum_targets = executor, maximum_targets
-        self.owner = executor.owner
+        self.owner, self.publisher, self.runtime_profile = owner, publisher, runtime_profile
+        self.maximum_targets = maximum_targets
         self.controls = LocalEmbeddingControlArtifactPublisher(
-            executor.publisher, source_commit=executor.source_commit
+            publisher, source_commit=source_commit
         )
 
-    def run_once(self) -> LocalEmbeddingReconciliationResult:
-        owner, executor = self.owner, self.executor
-        with executor.publisher.sessions.begin() as session:
+    def prepare_once(self) -> PreparedLocalEmbeddingReconciliation:
+        owner, publisher, runtime_profile = self.owner, self.publisher, self.runtime_profile
+        with publisher.sessions.begin() as session:
             query = owner.current_reconciliation_lookup(session)
             if query is None:
-                return LocalEmbeddingReconciliationResult(
-                    ReconciliationState.NO_PUBLISHED_GRAPH, None
+                return PreparedLocalEmbeddingReconciliation(
+                    LocalEmbeddingReconciliationResult(ReconciliationState.NO_PUBLISHED_GRAPH, None)
                 )
-            controls = owner.resolve_reconciliation_controls(
-                session, query, executor.runtime_profile
-            )
+            controls = owner.resolve_reconciliation_controls(session, query, runtime_profile)
             mixed = isinstance(query.namespace, MixedEmbeddingIndexNamespace)
             if mixed != isinstance(controls.grant, LocalIndexingMixedAccessPolicy):
                 raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
@@ -195,7 +216,7 @@ class LocalEmbeddingServiceReconciliation:
                 index_refresh_reason=refresh_reason,
             )
             # Fresh current checks also apply to no-op/report-wait observations.
-            late = owner.resolve_reconciliation_controls(session, query, executor.runtime_profile)
+            late = owner.resolve_reconciliation_controls(session, query, runtime_profile)
             if late != controls:
                 raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
             if not targets:
@@ -208,7 +229,7 @@ class LocalEmbeddingServiceReconciliation:
                     if unavailable
                     else ReconciliationState.UP_TO_DATE
                 )
-                return replace(observed, state=state)
+                return PreparedLocalEmbeddingReconciliation(replace(observed, state=state))
             definition_version = (
                 LOCAL_EMBEDDING_WORKFLOW_V2_VERSION if mixed else LOCAL_EMBEDDING_WORKFLOW_VERSION
             )
@@ -269,11 +290,9 @@ class LocalEmbeddingServiceReconciliation:
                 "access_policy_revision_id": query.policy_revision_id,
                 "access_policy_sha256": query.policy_sha256,
                 "namespace": query.namespace.model_dump(mode="json"),
-                "space": executor.runtime_profile.space.model_dump(mode="json"),
-                "runtime_bundle": executor.runtime_profile.runtime_bundle.model_dump(mode="json"),
-                "resource_profile": executor.runtime_profile.resource_profile.model_dump(
-                    mode="json"
-                ),
+                "space": runtime_profile.space.model_dump(mode="json"),
+                "runtime_bundle": runtime_profile.runtime_bundle.model_dump(mode="json"),
+                "resource_profile": runtime_profile.resource_profile.model_dump(mode="json"),
                 "source_plan": saved.member.model_dump(mode="json"),
                 "source_plan_sha256": plan.plan_sha256,
                 "native_execution_policy": owner.configuration.native_execution_policy.model_dump(
@@ -289,6 +308,60 @@ class LocalEmbeddingServiceReconciliation:
             request = parse_supported_local_embedding_request(
                 body | {"request_sha256": content_sha256(body)}
             )
+            # Artifact publication can consume time. Retain the source locks and
+            # repeat current authority, not immutable plan/material hashing.
+            owner.catalog.authorize_scope(session, controls.caller, query)
+            owner.fence_current_actor(session, request)
+            return PreparedLocalEmbeddingReconciliation(
+                replace(observed, state=ReconciliationState.PREPARED), request
+            )
+
+
+class LocalEmbeddingServiceReconciliation:
+    """Existing prepare/atomic START facade; scheduling stays with the installed owner."""
+
+    def __init__(self, executor: CatalogNativeEmbeddingExecutor, *, maximum_targets: int = 64):
+        if type(executor) is not CatalogNativeEmbeddingExecutor:
+            raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_CONFIGURATION_INVALID")
+        self.executor, self.owner = executor, executor.owner
+        self.preparation = LocalEmbeddingServicePreparation(
+            executor.owner,
+            executor.publisher,
+            executor.runtime_profile,
+            source_commit=executor.source_commit,
+            maximum_targets=maximum_targets,
+        )
+        self.controls = self.preparation.controls
+
+    @property
+    def maximum_targets(self) -> int:
+        return self.preparation.maximum_targets
+
+    @maximum_targets.setter
+    def maximum_targets(self, value: int) -> None:
+        if type(value) is not int or not 1 <= value <= 1024:
+            raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_CONFIGURATION_INVALID")
+        self.preparation.maximum_targets = value
+
+    def run_once(self) -> LocalEmbeddingReconciliationResult:
+        prepared = self.preparation.prepare_once()
+        observed, request = prepared.observed, prepared.request
+        if request is None:
+            return observed
+        owner, executor = self.owner, self.executor
+        with executor.publisher.sessions.begin() as session:
+            # Preparation carries no authority through this gap. Official START
+            # reacquires the actual current service/source/plan admission here.
+            definition = admitted_workflow_definition(
+                session,
+                definition_key=request.workflow_definition_key,
+                definition_version=request.workflow_definition_version,
+            )
+            if (
+                definition is None
+                or definition.definition_hash != request.workflow_definition_sha256
+            ):
+                raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_DEFINITION_UNAVAILABLE")
             actor_type, actor_id = supported_local_embedding_request_actor(request)
             started = start_local_embedding_in_session(
                 session,

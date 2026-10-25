@@ -1847,3 +1847,53 @@ LIVE_KERNEL_BUSY_TO_CPU_COMPUTE=NOT_RUN, GOAL=ACTIVE.
 `/home/eom/EOM_CODE_REVIEW_POST_CHECKPOINT_2026-10-24.md`의 정적 후보12건/추가4건을
 그 체크포인트와 대조한다. 현재 그 문서는 아직 읽지 않았으며 GPU 작업을 되돌리지 않는다.
 별도로 완료된 README 정리 `4e9c962e`는 재적용하지 않는다.
+
+### P2-Y — 물리 배정 전 source 준비와 공식 START 분리 (설계)
+
+현재 service reconciliation은 자료 관측/plan Artifact 발행/Workflow START를 한 메서드로
+묶는다. routed composition은 실제 장치를 고르기 전에 device별 missing/coverage와 source
+plan을 준비해야 하므로, numerical executor나 가짜 active root가 필요 없는 작은 application
+preparation으로 기존 로직을 추출한다. 기존 CPU reconciliation은 그 preparation과 기존
+`start_local_embedding_in_session`을 조합하는 facade로 유지한다. 새 queue/framework는 없다.
+
+canonical source는 기존 실제 service Catalog grant/Graph/source resolution이고 결과는 frozen
+관측 metadata와 원 request의 작은 plan pointer다. 기존 logical/revision/hash와 source-plan
+Artifact publication key 및 Workflow/START idempotency key를 그대로 사용한다. source별
+map/set·정렬 O(n log n), 기존 indexed missing-binding 조회와 동일하며 새 DB/index/schema는 없다.
+자료/계획 준비와 START는 별도 짧은 SQL root다. 후자의 공식 admission이 현재 권한·설정·원
+plan 및 pinned definition을 다시 확인하므로 준비 결과는 권한 토큰이 아니다. 그 사이 권한
+철회/입력 변경 시 START를 거부하고 준비한 canonical plan은 보존한다. 중단 후 준비/replay는
+기존 Artifact/key를 재사용한다. 모든 자료가 이미 준비되었으면 Workflow/빈 Artifact/모델을
+만들지 않는다. 단순 대안인 CPU/GPU reconciliation 전체 복사는 공통 source·refresh 규칙이
+갈라지므로 배제한다. 기존 CPU unit/disposable concurrency·중단·replay와 새 prepare-only
+후 권한 철회/재시작을 검증하며 운영 daemon/default는 이 추출만으로 바꾸지 않는다.
+
+#### P2-Y source 검증 결과
+
+`LocalEmbeddingServicePreparation`은 실제 owner/registry profile/publisher를 받아 source 계획만
+준비한다. numerical executor나 fake READY가 필요 없다. frozen 결과의 request는 기존 plan
+pointer와 원 pin을 사용하고, 내부 PREPARED는 QUEUED/COMPLETED와 구분한다. 기존 facade의
+run_once는 별도 root에서 원 definition hash와 현재 공식 START admission을 다시 확인한다.
+source plan 발행 직후에도 현재 scope/actor를 재확인한다. 기존 key/schema bytes/Artifact는
+변경하지 않는다. 기존 CPU caller/signature와 metadata-only refresh 순서는 유지했다.
+
+- 집중 service/runtime/dependency/wheel 회귀 **253 PASS,30.67초**
+  (`/tmp/eom-reconciliation-preparation-regression-20261025-r2.log`). 준비만으로 Workflow/command/
+  native 모델을 만들지 않음, 같은 source plan 재사용, 준비 중/후 권한 철회 거부를 포함한다.
+- 실제 disposable PostgreSQL의 concurrent preparation/atomic START, 기존 FAILED 보존,
+  savepoint 후 root rollback에서 원 plan 재사용, 준비와 START 사이 중단·권한 철회·재전송
+  **7 PASS,11.90초** (`/tmp/eom-document-execution-pg-20261025-r15.log`), cleanup/exit0.
+  앞선 r14 **7 PASS,11.83초**도 보존하며 중복 합산하지 않는다. 실제 service 인증/모델 증거는 아니다.
+- strict mypy2개 source, Ruff lint/format/diff PASS. dependency/schema/migration 추가 없음.
+
+직전 `74ac63ae` wheel의 RECORD와 checkout 밖 `-I -B` import/resource 검사도 PASS다.
+새 CPU/CUDA/shared context/driver와 기존 service/query 모듈7개, dependency462개를 wheel에서만
+읽었고 torch/transformers/model/native launch/activation은 없었다. build root는
+`/tmp/eom-api-build/74ac63ae641d3e55125cd8376ec8c767df6ddaa3.LkFMGe/dist`, import 결과는
+`/tmp/eom-routed-document-wheel-import-20261025.log`다. 이는 운영 배포가 아니다.
+
+API/Web/Workflow/INDEX/QUERY owner 장기 서비스5개 active를 확인했고 실제 장치/서비스 pin은
+바꾸지 않았다. 다음 연결은 이 preparation을 사용하는 실제 routed namespace/service composition,
+장치별 matched index coverage와 원 작업의 cold recovery/불필요한 allocation 종료다.
+최종 numerical/default/fallback/coexistence/throughput/rollback은 별도 gate로 남긴다.
+CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE; 후속12+4 정적 검토는 아직 시작하지 않는다.

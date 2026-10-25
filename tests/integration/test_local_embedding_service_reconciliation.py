@@ -203,6 +203,49 @@ def test_actual_independent_roots_reconcile_one_workflow_and_start(reconciliatio
     c.launcher.run.assert_not_called()
 
 
+def test_actual_prepared_pointer_survives_stop_but_cannot_cache_source_authority(
+    reconciliation, monkeypatch
+):
+    c = reconciliation
+    first = c.app.preparation.prepare_once()
+    assert first.request is not None and first.observed.state is ReconciliationState.PREPARED
+    key = "local-embedding-reconcile:" + first.request.request_sha256.removeprefix("sha256:")
+    pointer = first.request.source_plan
+    with c.publisher.sessions() as session:
+        assert (
+            session.scalar(
+                select(WorkflowInstanceRecord).where(WorkflowInstanceRecord.idempotency_key == key)
+            )
+            is None
+        )
+        revision = session.get(ArtifactRevisionRecord, pointer.artifact_revision_id)
+        assert revision is not None
+        assert session.get(JobRecord, revision.job_id).status == "SUCCEEDED"
+    assert c.app.preparation.prepare_once() == first
+    # Simulate retaining only the immutable request after a stop, not a live grant.
+    monkeypatch.setattr(c.app.preparation, "prepare_once", lambda: first)
+    c.source.deny = True
+    with pytest.raises(ValueError, match="FORBIDDEN"):
+        c.app.run_once()
+    with c.publisher.sessions() as session:
+        assert (
+            session.scalar(
+                select(WorkflowInstanceRecord).where(WorkflowInstanceRecord.idempotency_key == key)
+            )
+            is None
+        )
+        assert session.get(ArtifactRevisionRecord, pointer.artifact_revision_id) is not None
+    c.source.deny = False
+    submitted, replay = c.app.run_once(), c.app.run_once()
+    assert submitted.state is ReconciliationState.QUEUED
+    assert replay.state is ReconciliationState.REPLAYED
+    assert submitted.workflow_id == replay.workflow_id
+    with c.publisher.sessions() as session:
+        workflow = session.get(WorkflowInstanceRecord, submitted.workflow_id)
+        assert workflow.initial_request == first.request.model_dump(mode="json")
+    c.launcher.run.assert_not_called()
+
+
 @pytest.mark.parametrize("partial", [False, True])
 def test_actual_independent_roots_submit_one_metadata_refresh_without_encoding(
     reconciliation, partial
