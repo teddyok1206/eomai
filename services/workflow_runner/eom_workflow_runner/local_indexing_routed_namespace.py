@@ -30,11 +30,14 @@ from eom_workflow_runner.document_embedding_routed_execution import (
     drive_routed_document_embedding_parent_once,
 )
 from eom_workflow_runner.embedding_batch_execution import ExistingEmbeddingBatchExecution
+from eom_workflow_runner.index_membership_publication import publish_prepared_index_membership
 from eom_workflow_runner.local_embedding_native_executor import CatalogNativeEmbeddingExecutor
 from eom_workflow_runner.local_embedding_service_reconciliation import (
     LocalEmbeddingReconciliationResult,
     LocalEmbeddingServiceReconciliation,
+    PreparedLocalEmbeddingReconciliation,
     ReconciliationState,
+    local_embedding_reconciliation_key,
 )
 from eom_workflow_runner.local_indexing_routed_sources import PairedIndexingNamespacePreparation
 from eom_workflow_runner.local_indexing_runner_composition import (
@@ -126,6 +129,8 @@ class RoutedLocalIndexingNamespaceRuntime:
             if request is None:
                 self.cpu_reconciliation.run_once()
                 return observed
+            if observed.index_refresh_reason is not None:
+                return self._publish_membership(prepared)
         else:
             request, workflow_id, _key = pending
             observed = LocalEmbeddingReconciliationResult(
@@ -133,6 +138,10 @@ class RoutedLocalIndexingNamespaceRuntime:
                 request.graph_snapshot.graph_snapshot_revision_id,
                 workflow_id=workflow_id,
             )
+            if pending[2] == local_embedding_reconciliation_key(request):
+                return self._publish_membership(
+                    PreparedLocalEmbeddingReconciliation(observed, request)
+                )
         parent = prepare_document_embedding_parent(self.pair, request, self.configuration)
         parent = prepare_document_catch_up_parent(parent, self.pair, request)
         if pending is not None and pending[2] != document_embedding_batch_workflow_key(
@@ -181,3 +190,11 @@ class RoutedLocalIndexingNamespaceRuntime:
             )
         # Coverage-only is the existing no-demand result, not a zero-row model run.
         return replace(observed, state=ReconciliationState.UP_TO_DATE)
+
+    def _publish_membership(
+        self, prepared: PreparedLocalEmbeddingReconciliation
+    ) -> LocalEmbeddingReconciliationResult:
+        result = publish_prepared_index_membership(self.pair.cuda, prepared, self.gpu_selection)
+        if result.state is ReconciliationState.BATCH_COMPLETED:
+            self.cpu_reconciliation.run_once()
+        return result

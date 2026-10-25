@@ -864,8 +864,9 @@ def _refresh_counts(execution):
 
 @pytest.mark.parametrize("execution", ["service"], indirect=True)
 @pytest.mark.parametrize("kind", ["missing_namespace", "withdrawal"])
+@pytest.mark.parametrize("compute_forbidden", [False, True])
 def test_actual_membership_refresh_uses_existing_rows_without_numeric_reservation(
-    execution, monkeypatch, kind
+    execution, monkeypatch, kind, compute_forbidden
 ):
     seeded = execution.start()
     assert execution.advance(*seeded) is True
@@ -878,6 +879,14 @@ def test_actual_membership_refresh_uses_existing_rows_without_numeric_reservatio
     assert request.reconciliation_basis.reason == (
         "MISSING_NAMESPACE_INDEX" if kind == "missing_namespace" else "INDEX_MEMBERSHIP_CHANGED"
     )
+    if compute_forbidden:
+        from eom_workflow_runner.index_membership_publication import (
+            MembershipOnlyEmbeddingExecution,
+        )
+
+        backend = MembershipOnlyEmbeddingExecution(request)
+        monkeypatch.setattr(execution.executor, "execution_backend", backend)
+        monkeypatch.setattr(execution.executor._index_completion, "execution_backend", backend)
     reservations = Mock(side_effect=AssertionError("refresh must not reserve numerical work"))
     monkeypatch.setattr(execution.executor, "_reservations", reservations)
     refreshed = execution.start()
@@ -894,15 +903,24 @@ def test_actual_membership_refresh_uses_existing_rows_without_numeric_reservatio
 
 @pytest.mark.parametrize("execution", ["service"], indirect=True)
 @pytest.mark.parametrize("phase", ["INDEX_PREPARED", "REGISTERED", "COMPLETED"])
+@pytest.mark.parametrize("compute_forbidden", [False, True])
 def test_actual_refresh_crash_recovery_preserves_registered_rows_and_own_successor(
-    execution, monkeypatch, phase
+    execution, monkeypatch, phase, compute_forbidden
 ):
     seeded = execution.start()
     assert execution.advance(*seeded) is True
     execution.finish(*seeded)
     before = _refresh_counts(execution)
     forwards = execution.launcher.forwards
-    execution.refresh_membership(withdraw=True)
+    request = execution.refresh_membership(withdraw=True)
+    if compute_forbidden:
+        from eom_workflow_runner.index_membership_publication import (
+            MembershipOnlyEmbeddingExecution,
+        )
+
+        backend = MembershipOnlyEmbeddingExecution(request)
+        monkeypatch.setattr(execution.executor, "execution_backend", backend)
+        monkeypatch.setattr(execution.executor._index_completion, "execution_backend", backend)
     refreshed = execution.start()
     original = NativeEmbeddingCoordinator.append
     failed = False

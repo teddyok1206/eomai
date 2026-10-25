@@ -24,6 +24,7 @@ from eom_catalog_service.embedding_registry_ports import (
 from eom_orchestrator.models import ArtifactRevisionRecord, Base, JobRecord
 from eom_orchestrator.native_embedding_index_systemd import FixedNativeIndexLauncher
 from eom_workflow.local_embedding_request import parse_local_embedding_executable_request
+from eom_workflow_runner import index_membership_publication as membership
 from eom_workflow_runner import local_embedding_service_reconciliation as application
 from eom_workflow_runner.document_embedding_cpu_execution import FixedCpuDocumentEmbeddingExecution
 from eom_workflow_runner.local_embedding_native_executor import CatalogNativeEmbeddingExecutor
@@ -34,7 +35,7 @@ from eom_workflow_runner.models import (
     WorkflowEventRecord,
     WorkflowInstanceRecord,
 )
-from eom_workflow_runner.repository import import_workflow_definition
+from eom_workflow_runner.repository import NativeCommandActorSelection, import_workflow_definition
 from sqlalchemy import Table, func, select
 
 from tests.unit.inference_transfer_embedding_fixtures import (
@@ -46,6 +47,100 @@ from tests.unit.test_local_embedding_runner_admission import scope_fixture
 from tests.unit.test_local_embedding_service_owner import service_owner as service_owner
 from tests.unit.test_local_indexing_runtime_admission import installed as installed
 from tests.unit.test_postgres_local_indexing_fence import case as case
+
+
+def _prepared_membership(c):
+    c.current.keys = ()
+    c.current.previous = None
+    prepared = c.app.preparation.prepare_once()
+    request = prepared.request
+    assert request is not None and prepared.observed.index_refresh_reason is not None
+    selection = NativeCommandActorSelection(
+        "local_indexing_service", request.actor_context.service_id, request.namespace
+    )
+    return prepared, selection
+
+
+def test_metadata_publication_replay_reads_canonical_completion_without_claim_or_gpu(
+    reconciliation, monkeypatch
+):
+    """Synthetic terminal fixture only; canonical reader is independently PG-tested."""
+    c = reconciliation
+    prepared, selection = _prepared_membership(c)
+    runner, canonical = Mock(), Mock()
+
+    def complete(workflow_id):
+        with c.app.executor.publisher.sessions.begin() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            command = session.scalar(
+                select(WorkflowCommandRecord).where(
+                    WorkflowCommandRecord.workflow_id == workflow_id
+                )
+            )
+            workflow.state = workflow.stage = "COMPLETED"
+            command.state = "SUCCEEDED"
+
+    runner.run_once.side_effect = complete
+    factory = Mock(return_value=runner)
+    monkeypatch.setattr(membership, "build_local_indexing_workflow_runner", factory)
+    monkeypatch.setattr(membership, "read_completed_local_embedding", canonical)
+    first = membership.publish_prepared_index_membership(c.app.preparation, prepared, selection)
+    second = membership.publish_prepared_index_membership(c.app.preparation, prepared, selection)
+    assert first.state is second.state is application.ReconciliationState.BATCH_COMPLETED
+    assert first.workflow_id == second.workflow_id and first.command_id == second.command_id
+    runner.run_once.assert_called_once_with(first.workflow_id)
+    assert canonical.call_count == 2
+    c.launcher.run.assert_not_called()
+
+
+def test_metadata_publication_interruption_preserves_original_queue_and_failed_history(
+    reconciliation, monkeypatch
+):
+    """Synthetic interruption/terminal fixture, not an operational repair API."""
+    c = reconciliation
+    prepared, selection = _prepared_membership(c)
+    runner = Mock()
+    runner.run_once.side_effect = RuntimeError("synthetic interruption")
+    monkeypatch.setattr(
+        membership, "build_local_indexing_workflow_runner", Mock(return_value=runner)
+    )
+    canonical = Mock()
+    monkeypatch.setattr(membership, "read_completed_local_embedding", canonical)
+    with pytest.raises(RuntimeError, match="interruption"):
+        membership.publish_prepared_index_membership(c.app.preparation, prepared, selection)
+    submitted = c.app.submit_prepared(prepared)
+    assert submitted.state is application.ReconciliationState.REPLAYED
+    with c.app.executor.publisher.sessions.begin() as session:
+        workflow = session.get(WorkflowInstanceRecord, submitted.workflow_id)
+        command = session.get(WorkflowCommandRecord, submitted.command_id)
+        workflow.state = "FAILED"
+        command.state = "FAILED"
+    result = membership.publish_prepared_index_membership(c.app.preparation, prepared, selection)
+    assert result.state is application.ReconciliationState.TERMINAL_INCOMPLETE
+    assert result.workflow_id == submitted.workflow_id and result.command_id == submitted.command_id
+    assert result.workflow_state == result.command_state == "FAILED"
+    assert runner.run_once.call_count == 1
+    canonical.assert_not_called()
+    c.launcher.run.assert_not_called()
+
+
+def test_metadata_publication_rejects_numerical_discovery_and_wrong_selection_before_start(
+    reconciliation,
+):
+    c = reconciliation
+    numerical = c.app.preparation.prepare_once()
+    request = numerical.request
+    assert request is not None
+    selection = NativeCommandActorSelection(
+        "local_indexing_service", request.actor_context.service_id, request.namespace
+    )
+    with pytest.raises(ValueError, match="PREPARATION_INVALID"):
+        membership.publish_prepared_index_membership(c.app.preparation, numerical, selection)
+    prepared, selection = _prepared_membership(c)
+    wrong = replace(selection, actor_id="localindexservice_" + "0" * 32)
+    with pytest.raises(ValueError, match="SELECTION_INVALID"):
+        membership.publish_prepared_index_membership(c.app.preparation, prepared, wrong)
+    c.launcher.run.assert_not_called()
 
 
 @pytest.fixture

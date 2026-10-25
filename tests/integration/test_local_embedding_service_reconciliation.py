@@ -179,13 +179,17 @@ def reconciliation(guarded_engine, service_owner, tmp_path, monkeypatch):
     )
 
 
-def test_actual_independent_roots_reconcile_one_workflow_and_start(reconciliation):
+@pytest.mark.parametrize("retained_preparation", [False, True])
+def test_actual_independent_roots_reconcile_one_workflow_and_start(
+    reconciliation, retained_preparation
+):
     c = reconciliation
+    prepared = c.app.preparation.prepare_once() if retained_preparation else None
     barrier = Barrier(2)
 
     def run(_ordinal):
         barrier.wait(timeout=30)
-        return c.app.run_once()
+        return c.app.run_once() if prepared is None else c.app.submit_prepared(prepared)
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         first, second = tuple(pool.map(run, range(2)))
@@ -228,7 +232,7 @@ def test_actual_prepared_pointer_survives_stop_but_cannot_cache_source_authority
     monkeypatch.setattr(c.app.preparation, "prepare_once", lambda: first)
     c.source.deny = True
     with pytest.raises(ValueError, match="FORBIDDEN"):
-        c.app.run_once()
+        c.app.submit_prepared(first)
     with c.publisher.sessions() as session:
         assert (
             session.scalar(
@@ -238,7 +242,7 @@ def test_actual_prepared_pointer_survives_stop_but_cannot_cache_source_authority
         )
         assert session.get(ArtifactRevisionRecord, pointer.artifact_revision_id) is not None
     c.source.deny = False
-    submitted, replay = c.app.run_once(), c.app.run_once()
+    submitted, replay = c.app.submit_prepared(first), c.app.submit_prepared(first)
     assert submitted.state is ReconciliationState.QUEUED
     assert replay.state is ReconciliationState.REPLAYED
     assert submitted.workflow_id == replay.workflow_id

@@ -12,6 +12,7 @@ from eom_workflow_runner.local_embedding_service_reconciliation import (
     LocalEmbeddingReconciliationResult,
     PreparedLocalEmbeddingReconciliation,
     ReconciliationState,
+    local_embedding_reconciliation_key,
 )
 
 from tests.unit.document_embedding_parent_fixtures import parent_case as parent_case
@@ -108,6 +109,45 @@ def test_no_work_observation_does_not_allocate_or_submit_model_work(service):
     assert service.value.reconcile_once().state is ReconciliationState.UP_TO_DATE
     service.drive.assert_not_called()
     service.standby.run_once.assert_called_once()
+
+
+def test_membership_refresh_publishes_through_existing_runner_without_physical_parent(
+    service, monkeypatch
+):
+    from dataclasses import replace
+
+    original = service.prepare.return_value
+    observed = replace(original.observed, index_refresh_reason="INDEX_MEMBERSHIP_CHANGED")
+    prepared = PreparedLocalEmbeddingReconciliation(observed, original.request)
+    service.prepare.return_value = prepared
+    completed = replace(observed, state=ReconciliationState.BATCH_COMPLETED)
+    publish = Mock(return_value=completed)
+    parent = Mock(side_effect=AssertionError("metadata must not allocate a physical parent"))
+    monkeypatch.setattr(namespace, "publish_prepared_index_membership", publish)
+    monkeypatch.setattr(namespace, "prepare_document_embedding_parent", parent)
+    assert service.value.reconcile_once() is completed
+    publish.assert_called_once_with(service.case.pair.cuda, prepared, service.value.gpu_selection)
+    service.drive.assert_not_called()
+    service.standby.run_once.assert_called_once()
+
+
+def test_interrupted_original_membership_uses_same_submission_not_new_gpu_discovery(
+    service, monkeypatch
+):
+    request = service.case.request
+    monkeypatch.setattr(
+        service.value,
+        "_pending_gpu",
+        lambda: (request, "original", local_embedding_reconciliation_key(request)),
+    )
+    expected = LocalEmbeddingReconciliationResult(ReconciliationState.REPLAYED, "graph")
+    publish = Mock(return_value=expected)
+    monkeypatch.setattr(namespace, "publish_prepared_index_membership", publish)
+    assert service.value.reconcile_once() is expected
+    assert publish.call_args.args[1].request == request
+    service.prepare.assert_not_called()
+    service.drive.assert_not_called()
+    service.standby.run_once.assert_not_called()
 
 
 def test_planning_success_cannot_be_reported_as_child_numerical_completion(service):

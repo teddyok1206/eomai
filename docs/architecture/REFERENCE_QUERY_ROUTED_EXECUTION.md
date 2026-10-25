@@ -93,6 +93,28 @@ populations match; existing pinned query history remains readable by its owner.
 
 ## Gates
 
+### Metadata-only INDEX publication before physical allocation
+
+The 2026-10-25 live INDEX trace exposed a costly ownership mismatch: refreshing
+membership from already committed numerical rows acquired a physical GPU even
+though the common executor correctly performed no forward. Keep the existing
+preparation, source admission, atomic START, Runner and index publication owner;
+send an explicitly observed membership refresh to a compute-forbidden execution
+adapter before constructing a physical batch parent. Its exact original request
+and runtime controls are pinned, and any request for numerical execution fails
+closed. It neither reports GPU BUSY nor creates a CPU fallback or GPU compute
+receipt. Current source/permission/hash checks and immutable vector space remain.
+
+Use the existing reconciliation idempotency key to recover that same queued
+publication after interruption. Numerical routed jobs retain their original batch
+key and allocation/recovery path. Key comparison is O(1), membership publication
+keeps the existing bounded O(n + artifact bytes) registry/manifest work; no new
+schema, queue, index, cache or persistence model is introduced. Preparation and
+START remain separate authorization roots. Disposable DB tests must cover same
+key concurrency/replay, interruption and preserved terminal history. A second
+metadata pipeline or weakening source validation would duplicate the owner and
+is not an acceptable alternative. The change does not stop active GPU work.
+
 Pure binding and current-route tests; simultaneous barrier join, interrupted and
 already-bound replay; unchanged fixed-CPU execution regressions; disposable
 PostgreSQL atomic START/claim/bind/rollback; installed wheel and dependency
@@ -215,3 +237,43 @@ does not alone prove sixteen model forwards or full paired coverage. Numerical
 and per-namespace population evidence are still required. Evidence:
 `/tmp/eom-full-index-activation-20261025.log` EXIT0 and
 `/tmp/eom-full-index-observation-20261025-r2.{json,status}` EXIT0.
+
+### Standby source rollout and metadata-publication correction — 2026-10-25 UTC
+
+Source `91a8894ea530189795cfdc5bc28efe86339c89a8` is installed and active for
+the six existing INDEX namespaces, maximum16. Invocation
+`6211aa1136d54e1791e337893394c5dd`, started12:19:13 UTC. The preceding source
+finished its current work normally before the successor was activated. The first
+drain checker incorrectly counted historical RemainAfterExit active/exited units
+as live work and stopped before activation. Its failure is preserved; the resumed
+read-only check verified process0, no held native FDs and no original nonterminal
+Workflow before selecting the successor. No numerical unit was forcibly killed.
+Evidence: `/tmp/eom-standby-index-activation-20261025-91a8894e-r2.log`, EXIT0.
+API/Web/CPU-private QUERY and qualified numerical prefixes stayed unchanged.
+
+The subsequent source correction routes explicitly observed membership refreshes
+through the existing atomic reconciliation START/Runner and canonical completed
+reader, using a compute-forbidden adapter instead of a physical GPU allocation.
+The original reconciliation key also identifies interrupted metadata work. Failed
+history is returned unchanged; successful replay checks its actual registered
+completion and does not claim or compute again. This is metadata publication,
+not GPU success or GPU-unavailable CPU fallback. Numerical discovery still uses
+the original routed batch key and physical allocation.
+
+- Focused adapter/namespace/reconciliation/executor/runtime tests:91 PASS,
+  30.47seconds (`/tmp/eom-membership-publication-focused-20261025-r2.log`).
+- Disposable PostgreSQL:28 PASS,280.41seconds, cleanup EXIT0 (r60), including
+  independent-root submission of the same retained preparation, reauthorization
+  after interruption and membership publication/crash recovery with numerical
+  execution forbidden. IAM/model leaves remain explicitly synthetic; this is
+  not a live CUDA or human-session acceptance.
+- Strict mypy3 production modules and scoped Ruff PASS. No new dependency,
+  schema, migration, persistent queue or cache was introduced.
+- Dependency/current-source/CUDA-CPU adapter and QUERY-runtime regression:
+  36 PASS,21.98seconds (`/tmp/eom-membership-publication-boundaries-20261025-r2.log`).
+  The initial command named a nonexistent test file and ran no tests; that
+  invocation log is preserved separately and is not counted as acceptance.
+
+These source tests do not complete full paired coverage, actual GPU QUERY,
+GPU-default/fallback or rollback acceptance. The externally supplied12+4 static
+review remains unopened until the full GPU goal and live release checkpoint.

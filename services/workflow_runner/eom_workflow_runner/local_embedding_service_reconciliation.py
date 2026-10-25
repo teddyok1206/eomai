@@ -107,6 +107,12 @@ class PreparedLocalEmbeddingReconciliation:
     request: SupportedLocalEmbeddingRequest | None = None
 
 
+def local_embedding_reconciliation_key(request: SupportedLocalEmbeddingRequest) -> str:
+    """Stable original submission identity, shared by discovery and interrupted replay."""
+    checked = parse_supported_local_embedding_request(request)
+    return "local-embedding-reconcile:" + checked.request_sha256.removeprefix("sha256:")
+
+
 class LocalEmbeddingServicePreparation:
     """Source/coverage preparation before physical allocation, without a numerical executor."""
 
@@ -425,7 +431,14 @@ class LocalEmbeddingServiceReconciliation:
         self.preparation.maximum_targets = value
 
     def run_once(self) -> LocalEmbeddingReconciliationResult:
-        prepared = self.preparation.prepare_once()
+        return self.submit_prepared(self.preparation.prepare_once())
+
+    def submit_prepared(
+        self, prepared: PreparedLocalEmbeddingReconciliation
+    ) -> LocalEmbeddingReconciliationResult:
+        """Official START reauthorizes a prepared pointer; it carries no reusable grant."""
+        if type(prepared) is not PreparedLocalEmbeddingReconciliation:
+            raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_CONFIGURATION_INVALID")
         observed, request = prepared.observed, prepared.request
         if request is None:
             return observed
@@ -448,8 +461,7 @@ class LocalEmbeddingServiceReconciliation:
                 session,
                 definition=definition,
                 request=request,
-                idempotency_key="local-embedding-reconcile:"
-                + request.request_sha256.removeprefix("sha256:"),
+                idempotency_key=local_embedding_reconciliation_key(request),
                 actor_type=actor_type,
                 actor_id=actor_id,
                 owner=owner,
