@@ -26,6 +26,7 @@ from eom_workflow_runner.local_embedding_service_reconciliation import (
 )
 from eom_workflow_runner.local_indexing_service_runtime import (
     IndexingRoleExecutionDisabled,
+    LocalIndexingNamespaceRuntime,
     build_local_indexing_service_runtime,
 )
 from eom_workflow_runner.repository import (
@@ -45,7 +46,7 @@ def synthetic_queue_read(monkeypatch):
 
 
 def scheduled_runtime(**values):
-    leaf = SimpleNamespace(
+    leaf = LocalIndexingNamespaceRuntime(
         runner=values.pop("runner"),
         reconciliation=values.pop("reconciliation"),
         namespace=SimpleNamespace(view="CONTENT_ONLY"),

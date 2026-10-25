@@ -575,6 +575,38 @@ cold result recovery를 닫은 뒤 canonical source의 GPU/CPU numerical·covera
 검증하는 것이다. 실제 운영5개 서비스 active, GPU0%/2MiB 확인. CPU/QUERY/수치/물리 root pin과
 운영 기본값은 바꾸지 않았다. CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
 
+### P2-AB — 실제 service entry의 GPU 우선 namespace 루프 (설계)
+
+root-owned configuration5만 명시적으로 opt-in하고 기존 CPU1/2/4 parser/선택은 유지한다.
+같은 actual runtime capture/Identity fence와 DB privilege/protocol preflight를 거쳐 장치별
+Catalog preparation을 구성한다. 기존 CPU namespace는 그대로 돌고 새 routed namespace는
+기존 CPU queue의 원 작업을 먼저 drain한 후 GPU 원 queue를 확인하고, 없는 경우에만 새 자료를
+관측한다. 기존 indexed command candidate와 Workflow ID lookup O(log n)을 쓰며 새 queue나
+중복 target tracker는 만들지 않는다. 설정·source·Graph·policy·원 request/parent/hash는 pin한다.
+
+새 GPU 작업은 기존 finite parent/START/Runner use case를 사용한다. BATCH_COMPLETED는 이번
+batch의 실제 Workflow/command 종료일 뿐 corpus 전체 완료가 아니다. 원 GPU 작업을 재조회했으나
+지원된 cold result recovery가 아직 증명되지 않으면 RECOVERY_REQUIRED로 명시하고 새 root/key로
+우회하지 않는다. 실패 기록을 성공으로 바꾸지 않는다. 현재 source와 actor는 각 짧은 root에서
+공식 owner가 재확인하고 계산 동안 SQL을 열어 두지 않는다. 기존 CPU1/2/4와 새5의 공통 loop는
+동일한 run/reconcile 인터페이스를 쓰며 framework/전역 registry를 추가하지 않는다. 단순 대안인
+항상 새 request 생성/구 GPU 작업 무시는 불변 replay와 중복 방지를 깨뜨린다. 기존 CPU 회귀와
+config5 opt-in/권한 실패/queue 우선순위/중단/반복 관측을 검증한 뒤 실제 운영 선택을 진행한다.
+
+#### P2-AB source 검증 결과 — 2026-10-25 UTC
+
+새 dispatcher/namespace 집중9 PASS, 기존 CPU1/2/4 runtime·multi-view·dual-projection·mixed
+회귀88 PASS다. disposable PostgreSQL r22에서 원 parent 동시 생성/중단 replay, 실제
+START→Runner→CUDA adapter→index 등록, source 철회 거부, 기존 service reconciliation
+11 PASS와 공식 임시 DB cleanup을 확인했다. 이 DB suite의 OS/GPU/Graph/IAM leaf는 명시적
+합성 fixture이며 실제 CUDA 실행이나 운영 서비스 activation 증거로 확대하지 않는다.
+관련3개 runtime module mypy PASS이며 새 dependency/migration은 없다.
+
+운영은 여전히 configuration4/CPU다. 이 source checkpoint만으로 GPU 우선 활성화를 하지
+않는다. 남은 경계는 원 GPU result의 cold recovery, CPU fallback 완료 후 별도 GPU 보충 intent,
+실제 canonical-source 수치 실행/일괄 QUERY/장치별 coverage와 호환 배포·rollback이다. 특히 원
+CPU route를 GPU로 변경하거나 계획 SUCCEEDED를 계산 성공으로 재해석하지 않는다.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존

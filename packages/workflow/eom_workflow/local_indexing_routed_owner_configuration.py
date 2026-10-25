@@ -141,6 +141,10 @@ class RoutedLocalIndexingOwnerConfiguration(_RoutedValue):
     routing_policy_sha256: Sha256
     controller_release: str = Field(strict=True, pattern=r"^[0-9a-f]{40}$")
 
+    @property
+    def poll_interval_seconds(self) -> int:
+        return self.cpu_configuration.poll_interval_seconds
+
     @model_validator(mode="before")
     @classmethod
     def schema_first(cls, value: object) -> Any:

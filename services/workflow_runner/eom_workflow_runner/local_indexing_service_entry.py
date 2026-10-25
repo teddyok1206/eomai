@@ -135,7 +135,7 @@ def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> N
         index = cursor
         cursor = (cursor + 1) % len(runtime.namespaces)
         namespace = runtime.namespaces[index]
-        command = namespace.runner.run_once()
+        command = namespace.run_once()
         if command is not None:
             _emit(
                 "LOCAL_INDEXING_COMMAND_OBSERVED",
@@ -149,7 +149,7 @@ def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> N
             break
         now = time.monotonic()
         if now >= deadlines[index]:
-            observed = namespace.reconciliation.run_once()
+            observed = namespace.reconcile_once()
             signature = (
                 observed.state,
                 observed.graph_snapshot_revision_id,

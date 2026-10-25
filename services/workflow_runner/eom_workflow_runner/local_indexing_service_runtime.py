@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,9 +31,15 @@ from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.native_embedding_index_systemd import FixedNativeIndexLauncher
 from eom_orchestrator.settings import Settings
 from eom_workflow.local_indexing_owner_configuration import (
+    MAX_LOCAL_INDEXING_OWNER_BYTES,
     CpuLocalIndexingOwnerSelection,
     LocalIndexingMixedOwnerConfiguration,
+    LocalIndexingOwnerConfigurationError,
     parse_cpu_local_indexing_owner_configuration,
+)
+from eom_workflow.local_indexing_routed_owner_configuration import (
+    RoutedLocalIndexingOwnerConfiguration,
+    parse_local_indexing_routed_owner_configuration,
 )
 from sqlalchemy import Engine
 
@@ -48,12 +55,16 @@ from eom_workflow_runner.local_embedding_owner_admission import (
     LocalEmbeddingOwnerConfiguration,
 )
 from eom_workflow_runner.local_embedding_service_reconciliation import (
+    LocalEmbeddingReconciliationResult,
     LocalEmbeddingServiceReconciliation,
 )
+from eom_workflow_runner.local_indexing_routed_namespace import RoutedLocalIndexingNamespaceRuntime
+from eom_workflow_runner.local_indexing_routed_sources import build_routed_indexing_sources
 from eom_workflow_runner.local_indexing_runner_composition import (
     IndexingRoleExecutionDisabled as IndexingRoleExecutionDisabled,
 )
 from eom_workflow_runner.local_indexing_runtime_verification import FixedIndexingRuntimeVerification
+from eom_workflow_runner.models import WorkflowCommandRecord
 from eom_workflow_runner.repository import CommandExecutionFamily, NativeCommandActorSelection
 from eom_workflow_runner.settings import RunnerConfig, WorkflowSettings
 
@@ -66,12 +77,36 @@ class LocalIndexingNamespaceRuntime:
     runner: WorkflowRunner
     reconciliation: LocalEmbeddingServiceReconciliation
 
+    def run_once(self) -> WorkflowCommandRecord | None:
+        return self.runner.run_once()
+
+    def reconcile_once(self) -> LocalEmbeddingReconciliationResult:
+        return self.reconciliation.run_once()
+
 
 @dataclass(frozen=True, slots=True)
 class LocalIndexingServiceRuntime:
     engine: Engine
-    namespaces: tuple[LocalIndexingNamespaceRuntime, ...]
-    configuration: CpuLocalIndexingOwnerSelection
+    namespaces: tuple[LocalIndexingNamespaceRuntime | RoutedLocalIndexingNamespaceRuntime, ...]
+    configuration: CpuLocalIndexingOwnerSelection | RoutedLocalIndexingOwnerConfiguration
+
+
+def parse_indexing_service_configuration(
+    raw: bytes,
+) -> CpuLocalIndexingOwnerSelection | RoutedLocalIndexingOwnerConfiguration:
+    """Only this executable dispatcher opts into5; original CPU decoders stay closed."""
+    try:
+        if type(raw) is not bytes or not 0 < len(raw) <= MAX_LOCAL_INDEXING_OWNER_BYTES:
+            raise LocalIndexingOwnerConfigurationError()
+        value = json.loads(raw)
+        if (
+            isinstance(value, dict)
+            and value.get("schema_version") == "local-indexing-owner-configuration/5.0"
+        ):
+            return parse_local_indexing_routed_owner_configuration(raw)
+        return parse_cpu_local_indexing_owner_configuration(raw)
+    except Exception:
+        raise LocalIndexingOwnerConfigurationError() from None
 
 
 def build_local_indexing_service_runtime(
@@ -83,7 +118,12 @@ def build_local_indexing_service_runtime(
         or type(pin) is not LocalIndexingRuntimePin
     ):
         raise ValueError("LOCAL_INDEXING_SERVICE_RUNTIME_UNAVAILABLE")
-    selection = parse_cpu_local_indexing_owner_configuration(capture.read_owner_configuration())
+    selected = parse_indexing_service_configuration(capture.read_owner_configuration())
+    selection = (
+        selected.cpu_configuration
+        if isinstance(selected, RoutedLocalIndexingOwnerConfiguration)
+        else selected
+    )
     if selection.runtime_profile.resource_profile.device != "CPU":
         raise ValueError("LOCAL_INDEXING_SERVICE_DEVICE_UNAVAILABLE")
     capture.assert_current(
@@ -119,6 +159,27 @@ def build_local_indexing_service_runtime(
             EmbeddingEncodingReservationStorage.require_protocol(session)
             if isinstance(selection, LocalIndexingMixedOwnerConfiguration):
                 EmbeddingEncodingReservationStorage.require_mixed_ownership_protocol(session)
+        verifier = FixedIndexingRuntimeVerification(selection.runtime_verifier)
+        launcher = FixedNativeIndexLauncher(
+            selection.cpu_environment_raw_sha256.removeprefix("sha256:"),
+            selection.owner_environment_raw_sha256.removeprefix("sha256:"),
+            verifier.assert_current,
+        )
+        launcher.assert_current_runtime()
+        if isinstance(selected, RoutedLocalIndexingOwnerConfiguration):
+            routed = build_routed_indexing_sources(
+                engine,
+                publisher,
+                fence,
+                selected,
+                source_commit=pin.runtime_source_commit,
+                settings=catalog_settings,
+            )
+            routed_namespaces = tuple(
+                RoutedLocalIndexingNamespaceRuntime(pair, selected, launcher, fence)
+                for pair in routed.namespaces
+            )
+            return LocalIndexingServiceRuntime(engine, routed_namespaces, selected)
         selections: tuple[CpuLocalIndexingOwnerSelection, ...] = (selection,)
         if (
             isinstance(selection, LocalIndexingMixedOwnerConfiguration)
@@ -139,13 +200,6 @@ def build_local_indexing_service_runtime(
             )
             for configured in selections
         )
-        verifier = FixedIndexingRuntimeVerification(selection.runtime_verifier)
-        launcher = FixedNativeIndexLauncher(
-            selection.cpu_environment_raw_sha256.removeprefix("sha256:"),
-            selection.owner_environment_raw_sha256.removeprefix("sha256:"),
-            verifier.assert_current,
-        )
-        launcher.assert_current_runtime()
         namespaces = tuple(
             _build_namespace_runtime(
                 engine, publisher, authority, configured, namespace, pin, catalog_settings, launcher

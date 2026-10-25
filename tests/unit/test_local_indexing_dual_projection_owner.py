@@ -304,7 +304,9 @@ def test_existing_round_robin_visits_all_six_without_aliasing_same_view(monkeypa
                 ReconciliationState.UP_TO_DATE, "synthetic same graph"
             )
             leaves.append(
-                SimpleNamespace(namespace=namespace, runner=runner, reconciliation=reconciliation)
+                runtime.LocalIndexingNamespaceRuntime(
+                    namespace=namespace, runner=runner, reconciliation=reconciliation
+                )
             )
     last = leaves[-1].reconciliation.run_once.return_value
     leaves[-1].reconciliation.run_once.side_effect = lambda: (stop.set(), last)[1]

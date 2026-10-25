@@ -224,7 +224,7 @@ def schedule(monkeypatch, stop, *, busy=False):
             ReconciliationState.UP_TO_DATE, "graph"
         )
         leaves.append(
-            SimpleNamespace(
+            composition.LocalIndexingNamespaceRuntime(
                 namespace=SimpleNamespace(view=view), runner=runner, reconciliation=reconciliation
             )
         )
