@@ -17,8 +17,8 @@ from eom_identifiers import content_sha256
 from eom_workflow.embedding_batch_plan import (
     BATCH_PLAN_PROTOCOL,
     EmbeddingBatchBound,
-    validate_embedding_batch_query_context,
 )
+from eom_workflow.embedding_batch_plan_family import validate_embedding_batch_query_context
 from eom_workflow.reference_query_execution import SupportedReferenceQueryWorkflowRequest
 
 from eom_workflow_runner.embedding_batch_execution import (

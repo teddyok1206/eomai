@@ -12,23 +12,29 @@ from eom_orchestrator.embedding_batch_plan_store import EmbeddingBatchPlanStore
 from eom_orchestrator.models import JobEventRecord, JobRecord
 from eom_workflow.embedding_batch_plan import (
     EmbeddingBatchAllocation,
-    EmbeddingBatchPlanRequest,
 )
+from eom_workflow.embedding_batch_plan_family import (
+    embedding_batch_plan_schema_identity,
+    parse_embedding_batch_plan_request,
+)
+from eom_workflow.embedding_batch_plan_v11 import EmbeddingBatchPlanRequestV11
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
+from tests.unit.embedding_bulk_plan_fixtures import bulk_planning_case
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_embedding_batch_plan import planning_case
 
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-def planned(guarded_engine):
-    value = planning_case(batch_id="embeddingbatch_" + uuid4().hex)
+@pytest.fixture(params=("legacy", "bulk"))
+def planned(guarded_engine, request):
+    builder = bulk_planning_case if request.param == "bulk" else planning_case
+    value = builder(batch_id="embeddingbatch_" + uuid4().hex)
     value.engine = guarded_engine
     value.store = EmbeddingBatchPlanStore(value.request, value.selection, value.policy)
     # Explicit synthetic child-admission seam, not proof these fixture child Jobs exist.
@@ -65,6 +71,8 @@ def test_atomic_plan_binding_and_exact_replay_are_not_numerical_success(planned,
             == completed
         )
         job = session.get(JobRecord, completed.job_id)
+        protocol, _schema_sha = embedding_batch_plan_schema_identity(planned.request)
+        assert job.protocol_version == protocol
         events = tuple(
             session.scalars(select(JobEventRecord).where(JobEventRecord.job_id == job.job_id))
         )
@@ -72,6 +80,30 @@ def test_atomic_plan_binding_and_exact_replay_are_not_numerical_success(planned,
         assert "anchors" not in job.request and "vectors" not in job.request
         assert len(json.dumps(job.request)) < 16384
         assert all("text" not in event.data and "vectors" not in event.data for event in events)
+
+
+def test_new_bulk_version_cannot_fork_or_replace_an_existing_logical_batch(guarded_engine):
+    batch_id = "embeddingbatch_" + uuid4().hex
+    old = planning_case(purpose="INDEX", batch_id=batch_id)
+    new = bulk_planning_case(batch_id=batch_id)
+    old_store = EmbeddingBatchPlanStore(old.request, old.selection, old.policy)
+    new_store = EmbeddingBatchPlanStore(new.request, new.selection, new.policy)
+    assert old_store.key == new_store.key
+    with Session(guarded_engine) as session, session.begin():
+        original, created = old_store.allocate(session, old.allocation)
+        assert created
+    with pytest.raises(ValueError), Session(guarded_engine) as session, session.begin():
+        new_store.allocate(session, new.allocation)
+    with Session(guarded_engine) as session, session.begin():
+        assert old_store.read(session) == original
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(JobRecord)
+                .where(JobRecord.idempotency_key == old_store.key)
+            )
+            == 1
+        )
 
 
 def test_two_controllers_reserve_one_original_allocation_and_only_one_dispatch_owner(planned):
@@ -123,7 +155,12 @@ def test_gpu_availability_change_does_not_replace_original_route_or_child_identi
     with Session(planned.engine) as session, session.begin():
         planned.store.allocate(session, planned.allocation)
         original = planned.store.route(session, planned.route)
-    other = planning_case(status="BUSY", batch_id=planned.request.batch_id)
+    builder = (
+        bulk_planning_case
+        if isinstance(planned.request, EmbeddingBatchPlanRequestV11)
+        else planning_case
+    )
+    other = builder(status="BUSY", batch_id=planned.request.batch_id)
     assert other.request == planned.request and other.allocation == planned.allocation
     with pytest.raises(ValueError), Session(planned.engine) as session, session.begin():
         planned.store.route(session, other.route)
@@ -134,7 +171,7 @@ def test_gpu_availability_change_does_not_replace_original_route_or_child_identi
 def test_original_batch_key_cannot_be_widened_by_a_changed_request(planned):
     with Session(planned.engine) as session, session.begin():
         original, _ = planned.store.allocate(session, planned.allocation)
-    changed = EmbeddingBatchPlanRequest.model_validate(
+    changed = parse_embedding_batch_plan_request(
         seal(
             planned.request.model_dump(mode="json")
             | {"parent_request_sha256": "sha256:" + "f" * 64},

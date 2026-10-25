@@ -1722,3 +1722,69 @@ CPU route의 공식 child 실행·binding, no-numerical child의 명시적 dispo
 CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, CUDA_DOCUMENT_ADAPTER_SOURCE=PASS,
 CUDA_DOCUMENT_DRIVER_DISPOSABLE_PG=PASS, LIVE_CANONICAL_GPU_COMPUTE=NOT_RUN,
 CPU_FALLBACK_EXECUTION=NOT_RUN, GOAL=ACTIVE. 이 단계 역시 전체 완료 checkpoint가 아니다.
+
+### P2-W — INDEX bulk selection/request1.1 설계 (2026-10-25)
+
+INDEX의1.0 selection은32개 source anchor 한도라520개를 작은 parent로 나누면 같은 모델의
+cold load를 반복한다. source-side 후속1.1을 추가해 INDEX만 최대1,024 anchors/4MiB metadata로
+받는다. QUERY는 released1.0/32개를 유지하며1.1 QUERY는 명시적으로 거부한다. 기존1.0
+schema bytes/ID/hash와 native allocation/route/bound/failure1.0, CUDA numerical SDK/qualification은
+그대로다.1.1 schema는 재사용하는1.0 event frames를 명시적으로 참조한다. opaque parent hash를
+전달하는 native wire를 넓히거나 구버전을 새 버전으로 retag하지 않는다.
+
+canonical source는 pin된 selection Artifact와 실제 Catalog actor/Graph/policy/source closure다.
+logical batch+actor key와 immutable request hash, 각 source/profile/analysis pointer는 분리한다.
+메타데이터만 기존 Artifact/Job/Event에 두며 DB table/index/queue를 새로 만들지 않는다.
+source revision map/set으로 O(n) coverage/uniqueness를 검사하고 순서는 immutable tuple로 고정한다.
+기존 unique Job key/row lock/append-only sequence와 짧은 실제 authority transaction을 재사용한다.
+동일 batch의 다른 version/hash는 충돌이며 latest로 치환하지 않는다.
+
+version-specific schema-first model과 closed parser로 지원 family를 한 곳에서 dispatch한다.
+공통 selection/request value fields와 순수 closure 규칙만 공유해 domain invariant 복사를 막는다.
+1.1 선택과1.0 request의 혼합/반대 혼합, unknown version, hash/schema/media/lifecycle 오류는 거부한다.
+실패/재전송은 원 Job/route/producer를 유지하고 이 변경이 재추론 권한을 만들지 않는다.
+권한·해시·실행 불명 오류의 CPU fallback 금지도 유지한다.
+
+대안인 released1.0 한도 직접 확대와17개32-source batch 반복은 각각 불변 계약/모델 재사용 목적에
+맞지 않아 배제한다. domain/contracts는 infrastructure를 import하지 않으며 Source owner가
+publication/resolution을, Orchestrator가 기존 history commit을 소유한다. schema/resource mirror,
+32/33·520/1,024/1,025 경계, QUERY 거부, legacy bytes/정확한 replay, missing/stale/hash/current
+authority와 disposable PostgreSQL 동시성/Job history를 검증한다. Source 검증과 실제 GPU 실행은
+별도 gate이며 이 후속 계약 추가만으로 GPU default 활성화를 선언하지 않는다.
+
+P2-W 구현/검증:1.1 raw schema SHA는
+`deb40e0b3ebbcaed1d956bf5d9cbc09937a5f4a568bd397c819396387e0dd6c3`다.
+source/resource mirror가 동일하며1.0 두 파일의 rawSHA
+`94fe09d2dc756e15b77c3f61883a4dd76f6028b463199a5ad62bd6bf700f1337`은 그대로다.
+공통 value fields/closure만 추출하고 version별 schema-first guard와 closed family parser를
+분리했다. Source publisher/resolver/store/실행 adapter가 이 family를 사용한다. 실제 owner의
+maximum_sources 제한은 기존 SelectedEmbeddingSources가 계속 소유하며1.1 한도로 우회하지 않는다.
+기존 parent key는 version별로 나누지 않아 동일 logical batch를 새 version으로 fork하지 못한다.
+
+- 계약/현재 source admission 집중 **68 PASS,20.67초**
+  (`/tmp/eom-bulk-plan-contract-tests-20261025-r2.log`).33/520/1,024 metadata,
+  legacy32 한도·QUERY1.1 거부·unknown/mixed version·raw hash·scope cap·revoked/missing source를 확인했다.
+- legacy/native owner-control/DOCUMENT/QUERY/의존성·설치 wheel 포함 **174 PASS,79.47초**
+  (`/tmp/eom-bulk-plan-source-regression-20261025-r2.log`).1,024 anchors의 실제 canonical metadata
+  파일은 기존512KiB를 넘으며 새 resolver가 읽었다. 설치 wheel에서1.1 resource를 직접 열어
+  SHA/schema ID를 확인했고 runtime checkout 의존은 없다.
+- disposable PostgreSQL1.0/1.1 plan/admission 동시성·원 allocation 유지·중단 rollback·정확한
+  replay·FAILED 보존·B-tree lookup capability **38 PASS,24.02초**
+  (`/tmp/eom-document-execution-pg-20261025-r8.log`), cleanup/exit0.
+- 기존 실제 source/Workflow/Artifact 경계와 synthetic OS/model leaves의 실행 회귀
+  **48 PASS,317.81초** (`/tmp/eom-document-execution-pg-20261025-r9.log`), cleanup/exit0.
+-1.1 parent가1.0 native control/bound를 사용해 공식 INDEX/START와 실제 Runner로 등록되는 경로,
+  기존1.0 logical batch를1.1로 fork/교체하지 못하는 경로의 최종 추가 검사 **2 PASS,19.32초**
+  (`/tmp/eom-document-execution-pg-20261025-r10.log`), cleanup/exit0.
+
+테스트1차의 legacy negative case import3건과 잘못 지정한 unit publication 파일 invocation은
+개발 fixture/실행 목록 오류였다. import/대상을 바로잡은 r2로 해당 gate를 재실행했다.
+운영 코드의 validation/권한/lease를 완화하지 않았고 이 실패 로그도 보존했다.
+13개 source strict mypy와 scoped Ruff lint/format/diff 검사 PASS다. 새 dependency/migration은 없다.
+
+위520/1,024는 synthetic metadata cardinality 검사이며 운영 corpus 재임베딩 수가 아니다.
+실제 GPU math/CPU 대체 실행/paired coverage/default/rollback은 여전히 별도 미완료 gate다.
+운영 API/Web/INDEX/QUERY/private root/CUDA prefix 선택은 바꾸지 않았다. 다음 단계는 실제
+per-request routed runtime/service composition과 no-numerical disposition/cold recovery다.
+CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, BULK_METADATA_CONTRACT_SOURCE=PASS,
+LIVE_CANONICAL_GPU_COMPUTE=NOT_RUN, CPU_FALLBACK_EXECUTION=NOT_RUN, GOAL=ACTIVE.

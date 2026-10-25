@@ -27,8 +27,11 @@ from eom_orchestrator.local_embedding_control_artifacts import (
 from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
 from eom_workflow.embedding_batch_plan import (
     EmbeddingBatchPlanRequest,
-    EmbeddingBatchSelection,
     RegisteredReviewBatchAnchor,
+)
+from eom_workflow.embedding_batch_plan_family import (
+    parse_embedding_batch_plan_request,
+    parse_embedding_batch_selection,
 )
 from eom_workflow_runner.embedding_batch_plan_admission import (
     CatalogEmbeddingBatchPlanAdmission,
@@ -90,7 +93,7 @@ def source_case(
         assert (
             legacy.profile.source_basis.graph_snapshot == entry.profile.source_basis.graph_snapshot
         )
-    selection = EmbeddingBatchSelection.model_validate(seal(body, "selection_sha256"))
+    selection = parse_embedding_batch_selection(seal(body, "selection_sha256"))
     if publisher is None:
         publisher, engine = _publisher(tmp_path)
     else:
@@ -100,7 +103,7 @@ def source_case(
     selection_key, policy_key = SELECTION_KEY + ":" + key, POLICY_KEY + ":" + key
     saved_selection = controls.publish_batch_selection(selection, idempotency_key=selection_key)
     saved_policy = controls.publish_device_routing_policy(case.policy, idempotency_key=policy_key)
-    request = EmbeddingBatchPlanRequest.model_validate(
+    request = parse_embedding_batch_plan_request(
         seal(
             case.request.model_dump(mode="json")
             | {
@@ -146,7 +149,7 @@ def source_case(
         selection.corpus_id,
         registry.space,
         registry.recipe,
-        tuple(entry.profile.source_basis.source for entry in entries),
+        tuple(anchor.source for anchor in selection.anchors),
         entries,
     )
     value = SimpleNamespace(

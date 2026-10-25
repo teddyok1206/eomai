@@ -14,7 +14,9 @@ from eom_orchestrator.models import JobRecord
 from eom_orchestrator.settings import Settings
 from eom_workflow.embedding_batch_plan import (
     EmbeddingBatchAllocation,
-    EmbeddingBatchPlanRequest,
+)
+from eom_workflow.embedding_batch_plan_family import (
+    parse_embedding_batch_plan_request,
     validate_embedding_batch_allocation,
 )
 from sqlalchemy import func, select
@@ -23,21 +25,23 @@ from sqlalchemy.orm import Session
 from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
+from tests.unit.embedding_bulk_plan_fixtures import bulk_planning_case
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_embedding_batch_plan_admission import source_case
 
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-def admitted(guarded_engine, tmp_path, monkeypatch):
+@pytest.fixture(params=("legacy", "bulk"))
+def admitted(guarded_engine, tmp_path, monkeypatch, request):
     nas = tmp_path / "nas"
     nas.mkdir()
     publisher = ControlFileSetPublisher(
         guarded_engine, Settings(staging_root=tmp_path / "staging", nas_artifact_root=nas)
     )
-    value = source_case(tmp_path, monkeypatch, publisher=publisher, key=uuid4().hex)
-    value.request = EmbeddingBatchPlanRequest.model_validate(
+    case = bulk_planning_case() if request.param == "bulk" else None
+    value = source_case(tmp_path, monkeypatch, publisher=publisher, planned=case, key=uuid4().hex)
+    value.request = parse_embedding_batch_plan_request(
         seal(
             value.request.model_dump(mode="json") | {"batch_id": "embeddingbatch_" + uuid4().hex},
             "request_sha256",

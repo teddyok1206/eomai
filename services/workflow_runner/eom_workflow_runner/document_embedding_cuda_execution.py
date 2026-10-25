@@ -19,7 +19,10 @@ from eom_identifiers import content_sha256
 from eom_workflow.embedding_batch_plan import (
     BATCH_PLAN_PROTOCOL,
     EmbeddingBatchBound,
-    EmbeddingBatchPlanRequest,
+)
+from eom_workflow.embedding_batch_plan_family import (
+    SupportedEmbeddingBatchRequest,
+    parse_embedding_batch_plan_request,
 )
 from eom_workflow.local_embedding_encoding_dispatch import SupportedEmbeddingIntent
 from eom_workflow.local_embedding_request_v2 import (
@@ -54,9 +57,9 @@ def _require(condition: bool) -> None:
         raise ValueError("DOCUMENT_CUDA_EXECUTION_INVALID")
 
 
-def document_embedding_batch_workflow_key(parent: EmbeddingBatchPlanRequest) -> str:
+def document_embedding_batch_workflow_key(parent: SupportedEmbeddingBatchRequest) -> str:
     """Original parent/namespace relation in the existing unique Workflow key, not authority."""
-    parent = EmbeddingBatchPlanRequest.model_validate(parent)
+    parent = parse_embedding_batch_plan_request(parent)
     _require(parent.purpose == "INDEX" and len(parent.child_selection_sha256s) == 1)
     return "embedding-batch-index:" + content_sha256(
         {

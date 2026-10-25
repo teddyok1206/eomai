@@ -35,8 +35,11 @@ from eom_workflow.embedding_batch_plan import (
     BATCH_PLAN_PROTOCOL,
     EmbeddingBatchAllocation,
     EmbeddingBatchBound,
-    EmbeddingBatchPlanRequest,
     EmbeddingBatchRoute,
+)
+from eom_workflow.embedding_batch_plan_family import (
+    SupportedEmbeddingBatchRequest,
+    parse_embedding_batch_plan_request,
 )
 from eom_workflow.embedding_device_routing import (
     EmbeddingDeviceRoutingPolicy,
@@ -100,7 +103,7 @@ class ActiveEmbeddingBatchExecution:
     def __init__(
         self,
         operation: CatalogEmbeddingBatchExecution,
-        request: EmbeddingBatchPlanRequest,
+        request: SupportedEmbeddingBatchRequest,
         history: EmbeddingBatchPlanHistory,
         channel: EmbeddingBatchOwnerChannel,
         ready: EmbeddingBatchRootReady,
@@ -201,7 +204,7 @@ class CatalogEmbeddingBatchExecution:
 
     @contextmanager
     def open(
-        self, request: EmbeddingBatchPlanRequest, allocation: EmbeddingBatchAllocation
+        self, request: SupportedEmbeddingBatchRequest, allocation: EmbeddingBatchAllocation
     ) -> Iterator[
         ActiveEmbeddingBatchExecution
         | UnavailableEmbeddingBatchExecution
@@ -213,7 +216,7 @@ class CatalogEmbeddingBatchExecution:
         Canonical admission validates its exact current source/control closure.
         An interrupted original requires supported reconciliation, not this path.
         """
-        request = EmbeddingBatchPlanRequest.model_validate(request)
+        request = parse_embedding_batch_plan_request(request)
         allocation = EmbeddingBatchAllocation.model_validate(allocation)
         with (
             self.publisher.sessions.begin() as session,
@@ -253,7 +256,7 @@ class CatalogEmbeddingBatchExecution:
 
 
 def _root_route(
-    request: EmbeddingBatchPlanRequest,
+    request: SupportedEmbeddingBatchRequest,
     allocation: EmbeddingBatchAllocation,
     policy: EmbeddingDeviceRoutingPolicy,
     notice: EmbeddingBatchRootReady | EmbeddingBatchRootBusy,

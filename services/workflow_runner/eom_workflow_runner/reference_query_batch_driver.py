@@ -12,7 +12,10 @@ from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_identifiers import content_sha256
-from eom_workflow.embedding_batch_plan import EmbeddingBatchPlanRequest, embedding_batch_query_key
+from eom_workflow.embedding_batch_plan_family import (
+    SupportedEmbeddingBatchRequest,
+    embedding_batch_query_key,
+)
 from eom_workflow.reference_query_execution import (
     ReferenceQueryStepOutput,
     parse_supported_reference_query_workflow_request,
@@ -41,7 +44,7 @@ def _require(condition: bool) -> None:
 
 
 def prepare_batch_reference_query_context(
-    parent: EmbeddingBatchPlanRequest,
+    parent: SupportedEmbeddingBatchRequest,
     ordinal: int,
     context: SupportedSimilarityContextRequest,
 ) -> SupportedSimilarityContextRequest:

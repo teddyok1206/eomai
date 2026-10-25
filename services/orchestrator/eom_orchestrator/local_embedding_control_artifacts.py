@@ -28,9 +28,10 @@ from eom_workflow.embedding_batch_execution_receipt import (
     BATCH_EXECUTION_RECEIPT_SCHEMA_REF,
     EmbeddingBatchExecutionReceipt,
 )
-from eom_workflow.embedding_batch_plan import (
-    BATCH_SELECTION_SCHEMA_REF,
-    EmbeddingBatchSelection,
+from eom_workflow.embedding_batch_plan_family import (
+    SupportedEmbeddingBatchSelection,
+    embedding_batch_selection_schema_ref,
+    parse_embedding_batch_selection,
 )
 from eom_workflow.embedding_device_routing import (
     EMBEDDING_DEVICE_ROUTING_SCHEMA_REF,
@@ -122,17 +123,17 @@ class LocalEmbeddingControlArtifactPublisher:
 
     def publish_batch_selection(
         self,
-        selection: EmbeddingBatchSelection,
+        selection: SupportedEmbeddingBatchSelection,
         *,
         idempotency_key: str,
     ) -> PublishedLocalEmbeddingControl:
         """Canonical bounded selection, not source permission or a compute grant."""
-        checked = EmbeddingBatchSelection.model_validate(raw_similarity_contract_value(selection))
+        checked = parse_embedding_batch_selection(selection)
         return self._publish(
             raw=canonical_json_bytes(checked.model_dump(mode="json")),
             semantic_sha256=checked.selection_sha256,
             member="selection.json",
-            schema=BATCH_SELECTION_SCHEMA_REF,
+            schema=embedding_batch_selection_schema_ref(checked),
             artifact_type=BATCH_SELECTION_ARTIFACT_TYPE,
             idempotency_key=idempotency_key,
             created_at=ControlPublicationTime.FIRST_OBSERVATION,

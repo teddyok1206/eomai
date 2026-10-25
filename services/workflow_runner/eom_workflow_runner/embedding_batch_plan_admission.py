@@ -29,11 +29,13 @@ from eom_orchestrator.local_embedding_control_artifacts import (
     DEVICE_ROUTING_POLICY_ARTIFACT_TYPE,
 )
 from eom_protocol.artifact_members import ArtifactMemberPointer
-from eom_workflow.embedding_batch_plan import (
-    MAX_BATCH_PLAN_BYTES,
-    EmbeddingBatchPlanRequest,
-    EmbeddingBatchSelection,
-    RegisteredReviewBatchAnchor,
+from eom_workflow.embedding_batch_plan import RegisteredReviewBatchAnchor
+from eom_workflow.embedding_batch_plan_family import (
+    SupportedEmbeddingBatchRequest,
+    SupportedEmbeddingBatchSelection,
+    embedding_batch_selection_read_maximum,
+    parse_embedding_batch_plan_request,
+    parse_embedding_batch_selection,
     validate_embedding_batch_plan_controls,
 )
 from eom_workflow.embedding_device_routing import (
@@ -74,7 +76,7 @@ class EmbeddingBatchPlanOwnerConfiguration:
 class ResolvedEmbeddingBatchPlanSources:
     """Only this root's materialization; no cached permission, claim or GPU grant."""
 
-    selection: EmbeddingBatchSelection
+    selection: SupportedEmbeddingBatchSelection
     policy: EmbeddingDeviceRoutingPolicy
     sources: ResolvedEmbeddingLookup
 
@@ -126,7 +128,7 @@ class CatalogEmbeddingBatchPlanAdmission:
         return value
 
     def _validate_selection(
-        self, request: EmbeddingBatchPlanRequest, selection: EmbeddingBatchSelection
+        self, request: SupportedEmbeddingBatchRequest, selection: SupportedEmbeddingBatchSelection
     ) -> SelectedEmbeddingSources:
         scope = self.configuration.source_scope
         actor_kind, actor_id = (
@@ -153,7 +155,7 @@ class CatalogEmbeddingBatchPlanAdmission:
 
     @staticmethod
     def _validate_sources(
-        selection: EmbeddingBatchSelection, current: ResolvedEmbeddingLookup
+        selection: SupportedEmbeddingBatchSelection, current: ResolvedEmbeddingLookup
     ) -> None:
         sources = {source.item_revision_id: source for source in current.sources}
         entries = {
@@ -193,9 +195,9 @@ class CatalogEmbeddingBatchPlanAdmission:
 
     @contextmanager
     def admit(
-        self, session: Session, request: EmbeddingBatchPlanRequest
+        self, session: Session, request: SupportedEmbeddingBatchRequest
     ) -> Iterator[ResolvedEmbeddingBatchPlanSources]:
-        request = EmbeddingBatchPlanRequest.model_validate(request)
+        request = parse_embedding_batch_plan_request(request)
         root = session.get_transaction()
         _require(
             root is not None
@@ -225,19 +227,22 @@ class CatalogEmbeddingBatchPlanAdmission:
 
 
 def resolve_embedding_batch_plan_controls(
-    reader: PinnedArtifactReadContext, request: EmbeddingBatchPlanRequest
-) -> tuple[EmbeddingBatchSelection, EmbeddingDeviceRoutingPolicy]:
+    reader: PinnedArtifactReadContext, request: SupportedEmbeddingBatchRequest
+) -> tuple[SupportedEmbeddingBatchSelection, EmbeddingDeviceRoutingPolicy]:
     """Canonical original controls only, not current actor/source or compute authority.
 
     Admission and historical child completion use one file/schema/hash rule.
     Each caller retains its actual current authority and late provenance fence.
     """
-    request = EmbeddingBatchPlanRequest.model_validate(request)
+    request = parse_embedding_batch_plan_request(request)
     pointers = (request.selection_manifest, request.routing_policy)
     reader.prefetch(tuple((p.artifact_id, p.artifact_revision_id) for p in pointers))
-    selection = EmbeddingBatchSelection.model_validate(
+    selection = parse_embedding_batch_selection(
         CatalogEmbeddingBatchPlanAdmission._read_control(
-            reader, request.selection_manifest, BATCH_SELECTION_ARTIFACT_TYPE, MAX_BATCH_PLAN_BYTES
+            reader,
+            request.selection_manifest,
+            BATCH_SELECTION_ARTIFACT_TYPE,
+            embedding_batch_selection_read_maximum(request),
         )
     )
     policy = EmbeddingDeviceRoutingPolicy.model_validate(

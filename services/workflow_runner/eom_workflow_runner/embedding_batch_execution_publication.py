@@ -12,7 +12,10 @@ from eom_orchestrator.local_embedding_control_artifacts import (
     LocalEmbeddingControlArtifactPublisher,
     PublishedLocalEmbeddingControl,
 )
-from eom_workflow.embedding_batch_plan import EmbeddingBatchPlanRequest
+from eom_workflow.embedding_batch_plan_family import (
+    SupportedEmbeddingBatchRequest,
+    parse_embedding_batch_plan_request,
+)
 
 from eom_workflow_runner.embedding_batch_plan_admission import CatalogEmbeddingBatchPlanAdmission
 from eom_workflow_runner.embedding_batch_result_read import VerifiedLocalEmbeddingBatchResult
@@ -37,7 +40,7 @@ class CatalogEmbeddingBatchExecutionPublication:
     def __init__(
         self,
         admission: CatalogEmbeddingBatchPlanAdmission,
-        request: EmbeddingBatchPlanRequest,
+        request: SupportedEmbeddingBatchRequest,
         authorization: CatalogEmbeddingBatchSourceAuthorization,
         publisher: ControlFileSetPublisher,
         *,
@@ -50,7 +53,7 @@ class CatalogEmbeddingBatchExecutionPublication:
             and publisher.settings.nas_artifact_root == admission.catalog.settings.nas_artifact_root
         )
         self.admission, self.authorization = admission, authorization
-        self.request = EmbeddingBatchPlanRequest.model_validate(request)
+        self.request = parse_embedding_batch_plan_request(request)
         self.publisher = publisher
         self.controls = LocalEmbeddingControlArtifactPublisher(
             publisher, source_commit=source_commit

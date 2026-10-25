@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/embedding-batch-plan/1.1",
+  "title": "INDEX-only bulk selection and request with pinned 1.0 execution frames",
+  "description": "Supports up to 1024 source pointers for INDEX only. QUERY remains 1.0. Existing allocation, route, bound and failure frames retain 1.0 schemas and semantics. Neither selection nor planning is authorization or numerical success.",
+  "oneOf": [
+    {"$ref": "#/$defs/selection"},
+    {"$ref": "#/$defs/request"},
+    {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/allocation"},
+    {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/routed"},
+    {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/bound"},
+    {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/failed"}
+  ],
+  "$defs": {
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "message_type", "purpose", "scope", "corpus_id", "graph_snapshot", "access_policy_revision_id", "anchors", "recipe", "views", "query", "selection_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-batch-plan/1.1"},
+        "message_type": {"const": "SELECTION"},
+        "purpose": {"const": "INDEX"},
+        "scope": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/scope"},
+        "corpus_id": {"type": "string", "pattern": "^corpus_[0-9a-f]{32}$"},
+        "graph_snapshot": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"},
+        "access_policy_revision_id": {"type": "string", "pattern": "^accessrev_[0-9a-f]{32}$"},
+        "anchors": {
+          "type": "array", "minItems": 1, "maxItems": 1024,
+          "items": {"oneOf": [
+            {"$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/anchor"},
+            {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/registeredReviewAnchor"}
+          ]}
+        },
+        "recipe": {"$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/recipe"},
+        "views": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/selection/properties/views"},
+        "query": {"type": "null"},
+        "selection_sha256": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/hash"}
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "message_type", "batch_id", "parent_request_sha256", "purpose", "scope", "selection_manifest", "selection_sha256", "routing_policy", "routing_policy_sha256", "child_selection_sha256s", "request_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-batch-plan/1.1"},
+        "message_type": {"const": "REQUEST"},
+        "batch_id": {"type": "string", "pattern": "^embeddingbatch_[0-9a-f]{32}$"},
+        "parent_request_sha256": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/hash"},
+        "purpose": {"const": "INDEX"},
+        "scope": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/scope"},
+        "selection_manifest": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/member"},
+        "selection_sha256": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/hash"},
+        "routing_policy": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/member"},
+        "routing_policy_sha256": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/hash"},
+        "child_selection_sha256s": {
+          "type": "array", "minItems": 1, "maxItems": 3, "uniqueItems": true,
+          "items": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/hash"}
+        },
+        "request_sha256": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/hash"}
+      }
+    }
+  }
+}

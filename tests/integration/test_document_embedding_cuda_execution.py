@@ -115,6 +115,25 @@ def test_broader_runner_is_rejected_without_worker_or_numerical_dispatch(executi
     assert not value.gpu.acked and not hasattr(value.gpu, "numeric")
 
 
+@pytest.mark.parametrize("execution", ["cuda_bulk"], indirect=True)
+def test_bulk_parent_composes_with_existing_native_wire_and_actual_index_runner(execution):
+    value = execution
+    assert (
+        value.gpu.request.schema_version
+        == value.gpu.selection.schema_version
+        == "embedding-batch-plan/1.1"
+    )
+    started = start_document_embedding_batch(value.executor)
+    command = drive_document_embedding_batch_once(
+        value.executor, purpose_runner(value), started.workflow.workflow_id
+    )
+    assert command is not None and command.state == "SUCCEEDED"
+    assert value.gpu.allocation.schema_version == "embedding-batch-plan/1.0"
+    assert value.gpu.numeric.frames.bound.binding.schema_version == "embedding-batch-plan/1.0"
+    assert len(value.gpu.dispatches) == 1 and value.gpu.acked
+    assert value.launcher.forwards == 0
+
+
 def native_history(value, workflow):
     with value.sessions.begin() as session:
         step = session.scalar(

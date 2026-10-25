@@ -8,15 +8,17 @@ from dataclasses import dataclass
 from eom_catalog_contracts.embedding_work_batch import EmbeddingWorkBatchInput
 from eom_identifiers import content_sha256, new_job_id, new_logical_artifact_id, new_revision_id
 from eom_workflow.embedding_batch_plan import (
-    BATCH_PLAN_PROTOCOL,
-    BATCH_PLAN_SCHEMA_SHA256,
     EmbeddingBatchAllocation,
     EmbeddingBatchBound,
     EmbeddingBatchChildBinding,
     EmbeddingBatchFailure,
-    EmbeddingBatchPlanRequest,
     EmbeddingBatchRoute,
-    EmbeddingBatchSelection,
+)
+from eom_workflow.embedding_batch_plan_family import (
+    SupportedEmbeddingBatchRequest,
+    SupportedEmbeddingBatchSelection,
+    embedding_batch_plan_schema_identity,
+    parse_embedding_batch_plan_request,
     validate_embedding_batch_allocation,
     validate_embedding_batch_binding,
     validate_embedding_batch_plan_controls,
@@ -63,8 +65,8 @@ def _root(session: Session) -> None:
     )
 
 
-def embedding_batch_plan_key(request: EmbeddingBatchPlanRequest) -> str:
-    request = EmbeddingBatchPlanRequest.model_validate(request)
+def embedding_batch_plan_key(request: SupportedEmbeddingBatchRequest) -> str:
+    request = parse_embedding_batch_plan_request(request)
     return _PREFIX + content_sha256(
         {
             "batch_id": request.batch_id,
@@ -94,12 +96,15 @@ class EmbeddingBatchPlanStore:
 
     def __init__(
         self,
-        request: EmbeddingBatchPlanRequest,
-        selection: EmbeddingBatchSelection,
+        request: SupportedEmbeddingBatchRequest,
+        selection: SupportedEmbeddingBatchSelection,
         policy: EmbeddingDeviceRoutingPolicy,
     ) -> None:
         validate_embedding_batch_plan_controls(request, selection, policy)
-        self.request = EmbeddingBatchPlanRequest.model_validate(request)
+        self.request = parse_embedding_batch_plan_request(request)
+        self.protocol_version, self.schema_sha256 = embedding_batch_plan_schema_identity(
+            self.request
+        )
         self.policy = EmbeddingDeviceRoutingPolicy.model_validate(policy)
         self.key = embedding_batch_plan_key(self.request)
 
@@ -115,17 +120,17 @@ class EmbeddingBatchPlanStore:
             return None
         payload = self.request.model_dump(mode="json")
         _require(
-            job.protocol_version == BATCH_PLAN_PROTOCOL
+            job.protocol_version == self.protocol_version
             and job.task_type == _TASK
             and job.worker_slot_id is None
             and job.request == payload
             and job.request_hash
             == content_sha256(
-                {"protocol_version": BATCH_PLAN_PROTOCOL, "task_type": _TASK, "request": payload}
+                {"protocol_version": self.protocol_version, "task_type": _TASK, "request": payload}
             )
         )
-        protocol = session.get(ProtocolVersionRecord, BATCH_PLAN_PROTOCOL, populate_existing=True)
-        _require(protocol is not None and protocol.schema_sha256 == BATCH_PLAN_SCHEMA_SHA256)
+        protocol = session.get(ProtocolVersionRecord, self.protocol_version, populate_existing=True)
+        _require(protocol is not None and protocol.schema_sha256 == self.schema_sha256)
         return job
 
     def read(self, session: Session) -> EmbeddingBatchPlanHistory | None:
@@ -184,21 +189,21 @@ class EmbeddingBatchPlanStore:
         validate_embedding_batch_allocation(self.request, self.policy, allocation)
         session.execute(
             insert(ProtocolVersionRecord)
-            .values(version=BATCH_PLAN_PROTOCOL, schema_sha256=BATCH_PLAN_SCHEMA_SHA256)
+            .values(version=self.protocol_version, schema_sha256=self.schema_sha256)
             .on_conflict_do_nothing(index_elements=[ProtocolVersionRecord.version])
         )
-        ensure_protocol_version(session, BATCH_PLAN_PROTOCOL, BATCH_PLAN_SCHEMA_SHA256)
+        ensure_protocol_version(session, self.protocol_version, self.schema_sha256)
         payload = self.request.model_dump(mode="json")
         job_id = new_job_id()
         inserted = session.scalar(
             insert(JobRecord)
             .values(
                 job_id=job_id,
-                protocol_version=BATCH_PLAN_PROTOCOL,
+                protocol_version=self.protocol_version,
                 idempotency_key=self.key,
                 request_hash=content_sha256(
                     {
-                        "protocol_version": BATCH_PLAN_PROTOCOL,
+                        "protocol_version": self.protocol_version,
                         "task_type": _TASK,
                         "request": payload,
                     }

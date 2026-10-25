@@ -19,8 +19,8 @@ from eom_workflow.embedding_batch_execution_receipt import (
 )
 from eom_workflow.embedding_batch_plan import (
     EmbeddingBatchPlanRequest,
-    validate_embedding_batch_query_context,
 )
+from eom_workflow.embedding_batch_plan_family import validate_embedding_batch_query_context
 from eom_workflow.native_reference_query_coordinator import NativeQueryBatchExecuted
 from eom_workflow.reference_query_execution import ReferenceQueryLaunchAssociation
 from sqlalchemy.orm import Session

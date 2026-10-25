@@ -11,8 +11,14 @@ from eom_orchestrator.embedding_batch_plan_store import EmbeddingBatchPlanStore
 from eom_orchestrator.inference_transfer_cpu_handoff import CpuHandoffIdentity
 from eom_workflow.embedding_batch_plan import (
     EmbeddingBatchAllocation,
-    EmbeddingBatchPlanRequest,
     EmbeddingBatchSelection,
+)
+from eom_workflow.embedding_batch_plan_family import parse_embedding_batch_plan_request
+from eom_workflow.embedding_batch_plan_v11 import (
+    BATCH_PLAN_V11_PROTOCOL,
+    BATCH_SELECTION_V11_SCHEMA_REF,
+    EmbeddingBatchPlanRequestV11,
+    EmbeddingBatchSelectionV11,
 )
 from eom_workflow.embedding_device_routing import EmbeddingDeviceRoutingPolicy
 from eom_workflow_runner import document_embedding_batch_material as material
@@ -27,7 +33,7 @@ from eom_workflow_runner.native_command_fence import NativeCommandMutationFence
 from tests.integration.embedding_batch_root_fixtures import configure_synthetic_batch_runtime
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.reference_query_batch_execution_fixtures import query_plan_case
-from tests.unit.test_embedding_batch_plan import planning_case
+from tests.unit.test_embedding_batch_plan import member, planning_case
 from tests.unit.test_embedding_batch_plan_admission import source_case
 from tests.unit.test_embedding_device_routing import policy_document
 
@@ -43,6 +49,7 @@ def make_document_cuda_execution(
     tmp_path,
     monkeypatch,
     finalizer,
+    parent_protocol="embedding-batch-plan/1.0",
 ):
     # The same explicit synthetic Identity/source delegates as the CPU integration
     # fixture; real Catalog/index/encoding/Workflow/Artifact persistence is retained.
@@ -104,11 +111,32 @@ def make_document_cuda_execution(
         anchors=anchors,
         views=[request.namespace.view],
     )
-    template.selection = EmbeddingBatchSelection.model_validate(seal(body, "selection_sha256"))
+    if parent_protocol == BATCH_PLAN_V11_PROTOCOL:
+        template.selection = EmbeddingBatchSelectionV11.model_validate(
+            seal(body | {"schema_version": BATCH_PLAN_V11_PROTOCOL}, "selection_sha256")
+        )
+        template.request = EmbeddingBatchPlanRequestV11.model_validate(
+            seal(
+                template.request.model_dump(mode="json")
+                | dict(
+                    schema_version=BATCH_PLAN_V11_PROTOCOL,
+                    selection_manifest=member(
+                        "selection.json", BATCH_SELECTION_V11_SCHEMA_REF, template.selection, "1"
+                    ).model_dump(mode="json"),
+                    selection_sha256=template.selection.selection_sha256,
+                    child_selection_sha256s=list(template.selection.child_selection_sha256s),
+                ),
+                "request_sha256",
+            )
+        )
+    elif parent_protocol == "embedding-batch-plan/1.0":
+        template.selection = EmbeddingBatchSelection.model_validate(seal(body, "selection_sha256"))
+    else:
+        raise ValueError("unsupported synthetic parent protocol")
     value = source_case(
         tmp_path, monkeypatch, publisher=publisher, planned=template, key=uuid4().hex
     )
-    value.request = EmbeddingBatchPlanRequest.model_validate(
+    value.request = parse_embedding_batch_plan_request(
         seal(
             value.request.model_dump(mode="json") | {"batch_id": "embeddingbatch_" + uuid4().hex},
             "request_sha256",

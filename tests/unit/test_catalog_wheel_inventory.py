@@ -59,6 +59,9 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
             "eom_workflow/resources/native-embedding-coordinator-v2.schema.json",
             "eom_workflow/resources/local-indexing-owner-configuration-v4.schema.json",
             "eom_workflow/resources/reference-query-owner-configuration-v2.schema.json",
+            "eom_workflow/resources/embedding-batch-plan-v1.1.schema.json",
+            "eom_workflow/embedding_batch_plan_family.py",
+            "eom_workflow/embedding_batch_plan_v11.py",
             "eom_workflow_runner/reference_query_batch_driver.py",
             "eom_workflow_runner/reference_query_batch_executor.py",
             "eom_workflow_runner/reference_query_batch_group.py",
@@ -137,6 +140,10 @@ def test_platform_wheel_contains_and_imports_evidence_receipt_runtime(tmp_path: 
                 "'eom_catalog_service.evidence_usage_receipts'; "
                 "assert WorkflowCatalogService.__module__ == "
                 "'eom_catalog_service.workflow_catalog'; "
+                "from eom_workflow.embedding_batch_plan_v11 import "
+                "embedding_batch_plan_v11_schema; "
+                "assert embedding_batch_plan_v11_schema()['$id'] == "
+                "'eom://schemas/workflow/embedding-batch-plan/1.1'; "
                 "print(Resolver.__module__)"
             ),
             str(wheel),

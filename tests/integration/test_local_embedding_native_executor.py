@@ -184,7 +184,7 @@ def execution(
 ):
     execution_mode = getattr(request, "param", "operator")
     service_mode = execution_mode == "service"
-    cuda_mode = execution_mode == "cuda"
+    cuda_mode = execution_mode in {"cuda", "cuda_bulk"}
     addfinalizer = request.addfinalizer
     command, capture = _fixture(guarded_engine)
     if service_mode:
@@ -457,6 +457,9 @@ def execution(
             tmp_path=tmp_path,
             monkeypatch=monkeypatch,
             finalizer=addfinalizer,
+            parent_protocol="embedding-batch-plan/1.1"
+            if execution_mode == "cuda_bulk"
+            else "embedding-batch-plan/1.0",
         )
         owner, executor = gpu.child_owner, gpu.executor
     else:
