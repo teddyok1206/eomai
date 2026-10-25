@@ -185,6 +185,7 @@ def execution(
     execution_mode = getattr(request, "param", "operator")
     service_mode = execution_mode == "service"
     cuda_mode = execution_mode in {"cuda", "cuda_bulk"}
+    cpu_fallback = execution_mode == "cpu_fallback"
     addfinalizer = request.addfinalizer
     command, capture = _fixture(guarded_engine)
     if service_mode:
@@ -218,7 +219,9 @@ def execution(
                 ApprovedPastExamItemKnowledgeSourceV3.model_validate(occurrence_template | source)
             )
         capture = replace(capture, entries=tuple(entries), sources=tuple(sources))
-    native = native_fixture(device="CUDA" if cuda_mode else "CPU")
+    native = native_fixture(
+        device="CUDA" if cuda_mode else "CPU", timeout_seconds=180 if cpu_fallback else 300
+    )
     _unused, compiled = scope_fixture()
     profile = native.policy.profiles[0]
     namespace = EmbeddingIndexNamespace.model_validate(
@@ -444,7 +447,7 @@ def execution(
 
     launcher = Launcher()
     gpu = None
-    if cuda_mode:
+    if cuda_mode or cpu_fallback:
         from tests.integration.document_embedding_cuda_setup import make_document_cuda_execution
 
         gpu = make_document_cuda_execution(
@@ -460,6 +463,7 @@ def execution(
             parent_protocol="embedding-batch-plan/1.1"
             if execution_mode == "cuda_bulk"
             else "embedding-batch-plan/1.0",
+            cpu_launcher=launcher if cpu_fallback else None,
         )
         owner, executor = gpu.child_owner, gpu.executor
     else:

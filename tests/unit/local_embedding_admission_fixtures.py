@@ -65,7 +65,9 @@ def member(
     )
 
 
-def resources(device: Literal["CPU", "CUDA"] = "CPU") -> LocalEmbeddingResourceProfile:
+def resources(
+    device: Literal["CPU", "CUDA"] = "CPU", *, timeout_seconds: int = 300
+) -> LocalEmbeddingResourceProfile:
     return LocalEmbeddingResourceProfile.model_validate(
         seal(
             {
@@ -75,7 +77,7 @@ def resources(device: Literal["CPU", "CUDA"] = "CPU") -> LocalEmbeddingResourceP
                 "memory_max_bytes": 6 * 1024**3,
                 "gpu_vram_max_bytes": 8 * 1024**3 if device == "CUDA" else 0,
                 "cpu_quota_percent": 400,
-                "timeout_seconds": 300,
+                "timeout_seconds": timeout_seconds,
                 "tasks_max": 32,
                 "output_max_bytes": 16 * 1024**2,
                 "maximum_active_launches": 1,
@@ -87,7 +89,9 @@ def resources(device: Literal["CPU", "CUDA"] = "CPU") -> LocalEmbeddingResourceP
     )
 
 
-def runtime_profile(device: Literal["CPU", "CUDA"] = "CPU") -> LocalEmbeddingRuntimeProfile:
+def runtime_profile(
+    device: Literal["CPU", "CUDA"] = "CPU", *, timeout_seconds: int = 300
+) -> LocalEmbeddingRuntimeProfile:
     bundle = _bundle(device)
     space = EmbeddingSpace.model_validate(
         seal(
@@ -102,7 +106,9 @@ def runtime_profile(device: Literal["CPU", "CUDA"] = "CPU") -> LocalEmbeddingRun
         )
     )
     return LocalEmbeddingRuntimeProfile(
-        space=space, runtime_bundle=_pointer(bundle), resource_profile=resources(device)
+        space=space,
+        runtime_bundle=_pointer(bundle),
+        resource_profile=resources(device, timeout_seconds=timeout_seconds),
     )
 
 
@@ -119,9 +125,12 @@ class NativeAdmissionFixture:
 
 
 def native_fixture(
-    *seeds: str, owned_seeds: tuple[str, ...] | None = None, device: Literal["CPU", "CUDA"] = "CPU"
+    *seeds: str,
+    owned_seeds: tuple[str, ...] | None = None,
+    device: Literal["CPU", "CUDA"] = "CPU",
+    timeout_seconds: int = 300,
 ) -> NativeAdmissionFixture:
-    profile = runtime_profile(device)
+    profile = runtime_profile(device, timeout_seconds=timeout_seconds)
     recipe = view_recipe()
     namespace = EmbeddingIndexNamespace(
         storage_partition="synthetic-shared",

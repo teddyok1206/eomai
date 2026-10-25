@@ -1,9 +1,12 @@
-"""Existing atomic INDEX/START and purpose-only Runner for an original CUDA namespace batch."""
+"""Existing atomic INDEX/START and purpose-only Runner for an original routed namespace batch."""
 
 from __future__ import annotations
 
 from eom_workflow.local_embedding_request_v2 import supported_local_embedding_request_actor
 
+from eom_workflow_runner.document_embedding_cpu_batch_execution import (
+    CatalogCpuDocumentBatchExecution,
+)
 from eom_workflow_runner.document_embedding_cuda_execution import (
     CatalogCudaDocumentEmbeddingExecution,
 )
@@ -22,15 +25,23 @@ from eom_workflow_runner.repository import (
 )
 
 
-def _backend(executor: CatalogNativeEmbeddingExecutor) -> CatalogCudaDocumentEmbeddingExecution:
+def _backend(
+    executor: CatalogNativeEmbeddingExecutor,
+) -> CatalogCudaDocumentEmbeddingExecution | CatalogCpuDocumentBatchExecution:
+    if type(executor) is not CatalogNativeEmbeddingExecutor:
+        raise ValueError("DOCUMENT_BATCH_DRIVER_INVALID")
+    backend = executor.execution_backend
     if not (
-        type(executor) is CatalogNativeEmbeddingExecutor
-        and type(executor.execution_backend) is CatalogCudaDocumentEmbeddingExecution
-        and executor.owner is executor.execution_backend.owner
-        and executor.publisher is executor.execution_backend.active.operation.publisher
+        isinstance(
+            backend, (CatalogCudaDocumentEmbeddingExecution, CatalogCpuDocumentBatchExecution)
+        )
+        and type(backend)
+        in {CatalogCudaDocumentEmbeddingExecution, CatalogCpuDocumentBatchExecution}
+        and executor.owner is backend.owner
+        and executor.publisher is backend.context.operation.publisher
     ):
         raise ValueError("DOCUMENT_BATCH_DRIVER_INVALID")
-    return executor.execution_backend
+    return backend
 
 
 def start_document_embedding_batch(
@@ -79,13 +90,20 @@ def drive_document_embedding_batch_once(
     """
     backend = _backend(executor)
     actor_type, actor_id = supported_local_embedding_request_actor(backend.request)
+    selections: tuple[NativeCommandActorSelection, ...] = (
+        NativeCommandActorSelection(actor_type, actor_id),
+    )
+    if actor_type == "local_indexing_service":
+        selections += (
+            NativeCommandActorSelection(actor_type, actor_id, backend.request.namespace),
+        )
     if not (
         type(runner) is WorkflowRunner
         and runner.engine is executor.publisher.engine
         and runner.local_embedding_owner is executor.owner
         and runner.local_embedding_executor is executor
         and runner.command_families == frozenset({CommandExecutionFamily.LOCAL_EMBEDDING})
-        and runner.command_actor_selection == NativeCommandActorSelection(actor_type, actor_id)
+        and runner.command_actor_selection in selections
         and runner.available_roles == frozenset()
     ):
         raise ValueError("DOCUMENT_BATCH_DRIVER_RUNNER_INVALID")

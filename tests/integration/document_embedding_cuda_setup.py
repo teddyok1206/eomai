@@ -22,6 +22,10 @@ from eom_workflow.embedding_batch_plan_v11 import (
 )
 from eom_workflow.embedding_device_routing import EmbeddingDeviceRoutingPolicy
 from eom_workflow_runner import document_embedding_batch_material as material
+from eom_workflow_runner.document_embedding_cpu_batch_execution import (
+    CatalogCpuDocumentBatchExecution,
+)
+from eom_workflow_runner.document_embedding_cpu_execution import FixedCpuDocumentEmbeddingExecution
 from eom_workflow_runner.document_embedding_cuda_execution import (
     CatalogCudaDocumentEmbeddingExecution,
 )
@@ -50,6 +54,7 @@ def make_document_cuda_execution(
     monkeypatch,
     finalizer,
     parent_protocol="embedding-batch-plan/1.0",
+    cpu_launcher=None,
 ):
     # The same explicit synthetic Identity/source delegates as the CPU integration
     # fixture; real Catalog/index/encoding/Workflow/Artifact persistence is retained.
@@ -69,8 +74,11 @@ def make_document_cuda_execution(
     owner._command_fence = NativeCommandMutationFence()
     _unused_query, cpu_template = query_plan_case(key="a" * 32)
     policy = policy_document("INDEX")
-    policy["cpu"]["profile"] = cpu_template.policy.cpu.profile.model_dump(mode="json")
-    policy["cuda"]["profile"] = profile.model_dump(mode="json")
+    if cpu_launcher is None:
+        policy["cpu"]["profile"] = cpu_template.policy.cpu.profile.model_dump(mode="json")
+        policy["cuda"]["profile"] = profile.model_dump(mode="json")
+    else:
+        policy["cpu"]["profile"] = profile.model_dump(mode="json")
     template = planning_case(purpose="INDEX")
     template.policy = EmbeddingDeviceRoutingPolicy.model_validate(seal(policy, "policy_sha256"))
     scope = seal(
@@ -170,7 +178,9 @@ def make_document_cuda_execution(
         )
     )
     value.store = EmbeddingBatchPlanStore(value.request, value.selection, template.policy)
-    configure_synthetic_batch_runtime(value, monkeypatch)
+    configure_synthetic_batch_runtime(
+        value, monkeypatch, allocation_status="READY" if cpu_launcher is None else "BUSY"
+    )
     root = tmp_path / "cuda-publications"
     root.mkdir(mode=0o700)
     monkeypatch.setattr(material, "DOCUMENT_PUBLICATION_ROOT", root)
@@ -180,7 +190,18 @@ def make_document_cuda_execution(
     stack = ExitStack()
     finalizer(stack.close)
     active = stack.enter_context(value.operation.open(value.request, value.allocation))
-    value.adapter = CatalogCudaDocumentEmbeddingExecution(active, owner, request)
+    value.adapter = (
+        CatalogCudaDocumentEmbeddingExecution(active, owner, request)
+        if cpu_launcher is None
+        else CatalogCpuDocumentBatchExecution(
+            value.operation,
+            value.request,
+            active,
+            owner,
+            request,
+            FixedCpuDocumentEmbeddingExecution(cpu_launcher),
+        )
+    )
     value.child_owner = owner
     value.executor = CatalogNativeEmbeddingExecutor(
         owner=owner,

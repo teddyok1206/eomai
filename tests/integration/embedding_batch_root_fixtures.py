@@ -16,7 +16,7 @@ from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_embedding_batch_owner_control import RELEASE, control_frames
 
 
-def configure_synthetic_batch_runtime(value, monkeypatch):
+def configure_synthetic_batch_runtime(value, monkeypatch, *, allocation_status="READY"):
     """No actual unit/GPU/auth proof. SQL source/Job/Artifact boundaries are not replaced."""
     value.frames = control_frames(request=value.allocation.control_request)
     channel = object.__new__(EmbeddingBatchOwnerChannel)
@@ -26,7 +26,10 @@ def configure_synthetic_batch_runtime(value, monkeypatch):
         RELEASE,
     )
     channel.require_direct_peer = Mock()
-    channel.receive_allocation = Mock(return_value=value.frames.ready)
+    assert allocation_status in {"READY", "BUSY"}
+    channel.receive_allocation = Mock(
+        return_value=value.frames.ready if allocation_status == "READY" else value.frames.busy
+    )
     channel.send_binding = Mock()
     channel.close = Mock()
     value.channel, value.acked, value.dispatches = channel, False, []

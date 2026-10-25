@@ -1788,3 +1788,62 @@ maximum_sources 제한은 기존 SelectedEmbeddingSources가 계속 소유하며
 per-request routed runtime/service composition과 no-numerical disposition/cold recovery다.
 CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, BULK_METADATA_CONTRACT_SOURCE=PASS,
 LIVE_CANONICAL_GPU_COMPUTE=NOT_RUN, CPU_FALLBACK_EXECUTION=NOT_RUN, GOAL=ACTIVE.
+
+### P2-X — 실제 precompute BUSY 이후 CPU child 실행 연결 설계 (2026-10-25)
+
+기존 CatalogEmbeddingBatchExecution이 실제 root socket으로 받은 ROOT_BUSY와 canonical route를
+확정한 뒤에만 CPU namespace/request/encoding을 만든다. CPU adapter는 원 parent/route와 busy
+message SHA·allocation/controller pin을 기존 Job history에 대조한다. 순수 route 값만으로 CPU
+실행 권한을 만들지 않는다. 권한/해시/설정/partial/unknown 오류는 CPU 전환 대상이 아니다.
+
+GPU adapter의 원 selection/request/workflow/owned-input closure와 binding 생성 규칙을 작은
+operation-local context로 추출해 CPU/GPU가 공유한다. 각 adapter는 실제 numerical 실행만
+소유한다. CPU는 기존 FixedNativeIndexLauncher와 reservation/result/index publication을 그대로
+사용한다. 가짜 active GPU channel이나 GPU receipt/unit observation은 만들지 않는다.
+CPU로 고정된 원 route는 GPU가 나중에 비어도 replay에서 바꾸지 않는다.
+
+canonical source는 실제 actor/lease를 확인한 Catalog와 원 selection/route/child association이다.
+parent key/원 Workflow/step/native Job와 pinned hashes는 그대로다. 원 key lookup O(1), source
+set map 비교 O(n), immutable ordered binding을 사용한다. 새 DB/index/queue/message schema는 없다.
+parent binding root와 child source/lease roots를 분리하고 SQL transaction을 계산에 걸쳐 열지
+않는다. pending 관측은 OS/identity liveness일 뿐 reusable permission이나 재추론 grant가 아니다.
+
+운영 protected routing policy의 CPU/CUDA timeout은 각각180초다. CPU routed adapter는 기존
+finite work-batch 상한 안의 정확한 CPU profile만 받고, 이를 넘는 profile을 잘라서 실행하지 않는다.
+단순 대안인 GPU 예외를 catch해 CPU 함수를 호출하는 방법은 identity/space/unknown 실행을
+섞으므로 배제한다. CPU route의 공식 START/Runner/동시성/중단/replay는 disposable DB에서,
+실제 kernel BUSY→CPU 계산은 별도 운영 canary에서 검증한다. GPU default 활성화는 아직 하지 않는다.
+
+#### P2-X source 검증 결과
+
+- 원 GPU source/Workflow/binding closure를 `OriginalDocumentEmbeddingBatchContext`로
+  옮겼고 CPU/GPU의 numerical 책임은 별도 adapter에 유지했다. CPU fallback은 원 ROOT_BUSY
+  메시지, 원 allocation 및 canonical route를 모두 확인한 뒤 기존 fixed CPU launcher를 사용한다.
+- 원 CPU route의 공식 START, 실제 Runner claim/heartbeat와 index 등록, publication 전/후
+  네 경계 중단 후 같은 결과·producer 재사용, 권한 철회, 불명 관측 pending 유지 및 기존 CUDA
+  회귀 **16 PASS,188.28초** (`/tmp/eom-document-execution-pg-20261025-r12.log`).
+- 다른 root의 BUSY 증거 거부, 동시 START 두 건의 Workflow/command 하나 유지, 실제 Runner
+  두 개의 동시 claim에서 계산 한 번 유지, 기존 legacy/mixed encoding reservation 회귀
+  **15 PASS,31.76초** (`/tmp/eom-document-execution-pg-20261025-r13.log`).
+- 두 PostgreSQL 검증 모두 공식 disposable DB만 사용했고 cleanup/exit0을 확인했다.
+  IAM/root/수치 모델 leaves는 명시적 synthetic이다. 실제 kernel BUSY→CPU numerical acceptance로
+  확대 해석하지 않는다. planning SUCCEEDED와 실제 child numerical completion도 구분한다.
+- source 집중 회귀 **139 PASS,36.59초**, dependency/installed wheel/runtime/query 경계
+  **231 PASS,16.74초**. 로그는 각각 `/tmp/eom-routed-document-regression-20261025.log`,
+  `/tmp/eom-routed-document-boundaries-20261025.log`이다. strict mypy8개 source와 scoped
+  Ruff lint/format/diff 검사 PASS다. 새 dependency/schema/migration은 없다.
+
+첫 disposable r11은 테스트가 human actor에 허용되지 않는 namespace claim 선택을 만들다가
+1건 실패했다. 공식 actor 계약을 완화하지 않고 해당 test fixture를 고쳤다. driver도 namespace
+선택은 service actor에 대해서만 생성하도록 수정했다. 위 r12/r13은 그 수정 후 검증이며 r11
+실패 로그와 cleanup 기록은 보존했다.
+
+CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO,
+CPU_FALLBACK_APPLICATION_SOURCE=PASS, LIVE_CANONICAL_GPU_COMPUTE=NOT_RUN,
+LIVE_KERNEL_BUSY_TO_CPU_COMPUTE=NOT_RUN, GOAL=ACTIVE.
+
+사용자 후속 검토 순서는 고정한다. 전체 GPU 목표의 실제 실행·활성화·rollback까지 마친 후
+완료 commit과 실제 installed/active release map을 체크포인트로 먼저 기록한다. 그 이후에만
+`/home/eom/EOM_CODE_REVIEW_POST_CHECKPOINT_2026-10-24.md`의 정적 후보12건/추가4건을
+그 체크포인트와 대조한다. 현재 그 문서는 아직 읽지 않았으며 GPU 작업을 되돌리지 않는다.
+별도로 완료된 README 정리 `4e9c962e`는 재적용하지 않는다.

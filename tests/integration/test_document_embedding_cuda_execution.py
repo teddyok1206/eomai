@@ -220,8 +220,8 @@ def test_publication_interruptions_reuse_original_cuda_result_and_canonical_prod
 def test_other_parent_workflow_relation_is_rejected_before_numerical_work(execution):
     value = execution
     first = value.start()
-    value.gpu.adapter.workflow_key += "-foreign"
-    with pytest.raises(ValueError, match="DOCUMENT_CUDA_EXECUTION_INVALID"):
+    value.gpu.adapter.context.workflow_key += "-foreign"
+    with pytest.raises(ValueError, match="DOCUMENT_BATCH_CONTEXT_INVALID"):
         value.advance(*first)
     assert not value.gpu.acked and not hasattr(value.gpu, "numeric")
     assert value.launcher.forwards == 0
