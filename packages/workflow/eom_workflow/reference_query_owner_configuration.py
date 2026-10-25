@@ -72,8 +72,8 @@ def _validator() -> Draft202012Validator:
     )
 
 
-@lru_cache(maxsize=1)
-def _mixed_validator() -> Draft202012Validator:
+def reference_query_mixed_owner_configuration_schema() -> dict[str, Any]:
+    """Independent bytes for additive owner composition; legacy decoder stays closed."""
     with (
         files("eom_workflow")
         .joinpath("resources", "reference-query-owner-configuration-v2.schema.json")
@@ -85,9 +85,15 @@ def _mixed_validator() -> Draft202012Validator:
         or sha256_bytes(raw) != REFERENCE_QUERY_MIXED_OWNER_SCHEMA_SHA256
     ):
         raise ReferenceQueryOwnerConfigurationError()
-    schema = json.loads(raw)
+    schema: dict[str, Any] = json.loads(raw)
     if schema.get("$id") != REFERENCE_QUERY_MIXED_OWNER_SCHEMA_REF:
         raise ReferenceQueryOwnerConfigurationError()
+    return schema
+
+
+@lru_cache(maxsize=1)
+def _mixed_validator() -> Draft202012Validator:
+    schema = reference_query_mixed_owner_configuration_schema()
     Draft202012Validator.check_schema(schema)
     return Draft202012Validator(
         schema,

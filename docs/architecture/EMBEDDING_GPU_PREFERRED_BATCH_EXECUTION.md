@@ -1315,6 +1315,39 @@ BATCH_COMPLETED 뒤 MainPID0/inactive를 확인했다. systemd stop timeout이�
 진행 중 GPU 작업을 끊지 않았다. 이후 동일 numerical/controller에서 CONTENT1 후속 canary를
 준비했다. canary 완료와 successor lineage는 별도 증거로 닫는다.
 
+### P2-AL — QUERY 설치 선택과 기존 유한 묶음 composition
+
+남은 QUERY 연결은 기존 owner의 opt-in successor 설정으로만 활성화한다. released CPU1/2 설정과
+private-chat QUERY 경로는 그대로 둔다. 새3.0은 기존 CPU 설정, CUDA QUERY 실행 policy pointer,
+고정 routing policy pointer/controller release만 감싼다. 설정이나 caller DTO가 권한이 되지 않는다.
+정본은 기존 immutable policy/bundle/registered index/Artifact와 현재 actual operator capture다.
+소스·Graph·정책·각 장치 index revision/hash는1.2 selection으로 고정하고 latest로 대체하지 않는다.
+새 설치 값에는 password/token, arbitrary path/command, source 권한, TTL override를 넣지 않는다.
+
+접근은 설정1회 bounded parse와 기존 Artifact indexed reads, view별 CPU/CUDA pair O(N) 검증이다.
+작은 immutable 설정은 frozen typed 값, view lookup은 map, 원 순서는 tuple로 보존한다. 새 DB/queue,
+global permission cache/registry/daemon은 없다. 기존 actual capture·Catalog source owner→parent
+planning→finite group/Runner→commit owners를 composition하며 domain에 DB/NAS를 import하지 않는다.
+SQL roots와 claim은 기존 application이 소유하고, model/GPU scope는 실제 parent channel만 연다.
+같은 intent의 재전송은 원 selection/route/child pins를 다시 승인받아 읽으며 새 GPU를 시작하지 않는다.
+불명·해시·권한 오류는 기존 실패로 남기고, 실제 PRE_EXECUTION BUSY의 CPU 선택만 허용한다.
+
+우선 pure 설정/정책 closure와 selected-device context builder를 검증하고, 이어 installed runtime과
+기존 prepare transport를 연결한다. 단순히 CPU config의 namespace/device를 CUDA로 바꾸는 대안은
+released 의미와 재전송 핀을 손상시키므로 사용하지 않는다. source-only 검증을 live QUERY/GPU
+default로 보고하지 않으며 두 장치 전체 population이 다르면 activation을 보류한다.
+
+첫 source 경계 검증(2026-10-25 UTC): 새3.0 schema canonical/resource bytes와 hash를 고정했고,
+기존1/2 decoder는3.0을 거부한다. owner/runtime/paired-plan/context/dependency157 PASS(57.78초),
+production3모듈 strict mypy PASS, Ruff/format/diff PASS다. context builder는 원1.2 selection과
+원 allocation/route를 검증하고 실제로 선택된 장치의 immutable index만 사용한다. ordinal별
+기존 child logical ID 파생을 재사용하며 source/Graph/policy/recipe/population pins를 바꾸지 않는다.
+OS/IAM/source/index/numerical leaves는 합성이고 실제 QUERY runtime/transport 활성화는 아직 아니다.
+초기17건 실패는 Pydantic ValidationError를 별도 예외 subclass로 기대한 테스트 오류였고,
+context의 초기1건 실패는 fixture에 이미 있던 top_k=5를 다시5로 쓴 부정 테스트 오류였다.
+기록은 보존했으며 실제 다른 값으로 수정한 최종 회귀를 통과했다. 예외를 무시하거나 검증을
+완화해 PASS시킨 것이 아니다.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존
