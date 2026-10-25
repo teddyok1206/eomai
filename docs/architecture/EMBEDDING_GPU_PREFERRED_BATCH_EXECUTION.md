@@ -717,6 +717,30 @@ leaf는 명시적 합성 fixture다. 실제 canonical-source CUDA 계산·GPU �
 그림 생성 공존·처리량 및 rollback은 아직 별도 운영 gate다. live는 CPU/configuration4이며,
 동결된 CPU/CUDA/root SDK와 실제 설치 unit은 변경하지 않았다.
 
+#### P2-AD release 준비 evidence — 2026-10-25 05:12 UTC
+
+검증 코드 commit은 `23097eca3f21819edb9898e328e21d16979162d7`이고 origin/main에 push했다.
+기존 build-only로 archive/RECORD PASS, source 없는 격리 wheel 및 보호된 설치본에서 metadata
+import/config5·reconciliation schema decode PASS다. torch/transformers import·모델 실행은 없다.
+build 디렉터리는 `/tmp/eom-api-build/23097eca3f21819edb9898e328e21d16979162d7.0bruwI/dist`다.
+platform/API-contract wheel SHA-256은 각각
+`84b2dcf2a179b8b681f9b662329900295861967a74fb3e05be43d4cef776bbaf`,
+`54eb4e938c89af67e5dca6967823f6970eb94b73c20a324d4066e88c8f840aaa`다.
+
+기존 보호된 installer로 같은 source의 metadata SDK를
+`/opt/eom/embedding-owner-releases/23097eca3f21819edb9898e328e21d16979162d7`에 별도 설치했다.
+이 경로는 **STAGED_NOT_ACTIVE**다. 실제 owner unit, identity/config/grant, API/Web/QUERY와
+CPU/CUDA numerical prefix는 아직 교체하지 않았다. 고정 root controller `7f041c71…`, CUDA
+수치 SDK `56e545c4…`를 재설치/재자격하지 않았다. 현재 default는 CPU이며 GPU actual numerical
+canary, matched indexes, batch QUERY와 최종 default/rollback은 미완료다.
+
+다음은 source framework 추가가 아니라 이 candidate를 사용하는 실제 configuration5/least-
+privilege workspace·source grant bootstrap과 canonical-source CUDA canary다. 기존 supported
+Identity/Catalog owner operations 및 실제 same-process runtime capture를 사용하고 시험용
+DB fixtures/저장 actor ID를 운영 권한으로 대체하지 않는다. old CPU set으로의 복귀를 먼저
+고정한 뒤 실제 처리량/공존/배포를 닫는다. 사용자 후속 정적 리뷰12+4는 전체 GPU 완료 commit과
+운영 release checkpoint를 확보한 뒤에만 대조하며 아직 열지 않았다.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존
