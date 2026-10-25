@@ -478,3 +478,116 @@ protected-file read-once/late-tamper coverage plus the outcome-reader/contracts:
 42 PASS,18.47s; strict mypy and scoped lint/format passed. Initial filesystem
 fixture permissions were corrected to0700/0600, not relaxed in production.
 Evidence: `/tmp/eom-unpublished-protected-snapshot-20261025-r3.log`.
+
+### Original unpublished recovery and restored physical-owner alignment
+
+The installed recovery/2.0 application from `04e36bbe` closed only the expired,
+unpublished Workflow `workflow_aaeda70eab6c4bf7a1650c5fb7c72b02` as application
+`FAILED/EMBEDDING_NATIVE_RESULT_UNPUBLISHED`. Its16 encoding producers closed
+under the same disposition. The original numerical `SUCCEEDED`, root-controller
+`FAILED`, planning history and older failed/completed Workflows stayed unchanged.
+Exact command replay returned the same receipt without a model execution.
+Evidence: `/tmp/eom-unpublished-recovery-install-20261025-04e36bbe.log`, EXIT0.
+
+The same source became the INDEX/root-controller metadata owner and the explicit
+image/trainer retained-resource guardian owner. Only the latter's two entry
+installation values and matching configuration owner value changed; its19
+numerical templates, worker bootstrap, models and device pins stayed unchanged.
+Guardian/retained-resource regression302 PASS and pure selection4 PASS do not
+claim an actual image-generation or trainer numerical run. API/Web/Catalog and
+CPU/private QUERY remained the compatible `06b5d0e9` release. CPU/CUDA numerical
+prefixes, Graph, migration and embedding-space identities stayed unchanged.
+Evidence: `/tmp/eom-restored-index-activation-20261025-04e36bbe-r2.log`, EXIT0;
+backups `/var/lib/eom-gpu-standby-index-04e36bbe` and
+`/var/lib/eom-image-retained-owner-04e36bbe`.
+
+Four other-revision nonterminal historical Workflows were classified and retained,
+not silently counted as current executable work or marked successful. The current
+queue predicate includes the exact service reference. A read-only inspection of
+the old CUDA CONCRETE Workflow `workflow_b1c0a4cd2f8b4447a17df277d28c2a4f`
+found no attached encoding association or exact BOUND parent; that stale row alone
+does not justify a state-machine patch, fabricated retirement or failure repair.
+
+### Bounded work-size correction after measured control-budget exhaustion
+
+The restored INDEX invocation `d2fcb43fc95e45bca317640ebc18dc21` ended at
+14:35:40 UTC with `EMBEDDING_BENCHMARK_CHANNEL_EXPIRED`. This was not GPU
+unavailability: its16-row numerical worker actually succeeded, wrote65536 vector
+bytes at14:34:29, and retired with zero retained descriptors at14:34:59. The root
+controller subsequently failed before canonical publication. Preserve those
+distinct facts; raw local vectors are not canonical accepted output.
+
+Measured source-stage totals for this invocation:106 current resolutions,
+246617 milliseconds combined, including candidate admission145217ms and profile
+resolution46572ms. Preparation and final settlement share the original240-second
+control allowance; numerical time remains separately bounded180 seconds. A full
+16-row group therefore exhausted the420-second original channel. Logs:
+`/tmp/eom-current-index-expiry-20261025-r2.json` and the original unit journal.
+
+Use the existing owner5.0 `maximum_targets` setting to split subsequent groups
+into8 targets. This is an operational work-size selection, not a new queue,
+schema, service identity, source policy, permission cache or numerical runtime.
+Keep both logical projections and all six namespaces; change only the two group
+work-size values. In particular, do not renew the failed original deadline,
+increase the pinned numerical budget or requalify a new embedding space merely
+to accommodate metadata overhead. Existing grants remain unchanged upper bounds.
+
+Canonical inputs remain pinned approved sources and controls. Access remains the
+existing indexed queue/unique encoding reservation plus ordered finite batches,
+O(targets) metadata;8 reduces per-root source work and trades some model-loading
+amortization for completion headroom. No binary copy, DB schema or new index is
+needed. The root-managed owner-selection file is captured at service startup,
+outside the runtime-identity hash cycle; every new request pins its actual plan.
+Change it only while the service and physical resource owners are stopped,
+after the old unpublished Workflow is officially recovered with its original
+retirement proof and expired command lease. Compare exact predecessor bytes and
+epochs, save a recoverable backup, then replace that one selection and restart
+the same installed service. No model/source/user authority comes from the file.
+
+The previous16-row selection is the rollback target; already committed vectors
+and all original failed records remain. Source/config tests alone do not show
+that8 rows will finish: require an actual registered completion before declaring
+the work-size experiment successful. A fresh failure remains explicit, never a
+CPU fallback or silent re-key. GPU-default QUERY, complete exact device pairs,
+authenticated multi-query/fallback acceptance and the post-checkpoint review are
+still pending. The external12+4 review document remains unopened.
+
+The expired16-row Workflow `workflow_2b164211a28d423a8239855f0badf9cf`
+subsequently closed through the installed recovery/2.0 application, with16
+encoding failures, exact replay PASS and no new numerical execution. Original
+retirement SHA `ea6d9cd1ce1f3fc7f87b833965056aa8ee1413c465f3917102627e69e80bc0fe`
+pins numerical invocation `134f32e8fb0542a587b1b2d1d01977ae`; original failed
+controller invocation `2f69fde2f3844555a027fa09cc44f171` remains failed.
+Recovery command SHA `4ce150f6c114e21df451041944fdfd3e6ee15ab5cae7d7c9a18188d39c00145d`.
+
+The owner-selection before/after raw hashes are respectively
+`e8c26f1f264384464dd7227bd479a95489df554c04d8323e86eab1b2b970924a` /
+`7bbd9b6a657eb19c8f74723b0dc1600c61f273e98dea2b54138d1a7247fae71f`;
+backup and selection receipt: `/var/lib/eom-index-eight-04e36bbe`.
+INDEX restarted at14:51 UTC, invocation `6e792281a46a420898cdece549539ef7`,
+PID227907. No daemon reload, numerical-prefix change, service/grant revision,
+API/Web/QUERY restart or authentication change accompanied this selection.
+Evidence: `/tmp/eom-index-eight-started-20261025-r2.log`, EXIT0.
+The first operational selection stopped before file replacement because its
+diagnostic used an assumed actor JSON key. It was corrected to the existing
+public version-aware service-reference resolver; it did not repeat recovery or
+alter rows. The original failed invocation and operator error logs are retained.
+
+Pure work-size/configuration/unchanged lifetime/namespace tests64 PASS,13.26s;
+the final two operational selection helpers11 PASS,7.40s, scoped Ruff/format
+PASS. No core code, schema or persistence behavior changed in this selection,
+so the prior recovery disposable-PostgreSQL evidence remains applicable; these
+new helper tests are not described as additional live or DB-concurrency tests.
+
+An unselected QUERY3 candidate was also validated against canonical published
+CPU/CUDA native policies and routing controls using installed SDK04. Its API
+provider remains the actual06 release; both public/mixed owners select04 and
+private chat keeps the unchanged CPU base, with its existing pin rebound to the
+new CPU base bytes, **not** to the routed wrapper bytes. Unit isolation and64-task/
+1GiB bounds are preserved. Candidate generation and pure six-case selection
+tests do not constitute activation, paired coverage or numerical acceptance.
+Evidence: `/tmp/eom-routed-query-candidate-20261025-r1.log`, EXIT0;
+candidate/rollback set `/var/lib/eom-query-routed-selection-04e36bbe`.
+Slack milestone `devreport_57b7011f14f64ece931547a55a4bbbaa` reports ACTIVE,
+not completion. The user-supplied post-checkpoint review and README cleanup are
+still untouched.
