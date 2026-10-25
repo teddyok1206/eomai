@@ -7,6 +7,10 @@ from typing import cast
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_identifiers import content_sha256
+from eom_workflow.embedding_encoding_recovery import (
+    KNOWN_ENCODING_FAILURE_CODE,
+    NativeEmbeddingFailureRecoveryCommand,
+)
 from eom_workflow.local_embedding_encoding_ownership_v2 import (
     LocalEmbeddingLaunchIntentV2,
     SupportedLocalEmbeddingLaunchIntent,
@@ -40,6 +44,7 @@ from sqlalchemy.orm import Session
 
 from eom_orchestrator.embedding_encoding_reservation_storage import (
     EmbeddingEncodingReservationError,
+    EmbeddingEncodingReservationStorage,
 )
 from eom_orchestrator.models import JobEventRecord, JobRecord, ProtocolVersionRecord
 from eom_orchestrator.native_embedding_launch_identity import require_native_embedding_launch
@@ -240,5 +245,72 @@ class NativeEmbeddingCoordinator:
             "EMBEDDING_NATIVE_" + record.record_type,
             data=record.model_dump(mode="json"),
         )
+        session.flush()
+        return self.read(session)
+
+    def record_known_failure(
+        self, session: Session, command: NativeEmbeddingFailureRecoveryCommand
+    ) -> NativeEmbeddingCoordinatorHistory:
+        """Caller proves physical retirement and exact maintenance/source authority.
+
+        A command value is not proof. Only the first allocated/unpublished stage
+        can fail here; this never erases checkpoints or revives terminal work.
+        """
+        command = NativeEmbeddingFailureRecoveryCommand.model_validate(command)
+        EmbeddingEncodingReservationStorage.require_recovery_protocol(session)
+        if (
+            command.workflow_id != self.intent.workflow_id
+            or command.workflow_request_sha256 != self.request.request_sha256
+            or command.command_id != self.intent.command_id
+            or command.lease_generation != self.intent.lease_generation
+        ):
+            raise EmbeddingEncodingReservationError("EMBEDDING_NATIVE_FAILURE_CONTEXT_INVALID")
+        require_native_embedding_launch(session, self.intent, self.request)
+        job = session.scalar(
+            select(JobRecord)
+            .where(JobRecord.job_id == self.intent.native_launch_job_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        history = self.read(session)
+        events = tuple(
+            session.scalars(
+                select(JobEventRecord)
+                .where(
+                    JobEventRecord.job_id == self.intent.native_launch_job_id,
+                    JobEventRecord.event == "EMBEDDING_NATIVE_KNOWN_FAILED",
+                )
+                .limit(2)
+            )
+        )
+        if events:
+            if (
+                len(events) != 1
+                or events[0].data != command.model_dump(mode="json")
+                or (events[0].from_state, events[0].to_state) != ("RUNNING", "FAILED")
+                or (
+                    job is None
+                    or history.state != "FAILED"
+                    or job.error_code != KNOWN_ENCODING_FAILURE_CODE
+                )
+            ):
+                raise EmbeddingEncodingReservationError("EMBEDDING_NATIVE_FAILURE_HISTORY_INVALID")
+            return history
+        if (
+            job is None
+            or history.state != "RUNNING"
+            or len(history.records) != 1
+            or job.error_code is not None
+        ):
+            raise EmbeddingEncodingReservationError("EMBEDDING_NATIVE_FAILURE_TERMINAL_OR_FOREIGN")
+        job = transition_job(
+            session,
+            job.job_id,
+            JobState.FAILED,
+            "EMBEDDING_NATIVE_KNOWN_FAILED",
+            data=command.model_dump(mode="json"),
+        )
+        job.error_code = KNOWN_ENCODING_FAILURE_CODE
+        job.error_message = "Original numerical unit failed and its retirement was verified."
         session.flush()
         return self.read(session)

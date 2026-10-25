@@ -86,6 +86,97 @@ class EmbeddingBatchPlanHistory:
     failure: EmbeddingBatchFailure | None
 
 
+def require_embedding_batch_plan_job_record(
+    session: Session, job: JobRecord, request: SupportedEmbeddingBatchRequest
+) -> None:
+    """Shared canonical metadata check; actual current-source/maintenance admission is separate.
+
+    Callers first parse the exact supported wire request. This neither resolves
+    selection Artifacts nor grants a planning replay, model run or source access.
+    """
+    _root(session)
+    version, schema_sha = embedding_batch_plan_schema_identity(request)
+    payload = request.model_dump(mode="json")
+    _require(
+        job.protocol_version == version
+        and job.task_type == _TASK
+        and job.worker_slot_id is None
+        and job.request == payload
+        and job.idempotency_key == embedding_batch_plan_key(request)
+        and job.request_hash
+        == content_sha256({"protocol_version": version, "task_type": _TASK, "request": payload})
+    )
+    protocol = session.get(ProtocolVersionRecord, version, populate_existing=True)
+    _require(protocol is not None and protocol.schema_sha256 == schema_sha)
+
+
+def _read_job_history(
+    session: Session, job: JobRecord, request: SupportedEmbeddingBatchRequest
+) -> EmbeddingBatchPlanHistory:
+    """Canonical frame structure only. Runtime policy/source admission remains separate."""
+    rows = tuple(
+        session.scalars(
+            select(JobEventRecord)
+            .where(JobEventRecord.job_id == job.job_id)
+            .order_by(JobEventRecord.sequence)
+            .limit(10)
+        )
+    )
+    _require(4 <= len(rows) <= 9)
+    failure = None
+    normal = rows
+    if rows[-1].event == "EMBEDDING_PLAN_FAILED":
+        last = rows[-1]
+        failure = EmbeddingBatchFailure.model_validate(last.data)
+        _require(
+            failure.request_sha256 == request.request_sha256
+            and last.from_state == rows[-2].to_state
+            and last.to_state == "FAILED"
+            and last.from_state in {"CLAIMED", "RUNNING"}
+        )
+        normal = rows[:-1]
+    _require(len(normal) in {4, 5, 8})
+    for ordinal, (row, expected) in enumerate(zip(normal, _EVENTS, strict=False), 1):
+        _require(row.sequence == ordinal and (row.event, row.from_state, row.to_state) == expected)
+        if ordinal <= 3:
+            _require(row.data == {})
+    _require(rows[-1].sequence == len(rows) and job.status == rows[-1].to_state)
+    allocation = EmbeddingBatchAllocation.model_validate(normal[3].data)
+    _require(allocation.request_sha256 == request.request_sha256)
+    route = None if len(normal) < 5 else EmbeddingBatchRoute.model_validate(normal[4].data)
+    if route is not None:
+        _require(
+            route.request_sha256 == request.request_sha256
+            and route.allocation_record_sha256 == allocation.record_sha256
+        )
+    bound = None if len(normal) < 8 else EmbeddingBatchBound.model_validate(normal[5].data)
+    if bound is not None:
+        assert route is not None
+        validate_embedding_batch_binding(request, route, bound)
+        _require(
+            all(row.data == {"bound_record_sha256": bound.record_sha256} for row in normal[6:])
+        )
+    return EmbeddingBatchPlanHistory(job.job_id, job.status, allocation, route, bound, failure)
+
+
+def read_embedding_batch_plan_metadata(
+    session: Session, job_id: str
+) -> tuple[SupportedEmbeddingBatchRequest, EmbeddingBatchPlanHistory] | None:
+    """Exact technical metadata through its owner, never source/compute permission.
+
+    Deployment maintenance must authenticate its actual schema owner first.
+    Scientific consumers continue to use current Catalog source/policy admission;
+    this reader does not materialize selection Artifacts or numerical data.
+    """
+    _root(session)
+    job = session.get(JobRecord, job_id, populate_existing=True)
+    if job is None:
+        return None
+    request = parse_embedding_batch_plan_request(job.request)
+    require_embedding_batch_plan_job_record(session, job, request)
+    return request, _read_job_history(session, job, request)
+
+
 class EmbeddingBatchPlanStore:
     """Caller owns fresh actual-actor/source/physical fences in each root transaction.
 
@@ -118,67 +209,20 @@ class EmbeddingBatchPlanStore:
         )
         if job is None:
             return None
-        payload = self.request.model_dump(mode="json")
-        _require(
-            job.protocol_version == self.protocol_version
-            and job.task_type == _TASK
-            and job.worker_slot_id is None
-            and job.request == payload
-            and job.request_hash
-            == content_sha256(
-                {"protocol_version": self.protocol_version, "task_type": _TASK, "request": payload}
-            )
-        )
-        protocol = session.get(ProtocolVersionRecord, self.protocol_version, populate_existing=True)
-        _require(protocol is not None and protocol.schema_sha256 == self.schema_sha256)
+        require_embedding_batch_plan_job_record(session, job, self.request)
         return job
 
     def read(self, session: Session) -> EmbeddingBatchPlanHistory | None:
         job = self._job(session)
         if job is None:
             return None
-        rows = tuple(
-            session.scalars(
-                select(JobEventRecord)
-                .where(JobEventRecord.job_id == job.job_id)
-                .order_by(JobEventRecord.sequence)
-                .limit(10)
+        history = _read_job_history(session, job, self.request)
+        validate_embedding_batch_allocation(self.request, self.policy, history.allocation)
+        if history.route is not None:
+            validate_embedding_batch_route_record(
+                self.request, self.policy, history.allocation, history.route
             )
-        )
-        _require(4 <= len(rows) <= 9)
-        failure = None
-        normal = rows
-        if rows[-1].event == "EMBEDDING_PLAN_FAILED":
-            last = rows[-1]
-            failure = EmbeddingBatchFailure.model_validate(last.data)
-            _require(
-                failure.request_sha256 == self.request.request_sha256
-                and last.from_state == rows[-2].to_state
-                and last.to_state == "FAILED"
-                and last.from_state in {"CLAIMED", "RUNNING"}
-            )
-            normal = rows[:-1]
-        _require(len(normal) in {4, 5, 8})
-        for ordinal, (row, expected) in enumerate(zip(normal, _EVENTS, strict=False), 1):
-            _require(
-                row.sequence == ordinal and (row.event, row.from_state, row.to_state) == expected
-            )
-            if ordinal <= 3:
-                _require(row.data == {})
-        _require(rows[-1].sequence == len(rows) and job.status == rows[-1].to_state)
-        allocation = EmbeddingBatchAllocation.model_validate(normal[3].data)
-        validate_embedding_batch_allocation(self.request, self.policy, allocation)
-        route = None if len(normal) < 5 else EmbeddingBatchRoute.model_validate(normal[4].data)
-        if route is not None:
-            validate_embedding_batch_route_record(self.request, self.policy, allocation, route)
-        bound = None if len(normal) < 8 else EmbeddingBatchBound.model_validate(normal[5].data)
-        if bound is not None:
-            assert route is not None
-            validate_embedding_batch_binding(self.request, route, bound)
-            _require(
-                all(row.data == {"bound_record_sha256": bound.record_sha256} for row in normal[6:])
-            )
-        return EmbeddingBatchPlanHistory(job.job_id, job.status, allocation, route, bound, failure)
+        return history
 
     def allocate(
         self, session: Session, allocation: EmbeddingBatchAllocation

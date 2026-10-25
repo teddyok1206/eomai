@@ -1275,6 +1275,30 @@ read-only exact generation/Job/step 감사는 `/tmp/eom-gpu-original-failed-meta
 처리하지 않고 parent binding/planning SUCCEEDED는 보존한다. 현재 source/lease로 새 producer를
 처음 실행하는 canary는 그 뒤이며, 새 SDK를 stage한 것만으로 운영 복구/활성화했다고 보고하지 않는다.
 
+### P2-AK — 실제 allocated failure maintenance 적용 경계
+
+P2-AJ의 RECOVER command와 installed root reader를 기존 Workflow/Orchestrator owner로 연결한다.
+기존 preallocation maintenance의 clean-transaction/schema-owner 검사를 작은 public helper로 공유한다.
+각 application이 요구하는 고정 테이블 집합만 확인하며 runtime/user DTO에서 테이블·role을 받지 않는다.
+원 preallocation 오류 의미·원 schema bytes는 보존한다. parent planning Job의 immutable header 검증도
+기존 owner의 public 검증 함수 하나를 공유한다. 기술 metadata만 읽고 과거 source 권한을 되살리지 않는다.
+
+lock/transaction은 Workflow→원 command/step→native launch→encoding reservations 순서이며,
+명시된 원 generation·만료 lease·RUNNING/미완료 단계·one-child INDEX binding과 root allocation SHA를
+확인한다. 이미 validation/index publication 경계를 넘은 경우는 거부한다. 같은 root transaction 안에서
+encoding/native/command/step/Workflow를 기존 state machine으로 FAILED 종료하고 RECOVER 원문을
+canonical event에 남긴다. root file/unit의 늦은 재검증이 실패하면 모든 DB 변경을 rollback한다.
+replay는 같은 command/event만 반환하고 다른 generation/대상은 거부한다. 기존 planning SUCCEEDED,
+failed physical record, source/Artifact와 현재 진행 중 다른 namespace/GPU unit은 변경하지 않는다.
+새 worker/model/queue/schema migration이나 CPU fallback은 이 application의 효과가 아니다.
+
+구현 검증(2026-10-25 UTC): source 집중 회귀170 PASS(43.49초), mypy5개 module PASS,
+disposable PostgreSQL `r45`86 PASS(47.40초), cleanup EXIT0. 실제 DB 검증에는 동시 복구,
+동일 command replay, 잘못된 generation/parent/physical allocation 거부, runtime role 거부,
+늦은 OS fence 오류 시 전체 rollback과 기존 preallocation/parent planning/retry 회귀가 포함된다.
+이 테스트의 OS/source leaf는 fixture이며 실제 production mutation 증거가 아니다. 실제 적용 전에는
+설치된 immutable wheel에서 원 root retirement와 schema owner를 다시 검증한다.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존

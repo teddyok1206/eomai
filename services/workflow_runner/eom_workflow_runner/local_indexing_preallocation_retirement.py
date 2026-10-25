@@ -26,7 +26,7 @@ from eom_workflow.local_indexing_preallocation_retirement import (
     parse_local_indexing_retirement_command,
     parse_local_indexing_retirement_receipt,
 )
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
@@ -40,6 +40,11 @@ from eom_workflow_runner.models import (
 from eom_workflow_runner.native_start_command import (
     LOCAL_EMBEDDING_SUBMISSION_SOURCE,
     resolve_native_start_command,
+)
+from eom_workflow_runner.native_workflow_maintenance_authority import (
+    WORKFLOW_MAINTENANCE_TABLES,
+    NativeWorkflowMaintenanceAuthorityError,
+    require_native_workflow_maintenance_owner,
 )
 from eom_workflow_runner.repository import validate_local_embedding_workflow_submission
 from eom_workflow_runner.state_machine import (
@@ -63,42 +68,10 @@ class LocalIndexingRetirementError(ValueError):
 
 
 def _owner(session: Session) -> str:
-    root = session.get_transaction()
-    if (
-        root is None
-        or not root.is_active
-        or session.in_nested_transaction()
-        or session.new
-        or session.dirty
-        or session.deleted
-        or session.get_bind().dialect.name != "postgresql"
-    ):
-        raise LocalIndexingRetirementError("LOCAL_INDEXING_RETIREMENT_CONTEXT_INVALID")
-    principal, current, writable, isolation = session.execute(
-        text(
-            "SELECT SESSION_USER,CURRENT_USER,"
-            "pg_catalog.current_setting('transaction_read_only')='off',"
-            "pg_catalog.current_setting('transaction_isolation')"
-        )
-    ).one()
-    owners = session.execute(
-        text(
-            "SELECT c.relname,pg_catalog.pg_get_userbyid(c.relowner) "
-            "FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace "
-            "WHERE n.nspname='app' AND c.relkind='r' AND c.relname IN "
-            "('workflow_instances','workflow_commands','workflow_step_runs','workflow_events')"
-        )
-    ).all()
-    if (
-        not isinstance(principal, str)
-        or current != principal
-        or len(owners) != 4
-        or any(owner != principal for _table, owner in owners)
-    ):
-        raise LocalIndexingRetirementError("LOCAL_INDEXING_RETIREMENT_OWNER_REQUIRED")
-    if writable is not True or isolation != "read committed":
-        raise LocalIndexingRetirementError("LOCAL_INDEXING_RETIREMENT_CONTEXT_INVALID")
-    return principal
+    try:
+        return require_native_workflow_maintenance_owner(session, WORKFLOW_MAINTENANCE_TABLES)
+    except NativeWorkflowMaintenanceAuthorityError as error:
+        raise LocalIndexingRetirementError("LOCAL_INDEXING_RETIREMENT_" + error.reason) from error
 
 
 def retire_unallocated_indexing_workflow(
