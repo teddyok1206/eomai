@@ -12,6 +12,17 @@ from eom_identifiers import (
     new_logical_artifact_id,
     new_revision_id,
 )
+from eom_workflow.embedding_encoding_recovery import (
+    ENCODING_RECOVERY_PROTOCOL,
+    ENCODING_RECOVERY_SCHEMA_SHA256,
+    ENCODING_RETRY_PRODUCER_EVENT,
+    ENCODING_RETRY_SUCCESSOR_EVENT,
+    KNOWN_ENCODING_FAILURE_CODE,
+    KNOWN_ENCODING_FAILURE_EVENT,
+    MAX_ENCODING_RETRIES,
+    EmbeddingEncodingRetryDeclaration,
+    KnownFailedEmbeddingEncoding,
+)
 from eom_workflow.local_embedding_encoding_dispatch import (
     SupportedEmbeddingAssociation,
     SupportedEmbeddingAttachedEvent,
@@ -89,12 +100,26 @@ def _request_hash(request: EmbeddingEncodingJobRequest) -> str:
     )
 
 
-def owned_job(job: JobRecord) -> LocalEmbeddingOwnedJob:
+def owned_job(
+    job: JobRecord, retry: EmbeddingEncodingRetryDeclaration | None = None
+) -> LocalEmbeddingOwnedJob:
     request: EmbeddingEncodingJobRequest = _message(job.request, EmbeddingEncodingJobRequest)
+    key = request.idempotency_key
+    if retry is not None:
+        retry = EmbeddingEncodingRetryDeclaration.model_validate(retry)
+        key = retry.storage_idempotency_key
+        if (
+            retry.encoding_sha256 != request.encoding.encoding_sha256
+            or retry.successor.job_id != job.job_id
+            or retry.successor.request_sha256 != request.request_sha256
+            or retry.successor.allocated_artifact_id != job.logical_artifact_id
+            or retry.successor.allocated_artifact_revision_id != job.revision_id
+        ):
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_RETRY_REFERENCE_INVALID")
     if (
         job.protocol_version != ENCODING_PROTOCOL_VERSION
         or job.task_type != ENCODING_TASK_TYPE
-        or job.idempotency_key != request.idempotency_key
+        or job.idempotency_key != key
         or job.request_hash != _request_hash(request)
         or job.worker_slot_id is not None
     ):
@@ -142,6 +167,21 @@ class EmbeddingEncodingReservationStorage:
             "embedding-encoding-ownership/2.0",
             EMBEDDING_ENCODING_OWNERSHIP_V2_SCHEMA_SHA256,
         )
+
+    @staticmethod
+    def prepare_recovery_protocol(session: Session) -> None:
+        """Explicit schema-owner deployment preparation, not runtime bootstrap."""
+        EmbeddingEncodingReservationStorage._prepare_protocol(
+            session, ENCODING_RECOVERY_PROTOCOL, ENCODING_RECOVERY_SCHEMA_SHA256
+        )
+
+    @staticmethod
+    def require_recovery_protocol(session: Session) -> None:
+        record = session.get(
+            ProtocolVersionRecord, ENCODING_RECOVERY_PROTOCOL, populate_existing=True
+        )
+        if record is None or record.schema_sha256 != ENCODING_RECOVERY_SCHEMA_SHA256:
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_RECOVERY_UNAVAILABLE")
 
     @staticmethod
     def _prepare_protocol(session: Session, version: str, expected: str) -> None:
@@ -268,7 +308,9 @@ class EmbeddingEncodingReservationStorage:
         for job, requested in zip(jobs, requests, strict=True):
             if owned_job(job).request != requested:
                 raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_REQUEST_CONFLICT")
-        return jobs, created
+        return EmbeddingEncodingReservationStorage.current_producers(
+            session, jobs, lock=True
+        ), created
 
     @staticmethod
     def lock_references(
@@ -285,8 +327,12 @@ class EmbeddingEncodingReservationStorage:
         by_id = {job.job_id: job for job in jobs}
         if len(by_id) != len(references):
             raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_NOT_FOUND")
+        origins = EmbeddingEncodingReservationStorage.retry_origins(session, jobs)
         for reference in references:
-            if owned_job(by_id[reference.job_id]).job_reference != reference:
+            if (
+                owned_job(by_id[reference.job_id], origins.get(reference.job_id)).job_reference
+                != reference
+            ):
                 raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_REFERENCE_MISMATCH")
         return jobs
 
@@ -318,9 +364,10 @@ class EmbeddingEncodingReservationStorage:
                 owners[event.job_id] = parse_supported_embedding_attached(event.data)
             else:
                 completed[event.job_id] = parse_supported_embedding_completed(event.data)
+        origins = cls.retry_origins(session, jobs)
         records = []
         for job in jobs:
-            original = owned_job(job)
+            original = owned_job(job, origins.get(job.job_id))
             owner, completion = owners.get(job.job_id), completed.get(job.job_id)
             if (
                 owner is None
@@ -353,11 +400,14 @@ class EmbeddingEncodingReservationStorage:
     ) -> tuple[EmbeddingEncodingJobReference, ...]:
         if not 1 <= len(plan_keys) <= 1024:
             raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_BATCH_INVALID")
-        job_ids = tuple(
+        roots = tuple(
             session.scalars(
-                select(JobRecord.job_id).where(JobRecord.idempotency_key.in_(plan_keys))
+                select(JobRecord)
+                .where(JobRecord.idempotency_key.in_(plan_keys))
+                .order_by(JobRecord.idempotency_key)
             )
         )
+        job_ids = tuple(job.job_id for job in cls.current_producers(session, roots, lock=False))
         owners = []
         for event in cls.events(session, job_ids, (OWNED_EVENT,)):
             attached = parse_supported_embedding_attached(event.data)
@@ -425,6 +475,7 @@ class EmbeddingEncodingReservationStorage:
                 .order_by(JobEventRecord.job_id, JobEventRecord.sequence)
             )
         )
+        origins = cls.retry_origins(session, jobs)
         attached = {}
         by_id = {job.job_id: job for job in jobs}
         for event in attachments:
@@ -432,7 +483,7 @@ class EmbeddingEncodingReservationStorage:
             if (
                 event.job_id in attached
                 or value.intent != intent
-                or value.owned_job != owned_job(by_id[event.job_id])
+                or value.owned_job != owned_job(by_id[event.job_id], origins.get(event.job_id))
             ):
                 raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_INTENT_CONFLICT")
             attached[event.job_id] = value
@@ -444,13 +495,14 @@ class EmbeddingEncodingReservationStorage:
                 if isinstance(intent, LocalEmbeddingLaunchIntentV2)
                 else ENCODING_PROTOCOL_VERSION,
                 "record_type": "ATTACHED",
-                "owned_job": owned_job(job).model_dump(mode="json"),
+                "owned_job": owned_job(job, origins.get(job.job_id)).model_dump(mode="json"),
                 "intent": intent.model_dump(mode="json"),
             }
             document = body | {"event_sha256": content_sha256(body)}
             parse_supported_embedding_attached(document)
             if job.job_id in created:
-                cls.append(session, job, sequences, "JOB_CREATED", {})
+                if job.job_id not in origins:
+                    cls.append(session, job, sequences, "JOB_CREATED", {})
                 cls.append(
                     session,
                     job,
@@ -466,3 +518,275 @@ class EmbeddingEncodingReservationStorage:
             else:
                 cls.append(session, job, sequences, BORROWED_EVENT, document)
         session.flush()
+
+    @classmethod
+    def retry_origins(
+        cls, session: Session, jobs: tuple[JobRecord, ...]
+    ) -> dict[str, EmbeddingEncodingRetryDeclaration]:
+        ids = tuple(
+            j.job_id for j in jobs if j.idempotency_key.startswith("embedding-encode-retry:")
+        )
+        if not ids:
+            return {}
+        cls.require_recovery_protocol(session)
+        values = {}
+        for event in cls.events(session, ids, (ENCODING_RETRY_PRODUCER_EVENT,)):
+            record = EmbeddingEncodingRetryDeclaration.model_validate(event.data)
+            if (
+                event.job_id in values
+                or record.successor.job_id != event.job_id
+                or (event.from_state != "CREATED" or event.to_state != "CREATED")
+            ):
+                raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_RETRY_HISTORY_INVALID")
+            values[event.job_id] = record
+        if set(values) != set(ids):
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_RETRY_HISTORY_INVALID")
+        return values
+
+    @classmethod
+    def known_failures(
+        cls, session: Session, jobs: tuple[JobRecord, ...]
+    ) -> dict[str, KnownFailedEmbeddingEncoding]:
+        failed = {
+            j.job_id: j
+            for j in jobs
+            if j.status == "FAILED" and j.error_code == KNOWN_ENCODING_FAILURE_CODE
+        }
+        if not failed:
+            return {}
+        cls.require_recovery_protocol(session)
+        origins = cls.retry_origins(session, tuple(failed.values()))
+        reservations = {r.job.job_id: r for r in cls.reservations(session, tuple(failed.values()))}
+        values = {}
+        for event in cls.events(session, tuple(failed), (KNOWN_ENCODING_FAILURE_EVENT,)):
+            record = KnownFailedEmbeddingEncoding.model_validate(event.data)
+            prior = reservations[event.job_id]
+            if (
+                event.job_id in values
+                or record.owned_job != owned_job(failed[event.job_id], origins.get(event.job_id))
+                or (
+                    record.native_launch_job_id != prior.owner.intent.native_launch_job_id
+                    or event.from_state != "RUNNING"
+                    or event.to_state != "FAILED"
+                )
+            ):
+                raise EmbeddingEncodingReservationError(
+                    "EMBEDDING_ENCODING_FAILURE_HISTORY_INVALID"
+                )
+            values[event.job_id] = record
+        if set(values) != set(failed):
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_FAILURE_HISTORY_INVALID")
+        return values
+
+    @classmethod
+    def record_known_failures(
+        cls, session: Session, values: tuple[KnownFailedEmbeddingEncoding, ...]
+    ) -> None:
+        """Storage leaf only: caller must prove exact original root retirement/current owner.
+
+        No public runtime endpoint accepts these values as authority. The fixed
+        maintenance application owns OS/schema-owner admission and Workflow/native
+        transitions around this one caller transaction. Partial records roll back.
+        """
+        cls.require_protocol(session)
+        cls.require_recovery_protocol(session)
+        records = tuple(KnownFailedEmbeddingEncoding.model_validate(v) for v in values)
+        ids = tuple(v.owned_job.job_reference.job_id for v in records)
+        if not 1 <= len(ids) <= 1024 or ids != tuple(sorted(set(ids))):
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_BATCH_INVALID")
+        for launch_id in sorted({v.native_launch_job_id for v in records}):
+            cls.lock_launch(session, launch_id)
+        jobs = cls.lock_references(
+            session, tuple(v.owned_job.job_reference for v in records), lock=True
+        )
+        by_id = {j.job_id: j for j in jobs}
+        observed = {r.job.job_id: r for r in cls.reservations(session, jobs)}
+        previous = cls.known_failures(session, jobs)
+        sequences = cls.sequences(session, jobs)
+        for value in records:
+            job = by_id[value.owned_job.job_reference.job_id]
+            owner = observed[job.job_id]
+            if (
+                owner.owned_job != value.owned_job
+                or owner.owner.intent.native_launch_job_id != value.native_launch_job_id
+            ):
+                raise EmbeddingEncodingReservationError(
+                    "EMBEDDING_ENCODING_FAILURE_HISTORY_INVALID"
+                )
+            if job.status == "FAILED" and previous.get(job.job_id) == value:
+                continue
+            if job.status != "RUNNING" or owner.completion is not None:
+                raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_TERMINAL_OR_FOREIGN")
+            cls.append(
+                session,
+                job,
+                sequences,
+                KNOWN_ENCODING_FAILURE_EVENT,
+                value.model_dump(mode="json"),
+                target=JobState.FAILED,
+            )
+            job.error_code = KNOWN_ENCODING_FAILURE_CODE
+            job.error_message = "Original numerical unit failed and its retirement was verified."
+        session.flush()
+
+    @classmethod
+    def current_producers(
+        cls, session: Session, roots: tuple[JobRecord, ...], *, lock: bool
+    ) -> tuple[JobRecord, ...]:
+        """At most three append-only edges, bulk indexed reads; explicit Job reads never follow."""
+        if not any(
+            j.status == "FAILED" and j.error_code == KNOWN_ENCODING_FAILURE_CODE for j in roots
+        ):
+            return roots
+        current = {j.job_id: j for j in roots}
+        root_values = {j.job_id: owned_job(j).job_reference for j in roots}
+        for _ in range(MAX_ENCODING_RETRIES + 1):
+            candidates = tuple(
+                j
+                for j in current.values()
+                if j.status == "FAILED" and j.error_code == KNOWN_ENCODING_FAILURE_CODE
+            )
+            if not candidates:
+                break
+            edges = cls.events(
+                session, tuple(j.job_id for j in candidates), (ENCODING_RETRY_SUCCESSOR_EVENT,)
+            )
+            if not edges:
+                break
+            origins = cls.retry_origins(session, candidates)
+            failures = cls.known_failures(session, candidates)
+            edge_map = {}
+            for event in edges:
+                record = EmbeddingEncodingRetryDeclaration.model_validate(event.data)
+                if (
+                    event.job_id in edge_map
+                    or record.predecessor.job_id != event.job_id
+                    or (event.from_state != "FAILED" or event.to_state != "FAILED")
+                ):
+                    raise EmbeddingEncodingReservationError(
+                        "EMBEDDING_ENCODING_RETRY_HISTORY_INVALID"
+                    )
+                edge_map[event.job_id] = record
+            statement = (
+                select(JobRecord)
+                .where(JobRecord.job_id.in_(r.successor.job_id for r in edge_map.values()))
+                .order_by(JobRecord.idempotency_key)
+            )
+            if lock:
+                statement = statement.with_for_update()
+            next_jobs = {
+                j.job_id: j
+                for j in session.scalars(statement.execution_options(populate_existing=True))
+            }
+            next_origins = cls.retry_origins(session, tuple(next_jobs.values()))
+            for root_id, previous in tuple(current.items()):
+                edge = edge_map.get(previous.job_id)
+                if edge is None:
+                    continue
+                origin, failure = origins.get(previous.job_id), failures.get(previous.job_id)
+                successor = next_jobs.get(edge.successor.job_id)
+                if (
+                    failure is None
+                    or successor is None
+                    or (
+                        edge.logical_job != root_values[root_id]
+                        or edge.predecessor != owned_job(previous, origin).job_reference
+                        or edge.attempt != (1 if origin is None else origin.attempt + 1)
+                        or edge.predecessor_failure_sha256 != failure.event_sha256
+                        or next_origins.get(successor.job_id) != edge
+                        or owned_job(successor, edge).request != failure.owned_job.request
+                    )
+                ):
+                    raise EmbeddingEncodingReservationError(
+                        "EMBEDDING_ENCODING_RETRY_HISTORY_INVALID"
+                    )
+                current[root_id] = successor
+        else:
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_RETRY_LIMIT_EXCEEDED")
+        return tuple(current[j.job_id] for j in roots)
+
+    @classmethod
+    def retry_known_failed(
+        cls, session: Session, requests: tuple[EmbeddingEncodingJobRequest, ...]
+    ) -> tuple[tuple[JobRecord, ...], frozenset[str]]:
+        """Caller retains fresh current-source/launch fences; no resurrection or numerical work."""
+        jobs, unprepared = cls.reserve(session, requests)
+        if unprepared:
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_RETRY_NOT_PREPARED")
+        failures = cls.known_failures(session, jobs)
+        origins = cls.retry_origins(session, jobs)
+        keys = tuple(r.idempotency_key for r in requests)
+        roots = {
+            j.idempotency_key: j
+            for j in session.scalars(select(JobRecord).where(JobRecord.idempotency_key.in_(keys)))
+        }
+        created, selected = set(), []
+        proposals = []
+        sequences = cls.sequences(session, jobs)
+        for request, previous in zip(requests, jobs, strict=True):
+            failure = failures.get(previous.job_id)
+            if failure is None:
+                selected.append(previous)
+                continue
+            origin = origins.get(previous.job_id)
+            attempt = 1 if origin is None else origin.attempt + 1
+            if attempt > MAX_ENCODING_RETRIES:
+                raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_RETRY_LIMIT_EXCEEDED")
+            successor = JobRecord(
+                job_id=new_job_id(),
+                protocol_version=ENCODING_PROTOCOL_VERSION,
+                idempotency_key="pending-retry-declaration",
+                request_hash=_request_hash(request),
+                task_type=ENCODING_TASK_TYPE,
+                request=request.model_dump(mode="json"),
+                status="CREATED",
+                logical_artifact_id=new_logical_artifact_id(),
+                revision_id=new_revision_id(),
+            )
+            reference = EmbeddingEncodingJobReference(
+                job_id=successor.job_id,
+                request_sha256=request.request_sha256,
+                allocated_artifact_id=successor.logical_artifact_id,
+                allocated_artifact_revision_id=successor.revision_id,
+            )
+            body = dict(
+                schema_version=ENCODING_RECOVERY_PROTOCOL,
+                record_type="RETRY",
+                logical_job=owned_job(roots[request.idempotency_key]).job_reference.model_dump(
+                    mode="json"
+                ),
+                predecessor=failure.owned_job.job_reference.model_dump(mode="json"),
+                successor=reference.model_dump(mode="json"),
+                encoding_sha256=request.encoding.encoding_sha256,
+                attempt=attempt,
+                predecessor_failure_sha256=failure.event_sha256,
+            )
+            declaration = EmbeddingEncodingRetryDeclaration.model_validate(
+                body | {"event_sha256": content_sha256(body)}
+            )
+            successor.idempotency_key = declaration.storage_idempotency_key
+            proposals.append((previous, successor, declaration))
+            created.add(successor.job_id)
+            selected.append(successor)
+        # Insert all producer rows before dependent events; no per-target flush
+        # or assumed ORM relationship ordering, including autoflush=False owners.
+        session.add_all(successor for _previous, successor, _declaration in proposals)
+        session.flush()
+        for previous, successor, declaration in proposals:
+            cls.append(
+                session,
+                previous,
+                sequences,
+                ENCODING_RETRY_SUCCESSOR_EVENT,
+                declaration.model_dump(mode="json"),
+            )
+            cls.append(session, successor, sequences, "JOB_CREATED", {})
+            cls.append(
+                session,
+                successor,
+                sequences,
+                ENCODING_RETRY_PRODUCER_EVENT,
+                declaration.model_dump(mode="json"),
+            )
+        session.flush()
+        return tuple(selected), frozenset(created)

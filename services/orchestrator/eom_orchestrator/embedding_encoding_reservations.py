@@ -297,6 +297,38 @@ class EmbeddingEncodingReservations:
             self._admission.fence_mutation(session, intent)
             return result
 
+    def retry_known_failed(
+        self,
+        requests: tuple[EmbeddingEncodingJobRequest, ...],
+        intent: SupportedEmbeddingIntent,
+    ) -> tuple[SupportedEmbeddingReadResult, ...]:
+        """Fresh admitted successor producer only after an official known-failure record.
+
+        This does not mark old work failed, accept a claimed root proof, refresh a
+        lease, restart a worker or choose another device. The old Job remains
+        FAILED; its pinned reference never redirects to the successor.
+        """
+        _batch(requests)
+        requests = tuple(_parse(row, EmbeddingEncodingJobRequest) for row in requests)
+        keys = tuple(row.encoding.encoding_sha256 for row in requests)
+        if keys != tuple(sorted(set(keys))):
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_BATCH_INVALID")
+        intent = _intent(intent)
+        with self._sessions.begin() as session:
+            proof = self._admission.resolve_reservation(session, requests, intent)
+            _scope(proof, intent, requests)
+            self._storage.require_protocol(session)
+            self._storage.lock_launch(session, intent.native_launch_job_id)
+            if self._storage.association(session, intent.native_launch_job_id) is not None:
+                raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_LAUNCH_CONFLICT")
+            jobs, created = self._storage.retry_known_failed(session, requests)
+            self._storage.attach(session, jobs, created, intent)
+            records = self._storage.reservations(session, jobs)
+            observed = self._admission.reauthorize_read(session, _targets(records))
+            result = _results(records, observed)
+            self._admission.fence_mutation(session, intent)
+            return result
+
     def bind_launch(self, association: SupportedEmbeddingAssociation) -> None:
         association = parse_supported_embedding_association(association)
         with self._sessions.begin() as session:

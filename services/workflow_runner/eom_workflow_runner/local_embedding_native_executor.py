@@ -334,10 +334,15 @@ class CatalogNativeEmbeddingExecutor:
         # Reservation API owns short independent roots. Never hold Workflow SQL locks here.
         reservations = self._reservations(request, launch.intent, command_lease)
         publications = native_embedding_publications(self.publisher, allocation.source_commit)
-        readings = reservations.reserve_and_attach(
-            _encoding_requests(sources.admission.plan, reusable_encodings=reusable_encodings),
-            launch.intent,
+        encoding_requests = _encoding_requests(
+            sources.admission.plan, reusable_encodings=reusable_encodings
         )
+        readings = reservations.reserve_and_attach(encoding_requests, launch.intent)
+        if any(r.status == "FAILED" for r in readings):
+            readings = reservations.retry_known_failed(
+                encoding_requests,
+                launch.intent,
+            )
         if any(r.status in {"FAILED", "CANCELLED"} for r in readings):
             raise ValueError("LOCAL_EMBEDDING_EXECUTOR_ENCODING_FAILED")
         own = tuple(

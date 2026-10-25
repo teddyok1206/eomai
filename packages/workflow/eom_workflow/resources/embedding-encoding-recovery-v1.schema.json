@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/embedding-encoding-recovery/1.0",
+  "title": "Known retired failure and bounded explicit encoding producer successor",
+  "description": "Metadata only. A root record, actor ID or retry declaration is not current source permission, numerical completion, CPU fallback or a new allocation grant.",
+  "oneOf": [{"$ref": "#/$defs/failure"}, {"$ref": "#/$defs/retry"}, {"$ref": "#/$defs/recover"}],
+  "$defs": {
+    "recover": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "record_type", "workflow_id", "workflow_request_sha256", "command_id", "lease_generation", "root", "command_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-encoding-recovery/1.0"},
+        "record_type": {"const": "RECOVER"},
+        "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+        "workflow_request_sha256": {"$ref": "#/$defs/hash"},
+        "command_id": {"type": "string", "pattern": "^wfcmd_[0-9a-f]{32}$"},
+        "lease_generation": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+        "root": {"$ref": "#/$defs/rootFailure"},
+        "command_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "hash": {"$ref": "eom://schemas/workflow/embedding-encoding-job/1.0#/$defs/hash"},
+    "jobRef": {"$ref": "eom://schemas/workflow/embedding-encoding-job/1.0#/$defs/jobReference"},
+    "rootFailure": {
+      "type": "object", "additionalProperties": false,
+      "required": ["allocation_attempt_id", "invocation_id", "retirement_sha256", "retired_at", "parent_plan_job_id", "parent_request_sha256", "original_outcome", "stored_descriptors"],
+      "properties": {
+        "allocation_attempt_id": {"type": "string", "pattern": "^embeddingallocation_[0-9a-f]{32}$"},
+        "invocation_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+        "retirement_sha256": {"$ref": "#/$defs/hash"},
+        "retired_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+        "parent_plan_job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+        "parent_request_sha256": {"$ref": "#/$defs/hash"},
+        "original_outcome": {"const": "FAILED"},
+        "stored_descriptors": {"const": 0, "type": "integer"}
+      }
+    },
+    "failure": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "record_type", "owned_job", "native_launch_job_id", "root", "event_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-encoding-recovery/1.0"},
+        "record_type": {"const": "FAILURE"},
+        "owned_job": {"$ref": "eom://schemas/workflow/embedding-encoding-job/1.0#/$defs/ownedJob"},
+        "native_launch_job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+        "root": {"$ref": "#/$defs/rootFailure"},
+        "event_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "retry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "record_type", "logical_job", "predecessor", "successor", "encoding_sha256", "attempt", "predecessor_failure_sha256", "event_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-encoding-recovery/1.0"},
+        "record_type": {"const": "RETRY"},
+        "logical_job": {"$ref": "#/$defs/jobRef"},
+        "predecessor": {"$ref": "#/$defs/jobRef"},
+        "successor": {"$ref": "#/$defs/jobRef"},
+        "encoding_sha256": {"$ref": "#/$defs/hash"},
+        "attempt": {"type": "integer", "minimum": 1, "maximum": 3},
+        "predecessor_failure_sha256": {"$ref": "#/$defs/hash"},
+        "event_sha256": {"$ref": "#/$defs/hash"}
+      }
+    }
+  }
+}

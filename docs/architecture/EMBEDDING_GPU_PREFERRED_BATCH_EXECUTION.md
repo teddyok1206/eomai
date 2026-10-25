@@ -1173,6 +1173,82 @@ API contracts wheel SHA는 `b0f566f451748f7c243fcb383563a9bd18255d9628a6d8b7696b
 사용자가 요청한 **전체 GPU 목표 완료 commit + 실제 운영 release 체크포인트가 아니다**.
 기존 실행 INDEX `ae380acd…`/numerical `eae2c0d3…`/CPU QUERY pin은 변경하지 않았다.
 
+### P2-AJ — 종료가 증명된 실패 producer의 복구와 제한된 후속 계산
+
+08:39 UTC read-only 실제 감사에서 옛 CONTENT_ONLY/METADATA_ONLY 두 root가 각각 원 invocation의
+FAILED retirement/FDSTORE0와 현재 stopped 상태임을 확인했다. 원 Workflow/encoding 예약은
+RUNNING/PROCESSING으로 남고 lease는 만료됐다. planning Job SUCCEEDED는 binding 완료만 뜻하므로
+그 기록을 실패로 바꾸지 않는다. 이 경계는 단순 lease 만료나 현재 GPU BUSY와 다르다.
+
+- 책임/정본: root 전용 OS adapter는 **지정한 원 allocation/unit/invocation**의 protected retirement
+  record와 SHA를 확인한다. 기존 schema-owner maintenance application이 그 증거와 exact
+  Workflow/command generation/native intent/owned Jobs를 대조한 뒤 원 metadata를 FAILED로
+  종료한다. 원 root 기록·request·Artifact·성공 planning history는 보존한다. GPU stop/reset,
+  새 allocation, 모델 호출, NAS/DB 직접 보정은 이 maintenance 밖이다.
+- protocol/pointers: schema `embedding-encoding-recovery/1.0`을 먼저 정의한다. 작은 FAILURE
+  metadata는 original owned Job/native Job과 root allocation/invocation/retirement hash를 pin한다.
+  RETRY는 logical root Job, failed predecessor, 새 producer Job의 immutable references,
+  request/encoding hash,1–3번째 attempt와 predecessor failure hash를 보존한다. 수치 input,
+  encoding identity/space와 released encoding/ownership1/2 messages는 바꾸지 않는다.
+- 구조/규모: 기존 Job + append-only sequence events와 PK/unique idempotency key를 재사용한다.
+  새 queue/table/migration/cache는 없다. predecessor와 successor에 동일 typed 선언을 남기고
+  event sequence unique constraint와 sorted logical-root row locks로 분기를 막는다. 각 request의
+  retry chain은 최대3 edges, bulk map/set/IN lookups로 O(targets*3), bounded memory다.
+  SQL의 새로운 full scan/N+1이나 worker DB/NAS 접근을 추가하지 않는다.
+- identity/replay: computational key는 원 encoding hash 그대로다. 공식 후속 producer의 storage
+  idempotency key는 pinned logical root/predecessor/attempt에서 결정하고 root의 retry 선언으로
+  검증한다. 임의 key를 발급해 옛 실패를 피하지 않는다. 일반 reserve는 선언된 current producer를
+  따르되, 옛 Job reference의 read는 계속 FAILED를 반환한다. 동일 retry 요청 경합은 하나의 새
+  producer만 만들고 cancellation/unknown/부분 승인/성공 producer는 retry하지 않는다.
+- 권한/동시성: 재계산은 별도 현재 Workflow/source/lease admission으로 원 encoding demand가
+  허용된 경우에만 supported encoding application이 수행한다. 실패 declaration은 root 전용
+  maintenance의 검증 결과이지 과거 operator/service 권한의 재사용이 아니다. old failure 증거의
+  존재만으로 source read/신규 모델 실행을 허용하지 않는다. root→producer lock 순서를 유지한다.
+- dependency: pure recovery values/schema는 workflow contract, persistence는 기존 Orchestrator
+  storage, current source admission은 Catalog/Runner, OS 파일/systemd 관찰은 root adapter다.
+  작은 frozen proof를 사용하고 큰 raw record/log/source text는 DB에 복사하지 않는다.
+- failure/rollback: 감사·증거·generation·lease·history 불일치는 write 전에 거부하며 same request
+  replay는 같은 event/result만 반환한다. 새 producer 전에 중단하면 전부 root rollback된다.
+  FAILED→SUCCESS/삭제/identity relabel은 없다. 사용자 CPU fallback 조건도 넓히지 않는다.
+- 단순 대안인 row UPDATE/원 Job 재활성화/새 encoding hash/무조건 새 producer는 이력을
+  훼손하거나 중복 계산한다. 기존 bounded append-only relation으로 재시도를 명시한다.
+
+감사 기록 `/tmp/eom-gpu-original-failed-metadata-audit-20261025-r2.json`/status EXIT0은
+기술 metadata 증거이지 consumer source grant가 아니다. 첫 read-only 감사의 assertion 실패도
+보존했다. 이 설계/감사만으로 복구·재시도가 실행되거나 전체 GPU 목표가 완료된 것은 아니다.
+
+P2-AJ 후속 producer/검증 경계 구현 (2026-10-25 UTC):
+
+- 새 recovery schema raw SHA는 `ddb29cff67e8f494a3953f0193630e784960f38cf19acb47e10deebfad477244`다.
+  FAILURE/RETRY 및 원 Workflow/command generation을 고정한 RECOVER command가 작은 metadata다.
+  encoding/ownership/수치 메시지와 기존 DB schema는 바꾸지 않았다.
+- 기존 Orchestrator storage는 canonical known-failure event가 있는 FAILED producer만 새 producer로
+  연결한다. root key와 exact pinned old reference를 구분한다. root→최대3개 producer의 append-only
+  relation과 유일 idempotency key를 검증한다. legacy normal reserve는 추가 SQL 없이 그대로이며,
+  retry chain은 bulk lookup/insert다. 임의 key나 새 encoding/space로 원 실패를 우회하지 않는다.
+- 기존 encoding application의 `retry_known_failed`는 새 source/lease/launch admission 및 늦은 fence를
+  거친다. native executor는 이 공식 경계를 사용한다. cancellation, 미증명 실패, 손상된 failure
+  reference와 한도 초과는 재계산/CPU fallback이 아니다. history read의 old Job은 계속 FAILED다.
+- root OS reader는 exact allocation/unit/invocation의 protected record SHA, 독립 terminal FAILED,
+  retirement/FDSTORE0와 현재 stopped 상태를 대조하고 window 끝에서 파일/원 unit을 재확인한다.
+  다른 active GPU 작업·capacity lock에는 접근하거나 stop/reset하지 않는다. 반환값은 source grant가
+  아니며 실제 metadata 복구 application은 별도로 schema-owner/Workflow/native rows를 검증해야 한다.
+- 최종 focused **96 PASS,20.97초**, production5모듈 mypy와9파일 Ruff·format/diff PASS.
+  root/file/systemd/source leaves는 source tests에서 합성이다. 실제 root 권한 검증을 주장하지 않는다.
+- disposable PostgreSQL r42 **21 PASS,21.06초**, cleanup/EXIT0. 두 owner의 동일 실패 경합,
+  한 producer 생성, 원 FAILED reference 보존, successor의 실제 metadata bind/completion/replay,
+ 3회 한도, 취소·미증명 실패·손상 reference 거부와 늦은 source 거부의 전체 rollback을 확인했다.
+  실제 SQL 계측은 target2→6에서도 statement 수 증가가2 이하임을 확인한다. source/OS/numerical
+  leaf는 합성이며 모델/운영 DB/사용자 권한 또는 actual GPU retry 증거가 아니다.
+  r39/r40/r41의 이전 범위 PASS는 보존하고 중복 합산하지 않는다. 첫 root-reader test의 Mock spec
+  누락과 초기 lint 실패도 수정·재실행했으며 이전 로그는 그대로 둔다.
+
+기록은 `/tmp/eom-encoding-recovery-final-focused-20261025-r3.log`,
+`/tmp/eom-document-execution-pg-20261025-r42.log`다. **현재 아직 운영 복구 mutation은0**이다.
+schema-owner maintenance application의 실제 Workflow/native 실패 종료, installed-root 읽기 검증,
+공식 recovery protocol 준비와 actual retry canary가 다음 작업이다. 실행 중 INDEX/numerical/QUERY
+pin을 바꾸지 않았다. 이후 full matched coverage/QUERY/default/fallback/coexistence/rollback이 남는다.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존
