@@ -613,3 +613,28 @@ latency remains material; avoid extrapolating the previous3.97x warm numerical
 result into a production end-to-end speed claim. INDEX continues normal bounded
 work under invocation `6e792281a46a420898cdece549539ef7`; no GPU-preferred
 QUERY activation or whole-goal completion is asserted by this checkpoint.
+
+### Installed no-forward QUERY3 runtime preflight
+
+The staged QUERY3/public+mixed selection was constructed with the actual installed
+SDK04, the actual API06 provider observation, existing canonical policy/bundle
+readers and the existing private CPU factory. A separate finite, device-hidden
+systemd preflight dropped to runtime UID990/GID1000 with no supplementary groups
+and zero permitted/effective/ambient capabilities, matching the real owner.
+Protected candidate files/epochs and the actual provider observation were fenced
+before and after composition. No operator/session capture was supplied: no human
+source resolution, queue claim, model construction/forward, Artifact commit or
+runtime selection occurred. NAS was mounted read-only for this preflight.
+
+Actual result: `INSTALLED_ROUTED_QUERY_NO_FORWARD_PREFLIGHT=PASS`, two routed
+factories plus the unchanged private CPU factory,43.869 seconds. Evidence:
+`/tmp/eom-routed-query-runtime-preflight-20261025-r2.log`, EXIT0;
+unit `eom-routed-query-preflight-04e36bbe-r2.service`. This is installed/identity/
+layout/control composition evidence, not authenticated numerical GPU acceptance.
+The current INDEX and CPU QUERY invocation/source selections stayed unchanged.
+
+The first isolated preflight failed the existing workspace-read-only guard: the
+diagnostic sandbox omitted the two staging write-path allowances already present
+in the reviewed operational candidate unit. Only the diagnostic sandbox was
+aligned; the guard and operating unit were not relaxed or changed. Its original
+failed unit/log remain recorded separately. No GPU work was replayed or stopped.
