@@ -255,10 +255,14 @@ class _Frames:
                         with suppress(OSError):
                             os.close(descriptor)
                         closed.add(descriptor)
+        if unexpected or flags & (socket.MSG_CTRUNC | socket.MSG_TRUNC):
+            raise BenchmarkChannelError("EMBEDDING_BENCHMARK_SENDER_CHANGED")
+        if not part:
+            # Linux may attach dummy pid=0 credentials to stream EOF. There is
+            # no frame to authenticate; do not misreport it as a peer change.
+            raise BenchmarkChannelError("EMBEDDING_BENCHMARK_CHANNEL_EOF")
         if (
-            unexpected
-            or flags & (socket.MSG_CTRUNC | socket.MSG_TRUNC)
-            or len(ancillary) != 1
+            len(ancillary) != 1
             or ancillary[0][:2] != (socket.SOL_SOCKET, socket.SCM_CREDENTIALS)
             or len(ancillary[0][2]) != _CREDENTIALS.size
             or BenchmarkUnixPeer(*_CREDENTIALS.unpack(ancillary[0][2])) != self.expected_sender

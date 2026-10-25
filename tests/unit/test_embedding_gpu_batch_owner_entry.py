@@ -154,7 +154,7 @@ def test_root_policy_or_resource_mismatch_is_not_gpu_busy_or_cpu_fallback(monkey
         entry._policy(file_seam(raw), request)
 
 
-def test_fixed_unit_hash_bootstrap_and_secret_boundaries():
+def test_fixed_unit_hash_bootstrap_and_secret_boundaries(monkeypatch):
     unit = (ROOT / "infra/systemd/eom-embedding-native-gpu-batch-owner@.service").read_bytes()
     assert sha256_bytes(unit) == "sha256:" + BATCH_CONTROL_TEMPLATE_SHA256
     source = unit.decode()
@@ -177,7 +177,63 @@ def test_fixed_unit_hash_bootstrap_and_secret_boundaries():
     assert (
         'sys.argv[1] == "GPU_BATCH"' in bootstrap and "embedding_gpu_batch_owner_entry" in bootstrap
     )
+    report = Mock()
+    monkeypatch.setattr(entry, "_report_root_failure", report)
     assert entry.main() == 1  # Source execution is not a protected installed release.
+    report.assert_called_once()
+
+
+@pytest.mark.parametrize("fault", (None, "socket", "blocked", "send"))
+def test_root_failure_diagnostic_is_bounded_redacted_and_optional(monkeypatch, fault):
+    sent = []
+    resource = Mock()
+    resource.__enter__ = Mock(return_value=resource)
+    resource.__exit__ = Mock(return_value=False)
+    if fault == "blocked":
+        resource.setblocking.side_effect = OSError("private transport detail")
+    if fault == "send":
+        resource.sendto.side_effect = BlockingIOError("private transport detail")
+    else:
+        resource.sendto.side_effect = lambda raw, target: sent.append((raw, target))
+    factory = Mock(return_value=resource)
+    if fault == "socket":
+        factory.side_effect = OSError("private transport detail")
+    monkeypatch.setattr(entry.socket, "socket", factory)
+
+    class SensitiveFailure(ValueError):
+        code = "EMBEDDING_TEST_DIAGNOSTIC"
+
+    try:
+        raise SensitiveFailure("password=hidden; source text and raw request must not leave")
+    except SensitiveFailure as error:
+        entry._report_root_failure(error)
+    if fault is None:
+        assert len(sent) == 1
+        raw, target = sent[0]
+        assert target == "/dev/log" and len(raw) <= 2048
+        value = json.loads(raw.split(b": ", 1)[1])
+        assert value["event"] == "EMBEDDING_GPU_ROOT_FAILED"
+        assert value["error_type"] == "SensitiveFailure"
+        assert value["code"] == "EMBEDDING_TEST_DIAGNOSTIC"
+        assert all(
+            word not in raw
+            for word in (b"password", b"hidden", b"source text", b"raw request", b"private")
+        )
+        resource.setblocking.assert_called_once_with(False)
+    else:
+        assert sent == []
+
+
+def test_root_failure_diagnostic_does_not_accept_arbitrary_exception_code(monkeypatch):
+    resource = Mock()
+    resource.__enter__ = Mock(return_value=resource)
+    resource.__exit__ = Mock(return_value=False)
+    monkeypatch.setattr(entry.socket, "socket", Mock(return_value=resource))
+    error = ValueError("never disclose")
+    error.code = "password=hidden"
+    entry._report_root_failure(error)
+    raw = resource.sendto.call_args.args[0]
+    assert b"password" not in raw and b"never disclose" not in raw
 
 
 def test_polkit_evaluates_only_fixed_owner_start_and_never_native_worker_control():

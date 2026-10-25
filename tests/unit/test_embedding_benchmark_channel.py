@@ -30,6 +30,7 @@ from eom_catalog_service.embedding_benchmark_channel import (
     BenchmarkOwnerChannel,
     BenchmarkUnixPeer,
     BenchmarkWorkerChannel,
+    _Frames,
 )
 
 from tests.unit.embedding_device_benchmark_fixtures import resources, session, worker_invocation
@@ -46,6 +47,29 @@ def synthetic_peer_fence(value: BenchmarkUnixPeer) -> None:
 
 def synthetic_continuation(value: BenchmarkCheckpoint) -> None:
     assert value.kind == "LOCAL_CHECKPOINT"
+
+
+@pytest.mark.parametrize("written", (b"", b"\x00\x00"))
+def test_credential_bearing_unix_eof_is_not_invalid_peer(written: bytes) -> None:
+    left, right = socket.socketpair()
+    left.setsockopt(socket.SOL_SOCKET, socket.SO_PASSCRED, 1)
+    frames = _Frames(
+        left,
+        peer(),
+        synthetic_peer_fence,
+        time.monotonic_ns() + 10**9,
+        expected_sender=peer(),
+    )
+    try:
+        if written:
+            right.sendall(written)
+        right.close()
+        with pytest.raises(BenchmarkChannelError) as error:
+            frames.receive_raw()
+        assert error.value.code == "EMBEDDING_BENCHMARK_CHANNEL_EOF"
+    finally:
+        right.close()
+        frames.close()
 
 
 def local_resources(ordinal: int) -> BenchmarkResourceEvidence:

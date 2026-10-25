@@ -1,6 +1,6 @@
 # GPU-preferred embedding: live acceptance ledger
 
-As of2026-10-25 21:10 UTC. **GOAL=ACTIVE; completion is not proven.**
+As of2026-10-25 22:51 UTC. **GOAL=ACTIVE; completion is not proven.**
 This small ledger preserves the whole approved scope while background catch-up
 continues. Source tests, installed composition and actual execution are separate
 evidence. It is not a new runtime registry or permission grant.
@@ -39,7 +39,7 @@ operating release set: NOT_SET.** README cleanup `4e9c962e` is not repeated.
 | Finite multi-item GPU QUERY | **PENDING**: actual authenticated request3, ordered child completion, original pins and result reads after pair readiness. |
 | Resource-only CPU fallback | **PENDING live**: actual shared-kernel pre-init BUSY, exact CPU pair, no fallback on authority/hash/unknown execution. Source tests alone do not close it. |
 | Original request/device replay | Original replay source/PG evidence preserved. Candidate07 has installed no-forward composition PASS43.839s with actual API07; no authentication/model/claim/selection. Live routed default/replay is still pending. |
-| Image coexistence and release | **Physical INDEX/image exclusion and real image execution/return PASS**,19:33, below. This uses a private synthetic non-Item reference, not scientific source admission or an image-quality acceptance. Actual routed QUERY resource-only CPU fallback remains a separate pending check. Original independent `IMAGE_TRAINER_REGRESSION=NOT_RUN` remains unchanged. |
+| Image coexistence and release | **Actual same-invocation wait/continue/return PASS**,22:44, below, using the installed provider successor against a real INDEX allocation. This uses a private synthetic non-Item reference, not scientific source admission or an image-quality acceptance. Actual routed QUERY resource-only CPU fallback remains a separate pending check. Original independent `IMAGE_TRAINER_REGRESSION=NOT_RUN` remains unchanged. |
 | Throughput | Historical CPU/CUDA comparison stays unchanged. Measure finite QUERY/cohort behavior separately from end-to-end source/registration overhead; no new service speedup is claimed. |
 | GPU default, rollback and compatible installed set | **PENDING**. Candidate/backups/preflight exist, but actual default selection, read-back and supported rollback still need live verification. |
 | Git/docs/Slack | Source fixes and evidence pushed. Milestone report `devreport_5555af57a3984798b16e4ec263dd39a7` SENT; final completion report remains pending. |
@@ -323,6 +323,95 @@ expansion, additional login or failed-history rewrite was used to accelerate
 an acceptance declaration. Evidence:
 `/tmp/eom-current-index-pair-metadata-20261025-r13.json`,
 `/tmp/eom-current-index-phase-20261025-2103.json`, both EXIT0.
+
+### Actual installed image wait/continuation,22:44 UTC
+
+The original21:10/21:42 bounded observers ended without a visible numerical GPU
+process and submitted zero image models. They were not INDEX restarts or a
+failed scientific Workflow. A subsequent observer was tied to the recovered
+actual INDEX invocation and its retained numerical unit, rather than waiting
+until an already-leased unit becomes visible to NVML. A separate fixture attempt
+used cleared supplementary groups; the ordinary adapter correctly refused it
+before workspace/unit/model submission. That private operator error was corrected
+by using the owner's already-existing image group980 for that process only.
+No account membership, permission rule, binding or production adapter was changed.
+
+The real numerical allocation was
+`eom-embedding-native-gpu-batch@cd6643be4ec447deb0ba9a6bee992262.service`,
+invocation `594f11eb0dc84d4c8e3ee5d4930e16b3`, originally observed with PID652295
+and retainedFD1. It succeeded and retired at22:44:08.543271 UTC. The image unit
+`eom-image-reference-base-provider@imgreq_976af64a9499dcc9751cf2ecadb0d3a2.service`,
+invocation `21d61a39f41c454898c21ce66cf4770a`, started before that numerical
+process exited. Its original root ACK was sent only afterwards, at22:44:09.990591.
+The same image invocation then generated at22:44:15.164651–22:44:20.558975,
+reported duration5394ms and peak6229452288 GPU bytes, and retired SUCCEEDED at
+22:44:22.831442. Duration is the provider generation boundary, not an isolated
+forward/embedding throughput benchmark. Both original units subsequently had
+process0/retainedFD0; NVML showed no remaining compute client at22:45.
+
+A read-only typed-record check independently asserted original invocation
+identity, image start before INDEX exit, ACK after INDEX retirement, generation
+after ACK, and both original successful retirements. Evidence:
+`/tmp/eom-real-image-index-wait-verified-20261025-r4-r2.json`, EXIT0;
+`/tmp/eom-image-busy-wait-live-20261025-r4.log`, EXIT0. The first reducer rejected
+an omitted expected image-record field and was corrected; it did not rerun a model.
+Protected record hashes:
+
+- INDEX retirement: `71c50b44a68d7657a306c93d7ee2fe6a33252ae1da4f743208e99143ca87d892`.
+- Image ACK: `867e82d3984090f0911e43e7c94ffbfcc732b0ac74c4fdee53f1ecb4cc35d3dd`.
+- Image retirement: `9bc480f99c41f57c1fabe3c91fc9513e0bbba074625571f9f6173d4a8205c2b2`.
+
+One actual image model was run for this wait/continuation acceptance. Its output
+SHA is `4e9f6883c985dda4b53e2c087104d4c6bc9d26b209688101f2a19ba4be991736`.
+It is a synthetic, unregistered reference: scientific source admission and image
+quality are NOT_EVALUATED, no Item was generated, and no NAS source grant was
+invented. This closes product-path resource waiting, not live QUERY/default gates.
+
+### Profiler-induced host-cache incident and exact recovery
+
+At21:48:09 original INDEX invocation297d8b… exited1, not OOM
+(peak1891524608 bytes under2GiB). Its root attempt
+`embeddingallocation_cc38947d537c447f9a359eeb39c3fd47` exited1 before numerical
+unit startup. The owner exposed PEER_INVALID instead of credential-bearing EOF.
+The root entry intentionally discards stdout/stderr, so original file forensics
+were needed; no failed unit was replayed.
+
+The21:34 performance sample had itself created one hardlink cache on
+`/usr/lib/x86_64-linux-gnu/ld-linux-x86-64.so.2`, with matching inode/creation time
+under `/root/.debug/`. The existing single-link guard correctly refused it.
+Only that proven derived cache was removed with `perf buildid-cache --remove`.
+Canonical loader inode, SHA, owner and mode were unchanged; nlink returned to1.
+The derived cache is recoverable from the unchanged library; rebuilding it must
+not create another hardlink. No numerical prefix, model, credential or Item was
+edited. Original precompute input/result/vector files were all empty and no grant
+file existed. The original controller's static file closure passed afterwards
+in an isolated matching loader cwd/cache-bind context (13.046s, zero model runs).
+This is a static file check, not permission to resume the old root PID.
+
+Records: `/tmp/eom-owned-perf-cache-cleanup-20261025-r1.log`, EXIT0, and
+`/tmp/eom-original-gpu-precompute-files-20261025-2148-r4.jsonl`, EXIT0.
+The qualified prefix and all selected configuration hashes were unchanged.
+INDEX was explicitly started after this repair as a **new** invocation
+`af2955ab97b542279afbe763fa4988c7`, PID651171. API/QUERY, controller04, numerical
+eae… and provider e852… releases stayed pinned. The subsequent real numerical
+success and image wait/continuation above confirm that recovery reached actual
+execution. Original failed invocation297d8b… and root03c29a… remain unchanged.
+
+The old unbound planning Job `job_04e9e09afc994736ae063b882e4bb854` was observed
+CLAIMED, no route/BOUND/child execution, with schema1.1 and its original expired
+allocation. It is not declared SUCCEEDED or silently re-dispatched. Any terminal
+maintenance must use the supported planning-failure application with exact
+original physical evidence, not direct row edits or invented numerical retirement.
+
+Source-only diagnostic repairs now have536 related unit regressions PASS,
+strict mypy2 source modules PASS, and scoped Ruff/format PASS: real Unix EOF keeps
+the existing EOF code instead of reporting dummy pid0 credentials as an invalid
+peer; the root entry can emit bounded nonblocking, content-free local diagnostics.
+These two code repairs are **NOT_YET_DEPLOYED**. No schema/DB/state-machine change
+or new dependency was introduced. The earlier disposable PG53/68 evidence is
+preserved, not represented as rerun here. Design:
+[GPU control failure diagnostics](../architecture/GPU_CONTROL_FAILURE_DIAGNOSTICS.md).
+No later profiler may run with implicit build-id caching enabled.
 
 ### DOCUMENT timing and installed finite-model scope
 

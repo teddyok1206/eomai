@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 import re
+import socket
 import sys
+from contextlib import suppress
 from pathlib import Path
 
 from eom_catalog_contracts.embedding_gpu_control import (
@@ -133,6 +135,53 @@ def run_root_embedding_batch_control(attempt_hex: str, *, controller_release: st
         channel.close()
 
 
+def _report_root_failure(error: Exception) -> None:
+    """Optional bounded local diagnostic; never a receipt, authority or exception prose."""
+    with suppress(Exception):
+        current: BaseException = error
+        seen = {id(current)}
+        for _ in range(4):
+            related = current.__cause__ or current.__context__
+            if related is None or id(related) in seen:
+                break
+            seen.add(id(related))
+            current = related
+        code = getattr(current, "code", None)
+        if (
+            type(code) is not str
+            or re.fullmatch(r"(?:EMBEDDING_|INSTALLED_RUNTIME_)[A-Z0-9_]{1,75}", code) is None
+        ):
+            code = None
+        sites: list[str] = []
+        frame = current.__traceback__
+        for _ in range(64):
+            if frame is None:
+                break
+            module = frame.tb_frame.f_globals.get("__name__")
+            if type(module) is str and re.fullmatch(r"eom_[a-z0-9_.]{1,120}", module):
+                sites = [*sites[-1:], f"{module}:{frame.tb_lineno}"]
+            frame = frame.tb_next
+        name = type(current).__name__
+        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", name) is None:
+            name = "Exception"
+        body = canonical_json_bytes(
+            dict(
+                event="EMBEDDING_GPU_ROOT_FAILED",
+                error_type=name,
+                code=code,
+                sites=sites,
+            )
+        )
+        message = b"<27>eom-embedding-root: " + body
+        if len(message) <= 2048:
+            # stdout/stderr are intentionally null in the fixed root unit.
+            # One nonblocking pathname-Unix datagram preserves failure semantics
+            # even when journald is unavailable or its receive buffer is full.
+            with socket.socket(socket.AF_UNIX, socket.SOCK_DGRAM) as journal:
+                journal.setblocking(False)
+                journal.sendto(message, "/dev/log")
+
+
 def main() -> int:
     try:
         _require(sys.flags.isolated == 1 and sys.dont_write_bytecode and len(sys.argv) == 2)
@@ -145,8 +194,9 @@ def main() -> int:
         )
         run_root_embedding_batch_control(sys.argv[1], controller_release=release.name)
         return 0
-    except Exception:
-        return 1  # Protected unit emits no credentials, input, paths or arbitrary exception text.
+    except Exception as error:
+        _report_root_failure(error)
+        return 1
 
 
 if __name__ == "__main__":
