@@ -1,6 +1,6 @@
 # GPU-preferred embedding: live acceptance ledger
 
-As of2026-10-25 19:55 UTC. **GOAL=ACTIVE; completion is not proven.**
+As of2026-10-25 21:10 UTC. **GOAL=ACTIVE; completion is not proven.**
 This small ledger preserves the whole approved scope while background catch-up
 continues. Source tests, installed composition and actual execution are separate
 evidence. It is not a new runtime registry or permission grant.
@@ -273,11 +273,56 @@ instead of waiting. The small provider-only source successor waits only on
 pre-entry BUSY under the original request/unit budget; it neither retries model
 work nor changes the shared kernel adapter. Design:
 [bounded image contention wait](../architecture/IMAGE_PRECOMPUTE_GPU_BUSY_WAIT.md).
-Source regressions388 PASS and strict mypy2 modules PASS; current production still
-uses the original fail-fast provider until coordinated wheel deployment and a
-same-invocation live wait/continuation check. Do not treat the earlier physical
-PASS as proof of this not-yet-deployed product behavior. INDEX/QUERY and the
-qualified numerical CPU/CUDA releases are unchanged.
+Source regressions388 PASS and strict mypy2 modules PASS. The bounded wait
+successor was built from `e85235c663fcbb0d050f0e0958eef6508e12a66b` and is now
+installed as provider wheel SHA
+`3ef8795c9cfc1531538e37a8f36995712297082e8bccf46630442588ab811023`.
+The existing release admission and installed verifier passed for the complete
+provider dependency set. Only the provider wheel was reinstalled; contracts,
+standalone GPU lease, PEFT and all other dependency RECORD/version observations
+were unchanged. All19 image template bytes, guardian/bootstrap/installation
+bytes and the selected binding were unchanged. The five provider entries were
+temporarily fenced and confirmed to have no live process/retained FD before
+replacement, then released after verification. No shared GPU claim or model
+execution was needed to update this quiescent, separate Python prefix.
+
+Release records and the pinned apply/rollback operator are under
+`/opt/eom/image-provider-code-releases/provider-busy-wait-e85235c6/`;
+`apply-provider-only-r3.py` SHA
+`a59fd09c64e8ac491f33dd41ed666233c671938dec7d9ae1511c1ffae675a17d`.
+The previous standalone provider wheel is retained at its exact protected
+release location with SHA
+`624cb44d0d708da84fb769ac842acad8bcea5906560d25a72a57e9aafe9ca37c`.
+The first two operator preflights stopped before any fence/package mutation
+(read-access timestamp comparison; Conda metadata without wheel RECORD).
+Their EXIT1 records remain; the corrected operator completed EXIT0, not by
+reinterpreting an earlier failed invocation. These were operator-only problems,
+not retries of any model, Workflow or scientific acceptance.
+
+The same INDEX PID453623/invocation297d8b… remained running. The actual QUERY
+unit is `eom-reference-query-owner.service`, independently read back as
+PID441632/invocation11b5bc…, unchanged; the operator's inactive similarly named
+`eom-embedding-query-owner.service` observation is not QUERY identity evidence.
+API/Web, numerical CPU/CUDA prefixes, shared root controller and INDEX/QUERY
+selections were not changed by this provider-only release.
+
+At21:10 the one-image live continuation check was started against the next
+**existing** INDEX numerical allocation. It submits no INDEX work and does not
+stop or restart the current owner. A same-invocation wait/continuation result
+is **PENDING**; the earlier19:33 physical PASS is not that result. Private
+operator SHA
+`01363c565314b5464ec77247652ca4f6ec3556a8151abb0d334cd8ed10e45656`;
+small output `/tmp/eom-image-busy-wait-live-20261025-r1.log`.
+
+The21:03 technical population audit, EXIT0, found mixed CPU521/465/521 and
+CUDA89/173/64; legacy all-source CPU520/465/520 and CUDA97/173/64 for
+CONTENT/CONCRETE/METADATA. These distinct populations and derived counts are
+not canonical pair closure. The canary source remains intentionally separate.
+Ordinary catch-up is active; no smaller intersection, target subset, permission
+expansion, additional login or failed-history rewrite was used to accelerate
+an acceptance declaration. Evidence:
+`/tmp/eom-current-index-pair-metadata-20261025-r13.json`,
+`/tmp/eom-current-index-phase-20261025-2103.json`, both EXIT0.
 
 ### DOCUMENT timing and installed finite-model scope
 
