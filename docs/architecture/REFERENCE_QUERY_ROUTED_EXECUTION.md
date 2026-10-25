@@ -591,3 +591,25 @@ candidate/rollback set `/var/lib/eom-query-routed-selection-04e36bbe`.
 Slack milestone `devreport_57b7011f14f64ece931547a55a4bbbaa` reports ACTIVE,
 not completion. The user-supplied post-checkpoint review and README cleanup are
 still untouched.
+
+At15:05:43 UTC the first8-target CUDA CONTENT group reached actual
+`BATCH_COMPLETED` for `workflow_0c62b08fde184af6bb29340e611688e9`, command
+`wfcmd_e07ad983464d4272bc85b88a771715f2`. Its numerical invocation
+`66af304ffd7e4f7ca1e4e850159b9405` and root controller
+`6fd0d465543840338f1b648cc4061d22` succeeded; the latter ended14:57:50,
+before the original unextended allocation deadline. Actual OS observations showed
+zero numerical PID/retained descriptors after retirement. Native Job
+`job_986370a00a664c07889a5318b4e4e808` and all8 attached encoding producers
+were independently observed `SUCCEEDED`; the outer Workflow then completed.
+The read-only intermediate observation distinguished these canonical successes
+from the temporarily still-running outer Workflow, not a fake completion.
+
+This validates the work-size correction for that actual group only. End-to-end
+elapsed time was about14m20s from service READY and includes service preparation,
+source validation, numerical cold load/forward, result registration, index
+assembly and final current-source checks. It is **not** a warm GPU-forward
+benchmark or proof of improved whole-service throughput. Source/registration
+latency remains material; avoid extrapolating the previous3.97x warm numerical
+result into a production end-to-end speed claim. INDEX continues normal bounded
+work under invocation `6e792281a46a420898cdece549539ef7`; no GPU-preferred
+QUERY activation or whole-goal completion is asserted by this checkpoint.
