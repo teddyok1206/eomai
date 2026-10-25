@@ -296,7 +296,10 @@ def main() -> None:
                 request=composite_request,
             )
             if composite_receipt is None:
-                with acquire_gpu_lease(args.gpu_lock):
+                with acquire_gpu_lease(
+                    args.gpu_lock,
+                    busy_wait_seconds=composite_request.generation.timeout_seconds,
+                ):
                     composite_receipt = generate_composite_handoff(
                         model_store_root=args.model_store_root,
                         workspace=args.workspace,
@@ -315,7 +318,10 @@ def main() -> None:
                 request=conditioned_request,
             )
             if conditioned_receipt is None:
-                with acquire_gpu_lease(args.gpu_lock):
+                with acquire_gpu_lease(
+                    args.gpu_lock,
+                    busy_wait_seconds=conditioned_request.composite_request.generation.timeout_seconds,
+                ):
                     conditioned_receipt = generate_reference_conditioned_composite_handoff(
                         model_store_root=args.model_store_root,
                         workspace=args.workspace,
@@ -371,7 +377,10 @@ def main() -> None:
                 )
             )
             if styled_receipt is None:
-                with acquire_gpu_lease(args.gpu_lock):
+                with acquire_gpu_lease(
+                    args.gpu_lock,
+                    busy_wait_seconds=styled_request.composite_request.generation.timeout_seconds,
+                ):
                     styled_receipt = (
                         generate_reference_conditioned_composite_handoff_v4(
                             model_store_root=args.model_store_root,
@@ -461,7 +470,10 @@ def main() -> None:
                     workspace=args.workspace, request=base_request
                 )
             if base_receipt is None:
-                with acquire_gpu_lease(args.gpu_lock):
+                with acquire_gpu_lease(
+                    args.gpu_lock,
+                    busy_wait_seconds=base_request.composite_request.generation.timeout_seconds,
+                ):
                     if isinstance(base_request, LocalImageReferenceConditionedCompositeRequestV7):
                         base_receipt = generate_reference_conditioned_composite_handoff_v7(
                             model_store_root=args.model_store_root,

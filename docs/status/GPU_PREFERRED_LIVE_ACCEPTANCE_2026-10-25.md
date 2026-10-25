@@ -266,6 +266,19 @@ receipts. Private operator fixture source SHA
 `cd9838a7bf417de56f04d2140693cc17405d0e3bd9288975c5e8f210403f0fb6`;
 its installed copy exactly matches the reviewed/formatted staging source.
 
+The subsequent product-path review found that the ordinary Catalog materializer
+calls this same image adapter without a resource-wait boundary. Physical
+exclusion is correct, but a busy GPU can therefore fail a valid image request
+instead of waiting. The small provider-only source successor waits only on
+pre-entry BUSY under the original request/unit budget; it neither retries model
+work nor changes the shared kernel adapter. Design:
+[bounded image contention wait](../architecture/IMAGE_PRECOMPUTE_GPU_BUSY_WAIT.md).
+Source regressions388 PASS and strict mypy2 modules PASS; current production still
+uses the original fail-fast provider until coordinated wheel deployment and a
+same-invocation live wait/continuation check. Do not treat the earlier physical
+PASS as proof of this not-yet-deployed product behavior. INDEX/QUERY and the
+qualified numerical CPU/CUDA releases are unchanged.
+
 ### DOCUMENT timing and installed finite-model scope
 
 The following observations reuse existing successful8-row numerical runs and

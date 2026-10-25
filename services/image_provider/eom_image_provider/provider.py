@@ -121,20 +121,38 @@ class StyleReferenceImageBackend(Protocol):
 
 
 @contextmanager
-def acquire_gpu_lease(lock_path: Path) -> Iterator[None]:
-    """Hold one reviewed physical-GPU mutex for the caller-owned execution scope."""
+def acquire_gpu_lease(lock_path: Path, *, busy_wait_seconds: int = 0) -> Iterator[None]:
+    """Hold the existing mutex; optionally wait only for pre-entry shared contention.
+
+    The caller's existing unit deadline still bounds the whole invocation. Legacy
+    arbitrary-path locks remain fail-fast. No post-entry error repeats model work.
+    """
+
+    if type(busy_wait_seconds) is not int or not 0 <= busy_wait_seconds <= 900:
+        raise ProviderError("LOCAL_IMAGE_INPUT_INVALID")
 
     if lock_path == Path("/run/eom-gpu-lease/gpu0.lock"):
         try:
             from eom_gpu_lease import SharedGpuLeaseError, retained_unit_gpu_lease
         except ImportError as exc:
             raise ProviderError("LOCAL_IMAGE_GPU_UNAVAILABLE") from exc
-        try:
-            with retained_unit_gpu_lease():
-                yield
-        except SharedGpuLeaseError as exc:
-            raise ProviderError("LOCAL_IMAGE_GPU_UNAVAILABLE") from exc
-        return
+        deadline = time.monotonic() + busy_wait_seconds
+        while True:
+            if busy_wait_seconds and time.monotonic() >= deadline:
+                raise ProviderError("LOCAL_IMAGE_GPU_UNAVAILABLE")
+            entered = False
+            try:
+                with retained_unit_gpu_lease():
+                    entered = True
+                    yield
+                return
+            except SharedGpuLeaseError as exc:
+                remaining = deadline - time.monotonic()
+                if entered or exc.code != "BUSY" or remaining <= 0:
+                    raise ProviderError("LOCAL_IMAGE_GPU_UNAVAILABLE") from exc
+                # BUSY is proved by the unchanged kernel adapter before retention
+                # or root ACK. Invalid/uncertain retention must never enter this loop.
+                time.sleep(min(1.0, remaining))
 
     _require_absolute_no_symlink_components(lock_path.parent)
     _require_directory(lock_path.parent, mode=0o700, current_owner=True)
