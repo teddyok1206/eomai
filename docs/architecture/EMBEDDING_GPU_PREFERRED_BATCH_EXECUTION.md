@@ -1337,6 +1337,20 @@ SQL 쓰기·ORM dirty/new/deleted가 없음을 검증했다. 이것은 deploymen
 
 ### P2-AL — QUERY 설치 선택과 기존 유한 묶음 composition
 
+2026-10-25 추가 source checkpoint: `CatalogRoutedReferenceQuerySelection`은 동일한 실제
+operator capture의 기존 CPU/CUDA Catalog admission을 조합한다. 1–32개 원 요청의 순서와
+정확한 source/profile/index revision을 selection과 작은 preparation manifest로 발행하며,
+같은 key의 replay는 저장한 원 selection을 재인가한다. selection 발행 뒤 중단돼도 latest로
+다시 고르지 않는다. 장치별 전체 population pairing은 원 batch admission이 확인한다.
+이 단계는 모델·GPU·Workflow를 시작하거나 preparation을 권한으로 사용하는 단계가 아니다.
+INDEX와 QUERY의 새 allocation 후보 생성은 동일한 작은 순수 함수로 공유하고 원 replay의
+allocation은 기존 store가 보존한다. qualified numerical window는 양 장치 모두 180초 이하다.
+
+집중 source 회귀 101 PASS와 실제 disposable PostgreSQL publication/concurrent preparation,
+중단 후 replay 및 현재 권한 철회 5 PASS(6.99초, r48, cleanup EXIT0)를 확인했다. IAM/source/
+모델 leaves는 synthetic이며 실제 GPU QUERY 운영 검증은 아니다. 기존 실패 로그를 보존한다.
+운영 QUERY SDK/transport는 아직 CPU-only다. 이 source checkpoint를 전체 목표 완료로 보지 않는다.
+
 남은 QUERY 연결은 기존 owner의 opt-in successor 설정으로만 활성화한다. released CPU1/2 설정과
 private-chat QUERY 경로는 그대로 둔다. 새3.0은 기존 CPU 설정, CUDA QUERY 실행 policy pointer,
 고정 routing policy pointer/controller release만 감싼다. 설정이나 caller DTO가 권한이 되지 않는다.

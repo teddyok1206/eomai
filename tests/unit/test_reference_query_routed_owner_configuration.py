@@ -30,7 +30,20 @@ from tests.unit.test_reference_query_owner_configuration import owner_body
 @pytest.fixture
 def selected(source):
     query, planned = query_plan_case(key="1" * 32)
-    routing, cuda = planned.policy, query.policy
+    route_body = planned.policy.model_dump(mode="json")
+    for device in ("cpu", "cuda"):
+        route_body[device]["profile"]["resource_profile"] = seal(
+            route_body[device]["profile"]["resource_profile"] | {"timeout_seconds": 180},
+            "resource_profile_sha256",
+        )
+    routing = EmbeddingDeviceRoutingPolicy.model_validate(seal(route_body, "policy_sha256"))
+    cuda = ReferenceQueryExecutionPolicy.model_validate(
+        seal(
+            query.policy.model_dump(mode="json")
+            | {"resource_profile": routing.cuda.profile.resource_profile.model_dump(mode="json")},
+            "policy_sha256",
+        )
+    )
     profile = routing.cpu.profile
     document = profile.space.model_dump(mode="json")
     spaces = dict(
@@ -249,3 +262,34 @@ def test_individually_valid_but_wrong_resolved_controls_are_rejected(selected, f
     config = RoutedReferenceQueryOwnerConfiguration.model_validate(body)
     with pytest.raises(ReferenceQueryOwnerConfigurationError):
         require_routed_reference_query_policy(config, route, cpu, cuda)
+
+
+@pytest.mark.parametrize("device", ("cpu", "cuda"))
+def test_routed_composition_rejects_profile_above_qualified_finite_window(selected, device):
+    body, route, cpu, cuda = selected
+    changed = route.model_dump(mode="json")
+    profile = seal(
+        changed[device]["profile"]["resource_profile"] | {"timeout_seconds": 181},
+        "resource_profile_sha256",
+    )
+    changed[device]["profile"]["resource_profile"] = profile
+    route = EmbeddingDeviceRoutingPolicy.model_validate(seal(changed, "policy_sha256"))
+    execution = cpu if device == "cpu" else cuda
+    execution = ReferenceQueryExecutionPolicy.model_validate(
+        seal(execution.model_dump(mode="json") | {"resource_profile": profile}, "policy_sha256")
+    )
+    body["routing_policy_sha256"] = route.policy_sha256
+    target = body["cpu_configuration"] if device == "cpu" else body
+    target[
+        "native_execution_policy_sha256"
+        if device == "cpu"
+        else "cuda_native_execution_policy_sha256"
+    ] = execution.policy_sha256
+    config = RoutedReferenceQueryOwnerConfiguration.model_validate(body)
+    with pytest.raises(ReferenceQueryOwnerConfigurationError):
+        require_routed_reference_query_policy(
+            config,
+            route,
+            execution if device == "cpu" else cpu,
+            execution if device == "cuda" else cuda,
+        )

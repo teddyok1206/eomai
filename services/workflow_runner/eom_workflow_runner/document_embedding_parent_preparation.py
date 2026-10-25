@@ -4,12 +4,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass
-from uuid import uuid4
 
-from eom_catalog_contracts.embedding_gpu_control import (
-    EmbeddingGpuAllocationRequest,
-    embedding_gpu_allocation_window_seconds,
-)
 from eom_catalog_contracts.embedding_work_batch import EmbeddingWorkBatchScope
 from eom_catalog_contracts.inference_transfer_experiment import StagedExperimentEntry
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
@@ -24,7 +19,7 @@ from eom_workflow.document_embedding_reconciliation import (
     DocumentEmbeddingReconciliationAttempt,
     DocumentEmbeddingReconciliationRequest,
 )
-from eom_workflow.embedding_batch_plan import BATCH_PLAN_PROTOCOL, EmbeddingBatchAllocation
+from eom_workflow.embedding_batch_plan import EmbeddingBatchAllocation
 from eom_workflow.embedding_batch_plan_family import SupportedEmbeddingBatchRequest
 from eom_workflow.embedding_batch_plan_v11 import (
     BATCH_PLAN_V11_PROTOCOL,
@@ -39,8 +34,10 @@ from eom_workflow.local_indexing_routed_owner_configuration import (
     RoutedLocalIndexingOwnerConfiguration,
     require_routed_indexing_policy,
 )
-from eom_workflow.native_embedding_backend_selection import NativeCudaBackendSelection
 
+from eom_workflow_runner.embedding_batch_allocation_candidate import (
+    new_embedding_batch_allocation_candidate,
+)
 from eom_workflow_runner.embedding_batch_execution import CatalogEmbeddingBatchExecution
 from eom_workflow_runner.embedding_batch_plan_admission import (
     CatalogEmbeddingBatchPlanAdmission,
@@ -209,36 +206,8 @@ def prepare_document_embedding_parent(
     parent = EmbeddingBatchPlanRequestV11.model_validate(
         body | {"request_sha256": content_sha256(body)}
     )
-    backend = policy.cuda.backend.backend
-    _require(isinstance(backend, NativeCudaBackendSelection))
-    assert isinstance(backend, NativeCudaBackendSelection)
-    body = dict(
-        schema_version="embedding-gpu-allocation-control/1.0",
-        message_type="ALLOCATION_REQUEST",
-        allocation_attempt_id="embeddingallocation_" + uuid4().hex,
-        parent_request_sha256=parent.request_sha256,
-        child_set_sha256=content_sha256(list(parent.child_selection_sha256s)),
-        routing_policy_sha256=policy.policy_sha256,
-        purpose="INDEX",
-        configuration=backend.configuration.model_dump(mode="json"),
-        receipt_raw_sha256=backend.receipt_raw_sha256,
-        expires_monotonic_ns=time.monotonic_ns()
-        + embedding_gpu_allocation_window_seconds(
-            cuda.runtime_profile.resource_profile.timeout_seconds
-        )
-        * 10**9,
-    )
-    control = EmbeddingGpuAllocationRequest.model_validate(
-        body | {"message_sha256": content_sha256(body)}
-    )
-    body = dict(
-        schema_version=BATCH_PLAN_PROTOCOL,
-        message_type="ALLOCATION",
-        request_sha256=parent.request_sha256,
-        control_request=control.model_dump(mode="json"),
-    )
-    allocation = EmbeddingBatchAllocation.model_validate(
-        body | {"record_sha256": content_sha256(body)}
+    allocation = new_embedding_batch_allocation_candidate(
+        parent, policy, now_monotonic_ns=time.monotonic_ns()
     )
     admission = CatalogEmbeddingBatchPlanAdmission(
         cpu.owner.catalog,

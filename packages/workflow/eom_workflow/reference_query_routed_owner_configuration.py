@@ -8,6 +8,7 @@ from importlib.resources import files
 from typing import Any, Literal, Self
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
+from eom_catalog_contracts.embedding_work_batch import MAX_EMBEDDING_WORK_BATCH_SECONDS
 from eom_catalog_contracts.models import Sha256
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -166,5 +167,7 @@ def require_routed_reference_query_policy(
         or cpu.runtime_bundle != routing.cpu.profile.runtime_bundle
         or cuda.runtime_bundle != routing.cuda.profile.runtime_bundle
         or cpu.workflow_definition_sha256 != cuda.workflow_definition_sha256
+        or max(cpu.resource_profile.timeout_seconds, cuda.resource_profile.timeout_seconds)
+        > MAX_EMBEDDING_WORK_BATCH_SECONDS
     ):
         raise ReferenceQueryOwnerConfigurationError()
