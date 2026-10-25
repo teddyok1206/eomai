@@ -1315,6 +1315,26 @@ BATCH_COMPLETED 뒤 MainPID0/inactive를 확인했다. systemd stop timeout이�
 진행 중 GPU 작업을 끊지 않았다. 이후 동일 numerical/controller에서 CONTENT1 후속 canary를
 준비했다. canary 완료와 successor lineage는 별도 증거로 닫는다.
 
+실제 CONTENT 후속 canary는09:38:45.579076 UTC COMPLETED했다. Workflow
+`workflow_9e374fca380b4f0ab0b4bc460b4f6e4e`, native Job
+`job_88c24c510bab43b089e8b0880ac899df`의4개 canonical checkpoint와 encoding successor
+`job_1911e7f20b4b4dcea3b6ab2f430e94a9` SUCCEEDED를 확인했다. 원 producer
+`job_27f82d2aad6c4be9b2a4c13805a201cf`는 FAILED로 남아 있다. 원 request bytes/hash와
+encoding SHA `sha256:f3b6d948f743b6a832b63948a89c539a298aec0e7b54097861f10ac1fcf35a03`는
+동일하며, attempt1 양방향 retry declaration의 event SHA는
+`sha256:2e2b9a9cd185012dc27395876e55d3b264a29e1efc5c4886b9b63ab2a5f6356f`다.
+원 attempt의 실행은 성공으로 바꾸지 않았다. canary 종료 뒤 이전 INDEX owner를 복원했고,
+API/Web/QUERY/numerical prefix는 변경하지 않았다. watcher 로그의 고정 문구 `CPU_OWNER_RESTORED`는
+이번에는 실제 backup인 scoped GPU INDEX owner26 복원을 뜻한다. QUERY 기본값은 계속 CPU다.
+
+실제 결과는 `/tmp/eom-gpu-content-retry-observation-20261025.log` EXIT0와
+`/tmp/eom-gpu-content-retry-lineage-20261025-r5.{json,status}` EXIT0이다. 별도 이력 감사의
+초기 오류들은 진단 스크립트의 step 선택/읽기 잠금/DTO attribute 오류였고 보존했다.
+최종 감사는 설치본 official native reader와 SELECT/SHOW-only SQL guard를 사용했다.
+공식 native reader의 FOR SHARE 때문에 PostgreSQL READ ONLY transaction은 사용할 수 없지만
+SQL 쓰기·ORM dirty/new/deleted가 없음을 검증했다. 이것은 deployment metadata 감사이지
+사용자 source/RAG 권한이나 전체 paired index 완료를 증명하지 않는다.
+
 ### P2-AL — QUERY 설치 선택과 기존 유한 묶음 composition
 
 남은 QUERY 연결은 기존 owner의 opt-in successor 설정으로만 활성화한다. released CPU1/2 설정과
@@ -1347,6 +1367,30 @@ OS/IAM/source/index/numerical leaves는 합성이고 실제 QUERY runtime/transp
 context의 초기1건 실패는 fixture에 이미 있던 top_k=5를 다시5로 쓴 부정 테스트 오류였다.
 기록은 보존했으며 실제 다른 값으로 수정한 최종 회귀를 통과했다. 예외를 무시하거나 검증을
 완화해 PASS시킨 것이 아니다.
+
+HTTP 재전송의 초기 선택 보존은 기존 Orchestrator control-file-set publication의 indexed
+idempotency key를 재사용한다. 새 routed-preparation1.0 작은 manifest에는 actual operator의 audit
+ID·원 key·정규화한 요청 intent SHA·설정 raw SHA·원1.2 parent 값만 둔다. full item/text/vector/
+capture/token은 넣지 않으며 source 권한으로 사용하지 않는다. 정본은 immutable Artifact revision과
+parent의 selection/routing pointers이고, DB는 기존 publication metadata/Job 상태만 소유한다.
+동일 key 조회는 indexed O(1), parent/child 검증은 bounded O(anchors+views), 최대32 anchors다.
+처음 publication과 parent allocation은 각 기존 application의 transaction/idempotency 경계를 따른다.
+publication만 끝나고 중단되면 같은 manifest를 다시 읽고 현재 권한을 확인한다. 원 parent allocation이
+이미 있으면 새 GPU dispatch를 하지 않는다. 다른 intent·config·hash는 명시 충돌이고 latest 대체가
+아니다. source-side current admission 전에 manifest/Job 결과를 소비자에게 노출하지 않는다.
+새 DB table/queue를 만드는 대안은 기존 publication의 unique key와 immutable Artifact가 이미
+동일 초기 선택을 보존하므로 필요 없다. 단순히 요청 때마다 index latest를 읽는 대안은 원 핀을
+바꾸므로 사용하지 않는다. completed historical read와 새 compute admission은 계속 분리한다.
+
+manifest/publication source gate(2026-10-25 UTC): mirrored schema1.0과 offline1.2 parent registry,
+actual owner의 기존 control publication/find adapter를 추가했다. source74 PASS(26.94초),
+production3모듈 strict mypy 및 Ruff/format PASS다. disposable PostgreSQL `r47`50 PASS(23.23초),
+cleanup EXIT0에는 동일 key 동시 publication의 Job/Artifact1개, 같은 요청 replay, publication만
+끝난 중단 후 동일 pointer 조회, 다른 intent 충돌 및 원 bytes 보존이 포함된다. DB Job에는 full
+parent/selection/file payload가 없음을 확인했다. source/Identity/OS/수치 권한은 이 leaf 검증에
+포함되지 않는다. 초기 `r46`3개 오류는 read fixture에서 기존 reader의 필수 prefetch를 누락한
+것이었다. 원 로그/실패를 보존하고 prefetch 후 전체50개를 다시 실행했다. 운영에는 이 manifest
+경로를 활성화하지 않았으며 installed QUERY application/transport 연결은 여전히 후속 단계다.
 
 ### P2-E 패키징 확인
 

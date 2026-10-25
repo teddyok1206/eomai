@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/reference-query-routed-preparation/1.0",
+  "title": "Original pointer-only routed QUERY preparation; audit is never authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "operator_id", "idempotency_key", "intent_sha256", "owner_configuration_sha256", "parent", "preparation_sha256"],
+  "properties": {
+    "schema_version": {"const": "reference-query-routed-preparation/1.0"},
+    "operator_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+    "idempotency_key": {"type": "string", "pattern": "^[A-Za-z0-9_.:-]{8,128}$", "minLength": 8, "maxLength": 128},
+    "intent_sha256": {"$ref": "#/$defs/hash"},
+    "owner_configuration_sha256": {"$ref": "#/$defs/hash"},
+    "parent": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.2#/$defs/request"},
+    "preparation_sha256": {"$ref": "#/$defs/hash"}
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

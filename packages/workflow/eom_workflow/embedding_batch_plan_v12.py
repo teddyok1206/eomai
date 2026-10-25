@@ -17,7 +17,7 @@ from eom_catalog_contracts.similarity_context_v2 import SimilarityViewSelectionV
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import Field, model_validator
-from referencing import Resource
+from referencing import Registry, Resource
 
 from eom_workflow.embedding_batch_plan import (
     BATCH_PLAN_SCHEMA_REF,
@@ -73,13 +73,12 @@ def embedding_batch_plan_v12_schema() -> dict[str, Any]:
     return value
 
 
-@lru_cache(maxsize=1)
-def _validator() -> Draft202012Validator:
-    schema = embedding_batch_plan_v12_schema()
-    Draft202012Validator.check_schema(schema)
-    registry = local_embedding_admission_schema_registry().with_resources(
+def embedding_batch_query_plan_schema_registry() -> Registry[Any]:
+    """Offline parent/child schemas shared by actual plan and preparation contracts."""
+    return local_embedding_admission_schema_registry().with_resources(
         (
             (BATCH_PLAN_SCHEMA_REF, Resource.from_contents(embedding_batch_plan_schema())),
+            (BATCH_PLAN_V12_SCHEMA_REF, Resource.from_contents(embedding_batch_plan_v12_schema())),
             (
                 EMBEDDING_DEVICE_ROUTING_SCHEMA_REF,
                 Resource.from_contents(embedding_device_routing_schema()),
@@ -90,7 +89,17 @@ def _validator() -> Draft202012Validator:
             ),
         )
     )
-    return Draft202012Validator(schema, registry=registry, format_checker=FormatChecker())
+
+
+@lru_cache(maxsize=1)
+def _validator() -> Draft202012Validator:
+    schema = embedding_batch_plan_v12_schema()
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(
+        schema,
+        registry=embedding_batch_query_plan_schema_registry(),
+        format_checker=FormatChecker(),
+    )
 
 
 class _QueryPlanMessage(EmbeddingBatchPlanValue):
