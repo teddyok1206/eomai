@@ -51,6 +51,27 @@ class PairedIndexingNamespacePreparation:
 
     cpu: LocalEmbeddingServicePreparation
     cuda: LocalEmbeddingServicePreparation
+    maximum_sources: int = 1024
+
+    def __post_init__(self) -> None:
+        _require(type(self.cpu) is type(self.cuda) is LocalEmbeddingServicePreparation)
+        cpu, cuda = self.cpu.owner.configuration.registry, self.cuda.owner.configuration.registry
+        _require(
+            self.cpu.runtime_profile.resource_profile.device == "CPU"
+            and self.cuda.runtime_profile.resource_profile.device == "CUDA"
+            and self.cpu.publisher.engine is self.cuda.publisher.engine
+            and self.cpu.owner.settings.nas_artifact_root
+            == self.cuda.owner.settings.nas_artifact_root
+            and cpu.corpus_id == cuda.corpus_id
+            and cpu.recipe == cuda.recipe
+            and cpu.source_classes == cuda.source_classes
+            and type(cpu.namespace) is type(cuda.namespace)
+            and cpu.namespace.model_dump(mode="json", exclude={"space_sha256"})
+            == cuda.namespace.model_dump(mode="json", exclude={"space_sha256"})
+            and cpu.space.space_sha256 != cuda.space.space_sha256
+            and type(self.maximum_sources) is int
+            and 1 <= self.maximum_sources <= 1024
+        )
 
     @property
     def namespace(self) -> EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace:
@@ -192,6 +213,7 @@ def build_routed_indexing_sources(
                         source_commit=source_commit,
                         settings=settings,
                     ),
+                    cpu.maximum_sources,
                 )
             )
     _require(bool(pairs))

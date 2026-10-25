@@ -1,9 +1,10 @@
 """Actual Catalog/owner/control IO composition; service/source SQL leaves are synthetic."""
 
-from copy import deepcopy
+from copy import copy, deepcopy
 from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import Mock
+from uuid import uuid4
 
 import pytest
 from eom_catalog_service.embedding_registry_catalog_adapter import CatalogEmbeddingRegistryVerifier
@@ -23,7 +24,10 @@ from eom_workflow.local_indexing_routed_owner_configuration import (
     RoutedLocalIndexingOwnerConfiguration,
 )
 from eom_workflow_runner.local_embedding_owner_admission import CatalogLocalEmbeddingOwnerAdmission
-from eom_workflow_runner.local_indexing_routed_sources import build_routed_indexing_sources
+from eom_workflow_runner.local_indexing_routed_sources import (
+    PairedIndexingNamespacePreparation,
+    build_routed_indexing_sources,
+)
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.local_embedding_service_fixtures import service_fixture
@@ -32,17 +36,24 @@ from tests.unit.test_local_indexing_routed_owner_configuration import routed_doc
 
 
 @pytest.fixture
-def routed(tmp_path, monkeypatch, request):
+def routed_publisher(tmp_path):
+    return _publisher(tmp_path)
+
+
+@pytest.fixture
+def routed(tmp_path, monkeypatch, request, routed_publisher):
     body, policy = routed_document()
-    publisher, engine = _publisher(tmp_path)
+    publisher, engine = routed_publisher
     publisher.settings = replace(publisher.settings, workspace_root=tmp_path)
-    controls = LocalEmbeddingControlArtifactPublisher(publisher, source_commit="a" * 40)
+    cohort = uuid4().hex
+    source_commit = cohort + "a" * 8
+    controls = LocalEmbeddingControlArtifactPublisher(publisher, source_commit=source_commit)
     saved = controls.publish_device_routing_policy(
-        policy, idempotency_key="test:routed-device-policy"
+        policy, idempotency_key="test:routed-device-policy:" + cohort
     )
     body["routing_policy"] = saved.member.model_dump(mode="json")
     base = service_fixture()
-    pin = LocalIndexingRuntimePin(base.grant.service, "a" * 40, "sha256:" + "3" * 64)
+    pin = LocalIndexingRuntimePin(base.grant.service, source_commit, "sha256:" + "3" * 64)
     fence = PostgresLocalIndexingServiceFence(
         LocalIndexingFenceOwnerPin("synthetic_owner", 12001),
         pin,
@@ -81,7 +92,7 @@ def routed(tmp_path, monkeypatch, request):
         )
         saved_native = controls.publish_service_policy(
             native,
-            idempotency_key="test:routed-native-policy:" + device,
+            idempotency_key="test:routed-native-policy:" + device + ":" + cohort,
             created_at=native.created_at,
         )
         destination = body["cpu_configuration"] if device == "CPU" else body["cuda_grants"][0]
@@ -167,7 +178,7 @@ def routed(tmp_path, monkeypatch, request):
 
     def build(configuration=selected):
         return build_routed_indexing_sources(
-            engine, publisher, fence, configuration, source_commit="a" * 40, settings=settings
+            engine, publisher, fence, configuration, source_commit=source_commit, settings=settings
         )
 
     yield SimpleNamespace(
@@ -259,3 +270,18 @@ def test_legitimate_but_different_source_policy_or_wider_population_is_not_a_mat
     with pytest.raises(ValueError, match="LOCAL_INDEXING_ROUTED_SOURCE_MISMATCH"):
         routed.build()
     assert routed.current.observed == ["CPU", "CUDA"]
+
+
+def test_pair_metadata_rejects_different_views_before_any_capacity_or_launch(routed):
+    pair = routed.build().namespaces[0]
+    cpu = copy(pair.cpu)
+    cpu.owner = copy(pair.cpu.owner)
+    registry = cpu.owner.configuration.registry
+    cpu.owner.configuration = replace(
+        cpu.owner.configuration,
+        registry=replace(
+            registry, namespace=registry.namespace.model_copy(update={"view": "CONCRETE_FACETS"})
+        ),
+    )
+    with pytest.raises(ValueError, match="LOCAL_INDEXING_ROUTED_SOURCE_MISMATCH"):
+        PairedIndexingNamespacePreparation(cpu, pair.cuda)

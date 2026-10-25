@@ -510,6 +510,71 @@ P2_E_OBSERVATION_AND_ACQUIRED_RETIREMENT=SOURCE_VERIFIED,
 ROOT_FILE_DAC_AND_CONCURRENCY=PASS, LIVE_GPU_BATCH_UNIT=NOT_RUN,
 CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
 
+### P2-AA — 원 요청으로부터 실제 parent·장치별 START 조합 (설계)
+
+source preparation의 GPU 원 request를 새 배치의 상위 입력으로 pin한다. 현재 GPU/CPU 양쪽
+Catalog 권한으로 같은 Graph/source 집합을 확인하고 원 profile/evidence anchors의 selection을
+Orchestrator가 발행한다. batch ID/key는 원 request와 routing/controller pin에서 결정하며,
+개별 allocation 후보의 새 nonce가 replay를 새 실행으로 바꾸지 못한다. 기존 parent store의
+atomic creation을 통과한 요청만 root를 dispatch한다. 현재 scope admission과 원 hash를 다시
+확인하고 actual ROOT_READY/BUSY 뒤에만 기존 CUDA/CPU executor와 공식 START/Runner를 만든다.
+
+CPU fallback plan은 CPU missing 목록을 새로 고르는 대신 원 GPU request의 source ID/Graph/view
+집합에 대해 CPU 권한으로 다시 만든다. 이는 CPU 벡터/namespace를 GPU로 바꾸는 작업이 아니다.
+공통 plan/request 발행을 하나의 preparation 메서드에서 재사용하고, 원 key·Artifact·Revision·SHA를
+보존한다. source map/indexed lookup O(n), 정렬 O(n log n), 기존 1,024개 상한/유한180초와
+Job/Workflow unique key를 사용한다. 새 DB/queue/worker schema/numerical SDK는 없다.
+
+각 source/parent/child claim root는 짧고 계산 중 SQL transaction을 유지하지 않는다. 준비 DTO나
+saved source ID는 권한이 아니며 현재 권한·policy·hash·원 요청·lease를 공식 owner가 재확인한다.
+권한/hash/불명/부분 실행은 CPU로 전환하지 않는다. 실제 재전송은 원 parent/history로 돌아가고
+원 실행이 불명확하면 새 physical 실행을 만들지 않는다. 이미 있는 row만 사용하는 경우도
+빈 numerical output을 만들지 않고 기존 index owner가 처리한다. 미사용 root와 cold recovery는
+명시적으로 구분한다. 단순 대안인 CPU missing 재선택/새 key 재제출은 원 target/중복 실행을
+깨뜨리므로 배제한다. source/disposable DB에서 matched target·동시 creation·중단·replay를 검증한
+뒤 실제 kernel/model canary를 진행한다. 이 조합만으로 운영 기본값을 바꾸지 않는다.
+
+#### P2-AA 구현·검증 결과
+
+`prepare_document_embedding_parent`는 현재 양쪽 실제 owner와 원 service request로 selection을
+발행하고 deterministic parent를 만든다. 원 request/policy/controller가 같으면 selection/parent가
+같고 allocation 후보의 새 nonce는 기존 allocation/history를 교체하지 못한다. 실제 original
+GPU target/view/Graph에 대해 `prepare_matching`이 CPU plan/request를 다시 만들며 CPU missing
+queue를 새로 선택하지 않는다. 원 plan/request 발행은 기존 `prepare_once`와 한 구현을 공유한다.
+
+`drive_routed_document_embedding_parent_once`는 원 operation의 actual ROOT_READY/BUSY를 받은
+뒤에만 CUDA/CPU backend, 기존 atomic START, purpose-only 실제 Runner와 publication을 조합한다.
+예외를 catch해 CPU로 보내지 않는다. 같은 parent replay는 원 history만 반환하며 새 root를
+dispatch하지 않는다. 반환 상태는 별도 indexed read로 현재 Workflow/command를 읽는다.
+기존 non-role readiness 클래스는 purpose-only composition 모듈로 옮기고 원 import는 유지했다.
+pair metadata도 같은 source/namespace 의미와 NAS, 다른 장치 space를 요구한다.
+
+- 원 parent/selection 재사용, 현재 권한 철회, GPU와 CPU의 서로 다른 실제 plan space 및
+  동일 원 source 집합, CPU missing queue와 독립적인 원 target 유지 등을 포함한 source 회귀
+  **210 PASS,57.82초** (`/tmp/eom-routed-parent-and-driver-regression-20261025-r2.log`).
+- disposable PostgreSQL의 실제 START/Runner/claim/등록과 원 parent의 동시 publication/
+  allocation·중단/replay, 기존 CPU/CUDA publication 회귀 **28 PASS,226.97초**
+  (`/tmp/eom-document-execution-pg-20261025-r19.log`), cleanup/exit0.
+- 최종 pair 구조 검증 이후 실제 routed START/Runner/register와 권한 철회 전 dispatch 금지,
+  parent 동시 생성/원 allocation 유지, service reconciliation **11 PASS,29.17초**
+  (`/tmp/eom-document-execution-pg-20261025-r21.log`), cleanup/exit0.
+  앞선 추가 권한 검사 r20 **2 PASS,18.98초**는 중복이라 합산하지 않는다.
+- strict mypy6개 source와 Ruff lint/format14개/diff 검사 PASS. dependency/schema/migration은
+  추가하지 않았다. Root/GPU/model/OS 및 IAM/Graph leaves는 명시적 synthetic이며 실제
+  kernel numerical canary 또는 실제 service capture 승인으로 해석하지 않는다.
+
+초기 request fixture의 기존 hash 재포함과, disposable DB에 이전 테스트 cohort의 canonical
+Artifact가 남은 상태에서 다른 임시 NAS root를 사용하는 fixture 충돌을 고쳤다. 후자는 test-only
+source commit/key를 cohort별로 분리했으며 production idempotency key나 NAS/hash guard는
+완화하지 않았다. r17/r18 실패 기록과 cleanup은 보존했다. 실제 실패 이력은 변경하지 않았다.
+
+새 finite driver는 현재 normal execution 및 original-history rejoin 경계를 연결했다. original
+history가 존재한다고 numerical/child completion으로 선언하지 않으며 cold reconciliation은 아직
+별도 경계다. 다음은 configuration5를 actual service entry/finite loop에 연결하고 unused root,
+cold result recovery를 닫은 뒤 canonical source의 GPU/CPU numerical·coverage/default/rollback을
+검증하는 것이다. 실제 운영5개 서비스 active, GPU0%/2MiB 확인. CPU/QUERY/수치/물리 root pin과
+운영 기본값은 바꾸지 않았다. CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존

@@ -247,6 +247,29 @@ def test_preparation_rechecks_source_authority_after_immutable_plan_publication(
     c.launcher.run.assert_not_called()
 
 
+def test_matching_original_targets_does_not_reselect_the_current_missing_queue(reconciliation):
+    c = reconciliation
+    prepared = c.app.preparation.prepare_once()
+    assert prepared.request is not None
+    c.current.keys = ()
+    assert c.app.preparation.prepare_once().request is None
+    matched = c.app.preparation.prepare_matching(c.app.preparation, prepared.request)
+    assert matched == prepared.request
+    c.launcher.run.assert_not_called()
+
+
+def test_matching_original_selection_still_rechecks_current_source_authority(reconciliation):
+    c = reconciliation
+    prepared = c.app.preparation.prepare_once()
+    assert prepared.request is not None
+    before = counts(c)
+    c.source.deny = True
+    with pytest.raises(ValueError, match="FORBIDDEN"):
+        c.app.preparation.prepare_matching(c.app.preparation, prepared.request)
+    assert counts(c) == before
+    c.launcher.run.assert_not_called()
+
+
 def test_bounded_targets_are_stable_and_exclude_already_bound_sources(reconciliation):
     c = reconciliation
     c.current.keys = c.current.keys[1:]

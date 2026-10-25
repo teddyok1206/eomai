@@ -3,6 +3,7 @@
 import os
 import time
 from contextlib import ExitStack
+from dataclasses import replace
 from uuid import uuid4
 
 from eom_catalog_service.embedding_registry_ports import ResolvedEmbeddingLookup
@@ -55,6 +56,7 @@ def make_document_cuda_execution(
     finalizer,
     parent_protocol="embedding-batch-plan/1.0",
     cpu_launcher=None,
+    defer_open=False,
 ):
     # The same explicit synthetic Identity/source delegates as the CPU integration
     # fixture; real Catalog/index/encoding/Workflow/Artifact persistence is retained.
@@ -146,7 +148,11 @@ def make_document_cuda_execution(
     )
     value.request = parse_embedding_batch_plan_request(
         seal(
-            value.request.model_dump(mode="json") | {"batch_id": "embeddingbatch_" + uuid4().hex},
+            value.request.model_dump(mode="json")
+            | {
+                "batch_id": "embeddingbatch_" + uuid4().hex,
+                "parent_request_sha256": request.request_sha256,
+            },
             "request_sha256",
         )
     )
@@ -187,6 +193,62 @@ def make_document_cuda_execution(
     monkeypatch.setattr(
         material, "fixed_owner_identity", lambda: CpuHandoffIdentity(os.getuid(), os.getgid())
     )
+    if defer_open:
+        from eom_orchestrator.local_embedding_control_artifacts import (
+            LocalEmbeddingControlArtifactPublisher,
+        )
+        from eom_workflow.local_embedding_execution_policy import LocalEmbeddingExecutionPolicy
+        from eom_workflow_runner.local_embedding_owner_admission import (
+            LocalEmbeddingOwnerConfiguration,
+        )
+        from eom_workflow_runner.local_embedding_service_reconciliation import (
+            LocalEmbeddingServicePreparation,
+        )
+        from eom_workflow_runner.local_indexing_routed_sources import (
+            PairedIndexingNamespacePreparation,
+        )
+
+        from tests.unit.local_embedding_admission_fixtures import native_fixture
+
+        cpu_profile = template.policy.cpu.profile
+        cpu_policy = LocalEmbeddingExecutionPolicy.model_validate(
+            seal(
+                native_fixture().policy.model_dump(mode="json")
+                | dict(
+                    workflow_definition_sha256=request.workflow_definition_sha256,
+                    profiles=[cpu_profile.model_dump(mode="json")],
+                ),
+                "policy_sha256",
+            )
+        )
+        saved_cpu = LocalEmbeddingControlArtifactPublisher(
+            publisher, source_commit="a" * 40
+        ).publish_policy(
+            cpu_policy,
+            idempotency_key="test:deferred-cpu-policy:" + uuid4().hex,
+            created_at=cpu_policy.created_at,
+        )
+        cpu_owner = CatalogLocalEmbeddingOwnerAdmission(
+            publisher.engine,
+            LocalEmbeddingOwnerConfiguration(
+                replace(
+                    value.catalog.configuration,
+                    source_classes=owner.configuration.registry.source_classes,
+                ),
+                saved_cpu.member,
+                cpu_policy.policy_sha256,
+            ),
+            actor_authority=OperatorLocalEmbeddingActorAuthority(source_owner.identity),
+            settings=value.catalog.settings,
+        )
+        value.pair = PairedIndexingNamespacePreparation(
+            LocalEmbeddingServicePreparation(
+                cpu_owner, publisher, cpu_profile, source_commit="a" * 40
+            ),
+            LocalEmbeddingServicePreparation(owner, publisher, profile, source_commit="a" * 40),
+        )
+        value.child_owner, value.executor = owner, None
+        return value
     stack = ExitStack()
     finalizer(stack.close)
     active = stack.enter_context(value.operation.open(value.request, value.allocation))

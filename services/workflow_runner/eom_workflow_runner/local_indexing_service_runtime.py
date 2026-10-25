@@ -50,32 +50,14 @@ from eom_workflow_runner.local_embedding_owner_admission import (
 from eom_workflow_runner.local_embedding_service_reconciliation import (
     LocalEmbeddingServiceReconciliation,
 )
-from eom_workflow_runner.local_indexing_runtime_verification import FixedIndexingRuntimeVerification
-from eom_workflow_runner.readiness import (
-    ReadinessStatus,
-    RuntimeReadinessCheck,
-    RuntimeReadinessReport,
+from eom_workflow_runner.local_indexing_runner_composition import (
+    IndexingRoleExecutionDisabled as IndexingRoleExecutionDisabled,
 )
+from eom_workflow_runner.local_indexing_runtime_verification import FixedIndexingRuntimeVerification
 from eom_workflow_runner.repository import CommandExecutionFamily, NativeCommandActorSelection
 from eom_workflow_runner.settings import RunnerConfig, WorkflowSettings
 
 _STATE_ROOT = Path("/var/lib/eom-local-indexing")
-
-
-class IndexingRoleExecutionDisabled:
-    """Explicit failure for non-native readiness, never a fake READY role adapter."""
-
-    def evaluate(self) -> RuntimeReadinessReport:
-        return RuntimeReadinessReport(
-            (
-                RuntimeReadinessCheck(
-                    "role_execution",
-                    ReadinessStatus.FAIL,
-                    "LOCAL_INDEXING_ROLE_EXECUTION_DISABLED",
-                    "this installed owner processes only its own native INDEX commands",
-                ),
-            )
-        )
 
 
 @dataclass(frozen=True, slots=True)

@@ -24,6 +24,11 @@ from eom_catalog_service.embedding_index_refresh_plan import (
     plan_index_membership_refresh,
 )
 from eom_catalog_service.embedding_registry_application import prepare_missing_embedding_bindings
+from eom_catalog_service.embedding_registry_ports import (
+    EmbeddingRegistryLookup,
+    ResolvedEmbeddingLookup,
+    SelectedEmbeddingSources,
+)
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
 from eom_catalog_service.local_embedding_source_plan_v2 import build_local_embedding_source_plan_v2
 from eom_identifiers import content_sha256
@@ -46,9 +51,13 @@ from eom_workflow.local_embedding_workflow import (
     LOCAL_EMBEDDING_WORKFLOW_VERSION,
 )
 from eom_workflow.local_embedding_workflow_v2 import LOCAL_EMBEDDING_WORKFLOW_V2_VERSION
+from sqlalchemy.orm import Session
 
 from eom_workflow_runner.local_embedding_native_executor import CatalogNativeEmbeddingExecutor
-from eom_workflow_runner.local_embedding_owner_admission import CatalogLocalEmbeddingOwnerAdmission
+from eom_workflow_runner.local_embedding_owner_admission import (
+    CatalogLocalEmbeddingOwnerAdmission,
+    ServiceReconciliationControls,
+)
 from eom_workflow_runner.local_embedding_submission import (
     LocalEmbeddingWorkflowSubmitted,
     start_local_embedding_in_session,
@@ -230,91 +239,160 @@ class LocalEmbeddingServicePreparation:
                     else ReconciliationState.UP_TO_DATE
                 )
                 return PreparedLocalEmbeddingReconciliation(replace(observed, state=state))
-            definition_version = (
-                LOCAL_EMBEDDING_WORKFLOW_V2_VERSION if mixed else LOCAL_EMBEDDING_WORKFLOW_VERSION
-            )
-            definition = admitted_workflow_definition(
-                session,
-                definition_key=LOCAL_EMBEDDING_WORKFLOW_KEY,
-                definition_version=definition_version,
-            )
-            if definition is None or definition.definition_hash != (
-                controls.policy.workflow_definition_sha256
-            ):
-                raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_DEFINITION_UNAVAILABLE")
-            plan = (
-                build_local_embedding_source_plan_v2(
-                    query,
-                    resolved,
-                    target_revision_ids=targets,
-                    base_analysis_run_ids=dict(resolved.base_analysis_run_ids),
-                )
-                if mixed
-                else build_local_embedding_source_plan(query, resolved, target_revision_ids=targets)
-            )
-            plan_key = content_sha256(
-                {"plan": plan.plan_sha256, "source_commit": self.controls.source_commit}
-            )
-            # Only Orchestrator publishes; retained source/service locks protect
-            # this preparation root. No model/claim happens while locks are held.
-            plan_publication_key = "local-embedding-plan:" + plan_key.removeprefix("sha256:")
-            if isinstance(plan, LocalEmbeddingSourcePlanV2):
-                saved = self.controls.publish_observed_source_plan_v2(
-                    plan, idempotency_key=plan_publication_key
-                )
-            else:
-                saved = self.controls.publish_observed_source_plan(
-                    plan, idempotency_key=plan_publication_key
-                )
-            authorization_audit = supported_local_indexing_authorization_audit_sha256(
-                controls.grant
-            )
-            body = {
-                "schema_version": "local-embedding-workflow-request/2.0"
-                if mixed
-                else "local-embedding-workflow-request/1.2",
-                "request_name": "LOCAL_EMBEDDING_WORKFLOW_REQUEST",
-                "purpose": "LOCAL_EMBEDDING",
-                "workflow_definition_key": LOCAL_EMBEDDING_WORKFLOW_KEY,
-                "workflow_definition_version": definition_version,
-                "workflow_definition_sha256": definition.definition_hash,
-                "actor_context": {
-                    "kind": "LOCAL_INDEXING_SERVICE",
-                    **controls.caller.service.model_dump(mode="json"),
-                    "service_policy_revision_id": controls.grant.access_policy_revision_id,
-                    "service_policy_sha256": controls.grant.content_sha256,
-                    "authorization_audit_sha256": authorization_audit,
-                },
-                "corpus_id": query.corpus_id,
-                "graph_snapshot": query.graph_snapshot.model_dump(mode="json"),
-                "access_policy_revision_id": query.policy_revision_id,
-                "access_policy_sha256": query.policy_sha256,
-                "namespace": query.namespace.model_dump(mode="json"),
-                "space": runtime_profile.space.model_dump(mode="json"),
-                "runtime_bundle": runtime_profile.runtime_bundle.model_dump(mode="json"),
-                "resource_profile": runtime_profile.resource_profile.model_dump(mode="json"),
-                "source_plan": saved.member.model_dump(mode="json"),
-                "source_plan_sha256": plan.plan_sha256,
-                "native_execution_policy": owner.configuration.native_execution_policy.model_dump(
-                    mode="json"
-                ),
-                "native_execution_policy_sha256": controls.policy.policy_sha256,
-            }
-            if refresh is not None:
-                body |= {
-                    "schema_version": "local-embedding-workflow-request/1.3",
-                    "reconciliation_basis": refresh.model_dump(mode="json"),
-                }
-            request = parse_supported_local_embedding_request(
-                body | {"request_sha256": content_sha256(body)}
-            )
-            # Artifact publication can consume time. Retain the source locks and
-            # repeat current authority, not immutable plan/material hashing.
-            owner.catalog.authorize_scope(session, controls.caller, query)
-            owner.fence_current_actor(session, request)
+            request = self._prepare_request(session, controls, query, resolved, targets, refresh)
             return PreparedLocalEmbeddingReconciliation(
                 replace(observed, state=ReconciliationState.PREPARED), request
             )
+
+    def prepare_matching(
+        self,
+        counterpart: LocalEmbeddingServicePreparation,
+        request: SupportedLocalEmbeddingRequest,
+        *,
+        maximum_sources: int = 1024,
+    ) -> SupportedLocalEmbeddingRequest:
+        """Rebuild this device's plan for the original pinned selection, not its missing queue.
+
+        Both actual owners reauthorize in this root. No request DTO grants source
+        access and neither a current head nor a newly missing target replaces it.
+        """
+        if (
+            type(counterpart) is not LocalEmbeddingServicePreparation
+            or counterpart.publisher.engine is not self.publisher.engine
+            or counterpart.owner.settings.nas_artifact_root != self.owner.settings.nas_artifact_root
+            or type(maximum_sources) is not int
+            or not 1 <= maximum_sources <= 1024
+        ):
+            raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
+        request = parse_supported_local_embedding_request(request)
+        registry = self.owner.configuration.registry
+        if (
+            request.corpus_id != registry.corpus_id
+            or request.namespace.view != registry.namespace.view
+            or request.namespace.projection_version != registry.namespace.projection_version
+            or request.namespace.population_scope != registry.namespace.population_scope
+            or request.namespace.storage_partition != registry.namespace.storage_partition
+        ):
+            raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
+        query = EmbeddingRegistryLookup(
+            request.corpus_id,
+            registry.namespace,
+            request.graph_snapshot,
+            request.access_policy_revision_id,
+            request.access_policy_sha256,
+            maximum_sources,
+        )
+        with self.publisher.sessions.begin() as session:
+            original = counterpart.owner.resolve_sources(session, request)
+            controls = self.owner.resolve_reconciliation_controls(
+                session, query, self.runtime_profile
+            )
+            if controls.caller != counterpart.owner.registry_caller(request):
+                raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
+            targets = tuple(sorted(s.item_revision_id for s in original.admission.plan.sources))
+            selected = self.owner.catalog.resolve_selected_sources(
+                session, controls.caller, SelectedEmbeddingSources(query, targets)
+            )
+            if selected.recipe != original.admission.plan.recipe or {
+                s.item_revision_id: s for s in selected.sources
+            } != {s.item_revision_id: s for s in original.admission.plan.sources}:
+                raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
+            matched = self._prepare_request(session, controls, query, selected, targets, None)
+            counterpart.owner.fence_current_actor(session, request)
+            return matched
+
+    def _prepare_request(
+        self,
+        session: Session,
+        controls: ServiceReconciliationControls,
+        query: EmbeddingRegistryLookup,
+        resolved: ResolvedEmbeddingLookup,
+        targets: tuple[str, ...],
+        refresh: IndexMembershipRefreshBasis | None,
+    ) -> SupportedLocalEmbeddingRequest:
+        owner, runtime_profile = self.owner, self.runtime_profile
+        mixed = isinstance(query.namespace, MixedEmbeddingIndexNamespace)
+        definition_version = (
+            LOCAL_EMBEDDING_WORKFLOW_V2_VERSION if mixed else LOCAL_EMBEDDING_WORKFLOW_VERSION
+        )
+        definition = admitted_workflow_definition(
+            session,
+            definition_key=LOCAL_EMBEDDING_WORKFLOW_KEY,
+            definition_version=definition_version,
+        )
+        if definition is None or definition.definition_hash != (
+            controls.policy.workflow_definition_sha256
+        ):
+            raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_DEFINITION_UNAVAILABLE")
+        plan = (
+            build_local_embedding_source_plan_v2(
+                query,
+                resolved,
+                target_revision_ids=targets,
+                base_analysis_run_ids=dict(resolved.base_analysis_run_ids),
+            )
+            if mixed
+            else build_local_embedding_source_plan(query, resolved, target_revision_ids=targets)
+        )
+        plan_key = content_sha256(
+            {"plan": plan.plan_sha256, "source_commit": self.controls.source_commit}
+        )
+        # Only Orchestrator publishes; retained source/service locks protect
+        # this preparation root. No model/claim happens while locks are held.
+        plan_publication_key = "local-embedding-plan:" + plan_key.removeprefix("sha256:")
+        if isinstance(plan, LocalEmbeddingSourcePlanV2):
+            saved = self.controls.publish_observed_source_plan_v2(
+                plan, idempotency_key=plan_publication_key
+            )
+        else:
+            saved = self.controls.publish_observed_source_plan(
+                plan, idempotency_key=plan_publication_key
+            )
+        authorization_audit = supported_local_indexing_authorization_audit_sha256(controls.grant)
+        body = {
+            "schema_version": "local-embedding-workflow-request/2.0"
+            if mixed
+            else "local-embedding-workflow-request/1.2",
+            "request_name": "LOCAL_EMBEDDING_WORKFLOW_REQUEST",
+            "purpose": "LOCAL_EMBEDDING",
+            "workflow_definition_key": LOCAL_EMBEDDING_WORKFLOW_KEY,
+            "workflow_definition_version": definition_version,
+            "workflow_definition_sha256": definition.definition_hash,
+            "actor_context": {
+                "kind": "LOCAL_INDEXING_SERVICE",
+                **controls.caller.service.model_dump(mode="json"),
+                "service_policy_revision_id": controls.grant.access_policy_revision_id,
+                "service_policy_sha256": controls.grant.content_sha256,
+                "authorization_audit_sha256": authorization_audit,
+            },
+            "corpus_id": query.corpus_id,
+            "graph_snapshot": query.graph_snapshot.model_dump(mode="json"),
+            "access_policy_revision_id": query.policy_revision_id,
+            "access_policy_sha256": query.policy_sha256,
+            "namespace": query.namespace.model_dump(mode="json"),
+            "space": runtime_profile.space.model_dump(mode="json"),
+            "runtime_bundle": runtime_profile.runtime_bundle.model_dump(mode="json"),
+            "resource_profile": runtime_profile.resource_profile.model_dump(mode="json"),
+            "source_plan": saved.member.model_dump(mode="json"),
+            "source_plan_sha256": plan.plan_sha256,
+            "native_execution_policy": owner.configuration.native_execution_policy.model_dump(
+                mode="json"
+            ),
+            "native_execution_policy_sha256": controls.policy.policy_sha256,
+        }
+        if refresh is not None:
+            body |= {
+                "schema_version": "local-embedding-workflow-request/1.3",
+                "reconciliation_basis": refresh.model_dump(mode="json"),
+            }
+        request = parse_supported_local_embedding_request(
+            body | {"request_sha256": content_sha256(body)}
+        )
+        # Artifact publication can consume time. Retain the source locks and
+        # repeat current authority, not immutable plan/material hashing.
+        owner.catalog.authorize_scope(session, controls.caller, query)
+        owner.fence_current_actor(session, request)
+        return request
 
 
 class LocalEmbeddingServiceReconciliation:
