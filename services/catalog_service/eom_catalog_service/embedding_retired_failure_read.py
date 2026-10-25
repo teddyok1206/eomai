@@ -14,7 +14,7 @@ from typing import Any
 from eom_catalog_contracts.embedding_gpu_control import parse_embedding_gpu_control_bytes
 from eom_catalog_contracts.embedding_gpu_failed_retirement import FailedEmbeddingGpuRetirement
 from eom_identifiers import canonical_json_bytes, sha256_bytes
-from eom_orchestrator.inference_transfer_cpu_systemd import inspect_cpu_unit
+from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation, inspect_cpu_unit
 from eom_orchestrator.systemd_unit_processes import root_owned_unit_processes
 from eom_workflow.embedding_encoding_recovery import (
     RetiredEmbeddingRootFailure,
@@ -49,6 +49,12 @@ from eom_catalog_service.gpu_unit_terminal_observation import (
 class ResolvedRetiredEmbeddingFailure:
     proof: SupportedRetiredEmbeddingFailure
     allocation_request_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class _FailedPublicationController:
+    root_pid: int
+    observation: CpuUnitObservation
 
 
 @contextmanager
@@ -93,7 +99,9 @@ def read_retired_embedding_failure(
     yield ResolvedRetiredEmbeddingFailure(proof, allocation_sha256)
     reader.assert_unchanged()
     if isinstance(proof, RetiredUnpublishedEmbeddingResult) and (
-        _read_failed_publication_controller(proof, reader, allocation_sha256) != controller
+        controller is None
+        or _observe_failed_publication_controller(proof, controller.root_pid)
+        != controller.observation
     ):
         raise ValueError("EMBEDDING_FAILURE_RETIREMENT_CHANGED")
     if (
@@ -141,8 +149,34 @@ def _read_failed_publication_controller(
     proof: RetiredUnpublishedEmbeddingResult,
     reader: NumericalRuntimeFileSnapshots,
     allocation_request_sha256: str,
-) -> object:
+) -> _FailedPublicationController:
     """Controller failure is distinct from the successfully retired numerical worker."""
+    attempt = proof.allocation_attempt_id.removeprefix("embeddingallocation_")
+    launch = parse_native_embedding_gpu_batch_environment(
+        reader.observe_protected_member_bytes(
+            GPU_BATCH_RUNTIME_ROOT / attempt / "launch.env", maximum=4096
+        ).raw,
+        attempt_hex=attempt,
+    )
+    allocation_raw = reader.observe_protected_member_bytes(
+        GPU_BATCH_RUNTIME_ROOT / attempt / "allocation.json", maximum=32768
+    ).raw
+    allocation = parse_embedding_gpu_control_bytes(allocation_raw)
+    if (
+        allocation.message_sha256 != allocation_request_sha256
+        or allocation.allocation_attempt_id != proof.allocation_attempt_id
+        or sha256_bytes(allocation_raw) != launch.allocation_raw_sha256
+    ):
+        raise ValueError("EMBEDDING_UNPUBLISHED_CONTROLLER_INVALID")
+    return _FailedPublicationController(
+        launch.root_pid, _observe_failed_publication_controller(proof, launch.root_pid)
+    )
+
+
+def _observe_failed_publication_controller(
+    proof: RetiredUnpublishedEmbeddingResult, root_pid: int
+) -> CpuUnitObservation:
+    """Fresh OS fence; immutable file bytes were captured once and keep their epochs."""
     attempt = proof.allocation_attempt_id.removeprefix("embeddingallocation_")
     template = "eom-embedding-native-gpu-batch-owner@.service"
     unit = "eom-embedding-native-gpu-batch-owner@" + attempt + ".service"
@@ -158,23 +192,7 @@ def _read_failed_publication_controller(
     pid, descriptors = observe_failed_gpu_unit_metadata(
         unit, template=template, expected=controller
     )
-    launch = parse_native_embedding_gpu_batch_environment(
-        reader.observe_protected_member_bytes(
-            GPU_BATCH_RUNTIME_ROOT / attempt / "launch.env", maximum=4096
-        ).raw,
-        attempt_hex=attempt,
-    )
-    allocation_raw = reader.observe_protected_member_bytes(
-        GPU_BATCH_RUNTIME_ROOT / attempt / "allocation.json", maximum=32768
-    ).raw
-    allocation = parse_embedding_gpu_control_bytes(allocation_raw)
-    if (
-        pid != launch.root_pid
-        or descriptors != 0
-        or allocation.message_sha256 != allocation_request_sha256
-        or allocation.allocation_attempt_id != proof.allocation_attempt_id
-        or sha256_bytes(allocation_raw) != launch.allocation_raw_sha256
-    ):
+    if pid != root_pid or descriptors != 0:
         raise ValueError("EMBEDDING_UNPUBLISHED_CONTROLLER_INVALID")
     try:
         processes = root_owned_unit_processes(unit)

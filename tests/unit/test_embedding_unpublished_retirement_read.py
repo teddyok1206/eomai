@@ -1,6 +1,9 @@
 """Concrete distinct outcome reader; only root/files/systemd leaves are synthetic."""
 
+import os
+import tempfile
 from dataclasses import replace
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -85,6 +88,7 @@ def test_successful_numeric_and_failed_original_controller_are_both_verified(ori
         assert resolved.proof.controller_outcome == "FAILED"
     assert original.control.call_count == original.metadata.call_count == 2
     original.files.assert_unchanged.assert_called_once()
+    assert original.files.observe_protected_member_bytes.call_count == 2
     assert original.retired.original_terminal.original_outcome == "SUCCEEDED"
 
 
@@ -140,3 +144,53 @@ def test_late_original_controller_change_invalidates_entire_mutation_window(orig
     )
     with pytest.raises(ValueError), application.read_retired_embedding_failure(original.proof):
         pass
+
+
+@pytest.fixture
+def protected_filesystem():
+    with tempfile.TemporaryDirectory(
+        prefix="eom-protected-snapshot-", dir="/run" if os.getuid() == 0 else "/tmp"
+    ) as directory:
+        yield Path(directory)
+
+
+def test_actual_protected_file_snapshot_is_read_once_and_epoch_fenced_at_exit(
+    original, monkeypatch, protected_filesystem
+):
+    from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
+
+    root = protected_filesystem / "gpu"
+    lifetime = protected_filesystem / "lifetimes"
+    instance = original.proof.allocation_attempt_id.removeprefix("embeddingallocation_")
+    unit = "eom-embedding-native-gpu-batch@" + instance + ".service"
+    execution = root / instance
+    retirement = lifetime / unit / original.proof.invocation_id / "retirement/result.json"
+    for directory in (
+        root,
+        execution,
+        lifetime,
+        lifetime / unit,
+        lifetime / unit / original.proof.invocation_id,
+        retirement.parent,
+    ):
+        directory.mkdir(mode=0o700)
+    retirement.write_bytes(original.raw)
+    retirement.chmod(0o600)
+    for name in ("launch.env", "allocation.json"):
+        raw = original.files.observe_protected_member_bytes(Path(name), maximum=32768).raw
+        (execution / name).write_bytes(raw)
+        (execution / name).chmod(0o600)
+    monkeypatch.setattr(application, "GPU_BATCH_RUNTIME_ROOT", root)
+    monkeypatch.setattr(application, "GPU_BATCH_LIFETIME_ROOT", lifetime)
+    monkeypatch.setattr(
+        application,
+        "NumericalRuntimeFileSnapshots",
+        lambda: NumericalRuntimeFileSnapshots(owner_uid=os.getuid()),
+    )
+    with application.read_retired_embedding_failure(original.proof):
+        pass
+    with (
+        pytest.raises(ValueError, match="FILE_CHANGED"),
+        application.read_retired_embedding_failure(original.proof),
+    ):
+        (execution / "launch.env").write_bytes(b"changed after admission")

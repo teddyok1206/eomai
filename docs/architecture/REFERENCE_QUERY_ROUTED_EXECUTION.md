@@ -467,3 +467,14 @@ raw SHA `94405a21f6dc2d7713c89b1ffb93f3fca3174c6c5cac9980a8f93708c989104b`.
 The unpublished Workflow still needs the tested recovery/2.0 installed owner
 before supported metadata closure and successor-runtime activation. GPU-default
 QUERY, exact full paired corpus and the overall goal are not complete.
+
+The first installed recovery/2.0 read-only preparation stopped before any DB
+mutation with `INSTALLED_RUNTIME_REPEATED_BYTE_READ`: its exit fence attempted
+to capture the same protected launch/allocation bytes twice. The reader now
+captures those immutable bytes/epochs once, retains a small typed controller
+observation, and re-observes only actual unit/PID/store/cgroup state at exit.
+It neither adds a cache nor weakens the protected file owner. Actual temporary
+protected-file read-once/late-tamper coverage plus the outcome-reader/contracts:
+42 PASS,18.47s; strict mypy and scoped lint/format passed. Initial filesystem
+fixture permissions were corrected to0700/0600, not relaxed in production.
+Evidence: `/tmp/eom-unpublished-protected-snapshot-20261025-r3.log`.
