@@ -13,6 +13,7 @@ from eom_orchestrator.native_embedding_index_systemd import (
     FixedNativeIndexLauncher,
     NativeIndexLaunchError,
 )
+from eom_workflow.local_embedding_encoding_dispatch import SupportedEmbeddingIntent
 from eom_workflow.local_embedding_request_v2 import SupportedLocalEmbeddingRequest
 
 from eom_workflow_runner.document_embedding_execution import (
@@ -37,8 +38,8 @@ class FixedCpuDocumentEmbeddingExecution:
             raise ValueError("LOCAL_EMBEDDING_CPU_SPACE_INVALID")
         self.launcher.assert_current_runtime()
 
-    def observe(self, native_job_id: str) -> DocumentExecutionState:
-        units = self.launcher.observe(native_job_id.removeprefix("job_"))
+    def observe(self, intent: SupportedEmbeddingIntent) -> DocumentExecutionState:
+        units = self.launcher.observe(intent.native_launch_job_id.removeprefix("job_"))
         if len(units) != 2:
             return DocumentExecutionState.UNCERTAIN
         if all(row.fresh for row in units):

@@ -182,7 +182,10 @@ def execution(
     monkeypatch: pytest.MonkeyPatch,
     request: pytest.FixtureRequest,
 ):
-    service_mode = getattr(request, "param", "operator") == "service"
+    execution_mode = getattr(request, "param", "operator")
+    service_mode = execution_mode == "service"
+    cuda_mode = execution_mode == "cuda"
+    addfinalizer = request.addfinalizer
     command, capture = _fixture(guarded_engine)
     if service_mode:
         _extra_command, extra = _fixture(guarded_engine)
@@ -215,7 +218,7 @@ def execution(
                 ApprovedPastExamItemKnowledgeSourceV3.model_validate(occurrence_template | source)
             )
         capture = replace(capture, entries=tuple(entries), sources=tuple(sources))
-    native = native_fixture()
+    native = native_fixture(device="CUDA" if cuda_mode else "CPU")
     _unused, compiled = scope_fixture()
     profile = native.policy.profiles[0]
     namespace = EmbeddingIndexNamespace.model_validate(
@@ -440,13 +443,30 @@ def execution(
             return encoded.result
 
     launcher = Launcher()
-    executor = CatalogNativeEmbeddingExecutor(
-        owner=owner,
-        publisher=publisher,
-        execution_backend=FixedCpuDocumentEmbeddingExecution(launcher),
-        runtime_profile=profile,
-        source_commit="a" * 40,
-    )
+    gpu = None
+    if cuda_mode:
+        from tests.integration.document_embedding_cuda_setup import make_document_cuda_execution
+
+        gpu = make_document_cuda_execution(
+            source_owner=owner,
+            request=request,
+            plan=plan,
+            profile=profile,
+            resolved=resolved,
+            publisher=publisher,
+            tmp_path=tmp_path,
+            monkeypatch=monkeypatch,
+            finalizer=addfinalizer,
+        )
+        owner, executor = gpu.child_owner, gpu.executor
+    else:
+        executor = CatalogNativeEmbeddingExecutor(
+            owner=owner,
+            publisher=publisher,
+            execution_backend=FixedCpuDocumentEmbeddingExecution(launcher),
+            runtime_profile=profile,
+            source_commit="a" * 40,
+        )
     sessions = publisher.sessions
     with sessions.begin() as session:
         ensure_protocol_version(
@@ -464,7 +484,11 @@ def execution(
                 session,
                 definition=definition,
                 request=request,
-                idempotency_key="synthetic-full-native:" + uuid4().hex,
+                idempotency_key=(
+                    gpu.adapter.workflow_key
+                    if gpu is not None
+                    else "synthetic-full-native:" + uuid4().hex
+                ),
                 actor_type=actor_type,
                 actor_id=actor_id,
                 owner=owner,
@@ -722,6 +746,7 @@ def execution(
         current=current,
         graph_delta=graph_delta,
         refresh_membership=refresh_membership,
+        gpu=gpu,
     )
 
 

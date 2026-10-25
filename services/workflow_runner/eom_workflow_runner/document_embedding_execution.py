@@ -12,7 +12,10 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     IncrementalEmbeddingResult,
 )
 from eom_orchestrator.native_embedding_index_handoff import validate_native_index_original_input
-from eom_workflow.local_embedding_encoding_dispatch import SupportedEmbeddingAssociation
+from eom_workflow.local_embedding_encoding_dispatch import (
+    SupportedEmbeddingAssociation,
+    SupportedEmbeddingIntent,
+)
 from eom_workflow.local_embedding_request_v2 import SupportedLocalEmbeddingRequest
 
 from eom_workflow_runner.local_embedding_execution_port import NativeFencedRunnerTransaction
@@ -59,7 +62,7 @@ class DocumentEmbeddingExecution(Protocol):
 
     def assert_current_runtime(self, request: SupportedLocalEmbeddingRequest) -> None: ...
 
-    def observe(self, native_job_id: str) -> DocumentExecutionState: ...
+    def observe(self, intent: SupportedEmbeddingIntent) -> DocumentExecutionState: ...
 
     def execute(
         self,

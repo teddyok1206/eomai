@@ -1647,3 +1647,78 @@ CUDA_DOCUMENT_DISPATCH_COMPOSITION=PENDING, CANONICAL_SOURCE_BATCH_COMPUTE=NOT_R
 CPU_FALLBACK_EXECUTION=NOT_RUN, GOAL=ACTIVE. 기존 API/Web/QUERY/INDEX/private root
 release와 qualification/실패 기록은 그대로다. 이 commit은 경계 분리 중간 체크포인트이며
 요청된 전체 GPU 완료 체크포인트가 아니다. 후속12+4 리뷰는 아직 시작하지 않았다.
+
+### P2-V — 기존 namespace 단위 DOCUMENT GPU adapter 설계 (2026-10-25)
+
+기존 INDEX Workflow는 하나의 namespace/view를 소유한다. 이 원래 단위를 변경하지 않고
+하나의 canonical parent selection/view와 연결한 CUDA adapter를 공통 executor에 주입한다.
+한 native input의 다수 document rows/microbatches는 기존 finite GPU backend scope에서
+모델 한 번을 재사용한다. QUERY의 여러 독립 문항을 모으는 계약과 자료1건의 여러 view는
+같은 개념이 아니다. 전체 목표의 bulk coverage/연속 자료/다문항 QUERY는 별도로 유지한다.
+
+canonical source/identity는 기존 Catalog owner, source plan, 실제 command lease,
+parent admission/route, child Workflow의 unique key 및 원 encoding launch association이다.
+parent request+child selection에서 도출한 Workflow key를 확인한다. 기존 Workflow equivalence가
+다른 parent의 실행을 반환해도 그 실행을 새 GPU parent에 묶거나 다시 계산하지 않는다.
+관측 port에는 작은 immutable intent를 전달해 원 Workflow 관계를 검사하며 권한을 주지 않는다.
+
+원 parent 한 개/Workflow 한 개/owned input 한 개의 O(1) identity lookup과 source set의 O(n)
+map 비교를 사용한다. 기존 최대1,024 rows/16MiB vectors, original physical deadline을 유지한다.
+readiness는 metadata/runtime 관측이고, 실행 직전과 publication 직전은 실제 owner/source/lease
+fence를 재진입한다. SQL transaction은 GPU 실행 전에 닫는다. canonical batch receipt와 실제
+검증된 child result/read-only vectors를 기존 child publication 경계에 넘기고 공통 예약 완료·
+index 등록을 사용한다. 새 DB/schema/worker wire/dependency/queue는 추가하지 않는다.
+
+단순 대안인 string job ID만으로 READY를 보고하는 것은 다른 parent의 publication 중단 결과를
+재실행할 수 있으므로 배제한다. CPU adapter의 unit 관측은 그대로 두되 intent에서 원 job ID를
+취한다. 실패/permission/hash/계산 불명은 CPU fallback하지 않는다. 같은 살아 있는 application의
+publication 중단 replay는 원 결과만 재사용하며 root를 다시 실행하지 않는다. 새 process에서
+canonical receipt와 남은 원 binary를 복구하는 경계는 추가 검증 전까지 명시적으로 pending이다.
+
+구현: `document_embedding_cuda_execution`은 기존 공통 numerical port의 두 번째 실제 adapter다.
+`document_embedding_batch_driver`는 공식 atomic INDEX/START를 호출하고 원 parent key를 확인한
+뒤, 실제 owner/executor/actor에 묶인 purpose-only 기존 Runner에 claim을 맡긴다. 새 queue나
+별도 worker/scheduler는 없다. broad-role Runner는 실행 전에 거부한다. run_once의 None을
+성공 receipt로 포장하지 않는다. 완료 조회/새 process 복구의 권한 경계는 별도로 유지한다.
+
+소스 회귀/파일·의존성·설치 wheel **193 PASS,99.04초**
+(`/tmp/eom-document-cuda-source-tests-20261025-r1.log`), 최종 driver까지 포함한 cold-import/
+실행 경계 재검사 **48 PASS,33.16초** (`/tmp/eom-document-cuda-driver-tests-20261025-r1.log`).
+변경 source8개 strict mypy와 scoped Ruff lint/format, diff whitespace PASS다.
+
+disposable PostgreSQL 증거는 범위를 나눠 기록한다(중복 suite를 합산하지 않는다).
+
+- CPU/encoding 중복 예약/등록/중단 재전송 + CUDA 자료 + 기존 두 QUERY finite-batch 회귀:
+  **48 PASS,446.68초**, cleanup/exit0 (`/tmp/eom-document-execution-pg-20261025-r4.log`).
+  이는 driver 추가 전 회귀다. QUERY/DOCUMENT가 동일한 synthetic root fixture를 재사용한다.
+- 최종 자료 adapter/공식 START·실제 Runner + 저장4지점 중단·재전송 + 다른 parent 차단 +
+  broad-role Runner 거부: **8 PASS,98.67초**, cleanup/exit0
+  (`/tmp/eom-document-execution-pg-20261025-r6.log`). 이전 command/launch/producer checkpoint
+  prefix가 그대로 유지되고 CPU numerical launcher 호출은0이다.
+- heartbeat1초의 isolated config에서 실제 background-thread renewal transaction의
+  after_commit을 기다린 뒤 계산을 시작했다. 완료와 동일 START replay를 확인한 최종 재검증:
+  **1 PASS,19.36초**, cleanup/exit0 (`/tmp/eom-document-execution-pg-20261025-r7.log`).
+  기본 운영 heartbeat/lease 값은 변경하지 않았다.
+
+개발 실패도 보존했다. r2는 fixture가 read-only identity property를 덮어쓰려 해 setup에서
+실패했다. r3 수정 fixture의6개는 PASS다. r5에서는 기존 CPU 수동-step fixture의 fake owner가
+terminal command에도 live-only lease 검사를 적용해 실제 Runner의 terminal commit에서
+실패했다. fixture에 실제 `NativeCommandMutationFence`와 실제 owner의 mutation fence를
+사용한 r6/r7로 교정했다. production lease/state-machine 규칙은 완화하거나 바꾸지 않았다.
+각 disposable DB는 해당 실행 종료 시 정리했고 기존 운영 실패 기록은 건드리지 않았다.
+
+이 suite의 parent/Workflow/claim/command fence/Artifact/index 등록과 파일 materialization은
+실제 경계다. IAM/source capture와 root/OS/GPU/model leaves는 명시적 synthetic seam이다.
+따라서 **CANONICAL_SOURCE_BATCH_COMPUTE=NOT_RUN**은 여전히 유지한다.
+
+남은 연결 순서: INDEX의 bulk source selection(현재1.0은32 anchors)을 source-side 후속 계약으로
+확장한다. QUERY의32개 제한이나 기존1.0 schema bytes를 바꾸지 않는다. allocation/route/bound의
+기존 opaque parent hashes와 native control wire를 유지할 수 있는지 검증해, 불필요한 CUDA
+수치 SDK/qualification 재발행을 피한다. 이어 service/runtime의 per-request routed composition,
+CPU route의 공식 child 실행·binding, no-numerical child의 명시적 disposition, cold receipt/binary
+복구, paired index 실제 coverage, 수치/처리량/공존 canary와 default/rollback을 닫는다.
+하나의 namespace/view의 대량 rows와 여러 문항 QUERY를 모두 유지하며 목표 범위를 축소하지 않는다.
+
+CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, CUDA_DOCUMENT_ADAPTER_SOURCE=PASS,
+CUDA_DOCUMENT_DRIVER_DISPOSABLE_PG=PASS, LIVE_CANONICAL_GPU_COMPUTE=NOT_RUN,
+CPU_FALLBACK_EXECUTION=NOT_RUN, GOAL=ACTIVE. 이 단계 역시 전체 완료 checkpoint가 아니다.

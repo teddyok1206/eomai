@@ -121,8 +121,9 @@ def test_cpu_liveness_does_not_fabricate_gpu_unit_observations(states, expected)
         SimpleNamespace(fresh=fresh, succeeded=succeeded) for fresh, succeeded in states
     )
     executor = cpu.FixedCpuDocumentEmbeddingExecution(launcher)
-    assert executor.observe("job_" + "a" * 32) is expected
-    launcher.observe.assert_called_once_with("a" * 32)
+    intent = native_fixture().association.intent
+    assert executor.observe(intent) is expected
+    launcher.observe.assert_called_once_with(intent.native_launch_job_id.removeprefix("job_"))
     launcher.run.assert_not_called()
 
 

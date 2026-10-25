@@ -251,7 +251,7 @@ class CatalogEncodingOwnerAdmission:
                 )
                 if observation.state in {"FAILED", "CANCELLED", "SUCCEEDED"}:
                     raise ValueError("terminal native coordinator")
-                state = self.execution_backend.observe(self.execution.intent.native_launch_job_id)
+                state = self.execution_backend.observe(self.execution.intent)
                 if (
                     state is not DocumentExecutionState.NOT_STARTED
                     and state is not DocumentExecutionState.SUCCEEDED
