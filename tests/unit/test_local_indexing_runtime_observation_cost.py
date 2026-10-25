@@ -123,3 +123,63 @@ def test_loaded_module_aliases_do_not_repeat_physical_origin_checks(monkeypatch,
     runtime._loaded_code(runtime._ProtectedFiles(1000), Path("/opt/owner/site-packages"), set())
     assert set(calls.values()) == {2}
     assert set(calls) == {path, *path.parents}
+
+
+@pytest.mark.parametrize("count", (1, 512, 4096))
+def test_parent_path_construction_is_linear_in_files_and_distinct_parents(
+    monkeypatch, filesystem, count
+):
+    calls, values = filesystem
+    paths = tuple(Path("/opt/eom/runtime/pkg") / f"member-{index}.py" for index in range(count))
+    parents = set().union(*(path.parents for path in paths))
+    values.update((parent, metadata(directory=True)) for parent in parents)
+    constructed = 0
+    actual_parent = Path.parent.fget
+
+    def parent(path):
+        nonlocal constructed
+        constructed += 1
+        return actual_parent(path)
+
+    monkeypatch.setattr(Path, "parent", property(parent))
+    files = runtime._ProtectedFiles(1000)
+    files.ancestors_many(paths)
+    assert constructed == count + len(parents)
+    assert calls == Counter({path: 2 for path in parents})
+    # No filesystem result is retained: the same O(n+p) path walk must still
+    # observe every parent again, including a newly substituted ancestor.
+    values[Path("/opt/eom")].st_uid = 12345
+    with pytest.raises(runtime.IndexingRuntimeAdmissionError):
+        files.ancestors_many(paths)
+
+
+@pytest.mark.parametrize(
+    "name,origin,allowed",
+    (
+        ("eom_example", "/opt/owner/site-packages/eom_example/a.py", True),
+        ("eom_example", "/opt/owner/site-packages/eom_example/unlisted.py", False),
+        ("eom_example", "/opt/owner/site-packages-extra/eom_example/a.py", False),
+        ("external", "/opt/eom/runtime/lib/a.py", True),
+        ("external", "/opt/eom/runtime-extra/lib/a.py", False),
+        ("external", "/opt/eom/runtime/../unsafe.py", False),
+        ("eom_gpu_lease", "/opt/eom/runtime/lib/a.py", True),
+        ("eom_example", "/opt/eom/runtime/lib/a.py", False),
+    ),
+)
+def test_module_origin_uses_component_boundaries_not_textual_prefixes(
+    monkeypatch, filesystem, name, origin, allowed
+):
+    _calls, values = filesystem
+    path = Path(origin)
+    values[path] = metadata()
+    values.update((parent, metadata(directory=True)) for parent in path.parents)
+    monkeypatch.setattr(runtime, "_PREFIX", Path("/opt/eom/runtime"))
+    monkeypatch.setattr(
+        runtime, "sys", SimpleNamespace(modules={name: SimpleNamespace(__file__=origin)})
+    )
+    files = runtime._ProtectedFiles(1000)
+    if allowed:
+        runtime._loaded_code(files, Path("/opt/owner/site-packages"), {"eom_example/a.py"})
+    else:
+        with pytest.raises(runtime.IndexingRuntimeAdmissionError):
+            runtime._loaded_code(files, Path("/opt/owner/site-packages"), {"eom_example/a.py"})

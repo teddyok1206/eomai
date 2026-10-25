@@ -741,6 +741,71 @@ DB fixtures/저장 actor ID를 운영 권한으로 대체하지 않는다. old C
 고정한 뒤 실제 처리량/공존/배포를 닫는다. 사용자 후속 정적 리뷰12+4는 전체 GPU 완료 commit과
 운영 release checkpoint를 확보한 뒤에만 대조하며 아직 열지 않았다.
 
+### P2-AE — 실제 source-owner canary와 반복 OS 관측 비용
+
+2026-10-25 05:26–05:31 UTC, 보호된 `23097eca…` metadata SDK와 기존 고정 controller/
+numerical SDK를 사용해 configuration5를 실제 owner unit에 한시적으로 연결했다. 공식
+Identity register/activate와 Catalog policy publication 및 Orchestrator control Artifact
+publication만 사용했다. DB 행 직접 변경, source policy 확대, worker 권한 변경은 없다.
+API/Web/QUERY와 기본 CPU 검색은 변경하지 않았다. 범위는 기존 legacy CONTENT_ONLY
+namespace, maximum_targets=1이다. 다른 namespace의 기존 CPU command2건은 보존했으며,
+전체 DB queue가 비었다고 판정하지 않았다. 원 owner process를 정지하고 live numerical
+unit이 없는 상태에서만 한시적으로 전환했다.
+
+실제 same-process runtime/Identity/source grant composition과 원 GPU allocation/READY/
+child Workflow/GRANT 연결은 진행됐지만 **완료 PASS가 아니다**. owner invocation
+`1ba02104b49e4e65b4e8ca4b772a79d6`은 05:31:11.779120 UTC
+`EMBEDDING_BENCHMARK_CHANNEL_EXPIRED`로 종료했다. 원 allocation
+`embeddingallocation_8ff614cec2cc42729ed836f843960abf`의 보호된 ack 기록은
+`EMBEDDING_GPU_BATCH_GRANT_SENT_NOT_COMPLETED`, retirement의 original_outcome은
+**FAILED**다. original result/vector 파일은0 bytes이고 canonical numerical receipt/index
+성공은 없다. 모델 초기화 횟수/실제 추론 횟수도 성공 receipt로 확인되지 않았으므로0회 또는
+성공으로 단정하지 않는다. 이 상태를 precompute BUSY/CPU fallback으로 재해석하지 않는다.
+원 Workflow `workflow_744e0f7ba63744098fc9244f10040ea1`과 command의 미완료/lease 상태,
+allocation·root 실패·출력 파일은 보존했다. 새 identity로 같은 실패 작업을 재생성하지 않는다.
+
+05:31:15.046825 UTC 원 unit retirement를 확인했다. MainPID=0, FDSTORE=0이고, actual
+activating/deactivating/running numerical unit이 없는 뒤에만 공식 Identity activation으로
+이전 reference를 복귀하고 이전 unit/runtime/owner 파일을 복원했다. current revision은
+`localindexservicerev_7819ddd0edc6412dac90393f30ae82ad`, latest는 canary successor22,
+resource_version=49다. current와 latest를 혼동하지 않는다. 이전 CPU owner/API/Web/
+runner/QUERY owner5개 모두 active다. canary는 isolated test 결과가 아니라 실제 운영 실행
+실패 기록이며, 실패를 성공으로 바꾸거나 아직 미완료인 GPU 목표의 checkpoint로 쓰지 않는다.
+
+측정 근거:
+
+- canary Catalog read stage63회: ADMIT_CANDIDATES53.691s, PREFETCH_PROVENANCE13.466s,
+  SOLUTION_PROFILES15.811s, MATERIALIZE_ENTRIES5.495s, LOCK_POPULATION0.591s다.
+  이 합은 전체 시간/OS fence/수치 실행시간과 동일하지 않다.
+- 설치 SDK의 실제 보호된 file metadata2627개에 대한 별도 profiling은 부모 Path 재구성과
+  module origin 상대경로 계산이 반복 OS 관측의 상당 부분임을 보였다. 실제 서비스 capture가
+  아닌 **알고리즘 benchmark**로 구분한다. private benchmark driver의 module-table seam을
+  운영 admission이나 권한 증거로 쓰지 않았다.
+- 기존 `ancestors_many`의 경계 안에서, 이미 수집한 부모가 나오면 그 위 chain도 수집됐다는
+  성질을 사용한다. Path 생성은 O(files×depth) 대신 O(files+distinct parents)다. 매 fence의
+  모든 부모/파일 lstat, owner/mode/symlink/epoch 검증은 그대로이며 권한·epoch 캐시는 없다.
+  module origin도 문자열 startswith가 아닌 Path component tuple로 같은 namespace/prefix
+  경계를 검사한다. 새 cache/framework/dependency/schema/DB migration은 없다.
+- 실제 metadata2594개/20회씩 교차 실행한 전체 file/module 관측 알고리즘 benchmark의 median은
+  설치본119.512ms → 후보30.547ms, **3.912배**다. 동일 observed epochs를 확인했다. 이는
+  전체 문항 검색이나 GPU 처리량이3.912배 빨라졌다는 증거가 아니다.
+- runtime observation/admission/owner composition focused99 PASS(3.13s), root·module prefix
+  혼동/미등록 origin/상대경로/부모 substitution 부정 검사 포함. Ruff/format, strict mypy
+  runtime1모듈, diff 검사 PASS다. 이 수정의 실제 canary 재실행/운영 배포는 아직 하지 않았다.
+
+원 로그는 `/tmp/eom-gpu-canary-observation-20261025-r2.log`,
+`/tmp/eom-gpu-canary-root-terminal-20261025-r2.json`,
+`/tmp/eom-gpu-canary-after-rollback-20261025.json`,
+`/tmp/eom-gpu-canary-runtime-path-tests-20261025-r2.log`,
+`/tmp/eom-gpu-canary-runtime-path-benchmark-20261025-r2.log`다. 첫 quiescence gate 거부와
+diagnostic invocation 실패도 지우지 않았다. 다음은 이 최소 비용 수정을 installed metadata
+candidate로 검증하고, 원 FAILED/미완료 native history의 supported recovery 경계를 확인하는
+일이다. 재할당 불명 상태에서 새 GPU root를 제출하지 않는다. full matched indexes/batch QUERY/
+공존/throughput/default/rollback gate와 사용자 후속 정적 리뷰는 여전히 미완료다.
+
+GPU_GOAL=ACTIVE, CANARY=FAILED_EXPIRED, CURRENT_DEFAULT=CPU,
+PREVIOUS_COMPATIBLE_OWNER=RESTORED, GPU_PREFERRED_ACTIVE=NO.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존

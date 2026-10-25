@@ -135,7 +135,18 @@ class _ProtectedFiles:
         for path in paths:
             if not path.is_absolute() or ".." in path.parts:
                 raise _unavailable()
-            for parent in reversed(path.parents):
+            # Once a parent is present, its entire chain is already present.
+            # Avoid constructing every shared ancestor again for every file.
+            # This is O(files + distinct parents), with no permission/epoch cache.
+            chain = []
+            parent = path.parent
+            while parent not in parents:
+                chain.append(parent)
+                higher = parent.parent
+                if higher == parent:
+                    break
+                parent = higher
+            for parent in reversed(chain):
                 parents[parent] = None
         for parent in parents:
             # Ancestor directory contents need not be immutable: /etc and /opt
@@ -316,6 +327,7 @@ def _closed_namespaces(
 
 def _loaded_code(files: _ProtectedFiles, site: Path, members: set[str]) -> None:
     external: dict[Path, None] = {}
+    site_parts, prefix_parts = site.parts, _PREFIX.parts
     for name, module in tuple(sys.modules.items()):
         if module is None:
             continue
@@ -325,7 +337,10 @@ def _loaded_code(files: _ProtectedFiles, site: Path, members: set[str]) -> None:
                 raise _unavailable()
             continue
         path = Path(source)
-        if path.is_relative_to(site) and path.relative_to(site).as_posix() in members:
+        parts = path.parts
+        # Module origins are lexical, component-wise identities. Avoid building
+        # parent/relative Path objects for every module on every current fence.
+        if parts[: len(site_parts)] == site_parts and "/".join(parts[len(site_parts) :]) in members:
             continue
         if (
             name.startswith("eom_")
@@ -333,7 +348,7 @@ def _loaded_code(files: _ProtectedFiles, site: Path, members: set[str]) -> None:
             and not name.startswith("eom_gpu_lease.")
         ):
             raise _unavailable()
-        if not path.is_relative_to(_PREFIX):
+        if parts[: len(prefix_parts)] != prefix_parts:
             raise _unavailable()
         external[path] = None
     files.ancestors_many(tuple(external))
