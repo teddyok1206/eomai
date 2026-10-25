@@ -1,6 +1,6 @@
 # GPU-preferred embedding: live acceptance ledger
 
-As of2026-10-25 19:37 UTC. **GOAL=ACTIVE; completion is not proven.**
+As of2026-10-25 19:55 UTC. **GOAL=ACTIVE; completion is not proven.**
 This small ledger preserves the whole approved scope while background catch-up
 continues. Source tests, installed composition and actual execution are separate
 evidence. It is not a new runtime registry or permission grant.
@@ -35,7 +35,7 @@ operating release set: NOT_SET.** README cleanup `4e9c962e` is not repeated.
 | Bounded model lifetime | Actual finite native invocation and the installed single-backend-scope implementation support the DOCUMENT cohort; no direct model-construction counter was measured. Multi-child QUERY reuse remains live-pending. |
 | GPU return | Those three exact numerical invocations succeeded and have canonical retirement receipts; process0/retainedFD0. This is per-cohort closure, not a claim that no newer GPU job is running. |
 | Full CPU/CUDA per-view pair closure | **PENDING**: require the same complete source/profile/input-hash targets through the actual source owner, not equal counts or a smaller intersection. |
-| Continuous CPU standby coverage | Original64-producer failure was officially recovered without rewriting history. The actual current mixed CPU CONCRETE successor completed8 producers and registered465 bindings; the remaining56 and legacy counterpart still need ordinary catch-up. This is actual successor success, not full standby coverage. |
+| Continuous CPU standby coverage | Original64-producer failure was officially recovered without rewriting history. Actual current mixed and legacy CPU CONCRETE successors have COMPLETED; both projections now have465 bindings (targets521 and520 respectively). Ordinary catch-up remains necessary; this is not full standby coverage. |
 | Finite multi-item GPU QUERY | **PENDING**: actual authenticated request3, ordered child completion, original pins and result reads after pair readiness. |
 | Resource-only CPU fallback | **PENDING live**: actual shared-kernel pre-init BUSY, exact CPU pair, no fallback on authority/hash/unknown execution. Source tests alone do not close it. |
 | Original request/device replay | Original replay source/PG evidence preserved. Candidate07 has installed no-forward composition PASS43.839s with actual API07; no authentication/model/claim/selection. Live routed default/replay is still pending. |
@@ -265,6 +265,81 @@ the separate original refusal/input/preflight logs and protected image lifetime
 receipts. Private operator fixture source SHA
 `cd9838a7bf417de56f04d2140693cc17405d0e3bd9288975c5e8f210403f0fb6`;
 its installed copy exactly matches the reviewed/formatted staging source.
+
+### DOCUMENT timing and installed finite-model scope
+
+The following observations reuse existing successful8-row numerical runs and
+the19:25 captured file metadata; **new model submissions=0**. Each binary is
+32768 bytes (8×1024 FLOAT32), with the exact original successful retirement
+already recorded above. The matching application Workflows are COMPLETED, not
+merely successful planning Jobs.
+
+| Original numerical invocation | Input grant → vector file write |
+|---|---:|
+| `d3eeba4afb3c418d80982da1585eb65e` | 126.956782s |
+| `1397a7e3b8884c978af0cc7a0ae33e99` | 121.219813s |
+| `7fb114ad47a045969256055da4d317e6` | 127.550655s |
+
+This is about0.0627–0.0660 rows/s **inside that particular boundary**. It includes
+model load, source/control fences, encoding and serialization. It excludes
+earlier preparation and later canonical publication. It is neither warm-only
+forward throughput nor whole-service/UI latency, and does not replace the
+pending actual multi-child QUERY measurement or the historical CPU/CUDA comparison.
+The existing8-target selection and original deadlines remain unchanged.
+
+A read-only installed-source audit also linked the actual GPU worker to the
+granted descriptor executor, the one backend scope surrounding the child loop,
+the factory's one model construction and its `finally` close. These exact current
+module bytes match the installed qualified CUDA prefix, without importing a model
+or modifying/requalifying that numerical environment:
+
+| Module | Matching source/installed SHA-256 |
+|---|---|
+| `embedding_gpu_batch_worker.py` | `71fba402dbd7140d630e47fce835b4dd93bfee79a6171a286c2d785ae18e75a3` |
+| `embedding_native_stdio.py` | `2668c66886fc730ace6d95f070e7c6ba609f9f8cd2685744630bb05e0bad46e5` |
+| `embedding_work_batch_execution.py` | `e98f3d0f872d9ed804382637bd3cc7d04a4e685617846995920eea4efd69c48d` |
+| `embedding_native_cuda_backend.py` | `03effaea668ecf3fe4bfdc501fabba342a134d307410c7215e7ce51856658ac5` |
+| `embedding_native_factory.py` | `923bdc7b07702a1b42dcf59e1893426fdc749599fe05758dfb26b48ee90087c4` |
+| `embedding_offline_backend.py` | `f667e54da9ebf74312ef4d93b6c8f44760c49bb6012dc00b9b47799ff54f500b` |
+
+This source-linked real-cohort evidence supports finite model reuse and teardown;
+it is not a separately instrumented live model-constructor counter or an actual
+multi-child QUERY acceptance. Physical retirement remains independent evidence.
+No cache across authorization transactions, weakened source fence or additional
+runtime framework was introduced while waiting for full pair coverage.
+
+###19:55 regular read-only checkpoint
+
+Both technical inspections completed EXIT0: phase
+`/tmp/eom-current-index-phase-20261025-1955.json` and counts
+`/tmp/eom-current-index-pair-metadata-20261025-r11.json` (19:55:29 UTC).
+Mixed CPU521/465/521 versus CUDA81/165/56; legacy ALL CPU520/465/520 versus
+CUDA89/165/56, in CONTENT/CONCRETE/METADATA order. These remain partial counts,
+not canonical per-view pair validation or permission to activate routed QUERY.
+
+Legacy CPU CONCRETE Workflow `workflow_1213384ff2f74877818ef2a470c582bf` is now
+COMPLETED, native Job `job_a37b14f2c6cd4899a71bd084cdbd6382` SUCCEEDED. Its
+association has **one** newly owned successful producer; do not call the eight
+newly bound legacy index members eight additional model generations. Previously
+produced canonical encodings are reused through the existing owner.
+
+Legacy CONTENT Workflow `workflow_f1b57881465e437ca9d79fa8648938e3` completed
+eight actual owned CUDA producers. Its original numerical invocation
+`e2e4e3adb0a943a0a7c0024aa0296e9e` retired SUCCEEDED at19:27:37, SHA
+`711d949e9a0997dde232253e15f76ebb2cbc583a74968758a6a94f6d94195991`;
+original root invocation ended naturally at19:28:02. Mixed CONTENT Workflow
+`workflow_870bb2ac551147a58feb1824bb1e11d5` has a PROCESSING generation1 command
+in the snapshot, not a completed new numerical result.
+
+The INDEX handle remains PID453623/invocation`297d8b…`, active/running. The same
+CPU-default QUERY handle remains active. No new authentication, model submission,
+service restart, policy/configuration change or failure rewrite was performed in
+this checkpoint. Full pairs, actual multi-child QUERY/fallback/default/rollback
+remain pending. Next routine metadata observation is approximately20:25 UTC;
+do not turn this normal verified wait into unrelated development or frequent
+corpus polling. The19:38 milestone Slack report
+`devreport_6322ff06eab842fcbcce8c943629a655` was SENT; no routine progress report
+is sent for this partial-count observation.
 
 ### Separate observation, not an additional GPU implementation stream
 
