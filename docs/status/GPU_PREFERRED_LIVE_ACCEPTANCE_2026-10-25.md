@@ -1,6 +1,6 @@
 # GPU-preferred embedding: live acceptance ledger
 
-As of2026-10-25 18:26 UTC. **GOAL=ACTIVE; completion is not proven.**
+As of2026-10-25 18:55 UTC. **GOAL=ACTIVE; completion is not proven.**
 This small ledger preserves the whole approved scope while background catch-up
 continues. Source tests, installed composition and actual execution are separate
 evidence. It is not a new runtime registry or permission grant.
@@ -132,6 +132,67 @@ groups0/caps0, public+mixed routed factories and unchanged private CPU factory.
 No operator capture, source query, numerical work, claim, activation or selection
 occurred. The actual active INDEX and CPU QUERY configuration bytes were fenced
 before/after. This replaces neither full pair nor authenticated live canary gates.
+
+### Continued execution and the existing multi-item acceptance entry
+
+At18:50 UTC, the closed timing/event channel of the same INDEX invocation
+`297d8b…` records additional BATCH_COMPLETED observations: METADATA Workflow
+`workflow_2c6b1fe8bbef4b288724460de6286dd3` at18:31:47, CONTENT Workflow
+`workflow_0d6d6039270140e6ac535a53196f8199` at18:39:28, and CONCRETE Workflow
+`workflow_f54beff222a4436a96ed86fd975e8497` at18:47:42. These are actual
+application completion events, not new model submissions or independent
+retirement/pair checks. Do not reuse the older18:25 counts as current coverage.
+
+The18:55 read-only observation additionally confirms legacy METADATA Workflow
+`workflow_52b73c27c3b549acbb0df96857819ca1` COMPLETED. These legacy publication
+Workflows can reuse canonical encodings; do **not** count each as a fresh GPU
+forward. The original mixed METADATA8-row numerical invocation
+`1397a7e3b8884c978af0cc7a0ae33e99` has a successful protected retirement at18:23:36,
+SHA `2249db04b6ca825324ed7a9a578a05e3ffdff9c7b96fac7ccc06fd5bdda35b99`,
+with the original root invocation's process0/retainedFD0. Read evidence:
+`/tmp/eom-current-index-phase-20261025-1855.json`, status EXIT0.
+
+The18:54:43 technical audit, `/tmp/eom-current-index-pair-metadata-20261025-r9.json`
+(EXIT0), gives mixed CUDA81/165/48 and legacy ALL CUDA81/165/48 in
+CONTENT/CONCRETE/METADATA order. CPU remains mixed521/457/521 and legacy
+ALL520/457/520. Both newly queued CPU CONCRETE Workflows are still REQUESTED,
+PENDING generation0, no steps/claim: mixed `workflow_30d9d547127e4907ac64888d2032f95a`
+and legacy `workflow_1213384ff2f74877818ef2a470c582bf`. This is explicitly neither
+CPU successor completion nor full pair readiness. The same INDEX invocation
+remains active; no original Workflow, current physical work or failed history was
+restarted or rewritten for this observation.
+
+The same read-only observation contains561–562 completed stage measurements per
+stage since18:00: population locking, provenance prefetch, candidate admission,
+solution profiles and entry materialization. Repeated canonical source work is
+therefore part of the observed cost. Summed stage durations can overlap and are
+**not** isolated numerical-forward timings or an end-to-end speedup measurement.
+No source/permission/hash check was removed and no running batch was restarted
+to obtain this observation.
+
+Source review confirms that the installed public preparation route already
+accepts request3: `POST /api/v1/knowledge/reference-queries/preparation` → existing
+HTTP application → authenticated Unix transport → routed preparation owner.
+Its transport limit is **16** ordered distinct source revisions; the underlying
+parent selection's32-anchor capacity does not enlarge the HTTP contract. No new
+bulk endpoint, operator impersonation or parallel execution framework is needed.
+The existing `test_reference_query_prepare_v3_contracts.py` and
+`test_reference_query_prepare_v3_transport.py` suites were rerun together:
+**45 PASS,8.54s**, `/tmp/eom-query3-http-readiness-20261025-r1.log`.
+This covers the real local HTTP/socket carrier with explicitly synthetic
+Identity/source/application leaves, not actual HTTPS/GPU acceptance. One existing
+Starlette/httpx deprecation warning is retained; no dependency was changed.
+
+After full canonical pair readiness, the remaining live acceptance uses that
+existing route with one original request3 and exact same-key re-observation,
+then each returned child's canonical similarity-context read. Record ordered
+children, original preparation/device/Graph/policy/index pointers and output
+hashes. Unknown HTTP outcome does not authorize a new key. Test genuine
+pre-execution resource BUSY→CPU separately from authority/hash failures, and
+record real image execution and resource return separately from a mutex-only
+probe. Keep the actual private-chat CPU configuration unchanged. Stage these
+checks before requesting a fresh operator session; do not lengthen freshness
+limits, retain passwords or pretend that authentication has occurred.
 
 ### Separate observation, not an additional GPU implementation stream
 
