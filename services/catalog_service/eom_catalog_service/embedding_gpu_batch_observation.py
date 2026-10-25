@@ -68,7 +68,7 @@ from eom_catalog_service.embedding_runtime_process_identity import (
 from eom_catalog_service.gpu_unit_policy_observation import observe_embedding_gpu_batch_unit_policy
 
 _PREFIX = Path("/opt/eom/conda/envs/eom-embedding-cuda")
-_SERVICE_SHA = "sha256:23b79d81201e0fbda1eae6f6b6ffbddbc2545762229dfb654d8c5d331797c41f"
+_SERVICE_SHA = "sha256:1357002595b4ac5bca8460f02f75833cce5904db8dc75f70548daf1b205a7000"
 _SOCKET_SHA = "sha256:77be677e8333c36b2b11b7542c2eed6be4421d9a927af0aa5a53f76b0cff2bfb"
 _ENTRY_SHA = "sha256:da1c1ef262ff2a52adfdd0b9dc726f1cc6df31c1aef2d51478a54e5f6edd3909"
 _ENTRY_MEMBER = "lib/python3.12/site-packages/eom_catalog_service/embedding_gpu_batch_entry.py"

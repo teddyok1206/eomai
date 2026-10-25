@@ -6,7 +6,10 @@ import time
 from dataclasses import dataclass
 from uuid import uuid4
 
-from eom_catalog_contracts.embedding_gpu_control import EmbeddingGpuAllocationRequest
+from eom_catalog_contracts.embedding_gpu_control import (
+    EmbeddingGpuAllocationRequest,
+    embedding_gpu_allocation_window_seconds,
+)
 from eom_catalog_contracts.embedding_work_batch import EmbeddingWorkBatchScope
 from eom_catalog_contracts.inference_transfer_experiment import StagedExperimentEntry
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
@@ -220,7 +223,10 @@ def prepare_document_embedding_parent(
         configuration=backend.configuration.model_dump(mode="json"),
         receipt_raw_sha256=backend.receipt_raw_sha256,
         expires_monotonic_ns=time.monotonic_ns()
-        + cuda.runtime_profile.resource_profile.timeout_seconds * 10**9,
+        + embedding_gpu_allocation_window_seconds(
+            cuda.runtime_profile.resource_profile.timeout_seconds
+        )
+        * 10**9,
     )
     control = EmbeddingGpuAllocationRequest.model_validate(
         body | {"message_sha256": content_sha256(body)}

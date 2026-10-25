@@ -4,9 +4,11 @@ import json
 from types import SimpleNamespace
 
 import pytest
+from eom_catalog_contracts.embedding_gpu_control import embedding_gpu_allocation_window_seconds
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_orchestrator.local_embedding_control_artifacts import SOURCE_PLAN_ARTIFACT_TYPE
 from eom_workflow.local_embedding_source_plan import parse_local_embedding_source_plan
+from eom_workflow_runner import document_embedding_parent_preparation as parent_preparation
 from eom_workflow_runner import local_embedding_service_reconciliation as preparation
 from eom_workflow_runner.document_embedding_parent_preparation import (
     prepare_document_embedding_parent,
@@ -15,6 +17,23 @@ from eom_workflow_runner.document_embedding_parent_preparation import (
 from tests.unit.document_embedding_parent_fixtures import parent_case as parent_case
 from tests.unit.test_local_indexing_routed_sources import routed as routed
 from tests.unit.test_local_indexing_routed_sources import routed_publisher as routed_publisher
+
+
+def test_new_parent_allocation_has_control_allowance_not_a_larger_numeric_profile(
+    parent_case, monkeypatch
+):
+    now = 10**12
+    monkeypatch.setattr(parent_preparation, "time", SimpleNamespace(monotonic_ns=lambda: now))
+    value = parent_case
+    parent = prepare_document_embedding_parent(
+        value.pair, value.request, value.sources.configuration
+    )
+    numeric = value.pair.cuda.runtime_profile.resource_profile.timeout_seconds
+    assert (
+        parent.allocation.control_request.expires_monotonic_ns
+        == now + embedding_gpu_allocation_window_seconds(numeric) * 10**9
+    )
+    assert value.request.resource_profile.timeout_seconds == numeric
 
 
 def test_same_original_request_reuses_parent_and_selection_but_not_an_allocation_nonce(parent_case):

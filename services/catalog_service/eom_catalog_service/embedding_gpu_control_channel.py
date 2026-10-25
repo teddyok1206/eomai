@@ -43,7 +43,12 @@ from eom_catalog_contracts.embedding_work_batch_result import (
 )
 from eom_identifiers import content_sha256, sha256_bytes
 
-from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer, PeerFence, _Frames
+from eom_catalog_service.embedding_benchmark_channel import (
+    BenchmarkUnixPeer,
+    FrameLifetimeProfile,
+    PeerFence,
+    _Frames,
+)
 
 type Side = Literal["ROOT", "WORKER"]
 
@@ -129,6 +134,7 @@ class EmbeddingGpuControlChannel:
                 expected_peer,
                 fenced,
                 checked.expires_monotonic_ns,
+                lifetime_profile=FrameLifetimeProfile.EMBEDDING_ALLOCATION,
                 expected_sender=expected_peer if expected_sender is None else expected_sender,
             )
         except BaseException:

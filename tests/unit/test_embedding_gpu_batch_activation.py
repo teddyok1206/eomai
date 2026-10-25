@@ -75,6 +75,38 @@ def test_original_root_request_and_busy_cross_real_accepted_socket_without_ownin
     assert not server.get_inheritable()
 
 
+@pytest.mark.parametrize("seconds", (180, 420))
+def test_legacy_and_separate_control_allowance_cross_same_original_activation_fd(listener, seconds):
+    server, client, peer, _case = listener
+    case = control_case(expires_ns=time.monotonic_ns() + seconds * 10**9)
+    native = capture((server, client, peer, case))
+    root = EmbeddingGpuControlChannel(
+        client,
+        case[0],
+        side="ROOT",
+        expected_peer=peer,
+        expected_sender=peer,
+        peer_fence=lambda actual: None if actual == peer else pytest.fail("peer changed"),
+    )
+    try:
+        root.send_request()
+        native.receive_request()
+    finally:
+        root.close()
+        native.close()
+
+
+def test_activation_rejects_overlong_window_before_accepting_socket(listener):
+    server, _client, peer, _case = listener
+    case = control_case(expires_ns=time.monotonic_ns() + 421 * 10**9)
+    with pytest.raises(ValueError):
+        activation.capture_embedding_gpu_batch_worker_channel(
+            case[0],
+            activation_fd=server.fileno(),
+            expected_root_pid=peer.pid,
+        )
+
+
 @pytest.mark.parametrize(
     "fault",
     ["blocking", "passcred", "inheritable", "creator", "path", "root_peer", "not_listening"],

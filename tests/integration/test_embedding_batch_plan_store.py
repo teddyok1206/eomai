@@ -106,6 +106,49 @@ def test_new_bulk_version_cannot_fork_or_replace_an_existing_logical_batch(guard
         )
 
 
+def test_concurrent_larger_window_candidates_keep_original_allocation_and_expiry(planned):
+    with Session(planned.engine) as session, session.begin():
+        original, created = planned.store.allocate(session, planned.allocation)
+        assert created
+    candidates = []
+    for _ in range(2):
+        control = seal(
+            planned.allocation.control_request.model_dump(mode="json")
+            | {
+                "allocation_attempt_id": "embeddingallocation_" + uuid4().hex,
+                "expires_monotonic_ns": planned.allocation.control_request.expires_monotonic_ns
+                + 240 * 10**9,
+            },
+            "message_sha256",
+        )
+        candidates.append(
+            EmbeddingBatchAllocation.model_validate(
+                seal(
+                    planned.allocation.model_dump(mode="json") | {"control_request": control},
+                    "record_sha256",
+                )
+            )
+        )
+    barrier = Barrier(2)
+
+    def replay(candidate):
+        with Session(planned.engine) as session, session.begin():
+            barrier.wait(timeout=10)
+            return planned.store.allocate(session, candidate)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(replay, candidate) for candidate in candidates]
+        for future in futures:
+            observed, created = future.result(timeout=30)
+            assert not created and observed == original
+            assert (
+                observed.allocation.control_request.expires_monotonic_ns
+                == planned.allocation.control_request.expires_monotonic_ns
+            )
+    with Session(planned.engine) as session, session.begin():
+        assert planned.store.read(session) == original
+
+
 def test_two_controllers_reserve_one_original_allocation_and_only_one_dispatch_owner(planned):
     body = planned.allocation.model_dump(mode="json")
     body["control_request"] = seal(

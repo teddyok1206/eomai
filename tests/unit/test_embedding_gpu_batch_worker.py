@@ -33,6 +33,14 @@ def ports(monkeypatch, cuda_descriptors):
     )
 
     events, state = [], {"busy": False, "retention_failure": False}
+
+    # These tests run synthetic worker ports in threads of the pytest process.
+    # Real process-default timer/termination is tested in isolated child processes.
+    @contextmanager
+    def synthetic_compute_deadline(_seconds):
+        yield
+
+    monkeypatch.setattr(worker, "_hard_compute_deadline", synthetic_compute_deadline)
     batch, backend, scope, resources, life, descriptors = cuda_descriptors
     lease = object()
 

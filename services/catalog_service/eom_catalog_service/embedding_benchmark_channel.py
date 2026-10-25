@@ -15,6 +15,7 @@ import time
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
+from enum import Enum
 from typing import Self
 
 from eom_catalog_contracts.embedding_device_benchmark import (
@@ -35,6 +36,7 @@ from eom_catalog_contracts.embedding_device_benchmark import (
     validate_benchmark_local_resources,
     validate_benchmark_resource_finalization,
 )
+from eom_catalog_contracts.embedding_gpu_control import MAX_EMBEDDING_GPU_ALLOCATION_SECONDS
 from eom_identifiers import content_sha256
 
 _LENGTH = struct.Struct("!I")
@@ -72,6 +74,13 @@ ContinuationFence = Callable[[BenchmarkCheckpoint], None]
 ResourceFinalizer = Callable[[BenchmarkResourceEvidence], BenchmarkResourceEvidence]
 
 
+class FrameLifetimeProfile(Enum):
+    """Trusted transport composition, not a model-supplied execution permission."""
+
+    BENCHMARK = "BENCHMARK"
+    EMBEDDING_ALLOCATION = "EMBEDDING_ALLOCATION"
+
+
 class _Frames:
     def __init__(
         self,
@@ -84,6 +93,7 @@ class _Frames:
         expected_sender: BenchmarkUnixPeer | None = None,
         maximum_lifetime_seconds: int | None = None,
         policy: BenchmarkExecutionPolicy | None = None,
+        lifetime_profile: FrameLifetimeProfile = FrameLifetimeProfile.BENCHMARK,
     ) -> None:
         self.connection = connection
         self.peer = expected_peer
@@ -94,7 +104,17 @@ class _Frames:
         self.failed = False
         self.closed = False
         try:
-            seconds = 180 if policy is None else benchmark_timeout_seconds(policy)
+            allowed_lifetimes: tuple[int, ...]
+            if lifetime_profile is FrameLifetimeProfile.EMBEDDING_ALLOCATION:
+                if policy is not None or maximum_lifetime_seconds is not None:
+                    raise BenchmarkChannelError("EMBEDDING_BENCHMARK_CHANNEL_INVALID")
+                seconds = MAX_EMBEDDING_GPU_ALLOCATION_SECONDS
+                allowed_lifetimes = (seconds,)
+            elif lifetime_profile is FrameLifetimeProfile.BENCHMARK:
+                seconds = 180 if policy is None else benchmark_timeout_seconds(policy)
+                allowed_lifetimes = (seconds, seconds + 30)
+            else:
+                raise BenchmarkChannelError("EMBEDDING_BENCHMARK_CHANNEL_INVALID")
             if maximum_lifetime_seconds is None:
                 maximum_lifetime_seconds = seconds
             now = time.monotonic_ns()
@@ -104,7 +124,7 @@ class _Frames:
                 or not callable(peer_fence)
                 or type(expires_ns) is not int
                 or type(maximum_lifetime_seconds) is not int
-                or maximum_lifetime_seconds not in (seconds, seconds + 30)
+                or maximum_lifetime_seconds not in allowed_lifetimes
                 or not now < expires_ns <= now + maximum_lifetime_seconds * 10**9
                 or (wait_observer is not None and not callable(wait_observer))
                 or (expected_sender is not None and type(expected_sender) is not BenchmarkUnixPeer)

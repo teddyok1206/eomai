@@ -139,7 +139,7 @@ def test_native_unit_keeps_late_bound_input_root_metadata_and_no_worker_path_acc
         "RemainAfterExit=yes",
         "NotifyAccess=main",
         "FileDescriptorStorePreserve=yes",
-        "TimeoutStartSec=180",
+        "TimeoutStartSec=480",
         "Restart=no",
         "KillMode=control-group",
         "PrivateNetwork=yes",

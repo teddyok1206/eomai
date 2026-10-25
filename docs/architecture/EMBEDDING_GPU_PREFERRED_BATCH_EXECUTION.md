@@ -819,6 +819,99 @@ runtime pin을 이 후보로 대체하지 않았고, 운영 unit/identity/grant/
 `/tmp/eom-gpu-runtime-cost-owner-stage-20261025.log`,
 `/tmp/eom-gpu-runtime-cost-installed-import-20261025.log`다.
 
+### P2-AF — allocation 전체 기한과 수치 실행 기한의 분리 (설계)
+
+두 번째 실제 canary는 다른 legacy METADATA_ONLY namespace/maximum_targets=1에
+`154ad94f…`를 사용했다. 원 CONTENT_ONLY 실행/encoding을 retry·인계하지 않았다. current
+Identity/Catalog grant, root allocation/READY/GRANT까지 연결했고 반복 source admission 구간은
+약0.66s에서0.20s로 감소했다. 실제 GRANT는 05:54:04.131955 UTC로, worker 시작05:53:10의
+약54초 뒤다. 그러나 05:55:51.748359 UTC 원 absolute deadline에 다시 종료했고 result/vector는
+0 bytes다. 이전 CPU owner로 복귀했다. 비용 수정의 효과는 있지만 numerical completion이나
+전체 GPU 목표 완료 증거는 아니다. 두 번의 실패와 미완료 native reservations는 보존한다.
+
+원인은 준비·current authority·Workflow/encoding reservation·모델 초기화/계산·결과 확인이
+모두 같은180초 allocation clock을 소모한 것이다. numerical batch 자체의180초 한도와
+allocation 전체 시간을 혼동하지 않는다. 실제 측정상 단순 path 최적화나 batch 크기1만으로
+이 경계를 닫지 못했다. 다음 변경은 단일한 bounded time rule을 기존 계약/owner 안에 둔다.
+
+- 책임/경계: 준비·인가를 수행하는 Catalog/Orchestrator control window와 numerical backend의
+  계산 window를 분리한다. numerical batch/model load+encode는 여전히 최대180초다.
+- canonical source/형식: 기존 GPU allocation request1.0의 명시적 absolute monotonic expiry,
+  work-batch1.0의 timeout_seconds, 새로 검증할 runtime release와 root unit bytes다. wire 형식,
+  JSON Schema bytes, ID/hash 의미를 바꾸지 않는다. allocation schema에는180초 상대 제한이
+  없으며, 기존 request의 absolute expiry는 절대 다시 계산하거나 연장하지 않는다.
+- 새 allocation은 준비/검증/완료 overhead allowance240초와 해당 numerical timeout(최대180초)을
+  합한 최대420초다. overhead는 phase별 독립 timer가 아니라 전체 capacity budget이다.
+  계산은 자체180초 clock과 원 absolute expiry 중 더 빠른 쪽에 묶인다. hard worker unit은
+  최대480초, root controller는 최대540초로 종료/retirement 여유까지 유한하게 제한한다.
+- 전용 numerical worker는 GRANT를 받은 뒤에만 기본 SIGALRM disposition의 POSIX process
+  timer를 건다. Python callback에 의존하지 않아 네이티브 호출이 GIL을 가진 상태도 커널이
+  해당 worker를 종료한다. 공유 service thread, 이미 설정된 timer/handler, 차단된 SIGALRM은
+  덮어쓰지 않고 거부한다. 정상/예외 반환 시 자기 timer만 해제하며 root가 원 실패 unit의
+  FDSTORE/lease를 기존 retirement 경계로 정리한다. compute180을 cooperative check만으로
+  주장하거나 단순히 OS unit 한도480으로 늘리는 수정은 하지 않는다.
+- revision/pointer: 이전 unit/config/policy/runtime와 FAILED records는 보존한다. 변경된 worker
+  activation guard는 실제 실행 ABI 변경이므로 metadata-only 변경으로 숨기지 않고 CUDA payload/
+  proof/config를 기존 successor installer·qualification으로 검증한다. 검증 결과의 실제 runtime
+  fingerprint에 맞는 정확한 CUDA space/policy/grant만 사용한다. 같은 numerical identity를
+  임의의 새 space로 바꾸거나 옛 vectors를 다른 space로 relabel하지 않는다.
+- access/data structures: short bounded time arithmetic와 기존 immutable request/typed constants다.
+  O(1) time/space이며 새 cache, queue, registry, DB schema/index, dependency는 필요 없다.
+- concurrency/transaction: 원 atomic claim, lease, reservation, parent/root association과 각 SQL
+  root의 current source/권한 검사는 그대로다. 시간 추가는 권한 생략이나 scope 확대가 아니다.
+- dependency/ownership: 공통 pure timing rule은 기존 catalog contract가 소유하고, owner/handoff/
+  worker activation 및 parent construction이 사용한다. 수치 알고리즘과 worker DB/NAS 금지는
+  변하지 않는다. unit physical policy와 source hash pin은 새 bytes로 검증한다.
+- failure/retry/idempotency: expired, BUSY, FAILED/unknown 구분을 유지한다. 원 expired intent에
+  새 deadline을 넣거나 재할당하지 않는다. permission/hash/config/partial failure는 여전히 CPU
+  fallback 금지다. 실제 root stop/FDSTORE0/GPU 반환을 검증하기 전에 runtime pin을 바꾸지 않는다.
+- 검증: legacy short expiry의 동일 처리, compute180 한도 불변,420초 초과/만료 거부, unit480/
+  controller540 정렬, schema byte 불변과 focused/DB/OS gates를 수행한다. 설치·qualification은
+  current GPU unit/interpreter 사용이 없는 시점에만 한다. actual numerical completion, matched
+  indexes/batch QUERY/throughput/default/rollback은 그 뒤 별도 실제 증거가 필요하다.
+- 대안: root allocation 후 준비를 없애거나 source/lease checks를 생략하는 방식은 불변성을
+  깨뜨린다. 모델을 무승인 prewarm하거나 영구 상주시켜 시간을 숨기지 않는다. 부모/worker
+  state machine을 새 두 단계 framework로 복제하는 대신 기존 absolute expiry와 compute
+  timeout의 서로 다른 책임을 바로잡는다. historical 실패를 새 identity로 우회하지 않는다.
+
+이 설계는 사용자 후속 정적 리뷰12+4와 별개로 실제 GPU acceptance에서 드러난 필수 실행
+경계 수정이다. 원 wire1.0/history를 다시 정의하지 않으며 전체 GPU 목표는 계속 ACTIVE다.
+
+P2-AF 구현·source 검증 (2026-10-25 UTC):
+
+- 공통 allocation allowance 계산은 기존 catalog contract의 pure 함수/상수이며 새 message나
+  JSON Schema 버전을 만들지 않았다. control workspace/root handoff/worker activation 및
+  parent construction이 같은 최대420초를 사용한다. 기존 benchmark180/600/1200과 cleanup
+  예산은 closed `FrameLifetimeProfile`로 별도 유지한다. benchmark가 allocation 예산을 빌리거나
+  호출자가 임의의 lifetime을 주는 것을 거부한다. 실제 계산180 한도와 old absolute expiry는
+  변하지 않는다.
+- 전용 worker의 kernel timer는 원 GRANT 뒤부터 runtime 확인/model load/encode/result ACK까지
+  감싼다. 실제 별도 자식 프로세스의 native `ctypes.PyDLL` 호출 중 SIGALRM 종료(-14), 정상
+  반환 후 timer 해제와 후속 process 생존을 확인했다. 이는 실제 kernel timer 증거이지 GPU/
+  sandbox/source privilege 증거는 아니다. signal 종료는 기존 terminal adapter에서 FAILED로
+  분류하며 root retirement/FDSTORE 정리는 기존 경계를 사용한다.
+- 최종 관련 source focused396 PASS(70.27s), kernel deadline/worker/budget/activation 및 기존
+  benchmark budget 별도112 PASS(18.42s)다. 두 suite는 겹치므로 합산하지 않는다. scoped
+  Ruff/format와 production11모듈 mypy PASS, systemd255 정적 unit verify와 diff PASS다.
+- 공식 disposable PostgreSQL r35는 planning store/catch-up37 PASS(127.62s), cleanup PASS다.
+  새 larger-window 후보2개가 동시에 replay해도 기존 allocation/nonce/absolute expiry를 유지하는
+  legacy/bulk 검사, 기존 동시 claim·rollback·binding 거부·terminal history 보존을 포함한다.
+  source/runtime/root/numerical leaf는 이 DB suite에서 합성이다. 운영 DB pytest는 하지 않았다.
+- 과도하게 넓은 별도 source regression은 확인된 자체 test process만 SIGINT로 중단했고 로그를
+  보존했다. acceptance PASS로 세지 않는다. 그 실행 시작 뒤 worker hard timer가 추가됐으므로
+  최종 worker 검증은 위 focused/kernel suite로 별도 수행했다. 초기 assertion/transport lifetime/
+  mypy invocation 실패도 보존했다.
+
+로그는 `/tmp/eom-gpu-allocation-budget-final-focused-20261025.log`,
+`/tmp/eom-gpu-allocation-kernel-deadline-20261025.log`,
+`/tmp/eom-gpu-allocation-budget-mypy-20261025-r2.log`,
+`/tmp/eom-document-execution-pg-20261025-r35.log`다. 원 CPU owner/API/Web/runner/QUERY5개는
+active이며 변경된 worker/prefix/unit을 아직 운영 설치하지 않았다. 다음은 실제 CUDA 사용자/
+unit이 없는 시점의 기존 private-successor byte audit와 qualification, root/controller/unit/정책
+호환 반영이다. 단순 metadata-only staging으로 worker byte 변경을 숨기거나 기존 FAILED를
+성공으로 수정하지 않는다. 실제 계산·등록, matched indexes/batch QUERY/default/rollback과
+최종 completion audit는 여전히 남아 있다.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존

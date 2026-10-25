@@ -33,7 +33,12 @@ from eom_workflow.embedding_batch_owner_control import (
 
 from eom_catalog_service.embedding_batch_owner_identity import embedding_batch_owner_start_ticks
 from eom_catalog_service.embedding_batch_owner_pidfd import EmbeddingBatchOwnerPidfd
-from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer, PeerFence, _Frames
+from eom_catalog_service.embedding_benchmark_channel import (
+    BenchmarkUnixPeer,
+    FrameLifetimeProfile,
+    PeerFence,
+    _Frames,
+)
 
 type _Side = Literal["ROOT", "OWNER"]
 
@@ -123,6 +128,7 @@ class EmbeddingBatchOwnerChannel:
                 expected_peer,
                 fence,
                 self.request.expires_monotonic_ns,
+                lifetime_profile=FrameLifetimeProfile.EMBEDDING_ALLOCATION,
                 expected_sender=expected_peer if expected_sender is None else expected_sender,
             )
         except BaseException:

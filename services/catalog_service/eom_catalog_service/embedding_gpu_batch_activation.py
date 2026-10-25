@@ -11,6 +11,7 @@ import struct
 import time
 
 from eom_catalog_contracts.embedding_gpu_control import (
+    MAX_EMBEDDING_GPU_ALLOCATION_SECONDS,
     EmbeddingGpuAllocationRequest,
     parse_embedding_gpu_control,
 )
@@ -43,7 +44,8 @@ def capture_embedding_gpu_batch_worker_channel(
     _require(type(activation_fd) is int and activation_fd >= 3)
     root = BenchmarkUnixPeer(expected_root_pid, *_ROOT_IDENTITY)
     deadline = checked.expires_monotonic_ns
-    _require(time.monotonic_ns() < deadline <= time.monotonic_ns() + 180 * 10**9)
+    now = time.monotonic_ns()
+    _require(now < deadline <= now + MAX_EMBEDDING_GPU_ALLOCATION_SECONDS * 10**9)
     listener = connection = None
     duplicate = -1
     original = os.fstat(activation_fd)

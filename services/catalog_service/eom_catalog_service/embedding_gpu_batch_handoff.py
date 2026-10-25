@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass
 
 from eom_catalog_contracts.embedding_gpu_control import (
+    MAX_EMBEDDING_GPU_ALLOCATION_SECONDS,
     EmbeddingGpuAllocationRequest,
     EmbeddingGpuComputeGrant,
     embedding_gpu_control_bytes,
@@ -106,7 +107,9 @@ def prepare_embedding_gpu_batch_handoff(
     """Exclusive original files; preserve every partial/existing attempt for reconciliation."""
     raw = validate_embedding_gpu_batch_original(launch, request)
     now = time.monotonic_ns()
-    _require(now < request.expires_monotonic_ns <= now + 180 * 10**9)
+    _require(
+        now < request.expires_monotonic_ns <= now + MAX_EMBEDDING_GPU_ALLOCATION_SECONDS * 10**9
+    )
     owner = fixed_owner_identity()
     create_native_late_bound_descriptor_handoff(
         GPU_BATCH_RUNTIME_ROOT, launch.attempt_hex, owner=owner

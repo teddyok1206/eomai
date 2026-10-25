@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import os
+import signal
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
+from threading import current_thread, main_thread
 from typing import TYPE_CHECKING
 
 from eom_catalog_service.embedding_native_entrypoint import require_native_embedding_identity
@@ -18,6 +22,32 @@ if TYPE_CHECKING:
     from eom_catalog_service.embedding_work_batch_execution import (
         EmbeddingWorkBatchExecutionResources,
     )
+
+
+@contextmanager
+def _hard_compute_deadline(seconds: int) -> Iterator[None]:
+    """Kernel default SIGALRM ends this dedicated worker even if native code holds the GIL.
+
+    Arm only after the original compute grant. Never install a Python signal
+    handler, overwrite an existing timer or use this in a shared service thread.
+    Root owns original-unit retirement and retained-GPU-descriptor cleanup.
+    """
+    from eom_catalog_contracts.embedding_work_batch import MAX_EMBEDDING_WORK_BATCH_SECONDS
+
+    if (
+        type(seconds) is not int
+        or not 1 <= seconds <= MAX_EMBEDDING_WORK_BATCH_SECONDS
+        or current_thread() is not main_thread()
+        or signal.getsignal(signal.SIGALRM) != signal.SIG_DFL
+        or signal.getitimer(signal.ITIMER_REAL) != (0.0, 0.0)
+        or signal.SIGALRM in signal.pthread_sigmask(signal.SIG_BLOCK, ())
+    ):
+        raise ValueError("NATIVE_EMBEDDING_GPU_COMPUTE_DEADLINE_INVALID")
+    signal.setitimer(signal.ITIMER_REAL, float(seconds))
+    try:
+        yield
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0.0)
 
 
 def run_native_embedding_gpu_batch_worker(
@@ -139,20 +169,21 @@ def run_native_embedding_gpu_batch_worker(
                 )
                 channel.send_allocation(ready)
                 channel.receive_grant()
-                files.assert_unchanged()
-                captured.assert_current()
-                with open_cuda_probe_device_access(captured) as ownership:
-                    return run_granted_native_embedding_gpu_batch_descriptors(
-                        descriptors,
-                        lambda: native_cuda_backend_scope(
-                            configuration,
-                            receipt_raw_sha256=request.receipt_raw_sha256,
-                            ownership=ownership,
-                        ),
-                        resources=resources,
-                        maximum_total_output_bytes=maximum_total_output_bytes,
-                        channel=channel,
-                    )
+                with _hard_compute_deadline(resources.timeout_seconds):
+                    files.assert_unchanged()
+                    captured.assert_current()
+                    with open_cuda_probe_device_access(captured) as ownership:
+                        return run_granted_native_embedding_gpu_batch_descriptors(
+                            descriptors,
+                            lambda: native_cuda_backend_scope(
+                                configuration,
+                                receipt_raw_sha256=request.receipt_raw_sha256,
+                                ownership=ownership,
+                            ),
+                            resources=resources,
+                            maximum_total_output_bytes=maximum_total_output_bytes,
+                            channel=channel,
+                        )
     finally:
         if type(channel) is EmbeddingGpuControlChannel:
             channel.close()

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from eom_catalog_contracts.embedding_gpu_control import (
+    MAX_EMBEDDING_GPU_ALLOCATION_SECONDS,
     MAX_EMBEDDING_GPU_CONTROL_BYTES,
     EmbeddingGpuAllocationRequest,
     embedding_gpu_control_bytes,
@@ -55,7 +56,9 @@ def _epoch(value: os.stat_result) -> tuple[int, ...]:
 
 def _deadline(request: EmbeddingGpuAllocationRequest) -> None:
     now = time.monotonic_ns()
-    _require(now < request.expires_monotonic_ns <= now + 180 * 10**9)
+    _require(
+        now < request.expires_monotonic_ns <= now + MAX_EMBEDDING_GPU_ALLOCATION_SECONDS * 10**9
+    )
 
 
 def _markers(directory: int, request: EmbeddingGpuAllocationRequest, *, dispatched: bool) -> None:

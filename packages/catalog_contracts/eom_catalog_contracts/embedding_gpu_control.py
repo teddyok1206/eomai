@@ -18,6 +18,7 @@ from eom_catalog_contracts.embedding_reference_query import (
     similarity_contract_document,
 )
 from eom_catalog_contracts.embedding_work_batch import (
+    MAX_EMBEDDING_WORK_BATCH_SECONDS,
     EmbeddingWorkBatchInput,
     parse_embedding_work_batch_input,
 )
@@ -26,6 +27,14 @@ from eom_catalog_contracts.models import FrozenModel, Sha256
 EMBEDDING_GPU_CONTROL_SCHEMA = "embedding-gpu-allocation-control"
 MAX_EMBEDDING_GPU_CONTROL_BYTES = 32 * 1024
 MAX_EMBEDDING_GPU_FENCES = 256
+# Allocation includes current-source preparation and result settlement. Numerical
+# execution retains its separate work-batch clock; no original expiry is renewed.
+EMBEDDING_GPU_CONTROL_OVERHEAD_SECONDS = 240
+MAX_EMBEDDING_GPU_ALLOCATION_SECONDS = (
+    EMBEDDING_GPU_CONTROL_OVERHEAD_SECONDS + MAX_EMBEDDING_WORK_BATCH_SECONDS
+)
+EMBEDDING_GPU_WORKER_UNIT_SECONDS = MAX_EMBEDDING_GPU_ALLOCATION_SECONDS + 60
+EMBEDDING_GPU_CONTROLLER_UNIT_SECONDS = EMBEDDING_GPU_WORKER_UNIT_SECONDS + 60
 type AllocationAttemptId = Annotated[
     str, Field(pattern=r"^embeddingallocation_[0-9a-f]{32}$", strict=True)
 ]
@@ -37,6 +46,16 @@ type ProcessBirth = Annotated[int, Field(ge=1, le=18446744073709551615, strict=T
 class EmbeddingGpuControlError(ValueError):
     def __init__(self) -> None:
         super().__init__("EMBEDDING_GPU_CONTROL_INVALID")
+
+
+def embedding_gpu_allocation_window_seconds(numerical_timeout_seconds: int) -> int:
+    """New intent's finite total allowance; never extend an existing request."""
+    if (
+        type(numerical_timeout_seconds) is not int
+        or not 1 <= numerical_timeout_seconds <= MAX_EMBEDDING_WORK_BATCH_SECONDS
+    ):
+        raise EmbeddingGpuControlError()
+    return EMBEDDING_GPU_CONTROL_OVERHEAD_SECONDS + numerical_timeout_seconds
 
 
 class _ControlMessage(FrozenModel):
