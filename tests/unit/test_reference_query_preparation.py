@@ -63,7 +63,10 @@ def preparation(source, monkeypatch):
     def start(session, **kwargs):
         assert session.get_transaction().is_active and not session.in_nested_transaction()
         value.received.append(kwargs)
-        return SimpleNamespace(workflow_created=value.existing is None)
+        return SimpleNamespace(
+            workflow_created=value.existing is None,
+            command_created=value.existing is None,
+        )
 
     monkeypatch.setattr(module, "start_reference_query_in_session", start)
     return value
@@ -137,6 +140,28 @@ def test_selected_source_initial_capture_and_replay_share_canonical_start(prepar
         assert not prepare_selection(value, session, selection).workflow_created
     assert capture.call_count == 1 and len(value.received) == 2
     assert value.received[1]["request"] == original
+    value.executor.execute.assert_not_called()
+    value.executor.allocate_execution.assert_not_called()
+
+
+@pytest.mark.parametrize("created", ("workflow_created", "command_created"))
+def test_late_original_disappearance_rolls_back_before_physical_dispatch(
+    preparation, monkeypatch, created
+):
+    value = preparation
+    request = value.source.request
+    value.existing = SimpleNamespace(
+        initial_request=request.model_dump(mode="json"),
+        created_actor_type="human",
+        created_actor_id=request.operator_audit.operator_id,
+    )
+    recreated = SimpleNamespace(workflow_created=False, command_created=False)
+    setattr(recreated, created, True)
+    monkeypatch.setattr(module, "start_reference_query_in_session", Mock(return_value=recreated))
+    with value.source.publisher.sessions.begin() as session:
+        with pytest.raises(ValueError, match="REFERENCE_QUERY_PREPARATION_REPLAY_MISMATCH"):
+            prepare_selection(value, session, context_selection(value.source))
+        assert session.get_transaction() is None
     value.executor.execute.assert_not_called()
     value.executor.allocate_execution.assert_not_called()
 

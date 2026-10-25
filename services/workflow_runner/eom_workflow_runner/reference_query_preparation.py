@@ -108,6 +108,53 @@ def prepare_and_start_reference_query_selection_in_session(
     _require_preparation_root(session, owner, caller)
     validate_reference_query_context_preparation(preparation, owner.configuration.registry)
     original = _current_query_request(session, owner, caller, idempotency_key)
+    return _prepare_selected_reference_query(
+        session,
+        caller=caller,
+        preparation=preparation,
+        original=original,
+        idempotency_key=idempotency_key,
+        owner=owner,
+        executor=executor,
+    )
+
+
+def observe_existing_reference_query_selection_in_session(
+    session: Session,
+    *,
+    caller: EmbeddingRegistryCaller,
+    preparation: ReferenceQueryContextPreparation,
+    idempotency_key: str,
+    owner: CatalogReferenceQueryOwnerAdmission,
+    executor: ReferenceQueryNativeExecutor,
+) -> ReferenceQueryWorkflowSubmitted | None:
+    """Replay an original single-request intent; absence never creates CPU work."""
+    _require_preparation_root(session, owner, caller)
+    validate_reference_query_context_preparation(preparation, owner.configuration.registry)
+    original = _current_query_request(session, owner, caller, idempotency_key)
+    if original is None:
+        return None
+    return _prepare_selected_reference_query(
+        session,
+        caller=caller,
+        preparation=preparation,
+        original=original,
+        idempotency_key=idempotency_key,
+        owner=owner,
+        executor=executor,
+    )
+
+
+def _prepare_selected_reference_query(
+    session: Session,
+    *,
+    caller: EmbeddingRegistryCaller,
+    preparation: ReferenceQueryContextPreparation,
+    original: SupportedReferenceQueryWorkflowRequest | None,
+    idempotency_key: str,
+    owner: CatalogReferenceQueryOwnerAdmission,
+    executor: ReferenceQueryNativeExecutor,
+) -> ReferenceQueryWorkflowSubmitted:
     replay_preparation = preparation
     registry = owner.configuration.registry
     if original is not None:
@@ -251,7 +298,7 @@ def _start_with_pinned_context(
     )
     if definition is None or definition.definition_hash != request.workflow_definition_sha256:
         raise ValueError("REFERENCE_QUERY_PREPARATION_DEFINITION_UNAVAILABLE")
-    return start_reference_query_in_session(
+    submitted = start_reference_query_in_session(
         session,
         definition=definition,
         request=request,
@@ -261,3 +308,9 @@ def _start_with_pinned_context(
         owner=owner,
         executor=executor,
     )
+    if original is not None and (submitted.workflow_created or submitted.command_created):
+        # Disappearance is not permission to create CPU work under an old key.
+        # START has no physical effects; roll back the root before dispatch.
+        session.rollback()
+        raise ValueError("REFERENCE_QUERY_PREPARATION_REPLAY_MISMATCH")
+    return submitted

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from enum import StrEnum
 from typing import Literal, Protocol
 
 from eom_catalog_contracts.embedding_reference_query import ReferenceQuerySpaces
@@ -49,10 +50,16 @@ from eom_workflow_runner.reference_query_execution_port import ReferenceQueryNat
 from eom_workflow_runner.reference_query_owner_admission import CatalogReferenceQueryOwnerAdmission
 from eom_workflow_runner.reference_query_preparation import (
     ReferenceQueryPreparationUnavailable,
+    observe_existing_reference_query_selection_in_session,
     prepare_and_start_reference_query_selection_in_session,
 )
 
 _LOGGER = logging.getLogger(__name__)
+
+
+class _PreparationMode(StrEnum):
+    START_OR_REPLAY = "START_OR_REPLAY"
+    EXISTING_ONLY = "EXISTING_ONLY"
 
 
 class ReferenceQueryPrepareDrivePort(Protocol):
@@ -136,6 +143,20 @@ class NativeReferenceQueryPreparation:
     def prepare(
         self, request: SupportedReferenceQueryPrepareRequest
     ) -> SupportedReferenceQueryPrepareReply:
+        reply = self._prepare(request, mode=_PreparationMode.START_OR_REPLAY)
+        if reply is None:
+            raise ValueError("REFERENCE_QUERY_PREPARE_COMPOSITION_INVALID")
+        return reply
+
+    def observe_existing(
+        self, request: SupportedReferenceQueryPrepareRequest
+    ) -> SupportedReferenceQueryPrepareReply | None:
+        """Original CPU replay only; no initial capture, new Workflow or new device."""
+        return self._prepare(request, mode=_PreparationMode.EXISTING_ONLY)
+
+    def _prepare(
+        self, request: SupportedReferenceQueryPrepareRequest, *, mode: _PreparationMode
+    ) -> SupportedReferenceQueryPrepareReply | None:
         request = parse_single_reference_query_prepare_request(request)
         caller = EmbeddingRegistryCaller(self.owner.identity.capture.operator_id)
         key, context_id = reference_query_prepare_identity(
@@ -173,7 +194,12 @@ class NativeReferenceQueryPreparation:
         )
         try:
             with self.sessions.begin() as session:
-                submitted = prepare_and_start_reference_query_selection_in_session(
+                prepare_selection = (
+                    observe_existing_reference_query_selection_in_session
+                    if mode is _PreparationMode.EXISTING_ONLY
+                    else prepare_and_start_reference_query_selection_in_session
+                )
+                submitted = prepare_selection(
                     session,
                     caller=caller,
                     preparation=preparation,
@@ -181,6 +207,8 @@ class NativeReferenceQueryPreparation:
                     owner=self.owner,
                     executor=self.executor,
                 )
+                if submitted is None:
+                    return None
                 workflow = submitted.workflow
                 original = parse_supported_reference_query_workflow_request(
                     workflow.initial_request

@@ -5,6 +5,7 @@ from __future__ import annotations
 from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareReplyV3,
     ReferenceQueryPrepareRequestV3,
+    SupportedReferenceQueryPrepareReply,
     SupportedReferenceQueryPrepareRequest,
     parse_supported_reference_query_prepare_request,
     routed_reference_query_error_reply,
@@ -29,8 +30,13 @@ class RoutedNativeReferenceQueryPreparation:
 
     def prepare(
         self, request: SupportedReferenceQueryPrepareRequest
-    ) -> ReferenceQueryPrepareReplyV3:
+    ) -> SupportedReferenceQueryPrepareReply:
         request = parse_supported_reference_query_prepare_request(request)
+        if not isinstance(request, ReferenceQueryPrepareRequestV3):
+            original = self.session.cpu.observe_existing(request)
+            if original is not None:
+                validate_supported_reference_query_prepare_reply(request, original)
+                return original
         requests = (
             request.requests if isinstance(request, ReferenceQueryPrepareRequestV3) else (request,)
         )

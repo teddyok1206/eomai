@@ -638,3 +638,78 @@ diagnostic sandbox omitted the two staging write-path allowances already present
 in the reviewed operational candidate unit. Only the diagnostic sandbox was
 aligned; the guard and operating unit were not relaxed or changed. Its original
 failed unit/log remain recorded separately. No GPU work was replayed or stopped.
+
+### Activation gate: preserve pre-routing single-request replay
+
+Pre-activation source review found that the routed application enters only its
+new parent-preparation namespace. A single request previously admitted by the
+CPU owner must first resolve that original key; readable historical results alone
+do not prove same-request replay compatibility. The required successor belongs
+to the existing reference QUERY preparation use case, not a parallel resolver.
+
+- Canonical identity is the actual operator plus the released original native
+  preparation key and immutable Workflow/request/START references. No latest
+  index, new parent key, copied result or invented historical success may replace
+  that original. Explicit batch3 envelopes retain their distinct parent intent.
+- Add a supported observe-existing entrypoint sharing the original scope and
+  replay admission. Existing PENDING/READY/FAILED/denied results return through
+  that owner unchanged; only genuine absence permits new routed preparation.
+  Current actual Identity/source policy fencing precedes reads and is repeated
+  by existing replay/completion owners. A missing START, changed payload, revoked
+  source or uncertain old execution is an error, not permission to create a GPU
+  replacement. A pending original may be offered only to its existing CPU Runner.
+- Access is one indexed original-key lookup, O(log workflows) identity discovery plus the
+  unchanged bounded source/result checks. Reuse the ordered original command
+  and append-only history. No DB schema/index, cache, queue, wire message or
+  released JSON Schema change is required; internal application signatures stay
+  typed and domain packages do not import infrastructure.
+- Observe/replay owns a short existing SQL root, never a model allocation. Share
+  the existing pinned-context/start rule; if a previously observed original
+  disappears and a storage call reports a newly created Workflow, fail and roll
+  back that root before dispatch. Do not replace a deleted original under a new
+  identity. Deployment still requires the established quiescent QUERY cutover;
+  mixed old/new active writers are not a supported rollout mode.
+- Tests must first reproduce legacy dispatch entering the new route, then cover
+  all original reply states, absent-to-routed behavior, explicit batch separation,
+  changed payload/actor/source refusal, same-key concurrency, missing START and
+  late-disappearance rollback in a disposable database. Existing CPU/legacy and
+  routed contracts and worker/source pins must remain unchanged.
+
+The simpler global switch without original lookup can create a second logical
+execution for an old HTTP replay. Calling CPU prepare unconditionally would make
+new requests stay CPU and defeat the approved GPU default. Use the same official
+application in observe-only mode instead. Current INDEX/native/controller pins
+remain untouched while this activation gate is implemented and tested.
+
+The original dispatch defect was reproduced before the correction in all four
+reply-state cases (regression r2:4 expected failures). The source now shares one
+pinned-context/START rule and adds only an internal observe-existing application
+entrypoint. Genuine absence returns `None` without initial source capture or CPU
+creation; denied/failed/missing/changed originals never become absence. Original
+request1.0/1.1/2.0 replies keep their families; explicit batch3 remains a distinct
+intent. A contradictory late creation observation rolls back before dispatch.
+
+- Final focused unit regression:76 PASS,39.84seconds (focused r4), covering legacy
+  reply states/families, new-single routing, explicit batch separation, original
+  context/source rules and late-disappearance rollback. Numerical/source/IAM
+  leaves are explicitly synthetic; this is not live CUDA acceptance.
+- Disposable PostgreSQL r66:66 PASS,116.63seconds and cleanup EXIT0, including
+  actual same-key concurrent replay, changed intent/current authority denial,
+  preserved terminal/failed-command history and missing START refusal. The first
+  r65 run expected a typed reply where the original contract raises an explicit
+  replay error; that fixture expectation was corrected, not the refusal rule.
+- Strict mypy on the three production modules, scoped Ruff/format and diff PASS.
+  No released schema, DB migration, queue, permission or numerical pin changed.
+- Final disposable PostgreSQL r67 adds both contradictory late-creation
+  observations and proves their root-local mutations roll back:68 PASS,
+  122.92seconds, cleanup EXIT0. This supersedes, not adds to, the overlapping66.
+
+At15:47:34 UTC the read-only technical metadata audit showed mixed CUDA bindings
+CONTENT57, CONCRETE157, METADATA24 versus CPU521/457/521. It is progress, not an
+exact human-authorized target/profile/input-hash pair validation. At15:50 the
+INDEX invocation remained `6e792281a46a420898cdece549539ef7`; additional CUDA children
+were COMPLETED, bounded CPU standby work was REQUESTED and original failures
+remained FAILED. No active GPU work was stopped or re-keyed. The QUERY3 default
+remains unselected until full pair/current-source and live numerical/fallback
+acceptance. This source checkpoint is **not** the GPU-goal completion checkpoint;
+the user's post-checkpoint12+4 review remains unopened.
