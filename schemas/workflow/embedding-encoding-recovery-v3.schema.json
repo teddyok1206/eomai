@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/embedding-encoding-recovery/3.0",
+  "title": "Original terminated CPU INDEX failure and bounded producer retry eligibility",
+  "description": "Metadata only. Actual root/schema-owner admission and exact stopped CPU units are required. Never numerical completion, source permission, CPU fallback, a GPU retirement, or FAILED-to-success.",
+  "oneOf": [{"$ref": "#/$defs/recover"}, {"$ref": "#/$defs/failure"}],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "jobId": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+    "invocation": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "service": {
+      "type": "object", "additionalProperties": false,
+      "required": ["service_id", "service_revision_id", "service_identity_sha256"],
+      "properties": {
+        "service_id": {"type": "string", "pattern": "^localindexservice_[0-9a-f]{32}$"},
+        "service_revision_id": {"type": "string", "pattern": "^localindexservicerev_[0-9a-f]{32}$"},
+        "service_identity_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "root": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "native_launch_job_id", "boot_id", "prepare_invocation_id", "numeric_invocation_id", "prepare_template_sha256", "numeric_template_sha256", "numeric_started_monotonic_us", "numeric_exited_monotonic_us", "numeric_result", "numeric_exec_main_code", "numeric_exec_main_status", "original_outcome", "stored_descriptors", "proof_sha256"],
+      "properties": {
+        "kind": {"const": "NATIVE_CPU_INDEX_FAILED"},
+        "native_launch_job_id": {"$ref": "#/$defs/jobId"},
+        "boot_id": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+        "prepare_invocation_id": {"$ref": "#/$defs/invocation"},
+        "numeric_invocation_id": {"$ref": "#/$defs/invocation"},
+        "prepare_template_sha256": {"$ref": "#/$defs/hash"},
+        "numeric_template_sha256": {"$ref": "#/$defs/hash"},
+        "numeric_started_monotonic_us": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807},
+        "numeric_exited_monotonic_us": {"type": "integer", "minimum": 1, "maximum": 9223372036854775807},
+        "numeric_result": {"enum": ["timeout", "exit-code", "signal", "core-dump", "oom-kill"]},
+        "numeric_exec_main_code": {"type": "integer", "minimum": 1, "maximum": 3},
+        "numeric_exec_main_status": {"type": "integer", "minimum": 0, "maximum": 255},
+        "original_outcome": {"const": "FAILED"},
+        "stored_descriptors": {"type": "integer", "const": 0},
+        "proof_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "recover": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "record_type", "workflow_id", "workflow_request_sha256", "command_id", "lease_generation", "native_intent_sha256", "current_service", "root", "command_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-encoding-recovery/3.0"},
+        "record_type": {"const": "RECOVER"},
+        "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+        "workflow_request_sha256": {"$ref": "#/$defs/hash"},
+        "command_id": {"type": "string", "pattern": "^wfcmd_[0-9a-f]{32}$"},
+        "lease_generation": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+        "native_intent_sha256": {"$ref": "#/$defs/hash"},
+        "current_service": {"$ref": "#/$defs/service"},
+        "root": {"$ref": "#/$defs/root"},
+        "command_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "failure": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "record_type", "owned_job", "native_launch_job_id", "root", "event_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-encoding-recovery/3.0"},
+        "record_type": {"const": "FAILURE"},
+        "owned_job": {"$ref": "eom://schemas/workflow/embedding-encoding-job/1.0#/$defs/ownedJob"},
+        "native_launch_job_id": {"$ref": "#/$defs/jobId"},
+        "root": {"$ref": "#/$defs/root"},
+        "event_sha256": {"$ref": "#/$defs/hash"}
+      }
+    }
+  }
+}

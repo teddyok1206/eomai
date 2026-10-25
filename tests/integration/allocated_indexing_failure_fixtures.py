@@ -2,6 +2,7 @@
 
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 from uuid import uuid4
@@ -19,6 +20,7 @@ from eom_orchestrator.embedding_encoding_reservation_storage import (
 from eom_orchestrator.embedding_encoding_reservations import EmbeddingEncodingReservations
 from eom_orchestrator.native_embedding_coordinator import NativeEmbeddingCoordinator
 from eom_orchestrator.native_embedding_launch_identity import create_native_embedding_launch
+from eom_workflow.compiler import compile_definition
 from eom_workflow.embedding_batch_plan import (
     BATCH_SELECTION_SCHEMA_REF,
     EmbeddingBatchAllocation,
@@ -37,6 +39,7 @@ from eom_workflow.embedding_encoding_recovery import (
     NativeEmbeddingFailureRecoveryCommand,
 )
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingRuntimeProfile
+from eom_workflow.local_embedding_request_v2 import parse_supported_local_embedding_request
 from eom_workflow.native_embedding_coordinator import NativeCoordinatorAllocation
 from eom_workflow_runner.local_embedding_admission import ResolvedLocalEmbeddingAdmission
 from eom_workflow_runner.local_embedding_publications import new_native_artifact_producer
@@ -65,9 +68,10 @@ from tests.unit.test_embedding_batch_plan import member, planning_case
 from tests.unit.test_embedding_encoding_reservations import SyntheticAdmission
 from tests.unit.test_embedding_runtime_bundle_contracts import _bundle, _pointer
 from tests.unit.test_local_embedding_runner_admission import scope_fixture
+from tests.unit.test_mixed_native_workflow_carriers import carrier_fixture
 
 
-def seed_allocated_failure(engine):
+def seed_allocated_execution(engine, *, device="CUDA", request_family="1.2"):
     sessions = build_session_factory(engine)
     service = identity()
     ref = local_indexing_service_reference(service)
@@ -78,19 +82,84 @@ def seed_allocated_failure(engine):
             session, ref, expected_resource_version=1, operation_key=key + ":activate"
         )
     _, compiled = scope_fixture()
+    if request_family == "2.0":
+        assert device == "CPU"
+        compiled = compile_definition(
+            Path(__file__).resolve().parents[2] / "config/workflows/local-embedding-index.v2.yaml",
+            set(),
+        )
     native = service_fixture(
         base=partition_fixture(
-            native_fixture("a", "b", device="CUDA", timeout_seconds=180), "test-" + uuid4().hex
+            native_fixture("a", "b", device=device, timeout_seconds=180), "test-" + uuid4().hex
         ),
         service=ref,
         workflow_definition_sha256=compiled.sha256,
     )
+    if request_family == "2.0":
+        mixed = carrier_fixture()
+        plan = mixed["plan"]
+        policy = type(native.policy).model_validate(
+            seal(
+                native.policy.model_dump(mode="json")
+                | {"workflow_definition_sha256": compiled.sha256},
+                "policy_sha256",
+            )
+        )
+        body = native.request.model_dump(mode="json") | {
+            "schema_version": "local-embedding-workflow-request/2.0",
+            "workflow_definition_version": "2.0.0",
+            "workflow_definition_sha256": compiled.sha256,
+            **{
+                field: getattr(plan, field).model_dump(mode="json")
+                if hasattr(getattr(plan, field), "model_dump")
+                else getattr(plan, field)
+                for field in (
+                    "corpus_id",
+                    "graph_snapshot",
+                    "access_policy_revision_id",
+                    "access_policy_sha256",
+                    "namespace",
+                    "space",
+                )
+            },
+            "source_plan": member(
+                "source-plan.json",
+                mixed["request"].source_plan.schema_ref,
+                plan,
+                "d",
+            ).model_dump(mode="json"),
+            "source_plan_sha256": plan.plan_sha256,
+            "native_execution_policy": member(
+                "policy.json",
+                native.request.native_execution_policy.schema_ref,
+                policy,
+                "e",
+            ).model_dump(mode="json"),
+            "native_execution_policy_sha256": policy.policy_sha256,
+        }
+        request = parse_supported_local_embedding_request(seal(body, "request_sha256"))
+        base = partition_fixture(
+            replace(
+                native.base,
+                request=request,
+                policy=policy,
+                plan=plan,
+                association=mixed["association"],
+                native_input=mixed["input"],
+                result=mixed["result"],
+                completions=mixed["events"],
+            ),
+            "test-" + uuid4().hex,
+        )
+        native = SimpleNamespace(base=base, request=base.request, policy=policy)
     request = native.request
     owner = SyntheticOwner(
         ResolvedLocalEmbeddingAdmission(request, native.base.plan, native.policy)
     )
     with sessions.begin() as session:
         EmbeddingEncodingReservationStorage.prepare_protocol(session)
+        if request_family == "2.0":
+            EmbeddingEncodingReservationStorage.prepare_mixed_ownership_protocol(session)
         definition, _ = import_workflow_definition(session, compiled)
         submitted = start_local_embedding_in_session(
             session,
@@ -164,7 +233,27 @@ def seed_allocated_failure(engine):
     synthetic = fixture_for_jobs(synthetic, tuple(r.owned_job for r in rows))
     gate.fixture = synthetic
     encoding.bind_launch(synthetic.association)
-    parent = parent_case(request, synthetic.association, synthetic.native_input)
+    return SimpleNamespace(
+        sessions=sessions,
+        request=request,
+        workflow_id=workflow_id,
+        origin_command_id=command_id,
+        step_id=step_id,
+        coordinator=coordinator,
+        association=synthetic.association,
+        native_input=synthetic.native_input,
+        encoding=encoding,
+        gate=gate,
+        service=service,
+        owner=owner,
+    )
+
+
+def seed_allocated_failure(engine):
+    value = seed_allocated_execution(engine)
+    sessions, request = value.sessions, value.request
+    workflow_id, command_id = value.workflow_id, value.origin_command_id
+    parent = parent_case(request, value.association, value.native_input)
     store = EmbeddingBatchPlanStore(parent.request, parent.selection, parent.policy)
     with sessions.begin() as session:
         store.allocate(session, parent.allocation)
@@ -195,20 +284,9 @@ def seed_allocated_failure(engine):
             "command_sha256",
         )
     )
-    return SimpleNamespace(
-        sessions=sessions,
-        command=command,
-        request=request,
-        step_id=step_id,
-        coordinator=coordinator,
-        association=synthetic.association,
-        encoding=encoding,
-        gate=gate,
-        parent=parent,
-        store=store,
-        parent_history=history,
-        service=service,
-    )
+    value.command, value.parent = command, parent
+    value.store, value.parent_history = store, history
+    return value
 
 
 def parent_case(request, association, native_input):

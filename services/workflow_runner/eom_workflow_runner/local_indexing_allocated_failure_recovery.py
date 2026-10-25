@@ -22,8 +22,10 @@ from eom_orchestrator.native_embedding_launch_identity import (
     read_native_embedding_launch_association,
 )
 from eom_orchestrator.workflow_job_retirement import require_no_held_worker_leases
+from eom_workflow.embedding_cpu_failure_recovery import CpuEmbeddingFailureRecoveryCommand
 from eom_workflow.embedding_encoding_recovery import (
     SupportedFailureRecoveryCommand,
+    SupportedGpuFailureRecoveryCommand,
     encoding_failure_disposition,
     parse_supported_encoding_failure,
     parse_supported_failure_recovery,
@@ -86,7 +88,7 @@ def _require(condition: bool, reason: str = "CONTEXT_INVALID") -> None:
 
 @dataclass(frozen=True, slots=True)
 class RecoveredAllocatedIndexingFailure:
-    command: SupportedFailureRecoveryCommand
+    command: SupportedGpuFailureRecoveryCommand
     step_run_id: str
     native_launch_job_id: str
     encoding_job_ids: tuple[str, ...]
@@ -105,6 +107,8 @@ def recover_retired_indexing_workflow(
     No source data, model, unit effect, retry producer or new allocation is created.
     """
     command = parse_supported_failure_recovery(command)
+    _require(not isinstance(command, CpuEmbeddingFailureRecoveryCommand), "CONTEXT_INVALID")
+    assert not isinstance(command, CpuEmbeddingFailureRecoveryCommand)
     try:
         with sessions.begin() as session:
             principal = require_native_workflow_maintenance_owner(
@@ -120,7 +124,7 @@ def recover_retired_indexing_workflow(
 
 def _parent_binding(
     session: Session,
-    command: SupportedFailureRecoveryCommand,
+    command: SupportedGpuFailureRecoveryCommand,
     physical: ResolvedRetiredEmbeddingFailure,
     request: SupportedLocalEmbeddingRequest,
     association: SupportedEmbeddingAssociation,
@@ -194,7 +198,7 @@ def _parent_binding(
 
 def _recover(
     session: Session,
-    command: SupportedFailureRecoveryCommand,
+    command: SupportedGpuFailureRecoveryCommand,
     physical: ResolvedRetiredEmbeddingFailure,
     principal: str,
 ) -> RecoveredAllocatedIndexingFailure:

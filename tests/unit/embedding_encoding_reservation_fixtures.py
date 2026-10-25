@@ -10,11 +10,9 @@ from eom_catalog_contracts.inference_transfer_embedding import (
 )
 from eom_identifiers import content_sha256
 from eom_workflow.local_embedding_encoding_job import (
-    EmbeddingEncodingCompletedEvent,
     EmbeddingEncodingJobReference,
     EmbeddingEncodingJobRequest,
     EmbeddingEncodingReadResult,
-    LocalEmbeddingLaunchAssociation,
     LocalEmbeddingLaunchIntent,
     LocalEmbeddingOwnedJob,
 )
@@ -40,7 +38,7 @@ def reservation_fixture(*seeds: str, ordinal: int = 1) -> NativeAdmissionFixture
         "native_launch_job_id": "job_" + f"{ordinal:032x}",
         "command_id": "wfcmd_" + f"{ordinal:032x}",
     }
-    intent = LocalEmbeddingLaunchIntent.model_validate(seal(body, "intent_sha256"))
+    intent = type(fixture.association.intent).model_validate(seal(body, "intent_sha256"))
     fixture = replace(
         fixture, association=fixture.association.model_copy(update={"intent": intent})
     )
@@ -65,7 +63,7 @@ def fixture_for_jobs(
         native_input.model_dump(mode="json"),
         "7",
     )
-    association = LocalEmbeddingLaunchAssociation.model_validate(
+    association = type(fixture.association).model_validate(
         seal(
             fixture.association.model_dump(mode="json")
             | {
@@ -128,7 +126,7 @@ def fixture_for_jobs(
             "receipt_sha256",
         )
         completions.append(
-            EmbeddingEncodingCompletedEvent.model_validate(
+            type(fixture.completions[0]).model_validate(
                 seal(
                     template
                     | {
@@ -216,7 +214,7 @@ def partition_fixture(fixture: NativeAdmissionFixture, partition: str) -> Native
             "request_sha256",
         )
     )
-    intent = LocalEmbeddingLaunchIntent.model_validate(
+    intent = type(fixture.association.intent).model_validate(
         seal(
             fixture.association.intent.model_dump(mode="json")
             | {

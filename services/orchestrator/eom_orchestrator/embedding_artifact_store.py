@@ -62,6 +62,7 @@ from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.models import ArtifactId, JobId, RevisionId
 from eom_workflow.local_embedding_encoding_dispatch import (
     SupportedEmbeddingAssociation,
+    parse_supported_embedding_association,
     validate_supported_embedding_association,
 )
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingExecutablePolicy
@@ -341,6 +342,24 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
             raise ValueError("duplicate JSON member")
         value[name] = member
     return value
+
+
+def owned_embedding_publication_key(
+    association: SupportedEmbeddingAssociation, *, workflow_request_sha256: str
+) -> str:
+    """Exact original output lookup identity, not source or publication authority."""
+    association = parse_supported_embedding_association(association)
+    workflow_request_sha256 = TypeAdapter(Sha256).validate_python(workflow_request_sha256)
+    if association.intent.workflow_request_sha256 != workflow_request_sha256:
+        raise EmbeddingArtifactStoreError("EMBEDDING_ARTIFACT_CONTEXT_INVALID")
+    return "embedding-artifact:" + content_sha256(
+        {
+            "logical_encoder_job_id": association.intent.native_launch_job_id,
+            "native_request_sha256": association.owned_input_request_sha256,
+            "launch_association_sha256": association.association_sha256,
+            "workflow_request_sha256": workflow_request_sha256,
+        }
+    ).removeprefix("sha256:")
 
 
 class EmbeddingArtifactStore:
@@ -891,7 +910,10 @@ class EmbeddingArtifactStore:
             }
         ).removeprefix("sha256:")
         return self._publish_result(
-            request=request, workspace=workspace, timestamp=timestamp, key=key
+            request=request,
+            workspace=workspace,
+            timestamp=timestamp,
+            publication_key="embedding-artifact:" + key,
         )
 
     def publish_owned_batch(
@@ -924,16 +946,13 @@ class EmbeddingArtifactStore:
             timestamp = TypeAdapter(UtcDatetime).validate_python(created_at)
         except Exception:
             raise EmbeddingArtifactStoreError("EMBEDDING_ARTIFACT_CONTEXT_INVALID") from None
-        key = content_sha256(
-            {
-                "logical_encoder_job_id": request.job_id,
-                "native_request_sha256": request.request_sha256,
-                "launch_association_sha256": association.association_sha256,
-                "workflow_request_sha256": workflow_request.request_sha256,
-            }
-        ).removeprefix("sha256:")
         return self._publish_result(
-            request=request, workspace=workspace, timestamp=timestamp, key=key
+            request=request,
+            workspace=workspace,
+            timestamp=timestamp,
+            publication_key=owned_embedding_publication_key(
+                association, workflow_request_sha256=workflow_request.request_sha256
+            ),
         )
 
     def _publish_result(
@@ -942,7 +961,7 @@ class EmbeddingArtifactStore:
         request: IncrementalEmbeddingInput,
         workspace: Path,
         timestamp: datetime,
-        key: str,
+        publication_key: str,
     ) -> PublishedEmbeddingArtifacts:
         with (
             _directory(workspace) as directory,
@@ -1002,7 +1021,7 @@ class EmbeddingArtifactStore:
                     primary_file="result.json",
                     artifact_type=EMBEDDING_RESULT_ARTIFACT_TYPE,
                     manifest_version="control-file-set/1.0",
-                    idempotency_key="embedding-artifact:" + key,
+                    idempotency_key=publication_key,
                     source_commit=self.source_commit,
                     created_at=timestamp,
                 )

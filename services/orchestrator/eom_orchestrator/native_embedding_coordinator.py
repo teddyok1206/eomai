@@ -7,6 +7,7 @@ from typing import cast
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_identifiers import content_sha256
+from eom_workflow.embedding_cpu_failure_recovery import CpuEmbeddingFailureRecoveryCommand
 from eom_workflow.embedding_encoding_recovery import (
     SupportedFailureRecoveryCommand,
     encoding_failure_disposition,
@@ -263,11 +264,22 @@ class NativeEmbeddingCoordinator:
         EmbeddingEncodingReservationStorage.require_recovery_protocol(session)
         if isinstance(command, UnpublishedEmbeddingRecoveryCommand):
             EmbeddingEncodingReservationStorage.require_unpublished_recovery_protocol(session)
+        if isinstance(command, CpuEmbeddingFailureRecoveryCommand):
+            EmbeddingEncodingReservationStorage.require_cpu_failure_recovery_protocol(session)
+            origin_matches = (
+                command.native_intent_sha256 == self.intent.intent_sha256
+                and command.root.native_launch_job_id == self.intent.native_launch_job_id
+                and self.request.resource_profile.device == "CPU"
+            )
+        else:
+            origin_matches = (
+                command.command_id == self.intent.command_id
+                and command.lease_generation == self.intent.lease_generation
+            )
         if (
             command.workflow_id != self.intent.workflow_id
             or command.workflow_request_sha256 != self.request.request_sha256
-            or command.command_id != self.intent.command_id
-            or command.lease_generation != self.intent.lease_generation
+            or not origin_matches
         ):
             raise EmbeddingEncodingReservationError("EMBEDDING_NATIVE_FAILURE_CONTEXT_INVALID")
         require_native_embedding_launch(session, self.intent, self.request)

@@ -14,6 +14,10 @@ from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import Field, model_validator
 
+from eom_workflow.embedding_cpu_failure_recovery import (
+    CpuEmbeddingFailureRecoveryCommand,
+    KnownFailedCpuEmbeddingEncoding,
+)
 from eom_workflow.embedding_unpublished_recovery import (
     UNPUBLISHED_ENCODING_FAILURE_CODE,
     UNPUBLISHED_ENCODING_FAILURE_EVENT,
@@ -177,9 +181,16 @@ class NativeEmbeddingFailureRecoveryCommand(_RecoveryMessage):
         return self
 
 
-type SupportedEncodingFailure = KnownFailedEmbeddingEncoding | UnpublishedEmbeddingEncodingFailure
-type SupportedFailureRecoveryCommand = (
+type SupportedEncodingFailure = (
+    KnownFailedEmbeddingEncoding
+    | UnpublishedEmbeddingEncodingFailure
+    | KnownFailedCpuEmbeddingEncoding
+)
+type SupportedGpuFailureRecoveryCommand = (
     NativeEmbeddingFailureRecoveryCommand | UnpublishedEmbeddingRecoveryCommand
+)
+type SupportedFailureRecoveryCommand = (
+    SupportedGpuFailureRecoveryCommand | CpuEmbeddingFailureRecoveryCommand
 )
 type SupportedRetiredEmbeddingFailure = (
     RetiredEmbeddingRootFailure | RetiredUnpublishedEmbeddingResult
@@ -218,13 +229,21 @@ def encoding_failure_disposition(
 ) -> EncodingFailureDisposition:
     if isinstance(value, UnpublishedEmbeddingEncodingFailure | UnpublishedEmbeddingRecoveryCommand):
         return _UNPUBLISHED
-    if isinstance(value, KnownFailedEmbeddingEncoding | NativeEmbeddingFailureRecoveryCommand):
+    if isinstance(
+        value,
+        KnownFailedEmbeddingEncoding
+        | NativeEmbeddingFailureRecoveryCommand
+        | KnownFailedCpuEmbeddingEncoding
+        | CpuEmbeddingFailureRecoveryCommand,
+    ):
         return _NUMERICAL_FAILED
     raise ValueError("EMBEDDING_ENCODING_RECOVERY_INVALID")
 
 
 def parse_supported_encoding_failure(value: object) -> SupportedEncodingFailure:
     document = raw_similarity_contract_value(value)
+    if document.get("schema_version") == "embedding-encoding-recovery/3.0":
+        return KnownFailedCpuEmbeddingEncoding.model_validate(document)
     if document.get("schema_version") == "embedding-encoding-recovery/2.0":
         return UnpublishedEmbeddingEncodingFailure.model_validate(document)
     return KnownFailedEmbeddingEncoding.model_validate(document)
@@ -232,6 +251,8 @@ def parse_supported_encoding_failure(value: object) -> SupportedEncodingFailure:
 
 def parse_supported_failure_recovery(value: object) -> SupportedFailureRecoveryCommand:
     document = raw_similarity_contract_value(value)
+    if document.get("schema_version") == "embedding-encoding-recovery/3.0":
+        return CpuEmbeddingFailureRecoveryCommand.model_validate(document)
     if document.get("schema_version") == "embedding-encoding-recovery/2.0":
         return UnpublishedEmbeddingRecoveryCommand.model_validate(document)
     return NativeEmbeddingFailureRecoveryCommand.model_validate(document)
