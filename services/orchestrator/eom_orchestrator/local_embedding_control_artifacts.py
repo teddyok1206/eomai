@@ -71,6 +71,8 @@ from eom_workflow.reference_query_routed_preparation import (
 )
 from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import TypeAdapter
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from eom_orchestrator.file_set_control_artifacts import (
     CONTROL_FILE_SET_PROTOCOL,
@@ -78,6 +80,7 @@ from eom_orchestrator.file_set_control_artifacts import (
     ControlFileSetPublisher,
     ControlPublicationTime,
 )
+from eom_orchestrator.models import JobRecord
 
 SOURCE_PLAN_ARTIFACT_TYPE = "control_local_embedding_source_plan"
 EXECUTION_POLICY_ARTIFACT_TYPE = "control_local_embedding_execution_policy"
@@ -103,6 +106,20 @@ def batch_execution_receipt_publication_key(
             allocation_record_sha256=allocation_record_sha256,
         )
     ).removeprefix("sha256:")
+
+
+def batch_execution_publication_exists(
+    session: Session, *, parent_request_sha256: str, allocation_record_sha256: str
+) -> bool:
+    """Indexed original publication intent; incomplete/conflicting is not missing.
+
+    Maintenance callers hold the original Workflow/launch fence in this same
+    transaction. This metadata read neither resolves content nor grants a retry.
+    """
+    key = batch_execution_receipt_publication_key(parent_request_sha256, allocation_record_sha256)
+    return (
+        session.scalar(select(JobRecord.job_id).where(JobRecord.idempotency_key == key)) is not None
+    )
 
 
 @dataclass(frozen=True, slots=True)

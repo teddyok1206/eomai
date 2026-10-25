@@ -409,3 +409,61 @@ regressions:277 PASS,32.74seconds
 observer and scoped Ruff/format/diff checks passed. The first invocation selected
 a nonexistent test path and ran zero tests; the second retained an obsolete
 descriptor-number negative fixture (276 PASS,1 failure). Both logs are retained.
+
+#### Unpublished-success maintenance boundary
+
+The original worker exited `SUCCEEDED` but its source-owner publication never
+completed. The old recovery/1.0 proves a failed numerical unit; using it here
+would falsify history. Add an explicit recovery/2.0 maintenance message instead.
+Responsibility stays with the existing root/schema-owner recovery application;
+the canonical facts are the original protected successful retirement and the
+separately failed original root-controller invocation. Pin allocation, numeric
+and controller invocation, parent plan, Workflow/request/command/generation and
+retirement raw SHA. Resolve exact files, outcome, unit policy, empty cgroups,
+zero retained descriptors and immutable epochs; a DTO is never authority.
+
+Only the expired, allocated, still-unpublished Workflow/launch/encoding rows can
+close as an application failure with a distinct `RESULT_UNPUBLISHED` code.
+Numerical `SUCCEEDED`, controller `FAILED`, historical failures and original
+output bytes remain unchanged; no successful completion receipt is fabricated.
+The existing bounded explicit encoding-producer successor can then retry an
+unpublished failed producer under fresh service/source authority. It must not
+reuse these uncommitted vectors or treat this as a GPU-BUSY fallback.
+
+Access is indexed identity lookup plus ordered row locking and append-only
+events, O(encodings), bounded1024; no new table/index, queue or binary DB value.
+Physical retirement is an existing separate root effect; metadata recovery is
+one short NOWAIT transaction with rollback on late physical/source mismatch.
+The existing application owns transitions, the existing Orchestrator storage
+owns events/retry edges, and the root adapter owns OS proof. Exact replay returns
+the original failed receipt; it never repeats compute, retirement or publication.
+The simpler alternatives—calling the old failed-unit proof, accepting local
+files as canonical success or submitting a new identity while the old producer
+is still RUNNING—violate outcome, publication or concurrency invariants.
+
+Recovery/2.0's mirrored schema SHA is
+`996997c8b36626556cda4b2b7e63d1b8d004e8d9ca87aef0b465f06d9e4d5746`.
+The two concrete failure dispositions share the existing Workflow/native/encoding
+maintenance transaction and bounded retry graph, with distinct events and codes.
+An indexed original-receipt publication-intent guard refuses both complete and
+incomplete existing publication, so valid canonical completion is never failed.
+No released recovery/1.0 schema or original numerical checkpoint was rewritten.
+
+Focused contract/retirement/coordinator/reservation regressions140 PASS,45.95s;
+related routed-execution/publication/dependency regressions87 PASS,55.31s.
+Disposable PostgreSQL r64:49 PASS,49.21s and cleanup EXIT0, covering both failure
+dispositions, concurrent exact recovery, late-proof rollback, fresh-lease and
+foreign-owner refusal, original identity/history, concurrent single successor,
+same-request replay, and existing/incomplete publication refusal. These suites
+overlap; OS/source admission in the DB cases is explicitly synthetic. Strict
+mypy7 modules passed. Initial fixture/float-construction failures are retained.
+
+Actual physical retirement used installed metadata source `129ff5dd` and the
+existing original-terminal application, without model execution or Workflow DB
+changes. The original numeric success and failed controller remain recorded;
+held descriptors1→0. Evidence:
+`/tmp/eom-pid1-lease-retirement-20261025-129ff5dd.log`, EXIT0; original retirement
+raw SHA `94405a21f6dc2d7713c89b1ffb93f3fca3174c6c5cac9980a8f93708c989104b`.
+The unpublished Workflow still needs the tested recovery/2.0 installed owner
+before supported metadata closure and successor-runtime activation. GPU-default
+QUERY, exact full paired corpus and the overall goal are not complete.

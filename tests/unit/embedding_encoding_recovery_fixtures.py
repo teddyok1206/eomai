@@ -5,6 +5,7 @@ from eom_workflow.embedding_encoding_recovery import (
     EmbeddingEncodingRetryDeclaration,
     KnownFailedEmbeddingEncoding,
 )
+from eom_workflow.embedding_unpublished_recovery import UnpublishedEmbeddingEncodingFailure
 from eom_workflow.local_embedding_encoding_job import EmbeddingEncodingJobReference
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
@@ -57,3 +58,14 @@ def declaration(owned, *, seed="f", attempt=1, predecessor=None, predecessor_fai
             "event_sha256",
         )
     )
+
+
+def unpublished_failure(owned, native_launch_job_id):
+    body = known_failure(owned, native_launch_job_id).model_dump(mode="json")
+    body["schema_version"] = "embedding-encoding-recovery/2.0"
+    body["root"] |= dict(
+        original_outcome="SUCCEEDED",
+        controller_invocation_id="c" * 32,
+        controller_outcome="FAILED",
+    )
+    return UnpublishedEmbeddingEncodingFailure.model_validate(seal(body, "event_sha256"))

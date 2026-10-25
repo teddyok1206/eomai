@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 from functools import lru_cache
 from importlib.resources import files
 from typing import Any, Literal, Self
@@ -13,6 +14,13 @@ from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import Field, model_validator
 
+from eom_workflow.embedding_unpublished_recovery import (
+    UNPUBLISHED_ENCODING_FAILURE_CODE,
+    UNPUBLISHED_ENCODING_FAILURE_EVENT,
+    RetiredUnpublishedEmbeddingResult,
+    UnpublishedEmbeddingEncodingFailure,
+    UnpublishedEmbeddingRecoveryCommand,
+)
 from eom_workflow.local_embedding_encoding_job import (
     EmbeddingEncodingJobReference,
     LocalEmbeddingOwnedJob,
@@ -167,3 +175,63 @@ class NativeEmbeddingFailureRecoveryCommand(_RecoveryMessage):
             == content_sha256(self.model_dump(mode="json", exclude={"command_sha256"}))
         )
         return self
+
+
+type SupportedEncodingFailure = KnownFailedEmbeddingEncoding | UnpublishedEmbeddingEncodingFailure
+type SupportedFailureRecoveryCommand = (
+    NativeEmbeddingFailureRecoveryCommand | UnpublishedEmbeddingRecoveryCommand
+)
+type SupportedRetiredEmbeddingFailure = (
+    RetiredEmbeddingRootFailure | RetiredUnpublishedEmbeddingResult
+)
+
+
+@dataclass(frozen=True, slots=True)
+class EncodingFailureDisposition:
+    code: str
+    encoding_event: str
+    native_event: str
+    message: str
+
+
+_NUMERICAL_FAILED = EncodingFailureDisposition(
+    KNOWN_ENCODING_FAILURE_CODE,
+    KNOWN_ENCODING_FAILURE_EVENT,
+    "EMBEDDING_NATIVE_KNOWN_FAILED",
+    "Original numerical unit failed and its retirement was verified.",
+)
+_UNPUBLISHED = EncodingFailureDisposition(
+    UNPUBLISHED_ENCODING_FAILURE_CODE,
+    UNPUBLISHED_ENCODING_FAILURE_EVENT,
+    "EMBEDDING_NATIVE_RESULT_UNPUBLISHED",
+    "Numerical execution succeeded, but its failed controller never published completion.",
+)
+RECOVERABLE_ENCODING_FAILURE_CODES = frozenset((_NUMERICAL_FAILED.code, _UNPUBLISHED.code))
+RECOVERABLE_ENCODING_FAILURE_EVENTS = (
+    _NUMERICAL_FAILED.encoding_event,
+    _UNPUBLISHED.encoding_event,
+)
+
+
+def encoding_failure_disposition(
+    value: SupportedEncodingFailure | SupportedFailureRecoveryCommand,
+) -> EncodingFailureDisposition:
+    if isinstance(value, UnpublishedEmbeddingEncodingFailure | UnpublishedEmbeddingRecoveryCommand):
+        return _UNPUBLISHED
+    if isinstance(value, KnownFailedEmbeddingEncoding | NativeEmbeddingFailureRecoveryCommand):
+        return _NUMERICAL_FAILED
+    raise ValueError("EMBEDDING_ENCODING_RECOVERY_INVALID")
+
+
+def parse_supported_encoding_failure(value: object) -> SupportedEncodingFailure:
+    document = raw_similarity_contract_value(value)
+    if document.get("schema_version") == "embedding-encoding-recovery/2.0":
+        return UnpublishedEmbeddingEncodingFailure.model_validate(document)
+    return KnownFailedEmbeddingEncoding.model_validate(document)
+
+
+def parse_supported_failure_recovery(value: object) -> SupportedFailureRecoveryCommand:
+    document = raw_similarity_contract_value(value)
+    if document.get("schema_version") == "embedding-encoding-recovery/2.0":
+        return UnpublishedEmbeddingRecoveryCommand.model_validate(document)
+    return NativeEmbeddingFailureRecoveryCommand.model_validate(document)

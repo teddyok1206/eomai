@@ -17,11 +17,18 @@ from eom_workflow.embedding_encoding_recovery import (
     ENCODING_RECOVERY_SCHEMA_SHA256,
     ENCODING_RETRY_PRODUCER_EVENT,
     ENCODING_RETRY_SUCCESSOR_EVENT,
-    KNOWN_ENCODING_FAILURE_CODE,
-    KNOWN_ENCODING_FAILURE_EVENT,
     MAX_ENCODING_RETRIES,
+    RECOVERABLE_ENCODING_FAILURE_CODES,
+    RECOVERABLE_ENCODING_FAILURE_EVENTS,
     EmbeddingEncodingRetryDeclaration,
-    KnownFailedEmbeddingEncoding,
+    SupportedEncodingFailure,
+    encoding_failure_disposition,
+    parse_supported_encoding_failure,
+)
+from eom_workflow.embedding_unpublished_recovery import (
+    UNPUBLISHED_RECOVERY_PROTOCOL,
+    UNPUBLISHED_RECOVERY_SCHEMA_SHA256,
+    UnpublishedEmbeddingEncodingFailure,
 )
 from eom_workflow.local_embedding_encoding_dispatch import (
     SupportedEmbeddingAssociation,
@@ -174,6 +181,9 @@ class EmbeddingEncodingReservationStorage:
         EmbeddingEncodingReservationStorage._prepare_protocol(
             session, ENCODING_RECOVERY_PROTOCOL, ENCODING_RECOVERY_SCHEMA_SHA256
         )
+        EmbeddingEncodingReservationStorage._prepare_protocol(
+            session, UNPUBLISHED_RECOVERY_PROTOCOL, UNPUBLISHED_RECOVERY_SCHEMA_SHA256
+        )
 
     @staticmethod
     def require_recovery_protocol(session: Session) -> None:
@@ -181,6 +191,14 @@ class EmbeddingEncodingReservationStorage:
             ProtocolVersionRecord, ENCODING_RECOVERY_PROTOCOL, populate_existing=True
         )
         if record is None or record.schema_sha256 != ENCODING_RECOVERY_SCHEMA_SHA256:
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_RECOVERY_UNAVAILABLE")
+
+    @staticmethod
+    def require_unpublished_recovery_protocol(session: Session) -> None:
+        record = session.get(
+            ProtocolVersionRecord, UNPUBLISHED_RECOVERY_PROTOCOL, populate_existing=True
+        )
+        if record is None or record.schema_sha256 != UNPUBLISHED_RECOVERY_SCHEMA_SHA256:
             raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_RECOVERY_UNAVAILABLE")
 
     @staticmethod
@@ -546,11 +564,11 @@ class EmbeddingEncodingReservationStorage:
     @classmethod
     def known_failures(
         cls, session: Session, jobs: tuple[JobRecord, ...]
-    ) -> dict[str, KnownFailedEmbeddingEncoding]:
+    ) -> dict[str, SupportedEncodingFailure]:
         failed = {
             j.job_id: j
             for j in jobs
-            if j.status == "FAILED" and j.error_code == KNOWN_ENCODING_FAILURE_CODE
+            if j.status == "FAILED" and j.error_code in RECOVERABLE_ENCODING_FAILURE_CODES
         }
         if not failed:
             return {}
@@ -558,11 +576,16 @@ class EmbeddingEncodingReservationStorage:
         origins = cls.retry_origins(session, tuple(failed.values()))
         reservations = {r.job.job_id: r for r in cls.reservations(session, tuple(failed.values()))}
         values = {}
-        for event in cls.events(session, tuple(failed), (KNOWN_ENCODING_FAILURE_EVENT,)):
-            record = KnownFailedEmbeddingEncoding.model_validate(event.data)
+        for event in cls.events(session, tuple(failed), RECOVERABLE_ENCODING_FAILURE_EVENTS):
+            record = parse_supported_encoding_failure(event.data)
+            kind = encoding_failure_disposition(record)
+            if isinstance(record, UnpublishedEmbeddingEncodingFailure):
+                cls.require_unpublished_recovery_protocol(session)
             prior = reservations[event.job_id]
             if (
                 event.job_id in values
+                or event.event != kind.encoding_event
+                or failed[event.job_id].error_code != kind.code
                 or record.owned_job != owned_job(failed[event.job_id], origins.get(event.job_id))
                 or (
                     record.native_launch_job_id != prior.owner.intent.native_launch_job_id
@@ -580,7 +603,7 @@ class EmbeddingEncodingReservationStorage:
 
     @classmethod
     def record_known_failures(
-        cls, session: Session, values: tuple[KnownFailedEmbeddingEncoding, ...]
+        cls, session: Session, values: tuple[SupportedEncodingFailure, ...]
     ) -> None:
         """Storage leaf only: caller must prove exact original root retirement/current owner.
 
@@ -590,7 +613,7 @@ class EmbeddingEncodingReservationStorage:
         """
         cls.require_protocol(session)
         cls.require_recovery_protocol(session)
-        records = tuple(KnownFailedEmbeddingEncoding.model_validate(v) for v in values)
+        records = tuple(parse_supported_encoding_failure(v) for v in values)
         ids = tuple(v.owned_job.job_reference.job_id for v in records)
         if not 1 <= len(ids) <= 1024 or ids != tuple(sorted(set(ids))):
             raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_BATCH_INVALID")
@@ -604,6 +627,9 @@ class EmbeddingEncodingReservationStorage:
         previous = cls.known_failures(session, jobs)
         sequences = cls.sequences(session, jobs)
         for value in records:
+            kind = encoding_failure_disposition(value)
+            if isinstance(value, UnpublishedEmbeddingEncodingFailure):
+                cls.require_unpublished_recovery_protocol(session)
             job = by_id[value.owned_job.job_reference.job_id]
             owner = observed[job.job_id]
             if (
@@ -621,12 +647,12 @@ class EmbeddingEncodingReservationStorage:
                 session,
                 job,
                 sequences,
-                KNOWN_ENCODING_FAILURE_EVENT,
+                kind.encoding_event,
                 value.model_dump(mode="json"),
                 target=JobState.FAILED,
             )
-            job.error_code = KNOWN_ENCODING_FAILURE_CODE
-            job.error_message = "Original numerical unit failed and its retirement was verified."
+            job.error_code = kind.code
+            job.error_message = kind.message
         session.flush()
 
     @classmethod
@@ -635,7 +661,8 @@ class EmbeddingEncodingReservationStorage:
     ) -> tuple[JobRecord, ...]:
         """At most three append-only edges, bulk indexed reads; explicit Job reads never follow."""
         if not any(
-            j.status == "FAILED" and j.error_code == KNOWN_ENCODING_FAILURE_CODE for j in roots
+            j.status == "FAILED" and j.error_code in RECOVERABLE_ENCODING_FAILURE_CODES
+            for j in roots
         ):
             return roots
         current = {j.job_id: j for j in roots}
@@ -644,7 +671,7 @@ class EmbeddingEncodingReservationStorage:
             candidates = tuple(
                 j
                 for j in current.values()
-                if j.status == "FAILED" and j.error_code == KNOWN_ENCODING_FAILURE_CODE
+                if j.status == "FAILED" and j.error_code in RECOVERABLE_ENCODING_FAILURE_CODES
             )
             if not candidates:
                 break

@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/embedding-encoding-recovery/2.0",
+  "title": "Expired unpublished application failure after successful numerical retirement",
+  "description": "No numerical failure, completion publication, source grant or dispatch is inferred. Original numeric SUCCEEDED and original controller FAILED remain separate.",
+  "oneOf": [{"$ref": "#/$defs/recover"}, {"$ref": "#/$defs/failure"}],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "root": {
+      "type": "object", "additionalProperties": false,
+      "required": ["allocation_attempt_id", "invocation_id", "retirement_sha256", "retired_at", "parent_plan_job_id", "parent_request_sha256", "original_outcome", "stored_descriptors", "controller_invocation_id", "controller_outcome"],
+      "properties": {
+        "allocation_attempt_id": {"type": "string", "pattern": "^embeddingallocation_[0-9a-f]{32}$"},
+        "invocation_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+        "retirement_sha256": {"$ref": "#/$defs/hash"},
+        "retired_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+        "parent_plan_job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+        "parent_request_sha256": {"$ref": "#/$defs/hash"},
+        "original_outcome": {"const": "SUCCEEDED"},
+        "stored_descriptors": {"type": "integer", "const": 0},
+        "controller_invocation_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+        "controller_outcome": {"const": "FAILED"}
+      }
+    },
+    "recover": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "record_type", "workflow_id", "workflow_request_sha256", "command_id", "lease_generation", "root", "command_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-encoding-recovery/2.0"},
+        "record_type": {"const": "RECOVER"},
+        "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+        "workflow_request_sha256": {"$ref": "#/$defs/hash"},
+        "command_id": {"type": "string", "pattern": "^wfcmd_[0-9a-f]{32}$"},
+        "lease_generation": {"type": "integer", "minimum": 1},
+        "root": {"$ref": "#/$defs/root"},
+        "command_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "failure": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "record_type", "owned_job", "native_launch_job_id", "root", "event_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-encoding-recovery/2.0"},
+        "record_type": {"const": "FAILURE"},
+        "owned_job": {"$ref": "eom://schemas/workflow/embedding-encoding-job/1.0#/$defs/ownedJob"},
+        "native_launch_job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+        "root": {"$ref": "#/$defs/root"},
+        "event_sha256": {"$ref": "#/$defs/hash"}
+      }
+    }
+  }
+}

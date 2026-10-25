@@ -28,7 +28,7 @@ from tests.integration.test_embedding_encoding_reservations import (
 from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
-from tests.unit.embedding_encoding_recovery_fixtures import known_failure
+from tests.unit.embedding_encoding_recovery_fixtures import known_failure, unpublished_failure
 from tests.unit.embedding_encoding_reservation_fixtures import references, requests
 from tests.unit.test_embedding_encoding_reservations import SyntheticAdmission
 
@@ -43,14 +43,14 @@ def new_owner(engine, partition, seeds=("a", "b")):
     return fixture, admission, api
 
 
-def fail_owned(engine, fixture, admission, api, rows):
+def fail_owned(engine, fixture, admission, api, rows, *, failure_factory=known_failure):
     fixture = _owned_fixture(fixture, rows)
     admission.fixture = fixture
     api.bind_launch(fixture.association)
     values = tuple(
         sorted(
             (
-                known_failure(j, fixture.association.intent.native_launch_job_id)
+                failure_factory(j, fixture.association.intent.native_launch_job_id)
                 for j in fixture.association.owned_jobs
             ),
             key=lambda v: v.owned_job.job_reference.job_id,
@@ -62,13 +62,17 @@ def fail_owned(engine, fixture, admission, api, rows):
     return fixture, values
 
 
+@pytest.mark.parametrize("failure_factory", [known_failure, unpublished_failure])
 def test_actual_retry_replay_borrow_completion_and_old_failed_reference_are_separate(
     guarded_engine,
+    failure_factory,
 ):
     partition = "test-" + uuid4().hex
     old, old_gate, old_api = new_owner(guarded_engine, partition)
     reserved = old_api.reserve_and_attach(requests(old), old.association.intent)
-    old, failures = fail_owned(guarded_engine, old, old_gate, old_api, reserved)
+    old, failures = fail_owned(
+        guarded_engine, old, old_gate, old_api, reserved, failure_factory=failure_factory
+    )
     new, _gate, api = new_owner(guarded_engine, partition)
     assert {r.status for r in api.reserve_and_attach(requests(new), new.association.intent)} == {
         "FAILED"
@@ -103,11 +107,14 @@ def test_actual_retry_replay_borrow_completion_and_old_failed_reference_are_sepa
             assert Storage.known_failures(session, (job,))[job.job_id] == failure
 
 
-def test_concurrent_new_owners_create_only_one_successor_per_failed_encoding(guarded_engine):
+@pytest.mark.parametrize("failure_factory", [known_failure, unpublished_failure])
+def test_concurrent_new_owners_create_only_one_successor_per_failed_encoding(
+    guarded_engine, failure_factory
+):
     partition = "test-" + uuid4().hex
     old, gate, api = new_owner(guarded_engine, partition)
     rows = api.reserve_and_attach(requests(old), old.association.intent)
-    old, _ = fail_owned(guarded_engine, old, gate, api, rows)
+    old, _ = fail_owned(guarded_engine, old, gate, api, rows, failure_factory=failure_factory)
     candidates = [new_owner(guarded_engine, partition) for _ in range(2)]
     barrier = Barrier(2)
 

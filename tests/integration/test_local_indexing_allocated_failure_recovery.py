@@ -9,12 +9,15 @@ from threading import Barrier
 
 import pytest
 from eom_catalog_service.embedding_retired_failure_read import ResolvedRetiredEmbeddingFailure
+from eom_identifiers import new_job_id, new_logical_artifact_id, new_revision_id
 from eom_orchestrator.database import build_engine, build_session_factory
+from eom_orchestrator.local_embedding_control_artifacts import (
+    batch_execution_receipt_publication_key,
+)
 from eom_orchestrator.models import JobEventRecord, JobRecord
 from eom_workflow.embedding_encoding_recovery import (
-    KNOWN_ENCODING_FAILURE_CODE,
-    KNOWN_ENCODING_FAILURE_EVENT,
-    NativeEmbeddingFailureRecoveryCommand,
+    encoding_failure_disposition,
+    parse_supported_failure_recovery,
 )
 from eom_workflow_runner import local_indexing_allocated_failure_recovery as application
 from eom_workflow_runner.models import (
@@ -37,9 +40,18 @@ from tests.unit.inference_transfer_embedding_fixtures import seal
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-def allocated(guarded_engine, monkeypatch):
+@pytest.fixture(params=["numerical_failed", "unpublished_success"])
+def allocated(guarded_engine, monkeypatch, request):
     value = seed_allocated_failure(guarded_engine)
+    if request.param == "unpublished_success":
+        body = value.command.model_dump(mode="json")
+        body["schema_version"] = "embedding-encoding-recovery/2.0"
+        body["root"] |= dict(
+            original_outcome="SUCCEEDED",
+            controller_outcome="FAILED",
+            controller_invocation_id="c" * 32,
+        )
+        value.command = parse_supported_failure_recovery(seal(body, "command_sha256"))
     value.late_failure = False
     value.barrier = None
     value.allocation_sha = value.parent.allocation.control_request.message_sha256
@@ -110,7 +122,9 @@ def test_actual_exact_failure_replay_preserves_original_identity_and_successful_
         and after["parent"] == before["parent"] == allocated.parent_history
     )
     assert {r.status for r in after["jobs"]} == {"FAILED"}
-    assert {r.error_code for r in after["jobs"]} == {KNOWN_ENCODING_FAILURE_CODE}
+    assert {r.error_code for r in after["jobs"]} == {
+        encoding_failure_disposition(allocated.command).code
+    }
     assert (
         application.recover_retired_indexing_workflow(allocated.sessions, allocated.command)
         == result
@@ -155,7 +169,7 @@ def test_actual_changed_generation_or_nonrecoverable_input_is_not_repaired(alloc
                 session.get(WorkflowStepRunRecord, allocated.step_id).output_pointer_manifest = {
                     "synthetic": "existing"
                 }
-    command = NativeEmbeddingFailureRecoveryCommand.model_validate(seal(body, "command_sha256"))
+    command = parse_supported_failure_recovery(seal(body, "command_sha256"))
     before = snapshot(allocated)
     with pytest.raises(application.AllocatedIndexingFailureRecoveryError):
         application.recover_retired_indexing_workflow(allocated.sessions, command)
@@ -198,7 +212,8 @@ def test_actual_concurrent_recovery_has_one_canonical_failure_event(allocated):
                 .select_from(JobEventRecord)
                 .where(
                     JobEventRecord.job_id.in_(result.encoding_job_ids),
-                    JobEventRecord.event == KNOWN_ENCODING_FAILURE_EVENT,
+                    JobEventRecord.event
+                    == encoding_failure_disposition(allocated.command).encoding_event,
                 )
             )
             == 2
@@ -256,3 +271,32 @@ def test_corrupt_parent_confirmation_is_not_a_completed_binding(allocated):
             )
             == 0
         )
+
+
+@pytest.mark.parametrize("publication_state", ["CREATED", "SUCCEEDED"])
+def test_existing_or_incomplete_publication_cannot_be_failed_and_retried(
+    allocated, publication_state
+):
+    key = batch_execution_receipt_publication_key(
+        allocated.parent.request.request_sha256, allocated.parent_history.allocation.record_sha256
+    )
+    with allocated.sessions.begin() as session:
+        session.add(
+            JobRecord(
+                job_id=new_job_id(),
+                protocol_version="embedding-encoding-job/1.0",
+                task_type="control_embedding_batch_execution_receipt",
+                idempotency_key=key,
+                request_hash="sha256:" + "e" * 64,
+                request={"fixture": "existing publication"},
+                status=publication_state,
+                logical_artifact_id=new_logical_artifact_id(),
+                revision_id=new_revision_id(),
+            )
+        )
+    before = snapshot(allocated)
+    with pytest.raises(
+        application.AllocatedIndexingFailureRecoveryError, match="PUBLICATION_EXISTS"
+    ):
+        application.recover_retired_indexing_workflow(allocated.sessions, allocated.command)
+    assert snapshot(allocated) == before

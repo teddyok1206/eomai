@@ -15,6 +15,7 @@ from eom_orchestrator.embedding_batch_plan_store import read_embedding_batch_pla
 from eom_orchestrator.embedding_encoding_reservation_storage import (
     EmbeddingEncodingReservationStorage,
 )
+from eom_orchestrator.local_embedding_control_artifacts import batch_execution_publication_exists
 from eom_orchestrator.native_embedding_coordinator import NativeEmbeddingCoordinator
 from eom_orchestrator.native_embedding_launch_identity import (
     read_native_embedding_launch,
@@ -22,10 +23,10 @@ from eom_orchestrator.native_embedding_launch_identity import (
 )
 from eom_orchestrator.workflow_job_retirement import require_no_held_worker_leases
 from eom_workflow.embedding_encoding_recovery import (
-    ENCODING_RECOVERY_PROTOCOL,
-    KNOWN_ENCODING_FAILURE_CODE,
-    KnownFailedEmbeddingEncoding,
-    NativeEmbeddingFailureRecoveryCommand,
+    SupportedFailureRecoveryCommand,
+    encoding_failure_disposition,
+    parse_supported_encoding_failure,
+    parse_supported_failure_recovery,
 )
 from eom_workflow.local_embedding_encoding_dispatch import SupportedEmbeddingAssociation
 from eom_workflow.local_embedding_request import (
@@ -85,7 +86,7 @@ def _require(condition: bool, reason: str = "CONTEXT_INVALID") -> None:
 
 @dataclass(frozen=True, slots=True)
 class RecoveredAllocatedIndexingFailure:
-    command: NativeEmbeddingFailureRecoveryCommand
+    command: SupportedFailureRecoveryCommand
     step_run_id: str
     native_launch_job_id: str
     encoding_job_ids: tuple[str, ...]
@@ -95,7 +96,7 @@ class RecoveredAllocatedIndexingFailure:
 
 
 def recover_retired_indexing_workflow(
-    sessions: sessionmaker[Session], command: NativeEmbeddingFailureRecoveryCommand
+    sessions: sessionmaker[Session], command: SupportedFailureRecoveryCommand
 ) -> RecoveredAllocatedIndexingFailure:
     """Own one short root; late physical-fence failure rolls back EVERY metadata change.
 
@@ -103,7 +104,7 @@ def recover_retired_indexing_workflow(
     proof-shaped command, expired lease nor stored service/operator ID is authority.
     No source data, model, unit effect, retry producer or new allocation is created.
     """
-    command = NativeEmbeddingFailureRecoveryCommand.model_validate(command)
+    command = parse_supported_failure_recovery(command)
     try:
         with sessions.begin() as session:
             principal = require_native_workflow_maintenance_owner(
@@ -119,7 +120,7 @@ def recover_retired_indexing_workflow(
 
 def _parent_binding(
     session: Session,
-    command: NativeEmbeddingFailureRecoveryCommand,
+    command: SupportedFailureRecoveryCommand,
     physical: ResolvedRetiredEmbeddingFailure,
     request: SupportedLocalEmbeddingRequest,
     association: SupportedEmbeddingAssociation,
@@ -173,6 +174,14 @@ def _parent_binding(
     )
     child = bound.children[0]
     _require(
+        not batch_execution_publication_exists(
+            session,
+            parent_request_sha256=parent.request_sha256,
+            allocation_record_sha256=allocation.record_sha256,
+        ),
+        "PUBLICATION_EXISTS",
+    )
+    _require(
         child.workflow_id == command.workflow_id
         and child.step_run_id == association.intent.step_run_id
         and child.native_job_id == association.intent.native_launch_job_id
@@ -185,10 +194,11 @@ def _parent_binding(
 
 def _recover(
     session: Session,
-    command: NativeEmbeddingFailureRecoveryCommand,
+    command: SupportedFailureRecoveryCommand,
     physical: ResolvedRetiredEmbeddingFailure,
     principal: str,
 ) -> RecoveredAllocatedIndexingFailure:
+    kind = encoding_failure_disposition(command)
     workflow = session.scalar(
         select(WorkflowInstanceRecord)
         .where(WorkflowInstanceRecord.workflow_id == command.workflow_id)
@@ -311,8 +321,7 @@ def _recover(
             and events[0].command_id == command.command_id
             and (workflow.state, workflow.stage, original.state, step.state, history.state)
             == ("FAILED",) * 5
-            and (workflow.failure_code, original.error_code, step.error_code)
-            == (KNOWN_ENCODING_FAILURE_CODE,) * 3,
+            and (workflow.failure_code, original.error_code, step.error_code) == (kind.code,) * 3,
             "REPLAY_CONFLICT",
         )
         failures = storage.known_failures(session, jobs)
@@ -359,16 +368,14 @@ def _recover(
     failure_records = []
     for owned in association.owned_jobs:
         body = dict(
-            schema_version=ENCODING_RECOVERY_PROTOCOL,
+            schema_version=command.schema_version,
             record_type="FAILURE",
             owned_job=owned.model_dump(mode="json"),
             native_launch_job_id=launch.intent.native_launch_job_id,
             root=command.root.model_dump(mode="json"),
         )
         failure_records.append(
-            KnownFailedEmbeddingEncoding.model_validate(
-                body | {"event_sha256": content_sha256(body)}
-            )
+            parse_supported_encoding_failure(body | {"event_sha256": content_sha256(body)})
         )
     failed_encodings = tuple(
         sorted(failure_records, key=lambda f: f.owned_job.job_reference.job_id)
@@ -377,10 +384,10 @@ def _recover(
     storage.record_known_failures(session, failed_encodings)
     coordinator.record_known_failure(session, command)
     transition_command(original, CommandState.FAILED)
-    original.error_code = KNOWN_ENCODING_FAILURE_CODE
+    original.error_code = kind.code
     transition_step(step, StepState.FAILED)
-    step.error_code = KNOWN_ENCODING_FAILURE_CODE
-    workflow.failure_code = KNOWN_ENCODING_FAILURE_CODE
+    step.error_code = kind.code
+    workflow.failure_code = kind.code
     transition_stage(
         session,
         workflow.workflow_id,
