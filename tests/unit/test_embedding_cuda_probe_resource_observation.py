@@ -293,7 +293,7 @@ def test_benchmark_retained_phase_still_checks_actual_physical_fencing(kernel, m
     elif fault == "resource_type":
         observed = None
     else:
-        observed = replace(observed, pid1_descriptor=observed.pid1_descriptor + 1)
+        observed = replace(observed, pid1_descriptor=-1)
     with pytest.raises(ValueError, match="BENCHMARK_CUDA_RESOURCE_OBSERVATION_INVALID"):
         owner.observe_benchmark_cuda_retained_resources(observed, unit=unit)
 
@@ -504,16 +504,47 @@ def test_retained_phase_needs_no_worker_fd_and_does_not_release_the_guard(kernel
     )
 
 
-@pytest.mark.parametrize("fault", ("lost_lock", "descriptor_changed", "device_changed"))
+@pytest.mark.parametrize("fault", ("lost_lock", "descriptor_missing", "device_changed"))
 def test_retained_phase_rejects_lost_or_changed_physical_fence(kernel, fault):
     report, k, state, _ = kernel
     observed = observe(kernel)
     if fault == "lost_lock":
         state["unheld_pid1"] = True
-    elif fault == "descriptor_changed":
-        state["pid1"] = ["81"]
+    elif fault == "descriptor_missing":
+        state["pid1"] = []
     else:
         k.named[20] = metadata(k.values[20].st_mode, 500, rdev=k.values[20].st_rdev)
+    with pytest.raises(ValueError):
+        owner.observe_cuda_probe_retained_resources(
+            observed, unit="eom-embedding-native-cuda-probe@" + report.execution_id + ".service"
+        )
+
+
+@pytest.mark.parametrize("relocated", ["81", "3249"])
+def test_retained_same_open_description_survives_pid1_descriptor_renumbering(kernel, relocated):
+    report, _, state, _ = kernel
+    observed = observe(kernel)
+    assert observed.pid1_descriptor == 80
+    state["pid1"] = [relocated]
+    current = owner.observe_cuda_probe_retained_resources(
+        observed, unit="eom-embedding-native-cuda-probe@" + report.execution_id + ".service"
+    )
+    assert current is observed and current.pid1_descriptor == 80
+
+
+@pytest.mark.parametrize("fault", ["unheld_pid1", "missing", "duplicate", "store"])
+def test_relocated_descriptor_still_requires_exact_unit_and_unique_kernel_flock(kernel, fault):
+    report, _, state, _ = kernel
+    observed = observe(kernel)
+    state["pid1"] = ["3249"]
+    if fault == "unheld_pid1":
+        state[fault] = True
+    elif fault == "missing":
+        state["pid1"] = []
+    elif fault == "duplicate":
+        state["pid1"] = ["3249", "3250"]
+    else:
+        state["store"] = b"[]"
     with pytest.raises(ValueError):
         owner.observe_cuda_probe_retained_resources(
             observed, unit="eom-embedding-native-cuda-probe@" + report.execution_id + ".service"
@@ -703,7 +734,7 @@ def test_index_retained_never_uses_another_family_or_lost_store(kernel, monkeypa
     elif fault == "type":
         observed = None
     elif fault == "descriptor":
-        observed = replace(observed, pid1_descriptor=81)
+        observed = replace(observed, pid1_descriptor=-1)
     elif fault == "pid1":
         kernel[2]["unheld_pid1"] = True
     else:

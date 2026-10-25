@@ -287,10 +287,14 @@ def observe_native_cuda_index_retained_resources(
 
 def _assert_retained_resources(observed: _RetainedGpuUnitResources, unit: str) -> None:
     lease = _validated_retained_lease(observed)
+    _require(type(observed.pid1_descriptor) is int and 0 <= observed.pid1_descriptor < 10**7)
     _require(_epoch(_LOCK.lstat()) == lease.lock_epoch)
     _require(_epoch(_LOCK.parent.lstat())[:5] == lease.parent_epoch)
     _require_tmpfs_device(lease.lock_epoch[0])
-    _require(_observe_retained_store_descriptor(lease, unit) == observed.pid1_descriptor)
+    # PID1 may renumber the same open description during daemon-reload. Its
+    # historical fd is a handle, not identity: re-resolve the exact unit store,
+    # inode/epoch and unique kernel flock without changing the original record.
+    _observe_retained_store_descriptor(lease, unit)
     _require(_epoch(_LOCK.lstat()) == lease.lock_epoch)
     _require(_epoch(_LOCK.parent.lstat())[:5] == lease.parent_epoch)
     for node in observed.device_nodes:

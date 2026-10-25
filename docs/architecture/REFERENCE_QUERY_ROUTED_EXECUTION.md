@@ -370,3 +370,42 @@ memory stall was only0.35seconds and current pressure0; this is not evidence tha
 memory pressure caused the long reconciliation. No active memory cap was changed.
 Reconciliation wall time includes source/control validation, publication and CPU
 standby discovery and is not a numerical GPU-forward timing or throughput claim.
+
+### Compatible receiver rollout and retained-handle correction — 2026-10-25 UTC
+
+API/platform/Web, the CPU/private QUERY provider and the Catalog dual-device
+reader were installed from `06b5d0e9`. Official API RECORD/isolation and Web
+service-identity integrity passed; HTTPS readiness returned200. GPU-default
+QUERY and authenticated numerical acceptance are still pending. The initial
+QUERY-selector guard omitted the reviewed prepare/3.0 client delta; the exact
+one-member old/new hashes were checked against the source diff and six pure
+selector tests passed before the supported selection continued. Initial
+read-only preflight/selector/startup-health failures remain recorded, not PASS.
+
+During this rollout PID1 renumbered its retained GPU-lock descriptor from278
+to3249. The original GPU worker actually ended successfully; its root controller
+then failed because retained-resource validation incorrectly equated a historic
+descriptor number with physical identity. Supported read-only terminal
+observation reproduced that failure. A separate public terminal-resource read
+proved the same device nodes, lease parent/file epochs, exact unit FD store and
+exclusive kernel flock remained held. The original INDEX service stopped and
+its sixteen encodings remain unpublished; it must not be reported as continuous
+or accepted numerical completion. No old failure or worker outcome is rewritten.
+
+The correction keeps the original frozen observation and re-resolves the exact
+unit's unique retained open description. Descriptor numbers are local handles;
+the canonical physical identity is the protected lease/device epoch plus actual
+exclusive kernel flock and unit FD-store membership. Missing/duplicate/lost or
+different resources remain explicit errors. This is a local observer correction,
+not a new GPU lock, permission grant or numerical runtime. Core reproduction
+failed before the correction; relocated-handle and negative physical-fence
+regressions protect the change. Runtime cutovers must additionally avoid an
+in-flight control transaction until this corrected owner is installed.
+
+The exact same-inode descriptor relocation regression failed on the predecessor.
+Corrected retained-resource/lifetime/failure-reconciliation/owner-proxy/unit-policy
+regressions:277 PASS,32.74seconds
+(`/tmp/eom-pid1-fd-relocation-regression-20261025-r3.log`). Strict mypy for the
+observer and scoped Ruff/format/diff checks passed. The first invocation selected
+a nonexistent test path and ran zero tests; the second retained an obsolete
+descriptor-number negative fixture (276 PASS,1 failure). Both logs are retained.
