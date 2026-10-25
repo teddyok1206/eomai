@@ -8,16 +8,6 @@ from enum import StrEnum
 from threading import Condition
 from types import MappingProxyType
 
-from eom_catalog_contracts.embedding_work_batch import (
-    MAX_EMBEDDING_WORK_BATCH_SECONDS,
-    MAX_EMBEDDING_WORK_BATCH_VECTOR_BYTES,
-    EmbeddingWorkBatchInput,
-)
-from eom_identifiers import content_sha256
-from eom_workflow.embedding_batch_plan import (
-    BATCH_PLAN_PROTOCOL,
-    EmbeddingBatchBound,
-)
 from eom_workflow.embedding_batch_plan_family import validate_embedding_batch_query_context
 from eom_workflow.reference_query_execution import SupportedReferenceQueryWorkflowRequest
 
@@ -30,6 +20,7 @@ from eom_workflow_runner.embedding_batch_source_authorization import (
     CatalogEmbeddingBatchSourceAuthorization,
     ReferenceQueryBatchSource,
 )
+from eom_workflow_runner.reference_query_batch_binding import prepare_reference_query_batch_binding
 from eom_workflow_runner.reference_query_batch_material import PreparedBatchReferenceQuery
 from eom_workflow_runner.reference_query_owner_admission import CatalogReferenceQueryOwnerAdmission
 
@@ -209,31 +200,11 @@ class CatalogReferenceQueryBatchGroup:
     def _run(
         self, children: tuple[PreparedReferenceQueryBatchChild, ...]
     ) -> PublishedEmbeddingBatchExecution:
-        scope, resources = (
-            self.active.request.scope,
-            self.decision.selected.profile.resource_profile,
-        )
-        body = dict(
-            schema_version="embedding-work-batch-input/1.0",
-            purpose="REFERENCE_QUERY",
-            scope=scope.model_dump(mode="json"),
-            routing_decision_sha256=self.decision.decision_sha256,
-            resource_profile_sha256=resources.resource_profile_sha256,
-            timeout_seconds=min(resources.timeout_seconds, MAX_EMBEDDING_WORK_BATCH_SECONDS),
-            vector_max_bytes=MAX_EMBEDDING_WORK_BATCH_VECTOR_BYTES,
-            children=[
-                dict(
-                    scope_sha256=scope.scope_sha256,
-                    request=child.material.request.model_dump(mode="json"),
-                )
-                for child in children
-            ],
-        )
-        batch = EmbeddingWorkBatchInput.model_validate(
-            body | {"request_sha256": content_sha256(body)}
-        )
         route = self.active.history.route
         assert route is not None
+        binding, batch = prepare_reference_query_batch_binding(
+            self.active.request, route, tuple(child.material for child in children)
+        )
         if self.indexes:
             validate_embedding_batch_route(
                 policy=self.routing_policy,
@@ -242,29 +213,6 @@ class CatalogReferenceQueryBatchGroup:
                 batch=batch,
                 indexes=self.indexes,
             )
-        binding_body = dict(
-            schema_version=BATCH_PLAN_PROTOCOL,
-            message_type="BOUND",
-            request_sha256=self.active.request.request_sha256,
-            route_record_sha256=route.record_sha256,
-            batch_request_sha256=batch.request_sha256,
-            resource_profile_sha256=resources.resource_profile_sha256,
-            children=[
-                dict(
-                    selection_sha256=self.active.request.child_selection_sha256s[child.ordinal],
-                    workflow_id=child.material.association.workflow_id,
-                    step_run_id=child.material.association.step_run_id,
-                    native_job_id=child.material.association.native_launch_job_id,
-                    workflow_request_sha256=child.material.workflow_request.request_sha256,
-                    launch_association_sha256=child.material.association.association_sha256,
-                    native_input_sha256=child.material.request.request_sha256,
-                )
-                for child in children
-            ],
-        )
-        binding = EmbeddingBatchBound.model_validate(
-            binding_body | {"record_sha256": content_sha256(binding_body)}
-        )
         authorization = CatalogEmbeddingBatchSourceAuthorization(
             batch, tuple(child.source for child in children)
         )

@@ -108,6 +108,17 @@ class ReferenceQueryBatchSource:
         _require(batch.purpose == "REFERENCE_QUERY")
         _require(isinstance(child.request, EmbeddingReferenceQueryInputV11))
         assert isinstance(child.request, EmbeddingReferenceQueryInputV11)
+        _require(
+            batch.scope.actor_kind == "OPERATOR"
+            and batch.scope.actor_id == self.request.operator_audit.operator_id
+            and batch.scope.access_policy_sha256 == self.request.context_request.policy_sha256
+            and batch.resource_profile_sha256
+            == self.request.resource_profile.resource_profile_sha256
+        )
+        self.authorize_current(child.request)
+
+    def authorize_current(self, native_input: EmbeddingReferenceQueryInputV11) -> None:
+        """Current child-only lease/source fence, also used after a prior canonical CPU binding."""
         with self.transaction() as session:
             current = self.owner.resolve_execution_sources(
                 session,
@@ -125,15 +136,7 @@ class ReferenceQueryBatchSource:
                 )
                 == self.launch
             )
-            validate_current_reference_query_input(current, self.launch, child.request)
-            _require(
-                batch.scope.actor_kind == "OPERATOR"
-                and batch.scope.actor_id == current.request.operator_audit.operator_id
-                and batch.scope.access_policy_sha256
-                == current.request.context_request.policy_sha256
-                and batch.resource_profile_sha256
-                == current.request.resource_profile.resource_profile_sha256
-            )
+            validate_current_reference_query_input(current, self.launch, native_input)
             self.owner.identity.fence_current_operator(
                 session, current.request.operator_audit.operator_id
             )

@@ -9,8 +9,6 @@ from eom_catalog_contracts.similarity_context_v2 import (
     parse_supported_similarity_context_request,
 )
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
-from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
-from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_identifiers import content_sha256
 from eom_workflow.embedding_batch_plan_family import (
     SupportedEmbeddingBatchRequest,
@@ -21,21 +19,19 @@ from eom_workflow.reference_query_execution import (
     parse_supported_reference_query_workflow_request,
 )
 
-from eom_workflow_runner.actor_authorization_adapters import (
-    OperatorIdentityWorkflowActorAuthorizer,
-    SqlAlchemyOperatorActorSource,
-)
 from eom_workflow_runner.engine import WorkflowRunner
 from eom_workflow_runner.models import WorkflowInstanceRecord
 from eom_workflow_runner.reference_query_batch_executor import CatalogBatchReferenceQueryExecutor
-from eom_workflow_runner.reference_query_consumer_read import CatalogCompletedReferenceQueryRead
-from eom_workflow_runner.reference_query_owner_runtime import ReferenceQueryRoleExecutionDisabled
+from eom_workflow_runner.reference_query_consumer_read import (
+    read_completed_reference_query_selection,
+)
 from eom_workflow_runner.reference_query_preparation import (
     prepare_and_start_reference_query_in_session,
 )
 from eom_workflow_runner.reference_query_prepare_application import reference_query_prepare_identity
-from eom_workflow_runner.repository import CommandExecutionFamily, NativeCommandActorSelection
-from eom_workflow_runner.settings import RunnerConfig, WorkflowSettings
+from eom_workflow_runner.reference_query_runner_composition import (
+    build_reference_query_workflow_runner,
+)
 
 
 def _require(condition: bool) -> None:
@@ -100,28 +96,8 @@ def start_batch_reference_queries(
 
 def _runner(executor: CatalogBatchReferenceQueryExecutor) -> WorkflowRunner:
     group = executor.group
-    return WorkflowRunner(
-        group.publisher.engine,
-        WorkflowSettings(),
-        catalog=WorkflowCatalogService(group.publisher.engine, executor.owner.settings),
-        actor_authorizer=OperatorIdentityWorkflowActorAuthorizer(
-            SqlAlchemyOperatorActorSource(group.publisher.engine)
-        ),
-        readiness=ReferenceQueryRoleExecutionDisabled(),
-        available_roles=frozenset(),
-        reference_query_owner=executor.owner,
-        reference_query_executor=executor,
-        command_families=frozenset({CommandExecutionFamily.REFERENCE_QUERY}),
-        command_actor_selection=NativeCommandActorSelection(
-            "human", group.selection.scope.actor_id
-        ),
-        runner_config=RunnerConfig(
-            version=1,
-            poll_interval_seconds=5,
-            command_lease_seconds=900,
-            command_lease_heartbeat_seconds=30,
-            max_commands_per_run=1,
-        ),
+    return build_reference_query_workflow_runner(
+        group.publisher, executor.owner, executor, operator_id=group.selection.scope.actor_id
     )
 
 
@@ -131,21 +107,7 @@ def _completed(
     owner, group = executor.owner, executor.group
     caller = EmbeddingRegistryCaller(group.selection.scope.actor_id)
     with group.publisher.sessions.begin() as session:
-        workflow = session.get(WorkflowInstanceRecord, workflow_id, populate_existing=True)
-        _require(workflow is not None and workflow.state == "COMPLETED")
-        assert workflow is not None
-        request = parse_supported_reference_query_workflow_request(workflow.initial_request)
-        reader = PinnedArtifactReadContext.for_session(session, owner.settings)
-        current = owner.resolve_completed_sources(
-            session, caller, request, workflow_id=workflow_id, artifact_reader=reader
-        )
-        # Reuse the actual canonical completed-read owner, not just a state flag.
-        CatalogCompletedReferenceQueryRead(
-            owner, workflow_id=workflow_id, request=request, artifact_reader=reader
-        ).resolve_reference_query_in_session(
-            session, caller, request.context_request, current.sources.prepared
-        )
-        return current.output
+        return read_completed_reference_query_selection(session, owner, caller, workflow_id).output
 
 
 def drive_batch_reference_queries(

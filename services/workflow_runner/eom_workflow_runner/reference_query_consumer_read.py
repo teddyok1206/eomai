@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from eom_catalog_contracts.similarity_context_v2 import (
     SupportedSimilarityContextRequest,
     parse_supported_similarity_context_request,
@@ -28,6 +30,7 @@ from eom_workflow.native_reference_query_coordinator import (
     NativeQueryPublished,
 )
 from eom_workflow.reference_query_execution import (
+    ReferenceQueryStepOutput,
     SupportedReferenceQueryWorkflowRequest,
     parse_supported_reference_query_workflow_request,
 )
@@ -39,6 +42,51 @@ from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.models import WorkflowInstanceRecord
 from eom_workflow_runner.reference_query_publication_read import resolve_reference_query_publication
 from eom_workflow_runner.reference_query_source_read import ReferenceQuerySourceOwner
+
+
+@dataclass(frozen=True, slots=True)
+class CompletedReferenceQuerySelectionRead:
+    selection: CompletedSimilarityQuerySelection
+    output: ReferenceQueryStepOutput
+
+
+def read_completed_reference_query_selection(
+    session: Session,
+    owner: ReferenceQuerySourceOwner,
+    caller: EmbeddingRegistryCaller,
+    workflow_id: str,
+) -> CompletedReferenceQuerySelectionRead:
+    """Same canonical completed-read owner for standalone, CUDA and CPU-routed callers."""
+    root = session.get_transaction()
+    if root is None or not root.is_active or session.in_nested_transaction():
+        raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
+    owner.identity.fence_current_operator(session, caller.operator_id)
+    workflow = session.get(WorkflowInstanceRecord, workflow_id, populate_existing=True)
+    if (
+        workflow is None
+        or workflow.created_actor_type != "human"
+        or workflow.created_actor_id != caller.operator_id
+    ):
+        raise SimilarityContextReadError("SOURCE_ACCESS_DENIED")
+    if workflow.state != "COMPLETED":
+        raise SimilarityContextReadError("QUERY_RESULT_INVALID")
+    request = parse_supported_reference_query_workflow_request(workflow.initial_request)
+    selection = CompletedSimilarityQuerySelection(
+        workflow_id=workflow.workflow_id,
+        workflow_request_sha256=request.request_sha256,
+        context_request_sha256=request.context_request.request_sha256,
+    )
+    require_completed_query_selection_metadata(workflow, caller, selection)
+    reader = PinnedArtifactReadContext.for_session(session, owner.settings)
+    current = owner.resolve_completed_sources(
+        session, caller, request, workflow_id=workflow_id, artifact_reader=reader
+    )
+    CatalogCompletedReferenceQueryRead(
+        owner, workflow_id=workflow_id, request=request, artifact_reader=reader
+    ).resolve_reference_query_in_session(
+        session, caller, request.context_request, current.sources.prepared
+    )
+    return CompletedReferenceQuerySelectionRead(selection, current.output)
 
 
 def require_completed_query_selection_metadata(

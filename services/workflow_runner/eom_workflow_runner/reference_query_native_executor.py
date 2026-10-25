@@ -50,6 +50,11 @@ from eom_workflow_runner.readiness import (
     RuntimeReadinessReport,
 )
 from eom_workflow_runner.reference_query_completion import NativeReferenceQueryCompletion
+from eom_workflow_runner.reference_query_cpu_execution import (
+    CpuReferenceQueryExecution,
+    CpuReferenceQueryExecutionContext,
+    FixedCpuReferenceQueryExecution,
+)
 from eom_workflow_runner.reference_query_execution_port import ReferenceQueryStepPending
 from eom_workflow_runner.reference_query_launch_preparation import (
     prepare_reference_query_launch_candidate,
@@ -78,6 +83,7 @@ class CatalogNativeReferenceQueryExecutor:
         publisher: ControlFileSetPublisher,
         launcher: FixedNativeQueryLauncher,
         source_commit: str,
+        execution_backend: CpuReferenceQueryExecution | None = None,
     ) -> None:
         owner.configuration.__post_init__()
         if owner.catalog.engine is not publisher.engine or (
@@ -88,6 +94,13 @@ class CatalogNativeReferenceQueryExecutor:
         EmbeddingArtifactStore(publisher, source_commit=source_commit)
         self.owner, self.publisher, self.launcher = owner, publisher, launcher
         self.source_commit = source_commit
+        self.execution_backend = (
+            execution_backend
+            if execution_backend is not None
+            else FixedCpuReferenceQueryExecution(launcher)
+        )
+        if self.execution_backend.launcher is not launcher:
+            raise ValueError("REFERENCE_QUERY_EXECUTOR_OWNER_MISMATCH")
         self.completion = NativeReferenceQueryCompletion(owner)
 
     def evaluate(self, request: SupportedReferenceQueryWorkflowRequest) -> RuntimeReadinessReport:
@@ -311,7 +324,10 @@ class CatalogNativeReferenceQueryExecutor:
         # No Session/root/Workflow lock survives a numerical run or unit observation.
         if len(history.records) == 1:
             try:
-                result = self.launcher.run(prepared)
+                result = self.execution_backend.run(
+                    prepared,
+                    source=CpuReferenceQueryExecutionContext(self.owner, command_lease),
+                )
                 observed = self.launcher.completion_observation(prepared, result)
             except NativeQueryLaunchError as error:
                 if error.code == "NATIVE_QUERY_KNOWN_FAILED":

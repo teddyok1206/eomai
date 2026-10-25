@@ -7,7 +7,6 @@ from typing import Literal
 
 from eom_catalog_contracts.embedding_work_batch import MAX_EMBEDDING_WORK_BATCH_SECONDS
 from eom_orchestrator.embedding_batch_plan_store import EmbeddingBatchPlanStore
-from eom_workflow.embedding_batch_owner_control import validate_embedding_batch_owner_context
 from eom_workflow.embedding_batch_plan_family import SupportedEmbeddingBatchRequest
 from eom_workflow.local_embedding_encoding_dispatch import SupportedEmbeddingIntent
 from eom_workflow.local_embedding_request_v2 import SupportedLocalEmbeddingRequest
@@ -20,6 +19,10 @@ from eom_workflow_runner.document_embedding_execution import (
     DocumentEmbeddingOutput,
     DocumentExecutionState,
     OwnedDocumentEmbedding,
+)
+from eom_workflow_runner.embedding_batch_cpu_route import (
+    EmbeddingBatchCpuRouteError,
+    require_original_cpu_batch_route,
 )
 from eom_workflow_runner.embedding_batch_execution import (
     CatalogEmbeddingBatchExecution,
@@ -98,43 +101,12 @@ class CatalogCpuDocumentBatchExecution:
 
     def _require_original_route(self) -> None:
         context, original = self.context, self.unavailable
-        with (
-            context.operation.publisher.sessions.begin() as session,
-            context.operation.admission.admit(session, context.parent) as sources,
-        ):
-            current = EmbeddingBatchPlanStore(
-                context.parent, sources.selection, sources.policy
-            ).read(session)
-            _require(
-                current is not None
-                and current.failure is None
-                and current.state in {"RUNNING", "SUCCEEDED"}
-                and current.allocation == original.history.allocation
-                and current.route == original.history.route
-                and current.route is not None
-            )
-            assert current is not None and current.route is not None
-            observation = current.route.observation
-            _require(
-                observation.status == "BUSY"
-                and observation.phase == "PRE_EXECUTION"
-                and observation.cuda_launch_state == "NOT_STARTED"
-                and current.route.decision == context.decision
-                and context.decision.reason == "GPU_BUSY_CPU_FALLBACK"
-            )
-            if isinstance(original, UnavailableEmbeddingBatchExecution):
-                _require(
-                    observation.allocation_reference_sha256
-                    == original.root_observation.message_sha256
-                )
-                validate_embedding_batch_owner_context(
-                    current.allocation.control_request,
-                    context.operation.controller_release,
-                    original.root_observation,
-                )
-            # Existing history is read again from its exact canonical Plan in
-            # this actual-owner root. It preserves the authenticated original
-            # BUSY/NOT_STARTED route, not a fresh observation or GPU grant.
+        try:
+            current = require_original_cpu_batch_route(context.operation, context.parent, original)
+        except EmbeddingBatchCpuRouteError:
+            raise ValueError("DOCUMENT_CPU_ROUTE_INVALID") from None
+        assert current.route is not None
+        _require(current.route.decision == context.decision)
 
     def validate_workflow(self, workflow: WorkflowInstanceRecord) -> None:
         self.context.validate_workflow(workflow)

@@ -21,12 +21,16 @@ from eom_identity_service import OperatorAuthorizationFenceError
 from eom_orchestrator.models import ArtifactRevisionRecord, JobEventRecord, JobRecord
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
 from eom_workflow_runner.models import WorkflowStepRunRecord
-from eom_workflow_runner.reference_query_consumer_read import CatalogCompletedReferenceQueryRead
+from eom_workflow_runner.reference_query_consumer_read import (
+    CatalogCompletedReferenceQueryRead,
+    read_completed_reference_query_selection,
+)
 from eom_workflow_runner.reference_query_owner_admission import (
     ResolvedCompletedReferenceQuerySources,
 )
 from eom_workflow_runner.reference_query_source_read import CatalogReferenceQueryReadOwner
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_reference_query_native_executor import make_executor_case
@@ -370,3 +374,30 @@ def test_read_only_owner_reaches_canonical_consumer_without_constructing_executi
     assert len(observed) == 2 and observed[0] is observed[1]
     assert counts(completed.value) == before and len(completed.value.runs) == 1
     forbidden.assert_not_called()
+
+
+def test_completion_selection_snapshot_requires_an_explicit_caller_root_before_any_read():
+    session = Mock(spec=Session)
+    session.get_transaction.return_value = None
+    owner = Mock()
+    with pytest.raises(SimilarityContextReadError):
+        read_completed_reference_query_selection(
+            session, owner, EmbeddingRegistryCaller("operator_" + "a" * 32), "workflow_" + "b" * 32
+        )
+    session.get.assert_not_called()
+    owner.identity.fence_current_operator.assert_not_called()
+
+
+def test_completion_selection_snapshot_rejects_foreign_owner_before_parsing_or_artifact_read():
+    session = Mock(spec=Session)
+    session.get_transaction.return_value = SimpleNamespace(is_active=True)
+    session.in_nested_transaction.return_value = False
+    session.get.return_value = SimpleNamespace(
+        created_actor_type="human", created_actor_id="operator_" + "c" * 32
+    )
+    owner = Mock()
+    caller = EmbeddingRegistryCaller("operator_" + "a" * 32)
+    with pytest.raises(SimilarityContextReadError):
+        read_completed_reference_query_selection(session, owner, caller, "workflow_" + "b" * 32)
+    owner.identity.fence_current_operator.assert_called_once_with(session, caller.operator_id)
+    owner.resolve_completed_sources.assert_not_called()

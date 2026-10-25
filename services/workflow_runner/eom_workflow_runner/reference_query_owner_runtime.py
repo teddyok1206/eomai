@@ -10,7 +10,6 @@ from eom_catalog_contracts.embedding_reference_query import ReferenceQuerySpaces
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryOwnerConfiguration
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.settings import CatalogSettings
-from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_identity_service import (
     AuthenticatedOperatorSession,
     AuthenticatedSessionFence,
@@ -37,27 +36,21 @@ from eom_workflow.reference_query_owner_configuration import (
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session
 
-from eom_workflow_runner.actor_authorization_adapters import (
-    OperatorIdentityWorkflowActorAuthorizer,
-    SqlAlchemyOperatorActorSource,
-)
-from eom_workflow_runner.engine import WorkflowRunner
 from eom_workflow_runner.local_indexing_runtime_verification import FixedIndexingRuntimeVerification
-from eom_workflow_runner.readiness import (
-    ReadinessStatus,
-    RuntimeReadinessCheck,
-    RuntimeReadinessReport,
-)
 from eom_workflow_runner.reference_query_native_executor import CatalogNativeReferenceQueryExecutor
 from eom_workflow_runner.reference_query_owner_admission import CatalogReferenceQueryOwnerAdmission
 from eom_workflow_runner.reference_query_prepare_application import NativeReferenceQueryPreparation
 from eom_workflow_runner.reference_query_prepare_driver import ReferenceQueryPrepareDriver
+from eom_workflow_runner.reference_query_runner_composition import (
+    ReferenceQueryRoleExecutionDisabled as ReferenceQueryRoleExecutionDisabled,
+)
+from eom_workflow_runner.reference_query_runner_composition import (
+    build_reference_query_workflow_runner,
+)
 from eom_workflow_runner.reference_query_source_read import (
     ReferenceQueryOwnerConfiguration,
     read_selected_reference_query_controls,
 )
-from eom_workflow_runner.repository import CommandExecutionFamily, NativeCommandActorSelection
-from eom_workflow_runner.settings import RunnerConfig, WorkflowSettings
 
 REFERENCE_QUERY_SERVICE_STATE_ROOT = Path("/var/lib/eom-workflow-runner/reference-query-owner")
 
@@ -79,20 +72,6 @@ def require_reference_query_database_owner(
         or role_oid != expected.role_oid
     ):
         raise ValueError("REFERENCE_QUERY_OWNER_DATABASE_ROLE_MISMATCH")
-
-
-class ReferenceQueryRoleExecutionDisabled:
-    def evaluate(self) -> RuntimeReadinessReport:
-        return RuntimeReadinessReport(
-            (
-                RuntimeReadinessCheck(
-                    "role_execution",
-                    ReadinessStatus.FAIL,
-                    "REFERENCE_QUERY_ROLE_DISABLED",
-                    "native QUERY only",
-                ),
-            )
-        )
 
 
 def require_current_reference_query_provider(
@@ -157,26 +136,8 @@ class ReferenceQueryOwnerRuntime:
             launcher=self.launcher,
             source_commit=self.configuration.owner_source_commit,
         )
-        runner = WorkflowRunner(
-            self.engine,
-            WorkflowSettings(),
-            catalog=WorkflowCatalogService(self.engine, self.catalog_settings),
-            actor_authorizer=OperatorIdentityWorkflowActorAuthorizer(
-                SqlAlchemyOperatorActorSource(self.engine)
-            ),
-            readiness=ReferenceQueryRoleExecutionDisabled(),
-            available_roles=frozenset(),
-            reference_query_owner=owner,
-            reference_query_executor=executor,
-            command_families=frozenset({CommandExecutionFamily.REFERENCE_QUERY}),
-            command_actor_selection=NativeCommandActorSelection("human", capture.operator_id),
-            runner_config=RunnerConfig(
-                version=1,
-                poll_interval_seconds=5,
-                command_lease_seconds=900,
-                command_lease_heartbeat_seconds=30,
-                max_commands_per_run=1,
-            ),
+        runner = build_reference_query_workflow_runner(
+            self.publisher, owner, executor, operator_id=capture.operator_id
         )
         return NativeReferenceQueryPreparation(
             owner=owner, executor=executor, runner=runner, driver=self.driver, spaces=self.spaces
