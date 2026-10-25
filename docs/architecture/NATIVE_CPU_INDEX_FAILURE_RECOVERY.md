@@ -103,3 +103,78 @@ called the test-local Artifact member helper with the wrong signature. Correctin
 that fixture did not relax production schema, source admission or runtime checks.
 OS/model/source leaves in these PG tests are explicitly synthetic. Installed-wheel
 and exact original CPU unit checks still precede any production maintenance.
+
+## Independent controller selection and unbound failure closure
+
+The first installed successor's metadata process started, but the operational
+rollout advanced its root-controller entrypoint to07ec7b32 while declaring
+controller04. The existing channel correctly rejected ROOT_READY. This was a
+selection error, not permission to relax controller identity. Restore the exact
+previous controller environment; retain the failed unit, retirement and parent.
+The metadata owner stays07, numerical SDK stayseae2c0d3 and controller stays04.
+
+For this one known pre-binding failure, use existing contracts/owners:
+
+1. Responsibility/boundary: explicit root/schema-owner technical maintenance;
+   not a worker, source grant, retry loop or new production service.
+2. Canonical proof: the exact original FAILED numerical retirement, allocation
+   and unbound parent Job; no fabricated Workflow or compute-grant identity.
+3. Identity/pointers: pin parent Job/request/allocation, original invocation and
+   retirement raw SHA. Publish the small existing recovery1 `rootFailure` value
+   under its exact JSON Schema fragment; the original protected record remains.
+4. Artifact owner: `ControlFileSetPublisher`, one explicit temporary local JSON
+   materialization, type `control_embedding_retired_root_failure`. Existing
+   logical/revision/member/hash identity; no binary or full result DB value.
+5. Access/structures: exact indexed Job/key lookups, one ordered event history,
+   one immutable typed proof, existing unique publication key. O(1) bounded
+   control metadata; never scan or quote the corpus.
+6. Transaction/concurrency: actual schema-owner admission, original Job lock,
+   no route/binding/Workflow/completion publication, expired original allocation;
+   physical proof is fenced before/after the short transaction. Late changes
+   roll back the existing `EmbeddingBatchPlanStore.record_failure` operation.
+7. Dependency/authority: public Catalog control readers resolve selection/policy
+   and the committed evidence pointer. Orchestrator owns publication and terminal
+   state/event writes; no SQL row repair or caller-supplied actor authority.
+8. Failure/replay: preserve original CLAIMED→FAILED planning history and exact
+   replay. Never reinterpret FAILED as success, re-dispatch the original root,
+   issue a replacement request/key or fall back to CPU on this protocol error.
+9. Simpler alternative: merely waiting/restarting cannot terminalize a known dead
+   unbound allocation. Existing failure/store/physical-proof contracts suffice;
+   no successor schema, new queue or generic recovery framework is needed.
+
+The manager's measured1GiB cap/reclaim pressure is separately addressed by a
+bounded2GiB metadata unit selection. Numerical resource profiles, deadlines,
+eight-target limits, canonical sources and model qualifications are unchanged.
+No end-to-end speed improvement is claimed before observing the successor.
+
+## Actual operating checkpoint — not whole-goal completion
+
+`07ec7b32` was built/RECORD-inspected, installed in an immutable owner SDK and
+deployed as the compatible API/platform, Catalog and CPU QUERY set. Web06 source
+and public API/DTO behavior were unchanged. Existing numerical SDKeae2c0d3 was
+not replaced. The original CPU recovery completed at17:49:27 UTC as actual
+schema owner `eom_app`, command SHA
+`0a34857bd8bbc75cc8b711d7c098f2ce633300f7ec3c1a0c7ed809ce581ff10d`.
+Its64 producer failures and508 preserved successful commands were independently
+read back; exact command replay matched. The first operational PREPARE used a
+read-only transaction around an existing SHARE-locking read and rolled back
+before any recovery. Correcting that operator invocation did not relax core
+transaction admission or change source/runtime authority.
+
+The controller-selection failure was separately preserved and corrected to its
+declared04 entrypoint. Unbound parent
+`job_bb2f11b8234d4573ab1f77cb28ff7b2d` was closed FAILED through the existing
+planning owner with same-record replay. New allocations/Workflows/numerical
+retries from that maintenance operation:0. Root-failure evidence is canonical
+Artifact `artifact_91fc7f90fdcb4ded90b5eff2c9a3d493`, revision
+`rev_a0065b1e23b345d08e07d7812fa60082`, member `root-failure.json`, raw SHA
+`d129e42863eab366453e6fd1b57363083fd3d9deb6c68bfe50219ccd5ed9e4bc`.
+Disposable PG r71 confirmed68 tests/cleanup EXIT0, including concurrent terminal
+failure and late-proof rollback without changing released owner semantics.
+
+The current INDEX invocation is `297d8b3dfb30417bafdee3869b630a09`, service
+revision `localindexservicerev_58b983913c714161b8a3c912dad15814`. A real new
+eight-row CUDA CONCRETE Workflow completed and retired; CPU standby remains
+queued. Full coverage, GPU QUERY/default/fallback/rollback and whole-goal
+completion remain pending in the [live ledger](../status/GPU_PREFERRED_LIVE_ACCEPTANCE_2026-10-25.md).
+No post-GPU review candidate has been read or treated as a reproduced bug.

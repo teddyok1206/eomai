@@ -269,6 +269,49 @@ def test_failed_planning_history_is_preserved_and_cannot_bind_or_become_success(
         assert planned.store.read(session) == failed
 
 
+def test_concurrent_unbound_failure_has_one_terminal_event_and_exact_replay(planned):
+    with Session(planned.engine) as session, session.begin():
+        original, _ = planned.store.allocate(session, planned.allocation)
+    barrier = Barrier(2)
+
+    def fail_once(_):
+        barrier.wait(timeout=10)
+        with Session(planned.engine) as session, session.begin():
+            return planned.store.record_failure(session, planned.failure)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = tuple(pool.map(fail_once, range(2)))
+    assert first == second and first.state == "FAILED"
+    assert first.allocation == original.allocation and first.bound is first.route is None
+    with Session(planned.engine) as session, session.begin():
+        assert planned.store.record_failure(session, planned.failure) == first
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(JobEventRecord)
+                .where(
+                    JobEventRecord.job_id == original.job_id,
+                    JobEventRecord.event == "EMBEDDING_PLAN_FAILED",
+                )
+            )
+            == 1
+        )
+
+
+def test_late_unbound_failure_evidence_change_rolls_back_terminal_history(planned):
+    with Session(planned.engine) as session, session.begin():
+        original, _ = planned.store.allocate(session, planned.allocation)
+    with (
+        pytest.raises(ValueError, match="synthetic late physical evidence change"),
+        Session(planned.engine) as session,
+        session.begin(),
+    ):
+        planned.store.record_failure(session, planned.failure)
+        raise ValueError("synthetic late physical evidence change")
+    with Session(planned.engine) as session, session.begin():
+        assert planned.store.read(session) == original
+
+
 def test_missing_allocation_and_savepoint_are_not_dispatch_authority(planned):
     with Session(planned.engine) as session, session.begin():
         with pytest.raises(ValueError):
