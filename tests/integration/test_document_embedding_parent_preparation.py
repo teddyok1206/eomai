@@ -90,3 +90,16 @@ def test_interruption_after_original_allocation_preserves_history_without_anothe
         assert observed.history == history
     again, created = allocate(value, replay)
     assert not created and again == history
+
+
+def test_metadata_release_change_replays_exact_original_parent_without_new_allocation(parent_case):
+    value = parent_case
+    original = prepare(value)
+    history, created = allocate(value, original)
+    assert created
+    value.pair.cuda.controls.source_commit = "b" * 40
+    replay = prepare(value)
+    assert replay.operation.source_commit == "b" * 40
+    assert replay.request == original.request
+    again, created = allocate(value, replay)
+    assert not created and again == history

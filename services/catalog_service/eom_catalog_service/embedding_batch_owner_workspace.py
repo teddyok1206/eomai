@@ -24,6 +24,7 @@ from eom_orchestrator.inference_transfer_cpu_handoff import (
     read_protected_cpu_handoff_member,
     write_protected_cpu_owner_member,
 )
+from eom_workflow.embedding_batch_execution_receipt import EmbeddingBatchExecutionReceipt
 from eom_workflow.embedding_batch_owner_control import (
     MAX_BATCH_OWNER_CONTROL_BYTES,
     EmbeddingBatchOwnerBound,
@@ -197,6 +198,28 @@ def read_owner_embedding_batch(
         )
         == notice.owner_start_ticks
     )
+    return _read_original_owner_batch(request, notice)
+
+
+def read_completed_owner_embedding_batch(
+    receipt: EmbeddingBatchExecutionReceipt,
+) -> StagedOwnerEmbeddingBatch:
+    """Read a retired original input, not a live owner's PID or a new compute grant.
+
+    The caller resolves this receipt canonically and independently holds current
+    source authority. No arbitrary path, latest attempt or expired PID is used.
+    """
+    owner = fixed_owner_identity()
+    _require(os.getresuid() == (owner.owner_uid,) * 3)
+    _require(os.getresgid() == (owner.owner_gid,) * 3)
+    receipt = EmbeddingBatchExecutionReceipt.model_validate(receipt)
+    return _read_original_owner_batch(receipt.allocation, receipt.bound)
+
+
+def _read_original_owner_batch(
+    request: EmbeddingGpuAllocationRequest, notice: EmbeddingBatchOwnerBound
+) -> StagedOwnerEmbeddingBatch:
+    owner = fixed_owner_identity()
     instance = notice.allocation_attempt_id.removeprefix("embeddingallocation_")
     with protected_cpu_handoff_directory(
         BATCH_OWNER_ROOT / instance,

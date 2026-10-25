@@ -537,7 +537,7 @@ def execution(
 
         return workflow, lease, fenced
 
-    def advance(workflow, lease, fenced):
+    def advance(workflow, lease, fenced, *, selected_executor=None):
         selected_request = parse_local_embedding_executable_request(workflow.initial_request)
         actor_type, actor_id = local_embedding_request_actor(selected_request)
         return advance_local_embedding_step(
@@ -546,21 +546,21 @@ def execution(
             request=selected_request,
             lease=lease,
             owner=owner,
-            executor=executor,
+            executor=executor if selected_executor is None else selected_executor,
             fenced_transaction=fenced,
             poll_interval_seconds=1,
             actor_type=actor_type,
             actor_id=actor_id,
         )
 
-    def finish(workflow, lease, fenced):
+    def finish(workflow, lease, fenced, *, selected_executor=None):
         selected_request = parse_local_embedding_executable_request(workflow.initial_request)
         actor_type, actor_id = local_embedding_request_actor(selected_request)
         complete_local_embedding_terminal(
             workflow_id=workflow.workflow_id,
             request=selected_request,
             lease=lease,
-            executor=executor,
+            executor=executor if selected_executor is None else selected_executor,
             fenced_transaction=fenced,
             actor_type=actor_type,
             actor_id=actor_id,

@@ -145,6 +145,30 @@ class ControlFileSetPublisher:
         self.settings = settings or Settings.from_environment()
         self.sessions = build_session_factory(engine)
 
+    def find_published(
+        self, *, idempotency_key: str, artifact_type: str
+    ) -> PublishedControlFileSet | None:
+        """Exact original publication lookup, not latest resolution or a write/retry.
+
+        Current use-case authorization belongs to the caller. An existing
+        incomplete or conflicting publication raises; it is never missing.
+        """
+        if type(idempotency_key) is not str or not 16 <= len(idempotency_key) <= 128:
+            raise ControlPlaneError("CONTROL_FILE_SET_INVALID", "publication key is invalid")
+        # Wait for an in-flight official publisher, not a partially committed
+        # intermediate Job. A crashed incomplete publication still fails closed.
+        with self._publication_lock(idempotency_key):
+            with self.sessions() as session:
+                job = session.scalar(
+                    select(JobRecord).where(JobRecord.idempotency_key == idempotency_key)
+                )
+                if job is None:
+                    return None
+                if job.task_type != artifact_type:
+                    raise ControlPlaneError("CONTROL_FILE_SET_CONFLICT", "publication type differs")
+                job_id, request = job.job_id, job.request
+            return self._existing(job_id, request)
+
     def publish(
         self,
         *,

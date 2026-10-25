@@ -5,12 +5,12 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from eom_catalog_service.embedding_batch_owner_channel import EmbeddingBatchOwnerChannel
-from eom_identifiers import content_sha256
 from eom_orchestrator.embedding_batch_plan_store import EmbeddingBatchPlanStore
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.local_embedding_control_artifacts import (
     LocalEmbeddingControlArtifactPublisher,
     PublishedLocalEmbeddingControl,
+    batch_execution_receipt_publication_key,
 )
 from eom_workflow.embedding_batch_plan_family import (
     SupportedEmbeddingBatchRequest,
@@ -97,12 +97,9 @@ class CatalogEmbeddingBatchExecutionPublication:
             for child in verified.staged.notice.binding.children:
                 self.authorization.authorize_binding(child)
             receipt = verified.receipt(history.job_id, channel)
-            key = "embedding-batch-executed:" + content_sha256(
-                {
-                    "parent_request_sha256": request.request_sha256,
-                    "allocation_record_sha256": history.allocation.record_sha256,
-                }
-            ).removeprefix("sha256:")
+            key = batch_execution_receipt_publication_key(
+                request.request_sha256, history.allocation.record_sha256
+            )
             result = self.controls.publish_batch_execution_receipt(receipt, idempotency_key=key)
             self._authorize()
             verified.assert_current()

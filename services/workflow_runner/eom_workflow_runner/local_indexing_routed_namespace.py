@@ -152,8 +152,8 @@ class RoutedLocalIndexingNamespaceRuntime:
                 command_state=outcome.command_state,
             )
         if isinstance(outcome, ExistingEmbeddingBatchExecution):
-            # Planning SUCCEEDED is not numerical or child completion. Supported
-            # cold recovery is explicit; never dispatch another root here.
+            # No verified original numerical completion was available. Planning
+            # SUCCEEDED is not that proof; never dispatch another root here.
             return replace(observed, state=ReconciliationState.RECOVERY_REQUIRED)
         # Coverage-only is the existing no-demand result, not a zero-row model run.
         return replace(observed, state=ReconciliationState.UP_TO_DATE)

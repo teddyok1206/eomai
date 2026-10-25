@@ -21,7 +21,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     parse_incremental_embedding_input,
 )
 from eom_catalog_contracts.models import Sha256, UtcDatetime
-from eom_identifiers import canonical_json_bytes, sha256_bytes
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.models import JobId
 from eom_workflow.embedding_batch_execution_receipt import (
@@ -84,6 +84,21 @@ DEVICE_ROUTING_POLICY_ARTIFACT_TYPE = "control_embedding_device_routing_policy"
 BATCH_EXECUTION_RECEIPT_ARTIFACT_TYPE = "control_embedding_batch_execution_receipt"
 
 
+def batch_execution_receipt_publication_key(
+    parent_request_sha256: str, allocation_record_sha256: str
+) -> str:
+    """Identity of an original completion; no authority or implicit latest."""
+    validator = TypeAdapter(Sha256)
+    validator.validate_python(parent_request_sha256, strict=True)
+    validator.validate_python(allocation_record_sha256, strict=True)
+    return "embedding-batch-executed:" + content_sha256(
+        dict(
+            parent_request_sha256=parent_request_sha256,
+            allocation_record_sha256=allocation_record_sha256,
+        )
+    ).removeprefix("sha256:")
+
+
 @dataclass(frozen=True, slots=True)
 class PublishedLocalEmbeddingControl:
     """Publication receipt, not a released execution policy or source permission."""
@@ -139,6 +154,33 @@ class LocalEmbeddingControlArtifactPublisher:
             created_at=ControlPublicationTime.FIRST_OBSERVATION,
         )
 
+    def reuse_or_publish_batch_selection(
+        self, selection: SupportedEmbeddingBatchSelection, *, idempotency_key: str
+    ) -> ArtifactMemberPointer:
+        """Preserve original equivalent bytes across a metadata-owner release change.
+
+        The immutable original publisher/source remains recorded. This does not
+        activate an older policy or substitute another selection's contents.
+        """
+        checked = parse_embedding_batch_selection(selection)
+        saved = self.publisher.find_published(
+            idempotency_key=idempotency_key, artifact_type=BATCH_SELECTION_ARTIFACT_TYPE
+        )
+        if saved is None:
+            return self.publish_batch_selection(checked, idempotency_key=idempotency_key).member
+        if saved.primary_file != "selection.json" or saved.primary_sha256 != sha256_bytes(
+            canonical_json_bytes(checked)
+        ):
+            raise ValueError("BATCH_SELECTION_PUBLICATION_CONFLICT")
+        return ArtifactMemberPointer(
+            artifact_id=saved.artifact_id,
+            artifact_revision_id=saved.artifact_revision_id,
+            member_path="selection.json",
+            sha256=saved.primary_sha256,
+            schema_ref=embedding_batch_selection_schema_ref(checked),
+            media_type="application/json",
+        )
+
     def publish_batch_execution_receipt(
         self, receipt: EmbeddingBatchExecutionReceipt, *, idempotency_key: str
     ) -> PublishedLocalEmbeddingControl:
@@ -154,6 +196,29 @@ class LocalEmbeddingControlArtifactPublisher:
             artifact_type=BATCH_EXECUTION_RECEIPT_ARTIFACT_TYPE,
             idempotency_key=idempotency_key,
             created_at=ControlPublicationTime.FIRST_OBSERVATION,
+        )
+
+    def find_batch_execution_receipt(
+        self, *, parent_request_sha256: str, allocation_record_sha256: str
+    ) -> ArtifactMemberPointer | None:
+        """Original canonical completion pointer; caller reauthorizes and resolves its bytes."""
+        saved = self.publisher.find_published(
+            idempotency_key=batch_execution_receipt_publication_key(
+                parent_request_sha256, allocation_record_sha256
+            ),
+            artifact_type=BATCH_EXECUTION_RECEIPT_ARTIFACT_TYPE,
+        )
+        if saved is None:
+            return None
+        if saved.primary_file != "receipt.json":
+            raise ValueError("BATCH_EXECUTION_RECEIPT_PUBLICATION_INVALID")
+        return ArtifactMemberPointer(
+            artifact_id=saved.artifact_id,
+            artifact_revision_id=saved.artifact_revision_id,
+            member_path="receipt.json",
+            sha256=saved.primary_sha256,
+            schema_ref=BATCH_EXECUTION_RECEIPT_SCHEMA_REF,
+            media_type="application/json",
         )
 
     def publish_device_routing_policy(

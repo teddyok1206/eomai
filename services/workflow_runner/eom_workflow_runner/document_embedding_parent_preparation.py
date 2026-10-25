@@ -159,10 +159,10 @@ def prepare_document_embedding_parent(
         key = "embedding-batch-selection:" + content_sha256(
             {
                 "selection": selection.selection_sha256,
-                "source_commit": cuda.controls.source_commit,
+                "original_request": request.request_sha256,
             }
         ).removeprefix("sha256:")
-        saved = cuda.controls.publish_batch_selection(selection, idempotency_key=key)
+        saved = cuda.controls.reuse_or_publish_batch_selection(selection, idempotency_key=key)
         reader.revalidate_provenance()
         cpu.owner.catalog.authorize_scope(session, caller, scope)
         owner.fence_current_actor(session, request)
@@ -181,7 +181,7 @@ def prepare_document_embedding_parent(
         parent_request_sha256=request.request_sha256,
         purpose="INDEX",
         scope=batch_scope.model_dump(mode="json"),
-        selection_manifest=saved.member.model_dump(mode="json"),
+        selection_manifest=saved.model_dump(mode="json"),
         selection_sha256=selection.selection_sha256,
         routing_policy=configuration.routing_policy.model_dump(mode="json"),
         routing_policy_sha256=configuration.routing_policy_sha256,

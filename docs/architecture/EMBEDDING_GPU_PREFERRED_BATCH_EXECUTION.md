@@ -607,6 +607,48 @@ START→Runner→CUDA adapter→index 등록, source 철회 거부, 기존 servi
 실제 canonical-source 수치 실행/일괄 QUERY/장치별 coverage와 호환 배포·rollback이다. 특히 원
 CPU route를 GPU로 변경하거나 계획 SUCCEEDED를 계산 성공으로 재해석하지 않는다.
 
+### P2-AC — 원 CUDA 완료 결과의 cold read/recovery (설계)
+
+책임은 기존 Orchestrator file-set owner의 정확한 publication 조회, Catalog의 고정 local
+workspace read, Workflow의 원 source/lease 재인가로 나눈다. 정본은 원 parent Job/binding과
+이미 committed된 execution receipt Artifact다. 재시작한 owner가 옛 PID를 현재 권한으로
+사용하지 않고 원 allocation ID로만 입력/출력 위치를 해석한다. 새 root/model/device 선택은
+없다. receipt가 없거나 parent/원 Workflow/native association/hash/권한이 다르면 명시적으로
+복구 불가이며 CPU로 전환하지 않는다. 이미 FAILED인 Workflow는 복구로 성공 재해석하지 않는다.
+
+기존 unique publication key와 Job PK를 O(log n) 조회하고 bounded JSON/one vector buffer를
+읽는다. 파일 epoch·UID/GID/mode·link·크기/hash와 순서별 child metadata를 확인한다. 기존
+schema/DB/index를 바꾸지 않는다. 작은 frozen receipt/reference만 서비스 경계를 통과한다.
+각 짧은 root transaction에서 원 parent/actor/source/lease를 재인가하고 GPU 계산이나 큰 파일
+IO를 SQL root 안에서 하지 않는다. 기존 source owner와 common encoding/index publisher가
+등록과 멱등성을 계속 소유한다. 단순한 새 모델 재실행은 중복 계산과 불명 상태를 숨기므로
+허용하지 않는다. 합성 파일/peer 단위 검증과 disposable DB의 원 identity/replay를 실제 GPU
+증거와 구분해서 기록한다.
+
+이 아직 운영 비활성인 parent 경로의 selection publication key는 원 source request SHA와
+selection SHA로 고정한다. metadata owner의 후속 commit 때문에 동일 원 요청의 selection
+pointer/parent가 바뀌지 않도록 기존 file-set owner의 정확한 조회로 동일 bytes를 재사용한다.
+원 Artifact의 source commit은 그대로 보존한다. 조회는 기존 publication lock 뒤에서 실행해
+다른 publisher의 commit 중간 상태를 누락으로 오인하지 않는다. 불완전·상이한 publication은
+오류이며 새 identity로 우회하지 않는다. 운영 CPU 또는 과거 benchmark key/Artifact는 변경하지
+않는다. 다른 metadata release에서의 원 parent/할당 replay도 disposable DB에서 확인한다.
+
+#### P2-AC source 검증 결과 — 2026-10-25 UTC
+
+단위·의존성·parent preparation 합계168 PASS, 수정된9개 source module mypy PASS,
+Ruff/format/diff 검사를 통과했다. 실제 임시 PostgreSQL r25는21 PASS/cleanup PASS다.
+원 parent 동시 생성·다른 metadata commit의 replay, canonical receipt 조회, 새 adapter로
+원 claim/예약/result를 이어 등록, parent/child 권한 철회, FAILED/CANCELLED 보존을 검증했다.
+추가 r26은3 PASS/cleanup PASS이며 계획 SUCCEEDED 뒤 completion publication이 끊겨도
+새 root를 열지 않는 부정 사례와 기존 routed START/등록 회귀를 포함한다.
+
+초기 r23의 revocation 음성 검사1 FAIL도 로그로 보존했다. parent와 child의 합성 권한 seam을
+분리하고 recovered adapter에서 실제 child source/원 Workflow 상태를 재확인하도록 명시했다.
+r24=18 PASS, 최종 r25/r26 결과와 혼동하지 않는다. DB suite의 OS/root/GPU/model은 합성
+leaf이며 파일 suite는 실제 임시 파일/hash/epoch를 검사한다. 운영 CUDA 실행이나 GPU 우선
+activation으로 확대 해석하지 않는다. 기존 live CPU/configuration4와 frozen CUDA/root SDK는
+변경하지 않았다. 새 dependency·schema revision·migration은 없다.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존

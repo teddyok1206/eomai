@@ -11,6 +11,7 @@ from eom_catalog_service import embedding_batch_owner_workspace as workspace
 from eom_catalog_service.embedding_batch_owner_channel import EmbeddingBatchOwnerChannel
 from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer
 from eom_orchestrator.inference_transfer_cpu_handoff import CpuHandoffError, CpuHandoffIdentity
+from eom_workflow.embedding_batch_execution_receipt import EmbeddingBatchExecutionReceipt
 from eom_workflow.embedding_batch_owner_control import EmbeddingBatchRootCompleted
 from eom_workflow_runner import embedding_batch_result_read as reader
 from eom_workflow_runner.embedding_batch_source_authorization import (
@@ -208,3 +209,48 @@ def test_no_completion_or_wrong_original_batch_is_not_read_authority(local):
             reader.read_verified_embedding_batch_result(
                 owner, local.frames.ready, wrong, authorization=local.authorization
             )
+
+
+def canonical_completion(local):
+    with received_owner(local) as (root, owner, _, _, left, _):
+        receive(root, owner, local, left)
+        verified = read(owner, local)
+        owner.acknowledge_completion(lambda _: verified.assert_current())
+        owner.close()
+        return verified.receipt("job_" + "9" * 32, owner)
+
+
+def test_cold_read_uses_original_receipt_without_live_peer_or_old_owner_pid(local, monkeypatch):
+    receipt = canonical_completion(local)
+
+    def no_live_identity(*_args, **_kwargs):
+        raise AssertionError("cold result read attempted a live peer/PID")
+
+    monkeypatch.setattr(EmbeddingBatchOwnerChannel, "require_direct_peer", no_live_identity)
+    monkeypatch.setattr(workspace, "embedding_batch_owner_start_ticks", no_live_identity)
+    verified = reader.read_completed_embedding_batch_result(
+        receipt, authorization=local.authorization
+    )
+    assert verified.result == local.result
+    assert verified.staged == local.staged
+    assert b"".join(verified.child_vectors) == local.vectors
+    verified.assert_current()
+
+
+@pytest.mark.parametrize("fault", ("missing", "binary_hash", "child_metadata", "revoked"))
+def test_cold_read_never_repairs_missing_or_foreign_result_or_bypasses_current_source(local, fault):
+    receipt = canonical_completion(local)
+    if fault == "missing":
+        (local.output / "result.json").unlink()
+    elif fault == "binary_hash":
+        (local.output / "vectors.f32").write_bytes(bytes(len(local.vectors)))
+    elif fault == "child_metadata":
+        body = receipt.model_dump(mode="json")
+        body["children"][0]["result_sha256"] = "sha256:" + "f" * 64
+        receipt = EmbeddingBatchExecutionReceipt.model_validate(seal(body, "receipt_sha256"))
+    else:
+        local.state.deny_at = len(local.calls) + 1
+    with pytest.raises((ValueError, OSError, CpuHandoffError, PermissionError)):
+        reader.read_completed_embedding_batch_result(receipt, authorization=local.authorization)
+    if fault == "missing":
+        assert not (local.output / "result.json").exists()

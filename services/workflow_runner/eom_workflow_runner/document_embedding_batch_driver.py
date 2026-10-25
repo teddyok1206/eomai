@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import cast
+
 from eom_workflow.local_embedding_request_v2 import supported_local_embedding_request_actor
 
 from eom_workflow_runner.document_embedding_cpu_batch_execution import (
@@ -9,6 +11,9 @@ from eom_workflow_runner.document_embedding_cpu_batch_execution import (
 )
 from eom_workflow_runner.document_embedding_cuda_execution import (
     CatalogCudaDocumentEmbeddingExecution,
+)
+from eom_workflow_runner.document_embedding_recovery import (
+    CatalogRecoveredCudaDocumentEmbeddingExecution,
 )
 from eom_workflow_runner.engine import WorkflowRunner
 from eom_workflow_runner.local_embedding_native_executor import CatalogNativeEmbeddingExecutor
@@ -24,24 +29,30 @@ from eom_workflow_runner.repository import (
     admitted_workflow_definition,
 )
 
+type DocumentBatchExecution = (
+    CatalogCudaDocumentEmbeddingExecution
+    | CatalogCpuDocumentBatchExecution
+    | CatalogRecoveredCudaDocumentEmbeddingExecution
+)
 
-def _backend(
-    executor: CatalogNativeEmbeddingExecutor,
-) -> CatalogCudaDocumentEmbeddingExecution | CatalogCpuDocumentBatchExecution:
+
+def _backend(executor: CatalogNativeEmbeddingExecutor) -> DocumentBatchExecution:
     if type(executor) is not CatalogNativeEmbeddingExecutor:
         raise ValueError("DOCUMENT_BATCH_DRIVER_INVALID")
     backend = executor.execution_backend
-    if not (
-        isinstance(
-            backend, (CatalogCudaDocumentEmbeddingExecution, CatalogCpuDocumentBatchExecution)
-        )
-        and type(backend)
-        in {CatalogCudaDocumentEmbeddingExecution, CatalogCpuDocumentBatchExecution}
-        and executor.owner is backend.owner
-        and executor.publisher is backend.context.operation.publisher
+    if type(backend) not in {
+        CatalogCudaDocumentEmbeddingExecution,
+        CatalogCpuDocumentBatchExecution,
+        CatalogRecoveredCudaDocumentEmbeddingExecution,
+    }:
+        raise ValueError("DOCUMENT_BATCH_DRIVER_INVALID")
+    checked = cast(DocumentBatchExecution, backend)
+    if (
+        executor.owner is not checked.owner
+        or executor.publisher is not checked.context.operation.publisher
     ):
         raise ValueError("DOCUMENT_BATCH_DRIVER_INVALID")
-    return backend
+    return checked
 
 
 def start_document_embedding_batch(

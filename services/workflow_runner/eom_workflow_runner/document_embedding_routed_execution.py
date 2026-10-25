@@ -13,6 +13,7 @@ from eom_workflow.local_embedding_request_v2 import (
 )
 
 from eom_workflow_runner.document_embedding_batch_driver import (
+    DocumentBatchExecution,
     drive_document_embedding_batch_once,
     start_document_embedding_batch,
 )
@@ -25,6 +26,10 @@ from eom_workflow_runner.document_embedding_cuda_execution import (
 )
 from eom_workflow_runner.document_embedding_parent_preparation import (
     PreparedDocumentEmbeddingParent,
+)
+from eom_workflow_runner.document_embedding_recovery import (
+    CatalogRecoveredCudaDocumentEmbeddingExecution,
+    read_document_embedding_completion,
 )
 from eom_workflow_runner.embedding_batch_execution import (
     ActiveEmbeddingBatchExecution,
@@ -64,7 +69,8 @@ def drive_routed_document_embedding_parent_once(
 
     A nonterminal outcome remains the original pending work. This method does
     not manufacture success, restart an unknown GPU or turn a hash/authority
-    error into CPU work. Cold reconciliation remains a separate explicit owner.
+    error into CPU work. Cold reconciliation delegates only an already committed
+    original completion to its read-only recovery adapter.
     """
     if (
         type(parent) is not PreparedDocumentEmbeddingParent
@@ -77,10 +83,16 @@ def drive_routed_document_embedding_parent_once(
     with parent.operation.publisher.sessions.begin() as session:
         pair.cuda.owner.resolve_sources(session, request)
     with parent.operation.open(parent.request, parent.allocation) as lane:
+        backend: DocumentBatchExecution
         if isinstance(lane, ExistingEmbeddingBatchExecution):
-            return lane
-        backend: CatalogCudaDocumentEmbeddingExecution | CatalogCpuDocumentBatchExecution
-        if isinstance(lane, ActiveEmbeddingBatchExecution):
+            completed = read_document_embedding_completion(parent.operation, parent.request)
+            if completed is None:
+                return lane
+            selected, chosen = pair.cuda, request
+            backend = CatalogRecoveredCudaDocumentEmbeddingExecution(
+                parent.operation, parent.request, completed, selected.owner, chosen
+            )
+        elif isinstance(lane, ActiveEmbeddingBatchExecution):
             selected, chosen = pair.cuda, request
             backend = CatalogCudaDocumentEmbeddingExecution(lane, selected.owner, chosen)
         else:

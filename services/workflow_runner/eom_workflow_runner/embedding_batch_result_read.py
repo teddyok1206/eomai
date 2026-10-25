@@ -17,7 +17,10 @@ from eom_catalog_contracts.embedding_work_batch_result import (
     parse_embedding_work_batch_result,
 )
 from eom_catalog_service.embedding_batch_owner_channel import EmbeddingBatchOwnerChannel
-from eom_catalog_service.embedding_batch_owner_workspace import StagedOwnerEmbeddingBatch
+from eom_catalog_service.embedding_batch_owner_workspace import (
+    StagedOwnerEmbeddingBatch,
+    read_completed_owner_embedding_batch,
+)
 from eom_catalog_service.embedding_gpu_batch_launch import GPU_BATCH_RUNTIME_ROOT
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.inference_transfer_cpu_handoff import (
@@ -174,6 +177,56 @@ def read_verified_embedding_batch_result(
         input_raw_sha256=staged.notice.input_raw_sha256,
         input_byte_count=staged.notice.input_byte_count,
     )
+    return _read_original_result(ready, staged, completed, authorization)
+
+
+def read_completed_embedding_batch_result(
+    receipt: EmbeddingBatchExecutionReceipt,
+    *,
+    authorization: CatalogEmbeddingBatchSourceAuthorization,
+) -> VerifiedLocalEmbeddingBatchResult:
+    """Reuse an already canonical completion, never reconnect to a root or restart a model.
+
+    A pure receipt is not permission: the application resolves the canonical
+    parent/receipt and supplies current actual child source/lease authorization.
+    """
+    _owner()
+    receipt = EmbeddingBatchExecutionReceipt.model_validate(receipt)
+    _require(type(authorization) is CatalogEmbeddingBatchSourceAuthorization)
+    _authorize(authorization)
+    staged = read_completed_owner_embedding_batch(receipt)
+    _require(authorization.batch_request_sha256 == staged.batch.request_sha256)
+    validate_embedding_gpu_batch_grant(
+        receipt.allocation,
+        receipt.completed.grant,
+        staged.batch,
+        input_raw_sha256=staged.notice.input_raw_sha256,
+        input_byte_count=staged.notice.input_byte_count,
+    )
+    verified = _read_original_result(receipt.ready, staged, receipt.completed, authorization)
+    _require(len(receipt.children) == len(verified.result.children))
+    for expected, actual in zip(receipt.children, verified.result.children, strict=True):
+        result, shard = actual.result, actual.result.shard
+        _require(
+            expected.native_job_id == result.job_id
+            and expected.input_sha256 == result.request_sha256
+            and expected.result_sha256 == result.result_sha256
+            and expected.shard_sha256 == shard.shard_sha256
+            and expected.binary_sha256 == shard.binary.sha256
+            and expected.vector_offset == actual.vector_offset
+            and expected.vector_byte_count == shard.binary.byte_count
+            and expected.row_count == shard.row_count
+            and expected.dimension == shard.dimension
+        )
+    return verified
+
+
+def _read_original_result(
+    ready: EmbeddingBatchRootReady,
+    staged: StagedOwnerEmbeddingBatch,
+    completed: EmbeddingBatchRootCompleted,
+    authorization: CatalogEmbeddingBatchSourceAuthorization,
+) -> VerifiedLocalEmbeddingBatchResult:
     _authorize(authorization)
     staged.assert_current()
     identity = fixed_owner_identity()

@@ -47,6 +47,21 @@ def test_revoked_current_source_cannot_publish_or_dispatch_a_parent(parent_case)
         prepare_document_embedding_parent(value.pair, value.request, value.sources.configuration)
 
 
+def test_new_metadata_owner_reuses_original_selection_pointer_and_parent(parent_case):
+    value = parent_case
+    first = prepare_document_embedding_parent(
+        value.pair, value.request, value.sources.configuration
+    )
+    value.pair.cuda.controls.source_commit = "b" * 40
+    replay = prepare_document_embedding_parent(
+        value.pair, value.request, value.sources.configuration
+    )
+    assert replay.request == first.request
+    assert replay.operation.source_commit == "b" * 40
+    assert replay.request.selection_manifest == first.request.selection_manifest
+    assert replay.allocation != first.allocation
+
+
 def test_cpu_match_rebuilds_exact_gpu_targets_into_a_separate_native_space(
     parent_case, monkeypatch
 ):

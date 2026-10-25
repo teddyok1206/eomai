@@ -8,7 +8,6 @@ from eom_workflow_runner.document_embedding_routed_execution import (
     DrivenDocumentEmbeddingParent,
     drive_routed_document_embedding_parent_once,
 )
-from eom_workflow_runner.embedding_batch_execution import ExistingEmbeddingBatchExecution
 
 from tests.integration.test_local_embedding_native_executor import execution as execution
 from tests.integration.test_preset_model_validation_persistence import (
@@ -40,8 +39,8 @@ def test_routed_parent_composes_actual_start_runner_cuda_and_registered_index_wi
     replay = drive_routed_document_embedding_parent_once(
         parent, value.gpu.pair, value.request, value.launcher
     )
-    assert type(replay) is ExistingEmbeddingBatchExecution
-    assert replay.history.state == "SUCCEEDED"
+    assert type(replay) is DrivenDocumentEmbeddingParent
+    assert replay.workflow_id == outcome.workflow_id and replay.workflow_state == "COMPLETED"
     assert len(value.gpu.dispatches) == 1 and value.launcher.forwards == 0
 
 

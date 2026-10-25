@@ -124,6 +124,27 @@ def test_control_file_set_publication_is_idempotent_and_exact(tmp_path: Path) ->
         assert revision.content_bytes == primary.stat().st_size
 
 
+def test_exact_publication_read_does_not_create_and_rejects_corrupt_or_incomplete_history(tmp_path):
+    publisher, _engine = _publisher(tmp_path)
+    arguments = _arguments(tmp_path)
+    lookup = dict(
+        idempotency_key=arguments["idempotency_key"], artifact_type=arguments["artifact_type"]
+    )
+    assert publisher.find_published(**lookup) is None
+    saved = publisher.publish(**arguments)
+    assert publisher.find_published(**lookup) == saved
+    with pytest.raises(ControlPlaneError):
+        publisher.find_published(**(lookup | {"artifact_type": "wrong-type"}))
+    with publisher.sessions.begin() as session:
+        job = session.get(JobRecord, saved.job_id)
+        job.status = "FAILED"  # Explicit disposable fixture; never production history.
+    with pytest.raises(ControlPlaneError):
+        publisher.find_published(**lookup)
+    with publisher.sessions() as session:
+        assert session.get(JobRecord, saved.job_id).status == "FAILED"
+        assert session.scalar(select(func.count()).select_from(JobRecord)) == 1
+
+
 def test_first_observation_allocates_real_time_once_without_relaxing_fixed_replay(
     tmp_path: Path,
 ) -> None:
