@@ -1523,3 +1523,38 @@ worker protocol은 수정하지 않는다.
 
 startup executable settling/거부 및 기존 controller/descriptor/lifetime 회귀76 PASS/24.76초,
 strict mypy1 PASS, Ruff PASS다(`/tmp/eom-gpu-batch-startup-exec-tests-20261025-r2.log`).
+
+### P2-T 실제 READY/중단 회수 PASS와 BUSY 전달의 원 invocation
+
+1a708be0 owner로 actual91395b22… 실행에서 ROOT_READY를 수신했다. 관측은 실제 PID가
+systemd executor UID0/NoNewPrivs0 상태에서 원 native Python UID/GID973/973,
+supplementary974/모든 capability0/NoNewPrivs1로 전환하는 것을 확인했다. executor는 worker로
+인정하거나 요청/grant를 보내지 않았다. 새 exec guard 이후 기존 실제 native 신원·파일·device/
+FDSTORE·unit/원 Root peer 검사가 통과해 READY가 전달됐다. source/compute binding을 주지 않고
+연결을 끊었으며 원 supported retirement가 완료됐다. Root의 의도된 실패와 native 원 failure
+journal은 보존했다. 실제 native MainPID0/NFileDescriptorStore0/inactive, GPU0%/2MiB,
+input/result/vectors size0과 보호된 원 retirement intent/result 두 파일을 별도로 확인했다.
+모델/토크나이저/forward0이며 실제 Source/IAM·수치 batch 검증을 대신하지 않는다.
+
+원 기록은 `/tmp/eom-gpu-batch-pregrant-os-status-20261025.log`,
+`/tmp/eom-gpu-batch-pregrant-retirement-readonly-20261025.log`다. original native invocation은
+`795fbcaf56c54a3d8b5b50c754a88969`로 protected retirement 경로에 남아 있다. current PID1 unit의
+InvocationID가 stop/unload 후 비는 것은 원 identity를 덮어쓰거나 새 invocation으로 바꾼 일이 아니다.
+
+실제 shared GPU mutex를 다른 root 진단 프로세스가 계속 유지한60030e0d… BUSY 검증에서는 native
+unit이 정상 BUSY 종료했고 original invocation `c6d8fdebb0144103a830b2bff41c5ba3`에 대한 protected
+`EMBEDDING_GPU_BATCH_UNAVAILABLE_NOT_EXECUTED` result와 원 unit retirement까지 완료됐다.
+그러나 Root→owner 알림 adapter가 stop 후 빈 current InvocationID를 original ID와 같아야 한다고
+요구해 전달을 거부했다. 실제 current LoadState=loaded/InvocationID empty/PID0/store0과 원
+protected result를 대조해 확인한 input/output 계약 충돌이다. 원 BUSY 실행은 다시 시작하지 않는다.
+
+기존 stopped observation은 이미 `observed invocation ∈ {empty, original}`만 허용한다. 알림 adapter도
+그 검증된 cleared-current 상태를 받아들이되 **전달하는 immutable invocation은 원 terminal
+snapshot의 정확한 ID**로 유지한다. 다른 non-empty invocation은 계속 거부한다. 관측 값을 원 ID로
+조작하거나 latest를 조회하지 않는다. COMPLETED와 BUSY 양쪽에 같은 불일치가 있어 둘 다 수정한다.
+Root/worker JSON schema, qualified numerical prefix, DB/history와 API/Web selection은 바꾸지 않는다.
+
+원/cleared/current-other invocation의 COMPLETED·BUSY 전달과 기존 controller/terminal 관측 회귀94
+PASS/32.55초, strict mypy1 PASS, Ruff PASS다
+(`/tmp/eom-gpu-batch-cleared-invocation-tests-20261025.log`). 원 BUSY physical result는 보존하며,
+알림 수정 후 새 hardware-only identity로만 최종 전달을 확인한다. CPU 대체 실행은 아직 별도 gate다.

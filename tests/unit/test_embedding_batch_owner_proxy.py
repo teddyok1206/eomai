@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import os
+from dataclasses import replace
 from types import SimpleNamespace
 
 import pytest
 from eom_catalog_service import embedding_batch_owner_proxy as proxy
 from eom_catalog_service import embedding_batch_owner_workspace as workspace
+from eom_catalog_service import embedding_gpu_batch_controller as controller
 from eom_catalog_service.embedding_batch_owner_channel import EmbeddingBatchOwnerChannel
 from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer
 from eom_catalog_service.embedding_benchmark_handoff import benchmark_owner_start_ticks
@@ -95,8 +97,19 @@ def bridge(driver, tmp_path, monkeypatch):
     return value
 
 
-def test_existing_root_lifecycle_uses_owner_staging_and_each_source_fence(bridge):
+@pytest.mark.parametrize("cleared_invocation", (False, True))
+def test_existing_root_lifecycle_uses_owner_staging_and_each_source_fence(
+    bridge, monkeypatch, cleared_invocation
+):
     value, driver = bridge, bridge.driver
+    retire = controller.retire_embedding_gpu_batch
+    if cleared_invocation:
+
+        def cleared(*args, **kwargs):
+            original = retire(*args, **kwargs)
+            return replace(original, retired_unit=replace(original.retired_unit, invocation_id=""))
+
+        monkeypatch.setattr(controller, "retire_embedding_gpu_batch", cleared)
     result = proxy.run_embedding_gpu_batch_with_owner(
         driver.captured, value.channel, owner_start_ticks=value.birth
     )
@@ -114,9 +127,18 @@ def test_existing_root_lifecycle_uses_owner_staging_and_each_source_fence(bridge
     assert driver.events.index("result-ACK") < driver.events.index("retire")
 
 
-def test_verified_busy_only_reports_original_unexecuted_terminal_without_staging(bridge):
+@pytest.mark.parametrize("cleared_invocation", (False, True))
+def test_verified_busy_only_reports_original_unexecuted_terminal_without_staging(
+    bridge, monkeypatch, cleared_invocation
+):
     value, driver = bridge, bridge.driver
     driver.busy = True
+    if cleared_invocation:
+        monkeypatch.setattr(
+            controller,
+            "observe_stopped_gpu_unit",
+            lambda *_a, **_kw: replace(driver.retired.retired_unit, invocation_id=""),
+        )
     result = proxy.run_embedding_gpu_batch_with_owner(
         driver.captured, value.channel, owner_start_ticks=value.birth
     )
@@ -125,6 +147,36 @@ def test_verified_busy_only_reports_original_unexecuted_terminal_without_staging
     assert [notice.message_type for notice in value.notices] == ["ROOT_BUSY"]
     assert "input-bind" not in driver.events and "grant" not in driver.events
     assert value.notices[0].unit_invocation_id == result.original_unit.invocation_id
+
+
+@pytest.mark.parametrize("busy", (False, True))
+def test_other_nonempty_retired_invocation_is_not_cleared_current_state(bridge, monkeypatch, busy):
+    driver = bridge.driver
+    driver.busy = busy
+    if busy:
+        monkeypatch.setattr(
+            controller,
+            "observe_stopped_gpu_unit",
+            lambda *_a, **_kw: replace(driver.retired.retired_unit, invocation_id="f" * 32),
+        )
+    else:
+        retire = controller.retire_embedding_gpu_batch
+
+        def changed(*args, **kwargs):
+            original = retire(*args, **kwargs)
+            return replace(
+                original, retired_unit=replace(original.retired_unit, invocation_id="f" * 32)
+            )
+
+        monkeypatch.setattr(controller, "retire_embedding_gpu_batch", changed)
+    with pytest.raises(ValueError, match="EMBEDDING_BATCH_OWNER_PROXY_INVALID"):
+        proxy.run_embedding_gpu_batch_with_owner(
+            driver.captured, bridge.channel, owner_start_ticks=bridge.birth
+        )
+    assert bridge.closed
+    assert not any(
+        notice.message_type in {"ROOT_BUSY", "ROOT_COMPLETED"} for notice in bridge.notices
+    )
 
 
 @pytest.mark.parametrize("fault", ("birth", "uid", "request", "not_root"))

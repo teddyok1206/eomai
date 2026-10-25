@@ -154,12 +154,14 @@ class RootEmbeddingBatchOwnerProxy:
         assert self._bound is not None and self._ready is not None
         terminal = value.retirement.original_terminal
         claim = value.output_claim
+        # PID1 may clear current InvocationID after verified retirement. The
+        # emitted immutable identity still comes from the original terminal.
         _require(
             value.batch == self._bound.batch
             and terminal.original_outcome == "SUCCEEDED"
             and terminal.ready.readiness == self._ready.readiness
             and terminal.terminal_unit.invocation_id == self._ready.unit_invocation_id
-            and value.retirement.retired_unit.invocation_id == self._ready.unit_invocation_id
+            and value.retirement.retired_unit.invocation_id in {"", self._ready.unit_invocation_id}
             and value.retirement.retired_unit.stored_descriptors == 0
             and claim.batch_request_sha256 == value.batch.request_sha256
             and claim.grant_message_sha256 == value.grant.message_sha256
@@ -192,7 +194,7 @@ class RootEmbeddingBatchOwnerProxy:
             type(value) is UnavailableEmbeddingGpuBatch
             and self._ready is None
             and self._bound is None
-            and value.retired_unit.invocation_id == value.original_unit.invocation_id
+            and value.retired_unit.invocation_id in {"", value.original_unit.invocation_id}
             and value.retired_unit.stored_descriptors == 0
         )
         busy = EmbeddingBatchRootBusy.model_validate(
