@@ -1,6 +1,6 @@
 # GPU-preferred embedding: live acceptance ledger
 
-As of2026-10-25 22:51 UTC. **GOAL=ACTIVE; completion is not proven.**
+As of2026-10-25 23:44 UTC. **GOAL=ACTIVE; completion is not proven.**
 This small ledger preserves the whole approved scope while background catch-up
 continues. Source tests, installed composition and actual execution are separate
 evidence. It is not a new runtime registry or permission grant.
@@ -14,7 +14,7 @@ evidence. It is not a new runtime registry or permission grant.
 | Catalog completed CPU/CUDA reader | reader configuration3, SDK07 |
 | INDEX metadata owner | `07ec7b32105ca4c0e80973ec734418fd12840f76`; eight targets, metadata MemoryMax2GiB |
 | Root GPU controller | `04e36bbe248695a6200f7f114c83b4eb347a3536`, actual entrypoint/declared controller agree |
-| INDEX invocation | `297d8b3dfb30417bafdee3869b630a09`, PID453623, running |
+| INDEX invocation | `febab24100524e75a73b41b69ba90f17`, PID699393, running; same SDK07/Identity/controller04, after natural drain |
 | Public/mixed/private QUERY | SDK07, **CPU default**, invocation `11b5bc86df9545fc88b44c70f2f2d4d5` |
 | Qualified CPU/CUDA numerical SDK | `eae2c0d3`, unchanged |
 | Unselected QUERY3 candidate | owner/provider07, controller04; previous3db candidate preserved, not selected |
@@ -502,6 +502,58 @@ GPU work. Record this real observation for the following system review; do not
 claim whole-system stability or let it replace the GPU acceptance gates.
 
 ## Next boundary
+
+###23:44 focused recovery checkpoint
+
+Source `4f1a838a`'s diagnostic controller is installed and its real private-network
+journal/EOF checks passed, but it is **not selected**. The selection boundary
+regressions passed91 cases in19.95seconds; the two-file operator's actual read-only
+positive/negative checks passed4 cases with0 model runs. These suites do not prove
+the pending live QUERY/fallback/default acceptance.
+
+The proposed controller-only rollout deliberately avoided a new INDEX Identity,
+new access grants or replacing numerical prefixes. Final inspection caught that
+`controller_release` also contributes to deterministic DOCUMENT parent identity.
+Selecting it with original `job_04e9e09afc994736ae063b882e4bb854` still unbound /
+CLAIMED could bypass that original recovery boundary. The finite deployment
+continuation was stopped **before selection**. Its signal15 is a cancelled
+deployment observation, not a production model failure or a rewritten success.
+
+INDEX invocation`af2955ab97b542279afbe763fa4988c7` completed its current work and
+drained naturally with EXIT0. Both actual selected files compared byte-for-byte
+with their original backups. The exact SDK07/controller04 configuration and same
+service Identity resumed as invocation`febab24100524e75a73b41b69ba90f17`, PID699393.
+QUERY remains CPU and its original handle/configuration is unchanged. No original
+parent, failed root, Workflow or output was replaced/re-keyed for this operation.
+
+The original failed root still has invocation`03c29a9e0041406ca2cde062a2e1d4f8`,
+EXIT1, process0 and retainedFD0. Its native numerical unit has no invocation,
+process0/FD0 and empty original input/result/vector files. The protected
+`10-allocation.conf` **does exist**: do not invent descriptor absence or a
+numerical retirement. Close the original through the official planning-failure
+operation with independently checked actual root/control/input evidence before
+any controller successor; no raw DB UPDATE, fabricated BUSY or failed-to-success
+rewrite is allowed. The candidate SELECT now also refuses unresolved original
+history through the official Orchestrator metadata reader.
+
+Evidence: `/tmp/eom-controller-diagnostics-selector-checks-20261025-r1.log`,
+`/tmp/eom-controller-diagnostics-selection-boundaries-20261025-r1.log`,
+`/tmp/eom-controller-diagnostics-deferred-unit-20261025-r1.log`,
+`/tmp/eom-index-original-selection-resume-20261025-r1.status`,
+`/tmp/eom-original-control-startup-boundary-20261025-r1.log`.
+Prepared controller/rollback bytes remain under
+`/var/lib/eom-controller-diagnostics-4f1a838a`; they are not active release evidence.
+
+Routine technical count audit r17 at23:27:34 UTC reported mixed CPU521/466/521
+versus CUDA105/181/64, and legacy ALL CPU520/473/520 versus CUDA105/173/64, in
+CONTENT/CONCRETE/METADATA order. These are still partial counts, not exact
+canonical pair closure. Next routine corpus check is approximately23:57 UTC;
+precise original-failure and deployment-fence observations are separate checks.
+
+Immediate work is the original unbound failure's supported resolution, then the
+already planned full pairs, real finite QUERY3/resource-only CPU fallback/replay,
+default activation/read-back/rollback and completion audit. No new platform or
+unrelated static-review task is opened.
 
 Let the confirmed current catch-up invocation run, with milestone-based reporting
 and bounded metadata observations. Do not add unrelated code or repeatedly ask

@@ -36,3 +36,41 @@ nonexecution from the channel error alone.
   cache can create hardlinks to protected host libraries. A supposedly read-only
   diagnostic must not alter installation invariants. Do not weaken the existing
   single-link rule to accommodate a debug cache.
+
+## Minimal candidate selection and original-plan fence
+
+The root diagnostic can be selected independently from the metadata owner: its
+channel/schema bytes and the qualified numerical entry are unchanged. Prefer
+the existing typed `controller_release` selection and matching protected root
+environment over creating another INDEX Identity/grant revision. Keep metadata
+SDK07, source policy, original pending Workflows and CPU QUERY unchanged. The
+metadata-side EOF classification remains staged until its next compatible
+metadata release; do not describe that classification as already active.
+
+Prepare and hash the two exact before/after files and retain rollback bytes.
+Request the existing main-only SIGTERM drain, which sets the service's Event
+without marking the unit deactivating or killing a numerical child. Select both
+files only after natural EXIT0 and the existing physical process/retained-FD
+quiescence observer passes; then restart the same metadata source/Identity.
+Configuration mismatch leaves that service stopped for inspection, not partially
+activated. No DB write, new protocol, source query or model run is part of this
+selection. The larger full metadata/Identity successor is unnecessary for this
+controller-only diagnostic change.
+
+**A controller commit is part of the deterministic DOCUMENT parent identity.**
+Do not promote even this small candidate while an earlier original allocation
+remains unbound/CLAIMED. It would accidentally bypass the original recovery
+boundary. The23:33 deployment continuation was therefore stopped **before**
+selection. INDEX drained naturally with EXIT0, and the exact existing SDK07 /
+controller04 configuration was restarted; no original source request was re-keyed.
+The prepared before/after files are candidates, not an operating release.
+
+First reconcile original `job_04e9e09afc994736ae063b882e4bb854` through the
+existing official planning failure operation using independently checked actual
+root/unit/input evidence. Never fabricate a numerical retirement for an instance
+without that receipt. Descriptor metadata alone does not prove numerical start:
+the original protected `10-allocation.conf` does exist, while its native unit has
+no recorded invocation and the original input/output files remain empty. Keep
+the failed root and no-grant facts distinct. Candidate SELECT additionally reads
+the exact original through the official Orchestrator metadata reader and refuses
+promotion unless that original has an evidenced FAILED history and no route/BIND.
