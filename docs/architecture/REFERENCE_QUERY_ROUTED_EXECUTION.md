@@ -713,3 +713,41 @@ remained FAILED. No active GPU work was stopped or re-keyed. The QUERY3 default
 remains unselected until full pair/current-source and live numerical/fallback
 acceptance. This source checkpoint is **not** the GPU-goal completion checkpoint;
 the user's post-checkpoint12+4 review remains unopened.
+
+### Installed replay-preserving QUERY candidate — not activated
+
+Source `3db2df481177e5dbd9cda2010eebd04197994670` was committed/pushed and
+built through the existing clean-tree wheel/RECORD gate. Its platform wheel SHA
+is `c9799a8444924d3f3722234530418ee37d9c7e8fb0aa8207cd1b20f34dccb711`;
+owner-only API-contracts wheel SHA is
+`8bfeafbca41c8402b4d26e9fbd2c0a511551270932cd3adf799a3cb4b47d8566`.
+The protected installer published only a new immutable metadata SDK directory;
+both qualified numerical prefixes and all active component selections stayed
+unchanged. No API/Web redeploy or migration occurred.
+
+The staged public/mixed QUERY3 candidate pins that new owner independently of
+the existing root controller04 and actual API06 provider. Private chat still uses
+the unchanged CPU base (its pin is not the wrapper's raw hash). The pure four-file
+selector tests6 PASS,4.35seconds. Canonical control closure and original-file
+epoch/byte checks PASS. Backups and unselected candidates are under
+`/var/lib/eom-query-routed-selection-3db2df48`; staging log
+`/tmp/eom-query-replay-candidate-install-20261025-3db2df48-r1.log`, EXIT0.
+
+Actual installed-runtime preflight dropped to UID990/GID1000, supplementary
+groups0/capabilities0, and built both routed factories plus the unchanged private
+factory using the actual API06 provider and canonical controls. PASS,
+44.033seconds,582.7MiB peak; no captured human, source query, native claim, model
+forward, Artifact commit or activation. Evidence:
+`/tmp/eom-routed-query-runtime-preflight-20261025-3db2df48-r1.log`, EXIT0;
+unit `eom-routed-query-preflight-3db2df48-r1.service`. The INDEX and existing CPU
+QUERY invocations remain `6e792281a46a420898cdece549539ef7` and
+`750dd3fbee3f4368baff05d76b9c9c7e`. This does not promote GPU default or complete
+the goal. Its final exact-pair/live-numerical/fallback/replay gates remain open.
+
+Existing closed stage logs confirm that canonical candidate/report resolution,
+not numerical forwards alone, dominates elapsed catch-up time. A read-only
+bounded journal aggregate retained only timing/count/event metadata (r1 at15:54).
+A separate synthetic source-admission profile passed28 tests; its fake source
+leaves do not reproduce live Catalog cost, so it provides no basis to weaken
+source checks, add an authority cache or claim a production speedup. No production
+performance rule or dependency was changed based on that profile.
