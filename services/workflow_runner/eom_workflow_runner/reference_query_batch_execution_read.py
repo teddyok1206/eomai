@@ -17,10 +17,10 @@ from eom_workflow.embedding_batch_execution_receipt import (
     EmbeddingBatchExecutedChild,
     EmbeddingBatchExecutionReceipt,
 )
-from eom_workflow.embedding_batch_plan import (
-    EmbeddingBatchPlanRequest,
+from eom_workflow.embedding_batch_plan_family import (
+    parse_embedding_batch_plan_request,
+    validate_embedding_batch_query_context,
 )
-from eom_workflow.embedding_batch_plan_family import validate_embedding_batch_query_context
 from eom_workflow.native_reference_query_coordinator import NativeQueryBatchExecuted
 from eom_workflow.reference_query_execution import ReferenceQueryLaunchAssociation
 from sqlalchemy.orm import Session
@@ -92,7 +92,7 @@ def resolve_reference_query_batch_execution(
     parent_job = session.get(JobRecord, receipt.parent_plan_job_id, populate_existing=True)
     _require(parent_job is not None)
     assert parent_job is not None
-    parent = EmbeddingBatchPlanRequest.model_validate(parent_job.request)
+    parent = parse_embedding_batch_plan_request(parent_job.request)
     selection, policy = resolve_embedding_batch_plan_controls(reader, parent)
     history = EmbeddingBatchPlanStore(parent, selection, policy).read(session)
     _require(

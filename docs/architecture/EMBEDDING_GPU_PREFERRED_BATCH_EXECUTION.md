@@ -1105,6 +1105,63 @@ activation wrapper EXIT0이며 새 invocation `1cb1b4a870a542d787b44b7d16333504`
 BUSY fallback/그림 생성 공존/처리량/default/rollback과 최종 요구사항 대조가 남았다.
 **GPU_PREFERRED_FULL=NOT_COMPLETE**이며 사용자 후속12+4 정적 리뷰 문서는 아직 읽지 않았다.
 
+### P2-AI — QUERY 선택에 고정된 CPU/CUDA 인덱스와 실제 admission 연결
+
+남은 QUERY 연결은 기존1.0 선택이 검색 index pointer를 보존하지 않는 경계를 먼저 닫는다.
+기존 성공/실패 history나 released1.0/INDEX1.1 bytes를 수정하지 않는다.
+
+- 책임/정본: 기존 batch selection Artifact와 planning Job/event다. QUERY 전용 selection/request
+  successor1.2에 요청한 view마다 CPU/CUDA `SimilarityViewSelection` pointer 쌍과 source classes를
+  추가한다. 기존 canonical source/index revisions와 Artifact hashes가 정본이며 별도 index DB는 없다.
+- protocol: JSON Schema2020-12를 먼저 추가하고 frozen Pydantic으로 검증한다. legacy/mixed index
+  pin을 명시 구분하고 null/중복/순서/recipe/device/partition/space 불일치를 거부한다.32 anchors,
+  3views,512KiB 제한을 유지한다. native control 및 allocation/route/bound/failure event는1.0 그대로다.
+- 접근/구조/규모: 최대3쌍의 ordered tuple과 keyed view 비교, 기존 indexed reads/Artifact reader다.
+  pin 검사 O(views), canonical pair 확인 O(total bindings), source cap1024다. 새 queue/cache/table,
+  index/migration/dependency를 추가하지 않는다. 큰 파일은 원 owner의 materialization 경계에만 있다.
+- transaction/concurrency: allocation 전과 기존 route/bind/publication의 admission root에서 실제
+  human caller와 같은 Identity fence를 사용하는 두 Catalog verifier가 exact pinned read를 수행한다.
+  반환 pair는 권한이 아니며 root 종료 시 provenance/current source를 기존대로 재확인한다.
+- dependency/owner: contracts -> workflow value closure, Catalog public pair reader -> Runner admission.
+  domain은 SQL/NAS/worker를 모르며 worker DB/NAS 금지는 변하지 않는다.
+- replay/failure: 원 selection hash에 양쪽 index pins를 포함한다. child context는 실제 routing
+  decision이 선택한 쪽의 **정확한** views/source classes/REQUIRED vector mode와 일치해야 한다.
+  CPU BUSY fallback도 이미 고정된 CPU pins만 사용한다. mismatch/권한/hash/missing/unknown은
+  fallback 금지다. 같은 batch ID의1.0→1.2 재해석/중복 allocation은 기존 unique Job 경계가 거부한다.
+- 단순 대안인 caller-local pair tuple만 전달하면 원 parent replay에서 다른 index로 교체할 수 있다.
+  기존 selection에 작은 immutable pointers를 추가하고 기존 application admission을 재사용한다.
+  이 단계는 installed QUERY 구성/활성화가 아니며 실제 transport/default gate를 대체하지 않는다.
+
+P2-AI 구현·검증 (2026-10-25 UTC):
+
+- schema1.2 mirror/raw SHA는 `ede5e13a9046b6ce4d3c2f3bc9bd4799e943ed5f77f052666bfa15673cab6580`.
+  released1.0/INDEX1.1 bytes와 native/planning event1.0은 불변이다. public family parser,
+  selection publisher와 planning store가 successor를 구별한다. 기존 QUERY key/context value
+  규칙은 공유하되 원 parser를 바꾸거나 구버전 source scope를 넓히지 않았다.
+- 기존 Catalog batch admission이 새 QUERY 선택일 때 CPU/CUDA 각각의 현재 public pinned read와
+  exact target pair를 실제로 호출한다. 설치된 source classes/Identity fence를 그대로 사용하고,
+  root-local small pair만 반환한다. 기존 finite group은 그 pair/policy/실제 route와 numerical batch를
+  launch 전에 대조한다. historical batch receipt reader와 executor도 explicit family parser를 쓴다.
+- legacy/mixed, ACQUIRED/BUSY/CAPACITY_UNAVAILABLE, 양쪽 index pins/순서/source classes,
+  null/중복/과대/해시/다른 revision 거부와 canonical publication/read를 검증했다. 관련 source 회귀
+  **163 PASS,37.73초**. 마지막 parsing fence 수정 뒤 successor/dependency **47 PASS,23.32초**,
+  production7모듈 mypy와10파일 Ruff·format/diff PASS다. source/IAM/numerical leaves는 합성이다.
+- disposable PostgreSQL r38 **75 PASS,78.46초**, cleanup/EXIT0. 같은 logical batch의1.0→1.2
+  덮어쓰기 거부, 두 controller의 allocation 경합, 원 route/expiry 유지, 중간 root rollback,
+  bind replay/실패 이력과 기존 child receipt 검사를 포함한다. 운영 DB pytest는 하지 않았다.
+  이 DB suite의 root/source/수치 leaf는 합성이며 실제 GPU QUERY 증거가 아니다.
+- 초기 새 fixture의 consumer-purpose/actor ID, 구버전 전용 replay fixture builder와 잘못된
+  test 경로를 수정했다. r37은74 PASS/1 fixture failure 후 cleanup됐으며 PASS로 바꾸지 않는다.
+  초기 focused 실패 로그도 보존했다. production 권한/검증·기존 acceptance는 완화하지 않았다.
+
+로그는 `/tmp/eom-gpu-query-pinned-pairs-{final-focused-20261025-r2,final-boundaries-20261025}.log`,
+`/tmp/eom-document-execution-pg-20261025-r38.log`다. 이 변경을 실행 중인 GPU/QUERY runtime에
+설치하지 않았다.08:26:35 UTC, background의 첫 추가16-target Workflow
+`workflow_72c40dfd752941d8ba11b7e704031754`가 BATCH_COMPLETED임을 실제 journal에서 확인했다.
+해당 observation의 missing_bindings499는 **그 묶음 실행 전** 값이며 현재 잔여량으로 표시하지 않는다.
+완성된 legacy CONCRETE view 외의 전체 paired coverage, 설치된 routed QUERY와 실제 fallback/
+coexistence/default/rollback은 계속 남았다. 외부12+4 리뷰와 README 정리는 시작하지 않았다.
+
 ### P2-E 패키징 확인
 
 source `2a819d7dd2c51a1ab104f5275571b337709ca466`를 commit/push한 뒤 기존

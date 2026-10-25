@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/embedding-batch-plan/1.2",
+  "title": "QUERY-only exact device-index selection; execution frames remain 1.0",
+  "description": "Pinned legacy or mixed CPU/CUDA index references are identity, not current source authority, GPU availability, numerical success or retry permission.",
+  "oneOf": [
+    {"$ref": "#/$defs/selection"},
+    {"$ref": "#/$defs/request"},
+    {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/allocation"},
+    {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/routed"},
+    {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/bound"},
+    {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/failed"}
+  ],
+  "$defs": {
+    "pinnedView": {
+      "allOf": [
+        {"oneOf": [
+          {"allOf": [
+            {"$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/viewSelection"},
+            {"properties": {"index": {"properties": {"index_manifest": {"properties": {
+              "schema_ref": {"const": "eom://schemas/knowledge/embedding-index-manifest/1.0"}
+            }}}}}}
+          ]},
+          {"$ref": "eom://schemas/knowledge/system-rag-similarity-context/2.0#/$defs/viewSelection"}
+        ]},
+        {"properties": {"index": {"type": "object"}}}
+      ]
+    },
+    "indexPair": {
+      "type": "object", "additionalProperties": false, "required": ["cpu", "cuda"],
+      "properties": {
+        "cpu": {"$ref": "#/$defs/pinnedView"},
+        "cuda": {"$ref": "#/$defs/pinnedView"}
+      }
+    },
+    "selection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "message_type", "purpose", "scope", "corpus_id", "graph_snapshot", "access_policy_revision_id", "anchors", "recipe", "views", "query", "source_classes", "index_pairs", "selection_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-batch-plan/1.2"},
+        "message_type": {"const": "SELECTION"},
+        "purpose": {"const": "REFERENCE_QUERY"},
+        "scope": {"allOf": [
+          {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/scope"},
+          {"properties": {"actor_kind": {"const": "OPERATOR"}}}
+        ]},
+        "corpus_id": {"type": "string", "pattern": "^corpus_[0-9a-f]{32}$"},
+        "graph_snapshot": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"},
+        "access_policy_revision_id": {"type": "string", "pattern": "^accessrev_[0-9a-f]{32}$"},
+        "anchors": {
+          "type": "array", "minItems": 1, "maxItems": 32,
+          "items": {"$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/anchor"}
+        },
+        "recipe": {"$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/recipe"},
+        "views": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/selection/properties/views"},
+        "query": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/queryOptions"},
+        "source_classes": {"$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/request/properties/source_classes"},
+        "index_pairs": {
+          "type": "array", "minItems": 1, "maxItems": 3, "items": {"$ref": "#/$defs/indexPair"}
+        },
+        "selection_sha256": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/hash"}
+      }
+    },
+    "request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "message_type", "batch_id", "parent_request_sha256", "purpose", "scope", "selection_manifest", "selection_sha256", "routing_policy", "routing_policy_sha256", "child_selection_sha256s", "request_sha256"],
+      "properties": {
+        "schema_version": {"const": "embedding-batch-plan/1.2"},
+        "message_type": {"const": "REQUEST"},
+        "batch_id": {"type": "string", "pattern": "^embeddingbatch_[0-9a-f]{32}$"},
+        "parent_request_sha256": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/hash"},
+        "purpose": {"const": "REFERENCE_QUERY"},
+        "scope": {"allOf": [
+          {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/scope"},
+          {"properties": {"actor_kind": {"const": "OPERATOR"}}}
+        ]},
+        "selection_manifest": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/member"},
+        "selection_sha256": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/hash"},
+        "routing_policy": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/member"},
+        "routing_policy_sha256": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/hash"},
+        "child_selection_sha256s": {
+          "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true,
+          "items": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/hash"}
+        },
+        "request_sha256": {"$ref": "eom://schemas/workflow/embedding-batch-plan/1.0#/$defs/hash"}
+      }
+    }
+  }
+}

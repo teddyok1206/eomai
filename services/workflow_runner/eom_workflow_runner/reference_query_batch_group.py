@@ -25,6 +25,7 @@ from eom_workflow_runner.embedding_batch_execution import (
     ActiveEmbeddingBatchExecution,
     PublishedEmbeddingBatchExecution,
 )
+from eom_workflow_runner.embedding_batch_route import validate_embedding_batch_route
 from eom_workflow_runner.embedding_batch_source_authorization import (
     CatalogEmbeddingBatchSourceAuthorization,
     ReferenceQueryBatchSource,
@@ -84,6 +85,8 @@ class CatalogReferenceQueryBatchGroup:
             operation.admission.admit(session, active.request) as sources,
         ):
             self.selection = sources.selection
+            self.indexes = sources.indexes
+            self.routing_policy = sources.policy
         assert active.history.route is not None
         self.active, self.owner = active, owner
         self.decision = active.history.route.decision
@@ -231,6 +234,14 @@ class CatalogReferenceQueryBatchGroup:
         )
         route = self.active.history.route
         assert route is not None
+        if self.indexes:
+            validate_embedding_batch_route(
+                policy=self.routing_policy,
+                allocation=route.observation,
+                decision=self.decision,
+                batch=batch,
+                indexes=self.indexes,
+            )
         binding_body = dict(
             schema_version=BATCH_PLAN_PROTOCOL,
             message_type="BOUND",

@@ -18,6 +18,7 @@ from eom_workflow.embedding_batch_plan_family import (
     parse_embedding_batch_plan_request,
 )
 from eom_workflow.embedding_batch_plan_v11 import EmbeddingBatchPlanRequestV11
+from eom_workflow.embedding_batch_plan_v12 import EmbeddingBatchPlanRequestV12
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
@@ -25,15 +26,20 @@ from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
 from tests.unit.embedding_bulk_plan_fixtures import bulk_planning_case
+from tests.unit.embedding_query_pair_fixtures import paired_query_case
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_embedding_batch_plan import planning_case
 
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture(params=("legacy", "bulk"))
+@pytest.fixture(params=("legacy", "bulk", "paired_query"))
 def planned(guarded_engine, request):
-    builder = bulk_planning_case if request.param == "bulk" else planning_case
+    builder = {
+        "legacy": planning_case,
+        "bulk": bulk_planning_case,
+        "paired_query": paired_query_case,
+    }[request.param]
     value = builder(batch_id="embeddingbatch_" + uuid4().hex)
     value.engine = guarded_engine
     value.store = EmbeddingBatchPlanStore(value.request, value.selection, value.policy)
@@ -104,6 +110,22 @@ def test_new_bulk_version_cannot_fork_or_replace_an_existing_logical_batch(guard
             )
             == 1
         )
+
+
+def test_query_index_successor_cannot_replace_existing_logical_query_history(guarded_engine):
+    batch_id = "embeddingbatch_" + uuid4().hex
+    old = planning_case(batch_id=batch_id)
+    new = paired_query_case(batch_id=batch_id, actor_id=old.request.scope.actor_id)
+    old_store = EmbeddingBatchPlanStore(old.request, old.selection, old.policy)
+    new_store = EmbeddingBatchPlanStore(new.request, new.selection, new.policy)
+    assert old_store.key == new_store.key
+    with Session(guarded_engine) as session, session.begin():
+        original, created = old_store.allocate(session, old.allocation)
+        assert created
+    with pytest.raises(ValueError), Session(guarded_engine) as session, session.begin():
+        new_store.allocate(session, new.allocation)
+    with Session(guarded_engine) as session, session.begin():
+        assert old_store.read(session) == original
 
 
 def test_concurrent_larger_window_candidates_keep_original_allocation_and_expiry(planned):
@@ -198,11 +220,10 @@ def test_gpu_availability_change_does_not_replace_original_route_or_child_identi
     with Session(planned.engine) as session, session.begin():
         planned.store.allocate(session, planned.allocation)
         original = planned.store.route(session, planned.route)
-    builder = (
-        bulk_planning_case
-        if isinstance(planned.request, EmbeddingBatchPlanRequestV11)
-        else planning_case
-    )
+    builder = {
+        EmbeddingBatchPlanRequestV11: bulk_planning_case,
+        EmbeddingBatchPlanRequestV12: paired_query_case,
+    }.get(type(planned.request), planning_case)
     other = builder(status="BUSY", batch_id=planned.request.batch_id)
     assert other.request == planned.request and other.allocation == planned.allocation
     with pytest.raises(ValueError), Session(planned.engine) as session, session.begin():

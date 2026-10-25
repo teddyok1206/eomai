@@ -14,7 +14,7 @@ from eom_orchestrator.native_reference_query_coordinator import (
     create_native_reference_query_launch,
     read_native_reference_query_launch,
 )
-from eom_workflow.embedding_batch_plan import embedding_batch_query_key
+from eom_workflow.embedding_batch_plan_family import embedding_batch_query_key
 from eom_workflow.native_reference_query_coordinator import (
     NativeQueryAllocation,
     NativeQueryBatchExecuted,

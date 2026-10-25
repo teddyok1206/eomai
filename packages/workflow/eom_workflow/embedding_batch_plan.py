@@ -337,6 +337,11 @@ def embedding_batch_query_key(request: EmbeddingBatchPlanRequest, ordinal: int) 
     is rejected before a native Job exists, without another registry or table.
     """
     request = EmbeddingBatchPlanRequest.model_validate(request)
+    return embedding_batch_query_key_value(request, ordinal)
+
+
+def embedding_batch_query_key_value(request: EmbeddingBatchPlanRequestValues, ordinal: int) -> str:
+    """Shared value rule; callers must first parse an explicit supported wire version."""
     _require(
         request.purpose == "REFERENCE_QUERY"
         and type(ordinal) is int
@@ -359,6 +364,16 @@ def validate_embedding_batch_query_context(
     independent checks. An input-shaped selection never supplies permission.
     """
     selection = EmbeddingBatchSelection.model_validate(selection)
+    validate_embedding_batch_query_context_values(selection, decision, ordinal, request)
+
+
+def validate_embedding_batch_query_context_values(
+    selection: EmbeddingBatchSelectionValues,
+    decision: EmbeddingDeviceRoutingDecision,
+    ordinal: int,
+    request: SupportedReferenceQueryWorkflowRequest,
+) -> None:
+    """Shared closure after explicit wire parsing; not source or execution authority."""
     decision = EmbeddingDeviceRoutingDecision.model_validate(decision)
     request = parse_supported_reference_query_workflow_request(request)
     context, query, profile = request.context_request, selection.query, decision.selected.profile

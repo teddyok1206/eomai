@@ -5,18 +5,21 @@ from __future__ import annotations
 import json
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from eom_catalog_contracts.inference_transfer_experiment import StagedExperimentEntry
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
 from eom_catalog_contracts.models import Sha256
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import ApprovedReferenceItemAnchor
+from eom_catalog_service.embedding_device_index_pair import EmbeddingDeviceIndexPair
+from eom_catalog_service.embedding_device_index_read import resolve_embedding_device_index_pair
 from eom_catalog_service.embedding_registry_catalog_adapter import CatalogEmbeddingRegistryVerifier
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryActor,
     EmbeddingRegistryCaller,
     EmbeddingRegistryLookup,
+    EmbeddingRegistryRead,
     ResolvedEmbeddingLookup,
     SelectedEmbeddingSources,
     validate_embedding_registry_actor,
@@ -38,6 +41,7 @@ from eom_workflow.embedding_batch_plan_family import (
     parse_embedding_batch_selection,
     validate_embedding_batch_plan_controls,
 )
+from eom_workflow.embedding_batch_plan_v12 import EmbeddingBatchSelectionV12
 from eom_workflow.embedding_device_routing import (
     EMBEDDING_DEVICE_ROUTING_SCHEMA_REF,
     MAX_EMBEDDING_DEVICE_ROUTING_BYTES,
@@ -79,6 +83,7 @@ class ResolvedEmbeddingBatchPlanSources:
     selection: SupportedEmbeddingBatchSelection
     policy: EmbeddingDeviceRoutingPolicy
     sources: ResolvedEmbeddingLookup
+    indexes: tuple[EmbeddingDeviceIndexPair, ...] = ()
 
 
 class CatalogEmbeddingBatchPlanAdmission:
@@ -193,6 +198,51 @@ class CatalogEmbeddingBatchPlanAdmission:
                 )
             _require(entry.profile.source_basis.graph_snapshot == selection.graph_snapshot)
 
+    def _query_indexes(
+        self,
+        session: Session,
+        selection: SupportedEmbeddingBatchSelection,
+        reader: PinnedArtifactReadContext,
+    ) -> tuple[EmbeddingDeviceIndexPair, ...]:
+        """Both exact device populations before allocation; pins are not authority."""
+        if not isinstance(selection, EmbeddingBatchSelectionV12):
+            return ()
+        _require(type(self.caller) is EmbeddingRegistryCaller)
+        assert isinstance(self.caller, EmbeddingRegistryCaller)
+        config, scope = self.catalog.configuration, self.configuration.source_scope
+        _require(selection.source_classes == config.source_classes)
+        resolved = []
+        for pair in selection.index_pairs:
+            owners, intents = [], []
+            for row in (pair.cpu, pair.cuda):
+                pin = row.index
+                assert pin is not None
+                namespace = type(config.namespace).model_validate(
+                    config.namespace.model_dump(mode="json")
+                    | {"view": row.view, "space_sha256": pin.spaces.document.space_sha256}
+                )
+                owners.append(
+                    CatalogEmbeddingRegistryVerifier(
+                        self.catalog.engine,
+                        replace(config, namespace=namespace, space=pin.spaces.document),
+                        identity_fence=self.catalog.identity_fence,
+                        settings=self.catalog.settings,
+                    )
+                )
+                intents.append(EmbeddingRegistryRead(replace(scope, namespace=namespace), row))
+            resolved.append(
+                resolve_embedding_device_index_pair(
+                    session,
+                    self.caller,
+                    cpu_owner=owners[0],
+                    cpu_intent=intents[0],
+                    cuda_owner=owners[1],
+                    cuda_intent=intents[1],
+                    artifact_reader=reader,
+                )
+            )
+        return tuple(resolved)
+
     @contextmanager
     def admit(
         self, session: Session, request: SupportedEmbeddingBatchRequest
@@ -216,7 +266,8 @@ class CatalogEmbeddingBatchPlanAdmission:
         selected = self._validate_selection(request, selection)
         current = self.catalog.resolve_selected_sources(session, self.caller, selected)
         self._validate_sources(selection, current)
-        yield ResolvedEmbeddingBatchPlanSources(selection, policy, current)
+        indexes = self._query_indexes(session, selection, reader)
+        yield ResolvedEmbeddingBatchPlanSources(selection, policy, current, indexes)
         _require(session.get_transaction() is root and root.is_active)
         # Do not repeat immutable file reads/hashes. Recheck current metadata and
         # the official actual source authority before the caller commits this root.
