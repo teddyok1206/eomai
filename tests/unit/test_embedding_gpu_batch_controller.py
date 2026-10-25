@@ -307,6 +307,10 @@ def test_original_grant_sources_outputs_and_retirement_form_one_flow(driver):
     assert b"".join(result.child_vectors) == driver.vectors
     events = driver.events
     assert events.index("dispatch") < events.index("socket-start") < events.index("connect")
+    assert events.index("ready-observation.json") < events.index("actual-owner-admission")
+    saved = json.loads(driver.files["ready-observation.json"])
+    assert saved["event"] == "EMBEDDING_GPU_BATCH_READY_OBSERVED_NOT_GRANTED"
+    assert saved["observation"]["unit"]["invocation_id"] == driver.original.invocation_id
     assert (
         events.index("actual-owner-admission") < events.index("input-bind") < events.index("grant")
     )
@@ -472,7 +476,10 @@ def test_final_ack_allows_pid1_status_settling_but_not_another_invocation(driver
         fence(controller._ACTIVATOR)
 
 
-def test_terminal_wait_observes_settling_without_extending_numeric_deadline(driver, monkeypatch):
+@pytest.mark.parametrize("expired", (False, True))
+def test_terminal_wait_observes_settling_without_extending_numeric_deadline(
+    driver, monkeypatch, expired
+):
     observations = iter(
         [replace(driver.original, main_pid=0, exited_monotonic=200), driver.terminal]
     )
@@ -481,6 +488,12 @@ def test_terminal_wait_observes_settling_without_extending_numeric_deadline(driv
         controller, "inspect_embedding_gpu_batch_unit", lambda *args, **kwargs: next(observations)
     )
     monkeypatch.setattr(controller.time, "sleep", sleeps.append)
+    if expired:
+        monkeypatch.setattr(
+            controller.time,
+            "monotonic_ns",
+            lambda: driver.captured.prepared.request.expires_monotonic_ns + 40 * 10**9,
+        )
     assert controller._wait_terminal(driver.captured, driver.original) == driver.terminal
     assert sleeps == [0.05]
 

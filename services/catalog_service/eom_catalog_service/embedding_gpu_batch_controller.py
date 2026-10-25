@@ -44,6 +44,7 @@ from eom_orchestrator.inference_transfer_cpu_handoff import (
     read_protected_cpu_handoff_member,
 )
 from eom_orchestrator.inference_transfer_cpu_systemd import CpuUnitObservation
+from pydantic import TypeAdapter
 
 from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer
 from eom_catalog_service.embedding_cuda_probe_gpu_clients import observe_cuda_probe_gpu_clients
@@ -250,10 +251,7 @@ def _wait_terminal(
     captured: CapturedEmbeddingGpuBatchMachine, original: CpuUnitObservation
 ) -> CpuUnitObservation:
     # Separate cleanup budget, not permission to extend numeric execution or replay it.
-    deadline = min(
-        captured.prepared.request.expires_monotonic_ns + 30 * 10**9,
-        time.monotonic_ns() + 30 * 10**9,
-    )
+    deadline = time.monotonic_ns() + 60 * 10**9
     while time.monotonic_ns() < deadline:
         observed = inspect_embedding_gpu_batch_unit(_unit(captured), template=GPU_BATCH_TEMPLATE)
         _original_unit(observed, original, attempt_hex=captured.prepared.launch.attempt_hex)
@@ -267,6 +265,27 @@ def _wait_terminal(
             _require(observed.main_pid == original.main_pid)
         time.sleep(0.05)
     raise TimeoutError("EMBEDDING_GPU_BATCH_TERMINATION_UNCERTAIN")
+
+
+def _persist_ready_observation(
+    captured: CapturedEmbeddingGpuBatchMachine, ready: EmbeddingGpuBatchReadyObservation
+) -> None:
+    """Preserve actual READY before expensive admission; never reconstruct it after loss."""
+    captured.assert_precompute()
+    raw = canonical_json_bytes(
+        dict(
+            event="EMBEDDING_GPU_BATCH_READY_OBSERVED_NOT_GRANTED",
+            observation=TypeAdapter(EmbeddingGpuBatchReadyObservation).dump_python(
+                ready, mode="json"
+            ),
+        )
+    )
+    with protected_cpu_handoff_directory(
+        captured.execution, owner=fixed_owner_identity(), uid=0, gid=captured.owner_gid, mode=0o750
+    ) as directory:
+        create_protected_cpu_handoff_member(
+            directory, "ready-observation.json", raw, owner_gid=captured.owner_gid, mode=0o600
+        )
 
 
 class _WorkerFence:
@@ -502,6 +521,7 @@ def run_embedding_gpu_batch(
             return _prove_busy(captured, fence, allocation)
         ready = observe_embedding_gpu_batch_ready(captured, allocation)
         _require(ready.unit == original and ready.readiness.start_time_ticks == fence.start_ticks)
+        _persist_ready_observation(captured, ready)
         fence.phase = "ACTIVE"
         batch = parse_embedding_work_batch_input(
             source_owner.admit_allocation(captured.prepared.request, ready)

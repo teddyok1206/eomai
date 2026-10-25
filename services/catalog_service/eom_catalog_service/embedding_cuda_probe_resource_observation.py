@@ -627,6 +627,19 @@ def observe_ungranted_embedding_gpu_batch_resources(
     *, unit: str, terminal_pid: int, lease_gid: int
 ) -> UngrantedEmbeddingGpuBatchResources:
     """Actual batch/PID1 fence; caller proves failed terminal, no GRANT and empty input."""
+    return observe_terminal_embedding_gpu_batch_resources(
+        unit=unit, terminal_pid=terminal_pid, lease_gid=lease_gid
+    )
+
+
+def observe_terminal_embedding_gpu_batch_resources(
+    *, unit: str, terminal_pid: int, lease_gid: int
+) -> UngrantedEmbeddingGpuBatchResources:
+    """Actual dead-PID/PID1 physical facts, independent of whether GRANT was sent.
+
+    The historical frozen value name is retained for existing record compatibility.
+    This observer never proves absence of compute, READY, source authority or BUSY.
+    """
     _require_embedding_gpu_batch_unit(unit)
     lease = TerminalCudaLeaseIdentity(
         lease_gid, _epoch(_LOCK.parent.lstat())[:5], _epoch(_LOCK.lstat()), terminal_pid
@@ -650,6 +663,15 @@ def hold_released_ungranted_embedding_gpu_batch_resources(
     _require_embedding_gpu_batch_unit(unit)
     _require(type(observed) is UngrantedEmbeddingGpuBatchResources)
     with _hold_released_resources(observed):
+        yield
+
+
+@contextmanager
+def hold_released_terminal_embedding_gpu_batch_resources(
+    observed: UngrantedEmbeddingGpuBatchResources, *, unit: str
+) -> Iterator[None]:
+    """Same physical release fence; no claim that an original grant was absent."""
+    with hold_released_ungranted_embedding_gpu_batch_resources(observed, unit=unit):
         yield
 
 

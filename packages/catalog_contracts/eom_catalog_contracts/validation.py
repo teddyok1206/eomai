@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "embedding-gpu-failed-retirement": CatalogSchemaResource(
+            "schemas/knowledge/embedding-gpu-failed-retirement-v1.schema.json",
+            "resources/knowledge/embedding-gpu-failed-retirement-v1.schema.json",
+            "1.0",
+            "sha256:4e23e5b8438c5c9389d5061a5598c323e7873f93f02079fa41176377fb74c7ca",
+        ),
         "embedding-gpu-allocation-control": CatalogSchemaResource(
             "schemas/knowledge/embedding-gpu-allocation-control-v1.schema.json",
             "resources/knowledge/embedding-gpu-allocation-control-v1.schema.json",

@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-gpu-failed-retirement/1.0",
+  "title": "Original failed GPU batch retirement, never computation or source authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "event", "allocation_attempt_id", "allocation_raw_sha256", "allocation_request_sha256", "invocation_id", "intent_sha256", "original_outcome", "stored_descriptors", "observed_at"],
+  "properties": {
+    "schema_version": {"const": "embedding-gpu-failed-retirement/1.0"},
+    "event": {"const": "EMBEDDING_GPU_BATCH_FAILED_RETIRED_NOT_PUBLISHED"},
+    "allocation_attempt_id": {"type": "string", "pattern": "^embeddingallocation_[0-9a-f]{32}$"},
+    "allocation_raw_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "allocation_request_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "invocation_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "intent_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "original_outcome": {"const": "FAILED"},
+    "stored_descriptors": {"const": 0},
+    "observed_at": {"type": "string", "format": "date-time"}
+  }
+}
