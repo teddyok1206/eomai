@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/embedding-unbound-control-failure/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "parent_plan_job_id", "parent_request_sha256", "allocation_attempt_id", "allocation_request_sha256", "controller_invocation_id", "controller_pid", "boot_id", "allocation_raw_sha256", "launch_raw_sha256", "descriptor_raw_sha256", "controller_outcome", "compute_state", "observed_at", "evidence_sha256"],
+  "properties": {
+    "schema_version": {"const": "embedding-unbound-control-failure/1.0"},
+    "parent_plan_job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+    "parent_request_sha256": {"$ref": "#/$defs/sha"},
+    "allocation_attempt_id": {"type": "string", "pattern": "^embeddingallocation_[0-9a-f]{32}$"},
+    "allocation_request_sha256": {"$ref": "#/$defs/sha"},
+    "controller_invocation_id": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+    "controller_pid": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+    "boot_id": {"type": "string", "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"},
+    "allocation_raw_sha256": {"$ref": "#/$defs/sha"},
+    "launch_raw_sha256": {"$ref": "#/$defs/sha"},
+    "descriptor_raw_sha256": {"$ref": "#/$defs/sha"},
+    "controller_outcome": {"const": "FAILED"},
+    "compute_state": {"const": "NOT_GRANTED"},
+    "observed_at": {"type": "string", "format": "date-time", "pattern": "Z$"},
+    "evidence_sha256": {"$ref": "#/$defs/sha"}
+  },
+  "$defs": {"sha": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}
+}

@@ -312,6 +312,46 @@ def test_late_unbound_failure_evidence_change_rolls_back_terminal_history(planne
         assert planned.store.read(session) == original
 
 
+def test_unbound_only_failure_never_closes_a_routed_parent(planned):
+    with Session(planned.engine) as session, session.begin():
+        planned.store.allocate(session, planned.allocation)
+        routed = planned.store.route(session, planned.route)
+    with pytest.raises(ValueError), Session(planned.engine) as session, session.begin():
+        planned.store.record_unbound_failure(session, planned.failure)
+    with Session(planned.engine) as session, session.begin():
+        assert planned.store.read(session) == routed
+
+
+def test_concurrent_route_and_unbound_failure_have_one_atomic_winner(planned):
+    with Session(planned.engine) as session, session.begin():
+        planned.store.allocate(session, planned.allocation)
+    barrier = Barrier(2)
+
+    def apply(action):
+        barrier.wait(timeout=10)
+        try:
+            with Session(planned.engine) as session, session.begin():
+                result = (
+                    planned.store.route(session, planned.route)
+                    if action == "route"
+                    else planned.store.record_unbound_failure(session, planned.failure)
+                )
+            return result.state
+        except ValueError:
+            return "REFUSED"
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(apply, ("route", "failure")))
+    assert results.count("REFUSED") == 1
+    with Session(planned.engine) as session, session.begin():
+        result = planned.store.read(session)
+    assert result is not None
+    assert (result.state, result.route is None, result.failure is None) in {
+        ("RUNNING", False, True),
+        ("FAILED", True, False),
+    }
+
+
 def test_missing_allocation_and_savepoint_are_not_dispatch_authority(planned):
     with Session(planned.engine) as session, session.begin():
         with pytest.raises(ValueError):

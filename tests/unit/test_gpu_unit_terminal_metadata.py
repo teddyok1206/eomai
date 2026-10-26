@@ -67,6 +67,47 @@ def observe(state):
     )
 
 
+@pytest.mark.parametrize(
+    "fault", (None, "InvocationID", "NFileDescriptorStore", "MainPID", "Job", "ControlGroup")
+)
+def test_explicit_uninvoked_batch_read_never_invents_native_identity(facts, monkeypatch, fault):
+    template = "eom-embedding-native-gpu-batch@.service"
+    unit = template.replace("@", "@" + "a" * 32)
+    fields = dict(
+        LoadState="loaded",
+        ActiveState="inactive",
+        SubState="dead",
+        MainPID="0",
+        NFileDescriptorStore="0",
+        InvocationID="",
+        NeedDaemonReload="no",
+        FragmentPath="/etc/systemd/system/" + template,
+        DropInPaths=str(reader.embedding_gpu_batch_descriptor_path("a" * 32)),
+        Job="",
+        ControlGroup="",
+    )
+    if fault:
+        fields[fault] = "f" * 32 if fault == "InvocationID" else "1"
+    monkeypatch.setattr(
+        reader.subprocess,
+        "run",
+        lambda *a, **kw: SimpleNamespace(
+            returncode=0,
+            stdout="".join(f"{key}={value}\n" for key, value in fields.items()).encode(),
+            stderr=b"",
+        ),
+    )
+    if fault:
+        with pytest.raises(ValueError):
+            reader.observe_uninvoked_embedding_gpu_batch_unit(unit)
+    else:
+        observed = reader.observe_uninvoked_embedding_gpu_batch_unit(unit)
+        assert observed.invocation_id == "" and observed.stored_descriptors == 0
+    # The released known-invocation reader still rejects missing identity.
+    with pytest.raises(ValueError):
+        reader.observe_stopped_gpu_unit(unit, template=template, invocation=None)
+
+
 @pytest.mark.parametrize("batch", (False, True))
 @pytest.mark.parametrize(
     "substate,store", [("dead", "0"), ("dead", "1"), ("dead-resources-pinned", "1")]

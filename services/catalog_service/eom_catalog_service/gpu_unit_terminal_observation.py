@@ -153,6 +153,25 @@ def _observe_original_terminal_process(
 
 def observe_stopped_gpu_unit(unit: str, *, template: str, invocation: str) -> StoppedGpuUnit:
     """Only read actual post-effect state; caller owns the concrete fixed unit family."""
+    if type(invocation) is not str or re.fullmatch(r"[0-9a-f]{32}", invocation) is None:
+        raise ValueError("GPU_UNIT_RETIREMENT_UNCERTAIN")
+    return _observe_stopped_gpu_unit(unit, template=template, invocation=invocation)
+
+
+def observe_uninvoked_embedding_gpu_batch_unit(unit: str) -> StoppedGpuUnit:
+    """Current empty invocation/process/FD state, NOT a historical nonexecution proof.
+
+    The original unbound-failure reader also requires the actual failed root and
+    protected empty handoff/absent input grant. No dummy native invocation exists.
+    """
+    return _observe_stopped_gpu_unit(
+        unit, template="eom-embedding-native-gpu-batch@.service", invocation=None
+    )
+
+
+def _observe_stopped_gpu_unit(
+    unit: str, *, template: str, invocation: str | None
+) -> StoppedGpuUnit:
     if (
         os.getresuid() != (0, 0, 0)
         or type(unit) is not str
@@ -165,8 +184,11 @@ def observe_stopped_gpu_unit(unit: str, *, template: str, invocation: str) -> St
             and re.fullmatch(r"eom-embedding-native-gpu-batch@[0-9a-f]{32}\.service", unit) is None
         )
         or any(char in unit for char in ("/", "\0", "\n", "\r"))
-        or type(invocation) is not str
-        or re.fullmatch(r"[0-9a-f]{32}", invocation) is None
+        or (invocation is None and template != "eom-embedding-native-gpu-batch@.service")
+        or (
+            invocation is not None
+            and (type(invocation) is not str or re.fullmatch(r"[0-9a-f]{32}", invocation) is None)
+        )
     ):
         raise ValueError("GPU_UNIT_RETIREMENT_UNCERTAIN")
     try:
@@ -211,9 +233,9 @@ def observe_stopped_gpu_unit(unit: str, *, template: str, invocation: str) -> St
             )
         )
         and values["MainPID"] == "0"
-        and values["NFileDescriptorStore"] in {"0", "1"}
+        and values["NFileDescriptorStore"] in ({"0"} if invocation is None else {"0", "1"})
         and (loaded or values["NFileDescriptorStore"] == "0")
-        and values["InvocationID"] in {"", invocation}
+        and values["InvocationID"] in ({""} if invocation is None else {"", invocation})
         and values["NeedDaemonReload"] == "no"
         and values["DropInPaths"] == expected_drop_in
         and values["Job"] in {"", "0"}

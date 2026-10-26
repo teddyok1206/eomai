@@ -360,6 +360,24 @@ class EmbeddingBatchPlanStore:
         assert result is not None
         return result
 
+    def record_unbound_failure(
+        self, session: Session, record: EmbeddingBatchFailure
+    ) -> EmbeddingBatchPlanHistory:
+        """Lock and refuse even a concurrent ROUTED transition before failure.
+
+        Physical/evidence admission remains the maintenance caller's responsibility.
+        The general failure operation still supports an already-routed failure.
+        """
+        _require(self._job(session, update=True) is not None)
+        history = self.read(session)
+        assert history is not None
+        _require(
+            history.state in {"CLAIMED", "FAILED"}
+            and history.route is None
+            and history.bound is None
+        )
+        return self.record_failure(session, record)
+
     def record_failure(
         self, session: Session, record: EmbeddingBatchFailure
     ) -> EmbeddingBatchPlanHistory:
