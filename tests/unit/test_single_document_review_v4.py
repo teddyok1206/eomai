@@ -231,6 +231,7 @@ def v4_records() -> tuple[Any, ...]:
 def test_exact_new_revision_projects_and_preserves_non_complete_status() -> None:
     step, pointer, job, artifact, revision, event = v4_records()
     result = QueryAdapter._validated_pdf_document_review_result(
+        workflow=_workflow(),
         workflow_id=step.workflow_id,
         definition_version="1.3.0",
         review_request=_request(),
@@ -250,6 +251,7 @@ def test_exact_new_revision_projects_and_preserves_non_complete_status() -> None
     assert view.model_dump(mode="json")["result"]["review_status"] == "NEEDS_HUMAN_DECISION"
     with pytest.raises(ApiError):
         QueryAdapter._validated_pdf_document_review_result(
+            workflow=_workflow(),
             workflow_id=step.workflow_id,
             definition_version="1.0.0",
             review_request=_request(),
@@ -275,6 +277,7 @@ def test_new_pointer_integrity_does_not_relax_existing_checks(damage: str) -> No
         revision = None
     with pytest.raises(ApiError):
         QueryAdapter._validated_pdf_document_review_result(
+            workflow=_workflow(),
             workflow_id=step.workflow_id,
             definition_version="1.3.0",
             review_request=_request(),

@@ -15,12 +15,14 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfsV3,
     CreateDocumentReviewAnnotatedPdfsV4,
     CreateDocumentReviewAnnotatedPdfsV5,
+    CreateDocumentReviewAnnotatedPdfsV6,
     DocumentReviewAnnotatedPdfPointer,
     DocumentReviewAnnotationPage,
     DocumentReviewAnnotationRegion,
     DocumentReviewAnnotationSource,
     DocumentReviewPdfAnnotationMark,
     DocumentReviewPdfAnnotationMediaQuery,
+    DocumentReviewResultMemberPointerV3,
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory, transaction
@@ -152,7 +154,10 @@ class DocumentReviewAnnotationApplicationService:
             annotation_profile = "NUMBERED_BOXES_WITH_NATIVE_COMMENTS"
         payload: dict[str, object] = {
             "schema_version": (
-                "document-review-pdf-annotation-request/5.0"
+                "document-review-pdf-annotation-request/6.0"
+                if presentation_style is not None
+                and isinstance(review_result, DocumentReviewResultMemberPointerV3)
+                else "document-review-pdf-annotation-request/5.0"
                 if presentation_style is not None
                 else "document-review-pdf-annotation-request/4.0"
                 if isinstance(parsed, PdfDocumentReviewRoleResultV4)
@@ -192,8 +197,13 @@ class DocumentReviewAnnotationApplicationService:
             | CreateDocumentReviewAnnotatedPdfsV3
             | CreateDocumentReviewAnnotatedPdfsV4
             | CreateDocumentReviewAnnotatedPdfsV5
+            | CreateDocumentReviewAnnotatedPdfsV6
         )
-        if presentation_style is not None:
+        if presentation_style is not None and isinstance(
+            review_result, DocumentReviewResultMemberPointerV3
+        ):
+            command = CreateDocumentReviewAnnotatedPdfsV6.model_validate(payload)
+        elif presentation_style is not None:
             command = CreateDocumentReviewAnnotatedPdfsV5.model_validate(payload)
         elif isinstance(parsed, PdfDocumentReviewRoleResultV4):
             command = CreateDocumentReviewAnnotatedPdfsV4.model_validate(payload)

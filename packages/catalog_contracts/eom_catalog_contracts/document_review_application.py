@@ -18,12 +18,14 @@ from eom_catalog_contracts.document_review import (
     DocumentReviewPdfAnnotationResultV3,
     DocumentReviewResultMemberPointer,
     DocumentReviewResultMemberPointerV2,
+    DocumentReviewResultMemberPointerV3,
     GraphGroundedDocumentReviewResultMemberPointer,
     OfficeDocumentReviewConversionIdentity,
     OfficeDocumentReviewMemberPointer,
     OfficeDocumentReviewMemberPointerV2,
     PdfDocumentReviewResultMemberPointer,
     PdfDocumentReviewResultMemberPointerV2,
+    PdfDocumentReviewResultMemberPointerV3,
     PdfReviewArtifactMemberPointer,
     PdfReviewDocumentPointer,
 )
@@ -747,6 +749,13 @@ class ApplyDocumentReviewHwpxCorrectionsV2(ApplyDocumentReviewHwpxCorrections):
     review_result: PdfDocumentReviewResultMemberPointerV2
 
 
+class ApplyDocumentReviewHwpxCorrectionsV3(ApplyDocumentReviewHwpxCorrectionsV2):
+    schema_version: Literal["document-review-hwpx-correction-request/3.0"] = (
+        "document-review-hwpx-correction-request/3.0"  # type: ignore[assignment]
+    )
+    review_result: PdfDocumentReviewResultMemberPointerV3
+
+
 class CreateDocumentReviewAnnotatedPdfsV4(CreateDocumentReviewAnnotatedPdfsV2):
     schema_version: Literal["document-review-pdf-annotation-request/4.0"] = (
         "document-review-pdf-annotation-request/4.0"  # type: ignore[assignment]
@@ -764,6 +773,17 @@ class CreateDocumentReviewAnnotatedPdfsV5(CreateDocumentReviewAnnotatedPdfsV2):
     review_result: (
         DocumentReviewResultMemberPointerV2 | GraphGroundedDocumentReviewResultMemberPointer
     )  # type: ignore[assignment]
+
+
+class CreateDocumentReviewAnnotatedPdfsV6(CreateDocumentReviewAnnotatedPdfsV5):
+    """Readable annotation for the textbook-grounded single review successor."""
+
+    schema_version: Literal["document-review-pdf-annotation-request/6.0"] = (
+        "document-review-pdf-annotation-request/6.0"  # type: ignore[assignment]
+    )
+    review_result: (
+        DocumentReviewResultMemberPointerV3 | GraphGroundedDocumentReviewResultMemberPointer
+    )
 
 
 class CreateDocumentReviewAnnotatedPdfsV3(CreateDocumentReviewAnnotatedPdfsV2):

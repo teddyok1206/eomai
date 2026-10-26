@@ -16,6 +16,7 @@ from xml.etree import ElementTree
 from eom_catalog_contracts import (
     DocumentReviewHwpxCorrectionPlan,
     DocumentReviewHwpxCorrectionPlanV2,
+    DocumentReviewHwpxCorrectionPlanV3,
     DocumentReviewHwpxCorrectionResult,
     DocumentReviewHwpxEdit,
     OfficeDocumentReviewMemberPointer,
@@ -440,12 +441,19 @@ def build_document_review_hwpx_correction_plan(
             int(value["address"]["start_offset"]),  # type: ignore[index]
         )
     )
-    target_aware = (
-        single_document_review_contract_for_schema_ref(review_result.schema_ref).result_schema
-        == "pdf-document-review-result@4.0"
+    result_schema = single_document_review_contract_for_schema_ref(
+        review_result.schema_ref
+    ).result_schema
+    target_aware = result_schema in (
+        "pdf-document-review-result@4.0",
+        "pdf-document-review-result@5.0",
     )
     plan_model = (
-        DocumentReviewHwpxCorrectionPlanV2 if target_aware else DocumentReviewHwpxCorrectionPlan
+        DocumentReviewHwpxCorrectionPlanV3
+        if result_schema == "pdf-document-review-result@5.0"
+        else DocumentReviewHwpxCorrectionPlanV2
+        if target_aware
+        else DocumentReviewHwpxCorrectionPlan
     )
     value: dict[str, object] = {
         "schema_version": plan_model.model_fields["schema_version"].default,
@@ -458,7 +466,9 @@ def build_document_review_hwpx_correction_plan(
     }
     value["plan_sha256"] = content_sha256(value)
     validate_contract(
-        "document-review-hwpx-correction-plan-v2"
+        "document-review-hwpx-correction-plan-v3"
+        if result_schema == "pdf-document-review-result@5.0"
+        else "document-review-hwpx-correction-plan-v2"
         if target_aware
         else "document-review-hwpx-correction-plan",
         value,

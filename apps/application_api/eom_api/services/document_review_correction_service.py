@@ -11,6 +11,7 @@ from eom_api_contracts.document_review import (
 from eom_catalog_contracts import (
     ApplyDocumentReviewHwpxCorrections,
     ApplyDocumentReviewHwpxCorrectionsV2,
+    ApplyDocumentReviewHwpxCorrectionsV3,
     DocumentReviewHwpxCorrectionMediaQuery,
     OfficeDocumentReviewMemberPointer,
 )
@@ -143,7 +144,9 @@ class DocumentReviewCorrectionApplicationService:
             schema_ref="eom://schemas/document-review/editable-hwpx/1.0",
         )
         command_model = (
-            ApplyDocumentReviewHwpxCorrectionsV2
+            ApplyDocumentReviewHwpxCorrectionsV3
+            if review_result.schema_ref.endswith("/pdf-document-review-result-v5.schema.json")
+            else ApplyDocumentReviewHwpxCorrectionsV2
             if review_result.schema_ref.endswith("/pdf-document-review-result-v4.schema.json")
             else ApplyDocumentReviewHwpxCorrections
         )

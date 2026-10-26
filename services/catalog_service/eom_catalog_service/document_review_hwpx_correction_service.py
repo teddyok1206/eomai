@@ -13,6 +13,7 @@ from typing import BinaryIO, Protocol, cast
 from eom_catalog_contracts import (
     ApplyDocumentReviewHwpxCorrections,
     ApplyDocumentReviewHwpxCorrectionsV2,
+    ApplyDocumentReviewHwpxCorrectionsV3,
     DocumentReviewHwpxCorrectionMediaQuery,
     DocumentReviewHwpxCorrectionResponse,
     OfficeDocumentReviewMemberPointer,
@@ -54,6 +55,19 @@ DOCUMENT_REVIEW_HWPX_CORRECTION_V2_SCHEMA_HASH = content_sha256(
         "contracts": [
             "document-review-hwpx-correction-request/2.0",
             "document-review-hwpx-correction-plan/2.0",
+            "document-review-hwpx-correction-result/1.0",
+            "document-review-hwpx-correction-response/1.0",
+        ],
+    }
+)
+
+DOCUMENT_REVIEW_HWPX_CORRECTION_V3_PROTOCOL_VERSION = "catalog/1.25"
+DOCUMENT_REVIEW_HWPX_CORRECTION_V3_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": DOCUMENT_REVIEW_HWPX_CORRECTION_V3_PROTOCOL_VERSION,
+        "contracts": [
+            "document-review-hwpx-correction-request/3.0",
+            "document-review-hwpx-correction-plan/3.0",
             "document-review-hwpx-correction-result/1.0",
             "document-review-hwpx-correction-response/1.0",
         ],
@@ -276,12 +290,16 @@ class DocumentReviewHwpxCorrectionService:
                     },
                     manifest_version="document-review-hwpx-correction-file-set/1.0",
                     protocol_version=(
-                        DOCUMENT_REVIEW_HWPX_CORRECTION_V2_PROTOCOL_VERSION
+                        DOCUMENT_REVIEW_HWPX_CORRECTION_V3_PROTOCOL_VERSION
+                        if isinstance(command, ApplyDocumentReviewHwpxCorrectionsV3)
+                        else DOCUMENT_REVIEW_HWPX_CORRECTION_V2_PROTOCOL_VERSION
                         if isinstance(command, ApplyDocumentReviewHwpxCorrectionsV2)
                         else DOCUMENT_REVIEW_HWPX_CORRECTION_PROTOCOL_VERSION
                     ),
                     protocol_schema_hash=(
-                        DOCUMENT_REVIEW_HWPX_CORRECTION_V2_SCHEMA_HASH
+                        DOCUMENT_REVIEW_HWPX_CORRECTION_V3_SCHEMA_HASH
+                        if isinstance(command, ApplyDocumentReviewHwpxCorrectionsV3)
+                        else DOCUMENT_REVIEW_HWPX_CORRECTION_V2_SCHEMA_HASH
                         if isinstance(command, ApplyDocumentReviewHwpxCorrectionsV2)
                         else DOCUMENT_REVIEW_HWPX_CORRECTION_SCHEMA_HASH
                     ),

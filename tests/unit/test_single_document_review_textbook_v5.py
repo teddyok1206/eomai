@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from eom_api.errors import ApiError
+from eom_api.services.query_adapter import QueryAdapter
 from eom_catalog_contracts import ReviewTextbookEvidence
 from eom_catalog_contracts.knowledge import (
     EvidenceBundleManifestV3,
@@ -43,7 +45,7 @@ from pydantic import ValidationError
 from tests.unit.test_knowledge_analysis_document_contracts import document_source
 from tests.unit.test_pdf_document_review_protocol import _input
 from tests.unit.test_review_textbook_evidence import _binding, _manifest, _publication, _usage
-from tests.unit.test_single_document_review_v4 import result_v4
+from tests.unit.test_single_document_review_v4 import _workflow, result_v4, v4_records
 
 
 def _result_v5() -> dict[str, Any]:
@@ -397,6 +399,111 @@ def test_textbook_receipt_schema_and_model_preserve_distinct_hashes() -> None:
     wrong["usage_sha256"] = "sha256:" + "0" * 64
     with pytest.raises(ValidationError, match="pointers or hash differ"):
         ReviewTextbookValidationReceipt.model_validate(wrong)
+
+
+def test_completed_single_review_reader_requires_exact_textbook_receipt() -> None:
+    step, pointer, job, artifact, revision, event = v4_records()
+    result = PdfDocumentReviewRoleResultV5.model_validate(_result_v5())
+    result_value = result.model_dump(mode="json")
+    result_hash = content_sha256(result_value)
+    result_length = len(canonical_json_bytes(result_value))
+    pointer = pointer.model_copy(
+        update={"result_schema": "pdf-document-review-result@5.0", "content_hash": result_hash}
+    )
+    step.result_schema = pointer.result_schema
+    step.output_pointer_manifest = pointer.model_dump(mode="json")
+    job.protocol_version = "workflow-role/1.31.0"
+    job.request = _input_v5()
+    job.request_hash = content_sha256(
+        {
+            "protocol_version": job.protocol_version,
+            "task_type": job.task_type,
+            "request": job.request,
+        }
+    )
+    revision.result = result_value
+    revision.content_hash = result_hash
+    revision.content_bytes = result_length
+    revision.manifest = dict(
+        revision.manifest, content_hash=result_hash, content_bytes=result_length
+    )
+    revision.manifest_hash = content_sha256(revision.manifest)
+    workflow = _workflow()
+    workflow.definition_version = "1.4.0"
+    binding = ReviewTextbookEvidence.model_validate(_input_v5()["request"]["textbook_evidence"])
+    review_request = PdfDocumentReviewRequest.model_validate(
+        _input_v5()["request"]["review_request"]
+    )
+    workflow.initial_request = workflow_request_storage_document(
+        WorkflowRequest(
+            request_name="PDF_DOCUMENT_REVIEW_REQUEST",
+            image_mode="skip",
+            execution_preset_key="pdf-document-review",
+            pdf_document_review_request=review_request,
+            document_review_textbook_evidence=binding,
+        )
+    )
+    workflow.runtime_context = {
+        "execution_plan": {
+            "plan_id": "execplan_" + "1" * 32,
+            "plan_sha256": "sha256:" + "2" * 64,
+        }
+    }
+    publication = binding.publication
+    receipt: dict[str, Any] = {
+        "schema_version": "review-textbook-validation-receipt/1.0",
+        "plan_id": workflow.runtime_context["execution_plan"]["plan_id"],
+        "plan_sha256": workflow.runtime_context["execution_plan"]["plan_sha256"],
+        "workflow_id": workflow.workflow_id,
+        "step_run_id": step.step_run_id,
+        "job_id": pointer.job_id,
+        "attempt": step.attempt,
+        "review_input_sha256": binding.review_input_sha256,
+        "binding_sha256": binding.binding_sha256,
+        "graph_snapshot_revision_id": publication.graph_snapshot.graph_snapshot_revision_id,
+        "evidence_bundle_revision_id": publication.evidence_bundle_revision_id,
+        "evidence_manifest_artifact": publication.manifest_artifact.model_dump(mode="json"),
+        "evidence_manifest_sha256": publication.manifest_sha256,
+        "evidence_context_artifact": publication.context_artifact.model_dump(mode="json"),
+        "usage_sha256": result.output.textbook_usage.usage_sha256,
+        "result_artifact_id": pointer.logical_artifact_id,
+        "result_artifact_revision_id": pointer.revision_id,
+        "result_content_sha256": result_hash,
+    }
+    receipt["receipt_sha256"] = content_sha256(receipt)
+    event.data = dict(
+        event.data,
+        content_hash=result_hash,
+        review_textbook_validation_receipt=receipt,
+    )
+    admitted = QueryAdapter._validated_pdf_document_review_result(
+        workflow=workflow,
+        workflow_id=workflow.workflow_id,
+        definition_version="1.4.0",
+        review_request=review_request,
+        step=step,
+        pointer=pointer,
+        job=job,
+        artifact=artifact,
+        revision=revision,
+        event=event,
+    )
+    assert isinstance(admitted, PdfDocumentReviewRoleResultV5)
+    assert QueryAdapter._pdf_document_review(workflow, admitted, None).result is not None
+    event.data["review_textbook_validation_receipt"] = None
+    with pytest.raises(ApiError, match="receipt"):
+        QueryAdapter._validated_pdf_document_review_result(
+            workflow=workflow,
+            workflow_id=workflow.workflow_id,
+            definition_version="1.4.0",
+            review_request=review_request,
+            step=step,
+            pointer=pointer,
+            job=job,
+            artifact=artifact,
+            revision=revision,
+            event=event,
+        )
 
 
 def test_trusted_single_review_rejects_other_request_binding() -> None:

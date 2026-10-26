@@ -34,6 +34,24 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "document-review-pdf-annotation-request-v6": CatalogSchemaResource(
+            "schemas/catalog/catalog-application/document-review-pdf-annotation-request-v6.schema.json",
+            "resources/catalog-application/document-review-pdf-annotation-request-v6.schema.json",
+            "6.0",
+            "sha256:ca18ac590770e6b19ef8336f3f7552e8df13565899439eb7c2494a2a362a565e",
+        ),
+        "document-review-hwpx-correction-request-v3": CatalogSchemaResource(
+            "schemas/catalog/catalog-application/document-review-hwpx-correction-request-v3.schema.json",
+            "resources/catalog-application/document-review-hwpx-correction-request-v3.schema.json",
+            "3.0",
+            "sha256:cbbba4120e545b1cde29b9e86faa87e7bf7a8d2371cfad21d45a22bf4bf620f3",
+        ),
+        "document-review-hwpx-correction-plan-v3": CatalogSchemaResource(
+            "schemas/document-review/document-review-hwpx-correction-plan-v3.schema.json",
+            "resources/document-review/document-review-hwpx-correction-plan-v3.schema.json",
+            "3.0",
+            "sha256:365e71d09f53924a10bcccb0d0768bcf98c891d8275f2ee29ae76e540e6c7b12",
+        ),
         "embedding-gpu-failed-retirement": CatalogSchemaResource(
             "schemas/knowledge/embedding-gpu-failed-retirement-v1.schema.json",
             "resources/knowledge/embedding-gpu-failed-retirement-v1.schema.json",

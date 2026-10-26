@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog/document-review-pdf-annotation-request/6.0",
+  "title": "EOM Document Review PDF Annotation Request V6 textbook review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "operation", "annotation_profile", "presentation_style",
+    "actor_id", "idempotency_key", "workflow_id", "review_result", "sources",
+    "annotations", "annotation_set_sha256", "request_sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": "document-review-pdf-annotation-request/6.0" },
+    "operation": { "const": "CREATE_DOCUMENT_REVIEW_ANNOTATED_PDFS_V2" },
+    "annotation_profile": { "const": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS" },
+    "presentation_style": { "const": "READABLE_MARGIN_GUIDES_V1" },
+    "actor_id": { "$ref": "eom://schemas/catalog/document-review-pdf-annotation-request/5.0#/properties/actor_id" },
+    "idempotency_key": { "$ref": "eom://schemas/catalog/document-review-pdf-annotation-request/5.0#/properties/idempotency_key" },
+    "workflow_id": { "$ref": "eom://schemas/catalog/document-review-pdf-annotation-request/5.0#/properties/workflow_id" },
+    "review_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "sha256", "content_length", "media_type", "schema_ref"],
+      "properties": {
+        "artifact_id": { "type": "string", "pattern": "^artifact_[0-9a-f]{32}$" },
+        "artifact_revision_id": { "type": "string", "pattern": "^rev_[0-9a-f]{32}$" },
+        "member_path": { "const": "result.json" },
+        "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "content_length": { "type": "integer", "minimum": 1, "maximum": 16777216 },
+        "media_type": { "const": "application/json" },
+        "schema_ref": {
+          "enum": [
+            "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json",
+            "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v4.schema.json",
+            "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v5.schema.json",
+            "https://eom.local/schemas/workflow/roles/paired-document-review-result-v2.schema.json",
+            "https://eom.local/schemas/workflow/roles/paired-document-review-result-v3.schema.json"
+          ]
+        }
+      }
+    },
+    "sources": { "$ref": "eom://schemas/catalog/document-review-pdf-annotation-request/5.0#/properties/sources" },
+    "annotations": { "$ref": "eom://schemas/catalog/document-review-pdf-annotation-request/5.0#/properties/annotations" },
+    "annotation_set_sha256": { "$ref": "eom://schemas/catalog/document-review-pdf-annotation-request/5.0#/properties/annotation_set_sha256" },
+    "request_sha256": { "$ref": "eom://schemas/catalog/document-review-pdf-annotation-request/5.0#/properties/request_sha256" }
+  }
+}

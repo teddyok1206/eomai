@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/document-review/document-review-hwpx-correction-plan/3.0",
+  "title": "EOM Document Review HWPX Correction Plan V3 textbook review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "correction_id", "workflow_id", "review_result",
+    "base_hwpx", "text_color", "edits", "plan_sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": "document-review-hwpx-correction-plan/3.0" },
+    "correction_id": { "$ref": "eom://schemas/document-review/document-review-hwpx-correction-plan/2.0#/properties/correction_id" },
+    "workflow_id": { "$ref": "eom://schemas/document-review/document-review-hwpx-correction-plan/2.0#/properties/workflow_id" },
+    "review_result": { "$ref": "eom://schemas/catalog/document-review-hwpx-correction-request/3.0#/properties/review_result" },
+    "base_hwpx": { "$ref": "eom://schemas/document-review/document-review-hwpx-correction-plan/2.0#/properties/base_hwpx" },
+    "text_color": { "const": "#FF0000" },
+    "edits": { "$ref": "eom://schemas/document-review/document-review-hwpx-correction-plan/2.0#/properties/edits" },
+    "plan_sha256": { "$ref": "eom://schemas/document-review/document-review-hwpx-correction-plan/2.0#/properties/plan_sha256" }
+  }
+}

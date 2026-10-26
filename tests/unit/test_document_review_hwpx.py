@@ -9,6 +9,7 @@ import pytest
 from eom_catalog_contracts import (
     OfficeDocumentReviewMemberPointer,
     PdfDocumentReviewResultMemberPointer,
+    PdfDocumentReviewResultMemberPointerV3,
 )
 from eom_catalog_service.document_review_hwpx import (
     DocumentReviewHwpxError,
@@ -132,6 +133,29 @@ def test_redline_hwpx_creates_new_package_and_marks_only_replacement_red(tmp_pat
         runs = [node for node in section.iter() if _local(node.tag) == "run"]
         assert ["".join(node.itertext()) for node in runs] == ["앞 ", "수정 후 문장", " 뒤"]
         assert [node.attrib["charPrIDRef"] for node in runs] == ["0", "1", "0"]
+
+
+def test_textbook_review_result_pins_correction_plan_v3(tmp_path: Path) -> None:
+    source = tmp_path / "source.hwpx"
+    _write_hwpx(source)
+    pointer = PdfDocumentReviewResultMemberPointerV3.model_validate(
+        {
+            **_review_pointer().model_dump(mode="json"),
+            "schema_ref": (
+                "https://eom.local/schemas/workflow/roles/"
+                "pdf-document-review-result-v5.schema.json"
+            ),
+        }
+    )
+    plan = build_document_review_hwpx_correction_plan(
+        source,
+        correction_id="doccorrection_" + "6" * 32,
+        workflow_id="workflow_" + "7" * 32,
+        review_result=pointer,
+        base_hwpx=_base_pointer(source),
+        replacements=(_replacement(),),
+    )
+    assert plan.schema_version == "document-review-hwpx-correction-plan/3.0"
 
 
 def test_redline_hwpx_applies_multiple_nonoverlapping_edits_in_one_run(tmp_path: Path) -> None:

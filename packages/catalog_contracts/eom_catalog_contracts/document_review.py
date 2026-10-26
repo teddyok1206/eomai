@@ -317,6 +317,14 @@ class PdfDocumentReviewResultMemberPointerV2(PdfDocumentReviewResultMemberPointe
     ] = "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v4.schema.json"  # type: ignore[assignment]
 
 
+class PdfDocumentReviewResultMemberPointerV3(PdfDocumentReviewResultMemberPointerV2):
+    schema_ref: Literal[
+        "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json",
+        "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v4.schema.json",
+        "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v5.schema.json",
+    ] = "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v5.schema.json"  # type: ignore[assignment]
+
+
 class OfficeDocumentReviewConversionIdentity(FrozenModel):
     conversion_kind: Literal["IDENTITY_PDF", "LIBREOFFICE_H2ORESTART_PDF"]
     review_pdf_sha256: Sha256
@@ -676,6 +684,13 @@ class DocumentReviewHwpxCorrectionPlanV2(DocumentReviewHwpxCorrectionPlan):
     review_result: PdfDocumentReviewResultMemberPointerV2
 
 
+class DocumentReviewHwpxCorrectionPlanV3(DocumentReviewHwpxCorrectionPlanV2):
+    schema_version: Literal["document-review-hwpx-correction-plan/3.0"] = (
+        "document-review-hwpx-correction-plan/3.0"  # type: ignore[assignment]
+    )
+    review_result: PdfDocumentReviewResultMemberPointerV3
+
+
 class DocumentReviewHwpxCorrectionResult(FrozenModel):
     schema_version: Literal["document-review-hwpx-correction-result/1.0"] = (
         "document-review-hwpx-correction-result/1.0"
@@ -726,6 +741,15 @@ class DocumentReviewResultMemberPointerV2(DocumentReviewResultMemberPointer):
         "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json",
         "https://eom.local/schemas/workflow/roles/paired-document-review-result-v2.schema.json",
         "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v4.schema.json",
+    ]
+
+
+class DocumentReviewResultMemberPointerV3(DocumentReviewResultMemberPointerV2):
+    schema_ref: Literal[  # type: ignore[assignment]
+        "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json",
+        "https://eom.local/schemas/workflow/roles/paired-document-review-result-v2.schema.json",
+        "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v4.schema.json",
+        "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v5.schema.json",
     ]
 
 

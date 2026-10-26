@@ -100,10 +100,12 @@ from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
     DocumentReviewResultMemberPointer,
     DocumentReviewResultMemberPointerV2,
+    DocumentReviewResultMemberPointerV3,
     GraphGroundedDocumentReviewResultMemberPointer,
     InspectMockExamAssemblyQuery,
     PdfDocumentReviewResultMemberPointer,
     PdfDocumentReviewResultMemberPointerV2,
+    PdfDocumentReviewResultMemberPointerV3,
     PreviewMockExamAssemblyPlanCommand,
     load_integrated_science_mock_exam_policy,
 )
@@ -189,7 +191,9 @@ from eom_workflow import (
     PdfDocumentReviewRequest,
     PdfDocumentReviewRoleResult,
     PdfDocumentReviewRoleResultV4,
+    PdfDocumentReviewRoleResultV5,
     PdfDocumentReviewWorkerRequest,
+    PdfDocumentReviewWorkerRequestV5,
     PdfReviewDocumentPointer,
     PdfReviewPagePointer,
     ResolvedExecutionPlanV3,
@@ -198,6 +202,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
     ResolvedExecutionPlanV19,
+    ReviewTextbookValidationReceipt,
     RoleWorkerInput,
     single_document_review_contract_for_definition,
     validate_paired_document_review_output_against_request,
@@ -2973,7 +2978,9 @@ class QueryAdapter:
                     "The committed review result differs from its immutable Artifact revision.",
                 )
             pointer_model = (
-                PdfDocumentReviewResultMemberPointerV2
+                PdfDocumentReviewResultMemberPointerV3
+                if isinstance(result, PdfDocumentReviewRoleResultV5)
+                else PdfDocumentReviewResultMemberPointerV2
                 if isinstance(result, PdfDocumentReviewRoleResultV4)
                 else PdfDocumentReviewResultMemberPointer
             )
@@ -3015,6 +3022,7 @@ class QueryAdapter:
             schema_ref: Literal[
                 "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json",
                 "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v4.schema.json",
+                "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v5.schema.json",
                 "https://eom.local/schemas/workflow/roles/paired-document-review-result-v2.schema.json",
                 "https://eom.local/schemas/workflow/roles/paired-document-review-result-v3.schema.json",
             ]
@@ -3064,6 +3072,14 @@ class QueryAdapter:
                     content_length=revision.content_bytes,
                 )
                 if isinstance(result, PairedDocumentReviewRoleResultV3)
+                else DocumentReviewResultMemberPointerV3(
+                    artifact_id=result.artifact.logical_artifact_id,
+                    artifact_revision_id=result.artifact.revision_id,
+                    sha256=expected_sha256,
+                    content_length=revision.content_bytes,
+                    schema_ref="https://eom.local/schemas/workflow/roles/pdf-document-review-result-v5.schema.json",
+                )
+                if isinstance(result, PdfDocumentReviewRoleResultV5)
                 else DocumentReviewResultMemberPointerV2(
                     artifact_id=result.artifact.logical_artifact_id,
                     artifact_revision_id=result.artifact.revision_id,
@@ -3311,6 +3327,7 @@ class QueryAdapter:
             events = events_by_job.get(pointer.job_id, [])
             review_request = QueryAdapter._pdf_document_review_request(workflow_by_id[workflow_id])
             results[workflow_id] = QueryAdapter._validated_pdf_document_review_result(
+                workflow=workflow_by_id[workflow_id],
                 workflow_id=workflow_id,
                 definition_version=workflow_by_id[workflow_id].definition_version,
                 review_request=review_request,
@@ -3334,6 +3351,7 @@ class QueryAdapter:
     @staticmethod
     def _validated_pdf_document_review_result(
         *,
+        workflow: WorkflowInstanceRecord,
         workflow_id: str,
         definition_version: str,
         review_request: PdfDocumentReviewRequest,
@@ -3369,12 +3387,66 @@ class QueryAdapter:
                 "PDF document review result invalid",
                 "The stored PDF review result contract or manifest is invalid.",
             ) from exc
-        expected_event_data = {
+        expected_event_data: dict[str, object] = {
             "logical_artifact_id": pointer.logical_artifact_id,
             "revision_id": pointer.revision_id,
             "content_hash": pointer.content_hash,
         }
         worker_request = worker_input.request if worker_input is not None else None
+        if contract.result_schema == "pdf-document-review-result@5.0":
+            try:
+                if not isinstance(result, PdfDocumentReviewRoleResultV5) or not isinstance(
+                    worker_request, PdfDocumentReviewWorkerRequestV5
+                ):
+                    raise ValueError("textbook review result types differ")
+                stored = load_persisted_workflow_request(workflow.initial_request)
+                binding = stored.document_review_textbook_evidence
+                receipt = ReviewTextbookValidationReceipt.model_validate(
+                    event.data.get("review_textbook_validation_receipt")
+                    if event is not None
+                    else None
+                )
+                execution_plan = workflow.runtime_context.get("execution_plan")
+            except ValueError as exc:
+                raise ApiError(
+                    500,
+                    "PDF_DOCUMENT_REVIEW_TEXTBOOK_RECEIPT_INVALID",
+                    "PDF document review evidence receipt invalid",
+                    "The stored textbook review receipt is invalid.",
+                ) from exc
+            publication = binding.publication if binding is not None else None
+            if (
+                publication is None
+                or worker_request.textbook_evidence != binding
+                or not isinstance(execution_plan, dict)
+                or execution_plan.get("plan_id") != receipt.plan_id
+                or execution_plan.get("plan_sha256") != receipt.plan_sha256
+                or receipt.workflow_id != workflow_id
+                or receipt.step_run_id != step.step_run_id
+                or receipt.job_id != pointer.job_id
+                or receipt.attempt != step.attempt
+                or receipt.review_input_sha256 != review_request.request_sha256
+                or receipt.binding_sha256 != binding.binding_sha256
+                or receipt.graph_snapshot_revision_id
+                != publication.graph_snapshot.graph_snapshot_revision_id
+                or receipt.evidence_bundle_revision_id != publication.evidence_bundle_revision_id
+                or receipt.evidence_manifest_artifact != publication.manifest_artifact
+                or receipt.evidence_manifest_sha256 != publication.manifest_sha256
+                or receipt.evidence_context_artifact != publication.context_artifact
+                or receipt.usage_sha256 != result.output.textbook_usage.usage_sha256
+                or receipt.result_artifact_id != pointer.logical_artifact_id
+                or receipt.result_artifact_revision_id != pointer.revision_id
+                or receipt.result_content_sha256 != pointer.content_hash
+            ):
+                raise ApiError(
+                    500,
+                    "PDF_DOCUMENT_REVIEW_TEXTBOOK_RECEIPT_INVALID",
+                    "PDF document review evidence receipt invalid",
+                    "The textbook evidence receipt differs from the exact review result.",
+                )
+            expected_event_data["review_textbook_validation_receipt"] = receipt.model_dump(
+                mode="json"
+            )
         expected_request_hash = (
             content_sha256(
                 {

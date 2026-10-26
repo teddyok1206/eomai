@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog/document-review-hwpx-correction-request/3.0",
+  "title": "EOM Document Review HWPX Correction Request V3 textbook review",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "operation", "actor_id", "idempotency_key", "workflow_id",
+    "review_result", "base_hwpx", "finding_ids"
+  ],
+  "properties": {
+    "schema_version": { "const": "document-review-hwpx-correction-request/3.0" },
+    "operation": { "const": "APPLY_DOCUMENT_REVIEW_HWPX_CORRECTIONS" },
+    "actor_id": { "$ref": "eom://schemas/catalog/document-review-hwpx-correction-request/2.0#/properties/actor_id" },
+    "idempotency_key": { "$ref": "eom://schemas/catalog/document-review-hwpx-correction-request/2.0#/properties/idempotency_key" },
+    "workflow_id": { "$ref": "eom://schemas/catalog/document-review-hwpx-correction-request/2.0#/properties/workflow_id" },
+    "review_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "sha256", "content_length", "media_type", "schema_ref"],
+      "properties": {
+        "artifact_id": { "type": "string", "pattern": "^artifact_[0-9a-f]{32}$" },
+        "artifact_revision_id": { "type": "string", "pattern": "^rev_[0-9a-f]{32}$" },
+        "member_path": { "const": "result.json" },
+        "sha256": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "content_length": { "type": "integer", "minimum": 1, "maximum": 268435456 },
+        "media_type": { "const": "application/json" },
+        "schema_ref": {
+          "enum": [
+            "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json",
+            "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v4.schema.json",
+            "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v5.schema.json"
+          ]
+        }
+      }
+    },
+    "base_hwpx": { "$ref": "eom://schemas/catalog/document-review-hwpx-correction-request/2.0#/properties/base_hwpx" },
+    "finding_ids": { "$ref": "eom://schemas/catalog/document-review-hwpx-correction-request/2.0#/properties/finding_ids" }
+  }
+}

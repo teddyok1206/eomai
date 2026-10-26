@@ -8,6 +8,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfsV2,
     CreateDocumentReviewAnnotatedPdfsV3,
     CreateDocumentReviewAnnotatedPdfsV5,
+    CreateDocumentReviewAnnotatedPdfsV6,
     DocumentReviewAnnotatedPdfMember,
     DocumentReviewAnnotationPage,
     DocumentReviewAnnotationRegion,
@@ -168,6 +169,26 @@ def test_readable_request_v5_pins_style_without_changing_predecessors() -> None:
     validate_contract("document-review-pdf-annotation-request-v5", request.model_dump(mode="json"))
     assert request.request_sha256 != _request_v3().request_sha256
     payload["presentation_style"] = "LEGACY_BOXES"
+    with pytest.raises(ValidationError):
+        CreateDocumentReviewAnnotatedPdfsV5.model_validate(payload)
+
+
+def test_textbook_review_annotation_v6_accepts_only_pinned_successor_result() -> None:
+    payload = _request_v3().model_dump(mode="json")
+    payload["schema_version"] = "document-review-pdf-annotation-request/6.0"
+    payload["presentation_style"] = "READABLE_MARGIN_GUIDES_V1"
+    payload["review_result"]["schema_ref"] = (
+        "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v5.schema.json"
+    )
+    payload["request_sha256"] = content_sha256(
+        {
+            key: value
+            for key, value in payload.items()
+            if key not in {"idempotency_key", "request_sha256"}
+        }
+    )
+    request = CreateDocumentReviewAnnotatedPdfsV6.model_validate(payload)
+    validate_contract("document-review-pdf-annotation-request-v6", request.model_dump(mode="json"))
     with pytest.raises(ValidationError):
         CreateDocumentReviewAnnotatedPdfsV5.model_validate(payload)
 

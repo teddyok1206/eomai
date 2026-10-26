@@ -23,6 +23,7 @@ from eom_catalog_contracts import (
     PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES,
     ApplyDocumentReviewHwpxCorrections,
     ApplyDocumentReviewHwpxCorrectionsV2,
+    ApplyDocumentReviewHwpxCorrectionsV3,
     ApprovedItemGraphPublicationResult,
     ApproveItemRevisionCommandV1,
     AssessmentItemContentContract,
@@ -41,6 +42,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfsV3,
     CreateDocumentReviewAnnotatedPdfsV4,
     CreateDocumentReviewAnnotatedPdfsV5,
+    CreateDocumentReviewAnnotatedPdfsV6,
     CreateDocumentReviewEvidenceCommand,
     CreateDocumentReviewTextbookEvidenceCommand,
     CreateEvidenceBundleCommand,
@@ -459,7 +461,9 @@ class CatalogApplicationClient:
     ) -> DocumentReviewHwpxCorrectionResponse:
         payload = command.model_dump(mode="json")
         validate_contract(
-            "document-review-hwpx-correction-request-v2"
+            "document-review-hwpx-correction-request-v3"
+            if isinstance(command, ApplyDocumentReviewHwpxCorrectionsV3)
+            else "document-review-hwpx-correction-request-v2"
             if isinstance(command, ApplyDocumentReviewHwpxCorrectionsV2)
             else "document-review-hwpx-correction-request",
             payload,
@@ -534,6 +538,7 @@ class CatalogApplicationClient:
             | CreateDocumentReviewAnnotatedPdfsV3
             | CreateDocumentReviewAnnotatedPdfsV4
             | CreateDocumentReviewAnnotatedPdfsV5
+            | CreateDocumentReviewAnnotatedPdfsV6
         ),
     ) -> (
         DocumentReviewPdfAnnotationResponse
@@ -546,7 +551,9 @@ class CatalogApplicationClient:
             (CreateDocumentReviewAnnotatedPdfsV3, CreateDocumentReviewAnnotatedPdfsV2),
         )
         request_contract = (
-            "document-review-pdf-annotation-request-v5"
+            "document-review-pdf-annotation-request-v6"
+            if isinstance(command, CreateDocumentReviewAnnotatedPdfsV6)
+            else "document-review-pdf-annotation-request-v5"
             if isinstance(command, CreateDocumentReviewAnnotatedPdfsV5)
             else "document-review-pdf-annotation-request-v4"
             if isinstance(command, CreateDocumentReviewAnnotatedPdfsV4)

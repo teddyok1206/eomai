@@ -7,10 +7,12 @@ from typing import Any, cast
 import pytest
 from eom_catalog_contracts import (
     ApplyDocumentReviewHwpxCorrections,
+    ApplyDocumentReviewHwpxCorrectionsV3,
     DocumentReviewHwpxCorrectionMediaQuery,
     DocumentReviewHwpxCorrectionResult,
     OfficeDocumentReviewMemberPointer,
     PdfDocumentReviewResultMemberPointer,
+    validate_contract,
 )
 from eom_catalog_service.artifacts import CatalogArtifact
 from eom_catalog_service.document_review_hwpx_correction_service import (
@@ -84,6 +86,23 @@ def _command(finding_id: str) -> ApplyDocumentReviewHwpxCorrections:
         base_hwpx=_base_pointer(),
         finding_ids=(finding_id,),
     )
+
+
+def test_textbook_review_correction_v3_request_schema_is_exact() -> None:
+    command = ApplyDocumentReviewHwpxCorrectionsV3(
+        actor_id="operator_" + "d" * 32,
+        idempotency_key="document-review-correction-test-v3",
+        workflow_id="workflow_" + "5" * 32,
+        review_result={
+            **_review_pointer().model_dump(mode="json"),
+            "schema_ref": (
+                "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v5.schema.json"
+            ),
+        },
+        base_hwpx=_base_pointer(),
+        finding_ids=("reviewfinding_" + "f" * 32,),
+    )
+    validate_contract("document-review-hwpx-correction-request-v3", command.model_dump(mode="json"))
 
 
 def test_correction_service_commits_one_new_hwpx_and_streams_exact_output(

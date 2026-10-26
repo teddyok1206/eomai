@@ -16,6 +16,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfsV3,
     CreateDocumentReviewAnnotatedPdfsV4,
     CreateDocumentReviewAnnotatedPdfsV5,
+    CreateDocumentReviewAnnotatedPdfsV6,
     DocumentReviewAnnotatedPdfMember,
     DocumentReviewAnnotatedPdfPointer,
     DocumentReviewPdfAnnotationManifest,
@@ -125,6 +126,19 @@ DOCUMENT_REVIEW_PDF_ANNOTATION_V5_SCHEMA_HASH = content_sha256(
     }
 )
 
+DOCUMENT_REVIEW_PDF_ANNOTATION_V6_PROTOCOL_VERSION = "catalog/1.25"
+DOCUMENT_REVIEW_PDF_ANNOTATION_V6_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": DOCUMENT_REVIEW_PDF_ANNOTATION_V6_PROTOCOL_VERSION,
+        "contracts": [
+            "document-review-pdf-annotation-request/6.0",
+            "document-review-pdf-annotation-manifest/3.0",
+            "document-review-pdf-annotation-result/3.0",
+            "document-review-pdf-annotation-response/3.0",
+        ],
+    }
+)
+
 
 class DocumentReviewPdfAnnotationServiceError(RuntimeError):
     def __init__(self, code: str, message: str) -> None:
@@ -216,6 +230,7 @@ class DocumentReviewPdfAnnotationService:
             | CreateDocumentReviewAnnotatedPdfsV3
             | CreateDocumentReviewAnnotatedPdfsV4
             | CreateDocumentReviewAnnotatedPdfsV5
+            | CreateDocumentReviewAnnotatedPdfsV6
         ),
     ) -> DocumentReviewPdfAnnotationResponse | DocumentReviewPdfAnnotationResponseV2:
         parsed = self._validated_result(command)
@@ -509,7 +524,10 @@ class DocumentReviewPdfAnnotationService:
                         if readable
                         else "document-review-pdf-annotation-file-set/2.0"
                     )
-                    if isinstance(command, CreateDocumentReviewAnnotatedPdfsV5):
+                    if isinstance(command, CreateDocumentReviewAnnotatedPdfsV6):
+                        protocol_version = DOCUMENT_REVIEW_PDF_ANNOTATION_V6_PROTOCOL_VERSION
+                        protocol_schema_hash = DOCUMENT_REVIEW_PDF_ANNOTATION_V6_SCHEMA_HASH
+                    elif isinstance(command, CreateDocumentReviewAnnotatedPdfsV5):
                         protocol_version = DOCUMENT_REVIEW_PDF_ANNOTATION_V5_PROTOCOL_VERSION
                         protocol_schema_hash = DOCUMENT_REVIEW_PDF_ANNOTATION_V5_SCHEMA_HASH
                     elif isinstance(command, CreateDocumentReviewAnnotatedPdfsV4):
@@ -686,6 +704,7 @@ class DocumentReviewPdfAnnotationService:
             | CreateDocumentReviewAnnotatedPdfsV3
             | CreateDocumentReviewAnnotatedPdfsV4
             | CreateDocumentReviewAnnotatedPdfsV5
+            | CreateDocumentReviewAnnotatedPdfsV6
         ),
     ) -> (
         PdfDocumentReviewRoleResult
