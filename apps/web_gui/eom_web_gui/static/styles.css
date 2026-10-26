@@ -74,9 +74,11 @@ code, pre, .id-input, .inspector-list dd, .draft-meta { font-family: "JetBrains 
 .nav-group-label { margin: 15px 12px 5px; color: #86868b; font-size: var(--eom-type-caption); font-weight: 700; letter-spacing: .02em; }
 .nav-item { width: 100%; min-height: 44px; display: grid; grid-template-columns: 22px 1fr; align-items: center; gap: 8px; padding: 9px 11px; border: 0; border-radius: 9px; background: transparent; color: var(--eom-graphite); text-align: left; font-size: var(--eom-type-body); }
 .nav-item span { color: #86868b; font-size: 16px; text-align: center; }
+.nav-chat-icon { width: 18px; height: 18px; justify-self: center; color: #86868b; }
 .nav-item:hover { background: var(--eom-sidebar-hover); color: var(--eom-ink); }
 .nav-item.active { background: var(--eom-blue-50); color: var(--eom-blue-800); font-weight: 700; }
 .nav-item.active span { color: var(--eom-action-teal); }
+.nav-item.active .nav-chat-icon { color: var(--eom-action-teal); }
 
 .app-frame { min-width: 0; }
 .topbar { position: sticky; top: 0; z-index: 20; min-height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 10px 24px; background: rgba(251, 251, 253, .82); border-bottom: 1px solid rgba(0, 0, 0, .08); -webkit-backdrop-filter: saturate(180%) blur(18px); backdrop-filter: saturate(180%) blur(18px); }
