@@ -487,6 +487,30 @@ def test_normal_backend_keeps_its_original_nonprobe_batch_and_thread_recipe(
 
 
 @pytest.mark.parametrize("device", ("CPU", "CUDA"))
+def test_finite_backend_reuses_one_model_across_sequential_document_encodes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, device: Literal["CPU", "CUDA"]
+) -> None:
+    configured, bundle, _, _ = configured_bundle(tmp_path, device)
+    state = fake_libraries(monkeypatch, bundle)
+    ownership = FakeOwnership() if device == "CUDA" else None
+    backend = OfflineNativeEmbeddingBackend(
+        configured,
+        device=device,
+        runtime_observer=FakeObserver(bundle),
+        cuda_ownership=ownership,
+    )
+    try:
+        assert len(backend.encode(("first",), purpose="DOCUMENT")) == 1
+        assert len(backend.encode(("second",), purpose="DOCUMENT")) == 1
+        assert [kind for kind, _path, _values in state["loads"]] == ["tokenizer", "model"]
+        assert state["forwards"] == 2
+    finally:
+        backend.close()
+    if ownership is not None:
+        assert ownership.valid
+
+
+@pytest.mark.parametrize("device", ("CPU", "CUDA"))
 def test_cumulative_actual_cuda_oom_counter_includes_constructor_without_reset(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, device: Literal["CPU", "CUDA"]
 ) -> None:

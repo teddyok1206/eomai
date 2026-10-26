@@ -783,3 +783,14 @@ packages without repository source roots and failed at collection only; the
 passing invocation used the explicit API Conda interpreter and repository
 source roots as the existing non-live test harness prescribes. No DB or model
 execution occurred in these test invocations.
+
+### 17:23 finite model-scope regression
+
+The source regression now exercises two sequential DOCUMENT encodes on the
+same fake CPU or CUDA native backend and asserts that the tokenizer and model
+are each constructed once while both forwards run. Together with the existing
+finite work-batch test's single scope across children, the focused suites passed
+**219 tests** under the explicit `eom-core` interpreter. Ruff and format checks
+passed. This proves the source lifetime behavior with synthetic libraries; it
+does **not** claim a live model-load counter, exact pair closure, or GPU QUERY
+acceptance. The running INDEX and selected CPU QUERY were not changed.
