@@ -9,7 +9,9 @@ from unittest.mock import Mock
 import pytest
 from eom_catalog_contracts import CreateItemProductionEvidenceCommand, ReviewTextbookEvidence
 from eom_catalog_contracts.knowledge import (
+    EvidenceBundleManifestV3,
     EvidenceBundleManifestV4,
+    EvidenceBundlePublicationResultV3,
     EvidenceBundlePublicationResultV4,
     EvidenceBundlePublicationResultV5,
 )
@@ -18,9 +20,11 @@ from eom_catalog_service.review_textbook_evidence_service import (
     ReviewTextbookEvidenceError,
     ReviewTextbookEvidenceService,
 )
-from eom_identifiers import content_sha256
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
+
+from tests.unit.test_knowledge_analysis_document_contracts import document_source
 
 
 def _publication() -> EvidenceBundlePublicationResultV4:
@@ -281,3 +285,57 @@ def test_solution_enriched_mixed_bundle_does_not_count_as_textbook_only() -> Non
         service.create(review_input_sha256="sha256:" + "8" * 64, command=_command())
     assert captured.value.code == "REVIEW_TEXTBOOK_SOURCE_MISSING"
     artifacts.read_member.assert_not_called()
+
+
+def test_catalog_boundary_validates_actual_v3_textbook_manifest_bytes() -> None:
+    publication_value = _publication().model_dump(mode="json")
+    manifest_value: dict[str, object] = {
+        "schema_version": "evidence-bundle-manifest/3.0",
+        "evidence_bundle_id": publication_value["evidence_bundle_id"],
+        "evidence_bundle_revision_id": publication_value["evidence_bundle_revision_id"],
+        "revision_number": 1,
+        "retrieval_request_id": publication_value["retrieval_request_id"],
+        "retrieval_request_sha256": publication_value["retrieval_request_sha256"],
+        "graph_snapshot": publication_value["graph_snapshot"],
+        "access_policy_revision_id": publication_value["access_policy_revision_id"],
+        "access_policy_sha256": publication_value["access_policy_sha256"],
+        "requester_permissions_sha256": publication_value["requester_permissions_sha256"],
+        "materials": {"context_markdown": publication_value["context_artifact"]},
+        "entries": [
+            {
+                "evidence_id": "evidenceitem_" + "9" * 32,
+                "evidence_kind": "DOCUMENT",
+                "use": "GROUNDING",
+                "source": document_source(),
+                "graph_node_ids": ["knode_document"],
+                "anchor_ids": ["anchor_document"],
+                "relevance_milli": 1000,
+                "answer_bearing": False,
+            }
+        ],
+        "budget": publication_value["budget"],
+        "created_at": "2026-10-26T00:00:00Z",
+    }
+    manifest_value["manifest_sha256"] = content_sha256(manifest_value)
+    validate_contract("evidence-bundle-manifest-v3", manifest_value)
+    manifest = EvidenceBundleManifestV3.model_validate(manifest_value)
+    payload = canonical_json_bytes(manifest.model_dump(mode="json"))
+    publication_value["schema_version"] = "evidence-bundle-publication-result/3.0"
+    member = publication_value["manifest_artifact"]
+    assert isinstance(member, dict)
+    member["schema_ref"] = "eom://schemas/knowledge/evidence-bundle-manifest/3.0"
+    member["sha256"] = sha256_bytes(payload)
+    publication_value["manifest_sha256"] = manifest.manifest_sha256
+    publication_value["result_sha256"] = content_sha256(
+        {key: item for key, item in publication_value.items() if key != "result_sha256"}
+    )
+    publication = EvidenceBundlePublicationResultV3.model_validate(publication_value)
+    reader = SimpleNamespace(read_member=Mock(return_value=payload))
+    service = ReviewTextbookEvidenceService(
+        retrieval=SimpleNamespace(create_item_production=Mock(return_value=publication)),
+        artifacts=reader,
+    )
+    binding = service.create(review_input_sha256="sha256:" + "8" * 64, command=_command())
+    assert binding.publication == publication
+    assert binding.textbook_evidence_ids == ("evidenceitem_" + "9" * 32,)
+    assert reader.read_member.call_args.kwargs["sha256"] == sha256_bytes(payload)
