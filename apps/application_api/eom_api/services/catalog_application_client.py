@@ -40,6 +40,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfsV2,
     CreateDocumentReviewAnnotatedPdfsV3,
     CreateDocumentReviewAnnotatedPdfsV4,
+    CreateDocumentReviewAnnotatedPdfsV5,
     CreateDocumentReviewEvidenceCommand,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
@@ -57,6 +58,7 @@ from eom_catalog_contracts import (
     DocumentReviewPdfAnnotationMediaResponse,
     DocumentReviewPdfAnnotationResponse,
     DocumentReviewPdfAnnotationResponseV2,
+    DocumentReviewPdfAnnotationResponseV3,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV3,
@@ -527,15 +529,23 @@ class CatalogApplicationClient:
             CreateDocumentReviewAnnotatedPdfs
             | CreateDocumentReviewAnnotatedPdfsV2
             | CreateDocumentReviewAnnotatedPdfsV3
+            | CreateDocumentReviewAnnotatedPdfsV4
+            | CreateDocumentReviewAnnotatedPdfsV5
         ),
-    ) -> DocumentReviewPdfAnnotationResponse | DocumentReviewPdfAnnotationResponseV2:
+    ) -> (
+        DocumentReviewPdfAnnotationResponse
+        | DocumentReviewPdfAnnotationResponseV2
+        | DocumentReviewPdfAnnotationResponseV3
+    ):
         payload = command.model_dump(mode="json")
         native_panel = isinstance(
             command,
             (CreateDocumentReviewAnnotatedPdfsV3, CreateDocumentReviewAnnotatedPdfsV2),
         )
         request_contract = (
-            "document-review-pdf-annotation-request-v4"
+            "document-review-pdf-annotation-request-v5"
+            if isinstance(command, CreateDocumentReviewAnnotatedPdfsV5)
+            else "document-review-pdf-annotation-request-v4"
             if isinstance(command, CreateDocumentReviewAnnotatedPdfsV4)
             else "document-review-pdf-annotation-request-v3"
             if isinstance(command, CreateDocumentReviewAnnotatedPdfsV3)
@@ -546,7 +556,9 @@ class CatalogApplicationClient:
             )
         )
         response_contract = (
-            "document-review-pdf-annotation-response-v2"
+            "document-review-pdf-annotation-response-v3"
+            if isinstance(command, CreateDocumentReviewAnnotatedPdfsV5)
+            else "document-review-pdf-annotation-response-v2"
             if native_panel
             else "document-review-pdf-annotation-response"
         )
@@ -557,7 +569,9 @@ class CatalogApplicationClient:
         )
         validate_contract(response_contract, value)
         response = (
-            DocumentReviewPdfAnnotationResponseV2.model_validate(value)
+            DocumentReviewPdfAnnotationResponseV3.model_validate(value)
+            if isinstance(command, CreateDocumentReviewAnnotatedPdfsV5)
+            else DocumentReviewPdfAnnotationResponseV2.model_validate(value)
             if native_panel
             else DocumentReviewPdfAnnotationResponse.model_validate(value)
         )

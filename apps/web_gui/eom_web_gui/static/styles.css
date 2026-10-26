@@ -591,8 +591,10 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .pdf-review-page-toolbar { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 10px 14px; border-bottom: 1px solid var(--eom-border); }
 .pdf-review-page-stage { position: relative; min-height: 520px; margin: 16px; overflow: hidden; border: 1px solid var(--eom-border); border-radius: 8px; background: #eef0f3; box-shadow: inset 0 1px 2px rgb(0 0 0 / 5%); }
 .pdf-review-page-stage > img { display: block; width: 100%; height: auto; background: white; }
-.pdf-review-anchor { position: absolute; border: 2px solid #ff8a00; border-radius: 4px; background: rgb(255 183 76 / 18%); box-shadow: 0 0 0 1px rgb(255 255 255 / 75%); pointer-events: none; }
-.pdf-review-anchor.active { border-color: #d70015; background: rgb(215 0 21 / 16%); }
+.pdf-review-anchor { position: absolute; border: 2px solid rgb(79 70 229 / 58%); border-radius: 4px; background: rgb(79 70 229 / 6%); box-shadow: 0 0 0 1px rgb(255 255 255 / 75%); pointer-events: none; }
+.pdf-review-anchor:is(button) { pointer-events: auto; cursor: pointer; padding: 0; }
+.pdf-review-anchor:is(button):focus-visible { outline: 3px solid var(--eom-primary); outline-offset: 2px; z-index: 2; }
+.pdf-review-anchor.active { border-color: var(--eom-primary); background: rgb(79 70 229 / 11%); }
 .pdf-review-summary { padding: 18px; border-bottom: 1px solid var(--eom-border); white-space: pre-wrap; }
 .pdf-review-summary h3 { margin: 0 0 10px; font-size: 1.02rem; }
 .pdf-review-exhaustive { margin: 10px; border: 1px solid var(--eom-border); border-radius: 12px; background: var(--eom-surface-muted); }

@@ -563,6 +563,7 @@ class DocumentReviewAnnotationSubmission(WebModel):
     annotation_profile: Literal["NUMBERED_BOXES_WITH_NATIVE_COMMENTS"] = (
         "NUMBERED_BOXES_WITH_NATIVE_COMMENTS"
     )
+    presentation_style: Literal["READABLE_MARGIN_GUIDES_V1"] | None = None
     idempotency_key: str = Field(
         min_length=16,
         max_length=128,

@@ -121,7 +121,7 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
     assert "prepare_runtime_dependencies\n    build_release" in source
     assert "eom-codex-auth identity must be deployed before the API unit" in source
     assert 'source "${RELEASE_OPERATOR_LIBRARY}"' in source
-    assert 'run_release_operator MIGRATION_VERIFY_0058 "${COMMIT}"' in source
+    assert 'run_release_operator MIGRATION_VERIFY_0059 "${COMMIT}"' in source
     catalog = _catalog_resource_inventory(source)
     assert catalog["legacy-assessment/legacy-item-extraction-batch-v2.schema.json"] == (
         "schemas/legacy-assessment/legacy-item-extraction-batch-v2.schema.json"
@@ -559,9 +559,9 @@ def test_release_migration_wrapper_pins_source_and_database_owner() -> None:
         "engine = build_engine()"
     )
     assert 'MIGRATION_REVISION = "20261010_0051"' in operator
-    # Current releases retain the independently admitted 0052-0058 successors;
+    # Current releases retain the independently admitted 0052-0059 successors;
     # the legacy standalone wrapper still cannot turn into an implicit head upgrade.
-    assert CURRENT_MIGRATION_REVISION == "20261019_0058"
+    assert CURRENT_MIGRATION_REVISION == "20261026_0059"
     assert "target_revision != CURRENT_MIGRATION_REVISION" in operator
     assert 'owner[0] != owner[1] or owner[2] is not True or "app" not in owner[3]' in operator
     assert 'Callback.MIGRATION_UPGRADE_0051: (MIGRATION_REVISION, "20261009_0050")' in operator
@@ -606,6 +606,8 @@ def test_release_operator_boundary_requires_explicit_pins_without_unsafe_fallbac
         "MIGRATION_UPGRADE_0057",
         "MIGRATION_VERIFY_0058",
         "MIGRATION_UPGRADE_0058",
+        "MIGRATION_VERIFY_0059",
+        "MIGRATION_UPGRADE_0059",
         "API_ROLE_BOOTSTRAP",
         "CATALOG_ROLE_RECONCILE",
         "HWPX_ROLE_RECONCILE",
@@ -1039,16 +1041,20 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert f'CURRENT_MIGRATION_REVISION != "{CURRENT_MIGRATION_REVISION}"' in deployment
     assert "document-review-annotation-v1.schema.json" in expected
     assert "document-review-annotation-v2.schema.json" in expected
+    assert "document-review-annotation-v3.schema.json" in expected
     assert '"eom_catalog_service/document_review_pdf_annotation.py"' in deployment
     assert '"eom_catalog_service/document_review_pdf_annotation_service.py"' in deployment
     assert {
         "document-review/document-review-pdf-annotation-manifest-v1.schema.json",
         "document-review/document-review-pdf-annotation-manifest-v2.schema.json",
+        "document-review/document-review-pdf-annotation-manifest-v3.schema.json",
         "document-review/document-review-pdf-annotation-result-v1.schema.json",
         "document-review/document-review-pdf-annotation-result-v2.schema.json",
+        "document-review/document-review-pdf-annotation-result-v3.schema.json",
         "catalog-application/document-review-pdf-annotation-request-v2.schema.json",
         "catalog-application/document-review-pdf-annotation-request-v3.schema.json",
         "catalog-application/document-review-pdf-annotation-response-v2.schema.json",
+        "catalog-application/document-review-pdf-annotation-response-v3.schema.json",
         "catalog-application/document-review-evidence-request-v1.schema.json",
         "document-review/document-review-evidence-plan-v1.schema.json",
     } <= catalog.keys()

@@ -15,6 +15,7 @@ from eom_api.services.document_review_annotation_service import (
 )
 from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfsV2,
+    CreateDocumentReviewAnnotatedPdfsV5,
     DocumentReviewAnnotatedPdfPointer,
     DocumentReviewResultMemberPointer,
     OfficeDocumentReviewMemberPointer,
@@ -293,3 +294,22 @@ def test_native_comment_profile_uses_v2_without_changing_pointer_persistence() -
         assert session.scalar(select(DocumentReviewPdfAnnotationRecord)) is not None
         assert session.scalar(select(DocumentReviewPdfAnnotationOutputRecord)) is not None
     engine.dispose()
+
+
+def test_readable_presentation_is_pinned_in_a_new_catalog_request() -> None:
+    service, engine, catalog = _service()
+    try:
+        service.create(
+            WORKFLOW_ID,
+            actor_id=OPERATOR_ID,
+            idempotency_key="api:document-review-readable-comment-test",
+            annotation_profile="NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
+            presentation_style="READABLE_MARGIN_GUIDES_V1",
+        )
+        assert len(catalog.commands) == 1
+        command = catalog.commands[0]
+        assert isinstance(command, CreateDocumentReviewAnnotatedPdfsV5)
+        assert command.presentation_style == "READABLE_MARGIN_GUIDES_V1"
+        assert command.schema_version == "document-review-pdf-annotation-request/5.0"
+    finally:
+        engine.dispose()

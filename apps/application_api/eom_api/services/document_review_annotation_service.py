@@ -14,6 +14,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfsV2,
     CreateDocumentReviewAnnotatedPdfsV3,
     CreateDocumentReviewAnnotatedPdfsV4,
+    CreateDocumentReviewAnnotatedPdfsV5,
     DocumentReviewAnnotatedPdfPointer,
     DocumentReviewAnnotationPage,
     DocumentReviewAnnotationRegion,
@@ -67,6 +68,7 @@ class DocumentReviewAnnotationApplicationService:
         actor_id: str,
         idempotency_key: str,
         annotation_profile: Literal["NUMBERED_BOXES_WITH_NATIVE_COMMENTS"] | None = None,
+        presentation_style: Literal["READABLE_MARGIN_GUIDES_V1"] | None = None,
     ) -> DocumentReviewAnnotationView:
         review_result, source_values, parsed = self.queries.document_review_annotation_inputs(
             actor_id=actor_id,
@@ -146,11 +148,13 @@ class DocumentReviewAnnotationApplicationService:
         annotations = tuple(marks)
         # New single-document reviews use the product's native comment-panel profile.
         # Keep legacy box-only delivery unchanged for historical results.
-        if isinstance(parsed, PdfDocumentReviewRoleResultV4):
+        if presentation_style is not None or isinstance(parsed, PdfDocumentReviewRoleResultV4):
             annotation_profile = "NUMBERED_BOXES_WITH_NATIVE_COMMENTS"
         payload: dict[str, object] = {
             "schema_version": (
-                "document-review-pdf-annotation-request/4.0"
+                "document-review-pdf-annotation-request/5.0"
+                if presentation_style is not None
+                else "document-review-pdf-annotation-request/4.0"
                 if isinstance(parsed, PdfDocumentReviewRoleResultV4)
                 else "document-review-pdf-annotation-request/3.0"
                 if annotation_profile is not None
@@ -176,6 +180,9 @@ class DocumentReviewAnnotationApplicationService:
         }
         if annotation_profile is not None:
             payload["annotation_profile"] = annotation_profile
+        if presentation_style is not None:
+            payload["presentation_style"] = presentation_style
+            payload["review_result"] = review_result.model_dump(mode="json")
         payload["request_sha256"] = content_sha256(
             {key: value for key, value in payload.items() if key != "idempotency_key"}
         )
@@ -184,8 +191,11 @@ class DocumentReviewAnnotationApplicationService:
             | CreateDocumentReviewAnnotatedPdfsV2
             | CreateDocumentReviewAnnotatedPdfsV3
             | CreateDocumentReviewAnnotatedPdfsV4
+            | CreateDocumentReviewAnnotatedPdfsV5
         )
-        if isinstance(parsed, PdfDocumentReviewRoleResultV4):
+        if presentation_style is not None:
+            command = CreateDocumentReviewAnnotatedPdfsV5.model_validate(payload)
+        elif isinstance(parsed, PdfDocumentReviewRoleResultV4):
             command = CreateDocumentReviewAnnotatedPdfsV4.model_validate(payload)
         elif annotation_profile is None:
             command = CreateDocumentReviewAnnotatedPdfs.model_validate(payload)

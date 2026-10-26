@@ -7,17 +7,21 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfs,
     CreateDocumentReviewAnnotatedPdfsV2,
     CreateDocumentReviewAnnotatedPdfsV3,
+    CreateDocumentReviewAnnotatedPdfsV5,
     DocumentReviewAnnotatedPdfMember,
     DocumentReviewAnnotationPage,
     DocumentReviewAnnotationRegion,
     DocumentReviewAnnotationSource,
     DocumentReviewPdfAnnotationManifest,
     DocumentReviewPdfAnnotationManifestV2,
+    DocumentReviewPdfAnnotationManifestV3,
     DocumentReviewPdfAnnotationMark,
     DocumentReviewPdfAnnotationRenderer,
     DocumentReviewPdfAnnotationRendererV2,
+    DocumentReviewPdfAnnotationRendererV3,
     DocumentReviewPdfAnnotationResult,
     DocumentReviewPdfAnnotationResultV2,
+    DocumentReviewPdfAnnotationResultV3,
     DocumentReviewPdfPanelComment,
     DocumentReviewResultMemberPointer,
     PdfReviewArtifactMemberPointer,
@@ -147,6 +151,25 @@ def _request_v3() -> CreateDocumentReviewAnnotatedPdfsV3:
         }
     )
     return CreateDocumentReviewAnnotatedPdfsV3.model_validate(payload)
+
+
+def test_readable_request_v5_pins_style_without_changing_predecessors() -> None:
+    payload = _request_v3().model_dump(mode="json")
+    payload["schema_version"] = "document-review-pdf-annotation-request/5.0"
+    payload["presentation_style"] = "READABLE_MARGIN_GUIDES_V1"
+    payload["request_sha256"] = content_sha256(
+        {
+            key: value
+            for key, value in payload.items()
+            if key not in {"idempotency_key", "request_sha256"}
+        }
+    )
+    request = CreateDocumentReviewAnnotatedPdfsV5.model_validate(payload)
+    validate_contract("document-review-pdf-annotation-request-v5", request.model_dump(mode="json"))
+    assert request.request_sha256 != _request_v3().request_sha256
+    payload["presentation_style"] = "LEGACY_BOXES"
+    with pytest.raises(ValidationError):
+        CreateDocumentReviewAnnotatedPdfsV5.model_validate(payload)
 
 
 def test_annotation_request_is_schema_and_model_exact() -> None:
@@ -323,6 +346,48 @@ def test_native_panel_manifest_binds_primary_comments_and_renderer() -> None:
     result = DocumentReviewPdfAnnotationResultV2.model_validate(result_payload)
     validate_contract("document-review-pdf-annotation-result-v2", result.model_dump(mode="json"))
     assert result.panel_comment_count == 2
+
+    readable_renderer = DocumentReviewPdfAnnotationRendererV3.model_validate(
+        {
+            **renderer.model_dump(mode="json"),
+            "renderer_key": "pymupdf-qpdf-rsvg-document-review-readable-annotation",
+            "stroke_color": "#4F46E5",
+            "presentation_style": "READABLE_MARGIN_GUIDES_V1",
+        }
+    )
+    readable_manifest_payload = {
+        **manifest_payload,
+        "schema_version": "document-review-pdf-annotation-manifest/3.0",
+        "presentation_style": "READABLE_MARGIN_GUIDES_V1",
+        "renderer": readable_renderer,
+    }
+    readable_manifest_payload["manifest_sha256"] = content_sha256(
+        {key: value for key, value in readable_manifest_payload.items() if key != "manifest_sha256"}
+    )
+    readable_manifest = DocumentReviewPdfAnnotationManifestV3.model_validate(
+        readable_manifest_payload
+    )
+    validate_contract(
+        "document-review-pdf-annotation-manifest-v3",
+        readable_manifest.model_dump(mode="json"),
+    )
+    readable_result_payload = {
+        **result_payload,
+        "schema_version": "document-review-pdf-annotation-result/3.0",
+        "presentation_style": "READABLE_MARGIN_GUIDES_V1",
+        "manifest_sha256": readable_manifest.manifest_sha256,
+    }
+    readable_result_payload["result_sha256"] = content_sha256(
+        {key: value for key, value in readable_result_payload.items() if key != "result_sha256"}
+    )
+    readable_result = DocumentReviewPdfAnnotationResultV3.model_validate(readable_result_payload)
+    validate_contract(
+        "document-review-pdf-annotation-result-v3", readable_result.model_dump(mode="json")
+    )
+    with pytest.raises(ValidationError):
+        DocumentReviewPdfAnnotationRendererV3.model_validate(
+            {**readable_renderer.model_dump(mode="json"), "stroke_color": "#D70015"}
+        )
 
     incomplete = dict(manifest_payload)
     incomplete["panel_comments"] = comments[:1]

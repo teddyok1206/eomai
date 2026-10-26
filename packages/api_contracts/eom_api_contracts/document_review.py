@@ -706,6 +706,10 @@ class CreateDocumentReviewAnnotationRequestV2(ApiModel):
     annotation_profile: Literal["NUMBERED_BOXES_WITH_NATIVE_COMMENTS"]
 
 
+class CreateDocumentReviewAnnotationRequestV3(CreateDocumentReviewAnnotationRequestV2):
+    presentation_style: Literal["READABLE_MARGIN_GUIDES_V1"]
+
+
 class DocumentReviewAnnotationOutputView(ApiModel):
     document_role: Literal["DOCUMENT", "QUESTION", "SOLUTION"]
     sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")

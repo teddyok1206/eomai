@@ -791,6 +791,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "4.0",
             "sha256:074ea17cf18f8360f83e4d1cf2b06a28ae8f8ca4b03761e00f63bd1c30b357c8",
         ),
+        "document-review-pdf-annotation-request-v5": CatalogSchemaResource(
+            "schemas/catalog/catalog-application/document-review-pdf-annotation-request-v5.schema.json",
+            "resources/catalog-application/document-review-pdf-annotation-request-v5.schema.json",
+            "5.0",
+            "sha256:1267fa7757b3d340566f5d100e52f20d77e5b6748b3688a0e5314c88638a00e0",
+        ),
         "document-review-hwpx-correction-plan-v2": CatalogSchemaResource(
             "schemas/document-review/document-review-hwpx-correction-plan-v2.schema.json",
             "resources/document-review/document-review-hwpx-correction-plan-v2.schema.json",
@@ -908,6 +914,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:746458392aa78bdfec02d6edc45b4edd51c421743c2816ba219f89bb40be03a4",
         ),
+        "document-review-pdf-annotation-response-v3": CatalogSchemaResource(
+            "schemas/catalog/catalog-application/document-review-pdf-annotation-response-v3.schema.json",
+            "resources/catalog-application/document-review-pdf-annotation-response-v3.schema.json",
+            "3.0",
+            "sha256:8b7c468dfc2daae44b252b4a039e12821e4f3c433e759f9a6666c33a3905d256",
+        ),
         "document-review-pdf-annotation-media-request": CatalogSchemaResource(
             (
                 "schemas/catalog/catalog-application/"
@@ -944,6 +956,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:81e1647a71f138424f87d2401527759f197228386862ff8228800f1e6a1b9bd9",
         ),
+        "document-review-pdf-annotation-manifest-v3": CatalogSchemaResource(
+            "schemas/document-review/document-review-pdf-annotation-manifest-v3.schema.json",
+            "resources/document-review/document-review-pdf-annotation-manifest-v3.schema.json",
+            "3.0",
+            "sha256:b77d190b78a61388c76fa818536a1a6cdb7a5074920a3a41c5cebc1e88ab4fe3",
+        ),
         "document-review-pdf-annotation-result": CatalogSchemaResource(
             "schemas/document-review/document-review-pdf-annotation-result-v1.schema.json",
             "resources/document-review/document-review-pdf-annotation-result-v1.schema.json",
@@ -955,6 +973,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/document-review/document-review-pdf-annotation-result-v2.schema.json",
             "2.0",
             "sha256:81b4e95d1be0988ffe6f3ef9d72c9b9ed432e868a60615e72e0156edf1fcf983",
+        ),
+        "document-review-pdf-annotation-result-v3": CatalogSchemaResource(
+            "schemas/document-review/document-review-pdf-annotation-result-v3.schema.json",
+            "resources/document-review/document-review-pdf-annotation-result-v3.schema.json",
+            "3.0",
+            "sha256:ae81d99626100823f91b5f1d95e3dae909fa8716ed9c07987cfaa8ab36c88c0f",
         ),
         "mapping-proposal": CatalogSchemaResource(
             "schemas/content-intake/mapping-proposal-v1.schema.json",

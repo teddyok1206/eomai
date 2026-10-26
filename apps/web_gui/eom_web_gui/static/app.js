@@ -4838,11 +4838,22 @@ function renderPdfDocumentReviewPage() {
     ? `${API}/pdf-document-reviews/${encodeURIComponent(review.workflow_id)}/documents/${state.pdfDocumentReviewRole}/pages/${pageNumber}/image`
     : `${API}/pdf-document-reviews/${encodeURIComponent(review.workflow_id)}/pages/${pageNumber}/image`;
   image.addEventListener("load", () => {
+    if (!stage.contains(image) || state.pdfDocumentReviewSelected !== review
+      || state.pdfDocumentReviewPage !== pageNumber) return;
     const allAnchors = new Map();
+    const findingByAnchor = new Map();
+    const findingsById = new Map((review.result?.findings || []).map((finding) => [finding.finding_id, finding]));
     (review.result?.findings || []).forEach((finding) => {
       finding.anchors
         .filter((anchor) => anchor.page_number === pageNumber && (!anchor.document_role || anchor.document_role === state.pdfDocumentReviewRole))
-        .forEach((anchor) => allAnchors.set(anchor.anchor_id, anchor));
+        .forEach((anchor) => {
+          allAnchors.set(anchor.anchor_id, anchor);
+          const previous = findingByAnchor.get(anchor.anchor_id);
+          findingByAnchor.set(
+            anchor.anchor_id,
+            previous === undefined || previous === finding.finding_id ? finding.finding_id : null,
+          );
+        });
     });
     (review.result?.cross_document_checks || []).forEach((check) => {
       [...(check.question_anchors || []), ...(check.solution_anchors || [])]
@@ -4851,9 +4862,24 @@ function renderPdfDocumentReviewPage() {
     });
     const activeIds = new Set((selectedPdfReviewFinding()?.anchors || []).map((anchor) => anchor.anchor_id));
     allAnchors.forEach((anchor) => {
-      const marker = document.createElement("span");
+      const findingId = findingByAnchor.get(anchor.anchor_id);
+      const marker = document.createElement(findingId ? "button" : "span");
       marker.className = `pdf-review-anchor${activeIds.has(anchor.anchor_id) ? " active" : ""}`;
-      marker.setAttribute("aria-hidden", "true");
+      if (findingId) {
+        const finding = findingsById.get(findingId);
+        marker.type = "button";
+        marker.setAttribute("aria-label", `검토 ${finding.ordinal}. ${finding.title} 보기`);
+        marker.title = `검토 ${finding.ordinal}. ${finding.title}`;
+        marker.addEventListener("click", () => {
+          selectPdfReviewFinding(findingId, anchor);
+          const selected = Array.from($$("#pdf-review-findings [data-finding-id]"))
+            .find((value) => value.dataset.findingId === findingId);
+          selected?.scrollIntoView({ block: "nearest" });
+          selected?.focus({ preventScroll: true });
+        });
+      } else {
+        marker.setAttribute("aria-hidden", "true");
+      }
       marker.style.left = `${anchor.region.x_ppm / 10000}%`;
       marker.style.top = `${anchor.region.y_ppm / 10000}%`;
       marker.style.width = `${anchor.region.width_ppm / 10000}%`;
@@ -4867,12 +4893,13 @@ function renderPdfDocumentReviewPage() {
   $("#pdf-review-page-next").disabled = pageNumber >= pageCount;
 }
 
-function selectPdfReviewFinding(findingId) {
+function selectPdfReviewFinding(findingId, selectedAnchor = null) {
   state.pdfDocumentReviewFindingId = findingId;
   const finding = selectedPdfReviewFinding();
   if (finding?.anchors?.length) {
-    state.pdfDocumentReviewRole = finding.anchors[0].document_role || "QUESTION";
-    state.pdfDocumentReviewPage = finding.anchors[0].page_number;
+    const anchor = selectedAnchor || finding.anchors[0];
+    state.pdfDocumentReviewRole = anchor.document_role || "QUESTION";
+    state.pdfDocumentReviewPage = anchor.page_number;
   }
   renderPdfDocumentReviewDetail();
 }
@@ -4926,7 +4953,7 @@ function renderDocumentReviewAnnotation() {
   actions.querySelectorAll("a").forEach((value) => value.remove());
   const submit = $("#pdf-review-annotation-submit");
   submit.disabled = false;
-  showMessage(message, "검토 위치를 빨간 번호 상자로 표시하고 PDF 주석 패널에도 상세 내용을 넣습니다. 원본은 바뀌지 않습니다.");
+  showMessage(message, "검토 위치와 수정 권고를 읽기 쉽게 표시한 PDF를 만듭니다. 원본은 바뀌지 않습니다.");
   const annotation = state.pdfDocumentReviewAnnotation;
   if (!annotation) return;
   annotation.outputs.forEach((output) => {
@@ -4940,7 +4967,7 @@ function renderDocumentReviewAnnotation() {
         : "주석 PDF 다운로드";
     actions.append(link);
   });
-  showMessage(message, "주석 PDF를 만들었습니다. 빨간 번호 상자와 PDF 주석 패널에서 상세 검토 내용을 함께 확인할 수 있습니다.", "success");
+  showMessage(message, "주석 PDF를 만들었습니다. 표시된 위치와 PDF 주석 패널에서 수정 권고를 확인할 수 있습니다.", "success");
 }
 
 function navigatePairedReviewAnchor(anchor) {
@@ -5145,6 +5172,7 @@ function renderPdfDocumentReviewDetail() {
       const button = document.createElement("button");
       button.type = "button";
       button.className = `pdf-review-finding${finding.finding_id === state.pdfDocumentReviewFindingId ? " selected" : ""}`;
+      button.dataset.findingId = finding.finding_id;
       const head = document.createElement("span");
       head.className = "pdf-review-finding-head";
       const title = document.createElement("strong");
@@ -5473,6 +5501,7 @@ async function createDocumentReviewAnnotation() {
       body: {
         include_all_findings: true,
         annotation_profile: "NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
+        presentation_style: "READABLE_MARGIN_GUIDES_V1",
         idempotency_key: state.pdfDocumentReviewPendingAnnotation.idempotencyKey,
       },
     });

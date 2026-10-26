@@ -9,6 +9,7 @@ from eom_api_contracts.document_review import (
     ApplyDocumentReviewCorrectionRequest,
     CreateDocumentReviewAnnotationRequest,
     CreateDocumentReviewAnnotationRequestV2,
+    CreateDocumentReviewAnnotationRequestV3,
     CreateDocumentReviewUploadIntentRequestV2,
     DocumentReviewAnnotationOutputView,
     DocumentReviewAnnotationView,
@@ -218,6 +219,22 @@ def test_native_panel_annotation_request_is_a_strict_successor() -> None:
             {
                 "include_all_findings": True,
                 "annotation_profile": "NUMBERED_BOXES_ONLY",
+            }
+        )
+
+
+def test_readable_annotation_request_has_a_distinct_strict_schema() -> None:
+    _, validator = _schema("document-review-annotation-v3.schema.json")
+    request = CreateDocumentReviewAnnotationRequestV3(
+        annotation_profile="NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
+        presentation_style="READABLE_MARGIN_GUIDES_V1",
+    )
+    validator.validate(request.model_dump(mode="json"))
+    with pytest.raises(SchemaError):
+        validator.validate(
+            {
+                "include_all_findings": True,
+                "annotation_profile": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
             }
         )
 

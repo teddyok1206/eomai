@@ -12,6 +12,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfs,
     CreateDocumentReviewAnnotatedPdfsV2,
     CreateDocumentReviewAnnotatedPdfsV4,
+    CreateDocumentReviewAnnotatedPdfsV5,
     DocumentReviewAnnotationPage,
     DocumentReviewAnnotationRegion,
     DocumentReviewAnnotationSource,
@@ -24,12 +25,14 @@ from eom_catalog_contracts import (
 from eom_catalog_service.artifacts import CatalogArtifact
 from eom_catalog_service.document_review_pdf_annotation import (
     NativePanelCommentPayload,
+    _readable_overlay_svg,
     annotate_pdf,
     annotate_pdf_with_native_comments,
 )
 from eom_catalog_service.document_review_pdf_annotation_service import (
     DocumentReviewPdfAnnotationService,
     DocumentReviewPdfAnnotationServiceError,
+    _native_panel_comments,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
 from eom_orchestrator.artifacts import stage_file_set_artifact
@@ -205,6 +208,155 @@ def test_native_panel_annotation_is_deterministic_and_carries_comment_text(
         assert tuple(document[1].annots() or ()) == ()
     finally:
         document.close()
+
+
+def test_readable_pdf_has_one_number_and_native_comment_for_two_locations(
+    tmp_path: Path,
+    monkeypatch: Any,
+) -> None:
+    pymupdf = import_module("pymupdf")
+    pymupdf_native = import_module("pymupdf._extra")
+    monkeypatch.setattr(
+        "eom_catalog_service.document_review_pdf_annotation._pymupdf_runtime",
+        lambda: (
+            pymupdf,
+            Path(str(pymupdf.__file__)),
+            Path(str(pymupdf_native.__file__)),
+        ),
+    )
+    source = _source_pdf(tmp_path)
+    source_sha256 = sha256_file(source)
+    first_mark = _marks()[0]
+    second_mark = first_mark.model_copy(
+        update={
+            "anchor_id": "reviewanchor_" + "c" * 32,
+            "region": DocumentReviewAnnotationRegion(
+                x_ppm=100_000,
+                y_ppm=20_000,
+                width_ppm=300_000,
+                height_ppm=60_000,
+            ),
+        }
+    )
+    marks = (first_mark, second_mark)
+    finding = SimpleNamespace(
+        finding_id=first_mark.finding_id,
+        ordinal=1,
+        category="TYPOGRAPHY",
+        severity="HIGH",
+        title="표기 수정",
+        description="원문의 표기를 수정해야 합니다.",
+        recommendation=SimpleNamespace(
+            operation="REPLACE",
+            instruction="표기를 바로잡으세요.",
+            before_text="틀린 표기",
+            after_text="바른 표기",
+        ),
+        anchors=(
+            SimpleNamespace(anchor_id=first_mark.anchor_id, quote="주변 설명"),
+            SimpleNamespace(anchor_id=second_mark.anchor_id, quote="틀린 표기"),
+        ),
+    )
+    parsed = SimpleNamespace(output=SimpleNamespace(findings=(finding,)))
+    comments = _native_panel_comments(
+        cast(Any, parsed), marks, presentation_style="READABLE_MARGIN_GUIDES_V1"
+    )
+    assert len(comments) == 1
+    assert comments[0].descriptor.anchor_id == second_mark.anchor_id
+    assert "문서 1쪽" in comments[0].contents
+    assert "해당 문구\n틀린 표기" in comments[0].contents
+    svg = _readable_overlay_svg(595.0, 842.0, marks, frozenset({second_mark.anchor_id}), None)
+    assert svg.count("<text ") == 1
+    assert svg.count("<rect ") == 3  # two locations and one badge
+    assert 'stroke="#4F46E5"' in svg
+    assert 'fill-opacity="0.58"' in svg
+    assert '#D70015' not in svg
+
+    output = tmp_path / "readable.pdf"
+    annotate_pdf_with_native_comments(
+        source,
+        output,
+        role="DOCUMENT",
+        page_count=2,
+        annotations=marks,
+        panel_comments=comments,
+        presentation_style="READABLE_MARGIN_GUIDES_V1",
+    )
+    assert sha256_file(source) == source_sha256
+    subprocess.run(["/usr/bin/qpdf", "--check", str(output)], check=True)
+    document = pymupdf.open(str(output))
+    try:
+        native = tuple(document[0].annots() or ())
+        assert len(native) == 1
+        assert native[0].info["content"] == comments[0].contents
+    finally:
+        document.close()
+
+
+@pytest.mark.parametrize("rotation", [0, 90, 180, 270])
+def test_readable_comment_respects_rotated_cropped_page(
+    tmp_path: Path,
+    monkeypatch: Any,
+    rotation: int,
+) -> None:
+    pymupdf = import_module("pymupdf")
+    pymupdf_native = import_module("pymupdf._extra")
+    monkeypatch.setattr(
+        "eom_catalog_service.document_review_pdf_annotation._pymupdf_runtime",
+        lambda: (pymupdf, Path(str(pymupdf.__file__)), Path(str(pymupdf_native.__file__))),
+    )
+    base = _source_pdf(tmp_path)
+    source = tmp_path / "rotated-cropped.pdf"
+    document = pymupdf.open(str(base))
+    try:
+        document[0].set_cropbox(pymupdf.Rect(40, 50, 550, 790))
+        document[0].set_rotation(rotation)
+        document.save(str(source))
+    finally:
+        document.close()
+    mark = _marks()[0]
+    contents = "검토 #1\n문서 1쪽\n수정 권고"
+    descriptor = DocumentReviewPdfPanelComment(
+        comment_id="reviewcomment_" + "d" * 32,
+        finding_id=mark.finding_id,
+        anchor_id=mark.anchor_id,
+        ordinal=mark.ordinal,
+        document_role=mark.document_role,
+        page_number=1,
+        contents_sha256=sha256_bytes(contents.encode("utf-8")),
+        contents_utf8_length=len(contents.encode("utf-8")),
+    )
+    output = tmp_path / "rotated-cropped-annotated.pdf"
+    annotate_pdf_with_native_comments(
+        source,
+        output,
+        role="DOCUMENT",
+        page_count=2,
+        annotations=(mark,),
+        panel_comments=(NativePanelCommentPayload(descriptor, contents, mark.region),),
+        presentation_style="READABLE_MARGIN_GUIDES_V1",
+    )
+    result = pymupdf.open(str(output))
+    try:
+        assert result[0].rotation == rotation
+        assert next(iter(result[0].annots() or ())).info["content"] == contents
+        pixmap = result[0].get_pixmap(annots=False)
+        brand_pixels = [
+            (x, y)
+            for y in range(pixmap.height)
+            for x in range(pixmap.width)
+            if (
+                pixmap.samples[y * pixmap.stride + x * pixmap.n] < 180
+                and pixmap.samples[y * pixmap.stride + x * pixmap.n + 1] < 170
+                and pixmap.samples[y * pixmap.stride + x * pixmap.n + 2] > 190
+            )
+        ]
+        assert brand_pixels
+        expected_x = 0.4 * result[0].rect.width
+        expected_y = 0.16 * result[0].rect.height
+        assert any(abs(x - expected_x) <= 3 and abs(y - expected_y) <= 5 for x, y in brand_pixels)
+    finally:
+        result.close()
 
 
 class _StructuredResultArtifacts:
@@ -497,11 +649,15 @@ def test_catalog_annotation_service_commits_byte_and_semantic_hashes_separately(
     assert all("idempotency_key" not in value["request"] for value in artifacts.commit_calls)
 
 
-@pytest.mark.parametrize("target_aware", [False, True])
+@pytest.mark.parametrize(
+    ("target_aware", "readable"),
+    [(False, False), (True, False), (True, True)],
+)
 def test_catalog_native_panel_service_commits_v2_receipt_and_pdf_comments(
     tmp_path: Path,
     monkeypatch: Any,
     target_aware: bool,
+    readable: bool,
 ) -> None:
     pymupdf = import_module("pymupdf")
     pymupdf_native = import_module("pymupdf._extra")
@@ -518,7 +674,9 @@ def test_catalog_native_panel_service_commits_v2_receipt_and_pdf_comments(
     annotation = (_marks()[0],)
     payload: dict[str, Any] = {
         "schema_version": (
-            "document-review-pdf-annotation-request/4.0"
+            "document-review-pdf-annotation-request/5.0"
+            if readable
+            else "document-review-pdf-annotation-request/4.0"
             if target_aware
             else "document-review-pdf-annotation-request/2.0"
         ),
@@ -544,11 +702,17 @@ def test_catalog_native_panel_service_commits_v2_receipt_and_pdf_comments(
             [value.model_dump(mode="json") for value in annotation]
         ),
     }
+    if readable:
+        payload["presentation_style"] = "READABLE_MARGIN_GUIDES_V1"
     payload["request_sha256"] = content_sha256(
         {key: value for key, value in payload.items() if key != "idempotency_key"}
     )
     command_model = (
-        CreateDocumentReviewAnnotatedPdfsV4 if target_aware else CreateDocumentReviewAnnotatedPdfsV2
+        CreateDocumentReviewAnnotatedPdfsV5
+        if readable
+        else CreateDocumentReviewAnnotatedPdfsV4
+        if target_aware
+        else CreateDocumentReviewAnnotatedPdfsV2
     )
     command = command_model.model_validate(payload)
     mark = annotation[0]
@@ -571,6 +735,7 @@ def test_catalog_native_panel_service_commits_v2_receipt_and_pdf_comments(
                 page_number=mark.page_number,
                 page_image_sha256=mark.page_image_sha256,
                 region=mark.region,
+                quote=None,
             ),
         ),
     )
@@ -594,14 +759,26 @@ def test_catalog_native_panel_service_commits_v2_receipt_and_pdf_comments(
 
     response = service.create(command)
 
-    assert response.schema_version == "document-review-pdf-annotation-response/2.0"
+    assert response.schema_version == (
+        "document-review-pdf-annotation-response/3.0"
+        if readable
+        else "document-review-pdf-annotation-response/2.0"
+    )
     assert response.result is not None
     assert response.result.panel_comment_count == 1
     assert response.manifest is not None
-    assert response.manifest.schema_ref.endswith("annotation-manifest/2.0")
+    assert response.manifest.schema_ref.endswith(
+        "annotation-manifest/3.0" if readable else "annotation-manifest/2.0"
+    )
     commit = artifacts.commit_calls[0]
-    assert commit["protocol_version"] == ("catalog/1.23" if target_aware else "catalog/1.21")
-    assert commit["manifest_version"] == "document-review-pdf-annotation-file-set/2.0"
+    assert commit["protocol_version"] == (
+        "catalog/1.24" if readable else "catalog/1.23" if target_aware else "catalog/1.21"
+    )
+    assert commit["manifest_version"] == (
+        "document-review-pdf-annotation-file-set/3.0"
+        if readable
+        else "document-review-pdf-annotation-file-set/2.0"
+    )
     document = pymupdf.open(stream=artifacts.committed["annotated/document.pdf"], filetype="pdf")
     try:
         page = document[0]

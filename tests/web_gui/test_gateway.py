@@ -458,7 +458,10 @@ async def test_pdf_document_review_gateway_preserves_upload_and_page_integrity()
 
 
 @pytest.mark.anyio
-async def test_document_review_annotation_gateway_verifies_role_download_hash() -> None:
+@pytest.mark.parametrize("presentation_style", [None, "READABLE_MARGIN_GUIDES_V1"])
+async def test_document_review_annotation_gateway_verifies_role_download_hash(
+    presentation_style: str | None,
+) -> None:
     workflow_id = "workflow_" + "7" * 32
     annotation_id = "docannotation_" + "9" * 32
     content = b"%PDF-annotated"
@@ -484,10 +487,13 @@ async def test_document_review_annotation_gateway_verifies_role_download_hash() 
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.path.endswith("/annotations") and request.method == "POST":
             assert request.headers["idempotency-key"] == "studio:annotation:test-key"
-            assert json.loads(request.content) == {
+            expected = {
                 "include_all_findings": True,
                 "annotation_profile": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
             }
+            if presentation_style is not None:
+                expected["presentation_style"] = presentation_style
+            assert json.loads(request.content) == expected
             return httpx.Response(
                 201,
                 json=_single(
@@ -530,6 +536,7 @@ async def test_document_review_annotation_gateway_verifies_role_download_hash() 
         workflow_id,
         DocumentReviewAnnotationSubmission(
             idempotency_key="studio:annotation:test-key",
+            presentation_style=presentation_style,
         ),
     )
     downloaded = await gateway.document_review_annotation_download(session, value, "DOCUMENT")

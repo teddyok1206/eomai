@@ -15,6 +15,7 @@ from eom_catalog_contracts.document_review import (
     DocumentReviewPdfAnnotationMark,
     DocumentReviewPdfAnnotationResult,
     DocumentReviewPdfAnnotationResultV2,
+    DocumentReviewPdfAnnotationResultV3,
     DocumentReviewResultMemberPointer,
     DocumentReviewResultMemberPointerV2,
     GraphGroundedDocumentReviewResultMemberPointer,
@@ -753,6 +754,18 @@ class CreateDocumentReviewAnnotatedPdfsV4(CreateDocumentReviewAnnotatedPdfsV2):
     review_result: DocumentReviewResultMemberPointerV2
 
 
+class CreateDocumentReviewAnnotatedPdfsV5(CreateDocumentReviewAnnotatedPdfsV2):
+    """Readable presentation successor for supported single and paired results."""
+
+    schema_version: Literal["document-review-pdf-annotation-request/5.0"] = (
+        "document-review-pdf-annotation-request/5.0"  # type: ignore[assignment]
+    )
+    presentation_style: Literal["READABLE_MARGIN_GUIDES_V1"] = "READABLE_MARGIN_GUIDES_V1"
+    review_result: (
+        DocumentReviewResultMemberPointerV2 | GraphGroundedDocumentReviewResultMemberPointer
+    )  # type: ignore[assignment]
+
+
 class CreateDocumentReviewAnnotatedPdfsV3(CreateDocumentReviewAnnotatedPdfsV2):
     """Native-panel annotation request for a Graph-grounded V3 review result."""
 
@@ -804,6 +817,49 @@ class DocumentReviewPdfAnnotationResponseV2(FrozenModel):
                 != "eom://schemas/document-review/document-review-pdf-annotation-manifest/2.0"
             ):
                 raise ValueError("annotation response manifest pointer differs")
+        elif any(value is not None for value in (self.outputs, self.manifest, self.result)) or (
+            self.error_code is None
+        ):
+            raise ValueError("failed annotation response requires only one stable error code")
+        return self
+
+
+class DocumentReviewPdfAnnotationResponseV3(DocumentReviewPdfAnnotationResponseV2):
+    schema_version: Literal["document-review-pdf-annotation-response/3.0"] = (
+        "document-review-pdf-annotation-response/3.0"  # type: ignore[assignment]
+    )
+    result: DocumentReviewPdfAnnotationResultV3 | None = None
+    manifest: OfficeDocumentReviewMemberPointerV2 | None = None  # type: ignore[assignment]
+
+    @model_validator(mode="after")
+    def require_one_response_variant(self) -> DocumentReviewPdfAnnotationResponseV3:
+        if self.status == "OK":
+            if (
+                self.outputs is None
+                or self.manifest is None
+                or self.result is None
+                or self.error_code is not None
+            ):
+                raise ValueError("successful annotation response requires immutable outputs")
+            if tuple(value.document_role for value in self.outputs) != tuple(
+                value.document_role for value in self.result.outputs
+            ):
+                raise ValueError("annotation response output roles differ from its result")
+            if any(
+                pointer.member_path != descriptor.member_path
+                or pointer.sha256 != descriptor.sha256
+                or pointer.content_length != descriptor.content_length
+                for pointer, descriptor in zip(self.outputs, self.result.outputs, strict=True)
+            ):
+                raise ValueError("annotation response output pointers differ from its result")
+            if (
+                self.manifest.member_path
+                not in ("manifest.json", DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER)
+                or self.manifest.media_type != "application/json"
+                or self.manifest.schema_ref
+                != "eom://schemas/document-review/document-review-pdf-annotation-manifest/3.0"
+            ):
+                raise ValueError("annotation response V3 requires a V3 manifest pointer")
         elif any(value is not None for value in (self.outputs, self.manifest, self.result)) or (
             self.error_code is None
         ):

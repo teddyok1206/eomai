@@ -5,11 +5,12 @@ from __future__ import annotations
 import re
 import stat
 import subprocess
+from array import array
 from collections import defaultdict
 from dataclasses import dataclass
 from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from eom_catalog_contracts import (
     DocumentReviewAnnotationRegion,
@@ -17,6 +18,7 @@ from eom_catalog_contracts import (
     DocumentReviewPdfAnnotationMark,
     DocumentReviewPdfAnnotationRenderer,
     DocumentReviewPdfAnnotationRendererV2,
+    DocumentReviewPdfAnnotationRendererV3,
     DocumentReviewPdfPanelComment,
 )
 from eom_identifiers import sha256_bytes, sha256_file
@@ -102,6 +104,8 @@ def annotate_pdf(
     role: DocumentReviewAnnotationRole,
     page_count: int,
     annotations: tuple[DocumentReviewPdfAnnotationMark, ...],
+    presentation_style: Literal["LEGACY_BOXES", "READABLE_MARGIN_GUIDES_V1"] = "LEGACY_BOXES",
+    primary_anchor_ids: frozenset[str] = frozenset(),
 ) -> DocumentReviewPdfAnnotationRenderer:
     """Render role-local numbered rectangles and return the exact tool identity."""
 
@@ -127,18 +131,46 @@ def annotate_pdf(
                 "An annotation page is outside the source PDF",
             )
         by_page[annotation.page_number].append(annotation)
+    layout_document: Any | None = None
     overlay_pages: list[Path] = []
     overlay_root = destination.parent / f".{destination.stem}.overlays"
     overlay_root.mkdir(mode=0o700, parents=False, exist_ok=False)
     try:
+        if presentation_style == "READABLE_MARGIN_GUIDES_V1":
+            if not primary_anchor_ids.issubset({value.anchor_id for value in annotations}):
+                raise DocumentReviewPdfAnnotationError(
+                    "DOCUMENT_REVIEW_ANNOTATION_PRIMARY_INVALID",
+                    "A primary annotation is not in the validated mark set",
+                )
+            pymupdf, _, _ = _pymupdf_runtime()
+            layout_document = pymupdf.open(str(source))
+            if layout_document.page_count != page_count:
+                raise DocumentReviewPdfAnnotationError(
+                    "DOCUMENT_REVIEW_ANNOTATION_PAGE_COUNT_MISMATCH",
+                    "The layout source PDF page count differs",
+                )
         for page_number in range(1, page_count + 1):
             width, height = _pdf_page_size(source, page_number)
             svg = overlay_root / f"page-{page_number:04d}.svg"
             overlay = overlay_root / f"page-{page_number:04d}.pdf"
-            svg.write_text(
-                _overlay_svg(width, height, tuple(by_page.get(page_number, ()))),
-                encoding="utf-8",
-            )
+            page_marks = tuple(by_page.get(page_number, ()))
+            if layout_document is None:
+                overlay_svg = _overlay_svg(width, height, page_marks)
+            else:
+                page = layout_document[page_number - 1]
+                if abs(page.cropbox.width - width) > 0.1 or abs(page.cropbox.height - height) > 0.1:
+                    raise DocumentReviewPdfAnnotationError(
+                        "DOCUMENT_REVIEW_ANNOTATION_GEOMETRY_INVALID",
+                        "The PDF display geometry differs from its rendered page",
+                    )
+                overlay_svg = _readable_overlay_svg(
+                    page.rect.width,
+                    page.rect.height,
+                    page_marks,
+                    primary_anchor_ids,
+                    _page_ink_grid(page, pymupdf) if page_marks else None,
+                )
+            svg.write_text(overlay_svg, encoding="utf-8")
             svg.chmod(0o600)
             _run(
                 (
@@ -193,6 +225,8 @@ def annotate_pdf(
                 "The annotated PDF contains an external or embedded file reference",
             )
     finally:
+        if layout_document is not None:
+            layout_document.close()
         for child in overlay_root.iterdir() if overlay_root.exists() else ():
             child.unlink(missing_ok=True)
         overlay_root.rmdir()
@@ -207,7 +241,8 @@ def annotate_pdf_with_native_comments(
     page_count: int,
     annotations: tuple[DocumentReviewPdfAnnotationMark, ...],
     panel_comments: tuple[NativePanelCommentPayload, ...],
-) -> DocumentReviewPdfAnnotationRendererV2:
+    presentation_style: Literal["LEGACY_BOXES", "READABLE_MARGIN_GUIDES_V1"] = "LEGACY_BOXES",
+) -> DocumentReviewPdfAnnotationRendererV2 | DocumentReviewPdfAnnotationRendererV3:
     """Render visible boxes plus standard PDF annotations for viewer comment panels."""
 
     base_identity = annotate_pdf(
@@ -216,6 +251,12 @@ def annotate_pdf_with_native_comments(
         role=role,
         page_count=page_count,
         annotations=annotations,
+        presentation_style=presentation_style,
+        primary_anchor_ids=(
+            frozenset(value.descriptor.anchor_id for value in panel_comments)
+            if presentation_style == "READABLE_MARGIN_GUIDES_V1"
+            else frozenset()
+        ),
     )
     if any(value.descriptor.document_role != role for value in panel_comments):
         raise DocumentReviewPdfAnnotationError(
@@ -234,10 +275,20 @@ def annotate_pdf_with_native_comments(
                 )
             for value in panel_comments:
                 page = document[value.descriptor.page_number - 1]
-                rect = _native_rect(pymupdf, page.rect, value.region)
+                rect = _native_rect(
+                    pymupdf,
+                    page.rect,
+                    value.region,
+                )
+                if presentation_style == "READABLE_MARGIN_GUIDES_V1":
+                    rect = rect * page.derotation_matrix
                 annotation = page.add_rect_annot(rect)
                 annotation.set_border(width=0)
-                annotation.set_colors(stroke=(0.843137, 0.0, 0.082353))
+                annotation.set_colors(
+                    stroke=(79 / 255, 70 / 255, 229 / 255)
+                    if presentation_style == "READABLE_MARGIN_GUIDES_V1"
+                    else (0.843137, 0.0, 0.082353)
+                )
                 annotation.set_info(
                     title="EOM 문서 검토",
                     subject=f"검토 #{value.descriptor.ordinal}",
@@ -276,6 +327,7 @@ def annotate_pdf_with_native_comments(
             destination,
             page_count=page_count,
             expected=panel_comments,
+            presentation_style=presentation_style,
         )
         _reject_unsafe_pdf_references(destination, destination.parent)
     except DocumentReviewPdfAnnotationError:
@@ -287,7 +339,12 @@ def annotate_pdf_with_native_comments(
         ) from exc
     finally:
         native_output.unlink(missing_ok=True)
-    return DocumentReviewPdfAnnotationRendererV2(
+    renderer_type = (
+        DocumentReviewPdfAnnotationRendererV3
+        if presentation_style == "READABLE_MARGIN_GUIDES_V1"
+        else DocumentReviewPdfAnnotationRendererV2
+    )
+    return renderer_type(
         qpdf_version=base_identity.qpdf_version,
         qpdf_sha256=base_identity.qpdf_sha256,
         rsvg_convert_version=base_identity.rsvg_convert_version,
@@ -340,12 +397,187 @@ def _native_rect(pymupdf: Any, page_rect: Any, region: DocumentReviewAnnotationR
     return pymupdf.Rect(x0, y0, x1, y1)
 
 
+@dataclass(frozen=True)
+class _InkGrid:
+    width: int
+    height: int
+    page_width: float
+    page_height: float
+    prefix: array[int]
+
+    def count(self, rect: tuple[float, float, float, float]) -> int:
+        x0, y0, x1, y1 = rect
+        left = max(0, min(self.width, int(x0 * self.width / self.page_width)))
+        top = max(0, min(self.height, int(y0 * self.height / self.page_height)))
+        right = max(left, min(self.width, int(x1 * self.width / self.page_width + 0.9999)))
+        bottom = max(top, min(self.height, int(y1 * self.height / self.page_height + 0.9999)))
+        stride = self.width + 1
+        return int(
+            self.prefix[bottom * stride + right]
+            - self.prefix[top * stride + right]
+            - self.prefix[bottom * stride + left]
+            + self.prefix[top * stride + left]
+        )
+
+
+def _page_ink_grid(page: Any, pymupdf: Any) -> _InkGrid:
+    if page.rect.width <= 0 or page.rect.height <= 0:
+        raise DocumentReviewPdfAnnotationError(
+            "DOCUMENT_REVIEW_ANNOTATION_GEOMETRY_INVALID",
+            "The source PDF page has invalid display geometry",
+        )
+    scale = min(1.0, 1024.0 / max(page.rect.width, page.rect.height))
+    pixmap = page.get_pixmap(
+        matrix=pymupdf.Matrix(scale, scale),
+        colorspace=pymupdf.csGRAY,
+        alpha=False,
+        annots=False,
+    )
+    width, height = pixmap.width, pixmap.height
+    prefix = array("I", [0]) * ((width + 1) * (height + 1))
+    samples = pixmap.samples
+    for y in range(height):
+        row_sum = 0
+        row_start = y * pixmap.stride
+        current = (y + 1) * (width + 1)
+        previous = y * (width + 1)
+        for x in range(width):
+            row_sum += samples[row_start + x] < 245
+            prefix[current + x + 1] = prefix[previous + x + 1] + row_sum
+    return _InkGrid(width, height, page.rect.width, page.rect.height, prefix)
+
+
+def _mark_rect(
+    width: float,
+    height: float,
+    mark: DocumentReviewPdfAnnotationMark,
+) -> tuple[float, float, float, float]:
+    x0 = width * mark.region.x_ppm / 1_000_000
+    y0 = height * mark.region.y_ppm / 1_000_000
+    return (
+        x0,
+        y0,
+        x0 + width * mark.region.width_ppm / 1_000_000,
+        y0 + height * mark.region.height_ppm / 1_000_000,
+    )
+
+
+class _RowBins:
+    """Small page-local spatial index for badge/region collision checks."""
+
+    def __init__(self) -> None:
+        self._rows: dict[int, list[tuple[float, float, float, float]]] = defaultdict(list)
+
+    def add(self, rect: tuple[float, float, float, float]) -> None:
+        for row in range(int(rect[1] // 24), int(max(rect[1], rect[3] - 0.001) // 24) + 1):
+            self._rows[row].append(rect)
+
+    def intersects(self, rect: tuple[float, float, float, float]) -> bool:
+        for row in range(int(rect[1] // 24), int(max(rect[1], rect[3] - 0.001) // 24) + 1):
+            for other in self._rows.get(row, ()):
+                if (
+                    rect[0] < other[2]
+                    and rect[2] > other[0]
+                    and rect[1] < other[3]
+                    and rect[3] > other[1]
+                ):
+                    return True
+        return False
+
+
+def _readable_overlay_svg(
+    width: float,
+    height: float,
+    annotations: tuple[DocumentReviewPdfAnnotationMark, ...],
+    primary_anchor_ids: frozenset[str],
+    ink: _InkGrid | None,
+) -> str:
+    regions = _RowBins()
+    region_rects: dict[str, tuple[float, float, float, float]] = {}
+    boxes: list[str] = []
+    for mark in annotations:
+        rect = _mark_rect(width, height, mark)
+        region_rects[mark.anchor_id] = rect
+        regions.add(rect)
+        stroke_width = "1.2" if mark.anchor_id not in primary_anchor_ids else "2.0"
+        boxes.append(
+            f'<rect x="{rect[0]:.4f}" y="{rect[1]:.4f}" '
+            f'width="{rect[2] - rect[0]:.4f}" height="{rect[3] - rect[1]:.4f}" '
+            f'fill="none" stroke="#4F46E5" stroke-opacity="0.65" '
+            f'stroke-width="{stroke_width}"/>'
+        )
+    badges = _RowBins()
+    leaders: list[str] = []
+    labels: list[str] = []
+    for mark in annotations:
+        if mark.anchor_id not in primary_anchor_ids:
+            continue
+        x0, y0, x1, y1 = region_rects[mark.anchor_id]
+        badge_width = max(18.0, 9.0 + 7.0 * len(str(mark.ordinal)))
+        badge_height = 16.0
+        candidates = (
+            (x0 - badge_width - 4.0, y0),
+            (x1 + 4.0, y0),
+            (x0, y0 - badge_height - 4.0),
+            (x0, y1 + 4.0),
+            (2.0, y0),
+            (width - badge_width - 2.0, y0),
+            (2.0, y1 + 4.0),
+            (width - badge_width - 2.0, y1 + 4.0),
+        )
+        choices: list[tuple[int, int, float, int, tuple[float, float, float, float]]] = []
+        for order, (x, y) in enumerate(candidates):
+            if x < 0 or y < 0 or x + badge_width > width or y + badge_height > height:
+                continue
+            rect = (x, y, x + badge_width, y + badge_height)
+            collision = regions.intersects(rect) or badges.intersects(rect)
+            ink_count = ink.count(rect) if ink is not None else 0
+            distance = abs(x + badge_width / 2 - x0) + abs(y + badge_height / 2 - y0)
+            choices.append((int(collision), ink_count, distance, order, rect))
+        if not choices:
+            raise DocumentReviewPdfAnnotationError(
+                "DOCUMENT_REVIEW_ANNOTATION_GEOMETRY_INVALID",
+                "The PDF page has no room for a review marker",
+            )
+        selected_collision, ink_count, _, _, selected = min(choices)
+        badges.add(selected)
+        center_x = selected[0] + badge_width / 2
+        center_y = selected[1] + badge_height / 2
+        leaders.append(
+            f'<line x1="{center_x:.4f}" y1="{center_y:.4f}" '
+            f'x2="{x0:.4f}" y2="{y0:.4f}" stroke="#4F46E5" '
+            'stroke-opacity="0.48" stroke-width="0.8"/>'
+        )
+        # A hollow fallback badge obscures less text when no clear whitespace exists.
+        clear = selected_collision == 0 and ink_count == 0
+        fill = "#EEF2FF" if clear else "#FFFFFF"
+        text_color = "#4338CA"
+        labels.extend(
+            (
+                f'<rect x="{selected[0]:.4f}" y="{selected[1]:.4f}" '
+                f'width="{badge_width:.4f}" height="{badge_height:.4f}" '
+                f'rx="3" fill="{fill}" fill-opacity="0.58" stroke="#4F46E5" '
+                'stroke-opacity="0.75" stroke-width="0.8"/>',
+                f'<text x="{center_x:.4f}" y="{selected[1] + 12:.4f}" '
+                'font-family="DejaVu Sans" font-size="10" font-weight="bold" '
+                f'fill="{text_color}" text-anchor="middle">{mark.ordinal}</text>',
+            )
+        )
+    return (
+        '<?xml version="1.0" encoding="UTF-8"?>\n'
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width:.4f}pt" '
+        f'height="{height:.4f}pt" '
+        f'viewBox="0 0 {width:.4f} {height:.4f}">' + "".join(leaders + boxes + labels) + "</svg>\n"
+    )
+
+
 def _verify_native_panel_comments(
     pymupdf: Any,
     path: Path,
     *,
     page_count: int,
     expected: tuple[NativePanelCommentPayload, ...],
+    presentation_style: Literal["LEGACY_BOXES", "READABLE_MARGIN_GUIDES_V1"] = "LEGACY_BOXES",
 ) -> None:
     by_id = {value.descriptor.comment_id: value for value in expected}
     if len(by_id) != len(expected):
@@ -393,6 +625,8 @@ def _verify_native_panel_comments(
                 page.rect,
                 value.region,
             )
+            if presentation_style == "READABLE_MARGIN_GUIDES_V1":
+                expected_rect = expected_rect * page.derotation_matrix
             # PyMuPDF stores a fixed one-point rectangle difference (`/RD`) around Square
             # annotations even when the border width is zero.  The visible red box remains the
             # exact SVG overlay; verify this deterministic native hit-target expansion explicitly.

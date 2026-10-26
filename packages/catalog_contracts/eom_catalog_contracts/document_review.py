@@ -1075,3 +1075,26 @@ class DocumentReviewPdfAnnotationResultV2(FrozenModel):
         ):
             raise ValueError("annotation result self-hash differs")
         return self
+
+
+class DocumentReviewPdfAnnotationRendererV3(DocumentReviewPdfAnnotationRendererV2):
+    renderer_key: Literal["pymupdf-qpdf-rsvg-document-review-readable-annotation"] = (
+        "pymupdf-qpdf-rsvg-document-review-readable-annotation"  # type: ignore[assignment]
+    )
+    presentation_style: Literal["READABLE_MARGIN_GUIDES_V1"] = "READABLE_MARGIN_GUIDES_V1"
+    stroke_color: Literal["#4F46E5"] = "#4F46E5"  # type: ignore[assignment]
+
+
+class DocumentReviewPdfAnnotationManifestV3(DocumentReviewPdfAnnotationManifestV2):
+    schema_version: Literal["document-review-pdf-annotation-manifest/3.0"] = (
+        "document-review-pdf-annotation-manifest/3.0"  # type: ignore[assignment]
+    )
+    presentation_style: Literal["READABLE_MARGIN_GUIDES_V1"] = "READABLE_MARGIN_GUIDES_V1"
+    renderer: DocumentReviewPdfAnnotationRendererV3
+
+
+class DocumentReviewPdfAnnotationResultV3(DocumentReviewPdfAnnotationResultV2):
+    schema_version: Literal["document-review-pdf-annotation-result/3.0"] = (
+        "document-review-pdf-annotation-result/3.0"  # type: ignore[assignment]
+    )
+    presentation_style: Literal["READABLE_MARGIN_GUIDES_V1"] = "READABLE_MARGIN_GUIDES_V1"

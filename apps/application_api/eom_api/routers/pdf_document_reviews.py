@@ -10,6 +10,7 @@ from eom_api_contracts.document_review import (
     ApplyDocumentReviewCorrectionRequest,
     CreateDocumentReviewAnnotationRequest,
     CreateDocumentReviewAnnotationRequestV2,
+    CreateDocumentReviewAnnotationRequestV3,
     CreateDocumentReviewSetRequest,
     CreateDocumentReviewUploadIntentRequestV2,
     CreatePdfDocumentReviewUploadIntentRequest,
@@ -576,7 +577,11 @@ def download_document_review_hwpx_correction(
 )
 def create_document_review_annotation(
     request: Request,
-    body: CreateDocumentReviewAnnotationRequestV2 | CreateDocumentReviewAnnotationRequest,
+    body: (
+        CreateDocumentReviewAnnotationRequestV3
+        | CreateDocumentReviewAnnotationRequestV2
+        | CreateDocumentReviewAnnotationRequest
+    ),
     authentication: Auth,
     idempotency_key: IdempotencyKey,
     workflow_id: str = Path(pattern=r"^workflow_[0-9a-f]{32}$"),
@@ -596,6 +601,11 @@ def create_document_review_annotation(
             annotation_profile=(
                 body.annotation_profile
                 if isinstance(body, CreateDocumentReviewAnnotationRequestV2)
+                else None
+            ),
+            presentation_style=(
+                body.presentation_style
+                if isinstance(body, CreateDocumentReviewAnnotationRequestV3)
                 else None
             ),
         )

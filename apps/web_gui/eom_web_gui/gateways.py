@@ -1737,6 +1737,11 @@ class HttpApplicationGateway:
             json={
                 "include_all_findings": value.include_all_findings,
                 "annotation_profile": value.annotation_profile,
+                **(
+                    {"presentation_style": value.presentation_style}
+                    if value.presentation_style is not None
+                    else {}
+                ),
             },
             headers={"Idempotency-Key": value.idempotency_key},
             timeout=self._workflow_start_timeout,

@@ -705,3 +705,25 @@ def test_document_review_annotation_native_comment_profile_reaches_use_case(
         )
     finally:
         services.engine.dispose()
+
+
+def test_document_review_annotation_readable_profile_reaches_use_case(tmp_path: Path) -> None:
+    client, services, _reviews, _queries = _client(tmp_path)
+    annotations = cast(FakeDocumentReviewAnnotations, services.document_review_annotations)
+    try:
+        with client:
+            created = client.post(
+                f"/api/v1/pdf-document-reviews/{WORKFLOW_ID}/annotations",
+                headers={"Idempotency-Key": "document-review-readable-comments-test-0001"},
+                json={
+                    "include_all_findings": True,
+                    "annotation_profile": "NUMBERED_BOXES_WITH_NATIVE_COMMENTS",
+                    "presentation_style": "READABLE_MARGIN_GUIDES_V1",
+                },
+            )
+        assert created.status_code == 201
+        assert annotations.create_values[0]["presentation_style"] == (
+            "READABLE_MARGIN_GUIDES_V1"
+        )
+    finally:
+        services.engine.dispose()

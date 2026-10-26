@@ -37,6 +37,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfsV2,
     CreateDocumentReviewAnnotatedPdfsV3,
     CreateDocumentReviewAnnotatedPdfsV4,
+    CreateDocumentReviewAnnotatedPdfsV5,
     CreateDocumentReviewEvidenceCommand,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
@@ -53,6 +54,7 @@ from eom_catalog_contracts import (
     DocumentReviewPdfAnnotationMediaResponse,
     DocumentReviewPdfAnnotationResponse,
     DocumentReviewPdfAnnotationResponseV2,
+    DocumentReviewPdfAnnotationResponseV3,
     InspectItemRevisionHwpxEligibilityQueryV1,
     InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
@@ -460,10 +462,18 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 try:
                     annotation_request_v2: (
                         CreateDocumentReviewAnnotatedPdfsV4
+                        | CreateDocumentReviewAnnotatedPdfsV5
                         | CreateDocumentReviewAnnotatedPdfsV3
                         | CreateDocumentReviewAnnotatedPdfsV2
                     )
-                    if value.get("schema_version") == "document-review-pdf-annotation-request/4.0":
+                    if value.get("schema_version") == "document-review-pdf-annotation-request/5.0":
+                        validate_contract("document-review-pdf-annotation-request-v5", value)
+                        annotation_request_v2 = CreateDocumentReviewAnnotatedPdfsV5.model_validate(
+                            value
+                        )
+                    elif value.get("schema_version") == (
+                        "document-review-pdf-annotation-request/4.0"
+                    ):
                         validate_contract("document-review-pdf-annotation-request-v4", value)
                         annotation_request_v2 = CreateDocumentReviewAnnotatedPdfsV4.model_validate(
                             value
@@ -485,6 +495,8 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                         self.wfile,
                         CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
                         native_panel=True,
+                        readable=value.get("schema_version")
+                        == "document-review-pdf-annotation-request/5.0",
                     )
                     return
                 self._create_document_review_annotated_pdfs(annotation_request_v2)
@@ -1111,6 +1123,8 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             CreateDocumentReviewAnnotatedPdfs
             | CreateDocumentReviewAnnotatedPdfsV2
             | CreateDocumentReviewAnnotatedPdfsV3
+            | CreateDocumentReviewAnnotatedPdfsV4
+            | CreateDocumentReviewAnnotatedPdfsV5
         ),
     ) -> None:
         annotations = self.server.document_review_pdf_annotations
@@ -1122,6 +1136,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     request,
                     (CreateDocumentReviewAnnotatedPdfsV3, CreateDocumentReviewAnnotatedPdfsV2),
                 ),
+                readable=isinstance(request, CreateDocumentReviewAnnotatedPdfsV5),
             )
             return
         try:
@@ -1134,6 +1149,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     request,
                     (CreateDocumentReviewAnnotatedPdfsV3, CreateDocumentReviewAnnotatedPdfsV2),
                 ),
+                readable=isinstance(request, CreateDocumentReviewAnnotatedPdfsV5),
             )
             return
         except Exception:
@@ -1144,6 +1160,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     request,
                     (CreateDocumentReviewAnnotatedPdfsV3, CreateDocumentReviewAnnotatedPdfsV2),
                 ),
+                readable=isinstance(request, CreateDocumentReviewAnnotatedPdfsV5),
             )
             return
         self.server.write_document_review_pdf_annotation_response(self.wfile, response)
@@ -1706,11 +1723,17 @@ class CatalogApplicationServer(_ThreadingUnixServer):
     @staticmethod
     def write_document_review_pdf_annotation_response(
         stream: Any,
-        response: DocumentReviewPdfAnnotationResponse | DocumentReviewPdfAnnotationResponseV2,
+        response: (
+            DocumentReviewPdfAnnotationResponse
+            | DocumentReviewPdfAnnotationResponseV2
+            | DocumentReviewPdfAnnotationResponseV3
+        ),
     ) -> None:
         payload = response.model_dump(mode="json", exclude_none=True)
         contract = (
-            "document-review-pdf-annotation-response-v2"
+            "document-review-pdf-annotation-response-v3"
+            if isinstance(response, DocumentReviewPdfAnnotationResponseV3)
+            else "document-review-pdf-annotation-response-v2"
             if isinstance(response, DocumentReviewPdfAnnotationResponseV2)
             else "document-review-pdf-annotation-response"
         )
@@ -1727,11 +1750,14 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         error_code: str,
         *,
         native_panel: bool = False,
+        readable: bool = False,
     ) -> None:
         cls.write_document_review_pdf_annotation_response(
             stream,
             (
-                DocumentReviewPdfAnnotationResponseV2(status="ERROR", error_code=error_code)
+                DocumentReviewPdfAnnotationResponseV3(status="ERROR", error_code=error_code)
+                if readable
+                else DocumentReviewPdfAnnotationResponseV2(status="ERROR", error_code=error_code)
                 if native_panel
                 else DocumentReviewPdfAnnotationResponse(status="ERROR", error_code=error_code)
             ),
