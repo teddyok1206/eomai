@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/pdf-document-review-control-bootstrap/7.0",
+  "title": "EOM textbook-grounded single and paired PDF review control bootstrap V7",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "preset_key", "display_name", "description", "created_at",
+    "model", "reasoning_effort", "general_knowledge_policy",
+    "compatible_workflow_protocols", "platform_instruction_path",
+    "role_instruction_path", "slot_key", "worker_pool_key", "timeout_seconds",
+    "instruction_revision_number", "predecessor", "evidence_access", "retrieval_policy"
+  ],
+  "properties": {
+    "schema_version": { "const": "pdf-document-review-control-bootstrap/7.0" },
+    "preset_key": { "const": "pdf-document-review" },
+    "display_name": { "$ref": "eom://schemas/workflow/pdf-document-review-control-bootstrap/6.0#/properties/display_name" },
+    "description": { "$ref": "eom://schemas/workflow/pdf-document-review-control-bootstrap/6.0#/properties/description" },
+    "created_at": { "$ref": "eom://schemas/workflow/pdf-document-review-control-bootstrap/6.0#/properties/created_at" },
+    "model": { "const": "gpt-5.6-terra" },
+    "reasoning_effort": { "const": "xhigh" },
+    "general_knowledge_policy": { "const": "ALLOW_WITH_PROVENANCE" },
+    "compatible_workflow_protocols": {
+      "type": "array",
+      "prefixItems": [
+        { "const": "workflow-role/1.25.0" },
+        { "const": "workflow-role/1.26.0" },
+        { "const": "workflow-role/1.27.0" },
+        { "const": "workflow-role/1.28.0" },
+        { "const": "workflow-role/1.31.0" },
+        { "const": "workflow-role/1.32.0" }
+      ],
+      "items": false,
+      "minItems": 6,
+      "maxItems": 6
+    },
+    "platform_instruction_path": { "const": "instructions/platform.md" },
+    "role_instruction_path": { "const": "instructions/pdf-document-review.md" },
+    "slot_key": { "const": "slot06" },
+    "worker_pool_key": { "const": "customer-support" },
+    "timeout_seconds": { "const": 3600 },
+    "instruction_revision_number": { "const": 7 },
+    "predecessor": { "$ref": "eom://schemas/workflow/pdf-document-review-control-bootstrap/6.0#/properties/predecessor" },
+    "evidence_access": { "const": "EVIDENCE_CONTEXT" },
+    "retrieval_policy": { "$ref": "eom://schemas/workflow/pdf-document-review-control-bootstrap/6.0#/properties/retrieval_policy" }
+  }
+}

@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "document-review-pdf-annotation-request-v7": CatalogSchemaResource(
+            "schemas/catalog/catalog-application/document-review-pdf-annotation-request-v7.schema.json",
+            "resources/catalog-application/document-review-pdf-annotation-request-v7.schema.json",
+            "7.0",
+            "sha256:547f66da3fdcf660abb171b0663add7dcb8001bda84ed9791b53bf81dceb7efe",
+        ),
         "document-review-pdf-annotation-request-v6": CatalogSchemaResource(
             "schemas/catalog/catalog-application/document-review-pdf-annotation-request-v6.schema.json",
             "resources/catalog-application/document-review-pdf-annotation-request-v6.schema.json",

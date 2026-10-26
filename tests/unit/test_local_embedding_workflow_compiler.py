@@ -105,6 +105,17 @@ def test_legacy_definition_hashes_are_exactly_the_prechange_values(
     assert replay.sha256 == expected
 
 
+def test_textbook_review_definition_has_pinned_canonical_hash() -> None:
+    compiled = compile_definition(CONFIG / "pdf-document-review.v1.4.yaml", ROLES)
+    assert compiled.sha256 == (
+        "sha256:051e43615f483764ded2236171da5e37facf746302a71af6ad0c0cb79e21131c"
+    )
+    paired = compile_definition(CONFIG / "pdf-document-review.v1.5.yaml", ROLES)
+    assert paired.sha256 == (
+        "sha256:197c61d7a972f877e4855572fa5c16178ddd95e1ff4ad7753fce30fc68ef0cb7"
+    )
+
+
 @pytest.mark.parametrize(
     "name", ("generic-item-development.v1.12.yaml", "generic-item-development.v1.16.yaml")
 )

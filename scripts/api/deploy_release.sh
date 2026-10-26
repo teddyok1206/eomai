@@ -1833,6 +1833,20 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             / "config/workflows/pdf-document-review.v1.3.yaml"
         ).read_bytes()
     )
+    pdf_document_review_definition_v1_4 = root / "pdf-document-review.v1.4.yaml"
+    pdf_document_review_definition_v1_4.write_bytes(
+        (
+            Path(os.environ["REPOSITORY_ROOT"])
+            / "config/workflows/pdf-document-review.v1.4.yaml"
+        ).read_bytes()
+    )
+    pdf_document_review_definition_v1_5 = root / "pdf-document-review.v1.5.yaml"
+    pdf_document_review_definition_v1_5.write_bytes(
+        (
+            Path(os.environ["REPOSITORY_ROOT"])
+            / "config/workflows/pdf-document-review.v1.5.yaml"
+        ).read_bytes()
+    )
     inference_transfer_definition = root / "item-inference-transfer-comparison.v1.yaml"
     inference_transfer_definition.write_bytes(
         (
@@ -1925,7 +1939,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 installed_root = Path(sys.argv[1]).resolve()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, definition_v1_15, definition_v1_16, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, pdf_document_review_definition_v1_3, inference_transfer_definition, inference_transfer_definition_v1_1, local_embedding_definition, local_embedding_definition_v2, reference_query_definition, private_chat_query_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256, expected_catalog_resources_json = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, definition_v1_15, definition_v1_16, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, pdf_document_review_definition_v1_3, pdf_document_review_definition_v1_4, inference_transfer_definition, inference_transfer_definition_v1_1, local_embedding_definition, local_embedding_definition_v2, reference_query_definition, private_chat_query_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256, expected_catalog_resources_json = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -2173,6 +2187,8 @@ load_role_input_schema("support", "workflow-role/1.27.0")
 load_role_input_schema("support", "workflow-role/1.28.0")
 load_role_input_schema("support", "workflow-role/1.29.0")
 load_role_input_schema("support", "workflow-role/1.30.0")
+load_role_input_schema("support", "workflow-role/1.31.0")
+load_role_input_schema("support", "workflow-role/1.32.0")
 load_role_input_schema("authoring", "workflow-role/1.19.0")
 load_role_input_schema("image", "workflow-role/1.19.0")
 load_role_input_schema("review", "workflow-role/1.19.0")
@@ -2200,6 +2216,7 @@ if not {
     "inference-transfer-control-invocation-v1.1",
     "resolved-execution-plan-v21",
     "resolved-execution-plan-v22",
+    "resolved-execution-plan-v26",
     "standard-control-bootstrap-v10",
     "knowledge-item-control-bootstrap-v7",
     "standard-control-bootstrap-v11",
@@ -2223,6 +2240,7 @@ if not {
     "pdf-document-review-control-bootstrap-v4",
     "pdf-document-review-control-bootstrap-v5",
     "pdf-document-review-control-bootstrap-v6",
+    "pdf-document-review-control-bootstrap-v7",
     "resolved-execution-plan-v14",
     "resolved-execution-plan-v15",
     "resolved-execution-plan-v16",
@@ -2293,6 +2311,7 @@ pdf_document_reviews = tuple(
         pdf_document_review_definition_v1_1,
         pdf_document_review_definition_v1_2,
         pdf_document_review_definition_v1_3,
+        pdf_document_review_definition_v1_4,
     )
 )
 if tuple(
@@ -2302,6 +2321,8 @@ if tuple(
     ("pdf-document-review", "1.1.0"),
     ("pdf-document-review", "1.2.0"),
     ("pdf-document-review", "1.3.0"),
+    ("pdf-document-review", "1.4.0"),
+    ("pdf-document-review", "1.5.0"),
 ):
     raise SystemExit("PDF document review workflow definition mismatch")
 admitted_definitions = (
@@ -2326,6 +2347,7 @@ admitted_definitions = (
     compile_definition(Path(pdf_document_review_definition_v1_1), {"support"}),
     compile_definition(Path(pdf_document_review_definition_v1_2), {"support"}),
     compile_definition(Path(pdf_document_review_definition_v1_3), {"support"}),
+    compile_definition(Path(pdf_document_review_definition_v1_4), {"support"}),
     compile_definition(Path(inference_transfer_definition), {"support"}),
     compile_definition(Path(inference_transfer_definition_v1_1), {"support"}),
     compile_definition(Path(local_embedding_definition), set()),
@@ -2396,6 +2418,7 @@ validate_contract(
             str(pdf_document_review_definition_v1_1),
             str(pdf_document_review_definition_v1_2),
             str(pdf_document_review_definition_v1_3),
+            str(pdf_document_review_definition_v1_4),
             str(inference_transfer_definition),
             str(inference_transfer_definition_v1_1),
             str(local_embedding_definition),

@@ -28,6 +28,7 @@ from eom_catalog_contracts.document_review import (
     PdfDocumentReviewResultMemberPointerV3,
     PdfReviewArtifactMemberPointer,
     PdfReviewDocumentPointer,
+    TextbookGroundedPairedReviewResultMemberPointer,
 )
 
 Sha256 = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
@@ -784,6 +785,19 @@ class CreateDocumentReviewAnnotatedPdfsV6(CreateDocumentReviewAnnotatedPdfsV5):
     review_result: (
         DocumentReviewResultMemberPointerV3 | GraphGroundedDocumentReviewResultMemberPointer
     )
+
+
+class CreateDocumentReviewAnnotatedPdfsV7(CreateDocumentReviewAnnotatedPdfsV6):
+    """Readable annotation for the textbook-grounded paired review successor."""
+
+    schema_version: Literal["document-review-pdf-annotation-request/7.0"] = (
+        "document-review-pdf-annotation-request/7.0"  # type: ignore[assignment]
+    )
+    review_result: (
+        DocumentReviewResultMemberPointerV3
+        | GraphGroundedDocumentReviewResultMemberPointer
+        | TextbookGroundedPairedReviewResultMemberPointer
+    )  # type: ignore[assignment]
 
 
 class CreateDocumentReviewAnnotatedPdfsV3(CreateDocumentReviewAnnotatedPdfsV2):

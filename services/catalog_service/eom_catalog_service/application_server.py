@@ -40,6 +40,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfsV4,
     CreateDocumentReviewAnnotatedPdfsV5,
     CreateDocumentReviewAnnotatedPdfsV6,
+    CreateDocumentReviewAnnotatedPdfsV7,
     CreateDocumentReviewEvidenceCommand,
     CreateDocumentReviewTextbookEvidenceCommand,
     CreateEvidenceBundleCommand,
@@ -478,10 +479,18 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                         CreateDocumentReviewAnnotatedPdfsV4
                         | CreateDocumentReviewAnnotatedPdfsV5
                         | CreateDocumentReviewAnnotatedPdfsV6
+                        | CreateDocumentReviewAnnotatedPdfsV7
                         | CreateDocumentReviewAnnotatedPdfsV3
                         | CreateDocumentReviewAnnotatedPdfsV2
                     )
-                    if value.get("schema_version") == "document-review-pdf-annotation-request/6.0":
+                    if value.get("schema_version") == "document-review-pdf-annotation-request/7.0":
+                        validate_contract("document-review-pdf-annotation-request-v7", value)
+                        annotation_request_v2 = CreateDocumentReviewAnnotatedPdfsV7.model_validate(
+                            value
+                        )
+                    elif (
+                        value.get("schema_version") == "document-review-pdf-annotation-request/6.0"
+                    ):
                         validate_contract("document-review-pdf-annotation-request-v6", value)
                         annotation_request_v2 = CreateDocumentReviewAnnotatedPdfsV6.model_validate(
                             value
@@ -521,6 +530,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                         in (
                             "document-review-pdf-annotation-request/5.0",
                             "document-review-pdf-annotation-request/6.0",
+                            "document-review-pdf-annotation-request/7.0",
                         ),
                     )
                     return

@@ -60,6 +60,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV19,
     ResolvedExecutionPlanV20,
     ResolvedExecutionPlanV25,
+    ResolvedExecutionPlanV26,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
     single_document_review_contract_for_definition,
@@ -223,6 +224,7 @@ def materialize_execution_step(
         "resolved-execution-plan/9.0",
         "resolved-execution-plan/13.0",
         "resolved-execution-plan/25.0",
+        "resolved-execution-plan/26.0",
         "resolved-execution-plan/14.0",
         "resolved-execution-plan/15.0",
     }
@@ -241,6 +243,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV12
         | ResolvedExecutionPlanV13
         | ResolvedExecutionPlanV25
+        | ResolvedExecutionPlanV26
         | ResolvedExecutionPlanV14
         | ResolvedExecutionPlanV15
         | ResolvedExecutionPlanV16
@@ -277,6 +280,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV13.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/25.0":
         plan = ResolvedExecutionPlanV25.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/26.0":
+        plan = ResolvedExecutionPlanV26.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/14.0":
         plan = ResolvedExecutionPlanV14.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/15.0":
@@ -583,7 +588,9 @@ def materialize_execution_step(
         _require_total_size(total_bytes, analysis=True)
         source_artifact_revision_id = plan.document.source_pdf.artifact_revision_id
         source_sha256 = plan.document.source_pdf.sha256
-    elif isinstance(plan, (ResolvedExecutionPlanV14, ResolvedExecutionPlanV15)):
+    elif isinstance(
+        plan, (ResolvedExecutionPlanV14, ResolvedExecutionPlanV15, ResolvedExecutionPlanV26)
+    ):
         for review_document in plan.documents:
             document_bytes, document_members = _materialize_pdf_review_document(
                 session,
@@ -611,6 +618,33 @@ def materialize_execution_step(
             evidence_bundle_revision_id = plan.evidence_bundle_revision_id
             evidence_manifest_sha256 = plan.evidence_manifest_sha256
             evidence_context_sha256 = plan.evidence_context_artifact.sha256
+        elif isinstance(plan, ResolvedExecutionPlanV26):
+            textbook_materials = resolve_textbook_review_materials(
+                session,
+                binding=plan.textbook_evidence,
+                canonical_artifact_root=artifact_root,
+                authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            )
+            evidence_root = workspace / "references" / "evidence"
+            _ensure_parent(evidence_root, workspace=workspace, group_id=worker_group_id)
+            _write_exclusive(
+                evidence_root / "manifest.json",
+                textbook_materials.manifest_payload,
+                group_id=worker_group_id,
+            )
+            _write_exclusive(
+                evidence_root / "context.md",
+                textbook_materials.context_payload,
+                group_id=worker_group_id,
+            )
+            total_bytes += len(textbook_materials.manifest_payload)
+            total_bytes += len(textbook_materials.context_payload)
+            member_count += 2
+            evidence_bundle_revision_id = (
+                plan.textbook_evidence.publication.evidence_bundle_revision_id
+            )
+            evidence_manifest_sha256 = plan.textbook_evidence.publication.manifest_sha256
+            evidence_context_sha256 = plan.textbook_evidence.publication.context_artifact.sha256
         _require_total_size(total_bytes, analysis=True)
 
     agents_bytes = _agents_document(instruction_docs)
@@ -620,7 +654,9 @@ def materialize_execution_step(
             if isinstance(plan, ResolvedExecutionPlanV24)
             else SIMILARITY_ROLE_CONTRACT
         )
-    if isinstance(plan, (ResolvedExecutionPlanV13, ResolvedExecutionPlanV14)):
+    if isinstance(
+        plan, (ResolvedExecutionPlanV13, ResolvedExecutionPlanV14, ResolvedExecutionPlanV26)
+    ):
         agents_bytes += _admitted_document_review_contract(plan)
     total_bytes += len(agents_bytes)
     _require_total_size(total_bytes, analysis=is_analysis)
@@ -756,7 +792,9 @@ def materialize_execution_step(
             group_id=worker_group_id,
         )
         image_input_manifest_sha256 = image_manifest.manifest_sha256
-    elif isinstance(plan, (ResolvedExecutionPlanV14, ResolvedExecutionPlanV15)):
+    elif isinstance(
+        plan, (ResolvedExecutionPlanV14, ResolvedExecutionPlanV15, ResolvedExecutionPlanV26)
+    ):
         image_manifest_document = {
             "schema_version": "codex-image-input-manifest/3.0",
             "plan_id": plan.plan_id,
@@ -880,6 +918,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV12
             | ResolvedExecutionPlanV13
             | ResolvedExecutionPlanV25
+            | ResolvedExecutionPlanV26
             | ResolvedExecutionPlanV14
             | ResolvedExecutionPlanV15
             | ResolvedExecutionPlanV16
@@ -914,6 +953,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV13.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/25.0":
         plan = ResolvedExecutionPlanV25.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/26.0":
+        plan = ResolvedExecutionPlanV26.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/14.0":
         plan = ResolvedExecutionPlanV14.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/15.0":
@@ -1027,6 +1068,16 @@ def authorized_execution_artifact_revisions(
                     plan.textbook_evidence.publication.context_artifact.artifact_revision_id,
                 }
             )
+    elif isinstance(plan, ResolvedExecutionPlanV26):
+        revision_ids.update(
+            value.document.source_pdf.artifact_revision_id for value in plan.documents
+        )
+        revision_ids.update(
+            {
+                plan.textbook_evidence.publication.manifest_artifact.artifact_revision_id,
+                plan.textbook_evidence.publication.context_artifact.artifact_revision_id,
+            }
+        )
     elif isinstance(plan, ResolvedExecutionPlanV14):
         revision_ids.update(
             value.document.source_pdf.artifact_revision_id for value in plan.documents
@@ -2785,10 +2836,30 @@ def _write_exclusive(path: Path, payload: bytes, *, group_id: int) -> None:
 
 
 def _admitted_document_review_contract(
-    plan: ResolvedExecutionPlanV13 | ResolvedExecutionPlanV25 | ResolvedExecutionPlanV14,
+    plan: (
+        ResolvedExecutionPlanV13
+        | ResolvedExecutionPlanV25
+        | ResolvedExecutionPlanV14
+        | ResolvedExecutionPlanV26
+    ),
 ) -> bytes:
     """Bind shared role instructions to the exact admitted predecessor contract."""
 
+    if isinstance(plan, ResolvedExecutionPlanV26):
+        return (
+            b"\n## Actual admitted textbook-grounded paired-review contract\n\n"
+            b"Review QUESTION and SOLUTION together under workflow-role/1.32.0, "
+            b"pdf-document-review-result@6.0. Read every staged page and "
+            b"references/evidence/manifest.json and context.md. Use exact TEXTBOOK "
+            b"evidence IDs and anchors for scientific accuracy and curriculum scope, "
+            b"and record the examined source in textbook_usage and evidence_usage. "
+            b"Cite a non-empty science conclusion path and keep its exact source binding. "
+            b"Textbook evidence does not replace missing past-exam solution or originality "
+            b"evidence: mark those checks INSUFFICIENT and set NEEDS_HUMAN_DECISION. "
+            b"Do not invent supporting evidence or modify source documents. "
+            b"worker-input.json and worker-result.schema.json are the exact contract. "
+            b"Return only the permitted JSON.\n"
+        )
     if isinstance(plan, ResolvedExecutionPlanV25):
         return (
             b"\n## Actual admitted textbook-grounded document-review contract\n\n"

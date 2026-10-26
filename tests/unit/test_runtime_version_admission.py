@@ -37,6 +37,7 @@ ADMITTED_DEFINITIONS = {
     ("pdf-document-review", "1.1.0"): "pdf-document-review.v1.1.yaml",
     ("pdf-document-review", "1.2.0"): "pdf-document-review.v1.2.yaml",
     ("pdf-document-review", "1.3.0"): "pdf-document-review.v1.3.yaml",
+    ("pdf-document-review", "1.4.0"): "pdf-document-review.v1.4.yaml",
     ("item-inference-transfer-comparison", "1.0.0"): ("item-inference-transfer-comparison.v1.yaml"),
     ("generic-item-development", "1.8.0"): "generic-item-development.v1.8.yaml",
     ("generic-item-development", "1.9.0"): "generic-item-development.v1.9.yaml",
@@ -65,11 +66,17 @@ def test_admission_matrix_matches_exact_checked_in_definition_protocols() -> Non
     successors = {
         ("item-inference-transfer-comparison", "1.1.0"): (
             "item-inference-transfer-comparison.v1_1.yaml"
-        )
+        ),
+        ("pdf-document-review", "1.5.0"): "pdf-document-review.v1.5.yaml",
     }
     native_identity = ("local-embedding-index", "1.0.0")
+    other_native_identities = {
+        ("local-embedding-index", "2.0.0"),
+        ("local-embedding-reference-query", "1.0.0"),
+        ("local-embedding-private-chat-query", "1.0.0"),
+    }
     assert set(WORKFLOW_ADMISSION_BY_IDENTITY) == (
-        set(ADMITTED_DEFINITIONS) | set(successors) | {native_identity}
+        set(ADMITTED_DEFINITIONS) | set(successors) | {native_identity} | other_native_identities
     )
     for identity, file_name in (ADMITTED_DEFINITIONS | successors).items():
         compiled = compile_definition(ROOT / "config" / "workflows" / file_name, ROLES)

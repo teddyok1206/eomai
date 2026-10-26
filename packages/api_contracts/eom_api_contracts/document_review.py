@@ -7,6 +7,7 @@ from typing import Annotated, Literal
 from eom_workflow import (
     PairedDocumentReviewOutput,
     PairedDocumentReviewOutputV3,
+    PairedDocumentReviewOutputV4,
     PdfDocumentReviewOutput,
     PdfDocumentReviewOutputV4,
     PdfDocumentReviewOutputV5,
@@ -566,7 +567,12 @@ class PairedDocumentReviewView(ApiModel):
         pattern=r"^sha256:[0-9a-f]{64}$",
     )
     result_artifact: PdfDocumentReviewResultArtifactView | None = None
-    result: PairedDocumentReviewOutputV3 | PairedDocumentReviewOutput | None = None
+    result: (
+        PairedDocumentReviewOutputV4
+        | PairedDocumentReviewOutputV3
+        | PairedDocumentReviewOutput
+        | None
+    ) = None
     failure_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,63}$")
     created_at: UtcDatetime
     updated_at: UtcDatetime

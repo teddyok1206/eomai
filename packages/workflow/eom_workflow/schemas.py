@@ -54,6 +54,7 @@ from eom_workflow.control_plane import ResolvedExecutionPlanV3
 from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequest,
     PairedDocumentReviewWorkerRequestV2,
+    PairedDocumentReviewWorkerRequestV3,
     PdfDocumentReviewWorkerRequest,
     PdfDocumentReviewWorkerRequestV5,
 )
@@ -131,6 +132,7 @@ from eom_workflow.models import (
     LegacyItemExtractionWorkerRequest,
     PairedDocumentReviewRoleResult,
     PairedDocumentReviewRoleResultV3,
+    PairedDocumentReviewRoleResultV4,
     PdfDocumentReviewRoleResult,
     PdfDocumentReviewRoleResultV4,
     PdfDocumentReviewRoleResultV5,
@@ -241,6 +243,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "pdf-document-review-result@3.0",
             "pdf-document-review-result@4.0",
             "pdf-document-review-result@5.0",
+            "pdf-document-review-result@6.0",
             "item-inference-transfer-pair-result@1.0",
             "item-inference-transfer-pair-result@1.1",
         }
@@ -316,6 +319,7 @@ RESULT_SCHEMA_FILES = {
     "pdf-document-review-result@3.0": "paired-document-review-result-v3.schema.json",
     "pdf-document-review-result@4.0": "pdf-document-review-result-v4.schema.json",
     "pdf-document-review-result@5.0": "pdf-document-review-result-v5.schema.json",
+    "pdf-document-review-result@6.0": "paired-document-review-result-v4.schema.json",
     "item-inference-transfer-pair-result@1.0": "item-inference-transfer-pair-result-v1.schema.json",
     "item-inference-transfer-pair-result@1.1": "item-inference-transfer-pair-result-v2.schema.json",
 }
@@ -356,6 +360,7 @@ INPUT_SCHEMA_FILES_V1_28 = {"support": "pdf-document-review-input-v4.schema.json
 INPUT_SCHEMA_FILES_V1_29 = {"support": "item-inference-transfer-pair-input-v1.schema.json"}
 INPUT_SCHEMA_FILES_V1_30 = {"support": "item-inference-transfer-pair-input-v2.schema.json"}
 INPUT_SCHEMA_FILES_V1_31 = {"support": "pdf-document-review-input-v5.schema.json"}
+INPUT_SCHEMA_FILES_V1_32 = {"support": "paired-document-review-input-v4.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -389,6 +394,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "pdf-document-review-result@3.0": "workflow-role/1.27.0",
     "pdf-document-review-result@4.0": "workflow-role/1.28.0",
     "pdf-document-review-result@5.0": "workflow-role/1.31.0",
+    "pdf-document-review-result@6.0": "workflow-role/1.32.0",
     "item-inference-transfer-pair-result@1.0": "workflow-role/1.29.0",
     "item-inference-transfer-pair-result@1.1": "workflow-role/1.30.0",
     "authoring-result@5.0": "workflow-role/1.12.0",
@@ -458,6 +464,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.29.0": INPUT_SCHEMA_FILES_V1_29,
     "workflow-role/1.30.0": INPUT_SCHEMA_FILES_V1_30,
     "workflow-role/1.31.0": INPUT_SCHEMA_FILES_V1_31,
+    "workflow-role/1.32.0": INPUT_SCHEMA_FILES_V1_32,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -492,6 +499,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.29.0",
     "workflow-role/1.30.0",
     "workflow-role/1.31.0",
+    "workflow-role/1.32.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -524,6 +532,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_29.values(),
             *INPUT_SCHEMA_FILES_V1_30.values(),
             *INPUT_SCHEMA_FILES_V1_31.values(),
+            *INPUT_SCHEMA_FILES_V1_32.values(),
         }
     )
 )
@@ -1487,6 +1496,7 @@ def _role_input_schema(role: str, protocol_version: str = "workflow-role/1.0.1")
             "workflow-role/1.29.0",
             "workflow-role/1.30.0",
             "workflow-role/1.31.0",
+            "workflow-role/1.32.0",
         },
     )
 
@@ -1521,6 +1531,7 @@ def _role_result_schema(schema_id: str) -> dict[str, Any]:
             "item-inference-transfer-pair-result@1.0",
             "item-inference-transfer-pair-result@1.1",
             "pdf-document-review-result@5.0",
+            "pdf-document-review-result@6.0",
         },
     )
 
@@ -1777,6 +1788,7 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             "pdf-document-review-result@3.0",
             "pdf-document-review-result@4.0",
             "pdf-document-review-result@5.0",
+            "pdf-document-review-result@6.0",
         }
         and role == "support"
     ):
@@ -1929,6 +1941,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return PairedDocumentReviewRoleResult.model_validate(canonical_value)
         if schema_id == "pdf-document-review-result@3.0" and role == "support":
             return PairedDocumentReviewRoleResultV3.model_validate(canonical_value)
+        if schema_id == "pdf-document-review-result@6.0" and role == "support":
+            return PairedDocumentReviewRoleResultV4.model_validate(canonical_value)
         if schema_id == "authoring-result@3.0" and role == "authoring":
             return GeneratedAuthoringRoleResult.model_validate(value)
         if schema_id == "image-result@3.0" and role == "image":
@@ -3055,9 +3069,12 @@ def constrained_result_schema(
     if schema_id in {
         "pdf-document-review-result@2.0",
         "pdf-document-review-result@3.0",
+        "pdf-document-review-result@6.0",
     }:
         expected_request_type = (
-            PairedDocumentReviewWorkerRequestV2
+            PairedDocumentReviewWorkerRequestV3
+            if schema_id == "pdf-document-review-result@6.0"
+            else PairedDocumentReviewWorkerRequestV2
             if schema_id == "pdf-document-review-result@3.0"
             else PairedDocumentReviewWorkerRequest
         )
@@ -3129,7 +3146,7 @@ def constrained_result_schema(
         cross_check_properties["solution_anchors"]["description"] = (
             "Sort by anchor_id with no duplicates."
         )
-        if schema_id == "pdf-document-review-result@3.0":
+        if schema_id in {"pdf-document-review-result@3.0", "pdf-document-review-result@6.0"}:
             output_properties["page_coverage"]["description"] = (
                 "Return every QUESTION page followed by every SOLUTION page, sorted by role and "
                 "page_number, with no omission or duplicate."
@@ -3145,6 +3162,52 @@ def constrained_result_schema(
                 "manifest evidence and anchors. Every citation path must end at a non-null "
                 "primitive leaf under item_reviews."
             )
+        if schema_id == "pdf-document-review-result@6.0":
+            if not isinstance(worker_input.request, PairedDocumentReviewWorkerRequestV3):
+                raise WorkflowSchemaError("paired textbook review requires its exact request")
+            textbook = worker_input.request.textbook_evidence
+            publication = textbook.publication
+            paired_usage_properties = _mapping(
+                _mapping(definitions, "evidence_usage"), "properties"
+            )
+            for property_name, property_value in (
+                ("evidence_bundle_id", publication.evidence_bundle_id),
+                ("evidence_bundle_revision_id", publication.evidence_bundle_revision_id),
+                ("retrieval_request_id", publication.retrieval_request_id),
+                (
+                    "graph_snapshot_revision_id",
+                    publication.graph_snapshot.graph_snapshot_revision_id,
+                ),
+                ("manifest_sha256", publication.manifest_sha256),
+                ("context_sha256", publication.context_artifact.sha256),
+            ):
+                _bind_result_string_const(
+                    schema,
+                    _mapping(paired_usage_properties, property_name),
+                    property_value,
+                )
+            paired_citation_properties = _mapping(
+                _mapping(definitions, "evidence_citation"), "properties"
+            )
+            _mapping(paired_citation_properties, "evidence_id")["enum"] = list(
+                textbook.textbook_evidence_ids
+            )
+            usage = _mapping(definitions, "ReviewTextbookUsage")
+            usage_properties = _mapping(usage, "properties")
+            _bind_result_string_const(
+                schema,
+                _mapping(usage_properties, "binding_sha256"),
+                textbook.binding_sha256,
+            )
+            citation = _mapping(definitions, "ReviewTextbookUsage_citation")
+            citation_properties = _mapping(citation, "properties")
+            _mapping(citation_properties, "evidence_id")["enum"] = list(
+                textbook.textbook_evidence_ids
+            )
+            _mapping(_mapping(citation_properties, "conclusion_paths"), "items")["enum"] = [
+                *(f"/verification_targets/{index}/conclusion" for index in range(10)),
+                *(f"/item_reviews/{index}/conclusion" for index in range(256)),
+            ]
     if schema_id == "legacy-item-editorial-compatibility-result@1.0":
         if not isinstance(
             worker_input.request,
@@ -4089,6 +4152,7 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
         "pdf-document-review-result@3.0",
         "pdf-document-review-result@4.0",
         "pdf-document-review-result@5.0",
+        "pdf-document-review-result@6.0",
     }:
         anchor = _mapping(_mapping(schema, "$defs"), "anchor")
         anchor.pop("allOf", None)
@@ -4105,7 +4169,10 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
             "pdf-document-review-result@5.0",
         }:
             _mapping(_mapping(schema, "$defs"), "output").pop("allOf", None)
-        if schema_id == "pdf-document-review-result@5.0":
+        if schema_id in {
+            "pdf-document-review-result@5.0",
+            "pdf-document-review-result@6.0",
+        }:
             usage = _mapping(_mapping(schema, "$defs"), "ReviewTextbookUsage")
             usage_properties = _mapping(usage, "properties")
             if usage_properties.pop("usage_sha256", None) is None:
@@ -4114,8 +4181,11 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
             if not isinstance(usage_required, list) or "usage_sha256" not in usage_required:
                 raise WorkflowSchemaError("textbook usage hash requirement is invalid")
             usage_required.remove("usage_sha256")
-        if schema_id == "pdf-document-review-result@3.0":
-            _project_paired_document_review_v3_codex_contract(schema)
+        if schema_id in {"pdf-document-review-result@3.0", "pdf-document-review-result@6.0"}:
+            _project_paired_document_review_v3_codex_contract(
+                schema,
+                textbook_successor=schema_id == "pdf-document-review-result@6.0",
+            )
     _normalize_codex_schema(schema)
     validate_codex_structured_output_schema(schema)
     return schema
@@ -4180,7 +4250,9 @@ def _project_pdf_review_recommendation_codex_contract(schema: dict[str, Any]) ->
     recommendation["anyOf"] = branches
 
 
-def _project_paired_document_review_v3_codex_contract(schema: dict[str, Any]) -> None:
+def _project_paired_document_review_v3_codex_contract(
+    schema: dict[str, Any], *, textbook_successor: bool = False
+) -> None:
     """Project canonical conditional review rules into Codex's supported subset.
 
     The immutable V3 result contract uses ``allOf``/``contains``/conditionals for exact
@@ -4223,8 +4295,14 @@ def _project_paired_document_review_v3_codex_contract(schema: dict[str, Any]) ->
     )
     _append_projection_instruction(
         _mapping(item_properties, "evidence_citation_ids"),
-        "Return at least one evidence ID when evidence_status is SUPPORTED; return the empty "
-        "array when evidence_status is INSUFFICIENT.",
+        (
+            "Return at least one evidence ID when evidence_status is SUPPORTED. When "
+            "INSUFFICIENT, include examined textbook citations even though they do not prove "
+            "the missing solution or originality comparison."
+            if textbook_successor
+            else "Return at least one evidence ID when evidence_status is SUPPORTED; return "
+            "the empty array when evidence_status is INSUFFICIENT."
+        ),
     )
 
 

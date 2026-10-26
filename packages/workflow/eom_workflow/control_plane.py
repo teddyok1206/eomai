@@ -1167,6 +1167,28 @@ class ResolvedExecutionPlanV14(FrozenModel):
         return self
 
 
+class ResolvedExecutionPlanV26(ResolvedExecutionPlanV14):
+    """Paired review with one textbook-only bundle, independent of past-exam availability."""
+
+    schema_version: Literal["resolved-execution-plan/26.0"] = "resolved-execution-plan/26.0"  # type: ignore[assignment]
+    workflow_definition_version: Literal["1.5.0"] = "1.5.0"
+    textbook_evidence: ReviewTextbookEvidence
+    steps: tuple[ResolvedStepExecutionV3, ...] = Field(min_length=1, max_length=1)
+    resolver_version: Literal["26.0.0"] = "26.0.0"  # type: ignore[assignment]
+
+    @model_validator(mode="after")
+    def exact_textbook_boundary(self) -> ResolvedExecutionPlanV26:
+        publication = self.textbook_evidence.publication
+        if (
+            self.textbook_evidence.review_input_sha256 != self.review_request_sha256
+            or self.steps[0].evidence_access != "EVIDENCE_CONTEXT"
+            or publication.graph_snapshot.graph_snapshot_revision_id == ""
+            or publication.evidence_bundle_revision_id == ""
+        ):
+            raise ValueError("paired textbook plan differs from its pinned request")
+        return self
+
+
 class ResolvedExecutionPlanV15(FrozenModel):
     """Graph-grounded paired review pinned to exact documents and evidence."""
 

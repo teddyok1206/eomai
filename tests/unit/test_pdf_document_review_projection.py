@@ -166,6 +166,7 @@ def _workflow(state: Literal["RUNNING", "COMPLETED"] = "COMPLETED") -> WorkflowI
 def test_pdf_review_projection_resolves_exact_worker_request_and_artifact() -> None:
     step, pointer, job, artifact, revision, event = _records()
     result = QueryAdapter._validated_pdf_document_review_result(
+        workflow=_workflow(),
         workflow_id=WORKFLOW_ID,
         definition_version="1.0.0",
         review_request=_request(),
@@ -254,6 +255,7 @@ def test_pdf_review_projection_rejects_stale_or_cross_workflow_data(
 
     with pytest.raises(ApiError) as captured:
         QueryAdapter._validated_pdf_document_review_result(
+            workflow=_workflow(),
             workflow_id=WORKFLOW_ID,
             definition_version="1.0.0",
             review_request=_request(),

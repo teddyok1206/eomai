@@ -8,7 +8,7 @@ from eom_api.errors import ApiError
 from eom_api.services.catalog_application_client import CatalogApplicationClientError
 from eom_api.services.command_adapter import CommandAdapter
 from eom_catalog_contracts import (
-    CreateDocumentReviewEvidenceCommand,
+    CreateDocumentReviewTextbookEvidenceCommand,
     EvidenceBudget,
     PdfReviewDocumentPointer,
 )
@@ -71,6 +71,7 @@ def test_paired_review_replays_before_mutable_policy_or_catalog(
         lambda _value: SimpleNamespace(
             request_name="PAIRED_DOCUMENT_REVIEW_REQUEST",
             paired_document_review_request=stored_review,
+            document_review_textbook_evidence=None,
         ),
     )
 
@@ -159,12 +160,12 @@ def test_paired_review_first_start_hashes_complete_versioned_evidence_command(
         "eom_api.services.command_adapter.current_knowledge_backed_preset",
         lambda *_args, **_kwargs: SimpleNamespace(retrieval_policy=policy),
     )
-    observed: list[CreateDocumentReviewEvidenceCommand] = []
+    observed: list[CreateDocumentReviewTextbookEvidenceCommand] = []
 
-    def receive(command: CreateDocumentReviewEvidenceCommand) -> None:
+    def receive(command: CreateDocumentReviewTextbookEvidenceCommand) -> None:
         # Validate the real first-start payload, not a hand-built contract fixture.
         value = command.model_dump(mode="json")
-        assert value["schema_version"] == "document-review-evidence-request/1.0"
+        assert value["schema_version"] == "document-review-textbook-evidence-request/1.0"
         assert command.submission_sha256 == content_sha256(
             {
                 key: item
@@ -172,12 +173,12 @@ def test_paired_review_first_start_hashes_complete_versioned_evidence_command(
                 if key not in {"idempotency_key", "submission_sha256"}
             }
         )
-        assert CreateDocumentReviewEvidenceCommand.model_validate(value) == command
+        assert CreateDocumentReviewTextbookEvidenceCommand.model_validate(value) == command
         observed.append(command)
         raise CatalogApplicationClientError("CATALOG_APPLICATION_UNAVAILABLE", "test stop")
 
     adapter.catalog_application = cast(
-        Any, SimpleNamespace(create_document_review_evidence=receive)
+        Any, SimpleNamespace(create_document_review_textbook_evidence=receive)
     )
     with pytest.raises(ApiError) as failure:
         adapter.start_paired_document_review(

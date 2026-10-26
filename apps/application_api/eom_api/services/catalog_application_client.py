@@ -43,6 +43,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfsV4,
     CreateDocumentReviewAnnotatedPdfsV5,
     CreateDocumentReviewAnnotatedPdfsV6,
+    CreateDocumentReviewAnnotatedPdfsV7,
     CreateDocumentReviewEvidenceCommand,
     CreateDocumentReviewTextbookEvidenceCommand,
     CreateEvidenceBundleCommand,
@@ -539,6 +540,7 @@ class CatalogApplicationClient:
             | CreateDocumentReviewAnnotatedPdfsV4
             | CreateDocumentReviewAnnotatedPdfsV5
             | CreateDocumentReviewAnnotatedPdfsV6
+            | CreateDocumentReviewAnnotatedPdfsV7
         ),
     ) -> (
         DocumentReviewPdfAnnotationResponse
@@ -551,7 +553,9 @@ class CatalogApplicationClient:
             (CreateDocumentReviewAnnotatedPdfsV3, CreateDocumentReviewAnnotatedPdfsV2),
         )
         request_contract = (
-            "document-review-pdf-annotation-request-v6"
+            "document-review-pdf-annotation-request-v7"
+            if isinstance(command, CreateDocumentReviewAnnotatedPdfsV7)
+            else "document-review-pdf-annotation-request-v6"
             if isinstance(command, CreateDocumentReviewAnnotatedPdfsV6)
             else "document-review-pdf-annotation-request-v5"
             if isinstance(command, CreateDocumentReviewAnnotatedPdfsV5)

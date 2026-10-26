@@ -528,6 +528,18 @@ class PairedDocumentReviewWorkerRequestV2(FrozenModel):
     review_request: PairedDocumentReviewRequestV2
 
 
+class PairedDocumentReviewWorkerRequestV3(PairedDocumentReviewWorkerRequest):
+    """Paired input with an exact textbook-only publication and no past-exam prerequisite."""
+
+    textbook_evidence: ReviewTextbookEvidence
+
+    @model_validator(mode="after")
+    def exact_textbook_request(self) -> PairedDocumentReviewWorkerRequestV3:
+        if self.textbook_evidence.review_input_sha256 != self.review_request.request_sha256:
+            raise ValueError("paired textbook evidence belongs to another request")
+        return self
+
+
 class PairedReviewAnchor(PdfReviewAnchor):
     document_role: DocumentReviewRole
 
@@ -775,6 +787,51 @@ class PairedReviewItemCheck(FrozenModel):
             raise ValueError("item evidence citation IDs must be sorted and unique")
         if (self.evidence_status == "SUPPORTED") != bool(citation_ids):
             raise ValueError("item evidence status differs from its citation IDs")
+        return self
+
+
+class PairedReviewItemCheckV2(PairedReviewItemCheck):
+    """A textbook citation may document an inspected but insufficient comparison."""
+
+    @model_validator(mode="after")
+    def exhaustive_item_relations(self) -> PairedReviewItemCheckV2:
+        if any(value.document_role != "QUESTION" for value in self.question_anchors):
+            raise ValueError("item question anchors must address the question document")
+        if any(value.document_role != "SOLUTION" for value in self.solution_anchors):
+            raise ValueError("item solution anchors must address the solution document")
+        for anchors in (self.question_anchors, self.solution_anchors):
+            anchor_ids = tuple(value.anchor_id for value in anchors)
+            if anchor_ids != tuple(sorted(set(anchor_ids))):
+                raise ValueError("item anchors must be sorted and unique")
+        solve_ordinals = tuple(value.ordinal for value in self.solve_steps)
+        if solve_ordinals != tuple(range(1, len(self.solve_steps) + 1)):
+            raise ValueError("solve steps must be contiguous from one")
+        unit_ids = tuple(value.check_id for value in self.unit_checks)
+        if unit_ids != tuple(sorted(set(unit_ids))):
+            raise ValueError("item unit checks must be sorted and unique")
+        choice_ordinals = tuple(value.ordinal for value in self.choice_checks)
+        choice_keys = tuple(value.choice_key for value in self.choice_checks)
+        choice_bearing = self.response_format in {"MULTIPLE_CHOICE", "STATEMENT_COMBINATION"}
+        if choice_bearing:
+            if (
+                len(self.choice_checks) < 2
+                or choice_ordinals != tuple(range(1, len(self.choice_checks) + 1))
+                or len(choice_keys) != len(set(choice_keys))
+                or sum(value.verdict == "CORRECT" for value in self.choice_checks) != 1
+            ):
+                raise ValueError(
+                    "choice-bearing item requires ordered unique choices and one answer"
+                )
+        elif self.choice_checks:
+            raise ValueError("non-choice item cannot carry choice checks")
+        explanation_ordinals = tuple(value.ordinal for value in self.explanation_steps)
+        if explanation_ordinals != tuple(range(1, len(self.explanation_steps) + 1)):
+            raise ValueError("explanation steps must be contiguous from one")
+        citation_ids = self.evidence_citation_ids
+        if citation_ids != tuple(sorted(set(citation_ids))):
+            raise ValueError("item evidence citation IDs must be sorted and unique")
+        if self.evidence_status == "SUPPORTED" and not citation_ids:
+            raise ValueError("supported item requires cited evidence")
         return self
 
 
@@ -1048,6 +1105,31 @@ class PairedDocumentReviewOutputV3(PairedDocumentReviewOutput):
         )
         if self.review_status != expected_status:
             raise ValueError("paired review status differs from exhaustive verification evidence")
+        return self
+
+
+class PairedDocumentReviewOutputV4(PairedDocumentReviewOutputV3):
+    """Exhaustive paired review with a distinct textbook-grounding attestation."""
+
+    item_reviews: tuple[PairedReviewItemCheckV2, ...] = Field(min_length=1, max_length=256)
+    textbook_usage: ReviewTextbookUsage
+
+    @model_validator(mode="after")
+    def textbook_citations_are_declared(self) -> PairedDocumentReviewOutputV4:
+        reviewed = {value.evidence_id for value in self.evidence_usage.citations}
+        textbook = {value.evidence_id for value in self.textbook_usage.citations}
+        if not textbook.issubset(reviewed):
+            raise ValueError("textbook citations differ from the paired evidence usage")
+        required_paths = {
+            f"/verification_targets/{index}/conclusion"
+            for index, target in enumerate(self.verification_targets)
+            if target.axis in {"SCIENTIFIC_ACCURACY", "CURRICULUM_SCOPE"}
+        }
+        cited_paths = {
+            path for citation in self.textbook_usage.citations for path in citation.conclusion_paths
+        }
+        if not required_paths.issubset(cited_paths):
+            raise ValueError("paired review textbook citations must cover science axes")
         return self
 
 

@@ -16,6 +16,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfsV4,
     CreateDocumentReviewAnnotatedPdfsV5,
     CreateDocumentReviewAnnotatedPdfsV6,
+    CreateDocumentReviewAnnotatedPdfsV7,
     DocumentReviewAnnotatedPdfPointer,
     DocumentReviewAnnotationPage,
     DocumentReviewAnnotationRegion,
@@ -23,12 +24,14 @@ from eom_catalog_contracts import (
     DocumentReviewPdfAnnotationMark,
     DocumentReviewPdfAnnotationMediaQuery,
     DocumentReviewResultMemberPointerV3,
+    TextbookGroundedPairedReviewResultMemberPointer,
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_workflow import (
     PairedDocumentReviewRoleResult,
     PairedDocumentReviewRoleResultV3,
+    PairedDocumentReviewRoleResultV4,
     PdfDocumentReviewRoleResult,
     PdfDocumentReviewRoleResultV4,
 )
@@ -115,7 +118,11 @@ class DocumentReviewAnnotationApplicationService:
                     )
         elif isinstance(
             parsed,
-            (PairedDocumentReviewRoleResultV3, PairedDocumentReviewRoleResult),
+            (
+                PairedDocumentReviewRoleResultV4,
+                PairedDocumentReviewRoleResultV3,
+                PairedDocumentReviewRoleResult,
+            ),
         ):
             for finding in parsed.output.findings:
                 for anchor in finding.anchors:
@@ -150,11 +157,15 @@ class DocumentReviewAnnotationApplicationService:
         annotations = tuple(marks)
         # New single-document reviews use the product's native comment-panel profile.
         # Keep legacy box-only delivery unchanged for historical results.
+        if isinstance(parsed, PairedDocumentReviewRoleResultV4) and presentation_style is None:
+            presentation_style = "READABLE_MARGIN_GUIDES_V1"
         if presentation_style is not None or isinstance(parsed, PdfDocumentReviewRoleResultV4):
             annotation_profile = "NUMBERED_BOXES_WITH_NATIVE_COMMENTS"
         payload: dict[str, object] = {
             "schema_version": (
-                "document-review-pdf-annotation-request/6.0"
+                "document-review-pdf-annotation-request/7.0"
+                if isinstance(review_result, TextbookGroundedPairedReviewResultMemberPointer)
+                else "document-review-pdf-annotation-request/6.0"
                 if presentation_style is not None
                 and isinstance(review_result, DocumentReviewResultMemberPointerV3)
                 else "document-review-pdf-annotation-request/5.0"
@@ -198,8 +209,11 @@ class DocumentReviewAnnotationApplicationService:
             | CreateDocumentReviewAnnotatedPdfsV4
             | CreateDocumentReviewAnnotatedPdfsV5
             | CreateDocumentReviewAnnotatedPdfsV6
+            | CreateDocumentReviewAnnotatedPdfsV7
         )
-        if presentation_style is not None and isinstance(
+        if isinstance(review_result, TextbookGroundedPairedReviewResultMemberPointer):
+            command = CreateDocumentReviewAnnotatedPdfsV7.model_validate(payload)
+        elif presentation_style is not None and isinstance(
             review_result, DocumentReviewResultMemberPointerV3
         ):
             command = CreateDocumentReviewAnnotatedPdfsV6.model_validate(payload)

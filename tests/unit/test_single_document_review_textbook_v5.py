@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 from eom_api.errors import ApiError
 from eom_api.services.query_adapter import QueryAdapter
 from eom_catalog_contracts import ReviewTextbookEvidence
@@ -20,9 +21,11 @@ from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator import execution_materializer
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.evidence_usage_validation import EvidenceUsageValidationError
+from eom_orchestrator.pdf_document_review_bootstrap import PdfDocumentReviewBootstrapManifest
 from eom_orchestrator.review_textbook_evidence_validation import (
     validate_single_document_textbook_for_commit,
 )
+from eom_workflow import compile_definition
 from eom_workflow.control_plane import ResolvedExecutionPlanV25, ReviewTextbookValidationReceipt
 from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.document_review import (
@@ -46,6 +49,28 @@ from tests.unit.test_knowledge_analysis_document_contracts import document_sourc
 from tests.unit.test_pdf_document_review_protocol import _input
 from tests.unit.test_review_textbook_evidence import _binding, _manifest, _publication, _usage
 from tests.unit.test_single_document_review_v4 import _workflow, result_v4, v4_records
+
+
+def test_single_review_successor_definition_and_bootstrap_schema_are_pinned() -> None:
+    root = Path(__file__).resolve().parents[2]
+    definition = compile_definition(
+        root / "config/workflows/pdf-document-review.v1.4.yaml", {"support"}
+    )
+    assert definition.definition.definition_version == "1.4.0"
+    manifest = yaml.safe_load(
+        (root / "config/control-plane/pdf-document-review-v6/bootstrap.yaml").read_text()
+    )
+    manifest["schema_version"] = "pdf-document-review-control-bootstrap/7.0"
+    manifest["instruction_revision_number"] = 7
+    manifest["compatible_workflow_protocols"].append("workflow-role/1.31.0")
+    manifest["compatible_workflow_protocols"].append("workflow-role/1.32.0")
+    manifest["created_at"] = "2026-10-26T18:30:00Z"
+    validate_control_contract("pdf-document-review-control-bootstrap-v7", manifest)
+    parsed = PdfDocumentReviewBootstrapManifest.model_validate(manifest)
+    assert parsed.compatible_workflow_protocols[-2:] == (
+        "workflow-role/1.31.0",
+        "workflow-role/1.32.0",
+    )
 
 
 def _result_v5() -> dict[str, Any]:
@@ -145,7 +170,7 @@ def test_workflow_request_selects_successor_without_changing_predecessor_storage
         ]
         == binding.binding_sha256
     )
-    with pytest.raises(ValidationError, match="single document textbook evidence differs"):
+    with pytest.raises(ValidationError, match="document review textbook evidence differs"):
         WorkflowRequest(
             request_name="CUSTOMER_SUPPORT_REQUEST",
             image_mode="skip",

@@ -1,16 +1,16 @@
 # ADR 0213: Mandatory textbook evidence for new review workflows
 
-Status: implementation in progress, 2026-10-26 UTC. The shared
-`review-textbook-evidence/1.0` contract and a Catalog-only one/two-document
-publication boundary exist in source. The single-document `workflow-role/1.31.0`
-input/result schemas and typed models now bind textbook usage to science and
-curriculum conclusions. The pure validator can reopen the exact Catalog
-manifest and reject foreign sources, anchors, request identities and blank
-conclusions. No review Workflow selects that successor yet; the orchestrator
-has not connected the validator to its commit boundary. This decision does
-**not** activate a new review path or reinterpret historical reviews.
-The Orchestrator explicitly refuses a V5 result before artifact commit until
-that trusted receipt is installed; schema registration alone is not activation.
+Status: source implementation in progress, 2026-10-26 UTC. The shared
+`review-textbook-evidence/1.0` contract and Catalog-owned one/two-document
+publication boundary are in source. New single-document
+`workflow-role/1.31.0`/result V5 and paired-document
+`workflow-role/1.32.0`/result V4 contracts pin a nonempty textbook-only Graph
+bundle to the exact review request. The Orchestrator reopens the manifest and
+context, checks source IDs, anchors and scientific/curriculum conclusion paths,
+and emits a self-hashed receipt before committing the worker result. API reads
+require the same receipt, and paired annotations use an additive V7 request.
+These source changes do **not** by themselves prove production activation or
+reinterpret historical reviews.
 
 Implementation checkpoint, 2026-10-26 UTC: single-document successor
 `pdf-document-review@1.4.0` is assigned `workflow-role/1.31.0` and
@@ -30,6 +30,17 @@ before NAS result commit. The receipt binds the plan, input, published Graph and
 Evidence Bundle, usage hash and result Artifact revision/hash. This is a source
 gate only until a released definition, preset and prompt are published and a
 live canary demonstrates the full path.
+
+The paired successor is `pdf-document-review@1.5.0`, plan V26 and result
+`pdf-document-review-result@6.0`. It uses the same Catalog publication boundary
+for both input PDFs and preserves the V3 paired review's independent 풀이 and
+question/solution matching. Its textbook citations cannot replace originality
+or accepted past-exam solution evidence: those judgments remain
+`INSUFFICIENT`/`NEEDS_HUMAN_DECISION` when unsupported. Bootstrap V7 is an
+additive prompt/preset successor for both new document protocols; it requires
+exact live predecessor pins and operational publication before new requests are
+enabled. Generated-Item review is a separate workflow and is not covered by
+publishing these two material-review successors.
 
 ## Decision and boundary
 

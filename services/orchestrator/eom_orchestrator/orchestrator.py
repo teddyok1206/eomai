@@ -51,6 +51,7 @@ from eom_workflow.control_plane import (
 from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequest,
     PairedDocumentReviewWorkerRequestV2,
+    PairedDocumentReviewWorkerRequestV3,
     PdfDocumentReviewWorkerRequest,
     validate_paired_document_review_output_against_request,
     validate_paired_document_review_v3_output_against_request,
@@ -97,6 +98,7 @@ from eom_workflow.models import (
     LegacyItemExtractionWorkerRequest,
     PairedDocumentReviewRoleResult,
     PairedDocumentReviewRoleResultV3,
+    PairedDocumentReviewRoleResultV4,
     PdfDocumentReviewRoleResult,
     PdfDocumentReviewRoleResultV5,
     RoleWorkerInput,
@@ -164,6 +166,7 @@ from eom_orchestrator.repository import (
     upsert_worker_slot,
 )
 from eom_orchestrator.review_textbook_evidence_validation import (
+    validate_paired_document_textbook_for_commit,
     validate_single_document_textbook_for_commit,
 )
 from eom_orchestrator.runtime_configuration import resolve_worker_configuration
@@ -200,6 +203,8 @@ _EVIDENCE_ACCESS_PLAN_SCHEMA_VERSIONS = POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS 
         "resolved-execution-plan/17.0",
         "resolved-execution-plan/18.0",
         "resolved-execution-plan/20.0",
+        "resolved-execution-plan/25.0",
+        "resolved-execution-plan/26.0",
     }
 )
 
@@ -212,6 +217,7 @@ WorkflowRoleRequest = (
     | CustomerSupportWorkerRequest
     | PairedDocumentReviewWorkerRequest
     | PairedDocumentReviewWorkerRequestV2
+    | PairedDocumentReviewWorkerRequestV3
     | PdfDocumentReviewWorkerRequest
     | InferenceTransferPairWorkerRequest
 )
@@ -1163,6 +1169,22 @@ class Orchestrator:
                         ErrorCode.WORKER_RESULT_INVALID,
                         "exhaustive paired review result differs from its immutable request",
                     ) from exc
+            if isinstance(result, PairedDocumentReviewRoleResultV4):
+                if not isinstance(worker_input.request, PairedDocumentReviewWorkerRequestV3):
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "textbook paired review result has no exact typed request",
+                    )
+                try:
+                    validate_paired_document_review_v3_output_against_request(
+                        result.output,
+                        worker_input.request.review_request,
+                    )
+                except ValueError as exc:
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "textbook paired review result differs from its immutable request",
+                    ) from exc
             svg_label_layout_receipts = validate_image_result_svg_label_layout(
                 result=result,
                 result_schema=result_schema,
@@ -1303,6 +1325,23 @@ class Orchestrator:
                 if isinstance(result, PdfDocumentReviewRoleResultV5):
                     with self.sessions() as validation_session:
                         textbook_receipt = validate_single_document_textbook_for_commit(
+                            validation_session,
+                            plan_id=plan_id,
+                            worker_input=worker_input,
+                            result=result,
+                            result_artifact_id=artifact.logical_artifact_id,
+                            result_artifact_revision_id=artifact.revision_id,
+                            result_content_sha256=staged.content_hash,
+                            canonical_artifact_root=self.settings.nas_artifact_root,
+                        )
+                    evidence_event_data = {
+                        "review_textbook_validation_receipt": textbook_receipt.model_dump(
+                            mode="json"
+                        )
+                    }
+                if isinstance(result, PairedDocumentReviewRoleResultV4):
+                    with self.sessions() as validation_session:
+                        textbook_receipt = validate_paired_document_textbook_for_commit(
                             validation_session,
                             plan_id=plan_id,
                             worker_input=worker_input,

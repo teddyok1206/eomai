@@ -52,6 +52,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV19,
     ResolvedExecutionPlanV20,
     ResolvedExecutionPlanV25,
+    ResolvedExecutionPlanV26,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
@@ -1221,8 +1222,25 @@ def resolve_paired_document_review_plan(
     workflow_definition_sha256: str,
     workflow_role_schema_version: str,
     review_request: PairedDocumentReviewRequestV2 | PairedDocumentReviewRequest,
+    textbook_evidence: ReviewTextbookEvidence | None = None,
     resolved_at: datetime | None = None,
-) -> ResolvedExecutionPlanV15 | ResolvedExecutionPlanV14:
+) -> ResolvedExecutionPlanV26 | ResolvedExecutionPlanV15 | ResolvedExecutionPlanV14:
+    if textbook_evidence is not None:
+        if isinstance(review_request, PairedDocumentReviewRequestV2):
+            raise ControlPlaneError(
+                "CONTROL_REVIEW_TEXTBOOK_BINDING_INVALID",
+                "paired textbook review cannot reuse the past-exam-only request successor",
+            )
+        return _resolve_textbook_paired_document_review_plan(
+            session,
+            workflow_id=workflow_id,
+            workflow_definition_version=workflow_definition_version,
+            workflow_definition_sha256=workflow_definition_sha256,
+            workflow_role_schema_version=workflow_role_schema_version,
+            review_request=review_request,
+            textbook_evidence=textbook_evidence,
+            resolved_at=resolved_at,
+        )
     if isinstance(review_request, PairedDocumentReviewRequestV2):
         return _resolve_grounded_paired_document_review_plan(
             session,
@@ -1242,6 +1260,164 @@ def resolve_paired_document_review_plan(
         review_request=review_request,
         resolved_at=resolved_at,
     )
+
+
+def _resolve_textbook_paired_document_review_plan(
+    session: Session,
+    *,
+    workflow_id: str,
+    workflow_definition_version: str,
+    workflow_definition_sha256: str,
+    workflow_role_schema_version: str,
+    review_request: PairedDocumentReviewRequest,
+    textbook_evidence: ReviewTextbookEvidence,
+    resolved_at: datetime | None,
+) -> ResolvedExecutionPlanV26:
+    if (
+        workflow_definition_version != "1.5.0"
+        or workflow_role_schema_version != "workflow-role/1.32.0"
+        or textbook_evidence.review_input_sha256 != review_request.request_sha256
+    ):
+        raise ControlPlaneError(
+            "CONTROL_REVIEW_TEXTBOOK_BINDING_INVALID",
+            "paired textbook review protocol or request binding differs",
+        )
+    existing = session.scalar(
+        select(ResolvedExecutionPlanRecord).where(
+            ResolvedExecutionPlanRecord.workflow_id == workflow_id
+        )
+    )
+    if existing is not None:
+        try:
+            plan = ResolvedExecutionPlanV26.model_validate(existing.canonical_document)
+        except ValueError as exc:
+            raise ControlPlaneError(
+                "CONTROL_PLAN_INVALID", "stored paired plan is invalid"
+            ) from exc
+        if (
+            existing.plan_sha256 != plan.plan_sha256
+            or plan.workflow_definition_sha256 != workflow_definition_sha256
+            or plan.review_request_sha256 != review_request.request_sha256
+            or plan.documents != review_request.documents
+            or plan.textbook_evidence != textbook_evidence
+        ):
+            raise ControlPlaneError(
+                "CONTROL_PLAN_BINDING_MISMATCH", "stored paired textbook plan differs"
+            )
+        return plan
+    preset = current_knowledge_backed_preset(
+        session,
+        preset_key="pdf-document-review",
+        workflow_role_schema_version=workflow_role_schema_version,
+    )
+    if (
+        preset.content_sha256
+        != compute_control_document_hash(preset.model_dump(mode="json"), "content_sha256")
+        or len(preset.role_policies) != 1
+    ):
+        raise ControlPlaneError("CONTROL_PRESET_HASH_MISMATCH", "paired preset differs")
+    policy = preset.role_policies[0]
+    publication = textbook_evidence.publication
+    retrieval_policy = preset.retrieval_policy
+    if (
+        policy.role != WorkerRole.SUPPORT
+        or policy.worker_pool_key != "customer-support"
+        or policy.reference_bundle is not None
+        or policy.timeout_seconds != 3600
+        or policy.sandbox != "read-only"
+        or policy.network != "disabled"
+        or policy.evidence_access != "EVIDENCE_CONTEXT"
+        or preset.general_knowledge_policy != "ALLOW_WITH_PROVENANCE"
+        or len(policy.model_candidates) != 1
+        or textbook_evidence.requirement.corpus_key not in retrieval_policy.allowed_corpus_keys
+        or publication.access_policy_revision_id != retrieval_policy.access_policy_revision_id
+        or publication.access_policy_sha256 != retrieval_policy.access_policy_sha256
+        or publication.budget.document_count > retrieval_policy.maximum_budget.max_documents
+        or publication.budget.graph_node_count > retrieval_policy.maximum_budget.max_graph_nodes
+        or publication.budget.claim_count > retrieval_policy.maximum_budget.max_claims
+        or publication.budget.estimated_context_tokens
+        > retrieval_policy.maximum_budget.max_context_tokens
+    ):
+        raise ControlPlaneError(
+            "CONTROL_REVIEW_TEXTBOOK_POLICY_INVALID", "paired textbook policy differs"
+        )
+    candidate = policy.model_candidates[0]
+    if candidate.model != "gpt-5.6-terra" or candidate.reasoning_effort != "xhigh":
+        raise ControlPlaneError("CONTROL_PRESET_POLICY_INVALID", "paired model policy differs")
+    step = ResolvedStepExecutionV3(
+        step_key="review_document",
+        role=WorkerRole.SUPPORT,
+        model=candidate.model,
+        reasoning_effort=candidate.reasoning_effort,
+        instruction_bundle=policy.instruction_bundle,
+        reference_bundle=None,
+        worker_pool_key=policy.worker_pool_key,
+        timeout_seconds=policy.timeout_seconds,
+        sandbox=policy.sandbox,
+        network=policy.network,
+        general_knowledge_mode="ALLOWED_WITH_PROVENANCE",
+        evidence_access="EVIDENCE_CONTEXT",
+    )
+    timestamp = resolved_at or datetime.now(UTC)
+    if timestamp.tzinfo is None or timestamp.utcoffset() != timedelta(0):
+        raise ControlPlaneError("CONTROL_TIMESTAMP_INVALID", "resolution timestamp is not UTC")
+    document: dict[str, object] = {
+        "schema_version": "resolved-execution-plan/26.0",
+        "plan_id": new_execution_plan_id(),
+        "workflow_id": workflow_id,
+        "workload_class": "CODEX",
+        "preset_id": preset.preset_id,
+        "preset_revision_id": preset.preset_revision_id,
+        "preset_sha256": preset.content_sha256,
+        "workflow_definition_key": "pdf-document-review",
+        "workflow_definition_version": workflow_definition_version,
+        "workflow_definition_sha256": workflow_definition_sha256,
+        "review_request_sha256": review_request.request_sha256,
+        "documents": [value.model_dump(mode="json") for value in review_request.documents],
+        "textbook_evidence": textbook_evidence.model_dump(mode="json"),
+        "capacity_policy_revision_id": preset.capacity_policy_revision_id,
+        "steps": [step.model_dump(mode="json")],
+        "resolver_version": "26.0.0",
+        "resolved_at": timestamp.isoformat().replace("+00:00", "Z"),
+        "plan_sha256": "sha256:" + "0" * 64,
+    }
+    document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
+    validate_control_contract("resolved-execution-plan-v26", document)
+    plan = ResolvedExecutionPlanV26.model_validate(document)
+    session.add(
+        ResolvedExecutionPlanRecord(
+            plan_id=plan.plan_id,
+            workflow_id=plan.workflow_id,
+            preset_id=plan.preset_id,
+            preset_revision_id=plan.preset_revision_id,
+            capacity_policy_revision_id=plan.capacity_policy_revision_id,
+            graph_snapshot_revision_id=publication.graph_snapshot.graph_snapshot_revision_id,
+            evidence_bundle_revision_id=publication.evidence_bundle_revision_id,
+            plan_sha256=plan.plan_sha256,
+            resolver_version=plan.resolver_version,
+            canonical_document=plan.model_dump(mode="json"),
+            resolved_at=plan.resolved_at,
+        )
+    )
+    session.flush()
+    session.add(
+        ResolvedExecutionPlanStepRecord(
+            plan_id=plan.plan_id,
+            step_key=step.step_key,
+            role=step.role,
+            model=step.model,
+            reasoning_effort=step.reasoning_effort,
+            instruction_bundle_revision_id=step.instruction_bundle.bundle_revision_id,
+            reference_bundle_revision_id=None,
+            worker_pool_key=step.worker_pool_key,
+            timeout_seconds=step.timeout_seconds,
+            sandbox=step.sandbox,
+            network=step.network,
+            general_knowledge_mode=step.general_knowledge_mode,
+        )
+    )
+    session.flush()
+    return plan
 
 
 def _resolve_paired_document_review_plan_v14(

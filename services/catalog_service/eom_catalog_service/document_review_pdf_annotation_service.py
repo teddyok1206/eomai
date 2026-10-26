@@ -17,6 +17,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfsV4,
     CreateDocumentReviewAnnotatedPdfsV5,
     CreateDocumentReviewAnnotatedPdfsV6,
+    CreateDocumentReviewAnnotatedPdfsV7,
     DocumentReviewAnnotatedPdfMember,
     DocumentReviewAnnotatedPdfPointer,
     DocumentReviewPdfAnnotationManifest,
@@ -44,6 +45,7 @@ from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, 
 from eom_workflow import (
     PairedDocumentReviewRoleResult,
     PairedDocumentReviewRoleResultV3,
+    PairedDocumentReviewRoleResultV4,
     PairedReviewFinding,
     PdfDocumentReviewRoleResult,
     PdfReviewFinding,
@@ -132,6 +134,19 @@ DOCUMENT_REVIEW_PDF_ANNOTATION_V6_SCHEMA_HASH = content_sha256(
         "protocol": DOCUMENT_REVIEW_PDF_ANNOTATION_V6_PROTOCOL_VERSION,
         "contracts": [
             "document-review-pdf-annotation-request/6.0",
+            "document-review-pdf-annotation-manifest/3.0",
+            "document-review-pdf-annotation-result/3.0",
+            "document-review-pdf-annotation-response/3.0",
+        ],
+    }
+)
+
+DOCUMENT_REVIEW_PDF_ANNOTATION_V7_PROTOCOL_VERSION = "catalog/1.26"
+DOCUMENT_REVIEW_PDF_ANNOTATION_V7_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": DOCUMENT_REVIEW_PDF_ANNOTATION_V7_PROTOCOL_VERSION,
+        "contracts": [
+            "document-review-pdf-annotation-request/7.0",
             "document-review-pdf-annotation-manifest/3.0",
             "document-review-pdf-annotation-result/3.0",
             "document-review-pdf-annotation-response/3.0",
@@ -231,6 +246,7 @@ class DocumentReviewPdfAnnotationService:
             | CreateDocumentReviewAnnotatedPdfsV4
             | CreateDocumentReviewAnnotatedPdfsV5
             | CreateDocumentReviewAnnotatedPdfsV6
+            | CreateDocumentReviewAnnotatedPdfsV7
         ),
     ) -> DocumentReviewPdfAnnotationResponse | DocumentReviewPdfAnnotationResponseV2:
         parsed = self._validated_result(command)
@@ -264,7 +280,11 @@ class DocumentReviewPdfAnnotationService:
                     )
         elif isinstance(
             parsed,
-            (PairedDocumentReviewRoleResultV3, PairedDocumentReviewRoleResult),
+            (
+                PairedDocumentReviewRoleResultV4,
+                PairedDocumentReviewRoleResultV3,
+                PairedDocumentReviewRoleResult,
+            ),
         ):
             expected_documents = tuple(
                 (
@@ -524,7 +544,10 @@ class DocumentReviewPdfAnnotationService:
                         if readable
                         else "document-review-pdf-annotation-file-set/2.0"
                     )
-                    if isinstance(command, CreateDocumentReviewAnnotatedPdfsV6):
+                    if isinstance(command, CreateDocumentReviewAnnotatedPdfsV7):
+                        protocol_version = DOCUMENT_REVIEW_PDF_ANNOTATION_V7_PROTOCOL_VERSION
+                        protocol_schema_hash = DOCUMENT_REVIEW_PDF_ANNOTATION_V7_SCHEMA_HASH
+                    elif isinstance(command, CreateDocumentReviewAnnotatedPdfsV6):
                         protocol_version = DOCUMENT_REVIEW_PDF_ANNOTATION_V6_PROTOCOL_VERSION
                         protocol_schema_hash = DOCUMENT_REVIEW_PDF_ANNOTATION_V6_SCHEMA_HASH
                     elif isinstance(command, CreateDocumentReviewAnnotatedPdfsV5):
@@ -705,9 +728,11 @@ class DocumentReviewPdfAnnotationService:
             | CreateDocumentReviewAnnotatedPdfsV4
             | CreateDocumentReviewAnnotatedPdfsV5
             | CreateDocumentReviewAnnotatedPdfsV6
+            | CreateDocumentReviewAnnotatedPdfsV7
         ),
     ) -> (
         PdfDocumentReviewRoleResult
+        | PairedDocumentReviewRoleResultV4
         | PairedDocumentReviewRoleResultV3
         | PairedDocumentReviewRoleResult
     ):
@@ -731,6 +756,10 @@ class DocumentReviewPdfAnnotationService:
             ) from exc
         try:
             if command.review_result.schema_ref.endswith(
+                "/paired-document-review-result-v4.schema.json"
+            ):
+                result_schema = "pdf-document-review-result@6.0"
+            elif command.review_result.schema_ref.endswith(
                 "/paired-document-review-result-v3.schema.json"
             ):
                 result_schema = "pdf-document-review-result@3.0"
@@ -752,6 +781,7 @@ class DocumentReviewPdfAnnotationService:
             parsed,
             (
                 PdfDocumentReviewRoleResult,
+                PairedDocumentReviewRoleResultV4,
                 PairedDocumentReviewRoleResultV3,
                 PairedDocumentReviewRoleResult,
             ),
@@ -792,6 +822,7 @@ class DocumentReviewPdfAnnotationService:
 def _native_panel_comments(
     parsed: (
         PdfDocumentReviewRoleResult
+        | PairedDocumentReviewRoleResultV4
         | PairedDocumentReviewRoleResultV3
         | PairedDocumentReviewRoleResult
     ),

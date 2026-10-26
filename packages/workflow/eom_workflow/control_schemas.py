@@ -41,6 +41,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "25.0",
             "sha256:8613527cfa3b1e6af334291106a22a5725c9ba531cbcdd0c031697d5fe76defa",
         ),
+        "resolved-execution-plan-v26": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v26.schema.json",
+            "resources/control-plane/resolved-execution-plan-v26.schema.json",
+            "26.0",
+            "sha256:bac425c3f5a77e6031bfa15191ab3c39c9116daeab71e18144e3e20752acc246",
+        ),
         "resolved-execution-plan-v24": ControlSchemaResource(
             "schemas/workflow/control-plane/resolved-execution-plan-v24.schema.json",
             "resources/control-plane/resolved-execution-plan-v24.schema.json",
@@ -214,6 +220,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "resources/control-plane/pdf-document-review-control-bootstrap-v6.schema.json",
             "6.0",
             "sha256:852d96749a84433d685d9bf2915a659949f76caba130da8da8b2a65f4c0c353b",
+        ),
+        "pdf-document-review-control-bootstrap-v7": ControlSchemaResource(
+            "schemas/workflow/control-plane/pdf-document-review-control-bootstrap-v7.schema.json",
+            "resources/control-plane/pdf-document-review-control-bootstrap-v7.schema.json",
+            "7.0",
+            "sha256:479664f24da377ff8b8cbd3d8849533720dc17b5bc70bccd46fbadc7fdfbfa8e",
         ),
         "knowledge-item-control-bootstrap": ControlSchemaResource(
             "schemas/workflow/control-plane/knowledge-item-control-bootstrap-v1.schema.json",

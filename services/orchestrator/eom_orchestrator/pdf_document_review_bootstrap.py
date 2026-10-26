@@ -120,6 +120,7 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
         "pdf-document-review-control-bootstrap/4.0",
         "pdf-document-review-control-bootstrap/5.0",
         "pdf-document-review-control-bootstrap/6.0",
+        "pdf-document-review-control-bootstrap/7.0",
     ]
     preset_key: Literal["pdf-document-review"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -134,18 +135,20 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
             "workflow-role/1.26.0",
             "workflow-role/1.27.0",
             "workflow-role/1.28.0",
+            "workflow-role/1.31.0",
+            "workflow-role/1.32.0",
         ],
         ...,
     ] = Field(
         min_length=1,
-        max_length=4,
+        max_length=6,
     )
     platform_instruction_path: Literal["instructions/platform.md"]
     role_instruction_path: Literal["instructions/pdf-document-review.md"]
     slot_key: Literal["slot06"]
     worker_pool_key: Literal["customer-support"]
     timeout_seconds: Literal[3600]
-    instruction_revision_number: Literal[2, 3, 4, 5, 6] | None = None
+    instruction_revision_number: Literal[2, 3, 4, 5, 6, 7] | None = None
     predecessor: PdfDocumentReviewBootstrapPredecessor | None = None
     evidence_access: Literal["EVIDENCE_CONTEXT"] | None = None
     retrieval_policy: PdfDocumentReviewRetrievalBootstrapPolicy | None = None
@@ -179,6 +182,14 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
                 "workflow-role/1.27.0",
                 "workflow-role/1.28.0",
             ),
+            "pdf-document-review-control-bootstrap/7.0": (
+                "workflow-role/1.25.0",
+                "workflow-role/1.26.0",
+                "workflow-role/1.27.0",
+                "workflow-role/1.28.0",
+                "workflow-role/1.31.0",
+                "workflow-role/1.32.0",
+            ),
         }[self.schema_version]
         if self.compatible_workflow_protocols != expected:
             raise ValueError("PDF document-review bootstrap protocol must be exact")
@@ -189,6 +200,7 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
             "pdf-document-review-control-bootstrap/4.0": 4,
             "pdf-document-review-control-bootstrap/5.0": 5,
             "pdf-document-review-control-bootstrap/6.0": 6,
+            "pdf-document-review-control-bootstrap/7.0": 7,
         }[self.schema_version]
         if (self.instruction_revision_number, self.predecessor is not None) != (
             expected_revision,
@@ -198,6 +210,7 @@ class PdfDocumentReviewBootstrapManifest(BaseModel):
         grounded = self.schema_version in {
             "pdf-document-review-control-bootstrap/5.0",
             "pdf-document-review-control-bootstrap/6.0",
+            "pdf-document-review-control-bootstrap/7.0",
         }
         if (self.evidence_access is not None, self.retrieval_policy is not None) != (
             grounded,
@@ -250,6 +263,9 @@ def load_pdf_document_review_bootstrap_manifest(
             ),
             "pdf-document-review-control-bootstrap/6.0": (
                 "pdf-document-review-control-bootstrap-v6"
+            ),
+            "pdf-document-review-control-bootstrap/7.0": (
+                "pdf-document-review-control-bootstrap-v7"
             ),
         }.get(schema_version if isinstance(schema_version, str) else "")
         if schema_key is None:
@@ -401,6 +417,7 @@ def bootstrap_pdf_document_review_control_plane(
             "pdf-document-review-control-bootstrap/4.0": "1.1.0",
             "pdf-document-review-control-bootstrap/5.0": "1.2.0",
             "pdf-document-review-control-bootstrap/6.0": "1.3.0",
+            "pdf-document-review-control-bootstrap/7.0": "1.5.0",
         }[manifest.schema_version]
         definition = session.scalar(
             select(WorkflowDefinitionRecord).where(
@@ -429,6 +446,8 @@ def bootstrap_pdf_document_review_control_plane(
             "1.1.0": "workflow-role/1.26.0",
             "1.2.0": "workflow-role/1.27.0",
             "1.3.0": "workflow-role/1.28.0",
+            "1.4.0": "workflow-role/1.31.0",
+            "1.5.0": "workflow-role/1.32.0",
         }[definition_version]
         if protocols != {expected_protocol}:
             raise ControlPlaneError(
@@ -454,6 +473,7 @@ def bootstrap_pdf_document_review_control_plane(
         "pdf-document-review-control-bootstrap/4.0": "v4",
         "pdf-document-review-control-bootstrap/5.0": "v5",
         "pdf-document-review-control-bootstrap/6.0": "v6",
+        "pdf-document-review-control-bootstrap/7.0": "v7",
     }[manifest.schema_version]
     platform_artifact = _publish_markdown(
         publisher,

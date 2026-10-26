@@ -71,10 +71,12 @@ from pydantic import (
 from eom_workflow.document_review import (
     PairedDocumentReviewOutput,
     PairedDocumentReviewOutputV3,
+    PairedDocumentReviewOutputV4,
     PairedDocumentReviewRequest,
     PairedDocumentReviewRequestV2,
     PairedDocumentReviewWorkerRequest,
     PairedDocumentReviewWorkerRequestV2,
+    PairedDocumentReviewWorkerRequestV3,
     PdfDocumentReviewOutput,
     PdfDocumentReviewOutputV4,
     PdfDocumentReviewOutputV5,
@@ -511,13 +513,21 @@ class WorkflowRequest(FrozenModel):
             and self.pdf_document_review_request is not None
         ):
             raise ValueError("only PDF document review may include a PDF document review request")
-        if self.document_review_textbook_evidence is not None and (
-            self.request_name != "PDF_DOCUMENT_REVIEW_REQUEST"
-            or self.pdf_document_review_request is None
-            or self.document_review_textbook_evidence.review_input_sha256
-            != self.pdf_document_review_request.request_sha256
-        ):
-            raise ValueError("single document textbook evidence differs from its request")
+        if self.document_review_textbook_evidence is not None:
+            review_hash = (
+                self.pdf_document_review_request.request_sha256
+                if self.request_name == "PDF_DOCUMENT_REVIEW_REQUEST"
+                and self.pdf_document_review_request is not None
+                else self.paired_document_review_request.request_sha256
+                if self.request_name == "PAIRED_DOCUMENT_REVIEW_REQUEST"
+                and isinstance(self.paired_document_review_request, PairedDocumentReviewRequest)
+                and not isinstance(
+                    self.paired_document_review_request, PairedDocumentReviewRequestV2
+                )
+                else None
+            )
+            if self.document_review_textbook_evidence.review_input_sha256 != review_hash:
+                raise ValueError("document review textbook evidence differs from its request")
         if (
             self.request_name != "PAIRED_DOCUMENT_REVIEW_REQUEST"
             and self.paired_document_review_request is not None
@@ -821,9 +831,15 @@ class WorkflowRequest(FrozenModel):
         | PdfDocumentReviewWorkerRequest
         | PdfDocumentReviewWorkerRequestV5
         | PairedDocumentReviewWorkerRequestV2
+        | PairedDocumentReviewWorkerRequestV3
         | PairedDocumentReviewWorkerRequest
     ):
         if self.paired_document_review_request is not None:
+            if self.document_review_textbook_evidence is not None:
+                return PairedDocumentReviewWorkerRequestV3(
+                    review_request=self.paired_document_review_request,
+                    textbook_evidence=self.document_review_textbook_evidence,
+                )
             if isinstance(self.paired_document_review_request, PairedDocumentReviewRequestV2):
                 return PairedDocumentReviewWorkerRequestV2(
                     review_request=self.paired_document_review_request
@@ -1047,6 +1063,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.29.0",
         "workflow-role/1.30.0",
         "workflow-role/1.31.0",
+        "workflow-role/1.32.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1062,6 +1079,7 @@ class RoleWorkerInput(FrozenModel):
         | PdfDocumentReviewWorkerRequest
         | PdfDocumentReviewWorkerRequestV5
         | PairedDocumentReviewWorkerRequestV2
+        | PairedDocumentReviewWorkerRequestV3
         | PairedDocumentReviewWorkerRequest
         | InferenceTransferPairWorkerRequest
         | InferenceTransferPairWorkerRequestV11
@@ -1082,6 +1100,7 @@ class RoleWorkerInput(FrozenModel):
         | PdfDocumentReviewWorkerRequest
         | PdfDocumentReviewWorkerRequestV5
         | PairedDocumentReviewWorkerRequestV2
+        | PairedDocumentReviewWorkerRequestV3
         | PairedDocumentReviewWorkerRequest
         | InferenceTransferPairWorkerRequest
         | InferenceTransferPairWorkerRequestV11
@@ -1107,6 +1126,8 @@ class RoleWorkerInput(FrozenModel):
                 return PdfDocumentReviewWorkerRequestV5.model_validate(value)
             return PdfDocumentReviewWorkerRequest.model_validate(value)
         if value.get("request_name") == "PAIRED_DOCUMENT_REVIEW_REQUEST":
+            if "textbook_evidence" in value:
+                return PairedDocumentReviewWorkerRequestV3.model_validate(value)
             nested = value.get("review_request")
             if isinstance(nested, dict) and nested.get("schema_version") == (
                 "paired-document-review-request/2.0"
@@ -1139,6 +1160,11 @@ class RoleWorkerInput(FrozenModel):
             not is_textbook_review and self.protocol_version == "workflow-role/1.31.0"
         ):
             raise ValueError("textbook review requires its isolated protocol successor")
+        is_paired_textbook_review = isinstance(self.request, PairedDocumentReviewWorkerRequestV3)
+        if (is_paired_textbook_review and self.protocol_version != "workflow-role/1.32.0") or (
+            not is_paired_textbook_review and self.protocol_version == "workflow-role/1.32.0"
+        ):
+            raise ValueError("paired textbook review requires its isolated protocol successor")
         return self
 
 
@@ -1219,6 +1245,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.29.0",
         "workflow-role/1.30.0",
         "workflow-role/1.31.0",
+        "workflow-role/1.32.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -2909,6 +2936,12 @@ class PairedDocumentReviewRoleResultV3(RoleResultBase):
     output: PairedDocumentReviewOutputV3
 
 
+class PairedDocumentReviewRoleResultV4(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.32.0"] = "workflow-role/1.32.0"
+    role: Literal["support"] = "support"
+    output: PairedDocumentReviewOutputV4
+
+
 RoleResult = (
     AuthoringRoleResult
     | ImageRoleResult
@@ -2977,4 +3010,5 @@ RoleResult = (
     | PdfDocumentReviewRoleResultV5
     | PairedDocumentReviewRoleResult
     | PairedDocumentReviewRoleResultV3
+    | PairedDocumentReviewRoleResultV4
 )

@@ -26,13 +26,11 @@ from eom_api_contracts.workflows import (
 from eom_catalog_contracts import (
     ContentTeamMaterialRequirementV2,
     CreateDeliverable,
-    CreateDocumentReviewEvidenceCommand,
     CreateDocumentReviewTextbookEvidenceCommand,
     CreateItemProductionEvidenceCommand,
     CreateMockExamAssemblyCommand,
     CreatePlannedMockExamAssemblyCommand,
     CreateUsagePlan,
-    DocumentReviewEvidenceSource,
     DocumentReviewTextbookEvidenceSource,
     EducationalRetrievalRequirement,
     EducationalRetrievalRequirementV2,
@@ -75,7 +73,6 @@ from eom_workflow import (
     ResolvedExecutionPlan,
     ResolvedExecutionPlanV3,
     WorkflowRequest,
-    build_graph_grounded_paired_document_review_request,
     compile_definition_data,
 )
 from eom_workflow.control_plane import WorkerRole
@@ -1141,7 +1138,7 @@ class CommandAdapter:
         *,
         idempotency_key: str,
     ) -> tuple[str, str, int]:
-        """Create one exhaustive paired review pinned to documents and Graph evidence."""
+        """Create a paired review pinned to both documents and textbook Graph evidence."""
 
         replay = self._paired_document_review_start_replay(
             review_request,
@@ -1155,71 +1152,78 @@ class CommandAdapter:
                 preset = current_knowledge_backed_preset(
                     preflight_session,
                     preset_key="pdf-document-review",
-                    workflow_role_schema_version="workflow-role/1.27.0",
+                    workflow_role_schema_version="workflow-role/1.32.0",
                 )
             except ControlPlaneError as exc:
                 raise ApiError(
                     503,
                     exc.code,
                     "Paired document review is unavailable",
-                    "The Graph-grounded document-review policy is not published.",
+                    "The textbook-grounded document-review policy is not published.",
                 ) from exc
-        requester_role = self._knowledge_requester_role(actor)
-        requester_permissions = tuple(sorted(value.value for value in actor.permissions))
+        policy = preset.retrieval_policy
+        if (
+            policy is None
+            or "TEXTBOOK" not in policy.allowed_source_classes
+            or not policy.allowed_corpus_keys
+        ):
+            raise ApiError(
+                503,
+                "PAIRED_DOCUMENT_REVIEW_TEXTBOOK_POLICY_INVALID",
+                "Paired document review is unavailable",
+                "The published review policy does not authorize textbook evidence.",
+            )
+        evidence_budget = EvidenceBudget.model_validate(
+            {**policy.maximum_budget.model_dump(mode="json"), "max_item_revisions": 0}
+        )
         evidence_value: dict[str, object] = {
-            "schema_version": "document-review-evidence-request/1.0",
-            "operation": "CREATE_DOCUMENT_REVIEW_EVIDENCE",
+            "schema_version": "document-review-textbook-evidence-request/1.0",
+            "operation": "CREATE_DOCUMENT_REVIEW_TEXTBOOK_EVIDENCE",
+            "review_input_sha256": review_request.request_sha256,
             "documents": [
-                DocumentReviewEvidenceSource(
+                DocumentReviewTextbookEvidenceSource(
                     role=value.role,
                     document=value.document,
                 ).model_dump(mode="json")
                 for value in review_request.documents
             ],
-            "corpus_key": preset.retrieval_policy.allowed_corpus_keys[0],
-            "source_classes": list(preset.retrieval_policy.allowed_source_classes),
-            "evidence_budget": preset.retrieval_policy.maximum_budget.model_dump(mode="json"),
-            "access_policy_revision_id": preset.retrieval_policy.access_policy_revision_id,
-            "access_policy_sha256": preset.retrieval_policy.access_policy_sha256,
-            "requester_role": requester_role,
-            "requester_permission_keys": list(requester_permissions),
+            "corpus_key": policy.allowed_corpus_keys[0],
+            "evidence_budget": evidence_budget.model_dump(mode="json"),
+            "access_policy_revision_id": policy.access_policy_revision_id,
+            "access_policy_sha256": policy.access_policy_sha256,
+            "requester_role": self._knowledge_requester_role(actor),
+            "requester_permission_keys": sorted(value.value for value in actor.permissions),
             "requested_by": actor.actor_id,
         }
         evidence_value["submission_sha256"] = content_sha256(evidence_value)
-        evidence_value["idempotency_key"] = f"document-review-evidence:{idempotency_key}"
+        evidence_value["idempotency_key"] = "document-review-textbook:" + content_sha256(
+            {"workflow_key": idempotency_key, "request_sha256": review_request.request_sha256}
+        ).removeprefix("sha256:")
         try:
-            evidence_plan = self.catalog_application.create_document_review_evidence(
-                CreateDocumentReviewEvidenceCommand.model_validate(evidence_value)
+            textbook_evidence = self.catalog_application.create_document_review_textbook_evidence(
+                CreateDocumentReviewTextbookEvidenceCommand.model_validate(evidence_value)
             )
         except CatalogApplicationClientError as exc:
             raise ApiError(
                 503,
                 exc.code,
-                "Paired document review evidence is unavailable",
+                "Paired document review textbook evidence is unavailable",
                 "No Workflow was created. Replay the exact review request after recovery.",
             ) from exc
-        grounded_request: PairedDocumentReviewRequestV2 = (
-            build_graph_grounded_paired_document_review_request(
-                question_document=review_request.documents[0].document,
-                solution_document=review_request.documents[1].document,
-                preset_key=review_request.preset.preset_key,
-                additional_guidance=review_request.additional_guidance,
-                evidence_plan=evidence_plan,
-            )
-        )
 
         workflow_request = WorkflowRequest(
             request_name="PAIRED_DOCUMENT_REVIEW_REQUEST",
             image_mode="skip",
             execution_preset_key="pdf-document-review",
-            paired_document_review_request=grounded_request,
+            paired_document_review_request=review_request,
+            document_review_textbook_evidence=textbook_evidence,
         )
         replay = self._workflow_start_replay(
             workflow_request,
             actor=actor,
             idempotency_key=idempotency_key,
             definition_key="pdf-document-review",
-            definition_version="1.2.0",
+            definition_version="1.5.0",
         )
         if replay is not None:
             return replay
@@ -1227,7 +1231,7 @@ class CommandAdapter:
             definition = admitted_workflow_definition(
                 session,
                 definition_key="pdf-document-review",
-                definition_version="1.2.0",
+                definition_version="1.5.0",
             )
             if definition is None:
                 raise ApiError(
@@ -1246,7 +1250,7 @@ class CommandAdapter:
                 for step in compiled.definition.steps
                 if isinstance(step, AgentStep)
             }
-            if protocols != {"workflow-role/1.27.0"}:
+            if protocols != {"workflow-role/1.32.0"}:
                 raise ApiError(
                     503,
                     "PAIRED_DOCUMENT_REVIEW_CONTRACT_INVALID",
@@ -1270,7 +1274,8 @@ class CommandAdapter:
                         workflow_definition_version=definition.definition_version,
                         workflow_definition_sha256=definition.definition_hash,
                         workflow_role_schema_version=workflow.role_schema_version,
-                        review_request=grounded_request,
+                        review_request=review_request,
+                        textbook_evidence=textbook_evidence,
                     )
                 except ControlPlaneError as exc:
                     raise ApiError(
@@ -1384,7 +1389,7 @@ class CommandAdapter:
         actor: ActorContext,
         idempotency_key: str,
     ) -> tuple[str, str, int] | None:
-        """Replay V1.2 before consulting mutable policy or the Catalog evidence service."""
+        """Replay historical or textbook-pinned paired work before mutable lookups."""
 
         with self.sessions() as session:
             workflow = session.scalar(
@@ -1406,9 +1411,20 @@ class CommandAdapter:
                 workflow.created_actor_type != "human"
                 or workflow.created_actor_id != actor.actor_id
                 or workflow.definition_key != "pdf-document-review"
-                or workflow.definition_version != "1.2.0"
+                or workflow.definition_version not in {"1.2.0", "1.5.0"}
                 or stored.request_name != "PAIRED_DOCUMENT_REVIEW_REQUEST"
-                or not isinstance(stored_review, PairedDocumentReviewRequestV2)
+                or not isinstance(
+                    stored_review,
+                    (PairedDocumentReviewRequestV2, PairedDocumentReviewRequest),
+                )
+                or (
+                    isinstance(stored_review, PairedDocumentReviewRequestV2)
+                    != (workflow.definition_version == "1.2.0")
+                )
+                or (
+                    (stored.document_review_textbook_evidence is not None)
+                    != (workflow.definition_version == "1.5.0")
+                )
                 or stored_review.documents != request.documents
                 or stored_review.preset != request.preset
                 or stored_review.additional_guidance != request.additional_guidance

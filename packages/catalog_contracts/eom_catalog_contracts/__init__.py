@@ -213,6 +213,7 @@ from eom_catalog_contracts.document_review import (
     PdfReviewArtifactMemberPointer,
     PdfReviewDocumentPointer,
     PdfReviewPagePointer,
+    TextbookGroundedPairedReviewResultMemberPointer,
 )
 from eom_catalog_contracts.document_review_application import (
     OFFICE_DOCUMENT_REVIEW_INTAKE_MANIFEST_MEMBER,
@@ -226,6 +227,7 @@ from eom_catalog_contracts.document_review_application import (
     CreateDocumentReviewAnnotatedPdfsV4,
     CreateDocumentReviewAnnotatedPdfsV5,
     CreateDocumentReviewAnnotatedPdfsV6,
+    CreateDocumentReviewAnnotatedPdfsV7,
     DocumentReviewHwpxCorrectionMediaQuery,
     DocumentReviewHwpxCorrectionMediaResponse,
     DocumentReviewHwpxCorrectionResponse,
@@ -1327,6 +1329,7 @@ __all__ = [
     "CreateDocumentReviewAnnotatedPdfsV4",
     "CreateDocumentReviewAnnotatedPdfsV5",
     "CreateDocumentReviewAnnotatedPdfsV6",
+    "CreateDocumentReviewAnnotatedPdfsV7",
     "CreateDocumentReviewEvidenceCommand",
     "CreateDocumentReviewTextbookEvidenceCommand",
     "CreateEvidenceBundleCommand",
@@ -1897,6 +1900,7 @@ __all__ = [
     "TextbookCurriculumMapping",
     "TextbookDocumentIdentity",
     "TextbookExtractorDescriptor",
+    "TextbookGroundedPairedReviewResultMemberPointer",
     "TextbookPageAnalysis",
     "TextbookPageAnalysisV2",
     "TextbookPageScope",

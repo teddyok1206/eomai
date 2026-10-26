@@ -9,6 +9,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfsV3,
     CreateDocumentReviewAnnotatedPdfsV5,
     CreateDocumentReviewAnnotatedPdfsV6,
+    CreateDocumentReviewAnnotatedPdfsV7,
     DocumentReviewAnnotatedPdfMember,
     DocumentReviewAnnotationPage,
     DocumentReviewAnnotationRegion,
@@ -191,6 +192,26 @@ def test_textbook_review_annotation_v6_accepts_only_pinned_successor_result() ->
     validate_contract("document-review-pdf-annotation-request-v6", request.model_dump(mode="json"))
     with pytest.raises(ValidationError):
         CreateDocumentReviewAnnotatedPdfsV5.model_validate(payload)
+
+
+def test_paired_textbook_annotation_v7_accepts_exact_result_member() -> None:
+    payload = _request_v3().model_dump(mode="json")
+    payload["schema_version"] = "document-review-pdf-annotation-request/7.0"
+    payload["presentation_style"] = "READABLE_MARGIN_GUIDES_V1"
+    payload["review_result"]["schema_ref"] = (
+        "https://eom.local/schemas/workflow/roles/paired-document-review-result-v4.schema.json"
+    )
+    payload["request_sha256"] = content_sha256(
+        {
+            key: value
+            for key, value in payload.items()
+            if key not in {"idempotency_key", "request_sha256"}
+        }
+    )
+    request = CreateDocumentReviewAnnotatedPdfsV7.model_validate(payload)
+    validate_contract("document-review-pdf-annotation-request-v7", request.model_dump(mode="json"))
+    with pytest.raises(ValidationError):
+        CreateDocumentReviewAnnotatedPdfsV6.model_validate(payload)
 
 
 def test_annotation_request_is_schema_and_model_exact() -> None:

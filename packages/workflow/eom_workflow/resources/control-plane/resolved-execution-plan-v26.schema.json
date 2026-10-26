@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/resolved-execution-plan/26.0",
+  "title": "EOM Textbook-Grounded Paired Document Review Execution Plan V26",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "plan_id", "workflow_id", "workload_class", "preset_id",
+    "preset_revision_id", "preset_sha256", "workflow_definition_key",
+    "workflow_definition_version", "workflow_definition_sha256",
+    "review_request_sha256", "documents", "textbook_evidence",
+    "capacity_policy_revision_id", "steps", "resolver_version", "resolved_at",
+    "plan_sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": "resolved-execution-plan/26.0" },
+    "plan_id": { "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/plan_id" },
+    "workflow_id": { "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/workflow_id" },
+    "workload_class": { "const": "CODEX" },
+    "preset_id": { "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/preset_id" },
+    "preset_revision_id": { "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/preset_revision_id" },
+    "preset_sha256": { "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/preset_sha256" },
+    "workflow_definition_key": { "const": "pdf-document-review" },
+    "workflow_definition_version": { "const": "1.5.0" },
+    "workflow_definition_sha256": { "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/workflow_definition_sha256" },
+    "review_request_sha256": { "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/review_request_sha256" },
+    "documents": { "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/documents" },
+    "textbook_evidence": { "$ref": "eom://schemas/knowledge/review-textbook-evidence/1.0" },
+    "capacity_policy_revision_id": { "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/capacity_policy_revision_id" },
+    "steps": { "$ref": "eom://schemas/workflow/resolved-execution-plan/15.0#/properties/steps" },
+    "resolver_version": { "const": "26.0.0" },
+    "resolved_at": { "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/resolved_at" },
+    "plan_sha256": { "$ref": "eom://schemas/workflow/resolved-execution-plan/14.0#/properties/plan_sha256" }
+  }
+}
