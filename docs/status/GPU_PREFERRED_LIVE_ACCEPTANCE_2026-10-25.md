@@ -1,6 +1,6 @@
 # GPU-preferred embedding: live acceptance ledger
 
-As of2026-10-26 16:14 UTC. **GOAL=ACTIVE; completion is not proven.**
+As of2026-10-26 17:34 UTC. **GOAL=ACTIVE; completion is not proven.**
 This small ledger preserves the whole approved scope while background catch-up
 continues. Source tests, installed composition and actual execution are separate
 evidence. It is not a new runtime registry or permission grant.
@@ -794,3 +794,16 @@ finite work-batch test's single scope across children, the focused suites passed
 passed. This proves the source lifetime behavior with synthetic libraries; it
 does **not** claim a live model-load counter, exact pair closure, or GPU QUERY
 acceptance. The running INDEX and selected CPU QUERY were not changed.
+
+### 17:34 scheduled live-index observation
+
+The original INDEX PID `734655` / invocation
+`9718f2ed05ac404e84ce7a69559b110c` is still `active/running`.
+Its own journal records `BATCH_COMPLETED` at 17:09:40 (CONCRETE_FACETS),
+17:17:58 (METADATA_ONLY), and 17:32:56 UTC (CONTENT_ONLY, eight selected
+targets). The selected CPU QUERY remains PID `1572000` / invocation
+`a97c6b9930844639a384a03500a874e5`, also `active/running`.
+These are current-execution events, **not** exact CPU/CUDA pair acceptance.
+The bounded read-only metadata audit was attempted with `sudo -n` but no cached
+Linux authorization was available; it did not run, and no password was requested.
+No INDEX/QUERY restart, new model request, selection or fallback occurred.
