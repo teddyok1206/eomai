@@ -4768,7 +4768,7 @@ function renderPdfDocumentReviewList() {
   if (!state.pdfDocumentReviews.length) {
     const empty = document.createElement("p");
     empty.className = "empty-state";
-    empty.textContent = "아직 접수된 문서 검토가 없습니다.";
+    empty.textContent = "아직 접수된 자료 검토가 없습니다.";
     root.append(empty);
   }
   state.pdfDocumentReviews.forEach((review) => {
@@ -5442,11 +5442,11 @@ async function submitPdfDocumentReview(event) {
     }
     state.pdfDocumentReviewPendingSubmission = null;
     form.reset();
-    showMessage(message, "문서 검토가 시작되었습니다.", "success");
+    showMessage(message, "자료 검토가 시작되었습니다.", "success");
     await loadPdfDocumentReviews();
     await selectPdfDocumentReview(started.workflow_id);
   } catch (failure) {
-    showMessage(message, `문서 검토 시작 실패: ${failure.message}`, "error");
+    showMessage(message, `자료 검토 시작 실패: ${failure.message}`, "error");
   } finally {
     $("#pdf-review-submit").disabled = false;
   }

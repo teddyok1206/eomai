@@ -1,6 +1,6 @@
 # EOM Scientific Studio
 
-기출·교과서 근거를 활용해 과학 문항을 만들고, 문서 검토와 HWPX 편집·출력까지 연결하는 제작 시스템입니다.
+기출·교과서 근거를 활용해 과학 문항을 만들고, 자료 검토와 HWPX 편집·출력까지 연결하는 제작 시스템입니다.
 
 ## 주요 기능
 
@@ -8,7 +8,7 @@
 | --- | --- |
 | 문항 제작 | 단원·난이도·자연어 요구에 맞춰 출제하고, 출제자와 검토자의 피드백으로 최대 3차 개선합니다. |
 | 기출변형 | 원문항의 개념·핵심 착상을 참고하되, 단순한 숫자·표현 변경을 넘어 새 문항을 만듭니다. |
-| 문서 검토 | PDF·HWP·HWPX를 검토합니다. 문제지·해설지 분리 입력, 지적 위치 표시와 주석 PDF 다운로드를 지원합니다. |
+| 자료 검토 | PDF·HWP·HWPX를 검토합니다. 문제지·해설지 분리 입력, 지적 위치 표시와 주석 PDF 다운로드를 지원합니다. |
 | HWPX 제작 | 문항·표·수식·그림을 편집 가능한 문서로 출력합니다. 선택 가능한 HWPX 교정에서는 원본을 보존하고 수정 글자를 빨간색으로 표시합니다. |
 | 근거·유사도 검색 | GraphRAG와 로컬 임베딩으로 기출·등록 문항·풀이보고서의 관련 근거를 찾습니다. |
 | 내부 자료 대화 | 일반 → ChatGPT에서 전용 Codex 슬롯으로 대화하고, 허용된 내부 검색 도구로 자료를 참고합니다. |
@@ -83,7 +83,7 @@ Scientific Studio → Application API → Catalog / Workflow Runner / Orchestrat
 - [모듈 경계와 의존 방향](docs/architecture/MODULE_BOUNDARIES.md)
 - [GraphRAG 구조](docs/architecture/EDUCATION_KNOWLEDGE_ITEM_GRAPHRAG.md)
 - [유사도·증분 임베딩 통합 설계](docs/architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md)
-- [문서 검토 설계](docs/architecture/PDF_DOCUMENT_REVIEW_V1_IMPLEMENTATION_PLAN.md)
+- [자료 검토 설계](docs/architecture/PDF_DOCUMENT_REVIEW_V1_IMPLEMENTATION_PLAN.md)
 - [HWPX 제작 API](docs/architecture/HWPX_APPLICATION_API_V0.md)
 - [Codex 로그인·모델 검증](docs/operations/CODEX_AUTH_AUTOMATIC_MODEL_VERIFICATION_RELEASE.md)
 - [API 문제 진단](docs/operations/API_TROUBLESHOOTING.md)
