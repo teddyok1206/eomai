@@ -242,12 +242,16 @@ from eom_catalog_contracts.document_review_application import (
 )
 from eom_catalog_contracts.document_review_evidence import (
     CreateDocumentReviewEvidenceCommand,
+    CreateDocumentReviewTextbookEvidenceCommand,
     DocumentReviewEvidenceExtractor,
     DocumentReviewEvidencePlan,
     DocumentReviewEvidenceResponse,
     DocumentReviewEvidenceSource,
     DocumentReviewEvidenceSourceIdentity,
+    DocumentReviewTextbookEvidenceResponse,
+    DocumentReviewTextbookEvidenceSource,
 )
+from eom_catalog_contracts.review_textbook_evidence import ReviewTextbookEvidence
 from eom_catalog_contracts.educational_document import (
     EducationalDocumentIdentity,
     EducationalDocumentRegistrationReceipt,
@@ -1313,6 +1317,7 @@ __all__ = [
     "CreateDocumentReviewAnnotatedPdfsV4",
     "CreateDocumentReviewAnnotatedPdfsV5",
     "CreateDocumentReviewEvidenceCommand",
+    "CreateDocumentReviewTextbookEvidenceCommand",
     "CreateEvidenceBundleCommand",
     "CreateIntakeBatch",
     "CreateItem",
@@ -1348,6 +1353,9 @@ __all__ = [
     "DocumentReviewEvidenceResponse",
     "DocumentReviewEvidenceSource",
     "DocumentReviewEvidenceSourceIdentity",
+    "DocumentReviewTextbookEvidenceResponse",
+    "DocumentReviewTextbookEvidenceSource",
+    "ReviewTextbookEvidence",
     "DocumentReviewHwpxCorrectionMediaQuery",
     "DocumentReviewHwpxCorrectionMediaResponse",
     "DocumentReviewHwpxCorrectionPlan",

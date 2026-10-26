@@ -7,6 +7,7 @@ import socket
 import threading
 import time
 from datetime import UTC, datetime
+from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -37,6 +38,7 @@ from eom_catalog_contracts import (
     CreateKnowledgeSolutionAnalysisCommand,
     CreateMockExamAssemblyCommand,
     CreatePlannedMockExamAssemblyCommand,
+    DocumentReviewTextbookEvidenceResponse,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
     InspectItemRevisionHwpxEligibilityQueryV1,
@@ -1611,3 +1613,43 @@ def test_application_api_catalog_client_depends_on_protocol_not_server_implement
     assert "MockExamAssemblyService" not in command_source
     assert "mock_exam_assembly_service" not in query_source
     assert "mock_exam_assembly_service" not in command_source
+
+
+def test_textbook_review_boundary_preserves_stable_error_without_empty_binding() -> None:
+    stream = BytesIO()
+    CatalogApplicationServer.write_document_review_textbook_evidence_response(
+        stream,
+        DocumentReviewTextbookEvidenceResponse(
+            status="ERROR", error_code="REVIEW_TEXTBOOK_SOURCE_MISSING"
+        ),
+    )
+    payload = json.loads(stream.getvalue())
+    assert payload["operation"] == "CREATE_DOCUMENT_REVIEW_TEXTBOOK_EVIDENCE"
+    assert payload["error_code"] == "REVIEW_TEXTBOOK_SOURCE_MISSING"
+    assert "binding" not in payload
+    with pytest.raises(CatalogApplicationClientError) as captured:
+        CatalogApplicationClient._raise_remote_error("REVIEW_TEXTBOOK_SOURCE_MISSING")
+    assert captured.value.code == "REVIEW_TEXTBOOK_SOURCE_MISSING"
+
+
+def test_textbook_review_socket_rejects_unversioned_or_empty_source_scope(tmp_path: Path) -> None:
+    server = _server(tmp_path)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        reply = _client(server)._raw_request(
+            {
+                "schema_version": "document-review-textbook-evidence-request/1.0",
+                "operation": "CREATE_DOCUMENT_REVIEW_TEXTBOOK_EVIDENCE",
+                "documents": [],
+            },
+            timeout_seconds=RESPONSE_TIMEOUT_SECONDS,
+        )
+        validate_contract("document-review-textbook-evidence-response", reply)
+        assert reply["status"] == "ERROR"
+        assert reply["error_code"] == "CATALOG_APPLICATION_REQUEST_INVALID"
+        assert "binding" not in reply
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)

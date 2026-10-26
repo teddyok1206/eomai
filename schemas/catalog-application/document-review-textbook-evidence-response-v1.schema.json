@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog/document-review-textbook-evidence-response/1.0",
+  "title": "EOM Document Review Textbook Evidence Response V1",
+  "oneOf": [
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "operation", "status", "binding"],
+      "properties": {
+        "schema_version": {"const": "document-review-textbook-evidence-response/1.0"},
+        "operation": {"const": "CREATE_DOCUMENT_REVIEW_TEXTBOOK_EVIDENCE"},
+        "status": {"const": "OK"},
+        "binding": {"$ref": "eom://schemas/knowledge/review-textbook-evidence/1.0"}
+      }
+    },
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "operation", "status", "error_code"],
+      "properties": {
+        "schema_version": {"const": "document-review-textbook-evidence-response/1.0"},
+        "operation": {"const": "CREATE_DOCUMENT_REVIEW_TEXTBOOK_EVIDENCE"},
+        "status": {"const": "ERROR"},
+        "error_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"}
+      }
+    }
+  ]
+}

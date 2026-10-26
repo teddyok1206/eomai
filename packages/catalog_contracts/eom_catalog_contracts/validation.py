@@ -701,6 +701,24 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:62cc57bec58327da8ab18d83a42307bea34bd8bb09f9a365d35d005d91ccede0",
         ),
+        "review-textbook-evidence": CatalogSchemaResource(
+            "schemas/knowledge/review-textbook-evidence-v1.schema.json",
+            "resources/knowledge/review-textbook-evidence-v1.schema.json",
+            "1.0",
+            "sha256:8e402808b0dcea6a6358cd0cacf9a7e479518ce9da6d34abd85fa27e684955ae",
+        ),
+        "document-review-textbook-evidence-request": CatalogSchemaResource(
+            "schemas/catalog-application/document-review-textbook-evidence-request-v1.schema.json",
+            "resources/catalog-application/document-review-textbook-evidence-request-v1.schema.json",
+            "1.0",
+            "sha256:291d403c17d44975de0f91a5cc96f53d94b50cc932a35d0d791ad3aaa5eaa146",
+        ),
+        "document-review-textbook-evidence-response": CatalogSchemaResource(
+            "schemas/catalog-application/document-review-textbook-evidence-response-v1.schema.json",
+            "resources/catalog-application/document-review-textbook-evidence-response-v1.schema.json",
+            "1.0",
+            "sha256:e6e7eb7bd0fb037b1dc8a094a58a63e88d40f7bfe41e27c08fc8409cfc786da6",
+        ),
         "document-review-evidence-request": CatalogSchemaResource(
             "schemas/catalog-application/document-review-evidence-request-v1.schema.json",
             "resources/catalog-application/document-review-evidence-request-v1.schema.json",

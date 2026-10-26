@@ -9,18 +9,24 @@ import stat
 import subprocess
 import tempfile
 import unicodedata
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Literal
 
 from eom_catalog_contracts import (
     CreateDocumentReviewEvidenceCommand,
+    CreateDocumentReviewTextbookEvidenceCommand,
     CreateItemProductionEvidenceCommand,
     DocumentReviewEvidenceExtractor,
     DocumentReviewEvidencePlan,
+    DocumentReviewEvidenceSource,
     DocumentReviewEvidenceSourceIdentity,
+    DocumentReviewTextbookEvidenceSource,
     EducationalRetrievalRequirement,
     EvidenceBundlePublicationResultV5,
+    ReviewTextbookEvidence,
 )
+from eom_catalog_contracts.knowledge import KnowledgeSourceClass
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
 from sqlalchemy import Engine, func, select
@@ -34,6 +40,9 @@ from eom_catalog_service.knowledge_graph_models import (
 )
 from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalApplicationService,
+)
+from eom_catalog_service.review_textbook_evidence_service import (
+    ReviewTextbookEvidenceService,
 )
 
 _PDFTOTEXT = Path("/usr/bin/pdftotext")
@@ -90,10 +99,123 @@ class DocumentReviewEvidenceService:
         self.pdftotext_path = pdftotext_path
 
     def create(self, command: CreateDocumentReviewEvidenceCommand) -> DocumentReviewEvidencePlan:
+        extractor_sha256, term_set_sha256, topic_keys = self._scope_for_documents(
+            command.documents, command.corpus_key
+        )
+        requirement = EducationalRetrievalRequirement(
+            corpus_key=command.corpus_key,
+            query_kind="ITEM_PREPARATION",
+            curriculum_root_key=None,
+            topic_keys=topic_keys,
+            required_item_elements=_REQUIRED_ELEMENTS,
+            source_classes=command.source_classes,
+        )
+        publication = self.retrieval.create_item_production(
+            self._retrieval_command(
+                command,
+                requirement,
+                solution_requirement="REQUIRE_ACCEPTED_SOLUTION_REPORT",
+                idempotency_namespace="document-review-evidence",
+            )
+        )
+        if not isinstance(publication, EvidenceBundlePublicationResultV5):
+            raise DocumentReviewEvidenceServiceError(
+                "DOCUMENT_REVIEW_EVIDENCE_SOLUTION_MISSING",
+                "document review requires solution-enriched Graph evidence",
+            )
+        document: dict[str, object] = {
+            "schema_version": "document-review-evidence-plan/1.0",
+            "documents": [
+                DocumentReviewEvidenceSourceIdentity(
+                    role=value.role,
+                    document_id=value.document.document_id,
+                    document_revision_id=value.document.document_revision_id,
+                    source_pdf_sha256=value.document.source_pdf.sha256,
+                ).model_dump(mode="json")
+                for value in command.documents
+            ],
+            "term_set_sha256": term_set_sha256,
+            "topic_keys": list(topic_keys),
+            "extractor": DocumentReviewEvidenceExtractor(
+                executable_sha256=extractor_sha256
+            ).model_dump(mode="json"),
+            "requirement": requirement.model_dump(mode="json"),
+            "publication": publication.model_dump(mode="json"),
+        }
+        document["plan_sha256"] = content_sha256(document)
+        return DocumentReviewEvidencePlan.model_validate(document)
+
+    def create_textbook(
+        self, command: CreateDocumentReviewTextbookEvidenceCommand
+    ) -> ReviewTextbookEvidence:
+        """Resolve one/two exact PDF projections to textbook-only Graph evidence."""
+
+        _, _, topic_keys = self._scope_for_documents(command.documents, command.corpus_key)
+        textbook_only: tuple[KnowledgeSourceClass, ...] = (KnowledgeSourceClass.TEXTBOOK,)
+        requirement = EducationalRetrievalRequirement(
+            corpus_key=command.corpus_key,
+            query_kind="ITEM_PREPARATION",
+            curriculum_root_key=None,
+            topic_keys=topic_keys,
+            required_item_elements=_REQUIRED_ELEMENTS,
+            source_classes=textbook_only,
+        )
+        return ReviewTextbookEvidenceService(
+            retrieval=self.retrieval,
+            artifacts=self.artifacts,
+        ).create(
+            review_input_sha256=command.review_input_sha256,
+            command=self._retrieval_command(
+                command,
+                requirement,
+                solution_requirement="NONE",
+                idempotency_namespace="document-review-textbook",
+            ),
+        )
+
+    @staticmethod
+    def _retrieval_command(
+        source: CreateDocumentReviewEvidenceCommand | CreateDocumentReviewTextbookEvidenceCommand,
+        requirement: EducationalRetrievalRequirement,
+        *,
+        solution_requirement: Literal["NONE", "REQUIRE_ACCEPTED_SOLUTION_REPORT"],
+        idempotency_namespace: Literal["document-review-evidence", "document-review-textbook"],
+    ) -> CreateItemProductionEvidenceCommand:
+        """One canonical publication request for both released and successor review paths."""
+
+        value: dict[str, object] = {
+            "operation": "CREATE_ITEM_PRODUCTION_EVIDENCE",
+            "requirement": requirement.model_dump(mode="json"),
+            "evidence_budget": source.evidence_budget.model_dump(mode="json"),
+            "access_policy_revision_id": source.access_policy_revision_id,
+            "access_policy_sha256": source.access_policy_sha256,
+            "requester_role": source.requester_role,
+            "requester_permission_keys": list(source.requester_permission_keys),
+            "requested_by": source.requested_by,
+            "solution_evidence_requirement": solution_requirement,
+        }
+        value["submission_sha256"] = content_sha256(value)
+        value["idempotency_key"] = (
+            idempotency_namespace
+            + ":"
+            + content_sha256(
+                {
+                    "idempotency_key": source.idempotency_key,
+                    "submission_sha256": source.submission_sha256,
+                }
+            ).removeprefix("sha256:")
+        )
+        return CreateItemProductionEvidenceCommand.model_validate(value)
+
+    def _scope_for_documents(
+        self,
+        documents: Sequence[DocumentReviewEvidenceSource | DocumentReviewTextbookEvidenceSource],
+        corpus_key: str,
+    ) -> tuple[str, str, tuple[str, ...]]:
         extractor_sha256, descriptor = self._open_extractor()
         try:
             terms: set[str] = set()
-            for source in command.documents:
+            for source in documents:
                 pointer = source.document.source_pdf
                 payload = self.artifacts.read_member(
                     artifact_id=pointer.artifact_id,
@@ -113,67 +235,13 @@ class DocumentReviewEvidenceService:
                 "DOCUMENT_REVIEW_EVIDENCE_TEXT_MISSING",
                 "document review sources contain no bounded extractable text",
             )
-        topic_keys = self._resolve_topic_keys(command.corpus_key, bounded_terms)
+        topic_keys = self._resolve_topic_keys(corpus_key, bounded_terms)
         if not topic_keys:
             raise DocumentReviewEvidenceServiceError(
                 "DOCUMENT_REVIEW_EVIDENCE_SCOPE_MISSING",
                 "document review text does not resolve to controlled Graph topics",
             )
-        requirement = EducationalRetrievalRequirement(
-            corpus_key=command.corpus_key,
-            query_kind="ITEM_PREPARATION",
-            curriculum_root_key=None,
-            topic_keys=topic_keys,
-            required_item_elements=_REQUIRED_ELEMENTS,
-            source_classes=command.source_classes,
-        )
-        command_value = {
-            "operation": "CREATE_ITEM_PRODUCTION_EVIDENCE",
-            "requirement": requirement.model_dump(mode="json"),
-            "evidence_budget": command.evidence_budget.model_dump(mode="json"),
-            "access_policy_revision_id": command.access_policy_revision_id,
-            "access_policy_sha256": command.access_policy_sha256,
-            "requester_role": command.requester_role,
-            "requester_permission_keys": list(command.requester_permission_keys),
-            "requested_by": command.requested_by,
-            "solution_evidence_requirement": "REQUIRE_ACCEPTED_SOLUTION_REPORT",
-        }
-        command_value["submission_sha256"] = content_sha256(command_value)
-        command_value["idempotency_key"] = "document-review-evidence:" + content_sha256(
-            {
-                "idempotency_key": command.idempotency_key,
-                "submission_sha256": command.submission_sha256,
-            }
-        ).removeprefix("sha256:")
-        publication = self.retrieval.create_item_production(
-            CreateItemProductionEvidenceCommand.model_validate(command_value)
-        )
-        if not isinstance(publication, EvidenceBundlePublicationResultV5):
-            raise DocumentReviewEvidenceServiceError(
-                "DOCUMENT_REVIEW_EVIDENCE_SOLUTION_MISSING",
-                "document review requires solution-enriched Graph evidence",
-            )
-        document: dict[str, object] = {
-            "schema_version": "document-review-evidence-plan/1.0",
-            "documents": [
-                DocumentReviewEvidenceSourceIdentity(
-                    role=value.role,
-                    document_id=value.document.document_id,
-                    document_revision_id=value.document.document_revision_id,
-                    source_pdf_sha256=value.document.source_pdf.sha256,
-                ).model_dump(mode="json")
-                for value in command.documents
-            ],
-            "term_set_sha256": content_sha256(list(bounded_terms)),
-            "topic_keys": list(topic_keys),
-            "extractor": DocumentReviewEvidenceExtractor(
-                executable_sha256=extractor_sha256
-            ).model_dump(mode="json"),
-            "requirement": requirement.model_dump(mode="json"),
-            "publication": publication.model_dump(mode="json"),
-        }
-        document["plan_sha256"] = content_sha256(document)
-        return DocumentReviewEvidencePlan.model_validate(document)
+        return extractor_sha256, content_sha256(list(bounded_terms)), topic_keys
 
     def _open_extractor(self) -> tuple[str, int]:
         descriptor = -1

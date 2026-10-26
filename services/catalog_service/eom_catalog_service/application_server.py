@@ -39,6 +39,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfsV4,
     CreateDocumentReviewAnnotatedPdfsV5,
     CreateDocumentReviewEvidenceCommand,
+    CreateDocumentReviewTextbookEvidenceCommand,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisBatchCommand,
@@ -55,6 +56,7 @@ from eom_catalog_contracts import (
     DocumentReviewPdfAnnotationResponse,
     DocumentReviewPdfAnnotationResponseV2,
     DocumentReviewPdfAnnotationResponseV3,
+    DocumentReviewTextbookEvidenceResponse,
     InspectItemRevisionHwpxEligibilityQueryV1,
     InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
@@ -193,6 +195,7 @@ from eom_catalog_service.pdf_document_review_intake import (
     PdfDocumentReviewIntakeService,
 )
 from eom_catalog_service.registry_service import RegistryService
+from eom_catalog_service.review_textbook_evidence_service import ReviewTextbookEvidenceError
 from eom_catalog_service.similarity_read_dispatch import dispatch_similarity_read_frame
 from eom_catalog_service.similarity_read_service import CatalogSimilarityContextReadService
 from eom_catalog_service.workflow_similarity_read_dispatch import (
@@ -517,6 +520,25 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     )
                     return
                 self._create_document_review_evidence(evidence_request)
+                return
+            if raw_operation == "CREATE_DOCUMENT_REVIEW_TEXTBOOK_EVIDENCE":
+                try:
+                    validate_contract("document-review-textbook-evidence-request", value)
+                    textbook_request = CreateDocumentReviewTextbookEvidenceCommand.model_validate(
+                        value
+                    )
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_document_review_textbook_evidence_response(
+                        self.wfile,
+                        DocumentReviewTextbookEvidenceResponse(
+                            status="ERROR",
+                            error_code=(
+                                CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value
+                            ),
+                        ),
+                    )
+                    return
+                self._create_document_review_textbook_evidence(textbook_request)
                 return
             if raw_operation == "GET_DOCUMENT_REVIEW_ANNOTATED_PDF":
                 try:
@@ -1079,6 +1101,34 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             )
         self.server.write_document_review_evidence_response(self.wfile, response)
 
+    def _create_document_review_textbook_evidence(
+        self, request: CreateDocumentReviewTextbookEvidenceCommand
+    ) -> None:
+        service = self.server.document_review_evidence
+        if service is None:
+            response = DocumentReviewTextbookEvidenceResponse(
+                status="ERROR",
+                error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+            )
+        else:
+            try:
+                binding = service.create_textbook(request)
+                response = DocumentReviewTextbookEvidenceResponse(status="OK", binding=binding)
+            except (
+                DocumentReviewEvidenceServiceError,
+                ReviewTextbookEvidenceError,
+                KnowledgeRetrievalServiceError,
+            ) as exc:
+                response = DocumentReviewTextbookEvidenceResponse(
+                    status="ERROR", error_code=exc.code
+                )
+            except Exception:
+                response = DocumentReviewTextbookEvidenceResponse(
+                    status="ERROR",
+                    error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+                )
+        self.server.write_document_review_textbook_evidence_response(self.wfile, response)
+
     def _stream_document_review_corrected_hwpx(
         self,
         request: DocumentReviewHwpxCorrectionMediaQuery,
@@ -1616,6 +1666,19 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
         if len(raw) + 1 > MAX_MESSAGE_BYTES:
             raise RuntimeError("document review evidence response exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @staticmethod
+    def write_document_review_textbook_evidence_response(
+        stream: Any,
+        response: DocumentReviewTextbookEvidenceResponse,
+    ) -> None:
+        payload = response.model_dump(mode="json")
+        payload.pop("error_code" if response.status == "OK" else "binding")
+        validate_contract("document-review-textbook-evidence-response", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("textbook review evidence response exceeded its fixed bound")
         stream.write(raw + b"\n")
 
     @staticmethod

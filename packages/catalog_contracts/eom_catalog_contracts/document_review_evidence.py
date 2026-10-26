@@ -16,6 +16,7 @@ from eom_catalog_contracts.knowledge import (
     PermissionKeyValue,
 )
 from eom_catalog_contracts.models import ActorId, FrozenModel, Sha256
+from eom_catalog_contracts.review_textbook_evidence import ReviewTextbookEvidence
 
 
 class DocumentReviewEvidenceSource(FrozenModel):
@@ -152,3 +153,74 @@ class DocumentReviewEvidenceResponse(FrozenModel):
         if self.status == "ERROR" and self.plan is None and self.error_code is not None:
             return self
         raise ValueError("document review evidence response variant is incomplete")
+
+
+class DocumentReviewTextbookEvidenceSource(FrozenModel):
+    """Single or paired PDF-projected source for mandatory textbook retrieval."""
+
+    role: Literal["DOCUMENT", "QUESTION", "SOLUTION"]
+    document: PdfReviewDocumentPointer
+
+
+class CreateDocumentReviewTextbookEvidenceCommand(FrozenModel):
+    """Successor Catalog command; one document or exact QUESTION/SOLUTION pair."""
+
+    schema_version: Literal["document-review-textbook-evidence-request/1.0"] = (
+        "document-review-textbook-evidence-request/1.0"
+    )
+    operation: Literal["CREATE_DOCUMENT_REVIEW_TEXTBOOK_EVIDENCE"] = (
+        "CREATE_DOCUMENT_REVIEW_TEXTBOOK_EVIDENCE"
+    )
+    review_input_sha256: Sha256
+    documents: tuple[DocumentReviewTextbookEvidenceSource, ...] = Field(min_length=1, max_length=2)
+    corpus_key: str = Field(pattern=r"^[a-z][a-z0-9_-]{1,63}$")
+    evidence_budget: EvidenceBudget
+    access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
+    access_policy_sha256: Sha256
+    requester_role: Literal["ADMIN", "EDITOR", "REVIEWER"]
+    requester_permission_keys: tuple[PermissionKeyValue, ...] = Field(min_length=1, max_length=128)
+    requested_by: ActorId
+    idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[\x21-\x7e]+$")
+    submission_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_source_scope_and_hash(self) -> CreateDocumentReviewTextbookEvidenceCommand:
+        roles = tuple(value.role for value in self.documents)
+        if roles not in {("DOCUMENT",), ("QUESTION", "SOLUTION")}:
+            raise ValueError("textbook review sources must be single or exact paired documents")
+        identities = tuple(
+            (value.document.document_id, value.document.document_revision_id)
+            for value in self.documents
+        )
+        if len(set(identities)) != len(identities):
+            raise ValueError("textbook review documents must be distinct")
+        if self.evidence_budget.max_item_revisions != 0:
+            raise ValueError("textbook-only review cannot request Item revisions")
+        if self.requester_permission_keys != tuple(sorted(set(self.requester_permission_keys))):
+            raise ValueError("textbook review permission keys must be sorted and unique")
+        body = self.model_dump(mode="json", exclude={"idempotency_key", "submission_sha256"})
+        if content_sha256(body) != self.submission_sha256:
+            raise ValueError("textbook review command hash differs")
+        return self
+
+
+class DocumentReviewTextbookEvidenceResponse(FrozenModel):
+    """One verified textbook binding or one stable fail-closed error."""
+
+    schema_version: Literal["document-review-textbook-evidence-response/1.0"] = (
+        "document-review-textbook-evidence-response/1.0"
+    )
+    operation: Literal["CREATE_DOCUMENT_REVIEW_TEXTBOOK_EVIDENCE"] = (
+        "CREATE_DOCUMENT_REVIEW_TEXTBOOK_EVIDENCE"
+    )
+    status: Literal["OK", "ERROR"]
+    binding: ReviewTextbookEvidence | None = None
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
+
+    @model_validator(mode="after")
+    def exactly_one_variant(self) -> DocumentReviewTextbookEvidenceResponse:
+        if self.status == "OK" and self.binding is not None and self.error_code is None:
+            return self
+        if self.status == "ERROR" and self.binding is None and self.error_code is not None:
+            return self
+        raise ValueError("textbook review evidence response variant is incomplete")

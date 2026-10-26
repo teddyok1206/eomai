@@ -42,6 +42,7 @@ from eom_catalog_contracts import (
     CreateDocumentReviewAnnotatedPdfsV4,
     CreateDocumentReviewAnnotatedPdfsV5,
     CreateDocumentReviewEvidenceCommand,
+    CreateDocumentReviewTextbookEvidenceCommand,
     CreateEvidenceBundleCommand,
     CreateItemProductionEvidenceCommand,
     CreateKnowledgeAnalysisBatchCommand,
@@ -59,6 +60,7 @@ from eom_catalog_contracts import (
     DocumentReviewPdfAnnotationResponse,
     DocumentReviewPdfAnnotationResponseV2,
     DocumentReviewPdfAnnotationResponseV3,
+    DocumentReviewTextbookEvidenceResponse,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV3,
@@ -96,6 +98,7 @@ from eom_catalog_contracts import (
     ReviewedItemContentImportCommand,
     ReviewedItemContentImportResult,
     ReviewKnowledgeAnalysisCommand,
+    ReviewTextbookEvidence,
     catalog_application_schema_route,
     validate_contract,
 )
@@ -987,6 +990,37 @@ class CatalogApplicationClient:
             )
         return response.plan
 
+    def create_document_review_textbook_evidence(
+        self,
+        command: CreateDocumentReviewTextbookEvidenceCommand,
+    ) -> ReviewTextbookEvidence:
+        """Resolve exactly one/two document revisions to an authorized textbook bundle."""
+
+        payload = command.model_dump(mode="json")
+        try:
+            validate_contract("document-review-textbook-evidence-request", payload)
+            value = self._raw_request(
+                payload,
+                timeout_seconds=PDF_DOCUMENT_REVIEW_RESPONSE_TIMEOUT_SECONDS,
+            )
+            validate_contract("document-review-textbook-evidence-response", value)
+            response = DocumentReviewTextbookEvidenceResponse.model_validate(value)
+        except CatalogApplicationClientError:
+            raise
+        except (JsonSchemaValidationError, ValidationError, ValueError) as exc:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog textbook review evidence response is invalid",
+            ) from exc
+        if response.status == "ERROR":
+            self._raise_remote_error(response.error_code)
+        if response.binding is None:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog textbook review evidence binding is missing",
+            )
+        return response.binding
+
     def publish_approved_item_analyses(
         self,
         command: PublishApprovedItemAnalysesCommand,
@@ -1381,6 +1415,11 @@ class CatalogApplicationClient:
                     raise CatalogApplicationClientError(
                         error_code,
                         "Catalog document-review derivative operation failed",
+                    ) from None
+                if error_code.startswith("REVIEW_TEXTBOOK_"):
+                    raise CatalogApplicationClientError(
+                        error_code,
+                        "Catalog textbook review evidence is unavailable",
                     ) from None
                 if error_code.startswith("OFFICE_DOCUMENT_"):
                     raise CatalogApplicationClientError(
