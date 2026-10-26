@@ -14,6 +14,7 @@ from eom_orchestrator.errors import PlatformError
 from eom_orchestrator.orchestrator import _reject_unactivated_textbook_review_result
 from eom_protocol import ErrorCode
 from eom_workflow.document_review import (
+    PdfDocumentReviewRequest,
     PdfDocumentReviewWorkerRequestV5,
     validate_single_document_review_textbook_usage,
 )
@@ -21,6 +22,7 @@ from eom_workflow.models import (
     PdfDocumentReviewRoleResultV4,
     PdfDocumentReviewRoleResultV5,
     RoleWorkerInput,
+    WorkflowRequest,
 )
 from eom_workflow.schemas import (
     constrained_result_schema,
@@ -29,6 +31,7 @@ from eom_workflow.schemas import (
     validate_role_input,
     validate_role_result,
 )
+from eom_workflow_runner.repository import workflow_request_storage_document
 from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import ValidationError
 
@@ -108,6 +111,38 @@ def test_textbook_grounded_single_input_is_schema_and_model_valid() -> None:
     predecessor["protocol_version"] = "workflow-role/1.28.0"
     with pytest.raises(ValidationError, match="isolated protocol successor"):
         RoleWorkerInput.model_validate(predecessor)
+
+
+def test_workflow_request_selects_successor_without_changing_predecessor_storage() -> None:
+    source = _input_v5()["request"]
+    review_request = PdfDocumentReviewRequest.model_validate(source["review_request"])
+    legacy = WorkflowRequest(
+        request_name="PDF_DOCUMENT_REVIEW_REQUEST",
+        image_mode="skip",
+        execution_preset_key="pdf-document-review",
+        pdf_document_review_request=review_request,
+    )
+    assert "document_review_textbook_evidence" not in workflow_request_storage_document(legacy)
+    binding = ReviewTextbookEvidence.model_validate(source["textbook_evidence"])
+    successor = WorkflowRequest.model_validate(
+        {
+            **legacy.model_dump(mode="json"),
+            "document_review_textbook_evidence": binding.model_dump(mode="json"),
+        }
+    )
+    assert isinstance(successor.worker_request(), PdfDocumentReviewWorkerRequestV5)
+    assert (
+        workflow_request_storage_document(successor)["document_review_textbook_evidence"][
+            "binding_sha256"
+        ]
+        == binding.binding_sha256
+    )
+    with pytest.raises(ValidationError, match="single document textbook evidence differs"):
+        WorkflowRequest(
+            request_name="CUSTOMER_SUPPORT_REQUEST",
+            image_mode="skip",
+            document_review_textbook_evidence=binding,
+        )
 
 
 def test_textbook_grounded_single_result_is_schema_and_model_valid() -> None:

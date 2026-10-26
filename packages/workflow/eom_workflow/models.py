@@ -44,6 +44,7 @@ from eom_catalog_contracts import (
     LegacyItemExtractionRequest,
     LegacyItemExtractionResult,
     ParagraphBlock,
+    ReviewTextbookEvidence,
     SingleChoiceInteraction,
     StatementSetBlock,
     TableBlock,
@@ -498,6 +499,7 @@ class WorkflowRequest(FrozenModel):
     legacy_editorial_compatibility_request: LegacyItemEditorialCompatibilityRequest | None = None
     customer_support_case: CustomerSupportCase | None = None
     pdf_document_review_request: PdfDocumentReviewRequest | None = None
+    document_review_textbook_evidence: ReviewTextbookEvidence | None = None
     paired_document_review_request: (
         PairedDocumentReviewRequestV2 | PairedDocumentReviewRequest | None
     ) = None
@@ -509,6 +511,13 @@ class WorkflowRequest(FrozenModel):
             and self.pdf_document_review_request is not None
         ):
             raise ValueError("only PDF document review may include a PDF document review request")
+        if self.document_review_textbook_evidence is not None and (
+            self.request_name != "PDF_DOCUMENT_REVIEW_REQUEST"
+            or self.pdf_document_review_request is None
+            or self.document_review_textbook_evidence.review_input_sha256
+            != self.pdf_document_review_request.request_sha256
+        ):
+            raise ValueError("single document textbook evidence differs from its request")
         if (
             self.request_name != "PAIRED_DOCUMENT_REVIEW_REQUEST"
             and self.paired_document_review_request is not None
@@ -823,6 +832,11 @@ class WorkflowRequest(FrozenModel):
                 review_request=self.paired_document_review_request
             )
         if self.pdf_document_review_request is not None:
+            if self.document_review_textbook_evidence is not None:
+                return PdfDocumentReviewWorkerRequestV5(
+                    review_request=self.pdf_document_review_request,
+                    textbook_evidence=self.document_review_textbook_evidence,
+                )
             return PdfDocumentReviewWorkerRequest(review_request=self.pdf_document_review_request)
         if self.customer_support_case is not None:
             return CustomerSupportWorkerRequest(case=self.customer_support_case)
