@@ -55,6 +55,7 @@ from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequest,
     PairedDocumentReviewWorkerRequestV2,
     PdfDocumentReviewWorkerRequest,
+    PdfDocumentReviewWorkerRequestV5,
 )
 from eom_workflow.inference_transfer import (
     InferenceTransferPairWorkerRequest,
@@ -132,6 +133,7 @@ from eom_workflow.models import (
     PairedDocumentReviewRoleResultV3,
     PdfDocumentReviewRoleResult,
     PdfDocumentReviewRoleResultV4,
+    PdfDocumentReviewRoleResultV5,
     RegistrationRoleResult,
     ReviewRoleResult,
     RoleResult,
@@ -238,6 +240,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "pdf-document-review-result@2.0",
             "pdf-document-review-result@3.0",
             "pdf-document-review-result@4.0",
+            "pdf-document-review-result@5.0",
             "item-inference-transfer-pair-result@1.0",
             "item-inference-transfer-pair-result@1.1",
         }
@@ -312,6 +315,7 @@ RESULT_SCHEMA_FILES = {
     "pdf-document-review-result@2.0": "paired-document-review-result-v2.schema.json",
     "pdf-document-review-result@3.0": "paired-document-review-result-v3.schema.json",
     "pdf-document-review-result@4.0": "pdf-document-review-result-v4.schema.json",
+    "pdf-document-review-result@5.0": "pdf-document-review-result-v5.schema.json",
     "item-inference-transfer-pair-result@1.0": "item-inference-transfer-pair-result-v1.schema.json",
     "item-inference-transfer-pair-result@1.1": "item-inference-transfer-pair-result-v2.schema.json",
 }
@@ -351,6 +355,7 @@ INPUT_SCHEMA_FILES_V1_27 = {"support": "paired-document-review-input-v3.schema.j
 INPUT_SCHEMA_FILES_V1_28 = {"support": "pdf-document-review-input-v4.schema.json"}
 INPUT_SCHEMA_FILES_V1_29 = {"support": "item-inference-transfer-pair-input-v1.schema.json"}
 INPUT_SCHEMA_FILES_V1_30 = {"support": "item-inference-transfer-pair-input-v2.schema.json"}
+INPUT_SCHEMA_FILES_V1_31 = {"support": "pdf-document-review-input-v5.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -383,6 +388,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "pdf-document-review-result@2.0": "workflow-role/1.26.0",
     "pdf-document-review-result@3.0": "workflow-role/1.27.0",
     "pdf-document-review-result@4.0": "workflow-role/1.28.0",
+    "pdf-document-review-result@5.0": "workflow-role/1.31.0",
     "item-inference-transfer-pair-result@1.0": "workflow-role/1.29.0",
     "item-inference-transfer-pair-result@1.1": "workflow-role/1.30.0",
     "authoring-result@5.0": "workflow-role/1.12.0",
@@ -451,6 +457,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.28.0": INPUT_SCHEMA_FILES_V1_28,
     "workflow-role/1.29.0": INPUT_SCHEMA_FILES_V1_29,
     "workflow-role/1.30.0": INPUT_SCHEMA_FILES_V1_30,
+    "workflow-role/1.31.0": INPUT_SCHEMA_FILES_V1_31,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -484,6 +491,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.28.0",
     "workflow-role/1.29.0",
     "workflow-role/1.30.0",
+    "workflow-role/1.31.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -515,6 +523,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_28.values(),
             *INPUT_SCHEMA_FILES_V1_29.values(),
             *INPUT_SCHEMA_FILES_V1_30.values(),
+            *INPUT_SCHEMA_FILES_V1_31.values(),
         }
     )
 )
@@ -1477,6 +1486,7 @@ def _role_input_schema(role: str, protocol_version: str = "workflow-role/1.0.1")
             "workflow-role/1.21.0",
             "workflow-role/1.29.0",
             "workflow-role/1.30.0",
+            "workflow-role/1.31.0",
         },
     )
 
@@ -1510,6 +1520,7 @@ def _role_result_schema(schema_id: str) -> dict[str, Any]:
             "legacy-item-editorial-compatibility-result@1.0",
             "item-inference-transfer-pair-result@1.0",
             "item-inference-transfer-pair-result@1.1",
+            "pdf-document-review-result@5.0",
         },
     )
 
@@ -1765,6 +1776,7 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             "pdf-document-review-result@2.0",
             "pdf-document-review-result@3.0",
             "pdf-document-review-result@4.0",
+            "pdf-document-review-result@5.0",
         }
         and role == "support"
     ):
@@ -1911,6 +1923,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return PdfDocumentReviewRoleResult.model_validate(canonical_value)
         if schema_id == "pdf-document-review-result@4.0" and role == "support":
             return PdfDocumentReviewRoleResultV4.model_validate(canonical_value)
+        if schema_id == "pdf-document-review-result@5.0" and role == "support":
+            return PdfDocumentReviewRoleResultV5.model_validate(canonical_value)
         if schema_id == "pdf-document-review-result@2.0" and role == "support":
             return PairedDocumentReviewRoleResult.model_validate(canonical_value)
         if schema_id == "pdf-document-review-result@3.0" and role == "support":
@@ -2426,6 +2440,9 @@ def _canonicalize_pdf_document_review_result(value: object) -> object:
                     anchor["quote_sha256"] = (
                         content_sha256(quote) if isinstance(quote, str) else None
                     )
+    textbook_usage = canonical_output.get("textbook_usage")
+    if isinstance(textbook_usage, dict) and "usage_sha256" not in textbook_usage:
+        textbook_usage["usage_sha256"] = content_sha256(textbook_usage)
     return canonical
 
 
@@ -2950,8 +2967,17 @@ def constrained_result_schema(
             "in this item, and add mappings for every other grounded content element."
         )
         _prune_unreferenced_definitions(schema)
-    if schema_id in {"pdf-document-review-result@1.0", "pdf-document-review-result@4.0"}:
-        if not isinstance(worker_input.request, PdfDocumentReviewWorkerRequest):
+    if schema_id in {
+        "pdf-document-review-result@1.0",
+        "pdf-document-review-result@4.0",
+        "pdf-document-review-result@5.0",
+    }:
+        expected_request = (
+            PdfDocumentReviewWorkerRequestV5
+            if schema_id == "pdf-document-review-result@5.0"
+            else PdfDocumentReviewWorkerRequest
+        )
+        if not isinstance(worker_input.request, expected_request):
             raise WorkflowSchemaError("PDF document review result requires its typed request")
         pdf_request = worker_input.request.review_request
         _describe_document_review_result_order(definitions)
@@ -2961,7 +2987,10 @@ def constrained_result_schema(
             "anchor must refer to one of these pages."
         )
         output_properties = _mapping(_mapping(definitions, "output"), "properties")
-        if schema_id == "pdf-document-review-result@4.0":
+        if schema_id in {
+            "pdf-document-review-result@4.0",
+            "pdf-document-review-result@5.0",
+        }:
             output_properties["review_status"]["description"] = (
                 "Return NEEDS_HUMAN_DECISION if any of the ten verification targets is FAILED "
                 "or INSUFFICIENT, or any candidate is UNCERTAIN. Otherwise return COMPLETE. "
@@ -3004,6 +3033,25 @@ def constrained_result_schema(
                 "enum": [page.page_image.sha256 for page in pdf_request.document.pages],
             }
         )
+        if schema_id == "pdf-document-review-result@5.0":
+            if not isinstance(worker_input.request, PdfDocumentReviewWorkerRequestV5):
+                raise WorkflowSchemaError("textbook review requires its exact typed request")
+            textbook = worker_input.request.textbook_evidence
+            usage = _mapping(definitions, "ReviewTextbookUsage")
+            usage_properties = _mapping(usage, "properties")
+            _bind_result_string_const(
+                schema,
+                _mapping(usage_properties, "binding_sha256"),
+                textbook.binding_sha256,
+            )
+            citation = _mapping(definitions, "ReviewTextbookUsage_citation")
+            citation_properties = _mapping(citation, "properties")
+            _mapping(citation_properties, "evidence_id")["enum"] = list(
+                textbook.textbook_evidence_ids
+            )
+            _mapping(_mapping(citation_properties, "conclusion_paths"), "items")["enum"] = [
+                f"/verification_targets/{index}/conclusion" for index in range(10)
+            ]
     if schema_id in {
         "pdf-document-review-result@2.0",
         "pdf-document-review-result@3.0",
@@ -4040,6 +4088,7 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
         "pdf-document-review-result@2.0",
         "pdf-document-review-result@3.0",
         "pdf-document-review-result@4.0",
+        "pdf-document-review-result@5.0",
     }:
         anchor = _mapping(_mapping(schema, "$defs"), "anchor")
         anchor.pop("allOf", None)
@@ -4051,8 +4100,20 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
             raise WorkflowSchemaError("PDF document review quote hash requirement is invalid")
         anchor_required.remove("quote_sha256")
         _project_pdf_review_recommendation_codex_contract(schema)
-        if schema_id == "pdf-document-review-result@4.0":
+        if schema_id in {
+            "pdf-document-review-result@4.0",
+            "pdf-document-review-result@5.0",
+        }:
             _mapping(_mapping(schema, "$defs"), "output").pop("allOf", None)
+        if schema_id == "pdf-document-review-result@5.0":
+            usage = _mapping(_mapping(schema, "$defs"), "ReviewTextbookUsage")
+            usage_properties = _mapping(usage, "properties")
+            if usage_properties.pop("usage_sha256", None) is None:
+                raise WorkflowSchemaError("textbook usage hash is not projectable")
+            usage_required = usage.get("required")
+            if not isinstance(usage_required, list) or "usage_sha256" not in usage_required:
+                raise WorkflowSchemaError("textbook usage hash requirement is invalid")
+            usage_required.remove("usage_sha256")
         if schema_id == "pdf-document-review-result@3.0":
             _project_paired_document_review_v3_codex_contract(schema)
     _normalize_codex_schema(schema)
@@ -4665,6 +4726,31 @@ def _inline_catalog_schema(
     else:
         bundled = _inline_assessment_item_schema(schema, reference)
     knowledge_contracts = (
+        (
+            "eom://schemas/knowledge/review-textbook-evidence/1.0",
+            "review-textbook-evidence",
+            "ReviewTextbookEvidence",
+        ),
+        (
+            "https://eom.local/schemas/knowledge/review-textbook-usage-v1.schema.json",
+            "review-textbook-usage",
+            "ReviewTextbookUsage",
+        ),
+        (
+            "eom://schemas/knowledge/educational-retrieval-requirement/1.0",
+            "educational-retrieval-requirement",
+            "EducationalRetrievalRequirement",
+        ),
+        (
+            "eom://schemas/knowledge/evidence-bundle-publication-result/3.0",
+            "evidence-bundle-publication-result-v3",
+            "EvidenceBundlePublicationResultV3",
+        ),
+        (
+            "eom://schemas/knowledge/evidence-bundle-publication-result/4.0",
+            "evidence-bundle-publication-result-v4",
+            "EvidenceBundlePublicationResultV4",
+        ),
         (
             "eom://schemas/knowledge/item-inference-transfer-pair-result/1.1",
             "item-inference-transfer-pair-result-v1.1",

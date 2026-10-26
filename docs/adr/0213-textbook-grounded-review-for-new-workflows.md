@@ -2,9 +2,13 @@
 
 Status: implementation in progress, 2026-10-26 UTC. The shared
 `review-textbook-evidence/1.0` contract and a Catalog-only one/two-document
-publication boundary exist in source. No review Workflow consumes that binding
-yet; this decision does **not** activate a new review contract or reinterpret
-historical reviews.
+publication boundary exist in source. The single-document `workflow-role/1.31.0`
+input/result schemas and typed models now bind textbook usage to science and
+curriculum conclusions. The pure validator can reopen the exact Catalog
+manifest and reject foreign sources, anchors, request identities and blank
+conclusions. No review Workflow selects that successor yet; the orchestrator
+has not connected the validator to its commit boundary. This decision does
+**not** activate a new review path or reinterpret historical reviews.
 
 ## Decision and boundary
 
@@ -103,7 +107,9 @@ source. A mixed-source request alone is not evidence of this condition.
 
 New worker-result successors must record textbook evidence usage against exact
 scalar conclusion paths and expose `INSUFFICIENT` when the supplied textbook
-does not support a claim. The trusted receipt reopens the pinned manifest and
+does not support a claim. A citation on an `INSUFFICIENT` conclusion means the
+textbook entry was examined, **not** that it supports the rejected claim. The
+trusted receipt reopens the pinned manifest and
 checks cited source IDs, page/Graph anchors, result paths and source class before
 commit. It proves evidence linkage, not scientific truth. A reviewer remains
 responsible for correctness and educational value.

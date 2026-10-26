@@ -76,8 +76,10 @@ from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequestV2,
     PdfDocumentReviewOutput,
     PdfDocumentReviewOutputV4,
+    PdfDocumentReviewOutputV5,
     PdfDocumentReviewRequest,
     PdfDocumentReviewWorkerRequest,
+    PdfDocumentReviewWorkerRequestV5,
 )
 from eom_workflow.inference_transfer import (
     InferenceTransferPairWorkerRequest,
@@ -808,6 +810,7 @@ class WorkflowRequest(FrozenModel):
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PdfDocumentReviewWorkerRequest
+        | PdfDocumentReviewWorkerRequestV5
         | PairedDocumentReviewWorkerRequestV2
         | PairedDocumentReviewWorkerRequest
     ):
@@ -1029,6 +1032,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.28.0",
         "workflow-role/1.29.0",
         "workflow-role/1.30.0",
+        "workflow-role/1.31.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1042,6 +1046,7 @@ class RoleWorkerInput(FrozenModel):
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PdfDocumentReviewWorkerRequest
+        | PdfDocumentReviewWorkerRequestV5
         | PairedDocumentReviewWorkerRequestV2
         | PairedDocumentReviewWorkerRequest
         | InferenceTransferPairWorkerRequest
@@ -1061,6 +1066,7 @@ class RoleWorkerInput(FrozenModel):
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PdfDocumentReviewWorkerRequest
+        | PdfDocumentReviewWorkerRequestV5
         | PairedDocumentReviewWorkerRequestV2
         | PairedDocumentReviewWorkerRequest
         | InferenceTransferPairWorkerRequest
@@ -1083,6 +1089,8 @@ class RoleWorkerInput(FrozenModel):
         if value.get("request_name") == "ITEM_INFERENCE_TRANSFER_PAIR_REQUEST_V11":
             return InferenceTransferPairWorkerRequestV11.model_validate(value)
         if value.get("request_name") == "PDF_DOCUMENT_REVIEW_REQUEST":
+            if "textbook_evidence" in value:
+                return PdfDocumentReviewWorkerRequestV5.model_validate(value)
             return PdfDocumentReviewWorkerRequest.model_validate(value)
         if value.get("request_name") == "PAIRED_DOCUMENT_REVIEW_REQUEST":
             nested = value.get("review_request")
@@ -1112,6 +1120,11 @@ class RoleWorkerInput(FrozenModel):
             )
         if is_transfer and (self.role != "support" or self.upstream_artifacts):
             raise ValueError("inference-transfer input requires support with no upstream artifacts")
+        is_textbook_review = isinstance(self.request, PdfDocumentReviewWorkerRequestV5)
+        if (is_textbook_review and self.protocol_version != "workflow-role/1.31.0") or (
+            not is_textbook_review and self.protocol_version == "workflow-role/1.31.0"
+        ):
+            raise ValueError("textbook review requires its isolated protocol successor")
         return self
 
 
@@ -1191,6 +1204,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.28.0",
         "workflow-role/1.29.0",
         "workflow-role/1.30.0",
+        "workflow-role/1.31.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -2864,6 +2878,12 @@ class PdfDocumentReviewRoleResultV4(PdfDocumentReviewRoleResult):
     output: PdfDocumentReviewOutputV4
 
 
+class PdfDocumentReviewRoleResultV5(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.31.0"] = "workflow-role/1.31.0"
+    role: Literal["support"] = "support"
+    output: PdfDocumentReviewOutputV5
+
+
 class PairedDocumentReviewRoleResult(RoleResultBase):
     protocol_version: Literal["workflow-role/1.26.0"] = "workflow-role/1.26.0"
     role: Literal["support"] = "support"
@@ -2941,6 +2961,7 @@ RoleResult = (
     | InferenceTransferPairRoleResultV11
     | PdfDocumentReviewRoleResult
     | PdfDocumentReviewRoleResultV4
+    | PdfDocumentReviewRoleResultV5
     | PairedDocumentReviewRoleResult
     | PairedDocumentReviewRoleResultV3
 )

@@ -8,7 +8,11 @@ from typing import Annotated, Literal, get_args
 
 from eom_catalog_contracts import (
     DocumentReviewEvidencePlan,
+    EvidenceBundleManifestV3,
+    EvidenceBundleManifestV4,
     PdfReviewDocumentPointer,
+    ReviewTextbookEvidence,
+    ReviewTextbookUsage,
 )
 from eom_identifiers import content_sha256
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -111,6 +115,20 @@ class PdfDocumentReviewRequest(FrozenModel):
 class PdfDocumentReviewWorkerRequest(FrozenModel):
     request_name: Literal["PDF_DOCUMENT_REVIEW_REQUEST"] = "PDF_DOCUMENT_REVIEW_REQUEST"
     review_request: PdfDocumentReviewRequest
+
+
+class PdfDocumentReviewWorkerRequestV5(FrozenModel):
+    """One existing immutable document request plus exact Catalog textbook publication."""
+
+    request_name: Literal["PDF_DOCUMENT_REVIEW_REQUEST"] = "PDF_DOCUMENT_REVIEW_REQUEST"
+    review_request: PdfDocumentReviewRequest
+    textbook_evidence: ReviewTextbookEvidence
+
+    @model_validator(mode="after")
+    def exact_review_input(self) -> PdfDocumentReviewWorkerRequestV5:
+        if self.textbook_evidence.review_input_sha256 != self.review_request.request_sha256:
+            raise ValueError("single review textbook evidence belongs to another request")
+        return self
 
 
 class PdfReviewRegion(FrozenModel):
@@ -336,6 +354,26 @@ class PdfDocumentReviewOutputV4(PdfDocumentReviewOutput):
         return self
 
 
+class PdfDocumentReviewOutputV5(PdfDocumentReviewOutputV4):
+    """Science and curriculum conclusions disclose the textbook evidence examined."""
+
+    textbook_usage: ReviewTextbookUsage
+
+    @model_validator(mode="after")
+    def validate_textbook_conclusion_coverage(self) -> PdfDocumentReviewOutputV5:
+        required_paths = {
+            f"/verification_targets/{index}/conclusion"
+            for index, target in enumerate(self.verification_targets)
+            if target.axis in {"SCIENTIFIC_ACCURACY", "CURRICULUM_SCOPE"}
+        }
+        cited_paths = {
+            path for citation in self.textbook_usage.citations for path in citation.conclusion_paths
+        }
+        if cited_paths != required_paths:
+            raise ValueError("single review textbook citations must cover science axes")
+        return self
+
+
 def validate_pdf_document_review_output_against_request(
     output: PdfDocumentReviewOutput,
     request: PdfDocumentReviewRequest,
@@ -368,6 +406,26 @@ def validate_pdf_document_review_output_against_request(
     for anchor in anchors:
         if page_hashes.get(anchor.page_number) != anchor.page_image_sha256:
             raise ValueError("PDF review anchor differs from its pinned page image")
+
+
+def validate_single_document_review_textbook_usage(
+    output: PdfDocumentReviewOutputV5,
+    worker_request: PdfDocumentReviewWorkerRequestV5,
+    manifest: EvidenceBundleManifestV3 | EvidenceBundleManifestV4,
+) -> None:
+    """Check exact source, anchor and conclusion use after reopening Catalog evidence."""
+
+    validate_pdf_document_review_output_against_request(output, worker_request.review_request)
+    output.textbook_usage.verify_manifest(worker_request.textbook_evidence, manifest)
+    conclusions = {
+        f"/verification_targets/{index}/conclusion": target.conclusion
+        for index, target in enumerate(output.verification_targets)
+        if target.axis in {"SCIENTIFIC_ACCURACY", "CURRICULUM_SCOPE"}
+    }
+    for citation in output.textbook_usage.citations:
+        for pointer in citation.conclusion_paths:
+            if not conclusions.get(pointer, "").strip():
+                raise ValueError("textbook citation does not resolve to a science conclusion")
 
 
 class PairedReviewDocument(FrozenModel):
