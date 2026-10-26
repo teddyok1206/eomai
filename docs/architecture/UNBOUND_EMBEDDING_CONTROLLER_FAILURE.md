@@ -70,3 +70,34 @@ An explicit red regression reproduces this mismatch. Normalize that one boundary
 without changing either template/hash or weakening the file check, then stage a
 new immutable SDK rather than editing the installed prefix. Preserve the original
 failed read log; do not mistake staging for live failure closure.
+
+## Actual original closure — 2026-10-26 00:12 UTC
+
+Installed isolated maintenance SDK `245555474a621fc374485f3738710c46dd3a3e94`:
+platform wheel raw SHA `a727ac6a8d6372495161315a085c0f51f2018637e2bf193b647f61dd9ca0ea9b`,
+contracts wheel raw SHA `89665fed01aa514434615d6e99578b23551aba580a5e12a9a432a2761aa42d88`.
+Official wheel/RECORD verification and protected installer PASS. Neither the API,
+INDEX/QUERY metadata services nor qualified numerical prefixes were replaced.
+
+The actual root/OS/files/DB-owner PREPARE passed. The supported application then
+closed **original** `job_04e9e09afc994736ae063b882e4bb854` FAILED and exact replay
+returned the same failure. It created no new Workflow or model computation and
+preserved root invocation `03c29a9e0041406ca2cde062a2e1d4f8` as FAILED.
+
+Canonical Orchestrator-committed evidence:
+
+- Artifact `artifact_eb261803d3ca4a3d9efa156c4206feda` /
+  revision `rev_a73083081643428a94bb190c32c26cda`.
+- Member `controller-failure.json`, schema
+  `eom://schemas/workflow/embedding-unbound-control-failure/1.0`.
+- Raw SHA `91c88586410b2ef42b75e461124b89521685a8b493147752a9f89d7731ee4865`.
+- Protected operation record:
+  `/var/lib/eom-original-unbound-control-failure-20261025/completion.json`.
+- Small logs: `/tmp/eom-original-unbound-control-prepare-20261026-r2.log` and
+  `/tmp/eom-original-unbound-control-record-20261026-r1.log`, EXIT0.
+
+Corrected-template-boundary regression:198 PASS,42.48s; strict mypy5 PASS.
+Earlier r73 PostgreSQL63 PASS and cleanup are still applicable: the correction
+changed only plain-hex-to-typed-hash representation, not persistence/state rules.
+No fictional numerical invocation, retirement, BUSY observation or success exists.
+GPU QUERY/default/rollback and exact full index pairs remain separate open gates.

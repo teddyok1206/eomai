@@ -74,3 +74,20 @@ no recorded invocation and the original input/output files remain empty. Keep
 the failed root and no-grant facts distinct. Candidate SELECT additionally reads
 the exact original through the official Orchestrator metadata reader and refuses
 promotion unless that original has an evidenced FAILED history and no route/BIND.
+
+The original was officially closed at2026-10-26 00:12 UTC using the
+[unbound-controller operation](UNBOUND_EMBEDDING_CONTROLLER_FAILURE.md), with
+exact replay and a canonical Artifact; its failed root was preserved. At00:32
+the explicitly installed successor24555547 was selected through the two-file
+controller boundary, leaving metadata SDK07/Identity and numerical SDKeae2c0d3
+unchanged. Exact selected-file and unchanged-pin read-back PASS. INDEX restarted
+as invocation9718f2ed05ac404e84ce7a69559b110c. Earlier4f1a838a prepared bytes and
+cancelled/failed deployment attempts remain history, not active releases.
+
+Historical parents from before the **current service revision's canonical
+Identity REGISTER event** are quiescent earlier-revision history, not current
+executable claims. Keep them unchanged; current source fences cannot adopt their
+old request identities. The gate still checks current-epoch unbound parents and
+exact-current-revision GPU Workflows after natural drain, as well as actual
+processes/retained FDs. Do not use a global logical-service-ID scan to relabel old
+history as current failure or change history merely to satisfy a rollout check.

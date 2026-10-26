@@ -1,6 +1,6 @@
 # GPU-preferred embedding: live acceptance ledger
 
-As of2026-10-25 23:44 UTC. **GOAL=ACTIVE; completion is not proven.**
+As of2026-10-26 00:35 UTC. **GOAL=ACTIVE; completion is not proven.**
 This small ledger preserves the whole approved scope while background catch-up
 continues. Source tests, installed composition and actual execution are separate
 evidence. It is not a new runtime registry or permission grant.
@@ -13,14 +13,15 @@ evidence. It is not a new runtime registry or permission grant.
 | Web | `06b5d0e92aa96bd105762a6465d73b0e113b80dc`; API/Web source/DTO bytes unchanged |
 | Catalog completed CPU/CUDA reader | reader configuration3, SDK07 |
 | INDEX metadata owner | `07ec7b32105ca4c0e80973ec734418fd12840f76`; eight targets, metadata MemoryMax2GiB |
-| Root GPU controller | `04e36bbe248695a6200f7f114c83b4eb347a3536`, actual entrypoint/declared controller agree |
-| INDEX invocation | `febab24100524e75a73b41b69ba90f17`, PID699393, running; same SDK07/Identity/controller04, after natural drain |
+| Root GPU controller | `245555474a621fc374485f3738710c46dd3a3e94`, selected controller/entrypoint read-back PASS; first ordinary numerical cohort after this selection remains pending |
+| INDEX invocation | `9718f2ed05ac404e84ce7a69559b110c`, PID734655, running; same SDK07/Identity, controller24555547 |
 | Public/mixed/private QUERY | SDK07, **CPU default**, invocation `11b5bc86df9545fc88b44c70f2f2d4d5` |
 | Qualified CPU/CUDA numerical SDK | `eae2c0d3`, unchanged |
-| Unselected QUERY3 candidate | owner/provider07, controller04; previous3db candidate preserved, not selected |
+| Unselected QUERY3 candidate | owner/provider07, controller24555547; original controller04 candidate/rollback preserved, neither selection activated |
 | Migration | `20261019_0058`; no new migration |
 
-Production source checkpoint is `07ec7b32`; this is **not** GPU goal completion.
+API/INDEX metadata source checkpoint is `07ec7b32`, with the independently
+selected root-controller successor above; this is **not** GPU goal completion.
 Actual API wheel SHA is `46d5371724a73e8d0ce0daf93bd02096ac8d2318315c5128dfcb8520728ff745`.
 The immutable owner SDK has its separately pinned wheel bytes; same package version
 or source does not conflate the two wheel identities. **GPU completion commit and final
@@ -554,6 +555,98 @@ Immediate work is the original unbound failure's supported resolution, then the
 already planned full pairs, real finite QUERY3/resource-only CPU fallback/replay,
 default activation/read-back/rollback and completion audit. No new platform or
 unrelated static-review task is opened.
+
+###00:25 original recovery completed; controller selection is a verified wait
+
+The original unbound Job is now **FAILED through the supported application**, not
+an unresolved CLAIMED row and not a newly created replacement. Exact same-evidence
+replay PASS; actual original root remains FAILED / invocation03c29a9… / EXIT1 /
+process0/FD0. No numerical retirement, BUSY result, new Workflow or model forward
+was invented. Canonical evidence is Artifact
+`artifact_eb261803d3ca4a3d9efa156c4206feda` /
+`rev_a73083081643428a94bb190c32c26cda`, `controller-failure.json`, raw SHA
+`91c88586410b2ef42b75e461124b89521685a8b493147752a9f89d7731ee4865`.
+Installed maintenance SDK, tests, first read refusal and actual closure are
+recorded in [original controller failure](../architecture/UNBOUND_EMBEDDING_CONTROLLER_FAILURE.md).
+
+Source/current installed maintenance SDK: `245555474a621fc374485f3738710c46dd3a3e94`;
+API/Web/INDEX/QUERY and qualified numerical installations were not replaced.
+The new root-controller selection uses that explicitly pinned successor, not
+latest. It preserves the same INDEX source07/Identity/grants, eight-target bound,
+numeric profiles/prefixes, policy and QUERY CPU selection. SELECT additionally
+refuses another current actor's unbound parent or current-revision unfinished
+GPU Workflow before changing the deterministic controller pin.
+
+At00:24:51, actual finite deployment unit
+`eom-controller-diagnostics-select-24555547.service`, PID727976, was alive in
+activating/start, waiting for the requested main-only graceful drain of INDEX
+PID699393/invocation`febab24100524e75a73b41b69ba90f17`, also alive. This is
+**verified waiting, not completed activation**. Do not force-kill numerical work
+or restart either handle because an observation times out. The operator is
+bounded and will select/start only after natural EXIT0 and original OS/DB/file
+fences. Current selected controller remains04 until read-back proves otherwise.
+Prepared/rollback files: `/var/lib/eom-controller-diagnostics-24555547`.
+
+The independent QUERY3 candidate also passed canonical-control closure with
+owner/provider07, controller24555547, unchanged private CPU and0 model calls.
+It is stored at `/var/lib/eom-query-routed-controller-24555547`; original
+controller04 candidate remains intact. Actual QUERY is still CPU, same invocation.
+No Studio authentication was requested. This is not real QUERY3/fallback/default
+acceptance, nor permission to intersect/reduce the full corpus.
+
+Routine technical r18 audit at00:00:55: mixed CPU521/474/521 versus CUDA113/181/64;
+legacy ALL CPU520/473/520 versus CUDA105/173/72, CONTENT/CONCRETE/METADATA order.
+These remain partial technical counts, not canonical pair validation. Next
+routine corpus check is approximately00:30; deployment-unit fences are separate.
+Recovered milestone `devreport_769937188303492da9b643781a0fd69c` SENT/SAVED.
+
+Next: observe the same finite controller rollout, verify selected files and the
+resumed original metadata service, then continue full pair catch-up and the
+existing actual QUERY3/CPU fallback/replay/default/rollback acceptance. Goal
+completion and completion commit/release checkpoint remain **NOT_SET**; the
+post-checkpoint static review is still unopened. README4e9c962e is not repeated.
+
+###00:35 actual controller promotion and INDEX restart
+
+The same metadata invocation drained naturally with EXIT0. The first deployment
+continuation refused promotion because its query included ten historical ROUTED /
+RUNNING parent rows from10:03–11:59 of earlier service revisions. The fixed current
+service revision was not created/registered until17:39 or later; its captured
+source fence cannot issue or adopt those earlier requests. No historical row was
+marked successful, failed or deleted to make deployment proceed. The operator now
+uses the canonical Identity REGISTER event for the **current revision** (not an
+arbitrary age threshold or document-created-at) and still refuses current-epoch
+unbound parents and exact-current-revision unfinished GPU Workflows. Original
+21:47 unbound failure was independently closed beforehand, not excluded by time.
+
+The first failed continuation remains FAILED with its original journal. It made
+no selected-file changes. After read-only classification, the reviewed operator
+selected the two declared controller/entrypoint files and preserved every other
+metadata, numerical, policy and QUERY pin. Actual selected files equal prepared
+bytes; all nine unchanged-file hashes match. `CONTROLLER_SELECTION_READBACK=PASS`,
+`/tmp/eom-controller-diagnostics-readback-20261026-r4.log`, EXIT0.
+
+INDEX resumed at00:32:53 as PID734655 /
+invocation`9718f2ed05ac404e84ce7a69559b110c`, SDK07, same Identity/grants,
+controller24555547, eight-target bound. It remained active/running in the00:34
+inspection. The GPU numerical SDK is stilleae2c0d3; API, Catalog reader, Web and
+CPU/private QUERY were not replaced. Actual first numerical cohort and its
+retirement after this controller change remain a separate live gate; service
+start alone does not prove that execution.
+
+Small evidence: `/tmp/eom-controller-diagnostics-select-20261026-r4.log`,
+`/tmp/eom-controller-diagnostics-index-start-state-20261026-r4.log`,
+`/tmp/eom-pending-index-parent-classification-20261026-r1.json` (read-only), and
+the protected `/var/lib/eom-controller-diagnostics-24555547/selected.json`.
+
+Routine r19 count audit at00:34:01: mixed CPU521/474/521 versus CUDA113/181/72;
+legacy ALL CPU520/473/520 versus CUDA113/173/72, CONTENT/CONCRETE/METADATA order.
+They remain partial counts, not canonical pair closure. Next regular corpus
+observation is approximately01:04 UTC. Do not reopen unrelated development while
+the existing INDEX finishes catch-up. On actual pair readiness, use the already
+prepared QUERY3 candidate for the original finite live/fallback/replay/default /
+rollback gates. GPU goal completion and final commit/release checkpoint remain
+NOT_SET.
 
 Let the confirmed current catch-up invocation run, with milestone-based reporting
 and bounded metadata observations. Do not add unrelated code or repeatedly ask
