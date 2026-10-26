@@ -1,6 +1,6 @@
 # GPU-preferred embedding: live acceptance ledger
 
-As of2026-10-26 18:04 UTC. **GOAL=ACTIVE; completion is not proven.**
+As of2026-10-26 19:34 UTC. **GOAL=ACTIVE; completion is not proven.**
 This small ledger preserves the whole approved scope while background catch-up
 continues. Source tests, installed composition and actual execution are separate
 evidence. It is not a new runtime registry or permission grant.
@@ -825,3 +825,26 @@ that Linux authorization had expired. No password was requested, and no
 INDEX/QUERY restart, new model request, selection or fallback occurred.
 Continue the original catch-up and avoid requesting a new operator session
 until exact pair readiness is plausible from authorized evidence.
+
+### 19:34 scheduled live-index observation and current-source regression
+
+The original INDEX owner is still `active/running`, PID `734655`, invocation
+`9718f2ed05ac404e84ce7a69559b110c`; the selected CPU QUERY remains
+PID `1572000`, invocation `a97c6b9930844639a384a03500a874e5`.
+The INDEX journal records three later `BATCH_COMPLETED` observations:
+METADATA_ONLY at 19:12:09 (eight targets), CONTENT_ONLY at 19:20:48 (one),
+and CONCRETE_FACETS at 19:29:32 UTC (one). The event-local
+`missing_bindings` values 321/271/251 belong to different views and are
+**not** exact CPU/CUDA pair counts or an acceptance result. There was no
+INDEX/QUERY restart, new request, fallback or selection change.
+
+At observation, the repository checkout was clean at `1ec96ab2` after the independent
+material-review source work. Its GPU route/replay/batch unit regressions pass
+`64 + 137 + 198` focused tests under explicit `eom-api`/`eom-core`
+interpreters; strict mypy passes the three reviewed routing modules. These
+overlapping, synthetic/source tests guard compatibility with the new source
+head but do not close actual QUERY3, resource-only fallback, throughput,
+GPU-default or rollback gates. The current selected QUERY provider remains
+`e70b4cdb8485d1d02e3ddf8dd3fa0ee6de793484`; the unselected QUERY3
+candidate is still pinned to the older provider and must be restaged from
+the selected provider before any cutover.

@@ -49,7 +49,7 @@
 | 생성 문항 → GraphRAG·증분 임베딩 | 실제 검색·결과 조회·같은 요청 재전송 검증 완료. [운영 검증](docs/operations/REGISTERED_REVIEW_INCREMENTAL_ACCEPTANCE_2026-10-20.md) |
 | 일반 채팅 | 부가 알림 호환 수정 배포 및 새 메시지의 실제 답변·완료 상태 확인. [배포 기록](docs/operations/GENERAL_CHAT_MODERATION_METADATA_FIX_2026-10-24.md) |
 | CPU/GPU 임베딩 비교 | 고정 입력 비교 완료. GPU는 적재 후 문서 배치 계산에서 약 3.97배 빨랐으나 단일 질의 전체 시간은 비슷했습니다. [실측 결과](docs/operations/EMBEDDING_GPU_MEASURED_2026-10-24.md) |
-| GPU 우선·CPU 대체 실행 | 후속 구현 진행 중. 묶음 처리·모델 재사용·장치별 인덱스 연결을 검증하며, 운영 전환 전까지 기존 CPU 경로를 유지합니다. [진행 설계](docs/architecture/EMBEDDING_GPU_PREFERRED_BATCH_EXECUTION.md) |
+| GPU 우선·CPU 대체 실행 | 후속 구현과 CUDA 인덱스 증분 채우기가 진행 중입니다. 모델 재사용·장치별 선택의 코드 검증과 일부 실제 GPU 묶음 실행은 확인했지만, 전체 인덱스 짝·GPU 검색·자원 부족 시 CPU 대체·운영 기본값 전환은 아직 검증 전입니다. 기존 CPU 검색을 유지합니다. [설계](docs/architecture/EMBEDDING_GPU_PREFERRED_BATCH_EXECUTION.md) · [운영 검증 현황](docs/status/GPU_PREFERRED_LIVE_ACCEPTANCE_2026-10-25.md) |
 
 소스 테스트 통과만으로 운영 활성화나 문항의 교육적 품질까지 확인됐다고 간주하지 않습니다.
 세부 설치 버전·실패 보존·미검증 범위는 각 운영 기록을 기준으로 봅니다.
