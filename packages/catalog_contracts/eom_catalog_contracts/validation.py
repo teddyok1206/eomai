@@ -707,6 +707,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:8e402808b0dcea6a6358cd0cacf9a7e479518ce9da6d34abd85fa27e684955ae",
         ),
+        "review-textbook-usage": CatalogSchemaResource(
+            "schemas/knowledge/review-textbook-usage-v1.schema.json",
+            "resources/knowledge/review-textbook-usage-v1.schema.json",
+            "1.0",
+            "sha256:e9f284c672230c6fa701b967490d8c731c2c5cd0f2f0c46228a6e8875b8e8a56",
+        ),
         "document-review-textbook-evidence-request": CatalogSchemaResource(
             "schemas/catalog-application/document-review-textbook-evidence-request-v1.schema.json",
             "resources/catalog-application/document-review-textbook-evidence-request-v1.schema.json",

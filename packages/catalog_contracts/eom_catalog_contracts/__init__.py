@@ -251,7 +251,6 @@ from eom_catalog_contracts.document_review_evidence import (
     DocumentReviewTextbookEvidenceResponse,
     DocumentReviewTextbookEvidenceSource,
 )
-from eom_catalog_contracts.review_textbook_evidence import ReviewTextbookEvidence
 from eom_catalog_contracts.educational_document import (
     EducationalDocumentIdentity,
     EducationalDocumentRegistrationReceipt,
@@ -977,6 +976,11 @@ from eom_catalog_contracts.private_chat_similarity import (
     PrivateChatSimilarityRequest,
     validate_private_chat_query_execution,
 )
+from eom_catalog_contracts.review_textbook_evidence import (
+    ReviewTextbookCitation,
+    ReviewTextbookEvidence,
+    ReviewTextbookUsage,
+)
 from eom_catalog_contracts.science_assessment_corpus import (
     ScienceAssessmentAcquisitionCandidate,
     ScienceAssessmentAcquisitionFailureObservation,
@@ -1353,9 +1357,6 @@ __all__ = [
     "DocumentReviewEvidenceResponse",
     "DocumentReviewEvidenceSource",
     "DocumentReviewEvidenceSourceIdentity",
-    "DocumentReviewTextbookEvidenceResponse",
-    "DocumentReviewTextbookEvidenceSource",
-    "ReviewTextbookEvidence",
     "DocumentReviewHwpxCorrectionMediaQuery",
     "DocumentReviewHwpxCorrectionMediaResponse",
     "DocumentReviewHwpxCorrectionPlan",
@@ -1383,6 +1384,8 @@ __all__ = [
     "DocumentReviewPdfPanelComment",
     "DocumentReviewResultMemberPointer",
     "DocumentReviewResultMemberPointerV2",
+    "DocumentReviewTextbookEvidenceResponse",
+    "DocumentReviewTextbookEvidenceSource",
     "EditorialAuthorityKind",
     "EditorialAuthorityPointer",
     "EditorialCheckKind",
@@ -1831,6 +1834,9 @@ __all__ = [
     "ReuseAcceptedKnowledgeAnalysisRange",
     "ReviewKnowledgeAnalysisCommand",
     "ReviewLegacyUsageRowCommand",
+    "ReviewTextbookCitation",
+    "ReviewTextbookEvidence",
+    "ReviewTextbookUsage",
     "ReviewedAuthoringGuidance",
     "ReviewedAuthoringGuidanceError",
     "ReviewedItemContentImportCommand",

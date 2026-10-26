@@ -108,6 +108,14 @@ checks cited source IDs, page/Graph anchors, result paths and source class befor
 commit. It proves evidence linkage, not scientific truth. A reviewer remains
 responsible for correctness and educational value.
 
+The shared usage value is a small, self-hashed list of textbook evidence IDs,
+source anchors and scalar conclusion JSON Pointers, bound to the exact
+`ReviewTextbookEvidence.binding_sha256`. Its contract can reject unknown IDs,
+non-grounding entries and anchors not present in the reopened manifest. The
+result-specific receipt must additionally resolve every JSON Pointer against
+the actual successor output and require a nonempty scientific/curriculum
+conclusion; the generic value alone is not a claim that every axis was checked.
+
 The released paired result V3 cannot be reused for textbook-only review: its
 `SUPPORTED` item contract requires concept **and accepted-solution and
 originality** citation applications. A textbook concept citation is not an

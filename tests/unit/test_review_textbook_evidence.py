@@ -7,7 +7,11 @@ from typing import cast
 from unittest.mock import Mock
 
 import pytest
-from eom_catalog_contracts import CreateItemProductionEvidenceCommand, ReviewTextbookEvidence
+from eom_catalog_contracts import (
+    CreateItemProductionEvidenceCommand,
+    ReviewTextbookEvidence,
+    ReviewTextbookUsage,
+)
 from eom_catalog_contracts.knowledge import (
     EvidenceBundleManifestV3,
     EvidenceBundleManifestV4,
@@ -131,6 +135,7 @@ def _manifest(
                     evidence_id=binding.textbook_evidence_ids[0],
                     source=SimpleNamespace(source_class=source_class),
                     use="GROUNDING",
+                    anchor_ids=("anchor_concept-force",),
                 ),
             ),
         ),
@@ -173,6 +178,94 @@ def test_binding_hash_and_evidence_identity_are_immutable() -> None:
     value["textbook_evidence_ids"] = ["evidenceitem_" + "a" * 32]
     with pytest.raises(ValidationError, match="binding hash differs"):
         ReviewTextbookEvidence.model_validate(value)
+
+
+def _usage(binding: ReviewTextbookEvidence) -> dict[str, object]:
+    value: dict[str, object] = {
+        "schema_version": "review-textbook-usage/1.0",
+        "binding_sha256": binding.binding_sha256,
+        "citations": [
+            {
+                "evidence_id": binding.textbook_evidence_ids[0],
+                "anchor_ids": ["anchor_concept-force"],
+                "conclusion_paths": ["/verification_targets/0/conclusion"],
+            }
+        ],
+    }
+    value["usage_sha256"] = content_sha256(value)
+    return value
+
+
+def test_textbook_usage_cites_only_reopened_grounding_anchor() -> None:
+    binding = ReviewTextbookEvidence.model_validate(_binding())
+    value = _usage(binding)
+    validate_contract("review-textbook-usage", value)
+    usage = ReviewTextbookUsage.model_validate(value)
+    usage.verify_manifest(binding, _manifest(binding))
+
+
+def test_textbook_usage_cannot_treat_avoid_copy_entry_as_grounding() -> None:
+    value = _binding()
+    value["textbook_evidence_ids"] = ["evidenceitem_" + "9" * 32, "evidenceitem_" + "a" * 32]
+    value["binding_sha256"] = content_sha256(
+        {key: item for key, item in value.items() if key != "binding_sha256"}
+    )
+    binding = ReviewTextbookEvidence.model_validate(value)
+    manifest = _manifest(binding)
+    manifest.entries = (
+        manifest.entries[0],
+        SimpleNamespace(
+            evidence_id="evidenceitem_" + "a" * 32,
+            source=SimpleNamespace(source_class="TEXTBOOK"),
+            use="AVOID_COPY",
+            anchor_ids=("anchor_avoid-copy",),
+        ),
+    )
+    usage_value = _usage(binding)
+    citations = usage_value["citations"]
+    assert isinstance(citations, list)
+    citation = citations[0]
+    assert isinstance(citation, dict)
+    citation["evidence_id"] = "evidenceitem_" + "a" * 32
+    citation["anchor_ids"] = ["anchor_avoid-copy"]
+    usage_value["usage_sha256"] = content_sha256(
+        {key: item for key, item in usage_value.items() if key != "usage_sha256"}
+    )
+    usage = ReviewTextbookUsage.model_validate(usage_value)
+    with pytest.raises(ValueError, match="grounding anchors"):
+        usage.verify_manifest(binding, manifest)
+
+
+@pytest.mark.parametrize("fault", ("binding", "evidence", "anchor", "pointer", "hash"))
+def test_textbook_usage_rejects_unbound_or_noncanonical_citation(fault: str) -> None:
+    binding = ReviewTextbookEvidence.model_validate(_binding())
+    value = _usage(binding)
+    citations = value["citations"]
+    assert isinstance(citations, list)
+    citation = citations[0]
+    assert isinstance(citation, dict)
+    if fault == "binding":
+        value["binding_sha256"] = "sha256:" + "0" * 64
+    elif fault == "evidence":
+        citation["evidence_id"] = "evidenceitem_" + "0" * 32
+    elif fault == "anchor":
+        citation["anchor_ids"] = ["anchor_other"]
+    elif fault == "pointer":
+        citation["conclusion_paths"] = ["/verification_targets//conclusion"]
+    else:
+        value["usage_sha256"] = "sha256:" + "0" * 64
+    if fault != "hash":
+        value["usage_sha256"] = content_sha256(
+            {key: item for key, item in value.items() if key != "usage_sha256"}
+        )
+    if fault in {"pointer", "hash"}:
+        with pytest.raises((JsonSchemaValidationError, ValidationError)):
+            validate_contract("review-textbook-usage", value)
+            ReviewTextbookUsage.model_validate(value)
+    else:
+        usage = ReviewTextbookUsage.model_validate(value)
+        with pytest.raises(ValueError, match=r"binding|grounding anchors"):
+            usage.verify_manifest(binding, _manifest(binding))
 
 
 def _command(
