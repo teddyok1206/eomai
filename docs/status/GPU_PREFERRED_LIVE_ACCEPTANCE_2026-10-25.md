@@ -1,6 +1,6 @@
 # GPU-preferred embedding: live acceptance ledger
 
-As of2026-10-26 00:55 UTC. **GOAL=ACTIVE; completion is not proven.**
+As of2026-10-26 16:14 UTC. **GOAL=ACTIVE; completion is not proven.**
 This small ledger preserves the whole approved scope while background catch-up
 continues. Source tests, installed composition and actual execution are separate
 evidence. It is not a new runtime registry or permission grant.
@@ -9,20 +9,21 @@ evidence. It is not a new runtime registry or permission grant.
 
 | Component | Actual selected release |
 |---|---|
-| API/platform/contracts | `07ec7b32105ca4c0e80973ec734418fd12840f76` |
-| Web | `06b5d0e92aa96bd105762a6465d73b0e113b80dc`; API/Web source/DTO bytes unchanged |
+| API/platform/contracts | `a22313a3c869f81d23823736344c99eda3a6e585` (PDF-annotation release; QUERY provider is separately pinned) |
+| Web | `a22313a3c869f81d23823736344c99eda3a6e585` |
 | Catalog completed CPU/CUDA reader | reader configuration3, SDK07 |
 | INDEX metadata owner | `07ec7b32105ca4c0e80973ec734418fd12840f76`; eight targets, metadata MemoryMax2GiB |
 | Root GPU controller | `245555474a621fc374485f3738710c46dd3a3e94`, selected read-back and first ordinary CUDA cohort/registration/retirement PASS |
 | INDEX invocation | `9718f2ed05ac404e84ce7a69559b110c`, PID734655, running; same SDK07/Identity, controller24555547 |
-| Public/mixed/private QUERY | SDK07, **CPU default**, invocation `11b5bc86df9545fc88b44c70f2f2d4d5` |
+| Public/mixed/private QUERY | SDK07, provider `e70b4cdb8485d1d02e3ddf8dd3fa0ee6de793484`, **CPU default**, invocation `a97c6b9930844639a384a03500a874e5` at16:10 |
 | Qualified CPU/CUDA numerical SDK | `eae2c0d3`, unchanged |
-| Unselected QUERY3 candidate | owner/provider07, controller24555547; original controller04 candidate/rollback preserved, neither selection activated |
-| Migration | `20261019_0058`; no new migration |
+| Unselected QUERY3 candidate | owner/provider07, controller24555547; now stale versus selected provider `e70b4cdb`; original controller04 candidate/rollback preserved, neither selection activated |
+| Migration | Source/current Chat-delete release has `20261026_0059`; PDF release added none |
 
-API/INDEX metadata source checkpoint is `07ec7b32`, with the independently
+INDEX metadata source checkpoint is `07ec7b32`, with the independently
 selected root-controller successor above; this is **not** GPU goal completion.
-Actual API wheel SHA is `46d5371724a73e8d0ce0daf93bd02096ac8d2318315c5128dfcb8520728ff745`.
+Current API wheel SHA from installed `direct_url.json` is
+`18fddaa50737edd688d523a308d70e08b5cbd717abfe5be2b8734cfd75e74016`.
 The immutable owner SDK has its separately pinned wheel bytes; same package version
 or source does not conflate the two wheel identities. **GPU completion commit and final
 operating release set: NOT_SET.** README cleanup `4e9c962e` is not repeated.
@@ -754,3 +755,31 @@ pair/device routing, finite QUERY3 transport and routed INDEX; a further241 PASS
 for CPU finite execution, completed device reads and QUERY owner/route behavior.
 These source/package checks do not replace actual authenticated GPU QUERY,
 resource-only fallback, replay, throughput, GPU default or rollback gates.
+
+### 16:14 current provider and co-release observation
+
+The unrelated PDF-annotation compatible release installed API/platform source
+`a22313a3c869f81d23823736344c99eda3a6e585`; the installed API and platform
+`direct_url.json` files name that source. This **did not** advance the selected
+QUERY provider pin: the actual primary QUERY configuration still pins provider
+`e70b4cdb8485d1d02e3ddf8dd3fa0ee6de793484`, wheel
+`sha256:62be2932031815e7089b6260eb51579dc03c76a126a8000b27b2015b7c31d0fd`,
+with twelve code members. Do not infer that the QUERY provider pin equals the
+newest API wheel merely from the API's installed source. Stage the future QUERY3
+candidate against the selected provider observation at activation time, then
+verify the installed compatibility boundary; neither older provider07 candidate
+nor a fabricated provider-a223 candidate is selectable as-is.
+
+The PDF release restarted QUERY because its unit depends on the API unit. The
+QUERY journal recorded READY at16:05:54 UTC under PID1572000 /
+invocation`a97c6b9930844639a384a03500a874e5`. INDEX retained PID734655 /
+invocation`9718f2ed05ac404e84ce7a69559b110c`, active/running at16:10.
+This was not an intentional INDEX/model restart or GPU default selection; plan
+the eventual QUERY cutover only after checking active requests and quiescence.
+At16:14, focused source regression for exact device pairs, routed selection,
+finite V3 transport and original-key replay:60 PASS, one upstream TestClient
+deprecation warning. The first two ad-hoc invocations used installed/ambient
+packages without repository source roots and failed at collection only; the
+passing invocation used the explicit API Conda interpreter and repository
+source roots as the existing non-live test harness prescribes. No DB or model
+execution occurred in these test invocations.
