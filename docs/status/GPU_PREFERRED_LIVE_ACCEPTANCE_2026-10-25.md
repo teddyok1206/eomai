@@ -1,6 +1,6 @@
 # GPU-preferred embedding: live acceptance ledger
 
-As of2026-10-26 19:34 UTC. **GOAL=ACTIVE; completion is not proven.**
+As of2026-10-26 20:35 UTC. **GOAL=ACTIVE; completion is not proven.**
 This small ledger preserves the whole approved scope while background catch-up
 continues. Source tests, installed composition and actual execution are separate
 evidence. It is not a new runtime registry or permission grant.
@@ -849,3 +849,18 @@ GPU-default or rollback gates. The current selected QUERY provider remains
 `e70b4cdb8485d1d02e3ddf8dd3fa0ee6de793484`; the unselected QUERY3
 candidate is still pinned to the older provider and must be restaged from
 the selected provider before any cutover.
+
+### 20:35 continuing catch-up; no activation
+
+The same INDEX PID/invocation and CPU QUERY PID/invocation are `active/running`.
+Since 19:34, the INDEX owner recorded `BATCH_COMPLETED` for METADATA_ONLY at
+19:37:54, CONTENT_ONLY at 19:52:41, CONCRETE_FACETS at 20:07:21,
+METADATA_ONLY at 20:21:50 and CONTENT_ONLY at 20:30:28 UTC. The 19:52
+CONTENT Workflow `workflow_65077691aa7049deaf6abc55b011c3bb` is
+independently `COMPLETED` with `encode_batch=SUCCEEDED`, an immutable V2
+completion receipt SHA `3f4325c905e8a6da5f287c8d69534643d8e5eb57cca2841f10bb5c0538388a75`.
+These are successful ordinary work records, not a full source/profile/input-hash
+pair audit. Event-local missing counts can increase when a report becomes
+available or membership changes, so no rate or final pair count is inferred.
+No service restart, new Query request, GPU-default selection, CPU fallback or
+rollback occurred. The next scheduled status check is no earlier than21:05 UTC.
