@@ -95,6 +95,7 @@ def original(monkeypatch, tmp_path):
     bodies = {"allocation.json": raw, "launch.env": launch_raw, "10-allocation.conf": descriptor}
 
     def read(path, *, sha256, maximum):
+        assert sha256.startswith("sha256:") and len(sha256) == 71
         value = bodies.get(path.name)
         if value is not None:
             assert sha256_bytes(value) == sha256 and len(value) <= maximum

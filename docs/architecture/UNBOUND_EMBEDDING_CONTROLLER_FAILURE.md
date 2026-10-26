@@ -60,3 +60,13 @@ and records the original parent FAILED through the supported operation only.
   source results. Actual installed read/official closure remains separately gated.
 - Existing dependency-boundary and source/control-admission suites:25 PASS,
   16.04s (`/tmp/eom-unbound-control-dependency-admission-20261026-r1.log`).
+
+The first installed SDK `a5122dc0` passed wheel/RECORD staging, but its read-only
+PREPARE refused a plain hexadecimal root-template constant where the protected
+file API requires `sha256:`. The actual two service-template hashes matched their
+pins; this was a representation bug, not drift or permission failure. It happened
+before local proof publication, Artifact creation or any DB state mutation.
+An explicit red regression reproduces this mismatch. Normalize that one boundary
+without changing either template/hash or weakening the file check, then stage a
+new immutable SDK rather than editing the installed prefix. Preserve the original
+failed read log; do not mistake staging for live failure closure.

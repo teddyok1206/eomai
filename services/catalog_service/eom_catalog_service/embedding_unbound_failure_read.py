@@ -125,7 +125,9 @@ def read_unbound_embedding_control_failure(
     before_root, before_native = _controller(proof, root_unit), _native(native_unit)
     files = NumericalRuntimeFileSnapshots()
     for template, expected in (
-        (BATCH_CONTROL_TEMPLATE, BATCH_CONTROL_TEMPLATE_SHA256),
+        # systemd's fixed-template helper uses a plain hexadecimal constant;
+        # the protected-file reader requires the typed sha256: representation.
+        (BATCH_CONTROL_TEMPLATE, "sha256:" + BATCH_CONTROL_TEMPLATE_SHA256),
         (GPU_BATCH_TEMPLATE, GPU_BATCH_SERVICE_SHA256),
     ):
         files.read(Path("/etc/systemd/system") / template, sha256=expected, maximum=65536)
