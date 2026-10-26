@@ -99,6 +99,17 @@ console.log('guide_copy=PASS');
     assert "guide_copy=PASS" in result.stdout
 
 
+def test_material_review_name_is_consistent_in_current_studio_copy() -> None:
+    html = (STATIC / "index.html").read_text()
+    app = (STATIC / "app.js").read_text()
+    guidance = (STATIC / "guide-content.js").read_text()
+    assert 'data-view-target="pdf-review"' in html
+    assert '<h1 id="pdf-review-title">자료 검토</h1>' in html
+    assert '"pdf-review": guide("자료 검토"' in guidance
+    assert "자료 검토가 시작되었습니다." in app
+    assert all("문서 검토" not in source for source in (html, app, guidance))
+
+
 def test_guide_mode_real_browser_default_hover_focus_and_unchanged_actions() -> None:
     if not os.environ.get("EOM_WEB_PLAYWRIGHT_MODULE"):
         pytest.skip("Opt-in existing Playwright environment is required")
