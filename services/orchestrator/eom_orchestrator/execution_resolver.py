@@ -25,6 +25,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV10,
     LegacyItemEditorialCompatibilityRequest,
     LegacyItemExtractionRequest,
+    ReviewTextbookEvidence,
 )
 from eom_identifiers import content_sha256, new_execution_plan_id
 from eom_workflow.control_plane import (
@@ -50,6 +51,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV18,
     ResolvedExecutionPlanV19,
     ResolvedExecutionPlanV20,
+    ResolvedExecutionPlanV25,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
@@ -987,8 +989,9 @@ def resolve_pdf_document_review_plan(
     workflow_definition_sha256: str,
     workflow_role_schema_version: str,
     review_request: PdfDocumentReviewRequest,
+    textbook_evidence: ReviewTextbookEvidence | None = None,
     resolved_at: datetime | None = None,
-) -> ResolvedExecutionPlanV13:
+) -> ResolvedExecutionPlanV13 | ResolvedExecutionPlanV25:
     """Resolve one immutable PDF review onto the serial slot-06 support capacity."""
 
     try:
@@ -1002,6 +1005,15 @@ def resolve_pdf_document_review_plan(
             "CONTROL_WORKFLOW_PROTOCOL_INVALID",
             "single document review protocol differs from its pinned definition",
         )
+    textbook_successor = review_contract.result_schema == "pdf-document-review-result@5.0"
+    if textbook_successor != (textbook_evidence is not None) or (
+        textbook_evidence is not None
+        and textbook_evidence.review_input_sha256 != review_request.request_sha256
+    ):
+        raise ControlPlaneError(
+            "CONTROL_REVIEW_TEXTBOOK_BINDING_INVALID",
+            "single document review requires its exact textbook evidence binding",
+        )
 
     existing = session.scalar(
         select(ResolvedExecutionPlanRecord).where(
@@ -1010,7 +1022,10 @@ def resolve_pdf_document_review_plan(
     )
     if existing is not None:
         try:
-            existing_plan = ResolvedExecutionPlanV13.model_validate(existing.canonical_document)
+            plan_model = (
+                ResolvedExecutionPlanV25 if textbook_successor else ResolvedExecutionPlanV13
+            )
+            existing_plan = plan_model.model_validate(existing.canonical_document)
         except ValueError as exc:
             raise ControlPlaneError(
                 "CONTROL_PLAN_INVALID",
@@ -1023,6 +1038,13 @@ def resolve_pdf_document_review_plan(
             or existing_plan.workflow_definition_sha256 != workflow_definition_sha256
             or existing_plan.review_request_sha256 != review_request.request_sha256
             or existing_plan.document != review_request.document
+            or (
+                textbook_successor
+                and (
+                    not isinstance(existing_plan, ResolvedExecutionPlanV25)
+                    or existing_plan.textbook_evidence != textbook_evidence
+                )
+            )
         ):
             raise ControlPlaneError(
                 "CONTROL_PLAN_BINDING_MISMATCH",
@@ -1055,6 +1077,23 @@ def resolve_pdf_document_review_plan(
     preset = _document_review_preset(
         revision, workflow_role_schema_version=workflow_role_schema_version
     )
+    if textbook_evidence is not None:
+        retrieval_policy = (
+            preset.retrieval_policy if isinstance(preset, ExecutionPresetRevisionV2) else None
+        )
+        if (
+            retrieval_policy is None
+            or "TEXTBOOK" not in retrieval_policy.allowed_source_classes
+            or textbook_evidence.requirement.corpus_key not in retrieval_policy.allowed_corpus_keys
+            or textbook_evidence.publication.access_policy_revision_id
+            != retrieval_policy.access_policy_revision_id
+            or textbook_evidence.publication.access_policy_sha256
+            != retrieval_policy.access_policy_sha256
+        ):
+            raise ControlPlaneError(
+                "CONTROL_REVIEW_TEXTBOOK_POLICY_INVALID",
+                "textbook review evidence differs from the released execution policy",
+            )
     support_policies = [policy for policy in preset.role_policies if policy.role == "support"]
     if len(support_policies) != 1 or len(preset.role_policies) != 1:
         raise ControlPlaneError(
@@ -1098,7 +1137,9 @@ def resolve_pdf_document_review_plan(
     if actual_resolved_at.tzinfo is None or actual_resolved_at.utcoffset() != timedelta(0):
         raise ControlPlaneError("CONTROL_TIMESTAMP_INVALID", "resolution timestamp is not UTC")
     document: dict[str, object] = {
-        "schema_version": "resolved-execution-plan/13.0",
+        "schema_version": (
+            "resolved-execution-plan/25.0" if textbook_successor else "resolved-execution-plan/13.0"
+        ),
         "plan_id": new_execution_plan_id(),
         "workflow_id": workflow_id,
         "workload_class": "CODEX",
@@ -1112,13 +1153,22 @@ def resolve_pdf_document_review_plan(
         "document": review_request.document.model_dump(mode="json"),
         "capacity_policy_revision_id": preset.capacity_policy_revision_id,
         "steps": [step.model_dump(mode="json")],
-        "resolver_version": "13.0.0",
+        "resolver_version": "25.0.0" if textbook_successor else "13.0.0",
         "resolved_at": actual_resolved_at.isoformat().replace("+00:00", "Z"),
         "plan_sha256": "sha256:" + "0" * 64,
     }
+    if textbook_evidence is not None:
+        document["textbook_evidence"] = textbook_evidence.model_dump(mode="json")
     document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
-    validate_control_contract("resolved-execution-plan-v13", document)
-    model = ResolvedExecutionPlanV13.model_validate(document)
+    validate_control_contract(
+        "resolved-execution-plan-v25" if textbook_successor else "resolved-execution-plan-v13",
+        document,
+    )
+    model = (
+        ResolvedExecutionPlanV25.model_validate(document)
+        if textbook_successor
+        else ResolvedExecutionPlanV13.model_validate(document)
+    )
     session.add(
         ResolvedExecutionPlanRecord(
             plan_id=model.plan_id,
@@ -1126,8 +1176,16 @@ def resolve_pdf_document_review_plan(
             preset_id=model.preset_id,
             preset_revision_id=model.preset_revision_id,
             capacity_policy_revision_id=model.capacity_policy_revision_id,
-            graph_snapshot_revision_id=None,
-            evidence_bundle_revision_id=None,
+            graph_snapshot_revision_id=(
+                textbook_evidence.publication.graph_snapshot.graph_snapshot_revision_id
+                if textbook_evidence is not None
+                else None
+            ),
+            evidence_bundle_revision_id=(
+                textbook_evidence.publication.evidence_bundle_revision_id
+                if textbook_evidence is not None
+                else None
+            ),
             plan_sha256=model.plan_sha256,
             resolver_version=model.resolver_version,
             canonical_document=model.model_dump(mode="json"),

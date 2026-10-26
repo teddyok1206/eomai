@@ -28,6 +28,7 @@ from eom_catalog_contracts import (
     KnowledgeProposalArtifactMember,
     OriginArtifactMemberPointer,
     PdfReviewDocumentPointer,
+    ReviewTextbookEvidence,
 )
 from eom_catalog_contracts import validate_contract as validate_catalog_contract
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
@@ -58,6 +59,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV18,
     ResolvedExecutionPlanV19,
     ResolvedExecutionPlanV20,
+    ResolvedExecutionPlanV25,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
     single_document_review_contract_for_definition,
@@ -220,6 +222,7 @@ def materialize_execution_step(
         "resolved-execution-plan/8.0",
         "resolved-execution-plan/9.0",
         "resolved-execution-plan/13.0",
+        "resolved-execution-plan/25.0",
         "resolved-execution-plan/14.0",
         "resolved-execution-plan/15.0",
     }
@@ -237,6 +240,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV11
         | ResolvedExecutionPlanV12
         | ResolvedExecutionPlanV13
+        | ResolvedExecutionPlanV25
         | ResolvedExecutionPlanV14
         | ResolvedExecutionPlanV15
         | ResolvedExecutionPlanV16
@@ -271,6 +275,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV12.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/13.0":
         plan = ResolvedExecutionPlanV13.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/25.0":
+        plan = ResolvedExecutionPlanV25.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/14.0":
         plan = ResolvedExecutionPlanV14.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/15.0":
@@ -547,6 +553,33 @@ def materialize_execution_step(
         )
         total_bytes += document_bytes
         member_count += document_members
+        if isinstance(plan, ResolvedExecutionPlanV25):
+            textbook_materials = resolve_textbook_review_materials(
+                session,
+                binding=plan.textbook_evidence,
+                canonical_artifact_root=artifact_root,
+                authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            )
+            evidence_root = workspace / "references" / "evidence"
+            _ensure_parent(evidence_root, workspace=workspace, group_id=worker_group_id)
+            _write_exclusive(
+                evidence_root / "manifest.json",
+                textbook_materials.manifest_payload,
+                group_id=worker_group_id,
+            )
+            _write_exclusive(
+                evidence_root / "context.md",
+                textbook_materials.context_payload,
+                group_id=worker_group_id,
+            )
+            total_bytes += len(textbook_materials.manifest_payload)
+            total_bytes += len(textbook_materials.context_payload)
+            member_count += 2
+            evidence_bundle_revision_id = (
+                plan.textbook_evidence.publication.evidence_bundle_revision_id
+            )
+            evidence_manifest_sha256 = plan.textbook_evidence.publication.manifest_sha256
+            evidence_context_sha256 = plan.textbook_evidence.publication.context_artifact.sha256
         _require_total_size(total_bytes, analysis=True)
         source_artifact_revision_id = plan.document.source_pdf.artifact_revision_id
         source_sha256 = plan.document.source_pdf.sha256
@@ -846,6 +879,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV11
             | ResolvedExecutionPlanV12
             | ResolvedExecutionPlanV13
+            | ResolvedExecutionPlanV25
             | ResolvedExecutionPlanV14
             | ResolvedExecutionPlanV15
             | ResolvedExecutionPlanV16
@@ -878,6 +912,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV12.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/13.0":
         plan = ResolvedExecutionPlanV13.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/25.0":
+        plan = ResolvedExecutionPlanV25.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/14.0":
         plan = ResolvedExecutionPlanV14.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/15.0":
@@ -984,6 +1020,13 @@ def authorized_execution_artifact_revisions(
             )
     elif isinstance(plan, ResolvedExecutionPlanV13):
         revision_ids.add(plan.document.source_pdf.artifact_revision_id)
+        if isinstance(plan, ResolvedExecutionPlanV25):
+            revision_ids.update(
+                {
+                    plan.textbook_evidence.publication.manifest_artifact.artifact_revision_id,
+                    plan.textbook_evidence.publication.context_artifact.artifact_revision_id,
+                }
+            )
     elif isinstance(plan, ResolvedExecutionPlanV14):
         revision_ids.update(
             value.document.source_pdf.artifact_revision_id for value in plan.documents
@@ -2348,6 +2391,76 @@ def plan_stages_evidence_manifest(
     )
 
 
+def resolve_textbook_review_materials(
+    session: Session,
+    *,
+    binding: ReviewTextbookEvidence,
+    canonical_artifact_root: Path,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> ResolvedEvidenceMaterials:
+    """Reopen exactly the Catalog-published textbook manifest and context."""
+
+    publication = binding.publication
+    if publication.manifest_artifact.schema_ref not in {
+        "eom://schemas/knowledge/evidence-bundle-manifest/3.0",
+        "eom://schemas/knowledge/evidence-bundle-manifest/4.0",
+    }:
+        raise ControlPlaneError(
+            "CONTROL_REVIEW_TEXTBOOK_MANIFEST_INVALID",
+            "textbook review manifest schema is unsupported",
+        )
+    for pointer in (publication.manifest_artifact, publication.context_artifact):
+        if pointer.artifact_revision_id not in authorized_artifact_revision_ids:
+            raise ControlPlaneError(
+                "CONTROL_POINTER_PERMISSION_DENIED",
+                "textbook review material is not authorized by the execution plan",
+            )
+    artifact_root = _canonical_root(canonical_artifact_root)
+    manifest_payload = _knowledge_member_payload(
+        session,
+        pointer=publication.manifest_artifact,
+        artifact_root=artifact_root,
+        maximum_bytes=8 * 1024 * 1024,
+    )
+    try:
+        value = json.loads(manifest_payload.decode("utf-8"))
+        schema_name = (
+            "evidence-bundle-manifest-v4"
+            if publication.manifest_artifact.schema_ref
+            == "eom://schemas/knowledge/evidence-bundle-manifest/4.0"
+            else "evidence-bundle-manifest-v3"
+        )
+        validate_catalog_contract(schema_name, value)
+        manifest = (
+            EvidenceBundleManifestV4.model_validate(value)
+            if schema_name.endswith("v4")
+            else EvidenceBundleManifestV3.model_validate(value)
+        )
+        binding.verify_manifest(manifest)
+    except (UnicodeError, json.JSONDecodeError, ValueError, JsonSchemaValidationError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_REVIEW_TEXTBOOK_MANIFEST_INVALID",
+            "pinned textbook review manifest is invalid",
+        ) from exc
+    context_payload = _knowledge_member_payload(
+        session,
+        pointer=publication.context_artifact,
+        artifact_root=artifact_root,
+        maximum_bytes=MAX_MARKDOWN_MEMBER_BYTES,
+    )
+    try:
+        context_payload.decode("utf-8")
+    except UnicodeError as exc:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_ENCODING_INVALID", "textbook context is not UTF-8"
+        ) from exc
+    return ResolvedEvidenceMaterials(
+        manifest=manifest,
+        manifest_payload=manifest_payload,
+        context_payload=context_payload,
+    )
+
+
 def resolve_evidence_materials(
     session: Session,
     *,
@@ -2672,10 +2785,28 @@ def _write_exclusive(path: Path, payload: bytes, *, group_id: int) -> None:
 
 
 def _admitted_document_review_contract(
-    plan: ResolvedExecutionPlanV13 | ResolvedExecutionPlanV14,
+    plan: ResolvedExecutionPlanV13 | ResolvedExecutionPlanV25 | ResolvedExecutionPlanV14,
 ) -> bytes:
     """Bind shared role instructions to the exact admitted predecessor contract."""
 
+    if isinstance(plan, ResolvedExecutionPlanV25):
+        return (
+            b"\n## Actual admitted textbook-grounded document-review contract\n\n"
+            b"This is SINGLE-DOCUMENT review: PDF_DOCUMENT_REVIEW_REQUEST, "
+            b"workflow-role/1.31.0, pdf-document-review-result@5.0. "
+            b"Read every staged page and references/evidence/manifest.json plus context.md. "
+            b"The manifest must contain exact TEXTBOOK grounding evidence IDs and anchors. "
+            b"Check scientific accuracy and curriculum scope against that textbook evidence; "
+            b"cite the exact evidence IDs, anchors and scalar conclusion paths in textbook_usage. "
+            b"When the textbook does not support a conclusion, mark the axis INSUFFICIENT rather "
+            b"than claiming verification. Do not treat optional past-exam or model memory as a "
+            b"substitute. Include all ten verification axes, with target IDs and anchors sorted "
+            b"as required by worker-result.schema.json. Set review_status to "
+            b"NEEDS_HUMAN_DECISION if any target is FAILED or INSUFFICIENT, or any candidate "
+            b"is UNCERTAIN; otherwise COMPLETE. Do not modify the PDF. "
+            b"worker-input.json and worker-result.schema.json are the exact contract. "
+            b"Return only the permitted JSON.\n"
+        )
     if isinstance(plan, ResolvedExecutionPlanV13):
         admitted = single_document_review_contract_for_definition(plan.workflow_definition_version)
         contract = (
@@ -2694,7 +2825,10 @@ def _admitted_document_review_contract(
             "ordinals starting at 1 and unique finding IDs. Each finding must preserve its "
             "candidate's exact ordered anchors, finding_code, category, severity and title. "
         )
-        if admitted.result_schema == "pdf-document-review-result@4.0":
+        if admitted.result_schema in {
+            "pdf-document-review-result@4.0",
+            "pdf-document-review-result@5.0",
+        }:
             contract += (
                 "Include each of the ten verification axes exactly once. Set review_status "
                 "to NEEDS_HUMAN_DECISION if any target is FAILED or INSUFFICIENT, or any "

@@ -27,13 +27,16 @@ from eom_catalog_contracts import (
     ContentTeamMaterialRequirementV2,
     CreateDeliverable,
     CreateDocumentReviewEvidenceCommand,
+    CreateDocumentReviewTextbookEvidenceCommand,
     CreateItemProductionEvidenceCommand,
     CreateMockExamAssemblyCommand,
     CreatePlannedMockExamAssemblyCommand,
     CreateUsagePlan,
     DocumentReviewEvidenceSource,
+    DocumentReviewTextbookEvidenceSource,
     EducationalRetrievalRequirement,
     EducationalRetrievalRequirementV2,
+    EvidenceBudget,
     EvidenceBundlePublicationResultV5,
     FulfillUsagePlan,
     IntegratedScienceCurriculumContractError,
@@ -950,20 +953,88 @@ class CommandAdapter:
         *,
         idempotency_key: str,
     ) -> tuple[str, str, int]:
-        """Create one PDF review Workflow pinned to its immutable document and preset."""
+        """Create one successor PDF review after authorized textbook Graph publication."""
+
+        replay = self._single_document_review_start_replay(
+            review_request, actor=actor, idempotency_key=idempotency_key
+        )
+        if replay is not None:
+            return replay
+        with self.sessions() as preflight_session:
+            try:
+                preset = current_knowledge_backed_preset(
+                    preflight_session,
+                    preset_key="pdf-document-review",
+                    workflow_role_schema_version="workflow-role/1.31.0",
+                )
+            except ControlPlaneError as exc:
+                raise ApiError(
+                    503,
+                    exc.code,
+                    "PDF document review is unavailable",
+                    "The textbook-grounded review policy is not published.",
+                ) from exc
+        policy = preset.retrieval_policy
+        if (
+            policy is None
+            or "TEXTBOOK" not in policy.allowed_source_classes
+            or not policy.allowed_corpus_keys
+        ):
+            raise ApiError(
+                503,
+                "PDF_DOCUMENT_REVIEW_TEXTBOOK_POLICY_INVALID",
+                "PDF document review is unavailable",
+                "The published review policy does not authorize textbook evidence.",
+            )
+        evidence_budget = EvidenceBudget.model_validate(
+            {**policy.maximum_budget.model_dump(mode="json"), "max_item_revisions": 0}
+        )
+        evidence_value: dict[str, object] = {
+            "schema_version": "document-review-textbook-evidence-request/1.0",
+            "operation": "CREATE_DOCUMENT_REVIEW_TEXTBOOK_EVIDENCE",
+            "review_input_sha256": review_request.request_sha256,
+            "documents": [
+                DocumentReviewTextbookEvidenceSource(
+                    role="DOCUMENT", document=review_request.document
+                ).model_dump(mode="json")
+            ],
+            "corpus_key": policy.allowed_corpus_keys[0],
+            "evidence_budget": evidence_budget.model_dump(mode="json"),
+            "access_policy_revision_id": policy.access_policy_revision_id,
+            "access_policy_sha256": policy.access_policy_sha256,
+            "requester_role": self._knowledge_requester_role(actor),
+            "requester_permission_keys": sorted(value.value for value in actor.permissions),
+            "requested_by": actor.actor_id,
+        }
+        evidence_value["submission_sha256"] = content_sha256(evidence_value)
+        evidence_value["idempotency_key"] = "document-review-textbook:" + content_sha256(
+            {"workflow_key": idempotency_key, "request_sha256": review_request.request_sha256}
+        ).removeprefix("sha256:")
+        try:
+            textbook_evidence = self.catalog_application.create_document_review_textbook_evidence(
+                CreateDocumentReviewTextbookEvidenceCommand.model_validate(evidence_value)
+            )
+        except CatalogApplicationClientError as exc:
+            raise ApiError(
+                503,
+                exc.code,
+                "PDF document review textbook evidence is unavailable",
+                "No Workflow was created. Replay the exact request after recovery.",
+            ) from exc
 
         workflow_request = WorkflowRequest(
             request_name="PDF_DOCUMENT_REVIEW_REQUEST",
             image_mode="skip",
             execution_preset_key="pdf-document-review",
             pdf_document_review_request=review_request,
+            document_review_textbook_evidence=textbook_evidence,
         )
         replay = self._workflow_start_replay(
             workflow_request,
             actor=actor,
             idempotency_key=idempotency_key,
             definition_key="pdf-document-review",
-            definition_version=("1.0.0", "1.3.0"),
+            definition_version="1.4.0",
         )
         if replay is not None:
             return replay
@@ -971,7 +1042,7 @@ class CommandAdapter:
             definition = admitted_workflow_definition(
                 session,
                 definition_key="pdf-document-review",
-                definition_version="1.3.0",
+                definition_version="1.4.0",
             )
             if definition is None:
                 raise ApiError(
@@ -990,7 +1061,7 @@ class CommandAdapter:
                 for step in compiled.definition.steps
                 if isinstance(step, AgentStep)
             }
-            if protocols != {"workflow-role/1.28.0"}:
+            if protocols != {"workflow-role/1.31.0"}:
                 raise ApiError(
                     503,
                     "PDF_DOCUMENT_REVIEW_CONTRACT_INVALID",
@@ -1015,6 +1086,7 @@ class CommandAdapter:
                         workflow_definition_sha256=definition.definition_hash,
                         workflow_role_schema_version=workflow.role_schema_version,
                         review_request=review_request,
+                        textbook_evidence=textbook_evidence,
                     )
                 except ControlPlaneError as exc:
                     raise ApiError(
@@ -1244,6 +1316,65 @@ class CommandAdapter:
                         "existing paired document-review Workflow has no start command",
                     )
                 command = existing_command
+            return command.command_id, workflow.workflow_id, workflow.lock_version
+
+    def _single_document_review_start_replay(
+        self,
+        request: PdfDocumentReviewRequest,
+        *,
+        actor: ActorContext,
+        idempotency_key: str,
+    ) -> tuple[str, str, int] | None:
+        """Replay the exact successor request before consulting mutable Graph policy."""
+
+        with self.sessions() as session:
+            workflow = session.scalar(
+                select(WorkflowInstanceRecord).where(
+                    WorkflowInstanceRecord.idempotency_key == idempotency_key
+                )
+            )
+            if workflow is None:
+                return None
+            try:
+                stored = load_persisted_workflow_request(workflow.initial_request)
+            except ValueError as exc:
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+                    "stored document-review request is invalid",
+                ) from exc
+            if (
+                workflow.created_actor_type != "human"
+                or workflow.created_actor_id != actor.actor_id
+                or workflow.definition_key != "pdf-document-review"
+                or workflow.definition_version not in {"1.0.0", "1.3.0", "1.4.0"}
+                or stored.request_name != "PDF_DOCUMENT_REVIEW_REQUEST"
+                or stored.pdf_document_review_request != request
+                or (
+                    (stored.document_review_textbook_evidence is not None)
+                    != (workflow.definition_version == "1.4.0")
+                )
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_COMMAND_DUPLICATE,
+                    "document-review idempotency key was reused with different input",
+                )
+            command = session.scalar(
+                select(WorkflowCommandRecord)
+                .where(
+                    WorkflowCommandRecord.workflow_id == workflow.workflow_id,
+                    WorkflowCommandRecord.command_type == CommandType.START_WORKFLOW.value,
+                )
+                .order_by(
+                    WorkflowCommandRecord.created_at,
+                    WorkflowCommandRecord.command_id,
+                )
+                .limit(1)
+            )
+            if command is None:
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
+                    "existing document-review Workflow has no start command",
+                )
             return command.command_id, workflow.workflow_id, workflow.lock_version
 
     def _paired_document_review_start_replay(

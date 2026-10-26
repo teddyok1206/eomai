@@ -29,6 +29,18 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "review-textbook-validation-receipt": ControlSchemaResource(
+            "schemas/workflow/control-plane/review-textbook-validation-receipt-v1.schema.json",
+            "resources/control-plane/review-textbook-validation-receipt-v1.schema.json",
+            "1.0",
+            "sha256:532d325429f21d556d3741819fa7b079da2eed206aaf40bebe5c405cd5bce885",
+        ),
+        "resolved-execution-plan-v25": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v25.schema.json",
+            "resources/control-plane/resolved-execution-plan-v25.schema.json",
+            "25.0",
+            "sha256:8613527cfa3b1e6af334291106a22a5725c9ba531cbcdd0c031697d5fe76defa",
+        ),
         "resolved-execution-plan-v24": ControlSchemaResource(
             "schemas/workflow/control-plane/resolved-execution-plan-v24.schema.json",
             "resources/control-plane/resolved-execution-plan-v24.schema.json",
@@ -844,6 +856,9 @@ def _control_schema_registry() -> Registry[Any]:
         "item-inference-transfer-embedding",
         "system-rag-similarity-delivery",
         "system-rag-similarity-context",
+        "review-textbook-evidence",
+        "evidence-bundle-publication-result-v3",
+        "evidence-bundle-publication-result-v4",
     ):
         schema = load_schema(name)
         identifier = schema.get("$id")

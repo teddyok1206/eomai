@@ -23,6 +23,7 @@ from eom_catalog_contracts import (
     LegacyItemEditorialCompatibilityRequest,
     LegacyItemExtractionRequest,
     PdfReviewDocumentPointer,
+    ReviewTextbookEvidence,
 )
 from eom_identifiers import content_sha256
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -1105,6 +1106,20 @@ class ResolvedExecutionPlanV13(FrozenModel):
         return self
 
 
+class ResolvedExecutionPlanV25(ResolvedExecutionPlanV13):
+    """Successor single-document plan pinning the exact textbook publication."""
+
+    schema_version: Literal["resolved-execution-plan/25.0"] = "resolved-execution-plan/25.0"  # type: ignore[assignment]
+    textbook_evidence: ReviewTextbookEvidence
+    resolver_version: Literal["25.0.0"] = "25.0.0"  # type: ignore[assignment]
+
+    @model_validator(mode="after")
+    def exact_review_textbook_binding(self) -> ResolvedExecutionPlanV25:
+        if self.textbook_evidence.review_input_sha256 != self.review_request_sha256:
+            raise ValueError("document review textbook evidence belongs to another request")
+        return self
+
+
 class ResolvedExecutionPlanV14(FrozenModel):
     """Exact paired document review pinned to two role-addressed revisions."""
 
@@ -1283,6 +1298,52 @@ class DocumentReviewEvidenceValidationReceipt(FrozenModel):
             self.receipt_sha256
         ):
             raise ValueError("document review evidence receipt hash differs")
+        return self
+
+
+class ReviewTextbookValidationReceipt(FrozenModel):
+    """Trusted exact-plan textbook citation receipt emitted before result commit."""
+
+    schema_version: Literal["review-textbook-validation-receipt/1.0"] = (
+        "review-textbook-validation-receipt/1.0"
+    )
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    plan_sha256: Sha256
+    workflow_id: WorkflowId
+    step_run_id: str = Field(pattern=r"^steprun_[0-9a-f]{32}$")
+    job_id: JobId
+    attempt: int = Field(ge=1, le=10)
+    review_input_sha256: Sha256
+    binding_sha256: Sha256
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    evidence_bundle_revision_id: str = Field(pattern=r"^evidencerev_[0-9a-f]{32}$")
+    evidence_manifest_artifact: KnowledgeArtifactMemberPointer
+    evidence_manifest_sha256: Sha256
+    evidence_context_artifact: KnowledgeArtifactMemberPointer
+    usage_sha256: Sha256
+    result_artifact_id: ArtifactId
+    result_artifact_revision_id: ArtifactRevisionId
+    result_content_sha256: Sha256
+    receipt_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_members_and_hash(self) -> ReviewTextbookValidationReceipt:
+        if (
+            self.evidence_manifest_artifact.member_path != "evidence/manifest.json"
+            or self.evidence_manifest_artifact.media_type != "application/json"
+            or self.evidence_manifest_artifact.schema_ref
+            not in {
+                "eom://schemas/knowledge/evidence-bundle-manifest/3.0",
+                "eom://schemas/knowledge/evidence-bundle-manifest/4.0",
+            }
+            or self.evidence_context_artifact.member_path != "evidence/context.md"
+            or self.evidence_context_artifact.media_type != "text/markdown"
+            or self.evidence_context_artifact.schema_ref
+            != "eom://schemas/knowledge/evidence-bundle-context/1.0"
+            or content_sha256(self.model_dump(mode="json", exclude={"receipt_sha256"}))
+            != self.receipt_sha256
+        ):
+            raise ValueError("textbook review receipt pointers or hash differ")
         return self
 
 

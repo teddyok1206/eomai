@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
+from eom_catalog_contracts import ReviewTextbookEvidence
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import (
     ExecutionPresetRecord,
@@ -22,9 +23,12 @@ from eom_workflow import (
     ExecutionPresetRevisionV2,
     PdfReviewDocumentPointer,
     ResolvedExecutionPlanV13,
+    ResolvedExecutionPlanV25,
     build_paired_document_review_request,
     build_pdf_document_review_request,
 )
+
+from tests.unit.test_review_textbook_evidence import _binding
 
 NOW = datetime(2026, 9, 22, 12, tzinfo=UTC)
 
@@ -233,6 +237,59 @@ def test_pdf_review_plan_replay_rejects_changed_request_binding() -> None:
         )
 
     assert captured.value.code == "CONTROL_PLAN_BINDING_MISMATCH"
+
+
+def test_textbook_single_review_plan_pins_publication_and_replay() -> None:
+    request = build_pdf_document_review_request(
+        document=_document(), preset_key="MOCK_EXAM", additional_guidance=None
+    )
+    binding_value = _binding()
+    binding_value["review_input_sha256"] = request.request_sha256
+    binding_value["binding_sha256"] = content_sha256(
+        {key: value for key, value in binding_value.items() if key != "binding_sha256"}
+    )
+    binding = ReviewTextbookEvidence.model_validate(binding_value)
+    preset = _v2_preset_document()
+    policy = cast(dict[str, Any], preset["retrieval_policy"])
+    policy["allowed_corpus_keys"] = [binding.requirement.corpus_key]
+    policy["allowed_source_classes"] = ["TEXTBOOK"]
+    policy["access_policy_revision_id"] = binding.publication.access_policy_revision_id
+    policy["access_policy_sha256"] = binding.publication.access_policy_sha256
+    preset["compatible_workflow_protocols"] = ["workflow-role/1.31.0"]
+    preset["content_sha256"] = content_sha256(
+        {key: value for key, value in preset.items() if key != "content_sha256"}
+    )
+    session = FakeSession(preset_document=preset)
+    kwargs = {
+        "workflow_id": "workflow_" + "1" * 32,
+        "workflow_definition_version": "1.4.0",
+        "workflow_definition_sha256": "sha256:" + "2" * 64,
+        "workflow_role_schema_version": "workflow-role/1.31.0",
+        "review_request": request,
+        "textbook_evidence": binding,
+        "resolved_at": NOW,
+    }
+    first = resolve_pdf_document_review_plan(session, **kwargs)  # type: ignore[arg-type]
+    replay = resolve_pdf_document_review_plan(session, **kwargs)  # type: ignore[arg-type]
+    assert isinstance(first, ResolvedExecutionPlanV25)
+    assert replay == first
+    assert session.plan is not None
+    assert session.plan.graph_snapshot_revision_id == (
+        binding.publication.graph_snapshot.graph_snapshot_revision_id
+    )
+    assert session.plan.evidence_bundle_revision_id == (
+        binding.publication.evidence_bundle_revision_id
+    )
+    other = binding.model_dump(mode="json")
+    other["review_input_sha256"] = "sha256:" + "0" * 64
+    other["binding_sha256"] = content_sha256(
+        {key: value for key, value in other.items() if key != "binding_sha256"}
+    )
+    with pytest.raises(ControlPlaneError, match="textbook evidence binding"):
+        resolve_pdf_document_review_plan(
+            session,  # type: ignore[arg-type]
+            **{**kwargs, "textbook_evidence": ReviewTextbookEvidence.model_validate(other)},
+        )
 
 
 def _v2_preset_document() -> dict[str, Any]:

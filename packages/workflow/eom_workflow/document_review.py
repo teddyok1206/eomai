@@ -117,11 +117,9 @@ class PdfDocumentReviewWorkerRequest(FrozenModel):
     review_request: PdfDocumentReviewRequest
 
 
-class PdfDocumentReviewWorkerRequestV5(FrozenModel):
+class PdfDocumentReviewWorkerRequestV5(PdfDocumentReviewWorkerRequest):
     """One existing immutable document request plus exact Catalog textbook publication."""
 
-    request_name: Literal["PDF_DOCUMENT_REVIEW_REQUEST"] = "PDF_DOCUMENT_REVIEW_REQUEST"
-    review_request: PdfDocumentReviewRequest
     textbook_evidence: ReviewTextbookEvidence
 
     @model_validator(mode="after")

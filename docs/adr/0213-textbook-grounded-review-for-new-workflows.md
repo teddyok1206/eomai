@@ -12,6 +12,25 @@ has not connected the validator to its commit boundary. This decision does
 The Orchestrator explicitly refuses a V5 result before artifact commit until
 that trusted receipt is installed; schema registration alone is not activation.
 
+Implementation checkpoint, 2026-10-26 UTC: single-document successor
+`pdf-document-review@1.4.0` is assigned `workflow-role/1.31.0` and
+`resolved-execution-plan/25.0`. V25 retains the V13 isolated support policy
+and adds one self-hashed `ReviewTextbookEvidence` value. Its request hash must
+equal the immutable PDF review request hash. The published textbook bundle's
+Graph and Evidence Bundle revisions are recorded in the plan row, while the
+full binding remains in the plan and Workflow request. The API first checks
+same-key historical replay, then obtains a Catalog textbook publication with
+the real actor's permissions and a bounded zero-Item budget, and only then
+admits a new successor Workflow. This source checkpoint does not claim that
+the materialization/receipt/activation gates below have passed.
+The single-document materializer now reopens the exact V3/V4 textbook manifest
+and context through the existing allowlisted Artifact read boundary, and the
+orchestrator calls a typed `review-textbook-validation-receipt/1.0` admission
+before NAS result commit. The receipt binds the plan, input, published Graph and
+Evidence Bundle, usage hash and result Artifact revision/hash. This is a source
+gate only until a released definition, preset and prompt are published and a
+live canary demonstrates the full path.
+
 ## Decision and boundary
 
 Every **new** scientific review invocation—generated Item review, single-file

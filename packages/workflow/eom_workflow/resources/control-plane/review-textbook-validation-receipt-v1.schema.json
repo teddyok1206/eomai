@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/review-textbook-validation-receipt/1.0",
+  "title": "EOM Review Textbook Evidence Validation Receipt V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "plan_id", "plan_sha256", "workflow_id", "step_run_id",
+    "job_id", "attempt", "review_input_sha256", "binding_sha256",
+    "graph_snapshot_revision_id", "evidence_bundle_revision_id",
+    "evidence_manifest_artifact", "evidence_manifest_sha256",
+    "evidence_context_artifact", "usage_sha256", "result_artifact_id",
+    "result_artifact_revision_id", "result_content_sha256", "receipt_sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": "review-textbook-validation-receipt/1.0" },
+    "plan_id": { "type": "string", "pattern": "^execplan_[0-9a-f]{32}$" },
+    "plan_sha256": { "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256" },
+    "workflow_id": { "type": "string", "pattern": "^workflow_[0-9a-f]{32}$" },
+    "step_run_id": { "type": "string", "pattern": "^steprun_[0-9a-f]{32}$" },
+    "job_id": { "type": "string", "pattern": "^job_[0-9a-f]{32}$" },
+    "attempt": { "type": "integer", "minimum": 1, "maximum": 10 },
+    "review_input_sha256": { "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256" },
+    "binding_sha256": { "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256" },
+    "graph_snapshot_revision_id": { "type": "string", "pattern": "^graphrev_[0-9a-f]{32}$" },
+    "evidence_bundle_revision_id": { "type": "string", "pattern": "^evidencerev_[0-9a-f]{32}$" },
+    "evidence_manifest_artifact": { "$ref": "eom://schemas/workflow/document-review-evidence-validation-receipt/1.0#/$defs/knowledgeArtifactMemberPointer" },
+    "evidence_manifest_sha256": { "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256" },
+    "evidence_context_artifact": { "$ref": "eom://schemas/workflow/document-review-evidence-validation-receipt/1.0#/$defs/knowledgeArtifactMemberPointer" },
+    "usage_sha256": { "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256" },
+    "result_artifact_id": { "type": "string", "pattern": "^artifact_[0-9a-f]{32}$" },
+    "result_artifact_revision_id": { "type": "string", "pattern": "^rev_[0-9a-f]{32}$" },
+    "result_content_sha256": { "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256" },
+    "receipt_sha256": { "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256" }
+  }
+}

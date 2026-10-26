@@ -8,11 +8,18 @@ from typing import Literal
 @dataclass(frozen=True)
 class SingleDocumentReviewContract:
     definition_version: str
-    protocol_version: Literal["workflow-role/1.25.0", "workflow-role/1.28.0"]
-    result_schema: Literal["pdf-document-review-result@1.0", "pdf-document-review-result@4.0"]
+    protocol_version: Literal[
+        "workflow-role/1.25.0", "workflow-role/1.28.0", "workflow-role/1.31.0"
+    ]
+    result_schema: Literal[
+        "pdf-document-review-result@1.0",
+        "pdf-document-review-result@4.0",
+        "pdf-document-review-result@5.0",
+    ]
     schema_ref: Literal[
         "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v1.schema.json",
         "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v4.schema.json",
+        "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v5.schema.json",
     ]
 
 
@@ -28,7 +35,17 @@ CURRENT_SINGLE_DOCUMENT_REVIEW = SingleDocumentReviewContract(
     "pdf-document-review-result@4.0",
     "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v4.schema.json",
 )
-_CONTRACTS = (LEGACY_SINGLE_DOCUMENT_REVIEW, CURRENT_SINGLE_DOCUMENT_REVIEW)
+TEXTBOOK_SINGLE_DOCUMENT_REVIEW = SingleDocumentReviewContract(
+    "1.4.0",
+    "workflow-role/1.31.0",
+    "pdf-document-review-result@5.0",
+    "https://eom.local/schemas/workflow/roles/pdf-document-review-result-v5.schema.json",
+)
+_CONTRACTS = (
+    LEGACY_SINGLE_DOCUMENT_REVIEW,
+    CURRENT_SINGLE_DOCUMENT_REVIEW,
+    TEXTBOOK_SINGLE_DOCUMENT_REVIEW,
+)
 _BY_DEFINITION = MappingProxyType({value.definition_version: value for value in _CONTRACTS})
 _BY_SCHEMA: MappingProxyType[str, SingleDocumentReviewContract] = MappingProxyType(
     {value.result_schema: value for value in _CONTRACTS}

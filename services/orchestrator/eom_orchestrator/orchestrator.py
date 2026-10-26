@@ -163,6 +163,9 @@ from eom_orchestrator.repository import (
     submit_structured_job,
     upsert_worker_slot,
 )
+from eom_orchestrator.review_textbook_evidence_validation import (
+    validate_single_document_textbook_for_commit,
+)
 from eom_orchestrator.runtime_configuration import resolve_worker_configuration
 from eom_orchestrator.settings import Settings
 from eom_orchestrator.similarity_materialization import SimilarityMaterializationContext
@@ -212,17 +215,6 @@ WorkflowRoleRequest = (
     | PdfDocumentReviewWorkerRequest
     | InferenceTransferPairWorkerRequest
 )
-
-
-def _reject_unactivated_textbook_review_result(result: object) -> None:
-    """Fail closed until ADR 0213's exact-manifest receipt precedes NAS commit."""
-
-    if isinstance(result, PdfDocumentReviewRoleResultV5):
-        # Remove this guard only when the trusted receipt is wired into this commit path.
-        raise PlatformError(
-            ErrorCode.WORKER_RESULT_INVALID,
-            "textbook review successor is not activated without its evidence receipt",
-        )
 
 
 def _plan_step_evidence_access(
@@ -1088,7 +1080,6 @@ class Orchestrator:
                     ErrorCode.WORKER_RESULT_INVALID,
                     "workflow worker result identifiers do not match input",
                 )
-            _reject_unactivated_textbook_review_result(result)
             if isinstance(
                 result, (InferenceTransferPairRoleResult, InferenceTransferPairRoleResultV11)
             ):
@@ -1309,6 +1300,23 @@ class Orchestrator:
                     staging=staging,
                     worker_slot=slot.slot_id,
                 )
+                if isinstance(result, PdfDocumentReviewRoleResultV5):
+                    with self.sessions() as validation_session:
+                        textbook_receipt = validate_single_document_textbook_for_commit(
+                            validation_session,
+                            plan_id=plan_id,
+                            worker_input=worker_input,
+                            result=result,
+                            result_artifact_id=artifact.logical_artifact_id,
+                            result_artifact_revision_id=artifact.revision_id,
+                            result_content_sha256=staged.content_hash,
+                            canonical_artifact_root=self.settings.nas_artifact_root,
+                        )
+                    evidence_event_data = {
+                        "review_textbook_validation_receipt": textbook_receipt.model_dump(
+                            mode="json"
+                        )
+                    }
                 visual_reference_event_data = self._publish_visual_references(
                     result=result,
                     result_schema=result_schema,

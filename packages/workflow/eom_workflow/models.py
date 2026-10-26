@@ -2892,9 +2892,8 @@ class PdfDocumentReviewRoleResultV4(PdfDocumentReviewRoleResult):
     output: PdfDocumentReviewOutputV4
 
 
-class PdfDocumentReviewRoleResultV5(RoleResultBase):
-    protocol_version: Literal["workflow-role/1.31.0"] = "workflow-role/1.31.0"
-    role: Literal["support"] = "support"
+class PdfDocumentReviewRoleResultV5(PdfDocumentReviewRoleResultV4):
+    protocol_version: Literal["workflow-role/1.31.0"] = "workflow-role/1.31.0"  # type: ignore[assignment]
     output: PdfDocumentReviewOutputV5
 
 
