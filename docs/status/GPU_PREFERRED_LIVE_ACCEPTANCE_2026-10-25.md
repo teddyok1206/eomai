@@ -716,3 +716,41 @@ counts only**, not proof that either exact canonical device population is comple
 or identical. CPU QUERY remains the installed default. Continue the existing
 finite eight-target catch-up; the QUERY3/fallback/replay/default/rollback gates
 and final completion commit/release checkpoint remain pending.
+
+### 12:05 continued catch-up and post-chat-release compatibility
+
+The same INDEX PID734655/invocation`9718f2ed05ac404e84ce7a69559b110c` and
+QUERY PID1317903/invocation`c329c80f85e04635a62a65b7e4f4108a` were active.
+The read-only metadata audit
+`/tmp/eom-current-index-pair-metadata-20261026-r41.json` exited0 at12:05:29.
+For the current mixed population it recorded CPU521/514/521 versus
+CUDA201/229/152; the legacy ALL population remains distinct at
+CPU520/513/520 versus CUDA193/221/152.
+This audit explicitly did **not** validate exact canonical pairs. A subsequent
+CONCRETE eight-target `BATCH_COMPLETED` event occurred at12:05:51, after the
+audit; no count is extrapolated from that event. The same INDEX invocation was
+not restarted or re-keyed.
+
+The 11:30–12:00 journal window contains369 completed `ADMIT_CANDIDATES` and
+`SOLUTION_PROFILES` stage observations. Their recorded elapsed times sum to
+443.6s and333.1s respectively. Stage sums may overlap and are not isolated
+model-forward or whole-request latency; they show that repeated source checks
+are material to the current catch-up cost. The10:00–12:07 owner journal shows
+five eight-target `BATCH_COMPLETED` observations, separate from five
+membership-refresh observations. No speedup or new model-run count is claimed.
+
+The compatible Chat deletion release changed installed API/platform and the
+three QUERY provider pins to `e70b4cdb8485d1d02e3ddf8dd3fa0ee6de793484`
+while retaining QUERY owner SDK07 and the twelve identical provider code members;
+see [the release record](GENERAL_CHAT_LOGICAL_DELETION_RELEASE_2026-10-26.md).
+The earlier QUERY3 candidate/no-forward preflight was staged against provider07.
+Before selecting QUERY3, restage the candidate from the **current** installed
+provider and rerun its installed no-forward/rollback preflight. Equal code-member
+bytes alone do not authorize selecting stale provider-pin bytes. Current CPU QUERY
+and private-chat history remain in place.
+
+Current installed-contract regression after that release:146 PASS for exact index
+pair/device routing, finite QUERY3 transport and routed INDEX; a further241 PASS
+for CPU finite execution, completed device reads and QUERY owner/route behavior.
+These source/package checks do not replace actual authenticated GPU QUERY,
+resource-only fallback, replay, throughput, GPU default or rollback gates.
