@@ -1,6 +1,6 @@
 # GPU-preferred embedding: live acceptance ledger
 
-As of2026-10-26 00:35 UTC. **GOAL=ACTIVE; completion is not proven.**
+As of2026-10-26 00:55 UTC. **GOAL=ACTIVE; completion is not proven.**
 This small ledger preserves the whole approved scope while background catch-up
 continues. Source tests, installed composition and actual execution are separate
 evidence. It is not a new runtime registry or permission grant.
@@ -13,7 +13,7 @@ evidence. It is not a new runtime registry or permission grant.
 | Web | `06b5d0e92aa96bd105762a6465d73b0e113b80dc`; API/Web source/DTO bytes unchanged |
 | Catalog completed CPU/CUDA reader | reader configuration3, SDK07 |
 | INDEX metadata owner | `07ec7b32105ca4c0e80973ec734418fd12840f76`; eight targets, metadata MemoryMax2GiB |
-| Root GPU controller | `245555474a621fc374485f3738710c46dd3a3e94`, selected controller/entrypoint read-back PASS; first ordinary numerical cohort after this selection remains pending |
+| Root GPU controller | `245555474a621fc374485f3738710c46dd3a3e94`, selected read-back and first ordinary CUDA cohort/registration/retirement PASS |
 | INDEX invocation | `9718f2ed05ac404e84ce7a69559b110c`, PID734655, running; same SDK07/Identity, controller24555547 |
 | Public/mixed/private QUERY | SDK07, **CPU default**, invocation `11b5bc86df9545fc88b44c70f2f2d4d5` |
 | Qualified CPU/CUDA numerical SDK | `eae2c0d3`, unchanged |
@@ -647,6 +647,51 @@ the existing INDEX finishes catch-up. On actual pair readiness, use the already
 prepared QUERY3 candidate for the original finite live/fallback/replay/default /
 rollback gates. GPU goal completion and final commit/release checkpoint remain
 NOT_SET.
+
+###00:55 first ordinary successor cohort and installed QUERY composition
+
+Actual CUDA CONTENT Workflow `workflow_b8f2bfa405c049ffb3d50432921f2345`
+**COMPLETED**, native Job `job_77cbd60e48554b33b75696a7bd2432c0` SUCCEEDED,
+eight associated encoding producers SUCCEEDED. Its original parent is
+`job_7a12ce39db4a4877a9d1825f97937e0b` /
+allocation`embeddingallocation_f82a1b6ccee6476bbc4a9dc26d3cd47a`.
+This is actual completion/registration, not merely the planning Job's SUCCEEDED.
+
+Original numerical invocation`5aabbff2b6ca47c2a2fb14590374f077` retired SUCCEEDED
+at00:38:31.860202Z, retirement raw SHA
+`3b422166b46e10427d77773ffae16e86b100d8fc904d89918722ee719b2f378b`.
+Its32768-byte vector file corresponds to8×1024 FLOAT32 values. Original controller
+invocation`9120e75aae2c4bf99ca954888b567371` exited0 at00:39:00. The actual original
+numeric unit now has process0/FD0; the collected unit's empty invocation is not
+substituted for the exact invocation retained in its protected retirement.
+The full Workflow/command completion observation arrived at00:46:57.
+
+A second ordinary cohort, allocation`embeddingallocation_e9aac5f9935d41e2bd2ef79c0199925b`,
+also computed32768 bytes and retired SUCCEEDED at00:52:47.097213Z under numerical
+invocation`06139c846db244c3b5bdc8c63f9e72f4`, retirement raw SHA
+`1879e23a141915bd29f570e26b43e068cc2cb5028a66e71896c093065b0568d0`.
+Its final canonical Workflow registration was still pending in this inspection;
+do not count its planning success as completed publication. No extra model run
+was submitted to obtain either observation. Read-only technical evidence:
+`/tmp/eom-current-index-phase-20261026-0053.json`, EXIT0.
+
+The **new candidate's** real installed QUERY3 preflight also PASS43.725s under
+actual UID990/GID1000, supplementary groups0/capabilities0, API provider07,
+public+mixed factories and unchanged private CPU. Its three immutable input files
+use the prepared controller24555547 candidate, not the earlier controller04
+candidate. No actual operator was captured, no source query/model/claim occurred,
+and QUERY selection was not activated. Evidence:
+`/tmp/eom-routed-query-controller245-preflight-20261026-r1.log`, EXIT0.
+
+Current INDEX is still PID734655/invocation9718f2ed…, alive. Background source
+validation/registration contributes substantially to wall time; do not present
+it as model-only timing or make a new speedup claim. The earlier16-target group
+already exhausted the fixed control budget despite numerical success, so do not
+repeat that larger live experiment or expand deadlines. Keep the verified8-target
+selection and the full requested corpus; no cache across authorization roots or
+smaller intersection is introduced. Full exact pairs and authenticated finite
+QUERY/fallback/replay/default/rollback remain pending. Next regular corpus audit
+is approximately01:04 UTC; no unrelated work or new Studio authentication is needed.
 
 Let the confirmed current catch-up invocation run, with milestone-based reporting
 and bounded metadata observations. Do not add unrelated code or repeatedly ask
