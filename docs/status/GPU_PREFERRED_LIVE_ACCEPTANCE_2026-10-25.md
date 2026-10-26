@@ -1,6 +1,6 @@
 # GPU-preferred embedding: live acceptance ledger
 
-As of2026-10-26 20:35 UTC. **GOAL=ACTIVE; completion is not proven.**
+As of2026-10-26 23:07 UTC. **GOAL=ACTIVE; completion is not proven.**
 This small ledger preserves the whole approved scope while background catch-up
 continues. Source tests, installed composition and actual execution are separate
 evidence. It is not a new runtime registry or permission grant.
@@ -864,3 +864,16 @@ pair audit. Event-local missing counts can increase when a report becomes
 available or membership changes, so no rate or final pair count is inferred.
 No service restart, new Query request, GPU-default selection, CPU fallback or
 rollback occurred. The next scheduled status check is no earlier than21:05 UTC.
+
+### 23:07 continued original invocation
+
+Scheduled checks at 21:05, 21:36, 22:06, 22:37 and 23:07 UTC all found the
+same INDEX PID `734655`/invocation `9718f2ed05ac404e84ce7a69559b110c`
+and the same selected CPU QUERY PID `1572000`/invocation
+`a97c6b9930844639a384a03500a874e5`, both `active/running`. The bounded
+INDEX journals contain fourteen further `BATCH_COMPLETED` observations from
+20:35 through 23:07, across the three views; no owner stop/failure event was
+found in those windows. Some are one-target index-membership refreshes, not
+new numerical cohorts. Their per-view `missing_bindings` values are not an
+exact device-pair audit. No restart, model resubmission, GPU-default switch,
+CPU fallback or rollback was performed. Current pair closure remains pending.
