@@ -8,6 +8,7 @@ from typing import Annotated, Literal, Protocol
 from pydantic import Field, model_validator
 
 from eom_protocol.general_chat import ChatBoundaryValue
+from eom_protocol.general_chat_deletion import GeneralChatDelete, GeneralChatDeletion
 from eom_protocol.general_chat_grounding import (
     ChatGroundingQuery,
     ChatGroundingViews,
@@ -23,7 +24,7 @@ from eom_protocol.general_chat_views import (
     GeneralChatSubmission,
 )
 
-OwnerAction = Literal["SLOT", "LIST", "CREATE", "READ", "SUBMIT", "READ_GROUNDING"]
+OwnerAction = Literal["SLOT", "LIST", "CREATE", "READ", "SUBMIT", "READ_GROUNDING", "DELETE"]
 ActorId = Annotated[str, Field(pattern=r"^operator_[0-9a-f]{32}$")]
 ConversationId = Annotated[str, Field(pattern=r"^chat_[0-9a-f]{32}$")]
 IntentKey = Annotated[str, Field(pattern=r"^[!-~]{16,128}$")]
@@ -82,12 +83,21 @@ class ChatSubmitCommand(ChatBoundaryValue):
     idempotency_key: IntentKey
 
 
+class ChatDeleteCommand(ChatBoundaryValue):
+    action: Literal["DELETE"] = "DELETE"
+    actor_id: ActorId
+    conversation_id: ConversationId
+    request: GeneralChatDelete
+    idempotency_key: IntentKey
+
+
 ChatOwnerCommand = Annotated[
     ChatSlotQuery
     | ChatListQuery
     | ChatCreateCommand
     | ChatReadQuery
     | ChatSubmitCommand
+    | ChatDeleteCommand
     | ChatGroundingQuery,
     Field(discriminator="action"),
 ]
@@ -97,6 +107,7 @@ ChatOwnerValue = (
     | GeneralChatConversation
     | ChatGroundingViews
     | ChatGroundingViewsV2
+    | GeneralChatDeletion
 )
 
 
@@ -105,6 +116,7 @@ class ChatOwnerRequest(ChatBoundaryValue):
         "general-chat-owner-request/1.0",
         "general-chat-owner-request/2.0",
         "general-chat-owner-request/4.0",
+        "general-chat-owner-request/5.0",
     ] = "general-chat-owner-request/1.0"
     request_id: str = Field(pattern=r"^chatrpc_[0-9a-f]{32}$")
     command: ChatOwnerCommand
@@ -116,9 +128,12 @@ class ChatOwnerRequest(ChatBoundaryValue):
         "general-chat-owner-reply/1.0",
         "general-chat-owner-reply/2.0",
         "general-chat-owner-reply/4.0",
+        "general-chat-owner-reply/5.0",
     ]:
         return (
-            "general-chat-owner-reply/4.0"
+            "general-chat-owner-reply/5.0"
+            if self.schema_version.endswith("/5.0")
+            else "general-chat-owner-reply/4.0"
             if self.schema_version.endswith("/4.0")
             else "general-chat-owner-reply/2.0"
             if self.schema_version.endswith("/2.0")
@@ -131,6 +146,7 @@ class ChatOwnerReply(ChatBoundaryValue):
         "general-chat-owner-reply/1.0",
         "general-chat-owner-reply/2.0",
         "general-chat-owner-reply/4.0",
+        "general-chat-owner-reply/5.0",
     ] = "general-chat-owner-reply/1.0"
     request_id: str = Field(pattern=r"^chatrpc_[0-9a-f]{32}$")
     action: OwnerAction
@@ -174,6 +190,8 @@ class ChatOwnerReply(ChatBoundaryValue):
             expected = (
                 ChatGroundingViewsV2 if self.schema_version.endswith("/4.0") else ChatGroundingViews
             )
+        elif self.action == "DELETE":
+            expected = GeneralChatDeletion
         if not isinstance(self.value, expected):
             raise ValueError("owner reply action and projection differ")
         return self
@@ -216,3 +234,11 @@ class ChatOwnerPort(Protocol):
         request: GeneralChatSubmission | GroundedChatSubmission,
         idempotency_key: str,
     ) -> GeneralChatConversation: ...
+    def delete(
+        self,
+        *,
+        actor_id: str,
+        conversation_id: str,
+        request: GeneralChatDelete,
+        idempotency_key: str,
+    ) -> GeneralChatDeletion: ...

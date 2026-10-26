@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/owner-reply/5.0",
+  "title": "Private general chat deletion owner reply",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "action", "status", "value", "error_code"],
+  "properties": {
+    "schema_version": {"const": "general-chat-owner-reply/5.0"},
+    "request_id": {"type": "string", "pattern": "^chatrpc_[0-9a-f]{32}$"},
+    "action": {"const": "DELETE"},
+    "status": {"enum": ["SUCCEEDED", "FAILED"]},
+    "value": {"anyOf": [
+      {"type": "null"},
+      {"$ref": "eom://schemas/general-chat/delete/1.0#/$defs/Receipt"}
+    ]},
+    "error_code": {"enum": [
+      null, "GENERAL_CHAT_NOT_READY", "GENERAL_CHAT_FORBIDDEN", "GENERAL_CHAT_NOT_FOUND",
+      "GENERAL_CHAT_IDEMPOTENCY_INVALID", "GENERAL_CHAT_IDEMPOTENCY_CONFLICT",
+      "GENERAL_CHAT_STALE_REVISION", "GENERAL_CHAT_TURN_IN_PROGRESS",
+      "GENERAL_CHAT_APPLICATION_UNAVAILABLE", "GENERAL_CHAT_PROTOCOL_INVALID"
+    ]}
+  },
+  "allOf": [{
+    "if": {"properties": {"status": {"const": "SUCCEEDED"}}, "required": ["status"]},
+    "then": {"properties": {
+      "value": {"$ref": "eom://schemas/general-chat/delete/1.0#/$defs/Receipt"},
+      "error_code": {"type": "null"}
+    }},
+    "else": {"properties": {
+      "value": {"type": "null"},
+      "error_code": {"type": "string"}
+    }}
+  }]
+}

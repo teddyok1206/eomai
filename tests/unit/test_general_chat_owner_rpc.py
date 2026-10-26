@@ -24,8 +24,10 @@ from eom_orchestrator.general_chat_socket import (
     send_chat_frame,
 )
 from eom_orchestrator.general_chat_state import ChatError
+from eom_protocol.general_chat_deletion import GeneralChatDelete, GeneralChatDeletion
 from eom_protocol.general_chat_owner_messages import (
     ChatCreateCommand,
+    ChatDeleteCommand,
     ChatOwnerErrorCode,
     ChatOwnerFault,
     ChatOwnerReply,
@@ -88,6 +90,18 @@ class RecordingOwner:
             idempotency_key=idempotency_key,
         )
         return self._conversation()
+
+    def delete(self, *, actor_id, conversation_id, request, idempotency_key):
+        self._record(
+            "DELETE",
+            actor_id,
+            conversation_id=conversation_id,
+            request=request,
+            idempotency_key=idempotency_key,
+        )
+        return GeneralChatDeletion(
+            conversation_id=conversation_id, resource_version=2, deleted_at=NOW
+        )
 
     @staticmethod
     def _conversation():
@@ -155,6 +169,73 @@ def test_multiple_api_requests_are_safe_and_bounded_without_new_mutation_replay(
         )
     assert len(responses) == len(owner.calls) == 20
     assert all(call[0] == "LIST" for call in owner.calls)
+
+
+def test_delete_uses_v5_schema_and_preserves_actor_intent_over_real_owner_socket(rpc):
+    owner, _, client, _ = rpc
+    command = ChatDeleteCommand(
+        actor_id=ACTOR,
+        conversation_id=CONVERSATION,
+        request=GeneralChatDelete(expected_version=1),
+        idempotency_key=INTENT,
+    )
+    envelope = ChatOwnerRequest(
+        schema_version="general-chat-owner-request/5.0",
+        request_id="chatrpc_" + "3" * 32,
+        command=command,
+    )
+    assert read_chat_owner_request(envelope.model_dump(mode="json")) == envelope
+    receipt = client.delete(
+        actor_id=ACTOR,
+        conversation_id=CONVERSATION,
+        request=command.request,
+        idempotency_key=INTENT,
+    )
+    assert receipt.conversation_id == CONVERSATION and receipt.resource_version == 2
+    assert owner.calls == [
+        (
+            "DELETE",
+            ACTOR,
+            {
+                "conversation_id": CONVERSATION,
+                "request": command.request,
+                "idempotency_key": INTENT,
+            },
+        )
+    ]
+
+
+def test_delete_successor_does_not_reinterpret_released_owner_requests():
+    request = ChatOwnerRequest(
+        schema_version="general-chat-owner-request/5.0",
+        request_id="chatrpc_" + "3" * 32,
+        command=ChatDeleteCommand(
+            actor_id=ACTOR,
+            conversation_id=CONVERSATION,
+            request=GeneralChatDelete(expected_version=1),
+            idempotency_key=INTENT,
+        ),
+    )
+    document = request.model_dump(mode="json")
+    assert read_chat_owner_request(document) == request
+    for old_version in (
+        "general-chat-owner-request/1.0",
+        "general-chat-owner-request/2.0",
+        "general-chat-owner-request/4.0",
+    ):
+        with pytest.raises((ValueError, SchemaError)):
+            read_chat_owner_request({**document, "schema_version": old_version})
+    with pytest.raises((ValueError, SchemaError)):
+        read_chat_owner_request(
+            {
+                **document,
+                "command": ChatCreateCommand(
+                    actor_id=ACTOR,
+                    request=GeneralChatCreate(title="대화"),
+                    idempotency_key=INTENT,
+                ).model_dump(mode="json"),
+            }
+        )
 
 
 @pytest.mark.parametrize("code", list(ChatOwnerErrorCode))

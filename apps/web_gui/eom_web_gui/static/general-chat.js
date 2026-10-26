@@ -31,6 +31,9 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
   let loading = false;
   let createIntent = null;
   const intents = new Map();
+  const deleteIntents = new Map();
+  let deletePrompt = false;
+  let deleting = false;
   const drafts = new Map();
   const summaries = new Map();
   // Owner-scoped bounded DOM memo: polling must not parse unchanged immutable
@@ -54,9 +57,16 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
 
   function controls() {
     const active = chatIsActive(selected);
-    $("chat-send").disabled = $("chat-send").hidden || !slot || slot.state === "UNAVAILABLE" || sending || loading || active;
-    $("chat-input").readOnly = sending || loading;
+    const deletePending = Boolean(selected && deleteIntents.has(selected.conversation_id));
+    $("chat-send").disabled = $("chat-send").hidden || !slot || slot.state === "UNAVAILABLE" || sending || loading || deleting || active || deletePending;
+    $("chat-input").readOnly = sending || loading || deleting || deletePending;
     $("chat-send").textContent = sending ? "전송 중…" : active ? "답변 중…" : "↑ 보내기";
+    $("chat-delete").hidden = !selected;
+    $("chat-delete").disabled = sending || loading || deleting || active;
+    $("chat-delete-confirm").hidden = !selected || !deletePrompt;
+    $("chat-delete-accept").disabled = deleting || sending || loading || active;
+    $("chat-delete-accept").textContent = deleting ? "삭제 중…" : deleteIntents.get(selected?.conversation_id)?.attempted ? "같은 요청 재확인" : "삭제 확인";
+    $("chat-delete-cancel").disabled = deleting;
   }
 
   function render() {
@@ -215,12 +225,13 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
   }
 
   async function select(id) {
-    if (sending) return;
+    if (sending || deleting) return;
     drafts.set(selected?.conversation_id || "new", $("chat-input").value);
     stopTimer();
     const token = ++epoch;
     knowledge.resetSelection();
     selected = null;
+    deletePrompt = false;
     loading = true;
     $("chat-input").value = drafts.get(id) || "";
     $("chat-error").hidden = true;
@@ -236,7 +247,7 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
 
   async function send(event) {
     event.preventDefault();
-    if (sending || loading || chatIsActive(selected) || !slot || slot.state === "UNAVAILABLE") return;
+    if (sending || loading || deleting || (selected && deleteIntents.has(selected.conversation_id)) || chatIsActive(selected) || !slot || slot.state === "UNAVAILABLE") return;
     const text = $("chat-input").value.trim();
     if (!text) return;
     const token = epoch;
@@ -283,6 +294,39 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
     }
   }
 
+  async function deleteConversation() {
+    if (!selected || sending || loading || deleting || chatIsActive(selected)) return;
+    const id = selected.conversation_id;
+    let intent = deleteIntents.get(id);
+    if (!intent) {
+      intent = {expected_version: selected.resource_version, idempotency_key: key(), attempted: false};
+      deleteIntents.set(id, intent);
+    }
+    intent.attempted = true;
+    const token = epoch;
+    deleting = true;
+    controls();
+    $("chat-error").hidden = true;
+    try {
+      const receipt = await api(`/general-chat/conversations/${id}/deletion`, {
+        method: "POST", mutation: true,
+        body: {expected_version: intent.expected_version, idempotency_key: intent.idempotency_key},
+      });
+      if (!current(token) || selected?.conversation_id !== id) return;
+      if (receipt.conversation_id !== id || receipt.resource_version !== intent.expected_version + 1) throw new Error("GENERAL_CHAT_RESPONSE_INVALID");
+      stopTimer(); epoch += 1; selected = null; deletePrompt = false;
+      deleteIntents.delete(id); intents.delete(id); drafts.delete(id); summaries.delete(id);
+      for (const value of [...replyBodies.keys()]) if (value.startsWith(`${id}:`)) replyBodies.delete(value);
+      for (const value of [...grounding.keys()]) if (value.startsWith(`${id}:`)) grounding.delete(value);
+      knowledge.resetSelection();
+      $("chat-input").value = "";
+      conversationCursor = null;
+      renderHistory(); render();
+      await loadHistory(epoch);
+    } catch (error) { if (current(token)) fail(error); }
+    finally { deleting = false; if (visible) controls(); }
+  }
+
   async function open() {
     knowledge.open();
     visible = true;
@@ -313,7 +357,8 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
     slot = null;
     loading = false;
     createIntent = null;
-    intents.clear(); drafts.clear(); summaries.clear(); replyBodies.clear(); grounding.clear(); groundingPending.clear();
+    deletePrompt = false; deleting = false;
+    intents.clear(); deleteIntents.clear(); drafts.clear(); summaries.clear(); replyBodies.clear(); grounding.clear(); groundingPending.clear();
     conversationCursor = null;
     $("chat-input").value = "";
     $("chat-error").hidden = true;
@@ -323,15 +368,23 @@ export function createGeneralChat({document, api, errorMessage, openItem}) {
   function install() {
     knowledge.install();
     $("chat-form").addEventListener("submit", send);
+    $("chat-delete").addEventListener("click", () => { if (selected && !chatIsActive(selected)) { deletePrompt = true; controls(); } });
+    $("chat-delete-cancel").addEventListener("click", () => {
+      if (deleting) return;
+      const id = selected?.conversation_id;
+      if (id && !deleteIntents.get(id)?.attempted) deleteIntents.delete(id);
+      deletePrompt = false; controls();
+    });
+    $("chat-delete-accept").addEventListener("click", deleteConversation);
     $("chat-input").addEventListener("keydown", (event) => {
       if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
         event.preventDefault(); $("chat-form").requestSubmit();
       }
     });
     $("chat-new").addEventListener("click", async () => {
-      if (sending) return;
+      if (sending || deleting) return;
       drafts.set(selected?.conversation_id || "new", $("chat-input").value);
-      stopTimer(); epoch += 1; selected = null;
+      stopTimer(); epoch += 1; selected = null; deletePrompt = false;
       knowledge.resetSelection();
       loading = false;
       $("chat-input").value = drafts.get("new") || "";

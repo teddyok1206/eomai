@@ -12,6 +12,8 @@ from eom_web_gui.gateways import GatewayError, HttpApplicationGateway
 from eom_web_gui.general_chat_contracts import (
     ChatConversation,
     ChatCreateSubmission,
+    ChatDeleteSubmission,
+    ChatDeletion,
     ChatList,
     ChatSlot,
     ChatTurnSubmission,
@@ -66,6 +68,13 @@ class ChatGateway(FakeGateway):
         assert value.text == "질문"
         return conversation()
 
+    async def general_chat_delete(
+        self, session, conversation_id, value: ChatDeleteSubmission
+    ) -> ChatDeletion:
+        assert conversation_id == CHAT_ID and value.expected_version == 1
+        assert value.idempotency_key == "studio:chat:test-0001"
+        return ChatDeletion(conversation_id=conversation_id, resource_version=2, deleted_at=NOW)
+
 
 def test_bff_chat_session_csrf_and_static_shell():
     client, _ = make_client(gateway=ChatGateway())
@@ -96,6 +105,25 @@ def test_bff_chat_session_csrf_and_static_shell():
                 headers=csrf,
             ).status_code
             == 202
+        )
+        deletion = {
+            "expected_version": 1,
+            "idempotency_key": body["idempotency_key"],
+        }
+        assert (
+            client.post(
+                f"/studio/api/v1/general-chat/conversations/{CHAT_ID}/deletion",
+                json=deletion,
+            ).status_code
+            == 403
+        )
+        assert (
+            client.post(
+                f"/studio/api/v1/general-chat/conversations/{CHAT_ID}/deletion",
+                json=deletion,
+                headers=csrf,
+            ).json()["resource_version"]
+            == 2
         )
         assert (
             client.get("/studio/api/v1/general-chat/conversations/arbitrary-thread").status_code
@@ -164,7 +192,8 @@ async def test_grounding_read_deadline_covers_owner_rpc_without_widening_other_r
 
 @pytest.mark.anyio
 @pytest.mark.parametrize(
-    "operation", ["slot", "list", "create", "get", "submit", "grounded_submit", "grounding"]
+    "operation",
+    ["slot", "list", "create", "get", "submit", "delete", "grounded_submit", "grounding"],
 )
 async def test_owner_deadline_failure_does_not_replay_or_submit_generation(operation):
     from eom_web_gui.chat_grounding_contracts import (
@@ -200,6 +229,11 @@ async def test_owner_deadline_failure_does_not_replay_or_submit_generation(opera
                 session,
                 CHAT_ID,
                 ChatTurnSubmission(text="질문", expected_version=1, idempotency_key=intent),
+            ),
+            "delete": lambda: gateway.general_chat_delete(
+                session,
+                CHAT_ID,
+                ChatDeleteSubmission(expected_version=1, idempotency_key=intent),
             ),
             "grounded_submit": lambda: gateway.general_chat_grounded_submit(
                 session,
@@ -256,6 +290,41 @@ async def test_gateway_chat_validates_response_and_proxies_idempotency_without_a
         )
         assert calls[-1].headers["Idempotency-Key"] == "studio:chat:test-0001"
         assert json.loads(calls[-1].content) == {"title": "새 대화"}
+    finally:
+        await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_gateway_chat_deletion_validates_target_and_forwards_one_intent():
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        return httpx.Response(
+            200,
+            json={
+                "conversation_id": CHAT_ID,
+                "resource_version": 2,
+                "deleted_at": NOW.isoformat(),
+            },
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://testserver",
+        observability_url="http://observe",
+        timeout=5,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        receipt = await gateway.general_chat_delete(
+            _session(),
+            CHAT_ID,
+            ChatDeleteSubmission(expected_version=1, idempotency_key="studio:chat:test-0001"),
+        )
+        assert receipt.conversation_id == CHAT_ID
+        assert calls[0].headers["Idempotency-Key"] == "studio:chat:test-0001"
+        assert json.loads(calls[0].content) == {"expected_version": 1}
     finally:
         await gateway.close()
 

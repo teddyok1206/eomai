@@ -13,6 +13,7 @@ from eom_api_contracts.general_chat import (
     GeneralChatSubmission,
 )
 from eom_operator_identity import PermissionKey
+from eom_protocol.general_chat_deletion import GeneralChatDelete, GeneralChatDeletion
 from eom_protocol.general_chat_grounding import (
     ChatGroundingSubmission,
     ChatGroundingViews,
@@ -161,6 +162,31 @@ def conversation(
             actor_id=authentication.operator.operator_id,
             conversation_id=conversation_id,
             cursor=cursor,
+        )
+    )
+
+
+@router.post(
+    "/conversations/{conversation_id}/deletion",
+    operation_id="general_chat_delete",
+    response_model=GeneralChatDeletion,
+    dependencies=[Depends(require_permission(PermissionKey.GENERAL_CHAT_WRITE))],
+)
+def delete(
+    request: Request,
+    conversation_id: Annotated[str, Path(pattern=r"^chat_[0-9a-f]{32}$")],
+    body: GeneralChatDelete,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+) -> GeneralChatDeletion:
+    return (
+        get_services(request)
+        .general_chat.require_owner()
+        .delete(
+            actor_id=authentication.operator.operator_id,
+            conversation_id=conversation_id,
+            request=body,
+            idempotency_key=idempotency_key,
         )
     )
 

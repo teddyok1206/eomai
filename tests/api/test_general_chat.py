@@ -19,6 +19,7 @@ from eom_api_contracts.general_chat import (
     GeneralChatSubmission,
 )
 from eom_operator_identity import ROLE_PERMISSIONS, PermissionKey, RoleKey
+from eom_protocol.general_chat_deletion import GeneralChatDelete, GeneralChatDeletion
 from eom_protocol.general_chat_grounding import ChatGroundingViews, GroundedChatSubmission
 from eom_protocol.general_chat_owner_messages import ChatOwnerErrorCode, ChatOwnerFault
 from eom_web_gui.general_chat_contracts import (
@@ -93,6 +94,21 @@ class Owner:
         assert conversation_id == CHAT_ID
         assert turn_ids == ("chatturn_" + "1" * 32,)
         return ChatGroundingViews(conversation_id=conversation_id, values=())
+
+    def delete(
+        self,
+        *,
+        actor_id: str,
+        conversation_id: str,
+        request: GeneralChatDelete,
+        idempotency_key: str,
+    ) -> GeneralChatDeletion:
+        self.actors.append(actor_id)
+        assert conversation_id == CHAT_ID and request.expected_version == 1
+        assert idempotency_key == "chat-create-test-0001"
+        return GeneralChatDeletion(
+            conversation_id=conversation_id, resource_version=2, deleted_at=NOW
+        )
 
 
 def client(*, enabled: bool = False, allowed: bool = True):
@@ -261,6 +277,13 @@ def test_all_routes_use_authenticated_operator_and_have_separate_permissions():
                 ).status_code
                 == 202
             )
+            deletion = value.post(
+                f"/api/v1/general-chat/conversations/{CHAT_ID}/deletion",
+                json={"expected_version": 1},
+                headers={"Idempotency-Key": "chat-create-test-0001"},
+            )
+            assert deletion.status_code == 200
+            assert deletion.json()["resource_version"] == 2
             assert value.get("/api/v1/general-chat/conversations/invalid").status_code == 422
             missing = "chat_" + "f" * 32
             assert value.get(f"/api/v1/general-chat/conversations/{missing}").status_code == 404
@@ -283,6 +306,14 @@ def test_permission_denied_before_owner_resolution():
                 value.post(
                     "/api/v1/general-chat/conversations",
                     json={"title": "대화"},
+                    headers={"Idempotency-Key": "chat-create-test-0001"},
+                ).status_code
+                == 403
+            )
+            assert (
+                value.post(
+                    f"/api/v1/general-chat/conversations/{CHAT_ID}/deletion",
+                    json={"expected_version": 1},
                     headers={"Idempotency-Key": "chat-create-test-0001"},
                 ).status_code
                 == 403

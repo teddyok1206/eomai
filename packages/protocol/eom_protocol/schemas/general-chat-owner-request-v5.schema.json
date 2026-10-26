@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/owner-request/5.0",
+  "title": "Private general chat deletion owner request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "request_id", "command"],
+  "properties": {
+    "schema_version": {"const": "general-chat-owner-request/5.0"},
+    "request_id": {"type": "string", "pattern": "^chatrpc_[0-9a-f]{32}$"},
+    "command": {"$ref": "#/$defs/Delete"}
+  },
+  "$defs": {
+    "Delete": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action", "actor_id", "conversation_id", "request", "idempotency_key"],
+      "properties": {
+        "action": {"const": "DELETE"},
+        "actor_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+        "conversation_id": {"type": "string", "pattern": "^chat_[0-9a-f]{32}$"},
+        "request": {"$ref": "eom://schemas/general-chat/delete/1.0#/$defs/Request"},
+        "idempotency_key": {"type": "string", "pattern": "^[!-~]{16,128}$"}
+      }
+    }
+  }
+}

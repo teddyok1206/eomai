@@ -20,6 +20,7 @@ from eom_identifiers import canonical_json_bytes
 from eom_protocol.general_chat_grounding import ChatGroundingQuery, ChatGroundingViews
 from eom_protocol.general_chat_owner_messages import (
     ChatCreateCommand,
+    ChatDeleteCommand,
     ChatListQuery,
     ChatOwnerErrorCode,
     ChatOwnerPort,
@@ -151,6 +152,13 @@ class GeneralChatOwnerRpcServer:
                 actor_id=command.actor_id,
                 conversation_id=command.conversation_id,
                 cursor=command.cursor,
+            )
+        if isinstance(command, ChatDeleteCommand):
+            return self.owner.delete(
+                actor_id=command.actor_id,
+                conversation_id=command.conversation_id,
+                request=command.request,
+                idempotency_key=command.idempotency_key,
             )
         assert isinstance(command, ChatSubmitCommand)
         return self.owner.submit(

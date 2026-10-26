@@ -67,7 +67,8 @@
                 <button id="chat-more-conversations" class="button quiet" type="button" hidden>이전 대화 더 보기</button>
               </aside>
               <div class="chat-main panel">
-                <div class="chat-toolbar"><strong id="chat-conversation-title">새 대화</strong><button id="chat-refresh" class="button quiet" type="button">새로고침</button></div>
+                <div class="chat-toolbar"><strong id="chat-conversation-title">새 대화</strong><button id="chat-delete" class="button quiet" type="button" hidden>대화 삭제</button><button id="chat-refresh" class="button quiet" type="button">새로고침</button></div>
+                <div id="chat-delete-confirm" class="chat-delete-confirm" hidden><span>이 대화를 목록에서 숨길까요? 검증 기록은 보존됩니다.</span><button id="chat-delete-accept" class="button danger" type="button">삭제 확인</button><button id="chat-delete-cancel" class="button quiet" type="button">닫기</button></div>
                 <details id="chat-knowledge-panel" class="chat-knowledge">
                   <summary>내부 자료 찾기</summary>
                   <form id="chat-knowledge-form" class="chat-knowledge-search">

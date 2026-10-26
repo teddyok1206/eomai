@@ -35,6 +35,13 @@ class GeneralChatConversationRecord(Base):
             "create_request_sha256 ~ '^sha256:[0-9a-f]{64}$'",
             name="ck_chat_create_hashes",
         ),
+        CheckConstraint(
+            "(deleted_at IS NULL AND delete_key_sha256 IS NULL AND "
+            "delete_request_sha256 IS NULL) OR (deleted_at IS NOT NULL AND "
+            "delete_key_sha256 ~ '^sha256:[0-9a-f]{64}$' AND "
+            "delete_request_sha256 ~ '^sha256:[0-9a-f]{64}$')",
+            name="ck_chat_conversation_deletion",
+        ),
         Index("ix_chat_owner_history", "owner_id", "updated_at", "conversation_id"),
     )
 
@@ -49,6 +56,9 @@ class GeneralChatConversationRecord(Base):
     create_request_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    delete_key_sha256: Mapped[str | None] = mapped_column(String(71))
+    delete_request_sha256: Mapped[str | None] = mapped_column(String(71))
 
 
 class GeneralChatTurnRecord(Base):

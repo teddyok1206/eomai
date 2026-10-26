@@ -248,10 +248,15 @@ def test_runtime_and_policy_are_frozen_and_part_of_exact_policy_hash() -> None:
     assert read_chat_worker_policy(document).sha256 != policy.sha256
 
 
-@pytest.mark.parametrize("leaf", ("worker-request", "worker-reply", "owner-request", "owner-reply"))
+@pytest.mark.parametrize("leaf", ("worker-request", "worker-reply"))
 def test_v5_does_not_invent_unsupported_transport_families(leaf: str) -> None:
     with pytest.raises(ValueError, match="unsupported chat envelope"):
         chat_family_validator(leaf, 5)
+
+
+@pytest.mark.parametrize("leaf", ("owner-request", "owner-reply"))
+def test_v5_owner_successor_is_only_for_logical_deletion(leaf: str) -> None:
+    assert chat_family_validator(leaf, 5).schema["$id"] == f"eom://schemas/general-chat/{leaf}/5.0"
 
 
 def test_dispatch_v5_retains_v4_input_and_exact_runtime_policy_ticket() -> None:

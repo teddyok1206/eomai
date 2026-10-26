@@ -84,6 +84,8 @@ from eom_web_gui.contracts import (
 from eom_web_gui.general_chat_contracts import (
     ChatConversation,
     ChatCreateSubmission,
+    ChatDeleteSubmission,
+    ChatDeletion,
     ChatList,
     ChatSlot,
     ChatTurnSubmission,
@@ -375,6 +377,10 @@ class ApplicationGateway(Protocol):
     async def general_chat_submit(
         self, session: WebSession, conversation_id: str, value: ChatTurnSubmission
     ) -> ChatConversation: ...
+
+    async def general_chat_delete(
+        self, session: WebSession, conversation_id: str, value: ChatDeleteSubmission
+    ) -> ChatDeletion: ...
 
     async def general_chat_grounded_submit(
         self, session: WebSession, conversation_id: str, value: ChatGroundedTurnSubmission
@@ -963,6 +969,25 @@ class HttpApplicationGateway:
             return ChatConversation.model_validate(response.json())
         except ValueError as exc:
             raise GatewayError(status=502, code="GENERAL_CHAT_RESPONSE_INVALID") from exc
+
+    async def general_chat_delete(
+        self, session: WebSession, conversation_id: str, value: ChatDeleteSubmission
+    ) -> ChatDeletion:
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/general-chat/conversations/{conversation_id}/deletion",
+            json=value.model_dump(mode="json", exclude={"idempotency_key"}),
+            headers={"Idempotency-Key": value.idempotency_key},
+            timeout=CHAT_OWNER_HTTP_TIMEOUT_SECONDS,
+        )
+        try:
+            receipt = ChatDeletion.model_validate(response.json())
+        except ValueError as exc:
+            raise GatewayError(status=502, code="GENERAL_CHAT_RESPONSE_INVALID") from exc
+        if receipt.conversation_id != conversation_id:
+            raise GatewayError(status=502, code="GENERAL_CHAT_RESPONSE_INVALID")
+        return receipt
 
     async def general_chat_grounded_submit(
         self, session: WebSession, conversation_id: str, value: ChatGroundedTurnSubmission

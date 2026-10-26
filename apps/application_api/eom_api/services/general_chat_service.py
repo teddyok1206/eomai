@@ -13,6 +13,7 @@ from eom_api_contracts.general_chat import (
     GeneralChatSlot,
     GeneralChatSubmission,
 )
+from eom_protocol.general_chat_deletion import GeneralChatDelete, GeneralChatDeletion
 from eom_protocol.general_chat_grounding import ChatGroundingViews, GroundedChatSubmission
 from eom_protocol.general_chat_owner_messages import (
     ChatOwnerErrorCode,
@@ -115,6 +116,23 @@ class GeneralChatApplicationService:
     ) -> GeneralChatConversation:
         return self._call(
             lambda owner: owner.submit(
+                actor_id=actor_id,
+                conversation_id=conversation_id,
+                request=request,
+                idempotency_key=idempotency_key,
+            )
+        )
+
+    def delete(
+        self,
+        *,
+        actor_id: str,
+        conversation_id: str,
+        request: GeneralChatDelete,
+        idempotency_key: str,
+    ) -> GeneralChatDeletion:
+        return self._call(
+            lambda owner: owner.delete(
                 actor_id=actor_id,
                 conversation_id=conversation_id,
                 request=request,

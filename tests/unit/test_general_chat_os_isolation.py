@@ -38,7 +38,7 @@ def test_security_properties_come_from_source_including_repeated_path_directives
     assert values["Restart"] == "no" and values["RuntimeMaxSec"] == "30"
     assert "ExecStartPre" not in values and "EnvironmentFile" not in values
     if component == "owner":
-        assert values["SupplementaryGroups"] == "eom eom-cdx-chat"
+        assert values["SupplementaryGroups"] == "eom eom-cdx-chat eom-general-chat"
         assert values["IPAddressDeny"] == "any" and values["IPAddressAllow"] == "localhost"
     else:
         assert "SupplementaryGroups" not in values

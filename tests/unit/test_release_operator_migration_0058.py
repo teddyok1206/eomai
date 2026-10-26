@@ -207,13 +207,13 @@ def test_changed_schema_is_rejected_before_context_admission(
     assert not (path.parent / "operator-admission.json").exists()
 
 
-def test_current_selector_only_uses0058_and_historical_wrapper_stays0051() -> None:
+def test_current_selector_uses0059_and_historical_wrapper_stays0051() -> None:
     for name in ("release_operator_runtime.sh", "release_operator_boundary.sh"):
         source = (ROOT / "scripts/api" / name).read_text()
-        for suffix in ("0052", "0053", "0054", "0055", "0056", "0057", "0058"):
+        for suffix in ("0052", "0053", "0054", "0055", "0056", "0057", "0058", "0059"):
             assert f"MIGRATION_VERIFY_{suffix}|MIGRATION_UPGRADE_{suffix}" in source
     deploy = (ROOT / "scripts/api/deploy_release.sh").read_text()
-    assert 'run_release_operator MIGRATION_VERIFY_0058 "${COMMIT}"' in deploy
-    assert 'if CURRENT_MIGRATION_REVISION != "20261019_0058":' in deploy
+    assert 'run_release_operator MIGRATION_VERIFY_0059 "${COMMIT}"' in deploy
+    assert 'if CURRENT_MIGRATION_REVISION != "20261026_0059":' in deploy
     old = (ROOT / "scripts/api/migrate_release.sh").read_text()
     assert "MIGRATION_UPGRADE_0051" in old and "MIGRATION_UPGRADE_0058" not in old

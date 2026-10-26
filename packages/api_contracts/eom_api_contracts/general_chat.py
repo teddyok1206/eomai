@@ -1,5 +1,11 @@
 """Public re-exports of the presentation-neutral conversation contracts."""
 
+from eom_protocol.general_chat_deletion import (
+    GeneralChatDelete as GeneralChatDelete,
+)
+from eom_protocol.general_chat_deletion import (
+    GeneralChatDeletion as GeneralChatDeletion,
+)
 from eom_protocol.general_chat_views import (
     GeneralChatConversation as GeneralChatConversation,
 )

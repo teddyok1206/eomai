@@ -57,11 +57,14 @@ class GeneralChatRepository:
         conversation_id: str,
         *,
         lock: bool = False,
+        include_deleted: bool = False,
     ) -> GeneralChatConversationRecord:
         query = select(GeneralChatConversationRecord).where(
             GeneralChatConversationRecord.conversation_id == conversation_id,
             GeneralChatConversationRecord.owner_id == actor_id,
         )
+        if not include_deleted:
+            query = query.where(GeneralChatConversationRecord.deleted_at.is_(None))
         if lock:
             query = query.with_for_update().execution_options(populate_existing=True)
         value = session.scalar(query)
@@ -160,6 +163,7 @@ class GeneralChatRepository:
     ) -> tuple[GeneralChatConversationRecord, ...]:
         query = select(GeneralChatConversationRecord).where(
             GeneralChatConversationRecord.owner_id == actor_id,
+            GeneralChatConversationRecord.deleted_at.is_(None),
         )
         if before is not None:
             query = query.where(
@@ -210,6 +214,7 @@ class GeneralChatRepository:
             )
             .where(
                 GeneralChatTurnRecord.state == "QUEUED",
+                GeneralChatConversationRecord.deleted_at.is_(None),
                 OperatorRecord.status == "ACTIVE",
                 OperatorRecord.deleted_at.is_(None),
             )

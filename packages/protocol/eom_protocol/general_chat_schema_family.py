@@ -10,7 +10,7 @@ from jsonschema import Draft202012Validator
 from referencing import Registry, Resource
 
 
-@lru_cache(maxsize=26)
+@lru_cache(maxsize=28)
 def chat_family_validator(leaf: str, version: int) -> Draft202012Validator:
     if leaf not in {
         "worker-policy",
@@ -20,7 +20,10 @@ def chat_family_validator(leaf: str, version: int) -> Draft202012Validator:
         "owner-request",
         "owner-reply",
     } or (
-        version not in {1, 2, 3, 4} and not (version == 5 and leaf in {"worker-policy", "dispatch"})
+        version not in {1, 2, 3, 4}
+        and not (
+            version == 5 and leaf in {"worker-policy", "dispatch", "owner-request", "owner-reply"}
+        )
     ):
         raise ValueError("unsupported chat envelope")
     root = files("eom_protocol").joinpath("schemas")
@@ -45,6 +48,7 @@ def chat_family_validator(leaf: str, version: int) -> Draft202012Validator:
         "general-chat-worker-policy-v5",
         "general-chat-turn-input-v4",
         "general-chat-turn-result-v4",
+        "general-chat-delete",
     ):
         schema = json.loads(root.joinpath(name + ".schema.json").read_bytes())
         registry = registry.with_resource(schema["$id"], Resource.from_contents(schema))

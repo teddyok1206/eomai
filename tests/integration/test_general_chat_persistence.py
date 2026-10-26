@@ -33,6 +33,7 @@ from eom_orchestrator.general_chat_worker_server import ChatWorkerRpcServer
 from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_orchestrator.models import WorkerSlotRecord
 from eom_protocol.general_chat import CHAT_RESULT_SCHEMA, ChatTurnInput, ChatTurnResult
+from eom_protocol.general_chat_deletion import GeneralChatDelete
 from eom_protocol.general_chat_dispatch import CHAT_DISPATCH_SCHEMA, ChatExecutionIdentity
 from eom_protocol.general_chat_owner_messages import ChatOwnerErrorCode, ChatOwnerFault
 from eom_protocol.general_chat_views import GeneralChatCreate, GeneralChatSubmission
@@ -1007,6 +1008,142 @@ def test_concurrent_identical_submission_replays_after_revision_changes(chat: Ch
     replay = invoke_without_barrier(chat, conversation.conversation_id, request, key)
     assert replay.messages[0].turn_id == values[0].messages[0].turn_id
     assert replay.messages[1].state == "COMPLETED"
+
+
+def test_terminal_chat_deletion_hides_reads_and_preserves_evidence(chat: ChatFixture):
+    create_key = "create-" + uuid4().hex
+    conversation = chat.owner.create(
+        actor_id=chat.actors[0],
+        request=GeneralChatCreate(title="테스트 대화"),
+        idempotency_key=create_key,
+    )
+    chat.submit(conversation)
+    claim = chat.claim()
+    chat.answer(claim, chat.execution.prepare(claim, identity=IDENTITY))
+    final = chat.owner.conversation(
+        actor_id=chat.actors[0], conversation_id=conversation.conversation_id, cursor=None
+    )
+    request = GeneralChatDelete(expected_version=final.resource_version)
+    key = "delete-" + uuid4().hex
+    receipt = chat.owner.delete(
+        actor_id=chat.actors[0],
+        conversation_id=conversation.conversation_id,
+        request=request,
+        idempotency_key=key,
+    )
+    assert receipt.resource_version == final.resource_version + 1
+    assert (
+        chat.owner.delete(
+            actor_id=chat.actors[0],
+            conversation_id=conversation.conversation_id,
+            request=request,
+            idempotency_key=key,
+        )
+        == receipt
+    )
+    assert all(
+        value.conversation_id != conversation.conversation_id
+        for value in chat.owner.conversations(actor_id=chat.actors[0], cursor=None).values
+    )
+    with pytest.raises(ChatError, match="GENERAL_CHAT_NOT_FOUND"):
+        chat.owner.conversation(
+            actor_id=chat.actors[0], conversation_id=conversation.conversation_id, cursor=None
+        )
+    with pytest.raises(ChatError, match="GENERAL_CHAT_NOT_FOUND"):
+        chat.owner.create(
+            actor_id=chat.actors[0],
+            request=GeneralChatCreate(title="테스트 대화"),
+            idempotency_key=create_key,
+        )
+    with pytest.raises(ChatError, match="GENERAL_CHAT_NOT_FOUND"):
+        chat.owner.submit(
+            actor_id=chat.actors[0],
+            conversation_id=conversation.conversation_id,
+            request=GeneralChatSubmission(
+                text="삭제 뒤 입력", expected_version=receipt.resource_version
+            ),
+            idempotency_key="send-" + uuid4().hex,
+        )
+    with pytest.raises(ChatError, match="GENERAL_CHAT_NOT_FOUND"):
+        chat.owner.delete(
+            actor_id=chat.actors[1],
+            conversation_id=conversation.conversation_id,
+            request=request,
+            idempotency_key=key,
+        )
+    with pytest.raises(ChatError, match="GENERAL_CHAT_NOT_FOUND"):
+        chat.owner.delete(
+            actor_id=chat.actors[0],
+            conversation_id=conversation.conversation_id,
+            request=request,
+            idempotency_key="delete-" + uuid4().hex,
+        )
+    with chat.repository.read_snapshot() as session:
+        row = chat.repository.owned(
+            session, chat.actors[0], conversation.conversation_id, include_deleted=True
+        )
+        turn = chat.repository.turn(session, claim.turn_id)
+        assert row.deleted_at == receipt.deleted_at
+        assert turn.state == "COMPLETED" and turn.output_artifact_id is not None
+    with pytest.raises(DBAPIError), chat.repository.sessions.begin() as session:
+        row = chat.repository.owned(
+            session,
+            chat.actors[0],
+            conversation.conversation_id,
+            lock=True,
+            include_deleted=True,
+        )
+        row.title = "복구를 시도한 제목"
+
+
+def test_chat_deletion_rejects_active_and_concurrent_submit_has_one_winner(chat: ChatFixture):
+    active = chat.submit(chat.create())
+    with pytest.raises(ChatError, match="GENERAL_CHAT_TURN_IN_PROGRESS"):
+        chat.owner.delete(
+            actor_id=chat.actors[0],
+            conversation_id=active.conversation_id,
+            request=GeneralChatDelete(expected_version=active.resource_version),
+            idempotency_key="delete-" + uuid4().hex,
+        )
+
+    conversation = chat.create()
+    barrier = Barrier(2)
+
+    def delete():
+        barrier.wait(timeout=10)
+        try:
+            return chat.owner.delete(
+                actor_id=chat.actors[0],
+                conversation_id=conversation.conversation_id,
+                request=GeneralChatDelete(expected_version=1),
+                idempotency_key="delete-" + uuid4().hex,
+            )
+        except ChatError as error:
+            return error.code
+
+    def submit():
+        barrier.wait(timeout=10)
+        try:
+            return chat.owner.submit(
+                actor_id=chat.actors[0],
+                conversation_id=conversation.conversation_id,
+                request=GeneralChatSubmission(text="경쟁 입력", expected_version=1),
+                idempotency_key="send-" + uuid4().hex,
+            )
+        except ChatError as error:
+            return error.code
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        deletion = executor.submit(delete)
+        submission = executor.submit(submit)
+        outcomes = (deletion.result(), submission.result())
+    assert sum(not isinstance(value, str) for value in outcomes) == 1
+    with chat.repository.read_snapshot() as session:
+        row = chat.repository.owned(
+            session, chat.actors[0], conversation.conversation_id, include_deleted=True
+        )
+        turns = chat.repository.history(session, conversation.conversation_id, limit=10)
+        assert (row.deleted_at is not None, bool(turns)) in {(True, False), (False, True)}
 
 
 def invoke_without_barrier(chat: ChatFixture, conversation_id: str, request, key: str):

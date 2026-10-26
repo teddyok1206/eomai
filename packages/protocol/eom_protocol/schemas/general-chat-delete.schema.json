@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/general-chat/delete/1.0",
+  "title": "Owner-scoped logical conversation deletion",
+  "$defs": {
+    "Request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["expected_version"],
+      "properties": {
+        "expected_version": {"type": "integer", "minimum": 1}
+      }
+    },
+    "Receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conversation_id", "resource_version", "deleted_at"],
+      "properties": {
+        "conversation_id": {"type": "string", "pattern": "^chat_[0-9a-f]{32}$"},
+        "resource_version": {"type": "integer", "minimum": 2},
+        "deleted_at": {"type": "string", "format": "date-time"}
+      }
+    }
+  }
+}

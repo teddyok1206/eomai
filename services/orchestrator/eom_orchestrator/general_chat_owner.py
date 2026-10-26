@@ -17,6 +17,7 @@ from eom_protocol.general_chat import (
     ChatBoundaryValue,
     StoredChatMessage,
 )
+from eom_protocol.general_chat_deletion import GeneralChatDelete, GeneralChatDeletion
 from eom_protocol.general_chat_grounding import (
     GROUNDED_MESSAGE_SCHEMA,
     AgentChatTurnInput,
@@ -249,6 +250,46 @@ class GeneralChatConversationOwner:
                 session.flush()
             conversation_id = row.conversation_id
         return self.conversation(actor_id=actor_id, conversation_id=conversation_id, cursor=None)
+
+    def delete(
+        self,
+        *,
+        actor_id: str,
+        conversation_id: str,
+        request: GeneralChatDelete,
+        idempotency_key: str,
+    ) -> GeneralChatDeletion:
+        """Hide only a terminal owned conversation; preserve its immutable evidence."""
+        require_chat_key(idempotency_key)
+        key = chat_intent("chat-delete", actor_id, conversation_id, idempotency_key)
+        request_hash = sha256_bytes(canonical_json_bytes(request.model_dump(mode="json")))
+        with self.repository.sessions.begin() as session:
+            self.repository.require_actor(session, actor_id)
+            self.repository.lock_intent(session, key)
+            conversation = self.repository.owned(
+                session, actor_id, conversation_id, lock=True, include_deleted=True
+            )
+            if conversation.deleted_at is not None:
+                if conversation.delete_key_sha256 != key:
+                    raise ChatError("GENERAL_CHAT_NOT_FOUND")
+                if conversation.delete_request_sha256 != request_hash:
+                    raise ChatError("GENERAL_CHAT_IDEMPOTENCY_CONFLICT")
+            else:
+                if conversation.resource_version != request.expected_version:
+                    raise ChatError("GENERAL_CHAT_STALE_REVISION")
+                if self.repository.active_turn(session, conversation_id):
+                    raise ChatError("GENERAL_CHAT_TURN_IN_PROGRESS")
+                deleted_at = max(self.clock(), conversation.updated_at)
+                conversation.deleted_at = deleted_at
+                conversation.delete_key_sha256 = key
+                conversation.delete_request_sha256 = request_hash
+                self.repository.touch(conversation, now=deleted_at)
+            assert conversation.deleted_at is not None
+            return GeneralChatDeletion(
+                conversation_id=conversation_id,
+                resource_version=conversation.resource_version,
+                deleted_at=conversation.deleted_at,
+            )
 
     def submit(
         self,

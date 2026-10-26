@@ -6,12 +6,14 @@ import grp
 import pwd
 from uuid import uuid4
 
+from eom_protocol.general_chat_deletion import GeneralChatDelete, GeneralChatDeletion
 from eom_protocol.general_chat_grounding import (
     ChatGroundingQuery,
     GroundedChatSubmission,
 )
 from eom_protocol.general_chat_owner_messages import (
     ChatCreateCommand,
+    ChatDeleteCommand,
     ChatListQuery,
     ChatOwnerCommand,
     ChatOwnerErrorCode,
@@ -65,7 +67,9 @@ class GeneralChatOwnerClient:
 
     def _request(self, command: ChatOwnerCommand) -> ChatOwnerValue:
         request = ChatOwnerRequest(
-            schema_version="general-chat-owner-request/4.0"
+            schema_version="general-chat-owner-request/5.0"
+            if isinstance(command, ChatDeleteCommand)
+            else "general-chat-owner-request/4.0"
             if isinstance(command, ChatGroundingQuery)
             else "general-chat-owner-request/2.0"
             if (
@@ -157,4 +161,23 @@ class GeneralChatOwnerClient:
             )
         )
         assert isinstance(value, GeneralChatConversation)
+        return value
+
+    def delete(
+        self,
+        *,
+        actor_id: str,
+        conversation_id: str,
+        request: GeneralChatDelete,
+        idempotency_key: str,
+    ) -> GeneralChatDeletion:
+        value = self._request(
+            ChatDeleteCommand(
+                actor_id=actor_id,
+                conversation_id=conversation_id,
+                request=request,
+                idempotency_key=idempotency_key,
+            )
+        )
+        assert isinstance(value, GeneralChatDeletion)
         return value

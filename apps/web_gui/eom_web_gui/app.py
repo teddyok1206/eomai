@@ -56,7 +56,11 @@ from eom_web_gui.contracts import (
     StudioWorkbenchOverview,
 )
 from eom_web_gui.gateways import ApplicationGateway, GatewayError, HttpApplicationGateway
-from eom_web_gui.general_chat_contracts import ChatCreateSubmission, ChatTurnSubmission
+from eom_web_gui.general_chat_contracts import (
+    ChatCreateSubmission,
+    ChatDeleteSubmission,
+    ChatTurnSubmission,
+)
 from eom_web_gui.resources import installed_web_source_commit, static_resource
 from eom_web_gui.services import WebServices, build_services, validate_download_request
 from eom_web_gui.sessions import WebSession, utc_now
@@ -390,6 +394,16 @@ def create_app(
     ) -> dict[str, Any]:
         return (
             await actual.gateway.general_chat_submit(session, conversation_id, value)
+        ).model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/general-chat/conversations/{{conversation_id}}/deletion")
+    async def general_chat_delete(
+        conversation_id: Annotated[str, Path(pattern=r"^chat_[0-9a-f]{32}$")],
+        value: ChatDeleteSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return (
+            await actual.gateway.general_chat_delete(session, conversation_id, value)
         ).model_dump(mode="json")
 
     @app.post(

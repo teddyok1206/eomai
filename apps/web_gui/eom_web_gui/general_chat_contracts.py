@@ -110,3 +110,14 @@ class ChatCreateSubmission(ChatCreate):
 
 class ChatTurnSubmission(ChatSubmission):
     idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
+
+
+class ChatDeleteSubmission(WebModel):
+    expected_version: int = Field(ge=1)
+    idempotency_key: str = Field(min_length=16, max_length=128, pattern=r"^[A-Za-z0-9_.:-]+$")
+
+
+class ChatDeletion(WebModel):
+    conversation_id: str = Field(pattern=r"^chat_[0-9a-f]{32}$")
+    resource_version: int = Field(ge=2)
+    deleted_at: UtcDatetime

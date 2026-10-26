@@ -578,6 +578,32 @@ conversation/turn FK는 RESTRICT이며 owner DB role에는 DELETE 권한이 없�
 첫 구현은 **본인 대화의 논리 삭제**로 한다. 일반 목록·열기·재전송에서 숨기되 정본
 실행·transcript·근거 Artifact·감사 이력은 보존한다. 영구 폐기와 혼동하지 않도록 안내한다.
 
+구현 경계: Orchestrator의 기존 conversation owner만 삭제 명령을 처리한다. 정본은
+`general_chat_conversations`의 소유자·버전·논리 삭제 시각과 immutable turn/Artifact이다.
+대화 ID와 각 turn/Artifact revision/hash는 변경하지 않는다. 삭제 결과는 원 대화 ID,
+삭제 후 resource version, UTC 시각만 돌려준다. API/Web은 이 application 결과만 중계한다.
+새 owner wire는 successor schema로 정의하고 과거 wire bytes는 유지한다.
+
+주 접근은 `(owner_id, conversation_id)` 확인, `(owner_id, updated_at,
+conversation_id)` 순서의 목록, 그리고 동일 대화의 단일 turn 활성 여부다. 기존 PK·
+unique submission key·active-turn partial index와 conversation row lock을 재사용한다.
+대상별 lookup은 O(log N), 목록은 indexed cursor의 최대51행, 삭제는 활성 turn 존재
+확인과 한 row의 metadata UPDATE다. 증가한 전체 대화 수에 비례하는 scan은 만들지 않는다.
+`deleted_at IS NULL` 목록 필터의 실제 query plan을 disposable DB에서 확인한 뒤에만
+추가 partial index를 판단한다. 삭제 상태는 보존되는 정본 메타데이터이지 별도 캐시가 아니다.
+
+삭제는 동일 conversation row lock을 쓰는 submit과 한 transaction으로 직렬화한다.
+진행 turn은 거부하고 처리 중인 turn/claim을 취소·재해석하지 않는다. 원 delete key와
+요청 hash를 같은 row에 기록하여 시간 초과 후 동일 요청 재전송은 같은 결과만 읽는다.
+다른 key의 중복 삭제와 비소유자/없는 대화는 모두 안전한 404다. 실패·stale·미확인
+실행은 새 key로 우회하지 않는다. 기존 DB UPDATE 권한만 사용하고 DELETE, 새 queue,
+새 Artifact, worker 권한은 도입하지 않는다. 파일/대화 bytes는 API 사이에 복사하지 않는다.
+
+더 단순해 보이는 실제 DELETE는 FK/감사·불변 실행을 파괴한다. UI에서만 숨기는 방식은
+다른 탭의 조회·재전송을 막지 못한다. source/schema·disposable DB 검증은 실행 중인
+GPU INDEX를 건드리지 않고 진행할 수 있으나, migration과 호환 운영 release는 별도
+배포 창에서 기존 INDEX pin/GraphRAG 활성화를 보존할 때만 선택한다.
+
 - 기존 Chat owner에 typed 삭제 command/result·permission·expected-version·idempotency를 정의한다.
 - 소유자가 아닌 대화와 없는 대화는 같은 안전한404로 응답하고 존재 여부를 노출하지 않는다.
 - 첫 범위에서는 답변이 QUEUED/CLAIMED/RUNNING/COMMITTING이면 삭제를 명시적으로 거절하고

@@ -126,6 +126,37 @@ const createDocument = () => {
   controller.close();
 }
 
+// An uncertain deletion keeps one intent and prevents a new turn until replay confirms it.
+{
+  const document = createDocument();
+  const deletions = [];
+  let removed = false;
+  const api = async (path, options) => {
+    if (path.endsWith("/slot")) return {state: "READY"};
+    if (path.endsWith("/deletion")) {
+      deletions.push({...options.body});
+      if (deletions.length === 1) throw new Error("HTTP_TIMEOUT");
+      removed = true;
+      return {conversation_id: first, resource_version: 2, deleted_at: "2026-10-07T00:01:00Z"};
+    }
+    if (path.endsWith(first)) return conversation(first, "첫 번째");
+    return {values: removed ? [summaries[1]] : summaries, next_cursor: null};
+  };
+  const controller = createGeneralChat({document, api, errorMessage: error => error.message});
+  controller.install(); controller.setOwner("owner-one"); await controller.open();
+  await document.getElementById("chat-conversations").children[0].fire("click");
+  await document.getElementById("chat-delete").fire("click");
+  assert.equal(document.getElementById("chat-delete-confirm").hidden, false);
+  await document.getElementById("chat-delete-accept").fire("click");
+  assert.equal(document.getElementById("chat-send").disabled, true);
+  assert.equal(document.getElementById("chat-error").textContent, "HTTP_TIMEOUT");
+  await document.getElementById("chat-delete-accept").fire("click");
+  assert.deepEqual(deletions[0], deletions[1]);
+  assert.equal(document.getElementById("chat-conversation-title").textContent, "새 대화");
+  assert.equal(document.getElementById("chat-conversations").children.length, 1);
+  controller.close();
+}
+
 // A disabled runtime cannot fabricate a ready badge or submit a question.
 {
   const document = createDocument();
@@ -198,4 +229,4 @@ const createDocument = () => {
   controller.close();
 }
 
-console.log("CHAT_BROWSER_STATE=PASS uncertain-replay/stale-selection/owner-reset/unavailable/markdown-cache/rag-source-card");
+console.log("CHAT_BROWSER_STATE=PASS uncertain-replay/deletion-replay/stale-selection/owner-reset/unavailable/markdown-cache/rag-source-card");
