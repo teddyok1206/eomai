@@ -44,6 +44,7 @@ operating release set: NOT_SET.** README cleanup `4e9c962e` is not repeated.
 | Image coexistence and release | **Actual same-invocation wait/continue/return PASS**,22:44, below, using the installed provider successor against a real INDEX allocation. This uses a private synthetic non-Item reference, not scientific source admission or an image-quality acceptance. Actual routed QUERY resource-only CPU fallback remains a separate pending check. Original independent `IMAGE_TRAINER_REGRESSION=NOT_RUN` remains unchanged. |
 | Throughput | Historical CPU/CUDA comparison stays unchanged. Measure finite QUERY/cohort behavior separately from end-to-end source/registration overhead; no new service speedup is claimed. |
 | GPU default, rollback and compatible installed set | **PENDING**. Candidate/backups/preflight exist, but actual default selection, read-back and supported rollback still need live verification. |
+| Corpus growth beyond one 1,024-source lookup | **NOT_IMPLEMENTED**. The current source owner sets `maximum_sources=1024`; `prepare_missing_embedding_bindings` explicitly rejects a truncated population with `EMBEDDING_REGISTRY_SCOPE_LIMIT`. The live eligible population is 546. Finite 1,024-row batch support does not prove automatic indexing of a larger corpus; a successor bounded traversal/partition contract is required before claiming that scale. |
 | Git/docs/Slack | Source fixes and evidence pushed. Milestone report `devreport_5555af57a3984798b16e4ec263dd39a7` SENT; final completion report remains pending. |
 
 ## Reusable live DOCUMENT evidence
