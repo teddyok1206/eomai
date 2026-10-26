@@ -702,3 +702,17 @@ never simulate login or extend authentication age.
 Only after every live-pending row is proved, record the completion commit and
 actual compatible operating release, then inspect the user's post-checkpoint
 12-candidate/4-check static review. That external document remains unopened.
+
+### 09:40 continued catch-up checkpoint
+
+The same INDEX PID734655 / invocation`9718f2ed05ac404e84ce7a69559b110c`
+remained active at09:39; its original current-revision service reported another
+`BATCH_COMPLETED` at09:36:31. No restart, new index request, owner selection or
+QUERY activation occurred. The09:28:03 read-only audit
+`/tmp/eom-current-index-pair-metadata-20261026-r36.json` (EXIT0) recorded mixed
+CPU521/506/521 and CUDA177/213/136, versus legacy ALL CPU520/505/520 and
+CUDA169/213/128, in CONTENT/CONCRETE/METADATA order. These are **partial binding
+counts only**, not proof that either exact canonical device population is complete
+or identical. CPU QUERY remains the installed default. Continue the existing
+finite eight-target catch-up; the QUERY3/fallback/replay/default/rollback gates
+and final completion commit/release checkpoint remain pending.
