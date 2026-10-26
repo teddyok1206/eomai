@@ -9,6 +9,8 @@ manifest and reject foreign sources, anchors, request identities and blank
 conclusions. No review Workflow selects that successor yet; the orchestrator
 has not connected the validator to its commit boundary. This decision does
 **not** activate a new review path or reinterpret historical reviews.
+The Orchestrator explicitly refuses a V5 result before artifact commit until
+that trusted receipt is installed; schema registration alone is not activation.
 
 ## Decision and boundary
 

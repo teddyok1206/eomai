@@ -10,11 +10,18 @@ import pytest
 from eom_catalog_contracts import ReviewTextbookEvidence
 from eom_catalog_contracts.validation import catalog_schema_registry
 from eom_identifiers import content_sha256
+from eom_orchestrator.errors import PlatformError
+from eom_orchestrator.orchestrator import _reject_unactivated_textbook_review_result
+from eom_protocol import ErrorCode
 from eom_workflow.document_review import (
     PdfDocumentReviewWorkerRequestV5,
     validate_single_document_review_textbook_usage,
 )
-from eom_workflow.models import PdfDocumentReviewRoleResultV5, RoleWorkerInput
+from eom_workflow.models import (
+    PdfDocumentReviewRoleResultV4,
+    PdfDocumentReviewRoleResultV5,
+    RoleWorkerInput,
+)
 from eom_workflow.schemas import (
     constrained_result_schema,
     load_codex_result_schema,
@@ -207,6 +214,16 @@ def test_trusted_single_review_rejects_blank_science_conclusion() -> None:
         validate_single_document_review_textbook_usage(
             result.output, worker_input, _manifest(worker_input.textbook_evidence)
         )
+
+
+def test_unactivated_successor_cannot_reach_artifact_commit() -> None:
+    successor = validate_role_result(_result_v5(), "support", "pdf-document-review-result@5.0")
+    assert isinstance(successor, PdfDocumentReviewRoleResultV5)
+    with pytest.raises(PlatformError) as error:
+        _reject_unactivated_textbook_review_result(successor)
+    assert error.value.code == ErrorCode.WORKER_RESULT_INVALID
+    predecessor = PdfDocumentReviewRoleResultV4.model_validate(result_v4())
+    _reject_unactivated_textbook_review_result(predecessor)
 
 
 def test_predecessor_schema_does_not_accept_successor_textbook_result() -> None:

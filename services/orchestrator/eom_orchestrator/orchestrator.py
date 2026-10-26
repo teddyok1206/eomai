@@ -98,6 +98,7 @@ from eom_workflow.models import (
     PairedDocumentReviewRoleResult,
     PairedDocumentReviewRoleResultV3,
     PdfDocumentReviewRoleResult,
+    PdfDocumentReviewRoleResultV5,
     RoleWorkerInput,
     WorkerRequest,
 )
@@ -211,6 +212,17 @@ WorkflowRoleRequest = (
     | PdfDocumentReviewWorkerRequest
     | InferenceTransferPairWorkerRequest
 )
+
+
+def _reject_unactivated_textbook_review_result(result: object) -> None:
+    """Fail closed until ADR 0213's exact-manifest receipt precedes NAS commit."""
+
+    if isinstance(result, PdfDocumentReviewRoleResultV5):
+        # Remove this guard only when the trusted receipt is wired into this commit path.
+        raise PlatformError(
+            ErrorCode.WORKER_RESULT_INVALID,
+            "textbook review successor is not activated without its evidence receipt",
+        )
 
 
 def _plan_step_evidence_access(
@@ -1076,6 +1088,7 @@ class Orchestrator:
                     ErrorCode.WORKER_RESULT_INVALID,
                     "workflow worker result identifiers do not match input",
                 )
+            _reject_unactivated_textbook_review_result(result)
             if isinstance(
                 result, (InferenceTransferPairRoleResult, InferenceTransferPairRoleResultV11)
             ):
