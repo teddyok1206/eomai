@@ -59,6 +59,28 @@ def test_page_of_1024_keeps_one_extra_row_for_edge_validation() -> None:
     assert second.complete and second.next_after_source_revision_id is None
 
 
+@pytest.mark.parametrize("source_count", (1025, 2048, 10000))
+def test_many_source_pages_preserve_exact_order_without_overlap(source_count: int) -> None:
+    rows = tuple((_source(number), _run(number)) for number in range(1, source_count + 1))
+    emitted: list[tuple[str, str]] = []
+    cursor: str | None = None
+    offset = 0
+    while True:
+        page = validate_candidate_source_page(
+            rows[offset : offset + 1025],
+            maximum=1024,
+            after_source_revision_id=cursor,
+        )
+        emitted.extend(page.members)
+        if page.complete:
+            assert page.next_after_source_revision_id is None
+            break
+        assert page.next_after_source_revision_id == page.members[-1][0]
+        cursor = page.next_after_source_revision_id
+        offset += len(page.members)
+    assert tuple(emitted) == rows
+
+
 def test_duplicate_at_page_edge_is_rejected_before_cursor_advances() -> None:
     rows = tuple((_source(number), _run(number)) for number in range(1, 1025))
     with pytest.raises(ValueError, match="ambiguous"):
