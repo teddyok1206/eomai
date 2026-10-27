@@ -38,8 +38,18 @@ schema/revision/hash를 다시 검증하지만 그 자체는 source 접근 권�
 이렇게 게시와 실행 인가를 나누는 것은 단순히 기존 `maximum_sources`를
 page cap으로 재해석하는 방식이 이전 release의 의미를 깨뜨리기 때문이다.
 격리 PostgreSQL에서는 1.3 append-only 게시·동일 요청 재전송·독립 root
-동시 게시와 구형 reader 거부를 확인했다. 아직 새 service authority,
-Graph 전체 모집단 fence 및 segmented root publication은 없다.
+동시 게시와 구형 reader 거부를 확인했다. 그러나 이 게시 검증만으로
+Graph 전체 모집단의 profile/input closure나 segmented root publication이
+완성되지는 않는다.
+후속 Catalog service authority는 동일한 실제 DB/service identity, 원본
+access policy, corpus/Graph publication 검사를 1.1/1.2와 공유하되, 1.3에는
+`maximum_page_sources`만 적용하는 별도 진입점을 둔다. 구형 진입점은
+1.3 값을 받아도 거부한다. 한 active root transaction의 bounded source-first
+page는 조회 전후에 같은 1.3 policy를 재검증하고, 전체 순회는 페이지별
+`(source revision, accepted analysis run)` 해시와 범위·건수만 유지한다.
+이 요약은 최대 1,024개 segment descriptor의 파생값이지 전체 profile,
+input-text hash 또는 등록된 Artifact가 아니다. 그러므로 Graph 원천/풀이보고서
+프로파일의 실제 검증과 CPU/CUDA 결합 전에는 index 등록에 사용할 수 없다.
 
 ## 확인된 제한과 결정
 

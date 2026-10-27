@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 from typing import cast
+from unittest.mock import Mock
 
 import pytest
 from eom_catalog_contracts import load_schema, validate_contract
@@ -29,12 +32,21 @@ from eom_catalog_service.local_indexing_policy_publication import (
     LocalIndexingPolicyPublicationError,
     publish_local_indexing_access_policy,
 )
+from eom_catalog_service.local_indexing_source_ports import LocalIndexingSourceError
+from eom_catalog_service.segmented_local_indexing_population_read import (
+    SegmentedPopulationReadError,
+    read_segmented_candidate_source_page,
+    scan_segmented_candidate_sources,
+)
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from jsonschema import Draft202012Validator
 from sqlalchemy.orm import Session
 
 from tests.unit.test_local_indexing_mixed_policy import mixed_policy_document
+from tests.unit.test_local_indexing_runtime_admission import installed as installed
 from tests.unit.test_local_indexing_source_authority import MetadataSession
+from tests.unit.test_local_indexing_source_authority import owner as owner
+from tests.unit.test_postgres_local_indexing_fence import case as case
 
 
 def candidate_document(**changes: object) -> dict[str, object]:
@@ -157,4 +169,164 @@ def test_segmented_reader_rejects_stale_or_forged_metadata(fault: str) -> None:
     with pytest.raises(KnowledgeRetrievalServiceError):
         KnowledgeRetrievalApplicationService.resolve_segmented_local_indexing_access_policy(
             cast(Session, session), policy.access_policy_revision_id, sha256=policy.content_sha256
+        )
+
+
+def _segmented_owner(owner, *, page: int = 1024, population: int = 10000):
+    policy = SegmentedLocalIndexingAccessPolicy.model_validate(
+        candidate_document(
+            service=owner.policy.service.model_dump(mode="json"),
+            runtime_configuration_sha256=owner.policy.runtime_configuration_sha256,
+            corpus_id=owner.policy.corpus_id,
+            graph_id=owner.policy.graph_id,
+            source_access_policy_revision_id=owner.policy.source_access_policy_revision_id,
+            source_access_policy_sha256=owner.policy.source_access_policy_sha256,
+            maximum_page_sources=page,
+            maximum_population_sources=min(population, page * 1024),
+        )
+    )
+    owner.intent = replace(
+        owner.intent,
+        namespace=policy.namespaces[0],
+        source_classes=policy.source_classes,
+        service_policy_revision_id=policy.access_policy_revision_id,
+        service_policy_sha256=policy.content_sha256,
+    )
+    owner.retrieval.resolve_access_policy.return_value.allowed_source_classes = (
+        policy.source_classes
+    )
+    owner.retrieval.resolve_segmented_local_indexing_access_policy.return_value = policy
+    return policy
+
+
+def test_segmented_page_authority_uses_actual_service_and_pinned_graph(owner) -> None:
+    policy = _segmented_owner(owner)
+    assert owner.authority.authorize_segmented_scope(owner.session, owner.intent) == policy
+    owner.iam.assert_called_once_with(owner.session)
+    owner.retrieval.resolve_segmented_local_indexing_access_policy.assert_called_once_with(
+        owner.session, policy.access_policy_revision_id, sha256=policy.content_sha256
+    )
+    owner.retrieval.resolve_local_indexing_access_policy.assert_not_called()
+    owner.retrieval.resolve_snapshot_pointer.assert_called_once_with(
+        owner.session, owner.intent.graph_snapshot.graph_snapshot_revision_id
+    )
+
+
+def test_segmented_page_cap_and_old_runtime_reader_fail_closed(owner) -> None:
+    policy = _segmented_owner(owner, page=8)
+    with pytest.raises(LocalIndexingSourceError, match="FORBIDDEN"):
+        owner.authority.authorize_segmented_scope(
+            owner.session, replace(owner.intent, maximum_candidates=9)
+        )
+    owner.retrieval.resolve_local_indexing_access_policy.return_value = policy
+    with pytest.raises(LocalIndexingSourceError, match="UNAVAILABLE"):
+        owner.authority.authorize_scope(owner.session, owner.intent)
+
+
+def test_segmented_graph_and_source_policy_denials_do_not_grant_page(owner) -> None:
+    _segmented_owner(owner)
+    owner.session.publication = None
+    with pytest.raises(LocalIndexingSourceError, match="FORBIDDEN"):
+        owner.authority.authorize_segmented_scope(owner.session, owner.intent)
+    owner.session.publication = object()
+    owner.retrieval.resolve_access_policy.return_value.allowed_source_classes = ("PAST_EXAM",)
+    with pytest.raises(LocalIndexingSourceError, match="FORBIDDEN"):
+        owner.authority.authorize_segmented_scope(owner.session, owner.intent)
+
+
+def _page_session(owner, rows: tuple[tuple[str, str], ...]):
+    root = SimpleNamespace(is_active=True)
+    owner.session.get_transaction = lambda: root
+    owner.session.get_nested_transaction = lambda: None
+    owner.session.new = set()
+    owner.session.dirty = set()
+    owner.session.deleted = set()
+    owner.session.execute = Mock(return_value=SimpleNamespace(all=lambda: rows))
+    return root
+
+
+def test_catalog_page_reauthorizes_same_pin_after_bounded_source_read(owner) -> None:
+    policy = _segmented_owner(owner)
+    rows = (("itemrev_" + "1" * 32, "analysisrun_" + "1" * 32),)
+    _page_session(owner, rows)
+    actual, page = read_segmented_candidate_source_page(
+        cast(Session, owner.session), owner.intent, authority=owner.authority
+    )
+    assert actual == policy and page.members == rows and page.complete
+    assert owner.iam.call_count == 2
+    assert owner.session.execute.call_count == 1
+
+
+def test_catalog_page_rejects_duplicate_and_changed_authority(owner) -> None:
+    policy = _segmented_owner(owner)
+    source = "itemrev_" + "1" * 32
+    rows = ((source, "analysisrun_" + "1" * 32), (source, "analysisrun_" + "2" * 32))
+    _page_session(owner, rows)
+    with pytest.raises(SegmentedPopulationReadError, match="PAGE_INVALID"):
+        read_segmented_candidate_source_page(
+            cast(Session, owner.session), owner.intent, authority=owner.authority
+        )
+    owner.session.execute.return_value = SimpleNamespace(all=lambda: rows[:1])
+    owner.authority.authorize_segmented_scope = Mock(
+        side_effect=[policy, policy.model_copy(update={"maximum_population_sources": 9999})]
+    )
+    with pytest.raises(SegmentedPopulationReadError, match="UNAVAILABLE"):
+        read_segmented_candidate_source_page(
+            cast(Session, owner.session), owner.intent, authority=owner.authority
+        )
+
+
+def test_catalog_page_requires_clean_active_root_before_authority(owner) -> None:
+    _segmented_owner(owner)
+    _page_session(owner, ())
+    owner.session.dirty = {object()}
+    with pytest.raises(SegmentedPopulationReadError, match="CONTEXT_INVALID"):
+        read_segmented_candidate_source_page(
+            cast(Session, owner.session), owner.intent, authority=owner.authority
+        )
+    owner.iam.assert_not_called()
+
+
+def test_complete_1025_source_scan_retains_only_page_descriptors(owner) -> None:
+    _segmented_owner(owner)
+    rows = tuple(
+        (f"itemrev_{number:032x}", f"analysisrun_{number:032x}") for number in range(1, 1026)
+    )
+    _page_session(owner, ())
+    owner.session.execute.side_effect = (
+        SimpleNamespace(all=lambda: rows[:1025]),
+        SimpleNamespace(all=lambda: rows[1024:]),
+    )
+    summary = scan_segmented_candidate_sources(
+        cast(Session, owner.session), owner.intent, authority=owner.authority
+    )
+    assert summary.source_count == 1025
+    assert tuple(segment.source_count for segment in summary.segments) == (1024, 1)
+    assert summary.segments[0].last_source_revision_id == rows[1023][0]
+    assert summary.segments[1].first_source_revision_id == rows[1024][0]
+    expected_graph = owner.intent.graph_snapshot.graph_snapshot_revision_id
+    assert summary.graph_snapshot_revision_id == expected_graph
+    assert summary.selection_sha256.startswith("sha256:")
+    assert owner.session.execute.call_count == 2
+    assert owner.iam.call_count == 4
+    assert not hasattr(summary, "members")
+
+
+def test_scan_rejects_incomplete_or_over_policy_population(owner) -> None:
+    _segmented_owner(owner, population=1025)
+    _page_session(owner, ())
+    with pytest.raises(SegmentedPopulationReadError, match="INCOMPLETE"):
+        scan_segmented_candidate_sources(
+            cast(Session, owner.session), owner.intent, authority=owner.authority
+        )
+    rows = tuple(
+        (f"itemrev_{number:032x}", f"analysisrun_{number:032x}") for number in range(1, 1027)
+    )
+    owner.session.execute.side_effect = (
+        SimpleNamespace(all=lambda: rows[:1025]),
+        SimpleNamespace(all=lambda: rows[1024:]),
+    )
+    with pytest.raises(SegmentedPopulationReadError, match="INCOMPLETE"):
+        scan_segmented_candidate_sources(
+            cast(Session, owner.session), owner.intent, authority=owner.authority
         )

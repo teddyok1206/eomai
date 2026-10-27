@@ -956,3 +956,17 @@ including synthetic 1.3 replay and concurrent one-insert publication. Its
 guarded cleanup removed the exact temporary database. No production policy,
 INDEX/QUERY selection or Graph population was changed. This remains a source
 checkpoint, not large-corpus operational acceptance.
+
+### 03:55 UTC — 1.3 service gate and bounded population metadata scan
+
+The source now has an explicit 1.3 Catalog service-authorization entry. It
+reuses actual service identity, source policy and pinned Graph-publication
+checks; the 1.1/1.2 runtime entry refuses a 1.3 value. A same-root source-first
+scan reauthorizes each bounded page and retains only ordered page counts,
+source/accepted-analysis hashes and ranges. It rejects duplicate boundary
+sources, missing/over-limit populations and a changed policy. The related
+source/owner tests passed **200**; the smaller page-focused suite passed
+**79** after adding a synthetic 1,025-source scan. This does not materialize
+profiles or input-text hashes, publish an index, exercise a real 1,025-row
+PostgreSQL plan, or activate a new runtime. The live INDEX/QUERY pins are
+unchanged from the scheduled 03:38 observation.
