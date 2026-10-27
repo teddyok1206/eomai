@@ -1805,6 +1805,13 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
             / "config/workflows/legacy-item-extraction.v1.yaml"
         ).read_bytes()
     )
+    creative_definition = root / "external-item-learning.v1.yaml"
+    creative_definition.write_bytes(
+        (
+            Path(os.environ["REPOSITORY_ROOT"])
+            / "config/workflows/external-item-learning.v1.yaml"
+        ).read_bytes()
+    )
     editorial_definition = root / "legacy-item-editorial-compatibility.v1.yaml"
     editorial_definition.write_bytes(
         (
@@ -2003,6 +2010,8 @@ from eom_orchestrator.worker_systemd import WorkerSystemdReadiness
 from eomctl.cli import app as eomctl_app
 from typer.testing import CliRunner
 
+creative_definition = Path(legacy_definition).with_name("external-item-learning.v1.yaml")
+
 spec = importlib.util.find_spec("eom_workflow")
 if (
     spec is None
@@ -2066,6 +2075,16 @@ if (
     or "bootstrap-pdf-document-review" not in pdf_document_review_help.stdout
 ):
     raise SystemExit("installed-wheel eomctl PDF document-review bootstrap is unavailable")
+creative_prepare_help = CliRunner().invoke(
+    eomctl_app,
+    ["content", "external-items", "learning", "prepare", "--help"],
+)
+if (
+    creative_prepare_help.exit_code != 0
+    or "--request-file" not in creative_prepare_help.stdout
+    or "--start" in creative_prepare_help.stdout
+):
+    raise SystemExit("installed-wheel creative PREPARE-only command is unavailable")
 if any(
     model.__module__ != "eom_api_contracts.mock_exam_execution"
     for model in (
@@ -2198,6 +2217,8 @@ load_role_input_schema("support", "workflow-role/1.22.0")
 load_role_input_schema("support", "workflow-role/1.25.0")
 load_role_input_schema("support", "workflow-role/1.26.0")
 load_role_input_schema("support", "workflow-role/1.27.0")
+load_role_input_schema("support", "workflow-role/1.33.0")
+load_codex_result_schema("external-item-learning-result@1.0")
 load_role_input_schema("support", "workflow-role/1.28.0")
 load_role_input_schema("support", "workflow-role/1.29.0")
 load_role_input_schema("support", "workflow-role/1.30.0")
@@ -2356,6 +2377,7 @@ admitted_definitions = (
     compile_definition(Path(analysis_v9), {"support"}),
     compile_definition(Path(analysis_v10), {"support"}),
     compile_definition(Path(legacy_definition), {"support"}),
+    compile_definition(creative_definition, {"support"}),
     compile_definition(Path(editorial_definition), {"support"}),
     compile_definition(Path(customer_support_definition), {"support"}),
     compile_definition(Path(pdf_document_review_definition_v1), {"support"}),

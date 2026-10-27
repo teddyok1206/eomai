@@ -414,6 +414,11 @@ def test_api_release_contains_creative_prepare_and_reauthorization_closure() -> 
         "eom_catalog_service/external_item_learning_preparation_service.py",
         "eom_catalog_service/external_item_learning_authorization_service.py",
         "eom_catalog_service/external_item_learning_authorization_dispatch.py",
+        "config/workflows/external-item-learning.v1.yaml",
+        'compile_definition(creative_definition, {"support"})',
+        '["content", "external-items", "learning", "prepare", "--help"]',
+        'load_role_input_schema("support", "workflow-role/1.33.0")',
+        'load_codex_result_schema("external-item-learning-result@1.0")',
     ):
         assert required in source
 
