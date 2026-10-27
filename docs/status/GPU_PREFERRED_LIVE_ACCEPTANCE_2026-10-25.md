@@ -970,3 +970,19 @@ source/owner tests passed **200**; the smaller page-focused suite passed
 profiles or input-text hashes, publish an index, exercise a real 1,025-row
 PostgreSQL plan, or activate a new runtime. The live INDEX/QUERY pins are
 unchanged from the scheduled 03:38 observation.
+
+### 04:38 UTC — scheduled original-index observation
+
+The original INDEX owner is still `active/running` at PID `734655`, invocation
+`9718f2ed05ac404e84ce7a69559b110c`. Between 04:08 and 04:38 UTC its
+journal recorded two ordinary `BATCH_COMPLETED` reconciliation events:
+`CONCRETE_FACETS` at 04:21 and `METADATA_ONLY` at 04:36. Both reported 546
+eligible sources, 25 missing reports, eight selected targets and no unavailable
+views; their event-local missing-binding counts were 196 and 257 respectively.
+These are neither exact CPU/CUDA pair counts nor permission to select GPU QUERY.
+No restart, submission, policy activation or fallback was performed. Next
+routine INDEX check is no earlier than 05:08 UTC.
+
+On source `18b96aeb`, the focused routed QUERY/CPU fallback/three-view
+index-selection unit suites passed 33 tests. This does not close the pending
+actual resource-contention fallback or model-run acceptance.
