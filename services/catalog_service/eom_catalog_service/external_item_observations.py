@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import unicodedata
 from dataclasses import dataclass
+from typing import Literal
 
 from eom_catalog_contracts import (
     EXTERNAL_ITEM_ROW_OBSERVATION_SCHEMA,
+    ExternalItemCellObservation,
     ExternalItemRowObservation,
     ExternalItemWorkbookMapping,
     validate_contract,
@@ -30,6 +32,30 @@ class ExternalItemSearchFacets:
     field: str | None
     grade: str | None
     author: str | None
+
+
+type ExternalCreativeOriginKind = Literal["PAST_EXAM_VARIATION", "FREE_AUTHORING"]
+
+
+def external_creative_origin_kind(
+    row: ExternalItemRowObservation,
+) -> ExternalCreativeOriginKind | None:
+    """Classify this archive from its Y cell, never its incomplete W flag."""
+
+    return external_creative_origin_kind_from_cells(row.cells)
+
+
+def external_creative_origin_kind_from_cells(
+    cells: tuple[ExternalItemCellObservation, ...],
+) -> ExternalCreativeOriginKind | None:
+    if len(cells) != 32 or cells[24].column != "Y":
+        raise ValueError("external creative classification cells are not A:AF")
+    observed = unicodedata.normalize("NFC", cells[24].raw_text).strip()
+    if observed == "기출변형":
+        return "PAST_EXAM_VARIATION"
+    if observed == "자유출제":
+        return "FREE_AUTHORING"
+    return None
 
 
 def bind_external_item_observation(

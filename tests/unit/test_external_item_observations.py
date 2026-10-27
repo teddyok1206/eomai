@@ -10,6 +10,7 @@ from eom_catalog_contracts import (
 from eom_catalog_service.external_item_observations import (
     ExternalItemWorkbookPointer,
     bind_external_item_observation,
+    external_creative_origin_kind,
     external_item_search_facets,
 )
 from eom_catalog_service.external_item_xlsx import DecodedExternalItemRow
@@ -42,8 +43,12 @@ def _mapping() -> ExternalItemWorkbookMapping:
     return ExternalItemWorkbookMapping.model_validate(body)
 
 
-def _row() -> DecodedExternalItemRow:
+def _row(classification: str = "", variation_flag: str = "") -> DecodedExternalItemRow:
     values = {"Q": "  물질과 규칙성  ", "Z": "물리학", "U": "00042"}
+    if classification:
+        values["Y"] = classification
+    if variation_flag:
+        values["W"] = variation_flag
     return DecodedExternalItemRow(
         row_number=2,
         external_number="00042",
@@ -75,3 +80,23 @@ def test_observation_pins_workbook_and_retains_original_text() -> None:
     assert row.cells[16].raw_text == "  물질과 규칙성  "
     assert external_item_search_facets(row).major_unit == "물질과 규칙성"
     assert external_item_search_facets(row).field == "물리학"
+
+
+def test_creative_classification_uses_y_cell_not_incomplete_variation_flag() -> None:
+    mapping = _mapping()
+    workbook = ExternalItemWorkbookPointer(
+        artifact_id="artifact_" + "3" * 32,
+        artifact_revision_id="rev_" + "4" * 32,
+        sha256="sha256:" + "5" * 64,
+    )
+    for label, flag, expected in (
+        ("기출변형", "1", "PAST_EXAM_VARIATION"),
+        ("기출변형", "0", "PAST_EXAM_VARIATION"),
+        ("기출변형", "", "PAST_EXAM_VARIATION"),
+        ("자유출제", "", "FREE_AUTHORING"),
+        ("미확인", "1", None),
+    ):
+        observation = bind_external_item_observation(
+            _row(label, flag), mapping=mapping, workbook=workbook
+        )
+        assert external_creative_origin_kind(observation) == expected

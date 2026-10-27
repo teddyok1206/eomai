@@ -9,6 +9,10 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 import pytest
+from eom_catalog_service.external_creative_learning_targets import (
+    ExternalCreativeLearningTargetError,
+    list_external_creative_learning_targets,
+)
 from eom_catalog_service.external_item_read_service import (
     ExternalItemListFilter,
     ExternalItemMetadataPredicate,
@@ -43,6 +47,7 @@ def source_session():
             for table in (
                 "external_item_sources",
                 "external_item_source_revisions",
+                "external_item_edition_documents",
                 "external_item_imports",
                 "content_intake_source_files",
             ):
@@ -73,20 +78,44 @@ def source_session():
                     "mapping": json.dumps(mapping),
                 },
             )
-            for index, (number, unit, field) in enumerate((
-                ("00001", "물질의 상태", "화학"),
-                ("00002", "운동", "물리"),
-                ("00003", "물질", "화학"),
-            ), start=2):
+            for index, (number, unit, field, kind) in enumerate(
+                (
+                    ("00001", "물질의 상태", "화학", "기출변형"),
+                    ("00002", "운동", "물리", "자유출제"),
+                    ("00003", "물질", "화학", "기출변형"),
+                ),
+                start=2,
+            ):
                 suffix = f"{int(number):032x}"
                 source_id = "extitem_" + suffix
                 revision_id = "extitemrev_" + suffix
+                source_file_id = "sourcefile_" + suffix
+                document_sha256 = "sha256:" + "8" * 64
                 observed = deepcopy(observation)
                 cells = observed["cells"]
                 cells[16]["raw_text"] = unit  # Q
                 cells[20]["raw_text"] = number  # U
+                cells[23]["raw_text"] = "" if number == "00002" else "No"  # X
+                cells[24]["raw_text"] = kind  # Y
                 cells[25]["raw_text"] = field  # Z
-                for cell in (cells[16], cells[20], cells[25]):
+                edition = 2 if number == "00002" else 3
+                if edition == 2:
+                    cells[13]["raw_text"] = ""
+                    cells[13]["present"] = False
+                    cells[13]["cell_type"] = None
+                cells[12 if edition == 2 else 13]["raw_text"] = f"문항_{number}.hwp"
+                if number == "00001":
+                    cells[22]["raw_text"] = "0"  # W is not the creative classifier.
+                    cells[22]["present"] = True
+                    cells[22]["cell_type"] = "s"
+                for cell in (
+                    cells[16],
+                    cells[20],
+                    cells[23],
+                    cells[24],
+                    cells[25],
+                    cells[12 if edition == 2 else 13],
+                ):
                     cell["present"] = True
                     cell["cell_type"] = "s"
                 observed["row_number"] = index
@@ -104,15 +133,36 @@ def source_session():
                 )
                 session.execute(
                     text(
+                        "INSERT INTO content_intake_source_files"
+                        "(source_file_id,original_filename,normalized_filename,relative_path,"
+                        "media_type,size_bytes,sha256,artifact_id,artifact_revision_id) "
+                        "VALUES (:id,:filename,:filename,:path,:media,100,:sha,:artifact,:revision)"
+                    ),
+                    {
+                        "id": source_file_id,
+                        "filename": f"문항_{number}.hwp",
+                        "path": f"source/{number}.hwp",
+                        "media": "application/vnd.hancom.hwp",
+                        "sha": document_sha256,
+                        "artifact": "artifact_" + suffix,
+                        "revision": "rev_" + suffix,
+                    },
+                )
+                session.execute(
+                    text(
                         "INSERT INTO external_item_source_revisions"
-                        "(revision_id,import_id,match_status,cells,unit_major,field_label,"
+                        "(revision_id,source_id,import_id,match_status,selected_source_file_id,"
+                        "cells,unit_major,field_label,"
                         "worksheet_name,row_number,external_number,observation_sha256) "
-                        "VALUES (:revision,:import,'MATCHED',CAST(:cells AS jsonb),:unit,:field,"
+                        "VALUES (:revision,:source,:import,'MATCHED',:source_file,"
+                        "CAST(:cells AS jsonb),:unit,:field,"
                         ":worksheet,:row_number,:number,:observation_sha)"
                     ),
                     {
                         "revision": revision_id,
+                        "source": source_id,
                         "import": "extimport_" + "1" * 32,
+                        "source_file": source_file_id,
                         "cells": json.dumps(cells),
                         "unit": unit,
                         "field": field,
@@ -120,6 +170,21 @@ def source_session():
                         "row_number": index,
                         "number": number,
                         "observation_sha": observed["observation_sha256"],
+                    },
+                )
+                session.execute(
+                    text(
+                        "INSERT INTO external_item_edition_documents"
+                        "(edition_document_id,source_revision_id,edition,match_status,"
+                        "source_file_id,document_sha256) "
+                        "VALUES (:id,:revision,:edition,'MATCHED',:source_file,:sha)"
+                    ),
+                    {
+                        "id": "extitemdoc_" + suffix,
+                        "revision": revision_id,
+                        "edition": edition,
+                        "source_file": source_file_id,
+                        "sha": document_sha256,
                     },
                 )
             yield session
@@ -199,3 +264,62 @@ def test_export_uses_same_real_postgres_filters_and_preserves_source_values(
     result = render_item_database_xlsx(rows, original_headers=snapshot.original_headers)
     assert result.row_count == 2
     assert result.payload.startswith(b"PK\x03\x04")
+
+
+def test_creative_learning_targets_are_exact_keyset_pages(source_session: Session) -> None:
+    import_id = "extimport_" + "1" * 32
+    first = list_external_creative_learning_targets(source_session, import_id=import_id, limit=2)
+    assert tuple(value.external_number for value in first.entries) == ("00001", "00002")
+    assert tuple(value.origin_kind for value in first.entries) == (
+        "PAST_EXAM_VARIATION",
+        "FREE_AUTHORING",
+    )
+    assert first.entries[0].document_sha256 == "sha256:" + "8" * 64
+    assert first.entries[1].selected_edition == 2
+    assert first.next_after_number == "00002"
+    second = list_external_creative_learning_targets(
+        source_session, import_id=import_id, after_number=first.next_after_number, limit=2
+    )
+    assert tuple(value.external_number for value in second.entries) == ("00003",)
+    assert second.next_after_number is None
+
+
+def test_creative_learning_target_rejects_tampered_observation(source_session: Session) -> None:
+    source_session.execute(
+        text(
+            "UPDATE external_item_source_revisions SET observation_sha256=:changed "
+            "WHERE external_number='00001'"
+        ),
+        {"changed": "sha256:" + "0" * 64},
+    )
+    with pytest.raises(ExternalCreativeLearningTargetError) as captured:
+        list_external_creative_learning_targets(source_session, import_id="extimport_" + "1" * 32)
+    assert captured.value.code == "EXTERNAL_CREATIVE_SOURCE_OBSERVATION_INVALID"
+
+
+def test_creative_learning_target_excludes_stale_and_rejects_document_drift(
+    source_session: Session,
+) -> None:
+    source_session.execute(
+        text(
+            "UPDATE external_item_sources SET current_revision_id=NULL "
+            "WHERE external_number='00001'"
+        )
+    )
+    page = list_external_creative_learning_targets(
+        source_session, import_id="extimport_" + "1" * 32
+    )
+    assert tuple(value.external_number for value in page.entries) == ("00002", "00003")
+    source_session.execute(
+        text(
+            "UPDATE external_item_edition_documents SET document_sha256=:changed "
+            "WHERE source_revision_id=:revision"
+        ),
+        {
+            "changed": "sha256:" + "0" * 64,
+            "revision": "extitemrev_" + f"{2:032x}",
+        },
+    )
+    with pytest.raises(ExternalCreativeLearningTargetError) as captured:
+        list_external_creative_learning_targets(source_session, import_id="extimport_" + "1" * 32)
+    assert captured.value.code == "EXTERNAL_CREATIVE_DOCUMENT_POINTER_INVALID"

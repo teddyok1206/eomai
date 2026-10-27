@@ -8,6 +8,10 @@
 
 사용자 명칭 `창작`은 기출변형·자유출제의 검증된 출처 분류다. Graph source class는 당분간 현행 `APPROVED_ITEM`을 유지하고, 창작 여부는 검증된 Item Origin profile과 외부 U source revision 연결로 판별한다. 이 구분을 질의·화면·수출 결과에서 유지한다. source-only 원본은 Graph 근거 검색에 들어가지 않는다.
 
+2026-10-27 읽기 전용 입력 집계: Y열 분류는 기출변형 1,056행·자유출제 241행이다. 최종본 후보는 832행·235행, 정확한 원본 파일 연결 후보는 820행·233행이다. 반려·초안·14개 연결 예외는 자동 worker claim 대상이 아니다. W열의 0/1/빈칸은 분류를 신뢰할 수 없으므로 Y열의 원값 및 검증된 source revision을 사용한다. 이 숫자는 운영 accepted Item/Graph 게시 건수가 아니다.
+
+이 1,053개 연결 후보를 엑셀 행 순서의 `(U, 행 번호, 최종 교정 단계, ZIP 멤버 SHA-256)` 목록으로 직렬화한 읽기 전용 target-set hash는 `sha256:3705a73413fe8a442f00360283592b1ca0e8024029a9dce56700a708a4f36155`다. 운영 Intake 후에는 원본 Artifact pointer와 mapping revision을 포함한 새 target-set identity를 발행해야 하며, 이 사전 조사 해시를 승인 receipt나 worker 권한으로 사용하지 않는다.
+
 ## 필수 설계 절차
 
 1. **책임과 경계:** Catalog application은 exact 외부 원본→정본 Item 승격 근거, 승인, 분석, 보고서, Graph 게시를 조정한다. Orchestrator만 worker 실행과 Artifact commit을 지휘한다. worker는 DB/NAS에 직접 쓰지 않는다. Web/API는 typed 명령과 조회만 제공한다.
