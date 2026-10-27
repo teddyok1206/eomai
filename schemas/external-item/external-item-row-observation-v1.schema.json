@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/external-item/row-observation/1.0",
+  "title": "External Item Workbook Row Observation V1",
+  "description": "Immutable, lossless cell observation pinned to a workbook Artifact; it is not an approved Item.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "workbook_artifact_id", "workbook_artifact_revision_id",
+    "workbook_sha256", "mapping_revision_id", "mapping_sha256", "source_namespace",
+    "worksheet_name", "row_number", "external_number", "cells", "observation_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "external-item-row-observation/1.0"},
+    "workbook_artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+    "workbook_artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+    "workbook_sha256": {"$ref": "#/$defs/sha256"},
+    "mapping_revision_id": {"type": "string", "pattern": "^extitemmaprev_[0-9a-f]{32}$"},
+    "mapping_sha256": {"$ref": "#/$defs/sha256"},
+    "source_namespace": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"},
+    "worksheet_name": {"type": "string", "minLength": 1, "maxLength": 128},
+    "row_number": {"type": "integer", "minimum": 2, "maximum": 1000000},
+    "external_number": {"type": "string", "pattern": "^[0-9]{5}$"},
+    "cells": {
+      "type": "array", "minItems": 32, "maxItems": 32,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["column", "present", "cell_type", "raw_text", "style_id", "formula_text"],
+        "properties": {
+          "column": {"type": "string", "pattern": "^(?:[A-Z]|A[A-F])$"},
+          "present": {"type": "boolean"},
+          "cell_type": {"type": ["string", "null"], "maxLength": 32},
+          "raw_text": {"type": "string", "maxLength": 32767},
+          "style_id": {"type": ["integer", "null"], "minimum": 0, "maximum": 1000000},
+          "formula_text": {"type": ["string", "null"], "maxLength": 32767}
+        }
+      }
+    },
+    "observation_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}
+}

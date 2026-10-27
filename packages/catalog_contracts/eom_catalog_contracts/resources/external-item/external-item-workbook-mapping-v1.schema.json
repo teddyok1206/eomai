@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/external-item/workbook-mapping/1.0",
+  "title": "External Item Workbook Mapping V1",
+  "description": "Released meaning of one external workbook; not a grant to register an Item or trust a file link.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "mapping_id", "mapping_revision_id", "revision_number",
+    "state", "source_namespace", "worksheet_name", "header_row", "first_data_row",
+    "maximum_rows", "column_headers", "external_number_column", "edition_columns",
+    "rejection_column", "normalization_policy", "mapping_sha256", "released_at",
+    "released_by"
+  ],
+  "properties": {
+    "schema_version": {"const": "external-item-workbook-mapping/1.0"},
+    "mapping_id": {"type": "string", "pattern": "^extitemmap_[0-9a-f]{32}$"},
+    "mapping_revision_id": {"type": "string", "pattern": "^extitemmaprev_[0-9a-f]{32}$"},
+    "revision_number": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "state": {"const": "RELEASED"},
+    "source_namespace": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"},
+    "worksheet_name": {"type": "string", "minLength": 1, "maxLength": 128},
+    "header_row": {"type": "integer", "minimum": 1, "maximum": 1000},
+    "first_data_row": {"type": "integer", "minimum": 2, "maximum": 1001},
+    "maximum_rows": {"type": "integer", "minimum": 1, "maximum": 100000},
+    "column_headers": {
+      "type": "array", "minItems": 32, "maxItems": 32,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["column", "label"],
+        "properties": {
+          "column": {"type": "string", "pattern": "^(?:[A-Z]|A[A-F])$"},
+          "label": {"type": "string", "minLength": 1, "maxLength": 200}
+        }
+      }
+    },
+    "external_number_column": {"const": "U"},
+    "edition_columns": {
+      "type": "object", "additionalProperties": false,
+      "required": ["draft", "second", "third"],
+      "properties": {
+        "draft": {"const": "L"},
+        "second": {"const": "M"},
+        "third": {"const": "N"}
+      }
+    },
+    "rejection_column": {"const": "X"},
+    "normalization_policy": {"const": "external-item-notion-link/1.0"},
+    "mapping_sha256": {"$ref": "#/$defs/sha256"},
+    "released_at": {"type": "string", "format": "date-time", "pattern": "Z$|\\+00:00$"},
+    "released_by": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}
+}

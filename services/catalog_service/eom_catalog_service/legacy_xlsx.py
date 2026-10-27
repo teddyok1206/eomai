@@ -120,14 +120,18 @@ def _xml(archive: zipfile.ZipFile, member: str) -> ElementTree.Element:
     return ElementTree.fromstring(payload)
 
 
-def _shared_strings(archive: zipfile.ZipFile, names: frozenset[str]) -> tuple[str, ...]:
+def _shared_strings(
+    archive: zipfile.ZipFile, names: frozenset[str], *, normalize: bool = True
+) -> tuple[str, ...]:
     if "xl/sharedStrings.xml" not in names:
         return ()
     root = _xml(archive, "xl/sharedStrings.xml")
     strings: list[str] = []
     for item in root.findall(f"{{{_MAIN_NS}}}si"):
         value = "".join(node.text or "" for node in item.iter(f"{{{_MAIN_NS}}}t"))
-        strings.append(_normalize_cell(value))
+        if len(value) > (4096 if normalize else 32767):
+            raise LegacyXlsxError("LEGACY_XLSX_CELL_INVALID", "shared string exceeds cell limit")
+        strings.append(_normalize_cell(value) if normalize else value)
         if len(strings) > _MAX_SHARED_STRINGS:
             raise LegacyXlsxError(
                 "LEGACY_XLSX_SHARED_STRINGS_LIMIT", "workbook has too many shared strings"
@@ -235,7 +239,9 @@ def _worksheet_rows(
     return tuple(data)
 
 
-def _cell_text(cell: ElementTree.Element, shared_strings: tuple[str, ...]) -> str:
+def _cell_text(
+    cell: ElementTree.Element, shared_strings: tuple[str, ...], *, normalize: bool = True
+) -> str:
     cell_type = cell.attrib.get("t")
     if cell_type == "inlineStr":
         inline = cell.find(f"{{{_MAIN_NS}}}is")
@@ -255,13 +261,15 @@ def _cell_text(cell: ElementTree.Element, shared_strings: tuple[str, ...]) -> st
                 raise LegacyXlsxError(
                     "LEGACY_XLSX_SHARED_STRING_INVALID", "shared string index is invalid"
                 ) from exc
-        elif cell_type in {None, "n", "str", "b"}:
+        elif cell_type in {None, "n", "str", "b"} or (not normalize and cell_type in {"e", "d"}):
             value = raw
         elif cell_type in {"e", "d"}:
             raise LegacyXlsxError("LEGACY_XLSX_CELL_TYPE_UNSUPPORTED", "cell type is unsupported")
         else:
             raise LegacyXlsxError("LEGACY_XLSX_CELL_TYPE_UNSUPPORTED", "cell type is unsupported")
-    return _normalize_cell(value)
+    if len(value) > 32767:
+        raise LegacyXlsxError("LEGACY_XLSX_CELL_INVALID", "cell text exceeds the Excel limit")
+    return _normalize_cell(value) if normalize else value
 
 
 def _normalize_cell(value: str) -> str:

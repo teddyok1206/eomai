@@ -34,6 +34,18 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "external-item-row-observation-v1": CatalogSchemaResource(
+            "schemas/external-item/external-item-row-observation-v1.schema.json",
+            "resources/external-item/external-item-row-observation-v1.schema.json",
+            "1.0",
+            "sha256:e4de782ebf4f69bd99dec7fe058503214267f69e6f43c38ebbd10743270e9210",
+        ),
+        "external-item-workbook-mapping-v1": CatalogSchemaResource(
+            "schemas/external-item/external-item-workbook-mapping-v1.schema.json",
+            "resources/external-item/external-item-workbook-mapping-v1.schema.json",
+            "1.0",
+            "sha256:81ab18dd8045599811d5656e605a769c5581d2ef266b04c161fd0e28d7cf6ea9",
+        ),
         "document-review-pdf-annotation-request-v7": CatalogSchemaResource(
             "schemas/catalog/catalog-application/document-review-pdf-annotation-request-v7.schema.json",
             "resources/catalog-application/document-review-pdf-annotation-request-v7.schema.json",
