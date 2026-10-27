@@ -290,6 +290,8 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
     const root = $("#item-db-detail");
     panel.hidden = false;
     root.replaceChildren(node(document, "p", "empty-state", "문항 정보를 불러오는 중입니다."));
+    panel.scrollIntoView({block: "start"});
+    panel.focus({preventScroll: true});
     try {
       const detail = await api(`/item-db/external-sources/${encodeURIComponent(sourceId)}`);
       if (request !== sequence || detail.entry.source_id !== sourceId) return;

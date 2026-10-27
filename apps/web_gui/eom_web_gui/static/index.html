@@ -212,6 +212,10 @@
 
           <section class="view" data-view="item-db" aria-labelledby="item-db-title">
             <div class="page-heading"><div><h1 id="item-db-title">문항 DB</h1><p>기출·창작 문항과 원본을 찾습니다.</p></div></div>
+            <section id="item-db-detail-panel" class="panel item-db-detail-panel" tabindex="-1" hidden>
+              <div class="panel-heading"><h2>문항 정보</h2><button id="item-db-detail-close" class="button quiet" type="button">닫기</button></div>
+              <div id="item-db-detail"><p class="empty-state">문항을 선택하세요.</p></div>
+            </section>
             <section class="panel item-db-panel">
               <form id="item-db-form" class="item-db-search-form">
                 <label>문항 종류<select id="item-db-source"><option value="EXTERNAL_SOURCE">창작 원본</option><option value="PAST_EXAM">기출</option><option value="APPROVED_ITEM">창작 · Graph 게시</option></select></label>
@@ -228,10 +232,6 @@
               <p class="item-db-draft-note">선택한 순서는 이 화면을 닫거나 새로고침하면 사라집니다. 아직 합본 파일을 만들거나 문항을 승인하지 않습니다.</p>
               <ol id="item-db-draft-list" class="item-db-draft-list" aria-label="선택한 문항 순서"></ol>
               <p id="item-db-draft-empty" class="empty-state">문항을 조회해 조립 목록에 담아 주세요.</p>
-            </section>
-            <section id="item-db-detail-panel" class="panel item-db-detail-panel" hidden>
-              <div class="panel-heading"><h2>문항 정보</h2><button id="item-db-detail-close" class="button quiet" type="button">닫기</button></div>
-              <div id="item-db-detail"><p class="empty-state">문항을 선택하세요.</p></div>
             </section>
           </section>
 

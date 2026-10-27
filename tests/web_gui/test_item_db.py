@@ -134,6 +134,10 @@ def test_db_screen_shows_business_number_but_hides_internal_db_ids() -> None:
     assert 'id="item-db-match-mode"' in html
     assert 'id="item-db-source"' in html
     assert 'id="item-db-graph-unit"' in html
+    assert html.index('id="item-db-detail-panel"') < html.index('id="item-db-results"')
+    assert 'id="item-db-detail-panel" class="panel item-db-detail-panel" tabindex="-1"' in html
+    assert 'panel.scrollIntoView({block: "start"});' in javascript
+    assert "panel.focus({preventScroll: true});" in javascript
     assert "/item-db/graph-items?" in javascript
     assert (
         'canReadSource: () => hasPermission(state.operator, "content_intake:read")' in application
