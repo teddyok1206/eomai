@@ -157,8 +157,14 @@ def test_db_screen_shows_business_number_but_hides_internal_db_ids() -> None:
     assert 'id="item-db-match-mode"' in html
     assert 'id="item-db-source"' in html
     assert 'id="item-db-graph-unit"' in html
-    assert html.index('id="item-db-detail-panel"') < html.index('id="item-db-results"')
-    assert 'id="item-db-detail-panel" class="panel item-db-detail-panel" tabindex="-1"' in html
+    assert html.index('id="item-db-results"') < html.index('id="item-db-detail-panel"')
+    assert (
+        '<aside id="item-db-detail-panel" class="panel item-db-detail-panel" tabindex="-1"' in html
+    )
+    assert '<table class="item-db-table"' in html
+    assert '<tbody id="item-db-results"' in html
+    assert 'id="item-db-filter-quick"' in html
+    assert 'id="item-db-filter-clear"' in html
     assert 'panel.scrollIntoView({block: "start"});' in javascript
     assert "panel.focus({preventScroll: true});" in javascript
     assert "/item-db/graph-items?" in javascript

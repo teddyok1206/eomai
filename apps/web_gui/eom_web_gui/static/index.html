@@ -211,31 +211,42 @@
           </section>
 
           <section class="view" data-view="item-db" aria-labelledby="item-db-title">
-            <div class="page-heading"><div><h1 id="item-db-title">문항 DB</h1><p>기출·창작 문항과 원본을 찾습니다.</p></div></div>
-            <section id="item-db-detail-panel" class="panel item-db-detail-panel" tabindex="-1" hidden>
-              <div class="panel-heading"><h2>문항 정보</h2><button id="item-db-detail-close" class="button quiet" type="button">닫기</button></div>
-              <div id="item-db-detail"><p class="empty-state">문항을 선택하세요.</p></div>
-            </section>
+            <div class="page-heading"><h1 id="item-db-title">문항 DB</h1></div>
+            <div class="item-db-workspace">
             <section class="panel item-db-panel">
               <form id="item-db-form" class="item-db-search-form">
-                <label>문항 종류<select id="item-db-source"><option value="EXTERNAL_SOURCE">창작 원본</option><option value="PAST_EXAM">기출</option><option value="APPROVED_ITEM">창작 · Graph 게시</option></select></label>
-                <div id="item-db-source-filters"><label class="item-db-match-mode">검색 조건<select id="item-db-match-mode"><option value="ALL">모두 일치</option><option value="ANY">하나라도 일치</option></select></label><div id="item-db-filter-rows" class="item-db-filter-rows" aria-label="문항 검색 조건"></div></div>
+                <div class="item-db-search-heading"><label>문항 종류<select id="item-db-source"><option value="EXTERNAL_SOURCE">창작 원본</option><option value="PAST_EXAM">기출</option><option value="APPROVED_ITEM">창작 · 승인 문항</option></select></label><button id="item-db-export" class="button quiet" type="button">엑셀로 저장</button></div>
+                <div id="item-db-source-filters">
+                  <div class="item-db-filter-heading"><h2>필터</h2><label class="item-db-match-mode"><span class="sr-only">검색 조건 결합</span><select id="item-db-match-mode"><option value="ALL">모든 조건에 맞게</option><option value="ANY">하나 이상 맞게</option></select></label><button id="item-db-filter-clear" class="button quiet" type="button" hidden>모두 지우기</button></div>
+                  <div id="item-db-filter-quick" class="item-db-filter-quick" aria-label="자주 쓰는 검색 조건"><button class="item-db-filter-chip" data-filter-field="U" type="button">고유번호</button><button class="item-db-filter-chip" data-filter-field="R" type="button">단원</button><button class="item-db-filter-chip" data-filter-field="Z" type="button">분야</button><button class="item-db-filter-chip" data-filter-field="Y" type="button">문항 분류</button><button class="item-db-filter-chip" data-filter-field="AD" type="button">출제자</button><button class="item-db-filter-chip" data-filter-field="J" type="button">난이도</button><button class="item-db-filter-chip" data-filter-field="MATCH_STATUS" type="button">파일 상태</button></div>
+                  <div id="item-db-filter-rows" class="item-db-filter-rows" aria-label="문항 검색 조건"></div>
+                  <p id="item-db-filter-empty" class="item-db-filter-empty">전체 문항</p>
+                  <button id="item-db-filter-add" class="button quiet" type="button">+ 다른 조건 추가</button>
+                </div>
                 <div id="item-db-graph-filters" hidden><label>교육과정 단원<select id="item-db-graph-unit"><option value="">전체 단원</option></select></label></div>
-                <div class="form-actions"><button id="item-db-filter-add" class="button secondary" type="button">조건 추가</button><button class="button primary" type="submit">문항 찾기</button><button id="item-db-export" class="button secondary" type="button">검색 결과 엑셀로 저장</button></div>
+                <div class="form-actions"><button id="item-db-search" class="button primary" type="submit">문항 찾기</button></div>
               </form>
               <p id="item-db-message" class="form-message" aria-live="polite"></p>
-              <div id="item-db-results" class="item-bank-results"><p class="empty-state">조건을 정해 문항을 조회하세요.</p></div>
+              <div class="item-db-results-heading"><h2>검색 결과</h2><span id="item-db-result-count" class="status-badge tone-neutral">조회 전</span></div>
+              <div class="item-db-table-wrap"><table class="item-db-table" aria-label="문항 검색 결과"><thead id="item-db-table-heading"></thead><tbody id="item-db-results"><tr><td>조건을 정해 문항을 조회하세요.</td></tr></tbody></table></div>
               <div class="form-actions"><button id="item-db-more" class="button secondary" type="button" hidden>더 보기</button></div>
             </section>
+            <aside id="item-db-detail-panel" class="panel item-db-detail-panel" tabindex="-1" aria-label="선택한 문항 정보">
+              <div class="panel-heading"><h2>문항 정보</h2><button id="item-db-detail-close" class="button quiet" type="button" hidden>선택 해제</button></div>
+              <div id="item-db-detail"><p class="empty-state">왼쪽 표에서 문항을 선택하세요.</p></div>
+            </aside>
+            </div>
             <section class="panel item-db-draft-panel" aria-labelledby="item-db-draft-title">
               <div class="panel-heading"><h2 id="item-db-draft-title">조립 순서 초안</h2><span id="item-db-draft-count" class="status-badge tone-neutral">0개</span></div>
-              <p class="item-db-draft-note">순서를 정한 뒤 저장하세요. 저장은 입력 문항과 순서를 고정하며, 아직 합본 파일을 만들거나 문항을 승인하지 않습니다.</p>
+              <div class="panel-body">
+              <p class="item-db-draft-note">선택한 문항과 순서를 저장합니다. 아직 합본 파일을 만들거나 문항을 승인하지 않습니다.</p>
               <ol id="item-db-draft-list" class="item-db-draft-list" aria-label="선택한 문항 순서"></ol>
               <p id="item-db-draft-empty" class="empty-state">문항을 조회해 조립 목록에 담아 주세요.</p>
               <div class="form-actions"><button id="item-db-draft-save" class="button primary" type="button" disabled>조립 순서 저장</button></div>
               <h3>저장한 조립 순서</h3>
               <div id="item-db-saved-list" class="item-bank-results"><p class="empty-state">저장본을 불러오는 중입니다.</p></div>
               <div class="form-actions"><button id="item-db-saved-refresh" class="button quiet" type="button">목록 새로고침</button><button id="item-db-saved-more" class="button quiet" type="button" hidden>더 보기</button></div>
+              </div>
             </section>
           </section>
 

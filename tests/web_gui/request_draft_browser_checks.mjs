@@ -18,6 +18,9 @@ import {curriculumAncestors, curriculumOptionsForSelection, deepestCurriculumUni
   reconcileCurriculumSelection} from './curriculum-selector.js';
 import {hasPermission} from './studio-permissions.js';
 const $ = selector => document.querySelector(selector);
+// The request form shares curriculum delivery with the independent DB screen.
+// This fixture exercises the form, not the DB controller (covered separately).
+const itemDb = {setCurriculumUnits() {}};
 const state = {
   operator: {effective_permissions: ['workflow:start']}, draft: null,
   draftAction: null, draftEditorRevision: 0, variationSourceEntry: null,

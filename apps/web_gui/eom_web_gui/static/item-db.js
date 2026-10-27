@@ -1,9 +1,9 @@
 import {createItemDbDraft, selectedFinalSourcePlacement} from "./item-db-draft.js";
 
 const MATCH_LABELS = Object.freeze({
-  MATCHED: "최종 파일 연결됨",
-  MATCHED_DETECTED_HWPX: "최종 파일 연결됨 · HWPX",
-  MATCHED_IDENTICAL_COPIES: "최종 파일 연결됨 · 동일 복사본",
+  MATCHED: "파일 연결됨",
+  MATCHED_DETECTED_HWPX: "파일 연결됨 · HWPX",
+  MATCHED_IDENTICAL_COPIES: "파일 연결됨 · 동일 복사본",
   REJECTED: "반려",
   REJECTION_AMBIGUOUS: "반려 여부 확인 필요",
   DRAFT_ONLY: "최종본 없음",
@@ -27,7 +27,7 @@ const CELL_LABELS = Object.freeze({
 const FIELD_ORDER = ["U", "Q", "R", "Z", "Y", "V", "O", "AD", "AC", "J", "H", "X", "L", "M", "N"];
 const FILTER_FIELDS = [...FIELD_ORDER, ...Object.keys(CELL_LABELS).filter((value) => !FIELD_ORDER.includes(value))];
 const FILTER_OPERATORS = Object.freeze({
-  EQ: "일치", NE: "불일치", CONTAINS: "포함", IS_EMPTY: "비어 있음", IS_NOT_EMPTY: "비어 있지 않음",
+  EQ: "같음", NE: "다름", CONTAINS: "포함", IS_EMPTY: "값 없음", IS_NOT_EMPTY: "값 있음",
 });
 const SEARCH_FIELDS = ["MATCH_STATUS", ...FILTER_FIELDS];
 
@@ -45,6 +45,9 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
   let loaded = false;
   let lastSourceAccess = null;
   let sequence = 0;
+  let detailSequence = 0;
+  let resultCount = 0;
+  let selectedRow = null;
   let savedCursor = null;
   let savedSequence = 0;
   let pendingSave = null;
@@ -205,7 +208,14 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
     return item;
   }
 
-  function addFilter() {
+  function syncFilterControls() {
+    const count = $("#item-db-filter-rows").children.length;
+    $("#item-db-filter-empty").hidden = count > 0;
+    $("#item-db-filter-clear").hidden = count === 0;
+    $("#item-db-filter-add").disabled = count >= 8;
+  }
+
+  function addFilter(selectedField = "U") {
     const rows = $("#item-db-filter-rows");
     if (rows.children.length >= 8) {
       message("검색 조건은 최대 8개까지 추가할 수 있습니다.", true);
@@ -215,18 +225,25 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
     const field = node(document, "select", "item-db-filter-field");
     field.setAttribute("aria-label", "검색할 항목");
     for (const column of SEARCH_FIELDS) field.append(option(column, column === "MATCH_STATUS" ? "파일 상태" : CELL_LABELS[column]));
+    field.value = SEARCH_FIELDS.includes(selectedField) ? selectedField : "U";
     const operator = node(document, "select", "item-db-filter-operator");
     operator.setAttribute("aria-label", "검색 방법");
     for (const [value, label] of Object.entries(FILTER_OPERATORS)) operator.append(option(value, label));
+    operator.value = ["U", "MATCH_STATUS"].includes(field.value) ? "EQ" : "CONTAINS";
     const value = node(document, "input", "item-db-filter-value");
     value.setAttribute("aria-label", "검색할 값");
     value.maxLength = 255;
     const status = node(document, "select", "item-db-status-value");
     status.setAttribute("aria-label", "파일 상태");
     for (const [key, label] of Object.entries(MATCH_LABELS)) status.append(option(key, label));
-    const remove = node(document, "button", "button quiet", "삭제");
+    const remove = node(document, "button", "item-db-filter-remove", "×");
     remove.type = "button";
-    remove.addEventListener("click", () => row.remove());
+    remove.setAttribute("aria-label", "이 조건 지우기");
+    remove.addEventListener("click", () => {
+      row.remove();
+      syncFilterControls();
+      $("#item-db-filter-add").focus();
+    });
     function updateControls() {
       const statusField = field.value === "MATCH_STATUS";
       for (const item of operator.options) {
@@ -241,12 +258,15 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
       if (value.hidden) value.value = "";
       value.maxLength = field.value === "U" ? 5 : 255;
       value.inputMode = field.value === "U" ? "numeric" : "text";
+      value.placeholder = field.value === "U" ? "예: 10310" : `${CELL_LABELS[field.value] || "내용"} 입력`;
     }
     field.addEventListener("change", updateControls);
     operator.addEventListener("change", updateControls);
     row.append(field, operator, value, status, remove);
     updateControls();
     rows.append(row);
+    syncFilterControls();
+    (field.value === "MATCH_STATUS" ? status : value).focus();
   }
 
   function filters() {
@@ -267,32 +287,112 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
       conditions, limit: 50, cursor: null};
   }
 
-  function renderEntry(entry) {
-    const card = node(document, "article", "item-bank-card");
-    const heading = node(document, "h3", "", `${entry.external_number} · ${entry.selected_filename || "원본 파일 확인 필요"}`);
-    const summary = node(document, "p", "", [entry.major_unit, entry.minor_unit, entry.field_label]
-      .filter(Boolean).join(" · ") || "단원 정보 없음");
-    const graphState = entry.graph_state === "NOT_PUBLISHED" ? "Graph 미게시" : "Graph 상태 확인 필요";
-    const state = node(document, "p", "", `${MATCH_LABELS[entry.match_status] || "확인 필요"} · ${graphState}`);
-    const similarity = node(document, "p", "", "유사도 준비 전 · 원본 문항은 아직 임베딩되지 않았습니다.");
-    const button = node(document, "button", "button secondary", "문항 정보 보기");
-    button.type = "button";
-    button.addEventListener("click", () => openDetail(entry.source_id));
-    card.append(heading, summary, state, similarity, button);
-    return card;
+  function metadataList(values, className) {
+    const list = node(document, "dl", className);
+    for (const [label, value] of values) {
+      const cell = node(document, "div", "");
+      cell.append(node(document, "dt", "", label), node(document, "dd", "", value || "미입력"));
+      list.append(cell);
+    }
+    return list;
   }
 
-  function renderGraphEntry(entry) {
-    const card = node(document, "article", "item-bank-card");
+  function tableHeading(source) {
+    const row = node(document, "tr", "");
+    const labels = source === "EXTERNAL_SOURCE"
+      ? ["고유번호", "분야", "대단원", "소단원", "학년", "출제자", "파일 상태"]
+      : ["문항", "단원", "승인 상태", "HWPX 조립"];
+    for (const label of labels) {
+      const heading = node(document, "th", "", label);
+      heading.scope = "col";
+      row.append(heading);
+    }
+    $("#item-db-table-heading").replaceChildren(row);
+  }
+
+  function emptyResults(value, source) {
+    const row = node(document, "tr", "");
+    const cell = node(document, "td", "empty-state", value);
+    cell.colSpan = source === "EXTERNAL_SOURCE" ? 7 : 4;
+    row.append(cell);
+    $("#item-db-results").replaceChildren(row);
+  }
+
+  function selectRow(row) {
+    if (selectedRow) {
+      selectedRow.classList.remove("is-selected");
+      selectedRow.querySelector("button").setAttribute("aria-pressed", "false");
+    }
+    selectedRow = row;
+    if (row) {
+      row.classList.add("is-selected");
+      row.querySelector("button").setAttribute("aria-pressed", "true");
+    }
+  }
+
+  function resetDetail() {
+    detailSequence++;
+    selectRow(null);
+    $("#item-db-detail-close").hidden = true;
+    $("#item-db-detail").replaceChildren(node(document, "p", "empty-state", "왼쪽 표에서 문항을 선택하세요."));
+  }
+
+  function focusDetail(row) {
+    selectRow(row);
+    const panel = $("#item-db-detail-panel");
+    $("#item-db-detail-close").hidden = false;
+    if (window.matchMedia("(max-width: 1100px)").matches) panel.scrollIntoView({block: "start"});
+    panel.focus({preventScroll: true});
+  }
+
+  function resultRow(key, caption, values, select) {
+    const row = node(document, "tr", "");
+    row.dataset.selectionKey = key;
+    const first = node(document, "td", "");
+    const open = node(document, "button", "item-db-row-open", caption);
+    open.type = "button";
+    open.setAttribute("aria-label", `${caption} 문항 정보 보기`);
+    open.setAttribute("aria-pressed", "false");
+    first.append(open);
+    row.append(first);
+    for (const value of values) row.append(node(document, "td", "", value || "—"));
+    row.addEventListener("click", () => select(row));
+    return row;
+  }
+
+  function renderEntry(entry) {
+    return resultRow(entry.source_id, entry.external_number,
+      [entry.field_label, entry.major_unit, entry.minor_unit, entry.grade_label, entry.author_label,
+        MATCH_LABELS[entry.match_status] || "확인 필요"],
+      (row) => openDetail(entry.source_id, row));
+  }
+
+  function graphLabel(entry) {
     const source = entry.source_class === "PAST_EXAM" ? "기출" : "창작·승인 문항";
     const display = /^itemrev_[0-9a-f]{32}$/.test(entry.source_display_label)
       ? "승인 문항" : entry.source_display_label;
-    const heading = node(document, "h3", "", `${source} · ${display}`);
-    const units = node(document, "p", "", entry.curriculum_units
-      .map((unit) => `${unit.unit_code} ${unit.label}`).join(" · "));
-    const state = node(document, "p", "", entry.item_revision_state === "APPROVED"
-      ? "승인 완료 · Graph에 등록됨" : "고정된 이전 승인 버전 · Graph에 등록됨");
-    const button = node(document, "button", "button secondary", "문항 보기");
+    return `${source} · ${display}`;
+  }
+
+  function renderGraphEntry(entry) {
+    return resultRow(entry.item_revision_id, graphLabel(entry),
+      [entry.curriculum_units.map((unit) => unit.label).join(" · "),
+        entry.item_revision_state === "APPROVED" ? "승인 완료" : "이전 승인 버전",
+        entry.hwpx_exam_eligible ? "가능" : "대상 아님"],
+      (row) => openGraphDetail(entry, row));
+  }
+
+  function openGraphDetail(entry, row) {
+    detailSequence++;
+    focusDetail(row);
+    const root = $("#item-db-detail");
+    root.replaceChildren(node(document, "h3", "", graphLabel(entry)), metadataList([
+      ["문항 종류", entry.source_class === "PAST_EXAM" ? "기출" : "창작"],
+      ["승인 상태", entry.item_revision_state === "APPROVED" ? "승인 완료" : "이전 승인 버전"],
+      ["단원", entry.curriculum_units.map((unit) => unit.label).join(" · ")],
+      ["HWPX 조립", entry.hwpx_exam_eligible ? "가능" : "대상 아님"],
+    ], "item-db-detail-summary"));
+    const button = node(document, "button", "button secondary", "문항 미리보기");
     button.type = "button";
     button.addEventListener("click", () => openRegisteredItem(entry));
     const select = node(document, "button", "button quiet", "조립 목록에 담기");
@@ -307,9 +407,10 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
       item_manifest_sha256: entry.item_manifest_sha256,
       graph_snapshot_revision_id: entry.graph_snapshot_revision_id,
       graph_snapshot_sha256: entry.snapshot_sha256,
-    }, `${source} · ${display}`));
-    card.append(heading, units, state, button, select);
-    return card;
+    }, graphLabel(entry)));
+    const actions = node(document, "div", "item-db-result-actions");
+    actions.append(button, select);
+    root.append(actions);
   }
 
   function selectedSource() { return $("#item-db-source").value; }
@@ -335,7 +436,6 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
   }
 
   async function load(reset = false) {
-    const request = ++sequence;
     const source = selectedSource();
     let parameters;
     try {
@@ -345,16 +445,22 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
       message(error.message, true);
       return;
     }
+    const request = ++sequence;
     const key = JSON.stringify(parameters);
     if (reset || key !== query) {
       query = key;
       cursor = null;
+      resetDetail();
       $("#item-db-results").replaceChildren();
-      $("#item-db-detail-panel").hidden = true;
+      tableHeading(source);
+      resultCount = 0;
+      loaded = false;
     }
     parameters.cursor = cursor;
     const more = $("#item-db-more");
     more.disabled = true;
+    $("#item-db-results").setAttribute("aria-busy", "true");
+    $("#item-db-result-count").textContent = "조회 중";
     message("문항을 찾고 있습니다.");
     try {
       const page = source === "EXTERNAL_SOURCE"
@@ -370,39 +476,75 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
       const root = $("#item-db-results");
       for (const entry of page.values) root.append(source === "EXTERNAL_SOURCE"
         ? renderEntry(entry) : renderGraphEntry(entry));
-      if (!root.children.length) root.append(node(document, "p", "empty-state", "조건에 맞는 문항이 없습니다."));
+      resultCount += page.values.length;
+      if (!resultCount) emptyResults("조건에 맞는 문항이 없습니다.", source);
       cursor = page.next_cursor;
       more.hidden = !page.has_more;
-      message(`${page.values.length}개 문항을 불러왔습니다.${source === "EXTERNAL_SOURCE" ? " 이 원본들은 Graph 게시 전입니다." : " Graph의 승인 근거로 검색했습니다."}`);
+      $("#item-db-result-count").textContent = `${resultCount}개 표시${page.has_more ? " · 더 있음" : ""}`;
+      message(source === "EXTERNAL_SOURCE" ? "원본 보관 문항입니다. 등록·승인된 문항과 구분됩니다." : "등록·승인된 문항에서 조회했습니다.");
       loaded = true;
     } catch (error) {
-      if (request === sequence) message(`문항 조회 실패: ${error.message || "잠시 후 다시 시도해 주세요."}`, true);
+      if (request === sequence) {
+        $("#item-db-result-count").textContent = resultCount ? `${resultCount}개 표시` : "조회 실패";
+        if (!resultCount) emptyResults("문항을 불러오지 못했습니다. 다시 조회해 주세요.", source);
+        message(`문항 조회 실패: ${error.message || "잠시 후 다시 시도해 주세요."}`, true);
+      }
     } finally {
-      if (request === sequence) more.disabled = false;
+      if (request === sequence) {
+        more.disabled = false;
+        $("#item-db-results").setAttribute("aria-busy", "false");
+      }
     }
   }
 
-  async function openDetail(sourceId) {
-    const request = ++sequence;
-    const panel = $("#item-db-detail-panel");
+  async function openDetail(sourceId, row) {
+    const request = ++detailSequence;
     const root = $("#item-db-detail");
-    panel.hidden = false;
+    focusDetail(row);
     root.replaceChildren(node(document, "p", "empty-state", "문항 정보를 불러오는 중입니다."));
-    panel.scrollIntoView({block: "start"});
-    panel.focus({preventScroll: true});
     try {
       const detail = await api(`/item-db/external-sources/${encodeURIComponent(sourceId)}`);
-      if (request !== sequence || detail.entry.source_id !== sourceId) return;
+      if (request !== detailSequence || detail.entry.source_id !== sourceId) return;
       root.replaceChildren();
-      root.append(node(document, "h3", "", `고유번호 ${detail.entry.external_number}`));
-      root.append(node(document, "p", "", MATCH_LABELS[detail.entry.match_status] || "확인 필요"));
+      const byColumn = new Map(detail.cells.map((cell) => [cell.column, cell]));
+      const cellValue = (column) => byColumn.get(column)?.raw_text || "";
+      const placement = selectedFinalSourcePlacement(detail);
+      const heading = node(document, "div", "item-db-detail-heading");
+      const title = node(document, "div", "item-db-result-heading");
+      title.append(node(document, "h3", "", `고유번호 ${detail.entry.external_number}`),
+        node(document, "span", "status-badge tone-neutral", "창작 원본 · 원본 보관"));
+      heading.append(title);
+      if (placement) {
+        const chosen = detail.editions.find((edition) => edition.edition === placement.edition);
+        if (chosen) {
+          const select = node(document, "button", "button primary", "조립 목록에 담기");
+          select.type = "button";
+          select.addEventListener("click", () => addToDraft(placement,
+            `창작 원본 ${detail.entry.external_number} · ${chosen.edition}교 · ${chosen.filename}`));
+          heading.append(select);
+        }
+      }
+      root.append(heading, metadataList([
+        ["대단원", cellValue("Q")], ["소단원", cellValue("R")], ["분야", cellValue("Z")],
+        ["문항 분류", cellValue("Y")], ["난이도", cellValue("J")], ["배점", cellValue("H")],
+        ["학년", cellValue("O")], ["교재 분류", cellValue("V")],
+        ["출제자", cellValue("AD")], ["출제일", cellValue("AC")],
+      ], "item-db-detail-summary"));
+      const editionsSection = node(document, "section", "item-db-detail-section");
+      editionsSection.append(node(document, "h3", "", "교정본 파일"));
       const editions = node(document, "div", "item-db-editions");
-      editions.append(node(document, "h3", "", "교정본 파일"));
+      const previousEditions = node(document, "details", "item-db-previous-editions");
+      previousEditions.append(node(document, "summary", "", "이전 교정본 보기"));
       for (const edition of detail.editions) {
-        const line = node(document, "p", "");
-        line.append(document.createTextNode(`${edition.edition}교 · `));
+        const isFinal = placement?.edition === edition.edition;
+        const line = node(document, "div", `item-db-edition${isFinal ? " is-final" : ""}`);
+        const editionHeading = node(document, "div", "item-db-edition-heading");
+        editionHeading.append(node(document, "strong", "", `${edition.edition}교`),
+          node(document, "span", `status-badge ${isFinal ? "tone-success" : "tone-neutral"}`,
+            isFinal ? "최종본" : edition.edition === 1 ? "초안" : "교정본"));
+        line.append(editionHeading);
         if (edition.available && edition.filename) {
-          const link = node(document, "a", "", edition.filename);
+          const link = node(document, "a", "item-db-edition-file", edition.filename);
           link.href = `/studio/api/v1/item-db/external-sources/${encodeURIComponent(sourceId)}`
             + `/editions/${edition.edition}/download?source_revision_id=${encodeURIComponent(detail.entry.source_revision_id)}`;
           line.append(link);
@@ -421,7 +563,7 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
               const result = await api(`/item-db/external-sources/${encodeURIComponent(sourceId)}`
                 + `/editions/${edition.edition}/preview?source_revision_id=${encodeURIComponent(detail.entry.source_revision_id)}`,
               {method: "POST", mutation: true});
-              if (request !== sequence) return;
+              if (request !== detailSequence) return;
               if (typeof result.sha256 !== "string" || !/^sha256:[0-9a-f]{64}$/.test(result.sha256)) {
                 throw new Error("PDF 준비 결과가 올바르지 않습니다.");
               }
@@ -429,44 +571,49 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
               prepare.remove();
               message("PDF 미리보기가 준비됐습니다. 'PDF 열기'를 누르세요.");
             } catch (error) {
-              if (request !== sequence) return;
+              if (request !== detailSequence) return;
               prepare.disabled = false;
               prepare.textContent = "PDF 미리보기 준비";
               message(`PDF를 준비하지 못했습니다: ${error.message || "다시 시도해 주세요."}`, true);
             }
           });
-          line.append(document.createTextNode(" · "), prepare, preview);
+          const actions = node(document, "div", "item-db-edition-actions");
+          actions.append(prepare, preview);
+          line.append(actions);
         } else {
-          line.append(document.createTextNode(edition.filename || "파일 확인 필요"));
+          line.append(node(document, "span", "item-db-edition-file", edition.filename || "파일 확인 필요"));
         }
-        line.append(document.createTextNode(` · ${MATCH_LABELS[edition.match_status] || "확인 필요"}`));
-        editions.append(line);
+        line.append(node(document, "span", "item-db-unit-path", MATCH_LABELS[edition.match_status] || "확인 필요"));
+        if (placement && !isFinal) previousEditions.append(line);
+        else editions.append(line);
       }
-      root.append(editions);
-      const placement = selectedFinalSourcePlacement(detail);
-      if (placement) {
-        const chosen = detail.editions.find((edition) => edition.edition === placement.edition);
-        if (chosen) {
-          const select = node(document, "button", "button secondary", "조립 목록에 담기");
-          select.type = "button";
-          select.addEventListener("click", () => addToDraft(placement,
-            `창작 원본 ${detail.entry.external_number} · ${chosen.edition}교 · ${chosen.filename}`));
-          root.append(select);
-        }
+      if (previousEditions.children.length > 1) editions.append(previousEditions);
+      editionsSection.append(editions);
+      root.append(editionsSection);
+      for (const [column, label] of [["I", "출제 의도"], ["AF", "특이사항"]]) {
+        if (!cellValue(column)) continue;
+        const section = node(document, "section", "item-db-detail-section");
+        section.append(node(document, "h3", "", label), node(document, "p", "", cellValue(column)));
+        root.append(section);
       }
-      const metadata = node(document, "dl", "inspector-list item-db-metadata");
+      const remaining = node(document, "details", "item-db-detail-section");
+      remaining.append(node(document, "summary", "", "검토·관리 정보 더 보기"));
+      const metadata = node(document, "dl", "item-db-metadata");
+      const primaryColumns = new Set(["Q", "R", "Z", "Y", "J", "H", "O", "V", "AD", "AC", "I", "AF"]);
       for (const cell of detail.cells) {
         // The original U value is shown once in the heading; L/M/N are filenames above.
         if (["U", "L", "M", "N"].includes(cell.column)) continue;
+        if (primaryColumns.has(cell.column)) continue;
         if (!cell.present && !cell.raw_text) continue;
         metadata.append(
           node(document, "dt", "", CELL_LABELS[cell.column] || cell.column),
           node(document, "dd", "", cell.raw_text || "비어 있음"),
         );
       }
-      root.append(metadata);
+      remaining.append(metadata);
+      if (metadata.children.length) root.append(remaining);
     } catch (error) {
-      if (request === sequence) root.replaceChildren(node(document, "p", "empty-state", `정보를 불러오지 못했습니다: ${error.message || "다시 시도해 주세요."}`));
+      if (request === detailSequence) root.replaceChildren(node(document, "p", "empty-state", `정보를 불러오지 못했습니다: ${error.message || "다시 시도해 주세요."}`));
     }
   }
 
@@ -507,11 +654,22 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
   return Object.freeze({
     install() {
       renderDraft();
+      syncFilterControls();
+      tableHeading(selectedSource());
       $("#item-db-source").addEventListener("change", () => {
         syncSourceControls();
         load(true);
       });
-      $("#item-db-filter-add").addEventListener("click", addFilter);
+      $("#item-db-filter-add").addEventListener("click", () => addFilter());
+      $("#item-db-filter-quick").addEventListener("click", (event) => {
+        const button = event.target.closest("[data-filter-field]");
+        if (button) addFilter(button.dataset.filterField);
+      });
+      $("#item-db-filter-clear").addEventListener("click", () => {
+        $("#item-db-filter-rows").replaceChildren();
+        $("#item-db-match-mode").value = "ALL";
+        syncFilterControls();
+      });
       $("#item-db-form").addEventListener("submit", (event) => {
         event.preventDefault();
         load(true);
@@ -522,7 +680,9 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
       $("#item-db-saved-refresh").addEventListener("click", () => loadSaved(true));
       $("#item-db-saved-more").addEventListener("click", () => loadSaved(false));
       $("#item-db-detail-close").addEventListener("click", () => {
-        $("#item-db-detail-panel").hidden = true;
+        const button = selectedRow?.querySelector("button");
+        resetDetail();
+        button?.focus();
       });
     },
     open() {
