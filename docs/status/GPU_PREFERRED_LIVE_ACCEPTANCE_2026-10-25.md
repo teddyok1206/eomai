@@ -877,3 +877,35 @@ found in those windows. Some are one-target index-membership refreshes, not
 new numerical cohorts. Their per-view `missing_bindings` values are not an
 exact device-pair audit. No restart, model resubmission, GPU-default switch,
 CPU fallback or rollback was performed. Current pair closure remains pending.
+
+### 2026-10-27 03:27 UTC — current-provider QUERY3 candidate, not selected
+
+The independent material-review compatible API release installed source
+`9e69795ae2c219d77a9a49c975b900184284d1b2`. The API restart also restarted
+QUERY through its existing `Requires=eom-api.service` dependency; QUERY returned
+`active/running` at PID `2178866` / invocation
+`2f799a9df60043ba92db259a39b2ca03`. The INDEX owner retained PID `734655` /
+invocation `9718f2ed05ac404e84ce7a69559b110c`. This did **not** select GPU
+QUERY or restart the INDEX numerical work.
+
+The selected CPU QUERY provider remains pinned to `e70b4cdb8485d1d02e3ddf8dd3fa0ee6de793484`;
+all twelve provider code members matched the newly installed API bytes. From
+the exact selected four configuration/unit hashes, a new **unselected** QUERY3
+candidate was staged at `/var/lib/eom-query-routed-candidate-9e69795a` with
+owner SDK `07ec7b32`, controller `24555547`, current provider `e70b4cdb`,
+canonical routing/native controls and unchanged private CPU configuration.
+Control closure passed. Old candidates and rollback bytes were not rewritten.
+
+The candidate's finite installed no-forward preflight
+`eom-routed-query-preflight-9e69795a.service` passed under actual UID `990`,
+GID `1000`, no supplementary groups/capabilities; it composed two public/mixed
+routed factories and the unchanged private CPU factory. Runtime was `44.333s`,
+peak memory `581.7M`. No authenticated operator, source query, native claim,
+model run or runtime selection occurred. The script compared all four selected
+QUERY files plus INDEX owner/unit hashes before/after; they were unchanged.
+The exact protected candidate adapters and preflight are under
+`/usr/local/libexec/eom-query-routed-candidate-9e69795a`; local source checks
+were `4 PASS`, Ruff/format PASS. This is candidate/preflight progress, **not**
+full CPU/CUDA pair closure, actual multi-item GPU QUERY, CPU fallback, default
+activation or rollback acceptance. Continue the original INDEX catch-up and
+reaudit the complete source/profile/input-hash target sets before cutover.
