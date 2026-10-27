@@ -1216,7 +1216,7 @@ class ResolvedExecutionPlanV27(FrozenModel):
         if (
             step.step_key != "extract"
             or step.role != WorkerRole.SUPPORT
-            or step.worker_pool_key != "creative-learning"
+            or step.worker_pool_key != "support"
             or step.reference_bundle is not None
             or step.sandbox != "read-only"
             or step.network != "disabled"

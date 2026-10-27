@@ -51,7 +51,7 @@ def _plan() -> dict[str, object]:
                     "manifest_sha256": "sha256:" + "d" * 64,
                 },
                 "reference_bundle": None,
-                "worker_pool_key": "creative-learning",
+                "worker_pool_key": "support",
                 "timeout_seconds": 7200,
                 "sandbox": "read-only",
                 "network": "disabled",
@@ -77,7 +77,7 @@ def test_creative_plan_schema_mirror_and_exact_typed_plan() -> None:
     validate_control_contract("resolved-execution-plan-v27", value)
     parsed = ResolvedExecutionPlanV27.model_validate(value)
     assert parsed.work_input.source.external_number == "12345"
-    assert parsed.steps[0].worker_pool_key == "creative-learning"
+    assert parsed.steps[0].worker_pool_key == "support"
 
 
 def test_creative_plan_rejects_other_pool_and_changed_source() -> None:

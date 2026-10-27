@@ -30,7 +30,7 @@
           "reasoning_effort": {"enum": ["minimal", "low", "medium", "high", "xhigh"]},
           "instruction_bundle": {"$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/bundleRevisionPointer"},
           "reference_bundle": {"type": "null"},
-          "worker_pool_key": {"const": "creative-learning"},
+          "worker_pool_key": {"const": "support"},
           "timeout_seconds": {"type": "integer", "minimum": 30, "maximum": 7200},
           "sandbox": {"const": "read-only"},
           "network": {"const": "disabled"},

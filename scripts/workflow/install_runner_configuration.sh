@@ -26,6 +26,7 @@ declare -A FILES=(
   ["${REPOSITORY_ROOT}/config/workflows/pdf-document-review.v1.4.yaml"]="${WORKFLOW_ROOT}/pdf-document-review-textbook.yaml"
   ["${REPOSITORY_ROOT}/config/workflows/pdf-document-review.v1.5.yaml"]="${WORKFLOW_ROOT}/pdf-document-review-paired-textbook.yaml"
   ["${REPOSITORY_ROOT}/config/workflows/legacy-item-extraction.v1.yaml"]="${WORKFLOW_ROOT}/legacy-item-extraction.yaml"
+  ["${REPOSITORY_ROOT}/config/workflows/external-item-learning.v1.yaml"]="${WORKFLOW_ROOT}/external-item-learning.yaml"
   ["${REPOSITORY_ROOT}/config/workflows/legacy-item-editorial-compatibility.v1.yaml"]="${WORKFLOW_ROOT}/legacy-item-editorial-compatibility.yaml"
   ["${REPOSITORY_ROOT}/config/human-actors.example.yaml"]="${CONFIG_ROOT}/human-actors.yaml"
   ["${REPOSITORY_ROOT}/config/workflow-runner.example.yaml"]="${CONFIG_ROOT}/workflow-runner.yaml"
@@ -37,6 +38,7 @@ declare -A FILES=(
   ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/customer-support.txt"]="${PROMPT_ROOT}/customer-support.txt"
   ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/pdf-document-review.txt"]="${PROMPT_ROOT}/pdf-document-review.txt"
   ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/legacy-item-extraction.txt"]="${PROMPT_ROOT}/legacy-item-extraction.txt"
+  ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/external-item-learning.txt"]="${PROMPT_ROOT}/external-item-learning.txt"
   ["${REPOSITORY_ROOT}/content/prompt-templates/placeholders/legacy-item-editorial-compatibility.txt"]="${PROMPT_ROOT}/legacy-item-editorial-compatibility.txt"
 )
 

@@ -36,7 +36,7 @@ def _published_preset() -> tuple[SimpleNamespace, SimpleNamespace]:
                 ],
                 "instruction_bundle": step["instruction_bundle"],
                 "reference_bundle": None,
-                "worker_pool_key": "creative-learning",
+                "worker_pool_key": "support",
                 "timeout_seconds": 7200,
                 "sandbox": "read-only",
                 "network": "disabled",
@@ -108,7 +108,7 @@ def test_creative_plan_resolution_pins_exact_work_and_released_policy() -> None:
     plan = _resolve(session, work)
 
     assert plan.work_input == work
-    assert plan.steps[0].worker_pool_key == "creative-learning"
+    assert plan.steps[0].worker_pool_key == "support"
     assert plan.preset_sha256 == revision.content_sha256
     assert len(session.added) == 2
     assert session.added[0].canonical_document == plan.model_dump(mode="json")

@@ -2129,7 +2129,7 @@ def resolve_external_item_learning_plan(
     work: ExternalItemLearningWorkInput,
     resolved_at: datetime | None = None,
 ) -> ResolvedExecutionPlanV27:
-    """Pin an already-authorized creative source to the released private support policy.
+    """Pin creative source instructions to the existing bounded support pool.
 
     This resolver only records policy and input identity. Its caller must reauthorize
     the current Catalog source and page Artifact before a claim or worker staging.
@@ -2161,11 +2161,11 @@ def resolve_external_item_learning_plan(
         len(preset.role_policies) != 1
         or preset.general_knowledge_policy != "DENY"
         or preset.role_policies[0].role != WorkerRole.SUPPORT
-        or preset.role_policies[0].worker_pool_key != "creative-learning"
+        or preset.role_policies[0].worker_pool_key != "support"
         or preset.role_policies[0].reference_bundle is not None
     ):
         raise ControlPlaneError(
-            "CONTROL_PRESET_POLICY_INVALID", "creative learning requires one private support role"
+            "CONTROL_PRESET_POLICY_INVALID", "creative learning requires one bounded support role"
         )
     policy = preset.role_policies[0]
     candidate = policy.model_candidates[0]
@@ -2176,7 +2176,7 @@ def resolve_external_item_learning_plan(
         reasoning_effort=candidate.reasoning_effort,
         instruction_bundle=policy.instruction_bundle,
         reference_bundle=None,
-        worker_pool_key="creative-learning",
+        worker_pool_key="support",
         timeout_seconds=policy.timeout_seconds,
         sandbox=policy.sandbox,
         network=policy.network,

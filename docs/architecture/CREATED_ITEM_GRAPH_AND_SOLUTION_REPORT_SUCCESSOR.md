@@ -70,7 +70,9 @@ HTTP의 다음 입력 계약 `external-item-learning-start/1.0`은 `import_id`, 
 
 슬롯 요청은 `external-item-learning-work-input/1.0`이라는 작은 불변 값으로 고정한다. 원본 `learning-source`와 `learning-page-set`을 반복 바이너리 없이 담고, 페이지 Artifact의 논리 ID·Revision, primary manifest member의 schema/media/SHA와 file-set manifest SHA를 별도로 pin한다. 생성자 검증은 source↔page-set↔Artifact primary SHA를 일치시킨다. 슬롯 시작과 결과 수락 시에는 Catalog의 **현재** 원본 선택·권한을 다시 확인하고, Orchestrator가 승인 Artifact의 전체 member closure·media·hash를 검증한 뒤 로컬 읽기 전용 staging으로 놓는다. `(source revision, edition, 입력 계약, 페이지 Artifact Revision)`이 작업의 멱등 키 재료이며, 재시도는 동일 포인터만 재사용한다. 초기 약 1천 건, 확장 수십만 건에서 조회는 인덱스 키 기반 O(log n), 한 요청 materialization은 최대 32페이지·256MiB에 선형이다. 원본 PDF를 worker에게 무권한 NAS 경로로 주거나, 페이지 파일 경로만 저장하는 더 단순한 방식은 권한·재현성 경계를 깨므로 쓰지 않는다. 새 DB/queue/cache는 이 입력 계약 자체에 필요 없다.
 
-`resolved-execution-plan/27.0` 후보는 위 작업 입력, 게시된 프리셋·정의·용량 정책의 revision, `creative-learning` 전용 support 단계와 instruction bundle을 하나의 재현 가능한 해시로 묶는다. 이 단계는 worker에게 읽기 전용·네트워크 차단·일반 지식 차단을 요구한다. schema/typed validation과 기존 control-plane 테이블에 재전송을 구분해 기록하는 resolver는 구현됐다. 그러나 이 resolver에 선행해야 하는 operator 권한·현재 source 재인가, 영속 작업 claim, 승인된 worker staging과 결과 수락은 아직 연결되지 않았다. 따라서 워크플로 정의와 프롬프트 파일도 운영에 설치·활성화하지 않고, Orchestrator의 명시적 비활성 차단을 유지한다.
+`resolved-execution-plan/27.0` 후보는 위 작업 입력, 게시된 프리셋·정의·용량 정책의 revision, 기존 `support` 풀의 창작 분석 단계와 전용 instruction bundle을 하나의 재현 가능한 해시로 묶는다. 이 단계는 worker에게 읽기 전용·네트워크 차단·일반 지식 차단을 요구한다. schema/typed validation과 기존 control-plane 테이블에 재전송을 구분해 기록하는 resolver는 구현됐다. 실제 source/page 및 저장 작업에 묶인 실행 context 없이는 Orchestrator의 명시적 비활성 차단을 유지한다.
+
+2026-10-27 운영 read-only 확인: V27 plan 저장 건수는 **0**이며 설치된 fixed-host capacity는 기존 `worker-capacity-policy/1.3`이다. 이 정책의 `support`는 slot05·상한 1, `customer-support`는 slot06·상한 1이다. 따라서 아직 미발행인 V27 후보의 불필요한 `creative-learning` 풀을 기존 `support`로 정리한다. 새 capacity schema·풀·슬롯·host 상한을 만들거나 기존 capacity revision을 수정하지 않는다. 별도 창작 프리셋·instruction과 exact 작업/step/context로 목적을 검증하고, 기존 slot05 claim/lease로 분석 실행을 한 번에 1건으로 제한한다. 기존 분석 작업과 경쟁하면 대기하며 A/S slot06은 점유하지 않는다. 이 결정은 미발행 후보에만 적용하고 과거 plan/lease/control bytes는 변경하지 않는다.
 
 역할 메시지의 후속 규격 `workflow-role/1.33.0`은 위 입력과 `external-item-learning-result/1.0` 제안만 허용하는 `support` 1단계다. JSON Schema 2020-12 정본·패키지 리소스, Pydantic 모델, Codex 출력용 projection, 정확한 source/page 결합 검사와 1단계 Workflow 정의의 소스 테스트까지 준비했다. 모델이 결과 해시를 생략하면 Orchestrator 검증 경계에서 정확한 제출 본문의 해시를 계산하며, 잘못 제출한 해시는 덮어쓰지 않고 거부한다. **Workflow 정의 파일은 아직 운영 admission 또는 활성화가 아니다.** 저장된 작업/운영자 권한에 묶인 Catalog source read, 페이지 Artifact materialization, 실행 프리셋과 결과 수락을 **한 호환 release 경계**로 닫은 뒤에만 Codex 슬롯 실행이나 Graph 게시를 표시한다.
 
@@ -105,6 +107,20 @@ caller root transaction 안에서 기존 Workflow unique/idempotency 저장 → 
 2026-10-27 19:20 UTC 소스 후보: `prepare_external_item_learning_workflow`를 구현했다. 관련 역할·입력·materializer·인가·준비 unit **108 PASS**, 신규 준비 source mypy 및 Ruff/format PASS. disposable PostgreSQL의 외부 문항/조립/창작 저장 검사 **16 PASS** 안에서 같은 key/다른 key 동시 준비가 Workflow 1개·READY step 1개·event 2개·command 0개로 수렴하고, 마지막 source 재인가 거부 시 전부 rollback되는 것을 확인했다. 이 DB 검사의 source/page/plan port는 명시적인 합성 fixture이며 운영 source/preset 검증이라고 주장하지 않는다. 임시 DB `20261027191917_496e92b3`은 공식 cleanup으로 제거했다. 실제 Codex 호출과 실행 명령 생성은 0회다.
 
 남은 종료 게이트는 **실제 원본 1건의 격리 page Artifact 준비**, **전용 instruction/preset/capacity의 공식 고정**, **호환 운영 설치본에서 source→저장 작업→plan→worker staging의 실행 전 점검**이다. 창작 definition의 신규 작업 admission과 실제 START는 이 연결 없이 먼저 열지 않는다. 소스 unit 또는 합성 DB PASS만으로 목표 완료를 선언하지 않는다.
+
+### 기존 control owner를 재사용하는 지침·프리셋 준비
+
+전용 플랫폼/역할 지침은 기존 `control_markdown` 및 `instruction-bundle-manifest/1.0` Artifact owner로 게시한다. 역할 지침은 기출 V10의 공개 가능한 풀이·정답 비교와 기존 추출의 closed source anchor 규칙을 창작용 region 계약에 맞춰 재사용하며, 새로운 비공개 사고 과정 저장이나 Graph ID 합성을 요구하지 않는다. 지침 원문은 source config, 게시된 Artifact revision이 실행 시 정본이고 경로는 저장 위치일 뿐이다.
+
+프리셋 준비는 이미 released인 exact fixed-host V4 capacity와 기존 `support`/slot05/상한 1을 검증하고 기존 preset lifecycle로 **DRAFT만** 만든다. 새 capacity나 slot/auth 상태를 쓰지 않는다. instruction logical key·revision·schema/media/hash와 두 component의 layer/path를 검증하고, 같은 desired policy는 indexed preset key/최신 revision 조회와 기존 control advisory lock으로 중복 draft 없이 replay한다. 큰 지침 bytes는 Artifact에만 있고 DB에는 pointer/작은 policy만 남는다. 작업자 또는 caller가 주장한 권한은 받지 않고 상위 authenticated application의 현재 권한 port를 mutation 직전/직후 확인한다.
+
+이 단계는 새 queue/registry/bootstrap wire contract를 만들지 않는다. 내부 immutable 값과 기존 generic control schema를 사용한다. Artifact commit과 control transaction은 독립 경계이므로 나중 실패 시 게시 이력은 보존하고 같은 입력으로 복구한다. 더 단순한 released preset 직접 삽입은 evaluation/release invariant를 우회하므로 금지한다. 준비 함수에는 평가 PASS 생성, release/activation, 모델 가용성 갱신, Codex 호출, START enqueue가 없다. 실제 availability/quota와 과학적 품질은 이 DRAFT의 PASS가 아니다.
+
+2026-10-27 19:45 UTC 소스 후보 검증: 위 instruction 게시 및 DRAFT application을 구현하고, 실행 계획 후보를 기존 `support` 풀에 맞췄다. 관련 실행·control·Artifact unit **134 PASS**, package resource/wheel·설치 스크립트·설정·역할 규격 unit **59 PASS**, 수정 source 4개 mypy 및 Ruff/format/shell syntax PASS. 실제 disposable PostgreSQL의 외부 문항 전체 검사 **17 PASS**를 재전송 실행에서도 확인했다. 신규 control 검사는 실제 Orchestrator Artifact commit과 실제 generic control 저장/논리 잠금을 사용하되 원문·권한 port는 합성이다. 지침의 exact replay는 Artifact 3개를 재사용하고, 동시 준비는 DRAFT revision 1개/current activation 없음/evaluation 0개로 수렴한다. 늦은 권한 거부나 다른 모델 재전송은 기존 초안을 변경하지 않는다. 임시 DB `20261027193933_c44bb0ef`은 공식 cleanup으로 제거했다.
+
+지침 원문은 `config/control-plane/external-item-learning-v1/instructions/`에 기록했으며 기존 fallback prompt와 결과 hash 생략 규칙을 일치시켰다. 설치 inventory에 exact 창작 definition/fallback prompt를 추가했지만 **설치 스크립트를 운영에서 실행하지 않았고**, 기존 설정·auth·슬롯·capacity는 변경하지 않았다. 운영의 V27 plan 0건 및 fixed-host V4 확인은 read-only transaction의 실제 조회이고, 새 지침/프리셋/원본 작업이 운영에 준비됐다는 뜻은 아니다.
+
+다음 작업은 **실제 인증을 받는 한 준비 entry point**에 Catalog 원본 읽기 → Orchestrator 격리 렌더/페이지 게시 → 기존 control evaluation/release → 저장 Workflow/plan/READY step과 실행 전 materialization을 연결하는 것이다. 이 entry point는 마지막에 시작 명령을 enqueue하지 않는다. 임의 operator ID나 옛 session을 만들어 넣지 않고 기존 identity service의 실제 인증과 현재 권한을 사용해야 한다. source helper 또는 DRAFT만 만든 상태를 최종 준비 완료로 보고하지 않는다.
 
 ## 필수 설계 절차
 

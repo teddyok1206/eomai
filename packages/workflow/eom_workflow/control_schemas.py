@@ -51,7 +51,7 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "schemas/workflow/control-plane/resolved-execution-plan-v27.schema.json",
             "resources/control-plane/resolved-execution-plan-v27.schema.json",
             "27.0",
-            "sha256:1cae8cb6acc7f836308354ffbd41105507694b74a89e6017d491a9273fae163a",
+            "sha256:b5e70c59a502ffd0c985a22bbe051fb6c806fcb6b4517e684c0ca294df124f3c",
         ),
         "resolved-execution-plan-v24": ControlSchemaResource(
             "schemas/workflow/control-plane/resolved-execution-plan-v24.schema.json",

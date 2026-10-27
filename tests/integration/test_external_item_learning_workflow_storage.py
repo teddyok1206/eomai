@@ -6,16 +6,12 @@ not production source permission, page Artifact validity, or worker admission.
 
 from __future__ import annotations
 
-import os
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from threading import Barrier
-from urllib.parse import unquote, urlsplit
 from uuid import uuid4
 
 import pytest
 from eom_identifiers import content_sha256
-from eom_orchestrator.database import build_engine
 from eom_workflow.control_plane import ResolvedExecutionPlanV27
 from eom_workflow.models import WorkflowRequest
 from eom_workflow_runner import external_item_learning_preparation as preparation
@@ -28,11 +24,9 @@ from eom_workflow_runner.models import (
     WorkflowStepRunRecord,
 )
 from eom_workflow_runner.repository import create_workflow_instance
-from sqlalchemy import Engine, func, select, text
+from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
-from scripts.api.testdb_guard import TestDatabaseManifest as DisposableManifest
-from scripts.api.testdb_guard import validate_state_directory
 from tests.unit.test_external_item_learning_execution_plan import _plan
 from tests.unit.test_external_item_learning_workflow_admission import (
     OPERATOR,
@@ -43,25 +37,6 @@ from tests.unit.test_external_item_learning_workflow_admission import (
 )
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
-
-
-@pytest.fixture
-def creative_engine():
-    if os.environ.get("EOM_RUN_API_INTEGRATION") != "1":
-        pytest.skip("use guarded testdb_run.sh external-item-tests; never production")
-    state = validate_state_directory(Path(os.environ["EOM_EXTERNAL_ITEM_TEST_STATE"]))
-    manifest = DisposableManifest.load(state / "manifest.json")
-    parsed = urlsplit(os.environ["EOM_DATABASE_URL"])
-    assert parsed.username == manifest.owner_role
-    assert unquote(parsed.path.removeprefix("/")) == manifest.database
-    engine = build_engine(os.environ["EOM_DATABASE_URL"])
-    try:
-        with engine.connect() as connection:
-            assert connection.scalar(text("SELECT current_database()")) == manifest.database
-            assert connection.scalar(text("SELECT current_user")) == manifest.owner_role
-        yield engine
-    finally:
-        engine.dispose()
 
 
 def _unique_request() -> WorkflowRequest:

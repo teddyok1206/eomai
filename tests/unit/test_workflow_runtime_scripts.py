@@ -105,6 +105,20 @@ def test_runtime_scripts_have_valid_shell_syntax() -> None:
         assert result.returncode == 0, result.stderr
 
 
+def test_configuration_installer_includes_creative_definition_and_prompt_without_start() -> None:
+    source = (ROOT / "scripts/workflow/install_runner_configuration.sh").read_text(encoding="utf-8")
+    for path in (
+        "config/workflows/external-item-learning.v1.yaml",
+        "content/prompt-templates/placeholders/external-item-learning.txt",
+    ):
+        assert path in source
+        assert (ROOT / path).is_file()
+    assert '"${WORKFLOW_ROOT}/external-item-learning.yaml"' in source
+    assert '"${PROMPT_ROOT}/external-item-learning.txt"' in source
+    assert "systemctl start" not in source
+    assert "START_WORKFLOW" not in source
+
+
 def test_worker_runtime_doctor_receives_each_slot_group_explicitly() -> None:
     source = (ROOT / "scripts/workflow/deploy_worker_runtime.sh").read_text(encoding="utf-8")
 
