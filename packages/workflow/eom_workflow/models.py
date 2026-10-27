@@ -19,6 +19,8 @@ from eom_catalog_contracts import (
     EducationalRetrievalRequirement,
     EducationalRetrievalRequirementV2,
     EquationBlock,
+    ExternalItemLearningResult,
+    ExternalItemLearningWorkInput,
     IntegratedScienceCurriculumScope,
     ItemScore,
     ItemSolution,
@@ -220,6 +222,11 @@ class KnowledgeAnalysisWorkerRequest(FrozenModel):
 class LegacyItemExtractionWorkerRequest(FrozenModel):
     request_name: Literal["LEGACY_ITEM_EXTRACTION_REQUEST"] = "LEGACY_ITEM_EXTRACTION_REQUEST"
     extraction_request: LegacyItemExtractionRequest
+
+
+class ExternalItemLearningWorkerRequest(FrozenModel):
+    request_name: Literal["EXTERNAL_ITEM_LEARNING_REQUEST"] = "EXTERNAL_ITEM_LEARNING_REQUEST"
+    work_input: ExternalItemLearningWorkInput
 
 
 class LegacyItemEditorialCompatibilityWorkerRequest(FrozenModel):
@@ -464,6 +471,7 @@ class WorkflowRequest(FrozenModel):
         "CUSTOMER_SUPPORT_REQUEST",
         "PDF_DOCUMENT_REVIEW_REQUEST",
         "PAIRED_DOCUMENT_REVIEW_REQUEST",
+        "EXTERNAL_ITEM_LEARNING_REQUEST",
     ]
     image_mode: Literal["skip", "required"]
     content_pack: ContentPackSelection | None = None
@@ -498,6 +506,7 @@ class WorkflowRequest(FrozenModel):
         | None
     ) = None
     legacy_extraction_request: LegacyItemExtractionRequest | None = None
+    external_item_learning_work: ExternalItemLearningWorkInput | None = None
     legacy_editorial_compatibility_request: LegacyItemEditorialCompatibilityRequest | None = None
     customer_support_case: CustomerSupportCase | None = None
     pdf_document_review_request: PdfDocumentReviewRequest | None = None
@@ -508,6 +517,37 @@ class WorkflowRequest(FrozenModel):
 
     @model_validator(mode="after")
     def validate_catalog_request(self) -> WorkflowRequest:
+        if self.request_name == "EXTERNAL_ITEM_LEARNING_REQUEST":
+            if (
+                self.external_item_learning_work is None
+                or self.image_mode != "skip"
+                or self.execution_preset_key != "external-item-learning"
+                or any(
+                    value is not None
+                    for value in (
+                        self.content_pack,
+                        self.profiles,
+                        self.source_intake,
+                        self.registry_intent,
+                        self.item_brief,
+                        self.stimulus_asset,
+                        self.educational_retrieval,
+                        self.production_occurrence,
+                        self.expected_resolution,
+                        self.analysis_request,
+                        self.legacy_extraction_request,
+                        self.legacy_editorial_compatibility_request,
+                        self.customer_support_case,
+                        self.pdf_document_review_request,
+                        self.document_review_textbook_evidence,
+                        self.paired_document_review_request,
+                    )
+                )
+            ):
+                raise ValueError("creative learning requires only its pinned work input")
+            return self
+        if self.external_item_learning_work is not None:
+            raise ValueError("only creative learning may include its work input")
         if (
             self.request_name != "PDF_DOCUMENT_REVIEW_REQUEST"
             and self.pdf_document_review_request is not None
@@ -826,6 +866,7 @@ class WorkflowRequest(FrozenModel):
         WorkerRequest
         | KnowledgeAnalysisWorkerRequest
         | LegacyItemExtractionWorkerRequest
+        | ExternalItemLearningWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PdfDocumentReviewWorkerRequest
@@ -834,6 +875,8 @@ class WorkflowRequest(FrozenModel):
         | PairedDocumentReviewWorkerRequestV3
         | PairedDocumentReviewWorkerRequest
     ):
+        if self.external_item_learning_work is not None:
+            return ExternalItemLearningWorkerRequest(work_input=self.external_item_learning_work)
         if self.paired_document_review_request is not None:
             if self.document_review_textbook_evidence is not None:
                 return PairedDocumentReviewWorkerRequestV3(
@@ -870,6 +913,8 @@ class WorkflowRequest(FrozenModel):
             raise ValueError("knowledge analysis worker request is missing its pinned request")
         if self.request_name == "LEGACY_ITEM_EXTRACTION_REQUEST":
             raise ValueError("legacy extraction worker request is missing its pinned request")
+        if self.request_name == "EXTERNAL_ITEM_LEARNING_REQUEST":
+            raise ValueError("creative learning worker request is missing its pinned work input")
         if self.request_name == "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST":
             raise ValueError("editorial compatibility worker request is missing its pinned request")
         if self.request_name == "CUSTOMER_SUPPORT_REQUEST":
@@ -1064,6 +1109,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.30.0",
         "workflow-role/1.31.0",
         "workflow-role/1.32.0",
+        "workflow-role/1.33.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1074,6 +1120,7 @@ class RoleWorkerInput(FrozenModel):
         WorkerRequest
         | KnowledgeAnalysisWorkerRequest
         | LegacyItemExtractionWorkerRequest
+        | ExternalItemLearningWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PdfDocumentReviewWorkerRequest
@@ -1095,6 +1142,7 @@ class RoleWorkerInput(FrozenModel):
         WorkerRequest
         | KnowledgeAnalysisWorkerRequest
         | LegacyItemExtractionWorkerRequest
+        | ExternalItemLearningWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PdfDocumentReviewWorkerRequest
@@ -1113,6 +1161,8 @@ class RoleWorkerInput(FrozenModel):
             return KnowledgeAnalysisWorkerRequest.model_validate(value)
         if value.get("request_name") == "LEGACY_ITEM_EXTRACTION_REQUEST":
             return LegacyItemExtractionWorkerRequest.model_validate(value)
+        if value.get("request_name") == "EXTERNAL_ITEM_LEARNING_REQUEST":
+            return ExternalItemLearningWorkerRequest.model_validate(value)
         if value.get("request_name") == "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST":
             return LegacyItemEditorialCompatibilityWorkerRequest.model_validate(value)
         if value.get("request_name") == "CUSTOMER_SUPPORT_REQUEST":
@@ -1246,6 +1296,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.30.0",
         "workflow-role/1.31.0",
         "workflow-role/1.32.0",
+        "workflow-role/1.33.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -2838,6 +2889,16 @@ class LegacyItemExtractionRoleResult(RoleResultBase):
     output: LegacyItemExtractionOutput
 
 
+class ExternalItemLearningOutput(FrozenModel):
+    learning_result: ExternalItemLearningResult
+
+
+class ExternalItemLearningRoleResult(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.33.0"] = "workflow-role/1.33.0"
+    role: Literal["support"] = "support"
+    output: ExternalItemLearningOutput
+
+
 class LegacyItemEditorialCompatibilityOutput(FrozenModel):
     proposal: LegacyItemEditorialCompatibilityProposal
 
@@ -3001,6 +3062,7 @@ RoleResult = (
     | KnowledgeAnalysisProposalRoleResultV9
     | KnowledgeAnalysisProposalRoleResultV10
     | LegacyItemExtractionRoleResult
+    | ExternalItemLearningRoleResult
     | LegacyItemEditorialCompatibilityRoleResult
     | CustomerSupportRoleResult
     | InferenceTransferPairRoleResult

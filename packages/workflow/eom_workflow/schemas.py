@@ -92,6 +92,8 @@ from eom_workflow.models import (
     ContentTeamReviewRoleResultV11,
     ContentTeamReviewRoleResultV12,
     CustomerSupportRoleResult,
+    ExternalItemLearningRoleResult,
+    ExternalItemLearningWorkerRequest,
     GeneratedAuthoringRoleResult,
     GeneratedAuthoringRoleResultV4,
     GeneratedAuthoringRoleResultV5,
@@ -236,6 +238,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "knowledge-analysis-proposal-result@9.0",
             "knowledge-analysis-proposal-result@10.0",
             "legacy-item-extraction-result@1.0",
+            "external-item-learning-result@1.0",
             "legacy-item-editorial-compatibility-result@1.0",
             "customer-support-result@1.0",
             "pdf-document-review-result@1.0",
@@ -310,6 +313,7 @@ RESULT_SCHEMA_FILES = {
         "knowledge-analysis-proposal-result-v10.schema.json"
     ),
     "legacy-item-extraction-result@1.0": "legacy-item-extraction-result-v1.schema.json",
+    "external-item-learning-result@1.0": "external-item-learning-result-v1.schema.json",
     "legacy-item-editorial-compatibility-result@1.0": (
         "legacy-item-editorial-compatibility-result-v1.schema.json"
     ),
@@ -361,6 +365,7 @@ INPUT_SCHEMA_FILES_V1_29 = {"support": "item-inference-transfer-pair-input-v1.sc
 INPUT_SCHEMA_FILES_V1_30 = {"support": "item-inference-transfer-pair-input-v2.schema.json"}
 INPUT_SCHEMA_FILES_V1_31 = {"support": "pdf-document-review-input-v5.schema.json"}
 INPUT_SCHEMA_FILES_V1_32 = {"support": "paired-document-review-input-v4.schema.json"}
+INPUT_SCHEMA_FILES_V1_33 = {"support": "external-item-learning-input-v1.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -406,6 +411,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "review-result@6.0": "workflow-role/1.13.0",
     "registration-result@6.0": "workflow-role/1.13.0",
     "legacy-item-extraction-result@1.0": "workflow-role/1.14.0",
+    "external-item-learning-result@1.0": "workflow-role/1.33.0",
     "authoring-result@7.0": "workflow-role/1.15.0",
     "review-result@7.0": "workflow-role/1.15.0",
     "registration-result@7.0": "workflow-role/1.15.0",
@@ -465,6 +471,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.30.0": INPUT_SCHEMA_FILES_V1_30,
     "workflow-role/1.31.0": INPUT_SCHEMA_FILES_V1_31,
     "workflow-role/1.32.0": INPUT_SCHEMA_FILES_V1_32,
+    "workflow-role/1.33.0": INPUT_SCHEMA_FILES_V1_33,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -500,6 +507,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.30.0",
     "workflow-role/1.31.0",
     "workflow-role/1.32.0",
+    "workflow-role/1.33.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -533,6 +541,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_30.values(),
             *INPUT_SCHEMA_FILES_V1_31.values(),
             *INPUT_SCHEMA_FILES_V1_32.values(),
+            *INPUT_SCHEMA_FILES_V1_33.values(),
         }
     )
 )
@@ -1497,6 +1506,7 @@ def _role_input_schema(role: str, protocol_version: str = "workflow-role/1.0.1")
             "workflow-role/1.30.0",
             "workflow-role/1.31.0",
             "workflow-role/1.32.0",
+            "workflow-role/1.33.0",
         },
     )
 
@@ -1527,6 +1537,7 @@ def _role_result_schema(schema_id: str) -> dict[str, Any]:
             "knowledge-analysis-proposal-result@9.0",
             "knowledge-analysis-proposal-result@10.0",
             "legacy-item-extraction-result@1.0",
+            "external-item-learning-result@1.0",
             "legacy-item-editorial-compatibility-result@1.0",
             "item-inference-transfer-pair-result@1.0",
             "item-inference-transfer-pair-result@1.1",
@@ -1776,6 +1787,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
         canonical_value = _canonicalize_graph_review_v12_result(value)
     elif schema_id == "legacy-item-extraction-result@1.0" and role == "support":
         canonical_value = _canonicalize_legacy_item_extraction_result(value)
+    elif schema_id == "external-item-learning-result@1.0" and role == "support":
+        canonical_value = _canonicalize_external_item_learning_result(value)
     elif schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
         canonical_value = _canonicalize_legacy_editorial_compatibility_result(value)
     elif schema_id == "item-inference-transfer-pair-result@1.1" and role == "support":
@@ -1923,6 +1936,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return KnowledgeAnalysisProposalRoleResultV10.model_validate(canonical_value)
         if schema_id == "legacy-item-extraction-result@1.0" and role == "support":
             return LegacyItemExtractionRoleResult.model_validate(canonical_value)
+        if schema_id == "external-item-learning-result@1.0" and role == "support":
+            return ExternalItemLearningRoleResult.model_validate(canonical_value)
         if schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
             return LegacyItemEditorialCompatibilityRoleResult.model_validate(canonical_value)
         if schema_id == "customer-support-result@1.0" and role == "support":
@@ -2486,6 +2501,21 @@ def _canonicalize_legacy_item_extraction_result(value: object) -> object:
     return canonical
 
 
+def _canonicalize_external_item_learning_result(value: object) -> object:
+    """Derive an omitted proposal hash, but never replace an incorrect supplied hash."""
+
+    if not isinstance(value, dict):
+        return value
+    output = value.get("output")
+    result = output.get("learning_result") if isinstance(output, dict) else None
+    if not isinstance(result, dict) or "result_sha256" in result:
+        return value
+    canonical = copy.deepcopy(value)
+    learning_result = _mapping(_mapping(canonical, "output"), "learning_result")
+    learning_result["result_sha256"] = content_sha256(learning_result)
+    return canonical
+
+
 def _normalize_duplicate_legacy_source_anchor_ids(
     extraction_result: dict[str, Any],
 ) -> None:
@@ -2913,6 +2943,23 @@ def constrained_result_schema(
                 analysis_request,
             )
             _prune_unreferenced_definitions(schema)
+    if schema_id == "external-item-learning-result@1.0":
+        if not isinstance(worker_input.request, ExternalItemLearningWorkerRequest):
+            raise WorkflowSchemaError("creative learning result requires its pinned work input")
+        work = worker_input.request.work_input
+        result = _mapping(definitions, "ExternalItemLearningResult")
+        result_properties = _mapping(result, "properties")
+        for field_name, pinned_value in (
+            ("input_sha256", work.source.input_sha256),
+            ("source_id", work.source.source_id),
+            ("source_revision_id", work.source.source_revision_id),
+            ("external_number", work.source.external_number),
+        ):
+            _bind_result_string_const(schema, _mapping(result_properties, field_name), pinned_value)
+        region = _mapping(definitions, "ExternalItemLearningResult_region")
+        _mapping(_mapping(region, "properties"), "physical_page")["maximum"] = len(
+            work.page_set.pages
+        )
     if schema_id == "legacy-item-extraction-result@1.0":
         if not isinstance(worker_input.request, LegacyItemExtractionWorkerRequest):
             raise WorkflowSchemaError("legacy extraction result requires its typed worker request")
@@ -4092,6 +4139,9 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
         _prune_unreferenced_definitions(schema)
     if schema_id == "legacy-item-extraction-result@1.0":
         _prune_unreferenced_definitions(schema)
+    if schema_id == "external-item-learning-result@1.0":
+        _project_external_item_learning_codex_contract(schema)
+        _prune_unreferenced_definitions(schema)
     if schema_id == "legacy-item-editorial-compatibility-result@1.0":
         _project_legacy_editorial_compatibility_codex_contract(schema)
         _prune_unreferenced_definitions(schema)
@@ -4964,6 +5014,12 @@ def _inline_catalog_schema(
                 catalog_name=catalog_name,
                 definition_name=definition_name,
             )
+    creative_input = "eom://schemas/external-item/learning-work-input/1.0"
+    creative_result = "eom://schemas/external-item/learning-result/1.0"
+    if creative_input in json.dumps(bundled, ensure_ascii=True):
+        bundled = _inline_external_item_learning_contract(bundled, result=False)
+    if creative_result in json.dumps(bundled, ensure_ascii=True):
+        bundled = _inline_external_item_learning_contract(bundled, result=True)
     Draft202012Validator.check_schema(bundled)
     if require_reference_closure:
         _validate_local_reference_closure(bundled)
@@ -4996,6 +5052,66 @@ def _inline_legacy_assessment_contract(
         ),
     )
 
+    return _inline_contract_sources(schema, sources)
+
+
+def _inline_external_item_learning_contract(
+    schema: dict[str, Any], *, result: bool
+) -> dict[str, Any]:
+    """Close only the source/page or result/Item references used by one role."""
+
+    from eom_catalog_contracts import load_schema
+
+    references = (
+        (
+            (
+                "eom://schemas/external-item/learning-result/1.0",
+                "external-item-learning-result-v1",
+                "ExternalItemLearningResult",
+            ),
+            (
+                "eom://schemas/item-registry/assessment-item-content-v1",
+                "assessment-item-content",
+                "AssessmentItemContent",
+            ),
+        )
+        if result
+        else (
+            (
+                "eom://schemas/external-item/learning-work-input/1.0",
+                "external-item-learning-work-input-v1",
+                "ExternalItemLearningWorkInput",
+            ),
+            (
+                "eom://schemas/external-item/learning-source/1.0",
+                "external-item-learning-source-v1",
+                "ExternalItemLearningSource",
+            ),
+            (
+                "eom://schemas/external-item/preview-manifest/1.0",
+                "external-item-preview-manifest-v1",
+                "ExternalItemPreviewManifest",
+            ),
+            (
+                "eom://schemas/external-item/learning-page-set/1.0",
+                "external-item-learning-page-set-v1",
+                "ExternalItemLearningPageSet",
+            ),
+        )
+    )
+    sources = tuple(
+        (reference, definition, copy.deepcopy(load_schema(name)))
+        for reference, name, definition in references
+    )
+    return _inline_contract_sources(schema, sources)
+
+
+def _inline_contract_sources(
+    schema: dict[str, Any],
+    sources: tuple[tuple[str, str, dict[str, Any]], ...],
+) -> dict[str, Any]:
+    """Bundle exact Catalog schemas with collision-free local definition names."""
+
     def rewrite(value: object, *, local_prefix: str | None = None) -> object:
         if isinstance(value, dict):
             rewritten: dict[str, Any] = {}
@@ -5025,10 +5141,10 @@ def _inline_legacy_assessment_contract(
 
     bundled = rewrite(schema)
     if not isinstance(bundled, dict):
-        raise WorkflowSchemaError("bundled legacy assessment role schema is not an object")
+        raise WorkflowSchemaError("bundled Catalog role schema is not an object")
     definitions = bundled.setdefault("$defs", {})
     if not isinstance(definitions, dict):
-        raise WorkflowSchemaError("bundled legacy assessment definitions are not an object")
+        raise WorkflowSchemaError("bundled Catalog definitions are not an object")
     for _, prefix, source in sources:
         body = {
             key: item
@@ -5037,11 +5153,11 @@ def _inline_legacy_assessment_contract(
         }
         rewritten_body = rewrite(body, local_prefix=prefix)
         if not isinstance(rewritten_body, dict):
-            raise WorkflowSchemaError("legacy assessment contract body is not an object")
+            raise WorkflowSchemaError("Catalog contract body is not an object")
         definitions[prefix] = rewritten_body
         source_definitions = source.get("$defs", {})
         if not isinstance(source_definitions, dict):
-            raise WorkflowSchemaError("legacy assessment contract definitions are invalid")
+            raise WorkflowSchemaError("Catalog contract definitions are invalid")
         for name, value in source_definitions.items():
             definitions[f"{prefix}_{name}"] = rewrite(value, local_prefix=prefix)
     return bundled
@@ -5246,6 +5362,42 @@ def _validate_local_reference_closure(schema: dict[str, Any]) -> None:
                 visit(child)
 
     visit(schema)
+
+
+def _project_external_item_learning_codex_contract(schema: dict[str, Any]) -> None:
+    """Expose only Codex-supported syntax; canonical validation remains authoritative."""
+
+    definitions = _mapping(schema, "$defs")
+    result = _mapping(definitions, "ExternalItemLearningResult")
+    properties = _mapping(result, "properties")
+    if properties.pop("result_sha256", None) is None:
+        raise WorkflowSchemaError("creative learning result hash is not projectable")
+    required = result.get("required")
+    if not isinstance(required, list) or "result_sha256" not in required:
+        raise WorkflowSchemaError("creative learning result hash requirement is invalid")
+    required.remove("result_sha256")
+    _append_projection_instruction(
+        result,
+        "Do not output result_sha256; the Orchestrator derives it from the exact submitted "
+        "proposal body. Source identity, regions, and Item content remain subject to canonical "
+        "JSON Schema and Pydantic validation.",
+    )
+    safe_text = _mapping(definitions, "ExternalItemLearningResult_safeText")
+    for definition, field, maximum in (
+        ("ExternalItemLearningResult_region", "observed_text", 6000),
+        ("ExternalItemLearningResult_solutionStep", "reasoning_summary", 3000),
+        ("ExternalItemLearningResult_conflict", "description", 2000),
+    ):
+        field_schema = _mapping(_mapping(_mapping(definitions, definition), "properties"), field)
+        branches = field_schema.get("allOf")
+        if branches != [
+            {"$ref": "#/$defs/ExternalItemLearningResult_safeText"},
+            {"maxLength": maximum},
+        ]:
+            raise WorkflowSchemaError("creative learning safe text is not projectable")
+        field_schema.clear()
+        field_schema.update(copy.deepcopy(safe_text))
+        field_schema["maxLength"] = maximum
 
 
 def _project_knowledge_authoring_content(schema: dict[str, Any]) -> None:

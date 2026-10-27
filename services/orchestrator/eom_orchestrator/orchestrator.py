@@ -11,6 +11,9 @@ from typing import Literal, cast
 from uuid import uuid4
 
 from eom_catalog_contracts import ContentTeamMaterialRequirement
+from eom_catalog_contracts.external_item_learning_work import (
+    validate_external_item_learning_result_for_work,
+)
 from eom_identifiers import (
     content_sha256,
     new_job_id,
@@ -78,6 +81,8 @@ from eom_workflow.models import (
     ArtifactPointer,
     ContentTeamImageRoleResultV12,
     CustomerSupportWorkerRequest,
+    ExternalItemLearningRoleResult,
+    ExternalItemLearningWorkerRequest,
     GeneratedVectorDrawingV6,
     InferenceTransferPairRoleResult,
     InferenceTransferPairRoleResultV11,
@@ -1086,6 +1091,22 @@ class Orchestrator:
                     ErrorCode.WORKER_RESULT_INVALID,
                     "workflow worker result identifiers do not match input",
                 )
+            if isinstance(result, ExternalItemLearningRoleResult):
+                if not isinstance(worker_input.request, ExternalItemLearningWorkerRequest):
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "creative learning result has no pinned work input",
+                    )
+                try:
+                    validate_external_item_learning_result_for_work(
+                        result.output.learning_result,
+                        worker_input.request.work_input,
+                    )
+                except ValueError as exc:
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID,
+                        "creative learning result differs from its immutable source",
+                    ) from exc
             if isinstance(
                 result, (InferenceTransferPairRoleResult, InferenceTransferPairRoleResultV11)
             ):

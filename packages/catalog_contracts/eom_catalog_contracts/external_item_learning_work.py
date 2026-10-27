@@ -15,6 +15,10 @@ from eom_catalog_contracts.external_item_learning_pages import (
     ExternalItemLearningPageSet,
     validate_external_item_learning_page_set_for_source,
 )
+from eom_catalog_contracts.external_item_learning_result import (
+    ExternalItemLearningResult,
+    validate_external_item_learning_result_for_source,
+)
 from eom_catalog_contracts.external_item_learning_source import ExternalItemLearningSource
 from eom_catalog_contracts.models import FrozenModel, Sha256
 
@@ -62,3 +66,22 @@ class ExternalItemLearningWorkInput(FrozenModel):
         ):
             raise ValueError("creative learning work input hash differs")
         return self
+
+
+def validate_external_item_learning_result_for_work(
+    result: ExternalItemLearningResult,
+    work: ExternalItemLearningWorkInput,
+) -> None:
+    """Close worker output over one exact source and its staged visual pages."""
+
+    source = work.source
+    validate_external_item_learning_result_for_source(
+        result,
+        source.input_sha256,
+        source.source_id,
+        source.source_revision_id,
+        source.external_number,
+    )
+    page_count = len(work.page_set.pages)
+    if any(region.physical_page > page_count for region in result.regions):
+        raise ValueError("creative learning region is outside the staged pages")

@@ -6,9 +6,11 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
+from eom_catalog_contracts.external_item_learning_result import ExternalItemLearningResult
 from eom_catalog_contracts.external_item_learning_work import (
     EXTERNAL_ITEM_LEARNING_WORK_INPUT_SCHEMA,
     ExternalItemLearningWorkInput,
+    validate_external_item_learning_result_for_work,
 )
 from eom_catalog_contracts.validation import validate_contract
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
@@ -16,6 +18,7 @@ from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
 from tests.unit.test_external_item_learning_pages_contract import _pages
+from tests.unit.test_external_item_learning_result_contract import _result
 from tests.unit.test_external_item_learning_source_contract import _source
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -107,3 +110,25 @@ def test_work_input_rejects_stale_outer_hash_and_untrusted_member_path() -> None
     _rehash(value)
     with pytest.raises(JsonSchemaValidationError):
         validate_contract(EXTERNAL_ITEM_LEARNING_WORK_INPUT_SCHEMA, value)
+
+
+def test_result_must_match_exact_work_source_and_staged_page_range() -> None:
+    work = ExternalItemLearningWorkInput.model_validate(_work())
+    raw_result = _result()
+    for field in ("input_sha256", "source_id", "source_revision_id", "external_number"):
+        raw_result[field] = getattr(work.source, field)
+    raw_result["result_sha256"] = content_sha256(
+        {key: value for key, value in raw_result.items() if key != "result_sha256"}
+    )
+    result = ExternalItemLearningResult.model_validate(raw_result)
+    validate_external_item_learning_result_for_work(result, work)
+
+    stale = result.model_copy(update={"external_number": "99999"})
+    with pytest.raises(ValueError, match="pinned source"):
+        validate_external_item_learning_result_for_work(stale, work)
+
+    regions = list(result.regions)
+    regions[0] = regions[0].model_copy(update={"physical_page": len(work.page_set.pages) + 1})
+    outside = result.model_copy(update={"regions": tuple(regions)})
+    with pytest.raises(ValueError, match="outside the staged pages"):
+        validate_external_item_learning_result_for_work(outside, work)
