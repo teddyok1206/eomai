@@ -16,6 +16,12 @@ namespace, 정렬 범위, 1,025건 합계, Graph/정책 pin 및 device-independe
 source/profile/input hash를 root descriptor와 대조한다. 합성 1,025건을 포함한
 집중 테스트는 80 PASS다. 이 검증 함수는 권한·원본 Artifact·전체 모집단을
 읽지 않으며, 그 세 경계를 맡을 Catalog application은 아직 구현되지 않았다.
+Catalog의 source-first metadata page SQL과 extra-row/중복 검증도 소스에
+추가했다. 기존 적격성 predicate를 재사용하며, page마다 최대 1,024개와
+경계 확인용 1개만 읽는다. 이 함수는 권한을 부여하거나 현재 정책의
+`maximum_sources`를 전체 모집단이 아닌 page 크기로 재해석하지 않는다.
+후속 정책·인가·전체 모집단 검증이 없으므로 운영에서 호출하거나 root를
+게시하지 않는다.
 
 ## 확인된 제한과 결정
 
