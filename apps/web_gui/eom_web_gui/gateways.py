@@ -1377,6 +1377,7 @@ class HttpApplicationGateway:
             "POST",
             f"/api/v1/item-db/external-sources/{source_id}/editions/{edition}/preview",
             params={"source_revision_id": source_revision_id},
+            headers={"Idempotency-Key": f"external-item-preview-v1:{source_revision_id}:{edition}"},
             timeout=330.0,
         )
         try:

@@ -231,11 +231,21 @@ def test_preview_prepare_and_download_require_current_source_and_intake_permissi
     )
     services.catalog_application.download_external_item_preview = Mock(return_value=media)
     path = f"/api/v1/item-db/external-sources/{SOURCE_ID}/editions/3/preview"
+    headers = {"Idempotency-Key": f"external-item-preview-v1:{REVISION_ID}:3"}
     try:
         with client:
-            stale = client.post(path, params={"source_revision_id": "extitemrev_" + "9" * 32})
+            stale = client.post(
+                path,
+                params={"source_revision_id": "extitemrev_" + "9" * 32},
+                headers={
+                    "Idempotency-Key": "external-item-preview-v1:extitemrev_" + "9" * 32 + ":3"
+                },
+            )
             assert stale.status_code == 409
-            prepared = client.post(path, params={"source_revision_id": REVISION_ID})
+            assert client.post(path, params={"source_revision_id": REVISION_ID}).status_code == 400
+            prepared = client.post(
+                path, params={"source_revision_id": REVISION_ID}, headers=headers
+            )
             pdf = client.get(path + ".pdf", params={"source_revision_id": REVISION_ID})
         assert prepared.status_code == 200
         assert prepared.json() == {"sha256": "sha256:" + "5" * 64}
@@ -252,7 +262,9 @@ def test_preview_prepare_and_download_require_current_source_and_intake_permissi
     denied_reads.detail.return_value = SimpleNamespace(entry=_entry())
     try:
         with denied_client:
-            denied = denied_client.post(path, params={"source_revision_id": REVISION_ID})
+            denied = denied_client.post(
+                path, params={"source_revision_id": REVISION_ID}, headers=headers
+            )
         assert denied.status_code == 403
     finally:
         denied_services.engine.dispose()

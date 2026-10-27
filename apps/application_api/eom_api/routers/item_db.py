@@ -14,7 +14,7 @@ from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Path, Query, Request
 from fastapi.responses import Response, StreamingResponse
 
-from eom_api.dependencies import Auth, require_permission
+from eom_api.dependencies import Auth, IdempotencyKey, require_permission
 from eom_api.errors import ApiError
 from eom_api.routers.common import many, one
 
@@ -253,11 +253,19 @@ def preview_external_source_document(
 def prepare_external_source_preview(
     request: Request,
     authentication: Auth,
+    idempotency_key: IdempotencyKey,
     source_id: str = Path(pattern=r"^extitem_[0-9a-f]{32}$"),
     edition: int = Path(ge=1, le=3),
     source_revision_id: str = Query(pattern=r"^extitemrev_[0-9a-f]{32}$"),
 ) -> dict[str, str]:
     _source_access(authentication)
+    if idempotency_key != f"external-item-preview-v1:{source_revision_id}:{edition}":
+        raise ApiError(
+            409,
+            "API_IDEMPOTENCY_CONFLICT",
+            "Idempotency key differs",
+            "The preview request key does not match its pinned source revision.",
+        )
     detail = request.app.state.services.external_item_db_reads.detail(source_id)
     if detail.entry.source_revision_id != source_revision_id:
         raise ApiError(
