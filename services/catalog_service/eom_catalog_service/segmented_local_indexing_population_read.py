@@ -115,6 +115,29 @@ class CandidateSourcePageDescriptor:
     source_analysis_sha256: str
 
 
+def segmented_source_selection_sha256(
+    graph_snapshot_revision_id: str,
+    policy_revision_id: str,
+    segments: tuple[CandidateSourcePageDescriptor, ...],
+) -> str:
+    """Canonical source/analysis population fingerprint shared by scan and closure."""
+    return content_sha256(
+        {
+            "graph_snapshot_revision_id": graph_snapshot_revision_id,
+            "policy_revision_id": policy_revision_id,
+            "segments": [
+                {
+                    "first_source_revision_id": segment.first_source_revision_id,
+                    "last_source_revision_id": segment.last_source_revision_id,
+                    "source_count": segment.source_count,
+                    "source_analysis_sha256": segment.source_analysis_sha256,
+                }
+                for segment in segments
+            ],
+        }
+    )
+
+
 def scan_segmented_candidate_sources(
     session: Session,
     intent: LocalIndexingSourceReadIntent,
@@ -176,20 +199,10 @@ def scan_segmented_candidate_sources(
     ):
         raise SegmentedPopulationReadError("SEGMENTED_POPULATION_READ_INCOMPLETE")
     segments = tuple(descriptors)
-    selection_sha256 = content_sha256(
-        {
-            "graph_snapshot_revision_id": intent.graph_snapshot.graph_snapshot_revision_id,
-            "policy_revision_id": selected_policy.access_policy_revision_id,
-            "segments": [
-                {
-                    "first_source_revision_id": segment.first_source_revision_id,
-                    "last_source_revision_id": segment.last_source_revision_id,
-                    "source_count": segment.source_count,
-                    "source_analysis_sha256": segment.source_analysis_sha256,
-                }
-                for segment in segments
-            ],
-        }
+    selection_sha256 = segmented_source_selection_sha256(
+        intent.graph_snapshot.graph_snapshot_revision_id,
+        selected_policy.access_policy_revision_id,
+        segments,
     )
     return SegmentedSourceSelection(
         graph_snapshot_revision_id=intent.graph_snapshot.graph_snapshot_revision_id,

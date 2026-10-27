@@ -22,6 +22,11 @@ namespace, 정렬 범위, 1,025건 합계, Graph/정책 pin 및 device-independe
 source/profile/input hash를 root descriptor와 대조한다. 합성 1,025건을 포함한
 집중 테스트는 80 PASS다. 이 검증 함수는 권한·원본 Artifact·전체 모집단을
 읽지 않으며, 그 세 경계를 맡을 Catalog application은 아직 구현되지 않았다.
+이후 content validator는 Catalog가 같은 root에서 산출한 `SegmentedSourceSelection`
+요약을 필수 인자로 받아 Graph·정책·전체 수·page descriptor 자체 hash를 root와
+대조한다. 단순히 root의 segment 합계가 맞는지만으로 전체 자료집을 닫지 않는다.
+호출자가 실제 권한 있는 scan을 수행했다는 증명은 이 순수 함수 밖의 application
+책임이며, 이 함수가 권한을 부여하거나 아직 없는 root publication을 대신하지 않는다.
 Catalog의 source-first metadata page SQL과 extra-row/중복 검증도 소스에
 추가했다. 기존 적격성 predicate를 재사용하며, page마다 최대 1,024개와
 경계 확인용 1개만 읽는다. 이 함수는 권한을 부여하거나 현재 정책의
