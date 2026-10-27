@@ -35,6 +35,7 @@
 - 각 원본의 `HWP → HWPX --strict`는 모두 발행 거부됐다. 각각 `control_removed=1`, `metadata_value_removed=2`의 보존 손실이 보고됐다. 두 손실 항목의 의미를 실제 문항 내용과 대조하기 전에는 변환 성공이라고 판정할 수 없다.
 - 비엄격 단일 변환 후보와 원본의 추출 본문 텍스트는 두 문항 모두 byte-for-byte 동일했다. 이는 문자 손실이 없다는 제한된 증거일 뿐, 제거된 control이나 화면 배치·그림 보존을 입증하지 않는다.
 - 같은 격리 조건에서 LibreOffice로 원본 HWP와 비엄격 HWPX를 각각 PDF/PNG로 렌더링해 직접 대조했다. 두 문항 모두 1페이지로 열리지만 표·텍스트의 위치가 달라졌고, **U 10318의 원본 기출 그림은 변환본에서 보이지 않는다**. LibreOffice 자체의 원본 HWP 배치도 완전하지 않아 Hancom 기준의 정밀 일치 판정은 아니지만, 이미지 소실이라는 명백한 음성 증거가 있으므로 비엄격 변환본의 발행을 차단한다.
+- U 10318 후보 ZIP에는 `BinData/image1.bmp`, `image2.bmp`가 실제로 포함되고 section XML에도 두 `binaryItemIDRef`가 있다. 즉 파일 안에 그림 bytes가 아예 없는 문제로 단정할 수 없고, HWP→HWPX의 개체/배치 참조와 독립 renderer 해석을 함께 조사해야 한다. 앞서 확인한 서로 다른 원본 HWPX 병합 시 ID 충돌 문제와도 구분한다.
 - 두 원본을 순서대로 합친 **비엄격 조사 후보**는 구조 검증을 통과했지만, `control_removed=2`, `document_metadata_superseded=1`, `gso_object_id_renumbered=6`, `metadata_value_removed=2`가 기록됐다. ZIP/HWPX 구조 유효성은 서식·개체 보존이나 한글 편집 품질의 증거가 아니다. 이 후보는 `/tmp/eom-assembly-10310-10318.K22gDu/merged.nonstrict.hwpx`에만 있고 정식 Artifact로 등록·배포하지 않았다.
 - 기존 EOM content-team 시험지 병합기는 서로 다른 원본 문서의 style을 안전하게 재매핑하지 못하면 `content-team cross-style remapping is unsupported`로 중단한다. 따라서 두 원본을 그 병합기에 강제로 넣지 않는다.
 
