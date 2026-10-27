@@ -370,6 +370,18 @@ def test_catalog_page_requires_clean_active_root_before_authority(owner) -> None
     owner.iam.assert_not_called()
 
 
+def test_catalog_page_rejects_read_committed_before_authority(owner) -> None:
+    _segmented_owner(owner)
+    _page_session(owner, ())
+    owner.session.connection = lambda: SimpleNamespace(get_isolation_level=lambda: "READ COMMITTED")
+    with pytest.raises(SegmentedPopulationReadError, match="CONTEXT_INVALID"):
+        read_segmented_candidate_source_page(
+            cast(Session, owner.session), owner.intent, authority=owner.authority
+        )
+    owner.iam.assert_not_called()
+    owner.session.execute.assert_not_called()
+
+
 def test_complete_1025_source_scan_retains_only_page_descriptors(owner) -> None:
     _segmented_owner(owner)
     rows = tuple(

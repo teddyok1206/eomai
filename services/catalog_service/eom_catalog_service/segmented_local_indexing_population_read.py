@@ -65,6 +65,12 @@ def read_segmented_candidate_source_page(
     ):
         raise SegmentedPopulationReadError("SEGMENTED_POPULATION_READ_CONTEXT_INVALID")
     try:
+        if session.connection().get_isolation_level() not in {
+            "REPEATABLE READ",
+            "SERIALIZABLE",
+        }:
+            # READ COMMITTED takes a new snapshot at every page boundary.
+            raise SegmentedPopulationReadError("SEGMENTED_POPULATION_READ_CONTEXT_INVALID")
         statement = candidate_source_page_statement(
             intent, after_source_revision_id=after_source_revision_id
         )
@@ -123,14 +129,6 @@ def scan_segmented_candidate_sources(
     """
     root = session.get_transaction()
     if root is None or not root.is_active or intent.analysis_run_ids or intent.source_revision_ids:
-        raise SegmentedPopulationReadError("SEGMENTED_POPULATION_READ_CONTEXT_INVALID")
-    try:
-        isolation = session.connection().get_isolation_level()
-    except SQLAlchemyError:
-        raise SegmentedPopulationReadError("SEGMENTED_POPULATION_READ_UNAVAILABLE") from None
-    if isolation not in {"REPEATABLE READ", "SERIALIZABLE"}:
-        # READ COMMITTED takes a new snapshot for every page; a concurrent
-        # insertion could otherwise be skipped by the source-first cursor.
         raise SegmentedPopulationReadError("SEGMENTED_POPULATION_READ_CONTEXT_INVALID")
     descriptors: list[CandidateSourcePageDescriptor] = []
     selected_policy: SegmentedLocalIndexingAccessPolicy | None = None
