@@ -92,9 +92,10 @@ def resolve_curated_external_document(
         or revision.external_number != source.external_number
         or revision.import_id != imported.import_id
         or imported.state != "COMPLETED"
+        or source.source_namespace != imported.source_namespace
         or revision.match_status not in _READY_STATES
         or binding.source_file_id != revision.selected_source_file_id
-        or binding.match_status not in _READY_STATES
+        or binding.match_status != revision.match_status
         or binding.source_revision_id != revision.revision_id
         or binding.document_sha256 != document.sha256
         or document.media_type != _SOURCE_MEDIA[selection.source_format]

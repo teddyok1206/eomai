@@ -35,6 +35,7 @@ def _rows() -> tuple[SimpleNamespace, ...]:
         SimpleNamespace(
             source_id=selection.source_id,
             current_revision_id=selection.source_revision_id,
+            source_namespace="notion-integrated-science",
             external_number="10310",
         ),
         SimpleNamespace(
@@ -46,7 +47,11 @@ def _rows() -> tuple[SimpleNamespace, ...]:
             match_status="MATCHED_DETECTED_HWPX",
             selected_source_file_id=source_file_id,
         ),
-        SimpleNamespace(import_id="extimport_" + "6" * 32, state="COMPLETED"),
+        SimpleNamespace(
+            import_id="extimport_" + "6" * 32,
+            source_namespace="notion-integrated-science",
+            state="COMPLETED",
+        ),
         SimpleNamespace(
             source_revision_id=selection.source_revision_id,
             source_file_id=source_file_id,
@@ -135,6 +140,15 @@ def test_curated_source_rejects_stale_or_changed_pointer_before_build() -> None:
     with pytest.raises(CuratedDocumentAssemblySourceError) as changed:
         resolve_curated_external_document(session, media, _selection())  # type: ignore[arg-type]
     assert changed.value.code == "CURATED_SOURCE_POINTER_INVALID"
+    assert not media.opened
+
+    row = _rows()
+    row[3].match_status = "MATCHED"
+    session = _Session(row)
+    media = _Media(row)
+    with pytest.raises(CuratedDocumentAssemblySourceError) as inconsistent:
+        resolve_curated_external_document(session, media, _selection())  # type: ignore[arg-type]
+    assert inconsistent.value.code == "CURATED_SOURCE_POINTER_INVALID"
     assert not media.opened
 
     row = _rows()
