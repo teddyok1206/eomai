@@ -27,6 +27,8 @@ from eom_catalog_service.models import ContentIntakeSourceFileRecord
 
 _WORKBOOK_MAX_BYTES = 100 * 1024 * 1024
 _CHUNK_BYTES = 1024 * 1024
+_SOURCE_OWNER_TYPE = "other"
+_SOURCE_OWNER_REFERENCE = "notion-export-owner-unverified"
 
 
 class ExternalItemIntakeError(ValueError):
@@ -61,6 +63,8 @@ class ExternalItemArchiveIntakeService:
                 batch_name="external-item-notion-integrated-science-workbook",
                 received_by=received_by,
                 purpose="Source-only external Item workbook; no Item Registry admission",
+                source_owner_type=_SOURCE_OWNER_TYPE,
+                source_owner_reference=_SOURCE_OWNER_REFERENCE,
                 source_declarations=(
                     IntakeSourceDeclaration(
                         normalized_relative_path="workbook.xlsx",
@@ -134,6 +138,8 @@ class ExternalItemArchiveIntakeService:
                     batch_name=f"external-item-notion-integrated-science-archive-{number:02d}",
                     received_by=received_by,
                     purpose=f"Source-only external Item archive {inventory.archive_sha256}",
+                    source_owner_type=_SOURCE_OWNER_TYPE,
+                    source_owner_reference=_SOURCE_OWNER_REFERENCE,
                     source_declarations=declarations,
                 )
             with self.sessions() as session:

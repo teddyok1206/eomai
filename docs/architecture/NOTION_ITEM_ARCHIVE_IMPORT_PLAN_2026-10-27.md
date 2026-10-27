@@ -23,6 +23,10 @@
 
 ## 3. 책임·정본·식별자
 
+연결 예외 14건의 행·고유번호·교정본 셀·원본 링크 파일명·동일 번호 후보 SHA와 검수 조건은 [연결 예외 검수 기록](../operations/NOTION_ITEM_LINK_EXCEPTIONS_2026-10-27.md)에 고정한다. 후보는 자동 연결·Item 승격·Graph 게시에서 제외한다.
+
+이 외부 아카이브의 실제 권리자·소유자는 현재 검증되지 않았다. Intake의 내부 기본값인 팀장 소유를 상속하면 출처가 허위로 기록되므로, source-only Intake에서는 `source_owner_type=other`, `source_owner_reference=notion-export-owner-unverified`로 명시한다. 이는 이용 권한의 추가 승인이나 소유자 확정이 아니며, 확인되면 새 출처 결정과 revision으로 남긴다.
+
 ```text
 원본 XLSX (Content Intake Artifact Revision) + ZIP 해시 고정 운송 봉투
   -> 허용된 HWP/HWPX/관련 자료 멤버만 검증·분할 Intake
