@@ -151,6 +151,18 @@ Catalog의 `resolve_curated_external_document`는 source-only 배치 항목에 �
 
 추가 격리 표본(같은 날): [hwp-cli 1.3.1](https://github.com/STAIxBWLB/hwp-cli)의 릴리스 바이너리를 공식 SHA-256과 대조해 임시 폴더에서만 실행했다. `eom-image` 격리 서비스의 HWP `12109`→HWPX 변환은 성공했고 ZIP 검사와 자체 `validate`를 통과했다. 원본과 변환본의 문단 59개·표 개수는 같았지만 `compare`에서는 도형 컨트롤 종류 2건이 달랐고, 자체 렌더에는 글꼴 누락·shaping 실패 경고가 있어 시각 동등성은 입증되지 않았다. 더 중요한 합본 실험에서는 원본 HWP `12109`와 다른 템플릿의 HWPX `10991`을 `merge --strict`로 순서대로 결합했으나 보존 불가 이벤트 13건(`control_removed` 1, `document_metadata_superseded` 1, `document_package_passthrough_dropped` 4, `gso_object_id_renumbered` 5, `metadata_value_removed` 2) 때문에 **성공 출력을 발행하지 않고 거부**했다. 원래부터 HWPX인 `10991`+`11436`조차 엄격 병합에서는 metadata/package/도형 ID 관련 이벤트 9건으로 거부됐다. 비엄격 병합은 ZIP/HWPX 자체 검사만 통과하며 원문 내용·레이아웃 동등성을 증명하지 못하므로 운영 출력으로 승격하지 않았다. 이는 원본을 이미지로 만드는 우회 없이 이질 문서를 안전하게 합칠 수 있다는 증거가 아니다. 비엄격 합본으로 경고를 숨기거나 새 바이너리를 운영에 설치하지 않는다. 한글 육안·수식/도형·페이지 순서와 손실 원인별 허용 기준을 먼저 정한 뒤, 공식 Builder adapter와 회귀 표본을 추가해야 한다.
 
+#### 편집 가능한 합본의 후속 acceptance 경계
+
+2026-10-27 재점검: 외부 후보의 [공식 명령 설명](https://github.com/STAIxBWLB/hwp-cli#command-reference)은 `merge`가 입력마다 section을 만드는 **재작성** 경로이며 `--strict`/`--loss-report`를 제공한다고 설명한다. 같은 문서의 제한 사항은 HWPX 출력이 바이트 동일 복제가 아닌 의미상 재생성이고, HWP↔HWPX의 도형·수식·OLE 보존 범위에 한계가 있음을 명시한다. 따라서 ZIP 구조 검증이나 `merge`의 종료 코드만으로 원본 시험 문항의 동등성·편집성을 승인할 수 없다. 후보 CLI는 기존 Builder의 격리된 **선택적 변환 adapter**로만 고려하고, 기존 동질 템플릿 시험지 renderer는 변경하지 않는다.
+
+1. Catalog가 저장된 `curated-document-assembly-manifest/1.0`을 현재 operator 권한과 원본/Item/Graph revision·hash로 **빌드 직전에 다시 해석**한다. Builder는 임의 NAS 경로가 아니라 검증된 로컬 staging만 받는다. 같은 assembly revision, renderer profile/version, 변환기 binary hash, 입력 Artifact Revision·hash의 조합으로 빌드 멱등성을 고정한다.
+2. 각 source-only HWP는 원본 바이트를 보존하면서 별도의 편집 가능한 HWPX segment로 변환한다. 이미 HWPX인 원본도 신뢰하지 않고 ZIP/XML·내부 relationship·external reference·media/hash·section 자원 제한을 검사한다. 변환 단계의 구조 비교는 문단 **텍스트와 순서**, 표의 행/열/병합·셀 텍스트, 수식 스크립트/객체, 그림·도형·캡션·페이지 설정을 각각 기록한다. 파서가 읽지 못한 컨트롤은 `동등`이 아니라 `UNVERIFIED`다.
+3. 합본 후보는 정확한 입력 순서를 유지하고, 각 입력의 style/header/numbering·도형 ID·media relationship을 충돌 없이 재매핑해야 한다. `document_metadata_superseded` 같은 문서 전체 속성 변경도 실제 페이지 설정에 영향을 주는지 검사한다. `control_removed`, 수식/그림/표 누락, 외부 파일 relationship, unresolved ID는 무조건 실패다. `package_passthrough_dropped`는 이름만으로 허용하지 않고 대상 member와 의미를 확인한다. 비엄격 합본은 이 검사를 우회하는 성공 경로가 아니다.
+4. 출력 검증은 합본을 다시 section별로 나눠 각 segment의 구조·텍스트·표·수식·이미지와 비교하고, 전체 HWPX ZIP/core/relationship 및 출력 SHA를 검증한다. 원본과 합본의 파생 PDF/페이지 그림은 같은 고정 변환 환경에서 페이지 순서와 시각적 차이를 비교한다. 자동 비교가 한글 표시·편집 품질을 증명하지 못하는 첫 대표 표본은 실제 한글에서 열어 글·표·수식·그림이 선택/편집되는지 확인한 별도 수동 receipt가 필요하다.
+5. 자동·수동 검증을 통과한 경우에만 Manager가 불변 build result와 정확한 다운로드 Artifact를 commit한다. 어느 배치라도 실패하면 전체 성공 pointer를 만들지 않고 원본 Assembly Revision과 실패 진단을 보존한다. HWPX 변환 불가를 PNG 페이지 삽입으로 조용히 대체하지 않는다. 원본 전용 문항을 정본 Item으로 바꾸지도 않는다.
+
+첫 구현 순서는 **두 원래 HWPX 문항의 보존 가능성 검증 → HWP+HWPX 혼합의 변환·합본 검증 → Builder/Manager의 저장본 입력·불변 출력 연결 → 인증 다운로드/한글 육안 확인**이다. 대상별 중단·재전송은 새 identity를 발급해 중복 빌드하지 않고 기존 상태기계에서 복구한다. 실제 후보 검증이 실패한 문서 종류는 지원한다고 표시하지 않고 명시적 차단 사유로 남긴다.
+
 HWP/HWPX 화면 미리보기는 기존 Catalog의 격리된 Office→PDF 변환 경계를 재사용하고, 파생 PDF를 별도 Artifact Revision으로 연결한다. 변환 실패는 `미리보기 불가`로 표시하되 원본 다운로드와 메타데이터 조회를 계속 허용한다. 원본을 변환 PDF로 대체하거나 변환만으로 내용이 정확하다고 승인하지 않는다. 구조화된 본문·정답·해설 추출은 별도 제안/검토를 거쳐 기존 `AssessmentItemContent` 계약과 Registry 등록·승인 상태기계를 통과한다. source-only 문항을 HWPX 빌드·GraphRAG·유사도·출판 대상으로 자동 포함하지 않는다.
 
 ### 원본 문서 미리보기의 파생 Artifact 결정
