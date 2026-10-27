@@ -392,7 +392,11 @@ def _publish_rows(
             for link in row.edition_links
         )
         publication_pointers.append((source, revision.revision_id))
-    session.add_all([*new_revisions, *edition_documents])
+    # SQLAlchemy cannot infer ordering from scalar FK IDs alone. Persist every
+    # immutable revision before its edition-document children reach PostgreSQL.
+    session.add_all(new_revisions)
+    session.flush()
+    session.add_all(edition_documents)
     session.flush()
     for source, revision_id in publication_pointers:
         source.current_revision_id = revision_id

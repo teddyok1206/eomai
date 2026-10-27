@@ -382,8 +382,10 @@ fi
 if [[ "${action}" == "external-item-tests" ]]; then
   export EOM_RUN_API_INTEGRATION=1
   export EOM_EXTERNAL_ITEM_TEST_STATE="${state_directory}"
-  "${PYTHON}" -m pytest -q tests/integration/test_external_item_db_search.py
-  printf 'Disposable external Item DB search tests passed.\n'
+  "${PYTHON}" -m pytest -q \
+    tests/integration/test_external_item_db_search.py \
+    tests/integration/test_external_item_import_publication.py
+  printf 'Disposable external Item DB search and publication tests passed.\n'
   exit 0
 fi
 

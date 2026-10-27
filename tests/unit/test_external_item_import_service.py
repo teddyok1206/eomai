@@ -132,8 +132,8 @@ def test_atomic_publication_creates_only_external_source_revisions() -> None:
     _publish_rows(session, manifest)
     imported = session.add.call_args_list[0].args[0]
     source = session.add.call_args_list[1].args[0]
-    revision = session.add_all.call_args.args[0][0]
-    edition = session.add_all.call_args.args[0][1]
+    revision = session.add_all.call_args_list[0].args[0][0]
+    edition = session.add_all.call_args_list[1].args[0][0]
     assert isinstance(imported, ExternalItemImportRecord)
     assert imported.mapping_document["mapping_revision_id"] == manifest.mapping.mapping_revision_id
     assert isinstance(source, ExternalItemSourceRecord)
@@ -144,3 +144,4 @@ def test_atomic_publication_creates_only_external_source_revisions() -> None:
     assert revision.selected_source_file_id == manifest.rows[0].selected_source_file_id
     assert source.current_revision_id == revision.revision_id
     assert revision.revision_number == 1
+    assert session.flush.call_count == 3
