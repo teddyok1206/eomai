@@ -77,6 +77,7 @@ def resolve_curated_registered_items(
         select(ItemRevisionRecord, ItemRecord)
         .join(ItemRecord, ItemRecord.item_id == ItemRevisionRecord.item_id)
         .where(ItemRevisionRecord.item_revision_id.in_(revision_ids))
+        .order_by(ItemRecord.item_id)
         .with_for_update(read=True, of=ItemRecord)
     ).all()
     by_revision = {revision.item_revision_id: (revision, item) for revision, item in item_rows}
