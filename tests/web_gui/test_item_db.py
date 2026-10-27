@@ -1,6 +1,10 @@
 """Legacy source DB BFF and visible-key boundary."""
 
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 from tests.web_gui.helpers import login, make_client
 
@@ -119,3 +123,34 @@ def test_db_screen_shows_business_number_but_hides_internal_db_ids() -> None:
     assert "detail.entry.source_revision_id" in javascript  # pinned only in authenticated URL
     assert 'node(document, "p", "", detail.entry.source_revision_id)' not in javascript
     assert 'if (["U", "L", "M", "N"].includes(cell.column)) continue;' in javascript
+
+
+def test_db_assembly_draft_distinguishes_original_files_from_registered_items() -> None:
+    html = (ROOT / "apps/web_gui/eom_web_gui/static/index.html").read_text(encoding="utf-8")
+    javascript = (ROOT / "apps/web_gui/eom_web_gui/static/item-db.js").read_text(encoding="utf-8")
+    draft = (ROOT / "apps/web_gui/eom_web_gui/static/item-db-draft.js").read_text(encoding="utf-8")
+    assert 'id="item-db-draft-list"' in html
+    assert "아직 합본 파일을 만들거나 문항을 승인하지 않습니다." in html
+    assert 'placement_kind: "EXTERNAL_SOURCE_DOCUMENT"' in draft
+    assert '"PAST_EXAM_ITEM_REVISION" : "REGISTERED_ITEM_REVISION"' in javascript
+    assert "source_revision_id: detail.entry.source_revision_id" in draft
+    assert "graph_snapshot_revision_id: entry.graph_snapshot_revision_id" in javascript
+    assert "createItemDbDraft()" in javascript
+    assert "const keys = new Set()" in draft
+    assert "ordered.splice(index, 1)" in draft
+
+
+def test_db_assembly_draft_order_and_deduplication_in_browser_model() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node runtime is unavailable")
+    completed = subprocess.run(
+        [node, "--experimental-default-type=module", "tests/web_gui/item_db_draft_checks.mjs"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "item_db_draft=PASS" in completed.stdout

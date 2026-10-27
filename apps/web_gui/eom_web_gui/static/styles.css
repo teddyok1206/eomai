@@ -370,6 +370,11 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .item-db-filter-rows { display: grid; gap: 8px; }
 .item-db-filter-row { display: grid; grid-template-columns: minmax(130px, 1.2fr) minmax(120px, .8fr) minmax(160px, 2fr) auto; gap: 8px; align-items: center; }
 .item-db-filter-row input { width: 100%; }
+.item-db-draft-note { margin: 0 0 12px; color: var(--eom-text-muted); }
+.item-db-draft-list { display: grid; gap: 8px; margin: 0; padding-left: 32px; }
+.item-db-draft-list li { padding: 10px 12px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); }
+.item-db-draft-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.item-db-draft-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .item-bank-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; margin-top: 14px; }
 .item-bank-card { display: grid; gap: 11px; padding: 15px; border: 1px solid var(--eom-border); border-radius: 11px; background: #fff; }
 .item-bank-card header { display: flex; justify-content: space-between; gap: 12px; align-items: start; }

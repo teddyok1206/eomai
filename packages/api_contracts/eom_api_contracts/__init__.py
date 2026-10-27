@@ -33,6 +33,12 @@ from eom_api_contracts.common import (
     ResponseMeta,
     SingleResponse,
 )
+from eom_api_contracts.curated_document_assembly import (
+    CuratedDocumentAssemblyDraftV1,
+    ExternalSourcePlacement,
+    PastExamItemPlacement,
+    RegisteredItemPlacement,
+)
 from eom_api_contracts.curriculum import (
     AssessmentItemOccurrenceView,
     AssessmentItemOccurrenceViewV2,
@@ -214,6 +220,7 @@ __all__ = [
     "CreateMockExamAssemblyRequest",
     "CreatePdfDocumentReviewUploadIntentRequest",
     "CreatePlannedMockExamAssemblyRequest",
+    "CuratedDocumentAssemblyDraftV1",
     "CurriculumGraphCapabilityView",
     "CurriculumRetrievalScopeInput",
     "CustomerSupportActionView",
@@ -251,6 +258,7 @@ __all__ = [
     "ExternalItemDbDetailView",
     "ExternalItemDbEditionView",
     "ExternalItemDbEntryView",
+    "ExternalSourcePlacement",
     "FinalizeEducationalQualitySessionCommand",
     "HwpxBuildOptions",
     "HwpxBuildState",
@@ -302,6 +310,7 @@ __all__ = [
     "PairedDocumentReviewDocumentView",
     "PairedDocumentReviewPageView",
     "PairedDocumentReviewView",
+    "PastExamItemPlacement",
     "PdfDocumentReviewPageView",
     "PdfDocumentReviewResultArtifactView",
     "PdfDocumentReviewState",
@@ -319,6 +328,7 @@ __all__ = [
     "ProductionItemContentComponentView",
     "ProductionItemContentComponentViewV2",
     "ProductionPastExamContextView",
+    "RegisteredItemPlacement",
     "ResolveEducationalQualityDisagreementCommand",
     "ResponseMeta",
     "SingleResponse",

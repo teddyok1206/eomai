@@ -1,3 +1,5 @@
+import {createItemDbDraft, selectedFinalSourcePlacement} from "./item-db-draft.js";
+
 const MATCH_LABELS = Object.freeze({
   MATCHED: "최종 파일 연결됨",
   MATCHED_DETECTED_HWPX: "최종 파일 연결됨 · HWPX",
@@ -43,6 +45,55 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
   let loaded = false;
   let lastSourceAccess = null;
   let sequence = 0;
+  const draft = createItemDbDraft();
+
+  function renderDraft() {
+    const root = $("#item-db-draft-list");
+    root.replaceChildren();
+    const entries = draft.entries();
+    $("#item-db-draft-count").textContent = `${entries.length}개`;
+    $("#item-db-draft-empty").hidden = entries.length > 0;
+    entries.forEach((selection, index) => {
+      const line = node(document, "li", "item-db-draft-row");
+      const label = node(document, "span", "", selection.label);
+      const actions = node(document, "span", "item-db-draft-actions");
+      for (const [caption, next] of [
+        ["위로", index - 1], ["아래로", index + 1],
+      ]) {
+        const button = node(document, "button", "button quiet", caption);
+        button.type = "button";
+        button.disabled = next < 0 || next >= entries.length;
+        button.addEventListener("click", () => {
+          draft.move(index, next);
+          renderDraft();
+        });
+        actions.append(button);
+      }
+      const remove = node(document, "button", "button quiet", "빼기");
+      remove.type = "button";
+      remove.addEventListener("click", () => {
+        draft.remove(index);
+        renderDraft();
+      });
+      actions.append(remove);
+      line.append(label, actions);
+      root.append(line);
+    });
+  }
+
+  function addToDraft(pointer, label) {
+    const result = draft.add(pointer, label);
+    if (result === "DUPLICATE") {
+      message("이미 조립 목록에 담긴 문항입니다.");
+      return;
+    }
+    if (result === "FULL") {
+      message("조립 초안에는 문항을 최대 200개까지 담을 수 있습니다.", true);
+      return;
+    }
+    renderDraft();
+    message("조립 순서 초안에 담았습니다. 아직 HWPX를 만들지는 않았습니다.");
+  }
 
   function message(value, error = false) {
     const element = $("#item-db-message");
@@ -146,7 +197,20 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
     const button = node(document, "button", "button secondary", "문항 보기");
     button.type = "button";
     button.addEventListener("click", () => openRegisteredItem(entry));
-    card.append(heading, units, state, button);
+    const select = node(document, "button", "button quiet", "조립 목록에 담기");
+    select.type = "button";
+    select.disabled = !entry.hwpx_exam_eligible;
+    if (select.disabled) select.title = "이 문항 버전은 현재 HWPX 조립 대상이 아닙니다.";
+    select.addEventListener("click", () => addToDraft({
+      placement_kind: entry.source_class === "PAST_EXAM"
+        ? "PAST_EXAM_ITEM_REVISION" : "REGISTERED_ITEM_REVISION",
+      item_id: entry.item_id,
+      item_revision_id: entry.item_revision_id,
+      item_manifest_sha256: entry.item_manifest_sha256,
+      graph_snapshot_revision_id: entry.graph_snapshot_revision_id,
+      graph_snapshot_sha256: entry.snapshot_sha256,
+    }, `${source} · ${display}`));
+    card.append(heading, units, state, button, select);
     return card;
   }
 
@@ -249,6 +313,17 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
         editions.append(line);
       }
       root.append(editions);
+      const placement = selectedFinalSourcePlacement(detail);
+      if (placement) {
+        const chosen = detail.editions.find((edition) => edition.edition === placement.edition);
+        if (chosen) {
+          const select = node(document, "button", "button secondary", "조립 목록에 담기");
+          select.type = "button";
+          select.addEventListener("click", () => addToDraft(placement,
+            `창작 원본 ${detail.entry.external_number} · ${chosen.edition}교 · ${chosen.filename}`));
+          root.append(select);
+        }
+      }
       const metadata = node(document, "dl", "inspector-list item-db-metadata");
       for (const cell of detail.cells) {
         // The original U value is shown once in the heading; L/M/N are filenames above.
@@ -301,6 +376,7 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
 
   return Object.freeze({
     install() {
+      renderDraft();
       $("#item-db-source").addEventListener("change", () => {
         syncSourceControls();
         load(true);
