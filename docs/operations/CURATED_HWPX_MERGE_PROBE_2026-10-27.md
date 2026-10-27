@@ -19,6 +19,8 @@
 
 정식 출력과 분리된 진단용 임시 사본에서 이 단일 section 참조만 `image1_2`로 고쳐 LibreOffice PDF로 다시 렌더하자 노트북 그림과 제품 사양 표가 다시 나타났다. 진단 PDF SHA-256은 `2521f75e757aad1a4eb85316a2264cb5064db456eed8248fba829927f38e0cd1`다. 이 1건은 결함 원인을 확인하는 실험이지, 임의 HWPX 전체의 정확성이나 합본 출력 승인은 아니다. 정식 Builder는 manifest ID/멤버명 충돌과 **모든 section의 해당 참조를 함께 재매핑**하고, 재매핑 전후의 정확한 media hash·참조 해결·시각 차이를 자동 검증해야 한다. 원본 11436 및 기존 저장된 조립 revision은 수정하지 않았다.
 
+후속 소스 후보 `eom_hwpx_builder.curated_binary_lineage`는 원본별 단일 section과 병합 후보의 section 수·참조 노드 순서를 확인한 뒤, manifest member의 **SHA-256과 media type 쌍**으로 각 binary 참조를 별도 출력 후보에 재매핑한다. 누락된 원본 바이트, 참조 개수/노드 종류 불일치, 기존 출력 덮어쓰기는 거부한다. 10991+11436 실제 병합 후보에서 `position=2, image1→image1_2` 한 건을 찾아 새 후보를 만들었고, 정확한 원본 media lineage를 다시 확인했다. 집중 및 기존 시험지 합본 회귀 21건이 통과했다. 이 helper는 아직 공식 Manager/Builder 실행 또는 운영 서비스에 연결하지 않았으며, **그림 참조만** 검증한다. 위의 전체 시각·수식·표·편집 품질 게이트를 대체하지 않는다.
+
 ## 판정과 후속 경계
 
 `curated-document-assembly`의 저장·재열기만 운영에서 제공한다. 현재 후보 변환기의 비엄격 합본을 편집 가능한 정식 출력으로 배포하지 않는다. 다음 구현은 확인된 binary manifest ID 충돌과 section 참조 재매핑부터 회귀 테스트로 고정한 후, style/header/section/도형 자원까지 검증하고 원본 구조를 가능한 한 보존하는 package-level 경계를 비교한다. 교정한 병합기는 원본별 텍스트·표·수식·그림·페이지 설정과 실제 편집성을 비교하는 acceptance를 통과해야 한다. 구조 검사나 손실 코드의 단순 허용 목록은 대체 증거가 아니다.
