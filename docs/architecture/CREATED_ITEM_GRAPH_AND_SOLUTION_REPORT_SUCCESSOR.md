@@ -122,6 +122,14 @@ caller root transaction 안에서 기존 Workflow unique/idempotency 저장 → 
 
 다음 작업은 **실제 인증을 받는 한 준비 entry point**에 Catalog 원본 읽기 → Orchestrator 격리 렌더/페이지 게시 → 기존 control evaluation/release → 저장 Workflow/plan/READY step과 실행 전 materialization을 연결하는 것이다. 이 entry point는 마지막에 시작 명령을 enqueue하지 않는다. 임의 operator ID나 옛 session을 만들어 넣지 않고 기존 identity service의 실제 인증과 현재 권한을 사용해야 한다. source helper 또는 DRAFT만 만든 상태를 최종 준비 완료로 보고하지 않는다.
 
+19:50 UTC 패키지 checkpoint: source commit `42f265b03bf7b66d819aaae51404f12bd825dde1`을 푸시하고 기존 `scripts/api/deploy_release.sh --build-only`를 통과했다. source archive/wheel RECORD 및 설치 simulation PASS. 추가로 새 창작 모듈 6개를 **wheel에서만** 불러와 각 모듈 경로가 임시 설치본 아래인지 확인했고, `workflow-role/1.33.0` 입력 및 support 풀로 고정된 V27 스키마를 로드했다. Codex 호출·운영 설치·서비스 재시작은 없다.
+
+- build directory: `/tmp/eom-api-build/42f265b03bf7b66d819aaae51404f12bd825dde1.fEhf10/dist`
+- `eom_platform-0.1.0-py3-none-any.whl`: `sha256:7764421550fda9707b9af70461fc35872ff9314e0ac8360c8ca44eb7c35ae1cd`
+- `eom_application_api-0.1.0-py3-none-any.whl`: `sha256:770a8e5b7ce648a15d51f9916c6a956508b0f310f8c32946e15a3465d2bd4eeb`
+
+위 build는 운영 release가 아니라 **후속 연결 구현 전 소스 후보의 설치 검증**이다. runtime activation이나 슬롯 준비 완료의 대체 증거로 사용하지 않는다. GPU INDEX는 마지막 19:42 UTC 조회에서 동일 PID `734655`와 시작 시각 `2026-10-26 00:32:30 UTC`, active/running을 유지했다.
+
 ## 필수 설계 절차
 
 1. **책임과 경계:** Catalog application은 exact 외부 원본→정본 Item 승격 근거, 승인, 분석, 보고서, Graph 게시를 조정한다. Orchestrator만 worker 실행과 Artifact commit을 지휘한다. worker는 DB/NAS에 직접 쓰지 않는다. Web/API는 typed 명령과 조회만 제공한다.
