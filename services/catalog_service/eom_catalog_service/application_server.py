@@ -6,6 +6,7 @@ import contextlib
 import grp
 import hashlib
 import json
+import logging
 import os
 import pwd
 import socket
@@ -241,6 +242,7 @@ from eom_catalog_service.workflow_similarity_read_service import (
     CatalogWorkflowSimilarityReadService,
 )
 
+_LOGGER = logging.getLogger(__name__)
 CATALOG_APPLICATION_SOCKET = Path(CATALOG_APPLICATION_SOCKET_PATH)
 MAX_MESSAGE_BYTES = CATALOG_APPLICATION_MAX_MESSAGE_BYTES
 SOCKET_MODE = CATALOG_APPLICATION_SOCKET_MODE
@@ -726,7 +728,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             if raw_operation == "READ_CURATED_DOCUMENT_ASSEMBLY":
                 try:
                     validate_contract("catalog-curated-document-assembly-read-request-v1", value)
-                    assembly_query = CuratedDocumentAssemblyReadQueryV1.model_validate(value)
+                    assembly_read_query = CuratedDocumentAssemblyReadQueryV1.model_validate(value)
                 except (JsonSchemaValidationError, ValidationError, ValueError):
                     self.server.write_curated_document_assembly_read_response(
                         self.wfile,
@@ -736,12 +738,12 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                         ),
                     )
                     return
-                self._read_curated_document_assembly(assembly_query)
+                self._read_curated_document_assembly(assembly_read_query)
                 return
             if raw_operation == "LIST_CURATED_DOCUMENT_ASSEMBLIES":
                 try:
                     validate_contract("catalog-curated-document-assembly-list-request-v1", value)
-                    assembly_query = CuratedDocumentAssemblyListQueryV1.model_validate(value)
+                    assembly_list_query = CuratedDocumentAssemblyListQueryV1.model_validate(value)
                 except (JsonSchemaValidationError, ValidationError, ValueError):
                     self.server.write_curated_document_assembly_list_response(
                         self.wfile,
@@ -752,7 +754,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                         ),
                     )
                     return
-                self._list_curated_document_assemblies(assembly_query)
+                self._list_curated_document_assemblies(assembly_list_query)
                 return
             if raw_operation == "GET_ITEM_COMPONENT_MEDIA":
                 try:
@@ -1198,7 +1200,15 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 response = CuratedDocumentAssemblyCreateResponseV1(
                     status="ERROR", error_code=exc.code
                 )
-            except Exception:
+            except Exception as exc:
+                # The private boundary must not expose source content or SQL text,
+                # but an unexpected failure still needs a safe operator breadcrumb.
+                _LOGGER.error(
+                    "curated assembly create failed request_id=%s exception=%s sqlstate=%s",
+                    command.request_id,
+                    type(exc).__name__,
+                    getattr(getattr(exc, "orig", None), "sqlstate", None),
+                )
                 response = CuratedDocumentAssemblyCreateResponseV1(
                     status="ERROR",
                     error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,

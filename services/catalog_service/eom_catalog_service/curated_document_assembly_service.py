@@ -72,12 +72,10 @@ class CuratedDocumentAssemblyService:
             with transaction(self.sessions) as session:
                 actor = self._authorized_actor(session, actor)
                 existing = session.scalar(
-                    select(CuratedDocumentAssemblyRevisionRecord)
-                    .where(
+                    select(CuratedDocumentAssemblyRevisionRecord).where(
                         CuratedDocumentAssemblyRevisionRecord.created_by == actor.actor_id,
                         CuratedDocumentAssemblyRevisionRecord.idempotency_key == idempotency_key,
                     )
-                    .with_for_update(read=True)
                 )
                 if existing is not None:
                     return self._replay(session, existing, draft, actor, request_sha256)

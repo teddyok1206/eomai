@@ -68,7 +68,7 @@ def resolve_curated_document_assembly_manifest(
     )
     resolved_items = resolve_curated_registered_items(session, registered)
     by_item_revision = {row.item_revision_id: row for row in resolved_items}
-    # One lock order for concurrent drafts with opposite display order.
+    # Resolve in one order so concurrent opposite display orders remain stable.
     by_external_source = {
         placement.source_id: resolve_curated_external_document(session, media, placement)
         for placement in sorted(external, key=lambda row: row.source_id)

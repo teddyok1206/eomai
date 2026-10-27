@@ -115,7 +115,8 @@ def test_curated_source_resolves_current_final_edition_and_detected_format() -> 
 
     resolved = resolve_curated_external_document(session, media, _selection())  # type: ignore[arg-type]
 
-    assert session.locked
+    # Runtime SELECT-only authority must not require PostgreSQL UPDATE privilege.
+    assert not session.locked
     assert media.opened
     assert media.stream.closed
     assert resolved.external_number == "10310"

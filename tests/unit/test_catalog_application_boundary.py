@@ -837,6 +837,7 @@ class FakeExternalItemPreviews:
 class FakeCuratedDocumentAssemblies:
     def __init__(self) -> None:
         self.fail = False
+        self.internal_error = False
         self.received: list[tuple[str, str]] = []
         self.read_received: list[tuple[str, str]] = []
         self.list_received: list[tuple[str, int, str | None]] = []
@@ -847,6 +848,8 @@ class FakeCuratedDocumentAssemblies:
         assert draft == curated_draft()
         assert actor.permissions == frozenset()
         self.received.append((actor.actor_id, idempotency_key))
+        if self.internal_error:
+            raise RuntimeError("private source content must not enter diagnostics")
         if self.fail:
             raise CuratedDocumentAssemblyError("CURATED_SOURCE_STALE")
         value = curated_manifest()
@@ -1630,6 +1633,7 @@ def test_catalog_socket_prepares_once_then_streams_pinned_external_item_preview(
 
 def test_catalog_socket_pins_curated_inputs_without_accepting_caller_permissions(
     tmp_path: Path,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     assemblies = FakeCuratedDocumentAssemblies()
     server = _server(tmp_path, curated_assemblies=assemblies)
@@ -1660,6 +1664,21 @@ def test_catalog_socket_pins_curated_inputs_without_accepting_caller_permissions
         with pytest.raises(CatalogApplicationClientError) as missing:
             client.read_curated_document_assembly(manifest.assembly_id, actor=actor)
         assert missing.value.code == "CURATED_ASSEMBLY_NOT_FOUND"
+
+        assemblies.fail = False
+        assemblies.internal_error = True
+        with pytest.raises(CatalogApplicationClientError) as internal:
+            client.create_curated_document_assembly(
+                curated_draft(), actor=actor, idempotency_key="curated-create-key-3"
+            )
+        assert internal.value.code == "CATALOG_APPLICATION_INTERNAL_ERROR"
+        diagnostic = next(
+            record.message
+            for record in caplog.records
+            if "curated assembly create failed" in record.message
+        )
+        assert "exception=RuntimeError" in diagnostic
+        assert "private source content" not in diagnostic
     finally:
         server.shutdown()
         server.server_close()

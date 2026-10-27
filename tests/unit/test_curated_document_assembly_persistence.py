@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any
 
@@ -210,6 +211,55 @@ def test_curated_create_uses_current_operator_authority_not_stale_api_roles(
         CuratedDocumentAssemblyService._authorized_actor(  # type: ignore[arg-type]
             session, actor
         )
+
+
+def test_curated_replay_lookup_needs_no_update_privilege_on_immutable_revision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    actor = _actor(PermissionKey.ITEM_READ)
+    draft = CuratedDocumentAssemblyDraftV1(
+        schema_version="curated-document-assembly-draft/1.0",
+        placements=(
+            ExternalSourcePlacement(
+                placement_kind="EXTERNAL_SOURCE_DOCUMENT",
+                position=1,
+                source_id="extitem_" + "1" * 32,
+                source_revision_id="extitemrev_" + "2" * 32,
+                observation_sha256="sha256:" + "3" * 64,
+                edition=3,
+                source_format="HWP",
+            ),
+        ),
+    )
+    statements: list[Any] = []
+    existing = object()
+
+    class _ReplaySession:
+        def scalar(self, statement: Any) -> object:
+            statements.append(statement)
+            return existing
+
+    @contextmanager
+    def fake_transaction(_factory: Any):
+        yield _ReplaySession()
+
+    service = object.__new__(CuratedDocumentAssemblyService)
+    service.sessions = object()  # type: ignore[assignment]
+    monkeypatch.setattr(service_module, "transaction", fake_transaction)
+    monkeypatch.setattr(
+        CuratedDocumentAssemblyService,
+        "_authorized_actor",
+        staticmethod(lambda _session, _actor: actor),
+    )
+    monkeypatch.setattr(
+        CuratedDocumentAssemblyService,
+        "_replay",
+        staticmethod(lambda *_args: existing),
+    )
+    assert service.create(draft, actor=actor, idempotency_key="curated-replay-key") is existing
+    sql = str(statements[0].compile(dialect=postgresql.dialect()))
+    assert "FOR SHARE" not in sql
+    assert "FOR UPDATE" not in sql
 
 
 def test_curated_read_rechecks_owner_permissions_hash_and_placement_index(

@@ -46,7 +46,12 @@ def resolve_curated_external_document(
     media: ExternalItemDocumentMediaService,
     selection: ExternalSourcePlacement,
 ) -> CuratedExternalDocumentPlacement:
-    """Lock current row, validate exact edition, then hash-check its Artifact member."""
+    """Validate the current edition and hash-check its exact Artifact member.
+
+    The source pointer can advance after this read; the immutable selection is
+    reauthorized again before any later build. A row lock would require UPDATE
+    privilege on this read-only Catalog runtime boundary.
+    """
 
     row = session.execute(
         select(
@@ -80,7 +85,6 @@ def resolve_curated_external_document(
             ExternalItemSourceRecord.current_revision_id == selection.source_revision_id,
             ExternalItemEditionDocumentRecord.edition == selection.edition,
         )
-        .with_for_update(read=True, of=ExternalItemSourceRecord)
     ).one_or_none()
     if row is None:
         raise CuratedDocumentAssemblySourceError("CURATED_SOURCE_STALE")
