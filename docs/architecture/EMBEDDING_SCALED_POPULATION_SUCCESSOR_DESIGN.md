@@ -3,6 +3,12 @@
 상태: 설계 결정 후보, 운영 미구현 (2026-10-27 UTC). 현재 GPU 우선 배포의
 546개 적격 자료집을 재해석하거나 실행 중인 INDEX/QUERY의 pin을 바꾸지 않는다.
 
+첫 source checkpoint: `segmented-embedding-index/1.0` JSON Schema 2020-12와
+동일 bytes의 package resource, frozen typed root/segment value, 고정 길이·정렬·
+중복·자체 hash 검증을 추가했다. 이것은 **포인터 형식**뿐이다. 실제 segment의
+source 수·범위·input hash 및 전체 자료집 완결성은 아직 Catalog가 검증하지
+않으므로 새 root를 등록하거나 QUERY에 선택할 수 없다.
+
 ## 확인된 제한과 결정
 
 현재 `EmbeddingRegistryLookup.maximum_sources`, 자료 접근 정책, Catalog의
