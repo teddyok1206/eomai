@@ -986,3 +986,14 @@ routine INDEX check is no earlier than 05:08 UTC.
 On source `18b96aeb`, the focused routed QUERY/CPU fallback/three-view
 index-selection unit suites passed 33 tests. This does not close the pending
 actual resource-contention fallback or model-run acceptance.
+
+### 04:59 UTC — source-only compatibility regression
+
+Source `6d36fdd9` pins the unreleased segmented root to the complete authorized
+source-selection summary and makes that summary mandatory for pure content
+validation. Existing 1.1/1.2 plus 1.3 source/authority tests passed **159**;
+routed multi-item QUERY, transport, replay, finite batch and index-pair tests
+passed **164** (one existing Starlette/httpx deprecation warning). These are
+source tests, not a newly installed release, an INDEX corpus-pair audit, GPU
+QUERY execution, CPU fallback, default selection or rollback. The original
+INDEX was not inspected before the scheduled 05:08 UTC observation.
