@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "external-item-learning-result-v1": CatalogSchemaResource(
+            "schemas/external-item/external-item-learning-result-v1.schema.json",
+            "resources/external-item/external-item-learning-result-v1.schema.json",
+            "1.0",
+            "sha256:6678f0853973c99090b7530544bdd93b08252615bbe787a523f6d8cceec1f2fe",
+        ),
         "external-item-learning-source-v1": CatalogSchemaResource(
             "schemas/external-item/external-item-learning-source-v1.schema.json",
             "resources/external-item/external-item-learning-source-v1.schema.json",
