@@ -13,9 +13,17 @@
 
 ## 남은 확인과 기능 경계
 
-- 인증된 사용자 화면에서 `데이터 → DB`의 새 조립 초안 저장→목록→재열기는 아직 live 수동 smoke 기록이 없다. HTTPS 비로그인 상태와 소스/격리 DB PASS를 그 증거로 확대하지 않는다.
+- 최초 `834f81ea` 운영 배포의 사용자 저장 smoke는 `CATALOG_APPLICATION_INTERNAL_ERROR`로 실패했다. 아래 후속 수정/실사용 검증이 이 경계를 닫는다.
 - `EXTERNAL_SOURCE_DOCUMENT` placement는 정확한 원본 파일 포인터이지 승인된 `AssessmentItemContent`가 아니다. 저장된 초안을 곧바로 출판 가능한 HWPX나 Graph 근거로 표시하지 않는다.
 - 이 서버의 LibreOffice/H2Orestart는 HWP를 읽지만 HWPX export 필터가 없다. 실제 U `12109` HWP→HWPX 시도는 출력이 없었다. [임포트·합본 설계의 변환 게이트](../architecture/NOTION_ITEM_ARCHIVE_IMPORT_PLAN_2026-10-27.md)를 통과하기 전에는 편집 가능한 HWP 원본 합본을 성공 처리하지 않는다.
 - 창작 문항의 Codex 구조화 추출·풀이보고서·Graph 게시 슬롯은 아직 비활성 경계다. [후속 계약](../architecture/CREATED_ITEM_GRAPH_AND_SOLUTION_REPORT_SUCCESSOR.md)의 source 재인가/영속 claim/result admission이 필요하며 source-only import 1,297행을 승인 Item으로 재해석하지 않는다.
 
 릴리스 준비용 일회성 `/tmp/eom-source-clean.*`, `/tmp/eom-release-payload.*`, 임시 context 파일은 exact path 확인 후 제거했다. 보호 admission stage와 API rollback record, build-only wheel 결과는 검증·복구 증거로 보존했다. 기존 실패·INDEX 이력은 수정하지 않았다.
+
+## 후속 저장 오류 수정과 실제 사용자 검증
+
+2026-10-27 16:43–16:44 UTC. 사용자 U `10310`·`10318`은 둘 다 정확한 3교 원본 연결과 Artifact/member/hash가 유효했다. 최초 저장 실패의 원인은 Catalog 런타임에 의도적으로 없는 `UPDATE` 권한을 `SELECT ... FOR SHARE`가 요구한 점이다. 읽기 전용 원본·불변 revision 잠금만 제거하고, 권한을 확대하지 않았다. 정확한 source revision과 source 관찰 hash를 pin하며, 중복 저장은 actor/idempotency unique 제약으로 막고, 실제 출력 전 재인가한다.
+
+- 수정 source commit `6b3cb636b3a9e086378378a123f0da69e61b4022` (`fix(item-db): avoid privileged locks for curated draft save`)을 푸시했다. Catalog 경계 29개, 관련 unit/API/Web 49개, Ruff 및 수정 파일 mypy가 통과했다. owner-role disposable 테스트는 런타임 role 권한과 같지 않으므로 이것만으로 live 성공이라 판정하지 않았다.
+- 해당 commit의 build-only wheel RECORD 검증, 보호된 `release-operator-context/1.11` source/wheel admission, `MIGRATION_VERIFY_0062`, Catalog/HWPX role reconcile, API isolation 및 설치를 통과했다. 운영 rollback record는 `/var/lib/eom-api/deployments/6b3cb636b3a9e086378378a123f0da69e61b4022.json`이다. API `/api/v1/health/ready=READY`; Catalog/API active다. 격리 GPU INDEX owner의 서비스 시작 시각은 2026-10-26 00:32:30 UTC로 유지되어 이번 설치에서 재시작되지 않았다.
+- 사용자는 `데이터 → DB`에서 두 문항의 저장 성공을 보고했고, `다시 열기`를 눌렀다. 서버의 같은 운영 배포에서 `POST /item-db/assemblies` 1회와 뒤이은 목록 `GET`, 저장본 상세 `GET` 요청이 완료됐다. 다시 열기의 결과는 파일 생성이 아니라 상단 `조립 순서 초안`에 두 문항을 저장 순서대로 복원하는 기능임을 안내했고, 사용자는 이후 정상 동작을 확인했다. 따라서 **저장/목록/상세/화면 재열기의 실제 사용자 경로는 확인**됐지만, 이 기록만으로 편집 가능한 HWPX 합본이나 Graph 게시가 완료됐다고 주장하지 않는다.
