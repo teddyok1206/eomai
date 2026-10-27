@@ -140,7 +140,7 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "schemas/knowledge/segmented-embedding-index-v1.schema.json",
             "resources/knowledge/segmented-embedding-index-v1.schema.json",
             "1.0",
-            "sha256:1d6765468dba8f8cec3eebb24519a7cac62111fa6a040f20163d435d20f4b516",
+            "sha256:e0163499ab5b7d970bf173eed0c040604d79d43cc89ac55f4406cb3fc552ee5b",
         ),
         "ordinary-item-graph-publication-command": CatalogSchemaResource(
             "schemas/knowledge/ordinary-item-graph-publication-command-v1.schema.json",

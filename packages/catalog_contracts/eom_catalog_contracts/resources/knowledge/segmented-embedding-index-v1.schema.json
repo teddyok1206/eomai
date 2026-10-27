@@ -18,10 +18,10 @@
     "space": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/space"},
     "view": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/view"},
     "recipe": {"$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/recipe"},
-    "segments": {"type": "array", "minItems": 2, "maxItems": 1024, "items": {"$ref": "#/$defs/segment"}},
+    "segments": {"type": "array", "minItems": 1, "maxItems": 1024, "items": {"$ref": "#/$defs/segment"}},
     "source_count": {"type": "integer", "minimum": 1025, "maximum": 1048576},
     "source_selection_sha256": {"$ref": "#/$defs/hash"},
-    "binding_count": {"type": "integer", "minimum": 1025, "maximum": 1048576},
+    "binding_count": {"type": "integer", "minimum": 1, "maximum": 1048576},
     "target_set_sha256": {"$ref": "#/$defs/hash"},
     "created_at": {"type": "string", "format": "date-time", "pattern": "Z$|\\+00:00$"},
     "root_sha256": {"$ref": "#/$defs/hash"}

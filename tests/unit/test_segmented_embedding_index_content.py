@@ -142,6 +142,18 @@ def test_exact_large_segment_content_closes_without_vector_copy(case: SegmentedC
     assert root.binding_count == 1025
 
 
+def test_sparse_large_population_keeps_one_segment_without_truncating_source_scope(
+    case: SegmentedCase,
+) -> None:
+    root, resolved, selection = case
+    body = root.model_dump(mode="json")
+    body["segments"] = [body["segments"][1]]
+    body["binding_count"] = 1
+    sparse = SegmentedEmbeddingIndexRoot.model_validate(_reseal_root(body))
+    assert validate_segmented_embedding_index_content(sparse, (resolved[1],), selection) == sparse
+    assert sparse.source_count == 1025 and sparse.binding_count == 1
+
+
 def test_typed_descriptor_cannot_fake_a_segment_count(case: SegmentedCase) -> None:
     root, resolved, selection = case
     body = root.model_dump(mode="json")

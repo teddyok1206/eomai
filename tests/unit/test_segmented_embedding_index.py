@@ -170,6 +170,16 @@ def test_segmented_root_rejects_coercion_and_unbounded_population() -> None:
         SegmentedEmbeddingIndexRoot.model_validate(body)
 
 
+def test_large_source_population_can_have_one_available_vector_binding() -> None:
+    body = _root_body()
+    body["segments"] = [body["segments"][1]]
+    body["binding_count"] = 1
+    root = SegmentedEmbeddingIndexRoot.model_validate(_reseal(body))
+    assert root.source_count == 1025
+    assert root.binding_count == 1
+    assert len(root.segments) == 1
+
+
 def test_self_consistent_segment_descriptor_is_not_an_artifact_coverage_proof() -> None:
     body = _root_body()
     body["segments"][1]["target_set_sha256"] = "sha256:" + "0" * 64

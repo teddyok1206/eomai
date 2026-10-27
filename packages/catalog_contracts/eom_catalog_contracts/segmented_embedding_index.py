@@ -76,11 +76,11 @@ class SegmentedEmbeddingIndexRoot(FrozenModel):
     view: ExperimentView
     recipe: ExperimentViewRecipe
     segments: tuple[SegmentedEmbeddingIndexSegment, ...] = Field(
-        min_length=2, max_length=MAX_SEGMENTS
+        min_length=1, max_length=MAX_SEGMENTS
     )
     source_count: int = Field(strict=True, ge=MAX_SEGMENT_BINDINGS + 1, le=MAX_SEGMENTED_BINDINGS)
     source_selection_sha256: Sha256
-    binding_count: int = Field(strict=True, ge=MAX_SEGMENT_BINDINGS + 1, le=MAX_SEGMENTED_BINDINGS)
+    binding_count: int = Field(strict=True, ge=1, le=MAX_SEGMENTED_BINDINGS)
     target_set_sha256: Sha256
     created_at: UtcDatetime
     root_sha256: Sha256

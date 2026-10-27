@@ -12,6 +12,12 @@ source 수·범위·input hash 및 전체 자료집 완결성은 아직 Catalog�
 source/analysis-run 선택 요약 `source_selection_sha256`도 넣는다. 게시 소유자는
 같은 권한·snapshot에서 재조회한 `SegmentedSourceSelection`의 수와 hash를
 대조해야 한다. root의 자기 hash만으로 현재 전체 모집단이 입증되는 것은 아니다.
+전체 source가 1,025건 이상이어도 풀이보고서가 없어 벡터 binding은 1,024건
+이하일 수 있다. 따라서 root는 1개 이상의 실제 segment와 binding을 허용하고,
+두 수를 별개로 고정한다. binding이 0개면 검색 가능한 인덱스를 게시하지 않는다.
+이 희소 모집단 경계를 추가한 focused 계약·content·device-pair 테스트는
+76 PASS, Ruff/strict mypy PASS다. source와 package schema bytes도 일치한다.
+이 결과는 아직 대규모 source 권한 검증이나 운영 게시 증거가 아니다.
 이 필드 추가 후 계약·정책·device-pair 집중 테스트 68개와 Ruff/strict mypy가
 통과했다. 미출시 후보의 소스 검증이며 운영 활성화 증거는 아니다.
 계약·기존 device-pair 집중 테스트는 77 PASS, Ruff/strict mypy PASS다. 소스
