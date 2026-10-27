@@ -510,6 +510,10 @@ P2_E_OBSERVATION_AND_ACQUIRED_RETIREMENT=SOURCE_VERIFIED,
 ROOT_FILE_DAC_AND_CONCURRENCY=PASS, LIVE_GPU_BATCH_UNIT=NOT_RUN,
 CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
 
+현재 단일 자료 조회·인덱스 manifest의 1,024건 상한을 넘는 지속적 자료집 확장은
+[증분 임베딩의 확장 경계](EMBEDDING_SCALED_POPULATION_SUCCESSOR_DESIGN.md)에
+후속 계약으로 분리했다. 이 설계는 현재 GPU 우선 활성화나 live acceptance가 아니다.
+
 ### P2-AA — 원 요청으로부터 실제 parent·장치별 START 조합 (설계)
 
 source preparation의 GPU 원 request를 새 배치의 상위 입력으로 pin한다. 현재 GPU/CPU 양쪽
