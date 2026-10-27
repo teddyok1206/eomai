@@ -466,6 +466,11 @@ from eom_catalog_contracts.external_item_import import (
     ExternalItemImportManifest,
     ExternalItemImportRow,
 )
+from eom_catalog_contracts.external_item_learning_source import (
+    EXTERNAL_ITEM_LEARNING_SOURCE_SCHEMA,
+    EXTERNAL_ITEM_LEARNING_SOURCE_SCHEMA_REF,
+    ExternalItemLearningSource,
+)
 from eom_catalog_contracts.external_item_media import (
     EXTERNAL_ITEM_DOCUMENT_MAX_BYTES,
     EXTERNAL_ITEM_PREVIEW_MAX_BYTES,
@@ -1151,6 +1156,8 @@ __all__ = [
     "EXTERNAL_ITEM_DOCUMENT_MAX_BYTES",
     "EXTERNAL_ITEM_IMPORT_MANIFEST_SCHEMA",
     "EXTERNAL_ITEM_IMPORT_MANIFEST_SCHEMA_REF",
+    "EXTERNAL_ITEM_LEARNING_SOURCE_SCHEMA",
+    "EXTERNAL_ITEM_LEARNING_SOURCE_SCHEMA_REF",
     "EXTERNAL_ITEM_PREVIEW_MAX_BYTES",
     "EXTERNAL_ITEM_ROW_OBSERVATION_SCHEMA",
     "EXTERNAL_ITEM_ROW_OBSERVATION_SCHEMA_REF",
@@ -1511,6 +1518,7 @@ __all__ = [
     "ExternalItemEditionLink",
     "ExternalItemImportManifest",
     "ExternalItemImportRow",
+    "ExternalItemLearningSource",
     "ExternalItemPreviewMediaQuery",
     "ExternalItemPreviewMediaResponse",
     "ExternalItemPreviewPrepareCommand",

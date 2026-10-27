@@ -11,6 +11,7 @@ from urllib.parse import unquote, urlsplit
 import pytest
 from eom_catalog_service.external_creative_learning_targets import (
     ExternalCreativeLearningTargetError,
+    get_external_creative_learning_target,
     list_external_creative_learning_targets,
 )
 from eom_catalog_service.external_item_read_service import (
@@ -282,6 +283,26 @@ def test_creative_learning_targets_are_exact_keyset_pages(source_session: Sessio
     )
     assert tuple(value.external_number for value in second.entries) == ("00003",)
     assert second.next_after_number is None
+
+
+def test_creative_learning_target_exact_u_lookup_uses_keyset_boundary(
+    source_session: Session,
+) -> None:
+    import_id = "extimport_" + "1" * 32
+    first = get_external_creative_learning_target(
+        source_session, import_id=import_id, external_number="00001"
+    )
+    third = get_external_creative_learning_target(
+        source_session, import_id=import_id, external_number="00003"
+    )
+    assert first.external_number == "00001"
+    assert first.source_namespace == "notion-integrated-science"
+    assert third.external_number == "00003"
+    with pytest.raises(ExternalCreativeLearningTargetError) as missing:
+        get_external_creative_learning_target(
+            source_session, import_id=import_id, external_number="00004"
+        )
+    assert missing.value.code == "EXTERNAL_CREATIVE_TARGET_NOT_FOUND"
 
 
 def test_creative_learning_target_rejects_tampered_observation(source_session: Session) -> None:

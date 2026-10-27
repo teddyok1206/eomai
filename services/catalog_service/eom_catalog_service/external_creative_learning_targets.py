@@ -39,6 +39,7 @@ class ExternalCreativeLearningTargetError(ValueError):
 @dataclass(frozen=True)
 class ExternalCreativeLearningTarget:
     import_id: str
+    source_namespace: str
     source_id: str
     source_revision_id: str
     external_number: str
@@ -180,6 +181,7 @@ def list_external_creative_learning_targets(
         result.append(
             ExternalCreativeLearningTarget(
                 import_id=import_id,
+                source_namespace=imported.source_namespace,
                 source_id=source.source_id,
                 source_revision_id=revision.revision_id,
                 external_number=source.external_number,
@@ -198,3 +200,22 @@ def list_external_creative_learning_targets(
         entries=tuple(result),
         next_after_number=(result[-1].external_number if len(rows) > limit else None),
     )
+
+
+def get_external_creative_learning_target(
+    session: Session, *, import_id: str, external_number: str
+) -> ExternalCreativeLearningTarget:
+    """Resolve one exact U through the existing indexed keyset projection."""
+
+    if _NUMBER.fullmatch(external_number) is None:
+        raise ExternalCreativeLearningTargetError("EXTERNAL_CREATIVE_TARGET_QUERY_INVALID")
+    previous = int(external_number) - 1
+    page = list_external_creative_learning_targets(
+        session,
+        import_id=import_id,
+        after_number=f"{previous:05d}" if previous >= 0 else None,
+        limit=1,
+    )
+    if not page.entries or page.entries[0].external_number != external_number:
+        raise ExternalCreativeLearningTargetError("EXTERNAL_CREATIVE_TARGET_NOT_FOUND")
+    return page.entries[0]

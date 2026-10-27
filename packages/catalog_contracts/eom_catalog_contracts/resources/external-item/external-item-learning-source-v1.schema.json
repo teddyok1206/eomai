@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/external-item/learning-source/1.0",
+  "title": "External Item Learning Source V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "import_id", "source_namespace", "source_id",
+    "source_revision_id", "external_number", "origin_kind",
+    "observation_sha256", "selected_edition", "preview_artifact_id",
+    "preview_artifact_revision_id", "preview_manifest", "input_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "external-item-learning-source/1.0"},
+    "import_id": {"type": "string", "pattern": "^extimport_[0-9a-f]{32}$"},
+    "source_namespace": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"},
+    "source_id": {"type": "string", "pattern": "^extitem_[0-9a-f]{32}$"},
+    "source_revision_id": {"type": "string", "pattern": "^extitemrev_[0-9a-f]{32}$"},
+    "external_number": {"type": "string", "pattern": "^[0-9]{5}$"},
+    "origin_kind": {"enum": ["PAST_EXAM_VARIATION", "FREE_AUTHORING"]},
+    "observation_sha256": {"$ref": "#/$defs/sha256"},
+    "selected_edition": {"type": "integer", "minimum": 2, "maximum": 3},
+    "preview_artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+    "preview_artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+    "preview_manifest": {"$ref": "eom://schemas/external-item/preview-manifest/1.0"},
+    "input_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

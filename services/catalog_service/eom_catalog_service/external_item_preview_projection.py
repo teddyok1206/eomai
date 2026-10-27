@@ -57,6 +57,8 @@ class ExternalItemPreviewUnavailable(ValueError):
 class ResolvedExternalItemPreview:
     member: VerifiedArtifactMemberStream
     manifest: ExternalItemPreviewManifest
+    artifact_id: str
+    artifact_revision_id: str
 
 
 def _idempotency_key(query: ExternalItemDocumentMediaQuery) -> str:
@@ -241,7 +243,12 @@ class ExternalItemPreviewProjectionService:
                 raise ValueError("preview PDF size differs")
         except (OSError, ValueError, TypeError, JsonSchemaValidationError) as exc:
             raise ExternalItemPreviewUnavailable("EXTERNAL_ITEM_PREVIEW_POINTER_INVALID") from exc
-        return ResolvedExternalItemPreview(member=member, manifest=manifest)
+        return ResolvedExternalItemPreview(
+            member=member,
+            manifest=manifest,
+            artifact_id=artifact_id,
+            artifact_revision_id=revision_id,
+        )
 
     def build(self, query: ExternalItemDocumentMediaQuery) -> CatalogArtifact:
         source = self.source_media.open(query)
