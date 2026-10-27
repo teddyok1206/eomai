@@ -1,6 +1,8 @@
-"""Catalog-owned Graph/Registry pointer resolution for a curated Item placement."""
+"""Catalog-owned batched Graph/Registry resolution for curated Item placements."""
 
 from __future__ import annotations
+
+from collections import defaultdict
 
 from eom_api_contracts.curated_document_assembly import (
     PastExamItemPlacement,
@@ -11,7 +13,7 @@ from eom_catalog_contracts import (
     CuratedPastExamItemPlacement,
     CuratedRegisteredItemPlacement,
 )
-from sqlalchemy import and_, select
+from sqlalchemy import and_, literal, select
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.knowledge_graph_models import (
@@ -31,53 +33,69 @@ class CuratedDocumentAssemblyItemError(ValueError):
         self.code = code
 
 
-def resolve_curated_registered_item(
+def resolve_curated_registered_items(
     session: Session,
-    selection: RegisteredItemPlacement | PastExamItemPlacement,
-) -> CuratedRegisteredItemPlacement | CuratedPastExamItemPlacement:
-    """Pin one approved revision with its exact current Graph source class.
+    selections: tuple[RegisteredItemPlacement | PastExamItemPlacement, ...],
+) -> tuple[CuratedRegisteredItemPlacement | CuratedPastExamItemPlacement, ...]:
+    """Pin at most 200 approved Items with one Graph and bounded indexed reads.
 
-    HWPX content eligibility is a later Builder-admission decision; this
-    selection manifest must not claim that a render has succeeded.
+    The caller owns operator permission and the enclosing transaction. Corpus and
+    Item rows are read-locked while a persistent assembly is committed. HWPX
+    eligibility remains a separate Builder-admission decision.
     """
 
+    if not selections:
+        return ()
+    revisions = {row.item_revision_id for row in selections}
+    snapshot_ids = {row.graph_snapshot_revision_id for row in selections}
+    if len(selections) > 200 or len(revisions) != len(selections) or len(snapshot_ids) != 1:
+        raise CuratedDocumentAssemblyItemError("CURATED_ITEM_SELECTION_INVALID")
+    revision_ids = tuple(sorted(revisions))
+    node_keys = tuple("item-revision:" + revision_id for revision_id in revision_ids)
+    snapshot_id = next(iter(snapshot_ids))
     corpus = session.scalar(
-        select(KnowledgeCorpusRecord).where(
+        select(KnowledgeCorpusRecord)
+        .where(
             KnowledgeCorpusRecord.corpus_key == INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
             KnowledgeCorpusRecord.lifecycle_state == "ACTIVE",
         )
+        .with_for_update(read=True, of=KnowledgeCorpusRecord)
     )
-    if (
-        corpus is None
-        or corpus.current_graph_snapshot_revision_id != selection.graph_snapshot_revision_id
-    ):
+    if corpus is None or corpus.current_graph_snapshot_revision_id != snapshot_id:
         raise CuratedDocumentAssemblyItemError("CURATED_GRAPH_SNAPSHOT_STALE")
-    snapshot = session.get(KnowledgeGraphSnapshotRecord, selection.graph_snapshot_revision_id)
+    snapshot = session.get(KnowledgeGraphSnapshotRecord, snapshot_id)
     if (
         snapshot is None
         or snapshot.state != "PUBLISHED"
         or snapshot.graph_id != corpus.graph_id
-        or snapshot.snapshot_sha256 != selection.graph_snapshot_sha256
         or snapshot.ontology_version != "education-knowledge-graph/1.1"
+        or any(row.graph_snapshot_sha256 != snapshot.snapshot_sha256 for row in selections)
     ):
         raise CuratedDocumentAssemblyItemError("CURATED_GRAPH_SNAPSHOT_INVALID")
 
-    revision = session.get(ItemRevisionRecord, selection.item_revision_id)
-    item = session.get(ItemRecord, selection.item_id)
-    if (
-        revision is None
-        or item is None
-        or revision.item_id != item.item_id
-        or revision.manifest_sha256 != selection.item_manifest_sha256
-        or revision.revision_state not in {"APPROVED", "SUPERSEDED"}
-        or item.lifecycle_state != "ACTIVE"
-    ):
+    item_rows = session.execute(
+        select(ItemRevisionRecord, ItemRecord)
+        .join(ItemRecord, ItemRecord.item_id == ItemRevisionRecord.item_id)
+        .where(ItemRevisionRecord.item_revision_id.in_(revision_ids))
+        .with_for_update(read=True, of=ItemRecord)
+    ).all()
+    by_revision = {revision.item_revision_id: (revision, item) for revision, item in item_rows}
+    if len(by_revision) != len(revisions):
         raise CuratedDocumentAssemblyItemError("CURATED_ITEM_REVISION_INVALID")
+    for selection in selections:
+        revision, item = by_revision[selection.item_revision_id]
+        if (
+            revision.item_id != selection.item_id
+            or revision.item_id != item.item_id
+            or revision.manifest_sha256 != selection.item_manifest_sha256
+            or revision.revision_state not in {"APPROVED", "SUPERSEDED"}
+            or item.lifecycle_state != "ACTIVE"
+        ):
+            raise CuratedDocumentAssemblyItemError("CURATED_ITEM_REVISION_INVALID")
 
-    is_past_exam = isinstance(selection, PastExamItemPlacement)
-    source_class = "PAST_EXAM" if is_past_exam else "APPROVED_ITEM"
     source_rows = session.execute(
         select(
+            KnowledgeNodeSourcePointerRecord.source_revision_id,
             KnowledgeNodeSourcePointerRecord.source_class,
             KnowledgeNodeSourcePointerRecord.analysis_run_id,
         )
@@ -99,37 +117,57 @@ def resolve_curated_registered_item(
             ),
         )
         .where(
-            KnowledgeNodeSourcePointerRecord.graph_snapshot_revision_id
-            == selection.graph_snapshot_revision_id,
-            KnowledgeNodeSourcePointerRecord.source_revision_id == selection.item_revision_id,
+            KnowledgeNodeSourcePointerRecord.graph_snapshot_revision_id == snapshot_id,
+            KnowledgeNodeSourcePointerRecord.source_revision_id.in_(revision_ids),
             KnowledgeNodeRecord.node_type == "ITEM_REVISION",
-            KnowledgeNodeRecord.stable_key == "item-revision:" + selection.item_revision_id,
+            KnowledgeNodeRecord.stable_key.in_(node_keys),
+            KnowledgeNodeRecord.stable_key
+            == literal("item-revision:") + KnowledgeNodeSourcePointerRecord.source_revision_id,
             KnowledgeSnapshotAnalysisRecord.source_kind == "APPROVED_ITEM_REVISION",
-            KnowledgeSnapshotAnalysisRecord.source_revision_id == selection.item_revision_id,
+            KnowledgeSnapshotAnalysisRecord.source_revision_id
+            == KnowledgeNodeSourcePointerRecord.source_revision_id,
         )
         .distinct()
     ).all()
-    if not source_rows or {row_source_class for row_source_class, _run_id in source_rows} != {
-        source_class
-    }:
-        raise CuratedDocumentAssemblyItemError("CURATED_ITEM_GRAPH_SOURCE_INVALID")
-
-    analysis_run_ids = {run_id for _row_source_class, run_id in source_rows}
-    occurrences = set(
+    classes: dict[str, set[str]] = defaultdict(set)
+    runs: dict[str, set[str]] = defaultdict(set)
+    for revision_id, source_class, run_id in source_rows:
+        classes[revision_id].add(source_class)
+        runs[revision_id].add(run_id)
+    all_runs = {run_id for item_runs in runs.values() for run_id in item_runs}
+    occurrence_runs = set(
         session.scalars(
             select(AssessmentItemOccurrenceReferenceRecord.analysis_run_id).where(
-                AssessmentItemOccurrenceReferenceRecord.graph_snapshot_revision_id
-                == selection.graph_snapshot_revision_id,
-                AssessmentItemOccurrenceReferenceRecord.analysis_run_id.in_(analysis_run_ids),
+                AssessmentItemOccurrenceReferenceRecord.graph_snapshot_revision_id == snapshot_id,
+                AssessmentItemOccurrenceReferenceRecord.analysis_run_id.in_(all_runs),
             )
         )
     )
-    if (source_class == "PAST_EXAM" and occurrences != analysis_run_ids) or (
-        source_class == "APPROVED_ITEM" and occurrences
-    ):
-        raise CuratedDocumentAssemblyItemError("CURATED_ITEM_GRAPH_SOURCE_CONTEXT_INVALID")
+    result: list[CuratedRegisteredItemPlacement | CuratedPastExamItemPlacement] = []
+    for selection in selections:
+        revision_id = selection.item_revision_id
+        is_past_exam = isinstance(selection, PastExamItemPlacement)
+        expected_class = "PAST_EXAM" if is_past_exam else "APPROVED_ITEM"
+        if classes[revision_id] != {expected_class}:
+            raise CuratedDocumentAssemblyItemError("CURATED_ITEM_GRAPH_SOURCE_INVALID")
+        linked_occurrences = occurrence_runs.intersection(runs[revision_id])
+        if (is_past_exam and linked_occurrences != runs[revision_id]) or (
+            not is_past_exam and linked_occurrences
+        ):
+            raise CuratedDocumentAssemblyItemError("CURATED_ITEM_GRAPH_SOURCE_CONTEXT_INVALID")
+        values = selection.model_dump(mode="json")
+        result.append(
+            CuratedPastExamItemPlacement.model_validate(values)
+            if is_past_exam
+            else CuratedRegisteredItemPlacement.model_validate(values)
+        )
+    return tuple(result)
 
-    values = selection.model_dump(mode="json")
-    if source_class == "PAST_EXAM":
-        return CuratedPastExamItemPlacement.model_validate(values)
-    return CuratedRegisteredItemPlacement.model_validate(values)
+
+def resolve_curated_registered_item(
+    session: Session,
+    selection: RegisteredItemPlacement | PastExamItemPlacement,
+) -> CuratedRegisteredItemPlacement | CuratedPastExamItemPlacement:
+    """Single-placement convenience wrapper over the same batched invariant."""
+
+    return resolve_curated_registered_items(session, (selection,))[0]

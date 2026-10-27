@@ -13,6 +13,7 @@ from eom_api_contracts.curated_document_assembly import (
 from eom_catalog_service.curated_document_assembly_item import (
     CuratedDocumentAssemblyItemError,
     resolve_curated_registered_item,
+    resolve_curated_registered_items,
 )
 from eom_catalog_service.knowledge_graph_models import KnowledgeGraphSnapshotRecord
 from eom_catalog_service.models import ItemRecord, ItemRevisionRecord
@@ -46,16 +47,19 @@ class _Session:
             ontology_version="education-knowledge-graph/1.1",
         )
         self.revision = SimpleNamespace(
+            item_revision_id=selection.item_revision_id,
             item_id=selection.item_id,
             manifest_sha256=selection.item_manifest_sha256,
             revision_state="APPROVED",
         )
         self.item = SimpleNamespace(item_id=selection.item_id, lifecycle_state="ACTIVE")
+        self.item_rows = [(self.revision, self.item)]
         source_class = (
             "PAST_EXAM" if isinstance(selection, PastExamItemPlacement) else "APPROVED_ITEM"
         )
-        self.source_rows = [(source_class, "analysisrun_" + "7" * 32)]
+        self.source_rows = [(selection.item_revision_id, source_class, "analysisrun_" + "7" * 32)]
         self.occurrence_runs = {"analysisrun_" + "7" * 32} if source_class == "PAST_EXAM" else set()
+        self.execute_calls = 0
         self.source_statement: Any = None
         self.occurrence_statement: Any = None
 
@@ -69,16 +73,25 @@ class _Session:
             ItemRecord: self.item,
         }[record_type]
 
-    def execute(self, statement: Any) -> _Session:
+    def execute(self, statement: Any) -> _Rows:
+        self.execute_calls += 1
+        if "FROM item_revisions JOIN items" in str(statement):
+            self.item_statement = statement
+            return _Rows(self.item_rows)
         self.source_statement = statement
-        return self
-
-    def all(self) -> list[tuple[str, str]]:
-        return self.source_rows
+        return _Rows(self.source_rows)
 
     def scalars(self, statement: Any) -> set[str]:
         self.occurrence_statement = statement
         return self.occurrence_runs
+
+
+class _Rows:
+    def __init__(self, rows: list[Any]) -> None:
+        self.rows = rows
+
+    def all(self) -> list[Any]:
+        return self.rows
 
 
 @pytest.mark.parametrize("past_exam", [False, True])
@@ -113,7 +126,7 @@ def test_curated_item_rejects_stale_graph_or_item() -> None:
 def test_curated_item_rejects_ambiguous_class_and_wrong_exam_context() -> None:
     selection = _selection()
     session = _Session(selection)
-    session.source_rows.append(("PAST_EXAM", "analysisrun_" + "8" * 32))
+    session.source_rows.append((selection.item_revision_id, "PAST_EXAM", "analysisrun_" + "8" * 32))
     with pytest.raises(CuratedDocumentAssemblyItemError) as ambiguous:
         resolve_curated_registered_item(session, selection)  # type: ignore[arg-type]
     assert ambiguous.value.code == "CURATED_ITEM_GRAPH_SOURCE_INVALID"
@@ -130,3 +143,82 @@ def test_curated_item_rejects_ambiguous_class_and_wrong_exam_context() -> None:
     with pytest.raises(CuratedDocumentAssemblyItemError) as missing_context:
         resolve_curated_registered_item(session, selection)  # type: ignore[arg-type]
     assert missing_context.value.code == "CURATED_ITEM_GRAPH_SOURCE_CONTEXT_INVALID"
+
+
+def test_curated_items_use_batched_registry_and_graph_queries() -> None:
+    first = _selection()
+    second = PastExamItemPlacement(
+        placement_kind="PAST_EXAM_ITEM_REVISION",
+        position=3,
+        item_id="item_" + "8" * 32,
+        item_revision_id="itemrev_" + "9" * 32,
+        item_manifest_sha256="sha256:" + "a" * 64,
+        graph_snapshot_revision_id=first.graph_snapshot_revision_id,
+        graph_snapshot_sha256=first.graph_snapshot_sha256,
+    )
+    session = _Session(first)
+    session.item_rows.append(
+        (
+            SimpleNamespace(
+                item_revision_id=second.item_revision_id,
+                item_id=second.item_id,
+                manifest_sha256=second.item_manifest_sha256,
+                revision_state="APPROVED",
+            ),
+            SimpleNamespace(item_id=second.item_id, lifecycle_state="ACTIVE"),
+        )
+    )
+    session.source_rows.append((second.item_revision_id, "PAST_EXAM", "analysisrun_" + "b" * 32))
+    session.occurrence_runs.add("analysisrun_" + "b" * 32)
+
+    resolved = resolve_curated_registered_items(session, (first, second))  # type: ignore[arg-type]
+
+    assert [row.placement_kind for row in resolved] == [
+        "REGISTERED_ITEM_REVISION",
+        "PAST_EXAM_ITEM_REVISION",
+    ]
+    assert session.item_statement._for_update_arg is not None
+    assert session.source_statement is not None
+    assert session.execute_calls == 2
+
+    session.source_rows[1] = (second.item_revision_id, "APPROVED_ITEM", "analysisrun_" + "b" * 32)
+    with pytest.raises(CuratedDocumentAssemblyItemError) as misclassified:
+        resolve_curated_registered_items(session, (first, second))  # type: ignore[arg-type]
+    assert misclassified.value.code == "CURATED_ITEM_GRAPH_SOURCE_INVALID"
+
+
+def test_curated_item_query_count_stays_bounded_at_maximum_selection() -> None:
+    first = _selection()
+    session = _Session(first)
+    selections: list[RegisteredItemPlacement] = [first]
+    for number in range(2, 201):
+        identifier = f"{number:032x}"
+        selection = RegisteredItemPlacement(
+            placement_kind="REGISTERED_ITEM_REVISION",
+            position=number,
+            item_id="item_" + identifier,
+            item_revision_id="itemrev_" + identifier,
+            item_manifest_sha256="sha256:" + identifier * 2,
+            graph_snapshot_revision_id=first.graph_snapshot_revision_id,
+            graph_snapshot_sha256=first.graph_snapshot_sha256,
+        )
+        selections.append(selection)
+        session.item_rows.append(
+            (
+                SimpleNamespace(
+                    item_revision_id=selection.item_revision_id,
+                    item_id=selection.item_id,
+                    manifest_sha256=selection.item_manifest_sha256,
+                    revision_state="APPROVED",
+                ),
+                SimpleNamespace(item_id=selection.item_id, lifecycle_state="ACTIVE"),
+            )
+        )
+        session.source_rows.append(
+            (selection.item_revision_id, "APPROVED_ITEM", "analysisrun_" + identifier)
+        )
+
+    resolved = resolve_curated_registered_items(session, tuple(selections))  # type: ignore[arg-type]
+
+    assert len(resolved) == 200
+    assert session.execute_calls == 2
