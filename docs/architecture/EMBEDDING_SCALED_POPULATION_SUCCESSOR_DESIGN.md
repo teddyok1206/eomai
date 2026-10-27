@@ -38,10 +38,21 @@ Catalog publication, 전체 자료집 인가, 운영 설치 또는 1,025건 처�
    각 device의 실제 binding에 대조하며 단순 건수 일치로 인정하지 않는다.
 5. **접근:** 자주 하는 작업은 `(Graph revision, source revision)` 순서의 bounded
    keyset scan, source별 binding 조회, 변경된 segment 교체, root별 ordered iteration,
-   장치별 같은 source의 exact pair 조회다. offset 기반 전수 재검색을 피한다.
+   장치별 같은 source의 exact pair 조회다. 현재
+   `candidate_pool_analysis_statement`는 `analysis_run_id`로 정렬해 제한하므로,
+   그 조회에 단순 cursor만 붙이면 source 범위가 page 사이에서 겹칠 수 있다.
+   후속 조회는 승인 source revision과 analysis run ID를 함께 정렬·고정한 뒤
+   LIMIT를 적용해야 한다. 한 source revision에 여러 accepted analysis가 매칭되면
+   현재 정본 선택 규칙으로 정확히 하나를 고정하고, 모호하면 fail-closed한다.
+   offset 기반 전수 재검색을 피한다.
 6. **구조·인덱스:** Catalog의 기존 Graph membership 관계와 source/binding 고유키를
    재사용한다. keyset 정렬 키에 맞는 B-tree 인덱스가 실제 query plan에 없을 때만
-   새 인덱스를 추가한다. root에는 payload가 아닌 segment pointer만 둔다.
+   새 인덱스를 추가한다. 현재 `knowledge_snapshot_analyses`에는
+   `(graph_snapshot_revision_id, analysis_run_id)` 고유키와
+   `(source_kind, source_revision_id)` 인덱스가 있지만, 계획한 source-first
+   keyset을 하나로 뒷받침하는지는 확인되지 않았다. 후속 disposable DB의
+   `EXPLAIN`으로 입증한 뒤 필요할 때만 composite index migration을 낸다.
+   root에는 payload가 아닌 segment pointer만 둔다.
 7. **규모·복잡도:** page·segment당 최대 1,024개, numerical batch는 현재 작은
    유한 묶음을 유지한다. 전체 N건의 최초 순회는 O(N)이다. 전체 segment 수 S,
    변경 segment 수 k일 때 root 재게시에는 O(S) pointer 순회와 변경분 O(k)의
