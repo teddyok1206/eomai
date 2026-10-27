@@ -126,7 +126,18 @@ Scientific Studio에는 일반 사용자가 이해할 수 있는 **`DB`** 메뉴
 
 조립 초안→입력 manifest의 Catalog 합성 함수는 실제 operator의 문항 읽기·출판물 생성 권한, 원본이 포함되면 Intake 읽기 권한을 먼저 확인한다. 이어 Graph 정본 문항은 묶어서, 원본 파일은 source ID 순서로 포인터와 바이트 해시를 확인한 뒤 사용자가 지정한 배치 순서를 복원한다. 이 함수의 출력은 아직 **commit 전 값**이며, 공식 Assembly Revision/Artifact·멱등 저장과 HWPX 조립은 다음 application 경계에서 연결한다. 화면 초안을 곧바로 결과물로 표시하지 않는다.
 
-Catalog의 `resolve_curated_external_document`는 source-only 배치 항목에 대해 현재 source 행을 공유 잠금으로 확인하고 정확한 2/3교 연결·관찰 해시·탐지 media type을 대조한다. 이어 기존 verified Artifact-member reader가 멤버 해시를 검증한 결과만 위 manifest의 외부 문서 placement로 만든다. 호출자의 `CONTENT_INTAKE_READ` 인증, 정본 Item·Graph 포인터의 별도 재인가, 세 종류 placement의 한 transaction 조립, 실제 Builder/출력 receipt는 아직 연결 전이다. 이 부분 구현만으로 GUI 초안을 서버 조립물로 표시하지 않는다.
+### 혼합 조립 저장 경계의 선행 설계
+
+기존 `assessment_assemblies`는 시험 `AssessmentForm`에 1:1로 연결되고 `assessment_item_placements`의 모든 배치가 정본 `Item Revision` FK를 요구한다. 원본 Office 파일만 있는 배치를 이 테이블에 넣으면 가짜 Item을 만들어야 하므로 사용하지 않는다. Catalog 소유의 `curated_document_assemblies`/불변 revision/typed placement successor를 같은 Assembly 개념의 별도 profile로 둔다. 기존 시험 Assembly의 행·manifest·의미는 바꾸지 않는다.
+
+- **정본·식별자·포인터:** 사용자의 확정 요청은 `(actor, idempotency key, draft hash)`에 묶는다. 논리 `assembly_id`와 불변 `assembly_revision_id`는 따로 발급하며, 정본 입력은 검증된 `curated-document-assembly-manifest/1.0`이다. 큰 문서 파일은 기존 Intake/Item Artifact에 한 번만 남는다. DB의 typed placement 행은 조회·FK·중복 방지용 파생 인덱스이며 manifest와 반드시 대조한다.
+- **주 접근과 규모:** actor+key의 멱등 조회, assembly revision의 순서 조회, source 또는 Item revision의 역추적이 중심이다. 한 조립은 최대 200배치이고 초기 약 1천 원본에서 장기 수십만 source를 가정한다. unique/B-tree key lookup은 O(log n), 배치 조회·manifest 직렬화는 O(배치 수), 저장 공간도 O(배치 수)다. 원본 바이트를 DB나 새 조립 폴더에 복사하지 않는다.
+- **트랜잭션·권한·실패:** 실제 로그인 actor의 `ITEM_READ + DELIVERABLE_CREATE`, 원본 포함 시 `CONTENT_INTAKE_READ`를 요구한다. Catalog transaction에서 현재 Graph/Item/source를 일정한 lock 순서로 재인가·해시 검증하고, 하나의 assembly revision과 placement를 원자적으로 기록한다. 동일 key+동일 draft는 기존 revision을 돌려주고 key+다른 draft는 충돌한다. commit 후 HWPX 변환·합본은 **별도** idempotent build/Artifact 경계이며 변환 실패를 저장된 조립의 성공 HWPX로 표시하지 않는다. 읽기·빌드 때 권한과 pin된 Artifact member/hash를 다시 확인한다.
+- **의존·대안:** Web/API는 typed 명령, Catalog application은 결정과 영속화, HWPX Manager/격리 Builder는 변환·합본, Orchestrator/Artifact owner는 검증 결과 commit을 담당한다. 기존 시험 Assembly를 느슨하게 만들어 source-only를 끼우는 더 짧은 안은 Item FK·시험 Form·25문항 정책을 깨므로 배제한다. JSON manifest만 파일로 저장하고 별도 DB identity/unique key를 두지 않는 안은 중복 제출·권한 철회·조회 및 중단 복구를 보장하지 못한다.
+
+Catalog의 `resolve_curated_external_document`는 source-only 배치 항목에 대해 현재 source 행을 공유 잠금으로 확인하고 정확한 2/3교 연결·관찰 해시·탐지 media type을 대조한다. 이어 기존 verified Artifact-member reader가 멤버 해시를 검증한 결과만 위 manifest의 외부 문서 placement로 만든다. 정본 Item·Graph 포인터는 별도로 재인가하고 세 종류 placement를 입력 순서대로 합성한다. `20261027_0061`은 이 입력 manifest의 논리 Assembly·불변 revision·typed placement와 actor별 idempotency key를 저장하는 후보 migration이며, 배포 운영 계약은 기존 `release-operator-context/1.9`를 변경하지 않고 `1.10`으로 확장한다. 현재 소스 테스트 통과만으로 Catalog private operation·GUI 선택 저장·실제 Builder/출력 receipt가 연결됐다고 표시하지 않는다. 읽기/빌드 단계에서는 저장된 manifest와 indexed placement의 일치, 현재 권한, pin된 Artifact member/hash를 다시 확인해야 한다.
+
+이 후보의 소스/임시 DB 게이트는 혼합 입력 resolver·영속 모델·릴리스 계약 집중 회귀 323건, disposable PostgreSQL 외부 문항/조립 검사 9건, `0061` upgrade→`0060` downgrade→`0061` upgrade 왕복을 통과했다. 임시 DB에서 revision UPDATE/DELETE 차단, source/Item 판별형 포인터 shape, actor+key 유일성 및 동시 삽입의 단일 승자를 확인했다. 운영 DB와 GPU 작업의 설치본은 이 검증으로 바뀌지 않았다.
 
 대부분의 기존 파일은 바이너리 `.hwp`다. 이 서버에는 LibreOffice의 HWP 읽기 필터는 있으나 HWPX 출력 필터나 별도 HWP→HWPX 변환 실행 파일은 현재 확인되지 않았다. [한컴의 공식 변환기 설명](https://help.hancom.com/hoffice120/ko-KR/HwpxConverter/convert/convert.htm)은 HWP→HWPX를 지원하지만 Windows 실행 파일 예시다. [한컴 개발자 답변](https://forum.developer.hancom.com/t/hwp-hwpx-api/2980)은 서버 변환 API 지원이 보유 라이선스에 따라 다를 수 있음을 밝힌다. 현재 호스트에 한컴 변환기 또는 DocsConverter 설치·라이선스가 확인되지 않았으므로 Linux에서 편집 가능한 HWPX 변환이 가능하다고 가정하지 않는다. 격리된 실제 표본 변환과 한글 열기·레이아웃 비교에서 검증된 변환 경계만 사용한다. **사용자는 편집 가능한 합본만 허용했다.** HWP 페이지를 그림으로 넣거나 PDF 이미지로 우회하는 출력 profile은 현재 범위에서 금지한다. 변환 실패한 placement가 있으면 성공 합본 pointer를 만들지 않는다.
 

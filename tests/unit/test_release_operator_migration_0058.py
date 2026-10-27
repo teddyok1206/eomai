@@ -213,7 +213,7 @@ def test_current_selector_uses0059_and_historical_wrapper_stays0051() -> None:
         for suffix in ("0052", "0053", "0054", "0055", "0056", "0057", "0058", "0059"):
             assert f"MIGRATION_VERIFY_{suffix}|MIGRATION_UPGRADE_{suffix}" in source
     deploy = (ROOT / "scripts/api/deploy_release.sh").read_text()
-    assert 'run_release_operator MIGRATION_VERIFY_0060 "${COMMIT}"' in deploy
-    assert 'if CURRENT_MIGRATION_REVISION != "20261027_0060":' in deploy
+    assert 'run_release_operator MIGRATION_VERIFY_0061 "${COMMIT}"' in deploy
+    assert 'if CURRENT_MIGRATION_REVISION != "20261027_0061":' in deploy
     old = (ROOT / "scripts/api/migrate_release.sh").read_text()
     assert "MIGRATION_UPGRADE_0051" in old and "MIGRATION_UPGRADE_0058" not in old
