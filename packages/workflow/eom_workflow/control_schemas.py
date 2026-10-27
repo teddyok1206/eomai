@@ -47,6 +47,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "26.0",
             "sha256:bac425c3f5a77e6031bfa15191ab3c39c9116daeab71e18144e3e20752acc246",
         ),
+        "resolved-execution-plan-v27": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v27.schema.json",
+            "resources/control-plane/resolved-execution-plan-v27.schema.json",
+            "27.0",
+            "sha256:1cae8cb6acc7f836308354ffbd41105507694b74a89e6017d491a9273fae163a",
+        ),
         "resolved-execution-plan-v24": ControlSchemaResource(
             "schemas/workflow/control-plane/resolved-execution-plan-v24.schema.json",
             "resources/control-plane/resolved-execution-plan-v24.schema.json",
@@ -859,6 +865,10 @@ def _control_schema_registry() -> Registry[Any]:
         "item-origin-types",
         "legacy-assessment-types",
         "legacy-item-extraction-request",
+        "external-item-learning-work-input-v1",
+        "external-item-learning-source-v1",
+        "external-item-learning-page-set-v1",
+        "external-item-preview-manifest-v1",
         "legacy-item-editorial-compatibility-request",
         "past-exam-variation-request",
         "educational-retrieval-requirement",
