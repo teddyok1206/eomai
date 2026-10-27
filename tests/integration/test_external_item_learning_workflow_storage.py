@@ -16,12 +16,16 @@ from uuid import uuid4
 import pytest
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_engine
+from eom_workflow.control_plane import ResolvedExecutionPlanV27
 from eom_workflow.models import WorkflowRequest
+from eom_workflow_runner import external_item_learning_preparation as preparation
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.models import (
+    WorkflowCommandRecord,
     WorkflowDefinitionRecord,
     WorkflowEventRecord,
     WorkflowInstanceRecord,
+    WorkflowStepRunRecord,
 )
 from eom_workflow_runner.repository import create_workflow_instance
 from sqlalchemy import Engine, func, select, text
@@ -29,6 +33,7 @@ from sqlalchemy.orm import Session
 
 from scripts.api.testdb_guard import TestDatabaseManifest as DisposableManifest
 from scripts.api.testdb_guard import validate_state_directory
+from tests.unit.test_external_item_learning_execution_plan import _plan
 from tests.unit.test_external_item_learning_workflow_admission import (
     OPERATOR,
     OTHER_OPERATOR,
@@ -187,4 +192,98 @@ def test_concurrent_creative_submits_preserve_one_workflow_and_event(
                 .where(WorkflowEventRecord.workflow_id == results[0][0])
             )
             == 1
+        )
+
+
+def _preparation_ports(monkeypatch):
+    """Synthetic source/pages/policy: only real DB transaction behavior is claimed."""
+
+    def resolve(_session, **kwargs):
+        raw = _plan()
+        raw["workflow_id"] = kwargs["workflow_id"]
+        raw["workflow_definition_sha256"] = kwargs["workflow_definition_sha256"]
+        raw["work_input"] = kwargs["work"].model_dump(mode="json")
+        raw["plan_sha256"] = content_sha256(
+            {key: value for key, value in raw.items() if key != "plan_sha256"}
+        )
+        return ResolvedExecutionPlanV27.model_validate(raw)
+
+    monkeypatch.setattr(preparation, "resolve_external_item_learning_plan", resolve)
+    monkeypatch.setattr(preparation, "read_external_item_learning_page_artifact", lambda *_: None)
+
+
+@pytest.mark.parametrize("different_keys", [False, True])
+def test_concurrent_preparation_saves_one_ready_step_and_no_command(
+    creative_engine: Engine, monkeypatch, different_keys: bool
+):
+    _preparation_ports(monkeypatch)
+    request = _unique_request()
+    key = "synthetic-creative-prepare-" + uuid4().hex
+    with Session(creative_engine) as session, session.begin():
+        _seed(session)
+    barrier = Barrier(2)
+
+    def prepare(index):
+        with Session(creative_engine) as session, session.begin():
+            barrier.wait(timeout=10)
+            return preparation.prepare_external_item_learning_workflow(
+                session,
+                definition=_seed(session),
+                work=request.external_item_learning_work,
+                operator_id=OPERATOR,
+                idempotency_key=key + str(index) if different_keys else key,
+                source_authorizer=_owner(request),
+                page_publisher=None,  # synthetic page read above; never runtime authority
+            )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(prepare, range(2)))
+    assert results[0].selection == results[1].selection
+    assert sum(result.workflow_created for result in results) == 1
+    assert sum(result.step_created for result in results) == 1
+    workflow_id = results[0].selection.workflow_id
+    with Session(creative_engine) as session:
+        workflow = session.get(WorkflowInstanceRecord, workflow_id)
+        assert workflow.state == "REQUESTED" and workflow.stage == "KNOWLEDGE_ANALYSIS"
+        step = session.get(WorkflowStepRunRecord, results[0].selection.step_run_id)
+        assert step.state == "READY" and step.platform_job_id is None
+        for model, count in (
+            (WorkflowCommandRecord, 0),
+            (WorkflowStepRunRecord, 1),
+            (WorkflowEventRecord, 2),
+        ):
+            assert (
+                session.scalar(
+                    select(func.count()).select_from(model).where(model.workflow_id == workflow_id)
+                )
+                == count
+            )
+
+
+def test_preparation_late_source_rejection_rolls_back_ready_step_and_event(
+    creative_engine: Engine, monkeypatch
+):
+    _preparation_ports(monkeypatch)
+    request = _unique_request()
+    key = "synthetic-creative-prepare-revoked-" + uuid4().hex
+    owner = _owner(request)
+    owner.reauthorize.side_effect = [request.external_item_learning_work.source] * 3 + [
+        ValueError()
+    ]
+    with pytest.raises(WorkflowError), Session(creative_engine) as session, session.begin():
+        preparation.prepare_external_item_learning_workflow(
+            session,
+            definition=_seed(session),
+            work=request.external_item_learning_work,
+            operator_id=OPERATOR,
+            idempotency_key=key,
+            source_authorizer=owner,
+            page_publisher=None,
+        )
+    with Session(creative_engine) as session:
+        assert (
+            session.scalar(
+                select(WorkflowInstanceRecord).where(WorkflowInstanceRecord.idempotency_key == key)
+            )
+            is None
         )

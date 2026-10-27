@@ -94,6 +94,18 @@ HTTP의 다음 입력 계약 `external-item-learning-start/1.0`은 `import_id`, 
 
 2026-10-27 소스 후보 검증: Catalog 서버/composition/기존 read 경계를 포함한 관련 unit **412 PASS**, 최종 신규 authorization unit **30 PASS**, 수정 source 7개 mypy 및 Ruff/format PASS. 신규 검사는 실제 로컬 Unix socket과 합성 저장소/현재 UID로 요청·응답 결합, 호출마다 재인가, source 철회, runner 전용 operation, 잘못된 프레임·hash를 검사했다. 설치된 운영 socket/실제 DB 원본/실제 슬롯의 PASS가 아니며 Codex 호출은 0회다. 새 source 연결은 아직 운영 배포하지 않았다.
 
+### 실행하지 않는 준비 application
+
+기존 Workflow 저장 application 위에 준비 use case 하나를 둔다. 입력은 이미 Orchestrator가 게시한 exact source/page work input, 실제 제출 operator, 멱등 key다. 대화형 인증은 호출자가 확인하고 현재 source 권한은 기존 Catalog authorizer가 다시 확인한다. 페이지는 기존 Orchestrator file-set owner에서 승인·멤버·SHA·정본 경로를 재검증한다. worker JSON이나 임의 runtime-context로 권한을 받지 않는다.
+
+caller root transaction 안에서 기존 Workflow unique/idempotency 저장 → Workflow row lock → V27 plan 고정 → READY step/append-only event 한 번 저장으로 끝낸다. 주요 접근은 고유 key와 `(workflow_id, step_key, attempt)` index이므로 고정 수 O(log n) 조회와 bounded 한 문항 검증이다. 새 table/index/queue가 필요 없다. 재전송에서도 원본과 page를 재인가하고 동일 exact request/plan/step만 돌려준다. 시작·완료·실패 이력이 이미 있는 작업을 새 ‘준비 성공’으로 바꾸지 않는다. 늦은 권한/source 거부는 caller root 전체 rollback이다.
+
+**이 use case에는 enqueue/claim/worker-start 호출이 없다.** 기존 runner는 START command가 있어야 실행하므로 READY step만으로 모델이 실행되지 않는다. 다음에 승인된 시작 application이 기존 command 경계를 사용할 수 있으며 준비와 시작을 boolean flag 하나로 합치지 않는다. 단순히 generic start를 호출한 다음 즉시 중지하는 대안은 실제 추론이 시작될 경합을 만들기 때문에 배제한다. 이 내부 application은 사용자용 시작 버튼이나 실제 원본의 운영 준비 증거를 대신하지 않는다.
+
+2026-10-27 19:20 UTC 소스 후보: `prepare_external_item_learning_workflow`를 구현했다. 관련 역할·입력·materializer·인가·준비 unit **108 PASS**, 신규 준비 source mypy 및 Ruff/format PASS. disposable PostgreSQL의 외부 문항/조립/창작 저장 검사 **16 PASS** 안에서 같은 key/다른 key 동시 준비가 Workflow 1개·READY step 1개·event 2개·command 0개로 수렴하고, 마지막 source 재인가 거부 시 전부 rollback되는 것을 확인했다. 이 DB 검사의 source/page/plan port는 명시적인 합성 fixture이며 운영 source/preset 검증이라고 주장하지 않는다. 임시 DB `20261027191917_496e92b3`은 공식 cleanup으로 제거했다. 실제 Codex 호출과 실행 명령 생성은 0회다.
+
+남은 종료 게이트는 **실제 원본 1건의 격리 page Artifact 준비**, **전용 instruction/preset/capacity의 공식 고정**, **호환 운영 설치본에서 source→저장 작업→plan→worker staging의 실행 전 점검**이다. 창작 definition의 신규 작업 admission과 실제 START는 이 연결 없이 먼저 열지 않는다. 소스 unit 또는 합성 DB PASS만으로 목표 완료를 선언하지 않는다.
+
 ## 필수 설계 절차
 
 1. **책임과 경계:** Catalog application은 exact 외부 원본→정본 Item 승격 근거, 승인, 분석, 보고서, Graph 게시를 조정한다. Orchestrator만 worker 실행과 Artifact commit을 지휘한다. worker는 DB/NAS에 직접 쓰지 않는다. Web/API는 typed 명령과 조회만 제공한다.
