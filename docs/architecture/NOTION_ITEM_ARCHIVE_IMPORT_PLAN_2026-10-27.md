@@ -147,6 +147,8 @@ Catalog의 `resolve_curated_external_document`는 source-only 배치 항목에 �
 
 2026-10-27 실제 파일 표본 검증: ZIP의 U `12109`인 293,376바이트 HWP 5.0 파일(`sha256:219f3a0510977af996b0177ac9c0b8159bfe1d6459fcd556f4566e8940e01d79`)을 임시 폴더에서 LibreOffice로 읽었다. `--convert-to hwpx`는 `no export filter`로 실패했고 HWPX 파일은 나오지 않았다. 같은 입력의 DOCX 내보내기는 성공했지만 내부에는 표 10개, 수식 태그 110개, drawing 14개와 3개 이미지 멤버가 있어 DOCX 생성만으로 원래 문항이 편집 가능한 HWPX로 정확히 합쳐진다고 볼 수 없다. 다음 구현은 HWP→검증된 구조화 표현→HWPX의 표·수식·이미지 보존을 소수 표본에서 대조하거나, 정식 HWPX 변환 실행 환경을 확보해 격리 adapter로 검증해야 한다. 단일 파일의 성공/실패를 전체 1,053개에 일반화하지 않으며, 검증 전에는 합본 성공으로 승격하지 않는다.
 
+서버에 설치된 H2Orestart `0.7.14-eom.1`의 필터 정의에는 `Hwp2002_Reader`의 `IMPORT`만 있고 HWPX `EXPORT`는 없다. 따라서 독립 프로필 설정만으로 위 실패를 해결할 수 없다. [H2Orestart의 원래 설명](https://github.com/ebandal/H2Orestart)은 저장 형식을 ODT로 한정한다. 편집 가능한 변환의 검증 후보는 [한컴 DocsConverter의 `hwp2hwpx` API](https://developer.hancom.com/en-us/docsconverter/guide/api/module)와 [Apache-2.0 HWP→HWPX 라이브러리](https://github.com/neolord0/hwp2hwpx)다. 어느 쪽도 현재 설치·승인된 운영 변환기로 간주하지 않는다. 표·수식·그림·문항 순서를 가진 실제 표본에서 입력/출력 구조와 한글 표시를 비교하고, 라이선스·격리·의존성 검토가 끝난 경우에만 명시적 adapter로 채택한다.
+
 HWP/HWPX 화면 미리보기는 기존 Catalog의 격리된 Office→PDF 변환 경계를 재사용하고, 파생 PDF를 별도 Artifact Revision으로 연결한다. 변환 실패는 `미리보기 불가`로 표시하되 원본 다운로드와 메타데이터 조회를 계속 허용한다. 원본을 변환 PDF로 대체하거나 변환만으로 내용이 정확하다고 승인하지 않는다. 구조화된 본문·정답·해설 추출은 별도 제안/검토를 거쳐 기존 `AssessmentItemContent` 계약과 Registry 등록·승인 상태기계를 통과한다. source-only 문항을 HWPX 빌드·GraphRAG·유사도·출판 대상으로 자동 포함하지 않는다.
 
 ### 원본 문서 미리보기의 파생 Artifact 결정
