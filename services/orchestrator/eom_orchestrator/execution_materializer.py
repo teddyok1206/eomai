@@ -114,6 +114,9 @@ from eom_orchestrator.control_service import (
     resolve_control_artifact_pointer,
     resolve_released_instruction_bundle,
 )
+from eom_orchestrator.external_item_learning_page_publication import (
+    read_external_item_learning_page_artifact,
+)
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from eom_orchestrator.similarity_materialization import (
@@ -330,9 +333,10 @@ def materialize_execution_step(
             "CONTROL_CREATIVE_PAGE_OWNER_REQUIRED",
             "creative page materialization requires its pinned publication owner",
         )
-    if isinstance(plan, ResolvedExecutionPlanV27) and sum(
-        page.content_length for page in plan.work_input.page_set.pages
-    ) > 128 * 1024 * 1024:
+    if (
+        isinstance(plan, ResolvedExecutionPlanV27)
+        and sum(page.content_length for page in plan.work_input.page_set.pages) > 128 * 1024 * 1024
+    ):
         raise ControlPlaneError(
             "CONTROL_POINTER_SIZE_INVALID",
             "creative page images exceed the worker input limit",
@@ -1836,20 +1840,7 @@ def materialize_external_item_learning_pages(
         raise ControlPlaneError(
             "CONTROL_POINTER_STORAGE_MISMATCH", "creative page Artifact root differs"
         )
-    published = publisher.read_published_revision(
-        artifact_revision_id=artifact.artifact_revision_id,
-        artifact_type=artifact.artifact_type,
-    )
-    if (
-        published.artifact_id != artifact.artifact_id
-        or published.primary_file != artifact.member_path
-        or published.primary_sha256 != artifact.sha256
-        or published.manifest_sha256 != artifact.file_set_manifest_sha256
-        or Path(published.nas_path) != root / artifact.artifact_id / artifact.artifact_revision_id
-    ):
-        raise ControlPlaneError(
-            "CONTROL_POINTER_MANIFEST_MISMATCH", "creative page Artifact differs from work"
-        )
+    read_external_item_learning_page_artifact(publisher, artifact)
     manifest_pointer = OriginArtifactMemberPointer(
         artifact_id=artifact.artifact_id,
         artifact_revision_id=artifact.artifact_revision_id,

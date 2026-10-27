@@ -2,6 +2,12 @@
 
 상태: 설계 결정 및 구현 게이트. 2026-10-27 UTC. 이 문서는 원본 XLSX/ZIP만으로 Item 승인이나 Graph 게시가 완료됐다는 뜻이 아니다.
 
+## 이번 목표의 사용자 지정 종료선
+
+2026-10-27 사용자 추가 지시: 슬롯 계정의 주간 사용 한도가 소진됐을 수 있으므로 **실제 Codex 풀이보고서 작성 직전까지 확실하게 준비·검증되면 이번 goal 달성으로 간주**한다. 실제 Codex 호출·풀이보고서 생성은 수행하지 않는다. 기존 source-only 등록, 메타데이터/파일 보존, DB GUI, 조립 초안, 권한·불변 이력 조건은 유지한다.
+
+준비 완료는 고정 source/page Artifact, 소유자에 묶인 저장 작업, 실행 설정/슬롯 입력 연결, 실패·재전송·복구의 무과금 검증과 실제 환경의 실행 전 점검으로 입증한다. 미연결 코드를 숨긴 채 ‘실행만 하면 된다’고 표현하지 않는다. 실제 모델 결과·정본 승격·Graph 게시와 원본 HWP 편집 합본의 미지원 상태는 각각 남은 범위로 명시하고 성공한 것으로 재해석하지 않는다.
+
 ## 경계와 현재 사실
 
 `PAST_EXAM`은 기출 occurrence와 실제 PDF 페이지 위치를 가진 승인 문항이다. `APPROVED_ITEM`은 occurrence 없이 승인된 정본 Item Revision이다. 기존 `knowledge-analysis-request/10.0`은 전자의 V9 시각 분석·문제/해설 페이지 anchor에 고정되어 있다. 기존 ordinary-item Graph publisher는 EOM authoring/review/registration Workflow의 역할 결과·receipt를 요구한다. 업로드한 N제 원본은 어느 쪽 이력도 자동으로 갖지 않는다. 따라서 V10 또는 ordinary publisher의 검사를 느슨하게 하는 일은 금지한다.
@@ -67,6 +73,16 @@ HTTP의 다음 입력 계약 `external-item-learning-start/1.0`은 `import_id`, 
 `resolved-execution-plan/27.0` 후보는 위 작업 입력, 게시된 프리셋·정의·용량 정책의 revision, `creative-learning` 전용 support 단계와 instruction bundle을 하나의 재현 가능한 해시로 묶는다. 이 단계는 worker에게 읽기 전용·네트워크 차단·일반 지식 차단을 요구한다. schema/typed validation과 기존 control-plane 테이블에 재전송을 구분해 기록하는 resolver는 구현됐다. 그러나 이 resolver에 선행해야 하는 operator 권한·현재 source 재인가, 영속 작업 claim, 승인된 worker staging과 결과 수락은 아직 연결되지 않았다. 따라서 워크플로 정의와 프롬프트 파일도 운영에 설치·활성화하지 않고, Orchestrator의 명시적 비활성 차단을 유지한다.
 
 역할 메시지의 후속 규격 `workflow-role/1.33.0`은 위 입력과 `external-item-learning-result/1.0` 제안만 허용하는 `support` 1단계다. JSON Schema 2020-12 정본·패키지 리소스, Pydantic 모델, Codex 출력용 projection, 정확한 source/page 결합 검사와 1단계 Workflow 정의의 소스 테스트까지 준비했다. 모델이 결과 해시를 생략하면 Orchestrator 검증 경계에서 정확한 제출 본문의 해시를 계산하며, 잘못 제출한 해시는 덮어쓰지 않고 거부한다. **Workflow 정의 파일은 아직 운영 admission 또는 활성화가 아니다.** 저장된 작업/운영자 권한에 묶인 Catalog source read, 페이지 Artifact materialization, 실행 프리셋과 결과 수락을 **한 호환 release 경계**로 닫은 뒤에만 Codex 슬롯 실행이나 Graph 게시를 표시한다.
+
+### 실제 호출 없는 Orchestrator 실행 연결 검증
+
+2026-10-27 18:47 UTC. Orchestrator의 기존 역할 실행 경로에 `ExternalItemLearningExecutionContext`를 연결하는 소스 후보를 추가했다. 이는 서버 composition이 제공하는 source-authorizer callback과 기존 file-set publisher의 작은 불변 조합이며, worker JSON에 실리는 authority가 아니다. 상위 application은 저장된 Workflow/step/실제 owner에서 callback을 만들어야 한다. 현재 production composition에는 아직 연결하지 않았다.
+
+- 명시적 context가 없으면 기존 `CONTROL_CREATIVE_LEARNING_NOT_ACTIVATED` 차단을 유지한다. context가 있어도 support/extract/정확한 결과 규격·입력과 V27 plan row의 ID·revision·hash·시각이 일치해야 한다. 다른 작업·escalation·Graph 문항 context를 섞으면 job 생성 전에 거부한다.
+- 원본 권한·입력 페이지 Artifact를 먼저 검증하고, 기존 capacity의 `KNOWLEDGE_ANALYSIS`로 claim한다. 입력 파일 배치와 마지막 source 재인가가 끝난 후에만 실제 worker launch 경계로 넘어간다. 배치 실패는 ‘시작됐을 수 있음’으로 처리하지 않고 lease를 반납한다.
+- 결과 수락 전에는 exact source/page Artifact를 다시 확인한다. source 철회·페이지 manifest 불일치는 실패 이력을 남기고 Artifact commit을 막는다. terminal replay는 현재 권한을 재확인하되 worker를 다시 켜거나 FAILED 상태를 성공으로 바꾸지 않는다.
+- 페이지 file-set의 승인/identity/hash/canonical path 검사 규칙은 기존 게시 모듈의 한 read 함수로 모아 실행 전 검사와 worker materializer가 함께 사용한다. binary를 새 DB 행이나 메시지로 복사하지 않는다. 독립 수명 없는 실행 context를 새 registry/framework로 만들지 않는다.
+- 관련 역할 실행/materializer unit **341 PASS**, 수정 source 4개 mypy·Ruff PASS. 그 안의 새 실행 테스트는 합성 Job/트랜잭션과 **비-Codex worker 대역**만 사용했다. 실제 Codex 호출·systemd worker 시작·운영 DB/NAS write는 0회이며, 실제 Catalog 전송·제출 준비·운영 release 전 점검은 아직 남아 있다.
 
 ## 필수 설계 절차
 

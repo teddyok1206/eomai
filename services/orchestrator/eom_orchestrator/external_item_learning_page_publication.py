@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from pathlib import Path
 from typing import Protocol
 
 from eom_catalog_contracts.external_item_learning_pages import (
@@ -14,9 +15,11 @@ from eom_catalog_contracts.external_item_learning_work import ExternalItemLearni
 from eom_catalog_contracts.validation import validate_contract
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 
+from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.external_item_learning_page_render import RenderedExternalItemLearningPages
 from eom_orchestrator.file_set_control_artifacts import (
     ControlFileSetMember,
+    ControlFileSetPublisher,
     PublishedControlFileSet,
 )
 
@@ -51,6 +54,31 @@ def external_item_learning_page_artifact(
         sha256=receipt.primary_sha256,
         file_set_manifest_sha256=receipt.manifest_sha256,
     )
+
+
+def read_external_item_learning_page_artifact(
+    publisher: ControlFileSetPublisher, artifact: ExternalItemLearningPageArtifact
+) -> PublishedControlFileSet:
+    """Recheck the approved file-set closure without publishing or resolving latest."""
+
+    published = publisher.read_published_revision(
+        artifact_revision_id=artifact.artifact_revision_id,
+        artifact_type=artifact.artifact_type,
+    )
+    if (
+        published.artifact_id != artifact.artifact_id
+        or published.primary_file != artifact.member_path
+        or published.primary_sha256 != artifact.sha256
+        or published.manifest_sha256 != artifact.file_set_manifest_sha256
+        or Path(published.nas_path)
+        != publisher.settings.nas_artifact_root
+        / artifact.artifact_id
+        / artifact.artifact_revision_id
+    ):
+        raise ControlPlaneError(
+            "CONTROL_POINTER_MANIFEST_MISMATCH", "creative page Artifact differs from work"
+        )
+    return published
 
 
 def publish_external_item_learning_pages(

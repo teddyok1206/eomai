@@ -50,6 +50,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV12,
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
+    ResolvedExecutionPlanV27,
 )
 from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequest,
@@ -151,6 +152,10 @@ from eom_orchestrator.execution_materializer import (
     authorized_execution_artifact_revisions,
     materialize_execution_step,
     preflight_inference_transfer_materialization,
+)
+from eom_orchestrator.external_item_learning_execution import (
+    ExternalItemLearningExecutionContext,
+    validate_external_item_learning_execution_plan,
 )
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.knowledge_analysis_artifact import stage_knowledge_analysis_proposal
@@ -692,14 +697,54 @@ class Orchestrator:
         transfer_workflow_request: InferenceTransferWorkflowRequest | None = None,
         execution_tier: Literal["PRIMARY", "ESCALATED"] = "PRIMARY",
         similarity_context: SimilarityMaterializationContext | None = None,
+        external_item_learning: ExternalItemLearningExecutionContext | None = None,
     ) -> JobRecord:
         if (prompt_path is None) == (prompt_text is None):
             raise ValueError("exactly one workflow prompt source is required")
-        if isinstance(request, ExternalItemLearningWorkerRequest):
+        is_creative = isinstance(request, ExternalItemLearningWorkerRequest)
+        creative_plan: ResolvedExecutionPlanV27 | None = None
+        if is_creative and external_item_learning is None:
             raise ControlPlaneError(
                 "CONTROL_CREATIVE_LEARNING_NOT_ACTIVATED",
                 "creative learning requires source reauthorization and staged page materialization",
             )
+        if external_item_learning is not None:
+            if (
+                not isinstance(request, ExternalItemLearningWorkerRequest)
+                or role != "support"
+                or result_schema != "external-item-learning-result@1.0"
+                or upstream_artifacts
+                or execution_tier != "PRIMARY"
+                or similarity_context is not None
+                or material_requirement is not None
+                or reauthorize_transfer_sources is not None
+                or transfer_workflow_request is not None
+                or transfer_core_prompt_sha256 is not None
+            ):
+                raise ControlPlaneError(
+                    "CONTROL_CREATIVE_CONTEXT_INVALID", "creative execution context differs"
+                )
+            try:
+                request = ExternalItemLearningWorkerRequest.model_validate(
+                    request.model_dump(mode="json")
+                )
+            except ValueError as exc:
+                raise ControlPlaneError(
+                    "CONTROL_CREATIVE_CONTEXT_INVALID", "creative work input is invalid"
+                ) from exc
+            external_item_learning.reauthorize_source(request)
+            with self.sessions() as session:
+                creative_plan = validate_external_item_learning_execution_plan(
+                    session.scalar(
+                        select(ResolvedExecutionPlanRecord).where(
+                            ResolvedExecutionPlanRecord.workflow_id == workflow_id
+                        )
+                    ),
+                    workflow_id=workflow_id,
+                    step_key=step_key,
+                    request=request,
+                )
+            external_item_learning.verify_page_input(request)
         is_transfer = isinstance(request, InferenceTransferPairWorkerRequest)
         transfer_plan: ResolvedExecutionPlanV21 | None = None
         if is_transfer and reauthorize_transfer_sources is None:
@@ -760,6 +805,9 @@ class Orchestrator:
                 assert isinstance(request, InferenceTransferPairWorkerRequest)
                 # Exact history is immutable, but replay does not preserve a revoked permission.
                 self._reauthorize_inference_transfer_sources(request, reauthorize_transfer_sources)
+            if external_item_learning is not None:
+                assert isinstance(request, ExternalItemLearningWorkerRequest)
+                external_item_learning.reauthorize_source(request)
             existing_state = self._resume_pre_execution_job(job_id)
             existing = self.get_job(job_id)
             if existing_state in TERMINAL_STATES:
@@ -847,6 +895,9 @@ class Orchestrator:
                     self._reauthorize_inference_transfer_sources(
                         request, reauthorize_transfer_sources
                     )
+                if external_item_learning is not None:
+                    assert isinstance(request, ExternalItemLearningWorkerRequest)
+                    external_item_learning.reauthorize_source(request)
                 return self.get_job(job.job_id)
             self._transition(job_id, JobState.VALIDATED, "REQUEST_VALIDATED")
             self._transition(job_id, JobState.QUEUED, "JOB_QUEUED")
@@ -872,6 +923,9 @@ class Orchestrator:
             before_execute(job_id)
 
         try:
+            if external_item_learning is not None:
+                assert isinstance(request, ExternalItemLearningWorkerRequest)
+                external_item_learning.reauthorize_source(request)
             if isinstance(request, InferenceTransferPairWorkerRequest):
                 assert reauthorize_transfer_sources is not None
                 # This check is after job creation: owner failure must preserve
@@ -881,6 +935,9 @@ class Orchestrator:
                 if transfer_plan is not None:
                     plan_document = transfer_plan.model_dump(mode="json")
                     plan_id = transfer_plan.plan_id
+                elif creative_plan is not None:
+                    plan_document = creative_plan.model_dump(mode="json")
+                    plan_id = creative_plan.plan_id
                 else:
                     plan_record = session.scalar(
                         select(ResolvedExecutionPlanRecord).where(
@@ -936,6 +993,7 @@ class Orchestrator:
                                 "KNOWLEDGE_ANALYSIS_REQUEST",
                                 "LEGACY_ITEM_EXTRACTION_REQUEST",
                                 "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST",
+                                "EXTERNAL_ITEM_LEARNING_REQUEST",
                             }
                             else "CODEX"
                         ),
@@ -1016,9 +1074,14 @@ class Orchestrator:
                                 execution_tier=execution_tier,
                                 inference_transfer_context=transfer_materialization_context,
                                 similarity_context=similarity_context,
+                                creative_page_publisher=(
+                                    external_item_learning.page_publisher
+                                    if external_item_learning is not None
+                                    else None
+                                ),
                             )
                         event_data: dict[str, object] = dict(evidence.event_data())
-                        if not is_transfer:
+                        if not is_transfer and not is_creative:
                             self._transition(
                                 job_id,
                                 JobState.RUNNING,
@@ -1027,7 +1090,7 @@ class Orchestrator:
                             )
                         return evidence
 
-                    if is_transfer:
+                    if is_transfer or is_creative:
                         # Preparation and materialization cannot have started a process.
                         # Only the actual launch boundary may retain an uncertain lease.
                         prepared_workspace = self.worker_adapter.prepare_structured_workspace(
@@ -1038,11 +1101,15 @@ class Orchestrator:
                             slot=slot,
                         )
                         evidence = materialize(prepared_workspace.workspace)
-                        assert reauthorize_transfer_sources is not None
-                        assert isinstance(request, InferenceTransferPairWorkerRequest)
-                        self._reauthorize_inference_transfer_sources(
-                            request, reauthorize_transfer_sources
-                        )
+                        if isinstance(request, InferenceTransferPairWorkerRequest):
+                            assert reauthorize_transfer_sources is not None
+                            self._reauthorize_inference_transfer_sources(
+                                request, reauthorize_transfer_sources
+                            )
+                        else:
+                            assert external_item_learning is not None
+                            assert isinstance(request, ExternalItemLearningWorkerRequest)
+                            external_item_learning.reauthorize_source(request)
                         self._transition(
                             job_id,
                             JobState.RUNNING,
@@ -1113,6 +1180,9 @@ class Orchestrator:
                         ErrorCode.WORKER_RESULT_INVALID,
                         "creative learning result differs from its immutable source",
                     ) from exc
+                assert external_item_learning is not None
+                external_item_learning.reauthorize_source(worker_input.request)
+                external_item_learning.verify_page_input(worker_input.request)
             if isinstance(
                 result, (InferenceTransferPairRoleResult, InferenceTransferPairRoleResultV11)
             ):
