@@ -12,6 +12,23 @@
 
 이 1,053개 연결 후보를 엑셀 행 순서의 `(U, 행 번호, 최종 교정 단계, ZIP 멤버 SHA-256)` 목록으로 직렬화한 읽기 전용 target-set hash는 `sha256:3705a73413fe8a442f00360283592b1ca0e8024029a9dce56700a708a4f36155`다. 운영 Intake 후에는 원본 Artifact pointer와 mapping revision을 포함한 새 target-set identity를 발행해야 하며, 이 사전 조사 해시를 승인 receipt나 worker 권한으로 사용하지 않는다.
 
+## 최초 기출 Graph 설계와의 호환성 대조
+
+이 대조는 최초 [GraphRAG 설계](EDUCATION_KNOWLEDGE_ITEM_GRAPHRAG.md), 구현된 [Snapshot 영속 계약](EDUCATION_GRAPH_SNAPSHOT_PERSISTENCE_V1.md), [기출 풀이보고서 ADR](../adr/0073-additive-past-exam-solution-reports.md), 현행 Graph publisher source를 기준으로 한다. **설계상 호환 가능**과 **현재 운영에서 이 아카이브가 게시 가능**은 다른 판정이다. 후자는 아직 아니다.
+
+| 기존 기출 Graph 불변식 | 창작 아카이브 적용 | 현재 확인한 간극·차단 게이트 |
+|---|---|---|
+| Graph는 Item/Document 원본을 복제하지 않는 파생 snapshot이고 accepted 분석·출처·해시만 pin한다 | 동일한 Catalog Graph snapshot/adjacency/publisher를 재사용한다 | XLSX source-only 행을 Graph node로 바로 넣지 않는다. 각 행의 정본 Item Revision과 accepted 분석이 먼저 필요하다 |
+| 노드·edge마다 검증 가능한 원본 anchor가 있어야 한다 | 외부 source revision의 정확한 Office Artifact와 승인 Item 요소를 함께 가리키는 anchor를 만든다 | HWP/HWPX→PDF 화면 좌표는 변환기에 종속된 파생 위치다. 원본 source/member/hash와 변환 identity를 함께 고정하지 않은 PDF 좌표 단독 증거는 거부한다 |
+| `PAST_EXAM`은 실제 시험 occurrence·문제/해설 페이지를 요구한다 | 창작 출처는 기존 `APPROVED_ITEM` source class와 검증된 origin profile을 사용한다 | 원본이 기출변형이어도 그 자체는 기출 occurrence가 아니다. 가짜 시험·페이지 anchor나 V9/V10 기출 요청을 만들지 않는다 |
+| 분석 worker는 제안만 하고 Orchestrator/Catalog가 승인·Artifact commit·Graph CAS를 소유한다 | 기존 6개 슬롯 중 별도 1개를 bounded claim/lease로 사용하고 결과는 같은 검증 경계를 거친다 | tmux pane은 모니터링 화면일 뿐 작업 정본이 아니다. 슬롯을 열기 전 source→Item 추출 계약, 권한, queue/claim, 실패 복구를 검증해야 한다 |
+| 풀이보고서는 accepted base 분석의 additive successor이고 내부 비공개 사고 과정이 아니다 | 단계별 공개 가능한 풀이, 정답·해설 비교, 개념↔출제요소 연결을 별도 Artifact에 기록한다 | 기출 V10은 V9/페이지 anchor에 묶여 있으므로 창작용 successor 계약이 필요하다. 보고서 누락을 Graph 게시 실패와 혼동하지 않는다 |
+| publication은 기대 Graph head와 exact source/analysis를 확인한 원자적 CAS이며 과거 snapshot은 불변이다 | 기존 `AutomaticItemGraphPublicationService`의 final validation/CAS를 재사용한다 | 현행 ordinary/25문항 adapter는 실제 authoring/review/registration Workflow receipt 또는 25개 slot을 요구한다. 아카이브에 없는 receipt를 합성하지 않고 출처 검증 adapter만 추가한다 |
+
+따라서 **ontology·Graph 저장 엔진·기출 layer를 바꿀 필요는 없다.** 필요한 것은 원본 Office 위치를 신뢰 가능한 Item 요소 anchor로 해석하는 구조화 추출/검수 계약, 창작 출처 Item 승격 근거, additive 풀이보고서 successor, 그리고 기존 Graph owner를 호출하는 창작 전용 publication adapter다. 이 네 경계 중 하나라도 빠지면 코덱스가 내용을 풀었더라도 `GRAPH_PUBLISHED` 또는 `SOLUTION_REPORT_ACCEPTED`로 표시하지 않는다.
+
+실행 순서는 `source-only → 정확한 원본/파생 위치 pin → Codex 구조화 추출 제안 → 내용·정답·원본 대조 및 Item 승인 → accepted base 분석 → Graph 게시 → additive 풀이보고서 수락 → 검색/역추적`이다. 실제 코덱스 슬롯은 추출·풀이 단계에 사용하되 worker가 Registry/Graph/NAS에 직접 쓰지 않는다. 대량 작업은 대표 표본 1건의 원본↔Item↔풀이↔Graph 역추적과 중단/재전송 검증을 통과한 뒤에만 bounded chunk로 넓힌다.
+
 ## 필수 설계 절차
 
 1. **책임과 경계:** Catalog application은 exact 외부 원본→정본 Item 승격 근거, 승인, 분석, 보고서, Graph 게시를 조정한다. Orchestrator만 worker 실행과 Artifact commit을 지휘한다. worker는 DB/NAS에 직접 쓰지 않는다. Web/API는 typed 명령과 조회만 제공한다.

@@ -114,6 +114,14 @@ Scientific Studio에는 일반 사용자가 이해할 수 있는 **`DB`** 메뉴
 
 HWP/HWPX 화면 미리보기는 기존 Catalog의 격리된 Office→PDF 변환 경계를 재사용하고, 파생 PDF를 별도 Artifact Revision으로 연결한다. 변환 실패는 `미리보기 불가`로 표시하되 원본 다운로드와 메타데이터 조회를 계속 허용한다. 원본을 변환 PDF로 대체하거나 변환만으로 내용이 정확하다고 승인하지 않는다. 구조화된 본문·정답·해설 추출은 별도 제안/검토를 거쳐 기존 `AssessmentItemContent` 계약과 Registry 등록·승인 상태기계를 통과한다. source-only 문항을 HWPX 빌드·GraphRAG·유사도·출판 대상으로 자동 포함하지 않는다.
 
+### 원본 문서 미리보기의 파생 Artifact 결정
+
+- **책임·정본:** Catalog application만 현재 `(source_id, source_revision_id, edition)`을 재확인하고 해당 Content Intake source-file의 정확한 Artifact Revision/member/media/size/hash를 연다. 정본 원본은 Intake에 한 개만 남긴다. 변환용 로컬 복사는 임시 workspace이며, `external-item-preview-manifest/1.0`과 PDF만 새 Artifact에 commit한다. 원본 HWP/HWPX 바이트를 파생 Artifact에 다시 넣지 않는다.
+- **식별자·해석:** manifest는 원본 source/file/Artifact의 고정 포인터, 입력 hash, 실제 탐지 형식, PDF member/hash/size, 변환기 종류·버전·실행 파일 hash를 담는다. 현재 source revision이 달라졌거나 원본 member가 stale/누락/변조되면 PDF가 이미 있어도 fail-closed한다. 파생 PDF는 정본 Item Revision이나 교육적 승인 증거가 아니다.
+- **접근·자료구조:** 자주 쓰는 경로는 키 조회 `(source_id, current_revision_id)`와 `(source_revision_id, edition)`, 이어서 파생물의 idempotency key 조회다. 기존 B-tree/unique key와 immutable Artifact manifest를 재사용한다. 사용자는 한 번에 한 문항의 bounded PDF를 읽으며, 목록 조회는 원본/파생 바이트를 열지 않는다. 파생물 조회는 O(log n), 실제 스트리밍은 O(PDF 크기), 동시 빌드의 임시 공간은 요청당 원본+PDF 상한 안이다. 수십만 문항까지 늘어도 전체 파일 스캔으로 조회하지 않는다.
+- **트랜잭션·재시도:** 변환은 현재 Catalog application의 별도 bounded 작업으로 실행하고, 원본 포인터와 변환기 profile이 같은 정확한 요청에 기존 Catalog idempotency/unique job 경계를 적용한다. `CREATED` 상태의 동일 요청만 지원된 재시도로 복구하며, 성공 파생물을 덮어쓰지 않는다. 실패하면 원본 조회·다운로드는 그대로 되고, 실패 이력은 보존한다. 병렬 요청이 서로 다른 PDF를 같은 revision으로 승격하지 못하게 한다.
+- **의존 방향·대안:** API/Web은 인증된 사용자의 `ITEM_READ`·`CONTENT_INTAKE_READ`를 확인한 뒤 source/revision/edition만 넘기고 PDF를 같은 origin에서 제공한다. 변환·NAS·DB 해석은 Catalog adapter에만 둔다. 기존 자료 검토 `OfficeDocumentReviewIntakeService.ingest()`를 그대로 호출하는 간단한 방법은 동일 원본을 다시 commit하고 문서 검토용 source schema에 묶이므로 채택하지 않는다. 임의 HWP/HWPX의 브라우저 직접 렌더링도 신뢰할 수 있는 편집/표시 경계가 아니다.
+
 ## 7. 트랜잭션·보안·재시도
 
 ZIP은 전체 압축해제를 금지한다. 경로 탈출, symlink, Mac 메타파일, 중복 entry, 압축 폭탄, 확장자·magic 불일치, Office 외부 링크/매크로를 검증한다. 허용된 멤버만 bounded streaming으로 로컬 staging에 materialize하고, worker에게 ZIP/NAS 마운트를 주지 않는다. 검증된 Artifact commit은 기존 Orchestrator/Catalog owner만 수행한다.

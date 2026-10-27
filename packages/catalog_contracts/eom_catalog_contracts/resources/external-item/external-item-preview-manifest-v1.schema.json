@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/external-item/preview-manifest/1.0",
+  "title": "External Item Preview Manifest V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "source_id", "source_revision_id", "edition",
+    "source_file_id", "source_artifact_id", "source_artifact_revision_id",
+    "source_member_path", "source_schema_ref", "source_sha256", "source_media_type", "source_bytes",
+    "source_format", "pdf_member_path", "pdf_sha256", "pdf_bytes",
+    "conversion", "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "external-item-preview-manifest/1.0"},
+    "source_id": {"type": "string", "pattern": "^extitem_[0-9a-f]{32}$"},
+    "source_revision_id": {"type": "string", "pattern": "^extitemrev_[0-9a-f]{32}$"},
+    "edition": {"type": "integer", "minimum": 1, "maximum": 3},
+    "source_file_id": {"type": "string", "pattern": "^sourcefile_[0-9a-f]{32}$"},
+    "source_artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+    "source_artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+    "source_member_path": {"type": "string", "minLength": 8, "maxLength": 512, "pattern": "^source/.+$"},
+    "source_schema_ref": {"const": "eom://schemas/content-intake/source-file/1.0"},
+    "source_sha256": {"$ref": "#/$defs/sha256"},
+    "source_media_type": {"enum": ["application/vnd.hancom.hwp", "application/vnd.hancom.hwpx"]},
+    "source_bytes": {"type": "integer", "minimum": 8, "maximum": 104857600},
+    "source_format": {"enum": ["HWP", "HWPX"]},
+    "pdf_member_path": {"const": "preview/original.pdf"},
+    "pdf_sha256": {"$ref": "#/$defs/sha256"},
+    "pdf_bytes": {"type": "integer", "minimum": 8, "maximum": 268435456},
+    "conversion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conversion_kind", "review_pdf_sha256", "libreoffice_version", "libreoffice_sha256", "h2orestart_sha256"],
+      "properties": {
+        "conversion_kind": {"const": "LIBREOFFICE_H2ORESTART_PDF"},
+        "review_pdf_sha256": {"$ref": "#/$defs/sha256"},
+        "libreoffice_version": {"type": "string", "minLength": 1, "maxLength": 128},
+        "libreoffice_sha256": {"$ref": "#/$defs/sha256"},
+        "h2orestart_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "manifest_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "allOf": [
+    {"if": {"properties": {"source_format": {"const": "HWP"}}}, "then": {"properties": {"source_media_type": {"const": "application/vnd.hancom.hwp"}}}},
+    {"if": {"properties": {"source_format": {"const": "HWPX"}}}, "then": {"properties": {"source_media_type": {"const": "application/vnd.hancom.hwpx"}}}}
+  ],
+  "$defs": {"sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}
+}
