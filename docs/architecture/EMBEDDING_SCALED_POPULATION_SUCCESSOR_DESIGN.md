@@ -8,6 +8,9 @@
 중복·자체 hash 검증을 추가했다. 이것은 **포인터 형식**뿐이다. 실제 segment의
 source 수·범위·input hash 및 전체 자료집 완결성은 아직 Catalog가 검증하지
 않으므로 새 root를 등록하거나 QUERY에 선택할 수 없다.
+계약·기존 device-pair 집중 테스트는 77 PASS, Ruff/strict mypy PASS다. 소스
+wheel에는 새 typed module과 schema resource가 포함됨을 확인했다. 이 증거는
+Catalog publication, 전체 자료집 인가, 운영 설치 또는 1,025건 처리 성공이 아니다.
 
 ## 확인된 제한과 결정
 
