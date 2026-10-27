@@ -17,6 +17,7 @@ from unittest.mock import Mock
 from urllib.parse import unquote, urlsplit
 
 import pytest
+from eom_catalog_contracts.local_indexing_policy import LocalIndexingAccessPolicy
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.inference_transfer_catalog_adapter import (
     CatalogInferenceTransferSourceAdapter,
@@ -40,6 +41,10 @@ from eom_catalog_service.knowledge_analysis_sources import (
     read_item_source_relations,
 )
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalApplicationService
+from eom_catalog_service.local_indexing_source_paging import (
+    candidate_source_page_statement,
+    validate_candidate_source_page,
+)
 from eom_orchestrator.database import build_engine
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -49,6 +54,8 @@ from scripts.api.testdb_guard import validate_state_directory
 from tests.unit.inference_transfer_fixtures import profile
 from tests.unit.inference_transfer_snapshot_fixtures import snapshot_prepare, snapshot_read_request
 from tests.unit.test_inference_transfer_candidate_admission import admission_scope
+from tests.unit.test_local_indexing_policy_contracts import policy_document
+from tests.unit.test_local_indexing_source_authority import intent as local_indexing_intent
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 TABLES = (
@@ -1259,3 +1266,123 @@ def test_real_postgres_population_observation_order_and_72800_pointer_scale(
     record_property("population_observation_545_sources_73345_pointers_seconds", elapsed)
     record_property("population_observation_queries_per_capture", first_query_count)
     assert elapsed < 20  # bounded fixture only, not a production latency promise
+
+
+def test_real_postgres_source_first_pages_cover_10000_without_overlap(
+    pool_database: Session, record_property: Any
+) -> None:
+    """Exercise actual eligibility SQL at a scale beyond the released 1,024 cap.
+
+    All writes are to this test's pg_temp shadows. The comparison is diagnostic:
+    it does not publish a larger policy or assert timing as a production SLO.
+    """
+    session = pool_database
+    graph = admission_scope().graph_snapshot
+    source_ids = "lpad(to_hex(i),32,'0')"
+    session.execute(
+        text(
+            "INSERT INTO pg_temp.items(item_id,lifecycle_state) "
+            f"SELECT 'item_'||{source_ids},'ACTIVE' FROM generate_series(100,10099) i"
+        )
+    )
+    session.execute(
+        text(
+            "INSERT INTO pg_temp.item_revisions(item_revision_id,item_id,revision_state) "
+            f"SELECT 'itemrev_'||{source_ids},'item_'||{source_ids},'APPROVED' "
+            "FROM generate_series(100,10099) i"
+        )
+    )
+    session.execute(
+        text(
+            "INSERT INTO pg_temp.knowledge_analysis_runs(analysis_run_id,state) "
+            f"SELECT 'analysisrun_'||{source_ids},'ACCEPTED' "
+            "FROM generate_series(100,10099) i"
+        )
+    )
+    session.execute(
+        text(
+            "INSERT INTO pg_temp.knowledge_snapshot_analyses("
+            "snapshot_analysis_id,graph_snapshot_revision_id,analysis_run_id,"
+            "source_kind,source_revision_id) "
+            f"SELECT 100000+i,:graph,'analysisrun_'||{source_ids},"
+            f"'APPROVED_ITEM_REVISION','itemrev_'||{source_ids} "
+            "FROM generate_series(100,10099) i"
+        ),
+        {"graph": graph.graph_snapshot_revision_id},
+    )
+    session.execute(
+        text(
+            "INSERT INTO pg_temp.knowledge_nodes("
+            "graph_snapshot_revision_id,node_id,node_type,label,answer_bearing) "
+            "SELECT :graph,'knode_scale_'||i,'CONCEPT','synthetic condition',false "
+            "FROM generate_series(100,10099) i"
+        ),
+        {"graph": graph.graph_snapshot_revision_id},
+    )
+    session.execute(
+        text(
+            "INSERT INTO pg_temp.knowledge_node_source_pointers("
+            "pointer_id,graph_snapshot_revision_id,analysis_run_id,node_id,anchor_id,"
+            "source_class) "
+            f"SELECT 100000+i,:graph,'analysisrun_'||{source_ids},"
+            "'knode_scale_'||i,'anchor_scale_'||i,'PAST_EXAM' "
+            "FROM generate_series(100,10099) i"
+        ),
+        {"graph": graph.graph_snapshot_revision_id},
+    )
+    for table in (
+        "items",
+        "item_revisions",
+        "knowledge_analysis_runs",
+        "knowledge_snapshot_analyses",
+        "knowledge_nodes",
+        "knowledge_node_source_pointers",
+    ):
+        session.execute(text(f"ANALYZE pg_temp.{table}"))
+    policy = LocalIndexingAccessPolicy.model_validate(policy_document())
+    selection = replace(
+        local_indexing_intent(policy),
+        graph_snapshot=graph,
+        maximum_candidates=1024,
+    )
+
+    def read_all_pages() -> tuple[tuple[str, str], ...]:
+        cursor: str | None = f"itemrev_{99:032x}"
+        collected: list[tuple[str, str]] = []
+        while True:
+            rows = tuple(
+                (str(source), str(run))
+                for source, run in session.execute(
+                    candidate_source_page_statement(selection, after_source_revision_id=cursor)
+                )
+            )
+            page = validate_candidate_source_page(
+                rows, maximum=1024, after_source_revision_id=cursor
+            )
+            collected.extend(page.members)
+            if page.complete:
+                break
+            assert page.next_after_source_revision_id is not None
+            cursor = page.next_after_source_revision_id
+        return tuple(collected)
+
+    started = perf_counter()
+    original = read_all_pages()
+    baseline_seconds = perf_counter() - started
+    assert original == tuple(
+        (f"itemrev_{number:032x}", f"analysisrun_{number:032x}") for number in range(100, 10100)
+    )
+
+    session.execute(
+        text(
+            "CREATE INDEX segmented_source_first_candidate ON "
+            "pg_temp.knowledge_snapshot_analyses "
+            "(graph_snapshot_revision_id,source_kind,source_revision_id,analysis_run_id)"
+        )
+    )
+    session.execute(text("ANALYZE pg_temp.knowledge_snapshot_analyses"))
+    started = perf_counter()
+    assert read_all_pages() == original
+    composite_seconds = perf_counter() - started
+    record_property("segmented_10000_pages_existing_index_seconds", baseline_seconds)
+    record_property("segmented_10000_pages_composite_index_seconds", composite_seconds)

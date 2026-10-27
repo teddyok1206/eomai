@@ -98,6 +98,18 @@ closure나 운영 publication을 허용하지 않는다.
    `(source_kind, source_revision_id)` 인덱스가 있지만, 계획한 source-first
    keyset을 하나로 뒷받침하는지는 확인되지 않았다. 후속 disposable DB의
    `EXPLAIN`으로 입증한 뒤 필요할 때만 composite index migration을 낸다.
+   2026-10-27의 운영 DB **읽기 전용** `EXPLAIN (FORMAT JSON)`은 현재
+   Graph의 source-first keyset 형태에 `ix_knowledge_snapshot_source_revision`과
+   `uq_knowledge_snapshot_analysis`를 BitmapAnd로 결합한 후
+   `(source_revision_id, analysis_run_id)` Sort를 적용했다. 이는 546건
+   작업의 장애 증거가 아니라 대규모 페이지 순회에서 재정렬 비용을
+   검증해야 한다는 근거다. disposable PostgreSQL의 실제 eligibility SQL을
+   합성 10,000건에 적용한 source-first 10페이지 순회는 누락·중복 없이
+   완료됐다. 같은 임시 DB에서 기존 인덱스 0.360초, 후보 복합 인덱스
+   `(graph_snapshot_revision_id, source_kind, source_revision_id, analysis_run_id)`
+   0.253초였다(한 환경의 진단값이며 운영 SLO가 아님). 약 0.1초의 절대
+   차이만으로 운영 migration을 추가하지 않는다. 더 큰 실제 규모와 쓰기
+   비용을 함께 확인한 뒤 인덱스 도입을 결정한다.
    root에는 payload가 아닌 segment pointer만 둔다.
 7. **규모·복잡도:** page·segment당 최대 1,024개, numerical batch는 현재 작은
    유한 묶음을 유지한다. 전체 N건의 최초 순회는 O(N)이다. 전체 segment 수 S,
