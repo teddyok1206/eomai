@@ -29,9 +29,7 @@ def test_media_schema_and_filename_follow_detected_hwpx_bytes() -> None:
     query = ExternalItemDocumentMediaQuery(
         source_id=SOURCE_ID, source_revision_id=REVISION_ID, edition=3
     )
-    validate_contract(
-        "catalog-external-item-document-media-request", query.model_dump(mode="json")
-    )
+    validate_contract("catalog-external-item-document-media-request", query.model_dump(mode="json"))
     assert _effective_filename("문항_12345.hwp", "application/vnd.hancom.hwpx") == (
         "문항_12345.hwpx"
     )
@@ -73,7 +71,8 @@ def _service(row):
 def _row():
     return (
         SimpleNamespace(
-            source_id=SOURCE_ID, source_namespace="notion-integrated-science",
+            source_id=SOURCE_ID,
+            source_namespace="notion-integrated-science",
             external_number="12345",
         ),
         SimpleNamespace(source_id=SOURCE_ID, external_number="12345"),
@@ -103,6 +102,9 @@ def test_only_published_pinned_edition_can_open_its_artifact() -> None:
     )
     assert value.filename == "문항_12345.hwpx"
     assert value.media_type == "application/vnd.hancom.hwpx"
+    assert value.artifact_id == "artifact_" + "5" * 32
+    assert value.artifact_revision_id == "rev_" + "6" * 32
+    assert value.member_path == "source/문항_12345.hwpx"
     service.artifacts.open_verified_member.assert_called_once()
 
     stale = _service(None)

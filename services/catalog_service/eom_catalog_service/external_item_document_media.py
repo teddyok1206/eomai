@@ -24,9 +24,7 @@ from eom_catalog_service.external_item_models import (
 from eom_catalog_service.intake_service import INTAKE_SOURCE_FILE_SCHEMA_REF
 from eom_catalog_service.models import ContentIntakeBatchRecord, ContentIntakeSourceFileRecord
 
-ExternalDocumentMediaType = Literal[
-    "application/vnd.hancom.hwp", "application/vnd.hancom.hwpx"
-]
+ExternalDocumentMediaType = Literal["application/vnd.hancom.hwp", "application/vnd.hancom.hwpx"]
 _MEDIA_EXTENSIONS = {
     "application/vnd.hancom.hwp": ".hwp",
     "application/vnd.hancom.hwpx": ".hwpx",
@@ -44,6 +42,10 @@ class ResolvedExternalItemDocumentMedia:
     member: VerifiedArtifactMemberStream
     media_type: ExternalDocumentMediaType
     filename: str
+    source_file_id: str
+    artifact_id: str
+    artifact_revision_id: str
+    member_path: str
 
 
 class ExternalItemDocumentMediaService:
@@ -148,6 +150,10 @@ class ExternalItemDocumentMediaService:
             member=member,
             media_type=document.media_type,
             filename=filename,
+            source_file_id=document.source_file_id,
+            artifact_id=pointer[0],
+            artifact_revision_id=pointer[1],
+            member_path=pointer[2],
         )
 
 
