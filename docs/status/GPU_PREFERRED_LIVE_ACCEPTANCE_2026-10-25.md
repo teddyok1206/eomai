@@ -929,3 +929,15 @@ segmented root can yet be published or queried. Focused source tests were
 64 PASS; the page validator additionally passed synthetic 1,025/2,048/10,000
 row sequences. This does not prove a live PostgreSQL plan or large-corpus
 operation.
+
+### 03:40 UTC — segmented source-policy contract, not installed
+
+Source commit `c7deaf79` defines a schema-first `education-retrieval-access-policy/1.3`
+candidate. It separates a bounded page size (at most 1,024) from the maximum
+whole population (at most 1,048,576 and no more than page size times 1,024
+segments). Canonical schema/resource bytes and frozen typed values pass
+130 focused tests alongside predecessor policy and segmented-root contracts.
+The released 1.1/1.2 dispatch remains closed to 1.3; no policy was published,
+no Catalog runtime admitted a larger source set, and no INDEX/QUERY service
+was changed. The next work must connect actual Catalog authority and complete
+population validation before any root can be registered or queried.
