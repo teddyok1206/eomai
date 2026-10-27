@@ -909,3 +909,23 @@ were `4 PASS`, Ruff/format PASS. This is candidate/preflight progress, **not**
 full CPU/CUDA pair closure, actual multi-item GPU QUERY, CPU fallback, default
 activation or rollback acceptance. Continue the original INDEX catch-up and
 reaudit the complete source/profile/input-hash target sets before cutover.
+
+### 03:38 UTC — scheduled original-index observation
+
+The INDEX owner remains `active/running` with its original PID `734655` and
+invocation `9718f2ed05ac404e84ce7a69559b110c`. The selected CPU QUERY
+remains `active/running`, PID `2178866`, invocation
+`2f799a9df60043ba92db259a39b2ca03`. The INDEX journal records three
+ordinary `BATCH_COMPLETED` events since 03:08: CONCRETE_FACETS at 03:09,
+METADATA_ONLY at 03:24 and CONTENT_ONLY at 03:33 UTC. Those events report
+546 eligible sources and per-view missing bindings; they are not the exact
+CPU/CUDA pair audit. No restart, new model request or GPU-default selection
+was made. The next scheduled INDEX check is no earlier than 04:08 UTC.
+
+The source-only successor checkpoint `e4247cbe` adds source-first metadata
+paging with an extra row to reject duplicate source identities at page edges.
+The existing authority/policy still caps a whole selection at 1,024, and no
+segmented root can yet be published or queried. Focused source tests were
+64 PASS; the page validator additionally passed synthetic 1,025/2,048/10,000
+row sequences. This does not prove a live PostgreSQL plan or large-corpus
+operation.
