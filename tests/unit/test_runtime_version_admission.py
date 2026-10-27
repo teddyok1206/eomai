@@ -64,6 +64,7 @@ ADMITTED_DEFINITIONS = {
 def test_admission_matrix_matches_exact_checked_in_definition_protocols() -> None:
     # Preserve the legacy matrix; explicit source successors do not rewrite its entries.
     successors = {
+        ("external-item-learning", "1.0.0"): "external-item-learning.v1.yaml",
         ("item-inference-transfer-comparison", "1.1.0"): (
             "item-inference-transfer-comparison.v1_1.yaml"
         ),

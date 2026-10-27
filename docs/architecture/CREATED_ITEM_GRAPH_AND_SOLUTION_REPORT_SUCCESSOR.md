@@ -130,6 +130,16 @@ caller root transaction 안에서 기존 Workflow unique/idempotency 저장 → 
 
 위 build는 운영 release가 아니라 **후속 연결 구현 전 소스 후보의 설치 검증**이다. runtime activation이나 슬롯 준비 완료의 대체 증거로 사용하지 않는다. GPU INDEX는 마지막 19:42 UTC 조회에서 동일 PID `734655`와 시작 시각 `2026-10-26 00:32:30 UTC`, active/running을 유지했다.
 
+### 인증된 실행 전 준비 입구의 연결 결정
+
+하나의 privileged 운영 CLI가 기존 Identity `AuthService`로 실제 로그인하고, 메모리 안의 access token으로 현재 operator·session·필요 권한을 다시 확인한 뒤 Catalog application을 호출한다. 인증 DTO/작업 소유자는 실제 인증 결과에서만 얻으며 caller가 operator ID·permission·옛 session을 입력해 가장할 수 없다. 비밀번호는 숨김 TTY 입력만 받고 token/비밀번호/원본 PDF를 report·명령행·파일에 저장하지 않는다. 정상/실패 종료 시 이 CLI가 만든 session만 로그아웃한다. 이것은 관리자용 로컬 composition이며 Codex worker나 일반 API에 DB/NAS 접근을 추가하는 경로가 아니다.
+
+입력은 기존 `external-item-learning-start/1.0`의 exact source selection과 고정된 지침/source commit/시각/멱등 key이며, 이 CLI의 실제 동작은 **PREPARE, NOT START**다. 기존 wire schema는 바꾸지 않는다. application이 Catalog 원본/PDF 읽기 → Orchestrator 격리 렌더/페이지 Artifact → generic control lifecycle → owner-bound Workflow/V27/READY step을 순서대로 조정한다. 원본/PDF/지침 정본은 기존 Artifact이고 DB에는 작은 pointer와 manifest만 저장한다. root별 commit을 하나의 distributed transaction으로 부르지 않는다. 중간 실패의 immutable Artifact는 보존하고 exact source·멱등 key로 재개한다. source/관찰/교정본/지침/계획이 바뀌면 conflict로 중단하며 latest로 대체하지 않는다.
+
+새 초기 control release는 기존 generic `ExecutionPresetEvaluationReport`의 `NON_LIVE/CONTRACT_VALIDATION`, quality score 없음으로 기록한다. 실제 실행하는 검사는 role protocol/schema, exact instruction metadata, 기존 support capacity, 정확한 policy 및 기존 `non_live_invocation_cases`의 CLI 인자/transport 양·음성 검사뿐이다. 과학적 품질·계정의 사용 자격·quota 또는 모델 추론 PASS가 아니다. 2026-10-27 저장된 support05 가용 모델 projection은 빈 목록이므로 이를 fresh capability PASS로 꾸미거나 OBSERVE/추론을 자동 실행하지 않는다. 초기 policy 준비와 실제 worker claim을 구별하고, 실제 시작 시 기존 current account/model/capacity/lease 검사는 그대로 유지한다. 기존 model-selection successor의 fresh-capability gate를 변경하거나 우회하지 않는다.
+
+control 초기 release는 해당 exact DRAFT/policy에 대한 검증 보고서와 pointer를 기존 lifecycle에 넘길 뿐이고 START/slot/auth/계정 상태를 변경하지 않는다. 재전송은 이미 published인 **동일** 초기 policy와 exact 평가 pointer만 재사용하며, 다른 policy나 누락된 평가 이력은 거부한다. 자료 준비는 actual source/page/plan과 source 재인가를 검사하고, worker workspace materialization은 launch 호출 없이 끝낸다. 더 단순한 ‘root이므로 operator/session을 만들기’ 또는 ‘일단 START 후 바로 중단’은 각각 인증과 무실행 경계를 깨므로 배제한다.
+
 ## 필수 설계 절차
 
 1. **책임과 경계:** Catalog application은 exact 외부 원본→정본 Item 승격 근거, 승인, 분석, 보고서, Graph 게시를 조정한다. Orchestrator만 worker 실행과 Artifact commit을 지휘한다. worker는 DB/NAS에 직접 쓰지 않는다. Web/API는 typed 명령과 조회만 제공한다.
@@ -143,6 +153,14 @@ caller root transaction 안에서 기존 Workflow unique/idempotency 저장 → 
 9. **의존 방향:** JSON Schema 2020-12 → Pydantic value/command → Catalog application → 기존 Item Registry, Artifact, Graph publisher 어댑터. 원본 변환/텍스트 추출은 격리 adapter다. 도메인 모델이 SQL·파일시스템·HTTP를 import하지 않는다.
 10. **실패·재시도:** hash/권한/형식/답안/풀이 불명확은 해당 U를 격리하고 다른 행을 성공으로 꾸미지 않는다. 동일 idempotency key+입력은 기존 결과 조회, 다른 입력은 conflict다. worker 실패 기록은 보존한다. 승인 분석 없는 Graph 게시, 승인 분석 없는 보고서, 보고서 없는 최종 창작 학습 완료, origin proof 없는 Graph 게시는 fail-closed한다. 그래프 게시 실패 시 Item과 보고서를 지우지 않고 exact predecessor head에서 재시도한다.
 11. **더 단순한 대안:** 원본 행을 `APPROVED_ITEM` Graph node로 바로 삽입하거나 V10에 가짜 PDF anchor를 채우거나 ordinary publisher에 가짜 Workflow receipt를 넣는 방법은 코드가 짧아도 근거·권한·재현성을 깨므로 배제한다. 새 벡터 DB/Graph DB를 만드는 것도 기존 Catalog Graph 계약을 중복하므로 배제한다.
+
+### 인증된 PREPARE 소스 검증 체크포인트
+
+2026-10-27 UTC. 로컬 운영 입구 `eomctl content external-items learning prepare`와 Catalog 준비 application을 연결했다. 실제 로그인에서 얻은 operator/session 및 현재 네 권한을 사용하고, 정확한 source selection → 기존 Orchestrator 페이지/지침 Artifact → 초기 NON_LIVE control release → Workflow/plan/READY step → 임시 worker staging을 검사한다. 입력 source commit은 설치된 API build metadata와 runtime commit 모두에 일치해야 한다. 새 dependency는 없다. API application import는 이 명시적 운영 명령 안에서만 수행하여 기존 Identity 인증 정책·token codec을 재사용하며, 따라서 이 명령은 호환 platform/API 설치본에서만 실행한다. 일반 eomctl import에 API wheel을 강제하지 않는다.
+
+- 최종 focused unit **168 PASS**, 변경 source 9개 mypy·Ruff/format PASS.
+- 새 disposable DB `20261027203534_395c2253`에서 migration roundtrip 및 외부 문항/조립/준비 검사 **17 PASS**. 실제 SQL의 Identity 초기 로그인/공식 비밀번호 변경/현재 인증, generic preset release, Artifact commit, Workflow/plan/READY 저장, 동일 요청 replay, staging materialization, 로그아웃 후 거부를 검증했다. 원본 Office/PDF 읽기만 합성 fixture이며 실제 운영 파일/격리 systemd/runner UID PASS는 아니다. 실행 명령·platform job·Codex 호출은 0개다. 임시 DB는 공식 cleanup 완료했다.
+- 이 체크포인트는 **소스 후보**다. 다음은 새 wheel의 코드 closure/RECORD, 호환 운영 설치, 실제 원본 1건의 무실행 PREPARE다. 주간 quota·모델 사용 가능 여부는 확인하지 않았으며 실제 호출을 통한 검사도 하지 않는다.
 
 ## 프로토콜 구현 순서
 

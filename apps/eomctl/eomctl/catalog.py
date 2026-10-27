@@ -53,6 +53,8 @@ from eom_identifiers import sha256_file
 from eom_orchestrator.database import build_engine
 from sqlalchemy import Engine, inspect
 
+from eomctl.creative_learning import learning_app
+
 content_app = typer.Typer(no_args_is_help=True)
 intake_app = typer.Typer(no_args_is_help=True)
 pack_app = typer.Typer(no_args_is_help=True)
@@ -69,6 +71,7 @@ legacy_usage_import_app = typer.Typer(no_args_is_help=True)
 registry_app = typer.Typer(no_args_is_help=True)
 registry_export_app = typer.Typer(no_args_is_help=True)
 external_item_app = typer.Typer(no_args_is_help=True)
+external_item_app.add_typer(learning_app, name="learning")
 content_app.add_typer(intake_app, name="intake")
 content_app.add_typer(pack_app, name="pack")
 content_app.add_typer(stimulus_app, name="stimulus")

@@ -1,16 +1,32 @@
 """Real control-owner persistence, using guarded disposable DB and synthetic text.
 
-The authorization callback is a test port, not production user authentication.
-No Codex, capability refresh, evaluation/release or Workflow command is run.
+Control cases use a test authorization port. The final source-preparation scenario
+uses real Identity authentication and a synthetic Office/PDF resolution port.
+Only NON_LIVE contract evaluation is released; no Codex or Workflow command runs.
 """
 
 from __future__ import annotations
 
+import os
 from concurrent.futures import ThreadPoolExecutor
+from io import BytesIO
+from pathlib import Path
 from threading import Barrier
 from unittest.mock import Mock
 
 import pytest
+from eom_api_contracts.external_item_learning_start import ExternalItemLearningStartV1
+from eom_catalog_service.artifacts import VerifiedArtifactMemberStream
+from eom_catalog_service.external_item_learning_preparation_service import (
+    ExternalItemLearningPreparationService,
+    PrepareExternalItemLearningCommand,
+)
+from eom_catalog_service.external_item_preview_projection import ResolvedExternalItemPreview
+from eom_identity_service.auth_service import AuthService
+from eom_identity_service.service import OperatorService
+from eom_identity_service.tokens import SessionTokenService, TokenCodec
+from eom_operator_identity import ActorContext, ActorSource, ActorType
+from eom_operator_identity.errors import IdentityError
 from eom_orchestrator.control_artifacts import ControlArtifactPublisher
 from eom_orchestrator.control_models import (
     ExecutionPresetEvaluationRecord,
@@ -23,24 +39,41 @@ from eom_orchestrator.control_service import (
     record_capacity_policy_revision,
 )
 from eom_orchestrator.database import build_session_factory
+from eom_orchestrator.external_item_learning_control_release import (
+    release_external_item_learning_controls,
+)
 from eom_orchestrator.external_item_learning_controls import (
     prepare_external_item_learning_control_draft,
     publish_external_item_learning_instruction_bundle,
 )
+from eom_orchestrator.external_item_learning_policy_preparation import (
+    ExternalItemLearningControlInputs,
+)
 from eom_orchestrator.models import JobRecord, WorkerSlotRecord
 from eom_orchestrator.repository import ensure_protocol_version
 from eom_orchestrator.settings import Settings
+from eom_workflow.compiler import compile_definition
 from eom_workflow.control_plane import ModelCandidate
 from eom_workflow.schemas import role_schema_bundle_hash
+from eom_workflow_runner.models import (
+    WorkflowCommandRecord,
+    WorkflowInstanceRecord,
+    WorkflowStepRunRecord,
+)
 from sqlalchemy import Engine, func, select
 
 from tests.unit.test_external_item_learning_controls import NOW, OPERATOR, _capacity
+from tests.unit.test_external_item_learning_page_render import (
+    _direct_fixture_runner,
+    _pdf,
+    _source_for_pdf,
+)
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
 
-def test_instruction_replay_and_concurrent_draft_do_not_activate_or_run(
-    creative_engine: Engine, tmp_path
+def test_controls_and_authenticated_source_prepare_without_start(
+    creative_engine: Engine, tmp_path, monkeypatch
 ):
     sessions = build_session_factory(creative_engine)
     nas = tmp_path / "artifacts"
@@ -161,4 +194,163 @@ def test_instruction_replay_and_concurrent_draft_do_not_activate_or_run(
             ).canonical_document
             == original_document
         )
+
+    identity = OperatorService(creative_engine)
+    admin = identity.bootstrap_admin(
+        username="synthetic-creative-admin", display_name="Synthetic admin"
+    )
+    auth = AuthService(creative_engine, SessionTokenService(TokenCodec("synthetic-test-key-" * 4)))
+    login = auth.login(
+        username=admin.operator.username, password=admin.temporary_password, client_name="test"
+    )
+    pair = auth.change_password(
+        auth.authenticate_access(login.pair.access_token),
+        current_password=admin.temporary_password,
+        new_password="synthetic-only-disposable-password",
+    )
+
+    def actor_provider():
+        current = auth.authenticate_access(pair.access_token)
+        return ActorContext(
+            actor_type=ActorType.OPERATOR,
+            operator_id=current.operator.operator_id,
+            session_id=current.session_id,
+            request_id="synthetic-creative-preparation",
+            authentication_time=current.authenticated_at,
+            permissions=current.permissions,
+            source=ActorSource.APPLICATION_API,
+        )
+
+    pdf = _pdf()
+    source = _source_for_pdf(pdf)
+
+    def open_source(_session, _preview, **expected):
+        assert expected == dict(
+            import_id=source.import_id,
+            external_number=source.external_number,
+            expected_source_revision_id=source.source_revision_id,
+            expected_observation_sha256=source.observation_sha256,
+            expected_edition=source.selected_edition,
+        )
+        return source, ResolvedExternalItemPreview(
+            member=VerifiedArtifactMemberStream(
+                stream=BytesIO(pdf),
+                content_length=len(pdf),
+                sha256=source.preview_manifest.pdf_sha256,
+            ),
+            manifest=source.preview_manifest,
+            artifact_id=source.preview_artifact_id,
+            artifact_revision_id=source.preview_artifact_revision_id,
+        )
+
+    monkeypatch.setattr(
+        "eom_catalog_service.external_creative_learning_source._open_validated_source", open_source
+    )
+    selected = ExternalItemLearningStartV1(
+        import_id=source.import_id,
+        external_number=source.external_number,
+        source_revision_id=source.source_revision_id,
+        observation_sha256=source.observation_sha256,
+        selected_edition=source.selected_edition,
+    )
+    root = Path(__file__).resolve().parents[2]
+    inputs = ExternalItemLearningControlInputs(
+        definition=compile_definition(
+            root / "config/workflows/external-item-learning.v1.yaml", {"support"}
+        ),
+        platform_payload=arguments["platform_payload"],
+        role_payload=arguments["role_payload"],
+        source_commit="a" * 40,
+        reviewed_at=NOW,
+        capacity_revision_id=capacity.capacity_policy_revision_id,
+        candidate=draft_arguments["candidate"],
+    )
+    command = PrepareExternalItemLearningCommand(selected, inputs, "synthetic-full-preparation")
+    service = ExternalItemLearningPreparationService(
+        creative_engine,
+        settings=publisher.settings,
+        actor_provider=actor_provider,
+        worker_group_id=os.getgid(),
+        pdf_tools=_direct_fixture_runner,
+    )
+    first = service.prepare(command)
+    second = service.prepare(command)
+    assert first.workflow.selection == second.workflow.selection
+    assert first.workflow.workflow_created and not second.workflow.workflow_created
+    assert first.materialization == second.materialization
+    assert first.materialization.image_input_manifest_sha256 is not None
+    assert not any(publisher.settings.staging_root.glob("creative-prepare-*"))
+    with sessions() as session:
+        workflow = session.get(WorkflowInstanceRecord, first.workflow.selection.workflow_id)
+        step = session.get(WorkflowStepRunRecord, first.workflow.selection.step_run_id)
+        assert workflow.state == "REQUESTED" and step.state == "READY"
+        assert step.platform_job_id is None
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(WorkflowCommandRecord)
+                .where(WorkflowCommandRecord.workflow_id == workflow.workflow_id)
+            )
+            == 0
+        )
+    auth.logout(pair.session_id, admin.operator.operator_id)
+    with pytest.raises(IdentityError):
+        service.prepare(command)
         assert session.get(ExecutionPresetRecord, drafts[0].preset_id).current_revision_id is None
+
+    release_barrier = Barrier(2)
+
+    def release(_index):
+        release_barrier.wait(timeout=10)
+        return release_external_item_learning_controls(
+            sessions,
+            publisher,
+            draft=drafts[0],
+            operator_id=OPERATOR,
+            source_commit="a" * 40,
+            authorize_control_change=Mock(),
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        released = tuple(pool.map(release, range(2)))
+    assert released[0] == released[1]
+    assert released[0].preset.state == "RELEASED"
+    assert len(released[0].executed_cases) == 12
+    replay = release_external_item_learning_controls(
+        sessions,
+        publisher,
+        draft=drafts[0],
+        operator_id=OPERATOR,
+        source_commit="a" * 40,
+        authorize_control_change=Mock(),
+    )
+    assert replay == released[0]
+    with sessions() as session:
+        assert session.get(ExecutionPresetRecord, drafts[0].preset_id).current_revision_id == (
+            released[0].preset.preset_revision_id
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(ExecutionPresetRevisionRecord)
+                .where(ExecutionPresetRevisionRecord.preset_id == drafts[0].preset_id)
+            )
+            == 2
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(ExecutionPresetEvaluationRecord)
+                .where(ExecutionPresetEvaluationRecord.preset_id == drafts[0].preset_id)
+            )
+            == 1
+        )
+        report = session.get(ExecutionPresetEvaluationRecord, released[0].evaluation_id)
+        assert report.scope == "NON_LIVE" and report.quality_score_permille is None
+        assert report.cases_total == report.cases_passed == 12
+        assert (
+            session.get(
+                ExecutionPresetRevisionRecord, drafts[0].preset_revision_id
+            ).canonical_document
+            == original_document
+        )

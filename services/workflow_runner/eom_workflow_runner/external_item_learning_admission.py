@@ -34,6 +34,42 @@ class ExternalItemLearningSourceAuthorizer(Protocol):
         ...
 
 
+def validate_external_item_learning_definition(definition: WorkflowDefinitionRecord) -> None:
+    """One authoritative rule for control preparation and source submission."""
+
+    try:
+        compiled = compile_definition_data(
+            definition.canonical_definition, definition.source_path, {"support"}
+        )
+        extraction = compiled.steps_by_key.get("extract")
+        terminal = compiled.steps_by_key.get("complete")
+        if (
+            definition.definition_key != EXTERNAL_ITEM_LEARNING_WORKFLOW_KEY
+            or definition.definition_version != "1.0.0"
+            or not definition.active
+            or compiled.sha256 != definition.definition_hash
+            or compiled.definition.definition_key != definition.definition_key
+            or compiled.definition.definition_version != definition.definition_version
+            or compiled.definition.schema_version != definition.schema_version
+            or compiled.definition.start_step != "extract"
+            or compiled.definition.limits.max_step_attempts != 1
+            or compiled.definition.limits.max_rework_cycles != 0
+            or len(compiled.definition.steps) != 2
+            or not isinstance(extraction, AgentStep)
+            or extraction.worker_role != "support"
+            or extraction.result_schema != "external-item-learning-result@1.0"
+            or extraction.on_success != "complete"
+            or not isinstance(terminal, TerminalStep)
+            or terminal.terminal_status != "COMPLETED"
+        ):
+            raise ValueError("creative definition differs")
+    except ValueError as exc:
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+            "creative exact one-shot definition is required",
+        ) from exc
+
+
 def validate_external_item_learning_submission(
     *,
     definition: WorkflowDefinitionRecord,
@@ -64,26 +100,7 @@ def validate_external_item_learning_submission(
         if work is None:
             raise ValueError("missing creative work input")
         validate_contract(EXTERNAL_ITEM_LEARNING_WORK_INPUT_SCHEMA, work.model_dump(mode="json"))
-        compiled = compile_definition_data(
-            definition.canonical_definition, definition.source_path, {"support"}
-        )
-        extraction = compiled.steps_by_key.get("extract")
-        terminal = compiled.steps_by_key.get("complete")
-        if (
-            compiled.sha256 != definition.definition_hash
-            or compiled.definition.definition_key != definition.definition_key
-            or compiled.definition.definition_version != definition.definition_version
-            or compiled.definition.schema_version != definition.schema_version
-            or compiled.definition.start_step != "extract"
-            or len(compiled.definition.steps) != 2
-            or not isinstance(extraction, AgentStep)
-            or extraction.worker_role != "support"
-            or extraction.result_schema != "external-item-learning-result@1.0"
-            or extraction.on_success != "complete"
-            or not isinstance(terminal, TerminalStep)
-            or terminal.terminal_status != "COMPLETED"
-        ):
-            raise ValueError("creative learning definition or hash differs")
+        validate_external_item_learning_definition(definition)
     except (ValueError, JsonSchemaValidationError) as exc:
         raise WorkflowError(
             WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,

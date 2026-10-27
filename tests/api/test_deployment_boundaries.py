@@ -397,6 +397,27 @@ def test_api_release_verifies_knowledge_contract_resources() -> None:
         assert required in source
 
 
+def test_api_release_contains_creative_prepare_and_reauthorization_closure() -> None:
+    source = _source("scripts/api/deploy_release.sh")
+    for required in (
+        "eomctl/creative_learning.py",
+        "eom_orchestrator/external_item_learning_controls.py",
+        "eom_orchestrator/external_item_learning_control_release.py",
+        "eom_orchestrator/external_item_learning_policy_preparation.py",
+        "eom_orchestrator/external_item_learning_execution.py",
+        "eom_orchestrator/external_item_learning_page_render.py",
+        "eom_orchestrator/external_item_learning_page_publication.py",
+        "eom_workflow_runner/external_item_learning_admission.py",
+        "eom_workflow_runner/external_item_learning_preparation.py",
+        "eom_workflow_runner/external_item_learning_catalog_client.py",
+        "eom_catalog_service/external_creative_learning_source.py",
+        "eom_catalog_service/external_item_learning_preparation_service.py",
+        "eom_catalog_service/external_item_learning_authorization_service.py",
+        "eom_catalog_service/external_item_learning_authorization_dispatch.py",
+    ):
+        assert required in source
+
+
 def test_api_release_verifies_local_image_runtime_and_contract_resources() -> None:
     source = _source("scripts/api/deploy_release.sh")
 

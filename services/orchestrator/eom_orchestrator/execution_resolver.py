@@ -2128,6 +2128,7 @@ def resolve_external_item_learning_plan(
     workflow_role_schema_version: str,
     work: ExternalItemLearningWorkInput,
     resolved_at: datetime | None = None,
+    expected_preset: ExecutionPresetRevision | None = None,
 ) -> ResolvedExecutionPlanV27:
     """Pin creative source instructions to the existing bounded support pool.
 
@@ -2146,6 +2147,15 @@ def resolve_external_item_learning_plan(
             plan.plan_sha256 != existing.plan_sha256
             or plan.work_input != work
             or plan.workflow_definition_sha256 != workflow_definition_sha256
+            or (
+                expected_preset is not None
+                and (plan.preset_id, plan.preset_revision_id, plan.preset_sha256)
+                != (
+                    expected_preset.preset_id,
+                    expected_preset.preset_revision_id,
+                    expected_preset.content_sha256,
+                )
+            )
         ):
             raise ControlPlaneError(
                 "CONTROL_PLAN_CONFLICT", "creative workflow already has different pinned inputs"
@@ -2157,6 +2167,18 @@ def resolve_external_item_learning_plan(
         preset_key="external-item-learning",
         workflow_role_schema_version=workflow_role_schema_version,
     )
+    if expected_preset is not None and (
+        preset.preset_id,
+        preset.preset_revision_id,
+        preset.content_sha256,
+    ) != (
+        expected_preset.preset_id,
+        expected_preset.preset_revision_id,
+        expected_preset.content_sha256,
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POINTER_STALE", "creative preset changed before pin"
+        )
     if (
         len(preset.role_policies) != 1
         or preset.general_knowledge_policy != "DENY"

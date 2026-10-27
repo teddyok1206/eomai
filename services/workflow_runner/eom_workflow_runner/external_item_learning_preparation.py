@@ -18,6 +18,7 @@ from eom_orchestrator.external_item_learning_page_publication import (
     read_external_item_learning_page_artifact,
 )
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+from eom_workflow.control_plane import ExecutionPresetRevision
 from eom_workflow.models import WorkflowRequest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -54,6 +55,7 @@ def prepare_external_item_learning_workflow(
     idempotency_key: str,
     source_authorizer: ExternalItemLearningSourceAuthorizer,
     page_publisher: ControlFileSetPublisher,
+    expected_preset: ExecutionPresetRevision | None = None,
 ) -> PreparedExternalItemLearning:
     """Prepare in the caller root; any rejection leaves no partial preparation.
 
@@ -120,6 +122,7 @@ def prepare_external_item_learning_workflow(
             workflow_definition_sha256=definition.definition_hash,
             workflow_role_schema_version=workflow.role_schema_version,
             work=work,
+            expected_preset=expected_preset,
         )
         pointer = {
             "plan_id": plan.plan_id,

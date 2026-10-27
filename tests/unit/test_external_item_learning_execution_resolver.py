@@ -12,6 +12,7 @@ from eom_catalog_contracts import ExternalItemLearningWorkInput
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_service import ControlPlaneError, compute_control_document_hash
 from eom_orchestrator.execution_resolver import resolve_external_item_learning_plan
+from eom_workflow.control_plane import ExecutionPresetRevision
 
 from tests.unit.test_external_item_learning_execution_plan import _plan
 from tests.unit.test_external_item_learning_work_contract import _work
@@ -89,7 +90,7 @@ class _Session:
         pass
 
 
-def _resolve(session: Any, work: ExternalItemLearningWorkInput) -> Any:
+def _resolve(session: Any, work: ExternalItemLearningWorkInput, **kwargs: Any) -> Any:
     return resolve_external_item_learning_plan(
         session,
         workflow_id="workflow_" + "2" * 32,
@@ -97,6 +98,7 @@ def _resolve(session: Any, work: ExternalItemLearningWorkInput) -> Any:
         workflow_role_schema_version="workflow-role/1.33.0",
         work=work,
         resolved_at=datetime(2026, 10, 27, 11, tzinfo=UTC),
+        **kwargs,
     )
 
 
@@ -127,6 +129,28 @@ def test_creative_plan_resolution_pins_exact_work_and_released_policy() -> None:
     with pytest.raises(ControlPlaneError) as conflict:
         _resolve(_ReplaySession(), ExternalItemLearningWorkInput.model_validate(changed))
     assert conflict.value.code == "CONTROL_PLAN_CONFLICT"
+
+
+@pytest.mark.parametrize("field", ["preset_id", "preset_revision_id", "content_sha256"])
+def test_creative_plan_never_substitutes_another_expected_preset(field):
+    logical, revision = _published_preset()
+    expected = ExecutionPresetRevision.model_validate(revision.canonical_document)
+    prefix = (
+        "sha256:"
+        if field == "content_sha256"
+        else "execpresetrev_"
+        if field == "preset_revision_id"
+        else "execpreset_"
+    )
+    wrong = expected.model_copy(
+        update={field: prefix + "0" * (64 if field == "content_sha256" else 32)}
+    )
+    session = _Session(logical, revision)
+    with pytest.raises(ControlPlaneError, match="preset changed"):
+        _resolve(
+            session, ExternalItemLearningWorkInput.model_validate(_work()), expected_preset=wrong
+        )
+    assert session.added == []
 
 
 def test_creative_plan_rejects_nonprivate_support_policy() -> None:

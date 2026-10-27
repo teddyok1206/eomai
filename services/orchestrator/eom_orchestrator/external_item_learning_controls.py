@@ -17,8 +17,10 @@ from eom_workflow.control_plane import (
     ExecutionPresetRevision,
     InstructionBundleManifest,
     ModelCandidate,
+    RoleExecutionPolicy,
     UtcDatetime,
     WorkerCapacityPolicyV4,
+    WorkerRole,
 )
 from pydantic import TypeAdapter
 from sqlalchemy import func, select
@@ -45,6 +47,58 @@ from eom_orchestrator.preset_model_selection import (
 )
 
 CREATIVE_INSTRUCTION_BUNDLE_KEY = "external-item-learning-instructions"
+
+
+def resolve_external_item_learning_control_policy(
+    session: Session,
+    *,
+    instruction: BundleRevisionPointer,
+    capacity_revision_id: str,
+    candidate: ModelCandidate,
+) -> RoleExecutionPolicy:
+    """Resolve exact control purpose, without granting source or model authority."""
+
+    capacity = resolve_released_capacity_policy(session, capacity_revision_id)
+    logical = session.get(WorkerCapacityPolicyRecord, capacity.capacity_policy_id)
+    if (
+        not isinstance(capacity, WorkerCapacityPolicyV4)
+        or logical is None
+        or logical.policy_key != "fixed-host"
+        or logical.state != "ACTIVE"
+        or logical.current_revision_id != capacity_revision_id
+    ):
+        raise ControlPlaneError(
+            "CONTROL_CAPACITY_POINTER_INVALID", "creative preparation requires fixed-host V4"
+        )
+    manifest = resolve_released_instruction_bundle(session, instruction)
+    bundle = session.get(
+        ExecutionBundleRecord, instruction.bundle_id, with_for_update=True, populate_existing=True
+    )
+    if (
+        bundle is None
+        or bundle.bundle_key != CREATIVE_INSTRUCTION_BUNDLE_KEY
+        or bundle.bundle_kind != "INSTRUCTION"
+        or bundle.state != "ACTIVE"
+        or bundle.current_revision_id != instruction.bundle_revision_id
+        or tuple((part.layer, part.relative_path) for part in manifest.components)
+        != (
+            ("PLATFORM", "instructions/platform.md"),
+            ("ROLE", "instructions/external-item-learning.md"),
+        )
+    ):
+        raise ControlPlaneError(
+            "CONTROL_INSTRUCTION_POINTER_INVALID", "creative instruction purpose differs"
+        )
+    return RoleExecutionPolicy(
+        role=WorkerRole.SUPPORT,
+        model_candidates=(candidate,),
+        instruction_bundle=instruction,
+        reference_bundle=None,
+        worker_pool_key="support",
+        timeout_seconds=7200,
+        sandbox="read-only",
+        network="disabled",
+    )
 
 
 def publish_external_item_learning_instruction_bundle(
@@ -166,54 +220,13 @@ def prepare_external_item_learning_control_draft(
         authorize_control_change(operator_id)
         TypeAdapter(UtcDatetime).validate_python(created_at)
         session.execute(select(func.pg_advisory_xact_lock(LEGACY_ITEM_LEARNING_CONTROL_LOCK_ID)))
-        capacity = resolve_released_capacity_policy(session, capacity_revision_id)
-        capacity_logical = session.get(WorkerCapacityPolicyRecord, capacity.capacity_policy_id)
-        if (
-            not isinstance(capacity, WorkerCapacityPolicyV4)
-            or capacity_logical is None
-            or capacity_logical.policy_key != "fixed-host"
-            or capacity_logical.state != "ACTIVE"
-            or capacity_logical.current_revision_id != capacity_revision_id
-        ):
-            raise ControlPlaneError(
-                "CONTROL_CAPACITY_POINTER_INVALID", "creative preparation requires fixed-host V4"
-            )
-        # V4's authoritative model already enforces support/slot05/max_active=1;
-        # do not copy or mutate that topology in another policy or adapter.
-        manifest = resolve_released_instruction_bundle(session, instruction)
-        logical_bundle = session.get(
-            ExecutionBundleRecord,
-            instruction.bundle_id,
-            with_for_update=True,
-            populate_existing=True,
+        policy = resolve_external_item_learning_control_policy(
+            session,
+            instruction=instruction,
+            capacity_revision_id=capacity_revision_id,
+            candidate=candidate,
         )
-        if (
-            logical_bundle is None
-            or logical_bundle.bundle_key != CREATIVE_INSTRUCTION_BUNDLE_KEY
-            or logical_bundle.bundle_kind != "INSTRUCTION"
-            or logical_bundle.state != "ACTIVE"
-            or logical_bundle.current_revision_id != instruction.bundle_revision_id
-            or tuple((part.layer, part.relative_path) for part in manifest.components)
-            != (
-                ("PLATFORM", "instructions/platform.md"),
-                ("ROLE", "instructions/external-item-learning.md"),
-            )
-        ):
-            raise ControlPlaneError(
-                "CONTROL_INSTRUCTION_POINTER_INVALID", "creative instruction purpose differs"
-            )
-        role_policies = [
-            {
-                "role": "support",
-                "model_candidates": [candidate.model_dump(mode="json")],
-                "instruction_bundle": instruction.model_dump(mode="json"),
-                "reference_bundle": None,
-                "worker_pool_key": "support",
-                "timeout_seconds": 7200,
-                "sandbox": "read-only",
-                "network": "disabled",
-            }
-        ]
+        role_policies = [policy.model_dump(mode="json")]
         logical = session.scalar(
             select(ExecutionPresetRecord)
             .where(ExecutionPresetRecord.preset_key == "external-item-learning")

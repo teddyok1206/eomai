@@ -12,7 +12,10 @@ from eom_identifiers import content_sha256
 from eom_workflow.compiler import compile_definition
 from eom_workflow.models import WorkflowRequest
 from eom_workflow_runner.errors import WorkflowError
-from eom_workflow_runner.external_item_learning_admission import external_item_learning_fingerprint
+from eom_workflow_runner.external_item_learning_admission import (
+    external_item_learning_fingerprint,
+    validate_external_item_learning_definition,
+)
 from eom_workflow_runner.models import WorkflowDefinitionRecord, WorkflowInstanceRecord
 from eom_workflow_runner.repository import (
     create_workflow_instance,
@@ -106,6 +109,15 @@ def test_persisted_creative_work_uses_current_source_and_knowledge_stage() -> No
         "page_artifact",
         "request_sha256",
     }
+
+
+@pytest.mark.parametrize("limit", ["max_step_attempts", "max_rework_cycles"])
+def test_creative_definition_cannot_expand_one_shot_limits(limit):
+    definition = _definition()
+    definition.canonical_definition["limits"][limit] = 2
+    definition.definition_hash = content_sha256(definition.canonical_definition)
+    with pytest.raises(WorkflowError):
+        validate_external_item_learning_definition(definition)
 
 
 @pytest.mark.parametrize("invalid", ["owner", "definition", "inactive", "hash", "context", "actor"])

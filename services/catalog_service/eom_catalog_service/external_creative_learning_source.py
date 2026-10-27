@@ -51,7 +51,7 @@ _ADMISSION_PERMISSIONS = frozenset(
 )
 
 
-def _authorize_current_operator(session: Session, operator_id: str) -> None:
+def _authorize_current_operator(session: Session, operator_id: str) -> frozenset[PermissionKey]:
     """Check the persisted task owner without borrowing a browser session."""
 
     # Submission and its late check may share an identity map. Re-read current
@@ -62,12 +62,15 @@ def _authorize_current_operator(session: Session, operator_id: str) -> None:
         or operator.status != "ACTIVE"
         or operator.deleted_at is not None
         or operator.must_change_password
-        or not _ADMISSION_PERMISSIONS.issubset(effective_permissions(session, operator_id))
     ):
         raise ExternalCreativeLearningSourceError("EXTERNAL_CREATIVE_SOURCE_PERMISSION_DENIED")
+    permissions = effective_permissions(session, operator_id)
+    if not _ADMISSION_PERMISSIONS.issubset(permissions):
+        raise ExternalCreativeLearningSourceError("EXTERNAL_CREATIVE_SOURCE_PERMISSION_DENIED")
+    return permissions
 
 
-def _authorize_submission(session: Session, actor: ActorContext) -> None:
+def _authorize_submission(session: Session, actor: ActorContext) -> frozenset[PermissionKey]:
     """Recheck a live interactive session before admitting a new task."""
 
     if (
@@ -88,7 +91,16 @@ def _authorize_submission(session: Session, actor: ActorContext) -> None:
         or api_session.idle_expires_at <= now
     ):
         raise ExternalCreativeLearningSourceError("EXTERNAL_CREATIVE_SOURCE_PERMISSION_DENIED")
-    _authorize_current_operator(session, actor.operator_id)
+    return _authorize_current_operator(session, actor.operator_id)
+
+
+def authorize_external_creative_learning_preparation(session: Session, actor: ActorContext) -> str:
+    """Use the actual current session and four permissions, without opening source bytes."""
+
+    permissions = _authorize_submission(session, actor)
+    if PermissionKey.EXECUTION_PRESET_MANAGE not in permissions or actor.operator_id is None:
+        raise ExternalCreativeLearningSourceError("EXTERNAL_CREATIVE_SOURCE_PERMISSION_DENIED")
+    return actor.operator_id
 
 
 def _validated_source(
