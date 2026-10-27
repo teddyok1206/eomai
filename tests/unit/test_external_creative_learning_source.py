@@ -12,7 +12,9 @@ from eom_catalog_contracts.external_item_preview import ExternalItemPreviewManif
 from eom_catalog_service.artifacts import VerifiedArtifactMemberStream
 from eom_catalog_service.external_creative_learning_source import (
     ExternalCreativeLearningSourceError,
+    read_external_creative_learning_claim_input,
     read_external_creative_learning_input,
+    reauthorize_external_creative_learning_claim_source,
     resolve_external_creative_learning_source,
 )
 from eom_catalog_service.external_creative_learning_targets import ExternalCreativeLearningTarget
@@ -287,3 +289,147 @@ def test_source_rejects_stale_selection_before_opening_pdf(
         )
     assert captured.value.code == "EXTERNAL_CREATIVE_SOURCE_STALE"
     preview.open.assert_not_called()
+
+
+def test_persisted_claim_reauthorizes_owner_without_browser_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target, resolved = _fixtures()
+    actor, session, _, api_session, permissions = _authorized_session(monkeypatch)
+    api_session.revoked_at = datetime.now(UTC)
+    monkeypatch.setattr(
+        "eom_catalog_service.external_creative_learning_source.get_external_creative_learning_target",
+        Mock(return_value=target),
+    )
+    preview = Mock()
+    preview.open.return_value = resolved
+
+    source = reauthorize_external_creative_learning_claim_source(
+        session,
+        preview,
+        operator_id=actor.operator_id,
+        import_id=target.import_id,
+        external_number=target.external_number,
+        expected_source_revision_id=target.source_revision_id,
+        expected_observation_sha256=target.observation_sha256,
+        expected_edition=target.selected_edition,
+    )
+
+    assert source.source_revision_id == target.source_revision_id
+    assert resolved.member.stream.closed
+    permissions.assert_called_once_with(session, actor.operator_id)
+    assert all(call.args[0] is not ApiSessionRecord for call in session.get.call_args_list)
+
+
+@pytest.mark.parametrize("invalid_state", ["disabled", "deleted", "password_change", "permission"])
+def test_persisted_claim_denies_current_owner_change_before_source_open(
+    monkeypatch: pytest.MonkeyPatch, invalid_state: str
+) -> None:
+    target, _ = _fixtures()
+    actor, session, operator, _, permissions = _authorized_session(monkeypatch)
+    if invalid_state == "disabled":
+        operator.status = "DISABLED"
+    elif invalid_state == "deleted":
+        operator.deleted_at = datetime.now(UTC)
+    elif invalid_state == "password_change":
+        operator.must_change_password = True
+    else:
+        permissions.return_value = frozenset({PermissionKey.CONTENT_INTAKE_READ})
+    preview = Mock()
+
+    with pytest.raises(ExternalCreativeLearningSourceError) as captured:
+        reauthorize_external_creative_learning_claim_source(
+            session,
+            preview,
+            operator_id=actor.operator_id,
+            import_id=target.import_id,
+            external_number=target.external_number,
+            expected_source_revision_id=target.source_revision_id,
+            expected_observation_sha256=target.observation_sha256,
+            expected_edition=target.selected_edition,
+        )
+
+    assert captured.value.code == "EXTERNAL_CREATIVE_SOURCE_PERMISSION_DENIED"
+    preview.open.assert_not_called()
+
+
+def test_persisted_claim_rejects_stale_source_before_open(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target, _ = _fixtures()
+    actor, session, _, _, _ = _authorized_session(monkeypatch)
+    monkeypatch.setattr(
+        "eom_catalog_service.external_creative_learning_source.get_external_creative_learning_target",
+        Mock(return_value=target),
+    )
+    preview = Mock()
+
+    with pytest.raises(ExternalCreativeLearningSourceError) as captured:
+        reauthorize_external_creative_learning_claim_source(
+            session,
+            preview,
+            operator_id=actor.operator_id,
+            import_id=target.import_id,
+            external_number=target.external_number,
+            expected_source_revision_id="extitemrev_" + "f" * 32,
+            expected_observation_sha256=target.observation_sha256,
+            expected_edition=target.selected_edition,
+        )
+
+    assert captured.value.code == "EXTERNAL_CREATIVE_SOURCE_STALE"
+    preview.open.assert_not_called()
+
+
+@pytest.mark.parametrize("corrupt", [False, True])
+def test_persisted_claim_materializes_only_exact_pdf(
+    monkeypatch: pytest.MonkeyPatch, corrupt: bool
+) -> None:
+    target, _ = _fixtures()
+    actor, session, _, api_session, _ = _authorized_session(monkeypatch)
+    api_session.revoked_at = datetime.now(UTC)
+    pdf = _pdf()
+    source = _source_for_pdf(pdf)
+    stream = BytesIO(pdf[:-1] + b"!" if corrupt else pdf)
+    preview = Mock()
+    preview.open.return_value = ResolvedExternalItemPreview(
+        member=VerifiedArtifactMemberStream(
+            stream=stream,
+            content_length=source.preview_manifest.pdf_bytes,
+            sha256=source.preview_manifest.pdf_sha256,
+        ),
+        manifest=source.preview_manifest,
+        artifact_id=source.preview_artifact_id,
+        artifact_revision_id=source.preview_artifact_revision_id,
+    )
+    monkeypatch.setattr(
+        "eom_catalog_service.external_creative_learning_source.get_external_creative_learning_target",
+        Mock(return_value=target),
+    )
+
+    if corrupt:
+        with pytest.raises(ExternalCreativeLearningSourceError) as captured:
+            read_external_creative_learning_claim_input(
+                session,
+                preview,
+                operator_id=actor.operator_id,
+                import_id=target.import_id,
+                external_number=target.external_number,
+                expected_source_revision_id=target.source_revision_id,
+                expected_observation_sha256=target.observation_sha256,
+                expected_edition=target.selected_edition,
+            )
+        assert captured.value.code == "EXTERNAL_CREATIVE_SOURCE_PDF_INVALID"
+    else:
+        result = read_external_creative_learning_claim_input(
+            session,
+            preview,
+            operator_id=actor.operator_id,
+            import_id=target.import_id,
+            external_number=target.external_number,
+            expected_source_revision_id=target.source_revision_id,
+            expected_observation_sha256=target.observation_sha256,
+            expected_edition=target.selected_edition,
+        )
+        assert result.pdf_bytes == pdf
+    assert stream.closed
+    assert all(call.args[0] is not ApiSessionRecord for call in session.get.call_args_list)

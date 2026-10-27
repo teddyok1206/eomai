@@ -51,13 +51,22 @@ _ADMISSION_PERMISSIONS = frozenset(
 )
 
 
-def _authorize_submission(session: Session, actor: ActorContext) -> None:
-    """Recheck current identity state, not the API's copied permission snapshot.
+def _authorize_current_operator(session: Session, operator_id: str) -> None:
+    """Check the persisted task owner without borrowing a browser session."""
 
-    This is admission for an interactive submit. A persisted claim must later
-    reauthorize its operator independently; an expired browser session must not
-    be silently impersonated by a background worker.
-    """
+    operator = session.get(OperatorRecord, operator_id)
+    if (
+        operator is None
+        or operator.status != "ACTIVE"
+        or operator.deleted_at is not None
+        or operator.must_change_password
+        or not _ADMISSION_PERMISSIONS.issubset(effective_permissions(session, operator_id))
+    ):
+        raise ExternalCreativeLearningSourceError("EXTERNAL_CREATIVE_SOURCE_PERMISSION_DENIED")
+
+
+def _authorize_submission(session: Session, actor: ActorContext) -> None:
+    """Recheck a live interactive session before admitting a new task."""
 
     if (
         actor.actor_type is not ActorType.OPERATOR
@@ -66,23 +75,18 @@ def _authorize_submission(session: Session, actor: ActorContext) -> None:
         or actor.session_id is None
     ):
         raise ExternalCreativeLearningSourceError("EXTERNAL_CREATIVE_SOURCE_PERMISSION_DENIED")
-    operator = session.get(OperatorRecord, actor.operator_id)
     api_session = session.get(ApiSessionRecord, actor.session_id)
     now = datetime.now(UTC)
     if (
-        operator is None
-        or operator.status != "ACTIVE"
-        or operator.deleted_at is not None
-        or operator.must_change_password
-        or api_session is None
+        api_session is None
         or api_session.operator_id != actor.operator_id
         or api_session.revoked_at is not None
         or api_session.authenticated_at != actor.authentication_time
         or api_session.absolute_expires_at <= now
         or api_session.idle_expires_at <= now
-        or not _ADMISSION_PERMISSIONS.issubset(effective_permissions(session, actor.operator_id))
     ):
         raise ExternalCreativeLearningSourceError("EXTERNAL_CREATIVE_SOURCE_PERMISSION_DENIED")
+    _authorize_current_operator(session, actor.operator_id)
 
 
 def _validated_source(
@@ -190,6 +194,39 @@ def resolve_external_creative_learning_source(
         resolved.member.stream.close()
 
 
+def reauthorize_external_creative_learning_claim_source(
+    session: Session,
+    preview_service: ExternalItemPreviewProjectionService,
+    *,
+    operator_id: str,
+    import_id: str,
+    external_number: str,
+    expected_source_revision_id: str,
+    expected_observation_sha256: str,
+    expected_edition: int,
+) -> ExternalItemLearningSource:
+    """Reauthorize a persisted claim's owner and its exact current source.
+
+    The caller must derive ``operator_id`` from its durable task, not worker
+    input. This is a Catalog read boundary; it does not create or claim a job.
+    """
+
+    _authorize_current_operator(session, operator_id)
+    source, resolved = _open_validated_source(
+        session,
+        preview_service,
+        import_id=import_id,
+        external_number=external_number,
+        expected_source_revision_id=expected_source_revision_id,
+        expected_observation_sha256=expected_observation_sha256,
+        expected_edition=expected_edition,
+    )
+    try:
+        return source
+    finally:
+        resolved.member.stream.close()
+
+
 def read_external_creative_learning_input(
     session: Session,
     preview_service: ExternalItemPreviewProjectionService,
@@ -218,6 +255,42 @@ def read_external_creative_learning_input(
         expected_observation_sha256=expected_observation_sha256,
         expected_edition=expected_edition,
     )
+    return _materialize_exact_pdf(source, resolved)
+
+
+def read_external_creative_learning_claim_input(
+    session: Session,
+    preview_service: ExternalItemPreviewProjectionService,
+    *,
+    operator_id: str,
+    import_id: str,
+    external_number: str,
+    expected_source_revision_id: str,
+    expected_observation_sha256: str,
+    expected_edition: int,
+) -> ExternalCreativeLearningInput:
+    """Open the exact PDF for a persisted task owner at the claim boundary.
+
+    The caller must bind ``operator_id`` to its durable claim. A worker-provided
+    operator ID or stale browser session is never an authorization substitute.
+    """
+
+    _authorize_current_operator(session, operator_id)
+    source, resolved = _open_validated_source(
+        session,
+        preview_service,
+        import_id=import_id,
+        external_number=external_number,
+        expected_source_revision_id=expected_source_revision_id,
+        expected_observation_sha256=expected_observation_sha256,
+        expected_edition=expected_edition,
+    )
+    return _materialize_exact_pdf(source, resolved)
+
+
+def _materialize_exact_pdf(
+    source: ExternalItemLearningSource, resolved: ResolvedExternalItemPreview
+) -> ExternalCreativeLearningInput:
     expected_bytes = source.preview_manifest.pdf_bytes
     digest = hashlib.sha256()
     payload = bytearray()
