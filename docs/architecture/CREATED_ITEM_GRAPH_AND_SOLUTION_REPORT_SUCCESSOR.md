@@ -35,6 +35,8 @@
 
 제안의 `content_region_map`은 형식상 그럴듯한 경로만 허용하지 않는다. 실제 `AssessmentItemContent` 안에서 경로를 해석하고 제목, 모든 본문 블록, 상호작용, 정답, 해설, 점수의 필수 출처 매핑을 확인한다. 문항 본문·선지는 `TARGET_ITEM`에만, 해설은 `TARGET_ITEM` 또는 `EDITORIAL_SOLUTION`에만 연결할 수 있다. `REFERENCE_ORIGINAL`은 어느 정본 요소나 풀이 단계의 근거로도 허용하지 않는다. 작업자가 일부 근거를 못 읽었으면 없는 내용으로 보충하지 않고 `NEEDS_DECISION`을 반환한다.
 
+Codex 슬롯 입력에는 PDF 경로만 주지 않는다. `external-item-learning-page-set/1.0`은 정확한 preview Artifact Revision·PDF SHA, 고정된 `pdfinfo`/`pdftoppm` 바이너리 해시, 2400px 렌더 프로필, 순서가 연속된 각 페이지 PNG의 멤버/해시/크기를 기록한다. Orchestrator가 이 PDF를 허가·해시 검증 후 로컬에서 렌더하고 검증된 PNG+manifest만 Artifact로 commit하며, worker에게는 읽기 전용 로컬 staging 사본만 전달한다. PDF 자체는 preview Artifact를 계속 참조하고 페이지 세트에 복제하지 않는다. 이 파생 페이지 세트가 준비되지 않았거나 PDF identity와 다르면 worker claim 전 중단한다. 페이지 세트는 그래프 출처나 정본 Item이 아니라 시각 분석 입력이다.
+
 ## 필수 설계 절차
 
 1. **책임과 경계:** Catalog application은 exact 외부 원본→정본 Item 승격 근거, 승인, 분석, 보고서, Graph 게시를 조정한다. Orchestrator만 worker 실행과 Artifact commit을 지휘한다. worker는 DB/NAS에 직접 쓰지 않는다. Web/API는 typed 명령과 조회만 제공한다.
