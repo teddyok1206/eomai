@@ -29,6 +29,9 @@ from eom_catalog_service.document_review_pdf_annotation_service import (
     DocumentReviewPdfAnnotationService,
 )
 from eom_catalog_service.external_item_document_media import ExternalItemDocumentMediaService
+from eom_catalog_service.external_item_learning_authorization_service import (
+    CatalogExternalItemLearningAuthorizationService,
+)
 from eom_catalog_service.external_item_preview_projection import (
     ExternalItemPreviewProjectionService,
 )
@@ -283,6 +286,7 @@ def serve() -> int:
                 mixed_configuration_raw_sha256=mixed_read_pin,
             )
         external_item_documents = ExternalItemDocumentMediaService(engine)
+        external_item_previews = ExternalItemPreviewProjectionService(engine)
         server = CatalogApplicationServer(
             StructuredItemContentImportService(engine),
             RegistryService(engine),
@@ -319,7 +323,10 @@ def serve() -> int:
             document_review_hwpx_corrections=DocumentReviewHwpxCorrectionService(engine),
             document_review_pdf_annotations=DocumentReviewPdfAnnotationService(engine),
             external_item_documents=external_item_documents,
-            external_item_previews=ExternalItemPreviewProjectionService(engine),
+            external_item_previews=external_item_previews,
+            external_item_learning_authorization=CatalogExternalItemLearningAuthorizationService(
+                engine, external_item_previews
+            ),
             curated_document_assemblies=CuratedDocumentAssemblyService(
                 engine, external_item_documents
             ),

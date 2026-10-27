@@ -52,6 +52,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:73c25291cf6e5d5a32c1a8326cb586757f18ef4d73594c99391e5b8c9c9d045e",
         ),
+        "external-item-learning-authorization-v1": CatalogSchemaResource(
+            "schemas/catalog-application/external-item-learning-authorization-v1.schema.json",
+            "resources/catalog-application/external-item-learning-authorization-v1.schema.json",
+            "1.0",
+            "sha256:f1f392cce903c2de516e4b5dd79ea3ddd563cbe799b49909d0d3dbfe92f6286a",
+        ),
         "catalog-curated-document-assembly-read-request-v1": CatalogSchemaResource(
             "schemas/catalog-application/catalog-curated-document-assembly-read-request-v1.schema.json",
             "resources/catalog-application/catalog-curated-document-assembly-read-request-v1.schema.json",

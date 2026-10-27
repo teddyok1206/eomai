@@ -84,6 +84,16 @@ HTTP의 다음 입력 계약 `external-item-learning-start/1.0`은 `import_id`, 
 - 페이지 file-set의 승인/identity/hash/canonical path 검사 규칙은 기존 게시 모듈의 한 read 함수로 모아 실행 전 검사와 worker materializer가 함께 사용한다. binary를 새 DB 행이나 메시지로 복사하지 않는다. 독립 수명 없는 실행 context를 새 registry/framework로 만들지 않는다.
 - 관련 역할 실행/materializer unit **341 PASS**, 수정 source 4개 mypy·Ruff PASS. 그 안의 새 실행 테스트는 합성 Job/트랜잭션과 **비-Codex worker 대역**만 사용했다. 실제 Codex 호출·systemd worker 시작·운영 DB/NAS write는 0회이며, 실제 Catalog 전송·제출 준비·운영 release 전 점검은 아직 남아 있다.
 
+### Runner→Catalog 현재 원본 재인가 계약
+
+기존 private socket에 runner 전용 `AUTHORIZE_EXTERNAL_ITEM_LEARNING_INPUT` 읽기 operation 하나만 추가한다. 새 검색 서버나 공유 인증 자격을 만들지 않는다. JSON Schema 2020-12의 작은 selection은 Workflow·step·plan ID/plan hash·work-input hash만 담고 operator/session/권한/원본 경로는 받지 않는다. Catalog가 저장된 Workflow와 step에서 실제 owner 및 정확한 원본을 얻어 현재 권한과 source/preview를 다시 검증한다. 논리 entity/revision/hash는 기존 work input에 보존된다.
+
+정본은 기존 Workflow/step/plan과 Catalog source/Artifact이며 selection은 indexed key lookup용 포인터다. 조회는 고정 수 key lookup과 한 문항의 bounded Artifact 검증으로 O(log n + input bytes)이고 새 table/index/cache가 필요 없다. 요청 root에서 현재 데이터를 읽을 뿐 state transition·command enqueue·모델 호출·NAS commit은 없다. 응답은 요청 canonical SHA와 확인한 source SHA 또는 안전한 오류 코드만 반환하며 성공을 캐시하지 않는다. source 철회·stale·다른 owner/step/plan 선택은 거부하고 latest로 바꾸지 않는다.
+
+의존 방향은 Runner application의 socket adapter → 기존 Catalog private service → Catalog source owner다. 서버는 실제 peer UID로 runner의 이 operation만 허용하며, API·worker가 operator ID를 공급해 가장할 수 없다. 더 단순한 runner의 Catalog/NAS 직접 읽기나 전체 socket operation 허용은 기존 격리 경계를 깨므로 배제한다. 재전송은 같은 읽기를 다시 인가하며 작업·Artifact를 새로 만들지 않는다.
+
+2026-10-27 소스 후보 검증: Catalog 서버/composition/기존 read 경계를 포함한 관련 unit **412 PASS**, 최종 신규 authorization unit **30 PASS**, 수정 source 7개 mypy 및 Ruff/format PASS. 신규 검사는 실제 로컬 Unix socket과 합성 저장소/현재 UID로 요청·응답 결합, 호출마다 재인가, source 철회, runner 전용 operation, 잘못된 프레임·hash를 검사했다. 설치된 운영 socket/실제 DB 원본/실제 슬롯의 PASS가 아니며 Codex 호출은 0회다. 새 source 연결은 아직 운영 배포하지 않았다.
+
 ## 필수 설계 절차
 
 1. **책임과 경계:** Catalog application은 exact 외부 원본→정본 Item 승격 근거, 승인, 분석, 보고서, Graph 게시를 조정한다. Orchestrator만 worker 실행과 Artifact commit을 지휘한다. worker는 DB/NAS에 직접 쓰지 않는다. Web/API는 typed 명령과 조회만 제공한다.

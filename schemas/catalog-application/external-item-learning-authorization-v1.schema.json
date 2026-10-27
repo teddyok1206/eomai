@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/external-item-learning-authorization/1.0",
+  "title": "External Item Learning Current Source Authorization V1",
+  "oneOf": [{"$ref": "#/$defs/Request"}, {"$ref": "#/$defs/Reply"}],
+  "$defs": {
+    "Sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "Selection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["workflow_id", "step_run_id", "plan_id", "plan_sha256", "work_input_sha256"],
+      "properties": {
+        "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+        "step_run_id": {"type": "string", "pattern": "^steprun_[0-9a-f]{32}$"},
+        "plan_id": {"type": "string", "pattern": "^execplan_[0-9a-f]{32}$"},
+        "plan_sha256": {"$ref": "#/$defs/Sha256"},
+        "work_input_sha256": {"$ref": "#/$defs/Sha256"}
+      }
+    },
+    "Request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "operation", "selection"],
+      "properties": {
+        "schema_version": {"const": "external-item-learning-authorization-request/1.0"},
+        "operation": {"const": "AUTHORIZE_EXTERNAL_ITEM_LEARNING_INPUT"},
+        "selection": {"$ref": "#/$defs/Selection"}
+      }
+    },
+    "Reply": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "operation", "status", "request_sha256", "source_input_sha256", "error_code"],
+      "properties": {
+        "schema_version": {"const": "external-item-learning-authorization-reply/1.0"},
+        "operation": {"const": "AUTHORIZE_EXTERNAL_ITEM_LEARNING_INPUT"},
+        "status": {"enum": ["SUCCESS", "FAILED"]},
+        "request_sha256": {"oneOf": [{"$ref": "#/$defs/Sha256"}, {"type": "null"}]},
+        "source_input_sha256": {"oneOf": [{"$ref": "#/$defs/Sha256"}, {"type": "null"}]},
+        "error_code": {"enum": [null, "EXTERNAL_CREATIVE_AUTHORIZATION_REQUEST_INVALID", "EXTERNAL_CREATIVE_AUTHORIZATION_BINDING_INVALID", "EXTERNAL_CREATIVE_AUTHORIZATION_PERMISSION_DENIED", "EXTERNAL_CREATIVE_AUTHORIZATION_SOURCE_STALE", "EXTERNAL_CREATIVE_AUTHORIZATION_UNAVAILABLE"]}
+      },
+      "allOf": [{
+        "if": {"properties": {"status": {"const": "SUCCESS"}}, "required": ["status"]},
+        "then": {"properties": {"request_sha256": {"$ref": "#/$defs/Sha256"}, "source_input_sha256": {"$ref": "#/$defs/Sha256"}, "error_code": {"type": "null"}}},
+        "else": {"properties": {"source_input_sha256": {"type": "null"}, "error_code": {"type": "string"}}}
+      }]
+    }
+  }
+}

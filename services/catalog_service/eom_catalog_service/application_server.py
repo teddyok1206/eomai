@@ -177,6 +177,12 @@ from eom_catalog_service.external_item_document_media import (
     ExternalItemDocumentMediaError,
     ExternalItemDocumentMediaService,
 )
+from eom_catalog_service.external_item_learning_authorization_dispatch import (
+    dispatch_external_item_learning_authorization_frame,
+)
+from eom_catalog_service.external_item_learning_authorization_service import (
+    CatalogExternalItemLearningAuthorizationService,
+)
 from eom_catalog_service.external_item_preview_projection import (
     ExternalItemPreviewProjectionService,
     ExternalItemPreviewUnavailable,
@@ -276,6 +282,14 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 raise ValueError
             raw_operation = value.get("operation")
             if not self.server.peer_can_operate(self.request, raw_operation):
+                return
+            if raw_operation == "AUTHORIZE_EXTERNAL_ITEM_LEARNING_INPUT":
+                self.wfile.write(
+                    dispatch_external_item_learning_authorization_frame(
+                        self.server.external_item_learning_authorization, raw
+                    )
+                )
+                self.wfile.flush()
                 return
             if raw_operation == "READ_EXAM_SIMILARITY_OBSERVATION":
                 self.wfile.write(
@@ -1806,7 +1820,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
 
 
 class CatalogApplicationServer(_ThreadingUnixServer):
-    """Closed protocol; only the fixed Application API UID may connect."""
+    """Private Catalog API; additional peer UIDs have only their fixed read purposes."""
 
     def __init__(
         self,
@@ -1834,6 +1848,8 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         exam_similarity_reads: CatalogExamSimilarityReadService | None = None,
         item_similarity_publications: CatalogItemSimilarityPublicationService | None = None,
         workflow_similarity_reads: CatalogWorkflowSimilarityReadService | None = None,
+        external_item_learning_authorization: CatalogExternalItemLearningAuthorizationService
+        | None = None,
         workflow_runner_uid: int | None = None,
         inference_transfer_snapshot: InferenceTransferSnapshotApplicationService | None = None,
         inference_transfer_workflow_reads: CatalogInferenceTransferWorkflowReadService
@@ -1872,6 +1888,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         )
         self.item_similarity_publications = item_similarity_publications
         self.workflow_similarity_reads = workflow_similarity_reads
+        self.external_item_learning_authorization = external_item_learning_authorization
         self.workflow_runner_uid = None
         self.inference_transfer_snapshot = inference_transfer_snapshot
         self.inference_transfer_workflow_reads = inference_transfer_workflow_reads
@@ -1884,7 +1901,10 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.chat_owner_uid = chat_owner_uid
         self.socket_path = socket_path
         self.allowed_uid = pwd.getpwnam("eom-api").pw_uid if allowed_uid is None else allowed_uid
-        if workflow_similarity_reads is not None:
+        if (
+            workflow_similarity_reads is not None
+            or external_item_learning_authorization is not None
+        ):
             actual_runner_uid = (
                 pwd.getpwnam("eom-workflow-runner").pw_uid
                 if workflow_runner_uid is None
@@ -1952,7 +1972,13 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         return (
             uid == self.allowed_uid
             or uid == self.chat_owner_uid
-            or (self.workflow_similarity_reads is not None and uid == self.workflow_runner_uid)
+            or (
+                (
+                    self.workflow_similarity_reads is not None
+                    or self.external_item_learning_authorization is not None
+                )
+                and uid == self.workflow_runner_uid
+            )
         )
 
     def peer_can_operate(self, connection: socket.socket, operation: object) -> bool:
@@ -1965,6 +1991,11 @@ class CatalogApplicationServer(_ThreadingUnixServer):
             return False
         if operation == "READ_WORKFLOW_SIMILARITY_MATERIALS":
             return self.workflow_similarity_reads is not None and uid == self.workflow_runner_uid
+        if operation == "AUTHORIZE_EXTERNAL_ITEM_LEARNING_INPUT":
+            return (
+                self.external_item_learning_authorization is not None
+                and uid == self.workflow_runner_uid
+            )
         return uid == self.allowed_uid or (
             uid == self.chat_owner_uid
             and operation

@@ -17,6 +17,7 @@ from eom_identifiers import content_sha256
 from eom_operator_identity import PermissionKey
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord, WorkerLeaseRecord
 from eom_orchestrator.database import build_session_factory, transaction
+from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.models import (
     ArtifactRecord,
     ArtifactRevisionRecord,
@@ -108,6 +109,9 @@ from eom_workflow_runner.catalog_port import (
     WorkflowCatalogPort,
 )
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
+from eom_workflow_runner.external_item_learning_catalog_client import (
+    prepare_external_item_learning_execution_context,
+)
 from eom_workflow_runner.inference_transfer_execution_port import InferenceTransferRoleJobExecutor
 from eom_workflow_runner.local_embedding_admission import LocalEmbeddingOwnerAdmission
 from eom_workflow_runner.local_embedding_execution_port import LocalEmbeddingNativeExecutor
@@ -441,6 +445,7 @@ class PlatformRoleJobExecutor:
         self.orchestrator = orchestrator or Orchestrator(engine)
         self.workflow_settings = workflow_settings
         self.similarity_context_provider = similarity_context_provider
+        self.creative_page_publisher = ControlFileSetPublisher(engine, self.orchestrator.settings)
 
     def execute(
         self,
@@ -488,6 +493,16 @@ class PlatformRoleJobExecutor:
                 )
 
         similarity_context = None
+        creative_context = None
+        if isinstance(request, ExternalItemLearningWorkerRequest):
+            with self.sessions() as session:
+                creative_context = prepare_external_item_learning_execution_context(
+                    session,
+                    workflow=workflow,
+                    step=step,
+                    request=request,
+                    publisher=self.creative_page_publisher,
+                )
         if (
             self.similarity_context_provider is not None
             and isinstance(request, WorkerRequest)
@@ -512,6 +527,7 @@ class PlatformRoleJobExecutor:
             prompt_text=prompt_text,
             material_requirement=material_requirement,
             similarity_context=similarity_context,
+            external_item_learning=creative_context,
             before_execute=bind_platform_job,
             execution_tier=(
                 "ESCALATED"
