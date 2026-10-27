@@ -48,6 +48,7 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "static/guide-mode.js",
         "static/hwpx-delivery-target.js",
         "static/index.html",
+        "static/item-db-draft.js",
         "static/item-db.js",
         "static/item-preview.js",
         "static/preview-math.js",
