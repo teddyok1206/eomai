@@ -41,6 +41,8 @@ Codex 슬롯 입력에는 PDF 경로만 주지 않는다. `external-item-learnin
 
 슬롯 요청은 `external-item-learning-work-input/1.0`이라는 작은 불변 값으로 고정한다. 원본 `learning-source`와 `learning-page-set`을 반복 바이너리 없이 담고, 페이지 Artifact의 논리 ID·Revision, primary manifest member의 schema/media/SHA와 file-set manifest SHA를 별도로 pin한다. 생성자 검증은 source↔page-set↔Artifact primary SHA를 일치시킨다. 슬롯 시작과 결과 수락 시에는 Catalog의 **현재** 원본 선택·권한을 다시 확인하고, Orchestrator가 승인 Artifact의 전체 member closure·media·hash를 검증한 뒤 로컬 읽기 전용 staging으로 놓는다. `(source revision, edition, 입력 계약, 페이지 Artifact Revision)`이 작업의 멱등 키 재료이며, 재시도는 동일 포인터만 재사용한다. 초기 약 1천 건, 확장 수십만 건에서 조회는 인덱스 키 기반 O(log n), 한 요청 materialization은 최대 32페이지·256MiB에 선형이다. 원본 PDF를 worker에게 무권한 NAS 경로로 주거나, 페이지 파일 경로만 저장하는 더 단순한 방식은 권한·재현성 경계를 깨므로 쓰지 않는다. 새 DB/queue/cache는 이 입력 계약 자체에 필요 없다.
 
+역할 메시지의 후속 규격 `workflow-role/1.33.0`은 위 입력과 `external-item-learning-result/1.0` 제안만 허용하는 `support` 1단계다. 현재는 JSON Schema 2020-12 정본·패키지 리소스와 긍정/부정 검증만 준비했다. 이 파일이 존재한다는 이유로 Workflow admission, preset, Codex worker 실행이나 Graph 게시가 활성화된 것은 아니다. 다음 구현은 저장된 작업/운영자 권한에 묶인 Catalog source read, 페이지 Artifact materialization, 실행 프리셋과 결과 수락을 **한 호환 release 경계**로 닫아야 한다.
+
 ## 필수 설계 절차
 
 1. **책임과 경계:** Catalog application은 exact 외부 원본→정본 Item 승격 근거, 승인, 분석, 보고서, Graph 게시를 조정한다. Orchestrator만 worker 실행과 Artifact commit을 지휘한다. worker는 DB/NAS에 직접 쓰지 않는다. Web/API는 typed 명령과 조회만 제공한다.
