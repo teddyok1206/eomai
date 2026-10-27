@@ -2314,6 +2314,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.2",
             "sha256:9f723f43e17df7ddead0d1fcfae0008d61230b841a25fb682d62ec850bae5811",
         ),
+        "education-retrieval-access-policy-v1.3": CatalogSchemaResource(
+            "schemas/knowledge/education-retrieval-access-policy-v1_3.schema.json",
+            "resources/knowledge/education-retrieval-access-policy-v1_3.schema.json",
+            "1.3",
+            "sha256:560f871abdddb5c20152a0b75e293441810e6f7dbc63f49df8dd5f84315dd8b6",
+        ),
         "educational-retrieval-requirement": CatalogSchemaResource(
             "schemas/knowledge/educational-retrieval-requirement-v1.schema.json",
             "resources/knowledge/educational-retrieval-requirement-v1.schema.json",

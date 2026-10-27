@@ -24,6 +24,12 @@ Catalog의 source-first metadata page SQL과 extra-row/중복 검증도 소스�
 게시하지 않는다. 순수 페이지 검증은 합성 1,025·2,048·10,000건의
 순서·중복 없는 연결을 확인했지만, PostgreSQL query plan이나 운영 규모의
 전체 출처 검증을 증명하지는 않는다.
+후속 `education-retrieval-access-policy/1.3` 후보는 JSON Schema 2020-12와
+frozen typed value에서 `maximum_page_sources`(최대 1,024)와
+`maximum_population_sources`(1,025~1,048,576)를 분리한다. 전체 상한은
+`page × 1,024 segments`보다 클 수 없다. 기존 1.1/1.2 parser의 지원 버전
+목록에는 아직 넣지 않았다. 즉 이 값의 검증은 현재 service identity·Graph
+인가나 운영 활성화가 아니며, 구버전 `maximum_sources`의 의미를 바꾸지 않는다.
 
 ## 확인된 제한과 결정
 
