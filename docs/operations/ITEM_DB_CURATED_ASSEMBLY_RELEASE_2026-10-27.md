@@ -51,3 +51,13 @@
 - 상세와 검색의 응답 세대를 분리해 상세를 여는 일이 진행 중 검색·페이지 추가를 취소하지 않게 했다. 문항 전환·선택 해제·재검색은 이전 상세 응답을 무효화한다. 선택 강조는 현재 행 포인터를 사용해 이전/새 행 두 개만 갱신한다.
 - 실제 Chromium에서 표/오른쪽 상세 배치, 모바일 페이지 넘침 없음, 빠른 A→B 전환·선택 해제, 필터 직렬화·8개 상한, 최종 3교 PDF의 exact revision URL, 원본/기출 혼합 조립 포인터, 권한 변경을 검증했다. 외부 API·운영 DB·모델 호출은 없는 fixture 검증이다.
 - source Web 전체 회귀 검사 **417 PASS**. 기존 요청 폼의 브라우저 fixture가 공유 교육과정 함수에서 독립 DB controller를 찾지 못하던 문제는 그 테스트에만 작은 무부작용 어댑터로 명시했고, 실제 DB controller는 별도 Chromium 테스트로 검증했다. 운영 배포·설치 wheel 검증 결과는 아래에 별도 기록한다.
+
+### Web 전용 운영 반영
+
+2026-10-27 18:12 UTC. Source/Web commit `590625b2e2d17109840601a34e22be4598d56c58`을 푸시하고 기존 `scripts/web_gui/build_release.sh` 및 `install_release.sh`로 배포했다. API/platform·DB·Codex 슬롯·INDEX/QUERY runtime은 이번 설치 대상이 아니다.
+
+- 새 wheel SHA-256: `dadeb6e767b9f9b9d34c53837ecbb05237b0246df63442bab907992427783519`. package inventory/RECORD, 실제 Web interpreter import, 비편집 설치 simulation, `eom-web` service identity 설치 검증이 모두 PASS이며 설치 파일 50개를 확인했다.
+- `eom-web-gui.service`만 재시작했고 `ActiveState=active`, `SubState=running`, 실제 시작 시각 18:12:09 UTC다. HTTPS `/studio/api/v1/health/ready`는 `READY` 및 API `ACTIVE`를 반환했다. HTTPS로 받은 `item-db.js`, `styles.css`, `guide-content.js`는 source 바이트와 일치한다. 기존 no-store 헤더를 유지한다.
+- GPU INDEX owner는 같은 PID `734655`와 시작 시각 `2026-10-26 00:32:30 UTC`, active/running을 유지한다. 창작 학습 슬롯 실행이나 과거 실패 기록 변경은 없었다.
+- 이전 Web rollback wheel은 `/tmp/eom-web-gui-build/834f81ea290c59f2319031b6fb501ba30a912622.WXZOdx/dist/eom_web_gui-0.1.0-py3-none-any.whl`, SHA-256 `fa71bff47da3fdfbc4ee00e8472129f27bc28231f9a2483be0ec6f54d7ad449b`로 확인했다. rollback은 실행하지 않았다.
+- `AUTOMATED_BROWSER_TABLE_DETAIL=PASS`, `INSTALLED_WEB_RECORD=PASS`, `HTTPS_ASSET_ALIGNMENT=PASS`. 최신 화면에 대한 사용자의 실제 로그인/클릭 확인은 아직 `MANUAL_TABLE_DETAIL_UI=NOT_RECORDED`이며 fixture 검증을 실사용 승인으로 확대 해석하지 않는다. 기존 API의 원본 다운로드·PDF·조립 저장 계약은 변경하지 않았다.
