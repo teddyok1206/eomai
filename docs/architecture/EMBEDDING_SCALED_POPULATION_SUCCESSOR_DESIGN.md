@@ -47,6 +47,9 @@ access policy, corpus/Graph publication 검사를 1.1/1.2와 공유하되, 1.3�
 1.3 값을 받아도 거부한다. 한 active root transaction의 bounded source-first
 page는 조회 전후에 같은 1.3 policy를 재검증하고, 전체 순회는 페이지별
 `(source revision, accepted analysis run)` 해시와 범위·건수만 유지한다.
+전체 순회는 PostgreSQL `REPEATABLE READ` 또는 `SERIALIZABLE` root에서만
+허용한다. 기본 `READ COMMITTED`에서는 페이지마다 snapshot이 바뀌어 동시
+삽입을 cursor가 건너뛸 수 있으므로 시작 전에 거부한다.
 이 요약은 최대 1,024개 segment descriptor의 파생값이지 전체 profile,
 input-text hash 또는 등록된 Artifact가 아니다. 그러므로 Graph 원천/풀이보고서
 프로파일의 실제 검증과 CPU/CUDA 결합 전에는 index 등록에 사용할 수 없다.
@@ -118,7 +121,9 @@ closure나 운영 publication을 허용하지 않는다.
    root pointer 수에는 별도 상한을 둔다.
 8. **동시성:** 한 Graph snapshot/policy pin에서만 segment 집합을 만든다. 권한·
    source·revision이 순회 중 바뀌면 root 게시를 거부하고 같은 request identity로
-   재검증한다. root 교체는 기존 Registry의 transaction/idempotency 경계를 따른다.
+   재검증한다. 모든 page·profile·Artifact 읽기는 동일한 `REPEATABLE READ` 이상
+   root에서 수행한다. root 교체는 기존 Registry의 transaction/idempotency 경계를
+   따른다.
 9. **의존성:** JSON Schema 2020-12 successor → frozen typed values → Catalog
    application → PostgreSQL/NAS adapter 순서다. 새 queue, 별도 vector DB, worker의
    DB/NAS 직접 접근은 도입하지 않는다.

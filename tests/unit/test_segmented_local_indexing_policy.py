@@ -318,6 +318,9 @@ def _page_session(owner, rows: tuple[tuple[str, str], ...]):
     root = SimpleNamespace(is_active=True)
     owner.session.get_transaction = lambda: root
     owner.session.get_nested_transaction = lambda: None
+    owner.session.connection = lambda: SimpleNamespace(
+        get_isolation_level=lambda: "REPEATABLE READ"
+    )
     owner.session.new = set()
     owner.session.dirty = set()
     owner.session.deleted = set()
@@ -421,3 +424,15 @@ def test_full_scan_cannot_relabel_exact_subset_as_entire_population(owner) -> No
             cast(Session, owner.session), selected, authority=owner.authority
         )
     owner.iam.assert_not_called()
+
+
+def test_full_scan_rejects_read_committed_before_any_page(owner) -> None:
+    _segmented_owner(owner)
+    _page_session(owner, ())
+    owner.session.connection = lambda: SimpleNamespace(get_isolation_level=lambda: "READ COMMITTED")
+    with pytest.raises(SegmentedPopulationReadError, match="CONTEXT_INVALID"):
+        scan_segmented_candidate_sources(
+            cast(Session, owner.session), owner.intent, authority=owner.authority
+        )
+    owner.iam.assert_not_called()
+    owner.session.execute.assert_not_called()
