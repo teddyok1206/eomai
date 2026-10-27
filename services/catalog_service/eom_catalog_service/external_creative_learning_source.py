@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 from dataclasses import dataclass
+from datetime import UTC, datetime
 
 from eom_catalog_contracts.external_item_learning_source import (
     EXTERNAL_ITEM_LEARNING_SOURCE_SCHEMA,
@@ -12,6 +13,9 @@ from eom_catalog_contracts.external_item_learning_source import (
 from eom_catalog_contracts.external_item_media import ExternalItemDocumentMediaQuery
 from eom_catalog_contracts.validation import validate_contract
 from eom_identifiers import content_sha256
+from eom_identity_service.models import ApiSessionRecord, OperatorRecord
+from eom_identity_service.repository import effective_permissions
+from eom_operator_identity import ActorContext, ActorSource, ActorType, PermissionKey
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.external_creative_learning_targets import (
@@ -36,6 +40,49 @@ class ExternalCreativeLearningInput:
 
     source: ExternalItemLearningSource
     pdf_bytes: bytes
+
+
+_ADMISSION_PERMISSIONS = frozenset(
+    {
+        PermissionKey.CONTENT_INTAKE_READ,
+        PermissionKey.WORKFLOW_START,
+        PermissionKey.KNOWLEDGE_ANALYSIS_CREATE,
+    }
+)
+
+
+def _authorize_submission(session: Session, actor: ActorContext) -> None:
+    """Recheck current identity state, not the API's copied permission snapshot.
+
+    This is admission for an interactive submit. A persisted claim must later
+    reauthorize its operator independently; an expired browser session must not
+    be silently impersonated by a background worker.
+    """
+
+    if (
+        actor.actor_type is not ActorType.OPERATOR
+        or actor.source is not ActorSource.APPLICATION_API
+        or actor.operator_id is None
+        or actor.session_id is None
+    ):
+        raise ExternalCreativeLearningSourceError("EXTERNAL_CREATIVE_SOURCE_PERMISSION_DENIED")
+    operator = session.get(OperatorRecord, actor.operator_id)
+    api_session = session.get(ApiSessionRecord, actor.session_id)
+    now = datetime.now(UTC)
+    if (
+        operator is None
+        or operator.status != "ACTIVE"
+        or operator.deleted_at is not None
+        or operator.must_change_password
+        or api_session is None
+        or api_session.operator_id != actor.operator_id
+        or api_session.revoked_at is not None
+        or api_session.authenticated_at != actor.authentication_time
+        or api_session.absolute_expires_at <= now
+        or api_session.idle_expires_at <= now
+        or not _ADMISSION_PERMISSIONS.issubset(effective_permissions(session, actor.operator_id))
+    ):
+        raise ExternalCreativeLearningSourceError("EXTERNAL_CREATIVE_SOURCE_PERMISSION_DENIED")
 
 
 def _validated_source(
@@ -104,6 +151,7 @@ def resolve_external_creative_learning_source(
     session: Session,
     preview_service: ExternalItemPreviewProjectionService,
     *,
+    actor: ActorContext,
     import_id: str,
     external_number: str,
 ) -> ExternalItemLearningSource:
@@ -114,6 +162,7 @@ def resolve_external_creative_learning_source(
     resolve this same immutable source again; this DTO grants no execution right.
     """
 
+    _authorize_submission(session, actor)
     source, resolved = _open_validated_source(
         session, preview_service, import_id=import_id, external_number=external_number
     )
@@ -127,15 +176,18 @@ def read_external_creative_learning_input(
     session: Session,
     preview_service: ExternalItemPreviewProjectionService,
     *,
+    actor: ActorContext,
     import_id: str,
     external_number: str,
 ) -> ExternalCreativeLearningInput:
     """Resolve current Catalog authority once and materialize its exact PDF once.
 
-    The trusted caller must authorize the operator and pin this source to its
-    persisted worker claim. This helper grants neither claim nor source access.
+    This rechecks the operator's live session and current permissions before
+    opening the source. The caller must still bind this input to its persisted
+    worker claim. This helper grants neither claim nor worker source access.
     """
 
+    _authorize_submission(session, actor)
     source, resolved = _open_validated_source(
         session, preview_service, import_id=import_id, external_number=external_number
     )
