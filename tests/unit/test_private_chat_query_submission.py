@@ -63,7 +63,12 @@ def create(value, **overrides):
     )
 
 
-def test_private_definition_remains_unoffered_before_any_sql_or_current_source_io(submission):
+def test_private_definition_remains_unoffered_before_any_sql_or_current_source_io(
+    submission, monkeypatch
+):
+    # This negative seam requires an unoffered definition, independently of
+    # which purposes the current production admission catalog now supports.
+    monkeypatch.setattr(admission, "workflow_definition_is_admitted", lambda *_args: False)
     value = submission
     with pytest.raises(WorkflowError) as error:
         create(value)
@@ -108,7 +113,10 @@ def test_private_context_cannot_enter_another_workflow_persistence_branch(submis
     assert value.session.mock_calls == value.owner.mock_calls == []
 
 
-def test_atomic_private_start_does_not_offer_a_definition_or_invent_a_start(submission):
+def test_atomic_private_start_does_not_offer_a_definition_or_invent_a_start(
+    submission, monkeypatch
+):
+    monkeypatch.setattr(admission, "workflow_definition_is_admitted", lambda *_args: False)
     value = submission
     with pytest.raises(WorkflowError) as error:
         start_private_chat_query_in_session(

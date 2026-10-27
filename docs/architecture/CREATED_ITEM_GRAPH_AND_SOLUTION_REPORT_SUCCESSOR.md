@@ -39,9 +39,26 @@ Codex 슬롯 입력에는 PDF 경로만 주지 않는다. `external-item-learnin
 
 현재 구현은 페이지 세트 스키마·검증 모델, Catalog의 current source/preview 재인가 및 bounded PDF 일회 읽기, Orchestrator의 **격리 렌더 어댑터**, 기존 resumable `ControlFileSetPublisher`를 호출하는 전용 게시 어댑터, exact Artifact Revision의 file-set closure를 다시 검사해 PNG만 worker workspace에 놓는 materializer까지다. Catalog 읽기와 Orchestrator 게시 사이의 저장된 작업·권한·cross-service 전송, Workflow/slot admission은 아직 남아 있으므로 이 단계의 소스 테스트만으로 운영 창작 분석이 가능하다고 표시하지 않는다. 특히 workflow-runner의 Catalog private socket 권한은 현재 유사도 조회 한 operation으로 제한되어 있다. 창작 PDF를 얻기 위해 이 제한을 암묵적으로 넓히거나 Catalog/NAS를 우회하지 않는다. 개발 셸 계정에는 새 systemd transient unit 생성 권한이 없어 격리 runner의 실제 운영 실행 검증도 별도 운영 경계에서 필요하다.
 
-후속 Catalog source-read 입구는 `ActorContext`의 복사된 권한 목록을 신뢰하지 않고, 실제 API operator·session의 활성/미폐기/미만료 상태와 인증 시각을 DB에서 다시 확인한다. 현재 역할의 `CONTENT_INTAKE_READ`, `WORKFLOW_START`, `KNOWLEDGE_ANALYSIS_CREATE`가 모두 있어야 원본/파생 PDF를 열 수 있다. 소스 테스트는 정상·권한 변경·세션 폐기/만료·계정 비활성/비밀번호 변경·세션-계정 불일치에서 파일이 열리지 않는 것을 확인했다. **이 검사는 대화형 제출 입구에만 해당한다.** 저장된 worker claim 시점에는 만료된 브라우저 세션을 흉내 내지 않고, 저장된 operator identity·현재 권한과 pin된 source/Artifact를 별도 application 경계에서 재인가해야 한다. 아직 그 저장 작업/claim이 없으므로 슬롯 활성화는 계속 차단한다.
+후속 Catalog source-read 입구는 `ActorContext`의 복사된 권한 목록을 신뢰하지 않고, 실제 API operator·session의 활성/미폐기/미만료 상태와 인증 시각을 DB에서 다시 확인한다. 현재 역할의 `CONTENT_INTAKE_READ`, `WORKFLOW_START`, `KNOWLEDGE_ANALYSIS_CREATE`가 모두 있어야 원본/파생 PDF를 열 수 있다. 소스 테스트는 정상·권한 변경·세션 폐기/만료·계정 비활성/비밀번호 변경·세션-계정 불일치에서 파일이 열리지 않는 것을 확인했다. **이 검사는 대화형 제출 입구에만 해당한다.** 저장된 worker claim 시점에는 만료된 브라우저 세션을 흉내 내지 않고, 저장된 operator identity·현재 권한과 pin된 source/Artifact를 별도 application 경계에서 재인가해야 한다. 아래의 저장 application 후보와 별개로 운영 제출·claim 연결은 아직 없으므로 슬롯 활성화는 계속 차단한다.
 
 후속 구현으로 Catalog에 저장된 작업 소유자 ID를 받는 `reauthorize_external_creative_learning_claim_source`와 `read_external_creative_learning_claim_input` 읽기 경계가 추가됐다. 이들은 브라우저 세션을 사용하지 않고 현재 계정 활성 상태·삭제/비밀번호 변경 여부·세 권한 및 정확한 source/preview pointer를 다시 확인한다. PDF가 필요한 때에는 기대 크기·SHA를 확인하며 bounded materialization 후 stream을 닫는다. 소유자 ID는 향후 영속 작업에서만 가져와야 하며 worker 요청값을 신뢰하면 안 된다. 계정 변경·source stale·PDF hash 회귀를 포함한 소스 테스트는 통과했지만, 이 함수 자체는 작업 생성·원자적 claim·페이지 staged materialization·슬롯 실행을 구현하거나 허용하지 않는다.
+
+### 영속 Workflow 제출 경계의 구현 결정
+
+새 queue/table을 만들지 않고 기존 `workflow_instances`/고유 idempotency key/active request hash와 append-only 초기 event를 재사용한다. 입력은 기존 `WorkflowRequest(EXTERNAL_ITEM_LEARNING_REQUEST)`와 불변 `external-item-learning-work-input/1.0`이다. 이 문서는 메시지의 기존 schema나 기출 계약을 변경하지 않는다.
+
+- Catalog가 원본/권한의 정본이고 Workflow repository는 작업 identity·멱등 저장의 owner다. Workflow application은 작은 source-authorizer port를 호출하며 Catalog adapter가 현재 operator와 exact source/preview를 재인가한다. 도메인/계약은 SQL·NAS를 import하지 않는다.
+- 정확한 `external-item-learning@1.0.0`, 단일 support 추출→종료 DAG, role `1.33.0`, 입력·정의 hash와 실제 operator를 검증한 뒤에만 저장한다. native/비교 작업의 runtime context나 임의 context를 혼합하지 않는다. 재전송에서도 source를 재인가하고, 저장 후 같은 root에서 한 번 더 확인해 중간 권한/source 변경을 거부한다.
+- 빈번한 접근은 idempotency key/active request hash의 indexed lookup이다. 창작 전용 fingerprint에 실제 owner를 포함해 다른 계정의 active 작업이 재사용되지 않게 하며, 기존 작업 계열의 hash bytes는 바꾸지 않는다. 한 작업의 O(k) 입력 검증은 bounded page manifest 크기에 비례하고 binary는 DB에 넣지 않는다.
+- 경쟁 생성은 기존 unique 제약과 savepoint/replay를 사용한다. 실패한 늦은 재인가에서는 caller root를 rollback하며 새 identity로 우회하지 않는다. 작업 stage는 AUTHORING이 아니라 KNOWLEDGE_ANALYSIS다.
+- 더 단순한 generic 무검증 저장은 owner가 다른 작업 재사용과 임의 원본 입력을 허용할 수 있어 배제한다. 이 제출 경계가 구현돼도 실제 command enqueue·claim·Orchestrator source/page 재검증 및 수락을 연결하기 전까지 슬롯은 비활성이다.
+
+2026-10-27 18:31 UTC 소스 검증: 위 제출 gate와 Catalog source-authorizer adapter를 구현했다. 새 요청 ID만 바꿔도 같은 고정 source/page 작업의 fingerprint는 달라지지 않으며, 다른 요청 ID의 replay는 원래 요청을 덮어쓰지 않고 conflict 처리한다. 같은 root의 늦은 계정 확인에는 ORM identity-map의 옛 값을 쓰지 않도록 `populate_existing`을 적용했다. 새 DB migration·dependency는 없다.
+
+- Workflow 생성 경계 관련 unit **274 PASS**, 최종 Catalog/창작 admission focused **38 PASS**, 수정 source 3개 mypy 및 Ruff PASS.
+- 보호된 disposable PostgreSQL에서 기존 외부 문항/조립 검사와 새 저장 검사를 합쳐 **13 PASS**. 같은 key와 다른 key의 동시 동일 입력, owner별 분리, exact replay, 초기 event 1개, 늦은 source 거부 후 rollback을 검증했다. 이 테스트의 source-authorizer는 명시적인 합성 fixture이므로 실제 운영 원본 권한이나 슬롯 실행의 PASS를 뜻하지 않는다. 임시 DB `20261027182549_ad3868a6`은 공식 cleanup으로 제거했다.
+- 넓은 unit 실행에서 사전부터 실패하던 private QUERY 음성 fixture 2건은 수정 전 HEAD의 별도 source snapshot에서도 재현했다. 해당 fixture가 실제로 테스트하려는 ‘definition 미허용’ 조건을 명시하도록만 수정했고 private QUERY production 동작은 바꾸지 않았다.
+- 이 변경은 아직 platform/API 운영 배포·HTTP 제출 입구·command enqueue·worker claim·Graph 게시를 연결하지 않은 **소스 후보**다. 이미 확인된 DB GUI 운영 릴리스와 혼동하지 않는다.
 
 HTTP의 다음 입력 계약 `external-item-learning-start/1.0`은 `import_id`, U, exact `source_revision_id`, 행의 `observation_sha256`, 선택 2/3교만 받는다. 운영자 ID·권한·Artifact 경로나 worker 입력은 받지 않는다. Catalog는 현재 U lookup과 **이 네 가지 고정 입력**을 비교한 후에만 파생 PDF를 연다. 화면을 열어둔 사이 source revision·관찰·교정 선택이 바뀌면 `EXTERNAL_CREATIVE_SOURCE_STALE`로 거부하며 latest로 자동 대체하지 않는다. JSON Schema 2020-12와 Pydantic 및 현재성/권한 회귀 테스트가 준비됐다. 아직 HTTP route·Catalog 전송·영속 Workflow/claim·page Artifact 게시를 연결하지 않았으므로 이 요청 계약을 운영 기능으로 표시하지 않는다.
 

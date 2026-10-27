@@ -8,9 +8,11 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_contracts.external_item_learning_source import ExternalItemLearningSource
 from eom_catalog_contracts.external_item_preview import ExternalItemPreviewManifest
 from eom_catalog_service.artifacts import VerifiedArtifactMemberStream
 from eom_catalog_service.external_creative_learning_source import (
+    CatalogExternalItemLearningSourceAuthorizer,
     ExternalCreativeLearningSourceError,
     read_external_creative_learning_claim_input,
     read_external_creative_learning_input,
@@ -78,7 +80,7 @@ def _authorized_session(
         idle_expires_at=now + timedelta(minutes=15),
     )
     session = Mock()
-    session.get.side_effect = lambda model, _identity: (
+    session.get.side_effect = lambda model, _identity, **_kwargs: (
         operator if model is OperatorRecord else api_session if model is ApiSessionRecord else None
     )
     permissions = Mock(
@@ -125,6 +127,8 @@ def test_source_resolution_keeps_exact_original_and_preview(
     lookup.assert_called_once()
     assert resolved.member.stream.closed
     permissions.assert_called_once_with(session, actor.operator_id)
+    session.get.assert_any_call(OperatorRecord, actor.operator_id, populate_existing=True)
+    session.get.assert_any_call(ApiSessionRecord, actor.session_id, populate_existing=True)
 
 
 def test_source_resolution_rejects_cross_revision_pointer_and_closes_stream(
@@ -318,6 +322,25 @@ def test_persisted_claim_reauthorizes_owner_without_browser_session(
     assert source.source_revision_id == target.source_revision_id
     assert resolved.member.stream.closed
     permissions.assert_called_once_with(session, actor.operator_id)
+    assert all(call.args[0] is not ApiSessionRecord for call in session.get.call_args_list)
+
+
+def test_catalog_adapter_resolves_the_workflow_source_authorizer_port(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    target, resolved = _fixtures()
+    actor, session, _, _, _ = _authorized_session(monkeypatch)
+    monkeypatch.setattr(
+        "eom_catalog_service.external_creative_learning_source.get_external_creative_learning_target",
+        Mock(return_value=target),
+    )
+    preview = Mock()
+    preview.open.return_value = resolved
+    source = ExternalItemLearningSource.model_validate(_source())
+    adapter = CatalogExternalItemLearningSourceAuthorizer(preview)
+
+    assert adapter.reauthorize(session, operator_id=actor.operator_id, source=source) == source
+    assert resolved.member.stream.closed
     assert all(call.args[0] is not ApiSessionRecord for call in session.get.call_args_list)
 
 

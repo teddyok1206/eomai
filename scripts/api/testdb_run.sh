@@ -385,6 +385,7 @@ if [[ "${action}" == "external-item-tests" ]]; then
   "${PYTHON}" -m pytest -q \
     tests/integration/test_external_item_db_search.py \
     tests/integration/test_external_item_import_publication.py \
+    tests/integration/test_external_item_learning_workflow_storage.py \
     tests/integration/test_curated_document_assembly_storage.py
   printf 'Disposable external Item DB search and publication tests passed.\n'
   exit 0

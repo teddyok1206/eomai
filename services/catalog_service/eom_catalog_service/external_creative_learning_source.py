@@ -54,7 +54,9 @@ _ADMISSION_PERMISSIONS = frozenset(
 def _authorize_current_operator(session: Session, operator_id: str) -> None:
     """Check the persisted task owner without borrowing a browser session."""
 
-    operator = session.get(OperatorRecord, operator_id)
+    # Submission and its late check may share an identity map. Re-read current
+    # revocation/password state instead of accepting the earlier ORM snapshot.
+    operator = session.get(OperatorRecord, operator_id, populate_existing=True)
     if (
         operator is None
         or operator.status != "ACTIVE"
@@ -75,7 +77,7 @@ def _authorize_submission(session: Session, actor: ActorContext) -> None:
         or actor.session_id is None
     ):
         raise ExternalCreativeLearningSourceError("EXTERNAL_CREATIVE_SOURCE_PERMISSION_DENIED")
-    api_session = session.get(ApiSessionRecord, actor.session_id)
+    api_session = session.get(ApiSessionRecord, actor.session_id, populate_existing=True)
     now = datetime.now(UTC)
     if (
         api_session is None
@@ -225,6 +227,27 @@ def reauthorize_external_creative_learning_claim_source(
         return source
     finally:
         resolved.member.stream.close()
+
+
+class CatalogExternalItemLearningSourceAuthorizer:
+    """Catalog adapter for the Workflow application's source-authorization port."""
+
+    def __init__(self, preview: ExternalItemPreviewProjectionService) -> None:
+        self.preview = preview
+
+    def reauthorize(
+        self, session: Session, *, operator_id: str, source: ExternalItemLearningSource
+    ) -> ExternalItemLearningSource:
+        return reauthorize_external_creative_learning_claim_source(
+            session,
+            self.preview,
+            operator_id=operator_id,
+            import_id=source.import_id,
+            external_number=source.external_number,
+            expected_source_revision_id=source.source_revision_id,
+            expected_observation_sha256=source.observation_sha256,
+            expected_edition=source.selected_edition,
+        )
 
 
 def read_external_creative_learning_input(

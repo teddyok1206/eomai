@@ -87,6 +87,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
 
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
+from eom_workflow_runner.external_item_learning_admission import (
+    EXTERNAL_ITEM_LEARNING_WORKFLOW_KEY,
+    ExternalItemLearningSourceAuthorizer,
+    external_item_learning_fingerprint,
+    reauthorize_external_item_learning_submission,
+    validate_external_item_learning_submission,
+)
 from eom_workflow_runner.inference_transfer_admission import (
     InferenceTransferSubmissionContext,
     admit_inference_transfer_workflow_request,
@@ -1081,7 +1088,82 @@ def create_workflow_instance(
     private_chat_query_context: PrivateChatQuerySubmissionContext | None = None,
     private_chat_query_owner: PrivateChatQueryOwnerAdmission | None = None,
     private_chat_query_executor: PrivateChatQueryNativeExecutor | None = None,
+    external_item_learning_authorizer: ExternalItemLearningSourceAuthorizer | None = None,
 ) -> tuple[WorkflowInstanceRecord, bool]:
+    is_creative = (
+        isinstance(request, WorkflowRequest)
+        and getattr(request, "request_name", None) == "EXTERNAL_ITEM_LEARNING_REQUEST"
+    )
+    if is_creative or definition.definition_key == EXTERNAL_ITEM_LEARNING_WORKFLOW_KEY:
+        if (
+            not is_creative
+            or not isinstance(request, WorkflowRequest)
+            or external_item_learning_authorizer is None
+            or any(
+                value is not None
+                for value in (
+                    runtime_context,
+                    completed_preset_revision_id,
+                    inference_transfer_context,
+                    local_embedding_owner,
+                    local_embedding_executor,
+                    reference_query_owner,
+                    reference_query_executor,
+                    private_chat_query_context,
+                    private_chat_query_owner,
+                    private_chat_query_executor,
+                )
+            )
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+                "creative learning requires only its purpose and actual Catalog source owner",
+            )
+        checked = validate_external_item_learning_submission(
+            definition=definition, request=request, actor_type=actor_type, actor_id=actor_id
+        )
+        reauthorize_external_item_learning_submission(
+            session,
+            request=checked,
+            operator_id=actor_id,
+            source_authorizer=external_item_learning_authorizer,
+        )
+        try:
+            result = _persist_workflow_instance(
+                session,
+                definition=definition,
+                request=checked,
+                idempotency_key=idempotency_key,
+                actor_type=actor_type,
+                actor_id=actor_id,
+            )
+            stored, _created = result
+            if (
+                stored.created_actor_type != actor_type
+                or stored.created_actor_id != actor_id
+                or stored.definition_id != definition.definition_id
+                or stored.definition_hash != definition.definition_hash
+                or stored.initial_request != workflow_request_storage_document(checked)
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+                    "creative learning replay differs from its owner or original input",
+                )
+            reauthorize_external_item_learning_submission(
+                session,
+                request=checked,
+                operator_id=actor_id,
+                source_authorizer=external_item_learning_authorizer,
+            )
+            return result
+        except BaseException:
+            session.rollback()
+            raise
+    if external_item_learning_authorizer is not None:
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+            "creative learning source owner cannot admit another Workflow purpose",
+        )
     if (
         isinstance(request, PrivateChatQueryWorkflowRequest)
         or definition.definition_key == PRIVATE_CHAT_QUERY_WORKFLOW_KEY
@@ -1383,7 +1465,10 @@ def _persist_workflow_instance(
         )
     else:
         request_hash = (
-            reference_query_business_fingerprint(
+            external_item_learning_fingerprint(definition, request, operator_id=actor_id)
+            if isinstance(request, WorkflowRequest)
+            and request.request_name == "EXTERNAL_ITEM_LEARNING_REQUEST"
+            else reference_query_business_fingerprint(
                 definition, request, actor_type=actor_type, actor_id=actor_id
             )
             if isinstance(request, SupportedReferenceQueryWorkflowRequest)
@@ -1491,6 +1576,7 @@ def _persist_workflow_instance(
                 "KNOWLEDGE_ANALYSIS_REQUEST",
                 "LEGACY_ITEM_EXTRACTION_REQUEST",
                 "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST",
+                "EXTERNAL_ITEM_LEARNING_REQUEST",
             }
             else WorkflowStage.AUTHORING.value
         ),

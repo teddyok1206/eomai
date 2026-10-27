@@ -61,3 +61,5 @@
 - GPU INDEX owner는 같은 PID `734655`와 시작 시각 `2026-10-26 00:32:30 UTC`, active/running을 유지한다. 창작 학습 슬롯 실행이나 과거 실패 기록 변경은 없었다.
 - 이전 Web rollback wheel은 `/tmp/eom-web-gui-build/834f81ea290c59f2319031b6fb501ba30a912622.WXZOdx/dist/eom_web_gui-0.1.0-py3-none-any.whl`, SHA-256 `fa71bff47da3fdfbc4ee00e8472129f27bc28231f9a2483be0ec6f54d7ad449b`로 확인했다. rollback은 실행하지 않았다.
 - `AUTOMATED_BROWSER_TABLE_DETAIL=PASS`, `INSTALLED_WEB_RECORD=PASS`, `HTTPS_ASSET_ALIGNMENT=PASS`. 최신 화면에 대한 사용자의 실제 로그인/클릭 확인은 아직 `MANUAL_TABLE_DETAIL_UI=NOT_RECORDED`이며 fixture 검증을 실사용 승인으로 확대 해석하지 않는다. 기존 API의 원본 다운로드·PDF·조립 저장 계약은 변경하지 않았다.
+
+후속 사용자 확인: 새 운영 GUI를 본 사용자가 “GUI 아주아주 너무 좋다”라고 확인했다. 따라서 표/상세 배치와 기본 가독성은 `MANUAL_TABLE_DETAIL_LAYOUT=USER_CONFIRMED`로 기록한다. 이 응답을 최신 화면의 모든 필터·다운로드·동시성 분기의 실사용 재시험 증거로 확대하지 않는다.
