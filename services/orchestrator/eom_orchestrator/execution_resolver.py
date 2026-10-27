@@ -14,6 +14,7 @@ from eom_catalog_contracts import (
     EvidenceBundlePublicationResultV3,
     EvidenceBundlePublicationResultV4,
     EvidenceBundlePublicationResultV5,
+    ExternalItemLearningWorkInput,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
@@ -53,6 +54,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV20,
     ResolvedExecutionPlanV25,
     ResolvedExecutionPlanV26,
+    ResolvedExecutionPlanV27,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
@@ -2116,6 +2118,125 @@ def resolve_legacy_item_extraction_plan(
     )
     session.flush()
     return model
+
+
+def resolve_external_item_learning_plan(
+    session: Session,
+    *,
+    workflow_id: str,
+    workflow_definition_sha256: str,
+    workflow_role_schema_version: str,
+    work: ExternalItemLearningWorkInput,
+    resolved_at: datetime | None = None,
+) -> ResolvedExecutionPlanV27:
+    """Pin an already-authorized creative source to the released private support policy.
+
+    This resolver only records policy and input identity. Its caller must reauthorize
+    the current Catalog source and page Artifact before a claim or worker staging.
+    """
+
+    existing = session.scalar(
+        select(ResolvedExecutionPlanRecord).where(
+            ResolvedExecutionPlanRecord.workflow_id == workflow_id
+        )
+    )
+    if existing is not None:
+        plan = ResolvedExecutionPlanV27.model_validate(existing.canonical_document)
+        if (
+            plan.plan_sha256 != existing.plan_sha256
+            or plan.work_input != work
+            or plan.workflow_definition_sha256 != workflow_definition_sha256
+        ):
+            raise ControlPlaneError(
+                "CONTROL_PLAN_CONFLICT", "creative workflow already has different pinned inputs"
+            )
+        return plan
+
+    preset = lock_current_execution_preset(
+        session,
+        preset_key="external-item-learning",
+        workflow_role_schema_version=workflow_role_schema_version,
+    )
+    if (
+        len(preset.role_policies) != 1
+        or preset.general_knowledge_policy != "DENY"
+        or preset.role_policies[0].role != WorkerRole.SUPPORT
+        or preset.role_policies[0].worker_pool_key != "creative-learning"
+        or preset.role_policies[0].reference_bundle is not None
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POLICY_INVALID", "creative learning requires one private support role"
+        )
+    policy = preset.role_policies[0]
+    candidate = policy.model_candidates[0]
+    step = ResolvedStepExecution(
+        step_key="extract",
+        role=WorkerRole.SUPPORT,
+        model=candidate.model,
+        reasoning_effort=candidate.reasoning_effort,
+        instruction_bundle=policy.instruction_bundle,
+        reference_bundle=None,
+        worker_pool_key="creative-learning",
+        timeout_seconds=policy.timeout_seconds,
+        sandbox=policy.sandbox,
+        network=policy.network,
+        general_knowledge_mode="DENIED",
+    )
+    document: dict[str, object] = {
+        "schema_version": "resolved-execution-plan/27.0",
+        "plan_id": new_execution_plan_id(),
+        "workflow_id": workflow_id,
+        "workload_class": "KNOWLEDGE_ANALYSIS",
+        "preset_id": preset.preset_id,
+        "preset_revision_id": preset.preset_revision_id,
+        "preset_sha256": preset.content_sha256,
+        "workflow_definition_key": "external-item-learning",
+        "workflow_definition_version": "1.0.0",
+        "workflow_definition_sha256": workflow_definition_sha256,
+        "work_input": work.model_dump(mode="json"),
+        "capacity_policy_revision_id": preset.capacity_policy_revision_id,
+        "steps": [step.model_dump(mode="json")],
+        "resolver_version": "27.0.0",
+        "resolved_at": (resolved_at or datetime.now(UTC)).isoformat().replace("+00:00", "Z"),
+        "plan_sha256": "sha256:" + "0" * 64,
+    }
+    document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
+    validate_control_contract("resolved-execution-plan-v27", document)
+    plan = ResolvedExecutionPlanV27.model_validate(document)
+    session.add(
+        ResolvedExecutionPlanRecord(
+            plan_id=plan.plan_id,
+            workflow_id=plan.workflow_id,
+            preset_id=plan.preset_id,
+            preset_revision_id=plan.preset_revision_id,
+            capacity_policy_revision_id=plan.capacity_policy_revision_id,
+            graph_snapshot_revision_id=None,
+            evidence_bundle_revision_id=None,
+            plan_sha256=plan.plan_sha256,
+            resolver_version=plan.resolver_version,
+            canonical_document=plan.model_dump(mode="json"),
+            resolved_at=plan.resolved_at,
+        )
+    )
+    session.flush()
+    session.add(
+        ResolvedExecutionPlanStepRecord(
+            plan_id=plan.plan_id,
+            step_key=step.step_key,
+            role=step.role,
+            model=step.model,
+            reasoning_effort=step.reasoning_effort,
+            instruction_bundle_revision_id=step.instruction_bundle.bundle_revision_id,
+            reference_bundle_revision_id=None,
+            worker_pool_key=step.worker_pool_key,
+            timeout_seconds=step.timeout_seconds,
+            sandbox=step.sandbox,
+            network=step.network,
+            general_knowledge_mode=step.general_knowledge_mode,
+        )
+    )
+    session.flush()
+    return plan
 
 
 def resolve_legacy_item_editorial_compatibility_plan(
