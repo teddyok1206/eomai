@@ -114,6 +114,7 @@ from eom_catalog_service.local_indexing_source_ports import (
     LocalIndexingSourceAuthorization,
     LocalIndexingSourceError,
     LocalIndexingSourceReadIntent,
+    SegmentedLocalIndexingSourceAuthorization,
 )
 from eom_catalog_service.models import ItemRecord, ItemRevisionRecord
 from eom_catalog_service.past_exam_source_provenance import PastExamSourceResolutionCache
@@ -1560,9 +1561,44 @@ class KnowledgeRetrievalApplicationService:
         artifact_reader: CatalogArtifactReader | None = None,
     ) -> ReadOnlyKnowledgeCandidatePool:
         """Separate actual service gate, same canonical source algorithm; no fake user."""
-        if authority is None or type(scope) is not LocalIndexingSourceReadIntent:
+        if authority is None:
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_UNAVAILABLE")
-        policy = authority.authorize_scope(session, scope)
+        return self._admit_service_indexing_candidate_pool(
+            session,
+            scope,
+            authorize_scope=authority.authorize_scope,
+            artifact_reader=artifact_reader,
+        )
+
+    def admit_segmented_local_indexing_candidate_pool(
+        self,
+        session: Session,
+        scope: LocalIndexingSourceReadIntent,
+        *,
+        authority: SegmentedLocalIndexingSourceAuthorization | None,
+        artifact_reader: CatalogArtifactReader | None = None,
+    ) -> ReadOnlyKnowledgeCandidatePool:
+        """One bounded 1.3 page through the same canonical source algorithm."""
+        if authority is None:
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_UNAVAILABLE")
+        return self._admit_service_indexing_candidate_pool(
+            session,
+            scope,
+            authorize_scope=authority.authorize_segmented_scope,
+            artifact_reader=artifact_reader,
+        )
+
+    def _admit_service_indexing_candidate_pool(
+        self,
+        session: Session,
+        scope: LocalIndexingSourceReadIntent,
+        *,
+        authorize_scope: Callable[[Session, LocalIndexingSourceReadIntent], object],
+        artifact_reader: CatalogArtifactReader | None,
+    ) -> ReadOnlyKnowledgeCandidatePool:
+        if type(scope) is not LocalIndexingSourceReadIntent:
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_UNAVAILABLE")
+        policy = authorize_scope(session, scope)
         snapshot = self.resolve_snapshot_pointer(
             session, scope.graph_snapshot.graph_snapshot_revision_id
         )
@@ -1575,7 +1611,7 @@ class KnowledgeRetrievalApplicationService:
             allow_answer_bearing=True,
             artifact_reader=artifact_reader,
         )
-        if authority.authorize_scope(session, scope) != policy:
+        if authorize_scope(session, scope) != policy:
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_UNAVAILABLE")
         return result
 

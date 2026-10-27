@@ -24,14 +24,22 @@ from eom_catalog_contracts.segmented_local_indexing_policy import (
     segmented_local_indexing_policy_bytes,
 )
 from eom_catalog_contracts.validation import CATALOG_SCHEMA_RESOURCES
+from eom_catalog_service import inference_transfer_snapshot_catalog_adapter as capture_module
+from eom_catalog_service.inference_transfer_service import AdmittedInferenceTransferCorpus
+from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
+    CatalogInferenceTransferSnapshotSourceAdapter,
+    LocalIndexingSessionCapture,
+)
 from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalApplicationService,
     KnowledgeRetrievalServiceError,
+    ReadOnlyKnowledgeCandidatePool,
 )
 from eom_catalog_service.local_indexing_policy_publication import (
     LocalIndexingPolicyPublicationError,
     publish_local_indexing_access_policy,
 )
+from eom_catalog_service.local_indexing_source_paging import CandidateSourcePage
 from eom_catalog_service.local_indexing_source_ports import LocalIndexingSourceError
 from eom_catalog_service.segmented_local_indexing_population_read import (
     SegmentedPopulationReadError,
@@ -212,6 +220,78 @@ def test_segmented_page_authority_uses_actual_service_and_pinned_graph(owner) ->
     )
 
 
+def test_segmented_candidate_admission_reuses_canonical_source_reader(owner) -> None:
+    _segmented_owner(owner)
+    retrieval = object.__new__(KnowledgeRetrievalApplicationService)
+    retrieval.resolve_snapshot_pointer = Mock(return_value=owner.intent.graph_snapshot)
+    expected = ReadOnlyKnowledgeCandidatePool(owner.intent.graph_snapshot, (), False)
+    retrieval._read_candidate_pool = Mock(return_value=expected)
+    actual = retrieval.admit_segmented_local_indexing_candidate_pool(
+        owner.session, owner.intent, authority=owner.authority
+    )
+    assert actual == expected
+    assert owner.iam.call_count == 2
+    retrieval._read_candidate_pool.assert_called_once()
+    assert retrieval._read_candidate_pool.call_args.kwargs["allow_answer_bearing"] is True
+    assert owner.retrieval.resolve_segmented_local_indexing_access_policy.call_count == 2
+    assert owner.retrieval.resolve_local_indexing_access_policy.call_count == 0
+
+
+def test_segmented_page_capture_reuses_profile_artifact_owner_and_checks_exact_pair(
+    owner, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    policy = _segmented_owner(owner)
+    source, run = "itemrev_" + "1" * 32, "analysisrun_" + "1" * 32
+    page = CandidateSourcePage(((source, run),), None, True)
+    read_page = Mock(return_value=(policy, page))
+    monkeypatch.setattr(capture_module, "read_segmented_candidate_source_page", read_page)
+    adapter = object.__new__(CatalogInferenceTransferSnapshotSourceAdapter)
+    adapter.sources = Mock()
+    pool = ReadOnlyKnowledgeCandidatePool(owner.intent.graph_snapshot, (), False)
+    adapter.sources.retrieval.admit_segmented_local_indexing_candidate_pool.return_value = pool
+    corpus = AdmittedInferenceTransferCorpus(
+        (),
+        (),
+        False,
+        0,
+        (SimpleNamespace(analysis_run_id=run, source=SimpleNamespace(item_revision_id=source)),),
+    )
+
+    def capture(session, scope, recipe, *, artifact_reader, read_pool):
+        assert (session, recipe, artifact_reader) == (owner.session, owner.intent.recipe, reader)
+        assert scope.source_revision_ids == (source,)
+        assert scope.analysis_run_ids == (run,)
+        assert read_pool() is pool
+        return corpus, ()
+
+    adapter._capture_population = Mock(side_effect=capture)
+    reader = Mock()
+    actual_page, result = adapter.capture_segmented_indexing_page_in_session(
+        owner.session, owner.intent, authority=owner.authority, artifact_reader=reader
+    )
+    assert actual_page == page
+    assert result == LocalIndexingSessionCapture(result.scope, corpus, ())
+    assert read_page.call_count == 2
+    reader.require_session.assert_called_once_with(owner.session)
+    adapter.sources.retrieval.admit_local_indexing_candidate_pool.assert_not_called()
+
+    adapter._capture_population = Mock(
+        return_value=(AdmittedInferenceTransferCorpus((), (), False, 0, ()), ())
+    )
+    with pytest.raises(ValueError, match="SOURCE_PIN_MISMATCH"):
+        adapter.capture_segmented_indexing_page_in_session(
+            owner.session, owner.intent, authority=owner.authority, artifact_reader=reader
+        )
+
+    adapter._capture_population = Mock(return_value=(corpus, ()))
+    changed = CandidateSourcePage((("itemrev_" + "2" * 32, "analysisrun_" + "2" * 32),), None, True)
+    read_page.side_effect = [(policy, page), (policy, changed)]
+    with pytest.raises(SegmentedPopulationReadError, match="UNAVAILABLE"):
+        adapter.capture_segmented_indexing_page_in_session(
+            owner.session, owner.intent, authority=owner.authority, artifact_reader=reader
+        )
+
+
 def test_segmented_page_cap_and_old_runtime_reader_fail_closed(owner) -> None:
     policy = _segmented_owner(owner, page=8)
     with pytest.raises(LocalIndexingSourceError, match="FORBIDDEN"):
@@ -330,3 +410,14 @@ def test_scan_rejects_incomplete_or_over_policy_population(owner) -> None:
         scan_segmented_candidate_sources(
             cast(Session, owner.session), owner.intent, authority=owner.authority
         )
+
+
+def test_full_scan_cannot_relabel_exact_subset_as_entire_population(owner) -> None:
+    _segmented_owner(owner)
+    _page_session(owner, ())
+    selected = replace(owner.intent, source_revision_ids=("itemrev_" + "1" * 32,))
+    with pytest.raises(SegmentedPopulationReadError, match="CONTEXT_INVALID"):
+        scan_segmented_candidate_sources(
+            cast(Session, owner.session), selected, authority=owner.authority
+        )
+    owner.iam.assert_not_called()

@@ -13,6 +13,9 @@ from eom_catalog_contracts.inference_transfer_experiment import ExperimentViewRe
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_catalog_contracts.local_indexing_mixed_policy import SupportedLocalIndexingAccessPolicy
 from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
+from eom_catalog_contracts.segmented_local_indexing_policy import (
+    SegmentedLocalIndexingAccessPolicy,
+)
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.inference_transfer_scope import (
@@ -129,4 +132,16 @@ class LocalIndexingSourceAuthorization(Protocol):
         intent: LocalIndexingSourceReadIntent,
     ) -> SupportedLocalIndexingAccessPolicy:
         """Fence actual runtime/DB identity and resolve the exact current data policy."""
+        ...
+
+
+class SegmentedLocalIndexingSourceAuthorization(Protocol):
+    """Same installed Catalog gate, but only for the explicit 1.3 page policy."""
+
+    def authorize_segmented_scope(
+        self,
+        session: Session,
+        intent: LocalIndexingSourceReadIntent,
+    ) -> SegmentedLocalIndexingAccessPolicy:
+        """No page, cursor or policy document supplied by a worker is authority."""
         ...

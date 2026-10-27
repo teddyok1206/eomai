@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Any, cast
 
@@ -83,6 +83,8 @@ from eom_catalog_service.knowledge_retrieval_service import (
     ReadOnlyKnowledgeCandidatePool,
     ReadOnlyKnowledgeReuseContext,
 )
+from eom_catalog_service.local_indexing_source_authority import CatalogLocalIndexingSourceAuthority
+from eom_catalog_service.local_indexing_source_paging import CandidateSourcePage
 from eom_catalog_service.local_indexing_source_ports import (
     LocalIndexingSourceAuthorization,
     LocalIndexingSourceError,
@@ -93,6 +95,10 @@ from eom_catalog_service.past_exam_artifact_prefetch import prefetch_past_exam_a
 from eom_catalog_service.pinned_artifact_resolution import (
     PinnedArtifactReadContext,
     artifact_identity_hints,
+)
+from eom_catalog_service.segmented_local_indexing_population_read import (
+    SegmentedPopulationReadError,
+    read_segmented_candidate_source_page,
 )
 from eom_catalog_service.settings import CatalogSettings
 
@@ -367,6 +373,59 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
         if authority.authorize_scope(session, intent) != policy:
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_UNAVAILABLE")
         return LocalIndexingSessionCapture(intent, corpus, entries)
+
+    def capture_segmented_indexing_page_in_session(
+        self,
+        session: Session,
+        intent: LocalIndexingSourceReadIntent,
+        *,
+        authority: CatalogLocalIndexingSourceAuthority,
+        artifact_reader: PinnedArtifactReadContext,
+        after_source_revision_id: str | None = None,
+    ) -> tuple[CandidateSourcePage, LocalIndexingSessionCapture]:
+        """Resolve one 1.3 page through the existing profile/Artifact capture owner."""
+        if intent.analysis_run_ids or intent.source_revision_ids:
+            raise SegmentedPopulationReadError("SEGMENTED_POPULATION_READ_CONTEXT_INVALID")
+        artifact_reader.require_session(session)
+        policy, page = read_segmented_candidate_source_page(
+            session,
+            intent,
+            authority=authority,
+            after_source_revision_id=after_source_revision_id,
+        )
+        if not page.members:
+            raise SegmentedPopulationReadError("SEGMENTED_POPULATION_READ_INCOMPLETE")
+        page_intent = replace(
+            intent,
+            analysis_run_ids=tuple(sorted(run for _, run in page.members)),
+            source_revision_ids=tuple(sorted(source for source, _ in page.members)),
+        )
+        corpus, entries = self._capture_population(
+            session,
+            page_intent,
+            page_intent.recipe,
+            artifact_reader=artifact_reader,
+            read_pool=lambda: self.sources.retrieval.admit_segmented_local_indexing_candidate_pool(
+                session,
+                page_intent,
+                authority=authority,
+                artifact_reader=artifact_reader,
+            ),
+        )
+        observed = tuple(
+            sorted((row.source.item_revision_id, row.analysis_run_id) for row in corpus.sources)
+        )
+        if observed != page.members:
+            raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
+        final_policy, final_page = read_segmented_candidate_source_page(
+            session,
+            intent,
+            authority=authority,
+            after_source_revision_id=after_source_revision_id,
+        )
+        if (final_policy, final_page) != (policy, page):
+            raise SegmentedPopulationReadError("SEGMENTED_POPULATION_READ_UNAVAILABLE")
+        return page, LocalIndexingSessionCapture(page_intent, corpus, entries)
 
     def _capture_population(
         self,

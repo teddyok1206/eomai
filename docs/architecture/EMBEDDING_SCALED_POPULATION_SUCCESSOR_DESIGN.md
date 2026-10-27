@@ -50,6 +50,13 @@ page는 조회 전후에 같은 1.3 policy를 재검증하고, 전체 순회는 
 이 요약은 최대 1,024개 segment descriptor의 파생값이지 전체 profile,
 input-text hash 또는 등록된 Artifact가 아니다. 그러므로 Graph 원천/풀이보고서
 프로파일의 실제 검증과 CPU/CUDA 결합 전에는 index 등록에 사용할 수 없다.
+페이지별 후속 source capture는 새 worker reader를 만들지 않고 기존 Catalog의
+profile·풀이보고서·Artifact 검증 본문을 재사용한다. metadata page의 source/run
+ID를 최대 1,024개로 고정한 뒤 같은 root transaction에서 실제 candidate pool과
+Artifact 입력을 읽고, 반환된 source/run 쌍이 페이지와 정확히 일치하는지
+확인한다. 페이지를 다시 읽어 권한·내용이 바뀌었으면 거부한다. 이 경로는
+O(page) 작업 메모리만 쓰며, 아직 전체 root의 모든 page/profile/input-text
+closure나 운영 publication을 허용하지 않는다.
 
 ## 확인된 제한과 결정
 
