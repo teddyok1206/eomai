@@ -10,11 +10,13 @@ from eom_catalog_contracts.external_item_preview import ExternalItemPreviewManif
 from eom_catalog_service.artifacts import VerifiedArtifactMemberStream
 from eom_catalog_service.external_creative_learning_source import (
     ExternalCreativeLearningSourceError,
+    read_external_creative_learning_input,
     resolve_external_creative_learning_source,
 )
 from eom_catalog_service.external_creative_learning_targets import ExternalCreativeLearningTarget
 from eom_catalog_service.external_item_preview_projection import ResolvedExternalItemPreview
 
+from tests.unit.test_external_item_learning_page_render import _pdf, _source_for_pdf
 from tests.unit.test_external_item_learning_source_contract import _source
 
 
@@ -92,3 +94,49 @@ def test_source_resolution_rejects_cross_revision_pointer_and_closes_stream(
         )
     assert captured.value.code == "EXTERNAL_CREATIVE_SOURCE_POINTER_MISMATCH"
     assert resolved.member.stream.closed
+
+
+@pytest.mark.parametrize("change", ["none", "truncated", "different_hash"])
+def test_source_pdf_materialization_is_exact_and_bounded(
+    monkeypatch: pytest.MonkeyPatch,
+    change: str,
+) -> None:
+    target, _ = _fixtures()
+    original = _pdf()
+    source = _source_for_pdf(original)
+    payload = (
+        original[:-1]
+        if change == "truncated"
+        else original[:-1] + b"!"
+        if change == "different_hash"
+        else original
+    )
+    stream = BytesIO(payload)
+    preview = Mock()
+    preview.open.return_value = ResolvedExternalItemPreview(
+        member=VerifiedArtifactMemberStream(
+            stream=stream,
+            content_length=source.preview_manifest.pdf_bytes,
+            sha256=source.preview_manifest.pdf_sha256,
+        ),
+        manifest=source.preview_manifest,
+        artifact_id=source.preview_artifact_id,
+        artifact_revision_id=source.preview_artifact_revision_id,
+    )
+    monkeypatch.setattr(
+        "eom_catalog_service.external_creative_learning_source.get_external_creative_learning_target",
+        Mock(return_value=target),
+    )
+    if change == "none":
+        result = read_external_creative_learning_input(
+            Mock(), preview, import_id=target.import_id, external_number=target.external_number
+        )
+        assert result.pdf_bytes == original
+        assert result.source.preview_manifest.pdf_sha256 == source.preview_manifest.pdf_sha256
+    else:
+        with pytest.raises(ExternalCreativeLearningSourceError) as captured:
+            read_external_creative_learning_input(
+                Mock(), preview, import_id=target.import_id, external_number=target.external_number
+            )
+        assert captured.value.code == "EXTERNAL_CREATIVE_SOURCE_PDF_INVALID"
+    assert stream.closed
