@@ -225,6 +225,15 @@ def test_catalog_runtime_grants_only_its_application_boundary() -> None:
     }
     assert assembly_read_tables <= set(READ_TABLES)
     assert assembly_insert_tables <= set(INSERT_TABLES)
+    external_item_read_tables = {
+        "external_item_edition_documents",
+        "external_item_imports",
+        "external_item_source_revisions",
+        "external_item_sources",
+    }
+    assert external_item_read_tables <= set(READ_TABLES)
+    assert external_item_read_tables.isdisjoint(INSERT_TABLES)
+    assert external_item_read_tables.isdisjoint(UPDATE_TABLES)
     assert {"assessment_assemblies", "assessment_forms"} <= set(UPDATE_TABLES)
     assert "usage_records" not in INSERT_TABLES
     assert "usage_records" not in UPDATE_TABLES
@@ -242,6 +251,7 @@ def test_catalog_runtime_readiness_is_one_read_only_matrix_query() -> None:
     statement, parameters = connection.scalar.call_args.args
     assert "has_table_privilege" in str(statement)
     assert "knowledge_analysis_runs" in parameters["requirements"]
+    assert "external_item_edition_documents" in parameters["requirements"]
 
 
 def test_catalog_runtime_readiness_fails_on_a_missing_grant() -> None:
