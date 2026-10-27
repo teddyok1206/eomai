@@ -10,6 +10,7 @@ from eom_workflow_runner.embedding_batch_execution import (
     ActiveEmbeddingBatchExecution,
     CatalogEmbeddingBatchExecution,
     ExistingEmbeddingBatchExecution,
+    UnavailableEmbeddingBatchExecution,
 )
 from eom_workflow_runner.models import WorkflowInstanceRecord
 from eom_workflow_runner.reference_query_prepare_application import NativeReferenceQueryPreparation
@@ -179,6 +180,33 @@ def test_existing_route_keeps_original_allocation_and_never_creates_a_new_candid
         cpu.assert_called_once_with(original.session, original.prepared, lane)
     else:
         cpu.assert_not_called()
+
+
+def test_precompute_unavailable_original_uses_cpu_without_reallocation_or_cuda_retry(
+    original, monkeypatch
+):
+    history = SimpleNamespace(
+        allocation=Mock(),
+        failure=None,
+        route=SimpleNamespace(
+            decision=SimpleNamespace(
+                selected=SimpleNamespace(backend=SimpleNamespace(device="CPU"))
+            )
+        ),
+    )
+    lane = UnavailableEmbeddingBatchExecution(history, Mock())
+    calls = install_lane(monkeypatch, original, lane, existing=history)
+    cpu = Mock()
+    monkeypatch.setattr(module, "_drive_cpu", cpu)
+    candidate = Mock(side_effect=AssertionError("verified BUSY must not allocate twice"))
+    monkeypatch.setattr(type(original.prepared), "allocation_candidate", candidate)
+
+    result = module.drive_routed_reference_queries_once(original.session, original.prepared)
+
+    assert result.state == "PENDING"
+    assert calls == [history.allocation]
+    cpu.assert_called_once_with(original.session, original.prepared, lane)
+    candidate.assert_not_called()
 
 
 def test_foreign_session_cannot_observe_or_drive_original(original):
