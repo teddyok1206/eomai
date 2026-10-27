@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal, Never, cast
@@ -269,6 +270,19 @@ def _production_content_profile(media_type: str, schema_ref: str) -> ProductionC
     if schema_ref in _CONTENT_TEAM_ITEM_CONTENT_V3_SCHEMA_REFS:
         return "CONTENT_TEAM_ITEM_CONTENT_V3"
     return "UNSUPPORTED"
+
+
+def _graph_cursor_scope(filters: Mapping[str, object], snapshot_id: str) -> str:
+    """Make a later page fail closed if Graph publication changes the head."""
+
+    return hashlib.sha256(
+        json.dumps(
+            {**filters, "graph_snapshot_revision_id": snapshot_id},
+            ensure_ascii=True,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode()
+    ).hexdigest()
 
 
 @dataclass
@@ -682,10 +696,6 @@ class QueryAdapter:
             "item_type_key": item_type_key,
             "difficulty_band": difficulty_band,
         }
-        aggregate = hashlib.sha256(
-            json.dumps(filters, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
-        offset = self.cursors.decode_ordinal(cursor, "item-bank", aggregate) if cursor else 0
         expected_units = integrated_science_curriculum_units()
         expected_by_id = {unit.curriculum_unit_id: unit for unit in expected_units}
         with self.sessions() as session:
@@ -695,6 +705,8 @@ class QueryAdapter:
             snapshot = session.get(KnowledgeGraphSnapshotRecord, snapshot_id)
             if snapshot is None:
                 return PageResult((), None, False)
+            aggregate = _graph_cursor_scope(filters, snapshot_id)
+            offset = self.cursors.decode_ordinal(cursor, "item-bank", aggregate) if cursor else 0
             conditions = [
                 AssessmentItemOccurrenceReferenceRecord.graph_snapshot_revision_id == snapshot_id,
                 AssessmentItemOccurrenceReferenceRecord.subject_key == "integrated-science",
@@ -905,14 +917,6 @@ class QueryAdapter:
             "item_type_key": item_type_key,
             "difficulty_band": difficulty_band,
         }
-        aggregate = hashlib.sha256(
-            json.dumps(filters, ensure_ascii=True, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
-        offset = (
-            self.cursors.decode_ordinal(cursor, "production-item-candidate", aggregate)
-            if cursor
-            else 0
-        )
         expected_units = integrated_science_curriculum_units()
         expected_by_id = {unit.curriculum_unit_id: unit for unit in expected_units}
         with self.sessions() as session:
@@ -922,6 +926,12 @@ class QueryAdapter:
             snapshot = session.get(KnowledgeGraphSnapshotRecord, snapshot_id)
             if snapshot is None:
                 return PageResult((), None, False)
+            aggregate = _graph_cursor_scope(filters, snapshot_id)
+            offset = (
+                self.cursors.decode_ordinal(cursor, "production-item-candidate", aggregate)
+                if cursor
+                else 0
+            )
 
             source_pointer_exists = (
                 select(literal(1))

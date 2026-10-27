@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from eom_api_contracts.item_bank import (
+    ItemBankCurriculumUnitView,
+    ProductionItemCandidateView,
+    ProductionPastExamContextView,
+)
 from eom_catalog_contracts import ContentTeamMaterialRequirementV2
 from eom_web_gui.app import create_app
 from eom_web_gui.contracts import (
@@ -28,6 +34,11 @@ from eom_web_gui.contracts import (
     ExecutionPresetValidationView,
     ExplorerQuery,
     ExplorerResult,
+    ExternalItemDbCell,
+    ExternalItemDbDetail,
+    ExternalItemDbEdition,
+    ExternalItemDbEntry,
+    ExternalItemDbFilterSubmission,
     HwpxBuildRequest,
     HwpxBuildView,
     HwpxCapability,
@@ -65,9 +76,13 @@ from eom_web_gui.contracts import (
     StudioWorkbenchOverview,
 )
 from eom_web_gui.gateways import (
+    ExternalItemDbPage,
+    ExternalItemDocumentDownload,
     GatewayError,
+    GraphItemDbPage,
     HwpxDownload,
     ItemBankPage,
+    ItemDbExcelDownload,
     ItemMedia,
     KnowledgeAnalysisRangePage,
     LoginResult,
@@ -1346,6 +1361,200 @@ class FakeGateway:
         if item_number not in {None, entry.item_number}:
             return ItemBankPage((), None, False)
         return ItemBankPage((entry,), None, False)
+
+    async def graph_item_db_entries(
+        self,
+        session: WebSession,
+        *,
+        source_class: str,
+        curriculum_unit_key: str | None,
+        cursor: str | None,
+    ) -> GraphItemDbPage:
+        page = await self.item_bank_entries(
+            session,
+            curriculum_unit_key=curriculum_unit_key,
+            administration_year=None,
+            administration_month=None,
+            item_number=None,
+            cursor=cursor,
+        )
+        if not page.values:
+            return GraphItemDbPage((), None, False)
+        item = page.values[0]
+        past_exam = source_class == "PAST_EXAM"
+        context = (
+            ProductionPastExamContextView(
+                graph_placement_node_id=item.graph_placement_node_id,
+                assessment_occurrence_id=item.assessment_occurrence_id,
+                assessment_occurrence_revision_id=item.assessment_occurrence_revision_id,
+                assessment_occurrence_revision_sha256=item.assessment_occurrence_revision_sha256,
+                occurrence_display_label=item.occurrence_display_label,
+                administration_year=item.administration_year,
+                administration_month=item.administration_month,
+                target_school_level=item.target_school_level,
+                target_grade=item.target_grade,
+                subject_key=item.subject_key,
+                item_number=item.item_number,
+                placement_sha256=item.placement_sha256,
+            )
+            if past_exam
+            else None
+        )
+        candidate = ProductionItemCandidateView(
+            graph_snapshot_revision_id=item.graph_snapshot_revision_id,
+            snapshot_sha256=item.snapshot_sha256,
+            analysis_run_id=item.analysis_run_id,
+            graph_item_node_id="knode_" + "d" * 32,
+            source_class="PAST_EXAM" if past_exam else "APPROVED_ITEM",
+            source_display_label=(
+                f"{item.occurrence_display_label} {item.item_number}번"
+                if past_exam
+                else "창작 검증 문항"
+            ),
+            past_exam_context=context,
+            item_id=item.item_id,
+            item_revision_id=item.item_revision_id,
+            item_revision_state="APPROVED",
+            item_lifecycle_state="ACTIVE",
+            item_current_revision=True,
+            item_type_key=item.item_type_key,
+            difficulty_band=item.difficulty_band,
+            item_manifest_sha256=item.item_manifest_sha256,
+            curriculum_units=tuple(
+                ItemBankCurriculumUnitView.model_validate(value.model_dump(mode="json"))
+                for value in item.curriculum_units
+            ),
+            content_profile="UNSUPPORTED",
+            content_component=None,
+            mock_exam_assembly_eligible=False,
+            hwpx_exam_eligible=False,
+            ineligibility_reasons=("ITEM_CONTENT_COMPONENT_MISSING",),
+        )
+        return GraphItemDbPage((candidate,), None, False)
+
+    async def external_item_db_entries(
+        self,
+        session: WebSession,
+        *,
+        exact_number: str | None,
+        major_unit: str | None,
+        field_label: str | None,
+        match_status: str | None,
+        cursor: str | None,
+    ) -> ExternalItemDbPage:
+        del session, cursor
+        entry = ExternalItemDbEntry(
+            schema_version="external-item-db-entry/1.0",
+            source_id="extitem_" + "1" * 32,
+            source_revision_id="extitemrev_" + "2" * 32,
+            external_number="12345",
+            observation_sha256="sha256:" + "3" * 64,
+            major_unit="물질과 규칙성",
+            minor_unit="원소",
+            field_label="화학",
+            grade_label="고1",
+            author_label="테스트 출제자",
+            match_status="MATCHED",
+            selected_filename="문항_12345.hwp",
+            graph_state="NOT_PUBLISHED",
+            similarity_state="NOT_INDEXED",
+        )
+        if (
+            exact_number not in {None, "12345"}
+            or major_unit not in {None, entry.major_unit}
+            or field_label not in {None, entry.field_label}
+            or match_status not in {None, entry.match_status}
+        ):
+            return ExternalItemDbPage((), None, False)
+        return ExternalItemDbPage((entry,), None, False)
+
+    async def external_item_db_detail(
+        self, session: WebSession, source_id: str
+    ) -> ExternalItemDbDetail:
+        page = await self.external_item_db_entries(
+            session,
+            exact_number=None,
+            major_unit=None,
+            field_label=None,
+            match_status=None,
+            cursor=None,
+        )
+        assert source_id == page.values[0].source_id
+        columns = tuple(chr(ord("A") + index) for index in range(26)) + tuple(
+            "A" + chr(ord("A") + index) for index in range(6)
+        )
+        return ExternalItemDbDetail(
+            schema_version="external-item-db-detail/1.0",
+            entry=page.values[0],
+            worksheet_name="통합과학 DB",
+            row_number=2,
+            cells=tuple(
+                ExternalItemDbCell(
+                    column=column,
+                    present=True,
+                    cell_type="s",
+                    raw_text="12345" if column == "U" else "메타데이터" if column == "I" else "",
+                    style_id=None,
+                    formula_text=None,
+                )
+                for column in columns
+            ),
+            editions=(
+                ExternalItemDbEdition(
+                    edition=3,
+                    match_status="MATCHED",
+                    filename="문항_12345.hwp",
+                    media_type="application/vnd.hancom.hwp",
+                    available=True,
+                ),
+            ),
+        )
+
+    async def external_item_db_search(
+        self, session: WebSession, filters: ExternalItemDbFilterSubmission
+    ) -> ExternalItemDbPage:
+        return await self.external_item_db_entries(
+            session,
+            exact_number=next(
+                (
+                    value.value
+                    for value in filters.conditions
+                    if value.field == "U" and value.operator == "EQ"
+                ),
+                None,
+            ),
+            major_unit=None,
+            field_label=None,
+            match_status=None,
+            cursor=filters.cursor,
+        )
+
+    async def external_item_db_export(
+        self, session: WebSession, filters: ExternalItemDbFilterSubmission
+    ) -> ItemDbExcelDownload:
+        del session
+        assert filters.schema_version == "external-item-db-filter/1.0"
+        payload = b"PK\x03\x04test-xlsx"
+        return ItemDbExcelDownload(
+            content=payload,
+            etag='"sha256:' + hashlib.sha256(payload).hexdigest() + '"',
+            row_count=1,
+        )
+
+    async def external_item_db_document_download(
+        self, session: WebSession, source_id: str, source_revision_id: str, edition: int
+    ) -> ExternalItemDocumentDownload:
+        del session
+        assert source_id == "extitem_" + "1" * 32
+        assert source_revision_id == "extitemrev_" + "2" * 32
+        assert edition == 3
+        payload = b"test-hwp"
+        return ExternalItemDocumentDownload(
+            content=payload,
+            content_type="application/vnd.hancom.hwp",
+            content_disposition='attachment; filename="external-item-12345-3.hwp"',
+            etag='"sha256:' + hashlib.sha256(payload).hexdigest() + '"',
+        )
 
     async def mock_exam_assembly_policy(self, session: WebSession) -> dict[str, Any]:
         del session

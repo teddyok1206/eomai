@@ -34,6 +34,18 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "external-item-archive-stage-index-v1": CatalogSchemaResource(
+            "schemas/external-item/external-item-archive-stage-index-v1.schema.json",
+            "resources/external-item/external-item-archive-stage-index-v1.schema.json",
+            "1.0",
+            "sha256:b712d79b50b4731e17ba444a03d476496b29ae5e78a0b91f3745b157c7c76e60",
+        ),
+        "external-item-import-manifest-v1": CatalogSchemaResource(
+            "schemas/external-item/external-item-import-manifest-v1.schema.json",
+            "resources/external-item/external-item-import-manifest-v1.schema.json",
+            "1.0",
+            "sha256:5c305cf7d42948a1c83bf7a5edb086b6121d332bd4e5a8a974c1957d3b61faab",
+        ),
         "external-item-row-observation-v1": CatalogSchemaResource(
             "schemas/external-item/external-item-row-observation-v1.schema.json",
             "resources/external-item/external-item-row-observation-v1.schema.json",
@@ -1740,6 +1752,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/catalog-application/catalog-item-media-request-v1.schema.json",
             "1.0",
             "sha256:4e69c87208e641917fb6ce4655219767fce33ec9b32261d076b48c151f352385",
+        ),
+        "catalog-external-item-document-media-request": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-external-item-document-media-request-v1.schema.json",
+            "resources/catalog-application/catalog-external-item-document-media-request-v1.schema.json",
+            "1.0",
+            "sha256:3fd2e44e9f9a7feea4c01e9bc14c85d17b60a4ceb6f2bb0fa5e0609eebef989d",
+        ),
+        "catalog-external-item-document-media-response": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-external-item-document-media-response-v1.schema.json",
+            "resources/catalog-application/catalog-external-item-document-media-response-v1.schema.json",
+            "1.0",
+            "sha256:846538cb42ba3888a161be1f09fa02eb4f93f984467edc126cf7b0aee14fa559",
         ),
         "catalog-item-media-response": CatalogSchemaResource(
             "schemas/catalog-application/catalog-item-media-response-v1.schema.json",

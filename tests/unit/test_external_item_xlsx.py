@@ -8,7 +8,11 @@ from xml.sax.saxutils import escape
 
 import pytest
 from eom_catalog_contracts import EXTERNAL_ITEM_COLUMNS, ExternalItemWorkbookMapping
-from eom_catalog_service.external_item_xlsx import ExternalItemXlsxError, read_external_item_rows
+from eom_catalog_service.external_item_xlsx import (
+    ExternalItemXlsxError,
+    read_external_item_rows,
+    read_external_item_rows_bytes,
+)
 from eom_identifiers import content_sha256
 
 
@@ -100,6 +104,7 @@ def test_external_workbook_preserves_every_cell_and_leading_zero(tmp_path: Path)
     assert rows[0].cells[2].style_id == 2
     assert rows[0].cells[0].present is False
     assert rows[0].cells[20].present is True
+    assert read_external_item_rows_bytes(path.read_bytes(), _mapping()) == rows
 
 
 @pytest.mark.parametrize(

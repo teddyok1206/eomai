@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/external-item/import-manifest/1.0",
+  "title": "External Item Import Manifest V1",
+  "description": "Catalog-owned atomic source-only registration; no Item Registry admission or worker authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "source_namespace", "actor_id", "mapping", "workbook_source_file_id",
+    "workbook_artifact_id", "workbook_artifact_revision_id", "workbook_sha256",
+    "archive_sha256", "rows", "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "external-item-import-manifest/1.0"},
+    "source_namespace": {"type": "string", "pattern": "^[a-z0-9][a-z0-9._:-]{0,127}$"},
+    "actor_id": {"type": "string", "minLength": 1, "maxLength": 128},
+    "mapping": {"$ref": "eom://schemas/external-item/workbook-mapping/1.0"},
+    "workbook_source_file_id": {"type": "string", "pattern": "^sourcefile_[0-9a-f]{32}$"},
+    "workbook_artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+    "workbook_artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+    "workbook_sha256": {"$ref": "#/$defs/sha256"},
+    "archive_sha256": {"$ref": "#/$defs/sha256"},
+    "rows": {
+      "type": "array", "minItems": 1, "maxItems": 100000,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["observation", "match_status", "selected_source_file_id", "selected_document_sha256", "edition_links"],
+        "properties": {
+          "observation": {"$ref": "eom://schemas/external-item/row-observation/1.0"},
+          "match_status": {"enum": [
+            "MATCHED", "MATCHED_DETECTED_HWPX", "MATCHED_IDENTICAL_COPIES",
+            "REJECTED", "REJECTION_AMBIGUOUS", "DRAFT_ONLY", "LINK_UNSUPPORTED",
+            "DOCUMENT_MISSING", "NAME_MISMATCH", "CONTENT_CONFLICT", "FORMAT_MISMATCH"
+          ]},
+          "selected_source_file_id": {"type": ["string", "null"], "pattern": "^sourcefile_[0-9a-f]{32}$"},
+          "selected_document_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+          "edition_links": {
+            "type": "array", "maxItems": 3,
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["edition", "match_status", "selected_source_file_id", "selected_document_sha256"],
+              "properties": {
+                "edition": {"type": "integer", "minimum": 1, "maximum": 3},
+                "match_status": {"enum": [
+                  "MATCHED", "MATCHED_DETECTED_HWPX", "MATCHED_IDENTICAL_COPIES",
+                  "LINK_UNSUPPORTED", "DOCUMENT_MISSING", "NAME_MISMATCH",
+                  "CONTENT_CONFLICT", "FORMAT_MISMATCH"
+                ]},
+                "selected_source_file_id": {"type": ["string", "null"], "pattern": "^sourcefile_[0-9a-f]{32}$"},
+                "selected_document_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]}
+              }
+            }
+          }
+        },
+        "allOf": [{
+          "if": {"properties": {"match_status": {"enum": [
+            "MATCHED", "MATCHED_DETECTED_HWPX", "MATCHED_IDENTICAL_COPIES"
+          ]}}},
+          "then": {"properties": {
+            "selected_source_file_id": {"type": "string"},
+            "selected_document_sha256": {"$ref": "#/$defs/sha256"}
+          }},
+          "else": {"properties": {
+            "selected_source_file_id": {"type": "null"},
+            "selected_document_sha256": {"type": "null"}
+          }}
+        }]
+      }
+    },
+    "request_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}
+}

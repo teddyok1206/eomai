@@ -38,11 +38,11 @@ if (($# != 2)) || \
     "$1" != "embedding-stage-tests" && "$1" != "private-chat-context-tests" && \
     "$1" != "authenticated-session-tests" && \
     "$1" != "local-indexing-service-tests" && \
-    "$1" != "pdf-review-tests" && \
+    "$1" != "pdf-review-tests" && "$1" != "external-item-tests" && \
     "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
     "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|inspect|migrate|hwpx-tests|embedding-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|authenticated-session-tests|local-indexing-service-tests|pdf-review-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|inspect|migrate|hwpx-tests|embedding-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|authenticated-session-tests|local-indexing-service-tests|pdf-review-tests|external-item-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -376,6 +376,14 @@ if [[ "${action}" == "hwpx-tests" ]]; then
   export EOM_RUN_INTEGRATION=1
   "${PYTHON}" -m pytest -q tests/integration/test_hwpx_persistence.py
   printf 'Disposable HWPX persistence integration tests passed.\n'
+  exit 0
+fi
+
+if [[ "${action}" == "external-item-tests" ]]; then
+  export EOM_RUN_API_INTEGRATION=1
+  export EOM_EXTERNAL_ITEM_TEST_STATE="${state_directory}"
+  "${PYTHON}" -m pytest -q tests/integration/test_external_item_db_search.py
+  printf 'Disposable external Item DB search tests passed.\n'
   exit 0
 fi
 

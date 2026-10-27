@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://operations/release-operator-context/1.9",
+  "oneOf": [{"$ref": "#/$defs/context"}, {"$ref": "#/$defs/receipt"}],
+  "$defs": {
+    "hash": {
+      "type": "string", "minLength": 71, "maxLength": 71,
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "path": {
+      "type": "string", "minLength": 2, "maxLength": 1024, "pattern": "^/",
+      "not": {"pattern": "[\\u0000-\\u001f]"}
+    },
+    "wheel": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "sha256"],
+      "properties": {
+        "name": {
+          "type": "string", "maxLength": 200,
+          "pattern": "^eom_(platform|api_contracts|application_api)-[A-Za-z0-9_.+-]+\\.whl$",
+          "not": {"pattern": "[\\u0000-\\u001f]"}
+        },
+        "sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "context": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "schema_version", "source_commit", "source_tree", "source_archive_sha256",
+        "source_snapshot_sha256", "runtime_prefix", "runtime_tree_sha256", "wheels",
+        "migration_revision"
+      ],
+      "properties": {
+        "schema_version": {"const": "release-operator-context/1.9"},
+        "source_commit": {
+          "type": "string", "minLength": 40, "maxLength": 40, "pattern": "^[0-9a-f]{40}$"
+        },
+        "source_tree": {
+          "type": "string", "minLength": 40, "maxLength": 40, "pattern": "^[0-9a-f]{40}$"
+        },
+        "source_archive_sha256": {"$ref": "#/$defs/hash"},
+        "source_snapshot_sha256": {"$ref": "#/$defs/hash"},
+        "runtime_prefix": {"$ref": "#/$defs/path"},
+        "runtime_tree_sha256": {"$ref": "#/$defs/hash"},
+        "wheels": {
+          "type": "object", "additionalProperties": false,
+          "required": ["platform", "api_contracts", "api"],
+          "properties": {
+            "platform": {"$ref": "#/$defs/wheel"},
+            "api_contracts": {"$ref": "#/$defs/wheel"},
+            "api": {"$ref": "#/$defs/wheel"}
+          }
+        },
+        "migration_revision": {"const": "20261027_0060"}
+      }
+    },
+    "receipt": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "schema_version", "context_sha256", "runtime_prefix", "runtime_tree_sha256",
+        "source_snapshot_sha256", "context_identity", "interpreter_identity", "migration_revision"
+      ],
+      "properties": {
+        "schema_version": {"const": "release-operator-admission/1.9"},
+        "context_sha256": {"$ref": "#/$defs/hash"},
+        "runtime_prefix": {"$ref": "#/$defs/path"},
+        "runtime_tree_sha256": {"$ref": "#/$defs/hash"},
+        "source_snapshot_sha256": {"$ref": "#/$defs/hash"},
+        "context_identity": {"$ref": "#/$defs/identity"},
+        "interpreter_identity": {"$ref": "#/$defs/identity"},
+        "migration_revision": {"const": "20261027_0060"}
+      }
+    },
+    "identity": {
+      "type": "array", "minItems": 9, "maxItems": 9,
+      "items": {"type": "integer", "minimum": 0}
+    }
+  }
+}

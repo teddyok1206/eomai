@@ -9,6 +9,7 @@ from eom_catalog_service.external_item_archive import (
 )
 from eom_catalog_service.external_item_matching import (
     ExternalItemMatchStatus,
+    propose_external_item_edition_links,
     propose_external_item_links,
 )
 from eom_catalog_service.external_item_xlsx import DecodedExternalItemRow
@@ -127,3 +128,17 @@ def test_missing_unsupported_and_unsafe_links_are_not_silently_substituted() -> 
         result = propose_external_item_links((_row(third=link),), _inventory(document))[0]
         assert result.status == expected
         assert result.selected_member is None
+
+
+def test_all_editorial_links_are_observed_even_when_row_is_rejected() -> None:
+    row = _row(
+        second="N제/2025_기구.hwp",
+        third="N제/다른파일.hwp",
+        rejected="Yes",
+    )
+    links = propose_external_item_edition_links((row,), _inventory(_document()))
+    assert [(link.edition, link.status) for link in links] == [
+        (2, ExternalItemMatchStatus.MATCHED),
+        (3, ExternalItemMatchStatus.NAME_MISMATCH),
+    ]
+    assert propose_external_item_links((row,), _inventory(_document()))[0].status == "REJECTED"

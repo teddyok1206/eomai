@@ -27,6 +27,8 @@ AUTH_MUTATIONS = {
     "codex_auth_challenge_reveal",
 }
 READ_ONLY_POSTS = {
+    "item_db_external_source_search",
+    "item_db_external_source_export",
     "general_chat_knowledge_search",
     "general_chat_grounding_read",
     "inference_transfer_snapshot_read",

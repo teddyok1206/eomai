@@ -122,6 +122,14 @@ class ExternalItemRowObservation(FrozenModel):
     def exact_row_meaning(self) -> ExternalItemRowObservation:
         if tuple(cell.column for cell in self.cells) != EXTERNAL_ITEM_COLUMNS:
             raise ValueError("external Item row must observe A:AF exactly once in order")
+        if (
+            sum(
+                len(cell.raw_text.encode("utf-8")) + len((cell.formula_text or "").encode("utf-8"))
+                for cell in self.cells
+            )
+            > 128 * 1024
+        ):
+            raise ValueError("external Item row snapshot exceeds the bounded DB value")
         number_cell = self.cells[20]
         if (
             not number_cell.present

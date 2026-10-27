@@ -60,6 +60,8 @@ from eom_catalog_contracts import (
     DocumentReviewPdfAnnotationResponseV2,
     DocumentReviewPdfAnnotationResponseV3,
     DocumentReviewTextbookEvidenceResponse,
+    ExternalItemDocumentMediaQuery,
+    ExternalItemDocumentMediaResponse,
     InspectItemRevisionHwpxEligibilityQueryV1,
     InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
@@ -148,6 +150,10 @@ from eom_catalog_service.document_review_pdf_annotation_service import (
 from eom_catalog_service.errors import CatalogError
 from eom_catalog_service.exam_similarity_read_dispatch import dispatch_exam_similarity_read_frame
 from eom_catalog_service.exam_similarity_read_service import CatalogExamSimilarityReadService
+from eom_catalog_service.external_item_document_media import (
+    ExternalItemDocumentMediaError,
+    ExternalItemDocumentMediaService,
+)
 from eom_catalog_service.inference_transfer_metadata_dispatch import dispatch_metadata_frame
 from eom_catalog_service.inference_transfer_metadata_service import (
     CatalogInferenceTransferMetadataService,
@@ -636,6 +642,18 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     return
                 self._stream_item_media(media_request)
                 return
+            if raw_operation == "GET_EXTERNAL_ITEM_DOCUMENT_MEDIA":
+                try:
+                    validate_contract("catalog-external-item-document-media-request", value)
+                    document_request = ExternalItemDocumentMediaQuery.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_external_item_document_media_error(
+                        self.wfile,
+                        CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                    )
+                    return
+                self._stream_external_item_document(document_request)
+                return
             if raw_operation == "GET_ITEM_COMPONENT_MEDIA":
                 try:
                     validate_contract("catalog-item-component-media-request", value)
@@ -925,6 +943,42 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             ),
         )
         chunks = media.iter_chunks()
+        try:
+            for chunk in chunks:
+                self.wfile.write(chunk)
+        finally:
+            chunks.close()
+
+    def _stream_external_item_document(self, request: ExternalItemDocumentMediaQuery) -> None:
+        service = self.server.external_item_documents
+        if service is None:
+            self.server.write_external_item_document_media_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+            )
+            return
+        try:
+            media = service.open(request)
+        except ExternalItemDocumentMediaError as exc:
+            self.server.write_external_item_document_media_error(self.wfile, exc.code)
+            return
+        except Exception:
+            self.server.write_external_item_document_media_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+            )
+            return
+        self.server.write_external_item_document_media_header(
+            self.wfile,
+            ExternalItemDocumentMediaResponse(
+                status="OK",
+                media_type=media.media_type,
+                content_length=media.member.content_length,
+                sha256=media.member.sha256,
+                filename=media.filename,
+            ),
+        )
+        chunks = media.member.iter_chunks()
         try:
             for chunk in chunks:
                 self.wfile.write(chunk)
@@ -1472,6 +1526,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         document_review_hwpx_corrections: DocumentReviewHwpxCorrectionService | None = None,
         document_review_pdf_annotations: DocumentReviewPdfAnnotationService | None = None,
         document_review_evidence: DocumentReviewEvidenceService | None = None,
+        external_item_documents: ExternalItemDocumentMediaService | None = None,
         chat_knowledge: ChatKnowledgeResolutionService | None = None,
         chat_rag: ChatRagResolutionService | None = None,
         inference_transfer_metadata: CatalogInferenceTransferMetadataService | None = None,
@@ -1502,6 +1557,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.document_review_hwpx_corrections = document_review_hwpx_corrections
         self.document_review_pdf_annotations = document_review_pdf_annotations
         self.document_review_evidence = document_review_evidence
+        self.external_item_documents = external_item_documents
         self.chat_knowledge = chat_knowledge
         self.chat_rag = chat_rag
         self.inference_transfer_metadata = inference_transfer_metadata
@@ -1996,6 +2052,24 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         cls.write_media_header(
             stream,
             CatalogItemMediaResponse(status="ERROR", error_code=error_code),
+        )
+
+    @staticmethod
+    def write_external_item_document_media_header(
+        stream: Any, value: ExternalItemDocumentMediaResponse
+    ) -> None:
+        payload = value.model_dump(mode="json", exclude_none=True)
+        validate_contract("catalog-external-item-document-media-response", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("Catalog external Item document header exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @classmethod
+    def write_external_item_document_media_error(cls, stream: Any, error_code: str) -> None:
+        cls.write_external_item_document_media_header(
+            stream,
+            ExternalItemDocumentMediaResponse(status="ERROR", error_code=error_code),
         )
 
     @staticmethod

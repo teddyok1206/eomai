@@ -1523,6 +1523,71 @@ class ItemBankCurriculumUnit(WebModel):
     parent_unit_id: str | None = Field(default=None, pattern=r"^currunit_[0-9a-f]{32}$")
 
 
+class ExternalItemDbEntry(WebModel):
+    schema_version: Literal["external-item-db-entry/1.0"]
+    source_id: str = Field(pattern=r"^extitem_[0-9a-f]{32}$")
+    source_revision_id: str = Field(pattern=r"^extitemrev_[0-9a-f]{32}$")
+    external_number: str = Field(pattern=r"^[0-9]{5}$")
+    observation_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    major_unit: str | None = Field(default=None, max_length=255)
+    minor_unit: str | None = Field(default=None, max_length=255)
+    field_label: str | None = Field(default=None, max_length=255)
+    grade_label: str | None = Field(default=None, max_length=255)
+    author_label: str | None = Field(default=None, max_length=255)
+    match_status: str = Field(min_length=1, max_length=32)
+    selected_filename: str | None = Field(default=None, max_length=512)
+    graph_state: Literal["NOT_PUBLISHED"]
+    similarity_state: Literal["NOT_INDEXED"]
+
+
+class ExternalItemDbCell(WebModel):
+    column: str = Field(pattern=r"^(?:[A-Z]|A[A-F])$")
+    present: bool
+    cell_type: str | None = Field(default=None, max_length=32)
+    raw_text: str = Field(max_length=32767)
+    style_id: int | None = Field(default=None, ge=0)
+    formula_text: str | None = Field(default=None, max_length=32767)
+
+
+class ExternalItemDbEdition(WebModel):
+    edition: int = Field(ge=1, le=3)
+    match_status: str = Field(min_length=1, max_length=32)
+    filename: str | None = Field(default=None, max_length=512)
+    media_type: str | None = Field(default=None, max_length=127)
+    available: bool
+
+
+class ExternalItemDbDetail(WebModel):
+    schema_version: Literal["external-item-db-detail/1.0"]
+    entry: ExternalItemDbEntry
+    worksheet_name: str = Field(min_length=1, max_length=128)
+    row_number: int = Field(ge=2)
+    cells: tuple[ExternalItemDbCell, ...] = Field(min_length=32, max_length=32)
+    editions: tuple[ExternalItemDbEdition, ...] = Field(max_length=3)
+
+
+class ExternalItemDbFilterCondition(WebModel):
+    field: str = Field(pattern=r"^(?:MATCH_STATUS|[A-Z]|A[A-F])$")
+    operator: Literal["EQ", "NE", "CONTAINS", "IS_EMPTY", "IS_NOT_EMPTY"]
+    value: str | None = Field(min_length=1, max_length=255)
+
+    @model_validator(mode="after")
+    def applicable_value(self) -> ExternalItemDbFilterCondition:
+        if (self.operator in ("EQ", "NE", "CONTAINS")) != (self.value is not None):
+            raise ValueError("filter operator and value disagree")
+        if self.field == "MATCH_STATUS" and self.operator not in ("EQ", "NE"):
+            raise ValueError("status must use equality")
+        return self
+
+
+class ExternalItemDbFilterSubmission(WebModel):
+    schema_version: Literal["external-item-db-filter/1.0"]
+    match_mode: Literal["ALL", "ANY"]
+    conditions: tuple[ExternalItemDbFilterCondition, ...] = Field(max_length=8)
+    limit: int = Field(ge=1, le=100)
+    cursor: str | None = Field(min_length=1, max_length=1024)
+
+
 class ItemBankEntry(WebModel):
     schema_version: Literal["item-bank-entry-view/1.0"]
     graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")

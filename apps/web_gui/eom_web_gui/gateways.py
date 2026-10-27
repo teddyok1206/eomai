@@ -12,6 +12,8 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 import httpx
+from eom_api_contracts import ProductionItemCandidateViewContract
+from pydantic import TypeAdapter
 
 from eom_web_gui.chat_grounding_contracts import (
     ChatGroundedTurnSubmission,
@@ -51,6 +53,9 @@ from eom_web_gui.contracts import (
     ExplorerEntity,
     ExplorerQuery,
     ExplorerResult,
+    ExternalItemDbDetail,
+    ExternalItemDbEntry,
+    ExternalItemDbFilterSubmission,
     HwpxBuildRequest,
     HwpxBuildView,
     HwpxCapability,
@@ -330,6 +335,21 @@ class HwpxDownload:
 
 
 @dataclass(frozen=True)
+class ExternalItemDocumentDownload:
+    content: bytes
+    content_type: str
+    content_disposition: str
+    etag: str
+
+
+@dataclass(frozen=True)
+class ItemDbExcelDownload:
+    content: bytes
+    etag: str
+    row_count: int
+
+
+@dataclass(frozen=True)
 class ItemMedia:
     content: bytes
     content_type: str
@@ -353,6 +373,20 @@ class KnowledgeAnalysisRangePage:
 @dataclass(frozen=True)
 class ItemBankPage:
     values: tuple[ItemBankEntry, ...]
+    next_cursor: str | None
+    has_more: bool
+
+
+@dataclass(frozen=True)
+class ExternalItemDbPage:
+    values: tuple[ExternalItemDbEntry, ...]
+    next_cursor: str | None
+    has_more: bool
+
+
+@dataclass(frozen=True)
+class GraphItemDbPage:
+    values: tuple[ProductionItemCandidateViewContract, ...]
     next_cursor: str | None
     has_more: bool
 
@@ -617,6 +651,42 @@ class ApplicationGateway(Protocol):
         item_number: int | None,
         cursor: str | None,
     ) -> ItemBankPage: ...
+
+    async def graph_item_db_entries(
+        self,
+        session: WebSession,
+        *,
+        source_class: str,
+        curriculum_unit_key: str | None,
+        cursor: str | None,
+    ) -> GraphItemDbPage: ...
+
+    async def external_item_db_entries(
+        self,
+        session: WebSession,
+        *,
+        exact_number: str | None,
+        major_unit: str | None,
+        field_label: str | None,
+        match_status: str | None,
+        cursor: str | None,
+    ) -> ExternalItemDbPage: ...
+
+    async def external_item_db_detail(
+        self, session: WebSession, source_id: str
+    ) -> ExternalItemDbDetail: ...
+
+    async def external_item_db_search(
+        self, session: WebSession, filters: ExternalItemDbFilterSubmission
+    ) -> ExternalItemDbPage: ...
+
+    async def external_item_db_export(
+        self, session: WebSession, filters: ExternalItemDbFilterSubmission
+    ) -> ItemDbExcelDownload: ...
+
+    async def external_item_db_document_download(
+        self, session: WebSession, source_id: str, source_revision_id: str, edition: int
+    ) -> ExternalItemDocumentDownload: ...
 
     async def mock_exam_assembly_policy(self, session: WebSession) -> dict[str, Any]: ...
 
@@ -1129,6 +1199,134 @@ class HttpApplicationGateway:
             )
         except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def external_item_db_entries(
+        self,
+        session: WebSession,
+        *,
+        exact_number: str | None,
+        major_unit: str | None,
+        field_label: str | None,
+        match_status: str | None,
+        cursor: str | None,
+    ) -> ExternalItemDbPage:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/item-db/external-sources",
+            params={
+                "exact_number": exact_number,
+                "major_unit": major_unit,
+                "field_label": field_label,
+                "match_status": match_status,
+                "limit": 50,
+                "cursor": cursor,
+            },
+        )
+        return self._external_item_db_page(response)
+
+    async def external_item_db_search(
+        self, session: WebSession, filters: ExternalItemDbFilterSubmission
+    ) -> ExternalItemDbPage:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/item-db/external-sources/search",
+            json=filters.model_dump(mode="json"),
+        )
+        return self._external_item_db_page(response)
+
+    async def external_item_db_export(
+        self, session: WebSession, filters: ExternalItemDbFilterSubmission
+    ) -> ItemDbExcelDownload:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/item-db/external-sources/export",
+            json=filters.model_dump(mode="json"),
+            headers={"Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+        )
+        digest = '"sha256:' + hashlib.sha256(response.content).hexdigest() + '"'
+        row_count = response.headers.get("x-eom-row-count", "")
+        if (
+            response.headers.get("content-type", "").split(";", 1)[0]
+            != "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            or response.headers.get("content-disposition")
+            != "attachment; filename=EOM-item-database.xlsx"
+            or response.headers.get("content-length") != str(len(response.content))
+            or not 0 < len(response.content) <= 16 * 1024 * 1024
+            or response.headers.get("etag") != digest
+            or not row_count.isascii()
+            or not row_count.isdecimal()
+            or not 0 < int(row_count) <= 2000
+            or not response.content.startswith(b"PK\x03\x04")
+        ):
+            raise GatewayError(status=502, code="ITEM_DB_EXPORT_RESPONSE_INVALID")
+        return ItemDbExcelDownload(response.content, digest, int(row_count))
+
+    def _external_item_db_page(self, response: httpx.Response) -> ExternalItemDbPage:
+        document = self._document(response)
+        values = document.get("data") if isinstance(document, dict) else None
+        page = document.get("page") if isinstance(document, dict) else None
+        if (
+            not isinstance(values, list)
+            or not isinstance(page, dict)
+            or not isinstance(page.get("has_more"), bool)
+            or (page.get("next_cursor") is not None and not isinstance(page["next_cursor"], str))
+            or (page["has_more"] and not page.get("next_cursor"))
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        try:
+            return ExternalItemDbPage(
+                values=tuple(ExternalItemDbEntry.model_validate(value) for value in values),
+                next_cursor=page.get("next_cursor"),
+                has_more=page["has_more"],
+            )
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def external_item_db_detail(
+        self, session: WebSession, source_id: str
+    ) -> ExternalItemDbDetail:
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/item-db/external-sources/{source_id}",
+        )
+        try:
+            value = ExternalItemDbDetail.model_validate(self._data(response))
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+        if value.entry.source_id != source_id:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return value
+
+    async def external_item_db_document_download(
+        self, session: WebSession, source_id: str, source_revision_id: str, edition: int
+    ) -> ExternalItemDocumentDownload:
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/item-db/external-sources/{source_id}/editions/{edition}/download",
+            params={"source_revision_id": source_revision_id},
+            headers={"Accept": "application/vnd.hancom.hwp, application/vnd.hancom.hwpx"},
+        )
+        content_type = response.headers.get("content-type", "").split(";", 1)[0]
+        disposition = response.headers.get("content-disposition", "")
+        declared_length = response.headers.get("content-length", "")
+        etag = response.headers.get("etag", "")
+        actual_hash = "sha256:" + hashlib.sha256(response.content).hexdigest()
+        if (
+            content_type not in {"application/vnd.hancom.hwp", "application/vnd.hancom.hwpx"}
+            or not disposition.startswith('attachment; filename="external-item-')
+            or not declared_length.isascii()
+            or not declared_length.isdecimal()
+            or int(declared_length) != len(response.content)
+            or not 0 < len(response.content) <= 100 * 1024 * 1024
+            or etag != f'"{actual_hash}"'
+        ):
+            raise GatewayError(status=502, code="EXTERNAL_ITEM_DOCUMENT_RESPONSE_INVALID")
+        return ExternalItemDocumentDownload(response.content, content_type, disposition, etag)
 
     async def create_operator(
         self, session: WebSession, value: StudioOperatorCreate
@@ -2789,6 +2987,49 @@ class HttpApplicationGateway:
             )
         except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def graph_item_db_entries(
+        self,
+        session: WebSession,
+        *,
+        source_class: str,
+        curriculum_unit_key: str | None,
+        cursor: str | None,
+    ) -> GraphItemDbPage:
+        if source_class not in {"APPROVED_ITEM", "PAST_EXAM"}:
+            raise GatewayError(status=422, code="ITEM_DB_GRAPH_SOURCE_INVALID")
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/item-bank/production-candidates",
+            params={
+                "source_class": source_class,
+                "curriculum_unit_key": curriculum_unit_key,
+                "limit": 50,
+                "cursor": cursor,
+            },
+        )
+        document = self._document(response)
+        values = document.get("data") if isinstance(document, dict) else None
+        page = document.get("page") if isinstance(document, dict) else None
+        if (
+            not isinstance(values, list)
+            or not isinstance(page, dict)
+            or not isinstance(page.get("has_more"), bool)
+            or (page.get("next_cursor") is not None and not isinstance(page["next_cursor"], str))
+            or (page["has_more"] and not page.get("next_cursor"))
+        ):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        adapter: TypeAdapter[ProductionItemCandidateViewContract] = TypeAdapter(
+            ProductionItemCandidateViewContract
+        )
+        try:
+            parsed = tuple(adapter.validate_python(value) for value in values)
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+        if any(value.source_class != source_class for value in parsed):
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+        return GraphItemDbPage(parsed, page.get("next_cursor"), page["has_more"])
 
     async def mock_exam_assembly_policy(self, session: WebSession) -> dict[str, Any]:
         response = await self._authorized(

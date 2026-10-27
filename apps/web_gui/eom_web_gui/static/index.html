@@ -32,12 +32,14 @@
           <button type="button" class="nav-item" data-view-target="hwpx"><span aria-hidden="true">▱</span> HWPX·문항 승인</button>
           <button type="button" class="nav-item" data-view-target="pdf-review"><span aria-hidden="true">▦</span> 자료 검토</button>
           <button type="button" class="nav-item" data-view-target="quality-review"><span aria-hidden="true">◎</span> 품질 평가</button>
+          <p class="nav-group-label">데이터</p>
+          <button type="button" class="nav-item" data-view-target="item-db" data-required-permission="item:read"><span aria-hidden="true">▣</span> DB</button>
+          <button type="button" class="nav-item admin-only" data-view-target="learning"><span aria-hidden="true">◫</span> 자료 학습</button>
+          <button type="button" class="nav-item admin-only" data-view-target="explorer"><span aria-hidden="true">⌘</span> 운영 데이터 조회</button>
           <p class="nav-group-label admin-only">운영 도구</p>
           <button type="button" class="nav-item admin-only" data-view-target="control"><span aria-hidden="true">⚙</span> Codex 실행 관리</button>
           <button type="button" class="nav-item admin-only" data-view-target="admin-settings"><span aria-hidden="true">◇</span> 관리자 설정</button>
-          <button type="button" class="nav-item admin-only" data-view-target="learning"><span aria-hidden="true">◫</span> 자료 학습</button>
           <button type="button" class="nav-item admin-only" data-view-target="knowledge"><span aria-hidden="true">⌬</span> 교육 지식 맵</button>
-          <button type="button" class="nav-item admin-only" data-view-target="explorer"><span aria-hidden="true">⌘</span> 운영 데이터 조회</button>
           <p class="nav-group-label">시스템</p>
           <button type="button" class="nav-item" data-view-target="account"><span aria-hidden="true">○</span> 내 계정</button>
           <button type="button" class="nav-item" data-view-target="support"><span aria-hidden="true">?</span> 고객센터</button>
@@ -206,6 +208,25 @@
               <aside class="inspector panel"><div class="panel-heading"><h2>문항 버전 정보</h2><span id="revision-state" class="status-badge tone-neutral"><span class="status-icon">■</span> 선택 안 됨</span></div><div class="inspector-section"><h3>HWPX 문서 제작</h3><button id="item-hwpx-continue" class="button secondary view-link" data-view-target="hwpx" type="button" disabled>이 문항으로 HWPX 만들기</button></div><details class="technical-details"><summary>고정 버전·출처 정보</summary><dl id="item-inspector" class="inspector-list"><dt>문항 ID</dt><dd>-</dd><dt>문항 버전 ID</dt><dd>-</dd><dt>문항 제작 진행 ID</dt><dd>-</dd><dt>제작 기준 버전</dt><dd>-</dd></dl></details></aside>
             </div>
             <section class="panel structured-import-panel admin-only"><div class="panel-heading"><h2>구조화 문항 등록</h2></div><div class="panel-body"><div class="structured-import-grid"><label>기준 문항 버전<input id="structured-base-revision" placeholder="itemrev_…"></label><label>동시 편집 확인값<input id="structured-revision-etag" placeholder='"v1"' readonly></label><label>사용 가능한 참고 자료 묶음<select id="structured-intake"><option value="">참고 자료 선택</option></select></label><div class="form-actions source-actions"><button id="structured-load-sources" class="button secondary" type="button">그림 원본 불러오기</button></div><label class="wide">검토 사유<textarea id="structured-review-reason" rows="3" maxlength="2000" placeholder="본문·정답·해설·그림 원본을 검토한 근거"></textarea></label><label class="wide">고급 문항 데이터 (JSON)<textarea id="structured-content-json" rows="18" spellcheck="false" placeholder="검토된 문항 데이터 JSON"></textarea></label><label class="check wide"><input id="structured-reviewed" type="checkbox"> 이 문항 데이터와 모든 고정 원본을 검토했습니다.</label><pre id="structured-source-pointer" class="pointer-preview wide">선택된 그림 원본 없음</pre><p id="structured-import-message" class="form-message wide" aria-live="polite"></p><div class="form-actions wide"><button id="structured-import-submit" class="button primary" type="button">새 문항 버전 등록</button></div></div></div></section>
+          </section>
+
+          <section class="view" data-view="item-db" aria-labelledby="item-db-title">
+            <div class="page-heading"><div><h1 id="item-db-title">문항 DB</h1><p>기출·창작 문항과 원본을 찾습니다.</p></div></div>
+            <section class="panel item-db-panel">
+              <form id="item-db-form" class="item-db-search-form">
+                <label>문항 종류<select id="item-db-source"><option value="EXTERNAL_SOURCE">창작 원본</option><option value="PAST_EXAM">기출</option><option value="APPROVED_ITEM">창작 · Graph 게시</option></select></label>
+                <div id="item-db-source-filters"><label class="item-db-match-mode">검색 조건<select id="item-db-match-mode"><option value="ALL">모두 일치</option><option value="ANY">하나라도 일치</option></select></label><div id="item-db-filter-rows" class="item-db-filter-rows" aria-label="문항 검색 조건"></div></div>
+                <div id="item-db-graph-filters" hidden><label>교육과정 단원<select id="item-db-graph-unit"><option value="">전체 단원</option></select></label></div>
+                <div class="form-actions"><button id="item-db-filter-add" class="button secondary" type="button">조건 추가</button><button class="button primary" type="submit">문항 찾기</button><button id="item-db-export" class="button secondary" type="button">검색 결과 엑셀로 저장</button></div>
+              </form>
+              <p id="item-db-message" class="form-message" aria-live="polite"></p>
+              <div id="item-db-results" class="item-bank-results"><p class="empty-state">조건을 정해 문항을 조회하세요.</p></div>
+              <div class="form-actions"><button id="item-db-more" class="button secondary" type="button" hidden>더 보기</button></div>
+            </section>
+            <section id="item-db-detail-panel" class="panel item-db-detail-panel" hidden>
+              <div class="panel-heading"><h2>문항 정보</h2><button id="item-db-detail-close" class="button quiet" type="button">닫기</button></div>
+              <div id="item-db-detail"><p class="empty-state">문항을 선택하세요.</p></div>
+            </section>
           </section>
 
           <section class="view" data-view="item-bank" aria-labelledby="item-bank-title">

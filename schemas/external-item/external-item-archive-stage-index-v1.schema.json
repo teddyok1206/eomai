@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/external-item/archive-stage-index/1.0",
+  "title": "External Item Archive Stage Index V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "archive_sha256", "documents"],
+  "properties": {
+    "schema_version": {"const": "external-item-archive-stage-index/1.0"},
+    "archive_sha256": {"$ref": "#/$defs/sha256"},
+    "documents": {
+      "type": "array", "minItems": 1, "maxItems": 400,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": [
+          "member_name", "relative_path", "original_filename", "detected_format",
+          "media_type", "size_bytes", "sha256"
+        ],
+        "properties": {
+          "member_name": {"type": "string", "minLength": 1, "maxLength": 4096},
+          "relative_path": {"type": "string", "pattern": "^document-[0-9]{4}-[0-9a-f]{16}\\.(?:hwp|hwpx)$"},
+          "original_filename": {"type": "string", "minLength": 1, "maxLength": 255},
+          "detected_format": {"enum": ["HWP_BINARY", "HWPX_PACKAGE"]},
+          "media_type": {"enum": ["application/vnd.hancom.hwp", "application/vnd.hancom.hwpx"]},
+          "size_bytes": {"type": "integer", "minimum": 1, "maximum": 104857600},
+          "sha256": {"$ref": "#/$defs/sha256"}
+        }
+      }
+    }
+  },
+  "$defs": {"sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}
+}

@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/external-item-db-filter/1.0",
+  "title": "External Item DB bounded search",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "match_mode", "conditions", "limit", "cursor"],
+  "properties": {
+    "schema_version": {"const": "external-item-db-filter/1.0"},
+    "match_mode": {"enum": ["ALL", "ANY"]},
+    "conditions": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {"$ref": "#/$defs/condition"}
+    },
+    "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+    "cursor": {"type": ["string", "null"], "minLength": 1, "maxLength": 1024}
+  },
+  "$defs": {
+    "condition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["field", "operator", "value"],
+      "properties": {
+        "field": {"enum": ["MATCH_STATUS", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L", "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z", "AA", "AB", "AC", "AD", "AE", "AF"]},
+        "operator": {"enum": ["EQ", "NE", "CONTAINS", "IS_EMPTY", "IS_NOT_EMPTY"]},
+        "value": {"type": ["string", "null"], "minLength": 1, "maxLength": 255}
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 const VIEW_NAMES = new Set([
-  "dashboard", "workflow", "request", "item", "item-bank", "hwpx",
+  "dashboard", "workflow", "request", "item", "item-db", "item-bank", "hwpx",
   "pdf-review", "quality-review", "control", "admin-settings", "learning",
   "knowledge", "explorer", "support", "account", "chat",
 ]);

@@ -134,3 +134,16 @@ def test_row_observation_rejects_ambiguous_identity(changed: str) -> None:
         body["observation_sha256"] = "sha256:" + "0" * 64
     with pytest.raises(ValidationError):
         ExternalItemRowObservation.model_validate(body)
+
+
+def test_row_observation_rejects_large_database_snapshot() -> None:
+    body = _row_observation()
+    cells = body["cells"]
+    assert isinstance(cells, list)
+    for cell in cells[:5]:
+        cell.update(present=True, cell_type="s", raw_text="한" * 32767)
+    body["observation_sha256"] = content_sha256(
+        {key: value for key, value in body.items() if key != "observation_sha256"}
+    )
+    with pytest.raises(ValidationError):
+        ExternalItemRowObservation.model_validate(body)

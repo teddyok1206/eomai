@@ -38,6 +38,7 @@ from eom_api.services.educational_quality_service import (
 )
 from eom_api.services.exam_similarity_client import CatalogExamSimilarityClient
 from eom_api.services.exam_similarity_read import ExamSimilarityReadApplicationService
+from eom_api.services.external_item_db_read import ExternalItemDbReadApplication
 from eom_api.services.general_chat_service import GeneralChatApplicationService
 from eom_api.services.hwpx_download_client import HwpxDownloadClient
 from eom_api.services.hwpx_item_revision_resolver import (
@@ -157,6 +158,7 @@ class AppServices:
             fingerprint_key,
             catalog_application=self.catalog_application,
         )
+        self.external_item_db_reads = ExternalItemDbReadApplication(engine, fingerprint_key)
         self.registry = RegistryService(engine)
         self.commands = CommandAdapter(engine, catalog_application=self.catalog_application)
         self.pdf_review_upload_stager = PdfUploadStager(

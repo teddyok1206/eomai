@@ -14,6 +14,7 @@ import {
   hwpxTargetFromWorkflow,
 } from "./hwpx-delivery-target.js";
 import {formatEquationSource, orderedItemPreviewBlocks} from "./item-preview.js";
+import {createItemDb} from "./item-db.js";
 import {renderPreviewText} from "./preview-math.js";
 import {
   applyPermissionVisibility,
@@ -136,6 +137,17 @@ const generalChat = createGeneralChat({
   errorMessage: (error) => error instanceof StudioApiError
     ? error.message : errorMessage(error?.code || "APPLICATION_API_REQUEST_FAILED"),
 });
+const itemDb = createItemDb({
+  document,
+  api,
+  canReadSource: () => hasPermission(state.operator, "content_intake:read"),
+  openRegisteredItem: async (entry) => {
+    $("#item-id").value = entry.item_id;
+    $("#revision-id").value = entry.item_revision_id;
+    showView("item");
+    await loadItemPreview();
+  },
+});
 const presetEditor = createExecutionPresetEditor({
   document, api, isAdmin: hasAdminRole, refresh: loadAdminSettings,
   showMessage, addDetail: addControlDetail,
@@ -145,6 +157,7 @@ const UI_MODE_BY_VIEW = Object.freeze({
   workflow: "engine",
   request: "human",
   item: "human",
+  "item-db": "human",
   "item-bank": "human",
   hwpx: "human",
   control: "engine",
@@ -200,6 +213,7 @@ async function api(path, options = {}) {
     throw new StudioApiError(code, requestId);
   }
   if (response.status === 204) return null;
+  if (options.binary) return response.blob();
   return response.json();
 }
 
@@ -364,6 +378,7 @@ function showView(name, {history = true, replace = false, route = null} = {}) {
   state.currentView = name;
   if (name === "chat") generalChat.open();
   else generalChat.close();
+  if (name === "item-db") itemDb.open();
   $$(".view").forEach((element) => element.classList.toggle("active", element.dataset.view === name));
   $$(".nav-item").forEach((element) => element.classList.toggle("active", element.dataset.viewTarget === name));
   syncUiMode(name);
@@ -607,6 +622,7 @@ function renderCurriculumOutline() {
 }
 
 function renderItemBankUnitOptions(units) {
+  itemDb.setCurriculumUnits(units);
   const select = $("#item-bank-unit");
   const selected = select.value;
   select.replaceChildren(new Option("전체 단원", ""));
@@ -5558,6 +5574,7 @@ async function boot() {
   installWorkflow();
   installItemPreview();
   installItemBank();
+  itemDb.install();
   installStructuredImport();
   installHwpx();
   installControlPlane();

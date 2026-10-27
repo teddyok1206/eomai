@@ -41,6 +41,7 @@ from eom_catalog_contracts import (
     DocumentReviewTextbookEvidenceResponse,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
+    ExternalItemDocumentMediaQuery,
     InspectItemRevisionHwpxEligibilityQueryV1,
     InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
@@ -776,6 +777,27 @@ def _continuing_batch_command() -> CreateKnowledgeAnalysisBatchCommand:
     return CreateKnowledgeAnalysisBatchCommand.model_validate(value)
 
 
+class FakeExternalItemDocuments:
+    def open(self, request: ExternalItemDocumentMediaQuery) -> SimpleNamespace:
+        assert request.source_id == "extitem_" + "1" * 32
+        assert request.source_revision_id == "extitemrev_" + "2" * 32
+        assert request.edition == 3
+        payload = b"test-hwp"
+
+        def chunks():
+            yield payload
+
+        return SimpleNamespace(
+            media_type="application/vnd.hancom.hwpx",
+            filename="문항_12345.hwpx",
+            member=SimpleNamespace(
+                content_length=len(payload),
+                sha256="sha256:" + hashlib.sha256(payload).hexdigest(),
+                iter_chunks=chunks,
+            ),
+        )
+
+
 def _server(
     tmp_path: Path,
     *,
@@ -786,6 +808,7 @@ def _server(
     assemblies: FakeAssemblies | None = None,
     pdf_intake: FakePdfDocumentReviewIntake | None = None,
     office_intake: FakeOfficeDocumentReviewIntake | None = None,
+    external_documents: FakeExternalItemDocuments | None = None,
 ) -> CatalogApplicationServer:
     runtime = tmp_path / "runtime"
     runtime.mkdir(mode=0o750)
@@ -800,6 +823,7 @@ def _server(
         mock_exam_assemblies=assemblies or FakeAssemblies(),  # type: ignore[arg-type]
         pdf_document_review_intake=pdf_intake,  # type: ignore[arg-type]
         office_document_review_intake=office_intake,  # type: ignore[arg-type]
+        external_item_documents=external_documents,  # type: ignore[arg-type]
         socket_path=runtime / "manager.sock",
         allowed_uid=os.getuid() if allowed_uid is None else allowed_uid,
         expected_uid=os.getuid(),
@@ -1450,6 +1474,25 @@ def test_catalog_socket_round_trip_uses_v12_for_content_team_v3_items(tmp_path: 
         )
         assert imported.item_revision_id == "itemrev_" + "2" * 32
         assert client.load_item_content("itemrev_" + "2" * 32) == _content_team_item_v3()
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_catalog_socket_streams_pinned_external_item_document(tmp_path: Path) -> None:
+    server = _server(tmp_path, external_documents=FakeExternalItemDocuments())
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        media = _client(server).download_external_item_document(
+            "extitem_" + "1" * 32,
+            "extitemrev_" + "2" * 32,
+            3,
+        )
+        assert media.filename == "문항_12345.hwpx"
+        assert media.media_type == "application/vnd.hancom.hwpx"
+        assert b"".join(media.iter_chunks()) == b"test-hwp"
     finally:
         server.shutdown()
         server.server_close()

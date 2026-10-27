@@ -20,6 +20,7 @@ from eom_catalog_contracts import (
     CATALOG_APPLICATION_SOCKET_PATH,
     CATALOG_ASSESSMENT_PAGE_MAX_BYTES,
     CATALOG_ITEM_MEDIA_MAX_BYTES,
+    EXTERNAL_ITEM_DOCUMENT_MAX_BYTES,
     PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES,
     ApplyDocumentReviewHwpxCorrections,
     ApplyDocumentReviewHwpxCorrectionsV2,
@@ -68,6 +69,8 @@ from eom_catalog_contracts import (
     EvidenceBundlePublicationResultV2,
     EvidenceBundlePublicationResultV3,
     EvidenceBundlePublicationResultV4,
+    ExternalItemDocumentMediaQuery,
+    ExternalItemDocumentMediaResponse,
     InspectItemRevisionHwpxEligibilityQueryV1,
     InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
@@ -149,6 +152,11 @@ class ProxiedItemMedia:
                 raise RuntimeError("Catalog media stream failed end-to-end SHA-256 validation")
         finally:
             self.connection.close()
+
+
+@dataclass(frozen=True)
+class ProxiedExternalItemDocument(ProxiedItemMedia):
+    filename: str
 
 
 class CatalogApplicationClientError(RuntimeError):
@@ -723,6 +731,57 @@ class CatalogApplicationClient:
     def download_item_media(self, item_revision_id: str, block_id: str) -> ProxiedItemMedia:
         command = ItemMediaQuery(item_revision_id=item_revision_id, block_id=block_id)
         return self._download_item_media(command)
+
+    def download_external_item_document(
+        self, source_id: str, source_revision_id: str, edition: int
+    ) -> ProxiedExternalItemDocument:
+        command = ExternalItemDocumentMediaQuery(
+            source_id=source_id,
+            source_revision_id=source_revision_id,
+            edition=edition,
+        )
+        payload = command.model_dump(mode="json")
+        validate_contract("catalog-external-item-document-media-request", payload)
+        self._validate_socket()
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+            connection.connect(str(self.socket_path))
+            encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+            connection.sendall(encoded + b"\n")
+            connection.settimeout(RESPONSE_TIMEOUT_SECONDS)
+            raw = self._read_media_header(connection)
+            value: Any = json.loads(raw)
+            if not isinstance(value, dict):
+                raise ValueError("Catalog external Item document header is not an object")
+            validate_contract("catalog-external-item-document-media-response", value)
+            response = ExternalItemDocumentMediaResponse.model_validate(value)
+            if response.operation != command.operation:
+                raise ValueError("Catalog external Item document operation differs")
+            if response.status == "ERROR":
+                self._raise_remote_error(response.error_code)
+            assert response.media_type is not None
+            assert response.content_length is not None
+            assert response.sha256 is not None
+            assert response.filename is not None
+            if response.content_length > EXTERNAL_ITEM_DOCUMENT_MAX_BYTES:
+                raise ValueError("Catalog external Item document exceeds its fixed bound")
+            return ProxiedExternalItemDocument(
+                connection=connection,
+                media_type=response.media_type,
+                content_length=response.content_length,
+                sha256=response.sha256,
+                filename=response.filename,
+            )
+        except CatalogApplicationClientError:
+            connection.close()
+            raise
+        except (OSError, ValueError, JsonSchemaValidationError, ValidationError) as exc:
+            connection.close()
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog external Item document response is unavailable",
+            ) from exc
 
     def download_item_component_media(
         self,

@@ -2,15 +2,16 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
 import shutil
 import stat
-from collections.abc import Callable
+from collections.abc import Callable, Generator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol, runtime_checkable
+from typing import Any, BinaryIO, Protocol, runtime_checkable
 from uuid import uuid4
 
 from eom_identifiers import (
@@ -396,6 +397,20 @@ class CatalogModelArtifactReader(CatalogArtifactReader, Protocol):
     ) -> Model: ...
 
 
+@dataclass(frozen=True)
+class VerifiedArtifactMemberStream:
+    stream: BinaryIO
+    content_length: int
+    sha256: str
+
+    def iter_chunks(self) -> Generator[bytes, None, None]:
+        try:
+            while chunk := self.stream.read(1024 * 1024):
+                yield chunk
+        finally:
+            self.stream.close()
+
+
 @runtime_checkable
 class CatalogModelValueDecoder(Protocol):
     """Optional root-scoped interpretation of current canonical JSON metadata.
@@ -574,6 +589,65 @@ class CatalogArtifactService:
             max_bytes=max_bytes,
         )
         return target.read_bytes()
+
+    def open_verified_member(
+        self,
+        *,
+        artifact_id: str,
+        revision_id: str,
+        member_path: str,
+        sha256: str,
+        media_type: str,
+        schema_ref: str,
+        max_bytes: int,
+    ) -> VerifiedArtifactMemberStream:
+        """Resolve one immutable member, then bind its verified bytes to an opened FD."""
+
+        target = self._resolve_member(
+            artifact_id=artifact_id,
+            revision_id=revision_id,
+            member_path=member_path,
+            sha256=sha256,
+            media_type=media_type,
+            schema_ref=schema_ref,
+            max_bytes=max_bytes,
+        )
+        descriptor = -1
+        stream: BinaryIO | None = None
+        try:
+            descriptor = os.open(
+                target,
+                os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_CLOEXEC", 0),
+            )
+            stream = os.fdopen(descriptor, "rb")
+            before = os.fstat(stream.fileno())
+            if (
+                not stat.S_ISREG(before.st_mode)
+                or before.st_nlink != 1
+                or not 0 < before.st_size <= max_bytes
+            ):
+                raise ValueError("artifact member descriptor is unsafe")
+            digest = hashlib.sha256()
+            while chunk := stream.read(1024 * 1024):
+                digest.update(chunk)
+            after = os.fstat(stream.fileno())
+            if (
+                "sha256:" + digest.hexdigest() != sha256
+                or _stat_identity(before) != _stat_identity(after)
+            ):
+                raise ValueError("artifact member changed after pointer validation")
+            stream.seek(0)
+            return VerifiedArtifactMemberStream(
+                stream=stream,
+                content_length=before.st_size,
+                sha256=sha256,
+            )
+        except (OSError, ValueError):
+            if stream is not None:
+                stream.close()
+            elif descriptor >= 0:
+                os.close(descriptor)
+            raise
 
     def load_rendered_prompt(
         self,

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/external-item-db-view/1.0",
+  "title": "External Item DB read views",
+  "$defs": {
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "source_id", "source_revision_id", "external_number", "observation_sha256", "major_unit", "minor_unit", "field_label", "grade_label", "author_label", "match_status", "selected_filename", "graph_state", "similarity_state"],
+      "properties": {
+        "schema_version": {"const": "external-item-db-entry/1.0"},
+        "source_id": {"type": "string", "pattern": "^extitem_[0-9a-f]{32}$"},
+        "source_revision_id": {"type": "string", "pattern": "^extitemrev_[0-9a-f]{32}$"},
+        "external_number": {"type": "string", "pattern": "^[0-9]{5}$"},
+        "observation_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "major_unit": {"type": ["string", "null"], "maxLength": 255},
+        "minor_unit": {"type": ["string", "null"], "maxLength": 255},
+        "field_label": {"type": ["string", "null"], "maxLength": 255},
+        "grade_label": {"type": ["string", "null"], "maxLength": 255},
+        "author_label": {"type": ["string", "null"], "maxLength": 255},
+        "match_status": {"enum": ["MATCHED", "MATCHED_DETECTED_HWPX", "MATCHED_IDENTICAL_COPIES", "REJECTED", "REJECTION_AMBIGUOUS", "DRAFT_ONLY", "LINK_UNSUPPORTED", "DOCUMENT_MISSING", "NAME_MISMATCH", "CONTENT_CONFLICT", "FORMAT_MISMATCH"]},
+        "selected_filename": {"type": ["string", "null"], "maxLength": 512},
+        "graph_state": {"const": "NOT_PUBLISHED"},
+        "similarity_state": {"const": "NOT_INDEXED"}
+      }
+    },
+    "cell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["column", "present", "cell_type", "raw_text", "style_id", "formula_text"],
+      "properties": {
+        "column": {"type": "string", "pattern": "^(?:[A-Z]|A[A-F])$"},
+        "present": {"type": "boolean"},
+        "cell_type": {"type": ["string", "null"], "maxLength": 32},
+        "raw_text": {"type": "string", "maxLength": 32767},
+        "style_id": {"type": ["integer", "null"], "minimum": 0},
+        "formula_text": {"type": ["string", "null"], "maxLength": 32767}
+      }
+    },
+    "edition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["edition", "match_status", "filename", "media_type", "available"],
+      "properties": {
+        "edition": {"type": "integer", "minimum": 1, "maximum": 3},
+        "match_status": {"type": "string", "minLength": 1, "maxLength": 32},
+        "filename": {"type": ["string", "null"], "maxLength": 512},
+        "media_type": {"type": ["string", "null"], "maxLength": 127},
+        "available": {"type": "boolean"}
+      }
+    },
+    "detail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schema_version", "entry", "worksheet_name", "row_number", "cells", "editions"],
+      "properties": {
+        "schema_version": {"const": "external-item-db-detail/1.0"},
+        "entry": {"$ref": "#/$defs/entry"},
+        "worksheet_name": {"type": "string", "minLength": 1, "maxLength": 128},
+        "row_number": {"type": "integer", "minimum": 2},
+        "cells": {"type": "array", "minItems": 32, "maxItems": 32, "items": {"$ref": "#/$defs/cell"}},
+        "editions": {"type": "array", "maxItems": 3, "items": {"$ref": "#/$defs/edition"}}
+      }
+    }
+  }
+}

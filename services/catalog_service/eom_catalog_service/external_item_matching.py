@@ -51,6 +51,20 @@ class ExternalItemLinkMatch:
     candidates: tuple[ExternalItemDocumentMember, ...]
 
 
+@dataclass(frozen=True)
+class ExternalItemEditionLinkMatch:
+    """One observed 1/2/3교 link; finality is decided separately."""
+
+    external_number: str
+    row_number: int
+    edition: int
+    source_link: str
+    status: ExternalItemMatchStatus
+    display_filename: str | None
+    selected_member: ExternalItemDocumentMember | None
+    candidates: tuple[ExternalItemDocumentMember, ...]
+
+
 def propose_external_item_links(
     rows: tuple[DecodedExternalItemRow, ...], inventory: ExternalItemArchiveInventory
 ) -> tuple[ExternalItemLinkMatch, ...]:
@@ -62,6 +76,38 @@ def propose_external_item_links(
     return tuple(
         _propose_one(row, documents_by_number.get(row.external_number, [])) for row in rows
     )
+
+
+def propose_external_item_edition_links(
+    rows: tuple[DecodedExternalItemRow, ...], inventory: ExternalItemArchiveInventory
+) -> tuple[ExternalItemEditionLinkMatch, ...]:
+    """Preserve every nonempty editorial file link, including draft/rejected rows."""
+
+    documents_by_number: dict[str, list[ExternalItemDocumentMember]] = defaultdict(list)
+    for document in inventory.documents:
+        documents_by_number[document.external_number].append(document)
+    result: list[ExternalItemEditionLinkMatch] = []
+    for row in rows:
+        for edition, index in ((1, 11), (2, 12), (3, 13)):
+            link = row.cells[index].raw_text
+            if not link:
+                continue
+            proposal = _match_one_link(
+                row, edition, link, documents_by_number.get(row.external_number, [])
+            )
+            result.append(
+                ExternalItemEditionLinkMatch(
+                    external_number=row.external_number,
+                    row_number=row.row_number,
+                    edition=edition,
+                    source_link=link,
+                    status=proposal.status,
+                    display_filename=proposal.display_filename,
+                    selected_member=proposal.selected_member,
+                    candidates=proposal.candidates,
+                )
+            )
+    return tuple(result)
 
 
 def _propose_one(
@@ -78,6 +124,15 @@ def _propose_one(
         edition, source_link = 2, second_link
     else:
         return _unselected(row, ExternalItemMatchStatus.DRAFT_ONLY, None, None, number_candidates)
+    return _match_one_link(row, edition, source_link, number_candidates)
+
+
+def _match_one_link(
+    row: DecodedExternalItemRow,
+    edition: int,
+    source_link: str,
+    number_candidates: list[ExternalItemDocumentMember],
+) -> ExternalItemLinkMatch:
     filename = _link_basename(source_link)
     if filename is None or _OFFICE_EXTENSION.search(filename) is None:
         return _unselected(

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections import Counter
 from dataclasses import asdict
 from pathlib import Path
 from typing import Annotated, Literal, Never, cast
@@ -13,13 +14,26 @@ from eom_catalog_contracts import (
     CreateDeliverable,
     CreateLegacyUsageImportCommand,
     CreateUsagePlan,
+    ExternalItemWorkbookMapping,
     FulfillUsagePlan,
     LegacyUsageMappingContractRevision,
     ReviewLegacyUsageRowCommand,
     load_schema,
+    validate_contract,
 )
 from eom_catalog_service.content_pack_files import build_pack, compile_pack, inspect_bundle
 from eom_catalog_service.content_pack_service import ContentPackService
+from eom_catalog_service.external_item_archive import inspect_external_item_archive
+from eom_catalog_service.external_item_archive_intake import ExternalItemArchiveIntakeService
+from eom_catalog_service.external_item_archive_staging import plan_external_item_archive_batches
+from eom_catalog_service.external_item_import_preparation import prepare_external_item_import
+from eom_catalog_service.external_item_import_service import ExternalItemImportService
+from eom_catalog_service.external_item_matching import (
+    propose_external_item_edition_links,
+    propose_external_item_links,
+)
+from eom_catalog_service.external_item_observations import ExternalItemWorkbookPointer
+from eom_catalog_service.external_item_xlsx import read_external_item_rows
 from eom_catalog_service.intake_files import load_strict_json
 from eom_catalog_service.intake_service import IntakeService
 from eom_catalog_service.knowledge_stimulus import (
@@ -31,6 +45,7 @@ from eom_catalog_service.registry_export import ExportFormat, ExportKind, Regist
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.usage_service import UsageLedgerService
+from eom_identifiers import sha256_file
 from eom_orchestrator.database import build_engine
 from sqlalchemy import Engine, inspect
 
@@ -49,9 +64,11 @@ legacy_usage_mapping_app = typer.Typer(no_args_is_help=True)
 legacy_usage_import_app = typer.Typer(no_args_is_help=True)
 registry_app = typer.Typer(no_args_is_help=True)
 registry_export_app = typer.Typer(no_args_is_help=True)
+external_item_app = typer.Typer(no_args_is_help=True)
 content_app.add_typer(intake_app, name="intake")
 content_app.add_typer(pack_app, name="pack")
 content_app.add_typer(stimulus_app, name="stimulus")
+content_app.add_typer(external_item_app, name="external-items")
 item_app.add_typer(item_revision_app, name="revision")
 usage_app.add_typer(usage_plan_app, name="plan")
 usage_app.add_typer(usage_record_app, name="record")
@@ -68,6 +85,105 @@ def _emit(value: object) -> None:
 def _intake_service() -> tuple[IntakeService, Engine]:
     engine = build_engine()
     return IntakeService(engine), engine
+
+
+def _external_item_mapping(path: Path) -> ExternalItemWorkbookMapping:
+    raw = load_strict_json(path)
+    validate_contract("external-item-workbook-mapping-v1", raw)
+    return ExternalItemWorkbookMapping.model_validate(raw)
+
+
+@external_item_app.command("inventory")
+def external_item_inventory(
+    workbook: Annotated[Path, typer.Option("--workbook", exists=True, dir_okay=False)],
+    archive: Annotated[Path, typer.Option("--archive", exists=True, dir_okay=False)],
+    mapping_file: Annotated[Path, typer.Option("--mapping", exists=True, dir_okay=False)],
+) -> None:
+    """Read-only count, exact archive hashes and editorial match coverage."""
+
+    mapping = _external_item_mapping(mapping_file)
+    rows = read_external_item_rows(workbook, mapping)
+    inventory = inspect_external_item_archive(archive)
+    final = propose_external_item_links(rows, inventory)
+    editions = propose_external_item_edition_links(rows, inventory)
+    batches = plan_external_item_archive_batches(inventory)
+    _emit(
+        {
+            "workbook_sha256": sha256_file(workbook),
+            "archive_sha256": inventory.archive_sha256,
+            "row_count": len(rows),
+            "document_count": len(inventory.documents),
+            "intake_batch_sizes": [len(batch) for batch in batches],
+            "final_match_counts": dict(
+                sorted(Counter(value.status.value for value in final).items())
+            ),
+            "editorial_link_count": len(editions),
+            "matched_editorial_link_count": sum(
+                value.selected_member is not None for value in editions
+            ),
+        }
+    )
+
+
+@external_item_app.command("commit")
+def external_item_commit(
+    workbook: Annotated[Path, typer.Option("--workbook", exists=True, dir_okay=False)],
+    archive: Annotated[Path, typer.Option("--archive", exists=True, dir_okay=False)],
+    mapping_file: Annotated[Path, typer.Option("--mapping", exists=True, dir_okay=False)],
+    expected_workbook_sha256: Annotated[str, typer.Option("--expected-workbook-sha256")],
+    expected_archive_sha256: Annotated[str, typer.Option("--expected-archive-sha256")],
+    expected_rows: Annotated[int, typer.Option("--expected-rows")],
+    received_by: Annotated[str, typer.Option("--received-by")],
+    confirm: Annotated[bool, typer.Option("--confirm")] = False,
+) -> None:
+    """Commit the fixed workbook and archive through Intake, then source-only DB."""
+
+    if not confirm:
+        raise typer.BadParameter("external Item commit requires --confirm")
+    mapping = _external_item_mapping(mapping_file)
+    actual_workbook_sha256 = sha256_file(workbook)
+    if actual_workbook_sha256 != expected_workbook_sha256:
+        raise typer.BadParameter("workbook hash differs from the pinned input")
+    rows = read_external_item_rows(workbook, mapping)
+    if len(rows) != expected_rows:
+        raise typer.BadParameter("workbook row count differs from the pinned input")
+    inventory = inspect_external_item_archive(archive, expected_sha256=expected_archive_sha256)
+    engine = build_engine()
+    try:
+        intake = ExternalItemArchiveIntakeService(engine)
+        committed_workbook = intake.commit_workbook(
+            workbook, expected_sha256=expected_workbook_sha256, received_by=received_by
+        )
+        committed_documents = intake.commit_archive_documents(
+            archive, inventory, received_by=received_by
+        )
+        manifest = prepare_external_item_import(
+            actor_id=received_by,
+            mapping=mapping,
+            workbook_source_file_id=committed_workbook.source_file_id,
+            workbook=ExternalItemWorkbookPointer(
+                artifact_id=committed_workbook.artifact_id,
+                artifact_revision_id=committed_workbook.artifact_revision_id,
+                sha256=committed_workbook.sha256,
+            ),
+            inventory=inventory,
+            rows=rows,
+            committed_documents=committed_documents,
+        )
+        result = ExternalItemImportService(engine).commit(manifest)
+        _emit(
+            {
+                "status": "COMPLETED",
+                "import_id": result.import_id,
+                "request_sha256": result.request_sha256,
+                "row_count": result.row_count,
+                "matched_count": result.matched_count,
+                "created": result.created,
+                "committed_document_count": len(committed_documents),
+            }
+        )
+    finally:
+        engine.dispose()
 
 
 def _pack_service() -> tuple[ContentPackService, Engine]:

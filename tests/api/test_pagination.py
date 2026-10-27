@@ -6,6 +6,7 @@ import pytest
 from eom_api.errors import ApiError
 from eom_api.services.pagination import CursorCodec
 from eom_api.services.query_adapter import CursorCodec as QueryAdapterCursorCodec
+from eom_api.services.query_adapter import _graph_cursor_scope
 
 
 def test_query_adapter_preserves_the_pagination_public_import() -> None:
@@ -52,3 +53,18 @@ def test_ordinal_cursor_is_signed_and_aggregate_scoped() -> None:
     with pytest.raises(ApiError) as altered:
         codec.decode_ordinal(tampered, "knowledge_analysis_batch_ranges", batch_id)
     assert altered.value.error_code == "API_CURSOR_INVALID"
+
+
+def test_graph_cursor_rejects_a_new_snapshot_or_changed_search_filters() -> None:
+    codec = CursorCodec(b"g" * 32)
+    filters: dict[str, object] = {"source_class": "PAST_EXAM", "curriculum_unit_key": None}
+    first = _graph_cursor_scope(filters, "graphrev_" + "1" * 32)
+    cursor = codec.encode_ordinal("production-item-candidate", first, 50)
+    assert codec.decode_ordinal(cursor, "production-item-candidate", first) == 50
+    for scope in (
+        _graph_cursor_scope(filters, "graphrev_" + "2" * 32),
+        _graph_cursor_scope({**filters, "source_class": "APPROVED_ITEM"}, "graphrev_" + "1" * 32),
+    ):
+        with pytest.raises(ApiError) as stale:
+            codec.decode_ordinal(cursor, "production-item-candidate", scope)
+        assert stale.value.error_code == "API_CURSOR_INVALID"

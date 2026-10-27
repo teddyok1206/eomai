@@ -786,7 +786,7 @@ verify_mock_exam_deployment_admission() {
 prepare_runtime_dependencies() {
   getent group eom-codex-auth >/dev/null || \
     fail "eom-codex-auth identity must be deployed before the API unit"
-  run_release_operator MIGRATION_VERIFY_0059 "${COMMIT}"
+  run_release_operator MIGRATION_VERIFY_0060 "${COMMIT}"
   run_release_operator API_ROLE_BOOTSTRAP "${COMMIT}"
 }
 
@@ -2129,7 +2129,7 @@ if any(
     )
 ):
     raise SystemExit("mock-exam retirement contract package exports are incomplete")
-if CURRENT_MIGRATION_REVISION != "20261026_0059":
+if CURRENT_MIGRATION_REVISION != "20261027_0060":
     raise SystemExit("installed runtime migration admission head mismatch")
 settings = Settings.from_environment()
 if settings.worker_config != Path(worker_config).resolve():

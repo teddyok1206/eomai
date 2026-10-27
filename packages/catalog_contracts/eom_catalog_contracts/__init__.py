@@ -459,6 +459,18 @@ from eom_catalog_contracts.exam_similarity_observation import (
     parse_exam_observation_request,
     parse_exam_similarity_observation,
 )
+from eom_catalog_contracts.external_item_import import (
+    EXTERNAL_ITEM_IMPORT_MANIFEST_SCHEMA,
+    EXTERNAL_ITEM_IMPORT_MANIFEST_SCHEMA_REF,
+    ExternalItemEditionLink,
+    ExternalItemImportManifest,
+    ExternalItemImportRow,
+)
+from eom_catalog_contracts.external_item_media import (
+    EXTERNAL_ITEM_DOCUMENT_MAX_BYTES,
+    ExternalItemDocumentMediaQuery,
+    ExternalItemDocumentMediaResponse,
+)
 from eom_catalog_contracts.external_item_workbook import (
     EXTERNAL_ITEM_COLUMNS,
     EXTERNAL_ITEM_ROW_OBSERVATION_SCHEMA,
@@ -1131,6 +1143,9 @@ __all__ = [
     "EOM_GUIDANCE_MARKDOWN_MEDIA_TYPE",
     "EOM_GUIDANCE_MARKDOWN_SCHEMA_VERSION",
     "EXTERNAL_ITEM_COLUMNS",
+    "EXTERNAL_ITEM_DOCUMENT_MAX_BYTES",
+    "EXTERNAL_ITEM_IMPORT_MANIFEST_SCHEMA",
+    "EXTERNAL_ITEM_IMPORT_MANIFEST_SCHEMA_REF",
     "EXTERNAL_ITEM_ROW_OBSERVATION_SCHEMA",
     "EXTERNAL_ITEM_ROW_OBSERVATION_SCHEMA_REF",
     "EXTERNAL_ITEM_WORKBOOK_MAPPING_SCHEMA",
@@ -1484,7 +1499,12 @@ __all__ = [
     "ExecuteKnowledgeAnalysisRange",
     "ExternalItemCellObservation",
     "ExternalItemColumnHeader",
+    "ExternalItemDocumentMediaQuery",
+    "ExternalItemDocumentMediaResponse",
     "ExternalItemEditionColumns",
+    "ExternalItemEditionLink",
+    "ExternalItemImportManifest",
+    "ExternalItemImportRow",
     "ExternalItemRowObservation",
     "ExternalItemWorkbookMapping",
     "ExtractionValidationDiagnosis",

@@ -11,6 +11,7 @@ import re
 import stat
 import zipfile
 from dataclasses import dataclass
+from io import BytesIO
 from pathlib import Path
 from xml.etree import ElementTree
 
@@ -68,11 +69,7 @@ def read_external_item_rows(
                     "EXTERNAL_ITEM_XLSX_FILE_INVALID", "workbook is not a bounded regular file"
                 )
             with zipfile.ZipFile(source) as archive:
-                names = _validate_archive(archive)
-                shared_strings = _shared_strings(archive, names, normalize=False)
-                sheet_member = _worksheet_member(archive, mapping.worksheet_name)
-                worksheet = _xml(archive, sheet_member)
-                rows = _decode_rows(worksheet, shared_strings, mapping)
+                rows = _read_workbook(archive, mapping)
             after = os.fstat(source.fileno())
             if (
                 before.st_dev,
@@ -106,6 +103,41 @@ def read_external_item_rows(
             exc.code if isinstance(exc, LegacyXlsxError) else "EXTERNAL_ITEM_XLSX_PACKAGE_INVALID"
         )
         raise ExternalItemXlsxError(code, "external Item workbook is invalid") from exc
+
+
+def read_external_item_rows_bytes(
+    payload: bytes, mapping: ExternalItemWorkbookMapping
+) -> tuple[DecodedExternalItemRow, ...]:
+    """Decode bytes returned by the exact, hash-verified Artifact member reader."""
+
+    if not 0 < len(payload) <= _MAX_ARCHIVE_BYTES:
+        raise ExternalItemXlsxError(
+            "EXTERNAL_ITEM_XLSX_FILE_INVALID", "workbook bytes exceed the bounded input"
+        )
+    try:
+        with zipfile.ZipFile(BytesIO(payload)) as archive:
+            return _read_workbook(archive, mapping)
+    except (
+        zipfile.BadZipFile,
+        ElementTree.ParseError,
+        UnicodeError,
+        LegacyXlsxError,
+        ValidationError,
+    ) as exc:
+        code = (
+            exc.code if isinstance(exc, LegacyXlsxError) else "EXTERNAL_ITEM_XLSX_PACKAGE_INVALID"
+        )
+        raise ExternalItemXlsxError(code, "external Item workbook is invalid") from exc
+
+
+def _read_workbook(
+    archive: zipfile.ZipFile, mapping: ExternalItemWorkbookMapping
+) -> tuple[DecodedExternalItemRow, ...]:
+    names = _validate_archive(archive)
+    shared_strings = _shared_strings(archive, names, normalize=False)
+    sheet_member = _worksheet_member(archive, mapping.worksheet_name)
+    worksheet = _xml(archive, sheet_member)
+    return _decode_rows(worksheet, shared_strings, mapping)
 
 
 def _decode_rows(

@@ -95,6 +95,12 @@ from eom_api_contracts.educational_quality import (
     UpsertEducationalQualityObservationCommand,
 )
 from eom_api_contracts.errors import ProblemDetails, ValidationIssue
+from eom_api_contracts.external_item_db import (
+    ExternalItemDbCellView,
+    ExternalItemDbDetailView,
+    ExternalItemDbEditionView,
+    ExternalItemDbEntryView,
+)
 from eom_api_contracts.hwpx import (
     AssessmentHwpxBuildView,
     CreateAssessmentHwpxBuildRequest,
@@ -241,6 +247,10 @@ __all__ = [
     "EvidenceBudgetInput",
     "EvidenceBundleBudgetView",
     "EvidenceBundleView",
+    "ExternalItemDbCellView",
+    "ExternalItemDbDetailView",
+    "ExternalItemDbEditionView",
+    "ExternalItemDbEntryView",
     "FinalizeEducationalQualitySessionCommand",
     "HwpxBuildOptions",
     "HwpxBuildState",

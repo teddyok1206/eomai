@@ -1,0 +1,30 @@
+{
+  "$id": "eom://schemas/catalog-application/catalog-external-item-document-media-response/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Catalog External Item Document Media Response V1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "operation", "media_type", "content_length", "sha256", "filename"],
+      "properties": {
+        "status": {"const": "OK"},
+        "operation": {"const": "GET_EXTERNAL_ITEM_DOCUMENT_MEDIA"},
+        "media_type": {"enum": ["application/vnd.hancom.hwp", "application/vnd.hancom.hwpx"]},
+        "content_length": {"type": "integer", "minimum": 1, "maximum": 104857600},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "filename": {"type": "string", "minLength": 1, "maxLength": 255}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "operation", "error_code"],
+      "properties": {
+        "status": {"const": "ERROR"},
+        "operation": {"const": "GET_EXTERNAL_ITEM_DOCUMENT_MEDIA"},
+        "error_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"}
+      }
+    }
+  ]
+}

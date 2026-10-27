@@ -8,7 +8,7 @@
 
 기존 노션 DB에서 내보낸 엑셀의 **모든 행과 32개 열 A:AF**, 원래 셀 값과 파일 연결을 잃지 않고 EOM에서 검색·열람·엑셀 내보내기까지 제공한다. 파일 링크의 사용자 표시만 `~.hwp`/`~.hwpx` 같은 **파일명**으로 바꾼다. 실제 다운로드는 파일명이나 호스트 경로가 아닌 권한 검사를 거친 불변 Artifact pointer로 수행한다.
 
-원본 `.hwp`/`.hwpx`를 보관·조회하는 것과 EOM의 구조화된 정본 `Item Revision`으로 승격하는 것은 별개의 단계다. 파일 하나가 존재한다는 이유로 본문·정답·해설을 추측하거나, 생성된 문항으로 가장하거나, 승인·출판 가능 상태로 표시하지 않는다. 사용자가 원한 최초 기능은 **원본과 메타데이터가 온전히 연결된 문항 보관함**이다. 자동 출제·GraphRAG·유사도 편입은 검증된 구조화 문항이 생긴 뒤 별도로 활성화한다.
+원본 `.hwp`/`.hwpx`를 보관·조회하는 것과 EOM의 구조화된 정본 `Item Revision`으로 승격하는 것은 별개의 단계다. 파일 하나가 존재한다는 이유로 본문·정답·해설을 추측하거나, 생성된 문항으로 가장하거나, 승인·출판 가능 상태로 표시하지 않는다. 최초 기능은 **원본과 메타데이터가 온전히 연결된 문항 보관함**이다. 사용자가 추가로 확정한 종료 범위에는 검증된 `창작` 문항의 풀이보고서와 기존 Graph 게시까지 포함한다. 원본 보관과 Graph 게시의 자격 및 결과는 별도로 판정한다.
 
 ## 2. 조사 기준선과 격리 대상
 
@@ -29,7 +29,9 @@
   -> 확정된 원본 문항 기록과 모든 교정본 파일 pointer (Catalog)
   -> 필요 시 문서 변환·구조화 추출 제안 (Orchestrator 경유)
   -> 검증·결정된 AssessmentItemContent + 정본 Item Revision (Item Registry)
-  -> 선택적 Graph 게시·임베딩·출판
+  -> 승인된 창작 Item의 기존 Knowledge Analysis + 풀이보고서
+  -> APPROVED_ITEM Graph 공통 publisher를 재사용하는 창작 출처 검증 경계
+  -> 임베딩·출판
 ```
 
 엑셀과 선별된 각 문서 바이트의 정본은 Content Intake의 불변 Artifact Revision이다. 현재 일반 Intake는 파일당 100 MiB, 한 묶음 500파일·2 GiB를 제한한다. 이 ZIP 자체는 2.8 GB라 일반 Intake의 파일이 될 수 없고, 문서 1,087개도 한 묶음으로는 초과한다. ZIP은 정확한 SHA-256으로 고정한 **운송 봉투**로 취급하고 허용된 멤버를 안전하게 스트리밍하여 여러 정상 Intake 묶음으로 넘긴다. 조사한 HWP/HWPX 1,087개는 합계 약 445 MB이고 가장 큰 파일이 약 46 MB이므로 개별 파일 한도 안에 있다. `.ai` 등 보조 원본은 실제 엑셀 연결과 용량을 따로 검증해 추가 묶음으로 다룬다. 원본 ZIP 자체를 NAS에 보존하려면 일반 Intake의 상한을 몰래 늘리지 말고 별도 대용량 봉투 Artifact commit·용량·복구 게이트를 통과해야 한다. 봉투 보존 전에는 그 바이트가 정본 NAS Artifact라고 주장하지 않는다.
@@ -50,6 +52,15 @@ JSON Schema 2020-12와 동일 의미의 Pydantic 모델을 기존 `catalog_contr
 
 DB에는 source/import/row identity, 상태, 제한된 32필드 행 스냅샷, 인덱스 대상 정규화 값, pointer와 hash만 둔다. 원본 엑셀·HWP/HWPX·파생 PDF·긴 추출 결과는 Artifact store에 둔다. 원본 엑셀은 최종 권위자이고, DB의 행 스냅샷은 그 source revision에 고정된 **조회용 불변 파생물**이다. 재매핑은 기존 행을 수정하지 않고 새 mapping revision과 import revision을 만든다.
 
+### 영속 조회 구조의 구체화
+
+- `external_item_sources`: `(namespace, U)`의 유일한 논리 식별자와 현재 revision pointer만 둔다. U는 사용자가 허용한 업무상 5자리 고유번호로 목록·상세·정확 검색에 표시할 수 있다. EOM 내부 source/revision/Artifact ID는 기본 GUI에 노출하지 않는다.
+- `external_item_source_revisions`: workbook Artifact Revision·매핑 Revision/hash·원본 시트/행·A:AF 셀 관찰·선택된 원본 파일 pointer·결정 상태의 불변 snapshot이다. `(source_id, revision_number)`, `(import_id, row_number)`, `(import_id, U)`를 고유 제약으로 보호한다. 다른 import의 수정은 successor revision으로만 나타낸다.
+- `external_item_imports`: workbook/운송 ZIP/mapping의 고정 hash와 요청·완료 상태를 관리한다. 정확한 조합의 요청은 멱등 replay한다. ZIP 운송 봉투는 Artifact가 아니므로 `archive_sha256`은 원본 파일 pointer를 대신하지 않는다.
+- 파일 바이트는 기존 `content_intake_source_files → artifact_revisions`를 사용하고 새 테이블에 복사하지 않는다. 미연결·반려 행은 selected file pointer가 `NULL`인 상태로 남는다.
+- 인덱스는 `(namespace, U)` 고유 B-tree, 현재 상태/단원/분야/정렬의 bounded keyset read B-tree, `(import_id, row_number)` 및 `(source_id, revision_number)` 고유 B-tree다. 32칸 전체에 무작정 GIN을 달지 않는다. 예상 1천여 건에서 수십만 건까지 `O(log n + page_size)` key lookup을 목표로 하고, 실제 query plan과 필터 사용량을 보고 보조 인덱스를 추가한다.
+- 한 import의 source pointer 해석과 revision insert/current pointer CAS는 Catalog application transaction이 소유한다. 원본 파일 commit은 먼저 기존 Intake/Artifact 경계에서 끝나야 하며, 부분 실패가 있으면 성공한 원본 Artifact를 버리거나 실패 행을 성공으로 바꾸지 않는다. 사람의 불일치 판정은 새로운 decision revision으로 남긴다.
+
 ## 5. 파일명 표시와 대응 규칙
 
 - GUI 링크 텍스트는 선택된 파일의 정규화된 **basename**과 실제 형식 배지만 표시한다. 링크 목적지는 EOM의 인증된 source-file download API이며, 브라우저가 파일 경로나 Artifact ID를 임의로 선택할 수 없다.
@@ -62,17 +73,37 @@ DB에는 source/import/row identity, 상태, 제한된 32필드 행 스냅샷, �
 
 기존 문항 보관함의 Catalog read model을 확장해 `SOURCE_ONLY`와 `REGISTERED_ITEM`을 구분하는 판별 DTO를 사용한다. `SOURCE_ONLY`에도 목록 검색, 전체 32필드 상세, 최종/이전 교정본 파일명, 인증된 원본 다운로드, 변환 상태를 제공한다. 기존 `Item` 조회의 의미나 Graph 기반 기출 occurrence 조회를 바꾸지 않는다. 정본 승격 후에는 같은 외부 고유번호 source 기록에서 정확한 `item_id + item_revision_id`를 따라간다. 사용자에게 batch를 기본 노출하지 않는다.
 
-검색: 외부 고유번호 exact lookup, 등록 상태, 단원·분야·분류·학년·출제자·날짜·난이도 필터, 생성일/고유번호 순서의 keyset pagination. 인덱스는 실제 query plan을 보고 `namespace + U` unique, 상태/단원/분야/날짜/정렬용 B-tree를 최소로 추가한다. 한 페이지의 source/file pointer를 bulk resolve해 N+1을 피한다. 예상 규모는 우선 1,297행, 이후 수십만 문항까지 확장 가능하게 bounded page와 인덱스를 사용한다. 조회 자체는 원본 파일을 매번 복사하거나 변환하지 않는다. **내부 DB key/ID와 외부 U 고유번호는 GUI 기본 목록·상세에 표시하지 않는다.** U는 내부 식별·중복 방지와 필요할 때의 정확 검색에만 사용하고, 원본 메타데이터 보존을 위해 XLSX export의 원본 시트에는 남긴다.
+검색: 외부 고유번호 exact lookup, 등록 상태, 단원·분야·분류·학년·출제자·날짜·난이도 필터, 생성일/고유번호 순서의 keyset pagination. 인덱스는 실제 query plan을 보고 `namespace + U` unique, 상태/단원/분야/날짜/정렬용 B-tree를 최소로 추가한다. 한 페이지의 source/file pointer를 bulk resolve해 N+1을 피한다. 예상 규모는 우선 1,297행, 이후 수십만 문항까지 확장 가능하게 bounded page와 인덱스를 사용한다. 조회 자체는 원본 파일을 매번 복사하거나 변환하지 않는다. **5자리 U 고유번호는 사용자가 허용한 업무 메타데이터로 GUI 목록·상세·정확 검색에 표시한다. EOM 내부 source/revision/Artifact ID와 경로는 숨긴다.** 원본 메타데이터 보존을 위해 XLSX export의 원본 시트에도 U를 남긴다.
 
-Scientific Studio에는 일반 사용자가 이해할 수 있는 **`DB`** 메뉴를 별도로 둔다. 기존 `Graph 문항은행`의 기출 occurrence 조회와 섞지 않고, `DB` 목록에서 제목·단원·출처·교정 상태로 찾고 여러 문항을 선택해 순서를 지정할 수 있게 한다. 고유번호로도 정확 검색할 수 있지만 그 값을 결과나 상세에 다시 노출하지 않는다. 선택 목록은 브라우저의 임시 ID 문자열 배열이 아니라 서버가 검증한 `(source namespace, external U, exact source revision/해시)` 또는 승격된 `(item_id, item_revision_id, manifest hash)`의 ordered snapshot이다. 다른 사람의 선택과 섞이지 않게 사용자/권한과 idempotency를 고정한다. 기본 화면에는 내부 ID나 batch 정보를 표시하지 않는다.
+노션식 상세 필터는 원본 A:AF의 열과 연결 상태를 조건 대상으로 삼되, UI에서는 열 이름을 업무 용어로 표시한다. 첫 계약은 최대 8조건의 `ALL`/`ANY` 조합이며 `일치`, `불일치`, `포함`, `비어 있음`, `비어 있지 않음`을 제공한다. 같은 조건 계약을 목록과 Excel export에 사용하고 필터·정렬·권한·커서를 함께 고정한다. 입력값은 255자로 제한하고 와일드카드 문자는 리터럴로 이스케이프한다. API가 허용한 고정 열만 SQL 표현식으로 매핑하며 사용자 문자열을 SQL 식별자나 경로로 해석하지 않는다. 현재 1,297행에서는 `(namespace,U)` keyset과 기존 자주 쓰는 열의 B-tree를 우선 쓰고, 임의 열 `포함`의 실제 query plan/지연을 측정한다. 수십만 행에서 반복되는 임의 열 검색이 병목으로 관측되면 불변 source revision에서 파생된 별도 인덱스/검색 projection을 추가한다. 원본 JSONB를 대신하지 않으며 새 revision이 발행되면 파생 인덱스도 같은 트랜잭션 경계에서 갱신한다. 검색용 병렬 DB는 만들지 않는다.
 
-`DB → 엑셀 내보내기`는 현재 필터 결과 전체 또는 선택한 문항의 **권한 검증된 고정 조회 스냅샷**을 XLSX로 만든다. 첫 시트는 출처 종류·표시 고유번호·제목·단원·교정/승인 상태·원본 파일명·정확한 revision 등 공통 목록이다. legacy 행은 별도 `원본 메타데이터` 시트에 A:AF 32열의 원값(공백 포함)과 엑셀 출처 행을 보존한다. 기출·생성 문항의 메타데이터는 각 source class와 provenance를 구분하고 legacy 열에 억지로 채우지 않는다. 엑셀 수식으로 해석될 수 있는 외부 텍스트는 수식이 아닌 문자열로 내보내고, NAS 경로·내부 다운로드 토큰·비밀값을 넣지 않는다. 단일 HTTP 응답으로 무제한 행을 조립하지 않고 기존 Artifact delivery 경계에서 제한된 비동기 export를 생성하며, 동일 필터·정렬·권한·스냅샷·요청 키는 멱등 재전송한다. 생성된 XLSX의 manifest/hash와 인증 다운로드를 검증한다.
+유사도 검색은 별도 벡터 DB나 파일명·태그만의 유사도를 만들지 않고, **현재 설치된 로컬 임베딩 인덱스와 공식 Similarity Query application**을 DB 읽기 경계에 연결한다. 사용자가 한 문항을 기준으로 유사 문항을 찾으면 그 문항의 정확한 등록 revision과 source-class/Graph/policy/index revision을 pin하고, 기존 similarity 결과 pointer를 Catalog DB 보관함의 가시 권한·현재 revision과 교차 검증한다. 점수는 풀이의 동일성 확률이 아니라 후보 정렬 신호로 표시하고, 근거 부족 판정과 source별 coverage를 함께 보여준다. 아직 구조화·임베딩되지 않은 legacy 원본 HWP에는 점수를 계산한 것처럼 표시하지 않는다. 해당 문항은 `유사도 준비 전`으로 두고, 검증된 추출·승격 후 기존 incremental embedding publication 경계로 편입한다. GPU INDEX/QUERY의 현재 pin을 변경하지 않고, GPU 부재 시 기존 CPU fallback 정책만 적용한다.
+
+Scientific Studio에는 일반 사용자가 이해할 수 있는 **`DB`** 메뉴를 별도로 둔다. 기존 `Graph 문항은행`의 기출 occurrence 조회와 섞지 않고, `DB` 목록에서 제목·단원·출처·교정 상태와 5자리 고유번호로 찾고 여러 문항을 선택해 순서를 지정할 수 있게 한다. 선택 목록은 브라우저의 임시 ID 문자열 배열이 아니라 서버가 검증한 `(source namespace, external U, exact source revision/해시)` 또는 승격된 `(item_id, item_revision_id, manifest hash)`의 ordered snapshot이다. 다른 사람의 선택과 섞이지 않게 사용자/권한과 idempotency를 고정한다. 기본 화면에는 내부 ID나 batch 정보를 표시하지 않는다.
+
+최종 검색 경험은 현재 별도 화면의 **기출 검색도 DB 안으로 통합**한다. 첫 source-only 배포가 곧 통합 완료는 아니다. `EXTERNAL_SOURCE`, `PAST_EXAM`, `CREATED` 판별형을 동일한 사용자 검색 계약으로 묶되, 각 source class의 정본·승인·Graph occurrence·원본 페이지·풀이보고서·유사도 coverage를 지우거나 서로 다른 의미의 점수를 하나로 가장하지 않는다. 공통 필터는 교육과정·영역·자료형·난이도 등 실제 교집합에서 시작하고, source별 고유 필드는 명시적 네임스페이스/능력으로 확장한다. **기출·창작의 교육과정/개념/근거 검색은 반드시 현행 고정 Graph Snapshot의 기존 Catalog read/retrieval application을 통과한다.** SQL 원본 메타데이터 필터와 U 고유번호 exact lookup은 Graph를 대체하는 별도 의미 검색이 아니라, 후보를 정확한 원본 revision으로 제한·검증하는 보조 조회다. 기존 Graph 검색 구현과 검증된 retrieval/read contract를 내부 어댑터로 재사용하며 병렬 검색 DB를 만들지 않는다. 한 화면의 결과를 섞기 전에 권한·고정 revision·정렬 안정성·중복 문항 식별·N+1/지연을 테스트하고, 기존 기출 검색 화면은 전환 기간 동안 유지한다. 개선된 DB 검색이 기능·품질 모두를 대체한다는 운영 증거가 생기기 전에는 기존 경로를 제거하지 않는다.
+
+### Graph 검색과 창작 게시의 정확한 경계
+
+현재 운영 Graph ontology는 `APPROVED_ITEM_REVISION`의 승인된 분석을 `APPROVED_ITEM` 또는 `PAST_EXAM` source class로 게시한다. 후자는 실제 기출 occurrence pointer가 있어야 하고, 전자는 occurrence를 만들지 않는다. 따라서 `창작`은 사용자에게 보이는 출처 분류로 먼저 정의한다. 원본의 기출변형/자유출제 메타데이터와 검증된 `ItemOriginProfile`의 제작 방식·원본 관계를 연결하되, Graph에서는 기존 `APPROVED_ITEM` layer를 사용한다. 새 `창작` Graph enum이나 기출 occurrence를 임의로 만들지 않는다. `APPROVED_ITEM`만으로 사용자 분류를 정확히 표현하지 못한다는 실제 사례가 확인될 때에만 정책·ontology successor를 제안한다.
+
+오늘 업로드한 XLSX/ZIP은 아직 **source-only 원본**이다. 각 행의 2/3교 파일은 내용을 읽고 풀어 검증하기 전까지 `APPROVED_ITEM_REVISION`도 `accepted Knowledge Analysis`도 아니다. 그러므로 원본 행은 Catalog의 exact metadata 검색에서 `Graph 미게시`로 표시하고, Graph 교육과정/개념 검색 결과 또는 검증된 근거로 위장하지 않는다. 검색 계약은 source type과 `graph_state=NOT_PUBLISHED|PUBLISHED`를 분리해 표현한다. Graph 후보가 필요한 질의는 Graph가 없으면 명시적으로 coverage 없음으로 끝나야 한다. 해당 조건을 SQL 태그 유사도나 파일명 매치로 몰래 대체하지 않는다.
+
+승격 경로는 행/파일의 고정 revision·hash 확인 → HWP/HWPX의 신뢰할 수 있는 문항 단위 추출 → 실제 풀이와 정답/해설 검증을 포함한 Codex 제안 → 사람 또는 이미 승인된 정책에 의한 Item acceptance → 정본 Item Revision/Origin profile 등록 → 기존 `APPROVED_ITEM_REVISION` Knowledge Analysis → 창작 source에 맞는 additive 풀이보고서 successor → 출처를 검증한 Catalog 경계에서 `APPROVED_ITEM` Graph 공통 publisher 재사용이다. 풀이보고서는 검증 가능한 풀이 단계·출처·출제요소 연결을 담는 결과 Artifact이며 내부 사고 과정의 원문을 요구하지 않는다. 정확한 Item Revision, accepted base analysis, solution-report Artifact, Graph publication을 각각 pin한다. 보고서가 아직 없으면 Graph 게시 가능성과 풀이보고서 coverage를 혼동하지 않고 부족 상태로 표시한다. 중복/실패는 기존 accepted successor uniqueness·멱등·immutable history를 따른다.
+
+기술적으로 현재 `knowledge-analysis-request/10.0`은 기출의 `knowledge-analysis-request/9.0` 시각 분석, 문제지/해설지 페이지 anchor와 `PAST_EXAM` source를 요구한다. 창작 문항의 기존 base analysis는 `APPROVED_ITEM`이고 이 시각 기출 pointer가 없다. 따라서 V10의 schema bytes나 저장 결과를 바꾸지 않는다. 창작 풀이보고서 successor는 동일한 풀이 단계·선지 진단·개념 출제 연결·해설 비교 의미를 재사용하되, anchor authority를 승인 Item Content, 원본 HWP/HWPX의 검증된 위치, 등록/검토 solution receipt로 교체한다. `답지 없음`이나 출처 미확인 항목은 명시적 상태로 기록하고, 없는 기출 페이지를 만들지 않는다. JSON Schema 2020-12를 먼저 정의하고 Pydantic/worker proposal/accepted-result/unique successor/조회 계약을 같은 의미로 확장한 뒤에만 실행한다.
+
+현행 `ordinary_item_graph_publication_service`는 EOM authoring/review/registration Workflow의 성공한 role result와 검토 receipt를 요구한다. 이번 HWP/HWPX 원본에서 승격한 Item에는 그 이력이 존재하지 않으므로 이를 가짜로 만들거나 검사를 우회하지 않는다. 새 **창작 출처 검증 application 경계**가 원본 외부 U·source revision·파일 Artifact·구조화 추출/승인·Item Origin profile·accepted 분석·풀이보고서를 reauthorize한 뒤, 내부에서는 기존 `AutomaticItemGraphPublicationService`와 Graph snapshot CAS/idempotency를 재사용한다. 기존 ordinary/기출/25문항 publisher의 계약은 그대로 유지한다.
+
+주 조회는 Graph Snapshot→승인 분석/Item node/교육과정 edge의 인덱스 탐색과, external `(namespace,U)`/current revision의 B-tree lookup이다. 공통 결과는 bounded page와 typed pointer만 materialize한다. 원본 1,297행부터 수십만 행까지도 Graph snapshot pin·권한 검증·keyset pagination을 유지하고, 임의 A:AF 문자열 포함 필터는 별도 비용을 측정한다. Publication은 Catalog application/Orchestrator의 기존 CAS·receipt 경계를 사용하며 worker는 NAS/DB에 직접 쓰지 않는다. 직접 Graph 테이블 INSERT나 원본 행을 근거 node로 복사하는 단순안은 현재 source-class/acceptance/anchor 규칙을 깨므로 배제한다.
+
+`DB → 엑셀 내보내기`는 현재 필터 결과의 **권한 검증된 단일 SQL 조회 스냅샷**을 XLSX로 만든다. 첫 시트는 출처 종류·표시 고유번호·제목·단원·교정/승인 상태·원본 파일명 등 공통 목록이다. legacy 행은 별도 `원본 메타데이터` 시트에 A:AF 32열의 원값(공백 포함)과 원본 시트·행 번호를 보존한다. 기출·생성 문항의 메타데이터는 각 source class와 provenance를 구분하고 legacy 열에 억지로 채우지 않는다. 엑셀 수식으로 해석될 수 있는 외부 텍스트는 수식이 아닌 문자열로 내보내고, NAS 경로·내부 다운로드 토큰·비밀값을 넣지 않는다. 첫 단계는 현재 1,297행에 맞춰 2,000행·원문 텍스트 24 MiB·출력 16 MiB 상한의 **비정본 일회성 HTTP 다운로드**로 제한한다. 원본은 여전히 Intake Artifact이며, 파생 XLSX는 DB나 NAS의 새 정본으로 보관하지 않는다. 단일 SQL statement가 필터와 A:AF를 함께 읽고 결과 해시를 응답과 BFF에서 검증한다. 이 상한을 넘는 규모에서만 비동기 Artifact delivery successor를 별도로 도입한다. 현재 구현은 legacy 원본 행의 필터 결과 내보내기이며, 기출·생성·사용자 선택 집합을 함께 내보내는 기능은 공통 DB read model 이후로 분리한다.
 
 사용자가 확정한 배치의 출력은 **선택한 기출·생성·기존 등록 문항의 한글 파일을 지정 순서대로 이어 붙인 HWPX 한 개**다. 따라서 `DB` 선택은 source-only 원본까지 포함하는 버전 고정 ordered selection을 만들고, 이 선택을 실제 합본 HWPX delivery로 연결해야 한다. 원본 HWP/HWPX를 정본 `Item Revision`에 억지로 끼워 넣지 않으며, 기존 25문항 모의고사 정책을 임의 개수의 DB 선택에 적용하지 않는다. 대신 기존 Catalog의 원본/Item pointer 검증, Assessment Assembly의 불변 ordered placement·멱등·권한 원칙, HWPX Manager/Builder의 검증·NAS commit 경계를 재사용하는 **curated-document-assembly successor**를 정의한다. 각 placement는 `REGISTERED_ITEM_REVISION`, `PAST_EXAM_ITEM_REVISION`, `EXTERNAL_SOURCE_DOCUMENT`의 판별형과 정확한 Artifact Revision/해시·입력 형식을 고정한다. 그 source class는 정본 Item 여부를 속이지 않는다.
 
 출력 단계는 각 placement의 한글 원본을 검증된 HWPX segment로 정규화한 뒤 순서대로 하나의 HWPX package로 합친다. 기존 `content_team_exam_renderer._merge_item_packages`는 같은 EOM 템플릿에서 만든 package의 공유 header 구조를 전제로 하므로 임의 HWPX 파일에 그대로 쓰면 안 된다. 그 안의 ZIP/section/media/reference 검증·자원 ID 재매핑 소유권은 재사용하되, 서로 다른 header/style/page setting을 가진 package를 안전하게 합치는 후속 renderer contract와 격리 Builder를 둔다. 합본은 모든 내부 이미지 relationship, 수식·표·section 순서, 실제 압축 멤버와 다운로드 hash를 검증한다.
 
-대부분의 기존 파일은 바이너리 `.hwp`다. 이 서버에는 LibreOffice는 있으나 별도의 HWP→HWPX 변환 실행 파일은 현재 확인되지 않았다. [한컴의 공식 변환기 설명](https://help.hancom.com/hoffice120/ko-KR/HwpxConverter/convert/convert.htm)은 HWP→HWPX를 지원하지만 Windows 실행 파일 예시다. 따라서 Linux에서 편집 가능한 HWPX 변환이 가능하다고 가정하지 않는다. 격리된 실제 표본 변환과 한글 열기·레이아웃 비교에서 검증된 변환 경계만 사용한다. **사용자는 편집 가능한 합본만 허용했다.** HWP 페이지를 그림으로 넣거나 PDF 이미지로 우회하는 출력 profile은 현재 범위에서 금지한다. 변환 실패한 placement가 있으면 성공 합본 pointer를 만들지 않는다.
+대부분의 기존 파일은 바이너리 `.hwp`다. 이 서버에는 LibreOffice의 HWP 읽기 필터는 있으나 HWPX 출력 필터나 별도 HWP→HWPX 변환 실행 파일은 현재 확인되지 않았다. [한컴의 공식 변환기 설명](https://help.hancom.com/hoffice120/ko-KR/HwpxConverter/convert/convert.htm)은 HWP→HWPX를 지원하지만 Windows 실행 파일 예시다. [한컴 개발자 답변](https://forum.developer.hancom.com/t/hwp-hwpx-api/2980)은 서버 변환 API 지원이 보유 라이선스에 따라 다를 수 있음을 밝힌다. 현재 호스트에 한컴 변환기 또는 DocsConverter 설치·라이선스가 확인되지 않았으므로 Linux에서 편집 가능한 HWPX 변환이 가능하다고 가정하지 않는다. 격리된 실제 표본 변환과 한글 열기·레이아웃 비교에서 검증된 변환 경계만 사용한다. **사용자는 편집 가능한 합본만 허용했다.** HWP 페이지를 그림으로 넣거나 PDF 이미지로 우회하는 출력 profile은 현재 범위에서 금지한다. 변환 실패한 placement가 있으면 성공 합본 pointer를 만들지 않는다.
 
 HWP/HWPX 화면 미리보기는 기존 Catalog의 격리된 Office→PDF 변환 경계를 재사용하고, 파생 PDF를 별도 Artifact Revision으로 연결한다. 변환 실패는 `미리보기 불가`로 표시하되 원본 다운로드와 메타데이터 조회를 계속 허용한다. 원본을 변환 PDF로 대체하거나 변환만으로 내용이 정확하다고 승인하지 않는다. 구조화된 본문·정답·해설 추출은 별도 제안/검토를 거쳐 기존 `AssessmentItemContent` 계약과 Registry 등록·승인 상태기계를 통과한다. source-only 문항을 HWPX 빌드·GraphRAG·유사도·출판 대상으로 자동 포함하지 않는다.
 
@@ -84,18 +115,30 @@ Import Run은 workbook revision + archive revision + mapping revision + namespac
 
 원본 파일과 출제자 등 개인정보성 메타데이터는 실제 로그인 권한에 따라 조회한다. 다운로드는 인증·권한·sha256/size/member 검증 후 같은 origin의 임시 응답으로 제공한다. 공개 URL이나 NAS 경로 노출은 금지한다.
 
+### 원본 다운로드의 교차 서비스 계약 결정
+
+`Application API`는 실제 로그인 사용자의 `ITEM_READ`와 `CONTENT_INTAKE_READ`를 확인하고, `source_id + 고정 source_revision_id + 교정 단계`만 Catalog의 기존 private application socket으로 넘긴다. 임의 파일 경로·Artifact ID·멤버명은 브라우저 입력으로 받지 않는다. Catalog는 현재 source pointer와 완료된 import, 해당 교정본의 source-file/Artifact Revision/manifest member/크기/hash/media type을 다시 확인하고 100 MiB 이하의 검증된 파일 descriptor만 스트리밍한다. `.hwp` 이름의 HWPX는 원래 이름을 출처 메타데이터에 남기되 다운로드 이름과 Content-Type은 탐지한 HWPX 형식으로 지정한다. 대상이 바뀌었거나 source-file 권한·lifecycle이 유효하지 않으면 `latest`로 대체하지 않고 안정된 오류를 돌려준다. 이 경계는 기존 Item image media를 HWP 다운로드인 척 재사용하지 않고, `external-item-document-media/1.0`의 별도 요청/응답 계약으로 추가한다. 주 접근은 `(source_id, current_revision_id)`와 `(source_revision_id, edition)`의 indexed lookup이고 O(log n)이며, 본문 바이트는 디스크→socket→HTTP의 bounded streaming 외에는 복제하지 않는다. 더 단순한 API 직통 NAS 읽기는 API 격리와 pointer 검증 소유권을 깨므로 채택하지 않는다.
+
 ## 8. 구현 순서와 종료 게이트
 
 1. **고정·대조**: 엑셀을 immutable Intake로, ZIP을 해시 고정 운송 봉투로, 허용된 문서 멤버를 제한 크기의 여러 Intake로 나눌 설계·권한·용량을 확인한다. 원본 hash/manifest, 1,297행/32열, 1,067 최종본 후보와 14 예외의 read-only inventory를 재현한다. 운영 commit 전에는 계획과 fixture만 다룬다.
 2. **계약·어댑터**: schema-first로 매핑/행/파일/결정 DTO를 정의한다. 기존 안전한 XLSX 파서와 Artifact/Office 경계를 재사용하고 ZIP 멤버 선택 어댑터를 더한다. Unicode/URL/확장자/magic 문제와 모든 셀 원값 보존을 테스트한다.
 3. **제안·결정 저장**: Catalog application의 import proposal/decision/read use case와 필요한 additive DB migration을 작성한다. raw row 스냅샷 하나와 pointer만 저장한다. 14 예외는 UI에서 해결 전까지 `CONFLICT/UNRESOLVED`로 유지한다.
-4. **조회·내보내기 화면**: 기존 보관함에 source-only 목록·상세·필터·파일명 링크·원본 다운로드·미리보기 상태를 붙인다. 검색 결과/선택 문항의 XLSX 내보내기를 권한·행 상한·고정 스냅샷과 함께 제공한다. 사용자 화면에는 내부 ID/경로를 기본 노출하지 않는다. 정본 Item이 없음을 명확히 보인다.
+4. **조회·내보내기·유사도 화면**: 기존 보관함에 source-only 목록·상세·필터·파일명 링크·원본 다운로드·미리보기 상태를 붙인다. 검색 결과/선택 문항의 XLSX 내보내기를 권한·행 상한·고정 스냅샷과 함께 제공한다. 기존 similarity query 경계에서 지원되는 등록 revision은 유사 문항 검색을 제공하고, 미지원 source-only 문항은 이유를 표시한다. 사용자 화면에는 내부 ID/경로를 기본 노출하지 않는다. 정본 Item이 없음을 명확히 보인다.
 5. **다종 문항 합본 경계**: 세 source class의 exact pointer를 받는 ordered Assembly successor와 Builder handoff를 정의한다. HWP→HWPX 및 이질적인 HWPX package 병합을 각각 격리 표본으로 검증하고, 실제로 지원되는 경로만 운영에 연다. 정본 구조화 추출·승격은 별도의 목적이며 합본 다운로드를 위해 가짜 정본 Item을 만들지 않는다.
-6. **정본 승격 경계**: 원본 교정본 내용에서 구조화 문항이 검증된 건에만 공식 import workflow와 Registry registration/승인 명령을 연결한다. 기존 생성 문항, 기출 Item, 상품 Usage를 섞거나 가짜 workflow/Graph occurrence를 만들지 않는다.
-7. **검증·운영 rollout**: source parser·pointer·RBAC·멱등·동시성·중단/재개·마이그레이션을 unit 및 disposable PostgreSQL에서 검증한다. 실제 파일은 소수 표본(정상 HWP/HWPX, 동일 바이트 중복, 형식 불일치, 누락, 2교 최종)을 먼저 등록·조회·다운로드/미리보기 검증하고, 그다음 1,053 연결 후보를 bounded chunk로 진행한다. 14 예외와 230 비최종/반려 행의 보존·격리 결과도 reconciliation에 포함한다. 이후 기출·생성·기존 등록 문항을 섞은 순서 고정 합본 HWPX의 원본 media embedding, package reference, 실제 한글 열기와 download SHA를 검증한다. 백업/rollback은 source activation과 새 조회 경로만 되돌리고 이미 생성된 불변 Artifact/감사 기록은 삭제하지 않는다.
+6. **정본 승격·창작 Graph 경계**: 원본 교정본 내용에서 구조화 문항이 검증된 건에만 공식 import workflow와 Registry registration/승인 명령을 연결한다. `창작` provenance를 고정한 승인 Item에는 기존 분석과 창작용 풀이보고서 successor를 수행하고 출처 검증 successor에서 기존 Graph 공통 publisher로 게시한다. 기존 V10이나 ordinary-item workflow receipt를 창작에 재해석하지 않는다. 기존 생성 문항, 기출 Item, 상품 Usage를 섞거나 가짜 workflow/Graph occurrence를 만들지 않는다. 게시 전·후 같은 DB 질의에서 Graph coverage와 정확한 source/Item revision이 일치하는지 검증한다.
+7. **검증·운영 rollout**: source parser·pointer·RBAC·멱등·동시성·중단/재개·마이그레이션을 unit 및 disposable PostgreSQL에서 검증한다. 실제 파일은 소수 표본(정상 HWP/HWPX, 동일 바이트 중복, 형식 불일치, 누락, 2교 최종)을 먼저 등록·조회·다운로드/미리보기 검증하고, 그다음 1,053 연결 후보를 bounded chunk로 진행한다. 14 예외와 230 비최종/반려 행의 보존·격리 결과도 reconciliation에 포함한다. 기존 유사도 경로에서 등록 문항의 정확한 revision·권한·coverage·점수 표현과 source-only 미지원 표시를 검증한다. 이어 기출·창작 검색이 기존 Graph 조회를 통과하고 원본 전용 행이 Graph 결과에 섞이지 않음을 확인한다. 승인·풀이보고서·Graph 게시가 끝난 창작 표본은 정확한 revision/hash/Graph snapshot 및 재전송 멱등성을 검증한다. 이후 기출·생성·기존 등록 문항을 섞은 순서 고정 합본 HWPX의 원본 media embedding, package reference, 실제 한글 열기와 download SHA를 검증한다. 호환 릴리스로 운영 DB migration → API/Catalog/HWPX/Web을 순서대로 반영하고 실제 HTTPS 브라우저·인증 다운로드·엑셀/합본 hash를 확인한다. 백업/rollback은 source activation과 새 조회 경로만 되돌리고 이미 생성된 불변 Artifact/감사 기록은 삭제하지 않는다.
 
 완료 증거: 원본 workbook/ZIP hash, 모든 1,297행과 A:AF 값의 원본 대비 hash 일치, 각 교정본의 정확한 파일 Artifact pointer, `1,053 resolved candidate / 14 unresolved`의 실제 검토 후 재집계, 중복 Item 0, 원본/파생 파일 다운로드 hash 일치, XLSX export의 동일 행/원값/권한/해시 검증, 조회 성능 query plan, 기존 Item/Graph/HWPX 경로 회귀 PASS. 실제 교육적 정확성·구조화 추출 품질은 별도 검토 결과로 기록한다.
 
-## 9. 더 단순한 안을 채택하지 않는 이유
+## 9. 창작 Graph 적합성·게시 게이트
+
+구체적인 출처·풀이보고서 successor·게시 경계는 [창작 문항 풀이보고서·Graph 게시 후속 계약](CREATED_ITEM_GRAPH_AND_SOLUTION_REPORT_SUCCESSOR.md)에 고정한다.
+
+사용자가 이번 작업의 종료 범위로 지정한 검토와 게시다. 기존 시스템에서 기출변형 및 자유출제로 **생성·등록된 정본 문항**의 사용자 명칭을 `창작`으로 둔다. 이번 N제 ZIP에서 가져온 **원본 파일만 있는 source-only 행**도 메타데이터상 창작 후보이지만, 내용·승인·근거가 검증되기 전까지 `창작` 정본 Item으로 간주하지 않는다. 현행 계약상 승인된 창작은 기존 `APPROVED_ITEM` Graph source class에 origin profile로 구분하여 게시한다. source-only 상태에서 새 Graph node/edge나 색인을 게시하지 않는다.
+
+검토 시 정확한 Item Revision, 승인 상태, 생성/변형 원본 관계, 교육과정 태그, 풀이보고서, 근거 receipt, embedding publication pin, 접근 정책을 기존 기출 layer 계약과 대조한다. 기존 Graph·정본 Item·유사도/출제 경계를 재사용할 수 있는지, 별도 successor 계약이 필요한지, 기출과 창작을 조회·인용·학습 근거로 사용할 때 오인 위험이 없는지 판단한다. 첫 검증은 승인 창작 표본과 source-only 부정 표본을 함께 사용한다. 결과는 호환성 표, 필요한 최소 schema/policy 변경, migration·rollback·회귀 게이트와 함께 기록한다. 새 ontology는 기존 `APPROVED_ITEM`과 origin profile로 표현되지 않는 실제 사례가 입증될 때에만 검토한다.
+
+## 10. 더 단순한 안을 채택하지 않는 이유
 
 엑셀 행을 곧장 `items.metadata_json`에 넣고 ZIP 경로를 URL로 쓰면 구현은 짧지만, 문서가 없어도 Item이 만들어지고 교정본·원본 바이트·충돌·권한·재전송의 의미가 사라진다. 모든 HWP를 즉시 JSON으로 변환하는 방식도 표·수식·그림 손실을 정본으로 오인할 수 있다. 원본 source 기록 → 검토된 파일 대응 → 정확한 ordered document assembly → 필요한 건만 정본 승격의 경계가 기존 EOM 규칙을 가장 적게 바꾸면서 메타데이터·조회성·합본 출력을 함께 보장한다.

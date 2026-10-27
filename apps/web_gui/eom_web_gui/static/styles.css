@@ -362,6 +362,14 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .item-bank-filters { display: grid; grid-template-columns: minmax(240px, 2fr) repeat(3, minmax(110px, .7fr)) auto; gap: 10px; align-items: end; }
 .item-bank-filters label { display: grid; gap: 6px; color: var(--eom-text-muted); font-size: var(--eom-type-caption); }
 .item-bank-filters input, .item-bank-filters select { min-height: 42px; padding: 8px 11px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); background: #fff; color: var(--eom-graphite); }
+.item-db-search-form { display: grid; gap: 12px; }
+.item-db-search-form > label, #item-db-graph-filters label { display: grid; gap: 6px; color: #405570; font-size: var(--eom-type-label); font-weight: 700; }
+.item-db-search-form > label select, #item-db-graph-filters select { width: 100%; min-height: 42px; padding: 8px 11px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); background: #fff; color: var(--eom-graphite); }
+.item-db-match-mode { display: grid; gap: 6px; max-width: 200px; color: var(--eom-text-muted); font-size: var(--eom-type-caption); }
+.item-db-match-mode select, .item-db-filter-row input, .item-db-filter-row select { min-height: 42px; padding: 8px 11px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); background: #fff; color: var(--eom-graphite); }
+.item-db-filter-rows { display: grid; gap: 8px; }
+.item-db-filter-row { display: grid; grid-template-columns: minmax(130px, 1.2fr) minmax(120px, .8fr) minmax(160px, 2fr) auto; gap: 8px; align-items: center; }
+.item-db-filter-row input { width: 100%; }
 .item-bank-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; margin-top: 14px; }
 .item-bank-card { display: grid; gap: 11px; padding: 15px; border: 1px solid var(--eom-border); border-radius: 11px; background: #fff; }
 .item-bank-card header { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
@@ -738,6 +746,7 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
   .learning-exam-card { grid-template-columns: 1fr; }
   .learning-exam-metrics { grid-template-columns: repeat(2, 1fr); }
   .item-bank-filters { grid-template-columns: 1fr; }
+  .item-db-filter-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .item-bank-results { grid-template-columns: 1fr; }
   .mock-exam-form-grid, .mock-exam-selection { grid-template-columns: 1fr; }
   .knowledge-boundary { grid-template-columns: 1fr; }

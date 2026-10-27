@@ -34,6 +34,7 @@ from eom_web_gui.contracts import (
     ExecutionPresetLifecycleCommand,
     ExecutionPresetValidationSubmission,
     ExplorerQuery,
+    ExternalItemDbFilterSubmission,
     HwpxBuildRequest,
     HwpxBuildView,
     ItemPreview,
@@ -764,6 +765,111 @@ def create_app(
             "next_cursor": page.next_cursor,
             "has_more": page.has_more,
         }
+
+    @app.get(f"{API_PREFIX}/item-db/graph-items")
+    async def graph_item_db_entries(
+        session: Annotated[WebSession, Depends(require_session)],
+        source_class: Literal["APPROVED_ITEM", "PAST_EXAM"] = Query(),
+        curriculum_unit_key: str | None = Query(
+            default=None, pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$"
+        ),
+        cursor: str | None = Query(default=None, min_length=1, max_length=1024),
+    ) -> dict[str, object]:
+        page = await actual.gateway.graph_item_db_entries(
+            session,
+            source_class=source_class,
+            curriculum_unit_key=curriculum_unit_key,
+            cursor=cursor,
+        )
+        return {
+            "values": tuple(value.model_dump(mode="json") for value in page.values),
+            "next_cursor": page.next_cursor,
+            "has_more": page.has_more,
+        }
+
+    @app.get(f"{API_PREFIX}/item-db/external-sources")
+    async def external_item_db_entries(
+        session: Annotated[WebSession, Depends(require_session)],
+        exact_number: str | None = Query(default=None, pattern=r"^[0-9]{5}$"),
+        major_unit: str | None = Query(default=None, min_length=1, max_length=255),
+        field_label: str | None = Query(default=None, min_length=1, max_length=255),
+        match_status: str | None = Query(default=None, min_length=1, max_length=32),
+        cursor: str | None = Query(default=None, min_length=1, max_length=1024),
+    ) -> dict[str, object]:
+        page = await actual.gateway.external_item_db_entries(
+            session,
+            exact_number=exact_number,
+            major_unit=major_unit,
+            field_label=field_label,
+            match_status=match_status,
+            cursor=cursor,
+        )
+        return {
+            "values": tuple(value.model_dump(mode="json") for value in page.values),
+            "next_cursor": page.next_cursor,
+            "has_more": page.has_more,
+        }
+
+    @app.get(f"{API_PREFIX}/item-db/external-sources/{{source_id}}")
+    async def external_item_db_detail(
+        session: Annotated[WebSession, Depends(require_session)],
+        source_id: str = Path(pattern=r"^extitem_[0-9a-f]{32}$"),
+    ) -> dict[str, object]:
+        value = await actual.gateway.external_item_db_detail(session, source_id)
+        return value.model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/item-db/external-sources/search")
+    async def external_item_db_search(
+        filters: ExternalItemDbFilterSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, object]:
+        page = await actual.gateway.external_item_db_search(session, filters)
+        return {
+            "values": tuple(value.model_dump(mode="json") for value in page.values),
+            "next_cursor": page.next_cursor,
+            "has_more": page.has_more,
+        }
+
+    @app.post(f"{API_PREFIX}/item-db/external-sources/export")
+    async def external_item_db_export(
+        filters: ExternalItemDbFilterSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> Response:
+        value = await actual.gateway.external_item_db_export(session, filters)
+        return Response(
+            content=value.content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": "attachment; filename=EOM-item-database.xlsx",
+                "Content-Length": str(len(value.content)),
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+                "ETag": value.etag,
+                "X-EOM-Row-Count": str(value.row_count),
+            },
+        )
+
+    @app.get(f"{API_PREFIX}/item-db/external-sources/{{source_id}}/editions/{{edition}}/download")
+    async def external_item_db_document_download(
+        session: Annotated[WebSession, Depends(require_session)],
+        source_id: str = Path(pattern=r"^extitem_[0-9a-f]{32}$"),
+        edition: int = Path(ge=1, le=3),
+        source_revision_id: str = Query(pattern=r"^extitemrev_[0-9a-f]{32}$"),
+    ) -> Response:
+        value = await actual.gateway.external_item_db_document_download(
+            session, source_id, source_revision_id, edition
+        )
+        return Response(
+            content=value.content,
+            media_type=value.content_type,
+            headers={
+                "Content-Disposition": value.content_disposition,
+                "Content-Length": str(len(value.content)),
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+                "ETag": value.etag,
+            },
+        )
 
     @app.get(f"{API_PREFIX}/mock-exam-assemblies/policy")
     async def mock_exam_assembly_policy(

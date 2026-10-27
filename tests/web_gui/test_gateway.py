@@ -1124,6 +1124,67 @@ async def test_gateway_validates_item_bank_page_and_forwards_graph_filters() -> 
 
 
 @pytest.mark.anyio
+async def test_graph_item_db_gateway_reuses_pinned_graph_candidates() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/api/v1/item-bank/production-candidates"
+        assert request.url.params["source_class"] == "APPROVED_ITEM"
+        return httpx.Response(
+            200,
+            json=_list(
+                [
+                    {
+                        "schema_version": "production-item-candidate-view/1.0",
+                        "graph_snapshot_revision_id": "graphrev_" + "1" * 32,
+                        "snapshot_sha256": "sha256:" + "2" * 64,
+                        "analysis_run_id": "analysisrun_" + "3" * 32,
+                        "graph_item_node_id": "knode_" + "4" * 32,
+                        "source_class": "APPROVED_ITEM",
+                        "source_display_label": "창작 검증 문항",
+                        "past_exam_context": None,
+                        "item_id": "item_" + "5" * 32,
+                        "item_revision_id": "itemrev_" + "6" * 32,
+                        "item_revision_state": "APPROVED",
+                        "item_lifecycle_state": "ACTIVE",
+                        "item_current_revision": True,
+                        "item_type_key": "multiple-choice",
+                        "difficulty_band": None,
+                        "item_manifest_sha256": "sha256:" + "7" * 64,
+                        "curriculum_units": [
+                            {
+                                "curriculum_unit_id": "currunit_" + "8" * 32,
+                                "unit_key": "eom.is.middle.3-3",
+                                "unit_code": "3-(3)",
+                                "label": "중력장 내의 운동",
+                                "unit_level": "MINOR",
+                                "parent_unit_id": None,
+                            }
+                        ],
+                        "content_profile": "UNSUPPORTED",
+                        "content_component": None,
+                        "mock_exam_assembly_eligible": False,
+                        "hwpx_exam_eligible": False,
+                        "ineligibility_reasons": ["ITEM_CONTENT_COMPONENT_MISSING"],
+                    }
+                ]
+            ),
+        )
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    page = await gateway.graph_item_db_entries(
+        _session(), source_class="APPROVED_ITEM", curriculum_unit_key=None, cursor=None
+    )
+    assert page.values[0].source_class == "APPROVED_ITEM"
+    assert page.values[0].graph_snapshot_revision_id == "graphrev_" + "1" * 32
+    await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_gateway_accepts_complete_application_hwpx_build_view() -> None:
     build_id = "hwpxbuild_" + "1" * 32
 

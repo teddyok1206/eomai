@@ -27,6 +27,7 @@ from eom_catalog_service.document_review_hwpx_correction_service import (
 from eom_catalog_service.document_review_pdf_annotation_service import (
     DocumentReviewPdfAnnotationService,
 )
+from eom_catalog_service.external_item_document_media import ExternalItemDocumentMediaService
 from eom_catalog_service.inference_transfer_metadata_service import (
     CatalogInferenceTransferMetadataService,
 )
@@ -312,6 +313,7 @@ def serve() -> int:
             office_document_review_intake=OfficeDocumentReviewIntakeService(engine),
             document_review_hwpx_corrections=DocumentReviewHwpxCorrectionService(engine),
             document_review_pdf_annotations=DocumentReviewPdfAnnotationService(engine),
+            external_item_documents=ExternalItemDocumentMediaService(engine),
             document_review_evidence=DocumentReviewEvidenceService(
                 engine,
                 retrieval=knowledge_retrieval,
