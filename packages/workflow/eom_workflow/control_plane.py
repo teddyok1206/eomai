@@ -1569,6 +1569,46 @@ class CodexPairedReviewImageInputManifest(FrozenModel):
         return self
 
 
+class CodexCreativeImageInput(FrozenModel):
+    """One exact published creative-learning page, never the source Office/PDF file."""
+
+    physical_page: int = Field(strict=True, ge=1, le=32)
+    relative_path: str = Field(pattern=r"^source/pages/page-[0-9]{4}\.png$", max_length=32)
+    media_type: Literal["image/png"] = "image/png"
+    sha256: Sha256
+    bytes: int = Field(strict=True, ge=24, le=16 * 1024 * 1024)
+    width_pixels: int = Field(strict=True, ge=64, le=2400)
+    height_pixels: int = Field(strict=True, ge=64, le=2400)
+
+    @model_validator(mode="after")
+    def exact_page_path(self) -> CodexCreativeImageInput:
+        if self.relative_path != f"source/pages/page-{self.physical_page:04d}.png":
+            raise ValueError("creative image-input path differs from its physical page")
+        return self
+
+
+class CodexCreativeImageInputManifest(FrozenModel):
+    """Bounded ordered page set for an isolated creative-learning invocation."""
+
+    schema_version: Literal["codex-image-input-manifest/4.0"] = "codex-image-input-manifest/4.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    images: tuple[CodexCreativeImageInput, ...] = Field(min_length=1, max_length=32)
+    manifest_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_order_and_hash(self) -> CodexCreativeImageInputManifest:
+        if tuple(image.physical_page for image in self.images) != tuple(
+            range(1, len(self.images) + 1)
+        ):
+            raise ValueError("creative image inputs must cover ordered, contiguous pages")
+        if sum(image.bytes for image in self.images) > 128 * 1024 * 1024:
+            raise ValueError("creative image inputs exceed the worker byte limit")
+        body = self.model_dump(mode="json", exclude={"manifest_sha256"})
+        if content_sha256(body) != self.manifest_sha256:
+            raise ValueError("creative image-input manifest hash differs")
+        return self
+
+
 class CodexAuthHealthView(FrozenModel):
     schema_version: Literal["codex-auth-health-view/1.0"] = "codex-auth-health-view/1.0"
     binding_id: str = Field(pattern=r"^authbinding_[0-9a-f]{32}$")

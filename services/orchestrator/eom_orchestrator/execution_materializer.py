@@ -41,6 +41,7 @@ from eom_catalog_contracts.external_item_learning_work import ExternalItemLearni
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_workflow import (
     CodexAssessmentImageInputManifest,
+    CodexCreativeImageInputManifest,
     CodexImageInputManifest,
     CodexInvocation,
     CodexPairedReviewImageInputManifest,
@@ -68,6 +69,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV20,
     ResolvedExecutionPlanV25,
     ResolvedExecutionPlanV26,
+    ResolvedExecutionPlanV27,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
     single_document_review_contract_for_definition,
@@ -213,6 +215,7 @@ def materialize_execution_step(
     execution_tier: Literal["PRIMARY", "ESCALATED"] = "PRIMARY",
     inference_transfer_context: InferenceTransferMaterializationContext | None = None,
     similarity_context: SimilarityMaterializationContext | None = None,
+    creative_page_publisher: ControlFileSetPublisher | None = None,
 ) -> MaterializedExecution:
     """Materialize one exact plan step without resolving any mutable current pointer."""
 
@@ -233,6 +236,7 @@ def materialize_execution_step(
         "resolved-execution-plan/13.0",
         "resolved-execution-plan/25.0",
         "resolved-execution-plan/26.0",
+        "resolved-execution-plan/27.0",
         "resolved-execution-plan/14.0",
         "resolved-execution-plan/15.0",
     }
@@ -252,6 +256,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV13
         | ResolvedExecutionPlanV25
         | ResolvedExecutionPlanV26
+        | ResolvedExecutionPlanV27
         | ResolvedExecutionPlanV14
         | ResolvedExecutionPlanV15
         | ResolvedExecutionPlanV16
@@ -290,6 +295,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV25.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/26.0":
         plan = ResolvedExecutionPlanV26.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/27.0":
+        plan = ResolvedExecutionPlanV27.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/14.0":
         plan = ResolvedExecutionPlanV14.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/15.0":
@@ -318,6 +325,18 @@ def materialize_execution_step(
     if len(matching) != 1:
         raise ControlPlaneError("CONTROL_PLAN_STEP_MISSING", "resolved execution step is missing")
     step = matching[0]
+    if isinstance(plan, ResolvedExecutionPlanV27) and creative_page_publisher is None:
+        raise ControlPlaneError(
+            "CONTROL_CREATIVE_PAGE_OWNER_REQUIRED",
+            "creative page materialization requires its pinned publication owner",
+        )
+    if isinstance(plan, ResolvedExecutionPlanV27) and sum(
+        page.content_length for page in plan.work_input.page_set.pages
+    ) > 128 * 1024 * 1024:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_SIZE_INVALID",
+            "creative page images exceed the worker input limit",
+        )
     if isinstance(plan, SupportedSimilarityExecutionPlan) and step.role in {"authoring", "review"}:
         require_similarity_materialization_context(
             plan, step_key=step_key, context=similarity_context
@@ -554,6 +573,22 @@ def materialize_execution_step(
         _require_total_size(total_bytes, analysis=True)
         source_artifact_revision_id = plan.item_source.artifact_member.artifact_revision_id
         source_sha256 = plan.item_source.artifact_member.sha256
+    elif isinstance(plan, ResolvedExecutionPlanV27):
+        assert creative_page_publisher is not None
+        page_bytes, page_members = materialize_external_item_learning_pages(
+            session,
+            work=plan.work_input,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            publisher=creative_page_publisher,
+        )
+        total_bytes += page_bytes
+        member_count += page_members
+        _require_total_size(total_bytes, analysis=True)
+        source_artifact_revision_id = plan.work_input.page_artifact.artifact_revision_id
+        source_sha256 = plan.work_input.page_artifact.sha256
     elif isinstance(plan, ResolvedExecutionPlanV13):
         document_bytes, document_members = _materialize_pdf_review_document(
             session,
@@ -710,6 +745,45 @@ def materialize_execution_step(
             group_id=worker_group_id,
         )
         image_input_manifest_sha256 = image_manifest.manifest_sha256
+    elif isinstance(plan, ResolvedExecutionPlanV27):
+        image_manifest_document = {
+            "schema_version": "codex-image-input-manifest/4.0",
+            "plan_id": plan.plan_id,
+            "images": [
+                {
+                    "physical_page": page.physical_page,
+                    "relative_path": f"source/{page.member_path}",
+                    "media_type": "image/png",
+                    "sha256": page.sha256,
+                    "bytes": page.content_length,
+                    "width_pixels": page.width_px,
+                    "height_pixels": page.height_px,
+                }
+                for page in plan.work_input.page_set.pages
+            ],
+            "manifest_sha256": "sha256:" + "0" * 64,
+        }
+        image_manifest_document["manifest_sha256"] = content_sha256(
+            {
+                key: value
+                for key, value in image_manifest_document.items()
+                if key != "manifest_sha256"
+            }
+        )
+        validate_control_contract("codex-image-input-manifest-v4", image_manifest_document)
+        creative_image_manifest = CodexCreativeImageInputManifest.model_validate(
+            image_manifest_document
+        )
+        image_manifest_bytes = canonical_json_bytes(creative_image_manifest) + b"\n"
+        total_bytes += len(image_manifest_bytes)
+        member_count += 1
+        _require_total_size(total_bytes, analysis=True)
+        _write_exclusive(
+            workspace / "codex-image-inputs.json",
+            image_manifest_bytes,
+            group_id=worker_group_id,
+        )
+        image_input_manifest_sha256 = creative_image_manifest.manifest_sha256
     elif isinstance(plan, (ResolvedExecutionPlanV6, ResolvedExecutionPlanV8)):
         image_entries: list[dict[str, object]] = []
         pages = (
@@ -927,6 +1001,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV13
             | ResolvedExecutionPlanV25
             | ResolvedExecutionPlanV26
+            | ResolvedExecutionPlanV27
             | ResolvedExecutionPlanV14
             | ResolvedExecutionPlanV15
             | ResolvedExecutionPlanV16
@@ -963,6 +1038,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV25.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/26.0":
         plan = ResolvedExecutionPlanV26.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/27.0":
+        plan = ResolvedExecutionPlanV27.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/14.0":
         plan = ResolvedExecutionPlanV14.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/15.0":
@@ -1086,6 +1163,8 @@ def authorized_execution_artifact_revisions(
                 plan.textbook_evidence.publication.context_artifact.artifact_revision_id,
             }
         )
+    elif isinstance(plan, ResolvedExecutionPlanV27):
+        revision_ids.add(plan.work_input.page_artifact.artifact_revision_id)
     elif isinstance(plan, ResolvedExecutionPlanV14):
         revision_ids.update(
             value.document.source_pdf.artifact_revision_id for value in plan.documents

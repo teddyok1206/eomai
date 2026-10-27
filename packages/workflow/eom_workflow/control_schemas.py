@@ -614,6 +614,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "3.0",
             "sha256:4e9152149de3899fe85bd75df2e582cd36f821a2f4f8049939bce0db0def6cea",
         ),
+        "codex-image-input-manifest-v4": ControlSchemaResource(
+            "schemas/workflow/control-plane/codex-image-input-manifest-v4.schema.json",
+            "resources/control-plane/codex-image-input-manifest-v4.schema.json",
+            "4.0",
+            "sha256:2f442ea634cbd3eb9982c230b6fd74ae2d95ed58f90f0efb2b5a3e2583a2dbd5",
+        ),
         "codex-auth-health-view": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-auth-health-view-v1.schema.json",
             "resources/control-plane/codex-auth-health-view-v1.schema.json",

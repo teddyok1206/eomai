@@ -25,6 +25,7 @@ MAX_RESULT_BYTES = 1024 * 1024
 MAX_IMAGE_INPUTS_V1 = 32
 MAX_IMAGE_INPUTS_V2 = 64
 MAX_IMAGE_INPUTS_V3 = 128
+MAX_IMAGE_INPUTS_V4 = 32
 MAX_IMAGE_BYTES = 16 * 1024 * 1024
 MAX_IMAGE_TOTAL_BYTES = 128 * 1024 * 1024
 MAX_ASSESSMENT_IMAGE_PIXELS = 64_000_000
@@ -49,6 +50,7 @@ ASSESSMENT_IMAGE_PATH_PATTERN = re.compile(
 PAIRED_REVIEW_IMAGE_PATH_PATTERN = re.compile(
     r"\Asource/(question|solution)/images/page-([0-9]{6})\.png\Z", re.ASCII
 )
+CREATIVE_IMAGE_PATH_PATTERN = re.compile(r"\Asource/pages/page-([0-9]{4})\.png\Z", re.ASCII)
 REASONING_EFFORTS = frozenset({"minimal", "low", "medium", "high", "xhigh"})
 SLOT_USERS = {
     "01": "eom-cdx-01",
@@ -300,6 +302,7 @@ def _load_image_inputs(
             "codex-image-input-manifest/1.0",
             "codex-image-input-manifest/2.0",
             "codex-image-input-manifest/3.0",
+            "codex-image-input-manifest/4.0",
         }
         or document.get("plan_id") != expected_plan_id
         or SHA256_PATTERN.fullmatch(str(document.get("manifest_sha256"))) is None
@@ -310,6 +313,7 @@ def _load_image_inputs(
         "codex-image-input-manifest/1.0": MAX_IMAGE_INPUTS_V1,
         "codex-image-input-manifest/2.0": MAX_IMAGE_INPUTS_V2,
         "codex-image-input-manifest/3.0": MAX_IMAGE_INPUTS_V3,
+        "codex-image-input-manifest/4.0": MAX_IMAGE_INPUTS_V4,
     }[str(schema_version)]
     if not isinstance(images, list) or not 1 <= len(images) <= maximum_images:
         raise ValueError("Codex image-input manifest count is invalid")
@@ -355,6 +359,7 @@ def _load_image_inputs(
             "codex-image-input-manifest/1.0": 10000,
             "codex-image-input-manifest/2.0": 20000,
             "codex-image-input-manifest/3.0": 16384,
+            "codex-image-input-manifest/4.0": 2400,
         }[str(schema_version)]
         if (
             not isinstance(page, int)
@@ -381,6 +386,10 @@ def _load_image_inputs(
             match = IMAGE_PATH_PATTERN.fullmatch(relative_path)
             if match is None or int(match.group(1)) != page:
                 raise ValueError("Codex image-input page path is inconsistent")
+        elif schema_version == "codex-image-input-manifest/4.0":
+            match = CREATIVE_IMAGE_PATH_PATTERN.fullmatch(relative_path)
+            if match is None or not 1 <= page <= 32 or int(match.group(1)) != page:
+                raise ValueError("creative image-input page path is inconsistent")
         elif schema_version == "codex-image-input-manifest/2.0":
             page_input_id = item.get("page_input_id")
             source_role = item.get("source_role")
@@ -422,6 +431,8 @@ def _load_image_inputs(
     if schema_version == "codex-image-input-manifest/1.0":
         expected_pages = list(range(pages[0], pages[-1] + 1))
         identities_valid = pages == expected_pages
+    elif schema_version == "codex-image-input-manifest/4.0":
+        identities_valid = pages == list(range(1, len(pages) + 1))
     elif schema_version == "codex-image-input-manifest/2.0":
         identities_valid = len(page_input_ids) == len(set(page_input_ids)) and len(
             source_positions

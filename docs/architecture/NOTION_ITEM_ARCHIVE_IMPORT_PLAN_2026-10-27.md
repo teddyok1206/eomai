@@ -183,6 +183,12 @@ Catalog의 읽기 전용 `external-items verify --import-id`는 **로컬 staging
 
 ## 9. 창작 Graph 적합성·게시 게이트
 
+### 격리된 창작 풀이 입력의 단계적 활성화 경계
+
+`external-item-learning` V27은 승인 Item이나 Graph 게시가 아니라, 원본의 고정된 페이지를 코덱스가 독립적으로 풀어 보는 **제안 단계**다. 정본은 Catalog의 source revision과 Orchestrator가 발행한 page-set Artifact revision이며, 실행 계획은 이 둘의 ID·revision·hash 및 정확한 페이지 순서를 pin한다. Worker에게 원본 HWP/PDF나 NAS 경로를 주지 않고, Orchestrator가 발행된 PNG·manifest만 로컬 작업공간에 검증 후 적재한다. 원본 사용 권한 재확인은 Catalog application의 책임이며, Orchestrator의 파일 검증은 그 권한 판정을 대체하지 않는다.
+
+주 접근은 source revision의 키 조회, 발행 Artifact의 immutable revision 조회, 순서 고정 페이지 반복이다. 기존 ID 인덱스와 typed manifest를 재사용하며 페이지 수에 선형 시간·입력 크기만큼의 일시 공간이 든다. 새 검색 DB나 worker의 직접 NAS 접근은 필요 없다. 발행·plan·claim은 기존 트랜잭션/멱등 경계를 사용하고, 실패한 실행은 이력 그대로 보존한다. 재시도도 동일 pin을 재검증하며 현재 버전으로 바꾸지 않는다. 단순히 원본 PDF를 worker에게 복사하는 방법은 원본 권한·페이지 선택·해시 경계를 우회하므로 사용하지 않는다. V27 materializer의 지원만으로 실행을 열지 않으며, source 재인가·정확한 page Artifact allowlist·결과 검증·승격 경계가 이어지기 전에는 `CONTROL_CREATIVE_LEARNING_NOT_ACTIVATED`를 유지한다.
+
 구체적인 출처·풀이보고서 successor·게시 경계는 [창작 문항 풀이보고서·Graph 게시 후속 계약](CREATED_ITEM_GRAPH_AND_SOLUTION_REPORT_SUCCESSOR.md)에 고정한다.
 
 사용자가 이번 작업의 종료 범위로 지정한 검토와 게시다. 기존 시스템에서 기출변형 및 자유출제로 **생성·등록된 정본 문항**의 사용자 명칭을 `창작`으로 둔다. 이번 N제 ZIP에서 가져온 **원본 파일만 있는 source-only 행**도 메타데이터상 창작 후보이지만, 내용·승인·근거가 검증되기 전까지 `창작` 정본 Item으로 간주하지 않는다. 현행 계약상 승인된 창작은 기존 `APPROVED_ITEM` Graph source class에 origin profile로 구분하여 게시한다. source-only 상태에서 새 Graph node/edge나 색인을 게시하지 않는다.

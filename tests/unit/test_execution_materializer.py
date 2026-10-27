@@ -26,6 +26,7 @@ from eom_workflow import ControlArtifactPointer
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 
 from tests.unit.test_content_team_v3_protocol import _content_v3
+from tests.unit.test_external_item_learning_execution_plan import _plan as _creative_plan
 
 ZERO_SHA = "sha256:" + "0" * 64
 GROUP_ID = os.getgid()
@@ -272,6 +273,89 @@ def _workspace(tmp_path: Path, name: str) -> Path:
     path.mkdir(mode=0o2770)
     path.chmod(0o2770)
     return path
+
+
+def test_creative_plan_requires_owner_and_allowlists_only_pinned_pages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fixture = _fixture(tmp_path, monkeypatch)
+    session = fixture["session"]
+    old_record = session.records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))]
+    plan = _creative_plan()
+    plan["steps"][0]["instruction_bundle"] = old_record.canonical_document["steps"][0][
+        "instruction_bundle"
+    ]
+    plan["plan_sha256"] = compute_control_document_hash(plan, "plan_sha256")
+    session.records[(ResolvedExecutionPlanRecord, str(plan["plan_id"]))] = SimpleNamespace(
+        canonical_document=plan,
+        plan_sha256=plan["plan_sha256"],
+    )
+    bundle = plan["steps"][0]["instruction_bundle"]
+    bundle_record = session.records[(ExecutionBundleRevisionRecord, bundle["bundle_revision_id"])]
+    bundle_record.manifest_artifact_revision_id = bundle["manifest_artifact"][
+        "artifact_revision_id"
+    ]
+    authorized = authorized_execution_artifact_revisions(
+        session, plan_id=str(plan["plan_id"]), step_key="extract"
+    )
+    page_artifact = plan["work_input"]["page_artifact"]
+    assert page_artifact["artifact_revision_id"] in authorized
+    assert "rev_" + "5" * 32 not in authorized  # unrelated reference bundle
+
+    workspace = _workspace(tmp_path, "creative-owner-required")
+    with pytest.raises(ControlPlaneError) as captured:
+        materialize_execution_step(
+            session,
+            plan_id=str(plan["plan_id"]),
+            step_key="extract",
+            workspace=workspace,
+            canonical_artifact_root=fixture["artifact_root"],
+            worker_group_id=GROUP_ID,
+            authorized_artifact_revision_ids=authorized,
+        )
+    assert captured.value.code == "CONTROL_CREATIVE_PAGE_OWNER_REQUIRED"
+    assert list(workspace.iterdir()) == []
+
+    staged: list[str] = []
+
+    def stage_pages(
+        _session: object,
+        *,
+        work: object,
+        workspace: Path,
+        artifact_root: Path,
+        worker_group_id: int,
+        authorized_artifact_revision_ids: frozenset[str],
+        publisher: object,
+    ) -> tuple[int, int]:
+        assert publisher is owner
+        assert artifact_root == fixture["artifact_root"]
+        assert worker_group_id == GROUP_ID
+        assert work.page_artifact.artifact_revision_id in authorized_artifact_revision_ids
+        staged.append(str(work.source.external_number))
+        return 0, 0
+
+    owner = object()
+    monkeypatch.setattr(
+        "eom_orchestrator.execution_materializer.materialize_external_item_learning_pages",
+        stage_pages,
+    )
+    workspace = _workspace(tmp_path, "creative-dispatched")
+    result = materialize_execution_step(
+        session,
+        plan_id=str(plan["plan_id"]),
+        step_key="extract",
+        workspace=workspace,
+        canonical_artifact_root=fixture["artifact_root"],
+        worker_group_id=GROUP_ID,
+        authorized_artifact_revision_ids=authorized,
+        creative_page_publisher=owner,
+    )
+    images = json.loads((workspace / "codex-image-inputs.json").read_text())
+    assert staged == ["12345"]
+    assert images["images"][0]["relative_path"].startswith("source/pages/")
+    assert result.image_input_manifest_sha256 == images["manifest_sha256"]
+    assert result.source_artifact_revision_id == page_artifact["artifact_revision_id"]
 
 
 def _pdf_review_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
