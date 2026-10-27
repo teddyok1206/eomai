@@ -85,6 +85,7 @@ eom_workflow = [
   "resources/document-review-presets/*.json",
 ]
 eom_catalog_contracts = [
+  "resources/api/*.json",
   "resources/assessment-assembly/*.json",
   "resources/catalog-application/*.json",
   "resources/content-intake/*.json",

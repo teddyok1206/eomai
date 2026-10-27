@@ -6,8 +6,8 @@ member without promoting the source-only row to a canonical Item.
 
 from __future__ import annotations
 
-from eom_api_contracts.curated_document_assembly import ExternalSourcePlacement
 from eom_catalog_contracts import CuratedExternalDocumentPlacement, OriginArtifactMemberPointer
+from eom_catalog_contracts.curated_document_assembly_draft import ExternalSourcePlacement
 from eom_catalog_contracts.external_item_media import ExternalItemDocumentMediaQuery
 from sqlalchemy import select
 from sqlalchemy.orm import Session

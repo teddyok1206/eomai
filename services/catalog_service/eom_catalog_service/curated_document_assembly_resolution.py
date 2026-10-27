@@ -5,14 +5,14 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 
-from eom_api_contracts.curated_document_assembly import (
+from eom_catalog_contracts import CuratedDocumentAssemblyManifestV1, validate_contract
+from eom_catalog_contracts.curated_document_assembly import CuratedResolvedPlacement
+from eom_catalog_contracts.curated_document_assembly_draft import (
     CuratedDocumentAssemblyDraftV1,
     ExternalSourcePlacement,
     PastExamItemPlacement,
     RegisteredItemPlacement,
 )
-from eom_catalog_contracts import CuratedDocumentAssemblyManifestV1, validate_contract
-from eom_catalog_contracts.curated_document_assembly import CuratedResolvedPlacement
 from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext, PermissionKey
 from sqlalchemy.orm import Session

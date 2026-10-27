@@ -6,14 +6,16 @@ import re
 from datetime import UTC, datetime
 from typing import Any
 
-from eom_api_contracts.curated_document_assembly import CuratedDocumentAssemblyDraftV1
 from eom_catalog_contracts import (
     CuratedDocumentAssemblyManifestV1,
     CuratedExternalDocumentPlacement,
     validate_contract,
 )
+from eom_catalog_contracts.curated_document_assembly_draft import CuratedDocumentAssemblyDraftV1
 from eom_identifiers import content_sha256
-from eom_operator_identity import ActorContext, PermissionKey
+from eom_identity_service.models import OperatorRecord
+from eom_identity_service.repository import effective_permissions
+from eom_operator_identity import ActorContext, ActorSource, ActorType, PermissionKey
 from eom_orchestrator.database import build_session_factory, transaction
 from sqlalchemy import Engine, select
 from sqlalchemy.exc import IntegrityError
@@ -66,6 +68,7 @@ class CuratedDocumentAssemblyService:
         )
         try:
             with transaction(self.sessions) as session:
+                actor = self._authorized_actor(session, actor)
                 existing = session.scalar(
                     select(CuratedDocumentAssemblyRevisionRecord)
                     .where(
@@ -126,6 +129,7 @@ class CuratedDocumentAssemblyService:
             # A concurrent submit can win the unique actor/key race. Reopen a
             # fresh transaction and replay only its exact committed result.
             with self.sessions() as session:
+                actor = self._authorized_actor(session, actor)
                 existing = session.scalar(
                     select(CuratedDocumentAssemblyRevisionRecord).where(
                         CuratedDocumentAssemblyRevisionRecord.created_by == actor.actor_id,
@@ -135,6 +139,27 @@ class CuratedDocumentAssemblyService:
                 if existing is not None:
                     return self._replay(session, existing, draft, actor, request_sha256)
             raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_PERSISTENCE_CONFLICT") from exc
+
+    @staticmethod
+    def _authorized_actor(session: Session, actor: ActorContext) -> ActorContext:
+        """Use the authenticated API identity, but never trust its stale role snapshot."""
+        if (
+            actor.actor_type is not ActorType.OPERATOR
+            or actor.source is not ActorSource.APPLICATION_API
+            or actor.operator_id is None
+        ):
+            raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_PERMISSION_DENIED")
+        operator = session.get(OperatorRecord, actor.operator_id)
+        if (
+            operator is None
+            or operator.status != "ACTIVE"
+            or operator.deleted_at is not None
+            or operator.must_change_password
+        ):
+            raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_PERMISSION_DENIED")
+        return actor.model_copy(
+            update={"permissions": effective_permissions(session, actor.operator_id)}
+        )
 
     @staticmethod
     def _placement_rows(

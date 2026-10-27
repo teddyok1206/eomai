@@ -178,9 +178,13 @@ def install_exception_handlers(app: FastAPI) -> None:
             CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
             CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
         }
+        denied = exc.code in {
+            "CURATED_ASSEMBLY_PERMISSION_DENIED",
+            "CURATED_SOURCE_PERMISSION_DENIED",
+        }
         return problem_response(
             request,
-            status=503 if unavailable else 409,
+            status=503 if unavailable else 403 if denied else 409,
             error_code=str(exc.code),
             title="Catalog operation failed",
             detail="The Catalog operation could not be completed at a validated boundary.",

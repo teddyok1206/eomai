@@ -24,6 +24,7 @@ from eom_web_gui.contracts import (
     CodexDeviceChallengeView,
     ContentIntakeOption,
     ContentIntakeSourcePointer,
+    CuratedAssemblySaveView,
     CurriculumEditorialOutline,
     CustomerSupportCaseView,
     CustomerSupportSubmission,
@@ -1540,6 +1541,19 @@ class FakeGateway:
             content=payload,
             etag='"sha256:' + hashlib.sha256(payload).hexdigest() + '"',
             row_count=1,
+        )
+
+    async def save_curated_assembly(
+        self, session: WebSession, draft: dict[str, object], idempotency_key: str
+    ) -> CuratedAssemblySaveView:
+        del session
+        assert draft["schema_version"] == "curated-document-assembly-draft/1.0"
+        assert idempotency_key == "curated-web-key-1"
+        return CuratedAssemblySaveView(
+            assembly_revision_id="assemblyrev_" + "2" * 32,
+            selection_sha256="sha256:" + "3" * 64,
+            manifest_sha256="sha256:" + "4" * 64,
+            placement_count=len(draft["placements"]),
         )
 
     async def external_item_db_document_download(

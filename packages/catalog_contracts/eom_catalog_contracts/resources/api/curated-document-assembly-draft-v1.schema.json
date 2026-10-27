@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/curated-document-assembly-draft/1.0",
+  "title": "Curated Document Assembly Draft V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "placements"],
+  "properties": {
+    "schema_version": {"const": "curated-document-assembly-draft/1.0"},
+    "placements": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 200,
+      "items": {"oneOf": [{"$ref": "#/$defs/external"}, {"$ref": "#/$defs/registered"}, {"$ref": "#/$defs/past_exam"}]}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "external": {
+      "type": "object", "additionalProperties": false,
+      "required": ["placement_kind", "position", "source_id", "source_revision_id", "observation_sha256", "edition", "source_format"],
+      "properties": {
+        "placement_kind": {"const": "EXTERNAL_SOURCE_DOCUMENT"},
+        "position": {"type": "integer", "minimum": 1, "maximum": 200},
+        "source_id": {"type": "string", "pattern": "^extitem_[0-9a-f]{32}$"},
+        "source_revision_id": {"type": "string", "pattern": "^extitemrev_[0-9a-f]{32}$"},
+        "observation_sha256": {"$ref": "#/$defs/sha256"},
+        "edition": {"type": "integer", "enum": [2, 3]},
+        "source_format": {"type": "string", "enum": ["HWP", "HWPX"]}
+      }
+    },
+    "registered": {"$ref": "#/$defs/item_placement"},
+    "past_exam": {"$ref": "#/$defs/past_exam_placement"},
+    "item_placement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["placement_kind", "position", "item_id", "item_revision_id", "item_manifest_sha256", "graph_snapshot_revision_id", "graph_snapshot_sha256"],
+      "properties": {
+        "placement_kind": {"const": "REGISTERED_ITEM_REVISION"},
+        "position": {"type": "integer", "minimum": 1, "maximum": 200},
+        "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+        "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+        "item_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "graph_snapshot_revision_id": {"type": "string", "pattern": "^graphrev_[0-9a-f]{32}$"},
+        "graph_snapshot_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "past_exam_placement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["placement_kind", "position", "item_id", "item_revision_id", "item_manifest_sha256", "graph_snapshot_revision_id", "graph_snapshot_sha256"],
+      "properties": {
+        "placement_kind": {"const": "PAST_EXAM_ITEM_REVISION"},
+        "position": {"type": "integer", "minimum": 1, "maximum": 200},
+        "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+        "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+        "item_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "graph_snapshot_revision_id": {"type": "string", "pattern": "^graphrev_[0-9a-f]{32}$"},
+        "graph_snapshot_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

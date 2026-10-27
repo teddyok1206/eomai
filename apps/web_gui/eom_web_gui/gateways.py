@@ -34,6 +34,7 @@ from eom_web_gui.contracts import (
     ContentIntakeOption,
     ContentIntakeSourcePointer,
     ContentTeamMaterialRequirementV2,
+    CuratedAssemblySaveView,
     CurriculumEditorialOutline,
     CustomerSupportCaseView,
     CustomerSupportSubmission,
@@ -689,6 +690,10 @@ class ApplicationGateway(Protocol):
         self, session: WebSession, filters: ExternalItemDbFilterSubmission
     ) -> ItemDbExcelDownload: ...
 
+    async def save_curated_assembly(
+        self, session: WebSession, draft: dict[str, object], idempotency_key: str
+    ) -> CuratedAssemblySaveView: ...
+
     async def external_item_db_document_download(
         self, session: WebSession, source_id: str, source_revision_id: str, edition: int
     ) -> ExternalItemDocumentDownload: ...
@@ -1276,6 +1281,33 @@ class HttpApplicationGateway:
         ):
             raise GatewayError(status=502, code="ITEM_DB_EXPORT_RESPONSE_INVALID")
         return ItemDbExcelDownload(response.content, digest, int(row_count))
+
+    async def save_curated_assembly(
+        self, session: WebSession, draft: dict[str, object], idempotency_key: str
+    ) -> CuratedAssemblySaveView:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/item-db/assemblies",
+            json=draft,
+            headers={"Idempotency-Key": idempotency_key},
+            timeout=135.0,
+        )
+        value = self._data(response)
+        placements = value.get("placements")
+        if value.get("schema_version") != "curated-document-assembly-manifest/1.0" or (
+            not isinstance(placements, list)
+        ):
+            raise GatewayError(status=502, code="ITEM_DB_ASSEMBLY_RESPONSE_INVALID")
+        try:
+            return CuratedAssemblySaveView(
+                assembly_revision_id=value["assembly_revision_id"],
+                selection_sha256=value["selection_sha256"],
+                manifest_sha256=value["manifest_sha256"],
+                placement_count=len(placements),
+            )
+        except (KeyError, ValueError) as exc:
+            raise GatewayError(status=502, code="ITEM_DB_ASSEMBLY_RESPONSE_INVALID") from exc
 
     def _external_item_db_page(self, response: httpx.Response) -> ExternalItemDbPage:
         document = self._document(response)

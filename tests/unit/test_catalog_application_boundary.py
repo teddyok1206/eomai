@@ -38,6 +38,7 @@ from eom_catalog_contracts import (
     CreateKnowledgeSolutionAnalysisCommand,
     CreateMockExamAssemblyCommand,
     CreatePlannedMockExamAssemblyCommand,
+    CuratedDocumentAssemblyManifestV1,
     DocumentReviewTextbookEvidenceResponse,
     EvidenceBundlePublicationResult,
     EvidenceBundlePublicationResultV2,
@@ -72,6 +73,7 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_catalog_service.application_server import CatalogApplicationServer
+from eom_catalog_service.curated_document_assembly_service import CuratedDocumentAssemblyError
 from eom_catalog_service.external_item_preview_projection import ExternalItemPreviewUnavailable
 from eom_catalog_service.office_document_review_intake import OfficeDocumentReviewIntakeError
 from eom_identifiers import content_sha256
@@ -84,6 +86,9 @@ from jsonschema import ValidationError as JsonSchemaValidationError
 
 from tests.unit.test_assessment_item_content import item_content
 from tests.unit.test_content_team_item_protocol import _content as content_team_item
+from tests.unit.test_curated_document_assembly_manifest import _manifest as curated_manifest
+from tests.unit.test_curated_document_assembly_resolution import _actor as curated_actor
+from tests.unit.test_curated_document_assembly_resolution import _draft as curated_draft
 from tests.unit.test_mock_exam_assembly_contracts import (
     _identifier,
     _planning_candidates_v2,
@@ -828,6 +833,25 @@ class FakeExternalItemPreviews:
         self.ready = True
 
 
+class FakeCuratedDocumentAssemblies:
+    def __init__(self) -> None:
+        self.fail = False
+        self.received: list[tuple[str, str]] = []
+
+    def create(self, draft: object, *, actor: object, idempotency_key: str) -> CuratedDocumentAssemblyManifestV1:
+        assert draft == curated_draft()
+        assert getattr(actor, "permissions") == frozenset()
+        self.received.append((getattr(actor, "actor_id"), idempotency_key))
+        if self.fail:
+            raise CuratedDocumentAssemblyError("CURATED_SOURCE_STALE")
+        value = curated_manifest()
+        value["created_by"] = getattr(actor, "actor_id")
+        value["manifest_sha256"] = content_sha256(
+            {key: field for key, field in value.items() if key != "manifest_sha256"}
+        )
+        return CuratedDocumentAssemblyManifestV1.model_validate(value)
+
+
 def _server(
     tmp_path: Path,
     *,
@@ -840,6 +864,7 @@ def _server(
     office_intake: FakeOfficeDocumentReviewIntake | None = None,
     external_documents: FakeExternalItemDocuments | None = None,
     external_previews: FakeExternalItemPreviews | None = None,
+    curated_assemblies: FakeCuratedDocumentAssemblies | None = None,
 ) -> CatalogApplicationServer:
     runtime = tmp_path / "runtime"
     runtime.mkdir(mode=0o750)
@@ -856,6 +881,7 @@ def _server(
         office_document_review_intake=office_intake,  # type: ignore[arg-type]
         external_item_documents=external_documents,  # type: ignore[arg-type]
         external_item_previews=external_previews,  # type: ignore[arg-type]
+        curated_document_assemblies=curated_assemblies,  # type: ignore[arg-type]
         socket_path=runtime / "manager.sock",
         allowed_uid=os.getuid() if allowed_uid is None else allowed_uid,
         expected_uid=os.getuid(),
@@ -1557,6 +1583,34 @@ def test_catalog_socket_prepares_once_then_streams_pinned_external_item_preview(
         )
         assert media.media_type == "application/pdf"
         assert b"".join(media.iter_chunks()) == previews.payload
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_catalog_socket_pins_curated_inputs_without_accepting_caller_permissions(
+    tmp_path: Path,
+) -> None:
+    assemblies = FakeCuratedDocumentAssemblies()
+    server = _server(tmp_path, curated_assemblies=assemblies)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        client = _client(server)
+        actor = curated_actor()
+        manifest = client.create_curated_document_assembly(
+            curated_draft(), actor=actor, idempotency_key="curated-create-key-1"
+        )
+        assert manifest.created_by == actor.actor_id
+        assert assemblies.received == [(actor.actor_id, "curated-create-key-1")]
+
+        assemblies.fail = True
+        with pytest.raises(CatalogApplicationClientError) as stale:
+            client.create_curated_document_assembly(
+                curated_draft(), actor=actor, idempotency_key="curated-create-key-2"
+            )
+        assert stale.value.code == "CURATED_SOURCE_STALE"
     finally:
         server.shutdown()
         server.server_close()

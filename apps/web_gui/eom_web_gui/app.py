@@ -849,6 +849,15 @@ def create_app(
             },
         )
 
+    @app.post(f"{API_PREFIX}/item-db/assemblies")
+    async def save_curated_assembly(
+        draft: dict[str, object],
+        session: Annotated[WebSession, Depends(require_csrf)],
+        idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
+    ) -> dict[str, object]:
+        value = await actual.gateway.save_curated_assembly(session, draft, idempotency_key)
+        return value.model_dump(mode="json")
+
     @app.get(f"{API_PREFIX}/item-db/external-sources/{{source_id}}/editions/{{edition}}/download")
     async def external_item_db_document_download(
         session: Annotated[WebSession, Depends(require_session)],

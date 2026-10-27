@@ -16,6 +16,7 @@ from eom_api_contracts.curated_document_assembly import (
     RegisteredItemPlacement,
 )
 from eom_catalog_contracts import CuratedDocumentAssemblyManifestV1
+from eom_catalog_service import curated_document_assembly_service as service_module
 from eom_catalog_service.curated_document_assembly_models import (
     CuratedDocumentAssemblyPlacementRecord,
     CuratedDocumentAssemblyRecord,
@@ -175,3 +176,32 @@ def test_curated_replay_checks_request_permissions_and_placement_projection() ->
             session, existing, draft, actor, "sha256:" + "f" * 64
         )
     assert conflict.value.code == "CURATED_ASSEMBLY_IDEMPOTENCY_CONFLICT"
+
+
+def test_curated_create_uses_current_operator_authority_not_stale_api_roles(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    actor = _actor(PermissionKey.ITEM_READ)
+
+    class _OperatorSession:
+        operator = SimpleNamespace(
+            status="ACTIVE", deleted_at=None, must_change_password=False
+        )
+
+        def get(self, _record_type: type[Any], _key: str) -> Any:
+            return self.operator
+
+    session = _OperatorSession()
+    permissions = frozenset({PermissionKey.ITEM_READ, PermissionKey.DELIVERABLE_CREATE})
+    monkeypatch.setattr(service_module, "effective_permissions", lambda _session, _id: permissions)
+    refreshed = CuratedDocumentAssemblyService._authorized_actor(  # type: ignore[arg-type]
+        session, actor
+    )
+    assert refreshed.permissions == permissions
+    assert actor.permissions == frozenset({PermissionKey.ITEM_READ})
+
+    session.operator.must_change_password = True
+    with pytest.raises(CuratedDocumentAssemblyError, match="CURATED_ASSEMBLY_PERMISSION_DENIED"):
+        CuratedDocumentAssemblyService._authorized_actor(  # type: ignore[arg-type]
+            session, actor
+        )

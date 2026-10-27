@@ -34,6 +34,24 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "curated-document-assembly-draft-v1": CatalogSchemaResource(
+            "schemas/api/v1/curated-document-assembly-draft-v1.schema.json",
+            "resources/api/curated-document-assembly-draft-v1.schema.json",
+            "1.0",
+            "sha256:25c13bee6b22bdc4cd63285f62090c0fa193e7ca897de0b9284cb0aeffeb1f41",
+        ),
+        "catalog-curated-document-assembly-create-request-v1": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-curated-document-assembly-create-request-v1.schema.json",
+            "resources/catalog-application/catalog-curated-document-assembly-create-request-v1.schema.json",
+            "1.0",
+            "sha256:7425ae3c48fce3c9de7dedcc285d4895ee4458df1a644718514a6ffad9007a02",
+        ),
+        "catalog-curated-document-assembly-create-response-v1": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-curated-document-assembly-create-response-v1.schema.json",
+            "resources/catalog-application/catalog-curated-document-assembly-create-response-v1.schema.json",
+            "1.0",
+            "sha256:73c25291cf6e5d5a32c1a8326cb586757f18ef4d73594c99391e5b8c9c9d045e",
+        ),
         "curated-document-assembly-manifest-v1": CatalogSchemaResource(
             "schemas/assessment-assembly/curated-document-assembly-manifest-v1.schema.json",
             "resources/assessment-assembly/curated-document-assembly-manifest-v1.schema.json",

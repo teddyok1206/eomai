@@ -50,6 +50,8 @@ from eom_catalog_contracts import (
     CreateKnowledgeSolutionAnalysisCommand,
     CreateMockExamAssemblyCommand,
     CreatePlannedMockExamAssemblyCommand,
+    CuratedDocumentAssemblyCreateCommandV1,
+    CuratedDocumentAssemblyCreateResponseV1,
     DocumentReviewEvidenceResponse,
     DocumentReviewHwpxCorrectionMediaQuery,
     DocumentReviewHwpxCorrectionMediaResponse,
@@ -107,6 +109,7 @@ from eom_catalog_contracts.chat_ranked_candidate_read import (
 )
 from eom_identifiers import canonical_json_bytes
 from eom_item_registry import RegistryError
+from eom_operator_identity import ActorContext, ActorSource, ActorType
 from eom_protocol.general_chat_grounding import (
     ChatKnowledgeCatalogReply,
     ChatKnowledgeCatalogRequest,
@@ -139,6 +142,17 @@ from eom_catalog_service.chat_knowledge_resolution import (
 )
 from eom_catalog_service.chat_knowledge_search import ChatKnowledgeSearchService
 from eom_catalog_service.chat_rag_resolution import ChatRagResolutionService
+from eom_catalog_service.curated_document_assembly_item import CuratedDocumentAssemblyItemError
+from eom_catalog_service.curated_document_assembly_resolution import (
+    CuratedDocumentAssemblyResolutionError,
+)
+from eom_catalog_service.curated_document_assembly_service import (
+    CuratedDocumentAssemblyError,
+    CuratedDocumentAssemblyService,
+)
+from eom_catalog_service.curated_document_assembly_source import (
+    CuratedDocumentAssemblySourceError,
+)
 from eom_catalog_service.document_review_evidence_service import (
     DocumentReviewEvidenceService,
     DocumentReviewEvidenceServiceError,
@@ -690,6 +704,21 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     return
                 self._prepare_external_item_preview(preview_command)
                 return
+            if raw_operation == "CREATE_CURATED_DOCUMENT_ASSEMBLY":
+                try:
+                    validate_contract("catalog-curated-document-assembly-create-request-v1", value)
+                    assembly_command = CuratedDocumentAssemblyCreateCommandV1.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_curated_document_assembly_response(
+                        self.wfile,
+                        CuratedDocumentAssemblyCreateResponseV1(
+                            status="ERROR",
+                            error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                        ),
+                    )
+                    return
+                self._create_curated_document_assembly(assembly_command)
+                return
             if raw_operation == "GET_ITEM_COMPONENT_MEDIA":
                 try:
                     validate_contract("catalog-item-component-media-request", value)
@@ -1097,6 +1126,49 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
                 )
         self.server.write_external_item_preview_prepare_response(self.wfile, response)
+
+    def _create_curated_document_assembly(
+        self, command: CuratedDocumentAssemblyCreateCommandV1
+    ) -> None:
+        service = self.server.curated_document_assemblies
+        if service is None:
+            response = CuratedDocumentAssemblyCreateResponseV1(
+                status="ERROR",
+                error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+            )
+        else:
+            actor = ActorContext(
+                actor_type=ActorType.OPERATOR,
+                operator_id=command.actor_id,
+                session_id=command.session_id,
+                request_id=command.request_id,
+                authentication_time=command.authentication_time,
+                permissions=frozenset(),
+                source=ActorSource.APPLICATION_API,
+            )
+            try:
+                manifest = service.create(
+                    command.draft,
+                    actor=actor,
+                    idempotency_key=command.idempotency_key,
+                )
+                response = CuratedDocumentAssemblyCreateResponseV1(status="OK", manifest=manifest)
+            except (
+                CuratedDocumentAssemblyError,
+                CuratedDocumentAssemblyResolutionError,
+                CuratedDocumentAssemblySourceError,
+                CuratedDocumentAssemblyItemError,
+                ExternalItemDocumentMediaError,
+            ) as exc:
+                response = CuratedDocumentAssemblyCreateResponseV1(
+                    status="ERROR", error_code=exc.code
+                )
+            except Exception:
+                response = CuratedDocumentAssemblyCreateResponseV1(
+                    status="ERROR",
+                    error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+                )
+        self.server.write_curated_document_assembly_response(self.wfile, response)
 
     def _stream_pdf_document_review_page(
         self,
@@ -1641,6 +1713,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         document_review_evidence: DocumentReviewEvidenceService | None = None,
         external_item_documents: ExternalItemDocumentMediaService | None = None,
         external_item_previews: ExternalItemPreviewProjectionService | None = None,
+        curated_document_assemblies: CuratedDocumentAssemblyService | None = None,
         chat_knowledge: ChatKnowledgeResolutionService | None = None,
         chat_rag: ChatRagResolutionService | None = None,
         inference_transfer_metadata: CatalogInferenceTransferMetadataService | None = None,
@@ -1673,6 +1746,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.document_review_evidence = document_review_evidence
         self.external_item_documents = external_item_documents
         self.external_item_previews = external_item_previews
+        self.curated_document_assemblies = curated_document_assemblies
         self.chat_knowledge = chat_knowledge
         self.chat_rag = chat_rag
         self.inference_transfer_metadata = inference_transfer_metadata
@@ -2214,6 +2288,17 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
         if len(raw) + 1 > MAX_MESSAGE_BYTES:
             raise RuntimeError("Catalog external Item preview response exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @staticmethod
+    def write_curated_document_assembly_response(
+        stream: Any, value: CuratedDocumentAssemblyCreateResponseV1
+    ) -> None:
+        payload = value.model_dump(mode="json", exclude_none=True)
+        validate_contract("catalog-curated-document-assembly-create-response-v1", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("Catalog curated Assembly response exceeded its fixed bound")
         stream.write(raw + b"\n")
 
     @staticmethod

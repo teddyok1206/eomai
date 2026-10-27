@@ -14,6 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal, cast
 
+from eom_api_contracts.curated_document_assembly import CuratedDocumentAssemblyDraftV1
 from eom_catalog_contracts import (
     CATALOG_APPLICATION_MAX_MESSAGE_BYTES,
     CATALOG_APPLICATION_SOCKET_MODE,
@@ -55,6 +56,9 @@ from eom_catalog_contracts import (
     CreateKnowledgeSolutionAnalysisCommand,
     CreateMockExamAssemblyCommand,
     CreatePlannedMockExamAssemblyCommand,
+    CuratedDocumentAssemblyCreateCommandV1,
+    CuratedDocumentAssemblyCreateResponseV1,
+    CuratedDocumentAssemblyManifestV1,
     DocumentReviewEvidencePlan,
     DocumentReviewEvidenceResponse,
     DocumentReviewHwpxCorrectionMediaQuery,
@@ -114,6 +118,7 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_item_registry import RegistryError, RegistryErrorCode
+from eom_operator_identity import ActorContext
 from eom_workflow import PdfReviewDocumentPointer
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
@@ -876,6 +881,54 @@ class CatalogApplicationClient:
                 "Catalog external Item preview prepare response is unavailable",
             ) from exc
 
+    def create_curated_document_assembly(
+        self,
+        draft: CuratedDocumentAssemblyDraftV1,
+        *,
+        actor: ActorContext,
+        idempotency_key: str,
+    ) -> CuratedDocumentAssemblyManifestV1:
+        if actor.operator_id is None or actor.session_id is None:
+            raise ValueError("curated assembly requires one authenticated operator session")
+        command = CuratedDocumentAssemblyCreateCommandV1(
+            actor_id=actor.operator_id,
+            session_id=actor.session_id,
+            request_id=actor.request_id,
+            authentication_time=actor.authentication_time,
+            idempotency_key=idempotency_key,
+            draft=draft,
+        )
+        payload = command.model_dump(mode="json")
+        validate_contract("catalog-curated-document-assembly-create-request-v1", payload)
+        self._validate_socket()
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+                connection.connect(str(self.socket_path))
+                encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+                connection.sendall(encoded + b"\n")
+                connection.settimeout(EVIDENCE_RESPONSE_TIMEOUT_SECONDS)
+                response_payload: Any = json.loads(self._read_response(connection))
+                if not isinstance(response_payload, dict):
+                    raise ValueError("Catalog curated Assembly result is invalid")
+                validate_contract(
+                    "catalog-curated-document-assembly-create-response-v1", response_payload
+                )
+                response = CuratedDocumentAssemblyCreateResponseV1.model_validate(response_payload)
+                if response.operation != command.operation:
+                    raise ValueError("Catalog curated Assembly response operation differs")
+                if response.status == "ERROR":
+                    self._raise_remote_error(response.error_code)
+                assert response.manifest is not None
+                return response.manifest
+        except CatalogApplicationClientError:
+            raise
+        except (OSError, ValueError, JsonSchemaValidationError, ValidationError) as exc:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog curated Assembly response is unavailable",
+            ) from exc
+
     def download_item_component_media(
         self,
         item_revision_id: str,
@@ -1593,6 +1646,11 @@ class CatalogApplicationClient:
                     raise CatalogApplicationClientError(
                         error_code,
                         "Catalog external Item resolution failed",
+                    ) from None
+                if error_code.startswith("CURATED_"):
+                    raise CatalogApplicationClientError(
+                        error_code,
+                        "Catalog curated Assembly resolution failed",
                     ) from None
                 raise CatalogApplicationClientError(
                     CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,

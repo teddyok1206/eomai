@@ -120,6 +120,29 @@ def test_db_excel_export_uses_same_filter_and_csrf_boundary() -> None:
         )
 
 
+def test_db_ordered_selection_save_requires_session_csrf_and_retry_key() -> None:
+    client, _gateway = make_client()
+    path = "/studio/api/v1/item-db/assemblies"
+    body = {"schema_version": "curated-document-assembly-draft/1.0", "placements": [{}]}
+    with client:
+        session = login(client)
+        assert client.post(path, json=body).status_code == 403
+        missing_key = client.post(path, json=body, headers={"X-CSRF-Token": session["csrf_token"]})
+        saved = client.post(
+            path,
+            json=body,
+            headers={
+                "X-CSRF-Token": session["csrf_token"],
+                "Idempotency-Key": "curated-web-key-1",
+            },
+        )
+    assert missing_key.status_code == 422
+    assert saved.status_code == 200
+    assert saved.json()["state"] == "INPUT_PINNED"
+    assert saved.json()["placement_count"] == 1
+    assert "document_artifact" not in saved.json()
+
+
 def test_db_screen_shows_business_number_but_hides_internal_db_ids() -> None:
     html = (ROOT / "apps/web_gui/eom_web_gui/static/index.html").read_text(encoding="utf-8")
     javascript = (ROOT / "apps/web_gui/eom_web_gui/static/item-db.js").read_text(encoding="utf-8")

@@ -1611,6 +1611,16 @@ class ExternalItemDbFilterSubmission(WebModel):
     cursor: str | None = Field(min_length=1, max_length=1024)
 
 
+class CuratedAssemblySaveView(WebModel):
+    """Browser-facing receipt; file pointers remain in the Catalog manifest."""
+
+    assembly_revision_id: str = Field(pattern=r"^assemblyrev_[0-9a-f]{32}$")
+    selection_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    placement_count: int = Field(ge=1, le=200)
+    state: Literal["INPUT_PINNED"] = "INPUT_PINNED"
+
+
 class ItemBankEntry(WebModel):
     schema_version: Literal["item-bank-entry-view/1.0"]
     graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")

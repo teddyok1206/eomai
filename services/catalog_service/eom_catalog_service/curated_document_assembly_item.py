@@ -4,14 +4,14 @@ from __future__ import annotations
 
 from collections import defaultdict
 
-from eom_api_contracts.curated_document_assembly import (
-    PastExamItemPlacement,
-    RegisteredItemPlacement,
-)
 from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
     CuratedPastExamItemPlacement,
     CuratedRegisteredItemPlacement,
+)
+from eom_catalog_contracts.curated_document_assembly_draft import (
+    PastExamItemPlacement,
+    RegisteredItemPlacement,
 )
 from sqlalchemy import and_, literal, select
 from sqlalchemy.orm import Session
