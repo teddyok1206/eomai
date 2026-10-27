@@ -148,6 +148,15 @@ from eom_catalog_contracts.content_team_material import (
     validate_content_team_material_requirement,
     validate_content_team_material_selection,
 )
+from eom_catalog_contracts.curated_document_assembly import (
+    CURATED_DOCUMENT_ASSEMBLY_MANIFEST_SCHEMA,
+    CURATED_DOCUMENT_ASSEMBLY_MANIFEST_SCHEMA_REF,
+    CuratedDocumentAssemblyManifestV1,
+    CuratedExternalDocumentPlacement,
+    CuratedPastExamItemPlacement,
+    CuratedRegisteredItemPlacement,
+    CuratedResolvedPlacement,
+)
 from eom_catalog_contracts.curriculum import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_KEY,
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_REVISION,
@@ -1163,6 +1172,8 @@ __all__ = [
     "CUDA_HOST_NVML_MANIFEST_REF",
     "CUDA_HOST_NVML_SCHEMA",
     "CUDA_HOST_SCHEMA",
+    "CURATED_DOCUMENT_ASSEMBLY_MANIFEST_SCHEMA",
+    "CURATED_DOCUMENT_ASSEMBLY_MANIFEST_SCHEMA_REF",
     "DOCUMENT_REVIEW_PDF_ANNOTATION_MANIFEST_MEMBER",
     "EMBEDDING_DEVICE_BENCHMARK_SCHEMA",
     "EMBEDDING_DEVICE_BENCHMARK_SCHEMA_REF",
@@ -1430,6 +1441,11 @@ __all__ = [
     "CudaHostExtensionSnapshotV11",
     "CudaHostLibraryMember",
     "CudaHostNvmlLibraryMember",
+    "CuratedDocumentAssemblyManifestV1",
+    "CuratedExternalDocumentPlacement",
+    "CuratedPastExamItemPlacement",
+    "CuratedRegisteredItemPlacement",
+    "CuratedResolvedPlacement",
     "CurriculumRetrievalScope",
     "CurriculumUnitBinding",
     "CurriculumUnitBindingV2",

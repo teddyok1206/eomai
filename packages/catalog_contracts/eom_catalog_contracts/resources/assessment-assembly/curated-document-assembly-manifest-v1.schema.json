@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/assessment-assembly/curated-document-assembly-manifest/1.0",
+  "title": "EOM Curated Document Assembly Selection Manifest V1",
+  "description": "Immutable selection and resolved source pointers, not a successful HWPX build.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "assembly_id", "assembly_revision_id", "selection_sha256", "placements", "created_by", "created_at", "manifest_sha256"],
+  "properties": {
+    "schema_version": {"const": "curated-document-assembly-manifest/1.0"},
+    "assembly_id": {"type": "string", "pattern": "^assembly_[0-9a-f]{32}$"},
+    "assembly_revision_id": {"type": "string", "pattern": "^assemblyrev_[0-9a-f]{32}$"},
+    "selection_sha256": {"$ref": "#/$defs/sha256"},
+    "placements": {"type": "array", "minItems": 1, "maxItems": 200, "items": {"oneOf": [{"$ref": "#/$defs/external"}, {"$ref": "#/$defs/registered"}, {"$ref": "#/$defs/past_exam"}]}},
+    "created_by": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"},
+    "created_at": {"type": "string", "format": "date-time", "pattern": "(Z|\\+00:00)$"},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "document_artifact": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256"],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.?($|/))(?!.*\\\\)[^\\x00-\\x1f\\x7f]+$"},
+        "schema_ref": {"const": "eom://schemas/content-intake/source-file/1.0"},
+        "media_type": {"enum": ["application/vnd.hancom.hwp", "application/vnd.hancom.hwpx"]},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "external": {
+      "type": "object", "additionalProperties": false,
+      "required": ["placement_kind", "position", "source_id", "source_revision_id", "external_number", "observation_sha256", "edition", "source_format", "source_file_id", "document_artifact", "document_size_bytes"],
+      "allOf": [
+        {"if": {"properties": {"source_format": {"const": "HWP"}}}, "then": {"properties": {"document_artifact": {"properties": {"media_type": {"const": "application/vnd.hancom.hwp"}}}}}},
+        {"if": {"properties": {"source_format": {"const": "HWPX"}}}, "then": {"properties": {"document_artifact": {"properties": {"media_type": {"const": "application/vnd.hancom.hwpx"}}}}}}
+      ],
+      "properties": {
+        "placement_kind": {"const": "EXTERNAL_SOURCE_DOCUMENT"},
+        "position": {"type": "integer", "minimum": 1, "maximum": 200},
+        "source_id": {"type": "string", "pattern": "^extitem_[0-9a-f]{32}$"},
+        "source_revision_id": {"type": "string", "pattern": "^extitemrev_[0-9a-f]{32}$"},
+        "external_number": {"type": "string", "pattern": "^[0-9]{5}$"},
+        "observation_sha256": {"$ref": "#/$defs/sha256"},
+        "edition": {"type": "integer", "enum": [2, 3]},
+        "source_format": {"enum": ["HWP", "HWPX"]},
+        "source_file_id": {"type": "string", "pattern": "^sourcefile_[0-9a-f]{32}$"},
+        "document_artifact": {"$ref": "#/$defs/document_artifact"},
+        "document_size_bytes": {"type": "integer", "minimum": 1, "maximum": 104857600}
+      }
+    },
+    "item_fields": {
+      "type": "object", "additionalProperties": false,
+      "required": ["placement_kind", "position", "item_id", "item_revision_id", "item_manifest_sha256", "graph_snapshot_revision_id", "graph_snapshot_sha256"],
+      "properties": {
+        "placement_kind": {"enum": ["REGISTERED_ITEM_REVISION", "PAST_EXAM_ITEM_REVISION"]},
+        "position": {"type": "integer", "minimum": 1, "maximum": 200},
+        "item_id": {"type": "string", "pattern": "^item_[0-9a-f]{32}$"},
+        "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+        "item_manifest_sha256": {"$ref": "#/$defs/sha256"},
+        "graph_snapshot_revision_id": {"type": "string", "pattern": "^graphrev_[0-9a-f]{32}$"},
+        "graph_snapshot_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "registered": {
+      "allOf": [
+        {"$ref": "#/$defs/item_fields"},
+        {"properties": {"placement_kind": {"const": "REGISTERED_ITEM_REVISION"}}}
+      ]
+    },
+    "past_exam": {
+      "allOf": [
+        {"$ref": "#/$defs/item_fields"},
+        {"properties": {"placement_kind": {"const": "PAST_EXAM_ITEM_REVISION"}}}
+      ]
+    }
+  }
+}

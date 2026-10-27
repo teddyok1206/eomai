@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "curated-document-assembly-manifest-v1": CatalogSchemaResource(
+            "schemas/assessment-assembly/curated-document-assembly-manifest-v1.schema.json",
+            "resources/assessment-assembly/curated-document-assembly-manifest-v1.schema.json",
+            "1.0",
+            "sha256:8958aeb33d16902745cca44b13e39743c939f0eb3ee255dec931e8b5440afd04",
+        ),
         "external-item-learning-work-input-v1": CatalogSchemaResource(
             "schemas/external-item/external-item-learning-work-input-v1.schema.json",
             "resources/external-item/external-item-learning-work-input-v1.schema.json",
