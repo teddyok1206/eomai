@@ -26,6 +26,10 @@ from eom_catalog_service.content_pack_service import ContentPackService
 from eom_catalog_service.external_item_archive import inspect_external_item_archive
 from eom_catalog_service.external_item_archive_intake import ExternalItemArchiveIntakeService
 from eom_catalog_service.external_item_archive_staging import plan_external_item_archive_batches
+from eom_catalog_service.external_item_import_audit import (
+    ExternalItemImportAuditError,
+    ExternalItemImportAuditService,
+)
 from eom_catalog_service.external_item_import_preparation import prepare_external_item_import
 from eom_catalog_service.external_item_import_service import ExternalItemImportService
 from eom_catalog_service.external_item_matching import (
@@ -182,6 +186,23 @@ def external_item_commit(
                 "committed_document_count": len(committed_documents),
             }
         )
+    finally:
+        engine.dispose()
+
+
+@external_item_app.command("verify")
+def external_item_verify(
+    import_id: Annotated[str, typer.Option("--import-id")],
+) -> None:
+    """Read-only reconciliation of a completed import with its pinned NAS workbook."""
+
+    engine = build_engine()
+    try:
+        try:
+            result = ExternalItemImportAuditService(engine).verify(import_id)
+        except ExternalItemImportAuditError as exc:
+            raise typer.BadParameter(f"{exc.code}: {exc}") from exc
+        _emit({"status": "PASS", **asdict(result)})
     finally:
         engine.dispose()
 

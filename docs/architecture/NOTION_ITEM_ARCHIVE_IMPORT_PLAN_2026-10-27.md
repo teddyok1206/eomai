@@ -138,6 +138,10 @@ Import Run은 workbook revision + archive revision + mapping revision + namespac
 
 완료 증거: 원본 workbook/ZIP hash, 모든 1,297행과 A:AF 값의 원본 대비 hash 일치, 각 교정본의 정확한 파일 Artifact pointer, `1,053 resolved candidate / 14 unresolved`의 실제 검토 후 재집계, 중복 Item 0, 원본/파생 파일 다운로드 hash 일치, XLSX export의 동일 행/원값/권한/해시 검증, 조회 성능 query plan, 기존 Item/Graph/HWPX 경로 회귀 PASS. 실제 교육적 정확성·구조화 추출 품질은 별도 검토 결과로 기록한다.
 
+### 가져오기 사후 감사 경계
+
+Catalog의 읽기 전용 `external-items verify --import-id`는 **로컬 staging 파일이 아니라** import가 pin한 NAS workbook Artifact Revision을 검증해 다시 해독한다. 그 A:AF 행·행 번호·U·관찰 해시·검색 facet을 같은 import의 불변 source revision과 순서대로 대조하고, L/M/N에 원래 링크가 있던 교정 단계와 등록된 edition 관찰 수, 선택 문서와 Intake source-file 해시 관계를 확인한다. `import_id` 및 `(import_id,row_number)` 인덱스 조회와 정렬된 일대일 순회가 중심이며 시간 O(행+교정 링크), 메모리 O(행+링크)다. 현재 최대 1,297행에서는 원본 XLSX 파서의 bounded 메모리 모델을 재사용한다. 이것은 새로운 권위 데이터나 저장 테이블을 만들지 않고, 원본 바이트가 달라졌거나 DB 관찰이 달라지면 실패한다. 원본 문서 1,087개의 실제 바이트를 모두 다시 읽는 전수 NAS 무결성 검사나 교육적 품질 검토를 대신하지 않는다.
+
 ## 9. 창작 Graph 적합성·게시 게이트
 
 구체적인 출처·풀이보고서 successor·게시 경계는 [창작 문항 풀이보고서·Graph 게시 후속 계약](CREATED_ITEM_GRAPH_AND_SOLUTION_REPORT_SUCCESSOR.md)에 고정한다.
