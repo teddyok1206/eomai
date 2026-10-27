@@ -27,3 +27,15 @@
 - 수정 source commit `6b3cb636b3a9e086378378a123f0da69e61b4022` (`fix(item-db): avoid privileged locks for curated draft save`)을 푸시했다. Catalog 경계 29개, 관련 unit/API/Web 49개, Ruff 및 수정 파일 mypy가 통과했다. owner-role disposable 테스트는 런타임 role 권한과 같지 않으므로 이것만으로 live 성공이라 판정하지 않았다.
 - 해당 commit의 build-only wheel RECORD 검증, 보호된 `release-operator-context/1.11` source/wheel admission, `MIGRATION_VERIFY_0062`, Catalog/HWPX role reconcile, API isolation 및 설치를 통과했다. 운영 rollback record는 `/var/lib/eom-api/deployments/6b3cb636b3a9e086378378a123f0da69e61b4022.json`이다. API `/api/v1/health/ready=READY`; Catalog/API active다. 격리 GPU INDEX owner의 서비스 시작 시각은 2026-10-26 00:32:30 UTC로 유지되어 이번 설치에서 재시작되지 않았다.
 - 사용자는 `데이터 → DB`에서 두 문항의 저장 성공을 보고했고, `다시 열기`를 눌렀다. 서버의 같은 운영 배포에서 `POST /item-db/assemblies` 1회와 뒤이은 목록 `GET`, 저장본 상세 `GET` 요청이 완료됐다. 다시 열기의 결과는 파일 생성이 아니라 상단 `조립 순서 초안`에 두 문항을 저장 순서대로 복원하는 기능임을 안내했고, 사용자는 이후 정상 동작을 확인했다. 따라서 **저장/목록/상세/화면 재열기의 실제 사용자 경로는 확인**됐지만, 이 기록만으로 편집 가능한 HWPX 합본이나 Graph 게시가 완료됐다고 주장하지 않는다.
+
+## U 10310·10318 편집 가능한 합본의 격리 변환 조사
+
+2026-10-27 17:35 UTC. 사용자가 실제 저장한 순서의 두 원본은 ZIP 안에서 확장자와 내용이 모두 **HWP 5.0**이다. 임시 폴더에 두 정확한 ZIP member만 추출해 네트워크·장치·홈 접근이 제한된 일회성 사용자 서비스에서 `hwp` 1.3.1로 조사했다. 원본 Artifact와 운영 DB는 변경하지 않았다.
+
+- 각 원본의 `HWP → HWPX --strict`는 모두 발행 거부됐다. 각각 `control_removed=1`, `metadata_value_removed=2`의 보존 손실이 보고됐다. 두 손실 항목의 의미를 실제 문항 내용과 대조하기 전에는 변환 성공이라고 판정할 수 없다.
+- 비엄격 단일 변환 후보와 원본의 추출 본문 텍스트는 두 문항 모두 byte-for-byte 동일했다. 이는 문자 손실이 없다는 제한된 증거일 뿐, 제거된 control이나 화면 배치·그림 보존을 입증하지 않는다.
+- 같은 격리 조건에서 LibreOffice로 원본 HWP와 비엄격 HWPX를 각각 PDF/PNG로 렌더링해 직접 대조했다. 두 문항 모두 1페이지로 열리지만 표·텍스트의 위치가 달라졌고, **U 10318의 원본 기출 그림은 변환본에서 보이지 않는다**. LibreOffice 자체의 원본 HWP 배치도 완전하지 않아 Hancom 기준의 정밀 일치 판정은 아니지만, 이미지 소실이라는 명백한 음성 증거가 있으므로 비엄격 변환본의 발행을 차단한다.
+- 두 원본을 순서대로 합친 **비엄격 조사 후보**는 구조 검증을 통과했지만, `control_removed=2`, `document_metadata_superseded=1`, `gso_object_id_renumbered=6`, `metadata_value_removed=2`가 기록됐다. ZIP/HWPX 구조 유효성은 서식·개체 보존이나 한글 편집 품질의 증거가 아니다. 이 후보는 `/tmp/eom-assembly-10310-10318.K22gDu/merged.nonstrict.hwpx`에만 있고 정식 Artifact로 등록·배포하지 않았다.
+- 기존 EOM content-team 시험지 병합기는 서로 다른 원본 문서의 style을 안전하게 재매핑하지 못하면 `content-team cross-style remapping is unsupported`로 중단한다. 따라서 두 원본을 그 병합기에 강제로 넣지 않는다.
+
+현재 결정: 이 저장 초안은 **선택·순서 저장/재열기까지 PASS**, **편집 가능한 HWPX 합본은 아직 미지원**이다. 다음 구현은 원본 HWP 변환 손실의 실제 영향과 binary/style 참조를 독립 검증하고, 허용 가능한 보존 정책과 사람의 한글 육안 확인을 명시한 별도 출력 계약으로 진행한다. 비엄격 후보를 조용히 성공 파일로 제공하거나 페이지 그림으로 대체하지 않는다.
