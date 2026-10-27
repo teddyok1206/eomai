@@ -468,8 +468,13 @@ from eom_catalog_contracts.external_item_import import (
 )
 from eom_catalog_contracts.external_item_media import (
     EXTERNAL_ITEM_DOCUMENT_MAX_BYTES,
+    EXTERNAL_ITEM_PREVIEW_MAX_BYTES,
     ExternalItemDocumentMediaQuery,
     ExternalItemDocumentMediaResponse,
+    ExternalItemPreviewMediaQuery,
+    ExternalItemPreviewMediaResponse,
+    ExternalItemPreviewPrepareCommand,
+    ExternalItemPreviewPrepareResponse,
 )
 from eom_catalog_contracts.external_item_workbook import (
     EXTERNAL_ITEM_COLUMNS,
@@ -1146,6 +1151,7 @@ __all__ = [
     "EXTERNAL_ITEM_DOCUMENT_MAX_BYTES",
     "EXTERNAL_ITEM_IMPORT_MANIFEST_SCHEMA",
     "EXTERNAL_ITEM_IMPORT_MANIFEST_SCHEMA_REF",
+    "EXTERNAL_ITEM_PREVIEW_MAX_BYTES",
     "EXTERNAL_ITEM_ROW_OBSERVATION_SCHEMA",
     "EXTERNAL_ITEM_ROW_OBSERVATION_SCHEMA_REF",
     "EXTERNAL_ITEM_WORKBOOK_MAPPING_SCHEMA",
@@ -1505,6 +1511,10 @@ __all__ = [
     "ExternalItemEditionLink",
     "ExternalItemImportManifest",
     "ExternalItemImportRow",
+    "ExternalItemPreviewMediaQuery",
+    "ExternalItemPreviewMediaResponse",
+    "ExternalItemPreviewPrepareCommand",
+    "ExternalItemPreviewPrepareResponse",
     "ExternalItemRowObservation",
     "ExternalItemWorkbookMapping",
     "ExtractionValidationDiagnosis",

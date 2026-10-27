@@ -190,7 +190,7 @@ def download_external_source_document(
         media_type=value.media_type,
         headers={
             "Content-Disposition": (
-                f'attachment; filename="{fallback}"; filename*=UTF-8\'\'{quote(value.filename)}'
+                f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quote(value.filename)}"
             ),
             "Content-Length": str(value.content_length),
             "Cache-Control": "private, no-store",
@@ -198,3 +198,81 @@ def download_external_source_document(
             "ETag": f'"{value.sha256}"',
         },
     )
+
+
+@router.get(
+    "/{source_id}/editions/{edition}/preview.pdf",
+    operation_id="item_db_external_source_preview",
+    dependencies=_PERMISSIONS,
+    openapi_extra={"x-eom-additional-permissions": [PermissionKey.CONTENT_INTAKE_READ.value]},
+)
+def preview_external_source_document(
+    request: Request,
+    authentication: Auth,
+    source_id: str = Path(pattern=r"^extitem_[0-9a-f]{32}$"),
+    edition: int = Path(ge=1, le=3),
+    source_revision_id: str = Query(pattern=r"^extitemrev_[0-9a-f]{32}$"),
+) -> StreamingResponse:
+    _source_access(authentication)
+    detail = request.app.state.services.external_item_db_reads.detail(source_id)
+    if detail.entry.source_revision_id != source_revision_id:
+        raise ApiError(
+            409, "ITEM_DB_SOURCE_STALE", "Item source changed", "Pinned source revision is stale"
+        )
+    value = request.app.state.services.catalog_application.download_external_item_preview(
+        source_id, source_revision_id, edition
+    )
+    request.app.state.services.audit.append(
+        request.state.request_context,
+        event_type="EXTERNAL_ITEM_PREVIEW_READ_AUTHORIZED",
+        operation_id="item_db_external_source_preview",
+        outcome="SUCCEEDED",
+        http_status=200,
+        target_type="external_item_source",
+        target_id=source_id,
+    )
+    return StreamingResponse(
+        value.iter_chunks(),
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": 'inline; filename="external-item-preview.pdf"',
+            "Content-Length": str(value.content_length),
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "ETag": f'"{value.sha256}"',
+        },
+    )
+
+
+@router.post(
+    "/{source_id}/editions/{edition}/preview",
+    operation_id="item_db_external_source_prepare_preview",
+    dependencies=_PERMISSIONS,
+    openapi_extra={"x-eom-additional-permissions": [PermissionKey.CONTENT_INTAKE_READ.value]},
+)
+def prepare_external_source_preview(
+    request: Request,
+    authentication: Auth,
+    source_id: str = Path(pattern=r"^extitem_[0-9a-f]{32}$"),
+    edition: int = Path(ge=1, le=3),
+    source_revision_id: str = Query(pattern=r"^extitemrev_[0-9a-f]{32}$"),
+) -> dict[str, str]:
+    _source_access(authentication)
+    detail = request.app.state.services.external_item_db_reads.detail(source_id)
+    if detail.entry.source_revision_id != source_revision_id:
+        raise ApiError(
+            409, "ITEM_DB_SOURCE_STALE", "Item source changed", "Pinned source revision is stale"
+        )
+    sha256 = request.app.state.services.catalog_application.prepare_external_item_preview(
+        source_id, source_revision_id, edition
+    )
+    request.app.state.services.audit.append(
+        request.state.request_context,
+        event_type="EXTERNAL_ITEM_PREVIEW_PREPARED",
+        operation_id="item_db_external_source_prepare_preview",
+        outcome="SUCCEEDED",
+        http_status=200,
+        target_type="external_item_source",
+        target_id=source_id,
+    )
+    return {"sha256": sha256}

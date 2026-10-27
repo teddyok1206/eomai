@@ -76,6 +76,14 @@ DB에는 source/import/row identity, 상태, 제한된 32필드 행 스냅샷, �
 
 ## 6. 조회·미리보기·승격 UX
 
+초기 운영 미리보기는 교정본의 정확한 source revision·교차검증된 Intake Artifact를
+입력으로 고정한 뒤, 사용자가 `PDF 미리보기 준비`를 누를 때 Catalog가 PDF 파생물만
+커밋한다. `GET preview.pdf`는 파일을 만들지 않고 원본 source를 다시 인가한 다음
+manifest·SHA가 일치하는 PDF만 스트리밍한다. 준비 명령은 source revision·교정 차수
+기반의 멱등키를 사용하며, 원본 HWP/HWPX를 새 Artifact로 복사하지 않는다. 이 PDF는
+내용 추출·정본 문항 승인·Graph 게시의 증거를 자동으로 부여하지 않는다. 준비되지
+않거나 원본이 바뀐 경우에는 명시적 오류로 끝나며 암묵적 최신 버전 대체는 금지한다.
+
 기존 문항 보관함의 Catalog read model을 확장해 `SOURCE_ONLY`와 `REGISTERED_ITEM`을 구분하는 판별 DTO를 사용한다. `SOURCE_ONLY`에도 목록 검색, 전체 32필드 상세, 최종/이전 교정본 파일명, 인증된 원본 다운로드, 변환 상태를 제공한다. 기존 `Item` 조회의 의미나 Graph 기반 기출 occurrence 조회를 바꾸지 않는다. 정본 승격 후에는 같은 외부 고유번호 source 기록에서 정확한 `item_id + item_revision_id`를 따라간다. 사용자에게 batch를 기본 노출하지 않는다.
 
 검색: 외부 고유번호 exact lookup, 등록 상태, 단원·분야·분류·학년·출제자·날짜·난이도 필터, 생성일/고유번호 순서의 keyset pagination. 인덱스는 실제 query plan을 보고 `namespace + U` unique, 상태/단원/분야/날짜/정렬용 B-tree를 최소로 추가한다. 한 페이지의 source/file pointer를 bulk resolve해 N+1을 피한다. 예상 규모는 우선 1,297행, 이후 수십만 문항까지 확장 가능하게 bounded page와 인덱스를 사용한다. 조회 자체는 원본 파일을 매번 복사하거나 변환하지 않는다. **5자리 U 고유번호는 사용자가 허용한 업무 메타데이터로 GUI 목록·상세·정확 검색에 표시한다. EOM 내부 source/revision/Artifact ID와 경로는 숨긴다.** 원본 메타데이터 보존을 위해 XLSX export의 원본 시트에도 U를 남긴다.

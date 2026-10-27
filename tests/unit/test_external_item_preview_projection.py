@@ -15,7 +15,10 @@ import pytest
 from eom_catalog_contracts.document_review import OfficeDocumentReviewConversionIdentity
 from eom_catalog_contracts.external_item_media import ExternalItemDocumentMediaQuery
 from eom_catalog_contracts.external_item_preview import ExternalItemPreviewManifest
-from eom_catalog_service.artifacts import VerifiedArtifactMemberStream
+from eom_catalog_service.artifacts import (
+    VerifiedArtifactMemberStream,
+    normalize_catalog_idempotency_key,
+)
 from eom_catalog_service.external_item_document_media import (
     ExternalDocumentMediaType,
     ResolvedExternalItemDocumentMedia,
@@ -257,7 +260,14 @@ def test_open_reauthorizes_original_and_reads_only_exact_committed_pdf(tmp_path:
             return revision
         return None
 
-    session = SimpleNamespace(scalar=lambda statement: job, get=get_record)
+    def find_job(statement):
+        expected = normalize_catalog_idempotency_key(
+            f"external-item-preview-v1:{query.source_revision_id}:{query.edition}"
+        )
+        assert expected in str(statement.compile(compile_kwargs={"literal_binds": True}))
+        return job
+
+    session = SimpleNamespace(scalar=find_job, get=get_record)
     service = object.__new__(ExternalItemPreviewProjectionService)
     service.settings = CatalogSettings(staging_root=tmp_path)
     service.source_media = SimpleNamespace(open=Mock(return_value=source))

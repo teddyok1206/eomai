@@ -78,6 +78,7 @@ from eom_web_gui.contracts import (
 from eom_web_gui.gateways import (
     ExternalItemDbPage,
     ExternalItemDocumentDownload,
+    ExternalItemPreviewDownload,
     GatewayError,
     GraphItemDbPage,
     HwpxDownload,
@@ -1553,6 +1554,28 @@ class FakeGateway:
             content=payload,
             content_type="application/vnd.hancom.hwp",
             content_disposition='attachment; filename="external-item-12345-3.hwp"',
+            etag='"sha256:' + hashlib.sha256(payload).hexdigest() + '"',
+        )
+
+    async def external_item_db_prepare_preview(
+        self, session: WebSession, source_id: str, source_revision_id: str, edition: int
+    ) -> str:
+        del session
+        assert source_id == "extitem_" + "1" * 32
+        assert source_revision_id == "extitemrev_" + "2" * 32
+        assert edition == 3
+        return "sha256:" + hashlib.sha256(b"%PDF-1.7\n%%EOF").hexdigest()
+
+    async def external_item_db_preview_download(
+        self, session: WebSession, source_id: str, source_revision_id: str, edition: int
+    ) -> ExternalItemPreviewDownload:
+        del session
+        assert source_id == "extitem_" + "1" * 32
+        assert source_revision_id == "extitemrev_" + "2" * 32
+        assert edition == 3
+        payload = b"%PDF-1.7\n%%EOF"
+        return ExternalItemPreviewDownload(
+            content=payload,
             etag='"sha256:' + hashlib.sha256(payload).hexdigest() + '"',
         )
 

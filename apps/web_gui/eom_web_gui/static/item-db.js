@@ -306,6 +306,36 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
           link.href = `/studio/api/v1/item-db/external-sources/${encodeURIComponent(sourceId)}`
             + `/editions/${edition.edition}/download?source_revision_id=${encodeURIComponent(detail.entry.source_revision_id)}`;
           line.append(link);
+          const preview = node(document, "a", "item-db-preview-link", "PDF 열기");
+          preview.href = `/studio/api/v1/item-db/external-sources/${encodeURIComponent(sourceId)}`
+            + `/editions/${edition.edition}/preview.pdf?source_revision_id=${encodeURIComponent(detail.entry.source_revision_id)}`;
+          preview.target = "_blank";
+          preview.rel = "noopener noreferrer";
+          preview.hidden = true;
+          const prepare = node(document, "button", "button quiet", "PDF 미리보기 준비");
+          prepare.type = "button";
+          prepare.addEventListener("click", async () => {
+            prepare.disabled = true;
+            prepare.textContent = "PDF 준비 중…";
+            try {
+              const result = await api(`/item-db/external-sources/${encodeURIComponent(sourceId)}`
+                + `/editions/${edition.edition}/preview?source_revision_id=${encodeURIComponent(detail.entry.source_revision_id)}`,
+              {method: "POST", mutation: true});
+              if (request !== sequence) return;
+              if (typeof result.sha256 !== "string" || !/^sha256:[0-9a-f]{64}$/.test(result.sha256)) {
+                throw new Error("PDF 준비 결과가 올바르지 않습니다.");
+              }
+              preview.hidden = false;
+              prepare.remove();
+              message("PDF 미리보기가 준비됐습니다. 'PDF 열기'를 누르세요.");
+            } catch (error) {
+              if (request !== sequence) return;
+              prepare.disabled = false;
+              prepare.textContent = "PDF 미리보기 준비";
+              message(`PDF를 준비하지 못했습니다: ${error.message || "다시 시도해 주세요."}`, true);
+            }
+          });
+          line.append(document.createTextNode(" · "), prepare, preview);
         } else {
           line.append(document.createTextNode(edition.filename || "파일 확인 필요"));
         }

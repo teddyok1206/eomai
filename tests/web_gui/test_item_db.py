@@ -77,6 +77,27 @@ def test_db_document_filename_link_download_proxies_original_bytes() -> None:
         assert response.headers["content-disposition"].startswith("attachment;")
 
 
+def test_db_pdf_preview_preparation_needs_csrf_and_download_is_inline() -> None:
+    client, _gateway = make_client()
+    path = (
+        "/studio/api/v1/item-db/external-sources/" + "extitem_" + "1" * 32 + "/editions/3/preview"
+    )
+    params = {"source_revision_id": "extitemrev_" + "2" * 32}
+    with client:
+        session = login(client)
+        assert client.post(path, params=params).status_code == 403
+        prepared = client.post(path, params=params, headers={"X-CSRF-Token": session["csrf_token"]})
+        pdf = client.get(path + ".pdf", params=params)
+    assert prepared.status_code == 200
+    assert prepared.json()["sha256"].startswith("sha256:")
+    assert pdf.status_code == 200
+    assert pdf.content == b"%PDF-1.7\n%%EOF"
+    assert pdf.headers["content-disposition"].startswith("inline;")
+    assert "PDF 미리보기 준비" in (ROOT / "apps/web_gui/eom_web_gui/static/item-db.js").read_text(
+        encoding="utf-8"
+    )
+
+
 def test_db_excel_export_uses_same_filter_and_csrf_boundary() -> None:
     client, _gateway = make_client()
     with client:

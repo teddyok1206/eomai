@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-external-item-preview-media-response/1.0",
+  "title": "Catalog External Item Preview Media Response V1",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "operation", "media_type", "content_length", "sha256"],
+      "properties": {
+        "status": {"const": "OK"},
+        "operation": {"const": "GET_EXTERNAL_ITEM_PREVIEW_MEDIA"},
+        "media_type": {"const": "application/pdf"},
+        "content_length": {"type": "integer", "minimum": 8, "maximum": 268435456},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "operation", "error_code"],
+      "properties": {
+        "status": {"const": "ERROR"},
+        "operation": {"const": "GET_EXTERNAL_ITEM_PREVIEW_MEDIA"},
+        "error_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"}
+      }
+    }
+  ]
+}

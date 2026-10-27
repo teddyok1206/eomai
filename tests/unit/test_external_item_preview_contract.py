@@ -5,6 +5,12 @@ from __future__ import annotations
 from copy import deepcopy
 
 import pytest
+from eom_catalog_contracts.external_item_media import (
+    ExternalItemPreviewMediaQuery,
+    ExternalItemPreviewMediaResponse,
+    ExternalItemPreviewPrepareCommand,
+    ExternalItemPreviewPrepareResponse,
+)
 from eom_catalog_contracts.external_item_preview import (
     EXTERNAL_ITEM_PREVIEW_MANIFEST_SCHEMA,
     ExternalItemPreviewManifest,
@@ -52,6 +58,53 @@ def test_preview_manifest_pins_exact_source_and_pdf() -> None:
     assert manifest.source_file_id == value["source_file_id"]
     assert "source_bytes" in value
     assert not any(key in value for key in ("source_payload", "source_path", "original_bytes"))
+
+
+def test_preview_socket_request_and_result_are_closed_variants() -> None:
+    query = ExternalItemPreviewMediaQuery(
+        source_id="extitem_" + "1" * 32,
+        source_revision_id="extitemrev_" + "2" * 32,
+        edition=3,
+    )
+    validate_contract("catalog-external-item-preview-media-request", query.model_dump(mode="json"))
+    response = ExternalItemPreviewMediaResponse(
+        status="OK",
+        media_type="application/pdf",
+        content_length=8192,
+        sha256="sha256:" + "7" * 64,
+    )
+    validate_contract(
+        "catalog-external-item-preview-media-response",
+        response.model_dump(mode="json", exclude_none=True),
+    )
+    with pytest.raises(ValidationError):
+        ExternalItemPreviewMediaResponse(
+            status="OK",
+            media_type="application/pdf",
+            content_length=8192,
+            sha256="sha256:" + "7" * 64,
+            error_code="PREVIEW_NOT_READY",
+        )
+
+
+def test_preview_prepare_is_explicit_mutation_with_closed_response() -> None:
+    command = ExternalItemPreviewPrepareCommand(
+        source_id="extitem_" + "1" * 32,
+        source_revision_id="extitemrev_" + "2" * 32,
+        edition=3,
+    )
+    validate_contract(
+        "catalog-external-item-preview-prepare-request", command.model_dump(mode="json")
+    )
+    response = ExternalItemPreviewPrepareResponse(status="OK", sha256="sha256:" + "7" * 64)
+    validate_contract(
+        "catalog-external-item-preview-prepare-response",
+        response.model_dump(mode="json", exclude_none=True),
+    )
+    with pytest.raises(ValidationError):
+        ExternalItemPreviewPrepareResponse(
+            status="OK", error_code="EXTERNAL_ITEM_PREVIEW_NOT_READY"
+        )
 
 
 def test_preview_manifest_accepts_detected_hwpx_with_hwp_source_filename() -> None:

@@ -62,6 +62,10 @@ from eom_catalog_contracts import (
     DocumentReviewTextbookEvidenceResponse,
     ExternalItemDocumentMediaQuery,
     ExternalItemDocumentMediaResponse,
+    ExternalItemPreviewMediaQuery,
+    ExternalItemPreviewMediaResponse,
+    ExternalItemPreviewPrepareCommand,
+    ExternalItemPreviewPrepareResponse,
     InspectItemRevisionHwpxEligibilityQueryV1,
     InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
@@ -154,6 +158,10 @@ from eom_catalog_service.external_item_document_media import (
     ExternalItemDocumentMediaError,
     ExternalItemDocumentMediaService,
 )
+from eom_catalog_service.external_item_preview_projection import (
+    ExternalItemPreviewProjectionService,
+    ExternalItemPreviewUnavailable,
+)
 from eom_catalog_service.inference_transfer_metadata_dispatch import dispatch_metadata_frame
 from eom_catalog_service.inference_transfer_metadata_service import (
     CatalogInferenceTransferMetadataService,
@@ -195,6 +203,7 @@ from eom_catalog_service.mock_exam_item_review_publication_service import (
     MockExamItemReviewPublicationError,
     MockExamItemReviewPublicationService,
 )
+from eom_catalog_service.office_document_converter import OfficeDocumentConversionError
 from eom_catalog_service.office_document_review_intake import (
     OfficeDocumentReviewIntakeError,
     OfficeDocumentReviewIntakeService,
@@ -654,6 +663,33 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     return
                 self._stream_external_item_document(document_request)
                 return
+            if raw_operation == "GET_EXTERNAL_ITEM_PREVIEW_MEDIA":
+                try:
+                    validate_contract("catalog-external-item-preview-media-request", value)
+                    preview_request = ExternalItemPreviewMediaQuery.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_external_item_preview_media_error(
+                        self.wfile,
+                        CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                    )
+                    return
+                self._stream_external_item_preview(preview_request)
+                return
+            if raw_operation == "PREPARE_EXTERNAL_ITEM_PREVIEW":
+                try:
+                    validate_contract("catalog-external-item-preview-prepare-request", value)
+                    preview_command = ExternalItemPreviewPrepareCommand.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_external_item_preview_prepare_response(
+                        self.wfile,
+                        ExternalItemPreviewPrepareResponse(
+                            status="ERROR",
+                            error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                        ),
+                    )
+                    return
+                self._prepare_external_item_preview(preview_command)
+                return
             if raw_operation == "GET_ITEM_COMPONENT_MEDIA":
                 try:
                     validate_contract("catalog-item-component-media-request", value)
@@ -984,6 +1020,83 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 self.wfile.write(chunk)
         finally:
             chunks.close()
+
+    def _stream_external_item_preview(self, request: ExternalItemPreviewMediaQuery) -> None:
+        service = self.server.external_item_previews
+        if service is None:
+            self.server.write_external_item_preview_media_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+            )
+            return
+        try:
+            preview = service.open(
+                ExternalItemDocumentMediaQuery(
+                    source_id=request.source_id,
+                    source_revision_id=request.source_revision_id,
+                    edition=request.edition,
+                )
+            )
+        except (ExternalItemPreviewUnavailable, ExternalItemDocumentMediaError) as exc:
+            self.server.write_external_item_preview_media_error(self.wfile, exc.code)
+            return
+        except Exception:
+            self.server.write_external_item_preview_media_error(
+                self.wfile,
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+            )
+            return
+        self.server.write_external_item_preview_media_header(
+            self.wfile,
+            ExternalItemPreviewMediaResponse(
+                status="OK",
+                media_type="application/pdf",
+                content_length=preview.member.content_length,
+                sha256=preview.member.sha256,
+            ),
+        )
+        chunks = preview.member.iter_chunks()
+        try:
+            for chunk in chunks:
+                self.wfile.write(chunk)
+        finally:
+            chunks.close()
+
+    def _prepare_external_item_preview(self, command: ExternalItemPreviewPrepareCommand) -> None:
+        service = self.server.external_item_previews
+        if service is None:
+            response = ExternalItemPreviewPrepareResponse(
+                status="ERROR",
+                error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+            )
+        else:
+            query = ExternalItemDocumentMediaQuery(
+                source_id=command.source_id,
+                source_revision_id=command.source_revision_id,
+                edition=command.edition,
+            )
+            try:
+                try:
+                    preview = service.open(query)
+                except ExternalItemPreviewUnavailable as exc:
+                    if exc.code != "EXTERNAL_ITEM_PREVIEW_NOT_READY":
+                        raise
+                    service.build(query)
+                    preview = service.open(query)
+                preview.member.stream.close()
+                response = ExternalItemPreviewPrepareResponse(
+                    status="OK", sha256=preview.manifest.pdf_sha256
+                )
+            except (ExternalItemPreviewUnavailable, ExternalItemDocumentMediaError) as exc:
+                response = ExternalItemPreviewPrepareResponse(status="ERROR", error_code=exc.code)
+            except OfficeDocumentConversionError as exc:
+                response = ExternalItemPreviewPrepareResponse(status="ERROR", error_code=exc.code)
+            except Exception:
+                response = ExternalItemPreviewPrepareResponse(
+                    status="ERROR",
+                    error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+                )
+        self.server.write_external_item_preview_prepare_response(self.wfile, response)
 
     def _stream_pdf_document_review_page(
         self,
@@ -1527,6 +1640,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         document_review_pdf_annotations: DocumentReviewPdfAnnotationService | None = None,
         document_review_evidence: DocumentReviewEvidenceService | None = None,
         external_item_documents: ExternalItemDocumentMediaService | None = None,
+        external_item_previews: ExternalItemPreviewProjectionService | None = None,
         chat_knowledge: ChatKnowledgeResolutionService | None = None,
         chat_rag: ChatRagResolutionService | None = None,
         inference_transfer_metadata: CatalogInferenceTransferMetadataService | None = None,
@@ -1558,6 +1672,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.document_review_pdf_annotations = document_review_pdf_annotations
         self.document_review_evidence = document_review_evidence
         self.external_item_documents = external_item_documents
+        self.external_item_previews = external_item_previews
         self.chat_knowledge = chat_knowledge
         self.chat_rag = chat_rag
         self.inference_transfer_metadata = inference_transfer_metadata
@@ -2071,6 +2186,35 @@ class CatalogApplicationServer(_ThreadingUnixServer):
             stream,
             ExternalItemDocumentMediaResponse(status="ERROR", error_code=error_code),
         )
+
+    @staticmethod
+    def write_external_item_preview_media_header(
+        stream: Any, value: ExternalItemPreviewMediaResponse
+    ) -> None:
+        payload = value.model_dump(mode="json", exclude_none=True)
+        validate_contract("catalog-external-item-preview-media-response", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("Catalog external Item preview header exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @classmethod
+    def write_external_item_preview_media_error(cls, stream: Any, error_code: str) -> None:
+        cls.write_external_item_preview_media_header(
+            stream,
+            ExternalItemPreviewMediaResponse(status="ERROR", error_code=error_code),
+        )
+
+    @staticmethod
+    def write_external_item_preview_prepare_response(
+        stream: Any, value: ExternalItemPreviewPrepareResponse
+    ) -> None:
+        payload = value.model_dump(mode="json", exclude_none=True)
+        validate_contract("catalog-external-item-preview-prepare-response", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("Catalog external Item preview response exceeded its fixed bound")
+        stream.write(raw + b"\n")
 
     @staticmethod
     def write_component_media_header(stream: Any, value: CatalogItemComponentMediaResponse) -> None:

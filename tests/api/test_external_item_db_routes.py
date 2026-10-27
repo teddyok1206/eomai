@@ -101,8 +101,7 @@ def test_schema_2020_12_and_pydantic_agree_on_entry() -> None:
             ROOT
             / "packages/api_contracts/eom_api_contracts/schemas"
             / "external-item-db-view-v1.schema.json"
-        )
-        .read_text(encoding="utf-8")
+        ).read_text(encoding="utf-8")
     )
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema["$defs"]["entry"]).validate(_entry().model_dump(mode="json"))
@@ -215,3 +214,45 @@ def test_original_document_download_uses_pinned_revision_and_authenticated_catal
         )
     finally:
         services.engine.dispose()
+
+
+def test_preview_prepare_and_download_require_current_source_and_intake_permission() -> None:
+    client, services, reads = _client()
+    reads.detail.return_value = SimpleNamespace(entry=_entry())
+    services.audit.append = Mock()
+    services.catalog_application.prepare_external_item_preview = Mock(
+        return_value="sha256:" + "5" * 64
+    )
+    media = SimpleNamespace(
+        media_type="application/pdf",
+        content_length=14,
+        sha256="sha256:" + "5" * 64,
+        iter_chunks=lambda: iter((b"%PDF-1.7\n%%EOF",)),
+    )
+    services.catalog_application.download_external_item_preview = Mock(return_value=media)
+    path = f"/api/v1/item-db/external-sources/{SOURCE_ID}/editions/3/preview"
+    try:
+        with client:
+            stale = client.post(path, params={"source_revision_id": "extitemrev_" + "9" * 32})
+            assert stale.status_code == 409
+            prepared = client.post(path, params={"source_revision_id": REVISION_ID})
+            pdf = client.get(path + ".pdf", params={"source_revision_id": REVISION_ID})
+        assert prepared.status_code == 200
+        assert prepared.json() == {"sha256": "sha256:" + "5" * 64}
+        assert pdf.status_code == 200
+        assert pdf.content == b"%PDF-1.7\n%%EOF"
+        assert pdf.headers["content-disposition"].startswith("inline;")
+        services.catalog_application.prepare_external_item_preview.assert_called_once_with(
+            SOURCE_ID, REVISION_ID, 3
+        )
+    finally:
+        services.engine.dispose()
+
+    denied_client, denied_services, denied_reads = _client(allow_intake=False)
+    denied_reads.detail.return_value = SimpleNamespace(entry=_entry())
+    try:
+        with denied_client:
+            denied = denied_client.post(path, params={"source_revision_id": REVISION_ID})
+        assert denied.status_code == 403
+    finally:
+        denied_services.engine.dispose()

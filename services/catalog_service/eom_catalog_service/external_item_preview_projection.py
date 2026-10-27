@@ -27,6 +27,7 @@ from eom_catalog_service.artifacts import (
     CatalogArtifact,
     CatalogArtifactService,
     VerifiedArtifactMemberStream,
+    normalize_catalog_idempotency_key,
 )
 from eom_catalog_service.external_item_document_media import (
     ExternalItemDocumentMediaService,
@@ -113,7 +114,10 @@ class ExternalItemPreviewProjectionService:
         source.member.stream.close()
         with self.sessions() as session:
             job = session.scalar(
-                select(JobRecord).where(JobRecord.idempotency_key == _idempotency_key(query))
+                select(JobRecord).where(
+                    JobRecord.idempotency_key
+                    == normalize_catalog_idempotency_key(_idempotency_key(query))
+                )
             )
             if job is None:
                 raise ExternalItemPreviewUnavailable("EXTERNAL_ITEM_PREVIEW_NOT_READY")

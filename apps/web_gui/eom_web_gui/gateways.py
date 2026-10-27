@@ -342,6 +342,12 @@ class ExternalItemDocumentDownload:
 
 
 @dataclass(frozen=True)
+class ExternalItemPreviewDownload:
+    content: bytes
+    etag: str
+
+
+@dataclass(frozen=True)
 class ItemDbExcelDownload:
     content: bytes
     etag: str
@@ -686,6 +692,14 @@ class ApplicationGateway(Protocol):
     async def external_item_db_document_download(
         self, session: WebSession, source_id: str, source_revision_id: str, edition: int
     ) -> ExternalItemDocumentDownload: ...
+
+    async def external_item_db_preview_download(
+        self, session: WebSession, source_id: str, source_revision_id: str, edition: int
+    ) -> ExternalItemPreviewDownload: ...
+
+    async def external_item_db_prepare_preview(
+        self, session: WebSession, source_id: str, source_revision_id: str, edition: int
+    ) -> str: ...
 
     async def mock_exam_assembly_policy(self, session: WebSession) -> dict[str, Any]: ...
 
@@ -1326,6 +1340,53 @@ class HttpApplicationGateway:
         ):
             raise GatewayError(status=502, code="EXTERNAL_ITEM_DOCUMENT_RESPONSE_INVALID")
         return ExternalItemDocumentDownload(response.content, content_type, disposition, etag)
+
+    async def external_item_db_preview_download(
+        self, session: WebSession, source_id: str, source_revision_id: str, edition: int
+    ) -> ExternalItemPreviewDownload:
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/item-db/external-sources/{source_id}/editions/{edition}/preview.pdf",
+            params={"source_revision_id": source_revision_id},
+            headers={"Accept": "application/pdf"},
+        )
+        content_type = response.headers.get("content-type", "").split(";", 1)[0]
+        disposition = response.headers.get("content-disposition", "")
+        declared_length = response.headers.get("content-length", "")
+        etag = response.headers.get("etag", "")
+        actual_hash = "sha256:" + hashlib.sha256(response.content).hexdigest()
+        if (
+            content_type != "application/pdf"
+            or disposition != 'inline; filename="external-item-preview.pdf"'
+            or not declared_length.isascii()
+            or not declared_length.isdecimal()
+            or int(declared_length) != len(response.content)
+            or not 8 <= len(response.content) <= 256 * 1024 * 1024
+            or not response.content.startswith(b"%PDF-")
+            or etag != f'"{actual_hash}"'
+        ):
+            raise GatewayError(status=502, code="EXTERNAL_ITEM_PREVIEW_RESPONSE_INVALID")
+        return ExternalItemPreviewDownload(response.content, etag)
+
+    async def external_item_db_prepare_preview(
+        self, session: WebSession, source_id: str, source_revision_id: str, edition: int
+    ) -> str:
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/item-db/external-sources/{source_id}/editions/{edition}/preview",
+            params={"source_revision_id": source_revision_id},
+            timeout=330.0,
+        )
+        try:
+            payload = response.json()
+            sha256 = payload["sha256"]
+        except (ValueError, KeyError, TypeError) as exc:
+            raise GatewayError(status=502, code="EXTERNAL_ITEM_PREVIEW_RESPONSE_INVALID") from exc
+        if not isinstance(sha256, str) or re.fullmatch(r"sha256:[0-9a-f]{64}", sha256) is None:
+            raise GatewayError(status=502, code="EXTERNAL_ITEM_PREVIEW_RESPONSE_INVALID")
+        return sha256
 
     async def create_operator(
         self, session: WebSession, value: StudioOperatorCreate

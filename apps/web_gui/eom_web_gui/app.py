@@ -871,6 +871,42 @@ def create_app(
             },
         )
 
+    @app.get(
+        f"{API_PREFIX}/item-db/external-sources/{{source_id}}/editions/{{edition}}/preview.pdf"
+    )
+    async def external_item_db_preview_download(
+        session: Annotated[WebSession, Depends(require_session)],
+        source_id: str = Path(pattern=r"^extitem_[0-9a-f]{32}$"),
+        edition: int = Path(ge=1, le=3),
+        source_revision_id: str = Query(pattern=r"^extitemrev_[0-9a-f]{32}$"),
+    ) -> Response:
+        value = await actual.gateway.external_item_db_preview_download(
+            session, source_id, source_revision_id, edition
+        )
+        return Response(
+            content=value.content,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": 'inline; filename="external-item-preview.pdf"',
+                "Content-Length": str(len(value.content)),
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
+                "ETag": value.etag,
+            },
+        )
+
+    @app.post(f"{API_PREFIX}/item-db/external-sources/{{source_id}}/editions/{{edition}}/preview")
+    async def external_item_db_prepare_preview(
+        session: Annotated[WebSession, Depends(require_csrf)],
+        source_id: str = Path(pattern=r"^extitem_[0-9a-f]{32}$"),
+        edition: int = Path(ge=1, le=3),
+        source_revision_id: str = Query(pattern=r"^extitemrev_[0-9a-f]{32}$"),
+    ) -> dict[str, str]:
+        sha256 = await actual.gateway.external_item_db_prepare_preview(
+            session, source_id, source_revision_id, edition
+        )
+        return {"sha256": sha256}
+
     @app.get(f"{API_PREFIX}/mock-exam-assemblies/policy")
     async def mock_exam_assembly_policy(
         session: Annotated[WebSession, Depends(require_session)],

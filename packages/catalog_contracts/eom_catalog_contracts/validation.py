@@ -1771,6 +1771,30 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:846538cb42ba3888a161be1f09fa02eb4f93f984467edc126cf7b0aee14fa559",
         ),
+        "catalog-external-item-preview-media-request": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-external-item-preview-media-request-v1.schema.json",
+            "resources/catalog-application/catalog-external-item-preview-media-request-v1.schema.json",
+            "1.0",
+            "sha256:39fb8bd634fb011686171ed0c7c9f48bbef1bea450dec3292bbbcae532cd632b",
+        ),
+        "catalog-external-item-preview-media-response": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-external-item-preview-media-response-v1.schema.json",
+            "resources/catalog-application/catalog-external-item-preview-media-response-v1.schema.json",
+            "1.0",
+            "sha256:dd66e921aa6e470bdf28a47871e29df1f7c62ce4c0b7f0db74bc142ffc47094c",
+        ),
+        "catalog-external-item-preview-prepare-request": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-external-item-preview-prepare-request-v1.schema.json",
+            "resources/catalog-application/catalog-external-item-preview-prepare-request-v1.schema.json",
+            "1.0",
+            "sha256:46318456f965c723368c4ff72fd4d6b2881bd8582f8beae7103b43b5477b1a29",
+        ),
+        "catalog-external-item-preview-prepare-response": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-external-item-preview-prepare-response-v1.schema.json",
+            "resources/catalog-application/catalog-external-item-preview-prepare-response-v1.schema.json",
+            "1.0",
+            "sha256:2d0b66f27b9f55c796edacf0f9520b355c4be3a863dcb76c9a4f3174c006545a",
+        ),
         "catalog-item-media-response": CatalogSchemaResource(
             "schemas/catalog-application/catalog-item-media-response-v1.schema.json",
             "resources/catalog-application/catalog-item-media-response-v1.schema.json",

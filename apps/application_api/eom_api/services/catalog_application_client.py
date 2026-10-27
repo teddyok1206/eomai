@@ -21,6 +21,7 @@ from eom_catalog_contracts import (
     CATALOG_ASSESSMENT_PAGE_MAX_BYTES,
     CATALOG_ITEM_MEDIA_MAX_BYTES,
     EXTERNAL_ITEM_DOCUMENT_MAX_BYTES,
+    EXTERNAL_ITEM_PREVIEW_MAX_BYTES,
     PDF_DOCUMENT_REVIEW_PAGE_MAX_BYTES,
     ApplyDocumentReviewHwpxCorrections,
     ApplyDocumentReviewHwpxCorrectionsV2,
@@ -71,6 +72,10 @@ from eom_catalog_contracts import (
     EvidenceBundlePublicationResultV4,
     ExternalItemDocumentMediaQuery,
     ExternalItemDocumentMediaResponse,
+    ExternalItemPreviewMediaQuery,
+    ExternalItemPreviewMediaResponse,
+    ExternalItemPreviewPrepareCommand,
+    ExternalItemPreviewPrepareResponse,
     InspectItemRevisionHwpxEligibilityQueryV1,
     InspectMockExamAssemblyQuery,
     InspectMockExamReviewEligibilityQuery,
@@ -126,6 +131,7 @@ EVIDENCE_RESPONSE_TIMEOUT_SECONDS = 120.0
 ASSEMBLY_RESPONSE_TIMEOUT_SECONDS = 120.0
 PDF_DOCUMENT_REVIEW_UPLOAD_TIMEOUT_SECONDS = 300.0
 PDF_DOCUMENT_REVIEW_RESPONSE_TIMEOUT_SECONDS = 1800.0
+EXTERNAL_ITEM_PREVIEW_PREPARE_TIMEOUT_SECONDS = 300.0
 
 
 @dataclass(frozen=True)
@@ -781,6 +787,93 @@ class CatalogApplicationClient:
             raise CatalogApplicationClientError(
                 CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
                 "Catalog external Item document response is unavailable",
+            ) from exc
+
+    def download_external_item_preview(
+        self, source_id: str, source_revision_id: str, edition: int
+    ) -> ProxiedItemMedia:
+        command = ExternalItemPreviewMediaQuery(
+            source_id=source_id,
+            source_revision_id=source_revision_id,
+            edition=edition,
+        )
+        payload = command.model_dump(mode="json")
+        validate_contract("catalog-external-item-preview-media-request", payload)
+        self._validate_socket()
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+            connection.connect(str(self.socket_path))
+            encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+            connection.sendall(encoded + b"\n")
+            connection.settimeout(RESPONSE_TIMEOUT_SECONDS)
+            raw = self._read_media_header(connection)
+            value: Any = json.loads(raw)
+            if not isinstance(value, dict):
+                raise ValueError("Catalog external Item preview header is not an object")
+            validate_contract("catalog-external-item-preview-media-response", value)
+            response = ExternalItemPreviewMediaResponse.model_validate(value)
+            if response.operation != command.operation:
+                raise ValueError("Catalog external Item preview operation differs")
+            if response.status == "ERROR":
+                self._raise_remote_error(response.error_code)
+            assert response.media_type == "application/pdf"
+            assert response.content_length is not None
+            assert response.sha256 is not None
+            if response.content_length > EXTERNAL_ITEM_PREVIEW_MAX_BYTES:
+                raise ValueError("Catalog external Item preview exceeds its fixed bound")
+            return ProxiedItemMedia(
+                connection=connection,
+                media_type=response.media_type,
+                content_length=response.content_length,
+                sha256=response.sha256,
+            )
+        except CatalogApplicationClientError:
+            connection.close()
+            raise
+        except (OSError, ValueError, JsonSchemaValidationError, ValidationError) as exc:
+            connection.close()
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog external Item preview response is unavailable",
+            ) from exc
+
+    def prepare_external_item_preview(
+        self, source_id: str, source_revision_id: str, edition: int
+    ) -> str:
+        command = ExternalItemPreviewPrepareCommand(
+            source_id=source_id, source_revision_id=source_revision_id, edition=edition
+        )
+        payload = command.model_dump(mode="json")
+        validate_contract("catalog-external-item-preview-prepare-request", payload)
+        self._validate_socket()
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+                connection.connect(str(self.socket_path))
+                encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+                connection.sendall(encoded + b"\n")
+                connection.settimeout(EXTERNAL_ITEM_PREVIEW_PREPARE_TIMEOUT_SECONDS)
+                raw = self._read_media_header(connection)
+                response_payload: Any = json.loads(raw)
+                if not isinstance(response_payload, dict):
+                    raise ValueError("Catalog external Item preview prepare result is invalid")
+                validate_contract(
+                    "catalog-external-item-preview-prepare-response", response_payload
+                )
+                response = ExternalItemPreviewPrepareResponse.model_validate(response_payload)
+                if response.operation != command.operation:
+                    raise ValueError("Catalog external Item preview prepare operation differs")
+                if response.status == "ERROR":
+                    self._raise_remote_error(response.error_code)
+                assert response.sha256 is not None
+                return response.sha256
+        except CatalogApplicationClientError:
+            raise
+        except (OSError, ValueError, JsonSchemaValidationError, ValidationError) as exc:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog external Item preview prepare response is unavailable",
             ) from exc
 
     def download_item_component_media(
@@ -1495,6 +1588,11 @@ class CatalogApplicationClient:
                     raise CatalogApplicationClientError(
                         error_code,
                         "Catalog Office document conversion failed",
+                    ) from None
+                if error_code.startswith("EXTERNAL_ITEM_"):
+                    raise CatalogApplicationClientError(
+                        error_code,
+                        "Catalog external Item resolution failed",
                     ) from None
                 raise CatalogApplicationClientError(
                     CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,

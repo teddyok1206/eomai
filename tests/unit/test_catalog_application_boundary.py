@@ -72,6 +72,7 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_catalog_service.application_server import CatalogApplicationServer
+from eom_catalog_service.external_item_preview_projection import ExternalItemPreviewUnavailable
 from eom_catalog_service.office_document_review_intake import OfficeDocumentReviewIntakeError
 from eom_identifiers import content_sha256
 from eom_workflow import (
@@ -798,6 +799,35 @@ class FakeExternalItemDocuments:
         )
 
 
+class FakeExternalItemPreviews:
+    def __init__(self) -> None:
+        self.ready = False
+        self.build_count = 0
+        self.payload = b"%PDF-1.7\npreview\n%%EOF"
+        self.sha256 = "sha256:" + hashlib.sha256(self.payload).hexdigest()
+
+    def open(self, request: ExternalItemDocumentMediaQuery) -> SimpleNamespace:
+        assert request.source_id == "extitem_" + "1" * 32
+        assert request.source_revision_id == "extitemrev_" + "2" * 32
+        assert request.edition == 3
+        if not self.ready:
+            raise ExternalItemPreviewUnavailable("EXTERNAL_ITEM_PREVIEW_NOT_READY")
+        return SimpleNamespace(
+            manifest=SimpleNamespace(pdf_sha256=self.sha256),
+            member=SimpleNamespace(
+                content_length=len(self.payload),
+                sha256=self.sha256,
+                stream=BytesIO(self.payload),
+                iter_chunks=lambda: iter((self.payload,)),
+            ),
+        )
+
+    def build(self, request: ExternalItemDocumentMediaQuery) -> None:
+        assert request.edition == 3
+        self.build_count += 1
+        self.ready = True
+
+
 def _server(
     tmp_path: Path,
     *,
@@ -809,6 +839,7 @@ def _server(
     pdf_intake: FakePdfDocumentReviewIntake | None = None,
     office_intake: FakeOfficeDocumentReviewIntake | None = None,
     external_documents: FakeExternalItemDocuments | None = None,
+    external_previews: FakeExternalItemPreviews | None = None,
 ) -> CatalogApplicationServer:
     runtime = tmp_path / "runtime"
     runtime.mkdir(mode=0o750)
@@ -824,6 +855,7 @@ def _server(
         pdf_document_review_intake=pdf_intake,  # type: ignore[arg-type]
         office_document_review_intake=office_intake,  # type: ignore[arg-type]
         external_item_documents=external_documents,  # type: ignore[arg-type]
+        external_item_previews=external_previews,  # type: ignore[arg-type]
         socket_path=runtime / "manager.sock",
         allowed_uid=os.getuid() if allowed_uid is None else allowed_uid,
         expected_uid=os.getuid(),
@@ -1493,6 +1525,36 @@ def test_catalog_socket_streams_pinned_external_item_document(tmp_path: Path) ->
         assert media.filename == "문항_12345.hwpx"
         assert media.media_type == "application/vnd.hancom.hwpx"
         assert b"".join(media.iter_chunks()) == b"test-hwp"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+
+def test_catalog_socket_prepares_once_then_streams_pinned_external_item_preview(
+    tmp_path: Path,
+) -> None:
+    previews = FakeExternalItemPreviews()
+    server = _server(tmp_path, external_previews=previews)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        client = _client(server)
+        with pytest.raises(CatalogApplicationClientError) as missing:
+            client.download_external_item_preview(
+                "extitem_" + "1" * 32, "extitemrev_" + "2" * 32, 3
+            )
+        assert missing.value.code == "EXTERNAL_ITEM_PREVIEW_NOT_READY"
+        for _ in range(2):
+            assert client.prepare_external_item_preview(
+                "extitem_" + "1" * 32, "extitemrev_" + "2" * 32, 3
+            ) == previews.sha256
+        assert previews.build_count == 1
+        media = client.download_external_item_preview(
+            "extitem_" + "1" * 32, "extitemrev_" + "2" * 32, 3
+        )
+        assert media.media_type == "application/pdf"
+        assert b"".join(media.iter_chunks()) == previews.payload
     finally:
         server.shutdown()
         server.server_close()

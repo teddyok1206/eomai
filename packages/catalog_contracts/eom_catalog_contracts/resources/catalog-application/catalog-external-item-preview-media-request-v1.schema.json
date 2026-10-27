@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/catalog-external-item-preview-media-request/1.0",
+  "title": "Catalog External Item Preview Media Request V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operation", "source_id", "source_revision_id", "edition"],
+  "properties": {
+    "operation": {"const": "GET_EXTERNAL_ITEM_PREVIEW_MEDIA"},
+    "source_id": {"type": "string", "pattern": "^extitem_[0-9a-f]{32}$"},
+    "source_revision_id": {"type": "string", "pattern": "^extitemrev_[0-9a-f]{32}$"},
+    "edition": {"type": "integer", "minimum": 1, "maximum": 3}
+  }
+}
