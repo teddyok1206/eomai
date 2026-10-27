@@ -15,6 +15,9 @@ from uuid import uuid4
 import pytest
 from eom_catalog_contracts.local_indexing_mixed_policy import LocalIndexingMixedAccessPolicy
 from eom_catalog_contracts.local_indexing_policy import LocalIndexingAccessPolicy
+from eom_catalog_contracts.segmented_local_indexing_policy import (
+    SegmentedLocalIndexingAccessPolicy,
+)
 from eom_catalog_service.knowledge_graph_models import (
     EducationRetrievalAccessPolicyRevisionRecord,
     KnowledgeCorpusRecord,
@@ -185,6 +188,65 @@ def test_actual_mixed_policy_publication_replay_and_exact_versioned_read(case: C
         )
         assert row.schema_version == policy.schema_version
         assert row.canonical_document == policy.model_dump(mode="json")
+
+
+def _segmented_policy(case: Case) -> SegmentedLocalIndexingAccessPolicy:
+    values = case.policy.model_dump(mode="json", exclude={"content_sha256"})
+    values.update(
+        schema_version="education-retrieval-access-policy/1.3",
+        access_policy_revision_id="accessrev_" + uuid4().hex,
+        answer_bearing_use="ACCEPTED_SOLUTION_OR_REGISTERED_REVIEW_PROJECTION_ONLY",
+        maximum_page_sources=1024,
+        maximum_population_sources=10000,
+    )
+    values.pop("maximum_sources")
+    for namespace in values["namespaces"]:
+        namespace["projection_version"] = "mixed-solution-comparison/2.0"
+        namespace["population_scope"] = "ALL_ADMITTED_GRAPH_ITEMS"
+    return SegmentedLocalIndexingAccessPolicy.model_validate(
+        values | {"content_sha256": content_sha256(values)}
+    )
+
+
+def test_actual_segmented_policy_replay_and_old_runtime_denial(case: Case) -> None:
+    """Published metadata is not a large-population runtime grant or activation."""
+    policy = _segmented_policy(case)
+    with Session(case.engine) as session, session.begin():
+        first = publish_local_indexing_access_policy(session, policy)
+    with Session(case.engine) as session, session.begin():
+        second = publish_local_indexing_access_policy(session, policy)
+    assert first.created and not second.created
+    assert first.policy_sha256 == second.policy_sha256 == policy.content_sha256
+    with Session(case.engine) as session, session.begin():
+        resolved = (
+            KnowledgeRetrievalApplicationService.resolve_segmented_local_indexing_access_policy(
+                session, policy.access_policy_revision_id, sha256=policy.content_sha256
+            )
+        )
+        assert resolved == policy
+        with pytest.raises(KnowledgeRetrievalServiceError) as caught:
+            KnowledgeRetrievalApplicationService.resolve_local_indexing_access_policy(
+                session, policy.access_policy_revision_id, sha256=policy.content_sha256
+            )
+        assert caught.value.code == "KNOWLEDGE_RETRIEVAL_POLICY_INVALID"
+        row = session.get(
+            EducationRetrievalAccessPolicyRevisionRecord, policy.access_policy_revision_id
+        )
+        assert row.canonical_document == policy.model_dump(mode="json")
+
+
+def test_actual_two_roots_publish_segmented_policy_once(case: Case) -> None:
+    policy = _segmented_policy(case)
+    barrier = Barrier(2)
+
+    def publish() -> bool:
+        with Session(case.engine) as session, session.begin():
+            barrier.wait(timeout=10)
+            return publish_local_indexing_access_policy(session, policy).created
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(lambda _index: publish(), range(2)))
+    assert sorted(results) == [False, True]
 
 
 def test_actual_conflicting_revision_never_updates_original(case: Case) -> None:

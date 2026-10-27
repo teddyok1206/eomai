@@ -57,6 +57,9 @@ from eom_catalog_contracts.local_indexing_mixed_policy import (
     SupportedLocalIndexingAccessPolicy,
     parse_supported_local_indexing_access_policy,
 )
+from eom_catalog_contracts.segmented_local_indexing_policy import (
+    SegmentedLocalIndexingAccessPolicy,
+)
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.database import build_session_factory, transaction
@@ -1275,13 +1278,13 @@ class KnowledgeRetrievalApplicationService:
         return policy
 
     @staticmethod
-    def resolve_local_indexing_access_policy(
+    def _pinned_local_indexing_policy_record(
         session: Session,
         revision_id: str,
         *,
         sha256: str,
-    ) -> SupportedLocalIndexingAccessPolicy:
-        """Exact service-only1.1/1.2; existing human1.0 readers are unchanged."""
+    ) -> EducationRetrievalAccessPolicyRevisionRecord:
+        """Shared exact metadata read, not a policy parser or service grant."""
         if (
             type(revision_id) is not str
             or re.fullmatch(r"accessrev_[0-9a-f]{32}", revision_id) is None
@@ -1302,14 +1305,27 @@ class KnowledgeRetrievalApplicationService:
             )
             .execution_options(populate_existing=True)
         )
-        if (
-            record is None
-            or record.state != "RELEASED"
-            or record.schema_version
-            not in (
-                "education-retrieval-access-policy/1.1",
-                "education-retrieval-access-policy/1.2",
+        if record is None or record.state != "RELEASED":
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_POLICY_INVALID",
+                "indexing policy is absent or unsupported",
             )
+        return record
+
+    @staticmethod
+    def resolve_local_indexing_access_policy(
+        session: Session,
+        revision_id: str,
+        *,
+        sha256: str,
+    ) -> SupportedLocalIndexingAccessPolicy:
+        """Exact service-only 1.1/1.2; never reinterpret 1.3 as bounded."""
+        record = KnowledgeRetrievalApplicationService._pinned_local_indexing_policy_record(
+            session, revision_id, sha256=sha256
+        )
+        if record.schema_version not in (
+            "education-retrieval-access-policy/1.1",
+            "education-retrieval-access-policy/1.2",
         ):
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_POLICY_INVALID",
@@ -1331,6 +1347,40 @@ class KnowledgeRetrievalApplicationService:
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_POLICY_STALE",
                 "exact indexing policy identity/hash differs",
+            )
+        return policy
+
+    @staticmethod
+    def resolve_segmented_local_indexing_access_policy(
+        session: Session,
+        revision_id: str,
+        *,
+        sha256: str,
+    ) -> SegmentedLocalIndexingAccessPolicy:
+        """Read pinned 1.3 bytes; runtime authorization remains a separate gate."""
+        record = KnowledgeRetrievalApplicationService._pinned_local_indexing_policy_record(
+            session, revision_id, sha256=sha256
+        )
+        if record.schema_version != "education-retrieval-access-policy/1.3":
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_POLICY_INVALID",
+                "segmented indexing policy is absent or unsupported",
+            )
+        try:
+            policy = SegmentedLocalIndexingAccessPolicy.model_validate(record.canonical_document)
+        except ValueError:
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_POLICY_INVALID",
+                "segmented indexing policy document is invalid",
+            ) from None
+        if (
+            policy.access_policy_revision_id != revision_id
+            or policy.content_sha256 != record.content_sha256
+            or policy.content_sha256 != sha256
+        ):
+            raise KnowledgeRetrievalServiceError(
+                "KNOWLEDGE_RETRIEVAL_POLICY_STALE",
+                "exact segmented indexing policy identity/hash differs",
             )
         return policy
 

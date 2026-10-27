@@ -30,6 +30,16 @@ frozen typed value에서 `maximum_page_sources`(최대 1,024)와
 `page × 1,024 segments`보다 클 수 없다. 기존 1.1/1.2 parser의 지원 버전
 목록에는 아직 넣지 않았다. 즉 이 값의 검증은 현재 service identity·Graph
 인가나 운영 활성화가 아니며, 구버전 `maximum_sources`의 의미를 바꾸지 않는다.
+게시 단계는 기존 Catalog owner의 append-only 정책 테이블·실제 service
+identity/source/corpus 잠금·동일 revision 재전송을 재사용한다. 새 게시 버전
+dispatcher만 1.3을 받아들이며, 기존 **runtime-supported** 1.1/1.2 parser와
+조회는 의도적으로 1.3을 거부한다. 1.3의 별도 pinned metadata resolver도
+schema/revision/hash를 다시 검증하지만 그 자체는 source 접근 권한이 아니다.
+이렇게 게시와 실행 인가를 나누는 것은 단순히 기존 `maximum_sources`를
+page cap으로 재해석하는 방식이 이전 release의 의미를 깨뜨리기 때문이다.
+격리 PostgreSQL에서는 1.3 append-only 게시·동일 요청 재전송·독립 root
+동시 게시와 구형 reader 거부를 확인했다. 아직 새 service authority,
+Graph 전체 모집단 fence 및 segmented root publication은 없다.
 
 ## 확인된 제한과 결정
 

@@ -14,6 +14,10 @@ from pydantic import ConfigDict, Field, model_validator
 
 from eom_catalog_contracts.inference_transfer_embedding import EmbeddingSpace
 from eom_catalog_contracts.inference_transfer_experiment import ExperimentViewRecipe
+from eom_catalog_contracts.local_indexing_mixed_policy import (
+    SupportedLocalIndexingAccessPolicy,
+    parse_supported_local_indexing_access_policy,
+)
 from eom_catalog_contracts.local_indexing_policy import (
     MAX_LOCAL_INDEXING_ACCESS_POLICY_BYTES,
     LocalIndexingPolicyContractError,
@@ -29,6 +33,9 @@ from eom_catalog_contracts.validation import validate_contract
 SEGMENTED_LOCAL_INDEXING_POLICY_SCHEMA = "education-retrieval-access-policy-v1.3"
 SEGMENTED_LOCAL_INDEXING_POLICY_SCHEMA_REF = (
     "eom://schemas/knowledge/education-retrieval-access-policy/1.3"
+)
+type LocalIndexingPublicationPolicy = (
+    SupportedLocalIndexingAccessPolicy | SegmentedLocalIndexingAccessPolicy
 )
 
 
@@ -110,3 +117,24 @@ def parse_segmented_local_indexing_access_policy(
         return policy
     except Exception:
         raise LocalIndexingPolicyContractError() from None
+
+
+def parse_local_indexing_publication_policy(value: object) -> LocalIndexingPublicationPolicy:
+    """Publication recognizes 1.3; existing runtime-supported dispatch does not."""
+    raw = local_indexing_policy_wire_value(value)
+    if type(raw) is not dict:
+        raise LocalIndexingPolicyContractError()
+    version = raw.get("schema_version")
+    if version in {
+        "education-retrieval-access-policy/1.1",
+        "education-retrieval-access-policy/1.2",
+    }:
+        return parse_supported_local_indexing_access_policy(raw)
+    if version == "education-retrieval-access-policy/1.3":
+        return SegmentedLocalIndexingAccessPolicy.model_validate(raw)
+    raise LocalIndexingPolicyContractError()
+
+
+def local_indexing_publication_policy_bytes(value: LocalIndexingPublicationPolicy) -> bytes:
+    checked = parse_local_indexing_publication_policy(value)
+    return canonical_json_bytes(checked.model_dump(mode="json"))

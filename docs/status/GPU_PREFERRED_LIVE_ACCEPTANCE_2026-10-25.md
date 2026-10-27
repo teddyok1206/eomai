@@ -941,3 +941,18 @@ The released 1.1/1.2 dispatch remains closed to 1.3; no policy was published,
 no Catalog runtime admitted a larger source set, and no INDEX/QUERY service
 was changed. The next work must connect actual Catalog authority and complete
 population validation before any root can be registered or queried.
+
+### 03:48 UTC — owner policy publication regression, no live policy
+
+The 1.3 candidate now uses the existing Catalog owner publication transaction:
+actual service/source/corpus locks, append-only row, same-revision replay and
+conflict checks. A separate exact pinned metadata resolver reads 1.3, while the
+installed-style 1.1/1.2 runtime reader still rejects it. Source/owner-focused
+tests passed **192**. The first disposable-PostgreSQL suite invocation was made
+before runtime-role reconciliation and failed its fixture prerequisite
+(`runtime.env` absent); no source defect was inferred. After the official
+reconcile step, the same disposable DB passed **113 + 22** integration tests,
+including synthetic 1.3 replay and concurrent one-insert publication. Its
+guarded cleanup removed the exact temporary database. No production policy,
+INDEX/QUERY selection or Graph population was changed. This remains a source
+checkpoint, not large-corpus operational acceptance.

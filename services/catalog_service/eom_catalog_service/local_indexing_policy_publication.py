@@ -8,12 +8,12 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Literal, cast
 
-from eom_catalog_contracts.local_indexing_mixed_policy import (
-    SupportedLocalIndexingAccessPolicy,
-    parse_supported_local_indexing_access_policy,
-    supported_local_indexing_access_policy_bytes,
-)
 from eom_catalog_contracts.local_indexing_policy import require_local_indexing_source_policy
+from eom_catalog_contracts.segmented_local_indexing_policy import (
+    LocalIndexingPublicationPolicy,
+    local_indexing_publication_policy_bytes,
+    parse_local_indexing_publication_policy,
+)
 from eom_identity_service import lock_current_local_indexing_service_metadata
 from eom_operator_identity import (
     LocalIndexingServiceError,
@@ -186,11 +186,11 @@ SELECT SESSION_USER AS principal, CURRENT_USER AS role_name,
 
 def publish_local_indexing_access_policy(
     session: Session,
-    policy: SupportedLocalIndexingAccessPolicy,
+    policy: LocalIndexingPublicationPolicy,
 ) -> LocalIndexingPolicyPublicationResult:
     """Same revision/hash replays; no UPDATE, implicit root, commit, activation or compute."""
-    checked = parse_supported_local_indexing_access_policy(policy)
-    expected = supported_local_indexing_access_policy_bytes(checked)
+    checked = parse_local_indexing_publication_policy(policy)
+    expected = local_indexing_publication_policy_bytes(checked)
     try:
         with _publication_root(session) as principal:
             identity = lock_current_local_indexing_service_metadata(session, checked.service)
@@ -251,8 +251,8 @@ def publish_local_indexing_access_policy(
                     record.schema_version != checked.schema_version
                     or record.state != "RELEASED"
                     or record.content_sha256 != checked.content_sha256
-                    or supported_local_indexing_access_policy_bytes(
-                        parse_supported_local_indexing_access_policy(record.canonical_document)
+                    or local_indexing_publication_policy_bytes(
+                        parse_local_indexing_publication_policy(record.canonical_document)
                     )
                     != expected
                     or type(record.created_by) is not str
