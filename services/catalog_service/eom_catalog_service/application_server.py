@@ -52,6 +52,10 @@ from eom_catalog_contracts import (
     CreatePlannedMockExamAssemblyCommand,
     CuratedDocumentAssemblyCreateCommandV1,
     CuratedDocumentAssemblyCreateResponseV1,
+    CuratedDocumentAssemblyListQueryV1,
+    CuratedDocumentAssemblyListResponseV1,
+    CuratedDocumentAssemblyReadQueryV1,
+    CuratedDocumentAssemblyReadResponseV1,
     DocumentReviewEvidenceResponse,
     DocumentReviewHwpxCorrectionMediaQuery,
     DocumentReviewHwpxCorrectionMediaResponse,
@@ -719,6 +723,37 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     return
                 self._create_curated_document_assembly(assembly_command)
                 return
+            if raw_operation == "READ_CURATED_DOCUMENT_ASSEMBLY":
+                try:
+                    validate_contract("catalog-curated-document-assembly-read-request-v1", value)
+                    assembly_query = CuratedDocumentAssemblyReadQueryV1.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_curated_document_assembly_read_response(
+                        self.wfile,
+                        CuratedDocumentAssemblyReadResponseV1(
+                            status="ERROR",
+                            error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                        ),
+                    )
+                    return
+                self._read_curated_document_assembly(assembly_query)
+                return
+            if raw_operation == "LIST_CURATED_DOCUMENT_ASSEMBLIES":
+                try:
+                    validate_contract("catalog-curated-document-assembly-list-request-v1", value)
+                    assembly_query = CuratedDocumentAssemblyListQueryV1.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_curated_document_assembly_list_response(
+                        self.wfile,
+                        CuratedDocumentAssemblyListResponseV1(
+                            status="ERROR",
+                            values=(),
+                            error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                        ),
+                    )
+                    return
+                self._list_curated_document_assemblies(assembly_query)
+                return
             if raw_operation == "GET_ITEM_COMPONENT_MEDIA":
                 try:
                     validate_contract("catalog-item-component-media-request", value)
@@ -1169,6 +1204,74 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
                 )
         self.server.write_curated_document_assembly_response(self.wfile, response)
+
+    def _read_curated_document_assembly(self, query: CuratedDocumentAssemblyReadQueryV1) -> None:
+        service = self.server.curated_document_assemblies
+        if service is None:
+            response = CuratedDocumentAssemblyReadResponseV1(
+                status="ERROR",
+                error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+            )
+        else:
+            actor = ActorContext(
+                actor_type=ActorType.OPERATOR,
+                operator_id=query.actor_id,
+                session_id=query.session_id,
+                request_id=query.request_id,
+                authentication_time=query.authentication_time,
+                permissions=frozenset(),
+                source=ActorSource.APPLICATION_API,
+            )
+            try:
+                manifest = service.read(query.assembly_id, actor=actor)
+                response = CuratedDocumentAssemblyReadResponseV1(status="OK", manifest=manifest)
+            except CuratedDocumentAssemblyError as exc:
+                response = CuratedDocumentAssemblyReadResponseV1(
+                    status="ERROR", error_code=exc.code
+                )
+            except Exception:
+                response = CuratedDocumentAssemblyReadResponseV1(
+                    status="ERROR",
+                    error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+                )
+        self.server.write_curated_document_assembly_read_response(self.wfile, response)
+
+    def _list_curated_document_assemblies(self, query: CuratedDocumentAssemblyListQueryV1) -> None:
+        service = self.server.curated_document_assemblies
+        if service is None:
+            response = CuratedDocumentAssemblyListResponseV1(
+                status="ERROR",
+                values=(),
+                error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+            )
+        else:
+            actor = ActorContext(
+                actor_type=ActorType.OPERATOR,
+                operator_id=query.actor_id,
+                session_id=query.session_id,
+                request_id=query.request_id,
+                authentication_time=query.authentication_time,
+                permissions=frozenset(),
+                source=ActorSource.APPLICATION_API,
+            )
+            try:
+                values, next_cursor = service.list_recent(
+                    actor=actor, limit=query.limit, cursor=query.cursor
+                )
+                response = CuratedDocumentAssemblyListResponseV1(
+                    status="OK", values=values, next_cursor=next_cursor
+                )
+            except CuratedDocumentAssemblyError as exc:
+                response = CuratedDocumentAssemblyListResponseV1(
+                    status="ERROR", values=(), error_code=exc.code
+                )
+            except Exception:
+                response = CuratedDocumentAssemblyListResponseV1(
+                    status="ERROR",
+                    values=(),
+                    error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+                )
+        self.server.write_curated_document_assembly_list_response(self.wfile, response)
 
     def _stream_pdf_document_review_page(
         self,
@@ -2299,6 +2402,28 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
         if len(raw) + 1 > MAX_MESSAGE_BYTES:
             raise RuntimeError("Catalog curated Assembly response exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @staticmethod
+    def write_curated_document_assembly_read_response(
+        stream: Any, value: CuratedDocumentAssemblyReadResponseV1
+    ) -> None:
+        payload = value.model_dump(mode="json", exclude_none=True)
+        validate_contract("catalog-curated-document-assembly-read-response-v1", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("Catalog curated Assembly read exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @staticmethod
+    def write_curated_document_assembly_list_response(
+        stream: Any, value: CuratedDocumentAssemblyListResponseV1
+    ) -> None:
+        payload = value.model_dump(mode="json", exclude_none=True)
+        validate_contract("catalog-curated-document-assembly-list-response-v1", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("Catalog curated Assembly list exceeded its fixed bound")
         stream.write(raw + b"\n")
 
     @staticmethod

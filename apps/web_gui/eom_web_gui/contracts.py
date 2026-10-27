@@ -1614,11 +1614,54 @@ class ExternalItemDbFilterSubmission(WebModel):
 class CuratedAssemblySaveView(WebModel):
     """Browser-facing receipt; file pointers remain in the Catalog manifest."""
 
+    assembly_id: str = Field(pattern=r"^assembly_[0-9a-f]{32}$")
     assembly_revision_id: str = Field(pattern=r"^assemblyrev_[0-9a-f]{32}$")
     selection_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     placement_count: int = Field(ge=1, le=200)
     state: Literal["INPUT_PINNED"] = "INPUT_PINNED"
+
+
+class CuratedAssemblyListEntryView(WebModel):
+    assembly_id: str = Field(pattern=r"^assembly_[0-9a-f]{32}$")
+    assembly_revision_id: str = Field(pattern=r"^assemblyrev_[0-9a-f]{32}$")
+    created_at: datetime
+    placement_count: int = Field(ge=1, le=200)
+    manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
+class CuratedAssemblyListView(WebModel):
+    values: tuple[CuratedAssemblyListEntryView, ...] = Field(max_length=50)
+    next_cursor: str | None = Field(default=None, max_length=70)
+
+
+class CuratedAssemblySourcePointerView(WebModel):
+    placement_kind: Literal["EXTERNAL_SOURCE_DOCUMENT"]
+    source_id: str = Field(pattern=r"^extitem_[0-9a-f]{32}$")
+    source_revision_id: str = Field(pattern=r"^extitemrev_[0-9a-f]{32}$")
+    observation_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    edition: Literal[2, 3]
+    source_format: Literal["HWP", "HWPX"]
+    external_number: str = Field(pattern=r"^[0-9]{5}$")
+
+
+class CuratedAssemblyItemPointerView(WebModel):
+    placement_kind: Literal["PAST_EXAM_ITEM_REVISION", "REGISTERED_ITEM_REVISION"]
+    item_id: str = Field(pattern=r"^item_[0-9a-f]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    item_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    graph_snapshot_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
+class CuratedAssemblyReadView(WebModel):
+    assembly_id: str = Field(pattern=r"^assembly_[0-9a-f]{32}$")
+    assembly_revision_id: str = Field(pattern=r"^assemblyrev_[0-9a-f]{32}$")
+    selection_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    placements: tuple[CuratedAssemblySourcePointerView | CuratedAssemblyItemPointerView, ...] = (
+        Field(min_length=1, max_length=200)
+    )
 
 
 class ItemBankEntry(WebModel):

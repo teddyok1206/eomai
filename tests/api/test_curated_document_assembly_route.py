@@ -81,7 +81,13 @@ def test_external_selection_rejects_missing_source_permission_before_catalog() -
 def test_authenticated_http_route_requires_one_retry_key_and_declares_permissions() -> None:
     services = disconnected_services()
     create = Mock(return_value=CuratedDocumentAssemblyManifestV1.model_validate(_manifest()))
-    services.catalog_application = SimpleNamespace(create_curated_document_assembly=create)
+    read = Mock(return_value=CuratedDocumentAssemblyManifestV1.model_validate(_manifest()))
+    list_recent = Mock(return_value=((), None))
+    services.catalog_application = SimpleNamespace(
+        create_curated_document_assembly=create,
+        read_curated_document_assembly=read,
+        list_curated_document_assemblies=list_recent,
+    )
     services.audit = SimpleNamespace(append=Mock())
     app = create_app(services)
 
@@ -100,13 +106,27 @@ def test_authenticated_http_route_requires_one_retry_key_and_declares_permission
                 json=payload,
                 headers={"Idempotency-Key": "curated-http-key-1"},
             )
+            reopened = client.get("/api/v1/item-db/assemblies/assembly_" + "1" * 32)
+            listed = client.get("/api/v1/item-db/assemblies")
         assert missing.status_code == 400
         assert missing.json()["error_code"] == "API_IDEMPOTENCY_REQUIRED"
         assert created.status_code == 201
         assert created.json()["data"]["assembly_revision_id"] == "assemblyrev_" + "2" * 32
+        assert reopened.status_code == 200
+        assert reopened.json()["data"]["assembly_revision_id"] == "assemblyrev_" + "2" * 32
+        assert listed.status_code == 200
+        assert listed.json()["data"] == []
         create.assert_called_once()
+        read.assert_called_once()
+        list_recent.assert_called_once()
         route = app.openapi()["paths"]["/api/v1/item-db/assemblies"]["post"]
         assert route["x-eom-permission"] == PermissionKey.DELIVERABLE_CREATE.value
+        read_route = app.openapi()["paths"]["/api/v1/item-db/assemblies/{assembly_id}"]["get"]
+        assert read_route["x-eom-permission"] == PermissionKey.ITEM_READ.value
+        assert (
+            app.openapi()["paths"]["/api/v1/item-db/assemblies"]["get"]["x-eom-permission"]
+            == PermissionKey.ITEM_READ.value
+        )
     finally:
         services.engine.dispose()
 

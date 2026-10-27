@@ -49,3 +49,36 @@ def test_save_rejects_unexpected_upstream_shape() -> None:
     with pytest.raises(GatewayError) as captured:
         asyncio.run(gateway.save_curated_assembly(None, {}, "curated-web-key-1"))
     assert captured.value.code == "ITEM_DB_ASSEMBLY_RESPONSE_INVALID"
+
+
+def test_saved_selection_list_and_reopen_hide_artifact_pointer() -> None:
+    manifest = _manifest()
+    gateway, calls = _gateway(manifest)
+
+    async def authorized(self, _session, method, path, **kwargs):
+        calls.append({"method": method, "path": path, **kwargs})
+        if path == "/api/v1/item-db/assemblies":
+            return httpx.Response(
+                200,
+                json={
+                    "data": [
+                        {
+                            "assembly_id": manifest["assembly_id"],
+                            "assembly_revision_id": manifest["assembly_revision_id"],
+                            "created_at": manifest["created_at"],
+                            "placement_count": len(manifest["placements"]),
+                            "manifest_sha256": manifest["manifest_sha256"],
+                        }
+                    ],
+                    "page": {"has_more": False, "next_cursor": None},
+                },
+            )
+        return httpx.Response(200, json={"data": manifest})
+
+    gateway._authorized = MethodType(authorized, gateway)
+    page = asyncio.run(gateway.list_curated_assemblies(None, 20, None))
+    reopened = asyncio.run(gateway.read_curated_assembly(None, manifest["assembly_id"]))
+    assert page.values[0].assembly_id == manifest["assembly_id"]
+    assert len(reopened.placements) == 3
+    assert "document_artifact" not in reopened.model_dump_json()
+    assert calls[0]["params"] == {"limit": "20"}

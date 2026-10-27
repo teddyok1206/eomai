@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/curated-document-assembly-read-response/1.0",
+  "title": "Catalog Curated Document Assembly Read Response V1",
+  "oneOf": [
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "status", "manifest"],
+      "properties": {
+        "operation": {"const": "READ_CURATED_DOCUMENT_ASSEMBLY"},
+        "status": {"const": "OK"},
+        "manifest": {"$ref": "eom://schemas/assessment-assembly/curated-document-assembly-manifest/1.0"}
+      }
+    },
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "status", "error_code"],
+      "properties": {
+        "operation": {"const": "READ_CURATED_DOCUMENT_ASSEMBLY"},
+        "status": {"const": "ERROR"},
+        "error_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"}
+      }
+    }
+  ]
+}

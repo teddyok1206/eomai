@@ -50,4 +50,8 @@ assert.equal(draft.add(item, "다시 기출"), "ADDED");
 assert.deepEqual(draft.proposal().placements.map((row) => row.position), [1, 2]);
 assert.equal(draft.move(-1, 0), false);
 assert.equal(draft.remove(5), false);
+assert.equal(draft.replace([{pointer: item, label: "기출"}, {pointer: source, label: "원본"}]), true);
+assert.deepEqual(draft.proposal().placements, [{...item, position: 1}, {...source, position: 2}]);
+assert.equal(draft.replace([{pointer: item, label: "기출"}, {pointer: item, label: "중복"}]), false);
+assert.deepEqual(draft.proposal().placements, [{...item, position: 1}, {...source, position: 2}]);
 console.log("item_db_draft=PASS");

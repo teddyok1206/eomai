@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/curated-document-assembly-list-request/1.0",
+  "title": "Catalog Curated Document Assembly List Request V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operation", "actor_id", "session_id", "request_id", "authentication_time", "limit"],
+  "properties": {
+    "operation": {"const": "LIST_CURATED_DOCUMENT_ASSEMBLIES"},
+    "actor_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+    "session_id": {"type": "string", "pattern": "^apisession_[0-9a-f]{32}$"},
+    "request_id": {"type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"},
+    "authentication_time": {"type": "string", "format": "date-time"},
+    "limit": {"type": "integer", "minimum": 1, "maximum": 50},
+    "cursor": {"type": ["string", "null"], "pattern": "^[0-9]{13,20}\\|assembly_[0-9a-f]{32}$", "maxLength": 70}
+  }
+}

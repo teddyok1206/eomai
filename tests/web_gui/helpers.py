@@ -1550,6 +1550,7 @@ class FakeGateway:
         assert draft["schema_version"] == "curated-document-assembly-draft/1.0"
         assert idempotency_key == "curated-web-key-1"
         return CuratedAssemblySaveView(
+            assembly_id="assembly_" + "1" * 32,
             assembly_revision_id="assemblyrev_" + "2" * 32,
             selection_sha256="sha256:" + "3" * 64,
             manifest_sha256="sha256:" + "4" * 64,

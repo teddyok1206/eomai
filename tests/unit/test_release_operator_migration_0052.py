@@ -267,8 +267,8 @@ def test_root_requirement_and_closed_shell_callbacks_are_not_widened(
         assert "MIGRATION_VERIFY_0052|MIGRATION_UPGRADE_0052" in source
         assert "ARBITRARY_COMMAND" not in source
     deployment = (ROOT / "scripts/api/deploy_release.sh").read_text()
-    assert 'run_release_operator MIGRATION_VERIFY_0061 "${COMMIT}"' in deployment
-    assert 'if CURRENT_MIGRATION_REVISION != "20261027_0061":' in deployment
+    assert 'run_release_operator MIGRATION_VERIFY_0062 "${COMMIT}"' in deployment
+    assert 'if CURRENT_MIGRATION_REVISION != "20261027_0062":' in deployment
     assert 'run_release_operator MIGRATION_VERIFY "${COMMIT}"' not in deployment
     historical = (ROOT / "scripts/api/migrate_release.sh").read_text()
     assert "MIGRATION_UPGRADE_0051" in historical and "MIGRATION_VERIFY_0052" not in historical

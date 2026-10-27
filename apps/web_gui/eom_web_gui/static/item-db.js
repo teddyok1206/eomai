@@ -45,6 +45,9 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
   let loaded = false;
   let lastSourceAccess = null;
   let sequence = 0;
+  let savedCursor = null;
+  let savedSequence = 0;
+  let pendingSave = null;
   const draft = createItemDbDraft();
 
   function renderDraft() {
@@ -52,6 +55,7 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
     root.replaceChildren();
     const entries = draft.entries();
     $("#item-db-draft-count").textContent = `${entries.length}개`;
+    $("#item-db-draft-save").disabled = entries.length === 0;
     $("#item-db-draft-empty").hidden = entries.length > 0;
     entries.forEach((selection, index) => {
       const line = node(document, "li", "item-db-draft-row");
@@ -93,6 +97,100 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
     }
     renderDraft();
     message("조립 순서 초안에 담았습니다. 아직 HWPX를 만들지는 않았습니다.");
+  }
+
+  async function saveDraft() {
+    const button = $("#item-db-draft-save");
+    const proposal = draft.proposal();
+    if (!proposal.placements.length) return;
+    const signature = JSON.stringify(proposal);
+    if (!pendingSave || pendingSave.signature !== signature) {
+      pendingSave = {signature, key: `studio:curated-assembly:${crypto.randomUUID()}`};
+    }
+    button.disabled = true;
+    message("조립 순서를 저장하고 있습니다.");
+    try {
+      const receipt = await api("/item-db/assemblies", {
+        method: "POST", mutation: true, body: proposal,
+        headers: {"Idempotency-Key": pendingSave.key},
+      });
+      if (!/^assembly_[0-9a-f]{32}$/.test(receipt.assembly_id)
+        || receipt.placement_count !== proposal.placements.length) {
+        throw new Error("저장 결과를 확인하지 못했습니다.");
+      }
+      message("조립 순서를 저장했습니다. 아래 목록에서 다시 열 수 있습니다.");
+      await loadSaved(true);
+    } catch (error) {
+      message(`조립 순서 저장 실패: ${error.message || "다시 시도해 주세요."}`, true);
+    } finally {
+      button.disabled = draft.entries().length === 0;
+    }
+  }
+
+  function savedLabel(placement) {
+    if (placement.placement_kind === "EXTERNAL_SOURCE_DOCUMENT") {
+      return `창작 원본 ${placement.external_number} · ${placement.edition}교 · ${placement.source_format}`;
+    }
+    return placement.placement_kind === "PAST_EXAM_ITEM_REVISION"
+      ? "기출 승인 문항" : "창작 승인 문항";
+  }
+
+  async function openSaved(assemblyId) {
+    message("저장한 조립 순서를 불러오는 중입니다.");
+    try {
+      const saved = await api(`/item-db/assemblies/${encodeURIComponent(assemblyId)}`);
+      if (saved.assembly_id !== assemblyId || !Array.isArray(saved.placements)) {
+        throw new Error("저장본이 올바르지 않습니다.");
+      }
+      const selections = saved.placements.map((placement) => {
+        const {external_number, ...pointer} = placement;
+        return {pointer, label: savedLabel(placement)};
+      });
+      if (!draft.replace(selections)) throw new Error("저장된 순서를 불러올 수 없습니다.");
+      pendingSave = null;
+      renderDraft();
+      message("저장한 조립 순서를 다시 열었습니다. 바꾼 뒤 저장하면 별도 저장본이 됩니다.");
+      $("#item-db-draft-title").scrollIntoView({block: "start"});
+    } catch (error) {
+      message(`저장본 열기 실패: ${error.message || "다시 시도해 주세요."}`, true);
+    }
+  }
+
+  async function loadSaved(reset = false) {
+    const request = ++savedSequence;
+    if (reset) {
+      savedCursor = null;
+      $("#item-db-saved-list").replaceChildren();
+    }
+    const more = $("#item-db-saved-more");
+    more.disabled = true;
+    try {
+      const params = new URLSearchParams({limit: "20"});
+      if (savedCursor) params.set("cursor", savedCursor);
+      const page = await api(`/item-db/assemblies?${params.toString()}`);
+      if (request !== savedSequence) return;
+      if (!Array.isArray(page.values)) throw new Error("저장본 목록이 올바르지 않습니다.");
+      const root = $("#item-db-saved-list");
+      for (const entry of page.values) {
+        const line = node(document, "div", "item-db-draft-row");
+        const time = new Intl.DateTimeFormat("ko-KR", {
+          timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short",
+        }).format(new Date(entry.created_at));
+        const label = node(document, "span", "", `${time} · ${entry.placement_count}문항`);
+        const open = node(document, "button", "button secondary", "다시 열기");
+        open.type = "button";
+        open.addEventListener("click", () => openSaved(entry.assembly_id));
+        line.append(label, open);
+        root.append(line);
+      }
+      if (!root.children.length) root.append(node(document, "p", "empty-state", "저장한 조립 순서가 없습니다."));
+      savedCursor = page.next_cursor;
+      more.hidden = !savedCursor;
+    } catch (error) {
+      if (request === savedSequence) message(`저장본 목록 조회 실패: ${error.message || "다시 시도해 주세요."}`, true);
+    } finally {
+      if (request === savedSequence) more.disabled = false;
+    }
   }
 
   function message(value, error = false) {
@@ -420,6 +518,9 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
       });
       $("#item-db-more").addEventListener("click", () => load(false));
       $("#item-db-export").addEventListener("click", exportRows);
+      $("#item-db-draft-save").addEventListener("click", saveDraft);
+      $("#item-db-saved-refresh").addEventListener("click", () => loadSaved(true));
+      $("#item-db-saved-more").addEventListener("click", () => loadSaved(false));
       $("#item-db-detail-close").addEventListener("click", () => {
         $("#item-db-detail-panel").hidden = true;
       });
@@ -427,6 +528,7 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
     open() {
       const changed = syncSourceAccess();
       if (changed || !loaded) load(true);
+      loadSaved(true);
     },
     setCurriculumUnits(units) {
       const select = $("#item-db-graph-unit");

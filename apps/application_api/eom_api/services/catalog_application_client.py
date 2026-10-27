@@ -58,7 +58,12 @@ from eom_catalog_contracts import (
     CreatePlannedMockExamAssemblyCommand,
     CuratedDocumentAssemblyCreateCommandV1,
     CuratedDocumentAssemblyCreateResponseV1,
+    CuratedDocumentAssemblyListEntryV1,
+    CuratedDocumentAssemblyListQueryV1,
+    CuratedDocumentAssemblyListResponseV1,
     CuratedDocumentAssemblyManifestV1,
+    CuratedDocumentAssemblyReadQueryV1,
+    CuratedDocumentAssemblyReadResponseV1,
     DocumentReviewEvidencePlan,
     DocumentReviewEvidenceResponse,
     DocumentReviewHwpxCorrectionMediaQuery,
@@ -927,6 +932,92 @@ class CatalogApplicationClient:
             raise CatalogApplicationClientError(
                 CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
                 "Catalog curated Assembly response is unavailable",
+            ) from exc
+
+    def read_curated_document_assembly(
+        self, assembly_id: str, *, actor: ActorContext
+    ) -> CuratedDocumentAssemblyManifestV1:
+        if actor.operator_id is None or actor.session_id is None:
+            raise ValueError("curated assembly requires one authenticated operator session")
+        query = CuratedDocumentAssemblyReadQueryV1(
+            actor_id=actor.operator_id,
+            session_id=actor.session_id,
+            request_id=actor.request_id,
+            authentication_time=actor.authentication_time,
+            assembly_id=assembly_id,
+        )
+        payload = query.model_dump(mode="json")
+        validate_contract("catalog-curated-document-assembly-read-request-v1", payload)
+        self._validate_socket()
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+                connection.connect(str(self.socket_path))
+                encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+                connection.sendall(encoded + b"\n")
+                connection.settimeout(EVIDENCE_RESPONSE_TIMEOUT_SECONDS)
+                response_payload: Any = json.loads(self._read_response(connection))
+                if not isinstance(response_payload, dict):
+                    raise ValueError("Catalog curated Assembly read result is invalid")
+                validate_contract(
+                    "catalog-curated-document-assembly-read-response-v1", response_payload
+                )
+                response = CuratedDocumentAssemblyReadResponseV1.model_validate(response_payload)
+                if response.operation != query.operation:
+                    raise ValueError("Catalog curated Assembly read operation differs")
+                if response.status == "ERROR":
+                    self._raise_remote_error(response.error_code)
+                assert response.manifest is not None
+                return response.manifest
+        except CatalogApplicationClientError:
+            raise
+        except (OSError, ValueError, JsonSchemaValidationError, ValidationError) as exc:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog curated Assembly read response is unavailable",
+            ) from exc
+
+    def list_curated_document_assemblies(
+        self, *, actor: ActorContext, limit: int = 20, cursor: str | None = None
+    ) -> tuple[tuple[CuratedDocumentAssemblyListEntryV1, ...], str | None]:
+        if actor.operator_id is None or actor.session_id is None:
+            raise ValueError("curated assembly requires one authenticated operator session")
+        query = CuratedDocumentAssemblyListQueryV1(
+            actor_id=actor.operator_id,
+            session_id=actor.session_id,
+            request_id=actor.request_id,
+            authentication_time=actor.authentication_time,
+            limit=limit,
+            cursor=cursor,
+        )
+        payload = query.model_dump(mode="json", exclude_none=True)
+        validate_contract("catalog-curated-document-assembly-list-request-v1", payload)
+        self._validate_socket()
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+                connection.connect(str(self.socket_path))
+                encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+                connection.sendall(encoded + b"\n")
+                connection.settimeout(EVIDENCE_RESPONSE_TIMEOUT_SECONDS)
+                response_payload: Any = json.loads(self._read_response(connection))
+                if not isinstance(response_payload, dict):
+                    raise ValueError("Catalog curated Assembly list result is invalid")
+                validate_contract(
+                    "catalog-curated-document-assembly-list-response-v1", response_payload
+                )
+                response = CuratedDocumentAssemblyListResponseV1.model_validate(response_payload)
+                if response.operation != query.operation:
+                    raise ValueError("Catalog curated Assembly list operation differs")
+                if response.status == "ERROR":
+                    self._raise_remote_error(response.error_code)
+                return response.values, response.next_cursor
+        except CatalogApplicationClientError:
+            raise
+        except (OSError, ValueError, JsonSchemaValidationError, ValidationError) as exc:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog curated Assembly list response is unavailable",
             ) from exc
 
     def download_item_component_media(

@@ -25,6 +25,12 @@ from sqlalchemy.orm import Mapped, mapped_column
 class CuratedDocumentAssemblyRecord(Base):
     __tablename__ = "curated_document_assemblies"
     __table_args__ = (
+        Index(
+            "ix_curated_document_owner_recent",
+            "created_by",
+            text("created_at DESC"),
+            text("assembly_id DESC"),
+        ),
         ForeignKeyConstraint(
             ["assembly_id", "current_revision_id"],
             [

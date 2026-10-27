@@ -72,4 +72,4 @@ def test_external_item_uniqueness_and_pinned_file_reference() -> None:
 def test_external_item_migration_remains_in_the_single_revision_chain() -> None:
     scripts = ScriptDirectory.from_config(Config("alembic.ini"))
     assert scripts.get_revision("20261027_0060") is not None
-    assert scripts.get_heads() == ["20261027_0061"]
+    assert scripts.get_heads() == ["20261027_0062"]

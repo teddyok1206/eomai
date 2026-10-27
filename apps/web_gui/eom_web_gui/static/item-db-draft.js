@@ -51,6 +51,17 @@ export function createItemDbDraft(limit = 200) {
       ordered.splice(index, 1);
       return true;
     },
+    replace(selections) {
+      if (!Array.isArray(selections) || selections.length > limit) return false;
+      const identities = new Set(selections.map(({pointer}) => key(pointer)));
+      if (identities.size !== selections.length) return false;
+      ordered.splice(0, ordered.length, ...selections.map(({pointer, label}) => ({
+        pointer: Object.freeze({...pointer}), label,
+      })));
+      keys.clear();
+      for (const identity of identities) keys.add(identity);
+      return true;
+    },
     proposal() {
       return {
         schema_version: "curated-document-assembly-draft/1.0",

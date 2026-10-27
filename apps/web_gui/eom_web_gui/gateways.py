@@ -34,7 +34,11 @@ from eom_web_gui.contracts import (
     ContentIntakeOption,
     ContentIntakeSourcePointer,
     ContentTeamMaterialRequirementV2,
+    CuratedAssemblyItemPointerView,
+    CuratedAssemblyListView,
+    CuratedAssemblyReadView,
     CuratedAssemblySaveView,
+    CuratedAssemblySourcePointerView,
     CurriculumEditorialOutline,
     CustomerSupportCaseView,
     CustomerSupportSubmission,
@@ -694,6 +698,14 @@ class ApplicationGateway(Protocol):
         self, session: WebSession, draft: dict[str, object], idempotency_key: str
     ) -> CuratedAssemblySaveView: ...
 
+    async def list_curated_assemblies(
+        self, session: WebSession, limit: int, cursor: str | None
+    ) -> CuratedAssemblyListView: ...
+
+    async def read_curated_assembly(
+        self, session: WebSession, assembly_id: str
+    ) -> CuratedAssemblyReadView: ...
+
     async def external_item_db_document_download(
         self, session: WebSession, source_id: str, source_revision_id: str, edition: int
     ) -> ExternalItemDocumentDownload: ...
@@ -1301,12 +1313,85 @@ class HttpApplicationGateway:
             raise GatewayError(status=502, code="ITEM_DB_ASSEMBLY_RESPONSE_INVALID")
         try:
             return CuratedAssemblySaveView(
+                assembly_id=value["assembly_id"],
                 assembly_revision_id=value["assembly_revision_id"],
                 selection_sha256=value["selection_sha256"],
                 manifest_sha256=value["manifest_sha256"],
                 placement_count=len(placements),
             )
         except (KeyError, ValueError) as exc:
+            raise GatewayError(status=502, code="ITEM_DB_ASSEMBLY_RESPONSE_INVALID") from exc
+
+    async def list_curated_assemblies(
+        self, session: WebSession, limit: int, cursor: str | None
+    ) -> CuratedAssemblyListView:
+        params: dict[str, str | int | float | bool | None] = {"limit": str(limit)}
+        if cursor is not None:
+            params["cursor"] = cursor
+        response = await self._authorized(
+            session, "GET", "/api/v1/item-db/assemblies", params=params
+        )
+        document = self._document(response)
+        if not isinstance(document, dict):
+            raise GatewayError(status=502, code="ITEM_DB_ASSEMBLY_RESPONSE_INVALID")
+        try:
+            data = document["data"]
+            page = document["page"]
+            if not isinstance(page, dict) or page.get("has_more") != (
+                page.get("next_cursor") is not None
+            ):
+                raise ValueError("invalid page")
+            return CuratedAssemblyListView(values=data, next_cursor=page["next_cursor"])
+        except (KeyError, ValueError, TypeError) as exc:
+            raise GatewayError(status=502, code="ITEM_DB_ASSEMBLY_RESPONSE_INVALID") from exc
+
+    async def read_curated_assembly(
+        self, session: WebSession, assembly_id: str
+    ) -> CuratedAssemblyReadView:
+        response = await self._authorized(
+            session, "GET", f"/api/v1/item-db/assemblies/{assembly_id}"
+        )
+        value = self._data(response)
+        if value.get("assembly_id") != assembly_id or not isinstance(value.get("placements"), list):
+            raise GatewayError(status=502, code="ITEM_DB_ASSEMBLY_RESPONSE_INVALID")
+        try:
+            pointers: list[CuratedAssemblySourcePointerView | CuratedAssemblyItemPointerView] = []
+            for placement in value["placements"]:
+                if not isinstance(placement, dict):
+                    raise ValueError("invalid placement")
+                names = (
+                    (
+                        "placement_kind",
+                        "source_id",
+                        "source_revision_id",
+                        "observation_sha256",
+                        "edition",
+                        "source_format",
+                        "external_number",
+                    )
+                    if placement.get("placement_kind") == "EXTERNAL_SOURCE_DOCUMENT"
+                    else (
+                        "placement_kind",
+                        "item_id",
+                        "item_revision_id",
+                        "item_manifest_sha256",
+                        "graph_snapshot_revision_id",
+                        "graph_snapshot_sha256",
+                    )
+                )
+                pointer = {name: placement[name] for name in names}
+                if placement.get("placement_kind") == "EXTERNAL_SOURCE_DOCUMENT":
+                    pointers.append(CuratedAssemblySourcePointerView.model_validate(pointer))
+                else:
+                    pointers.append(CuratedAssemblyItemPointerView.model_validate(pointer))
+            return CuratedAssemblyReadView(
+                assembly_id=value["assembly_id"],
+                assembly_revision_id=value["assembly_revision_id"],
+                selection_sha256=value["selection_sha256"],
+                manifest_sha256=value["manifest_sha256"],
+                placements=tuple(pointers),
+            )
+        except (KeyError, ValueError, TypeError) as exc:
             raise GatewayError(status=502, code="ITEM_DB_ASSEMBLY_RESPONSE_INVALID") from exc
 
     def _external_item_db_page(self, response: httpx.Response) -> ExternalItemDbPage:

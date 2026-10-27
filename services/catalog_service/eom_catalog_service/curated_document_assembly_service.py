@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import re
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from eom_catalog_contracts import (
+    CuratedDocumentAssemblyListEntryV1,
     CuratedDocumentAssemblyManifestV1,
     CuratedExternalDocumentPlacement,
     validate_contract,
@@ -17,7 +18,8 @@ from eom_identity_service.models import OperatorRecord
 from eom_identity_service.repository import effective_permissions
 from eom_operator_identity import ActorContext, ActorSource, ActorType, PermissionKey
 from eom_orchestrator.database import build_session_factory, transaction
-from sqlalchemy import Engine, select
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
+from sqlalchemy import Engine, func, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -139,6 +141,130 @@ class CuratedDocumentAssemblyService:
                 if existing is not None:
                     return self._replay(session, existing, draft, actor, request_sha256)
             raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_PERSISTENCE_CONFLICT") from exc
+
+    def read(self, assembly_id: str, *, actor: ActorContext) -> CuratedDocumentAssemblyManifestV1:
+        """Return one owned pinned selection, never an implicit latest Item/source."""
+
+        with self.sessions() as session:
+            authorized = self._authorized_actor(session, actor)
+            if PermissionKey.ITEM_READ not in authorized.permissions:
+                raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_PERMISSION_DENIED")
+            aggregate = session.get(CuratedDocumentAssemblyRecord, assembly_id)
+            if aggregate is None or aggregate.created_by != authorized.actor_id:
+                raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_NOT_FOUND")
+            revision_id = aggregate.current_revision_id
+            if revision_id is None:
+                raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_POINTER_INVALID")
+            revision = session.get(CuratedDocumentAssemblyRevisionRecord, revision_id)
+            if (
+                revision is None
+                or revision.assembly_id != assembly_id
+                or revision.created_by != authorized.actor_id
+                or revision.revision_state != "INPUT_PINNED"
+            ):
+                raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_POINTER_INVALID")
+            try:
+                value = revision.canonical_document
+                validate_contract("curated-document-assembly-manifest-v1", value)
+                manifest = CuratedDocumentAssemblyManifestV1.model_validate(value)
+            except (ValueError, TypeError, JsonSchemaValidationError) as exc:
+                raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_POINTER_INVALID") from exc
+            if (
+                manifest.assembly_id != assembly_id
+                or manifest.assembly_revision_id != revision_id
+                or manifest.created_by != authorized.actor_id
+                or manifest.created_at != revision.created_at
+                or manifest.manifest_sha256 != revision.manifest_sha256
+                or manifest.selection_sha256 != revision.selection_sha256
+                or not self._placements_match(session, manifest)
+            ):
+                raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_POINTER_INVALID")
+            if (
+                any(
+                    isinstance(row, CuratedExternalDocumentPlacement) for row in manifest.placements
+                )
+                and PermissionKey.CONTENT_INTAKE_READ not in authorized.permissions
+            ):
+                raise CuratedDocumentAssemblyError("CURATED_SOURCE_PERMISSION_DENIED")
+            return manifest
+
+    def list_recent(
+        self, *, actor: ActorContext, limit: int = 20, cursor: str | None = None
+    ) -> tuple[tuple[CuratedDocumentAssemblyListEntryV1, ...], str | None]:
+        """Keyset page over the operator's own pinned assemblies, without copying manifests."""
+
+        if not 1 <= limit <= 50:
+            raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_LIST_INVALID")
+        boundary: tuple[datetime, str] | None = None
+        if cursor is not None:
+            try:
+                micros, assembly_id = cursor.split("|", 1)
+                if (
+                    re.fullmatch(r"[0-9]{13,20}", micros) is None
+                    or re.fullmatch(r"assembly_[0-9a-f]{32}", assembly_id) is None
+                ):
+                    raise ValueError("invalid cursor")
+                boundary = (
+                    datetime(1970, 1, 1, tzinfo=UTC) + timedelta(microseconds=int(micros)),
+                    assembly_id,
+                )
+            except (ValueError, OverflowError) as exc:
+                raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_LIST_INVALID") from exc
+        with self.sessions() as session:
+            authorized = self._authorized_actor(session, actor)
+            if PermissionKey.ITEM_READ not in authorized.permissions:
+                raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_PERMISSION_DENIED")
+            aggregate = CuratedDocumentAssemblyRecord
+            revision = CuratedDocumentAssemblyRevisionRecord
+            statement = (
+                select(
+                    aggregate.assembly_id,
+                    aggregate.current_revision_id,
+                    aggregate.created_at,
+                    revision.manifest_sha256,
+                    revision.revision_state,
+                    revision.created_by,
+                    func.jsonb_array_length(revision.canonical_document["placements"]),
+                )
+                .outerjoin(revision, aggregate.current_revision_id == revision.assembly_revision_id)
+                .where(aggregate.created_by == authorized.actor_id)
+                .order_by(aggregate.created_at.desc(), aggregate.assembly_id.desc())
+                .limit(limit + 1)
+            )
+            if boundary is not None:
+                statement = statement.where(
+                    tuple_(aggregate.created_at, aggregate.assembly_id) < boundary
+                )
+            rows = session.execute(statement).all()
+            values: list[CuratedDocumentAssemblyListEntryV1] = []
+            for assembly_id, revision_id, created_at, digest, state, owner, count in rows[:limit]:
+                if (
+                    revision_id is None
+                    or digest is None
+                    or state != "INPUT_PINNED"
+                    or owner != authorized.actor_id
+                ):
+                    raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_POINTER_INVALID")
+                try:
+                    values.append(
+                        CuratedDocumentAssemblyListEntryV1(
+                            assembly_id=assembly_id,
+                            assembly_revision_id=revision_id,
+                            created_at=created_at,
+                            placement_count=count,
+                            manifest_sha256=digest,
+                        )
+                    )
+                except ValueError as exc:
+                    raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_POINTER_INVALID") from exc
+            next_cursor = None
+            if len(rows) > limit and values:
+                last = values[-1]
+                cursor_micros = (last.created_at - datetime(1970, 1, 1, tzinfo=UTC)) // timedelta(
+                    microseconds=1
+                )
+                next_cursor = f"{cursor_micros}|{last.assembly_id}"
+            return tuple(values), next_cursor
 
     @staticmethod
     def _authorized_actor(session: Session, actor: ActorContext) -> ActorContext:

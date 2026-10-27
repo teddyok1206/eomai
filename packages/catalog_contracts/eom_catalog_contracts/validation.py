@@ -52,6 +52,30 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:73c25291cf6e5d5a32c1a8326cb586757f18ef4d73594c99391e5b8c9c9d045e",
         ),
+        "catalog-curated-document-assembly-read-request-v1": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-curated-document-assembly-read-request-v1.schema.json",
+            "resources/catalog-application/catalog-curated-document-assembly-read-request-v1.schema.json",
+            "1.0",
+            "sha256:87c66631c2bc6474ec1a58f24b76d8b46764b201a75e91fc217c137d38a0d680",
+        ),
+        "catalog-curated-document-assembly-read-response-v1": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-curated-document-assembly-read-response-v1.schema.json",
+            "resources/catalog-application/catalog-curated-document-assembly-read-response-v1.schema.json",
+            "1.0",
+            "sha256:af810d88781206215dc0b200c576069f598b446488ecca5b82d54c9ee2d14d32",
+        ),
+        "catalog-curated-document-assembly-list-request-v1": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-curated-document-assembly-list-request-v1.schema.json",
+            "resources/catalog-application/catalog-curated-document-assembly-list-request-v1.schema.json",
+            "1.0",
+            "sha256:f778cac8b5a089df0dd0452615d3352e76d6259aced8e83e37888029b8f0071b",
+        ),
+        "catalog-curated-document-assembly-list-response-v1": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-curated-document-assembly-list-response-v1.schema.json",
+            "resources/catalog-application/catalog-curated-document-assembly-list-response-v1.schema.json",
+            "1.0",
+            "sha256:11fe1543f0a1e0ac7a4c45f900ed137c0b2e5fddc3f0a02d07d138f2cbef2419",
+        ),
         "curated-document-assembly-manifest-v1": CatalogSchemaResource(
             "schemas/assessment-assembly/curated-document-assembly-manifest-v1.schema.json",
             "resources/assessment-assembly/curated-document-assembly-manifest-v1.schema.json",

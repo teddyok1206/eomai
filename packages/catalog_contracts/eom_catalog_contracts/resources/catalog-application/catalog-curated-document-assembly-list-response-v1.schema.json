@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/curated-document-assembly-list-response/1.0",
+  "title": "Catalog Curated Document Assembly List Response V1",
+  "oneOf": [
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "status", "values"],
+      "properties": {
+        "operation": {"const": "LIST_CURATED_DOCUMENT_ASSEMBLIES"},
+        "status": {"const": "OK"},
+        "values": {"type": "array", "maxItems": 50, "items": {"type": "object", "additionalProperties": false, "required": ["assembly_id", "assembly_revision_id", "created_at", "placement_count", "manifest_sha256"], "properties": {"assembly_id": {"type": "string", "pattern": "^assembly_[0-9a-f]{32}$"}, "assembly_revision_id": {"type": "string", "pattern": "^assemblyrev_[0-9a-f]{32}$"}, "created_at": {"type": "string", "format": "date-time"}, "placement_count": {"type": "integer", "minimum": 1, "maximum": 200}, "manifest_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}}},
+        "next_cursor": {"type": "string", "pattern": "^[0-9]{13,20}\\|assembly_[0-9a-f]{32}$", "maxLength": 70}
+      }
+    },
+    {
+      "type": "object", "additionalProperties": false,
+      "required": ["operation", "status", "error_code"],
+      "properties": {
+        "operation": {"const": "LIST_CURATED_DOCUMENT_ASSEMBLIES"},
+        "status": {"const": "ERROR"},
+        "values": {"type": "array", "maxItems": 0},
+        "error_code": {"type": "string", "pattern": "^[A-Z][A-Z0-9_]{2,127}$"}
+      }
+    }
+  ]
+}

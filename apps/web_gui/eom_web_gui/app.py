@@ -858,6 +858,23 @@ def create_app(
         value = await actual.gateway.save_curated_assembly(session, draft, idempotency_key)
         return value.model_dump(mode="json")
 
+    @app.get(f"{API_PREFIX}/item-db/assemblies")
+    async def list_curated_assemblies(
+        session: Annotated[WebSession, Depends(require_session)],
+        limit: int = Query(default=20, ge=1, le=50),
+        cursor: str | None = Query(default=None, max_length=70),
+    ) -> dict[str, object]:
+        value = await actual.gateway.list_curated_assemblies(session, limit, cursor)
+        return value.model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/item-db/assemblies/{{assembly_id}}")
+    async def read_curated_assembly(
+        session: Annotated[WebSession, Depends(require_session)],
+        assembly_id: str = Path(pattern=r"^assembly_[0-9a-f]{32}$"),
+    ) -> dict[str, object]:
+        value = await actual.gateway.read_curated_assembly(session, assembly_id)
+        return value.model_dump(mode="json")
+
     @app.get(f"{API_PREFIX}/item-db/external-sources/{{source_id}}/editions/{{edition}}/download")
     async def external_item_db_document_download(
         session: Annotated[WebSession, Depends(require_session)],

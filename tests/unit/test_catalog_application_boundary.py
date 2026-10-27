@@ -38,6 +38,7 @@ from eom_catalog_contracts import (
     CreateKnowledgeSolutionAnalysisCommand,
     CreateMockExamAssemblyCommand,
     CreatePlannedMockExamAssemblyCommand,
+    CuratedDocumentAssemblyListEntryV1,
     CuratedDocumentAssemblyManifestV1,
     DocumentReviewTextbookEvidenceResponse,
     EvidenceBundlePublicationResult,
@@ -837,19 +838,54 @@ class FakeCuratedDocumentAssemblies:
     def __init__(self) -> None:
         self.fail = False
         self.received: list[tuple[str, str]] = []
+        self.read_received: list[tuple[str, str]] = []
+        self.list_received: list[tuple[str, int, str | None]] = []
 
-    def create(self, draft: object, *, actor: object, idempotency_key: str) -> CuratedDocumentAssemblyManifestV1:
+    def create(
+        self, draft: object, *, actor: object, idempotency_key: str
+    ) -> CuratedDocumentAssemblyManifestV1:
         assert draft == curated_draft()
-        assert getattr(actor, "permissions") == frozenset()
-        self.received.append((getattr(actor, "actor_id"), idempotency_key))
+        assert actor.permissions == frozenset()
+        self.received.append((actor.actor_id, idempotency_key))
         if self.fail:
             raise CuratedDocumentAssemblyError("CURATED_SOURCE_STALE")
         value = curated_manifest()
-        value["created_by"] = getattr(actor, "actor_id")
+        value["created_by"] = actor.actor_id
         value["manifest_sha256"] = content_sha256(
             {key: field for key, field in value.items() if key != "manifest_sha256"}
         )
         return CuratedDocumentAssemblyManifestV1.model_validate(value)
+
+    def read(self, assembly_id: str, *, actor: object) -> CuratedDocumentAssemblyManifestV1:
+        assert actor.permissions == frozenset()
+        self.read_received.append((assembly_id, actor.actor_id))
+        if self.fail:
+            raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_NOT_FOUND")
+        value = curated_manifest()
+        value["created_by"] = actor.actor_id
+        value["manifest_sha256"] = content_sha256(
+            {key: field for key, field in value.items() if key != "manifest_sha256"}
+        )
+        return CuratedDocumentAssemblyManifestV1.model_validate(value)
+
+    def list_recent(self, *, actor: object, limit: int, cursor: str | None):
+        assert actor.permissions == frozenset()
+        self.list_received.append((actor.actor_id, limit, cursor))
+        if self.fail:
+            raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_NOT_FOUND")
+        manifest = self.read("assembly_" + "1" * 32, actor=actor)
+        return (
+            (
+                CuratedDocumentAssemblyListEntryV1(
+                    assembly_id=manifest.assembly_id,
+                    assembly_revision_id=manifest.assembly_revision_id,
+                    created_at=manifest.created_at,
+                    placement_count=len(manifest.placements),
+                    manifest_sha256=manifest.manifest_sha256,
+                ),
+            ),
+            None,
+        )
 
 
 def _server(
@@ -1574,9 +1610,12 @@ def test_catalog_socket_prepares_once_then_streams_pinned_external_item_preview(
             )
         assert missing.value.code == "EXTERNAL_ITEM_PREVIEW_NOT_READY"
         for _ in range(2):
-            assert client.prepare_external_item_preview(
-                "extitem_" + "1" * 32, "extitemrev_" + "2" * 32, 3
-            ) == previews.sha256
+            assert (
+                client.prepare_external_item_preview(
+                    "extitem_" + "1" * 32, "extitemrev_" + "2" * 32, 3
+                )
+                == previews.sha256
+            )
         assert previews.build_count == 1
         media = client.download_external_item_preview(
             "extitem_" + "1" * 32, "extitemrev_" + "2" * 32, 3
@@ -1604,6 +1643,13 @@ def test_catalog_socket_pins_curated_inputs_without_accepting_caller_permissions
         )
         assert manifest.created_by == actor.actor_id
         assert assemblies.received == [(actor.actor_id, "curated-create-key-1")]
+        reopened = client.read_curated_document_assembly(manifest.assembly_id, actor=actor)
+        assert reopened == manifest
+        assert assemblies.read_received == [(manifest.assembly_id, actor.actor_id)]
+        listed, cursor = client.list_curated_document_assemblies(actor=actor)
+        assert cursor is None and len(listed) == 1
+        assert listed[0].assembly_id == manifest.assembly_id
+        assert assemblies.list_received == [(actor.actor_id, 20, None)]
 
         assemblies.fail = True
         with pytest.raises(CatalogApplicationClientError) as stale:
@@ -1611,6 +1657,9 @@ def test_catalog_socket_pins_curated_inputs_without_accepting_caller_permissions
                 curated_draft(), actor=actor, idempotency_key="curated-create-key-2"
             )
         assert stale.value.code == "CURATED_SOURCE_STALE"
+        with pytest.raises(CatalogApplicationClientError) as missing:
+            client.read_curated_document_assembly(manifest.assembly_id, actor=actor)
+        assert missing.value.code == "CURATED_ASSEMBLY_NOT_FOUND"
     finally:
         server.shutdown()
         server.server_close()

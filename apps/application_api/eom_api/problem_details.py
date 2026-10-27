@@ -182,9 +182,14 @@ def install_exception_handlers(app: FastAPI) -> None:
             "CURATED_ASSEMBLY_PERMISSION_DENIED",
             "CURATED_SOURCE_PERMISSION_DENIED",
         }
+        missing = exc.code == "CURATED_ASSEMBLY_NOT_FOUND"
+        malformed = exc.code == "CURATED_ASSEMBLY_LIST_INVALID"
+        status = (
+            503 if unavailable else 403 if denied else 404 if missing else 400 if malformed else 409
+        )
         return problem_response(
             request,
-            status=503 if unavailable else 403 if denied else 409,
+            status=status,
             error_code=str(exc.code),
             title="Catalog operation failed",
             detail="The Catalog operation could not be completed at a validated boundary.",

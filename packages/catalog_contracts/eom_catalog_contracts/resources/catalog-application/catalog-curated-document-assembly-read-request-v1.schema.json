@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/curated-document-assembly-read-request/1.0",
+  "title": "Catalog Curated Document Assembly Read Request V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["operation", "actor_id", "session_id", "request_id", "authentication_time", "assembly_id"],
+  "properties": {
+    "operation": {"const": "READ_CURATED_DOCUMENT_ASSEMBLY"},
+    "actor_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+    "session_id": {"type": "string", "pattern": "^apisession_[0-9a-f]{32}$"},
+    "request_id": {"type": "string", "minLength": 3, "maxLength": 128, "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"},
+    "authentication_time": {"type": "string", "format": "date-time"},
+    "assembly_id": {"type": "string", "pattern": "^assembly_[0-9a-f]{32}$"}
+  }
+}

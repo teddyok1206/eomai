@@ -160,6 +160,11 @@ from eom_catalog_contracts.curated_document_assembly import (
 from eom_catalog_contracts.curated_document_assembly_application import (
     CuratedDocumentAssemblyCreateCommandV1,
     CuratedDocumentAssemblyCreateResponseV1,
+    CuratedDocumentAssemblyListEntryV1,
+    CuratedDocumentAssemblyListQueryV1,
+    CuratedDocumentAssemblyListResponseV1,
+    CuratedDocumentAssemblyReadQueryV1,
+    CuratedDocumentAssemblyReadResponseV1,
 )
 from eom_catalog_contracts.curriculum import (
     INTEGRATED_SCIENCE_EDITORIAL_OUTLINE_KEY,
@@ -1447,7 +1452,12 @@ __all__ = [
     "CudaHostNvmlLibraryMember",
     "CuratedDocumentAssemblyCreateCommandV1",
     "CuratedDocumentAssemblyCreateResponseV1",
+    "CuratedDocumentAssemblyListEntryV1",
+    "CuratedDocumentAssemblyListQueryV1",
+    "CuratedDocumentAssemblyListResponseV1",
     "CuratedDocumentAssemblyManifestV1",
+    "CuratedDocumentAssemblyReadQueryV1",
+    "CuratedDocumentAssemblyReadResponseV1",
     "CuratedExternalDocumentPlacement",
     "CuratedPastExamItemPlacement",
     "CuratedRegisteredItemPlacement",
