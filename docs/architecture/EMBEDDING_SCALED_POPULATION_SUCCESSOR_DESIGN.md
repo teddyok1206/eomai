@@ -8,6 +8,12 @@
 중복·자체 hash 검증을 추가했다. 이것은 **포인터 형식**뿐이다. 실제 segment의
 source 수·범위·input hash 및 전체 자료집 완결성은 아직 Catalog가 검증하지
 않으므로 새 root를 등록하거나 QUERY에 선택할 수 없다.
+미출시 후보 root에는 전체 적격 source 수 `source_count`와 Graph·정책에 고정된
+source/analysis-run 선택 요약 `source_selection_sha256`도 넣는다. 게시 소유자는
+같은 권한·snapshot에서 재조회한 `SegmentedSourceSelection`의 수와 hash를
+대조해야 한다. root의 자기 hash만으로 현재 전체 모집단이 입증되는 것은 아니다.
+이 필드 추가 후 계약·정책·device-pair 집중 테스트 68개와 Ruff/strict mypy가
+통과했다. 미출시 후보의 소스 검증이며 운영 활성화 증거는 아니다.
 계약·기존 device-pair 집중 테스트는 77 PASS, Ruff/strict mypy PASS다. 소스
 wheel에는 새 typed module과 schema resource가 포함됨을 확인했다. 이 증거는
 Catalog publication, 전체 자료집 인가, 운영 설치 또는 1,025건 처리 성공이 아니다.
@@ -111,8 +117,11 @@ provenance를 마지막으로 재확인한다. 집중 테스트 29개가 통과�
    binding을 가진다. 기존 V1/V2 단일 manifest는 변경하지 않는다.
 4. **포인터:** segment마다 schema/media/lifecycle/hash와 정확한 source/profile/
    input-text hash를 검증한다. root는 segment hash·범위·순서·중복 없음·전체 집합
-   fingerprint를 검증한다. CPU/CUDA 동등성은 같은 source/profile/input hash 집합을
-   각 device의 실제 binding에 대조하며 단순 건수 일치로 인정하지 않는다.
+   fingerprint를 검증한다. `source_count`와 `source_selection_sha256`는
+   segment binding 수와 별개의 전체 적격 source pin이며, Catalog가 실제
+   source-first scan 결과와 대조해야 한다. CPU/CUDA 동등성은 같은
+   source/profile/input hash 집합을 각 device의 실제 binding에 대조하며
+   단순 건수 일치로 인정하지 않는다.
 5. **접근:** 자주 하는 작업은 `(Graph revision, source revision)` 순서의 bounded
    keyset scan, source별 binding 조회, 변경된 segment 교체, root별 ordered iteration,
    장치별 같은 source의 exact pair 조회다. 현재

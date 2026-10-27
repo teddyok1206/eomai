@@ -28,6 +28,11 @@ from tests.unit.inference_transfer_embedding_fixtures import (
 )
 from tests.unit.inference_transfer_fixtures import NOW
 
+SegmentedCase = tuple[
+    SegmentedEmbeddingIndexRoot,
+    tuple[tuple[ArtifactMemberPointer, EmbeddingIndexManifest], ...],
+]
+
 
 def _reseal_root(body: dict[str, Any]) -> dict[str, Any]:
     body["target_set_sha256"] = content_sha256(
@@ -45,10 +50,7 @@ def _reseal_root(body: dict[str, Any]) -> dict[str, Any]:
 
 
 @pytest.fixture(scope="module")
-def case() -> tuple[
-    SegmentedEmbeddingIndexRoot,
-    tuple[tuple[ArtifactMemberPointer, EmbeddingIndexManifest], ...],
-]:
+def case() -> SegmentedCase:
     base = source_binding(embedding_entry("a", source_class="APPROVED_ITEM"))
     bindings = []
     for ordinal in range(1025):
@@ -90,6 +92,10 @@ def case() -> tuple[
         "view": first.view,
         "recipe": first.recipe.model_dump(mode="json"),
         "segments": segments,
+        "source_count": 1025,
+        "source_selection_sha256": content_sha256(
+            [binding.source.item_revision_id for binding in bindings]
+        ),
         "binding_count": 1025,
         "target_set_sha256": "",
         "created_at": NOW.isoformat().replace("+00:00", "Z"),
@@ -97,13 +103,13 @@ def case() -> tuple[
     return SegmentedEmbeddingIndexRoot.model_validate(_reseal_root(body)), resolved
 
 
-def test_exact_large_segment_content_closes_without_vector_copy(case) -> None:
+def test_exact_large_segment_content_closes_without_vector_copy(case: SegmentedCase) -> None:
     root, resolved = case
     assert validate_segmented_embedding_index_content(root, resolved) == root
     assert root.binding_count == 1025
 
 
-def test_typed_descriptor_cannot_fake_a_segment_count(case) -> None:
+def test_typed_descriptor_cannot_fake_a_segment_count(case: SegmentedCase) -> None:
     root, resolved = case
     body = root.model_dump(mode="json")
     body["segments"][0]["binding_count"] = 1023
@@ -113,7 +119,7 @@ def test_typed_descriptor_cannot_fake_a_segment_count(case) -> None:
         validate_segmented_embedding_index_content(forged, resolved)
 
 
-def test_modified_member_or_policy_is_not_a_compatible_segment(case) -> None:
+def test_modified_member_or_policy_is_not_a_compatible_segment(case: SegmentedCase) -> None:
     root, resolved = case
     changed = resolved[1][0].model_copy(update={"sha256": "sha256:" + "0" * 64})
     with pytest.raises(SegmentedEmbeddingIndexError):

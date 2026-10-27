@@ -67,6 +67,8 @@ def _root_body() -> dict[str, Any]:
         "view": "METADATA_ONLY",
         "recipe": indexes[0].recipe.model_dump(mode="json"),
         "segments": segments,
+        "source_count": 1025,
+        "source_selection_sha256": content_sha256({"synthetic_population": True}),
         "binding_count": 1025,
         "target_set_sha256": content_sha256(
             [
@@ -107,6 +109,7 @@ def test_segmented_root_preserves_ordered_pointers_and_immutable_hash() -> None:
     body = _root_body()
     root = SegmentedEmbeddingIndexRoot.model_validate(body)
     assert root.binding_count == 1025
+    assert root.source_count == 1025
     assert len(root.segments) == 2
     assert root.root_sha256 == body["root_sha256"]
     assert root.model_dump(mode="json") == body
@@ -114,7 +117,17 @@ def test_segmented_root_preserves_ordered_pointers_and_immutable_hash() -> None:
 
 @pytest.mark.parametrize(
     "fault",
-    ["order", "overlap", "duplicate", "count", "segment_hash", "root_hash", "media", "version"],
+    [
+        "order",
+        "overlap",
+        "duplicate",
+        "count",
+        "source_count",
+        "segment_hash",
+        "root_hash",
+        "media",
+        "version",
+    ],
 )
 def test_segmented_root_refuses_incomplete_or_drifting_descriptors(fault: str) -> None:
     body = _root_body()
@@ -128,6 +141,8 @@ def test_segmented_root_refuses_incomplete_or_drifting_descriptors(fault: str) -
         body["segments"][1]["index_manifest"] = body["segments"][0]["index_manifest"]
     elif fault == "count":
         body["binding_count"] = 1026
+    elif fault == "source_count":
+        body["source_count"] = 1024
     elif fault == "segment_hash":
         body["segments"][1]["target_set_sha256"] = "sha256:" + "0" * 64
     elif fault == "root_hash":
@@ -162,5 +177,14 @@ def test_self_consistent_segment_descriptor_is_not_an_artifact_coverage_proof() 
     # A pure pointer contract cannot inspect the referred-to index. Catalog must
     # reopen each manifest and compare the real source/input identities at commit.
     assert SegmentedEmbeddingIndexRoot.model_validate(body).segments[1].target_set_sha256 == (
+        "sha256:" + "0" * 64
+    )
+
+
+def test_self_consistent_source_selection_is_not_current_population_proof() -> None:
+    body = _root_body()
+    body["source_selection_sha256"] = "sha256:" + "0" * 64
+    _reseal(body)
+    assert SegmentedEmbeddingIndexRoot.model_validate(body).source_selection_sha256 == (
         "sha256:" + "0" * 64
     )

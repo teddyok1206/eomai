@@ -4,7 +4,7 @@
   "title": "Immutable bounded segment pointers for an embedding population larger than one index",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "index_id", "index_revision_id", "previous_root", "corpus_id", "graph_snapshot", "policy_revision_id", "policy_sha256", "storage_partition", "space", "view", "recipe", "segments", "binding_count", "target_set_sha256", "created_at", "root_sha256"],
+  "required": ["schema_version", "index_id", "index_revision_id", "previous_root", "corpus_id", "graph_snapshot", "policy_revision_id", "policy_sha256", "storage_partition", "space", "view", "recipe", "segments", "source_count", "source_selection_sha256", "binding_count", "target_set_sha256", "created_at", "root_sha256"],
   "properties": {
     "schema_version": {"const": "segmented-embedding-index/1.0"},
     "index_id": {"type": "string", "pattern": "^embeddingindex_[0-9a-f]{32}$"},
@@ -19,6 +19,8 @@
     "view": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/view"},
     "recipe": {"$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/recipe"},
     "segments": {"type": "array", "minItems": 2, "maxItems": 1024, "items": {"$ref": "#/$defs/segment"}},
+    "source_count": {"type": "integer", "minimum": 1025, "maximum": 1048576},
+    "source_selection_sha256": {"$ref": "#/$defs/hash"},
     "binding_count": {"type": "integer", "minimum": 1025, "maximum": 1048576},
     "target_set_sha256": {"$ref": "#/$defs/hash"},
     "created_at": {"type": "string", "format": "date-time", "pattern": "Z$|\\+00:00$"},

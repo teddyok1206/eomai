@@ -78,6 +78,8 @@ class SegmentedEmbeddingIndexRoot(FrozenModel):
     segments: tuple[SegmentedEmbeddingIndexSegment, ...] = Field(
         min_length=2, max_length=MAX_SEGMENTS
     )
+    source_count: int = Field(strict=True, ge=MAX_SEGMENT_BINDINGS + 1, le=MAX_SEGMENTED_BINDINGS)
+    source_selection_sha256: Sha256
     binding_count: int = Field(strict=True, ge=MAX_SEGMENT_BINDINGS + 1, le=MAX_SEGMENTED_BINDINGS)
     target_set_sha256: Sha256
     created_at: UtcDatetime
@@ -102,7 +104,10 @@ class SegmentedEmbeddingIndexRoot(FrozenModel):
                 raise ValueError("segmented index predecessor pointer differs")
         if self.space.purpose != "DOCUMENT":
             raise ValueError("segmented index namespace differs")
-        if sum(segment.binding_count for segment in self.segments) != self.binding_count:
+        if (
+            sum(segment.binding_count for segment in self.segments) != self.binding_count
+            or self.binding_count > self.source_count
+        ):
             raise ValueError("segmented index binding count differs")
         if any(
             left.last_source_revision_id >= right.first_source_revision_id
