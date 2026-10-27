@@ -35,7 +35,9 @@
 
 제안의 `content_region_map`은 형식상 그럴듯한 경로만 허용하지 않는다. 실제 `AssessmentItemContent` 안에서 경로를 해석하고 제목, 모든 본문 블록, 상호작용, 정답, 해설, 점수의 필수 출처 매핑을 확인한다. 문항 본문·선지는 `TARGET_ITEM`에만, 해설은 `TARGET_ITEM` 또는 `EDITORIAL_SOLUTION`에만 연결할 수 있다. `REFERENCE_ORIGINAL`은 어느 정본 요소나 풀이 단계의 근거로도 허용하지 않는다. 작업자가 일부 근거를 못 읽었으면 없는 내용으로 보충하지 않고 `NEEDS_DECISION`을 반환한다.
 
-Codex 슬롯 입력에는 PDF 경로만 주지 않는다. `external-item-learning-page-set/1.0`은 정확한 preview Artifact Revision·PDF SHA, 고정된 `pdfinfo`/`pdftoppm` 바이너리 해시, 2400px 렌더 프로필, 순서가 연속된 각 페이지 PNG의 멤버/해시/크기를 기록한다. Orchestrator가 이 PDF를 허가·해시 검증 후 로컬에서 렌더하고 검증된 PNG+manifest만 Artifact로 commit하며, worker에게는 읽기 전용 로컬 staging 사본만 전달한다. PDF 자체는 preview Artifact를 계속 참조하고 페이지 세트에 복제하지 않는다. 이 파생 페이지 세트가 준비되지 않았거나 PDF identity와 다르면 worker claim 전 중단한다. 페이지 세트는 그래프 출처나 정본 Item이 아니라 시각 분석 입력이다.
+Codex 슬롯 입력에는 PDF 경로만 주지 않는다. `external-item-learning-page-set/1.0`은 정확한 preview Artifact Revision·PDF SHA, 고정된 `pdfinfo`/`pdftoppm` 바이너리 해시, 2400px 렌더 프로필, 순서가 연속된 각 페이지 PNG의 멤버/해시/크기를 기록한다. Orchestrator는 PDF를 허가·해시 검증한 뒤 기존 `eom-image`의 시스템 격리 경계에서 입력을 `pdfinfo` 1회와 전체 페이지 `pdftoppm` 1회에만 전달한다. 단일 Poppler 출력의 PNG 경계·CRC·페이지 수·크기를 확인해 로컬에 단계별로 놓고, 검증된 PNG+manifest만 Artifact로 commit한다. worker에게는 읽기 전용 로컬 staging 사본만 전달한다. PDF 자체는 preview Artifact를 계속 참조하고 페이지 세트에 복제하지 않는다. 이 파생 페이지 세트가 준비되지 않았거나 PDF identity와 다르면 worker claim 전 중단한다. 페이지 세트는 그래프 출처나 정본 Item이 아니라 시각 분석 입력이다. 운영 계정에서 PDF를 직접 해석하거나 페이지마다 원본 PDF를 반복 전달하는 경로는 사용하지 않는다.
+
+현재 구현은 페이지 세트 스키마·검증 모델과 Orchestrator의 **격리 렌더 어댑터**까지다. Artifact publisher, 정확한 Catalog PDF resolution, Workflow/slot admission은 아직 연결되지 않았으므로 이 단계의 소스 테스트만으로 운영 창작 분석이 가능하다고 표시하지 않는다. 개발 셸 계정에는 새 systemd transient unit 생성 권한이 없어 격리 runner의 실제 운영 실행 검증도 별도 운영 경계에서 필요하다.
 
 ## 필수 설계 절차
 
