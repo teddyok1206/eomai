@@ -266,6 +266,7 @@ def test_segmented_page_capture_reuses_profile_artifact_owner_and_checks_exact_p
 
     adapter._capture_population = Mock(side_effect=capture)
     reader = Mock()
+    reader.provenance_identities.return_value = ()
     actual_page, result = adapter.capture_segmented_indexing_page_in_session(
         owner.session, owner.intent, authority=owner.authority, artifact_reader=reader
     )
@@ -273,7 +274,16 @@ def test_segmented_page_capture_reuses_profile_artifact_owner_and_checks_exact_p
     assert result == LocalIndexingSessionCapture(result.scope, corpus, ())
     assert read_page.call_count == 2
     reader.require_session.assert_called_once_with(owner.session)
+    reader.revalidate_provenance.assert_called_once_with()
     adapter.sources.retrieval.admit_local_indexing_candidate_pool.assert_not_called()
+
+    reader.provenance_identities.return_value = (("artifact_" + "1" * 32, "rev_" + "1" * 32),)
+    with pytest.raises(SegmentedPopulationReadError, match="CONTEXT_INVALID"):
+        adapter.capture_segmented_indexing_page_in_session(
+            owner.session, owner.intent, authority=owner.authority, artifact_reader=reader
+        )
+    assert read_page.call_count == 2
+    reader.provenance_identities.return_value = ()
 
     adapter._capture_population = Mock(
         return_value=(AdmittedInferenceTransferCorpus((), (), False, 0, ()), ())

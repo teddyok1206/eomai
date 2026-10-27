@@ -387,6 +387,10 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
         if intent.analysis_run_ids or intent.source_revision_ids:
             raise SegmentedPopulationReadError("SEGMENTED_POPULATION_READ_CONTEXT_INVALID")
         artifact_reader.require_session(session)
+        # One page must not inherit the previous page's bounded Artifact cache.
+        # The DB root stays fixed, while each page gets its own reader lifetime.
+        if artifact_reader.provenance_identities():
+            raise SegmentedPopulationReadError("SEGMENTED_POPULATION_READ_CONTEXT_INVALID")
         policy, page = read_segmented_candidate_source_page(
             session,
             intent,
@@ -425,6 +429,7 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
         )
         if (final_policy, final_page) != (policy, page):
             raise SegmentedPopulationReadError("SEGMENTED_POPULATION_READ_UNAVAILABLE")
+        artifact_reader.revalidate_provenance()
         return page, LocalIndexingSessionCapture(page_intent, corpus, entries)
 
     def _capture_population(

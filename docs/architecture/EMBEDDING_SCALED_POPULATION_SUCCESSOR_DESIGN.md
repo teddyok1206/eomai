@@ -61,6 +61,34 @@ Artifact 입력을 읽고, 반환된 source/run 쌍이 페이지와 정확히 �
 O(page) 작업 메모리만 쓰며, 아직 전체 root의 모든 page/profile/input-text
 closure나 운영 publication을 허용하지 않는다.
 
+### 페이지별 Artifact 검증기의 수명
+
+현재 `PinnedArtifactReadContext.for_session`은 한 root transaction에서 같은
+검증기를 재사용하며 revision 4,096개, member 8,192개와 보유·디코딩 bytes의
+별도 상한을 둔다. 1,024건짜리 페이지들을 그대로 같은 검증기에 계속 넣으면
+10,000건 순회 전에 이 상한에 걸릴 수 있다. 따라서 후속 전체 모집단 처리기는
+**DB의 동일한 REPEATABLE READ root는 유지하되**, Artifact 검증기는 한
+page 또는 더 작은 명시적 chunk마다 새로 열어야 한다. 각 chunk의 실제
+member/lifecycle/hash와 `revalidate_provenance`가 끝나기 전에는 그 chunk의
+source/profile/input fingerprint를 root 요약에 편입하지 않는다. 이전
+검증기를 지운 뒤 그 권한을 캐시하거나 다음 page의 권한으로 재사용하지 않는다.
+
+정책의 `maximum_page_sources`는 source 행 수 상한일 뿐 Artifact 수·bytes
+상한을 대체하지 않는다. 한 page가 검증기 예산을 넘으면 부분 성공으로
+게시하거나 같은 request를 몰래 더 작은 page로 재해석하지 않고 명시적으로
+실패한다. 필요한 경우 새 정책 revision에서 더 작은 page 크기를 고정하고
+전체 segment 상한과 함께 다시 계획한다. 1,048,576건은 schema의 이론적
+상한이지 모든 자료형에서 달성했다고 주장할 수 있는 처리량이 아니다.
+10,000건 이상을 대상으로 page/chunk 사이 최대 보유 revision·bytes가
+bounded인지, 누락·중복 없는 요약과 마지막 권한 재확인이 성립하는지를
+격리 PostgreSQL에서 검증한 뒤에만 root publication을 연결한다.
+
+현재 페이지 capture는 비어 있지 않은 이전 페이지의 Artifact 검증기를
+재사용하려는 호출을 거부하고, 정확한 페이지 재조회 후 사용한 검증기의
+provenance를 마지막으로 재확인한다. 집중 테스트 29개가 통과했다. 새
+검증기를 페이지마다 공급하고 전체 profile/input-text closure를 만들
+상위 처리기와 10,000건 실제 Artifact 예산 검증은 아직 남아 있다.
+
 ## 확인된 제한과 결정
 
 현재 `EmbeddingRegistryLookup.maximum_sources`, 자료 접근 정책, Catalog의
