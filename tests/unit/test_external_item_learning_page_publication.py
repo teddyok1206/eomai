@@ -6,7 +6,10 @@ import shutil
 from pathlib import Path
 
 import pytest
+from eom_catalog_contracts.external_item_learning_work import ExternalItemLearningWorkInput
+from eom_identifiers import content_sha256
 from eom_orchestrator.external_item_learning_page_publication import (
+    external_item_learning_page_artifact,
     publish_external_item_learning_pages,
 )
 from eom_orchestrator.external_item_learning_page_render import (
@@ -96,6 +99,19 @@ def test_real_publisher_commits_once_without_copying_source_pdf_to_artifact(
     first = publish_external_item_learning_pages(publisher, rendered, source_commit="a" * 40)
     replayed = publish_external_item_learning_pages(publisher, rendered, source_commit="a" * 40)
     assert replayed == first
+    pointer = external_item_learning_page_artifact(first)
+    assert pointer.artifact_id == first.artifact_id
+    assert pointer.sha256 == first.primary_sha256
+    assert pointer.file_set_manifest_sha256 == first.manifest_sha256
+    work: dict[str, object] = {
+        "schema_version": "external-item-learning-work-input/1.0",
+        "request_id": "extlearnreq_" + "f" * 32,
+        "source": _source_for_pdf(_pdf()).model_dump(mode="json"),
+        "page_set": rendered.manifest.model_dump(mode="json"),
+        "page_artifact": pointer.model_dump(mode="json"),
+    }
+    work["request_sha256"] = content_sha256(work)
+    assert ExternalItemLearningWorkInput.model_validate(work).source.external_number == "12345"
     artifact_root = Path(first.nas_path)
     assert (artifact_root / "page-set-manifest.json").read_bytes() == (
         rendered.manifest_path.read_bytes()

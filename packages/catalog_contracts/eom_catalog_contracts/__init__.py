@@ -491,6 +491,12 @@ from eom_catalog_contracts.external_item_learning_source import (
     EXTERNAL_ITEM_LEARNING_SOURCE_SCHEMA_REF,
     ExternalItemLearningSource,
 )
+from eom_catalog_contracts.external_item_learning_work import (
+    EXTERNAL_ITEM_LEARNING_WORK_INPUT_SCHEMA,
+    EXTERNAL_ITEM_LEARNING_WORK_INPUT_SCHEMA_REF,
+    ExternalItemLearningPageArtifact,
+    ExternalItemLearningWorkInput,
+)
 from eom_catalog_contracts.external_item_media import (
     EXTERNAL_ITEM_DOCUMENT_MAX_BYTES,
     EXTERNAL_ITEM_PREVIEW_MAX_BYTES,
@@ -1183,6 +1189,8 @@ __all__ = [
     "EXTERNAL_ITEM_LEARNING_RESULT_SCHEMA_REF",
     "EXTERNAL_ITEM_LEARNING_SOURCE_SCHEMA",
     "EXTERNAL_ITEM_LEARNING_SOURCE_SCHEMA_REF",
+    "EXTERNAL_ITEM_LEARNING_WORK_INPUT_SCHEMA",
+    "EXTERNAL_ITEM_LEARNING_WORK_INPUT_SCHEMA_REF",
     "EXTERNAL_ITEM_PREVIEW_MAX_BYTES",
     "EXTERNAL_ITEM_ROW_OBSERVATION_SCHEMA",
     "EXTERNAL_ITEM_ROW_OBSERVATION_SCHEMA_REF",
@@ -1546,12 +1554,14 @@ __all__ = [
     "ExternalItemImportRow",
     "ExternalItemLearningConflict",
     "ExternalItemLearningPage",
+    "ExternalItemLearningPageArtifact",
     "ExternalItemLearningPageRenderer",
     "ExternalItemLearningPageSet",
     "ExternalItemLearningProposal",
     "ExternalItemLearningRegion",
     "ExternalItemLearningResult",
     "ExternalItemLearningSource",
+    "ExternalItemLearningWorkInput",
     "ExternalItemPreviewMediaQuery",
     "ExternalItemPreviewMediaResponse",
     "ExternalItemPreviewPrepareCommand",

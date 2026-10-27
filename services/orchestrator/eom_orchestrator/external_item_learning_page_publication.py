@@ -10,6 +10,7 @@ from eom_catalog_contracts.external_item_learning_pages import (
     EXTERNAL_ITEM_LEARNING_PAGE_SET_SCHEMA,
     EXTERNAL_ITEM_LEARNING_PAGE_SET_SCHEMA_REF,
 )
+from eom_catalog_contracts.external_item_learning_work import ExternalItemLearningPageArtifact
 from eom_catalog_contracts.validation import validate_contract
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 
@@ -35,6 +36,21 @@ class CreativePageSetPublisher(Protocol):
         idempotency_key: str,
         source_commit: str,
     ) -> PublishedControlFileSet: ...
+
+
+def external_item_learning_page_artifact(
+    receipt: PublishedControlFileSet,
+) -> ExternalItemLearningPageArtifact:
+    """Turn the existing publication receipt into a typed immutable member pin."""
+
+    if receipt.primary_file != _PRIMARY_FILE:
+        raise ValueError("CREATIVE_PAGE_PUBLICATION_RECEIPT_INVALID")
+    return ExternalItemLearningPageArtifact(
+        artifact_id=receipt.artifact_id,
+        artifact_revision_id=receipt.artifact_revision_id,
+        sha256=receipt.primary_sha256,
+        file_set_manifest_sha256=receipt.manifest_sha256,
+    )
 
 
 def publish_external_item_learning_pages(

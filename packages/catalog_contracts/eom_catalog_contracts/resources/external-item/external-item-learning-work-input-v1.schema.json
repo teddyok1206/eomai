@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/external-item/learning-work-input/1.0",
+  "title": "External Item Learning Work Input V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "request_id", "source", "page_set", "page_artifact",
+    "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "external-item-learning-work-input/1.0"},
+    "request_id": {"type": "string", "pattern": "^extlearnreq_[0-9a-f]{32}$"},
+    "source": {"$ref": "eom://schemas/external-item/learning-source/1.0"},
+    "page_set": {"$ref": "eom://schemas/external-item/learning-page-set/1.0"},
+    "page_artifact": {"$ref": "#/$defs/page_artifact"},
+    "request_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "page_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_type", "artifact_id", "artifact_revision_id", "member_path",
+        "schema_ref", "media_type", "sha256", "file_set_manifest_sha256"
+      ],
+      "properties": {
+        "artifact_type": {"const": "control_external_item_learning_pages"},
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"const": "page-set-manifest.json"},
+        "schema_ref": {"const": "eom://schemas/external-item/learning-page-set/1.0"},
+        "media_type": {"const": "application/json"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "file_set_manifest_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}
