@@ -80,7 +80,10 @@ def _result() -> dict[str, object]:
             "content_region_map": [
                 {"content_path": "title", "region_ids": [target_region]},
                 {"content_path": "body[0]", "region_ids": [target_region]},
+                {"content_path": "interaction", "region_ids": [target_region]},
                 {"content_path": "solution.explanation", "region_ids": [solution_region]},
+                {"content_path": "solution.correct_choice_ids", "region_ids": [solution_region]},
+                {"content_path": "score.points", "region_ids": [target_region]},
             ],
             "solution_steps": [
                 {
@@ -199,10 +202,32 @@ def test_result_allows_editorial_solution_but_not_original_in_solution() -> None
     proposal = value["proposal"]
     assert isinstance(proposal, dict)
     maps = proposal["content_region_map"]
-    assert isinstance(maps, list) and isinstance(maps[2], dict)
-    maps[2]["region_ids"] = ["extregion_" + "3" * 32]
+    assert isinstance(maps, list) and isinstance(maps[3], dict)
+    maps[3]["region_ids"] = ["extregion_" + "3" * 32]
     _rehash(value)
     with pytest.raises(ValidationError, match="unrelated source region"):
+        ExternalItemLearningResult.model_validate(value)
+
+
+def test_result_rejects_nonexistent_or_unmapped_content_fields() -> None:
+    value = _result()
+    proposal = value["proposal"]
+    assert isinstance(proposal, dict)
+    maps = proposal["content_region_map"]
+    assert isinstance(maps, list) and isinstance(maps[1], dict)
+    maps[1]["content_path"] = "body[99]"
+    _rehash(value)
+    with pytest.raises(ValidationError, match="required Item fields"):
+        ExternalItemLearningResult.model_validate(value)
+
+    value = _result()
+    proposal = value["proposal"]
+    assert isinstance(proposal, dict)
+    maps = proposal["content_region_map"]
+    assert isinstance(maps, list)
+    maps.append({"content_path": "body[99].text", "region_ids": ["extregion_" + "1" * 32]})
+    _rehash(value)
+    with pytest.raises(ValidationError, match="does not resolve"):
         ExternalItemLearningResult.model_validate(value)
 
 

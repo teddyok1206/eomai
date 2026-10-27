@@ -33,6 +33,8 @@
 
 2026-10-27의 첫 구현 계약은 `external-item-learning-source/1.0`과 `external-item-learning-result/1.0`이다. 입력은 U의 source revision·원본 observation hash·정확한 Office→PDF 파생 manifest를 고정한다. 출력은 페이지 안의 `TARGET_ITEM`, `EDITORIAL_SOLUTION`, `REFERENCE_ORIGINAL`, `OTHER` 영역, 각 정본 요소의 영역 출처, 공개 가능한 풀이 요약과 답안 대조를 담은 **제안**이다. PDF 좌표는 0–10000 정규화 사각형이므로 파생 PDF hash와 변환 manifest 없이 단독 근거로 사용하지 않는다. 원본 기출 첨부는 새 창작 문항 또는 해설의 출처로 매핑할 수 없고, 읽을 수 없는 영역이나 답안 불일치는 `NEEDS_DECISION`으로 격리한다. 해설 텍스트만은 편집 해설 영역에서 제안할 수 있으나, 실제 승인 전에는 원본 문제와 답안의 사람/검증 경계를 통과해야 한다. 이 결과 스키마의 검증 PASS는 Item Registry 등록·Graph 게시 허가가 아니다.
 
+제안의 `content_region_map`은 형식상 그럴듯한 경로만 허용하지 않는다. 실제 `AssessmentItemContent` 안에서 경로를 해석하고 제목, 모든 본문 블록, 상호작용, 정답, 해설, 점수의 필수 출처 매핑을 확인한다. 문항 본문·선지는 `TARGET_ITEM`에만, 해설은 `TARGET_ITEM` 또는 `EDITORIAL_SOLUTION`에만 연결할 수 있다. `REFERENCE_ORIGINAL`은 어느 정본 요소나 풀이 단계의 근거로도 허용하지 않는다. 작업자가 일부 근거를 못 읽었으면 없는 내용으로 보충하지 않고 `NEEDS_DECISION`을 반환한다.
+
 ## 필수 설계 절차
 
 1. **책임과 경계:** Catalog application은 exact 외부 원본→정본 Item 승격 근거, 승인, 분석, 보고서, Graph 게시를 조정한다. Orchestrator만 worker 실행과 Artifact commit을 지휘한다. worker는 DB/NAS에 직접 쓰지 않는다. Web/API는 typed 명령과 조회만 제공한다.

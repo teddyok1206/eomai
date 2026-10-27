@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 from typing import Any, Literal, Self
 
@@ -16,6 +17,23 @@ EXTERNAL_ITEM_LEARNING_RESULT_SCHEMA = "external-item-learning-result-v1"
 EXTERNAL_ITEM_LEARNING_RESULT_SCHEMA_REF = "eom://schemas/external-item/learning-result/1.0"
 
 type RegionId = str
+_CONTENT_PATH_SEGMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*)(?:\[([0-9]+)\])?$")
+
+
+def _resolve_content_path(content: object, path: str) -> object:
+    """Reject a plausible-looking anchor path that names no actual Item value."""
+
+    current = content
+    for segment in path.split("."):
+        match = _CONTENT_PATH_SEGMENT.fullmatch(segment)
+        if match is None or not isinstance(current, dict) or match[1] not in current:
+            raise ValueError("content region path does not resolve")
+        current = current[match[1]]
+        if match[2] is not None:
+            if not isinstance(current, list) or int(match[2]) >= len(current):
+                raise ValueError("content region path does not resolve")
+            current = current[int(match[2])]
+    return current
 
 
 class ExternalItemLearningRegion(FrozenModel):
@@ -92,8 +110,22 @@ class ExternalItemLearningProposal(FrozenModel):
         paths = tuple(mapping.content_path for mapping in self.content_region_map)
         if len(paths) != len(set(paths)) or "title" not in paths:
             raise ValueError("proposal content regions repeat or omit title")
-        if not any(path.startswith("body[") for path in paths):
-            raise ValueError("proposal body requires a source region")
+        required = {
+            "title",
+            "interaction",
+            "solution.explanation",
+            "score.points",
+            *(f"body[{index}]" for index in range(len(self.content.body))),
+        }
+        if self.content.interaction.type == "single_choice":
+            required.add("solution.correct_choice_ids")
+        else:
+            required.add("solution.accepted_answers")
+        if not required.issubset(paths):
+            raise ValueError("proposal lacks source regions for required Item fields")
+        content = self.content.model_dump(mode="json")
+        for path in paths:
+            _resolve_content_path(content, path)
         steps = tuple(step.step_number for step in self.solution_steps)
         if steps != tuple(range(1, len(steps) + 1)):
             raise ValueError("solution steps must be contiguous and ordered")
@@ -141,6 +173,8 @@ class ExternalItemLearningResult(FrozenModel):
                 allowed_roles = (
                     {"TARGET_ITEM", "EDITORIAL_SOLUTION"}
                     if mapping.content_path.startswith("solution")
+                    else {"TARGET_ITEM", "EDITORIAL_SOLUTION", "OTHER"}
+                    if mapping.content_path.startswith("score")
                     else {"TARGET_ITEM"}
                 )
                 if any(
