@@ -69,6 +69,12 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "execution_preset_role_policies",
     "execution_preset_validations",
     "execution_presets",
+    # The Studio Item DB reads source-only rows through the API runtime; original
+    # Office bytes and publication remain owned by the protected Catalog boundary.
+    "external_item_edition_documents",
+    "external_item_imports",
+    "external_item_source_revisions",
+    "external_item_sources",
     "hwpx_application_builds",
     "hwpx_assessment_assembly_builds",
     "item_components",

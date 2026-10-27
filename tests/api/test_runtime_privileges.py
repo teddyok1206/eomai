@@ -15,6 +15,18 @@ from eom_api.runtime_privileges import (
 from sqlalchemy.engine import Connection
 
 
+def test_external_item_db_is_read_only_for_api_runtime() -> None:
+    tables = {
+        "external_item_edition_documents",
+        "external_item_imports",
+        "external_item_source_revisions",
+        "external_item_sources",
+    }
+    assert tables <= set(READ_TABLES)
+    assert tables.isdisjoint(INSERT_TABLES)
+    assert tables.isdisjoint(UPDATE_TABLES)
+
+
 def test_runtime_privilege_matrix_covers_workflow_approval_lock() -> None:
     assert "pdf_document_review_upload_intents" in READ_TABLES
     assert "pdf_document_review_upload_intents" in INSERT_TABLES
