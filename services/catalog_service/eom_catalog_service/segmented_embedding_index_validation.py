@@ -1,0 +1,72 @@
+"""Pure content closure for a segmented index after Catalog has reopened pinned members.
+
+This checks no actor or Graph permission. The Catalog publication/read use case must
+first reauthorize the exact current population and resolve every immutable Artifact.
+"""
+
+from __future__ import annotations
+
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
+from eom_catalog_contracts.segmented_embedding_index import SegmentedEmbeddingIndexRoot
+from eom_identifiers import content_sha256
+from eom_protocol.artifact_members import ArtifactMemberPointer
+from jsonschema.exceptions import ValidationError as SchemaError
+
+from eom_catalog_service.embedding_device_index_pair import (
+    canonical_embedding_index_targets,
+    validate_resolved_embedding_index,
+)
+from eom_catalog_service.embedding_registry_ports import SupportedEmbeddingIndex
+
+
+class SegmentedEmbeddingIndexError(ValueError):
+    def __init__(self) -> None:
+        super().__init__("SEGMENTED_EMBEDDING_INDEX_CONTENT_MISMATCH")
+
+
+def validate_segmented_embedding_index_content(
+    root: SegmentedEmbeddingIndexRoot,
+    resolved: tuple[tuple[ArtifactMemberPointer, SupportedEmbeddingIndex], ...],
+) -> SegmentedEmbeddingIndexRoot:
+    """O(total bindings) closure, without materializing vectors or granting access."""
+    try:
+        root = SegmentedEmbeddingIndexRoot.model_validate(raw_similarity_contract_value(root))
+        if type(resolved) is not tuple or len(resolved) != len(root.segments):
+            raise SegmentedEmbeddingIndexError()
+        index_ids: set[str] = set()
+        revision_ids: set[str] = set()
+        for descriptor, (member, original) in zip(root.segments, resolved, strict=True):
+            pointer, index = validate_resolved_embedding_index(
+                member, original, root.space.runtime.device
+            )
+            if (
+                pointer != descriptor.index_manifest
+                or index.index_id == root.index_id
+                or index.index_id in index_ids
+                or index.index_revision_id in revision_ids
+                or index.storage_partition != root.storage_partition
+                or index.space != root.space
+                or index.view != root.view
+                or index.recipe != root.recipe
+                or len(index.bindings) != descriptor.binding_count
+                or not index.bindings
+                or index.bindings[0].source.item_revision_id != descriptor.first_source_revision_id
+                or index.bindings[-1].source.item_revision_id != descriptor.last_source_revision_id
+                or content_sha256(canonical_embedding_index_targets(index))
+                != descriptor.target_set_sha256
+            ):
+                raise SegmentedEmbeddingIndexError()
+            index_ids.add(index.index_id)
+            revision_ids.add(index.index_revision_id)
+            if any(
+                binding.graph_snapshot != root.graph_snapshot
+                or binding.policy_revision_id != root.policy_revision_id
+                or binding.policy_sha256 != root.policy_sha256
+                for binding in index.bindings
+            ):
+                raise SegmentedEmbeddingIndexError()
+        return root
+    except SegmentedEmbeddingIndexError:
+        raise
+    except (SchemaError, ValueError, TypeError, AttributeError):
+        raise SegmentedEmbeddingIndexError() from None

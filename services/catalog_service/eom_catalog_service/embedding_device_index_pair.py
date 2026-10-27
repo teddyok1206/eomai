@@ -63,9 +63,10 @@ class EmbeddingDeviceIndexPair:
         raise EmbeddingDeviceIndexPairError("EMBEDDING_DEVICE_INDEX_DEVICE_INVALID")
 
 
-def _resolved_index(
+def validate_resolved_embedding_index(
     pointer: ArtifactMemberPointer, index: SupportedEmbeddingIndex, device: str
 ) -> tuple[ArtifactMemberPointer, SupportedEmbeddingIndex]:
+    """Reparse one pinned member/index pair; no store read or authority is inferred."""
     try:
         checked = parse_supported_embedding_index(raw_similarity_contract_value(index))
         member = ArtifactMemberPointer.model_validate(raw_similarity_contract_value(pointer))
@@ -88,7 +89,8 @@ def _resolved_index(
     return member, checked
 
 
-def _targets(index: SupportedEmbeddingIndex) -> tuple[dict[str, Any], ...]:
+def canonical_embedding_index_targets(index: SupportedEmbeddingIndex) -> tuple[dict[str, Any], ...]:
+    """Device-independent ordered source/profile/input identities for exact pairing."""
     # Runtime-dependent row/encoding identity must differ; every scientific source,
     # accepted analysis/review, Graph, policy, recipe and input-text hash must not.
     targets: list[dict[str, Any]] = []
@@ -117,8 +119,8 @@ def pair_embedding_device_indexes(
     source population using the existing official contracts. Pairing is not a grant,
     an activation, a cross-device numeric equivalence claim or a latest lookup.
     """
-    cpu_member, cpu_index = _resolved_index(cpu_member, cpu_index, "CPU")
-    cuda_member, cuda_index = _resolved_index(cuda_member, cuda_index, "CUDA")
+    cpu_member, cpu_index = validate_resolved_embedding_index(cpu_member, cpu_index, "CPU")
+    cuda_member, cuda_index = validate_resolved_embedding_index(cuda_member, cuda_index, "CUDA")
     if (
         type(cpu_index) is not type(cuda_index)
         or cpu_index.storage_partition != cuda_index.storage_partition
@@ -150,7 +152,10 @@ def pair_embedding_device_indexes(
         or cpu_index.index_revision_id == cuda_index.index_revision_id
     ):
         raise EmbeddingDeviceIndexPairError("EMBEDDING_DEVICE_INDEX_NAMESPACE_MISMATCH")
-    cpu_targets, cuda_targets = _targets(cpu_index), _targets(cuda_index)
+    cpu_targets, cuda_targets = (
+        canonical_embedding_index_targets(cpu_index),
+        canonical_embedding_index_targets(cuda_index),
+    )
     if cpu_targets != cuda_targets:
         raise EmbeddingDeviceIndexPairError("EMBEDDING_DEVICE_INDEX_TARGET_SET_MISMATCH")
     return EmbeddingDeviceIndexPair(

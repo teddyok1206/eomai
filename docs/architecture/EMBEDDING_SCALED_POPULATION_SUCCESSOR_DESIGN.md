@@ -11,6 +11,11 @@ source 수·범위·input hash 및 전체 자료집 완결성은 아직 Catalog�
 계약·기존 device-pair 집중 테스트는 77 PASS, Ruff/strict mypy PASS다. 소스
 wheel에는 새 typed module과 schema resource가 포함됨을 확인했다. 이 증거는
 Catalog publication, 전체 자료집 인가, 운영 설치 또는 1,025건 처리 성공이 아니다.
+후속 pure Catalog content validator는 실제로 다시 연 segment manifest의 장치,
+namespace, 정렬 범위, 1,025건 합계, Graph/정책 pin 및 device-independent
+source/profile/input hash를 root descriptor와 대조한다. 합성 1,025건을 포함한
+집중 테스트는 80 PASS다. 이 검증 함수는 권한·원본 Artifact·전체 모집단을
+읽지 않으며, 그 세 경계를 맡을 Catalog application은 아직 구현되지 않았다.
 
 ## 확인된 제한과 결정
 
