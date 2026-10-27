@@ -12,8 +12,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 import httpx
-from eom_api_contracts import ProductionItemCandidateViewContract
-from pydantic import TypeAdapter
 
 from eom_web_gui.chat_grounding_contracts import (
     ChatGroundedTurnSubmission,
@@ -56,6 +54,7 @@ from eom_web_gui.contracts import (
     ExternalItemDbDetail,
     ExternalItemDbEntry,
     ExternalItemDbFilterSubmission,
+    GraphItemDbEntry,
     HwpxBuildRequest,
     HwpxBuildView,
     HwpxCapability,
@@ -386,7 +385,7 @@ class ExternalItemDbPage:
 
 @dataclass(frozen=True)
 class GraphItemDbPage:
-    values: tuple[ProductionItemCandidateViewContract, ...]
+    values: tuple[GraphItemDbEntry, ...]
     next_cursor: str | None
     has_more: bool
 
@@ -3020,11 +3019,8 @@ class HttpApplicationGateway:
             or (page["has_more"] and not page.get("next_cursor"))
         ):
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
-        adapter: TypeAdapter[ProductionItemCandidateViewContract] = TypeAdapter(
-            ProductionItemCandidateViewContract
-        )
         try:
-            parsed = tuple(adapter.validate_python(value) for value in values)
+            parsed = tuple(GraphItemDbEntry.model_validate(value) for value in values)
         except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
         if any(value.source_class != source_class for value in parsed):

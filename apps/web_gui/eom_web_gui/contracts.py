@@ -1523,6 +1523,29 @@ class ItemBankCurriculumUnit(WebModel):
     parent_unit_id: str | None = Field(default=None, pattern=r"^currunit_[0-9a-f]{32}$")
 
 
+class GraphItemDbEntry(BaseModel):
+    """The small published-Graph projection that the DB screen actually renders.
+
+    The Application API remains the authority for full production-candidate validation;
+    this BFF only validates the fields it forwards to the browser.
+    """
+
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    schema_version: Literal[
+        "production-item-candidate-view/1.0", "production-item-candidate-view/2.0"
+    ]
+    graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
+    snapshot_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    source_class: Literal["APPROVED_ITEM", "PAST_EXAM"]
+    source_display_label: str = Field(min_length=1, max_length=512)
+    item_id: str = Field(pattern=r"^item_[0-9a-f]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    item_revision_state: Literal["APPROVED", "SUPERSEDED"]
+    item_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    curriculum_units: tuple[ItemBankCurriculumUnit, ...] = Field(min_length=1, max_length=8)
+
+
 class ExternalItemDbEntry(WebModel):
     schema_version: Literal["external-item-db-entry/1.0"]
     source_id: str = Field(pattern=r"^extitem_[0-9a-f]{32}$")
