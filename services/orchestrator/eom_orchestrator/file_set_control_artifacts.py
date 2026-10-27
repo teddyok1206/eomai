@@ -169,6 +169,39 @@ class ControlFileSetPublisher:
                 job_id, request = job.job_id, job.request
             return self._existing(job_id, request)
 
+    def read_published_revision(
+        self, *, artifact_revision_id: str, artifact_type: str
+    ) -> PublishedControlFileSet:
+        """Resolve one exact approved file set without relying on a mutable latest pointer."""
+
+        if re.fullmatch(r"rev_[0-9a-f]{32}", artifact_revision_id) is None or not artifact_type:
+            raise ControlPlaneError("CONTROL_FILE_SET_INVALID", "publication identity is invalid")
+        with self.sessions() as session:
+            revision = session.get(ArtifactRevisionRecord, artifact_revision_id)
+            job = session.get(JobRecord, revision.job_id) if revision is not None else None
+            if (
+                revision is None
+                or job is None
+                or job.revision_id != artifact_revision_id
+                or job.task_type != artifact_type
+                or not isinstance(job.request, dict)
+                or job.request.get("artifact_type") != artifact_type
+                or Path(revision.nas_path)
+                != self.settings.nas_artifact_root
+                / revision.logical_artifact_id
+                / artifact_revision_id
+            ):
+                raise ControlPlaneError(
+                    "CONTROL_FILE_SET_CONFLICT", "published file set identity differs"
+                )
+            job_id, request = job.job_id, job.request
+        published = self._existing(job_id, request)
+        if published.artifact_revision_id != artifact_revision_id:
+            raise ControlPlaneError(
+                "CONTROL_FILE_SET_CONFLICT", "published file set identity differs"
+            )
+        return published
+
     def publish(
         self,
         *,

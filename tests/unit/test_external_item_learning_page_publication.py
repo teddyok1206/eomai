@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import os
 import shutil
 from pathlib import Path
 
 import pytest
 from eom_catalog_contracts.external_item_learning_work import ExternalItemLearningWorkInput
 from eom_identifiers import content_sha256
+from eom_orchestrator.control_service import ControlPlaneError
+from eom_orchestrator.execution_materializer import materialize_external_item_learning_pages
 from eom_orchestrator.external_item_learning_page_publication import (
     external_item_learning_page_artifact,
     publish_external_item_learning_pages,
@@ -123,3 +126,71 @@ def test_real_publisher_commits_once_without_copying_source_pdf_to_artifact(
     with publisher.sessions() as session:
         assert session.scalar(select(func.count()).select_from(JobRecord)) == 1
         assert session.scalar(select(func.count()).select_from(ArtifactRevisionRecord)) == 1
+
+
+def test_worker_page_materialization_rechecks_exact_publication_and_permission(
+    tmp_path: Path,
+) -> None:
+    rendered = _rendered(tmp_path)
+    publisher, _engine = _publisher(tmp_path)
+    saved = publish_external_item_learning_pages(publisher, rendered, source_commit="a" * 40)
+    artifact = external_item_learning_page_artifact(saved)
+    source = _source_for_pdf(_pdf())
+    work_body: dict[str, object] = {
+        "schema_version": "external-item-learning-work-input/1.0",
+        "request_id": "extlearnreq_" + "f" * 32,
+        "source": source.model_dump(mode="json"),
+        "page_set": rendered.manifest.model_dump(mode="json"),
+        "page_artifact": artifact.model_dump(mode="json"),
+    }
+    work_body["request_sha256"] = content_sha256(work_body)
+    work = ExternalItemLearningWorkInput.model_validate(work_body)
+    workspace = tmp_path / "worker-workspace"
+    workspace.mkdir()
+    with publisher.sessions() as session:
+        total_bytes, members = materialize_external_item_learning_pages(
+            session,
+            work=work,
+            workspace=workspace,
+            artifact_root=publisher.settings.nas_artifact_root,
+            worker_group_id=os.getgid(),
+            authorized_artifact_revision_ids=frozenset({artifact.artifact_revision_id}),
+            publisher=publisher,
+        )
+    assert members == 2
+    assert total_bytes == len(rendered.manifest_path.read_bytes()) + len(
+        rendered.page_paths[0].read_bytes()
+    )
+    assert (workspace / "source/page-set-manifest.json").read_bytes() == (
+        rendered.manifest_path.read_bytes()
+    )
+    assert (workspace / "source/pages/page-0001.png").read_bytes() == (
+        rendered.page_paths[0].read_bytes()
+    )
+    assert not (workspace / "source/preview.pdf").exists()
+
+    with publisher.sessions() as session, pytest.raises(ControlPlaneError, match="not authorized"):
+        materialize_external_item_learning_pages(
+            session,
+            work=work,
+            workspace=tmp_path / "not-authorized",
+            artifact_root=publisher.settings.nas_artifact_root,
+            worker_group_id=os.getgid(),
+            authorized_artifact_revision_ids=frozenset(),
+            publisher=publisher,
+        )
+
+    tampered_member = Path(saved.nas_path, "pages/page-0001.png")
+    tampered_member.chmod(0o600)
+    tampered_member.write_bytes(b"tampered fixture")
+    with publisher.sessions() as session, pytest.raises(ControlPlaneError):
+        materialize_external_item_learning_pages(
+            session,
+            work=work,
+            workspace=tmp_path / "tampered-workspace",
+            artifact_root=publisher.settings.nas_artifact_root,
+            worker_group_id=os.getgid(),
+            authorized_artifact_revision_ids=frozenset({artifact.artifact_revision_id}),
+            publisher=publisher,
+        )
+    assert not (tmp_path / "tampered-workspace").exists()

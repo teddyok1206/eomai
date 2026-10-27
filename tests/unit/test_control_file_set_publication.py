@@ -124,6 +124,32 @@ def test_control_file_set_publication_is_idempotent_and_exact(tmp_path: Path) ->
         assert revision.content_bytes == primary.stat().st_size
 
 
+def test_file_set_read_by_exact_revision_rejects_wrong_type_and_storage(tmp_path: Path) -> None:
+    publisher, _engine = _publisher(tmp_path)
+    saved = publisher.publish(**_arguments(tmp_path))
+    assert (
+        publisher.read_published_revision(
+            artifact_revision_id=saved.artifact_revision_id,
+            artifact_type="control_local_image_micro_evaluation",
+        )
+        == saved
+    )
+    with pytest.raises(ControlPlaneError, match="identity differs"):
+        publisher.read_published_revision(
+            artifact_revision_id=saved.artifact_revision_id,
+            artifact_type="wrong-type",
+        )
+    with publisher.sessions.begin() as session:
+        revision = session.get(ArtifactRevisionRecord, saved.artifact_revision_id)
+        assert revision is not None
+        revision.nas_path = str(tmp_path / "different-root")
+    with pytest.raises(ControlPlaneError, match="identity differs"):
+        publisher.read_published_revision(
+            artifact_revision_id=saved.artifact_revision_id,
+            artifact_type="control_local_image_micro_evaluation",
+        )
+
+
 def test_exact_publication_read_does_not_create_and_rejects_corrupt_or_incomplete_history(tmp_path):
     publisher, _engine = _publisher(tmp_path)
     arguments = _arguments(tmp_path)

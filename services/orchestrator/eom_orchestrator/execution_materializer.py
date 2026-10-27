@@ -31,6 +31,13 @@ from eom_catalog_contracts import (
     ReviewTextbookEvidence,
 )
 from eom_catalog_contracts import validate_contract as validate_catalog_contract
+from eom_catalog_contracts.external_item_learning_pages import (
+    EXTERNAL_ITEM_LEARNING_PAGE_IMAGE_SCHEMA_REF,
+    EXTERNAL_ITEM_LEARNING_PAGE_SET_SCHEMA,
+    EXTERNAL_ITEM_LEARNING_PAGE_SET_SCHEMA_REF,
+    ExternalItemLearningPageSet,
+)
+from eom_catalog_contracts.external_item_learning_work import ExternalItemLearningWorkInput
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_workflow import (
     CodexAssessmentImageInputManifest,
@@ -105,6 +112,7 @@ from eom_orchestrator.control_service import (
     resolve_control_artifact_pointer,
     resolve_released_instruction_bundle,
 )
+from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from eom_orchestrator.similarity_materialization import (
     ORDINARY_SIMILARITY_ROLE_CONTRACT,
@@ -1725,6 +1733,109 @@ def _materialize_analysis_document_source(
             "document analysis materialized byte count differs from the plan",
         )
     return total_bytes, len(source.materialization_members)
+
+
+def materialize_external_item_learning_pages(
+    session: Session,
+    *,
+    work: ExternalItemLearningWorkInput,
+    workspace: Path,
+    artifact_root: Path,
+    worker_group_id: int,
+    authorized_artifact_revision_ids: frozenset[str],
+    publisher: ControlFileSetPublisher,
+) -> tuple[int, int]:
+    """Stage only the exact approved page set for a claim; never stage its source PDF."""
+
+    artifact = work.page_artifact
+    if artifact.artifact_revision_id not in authorized_artifact_revision_ids:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_PERMISSION_DENIED", "creative page Artifact is not authorized"
+        )
+    root = _canonical_root(artifact_root)
+    if publisher.settings.nas_artifact_root != root:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_STORAGE_MISMATCH", "creative page Artifact root differs"
+        )
+    published = publisher.read_published_revision(
+        artifact_revision_id=artifact.artifact_revision_id,
+        artifact_type=artifact.artifact_type,
+    )
+    if (
+        published.artifact_id != artifact.artifact_id
+        or published.primary_file != artifact.member_path
+        or published.primary_sha256 != artifact.sha256
+        or published.manifest_sha256 != artifact.file_set_manifest_sha256
+        or Path(published.nas_path) != root / artifact.artifact_id / artifact.artifact_revision_id
+    ):
+        raise ControlPlaneError(
+            "CONTROL_POINTER_MANIFEST_MISMATCH", "creative page Artifact differs from work"
+        )
+    manifest_pointer = OriginArtifactMemberPointer(
+        artifact_id=artifact.artifact_id,
+        artifact_revision_id=artifact.artifact_revision_id,
+        member_path=artifact.member_path,
+        schema_ref=EXTERNAL_ITEM_LEARNING_PAGE_SET_SCHEMA_REF,
+        media_type=artifact.media_type,
+        sha256=artifact.sha256,
+    )
+    manifest_payload = _materialize_assessment_member(
+        session,
+        pointer=manifest_pointer,
+        relative_path="source/page-set-manifest.json",
+        workspace=workspace,
+        artifact_root=root,
+        worker_group_id=worker_group_id,
+        authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+        maximum_bytes=128 * 1024,
+    )
+    try:
+        manifest_value = _json_object(manifest_payload, "creative page set")
+        validate_catalog_contract(EXTERNAL_ITEM_LEARNING_PAGE_SET_SCHEMA, manifest_value)
+        actual = ExternalItemLearningPageSet.model_validate(manifest_value)
+    except (ValueError, JsonSchemaValidationError) as exc:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_MANIFEST_MISMATCH", "creative page set is invalid"
+        ) from exc
+    if actual != work.page_set:
+        raise ControlPlaneError(
+            "CONTROL_POINTER_MANIFEST_MISMATCH", "creative page set differs from work"
+        )
+    total_bytes = len(manifest_payload)
+    for page in work.page_set.pages:
+        pointer = OriginArtifactMemberPointer(
+            artifact_id=artifact.artifact_id,
+            artifact_revision_id=artifact.artifact_revision_id,
+            member_path=page.member_path,
+            schema_ref=EXTERNAL_ITEM_LEARNING_PAGE_IMAGE_SCHEMA_REF,
+            media_type="image/png",
+            sha256=page.sha256,
+        )
+        payload = _materialize_assessment_member(
+            session,
+            pointer=pointer,
+            relative_path=f"source/{page.member_path}",
+            workspace=workspace,
+            artifact_root=root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            maximum_bytes=16 * 1024 * 1024,
+        )
+        if len(payload) != page.content_length:
+            raise ControlPlaneError(
+                "CONTROL_POINTER_MANIFEST_MISMATCH", "creative page size differs"
+            )
+        _validate_png_payload(
+            payload,
+            expected_width=page.width_px,
+            expected_height=page.height_px,
+        )
+        total_bytes += len(payload)
+        if total_bytes > 256 * 1024 * 1024 + 128 * 1024:
+            raise ControlPlaneError(
+                "CONTROL_POINTER_SIZE_INVALID", "creative page set exceeds its byte bound"
+            )
+    return total_bytes, len(work.page_set.pages) + 1
 
 
 def _materialize_legacy_extraction_source(

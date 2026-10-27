@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from eom_catalog_contracts.external_item_learning_result import ExternalItemLearningResult
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.orchestrator import Orchestrator
 from eom_workflow.models import (
@@ -108,6 +109,22 @@ def test_creative_role_result_is_separate_typed_proposal() -> None:
 def test_creative_generation_schema_binds_pinned_source_and_page_count() -> None:
     projected = load_codex_result_schema("external-item-learning-result@1.0")
     Draft202012Validator.check_schema(projected)
+    generated_result = ExternalItemLearningResult.model_validate(_result()).model_dump(mode="json")
+    generated_result.pop("result_sha256")
+    Draft202012Validator(projected).validate(
+        {
+            "schema_version": "1.0",
+            "protocol_version": "workflow-role/1.33.0",
+            "job_id": "job_" + "c" * 32,
+            "workflow_id": "workflow_" + "d" * 32,
+            "step_run_id": "steprun_" + "e" * 32,
+            "status": "ok",
+            "artifact": _input()["artifact"],
+            "completed_at": "2026-10-27T10:00:00Z",
+            "role": "support",
+            "output": {"learning_result": generated_result},
+        }
+    )
     worker_input = RoleWorkerInput.model_validate(_input())
     constrained = constrained_result_schema("external-item-learning-result@1.0", worker_input)
     definitions = constrained["$defs"]
