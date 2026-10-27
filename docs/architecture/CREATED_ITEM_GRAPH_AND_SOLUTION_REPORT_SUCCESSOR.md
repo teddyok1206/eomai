@@ -27,6 +27,8 @@
 
 따라서 **ontology·Graph 저장 엔진·기출 layer를 바꿀 필요는 없다.** 필요한 것은 원본 Office 위치를 신뢰 가능한 Item 요소 anchor로 해석하는 구조화 추출/검수 계약, 창작 출처 Item 승격 근거, additive 풀이보고서 successor, 그리고 기존 Graph owner를 호출하는 창작 전용 publication adapter다. 이 네 경계 중 하나라도 빠지면 코덱스가 내용을 풀었더라도 `GRAPH_PUBLISHED` 또는 `SOLUTION_REPORT_ACCEPTED`로 표시하지 않는다.
 
+운영 화면 검증에 사용한 고유번호 `10310`의 고정 3교 PDF는 한 페이지 안에 **왼쪽 창작 문항, 오른쪽 해설·편집 메타데이터, 오른쪽 아래 원본 기출 첨부**가 함께 배치돼 있다. 2026-10-27 UTC에 검증된 파생 PDF SHA-256은 `sha256:d1e2915b7981f8dd4c9df433aad442cb983706c638270532e2cd31ecbadd17fb`다. 따라서 페이지 전체 OCR을 곧바로 한 Item 본문으로 채택하면 해설이나 기출 원본이 문항에 섞인다. 추출 후속 계약은 `TARGET_ITEM / EDITORIAL_SOLUTION / REFERENCE_ORIGINAL / OTHER` 역할별 페이지 영역과 그 판정 근거를 구조화 제안으로 받아야 한다. 영역은 변환 PDF의 파생 좌표이므로 원본 HWP Artifact Revision·변환 manifest·PDF hash를 함께 고정하고, 원본 기출 첨부를 이번 창작 Item의 정본이나 `PAST_EXAM` occurrence로 승격하지 않는다. 이 실물 사례를 첫 슬롯 표본으로 사용하되 영역 제안의 자동 수락은 금지한다.
+
 실행 순서는 `source-only → 정확한 원본/파생 위치 pin → Codex 구조화 추출 제안 → 내용·정답·원본 대조 및 Item 승인 → accepted base 분석 → Graph 게시 → additive 풀이보고서 수락 → 검색/역추적`이다. 실제 코덱스 슬롯은 추출·풀이 단계에 사용하되 worker가 Registry/Graph/NAS에 직접 쓰지 않는다. 대량 작업은 대표 표본 1건의 원본↔Item↔풀이↔Graph 역추적과 중단/재전송 검증을 통과한 뒤에만 bounded chunk로 넓힌다.
 
 ## 필수 설계 절차
