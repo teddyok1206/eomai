@@ -587,8 +587,8 @@ def materialize_execution_step(
         total_bytes += page_bytes
         member_count += page_members
         _require_total_size(total_bytes, analysis=True)
-        source_artifact_revision_id = plan.work_input.page_artifact.artifact_revision_id
-        source_sha256 = plan.work_input.page_artifact.sha256
+        source_artifact_revision_id = plan.work_input.source.preview_artifact_revision_id
+        source_sha256 = plan.work_input.source.preview_manifest.pdf_sha256
     elif isinstance(plan, ResolvedExecutionPlanV13):
         document_bytes, document_members = _materialize_pdf_review_document(
             session,
