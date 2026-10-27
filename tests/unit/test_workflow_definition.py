@@ -54,6 +54,20 @@ def test_legacy_editorial_compatibility_definition_is_one_shot_support() -> None
     assert step.result_schema == ("legacy-item-editorial-compatibility-result@1.0")
 
 
+def test_external_item_learning_definition_is_one_shot_proposal_only() -> None:
+    compiled = compile_definition(
+        Path("config/workflows/external-item-learning.v1.yaml"),
+        ROLES,
+    )
+
+    assert compiled.definition.definition_key == "external-item-learning"
+    assert compiled.definition.limits.max_step_attempts == 1
+    assert compiled.definition.limits.max_rework_cycles == 0
+    step = compiled.steps_by_key["extract"]
+    assert isinstance(step, AgentStep)
+    assert step.result_schema == "external-item-learning-result@1.0"
+
+
 def test_duplicate_step_is_rejected() -> None:
     raw = _raw_definition()
     steps = raw["steps"]

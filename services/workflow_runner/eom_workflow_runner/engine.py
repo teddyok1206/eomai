@@ -33,6 +33,7 @@ from eom_workflow import (
     ContentTeamItemBriefV4,
     CustomerSupportWorkerRequest,
     DecisionStep,
+    ExternalItemLearningWorkerRequest,
     HumanGateStep,
     KnowledgeAnalysisWorkerRequest,
     LegacyItemEditorialCompatibilityWorkerRequest,
@@ -341,6 +342,7 @@ def _prompt_name_for_request(
         WorkerRequest
         | KnowledgeAnalysisWorkerRequest
         | LegacyItemExtractionWorkerRequest
+        | ExternalItemLearningWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PairedDocumentReviewWorkerRequestV2
@@ -352,6 +354,8 @@ def _prompt_name_for_request(
 
     if worker_role == "support" and isinstance(request, LegacyItemExtractionWorkerRequest):
         return "legacy-item-extraction"
+    if worker_role == "support" and isinstance(request, ExternalItemLearningWorkerRequest):
+        return "external-item-learning"
     if worker_role == "support" and isinstance(
         request, LegacyItemEditorialCompatibilityWorkerRequest
     ):
@@ -396,6 +400,7 @@ class RoleJobExecutor(Protocol):
             WorkerRequest
             | KnowledgeAnalysisWorkerRequest
             | LegacyItemExtractionWorkerRequest
+            | ExternalItemLearningWorkerRequest
             | LegacyItemEditorialCompatibilityWorkerRequest
             | CustomerSupportWorkerRequest
             | PairedDocumentReviewWorkerRequestV2
@@ -446,6 +451,7 @@ class PlatformRoleJobExecutor:
             WorkerRequest
             | KnowledgeAnalysisWorkerRequest
             | LegacyItemExtractionWorkerRequest
+            | ExternalItemLearningWorkerRequest
             | LegacyItemEditorialCompatibilityWorkerRequest
             | CustomerSupportWorkerRequest
             | PairedDocumentReviewWorkerRequestV2
@@ -3836,6 +3842,7 @@ def _capacity_resume_target(
     if worker_role == "support" and definition_key in {
         "knowledge-analysis",
         "legacy-item-extraction",
+        "external-item-learning",
         "legacy-item-editorial-compatibility",
     }:
         return WorkflowState.RUNNING, WorkflowStage.KNOWLEDGE_ANALYSIS

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import pytest
+from eom_orchestrator.control_service import ControlPlaneError
+from eom_orchestrator.orchestrator import Orchestrator
 from eom_workflow.models import (
     ExternalItemLearningRoleResult,
     ExternalItemLearningWorkerRequest,
@@ -142,3 +144,22 @@ def test_creative_result_hash_is_derived_only_if_omitted() -> None:
     learning_result["result_sha256"] = "sha256:" + "0" * 64
     with pytest.raises((ValidationError, ValueError), match="hash differs"):
         validate_role_result(role_result, "support", "external-item-learning-result@1.0")
+
+
+def test_creative_worker_cannot_launch_before_staged_pages_are_authorized() -> None:
+    request = ExternalItemLearningWorkerRequest(work_input=_work())
+    orchestrator = object.__new__(Orchestrator)
+    with pytest.raises(ControlPlaneError) as error:
+        orchestrator.submit_workflow_role(
+            workflow_id="workflow_" + "a" * 32,
+            step_run_id="steprun_" + "b" * 32,
+            step_key="extract",
+            attempt=1,
+            role="support",
+            request=request,
+            upstream_artifacts=(),
+            result_schema="external-item-learning-result@1.0",
+            idempotency_key="creative-learning-test",
+            prompt_text="test-only",
+        )
+    assert error.value.code == "CONTROL_CREATIVE_LEARNING_NOT_ACTIVATED"

@@ -218,6 +218,7 @@ WorkflowRoleRequest = (
     WorkerRequest
     | KnowledgeAnalysisWorkerRequest
     | LegacyItemExtractionWorkerRequest
+    | ExternalItemLearningWorkerRequest
     | LegacyItemEditorialCompatibilityWorkerRequest
     | CustomerSupportWorkerRequest
     | PairedDocumentReviewWorkerRequest
@@ -694,6 +695,11 @@ class Orchestrator:
     ) -> JobRecord:
         if (prompt_path is None) == (prompt_text is None):
             raise ValueError("exactly one workflow prompt source is required")
+        if isinstance(request, ExternalItemLearningWorkerRequest):
+            raise ControlPlaneError(
+                "CONTROL_CREATIVE_LEARNING_NOT_ACTIVATED",
+                "creative learning requires source reauthorization and staged page materialization",
+            )
         is_transfer = isinstance(request, InferenceTransferPairWorkerRequest)
         transfer_plan: ResolvedExecutionPlanV21 | None = None
         if is_transfer and reauthorize_transfer_sources is None:
