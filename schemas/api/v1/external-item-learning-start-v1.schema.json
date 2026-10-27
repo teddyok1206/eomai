@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/external-item-learning-start/1.0",
+  "title": "External Item Learning Start V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "import_id",
+    "external_number",
+    "source_revision_id",
+    "observation_sha256",
+    "selected_edition"
+  ],
+  "properties": {
+    "schema_version": {"const": "external-item-learning-start/1.0"},
+    "import_id": {"type": "string", "pattern": "^extimport_[0-9a-f]{32}$"},
+    "external_number": {"type": "string", "pattern": "^[0-9]{5}$"},
+    "source_revision_id": {"type": "string", "pattern": "^extitemrev_[0-9a-f]{32}$"},
+    "observation_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "selected_edition": {"type": "integer", "enum": [2, 3]}
+  }
+}

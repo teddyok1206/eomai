@@ -113,6 +113,9 @@ def test_source_resolution_keeps_exact_original_and_preview(
         actor=actor,
         import_id=target.import_id,
         external_number=target.external_number,
+        expected_source_revision_id=target.source_revision_id,
+        expected_observation_sha256=target.observation_sha256,
+        expected_edition=target.selected_edition,
     )
     assert source.input_sha256.startswith("sha256:")
     assert source.preview_artifact_id == resolved.artifact_id
@@ -147,6 +150,9 @@ def test_source_resolution_rejects_cross_revision_pointer_and_closes_stream(
             actor=actor,
             import_id=target.import_id,
             external_number=target.external_number,
+            expected_source_revision_id=target.source_revision_id,
+            expected_observation_sha256=target.observation_sha256,
+            expected_edition=target.selected_edition,
         )
     assert captured.value.code == "EXTERNAL_CREATIVE_SOURCE_POINTER_MISMATCH"
     assert resolved.member.stream.closed
@@ -191,6 +197,9 @@ def test_source_pdf_materialization_is_exact_and_bounded(
             actor=actor,
             import_id=target.import_id,
             external_number=target.external_number,
+            expected_source_revision_id=target.source_revision_id,
+            expected_observation_sha256=target.observation_sha256,
+            expected_edition=target.selected_edition,
         )
         assert result.pdf_bytes == original
         assert result.source.preview_manifest.pdf_sha256 == source.preview_manifest.pdf_sha256
@@ -202,6 +211,9 @@ def test_source_pdf_materialization_is_exact_and_bounded(
                 actor=actor,
                 import_id=target.import_id,
                 external_number=target.external_number,
+                expected_source_revision_id=target.source_revision_id,
+                expected_observation_sha256=target.observation_sha256,
+                expected_edition=target.selected_edition,
             )
         assert captured.value.code == "EXTERNAL_CREATIVE_SOURCE_PDF_INVALID"
     assert stream.closed
@@ -236,6 +248,42 @@ def test_source_cannot_open_before_current_operator_admission(
             actor=actor,
             import_id=target.import_id,
             external_number=target.external_number,
+            expected_source_revision_id=target.source_revision_id,
+            expected_observation_sha256=target.observation_sha256,
+            expected_edition=target.selected_edition,
         )
     assert captured.value.code == "EXTERNAL_CREATIVE_SOURCE_PERMISSION_DENIED"
+    preview.open.assert_not_called()
+
+
+@pytest.mark.parametrize("changed_pin", ["revision", "observation", "edition"])
+def test_source_rejects_stale_selection_before_opening_pdf(
+    monkeypatch: pytest.MonkeyPatch, changed_pin: str
+) -> None:
+    target, _ = _fixtures()
+    actor, session, _, _, _ = _authorized_session(monkeypatch)
+    monkeypatch.setattr(
+        "eom_catalog_service.external_creative_learning_source.get_external_creative_learning_target",
+        Mock(return_value=target),
+    )
+    preview = Mock()
+    revision = "extitemrev_" + "f" * 32 if changed_pin == "revision" else target.source_revision_id
+    observation = (
+        "sha256:" + "f" * 64 if changed_pin == "observation" else target.observation_sha256
+    )
+    edition = 2 if changed_pin == "edition" and target.selected_edition == 3 else 3
+    if changed_pin != "edition":
+        edition = target.selected_edition
+    with pytest.raises(ExternalCreativeLearningSourceError) as captured:
+        read_external_creative_learning_input(
+            session,
+            preview,
+            actor=actor,
+            import_id=target.import_id,
+            external_number=target.external_number,
+            expected_source_revision_id=revision,
+            expected_observation_sha256=observation,
+            expected_edition=edition,
+        )
+    assert captured.value.code == "EXTERNAL_CREATIVE_SOURCE_STALE"
     preview.open.assert_not_called()

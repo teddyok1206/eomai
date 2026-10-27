@@ -129,10 +129,19 @@ def _open_validated_source(
     *,
     import_id: str,
     external_number: str,
+    expected_source_revision_id: str,
+    expected_observation_sha256: str,
+    expected_edition: int,
 ) -> tuple[ExternalItemLearningSource, ResolvedExternalItemPreview]:
     target = get_external_creative_learning_target(
         session, import_id=import_id, external_number=external_number
     )
+    if (
+        target.source_revision_id != expected_source_revision_id
+        or target.observation_sha256 != expected_observation_sha256
+        or target.selected_edition != expected_edition
+    ):
+        raise ExternalCreativeLearningSourceError("EXTERNAL_CREATIVE_SOURCE_STALE")
     resolved = preview_service.open(
         ExternalItemDocumentMediaQuery(
             source_id=target.source_id,
@@ -154,6 +163,9 @@ def resolve_external_creative_learning_source(
     actor: ActorContext,
     import_id: str,
     external_number: str,
+    expected_source_revision_id: str,
+    expected_observation_sha256: str,
+    expected_edition: int,
 ) -> ExternalItemLearningSource:
     """Reauthorize original and derivative before staging, without opening NAS paths.
 
@@ -164,7 +176,13 @@ def resolve_external_creative_learning_source(
 
     _authorize_submission(session, actor)
     source, resolved = _open_validated_source(
-        session, preview_service, import_id=import_id, external_number=external_number
+        session,
+        preview_service,
+        import_id=import_id,
+        external_number=external_number,
+        expected_source_revision_id=expected_source_revision_id,
+        expected_observation_sha256=expected_observation_sha256,
+        expected_edition=expected_edition,
     )
     try:
         return source
@@ -179,6 +197,9 @@ def read_external_creative_learning_input(
     actor: ActorContext,
     import_id: str,
     external_number: str,
+    expected_source_revision_id: str,
+    expected_observation_sha256: str,
+    expected_edition: int,
 ) -> ExternalCreativeLearningInput:
     """Resolve current Catalog authority once and materialize its exact PDF once.
 
@@ -189,7 +210,13 @@ def read_external_creative_learning_input(
 
     _authorize_submission(session, actor)
     source, resolved = _open_validated_source(
-        session, preview_service, import_id=import_id, external_number=external_number
+        session,
+        preview_service,
+        import_id=import_id,
+        external_number=external_number,
+        expected_source_revision_id=expected_source_revision_id,
+        expected_observation_sha256=expected_observation_sha256,
+        expected_edition=expected_edition,
     )
     expected_bytes = source.preview_manifest.pdf_bytes
     digest = hashlib.sha256()

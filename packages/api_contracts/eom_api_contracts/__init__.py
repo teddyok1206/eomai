@@ -107,6 +107,7 @@ from eom_api_contracts.external_item_db import (
     ExternalItemDbEditionView,
     ExternalItemDbEntryView,
 )
+from eom_api_contracts.external_item_learning_start import ExternalItemLearningStartV1
 from eom_api_contracts.hwpx import (
     AssessmentHwpxBuildView,
     CreateAssessmentHwpxBuildRequest,
@@ -258,6 +259,7 @@ __all__ = [
     "ExternalItemDbDetailView",
     "ExternalItemDbEditionView",
     "ExternalItemDbEntryView",
+    "ExternalItemLearningStartV1",
     "ExternalSourcePlacement",
     "FinalizeEducationalQualitySessionCommand",
     "HwpxBuildOptions",
