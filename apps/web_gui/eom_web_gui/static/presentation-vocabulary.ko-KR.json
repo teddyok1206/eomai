@@ -106,6 +106,7 @@
     "codex_account": {
       "states": {
         "READY": {"label": "사용 가능", "audience": "ADMIN", "tone": "success", "icon": "✓"},
+        "USAGE_EXHAUSTED": {"label": "사용량 소진", "audience": "ADMIN", "tone": "neutral", "icon": "○"},
         "ACTIVE": {"label": "정상", "audience": "ADMIN", "tone": "success", "icon": "✓"},
         "DRAINING": {"label": "새 작업 중지 중", "audience": "ADMIN", "tone": "warning", "icon": "◆"},
         "DISABLED": {"label": "비활성", "audience": "ADMIN", "tone": "danger", "icon": "!"},

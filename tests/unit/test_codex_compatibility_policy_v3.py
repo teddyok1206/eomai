@@ -152,6 +152,16 @@ def test_unpaired_authoring_effort_is_not_admitted_but_other_slots_are_independe
     ] == ["03"]
 
 
+def test_exhausted_authoring_does_not_withhold_independent_support_slot() -> None:
+    document = _role_report((("05", "synthetic-model", "xhigh"),))
+    policy = _render(document, baseline_policy=_baseline("0.146.0"))
+    assert len(policy.models) == 1
+    assert policy.models[0].reasoning_efforts == ("xhigh",)
+    assert policy.models[0].bindings is not None
+    assert [pin.slot_id for pin in policy.models[0].bindings] == ["05"]
+    validate_control_contract("codex-reviewed-capability-policy-v3", policy.model_dump(mode="json"))
+
+
 @pytest.mark.parametrize("status", ("FAIL", "NOT_RUN"))
 def test_failed_or_unexecuted_other_binding_is_not_admitted(status: str) -> None:
     document = _role_report()

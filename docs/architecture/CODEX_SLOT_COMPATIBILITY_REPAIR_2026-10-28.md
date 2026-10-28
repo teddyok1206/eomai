@@ -21,4 +21,19 @@ The existing global compatibility maintenance preflight rejects *all* nontermina
 9. **Failure/replay:** fixed request/epoch/checkpoints remain the only replay identity. A failed or uncertain case is not retried under a new identity automatically, and neither FAILED history nor approved policy is reinterpreted. A policy update still requires the official committed report pointer and exact predecessor hash.
 10. **Simpler alternative:** retaining the old policy after only a file-hash change would falsely treat untested executable bytes as admitted. Stopping GPU or editing old Platform rows would disturb unrelated work. The scoped fence reuses the already-tested enrollment pattern and compatibility publisher without a new queue/framework.
 
-Exit checks: all six requested pairs PASS under the new helper SHA; official policy installation pins that report; supported OBSERVE shows each binding available. If a quota/model failure occurs, record it as such and leave unsupported pairs blocked. Creative solution-report execution remains out of scope for this repair.
+Exit checks: each admitted pair PASS under the new helper SHA; official policy installation pins that report; supported OBSERVE shows only admitted bindings available. If a quota/model failure occurs, record it as such and leave unsupported pairs blocked. Creative solution-report execution remains out of scope for this repair.
+
+## Quota-limited role admission (2026-10-28)
+
+The six fixed slots are independent account assignments, but authoring slot 01 and
+review slot 02 require a common tested model/effort pair before either is admitted.
+If slot 01 reaches its provider usage limit, a fresh report may still admit an
+actually passing image, item-management, or support slot without carrying forward
+old scoped claims. The report remains the canonical immutable evidence; the
+current runtime, assignment, permission, and hash checks remain unchanged.
+An all-failed or authoring-only report admits nothing. This changes only policy
+projection, with no DB, wire schema, queue, or worker protocol change. Access is
+bounded keyed lookup over six slots and linear aggregation over at most 64 cases.
+The simpler all-or-nothing projection is insufficient because one account's quota
+otherwise disables independently verified roles. A quota-limited account remains
+unable to execute; no failed report is rewritten or treated as a PASS.

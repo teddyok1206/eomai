@@ -10,6 +10,46 @@ from pathlib import Path
 APP = Path(__file__).resolve().parents[2] / "apps/web_gui/eom_web_gui/static/app.js"
 
 
+def test_quota_badge_is_neutral_only_for_fresh_ready_usage() -> None:
+    node = shutil.which("node")
+    assert node is not None
+    source = APP.read_text(encoding="utf-8")
+    function = source[
+        source.index("function codexAccountDisplayState(") : source.index(
+            "function renderCodexUsage("
+        )
+    ]
+    script = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const context = {};
+vm.createContext(context);
+vm.runInContext(FUNCTION, context);
+const now = Date.parse('2026-10-28T04:00:00Z');
+const account = {
+  state: 'READY',
+  usage_observation: {
+    observed_at: '2026-10-28T03:59:00Z',
+    windows: [{used_percent: 100, resets_at: '2026-10-28T05:00:00Z'}],
+  },
+};
+assert.equal(context.codexAccountDisplayState(account, now), 'USAGE_EXHAUSTED');
+assert.equal(context.codexAccountDisplayState({...account, state: 'DEGRADED'}, now), 'DEGRADED');
+assert.equal(
+  context.codexAccountDisplayState({...account, state: 'AUTH_REQUIRED'}, now), 'AUTH_REQUIRED'
+);
+assert.equal(context.codexAccountDisplayState(account, now + 16 * 60 * 1000), 'READY');
+assert.equal(context.codexAccountDisplayState({...account, usage_observation: {
+  ...account.usage_observation, windows: [{used_percent: 100, resets_at: '2026-10-28T03:59:59Z'}],
+}}, now), 'READY');
+assert.equal(context.codexAccountDisplayState({...account, usage_observation: {
+  ...account.usage_observation, windows: [{used_percent: 99, resets_at: '2026-10-28T05:00:00Z'}],
+}}, now), 'READY');
+""".replace("FUNCTION", json.dumps(function))
+    completed = subprocess.run([node, "-e", script], capture_output=True, text=True, check=False)
+    assert completed.returncode == 0, completed.stderr
+
+
 def test_model_verification_keeps_polling_without_asking_for_device_login_again() -> None:
     node = shutil.which("node")
     assert node is not None

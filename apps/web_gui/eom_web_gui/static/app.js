@@ -3227,12 +3227,13 @@ function controlCard(title, stateValue, domain = "generic") {
 
 function codexSlotCard(account) {
   const activeLeaseCount = Number(account.active_lease_count) || 0;
+  const displayState = codexAccountDisplayState(account);
   const card = document.createElement("details");
   card.className = "control-card codex-slot-card";
   card.dataset.bindingId = account.binding_id;
   if (activeLeaseCount > 0) {
     card.classList.add("is-active");
-  } else if (account.state !== "READY") {
+  } else if (displayState !== "READY" && displayState !== "USAGE_EXHAUSTED") {
     card.classList.add("is-unavailable");
   }
 
@@ -3247,7 +3248,7 @@ function codexSlotCard(account) {
   if (activeLeaseCount > 0) {
     setStatus(badge, "success", "●", `${activeLeaseCount}개 작업 중`);
   } else {
-    setStateStatus(badge, "codex_account", account.state);
+    setStateStatus(badge, "codex_account", displayState);
   }
   const disclosure = document.createElement("span");
   disclosure.className = "codex-slot-disclosure";
@@ -3319,6 +3320,20 @@ function usageWindowLabel(window, multipleLimits) {
             : window.window_kind === "PRIMARY" ? "기본 사용량" : "추가 사용량";
   const limit = window.limit_name || window.limit_id;
   return multipleLimits ? `${limit} · ${duration}` : duration;
+}
+
+function codexAccountDisplayState(account, now = Date.now()) {
+  // Usage is an availability detail, not authentication or capability health.
+  // Never disguise a real policy/authentication failure as quota exhaustion.
+  if (account.state !== "READY") return account.state;
+  const usage = account.usage_observation;
+  const observedAt = Date.parse(usage?.observed_at || "");
+  if (!Number.isFinite(observedAt) || now < observedAt || now - observedAt > 15 * 60 * 1000) {
+    return account.state;
+  }
+  return (usage.windows || []).some((window) =>
+    window.used_percent === 100 && Date.parse(window.resets_at || "") > now
+  ) ? "USAGE_EXHAUSTED" : account.state;
 }
 
 function renderCodexUsage(usage) {
@@ -3394,7 +3409,7 @@ function renderCodexAccounts(accounts) {
     card.open = openBindings.has(account.binding_id);
     const capabilities = (account.capabilities || []).map((value) => `${value.model}/${value.reasoning_effort}`).join(", ") || "관측 없음";
     addControlDetail(facts, "계정", account.account_label);
-    addControlDetail(facts, "계정 상태", statePresentation("codex_account", account.state).label);
+    addControlDetail(facts, "계정 상태", statePresentation("codex_account", codexAccountDisplayState(account)).label);
     addControlDetail(facts, "계정 연결 ID", account.binding_id);
     addControlDetail(facts, "Codex 버전", account.codex_cli_version);
     addControlDetail(facts, "확인된 실행 조합", capabilities);

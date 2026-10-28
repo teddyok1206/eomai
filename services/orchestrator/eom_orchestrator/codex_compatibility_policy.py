@@ -335,7 +335,9 @@ def render_compatibility_policy(
         if case.status == "PASS":
             passed[case.slot_id].add((case.model, str(case.reasoning_effort)))
     intersection = passed["01"] & passed["02"]
-    if not intersection:
+    # Authoring and review are admitted only as a tested pair. An exhausted
+    # authoring account must not withhold independent image/support roles.
+    if not intersection and not any(passed[slot] for slot in ("03", "04", "05", "06")):
         raise _invalid("no exact model/effort pair passed both required bindings")
     passed["01"] = intersection
     passed["02"] = intersection

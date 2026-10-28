@@ -45,6 +45,7 @@ def test_domain_specific_states_are_human_readable() -> None:
         ("hwpx_capability", "READY"): "HWPX 제작 가능",
         ("item_revision", "APPROVED"): "사용 가능",
         ("codex_account", "DRAINING"): "새 작업 중지 중",
+        ("codex_account", "USAGE_EXHAUSTED"): "사용량 소진",
     }
     for (domain, raw_state), label in expected.items():
         presentation = domains[domain]["states"][raw_state]
