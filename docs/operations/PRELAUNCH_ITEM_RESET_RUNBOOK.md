@@ -44,3 +44,16 @@ prelaunch-reset apply --plan-file <그 plan.json> --expected-plan-sha256 <plan_s
 ## 검증 증거
 
 `tests/integration/test_prelaunch_item_reset_application.py`는 disposable marker가 있는 복원 DB에서만 실행한다. 계획 변경 차단, component owner 경계, 동시 write 차단, 중단 rollback, 실제 정리와 동일 계획 재전송을 포함한다. `EOM_PRELAUNCH_RESET_TEST_STATE`를 설정하지 않으면 실행하지 않는다. 운영 DB를 pytest 대상으로 사용하지 않는다.
+
+## 2026-10-28 운영 실행 결과
+
+정리와 동일 계획 재전송을 완료했다. 실행한 설치본 source는 `3a8692641d917f0285b1773bf029588ee9b04b57`이며 API/Web/INDEX/QUERY pin을 교체하는 배포가 아니다. 영구 migration이나 DB privilege 변경도 없다.
+
+- 삭제: Item 110개, Item Revision 111개, 승인된 과거 workflow 921개, 전용 producer Job 918개.
+- 보존: AI 샘플 1개와 기존 HWPX, 기출 source 520개, 교과서 source 10개, 외부 원천 source 1,297개, legacy Item 757개, 공유 producer Job 1,216개.
+- 기존 NAS 파일 삭제 0개. 적용 직전 PostgreSQL 백업·manifest와 정본 계획/완료 영수증을 보존했다.
+- 동일 계획 재전송은 기존 영수증을 반환했으며 추가 삭제/Job/Artifact를 만들지 않았다.
+- 서비스 7개 재개, HTTPS/API readiness 및 보존 샘플 내용·HWPX secure read/hash 확인 완료. Graph 67 `CONTENT_ONLY` current index는 520/520이며 다른 view/device의 준비는 기존 owner에서 계속한다.
+- disposable DB 동시성/중단/재전송 검사 6개 PASS 후 해당 DB·전용 role·local state만 공식 cleanup으로 제거했다.
+
+계획·영수증의 immutable ID/hash, 백업 경로와 조사 이력은 [실행 기록](../architecture/AI_ITEM_PURGE_BOUNDARY_2026-10-28.md#현재-판정-운영-적용-완료)에 있다. 이미 완료한 계획을 새 승인처럼 재생성하거나, 이 고정 범위 명령을 일반 문항 삭제 API로 재사용하지 않는다.

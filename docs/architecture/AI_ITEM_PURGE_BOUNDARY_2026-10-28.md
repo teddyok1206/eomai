@@ -1,5 +1,33 @@
 # EOM 생성 문항 정리 경계 (2026-10-28)
 
+## 현재 판정: 운영 적용 완료
+
+2026-10-28 16:40 UTC 정리를 완료하고 원래 active였던 서비스 7개를 재개했다. 이 절이 현재 상태이며, 아래 조사·연습·구현 후보 절의 `미실행` 표현은 각 조사 시점의 기록이다. 과거 관찰이나 실패를 성공으로 덮어쓰지 않는다.
+
+| 항목 | 실제 운영 결과 |
+| --- | --- |
+| EOM 생성 문항 | 승인된 대상 Item 110개·Revision 111개 삭제, 대표 샘플 1개 보존 |
+| 보존 샘플 | `item_f913cf57d96a4fd287381b09eaf7f32e` / `itemrev_2f962f0bb4db4718b6e7af7d6fc8982f`, `APPROVED` |
+| 기출·교과서 | Graph 67의 기출 source 520개·교과서 source 10개와 보호 metadata fingerprint 보존 |
+| 가져온 창작·legacy | 외부 원천 source 1,297개·legacy Item 757개 보존. 서로 다른 모집단이므로 합산하지 않음 |
+| 구 Graph와 파생 이력 | 승인된 Graph 68/69 및 관련 workflow 921개 정리 |
+| 공유 producer | 후보 Job 2,134개 중 공유 참조가 있는 1,216개 보존, 전용 918개 삭제 |
+| NAS·백업 | 기존 감사 파일과 복구용 백업 보존. 기존 NAS 파일 물리 삭제 0개 |
+| 재전송 | 같은 계획으로 `apply` 재전송 시 동일 receipt Job/Artifact/Revision 반환, 새 삭제·새 Job 생성 없음 |
+| 가용성 | API readiness와 실제 HTTPS readiness `READY`, 보존 샘플의 Catalog 내용 조회 및 기존 HWPX secure read/hash 확인 |
+| 검색 복구 | Graph 67의 `CONTENT_ONLY` current index 520/520 게시 확인. 나머지 view/device는 기존 INDEX owner가 계속 준비하며 전체 짝 완료로 확대 해석하지 않음 |
+| runtime | API/Web 및 INDEX/QUERY의 기존 설치 pin·Codex 인증·worker 설정·DB migration head 변경 없음 |
+
+실행 도구 source는 `3a8692641d917f0285b1773bf029588ee9b04b57`, root 소유 설치본은 `/opt/eom/maintenance-releases/3a8692641d917f0285b1773bf029588ee9b04b57/site-packages`다. wheel SHA-256은 `f26dca8ba0f0778f65dddf8fc02521b21fee9fda35490b9e2ba2ce67e0581a6e`, 설치된 RECORD 2,116개 해시를 검증했다. 진행 중이던 다른 문서 변경은 이 릴리스에 포함하지 않았다.
+
+정본 계획은 `artifact_ea7ea7310cb94de48aaa02c687ed4ce8` / `rev_f3b50a188f5e4525ae696f112b3a1f78`, plan SHA-256은 `e16a2149ee01c681766ff1309f13d794288bbdaf5c68d4c724470113303dbde6`이다. 완료 영수증은 `artifact_b6c19da7848243019c17b47d04e5d8f0` / `rev_bc8479c648ff4974a06b8adc19d2f755`, primary `receipt.json`의 SHA-256은 `82ec85a83bc8c9d043b659568e00aa9c0ec3d0342b28196fe82dad18f1276df8`이다. 실제 삭제 수는 이 영수증을 기준으로 보며 아래 오래된 연습 수치를 더하지 않는다.
+
+적용 직전 백업은 `/mnt/nas/eom/backups/postgresql/eom_20261028T162742Z_1edaf9f60765.dump`와 같은 basename의 `.manifest.json`이다. 운영과 분리된 복원 DB에서 interruption rollback·동시성·drift rejection·적용/재전송 6개 검사를 통과했고, 확인 후 disposable DB·전용 role·local state만 공식 cleanup으로 제거했다. NAS 백업은 그대로 보존한다.
+
+후속 INDEX 관찰에서는 `workflow_5c51ee0d1f7440e69a2b18fbebc31faa`가 `COMPLETED`, 명령이 `SUCCEEDED`가 됐다. 별도 native GPU 보조 unit `aef559153f4d40d99bc0c9dc6ab55c63`에는 channel `BlockingIOError` 종료 기록이 있으며 이를 초기화하거나 성공으로 바꾸지 않았다. INDEX owner 자체는 계속 active이고 다음 요청을 준비한다. 따라서 위 `CONTENT_ONLY` 등록 복구와 전체 GPU device/view acceptance를 같은 성공으로 보고하지 않는다. 정리 자체의 source 회귀 최종 재실행은 36개 PASS다. 설치본을 source용 pytest 대상으로 선택한 환경 오류는 개발 source 경로로 바로잡았으며 운영 데이터 오류로 재분류하지 않았다.
+
+이번 사용 사례는 과거 게시 Graph·시험지·검색·실행 이력까지 함께 제거하는 **일회성 prelaunch 물리 정리**다. 앞으로의 일반 삭제 버튼은 기존 Registry lifecycle/retirement application을 사용해 사용 대상에서 제외하고 불변 감사 이력은 보존해야 한다. 일반 삭제에 Graph 전역 되돌리기·공유 producer purge·서비스 점검 창을 묶지 않는다. 이번에 새 범용 GUI hard-delete 기능을 추가한 것은 아니다. 실행 경계와 재전송 절차는 [운영 runbook](../operations/PRELAUNCH_ITEM_RESET_RUNBOOK.md)을 따른다.
+
 ## 목적과 정본
 
 시험 운영 전 EOM의 `generic-item-development` 워크플로가 만든 문항 중 대표 샘플 1건만 남기고 나머지 문항 및 문항 메타데이터를 제거한다. 기출 분석, 교과서, 외부에서 가져온 창작 문항은 대상이 아니다. 삭제 집합은 `APPROVED_ITEM`이라는 Graph source class만으로 추정하지 않고, 각 Item Revision에 고정된 `workflow_id`를 `workflow_instances.definition_key`와 대조해 산출한다. 이 집합의 해시와 보존 샘플을 실행 전에 고정해야 한다.
@@ -65,8 +93,8 @@
 | 조회 패턴 | Item/workflow/revision/key 직접 조회, 고정 Graph의 source·index 역참조, exact target 집합 membership 검사, index head의 compare-and-swap이다. |
 | 자료구조/인덱스 | 110개 목표 ID는 정렬된 immutable tuple + SHA-256, 중복 검사는 set, 관계 검색은 기존 FK/B-tree/unique 제약을 사용한다. 전체 운영 corpus를 Python 리스트로 반복 스캔하지 않는다. |
 | 규모/복잡도 | 이번 정리는 110 Item·111 Revision과 두 Graph snapshot의 파생 관계에 한정된다. 계획 생성은 관련 행 수에 선형이며, index revision 역순 제거는 revision 수에 선형이다. 새 범용 purge framework는 만들지 않는다. |
-| 트랜잭션/경합 | 서비스 owner의 fencing과 실제 current head·target hash를 재확인한다. 활성 GPU 작업·새 claim을 중지하고 비종결 실행을 공식 명령으로 끝낸 뒤, 최신 백업과 동일한 입력을 고정한다. DB 관계 변경은 소유 경계의 짧고 멱등인 단계로 나눈다. |
-| 실패/재전송 | 계획 hash 또는 참조 수가 변하면 쓰기 전에 중단한다. 중간 실패는 성공으로 재해석하지 않고 단계별 receipt로 재개한다. 기존 실패 기록을 소급 성공으로 바꾸지 않는다. |
+| 트랜잭션/경합 | 서비스 owner fencing과 실제 current head·target hash를 재확인한다. 실제 host 실행·claim이 quiescent임을 확인하고 최신 백업과 동일 입력을 고정한다. 각 소유 adapter의 DB 관계 변경은 하나의 root transaction·advisory/table lock 안에서 수행한다. |
+| 실패/재전송 | 계획 hash 또는 참조 수가 변하면 쓰기 전에 중단한다. transaction 내 실패는 전체 rollback하고, commit 이후 receipt 게시 전 중단은 같은 계획의 사후 조건 검증 후 receipt만 복구한다. 이미 게시된 receipt는 그대로 반환한다. 기존 실패 이력을 성공으로 바꾸지 않는다. |
 | 간단한 대안 | 기존 `retire`는 일반 목록에서 숨길 뿐 Item/Graph metadata를 남겨 사용자 요구를 충족하지 못한다. 단일 raw SQL은 component 소유권·불변 이력·동시 실행 fencing을 우회하므로 운영 경로가 될 수 없다. |
 
 비교를 위한 disposable 스크립트는 FK 순서를 실험할 뿐, 이 관리자 application 사용 사례를 대체하지 않는다.

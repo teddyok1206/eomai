@@ -51,6 +51,7 @@
 | 일반 채팅 | 부가 알림 호환 수정 배포 및 새 메시지의 실제 답변·완료 상태 확인. [배포 기록](docs/operations/GENERAL_CHAT_MODERATION_METADATA_FIX_2026-10-24.md) |
 | 문항 DB | 원본 조회·다중 조건 검색·엑셀 저장·교정본 다운로드·PDF 준비·조립 순서 저장과 재열기를 지원합니다. 표/상세 분할 화면의 Web 배포·자동 검증을 완료했으며, 원본 전용 편집 합본과 창작 분석 슬롯은 아직 미활성입니다. [운영 기록](docs/operations/ITEM_DB_CURATED_ASSEMBLY_RELEASE_2026-10-27.md) |
 | 창작 문항 학습 준비 | 모델을 실행하지 않는 준비 명령과 source→페이지→실행계획 연결을 배포했습니다. 실제 원본 준비의 인증 검증은 진행 중이며 풀이보고서·Graph 게시 완료는 아닙니다. [준비 릴리스](docs/operations/CREATIVE_ITEM_PRE_EXECUTION_RELEASE_2026-10-27.md) |
+| 시험 운영 생성 문항 정리 | AI 샘플 1개를 남기고 승인된 과거 생성 문항 110개와 파생 이력을 운영에서 정리했습니다. 기출·교과서·가져온 창작 정본과 NAS 감사 파일·백업은 보존했습니다. 일반 삭제와 구분되는 일회성 정리입니다. [실행 기록](docs/architecture/AI_ITEM_PURGE_BOUNDARY_2026-10-28.md) |
 | CPU/GPU 임베딩 비교 | 고정 입력 비교 완료. GPU는 적재 후 문서 배치 계산에서 약 3.97배 빨랐으나 단일 질의 전체 시간은 비슷했습니다. [실측 결과](docs/operations/EMBEDDING_GPU_MEASURED_2026-10-24.md) |
 | GPU 우선·CPU 대체 실행 | 후속 구현과 CUDA 인덱스 증분 채우기가 진행 중입니다. 모델 재사용·장치별 선택의 코드 검증과 일부 실제 GPU 묶음 실행은 확인했지만, 전체 인덱스 짝·GPU 검색·자원 부족 시 CPU 대체·운영 기본값 전환은 아직 검증 전입니다. 기존 CPU 검색을 유지합니다. [설계](docs/architecture/EMBEDDING_GPU_PREFERRED_BATCH_EXECUTION.md) · [운영 검증 현황](docs/status/GPU_PREFERRED_LIVE_ACCEPTANCE_2026-10-25.md) |
 
