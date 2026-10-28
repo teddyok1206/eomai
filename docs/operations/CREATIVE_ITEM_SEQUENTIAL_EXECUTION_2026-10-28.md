@@ -7,7 +7,9 @@
 - 입력은 완료된 import `extimport_d2019be75aa943636bfa8b7fb7f4a92e`의 정확한 최종본 연결 후보 1,053개다. 전체 관찰 1,297행을 완료 문항 수로 세지 않는다. 초안·반려·파일 연결 예외 14개를 자동 승격하지 않는다.
 - 기존 표본 고유번호 `10310`의 준비된 Workflow부터 시작한다. 기존 support 슬롯 `05`, 동시 상한 1, 고정된 `gpt-5.6-terra/xhigh` 실행 계획을 사용한다. 다른 슬롯·Codex 인증·기출/교과서·GPU runtime pin은 바꾸지 않는다.
 - 원본과 기출 첨부 영역을 분리한 구조화 추출·풀이 제안을 먼저 확인한다. 실제 결과 수락, 정본 Item/출처 연결, accepted 분석, Graph CAS, 창작 풀이보고서 successor의 역추적이 준비되기 전에는 전체를 실행하지 않는다.
-- `NEEDS_DECISION`, 정답 불일치, 미해결 이미지나 source 철회는 해당 문항만 격리한다. 형식 통과를 과학적 정확성이나 Graph 게시 완료로 간주하지 않는다. 공개 가능한 풀이 단계와 검증 요약만 남긴다.
+- 최신 사용자 지시: 풀이 중 의문점·정답/해설 불일치가 있어도 **원문 등록을 막지 않는다**. 원문/편집 답안을 수정하지 않고 공개 가능한 풀이·서로 다른 판단·미해결 사항을 별도 보고서에 보존하며, 나중에 공식 조회한 Codex가 이를 함께 읽어야 한다. 원문 수록 승인과 과학적 정확성 검증을 혼동하지 않는다. 기존 worker의 `NEEDS_DECISION` 결과 자체를 `PROPOSED`로 바꾸지 않고, 후속 등록 정책이 이 결과를 `REGISTER_WITH_REVIEW_WARNINGS`로 수록한다.
+- 파일·문항을 읽을 수 없거나 source 철회·pointer/hash 불일치가 있는 기술적 실패는 내용으로 꾸미지 않는다. 원천 자료와 실패/미독해 보고를 남기고 원문 내용을 발명하지 않는다.
+- 후속 사용자 지시: 문항 약 3개가 차례대로 정본/풀이/Graph 등록과 Codex 조회까지 연결되는 것을 확인한 뒤 나머지 자동 처리를 열고, 이후에는 GPU 임베딩처럼 기본 30분 간격으로 모니터링한다. 주의사항이 있는 문항도 원문/보고서/Graph 연결이 검증되면 이 3건에 포함할 수 있다.
 
 ## 시작 경계의 설계 결정
 
@@ -25,4 +27,38 @@
 
 ## 현재 상태
 
-시작 application과 검증을 연결하는 중이다. 아직 이 문서만으로 실제 슬롯 실행·정본 수락·Graph 게시를 완료했다고 주장하지 않는다. 표본부터 실제 불변 output/receipt로 기록한 후 bounded 순차 실행을 연다. 진행률은 원본 준비·실행·제안 수락·정본 등록·Graph 게시·보고서·격리로 나누고 정기 확인은 30분 간격으로 제한한다.
+시작 application을 연결하고 실제 표본 1건을 실행했다. 정본 수락·Graph 게시·장기 자동 처리는 아직 완료가 아니다. 표본부터 실제 불변 output/receipt로 기록한 후 bounded 순차 실행을 연다. 진행률은 원본 준비·실행·제안 수락·정본 등록·Graph 게시·보고서·격리로 나누고 정기 확인은 30분 간격으로 제한한다.
+
+## 첫 실제 실행
+
+- 설치 도구 source: `a8786e66d6bca40cf19370cbe577ff966cf720e4`; 별도 보호된 maintenance wheel. 실제 API/Runner는 `204ee18c7a4cf61c179a1b2953c2deca44d04b1e`, GPU owner의 기존 pin도 유지했다.
+- wheel SHA-256: `731cd4d6adfbe46f2991dc37b20884843a4262ae3dbde5990499c4701e59f996`, 표준 RECORD와 설치 CLI 분리 PREPARE/START 도움말 검사 통과.
+- source/CLI/인가 회귀 189개 PASS, mypy/Ruff/format PASS. 새 disposable DB의 migration 왕복과 동시 START·늦은 거부·중단 rollback을 포함한 20개 PASS. 같은 DB를 다시 쓴 이전 실행은 이미 released된 합성 preset 때문에 기존 control fixture 1건이 거부됐고, 이를 운영 결함으로 바꾸지 않고 새 disposable DB에서 전체를 확인했다.
+- 실제 guiadmin 로그인 성공, START command 저장 후 해당 테스트 session만 로그아웃. root/worker 인증 파일·사용자 비밀번호 변경 없음.
+- U `10310`: `workflow_cb2b0260c9fa4a31b7863da88b3e7a9d`, `wfcmd_12b7f2d0392f4f2fbc1df0b94fcfc82e`, `job_b112fe8c8bcc46b3a8ca195098e282fa`. 슬롯 `05`의 실제 ACTIVE lease와 모델 실행을 확인했다.
+- Workflow/command/Job: `COMPLETED` / `SUCCEEDED` / `SUCCEEDED`.
+- 결과: `extlearnresult_019c7e8a5f5e4e30ac439eb4d4b9e201`, hash `sha256:27e9ce1625043cce165551d6502e59e8150735ff685ef27b92eec56ca8fa189c`.
+- 정본 worker 결과: `artifact_a728b1094d4941e38183cb86a6b8488d` / `rev_7c5a0a612dba4697b570c87c18ce4688`, primary JSON SHA `sha256:549990d746dc7d5713c4e9adb7fc4270f8ec4acfa88ba1068bd4fa44304ccdc0`.
+- 제안 상태 `NEEDS_DECISION`: 문제·편집 해설·첨부 기출을 분리했고, 문항을 native 표와 진술문으로 제안했지만 편집 답안과 독립 풀이의 `ANSWER_DISAGREEMENT`를 보고했다. 이는 worker가 제기한 불일치이며 원문 오류 확정이 아니다. 이후 사용자가 이런 의문점은 등록을 막지 말고 보고서에 남기도록 정책을 정했다. 원래 결과 상태·편집 답안은 보존하고 주의사항을 동반한 원문 등록 경계를 추가한다.
+
+## 목표 완료 기준과 자동 처리 경계
+
+사용자가 2026-10-28 이 작업을 goal로 지정했다. 전체 1,053건의 학습이 끝나야 goal 완료인 것은 아니다. 표본 3개의 실제 정본/보고서/Graph/조회 및 중단·중복 방지 경계를 확인한 뒤, 같은 고정 대상의 나머지를 슬롯 05·동시 1개로 계속 처리하도록 운영에 연결하고 30분 모니터링으로 전환하면 이 goal의 종료선이다. 전체 완료율과 goal의 준비/자동 실행 완료를 분리해 보고한다.
+
+지금 확인한 추가 연결 범위는 source-only 아카이브의 정본 등록, 창작 origin/분석/보고서 수락, 공유 Graph publication adapter, 주의사항을 포함한 RAG read와 저장된 실제 operator에 귀속되는 장기 실행이다. 기존 일반 Item 승인이나 기출 V9/V10의 의미를 느슨하게 해 우회하지 않는다. 새 브라우저 로그인은 이 장기 작업을 실제 사용자 권한으로 한 번 제출할 때 필요할 수 있으나, 저장된 작업을 처리하는 도중에는 만료된 브라우저 session을 가장하지 않고 현재 계정/권한/source를 claim마다 재인가한다.
+
+## 원문 수록·주의사항 동반 등록의 최소 연결 설계
+
+현재 HWP 원본과 XLSX의 Intake는 `ANALYSIS_PENDING`이다. 이를 일괄 `ACCEPTED`로 바꾸거나, 기존 기출 Origin/occurrence를 합성해 창작 등록에 재사용하지 않는다. 원본 아카이브에 맞는 source→Item 계보를 기존 `SOURCE_REFERENCE` component의 새 작은 불변 계약으로 기록한다. 기출 publisher는 그대로 두고 창작 adapter가 이 계보를 검증한 뒤 기존 `AutomaticItemGraphPublicationService`를 호출한다.
+
+1. **책임:** Catalog가 원문 수록 정책·등록·주의사항과 source 계보를 확인한다. 기존 Registry와 분석/Graph application이 각자 정본을 소유하며 Orchestrator만 Artifact를 커밋한다.
+2. **정본:** 원본 Office/PDF·Notion 관찰은 기존 source revision이고, worker 결과는 이미 승인된 exact role-result Artifact다. 수록 Item Content는 원문과 AI 풀이를 구분해 materialize하는 별도 정본이다.
+3. **identity/버전:** source ID/revision·관찰 hash, work/plan 선택, role-result pointer/hash, 수록 content hash와 registration policy를 계보 receipt로 pin한다. 외부 U는 metadata일 뿐 DB ID가 아니다.
+4. **해석:** source 현재성/권한, 완료 step↔Job↔role-result, JSON Schema/Pydantic, region closure와 실제 페이지를 확인한다. 일치하지 않는 pointer나 첨부 기출에서 내용을 보충하지 않는다.
+5. **원문/풀이 분리:** 원문 편집 답안이 AI의 독립 답안과 다르면 원문 답안은 그대로 수록한다. 독립 답안·풀이·불일치는 기존 worker 결과를 고정 참조해 별도 보고서로 읽는다. 명확한 원문 답안/해설의 materialization과 그 근거 region·변환 전후 hash를 기록하고 과거 worker 결과는 수정하지 않는다.
+6. **자료구조:** 기존 고유 registration key를 `creative-source:<source_id>`로 사용해 한 외부 논리 문항이 새 Item들로 증식하지 않게 한다. 같은 source revision은 replay, 다른 revision은 명시적인 후속 수정 경계로 거부한다. 모든 원본 A:AF 값은 기존 source observation에 그대로 남는다.
+7. **규모/접근:** key/immutable revision 직접 조회와 제한된 manifest 순회다. binary는 DB에 넣지 않으며 role-result 전체나 HWP/PDF를 서비스 사이에서 반복 복사하지 않는다. 기존 Job/Artifact indexed identity와 U keyset projection을 우선 재사용하고 새 검색/queue framework를 만들지 않는다.
+8. **트랜잭션:** Artifact commit→Registry 등록→기존 knowledge analysis→Graph CAS는 독립 멱등 단계다. 긴 모델 실행 동안 transaction을 잡지 않고, 각 단계의 exact pointer로 중단 후 재개한다. 동시 등록·중단·재전송은 disposable DB에서 검증한다.
+9. **의존:** CLI/상주 composition→Catalog use case→기존 계약/Registry/analysis/Graph port. 원본 읽기와 파일 materialization은 기존 Catalog/Orchestrator adapter가 소유한다. worker는 proposal만 반환한다.
+10. **정책과 실패:** 과학적 의문점은 `REGISTER_WITH_REVIEW_WARNINGS`로 보존한다. 원본 미독해와 source/hash/권한 실패는 다른 상태다. 어느 상태도 원본 삭제나 기존 FAILED→성공 변경으로 처리하지 않는다. Codex용 보고서 projection은 의문점·편집 답안·독립 판단을 함께 내보내고 수록 승인을 정답 정확성 보장으로 표현하지 않는다.
+11. **간단한 대안 배제:** 원본 Intake 상태를 바꾸거나 `PAST_EXAM`/기출 Origin을 붙이면 없는 승인·시험 이력을 만들게 된다. 새 범용 origin/queue를 도입하는 대신 기존 component pointer와 source에 맞는 검증 adapter를 사용한다. 별도 `ItemOriginProfile`이 필요한 후속 기능에서는 이 계보를 authority로 삼는 정식 successor를 추가하며 기존 V1을 느슨하게 하지 않는다.

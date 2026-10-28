@@ -39,6 +39,7 @@ if (($# != 2)) || \
     "$1" != "authenticated-session-tests" && \
     "$1" != "local-indexing-service-tests" && \
     "$1" != "pdf-review-tests" && "$1" != "external-item-tests" && \
+    "$1" != "creative-registration-tests" && \
     "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
     "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
@@ -376,6 +377,13 @@ if [[ "${action}" == "hwpx-tests" ]]; then
   export EOM_RUN_INTEGRATION=1
   "${PYTHON}" -m pytest -q tests/integration/test_hwpx_persistence.py
   printf 'Disposable HWPX persistence integration tests passed.\n'
+  exit 0
+fi
+
+if [[ "${action}" == "creative-registration-tests" ]]; then
+  export EOM_RUN_API_INTEGRATION=1
+  export EOM_EXTERNAL_ITEM_TEST_STATE="${state_directory}"
+  "${PYTHON}" -m pytest -q tests/integration/test_creative_registration_storage.py
   exit 0
 fi
 

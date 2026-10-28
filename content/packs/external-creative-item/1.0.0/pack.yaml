@@ -1,0 +1,28 @@
+schema_version: "1.1"
+pack:
+  key: "external-creative-item"
+  name: "Imported Creative Item with Source and Review Notes"
+  version: "1.0.0"
+  locale: "ko-KR"
+  domain_key: "general-science"
+  description: "Archive source registration preserves editorial content and separate AI solution warnings"
+provenance:
+  mode: "built_in_general_knowledge"
+  intake_batch_ids: []
+  mapping_proposal_ids: []
+compatibility:
+  protocol:
+    minimum: "1.33.0"
+    maximum_exclusive: "1.34.0"
+  workflow_definitions:
+    - key: "external-item-learning"
+      versions: ["1.0.0"]
+  required_worker_roles: ["support"]
+taxonomies: {}
+item_types:
+  - key: "external-creative-multiple-choice"
+    source: "item-types/external-creative-multiple-choice.yaml"
+profiles: {}
+metadata_schemas:
+  item: "metadata-schemas/item-metadata.schema.json"
+rubrics: {}

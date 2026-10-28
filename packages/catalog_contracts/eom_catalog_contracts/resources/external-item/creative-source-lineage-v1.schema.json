@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/external-item/creative-source-lineage/1.0",
+  "title": "Creative Source Registration Lineage V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "lineage_id",
+    "source_id",
+    "source_revision_id",
+    "import_id",
+    "external_number",
+    "origin_kind",
+    "source_input_sha256",
+    "observation_sha256",
+    "selection",
+    "role_result",
+    "result_id",
+    "result_sha256",
+    "proposed_content_sha256",
+    "registered_content_sha256",
+    "source_answer_mode",
+    "normalization_actions",
+    "warning_codes",
+    "registration_policy",
+    "requested_by_operator_id",
+    "created_at",
+    "lineage_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "creative-source-lineage/1.0"
+    },
+    "lineage_id": {
+      "type": "string",
+      "pattern": "^extlineage_[0-9a-f]{32}$"
+    },
+    "source_id": {
+      "type": "string",
+      "pattern": "^extitem_[0-9a-f]{32}$"
+    },
+    "source_revision_id": {
+      "type": "string",
+      "pattern": "^extitemrev_[0-9a-f]{32}$"
+    },
+    "import_id": {
+      "type": "string",
+      "pattern": "^extimport_[0-9a-f]{32}$"
+    },
+    "external_number": {
+      "type": "string",
+      "pattern": "^[0-9]{5}$"
+    },
+    "origin_kind": {
+      "enum": [
+        "PAST_EXAM_VARIATION",
+        "FREE_AUTHORING"
+      ]
+    },
+    "source_input_sha256": {
+      "$ref": "#/$defs/sha"
+    },
+    "observation_sha256": {
+      "$ref": "#/$defs/sha"
+    },
+    "selection": {
+      "$ref": "#/$defs/selection"
+    },
+    "role_result": {
+      "$ref": "#/$defs/member"
+    },
+    "result_id": {
+      "type": "string",
+      "pattern": "^extlearnresult_[0-9a-f]{32}$"
+    },
+    "result_sha256": {
+      "$ref": "#/$defs/sha"
+    },
+    "proposed_content_sha256": {
+      "$ref": "#/$defs/sha"
+    },
+    "registered_content_sha256": {
+      "$ref": "#/$defs/sha"
+    },
+    "source_answer_mode": {
+      "enum": [
+        "EDITORIAL_SOURCE",
+        "MODEL_PROPOSAL_UNVERIFIED",
+        "NOT_APPLICABLE"
+      ]
+    },
+    "normalization_actions": {
+      "type": "array",
+      "maxItems": 4,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "PRESERVED_EDITORIAL_ANSWER",
+          "PRESERVED_EDITORIAL_EXPLANATION"
+        ]
+      }
+    },
+    "registration_policy": {
+      "const": "PRESERVE_SOURCE_WITH_REVIEW_WARNINGS_V1"
+    },
+    "requested_by_operator_id": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "lineage_sha256": {
+      "$ref": "#/$defs/sha"
+    },
+    "warning_codes": {
+      "type": "array",
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z][A-Z0-9_]{2,63}$"
+      }
+    }
+  },
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflow_id",
+        "step_run_id",
+        "plan_id",
+        "plan_sha256",
+        "work_input_sha256"
+      ],
+      "properties": {
+        "workflow_id": {
+          "type": "string",
+          "pattern": "^workflow_[0-9a-f]{32}$"
+        },
+        "step_run_id": {
+          "type": "string",
+          "pattern": "^steprun_[0-9a-f]{32}$"
+        },
+        "plan_id": {
+          "type": "string",
+          "pattern": "^execplan_[0-9a-f]{32}$"
+        },
+        "plan_sha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "work_input_sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "const": "result.json"
+        },
+        "schema_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    }
+  }
+}

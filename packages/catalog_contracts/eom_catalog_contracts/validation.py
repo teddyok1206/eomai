@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "creative-source-lineage-v1": CatalogSchemaResource(
+            "schemas/external-item/creative-source-lineage-v1.schema.json",
+            "resources/external-item/creative-source-lineage-v1.schema.json",
+            "1.0",
+            "sha256:7fa73f570a1791cbf0f19c6a020b50cba82e3a085031ab3a2cbbadbe943dac35",
+        ),
         "curated-document-assembly-draft-v1": CatalogSchemaResource(
             "schemas/api/v1/curated-document-assembly-draft-v1.schema.json",
             "resources/api/curated-document-assembly-draft-v1.schema.json",

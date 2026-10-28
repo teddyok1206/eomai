@@ -52,6 +52,11 @@ from sqlalchemy import Engine
 
 learning_app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 
+# Completion uses the same originally admitted owner, not a new synthetic login.
+from eomctl.creative_registration import complete_learning  # noqa: E402
+
+learning_app.command("complete")(complete_learning)
+
 
 def _read_reviewed(path: Path, maximum: int) -> bytes:
     """Bounded local presentation input; paths and ownership are not operator authority."""

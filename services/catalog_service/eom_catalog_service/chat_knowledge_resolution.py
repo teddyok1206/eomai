@@ -30,6 +30,7 @@ from eom_workflow_runner.models import WorkflowInstanceRecord
 from sqlalchemy import Engine, func, select, text
 
 from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.creative_registered_report import load_registered_creative_report
 from eom_catalog_service.item_content_contract import ITEM_CONTENT_SCHEMAS, read_item_content
 from eom_catalog_service.knowledge_graph_models import (
     KnowledgeCorpusRecord,
@@ -353,6 +354,12 @@ class ChatKnowledgeResolutionService:
                             "solution_summary": report.solution_summary,
                             "final_answer_summary": report.final_answer_summary,
                             "assessment_design_summary": report.assessment_design_summary,
+                            "unresolved_issues": [
+                                issue.model_dump(mode="json") for issue in report.unresolved_issues
+                            ],
+                            "official_explanation_comparison": (
+                                report.official_explanation_comparison.model_dump(mode="json")
+                            ),
                         }
                     ).decode()
                     if len(report_text) > 24000:
@@ -370,6 +377,40 @@ class ChatKnowledgeResolutionService:
                             pointer=ArtifactMemberPointer.model_validate(pointer_value),
                             location="고정 Graph 기초분석에 연결된 승인 풀이보고서 요약",
                             text=report_text,
+                            graph_node_ids=(),
+                        )
+                    )
+                    reported.add(ref.item_revision_id)
+                by_revision = {entry.source_revision_id: entry for entry in associations}
+                for ref in selection.references:
+                    revision = by_id[ref.item_revision_id][1]
+                    if revision.metadata_json.get("source_kind") != "CREATIVE":
+                        continue
+                    direct = direct_sources[ref.item_revision_id]
+                    creative_base = by_revision.get(ref.item_revision_id)
+                    if creative_base is None or direct.approval != "APPROVED":
+                        continue
+                    if ref.item_revision_id in reported or (
+                        creative_base.source_artifact_id,
+                        creative_base.source_artifact_revision_id,
+                        creative_base.source_sha256,
+                    ) != (
+                        direct.pointer.artifact_id,
+                        direct.pointer.artifact_revision_id,
+                        direct.pointer.sha256,
+                    ):
+                        raise ChatKnowledgeResolutionError("CHAT_KNOWLEDGE_HASH_MISMATCH")
+                    creative = load_registered_creative_report(session, self.artifacts, revision)
+                    sources.append(
+                        ChatKnowledgeSource(
+                            key=f"S{len(sources) + 1}",
+                            item=ref,
+                            display_name=direct.display_name,
+                            kind="SOLUTION_REPORT",
+                            approval="APPROVED",
+                            pointer=creative.lineage.role_result,
+                            location="창작 원문에 연결된 독립 풀이·불일치 기록 (정확성 승인 아님)",
+                            text=creative.context_text(),
                             graph_node_ids=(),
                         )
                     )
