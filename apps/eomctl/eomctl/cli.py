@@ -36,6 +36,7 @@ from eomctl.hwpx import hwpx_app
 from eomctl.knowledge import knowledge_app
 from eomctl.legacy_assessment import legacy_assessment_app
 from eomctl.operator import operator_app
+from eomctl.prelaunch_reset import prelaunch_reset_app
 from eomctl.workflow import workflow_app
 
 app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
@@ -55,6 +56,7 @@ app.add_typer(deliverable_app, name="deliverable")
 app.add_typer(usage_app, name="usage")
 app.add_typer(registry_app, name="registry")
 app.add_typer(operator_app, name="operator")
+app.add_typer(prelaunch_reset_app, name="prelaunch-reset")
 app.add_typer(control_plane_app, name="control-plane")
 
 

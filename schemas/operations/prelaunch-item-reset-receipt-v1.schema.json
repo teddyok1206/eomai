@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/operations/prelaunch-item-reset-receipt/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "plan_sha256", "database", "deleted_items", "deleted_item_revisions", "deleted_workflows", "candidate_jobs", "shared_jobs_preserved", "exclusive_jobs_deleted", "protected_sha256", "nas_action", "outcome"],
+  "properties": {
+    "schema_version": {"const": "prelaunch-item-reset-receipt/1.0"},
+    "plan_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "database": {"type": "string", "pattern": "^[A-Za-z_][A-Za-z0-9_]{0,62}$"},
+    "deleted_items": {"const": 110},
+    "deleted_item_revisions": {"const": 111},
+    "deleted_workflows": {"type": "integer", "minimum": 170, "maximum": 2500},
+    "candidate_jobs": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "shared_jobs_preserved": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "exclusive_jobs_deleted": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "protected_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "nas_action": {"const": "PRESERVED"},
+    "outcome": {"const": "COMPLETED"}
+  }
+}
