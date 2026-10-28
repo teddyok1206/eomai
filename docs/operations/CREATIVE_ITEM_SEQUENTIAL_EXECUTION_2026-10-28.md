@@ -68,3 +68,19 @@
 `bbf79e5b`는 원문 수록·계보·주의사항 조회·기존 Graph 분석 연결을 별도 maintenance wheel로 설치했다. API/Runner/GPU의 운영 설치본은 교체하지 않았다. schema/반환값·원문 분리·공식 채팅 조회 등 집중 63개, 전용 설정 포함 45개 테스트와 disposable DB의 실제 registration-key 동시성/중단 복구 2개를 확인했다. 동일 사례를 중복 합산한 독립 총계로 표현하지 않는다.
 
 U 10310은 원문 수록과 원래 role-result를 참조하는 보고서 component를 저장했다. 이후 Graph 분석 생성 transaction은 전용 preset이 `workflow-role/1.6.0`만 허용하고 실제 기본 Workflow가 요구하는 1.4를 누락해 거부됐다. 모델 실행이나 실패 상태 재해석 없이 해당 transaction은 rollback됐으며 원문 수록 결과는 보존한다. 초기 preset은 수정하지 않고, 원래 검증된 knowledge-analysis preset의 호환 protocol family 전체와 동일한 모델/지침을 물려받는 successor로 보완한다. capacity는 이미 released된 V4 support(slot05·동시1)만 사용하며 기존 knowledge-analysis preset과 capacity를 변경하지 않는다. 불완전한 초기 전용 release를 일반적으로 허용하는 예외가 아니라 그 exact predecessor의 successor 발행 경계이며, 다음 정상 release부터는 같은 family를 exact replay한다.
+
+실제 후속 분석은 슬롯 05에서 `workflow-role/1.4.0`으로 성공했다. Item은 `item_57e2a7c088b84ac7aa4e68bb9ab93eb4` / `itemrev_bcef1215ccc6469a8c07335f0fb86ffe`, 분석은 `analysisrun_7d22184840974c3a9893ea224a9544eb`다. 구조화 답안의 원문 표지를 단정할 수 없는 경우도 `SOURCE_EDITORIAL_ANSWER_NOT_UNAMBIGUOUS` 주의사항으로 남고 원문 파일과 독립 판단을 구별한다.
+
+Graph 접근 정책은 임의의 가장 최근 revision이 아니라 기존 Graph 자동 등록 owner가 고정한 `accessrev_4f62f8b4c4544443a9d0a809dd1c0bb9`를 사용한다. 다른 용도의 임베딩 정책은 지원 GraphRAG 정책이 아니며 초기 후보 확인에서 기존 validator가 이를 거부했다. 이후 cohort admission은 공식 retrieval service의 supported policy preflight를 통과한 exact revision/hash만 보관한다. 정책이나 역할을 넓혀 검색을 통과시키지 않는다.
+
+## 과거 검토자 계정에 대한 Graph 연결 보완
+
+1. **발견:** 이미 게시된 Graph의 framework 검토자 계정이 비활성화되면, 단순 자동 Item 추가까지 새 검토로 취급하여 거부했다. 계정 재활성화나 과거 review 변경으로 우회하지 않는다.
+2. **책임/정본:** 공통 Graph publication owner가 검토 계보를 해석한다. 정본은 exact PUBLISHED snapshot의 검증된 manifest와 structure Artifact다. 새로운 요청자의 현재 권한 검증은 별도로 유지한다.
+3. **pin:** 기존 publication command의 expected prior snapshot ID를 사용하고 그 revision의 schema/media/hash/승인 상태/멤버십을 기존 resolver로 확인한다. historical lookup은 current/latest 대체가 아니다.
+4. **허용 범위:** 기존 deterministic automatic-extension 함수로 candidate를 재계산했을 때 완전히 같아야 한다. outline·curriculum units·기존 source binding·기존 alignment·reviewer는 보존되고 새 자동 alignment의 prior snapshot도 exact base여야 한다.
+5. **불허 범위:** 새 framework, 검토자 교체, 과거 binding 수정/삭제, 다른 base에 붙인 alignment는 상속 검토로 승인하지 않는다. fresh review 경계는 그대로다. 자동 확장을 human review라고 기록하지 않는다.
+6. **자료구조/규모:** snapshot PK와 corpus graph index로 조회하고, binding map/set 비교와 deterministic 재계산은 O(n)이다. 새 DB schema/index/queue/worker protocol은 없다.
+7. **경합/실패:** structure commit과 최종 publication에서 각각 exact base를 확인하고 기존 Graph-head CAS를 보존한다. stale head는 오류이며 재시도에 latest를 조용히 끼워 넣지 않는다. 실패 후보 Artifact와 이전 성공 snapshot은 보존한다.
+8. **간단한 대안 배제:** reviewer ACTIVE 검사를 전역 제거하면 새 미검토 framework까지 통과할 수 있다. 현재 publisher를 과거 검토자로 바꾸면 없는 사람 검토를 만들게 된다. exact 검토 계보를 재사용하는 좁은 경계가 필요하다.
+9. **검증:** outline/reviewer 변경·다른 base·retired/missing reviewer·기존 active 경로·다른 정책 family 거부를 포함해 공유 Graph/검색/창작 연결 집중 114개 PASS. 이는 운영 Graph 게시 완료를 뜻하지 않으며 실제 표본 3건은 별도 완료 기준이다.

@@ -346,7 +346,9 @@ class AutomaticItemGraphPublicationService:
             created_at=requested_at,
             assessment_item_occurrences=occurrence_bindings,
         )
-        structure_pointer = self.publication.commit_structure_manifest(structure)
+        structure_pointer = self.publication.commit_structure_manifest(
+            structure, reviewed_base_snapshot_revision_id=context.graph_snapshot_revision_id
+        )
         all_run_ids = tuple(sorted({*context.accepted_analysis_run_ids, *candidate_ids}))
         origin_scoped = any(scope is not None for scope in alignment_scopes)
         request_value: dict[str, object] = {

@@ -706,6 +706,13 @@ class KnowledgeRetrievalApplicationService:
         self.sessions = build_session_factory(engine)
         self.artifacts = CatalogArtifactService(engine, self.settings)
 
+    def read_released_access_policy(
+        self, access_policy_revision_id: str
+    ) -> EducationRetrievalAccessPolicy:
+        """Resolve exact supported policy metadata, not permission or a query grant."""
+        with self.sessions() as session:
+            return self._policy(session, access_policy_revision_id)
+
     def create_read_only_reuse_context(
         self, session: Session, scope: ReadOnlyCandidatePoolScope
     ) -> ReadOnlyKnowledgeReuseContext:

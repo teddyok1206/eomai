@@ -303,6 +303,70 @@ def extend_integrated_science_structure_manifest_with_item_alignments(
     return KnowledgeGraphStructureManifestV3.model_validate(value)
 
 
+def validate_inherited_automatic_structure_review(
+    base: KnowledgeGraphStructureManifestV2,
+    candidate: KnowledgeGraphStructureManifestV2,
+    *,
+    base_snapshot_revision_id: str,
+) -> None:
+    """A retired reviewer cannot invalidate an unchanged published curriculum.
+
+    This is not a new human review or a grant to the historical reviewer. Only
+    the exact existing automatic extension rule may append separately validated
+    Item alignments. A changed outline, reviewer, source binding or old alignment
+    needs its ordinary fresh review and is never grandfathered here.
+    """
+    if candidate == base:
+        return
+    old = {
+        binding.analysis_run_id: binding
+        for binding in (
+            base.automatic_item_curriculum_bindings
+            if isinstance(base, KnowledgeGraphStructureManifestV4)
+            else ()
+        )
+    }
+    if not isinstance(candidate, KnowledgeGraphStructureManifestV4):
+        raise CurriculumGraphStructureError("inherited review requires an automatic extension")
+    by_id = {
+        binding.analysis_run_id: binding for binding in candidate.automatic_item_curriculum_bindings
+    }
+    if any(by_id.get(key) != value for key, value in old.items()):
+        raise CurriculumGraphStructureError("inherited review changed a previous alignment")
+    additions = tuple(
+        binding
+        for binding in candidate.automatic_item_curriculum_bindings
+        if binding.analysis_run_id not in old
+    )
+    if not additions or any(
+        binding.prior_graph_snapshot_revision_id != base_snapshot_revision_id
+        for binding in additions
+    ):
+        raise CurriculumGraphStructureError("inherited review uses a different base snapshot")
+    prior_occurrences = {
+        binding.placement_sha256
+        for binding in (
+            base.assessment_item_occurrences
+            if isinstance(base, KnowledgeGraphStructureManifestV5)
+            else ()
+        )
+    }
+    occurrences = tuple(
+        binding
+        for binding in (
+            candidate.assessment_item_occurrences
+            if isinstance(candidate, KnowledgeGraphStructureManifestV5)
+            else ()
+        )
+        if binding.placement_sha256 not in prior_occurrences
+    )
+    expected = extend_integrated_science_structure_manifest_with_automatic_item_alignments(
+        base, additions, created_at=candidate.created_at, assessment_item_occurrences=occurrences
+    )
+    if expected != candidate:
+        raise CurriculumGraphStructureError("inherited review changed the reviewed framework")
+
+
 def extend_integrated_science_structure_manifest_with_automatic_item_alignments(
     base: (
         KnowledgeGraphStructureManifestV2

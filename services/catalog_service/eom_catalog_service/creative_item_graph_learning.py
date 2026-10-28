@@ -132,11 +132,13 @@ class CreativeItemGraphLearningService:
         self.artifacts = CatalogArtifactService(engine, self.settings)
         self.analyses = KnowledgeAnalysisApplicationService(engine, self.settings)
         self.publication = KnowledgeGraphPublicationService(engine, self.settings)
+        retrieval = KnowledgeRetrievalApplicationService(engine, self.settings)
+        retrieval.read_released_access_policy(access_policy_revision_id)
         self.automatic = AutomaticItemGraphPublicationService(
             engine,
             access_policy_revision_id=access_policy_revision_id,
             publication=self.publication,
-            retrieval=KnowledgeRetrievalApplicationService(engine, self.settings),
+            retrieval=retrieval,
         )
         self.source = CatalogExternalItemLearningSourceAuthorizer(
             ExternalItemPreviewProjectionService(engine, settings=self.settings)

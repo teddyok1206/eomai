@@ -518,19 +518,43 @@ class KnowledgeGraphPublicationService:
 
     def current_structure_context(self, corpus_key: str) -> CurrentKnowledgeGraphStructure:
         """Resolve the current structured snapshot and its exact accepted source membership."""
+        return self._structure_context(corpus_key=corpus_key)
+
+    def structure_context_for_snapshot(
+        self, snapshot_revision_id: str
+    ) -> CurrentKnowledgeGraphStructure:
+        """Resolve that exact historical published structure, never the current head."""
+        return self._structure_context(pinned_snapshot_revision_id=snapshot_revision_id)
+
+    def _structure_context(
+        self, *, corpus_key: str | None = None, pinned_snapshot_revision_id: str | None = None
+    ) -> CurrentKnowledgeGraphStructure:
 
         with self.sessions() as session:
-            corpus = session.scalar(
-                select(KnowledgeCorpusRecord).where(KnowledgeCorpusRecord.corpus_key == corpus_key)
-            )
-            snapshot = (
-                session.get(
-                    KnowledgeGraphSnapshotRecord,
-                    corpus.current_graph_snapshot_revision_id,
+            if pinned_snapshot_revision_id is None:
+                corpus = session.scalar(
+                    select(KnowledgeCorpusRecord).where(
+                        KnowledgeCorpusRecord.corpus_key == corpus_key
+                    )
                 )
-                if corpus is not None and corpus.current_graph_snapshot_revision_id is not None
-                else None
-            )
+                snapshot = (
+                    session.get(
+                        KnowledgeGraphSnapshotRecord, corpus.current_graph_snapshot_revision_id
+                    )
+                    if corpus and corpus.current_graph_snapshot_revision_id
+                    else None
+                )
+            else:
+                snapshot = session.get(KnowledgeGraphSnapshotRecord, pinned_snapshot_revision_id)
+                corpus = (
+                    session.scalar(
+                        select(KnowledgeCorpusRecord).where(
+                            KnowledgeCorpusRecord.graph_id == snapshot.graph_id
+                        )
+                    )
+                    if snapshot
+                    else None
+                )
             if (
                 corpus is None
                 or corpus.lifecycle_state != "ACTIVE"
@@ -642,6 +666,8 @@ class KnowledgeGraphPublicationService:
             | KnowledgeGraphStructureManifestV5
             | KnowledgeGraphStructureManifestV6
         ),
+        *,
+        reviewed_base_snapshot_revision_id: str | None = None,
     ) -> KnowledgeArtifactMemberPointer:
         """Commit one reviewed structure manifest through the Catalog Artifact boundary."""
 
@@ -671,12 +697,7 @@ class KnowledgeGraphPublicationService:
                 "reviewed curriculum framework does not resolve exactly",
             ) from exc
         with self.sessions() as session:
-            reviewer = session.get(OperatorRecord, structure.reviewed_by_operator_id)
-            if reviewer is None or reviewer.status != "ACTIVE":
-                raise KnowledgeGraphPublicationError(
-                    "KNOWLEDGE_GRAPH_REVIEWER_INVALID",
-                    "structure manifest reviewer is absent or inactive",
-                )
+            self._require_structure_review(session, structure, reviewed_base_snapshot_revision_id)
         try:
             with tempfile.TemporaryDirectory(
                 prefix="knowledge-graph-structure.", dir=self.settings.staging_root
@@ -895,7 +916,11 @@ class KnowledgeGraphPublicationService:
                 previous_snapshot_revision_id=previous_snapshot_revision_id,
             )
             self._validate_assessment_item_occurrences(session, structure, analyses)
-            self._validate_item_elements(session, structure)
+            self._validate_item_elements(
+                session,
+                structure,
+                reviewed_base_snapshot_revision_id=previous_snapshot_revision_id,
+            )
 
         try:
             projection = build_education_graph_projection(analyses, structure)
@@ -1701,17 +1726,48 @@ class KnowledgeGraphPublicationService:
                 "reviewed graph structure manifest is invalid",
             ) from exc
 
+    def _require_structure_review(
+        self,
+        session: Session,
+        structure: KnowledgeGraphStructureContract,
+        reviewed_base_snapshot_revision_id: str | None,
+    ) -> None:
+        reviewer = session.get(OperatorRecord, structure.reviewed_by_operator_id)
+        if reviewer is not None and reviewer.status == "ACTIVE":
+            return
+        if reviewed_base_snapshot_revision_id is not None and isinstance(
+            structure, KnowledgeGraphStructureManifestV2
+        ):
+            from eom_catalog_service.curriculum_graph_structure import (
+                validate_inherited_automatic_structure_review,
+            )
+
+            base = self.structure_context_for_snapshot(reviewed_base_snapshot_revision_id)
+            try:
+                validate_inherited_automatic_structure_review(
+                    base.structure,
+                    structure,
+                    base_snapshot_revision_id=reviewed_base_snapshot_revision_id,
+                )
+            except CurriculumGraphStructureError as exc:
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_REVIEWER_INVALID", "inherited structure review differs"
+                ) from exc
+            return
+        raise KnowledgeGraphPublicationError(
+            "KNOWLEDGE_GRAPH_REVIEWER_INVALID", "structure manifest reviewer is absent or inactive"
+        )
+
     def _validate_item_elements(
-        self, session: Session, structure: KnowledgeGraphStructureContract | None
+        self,
+        session: Session,
+        structure: KnowledgeGraphStructureContract | None,
+        *,
+        reviewed_base_snapshot_revision_id: str | None = None,
     ) -> None:
         if structure is None:
             return
-        reviewer = session.get(OperatorRecord, structure.reviewed_by_operator_id)
-        if reviewer is None or reviewer.status != "ACTIVE":
-            raise KnowledgeGraphPublicationError(
-                "KNOWLEDGE_GRAPH_REVIEWER_INVALID",
-                "structure manifest reviewer is absent or inactive",
-            )
+        self._require_structure_review(session, structure, reviewed_base_snapshot_revision_id)
         content_by_revision: dict[str, AssessmentItemContent] = {}
         for binding in structure.item_elements:
             revision = session.get(ItemRevisionRecord, binding.item_revision_id)
