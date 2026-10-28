@@ -67,19 +67,21 @@ def release_creative_knowledge_controls(
             .with_for_update()
         )
         expected_roles = baseline.role_policies
+        current: ExecutionPresetRevision | None = None
         if logical is not None and logical.current_revision_id is not None:
             row = session.get(ExecutionPresetRevisionRecord, logical.current_revision_id)
-            current = validated_preset(row) if row else None
+            parsed_current = validated_preset(row) if row else None
             if (
-                not isinstance(current, ExecutionPresetRevision)
-                or current.state != "RELEASED"
-                or current.role_policies != expected_roles
-                or current.capacity_policy_revision_id != capacity_revision_id
-                or current.general_knowledge_policy != baseline.general_knowledge_policy
+                not isinstance(parsed_current, ExecutionPresetRevision)
+                or parsed_current.state != "RELEASED"
+                or parsed_current.role_policies != expected_roles
+                or parsed_current.capacity_policy_revision_id != capacity_revision_id
+                or parsed_current.general_knowledge_policy != baseline.general_knowledge_policy
             ):
                 raise ControlPlaneError(
                     "CONTROL_CREATIVE_ANALYSIS_POLICY_INVALID", "replay differs"
                 )
+            current = parsed_current
             if current.compatible_workflow_protocols == baseline.compatible_workflow_protocols:
                 return current
             # An initial canary exposed that approved-Item V2 uses the released
@@ -95,6 +97,10 @@ def release_creative_knowledge_controls(
                     select(ExecutionPresetRevisionRecord).where(
                         ExecutionPresetRevisionRecord.preset_id == logical.preset_id,
                         ExecutionPresetRevisionRecord.state == "DRAFT",
+                        # Released policies retain their original DRAFT history.
+                        # Only an unconsumed successor can resume this release.
+                        ExecutionPresetRevisionRecord.revision_number
+                        > (current.revision_number if current is not None else 0),
                     )
                 )
             )
