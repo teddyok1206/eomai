@@ -358,19 +358,21 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .codex-usage-window small { color: var(--eom-text-muted); font-size: var(--eom-type-caption); }
 .analysis-progress { width: 100%; height: 8px; margin-top: 8px; accent-color: var(--eom-primary); }
 .learning-grid { display: grid; grid-template-columns: minmax(280px, .7fr) minmax(520px, 1.3fr); gap: 14px; align-items: start; }
-.item-bank-panel { padding: 15px; }
-.item-bank-filters { display: grid; grid-template-columns: minmax(240px, 2fr) repeat(3, minmax(110px, .7fr)) auto; gap: 10px; align-items: end; }
-.item-bank-filters label { display: grid; gap: 6px; color: var(--eom-text-muted); font-size: var(--eom-type-caption); }
-.item-bank-filters input, .item-bank-filters select { min-height: 42px; padding: 8px 11px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); background: #fff; color: var(--eom-graphite); }
 .item-db-workspace { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(340px, 1fr); gap: 20px; align-items: start; }
+.item-db-tabs { display: flex; gap: 6px; margin: 0 0 18px; padding: 5px; width: fit-content; border: 1px solid var(--eom-border); border-radius: 13px; background: var(--eom-porcelain); }
+.item-db-tab { min-height: 42px; padding: 8px 18px; border: 0; border-radius: 9px; background: transparent; color: var(--eom-text-muted); font-weight: 650; }
+.item-db-tab:hover { color: var(--eom-primary-dark); }
+.item-db-tab.is-active { background: var(--eom-surface); color: var(--eom-primary-dark); box-shadow: var(--eom-shadow); }
+.item-db-tab span { margin-left: 4px; font-variant-numeric: tabular-nums; }
 .item-db-panel, .item-db-draft-panel { min-width: 0; }
 .item-db-panel { padding: 20px; }
 #item-db-detail { padding: 18px; }
 .item-db-search-form { display: grid; gap: 18px; }
 .item-db-search-heading, .item-db-filter-heading, .item-db-results-heading, .item-db-detail-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .item-db-search-heading > label, #item-db-graph-filters label { display: grid; gap: 6px; min-width: 0; color: var(--eom-graphite); font-size: var(--eom-type-label); font-weight: 650; }
+#item-db-graph-filters { display: grid; grid-template-columns: minmax(210px, 2fr) repeat(3, minmax(100px, 1fr)); gap: 10px; }
 .item-db-search-heading > label { width: min(100%, 250px); }
-.item-db-search-heading select, #item-db-graph-filters select, .item-db-match-mode select, .item-db-filter-row input, .item-db-filter-row select { width: 100%; min-width: 0; min-height: 42px; padding: 8px 11px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); background: #fff; color: var(--eom-graphite); }
+.item-db-search-heading select, #item-db-graph-filters select, #item-db-graph-filters input, .item-db-match-mode select, .item-db-filter-row input, .item-db-filter-row select { width: 100%; min-width: 0; min-height: 42px; padding: 8px 11px; border: 1px solid var(--eom-border); border-radius: var(--eom-radius-control); background: #fff; color: var(--eom-graphite); }
 .item-db-filter-heading { justify-content: flex-start; margin-bottom: 12px; flex-wrap: wrap; }
 .item-db-filter-heading h2, .item-db-results-heading h2 { margin: 0; font-size: var(--eom-type-body); }
 .item-db-filter-heading .button { margin-left: auto; }
@@ -418,6 +420,7 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .item-db-metadata dt { color: var(--eom-text-muted); }
 .item-db-metadata dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; }
 .item-db-draft-panel { margin-top: 20px; }
+.mock-exam-assembly-panel { margin-top: 20px; }
 .item-db-draft-panel .panel-heading h2 { font-size: 16px; }
 .item-db-draft-panel .panel-body > h3 { margin-top: 24px; padding-top: 18px; border-top: 1px solid var(--eom-border); font-size: 15px; }
 .item-db-draft-panel #item-db-saved-list { grid-template-columns: 1fr; }
@@ -432,14 +435,7 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
   .item-db-detail-panel { position: static; max-height: none; }
   .item-db-detail-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-.item-bank-results { display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 12px; margin-top: 14px; }
-.item-bank-card { display: grid; gap: 11px; padding: 15px; border: 1px solid var(--eom-border); border-radius: 11px; background: #fff; }
-.item-bank-card header { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
-.item-bank-card header small, .item-bank-card header strong { display: block; }
-.item-bank-card header small { margin-bottom: 4px; color: var(--eom-text-muted); font-size: var(--eom-type-caption); }
-.item-bank-card header strong { font-size: 15px; }
-.item-bank-unit-list { display: flex; flex-wrap: wrap; gap: 6px; }
-.item-bank-unit-chip { padding: 5px 8px; border: 1px solid var(--eom-blue-200); border-radius: 999px; background: #f8fbff; color: var(--eom-info-cobalt); cursor: pointer; font: inherit; font-size: var(--eom-type-caption); }
+.item-db-saved-results { display: grid; gap: 12px; margin-top: 14px; }
 .variation-field { border-color: var(--eom-blue-200); background: #f8fbff; }
 .variation-field > p { margin: 0 0 10px; color: var(--eom-graphite); font-weight: 600; }
 .variation-axis-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-bottom: 10px; }
@@ -730,7 +726,7 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
   .explorer-filters { grid-template-columns: repeat(3, 1fr); }
   .quality-metric-grid { grid-template-columns: repeat(3, 1fr); }
   .learning-grid { grid-template-columns: 1fr; }
-  .item-bank-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #item-db-graph-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mock-exam-form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .mock-exam-selection { grid-template-columns: 36px minmax(220px, 1fr) minmax(180px, .8fr); }
   .mock-exam-selection small { display: none; }
@@ -807,14 +803,13 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
   .learning-metric-grid { grid-template-columns: repeat(2, 1fr); }
   .learning-exam-card { grid-template-columns: 1fr; }
   .learning-exam-metrics { grid-template-columns: repeat(2, 1fr); }
-  .item-bank-filters { grid-template-columns: 1fr; }
+  #item-db-graph-filters { grid-template-columns: 1fr; }
   .item-db-filter-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .item-db-filter-remove { justify-self: end; width: 36px; }
   .item-db-search-heading { align-items: flex-end; }
   .item-db-search-heading > label { flex: 1; }
   .item-db-detail-summary { padding: 12px; gap: 14px; }
   .item-db-metadata { grid-template-columns: minmax(80px, 110px) minmax(0, 1fr); gap: 10px; }
-  .item-bank-results { grid-template-columns: 1fr; }
   .mock-exam-form-grid, .mock-exam-selection { grid-template-columns: 1fr; }
   .knowledge-boundary { grid-template-columns: 1fr; }
   .knowledge-boundary span { padding: 0; border: 0; }

@@ -1,5 +1,5 @@
 const VIEW_NAMES = new Set([
-  "dashboard", "workflow", "request", "item", "item-db", "item-bank", "hwpx",
+  "dashboard", "workflow", "request", "item", "item-db", "hwpx",
   "pdf-review", "quality-review", "control", "admin-settings", "learning",
   "knowledge", "explorer", "support", "account", "chat",
 ]);
@@ -16,7 +16,8 @@ export function studioRouteFromLocation(location) {
   const parameters = new URLSearchParams(location.search);
   const requestedView = parameters.get("view")
     || (POINTERS.hwpx_build_id.test(parameters.get("hwpx_build_id") || "") ? "hwpx" : "dashboard");
-  const route = {view: VIEW_NAMES.has(requestedView) ? requestedView : "dashboard"};
+  const route = {view: requestedView === "item-bank" ? "item-db"
+    : VIEW_NAMES.has(requestedView) ? requestedView : "dashboard"};
   for (const [name, pattern] of Object.entries(POINTERS)) {
     const value = parameters.get(name);
     if (value && pattern.test(value)) route[name] = value;
@@ -26,7 +27,8 @@ export function studioRouteFromLocation(location) {
 
 export function studioRouteUrl(route) {
   const parameters = new URLSearchParams();
-  const view = VIEW_NAMES.has(route?.view) ? route.view : "dashboard";
+  const view = route?.view === "item-bank" ? "item-db"
+    : VIEW_NAMES.has(route?.view) ? route.view : "dashboard";
   if (view !== "dashboard") parameters.set("view", view);
   for (const [name, pattern] of Object.entries(POINTERS)) {
     const value = route?.[name];

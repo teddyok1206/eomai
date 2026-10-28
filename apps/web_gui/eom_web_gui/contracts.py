@@ -1523,6 +1523,18 @@ class ItemBankCurriculumUnit(WebModel):
     parent_unit_id: str | None = Field(default=None, pattern=r"^currunit_[0-9a-f]{32}$")
 
 
+class GraphPastExamContext(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+    assessment_occurrence_id: str = Field(pattern=r"^occurrence_[0-9a-f]{32}$")
+    assessment_occurrence_revision_id: str = Field(pattern=r"^occurrev_[0-9a-f]{32}$")
+    assessment_occurrence_revision_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    placement_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    occurrence_display_label: str = Field(min_length=1, max_length=512)
+    administration_year: int = Field(ge=1900, le=2200)
+    administration_month: int = Field(ge=1, le=12)
+    item_number: int = Field(ge=1, le=200)
+
+
 class GraphItemDbEntry(BaseModel):
     """The small published-Graph projection that the DB screen actually renders.
 
@@ -1544,6 +1556,14 @@ class GraphItemDbEntry(BaseModel):
     item_revision_state: Literal["APPROVED", "SUPERSEDED"]
     item_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
     curriculum_units: tuple[ItemBankCurriculumUnit, ...] = Field(min_length=1, max_length=8)
+    past_exam_context: GraphPastExamContext | None
+    hwpx_exam_eligible: bool
+
+    @model_validator(mode="after")
+    def coherent_source_context(self) -> GraphItemDbEntry:
+        if (self.source_class == "PAST_EXAM") != (self.past_exam_context is not None):
+            raise ValueError("DB Graph source and past-exam context differ")
+        return self
 
 
 class ExternalItemDbEntry(WebModel):

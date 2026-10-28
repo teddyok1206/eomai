@@ -774,12 +774,18 @@ def create_app(
             default=None, pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$"
         ),
         cursor: str | None = Query(default=None, min_length=1, max_length=1024),
+        administration_year: int | None = Query(default=None, ge=1900, le=2200),
+        administration_month: int | None = Query(default=None, ge=1, le=12),
+        item_number: int | None = Query(default=None, ge=1, le=200),
     ) -> dict[str, object]:
         page = await actual.gateway.graph_item_db_entries(
             session,
             source_class=source_class,
             curriculum_unit_key=curriculum_unit_key,
             cursor=cursor,
+            administration_year=administration_year,
+            administration_month=administration_month,
+            item_number=item_number,
         )
         return {
             "values": tuple(value.model_dump(mode="json") for value in page.values),

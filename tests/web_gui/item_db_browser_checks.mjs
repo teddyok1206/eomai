@@ -12,7 +12,7 @@ const assets = new Map(await Promise.all(names.map(async name => [name, await re
 // adapters are fixtures. No production credentials, DB or model calls are used.
 const fixtureApp = `
 import {createItemDb} from './item-db.js';
-const fixture = window.dbFixture = {calls: [], opened: [], allowSource: true, hold: null, release: null};
+const fixture = window.dbFixture = {calls: [], opened: [], variations: [], allowSource: true, hold: null, release: null};
 const columns = Array.from({length: 26}, (_, index) => String.fromCharCode(65 + index)).concat(['AA','AB','AC','AD','AE','AF']);
 function entry(number) {
   return {source_id: 'extitem_' + number.padStart(32, '0'), source_revision_id: 'extitemrev_' + number.padStart(32, '0'),
@@ -34,6 +34,8 @@ const graph = {source_class: 'PAST_EXAM', source_display_label: '합성 시험 1
   item_id: 'item_' + 'b'.repeat(32), item_revision_id: 'itemrev_' + 'c'.repeat(32),
   item_manifest_sha256: 'sha256:' + 'd'.repeat(64), graph_snapshot_revision_id: 'graphrev_' + 'e'.repeat(32),
   snapshot_sha256: 'sha256:' + 'f'.repeat(64), item_revision_state: 'APPROVED', hwpx_exam_eligible: true,
+  past_exam_context: {occurrence_display_label: '합성 시험', administration_year: 2026,
+    administration_month: 6, item_number: 17},
   curriculum_units: [{key:'unit-one', unit_code: '1-1', label:'물질의 규칙성'}]};
 async function api(path, options = {}) {
   fixture.calls.push({path, ...structuredClone(options)});
@@ -51,12 +53,18 @@ async function api(path, options = {}) {
     if (options.body.cursor) return {values: [entry('10319')], has_more: false, next_cursor: null};
     return {values: [entry('10310'), entry('10318')], has_more: true, next_cursor: 'next-page'};
   }
-  if (path.startsWith('/item-db/graph-items?')) return {values: [{...graph, source_class: new URL('https://fixture' + path).searchParams.get('source_class')}], has_more: false, next_cursor: null};
+  if (path.startsWith('/item-db/graph-items?')) {
+    const params = new URL('https://fixture' + path).searchParams;
+    if (params.has('item_number') && params.get('item_number') !== '17') return {values: [], has_more: false, next_cursor: null};
+    return {values: [{...graph, source_class: params.get('source_class'),
+      past_exam_context: params.get('source_class') === 'PAST_EXAM' ? graph.past_exam_context : null}], has_more: false, next_cursor: null};
+  }
   if (path.includes('/preview?')) return {sha256: 'sha256:' + 'a'.repeat(64)};
   if (path.startsWith('/item-db/external-sources/')) return detail(path.split('/')[3].slice(-5));
   throw new Error('UNEXPECTED_FIXTURE_REQUEST ' + path);
 }
 const controller = createItemDb({document, api, openRegisteredItem: entry => fixture.opened.push(entry),
+  openPastExamVariation: entry => fixture.variations.push(entry),
   canReadSource: () => fixture.allowSource});
 controller.install(); controller.open();
 document.querySelectorAll('.view').forEach(view => view.classList.toggle('active', view.dataset.view === 'item-db'));
@@ -112,6 +120,7 @@ try {
   assert.match(await preview.getAttribute("href"), /editions\/3\/preview\.pdf\?source_revision_id=extitemrev_0+10310$/);
   await page.getByRole("button", {name: "조립 목록에 담기", exact: true}).click();
   assert.equal(await page.locator("#item-db-draft-count").innerText(), "1개");
+  assert.equal(await page.locator("#item-db-tab-count").innerText(), "1");
 
   // Slow A must never replace B, and closing/resetting a detail invalidates its reply.
   await page.evaluate(() => {window.dbFixture.hold = '/item-db/external-sources/extitem_' + '10310'.padStart(32, '0');});
@@ -164,12 +173,30 @@ try {
   await page.locator("#item-db-source").selectOption("PAST_EXAM");
   await page.waitForFunction(() => document.querySelectorAll('#item-db-results [data-selection-key]').length === 1);
   assert.equal(await page.locator("#item-db-export").isVisible(), false);
+  await page.locator("#item-db-graph-year").fill("2026");
+  await page.locator("#item-db-graph-month").selectOption("6");
+  await page.locator("#item-db-graph-number").fill("17");
+  await page.locator("#item-db-search").click();
+  const pastQuery = await page.evaluate(() => window.dbFixture.calls.filter(call => call.path.startsWith('/item-db/graph-items?')).at(-1).path);
+  assert.match(pastQuery, /administration_year=2026/);
+  assert.match(pastQuery, /administration_month=6/);
+  assert.match(pastQuery, /item_number=17/);
   await rows.first().getByRole("button").press("Enter");
   assert.match(await page.locator("#item-db-detail").innerText(), /합성 시험 17번/);
+  await page.getByRole("button", {name: "1:1 기출변형"}).click();
+  assert.equal(await page.evaluate(() => window.dbFixture.variations.length), 1);
+  await page.getByRole("button", {name: "같은 연도·월 찾기"}).click();
+  assert.equal(await page.locator("#item-db-graph-number").inputValue(), "");
+  await rows.first().getByRole("button").click();
   await page.getByRole("button", {name: "문항 미리보기", exact: true}).click();
   assert.equal(await page.evaluate(() => window.dbFixture.opened.length), 1);
   await page.getByRole("button", {name: "조립 목록에 담기", exact: true}).click();
   assert.equal(await page.locator("#item-db-draft-count").innerText(), "2개");
+  assert.equal(await page.locator("#item-db-tab-count").innerText(), "2");
+  await page.getByRole("tab", {name: /배치/}).click();
+  assert.equal(await page.locator("#item-db-search-panel").isVisible(), false);
+  assert.equal(await page.locator("#item-db-assembly-panel").isVisible(), true);
+  assert.equal(await page.locator("#mock-exam-submit").count(), 1);
   await page.locator("#item-db-draft-save").click();
   await page.waitForFunction(() => window.dbFixture.saved?.placements.length === 2);
   const saved = await page.evaluate(() => window.dbFixture.saved);
@@ -179,6 +206,7 @@ try {
   assert.doesNotMatch(await page.locator('#item-db-detail').innerText(), /itemrev_|graphrev_|extitemrev_/);
 
   // Small screens scroll the table itself, not the entire page, and show details below.
+  await page.getByRole("tab", {name: "문항 DB"}).click();
   await page.setViewportSize({width: 390, height: 844});
   await page.locator("#item-db-source").selectOption("EXTERNAL_SOURCE");
   await page.waitForFunction(() => document.querySelectorAll('#item-db-results [data-selection-key]').length === 2);
@@ -191,6 +219,13 @@ try {
   const mobileLeft = await page.locator(".item-db-panel").boundingBox();
   const mobileRight = await page.locator("#item-db-detail-panel").boundingBox();
   assert.ok(mobileRight.y >= mobileLeft.y + mobileLeft.height);
+  await page.getByRole("tab", {name: /배치/}).click();
+  assert.equal(await page.locator("#item-db-draft-list").isVisible(), true);
+  assert.equal(await page.locator("#mock-exam-selections").isVisible(), true);
+  const assemblyWidth = await page.evaluate(() => document.documentElement.scrollWidth);
+  assert.ok(assemblyWidth <= 390, "mobile assembly tab must not overflow the viewport");
+  await page.getByRole("tab", {name: /배치/}).press("ArrowLeft");
+  assert.equal(await page.locator("#item-db-search-panel").isVisible(), true);
   const screenshot = process.env.EOM_ITEM_DB_SCREENSHOT;
   if (screenshot) {
     await page.setViewportSize({width: 1600, height: 1000});

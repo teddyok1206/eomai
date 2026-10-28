@@ -669,6 +669,9 @@ class ApplicationGateway(Protocol):
         source_class: str,
         curriculum_unit_key: str | None,
         cursor: str | None,
+        administration_year: int | None = None,
+        administration_month: int | None = None,
+        item_number: int | None = None,
     ) -> GraphItemDbPage: ...
 
     async def external_item_db_entries(
@@ -3173,6 +3176,9 @@ class HttpApplicationGateway:
         source_class: str,
         curriculum_unit_key: str | None,
         cursor: str | None,
+        administration_year: int | None = None,
+        administration_month: int | None = None,
+        item_number: int | None = None,
     ) -> GraphItemDbPage:
         if source_class not in {"APPROVED_ITEM", "PAST_EXAM"}:
             raise GatewayError(status=422, code="ITEM_DB_GRAPH_SOURCE_INVALID")
@@ -3183,6 +3189,9 @@ class HttpApplicationGateway:
             params={
                 "source_class": source_class,
                 "curriculum_unit_key": curriculum_unit_key,
+                "administration_year": administration_year,
+                "administration_month": administration_month,
+                "item_number": item_number,
                 "limit": 50,
                 "cursor": cursor,
             },

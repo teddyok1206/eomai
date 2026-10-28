@@ -285,6 +285,9 @@ def test_route_and_permission_modules_fail_closed_and_round_trip(tmp_path: Path)
         || route.item_id !== item
         || route.item_revision_id !== revision) process.exit(1);
       const url = studioRouteUrl(route);
+      const oldBank = studioRouteFromLocation({{search: "?view=item-bank"}});
+      if (oldBank.view !== "item-db"
+        || !studioRouteUrl(oldBank).includes("view=item-db")) process.exit(10);
       if (!url.includes("view=item") || !url.includes("item_revision_id=")) process.exit(2);
       if (/[?#]/.test(supportContextRoute(route))) process.exit(3);
       const invalid = studioRouteFromLocation({{search: "?view=unknown&workflow_id=../../secret"}});

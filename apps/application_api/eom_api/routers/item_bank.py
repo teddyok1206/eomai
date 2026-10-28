@@ -81,6 +81,9 @@ def production_item_candidates(
     difficulty_band: str | None = Query(default=None, min_length=1, max_length=64),
     limit: int = Query(default=50, ge=1, le=200),
     cursor: str | None = Query(default=None, min_length=1, max_length=1024),
+    administration_year: int | None = Query(default=None, ge=1900, le=2200),
+    administration_month: int | None = Query(default=None, ge=1, le=12),
+    item_number: int | None = Query(default=None, ge=1, le=200),
 ) -> ListResponse[ProductionItemCandidateViewContract]:
     page = request.app.state.services.queries.production_item_candidates(
         curriculum_unit_key=curriculum_unit_key,
@@ -91,6 +94,9 @@ def production_item_candidates(
         difficulty_band=difficulty_band,
         limit=limit,
         cursor=cursor,
+        administration_year=administration_year,
+        administration_month=administration_month,
+        item_number=item_number,
     )
     return many(
         request,

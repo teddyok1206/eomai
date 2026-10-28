@@ -38,7 +38,7 @@ function node(document, tag, className, value) {
   return element;
 }
 
-export function createItemDb({document, api, openRegisteredItem, canReadSource}) {
+export function createItemDb({document, api, openRegisteredItem, openPastExamVariation, onAssemblyOpen, canReadSource}) {
   const $ = (selector) => document.querySelector(selector);
   let cursor = null;
   let query = "";
@@ -51,6 +51,7 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
   let savedCursor = null;
   let savedSequence = 0;
   let pendingSave = null;
+  let assemblyLoaded = false;
   const draft = createItemDbDraft();
 
   function renderDraft() {
@@ -58,6 +59,7 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
     root.replaceChildren();
     const entries = draft.entries();
     $("#item-db-draft-count").textContent = `${entries.length}개`;
+    $("#item-db-tab-count").textContent = String(entries.length);
     $("#item-db-draft-save").disabled = entries.length === 0;
     $("#item-db-draft-empty").hidden = entries.length > 0;
     entries.forEach((selection, index) => {
@@ -301,7 +303,7 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
     const row = node(document, "tr", "");
     const labels = source === "EXTERNAL_SOURCE"
       ? ["고유번호", "분야", "대단원", "소단원", "학년", "출제자", "파일 상태"]
-      : ["문항", "단원", "승인 상태", "HWPX 조립"];
+      : ["문항", source === "PAST_EXAM" ? "시험·번호" : "단원", "승인 상태", "HWPX 조립"];
     for (const label of labels) {
       const heading = node(document, "th", "", label);
       heading.scope = "col";
@@ -375,8 +377,10 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
   }
 
   function renderGraphEntry(entry) {
+    const context = entry.past_exam_context;
     return resultRow(entry.item_revision_id, graphLabel(entry),
-      [entry.curriculum_units.map((unit) => unit.label).join(" · "),
+      [context ? `${context.administration_year}년 ${context.administration_month}월 · ${context.item_number}번`
+        : entry.curriculum_units.map((unit) => unit.label).join(" · "),
         entry.item_revision_state === "APPROVED" ? "승인 완료" : "이전 승인 버전",
         entry.hwpx_exam_eligible ? "가능" : "대상 아님"],
       (row) => openGraphDetail(entry, row));
@@ -390,6 +394,10 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
       ["문항 종류", entry.source_class === "PAST_EXAM" ? "기출" : "창작"],
       ["승인 상태", entry.item_revision_state === "APPROVED" ? "승인 완료" : "이전 승인 버전"],
       ["단원", entry.curriculum_units.map((unit) => unit.label).join(" · ")],
+      ...(entry.past_exam_context ? [
+        ["시험", entry.past_exam_context.occurrence_display_label],
+        ["문항 번호", `${entry.past_exam_context.item_number}번`],
+      ] : []),
       ["HWPX 조립", entry.hwpx_exam_eligible ? "가능" : "대상 아님"],
     ], "item-db-detail-summary"));
     const button = node(document, "button", "button secondary", "문항 미리보기");
@@ -410,6 +418,26 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
     }, graphLabel(entry)));
     const actions = node(document, "div", "item-db-result-actions");
     actions.append(button, select);
+    if (entry.past_exam_context) {
+      const variation = node(document, "button", "button secondary", "1:1 기출변형");
+      variation.type = "button";
+      variation.addEventListener("click", async () => {
+        variation.disabled = true;
+        try { await openPastExamVariation(entry); }
+        catch (error) { message(`변형 요청 준비 실패: ${error.message || "다시 시도해 주세요."}`, true); }
+        finally { variation.disabled = false; }
+      });
+      const sameExam = node(document, "button", "button quiet", "같은 연도·월 찾기");
+      sameExam.type = "button";
+      sameExam.addEventListener("click", () => {
+        $("#item-db-graph-unit").value = "";
+        $("#item-db-graph-year").value = String(entry.past_exam_context.administration_year);
+        $("#item-db-graph-month").value = String(entry.past_exam_context.administration_month);
+        $("#item-db-graph-number").value = "";
+        load(true);
+      });
+      actions.append(variation, sameExam);
+    }
     root.append(actions);
   }
 
@@ -421,6 +449,25 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
     $("#item-db-graph-filters").hidden = !graph;
     $("#item-db-filter-add").hidden = graph;
     $("#item-db-export").hidden = graph;
+    for (const field of document.querySelectorAll(".item-db-past-exam-filter")) {
+      field.hidden = selectedSource() !== "PAST_EXAM";
+    }
+  }
+
+  function activateTab(name) {
+    const assembly = name === "assembly";
+    $("#item-db-search-panel").hidden = assembly;
+    $("#item-db-assembly-panel").hidden = !assembly;
+    for (const [tab, selected] of [["#item-db-search-tab", !assembly], ["#item-db-assembly-tab", assembly]]) {
+      $(tab).setAttribute("aria-selected", String(selected));
+      $(tab).classList.toggle("is-active", selected);
+      $(tab).tabIndex = selected ? 0 : -1;
+    }
+    if (assembly && !assemblyLoaded) {
+      assemblyLoaded = true;
+      loadSaved(true);
+      onAssemblyOpen?.();
+    }
   }
 
   function syncSourceAccess() {
@@ -440,7 +487,12 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
     let parameters;
     try {
       parameters = source === "EXTERNAL_SOURCE" ? filters()
-        : {source_class: source, curriculum_unit_key: $("#item-db-graph-unit").value};
+        : {source_class: source, curriculum_unit_key: $("#item-db-graph-unit").value,
+          ...(source === "PAST_EXAM" ? {
+            administration_year: $("#item-db-graph-year").value,
+            administration_month: $("#item-db-graph-month").value,
+            item_number: $("#item-db-graph-number").value,
+          } : {})};
     } catch (error) {
       message(error.message, true);
       return;
@@ -470,6 +522,9 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
         : await api(`/item-db/graph-items?${new URLSearchParams({
           source_class: source,
           ...(parameters.curriculum_unit_key ? {curriculum_unit_key: parameters.curriculum_unit_key} : {}),
+          ...(parameters.administration_year ? {administration_year: parameters.administration_year} : {}),
+          ...(parameters.administration_month ? {administration_month: parameters.administration_month} : {}),
+          ...(parameters.item_number ? {item_number: parameters.item_number} : {}),
           ...(cursor ? {cursor} : {}),
         }).toString()}`);
       if (request !== sequence) return;
@@ -654,6 +709,7 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
   return Object.freeze({
     install() {
       renderDraft();
+      activateTab("search");
       syncFilterControls();
       tableHeading(selectedSource());
       $("#item-db-source").addEventListener("change", () => {
@@ -661,6 +717,16 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
         load(true);
       });
       $("#item-db-filter-add").addEventListener("click", () => addFilter());
+      $("#item-db-search-tab").addEventListener("click", () => activateTab("search"));
+      $("#item-db-assembly-tab").addEventListener("click", () => activateTab("assembly"));
+      for (const [selector, next] of [["#item-db-search-tab", "#item-db-assembly-tab"], ["#item-db-assembly-tab", "#item-db-search-tab"]]) {
+        $(selector).addEventListener("keydown", (event) => {
+          if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+          event.preventDefault();
+          $(next).click();
+          $(next).focus();
+        });
+      }
       $("#item-db-filter-quick").addEventListener("click", (event) => {
         const button = event.target.closest("[data-filter-field]");
         if (button) addFilter(button.dataset.filterField);
@@ -688,7 +754,7 @@ export function createItemDb({document, api, openRegisteredItem, canReadSource})
     open() {
       const changed = syncSourceAccess();
       if (changed || !loaded) load(true);
-      loadSaved(true);
+      if (!$("#item-db-assembly-panel").hidden) loadSaved(true);
     },
     setCurriculumUnits(units) {
       const select = $("#item-db-graph-unit");

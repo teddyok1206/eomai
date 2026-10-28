@@ -906,6 +906,9 @@ class QueryAdapter:
         difficulty_band: str | None,
         limit: int,
         cursor: str | None,
+        administration_year: int | None = None,
+        administration_month: int | None = None,
+        item_number: int | None = None,
     ) -> PageResult[ProductionItemCandidateViewContract]:
         """List Graph-accepted Item revisions without inventing examination placement data."""
 
@@ -916,6 +919,9 @@ class QueryAdapter:
             "eligible": eligible,
             "item_type_key": item_type_key,
             "difficulty_band": difficulty_band,
+            "administration_year": administration_year,
+            "administration_month": administration_month,
+            "item_number": item_number,
         }
         expected_units = integrated_science_curriculum_units()
         expected_by_id = {unit.curriculum_unit_id: unit for unit in expected_units}
@@ -964,6 +970,36 @@ class QueryAdapter:
                         == KnowledgeSnapshotAnalysisRecord.source_revision_id,
                         KnowledgeNodeSourcePointerRecord.source_class == source_class,
                     )
+                    .exists()
+                )
+            if any(
+                value is not None
+                for value in (administration_year, administration_month, item_number)
+            ):
+                occurrence_conditions = [
+                    AssessmentItemOccurrenceReferenceRecord.graph_snapshot_revision_id
+                    == snapshot_id,
+                    AssessmentItemOccurrenceReferenceRecord.analysis_run_id
+                    == KnowledgeSnapshotAnalysisRecord.analysis_run_id,
+                ]
+                if administration_year is not None:
+                    occurrence_conditions.append(
+                        AssessmentItemOccurrenceReferenceRecord.administration_year
+                        == administration_year
+                    )
+                if administration_month is not None:
+                    occurrence_conditions.append(
+                        AssessmentItemOccurrenceReferenceRecord.administration_month
+                        == administration_month
+                    )
+                if item_number is not None:
+                    occurrence_conditions.append(
+                        AssessmentItemOccurrenceReferenceRecord.item_number == item_number
+                    )
+                conditions.append(
+                    select(literal(1))
+                    .select_from(AssessmentItemOccurrenceReferenceRecord)
+                    .where(*occurrence_conditions)
                     .exists()
                 )
             if item_type_key is not None:

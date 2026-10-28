@@ -1128,6 +1128,9 @@ async def test_graph_item_db_gateway_reuses_pinned_graph_candidates() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/api/v1/item-bank/production-candidates"
         assert request.url.params["source_class"] == "APPROVED_ITEM"
+        assert request.url.params["administration_year"] == "2025"
+        assert request.url.params["administration_month"] == "6"
+        assert request.url.params["item_number"] == "12"
         return httpx.Response(
             200,
             json=_list(
@@ -1177,7 +1180,13 @@ async def test_graph_item_db_gateway_reuses_pinned_graph_candidates() -> None:
         transport=httpx.MockTransport(handler),
     )
     page = await gateway.graph_item_db_entries(
-        _session(), source_class="APPROVED_ITEM", curriculum_unit_key=None, cursor=None
+        _session(),
+        source_class="APPROVED_ITEM",
+        curriculum_unit_key=None,
+        cursor=None,
+        administration_year=2025,
+        administration_month=6,
+        item_number=12,
     )
     assert page.values[0].source_class == "APPROVED_ITEM"
     assert page.values[0].graph_snapshot_revision_id == "graphrev_" + "1" * 32

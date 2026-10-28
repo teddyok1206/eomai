@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import contextmanager
 from types import SimpleNamespace
 from typing import Any, cast
 
@@ -11,7 +12,7 @@ from eom_api.routers.curriculum import (
     integrated_science_graph_capability,
 )
 from eom_api.routers.item_bank import item_bank_entries, production_item_candidates
-from eom_api.services.query_adapter import _production_content_profile
+from eom_api.services.query_adapter import QueryAdapter, _production_content_profile
 from eom_api_contracts import (
     AssessmentItemOccurrenceViewV2,
     CurriculumGraphCapabilityView,
@@ -24,6 +25,7 @@ from eom_catalog_contracts import (
 )
 from fastapi import Request
 from fastapi.testclient import TestClient
+from sqlalchemy.dialects import postgresql
 
 from tests.api.helpers import disconnected_services
 
@@ -348,6 +350,9 @@ def test_production_candidate_route_forwards_server_owned_capability_filters() -
         difficulty_band="MEDIUM",
         limit=25,
         cursor=None,
+        administration_year=2025,
+        administration_month=6,
+        item_number=12,
     )
     assert response.data == ()
     assert queries.kwargs == {
@@ -359,7 +364,68 @@ def test_production_candidate_route_forwards_server_owned_capability_filters() -
         "difficulty_band": "MEDIUM",
         "limit": 25,
         "cursor": None,
+        "administration_year": 2025,
+        "administration_month": 6,
+        "item_number": 12,
     }
+
+
+def test_production_candidate_exam_filters_use_the_graph_occurrence_index() -> None:
+    """The occurrence filter is part of the bounded SQL query, not a client scan."""
+
+    class EmptyRows:
+        def all(self) -> tuple[()]:
+            return ()
+
+    class CaptureSession:
+        statement: Any = None
+
+        def get(self, _model: object, _key: str) -> SimpleNamespace:
+            return SimpleNamespace()
+
+        def execute(self, statement: object) -> EmptyRows:
+            self.statement = statement
+            return EmptyRows()
+
+        def scalars(self, _statement: object) -> tuple[()]:
+            return ()
+
+    session = CaptureSession()
+
+    @contextmanager
+    def sessions() -> Any:
+        yield session
+
+    query = object.__new__(QueryAdapter)
+    query.sessions = sessions
+    query._current_assessment_snapshot_id = lambda _session: "graphrev_" + "1" * 32
+    page = query.production_item_candidates(
+        curriculum_unit_key=None,
+        source_class="PAST_EXAM",
+        content_profile=None,
+        eligible=None,
+        item_type_key=None,
+        difficulty_band=None,
+        administration_year=2025,
+        administration_month=6,
+        item_number=12,
+        limit=50,
+        cursor=None,
+    )
+    assert page.data == ()
+    sql = str(
+        session.statement.compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert "EXISTS (SELECT" in sql
+    assert "assessment_item_occurrence_references.administration_year = 2025" in sql
+    assert "assessment_item_occurrence_references.administration_month = 6" in sql
+    assert "assessment_item_occurrence_references.item_number = 12" in sql
+    assert (
+        "assessment_item_occurrence_references.analysis_run_id = "
+        "knowledge_snapshot_analyses.analysis_run_id"
+    ) in sql
 
 
 def test_production_candidate_query_classifies_v3_only_by_the_exact_pointer_family() -> None:

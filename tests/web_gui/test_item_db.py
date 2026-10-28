@@ -41,6 +41,25 @@ def test_db_graph_search_uses_published_candidate_contract_without_archive_promo
             assert entry["graph_snapshot_revision_id"].startswith("graphrev_")
             assert entry["source_display_label"]
             assert "external_number" not in entry
+            assert isinstance(entry["hwpx_exam_eligible"], bool)
+            assert (entry["past_exam_context"] is not None) == (source_class == "PAST_EXAM")
+        scoped = client.get(
+            path,
+            params={
+                "source_class": "PAST_EXAM",
+                "administration_year": 2025,
+                "administration_month": 6,
+                "item_number": 12,
+            },
+        )
+        assert scoped.status_code == 200
+        assert scoped.json()["values"][0]["past_exam_context"]["item_number"] == 12
+        assert (
+            client.get(
+                path, params={"source_class": "PAST_EXAM", "administration_month": 13}
+            ).status_code
+            == 422
+        )
 
 
 def test_db_advanced_filter_search_is_bounded_and_session_protected() -> None:
@@ -152,7 +171,12 @@ def test_db_screen_shows_business_number_but_hides_internal_db_ids() -> None:
     assert html.index('data-view-target="item-db"') < html.index('data-view-target="learning"')
     assert html.index('data-view-target="learning"') < html.index('data-view-target="explorer"')
     assert html.index('data-view-target="explorer"') < html.index(">운영 도구</p>")
-    assert html.count('data-view-target="item-db"') == 1
+    assert html.count('data-view-target="item-db"') == 2
+    assert 'data-view="item-bank"' not in html
+    assert 'id="item-db-search-tab"' in html
+    assert 'id="item-db-assembly-tab"' in html
+    assert html.index('id="item-db-assembly-panel"') < html.index('id="item-db-draft-list"')
+    assert html.index('id="item-db-draft-list"') < html.index('id="mock-exam-selections"')
     assert 'id="item-db-filter-rows"' in html
     assert 'id="item-db-match-mode"' in html
     assert 'id="item-db-source"' in html

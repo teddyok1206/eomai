@@ -1371,13 +1371,16 @@ class FakeGateway:
         source_class: str,
         curriculum_unit_key: str | None,
         cursor: str | None,
+        administration_year: int | None = None,
+        administration_month: int | None = None,
+        item_number: int | None = None,
     ) -> GraphItemDbPage:
         page = await self.item_bank_entries(
             session,
             curriculum_unit_key=curriculum_unit_key,
-            administration_year=None,
-            administration_month=None,
-            item_number=None,
+            administration_year=administration_year,
+            administration_month=administration_month,
+            item_number=item_number,
             cursor=cursor,
         )
         if not page.values:
