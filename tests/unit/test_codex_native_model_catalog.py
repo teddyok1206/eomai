@@ -8,8 +8,13 @@ from typing import Any
 
 import pytest
 from eom_identifiers import content_sha256
+from eom_orchestrator.control_command_processor import (
+    CodexControlCommandProcessor,
+    _ObservationTarget,
+)
 from eom_orchestrator.control_commands import _terminalize_record
 from eom_orchestrator.control_service import ControlPlaneError
+from eom_orchestrator.worker_auth import WorkerAuthObservation
 from eom_orchestrator.worker_registry import WorkerSlot
 from eom_orchestrator.worker_usage import _validate_observation
 from eom_orchestrator.worker_usage_exec import (
@@ -21,6 +26,7 @@ from eom_orchestrator.worker_usage_exec import (
 )
 from eom_workflow import (
     CodexControlCommandResultV3,
+    CodexControlCommandResultV4,
     CodexModelCatalogSnapshot,
     CodexUsageObservationV2,
     ModelCandidate,
@@ -237,6 +243,80 @@ def test_native_catalog_hash_freshness_and_result_identity_are_validated() -> No
         CodexControlCommandResultV3.model_validate(
             record.result_document | {"binding_id": "authbinding_" + "3" * 32}
         )
+
+
+def test_degraded_capability_can_report_exhausted_usage_without_claiming_ready() -> None:
+    catalog = _catalog_snapshot(
+        cli_version="0.160.0", models=(), reason_code="CODEX_MODEL_CATALOG_UNAVAILABLE"
+    )
+    document = _observation_document(
+        command_id=COMMAND,
+        binding_id=BINDING,
+        slot_id="01",
+        account_result={"account": {"type": "chatgpt", "planType": "plus"}},
+        usage_result={"rateLimits": {"primary": {"usedPercent": 100}}},
+        model_catalog=catalog,
+    )
+    observation = CodexUsageObservationV2.model_validate(document)
+    record = SimpleNamespace(command_id=COMMAND, command_type="OBSERVE", binding_id=BINDING)
+    _terminalize_record(
+        record,
+        outcome="SUCCEEDED",
+        result_resource_version=2,
+        binding_state="DEGRADED",
+        reason_code=None,
+        processed_at=datetime.now(UTC),
+        usage_observation=observation,
+    )
+    validate_control_contract("codex-control-command-result-v4", record.result_document)
+    result = CodexControlCommandResultV4.model_validate(record.result_document)
+    assert result.binding_state == "DEGRADED"
+    assert result.usage_observation.windows[0].used_percent == 100
+    with pytest.raises(ValidationError):
+        CodexControlCommandResultV3.model_validate(record.result_document)
+
+
+def test_capability_failure_preserves_independent_login_probe_result(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    observed_at = datetime.now(UTC)
+    target = _ObservationTarget(
+        binding_id=BINDING,
+        expected_resource_version=1,
+        slot=WorkerSlot(slot_id="01", linux_user="eom-cdx-01", role="authoring", enabled=True),
+        account_label="test-account",
+    )
+
+    def auth(**_kwargs: object) -> WorkerAuthObservation:
+        return WorkerAuthObservation(
+            binding_id=BINDING,
+            slot_key="slot01",
+            account_label="test-account",
+            state="READY",
+            reason_code=None,
+            codex_cli_version="0.160.0",
+            observed_at=observed_at,
+            valid_until=observed_at + timedelta(hours=1),
+            probe_unit_name="eom-worker-auth-01.service",
+        )
+
+    def capability_failure(_path: Path) -> None:
+        raise ControlPlaneError("CONTROL_CAPABILITY_POLICY_MISMATCH", "test-only failure")
+
+    monkeypatch.setattr("eom_orchestrator.control_command_processor.observe_worker_auth", auth)
+    monkeypatch.setattr(
+        "eom_orchestrator.control_command_processor.load_reviewed_capability_policy",
+        capability_failure,
+    )
+    processor = CodexControlCommandProcessor(
+        None,  # type: ignore[arg-type] - this direct observation does not open a session
+        capability_policy_path=Path("/test/policy.yaml"),
+        runner_id="test-observer",
+    )
+    collected = processor._collect_observation(target=target, observed_at=observed_at)
+    assert collected.auth_probe_ready is True
+    assert collected.auth.state == "DEGRADED"
+    assert collected.auth.reason_code == "CAPABILITY_OBSERVATION_FAILED"
 
 
 def test_native_observer_executes_only_fixed_read_rpc_methods(

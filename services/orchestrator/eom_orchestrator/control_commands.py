@@ -13,6 +13,7 @@ from eom_workflow import (
     CodexControlCommandResult,
     CodexControlCommandResultV2,
     CodexControlCommandResultV3,
+    CodexControlCommandResultV4,
     CodexUsageObservation,
     CodexUsageObservationV2,
     validate_control_contract,
@@ -258,9 +259,14 @@ def _terminalize_record(
 ) -> None:
     result_type: type[CodexControlCommandResult | CodexControlCommandResultV2]
     if isinstance(usage_observation, CodexUsageObservationV2):
-        schema_version = "codex-control-command-result/1.2"
-        result_type = CodexControlCommandResultV3
-        schema_name = "codex-control-command-result-v3"
+        if binding_state == "DEGRADED":
+            schema_version = "codex-control-command-result/1.3"
+            result_type = CodexControlCommandResultV4
+            schema_name = "codex-control-command-result-v4"
+        else:
+            schema_version = "codex-control-command-result/1.2"
+            result_type = CodexControlCommandResultV3
+            schema_name = "codex-control-command-result-v3"
     elif usage_observation is not None:
         schema_version = "codex-control-command-result/1.1"
         result_type = CodexControlCommandResultV2

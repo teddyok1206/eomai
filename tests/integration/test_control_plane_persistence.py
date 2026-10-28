@@ -177,6 +177,7 @@ from eom_orchestrator.workflow_job_retirement import (
 )
 from eom_workflow import (
     CodexUsageObservation,
+    CodexUsageObservationV2,
     ControlArtifactPointer,
     CustomerSupportCase,
     CustomerSupportDiagnostics,
@@ -1414,8 +1415,9 @@ def test_automatic_observation_renews_due_idle_binding_without_command(
     assert observed_slots == ["01"]
 
 
+@pytest.mark.parametrize("capability_degraded", [False, True])
 def test_operator_observe_persists_sanitized_usage_with_terminal_command(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, capability_degraded: bool
 ) -> None:
     _complete_control_plane(db_session)
     binding = db_session.scalar(
@@ -1471,7 +1473,11 @@ def test_operator_observe_persists_sanitized_usage_with_terminal_command(
 
     def usage(**kwargs: Any) -> CodexUsageObservation:
         document: dict[str, Any] = {
-            "schema_version": "codex-usage-observation/1.0",
+            "schema_version": (
+                "codex-usage-observation/1.1"
+                if capability_degraded
+                else "codex-usage-observation/1.0"
+            ),
             "command_id": kwargs["command_id"],
             "binding_id": kwargs["binding_id"],
             "slot_key": f"slot{kwargs['slot'].slot_id}",
@@ -1482,7 +1488,7 @@ def test_operator_observe_persists_sanitized_usage_with_terminal_command(
                     "limit_id": "codex",
                     "limit_name": "Codex",
                     "window_kind": "SECONDARY",
-                    "used_percent": 25,
+                    "used_percent": 100 if capability_degraded else 25,
                     "window_duration_minutes": 10080,
                     "resets_at": (NOW + timedelta(days=4)).isoformat().replace("+00:00", "Z"),
                 }
@@ -1492,13 +1498,32 @@ def test_operator_observe_persists_sanitized_usage_with_terminal_command(
             .replace("+00:00", "Z"),
             "observation_sha256": "sha256:" + "0" * 64,
         }
+        if capability_degraded:
+            catalog: dict[str, Any] = {
+                "source": "APP_SERVER_MODEL_LIST",
+                "codex_cli_version": "0.147.0",
+                "state": "UNAVAILABLE",
+                "reason_code": "CODEX_MODEL_CATALOG_UNAVAILABLE",
+                "models": [],
+                "observed_at": (NOW + timedelta(minutes=55)).isoformat().replace("+00:00", "Z"),
+                "valid_until": (NOW + timedelta(minutes=115)).isoformat().replace("+00:00", "Z"),
+                "catalog_sha256": "sha256:" + "0" * 64,
+            }
+            _self_hash(catalog, "catalog_sha256")
+            document["model_catalog"] = catalog
         _self_hash(document, "observation_sha256")
-        return CodexUsageObservation.model_validate(document)
+        observation_type = CodexUsageObservationV2 if capability_degraded else CodexUsageObservation
+        return observation_type.model_validate(document)
+
+    def policy_loader(_path: Path) -> ReviewedCapabilityPolicy:
+        if capability_degraded:
+            raise ControlPlaneError("CONTROL_CAPABILITY_POLICY_MISMATCH", "test-only failure")
+        return policy
 
     monkeypatch.setattr("eom_orchestrator.control_command_processor.observe_worker_auth", auth)
     monkeypatch.setattr(
         "eom_orchestrator.control_command_processor.load_reviewed_capability_policy",
-        lambda _path: policy,
+        policy_loader,
     )
     monkeypatch.setattr(
         "eom_orchestrator.control_command_processor.observe_codex_cli_surface",
@@ -1519,7 +1544,17 @@ def test_operator_observe_persists_sanitized_usage_with_terminal_command(
     assert terminal is not None
     assert terminal.state == "SUCCEEDED"
     assert terminal.result_document is not None
-    assert terminal.result_document["schema_version"] == "codex-control-command-result/1.1"
+    assert terminal.result_document["schema_version"] == (
+        "codex-control-command-result/1.3"
+        if capability_degraded
+        else "codex-control-command-result/1.1"
+    )
+    assert terminal.result_document["binding_state"] == (
+        "DEGRADED" if capability_degraded else "READY"
+    )
+    assert terminal.result_document["usage_observation"]["windows"][0]["used_percent"] == (
+        100 if capability_degraded else 25
+    )
     assert terminal.result_document["usage_observation"]["plan_type"] == "plus"
     assert "email" not in str(terminal.result_document).casefold()
 

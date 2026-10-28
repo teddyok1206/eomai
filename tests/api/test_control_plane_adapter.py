@@ -113,8 +113,10 @@ def test_usage_result_projection_exposes_only_sanitized_allowance() -> None:
 
 
 @pytest.mark.parametrize("available", [True, False])
+@pytest.mark.parametrize("binding_state", ["READY", "DEGRADED"])
 def test_native_catalog_projection_is_separate_from_usage_and_capability(
     available: bool,
+    binding_state: str,
 ) -> None:
     catalog = _catalog_snapshot(
         cli_version="0.160.0",
@@ -142,7 +144,9 @@ def test_native_catalog_projection_is_separate_from_usage_and_capability(
         binding_id="authbinding_" + "2" * 32,
         slot_id="01",
         account_result={"account": {"type": "chatgpt", "planType": "plus"}},
-        usage_result={"rateLimits": {"primary": {"usedPercent": 20}}},
+        usage_result={
+            "rateLimits": {"primary": {"usedPercent": 100 if binding_state == "DEGRADED" else 20}}
+        },
         model_catalog=catalog,
     )
     row = SimpleNamespace(
@@ -156,7 +160,7 @@ def test_native_catalog_projection_is_separate_from_usage_and_capability(
         row,
         outcome="SUCCEEDED",
         result_resource_version=3,
-        binding_state="READY",
+        binding_state=binding_state,
         reason_code=None,
         processed_at=datetime.now(UTC),
         usage_observation=CodexUsageObservationV2.model_validate(document),
@@ -166,7 +170,7 @@ def test_native_catalog_projection_is_separate_from_usage_and_capability(
     assert projected is not None
     assert projected.model_dump(mode="json") == catalog.model_dump(mode="json")
     assert projected.state == ("OBSERVED" if available else "UNAVAILABLE")
-    assert usage.windows[0].used_percent == 20
+    assert usage.windows[0].used_percent == (100 if binding_state == "DEGRADED" else 20)
     assert "never-projected" not in projected.model_dump_json()
     command = ControlPlaneAdapter._command(row)  # type: ignore[arg-type]
     assert command.model_catalog == projected

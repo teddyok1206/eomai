@@ -65,6 +65,7 @@ from eom_workflow import (
     CodexCapabilitySnapshot,
     CodexControlCommandResultV2,
     CodexControlCommandResultV3,
+    CodexControlCommandResultV4,
     validate_control_contract,
 )
 from sqlalchemy import Engine, func, select
@@ -197,7 +198,13 @@ class ControlPlaneAdapter:
                     CodexControlCommandRecord.state == "SUCCEEDED",
                     CodexControlCommandRecord.result_document["schema_version"]
                     .as_string()
-                    .in_(("codex-control-command-result/1.1", "codex-control-command-result/1.2")),
+                    .in_(
+                        (
+                            "codex-control-command-result/1.1",
+                            "codex-control-command-result/1.2",
+                            "codex-control-command-result/1.3",
+                        )
+                    ),
                 )
                 .subquery()
             )
@@ -680,11 +687,14 @@ class ControlPlaneAdapter:
         if document is None:
             return None, None
         schema_version = document.get("schema_version")
-        if schema_version == "codex-control-command-result/1.2":
-            validate_control_contract("codex-control-command-result-v3", document)
-            result: CodexControlCommandResultV2 = CodexControlCommandResultV3.model_validate(
+        if schema_version == "codex-control-command-result/1.3":
+            validate_control_contract("codex-control-command-result-v4", document)
+            result: CodexControlCommandResultV2 = CodexControlCommandResultV4.model_validate(
                 document
             )
+        elif schema_version == "codex-control-command-result/1.2":
+            validate_control_contract("codex-control-command-result-v3", document)
+            result = CodexControlCommandResultV3.model_validate(document)
         elif schema_version == "codex-control-command-result/1.1":
             validate_control_contract("codex-control-command-result-v2", document)
             result = CodexControlCommandResultV2.model_validate(document)

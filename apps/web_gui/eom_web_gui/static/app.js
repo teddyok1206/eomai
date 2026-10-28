@@ -3220,18 +3220,32 @@ function renderCodexUsage(usage) {
     const name = document.createElement("span");
     name.textContent = usageWindowLabel(window, limitIds.size > 1);
     const percent = document.createElement("strong");
-    percent.textContent = `${window.used_percent}% 사용 · ${100 - window.used_percent}% 남음`;
+    const resetAt = Date.parse(window.resets_at || "");
+    const resetPassed = Number.isFinite(resetAt) && resetAt <= Date.now();
+    percent.textContent = resetPassed
+      ? `이전 조회 ${window.used_percent}% 사용 · 새로고침 필요`
+      : `${window.used_percent}% 사용 · ${100 - window.used_percent}% 남음`;
     label.append(name, percent);
     const meter = document.createElement("progress");
     meter.max = 100;
     meter.value = window.used_percent;
-    meter.setAttribute("aria-label", `${name.textContent} ${window.used_percent}% 사용`);
+    meter.setAttribute("aria-label", `${name.textContent} ${resetPassed ? "이전 조회 " : ""}${window.used_percent}% 사용`);
     const reset = document.createElement("small");
     reset.textContent = `초기화 ${formatSeoulDateTime(window.resets_at)} (한국 시각)`;
     row.append(label, meter, reset);
     section.append(row);
   }
   return section;
+}
+
+async function refreshCodexAccount(account) {
+  // Reading current state is always safe; a separate usage probe must not share
+  // the slot with a worker that still holds its lease.
+  if (Number(account.active_lease_count) > 0 || account.active_auth_enrollment_id) {
+    await loadCodexAccounts();
+    return;
+  }
+  await sendAccountCommand(account, "OBSERVE");
 }
 
 function renderCodexAccounts(accounts) {
@@ -3289,21 +3303,14 @@ function renderCodexAccounts(accounts) {
     const actions = document.createElement("div");
     actions.className = "form-actions";
     actions.append(
-      actionButton("상태·사용량 새로고침", () => sendAccountCommand(account, "OBSERVE")),
+      actionButton(account.active_lease_count > 0 || account.active_auth_enrollment_id ? "상태 새로고침" : "상태·사용량 새로고침", () => refreshCodexAccount(account)),
       actionButton("사용 시작", () => sendAccountCommand(account, "ENABLE")),
       actionButton("새 작업 중지", () => sendAccountCommand(account, "DRAIN"), true),
       actionButton("사용 중지", () => sendAccountCommand(account, "DISABLE"), true),
     );
-    const usageButton = actions.firstElementChild;
     if (account.active_auth_enrollment_id) {
-      for (const button of [...actions.children].slice(0, 2)) {
-        button.disabled = true;
-        button.title = "로그인 변경과 자동 모델 확인이 끝나면 사용할 수 있습니다.";
-      }
-    }
-    if (account.active_lease_count > 0 && usageButton) {
-      usageButton.disabled = true;
-      usageButton.title = "현재 슬롯 작업이 끝난 뒤 사용량을 새로고침할 수 있습니다.";
+      actions.children[1].disabled = true;
+      actions.children[1].title = "로그인 변경과 자동 모델 확인이 끝나면 사용할 수 있습니다.";
     }
     const reauth = account.active_auth_enrollment_id
       ? actionButton("로그인 변경 계속", () => resumeCodexReauthentication(account))

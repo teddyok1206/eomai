@@ -2061,6 +2061,13 @@ class CodexControlCommandResultV3(CodexControlCommandResultV2):
     usage_observation: CodexUsageObservationV2
 
 
+class CodexControlCommandResultV4(CodexControlCommandResultV3):
+    """Authenticated usage refresh while capability verification remains degraded."""
+
+    schema_version: Literal["codex-control-command-result/1.3"] = "codex-control-command-result/1.3"  # type: ignore[assignment]
+    binding_state: Literal["DEGRADED"] = "DEGRADED"  # type: ignore[assignment]
+
+
 class ExecutionPresetEvaluationReport(FrozenModel):
     """Bounded report metadata; detailed evidence remains an Artifact Revision."""
 

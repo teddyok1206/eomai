@@ -50,6 +50,78 @@ assert.equal(context.codexAccountDisplayState({...account, usage_observation: {
     assert completed.returncode == 0, completed.stderr
 
 
+def test_usage_refresh_remains_available_when_exhausted_or_capability_limited() -> None:
+    node = shutil.which("node")
+    assert node is not None
+    source = APP.read_text(encoding="utf-8")
+    function = source[
+        source.index("async function refreshCodexAccount(") : source.index(
+            "function renderCodexAccounts("
+        )
+    ]
+    assert "usageButton.disabled" not in source
+    script = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const calls = [];
+const context = {
+  loadCodexAccounts: async () => calls.push('READ_ONLY'),
+  sendAccountCommand: async (_account, command) => calls.push(command),
+};
+vm.createContext(context);
+vm.runInContext(FUNCTION, context);
+(async () => {
+  const exhausted = {
+    state: 'DEGRADED', active_lease_count: 0,
+    usage_observation: {windows: [{used_percent: 100}]},
+  };
+  await context.refreshCodexAccount(exhausted);
+  await context.refreshCodexAccount({...exhausted, active_lease_count: 1});
+  await context.refreshCodexAccount({...exhausted, active_auth_enrollment_id: 'authflow_test'});
+  assert.deepEqual(calls, ['OBSERVE', 'READ_ONLY', 'READ_ONLY']);
+})().catch((error) => { console.error(error); process.exitCode = 1; });
+""".replace("FUNCTION", json.dumps(function))
+    completed = subprocess.run([node, "-e", script], capture_output=True, text=True, check=False)
+    assert completed.returncode == 0, completed.stderr
+
+
+def test_expired_usage_window_does_not_claim_zero_remaining_after_reset() -> None:
+    node = shutil.which("node")
+    assert node is not None
+    source = APP.read_text(encoding="utf-8")
+    function = source[
+        source.index("function renderCodexUsage(") : source.index(
+            "async function refreshCodexAccount("
+        )
+    ]
+    script = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+class Element {
+  constructor() { this.children = []; this.textContent = ''; }
+  append(...children) { this.children.push(...children); }
+  setAttribute() {}
+}
+const context = {
+  document: {createElement: () => new Element()},
+  usageWindowLabel: () => '주간 사용량',
+  formatSeoulDateTime: () => '표시 시각',
+};
+vm.createContext(context);
+vm.runInContext(FUNCTION, context);
+const usage = (resets_at) => ({
+  plan_type: 'plus', observed_at: '2026-10-27T00:00:00Z',
+  windows: [{limit_id: 'codex', used_percent: 100, resets_at}],
+});
+const percent = (result) => result.children[1].children[0].children[1].textContent;
+assert.match(percent(context.renderCodexUsage(usage('2020-01-01T00:00:00Z'))), /새로고침 필요/);
+assert.doesNotMatch(percent(context.renderCodexUsage(usage('2020-01-01T00:00:00Z'))), /0% 남음/);
+assert.match(percent(context.renderCodexUsage(usage('2099-01-01T00:00:00Z'))), /0% 남음/);
+""".replace("FUNCTION", json.dumps(function))
+    completed = subprocess.run([node, "-e", script], capture_output=True, text=True, check=False)
+    assert completed.returncode == 0, completed.stderr
+
+
 def test_model_verification_keeps_polling_without_asking_for_device_login_again() -> None:
     node = shutil.which("node")
     assert node is not None

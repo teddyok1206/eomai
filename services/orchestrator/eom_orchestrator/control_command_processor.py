@@ -69,6 +69,7 @@ class _CollectedObservation:
     auth: WorkerAuthObservation
     policy: ReviewedCapabilityPolicy | None
     cli: tuple[str, frozenset[str]] | None
+    auth_probe_ready: bool
 
 
 class CodexControlCommandProcessor:
@@ -274,7 +275,7 @@ class CodexControlCommandProcessor:
         )
         observation = collected.auth
         usage_observation = None
-        if collect_usage and observation.state == "READY":
+        if collect_usage and collected.auth_probe_ready:
             usage_observation = observe_worker_usage(
                 slot=slot,
                 command_id=command_id,
@@ -344,6 +345,7 @@ class CodexControlCommandProcessor:
             observed_at=observed_at,
             ttl=AUTH_OBSERVATION_TTL,
         )
+        auth_probe_ready = observation.state == "READY"
         policy = None
         cli_observation = None
         if observation.state == "READY":
@@ -375,6 +377,7 @@ class CodexControlCommandProcessor:
             auth=observation,
             policy=policy,
             cli=cli_observation,
+            auth_probe_ready=auth_probe_ready,
         )
 
 
