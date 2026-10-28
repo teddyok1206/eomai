@@ -62,3 +62,9 @@
 9. **의존:** CLI/상주 composition→Catalog use case→기존 계약/Registry/analysis/Graph port. 원본 읽기와 파일 materialization은 기존 Catalog/Orchestrator adapter가 소유한다. worker는 proposal만 반환한다.
 10. **정책과 실패:** 과학적 의문점은 `REGISTER_WITH_REVIEW_WARNINGS`로 보존한다. 원본 미독해와 source/hash/권한 실패는 다른 상태다. 어느 상태도 원본 삭제나 기존 FAILED→성공 변경으로 처리하지 않는다. Codex용 보고서 projection은 의문점·편집 답안·독립 판단을 함께 내보내고 수록 승인을 정답 정확성 보장으로 표현하지 않는다.
 11. **간단한 대안 배제:** 원본 Intake 상태를 바꾸거나 `PAST_EXAM`/기출 Origin을 붙이면 없는 승인·시험 이력을 만들게 된다. 새 범용 origin/queue를 도입하는 대신 기존 component pointer와 source에 맞는 검증 adapter를 사용한다. 별도 `ItemOriginProfile`이 필요한 후속 기능에서는 이 계보를 authority로 삼는 정식 successor를 추가하며 기존 V1을 느슨하게 하지 않는다.
+
+## 등록 경계 구현과 첫 적용
+
+`bbf79e5b`는 원문 수록·계보·주의사항 조회·기존 Graph 분석 연결을 별도 maintenance wheel로 설치했다. API/Runner/GPU의 운영 설치본은 교체하지 않았다. schema/반환값·원문 분리·공식 채팅 조회 등 집중 63개, 전용 설정 포함 45개 테스트와 disposable DB의 실제 registration-key 동시성/중단 복구 2개를 확인했다. 동일 사례를 중복 합산한 독립 총계로 표현하지 않는다.
+
+U 10310은 원문 수록과 원래 role-result를 참조하는 보고서 component를 저장했다. 이후 Graph 분석 생성 transaction은 전용 preset이 `workflow-role/1.6.0`만 허용하고 실제 기본 Workflow가 요구하는 1.4를 누락해 거부됐다. 모델 실행이나 실패 상태 재해석 없이 해당 transaction은 rollback됐으며 원문 수록 결과는 보존한다. 초기 preset은 수정하지 않고, 원래 검증된 knowledge-analysis preset의 호환 protocol family 전체와 동일한 모델/지침을 물려받는 successor로 보완한다. capacity는 이미 released된 V4 support(slot05·동시1)만 사용하며 기존 knowledge-analysis preset과 capacity를 변경하지 않는다. 불완전한 초기 전용 release를 일반적으로 허용하는 예외가 아니라 그 exact predecessor의 successor 발행 경계이며, 다음 정상 release부터는 같은 family를 exact replay한다.

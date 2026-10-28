@@ -75,13 +75,20 @@ def release_creative_knowledge_controls(
                 or current.state != "RELEASED"
                 or current.role_policies != expected_roles
                 or current.capacity_policy_revision_id != capacity_revision_id
-                or current.compatible_workflow_protocols != ("workflow-role/1.6.0",)
                 or current.general_knowledge_policy != baseline.general_knowledge_policy
             ):
                 raise ControlPlaneError(
                     "CONTROL_CREATIVE_ANALYSIS_POLICY_INVALID", "replay differs"
                 )
-            return current
+            if current.compatible_workflow_protocols == baseline.compatible_workflow_protocols:
+                return current
+            # An initial canary exposed that approved-Item V2 uses the released
+            # base Workflow's 1.4 protocol. Preserve the incomplete first release
+            # and publish a successor inheriting the complete baseline family.
+            if current.compatible_workflow_protocols != ("workflow-role/1.6.0",):
+                raise ControlPlaneError(
+                    "CONTROL_CREATIVE_ANALYSIS_POLICY_INVALID", "protocol replay differs"
+                )
         drafts = (
             tuple(
                 session.scalars(
@@ -107,7 +114,7 @@ def release_creative_knowledge_controls(
                 role_policies=[entry.model_dump(mode="json") for entry in expected_roles],
                 capacity_policy_revision_id=capacity_revision_id,
                 general_knowledge_policy=baseline.general_knowledge_policy,
-                compatible_workflow_protocols=["workflow-role/1.6.0"],
+                compatible_workflow_protocols=list(baseline.compatible_workflow_protocols),
                 created_by=operator_id,
                 created_at=datetime.now(UTC),
             )
@@ -117,10 +124,11 @@ def release_creative_knowledge_controls(
             not isinstance(draft, ExecutionPresetRevision)
             or draft.role_policies != expected_roles
             or draft.capacity_policy_revision_id != capacity_revision_id
-            or draft.compatible_workflow_protocols != ("workflow-role/1.6.0",)
+            or draft.compatible_workflow_protocols != baseline.compatible_workflow_protocols
         ):
             raise ControlPlaneError("CONTROL_CREATIVE_ANALYSIS_POLICY_INVALID", "draft differs")
-    load_role_input_schema("support", "workflow-role/1.6.0")
+    for protocol in draft.compatible_workflow_protocols:
+        load_role_input_schema("support", protocol)
     cases = (
         "EXACT_KNOWLEDGE_ROLE_POLICY",
         "SUPPORT_SLOT05_ONLY",

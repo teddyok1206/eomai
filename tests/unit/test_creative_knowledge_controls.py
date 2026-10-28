@@ -19,7 +19,7 @@ def policy():
     value["state"] = "RELEASED"
     value["role_policies"] = [value["role_policies"][0]]
     value["role_policies"][0].update(role="support", worker_pool_key="support")
-    value["compatible_workflow_protocols"] = ["workflow-role/1.6.0"]
+    value["compatible_workflow_protocols"] = ["workflow-role/1.4.0", "workflow-role/1.6.0"]
     value["capacity_policy_revision_id"] = _capacity().capacity_policy_revision_id
     value["content_sha256"] = content_sha256(
         {k: v for k, v in value.items() if k != "content_sha256"}
@@ -72,3 +72,46 @@ def test_two_slot_support_capacity_is_rejected_before_any_draft(monkeypatch):
             authorize=Mock(),
         )
     publisher.publish_bytes.assert_not_called()
+
+
+def test_incomplete_canary_protocol_family_gets_immutable_successor(monkeypatch):
+    baseline = policy()
+    incomplete = baseline.model_copy(
+        update={
+            "preset_revision_id": "execpresetrev_" + "f" * 32,
+            "compatible_workflow_protocols": ("workflow-role/1.6.0",),
+        }
+    )
+    session = Mock()
+    session.get.side_effect = lambda _model, identity: (
+        baseline if identity == baseline.preset_revision_id else incomplete
+    )
+    session.scalar.return_value = NS(
+        current_revision_id=incomplete.preset_revision_id, preset_id=incomplete.preset_id
+    )
+    session.scalars.return_value = ()
+    monkeypatch.setattr(controls, "validated_preset", lambda row: row)
+    monkeypatch.setattr(controls, "resolve_released_capacity_policy", lambda *args: _capacity())
+    create = Mock(return_value=baseline.model_copy(update={"state": "DRAFT"}))
+    monkeypatch.setattr(controls, "create_execution_preset_draft", create)
+    schemas = Mock()
+    monkeypatch.setattr(controls, "load_role_input_schema", schemas)
+    monkeypatch.setattr(controls, "record_execution_preset_evaluation", Mock())
+    monkeypatch.setattr(controls, "release_execution_preset", Mock(return_value=baseline))
+    publisher = Mock()
+    publisher.publish_bytes.return_value = NS(pointer=object())
+    released = controls.release_creative_knowledge_controls(
+        NS(begin=lambda: nullcontext(session)),
+        publisher,
+        baseline_revision_id=baseline.preset_revision_id,
+        capacity_revision_id=_capacity().capacity_policy_revision_id,
+        operator_id="operator_" + "1" * 32,
+        source_commit="a" * 40,
+        authorize=Mock(),
+    )
+    assert released == baseline
+    assert create.call_args.kwargs["compatible_workflow_protocols"] == list(
+        baseline.compatible_workflow_protocols
+    )
+    assert schemas.call_args_list[0].args == ("support", "workflow-role/1.4.0")
+    assert incomplete.compatible_workflow_protocols == ("workflow-role/1.6.0",)
