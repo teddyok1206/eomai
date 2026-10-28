@@ -1,0 +1,18 @@
+[Unit]
+Description=EOM creative learning read-only operational check
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+EnvironmentFile=/etc/eom/creative-learning.env
+ExecStart=@PYTHON@ -I -B -c "import sys; sys.path.insert(0, '@PREFIX@/site-packages'); from eom_catalog_service.creative_learning_observation import main; main()"
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+InaccessiblePaths=/home/eom/EOM /home/eom/EOMIS /mnt/nas /srv/eom/worker-homes /etc/eom/secrets
+ReadOnlyPaths=/var/lib/eom/creative-learning
+RestrictAddressFamilies=AF_UNIX
+TimeoutStartSec=20
+UMask=0077

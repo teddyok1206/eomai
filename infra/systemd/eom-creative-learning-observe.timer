@@ -1,0 +1,10 @@
+[Unit]
+Description=EOM creative learning check every 30 minutes
+
+[Timer]
+OnCalendar=*-*-* *:00,30:00 UTC
+AccuracySec=15s
+Unit=eom-creative-learning-observe.service
+
+[Install]
+WantedBy=timers.target
