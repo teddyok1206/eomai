@@ -106,6 +106,47 @@ def test_existing_active_reviewer_path_needs_no_historical_lookup():
     service.structure_context_for_snapshot.assert_not_called()
 
 
+def test_published_alignment_membership_is_exact_and_read_once_per_publication():
+    _, candidate, snapshot_id = extension()
+    service = object.__new__(KnowledgeGraphPublicationService)
+    service.structure_context_for_snapshot = Mock(return_value=NS(structure=candidate))
+    contains = service._published_alignment_membership_checker(snapshot_id)
+    binding = candidate.automatic_item_curriculum_bindings[0]
+    assert contains(binding.alignment_sha256)
+    assert not contains("sha256:" + "f" * 64)
+    assert contains(binding.alignment_sha256)
+    service.structure_context_for_snapshot.assert_called_once_with(snapshot_id)
+
+
+@pytest.mark.parametrize("inherited", [False, True])
+def test_retired_alignment_requester_needs_published_proof_and_does_not_skip_evidence(inherited):
+    from eom_identity_service.models import OperatorRecord
+
+    _, candidate, snapshot_id = extension()
+    service = object.__new__(KnowledgeGraphPublicationService)
+    service.structure_context_for_snapshot = Mock(return_value=NS(structure=candidate))
+    session = Mock()
+    session.get.side_effect = lambda model, _identity: (
+        NS(status="DISABLED") if model is OperatorRecord else None
+    )
+    session.scalars.return_value = ()
+    contains = service._published_alignment_membership_checker(snapshot_id) if inherited else None
+    with pytest.raises(KnowledgeGraphPublicationError) as caught:
+        service._validate_automatic_item_curriculum_bindings(
+            session,
+            candidate,
+            (_approved_item_analysis(),),
+            expected_snapshot_revision_id=snapshot_id,
+            ancestor_snapshot_ids=frozenset({snapshot_id}),
+            inherited_binding=contains,
+        )
+    assert caught.value.code == (
+        "KNOWLEDGE_GRAPH_AUTOMATIC_ALIGNMENT_EVIDENCE_INVALID"
+        if inherited
+        else "KNOWLEDGE_GRAPH_AUTOMATIC_ALIGNMENT_SOURCE_INVALID"
+    )
+
+
 def test_policy_metadata_preflight_rejects_a_different_policy_family():
     from contextlib import nullcontext
 

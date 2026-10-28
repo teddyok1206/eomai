@@ -1893,12 +1893,16 @@ class KnowledgeGraphPublicationService:
                 "Item curriculum alignment requires a prior Graph snapshot",
             )
         ancestor_snapshot_ids = self._snapshot_ancestor_ids(session, previous_snapshot_revision_id)
+        inherited_binding = self._published_alignment_membership_checker(
+            previous_snapshot_revision_id
+        )
         self._validate_approved_item_curriculum_bindings(
             session,
             structure,
             analyses,
             expected_snapshot_revision_id=previous_snapshot_revision_id,
             ancestor_snapshot_ids=ancestor_snapshot_ids,
+            inherited_binding=inherited_binding,
         )
         if isinstance(structure, KnowledgeGraphStructureManifestV4):
             self._validate_automatic_item_curriculum_bindings(
@@ -1907,7 +1911,35 @@ class KnowledgeGraphPublicationService:
                 analyses,
                 expected_snapshot_revision_id=previous_snapshot_revision_id,
                 ancestor_snapshot_ids=ancestor_snapshot_ids,
+                inherited_binding=inherited_binding,
             )
+
+    def _published_alignment_membership_checker(
+        self, base_snapshot_revision_id: str
+    ) -> Callable[[str], bool]:
+        """Request-local exact published binding membership, never current IAM authority."""
+        hashes: frozenset[str] | None = None
+
+        def contains(alignment_sha256: str) -> bool:
+            nonlocal hashes
+            if hashes is None:
+                base = self.structure_context_for_snapshot(base_snapshot_revision_id).structure
+                reviewed = (
+                    base.approved_item_curriculum_bindings
+                    if isinstance(base, KnowledgeGraphStructureManifestV3)
+                    else ()
+                )
+                automatic = (
+                    base.automatic_item_curriculum_bindings
+                    if isinstance(base, KnowledgeGraphStructureManifestV4)
+                    else ()
+                )
+                hashes = frozenset(binding.alignment_sha256 for binding in reviewed).union(
+                    binding.alignment_sha256 for binding in automatic
+                )
+            return alignment_sha256 in hashes
+
+        return contains
 
     def _validate_approved_item_curriculum_bindings(
         self,
@@ -1921,6 +1953,7 @@ class KnowledgeGraphPublicationService:
         *,
         expected_snapshot_revision_id: str | None,
         ancestor_snapshot_ids: frozenset[str],
+        inherited_binding: Callable[[str], bool] | None = None,
     ) -> None:
         """Resolve every reviewed Item alignment through its immutable evidence pointers."""
 
@@ -1956,10 +1989,12 @@ class KnowledgeGraphPublicationService:
             analysis = analysis_by_id[binding.analysis_run_id]
             source = analysis.source
             reviewer = session.get(OperatorRecord, binding.reviewed_by_operator_id)
+            actor_valid = (reviewer is not None and reviewer.status == "ACTIVE") or (
+                inherited_binding is not None and inherited_binding(binding.alignment_sha256)
+            )
             if (
                 not isinstance(source, ApprovedItemKnowledgeSourceV2)
-                or reviewer is None
-                or reviewer.status != "ACTIVE"
+                or not actor_valid
                 or source.item_id != binding.item_id
                 or source.item_revision_id != binding.item_revision_id
                 or analysis.accepted_result != binding.accepted_result
@@ -2117,6 +2152,7 @@ class KnowledgeGraphPublicationService:
         *,
         expected_snapshot_revision_id: str | None,
         ancestor_snapshot_ids: frozenset[str],
+        inherited_binding: Callable[[str], bool] | None = None,
     ) -> None:
         """Recompute every policy-derived Item alignment from its immutable evidence."""
 
@@ -2134,11 +2170,13 @@ class KnowledgeGraphPublicationService:
             analysis = analysis_by_id.get(binding.analysis_run_id)
             source = analysis.source if analysis is not None else None
             requester = session.get(OperatorRecord, binding.requested_by_operator_id)
+            actor_valid = (requester is not None and requester.status == "ACTIVE") or (
+                inherited_binding is not None and inherited_binding(binding.alignment_sha256)
+            )
             if (
                 analysis is None
                 or not isinstance(source, ApprovedItemKnowledgeSourceV2)
-                or requester is None
-                or requester.status != "ACTIVE"
+                or not actor_valid
                 or source.item_id != binding.item_id
                 or source.item_revision_id != binding.item_revision_id
                 or analysis.accepted_result != binding.accepted_result

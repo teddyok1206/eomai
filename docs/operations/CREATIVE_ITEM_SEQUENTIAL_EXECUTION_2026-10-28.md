@@ -84,3 +84,5 @@ Graph 접근 정책은 임의의 가장 최근 revision이 아니라 기존 Grap
 7. **경합/실패:** structure commit과 최종 publication에서 각각 exact base를 확인하고 기존 Graph-head CAS를 보존한다. stale head는 오류이며 재시도에 latest를 조용히 끼워 넣지 않는다. 실패 후보 Artifact와 이전 성공 snapshot은 보존한다.
 8. **간단한 대안 배제:** reviewer ACTIVE 검사를 전역 제거하면 새 미검토 framework까지 통과할 수 있다. 현재 publisher를 과거 검토자로 바꾸면 없는 사람 검토를 만들게 된다. exact 검토 계보를 재사용하는 좁은 경계가 필요하다.
 9. **검증:** outline/reviewer 변경·다른 base·retired/missing reviewer·기존 active 경로·다른 정책 family 거부를 포함해 공유 Graph/검색/창작 연결 집중 114개 PASS. 이는 운영 Graph 게시 완료를 뜻하지 않으며 실제 표본 3건은 별도 완료 기준이다.
+
+같은 역사적 계보 규칙은 과거 Item alignment의 검토자·자동 연결 요청자에도 적용한다. 현재 actor가 비활성화됐다는 이유만으로 이미 게시된 동일한 binding을 무효화하지 않되, exact prior snapshot의 검증된 structure에 같은 alignment SHA가 있어야 한다. 새 binding과 현재 publisher의 권한, source/accepted-result/Evidence Bundle/policy 검증은 생략하지 않는다. membership set은 한 publication 요청 안에서만 한 번 해석하며 IAM 권한 cache가 아니다. actor·기존 binding 변조·증거 검증 회귀와 창작 조회/코호트 관련 집중 74개가 통과했다(기존 114개와 중복 범위 포함).
