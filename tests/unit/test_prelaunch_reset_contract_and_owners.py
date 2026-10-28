@@ -235,6 +235,41 @@ def test_running_service_cannot_be_claimed_quiescent(monkeypatch) -> None:
     assert len(RESET_PAUSED_UNITS) == 7
 
 
+@pytest.mark.parametrize(
+    "state,pid,control,job,allowed",
+    [
+        ("inactive", "0", "0", "", True),
+        ("failed", "0", "0", "", True),
+        ("failed", "5", "0", "", False),
+        ("failed", "0", "1", "", False),
+        ("failed", "0", "0", "123 /job/123", False),
+        ("activating", "0", "0", "", False),
+    ],
+)
+def test_quiescence_preserves_failed_history_but_rejects_live_or_reserved_work(
+    monkeypatch, state, pid, control, job, allowed
+) -> None:
+    from eom_orchestrator import prelaunch_reset_host as host
+
+    fence = object.__new__(InstalledPrelaunchResetFence)
+    monkeypatch.setattr(fence, "authorize_local_owner", lambda: None)
+
+    def observe(command, **_kwargs):
+        value = (
+            f"ActiveState={state}\nMainPID={pid}\nControlPID={control}\nJob={job}\n"
+            if "show" in command
+            else ""
+        )
+        return SimpleNamespace(stdout=value)
+
+    monkeypatch.setattr(host.subprocess, "run", observe)
+    if allowed:
+        fence.verify()
+    else:
+        with pytest.raises(ValueError, match="SERVICE_NOT_QUIESCENT"):
+            fence.verify()
+
+
 def test_bounded_cli_document_rejects_symlink_and_oversize(tmp_path) -> None:
     from eomctl.prelaunch_reset import _bounded_document
 

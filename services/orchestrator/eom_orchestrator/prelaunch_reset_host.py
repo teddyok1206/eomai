@@ -69,14 +69,24 @@ class InstalledPrelaunchResetFence:
         self.authorize_local_owner()
         for unit in RESET_PAUSED_UNITS:
             result = subprocess.run(
-                ["/usr/bin/systemctl", "show", unit, "--property=ActiveState,MainPID,ControlPID"],
+                [
+                    "/usr/bin/systemctl",
+                    "show",
+                    unit,
+                    "--property=ActiveState,MainPID,ControlPID,Job",
+                ],
                 check=True,
                 capture_output=True,
                 text=True,
                 timeout=10,
             )
             values = dict(line.split("=", 1) for line in result.stdout.splitlines() if "=" in line)
-            if values != {"ActiveState": "inactive", "MainPID": "0", "ControlPID": "0"}:
+            if (
+                values.get("ActiveState") not in {"inactive", "failed"}
+                or values.get("MainPID") != "0"
+                or values.get("ControlPID") != "0"
+                or values.get("Job") != ""
+            ):
                 raise ValueError(f"ITEM_RESET_SERVICE_NOT_QUIESCENT:{unit}")
         running = subprocess.run(
             [
