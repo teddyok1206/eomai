@@ -38,7 +38,11 @@ from pydantic import Field
 from pydantic import ValidationError as PydanticValidationError
 from sqlalchemy import Engine, select
 
-from eom_orchestrator.codex_compatibility_maintenance import CodexCompatibilityMaintenance
+from eom_orchestrator.codex_compatibility_maintenance import (
+    CodexCompatibilityMaintenance,
+    assert_codex_slot_compatibility_work_absent,
+    assert_codex_workers_quiescent,
+)
 from eom_orchestrator.codex_compatibility_probe import (
     compatibility_output_schema,
     compatibility_probe_input,
@@ -413,6 +417,29 @@ def run_codex_compatibility(
         settings=settings or Settings.from_environment(),
         worker=worker,
         fence_factory=lambda: CodexCompatibilityMaintenance(engine),
+        require_binding=lambda case: _require_binding(engine, case),
+    )
+
+
+def run_codex_slot_compatibility(
+    engine: Engine,
+    request: CodexCompatibilityRequest,
+    *,
+    settings: Settings | None = None,
+    worker: CodexWorkerAdapter | None = None,
+) -> PublishedCodexCompatibility:
+    """Probe idle fixed slots under the host fence while unrelated GPU jobs continue."""
+
+    return execute_pinned_codex_compatibility(
+        engine,
+        request,
+        settings=settings or Settings.from_environment(),
+        worker=worker,
+        fence_factory=lambda: CodexCompatibilityMaintenance(
+            engine,
+            host_reader=assert_codex_workers_quiescent,
+            database_reader=assert_codex_slot_compatibility_work_absent,
+        ),
         require_binding=lambda case: _require_binding(engine, case),
     )
 

@@ -14,6 +14,7 @@ import typer
 from eom_orchestrator.capability_observer import observe_codex_cli_surface
 from eom_orchestrator.codex_compatibility_maintenance import (
     assert_codex_compatibility_database_quiescent,
+    assert_codex_slot_compatibility_database_quiescent,
     assert_codex_workers_quiescent,
 )
 from eom_orchestrator.codex_distribution_update import check_codex_distribution_update
@@ -21,6 +22,7 @@ from eom_orchestrator.codex_runtime_compatibility import (
     prepare_codex_compatibility_matrix_request,
     prepare_codex_compatibility_request,
     run_codex_compatibility,
+    run_codex_slot_compatibility,
     validate_codex_compatibility_preflight,
 )
 from eom_orchestrator.control_service import ControlPlaneError
@@ -293,12 +295,30 @@ def verify(
 ) -> None:
     """Run approved sequential synthetic inference in an already quiescent maintenance window."""
 
+    _verify_compatibility_request(request_file, source_commit, scoped=False)
+
+
+@codex_runtime_app.command("verify-scoped")
+def verify_scoped(
+    request_file: Path = REQUEST_FILE_OPTION,
+    source_commit: str = SOURCE_COMMIT_OPTION,
+) -> None:
+    """Run the same pinned probes for idle fixed slots without stopping GPU INDEX."""
+
+    _verify_compatibility_request(request_file, source_commit, scoped=True)
+
+
+def _verify_compatibility_request(request_file: Path, source_commit: str, *, scoped: bool) -> None:
     source_commit = _source_commit(source_commit)
     request = read_compatibility_request_file(request_file)
     settings = _command_settings(source_commit)
     engine = _command_engine()
     try:
-        published = run_codex_compatibility(engine, request, settings=settings)
+        published = (
+            run_codex_slot_compatibility(engine, request, settings=settings)
+            if scoped
+            else run_codex_compatibility(engine, request, settings=settings)
+        )
         report, artifact = published.report, published.artifact
         passed = sum(case.status == "PASS" for case in report.cases)
         failed = sum(case.status == "FAIL" for case in report.cases)
@@ -361,6 +381,20 @@ def maintenance_preflight(
 ) -> None:
     """Read current work before the operator stops producers; do not acquire an execution permit."""
 
+    _compatibility_preflight(request_file, source_commit, scoped=False)
+
+
+@codex_runtime_app.command("scoped-preflight")
+def scoped_preflight(
+    request_file: Path = REQUEST_FILE_OPTION,
+    source_commit: str = SOURCE_COMMIT_OPTION,
+) -> None:
+    """Read fixed-slot claims and units without requiring unrelated GPU jobs to stop."""
+
+    _compatibility_preflight(request_file, source_commit, scoped=True)
+
+
+def _compatibility_preflight(request_file: Path, source_commit: str, *, scoped: bool) -> None:
     source_commit = _source_commit(source_commit)
     request = read_compatibility_request_file(request_file)
     settings = _command_settings(source_commit)
@@ -369,7 +403,10 @@ def maintenance_preflight(
         validate_codex_compatibility_preflight(
             engine, request, settings=settings, now=datetime.now(UTC)
         )
-        assert_codex_compatibility_database_quiescent(engine)
+        if scoped:
+            assert_codex_slot_compatibility_database_quiescent(engine)
+        else:
+            assert_codex_compatibility_database_quiescent(engine)
         assert_codex_workers_quiescent()
         _emit(
             {
@@ -379,6 +416,7 @@ def maintenance_preflight(
                 "model_calls": 0,
                 "services_changed": False,
                 "execution_authorized": False,
+                **({"scope": "FIXED_SLOTS"} if scoped else {}),
             }
         )
     except (ControlPlaneError, SQLAlchemyError, SettingsError, OSError, ValueError) as exc:

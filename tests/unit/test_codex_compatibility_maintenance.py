@@ -93,6 +93,34 @@ def test_read_only_pre_stop_check_reuses_work_queries_without_a_session_lock() -
     connection.invalidate.assert_not_called()
 
 
+def test_scoped_preflight_checks_fixed_worker_claims_without_gpu_job_query() -> None:
+    engine, connection = _database([False, False])
+    cast(Mock, engine.connect).return_value = nullcontext(connection)
+    maintenance.assert_codex_slot_compatibility_database_quiescent(engine)
+    connection.commit.assert_called_once()
+    statements = [str(call.args[0]) for call in connection.scalar.call_args_list]
+    assert len(statements) == 2
+    assert "worker_leases" in statements[0]
+    assert "codex_control_commands" in statements[1]
+    assert all("jobs" not in statement for statement in statements)
+
+
+@pytest.mark.parametrize(
+    ("results", "code"),
+    [
+        ([True], "CODEX_COMPATIBILITY_LEASE_BUSY"),
+        ([False, True], "CODEX_COMPATIBILITY_CONTROL_BUSY"),
+    ],
+)
+def test_scoped_preflight_rejects_active_fixed_slot_work(results: list[bool], code: str) -> None:
+    engine, connection = _database(results)
+    cast(Mock, engine.connect).return_value = nullcontext(connection)
+    with pytest.raises(ControlPlaneError) as error:
+        maintenance.assert_codex_slot_compatibility_database_quiescent(engine)
+    assert error.value.code == code
+    connection.commit.assert_not_called()
+
+
 def test_enrollment_reader_uses_the_same_owned_host_fence_without_stopping_producers() -> None:
     engine, connection = _database([True, True, True, True])
     database_reader = Mock()

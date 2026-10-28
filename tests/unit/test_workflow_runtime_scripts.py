@@ -90,6 +90,7 @@ def test_runtime_scripts_have_valid_shell_syntax() -> None:
         "scripts/workflow/deploy_worker_runtime.sh",
         "scripts/workflow/install_runner_configuration.sh",
         "scripts/workflow/provision_worker_slot06.sh",
+        "scripts/workflow/run_codex_compatibility.sh",
         "scripts/workflow/verify_runtime_paths.sh",
         "scripts/workflow/verify_systemd_worker_authorization.sh",
     ):
@@ -127,6 +128,18 @@ def test_worker_runtime_doctor_receives_each_slot_group_explicitly() -> None:
     assert "eom-cdx-01,eom-cdx-02" not in source
     assert "EOM_STAGING_ROOT=/var/lib/eom-workflow-runner/orchestrator-staging" in source
     assert "eom-workflow-runner:eom:700" in source
+
+
+def test_scoped_compatibility_wrapper_preserves_existing_global_stop_path() -> None:
+    source = (ROOT / "scripts/workflow/run_codex_compatibility.sh").read_text(encoding="utf-8")
+    scoped = source.index("if [[ ${SCOPE} == scoped ]]; then")
+    global_stop = source.index('"${SYSTEMCTL}" stop "${unit}"')
+    assert scoped < global_stop
+    assert "run_installed scoped-preflight" in source[scoped:global_stop]
+    assert "run_installed verify-scoped" in source[scoped:global_stop]
+    assert "exit 0" in source[scoped:global_stop]
+    assert "run_installed maintenance-preflight" in source[scoped:global_stop]
+    assert "run_installed verify" in source[global_stop:]
 
 
 def test_worker_runtime_deployment_fails_closed_on_durable_lease() -> None:

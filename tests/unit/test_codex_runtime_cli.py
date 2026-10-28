@@ -36,8 +36,10 @@ def test_supported_cli_hierarchy_exposes_maintenance_without_running_it() -> Non
         "check-update",
         "prepare-compatibility",
         "maintenance-preflight",
+        "scoped-preflight",
         "restoration-preflight",
         "verify",
+        "verify-scoped",
     ):
         assert command in result.output
 
@@ -411,8 +413,9 @@ def test_strict_json_loader_rejects_ambiguous_or_non_schema_payload(
 
 
 @pytest.mark.parametrize("status", ["PASS", "FAIL", "NOT_RUN"])
+@pytest.mark.parametrize("command", ["verify", "verify-scoped"])
 def test_verify_renders_only_bounded_summary_and_validated_artifact_pointer(
-    status: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    status: str, command: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     engine = _database(monkeypatch)
     path = _file(tmp_path)
@@ -434,8 +437,11 @@ def test_verify_renders_only_bounded_summary_and_validated_artifact_pointer(
         nas_path="/mnt/nas/private-path-not-public",
     )
     run = Mock(return_value=SimpleNamespace(report=report, artifact=artifact))
-    monkeypatch.setattr(cli, "run_codex_compatibility", run)
-    result = RUNNER.invoke(cli.codex_runtime_app, _arguments("verify", path))
+    target = (
+        "run_codex_slot_compatibility" if command == "verify-scoped" else "run_codex_compatibility"
+    )
+    monkeypatch.setattr(cli, target, run)
+    result = RUNNER.invoke(cli.codex_runtime_app, _arguments(command, path))
     assert result.exit_code == (0 if status == "PASS" else 1), result.output
     value = json.loads(result.output)
     assert value["artifact"]["revision_id"] == artifact.artifact_revision_id
@@ -536,6 +542,36 @@ def test_maintenance_preflight_only_checks_owned_application_and_existing_reader
     assert json.loads(result.output)["services_changed"] is False
     engine.dispose.assert_called_once()
     model.assert_not_called()
+
+
+def test_scoped_preflight_excludes_unrelated_gpu_jobs_but_checks_worker_units(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = _database(monkeypatch)
+    path = _file(tmp_path)
+    events: list[str] = []
+    monkeypatch.setattr(
+        cli,
+        "validate_codex_compatibility_preflight",
+        Mock(side_effect=lambda *_args, **_kwargs: events.append("application")),
+    )
+    monkeypatch.setattr(
+        cli,
+        "assert_codex_slot_compatibility_database_quiescent",
+        Mock(side_effect=lambda *_args: events.append("scoped-database")),
+    )
+    global_reader = Mock(side_effect=AssertionError("global gate is not scoped"))
+    monkeypatch.setattr(cli, "assert_codex_compatibility_database_quiescent", global_reader)
+    monkeypatch.setattr(
+        cli, "assert_codex_workers_quiescent", Mock(side_effect=lambda: events.append("workers"))
+    )
+    result = RUNNER.invoke(cli.codex_runtime_app, _arguments("scoped-preflight", path))
+    assert result.exit_code == 0, result.output
+    assert events == ["application", "scoped-database", "workers"]
+    assert json.loads(result.output)["scope"] == "FIXED_SLOTS"
+    assert json.loads(result.output)["execution_authorized"] is False
+    global_reader.assert_not_called()
+    engine.dispose.assert_called_once()
 
 
 def test_expired_preflight_stops_before_database_work_checks(

@@ -232,21 +232,53 @@ def _assert_existing_work_absent(connection: Connection) -> None:
             raise ControlPlaneError(code, "Existing Codex work prevents maintenance")
 
 
-def assert_codex_compatibility_database_quiescent(engine: Engine) -> None:
-    """Read-only pre-stop evidence, not a capacity reservation or permission to execute."""
+def assert_codex_slot_compatibility_work_absent(connection: Connection) -> None:
+    """Scoped diagnostics do not reinterpret unrelated Platform or chat jobs."""
 
+    for predicate, code in (
+        (
+            exists().where(WorkerLeaseRecord.state.in_(("ACTIVE", "RECONCILING"))),
+            "CODEX_COMPATIBILITY_LEASE_BUSY",
+        ),
+        (
+            exists().where(CodexControlCommandRecord.state == "PROCESSING"),
+            "CODEX_COMPATIBILITY_CONTROL_BUSY",
+        ),
+    ):
+        busy = connection.scalar(select(predicate))
+        if type(busy) is not bool:
+            raise ControlPlaneError(
+                "CODEX_COMPATIBILITY_DATABASE_INVALID", "Codex maintenance evidence invalid"
+            )
+        if busy:
+            raise ControlPlaneError(code, "Fixed-slot work prevents compatibility diagnostics")
+
+
+def _assert_database_quiescent(engine: Engine, reader: Callable[[Connection], None]) -> None:
     if engine.dialect.name != "postgresql":
         raise ControlPlaneError(
             "CODEX_COMPATIBILITY_BACKEND_UNSUPPORTED", "Codex maintenance requires PostgreSQL"
         )
     try:
         with engine.connect() as connection:
-            _assert_existing_work_absent(connection)
+            reader(connection)
             connection.commit()
     except SQLAlchemyError as exc:
         raise ControlPlaneError(
             "CODEX_COMPATIBILITY_DATABASE_UNAVAILABLE", "Codex maintenance evidence unavailable"
         ) from exc
+
+
+def assert_codex_compatibility_database_quiescent(engine: Engine) -> None:
+    """Read-only global pre-stop evidence, not an execution permit."""
+
+    _assert_database_quiescent(engine, _assert_existing_work_absent)
+
+
+def assert_codex_slot_compatibility_database_quiescent(engine: Engine) -> None:
+    """Read-only fixed-slot evidence; unrelated GPU jobs remain untouched."""
+
+    _assert_database_quiescent(engine, assert_codex_slot_compatibility_work_absent)
 
 
 class CodexCompatibilityMaintenance:

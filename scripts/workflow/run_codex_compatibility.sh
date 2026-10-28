@@ -87,10 +87,12 @@ run_installed() {
 }
 
 [[ ${EUID} -eq 0 ]] || fail 'Codex compatibility maintenance requires root'
-[[ $# -eq 2 && $1 =~ ^[0-9a-f]{40}$ && $2 == /* ]] || \
-  fail 'usage: run_codex_compatibility.sh COMMIT ABSOLUTE_REQUEST_PATH'
+[[ ($# -eq 2 || $# -eq 3) && $1 =~ ^[0-9a-f]{40}$ && $2 == /* && \
+  (${3:-global} == global || ${3:-global} == scoped) ]] || \
+  fail 'usage: run_codex_compatibility.sh COMMIT ABSOLUTE_REQUEST_PATH [scoped]'
 EXPECTED_COMMIT=$1
 REQUEST_PATH=$2
+SCOPE=${3:-global}
 [[ "$(git -C "${REPOSITORY}" rev-parse HEAD)" == "${EXPECTED_COMMIT}" ]] || \
   fail 'source commit differs'
 [[ -z "$(git -C "${REPOSITORY}" status --porcelain=v1)" ]] || \
@@ -106,6 +108,14 @@ require_regular "${CAPABILITY_POLICY}" root:root:644
   -f "${REQUEST_PATH}" && ! -L "${REQUEST_PATH}" && \
   "$(stat -c '%U:%G:%a:%h' -- "${REQUEST_PATH}")" == 'eom-workflow-runner:eom:600:1' ]] || \
   fail 'request must be a canonical runner-owned mode-0600 single-link regular file'
+
+if [[ ${SCOPE} == scoped ]]; then
+  # The application still takes the host lock and rechecks fixed-slot leases and
+  # physical worker units before every probe. Unrelated GPU jobs keep running.
+  run_installed scoped-preflight || fail 'fixed-slot work or invalid request prevents diagnostics'
+  run_installed verify-scoped
+  exit 0
+fi
 
 # A busy or expired request must fail before the first stop. This is observation,
 # not inference authority; the use case takes/rechecks the host fence after stop.

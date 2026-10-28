@@ -2580,6 +2580,28 @@ install_wheels() {
   verify_install_mode exact-source
 }
 
+verify_worker_executable_release_identity() {
+  local source_executable="${SOURCE_ROOT}/services/orchestrator/eom_orchestrator/worker_exec.py"
+  local source_contract="${SOURCE_ROOT}/services/orchestrator/eom_orchestrator/worker_systemd.py"
+  local installed_executable=/usr/local/libexec/eom-worker-exec
+  local expected_sha source_sha
+  [[ -f "${source_executable}" && ! -L "${source_executable}" && \
+    -f "${source_contract}" && ! -L "${source_contract}" ]] || \
+    fail 'release worker executable is unavailable'
+  expected_sha="$(sed -nE 's/^WORKER_EXECUTABLE_SHA256 = "([0-9a-f]{64})"$/\1/p' "${source_contract}")"
+  [[ "${expected_sha}" =~ ^[0-9a-f]{64}$ ]] || \
+    fail 'release worker executable contract is invalid'
+  source_sha="$(sha256sum "${source_executable}" | cut -d' ' -f1)"
+  [[ "${source_sha}" == "${expected_sha}" ]] || \
+    fail 'release worker executable source differs from its adapter contract'
+  [[ -f "${installed_executable}" && ! -L "${installed_executable}" && \
+    "$(stat -c '%U:%G:%a:%h' -- "${installed_executable}")" == 'root:root:755:1' ]] || \
+    fail 'protected worker executable identity is invalid'
+  cmp --silent "${source_executable}" "${installed_executable}" || \
+    fail 'WORKER_RUNTIME_DEPLOYMENT_REQUIRED: install the matching reviewed worker executable before replacing Platform wheels'
+  printf 'worker_runtime_release_identity=PASS\n'
+}
+
 verify_install_mode() {
   local source_identity_mode="${1:-}"
   [[ "${source_identity_mode}" == "exact-source" || \
@@ -2929,6 +2951,7 @@ case "${ACTION}" in
     verify_mock_exam_deployment_admission
     require_no_active_transient_platform_consumers
     require_no_staged_workflow_runner_accelerator
+    verify_worker_executable_release_identity
     install_wheels
     reconcile_installed_catalog_runtime_privileges
     reconcile_installed_hwpx_manager_runtime_privileges

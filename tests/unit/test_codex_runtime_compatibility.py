@@ -250,6 +250,29 @@ def harness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> _Harness:
     return value
 
 
+def test_scoped_runner_reuses_pinned_report_with_fixed_worker_fence(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fences: list[dict[str, object]] = []
+
+    def scoped_fence(_engine: Engine, **readers: object) -> _Fence:
+        fences.append(readers)
+        return _Fence(harness)
+
+    monkeypatch.setattr(application, "CodexCompatibilityMaintenance", scoped_fence)
+    published = application.run_codex_slot_compatibility(
+        harness.engine,
+        harness.request,
+        settings=harness.settings,
+        worker=cast(CodexWorkerAdapter, harness.worker),
+    )
+    assert len(published.report.cases) == 2
+    assert all(case.status == "PASS" for case in published.report.cases)
+    assert len(fences) == 1
+    assert fences[0]["host_reader"] is application.assert_codex_workers_quiescent
+    assert fences[0]["database_reader"] is application.assert_codex_slot_compatibility_work_absent
+
+
 def test_ordered_passes_pin_inputs_hashes_and_publish_only_small_canonical_members(
     harness: _Harness,
 ) -> None:

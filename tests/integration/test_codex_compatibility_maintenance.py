@@ -10,6 +10,8 @@ from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.codex_compatibility_maintenance import (
     CodexCompatibilityMaintenance,
     assert_codex_compatibility_database_quiescent,
+    assert_codex_slot_compatibility_database_quiescent,
+    assert_codex_slot_compatibility_work_absent,
 )
 from eom_orchestrator.control_commands import (
     build_codex_control_command,
@@ -139,6 +141,32 @@ def test_executable_job_prevents_false_quiescence(
         ):
             pytest.fail("executable job cannot be hidden")
         assert error.value.code == "CODEX_COMPATIBILITY_JOB_BUSY"
+    finally:
+        _finish_fixture_job(guarded_engine, job_id)
+
+
+def test_scoped_fixed_slot_probe_preserves_unrelated_embedding_job(
+    guarded_engine: Engine, control_seed: tuple[str, str]
+) -> None:
+    with Session(guarded_engine) as session, session.begin():
+        job = control_fixture._job(session, workflow_id=control_seed[1])
+        job.task_type = "native_embedding_launch"
+        job.status = "RUNNING"
+        job_id = job.job_id
+    try:
+        with pytest.raises(ControlPlaneError) as global_error:
+            assert_codex_compatibility_database_quiescent(guarded_engine)
+        assert global_error.value.code == "CODEX_COMPATIBILITY_JOB_BUSY"
+        assert_codex_slot_compatibility_database_quiescent(guarded_engine)
+        with CodexCompatibilityMaintenance(
+            guarded_engine,
+            host_reader=_no_host_mutations,
+            database_reader=assert_codex_slot_compatibility_work_absent,
+        ) as fence:
+            fence.assert_quiescent()
+        with Session(guarded_engine) as session:
+            unchanged = session.get(JobRecord, job_id)
+            assert unchanged is not None and unchanged.status == "RUNNING"
     finally:
         _finish_fixture_job(guarded_engine, job_id)
 

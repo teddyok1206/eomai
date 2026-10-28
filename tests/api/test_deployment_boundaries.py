@@ -1350,6 +1350,25 @@ def test_shared_platform_release_fences_transient_consumers_before_install() -> 
     )
 
 
+def test_shared_platform_release_requires_matching_protected_worker_before_wheel_install() -> None:
+    deployment = _source("scripts/api/deploy_release.sh")
+    install_branch = deployment.partition('case "${ACTION}" in')[2]
+    guard = deployment.partition("verify_worker_executable_release_identity() {")[2].partition(
+        "\n}"
+    )[0]
+
+    assert '"${SOURCE_ROOT}/services/orchestrator/eom_orchestrator/worker_exec.py"' in guard
+    assert '"${SOURCE_ROOT}/services/orchestrator/eom_orchestrator/worker_systemd.py"' in guard
+    assert '"${source_sha}" == "${expected_sha}"' in guard
+    assert "/usr/local/libexec/eom-worker-exec" in guard
+    assert "root:root:755:1" in guard
+    assert 'cmp --silent "${source_executable}" "${installed_executable}"' in guard
+    assert "WORKER_RUNTIME_DEPLOYMENT_REQUIRED" in guard
+    assert install_branch.index("verify_worker_executable_release_identity") < (
+        install_branch.index("install_wheels")
+    )
+
+
 @pytest.mark.parametrize(
     "relative",
     [
