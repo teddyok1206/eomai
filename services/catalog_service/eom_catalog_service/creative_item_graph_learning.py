@@ -45,7 +45,7 @@ from eom_catalog_service.knowledge_graph_models import KnowledgeSnapshotAnalysis
 from eom_catalog_service.knowledge_graph_projection import AcceptedAnalysisProposal
 from eom_catalog_service.knowledge_graph_publication_service import KnowledgeGraphPublicationService
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalApplicationService
-from eom_catalog_service.models import ItemRevisionRecord
+from eom_catalog_service.models import ItemRecord, ItemRevisionRecord
 from eom_catalog_service.settings import CatalogSettings
 
 _PERMISSIONS = frozenset(
@@ -133,7 +133,9 @@ class CreativeItemGraphLearningService:
         self.analyses = KnowledgeAnalysisApplicationService(engine, self.settings)
         self.publication = KnowledgeGraphPublicationService(engine, self.settings)
         retrieval = KnowledgeRetrievalApplicationService(engine, self.settings)
-        retrieval.read_released_access_policy(access_policy_revision_id)
+        self.access_policy_sha256 = retrieval.read_released_access_policy(
+            access_policy_revision_id
+        ).content_sha256
         self.automatic = AutomaticItemGraphPublicationService(
             engine,
             access_policy_revision_id=access_policy_revision_id,
@@ -153,6 +155,13 @@ class CreativeItemGraphLearningService:
     def _validate_source(
         self, session: Session, revision: ItemRevisionRecord, operator_id: str
     ) -> RegisteredCreativeReport:
+        item = session.get(ItemRecord, revision.item_id, populate_existing=True)
+        if (
+            item is None
+            or item.lifecycle_state != "ACTIVE"
+            or item.current_revision_id != revision.item_revision_id
+        ):
+            raise ValueError("CREATIVE_GRAPH_SOURCE_LIFECYCLE_INVALID")
         report = load_registered_creative_report(session, self.artifacts, revision)
         if report.lineage.requested_by_operator_id != operator_id or not _PERMISSIONS.issubset(
             effective_permissions(session, operator_id)

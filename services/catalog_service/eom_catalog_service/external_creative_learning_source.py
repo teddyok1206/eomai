@@ -51,7 +51,9 @@ _ADMISSION_PERMISSIONS = frozenset(
 )
 
 
-def _authorize_current_operator(session: Session, operator_id: str) -> frozenset[PermissionKey]:
+def authorize_external_creative_learning_claim(
+    session: Session, operator_id: str
+) -> frozenset[PermissionKey]:
     """Check the persisted task owner without borrowing a browser session."""
 
     # Submission and its late check may share an identity map. Re-read current
@@ -91,7 +93,7 @@ def _authorize_submission(session: Session, actor: ActorContext) -> frozenset[Pe
         or api_session.idle_expires_at <= now
     ):
         raise ExternalCreativeLearningSourceError("EXTERNAL_CREATIVE_SOURCE_PERMISSION_DENIED")
-    return _authorize_current_operator(session, actor.operator_id)
+    return authorize_external_creative_learning_claim(session, actor.operator_id)
 
 
 def authorize_external_creative_learning_preparation(session: Session, actor: ActorContext) -> str:
@@ -225,7 +227,7 @@ def reauthorize_external_creative_learning_claim_source(
     input. This is a Catalog read boundary; it does not create or claim a job.
     """
 
-    _authorize_current_operator(session, operator_id)
+    authorize_external_creative_learning_claim(session, operator_id)
     source, resolved = _open_validated_source(
         session,
         preview_service,
@@ -310,7 +312,7 @@ def read_external_creative_learning_claim_input(
     operator ID or stale browser session is never an authorization substitute.
     """
 
-    _authorize_current_operator(session, operator_id)
+    authorize_external_creative_learning_claim(session, operator_id)
     source, resolved = _open_validated_source(
         session,
         preview_service,

@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/external-item/creative-learning-cohort/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "cohort_id",
+    "import_id",
+    "requested_by_operator_id",
+    "source_commit",
+    "created_at",
+    "targets",
+    "target_set_sha256",
+    "seed_external_number",
+    "seed_selection",
+    "extraction_preset",
+    "analysis_preset",
+    "capacity_policy_revision_id",
+    "workflow_definition_sha256",
+    "content_pack_release_id",
+    "risk_policy_revision_id",
+    "risk_policy_sha256",
+    "access_policy_revision_id",
+    "access_policy_sha256",
+    "registration_policy",
+    "cohort_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "creative-learning-cohort/1.0"
+    },
+    "cohort_id": {
+      "type": "string",
+      "pattern": "^creativecohort_[0-9a-f]{32}$"
+    },
+    "import_id": {
+      "type": "string",
+      "pattern": "^extimport_[0-9a-f]{32}$"
+    },
+    "requested_by_operator_id": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 20000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "source_id",
+          "source_revision_id",
+          "external_number",
+          "observation_sha256",
+          "selected_edition"
+        ],
+        "properties": {
+          "source_id": {
+            "type": "string",
+            "pattern": "^extitem_[0-9a-f]{32}$"
+          },
+          "source_revision_id": {
+            "type": "string",
+            "pattern": "^extitemrev_[0-9a-f]{32}$"
+          },
+          "external_number": {
+            "type": "string",
+            "pattern": "^[0-9]{5}$"
+          },
+          "observation_sha256": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "selected_edition": {
+            "type": "integer",
+            "enum": [
+              2,
+              3
+            ]
+          }
+        }
+      }
+    },
+    "target_set_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "seed_external_number": {
+      "type": "string",
+      "pattern": "^[0-9]{5}$"
+    },
+    "seed_selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflow_id",
+        "step_run_id",
+        "plan_id",
+        "plan_sha256",
+        "work_input_sha256"
+      ],
+      "properties": {
+        "workflow_id": {
+          "type": "string",
+          "pattern": "^workflow_[0-9a-f]{32}$"
+        },
+        "step_run_id": {
+          "type": "string",
+          "pattern": "^steprun_[0-9a-f]{32}$"
+        },
+        "plan_id": {
+          "type": "string",
+          "pattern": "^execplan_[0-9a-f]{32}$"
+        },
+        "plan_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "work_input_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "extraction_preset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preset_id",
+        "preset_revision_id",
+        "sha256"
+      ],
+      "properties": {
+        "preset_id": {
+          "type": "string",
+          "pattern": "^execpreset_[0-9a-f]{32}$"
+        },
+        "preset_revision_id": {
+          "type": "string",
+          "pattern": "^execpresetrev_[0-9a-f]{32}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "analysis_preset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preset_id",
+        "preset_revision_id",
+        "sha256"
+      ],
+      "properties": {
+        "preset_id": {
+          "type": "string",
+          "pattern": "^execpreset_[0-9a-f]{32}$"
+        },
+        "preset_revision_id": {
+          "type": "string",
+          "pattern": "^execpresetrev_[0-9a-f]{32}$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "capacity_policy_revision_id": {
+      "type": "string",
+      "pattern": "^capacityrev_[0-9a-f]{32}$"
+    },
+    "workflow_definition_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "content_pack_release_id": {
+      "type": "string",
+      "pattern": "^packrel_[0-9a-f]{32}$"
+    },
+    "risk_policy_revision_id": {
+      "type": "string",
+      "pattern": "^analysisriskrev_[0-9a-f]{32}$"
+    },
+    "risk_policy_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "access_policy_revision_id": {
+      "type": "string",
+      "pattern": "^accessrev_[0-9a-f]{32}$"
+    },
+    "access_policy_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "registration_policy": {
+      "const": "PRESERVE_SOURCE_WITH_REVIEW_WARNINGS_V1"
+    },
+    "cohort_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

@@ -27,6 +27,7 @@ from eom_protocol.general_chat_grounding import (
     read_grounding,
 )
 from eom_workflow_runner.models import WorkflowInstanceRecord
+from jsonschema import ValidationError as JsonSchemaValidationError
 from sqlalchemy import Engine, func, select, text
 
 from eom_catalog_service.artifacts import CatalogArtifactService
@@ -400,7 +401,17 @@ class ChatKnowledgeResolutionService:
                         direct.pointer.sha256,
                     ):
                         raise ChatKnowledgeResolutionError("CHAT_KNOWLEDGE_HASH_MISMATCH")
-                    creative = load_registered_creative_report(session, self.artifacts, revision)
+                    try:
+                        creative = load_registered_creative_report(
+                            session, self.artifacts, revision
+                        )
+                        creative_text = creative.context_text()
+                    except (ValueError, OSError, JsonSchemaValidationError) as exc:
+                        if getattr(exc, "code", None) == "CREATIVE_REPORT_CONTEXT_TOO_LARGE":
+                            raise ChatKnowledgeResolutionError(
+                                "CHAT_KNOWLEDGE_CONTEXT_TOO_LARGE"
+                            ) from exc
+                        raise ChatKnowledgeResolutionError("CHAT_KNOWLEDGE_HASH_MISMATCH") from exc
                     sources.append(
                         ChatKnowledgeSource(
                             key=f"S{len(sources) + 1}",
@@ -410,7 +421,7 @@ class ChatKnowledgeResolutionService:
                             approval="APPROVED",
                             pointer=creative.lineage.role_result,
                             location="창작 원문에 연결된 독립 풀이·불일치 기록 (정확성 승인 아님)",
-                            text=creative.context_text(),
+                            text=creative_text,
                             graph_node_ids=(),
                         )
                     )

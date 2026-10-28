@@ -52,6 +52,7 @@ from eom_catalog_service.models import (
     ContentPackRecord,
     ContentPackReleaseRecord,
     ItemComponentRecord,
+    ItemRecord,
     ItemRevisionRecord,
 )
 from eom_catalog_service.registry_service import RegistryService
@@ -385,8 +386,12 @@ class CreativeItemRegistrationService:
         )
         by_kind = {(row.component_type, row.ordinal): row for row in components}
         content = by_kind.get(("ITEM_CONTENT", 0))
+        item = session.get(ItemRecord, revision.item_id, populate_existing=True)
         if (
             metadata.get("source_id") != lineage.source_id
+            or item is None
+            or item.lifecycle_state != "ACTIVE"
+            or item.current_revision_id != revision.item_revision_id
             or metadata.get("source_revision_id") != lineage.source_revision_id
             or metadata.get("lineage_sha256") != lineage.lineage_sha256
             or revision.workflow_id != lineage.selection.workflow_id

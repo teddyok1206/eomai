@@ -15,7 +15,7 @@ from tests.unit.test_assessment_item_content import item_content
 from tests.unit.test_knowledge_retrieval_service import _solution_evidence
 
 
-def resolve(monkeypatch, *, mutate=None, reports=True, approved=True):
+def resolve(monkeypatch, *, mutate=None, reports=True, approved=True, creative_report=None):
     evidence = _solution_evidence()
     if mutate:
         evidence = mutate(evidence)
@@ -51,7 +51,10 @@ def resolve(monkeypatch, *, mutate=None, reports=True, approved=True):
         manifest_artifact_id="artifact_" + "a" * 32,
         manifest_artifact_revision_id="rev_" + "a" * 32,
         manifest_sha256=reference["manifest_sha256"],
-        metadata_json={"title": "기출"},
+        metadata_json={
+            "title": "기출",
+            **({"source_kind": "CREATIVE"} if creative_report is not None else {}),
+        },
         item_type_key="integrated-science",
     )
     rows = [
@@ -151,6 +154,14 @@ def resolve(monkeypatch, *, mutate=None, reports=True, approved=True):
         return {base_id: evidence} if reports else {}
 
     monkeypatch.setattr(resolution, "resolve_solution_evidence_by_base_run", solutions)
+    if creative_report is not None:
+
+        def load_creative(*args):
+            if isinstance(creative_report, Exception):
+                raise creative_report
+            return creative_report
+
+        monkeypatch.setattr(resolution, "load_registered_creative_report", load_creative)
     request = ChatKnowledgeCatalogRequest.model_validate(
         {
             "actor_id": "operator_" + "1" * 32,
@@ -181,6 +192,30 @@ def test_accepted_additive_report_does_not_require_graph_republication(monkeypat
         == _solution_evidence().pointer.solution_report.artifact_revision_id
     )
     assert "FINAL_ANSWER_MUST_NOT_LEAK" in report.text  # authorized explanation projection
+
+
+def test_creative_source_report_uses_same_official_read_with_all_warnings(monkeypatch):
+    from tests.unit.test_creative_registered_report import proposal
+
+    resolved, lineage = proposal()
+    report = SimpleNamespace(
+        lineage=lineage, context_text=lambda: '{"issues":["ANSWER_DISAGREEMENT"]}'
+    )
+    reply = resolve(monkeypatch, reports=False, creative_report=report)
+    assert [source.kind for source in reply.context.sources] == [
+        "REGISTRY_DIRECT",
+        "SOLUTION_REPORT",
+    ]
+    source = reply.context.sources[1]
+    assert source.pointer == resolved.pointer and "ANSWER_DISAGREEMENT" in source.text
+    assert "정확성 승인 아님" in source.location
+
+
+def test_creative_report_integrity_error_has_a_stable_public_error(monkeypatch):
+    with pytest.raises(resolution.ChatKnowledgeResolutionError) as caught:
+        resolve(monkeypatch, reports=False, creative_report=ValueError("private path /internal"))
+    assert caught.value.code == "CHAT_KNOWLEDGE_HASH_MISMATCH"
+    assert "private" not in str(caught.value)
 
 
 @pytest.mark.parametrize("reports,approved", [(False, True), (True, False)])

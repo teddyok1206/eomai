@@ -86,3 +86,11 @@ Graph 접근 정책은 임의의 가장 최근 revision이 아니라 기존 Grap
 9. **검증:** outline/reviewer 변경·다른 base·retired/missing reviewer·기존 active 경로·다른 정책 family 거부를 포함해 공유 Graph/검색/창작 연결 집중 114개 PASS. 이는 운영 Graph 게시 완료를 뜻하지 않으며 실제 표본 3건은 별도 완료 기준이다.
 
 같은 역사적 계보 규칙은 과거 Item alignment의 검토자·자동 연결 요청자에도 적용한다. 현재 actor가 비활성화됐다는 이유만으로 이미 게시된 동일한 binding을 무효화하지 않되, exact prior snapshot의 검증된 structure에 같은 alignment SHA가 있어야 한다. 새 binding과 현재 publisher의 권한, source/accepted-result/Evidence Bundle/policy 검증은 생략하지 않는다. membership set은 한 publication 요청 안에서만 한 번 해석하며 IAM 권한 cache가 아니다. actor·기존 binding 변조·증거 검증 회귀와 창작 조회/코호트 관련 집중 74개가 통과했다(기존 114개와 중복 범위 포함).
+
+## 고정 대상의 연속 처리
+
+실제 Studio 세션으로 전체 대상의 source revision/observation hash, 원래 task owner, 추출·분석 preset/정책/Workflow/Pack을 한 번 승인해 작은 `creative-learning-cohort/1.0` Artifact에 고정한다. 로그인 세션을 장기 보존하거나 관리자 권한을 모델에 넘기지 않는다. 이후 claim은 저장된 owner의 현재 권한과 exact source를 재검사한다. U keyset 조회로 대상 metadata만 모으며 작업·등록·분석의 기존 고유키와 Graph CAS를 재사용한다. 별도 queue나 DB migration은 없다. 메모리 cursor와 작은 status JSON은 파생 관측값이며 재시작 시 정본에서 완료 여부를 다시 확인한다. 단일 root-owned service lock과 기존 queue/slot lease가 중복 실행을 막는다. 우선 3개만 공식 조회까지 확인하고 같은 cohort의 실행 한도를 전체로 늘린다.
+
+아직 PDF가 준비되지 않은 source는 Catalog 소유의 기존 preview application service로만 준비한다. 고정된 설치본의 작은 로컬 adapter가 `eom-catalog-manager` service identity에서 기존 converter unit을 사용하며 기존 preview key로 재전송을 복구한다. 부모가 고정 target/owner/source를 먼저 검증하고 준비 후 다시 검증한다. worker에 NAS/DB 권한을 주거나 root 권한으로 Office 파일을 파싱하지 않는다. 변환 bytes는 기존 Artifact 하나만 정본이며 coordinator는 bounded staged input만 읽는다. 원래 Catalog socket의 peer 권한과 API 사용자 정책을 넓히지 않는다. 과학적 의문점과 기술적 무결성 실패를 구분하며 후자는 explicit stop으로 남긴다.
+
+구현 집중 검사 103개와 임시 PostgreSQL의 admitted base-analysis/Graph 검사 6개 PASS. 이전 전체 9개 중 오래된 document-creation fixture 3개는 현행 preset/retired Workflow admission과 맞지 않아 이 경로의 PASS로 합산하지 않았다. ontology 음성 사례는 현행 staging이 잘못된 edge를 제거하므로, 그 정규화만 test fixture에서 우회해 application acceptance가 raw/historical 부적합 edge를 독립 거부함을 확인했다. 운영 validator나 허용 Workflow를 느슨하게 바꾸지 않았다. 등록 고유키 경합/중단 복구 2개 PASS는 별도 기록을 유지한다. 이 소스/DB 검사는 실제 3건의 Graph·공식 조회 성공을 대신하지 않는다.

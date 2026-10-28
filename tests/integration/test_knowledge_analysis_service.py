@@ -971,10 +971,10 @@ def _ontology_invalid_proposal(
             "anchor_ids": ["anchor_source_1"],
         },
         {
-            "node_id": "knode_concept",
-            "node_type": "CONCEPT",
-            "stable_key": "earth.concept",
-            "label": "earth concept",
+            "node_id": "knode_formula",
+            "node_type": "FORMULA",
+            "stable_key": "earth.formula",
+            "label": "formula target",
             "anchor_ids": ["anchor_source_1"],
         },
     ]
@@ -983,7 +983,8 @@ def _ontology_invalid_proposal(
             "edge_id": "kedge_invalid_requires_concept",
             "edge_type": "REQUIRES_CONCEPT",
             "from_node_id": "knode_process",
-            "to_node_id": "knode_concept",
+            # A non-CONCEPT target violates the closed endpoint contract.
+            "to_node_id": "knode_formula",
             "confidence_milli": 900,
             "anchor_ids": ["anchor_source_1"],
         }
@@ -1959,6 +1960,7 @@ def test_concurrent_analysis_create_is_single_and_retry_replays(
 def test_incompatible_proposal_ontology_fails_before_acceptance(
     integration_engine: Engine,
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     orchestrator_settings, catalog_settings = _settings(tmp_path)
     _ensure_dependencies(integration_engine, orchestrator_settings)
@@ -1977,13 +1979,21 @@ def test_incompatible_proposal_ontology_fails_before_acceptance(
         run = session.get(KnowledgeAnalysisRunRecord, created.analysis_run_id)
         assert run is not None
         request = KnowledgeAnalysisRequestV2.model_validate(run.canonical_request)
-    _complete_proposal(
-        integration_engine,
-        catalog_settings,
-        run_id=created.analysis_run_id,
-        staging_root=tmp_path / "proposal-invalid-ontology",
-        proposal_override=_ontology_invalid_proposal(request),
-    )
+    # Current staging removes incompatible edges. Preserve one historical/raw
+    # shape in this isolated fixture to prove acceptance independently rejects it;
+    # do not disable the authoritative application validator being tested.
+    with monkeypatch.context() as staging_patch:
+        staging_patch.setattr(
+            "eom_orchestrator.knowledge_analysis_artifact._without_incompatible_edges",
+            lambda proposal: proposal,
+        )
+        _complete_proposal(
+            integration_engine,
+            catalog_settings,
+            run_id=created.analysis_run_id,
+            staging_root=tmp_path / "proposal-invalid-ontology",
+            proposal_override=_ontology_invalid_proposal(request),
+        )
 
     failed = service.reconcile(
         ReconcileKnowledgeAnalysisCommand(

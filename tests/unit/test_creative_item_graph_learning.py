@@ -18,7 +18,13 @@ def case(monkeypatch, state="RUNNING", replay=False):
     item_id = "item_" + "8" * 32
     run_id = "analysisrun_" + "9" * 32
     graph_id = "graphrev_" + "6" * 32
-    revision = NS(item_revision_id=item_revision, revision_state="APPROVED", item_id=item_id)
+    revision = NS(
+        item_revision_id=item_revision,
+        revision_state="APPROVED",
+        item_id=item_id,
+        lifecycle_state="ACTIVE",
+        current_revision_id=item_revision,
+    )
     session = Mock()
     session.__enter__ = Mock(return_value=session)
     session.__exit__ = Mock(return_value=None)
@@ -120,6 +126,17 @@ def test_revoked_source_permission_prevents_new_analysis(monkeypatch):
     value = case(monkeypatch)
     monkeypatch.setattr(learning, "effective_permissions", lambda *args: frozenset())
     with pytest.raises(ValueError, match="PERMISSION_DENIED"):
+        value.service.advance(
+            item_revision_id=value.item_revision,
+            requested_by_operator_id=value.lineage.requested_by_operator_id,
+        )
+    value.service.analyses.create_with_pinned_preset.assert_not_called()
+
+
+def test_retired_item_is_not_reactivated_or_scheduled_again(monkeypatch):
+    value = case(monkeypatch)
+    value.revision.lifecycle_state = "RETIRED"
+    with pytest.raises(ValueError, match="LIFECYCLE_INVALID"):
         value.service.advance(
             item_revision_id=value.item_revision,
             requested_by_operator_id=value.lineage.requested_by_operator_id,

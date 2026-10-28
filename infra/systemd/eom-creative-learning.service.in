@@ -1,0 +1,34 @@
+[Unit]
+Description=EOM admitted creative Item sequential learning owner
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/
+EnvironmentFile=/etc/eom/creative-learning.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=EOM_CATALOG_STAGING_ROOT=/srv/eom/staging/creative-learning-catalog
+ExecStart=@PYTHON@ -I -B -c "import sys; sys.path.insert(0, '@PREFIX@/site-packages'); from eom_catalog_service.creative_learning_runner import main; main()"
+Restart=on-failure
+RestartPreventExitStatus=78
+RestartSec=30
+TimeoutStopSec=180
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/srv/eom/staging /mnt/nas/eom/artifacts /var/lib/eom/creative-learning
+InaccessiblePaths=/home/eom/EOM /home/eom/EOMIS /srv/eom/worker-homes -/root/.codex -/var/run/docker.sock /etc/eom/secrets/api.env
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

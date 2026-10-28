@@ -39,11 +39,11 @@ if (($# != 2)) || \
     "$1" != "authenticated-session-tests" && \
     "$1" != "local-indexing-service-tests" && \
     "$1" != "pdf-review-tests" && "$1" != "external-item-tests" && \
-    "$1" != "creative-registration-tests" && \
+    "$1" != "creative-registration-tests" && "$1" != "creative-graph-tests" && \
     "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
     "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|inspect|migrate|hwpx-tests|embedding-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|authenticated-session-tests|local-indexing-service-tests|pdf-review-tests|external-item-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|inspect|migrate|hwpx-tests|embedding-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|authenticated-session-tests|local-indexing-service-tests|pdf-review-tests|external-item-tests|creative-registration-tests|creative-graph-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -377,6 +377,21 @@ if [[ "${action}" == "hwpx-tests" ]]; then
   export EOM_RUN_INTEGRATION=1
   "${PYTHON}" -m pytest -q tests/integration/test_hwpx_persistence.py
   printf 'Disposable HWPX persistence integration tests passed.\n'
+  exit 0
+fi
+
+if [[ "${action}" == "creative-graph-tests" ]]; then
+  export EOM_RUN_INTEGRATION=1
+  # This cohort uses the admitted base V2 analysis path. Historical document
+  # creation fixtures pin intentionally retired Workflow versions and are a
+  # separate compatibility audit, not a reason to reopen those admissions.
+  "${PYTHON}" -m pytest -q \
+    tests/integration/test_knowledge_analysis_service.py::test_knowledge_analysis_history_access_patterns_have_dedicated_indexes \
+    tests/integration/test_knowledge_analysis_service.py::test_education_graph_access_patterns_have_dedicated_indexes \
+    tests/integration/test_knowledge_analysis_service.py::test_concurrent_analysis_create_is_single_and_retry_replays \
+    tests/integration/test_knowledge_analysis_service.py::test_incompatible_proposal_ontology_fails_before_acceptance \
+    tests/integration/test_knowledge_analysis_service.py::test_knowledge_analysis_acceptance_review_and_retry_are_pointer_only \
+    tests/integration/test_knowledge_analysis_service.py::test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently
   exit 0
 fi
 
