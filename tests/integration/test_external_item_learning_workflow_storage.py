@@ -15,6 +15,7 @@ from eom_identifiers import content_sha256
 from eom_workflow.control_plane import ResolvedExecutionPlanV27
 from eom_workflow.models import WorkflowRequest
 from eom_workflow_runner import external_item_learning_preparation as preparation
+from eom_workflow_runner import external_item_learning_start as start
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
@@ -262,3 +263,98 @@ def test_preparation_late_source_rejection_rolls_back_ready_step_and_event(
             )
             is None
         )
+
+
+def _prepared_start(creative_engine, monkeypatch):
+    _preparation_ports(monkeypatch)
+    monkeypatch.setattr(start, "read_external_item_learning_page_artifact", lambda *_: None)
+
+    def plan(_record, *, workflow_id, step_key, request):
+        assert step_key == "extract"
+        return preparation.resolve_external_item_learning_plan(
+            None,
+            workflow_id=workflow_id,
+            workflow_definition_sha256=_definition().definition_hash,
+            work=request.work_input,
+        )
+
+    monkeypatch.setattr(start, "validate_external_item_learning_execution_plan", plan)
+    request = _unique_request()
+    with Session(creative_engine) as session, session.begin():
+        prepared = preparation.prepare_external_item_learning_workflow(
+            session,
+            definition=_seed(session),
+            work=request.external_item_learning_work,
+            operator_id=OPERATOR,
+            idempotency_key="synthetic-creative-start-" + uuid4().hex,
+            source_authorizer=_owner(request),
+            page_publisher=None,
+        )
+    return request, prepared.selection
+
+
+def test_concurrent_prepared_starts_create_one_original_command(creative_engine, monkeypatch):
+    request, selection = _prepared_start(creative_engine, monkeypatch)
+    barrier = Barrier(2)
+
+    def submit(_index):
+        with Session(creative_engine) as session, session.begin():
+            barrier.wait(timeout=10)
+            return start.start_prepared_external_item_learning(
+                session,
+                selection=selection,
+                operator_id=OPERATOR,
+                source_authorizer=_owner(request),
+                page_publisher=None,
+            )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = tuple(pool.map(submit, range(2)))
+    assert len({r.command_id for r in results}) == 1
+    assert sum(r.command_created for r in results) == 1
+    with Session(creative_engine) as session:
+        commands = tuple(
+            session.scalars(
+                select(WorkflowCommandRecord).where(
+                    WorkflowCommandRecord.workflow_id == selection.workflow_id
+                )
+            )
+        )
+        assert len(commands) == 1
+        assert commands[0].state == "PENDING" and commands[0].attempts == 0
+        assert session.get(WorkflowInstanceRecord, selection.workflow_id).state == "REQUESTED"
+        assert session.get(WorkflowStepRunRecord, selection.step_run_id).state == "READY"
+
+
+@pytest.mark.parametrize("failure", ["revoked", "interrupted"])
+def test_prepared_start_failure_rolls_back_command_not_original_ready_role(
+    creative_engine, monkeypatch, failure
+):
+    request, selection = _prepared_start(creative_engine, monkeypatch)
+    owner = _owner(request)
+    if failure == "revoked":
+        owner.reauthorize.side_effect = [request.external_item_learning_work.source, ValueError()]
+    with (
+        pytest.raises((WorkflowError, RuntimeError)),
+        Session(creative_engine) as session,
+        session.begin(),
+    ):
+        start.start_prepared_external_item_learning(
+            session,
+            selection=selection,
+            operator_id=OPERATOR,
+            source_authorizer=owner,
+            page_publisher=None,
+        )
+        raise RuntimeError("synthetic interruption before commit")
+    with Session(creative_engine) as session:
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(WorkflowCommandRecord)
+                .where(WorkflowCommandRecord.workflow_id == selection.workflow_id)
+            )
+            == 0
+        )
+        assert session.get(WorkflowInstanceRecord, selection.workflow_id).state == "REQUESTED"
+        assert session.get(WorkflowStepRunRecord, selection.step_run_id).state == "READY"

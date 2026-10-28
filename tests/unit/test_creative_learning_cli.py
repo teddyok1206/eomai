@@ -7,7 +7,7 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import MagicMock, Mock
 
 import pytest
 from eom_api import build_info
@@ -21,6 +21,7 @@ from eom_catalog_service.external_item_learning_preparation_service import (
 )
 from eom_operator_identity import PermissionKey
 from eom_workflow_runner.external_item_learning_preparation import PreparedExternalItemLearning
+from eom_workflow_runner.external_item_learning_start import StartedExternalItemLearning
 from eomctl import creative_learning as cli
 from jsonschema.exceptions import ValidationError
 from pydantic import SecretStr
@@ -205,7 +206,48 @@ def test_selection_rejects_authority_fields_and_unsafe_files(monkeypatch, tmp_pa
 
 
 def test_prepare_help_has_no_start_switch():
-    result = CliRunner().invoke(cli.learning_app, ["--help"])
+    result = CliRunner().invoke(cli.learning_app, ["prepare", "--help"])
     assert result.exit_code == 0
     assert "--request-file" in result.stdout and "--username" in result.stdout
     assert "--start" not in result.stdout
+
+
+def test_start_is_a_separate_command_and_not_an_implicit_prepare_switch():
+    result = CliRunner().invoke(cli.learning_app, ["start", "--help"])
+    assert result.exit_code == 0
+    assert "--selection-file" in result.stdout and "--username" in result.stdout
+    assert "--config-directory" not in result.stdout
+
+
+def test_start_cli_authenticates_actual_operator_and_does_not_accept_or_publish(
+    monkeypatch, tmp_path, capsys
+):
+    value = _case(monkeypatch, tmp_path)
+    selection = value.result.workflow.selection
+    selected = tmp_path / "prepared-role.json"
+    selected.write_text(selection.model_dump_json())
+    selected.chmod(0o600)
+    sessions = MagicMock()
+    monkeypatch.setattr(cli, "build_session_factory", Mock(return_value=sessions))
+    monkeypatch.setattr(cli, "ExternalItemPreviewProjectionService", Mock())
+    monkeypatch.setattr(cli, "CatalogExternalItemLearningSourceAuthorizer", Mock())
+    monkeypatch.setattr(cli, "ControlFileSetPublisher", Mock())
+    authorize = Mock(return_value=OPERATOR)
+    monkeypatch.setattr(cli, "authorize_external_creative_learning_preparation", authorize)
+    start = Mock(
+        return_value=StartedExternalItemLearning(selection, "wfcmd_" + "c" * 32, "PENDING", True)
+    )
+    monkeypatch.setattr(cli, "start_prepared_external_item_learning", start)
+    cli.start_learning(selection_file=selected, username="synthetic-operator")
+    output = capsys.readouterr()
+    report = json.loads(output.out)
+    assert report["status"] == "START_COMMAND_STORED" and report["command_created"]
+    assert report["item_acceptance"] == report["graph_publication"] == "NOT_PERFORMED"
+    assert report["test_session_logout"] == "PASS"
+    assert value.password.call_count == value.auth.login.call_count == 1
+    assert authorize.call_count == value.auth.authenticate_access.call_count == 2
+    assert start.call_args.kwargs["operator_id"] == OPERATOR
+    assert start.call_args.kwargs["selection"] == selection
+    value.service.prepare.assert_not_called()
+    assert "synthetic-password-do-not-print" not in output.out + output.err
+    assert "synthetic-access-do-not-print" not in output.out + output.err
