@@ -33,6 +33,8 @@ class PrelaunchResetArtifacts:
     def __init__(
         self, engine: Engine, source_commit: str, settings: Settings | None = None
     ) -> None:
+        if engine.url.query.get("options") != "-csearch_path=app,pg_catalog":
+            raise ValueError("ITEM_RESET_OWNER_SCHEMA_REQUIRED")
         self.publisher = ControlFileSetPublisher(engine, settings)
         self.source_commit = source_commit
 

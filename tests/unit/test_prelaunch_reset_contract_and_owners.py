@@ -310,5 +310,18 @@ def test_real_owner_database_configuration_is_not_selected_by_model_or_runtime_e
     monkeypatch.setattr(host, "_read_secret_environment", configuration)
     result = fence.owner_database_url()
     assert result.host == "127.0.0.1" and result.database == "test_db"
+    assert result.query.get("options") == "-csearch_path=app,pg_catalog"
     assert seen == ["/etc/eom/secrets/postgres.env"]
     assert "TEST_ONLY" not in repr(result)
+
+
+def test_audit_publisher_rejects_an_owner_engine_without_the_fixed_schema() -> None:
+    from eom_orchestrator.prelaunch_reset_artifacts import PrelaunchResetArtifacts
+    from sqlalchemy import create_engine
+
+    engine = create_engine("postgresql+psycopg://owner@127.0.0.1/eom")
+    try:
+        with pytest.raises(ValueError, match="OWNER_SCHEMA_REQUIRED"):
+            PrelaunchResetArtifacts(engine, "a" * 40)
+    finally:
+        engine.dispose()

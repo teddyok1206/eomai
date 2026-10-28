@@ -132,7 +132,7 @@ class InstalledPrelaunchResetFence:
             host="127.0.0.1",
             port=5432,
             database=values["POSTGRES_DB"],
-        )
+        ).update_query_dict({"options": "-csearch_path=app,pg_catalog"})
 
     def verify_backup(self, database: str, backup: ResetBackupPin) -> None:
         path = BACKUP_ROOT / backup.file_name
