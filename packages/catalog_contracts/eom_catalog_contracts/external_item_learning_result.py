@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from typing import Any, Literal, Self
+from typing import Any, Literal, Protocol, Self
 
 from eom_identifiers import content_sha256
 from pydantic import Field, field_validator, model_validator
@@ -20,7 +20,7 @@ type RegionId = str
 _CONTENT_PATH_SEGMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*)(?:\[([0-9]+)\])?$")
 
 
-def _resolve_content_path(content: object, path: str) -> object:
+def resolve_external_item_content_path(content: object, path: str) -> object:
     """Reject a plausible-looking anchor path that names no actual Item value."""
 
     current = content
@@ -125,7 +125,7 @@ class ExternalItemLearningProposal(FrozenModel):
             raise ValueError("proposal lacks source regions for required Item fields")
         content = self.content.model_dump(mode="json")
         for path in paths:
-            _resolve_content_path(content, path)
+            resolve_external_item_content_path(content, path)
         steps = tuple(step.step_number for step in self.solution_steps)
         if steps != tuple(range(1, len(steps) + 1)):
             raise ValueError("solution steps must be contiguous and ordered")
@@ -205,8 +205,24 @@ class ExternalItemLearningResult(FrozenModel):
         return self
 
 
+class LearningSourceResultIdentity(Protocol):
+    """Shared identity boundary for immutable historical and successor results."""
+
+    @property
+    def input_sha256(self) -> str: ...
+
+    @property
+    def source_id(self) -> str: ...
+
+    @property
+    def source_revision_id(self) -> str: ...
+
+    @property
+    def external_number(self) -> str: ...
+
+
 def validate_external_item_learning_result_for_source(
-    result: ExternalItemLearningResult,
+    result: LearningSourceResultIdentity,
     source_input_sha256: str,
     source_id: str,
     source_revision_id: str,

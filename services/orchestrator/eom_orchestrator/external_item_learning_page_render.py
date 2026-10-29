@@ -16,11 +16,16 @@ from pathlib import Path
 from typing import Protocol
 from uuid import uuid4
 
+from eom_catalog_contracts.creative_source_draft import SourceImageBlock
 from eom_catalog_contracts.external_item_learning_pages import (
     EXTERNAL_ITEM_LEARNING_PAGE_SET_SCHEMA,
     ExternalItemLearningPageSet,
     validate_external_item_learning_page_set_for_source,
 )
+from eom_catalog_contracts.external_item_learning_result import (
+    validate_external_item_learning_result_for_source,
+)
+from eom_catalog_contracts.external_item_learning_result_v2 import ExternalItemLearningResultV2
 from eom_catalog_contracts.external_item_learning_source import ExternalItemLearningSource
 from eom_catalog_contracts.validation import validate_contract
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes, sha256_file
@@ -141,7 +146,7 @@ def _page_count(pdfinfo: Path, pdf_bytes: bytes, run: PdfToolRunner) -> int:
     return int(count)
 
 
-def _png_dimensions_and_size(path: Path) -> tuple[int, int, int]:
+def _png_dimensions_and_size(path: Path, *, minimum_dimension: int = 64) -> tuple[int, int, int]:
     try:
         metadata = path.lstat()
         if (
@@ -157,7 +162,11 @@ def _png_dimensions_and_size(path: Path) -> tuple[int, int, int]:
     if header[:8] != _PNG_SIGNATURE or header[12:16] != b"IHDR":
         raise ValueError("CREATIVE_PAGE_PNG_INVALID")
     width, height = struct.unpack(">II", header[16:24])
-    if not 64 <= width <= 2400 or not 64 <= height <= 2400 or header[24] != 8:
+    if (
+        not minimum_dimension <= width <= 2400
+        or not minimum_dimension <= height <= 2400
+        or header[24] != 8
+    ):
         raise ValueError("CREATIVE_PAGE_PNG_DIMENSIONS_INVALID")
     return width, height, metadata.st_size
 
@@ -304,3 +313,147 @@ def render_external_item_learning_pages(
         target.flush()
         os.fsync(target.fileno())
     return RenderedExternalItemLearningPages(manifest, workspace, manifest_path, tuple(page_paths))
+
+
+@dataclass(frozen=True, slots=True)
+class RenderedCreativeSourceVisual:
+    source_region_id: str
+    physical_page: int
+    source_page_sha256: str
+    pixel_box: tuple[int, int, int, int]
+    member_path: str
+    path: Path
+    sha256: str
+    width_px: int
+    height_px: int
+    content_length: int
+
+
+def render_creative_source_visuals(
+    source: ExternalItemLearningSource,
+    pages: ExternalItemLearningPageSet,
+    result: ExternalItemLearningResultV2,
+    pdf_bytes: bytes,
+    *,
+    workspace: Path,
+    pdftoppm: Path = Path("/usr/bin/pdftoppm"),
+    run: PdfToolRunner = _run_isolated,
+) -> tuple[RenderedCreativeSourceVisual, ...]:
+    """Render only declared target crops through the existing isolated PDF tool.
+
+    This local adapter does not publish files, grant source access, or register an
+    Item. The owner validates actual source/role/page Artifact pointers before it
+    calls here and publishes the returned files with their derivation receipt.
+    PDF bytes and the executable are hashed once per bounded crop set. Repeated
+    references to one observed region share one output member.
+    """
+    source = ExternalItemLearningSource.model_validate(source.model_dump(mode="json"))
+    pages = ExternalItemLearningPageSet.model_validate(pages.model_dump(mode="json"))
+    result = ExternalItemLearningResultV2.model_validate(result.model_dump(mode="json"))
+    validate_external_item_learning_page_set_for_source(pages, source)
+    validate_external_item_learning_result_for_source(
+        result,
+        source.input_sha256,
+        source.source_id,
+        source.source_revision_id,
+        source.external_number,
+    )
+    if (
+        not workspace.is_absolute()
+        or os.path.lexists(workspace)
+        or not 8 <= len(pdf_bytes) <= _MAX_PDF_BYTES
+        or not pdf_bytes.startswith(b"%PDF-")
+        or sha256_bytes(pdf_bytes) != source.preview_manifest.pdf_sha256
+        or result.proposal is None
+    ):
+        raise ValueError("CREATIVE_VISUAL_CROP_INPUT_INVALID")
+    selected = dict.fromkeys(
+        block.source_region_id
+        for block in result.proposal.content.body
+        if isinstance(block, SourceImageBlock)
+    )
+    if not selected:
+        return ()
+    page_by_number = {page.physical_page: page for page in pages.pages}
+    regions = {region.region_id: region for region in result.regions}
+    recipes = []
+    for region_id in selected:
+        region = regions[region_id]
+        page = page_by_number.get(region.physical_page)
+        if page is None:
+            raise ValueError("CREATIVE_VISUAL_CROP_PAGE_MISSING")
+        box = region.bounding_box
+        pixel_box = (
+            box.left * page.width_px // 10000,
+            box.top * page.height_px // 10000,
+            (box.right * page.width_px + 9999) // 10000,
+            (box.bottom * page.height_px + 9999) // 10000,
+        )
+        recipes.append((region, page, pixel_box))
+    executable = _trusted_executable(pdftoppm)
+    if sha256_file(executable) != pages.renderer.pdftoppm_sha256:
+        raise ValueError("CREATIVE_VISUAL_CROP_RENDERER_CHANGED")
+    workspace.mkdir(mode=0o700)
+    images = workspace / "images"
+    images.mkdir(mode=0o700)
+    outputs = []
+    total = 0
+    for region, page, pixel_box in recipes:
+        left, top, right, bottom = pixel_box
+        width, height = right - left, bottom - top
+        raw = run(
+            executable,
+            (
+                "-f",
+                str(region.physical_page),
+                "-l",
+                str(region.physical_page),
+                "-png",
+                "-singlefile",
+                "-scale-to",
+                "2400",
+                "-x",
+                str(left),
+                "-y",
+                str(top),
+                "-W",
+                str(width),
+                "-H",
+                str(height),
+                "-",
+            ),
+            pdf_bytes,
+            timeout_seconds=90.0,
+            maximum_stdout=_MAX_PAGE_BYTES,
+        )
+        frames = _split_png_stream(raw, expected_pages=1)
+        total += len(raw)
+        if total > _MAX_TOTAL_PAGE_BYTES:
+            raise ValueError("CREATIVE_VISUAL_CROP_TOTAL_BYTES_EXCEEDED")
+        member = "images/" + region.region_id + ".png"
+        path = workspace / member
+        descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(frames[0])
+            stream.flush()
+            os.fsync(stream.fileno())
+        actual_width, actual_height, content_length = _png_dimensions_and_size(
+            path, minimum_dimension=1
+        )
+        if (actual_width, actual_height) != (width, height):
+            raise ValueError("CREATIVE_VISUAL_CROP_DIMENSIONS_MISMATCH")
+        outputs.append(
+            RenderedCreativeSourceVisual(
+                region.region_id,
+                region.physical_page,
+                page.sha256,
+                pixel_box,
+                member,
+                path,
+                sha256_bytes(raw),
+                width,
+                height,
+                content_length,
+            )
+        )
+    return tuple(outputs)

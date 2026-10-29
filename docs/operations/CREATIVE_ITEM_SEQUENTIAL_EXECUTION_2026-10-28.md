@@ -124,3 +124,13 @@ Graph 접근 정책은 임의의 가장 최근 revision이 아니라 기존 Grap
 9. **복구:** 이번 결과는 보존하고 정확한 해결 입력/후속 실행 계보를 남긴다. COMPLETED/FAILED 이력을 덮지 않는다. 후속 입력을 새 정책으로 admission해야 하는 경우 지원된 successor 경계만 사용하며 구 고정 cohort를 몰래 latest로 바꾸지 않는다.
 10. **검증:** missing crop/표 안 그림/배점 미표기/첨부 영역 차단, 잘못된 geometry/hash, 중단 후 crop/등록 replay, 같은 슬롯 동시성, 실제 3건과 공식 풀이·주의사항 조회를 확인한다. 원본 정보가 부족하면 source와 보고서를 보존하고 이유를 명시한다.
 11. **배제한 대안:** 전체 페이지를 그림으로 넣으면 별도 기출/메타데이터가 섞인다. 임의 이미지·Artifact hash 생성은 위조다. 배점 필수를 전역 완화하거나 읽을 수 있는 다음 문항만 골라 PASS 처리하는 것은 이번 실패 경계를 해결하지 않는다.
+
+### successor 구성요소 구현 현황 (아직 소스 전용)
+
+- `creative-source-item-draft/1.0` JSON Schema와 frozen model은 native paragraph/equation/table/statement를 유지하고, 그림만 `source_image`의 observed region reference로 표현한다. worker가 Artifact ID/경로/hash를 만들어 넣는 branch는 없다. `PRINTED`/`UNPRINTED` 배점 상태와 독립 풀이의 미검증 상태도 분리한다.
+- `external-item-learning-result/2.0`은 시각자료 정본 변환이 미완료여도 공개 가능한 독립 풀이를 별도 `solution_report`로 보존한다. 원문 source answer와 독립 answer의 차이는 그대로 기록한다. 부모 영역 containment·첨부 기출/편집 해설 영역 overlap·선지 참조·풀이 단계·region closure를 검증한다.
+- 순수 draft compiler는 owner가 검증해 전달한 이미지 집합이 recipe와 정확히 일치할 때만 canonical Item을 구성한다. UNPRINTED의 canonical 0은 `source_score_state`와 `SOURCE_SCORE_NOT_PRINTED`를 함께 보존해야 하며, 원문에서 관측한 0점과 구별한다. 아직 Registry application에 연결하지 않았다.
+- 기존 PDF renderer에 별도 visual crop 진입점을 추가했다. 동일 `-scale-to 2400` frame과 고정 Poppler binary hash를 사용해 source rectangle만 렌더링하고 중복 region은 한 번만 materialize한다. untrusted PDF는 기존 eom-image systemd isolation에서만 파싱하며 이 adapter는 NAS/DB에 쓰지 않는다. 합성 PDF를 실제 Poppler로 렌더링한 geometry/hash/중복/변조/renderer drift 검사도 통과했다. crop receipt Artifact commit은 후속 연결 사항이다.
+- V2는 worker의 미서명 body와 owner가 기본값을 정규화한 뒤 SHA를 붙이는 저장 result를 분리했다. 모델이 SHA를 제출하면 거부한다. nullable table caption 등 기본값이 저장/재조회에서 hash를 바꾸지 않도록 round-trip을 검사했다. 기존 V1 의미/bytes는 변경하지 않았다.
+- 집중 계약/compiler/real synthetic-PDF 회귀 56개 PASS. 별도 broader 공유 Graph/보고서 회귀 84개 PASS는 중복을 합산하지 않는다. 설치된 predecessor와 대조해 기존 workflow-role 1.0.1/1.4.0/1.33.0의 schema bundle hash가 동일함도 확인했다.
+- 아직 필요한 연결: successor role/Workflow·실행 설정, 검증된 crop derivation의 Orchestrator commit, source lineage/report reader·등록 adapter, 고정 cohort의 명시적 successor/recovery, 호환 운영 배포 및 실제 3건 재검증. 이 소스 검사를 운영 성공 또는 목표 달성으로 보고하지 않는다. 기존 owner는 중단 상태, 전체 연속 처리와 30분 timer는 미활성 상태로 유지한다.

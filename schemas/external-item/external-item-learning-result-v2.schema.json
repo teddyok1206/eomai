@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/external-item/learning-result/2.0",
+  "title": "Source-first creative extraction with independently preserved solution report",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "result_id", "input_sha256", "source_id", "source_revision_id", "external_number", "status", "regions", "proposal", "solution_report", "conflicts", "result_sha256"],
+  "properties": {
+    "schema_version": {"const": "external-item-learning-result/2.0"},
+    "result_id": {"type": "string", "pattern": "^extlearnresult_[0-9a-f]{32}$"},
+    "input_sha256": {"$ref": "eom://schemas/external-item/learning-result/1.0#/$defs/sha256"},
+    "source_id": {"type": "string", "pattern": "^extitem_[0-9a-f]{32}$"},
+    "source_revision_id": {"type": "string", "pattern": "^extitemrev_[0-9a-f]{32}$"},
+    "external_number": {"type": "string", "pattern": "^[0-9]{5}$"},
+    "status": {"enum": ["PROPOSED", "NEEDS_DECISION"]},
+    "regions": {"type": "array", "minItems": 1, "maxItems": 64, "items": {"$ref": "eom://schemas/external-item/learning-result/1.0#/$defs/region"}},
+    "proposal": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/proposal"}]},
+    "solution_report": {"$ref": "#/$defs/solutionReport"},
+    "conflicts": {"type": "array", "maxItems": 32, "items": {"$ref": "eom://schemas/external-item/learning-result/1.0#/$defs/conflict"}},
+    "result_sha256": {"$ref": "eom://schemas/external-item/learning-result/1.0#/$defs/sha256"}
+  },
+  "$defs": {
+    "proposal": {
+      "type": "object", "additionalProperties": false,
+      "required": ["item_number", "content", "content_region_map"],
+      "properties": {
+        "item_number": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "content": {"$ref": "eom://schemas/external-item/source-item-draft/1.0"},
+        "content_region_map": {"type": "array", "minItems": 2, "maxItems": 128, "items": {"$ref": "eom://schemas/external-item/learning-result/1.0#/$defs/contentRegionMap"}}
+      }
+    },
+    "solutionReport": {
+      "type": "object", "additionalProperties": false,
+      "required": ["answer_state", "answer_labels", "accepted_answers", "explanation", "solution_steps", "answer_cross_check", "editorial_region_ids"],
+      "properties": {
+        "answer_state": {"enum": ["DETERMINED", "UNDETERMINED"]},
+        "answer_labels": {"type": "array", "maxItems": 10, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 16}},
+        "accepted_answers": {"type": "array", "maxItems": 20, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 20000}},
+        "explanation": {"type": "string", "minLength": 1, "maxLength": 20000},
+        "solution_steps": {"type": "array", "maxItems": 32, "items": {"$ref": "eom://schemas/external-item/learning-result/1.0#/$defs/solutionStep"}},
+        "answer_cross_check": {"enum": ["MATCHES_EDITORIAL_SOLUTION", "DISAGREES", "NO_EDITORIAL_SOLUTION", "NOT_DETERMINED"]},
+        "editorial_region_ids": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"$ref": "eom://schemas/external-item/learning-result/1.0#/$defs/regionId"}}
+      }
+    }
+  }
+}
