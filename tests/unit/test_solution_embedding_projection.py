@@ -5,6 +5,7 @@ from pathlib import Path
 import pytest
 from eom_catalog_contracts.external_item_learning_result import ExternalItemLearningResult
 from eom_catalog_contracts.external_item_learning_result_v2 import (
+    ExternalItemLearningResultV2,
     stamp_external_item_learning_result_v2,
 )
 from eom_catalog_contracts.knowledge import KnowledgeAnalysisSolutionReport
@@ -16,9 +17,12 @@ from eom_catalog_service.solution_embedding_projection import project_public_sol
 from eom_identifiers import canonical_json_bytes, content_sha256
 from jsonschema import Draft202012Validator
 
+from tests.unit.inference_transfer_embedding_fixtures import embedding_space, encoding_identity
 from tests.unit.inference_transfer_fixtures import report
 from tests.unit.test_creative_source_content import _disagreement
-from tests.unit.test_external_item_learning_result_v2 import result_v2
+from tests.unit.test_creative_source_field_provenance import mapped
+from tests.unit.test_external_item_learning_result_contract import _rehash
+from tests.unit.test_external_item_learning_result_v2 import result_v2, undetermined_result_v2
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -70,6 +74,61 @@ def test_metadata_ids_and_report_explanation_do_not_become_numerical_features():
     changed = type(original).model_validate(value)
     assert project_public_solution_text(original) == project_public_solution_text(changed)
     assert original.conflicts == changed.conflicts  # warnings remain in the real report
+
+
+@pytest.mark.parametrize("path", ["solution.authoring_intent", "score.points"])
+@pytest.mark.parametrize("device", ["CPU", "CUDA"])
+def test_source_metadata_from_other_region_cannot_change_solution_embedding(path, device):
+    value = mapped(path, "OTHER")
+    original = ExternalItemLearningResultV2.model_validate(value)
+    metadata_text = "풀이에 섞이면 안 되는 편집 메타데이터"
+    if path == "solution.authoring_intent":
+        value["proposal"]["content"]["solution"]["authoring_intent"] = metadata_text
+    else:
+        value["proposal"]["content"]["score"] = {"state": "PRINTED", "points": 3}
+    next(region for region in value["regions"] if region["role"] == "OTHER")["observed_text"] = (
+        metadata_text
+    )
+    _rehash(value)
+    changed = ExternalItemLearningResultV2.model_validate(value)
+    before = tuple(canonical_json_bytes(result) for result in (original, changed))
+    projected = tuple(map(project_public_solution_text, (original, changed)))
+    assert original.result_sha256 != changed.result_sha256
+    assert projected[0] == projected[1] and projected[0].status == "AVAILABLE"
+    assert metadata_text not in projected[0].text
+    space = embedding_space(device=device)
+    assert encoding_identity(projected[0].text, space) == encoding_identity(
+        projected[1].text, space
+    )
+    assert before == tuple(canonical_json_bytes(result) for result in (original, changed))
+
+
+def test_undetermined_editorial_observations_do_not_change_public_reasoning_encoding():
+    value = undetermined_result_v2()
+    observed = ExternalItemLearningResultV2.model_validate(value)
+    value["solution_report"]["editorial_region_ids"] = []
+    _rehash(value)
+    unobserved = ExternalItemLearningResultV2.model_validate(value)
+    assert observed.result_sha256 != unobserved.result_sha256
+    assert observed.solution_report.editorial_region_ids
+    assert not unobserved.solution_report.editorial_region_ids
+    assert observed.solution_report.answer_state == "UNDETERMINED"
+    assert observed.conflicts == unobserved.conflicts
+    assert observed.proposal.content.solution == unobserved.proposal.content.solution
+    assert project_public_solution_text(observed) == project_public_solution_text(unobserved)
+
+
+def test_projection_revalidates_forged_creative_answer_before_extracting_solution_steps():
+    original = ExternalItemLearningResultV2.model_validate(result_v2())
+    forged = original.model_copy(
+        update={
+            "solution_report": original.solution_report.model_copy(
+                update={"answer_labels": ("제시된 선택지 없음",)}
+            )
+        }
+    )
+    with pytest.raises(ValueError):
+        project_public_solution_text(forged)
 
 
 @pytest.mark.parametrize(

@@ -498,3 +498,66 @@ Catalog 계약 계층 한 곳에 두고 검증과 생성 schema 설명이 공유
 원문/등록/공식 조회·생성 지침 및 기존 family/hash를 포함한 관련 519개 PASS,
 Ruff·format·mypy PASS다. 새 schema 버전·DB migration·의존성·queue를 추가하지 않았다.
 기존 실패와 7건 완료는 보존하고, 같은 supported recovery와 1,053개 대상·slot 05로 재개한다.
+
+2026-10-29 09:28 UTC 체크포인트: 수정 commit `4b08abf8911f51c30d86719d811b7c2c3cc7ff0e`
+(tree `4a0ba8389d1da8977d1036b88327b4a2c5b9649d`)을 main에 푸시하고 API/shared runner 및
+보호된 순차 owner에 호환 배포했다. build-only와 실제 배포 wheel의 RECORD·installed simulation,
+격리 검증·API READY를 확인했다. 배포 전 실행 중 role Job·lease·chat·HWPX는 0이었다.
+새 migration은 없고, 실제 DB head는 `20261027_0062`다. QUERY는 기존 `07ec7b32`의 같은
+prefix/config로 복구했다. 기존 GPU INDEX FAILED와 실행 중 일반 채팅은 변경하지 않았다.
+
+설치본에서도 이전 stdout을 변경 없이 재검증했다. OTHER 출제의도 참조는 더 이상 잘못
+거부하지 않지만, 실제 선택지가 아닌 답안 라벨은 여전히 거부함을 확인했다. 이전 실패를
+성공으로 재해석하지 않았고, 원래 두 FAILED Job은 보존한다. 기존 invalid-result recovery로
+`workflow_5bee09f18f2749f481bb96ade2378286`의 후속
+`workflow_f68ad6eb0e0b49b7bbe7bbf756049be6`을 준비했다. 실제 멱등 재전송은 같은 selection을
+반환했다. 원래 work input SHA
+`7ffd9a50bcd62bbdb75aeaa8449e07966a11a7a05834e46bd20ed6b7b12da04f`도 유지한다.
+
+전체 owner(limit=1053)를 시작하여 완료된 10310–10316의 7개 Item/분석을 재사용했고,
+10317의 새 Job `job_f4546aad9b244aafa354cd078bede6b3`이 실제 slot 05에서 RUNNING 및 ACTIVE
+lease 1개임을 확인했다. 실행 설정은 Terra/xhigh·7200초, cohort/target-set/원래 operator와
+정책 pin도 같다. 이는 **7/1053 완료 및 새 실행 시작**의 증거이며, 10317의 실제 등록·Graph·
+공식 보고서 조회 완료 증거는 아직 아니다. 30분 읽기 전용 timer는 계속 활성 상태다.
+
+2026-10-29 09:44 UTC 최종 재개 확인: 10317의 새 source Job과 후속 분석 Job
+`job_d3e90d81f34c40e085117e4625cdfd08`은 모두 SUCCEEDED, 분석
+`analysisrun_d3010b13eea54b9fb871c6250d8ffdc9`는 ACCEPTED였다. 후속 분석은 기출 520개와
+같은 `workflow-role/1.4.0` 경로로 slot 05에서 실행됐다. Item Revision
+`itemrev_981e2e4243034614b932a608cbe0f9b4`는 공유 Graph
+`graphrev_851ef20dceee6952fc423a808bc8cdcd`에 연결됐다. Graph SHA는
+`0fd2c8a7f9a9195141edc3d977e5c023b42a9bebb22da434f4aeed7abc3a43c5`다.
+
+공식 Catalog materialize로 10310–10317의 8건 모두 공개 풀이 전체·원문 답안·독립 판단·
+주의사항·원래 proposal status를 실제 정본과 대조했다. 새 10317 보고서는 PROPOSED,
+독립 DETERMINED/MATCHES_EDITORIAL_SOLUTION, 공개 풀이 3단계와 해설 참조 1개였다.
+이는 새 실행의 모델 판단이며 이전 미확정/불일치 판단을 지우거나 과학적 정답을 보증하는
+판정이 아니다. 이전 두 실패 Workflow/Job은 그대로 FAILED다.
+
+기존 교과서·기출 1,015개 source/accepted-result pointer와 hash는 전부 보존됐다. 원래 노드
+17,000개·edge 40,652개의 누락/재키잉은 0이며 새 Graph는 분석 1,023개, 노드 17,137개,
+edge 40,942개다. 기출 base 520개와 각 base의 accepted 풀이 successor 1개도 보존됐다.
+확인한 창작 8건당 APPROVED canonical revision은 하나씩, 실제 source/analysis Job 16개는
+모두 slot 05 SUCCEEDED이며 해당 lease 중복은 0이다.
+
+이후 10318의 `workflow_a3734c22a6414f409970264147da986d` / Job
+`job_1b745892a28e41459fb8730aa476a33a`이 slot 05 ACTIVE lease 1개로 실제 RUNNING이다.
+따라서 **8/1053 완료, 다음 문항 자동 실행**까지 확인했다. 전체 완료로 표현하지 않는다.
+실행 증거는 `/tmp/eom-creative-eight-end-to-end-20261029.json`과
+`/tmp/eom-creative-10318-live-20261029.json`이며 정본은 위 불변 Item/분석/Graph/role pointer다.
+
+### 같은 수정의 풀이 임베딩 영향 점검
+
+원래 canary 3건의 실제 role-result pointer와 공통 풀이 text SHA를 수정 전·후 대조해 모두
+같음을 확인했다. 필드별 출처 정책은 admission/generation 규칙이고, 공통 풀이 projection·
+기존 inference profile renderer·encoding recipe·query/document space는 변경하지 않았다.
+이번에 만든 새 보고서의 풀이 내용이 달라지면 새 text/hash가 되는 것은 정상이며, 점수가
+항상 같다는 보장은 하지 않는다. 잘못된 선택지 라벨이 있는 실패 body는 임베딩 입력으로
+우회시키지 않는다.
+
+OTHER 출처의 출제의도/배점·관찰 메타데이터 변경, 미확정 풀이에 남긴 editorial 참조,
+위조 frozen 결과의 재검증을 포함한 회귀를 추가했다. 같은 공개 풀이에는 같은 text/hash와
+CPU/CUDA encoding identity가 나오고 원래 report hash는 별개다. 실제 모델 추론이 아니라
+고정 입력·encoding 계약 검사이며 새 GPU 실행/인덱스 재작성은 없었다. 관련 232개 PASS,
+테스트 Ruff·format·diff 검사 PASS다. source-only 공통 표현의 운영 successor recipe/binding은
+여전히 `SOLUTION_EMBEDDING_ALIGNMENT_PENDING`이고, Graph 등록 성공과 혼동하지 않는다.

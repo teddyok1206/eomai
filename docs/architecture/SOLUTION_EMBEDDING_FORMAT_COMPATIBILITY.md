@@ -67,3 +67,21 @@ Graph 관련 42개 PASS, core Ruff·format·mypy PASS다. 같은 사실의 field
 
 **현재는 source-only 공통 projection이며, 기존 renderer의 동작이나 GPU/QUERY 인덱스는
 바꾸지 않았다.** 후속 namespace·source binding 및 실제 질의/후보 연결은 미완료다.
+
+### 필드별 근거 규칙 수정 후 회귀 확인 — 2026-10-29
+
+창작 원문의 필드별 출처 정책을 정리한 `4b08abf8` 배포 뒤, 원래 canary 3건의 실제
+role-result pointer와 공통 풀이 text SHA가 배포 전과 같음을 대조했다. 해당 변경은
+출제의도·배점의 근거 영역과 미확정 독립 풀이의 검증/생성 안내이며, 이 문서의 projection과
+기존 임베딩 renderer/recipe/space를 제자리 교체하지 않는다.
+
+추가 회귀에서 OTHER 근거의 출제의도·배점·편집 관찰을 바꿔도 같은 공개 풀이의 text/hash와
+CPU/CUDA encoding identity는 같고 report hash는 다름을 확인했다. 미확정 풀이의 editorial
+관찰 유무도 풀이 내용이 같으면 수치 feature를 바꾸지 않는다. 단위·수치·부정·첨자·지수는
+보존하며, 위조된 답안은 projection 진입 시 재검증으로 거부한다. 실제 벡터 추론/새 인덱싱을
+실행한 검사가 아니며, 같은 내용과 같은 인코더 입력을 보장하는 계약 검사다.
+
+새 실행에서 풀이 **내용 자체가 달라지는 것**은 양식 차이가 아니다. 이때 새 hash/벡터가
+생기는 것은 정상이며 유사도 점수 불변을 주장하지 않는다. 기존 source/accepted-analysis
+binding과 권한은 text hash가 같아도 합쳐지지 않는다. 관련 232개 회귀 PASS이며, 실제 운영
+공통 query/candidate 연결 상태는 여전히 `SOLUTION_EMBEDDING_ALIGNMENT_PENDING`이다.
