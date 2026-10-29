@@ -135,6 +135,28 @@ def run_root_embedding_batch_control(attempt_hex: str, *, controller_release: st
         channel.close()
 
 
+def _failure_diagnostic_fields(error: BaseException) -> dict[str, object]:
+    code = getattr(error, "code", None)
+    if (
+        type(code) is not str
+        or re.fullmatch(r"(?:EMBEDDING_|INSTALLED_RUNTIME_)[A-Z0-9_]{1,75}", code) is None
+    ):
+        code = None
+    sites: list[str] = []
+    frame = error.__traceback__
+    for _ in range(64):
+        if frame is None:
+            break
+        module = frame.tb_frame.f_globals.get("__name__")
+        if type(module) is str and re.fullmatch(r"eom_[a-z0-9_.]{1,120}", module):
+            sites = [*sites[-1:], f"{module}:{frame.tb_lineno}"]
+        frame = frame.tb_next
+    name = type(error).__name__
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", name) is None:
+        name = "Exception"
+    return dict(error_type=name, code=code, sites=sites)
+
+
 def _report_root_failure(error: Exception) -> None:
     """Optional bounded local diagnostic; never a receipt, authority or exception prose."""
     with suppress(Exception):
@@ -146,30 +168,18 @@ def _report_root_failure(error: Exception) -> None:
                 break
             seen.add(id(related))
             current = related
-        code = getattr(current, "code", None)
-        if (
-            type(code) is not str
-            or re.fullmatch(r"(?:EMBEDDING_|INSTALLED_RUNTIME_)[A-Z0-9_]{1,75}", code) is None
-        ):
-            code = None
-        sites: list[str] = []
-        frame = current.__traceback__
-        for _ in range(64):
-            if frame is None:
-                break
-            module = frame.tb_frame.f_globals.get("__name__")
-            if type(module) is str and re.fullmatch(r"eom_[a-z0-9_.]{1,120}", module):
-                sites = [*sites[-1:], f"{module}:{frame.tb_lineno}"]
-            frame = frame.tb_next
-        name = type(current).__name__
-        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", name) is None:
-            name = "Exception"
+        # Preserve the legacy chain summary, but do not mistake a handled EAGAIN
+        # in __context__ for the final guard failure or its explicit cause.
         body = canonical_json_bytes(
             dict(
                 event="EMBEDDING_GPU_ROOT_FAILED",
-                error_type=name,
-                code=code,
-                sites=sites,
+                **_failure_diagnostic_fields(current),
+                outer=_failure_diagnostic_fields(error),
+                explicit_cause=(
+                    _failure_diagnostic_fields(error.__cause__)
+                    if error.__cause__ is not None
+                    else None
+                ),
             )
         )
         message = b"<27>eom-embedding-root: " + body

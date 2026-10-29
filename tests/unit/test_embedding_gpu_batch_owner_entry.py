@@ -215,6 +215,12 @@ def test_root_failure_diagnostic_is_bounded_redacted_and_optional(monkeypatch, f
         assert value["event"] == "EMBEDDING_GPU_ROOT_FAILED"
         assert value["error_type"] == "SensitiveFailure"
         assert value["code"] == "EMBEDDING_TEST_DIAGNOSTIC"
+        assert value["outer"] == {
+            "error_type": "SensitiveFailure",
+            "code": "EMBEDDING_TEST_DIAGNOSTIC",
+            "sites": [],
+        }
+        assert value["explicit_cause"] is None
         assert all(
             word not in raw
             for word in (b"password", b"hidden", b"source text", b"raw request", b"private")
@@ -234,6 +240,101 @@ def test_root_failure_diagnostic_does_not_accept_arbitrary_exception_code(monkey
     entry._report_root_failure(error)
     raw = resource.sendto.call_args.args[0]
     assert b"password" not in raw and b"never disclose" not in raw
+
+
+@pytest.mark.parametrize("explicit_cause", (False, True))
+def test_root_failure_reports_guard_separately_from_handled_blocking_context(
+    monkeypatch, explicit_cause
+):
+    resource = Mock()
+    resource.__enter__ = Mock(return_value=resource)
+    resource.__exit__ = Mock(return_value=False)
+    monkeypatch.setattr(entry.socket, "socket", Mock(return_value=resource))
+
+    class GuardFailure(ValueError):
+        code = "EMBEDDING_TEST_GUARD"
+
+    class WrapperFailure(ValueError):
+        code = "INSTALLED_RUNTIME_TEST_WRAPPER"
+
+    try:
+        try:
+            try:
+                raise BlockingIOError("password=hidden; handled nonblocking read")
+            except BlockingIOError:
+                # Reproduce a handled read's implicit context, not an explicit cause.
+                raise GuardFailure("private guard details")  # noqa: B904
+        except GuardFailure as guard:
+            if not explicit_cause:
+                raise
+            try:
+                raise RuntimeError("private unrelated context")
+            except RuntimeError:
+                raise WrapperFailure("private final wrapper") from guard
+    except (GuardFailure, WrapperFailure) as error:
+        entry._report_root_failure(error)
+    raw = resource.sendto.call_args.args[0]
+    assert len(raw) <= 2048
+    value = json.loads(raw.split(b": ", 1)[1])
+    assert value["error_type"] == "BlockingIOError"  # Existing legacy fields remain stable.
+    assert value["code"] is None and value["sites"] == []
+    assert value["outer"] == {
+        "error_type": "WrapperFailure" if explicit_cause else "GuardFailure",
+        "code": "INSTALLED_RUNTIME_TEST_WRAPPER" if explicit_cause else "EMBEDDING_TEST_GUARD",
+        "sites": [],
+    }
+    assert value["explicit_cause"] == (
+        {"error_type": "GuardFailure", "code": "EMBEDDING_TEST_GUARD", "sites": []}
+        if explicit_cause
+        else None
+    )
+    assert all(word not in raw for word in (b"password", b"hidden", b"private", b"handled"))
+
+
+def test_root_failure_diagnostic_reports_only_final_two_module_line_sites(monkeypatch):
+    resource = Mock()
+    resource.__enter__ = Mock(return_value=resource)
+    resource.__exit__ = Mock(return_value=False)
+    monkeypatch.setattr(entry.socket, "socket", Mock(return_value=resource))
+    namespace = {"__name__": "eom_diagnostic_test"}
+    exec(
+        compile(
+            "def outer():\n    middle()\ndef middle():\n    inner()\ndef inner():\n"
+            "    raise ValueError('password=hidden')\n",
+            "/private/synthetic-source.py",
+            "exec",
+        ),
+        namespace,
+    )
+    try:
+        namespace["outer"]()
+    except ValueError as error:
+        entry._report_root_failure(error)
+    raw = resource.sendto.call_args.args[0]
+    value = json.loads(raw.split(b": ", 1)[1])
+    assert (
+        value["outer"]["sites"]
+        == value["sites"]
+        == [
+            "eom_diagnostic_test:4",
+            "eom_diagnostic_test:6",
+        ]
+    )
+    assert all(
+        word not in raw for word in (b"private", b"synthetic-source", b"password", b"hidden")
+    )
+
+
+def test_failed_diagnostic_transport_preserves_original_exception(monkeypatch):
+    monkeypatch.setattr(entry.socket, "socket", Mock(side_effect=OSError("private transport")))
+    original = ValueError("private original error")
+    with pytest.raises(ValueError) as caught:
+        try:
+            raise original
+        except ValueError as error:
+            entry._report_root_failure(error)
+            raise
+    assert caught.value is original
 
 
 def test_polkit_evaluates_only_fixed_owner_start_and_never_native_worker_control():

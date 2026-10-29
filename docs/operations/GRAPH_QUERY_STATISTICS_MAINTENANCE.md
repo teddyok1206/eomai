@@ -133,3 +133,42 @@ A future small Graph can again be absent from statistics on these large
 append-only tables. Reuse this evidence-led, bounded owner-maintenance boundary
 when needed; this checkpoint introduces no automatic ANALYZE grant, maintenance
 framework, autovacuum change or post-publication hook.
+
+## Actual 2026-10-29 GPU recovery maintenance
+
+The current Graph admitted544 source revisions. Before maintenance, EXPLAIN-only
+custom plans estimated1 pointer/node/association row, including the selected-eight
+path. Generic plans estimated about33k pointers. The custom nested loop could
+therefore reread the Graph's pointer range for each selected analysis. Production
+holds approximately4.3M immutable pointer rows across historical Graph revisions;
+the current disposable fixture's9–10ms result is not a production-scale benchmark.
+
+At16:25:03–04 UTC, the genuine schema owner refreshed statistics for exactly
+`knowledge_nodes`, `knowledge_node_source_pointers`, and `knowledge_snapshot_analyses`.
+These particular commands were table-level ANALYZE (7.005s/1.371s/0.253s), not the
+column-only commands above. They changed no domain rows, schema, indexes, grants,
+runtime files or service invocation. No production EXPLAIN ANALYZE was run. Future
+manual maintenance should retain the narrower column-only procedure above.
+
+The same EXPLAIN-only observer afterward estimated36,880 pointers and18,629 nodes
+and chose bitmap/hash paths rather than the fresh-Graph one-row nested loop.
+Subsequent original INDEX events recorded selected-source LOCK_POPULATION39–55ms
+and ADMIT_CANDIDATES639–799ms; full-population observations remained distinct
+(roughly150ms lock,5–6s admission,7–8s solution profiles). The stage logs do not
+carry a source-set hash, so these are runtime observations, not an identical-input
+speedup ratio or proof of numerical completion.
+
+The in-flight allocation had already started before this refresh. Its absolute
+expiry was19729798934353771ns monotonic; the root process started with only110.659s
+left and exited5.616s after expiry. Restarting the root does not renew that allocation.
+Keep the expired attempt as history and use supported prelaunch retirement before
+an explicit fresh owner recovery. Do not interpret its deepest caught EAGAIN
+exception as a new CUDA/kernel defect or claim this statistics refresh completed
+the GPU work. The controller and numerical runtime remain pinned.
+
+Local operational evidence: `/tmp/eom-gpu-current-shape-plans-202610291624.log`,
+`/tmp/eom-gpu-planner-statistics-refresh-202610291626.log`,
+`/tmp/eom-gpu-post-analyze-shape-plans-202610291625.log` and
+`/tmp/eom-gpu-cuda-acceptance-202610291633.log`. Fresh Graph recurrence is still a
+separate maintenance concern; no automatic privilege or maintenance framework is
+introduced here.
