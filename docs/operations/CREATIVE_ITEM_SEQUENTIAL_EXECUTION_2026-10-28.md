@@ -357,3 +357,33 @@ fresh disposable PostgreSQL migration 왕복/0062 PASS 및 관련 저장소 26�
 실행 보존을 검증했다. 초기 synthetic Job fixture의 protocol flush 누락을 수정했다.
 재사용 DB에서 instruction 전체 건수 검사가 기존 실행 자료를 합산한 실패는 별도 보존했고,
 운영 DB가 아닌 새 DB에서 전체 suite를 재실행했다. 아직 새 모델 결과 성공은 아니다.
+
+### 운영 체크포인트 — 2026-10-29 06:11 UTC
+
+- 코드/runtime: `86c0c8ca78e11b237f9cac9490131a017f56ac71` 커밋·푸시 및 호환
+  API/shared runner 배포 완료. installed simulation/RECORD/격리/READY PASS, DB migration
+  변경 없음(0062 확인). 일반 채팅은 기존 PID를 유지했다.
+- QUERY는 API Requires 관계로 배포 중 중지되어 기존 `07ec7b32` prefix/config 그대로
+  재시작했다. GPU INDEX의 10-28 실패 이력·설치 pin은 수정하지 않았다.
+- U10311의 실제 `WORKER_RESULT_INVALID` Job은 FAILED로 보존했다. 지원 application으로
+  `workflow_b4242f5344bb4d7aba957d17abb5fe66`을 별도 준비했으며, 실제 재전송은 같은
+  selection을 반환했다. 준비 단계 worker 실행 0을 확인한 뒤 기존 순차 owner를 START했다.
+- U10311 새 추출 Job `job_e0f0ac357e1f42e2bc4ca4b57887d432`와 분석 Job
+  `job_d7d2434e44c94b219c6aeca761438904`는 모두 support 05에서 SUCCEEDED.
+  canonical `itemrev_ae73f8a6ef4d4ff195d7e300167e50a7`, accepted 분석
+  `analysisrun_db05a954bfd049c48bc92c603a51b243`, 공유 Graph
+  `graphrev_26109e2e1e6ee1a3d1f6cdb93c7a7fa8`까지 완료됐다.
+- 공식 Catalog materialize를 통한 별도 read-only 대조는 **2/3 PASS**다. U10310 공개
+  풀이 4단계/불일치 주의사항 2개, U10311 공개 풀이 3단계/미인쇄 배점 주의사항 1개가
+  원래 결과와 정확히 같았다. 기존 1,015개 교과서·기출 분석의 모든 source/accepted-result
+  pointer/hash를 보존하고 공유 Graph에 창작 2개가 추가된 1,017개를 확인했다.
+- 증거: `/tmp/eom-creative-two-end-to-end-20261029.json`, 공식 immutable 원문/role/
+  Item/분석/Graph pointer에서 재구성 가능하다. 임시 DB 두 개는 공식 cleanup 완료.
+- 세 번째 U10312는 `workflow_786eb218e136486bba6b4278c60f8b23`, Job
+  `job_c1b25c904602473e8fa2778de058be28`에서 RUNNING. 실제 고정 설정은
+  Terra/xhigh/timeout 7200초, slot 05이며 관측 시점 오류 없음. 실행을 중복 제출하지 않았다.
+- 30분 observer의 실제 sandbox 실행은 `check=OK`, `status_stale=false`였지만 timer는
+  아직 disabled다. **3/3 검증, limit 1053 연속 실행 및 timer enable은 아직 미완료**다.
+- 풀이 양식 중립 projection은 실제 창작 V1/V2 보고서에서도 AVAILABLE과 text hash를
+  확인했다. **운영 임베딩 recipe/query/candidate 연결은 여전히 PENDING**이며 기존 인덱스
+  bytes/namespace를 제자리 변경하지 않았다.
