@@ -997,10 +997,13 @@ class KnowledgeAnalysisApplicationService:
         try:
             with transaction(self.sessions) as session:
                 existing = session.scalar(
-                    select(KnowledgeAnalysisRunRecord)
-                    .where(KnowledgeAnalysisRunRecord.idempotency_key == command.idempotency_key)
-                    .with_for_update()
+                    select(KnowledgeAnalysisRunRecord).where(
+                        KnowledgeAnalysisRunRecord.idempotency_key == command.idempotency_key
+                    )
                 )
+                # Replay only reads this row. An exclusive lock needlessly
+                # blocks behind the population reader's retained SHARE locks;
+                # concurrent new creation is still fenced by the unique key.
                 if existing is not None:
                     if existing.submission_sha256 != submission_sha256:
                         raise KnowledgeAnalysisServiceError(

@@ -54,3 +54,13 @@ concurrent-create bootstrap 1건이 거부됐고, 나머지 5건은 통과했다
 기존 자동 curriculum test의 기대값에 누락된 `inherited_binding` callback을 반영하면서 두
 binding family가 동일한 callable을 공유하는지도 단정한다. 운영 membership 검증을 제거한
 수정이 아니다. 배포 완료와 실제 10331 Graph publication은 별도 증거로 남긴다.
+
+## 등록과 GPU source reader의 동시 실행
+
+수정본 owner의 재개에서 PostgreSQL이 원인을 추가 확인했다. 이미 존재하는 분석의 `_create`
+idempotent replay가 `SELECT FOR UPDATE`를 요구하여, 동일 row를 보호하는 GPU population
+reader의 SHARE lock 뒤에서 기다렸다. replay 분기는 제출 hash를 대조하고 DTO를 반환할 뿐
+row/state를 변경하지 않는다. 이 read-only lookup에서만 배타 잠금을 제거한다. 새 생성의
+unique idempotency constraint, source/preset 검증, 상태 변경의 기존 잠금은 그대로다.
+실제 disposable DB에서 다른 connection이 SHARE lock을 유지한 동안 동일 요청의 replay가
+완료되는지, run ID/상태/lock version과 중복 1개 제한이 유지되는지 검사한다.

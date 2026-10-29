@@ -1946,6 +1946,22 @@ def test_concurrent_analysis_create_is_single_and_retry_replays(
     replay = service.create(command)
     assert replay.analysis_run_id == run_ids.pop()
     sessions = build_session_factory(integration_engine)
+    with ThreadPoolExecutor(max_workers=1) as executor, sessions() as population_reader:
+        held = population_reader.scalar(
+            select(KnowledgeAnalysisRunRecord)
+            .where(KnowledgeAnalysisRunRecord.analysis_run_id == replay.analysis_run_id)
+            .with_for_update(read=True)
+        )
+        assert held is not None
+        original_state = held.state
+        original_version = held.lock_version
+        pending_replay = executor.submit(service.create, command)
+        try:
+            nonblocking_replay = pending_replay.result(timeout=3)
+            assert nonblocking_replay.analysis_run_id == replay.analysis_run_id
+            assert (held.state, held.lock_version) == (original_state, original_version)
+        finally:
+            population_reader.rollback()
     with sessions() as session:
         assert (
             session.scalar(
