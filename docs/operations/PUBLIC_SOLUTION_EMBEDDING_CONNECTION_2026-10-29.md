@@ -264,3 +264,23 @@ canonical 관측은 `/tmp/eom-gpu-canonical-202610291710.log`, 실제 단계별 
 앞선 transient prepare는 namespace mount 단계에서226으로 종료해 Python을 실행하지 않았고,
 첫 직접 호출은 source-qualified adapter 경로 검사에서 write 전에 거부됐다. 실패 이력을 보존한 뒤
 정확한 source-qualified 보호 경로로 실행했으며, 불명확한 mutation을 새 identity로 우회하지 않았다.
+
+### 17:14 UTC — GPU 복구 수치·등록 acceptance
+
+실제 CUDA8행 완료 영수증과8개 owned numerical Job SUCCEEDED에 이어, 같은 CUDA space의
+정본 encoding row가 **1,522 → 1,530**으로 증가했다. METADATA_ONLY mixed index는
+**479 → 487** binding으로 등록됐고 current revision4는
+`embeddingindexrev_2ff71c03b95476e4900e18ebf55f5e10`이다. 등록 시각은17:12:05.973390 UTC,
+Graph는 `graphrev_699e26079ff7815c9040c80fb38d4121`, eligible546이다. 이는 기존520개 중
+33개 numerical 대상과 기존 recipe의 report 미준비26개를 구분해야 하는 부분 coverage다.
+기존 CPU space는1,563 encoding rows로 그대로였다. 수치 계산 성공만 있고 등록이 없는 상태와 다르다.
+
+관측 증거는 `/tmp/eom-gpu-canonical-202610291710.log`와
+`/tmp/eom-gpu-index-commit-202610291714.log`다. 기존 index logical ID를 유지한 새 revision이며
+이전 revision·실패·사용하지 않은 물리 allocation은 보존했다. 최종 Workflow audit는 정상 실행
+중이며 그 RUNNING을 성공으로 UPDATE하지 않았다. daemon을 유지해 다음 namespace/미계산
+frontier를 처리한다. 30분 systemd/창작 순차 감시는 유지하지만 systemd PID 관측을 numerical
+coverage나 전체 완료로 바꾸어 부르지 않는다.
+
+GPU 계산과 정본 등록의 복구 milestone은 PASS다. 전체 namespace/520개 완결, 새 공개 풀이
+recipe 질의·후보 운영 검색, 교과서·창작의 신규 embedding 범위 활성화는 이 PASS에 포함하지 않는다.
