@@ -138,3 +138,21 @@ Graph 접근 정책은 임의의 가장 최근 revision이 아니라 기존 Grap
 소스 단계에서 `workflow-role/1.34.0` / `external-item-learning-result@2.0` wire를 추가했다. 원본 source/page/work-input 1.0과 기존 `ExternalItemLearningWorkerRequest`는 그대로 재사용한다. 새 work-input이나 parallel worker request framework를 만들지 않는다. V2 report/draft만 다른 결과이며 source/page const와 페이지 수를 generation schema에 고정하고, owner가 검증한 기본값에만 SHA를 부여한다. wire 입력/결과/Codex projection/멱등 decode·선행 hash/무승인 실행 차단 집중 19개 PASS. 새 wire가 등록됐다는 사실은 실행 활성화가 아니다. 기존 plan 27은 Workflow 1.0.0에 고정돼 있으므로 후속 Workflow/plan도 explicit successor로 연결해야 한다. 이전 cohort/결과는 수정하지 않는다. 후속 preset이 이전 purpose/Workflow의 기본 설정을 뜻하지 않게 바꾸지 않도록 버전별 호환성·instruction pin을 함께 검사한다.
 
 사용자가 이전 architecture 문서의 변경을 그대로 별도 커밋하도록 승인했다. `94b1329e`에 68줄을 내용 수정 없이 보존했으며 정상 릴리스의 dirty-tree 조건을 우회하지 않았다. 추가 Studio 로그인은 이 문서 보존/소스 개발 과정에 필요하지 않았다.
+
+### 기출 520건과의 저장·조회 호환성 확인
+
+사용자 요청에 따라 2026-10-29 03:18 UTC 운영 Graph를 읽기 전용으로 대조했다.
+baseline `graphrev_7870b0fb03b7dfb64179e53182bf3999`의 accepted source는 1,015개
+(교과서 분석 범위 495 + 기출 520)이고, U10310 추가 후 같은 Graph에 1,016개다.
+문서 수/분석 범위 수/문항 수를 혼합하지 않는다. 기존 membership/Artifact·revision·hash
+변경 0, 기존 node identity 17,000개와 edge identity 40,652개 누락/재발급 0을 확인했다.
+기출의 accepted V10 보고서는 base당 정확히 1개씩 520개다. 창작 노드 29개 중 3개는
+교과서·기출 source pointer도 함께 갖는다. 세 source의 대표 accepted 분석은 공식
+resolver로 모두 읽혔다. 전체 기출을 재실행하거나 운영 데이터를 수정하지 않았다.
+
+합성 기출 520 + 창작 + 교과서를 공통 projector에 함께 넣는 회귀 4개와 관련 구버전/조회
+포함 집중 99개 PASS(중복 포함). 상세 근거·차이·다음 구현의 불변 조건은
+`docs/architecture/CREATIVE_PAST_EXAM_GRAPH_COMPATIBILITY.md`에 기록했다.
+입력 결과 V2/plan 28의 source-only 후속 작업은 이 저장 호환성과 별개로 계속 진행한다.
+창작 독립 보고서를 기존 accepted V10 상세 보고서라고 과장하지 않으며, 현재 실제 끝단
+검증은 여전히 1/3이다. 전체 연속 실행/30분 timer는 아직 활성화하지 않았다.
