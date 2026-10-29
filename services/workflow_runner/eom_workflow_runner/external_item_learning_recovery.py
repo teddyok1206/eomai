@@ -257,6 +257,10 @@ def prepare_unstarted_external_item_learning_recovery(
         page_publisher=page_publisher,
         expected_preset=expected_preset,
     )
+    if not prepared.workflow_created:
+        # Same-parent replay is handled above under its row lock. An unrelated
+        # active-equivalent READY workflow must not have its provenance replaced.
+        raise ValueError("CREATIVE_PREEXECUTION_RECOVERY_SUCCESSOR_CONFLICT")
     body = {
         "schema_version": "creative-preexecution-recovery/1.0",
         "predecessor_workflow_id": predecessor_workflow_id,

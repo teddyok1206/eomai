@@ -317,6 +317,44 @@ def test_no_job_recovery_late_rejection_leaves_only_the_original_failure(
         assert recovery.resolve_external_item_learning_recovery(session, old) is old
 
 
+def test_no_job_recovery_preserves_an_unrelated_active_equivalent_workflow(
+    creative_engine, monkeypatch
+):
+    request, predecessor, preset = _failed_before_job(creative_engine, monkeypatch)
+    with Session(creative_engine) as session, session.begin():
+        active = preparation.prepare_external_item_learning_workflow(
+            session,
+            definition=_seed(session),
+            work=request.external_item_learning_work,
+            operator_id=OPERATOR,
+            idempotency_key="synthetic-other-ready-" + uuid4().hex,
+            source_authorizer=_owner(request),
+            page_publisher=None,
+        )
+    with (
+        pytest.raises(ValueError, match="SUCCESSOR_CONFLICT"),
+        Session(creative_engine) as session,
+        session.begin(),
+    ):
+        recovery.prepare_unstarted_external_item_learning_recovery(
+            session,
+            predecessor_workflow_id=predecessor.workflow_id,
+            definition=_seed(session),
+            work=request.external_item_learning_work,
+            operator_id=OPERATOR,
+            source_authorizer=_owner(request),
+            page_publisher=None,
+            expected_preset=preset,
+        )
+    with Session(creative_engine) as session:
+        untouched = session.get(WorkflowInstanceRecord, active.selection.workflow_id)
+        assert untouched.state == "REQUESTED"
+        assert "creative_preexecution_recovery" not in untouched.runtime_context
+        old = session.get(WorkflowInstanceRecord, predecessor.workflow_id)
+        assert old.state == "FAILED"
+        assert recovery.resolve_external_item_learning_recovery(session, old) is old
+
+
 @pytest.mark.parametrize("different_keys", [False, True])
 def test_concurrent_preparation_saves_one_ready_step_and_no_command(
     creative_engine: Engine, monkeypatch, different_keys: bool

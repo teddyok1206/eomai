@@ -99,6 +99,17 @@ def test_an_ineligible_predecessor_never_prepares_or_relabels_history(monkeypatc
     value.event.assert_not_called()
 
 
+def test_other_active_equivalent_workflow_cannot_have_its_provenance_replaced(monkeypatch):
+    value = case(monkeypatch)
+    value.prepare.return_value = PreparedExternalItemLearning(
+        value.prepared.selection, False, False
+    )
+    with pytest.raises(ValueError, match="SUCCESSOR_CONFLICT"):
+        recovery.prepare_unstarted_external_item_learning_recovery(value.session, **value.arguments)
+    assert value.child.runtime_context == {}
+    value.event.assert_not_called()
+
+
 @pytest.mark.parametrize("position", [0, 1, 2])
 def test_unbound_job_or_live_command_or_held_lease_blocks_recovery(monkeypatch, position):
     value = case(monkeypatch)
