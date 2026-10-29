@@ -76,3 +76,40 @@ the outer257th overflow sentinel, and identical ORM pointer/node identities.
 The focused unit suite passes13 tests; Ruff format/lint and strict mypy pass.
 No production database, physical GPU runtime, model, prompt or authentication state
 was changed by these tests.
+
+## Inner candidate node join: second confirmed fresh-Graph boundary
+
+The subsequent live release still reported LOCK_POPULATION about 33 seconds and
+ADMIT_CANDIDATES about 38 seconds. The former includes the candidate/membership SQL,
+not numerical runtime or source-file hashing. Read-only production EXPLAIN (never
+ANALYZE) showed a fresh-Graph custom plan estimating one pointer and one node,
+choosing a Graph-only `ix_knowledge_node_type` lookup inside the existing
+`eligible_pointer_analyses` CTE. Materializing its final analysis IDs did not protect
+that inner join. The earlier fixture had only one node per source and missed this.
+
+The 20-node/source disposable fixture above reproduced the candidate/membership
+full custom query exceeding 20,000 ms. The repair materializes distinct
+`(analysis_run_id,node_id,graph_snapshot_revision_id)` pointer keys before joining
+nodes by their exact composite key. Original Graph/class/explicit analysis filters
+apply before this relation; selected source revisions remain on the canonical outer
+association, not an inner source subquery. Orphan and answer-bearing checks remain
+on the actual node. Deduplicating these keys cannot change candidate analysis
+existence: the enclosing query already returned DISTINCT analysis IDs. Detail
+pointer rows/anchors are not deduplicated or changed.
+
+The existing admission transaction, current policy, exact source revision and
+lifecycle checks, source resolution, stable analysis ordering and overflow LIMIT
+are unchanged. No new index, cache, DDL, retry policy or wire contract is introduced.
+This transient three-column relation uses O(distinct selected pointer-node keys)
+space and reads its pointer population once. The composite node lookup avoids
+rescanning a whole Graph's nodes for every source pointer.
+
+Disposable measurements after repair: full custom 76.726 ms/generic 61.728 ms;
+selected 8 custom 68.593 ms/generic 52.339 ms. Every pointer relation is scanned once;
+custom node lookups use both key columns. The regression preserves the unknown
+fresh pointer/node statistics and asserts no repeated Graph-only node lookup.
+Live source/Artifact and CUDA acceptance remain separate, so these SQL timings are
+not a claim that all end-to-end time has disappeared.
+
+Final focused gates: 62 disposable candidate-admission tests PASS in 31.87 seconds,
+13 unit tests PASS; Ruff format/lint, strict mypy and diff whitespace checks PASS.

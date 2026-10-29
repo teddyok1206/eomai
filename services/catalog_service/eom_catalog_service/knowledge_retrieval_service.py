@@ -1639,30 +1639,34 @@ class KnowledgeRetrievalApplicationService:
         pointer = KnowledgeNodeSourcePointerRecord
         node = KnowledgeNodeRecord
         run = KnowledgeAnalysisRunRecord
-        eligible_pointer = (
-            select(pointer.analysis_run_id)
-            .select_from(pointer)
-            .join(
-                node,
-                (node.graph_snapshot_revision_id == pointer.graph_snapshot_revision_id)
-                & (node.node_id == pointer.node_id),
-            )
-            .where(
-                pointer.graph_snapshot_revision_id == snapshot_id,
-                pointer.source_class.in_(scope.source_classes),
-            )
+        pointer_nodes = select(
+            pointer.analysis_run_id, pointer.node_id, pointer.graph_snapshot_revision_id
+        ).where(
+            pointer.graph_snapshot_revision_id == snapshot_id,
+            pointer.source_class.in_(scope.source_classes),
         )
-        if not allow_answer_bearing:
-            eligible_pointer = eligible_pointer.where(node.answer_bearing.is_(False))
         occurrence_scoped = (
             scope.population_scope == InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM
         )
         if occurrence_scoped:
-            eligible_pointer = eligible_pointer.where(pointer.source_class == "PAST_EXAM")
+            pointer_nodes = pointer_nodes.where(pointer.source_class == "PAST_EXAM")
         if scope.analysis_run_ids:
-            eligible_pointer = eligible_pointer.where(
-                pointer.analysis_run_id.in_(scope.analysis_run_ids)
-            )
+            pointer_nodes = pointer_nodes.where(pointer.analysis_run_id.in_(scope.analysis_run_ids))
+        # Fresh Graph estimates can choose a Graph-only node scan for every
+        # pointer. Materialize the exact distinct keys before the two-column
+        # node join; anchor duplicates cannot change source existence.
+        eligible_nodes = (
+            pointer_nodes.distinct()
+            .cte("eligible_pointer_nodes")
+            .prefix_with("MATERIALIZED", dialect="postgresql")
+        )
+        eligible_pointer = select(eligible_nodes.c.analysis_run_id).join(
+            node,
+            (node.graph_snapshot_revision_id == eligible_nodes.c.graph_snapshot_revision_id)
+            & (node.node_id == eligible_nodes.c.node_id),
+        )
+        if not allow_answer_bearing:
+            eligible_pointer = eligible_pointer.where(node.answer_bearing.is_(False))
         # A generic prepared plan otherwise rescans/materializes all pointer
         # rows per source. Keep revision selection on the canonical outer
         # association: a new Graph without statistics can otherwise make its

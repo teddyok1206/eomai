@@ -324,8 +324,8 @@ def prepared_detail_plans(
     return tuple(plans)
 
 
-def test_candidate_detail_query_on_fresh_graph_after_existing_statistics(pool_database):
-    """No re-ANALYZE after publication; covers the exact second pointer/node query."""
+def populate_fresh_pointer_graph(pool_database):
+    """No re-ANALYZE after publication; retain realistic per-source node cardinality."""
     for table in TABLES:
         pool_database.execute(text(f"TRUNCATE pg_temp.{table}"))
     previous = admission_scope().graph_snapshot.graph_snapshot_revision_id
@@ -375,6 +375,12 @@ def test_candidate_detail_query_on_fresh_graph_after_existing_statistics(pool_da
             update={"graph_snapshot_revision_id": fresh}
         ),
     )
+    return scope
+
+
+def test_candidate_detail_query_on_fresh_graph_after_existing_statistics(pool_database):
+    """Exercise the exact second pointer/node query, not a simplified selection."""
+    scope = populate_fresh_pointer_graph(pool_database)
     for count in (8, 520):
         run_ids = tuple("analysisrun_" + str(value).zfill(32) for value in range(1, count + 1))
         detail = KnowledgeRetrievalApplicationService.candidate_pool_detail_statement(
@@ -437,6 +443,75 @@ def test_candidate_detail_query_on_fresh_graph_after_existing_statistics(pool_da
             )
         )
         assert reference["Plan"]["Actual Rows"] == count * 142
+
+
+def test_candidate_membership_inner_node_join_on_fresh_graph(pool_database):
+    """Materializing analysis IDs alone does not protect the inner node lookup."""
+    scope = populate_fresh_pointer_graph(pool_database)
+    statements = (
+        "INSERT INTO pg_temp.items(item_id,lifecycle_state) "
+        "SELECT 'item_'||lpad(i::text,32,'0'),'ACTIVE' FROM generate_series(1,520) i",
+        "INSERT INTO pg_temp.item_revisions(item_revision_id,item_id,revision_state) "
+        "SELECT 'itemrev_'||lpad(i::text,32,'0'),'item_'||lpad(i::text,32,'0'),'APPROVED' "
+        "FROM generate_series(1,520) i",
+        "INSERT INTO pg_temp.knowledge_analysis_runs(analysis_run_id,state) "
+        "SELECT 'analysisrun_'||lpad(i::text,32,'0'),'ACCEPTED' FROM generate_series(1,520) i",
+        "INSERT INTO pg_temp.knowledge_snapshot_analyses(snapshot_analysis_id,"
+        "graph_snapshot_revision_id,analysis_run_id,source_kind,source_revision_id) "
+        "SELECT i,:snapshot,'analysisrun_'||lpad(i::text,32,'0'),'APPROVED_ITEM_REVISION',"
+        "'itemrev_'||lpad(i::text,32,'0') FROM generate_series(1,520) i",
+    )
+    for statement in statements:
+        pool_database.execute(
+            text(statement),
+            {"snapshot": scope.graph_snapshot.graph_snapshot_revision_id},
+        )
+    # Only unrelated outer eligibility tables get fresh statistics. The freshly
+    # published pointer/node Graph remains unknown, reproducing the live plan.
+    for table in (
+        "items",
+        "item_revisions",
+        "knowledge_analysis_runs",
+        "knowledge_snapshot_analyses",
+    ):
+        pool_database.execute(text("ANALYZE pg_temp." + table))
+    for count in (0, 8):
+        selected = replace(
+            scope,
+            source_revision_ids=tuple(
+                "itemrev_" + str(value).zfill(32) for value in range(1, count + 1)
+            ),
+        )
+        for mode, plan in zip(
+            ("CUSTOM", "GENERIC"),
+            prepared_membership_plans(pool_database, selected),
+            strict=True,
+        ):
+            pending, pointer_scans, key_ctes = [plan["Plan"]], [], []
+            while pending:
+                node = pending.pop()
+                pending.extend(node.get("Plans", ()))
+                if node.get("Relation Name") == "knowledge_node_source_pointers":
+                    pointer_scans.append(node)
+                if node.get("Subplan Name") == "CTE eligible_pointer_nodes":
+                    key_ctes.append(node)
+                if node.get("Relation Name") == "knowledge_nodes" and node["Actual Loops"] > 1:
+                    assert "node_id" in node.get("Index Cond", "")
+            print(
+                json.dumps(
+                    {
+                        "candidate_selection": count,
+                        "plan_mode": mode,
+                        "elapsed_ms": plan["Execution Time"],
+                    },
+                    sort_keys=True,
+                )
+            )
+            assert plan["Plan"]["Actual Rows"] == (count or 520)
+            assert len(pointer_scans) == len(key_ctes) == 1
+            assert pointer_scans[0]["Actual Loops"] == key_ctes[0]["Actual Loops"] == 1
+            assert key_ctes[0]["Actual Rows"] == 520 * 20
+            assert plan["Execution Time"] < 10000
 
 
 def legacy_detail_statement(scope, run_ids, *, allow_answer_bearing):

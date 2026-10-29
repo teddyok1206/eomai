@@ -133,7 +133,13 @@ def test_source_class_lifecycle_answer_bearing_exists_precedes_source_limit() ->
     assert "knowledge_analysis_runs.state = 'ACCEPTED'" in sql
     assert "GROUP BY" not in sql
     assert "eligible_pointer_analyses AS MATERIALIZED" in sql
+    assert "eligible_pointer_nodes AS MATERIALIZED" in sql
     assert "SELECT DISTINCT knowledge_node_source_pointers.analysis_run_id" in sql
+    assert "knowledge_nodes.node_id = eligible_pointer_nodes.node_id" in sql
+    assert (
+        "knowledge_nodes.graph_snapshot_revision_id = "
+        "eligible_pointer_nodes.graph_snapshot_revision_id"
+    ) in sql
     assert sql.index("knowledge_nodes.answer_bearing IS false") < sql.index("LIMIT 3")
     assert "assessment_item_occurrence_references" not in sql
 
