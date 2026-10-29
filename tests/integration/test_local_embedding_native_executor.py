@@ -69,7 +69,7 @@ from eom_orchestrator.inference_transfer_cpu_handoff import CpuHandoffIdentity
 from eom_orchestrator.local_embedding_control_artifacts import (
     LocalEmbeddingControlArtifactPublisher,
 )
-from eom_orchestrator.models import JobRecord
+from eom_orchestrator.models import ArtifactRevisionRecord, JobEventRecord, JobRecord
 from eom_orchestrator.native_embedding_coordinator import NativeEmbeddingCoordinator
 from eom_orchestrator.native_embedding_launch_identity import create_native_embedding_launch
 from eom_orchestrator.repository import ensure_protocol_version
@@ -121,7 +121,7 @@ from eom_workflow_runner.repository import (
     peek_command_candidate,
     require_command_lease,
 )
-from sqlalchemy import Engine, func, select
+from sqlalchemy import Engine, delete, func, select
 from sqlalchemy.orm import Session
 
 from tests.integration.test_embedding_registry_application import _artifact, _fixture
@@ -1002,6 +1002,85 @@ def _refresh_counts(execution):
             .where(EmbeddingIndexRecord.corpus_id == execution.request.corpus_id)
         )
         return encodings, bindings, jobs, revisions
+
+
+@pytest.mark.parametrize("execution", ["service"], indirect=True)
+@pytest.mark.parametrize("cache_fault", [None, "missing_member", "lost_basis"])
+def test_actual_legacy_cached_rows_without_reservation_ledger_never_allocate_numerics(
+    execution, monkeypatch, cache_fault
+):
+    """Disposable imported-cache fixture, not a production history-repair operation.
+
+    A synthetic seed supplies genuine committed row/shard/registry pointers. Removing
+    only its test encoding ledger models canonical rows imported through another
+    owner, which are valid independently of native numerical reservation Jobs.
+    """
+    from eom_workflow_runner.index_membership_publication import MembershipOnlyEmbeddingExecution
+
+    seeded = execution.start()
+    assert execution.advance(*seeded) is True
+    execution.finish(*seeded)
+    encodings, _bindings, _jobs, _revisions = _refresh_counts(execution)
+    keys = tuple(EMBEDDING_ENCODING_IDEMPOTENCY_PREFIX + key for key in encodings)
+    with execution.sessions.begin() as session:
+        ledger_ids = tuple(
+            session.scalars(select(JobRecord.job_id).where(JobRecord.idempotency_key.in_(keys)))
+        )
+        assert ledger_ids
+        session.execute(delete(JobEventRecord).where(JobEventRecord.job_id.in_(ledger_ids)))
+        session.execute(delete(JobRecord).where(JobRecord.job_id.in_(ledger_ids)))
+    before = _refresh_counts(execution)
+    assert before[2] == 0
+    execution.graph_delta()
+    refreshed = execution.start()
+    workflow, _lease, _fenced = refreshed
+    selected = parse_supported_local_embedding_request(workflow.initial_request)
+    backend = MembershipOnlyEmbeddingExecution(selected)
+    monkeypatch.setattr(execution.executor, "execution_backend", backend)
+    monkeypatch.setattr(execution.executor._index_completion, "execution_backend", backend)
+    reservations = Mock(side_effect=AssertionError("registered rows need no numerical ledger"))
+    if cache_fault != "lost_basis":
+        monkeypatch.setattr(execution.executor, "_reservations", reservations)
+    forwards = execution.launcher.forwards
+    if cache_fault == "missing_member":
+        with execution.sessions() as session:
+            shard_revision = session.scalar(
+                select(EmbeddingEncodingRecord.shard_artifact_revision_id)
+                .where(EmbeddingEncodingRecord.encoding_sha256.in_(encodings))
+                .limit(1)
+            )
+            # Do not bypass immutable approved-record guards even in this test.
+            # A missing local test member exercises real pointer failure instead.
+            shard_path = (
+                Path(session.get(ArtifactRevisionRecord, shard_revision).nas_path) / "shard.json"
+            )
+        assert shard_path.is_relative_to(execution.publisher.settings.nas_artifact_root)
+        shard_path.rename(shard_path.with_name("shard.json.test-unavailable"))
+        with pytest.raises(ValueError):
+            execution.advance(*refreshed)
+        assert _refresh_counts(execution)[2] == 0
+    elif cache_fault == "lost_basis":
+        # Synthetic current-basis change after preparation. Exercise actual
+        # reservation SQL rollback when the no-compute adapter refuses ownership.
+        original_basis = execution.owner.catalog.prepare_index_basis
+        monkeypatch.setattr(
+            execution.owner.catalog,
+            "prepare_index_basis",
+            lambda *args: replace(original_basis(*args), reusable_rows=()),
+        )
+        with pytest.raises(ValueError, match="NUMERICAL_EXECUTION_FORBIDDEN"):
+            execution.advance(*refreshed)
+        assert _refresh_counts(execution)[2] == 0
+    else:
+        assert execution.advance(*refreshed) is True
+        execution.finish(*refreshed)
+        after = _refresh_counts(execution)
+        assert after[0] == before[0] and after[2] == 0
+        assert after[3] == before[3] + 1
+        with execution.sessions() as session:
+            assert session.get(WorkflowInstanceRecord, workflow.workflow_id).state == "COMPLETED"
+    reservations.assert_not_called()
+    assert execution.launcher.forwards == forwards
 
 
 @pytest.mark.parametrize("execution", ["service"], indirect=True)

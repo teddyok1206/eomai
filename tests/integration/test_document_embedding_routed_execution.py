@@ -34,6 +34,10 @@ def test_routed_parent_composes_actual_start_runner_cuda_and_registered_index_wi
     )
     assert outcome.workflow_request_sha256 == value.request.request_sha256
     assert outcome.workflow_state == "COMPLETED" and outcome.command_state == "SUCCEEDED"
+    assert value.gpu.allocation != parent.allocation
+    assert (
+        value.gpu.allocation.control_request.parent_request_sha256 == parent.request.request_sha256
+    )
     assert len(value.gpu.dispatches) == 1 and value.gpu.acked
     assert value.launcher.forwards == 0
     replay = drive_routed_document_embedding_parent_once(

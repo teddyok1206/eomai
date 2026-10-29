@@ -200,3 +200,43 @@ long-lived parsed-Artifact/auth cache would add invalidation/security complexity
 The current installed Workflow is not restarted or modified to install this
 candidate. Actual latency/memory improvement needs its own compatible release
 after the current execution is terminal or safely drained.
+
+## Cached vectors do not require a physical allocation
+
+2026-10-29 UTC. A missing Graph binding is not necessarily missing numerical work.
+Source-plan1 still records every selected encoding demand when its canonical row
+already exists. `LocalEmbeddingCoverageOnly` therefore cannot represent this case:
+its released invariant requires an actually empty demand tuple.
+
+Keep preparation with the existing Catalog missing-binding owner. Its validated
+registered rows are canonical; the temporary set of their encoding hashes is not
+an authority cache. When missing bindings exist but the set difference contains
+no uncached targets, report the internal observation
+`REUSABLE_ENCODINGS_NOT_BOUND`, unless an existing membership-refresh reason already
+applies. The existing membership-only application publishes the index without
+opening a GPU allocation. Its adapter refuses numerical work if fresh resolution
+does not support that cached observation. No wire schema or new queue is introduced.
+
+The native executor reopens the existing complete registered-row basis for legacy
+as well as mixed requests. Subtract those validated encoding keys before creating
+reservation requests. An empty difference uses the existing index-completion use
+case with no numerical reservations, launch association or new numerical shard.
+Registration, source/Graph/policy pointers, immutable output identities, current
+actor checks and transaction-local late fences retain their existing owners. A
+changed or revoked row fails through the existing source/Artifact boundary; the
+membership-only adapter never falls back to computation. Public-source3 behavior
+is unchanged.
+
+Access is set difference and indexed batch lookup: O(N) temporary hash space and
+O(N) membership work for the existing bounded source population, plus the existing
+complete index-basis verification. No new persistent data or index is required.
+Each source/registration root reauthorizes independently; existing command claims,
+checkpoint history and idempotency keys own concurrency and replay. A historical
+CLAIMED parent that expired before dispatch remains truthful quiescent history:
+this change neither reports it as successful nor invents failed-controller proof.
+The simpler zero-demand shortcut would erase real demand provenance, while opening
+a GPU merely to discover cached rows wastes a finite allocation unnecessarily.
+
+Tests cover all-cached stale bindings, preservation of explicit refresh reasons,
+new uncached targets, canonical rows without a numerical reservation ledger,
+unchanged pending replay, and source/cache revocation refusing numerical execution.

@@ -281,6 +281,11 @@ class LocalEmbeddingServicePreparation:
                     # request, even while more sources need vectors. Publish
                     # usable membership before the next ordinary seed/delta.
                     targets = (min(b.source.item_revision_id for b in prepared.bindings),)
+            if refresh_reason is None and missing.missing and not uncached_targets:
+                # A new Graph can require bindings for already registered vectors.
+                # Keep real plan demands; the existing membership-only owner must
+                # recapture those rows before it can publish without computation.
+                refresh_reason = "REUSABLE_ENCODINGS_NOT_BOUND"
             observed = LocalEmbeddingReconciliationResult(
                 state=ReconciliationState.UP_TO_DATE,
                 graph_snapshot_revision_id=query.graph_snapshot.graph_snapshot_revision_id,

@@ -284,3 +284,42 @@ coverage나 전체 완료로 바꾸어 부르지 않는다.
 
 GPU 계산과 정본 등록의 복구 milestone은 PASS다. 전체 namespace/520개 완결, 새 공개 풀이
 recipe 질의·후보 운영 검색, 교과서·창작의 신규 embedding 범위 활성화는 이 PASS에 포함하지 않는다.
+
+### 18:37 UTC recurrence — unstarted allocation expires during preparation
+
+The original owner completed a second CUDA batch (8 real new rows, canonical
+receipt and completed Workflow), reaching1,538 CUDA encoding rows; CPU remained
+1,563. Legacy metadata coverage reached495/520. These successes are preserved.
+The INDEX service then stopped at18:37:06 before staging the next control workspace.
+Parent `job_6ef90de263fd42fc984a0d6c4ddd987c` remained CLAIMED with an expired
+allocation, no route/binding/Workflow or numerical completion. It is not a failed
+Workflow eligible for the earlier prelaunch-retirement command. Do not fabricate
+a staging/launch proof, renew its recorded deadline, or rewrite its history.
+
+Three related source fixes use the existing boundaries, without a migration,
+new dependency, timeout increase or new execution framework:
+
+- INDEX allocates its finite physical clock after current admission entry/exit,
+  in the same retained-lock transaction. Concurrent/replayed calls keep one
+  original allocation and dispatch; explicit-allocation callers stay supported.
+- All-cached missing bindings use the existing membership-only publication path,
+  without physical GPU allocation. Legacy execution resolves canonical registered
+  rows even when no reservation ledger exists. Lost/revoked cache fails closed.
+- The existing candidate-detail JOIN materializes its exact selected pointer set
+  once. A fresh-Graph disposable custom plan previously exceeded20s; the fixed
+  full520 query completed in426.856ms. This is not a production throughput claim.
+
+Source gates: late-allocation family57 unique tests; cached-only focused73 PASS
+and3 disposable PostgreSQL negatives/completion cases; candidate SQL13 unit and61
+disposable tests; cross-boundary51 PASS. Overlapping suites are not summed.
+Changed core6 files pass Ruff/format/strict mypy. Production DB was not a pytest
+target. See the associated architecture notes for invariants and measured trade-offs.
+
+The next metadata-only successor must preserve QUERY/creative PID+InvocationID,
+the numerical CPU/CUDA prefixes, controller24555547, all6 namespaces and max8.
+Its selector additionally checks the exact old CLAIMED parent is expired, has no
+Workflow, no workspace and no root invocation, and leaves it unchanged. New
+code/service identity is a genuine release, not an arbitrary retry identity.
+At this paragraph's checkpoint the successor is source-verified, not deployed;
+actual CUDA completion, registered growth and the following automatic cached
+transition remain mandatory live recovery evidence.

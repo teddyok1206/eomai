@@ -70,7 +70,7 @@ from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, ValidationError
 from sqlalchemy import Engine, Select, distinct, func, or_, select, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, SessionTransaction
+from sqlalchemy.orm import Session, SessionTransaction, aliased
 
 from eom_catalog_service.artifacts import (
     CatalogArtifact,
@@ -1718,6 +1718,45 @@ class KnowledgeRetrievalApplicationService:
             statement = statement.where(exact_occurrence)
         return statement
 
+    @staticmethod
+    def candidate_pool_detail_statement(
+        scope: ReadOnlyCandidatePoolScope | LocalIndexingSourceReadIntent,
+        run_ids: tuple[str, ...],
+        *,
+        allow_answer_bearing: bool,
+    ) -> Select[tuple[KnowledgeNodeSourcePointerRecord, KnowledgeNodeRecord]]:
+        """Exact bounded pointer/node SQL; not authorization or source resolution."""
+        pointer, node = KnowledgeNodeSourcePointerRecord, KnowledgeNodeRecord
+        selected_pointers = select(pointer).where(
+            pointer.graph_snapshot_revision_id == scope.graph_snapshot.graph_snapshot_revision_id,
+            pointer.analysis_run_id.in_(run_ids),
+            pointer.source_class.in_(scope.source_classes),
+        )
+        if scope.population_scope == InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM:
+            selected_pointers = selected_pointers.where(pointer.source_class == "PAST_EXAM")
+        # Fresh Graph statistics may estimate one row and repeatedly scan the
+        # whole pointer population per node. Bound the existing exact run set
+        # once; the node join still rejects orphans before sorting and LIMIT.
+        selected = aliased(
+            pointer,
+            selected_pointers.cte("selected_candidate_pointers").prefix_with(
+                "MATERIALIZED", dialect="postgresql"
+            ),
+        )
+        detail = (
+            select(selected, node)
+            .join(
+                node,
+                (node.graph_snapshot_revision_id == selected.graph_snapshot_revision_id)
+                & (node.node_id == selected.node_id),
+            )
+            .order_by(selected.analysis_run_id, selected.node_id, selected.anchor_id)
+            .limit(scope.maximum_candidates * MAX_RETRIEVAL_CANDIDATES + 1)
+        )
+        if not allow_answer_bearing:
+            detail = detail.where(node.answer_bearing.is_(False))
+        return detail.execution_options(populate_existing=True)
+
     def _read_candidate_pool(
         self,
         session: Session,
@@ -1730,10 +1769,6 @@ class KnowledgeRetrievalApplicationService:
     ) -> ReadOnlyKnowledgeCandidatePool:
         """Shared bounded source selection AFTER the purpose-specific authority gate."""
         snapshot_id = snapshot.graph_snapshot_revision_id
-        pointer, node = KnowledgeNodeSourcePointerRecord, KnowledgeNodeRecord
-        occurrence_scoped = (
-            scope.population_scope == InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM
-        )
         statement = self.candidate_pool_analysis_statement(
             scope, allow_answer_bearing=allow_answer_bearing
         )
@@ -1743,26 +1778,13 @@ class KnowledgeRetrievalApplicationService:
         if not run_ids:
             return ReadOnlyKnowledgeCandidatePool(snapshot, (), truncated=False)
         maximum_pointer_rows = scope.maximum_candidates * MAX_RETRIEVAL_CANDIDATES
-        detail = (
-            select(pointer, node)
-            .join(
-                node,
-                (node.graph_snapshot_revision_id == pointer.graph_snapshot_revision_id)
-                & (node.node_id == pointer.node_id),
+        rows = tuple(
+            session.execute(
+                self.candidate_pool_detail_statement(
+                    scope, run_ids, allow_answer_bearing=allow_answer_bearing
+                )
             )
-            .where(
-                pointer.graph_snapshot_revision_id == snapshot_id,
-                pointer.analysis_run_id.in_(run_ids),
-                pointer.source_class.in_(scope.source_classes),
-            )
-            .order_by(pointer.analysis_run_id, pointer.node_id, pointer.anchor_id)
-            .limit(maximum_pointer_rows + 1)
         )
-        if not allow_answer_bearing:
-            detail = detail.where(node.answer_bearing.is_(False))
-        if occurrence_scoped:
-            detail = detail.where(pointer.source_class == "PAST_EXAM")
-        rows = tuple(session.execute(detail.execution_options(populate_existing=True)))
         if len(rows) > maximum_pointer_rows:
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_CANDIDATE_POOL_BUDGET_EXCEEDED",

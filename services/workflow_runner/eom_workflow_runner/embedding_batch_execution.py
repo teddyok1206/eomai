@@ -47,6 +47,9 @@ from eom_workflow.embedding_device_routing import (
     plan_embedding_device_route,
 )
 
+from eom_workflow_runner.embedding_batch_allocation_candidate import (
+    new_embedding_batch_allocation_candidate,
+)
 from eom_workflow_runner.embedding_batch_execution_publication import (
     CatalogEmbeddingBatchExecutionPublication,
 )
@@ -225,6 +228,49 @@ class CatalogEmbeddingBatchExecution:
             history, created = EmbeddingBatchPlanStore(
                 request, sources.selection, sources.policy
             ).allocate(session, allocation)
+        with self._dispatch(request, history, created) as result:
+            yield result
+
+    @contextmanager
+    def open_index(
+        self, request: SupportedEmbeddingBatchRequest
+    ) -> Iterator[
+        ActiveEmbeddingBatchExecution
+        | UnavailableEmbeddingBatchExecution
+        | ExistingEmbeddingBatchExecution
+    ]:
+        """Start a new candidate's finite clock only after current INDEX preparation.
+
+        An existing parent keeps its original allocation and never dispatches
+        again. No published request, recorded deadline or numerical limit changes.
+        """
+        request = parse_embedding_batch_plan_request(request)
+        _require(request.purpose == "INDEX")
+        with self.publisher.sessions.begin() as session:
+            with self.admission.admit(session, request) as sources:
+                store = EmbeddingBatchPlanStore(request, sources.selection, sources.policy)
+            # The late source checks can be expensive. Their retained locks
+            # remain in this root; only an unrecorded INDEX candidate starts now.
+            original = store.read(session)
+            if original is None:
+                allocation = new_embedding_batch_allocation_candidate(request, store.policy)
+                history, created = store.allocate(session, allocation)
+            else:
+                history, created = original, False
+        with self._dispatch(request, history, created) as result:
+            yield result
+
+    @contextmanager
+    def _dispatch(
+        self,
+        request: SupportedEmbeddingBatchRequest,
+        history: EmbeddingBatchPlanHistory,
+        created: bool,
+    ) -> Iterator[
+        ActiveEmbeddingBatchExecution
+        | UnavailableEmbeddingBatchExecution
+        | ExistingEmbeddingBatchExecution
+    ]:
         if not created:
             yield ExistingEmbeddingBatchExecution(history)
             return

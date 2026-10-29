@@ -2,14 +2,17 @@
 
 import json
 import time
+from contextlib import contextmanager
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
 from eom_catalog_service.embedding_registry_catalog_adapter import (
     EmbeddingRegistryOwnerConfiguration,
 )
 from eom_orchestrator.native_embedding_index_systemd import FixedNativeIndexLauncher
+from eom_workflow_runner import local_embedding_native_executor as native
 from eom_workflow_runner.document_embedding_cpu_execution import FixedCpuDocumentEmbeddingExecution
 from eom_workflow_runner.local_embedding_native_executor import CatalogNativeEmbeddingExecutor
 from eom_workflow_runner.local_embedding_owner_admission import LocalEmbeddingOwnerConfiguration
@@ -155,4 +158,88 @@ def test_execution_idempotency_mismatch_still_stops_before_source(executor):
         _execute_before_source_admission(service, fixture.request, key="incorrect-key")
     assert failed.value.__cause__ is None
     launcher.assert_current_runtime.assert_called_once()
+    launcher.run.assert_not_called()
+
+
+@pytest.mark.parametrize("cache_state", ["all_cached", "uncached", "revoked"])
+def test_legacy_registered_row_basis_controls_numerical_reservation_before_launch(
+    executor, monkeypatch, cache_state
+):
+    """Synthetic owner/basis seams; actual registered-row flow is disposable-DB tested."""
+    fixture, service, launcher, owner = executor
+    request = fixture.request
+    owner.registry_caller = Mock(return_value=Mock())
+    owner.catalog = SimpleNamespace(
+        require_index_publication_scope=Mock(),
+        prepare_index_basis=Mock(
+            return_value=SimpleNamespace(
+                reusable_rows=tuple(
+                    RegisteredEmbeddingRow(demand.encoding, completion.receipt.row_ref)
+                    for demand, completion in zip(
+                        fixture.plan.demands, fixture.completions, strict=True
+                    )
+                )
+                if cache_state == "all_cached"
+                else (),
+            )
+        ),
+    )
+    if cache_state == "revoked":
+        owner.catalog.prepare_index_basis.side_effect = ValueError("synthetic revoked cache")
+    monkeypatch.setattr(
+        service,
+        "_current",
+        lambda *_a, **_k: SimpleNamespace(admission=SimpleNamespace(plan=fixture.plan)),
+    )
+    allocation = native.NativeCoordinatorAllocation(
+        index_producer=native.new_native_artifact_producer(),
+        receipt_producer=native.new_native_artifact_producer(),
+        created_at=fixture.policy.created_at,
+        source_commit="a" * 40,
+    )
+    coordinator = Mock()
+    coordinator.read.return_value = SimpleNamespace(
+        state="RUNNING", records=(SimpleNamespace(payload=allocation),)
+    )
+    monkeypatch.setattr(native, "NativeEmbeddingCoordinator", Mock(return_value=coordinator))
+    monkeypatch.setattr(
+        native,
+        "create_native_embedding_launch",
+        Mock(return_value=SimpleNamespace(intent=fixture.association.intent)),
+    )
+    completion = Mock(return_value=object())
+    monkeypatch.setattr(service._index_completion, "publish", completion)
+    reservations = Mock(side_effect=RuntimeError("synthetic numerical reservation boundary"))
+    monkeypatch.setattr(service, "_reservations", reservations)
+
+    @contextmanager
+    def fenced():
+        yield Mock()
+
+    workflow = SimpleNamespace(workflow_id=fixture.association.intent.workflow_id)
+    values = dict(
+        workflow=workflow,
+        step=SimpleNamespace(step_run_id=fixture.association.intent.step_run_id),
+        request=request,
+        command_lease=SimpleNamespace(
+            command_id="wfcmd_" + "3" * 32, runner_id="synthetic", lease_generation=1
+        ),
+        idempotency_key=f"local-embedding-step:{workflow.workflow_id}:encode_batch:1:{request.workflow_definition_sha256}",
+        fenced_transaction=fenced,
+    )
+    if cache_state == "all_cached":
+        assert service.execute(**values) is completion.return_value
+        assert completion.call_args.args[7] == ()
+        reservations.assert_not_called()
+    elif cache_state == "uncached":
+        with pytest.raises(RuntimeError, match="numerical reservation boundary"):
+            service.execute(**values)
+        reservations.assert_called_once()
+        completion.assert_not_called()
+    else:
+        with pytest.raises(ValueError, match="revoked cache"):
+            service.execute(**values)
+        reservations.assert_not_called()
+        completion.assert_not_called()
+    owner.catalog.prepare_index_basis.assert_called_once()
     launcher.run.assert_not_called()

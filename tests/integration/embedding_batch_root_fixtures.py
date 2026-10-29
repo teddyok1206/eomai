@@ -8,6 +8,7 @@ from unittest.mock import Mock
 from eom_catalog_contracts.embedding_work_batch_binary import validate_embedding_work_batch_binary
 from eom_catalog_service.embedding_batch_owner_channel import EmbeddingBatchOwnerChannel
 from eom_catalog_service.embedding_batch_owner_workspace import StagedOwnerEmbeddingBatch
+from eom_workflow.embedding_batch_plan import EmbeddingBatchAllocation
 from eom_workflow_runner import embedding_batch_execution as batch_execution
 from eom_workflow_runner.embedding_batch_result_read import VerifiedLocalEmbeddingBatchResult
 
@@ -40,7 +41,24 @@ def configure_synthetic_batch_runtime(value, monkeypatch, *, allocation_status="
         assert staged == value.allocation.control_request
         yield listener
 
-    monkeypatch.setattr(batch_execution, "stage_embedding_batch_control", lambda request: request)
+    def prepare_control(request):
+        # The real owner may allocate only after preparation. Bind synthetic
+        # frames to its committed control, not an earlier unrecorded candidate.
+        value.allocation = EmbeddingBatchAllocation.model_validate(
+            seal(
+                value.allocation.model_dump(mode="json")
+                | {"control_request": request.model_dump(mode="json")},
+                "record_sha256",
+            )
+        )
+        value.frames = control_frames(request=request)
+        channel.request = request
+        channel.receive_allocation.return_value = (
+            value.frames.ready if allocation_status == "READY" else value.frames.busy
+        )
+        return request
+
+    monkeypatch.setattr(batch_execution, "stage_embedding_batch_control", prepare_control)
     monkeypatch.setattr(batch_execution, "owner_embedding_batch_listener", listen)
     monkeypatch.setattr(
         batch_execution,

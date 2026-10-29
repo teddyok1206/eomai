@@ -46,6 +46,7 @@ from eom_workflow.local_embedding_request_v2 import (
     SupportedLocalEmbeddingRequest,
     parse_supported_local_embedding_request,
 )
+from eom_workflow.local_embedding_request_v3 import LocalEmbeddingWorkflowRequestV3
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
 from eom_workflow.local_embedding_source_plan_v2 import LocalEmbeddingSourcePlanV2
 from eom_workflow.local_embedding_source_plan_v3 import LocalEmbeddingSourcePlanV3
@@ -324,11 +325,22 @@ class CatalogNativeEmbeddingExecutor:
                 reusable_encodings = frozenset(
                     row.encoding.encoding_sha256 for row in basis.reusable_rows
                 )
+            elif not isinstance(
+                request, (LocalEmbeddingIndexRefreshRequest, LocalEmbeddingWorkflowRequestV3)
+            ):
+                legacy_basis = self.owner.catalog.prepare_index_basis(
+                    session, caller, native_embedding_registry_scope(request)
+                )
+                reusable_encodings = frozenset(
+                    row.encoding.encoding_sha256 for row in legacy_basis.reusable_rows
+                )
+        encoding_requests = (
+            ()
+            if isinstance(request, LocalEmbeddingIndexRefreshRequest)
+            else _encoding_requests(sources.admission.plan, reusable_encodings=reusable_encodings)
+        )
         if isinstance(request, LocalEmbeddingIndexRefreshRequest) or (
-            isinstance(request, LocalEmbeddingWorkflowRequestV2)
-            and not _encoding_requests(
-                sources.admission.plan, reusable_encodings=reusable_encodings
-            )
+            not isinstance(request, LocalEmbeddingWorkflowRequestV3) and not encoding_requests
         ):
             # Reuse canonical registry rows directly. A membership-only request
             # must never allocate encoding reservations or launch numerical work.
@@ -347,9 +359,6 @@ class CatalogNativeEmbeddingExecutor:
         # Reservation API owns short independent roots. Never hold Workflow SQL locks here.
         reservations = self._reservations(request, launch.intent, command_lease)
         publications = native_embedding_publications(self.publisher, allocation.source_commit)
-        encoding_requests = _encoding_requests(
-            sources.admission.plan, reusable_encodings=reusable_encodings
-        )
         readings = reservations.reserve_and_attach(encoding_requests, launch.intent)
         if any(r.status == "FAILED" for r in readings):
             readings = reservations.retry_known_failed(

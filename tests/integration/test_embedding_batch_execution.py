@@ -10,7 +10,11 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
-from eom_catalog_contracts.embedding_work_batch import EmbeddingWorkBatchInput
+from eom_catalog_contracts.embedding_gpu_control import embedding_gpu_allocation_window_seconds
+from eom_catalog_contracts.embedding_work_batch import (
+    MAX_EMBEDDING_WORK_BATCH_SECONDS,
+    EmbeddingWorkBatchInput,
+)
 from eom_catalog_contracts.embedding_work_batch_binary import validate_embedding_work_batch_binary
 from eom_catalog_service.embedding_batch_owner_channel import EmbeddingBatchOwnerChannel
 from eom_catalog_service.embedding_batch_owner_workspace import StagedOwnerEmbeddingBatch
@@ -67,7 +71,21 @@ def owner_case(admitted, monkeypatch):
         assert staged == value.allocation.control_request
         yield listener
 
-    monkeypatch.setattr(execution, "stage_embedding_batch_control", lambda request: request)
+    def stage_control(request):
+        if request != value.allocation.control_request:
+            value.allocation = EmbeddingBatchAllocation.model_validate(
+                seal(
+                    value.allocation.model_dump(mode="json")
+                    | {"control_request": request.model_dump(mode="json")},
+                    "record_sha256",
+                )
+            )
+            value.frames = control_frames(request=request)
+            value.observation = value.frames.ready
+            channel.request = request
+        return request
+
+    monkeypatch.setattr(execution, "stage_embedding_batch_control", stage_control)
     monkeypatch.setattr(execution, "owner_embedding_batch_listener", listen)
     monkeypatch.setattr(
         execution,
@@ -202,6 +220,110 @@ def receipt_count(value):
             .select_from(ArtifactRecord)
             .where(ArtifactRecord.artifact_type == BATCH_EXECUTION_RECEIPT_ARTIFACT_TYPE)
         )
+
+
+@pytest.mark.parametrize("admitted", ["bulk"], indirect=True)
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_index_clock_begins_after_late_source_admission_and_replay_never_renews_it(
+    owner_case, monkeypatch, interrupted
+):
+    value = owner_case
+    original_request = value.request.model_dump(mode="json")
+    original_admit = value.owner.admit
+    original_candidate = execution.new_embedding_batch_allocation_candidate
+    clock = [time.monotonic_ns()]
+    prepared = SimpleNamespace(first=True, finished=False, session=None)
+    starts = []
+
+    @contextmanager
+    def delayed_admit(session, request):
+        first = prepared.first
+        prepared.first = False
+        with original_admit(session, request) as sources:
+            if first:
+                prepared.session = session
+                clock[0] += 600 * 10**9
+            yield sources
+            if first:
+                clock[0] += 600 * 10**9
+        if first:
+            prepared.finished = True
+
+    def candidate(request, policy):
+        assert prepared.finished and prepared.session.in_transaction()
+        starts.append(clock[0])
+        return original_candidate(request, policy, now_monotonic_ns=clock[0])
+
+    monkeypatch.setattr(value.owner, "admit", delayed_admit)
+    monkeypatch.setattr(execution, "new_embedding_batch_allocation_candidate", candidate)
+    if interrupted:
+
+        def dispatch(listener):
+            value.dispatched.append(listener)
+            raise TimeoutError("synthetic original dispatch interrupted")
+
+        monkeypatch.setattr(execution, "dispatch_embedding_batch_control", dispatch)
+        with pytest.raises(TimeoutError), value.operation.open_index(value.request):
+            pytest.fail("interrupted root offered execution")
+    else:
+        with value.operation.open_index(value.request) as active:
+            assert type(active) is execution.ActiveEmbeddingBatchExecution
+    original = history(value)
+    numerical = min(
+        value.case.policy.cuda.profile.resource_profile.timeout_seconds,
+        MAX_EMBEDDING_WORK_BATCH_SECONDS,
+    )
+    assert original.allocation.control_request.expires_monotonic_ns == (
+        starts[0] + embedding_gpu_allocation_window_seconds(numerical) * 10**9
+    )
+    assert value.request.model_dump(mode="json") == original_request
+    clock[0] += 3600 * 10**9
+    with value.operation.open_index(value.request) as replay:
+        assert type(replay) is execution.ExistingEmbeddingBatchExecution
+        assert replay.history == original
+    assert len(starts) == len(value.dispatched) == 1
+
+
+@pytest.mark.parametrize("admitted", ["bulk"], indirect=True)
+def test_concurrent_index_open_keeps_one_original_allocation_and_dispatch(owner_case):
+    value, barrier = owner_case, Barrier(2)
+
+    def open_once():
+        barrier.wait(timeout=10)
+        with value.operation.open_index(value.request) as result:
+            return type(result), result.history.job_id, result.history.allocation
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        futures = [pool.submit(open_once) for _ in range(2)]
+        results = [future.result(timeout=30) for future in futures]
+    assert {kind for kind, _job, _allocation in results} == {
+        execution.ActiveEmbeddingBatchExecution,
+        execution.ExistingEmbeddingBatchExecution,
+    }
+    assert results[0][1:] == results[1][1:] and len(value.dispatched) == 1
+
+
+@pytest.mark.parametrize("admitted", ["bulk"], indirect=True)
+@pytest.mark.parametrize("phase", ["entry", "exit"])
+def test_index_preparation_denial_creates_no_allocation_or_dispatch(owner_case, monkeypatch, phase):
+    value = owner_case
+    original_admit = value.owner.admit
+
+    @contextmanager
+    def denied(session, request):
+        with original_admit(session, request) as sources:
+            if phase == "entry":
+                raise PermissionError("synthetic entry denial")
+            yield sources
+            raise PermissionError("synthetic late denial")
+
+    candidate = Mock(side_effect=AssertionError("denied source created an allocation"))
+    monkeypatch.setattr(value.owner, "admit", denied)
+    monkeypatch.setattr(execution, "new_embedding_batch_allocation_candidate", candidate)
+    with pytest.raises(PermissionError), value.operation.open_index(value.request):
+        pytest.fail("denied source offered execution")
+    assert history(value) is None and value.dispatched == []
+    candidate.assert_not_called()
 
 
 def test_actual_application_orders_parent_route_binding_checks_ack_and_publication(

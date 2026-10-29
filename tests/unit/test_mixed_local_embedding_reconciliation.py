@@ -253,7 +253,7 @@ def test_missing_graph_bindings_prioritize_unencoded_sources(
 ):
     c = reconciliation
     # A fresh Graph can lack every binding while canonical encoding rows survive.
-    # No current binding exists, so the intentional refresh override is not used.
+    # Cached encodings retain real demands, but need no physical allocation.
     c.current.missing = tuple(reversed(c.full))
     c.current.reusable_rows = tuple(
         RegisteredEmbeddingRow(c.full[index].encoding, c.full[index].row_ref)
@@ -261,7 +261,9 @@ def test_missing_graph_bindings_prioritize_unencoded_sources(
     )
     c.app.maximum_targets = maximum_targets
     result = c.app.run_once()
-    assert result.index_refresh_reason is None
+    assert result.index_refresh_reason == (
+        "REUSABLE_ENCODINGS_NOT_BOUND" if len(cached_indexes) == len(c.full) else None
+    )
     assert result.missing_binding_count == len(c.full)
     assert result.selected_target_count == len(expected_indexes)
     _request, plan = read_plan(c, result)

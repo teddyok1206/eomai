@@ -7,6 +7,7 @@ pre-LIMIT policy/lifecycle/answer-bearing queries in real PostgreSQL.
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import replace
 from pathlib import Path
@@ -40,6 +41,10 @@ from eom_catalog_service.knowledge_analysis_sources import (
     KnowledgeAnalysisSourceError,
     read_item_source_relations,
 )
+from eom_catalog_service.knowledge_graph_models import (
+    KnowledgeNodeRecord,
+    KnowledgeNodeSourcePointerRecord,
+)
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalApplicationService
 from eom_catalog_service.local_indexing_source_paging import (
     candidate_source_page_statement,
@@ -48,7 +53,7 @@ from eom_catalog_service.local_indexing_source_paging import (
 from eom_orchestrator.database import build_engine
 from psycopg import sql
 from psycopg.pq import TransactionStatus
-from sqlalchemy import text
+from sqlalchemy import select, text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
@@ -283,6 +288,264 @@ def prepared_membership_plans(session: Session, scope) -> tuple[dict[str, Any], 
             if connection.info.transaction_status != TransactionStatus.INERROR:
                 cursor.execute("DEALLOCATE eom_membership_plan", prepare=False)
     return tuple(plans)
+
+
+def prepared_detail_plans(
+    session: Session,
+    statement,
+    *,
+    plan_modes=("force_custom_plan", "force_generic_plan"),
+) -> tuple[dict[str, Any], ...]:
+    """Execute only the production detail SELECT over this connection's pg_temp shadows."""
+    prepared = statement.compile(
+        dialect=postgresql.dialect(paramstyle="numeric_dollar"),
+        compile_kwargs={"render_postcompile": True},
+    )
+    arguments = sql.SQL(", ").join(
+        sql.Literal(prepared.params[name]) for name in prepared.positiontup
+    )
+    connection = session.get_bind().connection.driver_connection
+    plans = []
+    with connection.cursor() as cursor:
+        cursor.execute("PREPARE eom_detail_plan AS " + str(prepared), prepare=False)
+        try:
+            for mode in plan_modes:
+                session.execute(text("SET LOCAL plan_cache_mode = " + mode))
+                cursor.execute(
+                    sql.SQL(
+                        "EXPLAIN (ANALYZE, FORMAT JSON, TIMING FALSE) EXECUTE eom_detail_plan({})"
+                    ).format(arguments),
+                    prepare=False,
+                )
+                plans.append(cursor.fetchone()[0][0])
+        finally:
+            if connection.info.transaction_status != TransactionStatus.INERROR:
+                cursor.execute("DEALLOCATE eom_detail_plan", prepare=False)
+    return tuple(plans)
+
+
+def test_candidate_detail_query_on_fresh_graph_after_existing_statistics(pool_database):
+    """No re-ANALYZE after publication; covers the exact second pointer/node query."""
+    for table in TABLES:
+        pool_database.execute(text(f"TRUNCATE pg_temp.{table}"))
+    previous = admission_scope().graph_snapshot.graph_snapshot_revision_id
+    fresh = "graphrev_" + "f" * 32
+    pool_database.execute(
+        text(
+            "INSERT INTO pg_temp.knowledge_nodes(graph_snapshot_revision_id,node_id,node_type,"
+            "label,answer_bearing) SELECT :snapshot,'knode_'||i||'_'||n,"
+            "'CONCEPT','synthetic',false "
+            "FROM generate_series(1,520) i CROSS JOIN generate_series(1,20) n"
+        ),
+        {"snapshot": previous},
+    )
+    pool_database.execute(
+        text(
+            "INSERT INTO pg_temp.knowledge_node_source_pointers(pointer_id,"
+            "graph_snapshot_revision_id,analysis_run_id,node_id,anchor_id,source_class) "
+            "SELECT (i-1)*142+p,:snapshot,'analysisrun_'||lpad(i::text,32,'0'),"
+            "'knode_'||i||'_'||((p-1)%20+1),'anchor_'||p,'PAST_EXAM' "
+            "FROM generate_series(1,520) i CROSS JOIN generate_series(1,142) p"
+        ),
+        {"snapshot": previous},
+    )
+    for table in ("knowledge_nodes", "knowledge_node_source_pointers"):
+        pool_database.execute(text(f"ANALYZE pg_temp.{table}"))
+    pool_database.execute(
+        text(
+            "INSERT INTO pg_temp.knowledge_nodes(graph_snapshot_revision_id,node_id,node_type,"
+            "label,answer_bearing) SELECT :fresh,node_id,node_type,label,answer_bearing "
+            "FROM pg_temp.knowledge_nodes WHERE graph_snapshot_revision_id=:previous"
+        ),
+        {"fresh": fresh, "previous": previous},
+    )
+    pool_database.execute(
+        text(
+            "INSERT INTO pg_temp.knowledge_node_source_pointers(pointer_id,"
+            "graph_snapshot_revision_id,analysis_run_id,node_id,anchor_id,source_class) "
+            "SELECT pointer_id+73840,:fresh,analysis_run_id,node_id,anchor_id,source_class "
+            "FROM pg_temp.knowledge_node_source_pointers WHERE graph_snapshot_revision_id=:previous"
+        ),
+        {"fresh": fresh, "previous": previous},
+    )
+    scope = admission_scope(maximum=1024)
+    scope = replace(
+        scope,
+        graph_snapshot=scope.graph_snapshot.model_copy(
+            update={"graph_snapshot_revision_id": fresh}
+        ),
+    )
+    for count in (8, 520):
+        run_ids = tuple("analysisrun_" + str(value).zfill(32) for value in range(1, count + 1))
+        detail = KnowledgeRetrievalApplicationService.candidate_pool_detail_statement(
+            scope, run_ids, allow_answer_bearing=True
+        )
+        for mode, plan in zip(
+            ("CUSTOM", "GENERIC"), prepared_detail_plans(pool_database, detail), strict=True
+        ):
+            pointer_scans, pending = [], [plan["Plan"]]
+            selected_pointer_ctes = []
+            while pending:
+                node = pending.pop()
+                pending.extend(node.get("Plans", ()))
+                if node.get("Subplan Name") == "CTE selected_candidate_pointers":
+                    selected_pointer_ctes.append(node)
+                if node.get("Relation Name") == "knowledge_node_source_pointers":
+                    pointer_scans.append(
+                        {
+                            key: node[key]
+                            for key in (
+                                "Node Type",
+                                "Actual Loops",
+                                "Actual Rows",
+                                "Rows Removed by Filter",
+                            )
+                            if key in node
+                        }
+                    )
+            print(
+                json.dumps(
+                    {
+                        "detail_count": count,
+                        "plan_mode": mode,
+                        "elapsed_ms": plan["Execution Time"],
+                        "pointer_scans": pointer_scans,
+                    },
+                    sort_keys=True,
+                )
+            )
+            assert plan["Plan"]["Actual Rows"] == count * 142
+            assert len(pointer_scans) == len(selected_pointer_ctes) == 1
+            assert pointer_scans[0]["Actual Loops"] == selected_pointer_ctes[0]["Actual Loops"] == 1
+            assert plan["Execution Time"] < 10000
+        # Keep the original generic plan as a semantic/quantitative reference.
+        # The original full custom plan is deliberately not repeated here: it
+        # reproduced a 20-second timeout before this regression was repaired.
+        reference = prepared_detail_plans(
+            pool_database,
+            legacy_detail_statement(scope, run_ids, allow_answer_bearing=True),
+            plan_modes=("force_generic_plan",),
+        )[0]
+        print(
+            json.dumps(
+                {
+                    "legacy_detail_count": count,
+                    "plan_mode": "GENERIC",
+                    "elapsed_ms": reference["Execution Time"],
+                },
+                sort_keys=True,
+            )
+        )
+        assert reference["Plan"]["Actual Rows"] == count * 142
+
+
+def legacy_detail_statement(scope, run_ids, *, allow_answer_bearing):
+    """Unoptimized semantic oracle, not another production source/authority path."""
+    pointer, node = KnowledgeNodeSourcePointerRecord, KnowledgeNodeRecord
+    statement = (
+        select(pointer, node)
+        .join(
+            node,
+            (node.graph_snapshot_revision_id == pointer.graph_snapshot_revision_id)
+            & (node.node_id == pointer.node_id),
+        )
+        .where(
+            pointer.graph_snapshot_revision_id == scope.graph_snapshot.graph_snapshot_revision_id,
+            pointer.analysis_run_id.in_(run_ids),
+            pointer.source_class.in_(scope.source_classes),
+        )
+        .order_by(pointer.analysis_run_id, pointer.node_id, pointer.anchor_id)
+        .limit(scope.maximum_candidates * 256 + 1)
+    )
+    if not allow_answer_bearing:
+        statement = statement.where(node.answer_bearing.is_(False))
+    if scope.population_scope == InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM:
+        statement = statement.where(pointer.source_class == "PAST_EXAM")
+    return statement.execution_options(populate_existing=True)
+
+
+@pytest.mark.parametrize("allow_answers", (False, True))
+@pytest.mark.parametrize("occurrence_only", (False, True))
+def test_candidate_detail_materialization_preserves_rows_order_orphans_and_orm_identity(
+    pool_database, allow_answers, occurrence_only
+):
+    scope = replace(
+        admission_scope(maximum=8),
+        source_classes=("APPROVED_ITEM", "PAST_EXAM"),
+        population_scope=InferenceTransferPopulationScope.OCCURRENCE_BACKED_PAST_EXAM
+        if occurrence_only
+        else InferenceTransferPopulationScope.ALL_ADMITTED_GRAPH_ITEMS,
+    )
+    snapshot = scope.graph_snapshot.graph_snapshot_revision_id
+    for pointer_id, node_id, anchor, source_class in (
+        (999, "missing-node", "orphan", "PAST_EXAM"),
+        (1000, "knode_6_1", "zz-duplicate-node", "PAST_EXAM"),
+        (1001, "knode_6_1", "wrong-class", "TEXTBOOK"),
+    ):
+        pool_database.execute(
+            text(
+                "INSERT INTO pg_temp.knowledge_node_source_pointers(pointer_id,"
+                "graph_snapshot_revision_id,analysis_run_id,node_id,anchor_id,source_class) "
+                "VALUES(:pointer,:snapshot,:run,:node,:anchor,:source_class)"
+            ),
+            {
+                "pointer": pointer_id,
+                "snapshot": snapshot,
+                "run": "analysisrun_" + "6".zfill(32),
+                "node": node_id,
+                "anchor": anchor,
+                "source_class": source_class,
+            },
+        )
+    runs = tuple("analysisrun_" + str(value).zfill(32) for value in (1, 2, 6))
+    expected = tuple(
+        pool_database.execute(
+            legacy_detail_statement(scope, runs, allow_answer_bearing=allow_answers)
+        )
+    )
+    actual = tuple(
+        pool_database.execute(
+            KnowledgeRetrievalApplicationService.candidate_pool_detail_statement(
+                scope, runs, allow_answer_bearing=allow_answers
+            )
+        )
+    )
+    assert actual and len(actual) == len(expected)
+    assert [(p.pointer_id, n.node_id) for p, n in actual] == [
+        (p.pointer_id, n.node_id) for p, n in expected
+    ]
+    assert all(
+        left[0] is right[0] and left[1] is right[1]
+        for left, right in zip(actual, expected, strict=True)
+    )
+    assert 1000 in {p.pointer_id for p, _ in actual}  # Duplicate node references are retained.
+    assert not {999, 1001}.intersection(p.pointer_id for p, _ in actual)
+    assert not occurrence_only or all(p.source_class == "PAST_EXAM" for p, _ in actual)
+    assert allow_answers or all(not node.answer_bearing for _, node in actual)
+
+
+def test_candidate_detail_materialization_keeps_outer_pointer_overflow_sentinel(pool_database):
+    scope = admission_scope(maximum=1)
+    snapshot = scope.graph_snapshot.graph_snapshot_revision_id
+    run = "analysisrun_" + "6".zfill(32)
+    pool_database.execute(
+        text(
+            "INSERT INTO pg_temp.knowledge_node_source_pointers(pointer_id,"
+            "graph_snapshot_revision_id,analysis_run_id,node_id,anchor_id,source_class) "
+            "SELECT 2000+n,:snapshot,:run,'knode_6_1','overflow_'||n,'PAST_EXAM' "
+            "FROM generate_series(1,260) n"
+        ),
+        {"snapshot": snapshot, "run": run},
+    )
+    statement = KnowledgeRetrievalApplicationService.candidate_pool_detail_statement(
+        scope, (run,), allow_answer_bearing=True
+    )
+    actual = tuple(pool_database.execute(statement))
+    expected = tuple(
+        pool_database.execute(legacy_detail_statement(scope, (run,), allow_answer_bearing=True))
+    )
+    assert len(actual) == len(expected) == 257
+    assert [row[0].pointer_id for row in actual] == [row[0].pointer_id for row in expected]
 
 
 def test_real_postgres_prefetch_does_not_count_additive_reports_as_original_targets(pool_database):

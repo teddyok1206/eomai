@@ -96,3 +96,24 @@ budget 안에서만 수행한다. 추가 queue/cache/모델 입력/DB/schema/권
 검증은 cached 앞번호와 uncached 뒷번호, cap/순서, all-cached fallback, empty/no-op 및 기존
 membership override를 포함한다. 단순 sorted-prefix는 잦은 Graph 갱신마다 앞부분만 재등록해
 아직 계산되지 않은 뒤쪽 문항을 계속 굶길 수 있어 사용하지 않는다.
+
+## 새 INDEX 할당의 시계는 준비가 끝난 뒤 시작
+
+parent request/selection의 정본 hash와 allocation event의 nonce/deadline은 별개다. 기존 parent
+준비의 allocation은 미기록 후보일 뿐 실행권이 아니다. routed INDEX는 기존 execution owner의
+`open_index`에서 현재 source/control admission의 진입·종료 검증을 같은 SQL root 안에서 끝낸
+뒤 기존 candidate constructor와 atomic `EmbeddingBatchPlanStore.allocate`를 호출한다.
+그 root의 source/Identity 잠금은 commit까지 유지하고 SQL transaction을 GPU 계산에 걸쳐 열지 않는다.
+
+논리 parent·request·selection·정책·수치 프로필·pointer/hash·actor는 변경하지 않는다. 기존
+unique parent key가 있으면 원래 allocation/history가 이기며, 새 후보는 저장·dispatch되지 않는다.
+이미 기록된 deadline을 갱신하거나 실패를 성공으로 바꾸거나 새 retry identity를 만드는 기능이 아니다.
+기존 explicit-allocation `open`과 QUERY 사용은 유지한다. 420초 할당·180초 계산 상한도 그대로다.
+더 긴 released resource profile도 실제 work-batch와 같은 `min(profile timeout, 180)`으로
+할당 window를 계산하며 원 profile/policy의 값이나 hash는 변경하지 않는다.
+
+접근은 기존 unique key lookup/event append이며 새 queue/cache/schema/DB/index는 없다.
+비싼 parent/catch-up 준비와 admission 때문에 아직 실행하지 않은 후보의 시간이 먼저 소진되는
+문제를 제거한다. 단순 timeout 연장 대신, 준비 후의 실제 기록 경계로 clock allocation을 옮긴다.
+검증은 느린 admission 종료 이후의 candidate 시각, 원 request/hash 보존, 거부 시 무기록,
+중단 후 같은-key 원 deadline 보존과 중복 dispatch 방지, 기존 동시성/명시 후보 동작을 포함한다.

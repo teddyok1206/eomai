@@ -9,6 +9,7 @@ from eom_catalog_contracts.embedding_gpu_control import (
     EmbeddingGpuAllocationRequest,
     embedding_gpu_allocation_window_seconds,
 )
+from eom_catalog_contracts.embedding_work_batch import MAX_EMBEDDING_WORK_BATCH_SECONDS
 from eom_identifiers import content_sha256
 from eom_workflow.embedding_batch_plan import BATCH_PLAN_PROTOCOL, EmbeddingBatchAllocation
 from eom_workflow.embedding_batch_plan_family import (
@@ -49,7 +50,10 @@ def new_embedding_batch_allocation_candidate(
         receipt_raw_sha256=backend.receipt_raw_sha256,
         expires_monotonic_ns=now
         + embedding_gpu_allocation_window_seconds(
-            policy.cuda.profile.resource_profile.timeout_seconds
+            min(
+                policy.cuda.profile.resource_profile.timeout_seconds,
+                MAX_EMBEDDING_WORK_BATCH_SECONDS,
+            )
         )
         * 10**9,
     )

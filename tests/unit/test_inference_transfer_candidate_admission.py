@@ -11,11 +11,16 @@ from unittest.mock import Mock
 import pytest
 from eom_catalog_contracts import EvidenceBudget
 from eom_catalog_service.inference_transfer_scope import InferenceTransferPopulationScope
+from eom_catalog_service.knowledge_graph_models import (
+    KnowledgeNodeRecord,
+    KnowledgeNodeSourcePointerRecord,
+)
 from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalApplicationService,
     KnowledgeRetrievalServiceError,
     ReadOnlyCandidatePoolScope,
 )
+from sqlalchemy import inspect
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
 
@@ -201,6 +206,32 @@ def test_occurrence_scope_also_restricts_materialized_pointer_classes() -> None:
         )
     )
     assert "knowledge_node_source_pointers.source_class = 'PAST_EXAM'" in detail_sql
+
+
+def test_detail_statement_materializes_exact_pointers_without_changing_orm_or_outer_limit():
+    scope = admission_scope(role="EDITOR")
+    run_ids = ("analysisrun_" + "a" * 32,)
+    statement = KnowledgeRetrievalApplicationService.candidate_pool_detail_statement(
+        scope, run_ids, allow_answer_bearing=False
+    )
+    compiled = str(
+        statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+    )
+    assert "selected_candidate_pointers AS MATERIALIZED" in compiled
+    assert compiled.count("FROM knowledge_node_source_pointers") == 1
+    assert "knowledge_node_source_pointers.analysis_run_id IN ('" + run_ids[0] + "')" in compiled
+    assert "knowledge_node_source_pointers.source_class IN ('PAST_EXAM')" in compiled
+    assert "knowledge_nodes.answer_bearing IS false" in compiled
+    assert "DISTINCT" not in compiled and compiled.count("LIMIT") == 1
+    assert "ORDER BY selected_candidate_pointers.analysis_run_id" in compiled
+    assert "selected_candidate_pointers.node_id, selected_candidate_pointers.anchor_id" in compiled
+    assert compiled.index("JOIN knowledge_nodes") < compiled.index("LIMIT 513")
+    assert (
+        inspect(statement.column_descriptions[0]["entity"]).mapper.class_
+        is KnowledgeNodeSourcePointerRecord
+    )
+    assert statement.column_descriptions[1]["entity"] is KnowledgeNodeRecord
+    assert statement.get_execution_options()["populate_existing"] is True
 
 
 @pytest.mark.parametrize("invalid_scope", ("OCCURRENCE_BACKED_PAST_EXAM", "ALL", None))

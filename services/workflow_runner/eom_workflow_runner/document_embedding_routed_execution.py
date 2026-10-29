@@ -119,7 +119,7 @@ def drive_routed_document_embedding_parent_once(
     request = parse_supported_local_embedding_request(request)
     with parent.operation.publisher.sessions.begin() as session:
         pair.cuda.owner.resolve_sources(session, request)
-    with parent.operation.open(parent.request, parent.allocation) as lane:
+    with parent.operation.open_index(parent.request) as lane:
         backend: DocumentBatchExecution
         if isinstance(lane, ExistingEmbeddingBatchExecution):
             if (

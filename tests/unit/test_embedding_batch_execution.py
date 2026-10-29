@@ -6,7 +6,10 @@ from types import SimpleNamespace
 
 import pytest
 from eom_workflow.embedding_batch_owner_control import parse_embedding_batch_owner_control
-from eom_workflow_runner.embedding_batch_execution import _root_route
+from eom_workflow_runner.embedding_batch_execution import (
+    CatalogEmbeddingBatchExecution,
+    _root_route,
+)
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_embedding_batch_owner_control import control_frames
@@ -46,3 +49,13 @@ def test_unknown_or_shape_only_allocation_never_selects_cpu():
     case = planning_case()
     with pytest.raises(ValueError):
         _root_route(case.request, case.allocation, case.policy, SimpleNamespace(status="UNKNOWN"))
+
+
+def test_automatic_index_allocation_rejects_query_before_any_owner_or_database_access():
+    operation = object.__new__(CatalogEmbeddingBatchExecution)
+    case = planning_case(purpose="REFERENCE_QUERY")
+    with (
+        pytest.raises(ValueError, match="EMBEDDING_BATCH_EXECUTION_INVALID"),
+        operation.open_index(case.request),
+    ):
+        pytest.fail("QUERY entered the fresh INDEX allocation boundary")

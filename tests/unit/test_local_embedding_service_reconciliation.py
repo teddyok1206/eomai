@@ -201,6 +201,7 @@ def reconciliation(service_owner, monkeypatch):
         published=True,
         unavailable=False,
         previous=(index_pointer(existing_index), existing_index),
+        reusable_rows=None,
     )
 
     def current_lookup(gate, session, configuration):
@@ -228,7 +229,9 @@ def reconciliation(service_owner, monkeypatch):
                     for binding in {
                         value.encoding.encoding_sha256: value for value in bindings
                     }.values()
-                ),
+                )
+                if current.reusable_rows is None
+                else current.reusable_rows,
                 len(c.current.sources),
                 0 if current.unavailable else len(c.current.entries),
             ),
@@ -392,6 +395,55 @@ def test_bounded_targets_are_stable_and_exclude_already_bound_sources(reconcilia
         assert tuple(source.item_revision_id for source in actual.plan.sources) == (
             c.current.keys[0].item_revision_id,
         )
+
+
+@pytest.mark.parametrize("cached_count", [1, 2])
+def test_cached_vectors_without_graph_bindings_use_only_metadata_when_all_cached(
+    reconciliation, cached_count
+):
+    c = reconciliation
+    bindings = tuple(
+        source_binding(
+            entry, view=c.source.scope.request.namespace.view, space=c.source.scope.request.space
+        )
+        for entry in c.source.current.entries
+    )
+    c.current.reusable_rows = tuple(
+        RegisteredEmbeddingRow(binding.encoding, binding.row_ref)
+        for binding in bindings[:cached_count]
+    )
+    c.app.maximum_targets = 1
+    first = c.app.preparation.prepare_once()
+    second = c.app.preparation.prepare_once()
+    assert first.request == second.request and first.request is not None
+    assert first.observed.index_refresh_reason == (
+        "REUSABLE_ENCODINGS_NOT_BOUND" if cached_count == len(bindings) else None
+    )
+    with c.source.publisher.sessions.begin() as session:
+        scope = c.source.owner.resolve_submission(session, first.request)
+    assert len(scope.plan.demands) == 1  # cached is not an empty-demand CoverageOnly result
+    expected = bindings[0 if cached_count == len(bindings) else 1].source.item_revision_id
+    assert scope.plan.demands[0].source_revision_id == expected
+    c.launcher.run.assert_not_called()
+
+
+def test_explicit_membership_refresh_reason_is_not_replaced_by_cached_rebinding(reconciliation):
+    c = reconciliation
+    bindings = tuple(
+        source_binding(
+            entry, view=c.source.scope.request.namespace.view, space=c.source.scope.request.space
+        )
+        for entry in c.source.current.entries
+    )
+    c.current.keys, c.current.previous = c.current.keys[1:], None
+    c.current.reusable_rows = tuple(
+        RegisteredEmbeddingRow(binding.encoding, binding.row_ref) for binding in bindings
+    )
+    prepared = c.app.preparation.prepare_once()
+    assert prepared.observed.index_refresh_reason == "MISSING_NAMESPACE_INDEX"
+    assert prepared.request is not None
+    assert prepared.request.schema_version == "local-embedding-workflow-request/1.3"
+    c.launcher.run.assert_not_called()
 
 
 def test_partial_new_namespace_refresh_precedes_missing_vector_seed(reconciliation):

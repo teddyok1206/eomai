@@ -2,6 +2,7 @@
 
 import pytest
 from eom_catalog_contracts.embedding_gpu_control import embedding_gpu_allocation_window_seconds
+from eom_catalog_contracts.embedding_work_batch import MAX_EMBEDDING_WORK_BATCH_SECONDS
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_workflow.embedding_device_routing import EmbeddingDeviceRoutingPolicy
 from eom_workflow_runner.embedding_batch_allocation_candidate import (
@@ -13,12 +14,12 @@ from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_embedding_batch_plan import planning_case
 
 
-def finite_case(purpose="REFERENCE_QUERY"):
+def finite_case(purpose="REFERENCE_QUERY", *, timeout_seconds=180):
     value = planning_case(purpose=purpose) if purpose == "INDEX" else paired_query_case()
     body = value.policy.model_dump(mode="json")
     for device in ("cpu", "cuda"):
         body[device]["profile"]["resource_profile"] = seal(
-            body[device]["profile"]["resource_profile"] | {"timeout_seconds": 180},
+            body[device]["profile"]["resource_profile"] | {"timeout_seconds": timeout_seconds},
             "resource_profile_sha256",
         )
     value.policy = EmbeddingDeviceRoutingPolicy.model_validate(seal(body, "policy_sha256"))
@@ -30,8 +31,9 @@ def finite_case(purpose="REFERENCE_QUERY"):
 
 
 @pytest.mark.parametrize("purpose", ("INDEX", "REFERENCE_QUERY"))
-def test_shared_constructor_preserves_original_pins_and_numeric_limits(purpose):
-    value = finite_case(purpose)
+@pytest.mark.parametrize("timeout_seconds", (180, 300))
+def test_shared_constructor_preserves_original_pins_and_numeric_limits(purpose, timeout_seconds):
+    value = finite_case(purpose, timeout_seconds=timeout_seconds)
     before = value.policy.model_dump(mode="json")
     created = new_embedding_batch_allocation_candidate(
         value.request, value.policy, now_monotonic_ns=10**12
@@ -46,7 +48,7 @@ def test_shared_constructor_preserves_original_pins_and_numeric_limits(purpose):
         created.control_request.expires_monotonic_ns
         == 10**12
         + embedding_gpu_allocation_window_seconds(
-            value.policy.cuda.profile.resource_profile.timeout_seconds
+            min(timeout_seconds, MAX_EMBEDDING_WORK_BATCH_SECONDS)
         )
         * 10**9
     )
