@@ -175,23 +175,25 @@ class CatalogNativeEmbeddingExecutor:
         self.source_commit = source_commit
         self._index_completion = NativeEmbeddingIndexCompletion(owner, publisher, execution_backend)
 
+    def _assert_current_runtime(self, request: SupportedLocalEmbeddingRequest) -> None:
+        request = parse_supported_local_embedding_request(request)
+        profile = self.runtime_profile
+        if (
+            request.space != profile.space
+            or request.runtime_bundle != profile.runtime_bundle
+            or request.resource_profile != profile.resource_profile
+            or request.native_execution_policy != self.owner.configuration.native_execution_policy
+            or request.native_execution_policy_sha256
+            != self.owner.configuration.native_execution_policy_sha256
+            or request.corpus_id != self.owner.configuration.registry.corpus_id
+            or request.namespace != self.owner.configuration.registry.namespace
+        ):
+            raise ValueError("LOCAL_EMBEDDING_EXECUTOR_CONTROLS_MISMATCH")
+        self.execution_backend.assert_current_runtime(request)
+
     def evaluate(self, request: SupportedLocalEmbeddingRequest) -> RuntimeReadinessReport:
         try:
-            request = parse_supported_local_embedding_request(request)
-            profile = self.runtime_profile
-            if (
-                request.space != profile.space
-                or request.runtime_bundle != profile.runtime_bundle
-                or request.resource_profile != profile.resource_profile
-                or request.native_execution_policy
-                != self.owner.configuration.native_execution_policy
-                or request.native_execution_policy_sha256
-                != self.owner.configuration.native_execution_policy_sha256
-                or request.corpus_id != self.owner.configuration.registry.corpus_id
-                or request.namespace != self.owner.configuration.registry.namespace
-            ):
-                raise ValueError("configured native controls differ")
-            self.execution_backend.assert_current_runtime(request)
+            self._assert_current_runtime(request)
             check = RuntimeReadinessCheck(
                 "native_document_index",
                 ReadinessStatus.PASS,
@@ -252,7 +254,13 @@ class CatalogNativeEmbeddingExecutor:
             f"local-embedding-step:{workflow.workflow_id}:encode_batch:1:"
             f"{request.workflow_definition_sha256}"
         )
-        if not self.evaluate(request).ready or idempotency_key != expected_key:
+        try:
+            self._assert_current_runtime(request)
+        except (ValueError, OSError) as error:
+            # Readiness is a redacted public projection. Execution must retain
+            # the actual failure chain for the existing bounded site reporter.
+            raise ValueError("LOCAL_EMBEDDING_EXECUTOR_CONTEXT_INVALID") from error
+        if idempotency_key != expected_key:
             raise ValueError("LOCAL_EMBEDDING_EXECUTOR_CONTEXT_INVALID")
         caller = self.owner.registry_caller(request)
         with fenced_transaction() as session:

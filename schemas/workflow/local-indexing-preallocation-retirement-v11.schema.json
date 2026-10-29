@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-indexing-preallocation-retirement/1.1",
+  "oneOf": [{"$ref": "#/$defs/command"}, {"$ref": "#/$defs/receipt"}],
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "service": {
+      "type": "object", "additionalProperties": false,
+      "required": ["service_id", "service_revision_id", "service_identity_sha256"],
+      "properties": {
+        "service_id": {"type": "string", "pattern": "^localindexservice_[0-9a-f]{32}$"},
+        "service_revision_id": {"type": "string", "pattern": "^localindexservicerev_[0-9a-f]{32}$"},
+        "service_identity_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "command": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "record_type", "workflow_id", "workflow_request_sha256", "command_id", "lease_generation", "service", "successor_source_commit", "reason", "command_sha256"],
+      "properties": {
+        "schema_version": {"const": "local-indexing-preallocation-retirement/1.1"},
+        "record_type": {"const": "COMMAND"},
+        "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+        "workflow_request_sha256": {"$ref": "#/$defs/sha256"},
+        "command_id": {"type": "string", "pattern": "^wfcmd_[0-9a-f]{32}$"},
+        "lease_generation": {"type": "integer", "minimum": 1, "maximum": 2147483647},
+        "service": {"$ref": "#/$defs/service"},
+        "successor_source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "reason": {"const": "EMBEDDING_EXECUTION_CONTEXT_UNAVAILABLE"},
+        "command_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "receipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "record_type", "command", "step_run_id", "performed_by", "performed_at", "prior_command_state", "new_workflow_state", "new_stage", "new_command_state", "new_step_state", "receipt_sha256"],
+      "properties": {
+        "schema_version": {"const": "local-indexing-preallocation-retirement/1.1"},
+        "record_type": {"const": "RECEIPT"},
+        "command": {"$ref": "#/$defs/command"},
+        "step_run_id": {"type": "string", "pattern": "^steprun_[0-9a-f]{32}$"},
+        "performed_by": {"type": "string", "minLength": 1, "maxLength": 63, "pattern": "^[a-z_][a-z0-9_]*$"},
+        "performed_at": {"type": "string", "format": "date-time", "pattern": "(?:Z|\\+00:00)$"},
+        "prior_command_state": {"const": "PROCESSING"},
+        "new_workflow_state": {"const": "FAILED"},
+        "new_stage": {"const": "FAILED"},
+        "new_command_state": {"const": "FAILED"},
+        "new_step_state": {"const": "FAILED"},
+        "receipt_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

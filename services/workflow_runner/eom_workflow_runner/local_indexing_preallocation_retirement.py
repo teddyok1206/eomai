@@ -21,10 +21,10 @@ from eom_workflow.local_embedding_request_v2 import (
     parse_supported_local_embedding_request,
 )
 from eom_workflow.local_indexing_preallocation_retirement import (
-    LocalIndexingPreallocationRetirementCommand,
-    LocalIndexingPreallocationRetirementReceipt,
-    parse_local_indexing_retirement_command,
-    parse_local_indexing_retirement_receipt,
+    SupportedLocalIndexingRetirementCommand,
+    SupportedLocalIndexingRetirementReceipt,
+    parse_supported_local_indexing_retirement_command,
+    parse_supported_local_indexing_retirement_receipt,
 )
 from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError
@@ -75,14 +75,14 @@ def _owner(session: Session) -> str:
 
 
 def retire_unallocated_indexing_workflow(
-    session: Session, command: LocalIndexingPreallocationRetirementCommand
-) -> LocalIndexingPreallocationRetirementReceipt:
+    session: Session, command: SupportedLocalIndexingRetirementCommand
+) -> SupportedLocalIndexingRetirementReceipt:
     """Verify exact preallocation evidence, then append FAILED history atomically.
 
     This operation is explicit owner maintenance, not a runtime automatic retry.
     A DB timeout/race requires rollback and exact replay, never a force flag.
     """
-    command = parse_local_indexing_retirement_command(command)
+    command = parse_supported_local_indexing_retirement_command(command)
     principal = _owner(session)
     try:
         return _retire(session, command, principal)
@@ -93,8 +93,8 @@ def retire_unallocated_indexing_workflow(
 
 
 def _retire(
-    session: Session, command: LocalIndexingPreallocationRetirementCommand, principal: str
-) -> LocalIndexingPreallocationRetirementReceipt:
+    session: Session, command: SupportedLocalIndexingRetirementCommand, principal: str
+) -> SupportedLocalIndexingRetirementReceipt:
     workflow = session.scalar(
         select(WorkflowInstanceRecord)
         .where(WorkflowInstanceRecord.workflow_id == command.workflow_id)
@@ -207,7 +207,7 @@ def _retire(
         if len(events) != 1:
             raise LocalIndexingRetirementError("LOCAL_INDEXING_RETIREMENT_HISTORY_INVALID")
         event = events[0]
-        receipt = parse_local_indexing_retirement_receipt(event.payload)
+        receipt = parse_supported_local_indexing_retirement_receipt(event.payload)
         if receipt.command != command:
             raise LocalIndexingRetirementError("LOCAL_INDEXING_RETIREMENT_REPLAY_CONFLICT")
         if (
@@ -247,7 +247,7 @@ def _retire(
     ):
         raise LocalIndexingRetirementError("LOCAL_INDEXING_RETIREMENT_PREALLOCATION_UNPROVEN")
     body = {
-        "schema_version": "local-indexing-preallocation-retirement/1.0",
+        "schema_version": command.schema_version,
         "record_type": "RECEIPT",
         "command": command.model_dump(mode="json"),
         "step_run_id": step.step_run_id,
@@ -259,7 +259,7 @@ def _retire(
         "new_command_state": "FAILED",
         "new_step_state": "FAILED",
     }
-    receipt = parse_local_indexing_retirement_receipt(
+    receipt = parse_supported_local_indexing_retirement_receipt(
         body | {"receipt_sha256": content_sha256(body)}
     )
     transition_command(original, CommandState.FAILED)

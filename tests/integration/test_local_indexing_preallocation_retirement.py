@@ -29,7 +29,7 @@ from eom_orchestrator.embedding_encoding_reservation_storage import (
 from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
 from eom_orchestrator.native_embedding_launch_identity import create_native_embedding_launch
 from eom_workflow.local_indexing_preallocation_retirement import (
-    parse_local_indexing_retirement_command,
+    parse_supported_local_indexing_retirement_command,
 )
 from eom_workflow_runner.local_embedding_admission import ResolvedLocalEmbeddingAdmission
 from eom_workflow_runner.local_embedding_submission import start_local_embedding_in_session
@@ -58,7 +58,7 @@ from eom_workflow_runner.state_machine import (
     transition_step,
     transition_workflow,
 )
-from sqlalchemy import func, select
+from sqlalchemy import event, func, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
@@ -91,8 +91,9 @@ class Case:
     step_id: str
 
 
-@pytest.fixture
-def case(guarded_engine):
+@pytest.fixture(params=("1.0", "1.1"))
+def case(guarded_engine, request):
+    retirement_version = request.param
     sessions = build_session_factory(guarded_engine)
     service = identity()
     reference = local_indexing_service_reference(service)
@@ -153,10 +154,10 @@ def case(guarded_engine):
         )
         transition_step(step, StepState.RUNNING)
         step_id = step.step_run_id
-    command = parse_local_indexing_retirement_command(
+    command = parse_supported_local_indexing_retirement_command(
         seal(
             {
-                "schema_version": "local-indexing-preallocation-retirement/1.0",
+                "schema_version": "local-indexing-preallocation-retirement/" + retirement_version,
                 "record_type": "COMMAND",
                 "workflow_id": workflow_id,
                 "workflow_request_sha256": request.request_sha256,
@@ -164,7 +165,11 @@ def case(guarded_engine):
                 "lease_generation": 1,
                 "service": reference.model_dump(mode="json"),
                 "successor_source_commit": "f" * 40,
-                "reason": "EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE",
+                "reason": (
+                    "EMBEDDING_EXECUTION_CONTEXT_UNAVAILABLE"
+                    if retirement_version == "1.1"
+                    else "EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE"
+                ),
             },
             "command_sha256",
         )
@@ -206,8 +211,28 @@ def snapshot(case):
 
 def test_actual_failure_replay_keeps_request_lease_and_job_artifact_counts(case):
     before = snapshot(case)
-    with case.fixture.sessions.begin() as session:
-        result = retire_unallocated_indexing_workflow(session, case.command)
+    parent_writes = []
+
+    def observe(_connection, _cursor, statement, _parameters, _context, _many):
+        normalized = " ".join(statement.upper().split())
+        for table in ("JOBS", "JOB_EVENTS", "ARTIFACTS", "ARTIFACT_REVISIONS"):
+            if any(
+                normalized.startswith(prefix + name + " ")
+                or normalized.startswith(prefix + name + "(")
+                for prefix in ("UPDATE ", "INSERT INTO ", "DELETE FROM ")
+                for name in (table, "APP." + table)
+            ):
+                parent_writes.append(table)
+
+    event.listen(case.fixture.engine, "before_cursor_execute", observe)
+    try:
+        with case.fixture.sessions.begin() as session:
+            result = retire_unallocated_indexing_workflow(session, case.command)
+    finally:
+        event.remove(case.fixture.engine, "before_cursor_execute", observe)
+    assert parent_writes == []
+    assert result.schema_version == case.command.schema_version
+    assert result.command == case.command
     after = snapshot(case)
     assert after["states"] == ("FAILED",) * 4
     assert after["events"] == before["events"] + (
@@ -320,12 +345,35 @@ def test_actual_changed_retirement_command_conflicts_without_adding_events(case)
     with case.fixture.sessions.begin() as session:
         retire_unallocated_indexing_workflow(session, case.command)
     before = snapshot(case)
-    changed = parse_local_indexing_retirement_command(
+    changed = parse_supported_local_indexing_retirement_command(
         seal(
             case.command.model_dump(mode="json") | {"successor_source_commit": "e" * 40},
             "command_sha256",
         )
     )
+    with (
+        pytest.raises(LocalIndexingRetirementError, match="REPLAY_CONFLICT"),
+        case.fixture.sessions.begin() as session,
+    ):
+        retire_unallocated_indexing_workflow(session, changed)
+    assert snapshot(case) == before
+
+
+def test_actual_other_retirement_family_cannot_reclassify_the_original_failure(case):
+    with case.fixture.sessions.begin() as session:
+        retire_unallocated_indexing_workflow(session, case.command)
+    before = snapshot(case)
+    successor = case.command.schema_version.endswith("/1.0")
+    body = case.command.model_dump(mode="json") | {
+        "schema_version": "local-indexing-preallocation-retirement/"
+        + ("1.1" if successor else "1.0"),
+        "reason": (
+            "EMBEDDING_EXECUTION_CONTEXT_UNAVAILABLE"
+            if successor
+            else "EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE"
+        ),
+    }
+    changed = parse_supported_local_indexing_retirement_command(seal(body, "command_sha256"))
     with (
         pytest.raises(LocalIndexingRetirementError, match="REPLAY_CONFLICT"),
         case.fixture.sessions.begin() as session,
@@ -347,7 +395,7 @@ def test_actual_validly_hashed_but_different_control_intent_is_denied(case, fiel
         body["successor_source_commit"] = case.service.runtime_source_commit
     else:
         body[field] = "sha256:" + "e" * 64 if field.endswith("sha256") else "wfcmd_" + uuid4().hex
-    command = parse_local_indexing_retirement_command(seal(body, "command_sha256"))
+    command = parse_supported_local_indexing_retirement_command(seal(body, "command_sha256"))
     before = snapshot(case)
     with pytest.raises(LocalIndexingRetirementError), case.fixture.sessions.begin() as session:
         retire_unallocated_indexing_workflow(session, command)
