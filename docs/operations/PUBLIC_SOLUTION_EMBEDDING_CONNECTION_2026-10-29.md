@@ -231,3 +231,36 @@ source `fa80e5ba345908e76dcf162fd66807c81eca0322`의 관련 247 tests, mypy/Ruff
 build-only RECORD/설치 검사는 PASS다. 새 owner prefix는 설치만 했으며, 이 문단 시점에는
 현재 묶음의 정상 종료를 기다려 활성화를 보류했다. root controller24555547과 수치 모델은
 변경하지 않았다.
+
+### 17:01–17:10 UTC — 실제 CUDA 계산 재개
+
+현재 묶음을 끝내는 MAIN-only SIGTERM 뒤 a8ed owner는 16:53:24에 두 번째 캐시 등록도
+`BATCH_COMPLETED`로 끝내고 정상 종료했다. 완료 Workflow 두 개는 실패로 바꾸거나 retirement하지
+않았다. 새 owner `a72150a03a7a92a2f5c024ff1c2af0b5beefedc0`에 fresh-Graph SQL 수정과
+미계산 encoding 우선 선택을 함께 담았다. 후자는 검증된 `reusable_rows` hash set을 사용하며,
+모델 입력·recipe·space·최대8개·기존 membership refresh 규칙을 바꾸지 않는다(관련77 tests PASS).
+
+build-only RECORD/installed simulation PASS 후 기존 installer로 별도 immutable prefix에
+설치했다. 기존 3-file CAS selector를 재사용한 operator 검사는33 tests PASS다. 6개 namespace의
+내용은 그대로 두고 METADATA_ONLY를 먼저 순회하도록 배열했다. 공유9개 파일은 bytes와
+stat epoch까지 보존했다. prepare/publish/activate/select/start는 모두 PASS다.
+
+실제 INDEX InvocationID는 `aa48cbc822864f7787fe78e79f9ab227`(시작 PID2016982)이며,
+QUERY PID1708497/Invocation9c60629b423547fc832a91b7e9f180e3와 창작 등록 PID1938852/
+Invocation9ccf12bddee14fc6ba03cda79cfc6826는 그대로다. 운영 migration·API/Web·수치 모델·
+controller24555547을 교체하지 않았다. staged rollout/rollback은
+`/var/lib/eom-gpu-standby-index-a72150a0/`에 보존했다.
+
+새 parent `job_233a431a9b154a1dae4ee36b7ea1b857`, Workflow
+`workflow_2c4af93d02e34f7b9b6bf6240ab1ab83`에서 실제 CUDA8행·dimension1024 계산 완료를 확인했다.
+정식 `EmbeddingBatchExecutionReceipt`는
+`sha256:96a1e00b2a927fcaee32e46b1de7e15be3991ce1b6095fae68a312aa2767a272`이며,
+공식 Artifact reader로 parent/allocation/bound/route/canonical bytes·hash를 대조했다.
+8개 owned numerical Job도 모두 SUCCEEDED다. 이 증거는 단순 PID·GPU 메모리·planning Job 성공이나
+앞선 캐시 재사용과 다르다. 최종 index registration/전체520개 완료 여부는 아래 후속 증거로 구분한다.
+
+canonical 관측은 `/tmp/eom-gpu-canonical-202610291710.log`, 실제 단계별 배포 기록은
+`/tmp/eom-gpu-priority-{prepare-qualified,publish,activate,select,start}-20261029*.log`다.
+앞선 transient prepare는 namespace mount 단계에서226으로 종료해 Python을 실행하지 않았고,
+첫 직접 호출은 source-qualified adapter 경로 검사에서 write 전에 거부됐다. 실패 이력을 보존한 뒤
+정확한 source-qualified 보호 경로로 실행했으며, 불명확한 mutation을 새 identity로 우회하지 않았다.
