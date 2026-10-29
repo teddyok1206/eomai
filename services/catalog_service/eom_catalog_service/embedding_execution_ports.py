@@ -16,6 +16,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingExecutionRuntime,
     IncrementalEmbeddingResult,
 )
+from eom_catalog_contracts.public_solution_query import PublicSolutionQueryResult
 
 from eom_catalog_service.inference_transfer_ports import LocalTextEmbeddingBackend
 
@@ -286,6 +287,14 @@ class EncodedReferenceQueryBatch:
     """Temporary genuine QUERY output, not a corpus binding or native admission receipt."""
 
     result: EmbeddingReferenceQueryResult
+    vectors: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class EncodedPublicSolutionQuery:
+    """Local public QUERY2 bytes, not source admission or a committed execution."""
+
+    result: PublicSolutionQueryResult
     vectors: bytes
 
 

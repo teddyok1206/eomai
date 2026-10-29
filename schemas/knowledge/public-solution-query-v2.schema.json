@@ -1,0 +1,821 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/public-solution-query/2.0",
+  "$defs": {
+    "ArtifactMemberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ArtifactMemberPointer",
+      "type": "object"
+    },
+    "EmbeddingBinaryMember": {
+      "additionalProperties": false,
+      "description": "Precommit same-file-set descriptor. Binary validation remains an owner adapter duty.",
+      "properties": {
+        "member_path": {
+          "const": "vectors.f32",
+          "default": "vectors.f32",
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0",
+          "default": "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0",
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "media_type": {
+          "const": "application/octet-stream",
+          "default": "application/octet-stream",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "byte_count": {
+          "maximum": 16777216,
+          "minimum": 4,
+          "title": "Byte Count",
+          "type": "integer"
+        },
+        "dtype": {
+          "const": "FLOAT32",
+          "default": "FLOAT32",
+          "title": "Dtype",
+          "type": "string"
+        },
+        "byte_order": {
+          "const": "LITTLE_ENDIAN",
+          "default": "LITTLE_ENDIAN",
+          "title": "Byte Order",
+          "type": "string"
+        },
+        "layout": {
+          "const": "ROW_MAJOR",
+          "default": "ROW_MAJOR",
+          "title": "Layout",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sha256",
+        "byte_count"
+      ],
+      "title": "EmbeddingBinaryMember",
+      "type": "object"
+    },
+    "EmbeddingEncodingIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "storage_partition": {
+          "$ref": "#/$defs/StoragePartition"
+        },
+        "space_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Space Sha256",
+          "type": "string"
+        },
+        "input_text_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Input Text Sha256",
+          "type": "string"
+        },
+        "encoding_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Encoding Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "storage_partition",
+        "space_sha256",
+        "input_text_sha256",
+        "encoding_sha256"
+      ],
+      "title": "EmbeddingEncodingIdentity",
+      "type": "object"
+    },
+    "EmbeddingExecutionRuntime": {
+      "additionalProperties": false,
+      "description": "Actual installed execution fingerprint is verified by the owner, not this pure DTO.",
+      "properties": {
+        "device": {
+          "enum": [
+            "CPU",
+            "CUDA"
+          ],
+          "title": "Device",
+          "type": "string"
+        },
+        "precision": {
+          "const": "FLOAT32",
+          "default": "FLOAT32",
+          "title": "Precision",
+          "type": "string"
+        },
+        "tf32_enabled": {
+          "const": false,
+          "default": false,
+          "title": "Tf32 Enabled",
+          "type": "boolean"
+        },
+        "execution_runtime_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Execution Runtime Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "device",
+        "execution_runtime_sha256"
+      ],
+      "title": "EmbeddingExecutionRuntime",
+      "type": "object"
+    },
+    "EmbeddingSpace": {
+      "additionalProperties": false,
+      "properties": {
+        "model_spec": {
+          "$ref": "#/$defs/LocalEmbeddingModelSpec"
+        },
+        "purpose": {
+          "enum": [
+            "QUERY",
+            "DOCUMENT"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "runtime": {
+          "$ref": "#/$defs/EmbeddingExecutionRuntime"
+        },
+        "space_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Space Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_spec",
+        "purpose",
+        "runtime",
+        "space_sha256"
+      ],
+      "title": "EmbeddingSpace",
+      "type": "object"
+    },
+    "EmbeddingVectorShardManifest": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "embedding-vector-shard/1.0",
+          "default": "embedding-vector-shard/1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "space": {
+          "$ref": "#/$defs/EmbeddingSpace"
+        },
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/EmbeddingEncodingIdentity"
+          },
+          "maxItems": 1024,
+          "minItems": 1,
+          "title": "Rows",
+          "type": "array"
+        },
+        "input_set_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Input Set Sha256",
+          "type": "string"
+        },
+        "binary": {
+          "$ref": "#/$defs/EmbeddingBinaryMember"
+        },
+        "dimension": {
+          "maximum": 4096,
+          "minimum": 1,
+          "title": "Dimension",
+          "type": "integer"
+        },
+        "row_count": {
+          "maximum": 1024,
+          "minimum": 1,
+          "title": "Row Count",
+          "type": "integer"
+        },
+        "shard_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Shard Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "space",
+        "rows",
+        "input_set_sha256",
+        "binary",
+        "dimension",
+        "row_count",
+        "shard_sha256"
+      ],
+      "title": "EmbeddingVectorShardManifest",
+      "type": "object"
+    },
+    "ExperimentView": {
+      "enum": [
+        "CONTENT_ONLY",
+        "CONCRETE_FACETS",
+        "METADATA_ONLY"
+      ],
+      "type": "string"
+    },
+    "LocalEmbeddingFile": {
+      "additionalProperties": false,
+      "properties": {
+        "member_path": {
+          "enum": [
+            "config.json",
+            "model.safetensors",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "special_tokens_map.json",
+            "sentencepiece.bpe.model",
+            "README.md",
+            "LICENSE",
+            "1_Pooling/config.json"
+          ],
+          "title": "Member Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 8589934592,
+          "minimum": 1,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "member_path",
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "LocalEmbeddingFile",
+      "type": "object"
+    },
+    "LocalEmbeddingModelSpec": {
+      "additionalProperties": false,
+      "description": "Pinned offline recipe; owning a manifest does not activate or approve its files.",
+      "properties": {
+        "schema_version": {
+          "const": "item-local-embedding-model-spec/1.0",
+          "default": "item-local-embedding-model-spec/1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model_id": {
+          "pattern": "^embeddingmodel_[0-9a-f]{32}$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "model_revision_id": {
+          "pattern": "^embeddingmodelrev_[0-9a-f]{32}$",
+          "title": "Model Revision Id",
+          "type": "string"
+        },
+        "provider_family": {
+          "const": "transformers-local-dense/1.0",
+          "default": "transformers-local-dense/1.0",
+          "title": "Provider Family",
+          "type": "string"
+        },
+        "upstream_repo": {
+          "enum": [
+            "BAAI/bge-m3",
+            "intfloat/multilingual-e5-small",
+            "intfloat/multilingual-e5-base"
+          ],
+          "title": "Upstream Repo",
+          "type": "string"
+        },
+        "upstream_revision": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Upstream Revision",
+          "type": "string"
+        },
+        "license_id": {
+          "const": "MIT",
+          "default": "MIT",
+          "title": "License Id",
+          "type": "string"
+        },
+        "dimension": {
+          "enum": [
+            384,
+            768,
+            1024
+          ],
+          "title": "Dimension",
+          "type": "integer"
+        },
+        "maximum_tokens": {
+          "maximum": 8192,
+          "minimum": 2,
+          "title": "Maximum Tokens",
+          "type": "integer"
+        },
+        "pooling": {
+          "enum": [
+            "CLS",
+            "MEAN"
+          ],
+          "title": "Pooling",
+          "type": "string"
+        },
+        "normalization": {
+          "const": "L2",
+          "default": "L2",
+          "title": "Normalization",
+          "type": "string"
+        },
+        "dtype": {
+          "const": "float32",
+          "default": "float32",
+          "title": "Dtype",
+          "type": "string"
+        },
+        "query_prefix": {
+          "enum": [
+            "",
+            "query: "
+          ],
+          "title": "Query Prefix",
+          "type": "string"
+        },
+        "document_prefix": {
+          "enum": [
+            "",
+            "query: "
+          ],
+          "title": "Document Prefix",
+          "type": "string"
+        },
+        "truncation": {
+          "const": "REJECT_OVERFLOW",
+          "default": "REJECT_OVERFLOW",
+          "title": "Truncation",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/LocalEmbeddingFile"
+          },
+          "maxItems": 9,
+          "minItems": 5,
+          "title": "Files",
+          "type": "array"
+        },
+        "runtime_versions": {
+          "items": {
+            "$ref": "#/$defs/LocalEmbeddingRuntimeVersion"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "title": "Runtime Versions",
+          "type": "array"
+        },
+        "manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "upstream_repo",
+        "upstream_revision",
+        "dimension",
+        "maximum_tokens",
+        "pooling",
+        "query_prefix",
+        "document_prefix",
+        "files",
+        "runtime_versions",
+        "manifest_sha256"
+      ],
+      "title": "LocalEmbeddingModelSpec",
+      "type": "object"
+    },
+    "LocalEmbeddingRuntimeVersion": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "enum": [
+            "torch",
+            "transformers",
+            "safetensors",
+            "tokenizers"
+          ],
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "pattern": "^[0-9][A-Za-z0-9.+_-]{0,95}$",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "title": "LocalEmbeddingRuntimeVersion",
+      "type": "object"
+    },
+    "PublicSolutionEmbeddingRecipe": {
+      "additionalProperties": false,
+      "description": "Explicit successor; old EXACT_PROFILE_CLAIMS recipe bytes stay unchanged.",
+      "properties": {
+        "schema_version": {
+          "const": "inference-transfer-view-recipe/2.0",
+          "default": "inference-transfer-view-recipe/2.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "content": {
+          "const": "CANONICAL_ITEM_TEXT_NO_SOLUTION",
+          "default": "CANONICAL_ITEM_TEXT_NO_SOLUTION",
+          "title": "Content",
+          "type": "string"
+        },
+        "facets": {
+          "const": "FORMAT_NEUTRAL_PUBLIC_SOLUTION",
+          "default": "FORMAT_NEUTRAL_PUBLIC_SOLUTION",
+          "title": "Facets",
+          "type": "string"
+        },
+        "metadata": {
+          "const": "SORTED_ACCEPTED_FIELDS",
+          "default": "SORTED_ACCEPTED_FIELDS",
+          "title": "Metadata",
+          "type": "string"
+        },
+        "overflow": {
+          "const": "REJECT_OVERFLOW",
+          "default": "REJECT_OVERFLOW",
+          "title": "Overflow",
+          "type": "string"
+        },
+        "maximum_text_bytes": {
+          "const": 262144,
+          "default": 262144,
+          "title": "Maximum Text Bytes",
+          "type": "integer"
+        },
+        "ranking": {
+          "const": "EXACT_FLOAT64_COSINE_REF_TIES",
+          "default": "EXACT_FLOAT64_COSINE_REF_TIES",
+          "title": "Ranking",
+          "type": "string"
+        },
+        "recipe_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Recipe Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "recipe_sha256"
+      ],
+      "title": "PublicSolutionEmbeddingRecipe",
+      "type": "object"
+    },
+    "PublicSolutionQueryExecutionPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "job_id": {
+          "pattern": "^job_[0-9a-f]{32}$",
+          "title": "Job Id",
+          "type": "string"
+        },
+        "query_request_id": {
+          "pattern": "^embeddingquery_[0-9a-f]{32}$",
+          "title": "Query Request Id",
+          "type": "string"
+        },
+        "request_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Request Sha256",
+          "type": "string"
+        },
+        "input_set_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Input Set Sha256",
+          "type": "string"
+        },
+        "result_member": {
+          "$ref": "#/$defs/ArtifactMemberPointer"
+        },
+        "result_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Result Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "query_request_id",
+        "request_sha256",
+        "input_set_sha256",
+        "result_member",
+        "result_sha256"
+      ],
+      "title": "PublicSolutionQueryExecutionPointer",
+      "type": "object"
+    },
+    "PublicSolutionQueryInput": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "embedding-reference-query-input/2.0",
+          "default": "embedding-reference-query-input/2.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "job_id": {
+          "pattern": "^job_[0-9a-f]{32}$",
+          "title": "Job Id",
+          "type": "string"
+        },
+        "query_request_id": {
+          "pattern": "^embeddingquery_[0-9a-f]{32}$",
+          "title": "Query Request Id",
+          "type": "string"
+        },
+        "context_request_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Context Request Sha256",
+          "type": "string"
+        },
+        "spaces": {
+          "$ref": "#/$defs/ReferenceQuerySpaces"
+        },
+        "recipe": {
+          "$ref": "#/$defs/PublicSolutionEmbeddingRecipe"
+        },
+        "rows": {
+          "items": {
+            "$ref": "#/$defs/ReferenceQueryTextInput"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "title": "Rows",
+          "type": "array"
+        },
+        "batch_size": {
+          "maximum": 16,
+          "minimum": 1,
+          "title": "Batch Size",
+          "type": "integer"
+        },
+        "threads": {
+          "maximum": 16,
+          "minimum": 1,
+          "title": "Threads",
+          "type": "integer"
+        },
+        "input_set_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Input Set Sha256",
+          "type": "string"
+        },
+        "request_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Request Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "query_request_id",
+        "context_request_sha256",
+        "spaces",
+        "recipe",
+        "rows",
+        "batch_size",
+        "threads",
+        "input_set_sha256",
+        "request_sha256"
+      ],
+      "title": "PublicSolutionQueryInput",
+      "type": "object"
+    },
+    "PublicSolutionQueryResult": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "embedding-reference-query-result/2.0",
+          "default": "embedding-reference-query-result/2.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "job_id": {
+          "pattern": "^job_[0-9a-f]{32}$",
+          "title": "Job Id",
+          "type": "string"
+        },
+        "query_request_id": {
+          "pattern": "^embeddingquery_[0-9a-f]{32}$",
+          "title": "Query Request Id",
+          "type": "string"
+        },
+        "context_request_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Context Request Sha256",
+          "type": "string"
+        },
+        "request_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Request Sha256",
+          "type": "string"
+        },
+        "spaces": {
+          "$ref": "#/$defs/ReferenceQuerySpaces"
+        },
+        "recipe": {
+          "$ref": "#/$defs/PublicSolutionEmbeddingRecipe"
+        },
+        "input_set_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Input Set Sha256",
+          "type": "string"
+        },
+        "shard": {
+          "$ref": "#/$defs/EmbeddingVectorShardManifest"
+        },
+        "view_rows": {
+          "items": {
+            "$ref": "#/$defs/ReferenceQueryViewRow"
+          },
+          "maxItems": 1,
+          "minItems": 1,
+          "title": "View Rows",
+          "type": "array"
+        },
+        "result_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Result Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "job_id",
+        "query_request_id",
+        "context_request_sha256",
+        "request_sha256",
+        "spaces",
+        "recipe",
+        "input_set_sha256",
+        "shard",
+        "view_rows",
+        "result_sha256"
+      ],
+      "title": "PublicSolutionQueryResult",
+      "type": "object"
+    },
+    "ReferenceQuerySpaces": {
+      "additionalProperties": false,
+      "properties": {
+        "query": {
+          "$ref": "#/$defs/EmbeddingSpace"
+        },
+        "document": {
+          "$ref": "#/$defs/EmbeddingSpace"
+        }
+      },
+      "required": [
+        "query",
+        "document"
+      ],
+      "title": "ReferenceQuerySpaces",
+      "type": "object"
+    },
+    "ReferenceQueryTextInput": {
+      "additionalProperties": false,
+      "properties": {
+        "encoding": {
+          "$ref": "#/$defs/EmbeddingEncodingIdentity"
+        },
+        "text": {
+          "maxLength": 262144,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "view": {
+          "$ref": "#/$defs/ExperimentView"
+        }
+      },
+      "required": [
+        "encoding",
+        "text",
+        "view"
+      ],
+      "title": "ReferenceQueryTextInput",
+      "type": "object"
+    },
+    "ReferenceQueryViewRow": {
+      "additionalProperties": false,
+      "properties": {
+        "view": {
+          "$ref": "#/$defs/ExperimentView"
+        },
+        "row_index": {
+          "maximum": 2,
+          "minimum": 0,
+          "title": "Row Index",
+          "type": "integer"
+        },
+        "encoding_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Encoding Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "view",
+        "row_index",
+        "encoding_sha256"
+      ],
+      "title": "ReferenceQueryViewRow",
+      "type": "object"
+    },
+    "StoragePartition": {
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+      "type": "string"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/PublicSolutionQueryInput"
+    },
+    {
+      "$ref": "#/$defs/PublicSolutionQueryResult"
+    },
+    {
+      "$ref": "#/$defs/PublicSolutionQueryExecutionPointer"
+    }
+  ]
+}

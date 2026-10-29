@@ -166,3 +166,12 @@ schema/migration·실제 disposable transaction·동시성·중단 재개 결과
 분리해 기록한다. source-plan3 → 숫자 input/result1 → index/binding3 → completion3 경로가
 실제 임시 DB에서 끝나더라도 QUERY와 candidate의 동일 recipe 운영 검색이 확인되기 전에는
 `SOLUTION_EMBEDDING_ALIGNMENT_PENDING`을 유지한다.
+
+### QUERY 수치 결과와 source 의미의 분리
+
+Public QUERY는 기존 query1/1.1을 새 recipe로 제자리 변경하지 않는다. query input/result2는
+공개 풀이 recipe2와 QUERY/DOCUMENT space pair를 명시하며, 실제 수치 row/shard/encoding
+identity와 encoder는 기존 것을 사용한다. 이 view에는 공개 풀이 한 개만 들어가며 원문의
+format/ID/warning은 넣지 않는다. source와 정책은 별도 similarity/native owner가 검증한다.
+새 result2를 result1이라고 표시하거나 기존 fixed QUERY1 DAG에 위장 연결하지 않는다.
+후속 native definition/metadata·선택 정책을 정확하게 연결한 뒤 실제 검색을 활성화한다.

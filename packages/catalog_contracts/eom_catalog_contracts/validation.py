@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "public-solution-query-v2": CatalogSchemaResource(
+            "schemas/knowledge/public-solution-query-v2.schema.json",
+            "resources/knowledge/public-solution-query-v2.schema.json",
+            "2.0",
+            "sha256:9632da6fa2d7458761c3262430c2843a41f2d70042c26bef57ba8f7a13964769",
+        ),
         "education-retrieval-access-policy-v1.4": CatalogSchemaResource(
             "schemas/knowledge/education-retrieval-access-policy-v1.4.schema.json",
             "resources/knowledge/education-retrieval-access-policy-v1.4.schema.json",

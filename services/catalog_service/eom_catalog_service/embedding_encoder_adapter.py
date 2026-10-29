@@ -33,11 +33,17 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     parse_incremental_embedding_input,
     validate_incremental_embedding_result,
 )
+from eom_catalog_contracts.public_solution_query import (
+    PublicSolutionQueryInput,
+    PublicSolutionQueryResult,
+    validate_public_solution_query_result,
+)
 from eom_identifiers import content_sha256, sha256_bytes
 
 from eom_catalog_service.embedding_execution_ports import (
     EncodedEmbeddingBatch,
     EncodedPrivateChatQueryBatch,
+    EncodedPublicSolutionQuery,
     EncodedReferenceQueryBatch,
     NativeEmbeddingBackend,
 )
@@ -98,7 +104,8 @@ def _require_actual_backend(
 
 
 def _require_actual_query_backend(
-    request: EmbeddingReferenceQueryInputV11, backend: NativeEmbeddingBackend
+    request: EmbeddingReferenceQueryInputV11 | PublicSolutionQueryInput,
+    backend: NativeEmbeddingBackend,
 ) -> None:
     mismatch = _actual_backend_mismatch(
         request.spaces.query, request.batch_size, request.threads, backend
@@ -166,6 +173,32 @@ def encode_reference_query_batch(
 ) -> EncodedReferenceQueryBatch:
     """Encode genuine QUERY rows once; no installation, source grant or publication follows."""
     request = parse_embedding_reference_query_input_v11(request)
+    result_body, payload = _encode_reference_query_values(request, backend)
+    result = EmbeddingReferenceQueryResult.model_validate(
+        result_body | {"result_sha256": content_sha256(result_body)}
+    )
+    validate_reference_query_result_v11(request, result)
+    return EncodedReferenceQueryBatch(result, payload)
+
+
+def encode_public_solution_query(
+    request: PublicSolutionQueryInput, backend: NativeEmbeddingBackend
+) -> EncodedPublicSolutionQuery:
+    """Same numeric kernel, explicit recipe2/result2; does not activate native QUERY."""
+    request = PublicSolutionQueryInput.model_validate(raw_similarity_contract_value(request))
+    result_body, payload = _encode_reference_query_values(request, backend)
+    result = PublicSolutionQueryResult.model_validate(
+        result_body | {"result_sha256": content_sha256(result_body)}
+    )
+    validate_public_solution_query_result(request, result)
+    return EncodedPublicSolutionQuery(result, payload)
+
+
+def _encode_reference_query_values(
+    request: EmbeddingReferenceQueryInputV11 | PublicSolutionQueryInput,
+    backend: NativeEmbeddingBackend,
+) -> tuple[dict[str, object], bytes]:
+    """Shared owner-local numerical materialization; callers parse exact wire families first."""
     _require_actual_query_backend(request, backend)
     vectors = backend.encode(tuple(row.text for row in request.rows), purpose="QUERY")
     _require_actual_query_backend(request, backend)
@@ -177,8 +210,10 @@ def encode_reference_query_batch(
         request.input_set_sha256,
         vectors,
     )
-    result_body = {
-        "schema_version": "embedding-reference-query-result/1.0",
+    result_body: dict[str, object] = {
+        "schema_version": "embedding-reference-query-result/2.0"
+        if isinstance(request, PublicSolutionQueryInput)
+        else "embedding-reference-query-result/1.0",
         "job_id": request.job_id,
         "query_request_id": request.query_request_id,
         "context_request_sha256": request.context_request_sha256,
@@ -196,11 +231,7 @@ def encode_reference_query_batch(
             for index, row in enumerate(request.rows)
         ],
     }
-    result = EmbeddingReferenceQueryResult.model_validate(
-        result_body | {"result_sha256": content_sha256(result_body)}
-    )
-    validate_reference_query_result_v11(request, result)
-    return EncodedReferenceQueryBatch(result, payload)
+    return result_body, payload
 
 
 def _encode_private_chat_query(

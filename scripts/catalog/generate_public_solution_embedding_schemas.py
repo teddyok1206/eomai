@@ -50,6 +50,7 @@ def main() -> None:
     families.add_argument("--ownership", action="store_true")
     families.add_argument("--completion", action="store_true")
     families.add_argument("--coordinator", action="store_true")
+    families.add_argument("--query", action="store_true")
     arguments = parser.parse_args()
     value = schema(registry=arguments.registry)
     name = NAME.replace("index", "registry") if arguments.registry else NAME
@@ -118,6 +119,23 @@ def main() -> None:
             **NativeEmbeddingCoordinatorCheckpointV3.model_json_schema(),
         }
         name = "workflow/native-embedding-coordinator-v3.schema.json"
+    if arguments.query:
+        from eom_catalog_contracts.public_solution_query import (
+            PublicSolutionQueryExecutionPointer,
+            PublicSolutionQueryInput,
+            PublicSolutionQueryResult,
+        )
+
+        value = {
+            "$schema": "https://json-schema.org/draft/2020-12/schema",
+            "$id": "eom://schemas/knowledge/public-solution-query/2.0",
+            **TypeAdapter(
+                PublicSolutionQueryInput
+                | PublicSolutionQueryResult
+                | PublicSolutionQueryExecutionPointer
+            ).json_schema(),
+        }
+        name = "knowledge/public-solution-query-v2.schema.json"
     payload = (json.dumps(value, ensure_ascii=False, indent=2) + "\n").encode()
     if not arguments.check:
         print(payload.decode(), end="")

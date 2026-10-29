@@ -86,6 +86,22 @@ staging하는 코드와 일치하도록 creative definition의 오래된 문자�
 관련 operator/runtime/기존 migration/API 배포 경계 **320 PASS**, script mypy PASS.
 새 패키지 검사의 결과와 운영 설치는 별도로 남긴다.
 
+`85854c63`에서 build-only를 다시 실행하여 wheel RECORD와 비편집 설치본의 schema·import·
+definition/admission 검사가 모두 PASS했다. 운영 migration·서비스 교체는 수행하지 않았다.
+빌드 출력은 `/tmp/eom-api-build/85854c63011de6e5be742ee3c7e3e0df0a2d655d.HCBpK6/dist`다.
+
+### QUERY의 같은 풀이 입력 — 다음 source 체크포인트
+
+공개 풀이 recipe2를 담는 별도 query input/result2와 실행 결과 pointer를 추가했다.
+기존 query1/1.1/result1은 새 recipe를 받아들이지 않는다. 새 encoder wrapper는 기존
+QUERY purpose 호출·backend 전후 대조·수치 shard1 packer를 공유하며 한 행을 padding하거나
+재시도하지 않는다. 기출·창작의 같은 공개 풀이가 같은 QUERY 입력이 되는 것도 확인했다.
+
+합성 CPU/CUDA backend를 사용하는 기존·신규 QUERY/증분 수치 회귀 **162 PASS**, 관련
+core 3개 파일 mypy PASS, 새 schema canonical/package mirror 및 generator `--query --check`
+PASS다. 이것은 실제 GPU 실행·native QUERY 활성화·공식 유사도 검색 완료가 아니다.
+후속 similarity/source read와 fixed native definition/owner 선택 연결이 남아 있다.
+
 ## 병행 운영 확인
 
 2026-10-29 11:47 UTC의 read-only metadata 대조에서 기존 미완료 CUDA Workflow의
