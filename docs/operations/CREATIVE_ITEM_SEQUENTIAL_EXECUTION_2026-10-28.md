@@ -100,3 +100,27 @@ Graph 접근 정책은 임의의 가장 최근 revision이 아니라 기존 Grap
 30분 운영 확인은 별도 read-only systemd timer로 수행한다. 설치본의 observation adapter는 고정 cohort의 bounded 파생 status와 실행 service 상태만 읽고, stale/중단/기술 실패를 구분한다. DB/NAS·모델·queue에 접근하거나 자동 retry/상태 변경을 하지 않는다. 결과는 journal에 남기며 개발 Slack reporter를 운영 기능으로 넣지 않는다. 완료 증거는 여전히 Item/accepted analysis/Graph/공식 조회의 정본 pointer이고 status 숫자로 대체하지 않는다. 전체 실행 전환 후 timer를 활성화하며 rollback은 이 신규 service/timer의 stop/disable이다.
 
 설치는 `scripts/catalog/install_creative_learning_owner.py`가 고정한 신규 service/timer/metadata-only env만 담당하며 모델 작업은 시작하지 않는다. canary 한도 3과 전체 한도는 같은 admitted cohort revision에서만 변경한다. wheel 설치의 umask가 `site-packages`를 root-only로 만들 수 있으므로, 새 immutable prefix를 동결하기 전에 directory 0555/file 0444로 정규화하고 Catalog identity의 import를 확인한다. 이미 실행 중인 API/GPU 또는 이전 maintenance prefix의 권한은 바꾸지 않는다. 설치 도구는 보호된 template/정확한 cohort ID·revision과 state directory를 검사하며 DB migration·비밀번호 저장·다른 서비스 재시작은 하지 않는다.
+
+## 2026-10-29 실제 연속 실행에서 확인한 경계
+
+- 실제 guiadmin 인증과 자체 테스트 세션 logout이 성공했다. 전체 1,053 target의 고정 cohort는 `creativecohort_fa7c6a7691dc890c546ccf700e77436d`, 정본 revision은 `rev_55de21e864244c90b7fb73f29f78c4b4`다. 등록 정책/대상은 다시 로그인해 재제출하지 않는다.
+- owner wheel은 `9ce6ee239e20f65b40600dedbd0b4275e9019093`, SHA `107db69749040bb6ebda1aaf43eadab641c03a4ba5ecc538c5258ce54ec2cf7d`다. Catalog identity import, service 실행, read-only observer의 `OK`/exit 0을 실제 확인했다. 설치 보조 도구의 parent directory 누락은 `2c8ce81d`에서 수정했다. API/Web/GPU 설치본은 교체하지 않았다.
+- U 10310은 02:19 UTC에 원문 수록/accepted base/공유 Graph/공식 SOLUTION_REPORT 조회와 warning closure까지 VERIFIED 됐다. 기존 worker/analysis 결과를 재사용했다.
+- U 10311은 02:19:46–02:30:09 UTC에 실제 support05에서 실행됐다. Job `job_098991890d0843e3a222092cdb551ac1`은 SUCCEEDED, Workflow `workflow_518e91583462499a8833a855be047487`는 COMPLETED이며 원래 role-result는 NEEDS_DECISION/proposal=null이다. 모델/실행 실패가 아니라 입력 계약의 원문 표현 부족이다. 원문 표 안의 장치 그림을 가리킬 verified crop pointer가 없고, 창작 문항에 배점 표지가 없다. 별도 첨부 기출의 배점을 빌려 쓰거나 그림을 만들어 넣지 않은 판단은 보존한다.
+- 결과적으로 owner는 `CREATIVE_SOURCE_ITEM_UNREADABLE`로 explicit stop했다. 이 사례를 과학적 오류나 실제 OCR 불능이라고 재해석하지 않는다. 3건 PASS가 아니며, 나머지 자동 실행/30분 timer 전환도 아직 미실행이다. 이 문항을 건너뛰어 쉬운 표본 3개만 통과시키지 않는다.
+- UI의 슬롯 표시 오류는 재현되지 않았다. 위 Job의 정확한 auth binding에 lease가 존재했고 종료 후 RELEASED 됐다. 실제 배포 JS는 같은 active-lease 값을 5초 간격으로 읽는다. 11:30 KST 이후 슬롯이 대기로 보인 것은 실제 종료/등록 대기 상태와 일치한다. owner의 등록 대기를 Codex 실행 중으로 표시하지 않는다.
+- GPU INDEX는 2026-10-28 20:10:37 UTC `LOCAL_INDEXING_SERVICE_UNAVAILABLE`로 종료한 상태를 읽기 전용으로 관측했다. QUERY는 기존 PID/설치본으로 active다. 이 작업에서 실패 기록이나 GPU runtime pin을 변경·재시작하지 않았다.
+
+### 필요한 좁은 successor 설계 (구현/활성화 전)
+
+1. **책임:** worker는 원문 영역·구조·풀이·필요한 crop recipe를 제안하고, Orchestrator가 exact source에서 crop을 생성·검증·commit한 후 Catalog가 정본 Item을 materialize한다. 원본 HWP/HWPX/PDF는 수정하지 않는다.
+2. **정본/계보:** 기존 source revision/observation, page-set과 role-result Artifact가 정본이다. 미해결 제안과 후속 제안을 각각 immutable pointer로 연결한다. 기존 1.33/result 1.0/Workflow/cohort는 제자리 수정하지 않는다.
+3. **새 계약:** JSON Schema를 먼저 정의하는 successor에서 임시 source-image reference(영역 ID/페이지/bbox)와 실제 Artifact pointer를 구별한다. 아직 생성되지 않은 hash/Artifact ID를 worker가 채우지 않는다. 독립 풀이/불일치는 시각자료 materialization 완료 여부와 분리해 보존한다.
+4. **해석:** crop은 검증된 TARGET_ITEM 영역 내부의 exact page에서만 허용한다. 원본 첨부 영역이나 최신 source를 대체 입력으로 사용하지 않는다. receipt는 source page hash·geometry·output PNG hash를 고정하며 기존 crop isolation/Artifact commit 경계를 재사용한다.
+5. **배점:** 원문 미표기를 제안 불능의 근거로 삼지 않는다. successor에서 관측 배점과 미표기 상태를 구별하고, canonical 계약의 합법적인 0은 미표기 변환 정책/주의사항과 함께 해석하도록 설계한다. 첨부 기출의 2/3점을 추측해 채우거나 출판용 배점 확정으로 간주하지 않는다.
+6. **접근/규모:** source/작업 key indexed lookup, region ID map, crop recipe/hash set으로 O(regions+crops) 처리한다. 동일 source/rectangle/renderer의 파생물은 고유키로 재사용하고 기존 page bytes를 반복 복사하지 않는다.
+7. **트랜잭션:** proposal→crop Artifact→canonical Item→accepted analysis→공유 Graph CAS를 기존 짧은 멱등 단계로 연결한다. 모델/렌더링 동안 DB transaction을 열어 두지 않는다. 신규 queue/table/framework는 기본 범위 밖이다.
+8. **의존:** 계약/순수 draft compiler는 adapter를 import하지 않는다. CLI/상주 owner가 기존 Orchestrator/Catalog application을 조합하며 worker가 NAS/DB에 직접 쓰지 않는다.
+9. **복구:** 이번 결과는 보존하고 정확한 해결 입력/후속 실행 계보를 남긴다. COMPLETED/FAILED 이력을 덮지 않는다. 후속 입력을 새 정책으로 admission해야 하는 경우 지원된 successor 경계만 사용하며 구 고정 cohort를 몰래 latest로 바꾸지 않는다.
+10. **검증:** missing crop/표 안 그림/배점 미표기/첨부 영역 차단, 잘못된 geometry/hash, 중단 후 crop/등록 replay, 같은 슬롯 동시성, 실제 3건과 공식 풀이·주의사항 조회를 확인한다. 원본 정보가 부족하면 source와 보고서를 보존하고 이유를 명시한다.
+11. **배제한 대안:** 전체 페이지를 그림으로 넣으면 별도 기출/메타데이터가 섞인다. 임의 이미지·Artifact hash 생성은 위조다. 배점 필수를 전역 완화하거나 읽을 수 있는 다음 문항만 골라 PASS 처리하는 것은 이번 실패 경계를 해결하지 않는다.
