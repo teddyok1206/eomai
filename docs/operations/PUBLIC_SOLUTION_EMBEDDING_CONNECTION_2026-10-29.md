@@ -204,3 +204,30 @@ LOCK_POPULATION은 31.654초, 두 번째는 32.096초로 줄었으나 후속 선
 운영 자료는 여러 immutable Graph에 걸쳐 pointer 약 430만 행이므로 작은 임시 fixture의
 9–10ms 결과를 운영 처리시간으로 환산하지 않는다. 실제 canonical CUDA receipt와 committed
 index revision/binding delta가 확인될 때 별도로 수치 복구 완료 증거를 남긴다.
+
+### 16:37 UTC — 캐시 재사용 등록은 완료, CUDA 수치 완료와 구별
+
+첫 새 Workflow `workflow_fdb4e4bcbe644543bd44326c50b92a27`은 16:37:24에
+`BATCH_COMPLETED`로 끝났다. CONTENT_ONLY CUDA index는 revision2
+`embeddingindexrev_5a5344d79ef0f0ae5abeea18da357b08`, Graph
+`graphrev_e9121aa750119f717b178e283fe6b840`, binding520/eligible543으로 반영됐다.
+23개는 해당 기존 recipe에서 solution report가 없는 것으로 관측됐으며, 새 공개 풀이
+recipe의 활성화나 창작 문항 임베딩 완료로 확대 해석하지 않는다.
+
+공식 native launch/coordinator reader와 completion receipt·등록 revision을 대조해
+`CACHED_INDEX_PUBLICATION_NO_NEW_NUMERICAL_WORK`를 확인했다. encoding association과
+owned numerical Job이 없고 receipt.native_launch가 없었다. 따라서 첫 작업은 기존 유효 CUDA
+벡터를 재사용한 등록 성공이며, 새 CUDA 수치 연산 영수증이 생긴 것은 아니다.
+
+이 Workflow의 사용하지 않은 물리 allocation은 통계 정비 전에 준비돼 만료했지만, 캐시 등록
+Workflow 자체는 정상 완료했다. **만료 사실만으로 이 완료 Workflow를 retirement하거나 실패로
+바꾸면 안 된다.** step.platform_job_id도 numerical Job이 아니라 최종 receipt producer를 가리키므로
+그 값이 없다는 것만으로 numerical launch 부재를 단정하지 않는다. 원래 두 prelaunch 실패의
+retirement와 이번 정상 캐시 경로는 서로 다른 상태다.
+
+fresh Graph를 ANALYZE 없이 추가한 실제 임시 DB 회귀에서 내부 source-revision 서브쿼리의
+반복 스캔을 재현했고, 기존 Catalog SQL 한 곳에서 그 필터만 외부 정본 association에 남겼다.
+source `fa80e5ba345908e76dcf162fd66807c81eca0322`의 관련 247 tests, mypy/Ruff/format,
+build-only RECORD/설치 검사는 PASS다. 새 owner prefix는 설치만 했으며, 이 문단 시점에는
+현재 묶음의 정상 종료를 기다려 활성화를 보류했다. root controller24555547과 수치 모델은
+변경하지 않았다.
