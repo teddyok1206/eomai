@@ -65,6 +65,7 @@ def test_admission_matrix_matches_exact_checked_in_definition_protocols() -> Non
     # Preserve the legacy matrix; explicit source successors do not rewrite its entries.
     successors = {
         ("external-item-learning", "1.0.0"): "external-item-learning.v1.yaml",
+        ("external-item-learning", "2.0.0"): "external-item-learning.v2.yaml",
         ("item-inference-transfer-comparison", "1.1.0"): (
             "item-inference-transfer-comparison.v1_1.yaml"
         ),

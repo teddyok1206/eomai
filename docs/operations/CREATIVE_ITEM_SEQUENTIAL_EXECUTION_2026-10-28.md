@@ -215,3 +215,17 @@ admission/Graph 성공을 뜻하지 않는다. migration 왕복 head는 20261027
 명시적 successor/recovery, 호환 wheel 배포와 U10311/U10312 실제 순차 검증이다. 운영은
 여전히 표본 1/3이며 전체 연속 실행/30분 timer를 켜지 않았다. 기존 API/Web/GPU/QUERY
 runtime pin과 과거 실패/의사결정 기록을 보존한다.
+
+같은 저장소 후보 `d7858b56`을 archive에서 wheel로 만들어 별도 임시 target에 설치했다.
+wheel SHA는 `73d4177acd909eef932ea4bb47b404e3fc6707fe711659822686b5c08dd0b358`이며
+RECORD와 installed-only import/schema 해석 PASS다. 새 plan 28/crop schema가 포함되고
+구 role 1.0.1/1.4/1.33 bundle hash는 그대로다. 최초 pip 산출물의 0664 권한은 verifier가
+거부했고, 해당 후보 파일만 요구되는 private 0600으로 바꾼 후 재검증했다. 검사를 완화하지
+않았다. 이 wheel은 소스 후보 확인용이며 운영 shared runtime에 설치하지 않았다.
+
+후속 실제 definition 발행을 위해 기존 공통 admission table에도 정확한
+external-item-learning 2.0.0 ↔ role 1.34.0 pair를 추가했다. DB definition active/preset/source
+권한 검사를 대체하거나 Workflow 1의 기본 설정을 바꾸지 않는다. profile과 admission의
+일치 및 기존 version admission 집중 38개 PASS다. 추가 admission 회귀의 최초 235개 중
+234개 PASS/1개는 구 expected matrix가 새 pair를 누락한 fixture 차이였고, 그 expected
+successor 목록을 보완해 해당 집중 검사를 재실행했다. 이는 운영 발행·START 증거가 아니다.

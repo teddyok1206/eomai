@@ -8,6 +8,7 @@ import pytest
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.state_machine import JobState
+from eom_workflow.admission import workflow_admission
 from eom_workflow.control_plane import (
     ResolvedExecutionPlanV27,
     ResolvedExecutionPlanV28,
@@ -46,6 +47,8 @@ ROOT = Path(__file__).resolve().parents[2]
 def test_profile_closes_definition_protocol_plan_and_result_family(version):
     profile = creative_learning_profile(version)
     assert profile == creative_learning_profile_for_protocol(profile.role_protocol)
+    admission = workflow_admission("external-item-learning", version)
+    assert admission is not None and admission.role_protocol_version == profile.role_protocol
     parsed = parse_creative_learning_execution_plan(_plan(successor=version == "2.0.0"))
     assert parsed.schema_version == profile.plan_schema_version
     assert parsed.resolver_version == profile.resolver_version
