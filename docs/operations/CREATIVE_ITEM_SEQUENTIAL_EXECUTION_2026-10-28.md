@@ -264,3 +264,8 @@ Graph 집중 27개 PASS(서로 중복 포함), core Ruff·format·mypy PASS다. 
 실제 similarity projection을 별도로 추적한다. 없는 풀이 정보를 만들어 채우거나 원래 보고서/
 현재 임베딩 인덱스의 identity·bytes를 제자리 변경하지 않는다. 아직 이 요구의 검증·배포는
 완료되지 않았다.
+
+저장소 후보 `92dbdc19`의 정식 build-only wheel RECORD는 PASS였으나 installed definition
+simulation이 새 Workflow 2의 staging 누락을 발견해 거부했다. 운영 설치는 시작하지 않았다.
+기존 equality gate를 완화하지 않고 두 창작 definition/role/result family를 실제 staging과
+검사 대상에 모두 넣었다. 해당 release coverage/role 회귀 9개, shell syntax·Ruff·mypy PASS다.
