@@ -60,3 +60,24 @@ command identity로만 재확인한다. 미확인 처리에 새 key를 발급해
 단순 restart는 expired physical context와 generic SQL을 반복했다. 직접 row UPDATE와 임의 key
 변경은 owner/감사 경계를 깨므로 제외한다. 기존 maintenance의 좁은 successor와 기존 배포 경계가
 새 복구 프레임워크보다 작고 충분하다.
+
+## 새 Graph의 통계 공백에서도 선택 검색을 한 번만 스캔
+
+2026-10-29 UTC 추가 결정. Catalog의 기존 `candidate_pool_analysis_statement`에서 pointer
+eligibility를 Graph당 `MATERIALIZED DISTINCT analysis_run_id` 집합으로 한 번 만든다.
+`source_revision_ids`는 정본 `knowledge_snapshot_analyses`의 바깥 exact-revision 조건으로만
+적용한다. Graph/분석/문항 revision pin, 출처 class·node 존재·정답 권한·명시한 analysis ID·accepted
+상태·문항 lifecycle·exact occurrence·정렬·LIMIT은 유지한다. pointer의 source revision을 직접
+필터링하지 않아 기존 FK와 원본 불일치/orphan 검증의 의미도 바뀌지 않는다.
+
+이 경계는 source 승인이나 Artifact를 대체하는 검색 엔진이 아니라 기존 metadata SQL builder다.
+기존 인덱스와 caller-owned Session/현 권한/원본 공유 잠금을 그대로 사용한다. 새 DDL·cache·권한·
+worker protocol·runtime pin 변경과 cross-transaction proof 재사용은 없다. 결과·실패·retry·멱등성도
+변경하지 않는다. 접근은 eligible analysis ID 집합과 exact revision membership이며, fresh Graph를
+1행으로 과소추정하는 custom plan에서도 pointer 읽기는 O(P), 선택 수 k에 따른 O(kP)가 아니다.
+
+근거는 disposable `pg_temp`의 520개 source/73,840개 pointer를 ANALYZE한 뒤 새 Graph로 복제하고
+재분석하지 않는 검사다. 기존 내부 selected-analysis 서브쿼리는 selected8 custom 실행이 20초
+guard에 걸렸다. 수정 후 custom/generic에서 전체·선택8 결과와 pointer scan 1회를 검증한다.
+매 Graph 발행마다 수동 ANALYZE하는 대안은 당장 통계를 복구하지만 발행 직후의 나쁜 계획을
+제거하지 못한다. 통계 갱신을 권한·수명 검사를 우회하는 근거로 사용하지 않는다.

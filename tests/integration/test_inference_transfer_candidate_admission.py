@@ -47,6 +47,7 @@ from eom_catalog_service.local_indexing_source_paging import (
 )
 from eom_orchestrator.database import build_engine
 from psycopg import sql
+from psycopg.pq import TransactionStatus
 from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.orm import Session
@@ -279,7 +280,8 @@ def prepared_membership_plans(session: Session, scope) -> tuple[dict[str, Any], 
                 )
                 plans.append(cursor.fetchone()[0][0])
         finally:
-            cursor.execute("DEALLOCATE eom_membership_plan", prepare=False)
+            if connection.info.transaction_status != TransactionStatus.INERROR:
+                cursor.execute("DEALLOCATE eom_membership_plan", prepare=False)
     return tuple(plans)
 
 
@@ -408,6 +410,61 @@ def test_real_postgres_prefetch_does_not_count_additive_reports_as_original_targ
         )
         == 520
     )
+    # A published Graph arrives after the last table ANALYZE. Its literal ID
+    # therefore estimates as one row even though it contains the same corpus.
+    # Do not ANALYZE these clones: that would hide the production failure mode.
+    fresh_snapshot = "graphrev_" + "d" * 32
+    clones = (
+        "INSERT INTO pg_temp.knowledge_snapshot_analyses(snapshot_analysis_id,"
+        "graph_snapshot_revision_id,analysis_run_id,source_kind,source_revision_id) "
+        "SELECT snapshot_analysis_id+1040,:fresh,analysis_run_id,source_kind,source_revision_id "
+        "FROM pg_temp.knowledge_snapshot_analyses WHERE graph_snapshot_revision_id=:previous",
+        "INSERT INTO pg_temp.knowledge_nodes(graph_snapshot_revision_id,node_id,node_type,"
+        "label,answer_bearing) SELECT :fresh,node_id,node_type,label,answer_bearing "
+        "FROM pg_temp.knowledge_nodes WHERE graph_snapshot_revision_id=:previous",
+        "INSERT INTO pg_temp.knowledge_node_source_pointers(pointer_id,"
+        "graph_snapshot_revision_id,analysis_run_id,node_id,anchor_id,source_class) "
+        "SELECT pointer_id+73840,:fresh,analysis_run_id,node_id,anchor_id,source_class "
+        "FROM pg_temp.knowledge_node_source_pointers WHERE graph_snapshot_revision_id=:previous",
+        "INSERT INTO pg_temp.assessment_item_occurrence_references(graph_snapshot_revision_id,"
+        "placement_node_id,analysis_run_id,item_id,item_revision_id) "
+        "SELECT :fresh,placement_node_id,analysis_run_id,item_id,item_revision_id "
+        "FROM pg_temp.assessment_item_occurrence_references "
+        "WHERE graph_snapshot_revision_id=:previous",
+    )
+    for clone in clones:
+        pool_database.execute(text(clone), {"fresh": fresh_snapshot, "previous": snapshot})
+    fresh_selection = replace(
+        selected_eight,
+        graph_snapshot=selected_eight.graph_snapshot.model_copy(
+            update={"graph_snapshot_revision_id": fresh_snapshot}
+        ),
+    )
+    for fresh_scope, expected_count in (
+        (fresh_selection, 8),
+        (replace(fresh_selection, source_revision_ids=()), 520),
+    ):
+        expected_ids = tuple(
+            "analysisrun_" + str(value).zfill(32) for value in range(1, expected_count + 1)
+        )
+        assert (
+            tuple(
+                row.analysis_run_id
+                for row in pool_database.scalars(population_membership_statement(fresh_scope))
+            )
+            == expected_ids
+        )
+        for actual in prepared_membership_plans(pool_database, fresh_scope):
+            assert actual["Plan"]["Actual Rows"] == expected_count
+            pending = [actual["Plan"]]
+            pointer_scans = []
+            while pending:
+                node = pending.pop()
+                pending.extend(node.get("Plans", ()))
+                if node.get("Relation Name") == "knowledge_node_source_pointers":
+                    pointer_scans.append(node)
+            assert len(pointer_scans) == 1 and pointer_scans[0]["Actual Loops"] == 1
+            assert actual["Execution Time"] < 10000
 
 
 @pytest.mark.parametrize("target", [1, 2, 3, 4, 5, 6, 7, 8, 99])

@@ -1663,16 +1663,10 @@ class KnowledgeRetrievalApplicationService:
             eligible_pointer = eligible_pointer.where(
                 pointer.analysis_run_id.in_(scope.analysis_run_ids)
             )
-        if scope.source_revision_ids:
-            selected_analyses = select(association.analysis_run_id).where(
-                association.graph_snapshot_revision_id == snapshot_id,
-                association.source_revision_id.in_(scope.source_revision_ids),
-            )
-            eligible_pointer = eligible_pointer.where(
-                pointer.analysis_run_id.in_(selected_analyses)
-            )
         # A generic prepared plan otherwise rescans/materializes all pointer
-        # rows per source. Deduplicate once, retaining every eligibility fence.
+        # rows per source. Keep revision selection on the canonical outer
+        # association: a new Graph without statistics can otherwise make its
+        # source subquery rescan all pointers per requested source even here.
         eligible_analyses = (
             eligible_pointer.distinct()
             .cte("eligible_pointer_analyses")
