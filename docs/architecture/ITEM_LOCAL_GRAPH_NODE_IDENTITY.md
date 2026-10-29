@@ -64,3 +64,33 @@ row/state를 변경하지 않는다. 이 read-only lookup에서만 배타 잠금
 unique idempotency constraint, source/preset 검증, 상태 변경의 기존 잠금은 그대로다.
 실제 disposable DB에서 다른 connection이 SHARE lock을 유지한 동안 동일 요청의 replay가
 완료되는지, run ID/상태/lock version과 중복 1개 제한이 유지되는지 검사한다.
+
+## 실제 운영 복구 — 2026-10-29 15:45 UTC
+
+`abcc6eda`의 문항 내부 식별 수정과 `007e3f44`의 read-only replay 수정을 기존 isolated
+creative owner에 배포했다. 최종 설치는 `/opt/eom/maintenance-releases/007e3f44bcc22afe699a0a452b093c2065a43649`.
+wheel raw SHA/RECORD, Catalog identity import와 기존 cohort/limit 검증 PASS다. API/Web,
+QUERY PID 1708497·07ec 설치본과 numeric GPU runtime/bundle은 교체하지 않았다. production
+migration·권한 변경·로그인/비밀번호 변경·기출 재생성은 없다.
+
+이전 owner는 GPU SHARE lock 뒤의 read-only replay에서 대기하여 정상 stop을 요청했고,
+기존 systemd의 180초 종료 한도 후 종료됐다. 새 invocation은 같은 cohort의 기존 완료
+21건을 다시 확인했다. 이를 새 모델 실행 21회나 완료 데이터 손실로 계산하지 않는다.
+
+기존 실패 지점 **10331**은 원래 `analysisrun_70662984ce8e4962be7b011cd87bf976`와
+`itemrev_6b15a706134b464b858c9447a6ab88bd`를 그대로 사용하여 새 Graph
+`graphrev_86889bbff51b960b7733f5fc0a168376`에 게시됐고, cohort의 공식 SOLUTION_REPORT
+조회까지 **VERIFIED** 됐다. 모델 재생성 없이 **22/1,053**으로 진행했으며 다음 10332는
+새 추출·등록을 마친 뒤 ANALYZING 상태로 이어졌다. 전체 자동 순차처리와 기존 :00/:30
+read-only observer를 유지한다. 전체 1,053건 완료 판정은 아니다.
+
+read-only identity 대조 결과:
+
+- 이전 accepted source 1,036개 모두 동일 revision/source SHA/accepted SHA 유지, 새 source 1개 추가.
+- 기출·교과서 source pointer를 가진 node 17,000개와 edge 40,652개의 ID/type/key/endpoint 보존.
+- missing/changed source·protected node·protected edge 각각 **0**.
+- source unit/경계 집중 **167 PASS**, 실제 disposable DB 동시 생성·SHARE lock 중 replay 등
+  **6 PASS**, 수정 core mypy/Ruff/format PASS. build-only/설치본 검사와 실제 운영 게시를 구분한다.
+
+보존 검사의 첫 correlated EXISTS 조회는 read-only 30초 timeout으로 중단됐다. 같은 metadata를
+각각 indexed 읽기 후 ID set으로 비교하여 완료했으며 운영 row·source·정책은 바꾸지 않았다.

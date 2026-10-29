@@ -151,3 +151,24 @@ source hash·순서·LIMIT·occurrence/revision 조건·최종 source admission�
 실제 PREPARE + force_custom_plan/force_generic_plan 모두 target 520개, pointer CTE/scan 각 1회,
 실행 10초 미만을 확인했다. lifecycle/answer-bearing/orphan/occurrence/선택 revision/페이지 분기도
 유지한다. 이는 운영 SQL 개선 활성화나 GPU 계산 완료가 아니며 새 모델 실행은 없었다.
+
+추가 read-only 정본 실행 metadata에서 현재 원 parent `job_c38f7ebb2faf4c53a6279bb02fa231fe`는
+CUDA ROUTED/RUNNING, BOUND 없음, canonical numerical completion pointer 없음을 확인했다.
+연결된 `workflow_db74b6d4242443dca07867e29ebbcb88`도 RUNNING이다. 반면 앞선 완료 parent들은
+BOUND/SUCCEEDED와 실제 completion pointer가 있다. 따라서 이번 restart의 반복 source 검사를
+실제 GPU 재개로 간주하지 않는다. 기존 cold recovery는 canonical completion이 있을 때만
+수치 재실행 없이 등록을 복구한다. 사라진 원 physical channel을 재발급하지 않는다.
+
+기존 maintenance 경계도 구분한다. `record_unbound_embedding_plan_failure`는 ROUTED 전
+CLAIMED/no Workflow에 한정되고, `recover_retired_indexing_workflow`는 BOUND/SUCCEEDED
+parent를 요구한다. 현재 **ROUTED → BOUND 사이 중단**을 그 중 하나로 위장하면 안 된다.
+후속은 기존 physical failure reader와 maintenance owner를 재사용하는 명시적 recovery successor,
+동시/늦은 BOUND·grant·completion 거부 검증 및 원 Workflow의 실패 기록 보존이다. 신규 실행은
+별도의 실제 승인된 retry/owner release identity로만 만든다. row UPDATE, FAILED→성공 또는
+오래된 물리 allocation의 재사용은 금지한다. 공개 풀이 운영 검색/정책 활성화는 아직 미완료다.
+
+SQL 개선 source `d16e84c8`의 build-only wheel RECORD/installed simulation PASS다.
+`/tmp/eom-api-build/d16e84c8ae9203679ed5926e5ac36f4eb470ebee.ZzEkV4/dist`에 있으며 운영 INDEX/QUERY
+교체는 수행하지 않았다. 별도로 창작 등록 오류는 007e owner에서 실제 10331 Graph/공식 조회까지
+복구했고 22/1,053 순차처리를 확인했다. 그 source/보존 증거는
+[문항 내부 노드 식별 기록](../architecture/ITEM_LOCAL_GRAPH_NODE_IDENTITY.md#실제-운영-복구--2026-10-29-1545-utc)에 있다.
