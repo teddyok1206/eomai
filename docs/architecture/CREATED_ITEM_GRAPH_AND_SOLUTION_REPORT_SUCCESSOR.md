@@ -220,3 +220,71 @@ PDF용 입력 어댑터를 구현할 시점에는 먼저 이번 아카이브에�
 정답·풀이 검증, 중복/재전송 방지, 같은 Item Revision에서의 Graph·보고서 역추적,
 권한별 검색과 실패 격리다. 단순 PDF 텍스트 추출 성공 또는 worker 제안 스키마 PASS만으로
 등록 파이프라인 완료라고 판정하지 않는다.
+
+## 2026-10-28 재개 점검: 하나의 Graph, 아직 source-only인 창작 아카이브
+
+사용자가 실제 풀이보고서·Graph 게시를 시작하도록 범위를 넓혔다. 앞의 2026-10-27
+`PREPARE, NOT START` 종료선은 당시 목표의 기록으로 보존하고, 이를 새 실행의 완료 판정으로
+재사용하지 않는다. 운영 읽기 전용 점검에서 `integrated-science-textbooks`의 current Graph
+Snapshot은 같은 snapshot 안에 `TEXTBOOK`, `PAST_EXAM`, `APPROVED_ITEM` source pointer를
+포함했다. 두 종류 이상의 출처가 같은 노드를 뒷받침하는 노드는 371개, 세 종류 모두가
+뒷받침하는 노드는 31개였다. 따라서 교과서·기출·이미 게시된 승인 Item은 별도 Graph DB가
+아니라 같은 ontology/snapshot과 개념 노드를 공유한다. 이것은 **모든 개별 문항이 교과서와
+직접 연결됐다는 증명은 아니다.**
+
+반면 이번 Notion/N제 아카이브는 source-only Import 1건·행 1,297개로 확인됐다.
+`MATCHED` 1,042, 동일 복사본 연결 10, HWPX 감지 연결 1로 파일 연결 후보는 1,053개다.
+`external-item-learning` V27 plan/Workflow는 표본 1건만 있고 `REQUESTED`/`extract READY`,
+worker command는 아직 없다. 현행 Graph의 `APPROVED_ITEM` pointer만으로 이 1,053건을
+창작 게시 완료라고 간주하지 않는다. 현재 구조에서 창작은 별도 그래프 저장소가 아니라
+검증된 Item Origin + 외부 source revision으로 구분되는 `APPROVED_ITEM` 출처다.
+
+사용자가 요구한 화면·검색의 논리적 출처 layer는 `교과서 / 기출 / 창작 / AI` 네 가지다.
+이를 네 개의 독립 Graph DB나 기존 `KnowledgeSourceClass` enum의 무증거 재명명으로
+구현하지 않는다. 같은 Graph의 노드·edge를 공유하면서, 아래 출처 증명으로 read projection을
+분류한다.
+
+| 사용자 layer | 기존 Graph source class | 필수 증명 |
+|---|---|---|
+| 교과서 | `TEXTBOOK` | 승인된 교육 문서 revision·페이지 anchor |
+| 기출 | `PAST_EXAM` | 실제 시험 occurrence revision·원본 문제/해설 anchor |
+| 창작 | `APPROVED_ITEM` | 이번 외부 source revision·고유번호·원본 Artifact와 승인 Item Revision의 유일한 연결, `IMPORTED/ADAPTED` origin |
+| AI | `APPROVED_ITEM` | EOM 출제 Workflow/plan·승인 Item Revision의 연결, `AI_GENERATED/AI_ASSISTED` origin |
+
+출처 증명이 없는 승인 Item은 네 layer 중 하나로 추측하지 않고 `UNCLASSIFIED` 진단
+상태로 격리한다. 현재 운영 Graph의 `APPROVED_ITEM` pointer가 가리키는 Item Revision
+26개는 정본 Item에는 모두 존재하지만 `item_origin_profiles` 연결은 0개였다. 따라서
+이들을 일괄 `AI` 또는 `창작`으로 소급 분류할 수 없다. 먼저 기존 Workflow/Item Provenance를
+읽기 전용으로 대조하고, 증명이 되는 건만 별도 불변 origin successor로 보강한다.
+한 문항의 `창작` layer와 참고한 기출 사이에 관계가 있더라도 창작 문항을 `기출`로
+중복 분류하지 않는다. layer는 출처이지 유사도나 문항의 주제를 나타내는 값이 아니다.
+
+### 다음 구현·실행의 고정 순서
+
+1. 기존 표본 READY Workflow의 source/권한/plan·slot05 support pool을 새로 확인하고,
+   실제 Studio operator 인증을 받는 별도 `START_WORKFLOW` application 입구를 만든다.
+   일반 `eomctl workflow start`의 합성 actor나 DB 직접 명령 삽입으로 우회하지 않는다.
+   같은 source/plan에 대한 중복 START는 기존 command idempotency와 lease로 막는다.
+2. 첫 worker 결과는 `external-item-learning-result/1.0` 제안으로만 받는다. 문항·해설·원본
+   첨부 영역 분리, 실제 Item 구조/정답/해설 비교, exact page/Office pointer 검증에 실패하면
+   `NEEDS_DECISION`으로 격리한다. 제안 스키마 PASS만으로 Item/Graph를 게시하지 않는다.
+3. 검증된 source→승인 Item Revision→accepted base 분석→기존 Graph publisher CAS를 연결한다.
+   이후 additive 창작 풀이보고서 successor를 같은 Item/base에 유일하게 연결한다. 기출 V10의
+   공개 가능한 풀이 단계, 개념→평가 요소, 선지별 오개념, 해설 비교, 재사용 가능한 출제 논리
+   표현을 재사용하되 기출 V9 페이지 anchor나 내부 사고 과정을 복사하지 않는다. 창작 보고서의
+   authority는 승인 Item 요소와 고정 Office 원본·파생 PDF 영역이다. 모든 Graph node/anchor
+   ID는 게시된 정본에서만 취득하고 worker가 합성하지 않는다.
+4. 표본 1건의 원본→Item→분석→Graph→보고서→검색 역추적과 disposable PostgreSQL의
+   동시성·중단·재전송을 통과한 뒤에만 slot05 상한 1로 1,053건을 bounded chunk 처리한다.
+   대기·실행·승인·Graph·보고서·격리 수를 분리한다. 사용자가 승인하지 않은 모호한 원본이나
+   14개 연결 예외를 자동 승격하지 않는다.
+
+접근은 외부 `(namespace,U)` 및 immutable source revision의 indexed lookup, Item/분석의
+unique successor, current Graph head CAS와 bounded Graph adjacency를 재사용한다. 소스
+선정·START·결과 승인·Graph 게시를 각각 짧은 transaction으로 분리하고, 긴 worker 실행
+동안 DB transaction을 잡지 않는다. 새 queue/Graph 엔진, 원본 복사, 기출 V10 의미 변경은 없다.
+
+동시 GPU INDEX는 별도 기계 작업이다. 06:23 UTC의 기존 index owner 실패 뒤 09:43 UTC에
+동일 pinned owner만 재시작했으며 source·model/default/QUERY pin은 바꾸지 않았다. 서비스가
+`active`라는 것과 새로운 CUDA encoding/index revision이 생겼다는 것은 분리해 판정한다.
+현재 오류를 새 작업 identity로 우회하거나 과거 RUNNING/FAILED 기록을 성공으로 바꾸지 않는다.
