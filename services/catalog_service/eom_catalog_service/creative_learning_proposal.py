@@ -19,7 +19,12 @@ from eom_orchestrator.external_item_learning_execution import (
 from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.models import ArtifactManifest
-from eom_workflow.models import ExternalItemLearningRoleResult, ExternalItemLearningWorkerRequest
+from eom_workflow.creative_learning_profile import creative_learning_profile
+from eom_workflow.models import (
+    ExternalItemLearningRoleResult,
+    ExternalItemLearningRoleResultV2,
+    ExternalItemLearningWorkerRequest,
+)
 from eom_workflow.schemas import validate_role_result
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from eom_workflow_runner.repository import load_persisted_workflow_request
@@ -41,7 +46,7 @@ class ResolvedCreativeLearningProposal:
     selection: ExternalItemLearningRoleSelection
     operator_id: str
     work: ExternalItemLearningWorkInput
-    role: ExternalItemLearningRoleResult
+    role: ExternalItemLearningRoleResult | ExternalItemLearningRoleResultV2
     pointer: ArtifactMemberPointer
 
 
@@ -58,22 +63,29 @@ def resolve_completed_creative_learning_proposal(
         or step is None
         or workflow.state != "COMPLETED"
         or workflow.definition_key != "external-item-learning"
-        or workflow.definition_version != "1.0.0"
-        or workflow.role_schema_version != "workflow-role/1.33.0"
         or workflow.created_actor_type != "human"
         or step.workflow_id != workflow.workflow_id
         or step.step_key != "extract"
         or step.worker_role != "support"
-        or step.result_schema != "external-item-learning-result@1.0"
         or step.state != "SUCCEEDED"
         or step.attempt != 1
         or step.platform_job_id is None
+    ):
+        raise CreativeLearningProposalError("CREATIVE_LEARNING_PROPOSAL_NOT_COMPLETED")
+    try:
+        profile = creative_learning_profile(workflow.definition_version)
+    except ValueError as exc:
+        raise CreativeLearningProposalError("CREATIVE_LEARNING_PROPOSAL_NOT_COMPLETED") from exc
+    if (
+        workflow.role_schema_version != profile.role_protocol
+        or step.result_schema != profile.result_schema
     ):
         raise CreativeLearningProposalError("CREATIVE_LEARNING_PROPOSAL_NOT_COMPLETED")
     initial = load_persisted_workflow_request(workflow.initial_request)
     request = initial.worker_request()
     if (
         initial != load_persisted_workflow_request(workflow.request_payload)
+        or initial.execution_preset_key != profile.preset_key
         or not isinstance(request, ExternalItemLearningWorkerRequest)
         or request.work_input.request_sha256 != selection.work_input_sha256
     ):
@@ -86,6 +98,7 @@ def resolve_completed_creative_learning_proposal(
     )
     if (
         plan.plan_sha256 != selection.plan_sha256
+        or plan.workflow_definition_version != profile.definition_version
         or plan.workflow_definition_sha256 != workflow.definition_hash
         or workflow.runtime_context.get("execution_plan")
         != {
@@ -144,12 +157,14 @@ def resolve_completed_creative_learning_proposal(
         content_hash=pointer.sha256,
         max_bytes=4 * 1024 * 1024,
     )
-    role = ExternalItemLearningRoleResult.model_validate(raw)
-    validate_role_result(raw, "support", step.result_schema)
-    if (role.job_id, role.workflow_id, role.step_run_id) != (
-        job.job_id,
-        workflow.workflow_id,
-        step.step_run_id,
+    role = validate_role_result(raw, "support", step.result_schema)
+    if not isinstance(role, (ExternalItemLearningRoleResult, ExternalItemLearningRoleResultV2)):
+        raise CreativeLearningProposalError("CREATIVE_LEARNING_RESULT_POINTER_INVALID")
+    if (
+        (role.job_id, role.workflow_id, role.step_run_id)
+        != (job.job_id, workflow.workflow_id, step.step_run_id)
+        or role.artifact.logical_artifact_id != job.logical_artifact_id
+        or role.artifact.revision_id != job.revision_id
     ):
         raise CreativeLearningProposalError("CREATIVE_LEARNING_RESULT_JOB_MISMATCH")
     work, result = request.work_input, role.output.learning_result
@@ -174,16 +189,20 @@ def resolve_completed_creative_learning_proposal(
         )
         for page in work.page_set.pages
     }
-    if result.proposal is not None and any(
-        (
-            block.artifact.artifact_id,
-            block.artifact.artifact_revision_id,
-            block.artifact.artifact_member,
-            block.artifact.sha256,
+    if (
+        isinstance(role, ExternalItemLearningRoleResult)
+        and role.output.learning_result.proposal is not None
+        and any(
+            (
+                block.artifact.artifact_id,
+                block.artifact.artifact_revision_id,
+                block.artifact.artifact_member,
+                block.artifact.sha256,
+            )
+            not in allowed
+            for block in role.output.learning_result.proposal.content.body
+            if isinstance(block, ImageBlock)
         )
-        not in allowed
-        for block in result.proposal.content.body
-        if isinstance(block, ImageBlock)
     ):
         raise CreativeLearningProposalError("CREATIVE_LEARNING_IMAGE_POINTER_UNBOUND")
     return ResolvedCreativeLearningProposal(

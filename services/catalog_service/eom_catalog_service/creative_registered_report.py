@@ -8,6 +8,7 @@ from eom_catalog_contracts.creative_source_lineage import (
     CREATIVE_SOURCE_LINEAGE_SCHEMA_REF,
     CreativeSourceLineage,
 )
+from eom_catalog_contracts.external_item_learning_result_v2 import ExternalItemLearningResultV2
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import select
@@ -17,6 +18,9 @@ from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.creative_learning_proposal import (
     ResolvedCreativeLearningProposal,
     resolve_completed_creative_learning_proposal,
+)
+from eom_catalog_service.creative_source_draft_materialization import (
+    creative_source_draft_warning_codes,
 )
 from eom_catalog_service.models import ItemComponentRecord, ItemRevisionRecord
 
@@ -38,6 +42,44 @@ class RegisteredCreativeReport:
         proposal = result.proposal
         if proposal is None:
             raise CreativeRegisteredReportError("CREATIVE_REPORT_CONTENT_MISSING")
+        if isinstance(result, ExternalItemLearningResultV2):
+            report = result.solution_report
+            draft = result.proposal
+            assert draft is not None
+            editorial_ids_v2 = set(report.editorial_region_ids)
+            text_v2 = canonical_json_bytes(
+                {
+                    "report_kind": "CREATIVE_SOURCE_SOLUTION_AND_WARNINGS_V2",
+                    "approval_meaning": (
+                        "원문 수록 승인입니다. 정답·풀이의 과학적 정확성 보장이 아닙니다."
+                    ),
+                    "independent_proposal_is_not_editorial_answer": True,
+                    "source_answer_mode": self.lineage.source_answer_mode,
+                    "source_score_state": draft.content.score.state,
+                    "source_solution": draft.content.solution.model_dump(mode="json"),
+                    "editorial_observations": [
+                        {"region_id": region.region_id, "text": region.observed_text}
+                        for region in result.regions
+                        if region.region_id in editorial_ids_v2
+                    ],
+                    "independent_answer_state": report.answer_state,
+                    "independent_proposal_answer": report.answer_labels or report.accepted_answers,
+                    "independent_proposal_explanation": report.explanation,
+                    "solution_steps": [
+                        step.model_dump(mode="json") for step in report.solution_steps
+                    ],
+                    "answer_cross_check": report.answer_cross_check,
+                    "warning_codes": self.lineage.warning_codes,
+                    "issues": [issue.model_dump(mode="json") for issue in result.conflicts],
+                    "original_proposal_status": result.status,
+                }
+            ).decode()
+            if len(text_v2) > maximum_chars:
+                raise CreativeRegisteredReportError("CREATIVE_REPORT_CONTEXT_TOO_LARGE")
+            return text_v2
+        # Narrow the historical family independently of the separate V2 report.
+        proposal = result.proposal
+        assert proposal is not None
         mappings = {entry.content_path: entry.region_ids for entry in proposal.content_region_map}
         editorial_ids = set(mappings.get("solution.correct_choice_ids", ())) | set(
             mappings.get("solution.explanation", ())
@@ -158,4 +200,17 @@ def load_registered_creative_report(
         or not {issue.conflict_code for issue in result.conflicts}.issubset(lineage.warning_codes)
     ):
         raise CreativeRegisteredReportError("CREATIVE_REPORT_SOURCE_MISMATCH")
+    if isinstance(result, ExternalItemLearningResultV2):
+        assert result.proposal is not None
+        draft = result.proposal.content
+        expected_mode = (
+            "EDITORIAL_SOURCE"
+            if draft.solution_origin == "EDITORIAL_SOURCE"
+            else "MODEL_PROPOSAL_UNVERIFIED"
+        )
+        if (
+            not set(creative_source_draft_warning_codes(draft)).issubset(lineage.warning_codes)
+            or lineage.source_answer_mode != expected_mode
+        ):
+            raise CreativeRegisteredReportError("CREATIVE_REPORT_SOURCE_MISMATCH")
     return RegisteredCreativeReport(lineage, resolved)

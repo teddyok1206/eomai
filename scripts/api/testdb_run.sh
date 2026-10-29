@@ -398,7 +398,8 @@ fi
 if [[ "${action}" == "creative-registration-tests" ]]; then
   export EOM_RUN_API_INTEGRATION=1
   export EOM_EXTERNAL_ITEM_TEST_STATE="${state_directory}"
-  "${PYTHON}" -m pytest -q tests/integration/test_creative_registration_storage.py
+  "${PYTHON}" -m pytest -q tests/integration/test_creative_registration_storage.py \
+    tests/integration/test_creative_visual_publication_storage.py
   exit 0
 fi
 

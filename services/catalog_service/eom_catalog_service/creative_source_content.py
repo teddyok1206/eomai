@@ -3,15 +3,21 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Mapping
 from dataclasses import dataclass
 
-from eom_catalog_contracts.assessment_item import AssessmentItemContent
+from eom_catalog_contracts.assessment_item import AssessmentItemContent, ImageBlock
 from eom_catalog_contracts.creative_source_lineage import (
     CreativeSourceAnswerMode,
     CreativeSourceNormalizationAction,
 )
 from eom_catalog_contracts.external_item_learning_result import ExternalItemLearningResult
+from eom_catalog_contracts.external_item_learning_result_v2 import ExternalItemLearningResultV2
 from eom_identifiers import content_sha256
+
+from eom_catalog_service.creative_source_draft_materialization import (
+    materialize_creative_source_draft,
+)
 
 
 class CreativeSourceContentError(ValueError):
@@ -28,6 +34,31 @@ class CreativeSourceContent:
     source_answer_mode: CreativeSourceAnswerMode
     normalization_actions: tuple[CreativeSourceNormalizationAction, ...]
     warning_codes: tuple[str, ...]
+
+
+def materialize_creative_source_content_v2(
+    result: ExternalItemLearningResultV2, *, resolved_images: Mapping[str, ImageBlock]
+) -> CreativeSourceContent:
+    """Original answer/explanation remain source content, independent work stays separate."""
+    result = ExternalItemLearningResultV2.model_validate(result.model_dump(mode="json"))
+    if result.proposal is None:
+        raise CreativeSourceContentError("CREATIVE_SOURCE_ITEM_UNREADABLE")
+    draft = result.proposal.content
+    materialized = materialize_creative_source_draft(draft, resolved_images=resolved_images)
+    return CreativeSourceContent(
+        materialized.content,
+        content_sha256(draft.model_dump(mode="json")),
+        content_sha256(materialized.content.model_dump(mode="json")),
+        "EDITORIAL_SOURCE"
+        if draft.solution_origin == "EDITORIAL_SOURCE"
+        else "MODEL_PROPOSAL_UNVERIFIED",
+        (),
+        tuple(
+            sorted(
+                {*materialized.warning_codes, *(issue.conflict_code for issue in result.conflicts)}
+            )
+        ),
+    )
 
 
 def materialize_creative_source_content(

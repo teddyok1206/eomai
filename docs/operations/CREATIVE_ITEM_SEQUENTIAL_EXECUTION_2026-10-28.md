@@ -174,3 +174,44 @@ Workflow/cohort pin을 바꾸지 않으며, 새 definition/control을 운영에�
 worker로 검증했고 실제 Codex/운영 DB/NAS를 사용한 acceptance가 아니다. 관련 core의
 Ruff·format·mypy PASS. 추가 연결은 crop derivation receipt/Orchestrator publication,
 등록·보고서 reader와 명시적 cohort successor다. 실제 3건과 장기 owner 전환은 아직 미완료다.
+
+### crop commit·등록·공식 보고서 연결 (소스 전용)
+
+`creative-source-visual-set/1.0` receipt를 schema-first로 정의했다. 원문 source/work hash,
+exact role-result Artifact, PDF SHA, delivered page Artifact, 고정 renderer, normalized/pixel
+rectangle과 PNG member/SHA를 묶는다. worker가 Artifact ID를 제안하지 않으며 기존
+`ControlFileSetPublisher`만 NAS commit을 소유한다. 반복 참조는 같은 crop 한 개를 사용한다.
+성공 replay는 PNG를 재생성하지 않고 exact publication을 읽는다. 중단된 commit은 같은
+작업 키로 결정적인 로컬 입력만 재준비하고 기존 owner의 resumable 검사를 통과해야 한다.
+FAILED/conflict 또는 손상된 성공 Artifact를 성공으로 고치지 않는다.
+
+Registry는 source/권한을 먼저 확인하고 crop rendering을 DB transaction 밖에서 수행한다.
+실제 NAS commit 직전과 직후에도 Catalog 소유의 현재 source 권한을 확인한다. 최종 등록은
+동일 role/work를 다시 해석하고 기존 registration-key fence와 source revision 검사를 사용한다.
+이미 등록된 결과는 저장된 lineage/derivation을 검증해 반환하며 새 코드 commit을 이유로
+새 이미지 포인터나 문항 revision을 만들지 않는다. 같은 원문에 대한 별도 결과는 기존 정본을
+덮는 대신 충돌로 남는다. 일반 문항 삭제/다른 컴포넌트 권한 변경과는 무관하다.
+
+V2 공식 보고서는 원문 답안/독립 답안·공개 풀이 단계·모든 conflict·원래 NEEDS_DECISION을
+같이 보여준다. UNPRINTED의 canonical 0은 SOURCE_SCORE_NOT_PRINTED와 원래 배점 상태를
+함께 보존하고 해당 warning 누락을 거부한다. 원문이 과학적으로 틀렸다는 판단만으로 원문을
+수정하거나 수록을 거부하지 않는다. resolver는 구 family와 새 family를 명시적으로 나누고
+role의 Job/Workflow/step뿐 아니라 logical Artifact/revision도 실제 Job과 대조한다.
+
+등록 Pack `external-creative-item/1.1.0`은 기존 metadata/item-type bytes를 유지하고
+Workflow 1/2, role 1.33/1.34를 명시적으로 지원한다. 1.0.0과 과거 Item은 변경하지 않았다.
+이 Pack/control은 아직 운영 발행/활성화하지 않았다.
+
+2026-10-29 소스 집중 회귀 **359개 PASS**(창작/입력/실행/Graph/보고서 전체, 이전 숫자와 중복).
+새 crop adapter는 합성 PDF를 실제 Poppler로 처리했다. 별도 fresh disposable PostgreSQL에서
+등록 키 경합/rollback 2개와 실제 crop Artifact의 동시 commit/COMMITTING 복구 2개,
+합계 **4개 PASS**를 확인했다. 후자는 같은 Job·Artifact·revision으로 복구되며 실제 소스
+admission/Graph 성공을 뜻하지 않는다. migration 왕복 head는 20261027_0062, 새 migration은
+없다. 초기 test helper의 manifest dict 접근 오류는 fixture만 수정하고 fresh DB에서 재검증했다.
+이 단계에서 만든 disposable DB 두 개는 공식 cleanup으로 제거했고 운영 데이터는 수정하지
+않았다. core Ruff·format·mypy, diff와 shell syntax 검사 PASS.
+
+남은 활성화 범위는 새 목적의 실행 설정/원문 표현 지침 발행, 부모 cohort를 고정 참조하는
+명시적 successor/recovery, 호환 wheel 배포와 U10311/U10312 실제 순차 검증이다. 운영은
+여전히 표본 1/3이며 전체 연속 실행/30분 timer를 켜지 않았다. 기존 API/Web/GPU/QUERY
+runtime pin과 과거 실패/의사결정 기록을 보존한다.

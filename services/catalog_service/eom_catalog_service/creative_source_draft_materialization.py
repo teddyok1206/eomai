@@ -18,6 +18,16 @@ class MaterializedCreativeSourceDraft:
     warning_codes: tuple[str, ...]
 
 
+def creative_source_draft_warning_codes(draft: CreativeSourceItemDraft) -> tuple[str, ...]:
+    """The compiler and official report reader share the same interpretation flags."""
+    warnings = []
+    if draft.score.state == "UNPRINTED":
+        warnings.append("SOURCE_SCORE_NOT_PRINTED")
+    if draft.solution_origin == "INDEPENDENT_PROPOSAL_UNVERIFIED":
+        warnings.append("SOURCE_SOLUTION_UNVERIFIED")
+    return tuple(sorted(warnings))
+
+
 def materialize_creative_source_draft(
     draft: CreativeSourceItemDraft,
     *,
@@ -45,11 +55,6 @@ def materialize_creative_source_draft(
             body.append(image.model_dump(mode="json"))
         else:
             body.append(block.model_dump(mode="json"))
-    warnings = []
-    if draft.score.state == "UNPRINTED":
-        warnings.append("SOURCE_SCORE_NOT_PRINTED")
-    if draft.solution_origin == "INDEPENDENT_PROPOSAL_UNVERIFIED":
-        warnings.append("SOURCE_SOLUTION_UNVERIFIED")
     content = AssessmentItemContent.model_validate(
         {
             "schema_version": "1.0",
@@ -62,5 +67,8 @@ def materialize_creative_source_draft(
         }
     )
     return MaterializedCreativeSourceDraft(
-        content, draft.score.state, draft.solution_origin, tuple(sorted(warnings))
+        content,
+        draft.score.state,
+        draft.solution_origin,
+        creative_source_draft_warning_codes(draft),
     )

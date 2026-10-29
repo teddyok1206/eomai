@@ -1,0 +1,283 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/external-item/creative-source-visual-set/1.0",
+  "title": "Creative source visual derivation set V1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source_id",
+    "source_revision_id",
+    "source_input_sha256",
+    "work_input_sha256",
+    "pdf_sha256",
+    "role_result",
+    "result_sha256",
+    "page_artifact",
+    "renderer",
+    "crops",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "creative-source-visual-set/1.0"
+    },
+    "source_id": {
+      "type": "string",
+      "pattern": "^extitem_[0-9a-f]{32}$"
+    },
+    "source_revision_id": {
+      "type": "string",
+      "pattern": "^extitemrev_[0-9a-f]{32}$"
+    },
+    "source_input_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "work_input_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "pdf_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "role_result": {
+      "$ref": "#/$defs/role_result"
+    },
+    "result_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "page_artifact": {
+      "$ref": "#/$defs/page_artifact"
+    },
+    "renderer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "profile",
+        "pdfinfo_sha256",
+        "pdftoppm_sha256"
+      ],
+      "properties": {
+        "profile": {
+          "const": "PDFTOPPM_PNG_SCALE_2400_V1"
+        },
+        "pdfinfo_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "pdftoppm_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "crops": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/crop"
+      }
+    },
+    "manifest_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "role_result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "const": "result.json"
+        },
+        "schema_ref": {
+          "const": "external-item-learning-result@2.0"
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "page_artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_type",
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256",
+        "file_set_manifest_sha256"
+      ],
+      "properties": {
+        "artifact_type": {
+          "const": "control_external_item_learning_pages"
+        },
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "const": "page-set-manifest.json"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/external-item/learning-page-set/1.0"
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "file_set_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "crop": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_region_id",
+        "physical_page",
+        "source_page_member",
+        "source_page_sha256",
+        "bounding_box",
+        "pixel_box",
+        "member_path",
+        "sha256",
+        "width_px",
+        "height_px",
+        "content_length"
+      ],
+      "properties": {
+        "source_region_id": {
+          "type": "string",
+          "pattern": "^extregion_[0-9a-f]{32}$"
+        },
+        "physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "source_page_member": {
+          "type": "string",
+          "pattern": "^pages/page-[0-9]{4}\\.png$"
+        },
+        "source_page_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "bounding_box": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "left",
+            "top",
+            "right",
+            "bottom"
+          ],
+          "properties": {
+            "left": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "top": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "right": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "bottom": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            }
+          }
+        },
+        "pixel_box": {
+          "type": "array",
+          "prefixItems": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2400
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2400
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2400
+            },
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 2400
+            }
+          ],
+          "items": false,
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "member_path": {
+          "type": "string",
+          "pattern": "^images/extregion_[0-9a-f]{32}\\.png$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "width_px": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2400
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2400
+        },
+        "content_length": {
+          "type": "integer",
+          "minimum": 24,
+          "maximum": 16777216
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://metadata/external-creative-item@1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "item_type_key", "source_kind", "source_id", "source_revision_id", "import_id",
+    "external_number", "origin_kind", "lineage_id", "lineage_sha256", "approval_basis"
+  ],
+  "properties": {
+    "item_type_key": {"const": "external-creative-multiple-choice"},
+    "source_kind": {"const": "CREATIVE"},
+    "source_id": {"type": "string", "pattern": "^extitem_[0-9a-f]{32}$"},
+    "source_revision_id": {"type": "string", "pattern": "^extitemrev_[0-9a-f]{32}$"},
+    "import_id": {"type": "string", "pattern": "^extimport_[0-9a-f]{32}$"},
+    "external_number": {"type": "string", "pattern": "^[0-9]{5}$"},
+    "origin_kind": {"enum": ["PAST_EXAM_VARIATION", "FREE_AUTHORING"]},
+    "lineage_id": {"type": "string", "pattern": "^extlineage_[0-9a-f]{32}$"},
+    "lineage_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "approval_basis": {"const": "SOURCE_IMPORT_AUTOMATION_NOT_SCIENTIFIC_VERIFICATION"}
+  }
+}

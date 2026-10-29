@@ -46,6 +46,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:5dfcfd09fd7674b78d554591d11ebca79b6745901dd38296fb6ae131c752aba7",
         ),
+        "creative-source-visual-set-v1": CatalogSchemaResource(
+            "schemas/external-item/creative-source-visual-set-v1.schema.json",
+            "resources/external-item/creative-source-visual-set-v1.schema.json",
+            "1.0",
+            "sha256:76051114c799884a4cf78612dd7561f242971d36465ecfe1b0f5834ff0aa9f32",
+        ),
         "creative-source-lineage-v1": CatalogSchemaResource(
             "schemas/external-item/creative-source-lineage-v1.schema.json",
             "resources/external-item/creative-source-lineage-v1.schema.json",

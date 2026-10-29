@@ -10,6 +10,7 @@ from eom_catalog_contracts.assessment_item import (
     ASSESSMENT_ITEM_CONTENT_FILE_NAME,
     ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
 )
+from eom_catalog_contracts.creative_source_draft import SourceImageBlock
 from eom_catalog_contracts.creative_source_lineage import (
     CREATIVE_SOURCE_LINEAGE_SCHEMA_REF,
     CreativeSourceLineage,
@@ -17,16 +18,20 @@ from eom_catalog_contracts.creative_source_lineage import (
 from eom_catalog_contracts.external_item_learning_authorization import (
     ExternalItemLearningRoleSelection,
 )
+from eom_catalog_contracts.external_item_learning_result_v2 import ExternalItemLearningResultV2
+from eom_catalog_contracts.external_item_preview import EXTERNAL_ITEM_PREVIEW_PDF_SCHEMA_REF
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_identity_service.repository import effective_permissions
 from eom_item_registry import ComponentPointer, RegistrationRequest
 from eom_operator_identity import PermissionKey
+from eom_orchestrator.creative_source_visual_publication import publish_creative_source_visuals
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.file_set_control_artifacts import (
     ControlFileSetMember,
     ControlFileSetPublisher,
     PublishedControlFileSet,
 )
+from eom_workflow.creative_learning_profile import creative_learning_profile_for_protocol
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
@@ -40,6 +45,7 @@ from eom_catalog_service.creative_registered_report import load_registered_creat
 from eom_catalog_service.creative_source_content import (
     CreativeSourceContent,
     materialize_creative_source_content,
+    materialize_creative_source_content_v2,
 )
 from eom_catalog_service.external_creative_learning_source import (
     CatalogExternalItemLearningSourceAuthorizer,
@@ -163,12 +169,39 @@ class CreativeItemRegistrationService:
     def register_completed(
         self, selection: ExternalItemLearningRoleSelection, *, requested_by_operator_id: str
     ) -> RegisteredCreativeItem:
+        # Source crop rendering is outside the registration transaction. The
+        # final mutation re-resolves identical immutable work and current access.
+        # An already registered source uses its stored derivation, not a new
+        # runtime's source_commit or a newly generated image pointer.
+        with self.sessions() as preflight:
+            prepared = resolve_completed_creative_learning_proposal(
+                preflight, self.artifacts, selection
+            )
+            self._authorize(preflight, prepared, requested_by_operator_id)
+            present = preflight.scalar(
+                select(ItemRevisionRecord).where(
+                    ItemRevisionRecord.registration_key
+                    == creative_registration_key(prepared.work.source.source_id)
+                )
+            )
+            already_registered = present is not None
+        prepared_content = (
+            self._prepare_successor_content(prepared)
+            if isinstance(prepared.role.output.learning_result, ExternalItemLearningResultV2)
+            and not already_registered
+            else None
+        )
         with self.sessions.begin() as guard:
             resolved = resolve_completed_creative_learning_proposal(
                 guard, self.artifacts, selection
             )
-            if resolved.operator_id != requested_by_operator_id:
-                raise CreativeItemRegistrationError("CREATIVE_REGISTRATION_OWNER_MISMATCH")
+            if (
+                resolved.pointer != prepared.pointer
+                or resolved.work != prepared.work
+                or resolved.role.output.learning_result.result_sha256
+                != prepared.role.output.learning_result.result_sha256
+            ):
+                raise CreativeItemRegistrationError("CREATIVE_REGISTRATION_INPUT_CHANGED")
             source = resolved.work.source
             existing = lock_creative_registration(guard, source.source_id)
             current = guard.scalar(
@@ -179,27 +212,41 @@ class CreativeItemRegistrationService:
             )
             if current is None or current.current_revision_id != source.source_revision_id:
                 raise CreativeItemRegistrationError("CREATIVE_REGISTRATION_SOURCE_STALE")
-            self.source.reauthorize(guard, operator_id=resolved.operator_id, source=source)
-            if PermissionKey.ITEM_STRUCTURED_CONTENT_IMPORT not in effective_permissions(
-                guard, resolved.operator_id
-            ):
-                raise CreativeItemRegistrationError("CREATIVE_REGISTRATION_PERMISSION_DENIED")
-            self._require_pack(guard)
-            content = materialize_creative_source_content(resolved.role.output.learning_result)
-            lineage = self._lineage(resolved, content)
+            self._authorize(guard, resolved, requested_by_operator_id)
             key = creative_registration_key(source.source_id)
             if existing is not None:
+                stored = load_registered_creative_report(guard, self.artifacts, existing)
+                lineage = stored.lineage
+                if (
+                    lineage.selection != resolved.selection
+                    or lineage.role_result != resolved.pointer
+                    or lineage.result_sha256 != resolved.role.output.learning_result.result_sha256
+                    or lineage.source_id != source.source_id
+                    or lineage.source_revision_id != source.source_revision_id
+                ):
+                    raise CreativeItemRegistrationError("CREATIVE_REGISTRATION_REPLAY_CONFLICT")
                 self._verify_existing(guard, existing, lineage)
                 return RegisteredCreativeItem(
                     existing.item_id,
                     existing.item_revision_id,
                     source.source_id,
                     source.source_revision_id,
-                    content.registered_content_sha256,
+                    lineage.registered_content_sha256,
                     lineage,
                     None,
                     False,
                 )
+
+            result = resolved.role.output.learning_result
+            if isinstance(result, ExternalItemLearningResultV2):
+                if prepared_content is None:
+                    raise CreativeItemRegistrationError(
+                        "CREATIVE_REGISTRATION_PREPARATION_REQUIRED"
+                    )
+                content = prepared_content
+            else:
+                content = materialize_creative_source_content(result)
+            lineage = self._lineage(resolved, content)
 
             staged, staged_hash = stage_registry_item_content(
                 self.settings, content.content.model_dump(mode="json")
@@ -230,7 +277,9 @@ class CreativeItemRegistrationService:
                     content_pack_release_id=self.pack_release_id,
                     workflow_id=selection.workflow_id,
                     workflow_definition_key="external-item-learning",
-                    workflow_definition_version="1.0.0",
+                    workflow_definition_version=creative_learning_profile_for_protocol(
+                        resolved.role.protocol_version
+                    ).definition_version,
                     source_workflow_step_run_id=selection.step_run_id,
                     # Unaccepted raw archive Intake rows are not fabricated approvals.
                     source_intake_batch_ids=(),
@@ -278,7 +327,13 @@ class CreativeItemRegistrationService:
                             artifact_revision_id=resolved.pointer.artifact_revision_id,
                             sha256=resolved.pointer.sha256,
                             logical_name="result.json",
-                            metadata={"report_kind": "CREATIVE_SOURCE_SOLUTION_AND_WARNINGS_V1"},
+                            metadata={
+                                "report_kind": (
+                                    "CREATIVE_SOURCE_SOLUTION_AND_WARNINGS_V2"
+                                    if isinstance(result, ExternalItemLearningResultV2)
+                                    else "CREATIVE_SOURCE_SOLUTION_AND_WARNINGS_V1"
+                                )
+                            },
                         ),
                     ),
                     created_by=resolved.operator_id,
@@ -295,6 +350,59 @@ class CreativeItemRegistrationService:
                 published,
                 True,
             )
+
+    def _authorize(
+        self, session: Session, resolved: ResolvedCreativeLearningProposal, operator_id: str
+    ) -> None:
+        if resolved.operator_id != operator_id:
+            raise CreativeItemRegistrationError("CREATIVE_REGISTRATION_OWNER_MISMATCH")
+        self.source.reauthorize(session, operator_id=operator_id, source=resolved.work.source)
+        if PermissionKey.ITEM_STRUCTURED_CONTENT_IMPORT not in effective_permissions(
+            session, operator_id
+        ):
+            raise CreativeItemRegistrationError("CREATIVE_REGISTRATION_PERMISSION_DENIED")
+        self._require_pack(session)
+
+    def _prepare_successor_content(
+        self, resolved: ResolvedCreativeLearningProposal
+    ) -> CreativeSourceContent:
+        result = resolved.role.output.learning_result
+        assert isinstance(result, ExternalItemLearningResultV2)
+        if result.proposal is None:
+            raise CreativeItemRegistrationError("CREATIVE_SOURCE_ITEM_UNREADABLE")
+        if not any(isinstance(block, SourceImageBlock) for block in result.proposal.content.body):
+            return materialize_creative_source_content_v2(result, resolved_images={})
+        source = resolved.work.source
+
+        def authorize_source() -> None:
+            with self.sessions() as session:
+                self._authorize(session, resolved, resolved.operator_id)
+
+        pdf = self.artifacts.read_member(
+            artifact_id=source.preview_artifact_id,
+            revision_id=source.preview_artifact_revision_id,
+            member_path=source.preview_manifest.pdf_member_path,
+            sha256=source.preview_manifest.pdf_sha256,
+            schema_ref=EXTERNAL_ITEM_PREVIEW_PDF_SCHEMA_REF,
+            media_type="application/pdf",
+            max_bytes=256 * 1024 * 1024,
+        )
+        with TemporaryDirectory(
+            prefix="creative-source-visual-", dir=self.publisher.settings.staging_root
+        ) as raw:
+            visuals = publish_creative_source_visuals(
+                self.publisher,
+                work=resolved.work,
+                result=result,
+                role_result=resolved.pointer,
+                pdf_bytes=pdf,
+                workspace=Path(raw) / "crops",
+                source_commit=self.source_commit,
+                authorize_source=authorize_source,
+            )
+            if visuals is None:
+                raise CreativeItemRegistrationError("CREATIVE_REGISTRATION_VISUALS_MISSING")
+            return materialize_creative_source_content_v2(result, resolved_images=visuals.images)
 
     def _require_pack(self, session: Session) -> None:
         release = session.get(ContentPackReleaseRecord, self.pack_release_id)
