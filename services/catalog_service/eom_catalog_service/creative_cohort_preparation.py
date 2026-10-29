@@ -12,6 +12,7 @@ from eom_catalog_contracts.creative_learning_cohort import (
     CreativeCohortTarget,
     CreativeLearningCohort,
 )
+from eom_catalog_contracts.creative_learning_continuation import CreativeLearningExecutionScope
 from eom_catalog_contracts.external_item_learning_authorization import (
     ExternalItemLearningRoleSelection,
 )
@@ -59,13 +60,16 @@ from eom_catalog_service.settings import CatalogSettings
 
 
 def creative_cohort_workflow_key(
-    cohort: CreativeLearningCohort, target: CreativeCohortTarget
+    cohort: CreativeLearningCohort,
+    target: CreativeCohortTarget,
+    *,
+    execution_cohort_id: str | None = None,
 ) -> str:
     return (
         "creative-cohort-work:"
         + content_sha256(
             {
-                "cohort_id": cohort.cohort_id,
+                "cohort_id": execution_cohort_id or cohort.cohort_id,
                 "source_revision_id": target.source_revision_id,
                 "requested_by_operator_id": cohort.requested_by_operator_id,
             }
@@ -81,9 +85,13 @@ class CreativeCohortPreparationService:
         cohort: CreativeLearningCohort,
         settings: Settings,
         catalog_settings: CatalogSettings,
+        scope: CreativeLearningExecutionScope | None = None,
     ) -> None:
         self.sessions = build_session_factory(engine)
         self.cohort, self.settings = cohort, settings
+        self.scope = scope or CreativeLearningExecutionScope(cohort)
+        if self.scope.cohort != cohort:
+            raise ValueError("CREATIVE_COHORT_SCOPE_MISMATCH")
         self.targets = {entry.source_id: entry for entry in cohort.targets}
         self.pages = ControlFileSetPublisher(engine, settings)
         self.preview = ExternalItemPreviewProjectionService(engine, settings=catalog_settings)
@@ -92,9 +100,14 @@ class CreativeCohortPreparationService:
     def prepare(self, target: CreativeCohortTarget) -> ExternalItemLearningRoleSelection:
         if self.targets.get(target.source_id) != target:
             raise ValueError("CREATIVE_COHORT_TARGET_NOT_ADMITTED")
-        key = creative_cohort_workflow_key(self.cohort, target)
+        key = creative_cohort_workflow_key(
+            self.cohort, target, execution_cohort_id=self.scope.cohort_id
+        )
         with self.sessions() as session:
-            if target.external_number == self.cohort.seed_external_number:
+            if (
+                target.external_number == self.cohort.seed_external_number
+                and self.scope.continuation is None
+            ):
                 workflow = session.get(
                     WorkflowInstanceRecord, self.cohort.seed_selection.workflow_id
                 )
@@ -114,7 +127,8 @@ class CreativeCohortPreparationService:
                 if (
                     workflow.created_actor_type != "human"
                     or workflow.created_actor_id != self.cohort.requested_by_operator_id
-                    or workflow.definition_hash != self.cohort.workflow_definition_sha256
+                    or workflow.definition_hash != self.scope.workflow_definition_sha256
+                    or workflow.definition_version != self.scope.workflow_definition_version
                     or source.source_id != target.source_id
                     or source.source_revision_id != target.source_revision_id
                     or source.observation_sha256 != target.observation_sha256
@@ -136,9 +150,9 @@ class CreativeCohortPreparationService:
                     request=original,
                 )
                 if (
-                    plan.preset_id != self.cohort.extraction_preset.preset_id
-                    or plan.preset_revision_id != self.cohort.extraction_preset.preset_revision_id
-                    or plan.preset_sha256 != self.cohort.extraction_preset.sha256
+                    plan.preset_id != self.scope.extraction_preset.preset_id
+                    or plan.preset_revision_id != self.scope.extraction_preset.preset_revision_id
+                    or plan.preset_sha256 != self.scope.extraction_preset.sha256
                     or plan.capacity_policy_revision_id != self.cohort.capacity_policy_revision_id
                 ):
                     raise ValueError("CREATIVE_COHORT_WORKFLOW_POLICY_MISMATCH")
@@ -160,6 +174,7 @@ class CreativeCohortPreparationService:
                 )
                 if (
                     target.external_number == self.cohort.seed_external_number
+                    and self.scope.continuation is None
                     and recovered != self.cohort.seed_selection
                 ):
                     raise ValueError("CREATIVE_COHORT_SEED_SELECTION_MISMATCH")
@@ -185,7 +200,7 @@ class CreativeCohortPreparationService:
                 resolved.source, resolved.pdf_bytes, workspace=Path(raw) / "rendered"
             )
             artifact = publish_external_item_learning_pages(
-                self.pages, rendered, source_commit=self.cohort.source_commit
+                self.pages, rendered, source_commit=self.scope.source_commit
             )
             body = {
                 "schema_version": "external-item-learning-work-input/1.0",
@@ -201,17 +216,19 @@ class CreativeCohortPreparationService:
             )
             with self.sessions.begin() as session:
                 definition = admitted_workflow_definition(
-                    session, definition_key="external-item-learning", definition_version="1.0.0"
+                    session,
+                    definition_key="external-item-learning",
+                    definition_version=self.scope.workflow_definition_version,
                 )
                 preset_row = session.get(
-                    ExecutionPresetRevisionRecord, self.cohort.extraction_preset.preset_revision_id
+                    ExecutionPresetRevisionRecord, self.scope.extraction_preset.preset_revision_id
                 )
                 preset = validated_preset(preset_row) if preset_row else None
                 if (
                     definition is None
-                    or definition.definition_hash != self.cohort.workflow_definition_sha256
+                    or definition.definition_hash != self.scope.workflow_definition_sha256
                     or not isinstance(preset, ExecutionPresetRevision)
-                    or preset.content_sha256 != self.cohort.extraction_preset.sha256
+                    or preset.content_sha256 != self.scope.extraction_preset.sha256
                 ):
                     raise ValueError("CREATIVE_COHORT_PREPARATION_POLICY_MISMATCH")
                 prepared = prepare_external_item_learning_workflow(

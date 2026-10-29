@@ -38,6 +38,7 @@ from eom_orchestrator.control_service import (
     publish_capacity_policy_revision,
     record_capacity_policy_revision,
 )
+from eom_orchestrator.creative_source_controls import release_creative_source_controls
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.external_item_learning_control_release import (
     release_external_item_learning_controls,
@@ -354,3 +355,42 @@ def test_controls_and_authenticated_source_prepare_without_start(
             ).canonical_document
             == original_document
         )
+    _assert_source_successor_release(
+        sessions, publisher, released[0].preset, capacity, arguments["platform_payload"]
+    )
+
+
+def _assert_source_successor_release(sessions, publisher, baseline, capacity, platform_payload):
+    successor_arguments = dict(
+        baseline_revision_id=baseline.preset_revision_id,
+        capacity_revision_id=capacity.capacity_policy_revision_id,
+        platform_payload=platform_payload,
+        role_payload=b"# Synthetic source-visual successor\n",
+        operator_id=OPERATOR,
+        source_commit="b" * 40,
+        authorize=Mock(),
+    )
+    successor = release_creative_source_controls(sessions, publisher, **successor_arguments)
+    assert successor == release_creative_source_controls(sessions, publisher, **successor_arguments)
+    assert successor.compatible_workflow_protocols == ("workflow-role/1.34.0",)
+    assert successor.role_policies[0].model_candidates == baseline.role_policies[0].model_candidates
+    assert successor.capacity_policy_revision_id == baseline.capacity_policy_revision_id
+    with sessions() as session:
+        assert (
+            session.get(ExecutionPresetRecord, baseline.preset_id).current_revision_id
+            == baseline.preset_revision_id
+        )
+        assert session.get(
+            ExecutionPresetRevisionRecord, baseline.preset_revision_id
+        ).canonical_document == baseline.model_dump(mode="json")
+        logical_successor = session.get(ExecutionPresetRecord, successor.preset_id)
+        assert logical_successor.preset_key == "creative-source-learning"
+        assert logical_successor.current_revision_id == successor.preset_revision_id
+        evaluations = tuple(
+            session.scalars(
+                select(ExecutionPresetEvaluationRecord).where(
+                    ExecutionPresetEvaluationRecord.preset_id == successor.preset_id
+                )
+            )
+        )
+        assert len(evaluations) == 1 and evaluations[0].scope == "NON_LIVE"

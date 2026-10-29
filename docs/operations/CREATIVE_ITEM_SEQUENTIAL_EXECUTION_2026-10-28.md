@@ -229,3 +229,38 @@ external-item-learning 2.0.0 ↔ role 1.34.0 pair를 추가했다. DB definition
 일치 및 기존 version admission 집중 38개 PASS다. 추가 admission 회귀의 최초 235개 중
 234개 PASS/1개는 구 expected matrix가 새 pair를 누락한 fixture 차이였고, 그 expected
 successor 목록을 보완해 해당 집중 검사를 재실행했다. 이는 운영 발행·START 증거가 아니다.
+
+### 고정 source cohort의 좁은 continuation 설계
+
+1. 책임은 기존 cohort application/순차 owner에 있다. 새 queue/framework를 만들지 않는다.
+2. 원래 cohort Artifact와 targets/정책 pin이 정본이며 원래 1,053개 목록은 수정하지 않는다.
+3. 작은 `creative-learning-continuation/1.0`은 부모 cohort member pointer를 고정 참조한다.
+   새 실행 identity/Workflow 2 hash/추출 preset/등록 Pack만 저장하고 targets를 복제하지 않는다.
+4. 부모의 Artifact/revision/schema/media/hash/lifecycle과 target-set SHA·owner 일치를 검사한다.
+   부모가 V1이 아니거나 target/owner가 다르면 상속 admission이 아니다.
+5. 접근은 source/등록 unique key indexed lookup, 고정 targets의 순서 순회와 Graph CAS다.
+6. continuation 해석은 부모 metadata를 한 번 읽는 O(targets), 추가 저장은 O(1)이다.
+7. 추출·등록·분석은 기존 짧은 transaction/lease를 사용한다. 완료한 source는 exact 등록
+   lineage를 재검증해 재사용하고, 멈춘 구 실행은 보존한 채 명시적 새 family 작업으로 잇는다.
+8. contracts에는 frozen value만, application에 admission/권한, Orchestrator에 Artifact
+   commit, CLI/runner에는 조합만 둔다. worker의 DB/NAS 접근은 여전히 금지다.
+9. 원래 admission의 실제 owner를 매 claim/control 변경에 현재 IAM/source로 재검증한다.
+   browser session을 보존하거나 운영자를 사칭하지 않는다. 같은 transition은 멱등 replay다.
+10. 설치/배포/START를 별개로 기록한다. 실패 이력을 덮거나 3개 검증 전에 전체 실행하지 않는다.
+11. 부모 targets 전체를 새 schema로 복사하거나 구 cohort pin을 수정하는 대안은 불필요한
+    복제/재해석이므로 쓰지 않는다. 별도 DB table/migration도 필요 없다.
+
+continuation application/CLI와 원래 source set을 공유하는 process lock을 연결했다. 등록된
+source는 exact source revision/observation/edition과 기존 lineage를 검증해 재사용하며, 미등록
+source만 후속 Workflow 2로 준비한다. 원래 cohort와 실패 결과를 수정하지 않는다.
+창작·기존 추출 unit 회귀 366개 PASS, 프로토콜 hash 충돌 거부를 추가한 control/continuation/
+Graph 집중 27개 PASS(서로 중복 포함), core Ruff·format·mypy PASS다. fresh disposable DB에서
+기존/후속 control 발행·동시성·멱등 및 원래 설정 불변 검사를 포함한 20개 PASS다.
+첫 DB 실행은 새 role protocol 등록이 빠져 명시적으로 거부됐으며, 기존 protocol owner를
+같은 control transaction에서 호출하도록 보완했다. hash 불일치 검사는 유지한다.
+새 migration·모델 실행·운영 활성화는 이 검증에서 하지 않았다.
+
+추가 사용자 요구: 풀이보고서의 입력 family/양식 차이만으로 임베딩 유사도가 달라지지 않도록
+실제 similarity projection을 별도로 추적한다. 없는 풀이 정보를 만들어 채우거나 원래 보고서/
+현재 임베딩 인덱스의 identity·bytes를 제자리 변경하지 않는다. 아직 이 요구의 검증·배포는
+완료되지 않았다.

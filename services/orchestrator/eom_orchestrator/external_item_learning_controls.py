@@ -47,6 +47,7 @@ from eom_orchestrator.preset_model_selection import (
 )
 
 CREATIVE_INSTRUCTION_BUNDLE_KEY = "external-item-learning-instructions"
+CREATIVE_SOURCE_INSTRUCTION_BUNDLE_KEY = "creative-source-learning-instructions"
 
 
 def resolve_external_item_learning_control_policy(
@@ -111,6 +112,7 @@ def publish_external_item_learning_instruction_bundle(
     operator_id: str,
     created_at: datetime,
     authorize_control_change: Callable[[str], None],
+    bundle_key: str = CREATIVE_INSTRUCTION_BUNDLE_KEY,
 ) -> BundleRevisionPointer:
     """Publish the reviewed initial two-layer bundle; never a model or preset.
 
@@ -118,6 +120,8 @@ def publish_external_item_learning_instruction_bundle(
     them on a later permission/control failure and replay with the same pins.
     """
 
+    if bundle_key not in {CREATIVE_INSTRUCTION_BUNDLE_KEY, CREATIVE_SOURCE_INSTRUCTION_BUNDLE_KEY}:
+        raise ValueError("creative instruction purpose is unsupported")
     authorize_control_change(operator_id)
     TypeAdapter(UtcDatetime).validate_python(created_at)
     if not isinstance(source_commit, str) or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
@@ -150,8 +154,8 @@ def publish_external_item_learning_instruction_bundle(
                 "artifact": artifact.pointer.model_dump(mode="json"),
             }
         )
-    bundle_id = "instrbundle_" + uuid5(NAMESPACE_URL, CREATIVE_INSTRUCTION_BUNDLE_KEY).hex
-    revision_id = "instrrev_" + uuid5(NAMESPACE_URL, CREATIVE_INSTRUCTION_BUNDLE_KEY + "/v1").hex
+    bundle_id = "instrbundle_" + uuid5(NAMESPACE_URL, bundle_key).hex
+    revision_id = "instrrev_" + uuid5(NAMESPACE_URL, bundle_key + "/v1").hex
     body = {
         "schema_version": "instruction-bundle-manifest/1.0",
         "bundle_id": bundle_id,
@@ -180,7 +184,7 @@ def publish_external_item_learning_instruction_bundle(
         authorize_control_change(operator_id)
         record = record_bundle_revision(
             session,
-            bundle_key=CREATIVE_INSTRUCTION_BUNDLE_KEY,
+            bundle_key=bundle_key,
             manifest_artifact=artifact.pointer,
             document=manifest.model_dump(mode="json"),
             created_by=operator_id,

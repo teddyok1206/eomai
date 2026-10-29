@@ -6,6 +6,7 @@ from unittest.mock import Mock
 
 import pytest
 from eom_catalog_contracts.creative_learning_cohort import CreativeLearningCohort
+from eom_catalog_contracts.creative_learning_continuation import CreativeLearningExecutionScope
 from eom_catalog_service import creative_cohort_execution as execution
 from eom_catalog_service.knowledge_graph_models import KnowledgeGraphSnapshotRecord
 from eom_catalog_service.models import ItemRevisionRecord
@@ -44,13 +45,17 @@ def execution_case(monkeypatch, *, state="COMPLETED", missing_notes=False):
     service = object.__new__(execution.CreativeCohortExecutionService)
     service.sessions = Sessions()
     service.cohort = cohort
+    service.scope = CreativeLearningExecutionScope(cohort)
     service.targets = cohort.targets
     service.cursor = 0
     service.selection = service.registered = service.analysis_run_id = None
     service.started = False
     service.preparation = NS(prepare=Mock(return_value=resolved.selection), source=object())
     service.publisher = object()
-    service.registration = NS(register_completed=Mock(return_value=registered))
+    service.registration = NS(
+        register_completed=Mock(return_value=registered),
+        find_registered_source=Mock(return_value=None),
+    )
     service.learning = NS(
         advance=Mock(
             return_value=NS(
@@ -115,3 +120,14 @@ def test_historical_worker_failure_is_not_accepted_or_recreated(monkeypatch):
     assert case.workflow.state == "FAILED"
     case.start.assert_not_called()
     case.service.registration.register_completed.assert_not_called()
+
+
+def test_registered_source_is_reauthorized_and_reused_without_new_extraction(monkeypatch):
+    case = execution_case(monkeypatch)
+    case.service.registration.find_registered_source.return_value = case.registered
+    result = case.service.advance_once()
+    assert result.state == "VERIFIED" and result.verified_count == 1
+    case.service.preparation.prepare.assert_not_called()
+    case.service.registration.register_completed.assert_not_called()
+    case.start.assert_not_called()
+    case.service.read.resolve.assert_called_once()

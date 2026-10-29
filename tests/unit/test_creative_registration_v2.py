@@ -1,12 +1,15 @@
 """Successor registration preserves source answers, independent work and warnings."""
 
 import json
+from contextlib import nullcontext
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_contracts.creative_learning_cohort import CreativeCohortTarget
 from eom_catalog_contracts.external_item_learning_result_v2 import ExternalItemLearningResultV2
+from eom_catalog_service import creative_item_registration as registration_module
 from eom_catalog_service import creative_registered_report as reports
 from eom_catalog_service.content_pack_files import compile_pack
 from eom_catalog_service.creative_item_registration import CreativeItemRegistrationService
@@ -140,3 +143,60 @@ def test_successor_pack_preserves_metadata_and_admits_only_the_two_explicit_fami
         "item-types/external-creative-multiple-choice.yaml",
     ):
         assert (root / "1.0.0" / relative).read_bytes() == (root / "1.1.0" / relative).read_bytes()
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        None,
+        "source_revision_id",
+        "observation_sha256",
+        "external_number",
+        "selected_edition",
+        "owner",
+    ],
+)
+def test_registered_source_reuse_requires_exact_target_and_original_current_owner(
+    monkeypatch, change
+):
+    session, artifacts, revision, _, resolved, lineage, _ = v2_registered(monkeypatch)
+    revision.item_id = "item_" + "4" * 32
+    source = resolved.work.source
+    target = CreativeCohortTarget(
+        source_id=source.source_id,
+        source_revision_id=source.source_revision_id,
+        observation_sha256=source.observation_sha256,
+        external_number=source.external_number,
+        selected_edition=source.selected_edition,
+    )
+    if change is not None and change != "owner":
+        changed = {
+            "source_revision_id": "extitemrev_" + "0" * 32,
+            "observation_sha256": "sha256:" + "0" * 64,
+            "external_number": "99999",
+            "selected_edition": 2 if source.selected_edition == 3 else 3,
+        }
+        target = target.model_copy(update={change: changed[change]})
+    service = object.__new__(CreativeItemRegistrationService)
+    service.sessions = lambda: nullcontext(session)
+    service.artifacts = artifacts
+    service.source = Mock()
+    service._require_pack = Mock()
+    service._verify_existing = Mock()
+    session.scalar.return_value = revision
+    monkeypatch.setattr(
+        registration_module,
+        "effective_permissions",
+        lambda *args: {registration_module.PermissionKey.ITEM_STRUCTURED_CONTENT_IMPORT},
+    )
+    operator = "operator_" + "0" * 32 if change == "owner" else resolved.operator_id
+    if change is not None:
+        with pytest.raises(registration_module.CreativeItemRegistrationError):
+            service.find_registered_source(target, requested_by_operator_id=operator)
+        service._verify_existing.assert_not_called()
+    else:
+        result = service.find_registered_source(target, requested_by_operator_id=operator)
+        assert result.created is False and result.lineage == lineage
+        assert result.item_revision_id == revision.item_revision_id
+        service._verify_existing.assert_called_once()
+        service.source.reauthorize.assert_called_once()

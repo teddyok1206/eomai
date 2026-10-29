@@ -9,6 +9,12 @@ from eom_catalog_contracts.creative_learning_cohort import (
     CREATIVE_COHORT_SCHEMA_REF,
     CreativeLearningCohort,
 )
+from eom_catalog_contracts.creative_learning_continuation import (
+    CREATIVE_CONTINUATION_REF,
+    CreativeLearningContinuation,
+    CreativeLearningExecutionScope,
+    validate_creative_continuation_parent,
+)
 from eom_catalog_contracts.external_item_learning_authorization import (
     ExternalItemLearningRoleSelection,
 )
@@ -28,6 +34,7 @@ from eom_orchestrator.file_set_control_artifacts import (
 )
 from eom_orchestrator.preset_model_selection import validated_preset
 from eom_orchestrator.settings import Settings
+from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.control_plane import ExecutionPresetRevision, ExecutionPresetRevisionV2
 from sqlalchemy import Engine, select, text
 
@@ -59,6 +66,14 @@ def read_creative_cohort(
     published = publisher.read_published_revision(
         artifact_revision_id=revision_id, artifact_type=COHORT_ARTIFACT_TYPE
     )
+    return _read_base_cohort(artifacts, published), published
+
+
+def _read_base_cohort(
+    artifacts: CatalogArtifactService, published: PublishedControlFileSet
+) -> CreativeLearningCohort:
+    if published.primary_file != "cohort.json":
+        raise ValueError("CREATIVE_COHORT_PARENT_FORMAT_INVALID")
     payload = artifacts.read_member(
         artifact_id=published.artifact_id,
         revision_id=published.artifact_revision_id,
@@ -68,7 +83,43 @@ def read_creative_cohort(
         media_type="application/json",
         max_bytes=16 * 1024 * 1024,
     )
-    return CreativeLearningCohort.model_validate_json(payload), published
+    return CreativeLearningCohort.model_validate_json(payload)
+
+
+def read_creative_execution_scope(
+    artifacts: CatalogArtifactService, publisher: ControlFileSetPublisher, revision_id: str
+) -> tuple[CreativeLearningExecutionScope, PublishedControlFileSet]:
+    """Resolve a base or one explicit continuation, never an implicit latest cohort."""
+    published = publisher.read_published_revision(
+        artifact_revision_id=revision_id, artifact_type=COHORT_ARTIFACT_TYPE
+    )
+    if published.primary_file == "cohort.json":
+        return CreativeLearningExecutionScope(_read_base_cohort(artifacts, published)), published
+    if published.primary_file != "continuation.json":
+        raise ValueError("CREATIVE_COHORT_FORMAT_INVALID")
+    payload = artifacts.read_member(
+        artifact_id=published.artifact_id,
+        revision_id=published.artifact_revision_id,
+        member_path="continuation.json",
+        sha256=published.primary_sha256,
+        schema_ref=CREATIVE_CONTINUATION_REF,
+        media_type="application/json",
+        max_bytes=64 * 1024,
+    )
+    continuation = CreativeLearningContinuation.model_validate_json(payload)
+    parent, parent_publication = read_creative_cohort(
+        artifacts, publisher, continuation.parent_cohort.artifact_revision_id
+    )
+    actual_parent = ArtifactMemberPointer(
+        artifact_id=parent_publication.artifact_id,
+        artifact_revision_id=parent_publication.artifact_revision_id,
+        member_path="cohort.json",
+        sha256=parent_publication.primary_sha256,
+        schema_ref=CREATIVE_COHORT_SCHEMA_REF,
+        media_type="application/json",
+    )
+    validate_creative_continuation_parent(continuation, parent, actual_parent)
+    return CreativeLearningExecutionScope(parent, continuation), published
 
 
 def admit_creative_cohort(

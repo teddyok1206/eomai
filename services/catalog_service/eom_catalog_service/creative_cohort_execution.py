@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from eom_catalog_contracts.creative_learning_cohort import CreativeLearningCohort
+from eom_catalog_contracts.creative_learning_continuation import CreativeLearningExecutionScope
 from eom_catalog_contracts.external_item_learning_authorization import (
     ExternalItemLearningRoleSelection,
 )
@@ -13,6 +14,7 @@ from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecor
 from eom_orchestrator.preset_model_selection import validated_preset
 from eom_orchestrator.settings import Settings
 from eom_protocol.general_chat_grounding import ChatKnowledgeCatalogRequest
+from eom_workflow.creative_learning_profile import creative_learning_profile
 from eom_workflow_runner.external_item_learning_start import start_prepared_external_item_learning
 from eom_workflow_runner.models import WorkflowInstanceRecord
 from sqlalchemy import Engine
@@ -58,18 +60,26 @@ class CreativeCohortExecutionService:
         cohort: CreativeLearningCohort,
         settings: Settings,
         catalog_settings: CatalogSettings,
+        scope: CreativeLearningExecutionScope | None = None,
     ) -> None:
         self.cohort = cohort
+        self.scope = scope or CreativeLearningExecutionScope(cohort)
+        if self.scope.cohort != cohort:
+            raise ValueError("CREATIVE_COHORT_SCOPE_MISMATCH")
         self.sessions = build_session_factory(engine)
         self.publisher = ControlFileSetPublisher(engine, settings)
         self.preparation = CreativeCohortPreparationService(
-            engine, cohort=cohort, settings=settings, catalog_settings=catalog_settings
+            engine,
+            cohort=cohort,
+            settings=settings,
+            catalog_settings=catalog_settings,
+            scope=self.scope,
         )
         self.registration = CreativeItemRegistrationService(
             engine,
-            content_pack_release_id=cohort.content_pack_release_id,
+            content_pack_release_id=self.scope.content_pack_release_id,
             publisher=self.publisher,
-            source_commit=cohort.source_commit,
+            source_commit=self.scope.source_commit,
             settings=catalog_settings,
         )
         self.learning = CreativeItemGraphLearningService(
@@ -95,7 +105,10 @@ class CreativeCohortExecutionService:
     def _require_pins(self) -> None:
         with self.sessions() as session:
             for pin, purpose in (
-                (self.cohort.extraction_preset, "external-item-learning"),
+                (
+                    self.scope.extraction_preset,
+                    creative_learning_profile(self.scope.workflow_definition_version).preset_key,
+                ),
                 (self.cohort.analysis_preset, "creative-knowledge-analysis"),
             ):
                 row = session.get(ExecutionPresetRevisionRecord, pin.preset_revision_id)
@@ -125,7 +138,16 @@ class CreativeCohortExecutionService:
             return self._progress("COMPLETED", None)
         target = self.targets[self.cursor]
         if self.selection is None:
-            self.selection = self.preparation.prepare(target)
+            registered = self.registration.find_registered_source(
+                target, requested_by_operator_id=self.cohort.requested_by_operator_id
+            )
+            if registered is not None:
+                if registered.lineage.import_id != self.cohort.import_id:
+                    raise ValueError("CREATIVE_COHORT_REGISTERED_IMPORT_MISMATCH")
+                self.registered = registered
+                self.selection = registered.lineage.selection
+            else:
+                self.selection = self.preparation.prepare(target)
         selection = self.selection
         with self.sessions() as session:
             workflow = session.get(WorkflowInstanceRecord, selection.workflow_id)
@@ -228,7 +250,7 @@ class CreativeCohortExecutionService:
         self, state: str, number: str | None, *, graph_revision: str | None = None
     ) -> CreativeCohortProgress:
         return CreativeCohortProgress(
-            self.cohort.cohort_id,
+            self.scope.cohort_id,
             len(self.targets),
             self.cursor,
             number,

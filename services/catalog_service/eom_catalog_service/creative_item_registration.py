@@ -10,6 +10,7 @@ from eom_catalog_contracts.assessment_item import (
     ASSESSMENT_ITEM_CONTENT_FILE_NAME,
     ASSESSMENT_ITEM_CONTENT_SCHEMA_REF,
 )
+from eom_catalog_contracts.creative_learning_cohort import CreativeCohortTarget
 from eom_catalog_contracts.creative_source_draft import SourceImageBlock
 from eom_catalog_contracts.creative_source_lineage import (
     CREATIVE_SOURCE_LINEAGE_SCHEMA_REF,
@@ -41,7 +42,10 @@ from eom_catalog_service.creative_learning_proposal import (
     ResolvedCreativeLearningProposal,
     resolve_completed_creative_learning_proposal,
 )
-from eom_catalog_service.creative_registered_report import load_registered_creative_report
+from eom_catalog_service.creative_registered_report import (
+    RegisteredCreativeReport,
+    load_registered_creative_report,
+)
 from eom_catalog_service.creative_source_content import (
     CreativeSourceContent,
     materialize_creative_source_content,
@@ -166,6 +170,43 @@ class CreativeItemRegistrationService:
             ExternalItemPreviewProjectionService(engine, settings=self.settings)
         )
 
+    def find_registered_source(
+        self, target: CreativeCohortTarget, *, requested_by_operator_id: str
+    ) -> RegisteredCreativeItem | None:
+        """Indexed exact source reuse; it neither changes a Workflow nor picks latest."""
+        target = CreativeCohortTarget.model_validate(target.model_dump(mode="json"))
+        with self.sessions() as session:
+            revision = session.scalar(
+                select(ItemRevisionRecord).where(
+                    ItemRevisionRecord.registration_key
+                    == creative_registration_key(target.source_id)
+                )
+            )
+            if revision is None:
+                return None
+            report = load_registered_creative_report(session, self.artifacts, revision)
+            source = report.proposal.work.source
+            if (
+                source.source_id != target.source_id
+                or source.source_revision_id != target.source_revision_id
+                or source.observation_sha256 != target.observation_sha256
+                or source.external_number != target.external_number
+                or source.selected_edition != target.selected_edition
+            ):
+                raise CreativeItemRegistrationError("CREATIVE_REGISTRATION_REPLAY_CONFLICT")
+            self._authorize(session, report.proposal, requested_by_operator_id)
+            self._verify_existing(session, revision, report.lineage, report=report)
+            return RegisteredCreativeItem(
+                revision.item_id,
+                revision.item_revision_id,
+                source.source_id,
+                source.source_revision_id,
+                report.lineage.registered_content_sha256,
+                report.lineage,
+                None,
+                False,
+            )
+
     def register_completed(
         self, selection: ExternalItemLearningRoleSelection, *, requested_by_operator_id: str
     ) -> RegisteredCreativeItem:
@@ -225,7 +266,7 @@ class CreativeItemRegistrationService:
                     or lineage.source_revision_id != source.source_revision_id
                 ):
                     raise CreativeItemRegistrationError("CREATIVE_REGISTRATION_REPLAY_CONFLICT")
-                self._verify_existing(guard, existing, lineage)
+                self._verify_existing(guard, existing, lineage, report=stored)
                 return RegisteredCreativeItem(
                     existing.item_id,
                     existing.item_revision_id,
@@ -482,7 +523,12 @@ class CreativeItemRegistrationService:
             )
 
     def _verify_existing(
-        self, session: Session, revision: ItemRevisionRecord, lineage: CreativeSourceLineage
+        self,
+        session: Session,
+        revision: ItemRevisionRecord,
+        lineage: CreativeSourceLineage,
+        *,
+        report: RegisteredCreativeReport | None = None,
     ) -> None:
         metadata = revision.metadata_json
         components = tuple(
@@ -513,7 +559,7 @@ class CreativeItemRegistrationService:
             or ("REVIEW_REPORT", 0) not in by_kind
         ):
             raise CreativeItemRegistrationError("CREATIVE_REGISTRATION_REPLAY_CONFLICT")
-        stored = load_registered_creative_report(session, self.artifacts, revision)
+        stored = report or load_registered_creative_report(session, self.artifacts, revision)
         if stored.lineage != lineage:
             raise CreativeItemRegistrationError("CREATIVE_REGISTRATION_REPLAY_CONFLICT")
         self.artifacts.read_member(

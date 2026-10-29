@@ -20,7 +20,7 @@ from eom_orchestrator.settings import Settings
 
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.creative_cohort_execution import CreativeCohortExecutionService
-from eom_catalog_service.creative_learning_cohort import read_creative_cohort
+from eom_catalog_service.creative_learning_cohort import read_creative_execution_scope
 from eom_catalog_service.settings import CatalogSettings
 
 STATE_ROOT = Path("/var/lib/eom/creative-learning")
@@ -109,18 +109,24 @@ def main() -> None:
     descriptor = -1
     owns_lock = False
     cohort = None
+    scope = None
     status: dict[str, object] = {}
     try:
-        cohort, _ = read_creative_cohort(
+        scope, _ = read_creative_execution_scope(
             CatalogArtifactService(engine, catalog_settings),
             ControlFileSetPublisher(engine, settings),
             arguments.cohort_revision_id,
         )
+        cohort = scope.cohort
         if not 1 <= arguments.verified_limit <= len(cohort.targets):
             raise ValueError("CREATIVE_COHORT_EXECUTION_LIMIT_INVALID")
         validate_state_root(STATE_ROOT)
         descriptor = os.open(
-            STATE_ROOT / (cohort.cohort_id + ".lock"), os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW, 0o600
+            # A continuation shares its parent's source set and process fence.
+            # Different execution/status IDs must not allow old/new owners together.
+            STATE_ROOT / (cohort.cohort_id + ".lock"),
+            os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW,
+            0o600,
         )
         lock_metadata = os.fstat(descriptor)
         if (
@@ -134,11 +140,11 @@ def main() -> None:
         owns_lock = True
         write_status(
             STATE_ROOT,
-            cohort.cohort_id,
+            scope.cohort_id,
             {"state": "STARTING", "verified_count": 0, "target_count": len(cohort.targets)},
         )
         service = CreativeCohortExecutionService(
-            engine, cohort=cohort, settings=settings, catalog_settings=catalog_settings
+            engine, cohort=cohort, settings=settings, catalog_settings=catalog_settings, scope=scope
         )
         previous = None
         while not stopped.is_set():
@@ -153,7 +159,7 @@ def main() -> None:
                     if progress.verified_count == len(cohort.targets)
                     else "CANARY_VERIFIED"
                 )
-            write_status(STATE_ROOT, cohort.cohort_id, status)
+            write_status(STATE_ROOT, scope.cohort_id, status)
             marker = (progress.external_number, status["state"], progress.verified_count)
             if marker != previous:
                 print(json.dumps(status, ensure_ascii=False, sort_keys=True), flush=True)
@@ -162,7 +168,7 @@ def main() -> None:
                 break
             stopped.wait(10)
         if stopped.is_set():
-            write_status(STATE_ROOT, cohort.cohort_id, {**status, "state": "STOPPED"})
+            write_status(STATE_ROOT, scope.cohort_id, {**status, "state": "STOPPED"})
     except Exception as error:
         code = stable_error_code(error)
         safe = {
@@ -171,9 +177,9 @@ def main() -> None:
             "error_code": code,
             "exception_type": type(error).__name__,
         }
-        if cohort is not None and owns_lock:
+        if scope is not None and owns_lock:
             with suppress(OSError, ValueError):
-                write_status(STATE_ROOT, cohort.cohort_id, safe)
+                write_status(STATE_ROOT, scope.cohort_id, safe)
         print(json.dumps(safe, ensure_ascii=False, sort_keys=True), flush=True)
         raise SystemExit(78) from None
     finally:

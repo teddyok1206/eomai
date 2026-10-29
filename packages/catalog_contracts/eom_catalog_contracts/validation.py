@@ -58,6 +58,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:7fa73f570a1791cbf0f19c6a020b50cba82e3a085031ab3a2cbbadbe943dac35",
         ),
+        "creative-learning-continuation-v1": CatalogSchemaResource(
+            "schemas/external-item/creative-learning-continuation-v1.schema.json",
+            "resources/external-item/creative-learning-continuation-v1.schema.json",
+            "1.0",
+            "sha256:b6849b0872634dfb07c0463b3e9bf40af542deefde8a2ba0b81e258be85aba2e",
+        ),
         "creative-learning-cohort-v1": CatalogSchemaResource(
             "schemas/external-item/creative-learning-cohort-v1.schema.json",
             "resources/external-item/creative-learning-cohort-v1.schema.json",
