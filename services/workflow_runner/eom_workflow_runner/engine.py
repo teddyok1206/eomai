@@ -486,9 +486,15 @@ class PlatformRoleJobExecutor:
             # The installed V1 placeholder explicitly requests result@1.0.
             # Preserve those historical bytes; the V2 instruction bundle owns
             # the detailed source/visual/public-solution rules for this family.
+            from eom_catalog_contracts.external_item_learning_result_v2 import (
+                INDEPENDENT_SOURCE_SOLUTION_GUIDANCE,
+            )
+
             prompt_text = (
                 "Analyze only the exact staged creative source and delivered page images. "
                 "Follow the pinned source-visual instruction bundle and supplied role schema. "
+                "For region mappings use the schema's field-specific policy, not a field's "
+                "storage prefix, to decide which source roles are permitted. "
                 "Preserve original source content separately from the independent public solution. "
                 "For single_choice set solution.correct_choice_ids to exactly one choice ID "
                 "and solution.accepted_answers to []; in the independent solution_report use "
@@ -497,7 +503,8 @@ class PlatformRoleJobExecutor:
                 "For UNDETERMINED leave both independent answer arrays empty. "
                 "Return only schema-valid external-item-learning-result@2.0 JSON; "
                 "the Orchestrator, not the worker, stamps result_sha256. "
-                "Do not access the network, database, NAS or other workers."
+                "Do not access the network, database, NAS or other workers. "
+                + INDEPENDENT_SOURCE_SOLUTION_GUIDANCE
             )
         prompt_path = (
             None

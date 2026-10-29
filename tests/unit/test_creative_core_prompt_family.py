@@ -6,6 +6,9 @@ from types import SimpleNamespace as NS
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_contracts.external_item_learning_result_v2 import (
+    INDEPENDENT_SOURCE_SOLUTION_GUIDANCE,
+)
 from eom_workflow.models import ExternalItemLearningWorkerRequest
 from eom_workflow_runner import engine
 
@@ -53,6 +56,8 @@ def test_actual_role_executor_selects_matching_core_without_mutating_v1(monkeypa
         assert "external-item-learning-result@2.0" in passed["prompt_text"]
         assert "external-item-learning-result@1.0" not in passed["prompt_text"]
         assert "independent public solution" in passed["prompt_text"]
+        assert "field-specific policy" in passed["prompt_text"]
+        assert INDEPENDENT_SOURCE_SOLUTION_GUIDANCE in passed["prompt_text"]
     else:
         assert passed["prompt_text"] is None
         assert passed["prompt_path"] == Path("/synthetic/prompts/external-item-learning.txt")

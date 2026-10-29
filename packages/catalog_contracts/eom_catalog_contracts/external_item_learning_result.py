@@ -17,7 +17,8 @@ EXTERNAL_ITEM_LEARNING_RESULT_SCHEMA = "external-item-learning-result-v1"
 EXTERNAL_ITEM_LEARNING_RESULT_SCHEMA_REF = "eom://schemas/external-item/learning-result/1.0"
 
 type RegionId = str
-_CONTENT_PATH_SEGMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*)(?:\[([0-9]+)\])?$")
+_CONTENT_PATH_SEGMENT = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*)((?:\[[0-9]+\])*)$")
+_CONTENT_PATH_INDEX = re.compile(r"\[([0-9]+)\]")
 
 
 def resolve_external_item_content_path(content: object, path: str) -> object:
@@ -29,10 +30,10 @@ def resolve_external_item_content_path(content: object, path: str) -> object:
         if match is None or not isinstance(current, dict) or match[1] not in current:
             raise ValueError("content region path does not resolve")
         current = current[match[1]]
-        if match[2] is not None:
-            if not isinstance(current, list) or int(match[2]) >= len(current):
+        for index in _CONTENT_PATH_INDEX.findall(match[2]):
+            if not isinstance(current, list) or int(index) >= len(current):
                 raise ValueError("content region path does not resolve")
-            current = current[int(match[2])]
+            current = current[int(index)]
     return current
 
 

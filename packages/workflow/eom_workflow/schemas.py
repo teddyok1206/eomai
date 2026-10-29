@@ -5451,6 +5451,10 @@ def _project_creative_answer_representations(schema: dict[str, Any]) -> None:
     Copy only the small schema nodes, never source/results. Canonical contracts
     and historical V1 generation stay unchanged; invalid responses are not repaired.
     """
+    from eom_catalog_contracts.external_item_learning_result_v2 import (
+        INDEPENDENT_SOURCE_SOLUTION_GUIDANCE,
+    )
+
     definitions = _mapping(schema, "$defs")
     draft = _mapping(definitions, "CreativeSourceItemDraft")
     solution = _mapping(definitions, "AssessmentItemContent_solution")
@@ -5496,6 +5500,7 @@ def _project_creative_answer_representations(schema: dict[str, Any]) -> None:
         alternatives.append(branch)
     report.clear()
     report["anyOf"] = alternatives
+    report["description"] = INDEPENDENT_SOURCE_SOLUTION_GUIDANCE
 
 
 def _project_external_item_learning_codex_contract(
@@ -5504,6 +5509,13 @@ def _project_external_item_learning_codex_contract(
     """Expose only Codex-supported syntax; canonical validation remains authoritative."""
 
     definitions = _mapping(schema, "$defs")
+    if result_definition == "ExternalItemLearningResultV2":
+        from eom_catalog_contracts.creative_source_draft import (
+            creative_source_region_policy_description,
+        )
+
+        region_map = _mapping(definitions, "ExternalItemLearningResult_contentRegionMap")
+        _append_projection_instruction(region_map, creative_source_region_policy_description())
     result = _mapping(definitions, result_definition)
     properties = _mapping(result, "properties")
     if properties.pop("result_sha256", None) is None:

@@ -1,5 +1,7 @@
 """Source-first draft: no invented media identity or inferred printed score."""
 
+from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Annotated, Literal, Self
 
 from pydantic import Field, field_validator, model_validator
@@ -19,6 +21,62 @@ from eom_catalog_contracts.validation import validate_contract
 
 CREATIVE_SOURCE_DRAFT_SCHEMA = "creative-source-item-draft-v1"
 CREATIVE_SOURCE_DRAFT_SCHEMA_REF = "eom://schemas/external-item/source-item-draft/1.0"
+
+_TARGET_ROLES = frozenset({"TARGET_ITEM"})
+_SOLUTION_ROLES = frozenset({"TARGET_ITEM", "EDITORIAL_SOLUTION"})
+_METADATA_ROLES = frozenset({"TARGET_ITEM", "EDITORIAL_SOLUTION", "OTHER"})
+_ROOT_FIELD_REGION_ROLES: Mapping[str, frozenset[str]] = MappingProxyType(
+    {
+        "title": _TARGET_ROLES,
+        "body": _TARGET_ROLES,
+        "interaction": _TARGET_ROLES,
+        "solution": _SOLUTION_ROLES,
+        "score": _METADATA_ROLES,
+    }
+)
+_SOLUTION_FIELD_REGION_ROLES: Mapping[str, frozenset[str]] = MappingProxyType(
+    {
+        "correct_choice_ids": _SOLUTION_ROLES,
+        "accepted_answers": _SOLUTION_ROLES,
+        "explanation": _SOLUTION_ROLES,
+        "authoring_intent": _METADATA_ROLES,
+        "statement_explanations": _SOLUTION_ROLES,
+    }
+)
+
+
+def creative_source_field_region_roles(content_path: str) -> frozenset[str]:
+    """Classify an already resolved path, not authority or a substitute for resolution.
+
+    The enclosing proposal resolves the complete actual path first. Exact root
+    and solution-field lookup prevent a metadata leaf from widening its parent
+    or a similarly named answer field. Reference-original is never admissible.
+    """
+    head, separator, tail = content_path.partition(".")
+    root = head.partition("[")[0]
+    if root == "solution" and separator:
+        member = tail.partition(".")[0].partition("[")[0]
+        allowed = _SOLUTION_FIELD_REGION_ROLES.get(member)
+    else:
+        allowed = _ROOT_FIELD_REGION_ROLES.get(root)
+    if allowed is None:
+        raise ValueError("CREATIVE_DRAFT_SOURCE_FIELD_UNKNOWN")
+    return allowed
+
+
+def creative_source_region_policy_description() -> str:
+    """Generation guidance and admission share this one fixed source-role policy."""
+    fields = tuple(
+        ("body[i]" if field == "body" else field, roles)
+        for field, roles in _ROOT_FIELD_REGION_ROLES.items()
+    ) + tuple((f"solution.{field}", roles) for field, roles in _SOLUTION_FIELD_REGION_ROLES.items())
+    return (
+        "Map each actual field to declared source regions with these roles: "
+        + "; ".join(f"{field}: {', '.join(sorted(roles))}" for field, roles in fields)
+        + ". Nested values inherit their field's policy. Use the authoring_intent leaf for "
+        "editorial metadata; OTHER is not answer, explanation, stem or choice evidence. "
+        "REFERENCE_ORIGINAL is never permitted. Paths must resolve to actual values."
+    )
 
 
 class PrintedSourceScore(FrozenModel):

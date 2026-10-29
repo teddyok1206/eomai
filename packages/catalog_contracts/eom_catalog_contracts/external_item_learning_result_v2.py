@@ -9,6 +9,7 @@ from pydantic import Field, field_validator, model_validator
 from eom_catalog_contracts.creative_source_draft import (
     CreativeSourceItemDraft,
     SourceImageBlock,
+    creative_source_field_region_roles,
     validate_source_draft_visual_regions,
 )
 from eom_catalog_contracts.external_item_learning_result import (
@@ -23,6 +24,18 @@ from eom_catalog_contracts.validation import validate_contract
 
 EXTERNAL_ITEM_LEARNING_RESULT_V2_SCHEMA = "external-item-learning-result-v2"
 EXTERNAL_ITEM_LEARNING_RESULT_V2_SCHEMA_REF = "eom://schemas/external-item/learning-result/2.0"
+
+INDEPENDENT_SOURCE_SOLUTION_GUIDANCE = (
+    "For a determined single-choice answer, answer_labels must copy actual label values from "
+    "proposal.content.interaction.choices, not choice IDs, option text or invented labels. "
+    "If no listed choice fits or no unique listed choice can be determined, do not force a "
+    "numbered choice or put 'no matching choice' in answer_labels. Use answer_state=UNDETERMINED, "
+    "empty answer_labels and accepted_answers, and answer_cross_check=NOT_DETERMINED. Preserve "
+    "the finding and its public reasoning in explanation/solution_steps and an explicit conflict; "
+    "use NEEDS_DECISION with a blocking conflict while retaining a faithful proposal. Keep "
+    "observed editorial_region_ids and the original source answer/explanation unchanged. "
+    "Source registration may preserve these scientific issues; do not erase or guess evidence."
+)
 
 
 class IndependentSourceSolution(FrozenModel):
@@ -165,13 +178,7 @@ class ExternalItemLearningBodyV2(FrozenModel):
         proposal = self.proposal
         assert proposal is not None
         for mapping in proposal.content_region_map:
-            allowed = (
-                {"TARGET_ITEM", "EDITORIAL_SOLUTION"}
-                if mapping.content_path.startswith("solution")
-                else {"TARGET_ITEM", "EDITORIAL_SOLUTION", "OTHER"}
-                if mapping.content_path.startswith("score")
-                else {"TARGET_ITEM"}
-            )
+            allowed = creative_source_field_region_roles(mapping.content_path)
             if any(roles.get(identifier) not in allowed for identifier in mapping.region_ids):
                 raise ValueError("source draft maps to unrelated source regions")
         mappings = {

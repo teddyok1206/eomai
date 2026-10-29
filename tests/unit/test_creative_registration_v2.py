@@ -2,6 +2,7 @@
 
 import json
 from contextlib import nullcontext
+from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock
@@ -129,6 +130,36 @@ def test_undetermined_solution_registers_original_and_preserves_evidence_in_offi
     ]
     assert "ANSWER_DISAGREEMENT" in exposed["warning_codes"]
     assert exposed["original_proposal_status"] == "NEEDS_DECISION"
+
+
+def test_authoring_metadata_from_other_region_survives_native_registration_and_read(monkeypatch):
+    raw = role_result()
+    value = raw["output"]["learning_result"]
+    region = deepcopy(value["regions"][0])
+    region.update(
+        region_id="extregion_" + "a" * 32,
+        role="OTHER",
+        observed_text=value["proposal"]["content"]["solution"]["authoring_intent"],
+    )
+    value["regions"].append(region)
+    value["proposal"]["content_region_map"].append(
+        {
+            "content_path": "solution.authoring_intent",
+            "region_ids": [region["region_id"]],
+        }
+    )
+    monkeypatch.setattr(f"{__name__}.role_result", lambda: deepcopy(raw))
+    session, artifacts, revision, _, resolved, _, content = v2_registered(monkeypatch)
+    exposed = json.loads(
+        reports.load_registered_creative_report(session, artifacts, revision).context_text()
+    )
+    expected = value["proposal"]["content"]["solution"]["authoring_intent"]
+    assert content.content.solution.authoring_intent == expected
+    assert exposed["source_solution"]["authoring_intent"] == expected
+    assert resolved.role.output.learning_result.regions[-1].role == "OTHER"
+    assert resolved.role.output.learning_result.proposal.content_region_map[-1].region_ids == (
+        region["region_id"],
+    )
 
 
 def test_missing_score_warning_is_not_silently_interpreted_as_printed_zero(monkeypatch):
