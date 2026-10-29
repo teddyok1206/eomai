@@ -70,8 +70,10 @@ from eom_workflow import (
     ResolvedExecutionPlanV25,
     ResolvedExecutionPlanV26,
     ResolvedExecutionPlanV27,
+    ResolvedExecutionPlanV28,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
+    parse_creative_learning_execution_plan,
     single_document_review_contract_for_definition,
     validate_control_contract,
 )
@@ -240,6 +242,7 @@ def materialize_execution_step(
         "resolved-execution-plan/25.0",
         "resolved-execution-plan/26.0",
         "resolved-execution-plan/27.0",
+        "resolved-execution-plan/28.0",
         "resolved-execution-plan/14.0",
         "resolved-execution-plan/15.0",
     }
@@ -260,6 +263,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV25
         | ResolvedExecutionPlanV26
         | ResolvedExecutionPlanV27
+        | ResolvedExecutionPlanV28
         | ResolvedExecutionPlanV14
         | ResolvedExecutionPlanV15
         | ResolvedExecutionPlanV16
@@ -298,8 +302,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV25.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/26.0":
         plan = ResolvedExecutionPlanV26.model_validate(plan_record.canonical_document)
-    elif plan_schema_version == "resolved-execution-plan/27.0":
-        plan = ResolvedExecutionPlanV27.model_validate(plan_record.canonical_document)
+    elif plan_schema_version in {"resolved-execution-plan/27.0", "resolved-execution-plan/28.0"}:
+        plan = parse_creative_learning_execution_plan(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/14.0":
         plan = ResolvedExecutionPlanV14.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/15.0":
@@ -328,13 +332,16 @@ def materialize_execution_step(
     if len(matching) != 1:
         raise ControlPlaneError("CONTROL_PLAN_STEP_MISSING", "resolved execution step is missing")
     step = matching[0]
-    if isinstance(plan, ResolvedExecutionPlanV27) and creative_page_publisher is None:
+    if (
+        isinstance(plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28))
+        and creative_page_publisher is None
+    ):
         raise ControlPlaneError(
             "CONTROL_CREATIVE_PAGE_OWNER_REQUIRED",
             "creative page materialization requires its pinned publication owner",
         )
     if (
-        isinstance(plan, ResolvedExecutionPlanV27)
+        isinstance(plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28))
         and sum(page.content_length for page in plan.work_input.page_set.pages) > 128 * 1024 * 1024
     ):
         raise ControlPlaneError(
@@ -577,7 +584,7 @@ def materialize_execution_step(
         _require_total_size(total_bytes, analysis=True)
         source_artifact_revision_id = plan.item_source.artifact_member.artifact_revision_id
         source_sha256 = plan.item_source.artifact_member.sha256
-    elif isinstance(plan, ResolvedExecutionPlanV27):
+    elif isinstance(plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28)):
         assert creative_page_publisher is not None
         page_bytes, page_members = materialize_external_item_learning_pages(
             session,
@@ -749,7 +756,7 @@ def materialize_execution_step(
             group_id=worker_group_id,
         )
         image_input_manifest_sha256 = image_manifest.manifest_sha256
-    elif isinstance(plan, ResolvedExecutionPlanV27):
+    elif isinstance(plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28)):
         image_manifest_document = {
             "schema_version": "codex-image-input-manifest/4.0",
             "plan_id": plan.plan_id,
@@ -1006,6 +1013,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV25
             | ResolvedExecutionPlanV26
             | ResolvedExecutionPlanV27
+            | ResolvedExecutionPlanV28
             | ResolvedExecutionPlanV14
             | ResolvedExecutionPlanV15
             | ResolvedExecutionPlanV16
@@ -1042,8 +1050,11 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV25.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/26.0":
         plan = ResolvedExecutionPlanV26.model_validate(plan_record.canonical_document)
-    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/27.0":
-        plan = ResolvedExecutionPlanV27.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") in {
+        "resolved-execution-plan/27.0",
+        "resolved-execution-plan/28.0",
+    }:
+        plan = parse_creative_learning_execution_plan(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/14.0":
         plan = ResolvedExecutionPlanV14.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/15.0":
@@ -1167,7 +1178,7 @@ def authorized_execution_artifact_revisions(
                 plan.textbook_evidence.publication.context_artifact.artifact_revision_id,
             }
         )
-    elif isinstance(plan, ResolvedExecutionPlanV27):
+    elif isinstance(plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28)):
         revision_ids.add(plan.work_input.page_artifact.artifact_revision_id)
     elif isinstance(plan, ResolvedExecutionPlanV14):
         revision_ids.update(

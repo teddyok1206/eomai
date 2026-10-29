@@ -9,7 +9,11 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from eom_workflow.control_plane import ResolvedExecutionPlanV27
+from eom_workflow.control_plane import (
+    ResolvedExecutionPlanV27,
+    ResolvedExecutionPlanV28,
+    parse_creative_learning_execution_plan,
+)
 from eom_workflow.models import ExternalItemLearningWorkerRequest
 
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
@@ -46,13 +50,13 @@ def validate_external_item_learning_execution_plan(
     workflow_id: str,
     step_key: str,
     request: ExternalItemLearningWorkerRequest,
-) -> ResolvedExecutionPlanV27:
+) -> ResolvedExecutionPlanV27 | ResolvedExecutionPlanV28:
     """Bind the immutable row, full plan, Workflow and exact work for replay too."""
 
     try:
         if record is None:
             raise ValueError("missing creative execution plan")
-        plan = ResolvedExecutionPlanV27.model_validate(record.canonical_document)
+        plan = parse_creative_learning_execution_plan(record.canonical_document)
         if (
             plan.workflow_id != workflow_id
             or step_key != "extract"

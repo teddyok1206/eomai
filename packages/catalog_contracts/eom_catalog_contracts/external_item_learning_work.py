@@ -19,6 +19,7 @@ from eom_catalog_contracts.external_item_learning_result import (
     ExternalItemLearningResult,
     validate_external_item_learning_result_for_source,
 )
+from eom_catalog_contracts.external_item_learning_result_v2 import ExternalItemLearningResultV2
 from eom_catalog_contracts.external_item_learning_source import ExternalItemLearningSource
 from eom_catalog_contracts.models import FrozenModel, Sha256
 
@@ -69,7 +70,7 @@ class ExternalItemLearningWorkInput(FrozenModel):
 
 
 def validate_external_item_learning_result_for_work(
-    result: ExternalItemLearningResult,
+    result: ExternalItemLearningResult | ExternalItemLearningResultV2,
     work: ExternalItemLearningWorkInput,
 ) -> None:
     """Close worker output over one exact source and its staged visual pages."""

@@ -24,15 +24,17 @@ from eom_orchestrator.models import JobRecord
 from eom_orchestrator.orchestrator import Orchestrator
 from eom_orchestrator.state_machine import JobState
 from eom_orchestrator.worker import PreparedWorkerWorkspace, WorkerRun
-from eom_workflow.control_plane import ResolvedExecutionPlanV27
+from eom_workflow.control_plane import (
+    parse_creative_learning_execution_plan,
+)
 from eom_workflow.models import ExternalItemLearningWorkerRequest
 
 from tests.unit.test_external_item_learning_execution_plan import _plan
 from tests.unit.test_external_item_learning_result_contract import _result
 
 
-def _record() -> ResolvedExecutionPlanRecord:
-    plan = ResolvedExecutionPlanV27.model_validate(_plan())
+def _record(*, successor: bool = False) -> ResolvedExecutionPlanRecord:
+    plan = parse_creative_learning_execution_plan(_plan(successor=successor))
     return ResolvedExecutionPlanRecord(
         plan_id=plan.plan_id,
         workflow_id=plan.workflow_id,
@@ -74,9 +76,9 @@ def test_plan_binds_full_row_identity_before_execution(changed: str | None) -> N
         assert plan.work_input == request.work_input
 
 
-def _fixture(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
-    record = _record()
-    plan = ResolvedExecutionPlanV27.model_validate(record.canonical_document)
+def _fixture(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, *, successor: bool = False):
+    record = _record(successor=successor)
+    plan = parse_creative_learning_execution_plan(record.canonical_document)
     request = ExternalItemLearningWorkerRequest(work_input=plan.work_input)
     orchestrator = object.__new__(Orchestrator)
     settings = SimpleNamespace(
@@ -168,7 +170,12 @@ def _fixture(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     def run(**values):
         events.append("worker-test-double")
         value = inputs[0]
-        learning_result = _result()
+        if successor:
+            from tests.unit.test_external_item_learning_result_v2 import result_v2
+
+            learning_result = result_v2()
+        else:
+            learning_result = _result()
         source = request.work_input.source
         for field in ("input_sha256", "source_id", "source_revision_id", "external_number"):
             learning_result[field] = getattr(source, field)
@@ -238,7 +245,7 @@ def _fixture(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     )
 
 
-def _execute(value):
+def _execute(value, *, result_schema="external-item-learning-result@1.0"):
     return value.orchestrator.submit_workflow_role(
         workflow_id=value.plan.workflow_id,
         step_run_id="steprun_" + "0" * 32,
@@ -247,7 +254,7 @@ def _execute(value):
         role="support",
         request=value.request,
         upstream_artifacts=(),
-        result_schema="external-item-learning-result@1.0",
+        result_schema=result_schema,
         idempotency_key="synthetic-creative-role-execution",
         prompt_text="synthetic prompt",
         external_item_learning=value.context,

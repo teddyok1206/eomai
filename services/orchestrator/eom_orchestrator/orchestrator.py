@@ -51,6 +51,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV16,
     ResolvedExecutionPlanV17,
     ResolvedExecutionPlanV27,
+    ResolvedExecutionPlanV28,
 )
 from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequest,
@@ -83,6 +84,7 @@ from eom_workflow.models import (
     ContentTeamImageRoleResultV12,
     CustomerSupportWorkerRequest,
     ExternalItemLearningRoleResult,
+    ExternalItemLearningRoleResultV2,
     ExternalItemLearningWorkerRequest,
     GeneratedVectorDrawingV6,
     InferenceTransferPairRoleResult,
@@ -702,7 +704,7 @@ class Orchestrator:
         if (prompt_path is None) == (prompt_text is None):
             raise ValueError("exactly one workflow prompt source is required")
         is_creative = isinstance(request, ExternalItemLearningWorkerRequest)
-        creative_plan: ResolvedExecutionPlanV27 | None = None
+        creative_plan: ResolvedExecutionPlanV27 | ResolvedExecutionPlanV28 | None = None
         if is_creative and external_item_learning is None:
             raise ControlPlaneError(
                 "CONTROL_CREATIVE_LEARNING_NOT_ACTIVATED",
@@ -712,7 +714,8 @@ class Orchestrator:
             if (
                 not isinstance(request, ExternalItemLearningWorkerRequest)
                 or role != "support"
-                or result_schema != "external-item-learning-result@1.0"
+                or result_schema
+                not in {"external-item-learning-result@1.0", "external-item-learning-result@2.0"}
                 or upstream_artifacts
                 or execution_tier != "PRIMARY"
                 or similarity_context is not None
@@ -743,6 +746,17 @@ class Orchestrator:
                     workflow_id=workflow_id,
                     step_key=step_key,
                     request=request,
+                )
+            from eom_workflow.creative_learning_profile import creative_learning_profile
+
+            if (
+                result_schema
+                != creative_learning_profile(
+                    creative_plan.workflow_definition_version
+                ).result_schema
+            ):
+                raise ControlPlaneError(
+                    "CONTROL_CREATIVE_CONTEXT_INVALID", "creative result and plan family differ"
                 )
             external_item_learning.verify_page_input(request)
         is_transfer = isinstance(request, InferenceTransferPairWorkerRequest)
@@ -1164,7 +1178,9 @@ class Orchestrator:
                     ErrorCode.WORKER_RESULT_INVALID,
                     "workflow worker result identifiers do not match input",
                 )
-            if isinstance(result, ExternalItemLearningRoleResult):
+            if isinstance(
+                result, (ExternalItemLearningRoleResult, ExternalItemLearningRoleResultV2)
+            ):
                 if not isinstance(worker_input.request, ExternalItemLearningWorkerRequest):
                     raise PlatformError(
                         ErrorCode.WORKER_RESULT_INVALID,

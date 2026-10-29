@@ -17,7 +17,7 @@ from tests.unit.test_external_item_learning_work_contract import _work
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def _plan() -> dict[str, object]:
+def _plan(*, successor: bool = False) -> dict[str, object]:
     value: dict[str, object] = {
         "schema_version": "resolved-execution-plan/27.0",
         "plan_id": "execplan_" + "1" * 32,
@@ -61,6 +61,12 @@ def _plan() -> dict[str, object]:
         "resolver_version": "27.0.0",
         "resolved_at": "2026-10-27T11:00:00Z",
     }
+    if successor:
+        value.update(
+            schema_version="resolved-execution-plan/28.0",
+            workflow_definition_version="2.0.0",
+            resolver_version="28.0.0",
+        )
     value["plan_sha256"] = content_sha256(value)
     return value
 

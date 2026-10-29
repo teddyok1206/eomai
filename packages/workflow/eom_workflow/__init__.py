@@ -96,6 +96,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV25,
     ResolvedExecutionPlanV26,
     ResolvedExecutionPlanV27,
+    ResolvedExecutionPlanV28,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
     ReviewEvidenceUsageValidationReceipt,
@@ -107,6 +108,7 @@ from eom_workflow.control_plane import (
     WorkerCapacityPolicyV3,
     WorkerCapacityPolicyV4,
     WorkerLeaseView,
+    parse_creative_learning_execution_plan,
 )
 from eom_workflow.control_schemas import (
     CONTROL_SCHEMA_RESOURCES,
@@ -623,6 +625,7 @@ __all__ = [
     "ResolvedExecutionPlanV25",
     "ResolvedExecutionPlanV26",
     "ResolvedExecutionPlanV27",
+    "ResolvedExecutionPlanV28",
     "ResolvedStepExecutionV3",
     "ResolvedStepExecutionV12",
     "ReviewEvidenceUsageValidationReceipt",
@@ -683,6 +686,7 @@ __all__ = [
     "native_embedding_backend_selection_bytes",
     "native_embedding_backend_selection_schema",
     "normalize_pdf_review_guidance",
+    "parse_creative_learning_execution_plan",
     "parse_embedding_encoding_job_message",
     "parse_local_embedding_executable_policy",
     "parse_local_embedding_executable_request",

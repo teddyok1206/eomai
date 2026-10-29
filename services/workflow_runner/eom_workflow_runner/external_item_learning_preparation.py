@@ -19,6 +19,7 @@ from eom_orchestrator.external_item_learning_page_publication import (
 )
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_workflow.control_plane import ExecutionPresetRevision
+from eom_workflow.creative_learning_profile import creative_learning_profile
 from eom_workflow.models import WorkflowRequest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -66,10 +67,11 @@ def prepare_external_item_learning_workflow(
     if not session.in_transaction():
         raise ValueError("creative preparation requires a caller-owned root transaction")
     try:
+        profile = creative_learning_profile(definition.definition_version)
         request = WorkflowRequest(
             request_name="EXTERNAL_ITEM_LEARNING_REQUEST",
             image_mode="skip",
-            execution_preset_key="external-item-learning",
+            execution_preset_key=profile.preset_key,
             external_item_learning_work=work,
         )
         request = validate_external_item_learning_submission(
@@ -153,7 +155,7 @@ def prepare_external_item_learning_workflow(
                 step_key="extract",
                 step_type="agent",
                 worker_role="support",
-                result_schema="external-item-learning-result@1.0",
+                result_schema=profile.result_schema,
                 input_pointer_manifest={"upstream_artifacts": []},
                 max_attempts=1,
             )
@@ -173,7 +175,7 @@ def prepare_external_item_learning_workflow(
             or step.attempt != 1
             or step.step_type != "agent"
             or step.worker_role != "support"
-            or step.result_schema != "external-item-learning-result@1.0"
+            or step.result_schema != profile.result_schema
             or step.platform_job_id is not None
             or step.input_pointer_manifest != {"upstream_artifacts": []}
             or step.output_pointer_manifest is not None

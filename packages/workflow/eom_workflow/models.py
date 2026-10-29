@@ -71,6 +71,7 @@ from pydantic import (
     model_validator,
 )
 
+from eom_workflow.creative_learning_profile import CREATIVE_LEARNING_PRESET_KEYS
 from eom_workflow.document_review import (
     PairedDocumentReviewOutput,
     PairedDocumentReviewOutputV3,
@@ -522,7 +523,7 @@ class WorkflowRequest(FrozenModel):
             if (
                 self.external_item_learning_work is None
                 or self.image_mode != "skip"
-                or self.execution_preset_key != "external-item-learning"
+                or self.execution_preset_key not in CREATIVE_LEARNING_PRESET_KEYS
                 or any(
                     value is not None
                     for value in (

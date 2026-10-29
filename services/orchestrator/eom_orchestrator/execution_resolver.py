@@ -55,12 +55,15 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV25,
     ResolvedExecutionPlanV26,
     ResolvedExecutionPlanV27,
+    ResolvedExecutionPlanV28,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
     WorkerRole,
+    parse_creative_learning_execution_plan,
 )
 from eom_workflow.control_schemas import validate_control_contract
+from eom_workflow.creative_learning_profile import creative_learning_profile_for_protocol
 from eom_workflow.document_review import (
     PairedDocumentReviewRequest,
     PairedDocumentReviewRequestV2,
@@ -2129,22 +2132,25 @@ def resolve_external_item_learning_plan(
     work: ExternalItemLearningWorkInput,
     resolved_at: datetime | None = None,
     expected_preset: ExecutionPresetRevision | None = None,
-) -> ResolvedExecutionPlanV27:
+) -> ResolvedExecutionPlanV27 | ResolvedExecutionPlanV28:
     """Pin creative source instructions to the existing bounded support pool.
 
     This resolver only records policy and input identity. Its caller must reauthorize
     the current Catalog source and page Artifact before a claim or worker staging.
     """
 
+    profile = creative_learning_profile_for_protocol(workflow_role_schema_version)
     existing = session.scalar(
         select(ResolvedExecutionPlanRecord).where(
             ResolvedExecutionPlanRecord.workflow_id == workflow_id
         )
     )
     if existing is not None:
-        plan = ResolvedExecutionPlanV27.model_validate(existing.canonical_document)
+        plan = parse_creative_learning_execution_plan(existing.canonical_document)
         if (
             plan.plan_sha256 != existing.plan_sha256
+            or plan.schema_version != profile.plan_schema_version
+            or plan.workflow_definition_version != profile.definition_version
             or plan.work_input != work
             or plan.workflow_definition_sha256 != workflow_definition_sha256
             or (
@@ -2164,7 +2170,7 @@ def resolve_external_item_learning_plan(
 
     preset = lock_current_execution_preset(
         session,
-        preset_key="external-item-learning",
+        preset_key=profile.preset_key,
         workflow_role_schema_version=workflow_role_schema_version,
     )
     if expected_preset is not None and (
@@ -2205,7 +2211,7 @@ def resolve_external_item_learning_plan(
         general_knowledge_mode="DENIED",
     )
     document: dict[str, object] = {
-        "schema_version": "resolved-execution-plan/27.0",
+        "schema_version": profile.plan_schema_version,
         "plan_id": new_execution_plan_id(),
         "workflow_id": workflow_id,
         "workload_class": "KNOWLEDGE_ANALYSIS",
@@ -2213,18 +2219,18 @@ def resolve_external_item_learning_plan(
         "preset_revision_id": preset.preset_revision_id,
         "preset_sha256": preset.content_sha256,
         "workflow_definition_key": "external-item-learning",
-        "workflow_definition_version": "1.0.0",
+        "workflow_definition_version": profile.definition_version,
         "workflow_definition_sha256": workflow_definition_sha256,
         "work_input": work.model_dump(mode="json"),
         "capacity_policy_revision_id": preset.capacity_policy_revision_id,
         "steps": [step.model_dump(mode="json")],
-        "resolver_version": "27.0.0",
+        "resolver_version": profile.resolver_version,
         "resolved_at": (resolved_at or datetime.now(UTC)).isoformat().replace("+00:00", "Z"),
         "plan_sha256": "sha256:" + "0" * 64,
     }
     document["plan_sha256"] = compute_control_document_hash(document, "plan_sha256")
-    validate_control_contract("resolved-execution-plan-v27", document)
-    plan = ResolvedExecutionPlanV27.model_validate(document)
+    validate_control_contract(profile.plan_contract, document)
+    plan = parse_creative_learning_execution_plan(document)
     session.add(
         ResolvedExecutionPlanRecord(
             plan_id=plan.plan_id,

@@ -27,7 +27,15 @@ from eom_catalog_contracts import (
     ReviewTextbookEvidence,
 )
 from eom_identifiers import content_sha256
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    TypeAdapter,
+    field_validator,
+    model_validator,
+)
 
 from eom_workflow.document_review import PairedReviewDocument
 
@@ -1190,6 +1198,19 @@ class ResolvedExecutionPlanV26(ResolvedExecutionPlanV14):
         return self
 
 
+def _validate_creative_support_step(step: ResolvedStepExecution) -> None:
+    if (
+        step.step_key != "extract"
+        or step.role != WorkerRole.SUPPORT
+        or step.worker_pool_key != "support"
+        or step.reference_bundle is not None
+        or step.sandbox != "read-only"
+        or step.network != "disabled"
+        or step.general_knowledge_mode != "DENIED"
+    ):
+        raise ValueError("creative learning plan requires its isolated support step")
+
+
 class ResolvedExecutionPlanV27(FrozenModel):
     """Exact creative-source pages and one isolated support execution; not Item approval."""
 
@@ -1212,22 +1233,53 @@ class ResolvedExecutionPlanV27(FrozenModel):
 
     @model_validator(mode="after")
     def exact_creative_support_step_and_hash(self) -> ResolvedExecutionPlanV27:
-        step = self.steps[0]
-        if (
-            step.step_key != "extract"
-            or step.role != WorkerRole.SUPPORT
-            or step.worker_pool_key != "support"
-            or step.reference_bundle is not None
-            or step.sandbox != "read-only"
-            or step.network != "disabled"
-            or step.general_knowledge_mode != "DENIED"
-        ):
-            raise ValueError("creative learning plan requires its isolated support step")
+        _validate_creative_support_step(self.steps[0])
         if self.plan_sha256 != content_sha256(
             self.model_dump(mode="json", exclude={"plan_sha256"})
         ):
             raise ValueError("creative learning plan hash differs")
         return self
+
+
+class ResolvedExecutionPlanV28(FrozenModel):
+    """Source-visual draft successor; V27 execution pins retain their old meaning."""
+
+    schema_version: Literal["resolved-execution-plan/28.0"] = "resolved-execution-plan/28.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    workflow_id: WorkflowId
+    workload_class: Literal["KNOWLEDGE_ANALYSIS"] = "KNOWLEDGE_ANALYSIS"
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_sha256: Sha256
+    workflow_definition_key: Literal["external-item-learning"] = "external-item-learning"
+    workflow_definition_version: Literal["2.0.0"] = "2.0.0"
+    workflow_definition_sha256: Sha256
+    work_input: ExternalItemLearningWorkInput
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    steps: tuple[ResolvedStepExecution, ...] = Field(min_length=1, max_length=1)
+    resolver_version: Literal["28.0.0"] = "28.0.0"
+    resolved_at: UtcDatetime
+    plan_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_creative_support_step_and_hash(self) -> ResolvedExecutionPlanV28:
+        _validate_creative_support_step(self.steps[0])
+        if self.plan_sha256 != content_sha256(
+            self.model_dump(mode="json", exclude={"plan_sha256"})
+        ):
+            raise ValueError("creative learning plan hash differs")
+        return self
+
+
+CreativeLearningExecutionPlan = Annotated[
+    ResolvedExecutionPlanV27 | ResolvedExecutionPlanV28, Field(discriminator="schema_version")
+]
+
+
+def parse_creative_learning_execution_plan(
+    value: object,
+) -> ResolvedExecutionPlanV27 | ResolvedExecutionPlanV28:
+    return TypeAdapter(CreativeLearningExecutionPlan).validate_python(value)
 
 
 class ResolvedExecutionPlanV15(FrozenModel):

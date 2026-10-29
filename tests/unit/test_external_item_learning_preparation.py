@@ -8,7 +8,7 @@ from unittest.mock import Mock
 import pytest
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_service import ControlPlaneError
-from eom_workflow.control_plane import ResolvedExecutionPlanV27
+from eom_workflow.control_plane import parse_creative_learning_execution_plan
 from eom_workflow_runner import external_item_learning_preparation as preparation
 from eom_workflow_runner.errors import WorkflowError
 from sqlalchemy.orm import Session
@@ -17,20 +17,20 @@ from tests.unit.test_external_item_learning_execution_plan import _plan
 from tests.unit.test_external_item_learning_workflow_admission import OPERATOR, _definition
 
 
-def _case(monkeypatch):
-    definition = _definition()
-    raw = _plan()
+def _case(monkeypatch, *, successor=False):
+    definition = _definition(successor=successor)
+    raw = _plan(successor=successor)
     raw["workflow_definition_sha256"] = definition.definition_hash
     raw["plan_sha256"] = content_sha256(
         {key: value for key, value in raw.items() if key != "plan_sha256"}
     )
-    plan = ResolvedExecutionPlanV27.model_validate(raw)
+    plan = parse_creative_learning_execution_plan(raw)
     workflow = SimpleNamespace(
         workflow_id=plan.workflow_id,
         state="REQUESTED",
         stage="KNOWLEDGE_ANALYSIS",
         current_step_key="extract",
-        role_schema_version="workflow-role/1.33.0",
+        role_schema_version="workflow-role/1.34.0" if successor else "workflow-role/1.33.0",
         runtime_context={"artifact_pointers": []},
     )
     step = SimpleNamespace(
@@ -40,7 +40,9 @@ def _case(monkeypatch):
         state="READY",
         step_type="agent",
         worker_role="support",
-        result_schema="external-item-learning-result@1.0",
+        result_schema="external-item-learning-result@2.0"
+        if successor
+        else "external-item-learning-result@1.0",
         platform_job_id=None,
         input_pointer_manifest={"upstream_artifacts": []},
         output_pointer_manifest=None,

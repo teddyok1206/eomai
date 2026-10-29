@@ -18,7 +18,7 @@ from tests.unit.test_external_item_learning_execution_plan import _plan
 from tests.unit.test_external_item_learning_work_contract import _work
 
 
-def _published_preset() -> tuple[SimpleNamespace, SimpleNamespace]:
+def _published_preset(*, successor: bool = False) -> tuple[SimpleNamespace, SimpleNamespace]:
     step = _plan()["steps"][0]
     assert isinstance(step, dict)
     preset: dict[str, Any] = {
@@ -45,14 +45,16 @@ def _published_preset() -> tuple[SimpleNamespace, SimpleNamespace]:
         ],
         "capacity_policy_revision_id": "capacityrev_" + "7" * 32,
         "general_knowledge_policy": "DENY",
-        "compatible_workflow_protocols": ["workflow-role/1.33.0"],
+        "compatible_workflow_protocols": [
+            "workflow-role/1.34.0" if successor else "workflow-role/1.33.0"
+        ],
         "content_sha256": "sha256:" + "0" * 64,
         "created_at": "2026-10-27T11:00:00Z",
     }
     preset["content_sha256"] = compute_control_document_hash(preset, "content_sha256")
     logical = SimpleNamespace(
         preset_id=preset["preset_id"],
-        preset_key="external-item-learning",
+        preset_key="creative-source-learning" if successor else "external-item-learning",
         state="ACTIVE",
         current_revision_id=preset["preset_revision_id"],
     )
@@ -90,12 +92,18 @@ class _Session:
         pass
 
 
-def _resolve(session: Any, work: ExternalItemLearningWorkInput, **kwargs: Any) -> Any:
+def _resolve(
+    session: Any,
+    work: ExternalItemLearningWorkInput,
+    *,
+    protocol: str = "workflow-role/1.33.0",
+    **kwargs: Any,
+) -> Any:
     return resolve_external_item_learning_plan(
         session,
         workflow_id="workflow_" + "2" * 32,
         workflow_definition_sha256="sha256:" + "6" * 64,
-        workflow_role_schema_version="workflow-role/1.33.0",
+        workflow_role_schema_version=protocol,
         work=work,
         resolved_at=datetime(2026, 10, 27, 11, tzinfo=UTC),
         **kwargs,

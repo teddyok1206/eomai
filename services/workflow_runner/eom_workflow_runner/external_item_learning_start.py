@@ -16,6 +16,7 @@ from eom_orchestrator.external_item_learning_page_publication import (
     read_external_item_learning_page_artifact,
 )
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+from eom_workflow.creative_learning_profile import creative_learning_profile
 from eom_workflow.models import ExternalItemLearningWorkerRequest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -70,10 +71,11 @@ def start_prepared_external_item_learning(
         or workflow.created_actor_id != operator_id
         or workflow.state not in {"REQUESTED", "RUNNING", "COMPLETED"}
         or workflow.definition_key != "external-item-learning"
-        or workflow.definition_version != "1.0.0"
-        or workflow.role_schema_version != "workflow-role/1.33.0"
     ):
         raise ValueError("creative start owner or lifecycle differs")
+    profile = creative_learning_profile(workflow.definition_version)
+    if workflow.role_schema_version != profile.role_protocol:
+        raise ValueError("creative start protocol differs")
     definition = session.get(
         WorkflowDefinitionRecord, workflow.definition_id, populate_existing=True
     )
@@ -99,7 +101,7 @@ def start_prepared_external_item_learning(
         or step.step_key != "extract"
         or step.step_type != "agent"
         or step.worker_role != "support"
-        or step.result_schema != "external-item-learning-result@1.0"
+        or step.result_schema != profile.result_schema
         or step.attempt != 1
     ):
         raise ValueError("creative start role differs")
@@ -111,6 +113,7 @@ def start_prepared_external_item_learning(
     )
     if (
         plan.plan_sha256 != selection.plan_sha256
+        or plan.workflow_definition_version != profile.definition_version
         or plan.workflow_definition_sha256 != workflow.definition_hash
         or workflow.runtime_context.get("execution_plan")
         != {

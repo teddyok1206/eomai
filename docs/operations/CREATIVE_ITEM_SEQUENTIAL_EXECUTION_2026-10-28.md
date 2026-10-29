@@ -156,3 +156,21 @@ resolver로 모두 읽혔다. 전체 기출을 재실행하거나 운영 데이�
 입력 결과 V2/plan 28의 source-only 후속 작업은 이 저장 호환성과 별개로 계속 진행한다.
 창작 독립 보고서를 기존 accepted V10 상세 보고서라고 과장하지 않으며, 현재 실제 끝단
 검증은 여전히 1/3이다. 전체 연속 실행/30분 timer는 아직 활성화하지 않았다.
+
+### source-visual successor 실행 연결 (소스 전용)
+
+Workflow `2.0.0` / role `1.34.0` / plan `28.0` / result `2.0`을 한 호환 family로
+정의했다. 기존 `external-item-learning` purpose와 Workflow 1/plan 27은 그대로 남고,
+새 purpose는 `creative-source-learning`이다. 버전별 profile lookup은 불변 table이며
+latest fallback이 아니다. 같은 work-input/page Artifact 1.0을 재사용한다.
+
+준비·START·Orchestrator result admission·page materialization은 그 exact family를 확인한다.
+구 plan에 새 result 또는 새 plan에 구 result를 넣으면 capacity claim 전에 거부한다.
+원문 권한과 page-set 무결성은 실행 전·결과 commit 전에 다시 검사한다. terminal replay는
+기존 성공/실패 상태를 보존하고 모델을 다시 실행하지 않는다. 기존 schema의 bytes나
+Workflow/cohort pin을 바꾸지 않으며, 새 definition/control을 운영에서 발행·활성화하지 않았다.
+
+집중 실행/기존 materializer/준비/START/계약 회귀 **137개 PASS**. V2 실행은 로컬 synthetic
+worker로 검증했고 실제 Codex/운영 DB/NAS를 사용한 acceptance가 아니다. 관련 core의
+Ruff·format·mypy PASS. 추가 연결은 crop derivation receipt/Orchestrator publication,
+등록·보고서 reader와 명시적 cohort successor다. 실제 3건과 장기 owner 전환은 아직 미완료다.

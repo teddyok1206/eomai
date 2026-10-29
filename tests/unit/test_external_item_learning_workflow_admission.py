@@ -31,14 +31,14 @@ OPERATOR = "operator_" + "a" * 32
 OTHER_OPERATOR = "operator_" + "b" * 32
 
 
-def _definition() -> WorkflowDefinitionRecord:
+def _definition(*, successor: bool = False) -> WorkflowDefinitionRecord:
     compiled = compile_definition(
-        ROOT / "config/workflows/external-item-learning.v1.yaml", {"support"}
+        ROOT / f"config/workflows/external-item-learning.v{2 if successor else 1}.yaml", {"support"}
     )
     return WorkflowDefinitionRecord(
         definition_id="wfdef_" + "c" * 32,
         definition_key="external-item-learning",
-        definition_version="1.0.0",
+        definition_version="2.0.0" if successor else "1.0.0",
         schema_version="1.0",
         canonical_definition=compiled.as_dict(),
         definition_hash=compiled.sha256,

@@ -275,13 +275,14 @@ def _workspace(tmp_path: Path, name: str) -> Path:
     return path
 
 
+@pytest.mark.parametrize("successor", [False, True])
 def test_creative_plan_requires_owner_and_allowlists_only_pinned_pages(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, successor: bool
 ) -> None:
     fixture = _fixture(tmp_path, monkeypatch)
     session = fixture["session"]
     old_record = session.records[(ResolvedExecutionPlanRecord, str(fixture["plan_id"]))]
-    plan = _creative_plan()
+    plan = _creative_plan(successor=successor)
     plan["steps"][0]["instruction_bundle"] = old_record.canonical_document["steps"][0][
         "instruction_bundle"
     ]
@@ -355,12 +356,11 @@ def test_creative_plan_requires_owner_and_allowlists_only_pinned_pages(
     assert staged == ["12345"]
     assert images["images"][0]["relative_path"].startswith("source/pages/")
     assert result.image_input_manifest_sha256 == images["manifest_sha256"]
-    assert result.source_artifact_revision_id == plan["work_input"]["source"][
-        "preview_artifact_revision_id"
-    ]
-    assert result.source_sha256 == plan["work_input"]["source"]["preview_manifest"][
-        "pdf_sha256"
-    ]
+    assert (
+        result.source_artifact_revision_id
+        == plan["work_input"]["source"]["preview_artifact_revision_id"]
+    )
+    assert result.source_sha256 == plan["work_input"]["source"]["preview_manifest"]["pdf_sha256"]
 
 
 def _pdf_review_fixture(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:

@@ -15,6 +15,7 @@ from eom_catalog_contracts.external_item_learning_work import (
 from eom_catalog_contracts.validation import validate_contract
 from eom_identifiers import content_sha256
 from eom_workflow.compiler import compile_definition_data
+from eom_workflow.creative_learning_profile import creative_learning_profile
 from eom_workflow.models import AgentStep, TerminalStep, WorkflowRequest
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from sqlalchemy.orm import Session
@@ -38,6 +39,7 @@ def validate_external_item_learning_definition(definition: WorkflowDefinitionRec
     """One authoritative rule for control preparation and source submission."""
 
     try:
+        profile = creative_learning_profile(definition.definition_version)
         compiled = compile_definition_data(
             definition.canonical_definition, definition.source_path, {"support"}
         )
@@ -45,7 +47,6 @@ def validate_external_item_learning_definition(definition: WorkflowDefinitionRec
         terminal = compiled.steps_by_key.get("complete")
         if (
             definition.definition_key != EXTERNAL_ITEM_LEARNING_WORKFLOW_KEY
-            or definition.definition_version != "1.0.0"
             or not definition.active
             or compiled.sha256 != definition.definition_hash
             or compiled.definition.definition_key != definition.definition_key
@@ -57,7 +58,7 @@ def validate_external_item_learning_definition(definition: WorkflowDefinitionRec
             or len(compiled.definition.steps) != 2
             or not isinstance(extraction, AgentStep)
             or extraction.worker_role != "support"
-            or extraction.result_schema != "external-item-learning-result@1.0"
+            or extraction.result_schema != profile.result_schema
             or extraction.on_success != "complete"
             or not isinstance(terminal, TerminalStep)
             or terminal.terminal_status != "COMPLETED"
@@ -84,11 +85,18 @@ def validate_external_item_learning_submission(
             WorkflowErrorCode.ACTOR_AUTHORIZATION_UNAVAILABLE,
             "creative learning requires its real Operator owner",
         )
+    try:
+        profile = creative_learning_profile(definition.definition_version)
+    except ValueError as exc:
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+            "unsupported creative learning Workflow version",
+        ) from exc
     if (
         definition.definition_key != EXTERNAL_ITEM_LEARNING_WORKFLOW_KEY
-        or definition.definition_version != "1.0.0"
         or not definition.active
         or request.request_name != "EXTERNAL_ITEM_LEARNING_REQUEST"
+        or request.execution_preset_key != profile.preset_key
     ):
         raise WorkflowError(
             WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
