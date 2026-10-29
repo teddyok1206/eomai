@@ -16,7 +16,7 @@ source/accepted Artifact revision/hash는 수정하지 않는다. publish comman
 - APPROVED_ITEM source의 ITEM_REVISION/ITEM_ELEMENT 및 역사적 `item.` 이름 공간의 노드는
   해당 immutable Item Revision에 속한다. `item.`은 기존 proposal의 문항 내부 키 문법이며,
   type-qualified proposal의 `<node_type>:` 접두사를 제거한 뒤에도 동일하게 판정한다.
-- 투영 키는 `item-source:<item_revision_id>:<원래 stable_key의 SHA-256>`이다. node ID는 기존처럼
+- 투영 키는 `item-source:<item_revision_id>:<원래 stable_key canonical JSON의 SHA-256>`이다. node ID는 기존처럼
   node type과 투영 키로 계산한다. 같은 문항의 같은 키에서 유형이 충돌하면 여전히 거부한다.
 - 공통 CONCEPT/FORMULA/PROCESS 등의 키는 그대로 공유한다. 다른 이름만 보고 의미가 같다고
   추정하거나 새로운 과학적 관계를 만들지 않는다. 기존 edges와 source pointer를 정확한
@@ -94,3 +94,9 @@ read-only identity 대조 결과:
 
 보존 검사의 첫 correlated EXISTS 조회는 read-only 30초 timeout으로 중단됐다. 같은 metadata를
 각각 indexed 읽기 후 ID set으로 비교하여 완료했으며 운영 row·source·정책은 바꾸지 않았다.
+
+공개 풀이 원문과 report Artifact/hash는 변경하지 않았으므로 공통 풀이 텍스트 투영의 입력도
+그대로다. 새 Graph revision의 source proof/index binding은 새 revision에 정확히 귀속해야 한다.
+node key 변경을 풀이 텍스트에 섞거나 구 index의 Graph pin을 바꾸지 않는다. 같은 text/space의
+수치 row 재사용과 새 Graph의 source membership 갱신은 서로 다른 검증이며 운영 검색 연결은
+별도 미완료 상태다.
