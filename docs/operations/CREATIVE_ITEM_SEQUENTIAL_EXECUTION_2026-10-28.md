@@ -387,3 +387,52 @@ fresh disposable PostgreSQL migration 왕복/0062 PASS 및 관련 저장소 26�
 - 풀이 양식 중립 projection은 실제 창작 V1/V2 보고서에서도 AVAILABLE과 text hash를
   확인했다. **운영 임베딩 recipe/query/candidate 연결은 여전히 PENDING**이며 기존 인덱스
   bytes/namespace를 제자리 변경하지 않았다.
+
+### 3건 실제 검증 및 장기 처리 전환 — 2026-10-29 06:26 UTC
+
+목표의 종료선은 전체 1,053개 완료가 아니라 **3건 끝단 증명 후 같은 대상의 연속 실행과
+30분 읽기 전용 감시 활성화**다. 이 체크포인트는 그 종료선을 실제로 확인한 결과다.
+
+| 원문 고유번호 | canonical Item Revision | accepted 분석 | 공개 풀이 / 주의사항 |
+| --- | --- | --- | --- |
+| 10310 | `itemrev_bcef1215ccc6469a8c07335f0fb86ffe` | `analysisrun_7d22184840974c3a9893ea224a9544eb` | 4단계 / 정답 불일치·editorial 모호성 보존 |
+| 10311 | `itemrev_ae73f8a6ef4d4ff195d7e300167e50a7` | `analysisrun_db05a954bfd049c48bc92c603a51b243` | 3단계 / 미인쇄 배점 보존 |
+| 10312 | `itemrev_fba3f3158bd7479bb2ec78415cf5b45e` | `analysisrun_9fdda55b645b4b3eb9bb53c9560290d5` | 4단계 / 미인쇄 배점 보존 |
+
+- 실제 창작 source/analysis Job 6개가 모두 support 05에서 SUCCEEDED였고, 실제 lease
+  시간 구간의 중복은 0이다. 세 원문마다 APPROVED canonical revision은 정확히 하나다.
+- 같은 공식 Catalog materialize 경계에서 세 보고서의 모든 풀이 단계·warning·issue·원래
+  proposal status가 원래 role 결과와 정확히 같음을 대조했다. 이는 원문 수록·조회 증거이지
+  과학적 정확성을 무조건 보장하는 승인으로 확대하지 않는다. FAILED 이력은 보존했다.
+- 공유 Graph는 `graphrev_3ae70abeda9fef2afb7db57e4a132cfc`, SHA
+  `9c1d6ce1817cf367a505eab59ee651a9a090a0a15adf87787b07b7e4681e092d`다. 동일 Graph
+  logical ID를 유지하며, 이전 교과서·기출 분석 1,015개의 source/accepted-result pointer와
+  hash가 모두 같다. 기존 노드 17,000개·edge 40,652개의 ID/type/key/연결은 누락·재키잉 0이다.
+  새 snapshot은 분석 1,018개, 노드 17,066개, edge 40,749개다.
+- 원래 기출 base 520개와 각 base당 accepted 풀이 successor 1개, 총 520개를 다시 확인했다.
+  worker의 원문·Item·Graph 접근 경계를 우회하지 않았고 새 migration은 없다.
+- 실제 canary owner는 `CANARY_VERIFIED`, count=3, limit=3으로 exit 0 종료됐다.
+  같은 설치본·cohort revision·target-set SHA
+  `6157b85a9e30310b744cbc9c9fc33038b1c04125bfad238d3a2cdaa62c957454`를 유지하고,
+  지원 installer로 limit만 1053으로 전환했다. 서비스 재시작은 기존 세 Item/분석을 재사용했다.
+- 네 번째 원문 10313은 `workflow_9d8cdeda56bc4a14956520a3f880bc41` / Job
+  `job_ecce72c95919456788c52a9b9efc83f9`에서 실제 RUNNING, slot 05 ACTIVE claim 1개다.
+  즉 단순 준비/계획이 아닌 나머지 연속 실행이 시작됐다. 현재 완료 3, 잔여 1,050이다.
+- `eom-creative-learning.service`와 `eom-creative-learning-observe.timer`는 enable/start했다.
+  timer는 UTC 매시 :00/:30, 실제 sandbox observer는 `check=OK`, count=3/1053,
+  `status_stale=false`였다. 관측기는 DB/NAS 접근·재실행·수정·Slack 전송을 하지 않는다.
+  기술 실패는 원래 실패로 남고 자동 성공 재해석/무한 재생성을 하지 않는다.
+- 코드와 운영 runtime은 `86c0c8ca`다. 이후 README/운영 기록만의 commit은 runtime 변경이
+  아니며 이 목표 때문에 재배포하지 않는다. QUERY는 기존 보호 설치본 pin을 유지하고,
+  GPU INDEX의 기존 FAILED 상태와 pin은 별도 보존한다. 다른 개발 변경을 덮지 않았다.
+
+실행 증거: `/tmp/eom-creative-three-end-to-end-20261029.json`,
+`/tmp/eom-creative-background-acceptance-20261029.json`,
+`/tmp/eom-creative-monitor-enabled-20261029.log`. 임시 증거 파일만을 정본으로 보지 않으며,
+위 immutable Item/role/분석/Graph pointer와 실제 systemd unit에서 다시 확인할 수 있다.
+원문·모델 결과 본문·비밀값은 Git/Slack에 싣지 않았다.
+
+관련되지만 이번 **Graph 순차 등록 목표의 완료와 분리할 남은 작업**:
+`SOLUTION_EMBEDDING_ALIGNMENT_PENDING`. 창작 V1/V2와 기출 보고서의 공통 텍스트 projection은
+검증했으나, 운영 질의·후보의 successor recipe/source binding 및 실제 임베딩 검색 연결은
+아직 완료하지 않았다. 기존 인덱스를 새 의미로 덮어쓰거나 두 입력 공간을 조용히 섞지 않는다.
