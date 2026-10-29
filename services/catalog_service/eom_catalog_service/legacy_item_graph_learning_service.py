@@ -32,7 +32,10 @@ from eom_catalog_service.automatic_item_graph_publication_service import (
     build_automatic_item_alignment_retrieval_command,
 )
 from eom_catalog_service.knowledge_graph_models import KnowledgeSnapshotAnalysisRecord
-from eom_catalog_service.knowledge_graph_projection import AcceptedAnalysisProposal
+from eom_catalog_service.knowledge_graph_projection import (
+    ITEM_SCOPED_GRAPH_PUBLISHER_VERSION,
+    AcceptedAnalysisProposal,
+)
 from eom_catalog_service.knowledge_graph_publication_service import (
     CurrentKnowledgeGraphStructure,
     KnowledgeGraphPublicationService,
@@ -483,7 +486,7 @@ class LegacyItemGraphLearningService:
             required_source_class="PAST_EXAM",
             retrieval_idempotency_namespace="legacy-auto-alignment",
             publication_idempotency_namespace="legacy-auto-graph",
-            publisher_version="1.6.0",
+            publisher_version=ITEM_SCOPED_GRAPH_PUBLISHER_VERSION,
             analysis_validator=self._validate_past_exam_analyses,
             occurrence_binding_resolver=self._assessment_item_occurrence_bindings,
         )

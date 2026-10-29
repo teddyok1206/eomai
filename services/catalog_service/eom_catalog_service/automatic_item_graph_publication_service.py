@@ -38,7 +38,10 @@ from eom_catalog_service.curriculum_graph_structure import (
     extend_integrated_science_structure_manifest_with_automatic_item_alignments,
 )
 from eom_catalog_service.knowledge_graph_models import EvidenceBundleEntryRecord
-from eom_catalog_service.knowledge_graph_projection import AcceptedAnalysisProposal
+from eom_catalog_service.knowledge_graph_projection import (
+    ITEM_SCOPED_GRAPH_PUBLISHER_VERSION,
+    AcceptedAnalysisProposal,
+)
 from eom_catalog_service.knowledge_graph_publication_service import (
     CurrentKnowledgeGraphStructure,
     KnowledgeGraphPublicationError,
@@ -371,6 +374,11 @@ class AutomaticItemGraphPublicationService:
                     {
                         "prior": context.graph_snapshot_revision_id,
                         "analysis_run_ids": list(candidate_ids),
+                        **(
+                            {"publisher_version": publisher_version}
+                            if publisher_version == ITEM_SCOPED_GRAPH_PUBLISHER_VERSION
+                            else {}
+                        ),
                     }
                 ).removeprefix("sha256:")
             ),

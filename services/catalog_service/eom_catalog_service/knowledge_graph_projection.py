@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from eom_catalog_contracts import (
@@ -35,12 +36,53 @@ from eom_catalog_contracts import (
     KnowledgeGraphStructureManifestV6,
     KnowledgeNodeType,
     ProposedKnowledgeEdgeV2,
+    ProposedKnowledgeNode,
     validate_knowledge_edge_endpoint_types,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 
 _LEXICAL_TOKEN = re.compile(r"[0-9A-Za-z가-힣]+")
 _MAX_NODE_ALIASES = 256
+ITEM_SCOPED_GRAPH_PUBLISHER_VERSION = "1.10.0"
+
+
+class KnowledgeNodeIdentityPolicy(StrEnum):
+    SHARED_STABLE_KEY = "SHARED_STABLE_KEY"
+    ITEM_REVISION_SCOPED = "ITEM_REVISION_SCOPED"
+
+
+def node_identity_policy_for_publisher(version: str) -> KnowledgeNodeIdentityPolicy:
+    """The existing manifest publisher version pins the projection algorithm."""
+    return (
+        KnowledgeNodeIdentityPolicy.ITEM_REVISION_SCOPED
+        if version == ITEM_SCOPED_GRAPH_PUBLISHER_VERSION
+        else KnowledgeNodeIdentityPolicy.SHARED_STABLE_KEY
+    )
+
+
+def _projected_node_key(
+    analysis: AcceptedAnalysisProposal,
+    node: ProposedKnowledgeNode,
+    policy: KnowledgeNodeIdentityPolicy,
+) -> str:
+    source = analysis.source
+    key = node.stable_key
+    if (
+        policy != KnowledgeNodeIdentityPolicy.ITEM_REVISION_SCOPED
+        or not isinstance(source, ApprovedItemKnowledgeSourceV2)
+        or source.source_class != "APPROVED_ITEM"
+    ):
+        return key
+    # Historical Item proposals use item.<number>.<element> as a local namespace.
+    # A statement can be CLAIM or ITEM_ELEMENT; scope the name, not its type.
+    local_key = key.removeprefix(f"{str(node.node_type).lower()}:")
+    if node.node_type not in {KnowledgeNodeType.ITEM_REVISION, KnowledgeNodeType.ITEM_ELEMENT} and (
+        not local_key.startswith("item.")
+    ):
+        return key
+    return f"item-source:{source.item_revision_id}:{content_sha256(key)[7:]}"
+
+
 _CURRICULUM_ALIGNED_NODE_TYPES = frozenset(
     {
         KnowledgeNodeType.CONCEPT,
@@ -823,6 +865,10 @@ def build_education_graph_projection(
         | KnowledgeGraphStructureManifestV6
         | None
     ),
+    *,
+    node_identity_policy: KnowledgeNodeIdentityPolicy = (
+        KnowledgeNodeIdentityPolicy.SHARED_STABLE_KEY
+    ),
 ) -> EducationGraphProjection:
     """Merge accepted proposals by stable identity and fail closed on conflicts."""
 
@@ -846,28 +892,34 @@ def build_education_graph_projection(
     node_accumulators: dict[str, _NodeAccumulator] = {}
     allow_label_aliases = isinstance(structure, KnowledgeGraphStructureManifestV2)
     local_node_ids: dict[tuple[str, str], str] = {}
+    item_node_keys: dict[tuple[str, str], str] = {}
     edge_accumulators: dict[tuple[str, str, str], _EdgeAccumulator] = {}
     anchor_count = 0
     for analysis in analyses:
         anchor_count += len(analysis.proposal.anchors)
         for proposed_node in analysis.proposal.nodes:
+            stable_key = _projected_node_key(analysis, proposed_node, node_identity_policy)
+            if isinstance(analysis.source, ApprovedItemKnowledgeSourceV2):
+                item_node_keys[(analysis.source.item_revision_id, proposed_node.stable_key)] = (
+                    stable_key
+                )
             node_id = _stable_id(
                 "knode_",
                 {
                     "node_type": proposed_node.node_type,
-                    "stable_key": proposed_node.stable_key,
+                    "stable_key": stable_key,
                 },
             )
             local_node_ids[(analysis.analysis_run_id, proposed_node.node_id)] = node_id
             pointers = {
                 _source_pointer(analysis, anchor_id) for anchor_id in proposed_node.anchor_ids
             }
-            existing = node_accumulators.get(proposed_node.stable_key)
+            existing = node_accumulators.get(stable_key)
             if existing is None:
-                node_accumulators[proposed_node.stable_key] = _NodeAccumulator(
+                node_accumulators[stable_key] = _NodeAccumulator(
                     node_id=node_id,
                     node_type=proposed_node.node_type,
-                    stable_key=proposed_node.stable_key,
+                    stable_key=stable_key,
                     label_counts={proposed_node.label: 1},
                     reviewed_label=None,
                     source_pointers=pointers,
@@ -919,7 +971,16 @@ def build_education_graph_projection(
         )
 
     curriculum_units = structure.curriculum_units if structure is not None else ()
-    item_elements = structure.item_elements if structure is not None else ()
+    item_elements = tuple(
+        binding.model_copy(
+            update={
+                "node_stable_key": item_node_keys.get(
+                    (binding.item_revision_id, binding.node_stable_key), binding.node_stable_key
+                )
+            }
+        )
+        for binding in (structure.item_elements if structure is not None else ())
+    )
     for curriculum_binding in curriculum_units:
         node = node_accumulators.get(curriculum_binding.node_stable_key)
         expected_type = (

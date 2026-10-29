@@ -462,12 +462,17 @@ def test_v4_publication_validates_both_item_binding_families_against_one_ancestr
     )
 
     service._snapshot_ancestor_ids.assert_called_once_with(session, snapshot_id)
+    inherited_binding = service._validate_approved_item_curriculum_bindings.call_args.kwargs[
+        "inherited_binding"
+    ]
+    assert callable(inherited_binding)
     service._validate_approved_item_curriculum_bindings.assert_called_once_with(
         session,
         structure,
         analyses,
         expected_snapshot_revision_id=snapshot_id,
         ancestor_snapshot_ids=ancestors,
+        inherited_binding=inherited_binding,
     )
     service._validate_automatic_item_curriculum_bindings.assert_called_once_with(
         session,
@@ -475,6 +480,7 @@ def test_v4_publication_validates_both_item_binding_families_against_one_ancestr
         analyses,
         expected_snapshot_revision_id=snapshot_id,
         ancestor_snapshot_ids=ancestors,
+        inherited_binding=inherited_binding,
     )
 
 

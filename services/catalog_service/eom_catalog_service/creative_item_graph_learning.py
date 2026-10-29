@@ -42,7 +42,10 @@ from eom_catalog_service.external_item_preview_projection import (
 )
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
 from eom_catalog_service.knowledge_graph_models import KnowledgeSnapshotAnalysisRecord
-from eom_catalog_service.knowledge_graph_projection import AcceptedAnalysisProposal
+from eom_catalog_service.knowledge_graph_projection import (
+    ITEM_SCOPED_GRAPH_PUBLISHER_VERSION,
+    AcceptedAnalysisProposal,
+)
 from eom_catalog_service.knowledge_graph_publication_service import KnowledgeGraphPublicationService
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalApplicationService
 from eom_catalog_service.models import ItemRecord, ItemRevisionRecord
@@ -251,7 +254,7 @@ class CreativeItemGraphLearningService:
                 required_source_class="APPROVED_ITEM",
                 retrieval_idempotency_namespace="creative-item-align",
                 publication_idempotency_namespace="creative-item-graph",
-                publisher_version="1.9.0",
+                publisher_version=ITEM_SCOPED_GRAPH_PUBLISHER_VERSION,
                 analysis_validator=validate,
             )
             graph_revision = published.graph_publication.graph_snapshot.graph_snapshot_revision_id

@@ -142,6 +142,7 @@ from eom_catalog_service.knowledge_graph_projection import (
     KnowledgeGraphProjectionError,
     build_education_graph_projection,
     knowledge_node_terms,
+    node_identity_policy_for_publisher,
     serialize_education_graph_projection,
 )
 from eom_catalog_service.knowledge_proposal_resolution import (
@@ -923,7 +924,11 @@ class KnowledgeGraphPublicationService:
             )
 
         try:
-            projection = build_education_graph_projection(analyses, structure)
+            projection = build_education_graph_projection(
+                analyses,
+                structure,
+                node_identity_policy=node_identity_policy_for_publisher(command.publisher_version),
+            )
         except KnowledgeGraphProjectionError as exc:
             raise KnowledgeGraphPublicationError(exc.code, str(exc)) from exc
         projection_files = serialize_education_graph_projection(projection)

@@ -21,6 +21,7 @@ from eom_catalog_service.knowledge_graph_projection import (
     AcceptedAnalysisProposal,
     EducationGraphProjection,
     KnowledgeGraphProjectionError,
+    KnowledgeNodeIdentityPolicy,
     build_education_graph_projection,
     serialize_education_graph_projection,
 )
@@ -122,8 +123,8 @@ class MixedCase:
     creative: AcceptedAnalysisProposal
 
 
-@pytest.fixture(scope="module")
-def mixed() -> MixedCase:
+@pytest.fixture(scope="module", params=tuple(KnowledgeNodeIdentityPolicy))
+def mixed(request: pytest.FixtureRequest) -> MixedCase:
     documents = _complete_analyses()
     base = build_integrated_science_structure_manifest(
         documents, reviewed_by_operator_id=OPERATOR_ID, created_at=NOW
@@ -145,7 +146,9 @@ def mixed() -> MixedCase:
     )
     assert isinstance(structure, KnowledgeGraphStructureManifestV5)
     extended = build_education_graph_projection(
-        tuple(sorted((*ordered, creative), key=lambda a: a.analysis_run_id)), structure
+        tuple(sorted((*ordered, creative), key=lambda a: a.analysis_run_id)),
+        structure,
+        node_identity_policy=request.param,
     )
     return MixedCase(baseline, extended, structure, creative)
 
