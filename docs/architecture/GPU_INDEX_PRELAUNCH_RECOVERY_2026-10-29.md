@@ -81,3 +81,18 @@ worker protocol·runtime pin 변경과 cross-transaction proof 재사용은 없�
 guard에 걸렸다. 수정 후 custom/generic에서 전체·선택8 결과와 pointer scan 1회를 검증한다.
 매 Graph 발행마다 수동 ANALYZE하는 대안은 당장 통계를 복구하지만 발행 직후의 나쁜 계획을
 제거하지 못한다. 통계 갱신을 권한·수명 검사를 우회하는 근거로 사용하지 않는다.
+
+## Graph 갱신 시 계산되지 않은 문항의 기아 방지
+
+등록 준비 owner는 기존 typed `MissingEmbeddingBindings`의 exact missing keys와 검증된
+`reusable_rows`를 정본 관측으로 사용한다. Graph 갱신은 binding을 새로 요구할 수 있지만 이미
+만든 encoding까지 사라진 것은 아니다. 새 후보는 재사용 encoding hash 집합에 없는 missing
+source부터 고유 ID 순으로 cap까지 선택한다. 그런 source가 없을 때만 기존 missing ID 순서로
+돌아가 membership을 완결한다. 기존 index-refresh override와 pending intent 재생은 그대로다.
+
+두 집합의 조회/중복 제거는 O(m+r), 결정적 frontier 정렬은 O(u log u)이며 작은 기존 source
+budget 안에서만 수행한다. 추가 queue/cache/모델 입력/DB/schema/권한/capacity/runtime pin은 없다.
+현재 lookup·source 권한·같은 transaction의 늦은 fence와 공식 등록 경계는 재사용한다.
+검증은 cached 앞번호와 uncached 뒷번호, cap/순서, all-cached fallback, empty/no-op 및 기존
+membership override를 포함한다. 단순 sorted-prefix는 잦은 Graph 갱신마다 앞부분만 재등록해
+아직 계산되지 않은 뒤쪽 문항을 계속 굶길 수 있어 사용하지 않는다.

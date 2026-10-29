@@ -181,9 +181,16 @@ class LocalEmbeddingServicePreparation:
             }
             missing_reports = tuple(sorted(source_ids - profile_ids))
             unavailable = len(profile_ids) - missing.available_view_count
-            targets = tuple(sorted({row.item_revision_id for row in missing.missing}))[
-                : self.maximum_targets
-            ]
+            reusable = {row.encoding.encoding_sha256 for row in missing.reusable_rows}
+            uncached_targets = {
+                row.item_revision_id
+                for row in missing.missing
+                if row.encoding_sha256 not in reusable
+            }
+            # A new Graph can invalidate every binding, not its immutable vectors.
+            # Finish new numerical work before repeatedly rebinding a cached prefix.
+            target_ids = uncached_targets or {row.item_revision_id for row in missing.missing}
+            targets = tuple(sorted(target_ids))[: self.maximum_targets]
             if (
                 missing.eligible_source_count != len(source_ids)
                 or not profile_ids.issubset(source_ids)

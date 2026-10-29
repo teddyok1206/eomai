@@ -145,7 +145,7 @@ def reconciliation(mixed_owner, monkeypatch):
         request.access_policy_sha256,
     )
     full = bindings_for(c)
-    current = SimpleNamespace(missing=full, bindings=(), previous=None)
+    current = SimpleNamespace(missing=full, bindings=(), previous=None, reusable_rows=None)
 
     def current_lookup(gate, session, configuration):
         gate.authorize_scope(session, c.owner.registry_caller(request), query, configuration)
@@ -157,7 +157,9 @@ def reconciliation(mixed_owner, monkeypatch):
         return PreparedEmbeddingBindingLookup(
             MissingEmbeddingBindings(
                 tuple(embedding_binding_lookup_key(b) for b in current.missing),
-                tuple(RegisteredEmbeddingRow(b.encoding, b.row_ref) for b in current.bindings),
+                tuple(RegisteredEmbeddingRow(b.encoding, b.row_ref) for b in current.bindings)
+                if current.reusable_rows is None
+                else current.reusable_rows,
                 len(c.current.sources),
                 len(c.current.entries),
             ),
@@ -232,6 +234,40 @@ def test_new_numeric_targets_remain_bounded_and_same_key_replays(reconciliation)
     assert request.schema_version == "local-embedding-workflow-request/2.0"
     assert len(plan.sources) == len(plan.demands) == 1
     assert counts(c) == (1, 1, before[2] + 1)
+    c.launcher.run.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ("cached_indexes", "maximum_targets", "expected_indexes"),
+    (
+        pytest.param((0,), 1, (1,), id="cached-prefix-must-not-starve-new-numerics"),
+        pytest.param((1,), 1, (0,), id="uncached-prefix"),
+        pytest.param((), 1, (0,), id="stable-cap"),
+        pytest.param((), 2, (0, 1), id="stable-order"),
+        pytest.param((0,), 2, (1,), id="uncached-frontier-only"),
+        pytest.param((0, 1), 1, (0,), id="all-cached-membership-fallback"),
+    ),
+)
+def test_missing_graph_bindings_prioritize_unencoded_sources(
+    reconciliation, cached_indexes, maximum_targets, expected_indexes
+):
+    c = reconciliation
+    # A fresh Graph can lack every binding while canonical encoding rows survive.
+    # No current binding exists, so the intentional refresh override is not used.
+    c.current.missing = tuple(reversed(c.full))
+    c.current.reusable_rows = tuple(
+        RegisteredEmbeddingRow(c.full[index].encoding, c.full[index].row_ref)
+        for index in cached_indexes
+    )
+    c.app.maximum_targets = maximum_targets
+    result = c.app.run_once()
+    assert result.index_refresh_reason is None
+    assert result.missing_binding_count == len(c.full)
+    assert result.selected_target_count == len(expected_indexes)
+    _request, plan = read_plan(c, result)
+    assert tuple(source.item_revision_id for source in plan.sources) == tuple(
+        c.full[index].source.item_revision_id for index in expected_indexes
+    )
     c.launcher.run.assert_not_called()
 
 
