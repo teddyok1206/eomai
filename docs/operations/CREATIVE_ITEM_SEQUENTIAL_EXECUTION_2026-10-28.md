@@ -317,3 +317,14 @@ fresh disposable PostgreSQL에서 22개 PASS, 마지막 link 검사 이후 동�
 같은 predecessor에 successor 1개/기존 FAILED 보존/START command 0/예외 시 orphan 0을
 확인했다. 원래 role Job key의 bytes는 유지하고 공통 함수로 옮겨 indexed 부재 확인에
 재사용한다. core Ruff·format·mypy PASS. 이 수정·복구 기능은 아직 운영 배포 전이다.
+
+추가로 다른 active-equivalent READY 실행에 복구 계보를 덮어쓰는 것을 명시적으로 거부했다.
+복구 unit 19개와 fresh disposable DB의 동시 준비/늦은 거부/다른 active 보존 3개 PASS이며
+이 DB와 앞선 22개 검증 DB는 공식 cleanup으로 제거했다. 후보 `8acd992d`와 `085cc260`은
+정식 build-only/설치본 simulation/RECORD PASS였고 아직 운영 설치하지 않았다.
+
+V2 추출의 core prompt도 점검해, 구 placeholder가 명시하는 result@1.0을 새 family에
+넘기지 않도록 분리했다. V1 파일과 그 경로·지침은 그대로 유지한다. V2는 exact source-
+visual bundle/주어진 schema/독립 공개 풀이/result@2.0만 지시하는 고정 core를 사용한다.
+실제 executor의 prompt 전달과 구버전 선택/role hash 회귀 20개, engine Ruff·format·mypy
+PASS다. 아직 새로운 worker 실행이나 새 결과 성공을 의미하지 않는다.

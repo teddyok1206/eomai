@@ -70,6 +70,7 @@ from eom_workflow import (
     validate_review_rework_history,
     validate_schema_message,
 )
+from eom_workflow.creative_learning_profile import creative_learning_profile
 from eom_workflow.inference_transfer import (
     TRANSFER_PAIR_RESULT_SCHEMA,
     TRANSFER_PAIR_RESULT_SCHEMA_V11,
@@ -476,6 +477,23 @@ class PlatformRoleJobExecutor:
                 "agent step is missing role contract",
             )
         prompt_name = _prompt_name_for_request(worker_role=step.worker_role, request=request)
+        if (
+            prompt_text is None
+            and isinstance(request, ExternalItemLearningWorkerRequest)
+            and creative_learning_profile(workflow.definition_version).result_schema
+            == "external-item-learning-result@2.0"
+        ):
+            # The installed V1 placeholder explicitly requests result@1.0.
+            # Preserve those historical bytes; the V2 instruction bundle owns
+            # the detailed source/visual/public-solution rules for this family.
+            prompt_text = (
+                "Analyze only the exact staged creative source and delivered page images. "
+                "Follow the pinned source-visual instruction bundle and supplied role schema. "
+                "Preserve original source content separately from the independent public solution. "
+                "Return only schema-valid external-item-learning-result@2.0 JSON; "
+                "the Orchestrator, not the worker, stamps result_sha256. "
+                "Do not access the network, database, NAS or other workers."
+            )
         prompt_path = (
             None
             if prompt_text is not None
