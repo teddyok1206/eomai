@@ -73,6 +73,19 @@ FULL embedding persistence에도 skip·setup 오류 없이 148개가 통과했�
 4. 실제 bounded document/query·registry binding·공식 검색 및 replay 검증 후에만
    alignment 완료를 선언하고 GPU INDEX 재개를 별도로 확인한다.
 
+### 배포 패키지 검사에서 찾은 admission 누락
+
+첫 후보 `6cf425ad`의 wheel RECORD는 통과했지만 installed simulation이 이전 0062 head를
+고정 검사하여 전체 build gate는 실패했다. 운영 mutation은 없었다. 기존 배포 owner에
+정확한 0062 → 0063 callback과 context/admission 1.12를 추가한다. 이전 schema bytes와
+0062 callback은 그대로이며, 옛 callback으로 새 migration을 실행할 수 없다.
+
+기존 migration별 테스트의 frozen callback/receipt 검사는 유지하고 현재 release selector와
+head에 대한 기대만 authoritative runtime head를 참조한다. 실제 검증이 YAML 두 파일을
+staging하는 코드와 일치하도록 creative definition의 오래된 문자열 단정도 보정했다.
+관련 operator/runtime/기존 migration/API 배포 경계 **320 PASS**, script mypy PASS.
+새 패키지 검사의 결과와 운영 설치는 별도로 남긴다.
+
 ## 병행 운영 확인
 
 2026-10-29 11:47 UTC의 read-only metadata 대조에서 기존 미완료 CUDA Workflow의
