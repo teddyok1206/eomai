@@ -323,3 +323,133 @@ code/service identity is a genuine release, not an arbitrary retry identity.
 At this paragraph's checkpoint the successor is source-verified, not deployed;
 actual CUDA completion, registered growth and the following automatic cached
 transition remain mandatory live recovery evidence.
+
+### 19:14 UTC — complete fresh-Graph query correction selected
+
+Source `283a928f3ad080d82e16fc3688d02c473e797519` was installed and selected
+for INDEX only at18:54. It exposed the remaining inner pointer/node join in the
+candidate query, shared by population locking. Full locks still took33s and
+selected captures about66s total. A realistic disposable fixture with20 nodes
+per source reproduced the full custom-plan20s timeout. Source
+`b3c8a4c0b39b8979775ffb5e5ca58741f9ac55e4` materializes distinct exact
+Graph/analysis/node keys before that existing join, preserving orphan/answer/class
+and outer revision/occurrence checks. Its62 disposable and13 unit tests,
+Ruff/format/strict mypy, build-only RECORD and immutable owner installation pass.
+
+The 283a call could not drain before its finite window: code inspection found at
+least9 source captures after allocation before START submission, without a
+preparation-only cancellation use case. The first bounded operator-stop guard
+denied and resumed because logical service IDs also have historical Workflows;
+no data changed. The corrected guard checked the exact current service revision,
+the fixed PID/Invocation/runtime SHA, actual stopped process state, canonical
+unbound parent `job_6eb9446fd1d64cf385b4d0fba009e872`, absence of a Workflow at
+its exact key, and absence of active control publication Jobs. It stopped only
+that pre-Workflow owner at19:10 UTC, with zero database writes. Its parent/history
+remain unchanged, as do all older successes and failures.
+
+The original controller, worker and socket for allocation
+`embeddingallocation_ae71fc7f67f44b47aacfb89adcf16f65` were then observed stopped,
+with empty cgroups; the existing protected quiescence check also passed before
+the next release. Root EOF is not by itself sufficient proof of retirement.
+The fixed operator helper and six pure denial/stop regressions are operational
+materialization, not a new runtime cancellation framework. The next selector's
+24 pure tests pass; it rechecks both original parents and zero current-revision
+child Workflows without reinterpreting historical rows.
+
+All five protected phases for b3c8a4c0 pass. Its INDEX invocation is
+`8b9b5ed1ec1a4c67bc9ec7c44f9debff` (PID2113256); operational records/rollback
+are `/var/lib/eom-gpu-standby-index-b3c8a4c0/`. QUERY PID1708497/invocation
+9c60629b423547fc832a91b7e9f180e3 and creative PID1938852/invocation
+9ccf12bddee14fc6ba03cda79cfc6826 are unchanged. The9 shared files retain
+their bytes and epochs. API/Web, numerical CPU/CUDA prefixes, controller24555547,
+source/space/recipe and all6 namespaces/max8 remain unchanged. No migration ran.
+
+Actual new-owner stage samples show full locks239–302ms and admissions5.7–5.9s;
+selected locks106–123ms and admissions0.7–0.9s. These live samples use different
+pinned Graphs and are not an identical-workload speedup ratio; the controlled
+synthetic comparison is in the SQL design note. First new parent
+`job_3da9580577f747b291e122a2f2f3774c`, Workflow
+`workflow_fa573b1709784da795e64aef105ecd7e`, and allocation
+`embeddingallocation_bb4c488b3c9a4eeca46788f1c2f78e2f` reached owned numerical
+execution for8 Jobs. The physical controller/worker both completed successfully
+before their deadline. At19:22 this was still awaiting canonical receipt/index
+publication, not yet a registered numerical-completion acceptance.
+
+At19:23:15 UTC the official technical reader verified the canonical CUDA batch
+completion:8 rows, dimension1024, receipt
+`sha256:3e4df60937bff2c90544fabce385be37cdf594b49e4060b4e5933134d085a93a`,
+Artifact revision `rev_e5b84a088ea747f69b3a6b8afefbc498`, member SHA
+`sha256:9375f5bf1e402f70a1350d626326ef04742ebc6ac5d774eeb6b4b7d8f14477c1`.
+All8 owned numerical Jobs were SUCCEEDED. This proves new actual CUDA computation,
+not a cached publication, a ready PID or the parent planning Job's SUCCEEDED state.
+The physical deadline was already past at observation, but root execution/ACK had
+completed before it; subsequent canonical publication does not renew the deadline.
+Native coordinator final validation/index registration remained pending at that
+observation. Evidence: `/tmp/eom-gpu-node-key-canonical-202610291923.log`.
+
+At19:23:47.918478 UTC the same CUDA space committed8 new encoding rows:
+global rows1,538→1,546; the CPU space stayed1,563. Mixed metadata index logical
+identity `embeddingindex_2497d3eef359db9c3bb217bf3436ef22` advanced to revision5
+`embeddingindexrev_961704fc99b0d6af68ea2abcefbe1d79`, Graph
+`graphrev_557e79096d781af8eacc468378ba1fc2`, bindings487→503, eligible556.
+The binding delta16 is not16 new model computations: the separate canonical
+batch and encoding row delta prove8 new encodings. The exact reused/new binding
+decomposition is not inferred from counters alone. Original computable baseline520 and all
+eligible Graph sources556 are distinct denominators; do not sum overlapping views.
+This is committed numerical/index growth, not merely a successful root process;
+the exact child-to-index lineage still requires the canonical Workflow receipt.
+Read-only evidence is `/tmp/eom-gpu-node-key-registry-202610291926.log`.
+The full Workflow post-validation and following membership-only transition are
+checked separately rather than inferred from registration alone.
+
+The first new batch emitted BATCH_COMPLETED at19:32:58 UTC. At19:33:52 the
+canonical completion reader verified Workflow COMPLETED, original START command
+SUCCEEDED, native coordinator SUCCEEDED and all8 owned numerical Jobs SUCCEEDED.
+Workflow receipt
+`sha256:724c0760173166c13c95164b88ddfba2e09f7eb64a6617997d8cce01abd9d4bd`
+pins the same native launch `job_6a84f97d5c5a4704be33fa42922a494e` and exact
+registered index revision `embeddingindexrev_961704fc99b0d6af68ea2abcefbe1d79`.
+Its registration command/result/hash, Artifact carrier and index metadata close
+against the actual output. This supplies the causal child-to-index closure rather
+than relying on a same-namespace counter correlation. The technical reader's
+separate cached-only classification UNKNOWN is expected for this real numerical
+case; the independent CUDA batch receipt is PASS.
+
+The daemon automatically created CUDA CONTENT_ONLY membership Workflow
+`workflow_8bac90fe7aa34ad39f3e2d5100abacd9` at19:33:41 using the existing
+`local-embedding-reconcile:` identity. This is the next all-cached publication,
+not a newly fabricated physical parent/retry. A separate CPU metadata standby
+request was also prepared without computation. At19:33:52 these requests were
+REQUESTED; terminal cached completion is not inferred from that state.
+Evidence: `/tmp/eom-gpu-node-key-next-membership-202610291934.log`.
+
+### 19:47 UTC — recovery acceptance, including automatic cached completion
+
+The automatic CONTENT_ONLY successor emitted BATCH_COMPLETED at19:46:36 UTC
+with `index_refresh_reason=REUSABLE_ENCODINGS_NOT_BOUND`. At19:47:22 the canonical
+reader verified Workflow COMPLETED, original command and coordinator SUCCEEDED,
+receipt `sha256:d100fc59a27be071cb2ddce8a0a13b47acb269e8f81004dce401d21894d390f6`,
+and exact registered revision `embeddingindexrev_7124d46112b61c87a7e3a89765f3bb3b`
+(520 bindings/557 eligible). Its encode step succeeded with **zero owned numerical
+Jobs**, no launch association and no receipt native-launch ID. The current-release
+INDEX physical-parent count remains1, the original real CUDA batch. This is a
+completed existing-vector publication without an unnecessary GPU allocation,
+not just a queued successor or an observation of an idle GPU.
+
+`GPU_INDEX_RECOVERY=PASS`: actual new CUDA computation and committed index growth,
+canonical child/index receipt closure, full first Workflow completion, and
+automatic membership-only completion all passed. INDEX stays active for the next
+namespace/frontier. QUERY and creative invocations remain unchanged and API is
+READY. Existing30-minute observer timers remain enabled; their metadata-only
+health reports are not a substitute for future coverage counts.
+
+Evidence: `/tmp/eom-gpu-recovery-final-202610291947.log` and the protected release
+records under `/var/lib/eom-gpu-standby-index-b3c8a4c0/`. Core source commits
+283a928f/b3c8a4c0 were pushed. All original successful/failed/quiescent histories
+are preserved; no production pytest, direct business-row repair, new migration,
+model/space change or additional Studio authentication was used.
+
+This acceptance does **not** mean the full corpus is finished, every new creative
+solution is embedded, the public solution recipe successor is activated, or GPU
+QUERY/default CPU fallback has passed its separate acceptance. Those pending
+boundaries and the existing CPU search remain unchanged.
