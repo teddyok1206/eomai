@@ -127,7 +127,8 @@ def test_source_class_lifecycle_answer_bearing_exists_precedes_source_limit() ->
     assert "items.lifecycle_state = 'ACTIVE'" in sql
     assert "knowledge_analysis_runs.state = 'ACCEPTED'" in sql
     assert "GROUP BY" not in sql
-    assert "EXISTS (SELECT knowledge_node_source_pointers.pointer_id" in sql
+    assert "eligible_pointer_analyses AS MATERIALIZED" in sql
+    assert "SELECT DISTINCT knowledge_node_source_pointers.analysis_run_id" in sql
     assert sql.index("knowledge_nodes.answer_bearing IS false") < sql.index("LIMIT 3")
     assert "assessment_item_occurrence_references" not in sql
 

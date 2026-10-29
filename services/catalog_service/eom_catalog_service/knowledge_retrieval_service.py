@@ -1640,7 +1640,7 @@ class KnowledgeRetrievalApplicationService:
         node = KnowledgeNodeRecord
         run = KnowledgeAnalysisRunRecord
         eligible_pointer = (
-            select(pointer.pointer_id)
+            select(pointer.analysis_run_id)
             .select_from(pointer)
             .join(
                 node,
@@ -1648,11 +1648,9 @@ class KnowledgeRetrievalApplicationService:
                 & (node.node_id == pointer.node_id),
             )
             .where(
-                pointer.graph_snapshot_revision_id == association.graph_snapshot_revision_id,
-                pointer.analysis_run_id == association.analysis_run_id,
+                pointer.graph_snapshot_revision_id == snapshot_id,
                 pointer.source_class.in_(scope.source_classes),
             )
-            .correlate(association)
         )
         if not allow_answer_bearing:
             eligible_pointer = eligible_pointer.where(node.answer_bearing.is_(False))
@@ -1661,8 +1659,31 @@ class KnowledgeRetrievalApplicationService:
         )
         if occurrence_scoped:
             eligible_pointer = eligible_pointer.where(pointer.source_class == "PAST_EXAM")
+        if scope.analysis_run_ids:
+            eligible_pointer = eligible_pointer.where(
+                pointer.analysis_run_id.in_(scope.analysis_run_ids)
+            )
+        if scope.source_revision_ids:
+            selected_analyses = select(association.analysis_run_id).where(
+                association.graph_snapshot_revision_id == snapshot_id,
+                association.source_revision_id.in_(scope.source_revision_ids),
+            )
+            eligible_pointer = eligible_pointer.where(
+                pointer.analysis_run_id.in_(selected_analyses)
+            )
+        # A generic prepared plan otherwise rescans/materializes all pointer
+        # rows per source. Deduplicate once, retaining every eligibility fence.
+        eligible_analyses = (
+            eligible_pointer.distinct()
+            .cte("eligible_pointer_analyses")
+            .prefix_with("MATERIALIZED", dialect="postgresql")
+        )
         statement = (
             select(association.analysis_run_id)
+            .join(
+                eligible_analyses,
+                eligible_analyses.c.analysis_run_id == association.analysis_run_id,
+            )
             .join(run, run.analysis_run_id == association.analysis_run_id)
             .join(
                 ItemRevisionRecord,
@@ -1672,7 +1693,6 @@ class KnowledgeRetrievalApplicationService:
             .where(
                 association.graph_snapshot_revision_id == snapshot_id,
                 association.source_kind == "APPROVED_ITEM_REVISION",
-                eligible_pointer.exists(),
                 run.state == "ACCEPTED",
                 ItemRecord.lifecycle_state == "ACTIVE",
                 ItemRevisionRecord.revision_state.in_(("APPROVED", "SUPERSEDED", "RETIRED")),

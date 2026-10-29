@@ -122,3 +122,32 @@ held worker lease 0·active slot Job 0을 확인했다. 이때 슬롯 6개가 �
 
 실제 source 정본·과거 FAILED·운영 GPU/QUERY pin은 보존했다. 공개 풀이 원문과 실험 장문 로그,
 인증/env 파일은 Git/Slack에 기록하지 않는다.
+
+## 2026-10-29 INDEX 재개 후 확인한 조회 병목
+
+같은 07ec owner를 재개했으나 실제 GPU 계산 전에 LOCK_POPULATION 616초,
+ADMIT_CANDIDATES 651초가 걸렸다. 단순 PID 활성화는 GPU 재개 PASS가 아니다. 기술 metadata의
+read-only EXPLAIN에서 custom plan은 pointer 집합을 한 번 집계했지만 generic prepared plan은
+Nested Loop Semi Join과 전체 pointer 행 Materialize를 골랐다. source 조건을 반복 대조하는
+잘못된 실행 형태를 확인했으며, 운영에서 EXPLAIN ANALYZE/load test를 수행하지 않았다.
+
+수정 책임은 기존 Catalog `candidate_pool_analysis_statement`의 SQL 구성 한 곳이다. 기존
+Graph revision/source class/node 존재/answer-bearing 조건으로 eligible analysis ID의 DISTINCT
+집합을 한 번 MATERIALIZED CTE로 만든 뒤 association과 join한다. 정본·pointer·권한·policy·
+source hash·순서·LIMIT·occurrence/revision 조건·최종 source admission은 바꾸지 않는다.
+실제 source를 읽는 권한이 없는 SQL builder가 새 권한을 만들지도 않는다.
+
+접근은 Graph-local membership/dedup과 indexed joins이며 pointer P와 source N에 대해
+집합 구성 O(P), 작은 key 집합 공간 O(N)을 의도한다. 이미 선택된 analysis/revision 조건은
+같은 association 의미로 CTE 안에도 전달한다. 새 DB/index/cache/queue/migration은 없다.
+기존 transaction·source fence·idempotent request와 dependency 방향을 유지하며 오류는
+기존 explicit failure다. LIMIT 이후 필터링하거나 node join을 없애는 대안은 의미가 달라져
+채택하지 않는다. pointer 원문 전체를 매 source마다 재탐색하는 기존 계획보다 작은 ID 집합이
+안정적이다. 임시 PostgreSQL의 force-generic/custom 결과 동등성·분기·중복/orphan·계획 검증 후
+별도 owner 릴리스 시점에만 활성화한다. 실행 중 numeric bundle/QUERY pin을 hot patch하지 않는다.
+
+동일 builder의 focused unit/권한/경계 154개 PASS, disposable source admission 55개 PASS
+(다른 66개는 명시한 `-k` 범위 밖). 520 target·additive report·72,800 중복 pointer 합성 fixture에서
+실제 PREPARE + force_custom_plan/force_generic_plan 모두 target 520개, pointer CTE/scan 각 1회,
+실행 10초 미만을 확인했다. lifecycle/answer-bearing/orphan/occurrence/선택 revision/페이지 분기도
+유지한다. 이는 운영 SQL 개선 활성화나 GPU 계산 완료가 아니며 새 모델 실행은 없었다.

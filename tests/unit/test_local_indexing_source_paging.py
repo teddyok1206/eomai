@@ -36,7 +36,8 @@ def test_page_reuses_eligibility_before_source_first_limit() -> None:
     )
     assert "knowledge_analysis_runs.state = 'ACCEPTED'" in sql
     assert "items.lifecycle_state = 'ACTIVE'" in sql
-    assert "EXISTS (SELECT knowledge_node_source_pointers.pointer_id" in sql
+    assert "eligible_pointer_analyses AS MATERIALIZED" in sql
+    assert "SELECT DISTINCT knowledge_node_source_pointers.analysis_run_id" in sql
     assert "knowledge_snapshot_analyses.source_revision_id > '" + _source(17) + "'" in sql
     assert (
         "ORDER BY knowledge_snapshot_analyses.source_revision_id, "
