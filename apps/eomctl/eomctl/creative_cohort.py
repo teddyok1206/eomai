@@ -111,3 +111,41 @@ def continue_source_visuals(
         )
     finally:
         engine.dispose()
+
+
+def recover_unstarted(
+    cohort_revision_id: Annotated[str, typer.Option("--cohort-revision-id")],
+    predecessor_workflow_id: Annotated[str, typer.Option("--predecessor-workflow-id")],
+) -> None:
+    """Prepare an auditable no-Job successor; preserve FAILED and never START."""
+    from eom_catalog_service.artifacts import CatalogArtifactService
+    from eom_catalog_service.creative_cohort_preparation import CreativeCohortPreparationService
+    from eom_catalog_service.creative_learning_cohort import read_creative_execution_scope
+    from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+
+    if os.geteuid() != 0:
+        raise ValueError("trusted installed maintenance owner is required")
+    engine = build_engine()
+    try:
+        settings = Settings.from_environment()
+        catalog_settings = CatalogSettings.from_environment()
+        scope, _ = read_creative_execution_scope(
+            CatalogArtifactService(engine, catalog_settings),
+            ControlFileSetPublisher(engine, settings),
+            cohort_revision_id,
+        )
+        selection = CreativeCohortPreparationService(
+            engine,
+            cohort=scope.cohort,
+            scope=scope,
+            settings=settings,
+            catalog_settings=catalog_settings,
+        ).recover_unstarted(predecessor_workflow_id)
+        typer.echo(
+            json.dumps(
+                {"selection": selection.model_dump(mode="json"), "workers_started": 0},
+                ensure_ascii=False,
+            )
+        )
+    finally:
+        engine.dispose()

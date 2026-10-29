@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/external-item/creative-preexecution-recovery/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "predecessor_workflow_id", "predecessor_step_run_id", "successor_workflow_id", "operator_id", "definition_sha256", "work_input_sha256", "reason", "record_sha256"],
+  "properties": {
+    "schema_version": {"const": "creative-preexecution-recovery/1.0"},
+    "predecessor_workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+    "predecessor_step_run_id": {"type": "string", "pattern": "^steprun_[0-9a-f]{32}$"},
+    "successor_workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+    "operator_id": {"type": "string", "pattern": "^operator_[0-9a-f]{32}$"},
+    "definition_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "work_input_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "reason": {"const": "NO_PLATFORM_JOB_CREATED"},
+    "record_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

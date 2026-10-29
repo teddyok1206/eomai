@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -15,6 +16,7 @@ from eom_identifiers import content_sha256
 from eom_workflow.control_plane import ResolvedExecutionPlanV27
 from eom_workflow.models import WorkflowRequest
 from eom_workflow_runner import external_item_learning_preparation as preparation
+from eom_workflow_runner import external_item_learning_recovery as recovery
 from eom_workflow_runner import external_item_learning_start as start
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.models import (
@@ -186,6 +188,133 @@ def _preparation_ports(monkeypatch):
 
     monkeypatch.setattr(preparation, "resolve_external_item_learning_plan", resolve)
     monkeypatch.setattr(preparation, "read_external_item_learning_page_artifact", lambda *_: None)
+
+
+def _failed_before_job(creative_engine, monkeypatch):
+    """Synthetic failure fixture, never a mutation of production/historical data."""
+    _preparation_ports(monkeypatch)
+    request = _unique_request()
+    with Session(creative_engine) as session, session.begin():
+        prepared = preparation.prepare_external_item_learning_workflow(
+            session,
+            definition=_seed(session),
+            work=request.external_item_learning_work,
+            operator_id=OPERATOR,
+            idempotency_key="synthetic-no-job-predecessor-" + uuid4().hex,
+            source_authorizer=_owner(request),
+            page_publisher=None,
+        )
+        workflow = session.get(WorkflowInstanceRecord, prepared.selection.workflow_id)
+        workflow.state = workflow.stage = "FAILED"
+        workflow.failure_code = "WORKFLOW_STEP_FAILED"
+        step = session.get(WorkflowStepRunRecord, prepared.selection.step_run_id)
+        step.state = "FAILED"
+        step.error_code = "WORKFLOW_STEP_FAILED"
+    preset = SimpleNamespace(
+        preset_revision_id=_plan()["preset_revision_id"], content_sha256=_plan()["preset_sha256"]
+    )
+
+    def replay_plan(_record, *, workflow_id, step_key, request):
+        assert step_key == "extract"
+        return preparation.resolve_external_item_learning_plan(
+            None,
+            workflow_id=workflow_id,
+            workflow_definition_sha256=_definition().definition_hash,
+            work=request.work_input,
+        )
+
+    monkeypatch.setattr(recovery, "validate_external_item_learning_execution_plan", replay_plan)
+    return request, prepared.selection, preset
+
+
+def test_concurrent_no_job_recovery_prepares_one_successor_and_preserves_failure(
+    creative_engine, monkeypatch
+):
+    request, predecessor, preset = _failed_before_job(creative_engine, monkeypatch)
+    barrier = Barrier(2)
+
+    def prepare(_index):
+        with Session(creative_engine) as session, session.begin():
+            barrier.wait(timeout=10)
+            return recovery.prepare_unstarted_external_item_learning_recovery(
+                session,
+                predecessor_workflow_id=predecessor.workflow_id,
+                definition=_seed(session),
+                work=request.external_item_learning_work,
+                operator_id=OPERATOR,
+                source_authorizer=_owner(request),
+                page_publisher=None,
+                expected_preset=preset,
+            )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        rows = tuple(pool.map(prepare, range(2)))
+    assert rows[0].selection == rows[1].selection
+    assert sum(row.workflow_created for row in rows) == 1
+    successor_id = rows[0].selection.workflow_id
+    assert successor_id != predecessor.workflow_id
+    with Session(creative_engine) as session:
+        old = session.get(WorkflowInstanceRecord, predecessor.workflow_id)
+        old_step = session.get(WorkflowStepRunRecord, predecessor.step_run_id)
+        assert old.state == old.stage == old_step.state == "FAILED"
+        assert old_step.platform_job_id is None
+        successor = recovery.resolve_external_item_learning_recovery(session, old)
+        assert successor.workflow_id == successor_id and successor.state == "REQUESTED"
+        assert successor.initial_request == old.initial_request
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(WorkflowEventRecord)
+                .where(
+                    WorkflowEventRecord.workflow_id == predecessor.workflow_id,
+                    WorkflowEventRecord.event_type == recovery.RECOVERY_EVENT,
+                )
+            )
+            == 1
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(WorkflowCommandRecord)
+                .where(
+                    WorkflowCommandRecord.workflow_id.in_((predecessor.workflow_id, successor_id))
+                )
+            )
+            == 0
+        )
+
+
+def test_no_job_recovery_late_rejection_leaves_only_the_original_failure(
+    creative_engine, monkeypatch
+):
+    request, predecessor, preset = _failed_before_job(creative_engine, monkeypatch)
+    owner = _owner(request)
+    owner.reauthorize.side_effect = [request.external_item_learning_work.source] * 3 + [
+        ValueError("synthetic source revoked")
+    ]
+    with pytest.raises(WorkflowError), Session(creative_engine) as session, session.begin():
+        recovery.prepare_unstarted_external_item_learning_recovery(
+            session,
+            predecessor_workflow_id=predecessor.workflow_id,
+            definition=_seed(session),
+            work=request.external_item_learning_work,
+            operator_id=OPERATOR,
+            source_authorizer=owner,
+            page_publisher=None,
+            expected_preset=preset,
+        )
+    with Session(creative_engine) as session:
+        old = session.get(WorkflowInstanceRecord, predecessor.workflow_id)
+        assert old.state == "FAILED"
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(WorkflowInstanceRecord)
+                .where(WorkflowInstanceRecord.request_hash == old.request_hash)
+            )
+            == 1
+        )
+        assert recovery.resolve_external_item_learning_recovery(session, old) is old
 
 
 @pytest.mark.parametrize("different_keys", [False, True])

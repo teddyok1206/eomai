@@ -14,6 +14,7 @@ from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.external_item_learning_execution import (
     validate_external_item_learning_execution_plan,
 )
+from eom_workflow.creative_learning_profile import creative_learning_profile
 from eom_workflow.models import ExternalItemLearningWorkerRequest
 from eom_workflow_runner.actor_authorization import OPERATOR_ACTOR_PATTERN
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
@@ -60,12 +61,12 @@ class CatalogExternalItemLearningAuthorizationService:
                 step = session.get(
                     WorkflowStepRunRecord, selected.step_run_id, populate_existing=True
                 )
+                if workflow is None or step is None:
+                    raise ValueError("stored creative role binding is missing")
+                profile = creative_learning_profile(workflow.definition_version)
                 if (
-                    workflow is None
-                    or step is None
-                    or workflow.definition_key != "external-item-learning"
-                    or workflow.definition_version != "1.0.0"
-                    or workflow.role_schema_version != "workflow-role/1.33.0"
+                    workflow.definition_key != "external-item-learning"
+                    or workflow.role_schema_version != profile.role_protocol
                     or workflow.created_actor_type != "human"
                     or OPERATOR_ACTOR_PATTERN.fullmatch(workflow.created_actor_id) is None
                     or workflow.stage
@@ -74,7 +75,7 @@ class CatalogExternalItemLearningAuthorizationService:
                     or step.step_key != "extract"
                     or step.step_type != "agent"
                     or step.worker_role != "support"
-                    or step.result_schema != "external-item-learning-result@1.0"
+                    or step.result_schema != profile.result_schema
                     or step.attempt != 1
                     or step.state not in {"READY", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED"}
                 ):
@@ -98,6 +99,7 @@ class CatalogExternalItemLearningAuthorizationService:
                 )
                 if (
                     plan.plan_sha256 != selected.plan_sha256
+                    or plan.workflow_definition_version != workflow.definition_version
                     or plan.workflow_definition_sha256 != workflow.definition_hash
                 ):
                     raise ValueError("creative plan selection differs")

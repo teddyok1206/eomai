@@ -36,7 +36,8 @@ from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.general_chat_socket import ChatSocketEndpoint
-from eom_workflow.control_plane import ResolvedExecutionPlanV27
+from eom_workflow.control_plane import parse_creative_learning_execution_plan
+from eom_workflow.creative_learning_profile import creative_learning_profile
 from eom_workflow.models import ExternalItemLearningWorkerRequest, WorkflowRequest
 from eom_workflow_runner import external_item_learning_catalog_client as client_module
 from eom_workflow_runner.external_item_learning_catalog_client import (
@@ -51,9 +52,10 @@ from tests.unit.test_catalog_application_boundary import _server
 from tests.unit.test_external_item_learning_execution import _record
 
 
-def _case():
-    record = _record()
-    plan = ResolvedExecutionPlanV27.model_validate(record.canonical_document)
+def _case(*, successor=False):
+    record = _record(successor=successor)
+    plan = parse_creative_learning_execution_plan(record.canonical_document)
+    profile = creative_learning_profile(plan.workflow_definition_version)
     worker_request = ExternalItemLearningWorkerRequest(work_input=plan.work_input)
     request = ExternalItemLearningAuthorizationRequest(
         schema_version="external-item-learning-authorization-request/1.0",
@@ -69,15 +71,15 @@ def _case():
     workflow_request = WorkflowRequest(
         request_name="EXTERNAL_ITEM_LEARNING_REQUEST",
         image_mode="skip",
-        execution_preset_key="external-item-learning",
+        execution_preset_key=profile.preset_key,
         external_item_learning_work=plan.work_input,
     ).model_dump(mode="json", exclude_none=True)
     workflow = SimpleNamespace(
         workflow_id=plan.workflow_id,
         definition_key="external-item-learning",
-        definition_version="1.0.0",
+        definition_version=profile.definition_version,
         definition_hash=plan.workflow_definition_sha256,
-        role_schema_version="workflow-role/1.33.0",
+        role_schema_version=profile.role_protocol,
         created_actor_type="human",
         created_actor_id="operator_" + "1" * 32,
         stage="KNOWLEDGE_ANALYSIS",
@@ -90,7 +92,7 @@ def _case():
         step_key="extract",
         step_type="agent",
         worker_role="support",
-        result_schema="external-item-learning-result@1.0",
+        result_schema=profile.result_schema,
         attempt=1,
         state="RUNNING",
     )
@@ -157,6 +159,30 @@ def test_runner_context_uses_exact_step_plan_and_existing_page_owner():
     assert context.page_publisher is publisher
     assert context.source_authorizer.selection == value.request.selection
     assert value.service.source.reauthorize.call_count == 0
+
+
+@pytest.mark.parametrize("successor", [False, True])
+@pytest.mark.parametrize("fault", [None, "role_family", "result_family", "definition_family"])
+def test_catalog_authorization_accepts_exact_released_families_not_mixed_versions(successor, fault):
+    value = _case(successor=successor)
+    other = creative_learning_profile("1.0.0" if successor else "2.0.0")
+    if fault == "role_family":
+        value.workflow.role_schema_version = other.role_protocol
+    elif fault == "result_family":
+        value.step.result_schema = other.result_schema
+    elif fault == "definition_family":
+        value.workflow.definition_version = other.definition_version
+        value.workflow.role_schema_version = other.role_protocol
+        value.step.result_schema = other.result_schema
+    if fault:
+        with pytest.raises(ExternalItemLearningAuthorizationServiceError):
+            value.service.authorize(value.request)
+        value.service.source.reauthorize.assert_not_called()
+    else:
+        assert value.service.authorize(value.request).status == "SUCCESS"
+        assert value.service.source.reauthorize.call_args.kwargs["operator_id"] == (
+            value.workflow.created_actor_id
+        )
 
 
 @pytest.mark.parametrize(
@@ -241,9 +267,9 @@ def test_bad_frames_never_reach_the_service(raw):
     service.authorize.assert_not_called()
 
 
-@pytest.fixture
-def authorization_socket(tmp_path):
-    value = _case()
+@pytest.fixture(params=[False, True], ids=["original", "source-visual"])
+def authorization_socket(request, tmp_path):
+    value = _case(successor=request.param)
     server = _server(tmp_path, allowed_uid=os.getuid() + 100000)
     server.workflow_runner_uid = os.getuid()
     server.external_item_learning_authorization = value.service

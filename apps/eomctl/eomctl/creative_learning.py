@@ -53,12 +53,17 @@ from sqlalchemy import Engine
 learning_app = typer.Typer(no_args_is_help=True, pretty_exceptions_enable=False)
 
 # Completion uses the same originally admitted owner, not a new synthetic login.
-from eomctl.creative_cohort import admit_cohort, continue_source_visuals  # noqa: E402
+from eomctl.creative_cohort import (  # noqa: E402
+    admit_cohort,
+    continue_source_visuals,
+    recover_unstarted,
+)
 from eomctl.creative_registration import complete_learning  # noqa: E402
 
 learning_app.command("complete")(complete_learning)
 learning_app.command("admit-cohort")(admit_cohort)
 learning_app.command("continue-source-visuals")(continue_source_visuals)
+learning_app.command("recover-unstarted")(recover_unstarted)
 
 
 def _read_reviewed(path: Path, maximum: int) -> bytes:

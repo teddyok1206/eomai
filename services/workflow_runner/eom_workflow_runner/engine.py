@@ -13,7 +13,6 @@ from typing import Literal, Protocol
 from uuid import uuid4
 
 from eom_catalog_contracts import ContentTeamMaterialRequirement
-from eom_identifiers import content_sha256
 from eom_operator_identity import PermissionKey
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord, WorkerLeaseRecord
 from eom_orchestrator.database import build_session_factory, transaction
@@ -178,6 +177,9 @@ from eom_workflow_runner.role_execution_binding import (
     read_platform_role_result,
 )
 from eom_workflow_runner.role_execution_port import RoleExecutionResult
+from eom_workflow_runner.role_job_identity import (
+    role_job_idempotency_key as _step_job_idempotency_key,
+)
 from eom_workflow_runner.settings import RunnerConfig, WorkflowSettings
 from eom_workflow_runner.similarity_role_context import SimilarityRoleContextProvider
 from eom_workflow_runner.state_machine import (
@@ -3815,20 +3817,6 @@ class WorkflowRunner:
             step_key=workflow.current_step_key,
             payload={"error_code": error_code},
         )
-
-
-def _step_job_idempotency_key(
-    workflow_id: str, step_key: str, attempt: int, definition_hash: str
-) -> str:
-    digest = content_sha256(
-        {
-            "workflow_id": workflow_id,
-            "step_key": step_key,
-            "attempt": attempt,
-            "definition_hash": definition_hash,
-        }
-    ).removeprefix("sha256:")
-    return f"wfstep-{digest}"
 
 
 def _stage_for_rework_target(target: str) -> WorkflowStage:

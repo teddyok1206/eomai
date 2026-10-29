@@ -40,6 +40,10 @@ from eom_workflow.models import ExternalItemLearningWorkerRequest
 from eom_workflow_runner.external_item_learning_preparation import (
     prepare_external_item_learning_workflow,
 )
+from eom_workflow_runner.external_item_learning_recovery import (
+    prepare_unstarted_external_item_learning_recovery,
+    resolve_external_item_learning_recovery,
+)
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from eom_workflow_runner.repository import (
     admitted_workflow_definition,
@@ -118,6 +122,7 @@ class CreativeCohortPreparationService:
                     )
                 )
             if workflow is not None:
+                workflow = resolve_external_item_learning_recovery(session, workflow)
                 original = load_persisted_workflow_request(
                     workflow.initial_request
                 ).worker_request()
@@ -242,6 +247,64 @@ class CreativeCohortPreparationService:
                     expected_preset=preset,
                 )
             return prepared.selection
+
+    def recover_unstarted(self, workflow_id: str) -> ExternalItemLearningRoleSelection:
+        """Explicitly prepare one admitted source after a proven no-Job failure.
+
+        Original cohort/source/controls and historical FAILED remain unchanged.
+        The Workflow application owns the successor transaction and audit link.
+        """
+        with self.sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id)
+            if workflow is None:
+                raise ValueError("CREATIVE_COHORT_RECOVERY_WORKFLOW_MISSING")
+            if workflow.created_actor_id != self.cohort.requested_by_operator_id:
+                raise ValueError("CREATIVE_COHORT_RECOVERY_OWNER_MISMATCH")
+            request = load_persisted_workflow_request(workflow.initial_request).worker_request()
+            if not isinstance(request, ExternalItemLearningWorkerRequest):
+                raise ValueError("CREATIVE_COHORT_RECOVERY_TYPE_MISMATCH")
+            work = request.work_input
+            target = self.targets.get(work.source.source_id)
+            if target is None:
+                raise ValueError("CREATIVE_COHORT_RECOVERY_TARGET_NOT_ADMITTED")
+        selected = self.prepare(target)  # exact source/plan pins and current real owner rights
+        if selected.workflow_id != workflow_id:
+            with self.sessions() as session:
+                predecessor = session.get(WorkflowInstanceRecord, workflow_id)
+                if predecessor is None or (
+                    resolve_external_item_learning_recovery(session, predecessor).workflow_id
+                    != selected.workflow_id
+                ):
+                    raise ValueError("CREATIVE_COHORT_RECOVERY_WORKFLOW_NOT_ADMITTED")
+            return selected  # an already recorded successor is an idempotent replay
+        with self.sessions.begin() as session:
+            definition = admitted_workflow_definition(
+                session,
+                definition_key="external-item-learning",
+                definition_version=self.scope.workflow_definition_version,
+            )
+            preset_row = session.get(
+                ExecutionPresetRevisionRecord, self.scope.extraction_preset.preset_revision_id
+            )
+            preset = validated_preset(preset_row) if preset_row else None
+            if (
+                definition is None
+                or definition.definition_hash != self.scope.workflow_definition_sha256
+                or not isinstance(preset, ExecutionPresetRevision)
+                or preset.content_sha256 != self.scope.extraction_preset.sha256
+            ):
+                raise ValueError("CREATIVE_COHORT_PREPARATION_POLICY_MISMATCH")
+            recovered = prepare_unstarted_external_item_learning_recovery(
+                session,
+                predecessor_workflow_id=workflow_id,
+                definition=definition,
+                work=work,
+                operator_id=self.cohort.requested_by_operator_id,
+                source_authorizer=self.source,
+                page_publisher=self.pages,
+                expected_preset=preset,
+            )
+            return recovered.selection
 
     def _ensure_preview(self, target: CreativeCohortTarget) -> None:
         # Reauthorize before asking the real Catalog owner to materialize bytes.

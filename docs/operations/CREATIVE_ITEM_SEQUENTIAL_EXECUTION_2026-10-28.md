@@ -269,3 +269,51 @@ Graph 집중 27개 PASS(서로 중복 포함), core Ruff·format·mypy PASS다. 
 simulation이 새 Workflow 2의 staging 누락을 발견해 거부했다. 운영 설치는 시작하지 않았다.
 기존 equality gate를 완화하지 않고 두 창작 definition/role/result family를 실제 staging과
 검사 대상에 모두 넣었다. 해당 release coverage/role 회귀 9개, shell syntax·Ruff·mypy PASS다.
+
+### 모델 시작 전 실패의 명시적 후속 준비
+
+호환 배포 `efdb7c67`과 continuation 발행은 완료했으나 U10311의 새 Workflow는 Catalog
+원문 권한 확인이 구 family만 허용하여 Job 생성 전에 실패했다. 원래 FAILED는 보존한다.
+공통 profile의 definition/role/result 정확한 조합을 확인하도록 수정하며 권한 검사를 완화하지
+않는다. 구/새 family 및 혼합 버전 거부, 실제 Unix socket 회귀 포함 62개 PASS다.
+
+1. 복구 책임은 기존 Workflow preparation application에 둔다. worker를 직접 실행하지 않는다.
+2. 정본은 admitted cohort, exact 원문/work/plan과 FAILED Workflow/step, 기존 Job/command다.
+3. 기존 실패는 그대로 두고 새 Workflow 하나를 만든다. immutable recovery 값은 두 ID와
+   source/work/definition hash, 원래 owner를 연결하며 기존 append-only event에 저장한다.
+4. 원래 source 권한과 원본 pin을 재확인하고, 실패 step의 Job ID뿐 아니라 유일한 Job
+   idempotency key 조회에서도 Job이 없음을 증명해야 한다. 살아 있는 command도 거부한다.
+5. 접근은 PK/Job unique key와 workflow별 event sequence index다. 큰 자료를 복사하지 않는다.
+6. 후속 key는 predecessor/work/definition hash에서 결정하고 parent row lock으로 중복 준비를
+   막는다. 원래 1,053개 대상과 정책/모델 pin, 단계당 실행 횟수는 바꾸지 않는다.
+7. 준비는 한 DB transaction이다. 같은 복구의 재전송은 같은 successor로 돌아오고 중단은
+   기존 Artifact/DB 경계로 rollback한다. 실패 이력을 성공으로 변경하지 않는다.
+8. Cohort application은 지원 Workflow use case를 호출하고, 순차 owner는 기록된 successor
+   pointer만 해석한다. Catalog가 Workflow row를 직접 고치거나 root가 worker를 실행하지 않는다.
+9. recovery 기록이 없으면 기존 실패에서 멈춘다. 과학적 불일치나 실제 worker 실패는 이 좁은
+   'Job 생성 전' 복구로 우회할 수 없다. 복구 준비와 START는 별개다.
+10. 이벤트 연결은 bounded immutable chain, seen-ID set으로 순환을 거부한다. 기존 등록 unique
+    source key/현재 operator 권한/Graph CAS는 계속 적용된다. 새 table/index/migration은 없다.
+11. FAILED를 READY로 바꾸거나 새 key만 임의 발급하는 대안은 원래 실패와 중복 실행 근거를
+    잃으므로 쓰지 않는다. 별도 queue/framework 대신 현재 preparation/event를 확장한다.
+
+2026-10-29 04:46–04:48 UTC 실제 적용: API/shared runner `efdb7c67` 배포·RECORD·설치본
+definition 검사·migration 0062 확인·격리 검사·READY PASS. continuation은
+`creativecohort_672605303b6e3e27b9e57fcc6938beb3` /
+`rev_36fc4e4e415f4e609e2033f7a4ab48dc`이며 원래 target-set 1,053개/SHA는 유지했다.
+QUERY는 API Requires 관계로 중지된 것을 확인해 같은 `07ec7b32` prefix/config로 재시작했다.
+GPU INDEX는 원래 10-28 20:10:37 UTC FAILED 상태와 pin을 그대로 보존했다. 현재 worker
+lease·진행 HWPX·chat은 0이었으며, 오래된 native 임베딩 Job/command는 수정하지 않았다.
+
+U10310은 원래 Item/분석/Graph/공식 보고서로 다시 VERIFIED. U10311 후속 Workflow
+`workflow_96b5f78cb4384555852cccdd170f4ef4`는 원문 권한 family 누락 때문에 FAILED이며
+`steprun_121c981a8b784f54bb8da1b45a2e719e`의 platform Job은 없었다. 원래 V1 결과와 이
+실패는 보존한다. 전체 연속 실행/30분 timer는 아직 미활성화, 실제 표본 종료선은 1/3이다.
+
+위 source-authority 보완과 명시적 no-Job recovery의 소스 회귀: 창작·기존 추출·공통 풀이
+projection 407개 PASS, 추가 link 변조 거부를 포함한 복구 집중 18개 PASS(부분 중복).
+fresh disposable PostgreSQL에서 22개 PASS, 마지막 link 검사 이후 동시 복구/늦은 권한
+거부 rollback 두 사례만 같은 guarded DB의 새 synthetic 대상으로 다시 실행해 2개 PASS다.
+같은 predecessor에 successor 1개/기존 FAILED 보존/START command 0/예외 시 orphan 0을
+확인했다. 원래 role Job key의 bytes는 유지하고 공통 함수로 옮겨 indexed 부재 확인에
+재사용한다. core Ruff·format·mypy PASS. 이 수정·복구 기능은 아직 운영 배포 전이다.

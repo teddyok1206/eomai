@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "creative-preexecution-recovery-v1": CatalogSchemaResource(
+            "schemas/external-item/creative-preexecution-recovery-v1.schema.json",
+            "resources/external-item/creative-preexecution-recovery-v1.schema.json",
+            "1.0",
+            "sha256:9c2bdeab41c1bac93b6d2de66d4fb08ecaab559d35386f270062c8215c22f031",
+        ),
         "public-solution-text-v1": CatalogSchemaResource(
             "schemas/knowledge/public-solution-text-v1.schema.json",
             "resources/knowledge/public-solution-text-v1.schema.json",
