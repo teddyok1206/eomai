@@ -93,6 +93,7 @@ from eom_workflow.models import (
     ContentTeamReviewRoleResultV12,
     CustomerSupportRoleResult,
     ExternalItemLearningRoleResult,
+    ExternalItemLearningRoleResultV2,
     ExternalItemLearningWorkerRequest,
     GeneratedAuthoringRoleResult,
     GeneratedAuthoringRoleResultV4,
@@ -239,6 +240,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "knowledge-analysis-proposal-result@10.0",
             "legacy-item-extraction-result@1.0",
             "external-item-learning-result@1.0",
+            "external-item-learning-result@2.0",
             "legacy-item-editorial-compatibility-result@1.0",
             "customer-support-result@1.0",
             "pdf-document-review-result@1.0",
@@ -314,6 +316,7 @@ RESULT_SCHEMA_FILES = {
     ),
     "legacy-item-extraction-result@1.0": "legacy-item-extraction-result-v1.schema.json",
     "external-item-learning-result@1.0": "external-item-learning-result-v1.schema.json",
+    "external-item-learning-result@2.0": "external-item-learning-result-v2.schema.json",
     "legacy-item-editorial-compatibility-result@1.0": (
         "legacy-item-editorial-compatibility-result-v1.schema.json"
     ),
@@ -366,6 +369,7 @@ INPUT_SCHEMA_FILES_V1_30 = {"support": "item-inference-transfer-pair-input-v2.sc
 INPUT_SCHEMA_FILES_V1_31 = {"support": "pdf-document-review-input-v5.schema.json"}
 INPUT_SCHEMA_FILES_V1_32 = {"support": "paired-document-review-input-v4.schema.json"}
 INPUT_SCHEMA_FILES_V1_33 = {"support": "external-item-learning-input-v1.schema.json"}
+INPUT_SCHEMA_FILES_V1_34 = {"support": "external-item-learning-input-v2.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -412,6 +416,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "registration-result@6.0": "workflow-role/1.13.0",
     "legacy-item-extraction-result@1.0": "workflow-role/1.14.0",
     "external-item-learning-result@1.0": "workflow-role/1.33.0",
+    "external-item-learning-result@2.0": "workflow-role/1.34.0",
     "authoring-result@7.0": "workflow-role/1.15.0",
     "review-result@7.0": "workflow-role/1.15.0",
     "registration-result@7.0": "workflow-role/1.15.0",
@@ -472,6 +477,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.31.0": INPUT_SCHEMA_FILES_V1_31,
     "workflow-role/1.32.0": INPUT_SCHEMA_FILES_V1_32,
     "workflow-role/1.33.0": INPUT_SCHEMA_FILES_V1_33,
+    "workflow-role/1.34.0": INPUT_SCHEMA_FILES_V1_34,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -508,6 +514,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.31.0",
     "workflow-role/1.32.0",
     "workflow-role/1.33.0",
+    "workflow-role/1.34.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -1538,6 +1545,7 @@ def _role_result_schema(schema_id: str) -> dict[str, Any]:
             "knowledge-analysis-proposal-result@10.0",
             "legacy-item-extraction-result@1.0",
             "external-item-learning-result@1.0",
+            "external-item-learning-result@2.0",
             "legacy-item-editorial-compatibility-result@1.0",
             "item-inference-transfer-pair-result@1.0",
             "item-inference-transfer-pair-result@1.1",
@@ -1789,6 +1797,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
         canonical_value = _canonicalize_legacy_item_extraction_result(value)
     elif schema_id == "external-item-learning-result@1.0" and role == "support":
         canonical_value = _canonicalize_external_item_learning_result(value)
+    elif schema_id == "external-item-learning-result@2.0" and role == "support":
+        canonical_value = _canonicalize_external_item_learning_result_v2(value)
     elif schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
         canonical_value = _canonicalize_legacy_editorial_compatibility_result(value)
     elif schema_id == "item-inference-transfer-pair-result@1.1" and role == "support":
@@ -1938,6 +1948,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return LegacyItemExtractionRoleResult.model_validate(canonical_value)
         if schema_id == "external-item-learning-result@1.0" and role == "support":
             return ExternalItemLearningRoleResult.model_validate(canonical_value)
+        if schema_id == "external-item-learning-result@2.0" and role == "support":
+            return ExternalItemLearningRoleResultV2.model_validate(canonical_value)
         if schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
             return LegacyItemEditorialCompatibilityRoleResult.model_validate(canonical_value)
         if schema_id == "customer-support-result@1.0" and role == "support":
@@ -2516,6 +2528,27 @@ def _canonicalize_external_item_learning_result(value: object) -> object:
     return canonical
 
 
+def _canonicalize_external_item_learning_result_v2(value: object) -> object:
+    """Normalize source defaults before stamping; never repair an existing hash."""
+    from eom_catalog_contracts.external_item_learning_result_v2 import (
+        stamp_external_item_learning_result_v2,
+    )
+
+    if not isinstance(value, dict):
+        return value
+    output = value.get("output")
+    result = output.get("learning_result") if isinstance(output, dict) else None
+    if not isinstance(result, dict) or "result_sha256" in result:
+        return value
+    try:
+        stamped = stamp_external_item_learning_result_v2(result)
+    except ValueError as exc:
+        raise WorkflowSchemaError("creative source successor body is invalid") from exc
+    canonical = copy.deepcopy(value)
+    _mapping(canonical, "output")["learning_result"] = stamped.model_dump(mode="json")
+    return canonical
+
+
 def _normalize_duplicate_legacy_source_anchor_ids(
     extraction_result: dict[str, Any],
 ) -> None:
@@ -2943,11 +2976,16 @@ def constrained_result_schema(
                 analysis_request,
             )
             _prune_unreferenced_definitions(schema)
-    if schema_id == "external-item-learning-result@1.0":
+    if schema_id in {"external-item-learning-result@1.0", "external-item-learning-result@2.0"}:
         if not isinstance(worker_input.request, ExternalItemLearningWorkerRequest):
             raise WorkflowSchemaError("creative learning result requires its pinned work input")
         work = worker_input.request.work_input
-        result = _mapping(definitions, "ExternalItemLearningResult")
+        result = _mapping(
+            definitions,
+            "ExternalItemLearningResultV2"
+            if schema_id.endswith("@2.0")
+            else "ExternalItemLearningResult",
+        )
         result_properties = _mapping(result, "properties")
         for field_name, pinned_value in (
             ("input_sha256", work.source.input_sha256),
@@ -4142,6 +4180,11 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
     if schema_id == "external-item-learning-result@1.0":
         _project_external_item_learning_codex_contract(schema)
         _prune_unreferenced_definitions(schema)
+    if schema_id == "external-item-learning-result@2.0":
+        _project_external_item_learning_codex_contract(
+            schema, result_definition="ExternalItemLearningResultV2"
+        )
+        _prune_unreferenced_definitions(schema)
     if schema_id == "legacy-item-editorial-compatibility-result@1.0":
         _project_legacy_editorial_compatibility_codex_contract(schema)
         _prune_unreferenced_definitions(schema)
@@ -5020,6 +5063,8 @@ def _inline_catalog_schema(
         bundled = _inline_external_item_learning_contract(bundled, result=False)
     if creative_result in json.dumps(bundled, ensure_ascii=True):
         bundled = _inline_external_item_learning_contract(bundled, result=True)
+    if "eom://schemas/external-item/learning-result/2.0" in json.dumps(bundled, ensure_ascii=True):
+        bundled = _inline_external_item_learning_result_v2_contract(bundled)
     Draft202012Validator.check_schema(bundled)
     if require_reference_closure:
         _validate_local_reference_closure(bundled)
@@ -5104,6 +5149,41 @@ def _inline_external_item_learning_contract(
         for reference, name, definition in references
     )
     return _inline_contract_sources(schema, sources)
+
+
+def _inline_external_item_learning_result_v2_contract(schema: dict[str, Any]) -> dict[str, Any]:
+    """Successor only: reuse historical region types without changing their bytes."""
+    from eom_catalog_contracts import load_schema
+
+    references = (
+        (
+            "eom://schemas/external-item/learning-result/2.0",
+            "external-item-learning-result-v2",
+            "ExternalItemLearningResultV2",
+        ),
+        (
+            "eom://schemas/external-item/learning-result/1.0",
+            "external-item-learning-result-v1",
+            "ExternalItemLearningResult",
+        ),
+        (
+            "eom://schemas/external-item/source-item-draft/1.0",
+            "creative-source-item-draft-v1",
+            "CreativeSourceItemDraft",
+        ),
+        (
+            "eom://schemas/item-registry/assessment-item-content-v1",
+            "assessment-item-content",
+            "AssessmentItemContent",
+        ),
+    )
+    return _inline_contract_sources(
+        schema,
+        tuple(
+            (reference, name, copy.deepcopy(load_schema(resource)))
+            for reference, resource, name in references
+        ),
+    )
 
 
 def _inline_contract_sources(
@@ -5364,11 +5444,13 @@ def _validate_local_reference_closure(schema: dict[str, Any]) -> None:
     visit(schema)
 
 
-def _project_external_item_learning_codex_contract(schema: dict[str, Any]) -> None:
+def _project_external_item_learning_codex_contract(
+    schema: dict[str, Any], *, result_definition: str = "ExternalItemLearningResult"
+) -> None:
     """Expose only Codex-supported syntax; canonical validation remains authoritative."""
 
     definitions = _mapping(schema, "$defs")
-    result = _mapping(definitions, "ExternalItemLearningResult")
+    result = _mapping(definitions, result_definition)
     properties = _mapping(result, "properties")
     if properties.pop("result_sha256", None) is None:
         raise WorkflowSchemaError("creative learning result hash is not projectable")

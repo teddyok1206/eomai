@@ -134,3 +134,7 @@ Graph 접근 정책은 임의의 가장 최근 revision이 아니라 기존 Grap
 - V2는 worker의 미서명 body와 owner가 기본값을 정규화한 뒤 SHA를 붙이는 저장 result를 분리했다. 모델이 SHA를 제출하면 거부한다. nullable table caption 등 기본값이 저장/재조회에서 hash를 바꾸지 않도록 round-trip을 검사했다. 기존 V1 의미/bytes는 변경하지 않았다.
 - 집중 계약/compiler/real synthetic-PDF 회귀 56개 PASS. 별도 broader 공유 Graph/보고서 회귀 84개 PASS는 중복을 합산하지 않는다. 설치된 predecessor와 대조해 기존 workflow-role 1.0.1/1.4.0/1.33.0의 schema bundle hash가 동일함도 확인했다.
 - 아직 필요한 연결: successor role/Workflow·실행 설정, 검증된 crop derivation의 Orchestrator commit, source lineage/report reader·등록 adapter, 고정 cohort의 명시적 successor/recovery, 호환 운영 배포 및 실제 3건 재검증. 이 소스 검사를 운영 성공 또는 목표 달성으로 보고하지 않는다. 기존 owner는 중단 상태, 전체 연속 처리와 30분 timer는 미활성 상태로 유지한다.
+
+소스 단계에서 `workflow-role/1.34.0` / `external-item-learning-result@2.0` wire를 추가했다. 원본 source/page/work-input 1.0과 기존 `ExternalItemLearningWorkerRequest`는 그대로 재사용한다. 새 work-input이나 parallel worker request framework를 만들지 않는다. V2 report/draft만 다른 결과이며 source/page const와 페이지 수를 generation schema에 고정하고, owner가 검증한 기본값에만 SHA를 부여한다. wire 입력/결과/Codex projection/멱등 decode·선행 hash/무승인 실행 차단 집중 19개 PASS. 새 wire가 등록됐다는 사실은 실행 활성화가 아니다. 기존 plan 27은 Workflow 1.0.0에 고정돼 있으므로 후속 Workflow/plan도 explicit successor로 연결해야 한다. 이전 cohort/결과는 수정하지 않는다. 후속 preset이 이전 purpose/Workflow의 기본 설정을 뜻하지 않게 바꾸지 않도록 버전별 호환성·instruction pin을 함께 검사한다.
+
+사용자가 이전 architecture 문서의 변경을 그대로 별도 커밋하도록 승인했다. `94b1329e`에 68줄을 내용 수정 없이 보존했으며 정상 릴리스의 dirty-tree 조건을 우회하지 않았다. 추가 Studio 로그인은 이 문서 보존/소스 개발 과정에 필요하지 않았다.

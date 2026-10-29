@@ -56,6 +56,7 @@ from eom_catalog_contracts import (
     validate_item_reference_contract,
     validate_reviewed_authoring_guidance,
 )
+from eom_catalog_contracts.external_item_learning_result_v2 import ExternalItemLearningResultV2
 from eom_catalog_contracts.inference_transfer_pair_result_v11 import PairComparisonResultV11
 from eom_catalog_contracts.item_inference_transfer import PairComparisonResult
 from eom_catalog_contracts.mock_exam_production_plan import ContentTeamMockExamSlotV1
@@ -1110,6 +1111,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.31.0",
         "workflow-role/1.32.0",
         "workflow-role/1.33.0",
+        "workflow-role/1.34.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1297,6 +1299,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.31.0",
         "workflow-role/1.32.0",
         "workflow-role/1.33.0",
+        "workflow-role/1.34.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -2899,6 +2902,16 @@ class ExternalItemLearningRoleResult(RoleResultBase):
     output: ExternalItemLearningOutput
 
 
+class ExternalItemLearningOutputV2(FrozenModel):
+    learning_result: ExternalItemLearningResultV2
+
+
+class ExternalItemLearningRoleResultV2(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.34.0"] = "workflow-role/1.34.0"
+    role: Literal["support"] = "support"
+    output: ExternalItemLearningOutputV2
+
+
 class LegacyItemEditorialCompatibilityOutput(FrozenModel):
     proposal: LegacyItemEditorialCompatibilityProposal
 
@@ -3063,6 +3076,7 @@ RoleResult = (
     | KnowledgeAnalysisProposalRoleResultV10
     | LegacyItemExtractionRoleResult
     | ExternalItemLearningRoleResult
+    | ExternalItemLearningRoleResultV2
     | LegacyItemEditorialCompatibilityRoleResult
     | CustomerSupportRoleResult
     | InferenceTransferPairRoleResult
