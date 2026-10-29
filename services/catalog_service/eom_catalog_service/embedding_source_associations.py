@@ -8,6 +8,10 @@ from __future__ import annotations
 
 import re
 
+from eom_catalog_contracts.embedding_index_families import (
+    SupportedEmbeddingBinding,
+    parse_supported_embedding_entry,
+)
 from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingEncodingIdentity,
     EmbeddingSourceBinding,
@@ -15,15 +19,20 @@ from eom_catalog_contracts.inference_transfer_embedding import (
 from eom_catalog_contracts.inference_transfer_experiment import PopulationSource
 from eom_catalog_contracts.knowledge import same_approved_item_source_identity
 from eom_catalog_contracts.mixed_embedding_index import (
-    MixedEmbeddingSourceBinding,
     RegisteredReviewEmbeddingEntry,
-    parse_supported_embedding_entry,
 )
+from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
+from eom_catalog_contracts.public_solution_embedding_index import (
+    PublicSolutionEmbeddingSourceBinding,
+    PublicSolutionProfilePointer,
+)
+from eom_identifiers import content_sha256
 
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingBindingLookupKey,
     EmbeddingRegistryError,
     EmbeddingRegistryLookup,
+    PublicSolutionEmbeddingBindingLookupKey,
     RegisteredReviewEmbeddingBindingLookupKey,
     SupportedEmbeddingBindingLookupKey,
     SupportedEmbeddingEntry,
@@ -31,7 +40,7 @@ from eom_catalog_service.embedding_registry_ports import (
 
 
 def embedding_binding_lookup_key(
-    binding: MixedEmbeddingSourceBinding,
+    binding: SupportedEmbeddingBinding,
 ) -> SupportedEmbeddingBindingLookupKey:
     common = (
         binding.source.item_revision_id,
@@ -41,6 +50,14 @@ def embedding_binding_lookup_key(
         binding.view,
         binding.projection_version,
     )
+    if isinstance(binding, PublicSolutionEmbeddingSourceBinding):
+        return PublicSolutionEmbeddingBindingLookupKey(
+            *common,
+            binding.base_analysis_run_id,
+            binding.profile.profile_revision_id,
+            binding.encoding.encoding_sha256,
+            content_sha256(binding.evidence),
+        )
     if isinstance(binding, EmbeddingSourceBinding):
         return EmbeddingBindingLookupKey(
             *common,
@@ -82,6 +99,14 @@ def validated_embedding_base_associations(
         raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
     for original in entries:
         entry = parse_supported_embedding_entry(original)
+        if isinstance(entry, PublicSolutionEmbeddingEntry):
+            revision = entry.source.item_revision_id
+            if (
+                by_source.get(revision) != entry.source
+                or base_ids.get(revision) != entry.base_analysis_run_id
+            ):
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+            continue
         basis = entry.profile.source_basis
         revision = basis.source.item_revision_id
         source = by_source.get(revision)
@@ -107,6 +132,21 @@ def embedding_entry_lookup_key(
     scope: EmbeddingRegistryLookup,
     base_analysis_run_id: str,
 ) -> SupportedEmbeddingBindingLookupKey:
+    if isinstance(entry, PublicSolutionEmbeddingEntry):
+        if entry.base_analysis_run_id != base_analysis_run_id:
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+        return PublicSolutionEmbeddingBindingLookupKey(
+            entry.source.item_revision_id,
+            scope.graph_snapshot.graph_snapshot_revision_id,
+            scope.policy_revision_id,
+            scope.namespace.recipe_sha256,
+            scope.namespace.view,
+            "public-solution-text/1.0",
+            entry.base_analysis_run_id,
+            PublicSolutionProfilePointer.from_entry(entry).profile_revision_id,
+            encoding.encoding_sha256,
+            content_sha256(entry.evidence),
+        )
     basis = entry.profile.source_basis
     common = (
         basis.source.item_revision_id,

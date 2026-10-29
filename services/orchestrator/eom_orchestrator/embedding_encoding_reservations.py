@@ -20,6 +20,7 @@ from eom_workflow.local_embedding_encoding_dispatch import (
     SupportedEmbeddingCompletedEvent,
     SupportedEmbeddingIntent,
     SupportedEmbeddingReadResult,
+    embedding_ownership_version,
     parse_supported_embedding_association,
     parse_supported_embedding_completed,
     parse_supported_embedding_intent,
@@ -33,9 +34,6 @@ from eom_workflow.local_embedding_encoding_job import (
     EmbeddingEncodingJobRequest,
     LocalEmbeddingOwnedJob,
 )
-from eom_workflow.local_embedding_encoding_ownership_v2 import (
-    LocalEmbeddingLaunchIntentV2,
-)
 from eom_workflow.local_embedding_execution_policy import (
     LocalEmbeddingExecutablePolicy,
     parse_local_embedding_executable_policy,
@@ -47,6 +45,7 @@ from eom_workflow.local_embedding_request_v2 import (
 )
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
 from eom_workflow.local_embedding_source_plan_v2 import LocalEmbeddingSourcePlanV2
+from eom_workflow.local_embedding_source_plan_v3 import LocalEmbeddingSourcePlanV3
 from eom_workflow.schemas import NativeEmbeddingContract
 from jsonschema import ValidationError as JsonSchemaValidationError
 from sqlalchemy.orm import Session, sessionmaker
@@ -64,7 +63,7 @@ from eom_orchestrator.state_machine import JobState
 @dataclass(frozen=True, slots=True)
 class ResolvedEncodingScope:
     workflow_request: SupportedLocalEmbeddingRequest
-    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2
+    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3
     policy: LocalEmbeddingExecutablePolicy
 
 
@@ -239,9 +238,7 @@ def _results(
         else:
             status = "OWNED" if row.owner.intent == current else "BORROWED"
         body = {
-            "schema_version": "embedding-encoding-ownership/2.0"
-            if isinstance(row.owner.intent, LocalEmbeddingLaunchIntentV2)
-            else "embedding-encoding-job/1.0",
+            "schema_version": embedding_ownership_version(row.owner.intent),
             "record_type": "READ_RESULT",
             "owned_job": row.owned_job.model_dump(mode="json"),
             "owner_intent": row.owner.intent.model_dump(mode="json"),

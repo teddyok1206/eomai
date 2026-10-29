@@ -36,7 +36,9 @@ from eom_workflow.local_embedding_encoding_dispatch import (
 from eom_workflow.local_embedding_encoding_job import (
     EmbeddingEncodingJobRequest,
 )
-from eom_workflow.local_embedding_encoding_ownership_v2 import LocalEmbeddingLaunchAssociationV2
+from eom_workflow.local_embedding_encoding_ownership_v2 import (
+    local_embedding_launch_protocol,
+)
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingRuntimeProfile
 from eom_workflow.local_embedding_index_refresh import LocalEmbeddingIndexRefreshRequest
 from eom_workflow.local_embedding_request_v2 import (
@@ -46,12 +48,14 @@ from eom_workflow.local_embedding_request_v2 import (
 )
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
 from eom_workflow.local_embedding_source_plan_v2 import LocalEmbeddingSourcePlanV2
+from eom_workflow.local_embedding_source_plan_v3 import LocalEmbeddingSourcePlanV3
 from eom_workflow.local_embedding_workflow_receipt_v2 import SupportedLocalEmbeddingStepOutput
 from eom_workflow.native_embedding_coordinator import (
     NativeCoordinatorAllocation,
     NativeCoordinatorCompleted,
 )
 from eom_workflow.native_embedding_coordinator_v2 import NativeCoordinatorCompletedV2
+from eom_workflow.native_embedding_coordinator_v3 import NativeCoordinatorCompletedV3
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.document_embedding_execution import (
@@ -89,7 +93,7 @@ from eom_workflow_runner.repository import CommandLeaseIdentity
 
 
 def _encoding_requests(
-    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2,
+    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3,
     *,
     reusable_encodings: frozenset[str] = frozenset(),
 ) -> tuple[EmbeddingEncodingJobRequest, ...]:
@@ -133,9 +137,7 @@ def _completion_events(
         }
         receipt = body | {"receipt_sha256": content_sha256(body)}
         body = {
-            "schema_version": "embedding-encoding-ownership/2.0"
-            if isinstance(association, LocalEmbeddingLaunchAssociationV2)
-            else "embedding-encoding-job/1.0",
+            "schema_version": association.schema_version,
             "record_type": "COMPLETED",
             "owned_job": owned.model_dump(mode="json"),
             "intent": association.intent.model_dump(mode="json"),
@@ -293,7 +295,10 @@ class CatalogNativeEmbeddingExecutor:
             if len(history.records) == 4:
                 completed = history.records[3].payload
                 assert isinstance(
-                    completed, NativeCoordinatorCompleted | NativeCoordinatorCompletedV2
+                    completed,
+                    NativeCoordinatorCompleted
+                    | NativeCoordinatorCompletedV2
+                    | NativeCoordinatorCompletedV3,
                 )
                 return self.validate_completion(
                     session=session,
@@ -374,9 +379,7 @@ class CatalogNativeEmbeddingExecutor:
                         created_at=allocation.created_at,
                     )
                     body = {
-                        "schema_version": "embedding-encoding-ownership/2.0"
-                        if isinstance(request, LocalEmbeddingWorkflowRequestV2)
-                        else "embedding-encoding-job/1.0",
+                        "schema_version": local_embedding_launch_protocol(request)[0],
                         "record_type": "LAUNCH_ASSOCIATION",
                         "intent": launch.intent.model_dump(mode="json"),
                         "owned_jobs": [j.model_dump(mode="json") for j in own],

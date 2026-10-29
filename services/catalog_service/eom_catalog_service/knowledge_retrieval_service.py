@@ -1327,13 +1327,14 @@ class KnowledgeRetrievalApplicationService:
         *,
         sha256: str,
     ) -> SupportedLocalIndexingAccessPolicy:
-        """Exact service-only 1.1/1.2; never reinterpret 1.3 as bounded."""
+        """Exact runtime families; 1.3's unselected segmented policy stays separate."""
         record = KnowledgeRetrievalApplicationService._pinned_local_indexing_policy_record(
             session, revision_id, sha256=sha256
         )
         if record.schema_version not in (
             "education-retrieval-access-policy/1.1",
             "education-retrieval-access-policy/1.2",
+            "education-retrieval-access-policy/1.4",
         ):
             raise KnowledgeRetrievalServiceError(
                 "KNOWLEDGE_RETRIEVAL_POLICY_INVALID",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from eom_catalog_contracts.embedding_contract_values import raw_similarity_contract_value
+from eom_catalog_contracts.embedding_index_families import SupportedEmbeddingEntry
 from eom_catalog_contracts.inference_transfer_embedding import (
     IncrementalEmbeddingInput,
     IncrementalEmbeddingResult,
@@ -13,9 +14,9 @@ from eom_catalog_contracts.inference_transfer_experiment import (
 )
 from eom_catalog_contracts.mixed_embedding_index import (
     RegisteredReviewEmbeddingEntry,
-    SupportedEmbeddingEntry,
     registered_review_embedding_text,
 )
+from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
 
 from eom_workflow.local_embedding_encoding_job import (
     EmbeddingEncodingAttachedEvent,
@@ -42,6 +43,17 @@ from eom_workflow.local_embedding_encoding_ownership_v2 import (
     validate_embedding_encoding_completions_v2,
     validate_local_embedding_launch_association_v2,
 )
+from eom_workflow.local_embedding_encoding_ownership_v3 import (
+    EmbeddingEncodingAttachedEventV3,
+    EmbeddingEncodingCompletedEventV3,
+    EmbeddingEncodingOwnershipMessageV3,
+    EmbeddingEncodingReadResultV3,
+    LocalEmbeddingLaunchAssociationV3,
+    LocalEmbeddingLaunchIntentV3,
+    parse_embedding_encoding_ownership_v3,
+    validate_embedding_encoding_completions_v3,
+    validate_local_embedding_launch_association_v3,
+)
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingResourceProfile
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
 from eom_workflow.local_embedding_source_plan_v2 import (
@@ -49,29 +61,70 @@ from eom_workflow.local_embedding_source_plan_v2 import (
     parse_local_embedding_source_plan_v2,
     validate_local_embedding_plan_entries_v2,
 )
+from eom_workflow.local_embedding_source_plan_v3 import (
+    LocalEmbeddingSourcePlanV3,
+    parse_local_embedding_source_plan_v3,
+    validate_local_embedding_plan_entries_v3,
+)
 
-type SupportedEmbeddingIntent = LocalEmbeddingLaunchIntent | LocalEmbeddingLaunchIntentV2
+type SupportedEmbeddingIntent = (
+    LocalEmbeddingLaunchIntent | LocalEmbeddingLaunchIntentV2 | LocalEmbeddingLaunchIntentV3
+)
 type SupportedEmbeddingAssociation = (
-    LocalEmbeddingLaunchAssociation | LocalEmbeddingLaunchAssociationV2
+    LocalEmbeddingLaunchAssociation
+    | LocalEmbeddingLaunchAssociationV2
+    | LocalEmbeddingLaunchAssociationV3
 )
 type SupportedEmbeddingAttachedEvent = (
-    EmbeddingEncodingAttachedEvent | EmbeddingEncodingAttachedEventV2
+    EmbeddingEncodingAttachedEvent
+    | EmbeddingEncodingAttachedEventV2
+    | EmbeddingEncodingAttachedEventV3
 )
 type SupportedEmbeddingCompletedEvent = (
-    EmbeddingEncodingCompletedEvent | EmbeddingEncodingCompletedEventV2
+    EmbeddingEncodingCompletedEvent
+    | EmbeddingEncodingCompletedEventV2
+    | EmbeddingEncodingCompletedEventV3
 )
-type SupportedEmbeddingReadResult = EmbeddingEncodingReadResult | EmbeddingEncodingReadResultV2
-type SupportedEmbeddingMessage = EmbeddingEncodingJobMessage | EmbeddingEncodingOwnershipMessageV2
+type SupportedEmbeddingReadResult = (
+    EmbeddingEncodingReadResult | EmbeddingEncodingReadResultV2 | EmbeddingEncodingReadResultV3
+)
+type SupportedEmbeddingMessage = (
+    EmbeddingEncodingJobMessage
+    | EmbeddingEncodingOwnershipMessageV2
+    | EmbeddingEncodingOwnershipMessageV3
+)
 
 
 def build_supported_owned_incremental_embedding_input(
-    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2,
+    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3,
     entries: tuple[SupportedEmbeddingEntry, ...],
     owned_jobs: tuple[LocalEmbeddingOwnedJob, ...],
     *,
     native_launch_job_id: str,
     resources: LocalEmbeddingResourceProfile,
 ) -> IncrementalEmbeddingInput:
+    if isinstance(plan, LocalEmbeddingSourcePlanV3):
+        checked_public = parse_local_embedding_source_plan_v3(plan)
+        public_entries = tuple(
+            entry for entry in entries if isinstance(entry, PublicSolutionEmbeddingEntry)
+        )
+        if len(public_entries) != len(entries):
+            raise ValueError("LOCAL_EMBEDDING_OWNERSHIP_FAMILY_MISMATCH")
+        validate_local_embedding_plan_entries_v3(checked_public, public_entries)
+        public_texts = {
+            entry.source.item_revision_id: entry.public_solution.text for entry in public_entries
+        }
+        return build_owned_embedding_input_values(
+            space=checked_public.space,
+            planned_encodings=tuple(demand.encoding for demand in checked_public.demands),
+            encoding_texts=tuple(
+                (demand.encoding, public_texts[demand.source_revision_id])
+                for demand in checked_public.demands
+            ),
+            owned_jobs=owned_jobs,
+            native_launch_job_id=native_launch_job_id,
+            resources=resources,
+        )
     if isinstance(plan, LocalEmbeddingSourcePlan):
         legacy = tuple(entry for entry in entries if isinstance(entry, StagedExperimentEntry))
         if len(legacy) != len(entries):
@@ -84,8 +137,17 @@ def build_supported_owned_incremental_embedding_input(
             resources=resources,
         )
     plan = parse_local_embedding_source_plan_v2(plan)
-    validate_local_embedding_plan_entries_v2(plan, entries)
-    by_source = {entry.profile.source_basis.source.item_revision_id: entry for entry in entries}
+    mixed_entries = tuple(
+        entry
+        for entry in entries
+        if isinstance(entry, (StagedExperimentEntry, RegisteredReviewEmbeddingEntry))
+    )
+    if len(mixed_entries) != len(entries):
+        raise ValueError("LOCAL_EMBEDDING_OWNERSHIP_FAMILY_MISMATCH")
+    validate_local_embedding_plan_entries_v2(plan, mixed_entries)
+    by_source = {
+        entry.profile.source_basis.source.item_revision_id: entry for entry in mixed_entries
+    }
     texts = {
         source: registered_review_embedding_text(entry, plan.namespace.view)
         if isinstance(entry, RegisteredReviewEmbeddingEntry)
@@ -111,6 +173,8 @@ def parse_supported_embedding_message(value: object) -> SupportedEmbeddingMessag
             return parse_embedding_encoding_job_message(document)
         if document.get("schema_version") == "embedding-encoding-ownership/2.0":
             return parse_embedding_encoding_ownership_v2(document)
+        if document.get("schema_version") == "embedding-encoding-ownership/3.0":
+            return parse_embedding_encoding_ownership_v3(document)
     raise ValueError("LOCAL_EMBEDDING_CONTRACT_INVALID")
 
 
@@ -122,44 +186,85 @@ def parse_supported_embedding_intent(value: object) -> SupportedEmbeddingIntent:
             return LocalEmbeddingLaunchIntent.model_validate(document)
         if schema == "eom://schemas/workflow/local-embedding-source-plan/2.0":
             return LocalEmbeddingLaunchIntentV2.model_validate(document)
+        if schema == "eom://schemas/workflow/local-embedding-source-plan/3.0":
+            return LocalEmbeddingLaunchIntentV3.model_validate(document)
     raise ValueError("LOCAL_EMBEDDING_CONTRACT_INVALID")
+
+
+def embedding_ownership_version(intent: SupportedEmbeddingIntent) -> str:
+    """Closed metadata family selection, not an inference from current/latest work."""
+    checked = parse_supported_embedding_intent(intent)
+    return {
+        "eom://schemas/workflow/local-embedding-source-plan/1.0": "embedding-encoding-job/1.0",
+        "eom://schemas/workflow/local-embedding-source-plan/2.0": (
+            "embedding-encoding-ownership/2.0"
+        ),
+        "eom://schemas/workflow/local-embedding-source-plan/3.0": (
+            "embedding-encoding-ownership/3.0"
+        ),
+    }[checked.source_plan.schema_ref]
 
 
 def parse_supported_embedding_association(value: object) -> SupportedEmbeddingAssociation:
     result = parse_supported_embedding_message(value)
-    if not isinstance(result, LocalEmbeddingLaunchAssociation | LocalEmbeddingLaunchAssociationV2):
+    if not isinstance(
+        result,
+        LocalEmbeddingLaunchAssociation
+        | LocalEmbeddingLaunchAssociationV2
+        | LocalEmbeddingLaunchAssociationV3,
+    ):
         raise ValueError("LOCAL_EMBEDDING_CONTRACT_INVALID")
     return result
 
 
 def parse_supported_embedding_attached(value: object) -> SupportedEmbeddingAttachedEvent:
     result = parse_supported_embedding_message(value)
-    if not isinstance(result, EmbeddingEncodingAttachedEvent | EmbeddingEncodingAttachedEventV2):
+    if not isinstance(
+        result,
+        EmbeddingEncodingAttachedEvent
+        | EmbeddingEncodingAttachedEventV2
+        | EmbeddingEncodingAttachedEventV3,
+    ):
         raise ValueError("LOCAL_EMBEDDING_CONTRACT_INVALID")
     return result
 
 
 def parse_supported_embedding_completed(value: object) -> SupportedEmbeddingCompletedEvent:
     result = parse_supported_embedding_message(value)
-    if not isinstance(result, EmbeddingEncodingCompletedEvent | EmbeddingEncodingCompletedEventV2):
+    if not isinstance(
+        result,
+        EmbeddingEncodingCompletedEvent
+        | EmbeddingEncodingCompletedEventV2
+        | EmbeddingEncodingCompletedEventV3,
+    ):
         raise ValueError("LOCAL_EMBEDDING_CONTRACT_INVALID")
     return result
 
 
 def parse_supported_embedding_read(value: object) -> SupportedEmbeddingReadResult:
     result = parse_supported_embedding_message(value)
-    if not isinstance(result, EmbeddingEncodingReadResult | EmbeddingEncodingReadResultV2):
+    if not isinstance(
+        result,
+        EmbeddingEncodingReadResult | EmbeddingEncodingReadResultV2 | EmbeddingEncodingReadResultV3,
+    ):
         raise ValueError("LOCAL_EMBEDDING_CONTRACT_INVALID")
     return result
 
 
 def validate_supported_embedding_association(
     association: SupportedEmbeddingAssociation,
-    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2,
+    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3,
     owned_input: IncrementalEmbeddingInput,
     resources: LocalEmbeddingResourceProfile,
     workflow_request_sha256: str,
 ) -> None:
+    if isinstance(association, LocalEmbeddingLaunchAssociationV3) and isinstance(
+        plan, LocalEmbeddingSourcePlanV3
+    ):
+        validate_local_embedding_launch_association_v3(
+            association, plan, owned_input, resources, workflow_request_sha256
+        )
+        return
     if isinstance(association, LocalEmbeddingLaunchAssociationV2) and isinstance(
         plan, LocalEmbeddingSourcePlanV2
     ):
@@ -182,6 +287,18 @@ def validate_supported_embedding_completions(
     owned_input: IncrementalEmbeddingInput,
     result: IncrementalEmbeddingResult,
 ) -> None:
+    if isinstance(association, LocalEmbeddingLaunchAssociationV3) and all(
+        isinstance(event, EmbeddingEncodingCompletedEventV3) for event in events
+    ):
+        validate_embedding_encoding_completions_v3(
+            tuple(
+                event for event in events if isinstance(event, EmbeddingEncodingCompletedEventV3)
+            ),
+            association,
+            owned_input,
+            result,
+        )
+        return
     if isinstance(association, LocalEmbeddingLaunchAssociationV2) and all(
         isinstance(event, EmbeddingEncodingCompletedEventV2) for event in events
     ):

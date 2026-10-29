@@ -294,9 +294,21 @@ def owner(
         identity_fence=Mock(),
         settings=CatalogSettings(nas_artifact_root=tmp_path),
     )
-    scope = cast(
-        ReadOnlyCandidatePoolScope,
-        SimpleNamespace(requester_permission_keys=("knowledge_graph:publish",)),
+    scope = ReadOnlyCandidatePoolScope(
+        graph_snapshot=command.graph_snapshot,
+        access_policy_revision_id=command.policy_revision_id,
+        access_policy_sha256=command.policy_sha256,
+        requested_by="operator_" + "1" * 32,
+        requester_role="ADMIN",
+        requester_permission_keys=("knowledge_graph:publish",),
+        source_classes=("PAST_EXAM",),
+        evidence_budget=EvidenceBudget(
+            max_documents=1,
+            max_item_revisions=64,
+            max_graph_nodes=256,
+            max_claims=128,
+            max_context_tokens=32000,
+        ),
     )
     corpus = AdmittedInferenceTransferCorpus(
         (resolved.entries[0].profile,),
@@ -794,7 +806,7 @@ def test_owner_refuses_missing_authority_lifecycle_and_byte_drift(
     if failure == "fence":
         verifier.identity_fence = None
     elif failure == "publish":
-        scope.requester_permission_keys = ()
+        object.__setattr__(scope, "requester_permission_keys", ())
     elif failure == "corpus":
         session.corpus.lifecycle_state = "RETIRED"
     elif failure == "binary":
@@ -820,7 +832,7 @@ def test_lookup_is_read_scoped_and_retained_reference_values_are_revalidated(
     owner: tuple[Any, ...],
 ) -> None:
     verifier, session, command, _index, binding, scope, _root = owner
-    scope.requester_permission_keys = ()
+    object.__setattr__(scope, "requester_permission_keys", ())
     query = EmbeddingRegistryLookup(
         command.corpus_id,
         command.namespace,
@@ -1182,7 +1194,7 @@ def test_pinned_read_uses_read_scope_without_publish_and_one_read_per_unique_mem
 ) -> None:
     verifier, session, command, index, binding, scope, _root = owner
     # Synthetic scope isolates the write-check regression, not actual read-authority admission.
-    scope.requester_permission_keys = ()
+    object.__setattr__(scope, "requester_permission_keys", ())
     intent, registered = _read_selection(command, index)
     read = PinnedArtifactReadContext.read_pinned
     counts: dict[tuple[str, str, str], int] = {}

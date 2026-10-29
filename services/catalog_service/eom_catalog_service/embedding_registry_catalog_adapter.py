@@ -6,6 +6,13 @@ import json
 from collections.abc import Callable, Iterator
 from typing import Any, Literal, overload
 
+from eom_catalog_contracts.embedding_index_families import (
+    SupportedEmbeddingBinding,
+    embedding_entry_profile,
+    embedding_entry_source,
+    parse_supported_embedding_index,
+    validate_supported_embedding_source_bindings,
+)
 from eom_catalog_contracts.embedding_reference_query import (
     ReferenceQuerySpaces,
     raw_similarity_contract_value,
@@ -46,17 +53,27 @@ from eom_catalog_contracts.knowledge import ApprovedItemKnowledgeSourceV2
 from eom_catalog_contracts.mixed_embedding_index import (
     MIXED_EMBEDDING_INDEX_SCHEMA_REF,
     MixedEmbeddingIndexManifest,
-    MixedEmbeddingSourceBinding,
     RegisteredReviewEmbeddingEntry,
     RegisteredReviewEmbeddingSourceBinding,
-    parse_supported_embedding_index,
-    validate_mixed_embedding_source_bindings,
 )
 from eom_catalog_contracts.mixed_embedding_registry import (
     MixedEmbeddingIndexNamespace,
     RegisterEmbeddingIndexCommandV2,
 )
 from eom_catalog_contracts.private_chat_similarity import PrivateChatSimilarityRequest
+from eom_catalog_contracts.public_solution_embedding import (
+    PublicSolutionEmbeddingEntry,
+    PublicSolutionEmbeddingRecipe,
+)
+from eom_catalog_contracts.public_solution_embedding_index import (
+    MAX_PUBLIC_SOLUTION_SOURCES,
+    PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+    PublicSolutionEmbeddingIndex,
+    PublicSolutionIndexNamespace,
+)
+from eom_catalog_contracts.public_solution_embedding_registry import (
+    RegisterPublicSolutionIndexCommand,
+)
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import (
     SimilarityContext,
@@ -106,6 +123,7 @@ from eom_workflow.local_embedding_source_plan_v2 import (
     LocalEmbeddingSourcePlanV2,
     validate_local_embedding_entry_source_v2,
 )
+from eom_workflow.local_embedding_source_plan_v3 import LocalEmbeddingSourcePlanV3
 from jsonschema.exceptions import ValidationError as JsonSchemaError
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
@@ -187,7 +205,11 @@ from eom_catalog_service.knowledge_graph_models import (
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalServiceError
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
 from eom_catalog_service.local_embedding_source_plan_v2 import build_local_embedding_source_plan_v2
-from eom_catalog_service.local_indexing_source_ports import LocalIndexingSourceError
+from eom_catalog_service.local_embedding_source_plan_v3 import build_local_embedding_source_plan_v3
+from eom_catalog_service.local_indexing_source_ports import (
+    LocalIndexingSourceError,
+    LocalIndexingSourceReadIntent,
+)
 from eom_catalog_service.pinned_artifact_resolution import (
     PinnedArtifactReadContext,
     PinnedArtifactResolutionError,
@@ -200,6 +222,11 @@ from eom_catalog_service.private_chat_document_read import (
     read_private_chat_document_index_in_session,
 )
 from eom_catalog_service.private_chat_similarity_ports import PreparedPrivateChatDocumentScope
+from eom_catalog_service.public_solution_capture_ports import CapturedPublicSolutionSources
+from eom_catalog_service.public_solution_index_assembly import (
+    PreparedPublicSolutionIndexBasis,
+    assemble_public_solution_binding,
+)
 from eom_catalog_service.reference_query_context_preparation import (
     validate_reference_query_context_preparation,
 )
@@ -251,11 +278,19 @@ def _document(payload: bytes) -> dict[str, Any]:
     return value
 
 
-_REGISTRATION_TYPES = (RegisterEmbeddingIndexCommand, RegisterEmbeddingIndexCommandV2)
+_REGISTRATION_TYPES = (
+    RegisterEmbeddingIndexCommand,
+    RegisterEmbeddingIndexCommandV2,
+    RegisterPublicSolutionIndexCommand,
+)
 
 
 def _decode_index_manifest(schema_ref: str, payload: bytes) -> SupportedEmbeddingIndex:
-    if schema_ref not in (INDEX_SCHEMA_REF, MIXED_EMBEDDING_INDEX_SCHEMA_REF):
+    if schema_ref not in (
+        INDEX_SCHEMA_REF,
+        MIXED_EMBEDDING_INDEX_SCHEMA_REF,
+        PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+    ):
         raise ValueError("foreign index schema")
     index = parse_supported_embedding_index(_document(payload))
     if schema_ref != "eom://schemas/knowledge/" + index.schema_version:
@@ -286,7 +321,15 @@ class CatalogEmbeddingRegistryVerifier:
         if type(configuration.namespace) not in (
             EmbeddingIndexNamespace,
             MixedEmbeddingIndexNamespace,
+            PublicSolutionIndexNamespace,
         ):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_CONFIGURATION_INVALID")
+        expected_recipe = (
+            PublicSolutionEmbeddingRecipe
+            if isinstance(configuration.namespace, PublicSolutionIndexNamespace)
+            else ExperimentViewRecipe
+        )
+        if type(configuration.recipe) is not expected_recipe:
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_CONFIGURATION_INVALID")
         self.configuration = EmbeddingRegistryOwnerConfiguration(
             configuration.corpus_id,
@@ -294,7 +337,7 @@ class CatalogEmbeddingRegistryVerifier:
                 raw_similarity_contract_value(configuration.namespace)
             ),
             EmbeddingSpace.model_validate(configuration.space.model_dump(mode="json")),
-            ExperimentViewRecipe.model_validate(configuration.recipe.model_dump(mode="json")),
+            expected_recipe.model_validate(configuration.recipe.model_dump(mode="json")),
             configuration.source_classes,
         )
         config = self.configuration
@@ -340,7 +383,11 @@ class CatalogEmbeddingRegistryVerifier:
         phase: InferenceTransferSessionCapturePhase,
         source_revision_ids: tuple[str, ...] = (),
         population_read_set: InferenceTransferPopulationReadSet | None = None,
-    ) -> InferenceTransferSessionCapture | LocalIndexingSessionCapture:
+    ) -> (
+        InferenceTransferSessionCapture
+        | LocalIndexingSessionCapture
+        | CapturedPublicSolutionSources
+    ):
         validate_embedding_registry_actor(caller)
         if isinstance(caller, EmbeddingRegistryServiceCaller):
             if (
@@ -364,25 +411,74 @@ class CatalogEmbeddingRegistryVerifier:
         options = (
             {} if population_read_set is None else {"population_read_set": population_read_set}
         )
+        maximum_page = (
+            intent.maximum_sources if isinstance(intent, EmbeddingRegistryLookup) else 1024
+        )
+        if isinstance(intent.namespace, PublicSolutionIndexNamespace):
+            maximum_page = min(1024, maximum_page)
+        command = InferenceTransferCorpusReadCommand(
+            actor_id=caller.operator_id,
+            graph_snapshot=intent.graph_snapshot,
+            access_policy_revision_id=intent.policy_revision_id,
+            access_policy_sha256=intent.policy_sha256,
+            source_classes=self.configuration.source_classes,
+            maximum_candidates=maximum_page,
+            population_scope=InferenceTransferPopulationScope(intent.namespace.population_scope),
+            top_k=1
+            if self._similarity_requested_top_k is None
+            else self._similarity_requested_top_k,
+            source_revision_ids=source_revision_ids,
+        )
+        if isinstance(self.configuration.namespace, PublicSolutionIndexNamespace):
+            # Load registered Workflow provenance only when composing this family.
+            # Registry/bootstrap imports must not load the runner execution root.
+            from eom_catalog_service.public_solution_source_capture import (
+                CatalogPublicSolutionSourceCapture,
+            )
+
+            if (
+                not isinstance(self.configuration.recipe, PublicSolutionEmbeddingRecipe)
+                or population_read_set is not None
+            ):
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_CONFIGURATION_INVALID")
+            public_owner = CatalogPublicSolutionSourceCapture(self.engine, self.settings)
+            public_owner.sources = self.sources
+            if phase is InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE:
+                scope = self.sources.authorize_scope_in_session(
+                    session,
+                    command,
+                    identity_fence=self.identity_fence,
+                    artifact_reader=artifact_reader,
+                )
+                return CapturedPublicSolutionSources((), (), (), scope, None)
+            if not source_revision_ids:
+                maximum = (
+                    MAX_PUBLIC_SOLUTION_SOURCES
+                    if isinstance(intent, RegisterPublicSolutionIndexCommand)
+                    else intent.maximum_sources
+                    if isinstance(intent, EmbeddingRegistryLookup)
+                    else 1024
+                )
+                return public_owner.capture_population_in_session(
+                    session,
+                    command,
+                    self.configuration.recipe,
+                    identity_fence=self.identity_fence,
+                    artifact_reader=artifact_reader,
+                    maximum_population_sources=maximum,
+                )
+            return public_owner.capture_in_session(
+                session,
+                command,
+                self.configuration.recipe,
+                identity_fence=self.identity_fence,
+                artifact_reader=artifact_reader,
+            )
+        if not isinstance(self.configuration.recipe, ExperimentViewRecipe):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_CONFIGURATION_INVALID")
         return self.sources.capture_in_session(
             session,
-            InferenceTransferCorpusReadCommand(
-                actor_id=caller.operator_id,
-                graph_snapshot=intent.graph_snapshot,
-                access_policy_revision_id=intent.policy_revision_id,
-                access_policy_sha256=intent.policy_sha256,
-                source_classes=self.configuration.source_classes,
-                maximum_candidates=1024
-                if isinstance(intent, _REGISTRATION_TYPES)
-                else intent.maximum_sources,
-                population_scope=InferenceTransferPopulationScope(
-                    intent.namespace.population_scope
-                ),
-                top_k=1
-                if self._similarity_requested_top_k is None
-                else self._similarity_requested_top_k,
-                source_revision_ids=source_revision_ids,
-            ),
+            command,
             self.configuration.recipe,
             identity_fence=self.identity_fence,
             artifact_reader=artifact_reader,
@@ -393,15 +489,30 @@ class CatalogEmbeddingRegistryVerifier:
     @staticmethod
     def _require_publication_authority(
         caller: EmbeddingRegistryActor,
-        capture: InferenceTransferSessionCapture | LocalIndexingSessionCapture,
+        capture: InferenceTransferSessionCapture
+        | LocalIndexingSessionCapture
+        | CapturedPublicSolutionSources,
     ) -> None:
         if isinstance(caller, EmbeddingRegistryServiceCaller):
-            if type(capture) is not LocalIndexingSessionCapture:
+            if not (
+                type(capture) is LocalIndexingSessionCapture
+                or (
+                    isinstance(capture, CapturedPublicSolutionSources)
+                    and type(capture.scope) is LocalIndexingSourceReadIntent
+                )
+            ):
                 raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
-        elif not isinstance(capture, InferenceTransferSessionCapture):
+        elif not isinstance(
+            capture, (InferenceTransferSessionCapture, CapturedPublicSolutionSources)
+        ):
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
-        elif "knowledge_graph:publish" not in capture.scope.requester_permission_keys:
-            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
+        else:
+            from eom_catalog_service.knowledge_retrieval_service import ReadOnlyCandidatePoolScope
+
+            if not isinstance(capture.scope, ReadOnlyCandidatePoolScope):
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+            if "knowledge_graph:publish" not in capture.scope.requester_permission_keys:
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
 
     def _capture(
         self,
@@ -414,7 +525,10 @@ class CatalogEmbeddingRegistryVerifier:
         artifact_reader: PinnedArtifactReadContext | None = None,
         population_read_set: InferenceTransferPopulationReadSet | None = None,
     ) -> tuple[
-        PinnedArtifactReadContext, InferenceTransferSessionCapture | LocalIndexingSessionCapture
+        PinnedArtifactReadContext,
+        InferenceTransferSessionCapture
+        | LocalIndexingSessionCapture
+        | CapturedPublicSolutionSources,
     ]:
         if source_revision_ids and (
             isinstance(intent, _REGISTRATION_TYPES) or self._similarity_read_window is not None
@@ -504,12 +618,27 @@ class CatalogEmbeddingRegistryVerifier:
         session: Session,
         caller: EmbeddingRegistryActor,
         intent: SupportedEmbeddingRegistrationCommand | EmbeddingRegistryLookup,
-        capture: InferenceTransferSessionCapture | LocalIndexingSessionCapture,
+        capture: InferenceTransferSessionCapture
+        | LocalIndexingSessionCapture
+        | CapturedPublicSolutionSources,
     ) -> ResolvedEmbeddingLookup:
         """Fresh review proof in this exact root; never a legacy read-set cache grant."""
         if capture.corpus is None:
             raise ValueError("embedding capture has no current admitted population")
         sources = tuple(row.source for row in capture.corpus.sources)
+        if isinstance(capture, CapturedPublicSolutionSources):
+            return ResolvedEmbeddingLookup(
+                intent.corpus_id,
+                self.configuration.space,
+                self.configuration.recipe,
+                sources,
+                capture.entries,
+                capture.corpus.truncated,
+                tuple(
+                    (row.source.item_revision_id, row.analysis_run_id)
+                    for row in capture.corpus.sources
+                ),
+            )
         if not isinstance(intent.namespace, MixedEmbeddingIndexNamespace):
             return ResolvedEmbeddingLookup(
                 intent.corpus_id,
@@ -524,6 +653,9 @@ class CatalogEmbeddingRegistryVerifier:
         from eom_catalog_service.registered_review_embedding_capture import (
             capture_registered_review_embedding_entries,
         )
+
+        if not isinstance(self.configuration.recipe, ExperimentViewRecipe):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_CONFIGURATION_INVALID")
 
         admitted = {source.item_revision_id: source for source in sources}
 
@@ -562,7 +694,12 @@ class CatalogEmbeddingRegistryVerifier:
         """Same physical/provenance closure for selected indices and immutable origins."""
         pointer = ArtifactMemberPointer.model_validate(pointer.model_dump(mode="json"))
         if (
-            pointer.schema_ref not in (INDEX_SCHEMA_REF, MIXED_EMBEDDING_INDEX_SCHEMA_REF)
+            pointer.schema_ref
+            not in (
+                INDEX_SCHEMA_REF,
+                MIXED_EMBEDDING_INDEX_SCHEMA_REF,
+                PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+            )
             or pointer.member_path != EMBEDDING_INDEX_PRIMARY_MEMBER
             or pointer.media_type != "application/json"
         ):
@@ -795,7 +932,7 @@ class CatalogEmbeddingRegistryVerifier:
         if capture.corpus is None:
             raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
         entries = {
-            entry.profile.source_basis.source.item_revision_id: entry
+            embedding_entry_source(entry).item_revision_id: entry
             for entry in (capture.entries if resolved is None else resolved.entries)
         }
         values = []
@@ -803,6 +940,8 @@ class CatalogEmbeddingRegistryVerifier:
             capture.corpus.sources, key=lambda value: value.source.item_revision_id
         ):
             entry = entries.get(value.source.item_revision_id)
+            if isinstance(entry, PublicSolutionEmbeddingEntry):
+                raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
             values.append(
                 PreparedSimilaritySource(
                     source=value.source,
@@ -836,7 +975,7 @@ class CatalogEmbeddingRegistryVerifier:
             (
                 entry
                 for entry in (capture.entries if resolved is None else resolved.entries)
-                if entry.profile.source_basis.source.item_revision_id
+                if embedding_entry_source(entry).item_revision_id
                 == request.anchor.source.item_revision_id
             ),
             None,
@@ -1733,6 +1872,8 @@ class CatalogEmbeddingRegistryVerifier:
     ) -> tuple[SimilarityViewSelection | SimilarityViewSelectionV2, ...]:
         """One current-head capture for initial reference/private intents, not replay."""
         repository = EmbeddingRegistryRepository(session)
+        if not isinstance(self.configuration.recipe, ExperimentViewRecipe):
+            raise ValueError("legacy similarity request requires its released recipe family")
         selected_views = []
         for view in views:
             namespace = type(scope.namespace).model_validate(
@@ -1888,11 +2029,12 @@ class CatalogEmbeddingRegistryVerifier:
             )
             resolved = owner.resolve_selected_sources(session, caller, selected)
             entries = {
-                entry.profile.source_basis.source.item_revision_id: entry
-                for entry in resolved.entries
+                embedding_entry_source(entry).item_revision_id: entry for entry in resolved.entries
             }
             if len(entries) != len(resolved.entries) or set(entries) != targets:
                 raise ValueError("selected reference projections differ")
+            if any(isinstance(entry, PublicSolutionEmbeddingEntry) for entry in entries.values()):
+                raise ValueError("legacy materials cannot reinterpret a public-solution entry")
             anchor_entry = entries.get(request.anchor.source.item_revision_id)
             if anchor_entry is not None and not isinstance(anchor_entry, StagedExperimentEntry):
                 raise ValueError("reference QUERY anchor cannot borrow a registered-review profile")
@@ -1903,7 +2045,12 @@ class CatalogEmbeddingRegistryVerifier:
                     if request.anchor.profile is None or anchor_entry is None
                     else anchor_entry.profile,
                     entries=tuple(
-                        entries[row.source.item_revision_id] for row in context.candidates
+                        entry
+                        for row in context.candidates
+                        if isinstance(
+                            (entry := entries[row.source.item_revision_id]),
+                            (StagedExperimentEntry, RegisteredReviewEmbeddingEntry),
+                        )
                     ),
                 )
             if any(not isinstance(entry, StagedExperimentEntry) for entry in entries.values()):
@@ -1999,9 +2146,23 @@ class CatalogEmbeddingRegistryVerifier:
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
         return basis
 
+    def prepare_public_index_basis(
+        self, session: Session, caller: EmbeddingRegistryActor, query: EmbeddingRegistryLookup
+    ) -> PreparedPublicSolutionIndexBasis:
+        if not isinstance(query.namespace, PublicSolutionIndexNamespace):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+        basis = self._prepare_index_basis(session, caller, query)
+        if not isinstance(basis, PreparedPublicSolutionIndexBasis):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+        return basis
+
     def _prepare_index_basis(
         self, session: Session, caller: EmbeddingRegistryActor, query: EmbeddingRegistryLookup
-    ) -> PreparedEmbeddingIndexBasis | PreparedMixedEmbeddingIndexBasis:
+    ) -> (
+        PreparedEmbeddingIndexBasis
+        | PreparedMixedEmbeddingIndexBasis
+        | PreparedPublicSolutionIndexBasis
+    ):
         """Capture full current eligibility and reusable rows once before index assembly.
 
         Old index bindings provide predecessor identity ONLY. Reusable numeric rows
@@ -2010,7 +2171,11 @@ class CatalogEmbeddingRegistryVerifier:
         No Job/model execution, registry mutation or future permission is returned.
         """
 
-        def resolve() -> PreparedEmbeddingIndexBasis | PreparedMixedEmbeddingIndexBasis:
+        def resolve() -> (
+            PreparedEmbeddingIndexBasis
+            | PreparedMixedEmbeddingIndexBasis
+            | PreparedPublicSolutionIndexBasis
+        ):
             reader, capture = self._capture(
                 session, caller, query, InferenceTransferSessionCapturePhase.CAPTURE_POPULATION
             )
@@ -2018,8 +2183,12 @@ class CatalogEmbeddingRegistryVerifier:
                 raise ValueError("index basis has no complete current population")
             resolved = self._captured_lookup(session, caller, query, capture)
             targets = tuple(sorted(s.item_revision_id for s in resolved.sources))
-            plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2
-            if isinstance(query.namespace, MixedEmbeddingIndexNamespace):
+            plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3
+            if isinstance(query.namespace, PublicSolutionIndexNamespace):
+                plan = build_local_embedding_source_plan_v3(
+                    query, resolved, target_revision_ids=targets
+                )
+            elif isinstance(query.namespace, MixedEmbeddingIndexNamespace):
                 plan = build_local_embedding_source_plan_v2(
                     query,
                     resolved,
@@ -2055,8 +2224,37 @@ class CatalogEmbeddingRegistryVerifier:
             # The proof is root-local. Later publication roots independently
             # recapture review dependencies rather than reusing this observation.
             self.authorize_scope(session, caller, query)
+            if isinstance(plan, LocalEmbeddingSourcePlanV3):
+                public_previous = None
+                if previous is not None:
+                    public_index = previous[1]
+                    if not isinstance(public_index, PublicSolutionEmbeddingIndex):
+                        raise ValueError(
+                            "source-plan3 cannot reinterpret predecessor index families"
+                        )
+                    public_previous = (previous[0], public_index)
+                return PreparedPublicSolutionIndexBasis(
+                    plan, rows, shards, public_previous, version
+                )
             if isinstance(plan, LocalEmbeddingSourcePlanV2):
-                return PreparedMixedEmbeddingIndexBasis(plan, rows, shards, previous, version)
+                if previous is not None and not isinstance(
+                    previous[1], (EmbeddingIndexManifest, MixedEmbeddingIndexManifest)
+                ):
+                    raise ValueError("source-plan2 cannot reinterpret public index history")
+                mixed_previous: (
+                    tuple[
+                        ArtifactMemberPointer, EmbeddingIndexManifest | MixedEmbeddingIndexManifest
+                    ]
+                    | None
+                ) = None
+                if previous is not None:
+                    old_index = previous[1]
+                    if not isinstance(
+                        old_index, (EmbeddingIndexManifest, MixedEmbeddingIndexManifest)
+                    ):
+                        raise ValueError("source-plan2 cannot reinterpret public index history")
+                    mixed_previous = (previous[0], old_index)
+                return PreparedMixedEmbeddingIndexBasis(plan, rows, shards, mixed_previous, version)
             legacy_previous = None
             if previous is not None:
                 if not isinstance(previous[1], EmbeddingIndexManifest):
@@ -2115,8 +2313,7 @@ class CatalogEmbeddingRegistryVerifier:
             )
             current_entries = capture.entries if current is None else current.entries
             entries = {
-                value.profile.source_basis.source.item_revision_id: value
-                for value in current_entries
+                embedding_entry_source(value).item_revision_id: value for value in current_entries
             }
             base_ids = {} if current is None else dict(current.base_analysis_run_ids)
             selected = tuple(
@@ -2150,7 +2347,7 @@ class CatalogEmbeddingRegistryVerifier:
                     ),
                 )
             )
-            by_pointer: dict[ArtifactMemberPointer, list[MixedEmbeddingSourceBinding]] = {}
+            by_pointer: dict[ArtifactMemberPointer, list[SupportedEmbeddingBinding]] = {}
             for binding in selected:
                 by_pointer.setdefault(binding.row_ref.shard_manifest, []).append(binding)
             shards = []
@@ -2171,7 +2368,9 @@ class CatalogEmbeddingRegistryVerifier:
                 # Retain selected row tuples only, not every decoded corpus shard matrix.
                 del values
             if isinstance(intent.selection, SimilarityViewSelectionV2):
-                validate_mixed_embedding_source_bindings(selected, current_entries, tuple(shards))
+                validate_supported_embedding_source_bindings(
+                    selected, current_entries, tuple(shards)
+                )
             else:
                 if any(not isinstance(binding, EmbeddingSourceBinding) for binding in selected):
                     raise ValueError("similarity request1 cannot reinterpret binding2")
@@ -2181,16 +2380,18 @@ class CatalogEmbeddingRegistryVerifier:
                         for binding in selected
                         if isinstance(binding, EmbeddingSourceBinding)
                     ),
-                    capture.entries,
+                    tuple(
+                        entry
+                        for entry in capture.entries
+                        if isinstance(entry, StagedExperimentEntry)
+                    ),
                     tuple(shards),
                 )
             rows = tuple(materialized[key] for key in sorted(materialized))
             profiles = tuple(
                 AuthorizedEmbeddingReadProfile(
                     revision,
-                    RegisteredReviewProfilePointer.from_profile(entry.profile)
-                    if isinstance(entry, RegisteredReviewEmbeddingEntry)
-                    else InferenceTransferProfilePointer.from_profile(entry.profile),
+                    embedding_entry_profile(entry),
                 )
                 for revision, entry in sorted(entries.items())
             )
@@ -2207,7 +2408,12 @@ class CatalogEmbeddingRegistryVerifier:
         origins: tuple[EmbeddingBindingOrigin, ...],
     ) -> ResolvedEmbeddingReferences:
         def resolve() -> ResolvedEmbeddingReferences:
-            if len(rows) > 1024 or len(origins) > 1024:
+            maximum = (
+                MAX_PUBLIC_SOLUTION_SOURCES
+                if isinstance(intent.namespace, PublicSolutionIndexNamespace)
+                else 1024
+            )
+            if len(rows) > maximum or len(origins) > maximum:
                 raise ValueError("registered reference budget exceeded")
             reader, capture = self._capture(
                 session, caller, intent, InferenceTransferSessionCapturePhase.CAPTURE_POPULATION
@@ -2235,19 +2441,27 @@ class CatalogEmbeddingRegistryVerifier:
                 raise ValueError("duplicate registered references")
             admitted_sources = {value.item_revision_id: value for value in current.sources}
             entries = {
-                value.profile.source_basis.source.item_revision_id: value
-                for value in current.entries
+                embedding_entry_source(value).item_revision_id: value for value in current.entries
             }
             base_ids = dict(current.base_analysis_run_ids)
             by_encoding = {row.encoding.encoding_sha256: row for row in checked_rows}
-            rebuilt: dict[str, MixedEmbeddingSourceBinding] = {}
+            rebuilt: dict[str, SupportedEmbeddingBinding] = {}
             for demand in plan.demands:
                 row = by_encoding.get(demand.encoding.encoding_sha256)
                 if row is None:
                     continue
                 entry = entries[demand.source_revision_id]
-                binding: MixedEmbeddingSourceBinding
-                if isinstance(entry, RegisteredReviewEmbeddingEntry):
+                binding: SupportedEmbeddingBinding
+                recipe = self.configuration.recipe
+                if isinstance(entry, PublicSolutionEmbeddingEntry):
+                    if not isinstance(intent.namespace, PublicSolutionIndexNamespace):
+                        raise ValueError("public solution requires its exact namespace")
+                    binding = assemble_public_solution_binding(
+                        entry, row=row, space=self.configuration.space, namespace=intent.namespace
+                    )
+                elif isinstance(entry, RegisteredReviewEmbeddingEntry):
+                    if not isinstance(recipe, ExperimentViewRecipe):
+                        raise ValueError("registered review requires its released recipe family")
                     if not isinstance(
                         intent.namespace, MixedEmbeddingIndexNamespace
                     ) or not isinstance(demand.profile, RegisteredReviewProfilePointer):
@@ -2260,11 +2474,13 @@ class CatalogEmbeddingRegistryVerifier:
                         graph_snapshot=intent.graph_snapshot,
                         policy_revision_id=intent.policy_revision_id,
                         policy_sha256=intent.policy_sha256,
-                        recipe=self.configuration.recipe,
+                        recipe=recipe,
                         view=intent.namespace.view,
                         row=row,
                     )
                 else:
+                    if not isinstance(recipe, ExperimentViewRecipe):
+                        raise ValueError("legacy solution requires its released recipe family")
                     if not isinstance(demand.profile, InferenceTransferProfilePointer):
                         raise ValueError("legacy binding requires its own profile family")
                     binding = assemble_embedding_source_binding(
@@ -2274,7 +2490,7 @@ class CatalogEmbeddingRegistryVerifier:
                         graph_snapshot=intent.graph_snapshot,
                         policy_revision_id=intent.policy_revision_id,
                         policy_sha256=intent.policy_sha256,
-                        recipe=self.configuration.recipe,
+                        recipe=recipe,
                         view=intent.namespace.view,
                         projection_version=entry.profile.extraction.extractor_version,
                         row=row,
@@ -2355,7 +2571,7 @@ class CatalogEmbeddingRegistryVerifier:
             binding_shards = tuple(
                 (pointer, shard) for pointer, shard in shards if pointer in selected
             )
-            validate_mixed_embedding_source_bindings(
+            validate_supported_embedding_source_bindings(
                 tuple(value.binding for value in resolved), current.entries, binding_shards
             )
             return ResolvedEmbeddingReferences(resolved, binding_shards)

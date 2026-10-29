@@ -133,6 +133,26 @@ def load_registered_creative_report(
             )
         )
     )
+    content, lineage_component, report = creative_report_components(revision, components)
+    payload = artifacts.read_member(
+        artifact_id=lineage_component.artifact_id,
+        revision_id=lineage_component.artifact_revision_id,
+        member_path="lineage.json",
+        sha256=lineage_component.sha256,
+        schema_ref=CREATIVE_SOURCE_LINEAGE_SCHEMA_REF,
+        media_type="application/json",
+        max_bytes=64 * 1024,
+    )
+    lineage = CreativeSourceLineage.model_validate_json(payload)
+    validate_creative_report_lineage(revision, content, report, lineage)
+    resolved = resolve_completed_creative_learning_proposal(session, artifacts, lineage.selection)
+    return validate_registered_creative_report(lineage, resolved)
+
+
+def creative_report_components(
+    revision: ItemRevisionRecord, components: tuple[ItemComponentRecord, ...]
+) -> tuple[ItemComponentRecord, ItemComponentRecord, ItemComponentRecord]:
+    """One exact component rule for single reads and bounded batch capture."""
     keyed = {(entry.component_type, entry.ordinal): entry for entry in components}
     content = keyed.get(("ITEM_CONTENT", 0))
     lineage_component = keyed.get(("SOURCE_REFERENCE", 0))
@@ -150,16 +170,16 @@ def load_registered_creative_report(
         or report.media_type != "application/json"
     ):
         raise CreativeRegisteredReportError("CREATIVE_REPORT_COMPONENT_INVALID")
-    payload = artifacts.read_member(
-        artifact_id=lineage_component.artifact_id,
-        revision_id=lineage_component.artifact_revision_id,
-        member_path="lineage.json",
-        sha256=lineage_component.sha256,
-        schema_ref=CREATIVE_SOURCE_LINEAGE_SCHEMA_REF,
-        media_type="application/json",
-        max_bytes=64 * 1024,
-    )
-    lineage = CreativeSourceLineage.model_validate_json(payload)
+    return content, lineage_component, report
+
+
+def validate_creative_report_lineage(
+    revision: ItemRevisionRecord,
+    content: ItemComponentRecord,
+    report: ItemComponentRecord,
+    lineage: CreativeSourceLineage,
+) -> None:
+    """Pure closure check, never permission to resolve any Artifact."""
     metadata = revision.metadata_json
     pointer = ArtifactMemberPointer(
         artifact_id=report.artifact_id,
@@ -180,7 +200,12 @@ def load_registered_creative_report(
         or lineage.role_result != pointer
     ):
         raise CreativeRegisteredReportError("CREATIVE_REPORT_LINEAGE_MISMATCH")
-    resolved = resolve_completed_creative_learning_proposal(session, artifacts, lineage.selection)
+
+
+def validate_registered_creative_report(
+    lineage: CreativeSourceLineage, resolved: ResolvedCreativeLearningProposal
+) -> RegisteredCreativeReport:
+    """Shared original source/solution checks after actual completed-job resolution."""
     result, source = resolved.role.output.learning_result, resolved.work.source
     if (
         resolved.pointer != lineage.role_result

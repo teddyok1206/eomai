@@ -101,7 +101,7 @@ class EmbeddingSourceBindingRecord(Base):
         ),
         CheckConstraint(
             "projection_version IN ('accepted-solution-comparison/1.0',"
-            "'registered-item-review-comparison/1.0')",
+            "'registered-item-review-comparison/1.0','public-solution-text/1.0')",
             name="ck_embedding_binding_projection",
         ),
         CheckConstraint(
@@ -118,7 +118,14 @@ class EmbeddingSourceBindingRecord(Base):
             "solution_analysis_run_id IS NULL AND solution_pointer_sha256 IS NULL AND "
             "review_job_id IS NOT NULL AND review_evidence_sha256 IS NOT NULL AND "
             "source_class = 'APPROVED_ITEM' AND "
-            "projection_version = 'registered-item-review-comparison/1.0')",
+            "projection_version = 'registered-item-review-comparison/1.0') OR "
+            "(evidence_kind = 'PUBLIC_SOLUTION_REPORT' AND "
+            "solution_pointer_sha256 IS NOT NULL AND "
+            "review_job_id IS NULL AND review_evidence_sha256 IS NULL AND "
+            "view = 'CONCRETE_FACETS' AND projection_version = 'public-solution-text/1.0' AND "
+            "((source_class = 'PAST_EXAM' AND solution_analysis_run_id IS NOT NULL AND "
+            "base_analysis_run_id <> solution_analysis_run_id) OR "
+            "source_class = 'APPROVED_ITEM'))",
             name="ck_embedding_binding_evidence",
         ),
         CheckConstraint(
@@ -130,10 +137,17 @@ class EmbeddingSourceBindingRecord(Base):
             "binding_manifest_member_path = 'index.json' AND "
             "binding_manifest_schema_ref IN "
             "('eom://schemas/knowledge/embedding-index-manifest/1.0',"
-            "'eom://schemas/knowledge/embedding-index-manifest/2.0') AND "
+            "'eom://schemas/knowledge/embedding-index-manifest/2.0',"
+            "'eom://schemas/knowledge/embedding-index-manifest/3.0') AND "
             "binding_manifest_media_type = 'application/json' AND "
-            "(evidence_kind = 'ACCEPTED_SOLUTION_ANALYSIS' OR "
-            "binding_manifest_schema_ref = 'eom://schemas/knowledge/embedding-index-manifest/2.0')",
+            "((evidence_kind = 'ACCEPTED_SOLUTION_ANALYSIS' AND "
+            "binding_manifest_schema_ref IN "
+            "('eom://schemas/knowledge/embedding-index-manifest/1.0',"
+            "'eom://schemas/knowledge/embedding-index-manifest/2.0')) OR "
+            "(evidence_kind = 'REGISTERED_ITEM_REVIEW_SOLUTION' AND "
+            "binding_manifest_schema_ref = 'eom://schemas/knowledge/embedding-index-manifest/2.0') "
+            "OR (evidence_kind = 'PUBLIC_SOLUTION_REPORT' AND "
+            "binding_manifest_schema_ref = 'eom://schemas/knowledge/embedding-index-manifest/3.0'))",
             name="ck_embedding_binding_member",
         ),
         ForeignKeyConstraint(
@@ -203,6 +217,33 @@ class EmbeddingSourceBindingRecord(Base):
             "review_evidence_sha256",
             postgresql_where=text("evidence_kind = 'REGISTERED_ITEM_REVIEW_SOLUTION'"),
         ),
+        Index(
+            "uq_embedding_binding_public_solution",
+            "item_revision_id",
+            "graph_snapshot_revision_id",
+            "policy_revision_id",
+            "recipe_sha256",
+            "view",
+            "projection_version",
+            "base_analysis_run_id",
+            "profile_revision_id",
+            "encoding_sha256",
+            "solution_pointer_sha256",
+            unique=True,
+            postgresql_where=text("evidence_kind = 'PUBLIC_SOLUTION_REPORT'"),
+        ),
+        Index(
+            "ix_embedding_binding_public_solution_delta",
+            "graph_snapshot_revision_id",
+            "policy_revision_id",
+            "recipe_sha256",
+            "view",
+            "projection_version",
+            "item_revision_id",
+            "base_analysis_run_id",
+            "solution_pointer_sha256",
+            postgresql_where=text("evidence_kind = 'PUBLIC_SOLUTION_REPORT'"),
+        ),
     )
 
     binding_sha256: Mapped[str] = mapped_column(String(71), primary_key=True)
@@ -270,7 +311,9 @@ class EmbeddingIndexRecord(Base):
             "((projection_version = 'accepted-solution-comparison/1.0' AND "
             "population_scope IN ('ALL_ADMITTED_GRAPH_ITEMS','OCCURRENCE_BACKED_PAST_EXAM')) OR "
             "(projection_version = 'mixed-solution-comparison/2.0' AND "
-            "population_scope = 'ALL_ADMITTED_GRAPH_ITEMS'))",
+            "population_scope = 'ALL_ADMITTED_GRAPH_ITEMS') OR "
+            "(projection_version = 'public-solution-text/1.0' AND "
+            "view = 'CONCRETE_FACETS' AND population_scope = 'ALL_ADMITTED_GRAPH_ITEMS'))",
             name="ck_embedding_index_namespace",
         ),
         CheckConstraint(
@@ -337,13 +380,16 @@ class EmbeddingIndexRevisionRecord(Base):
         ),
         CheckConstraint(
             "binding_count >= 1 AND eligible_source_count >= binding_count AND "
-            "eligible_source_count <= 1024",
+            "eligible_source_count <= CASE WHEN "
+            "manifest_schema_ref = 'eom://schemas/knowledge/embedding-index-manifest/3.0' "
+            "THEN 16384 ELSE 1024 END",
             name="ck_embedding_index_revision_coverage",
         ),
         CheckConstraint(
             "manifest_member_path = 'index.json' AND "
             "manifest_schema_ref IN ('eom://schemas/knowledge/embedding-index-manifest/1.0',"
-            "'eom://schemas/knowledge/embedding-index-manifest/2.0') AND "
+            "'eom://schemas/knowledge/embedding-index-manifest/2.0',"
+            "'eom://schemas/knowledge/embedding-index-manifest/3.0') AND "
             "manifest_media_type = 'application/json'",
             name="ck_embedding_index_revision_member",
         ),

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
+from eom_catalog_contracts.embedding_index_families import embedding_entry_source
 from eom_catalog_contracts.inference_transfer_embedding import (
     MAX_EMBEDDING_ROWS,
     EmbeddingEncodingIdentity,
@@ -19,6 +20,11 @@ from eom_catalog_contracts.inference_transfer_experiment import (
     experiment_view_text,
 )
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
+from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
+from eom_catalog_contracts.public_solution_embedding_index import (
+    MAX_PUBLIC_SOLUTION_SOURCES,
+    PublicSolutionProfilePointer,
+)
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_identifiers import content_sha256
 
@@ -28,8 +34,12 @@ from eom_catalog_service.registered_review_embedding_entry import (
     validate_registered_review_embedding_entry,
 )
 
-type EmbeddingProfilePointer = InferenceTransferProfilePointer | RegisteredReviewProfilePointer
-type IncrementalEmbeddingEntry = StagedExperimentEntry | RegisteredReviewEmbeddingEntry
+type EmbeddingProfilePointer = (
+    InferenceTransferProfilePointer | RegisteredReviewProfilePointer | PublicSolutionProfilePointer
+)
+type IncrementalEmbeddingEntry = (
+    StagedExperimentEntry | RegisteredReviewEmbeddingEntry | PublicSolutionEmbeddingEntry
+)
 
 
 class EmbeddingDeltaError(ValueError):
@@ -59,7 +69,7 @@ class UnavailableEmbeddingView:
     source_revision_id: str
     profile: EmbeddingProfilePointer
     view: ExperimentView
-    reason: Literal["VIEW_NOT_MATERIALIZED", "EMPTY_VIEW"]
+    reason: Literal["VIEW_NOT_MATERIALIZED", "EMPTY_VIEW", "PUBLIC_SOLUTION_TEXT_LIMIT"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -93,7 +103,12 @@ def plan_embedding_delta(
         raise EmbeddingDeltaError("EMBEDDING_DELTA_PURPOSE_INVALID")
     if (
         not isinstance(entries, tuple)
-        or len(entries) > MAX_EMBEDDING_ROWS
+        or len(entries)
+        > (
+            MAX_PUBLIC_SOLUTION_SOURCES
+            if all(isinstance(value, PublicSolutionEmbeddingEntry) for value in entries)
+            else MAX_EMBEDDING_ROWS
+        )
         or not isinstance(views, tuple)
         or not views
         or len(views) != len(set(views))
@@ -131,22 +146,35 @@ def plan_embedding_delta(
     for original in entries:
         entry: IncrementalEmbeddingEntry
         profile: EmbeddingProfilePointer
-        if isinstance(original, RegisteredReviewEmbeddingEntry):
+        if isinstance(original, PublicSolutionEmbeddingEntry):
+            entry = PublicSolutionEmbeddingEntry.model_validate(original.model_dump(mode="json"))
+            profile = PublicSolutionProfilePointer.from_entry(entry)
+        elif isinstance(original, RegisteredReviewEmbeddingEntry):
             entry = validate_registered_review_embedding_entry(original)
             profile = RegisteredReviewProfilePointer.from_profile(entry.profile)
         else:
             entry = StagedExperimentEntry.model_validate(original.model_dump(mode="json"))
             profile = InferenceTransferProfilePointer.from_profile(entry.profile)
-        revision = entry.profile.source_basis.source.item_revision_id
+        revision = embedding_entry_source(entry).item_revision_id
         if revision in source_revisions:
             raise EmbeddingDeltaError("EMBEDDING_DELTA_DUPLICATE_SOURCE")
         source_revisions.add(revision)
         for view in views:
-            text = (
-                registered_review_embedding_view_text(entry, view)
-                if isinstance(entry, RegisteredReviewEmbeddingEntry)
-                else experiment_view_text(entry, view)
-            )
+            if isinstance(entry, PublicSolutionEmbeddingEntry):
+                text = entry.public_solution.text if view == "CONCRETE_FACETS" else None
+                if text is not None and len(text.encode("utf-8")) > entry.recipe.maximum_text_bytes:
+                    unavailable.append(
+                        UnavailableEmbeddingView(
+                            revision, profile, view, "PUBLIC_SOLUTION_TEXT_LIMIT"
+                        )
+                    )
+                    continue
+            else:
+                text = (
+                    registered_review_embedding_view_text(entry, view)
+                    if isinstance(entry, RegisteredReviewEmbeddingEntry)
+                    else experiment_view_text(entry, view)
+                )
             if text is None or not text.strip():
                 reason: Literal["VIEW_NOT_MATERIALIZED", "EMPTY_VIEW"] = (
                     "VIEW_NOT_MATERIALIZED" if text is None else "EMPTY_VIEW"

@@ -34,7 +34,7 @@ fi
 
 if (($# != 2)) || \
   [[ "$1" != "verify" && "$1" != "inspect" && "$1" != "migrate" && "$1" != "hwpx-tests" && \
-    "$1" != "embedding-tests" && "$1" != "embedding-encoding-tests" && \
+    "$1" != "embedding-tests" && "$1" != "embedding-registry-tests" && "$1" != "embedding-encoding-tests" && \
     "$1" != "embedding-stage-tests" && "$1" != "private-chat-context-tests" && \
     "$1" != "authenticated-session-tests" && \
     "$1" != "local-indexing-service-tests" && \
@@ -43,7 +43,7 @@ if (($# != 2)) || \
     "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
     "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|inspect|migrate|hwpx-tests|embedding-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|authenticated-session-tests|local-indexing-service-tests|pdf-review-tests|external-item-tests|creative-registration-tests|creative-graph-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|inspect|migrate|hwpx-tests|embedding-tests|embedding-registry-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|authenticated-session-tests|local-indexing-service-tests|pdf-review-tests|external-item-tests|creative-registration-tests|creative-graph-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -309,7 +309,23 @@ if [[ "${action}" == "embedding-encoding-tests" ]]; then
   exit 0
 fi
 
+if [[ "${action}" == "embedding-registry-tests" ]]; then
+  export EOM_RUN_INTEGRATION=1
+  export EOM_API_TEST_STATE="${state_directory}"
+  "${PYTHON}" -m pytest -q tests/integration/test_embedding_registry_persistence.py \
+    tests/integration/test_embedding_registry_application.py \
+    tests/integration/test_public_solution_embedding_registry.py \
+    tests/integration/test_local_embedding_native_executor.py
+  printf 'Disposable embedding registry and native transaction tests passed.\n'
+  exit 0
+fi
+
 if [[ "${action}" == "embedding-tests" ]]; then
+  runtime_environment="${state_directory}/runtime.env"
+  [[ ! -L "${runtime_environment}" && -f "${runtime_environment}" ]] || \
+    fail "full embedding tests require disposable runtime-role reconciliation first"
+  [[ "$(stat -Lc '%U:%G:%a' "${runtime_environment}")" == "eom:eom:600" ]] || \
+    fail "test runtime environment metadata mismatch"
   export EOM_RUN_INTEGRATION=1
   export EOM_API_TEST_STATE="${state_directory}"
   "${PYTHON}" -m pytest -q tests/integration/test_embedding_artifact_persistence.py \
@@ -318,6 +334,7 @@ if [[ "${action}" == "embedding-tests" ]]; then
     tests/integration/test_embedding_runtime_bundle_persistence.py \
     tests/integration/test_embedding_registry_persistence.py \
     tests/integration/test_embedding_registry_application.py \
+    tests/integration/test_public_solution_embedding_registry.py \
     tests/integration/test_registered_review_restricted_role.py \
     tests/integration/test_private_chat_document_read.py \
     tests/integration/test_private_chat_query_source_owner.py \

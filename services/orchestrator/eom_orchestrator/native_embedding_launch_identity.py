@@ -5,11 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from eom_identifiers import content_sha256, new_job_id, new_logical_artifact_id, new_revision_id
-from eom_workflow.local_embedding_encoding_job import (
-    LocalEmbeddingLaunchAssociation,
-)
+from eom_workflow.local_embedding_encoding_dispatch import SupportedEmbeddingAssociation
 from eom_workflow.local_embedding_encoding_ownership_v2 import (
-    LocalEmbeddingLaunchAssociationV2,
     SupportedLocalEmbeddingLaunchIntent,
     local_embedding_launch_protocol,
     parse_local_embedding_launch_intent_for_request,
@@ -106,7 +103,7 @@ def read_native_embedding_launch_association(
     session: Session,
     intent: SupportedLocalEmbeddingLaunchIntent,
     request: SupportedLocalEmbeddingRequest,
-) -> LocalEmbeddingLaunchAssociation | LocalEmbeddingLaunchAssociationV2 | None:
+) -> SupportedEmbeddingAssociation | None:
     """Exact owner association, not a source or current lease grant."""
     require_native_embedding_launch(session, intent, request)
     association = EmbeddingEncodingReservationStorage.association(

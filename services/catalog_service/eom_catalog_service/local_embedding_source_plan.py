@@ -17,12 +17,26 @@ from eom_workflow.local_embedding_source_plan import (
     validate_local_embedding_entry_source,
 )
 
-from eom_catalog_service.embedding_incremental_plan import plan_embedding_delta
+from eom_catalog_service.embedding_incremental_plan import (
+    UnavailableEmbeddingView,
+    plan_embedding_delta,
+)
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryError,
     EmbeddingRegistryLookup,
     ResolvedEmbeddingLookup,
 )
+
+
+def legacy_local_embedding_unavailable_view(
+    view: UnavailableEmbeddingView,
+) -> LocalEmbeddingUnavailableView:
+    """Released plans1/2 cannot silently adopt a public-solution-only reason."""
+    if view.reason == "PUBLIC_SOLUTION_TEXT_LIMIT":
+        raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+    return LocalEmbeddingUnavailableView(
+        source_revision_id=view.source_revision_id, reason=view.reason
+    )
 
 
 def build_local_embedding_source_plan(
@@ -53,12 +67,14 @@ def build_local_embedding_source_plan(
         source.item_revision_id: type(source).model_validate(source.model_dump(mode="json"))
         for source in resolved.sources
     }
-    entries = {
-        entry.profile.source_basis.source.item_revision_id: StagedExperimentEntry.model_validate(
-            entry.model_dump(mode="json", warnings="error")
+    entries = {}
+    for original in resolved.entries:
+        if not isinstance(original, StagedExperimentEntry):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+        entry = StagedExperimentEntry.model_validate(
+            original.model_dump(mode="json", warnings="error")
         )
-        for entry in resolved.entries
-    }
+        entries[entry.profile.source_basis.source.item_revision_id] = entry
     selected = tuple(sorted(target_revision_ids))
     if (
         len(sources) != len(resolved.sources)
@@ -112,9 +128,7 @@ def build_local_embedding_source_plan(
         "demands": [demand.model_dump(mode="json") for demand in demands],
         "missing_solution_report_revision_ids": [key for key in selected if key not in entries],
         "unavailable_views": [
-            LocalEmbeddingUnavailableView(
-                source_revision_id=view.source_revision_id, reason=view.reason
-            ).model_dump(mode="json")
+            legacy_local_embedding_unavailable_view(view).model_dump(mode="json")
             for view in delta.unavailable_views
         ],
         "source_set_sha256": population_sha256(selected_sources),

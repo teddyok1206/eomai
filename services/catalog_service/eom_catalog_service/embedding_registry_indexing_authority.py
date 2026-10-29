@@ -8,6 +8,13 @@ from dataclasses import dataclass
 from eom_catalog_contracts.embedding_registry import RegisterEmbeddingIndexCommand
 from eom_catalog_contracts.local_indexing_mixed_policy import SupportedLocalIndexingAccessPolicy
 from eom_catalog_contracts.mixed_embedding_registry import RegisterEmbeddingIndexCommandV2
+from eom_catalog_contracts.public_solution_embedding_index import (
+    MAX_PUBLIC_SOLUTION_SOURCES,
+    PublicSolutionIndexNamespace,
+)
+from eom_catalog_contracts.public_solution_embedding_registry import (
+    RegisterPublicSolutionIndexCommand,
+)
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.embedding_registry_ports import (
@@ -29,6 +36,7 @@ from eom_catalog_service.local_indexing_source_ports import (
     LocalIndexingSourceReadIntent,
 )
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
+from eom_catalog_service.public_solution_capture_ports import CapturedPublicSolutionSources
 
 
 @dataclass(frozen=True, slots=True)
@@ -60,7 +68,7 @@ class CatalogIndexingRegistrySourceAuthority:
                 )
             )
             or type(self.maximum_sources) is not int
-            or not 1 <= self.maximum_sources <= 1024
+            or not 1 <= self.maximum_sources <= MAX_PUBLIC_SOLUTION_SOURCES
         ):
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_CONFIGURATION_INVALID")
 
@@ -77,9 +85,29 @@ class CatalogIndexingRegistrySourceAuthority:
         if caller.service != self.authority.service_fence.pin.service:
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
         if source_revision_ids and isinstance(
-            intent, RegisterEmbeddingIndexCommand | RegisterEmbeddingIndexCommandV2
+            intent,
+            RegisterEmbeddingIndexCommand
+            | RegisterEmbeddingIndexCommandV2
+            | RegisterPublicSolutionIndexCommand,
         ):
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+        maximum = (
+            self.maximum_sources
+            if isinstance(
+                intent,
+                (
+                    RegisterEmbeddingIndexCommand,
+                    RegisterEmbeddingIndexCommandV2,
+                    RegisterPublicSolutionIndexCommand,
+                ),
+            )
+            else intent.maximum_sources
+        )
+        public = isinstance(intent.namespace, PublicSolutionIndexNamespace)
+        if (not public and maximum > min(self.maximum_sources, 1024)) or (
+            public and maximum > MAX_PUBLIC_SOLUTION_SOURCES
+        ):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
         selection = LocalIndexingSourceReadIntent(
             corpus_id=intent.corpus_id,
             graph_snapshot=intent.graph_snapshot,
@@ -93,9 +121,7 @@ class CatalogIndexingRegistrySourceAuthority:
             recipe=configuration.recipe,
             native_execution_policy_sha256=self.native_execution_policy_sha256,
             resource_profile_sha256=self.resource_profile_sha256,
-            maximum_candidates=self.maximum_sources
-            if isinstance(intent, RegisterEmbeddingIndexCommand | RegisterEmbeddingIndexCommandV2)
-            else intent.maximum_sources,
+            maximum_candidates=min(1024, maximum, self.maximum_sources),
             source_revision_ids=source_revision_ids,
         )
         if selection.maximum_candidates > self.maximum_sources:
@@ -157,12 +183,41 @@ class CatalogIndexingRegistrySourceAuthority:
         artifact_reader: PinnedArtifactReadContext,
         phase: InferenceTransferSessionCapturePhase,
         source_revision_ids: tuple[str, ...] = (),
-    ) -> LocalIndexingSessionCapture:
+    ) -> LocalIndexingSessionCapture | CapturedPublicSolutionSources:
+        selection = self.source_intent(
+            caller, intent, configuration, source_revision_ids=source_revision_ids
+        )
+        if isinstance(selection.namespace, PublicSolutionIndexNamespace):
+            from eom_catalog_service.public_solution_source_capture import (
+                CatalogPublicSolutionSourceCapture,
+            )
+
+            self.authority.authorize_scope(session, selection)
+            if phase is InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE:
+                return CapturedPublicSolutionSources((), (), (), selection, None)
+            capture = CatalogPublicSolutionSourceCapture(sources.engine, artifact_reader.settings)
+            capture.sources = sources
+            if source_revision_ids:
+                return capture.capture_indexing_in_session(
+                    session, selection, authority=self.authority, artifact_reader=artifact_reader
+                )
+            maximum = (
+                self.maximum_sources
+                if isinstance(intent, RegisterPublicSolutionIndexCommand)
+                else intent.maximum_sources
+                if isinstance(intent, EmbeddingRegistryLookup)
+                else 1024
+            )
+            return capture.capture_indexing_population_in_session(
+                session,
+                selection,
+                authority=self.authority,
+                artifact_reader=artifact_reader,
+                maximum_population_sources=min(maximum, self.maximum_sources),
+            )
         return sources.capture_indexing_in_session(
             session,
-            self.source_intent(
-                caller, intent, configuration, source_revision_ids=source_revision_ids
-            ),
+            selection,
             authority=self.authority,
             artifact_reader=artifact_reader,
             phase=phase,

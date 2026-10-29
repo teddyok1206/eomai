@@ -384,6 +384,19 @@ class CatalogArtifactReader(Protocol):
     ) -> None: ...
 
 
+class CatalogJsonRevisionReader(Protocol):
+    """Exact immutable JSON primary, implemented by direct and bounded batch readers."""
+
+    def load_json_revision(
+        self,
+        *,
+        artifact_id: str,
+        revision_id: str,
+        content_hash: str,
+        max_bytes: int = 1_048_576,
+    ) -> dict[str, Any]: ...
+
+
 @runtime_checkable
 class CatalogModelArtifactReader(CatalogArtifactReader, Protocol):
     """Optional operation-scoped decoding; each call still resolves the exact member."""
@@ -631,9 +644,8 @@ class CatalogArtifactService:
             while chunk := stream.read(1024 * 1024):
                 digest.update(chunk)
             after = os.fstat(stream.fileno())
-            if (
-                "sha256:" + digest.hexdigest() != sha256
-                or _stat_identity(before) != _stat_identity(after)
+            if "sha256:" + digest.hexdigest() != sha256 or _stat_identity(before) != _stat_identity(
+                after
             ):
                 raise ValueError("artifact member changed after pointer validation")
             stream.seek(0)

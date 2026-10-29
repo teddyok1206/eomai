@@ -85,3 +85,84 @@ CPU/CUDA encoding identity는 같고 report hash는 다름을 확인했다. 미�
 생기는 것은 정상이며 유사도 점수 불변을 주장하지 않는다. 기존 source/accepted-analysis
 binding과 권한은 text hash가 같아도 합쳐지지 않는다. 관련 232개 회귀 PASS이며, 실제 운영
 공통 query/candidate 연결 상태는 여전히 `SOLUTION_EMBEDDING_ALIGNMENT_PENDING`이다.
+
+## 운영 연결 후속 구현 — 2026-10-29
+
+이번 범위는 기존 증분 인코딩·등록·조회 application을 확장하는 것이며 새 검색 엔진이나
+벡터 저장소를 만들지 않는다. 과거 인덱스·실패 기록·고정 QUERY 실행환경은 보존한다.
+
+1. **책임/경계**: Catalog가 실제 operator 또는 이미 인가된 indexing service의 기존 Graph
+   source-resolution 경계를 거쳐 공개 풀이와 근거를 캡처한다. 순수 계약/projection은 권한을
+   부여하지 않는다. 새 worker가 DB/NAS를 읽거나 등록 역할을 맡지 않는다.
+2. **정본**: 기출 accepted V10 successor와 가져온 창작의 등록 lineage/완료 role result가
+   각각 정본이다. 공통 텍스트는 명시적 후속 recipe의 파생 입력이다. 창작을 V10 successor나
+   등록 AI review로 가장하지 않고 evidence kind를 구분한다.
+3. **식별**: 기존 Item/Item Revision, Graph/policy revision, base analysis, Artifact Revision과
+   SHA를 유지한다. 공통 text SHA가 같아도 서로 다른 source/binding은 합치지 않는다.
+4. **포인터**: 기출의 solution evidence pointer를 재사용하고 창작은 정확한 lineage member와
+   role-result member를 핀한다. 조회·수명·원문·Job/Workflow 완료·schema/media/hash 및 실제
+   Graph membership을 기존 owner가 확인한다. 누락/철회/변조는 명시적 오류다.
+5. **접근 패턴**: 인가된 source 집합의 ordered traversal, revision별 indexed lookup, 같은
+   encoding key의 dedup/reuse, namespace head의 compare-and-swap다. 문항 1개당 별도 전체
+   Graph 탐색이나 SQL 목록 재조회는 하지 않는다.
+6. **구조/index**: source/evidence는 typed discriminated union, 계산 입력은 기존
+   EmbeddingTextInput/encoding identity, cache와 binding은 기존 registry를 사용한다.
+   새로운 의미의 recipe/namespace를 명시하고 기존 index 의미를 제자리 변경하지 않는다.
+7. **규모/비용**: bounded 페이지마다 O(source 수 + 실제 풀이 bytes), map/set membership은
+   평균 O(1)이다. 기존 source-first keyset paging을 재사용하며 한 페이지·실제 숫자 추론
+   batch의 1,024 한도는 유지한다. 새 public family의 전체 metadata head만 최대 16,384개,
+   공개 풀이 캡처는 합계 64 MiB로 제한한다. 이전 index/plan family의 1,024 한도는 그대로다.
+   페이지 경계의 중복과 최종 전체 membership 변경을 거부하고, 상한을 넘기면 명시적으로
+   실패한다. 520+1053보다 큰 현재 범위를 수용하기 위한 bounded successor이지 무제한 보장이 아니다.
+   파생 text가 기존 encoder의 262,144 UTF-8 byte 한도를 넘으면 unavailable로 표시하며 자르지 않는다.
+8. **동시성**: 현재 read transaction의 identity/source/provenance를 재검증한다. 등록은 기존
+   encoding unique key와 index head CAS를 재사용한다. 슬롯 순차 등록과 인코딩 claim은 서로의
+   작업을 중복 실행하지 않는다. 실행 중 runtime pin을 바꾸지 않는다.
+9. **의존성**: 계약 → 순수 공통 projection → Catalog source owner → 기존 registry/Orchestrator
+   adapter 순서다. CLI/UI는 이 use case를 호출하며 직접 SQL/NAS로 검색하지 않는다.
+10. **실패/재실행**: 동일 source/recipe/space는 동일 파생 입력이며 완료 encoding은 재사용한다.
+    불완전한 풀이·warning은 정본에 보존하고 없는 본문을 다른 해설로 채우지 않는다. 실패한
+    Job을 성공으로 바꾸지 않는다. 기존 namespace fallback은 명시적으로 구분한다.
+11. **더 단순한 대안과 한계**: 기존 CONCRETE_FACETS renderer에 창작 JSON을 그대로 끼우면
+    양식 편향과 source-family 위장이 생긴다. 인코더만 호출하는 임시 별도 인덱스는 기존
+    권한·수명·중복·검색 계약을 우회한다. 따라서 기존 registry의 명시적 successor를 선택한다.
+
+### 기존 실행 그래프 재사용
+
+새 의미는 recipe2 / public entry1 / source-plan3 / index3 / service source policy1.4에
+명시한다. 숫자 계산은 기존 IncrementalEmbeddingInput/Result1 및 shard1이고, 실행 DAG는
+기존 `local-embedding-index@2.0.0`의 `encode_batch → complete` 그대로다. 이 정의에는
+source-plan family나 report field가 들어 있지 않고 application 동작·한도·numeric result가
+바뀌지 않으므로 불필요한 새 DAG 버전은 만들지 않는다. public request/ownership/completion은
+별도 successor로 plan3와 실제 public binding을 핀하고, 과거 request2를 public로 재해석하지 않는다.
+새 source policy 없이 구 service의 허용 범위를 늘리거나 기존 runtime configuration에
+선택되지 않은 namespace를 끼워 넣지 않는다. 실제 활성화는 호환 설치본·정확한 정책 pin·
+문서/질의 양쪽의 실행 증거가 필요하다.
+
+### 구현·활성화 순서
+
+1. source-family별 정확한 근거 pointer와 공통 encoder 입력의 schema/typed contract,
+   동등한 text의 encoding identity·원문 불변·missing/oversize/위조 거부 회귀.
+2. 기존 Catalog source owner에서 기출/창작 근거를 같은 인가 범위로 캡처. N+1 없는 bounded
+   metadata capture를 먼저 확보하고 existing lineage/완료 결과 검증을 공유한다.
+3. 기존 registry/plan/index/query의 명시적 successor namespace를 연결하고, disposable DB에서
+   binding 동시성·멱등·CAS·중단 복구를 검증. predecessor bytes·encoding history는 보존.
+4. 호환 release 후 고정된 표본으로 실제 document/query 인코딩·binding·검색과 재전송 검증.
+   질의와 후보 양쪽이 같은 recipe를 쓰는 증거가 있어야 운영 완료로 표시한다.
+
+### 병행 관측
+
+등록은 기존 30분 읽기 전용 timer와 실제 Job/분석/Graph 전이로 관측한다. 임베딩은 INDEX와
+QUERY를 분리하여 관측하며 PID/마지막 batch/고정 실행환경/실패를 구분한다. 착수 당시
+등록 8/1053 이후 문항이 계속 진행 중이고 QUERY는 active지만, GPU INDEX는 2026-10-28
+20:10 UTC의 `LOCAL_INDEXING_SERVICE_UNAVAILABLE`로 중단된 상태다. 이를 진행 중으로
+표시하지 않는다. 기존 실패 pin의 무조건 재시작 대신 정확한 원인과 지원 recovery 경계를
+확인하며, 새 source 공간의 activation과 기존 INDEX 복구를 서로 다른 증거로 남긴다.
+
+### Native/registry 연결 검사 체크포인트
+
+2026-10-29의 [실행 기록](../operations/PUBLIC_SOLUTION_EMBEDDING_CONNECTION_2026-10-29.md)에
+schema/migration·실제 disposable transaction·동시성·중단 재개 결과와 운영 미완료 경계를
+분리해 기록한다. source-plan3 → 숫자 input/result1 → index/binding3 → completion3 경로가
+실제 임시 DB에서 끝나더라도 QUERY와 candidate의 동일 recipe 운영 검색이 확인되기 전에는
+`SOLUTION_EMBEDDING_ALIGNMENT_PENDING`을 유지한다.

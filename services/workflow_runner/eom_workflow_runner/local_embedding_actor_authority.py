@@ -13,6 +13,7 @@ from eom_catalog_contracts.local_indexing_mixed_policy import (
     LocalIndexingMixedAccessPolicy,
     supported_local_indexing_authorization_audit_sha256,
 )
+from eom_catalog_contracts.public_solution_indexing_policy import PublicSolutionIndexingAccessPolicy
 from eom_catalog_service.embedding_registry_catalog_adapter import CatalogEmbeddingRegistryVerifier
 from eom_catalog_service.embedding_registry_indexing_authority import (
     CatalogIndexingRegistrySourceAuthority,
@@ -39,6 +40,10 @@ from eom_workflow.local_embedding_request import (
 from eom_workflow.local_embedding_request_v2 import (
     LocalEmbeddingWorkflowRequestV2,
     local_embedding_request_service_v2,
+)
+from eom_workflow.local_embedding_request_v3 import (
+    LocalEmbeddingWorkflowRequestV3,
+    local_embedding_request_service_v3,
 )
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
@@ -92,14 +97,21 @@ class ServiceLocalEmbeddingActorAuthority:
     ) -> EmbeddingRegistryServiceCaller:
         checked = parse_supported_local_embedding_owner_request(request)
         if not isinstance(
-            checked, LocalEmbeddingServiceWorkflowRequest | LocalEmbeddingWorkflowRequestV2
+            checked,
+            LocalEmbeddingServiceWorkflowRequest
+            | LocalEmbeddingWorkflowRequestV2
+            | LocalEmbeddingWorkflowRequestV3,
         ):
             raise ValueError("LOCAL_EMBEDDING_SERVICE_UNAVAILABLE")
         gate, audit = self.source_authority, checked.actor_context
         service = (
-            local_embedding_request_service_v2(checked)
-            if isinstance(checked, LocalEmbeddingWorkflowRequestV2)
-            else local_embedding_request_service(checked)
+            local_embedding_request_service_v3(checked)
+            if isinstance(checked, LocalEmbeddingWorkflowRequestV3)
+            else (
+                local_embedding_request_service_v2(checked)
+                if isinstance(checked, LocalEmbeddingWorkflowRequestV2)
+                else local_embedding_request_service(checked)
+            )
         )
         caller = EmbeddingRegistryServiceCaller(service)
         if (
@@ -130,11 +142,18 @@ class ServiceLocalEmbeddingActorAuthority:
         )
         if (
             not isinstance(
-                request, LocalEmbeddingServiceWorkflowRequest | LocalEmbeddingWorkflowRequestV2
+                request,
+                LocalEmbeddingServiceWorkflowRequest
+                | LocalEmbeddingWorkflowRequestV2
+                | LocalEmbeddingWorkflowRequestV3,
             )
             or (
                 isinstance(request, LocalEmbeddingWorkflowRequestV2)
                 != isinstance(policy, LocalIndexingMixedAccessPolicy)
+            )
+            or (
+                isinstance(request, LocalEmbeddingWorkflowRequestV3)
+                != isinstance(policy, PublicSolutionIndexingAccessPolicy)
             )
             or (
                 request.actor_context.authorization_audit_sha256

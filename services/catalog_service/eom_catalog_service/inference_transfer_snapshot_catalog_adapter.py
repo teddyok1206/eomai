@@ -31,6 +31,9 @@ from eom_catalog_contracts.inference_transfer_snapshot import (
     InferenceTransferSnapshotRecord,
 )
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
+from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingRecipe
+from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
+from eom_catalog_contracts.public_solution_indexing_policy import PublicSolutionIndexingAccessPolicy
 from eom_identifiers import content_sha256
 from eom_identity_service.operator_authorization_fence import OperatorAuthorizationFence
 from eom_orchestrator.control_artifact_resolution import (
@@ -299,24 +302,11 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
         mutable source rows and delegates eligibility/projection to existing rules.
         Published membership is a bounded metadata-prefetch hint, never admission.
         """
-        if identity_fence is None:
-            raise InferenceTransferServiceError("INFERENCE_TRANSFER_AUTHORITY_UNAVAILABLE")
         if not isinstance(phase, InferenceTransferSessionCapturePhase):
             raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
-        artifact_reader.require_session(session)
-        identity_fence.fence_current_operator(session, command.actor_id)
-        scope = self.sources._scope(session, command)
-        policy = self.sources.retrieval.resolve_access_policy(
-            session, scope.access_policy_revision_id, sha256=scope.access_policy_sha256
+        scope = self.authorize_scope_in_session(
+            session, command, identity_fence=identity_fence, artifact_reader=artifact_reader
         )
-        self.sources.retrieval._authorize(session, scope, policy)
-        if (
-            self.sources.retrieval.resolve_snapshot_pointer(
-                session, scope.graph_snapshot.graph_snapshot_revision_id
-            )
-            != scope.graph_snapshot
-        ):
-            raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
         if phase is InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE:
             return InferenceTransferSessionCapture(scope)
         if population_read_set is not None:
@@ -340,6 +330,88 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
             population_read_set.complete(session, scope, recipe, artifact_reader, capture)
         return capture
 
+    def authorize_scope_in_session(
+        self,
+        session: Session,
+        command: InferenceTransferCorpusReadCommand,
+        *,
+        identity_fence: OperatorAuthorizationFence | None,
+        artifact_reader: PinnedArtifactReadContext,
+    ) -> ReadOnlyCandidatePoolScope:
+        """Existing actual-principal and pinned policy/Graph boundary, without profiles."""
+        if identity_fence is None:
+            raise InferenceTransferServiceError("INFERENCE_TRANSFER_AUTHORITY_UNAVAILABLE")
+        artifact_reader.require_session(session)
+        identity_fence.fence_current_operator(session, command.actor_id)
+        scope = self.sources._scope(session, command)
+        policy = self.sources.retrieval.resolve_access_policy(
+            session, scope.access_policy_revision_id, sha256=scope.access_policy_sha256
+        )
+        self.sources.retrieval._authorize(session, scope, policy)
+        if (
+            self.sources.retrieval.resolve_snapshot_pointer(
+                session, scope.graph_snapshot.graph_snapshot_revision_id
+            )
+            != scope.graph_snapshot
+        ):
+            raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
+        return scope
+
+    def capture_public_solution_pool_in_session(
+        self,
+        session: Session,
+        command: InferenceTransferCorpusReadCommand,
+        *,
+        identity_fence: OperatorAuthorizationFence,
+        artifact_reader: PinnedArtifactReadContext,
+    ) -> tuple[ReadOnlyCandidatePoolScope, ReadOnlyKnowledgeCandidatePool]:
+        """Source admission shared with existing INDEX/QUERY, not an old-profile conversion."""
+        scope = self.authorize_scope_in_session(
+            session, command, identity_fence=identity_fence, artifact_reader=artifact_reader
+        )
+        pool = self._capture_source_pool(
+            session,
+            scope,
+            None,
+            artifact_reader=artifact_reader,
+            read_pool=lambda: self.sources.retrieval.admit_read_only_candidate_pool(
+                session,
+                scope,
+                artifact_reader=artifact_reader,
+            ),
+        )
+        return scope, pool
+
+    def capture_public_solution_indexing_pool_in_session(
+        self,
+        session: Session,
+        intent: LocalIndexingSourceReadIntent,
+        *,
+        authority: LocalIndexingSourceAuthorization,
+        artifact_reader: PinnedArtifactReadContext,
+    ) -> ReadOnlyKnowledgeCandidatePool:
+        """Same actual service fence and canonical source admission; no legacy profiles."""
+        artifact_reader.require_session(session)
+        policy = authority.authorize_scope(session, intent)
+        if (
+            not isinstance(policy, PublicSolutionIndexingAccessPolicy)
+            or not isinstance(intent.namespace, PublicSolutionIndexNamespace)
+            or not isinstance(intent.recipe, PublicSolutionEmbeddingRecipe)
+        ):
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_SCOPE_INVALID")
+        pool = self._capture_source_pool(
+            session,
+            intent,
+            None,
+            artifact_reader=artifact_reader,
+            read_pool=lambda: self.sources.retrieval.admit_local_indexing_candidate_pool(
+                session, intent, authority=authority, artifact_reader=artifact_reader
+            ),
+        )
+        if authority.authorize_scope(session, intent) != policy:
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_UNAVAILABLE")
+        return pool
+
     def capture_indexing_in_session(
         self,
         session: Session,
@@ -358,6 +430,8 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
         policy = authority.authorize_scope(session, intent)
         if phase is InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE:
             return LocalIndexingSessionCapture(intent)
+        if not isinstance(intent.recipe, ExperimentViewRecipe):
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_SCOPE_INVALID")
         corpus, entries = self._capture_population(
             session,
             intent,
@@ -404,6 +478,8 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
             analysis_run_ids=tuple(sorted(run for _, run in page.members)),
             source_revision_ids=tuple(sorted(source for source, _ in page.members)),
         )
+        if not isinstance(page_intent.recipe, ExperimentViewRecipe):
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_SCOPE_INVALID")
         corpus, entries = self._capture_population(
             session,
             page_intent,
@@ -432,19 +508,20 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
         artifact_reader.revalidate_provenance()
         return page, LocalIndexingSessionCapture(page_intent, corpus, entries)
 
-    def _capture_population(
+    def _capture_source_pool(
         self,
         session: Session,
         scope: ReadOnlyCandidatePoolScope | LocalIndexingSourceReadIntent,
-        recipe: ExperimentViewRecipe,
+        recipe: ExperimentViewRecipe | None,
         *,
         artifact_reader: PinnedArtifactReadContext,
         read_pool: Callable[[], ReadOnlyKnowledgeCandidatePool],
         population_read_set: InferenceTransferPopulationReadSet | None = None,
-    ) -> tuple[AdmittedInferenceTransferCorpus, tuple[StagedExperimentEntry, ...]]:
-        """Common lock/prefetch/physical-byte/accepted-report path after owner admission."""
+    ) -> ReadOnlyKnowledgeCandidatePool:
+        """One lock/prefetch/physical-byte source path before report-family projection."""
         with observe_read_stage(InferenceTransferReadStage.LOCK_POPULATION):
-            recipe = ExperimentViewRecipe.model_validate(recipe.model_dump(mode="json"))
+            if recipe is not None:
+                recipe = ExperimentViewRecipe.model_validate(recipe.model_dump(mode="json"))
             memberships = tuple(session.scalars(population_membership_statement(scope)))
             if len(memberships) > scope.maximum_candidates:
                 raise InferenceTransferServiceError(
@@ -531,7 +608,7 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
                 session, tuple(revision for _item, revision in source_rows), artifact_reader
             )
         if population_read_set is not None:
-            if not isinstance(scope, ReadOnlyCandidatePoolScope):
+            if not isinstance(scope, ReadOnlyCandidatePoolScope) or recipe is None:
                 raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
             population_read_set.begin(
                 session,
@@ -554,6 +631,27 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
             pool = read_pool()
         if pool.truncated:
             raise InferenceTransferServiceError("INFERENCE_TRANSFER_SNAPSHOT_POPULATION_TRUNCATED")
+        return pool
+
+    def _capture_population(
+        self,
+        session: Session,
+        scope: ReadOnlyCandidatePoolScope | LocalIndexingSourceReadIntent,
+        recipe: ExperimentViewRecipe,
+        *,
+        artifact_reader: PinnedArtifactReadContext,
+        read_pool: Callable[[], ReadOnlyKnowledgeCandidatePool],
+        population_read_set: InferenceTransferPopulationReadSet | None = None,
+    ) -> tuple[AdmittedInferenceTransferCorpus, tuple[StagedExperimentEntry, ...]]:
+        """Released legacy profile projection over the unchanged shared source capture."""
+        pool = self._capture_source_pool(
+            session,
+            scope,
+            recipe,
+            artifact_reader=artifact_reader,
+            read_pool=read_pool,
+            population_read_set=population_read_set,
+        )
         with observe_read_stage(InferenceTransferReadStage.SOLUTION_PROFILES):
             inputs, missing = self.sources._resolve_profile_inputs(
                 session, pool, artifact_reader=artifact_reader

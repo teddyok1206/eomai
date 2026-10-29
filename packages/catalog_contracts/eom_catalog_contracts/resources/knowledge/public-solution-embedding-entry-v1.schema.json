@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/public-solution-embedding-entry/1.0",
+  "title": "Pinned public-solution encoding source; not an authorization grant",
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "member": {
+      "type": "object", "additionalProperties": false,
+      "required": ["artifact_id", "artifact_revision_id", "member_path", "schema_ref", "media_type", "sha256"],
+      "properties": {
+        "artifact_id": {"type": "string", "pattern": "^artifact_[0-9a-f]{32}$"},
+        "artifact_revision_id": {"type": "string", "pattern": "^rev_[0-9a-f]{32}$"},
+        "member_path": {"type": "string", "minLength": 1, "maxLength": 512},
+        "schema_ref": {"type": "string", "minLength": 1, "maxLength": 256},
+        "media_type": {"const": "application/json"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "recipe": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "content", "facets", "metadata", "overflow", "maximum_text_bytes", "ranking", "recipe_sha256"],
+      "properties": {
+        "schema_version": {"const": "inference-transfer-view-recipe/2.0"},
+        "content": {"const": "CANONICAL_ITEM_TEXT_NO_SOLUTION"},
+        "facets": {"const": "FORMAT_NEUTRAL_PUBLIC_SOLUTION"},
+        "metadata": {"const": "SORTED_ACCEPTED_FIELDS"},
+        "overflow": {"const": "REJECT_OVERFLOW"},
+        "maximum_text_bytes": {"const": 262144},
+        "ranking": {"const": "EXACT_FLOAT64_COSINE_REF_TIES"},
+        "recipe_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "acceptedEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "solution"],
+      "properties": {
+        "kind": {"const": "ACCEPTED_SOLUTION_ANALYSIS"},
+        "solution": {"$ref": "eom://schemas/knowledge/evidence-bundle-manifest/5.0#/$defs/solutionEvidence"}
+      }
+    },
+    "creativeEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "lineage", "lineage_sha256", "role_result", "result_id", "result_sha256"],
+      "properties": {
+        "kind": {"const": "REGISTERED_CREATIVE_SOURCE_REPORT"},
+        "lineage": {
+          "allOf": [
+            {"$ref": "#/$defs/member"},
+            {"properties": {
+              "member_path": {"const": "lineage.json"},
+              "schema_ref": {"const": "eom://schemas/external-item/creative-source-lineage/1.0"},
+              "media_type": {"const": "application/json"}
+            }}
+          ]
+        },
+        "lineage_sha256": {"$ref": "#/$defs/sha256"},
+        "role_result": {
+          "allOf": [
+            {"$ref": "#/$defs/member"},
+            {"properties": {
+              "member_path": {"const": "result.json"},
+              "schema_ref": {"enum": ["external-item-learning-result@1.0", "external-item-learning-result@2.0"]},
+              "media_type": {"const": "application/json"}
+            }}
+          ]
+        },
+        "result_id": {"type": "string", "pattern": "^extlearnresult_[0-9a-f]{32}$"},
+        "result_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  },
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "source", "base_analysis_run_id", "graph_snapshot", "policy_revision_id", "policy_sha256", "recipe", "evidence", "public_solution", "entry_sha256"],
+  "properties": {
+    "schema_version": {"const": "public-solution-embedding-entry/1.0"},
+    "source": {"oneOf": [
+      {"$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/approvedItemSource"},
+      {"$ref": "eom://schemas/knowledge/knowledge-analysis-types/5.0#/$defs/pastExamItemSource"}
+    ]},
+    "base_analysis_run_id": {"type": "string", "pattern": "^analysisrun_[0-9a-f]{32}$"},
+    "graph_snapshot": {"$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"},
+    "policy_revision_id": {"type": "string", "pattern": "^accessrev_[0-9a-f]{32}$"},
+    "policy_sha256": {"$ref": "#/$defs/sha256"},
+    "recipe": {"$ref": "#/$defs/recipe"},
+    "evidence": {"oneOf": [{"$ref": "#/$defs/acceptedEvidence"}, {"$ref": "#/$defs/creativeEvidence"}]},
+    "public_solution": {"$ref": "eom://schemas/knowledge/public-solution-text/1.0"},
+    "entry_sha256": {"$ref": "#/$defs/sha256"}
+  }
+}

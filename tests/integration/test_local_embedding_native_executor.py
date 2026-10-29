@@ -21,6 +21,8 @@ import pytest
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_contracts.inference_transfer_experiment import StagedExperimentEntry
 from eom_catalog_contracts.knowledge import ApprovedPastExamItemKnowledgeSourceV3
+from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
+from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
 from eom_catalog_service.embedding_encoder_adapter import encode_incremental_batch
 from eom_catalog_service.embedding_index_refresh_plan import plan_index_membership_refresh
 from eom_catalog_service.embedding_registry_application import prepare_missing_embedding_bindings
@@ -53,8 +55,10 @@ from eom_catalog_service.knowledge_graph_models import (
     KnowledgeGraphSnapshotRecord,
 )
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
+from eom_catalog_service.local_embedding_source_plan_v3 import build_local_embedding_source_plan_v3
 from eom_catalog_service.local_indexing_source_ports import LocalIndexingSourceReadIntent
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
+from eom_catalog_service.public_solution_capture_ports import CapturedPublicSolutionSources
 from eom_catalog_service.settings import CatalogSettings
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_orchestrator import native_embedding_index_handoff as handoff
@@ -75,10 +79,17 @@ from eom_workflow.local_embedding_encoding_job import EMBEDDING_ENCODING_IDEMPOT
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingExecutionPolicy
 from eom_workflow.local_embedding_request import (
     LocalEmbeddingServiceWorkflowRequest,
-    local_embedding_request_actor,
     local_embedding_request_service,
     parse_local_embedding_executable_request,
     require_local_embedding_operator_seed,
+)
+from eom_workflow.local_embedding_request_v2 import (
+    parse_supported_local_embedding_request,
+    supported_local_embedding_request_actor,
+)
+from eom_workflow.local_embedding_request_v3 import (
+    LocalEmbeddingWorkflowRequestV3,
+    local_embedding_request_service_v3,
 )
 from eom_workflow.native_embedding_coordinator import (
     NativeArtifactProducerIdentity,
@@ -123,6 +134,8 @@ from tests.unit.local_embedding_service_fixtures import service_fixture
 from tests.unit.test_embedding_incremental_encoding import SyntheticNativeBackend
 from tests.unit.test_inference_transfer_pair_source_authorization import accepted_input
 from tests.unit.test_local_embedding_runner_admission import scope_fixture
+from tests.unit.test_mixed_local_embedding_owner_admission import mixed_scope
+from tests.unit.test_public_solution_encoding import public_entry
 
 pytestmark = pytest.mark.integration
 
@@ -183,12 +196,13 @@ def execution(
     request: pytest.FixtureRequest,
 ):
     execution_mode = getattr(request, "param", "operator")
-    service_mode = execution_mode == "service"
+    public_mode = execution_mode == "public"
+    service_mode = execution_mode in {"service", "public"}
     cuda_mode = execution_mode in {"cuda", "cuda_bulk", "cuda_deferred"}
     cpu_fallback = execution_mode in {"cpu_fallback", "cpu_fallback_catchup"}
     addfinalizer = request.addfinalizer
     command, capture = _fixture(guarded_engine)
-    if service_mode:
+    if execution_mode == "service":
         _extra_command, extra = _fixture(guarded_engine)
         extra_body = extra.entries[0].model_dump(mode="json")
         extra_body["profile"]["source_basis"].update(
@@ -223,13 +237,47 @@ def execution(
         device="CUDA" if cuda_mode else "CPU", timeout_seconds=180 if cpu_fallback else 300
     )
     _unused, compiled = scope_fixture()
+    if public_mode:
+        _unused, compiled, _grant = mixed_scope()
     profile = native.policy.profiles[0]
     namespace = EmbeddingIndexNamespace.model_validate(
         command.namespace.model_dump(mode="json")
         | {"space_sha256": profile.space.space_sha256, "view": "CONTENT_ONLY"}
     )
+    entries = capture.entries
+    recipe = capture.index.recipe
+    if public_mode:
+        public_entries = []
+        for old_entry in entries:
+            basis = old_entry.profile.source_basis
+            public_entries.append(
+                PublicSolutionEmbeddingEntry.model_validate(
+                    seal(
+                        public_entry().model_dump(mode="json")
+                        | {
+                            "source": basis.source.model_dump(mode="json"),
+                            "base_analysis_run_id": basis.solution_evidence.base_analysis_run_id,
+                            "graph_snapshot": command.graph_snapshot.model_dump(mode="json"),
+                            "policy_revision_id": command.policy_revision_id,
+                            "policy_sha256": command.policy_sha256,
+                            "evidence": {
+                                "kind": "ACCEPTED_SOLUTION_ANALYSIS",
+                                "solution": basis.solution_evidence.model_dump(mode="json"),
+                            },
+                        },
+                        "entry_sha256",
+                    )
+                )
+            )
+        entries = tuple(public_entries)
+        recipe = entries[0].recipe
+        namespace = PublicSolutionIndexNamespace(
+            storage_partition=namespace.storage_partition,
+            space_sha256=profile.space.space_sha256,
+            recipe_sha256=recipe.recipe_sha256,
+        )
     config = EmbeddingRegistryOwnerConfiguration(
-        command.corpus_id, namespace, profile.space, capture.index.recipe, ("PAST_EXAM",)
+        command.corpus_id, namespace, profile.space, recipe, ("PAST_EXAM",)
     )
     query = EmbeddingRegistryLookup(
         command.corpus_id,
@@ -239,9 +287,21 @@ def execution(
         command.policy_sha256,
     )
     resolved = ResolvedEmbeddingLookup(
-        command.corpus_id, profile.space, capture.index.recipe, capture.sources, capture.entries
+        command.corpus_id,
+        profile.space,
+        recipe,
+        capture.sources,
+        entries,
+        base_analysis_run_ids=tuple(
+            (e.source.item_revision_id, e.base_analysis_run_id) for e in entries
+        )
+        if public_mode
+        else (),
     )
-    plan = build_local_embedding_source_plan(
+    plan_builder = (
+        build_local_embedding_source_plan_v3 if public_mode else build_local_embedding_source_plan
+    )
+    plan = plan_builder(
         query, resolved, target_revision_ids=tuple(s.item_revision_id for s in capture.sources)
     )
     root = tmp_path / "artifacts"
@@ -262,8 +322,12 @@ def execution(
     )
     controls = LocalEmbeddingControlArtifactPublisher(publisher, source_commit="a" * 40)
     created = datetime.now(UTC)
-    saved_plan = controls.publish_source_plan(
-        plan, idempotency_key="test-plan:" + uuid4().hex, created_at=created
+    saved_plan = (
+        controls.publish_observed_source_plan_v3(plan, idempotency_key="test-plan:" + uuid4().hex)
+        if public_mode
+        else controls.publish_source_plan(
+            plan, idempotency_key="test-plan:" + uuid4().hex, created_at=created
+        )
     )
     policy = LocalEmbeddingExecutionPolicy.model_validate(
         seal(
@@ -293,31 +357,55 @@ def execution(
     )
     if service_mode:
         body.update(
-            schema_version="local-embedding-workflow-request/1.2",
+            schema_version="local-embedding-workflow-request/3.0"
+            if public_mode
+            else "local-embedding-workflow-request/1.2",
+            workflow_definition_version=compiled.definition.definition_version,
             actor_context=service.request.actor_context.model_dump(mode="json"),
         )
-    request = parse_local_embedding_executable_request(seal(body, "request_sha256"))
+    request = parse_supported_local_embedding_request(seal(body, "request_sha256"))
     settings = CatalogSettings(nas_artifact_root=root)
     fence = Mock()
     catalog = CatalogEmbeddingRegistryVerifier(
         guarded_engine, config, identity_fence=fence, settings=settings
     )
-    scope = SimpleNamespace(requester_permission_keys=("knowledge_graph:publish",))
+    from eom_catalog_contracts import EvidenceBudget
+    from eom_catalog_service.knowledge_retrieval_service import ReadOnlyCandidatePoolScope
+
+    # A typed scope at the explicit synthetic IAM seam, not actual source admission.
+    scope = ReadOnlyCandidatePoolScope(
+        graph_snapshot=query.graph_snapshot,
+        access_policy_revision_id=query.policy_revision_id,
+        access_policy_sha256=query.policy_sha256,
+        requested_by="operator_" + "1" * 32,
+        requester_role="ADMIN",
+        requester_permission_keys=("knowledge_graph:publish",),
+        source_classes=config.source_classes,
+        evidence_budget=EvidenceBudget(
+            max_documents=1,
+            max_item_revisions=64,
+            max_graph_nodes=256,
+            max_claims=128,
+            max_context_tokens=32000,
+        ),
+    )
     corpus = AdmittedInferenceTransferCorpus(
-        tuple(e.profile for e in capture.entries),
+        () if public_mode else tuple(e.profile for e in entries),
         (),
         False,
         0,
         tuple(
             AdmittedInferenceTransferSource(
-                e.profile.source_basis.solution_evidence.base_analysis_run_id,
+                e.base_analysis_run_id
+                if public_mode
+                else e.profile.source_basis.solution_evidence.base_analysis_run_id,
                 source,
             )
-            for e, source in zip(capture.entries, capture.sources, strict=True)
+            for e, source in zip(entries, capture.sources, strict=True)
         ),
     )
     current = SimpleNamespace(allowed=True, active_roots=0)
-    captures = {query.graph_snapshot.graph_snapshot_revision_id: (corpus, capture.entries)}
+    captures = {query.graph_snapshot.graph_snapshot_revision_id: (corpus, entries)}
     admitted = {request.request_sha256: (request, plan)}
 
     def authorize(session, caller, intent, phase):
@@ -342,7 +430,17 @@ def execution(
                 native_execution_policy_sha256=policy.policy_sha256,
                 resource_profile_sha256=profile.resource_profile.resource_profile_sha256,
             )
-            captured = LocalIndexingSessionCapture(selected, actual_corpus, entries)
+            captured = (
+                CapturedPublicSolutionSources(
+                    entries,
+                    (),
+                    tuple(s.source.item_revision_id for s in actual_corpus.sources),
+                    selected,
+                    actual_corpus,
+                )
+                if public_mode
+                else LocalIndexingSessionCapture(selected, actual_corpus, entries)
+            )
         else:
             captured = InferenceTransferSessionCapture(scope, actual_corpus, entries)
         return PinnedArtifactReadContext(session, settings), captured
@@ -374,6 +472,8 @@ def execution(
             self.catalog, self.settings = catalog, settings
 
         def registry_caller(self, supplied):
+            if isinstance(supplied, LocalEmbeddingWorkflowRequestV3):
+                return EmbeddingRegistryServiceCaller(local_embedding_request_service_v3(supplied))
             if isinstance(supplied, LocalEmbeddingServiceWorkflowRequest):
                 return EmbeddingRegistryServiceCaller(local_embedding_request_service(supplied))
             return EmbeddingRegistryCaller(
@@ -478,6 +578,12 @@ def execution(
         )
     sessions = publisher.sessions
     with sessions.begin() as session:
+        if public_mode:
+            from eom_orchestrator.embedding_encoding_reservation_storage import (
+                EmbeddingEncodingReservationStorage,
+            )
+
+            EmbeddingEncodingReservationStorage.prepare_public_ownership_protocol(session)
         ensure_protocol_version(
             session,
             ENCODING_PROTOCOL_VERSION,
@@ -487,7 +593,7 @@ def execution(
 
     def start():
         selected_request = request
-        actor_type, actor_id = local_embedding_request_actor(request)
+        actor_type, actor_id = supported_local_embedding_request_actor(request)
         with sessions.begin() as session:
             supplied = start_local_embedding_in_session(
                 session,
@@ -539,8 +645,8 @@ def execution(
         return workflow, lease, fenced
 
     def advance(workflow, lease, fenced, *, selected_executor=None):
-        selected_request = parse_local_embedding_executable_request(workflow.initial_request)
-        actor_type, actor_id = local_embedding_request_actor(selected_request)
+        selected_request = parse_supported_local_embedding_request(workflow.initial_request)
+        actor_type, actor_id = supported_local_embedding_request_actor(selected_request)
         return advance_local_embedding_step(
             workflow=workflow,
             compiled=compiled,
@@ -555,8 +661,8 @@ def execution(
         )
 
     def finish(workflow, lease, fenced, *, selected_executor=None):
-        selected_request = parse_local_embedding_executable_request(workflow.initial_request)
-        actor_type, actor_id = local_embedding_request_actor(selected_request)
+        selected_request = parse_supported_local_embedding_request(workflow.initial_request)
+        actor_type, actor_id = supported_local_embedding_request_actor(selected_request)
         complete_local_embedding_terminal(
             workflow_id=workflow.workflow_id,
             request=selected_request,
@@ -781,6 +887,42 @@ def test_actual_disposable_seed_and_graph_delta_reuses_vectors_without_model(exe
         jobs = tuple(session.scalars(select(JobRecord).where(JobRecord.idempotency_key.in_(keys))))
         assert len(keys) == len(jobs) == 1
         assert jobs[0].task_type == "native_embedding_encoding" and jobs[0].status == "SUCCEEDED"
+
+
+@pytest.mark.parametrize("execution", ["public"], indirect=True)
+def test_public_native_document_completes_with_real_registry_and_one_encoding(execution):
+    started = execution.start()
+    assert execution.advance(*started) is True
+    execution.finish(*started)
+    assert execution.launcher.forwards == 1
+    with execution.sessions.begin() as session:
+        workflow = session.get(WorkflowInstanceRecord, started[0].workflow_id)
+        assert workflow.state == "COMPLETED"
+        assert workflow.initial_request == execution.request.model_dump(mode="json")
+        bindings = tuple(
+            session.scalars(
+                select(EmbeddingSourceBindingRecord).where(
+                    EmbeddingSourceBindingRecord.item_revision_id.in_(
+                        tuple(s.item_revision_id for s in execution.plan.sources)
+                    ),
+                    EmbeddingSourceBindingRecord.evidence_kind == "PUBLIC_SOLUTION_REPORT",
+                )
+            )
+        )
+        assert len(bindings) == len(execution.plan.sources)
+        # Binding rows point into the one canonical index, not duplicate files.
+        assert all(
+            b.binding_manifest_schema_ref == "eom://schemas/knowledge/embedding-index-manifest/3.0"
+            for b in bindings
+        )
+        assert all(b.projection_version == "public-solution-text/1.0" for b in bindings)
+        assert all(b.review_job_id is None for b in bindings)
+
+
+@pytest.mark.parametrize("execution", ["public"], indirect=True)
+@pytest.mark.parametrize("phase", ["encoding_complete", "REGISTERED"])
+def test_public_native_interruption_reuses_original_numerical_output(execution, monkeypatch, phase):
+    test_actual_interruption_resumes_same_outputs_without_reencoding(execution, monkeypatch, phase)
 
 
 @pytest.mark.parametrize(

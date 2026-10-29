@@ -32,12 +32,19 @@ from eom_workflow.local_embedding_encoding_job import (
     validate_embedding_owned_association_values,
     validate_local_embedding_launch_values,
 )
+from eom_workflow.local_embedding_encoding_ownership_v3 import (
+    EMBEDDING_ENCODING_OWNERSHIP_V3_SCHEMA_SHA256,
+    EmbeddingEncodingReadResultV3,
+    LocalEmbeddingLaunchIntentV3,
+    parse_embedding_encoding_ownership_v3,
+)
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingResourceProfile
 from eom_workflow.local_embedding_request_v2 import (
     LocalEmbeddingWorkflowRequestV2,
     SupportedLocalEmbeddingRequest,
     parse_supported_local_embedding_request,
 )
+from eom_workflow.local_embedding_request_v3 import LocalEmbeddingWorkflowRequestV3
 from eom_workflow.local_embedding_source_plan_v2 import (
     LOCAL_EMBEDDING_SOURCE_PLAN_V2_SCHEMA_REF,
     LocalEmbeddingSourcePlanV2,
@@ -179,10 +186,14 @@ def parse_local_embedding_launch_association_v2(value: object) -> LocalEmbedding
 
 def parse_supported_embedding_encoding_read(
     value: object,
-) -> EmbeddingEncodingReadResult | EmbeddingEncodingReadResultV2:
+) -> EmbeddingEncodingReadResult | EmbeddingEncodingReadResultV2 | EmbeddingEncodingReadResultV3:
     """Preserve the ORIGINAL owner family; never retag historical completion1 as2."""
     document = raw_similarity_contract_value(value)
     if isinstance(document, dict):
+        if document.get("schema_version") == "embedding-encoding-ownership/3.0":
+            public = parse_embedding_encoding_ownership_v3(document)
+            if isinstance(public, EmbeddingEncodingReadResultV3):
+                return public
         if document.get("schema_version") == "embedding-encoding-job/1.0":
             result = parse_embedding_encoding_job_message(document)
             if isinstance(result, EmbeddingEncodingReadResult):
@@ -199,7 +210,7 @@ def validate_supported_embedding_encoding_read(
     *,
     expected_request: EmbeddingEncodingJobRequest,
     expected_reference: EmbeddingEncodingJobReference,
-) -> EmbeddingEncodingReadResult | EmbeddingEncodingReadResultV2:
+) -> EmbeddingEncodingReadResult | EmbeddingEncodingReadResultV2 | EmbeddingEncodingReadResultV3:
     """Exact canonical encoding/Job allocation only, not source/lease authority."""
     result = parse_supported_embedding_encoding_read(value)
     request = parse_embedding_encoding_job_message(raw_similarity_contract_value(expected_request))
@@ -264,12 +275,16 @@ def validate_embedding_encoding_completions_v2(
         validate_embedding_completion_event_context(event, context)
 
 
-type SupportedLocalEmbeddingLaunchIntent = LocalEmbeddingLaunchIntent | LocalEmbeddingLaunchIntentV2
+type SupportedLocalEmbeddingLaunchIntent = (
+    LocalEmbeddingLaunchIntent | LocalEmbeddingLaunchIntentV2 | LocalEmbeddingLaunchIntentV3
+)
 
 
 def local_embedding_launch_protocol(request: SupportedLocalEmbeddingRequest) -> tuple[str, str]:
     """Actual native metadata Job protocol; not the numerical execution channel."""
     checked = parse_supported_local_embedding_request(request)
+    if isinstance(checked, LocalEmbeddingWorkflowRequestV3):
+        return "embedding-encoding-ownership/3.0", EMBEDDING_ENCODING_OWNERSHIP_V3_SCHEMA_SHA256
     if isinstance(checked, LocalEmbeddingWorkflowRequestV2):
         return "embedding-encoding-ownership/2.0", EMBEDDING_ENCODING_OWNERSHIP_V2_SCHEMA_SHA256
     return "embedding-encoding-job/1.0", next(
@@ -283,6 +298,8 @@ def parse_local_embedding_launch_intent_for_request(
     """Explicit owner-selected request family; never infer a new grant from a pointer."""
     checked = parse_supported_local_embedding_request(request)
     document = raw_similarity_contract_value(value)
+    if isinstance(checked, LocalEmbeddingWorkflowRequestV3):
+        return LocalEmbeddingLaunchIntentV3.model_validate(document)
     if isinstance(checked, LocalEmbeddingWorkflowRequestV2):
         return LocalEmbeddingLaunchIntentV2.model_validate(document)
     return LocalEmbeddingLaunchIntent.model_validate(document)

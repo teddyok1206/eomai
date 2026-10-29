@@ -16,7 +16,6 @@ from eom_catalog_contracts.mixed_embedding_index import RegisteredReviewEmbeddin
 from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_identifiers import content_sha256
-from eom_workflow.local_embedding_source_plan import LocalEmbeddingUnavailableView
 from eom_workflow.local_embedding_source_plan_v2 import (
     AcceptedSolutionEncodingDemandV2,
     LocalEmbeddingEncodingDemandV2,
@@ -32,6 +31,7 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryLookup,
     ResolvedEmbeddingLookup,
 )
+from eom_catalog_service.local_embedding_source_plan import legacy_local_embedding_unavailable_view
 
 
 def build_local_embedding_source_plan_v2(
@@ -71,12 +71,12 @@ def build_local_embedding_source_plan_v2(
         for entry in resolved.entries
     ):
         raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
-    entries = {
-        entry.profile.source_basis.source.item_revision_id: type(entry).model_validate(
-            raw_similarity_contract_value(entry)
-        )
-        for entry in resolved.entries
-    }
+    entries: dict[str, StagedExperimentEntry | RegisteredReviewEmbeddingEntry] = {}
+    for original in resolved.entries:
+        if not isinstance(original, (StagedExperimentEntry, RegisteredReviewEmbeddingEntry)):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+        entry = type(original).model_validate(raw_similarity_contract_value(original))
+        entries[entry.profile.source_basis.source.item_revision_id] = entry
     selected = tuple(sorted(target_revision_ids))
     bases = dict(base_analysis_run_ids)
     if (
@@ -147,9 +147,7 @@ def build_local_embedding_source_plan_v2(
         "demands": [demand.model_dump(mode="json") for demand in demands_list],
         "missing_solution_report_revision_ids": [key for key in selected if key not in entries],
         "unavailable_views": [
-            LocalEmbeddingUnavailableView(
-                source_revision_id=view.source_revision_id, reason=view.reason
-            ).model_dump(mode="json")
+            legacy_local_embedding_unavailable_view(view).model_dump(mode="json")
             for view in delta.unavailable_views
         ],
         "source_set_sha256": population_sha256(selected_sources),

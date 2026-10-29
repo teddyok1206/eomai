@@ -30,7 +30,8 @@ from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRe
 from eom_workflow_runner.repository import load_persisted_workflow_request
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.artifacts import CatalogJsonRevisionReader
+from eom_catalog_service.creative_proposal_read_set import CreativeProposalReadSet
 
 
 class CreativeLearningProposalError(ValueError):
@@ -52,12 +53,23 @@ class ResolvedCreativeLearningProposal:
 
 def resolve_completed_creative_learning_proposal(
     session: Session,
-    artifacts: CatalogArtifactService,
+    artifacts: CatalogJsonRevisionReader,
     selection: ExternalItemLearningRoleSelection,
+    *,
+    read_set: CreativeProposalReadSet | None = None,
 ) -> ResolvedCreativeLearningProposal:
     selection = ExternalItemLearningRoleSelection.model_validate(selection.model_dump(mode="json"))
-    workflow = session.get(WorkflowInstanceRecord, selection.workflow_id, populate_existing=True)
-    step = session.get(WorkflowStepRunRecord, selection.step_run_id, populate_existing=True)
+    rows = None if read_set is None else read_set.for_selection(session, selection)
+    workflow = (
+        session.get(WorkflowInstanceRecord, selection.workflow_id, populate_existing=True)
+        if rows is None
+        else rows.workflow
+    )
+    step = (
+        session.get(WorkflowStepRunRecord, selection.step_run_id, populate_existing=True)
+        if rows is None
+        else rows.step
+    )
     if (
         workflow is None
         or step is None
@@ -91,7 +103,9 @@ def resolve_completed_creative_learning_proposal(
     ):
         raise CreativeLearningProposalError("CREATIVE_LEARNING_INPUT_MISMATCH")
     plan = validate_external_item_learning_execution_plan(
-        session.get(ResolvedExecutionPlanRecord, selection.plan_id, populate_existing=True),
+        session.get(ResolvedExecutionPlanRecord, selection.plan_id, populate_existing=True)
+        if rows is None
+        else rows.plan,
         workflow_id=workflow.workflow_id,
         step_key=step.step_key,
         request=request,
@@ -109,9 +123,17 @@ def resolve_completed_creative_learning_proposal(
         }
     ):
         raise CreativeLearningProposalError("CREATIVE_LEARNING_PLAN_MISMATCH")
-    job = session.get(JobRecord, step.platform_job_id, populate_existing=True)
+    job = (
+        session.get(JobRecord, step.platform_job_id, populate_existing=True)
+        if rows is None
+        else rows.job
+    )
     revision = (
-        session.get(ArtifactRevisionRecord, job.revision_id, populate_existing=True)
+        (
+            session.get(ArtifactRevisionRecord, job.revision_id, populate_existing=True)
+            if rows is None
+            else rows.result_revision
+        )
         if job is not None
         else None
     )

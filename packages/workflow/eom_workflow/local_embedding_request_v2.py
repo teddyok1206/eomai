@@ -24,9 +24,16 @@ from eom_workflow.local_embedding_execution_policy import (
 )
 from eom_workflow.local_embedding_request import (
     LocalEmbeddingExecutableRequest,
+    LocalEmbeddingServiceWorkflowRequest,
+    LocalEmbeddingWorkflowRequestV11,
     local_embedding_request_actor,
     parse_local_embedding_executable_request,
     validate_local_embedding_request_references,
+)
+from eom_workflow.local_embedding_request_v3 import (
+    LocalEmbeddingWorkflowRequestV3,
+    parse_local_embedding_workflow_request_v3,
+    validate_local_embedding_request_references_v3,
 )
 from eom_workflow.local_embedding_request_values import (
     LocalEmbeddingServiceAudit,
@@ -39,6 +46,7 @@ from eom_workflow.local_embedding_source_plan_v2 import (
     LocalEmbeddingSourcePlanV2,
     parse_local_embedding_source_plan_v2,
 )
+from eom_workflow.local_embedding_source_plan_v3 import LocalEmbeddingSourcePlanV3
 from eom_workflow.schemas import (
     LocalEmbeddingAdmissionContractError,
     NativeEmbeddingContract,
@@ -102,7 +110,18 @@ def parse_local_embedding_workflow_request_v2(value: object) -> LocalEmbeddingWo
 
 
 type SupportedLocalEmbeddingRequest = (
-    LocalEmbeddingExecutableRequest | LocalEmbeddingWorkflowRequestV2
+    LocalEmbeddingExecutableRequest
+    | LocalEmbeddingWorkflowRequestV2
+    | LocalEmbeddingWorkflowRequestV3
+)
+
+# Runtime classification is separate from schema/source/actor admission. A PEP 695
+# alias cannot be passed to isinstance; keep the closed class set at this dispatch.
+LOCAL_EMBEDDING_REQUEST_TYPES = (
+    LocalEmbeddingWorkflowRequestV11,
+    LocalEmbeddingServiceWorkflowRequest,
+    LocalEmbeddingWorkflowRequestV2,
+    LocalEmbeddingWorkflowRequestV3,
 )
 
 
@@ -110,6 +129,11 @@ def parse_supported_local_embedding_request(value: object) -> SupportedLocalEmbe
     """One closed request family dispatch; source/service/runtime authority is separate."""
     try:
         document = raw_similarity_contract_value(value)
+        if (
+            isinstance(document, dict)
+            and document.get("schema_version") == "local-embedding-workflow-request/3.0"
+        ):
+            return parse_local_embedding_workflow_request_v3(document)
         if (
             isinstance(document, dict)
             and document.get("schema_version") == "local-embedding-workflow-request/2.0"
@@ -126,7 +150,7 @@ def supported_local_embedding_request_actor(
     request: SupportedLocalEmbeddingRequest,
 ) -> tuple[Literal["human", "local_indexing_service"], str]:
     checked = parse_supported_local_embedding_request(request)
-    if isinstance(checked, LocalEmbeddingWorkflowRequestV2):
+    if isinstance(checked, (LocalEmbeddingWorkflowRequestV2, LocalEmbeddingWorkflowRequestV3)):
         return "local_indexing_service", checked.actor_context.service_id
     return local_embedding_request_actor(checked)
 
@@ -183,20 +207,26 @@ def validate_local_embedding_request_references_v2(
 
 def validate_supported_local_embedding_request_references(
     request: SupportedLocalEmbeddingRequest,
-    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2,
+    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3,
     policy: LocalEmbeddingExecutablePolicy,
 ) -> None:
     """Exact family closure only; current source and service authority stay upstream."""
     request = parse_supported_local_embedding_request(request)
     if (
+        isinstance(request, LocalEmbeddingWorkflowRequestV3)
+        and isinstance(plan, LocalEmbeddingSourcePlanV3)
+        and isinstance(policy, LocalEmbeddingServiceExecutionPolicy)
+    ):
+        validate_local_embedding_request_references_v3(request, plan, policy)
+    elif (
         isinstance(request, LocalEmbeddingWorkflowRequestV2)
         and isinstance(plan, LocalEmbeddingSourcePlanV2)
         and isinstance(policy, LocalEmbeddingServiceExecutionPolicy)
     ):
         validate_local_embedding_request_references_v2(request, plan, policy)
-    elif not isinstance(request, LocalEmbeddingWorkflowRequestV2) and isinstance(
-        plan, LocalEmbeddingSourcePlan
-    ):
+    elif not isinstance(
+        request, (LocalEmbeddingWorkflowRequestV2, LocalEmbeddingWorkflowRequestV3)
+    ) and isinstance(plan, LocalEmbeddingSourcePlan):
         validate_local_embedding_request_references(request, plan, policy)
     else:
         raise ValueError("LOCAL_EMBEDDING_REQUEST_FAMILY_MISMATCH")

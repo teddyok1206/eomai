@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from eom_catalog_contracts.public_solution_embedding_index import (
+    MAX_PUBLIC_SOLUTION_SOURCES,
+    PublicSolutionIndexNamespace,
+)
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryLookup
 from eom_workflow.local_embedding_request_v2 import (
     SupportedLocalEmbeddingRequest,
@@ -26,6 +30,9 @@ def native_embedding_registry_scope(
         request.graph_snapshot,
         request.access_policy_revision_id,
         request.access_policy_sha256,
+        MAX_PUBLIC_SOLUTION_SOURCES
+        if isinstance(request.namespace, PublicSolutionIndexNamespace)
+        else 1024,
     )
 
 

@@ -25,10 +25,6 @@ from eom_workflow.local_embedding_encoding_dispatch import (
     SupportedEmbeddingAssociation,
     parse_supported_embedding_association,
 )
-from eom_workflow.local_embedding_encoding_job import (
-    LocalEmbeddingLaunchAssociation,
-)
-from eom_workflow.local_embedding_encoding_ownership_v2 import LocalEmbeddingLaunchAssociationV2
 
 from eom_orchestrator.inference_transfer_cpu_handoff import (
     CpuHandoffError,
@@ -74,10 +70,6 @@ def validate_native_index_original_input(
         raw_similarity_contract_value(association)
     )
     request = parse_incremental_embedding_input(raw_similarity_contract_value(request))
-    if not isinstance(
-        association_value, LocalEmbeddingLaunchAssociation | LocalEmbeddingLaunchAssociationV2
-    ):
-        raise NativeIndexHandoffError("NATIVE_INDEX_ASSOCIATION_INVALID")
     association = association_value
     if (
         request.batch_size != 4
@@ -189,10 +181,6 @@ def _read_prepared(execution_id: str, owner: CpuHandoffIdentity) -> PreparedNati
                 )
             )
         )
-        if not isinstance(
-            association, LocalEmbeddingLaunchAssociation | LocalEmbeddingLaunchAssociationV2
-        ):
-            raise NativeIndexHandoffError("NATIVE_INDEX_ASSOCIATION_INVALID")
     return PreparedNativeIndex(execution_id, association, request)
 
 

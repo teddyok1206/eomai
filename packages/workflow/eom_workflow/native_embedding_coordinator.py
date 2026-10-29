@@ -24,6 +24,7 @@ from eom_workflow.schemas import (
 
 if TYPE_CHECKING:
     from eom_workflow.local_embedding_workflow_receipt_v2 import LocalEmbeddingStepOutputV2
+    from eom_workflow.local_embedding_workflow_receipt_v3 import LocalEmbeddingStepOutputV3
 
 type NativeCoordinatorPhase = Literal["ALLOCATION", "INDEX_PREPARED", "REGISTERED", "COMPLETED"]
 NATIVE_COORDINATOR_PHASES: tuple[NativeCoordinatorPhase, ...] = (
@@ -172,7 +173,7 @@ def validate_native_coordinator_registration_times(
 
 def validate_native_coordinator_completion_producer(
     allocation: NativeCoordinatorAllocation,
-    output: LocalEmbeddingStepOutput | LocalEmbeddingStepOutputV2,
+    output: LocalEmbeddingStepOutput | LocalEmbeddingStepOutputV2 | LocalEmbeddingStepOutputV3,
     *,
     workflow_id: str,
     step_run_id: str,

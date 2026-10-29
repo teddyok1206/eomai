@@ -1,0 +1,783 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-embedding-workflow-request/3.0",
+  "$defs": {
+    "ArtifactMemberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ArtifactMemberPointer",
+      "type": "object"
+    },
+    "EmbeddingBundleId": {
+      "pattern": "^embeddingbundle_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "EmbeddingBundleRevisionId": {
+      "pattern": "^embeddingbundlerev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "EmbeddingExecutionRuntime": {
+      "additionalProperties": false,
+      "description": "Actual installed execution fingerprint is verified by the owner, not this pure DTO.",
+      "properties": {
+        "device": {
+          "enum": [
+            "CPU",
+            "CUDA"
+          ],
+          "title": "Device",
+          "type": "string"
+        },
+        "precision": {
+          "const": "FLOAT32",
+          "default": "FLOAT32",
+          "title": "Precision",
+          "type": "string"
+        },
+        "tf32_enabled": {
+          "const": false,
+          "default": false,
+          "title": "Tf32 Enabled",
+          "type": "boolean"
+        },
+        "execution_runtime_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Execution Runtime Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "device",
+        "execution_runtime_sha256"
+      ],
+      "title": "EmbeddingExecutionRuntime",
+      "type": "object"
+    },
+    "EmbeddingRuntimeBundlePointer": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "embedding-runtime-bundle-pointer/1.0",
+          "default": "embedding-runtime-bundle-pointer/1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "bundle_id": {
+          "$ref": "#/$defs/EmbeddingBundleId"
+        },
+        "bundle_revision_id": {
+          "$ref": "#/$defs/EmbeddingBundleRevisionId"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/knowledge/embedding-runtime-bundle/1.0",
+          "default": "eom://schemas/knowledge/embedding-runtime-bundle/1.0",
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "bundle_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Bundle Sha256",
+          "type": "string"
+        },
+        "bundle_raw_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Bundle Raw Sha256",
+          "type": "string"
+        },
+        "manifest_member": {
+          "$ref": "#/$defs/ArtifactMemberPointer"
+        }
+      },
+      "required": [
+        "bundle_id",
+        "bundle_revision_id",
+        "bundle_sha256",
+        "bundle_raw_sha256",
+        "manifest_member"
+      ],
+      "title": "EmbeddingRuntimeBundlePointer",
+      "type": "object"
+    },
+    "EmbeddingSpace": {
+      "additionalProperties": false,
+      "properties": {
+        "model_spec": {
+          "$ref": "#/$defs/LocalEmbeddingModelSpec"
+        },
+        "purpose": {
+          "enum": [
+            "QUERY",
+            "DOCUMENT"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "runtime": {
+          "$ref": "#/$defs/EmbeddingExecutionRuntime"
+        },
+        "space_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Space Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_spec",
+        "purpose",
+        "runtime",
+        "space_sha256"
+      ],
+      "title": "EmbeddingSpace",
+      "type": "object"
+    },
+    "KnowledgeArtifactMemberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "pattern": "^eom(?:\\.assess(?:ment)?|://schemas/)[A-Za-z0-9._/@:-]{1,191}$",
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "pattern": "^[a-z0-9.+-]+/[A-Za-z0-9.+-]+$",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "logical_name": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$",
+          "title": "Logical Name",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "pattern": "^(source|normalized|projections|evidence)/[A-Za-z0-9._()가-힣/-]+$",
+          "title": "Member Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "schema_ref",
+        "media_type",
+        "logical_name",
+        "member_path"
+      ],
+      "title": "KnowledgeArtifactMemberPointer",
+      "type": "object"
+    },
+    "KnowledgeGraphSnapshotPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "graph_id": {
+          "pattern": "^graph_[0-9a-f]{32}$",
+          "title": "Graph Id",
+          "type": "string"
+        },
+        "graph_snapshot_revision_id": {
+          "pattern": "^graphrev_[0-9a-f]{32}$",
+          "title": "Graph Snapshot Revision Id",
+          "type": "string"
+        },
+        "manifest_artifact": {
+          "$ref": "#/$defs/KnowledgeArtifactMemberPointer"
+        },
+        "manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "graph_id",
+        "graph_snapshot_revision_id",
+        "manifest_artifact",
+        "manifest_sha256"
+      ],
+      "title": "KnowledgeGraphSnapshotPointer",
+      "type": "object"
+    },
+    "LocalEmbeddingFile": {
+      "additionalProperties": false,
+      "properties": {
+        "member_path": {
+          "enum": [
+            "config.json",
+            "model.safetensors",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "special_tokens_map.json",
+            "sentencepiece.bpe.model",
+            "README.md",
+            "LICENSE",
+            "1_Pooling/config.json"
+          ],
+          "title": "Member Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 8589934592,
+          "minimum": 1,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "member_path",
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "LocalEmbeddingFile",
+      "type": "object"
+    },
+    "LocalEmbeddingModelSpec": {
+      "additionalProperties": false,
+      "description": "Pinned offline recipe; owning a manifest does not activate or approve its files.",
+      "properties": {
+        "schema_version": {
+          "const": "item-local-embedding-model-spec/1.0",
+          "default": "item-local-embedding-model-spec/1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model_id": {
+          "pattern": "^embeddingmodel_[0-9a-f]{32}$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "model_revision_id": {
+          "pattern": "^embeddingmodelrev_[0-9a-f]{32}$",
+          "title": "Model Revision Id",
+          "type": "string"
+        },
+        "provider_family": {
+          "const": "transformers-local-dense/1.0",
+          "default": "transformers-local-dense/1.0",
+          "title": "Provider Family",
+          "type": "string"
+        },
+        "upstream_repo": {
+          "enum": [
+            "BAAI/bge-m3",
+            "intfloat/multilingual-e5-small",
+            "intfloat/multilingual-e5-base"
+          ],
+          "title": "Upstream Repo",
+          "type": "string"
+        },
+        "upstream_revision": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Upstream Revision",
+          "type": "string"
+        },
+        "license_id": {
+          "const": "MIT",
+          "default": "MIT",
+          "title": "License Id",
+          "type": "string"
+        },
+        "dimension": {
+          "enum": [
+            384,
+            768,
+            1024
+          ],
+          "title": "Dimension",
+          "type": "integer"
+        },
+        "maximum_tokens": {
+          "maximum": 8192,
+          "minimum": 2,
+          "title": "Maximum Tokens",
+          "type": "integer"
+        },
+        "pooling": {
+          "enum": [
+            "CLS",
+            "MEAN"
+          ],
+          "title": "Pooling",
+          "type": "string"
+        },
+        "normalization": {
+          "const": "L2",
+          "default": "L2",
+          "title": "Normalization",
+          "type": "string"
+        },
+        "dtype": {
+          "const": "float32",
+          "default": "float32",
+          "title": "Dtype",
+          "type": "string"
+        },
+        "query_prefix": {
+          "enum": [
+            "",
+            "query: "
+          ],
+          "title": "Query Prefix",
+          "type": "string"
+        },
+        "document_prefix": {
+          "enum": [
+            "",
+            "query: "
+          ],
+          "title": "Document Prefix",
+          "type": "string"
+        },
+        "truncation": {
+          "const": "REJECT_OVERFLOW",
+          "default": "REJECT_OVERFLOW",
+          "title": "Truncation",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/LocalEmbeddingFile"
+          },
+          "maxItems": 9,
+          "minItems": 5,
+          "title": "Files",
+          "type": "array"
+        },
+        "runtime_versions": {
+          "items": {
+            "$ref": "#/$defs/LocalEmbeddingRuntimeVersion"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "title": "Runtime Versions",
+          "type": "array"
+        },
+        "manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "upstream_repo",
+        "upstream_revision",
+        "dimension",
+        "maximum_tokens",
+        "pooling",
+        "query_prefix",
+        "document_prefix",
+        "files",
+        "runtime_versions",
+        "manifest_sha256"
+      ],
+      "title": "LocalEmbeddingModelSpec",
+      "type": "object"
+    },
+    "LocalEmbeddingResourceProfile": {
+      "additionalProperties": false,
+      "description": "Integer-only limits; owner configuration/capacity must independently admit them.",
+      "properties": {
+        "device": {
+          "enum": [
+            "CPU",
+            "CUDA"
+          ],
+          "title": "Device",
+          "type": "string"
+        },
+        "threads": {
+          "maximum": 16,
+          "minimum": 1,
+          "title": "Threads",
+          "type": "integer"
+        },
+        "batch_size": {
+          "maximum": 16,
+          "minimum": 1,
+          "title": "Batch Size",
+          "type": "integer"
+        },
+        "memory_max_bytes": {
+          "maximum": 34359738368,
+          "minimum": 268435456,
+          "title": "Memory Max Bytes",
+          "type": "integer"
+        },
+        "gpu_vram_max_bytes": {
+          "maximum": 8589934592,
+          "minimum": 0,
+          "title": "Gpu Vram Max Bytes",
+          "type": "integer"
+        },
+        "cpu_quota_percent": {
+          "maximum": 1600,
+          "minimum": 100,
+          "title": "Cpu Quota Percent",
+          "type": "integer"
+        },
+        "timeout_seconds": {
+          "maximum": 1800,
+          "minimum": 30,
+          "title": "Timeout Seconds",
+          "type": "integer"
+        },
+        "tasks_max": {
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Tasks Max",
+          "type": "integer"
+        },
+        "output_max_bytes": {
+          "maximum": 67108864,
+          "minimum": 1,
+          "title": "Output Max Bytes",
+          "type": "integer"
+        },
+        "maximum_active_launches": {
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Maximum Active Launches",
+          "type": "integer"
+        },
+        "physical_gpu_lease": {
+          "enum": [
+            "NONE",
+            "SHARED_GPU0"
+          ],
+          "title": "Physical Gpu Lease",
+          "type": "string"
+        },
+        "network": {
+          "const": "DISABLED",
+          "default": "DISABLED",
+          "title": "Network",
+          "type": "string"
+        },
+        "resource_profile_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Resource Profile Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "device",
+        "threads",
+        "batch_size",
+        "memory_max_bytes",
+        "gpu_vram_max_bytes",
+        "cpu_quota_percent",
+        "timeout_seconds",
+        "tasks_max",
+        "output_max_bytes",
+        "maximum_active_launches",
+        "physical_gpu_lease",
+        "resource_profile_sha256"
+      ],
+      "title": "LocalEmbeddingResourceProfile",
+      "type": "object"
+    },
+    "LocalEmbeddingRuntimeVersion": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "enum": [
+            "torch",
+            "transformers",
+            "safetensors",
+            "tokenizers"
+          ],
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "pattern": "^[0-9][A-Za-z0-9.+_-]{0,95}$",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "title": "LocalEmbeddingRuntimeVersion",
+      "type": "object"
+    },
+    "LocalEmbeddingServiceAudit": {
+      "additionalProperties": false,
+      "description": "Service provenance only, never actual runtime identity or a current data grant.",
+      "properties": {
+        "kind": {
+          "const": "LOCAL_INDEXING_SERVICE",
+          "default": "LOCAL_INDEXING_SERVICE",
+          "title": "Kind",
+          "type": "string"
+        },
+        "service_id": {
+          "pattern": "^localindexservice_[0-9a-f]{32}$",
+          "title": "Service Id",
+          "type": "string"
+        },
+        "service_revision_id": {
+          "pattern": "^localindexservicerev_[0-9a-f]{32}$",
+          "title": "Service Revision Id",
+          "type": "string"
+        },
+        "service_identity_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Service Identity Sha256",
+          "type": "string"
+        },
+        "service_policy_revision_id": {
+          "pattern": "^accessrev_[0-9a-f]{32}$",
+          "title": "Service Policy Revision Id",
+          "type": "string"
+        },
+        "service_policy_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Service Policy Sha256",
+          "type": "string"
+        },
+        "authorization_audit_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Authorization Audit Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "service_id",
+        "service_revision_id",
+        "service_identity_sha256",
+        "service_policy_revision_id",
+        "service_policy_sha256",
+        "authorization_audit_sha256"
+      ],
+      "title": "LocalEmbeddingServiceAudit",
+      "type": "object"
+    },
+    "PublicSolutionIndexNamespace": {
+      "additionalProperties": false,
+      "properties": {
+        "storage_partition": {
+          "$ref": "#/$defs/StoragePartition"
+        },
+        "space_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Space Sha256",
+          "type": "string"
+        },
+        "view": {
+          "const": "CONCRETE_FACETS",
+          "default": "CONCRETE_FACETS",
+          "title": "View",
+          "type": "string"
+        },
+        "recipe_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Recipe Sha256",
+          "type": "string"
+        },
+        "projection_version": {
+          "const": "public-solution-text/1.0",
+          "default": "public-solution-text/1.0",
+          "title": "Projection Version",
+          "type": "string"
+        },
+        "population_scope": {
+          "const": "ALL_ADMITTED_GRAPH_ITEMS",
+          "default": "ALL_ADMITTED_GRAPH_ITEMS",
+          "title": "Population Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "storage_partition",
+        "space_sha256",
+        "recipe_sha256"
+      ],
+      "title": "PublicSolutionIndexNamespace",
+      "type": "object"
+    },
+    "StoragePartition": {
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Independent public-solution service frame; not an instance of a released request1.",
+  "properties": {
+    "schema_version": {
+      "const": "local-embedding-workflow-request/3.0",
+      "default": "local-embedding-workflow-request/3.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "request_name": {
+      "const": "LOCAL_EMBEDDING_WORKFLOW_REQUEST",
+      "default": "LOCAL_EMBEDDING_WORKFLOW_REQUEST",
+      "title": "Request Name",
+      "type": "string"
+    },
+    "purpose": {
+      "const": "LOCAL_EMBEDDING",
+      "default": "LOCAL_EMBEDDING",
+      "title": "Purpose",
+      "type": "string"
+    },
+    "workflow_definition_key": {
+      "const": "local-embedding-index",
+      "default": "local-embedding-index",
+      "title": "Workflow Definition Key",
+      "type": "string"
+    },
+    "workflow_definition_version": {
+      "const": "2.0.0",
+      "default": "2.0.0",
+      "title": "Workflow Definition Version",
+      "type": "string"
+    },
+    "workflow_definition_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Workflow Definition Sha256",
+      "type": "string"
+    },
+    "actor_context": {
+      "$ref": "#/$defs/LocalEmbeddingServiceAudit"
+    },
+    "corpus_id": {
+      "pattern": "^corpus_[0-9a-f]{32}$",
+      "title": "Corpus Id",
+      "type": "string"
+    },
+    "graph_snapshot": {
+      "$ref": "#/$defs/KnowledgeGraphSnapshotPointer"
+    },
+    "access_policy_revision_id": {
+      "pattern": "^accessrev_[0-9a-f]{32}$",
+      "title": "Access Policy Revision Id",
+      "type": "string"
+    },
+    "access_policy_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Access Policy Sha256",
+      "type": "string"
+    },
+    "namespace": {
+      "$ref": "#/$defs/PublicSolutionIndexNamespace"
+    },
+    "space": {
+      "$ref": "#/$defs/EmbeddingSpace"
+    },
+    "runtime_bundle": {
+      "$ref": "#/$defs/EmbeddingRuntimeBundlePointer"
+    },
+    "source_plan": {
+      "$ref": "#/$defs/ArtifactMemberPointer"
+    },
+    "source_plan_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Source Plan Sha256",
+      "type": "string"
+    },
+    "native_execution_policy": {
+      "$ref": "#/$defs/ArtifactMemberPointer"
+    },
+    "native_execution_policy_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Native Execution Policy Sha256",
+      "type": "string"
+    },
+    "resource_profile": {
+      "$ref": "#/$defs/LocalEmbeddingResourceProfile"
+    },
+    "request_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Request Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "workflow_definition_sha256",
+    "actor_context",
+    "corpus_id",
+    "graph_snapshot",
+    "access_policy_revision_id",
+    "access_policy_sha256",
+    "namespace",
+    "space",
+    "runtime_bundle",
+    "source_plan",
+    "source_plan_sha256",
+    "native_execution_policy",
+    "native_execution_policy_sha256",
+    "resource_profile",
+    "request_sha256"
+  ],
+  "title": "LocalEmbeddingWorkflowRequestV3",
+  "type": "object"
+}

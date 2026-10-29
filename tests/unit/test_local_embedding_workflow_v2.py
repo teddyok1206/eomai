@@ -111,10 +111,20 @@ def test_old_definition_schema_yaml_canonical_hash_and_admissions_are_unchanged(
     assert type(old.definition) is LocalEmbeddingWorkflowDefinition
     assert old.sha256 == ("sha256:5098dcfd92996bf5136b776fe7c0c3786d5f1a38fa5ce581109f646dc3b9046d")
     assert definition_execution_protocol(old.definition) == "local-embedding/1.0"
+    # Preserve the original snapshot, not every future additive admission. These
+    # exact successors were released after a8f9965b introduced this regression.
+    later_admissions = {
+        ("pdf-document-review", "1.4.0"): "workflow-role/1.31.0",
+        ("pdf-document-review", "1.5.0"): "workflow-role/1.32.0",
+        ("external-item-learning", "1.0.0"): "workflow-role/1.33.0",
+        ("external-item-learning", "2.0.0"): "workflow-role/1.34.0",
+    }
+    for identity, protocol in later_admissions.items():
+        assert WORKFLOW_ADMISSION_BY_IDENTITY[identity].role_protocol_version == protocol
     old_admissions = [
         [row.definition_key, row.definition_version, row.role_protocol_version]
         for key, row in WORKFLOW_ADMISSION_BY_IDENTITY.items()
-        if key != ("local-embedding-index", "2.0.0")
+        if key != ("local-embedding-index", "2.0.0") and key not in later_admissions
     ]
     assert content_sha256(old_admissions) == (
         "sha256:31f86f8fa2c3bb5626df9d9d7add22b7309b6e84ebbb10716bdf28b6b33eb3e7"

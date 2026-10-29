@@ -1,0 +1,630 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-embedding-completion/3.0",
+  "$defs": {
+    "ArtifactMemberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ArtifactMemberPointer",
+      "type": "object"
+    },
+    "EmbeddingIndexId": {
+      "pattern": "^embeddingindex_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "EmbeddingIndexRevisionId": {
+      "pattern": "^embeddingindexrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "EmbeddingRegistrationOperationKey": {
+      "maxLength": 128,
+      "minLength": 1,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+      "type": "string"
+    },
+    "KnowledgeArtifactMemberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "pattern": "^eom(?:\\.assess(?:ment)?|://schemas/)[A-Za-z0-9._/@:-]{1,191}$",
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "pattern": "^[a-z0-9.+-]+/[A-Za-z0-9.+-]+$",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "logical_name": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$",
+          "title": "Logical Name",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "pattern": "^(source|normalized|projections|evidence)/[A-Za-z0-9._()가-힣/-]+$",
+          "title": "Member Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "schema_ref",
+        "media_type",
+        "logical_name",
+        "member_path"
+      ],
+      "title": "KnowledgeArtifactMemberPointer",
+      "type": "object"
+    },
+    "KnowledgeGraphSnapshotPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "graph_id": {
+          "pattern": "^graph_[0-9a-f]{32}$",
+          "title": "Graph Id",
+          "type": "string"
+        },
+        "graph_snapshot_revision_id": {
+          "pattern": "^graphrev_[0-9a-f]{32}$",
+          "title": "Graph Snapshot Revision Id",
+          "type": "string"
+        },
+        "manifest_artifact": {
+          "$ref": "#/$defs/KnowledgeArtifactMemberPointer"
+        },
+        "manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "graph_id",
+        "graph_snapshot_revision_id",
+        "manifest_artifact",
+        "manifest_sha256"
+      ],
+      "title": "KnowledgeGraphSnapshotPointer",
+      "type": "object"
+    },
+    "LocalEmbeddingStepOutputV3": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "local-embedding-step-output/3.0",
+          "default": "local-embedding-step-output/3.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "purpose": {
+          "const": "LOCAL_EMBEDDING",
+          "default": "LOCAL_EMBEDDING",
+          "title": "Purpose",
+          "type": "string"
+        },
+        "workflow_id": {
+          "pattern": "^workflow_[0-9a-f]{32}$",
+          "title": "Workflow Id",
+          "type": "string"
+        },
+        "step_run_id": {
+          "pattern": "^steprun_[0-9a-f]{32}$",
+          "title": "Step Run Id",
+          "type": "string"
+        },
+        "step_key": {
+          "const": "encode_batch",
+          "default": "encode_batch",
+          "title": "Step Key",
+          "type": "string"
+        },
+        "attempt": {
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "receipt_owner_job_id": {
+          "pattern": "^job_[0-9a-f]{32}$",
+          "title": "Receipt Owner Job Id",
+          "type": "string"
+        },
+        "execution_result_schema": {
+          "const": "incremental-embedding-result@1.0",
+          "default": "incremental-embedding-result@1.0",
+          "title": "Execution Result Schema",
+          "type": "string"
+        },
+        "receipt_schema": {
+          "const": "eom://schemas/workflow/local-embedding-workflow-receipt/3.0",
+          "default": "eom://schemas/workflow/local-embedding-workflow-receipt/3.0",
+          "title": "Receipt Schema",
+          "type": "string"
+        },
+        "receipt": {
+          "$ref": "#/$defs/ArtifactMemberPointer"
+        },
+        "receipt_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Receipt Sha256",
+          "type": "string"
+        },
+        "output_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Output Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workflow_id",
+        "step_run_id",
+        "attempt",
+        "receipt_owner_job_id",
+        "receipt",
+        "receipt_sha256",
+        "output_sha256"
+      ],
+      "title": "LocalEmbeddingStepOutputV3",
+      "type": "object"
+    },
+    "LocalEmbeddingWorkflowReceiptV3": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "local-embedding-workflow-receipt/3.0",
+          "default": "local-embedding-workflow-receipt/3.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "purpose": {
+          "const": "LOCAL_EMBEDDING",
+          "default": "LOCAL_EMBEDDING",
+          "title": "Purpose",
+          "type": "string"
+        },
+        "workflow_id": {
+          "pattern": "^workflow_[0-9a-f]{32}$",
+          "title": "Workflow Id",
+          "type": "string"
+        },
+        "workflow_definition_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Workflow Definition Sha256",
+          "type": "string"
+        },
+        "workflow_request_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Workflow Request Sha256",
+          "type": "string"
+        },
+        "source_plan": {
+          "$ref": "#/$defs/ArtifactMemberPointer"
+        },
+        "source_plan_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Source Plan Sha256",
+          "type": "string"
+        },
+        "step_run_id": {
+          "pattern": "^steprun_[0-9a-f]{32}$",
+          "title": "Step Run Id",
+          "type": "string"
+        },
+        "step_key": {
+          "const": "encode_batch",
+          "default": "encode_batch",
+          "title": "Step Key",
+          "type": "string"
+        },
+        "attempt": {
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "receipt_owner_job_id": {
+          "pattern": "^job_[0-9a-f]{32}$",
+          "title": "Receipt Owner Job Id",
+          "type": "string"
+        },
+        "execution_result_schema": {
+          "const": "incremental-embedding-result@1.0",
+          "default": "incremental-embedding-result@1.0",
+          "title": "Execution Result Schema",
+          "type": "string"
+        },
+        "native_launch_job_id": {
+          "anyOf": [
+            {
+              "pattern": "^job_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Native Launch Job Id"
+        },
+        "launch_association_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Launch Association Sha256"
+        },
+        "registration_command": {
+          "$ref": "#/$defs/RegisterPublicSolutionIndexCommand"
+        },
+        "registration_result": {
+          "$ref": "#/$defs/PublicSolutionIndexRegistrationResult"
+        },
+        "registration_observed_at": {
+          "format": "date-time",
+          "title": "Registration Observed At",
+          "type": "string"
+        },
+        "receipt_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Receipt Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workflow_id",
+        "workflow_definition_sha256",
+        "workflow_request_sha256",
+        "source_plan",
+        "source_plan_sha256",
+        "step_run_id",
+        "attempt",
+        "receipt_owner_job_id",
+        "native_launch_job_id",
+        "launch_association_sha256",
+        "registration_command",
+        "registration_result",
+        "registration_observed_at",
+        "receipt_sha256"
+      ],
+      "title": "LocalEmbeddingWorkflowReceiptV3",
+      "type": "object"
+    },
+    "PublicSolutionIndexNamespace": {
+      "additionalProperties": false,
+      "properties": {
+        "storage_partition": {
+          "$ref": "#/$defs/StoragePartition"
+        },
+        "space_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Space Sha256",
+          "type": "string"
+        },
+        "view": {
+          "const": "CONCRETE_FACETS",
+          "default": "CONCRETE_FACETS",
+          "title": "View",
+          "type": "string"
+        },
+        "recipe_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Recipe Sha256",
+          "type": "string"
+        },
+        "projection_version": {
+          "const": "public-solution-text/1.0",
+          "default": "public-solution-text/1.0",
+          "title": "Projection Version",
+          "type": "string"
+        },
+        "population_scope": {
+          "const": "ALL_ADMITTED_GRAPH_ITEMS",
+          "default": "ALL_ADMITTED_GRAPH_ITEMS",
+          "title": "Population Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "storage_partition",
+        "space_sha256",
+        "recipe_sha256"
+      ],
+      "title": "PublicSolutionIndexNamespace",
+      "type": "object"
+    },
+    "PublicSolutionIndexRegistrationResult": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "embedding-registry-registration-result/3.0",
+          "default": "embedding-registry-registration-result/3.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "operation_key": {
+          "$ref": "#/$defs/EmbeddingRegistrationOperationKey"
+        },
+        "request_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Request Sha256",
+          "type": "string"
+        },
+        "index_id": {
+          "$ref": "#/$defs/EmbeddingIndexId"
+        },
+        "index_revision_id": {
+          "$ref": "#/$defs/EmbeddingIndexRevisionId"
+        },
+        "previous_index_revision_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmbeddingIndexRevisionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "index_manifest": {
+          "$ref": "#/$defs/ArtifactMemberPointer"
+        },
+        "index_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Index Sha256",
+          "type": "string"
+        },
+        "registered_lock_version": {
+          "minimum": 2,
+          "title": "Registered Lock Version",
+          "type": "integer"
+        },
+        "current_index_revision_id": {
+          "$ref": "#/$defs/EmbeddingIndexRevisionId"
+        },
+        "current_lock_version": {
+          "minimum": 2,
+          "title": "Current Lock Version",
+          "type": "integer"
+        },
+        "replayed": {
+          "title": "Replayed",
+          "type": "boolean"
+        },
+        "is_current": {
+          "title": "Is Current",
+          "type": "boolean"
+        },
+        "registered_at": {
+          "format": "date-time",
+          "title": "Registered At",
+          "type": "string"
+        },
+        "result_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Result Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_key",
+        "request_sha256",
+        "index_id",
+        "index_revision_id",
+        "previous_index_revision_id",
+        "index_manifest",
+        "index_sha256",
+        "registered_lock_version",
+        "current_index_revision_id",
+        "current_lock_version",
+        "replayed",
+        "is_current",
+        "registered_at",
+        "result_sha256"
+      ],
+      "title": "PublicSolutionIndexRegistrationResult",
+      "type": "object"
+    },
+    "RegisterPublicSolutionIndexCommand": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "embedding-registry-registration-command/3.0",
+          "default": "embedding-registry-registration-command/3.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "operation": {
+          "const": "REGISTER_EMBEDDING_INDEX",
+          "default": "REGISTER_EMBEDDING_INDEX",
+          "title": "Operation",
+          "type": "string"
+        },
+        "operation_key": {
+          "$ref": "#/$defs/EmbeddingRegistrationOperationKey"
+        },
+        "corpus_id": {
+          "pattern": "^corpus_[0-9a-f]{32}$",
+          "title": "Corpus Id",
+          "type": "string"
+        },
+        "namespace": {
+          "$ref": "#/$defs/PublicSolutionIndexNamespace"
+        },
+        "index_id": {
+          "$ref": "#/$defs/EmbeddingIndexId"
+        },
+        "index_revision_id": {
+          "$ref": "#/$defs/EmbeddingIndexRevisionId"
+        },
+        "index_manifest": {
+          "$ref": "#/$defs/ArtifactMemberPointer"
+        },
+        "index_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Index Sha256",
+          "type": "string"
+        },
+        "graph_snapshot": {
+          "$ref": "#/$defs/KnowledgeGraphSnapshotPointer"
+        },
+        "policy_revision_id": {
+          "pattern": "^accessrev_[0-9a-f]{32}$",
+          "title": "Policy Revision Id",
+          "type": "string"
+        },
+        "policy_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Policy Sha256",
+          "type": "string"
+        },
+        "expected_current_index_revision_id": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmbeddingIndexRevisionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expected_lock_version": {
+          "minimum": 1,
+          "title": "Expected Lock Version",
+          "type": "integer"
+        },
+        "source_set_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Source Set Sha256",
+          "type": "string"
+        },
+        "binding_set_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Binding Set Sha256",
+          "type": "string"
+        },
+        "eligible_source_count": {
+          "maximum": 16384,
+          "minimum": 1,
+          "title": "Eligible Source Count",
+          "type": "integer"
+        },
+        "binding_count": {
+          "maximum": 16384,
+          "minimum": 1,
+          "title": "Binding Count",
+          "type": "integer"
+        },
+        "requested_at": {
+          "format": "date-time",
+          "title": "Requested At",
+          "type": "string"
+        },
+        "request_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Request Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "operation_key",
+        "corpus_id",
+        "namespace",
+        "index_id",
+        "index_revision_id",
+        "index_manifest",
+        "index_sha256",
+        "graph_snapshot",
+        "policy_revision_id",
+        "policy_sha256",
+        "expected_current_index_revision_id",
+        "expected_lock_version",
+        "source_set_sha256",
+        "binding_set_sha256",
+        "eligible_source_count",
+        "binding_count",
+        "requested_at",
+        "request_sha256"
+      ],
+      "title": "RegisterPublicSolutionIndexCommand",
+      "type": "object"
+    },
+    "StoragePartition": {
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+      "type": "string"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/LocalEmbeddingStepOutputV3"
+    },
+    {
+      "$ref": "#/$defs/LocalEmbeddingWorkflowReceiptV3"
+    }
+  ]
+}

@@ -6,6 +6,16 @@ import re
 from dataclasses import dataclass
 from typing import Literal, Protocol
 
+from eom_catalog_contracts.embedding_index_families import (
+    SupportedEmbeddingBinding,
+    SupportedEmbeddingProfilePointer,
+)
+from eom_catalog_contracts.embedding_index_families import (
+    SupportedEmbeddingEntry as SupportedEmbeddingEntry,
+)
+from eom_catalog_contracts.embedding_index_families import (
+    SupportedEmbeddingIndex as SupportedEmbeddingIndex,
+)
 from eom_catalog_contracts.embedding_reference_query import (
     ReferenceQuerySpaces,
     raw_similarity_contract_value,
@@ -15,7 +25,6 @@ from eom_catalog_contracts.embedding_registry import (
     RegisterEmbeddingIndexCommand,
 )
 from eom_catalog_contracts.inference_transfer_embedding import (
-    EmbeddingIndexManifest,
     EmbeddingSpace,
     EmbeddingVectorShardManifest,
 )
@@ -24,21 +33,18 @@ from eom_catalog_contracts.inference_transfer_experiment import (
     ExperimentView,
     ExperimentViewRecipe,
     PopulationSource,
-    StagedExperimentEntry,
 )
-from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
-from eom_catalog_contracts.mixed_embedding_index import (
-    MixedEmbeddingIndexManifest,
-    MixedEmbeddingSourceBinding,
-    RegisteredReviewEmbeddingEntry,
-)
 from eom_catalog_contracts.mixed_embedding_registry import (
     MixedEmbeddingIndexNamespace,
     RegisterEmbeddingIndexCommandV2,
 )
 from eom_catalog_contracts.private_chat_query_basis import PrivateChatQueryBasis
-from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
+from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingRecipe
+from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
+from eom_catalog_contracts.public_solution_embedding_registry import (
+    RegisterPublicSolutionIndexCommand,
+)
 from eom_catalog_contracts.similarity_context import SimilarityContext, SimilarityViewSelection
 from eom_catalog_contracts.similarity_context_v2 import SimilarityViewSelectionV2
 from eom_catalog_contracts.similarity_materials import SimilarityReferenceMaterials
@@ -76,10 +82,10 @@ class EmbeddingRegistryServiceCaller:
 
 
 type EmbeddingRegistryActor = EmbeddingRegistryCaller | EmbeddingRegistryServiceCaller
-type SupportedEmbeddingIndex = EmbeddingIndexManifest | MixedEmbeddingIndexManifest
-type SupportedEmbeddingEntry = StagedExperimentEntry | RegisteredReviewEmbeddingEntry
 type SupportedEmbeddingRegistrationCommand = (
-    RegisterEmbeddingIndexCommand | RegisterEmbeddingIndexCommandV2
+    RegisterEmbeddingIndexCommand
+    | RegisterEmbeddingIndexCommandV2
+    | RegisterPublicSolutionIndexCommand
 )
 
 type AuthoringReferencePurpose = Literal["PAST_EXAM_VARIATION", "ITEM_AUTHORING", "ITEM_REVIEW"]
@@ -114,9 +120,9 @@ class EmbeddingRegistryOwnerConfiguration:
     """Owner numerical/isolation configuration, never a source permission grant."""
 
     corpus_id: str
-    namespace: EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace
+    namespace: EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace | PublicSolutionIndexNamespace
     space: EmbeddingSpace
-    recipe: ExperimentViewRecipe
+    recipe: ExperimentViewRecipe | PublicSolutionEmbeddingRecipe
     source_classes: tuple[Literal["APPROVED_ITEM", "PAST_EXAM"], ...]
 
 
@@ -137,7 +143,7 @@ class EmbeddingRegistryLookup:
     """Internal pinned scope; not a public wire schema or authority grant."""
 
     corpus_id: str
-    namespace: EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace
+    namespace: EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace | PublicSolutionIndexNamespace
     graph_snapshot: KnowledgeGraphSnapshotPointer
     policy_revision_id: str
     policy_sha256: str
@@ -148,7 +154,7 @@ class EmbeddingRegistryLookup:
 class ResolvedEmbeddingLookup:
     corpus_id: str
     space: EmbeddingSpace
-    recipe: ExperimentViewRecipe
+    recipe: ExperimentViewRecipe | PublicSolutionEmbeddingRecipe
     sources: tuple[PopulationSource, ...]
     entries: tuple[SupportedEmbeddingEntry, ...]
     truncated: bool = False
@@ -268,7 +274,7 @@ class RegisteredEmbeddingIndexRead:
     """Internal registered metadata; historical counts never become disclosed coverage."""
 
     corpus_id: str
-    namespace: EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace
+    namespace: EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace | PublicSolutionIndexNamespace
     index_id: str
     index_revision_id: str
     index_manifest: ArtifactMemberPointer
@@ -283,7 +289,7 @@ class RegisteredEmbeddingIndexRead:
 @dataclass(frozen=True, slots=True)
 class AuthorizedEmbeddingReadProfile:
     source_item_revision_id: str
-    profile: InferenceTransferProfilePointer | RegisteredReviewProfilePointer
+    profile: SupportedEmbeddingProfilePointer
 
 
 @dataclass(frozen=True, slots=True)
@@ -305,7 +311,7 @@ class ResolvedPinnedEmbeddingIndex:
     intent: EmbeddingRegistryRead
     sources: tuple[PopulationSource, ...]
     profiles: tuple[AuthorizedEmbeddingReadProfile, ...]
-    bindings: tuple[MixedEmbeddingSourceBinding, ...]
+    bindings: tuple[SupportedEmbeddingBinding, ...]
     numerical_rows: tuple[MaterializedEmbeddingReadRow, ...]
 
     @property
@@ -385,8 +391,38 @@ class RegisteredReviewEmbeddingBindingLookupKey:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class PublicSolutionEmbeddingBindingLookupKey:
+    item_revision_id: str
+    graph_snapshot_revision_id: str
+    policy_revision_id: str
+    recipe_sha256: str
+    view: str
+    projection_version: str
+    base_analysis_run_id: str
+    profile_revision_id: str
+    encoding_sha256: str
+    solution_pointer_sha256: str
+
+    def columns(self) -> tuple[str, ...]:
+        return (
+            self.item_revision_id,
+            self.graph_snapshot_revision_id,
+            self.policy_revision_id,
+            self.recipe_sha256,
+            self.view,
+            self.projection_version,
+            self.base_analysis_run_id,
+            self.profile_revision_id,
+            self.encoding_sha256,
+            self.solution_pointer_sha256,
+        )
+
+
 type SupportedEmbeddingBindingLookupKey = (
-    EmbeddingBindingLookupKey | RegisteredReviewEmbeddingBindingLookupKey
+    EmbeddingBindingLookupKey
+    | RegisteredReviewEmbeddingBindingLookupKey
+    | PublicSolutionEmbeddingBindingLookupKey
 )
 
 
@@ -395,12 +431,15 @@ def embedding_binding_lookup_sort_key(key: SupportedEmbeddingBindingLookupKey) -
     if type(key) not in {
         EmbeddingBindingLookupKey,
         RegisteredReviewEmbeddingBindingLookupKey,
+        PublicSolutionEmbeddingBindingLookupKey,
     } or any(type(value) is not str or not value for value in key.columns()):
         raise EmbeddingRegistryError("EMBEDDING_REGISTRY_REQUEST_INVALID")
     if type(key) is EmbeddingBindingLookupKey:
         return ("ACCEPTED_SOLUTION_ANALYSIS", *key.columns())
     if type(key) is RegisteredReviewEmbeddingBindingLookupKey:
         return ("REGISTERED_ITEM_REVIEW_SOLUTION", *key.columns())
+    if type(key) is PublicSolutionEmbeddingBindingLookupKey:
+        return ("PUBLIC_SOLUTION_REPORT", *key.columns())
     raise EmbeddingRegistryError("EMBEDDING_REGISTRY_REQUEST_INVALID")
 
 
@@ -413,7 +452,7 @@ class EmbeddingBindingOrigin:
 @dataclass(frozen=True, slots=True)
 class ResolvedEmbeddingBindingOrigin:
     origin: EmbeddingBindingOrigin
-    binding: MixedEmbeddingSourceBinding
+    binding: SupportedEmbeddingBinding
 
 
 @dataclass(frozen=True, slots=True)
@@ -436,7 +475,7 @@ class PreparedEmbeddingBindingLookup:
 
     observation: MissingEmbeddingBindings
     resolved: ResolvedEmbeddingLookup
-    bindings: tuple[MixedEmbeddingSourceBinding, ...]
+    bindings: tuple[SupportedEmbeddingBinding, ...]
 
 
 class EmbeddingRegistryVerificationPort(Protocol):

@@ -14,6 +14,11 @@ from functools import partial
 from pathlib import Path
 from typing import Annotated, Any
 
+from eom_catalog_contracts.embedding_index_families import (
+    SupportedEmbeddingIndex,
+    parse_supported_embedding_index,
+    validate_supported_embedding_index_references,
+)
 from eom_catalog_contracts.embedding_private_chat_query import (
     MAX_PRIVATE_CHAT_QUERY_BYTES,
     PRIVATE_CHAT_QUERY_RESULT_REF,
@@ -36,7 +41,6 @@ from eom_catalog_contracts.embedding_reference_query_v11 import (
 from eom_catalog_contracts.embedding_runtime_bundle import EmbeddingRuntimeBundle
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
 from eom_catalog_contracts.inference_transfer_embedding import (
-    INDEX_SCHEMA_REF,
     MAX_EMBEDDING_INPUT_BYTES,
     MAX_EMBEDDING_ROWS,
     RESULT_SCHEMA_REF,
@@ -46,17 +50,17 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     IncrementalEmbeddingInput,
     parse_incremental_embedding_input,
     parse_incremental_embedding_result,
-    validate_embedding_index_references,
     validate_incremental_embedding_result,
 )
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_catalog_contracts.mixed_embedding_index import (
-    MIXED_EMBEDDING_INDEX_SCHEMA_REF,
     MixedEmbeddingIndexManifest,
-    parse_supported_embedding_index,
-    validate_mixed_embedding_index_references,
 )
 from eom_catalog_contracts.models import Sha256, UtcDatetime
+from eom_catalog_contracts.public_solution_embedding_index import (
+    MAX_PUBLIC_SOLUTION_SOURCES,
+    PublicSolutionEmbeddingIndex,
+)
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.models import ArtifactId, JobId, RevisionId
@@ -73,6 +77,7 @@ from eom_workflow.local_embedding_request_v2 import (
 )
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
 from eom_workflow.local_embedding_source_plan_v2 import LocalEmbeddingSourcePlanV2
+from eom_workflow.local_embedding_source_plan_v3 import LocalEmbeddingSourcePlanV3
 from eom_workflow.local_embedding_workflow import (
     LocalEmbeddingWorkflowRequest,
     parse_local_embedding_workflow_request,
@@ -719,10 +724,9 @@ class EmbeddingArtifactStore:
     def publish_index(
         self,
         *,
-        index: EmbeddingIndexManifest | MixedEmbeddingIndexManifest,
+        index: SupportedEmbeddingIndex,
         shards: tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...],
-        previous: tuple[ArtifactMemberPointer, EmbeddingIndexManifest | MixedEmbeddingIndexManifest]
-        | None,
+        previous: tuple[ArtifactMemberPointer, SupportedEmbeddingIndex] | None,
         scope: EmbeddingIndexPublicationScope,
         workspace: Path,
         identity: ControlFileSetIdentity | None = None,
@@ -740,7 +744,13 @@ class EmbeddingArtifactStore:
             if (
                 graph.manifest_artifact.sha256 != graph.manifest_sha256
                 or not isinstance(shards, tuple)
-                or not 1 <= len(shards) <= MAX_EMBEDDING_ROWS
+                or not 1
+                <= len(shards)
+                <= (
+                    MAX_PUBLIC_SOLUTION_SOURCES
+                    if isinstance(index, PublicSolutionEmbeddingIndex)
+                    else MAX_EMBEDDING_ROWS
+                )
                 or any(not isinstance(value, tuple) or len(value) != 2 for value in shards)
                 or (
                     previous is not None and (not isinstance(previous, tuple) or len(previous) != 2)
@@ -753,17 +763,8 @@ class EmbeddingArtifactStore:
                 )
             ):
                 raise ValueError("index publication frame or pinned scope differs")
-            schema_ref = INDEX_SCHEMA_REF
-            if isinstance(index, MixedEmbeddingIndexManifest):
-                validate_mixed_embedding_index_references(index, shards, previous)
-                schema_ref = MIXED_EMBEDDING_INDEX_SCHEMA_REF
-            else:
-                parent = None
-                if previous is not None:
-                    if not isinstance(previous[1], EmbeddingIndexManifest):
-                        raise ValueError("index1 cannot reinterpret an index2 predecessor")
-                    parent = (previous[0], previous[1])
-                validate_embedding_index_references(index, shards, parent)
+            schema_ref = "eom://schemas/knowledge/" + index.schema_version
+            validate_supported_embedding_index_references(index, shards, previous)
             timestamp = TypeAdapter(UtcDatetime).validate_python(index.created_at)
             payload = canonical_json_bytes(index.model_dump(mode="json"))
         except Exception:
@@ -838,9 +839,7 @@ class EmbeddingArtifactStore:
                 except Exception:
                     raise EmbeddingArtifactStoreError("EMBEDDING_INDEX_RECEIPT_INVALID") from None
 
-    def stage_index_manifest(
-        self, *, index: EmbeddingIndexManifest | MixedEmbeddingIndexManifest, workspace: Path
-    ) -> None:
+    def stage_index_manifest(self, *, index: SupportedEmbeddingIndex, workspace: Path) -> None:
         """Fixed durable local materialization before its small checkpoint; no NAS write."""
         index = parse_supported_embedding_index(index)
         with _directory(workspace) as directory:
@@ -864,9 +863,17 @@ class EmbeddingArtifactStore:
             raise EmbeddingArtifactStoreError("EMBEDDING_INDEX_CONTEXT_INVALID")
         return index
 
+    def read_staged_public_index(
+        self, *, workspace: Path, expected_sha256: str
+    ) -> PublicSolutionEmbeddingIndex:
+        index = self._read_staged_index(workspace=workspace, expected_sha256=expected_sha256)
+        if not isinstance(index, PublicSolutionEmbeddingIndex):
+            raise EmbeddingArtifactStoreError("EMBEDDING_INDEX_CONTEXT_INVALID")
+        return index
+
     def _read_staged_index(
         self, *, workspace: Path, expected_sha256: str
-    ) -> EmbeddingIndexManifest | MixedEmbeddingIndexManifest:
+    ) -> SupportedEmbeddingIndex:
         """Read the exact checkpointed local bytes; never regenerate from current/latest."""
         with (
             _directory(workspace) as directory,
@@ -920,7 +927,7 @@ class EmbeddingArtifactStore:
         self,
         *,
         workflow_request: SupportedLocalEmbeddingRequest,
-        plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2,
+        plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3,
         policy: LocalEmbeddingExecutablePolicy,
         association: SupportedEmbeddingAssociation,
         request: IncrementalEmbeddingInput,

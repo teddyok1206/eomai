@@ -40,6 +40,7 @@ from eom_workflow.local_embedding_encoding_dispatch import (
     SupportedEmbeddingAttachedEvent,
     SupportedEmbeddingCompletedEvent,
     SupportedEmbeddingIntent,
+    embedding_ownership_version,
     parse_supported_embedding_association,
     parse_supported_embedding_attached,
     parse_supported_embedding_completed,
@@ -52,7 +53,9 @@ from eom_workflow.local_embedding_encoding_job import (
 )
 from eom_workflow.local_embedding_encoding_ownership_v2 import (
     EMBEDDING_ENCODING_OWNERSHIP_V2_SCHEMA_SHA256,
-    LocalEmbeddingLaunchIntentV2,
+)
+from eom_workflow.local_embedding_encoding_ownership_v3 import (
+    EMBEDDING_ENCODING_OWNERSHIP_V3_SCHEMA_SHA256,
 )
 from eom_workflow.schemas import LOCAL_EMBEDDING_SCHEMA_RESOURCES
 from pydantic import BaseModel
@@ -181,6 +184,15 @@ class EmbeddingEncodingReservationStorage:
         )
 
     @staticmethod
+    def prepare_public_ownership_protocol(session: Session) -> None:
+        """Explicit owner-only deployment preparation; never a claim-time self-grant."""
+        EmbeddingEncodingReservationStorage._prepare_protocol(
+            session,
+            "embedding-encoding-ownership/3.0",
+            EMBEDDING_ENCODING_OWNERSHIP_V3_SCHEMA_SHA256,
+        )
+
+    @staticmethod
     def prepare_recovery_protocol(session: Session) -> None:
         """Explicit schema-owner deployment preparation, not runtime bootstrap."""
         EmbeddingEncodingReservationStorage._prepare_protocol(
@@ -269,6 +281,14 @@ class EmbeddingEncodingReservationStorage:
             ProtocolVersionRecord, "embedding-encoding-ownership/2.0", populate_existing=True
         )
         if record is None or record.schema_sha256 != EMBEDDING_ENCODING_OWNERSHIP_V2_SCHEMA_SHA256:
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE")
+
+    @staticmethod
+    def require_public_ownership_protocol(session: Session) -> None:
+        record = session.get(
+            ProtocolVersionRecord, "embedding-encoding-ownership/3.0", populate_existing=True
+        )
+        if record is None or record.schema_sha256 != EMBEDDING_ENCODING_OWNERSHIP_V3_SCHEMA_SHA256:
             raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE")
 
     @staticmethod
@@ -525,9 +545,7 @@ class EmbeddingEncodingReservationStorage:
             if job.job_id in attached:
                 continue
             body = {
-                "schema_version": "embedding-encoding-ownership/2.0"
-                if isinstance(intent, LocalEmbeddingLaunchIntentV2)
-                else ENCODING_PROTOCOL_VERSION,
+                "schema_version": embedding_ownership_version(intent),
                 "record_type": "ATTACHED",
                 "owned_job": owned_job(job, origins.get(job.job_id)).model_dump(mode="json"),
                 "intent": intent.model_dump(mode="json"),

@@ -6,9 +6,12 @@ import json
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from eom_catalog_contracts.embedding_index_families import (
+    SupportedEmbeddingEntry,
+    embedding_entry_source,
+)
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.local_indexing_mixed_policy import SupportedLocalIndexingAccessPolicy
-from eom_catalog_contracts.mixed_embedding_index import SupportedEmbeddingEntry
 from eom_catalog_contracts.models import Sha256
 from eom_catalog_service.embedding_registry_catalog_adapter import (
     EmbeddingRegistryOwnerConfiguration,
@@ -24,6 +27,7 @@ from eom_catalog_service.embedding_registry_ports import (
 )
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
 from eom_catalog_service.local_embedding_source_plan_v2 import build_local_embedding_source_plan_v2
+from eom_catalog_service.local_embedding_source_plan_v3 import build_local_embedding_source_plan_v3
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.settings import CatalogSettings
 from eom_identifiers import canonical_json_bytes
@@ -50,8 +54,19 @@ from eom_workflow.local_embedding_execution_policy import (
     parse_local_embedding_service_execution_policy,
 )
 from eom_workflow.local_embedding_request_v2 import LocalEmbeddingWorkflowRequestV2
-from eom_workflow.local_embedding_source_plan import parse_local_embedding_source_plan
-from eom_workflow.local_embedding_source_plan_v2 import parse_local_embedding_source_plan_v2
+from eom_workflow.local_embedding_request_v3 import LocalEmbeddingWorkflowRequestV3
+from eom_workflow.local_embedding_source_plan import (
+    LocalEmbeddingSourcePlan,
+    parse_local_embedding_source_plan,
+)
+from eom_workflow.local_embedding_source_plan_v2 import (
+    LocalEmbeddingSourcePlanV2,
+    parse_local_embedding_source_plan_v2,
+)
+from eom_workflow.local_embedding_source_plan_v3 import (
+    LocalEmbeddingSourcePlanV3,
+    parse_local_embedding_source_plan_v3,
+)
 from pydantic import TypeAdapter
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session, object_session
@@ -334,11 +349,13 @@ class CatalogLocalEmbeddingOwnerAdmission:
         plan_value = self._read_control(
             reader, request.source_plan, SOURCE_PLAN_ARTIFACT_TYPE, 64 * 1024**2
         )
-        plan = (
-            parse_local_embedding_source_plan_v2(plan_value)
-            if isinstance(request, LocalEmbeddingWorkflowRequestV2)
-            else parse_local_embedding_source_plan(plan_value)
-        )
+        plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3
+        if isinstance(request, LocalEmbeddingWorkflowRequestV3):
+            plan = parse_local_embedding_source_plan_v3(plan_value)
+        elif isinstance(request, LocalEmbeddingWorkflowRequestV2):
+            plan = parse_local_embedding_source_plan_v2(plan_value)
+        else:
+            plan = parse_local_embedding_source_plan(plan_value)
         scope = ResolvedLocalEmbeddingAdmission(request, plan, policy)
         current = self.catalog.resolve_selected_sources(
             session,
@@ -348,20 +365,24 @@ class CatalogLocalEmbeddingOwnerAdmission:
             ),
         )
         targets = tuple(source.item_revision_id for source in plan.sources)
-        rebuilt = (
-            build_local_embedding_source_plan_v2(
+        rebuilt: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3
+        if isinstance(request, LocalEmbeddingWorkflowRequestV3):
+            rebuilt = build_local_embedding_source_plan_v3(
+                query, current, target_revision_ids=targets
+            )
+        elif isinstance(request, LocalEmbeddingWorkflowRequestV2):
+            rebuilt = build_local_embedding_source_plan_v2(
                 query,
                 current,
                 target_revision_ids=targets,
                 base_analysis_run_ids=dict(current.base_analysis_run_ids),
             )
-            if isinstance(request, LocalEmbeddingWorkflowRequestV2)
-            else build_local_embedding_source_plan(query, current, target_revision_ids=targets)
-        )
+        else:
+            rebuilt = build_local_embedding_source_plan(query, current, target_revision_ids=targets)
         if rebuilt != plan:
             raise ValueError("LOCAL_EMBEDDING_SOURCE_PLAN_STALE")
         by_source = {
-            entry.profile.source_basis.source.item_revision_id: entry for entry in current.entries
+            embedding_entry_source(entry).item_revision_id: entry for entry in current.entries
         }
         selected = tuple(by_source[d.source_revision_id] for d in plan.demands)
         # Reading/resolving may consume time. Never let an old successful check

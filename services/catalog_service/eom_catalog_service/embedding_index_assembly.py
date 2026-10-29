@@ -25,6 +25,7 @@ from eom_catalog_contracts.knowledge import (
     KnowledgeGraphSnapshotPointer,
     KnowledgeSolutionEvidencePointer,
 )
+from eom_catalog_contracts.public_solution_embedding_index import MAX_PUBLIC_SOLUTION_SOURCES
 from eom_identifiers import content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.local_embedding_source_plan import (
@@ -88,9 +89,16 @@ def assemble_embedding_source_binding(
 def select_embedding_index_rows(
     demanded_encodings: tuple[EmbeddingEncodingIdentity, ...],
     available_rows: tuple[RegisteredEmbeddingRow, ...],
+    *,
+    maximum_rows: int = MAX_EMBEDDING_ROWS,
 ) -> dict[str, RegisteredEmbeddingRow]:
     """Pure exact encoding lookup shared by released and mixed index assembly."""
-    if type(available_rows) is not tuple or len(available_rows) > MAX_EMBEDDING_ROWS:
+    if (
+        type(maximum_rows) is not int
+        or not 1 <= maximum_rows <= MAX_PUBLIC_SOLUTION_SOURCES
+        or type(available_rows) is not tuple
+        or len(available_rows) > maximum_rows
+    ):
         raise ValueError("EMBEDDING_INDEX_ASSEMBLY_LIMIT")
     demands = {encoding.encoding_sha256: encoding for encoding in demanded_encodings}
     rows: dict[str, RegisteredEmbeddingRow] = {}
@@ -107,9 +115,16 @@ def select_embedding_index_rows(
 def select_embedding_index_shards(
     needed: frozenset[ArtifactMemberPointer],
     shards: tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...],
+    *,
+    maximum_shards: int = MAX_EMBEDDING_ROWS,
 ) -> tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...]:
     """Exact required pointer membership with stable order; bytes are verified later."""
-    if type(shards) is not tuple or len(shards) > MAX_EMBEDDING_ROWS:
+    if (
+        type(maximum_shards) is not int
+        or not 1 <= maximum_shards <= MAX_PUBLIC_SOLUTION_SOURCES
+        or type(shards) is not tuple
+        or len(shards) > maximum_shards
+    ):
         raise ValueError("EMBEDDING_INDEX_ASSEMBLY_LIMIT")
     by_pointer = {pointer: shard for pointer, shard in shards}
     if len(by_pointer) != len(shards):

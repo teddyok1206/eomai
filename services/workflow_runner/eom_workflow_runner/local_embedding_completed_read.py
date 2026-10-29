@@ -25,6 +25,7 @@ from eom_workflow.local_embedding_workflow_receipt_v2 import (
 )
 from eom_workflow.native_embedding_coordinator import NativeCoordinatorCompleted
 from eom_workflow.native_embedding_coordinator_v2 import NativeCoordinatorCompletedV2
+from eom_workflow.native_embedding_coordinator_v3 import NativeCoordinatorCompletedV3
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -83,8 +84,20 @@ def read_completed_local_embedding(
     history = NativeEmbeddingCoordinator(launch.intent, request).read(session)
     _require(history.state == "SUCCEEDED" and len(history.records) == 4)
     completed = history.records[3].payload
-    _require(isinstance(completed, (NativeCoordinatorCompleted, NativeCoordinatorCompletedV2)))
-    assert isinstance(completed, (NativeCoordinatorCompleted, NativeCoordinatorCompletedV2))
+    _require(
+        isinstance(
+            completed,
+            (
+                NativeCoordinatorCompleted,
+                NativeCoordinatorCompletedV2,
+                NativeCoordinatorCompletedV3,
+            ),
+        )
+    )
+    assert isinstance(
+        completed,
+        (NativeCoordinatorCompleted, NativeCoordinatorCompletedV2, NativeCoordinatorCompletedV3),
+    )
     _require(
         completed.output == output
         and output.workflow_id == workflow.workflow_id

@@ -34,6 +34,30 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "education-retrieval-access-policy-v1.4": CatalogSchemaResource(
+            "schemas/knowledge/education-retrieval-access-policy-v1.4.schema.json",
+            "resources/knowledge/education-retrieval-access-policy-v1.4.schema.json",
+            "1.4",
+            "sha256:3d44f5b533173533fc16ea71cc2b1132988a78a1625906f24f4df6a6fc6ee1c7",
+        ),
+        "public-solution-embedding-registry-v3": CatalogSchemaResource(
+            "schemas/knowledge/public-solution-embedding-registry-v3.schema.json",
+            "resources/knowledge/public-solution-embedding-registry-v3.schema.json",
+            "3.0",
+            "sha256:a7097861a77dfa1b012c9f22088a97dfed47e0a3df4cdcd7137aecd828f4ee68",
+        ),
+        "public-solution-embedding-index-v3": CatalogSchemaResource(
+            "schemas/knowledge/public-solution-embedding-index-v3.schema.json",
+            "resources/knowledge/public-solution-embedding-index-v3.schema.json",
+            "3.0",
+            "sha256:14e9e60a74abcee7cfff24fac62a3a9e841dd8d28eedc04196c11ea997db8c06",
+        ),
+        "public-solution-embedding-entry-v1": CatalogSchemaResource(
+            "schemas/knowledge/public-solution-embedding-entry-v1.schema.json",
+            "resources/knowledge/public-solution-embedding-entry-v1.schema.json",
+            "1.0",
+            "sha256:1daa230e38e0ce21ab164c4263a2cd2975145e1e6ab736a9af43330e4ada3535",
+        ),
         "creative-result-recovery-v1": CatalogSchemaResource(
             "schemas/external-item/creative-result-recovery-v1.schema.json",
             "resources/external-item/creative-result-recovery-v1.schema.json",

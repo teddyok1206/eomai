@@ -1,0 +1,1351 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/public-solution-embedding-index/3.0",
+  "title": "Exact public-solution bindings over existing numerical shards",
+  "$defs": {
+    "AcceptedPublicSolutionEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "ACCEPTED_SOLUTION_ANALYSIS",
+          "default": "ACCEPTED_SOLUTION_ANALYSIS",
+          "title": "Kind",
+          "type": "string"
+        },
+        "solution": {
+          "$ref": "#/$defs/KnowledgeSolutionEvidencePointer"
+        }
+      },
+      "required": [
+        "solution"
+      ],
+      "title": "AcceptedPublicSolutionEvidence",
+      "type": "object"
+    },
+    "ApprovedItemKnowledgeSourceV2": {
+      "additionalProperties": false,
+      "properties": {
+        "source_kind": {
+          "const": "APPROVED_ITEM_REVISION",
+          "default": "APPROVED_ITEM_REVISION",
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "source_class": {
+          "enum": [
+            "APPROVED_ITEM",
+            "PAST_EXAM"
+          ],
+          "title": "Source Class",
+          "type": "string"
+        },
+        "item_id": {
+          "pattern": "^item_[0-9a-f]{32}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "item_revision_id": {
+          "pattern": "^itemrev_[0-9a-f]{32}$",
+          "title": "Item Revision Id",
+          "type": "string"
+        },
+        "lifecycle_state": {
+          "const": "APPROVED",
+          "default": "APPROVED",
+          "title": "Lifecycle State",
+          "type": "string"
+        },
+        "artifact_member": {
+          "$ref": "#/$defs/KnowledgeAnalysisSourceArtifactMemberV2"
+        }
+      },
+      "required": [
+        "source_class",
+        "item_id",
+        "item_revision_id",
+        "artifact_member"
+      ],
+      "title": "ApprovedItemKnowledgeSourceV2",
+      "type": "object"
+    },
+    "ApprovedPastExamItemKnowledgeSourceV3": {
+      "additionalProperties": false,
+      "description": "One approved past-exam Item plus its exact visually reviewed source pages.",
+      "properties": {
+        "source_kind": {
+          "const": "APPROVED_ITEM_REVISION",
+          "default": "APPROVED_ITEM_REVISION",
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "source_class": {
+          "const": "PAST_EXAM",
+          "default": "PAST_EXAM",
+          "title": "Source Class",
+          "type": "string"
+        },
+        "item_id": {
+          "pattern": "^item_[0-9a-f]{32}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "item_revision_id": {
+          "pattern": "^itemrev_[0-9a-f]{32}$",
+          "title": "Item Revision Id",
+          "type": "string"
+        },
+        "lifecycle_state": {
+          "const": "APPROVED",
+          "default": "APPROVED",
+          "title": "Lifecycle State",
+          "type": "string"
+        },
+        "artifact_member": {
+          "$ref": "#/$defs/KnowledgeAnalysisSourceArtifactMemberV2"
+        },
+        "extraction_acceptance_id": {
+          "pattern": "^itemacceptance_[0-9a-f]{32}$",
+          "title": "Extraction Acceptance Id",
+          "type": "string"
+        },
+        "extraction_acceptance_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Extraction Acceptance Sha256",
+          "type": "string"
+        },
+        "extraction_acceptance_artifact": {
+          "$ref": "#/$defs/AssessmentArtifactMemberPointer"
+        },
+        "extraction_result_id": {
+          "pattern": "^itemextractresult_[0-9a-f]{32}$",
+          "title": "Extraction Result Id",
+          "type": "string"
+        },
+        "extraction_result_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Extraction Result Sha256",
+          "type": "string"
+        },
+        "extraction_result_artifact": {
+          "$ref": "#/$defs/AssessmentArtifactMemberPointer"
+        },
+        "item_proposal_id": {
+          "pattern": "^itemproposal_[0-9a-f]{32}$",
+          "title": "Item Proposal Id",
+          "type": "string"
+        },
+        "item_number": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Item Number",
+          "type": "integer"
+        },
+        "bundle": {
+          "$ref": "#/$defs/AssessmentSourceBundlePointer"
+        },
+        "layout_observation": {
+          "$ref": "#/$defs/AssessmentLayoutObservationPointer"
+        },
+        "page_inputs": {
+          "items": {
+            "$ref": "#/$defs/AssessmentPageImageInput"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Page Inputs",
+          "type": "array"
+        },
+        "page_image_count": {
+          "maximum": 32,
+          "minimum": 1,
+          "title": "Page Image Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "item_id",
+        "item_revision_id",
+        "artifact_member",
+        "extraction_acceptance_id",
+        "extraction_acceptance_sha256",
+        "extraction_acceptance_artifact",
+        "extraction_result_id",
+        "extraction_result_sha256",
+        "extraction_result_artifact",
+        "item_proposal_id",
+        "item_number",
+        "bundle",
+        "layout_observation",
+        "page_inputs",
+        "page_image_count"
+      ],
+      "title": "ApprovedPastExamItemKnowledgeSourceV3",
+      "type": "object"
+    },
+    "ArtifactMemberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ArtifactMemberPointer",
+      "type": "object"
+    },
+    "AssessmentArtifactMemberPointer": {
+      "additionalProperties": false,
+      "description": "Compatibility name for the shared origin Artifact member pointer.",
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "AssessmentArtifactMemberPointer",
+      "type": "object"
+    },
+    "AssessmentLayoutObservationPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "assessment_layout_observation_id": {
+          "pattern": "^assessmentlayout_[0-9a-f]{32}$",
+          "title": "Assessment Layout Observation Id",
+          "type": "string"
+        },
+        "artifact": {
+          "$ref": "#/$defs/AssessmentArtifactMemberPointer"
+        },
+        "workspace_relative_path": {
+          "const": "source/layout-observation.json",
+          "default": "source/layout-observation.json",
+          "title": "Workspace Relative Path",
+          "type": "string"
+        },
+        "observation_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Observation Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "assessment_layout_observation_id",
+        "artifact",
+        "observation_sha256"
+      ],
+      "title": "AssessmentLayoutObservationPointer",
+      "type": "object"
+    },
+    "AssessmentPageImageInput": {
+      "additionalProperties": false,
+      "properties": {
+        "page_input_id": {
+          "pattern": "^assessmentpage_[0-9a-f]{32}$",
+          "title": "Page Input Id",
+          "type": "string"
+        },
+        "source_role": {
+          "enum": [
+            "PROBLEM_DOCUMENT",
+            "ANSWER_EXPLANATION_DOCUMENT"
+          ],
+          "title": "Source Role",
+          "type": "string"
+        },
+        "physical_page": {
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Physical Page",
+          "type": "integer"
+        },
+        "source": {
+          "$ref": "#/$defs/AssessmentArtifactMemberPointer"
+        },
+        "image": {
+          "$ref": "#/$defs/AssessmentArtifactMemberPointer"
+        },
+        "workspace_relative_path": {
+          "pattern": "^source/pages/assessmentpage_[0-9a-f]{32}\\.png$",
+          "title": "Workspace Relative Path",
+          "type": "string"
+        },
+        "width_px": {
+          "maximum": 20000,
+          "minimum": 1,
+          "title": "Width Px",
+          "type": "integer"
+        },
+        "height_px": {
+          "maximum": 20000,
+          "minimum": 1,
+          "title": "Height Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "page_input_id",
+        "source_role",
+        "physical_page",
+        "source",
+        "image",
+        "workspace_relative_path",
+        "width_px",
+        "height_px"
+      ],
+      "title": "AssessmentPageImageInput",
+      "type": "object"
+    },
+    "AssessmentSourceBundlePointer": {
+      "additionalProperties": false,
+      "properties": {
+        "assessment_source_bundle_id": {
+          "pattern": "^assessbundle_[0-9a-f]{32}$",
+          "title": "Assessment Source Bundle Id",
+          "type": "string"
+        },
+        "assessment_source_bundle_revision_id": {
+          "pattern": "^assessbundlerev_[0-9a-f]{32}$",
+          "title": "Assessment Source Bundle Revision Id",
+          "type": "string"
+        },
+        "bundle_manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Bundle Manifest Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "assessment_source_bundle_id",
+        "assessment_source_bundle_revision_id",
+        "bundle_manifest_sha256"
+      ],
+      "title": "AssessmentSourceBundlePointer",
+      "type": "object"
+    },
+    "CreativePublicSolutionEvidence": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "REGISTERED_CREATIVE_SOURCE_REPORT",
+          "default": "REGISTERED_CREATIVE_SOURCE_REPORT",
+          "title": "Kind",
+          "type": "string"
+        },
+        "lineage": {
+          "$ref": "#/$defs/ArtifactMemberPointer"
+        },
+        "lineage_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Lineage Sha256",
+          "type": "string"
+        },
+        "role_result": {
+          "$ref": "#/$defs/ArtifactMemberPointer"
+        },
+        "result_id": {
+          "pattern": "^extlearnresult_[0-9a-f]{32}$",
+          "title": "Result Id",
+          "type": "string"
+        },
+        "result_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Result Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "lineage",
+        "lineage_sha256",
+        "role_result",
+        "result_id",
+        "result_sha256"
+      ],
+      "title": "CreativePublicSolutionEvidence",
+      "type": "object"
+    },
+    "EmbeddingEncodingIdentity": {
+      "additionalProperties": false,
+      "properties": {
+        "storage_partition": {
+          "$ref": "#/$defs/StoragePartition"
+        },
+        "space_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Space Sha256",
+          "type": "string"
+        },
+        "input_text_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Input Text Sha256",
+          "type": "string"
+        },
+        "encoding_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Encoding Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "storage_partition",
+        "space_sha256",
+        "input_text_sha256",
+        "encoding_sha256"
+      ],
+      "title": "EmbeddingEncodingIdentity",
+      "type": "object"
+    },
+    "EmbeddingExecutionRuntime": {
+      "additionalProperties": false,
+      "description": "Actual installed execution fingerprint is verified by the owner, not this pure DTO.",
+      "properties": {
+        "device": {
+          "enum": [
+            "CPU",
+            "CUDA"
+          ],
+          "title": "Device",
+          "type": "string"
+        },
+        "precision": {
+          "const": "FLOAT32",
+          "default": "FLOAT32",
+          "title": "Precision",
+          "type": "string"
+        },
+        "tf32_enabled": {
+          "const": false,
+          "default": false,
+          "title": "Tf32 Enabled",
+          "type": "boolean"
+        },
+        "execution_runtime_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Execution Runtime Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "device",
+        "execution_runtime_sha256"
+      ],
+      "title": "EmbeddingExecutionRuntime",
+      "type": "object"
+    },
+    "EmbeddingSpace": {
+      "additionalProperties": false,
+      "properties": {
+        "model_spec": {
+          "$ref": "#/$defs/LocalEmbeddingModelSpec"
+        },
+        "purpose": {
+          "enum": [
+            "QUERY",
+            "DOCUMENT"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "runtime": {
+          "$ref": "#/$defs/EmbeddingExecutionRuntime"
+        },
+        "space_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Space Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_spec",
+        "purpose",
+        "runtime",
+        "space_sha256"
+      ],
+      "title": "EmbeddingSpace",
+      "type": "object"
+    },
+    "EmbeddingVectorRowRef": {
+      "additionalProperties": false,
+      "properties": {
+        "shard_manifest": {
+          "$ref": "#/$defs/ArtifactMemberPointer"
+        },
+        "row_index": {
+          "maximum": 1023,
+          "minimum": 0,
+          "title": "Row Index",
+          "type": "integer"
+        },
+        "encoding_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Encoding Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "shard_manifest",
+        "row_index",
+        "encoding_sha256"
+      ],
+      "title": "EmbeddingVectorRowRef",
+      "type": "object"
+    },
+    "KnowledgeAnalysisSourceArtifactMemberV2": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "pattern": "^[A-Za-z0-9._()가-힣/-]+$",
+          "title": "Member Path",
+          "type": "string"
+        },
+        "materialized_path": {
+          "maxLength": 512,
+          "minLength": 8,
+          "pattern": "^source/[A-Za-z0-9._()가-힣/-]+$",
+          "title": "Materialized Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "bytes": {
+          "maximum": 104857600,
+          "minimum": 1,
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "schema_ref": {
+          "anyOf": [
+            {
+              "maxLength": 256,
+              "pattern": "^eom(?:\\.assess(?:ment)?|://schemas/)[A-Za-z0-9._/@:-]{1,191}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Schema Ref"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "pattern": "^[a-z0-9.+-]+/[A-Za-z0-9.+-]+$",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "logical_name": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$",
+          "title": "Logical Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "materialized_path",
+        "sha256",
+        "bytes",
+        "media_type",
+        "logical_name"
+      ],
+      "title": "KnowledgeAnalysisSourceArtifactMemberV2",
+      "type": "object"
+    },
+    "KnowledgeArtifactMemberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "pattern": "^eom(?:\\.assess(?:ment)?|://schemas/)[A-Za-z0-9._/@:-]{1,191}$",
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "pattern": "^[a-z0-9.+-]+/[A-Za-z0-9.+-]+$",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "logical_name": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$",
+          "title": "Logical Name",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "pattern": "^(source|normalized|projections|evidence)/[A-Za-z0-9._()가-힣/-]+$",
+          "title": "Member Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "sha256",
+        "schema_ref",
+        "media_type",
+        "logical_name",
+        "member_path"
+      ],
+      "title": "KnowledgeArtifactMemberPointer",
+      "type": "object"
+    },
+    "KnowledgeGraphSnapshotPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "graph_id": {
+          "pattern": "^graph_[0-9a-f]{32}$",
+          "title": "Graph Id",
+          "type": "string"
+        },
+        "graph_snapshot_revision_id": {
+          "pattern": "^graphrev_[0-9a-f]{32}$",
+          "title": "Graph Snapshot Revision Id",
+          "type": "string"
+        },
+        "manifest_artifact": {
+          "$ref": "#/$defs/KnowledgeArtifactMemberPointer"
+        },
+        "manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "graph_id",
+        "graph_snapshot_revision_id",
+        "manifest_artifact",
+        "manifest_sha256"
+      ],
+      "title": "KnowledgeGraphSnapshotPointer",
+      "type": "object"
+    },
+    "KnowledgeSolutionEvidencePointer": {
+      "additionalProperties": false,
+      "description": "Exact accepted additive report pointers attached to one base analysis.",
+      "properties": {
+        "schema_version": {
+          "const": "knowledge-solution-evidence-pointer/1.0",
+          "default": "knowledge-solution-evidence-pointer/1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "base_analysis_run_id": {
+          "pattern": "^analysisrun_[0-9a-f]{32}$",
+          "title": "Base Analysis Run Id",
+          "type": "string"
+        },
+        "base_analysis_result_id": {
+          "pattern": "^knowledgeanalysisresult_[0-9a-f]{32}$",
+          "title": "Base Analysis Result Id",
+          "type": "string"
+        },
+        "solution_analysis_run_id": {
+          "pattern": "^analysisrun_[0-9a-f]{32}$",
+          "title": "Solution Analysis Run Id",
+          "type": "string"
+        },
+        "solution_analysis_result_id": {
+          "pattern": "^knowledgeanalysisresult_[0-9a-f]{32}$",
+          "title": "Solution Analysis Result Id",
+          "type": "string"
+        },
+        "solution_result_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Solution Result Sha256",
+          "type": "string"
+        },
+        "accepted_result_artifact": {
+          "$ref": "#/$defs/KnowledgeArtifactMemberPointer"
+        },
+        "proposal_receipt": {
+          "$ref": "#/$defs/KnowledgeArtifactMemberPointer"
+        },
+        "solution_report": {
+          "$ref": "#/$defs/KnowledgeArtifactMemberPointer"
+        },
+        "proposal_content_set_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Proposal Content Set Sha256",
+          "type": "string"
+        },
+        "pointer_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Pointer Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "base_analysis_run_id",
+        "base_analysis_result_id",
+        "solution_analysis_run_id",
+        "solution_analysis_result_id",
+        "solution_result_sha256",
+        "accepted_result_artifact",
+        "proposal_receipt",
+        "solution_report",
+        "proposal_content_set_sha256",
+        "pointer_sha256"
+      ],
+      "title": "KnowledgeSolutionEvidencePointer",
+      "type": "object"
+    },
+    "LocalEmbeddingFile": {
+      "additionalProperties": false,
+      "properties": {
+        "member_path": {
+          "enum": [
+            "config.json",
+            "model.safetensors",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "special_tokens_map.json",
+            "sentencepiece.bpe.model",
+            "README.md",
+            "LICENSE",
+            "1_Pooling/config.json"
+          ],
+          "title": "Member Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "maximum": 8589934592,
+          "minimum": 1,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "member_path",
+        "sha256",
+        "size_bytes"
+      ],
+      "title": "LocalEmbeddingFile",
+      "type": "object"
+    },
+    "LocalEmbeddingModelSpec": {
+      "additionalProperties": false,
+      "description": "Pinned offline recipe; owning a manifest does not activate or approve its files.",
+      "properties": {
+        "schema_version": {
+          "const": "item-local-embedding-model-spec/1.0",
+          "default": "item-local-embedding-model-spec/1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "model_id": {
+          "pattern": "^embeddingmodel_[0-9a-f]{32}$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "model_revision_id": {
+          "pattern": "^embeddingmodelrev_[0-9a-f]{32}$",
+          "title": "Model Revision Id",
+          "type": "string"
+        },
+        "provider_family": {
+          "const": "transformers-local-dense/1.0",
+          "default": "transformers-local-dense/1.0",
+          "title": "Provider Family",
+          "type": "string"
+        },
+        "upstream_repo": {
+          "enum": [
+            "BAAI/bge-m3",
+            "intfloat/multilingual-e5-small",
+            "intfloat/multilingual-e5-base"
+          ],
+          "title": "Upstream Repo",
+          "type": "string"
+        },
+        "upstream_revision": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Upstream Revision",
+          "type": "string"
+        },
+        "license_id": {
+          "const": "MIT",
+          "default": "MIT",
+          "title": "License Id",
+          "type": "string"
+        },
+        "dimension": {
+          "enum": [
+            384,
+            768,
+            1024
+          ],
+          "title": "Dimension",
+          "type": "integer"
+        },
+        "maximum_tokens": {
+          "maximum": 8192,
+          "minimum": 2,
+          "title": "Maximum Tokens",
+          "type": "integer"
+        },
+        "pooling": {
+          "enum": [
+            "CLS",
+            "MEAN"
+          ],
+          "title": "Pooling",
+          "type": "string"
+        },
+        "normalization": {
+          "const": "L2",
+          "default": "L2",
+          "title": "Normalization",
+          "type": "string"
+        },
+        "dtype": {
+          "const": "float32",
+          "default": "float32",
+          "title": "Dtype",
+          "type": "string"
+        },
+        "query_prefix": {
+          "enum": [
+            "",
+            "query: "
+          ],
+          "title": "Query Prefix",
+          "type": "string"
+        },
+        "document_prefix": {
+          "enum": [
+            "",
+            "query: "
+          ],
+          "title": "Document Prefix",
+          "type": "string"
+        },
+        "truncation": {
+          "const": "REJECT_OVERFLOW",
+          "default": "REJECT_OVERFLOW",
+          "title": "Truncation",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "$ref": "#/$defs/LocalEmbeddingFile"
+          },
+          "maxItems": 9,
+          "minItems": 5,
+          "title": "Files",
+          "type": "array"
+        },
+        "runtime_versions": {
+          "items": {
+            "$ref": "#/$defs/LocalEmbeddingRuntimeVersion"
+          },
+          "maxItems": 4,
+          "minItems": 4,
+          "title": "Runtime Versions",
+          "type": "array"
+        },
+        "manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_id",
+        "model_revision_id",
+        "upstream_repo",
+        "upstream_revision",
+        "dimension",
+        "maximum_tokens",
+        "pooling",
+        "query_prefix",
+        "document_prefix",
+        "files",
+        "runtime_versions",
+        "manifest_sha256"
+      ],
+      "title": "LocalEmbeddingModelSpec",
+      "type": "object"
+    },
+    "LocalEmbeddingRuntimeVersion": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "enum": [
+            "torch",
+            "transformers",
+            "safetensors",
+            "tokenizers"
+          ],
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "pattern": "^[0-9][A-Za-z0-9.+_-]{0,95}$",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version"
+      ],
+      "title": "LocalEmbeddingRuntimeVersion",
+      "type": "object"
+    },
+    "PopulationSource": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ApprovedItemKnowledgeSourceV2"
+        },
+        {
+          "$ref": "#/$defs/ApprovedPastExamItemKnowledgeSourceV3"
+        }
+      ]
+    },
+    "PublicSolutionEmbeddingEvidence": {
+      "discriminator": {
+        "mapping": {
+          "ACCEPTED_SOLUTION_ANALYSIS": "#/$defs/AcceptedPublicSolutionEvidence",
+          "REGISTERED_CREATIVE_SOURCE_REPORT": "#/$defs/CreativePublicSolutionEvidence"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/AcceptedPublicSolutionEvidence"
+        },
+        {
+          "$ref": "#/$defs/CreativePublicSolutionEvidence"
+        }
+      ]
+    },
+    "PublicSolutionEmbeddingIndex": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "embedding-index-manifest/3.0",
+          "default": "embedding-index-manifest/3.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "index_id": {
+          "pattern": "^embeddingindex_[0-9a-f]{32}$",
+          "title": "Index Id",
+          "type": "string"
+        },
+        "index_revision_id": {
+          "pattern": "^embeddingindexrev_[0-9a-f]{32}$",
+          "title": "Index Revision Id",
+          "type": "string"
+        },
+        "previous_manifest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactMemberPointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "storage_partition": {
+          "$ref": "#/$defs/StoragePartition"
+        },
+        "space": {
+          "$ref": "#/$defs/EmbeddingSpace"
+        },
+        "view": {
+          "const": "CONCRETE_FACETS",
+          "default": "CONCRETE_FACETS",
+          "title": "View",
+          "type": "string"
+        },
+        "recipe": {
+          "$ref": "#/$defs/PublicSolutionEmbeddingRecipe"
+        },
+        "shards": {
+          "items": {
+            "$ref": "#/$defs/ArtifactMemberPointer"
+          },
+          "maxItems": 16384,
+          "minItems": 1,
+          "title": "Shards",
+          "type": "array"
+        },
+        "bindings": {
+          "items": {
+            "$ref": "#/$defs/PublicSolutionEmbeddingSourceBinding"
+          },
+          "maxItems": 16384,
+          "minItems": 1,
+          "title": "Bindings",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "index_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Index Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "index_id",
+        "index_revision_id",
+        "previous_manifest",
+        "storage_partition",
+        "space",
+        "recipe",
+        "shards",
+        "bindings",
+        "created_at",
+        "index_sha256"
+      ],
+      "title": "PublicSolutionEmbeddingIndex",
+      "type": "object"
+    },
+    "PublicSolutionEmbeddingRecipe": {
+      "additionalProperties": false,
+      "description": "Explicit successor; old EXACT_PROFILE_CLAIMS recipe bytes stay unchanged.",
+      "properties": {
+        "schema_version": {
+          "const": "inference-transfer-view-recipe/2.0",
+          "default": "inference-transfer-view-recipe/2.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "content": {
+          "const": "CANONICAL_ITEM_TEXT_NO_SOLUTION",
+          "default": "CANONICAL_ITEM_TEXT_NO_SOLUTION",
+          "title": "Content",
+          "type": "string"
+        },
+        "facets": {
+          "const": "FORMAT_NEUTRAL_PUBLIC_SOLUTION",
+          "default": "FORMAT_NEUTRAL_PUBLIC_SOLUTION",
+          "title": "Facets",
+          "type": "string"
+        },
+        "metadata": {
+          "const": "SORTED_ACCEPTED_FIELDS",
+          "default": "SORTED_ACCEPTED_FIELDS",
+          "title": "Metadata",
+          "type": "string"
+        },
+        "overflow": {
+          "const": "REJECT_OVERFLOW",
+          "default": "REJECT_OVERFLOW",
+          "title": "Overflow",
+          "type": "string"
+        },
+        "maximum_text_bytes": {
+          "const": 262144,
+          "default": 262144,
+          "title": "Maximum Text Bytes",
+          "type": "integer"
+        },
+        "ranking": {
+          "const": "EXACT_FLOAT64_COSINE_REF_TIES",
+          "default": "EXACT_FLOAT64_COSINE_REF_TIES",
+          "title": "Ranking",
+          "type": "string"
+        },
+        "recipe_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Recipe Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "recipe_sha256"
+      ],
+      "title": "PublicSolutionEmbeddingRecipe",
+      "type": "object"
+    },
+    "PublicSolutionEmbeddingSourceBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "embedding-source-binding/3.0",
+          "default": "embedding-source-binding/3.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "source": {
+          "$ref": "#/$defs/PopulationSource"
+        },
+        "base_analysis_run_id": {
+          "pattern": "^analysisrun_[0-9a-f]{32}$",
+          "title": "Base Analysis Run Id",
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/$defs/PublicSolutionProfilePointer"
+        },
+        "evidence": {
+          "$ref": "#/$defs/PublicSolutionEmbeddingEvidence"
+        },
+        "graph_snapshot": {
+          "$ref": "#/$defs/KnowledgeGraphSnapshotPointer"
+        },
+        "policy_revision_id": {
+          "pattern": "^accessrev_[0-9a-f]{32}$",
+          "title": "Policy Revision Id",
+          "type": "string"
+        },
+        "policy_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Policy Sha256",
+          "type": "string"
+        },
+        "recipe": {
+          "$ref": "#/$defs/PublicSolutionEmbeddingRecipe"
+        },
+        "view": {
+          "const": "CONCRETE_FACETS",
+          "default": "CONCRETE_FACETS",
+          "title": "View",
+          "type": "string"
+        },
+        "projection_version": {
+          "const": "public-solution-text/1.0",
+          "default": "public-solution-text/1.0",
+          "title": "Projection Version",
+          "type": "string"
+        },
+        "encoding": {
+          "$ref": "#/$defs/EmbeddingEncodingIdentity"
+        },
+        "row_ref": {
+          "$ref": "#/$defs/EmbeddingVectorRowRef"
+        },
+        "binding_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Binding Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "base_analysis_run_id",
+        "profile",
+        "evidence",
+        "graph_snapshot",
+        "policy_revision_id",
+        "policy_sha256",
+        "recipe",
+        "encoding",
+        "row_ref",
+        "binding_sha256"
+      ],
+      "title": "PublicSolutionEmbeddingSourceBinding",
+      "type": "object"
+    },
+    "PublicSolutionIndexNamespace": {
+      "additionalProperties": false,
+      "properties": {
+        "storage_partition": {
+          "$ref": "#/$defs/StoragePartition"
+        },
+        "space_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Space Sha256",
+          "type": "string"
+        },
+        "view": {
+          "const": "CONCRETE_FACETS",
+          "default": "CONCRETE_FACETS",
+          "title": "View",
+          "type": "string"
+        },
+        "recipe_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Recipe Sha256",
+          "type": "string"
+        },
+        "projection_version": {
+          "const": "public-solution-text/1.0",
+          "default": "public-solution-text/1.0",
+          "title": "Projection Version",
+          "type": "string"
+        },
+        "population_scope": {
+          "const": "ALL_ADMITTED_GRAPH_ITEMS",
+          "default": "ALL_ADMITTED_GRAPH_ITEMS",
+          "title": "Population Scope",
+          "type": "string"
+        }
+      },
+      "required": [
+        "storage_partition",
+        "space_sha256",
+        "recipe_sha256"
+      ],
+      "title": "PublicSolutionIndexNamespace",
+      "type": "object"
+    },
+    "PublicSolutionProfilePointer": {
+      "additionalProperties": false,
+      "properties": {
+        "profile_id": {
+          "pattern": "^inferenceprofile_[0-9a-f]{32}$",
+          "title": "Profile Id",
+          "type": "string"
+        },
+        "profile_revision_id": {
+          "pattern": "^inferenceprofilerev_[0-9a-f]{32}$",
+          "title": "Profile Revision Id",
+          "type": "string"
+        },
+        "profile_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Profile Sha256",
+          "type": "string"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/knowledge/public-solution-embedding-entry/1.0",
+          "default": "eom://schemas/knowledge/public-solution-embedding-entry/1.0",
+          "title": "Schema Ref",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profile_id",
+        "profile_revision_id",
+        "profile_sha256"
+      ],
+      "title": "PublicSolutionProfilePointer",
+      "type": "object"
+    },
+    "StoragePartition": {
+      "pattern": "^[a-z0-9][a-z0-9._-]{0,63}$",
+      "type": "string"
+    }
+  },
+  "anyOf": [
+    {
+      "$ref": "#/$defs/PublicSolutionEmbeddingIndex"
+    },
+    {
+      "$ref": "#/$defs/PublicSolutionEmbeddingSourceBinding"
+    },
+    {
+      "$ref": "#/$defs/PublicSolutionIndexNamespace"
+    },
+    {
+      "$ref": "#/$defs/PublicSolutionProfilePointer"
+    }
+  ]
+}

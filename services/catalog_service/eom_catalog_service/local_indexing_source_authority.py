@@ -15,6 +15,7 @@ from eom_catalog_contracts.local_indexing_policy import (
     LocalIndexingPolicyContractError,
     require_local_indexing_source_policy,
 )
+from eom_catalog_contracts.public_solution_indexing_policy import PublicSolutionIndexingAccessPolicy
 from eom_catalog_contracts.segmented_local_indexing_policy import (
     SegmentedLocalIndexingAccessPolicy,
 )
@@ -60,7 +61,11 @@ class CatalogLocalIndexingSourceAuthority:
         policy = self.retrieval.resolve_local_indexing_access_policy(
             session, revision_id, sha256=sha256
         )
-        if type(policy) not in (LocalIndexingAccessPolicy, LocalIndexingMixedAccessPolicy):
+        if type(policy) not in (
+            LocalIndexingAccessPolicy,
+            LocalIndexingMixedAccessPolicy,
+            PublicSolutionIndexingAccessPolicy,
+        ):
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_UNAVAILABLE")
         self._verify_source_policy(session, policy, identity)
         return policy
@@ -142,7 +147,11 @@ class CatalogLocalIndexingSourceAuthority:
         intent: LocalIndexingSourceReadIntent,
     ) -> SupportedLocalIndexingAccessPolicy:
         policy = self._authorize_with_policy(session, intent, self._current_policy)
-        if type(policy) not in (LocalIndexingAccessPolicy, LocalIndexingMixedAccessPolicy):
+        if type(policy) not in (
+            LocalIndexingAccessPolicy,
+            LocalIndexingMixedAccessPolicy,
+            PublicSolutionIndexingAccessPolicy,
+        ):
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_UNAVAILABLE")
         return cast(SupportedLocalIndexingAccessPolicy, policy)
 
@@ -175,7 +184,9 @@ class CatalogLocalIndexingSourceAuthority:
                 raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_FORBIDDEN") from None
             page_cap = (
                 policy.maximum_page_sources
-                if isinstance(policy, SegmentedLocalIndexingAccessPolicy)
+                if isinstance(
+                    policy, (SegmentedLocalIndexingAccessPolicy, PublicSolutionIndexingAccessPolicy)
+                )
                 else policy.maximum_sources
             )
             if (

@@ -30,6 +30,7 @@ from eom_catalog_contracts.knowledge import (
     same_approved_item_source_identity,
 )
 from eom_catalog_contracts.models import FrozenModel, Sha256, UtcDatetime
+from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingRecipe
 from eom_catalog_contracts.validation import validate_contract
 
 SCHEMA_NAME = "item-inference-transfer-embedding"
@@ -197,7 +198,7 @@ class EmbeddingIndexBindingShape(Protocol):
     def view(self) -> ExperimentView: ...
 
     @property
-    def recipe(self) -> ExperimentViewRecipe: ...
+    def recipe(self) -> ExperimentViewRecipe | PublicSolutionEmbeddingRecipe: ...
 
 
 class EmbeddingIndexReferenceShape(Protocol):
@@ -222,7 +223,7 @@ class EmbeddingIndexReferenceShape(Protocol):
     def view(self) -> ExperimentView: ...
 
     @property
-    def recipe(self) -> ExperimentViewRecipe: ...
+    def recipe(self) -> ExperimentViewRecipe | PublicSolutionEmbeddingRecipe: ...
 
     @property
     def shards(self) -> tuple[ArtifactMemberPointer, ...]: ...
@@ -240,12 +241,17 @@ def validate_embedding_index_layout(
     storage_partition: str,
     space: EmbeddingSpace,
     view: ExperimentView,
-    recipe: ExperimentViewRecipe,
+    recipe: ExperimentViewRecipe | PublicSolutionEmbeddingRecipe,
     shards: tuple[ArtifactMemberPointer, ...],
     bindings: Sequence[EmbeddingIndexBindingShape],
 ) -> None:
     """One authoritative pure layout rule, after each owner's schema validation."""
-    ExperimentViewRecipe.model_validate(recipe.model_dump(mode="json"))
+    if type(recipe) is PublicSolutionEmbeddingRecipe:
+        PublicSolutionEmbeddingRecipe.model_validate(recipe.model_dump(mode="json"))
+    elif type(recipe) is ExperimentViewRecipe:
+        ExperimentViewRecipe.model_validate(recipe.model_dump(mode="json"))
+    else:
+        raise ValueError("index recipe family is unsupported")
     if space.purpose != "DOCUMENT":
         raise ValueError("a corpus index requires document vectors")
     if previous_manifest is not None:

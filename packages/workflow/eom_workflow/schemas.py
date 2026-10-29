@@ -756,6 +756,12 @@ MIXED_EMBEDDING_SOURCE_PLAN_SCHEMA_RESOURCE = (
     "eom://schemas/workflow/local-embedding-source-plan/2.0",
     "sha256:cbf7c6647484bc59efa1a857669ebb67aa6cf49a2a1bfaa28a326bca364f88d0",
 )
+PUBLIC_EMBEDDING_SOURCE_PLAN_SCHEMA_RESOURCE = (
+    "public-source-plan",
+    "local-embedding-source-plan-v3.schema.json",
+    "eom://schemas/workflow/local-embedding-source-plan/3.0",
+    "sha256:74928b617a8c3588f2c348b6803d2d898fad24774532b2b11f15a544adf25ae4",
+)
 
 MIXED_NATIVE_WORKFLOW_SCHEMA_RESOURCES = (
     (
@@ -775,6 +781,32 @@ MIXED_NATIVE_WORKFLOW_SCHEMA_RESOURCES = (
         "local-embedding-completion-v2.schema.json",
         "eom://schemas/workflow/local-embedding-completion/2.0",
         "sha256:543283984d92ef61d59d044c396e2001267c6f15532081f71f45c0034200b5b1",
+    ),
+)
+PUBLIC_NATIVE_WORKFLOW_SCHEMA_RESOURCES = (
+    (
+        "public-completion",
+        "local-embedding-completion-v3.schema.json",
+        "eom://schemas/workflow/local-embedding-completion/3.0",
+        "sha256:63cb7949b7c71ec0cc6f83bd95463a31269a789f5b4f0642cdbf6f7c24c2627b",
+    ),
+    (
+        "public-coordinator",
+        "native-embedding-coordinator-v3.schema.json",
+        "eom://schemas/workflow/native-embedding-coordinator/3.0",
+        "sha256:5da92e6ddbaf39f8f4c9aee371be929f58f68a6919015da7a01e48d2d225d2a0",
+    ),
+    (
+        "public-request",
+        "local-embedding-workflow-request-v3.schema.json",
+        "eom://schemas/workflow/local-embedding-workflow-request/3.0",
+        "sha256:81f38bd9a5996ca02e5463d6fffe89d01d61c9972d50abb049ebbdbcd4304e4f",
+    ),
+    (
+        "public-ownership",
+        "embedding-encoding-ownership-v3.schema.json",
+        "eom://schemas/workflow/embedding-encoding-ownership/3.0",
+        "sha256:d30a5355499c7576249ca46c147411b52ac11407f2115003f87b20fcaa4db465",
     ),
 )
 
@@ -838,7 +870,12 @@ type LocalEmbeddingSchemaName = Literal[
     "request",
     "source-plan",
     "mixed-source-plan",
+    "public-source-plan",
     "mixed-request",
+    "public-request",
+    "public-ownership",
+    "public-completion",
+    "public-coordinator",
     "mixed-ownership",
     "mixed-completion",
     "definition-v2",
@@ -894,7 +931,9 @@ def _local_embedding_admission_schema(name: LocalEmbeddingSchemaName) -> dict[st
             for entry in (
                 *LOCAL_EMBEDDING_SCHEMA_RESOURCES,
                 MIXED_EMBEDDING_SOURCE_PLAN_SCHEMA_RESOURCE,
+                PUBLIC_EMBEDDING_SOURCE_PLAN_SCHEMA_RESOURCE,
                 *MIXED_NATIVE_WORKFLOW_SCHEMA_RESOURCES,
+                *PUBLIC_NATIVE_WORKFLOW_SCHEMA_RESOURCES,
                 WORKFLOW_DEFINITION_V1_4_SCHEMA_RESOURCE,
                 *LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES,
                 PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
@@ -936,7 +975,9 @@ def _local_embedding_admission_schema_registry() -> Registry[Any]:
         for name, _, schema_id, _ in (
             *LOCAL_EMBEDDING_SCHEMA_RESOURCES,
             MIXED_EMBEDDING_SOURCE_PLAN_SCHEMA_RESOURCE,
+            PUBLIC_EMBEDDING_SOURCE_PLAN_SCHEMA_RESOURCE,
             *MIXED_NATIVE_WORKFLOW_SCHEMA_RESOURCES,
+            *PUBLIC_NATIVE_WORKFLOW_SCHEMA_RESOURCES,
             WORKFLOW_DEFINITION_V1_4_SCHEMA_RESOURCE,
             *LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES,
             PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
@@ -960,7 +1001,9 @@ def local_embedding_admission_schema_registry() -> Registry[Any]:
         for name, _, schema_id, _ in (
             *LOCAL_EMBEDDING_SCHEMA_RESOURCES,
             MIXED_EMBEDDING_SOURCE_PLAN_SCHEMA_RESOURCE,
+            PUBLIC_EMBEDDING_SOURCE_PLAN_SCHEMA_RESOURCE,
             *MIXED_NATIVE_WORKFLOW_SCHEMA_RESOURCES,
+            *PUBLIC_NATIVE_WORKFLOW_SCHEMA_RESOURCES,
             WORKFLOW_DEFINITION_V1_4_SCHEMA_RESOURCE,
             *LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES,
             PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
@@ -983,6 +1026,9 @@ def validate_local_embedding_admission_message(
             in {
                 "request",
                 "mixed-request",
+                "public-request",
+                "public-completion",
+                "public-coordinator",
                 "mixed-completion",
                 "definition-v2",
                 "execution-policy",

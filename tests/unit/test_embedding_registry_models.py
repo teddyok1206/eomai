@@ -175,6 +175,18 @@ def test_frozen_migration_matches_current_ddl_without_runtime_model_imports() ->
             value._creation_order = original_order[
                 (type(value), value.name, tuple(value.columns.keys()))
             ]
+    from tests.unit.test_public_solution_embedding_migration import public_solution_migration
+
+    public_successor = public_solution_migration()
+    # Roll back only the additive metadata shape, never execute a data downgrade.
+    for owner, name, predicate in public_successor._PREVIOUS_CHECKS:
+        table = baseline.tables[owner]
+        current = next(value for value in table.constraints if value.name == name)
+        order = current._creation_order
+        table.constraints.remove(current)
+        restored = CheckConstraint(predicate, name=name)
+        restored._creation_order = order
+        table.append_constraint(restored)
     changed = {(owner, name) for owner, name, _predicate in successor._CHECKS}
     for owner in ("embedding_source_bindings", "embedding_indexes", "embedding_index_revisions"):
         table = baseline.tables[owner]
@@ -195,6 +207,8 @@ def test_frozen_migration_matches_current_ddl_without_runtime_model_imports() ->
         if index.name in {
             "uq_embedding_binding_registered_review",
             "ix_embedding_binding_review_delta",
+            "uq_embedding_binding_public_solution",
+            "ix_embedding_binding_public_solution_delta",
         }:
             binding.indexes.remove(index)
     for name in ("evidence_kind", "review_job_id", "review_evidence_sha256"):

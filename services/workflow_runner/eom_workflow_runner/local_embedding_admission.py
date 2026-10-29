@@ -24,6 +24,10 @@ from eom_workflow.local_embedding_request_v2 import (
     supported_local_embedding_request_actor,
     validate_local_embedding_request_references_v2,
 )
+from eom_workflow.local_embedding_request_v3 import (
+    LocalEmbeddingWorkflowRequestV3,
+    validate_local_embedding_request_references_v3,
+)
 from eom_workflow.local_embedding_source_plan import (
     LocalEmbeddingSourcePlan,
     parse_local_embedding_source_plan,
@@ -31,6 +35,10 @@ from eom_workflow.local_embedding_source_plan import (
 from eom_workflow.local_embedding_source_plan_v2 import (
     LocalEmbeddingSourcePlanV2,
     parse_local_embedding_source_plan_v2,
+)
+from eom_workflow.local_embedding_source_plan_v3 import (
+    LocalEmbeddingSourcePlanV3,
+    parse_local_embedding_source_plan_v3,
 )
 from eom_workflow.local_embedding_workflow import (
     LOCAL_EMBEDDING_EXECUTION_PROTOCOL,
@@ -64,14 +72,19 @@ class ResolvedLocalEmbeddingAdmission:
     """Validated immutable controls only; no caller/session/source authority is carried."""
 
     request: SupportedLocalEmbeddingOwnerRequest
-    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2
+    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3
     policy: LocalEmbeddingExecutablePolicy
 
     def __post_init__(self) -> None:
         request = parse_supported_local_embedding_owner_request(self.request)
         policy = parse_local_embedding_executable_policy(raw_similarity_contract_value(self.policy))
-        plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2
-        if isinstance(request, LocalEmbeddingWorkflowRequestV2):
+        plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3
+        if isinstance(request, LocalEmbeddingWorkflowRequestV3):
+            plan = parse_local_embedding_source_plan_v3(self.plan)
+            if not isinstance(policy, LocalEmbeddingServiceExecutionPolicy):
+                raise ValueError("LOCAL_EMBEDDING_PURPOSE_INVALID")
+            validate_local_embedding_request_references_v3(request, plan, policy)
+        elif isinstance(request, LocalEmbeddingWorkflowRequestV2):
             plan = parse_local_embedding_source_plan_v2(self.plan)
             if not isinstance(policy, LocalEmbeddingServiceExecutionPolicy):
                 raise ValueError("LOCAL_EMBEDDING_PURPOSE_INVALID")
@@ -143,7 +156,9 @@ def validate_local_embedding_submission_controls(
     scope = ResolvedLocalEmbeddingAdmission(scope.request, scope.plan, scope.policy)
     expected_definition = (
         LocalEmbeddingWorkflowDefinitionV2
-        if isinstance(scope.request, LocalEmbeddingWorkflowRequestV2)
+        if isinstance(
+            scope.request, (LocalEmbeddingWorkflowRequestV2, LocalEmbeddingWorkflowRequestV3)
+        )
         else LocalEmbeddingWorkflowDefinition
     )
     if type(definition.definition) is not expected_definition:

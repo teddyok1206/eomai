@@ -38,7 +38,7 @@ def registered_review_migration() -> Any:
 
 def test_frozen_revision_and_current_orm_checks_are_exact(monkeypatch):
     module = registered_review_migration()
-    assert module.revision == CURRENT_MIGRATION_REVISION == "20261019_0058"
+    assert module.revision == "20261019_0058"
     assert module.down_revision == "20261017_0057"
     assert ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini"))).get_heads() == [
         CURRENT_MIGRATION_REVISION
@@ -50,6 +50,15 @@ def test_frozen_revision_and_current_orm_checks_are_exact(monkeypatch):
         for check in cast(Table, model.__table__).constraints
         if isinstance(check, CheckConstraint)
     }
+    # A released migration remains frozen when a later family adds CHECK branches.
+    from tests.unit.test_public_solution_embedding_migration import public_solution_migration
+
+    current.update(
+        {
+            (table, name): value
+            for table, name, value in public_solution_migration()._PREVIOUS_CHECKS
+        }
+    )
     assert len(module._CHECKS) == 7
     for table, name, predicate in module._CHECKS:
         assert current[(table, name)] == predicate

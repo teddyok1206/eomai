@@ -18,6 +18,11 @@ from eom_catalog_contracts.mixed_embedding_registry import (
     EmbeddingIndexRegistrationResultV2,
     RegisterEmbeddingIndexCommandV2,
 )
+from eom_catalog_contracts.public_solution_embedding_index import PUBLIC_SOLUTION_INDEX_SCHEMA_REF
+from eom_catalog_contracts.public_solution_embedding_registry import (
+    PublicSolutionIndexRegistrationResult,
+    RegisterPublicSolutionIndexCommand,
+)
 from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
 from eom_catalog_service.embedding_index_assembly import (
     AssembledEmbeddingIndex,
@@ -43,6 +48,11 @@ from eom_catalog_service.local_embedding_completion_artifacts import (
 from eom_catalog_service.local_embedding_encoding_artifacts import (
     CatalogLocalEmbeddingEncodingArtifacts,
 )
+from eom_catalog_service.public_solution_index_assembly import (
+    AssembledPublicSolutionIndex,
+    PreparedPublicSolutionIndexBasis,
+    assemble_public_solution_index_revision,
+)
 from eom_identifiers import (
     canonical_json_bytes,
     content_sha256,
@@ -67,11 +77,8 @@ from eom_orchestrator.native_embedding_launch_identity import (
     read_native_embedding_launch_association,
 )
 from eom_protocol.artifact_members import ArtifactMemberPointer
-from eom_workflow.local_embedding_encoding_job import (
-    EmbeddingEncodingReadResult,
-)
+from eom_workflow.local_embedding_encoding_dispatch import SupportedEmbeddingReadResult
 from eom_workflow.local_embedding_encoding_ownership_v2 import (
-    EmbeddingEncodingReadResultV2,
     SupportedLocalEmbeddingLaunchIntent,
 )
 from eom_workflow.local_embedding_index_refresh import (
@@ -82,6 +89,7 @@ from eom_workflow.local_embedding_request_v2 import (
     LocalEmbeddingWorkflowRequestV2,
     SupportedLocalEmbeddingRequest,
 )
+from eom_workflow.local_embedding_request_v3 import LocalEmbeddingWorkflowRequestV3
 from eom_workflow.local_embedding_source_plan import (
     LocalEmbeddingSourcePlan,
     validate_local_embedding_selected_index_coverage,
@@ -90,12 +98,17 @@ from eom_workflow.local_embedding_source_plan_v2 import (
     LocalEmbeddingSourcePlanV2,
     validate_local_embedding_selected_index_coverage_v2,
 )
+from eom_workflow.local_embedding_source_plan_v3 import (
+    LocalEmbeddingSourcePlanV3,
+    validate_local_embedding_selected_index_coverage_v3,
+)
 from eom_workflow.local_embedding_workflow_receipt_v2 import (
     LocalEmbeddingStepOutputV2,
     SupportedLocalEmbeddingStepOutput,
     parse_supported_local_embedding_workflow_receipt,
     validate_supported_local_embedding_workflow_receipt,
 )
+from eom_workflow.local_embedding_workflow_receipt_v3 import LocalEmbeddingStepOutputV3
 from eom_workflow.native_embedding_coordinator import (
     NativeCoordinatorAllocation,
     NativeCoordinatorCompleted,
@@ -106,6 +119,11 @@ from eom_workflow.native_embedding_coordinator_v2 import (
     NativeCoordinatorCompletedV2,
     NativeCoordinatorIndexPreparedV2,
     NativeCoordinatorRegisteredV2,
+)
+from eom_workflow.native_embedding_coordinator_v3 import (
+    NativeCoordinatorCompletedV3,
+    NativeCoordinatorIndexPreparedV3,
+    NativeCoordinatorRegisteredV3,
 )
 from sqlalchemy.orm import Session
 
@@ -185,7 +203,7 @@ class NativeEmbeddingIndexCompletion:
         caller: EmbeddingRegistryActor,
         coordinator: NativeEmbeddingCoordinator,
         allocation: NativeCoordinatorAllocation,
-        readings: tuple[EmbeddingEncodingReadResult | EmbeddingEncodingReadResultV2, ...],
+        readings: tuple[SupportedEmbeddingReadResult, ...],
         fenced_transaction: NativeFencedRunnerTransaction,
         publications: NativeEmbeddingPublications,
     ) -> SupportedLocalEmbeddingStepOutput:
@@ -202,8 +220,16 @@ class NativeEmbeddingIndexCompletion:
                 coordinator.intent.native_launch_job_id.removeprefix("job_")
             )
             if len(history.records) == 1:
-                basis: PreparedEmbeddingIndexBasis | PreparedMixedEmbeddingIndexBasis
-                if isinstance(request, LocalEmbeddingWorkflowRequestV2):
+                basis: (
+                    PreparedEmbeddingIndexBasis
+                    | PreparedMixedEmbeddingIndexBasis
+                    | PreparedPublicSolutionIndexBasis
+                )
+                if isinstance(request, LocalEmbeddingWorkflowRequestV3):
+                    basis = self.owner.catalog.prepare_public_index_basis(
+                        session, caller, native_embedding_registry_scope(request)
+                    )
+                elif isinstance(request, LocalEmbeddingWorkflowRequestV2):
                     basis = self.owner.catalog.prepare_mixed_index_basis(
                         session, caller, native_embedding_registry_scope(request)
                     )
@@ -213,6 +239,9 @@ class NativeEmbeddingIndexCompletion:
                     )
                 if isinstance(request, LocalEmbeddingWorkflowRequestV2) != isinstance(
                     basis, PreparedMixedEmbeddingIndexBasis
+                ) or (
+                    isinstance(request, LocalEmbeddingWorkflowRequestV3)
+                    != isinstance(basis, PreparedPublicSolutionIndexBasis)
                 ):
                     raise ValueError("LOCAL_EMBEDDING_COMPLETION_FAMILY_MISMATCH")
                 selected = tuple(
@@ -256,8 +285,27 @@ class NativeEmbeddingIndexCompletion:
                         -32:
                     ]
                 )
-                assembled: AssembledEmbeddingIndex | AssembledMixedEmbeddingIndex
-                if isinstance(basis, PreparedMixedEmbeddingIndexBasis):
+                assembled: (
+                    AssembledEmbeddingIndex
+                    | AssembledMixedEmbeddingIndex
+                    | AssembledPublicSolutionIndex
+                )
+                if isinstance(basis, PreparedPublicSolutionIndexBasis):
+                    if not isinstance(sources.admission.plan, LocalEmbeddingSourcePlanV3):
+                        raise ValueError("LOCAL_EMBEDDING_COMPLETION_FAMILY_MISMATCH")
+                    assembled = assemble_public_solution_index_revision(
+                        basis.full_plan,
+                        available_rows=tuple(rows.values()),
+                        shards=tuple(shards.items()),
+                        index_id=index_id,
+                        index_revision_id=revision_id,
+                        previous_manifest=None if basis.previous is None else basis.previous[0],
+                        created_at=created,
+                    )
+                    validate_local_embedding_selected_index_coverage_v3(
+                        sources.admission.plan, assembled.index
+                    )
+                elif isinstance(basis, PreparedMixedEmbeddingIndexBasis):
                     if not isinstance(sources.admission.plan, LocalEmbeddingSourcePlanV2):
                         raise ValueError("LOCAL_EMBEDDING_COMPLETION_FAMILY_MISMATCH")
                     assembled = assemble_embedding_index_revision_v2(
@@ -306,7 +354,9 @@ class NativeEmbeddingIndexCompletion:
                 )
                 body = {
                     "schema_version": (
-                        "embedding-registry-registration-command/2.0"
+                        "embedding-registry-registration-command/3.0"
+                        if isinstance(request, LocalEmbeddingWorkflowRequestV3)
+                        else "embedding-registry-registration-command/2.0"
                         if isinstance(request, LocalEmbeddingWorkflowRequestV2)
                         else "embedding-registry-registration-command/1.0"
                     ),
@@ -323,7 +373,9 @@ class NativeEmbeddingIndexCompletion:
                         artifact_revision_id=allocation.index_producer.artifact_revision_id,
                         member_path="index.json",
                         schema_ref=(
-                            MIXED_EMBEDDING_INDEX_SCHEMA_REF
+                            PUBLIC_SOLUTION_INDEX_SCHEMA_REF
+                            if isinstance(request, LocalEmbeddingWorkflowRequestV3)
+                            else MIXED_EMBEDDING_INDEX_SCHEMA_REF
                             if isinstance(request, LocalEmbeddingWorkflowRequestV2)
                             else INDEX_SCHEMA_REF
                         ),
@@ -349,7 +401,11 @@ class NativeEmbeddingIndexCompletion:
                     "requested_at": created.isoformat().replace("+00:00", "Z"),
                 }
                 command = (
-                    RegisterEmbeddingIndexCommandV2.model_validate(
+                    RegisterPublicSolutionIndexCommand.model_validate(
+                        body | {"request_sha256": content_sha256(body)}
+                    )
+                    if isinstance(request, LocalEmbeddingWorkflowRequestV3)
+                    else RegisterEmbeddingIndexCommandV2.model_validate(
                         body | {"request_sha256": content_sha256(body)}
                     )
                     if isinstance(request, LocalEmbeddingWorkflowRequestV2)
@@ -361,7 +417,11 @@ class NativeEmbeddingIndexCompletion:
                     session,
                     coordinator.checkpoint(
                         "INDEX_PREPARED",
-                        NativeCoordinatorIndexPreparedV2(
+                        NativeCoordinatorIndexPreparedV3(
+                            registration_command=command, index_created_at=created
+                        )
+                        if isinstance(command, RegisterPublicSolutionIndexCommand)
+                        else NativeCoordinatorIndexPreparedV2(
                             registration_command=command, index_created_at=created
                         )
                         if isinstance(command, RegisterEmbeddingIndexCommandV2)
@@ -372,7 +432,12 @@ class NativeEmbeddingIndexCompletion:
                 )
             prepared = history.records[1].payload
             assert isinstance(
-                prepared, (NativeCoordinatorIndexPrepared, NativeCoordinatorIndexPreparedV2)
+                prepared,
+                (
+                    NativeCoordinatorIndexPrepared,
+                    NativeCoordinatorIndexPreparedV2,
+                    NativeCoordinatorIndexPreparedV3,
+                ),
             )
             command = prepared.registration_command
         if len(history.records) == 2:
@@ -389,7 +454,11 @@ class NativeEmbeddingIndexCompletion:
                 )
                 if resolved is None:
                     index = (
-                        publications.artifacts.read_staged_mixed_index(
+                        publications.artifacts.read_staged_public_index(
+                            workspace=workspace, expected_sha256=command.index_manifest.sha256
+                        )
+                        if isinstance(command, RegisterPublicSolutionIndexCommand)
+                        else publications.artifacts.read_staged_mixed_index(
                             workspace=workspace, expected_sha256=command.index_manifest.sha256
                         )
                         if isinstance(command, RegisterEmbeddingIndexCommandV2)
@@ -416,8 +485,18 @@ class NativeEmbeddingIndexCompletion:
                 if saved.index_manifest != command.index_manifest:
                     raise ValueError("LOCAL_EMBEDDING_EXECUTOR_INDEX_PUBLICATION_MISMATCH")
                 result = register_embedding_index(session, caller, command, self.owner.catalog)
-                registered_payload: NativeCoordinatorRegistered | NativeCoordinatorRegisteredV2
-                if isinstance(command, RegisterEmbeddingIndexCommandV2):
+                registered_payload: (
+                    NativeCoordinatorRegistered
+                    | NativeCoordinatorRegisteredV2
+                    | NativeCoordinatorRegisteredV3
+                )
+                if isinstance(command, RegisterPublicSolutionIndexCommand):
+                    if not isinstance(result, PublicSolutionIndexRegistrationResult):
+                        raise ValueError("LOCAL_EMBEDDING_COMPLETION_FAMILY_MISMATCH")
+                    registered_payload = NativeCoordinatorRegisteredV3(
+                        registration_result=result, registration_observed_at=datetime.now(UTC)
+                    )
+                elif isinstance(command, RegisterEmbeddingIndexCommandV2):
                     if not isinstance(result, EmbeddingIndexRegistrationResultV2):
                         raise ValueError("LOCAL_EMBEDDING_COMPLETION_FAMILY_MISMATCH")
                     registered_payload = NativeCoordinatorRegisteredV2(
@@ -437,7 +516,14 @@ class NativeEmbeddingIndexCompletion:
                     ),
                 )
         registered = history.records[2].payload
-        assert isinstance(registered, (NativeCoordinatorRegistered, NativeCoordinatorRegisteredV2))
+        assert isinstance(
+            registered,
+            (
+                NativeCoordinatorRegistered,
+                NativeCoordinatorRegisteredV2,
+                NativeCoordinatorRegisteredV3,
+            ),
+        )
         with fenced_transaction() as session:
             sources = self._current(
                 session,
@@ -461,7 +547,9 @@ class NativeEmbeddingIndexCompletion:
             )
             body = {
                 "schema_version": (
-                    "local-embedding-workflow-receipt/2.0"
+                    "local-embedding-workflow-receipt/3.0"
+                    if isinstance(request, LocalEmbeddingWorkflowRequestV3)
+                    else "local-embedding-workflow-receipt/2.0"
                     if isinstance(request, LocalEmbeddingWorkflowRequestV2)
                     else "local-embedding-workflow-receipt/1.0"
                 ),
@@ -518,7 +606,9 @@ class NativeEmbeddingIndexCompletion:
                 session,
                 coordinator.checkpoint(
                     "COMPLETED",
-                    NativeCoordinatorCompletedV2(output=output)
+                    NativeCoordinatorCompletedV3(output=output)
+                    if isinstance(output, LocalEmbeddingStepOutputV3)
+                    else NativeCoordinatorCompletedV2(output=output)
                     if isinstance(output, LocalEmbeddingStepOutputV2)
                     else NativeCoordinatorCompleted(output=output),
                 ),
@@ -554,9 +644,21 @@ class NativeEmbeddingIndexCompletion:
         allocation, prepared, registered = (r.payload for r in history.records[:3])
         assert isinstance(allocation, NativeCoordinatorAllocation)
         assert isinstance(
-            prepared, (NativeCoordinatorIndexPrepared, NativeCoordinatorIndexPreparedV2)
+            prepared,
+            (
+                NativeCoordinatorIndexPrepared,
+                NativeCoordinatorIndexPreparedV2,
+                NativeCoordinatorIndexPreparedV3,
+            ),
         )
-        assert isinstance(registered, (NativeCoordinatorRegistered, NativeCoordinatorRegisteredV2))
+        assert isinstance(
+            registered,
+            (
+                NativeCoordinatorRegistered,
+                NativeCoordinatorRegisteredV2,
+                NativeCoordinatorRegisteredV3,
+            ),
+        )
         if (
             receipt.registration_command != prepared.registration_command
             or receipt.registration_result != registered.registration_result
@@ -575,7 +677,9 @@ class NativeEmbeddingIndexCompletion:
                 len(history.records) == 4
                 and history.records[3].payload
                 != (
-                    NativeCoordinatorCompletedV2(output=output)
+                    NativeCoordinatorCompletedV3(output=output)
+                    if isinstance(output, LocalEmbeddingStepOutputV3)
+                    else NativeCoordinatorCompletedV2(output=output)
                     if isinstance(output, LocalEmbeddingStepOutputV2)
                     else NativeCoordinatorCompleted(output=output)
                 )

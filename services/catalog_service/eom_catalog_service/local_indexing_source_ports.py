@@ -13,6 +13,8 @@ from eom_catalog_contracts.inference_transfer_experiment import ExperimentViewRe
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_catalog_contracts.local_indexing_mixed_policy import SupportedLocalIndexingAccessPolicy
 from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
+from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingRecipe
+from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
 from eom_catalog_contracts.segmented_local_indexing_policy import (
     SegmentedLocalIndexingAccessPolicy,
 )
@@ -47,9 +49,9 @@ class LocalIndexingSourceReadIntent:
     service_policy_revision_id: str
     service_policy_sha256: str
     source_classes: tuple[Literal["APPROVED_ITEM", "PAST_EXAM"], ...]
-    namespace: EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace
+    namespace: EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace | PublicSolutionIndexNamespace
     space: EmbeddingSpace
-    recipe: ExperimentViewRecipe
+    recipe: ExperimentViewRecipe | PublicSolutionEmbeddingRecipe
     native_execution_policy_sha256: str
     resource_profile_sha256: str
     maximum_candidates: int = 1024
@@ -94,13 +96,22 @@ class LocalIndexingSourceReadIntent:
             or len(self.source_revision_ids) > self.maximum_candidates
         ):
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_SCOPE_INVALID")
-        if type(self.namespace) not in (EmbeddingIndexNamespace, MixedEmbeddingIndexNamespace):
+        if type(self.namespace) not in (
+            EmbeddingIndexNamespace,
+            MixedEmbeddingIndexNamespace,
+            PublicSolutionIndexNamespace,
+        ):
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_SCOPE_INVALID")
+        recipe_model = (
+            PublicSolutionEmbeddingRecipe
+            if isinstance(self.namespace, PublicSolutionIndexNamespace)
+            else ExperimentViewRecipe
+        )
         for name, model in (
             ("graph_snapshot", KnowledgeGraphSnapshotPointer),
             ("namespace", type(self.namespace)),
             ("space", EmbeddingSpace),
-            ("recipe", ExperimentViewRecipe),
+            ("recipe", recipe_model),
         ):
             value = getattr(self, name)
             if type(value) is not model:

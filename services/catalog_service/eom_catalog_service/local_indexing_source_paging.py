@@ -15,6 +15,7 @@ from sqlalchemy import Select
 from eom_catalog_service.knowledge_graph_models import KnowledgeSnapshotAnalysisRecord
 from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalApplicationService,
+    ReadOnlyCandidatePoolScope,
 )
 from eom_catalog_service.local_indexing_source_ports import LocalIndexingSourceReadIntent
 
@@ -29,7 +30,7 @@ class CandidateSourcePage:
 
 
 def candidate_source_page_statement(
-    intent: LocalIndexingSourceReadIntent,
+    intent: LocalIndexingSourceReadIntent | ReadOnlyCandidatePoolScope,
     *,
     after_source_revision_id: str | None = None,
 ) -> Select[tuple[str, str]]:

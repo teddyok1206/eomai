@@ -9,6 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 from enum import StrEnum
 
+from eom_catalog_contracts.embedding_index_families import embedding_entry_source
 from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingIndexManifest,
     EmbeddingSourceBinding,
@@ -17,11 +18,21 @@ from eom_catalog_contracts.local_indexing_mixed_policy import (
     LocalIndexingMixedAccessPolicy,
     supported_local_indexing_authorization_audit_sha256,
 )
-from eom_catalog_contracts.mixed_embedding_index import MixedEmbeddingIndexManifest
+from eom_catalog_contracts.mixed_embedding_index import (
+    MixedEmbeddingIndexManifest,
+    RegisteredReviewEmbeddingSourceBinding,
+)
 from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
+from eom_catalog_contracts.public_solution_embedding_index import (
+    PublicSolutionEmbeddingIndex,
+    PublicSolutionEmbeddingSourceBinding,
+    PublicSolutionIndexNamespace,
+)
+from eom_catalog_contracts.public_solution_indexing_policy import PublicSolutionIndexingAccessPolicy
 from eom_catalog_service.embedding_index_refresh_plan import (
     mixed_index_membership_refresh_reason,
     plan_index_membership_refresh,
+    public_index_membership_refresh_reason,
 )
 from eom_catalog_service.embedding_registry_application import prepare_missing_embedding_bindings
 from eom_catalog_service.embedding_registry_ports import (
@@ -31,6 +42,7 @@ from eom_catalog_service.embedding_registry_ports import (
 )
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
 from eom_catalog_service.local_embedding_source_plan_v2 import build_local_embedding_source_plan_v2
+from eom_catalog_service.local_embedding_source_plan_v3 import build_local_embedding_source_plan_v3
 from eom_identifiers import content_sha256
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.local_embedding_control_artifacts import (
@@ -45,7 +57,9 @@ from eom_workflow.local_embedding_request_v2 import (
     parse_supported_local_embedding_request,
     supported_local_embedding_request_actor,
 )
+from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
 from eom_workflow.local_embedding_source_plan_v2 import LocalEmbeddingSourcePlanV2
+from eom_workflow.local_embedding_source_plan_v3 import LocalEmbeddingSourcePlanV3
 from eom_workflow.local_embedding_workflow import (
     LOCAL_EMBEDDING_WORKFLOW_KEY,
     LOCAL_EMBEDDING_WORKFLOW_VERSION,
@@ -152,7 +166,10 @@ class LocalEmbeddingServicePreparation:
                 )
             controls = owner.resolve_reconciliation_controls(session, query, runtime_profile)
             mixed = isinstance(query.namespace, MixedEmbeddingIndexNamespace)
-            if mixed != isinstance(controls.grant, LocalIndexingMixedAccessPolicy):
+            public = isinstance(query.namespace, PublicSolutionIndexNamespace)
+            if mixed != isinstance(
+                controls.grant, LocalIndexingMixedAccessPolicy
+            ) or public != isinstance(controls.grant, PublicSolutionIndexingAccessPolicy):
                 raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
             prepared = prepare_missing_embedding_bindings(
                 session, controls.caller, query, owner.catalog
@@ -160,7 +177,7 @@ class LocalEmbeddingServicePreparation:
             missing, resolved = prepared.observation, prepared.resolved
             source_ids = {source.item_revision_id for source in resolved.sources}
             profile_ids = {
-                entry.profile.source_basis.source.item_revision_id for entry in resolved.entries
+                embedding_entry_source(entry).item_revision_id for entry in resolved.entries
             }
             missing_reports = tuple(sorted(source_ids - profile_ids))
             unavailable = len(profile_ids) - missing.available_view_count
@@ -180,7 +197,42 @@ class LocalEmbeddingServicePreparation:
                 previous = owner.catalog.resolve_indexing_namespace_predecessor(
                     session, controls.caller, query
                 )
-                if mixed:
+                if public:
+                    public_previous = None
+                    if previous is not None:
+                        pointer, prior_public = previous
+                        if not isinstance(prior_public, PublicSolutionEmbeddingIndex):
+                            raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
+                        public_previous = pointer, prior_public
+                    public_bindings = tuple(
+                        binding
+                        for binding in prepared.bindings
+                        if isinstance(binding, PublicSolutionEmbeddingSourceBinding)
+                    )
+                    if len(public_bindings) != len(prepared.bindings):
+                        raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
+                    refresh_reason = public_index_membership_refresh_reason(
+                        eligible_sources=resolved.sources,
+                        available_bindings=public_bindings,
+                        previous=public_previous,
+                    )
+                    if refresh_reason is not None:
+                        # One exact available witness keeps the native batch small;
+                        # completion independently captures and registers the full head.
+                        targets = (
+                            min(binding.source.item_revision_id for binding in public_bindings),
+                        )
+                elif mixed:
+                    mixed_bindings = tuple(
+                        binding
+                        for binding in prepared.bindings
+                        if isinstance(
+                            binding,
+                            (EmbeddingSourceBinding, RegisteredReviewEmbeddingSourceBinding),
+                        )
+                    )
+                    if len(mixed_bindings) != len(prepared.bindings):
+                        raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
                     mixed_previous = None
                     if previous is not None:
                         pointer, prior_index = previous
@@ -189,7 +241,7 @@ class LocalEmbeddingServicePreparation:
                         mixed_previous = pointer, prior_index
                     refresh_reason = mixed_index_membership_refresh_reason(
                         eligible_sources=resolved.sources,
-                        available_bindings=prepared.bindings,
+                        available_bindings=mixed_bindings,
                         previous=mixed_previous,
                     )
                     if refresh_reason is not None:
@@ -321,8 +373,11 @@ class LocalEmbeddingServicePreparation:
     ) -> SupportedLocalEmbeddingRequest:
         owner, runtime_profile = self.owner, self.runtime_profile
         mixed = isinstance(query.namespace, MixedEmbeddingIndexNamespace)
+        public = isinstance(query.namespace, PublicSolutionIndexNamespace)
         definition_version = (
-            LOCAL_EMBEDDING_WORKFLOW_V2_VERSION if mixed else LOCAL_EMBEDDING_WORKFLOW_VERSION
+            LOCAL_EMBEDDING_WORKFLOW_V2_VERSION
+            if mixed or public
+            else LOCAL_EMBEDDING_WORKFLOW_VERSION
         )
         definition = admitted_workflow_definition(
             session,
@@ -333,23 +388,31 @@ class LocalEmbeddingServicePreparation:
             controls.policy.workflow_definition_sha256
         ):
             raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_DEFINITION_UNAVAILABLE")
-        plan = (
-            build_local_embedding_source_plan_v2(
+        plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3
+        if public:
+            plan = build_local_embedding_source_plan_v3(
+                query, resolved, target_revision_ids=targets
+            )
+        elif mixed:
+            plan = build_local_embedding_source_plan_v2(
                 query,
                 resolved,
                 target_revision_ids=targets,
                 base_analysis_run_ids=dict(resolved.base_analysis_run_ids),
             )
-            if mixed
-            else build_local_embedding_source_plan(query, resolved, target_revision_ids=targets)
-        )
+        else:
+            plan = build_local_embedding_source_plan(query, resolved, target_revision_ids=targets)
         plan_key = content_sha256(
             {"plan": plan.plan_sha256, "source_commit": self.controls.source_commit}
         )
         # Only Orchestrator publishes; retained source/service locks protect
         # this preparation root. No model/claim happens while locks are held.
         plan_publication_key = "local-embedding-plan:" + plan_key.removeprefix("sha256:")
-        if isinstance(plan, LocalEmbeddingSourcePlanV2):
+        if isinstance(plan, LocalEmbeddingSourcePlanV3):
+            saved = self.controls.publish_observed_source_plan_v3(
+                plan, idempotency_key=plan_publication_key
+            )
+        elif isinstance(plan, LocalEmbeddingSourcePlanV2):
             saved = self.controls.publish_observed_source_plan_v2(
                 plan, idempotency_key=plan_publication_key
             )
@@ -359,7 +422,9 @@ class LocalEmbeddingServicePreparation:
             )
         authorization_audit = supported_local_indexing_authorization_audit_sha256(controls.grant)
         body = {
-            "schema_version": "local-embedding-workflow-request/2.0"
+            "schema_version": "local-embedding-workflow-request/3.0"
+            if public
+            else "local-embedding-workflow-request/2.0"
             if mixed
             else "local-embedding-workflow-request/1.2",
             "request_name": "LOCAL_EMBEDDING_WORKFLOW_REQUEST",

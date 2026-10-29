@@ -21,6 +21,7 @@ from eom_catalog_contracts.local_indexing_policy import (
 )
 from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
 from eom_catalog_contracts.models import FrozenModel, Sha256, UtcDatetime
+from eom_catalog_contracts.public_solution_indexing_policy import PublicSolutionIndexingAccessPolicy
 from eom_catalog_contracts.validation import validate_contract
 
 LOCAL_INDEXING_MIXED_POLICY_SCHEMA = "education-retrieval-access-policy-v1.2"
@@ -88,7 +89,9 @@ class LocalIndexingMixedAccessPolicy(FrozenModel):
         return self
 
 
-type SupportedLocalIndexingAccessPolicy = LocalIndexingAccessPolicy | LocalIndexingMixedAccessPolicy
+type SupportedLocalIndexingAccessPolicy = (
+    LocalIndexingAccessPolicy | LocalIndexingMixedAccessPolicy | PublicSolutionIndexingAccessPolicy
+)
 
 
 def parse_supported_local_indexing_access_policy(
@@ -102,6 +105,8 @@ def parse_supported_local_indexing_access_policy(
         return LocalIndexingAccessPolicy.model_validate(raw)
     if raw.get("schema_version") == "education-retrieval-access-policy/1.2":
         return LocalIndexingMixedAccessPolicy.model_validate(raw)
+    if raw.get("schema_version") == "education-retrieval-access-policy/1.4":
+        return PublicSolutionIndexingAccessPolicy.model_validate(raw)
     raise LocalIndexingPolicyContractError()
 
 

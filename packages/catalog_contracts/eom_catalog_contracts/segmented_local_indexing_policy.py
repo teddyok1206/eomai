@@ -128,6 +128,7 @@ def parse_local_indexing_publication_policy(value: object) -> LocalIndexingPubli
     if version in {
         "education-retrieval-access-policy/1.1",
         "education-retrieval-access-policy/1.2",
+        "education-retrieval-access-policy/1.4",
     }:
         return parse_supported_local_indexing_access_policy(raw)
     if version == "education-retrieval-access-policy/1.3":
