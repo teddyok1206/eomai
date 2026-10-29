@@ -133,6 +133,43 @@ def test_generation_accepts_an_honest_undetermined_independent_solution():
     ).is_valid(value)
 
 
+def test_actual_role_admission_preserves_editorial_references_for_an_undetermined_answer():
+    value = role_result()
+    learning = value["output"]["learning_result"]
+    learning["status"] = "NEEDS_DECISION"
+    report = learning["solution_report"]
+    report.update(
+        answer_state="UNDETERMINED",
+        answer_labels=[],
+        accepted_answers=[],
+        answer_cross_check="NOT_DETERMINED",
+    )
+    learning["conflicts"] = [
+        {
+            "conflict_code": "ANSWER_DISAGREEMENT",
+            "description": "독립 답안 미확정",
+            "source_region_ids": report["editorial_region_ids"],
+            "blocking": True,
+        }
+    ]
+    before = deepcopy(value)
+    Draft202012Validator(load_codex_result_schema("external-item-learning-result@2.0")).validate(
+        value
+    )
+    actual = validate_role_result(value, "support", "external-item-learning-result@2.0")
+    assert value == before
+    assert actual.output.learning_result.solution_report.editorial_region_ids == tuple(
+        report["editorial_region_ids"]
+    )
+    assert actual.output.learning_result.solution_report.answer_state == "UNDETERMINED"
+    assert (
+        validate_role_result(
+            actual.model_dump(mode="json"), "support", "external-item-learning-result@2.0"
+        )
+        == actual
+    )
+
+
 def test_registering_a_wire_contract_does_not_authorize_model_execution():
     request = RoleWorkerInput.model_validate(role_input()).request
     orchestrator = object.__new__(Orchestrator)

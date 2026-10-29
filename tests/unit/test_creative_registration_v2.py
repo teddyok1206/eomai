@@ -21,7 +21,7 @@ from tests.unit.test_creative_learning_protocol_v2 import role_result
 from tests.unit.test_creative_registered_report import registered_fixture
 
 
-def v2_registered(monkeypatch):
+def v2_registered(monkeypatch, *, independent_answer_state="DETERMINED"):
     session, artifacts, revision, components, resolved, _ = registered_fixture(monkeypatch)
     role = role_result()
     value = role["output"]["learning_result"]
@@ -40,6 +40,13 @@ def v2_registered(monkeypatch):
             "blocking": True,
         }
     ]
+    if independent_answer_state == "UNDETERMINED":
+        value["solution_report"].update(
+            answer_state="UNDETERMINED",
+            answer_labels=[],
+            accepted_answers=[],
+            answer_cross_check="NOT_DETERMINED",
+        )
     parsed_role = validate_role_result(role, "support", "external-item-learning-result@2.0")
     resolved = replace(
         resolved,
@@ -97,6 +104,31 @@ def test_official_report_exposes_original_and_independent_answers_with_all_issue
     assert text["solution_steps"] == [
         step.model_dump(mode="json") for step in result.solution_report.solution_steps
     ]
+
+
+def test_undetermined_solution_registers_original_and_preserves_evidence_in_official_read(
+    monkeypatch,
+):
+    session, artifacts, revision, _, resolved, lineage, content = v2_registered(
+        monkeypatch, independent_answer_state="UNDETERMINED"
+    )
+    result = resolved.role.output.learning_result
+    report = reports.load_registered_creative_report(session, artifacts, revision)
+    exposed = json.loads(report.context_text())
+    assert content.content.solution.correct_choice_ids == ("choice_1",)
+    assert lineage.source_answer_mode == "EDITORIAL_SOURCE"
+    assert exposed["independent_answer_state"] == "UNDETERMINED"
+    assert exposed["independent_proposal_answer"] == []
+    assert exposed["answer_cross_check"] == "NOT_DETERMINED"
+    assert [row["region_id"] for row in exposed["editorial_observations"]] == list(
+        result.solution_report.editorial_region_ids
+    )
+    assert exposed["issues"] == [entry.model_dump(mode="json") for entry in result.conflicts]
+    assert exposed["solution_steps"] == [
+        step.model_dump(mode="json") for step in result.solution_report.solution_steps
+    ]
+    assert "ANSWER_DISAGREEMENT" in exposed["warning_codes"]
+    assert exposed["original_proposal_status"] == "NEEDS_DECISION"
 
 
 def test_missing_score_warning_is_not_silently_interpreted_as_printed_zero(monkeypatch):

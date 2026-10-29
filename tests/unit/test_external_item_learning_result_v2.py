@@ -43,6 +43,72 @@ def result_v2():
     return value
 
 
+def undetermined_result_v2():
+    value = result_v2()
+    value["status"] = "NEEDS_DECISION"
+    value["solution_report"].update(
+        answer_state="UNDETERMINED",
+        answer_labels=[],
+        accepted_answers=[],
+        answer_cross_check="NOT_DETERMINED",
+    )
+    value["conflicts"] = [
+        {
+            "conflict_code": "ANSWER_DISAGREEMENT",
+            "description": "원문 해설을 확인했지만 독립 답안은 확정할 수 없다.",
+            "source_region_ids": value["solution_report"]["editorial_region_ids"],
+            "blocking": True,
+        }
+    ]
+    _rehash(value)
+    return value
+
+
+def test_undetermined_answer_keeps_observed_editorial_evidence_without_claiming_agreement():
+    value = undetermined_result_v2()
+    before = deepcopy(value)
+    validate_contract("external-item-learning-result-v2", value)
+    result = ExternalItemLearningResultV2.model_validate(value)
+    assert value == before
+    assert result.solution_report.editorial_region_ids == (value["regions"][1]["region_id"],)
+    assert result.solution_report.answer_cross_check == "NOT_DETERMINED"
+    assert result.solution_report.answer_labels == result.solution_report.accepted_answers == ()
+    assert result.proposal.content.solution.correct_choice_ids == ("choice_1",)
+    assert result.status == "NEEDS_DECISION" and result.conflicts[0].blocking
+    assert ExternalItemLearningResultV2.model_validate(result.model_dump(mode="json")) == result
+
+
+@pytest.mark.parametrize("region", ["target", "attachment", "unknown"])
+def test_undetermined_answer_cannot_cite_foreign_or_unrelated_editorial_evidence(region):
+    value = undetermined_result_v2()
+    identifier = {
+        "target": value["regions"][0]["region_id"],
+        "attachment": value["regions"][2]["region_id"],
+        "unknown": "extregion_" + "f" * 32,
+    }[region]
+    value["solution_report"]["editorial_region_ids"] = [identifier]
+    _rehash(value)
+    with pytest.raises(ValueError, match="unrelated source"):
+        ExternalItemLearningResultV2.model_validate(value)
+
+
+@pytest.mark.parametrize("comparison", ["MATCHES_EDITORIAL_SOLUTION", "DISAGREES"])
+def test_determined_editorial_comparison_still_requires_actual_editorial_references(comparison):
+    value = result_v2()
+    value["solution_report"].update(answer_cross_check=comparison, editorial_region_ids=[])
+    _rehash(value)
+    with pytest.raises(ValueError, match="cross-check differs"):
+        ExternalItemLearningResultV2.model_validate(value)
+
+
+def test_no_editorial_solution_still_rejects_editorial_references():
+    value = result_v2()
+    value["solution_report"]["answer_cross_check"] = "NO_EDITORIAL_SOLUTION"
+    _rehash(value)
+    with pytest.raises(ValueError, match="cross-check differs"):
+        ExternalItemLearningResultV2.model_validate(value)
+
+
 def test_source_draft_and_independent_report_are_distinct_with_unprinted_score():
     value = result_v2()
     validate_contract("external-item-learning-result-v2", value)

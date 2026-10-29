@@ -67,7 +67,12 @@ class IndependentSourceSolution(FrozenModel):
         ):
             raise ValueError("undetermined source solution claims a determined answer")
         compared = self.answer_cross_check in {"MATCHES_EDITORIAL_SOLUTION", "DISAGREES"}
-        if compared != bool(self.editorial_region_ids):
+        # Observing an editorial source does not assert a determined comparison.
+        # Preserve those references when the independent answer is undetermined;
+        # the enclosing body still checks each reference's actual source role.
+        if (compared and not self.editorial_region_ids) or (
+            self.answer_cross_check == "NO_EDITORIAL_SOLUTION" and self.editorial_region_ids
+        ):
             raise ValueError("editorial cross-check differs from its cited source")
         return self
 

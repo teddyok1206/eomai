@@ -436,3 +436,25 @@ fresh disposable PostgreSQL migration 왕복/0062 PASS 및 관련 저장소 26�
 `SOLUTION_EMBEDDING_ALIGNMENT_PENDING`. 창작 V1/V2와 기출 보고서의 공통 텍스트 projection은
 검증했으나, 운영 질의·후보의 successor recipe/source binding 및 실제 임베딩 검색 연결은
 아직 완료하지 않았다. 기존 인덱스를 새 의미로 덮어쓰거나 두 입력 공간을 조용히 섞지 않는다.
+
+### 미확정 풀이의 해설 근거 보존 수정 — 2026-10-29
+
+연속 처리는 7건의 Graph 등록까지 진행한 뒤 U10317에서 중단됐다. 실제 Job
+`job_7d2ff57f0c814d208b34d9af5e38b41b`는 `WORKER_RESULT_INVALID` / FAILED이며,
+원인은 `IndependentSourceSolution`의 지나친 상호조건이었다. 모델은 원문 editorial answer를
+보존하고 독립 풀이를 UNDETERMINED / NOT_DETERMINED로 기록했으나, 확인한 editorial region
+1개도 함께 남겼다. 기존 검사는 비교 판정이 없으면 그 근거도 없어야 한다고 잘못 요구했다.
+
+이는 새 wire 의미/worker 행동/DB 변경이 아니라 기존 JSON Schema가 이미 허용하는 경우를
+Pydantic이 잘못 거부한 버그 수정이다. released schema bytes·원래 결과·hash·판정·근거를
+변경하지 않는다. 독립 답안 미확정과 해설 관찰은 구분하고, MATCHES/DISAGREES에는 여전히
+실제 editorial 근거가 필요하다. NO_EDITORIAL_SOLUTION과 editorial 근거의 모순, 없는 region,
+target/첨부 기출을 editorial로 사용하기, 중복 참조·답안·hash 변조는 계속 거부한다.
+
+새 재현/역방향/등록·공식 조회 회귀를 포함해 관련 441개 PASS, Ruff·format·mypy PASS다.
+실제 실패 stdout SHA `606ce0862c099994794e8cc9386c1276c6f9d4de7d6b8002e260d537abfa04f9`의
+내용을 바꾸지 않고 수정된 전체 role admission으로 대조해 PASS를 확인했다. 원래
+NEEDS_DECISION·UNDETERMINED·공개 풀이 3단계·editorial 근거·불일치 주의사항을 모두 보존했다.
+이 검사는 저장이나 실패 Job 성공 처리가 아니다. 운영 반영 후 기존 invalid-result 복구
+application으로 별도 successor를 준비하고, 같은 1,053개 대상·slot 05·정책 pin으로 재개한다.
+자동 무한 재시도나 DB row 직접 수정을 추가하지 않는다.
