@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/public-solution-text/1.0",
+  "title": "Format-neutral public solution text (derived, not source authority)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "status", "text", "text_sha256"],
+  "properties": {
+    "schema_version": {"const": "public-solution-text/1.0"},
+    "status": {"enum": ["AVAILABLE", "UNAVAILABLE"]},
+    "text": {"type": ["string", "null"], "maxLength": 524288},
+    "text_sha256": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"}
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "status": {"const": "AVAILABLE"},
+        "text": {"type": "string", "minLength": 1},
+        "text_sha256": {"type": "string"}
+      }
+    },
+    {
+      "properties": {
+        "status": {"const": "UNAVAILABLE"},
+        "text": {"const": null},
+        "text_sha256": {"const": null}
+      }
+    }
+  ]
+}
