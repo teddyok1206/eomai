@@ -172,3 +172,35 @@ SQL 개선 source `d16e84c8`의 build-only wheel RECORD/installed simulation PAS
 교체는 수행하지 않았다. 별도로 창작 등록 오류는 007e owner에서 실제 10331 Graph/공식 조회까지
 복구했고 22/1,053 순차처리를 확인했다. 그 source/보존 증거는
 [문항 내부 노드 식별 기록](../architecture/ITEM_LOCAL_GRAPH_NODE_IDENTITY.md#실제-운영-복구--2026-10-29-1545-utc)에 있다.
+
+## GPU 우선 복구 운영 체크포인트 — 2026-10-29 16:07 UTC
+
+`a8ed45efbffe2ef63e00bb576a5313676add4867`의 build-only RECORD/비편집 설치 검사를 통과하고
+기존 protected installer로 새 immutable metadata-owner prefix에 설치했다. 수치 CPU/CUDA
+bundle·controller `24555547`·6개 namespace·8개 numerical target 상한은 그대로다.
+공개 recipe2/index3/QUERY2를 활성화하지 않았고 운영 migration도 적용하지 않았다.
+
+실제 root/schema-owner maintenance는 두 개의 만료된 prelaunch Workflow에 successor 1.1
+reason `EMBEDDING_EXECUTION_CONTEXT_UNAVAILABLE`을 기록했다. RUNNING/미출력/no native Job/
+만료 lease와 원 command/hash/service를 재검사한 뒤 FAILED event를 append했으며 같은 command
+replay가 같은 receipt를 반환했다. 원 parent planning history나 과거 실패는 성공으로 바꾸지 않았다.
+보호된 receipt materialization은 `/var/lib/eom-gpu-index-recovery-a8ed45ef/receipts.json`,
+receipt 집합 hash는 `sha256:e3bdd24196e8a904ace45ba5f775c577bf75760cf16fd5511642db9c7a0ba9ba`다.
+
+기존 PREPARE/PUBLISH/ACTIVATE/SELECT/START 경계로 **INDEX만** 새 owner에 선택했다.
+16:07:54 시작 InvocationID는 `b914a47fc7b844268b10eb2b3ede9dff`다. QUERY InvocationID
+`9c60629b423547fc832a91b7e9f180e3`와 창작 순차 등록 InvocationID
+`9ccf12bddee14fc6ba03cda79cfc6826`는 유지했다. 공유 9개 설정은 bytes와 stat epoch까지
+보존했으며 선택·rollback 기록은 `/var/lib/eom-gpu-standby-index-a8ed45ef/`에 있다.
+
+retirement unit 51 PASS, disposable owner/concurrency 135 PASS와 policy publication 22 PASS,
+executor/channel/entry focused 60 PASS, cross-boundary 117 PASS다. 서로 겹치는 suite를 합산한
+고유 테스트 수로 표현하지 않는다. 선택 8개 custom/generic 실행계획 회귀도 기존 임시 DB에
+추가했다(관련 unit/integration 107 PASS). 운영 DB에 pytest/EXPLAIN ANALYZE는 실행하지 않았다.
+
+**이 체크포인트는 실제 CUDA 수치 완료나 인덱스 증가 PASS가 아니다.** 새 owner의 첫 전체
+LOCK_POPULATION은 31.654초, 두 번째는 32.096초로 줄었으나 후속 선택 자료 캡처에서
+259.914초/253.601초가 관측됐다. 첫 두 구간의 개선만으로 전체 병목 해소를 주장하지 않는다.
+운영 자료는 여러 immutable Graph에 걸쳐 pointer 약 430만 행이므로 작은 임시 fixture의
+9–10ms 결과를 운영 처리시간으로 환산하지 않는다. 실제 canonical CUDA receipt와 committed
+index revision/binding delta가 확인될 때 별도로 수치 복구 완료 증거를 남긴다.

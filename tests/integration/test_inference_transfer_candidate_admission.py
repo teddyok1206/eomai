@@ -255,6 +255,34 @@ def occurrence_scope(*, maximum: int = 8, role: str = "ADMIN"):
     )
 
 
+def prepared_membership_plans(session: Session, scope) -> tuple[dict[str, Any], ...]:
+    prepared = population_membership_statement(scope).compile(
+        dialect=postgresql.dialect(paramstyle="numeric_dollar"),
+        compile_kwargs={"render_postcompile": True},
+    )
+    arguments = sql.SQL(", ").join(
+        sql.Literal(prepared.params[name]) for name in prepared.positiontup
+    )
+    connection = session.get_bind().connection.driver_connection
+    plans = []
+    with connection.cursor() as cursor:
+        cursor.execute("PREPARE eom_membership_plan AS " + str(prepared), prepare=False)
+        try:
+            for mode in ("force_custom_plan", "force_generic_plan"):
+                session.execute(text("SET LOCAL plan_cache_mode = " + mode))
+                cursor.execute(
+                    sql.SQL(
+                        "EXPLAIN (ANALYZE, FORMAT JSON, TIMING FALSE) "
+                        "EXECUTE eom_membership_plan({})"
+                    ).format(arguments),
+                    prepare=False,
+                )
+                plans.append(cursor.fetchone()[0][0])
+        finally:
+            cursor.execute("DEALLOCATE eom_membership_plan", prepare=False)
+    return tuple(plans)
+
+
 def test_real_postgres_prefetch_does_not_count_additive_reports_as_original_targets(pool_database):
     """SQL-only scale fixture; pg_temp metadata is NOT canonical source authority."""
     for table in TABLES:
@@ -331,47 +359,42 @@ def test_real_postgres_prefetch_does_not_count_additive_reports_as_original_targ
     assert plan["Execution Time"] < 10000
     # Production uses bound parameters. Literal/custom-only EXPLAIN missed the
     # generic semi-join that repeatedly rescanned full pointer rows.
-    prepared = population_membership_statement(scope).compile(
-        dialect=postgresql.dialect(paramstyle="numeric_dollar"),
-        compile_kwargs={"render_postcompile": True},
-    )
-    arguments = sql.SQL(", ").join(
-        sql.Literal(prepared.params[name]) for name in prepared.positiontup
-    )
-    connection = pool_database.get_bind().connection.driver_connection
-    with connection.cursor() as cursor:
-        cursor.execute("PREPARE eom_membership_plan AS " + str(prepared), prepare=False)
-        try:
-            for mode in ("force_custom_plan", "force_generic_plan"):
-                pool_database.execute(text("SET LOCAL plan_cache_mode = " + mode))
-                cursor.execute(
-                    sql.SQL(
-                        "EXPLAIN (ANALYZE, FORMAT JSON, TIMING FALSE) "
-                        "EXECUTE eom_membership_plan({})"
-                    ).format(arguments),
-                    prepare=False,
-                )
-                actual = cursor.fetchone()[0][0]
-                assert actual["Plan"]["Actual Rows"] == 520
-                pending = [actual["Plan"]]
-                pointer_ctes, pointer_scans = [], []
-                while pending:
-                    node = pending.pop()
-                    pending.extend(node.get("Plans", ()))
-                    if node.get("Subplan Name") == "CTE eligible_pointer_analyses":
-                        pointer_ctes.append(node)
-                    if node.get("Relation Name") == "knowledge_node_source_pointers":
-                        pointer_scans.append(node)
-                assert len(pointer_ctes) == 1 and pointer_ctes[0]["Actual Loops"] == 1
-                assert len(pointer_scans) == 1 and pointer_scans[0]["Actual Loops"] == 1
-                assert actual["Execution Time"] < 10000
-        finally:
-            cursor.execute("DEALLOCATE eom_membership_plan", prepare=False)
+    for actual in prepared_membership_plans(pool_database, scope):
+        assert actual["Plan"]["Actual Rows"] == 520
+        pending = [actual["Plan"]]
+        pointer_ctes, pointer_scans = [], []
+        while pending:
+            node = pending.pop()
+            pending.extend(node.get("Plans", ()))
+            if node.get("Subplan Name") == "CTE eligible_pointer_analyses":
+                pointer_ctes.append(node)
+            if node.get("Relation Name") == "knowledge_node_source_pointers":
+                pointer_scans.append(node)
+        assert len(pointer_ctes) == 1 and pointer_ctes[0]["Actual Loops"] == 1
+        assert len(pointer_scans) == 1 and pointer_scans[0]["Actual Loops"] == 1
+        assert actual["Execution Time"] < 10000
     target = "itemrev_" + "1".zfill(32)
     selected_scope = replace(scope, source_revision_ids=(target,))
     narrowed = tuple(pool_database.scalars(population_membership_statement(selected_scope)))
     assert len(narrowed) == 1 and narrowed[0].source_revision_id == target
     assert narrowed[0].analysis_run_id == "analysisrun_" + "1".zfill(32)
+    selected_eight = replace(
+        scope,
+        source_revision_ids=tuple("itemrev_" + str(value).zfill(32) for value in range(1, 9)),
+    )
+    # Finite GPU requests recapture a source subset. Bound parameters must not
+    # turn that selection into one complete pointer scan per requested source.
+    for actual in prepared_membership_plans(pool_database, selected_eight):
+        assert actual["Plan"]["Actual Rows"] == 8
+        pending = [actual["Plan"]]
+        pointer_scans = []
+        while pending:
+            node = pending.pop()
+            pending.extend(node.get("Plans", ()))
+            if node.get("Relation Name") == "knowledge_node_source_pointers":
+                pointer_scans.append(node)
+        assert len(pointer_scans) == 1 and pointer_scans[0]["Actual Loops"] == 1
+        assert actual["Execution Time"] < 10000
     # Full population discovery remains unchanged after this target-local read.
     assert len(tuple(pool_database.scalars(population_membership_statement(scope)))) == 520
     # The full-scope limit still exposes the520th member as overflow.
