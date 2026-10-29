@@ -4,6 +4,7 @@ Only the trusted local owner launches PDF tooling; it uses the existing eom-imag
 sandbox. Codex execution is exclusively the existing Orchestrator queue/lease.
 """
 
+from collections.abc import Callable
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import NAMESPACE_URL, uuid5
@@ -38,9 +39,11 @@ from eom_orchestrator.settings import Settings
 from eom_workflow.control_plane import ExecutionPresetRevision
 from eom_workflow.models import ExternalItemLearningWorkerRequest
 from eom_workflow_runner.external_item_learning_preparation import (
+    PreparedExternalItemLearning,
     prepare_external_item_learning_workflow,
 )
 from eom_workflow_runner.external_item_learning_recovery import (
+    prepare_invalid_result_external_item_learning_recovery,
     prepare_unstarted_external_item_learning_recovery,
     resolve_external_item_learning_recovery,
 )
@@ -254,6 +257,15 @@ class CreativeCohortPreparationService:
         Original cohort/source/controls and historical FAILED remain unchanged.
         The Workflow application owns the successor transaction and audit link.
         """
+        return self._recover(workflow_id, prepare_unstarted_external_item_learning_recovery)
+
+    def recover_invalid_result(self, workflow_id: str) -> ExternalItemLearningRoleSelection:
+        """Explicit terminal validation recovery; the Workflow owner proves no commit."""
+        return self._recover(workflow_id, prepare_invalid_result_external_item_learning_recovery)
+
+    def _recover(
+        self, workflow_id: str, prepare_recovery: Callable[..., PreparedExternalItemLearning]
+    ) -> ExternalItemLearningRoleSelection:
         with self.sessions() as session:
             workflow = session.get(WorkflowInstanceRecord, workflow_id)
             if workflow is None:
@@ -294,7 +306,7 @@ class CreativeCohortPreparationService:
                 or preset.content_sha256 != self.scope.extraction_preset.sha256
             ):
                 raise ValueError("CREATIVE_COHORT_PREPARATION_POLICY_MISMATCH")
-            recovered = prepare_unstarted_external_item_learning_recovery(
+            recovered = prepare_recovery(
                 session,
                 predecessor_workflow_id=workflow_id,
                 definition=definition,

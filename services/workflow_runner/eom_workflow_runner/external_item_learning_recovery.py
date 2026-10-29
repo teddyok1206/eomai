@@ -1,6 +1,9 @@
-"""Explicit successor preparation only after proving that no platform Job exists."""
+"""Explicit, proof-specific successor preparation; terminal history is never rewritten."""
+
+from collections.abc import Callable
 
 from eom_catalog_contracts.creative_preexecution_recovery import CreativePreexecutionRecovery
+from eom_catalog_contracts.creative_result_recovery import CreativeResultRecovery
 from eom_catalog_contracts.external_item_learning_authorization import (
     ExternalItemLearningRoleSelection,
 )
@@ -11,7 +14,7 @@ from eom_orchestrator.external_item_learning_execution import (
     validate_external_item_learning_execution_plan,
 )
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
-from eom_orchestrator.models import JobRecord
+from eom_orchestrator.models import ArtifactRecord, JobEventRecord, JobRecord
 from eom_workflow.control_plane import ExecutionPresetRevision
 from eom_workflow.creative_learning_profile import creative_learning_profile
 from eom_workflow.models import ExternalItemLearningWorkerRequest
@@ -37,6 +40,8 @@ from eom_workflow_runner.role_job_identity import role_job_idempotency_key
 from eom_workflow_runner.state_machine import record_workflow_event
 
 RECOVERY_EVENT = "CREATIVE_PREEXECUTION_SUCCESSOR_PREPARED"
+RESULT_RECOVERY_EVENT = "CREATIVE_INVALID_RESULT_SUCCESSOR_PREPARED"
+RecoveryRecord = CreativePreexecutionRecovery | CreativeResultRecovery
 
 
 def _failed_input(
@@ -109,13 +114,85 @@ def _failed_input(
     return worker.work_input, step
 
 
-def _successor_event(session: Session, workflow_id: str) -> CreativePreexecutionRecovery | None:
+def _failed_result_input(
+    session: Session, workflow: WorkflowInstanceRecord
+) -> tuple[ExternalItemLearningWorkInput, WorkflowStepRunRecord]:
+    """A known terminal validation failure, with no commit and no executable work."""
+    profile = creative_learning_profile(workflow.definition_version)
+    original = load_persisted_workflow_request(workflow.initial_request)
+    worker = original.worker_request()
+    steps = tuple(
+        session.scalars(
+            select(WorkflowStepRunRecord)
+            .where(WorkflowStepRunRecord.workflow_id == workflow.workflow_id)
+            .limit(2)
+        )
+    )
+    if (
+        workflow.definition_key != "external-item-learning"
+        or workflow.role_schema_version != profile.role_protocol
+        or workflow.created_actor_type != "human"
+        or workflow.state != "FAILED"
+        or workflow.stage != "FAILED"
+        or workflow.failure_code != "WORKER_RESULT_INVALID"
+        or workflow.current_step_key != "extract"
+        or original != load_persisted_workflow_request(workflow.request_payload)
+        or not isinstance(worker, ExternalItemLearningWorkerRequest)
+        or len(steps) != 1
+    ):
+        raise ValueError("CREATIVE_RESULT_RECOVERY_NOT_ELIGIBLE")
+    step = steps[0]
+    job = session.scalar(
+        select(JobRecord).where(
+            JobRecord.idempotency_key
+            == role_job_idempotency_key(
+                workflow.workflow_id, "extract", 1, workflow.definition_hash
+            )
+        )
+    )
+    if (
+        step.step_key != "extract"
+        or step.step_type != "agent"
+        or step.worker_role != "support"
+        or step.result_schema != profile.result_schema
+        or step.attempt != 1
+        or step.state != "FAILED"
+        or step.error_code != "WORKER_RESULT_INVALID"
+        or step.output_pointer_manifest is not None
+        or step.superseded_by_step_run_id is not None
+        or job is None
+        or step.platform_job_id != job.job_id
+        or job.status != "FAILED"
+        or job.error_code != "WORKER_RESULT_INVALID"
+    ):
+        raise ValueError("CREATIVE_RESULT_RECOVERY_NOT_ELIGIBLE")
+    for statement in (
+        select(ArtifactRecord.logical_artifact_id).where(ArtifactRecord.job_id == job.job_id),
+        select(JobEventRecord.event_id).where(
+            JobEventRecord.job_id == job.job_id,
+            JobEventRecord.to_state.in_(("COMMITTING", "SUCCEEDED")),
+        ),
+        select(WorkflowCommandRecord.command_id).where(
+            WorkflowCommandRecord.workflow_id == workflow.workflow_id,
+            WorkflowCommandRecord.state.in_(("PENDING", "LEASED", "PROCESSING")),
+        ),
+        select(WorkerLeaseRecord.lease_id).where(
+            WorkerLeaseRecord.workflow_id == workflow.workflow_id,
+            WorkerLeaseRecord.state.in_(("ACTIVE", "RECONCILING")),
+        ),
+    ):
+        if session.scalar(statement.limit(1)) is not None:
+            raise ValueError("CREATIVE_RESULT_RECOVERY_COMMITTED_OR_ACTIVE")
+    return worker.work_input, step
+
+
+def _successor_event(session: Session, workflow_id: str) -> RecoveryRecord | None:
     rows = tuple(
         session.scalars(
             select(WorkflowEventRecord)
             .where(
                 WorkflowEventRecord.workflow_id == workflow_id,
-                WorkflowEventRecord.event_type == RECOVERY_EVENT,
+                WorkflowEventRecord.event_type.in_((RECOVERY_EVENT, RESULT_RECOVERY_EVENT)),
             )
             .order_by(WorkflowEventRecord.sequence)
             .limit(2)
@@ -123,7 +200,22 @@ def _successor_event(session: Session, workflow_id: str) -> CreativePreexecution
     )
     if len(rows) > 1:
         raise ValueError("CREATIVE_PREEXECUTION_RECOVERY_DUPLICATE_LINK")
-    return CreativePreexecutionRecovery.model_validate(rows[0].payload) if rows else None
+    if not rows:
+        return None
+    record_type = (
+        CreativeResultRecovery
+        if rows[0].event_type == RESULT_RECOVERY_EVENT
+        else CreativePreexecutionRecovery
+    )
+    return record_type.model_validate(rows[0].payload)
+
+
+def _record_context_key(record: RecoveryRecord) -> str:
+    return (
+        "creative_result_recovery"
+        if isinstance(record, CreativeResultRecovery)
+        else "creative_preexecution_recovery"
+    )
 
 
 def resolve_external_item_learning_recovery(
@@ -144,7 +236,11 @@ def resolve_external_item_learning_recovery(
         record = _successor_event(session, workflow.workflow_id)
         if record is None:
             return workflow
-        work, step = _failed_input(session, workflow)
+        work, step = (
+            _failed_result_input(session, workflow)
+            if isinstance(record, CreativeResultRecovery)
+            else _failed_input(session, workflow)
+        )
         successor = session.get(WorkflowInstanceRecord, record.successor_workflow_id)
         if (
             record.predecessor_workflow_id != workflow.workflow_id
@@ -152,6 +248,10 @@ def resolve_external_item_learning_recovery(
             or record.operator_id != workflow.created_actor_id
             or record.definition_sha256 != workflow.definition_hash
             or record.work_input_sha256 != work.request_sha256
+            or (
+                isinstance(record, CreativeResultRecovery)
+                and record.predecessor_job_id != step.platform_job_id
+            )
             or successor is None
             or successor.created_actor_type != "human"
             or successor.created_actor_id != workflow.created_actor_id
@@ -161,7 +261,7 @@ def resolve_external_item_learning_recovery(
             or successor.role_schema_version != workflow.role_schema_version
             or successor.initial_request != workflow.initial_request
             or successor.request_payload != workflow.request_payload
-            or successor.runtime_context.get("creative_preexecution_recovery")
+            or successor.runtime_context.get(_record_context_key(record))
             != record.model_dump(mode="json")
         ):
             raise ValueError("CREATIVE_PREEXECUTION_RECOVERY_LINK_MISMATCH")
@@ -181,6 +281,62 @@ def prepare_unstarted_external_item_learning_recovery(
     expected_preset: ExecutionPresetRevision,
 ) -> PreparedExternalItemLearning:
     """Preserve FAILED, prepare a separate READY successor in the caller transaction."""
+    return _prepare_recovery(
+        session,
+        predecessor_workflow_id=predecessor_workflow_id,
+        definition=definition,
+        work=work,
+        operator_id=operator_id,
+        source_authorizer=source_authorizer,
+        page_publisher=page_publisher,
+        expected_preset=expected_preset,
+        proof=_failed_input,
+        record_type=CreativePreexecutionRecovery,
+    )
+
+
+def prepare_invalid_result_external_item_learning_recovery(
+    session: Session,
+    *,
+    predecessor_workflow_id: str,
+    definition: WorkflowDefinitionRecord,
+    work: ExternalItemLearningWorkInput,
+    operator_id: str,
+    source_authorizer: ExternalItemLearningSourceAuthorizer,
+    page_publisher: ControlFileSetPublisher,
+    expected_preset: ExecutionPresetRevision,
+) -> PreparedExternalItemLearning:
+    """Explicit reviewed re-execution, never an automatic or same-Job retry."""
+    return _prepare_recovery(
+        session,
+        predecessor_workflow_id=predecessor_workflow_id,
+        definition=definition,
+        work=work,
+        operator_id=operator_id,
+        source_authorizer=source_authorizer,
+        page_publisher=page_publisher,
+        expected_preset=expected_preset,
+        proof=_failed_result_input,
+        record_type=CreativeResultRecovery,
+    )
+
+
+def _prepare_recovery(
+    session: Session,
+    *,
+    predecessor_workflow_id: str,
+    definition: WorkflowDefinitionRecord,
+    work: ExternalItemLearningWorkInput,
+    operator_id: str,
+    source_authorizer: ExternalItemLearningSourceAuthorizer,
+    page_publisher: ControlFileSetPublisher,
+    expected_preset: ExecutionPresetRevision,
+    proof: Callable[
+        [Session, WorkflowInstanceRecord],
+        tuple[ExternalItemLearningWorkInput, WorkflowStepRunRecord],
+    ],
+    record_type: type[CreativePreexecutionRecovery] | type[CreativeResultRecovery],
+) -> PreparedExternalItemLearning:
     if not session.in_transaction():
         raise ValueError("creative recovery requires the caller root transaction")
     parent = session.get(
@@ -191,7 +347,7 @@ def prepare_unstarted_external_item_learning_recovery(
     )
     if parent is None:
         raise ValueError("CREATIVE_PREEXECUTION_RECOVERY_PARENT_MISSING")
-    original, step = _failed_input(session, parent)
+    original, step = proof(session, parent)
     if (
         original != work
         or parent.created_actor_id != operator_id
@@ -201,6 +357,8 @@ def prepare_unstarted_external_item_learning_recovery(
         raise ValueError("CREATIVE_PREEXECUTION_RECOVERY_INPUT_MISMATCH")
     previous = _successor_event(session, parent.workflow_id)
     if previous is not None:
+        if not isinstance(previous, record_type):
+            raise ValueError("CREATIVE_RECOVERY_PROOF_MISMATCH")
         successor = resolve_external_item_learning_recovery(session, parent)
         source_authorizer.reauthorize(session, operator_id=operator_id, source=work.source)
         plan = validate_external_item_learning_execution_plan(
@@ -239,14 +397,15 @@ def prepare_unstarted_external_item_learning_recovery(
         )
     key = (
         "creative-no-job-recovery:"
-        + content_sha256(
-            {
-                "predecessor_workflow_id": predecessor_workflow_id,
-                "definition_sha256": definition.definition_hash,
-                "work_input_sha256": work.request_sha256,
-            }
-        )[7:]
-    )
+        if record_type is CreativePreexecutionRecovery
+        else "creative-invalid-result-recovery:"
+    ) + content_sha256(
+        {
+            "predecessor_workflow_id": predecessor_workflow_id,
+            "definition_sha256": definition.definition_hash,
+            "work_input_sha256": work.request_sha256,
+        }
+    )[7:]
     prepared = prepare_external_item_learning_workflow(
         session,
         definition=definition,
@@ -262,29 +421,34 @@ def prepare_unstarted_external_item_learning_recovery(
         # active-equivalent READY workflow must not have its provenance replaced.
         raise ValueError("CREATIVE_PREEXECUTION_RECOVERY_SUCCESSOR_CONFLICT")
     body = {
-        "schema_version": "creative-preexecution-recovery/1.0",
+        "schema_version": "creative-preexecution-recovery/1.0"
+        if record_type is CreativePreexecutionRecovery
+        else "creative-result-recovery/1.0",
         "predecessor_workflow_id": predecessor_workflow_id,
         "predecessor_step_run_id": step.step_run_id,
         "successor_workflow_id": prepared.selection.workflow_id,
         "operator_id": operator_id,
         "definition_sha256": definition.definition_hash,
         "work_input_sha256": work.request_sha256,
-        "reason": "NO_PLATFORM_JOB_CREATED",
+        "reason": "NO_PLATFORM_JOB_CREATED"
+        if record_type is CreativePreexecutionRecovery
+        else "INVALID_RESULT_BEFORE_COMMIT",
     }
-    record = CreativePreexecutionRecovery.model_validate(
-        body | {"record_sha256": content_sha256(body)}
-    )
+    if record_type is CreativeResultRecovery:
+        assert step.platform_job_id is not None  # established by the proof above
+        body["predecessor_job_id"] = step.platform_job_id
+    record = record_type.model_validate(body | {"record_sha256": content_sha256(body)})
     created_successor = session.get(WorkflowInstanceRecord, prepared.selection.workflow_id)
     if created_successor is None or created_successor.initial_request != parent.initial_request:
         raise ValueError("CREATIVE_PREEXECUTION_RECOVERY_SUCCESSOR_MISMATCH")
     created_successor.runtime_context = {
         **created_successor.runtime_context,
-        "creative_preexecution_recovery": record.model_dump(mode="json"),
+        _record_context_key(record): record.model_dump(mode="json"),
     }
     record_workflow_event(
         session,
         parent.workflow_id,
-        RECOVERY_EVENT,
+        RESULT_RECOVERY_EVENT if isinstance(record, CreativeResultRecovery) else RECOVERY_EVENT,
         actor_type="human",
         actor_id=operator_id,
         command_id=None,

@@ -104,6 +104,35 @@ def test_supplied_wrong_hash_is_not_replaced_by_normalization():
         validate_role_result(value, "support", "external-item-learning-result@2.0")
 
 
+@pytest.mark.parametrize("location", ["source", "independent"])
+def test_generation_rejects_duplicate_choice_and_text_answer_representations(location):
+    value = role_result()
+    learning = value["output"]["learning_result"]
+    if location == "source":
+        learning["proposal"]["content"]["solution"]["accepted_answers"] = ["1"]
+    else:
+        learning["solution_report"]["accepted_answers"] = ["1"]
+    validator = Draft202012Validator(load_codex_result_schema("external-item-learning-result@2.0"))
+    assert not validator.is_valid(value)
+    with pytest.raises(ValueError):
+        validate_role_result(value, "support", "external-item-learning-result@2.0")
+
+
+def test_generation_accepts_an_honest_undetermined_independent_solution():
+    value = role_result()
+    report = value["output"]["learning_result"]["solution_report"]
+    report.update(
+        answer_state="UNDETERMINED",
+        answer_labels=[],
+        accepted_answers=[],
+        answer_cross_check="NOT_DETERMINED",
+        editorial_region_ids=[],
+    )
+    assert Draft202012Validator(
+        load_codex_result_schema("external-item-learning-result@2.0")
+    ).is_valid(value)
+
+
 def test_registering_a_wire_contract_does_not_authorize_model_execution():
     request = RoleWorkerInput.model_validate(role_input()).request
     orchestrator = object.__new__(Orchestrator)

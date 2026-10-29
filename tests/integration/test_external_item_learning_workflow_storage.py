@@ -227,16 +227,62 @@ def _failed_before_job(creative_engine, monkeypatch):
     return request, prepared.selection, preset
 
 
+def _failed_after_result(creative_engine, monkeypatch):
+    from eom_orchestrator.models import JobRecord
+    from eom_orchestrator.repository import ensure_protocol_version
+    from eom_workflow.schemas import role_schema_bundle_hash
+    from eom_workflow_runner.role_job_identity import role_job_idempotency_key
+
+    request, selection, preset = _failed_before_job(creative_engine, monkeypatch)
+    with Session(creative_engine) as session, session.begin():
+        workflow = session.get(WorkflowInstanceRecord, selection.workflow_id)
+        step = session.get(WorkflowStepRunRecord, selection.step_run_id)
+        ensure_protocol_version(
+            session,
+            workflow.role_schema_version,
+            role_schema_bundle_hash(workflow.role_schema_version),
+        )
+        session.flush()
+        job_id = "job_" + uuid4().hex
+        session.add(
+            JobRecord(
+                job_id=job_id,
+                protocol_version=workflow.role_schema_version,
+                idempotency_key=role_job_idempotency_key(
+                    workflow.workflow_id, "extract", 1, workflow.definition_hash
+                ),
+                request_hash="sha256:" + "a" * 64,
+                task_type="workflow_support",
+                request={},
+                status="FAILED",
+                logical_artifact_id="artifact_" + uuid4().hex,
+                revision_id="rev_" + uuid4().hex,
+                error_code="WORKER_RESULT_INVALID",
+            )
+        )
+        session.flush()
+        step.platform_job_id = job_id
+        workflow.failure_code = step.error_code = "WORKER_RESULT_INVALID"
+    return request, selection, preset
+
+
+@pytest.mark.parametrize("failure", ["NO_JOB", "INVALID_RESULT"])
 def test_concurrent_no_job_recovery_prepares_one_successor_and_preserves_failure(
-    creative_engine, monkeypatch
+    creative_engine, monkeypatch, failure
 ):
-    request, predecessor, preset = _failed_before_job(creative_engine, monkeypatch)
+    fixture = _failed_before_job if failure == "NO_JOB" else _failed_after_result
+    prepare_recovery = (
+        recovery.prepare_unstarted_external_item_learning_recovery
+        if failure == "NO_JOB"
+        else recovery.prepare_invalid_result_external_item_learning_recovery
+    )
+    request, predecessor, preset = fixture(creative_engine, monkeypatch)
     barrier = Barrier(2)
 
     def prepare(_index):
         with Session(creative_engine) as session, session.begin():
             barrier.wait(timeout=10)
-            return recovery.prepare_unstarted_external_item_learning_recovery(
+            return prepare_recovery(
                 session,
                 predecessor_workflow_id=predecessor.workflow_id,
                 definition=_seed(session),
@@ -257,7 +303,7 @@ def test_concurrent_no_job_recovery_prepares_one_successor_and_preserves_failure
         old = session.get(WorkflowInstanceRecord, predecessor.workflow_id)
         old_step = session.get(WorkflowStepRunRecord, predecessor.step_run_id)
         assert old.state == old.stage == old_step.state == "FAILED"
-        assert old_step.platform_job_id is None
+        assert (old_step.platform_job_id is None) == (failure == "NO_JOB")
         successor = recovery.resolve_external_item_learning_recovery(session, old)
         assert successor.workflow_id == successor_id and successor.state == "REQUESTED"
         assert successor.initial_request == old.initial_request
@@ -267,7 +313,12 @@ def test_concurrent_no_job_recovery_prepares_one_successor_and_preserves_failure
                 .select_from(WorkflowEventRecord)
                 .where(
                     WorkflowEventRecord.workflow_id == predecessor.workflow_id,
-                    WorkflowEventRecord.event_type == recovery.RECOVERY_EVENT,
+                    WorkflowEventRecord.event_type
+                    == (
+                        recovery.RECOVERY_EVENT
+                        if failure == "NO_JOB"
+                        else recovery.RESULT_RECOVERY_EVENT
+                    ),
                 )
             )
             == 1
@@ -284,16 +335,23 @@ def test_concurrent_no_job_recovery_prepares_one_successor_and_preserves_failure
         )
 
 
+@pytest.mark.parametrize("failure", ["NO_JOB", "INVALID_RESULT"])
 def test_no_job_recovery_late_rejection_leaves_only_the_original_failure(
-    creative_engine, monkeypatch
+    creative_engine, monkeypatch, failure
 ):
-    request, predecessor, preset = _failed_before_job(creative_engine, monkeypatch)
+    fixture = _failed_before_job if failure == "NO_JOB" else _failed_after_result
+    prepare_recovery = (
+        recovery.prepare_unstarted_external_item_learning_recovery
+        if failure == "NO_JOB"
+        else recovery.prepare_invalid_result_external_item_learning_recovery
+    )
+    request, predecessor, preset = fixture(creative_engine, monkeypatch)
     owner = _owner(request)
     owner.reauthorize.side_effect = [request.external_item_learning_work.source] * 3 + [
         ValueError("synthetic source revoked")
     ]
     with pytest.raises(WorkflowError), Session(creative_engine) as session, session.begin():
-        recovery.prepare_unstarted_external_item_learning_recovery(
+        prepare_recovery(
             session,
             predecessor_workflow_id=predecessor.workflow_id,
             definition=_seed(session),
@@ -317,10 +375,17 @@ def test_no_job_recovery_late_rejection_leaves_only_the_original_failure(
         assert recovery.resolve_external_item_learning_recovery(session, old) is old
 
 
+@pytest.mark.parametrize("failure", ["NO_JOB", "INVALID_RESULT"])
 def test_no_job_recovery_preserves_an_unrelated_active_equivalent_workflow(
-    creative_engine, monkeypatch
+    creative_engine, monkeypatch, failure
 ):
-    request, predecessor, preset = _failed_before_job(creative_engine, monkeypatch)
+    fixture = _failed_before_job if failure == "NO_JOB" else _failed_after_result
+    prepare_recovery = (
+        recovery.prepare_unstarted_external_item_learning_recovery
+        if failure == "NO_JOB"
+        else recovery.prepare_invalid_result_external_item_learning_recovery
+    )
+    request, predecessor, preset = fixture(creative_engine, monkeypatch)
     with Session(creative_engine) as session, session.begin():
         active = preparation.prepare_external_item_learning_workflow(
             session,
@@ -336,7 +401,7 @@ def test_no_job_recovery_preserves_an_unrelated_active_equivalent_workflow(
         Session(creative_engine) as session,
         session.begin(),
     ):
-        recovery.prepare_unstarted_external_item_learning_recovery(
+        prepare_recovery(
             session,
             predecessor_workflow_id=predecessor.workflow_id,
             definition=_seed(session),

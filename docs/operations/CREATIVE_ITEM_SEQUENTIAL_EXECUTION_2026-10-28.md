@@ -328,3 +328,32 @@ V2 추출의 core prompt도 점검해, 구 placeholder가 명시하는 result@1.
 visual bundle/주어진 schema/독립 공개 풀이/result@2.0만 지시하는 고정 core를 사용한다.
 실제 executor의 prompt 전달과 구버전 선택/role hash 회귀 20개, engine Ruff·format·mypy
 PASS다. 아직 새로운 worker 실행이나 새 결과 성공을 의미하지 않는다.
+
+### 검증 거부된 모델 결과의 명시적 재실행 준비 (2026-10-29)
+
+U10311의 V2 Job은 객관식 정답을 choice/text 양쪽에 넣어 WORKER_RESULT_INVALID로
+실패했다. 원문이나 과학 판단 문제가 아니다. 기존 canonical/Pydantic XOR 검사는 유지하고,
+V2 생성용 schema에서 객관식/서술형/미결정 답안을 anyOf로 구분한다. 기존 V1 및 released
+schema bytes는 바꾸지 않고 실패 응답을 자동 고치거나 성공 처리하지 않는다.
+
+실제 Job이 있으므로 no-Job 복구는 적용할 수 없다. 같은 Workflow preparation 경계에
+명시적 invalid-result 복구를 추가한다. 정본은 기존 cohort/source/work/definition/preset,
+FAILED Workflow/step/Job이며, 새 작은 immutable event는 이전 Job과 새 Workflow를 연결한다.
+큰 입력·파일은 복사하지 않는다. PK/unique Job key 및 workflow event index로 조회하며
+한 predecessor row lock/transaction에서 successor 하나만 준비한다. 예상 비용은 bounded
+indexed lookup과 기존 event sequence append다. 새 table/index/queue/migration은 없다.
+
+조건은 일치하는 WORKER_RESULT_INVALID terminal Job, commit 진입 이력 및 Artifact 없음,
+active lease/command 없음, 동일 원래 owner/source/plan 재인가다. COMMITTING/성공/불명확한
+Job은 거부한다. 준비는 worker 실행이 아니며 START는 기존 owner가 별도 수행한다.
+중복 요청은 같은 pointer를 반환하고, 실패는 caller transaction rollback한다. 과거 FAILED,
+과학적 NEEDS_DECISION, 원본 답/해설은 변경하지 않는다. 자동 무한 재시도하지 않는다.
+기존 successor resolver만 typed event 두 종류를 해석한다. 임의 key 재발급이나 FAILED를
+READY로 변경하는 대안은 중복·감사 계보를 잃으므로 사용하지 않는다.
+
+소스 검증: 창작·기존 추출·풀이 projection 432개 PASS, Ruff·format·mypy PASS.
+fresh disposable PostgreSQL migration 왕복/0062 PASS 및 관련 저장소 26개 PASS이며,
+두 복구 사유 모두 동시 준비 1개·기존 실패 보존·늦은 권한 거부 rollback·다른 active
+실행 보존을 검증했다. 초기 synthetic Job fixture의 protocol flush 누락을 수정했다.
+재사용 DB에서 instruction 전체 건수 검사가 기존 실행 자료를 합산한 실패는 별도 보존했고,
+운영 DB가 아닌 새 DB에서 전체 suite를 재실행했다. 아직 새 모델 결과 성공은 아니다.

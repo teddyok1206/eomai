@@ -4184,6 +4184,7 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
         _project_external_item_learning_codex_contract(
             schema, result_definition="ExternalItemLearningResultV2"
         )
+        _project_creative_answer_representations(schema)
         _prune_unreferenced_definitions(schema)
     if schema_id == "legacy-item-editorial-compatibility-result@1.0":
         _project_legacy_editorial_compatibility_codex_contract(schema)
@@ -5442,6 +5443,59 @@ def _validate_local_reference_closure(schema: dict[str, Any]) -> None:
                 visit(child)
 
     visit(schema)
+
+
+def _project_creative_answer_representations(schema: dict[str, Any]) -> None:
+    """Make the existing answer XOR rules visible to generation, not just admission.
+
+    Copy only the small schema nodes, never source/results. Canonical contracts
+    and historical V1 generation stay unchanged; invalid responses are not repaired.
+    """
+    definitions = _mapping(schema, "$defs")
+    draft = _mapping(definitions, "CreativeSourceItemDraft")
+    solution = _mapping(definitions, "AssessmentItemContent_solution")
+    branches = []
+    for interaction, used, unused, maximum in (
+        ("singleChoice", "correct_choice_ids", "accepted_answers", 1),
+        ("constructedResponse", "accepted_answers", "correct_choice_ids", 20),
+    ):
+        branch = copy.deepcopy(draft)
+        properties = _mapping(branch, "properties")
+        properties["interaction"] = {"$ref": f"#/$defs/AssessmentItemContent_{interaction}"}
+        answer = copy.deepcopy(solution)
+        answer_properties = _mapping(answer, "properties")
+        _mapping(answer_properties, used).update(minItems=1, maxItems=maximum)
+        _mapping(answer_properties, unused)["maxItems"] = 0
+        properties["solution"] = answer
+        branches.append(branch)
+    draft.clear()
+    draft["anyOf"] = branches
+
+    report = _mapping(definitions, "ExternalItemLearningResultV2_solutionReport")
+    alternatives = []
+    for state, answer_field in (
+        ("DETERMINED", "answer_labels"),
+        ("DETERMINED", "accepted_answers"),
+        ("UNDETERMINED", None),
+    ):
+        branch = copy.deepcopy(report)
+        properties = _mapping(branch, "properties")
+        properties["answer_state"] = {"type": "string", "const": state}
+        for key in ("answer_labels", "accepted_answers"):
+            _mapping(properties, key).update(
+                {"minItems": 1} if key == answer_field else {"maxItems": 0}
+            )
+        if state == "UNDETERMINED":
+            properties["answer_cross_check"] = {"type": "string", "const": "NOT_DETERMINED"}
+        else:
+            _mapping(properties, "solution_steps")["minItems"] = 1
+            properties["answer_cross_check"] = {
+                "type": "string",
+                "enum": ["MATCHES_EDITORIAL_SOLUTION", "DISAGREES", "NO_EDITORIAL_SOLUTION"],
+            }
+        alternatives.append(branch)
+    report.clear()
+    report["anyOf"] = alternatives
 
 
 def _project_external_item_learning_codex_contract(

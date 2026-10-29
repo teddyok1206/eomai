@@ -3,7 +3,7 @@
 import json
 import os
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 import typer
 from eom_catalog_contracts.external_item_learning_authorization import (
@@ -118,6 +118,22 @@ def recover_unstarted(
     predecessor_workflow_id: Annotated[str, typer.Option("--predecessor-workflow-id")],
 ) -> None:
     """Prepare an auditable no-Job successor; preserve FAILED and never START."""
+    _recover_cohort(cohort_revision_id, predecessor_workflow_id, "UNSTARTED")
+
+
+def recover_invalid_result(
+    cohort_revision_id: Annotated[str, typer.Option("--cohort-revision-id")],
+    predecessor_workflow_id: Annotated[str, typer.Option("--predecessor-workflow-id")],
+) -> None:
+    """Prepare a reviewed failed-result successor; preserve FAILED and never START."""
+    _recover_cohort(cohort_revision_id, predecessor_workflow_id, "INVALID_RESULT")
+
+
+def _recover_cohort(
+    cohort_revision_id: str,
+    predecessor_workflow_id: str,
+    kind: Literal["UNSTARTED", "INVALID_RESULT"],
+) -> None:
     from eom_catalog_service.artifacts import CatalogArtifactService
     from eom_catalog_service.creative_cohort_preparation import CreativeCohortPreparationService
     from eom_catalog_service.creative_learning_cohort import read_creative_execution_scope
@@ -134,13 +150,18 @@ def recover_unstarted(
             ControlFileSetPublisher(engine, settings),
             cohort_revision_id,
         )
-        selection = CreativeCohortPreparationService(
+        service = CreativeCohortPreparationService(
             engine,
             cohort=scope.cohort,
             scope=scope,
             settings=settings,
             catalog_settings=catalog_settings,
-        ).recover_unstarted(predecessor_workflow_id)
+        )
+        selection = (
+            service.recover_unstarted(predecessor_workflow_id)
+            if kind == "UNSTARTED"
+            else service.recover_invalid_result(predecessor_workflow_id)
+        )
         typer.echo(
             json.dumps(
                 {"selection": selection.model_dump(mode="json"), "workers_started": 0},
