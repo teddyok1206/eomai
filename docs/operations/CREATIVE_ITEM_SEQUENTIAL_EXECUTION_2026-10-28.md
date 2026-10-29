@@ -458,3 +458,21 @@ NEEDS_DECISION·UNDETERMINED·공개 풀이 3단계·editorial 근거·불일치
 이 검사는 저장이나 실패 Job 성공 처리가 아니다. 운영 반영 후 기존 invalid-result 복구
 application으로 별도 successor를 준비하고, 같은 1,053개 대상·slot 05·정책 pin으로 재개한다.
 자동 무한 재시도나 DB row 직접 수정을 추가하지 않는다.
+
+2026-10-29 08:23 UTC 운영 반영: `8f8206c6`을 커밋·푸시했고 API/shared runner와 보호된
+순차 owner 설치본에 배포했다. wheel/installed simulation/RECORD/격리/READY PASS,
+새 migration 없음. 배포 전 실제 role Job·lease·chat·HWPX 실행 0을 각 소유자 경계에서
+확인했다. QUERY는 같은 `07ec7b32` 보호 prefix/config로 복구했고 GPU INDEX는 변경하지 않았다.
+
+설치본에서도 실제 10317 실패 body를 그대로 읽어 validation PASS를 확인했다. 기존 FAILED
+Workflow `workflow_a4800cedd6124fdaa0dea99150b55991` / Job `job_7d2ff57f0c814d208b34d9af5e38b41b`
+상태는 바꾸지 않았다. 지원되는 invalid-result recovery로 후속
+`workflow_5bee09f18f2749f481bb96ade2378286`을 준비했고, 같은 요청의 실제 재전송은 같은
+selection을 반환했다. 이후 별도 START로 전체 1,053개 처리(limit=1053)를 재개했다.
+
+완료된 10310–10316의 7개 Item/분석은 다시 만들지 않고 공식 조회로 재사용했다. 10317의
+새 Job `job_720ac98ba68f4873838b7ca18b422787`이 실제 slot 05 / ACTIVE lease 1개 / RUNNING임을
+확인했다. 같은 target-set·cohort revision·정책·Terra/xhigh pin을 유지했다. 현재 체크포인트는
+**7/1053 완료, 10317 재실행 진행 중**이며, 이 기록을 10317 Graph 등록 완료나 전체 완료로
+확대하지 않는다. 30분 observer는 활성 상태이며 새 실행의 `check=OK`도 확인했다.
+감시의 자동 Slack 경고/주기적 AI 검토 기능을 추가했다는 뜻은 아니다.
