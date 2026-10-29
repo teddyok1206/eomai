@@ -97,7 +97,17 @@ def main() -> None:
         )
         if "@PREFIX@" in units[name] or "@PYTHON@" in units[name]:
             raise ValueError("CREATIVE_OWNER_INSTALL_TEMPLATE_INVALID")
-    state = Path("/var/lib/eom/creative-learning")
+    parent = Path("/var/lib/eom")
+    parent.mkdir(mode=0o755, exist_ok=True)
+    parent_metadata = parent.lstat()
+    if (
+        not stat.S_ISDIR(parent_metadata.st_mode)
+        or parent_metadata.st_uid != 0
+        or parent_metadata.st_gid != 0
+        or parent_metadata.st_mode & 0o022
+    ):
+        raise ValueError("CREATIVE_OWNER_INSTALL_STATE_PARENT_INVALID")
+    state = parent / "creative-learning"
     state.mkdir(mode=0o750, exist_ok=True)
     metadata = state.lstat()
     if (
