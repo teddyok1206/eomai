@@ -562,3 +562,40 @@ Completion still requires sustained/refilled three-slot work, usage refresh live
 busy-and-idle verification, actual five creative embeddings and authenticated DB similarity
 search/return-to-detail/assembly integration, and compatible operating deployment. Do not
 mark the full goal achieved from this three-worker checkpoint or the prepared release alone.
+
+### 20:57 UTC — three-slot refill and busy/idle usage operating acceptance
+
+- The initial three physical Jobs all finished. Three **different following Jobs** were
+  subsequently observed together: slot04 `job_5356835536804d28b59966d746ba2355`,
+  slot05 `job_df35ad1fe73a47a497775435c366d2f8`,
+  slot06 `job_088000ced609431bbbf0e24d46ccc7a4`. This closes initial three-slot/refill
+  acceptance, not the full embedding/similarity goal. The six-source bounded pipeline
+  may temporarily wait for its serial Graph publication; it does not promise that all
+  three slots stay occupied during every observation or a graceful release window.
+- Shared Platform/API and Web are now the compatible **4cc9546c** release. Installed
+  wheel verification checked 2,439 members, actual API isolation passed, Web service
+  identity checked 51 files, and public HTTPS `/studio/` followed to the login page
+  returned 200. The original three queue consumers and admitted creative scope resumed.
+- The first rollout passed installation/isolation but its immediate post-restart HTTPS
+  probe failed. It automatically restored shared8a886677/Web82388ed1. That failed release
+  remains failed; the second recorded attempt used the same wheels and a bounded,
+  read-only HTTP readiness wait, then completed successfully. No model request was
+  regenerated, history rewritten, or DB downgrade performed.
+- **Actual official OBSERVE commands while slot04 was writing a report**:
+  busy04 `codexcmd_1469362685b74041a33483cdcd0c45e0` and idle01
+  `codexcmd_7a1339f00e1543c0a78a7e5c2a19c410` both SUCCEEDED with new native usage
+  observation times. Slot04's Job `job_40431a2e9baa4c65a02300cc78012562`, READY state
+  and resource version3364 were unchanged. Idle01 retained the normal full observation
+  behavior (version3360→3361). No auth refresh, inference or administrative state promotion
+  occurred for the busy slot. This is operating command/receipt evidence; no new manual
+  browser assertion is inferred from it.
+- INDEX PID2113256 / invocation `8b9b5ed1ec1a4c67bc9ec7c44f9debff` stayed unchanged.
+  QUERY coordinator was stopped/restarted by its existing API dependency and retains the
+  original07ec7b32 runtime/configuration pins; do not claim its PID was unchanged.
+
+Evidence: `/tmp/eom-creative-usage-attempt2-terminal-20261030.log`,
+`/tmp/eom-busy-usage-operating-4cc9546c-20261030.json`,
+`/tmp/eom-busy-usage-operating-tail-20261030.log`; protected completion record
+`/var/lib/eom-release-operator-stage.4cc9546c-xjyhsbhs/usage-release-completed.json`.
+Full goal remains ACTIVE: public-report INDEX activation, five actual creative vectors,
+official DB similarity QUERY/read/replay and automatic backlog/future increments remain.
