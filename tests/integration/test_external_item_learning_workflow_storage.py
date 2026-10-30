@@ -55,7 +55,14 @@ def _unique_request() -> WorkflowRequest:
 
 def _seed(session: Session) -> WorkflowDefinitionRecord:
     candidate = _definition()
-    existing = session.get(WorkflowDefinitionRecord, candidate.definition_id)
+    # The control-owner test can already have imported this immutable definition
+    # with its real ID. Resolve the unique family/version, not this fixture's ID.
+    existing = session.scalar(
+        select(WorkflowDefinitionRecord).where(
+            WorkflowDefinitionRecord.definition_key == candidate.definition_key,
+            WorkflowDefinitionRecord.definition_version == candidate.definition_version,
+        )
+    )
     if existing is None:
         session.add(candidate)
         session.flush()

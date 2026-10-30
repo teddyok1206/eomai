@@ -19,7 +19,10 @@ from eom_orchestrator.external_item_learning_page_publication import (
 )
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_workflow.control_plane import ExecutionPresetRevision
-from eom_workflow.creative_learning_profile import creative_learning_profile
+from eom_workflow.creative_learning_profile import (
+    creative_learning_profile,
+    creative_learning_profile_for_preset,
+)
 from eom_workflow.models import WorkflowRequest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -57,6 +60,7 @@ def prepare_external_item_learning_workflow(
     source_authorizer: ExternalItemLearningSourceAuthorizer,
     page_publisher: ControlFileSetPublisher,
     expected_preset: ExecutionPresetRevision | None = None,
+    execution_preset_key: str | None = None,
 ) -> PreparedExternalItemLearning:
     """Prepare in the caller root; any rejection leaves no partial preparation.
 
@@ -67,7 +71,12 @@ def prepare_external_item_learning_workflow(
     if not session.in_transaction():
         raise ValueError("creative preparation requires a caller-owned root transaction")
     try:
-        profile = creative_learning_profile(definition.definition_version)
+        default_profile = creative_learning_profile(definition.definition_version)
+        profile = creative_learning_profile_for_preset(
+            definition.definition_version, execution_preset_key or default_profile.preset_key
+        )
+        if execution_preset_key is not None and expected_preset is None:
+            raise ValueError("explicit creative purpose requires an exact released preset")
         request = WorkflowRequest(
             request_name="EXTERNAL_ITEM_LEARNING_REQUEST",
             image_mode="skip",
@@ -125,6 +134,7 @@ def prepare_external_item_learning_workflow(
             workflow_role_schema_version=workflow.role_schema_version,
             work=work,
             expected_preset=expected_preset,
+            execution_preset_key=profile.preset_key,
         )
         pointer = {
             "plan_id": plan.plan_id,

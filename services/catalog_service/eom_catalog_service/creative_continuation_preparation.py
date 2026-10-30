@@ -7,15 +7,19 @@ from tempfile import TemporaryDirectory
 from eom_catalog_contracts.creative_learning_cohort import CREATIVE_COHORT_SCHEMA_REF
 from eom_catalog_contracts.creative_learning_continuation import (
     CREATIVE_CONTINUATION_REF,
+    CREATIVE_PARALLEL_CONTINUATION_REF,
     CreativeLearningContinuation,
     CreativeLearningExecutionScope,
+    CreativeLearningParallelContinuation,
     validate_creative_continuation_parent,
+    validate_creative_parallel_predecessor,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_identity_service.repository import effective_permissions
 from eom_operator_identity import PermissionKey
 from eom_orchestrator.control_artifacts import ControlArtifactPublisher
 from eom_orchestrator.control_service import ControlPlaneError
+from eom_orchestrator.creative_parallel_controls import release_creative_parallel_controls
 from eom_orchestrator.creative_source_controls import release_creative_source_controls
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.file_set_control_artifacts import (
@@ -227,6 +231,155 @@ def prepare_creative_source_continuation(
                 ),
             ),
             primary_file="continuation.json",
+            artifact_type=COHORT_ARTIFACT_TYPE,
+            manifest_version=continuation.schema_version,
+            idempotency_key=key,
+            source_commit=source_commit,
+        )
+    authorize(operator_id)
+    return read_creative_execution_scope(artifacts, publisher, published.artifact_revision_id)
+
+
+def prepare_creative_parallel_continuation(
+    engine: Engine,
+    *,
+    predecessor_revision_id: str,
+    source_commit: str,
+    settings: Settings,
+    catalog_settings: CatalogSettings,
+) -> tuple[CreativeLearningExecutionScope, PublishedControlFileSet]:
+    """Admitted target owner may change capacity, never targets, content or authority.
+
+    This records controls and the small execution successor, not a worker claim.
+    Actual source rights are checked now and again before every source/job/Graph use.
+    """
+    if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
+        raise ValueError("CREATIVE_CONTINUATION_SOURCE_COMMIT_INVALID")
+    sessions = build_session_factory(engine)
+    artifacts = CatalogArtifactService(engine, catalog_settings)
+    publisher = ControlFileSetPublisher(engine, settings)
+    previous, publication = read_creative_execution_scope(
+        artifacts, publisher, predecessor_revision_id
+    )
+    if not isinstance(previous.continuation, CreativeLearningContinuation):
+        raise ValueError("CREATIVE_PARALLEL_CONTINUATION_PARENT_MISMATCH")
+    operator_id = previous.cohort.requested_by_operator_id
+    with sessions() as session:
+        seed = resolve_completed_creative_learning_proposal(
+            session, artifacts, previous.cohort.seed_selection
+        )
+        if (
+            seed.operator_id != operator_id
+            or seed.work.source.import_id != previous.cohort.import_id
+        ):
+            raise ValueError("CREATIVE_CONTINUATION_SEED_MISMATCH")
+    authorizer = CatalogExternalItemLearningSourceAuthorizer(
+        ExternalItemPreviewProjectionService(engine, settings=catalog_settings)
+    )
+
+    def authorize(current: str) -> None:
+        if current != operator_id:
+            raise ValueError("CREATIVE_CONTINUATION_OWNER_MISMATCH")
+        with sessions() as session:
+            authorizer.reauthorize(session, operator_id=operator_id, source=seed.work.source)
+            if not _PERMISSIONS.issubset(effective_permissions(session, operator_id)):
+                raise ValueError("CREATIVE_CONTINUATION_PERMISSION_DENIED")
+
+    authorize(operator_id)
+    controls = release_creative_parallel_controls(
+        sessions,
+        ControlArtifactPublisher(engine, settings),
+        extraction_revision_id=previous.extraction_preset.preset_revision_id,
+        analysis_revision_id=previous.analysis_preset.preset_revision_id,
+        operator_id=operator_id,
+        source_commit=source_commit,
+        authorize=authorize,
+    )
+    pointer = ArtifactMemberPointer(
+        artifact_id=publication.artifact_id,
+        artifact_revision_id=publication.artifact_revision_id,
+        member_path=publication.primary_file,
+        schema_ref=CREATIVE_CONTINUATION_REF,
+        media_type="application/json",
+        sha256=publication.primary_sha256,
+    )
+    body = {
+        "schema_version": "creative-learning-continuation/1.1",
+        "parent_cohort": previous.continuation.parent_cohort.model_dump(mode="json"),
+        "predecessor_execution": pointer.model_dump(mode="json"),
+        "requested_by_operator_id": operator_id,
+        "target_set_sha256": previous.cohort.target_set_sha256,
+        "source_commit": source_commit,
+        "workflow_definition_version": previous.workflow_definition_version,
+        "workflow_definition_sha256": previous.workflow_definition_sha256,
+        "content_pack_release_id": previous.content_pack_release_id,
+        "extraction_preset": {
+            "preset_id": controls.extraction.preset_id,
+            "preset_revision_id": controls.extraction.preset_revision_id,
+            "sha256": controls.extraction.content_sha256,
+        },
+        "analysis_preset": {
+            "preset_id": controls.analysis.preset_id,
+            "preset_revision_id": controls.analysis.preset_revision_id,
+            "sha256": controls.analysis.content_sha256,
+        },
+        "extraction_preset_key": "creative-source-learning-parallel",
+        "analysis_preset_key": "creative-knowledge-analysis-parallel",
+        "capacity_policy": {
+            "capacity_policy_id": controls.capacity.capacity_policy_id,
+            "capacity_policy_revision_id": controls.capacity.capacity_policy_revision_id,
+            "schema_ref": "eom://schemas/workflow/worker-capacity-policy/1.4",
+            "sha256": controls.capacity.content_sha256,
+        },
+        "max_in_flight_sources": 6,
+        "max_report_workers": 3,
+        "graph_publication_batch_size": 3,
+        "continuation_reason": "THREE_SLOT_REPORT_CAPACITY_SUCCESSOR",
+    }
+    identity = content_sha256({k: v for k, v in body.items() if k != "source_commit"})
+    key = "creative-parallel-continuation:" + identity[7:]
+    authorize(operator_id)
+    try:
+        existing = publisher.find_published(idempotency_key=key, artifact_type=COHORT_ARTIFACT_TYPE)
+    except ControlPlaneError as exc:
+        if exc.code != "CONTROL_FILE_SET_INCOMPLETE":
+            raise
+        existing = None
+    if existing is not None:
+        scope, published = read_creative_execution_scope(
+            artifacts, publisher, existing.artifact_revision_id
+        )
+        actual = scope.continuation
+        if not isinstance(actual, CreativeLearningParallelContinuation) or any(
+            actual.model_dump(mode="json")[field] != value
+            for field, value in body.items()
+            if field != "source_commit"
+        ):
+            raise ValueError("CREATIVE_CONTINUATION_REPLAY_MISMATCH")
+        return scope, published
+    body["cohort_id"] = "creativecohort_" + identity[7:39]
+    continuation = CreativeLearningParallelContinuation.model_validate(
+        {**body, "cohort_sha256": content_sha256(body)}
+    )
+    validate_creative_parallel_predecessor(continuation, previous, pointer)
+    payload = canonical_json_bytes(continuation.model_dump(mode="json"))
+    with TemporaryDirectory(prefix="creative-parallel-", dir=settings.staging_root) as raw:
+        path = Path(raw) / "parallel-continuation.json"
+        path.write_bytes(payload)
+        path.chmod(0o400)
+        authorize(operator_id)
+        published = publisher.publish_first_observation(
+            members=(
+                ControlFileSetMember(
+                    path.name,
+                    path,
+                    sha256_bytes(payload),
+                    len(payload),
+                    CREATIVE_PARALLEL_CONTINUATION_REF,
+                    "application/json",
+                ),
+            ),
+            primary_file=path.name,
             artifact_type=COHORT_ARTIFACT_TYPE,
             manifest_version=continuation.schema_version,
             idempotency_key=key,

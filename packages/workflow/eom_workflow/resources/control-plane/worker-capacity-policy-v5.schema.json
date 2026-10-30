@@ -17,8 +17,8 @@
     "max_active_per_slot": {"const": 1},
     "max_active_gpu": {"const": 1},
     "max_active_knowledge_analysis": {"const": 3},
-    "pools": {"const": [{"pool_key": "creative-reports", "roles": ["support"], "slot_keys": ["slot04", "slot05", "slot06"], "max_active": 3}]},
-    "delegated_slot_roles": {"const": [{"pool_key": "creative-reports", "slot_key": "slot04", "native_role": "item_management", "execution_role": "support"}]},
+    "pools": {"const": [{"pool_key": "support", "roles": ["support"], "slot_keys": ["slot04", "slot05", "slot06"], "max_active": 3}]},
+    "delegated_slot_roles": {"const": [{"pool_key": "support", "slot_key": "slot04", "native_role": "item_management", "execution_role": "support"}]},
     "content_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
     "created_at": {"type": "string", "format": "date-time"}
   }

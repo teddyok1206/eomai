@@ -382,4 +382,30 @@ index다. 원래 full-audit assertion을 완화하거나 목적과 무관한 모
 `/tmp/eom-capacity-current-schema-diff-20261030.json` /
 `/tmp/eom-capacity-baseline-schema-diff-20261030.json`.
 
+## 19:13 UTC — three-slot source pipeline checkpoint, operating activation still pending
+
+- 원래 serial owner는 중단하지 않았다. 18:55 UTC 마지막 로그 확인은 **100/1053**
+  VERIFIED, 10446 분석 중이다. 이것을 3개 슬롯 동시 동작 증거로 해석하지 않는다.
+- 1.1 continuation은 원래 cohort와 serial predecessor를 exact pointer로 참조한다.
+  원래 문항/등록/보고서/분석/실행 설정은 재사용하고 새 대상만 새 용량 설정으로 준비한다.
+  여섯 source 상태 안에서 세 actual worker와 최대 세 문항 Graph batch를 겹친다.
+- 기존 `support` pool 이름과 source plan 28 / 지식 분석 plan을 재사용하도록 미활성
+  capacity 1.4 후보를 단순화했다. 별도 logical capacity/preset으로 목적을 한정하며,
+  fixed-host current pointer, slot04의 기본 역할, 인증과 원래 1.0–1.3 의미는 바꾸지 않는다.
+  불필요한 plan 29 / 별도 분석 plan을 새로 만들지 않는다.
+- 관련 source **688 PASS**, core mypy 15개 PASS, Ruff/format / shell syntax PASS.
+  fresh guarded DB `/tmp/eom-api-testdb-20261030190926_69c250b2`에서 **24 PASS**:
+  실제 control Artifact·lifecycle·동시 release/replay, Workflow preparation/start/recovery,
+  세 physical claim, shared host / per-slot ceiling. 모델 실행이나 운영 PASS는 아니다.
+- 동시 control release 검사에서 발견한 advisory/FK 잠금 역전은 lifecycle fence를
+  evaluation insert보다 먼저 잡도록 수정했다. 예외 무시나 재시도 땜질을 넣지 않았다.
+  이전 실패 로그는 보존한다. 함께 실행된 구 fixture의 definition ID 충돌은 unique
+  family/version 조회로 수정하고 기존 canonical bytes 비교를 유지했다.
+- 새 운영 scope, migration, worker profile은 아직 활성화하지 않았다. 실제 3개 슬롯의
+  동시 작성→다음 문항 refill 확인, 사용량 UI 버그, 실제 similarity adapter 배포는
+  여전히 남아 있으며 goal은 ACTIVE다. 기존 GPU INDEX/QUERY 실행은 바꾸지 않았다.
+
+Evidence: `/tmp/eom-creative-parallel-final-support-unit-20261030.log`,
+`/tmp/eom-creative-parallel-final-pg-20261030.log`.
+
 Graph 복구 Slack 보고는 `devreport_e133ee93d7054d8a8b42b35988cb3dcb`로 전송·보관됐다.

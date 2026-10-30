@@ -78,7 +78,7 @@ def capacity_case(guarded_engine):
         previous = session.get(ExecutionPresetRevisionRecord, old_plan.preset_revision_id)
         preset = deepcopy(previous.canonical_document)
         role = next(value for value in preset["role_policies"] if value["role"] == "support")
-        role.update(worker_pool_key="creative-reports", timeout_seconds=7200)
+        role.update(worker_pool_key="support", timeout_seconds=7200)
         preset.update(
             preset_id="execpreset_" + identity,
             preset_revision_id="execpresetrev_" + identity,

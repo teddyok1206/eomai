@@ -415,6 +415,9 @@ def _prepare_recovery(
         source_authorizer=source_authorizer,
         page_publisher=page_publisher,
         expected_preset=expected_preset,
+        execution_preset_key=load_persisted_workflow_request(
+            parent.initial_request
+        ).execution_preset_key,
     )
     if not prepared.workflow_created:
         # Same-parent replay is handled above under its row lock. An unrelated

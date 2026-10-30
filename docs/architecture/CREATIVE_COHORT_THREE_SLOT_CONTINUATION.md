@@ -1,6 +1,6 @@
 # Creative cohort: three actual report-writing slots
 
-Status: capacity/fixed-unit source verified; cohort continuation NOT yet implemented or installed.
+Status: capacity, continuation and bounded driver source verified; three-slot operating activation pending.
 Date: 2026-10-30 UTC.
 
 ## Decision and existing boundary
@@ -21,7 +21,8 @@ Retain the original immutable cohort and exact ordered source target-set hash. A
 execution scope references the original cohort and its preceding continuation through
 validated Artifact/member/revision/hash pointers, not a copied target list. It pins released
 extraction and analysis presets, the new reviewed capacity revision, the exact workflow and
-Pack, original operator, source commit and max-in-flight=3. Define additive JSON Schema
+Pack, original operator and source commit. Bound the pipeline to six source states: three
+report workers plus at most three sources in one Graph publication batch. Define additive JSON Schema
 2020-12 and a frozen Pydantic model before implementing this execution scope.
 
 Existing registered Items and accepted reports use their original lineage, analysis identity,
@@ -33,15 +34,17 @@ capacity/preset. Report warnings remain readable, not blockers to recording the 
 ## Bounded scheduling and data structures
 
 Use the existing creative execution application and one process fence for the original
-cohort. A bounded three-entry window advances different source targets through the same
+cohort. A bounded six-entry window advances different source targets through the same
 existing Workflow queue/command/Job/lease owners. A target-key map/set enforces membership
 and deduplication; target order stays in the immutable cohort. The cursor/window is ephemeral
 and reconstructed from validated canonical state on restart, never trusted from status JSON.
-Per-tick scheduling is O(3); initial indexed source reconstruction is O(N), not pairwise scans.
+Per-tick scheduling is O(6); initial indexed source reconstruction is O(N), not pairwise scans.
 Do not add another queue, DB tracker, model daemon, distributed scheduler or worker chat.
 
 Independent workers may finish out of order. The single local driver invokes the existing
-Graph publication owner serially; the corpus CAS/advisory lock remains the cross-owner guard.
+Graph publication owner serially in batches of at most three. A single bounded background
+publication future lets other report jobs proceed; it is not another queue or source of
+completion authority. The corpus CAS/advisory lock remains the cross-owner guard.
 Existing unique registration/analysis/Workflow keys and held-slot constraints remain the
 race-safe boundaries. The embedding owner discovers committed publications asynchronously.
 
@@ -70,7 +73,19 @@ do not import infrastructure. The protected release installs the exact compatibl
 policy, runner and fixed unit at a lease-safe point; do not mutate a running GPU bundle.
 No new DB table/index is expected: use existing indexed commands, target lookup, revision
 records, publication and append-only history. Add a migration only if inspection proves a
-missing persistent invariant, not for an ephemeral three-entry window.
+missing persistent invariant, not for an ephemeral source window.
+
+Extraction keeps Workflow 2.0.0, role/result 1.34/2.0, resolved plan 28 and the exact
+instruction bundle. Graph analysis also keeps its existing released task/plan family.
+Both use the existing `support` pool name under a **separate**, purpose-limited capacity
+revision. The draft capacity 1.4 candidate originally used a new pool name; inspection
+proved that would unnecessarily require two additional plan families with identical task
+semantics. No capacity 1.4 has been operating-activated, so the candidate was simplified
+before release; original released 1.0–1.3 bytes/meaning remain unchanged.
+The fixed profile maps the explicit parallel preset key to the same source task, not an
+arbitrary caller-selected pool or preset. Existing
+predecessor Workflows are found first by their original indexed idempotency keys and retain
+their original execution plan. New targets alone use the separate parallel presets.
 
 Inspection found that the existing DB CHECK caps Knowledge Analysis at two, and Orchestrator
 correctly classifies both EXTERNAL_ITEM_LEARNING and knowledge analysis as that workload.
@@ -80,7 +95,7 @@ index. Downgrade refuses once three-report capacity history exists. The protecte
 operator needs an additive exact `0064` context/callback, not a direct production SQL change.
 
 The new schema carries an explicit immutable `slot04/item_management → support` delegation,
-limited to the `creative-reports` pool. The same mapping owns prepublication model options
+limited to the `support` pool of this exact purpose/capacity. The same mapping owns prepublication model options
 and actual lease eligibility. SQL eligibility additionally excludes a tampered slot04 default
 role. Existing host advisory lock and held-slot unique constraint remain authoritative.
 
@@ -120,3 +135,30 @@ The separate complete metadata audit still reports 14 pre-existing differences; 
 confirmed identical against the unchanged installed 54b39f7f baseline. Its assertion was not
 weakened. See the operating record. No capacity policy, migration, worker template or new
 three-slot execution scope has been activated in production at this checkpoint.
+
+## Source pipeline checkpoint, 19:13 UTC
+
+The continuation reader/admission, bounded source window, serial Graph batches and exact
+predecessor reuse are now implemented. Source/analysis presets clone the original released
+instructions, models, reasoning and isolation; only separate logical preset/capacity
+identities change. Existing registered reports/analyses select their original source plan,
+not the new capacity. An explicit failed-source recovery also retains its original purpose.
+
+Related source tests (old families, new continuation/window/history, capacity and operator):
+688 PASS. A fresh disposable PostgreSQL database at head 0064: 24 PASS covering actual
+control Artifact/lifecycle publication and concurrent replay, source preparation/command
+creation/recovery, three distinct physical claims and shared capacity limits. Fifteen core
+modules passed mypy; affected Ruff/format and shell syntax checks PASS. These remain source
+and disposable evidence, not three live worker completions.
+
+Concurrent control release initially exposed an advisory/FK lock inversion. The candidate
+now acquires the lifecycle fence before evaluation insertion; the real concurrency test
+passes without catch-and-retry or history edits. A separate fixture failed to find a
+definition already imported under its real ID; it now uses the existing unique family /
+version index and asserts the same canonical definition. Initial failure logs are retained.
+
+Candidate capacity schema 1.4 SHA is
+`sha256:e739d0d4085146919a4dc6eea678b4e6e06ec801cebcfd0796fc2793e530eb04`.
+The earlier unactivated candidate pool name was simplified before operating release; no
+new resolved plan 29 or another analysis plan family is introduced. Both root launcher and
+developer boundary now test exact parity with the closed 0064 callback enum.

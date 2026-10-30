@@ -94,6 +94,7 @@ class CreativeCohortPreparationService:
         catalog_settings: CatalogSettings,
         scope: CreativeLearningExecutionScope | None = None,
     ) -> None:
+        self.engine = engine
         self.sessions = build_session_factory(engine)
         self.cohort, self.settings = cohort, settings
         self.scope = scope or CreativeLearningExecutionScope(cohort)
@@ -124,6 +125,30 @@ class CreativeCohortPreparationService:
                         WorkflowInstanceRecord.idempotency_key == key
                     )
                 )
+            workflow_scope = self.scope
+            if workflow is None and self.scope.predecessor_scope is not None:
+                # A successor must find original work before creating another
+                # identity. At most two indexed predecessor keys are examined.
+                for previous in self.scope.history_scopes[1:]:
+                    if (
+                        target.external_number == self.cohort.seed_external_number
+                        and previous.continuation is None
+                    ):
+                        workflow = session.get(
+                            WorkflowInstanceRecord, self.cohort.seed_selection.workflow_id
+                        )
+                    else:
+                        previous_key = creative_cohort_workflow_key(
+                            self.cohort, target, execution_cohort_id=previous.cohort_id
+                        )
+                        workflow = session.scalar(
+                            select(WorkflowInstanceRecord).where(
+                                WorkflowInstanceRecord.idempotency_key == previous_key
+                            )
+                        )
+                    if workflow is not None:
+                        workflow_scope = previous
+                        break
             if workflow is not None:
                 workflow = resolve_external_item_learning_recovery(session, workflow)
                 original = load_persisted_workflow_request(
@@ -135,8 +160,8 @@ class CreativeCohortPreparationService:
                 if (
                     workflow.created_actor_type != "human"
                     or workflow.created_actor_id != self.cohort.requested_by_operator_id
-                    or workflow.definition_hash != self.scope.workflow_definition_sha256
-                    or workflow.definition_version != self.scope.workflow_definition_version
+                    or workflow.definition_hash != workflow_scope.workflow_definition_sha256
+                    or workflow.definition_version != workflow_scope.workflow_definition_version
                     or source.source_id != target.source_id
                     or source.source_revision_id != target.source_revision_id
                     or source.observation_sha256 != target.observation_sha256
@@ -158,10 +183,12 @@ class CreativeCohortPreparationService:
                     request=original,
                 )
                 if (
-                    plan.preset_id != self.scope.extraction_preset.preset_id
-                    or plan.preset_revision_id != self.scope.extraction_preset.preset_revision_id
-                    or plan.preset_sha256 != self.scope.extraction_preset.sha256
-                    or plan.capacity_policy_revision_id != self.cohort.capacity_policy_revision_id
+                    plan.preset_id != workflow_scope.extraction_preset.preset_id
+                    or plan.preset_revision_id
+                    != workflow_scope.extraction_preset.preset_revision_id
+                    or plan.preset_sha256 != workflow_scope.extraction_preset.sha256
+                    or plan.capacity_policy_revision_id
+                    != workflow_scope.capacity_policy_revision_id
                 ):
                     raise ValueError("CREATIVE_COHORT_WORKFLOW_POLICY_MISMATCH")
                 step = session.scalar(
@@ -248,6 +275,7 @@ class CreativeCohortPreparationService:
                     source_authorizer=self.source,
                     page_publisher=self.pages,
                     expected_preset=preset,
+                    execution_preset_key=self.scope.extraction_preset_key,
                 )
             return prepared.selection
 
@@ -279,6 +307,21 @@ class CreativeCohortPreparationService:
             target = self.targets.get(work.source.source_id)
             if target is None:
                 raise ValueError("CREATIVE_COHORT_RECOVERY_TARGET_NOT_ADMITTED")
+            persisted = load_persisted_workflow_request(workflow.initial_request)
+            for previous in self.scope.history_scopes[1:]:
+                if (
+                    persisted.execution_preset_key == previous.extraction_preset_key
+                    and workflow.definition_hash == previous.workflow_definition_sha256
+                ):
+                    # Recovery stays under the original policy. The successor
+                    # admission does not upgrade a failed job's execution pins.
+                    return CreativeCohortPreparationService(
+                        self.engine,
+                        cohort=self.cohort,
+                        settings=self.settings,
+                        catalog_settings=self.preview.settings,
+                        scope=previous,
+                    )._recover(workflow_id, prepare_recovery)
         selected = self.prepare(target)  # exact source/plan pins and current real owner rights
         if selected.workflow_id != workflow_id:
             with self.sessions() as session:

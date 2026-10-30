@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,19 @@ from tests.unit.test_release_operator_runtime import FakeEngine, _hash, _json
 from tests.unit.test_release_operator_runtime import synthetic_stage as synthetic_stage
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def test_root_launcher_and_developer_boundary_route_the_same_closed_callback_set():
+    for filename, extra in (
+        ("release_operator_runtime.sh", {"ADMIT"}),
+        ("release_operator_boundary.sh", set()),
+    ):
+        source = (ROOT / "scripts/api" / filename).read_text()
+        match = re.search(r"\n\s+((?:[A-Z][A-Z0-9_]*\|)+[A-Z][A-Z0-9_]*)\) ;;", source)
+        assert match is not None
+        assert (
+            set(match.group(1).split("|")) == {member.value for member in operator.Callback} | extra
+        )
 
 
 @pytest.fixture

@@ -142,3 +142,59 @@ def test_retired_item_is_not_reactivated_or_scheduled_again(monkeypatch):
             requested_by_operator_id=value.lineage.requested_by_operator_id,
         )
     value.service.analyses.create_with_pinned_preset.assert_not_called()
+
+
+def test_bounded_publication_uses_one_graph_owner_without_resubmitting_analysis(monkeypatch):
+    value = case(monkeypatch, "ACCEPTED")
+    second_revision = NS(**vars(value.revision))
+    second_revision.item_revision_id = second_revision.current_revision_id = "itemrev_" + "b" * 32
+    second_revision.item_id = "item_" + "c" * 32
+    revisions = {row.item_revision_id: row for row in (value.revision, second_revision)}
+    lookup = {**revisions, **{row.item_id: row for row in revisions.values()}}
+    value.session.get.side_effect = lambda _model, identity, **_kwargs: lookup.get(identity)
+    progress = (
+        learning.CreativeGraphLearningProgress(value.item_revision, value.run_id, "ACCEPTED", None),
+        learning.CreativeGraphLearningProgress(
+            second_revision.item_revision_id, "analysisrun_" + "d" * 32, "ACCEPTED", None
+        ),
+    )
+    result = value.service.publish_accepted(
+        progress, requested_by_operator_id=value.lineage.requested_by_operator_id
+    )
+    assert (
+        len(result) == 2
+        and result[0].graph_snapshot_revision_id == result[1].graph_snapshot_revision_id
+    )
+    invocation = value.service.automatic.publish.call_args
+    assert tuple(entry.analysis_run_id for entry in invocation.args[0]) == tuple(
+        entry.analysis_run_id for entry in progress
+    )
+    assert len({entry.graph_snapshot_revision_id for entry in invocation.args[0]}) == 1
+    value.service.analyses.create_with_pinned_preset.assert_not_called()
+
+
+@pytest.mark.parametrize("fault", ["empty", "duplicate", "unaccepted", "oversized"])
+def test_graph_batch_rejects_ambiguous_or_unaccepted_members_before_any_io(monkeypatch, fault):
+    value = case(monkeypatch)
+    entry = learning.CreativeGraphLearningProgress(
+        value.item_revision, value.run_id, "ACCEPTED", None
+    )
+    progress = (entry,)
+    if fault == "empty":
+        progress = ()
+    elif fault == "duplicate":
+        progress = (entry, entry)
+    elif fault == "unaccepted":
+        progress = (
+            learning.CreativeGraphLearningProgress(
+                value.item_revision, value.run_id, "RUNNING", None
+            ),
+        )
+    else:
+        progress = (entry,) * 4
+    with pytest.raises(ValueError, match="ANALYSIS_INVALID"):
+        value.service.publish_accepted(
+            progress, requested_by_operator_id=value.lineage.requested_by_operator_id
+        )
+    value.service.automatic.publish.assert_not_called()
+    value.service.analyses.create_with_pinned_preset.assert_not_called()

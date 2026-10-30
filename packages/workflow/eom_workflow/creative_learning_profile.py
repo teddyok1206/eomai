@@ -1,6 +1,6 @@
 """Immutable released-family identities; no current/latest policy resolution."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from types import MappingProxyType
 
 
@@ -37,7 +37,13 @@ _PROFILES = (
 )
 _BY_DEFINITION = MappingProxyType({profile.definition_version: profile for profile in _PROFILES})
 _BY_PROTOCOL = MappingProxyType({profile.role_protocol: profile for profile in _PROFILES})
-CREATIVE_LEARNING_PRESET_KEYS = frozenset(profile.preset_key for profile in _PROFILES)
+_PARALLEL_PROFILE = replace(
+    _PROFILES[1],
+    preset_key="creative-source-learning-parallel",
+)
+CREATIVE_LEARNING_PRESET_KEYS = frozenset(
+    (*[profile.preset_key for profile in _PROFILES], _PARALLEL_PROFILE.preset_key)
+)
 
 
 def creative_learning_profile(definition_version: str) -> CreativeLearningProfile:
@@ -52,3 +58,15 @@ def creative_learning_profile_for_protocol(protocol: str) -> CreativeLearningPro
         return _BY_PROTOCOL[protocol]
     except KeyError as error:
         raise ValueError("unsupported creative learning role protocol") from error
+
+
+def creative_learning_profile_for_preset(
+    definition_version: str, preset_key: str
+) -> CreativeLearningProfile:
+    """Closed purpose mapping; it does not admit a caller-defined pool or role."""
+    profile = creative_learning_profile(definition_version)
+    if preset_key == profile.preset_key:
+        return profile
+    if definition_version == "2.0.0" and preset_key == _PARALLEL_PROFILE.preset_key:
+        return _PARALLEL_PROFILE
+    raise ValueError("creative preset and Workflow family differ")

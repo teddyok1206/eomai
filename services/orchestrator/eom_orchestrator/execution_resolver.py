@@ -63,7 +63,10 @@ from eom_workflow.control_plane import (
     parse_creative_learning_execution_plan,
 )
 from eom_workflow.control_schemas import validate_control_contract
-from eom_workflow.creative_learning_profile import creative_learning_profile_for_protocol
+from eom_workflow.creative_learning_profile import (
+    creative_learning_profile_for_preset,
+    creative_learning_profile_for_protocol,
+)
 from eom_workflow.document_review import (
     PairedDocumentReviewRequest,
     PairedDocumentReviewRequestV2,
@@ -2132,6 +2135,7 @@ def resolve_external_item_learning_plan(
     work: ExternalItemLearningWorkInput,
     resolved_at: datetime | None = None,
     expected_preset: ExecutionPresetRevision | None = None,
+    execution_preset_key: str | None = None,
 ) -> ResolvedExecutionPlanV27 | ResolvedExecutionPlanV28:
     """Pin creative source instructions to the existing bounded support pool.
 
@@ -2140,6 +2144,12 @@ def resolve_external_item_learning_plan(
     """
 
     profile = creative_learning_profile_for_protocol(workflow_role_schema_version)
+    if execution_preset_key is not None and execution_preset_key != profile.preset_key:
+        profile = creative_learning_profile_for_preset(
+            profile.definition_version, execution_preset_key
+        )
+        if expected_preset is None:
+            raise ControlPlaneError("CONTROL_PRESET_POINTER_INVALID", "exact purpose pin required")
     existing = session.scalar(
         select(ResolvedExecutionPlanRecord).where(
             ResolvedExecutionPlanRecord.workflow_id == workflow_id

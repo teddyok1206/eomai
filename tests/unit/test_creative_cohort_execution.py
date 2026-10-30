@@ -48,8 +48,7 @@ def execution_case(monkeypatch, *, state="COMPLETED", missing_notes=False):
     service.scope = CreativeLearningExecutionScope(cohort)
     service.targets = cohort.targets
     service.cursor = 0
-    service.selection = service.registered = service.analysis_run_id = None
-    service.started = False
+    service.current = None
     service.preparation = NS(prepare=Mock(return_value=resolved.selection), source=object())
     service.publisher = object()
     service.registration = NS(
@@ -57,7 +56,7 @@ def execution_case(monkeypatch, *, state="COMPLETED", missing_notes=False):
         find_registered_source=Mock(return_value=None),
     )
     service.learning = NS(
-        advance=Mock(
+        advance_analysis=Mock(
             return_value=NS(
                 analysis_run_id="analysisrun_" + "6" * 32,
                 analysis_state="ACCEPTED",
@@ -65,6 +64,17 @@ def execution_case(monkeypatch, *, state="COMPLETED", missing_notes=False):
             )
         )
     )
+    service.learning.publish_accepted = Mock(
+        side_effect=lambda _sources, **_kwargs: (
+            NS(
+                item_revision_id=registered.item_revision_id,
+                analysis_run_id="analysisrun_" + "6" * 32,
+                analysis_state="ACCEPTED",
+                graph_snapshot_revision_id="graphrev_" + "7" * 32,
+            ),
+        )
+    )
+    service._learning_for_registered = Mock(return_value=service.learning)
     service.read = NS(
         resolve=Mock(
             return_value=NS(
@@ -93,7 +103,7 @@ def test_warning_bearing_source_is_verified_only_after_official_report_read(monk
     assert case.lineage.warning_codes == ("ANSWER_DISAGREEMENT",)
     case.service.read.resolve.assert_called_once()
     case.start.assert_not_called()
-    assert case.service.selection is None  # next target is not started in this tick
+    assert case.service.current is None  # next target is not started in this tick
 
 
 def test_missing_report_warning_does_not_advance_or_start_another_source(monkeypatch):

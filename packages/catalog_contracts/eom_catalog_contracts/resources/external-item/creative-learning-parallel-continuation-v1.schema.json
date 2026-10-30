@@ -1,0 +1,217 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/external-item/creative-learning-continuation/1.1",
+  "title": "Creative learning bounded three-report continuation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "cohort_id",
+    "parent_cohort",
+    "requested_by_operator_id",
+    "target_set_sha256",
+    "source_commit",
+    "workflow_definition_version",
+    "workflow_definition_sha256",
+    "extraction_preset",
+    "content_pack_release_id",
+    "continuation_reason",
+    "cohort_sha256",
+    "predecessor_execution",
+    "analysis_preset",
+    "capacity_policy",
+    "extraction_preset_key",
+    "analysis_preset_key",
+    "max_in_flight_sources",
+    "max_report_workers",
+    "graph_publication_batch_size"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "creative-learning-continuation/1.1"
+    },
+    "cohort_id": {
+      "type": "string",
+      "pattern": "^creativecohort_[0-9a-f]{32}$"
+    },
+    "parent_cohort": {
+      "$ref": "#/$defs/member"
+    },
+    "requested_by_operator_id": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "target_set_sha256": {
+      "$ref": "#/$defs/sha"
+    },
+    "source_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "workflow_definition_version": {
+      "const": "2.0.0"
+    },
+    "workflow_definition_sha256": {
+      "$ref": "#/$defs/sha"
+    },
+    "extraction_preset": {
+      "$ref": "#/$defs/preset"
+    },
+    "content_pack_release_id": {
+      "type": "string",
+      "pattern": "^packrel_[0-9a-f]{32}$"
+    },
+    "continuation_reason": {
+      "const": "THREE_SLOT_REPORT_CAPACITY_SUCCESSOR"
+    },
+    "cohort_sha256": {
+      "$ref": "#/$defs/sha"
+    },
+    "predecessor_execution": {
+      "$ref": "#/$defs/predecessor"
+    },
+    "analysis_preset": {
+      "$ref": "#/$defs/preset"
+    },
+    "capacity_policy": {
+      "$ref": "#/$defs/capacity"
+    },
+    "extraction_preset_key": {
+      "const": "creative-source-learning-parallel"
+    },
+    "analysis_preset_key": {
+      "const": "creative-knowledge-analysis-parallel"
+    },
+    "max_in_flight_sources": {
+      "const": 6
+    },
+    "max_report_workers": {
+      "const": 3
+    },
+    "graph_publication_batch_size": {
+      "const": 3
+    }
+  },
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "const": "cohort.json"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/external-item/creative-learning-cohort/1.0"
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "preset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preset_id",
+        "preset_revision_id",
+        "sha256"
+      ],
+      "properties": {
+        "preset_id": {
+          "type": "string",
+          "pattern": "^execpreset_[0-9a-f]{32}$"
+        },
+        "preset_revision_id": {
+          "type": "string",
+          "pattern": "^execpresetrev_[0-9a-f]{32}$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "predecessor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "const": "continuation.json"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/external-item/creative-learning-continuation/1.0"
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    },
+    "capacity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "capacity_policy_id",
+        "capacity_policy_revision_id",
+        "schema_ref",
+        "sha256"
+      ],
+      "properties": {
+        "capacity_policy_id": {
+          "type": "string",
+          "pattern": "^capacity_[0-9a-f]{32}$"
+        },
+        "capacity_policy_revision_id": {
+          "type": "string",
+          "pattern": "^capacityrev_[0-9a-f]{32}$"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/workflow/worker-capacity-policy/1.4"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha"
+        }
+      }
+    }
+  }
+}

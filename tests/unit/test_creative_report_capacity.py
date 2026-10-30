@@ -29,7 +29,7 @@ def capacity_value():
         "max_active_knowledge_analysis": 3,
         "pools": [
             {
-                "pool_key": "creative-reports",
+                "pool_key": "support",
                 "roles": ["support"],
                 "slot_keys": ["slot04", "slot05", "slot06"],
                 "max_active": 3,
@@ -37,7 +37,7 @@ def capacity_value():
         ],
         "delegated_slot_roles": [
             {
-                "pool_key": "creative-reports",
+                "pool_key": "support",
                 "slot_key": "slot04",
                 "native_role": "item_management",
                 "execution_role": "support",
@@ -82,7 +82,7 @@ def slots():
     engine.dispose()
 
 
-def eligible(session, policy, *, pool="creative-reports", role="support"):
+def eligible(session, policy, *, pool="support", role="support"):
     return tuple(
         session.scalars(
             select(WorkerSlotRecord.slot_id)
@@ -135,7 +135,7 @@ def test_exact_new_policy_grants_only_the_reviewed_native_slot_role(slots):
 
 
 def test_wrong_pool_or_role_does_not_receive_the_delegation(slots):
-    assert eligible(slots, policy_row(), pool="support") == ("05", "06")
+    assert eligible(slots, policy_row(), pool="other-support") == ("05", "06")
     assert eligible(slots, policy_row(), role="authoring") == ("01",)
     # Actual pool membership/role, claim and capability gates apply separately.
 
@@ -154,7 +154,7 @@ def test_rewritten_physical_role_is_not_a_valid_delegation(slots):
     assert eligible(slots, policy_row()) == ("05", "06")
     with pytest.raises(ValueError, match="default role differs"):
         WorkerCapacityPolicyV5.model_validate(capacity_value()).execution_role_for_slot(
-            pool_key="creative-reports", slot_key="slot04", native_role="support"
+            pool_key="support", slot_key="slot04", native_role="support"
         )
 
 

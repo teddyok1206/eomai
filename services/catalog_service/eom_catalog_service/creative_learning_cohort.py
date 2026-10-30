@@ -11,9 +11,12 @@ from eom_catalog_contracts.creative_learning_cohort import (
 )
 from eom_catalog_contracts.creative_learning_continuation import (
     CREATIVE_CONTINUATION_REF,
+    CREATIVE_PARALLEL_CONTINUATION_REF,
     CreativeLearningContinuation,
     CreativeLearningExecutionScope,
+    CreativeLearningParallelContinuation,
     validate_creative_continuation_parent,
+    validate_creative_parallel_predecessor,
 )
 from eom_catalog_contracts.external_item_learning_authorization import (
     ExternalItemLearningRoleSelection,
@@ -95,6 +98,43 @@ def read_creative_execution_scope(
     )
     if published.primary_file == "cohort.json":
         return CreativeLearningExecutionScope(_read_base_cohort(artifacts, published)), published
+    if published.primary_file == "parallel-continuation.json":
+        payload = artifacts.read_member(
+            artifact_id=published.artifact_id,
+            revision_id=published.artifact_revision_id,
+            member_path=published.primary_file,
+            sha256=published.primary_sha256,
+            schema_ref=CREATIVE_PARALLEL_CONTINUATION_REF,
+            media_type="application/json",
+            max_bytes=64 * 1024,
+        )
+        parallel = CreativeLearningParallelContinuation.model_validate_json(payload)
+        previous = publisher.read_published_revision(
+            artifact_revision_id=parallel.predecessor_execution.artifact_revision_id,
+            artifact_type=COHORT_ARTIFACT_TYPE,
+        )
+        # The predecessor is explicitly serial 1.0. This is one bounded link,
+        # not arbitrary recursion through caller-supplied control Artifacts.
+        if previous.primary_file != "continuation.json":
+            raise ValueError("CREATIVE_PARALLEL_CONTINUATION_PARENT_MISMATCH")
+        actual_predecessor = ArtifactMemberPointer(
+            artifact_id=previous.artifact_id,
+            artifact_revision_id=previous.artifact_revision_id,
+            member_path=previous.primary_file,
+            sha256=previous.primary_sha256,
+            schema_ref=CREATIVE_CONTINUATION_REF,
+            media_type="application/json",
+        )
+        if actual_predecessor != parallel.predecessor_execution:
+            raise ValueError("CREATIVE_PARALLEL_CONTINUATION_PARENT_MISMATCH")
+        predecessor, _ = read_creative_execution_scope(
+            artifacts, publisher, actual_predecessor.artifact_revision_id
+        )
+        validate_creative_parallel_predecessor(parallel, predecessor, actual_predecessor)
+        return (
+            CreativeLearningExecutionScope(predecessor.cohort, parallel, predecessor),
+            published,
+        )
     if published.primary_file != "continuation.json":
         raise ValueError("CREATIVE_COHORT_FORMAT_INVALID")
     payload = artifacts.read_member(

@@ -2369,7 +2369,7 @@ class WorkerCapacityPolicyV4(FrozenModel):
 class CreativeReportSlotRoleDelegation(FrozenModel):
     """One reviewed execution purpose; the physical default role is unchanged."""
 
-    pool_key: Literal["creative-reports"]
+    pool_key: Literal["support"]
     slot_key: Literal["slot04"]
     native_role: Literal["item_management"]
     execution_role: Literal["support"]
@@ -2400,7 +2400,7 @@ class WorkerCapacityPolicyV5(FrozenModel):
     def exact_creative_report_purpose(self) -> WorkerCapacityPolicyV5:
         pool = self.pools[0]
         if (pool.pool_key, pool.roles, pool.slot_keys, pool.max_active) != (
-            "creative-reports",
+            "support",
             ("support",),
             ("slot04", "slot05", "slot06"),
             3,

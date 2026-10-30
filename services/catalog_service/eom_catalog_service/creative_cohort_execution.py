@@ -2,26 +2,47 @@
 
 from dataclasses import dataclass
 
-from eom_catalog_contracts.creative_learning_cohort import CreativeLearningCohort
-from eom_catalog_contracts.creative_learning_continuation import CreativeLearningExecutionScope
+from eom_catalog_contracts.creative_learning_cohort import (
+    CreativeCohortTarget,
+    CreativeLearningCohort,
+)
+from eom_catalog_contracts.creative_learning_continuation import (
+    CreativeLearningExecutionScope,
+    CreativeLearningParallelContinuation,
+)
 from eom_catalog_contracts.external_item_learning_authorization import (
     ExternalItemLearningRoleSelection,
 )
-from eom_orchestrator.control_models import ExecutionPresetRecord, ExecutionPresetRevisionRecord
+from eom_orchestrator.control_models import (
+    ExecutionPresetRecord,
+    ExecutionPresetRevisionRecord,
+    ResolvedExecutionPlanRecord,
+)
 from eom_orchestrator.database import build_session_factory
+from eom_orchestrator.external_item_learning_execution import (
+    validate_external_item_learning_execution_plan,
+)
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
-from eom_orchestrator.preset_model_selection import validated_preset
+from eom_orchestrator.preset_model_selection import (
+    resolve_released_capacity_policy,
+    validated_preset,
+)
 from eom_orchestrator.settings import Settings
 from eom_protocol.general_chat_grounding import ChatKnowledgeCatalogRequest
-from eom_workflow.creative_learning_profile import creative_learning_profile
+from eom_workflow.models import ExternalItemLearningWorkerRequest
 from eom_workflow_runner.external_item_learning_start import start_prepared_external_item_learning
 from eom_workflow_runner.models import WorkflowInstanceRecord
+from eom_workflow_runner.repository import load_persisted_workflow_request
 from sqlalchemy import Engine
+from sqlalchemy.orm import Session
 
 from eom_catalog_service.chat_knowledge_resolution import ChatKnowledgeResolutionService
 from eom_catalog_service.creative_cohort_preparation import CreativeCohortPreparationService
-from eom_catalog_service.creative_item_graph_learning import CreativeItemGraphLearningService
+from eom_catalog_service.creative_item_graph_learning import (
+    CreativeGraphLearningProgress,
+    CreativeItemGraphLearningService,
+)
 from eom_catalog_service.creative_item_registration import (
     CreativeItemRegistrationService,
     RegisteredCreativeItem,
@@ -43,6 +64,19 @@ class CreativeCohortProgress:
     item_revision_id: str | None
     analysis_run_id: str | None
     graph_snapshot_revision_id: str | None
+    active_sources: tuple[tuple[str, str], ...] = ()
+
+
+@dataclass(slots=True)
+class CreativeSourceExecution:
+    """Ephemeral cursor; every identity is recovered through the canonical owners."""
+
+    target: CreativeCohortTarget
+    selection: ExternalItemLearningRoleSelection | None = None
+    started: bool = False
+    registered: RegisteredCreativeItem | None = None
+    analysis: CreativeGraphLearningProgress | None = None
+    state: str = "PREPARING"
 
 
 class CreativeCohortExecutionService:
@@ -82,47 +116,40 @@ class CreativeCohortExecutionService:
             source_commit=self.scope.source_commit,
             settings=catalog_settings,
         )
-        self.learning = CreativeItemGraphLearningService(
-            engine,
-            access_policy_revision_id=cohort.access_policy_revision_id,
-            preset_key="creative-knowledge-analysis",
-            preset_id=cohort.analysis_preset.preset_id,
-            preset_revision_id=cohort.analysis_preset.preset_revision_id,
-            risk_policy_revision_id=cohort.risk_policy_revision_id,
-            settings=catalog_settings,
-        )
+        self.learning_by_scope = {
+            entry.cohort_id: CreativeItemGraphLearningService(
+                engine,
+                access_policy_revision_id=cohort.access_policy_revision_id,
+                preset_key=entry.analysis_preset_key,
+                preset_id=entry.analysis_preset.preset_id,
+                preset_revision_id=entry.analysis_preset.preset_revision_id,
+                risk_policy_revision_id=cohort.risk_policy_revision_id,
+                settings=catalog_settings,
+            )
+            for entry in self.scope.history_scopes
+        }
+        self.learning = self.learning_by_scope[self.scope.cohort_id]
         self.read = ChatKnowledgeResolutionService(engine)
         self._require_pins()
         indexed = {target.external_number: target for target in cohort.targets}
         seed = indexed[cohort.seed_external_number]
         self.targets = (seed, *(target for target in cohort.targets if target != seed))
         self.cursor = 0
-        self.selection: ExternalItemLearningRoleSelection | None = None
-        self.started = False
-        self.registered: RegisteredCreativeItem | None = None
-        self.analysis_run_id: str | None = None
+        self.current: CreativeSourceExecution | None = None
 
     def _require_pins(self) -> None:
         with self.sessions() as session:
-            for pin, purpose in (
-                (
-                    self.scope.extraction_preset,
-                    creative_learning_profile(self.scope.workflow_definition_version).preset_key,
-                ),
-                (self.cohort.analysis_preset, "creative-knowledge-analysis"),
-            ):
-                row = session.get(ExecutionPresetRevisionRecord, pin.preset_revision_id)
-                preset = validated_preset(row) if row else None
-                logical = session.get(ExecutionPresetRecord, pin.preset_id)
+            for scope in self.scope.history_scopes:
+                self._require_scope_pins(session, scope)
+            if isinstance(self.scope.continuation, CreativeLearningParallelContinuation):
+                pin = self.scope.continuation.capacity_policy
+                capacity = resolve_released_capacity_policy(
+                    session, pin.capacity_policy_revision_id
+                )
                 if (
-                    preset is None
-                    or preset.state != "RELEASED"
-                    or preset.preset_id != pin.preset_id
-                    or preset.content_sha256 != pin.sha256
-                    or preset.capacity_policy_revision_id != self.cohort.capacity_policy_revision_id
-                    or logical is None
-                    or logical.state != "ACTIVE"
-                    or logical.preset_key != purpose
+                    capacity.capacity_policy_id != pin.capacity_policy_id
+                    or capacity.schema_version != "worker-capacity-policy/1.4"
+                    or capacity.content_sha256 != pin.sha256
                 ):
                     raise ValueError("CREATIVE_COHORT_PRESET_PIN_MISMATCH")
             risk = KnowledgeAnalysisApplicationService.risk_policy(
@@ -133,22 +160,88 @@ class CreativeCohortExecutionService:
         if self.learning.access_policy_sha256 != self.cohort.access_policy_sha256:
             raise ValueError("CREATIVE_COHORT_ACCESS_POLICY_PIN_MISMATCH")
 
+    @staticmethod
+    def _require_scope_pins(session: Session, scope: CreativeLearningExecutionScope) -> None:
+        for pin, purpose in (
+            (scope.extraction_preset, scope.extraction_preset_key),
+            (scope.analysis_preset, scope.analysis_preset_key),
+        ):
+            row = session.get(ExecutionPresetRevisionRecord, pin.preset_revision_id)
+            preset = validated_preset(row) if row else None
+            logical = session.get(ExecutionPresetRecord, pin.preset_id)
+            if (
+                preset is None
+                or preset.state != "RELEASED"
+                or preset.preset_id != pin.preset_id
+                or preset.content_sha256 != pin.sha256
+                or preset.capacity_policy_revision_id != scope.capacity_policy_revision_id
+                or logical is None
+                or logical.state != "ACTIVE"
+                or logical.preset_key != purpose
+            ):
+                raise ValueError("CREATIVE_COHORT_PRESET_PIN_MISMATCH")
+
+    def _learning_for_registered(
+        self, registered: RegisteredCreativeItem
+    ) -> CreativeItemGraphLearningService:
+        """Original source plan selects its original analysis, never a latest preset."""
+        selection = registered.lineage.selection
+        with self.sessions() as session:
+            workflow = session.get(WorkflowInstanceRecord, selection.workflow_id)
+            row = session.get(ResolvedExecutionPlanRecord, selection.plan_id)
+            if workflow is None or row is None:
+                raise ValueError("CREATIVE_COHORT_WORKFLOW_MISSING")
+            request = load_persisted_workflow_request(workflow.initial_request).worker_request()
+            if not isinstance(request, ExternalItemLearningWorkerRequest):
+                raise ValueError("CREATIVE_COHORT_WORKFLOW_TYPE_MISMATCH")
+            plan = validate_external_item_learning_execution_plan(
+                row, workflow_id=selection.workflow_id, step_key="extract", request=request
+            )
+            if plan.plan_sha256 != selection.plan_sha256:
+                raise ValueError("CREATIVE_COHORT_WORKFLOW_POLICY_MISMATCH")
+        for scope in self.scope.history_scopes:
+            if (
+                plan.preset_id == scope.extraction_preset.preset_id
+                and plan.preset_revision_id == scope.extraction_preset.preset_revision_id
+                and plan.preset_sha256 == scope.extraction_preset.sha256
+                and plan.capacity_policy_revision_id == scope.capacity_policy_revision_id
+                and plan.workflow_definition_sha256 == scope.workflow_definition_sha256
+            ):
+                return self.learning_by_scope[scope.cohort_id]
+        raise ValueError("CREATIVE_COHORT_WORKFLOW_POLICY_MISMATCH")
+
     def advance_once(self) -> CreativeCohortProgress:
         if self.cursor == len(self.targets):
-            return self._progress("COMPLETED", None)
-        target = self.targets[self.cursor]
-        if self.selection is None:
+            return self.progress("COMPLETED", None, self.cursor)
+        if self.current is None:
+            self.current = CreativeSourceExecution(self.targets[self.cursor])
+        current = self.current
+        self.advance_report(current)
+        if current.state != "READY_TO_PUBLISH":
+            return self.progress(current.state, current, self.cursor)
+        self.publish_sources((current,))
+        self.cursor += 1
+        result = self.progress("VERIFIED", current, self.cursor)
+        self.current = None
+        return result
+
+    def close(self) -> None:
+        """Serial owner has no in-process background work to drain."""
+
+    def advance_report(self, current: CreativeSourceExecution) -> None:
+        target = current.target
+        if current.selection is None:
             registered = self.registration.find_registered_source(
                 target, requested_by_operator_id=self.cohort.requested_by_operator_id
             )
             if registered is not None:
                 if registered.lineage.import_id != self.cohort.import_id:
                     raise ValueError("CREATIVE_COHORT_REGISTERED_IMPORT_MISMATCH")
-                self.registered = registered
-                self.selection = registered.lineage.selection
+                current.registered = registered
+                current.selection = registered.lineage.selection
             else:
-                self.selection = self.preparation.prepare(target)
-        selection = self.selection
+                current.selection = self.preparation.prepare(target)
+        selection = current.selection
         with self.sessions() as session:
             workflow = session.get(WorkflowInstanceRecord, selection.workflow_id)
             if workflow is None:
@@ -157,7 +250,7 @@ class CreativeCohortExecutionService:
         if state in {"FAILED", "CANCELLED"}:
             raise ValueError("CREATIVE_COHORT_EXTRACTION_TERMINAL_FAILURE")
         if state != "COMPLETED":
-            if not self.started:
+            if not current.started:
                 with self.sessions.begin() as session:
                     start_prepared_external_item_learning(
                         session,
@@ -166,15 +259,16 @@ class CreativeCohortExecutionService:
                         source_authorizer=self.preparation.source,
                         page_publisher=self.publisher,
                     )
-                self.started = True
-            return self._progress("EXTRACTING", target.external_number)
-        if self.registered is None:
-            self.registered = self.registration.register_completed(
+                current.started = True
+            current.state = "EXTRACTING"
+            return
+        if current.registered is None:
+            current.registered = self.registration.register_completed(
                 selection, requested_by_operator_id=self.cohort.requested_by_operator_id
             )
-        if self.analysis_run_id is not None:
+        if current.analysis is not None:
             with self.sessions() as session:
-                run = session.get(KnowledgeAnalysisRunRecord, self.analysis_run_id)
+                run = session.get(KnowledgeAnalysisRunRecord, current.analysis.analysis_run_id)
                 if run is None:
                     raise ValueError("CREATIVE_COHORT_ANALYSIS_MISSING")
                 if run.state in {"FAILED", "REJECTED", "CANCELLED"}:
@@ -186,29 +280,41 @@ class CreativeCohortExecutionService:
                         "FAILED",
                         "CANCELLED",
                     }:
-                        return self._progress("ANALYZING", target.external_number)
-        progress = self.learning.advance(
-            item_revision_id=self.registered.item_revision_id,
+                        current.state = "ANALYZING"
+                        return
+        learning = self._learning_for_registered(current.registered)
+        progress = learning.advance_analysis(
+            item_revision_id=current.registered.item_revision_id,
             requested_by_operator_id=self.cohort.requested_by_operator_id,
         )
-        self.analysis_run_id = progress.analysis_run_id
+        current.analysis = progress
         if progress.analysis_state in {"FAILED", "REJECTED", "CANCELLED"}:
             raise ValueError("CREATIVE_COHORT_ANALYSIS_TERMINAL_FAILURE")
-        if progress.graph_snapshot_revision_id is None:
-            return self._progress("ANALYZING", target.external_number)
-        self._verify_read(progress.graph_snapshot_revision_id)
-        self.cursor += 1
-        verified = self._progress(
-            "VERIFIED", target.external_number, graph_revision=progress.graph_snapshot_revision_id
-        )
-        self.selection, self.registered, self.analysis_run_id = None, None, None
-        self.started = False
-        return verified
+        current.state = "READY_TO_PUBLISH" if progress.analysis_state == "ACCEPTED" else "ANALYZING"
 
-    def _verify_read(self, graph_revision: str) -> None:
-        registered = self.registered
-        if registered is None:
-            raise ValueError("CREATIVE_COHORT_REGISTERED_ITEM_MISSING")
+    def publish_sources(self, sources: tuple[CreativeSourceExecution, ...]) -> None:
+        if not sources or any(
+            entry.state != "READY_TO_PUBLISH" or entry.analysis is None or entry.registered is None
+            for entry in sources
+        ):
+            raise ValueError("CREATIVE_COHORT_PUBLICATION_NOT_READY")
+        published = self.learning.publish_accepted(
+            tuple(entry.analysis for entry in sources if entry.analysis is not None),
+            requested_by_operator_id=self.cohort.requested_by_operator_id,
+        )
+        by_revision = {entry.item_revision_id: entry for entry in published}
+        if len(by_revision) != len(sources):
+            raise ValueError("CREATIVE_COHORT_PUBLICATION_MISMATCH")
+        for entry in sources:
+            assert entry.registered is not None
+            progress = by_revision.get(entry.registered.item_revision_id)
+            if progress is None or progress.graph_snapshot_revision_id is None:
+                raise ValueError("CREATIVE_COHORT_PUBLICATION_MISMATCH")
+            self._verify_read(entry.registered, progress.graph_snapshot_revision_id)
+            entry.analysis = progress
+            entry.state = "VERIFIED"
+
+    def _verify_read(self, registered: RegisteredCreativeItem, graph_revision: str) -> None:
         with self.sessions() as session:
             revision = session.get(ItemRevisionRecord, registered.item_revision_id)
             snapshot = session.get(KnowledgeGraphSnapshotRecord, graph_revision)
@@ -246,17 +352,23 @@ class CreativeCohortExecutionService:
         ):
             raise ValueError("CREATIVE_COHORT_READ_NOTES_MISSING")
 
-    def _progress(
-        self, state: str, number: str | None, *, graph_revision: str | None = None
+    def progress(
+        self,
+        state: str,
+        current: CreativeSourceExecution | None,
+        verified_count: int,
+        *,
+        active_sources: tuple[tuple[str, str], ...] = (),
     ) -> CreativeCohortProgress:
         return CreativeCohortProgress(
             self.scope.cohort_id,
             len(self.targets),
-            self.cursor,
-            number,
+            verified_count,
+            current.target.external_number if current else None,
             state,
-            self.selection.workflow_id if self.selection else None,
-            self.registered.item_revision_id if self.registered else None,
-            self.analysis_run_id,
-            graph_revision,
+            current.selection.workflow_id if current and current.selection else None,
+            current.registered.item_revision_id if current and current.registered else None,
+            current.analysis.analysis_run_id if current and current.analysis else None,
+            current.analysis.graph_snapshot_revision_id if current and current.analysis else None,
+            active_sources,
         )

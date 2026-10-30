@@ -22,6 +22,11 @@ from eom_catalog_service.external_item_learning_preparation_service import (
     PrepareExternalItemLearningCommand,
 )
 from eom_catalog_service.external_item_preview_projection import ResolvedExternalItemPreview
+from eom_identifiers import (
+    content_sha256,
+    new_execution_preset_id,
+    new_execution_preset_revision_id,
+)
 from eom_identity_service.auth_service import AuthService
 from eom_identity_service.service import OperatorService
 from eom_identity_service.tokens import SessionTokenService, TokenCodec
@@ -32,12 +37,16 @@ from eom_orchestrator.control_models import (
     ExecutionPresetEvaluationRecord,
     ExecutionPresetRecord,
     ExecutionPresetRevisionRecord,
+    WorkerCapacityPolicyRecord,
 )
 from eom_orchestrator.control_service import (
     ControlPlaneError,
     publish_capacity_policy_revision,
+    publish_execution_preset_revision,
     record_capacity_policy_revision,
+    record_execution_preset_revision,
 )
+from eom_orchestrator.creative_parallel_controls import release_creative_parallel_controls
 from eom_orchestrator.creative_source_controls import release_creative_source_controls
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.external_item_learning_control_release import (
@@ -394,3 +403,106 @@ def _assert_source_successor_release(sessions, publisher, baseline, capacity, pl
             )
         )
         assert len(evaluations) == 1 and evaluations[0].scope == "NON_LIVE"
+    _assert_parallel_control_release(sessions, publisher, successor)
+
+
+def _assert_parallel_control_release(sessions, publisher, extraction):
+    """Actual lifecycle/Artifact replay and concurrent release; no synthetic PASS row."""
+    with sessions.begin() as session:
+        for slot_id, role in (("04", "item_management"), ("06", "support")):
+            row = session.get(WorkerSlotRecord, slot_id)
+            if row is None:
+                session.add(
+                    WorkerSlotRecord(
+                        slot_id=slot_id,
+                        linux_user="synthetic-creative-slot" + slot_id,
+                        role=role,
+                        enabled=True,
+                        gpu=False,
+                    )
+                )
+            else:
+                assert row.role == role
+        for protocol in ("workflow-role/1.4.0", "workflow-role/1.6.0"):
+            ensure_protocol_version(session, protocol, role_schema_bundle_hash(protocol))
+        document = extraction.model_dump(mode="json")
+        document.update(
+            preset_id=new_execution_preset_id(),
+            preset_revision_id=new_execution_preset_revision_id(),
+            revision_number=1,
+            compatible_workflow_protocols=["workflow-role/1.4.0", "workflow-role/1.6.0"],
+        )
+        document["content_sha256"] = content_sha256(
+            {k: v for k, v in document.items() if k != "content_sha256"}
+        )
+        analysis = record_execution_preset_revision(
+            session,
+            preset_key="creative-knowledge-analysis",
+            document=document,
+            created_by=OPERATOR,
+        )
+        publish_execution_preset_revision(
+            session,
+            preset_id=analysis.preset_id,
+            preset_revision_id=analysis.preset_revision_id,
+        )
+        analysis_revision_id = analysis.preset_revision_id
+        old_capacity = session.scalar(
+            select(WorkerCapacityPolicyRecord).where(
+                WorkerCapacityPolicyRecord.policy_key == "fixed-host"
+            )
+        ).current_revision_id
+    arguments = dict(
+        extraction_revision_id=extraction.preset_revision_id,
+        analysis_revision_id=analysis_revision_id,
+        operator_id=OPERATOR,
+        source_commit="c" * 40,
+        authorize=Mock(),
+    )
+    barrier = Barrier(2)
+
+    def release(_index):
+        barrier.wait(timeout=10)
+        return release_creative_parallel_controls(sessions, publisher, **arguments)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, replay = tuple(pool.map(release, range(2)))
+    assert first == replay
+    assert first.capacity.max_active_knowledge_analysis == 3
+    assert first.extraction.preset_id != extraction.preset_id
+    assert first.analysis.preset_id != analysis.preset_id
+    assert (
+        first.extraction.role_policies[0].instruction_bundle
+        == extraction.role_policies[0].instruction_bundle
+    )
+    assert (
+        first.extraction.role_policies[0].model_candidates
+        == extraction.role_policies[0].model_candidates
+    )
+    assert first.extraction.role_policies[0].worker_pool_key == "support"
+    with sessions() as session:
+        assert (
+            session.scalar(
+                select(WorkerCapacityPolicyRecord).where(
+                    WorkerCapacityPolicyRecord.policy_key == "fixed-host"
+                )
+            ).current_revision_id
+            == old_capacity
+        )
+        assert session.get(WorkerSlotRecord, "04").role == "item_management"
+        assert (
+            session.get(ExecutionPresetRecord, extraction.preset_id).current_revision_id
+            == extraction.preset_revision_id
+        )
+        assert session.get(
+            ExecutionPresetRevisionRecord, extraction.preset_revision_id
+        ).canonical_document == extraction.model_dump(mode="json")
+        for preset in (first.extraction, first.analysis):
+            reports = tuple(
+                session.scalars(
+                    select(ExecutionPresetEvaluationRecord).where(
+                        ExecutionPresetEvaluationRecord.preset_id == preset.preset_id,
+                    )
+                )
+            )
+            assert reports and all(report.scope == "NON_LIVE" for report in reports)

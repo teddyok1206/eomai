@@ -20,6 +20,9 @@ from eom_orchestrator.settings import Settings
 
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.creative_cohort_execution import CreativeCohortExecutionService
+from eom_catalog_service.creative_cohort_parallel_execution import (
+    CreativeCohortParallelExecutionService,
+)
 from eom_catalog_service.creative_learning_cohort import read_creative_execution_scope
 from eom_catalog_service.settings import CatalogSettings
 
@@ -118,6 +121,7 @@ def main() -> None:
     cohort = None
     scope = None
     status: dict[str, object] = {}
+    service: CreativeCohortExecutionService | CreativeCohortParallelExecutionService | None = None
     try:
         scope, _ = read_creative_execution_scope(
             CatalogArtifactService(engine, catalog_settings),
@@ -150,8 +154,13 @@ def main() -> None:
             scope.cohort_id,
             {"state": "STARTING", "verified_count": 0, "target_count": len(cohort.targets)},
         )
-        service = CreativeCohortExecutionService(
+        owner = CreativeCohortExecutionService(
             engine, cohort=cohort, settings=settings, catalog_settings=catalog_settings, scope=scope
+        )
+        service = (
+            CreativeCohortParallelExecutionService(owner, verified_limit=arguments.verified_limit)
+            if scope.max_in_flight_sources > 1
+            else owner
         )
         previous = None
         while not stopped.is_set():
@@ -167,7 +176,12 @@ def main() -> None:
                     else "CANARY_VERIFIED"
                 )
             write_status(STATE_ROOT, scope.cohort_id, status)
-            marker = (progress.external_number, status["state"], progress.verified_count)
+            marker = (
+                progress.external_number,
+                status["state"],
+                progress.verified_count,
+                progress.active_sources,
+            )
             if marker != previous:
                 print(json.dumps(status, ensure_ascii=False, sort_keys=True), flush=True)
                 previous = marker
@@ -190,9 +204,26 @@ def main() -> None:
         print(json.dumps(safe, ensure_ascii=False, sort_keys=True), flush=True)
         raise SystemExit(78) from None
     finally:
-        if descriptor >= 0:
-            os.close(descriptor)
-        engine.dispose()
+        try:
+            if service is not None:
+                try:
+                    service.close()
+                except Exception as error:
+                    safe = {
+                        **status,
+                        "state": "STOPPED_TECHNICAL_FAILURE",
+                        "error_code": stable_error_code(error),
+                        "exception_type": type(error).__name__,
+                    }
+                    if scope is not None and owns_lock:
+                        with suppress(OSError, ValueError):
+                            write_status(STATE_ROOT, scope.cohort_id, safe)
+                    print(json.dumps(safe, ensure_ascii=False, sort_keys=True), flush=True)
+                    raise SystemExit(78) from None
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+            engine.dispose()
 
 
 if __name__ == "__main__":

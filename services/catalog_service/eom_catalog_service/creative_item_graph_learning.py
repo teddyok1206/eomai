@@ -178,6 +178,19 @@ class CreativeItemGraphLearningService:
     def advance(
         self, *, item_revision_id: str, requested_by_operator_id: str
     ) -> CreativeGraphLearningProgress:
+        progress = self.advance_analysis(
+            item_revision_id=item_revision_id, requested_by_operator_id=requested_by_operator_id
+        )
+        if progress.analysis_state != "ACCEPTED":
+            return progress
+        return self.publish_accepted(
+            (progress,), requested_by_operator_id=requested_by_operator_id
+        )[0]
+
+    def advance_analysis(
+        self, *, item_revision_id: str, requested_by_operator_id: str
+    ) -> CreativeGraphLearningProgress:
+        """Submit/reconcile the exact original analysis without rebuilding the Graph."""
         with self.sessions() as session:
             revision = session.get(ItemRevisionRecord, item_revision_id)
             if revision is None or revision.revision_state != "APPROVED":
@@ -207,49 +220,78 @@ class CreativeItemGraphLearningService:
                     analysis_run_id=run.analysis_run_id, requested_by=requested_by_operator_id
                 )
             )
-        if run.state != "ACCEPTED":
-            return CreativeGraphLearningProgress(
-                item_revision_id, run.analysis_run_id, run.state, None
-            )
+        return CreativeGraphLearningProgress(item_revision_id, run.analysis_run_id, run.state, None)
+
+    def publish_accepted(
+        self,
+        progress: tuple[CreativeGraphLearningProgress, ...],
+        *,
+        requested_by_operator_id: str,
+    ) -> tuple[CreativeGraphLearningProgress, ...]:
+        """One bounded publication; exact source and accepted analyses remain authoritative."""
+        if (
+            not 1 <= len(progress) <= 3
+            or len({entry.item_revision_id for entry in progress}) != len(progress)
+            or len({entry.analysis_run_id for entry in progress}) != len(progress)
+            or any(entry.analysis_state != "ACCEPTED" for entry in progress)
+        ):
+            raise ValueError("CREATIVE_GRAPH_ANALYSIS_INVALID")
+        expected = {entry.analysis_run_id: entry.item_revision_id for entry in progress}
+        # Reauthorize every member even when all Graph memberships already exist.
+        with self.sessions() as session:
+            for entry in progress:
+                revision = session.get(ItemRevisionRecord, entry.item_revision_id)
+                if revision is None or revision.revision_state != "APPROVED":
+                    raise ValueError("CREATIVE_GRAPH_SOURCE_UNAVAILABLE")
+                self._validate_source(session, revision, requested_by_operator_id)
         context = self.publication.current_structure_context(INTEGRATED_SCIENCE_CORPUS_KEY)
+        included = set(context.accepted_analysis_run_ids)
+        pending = tuple(entry for entry in progress if entry.analysis_run_id not in included)
+        expected_pending = {entry.analysis_run_id: entry.item_revision_id for entry in pending}
 
         def validate(session: Session, analyses: tuple[AcceptedAnalysisProposal, ...]) -> None:
-            current = session.get(ItemRevisionRecord, item_revision_id, populate_existing=True)
-            if current is None or len(analyses) != 1:
+            if len(analyses) != len(expected_pending):
                 raise ValueError("CREATIVE_GRAPH_ANALYSIS_INVALID")
-            exact = self._validate_source(session, current, requested_by_operator_id)
-            analysis = analyses[0]
-            source = analysis.source
-            if (
-                analysis.analysis_run_id != run.analysis_run_id
-                or not isinstance(source, ApprovedItemKnowledgeSourceV2)
-                or source.source_class != "APPROVED_ITEM"
-                or source.item_revision_id != item_revision_id
-                or source.item_id != current.item_id
-                or source.artifact_member.sha256 != exact.lineage.registered_content_sha256
-            ):
+            if {entry.analysis_run_id for entry in analyses} != set(expected_pending):
                 raise ValueError("CREATIVE_GRAPH_ANALYSIS_SOURCE_MISMATCH")
+            for analysis in analyses:
+                revision_id = expected_pending[analysis.analysis_run_id]
+                current = session.get(ItemRevisionRecord, revision_id, populate_existing=True)
+                if current is None or current.revision_state != "APPROVED":
+                    raise ValueError("CREATIVE_GRAPH_ANALYSIS_INVALID")
+                exact = self._validate_source(session, current, requested_by_operator_id)
+                source = analysis.source
+                if (
+                    not isinstance(source, ApprovedItemKnowledgeSourceV2)
+                    or source.source_class != "APPROVED_ITEM"
+                    or source.item_revision_id != revision_id
+                    or source.item_id != current.item_id
+                    or source.artifact_member.sha256 != exact.lineage.registered_content_sha256
+                ):
+                    raise ValueError("CREATIVE_GRAPH_ANALYSIS_SOURCE_MISMATCH")
 
-        if run.analysis_run_id in context.accepted_analysis_run_ids:
-            with self.sessions() as session:
+        with self.sessions() as session:
+            for run_id in expected.keys() & included:
                 bound = session.scalar(
                     select(KnowledgeSnapshotAnalysisRecord).where(
                         KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id
                         == context.graph_snapshot_revision_id,
-                        KnowledgeSnapshotAnalysisRecord.analysis_run_id == run.analysis_run_id,
+                        KnowledgeSnapshotAnalysisRecord.analysis_run_id == run_id,
                     )
                 )
-                if bound is None or bound.source_revision_id != item_revision_id:
+                if bound is None or bound.source_revision_id != expected[run_id]:
                     raise ValueError("CREATIVE_GRAPH_REPLAY_MISMATCH")
+        if not pending:
             graph_revision = context.graph_snapshot_revision_id
         else:
             published = self.automatic.publish(
-                (
+                tuple(
                     AutomaticItemGraphCandidate(
-                        run.analysis_run_id,
+                        entry.analysis_run_id,
                         requested_by_operator_id,
                         context.graph_snapshot_revision_id,
-                    ),
+                    )
+                    for entry in pending
                 ),
                 required_source_class="APPROVED_ITEM",
                 retrieval_idempotency_namespace="creative-item-align",
@@ -258,6 +300,9 @@ class CreativeItemGraphLearningService:
                 analysis_validator=validate,
             )
             graph_revision = published.graph_publication.graph_snapshot.graph_snapshot_revision_id
-        return CreativeGraphLearningProgress(
-            item_revision_id, run.analysis_run_id, run.state, graph_revision
+        return tuple(
+            CreativeGraphLearningProgress(
+                entry.item_revision_id, entry.analysis_run_id, entry.analysis_state, graph_revision
+            )
+            for entry in progress
         )

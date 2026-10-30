@@ -15,7 +15,10 @@ from eom_catalog_contracts.external_item_learning_work import (
 from eom_catalog_contracts.validation import validate_contract
 from eom_identifiers import content_sha256
 from eom_workflow.compiler import compile_definition_data
-from eom_workflow.creative_learning_profile import creative_learning_profile
+from eom_workflow.creative_learning_profile import (
+    creative_learning_profile,
+    creative_learning_profile_for_preset,
+)
 from eom_workflow.models import AgentStep, TerminalStep, WorkflowRequest
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from sqlalchemy.orm import Session
@@ -86,7 +89,9 @@ def validate_external_item_learning_submission(
             "creative learning requires its real Operator owner",
         )
     try:
-        profile = creative_learning_profile(definition.definition_version)
+        profile = creative_learning_profile_for_preset(
+            definition.definition_version, request.execution_preset_key or ""
+        )
     except ValueError as exc:
         raise WorkflowError(
             WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
