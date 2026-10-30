@@ -63,3 +63,33 @@ canonical/accepted analysis/Graph/공식 공개 풀이 pointer와 hash를 대조
 재개 전 Graph `graphrev_a7a5f84bf68b2b860748797d868a1ffb`의 모든 source/accepted-result
 참조가 보존됨을 추가 확인한다. 기존 readonly acceptance를 재사용하는 bounded helper는
 검증되지 않은 status 숫자만으로 PASS를 만들지 않는다.
+
+### 02:57 UTC — 추가 2건 운영 진행, 5건 최종 대조는 대기
+
+10369의 새 추출 Job은 02:26:43 UTC SUCCEEDED, 분석 Job
+`job_a8df1e06ef474d85801e116b31ad704d`는 02:29:40 UTC SUCCEEDED였다.
+각각 role 1.34.0과 기출 분석과 같은 role 1.4.0을 사용했고 slot05였다.
+Item `itemrev_529ced1919c84ab5ae352d96dfba6328`, accepted 분석
+`analysisrun_060df2fb6d8545769c2a1a972b4cc894`, 공유 Graph
+`graphrev_669c50401bd6471f0bb33129bc9c48f1`과 연결됐다.
+
+기존 readonly acceptance로 10369를 별도 검증했다. 공식 보고서의 공개 풀이 5단계·
+원문/독립 답안·모든 주의사항이 원래 결과와 일치했다. 원문당 canonical 중복 0,
+두 Job의 slot lease 중복 0이었다. 기존 1015개 교과서·기출 source/accepted-result
+참조와 노드/edge identity, 기출 520개 및 accepted 풀이 successor 520개도 보존됐다.
+증거는 `/tmp/eom-creative-10369-e2e-0240.json`이며 immutable pointer에서 재구성할 수 있다.
+
+같은 공식 Catalog report resolver로 추출 구조도 대조했다. 새로운 source draft는
+`paragraph` + `statement_set`이고 판단 statement/해설은 ㄱ·ㄴ·ㄷ의 동일한 3개 ID다.
+조건을 보기로 잘못 모델링한 이전 결과를 제자리 고치거나 검증을 완화하지 않았다.
+정본 role Artifact는 `artifact_49393a60cb6346c386530be23e52840e` /
+`rev_d4a2a2808c704fca806c989c42cec9b5`의 `result.json`, SHA는
+`bb8a6cd117d0d089c0f375787728593083ca642338284cc1d9f19cd9f3dfa5e9`다.
+이는 현재 설치본의 명시적 재추출 성공이며 새 지침 후보의 운영 활성화 증거는 아니다.
+
+02:57 UTC 운영 owner는 10370의 `itemrev_e809f0e338964edeb67fa82d868db95a` /
+`analysisrun_3c1320a280714eb2a35fada7f2cd0426`을 Graph
+`graphrev_cd2239c7f0a85b4570c5423f40b2d88c`까지 검증해 56/1053이 됐다.
+다음 10371의 `workflow_eb873569938a48c9802f307793cc08fe`가 자동 시작됐다.
+목표 5건 중 운영 진행은 2건이며, 다섯 문항의 별도 정본 대조 및 목표 완료는 아직 아니다.
+GPU INDEX/QUERY의 기존 PID·invocation과 재개 owner invocation은 모두 유지된다.
