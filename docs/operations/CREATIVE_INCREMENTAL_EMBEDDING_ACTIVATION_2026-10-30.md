@@ -266,3 +266,46 @@ row/hash를 사용한다. 저장소·task·인덱스·이벤트 순서·트랜�
 
 설치 기록: `/tmp/eom-db-ui-release-20261030T1650.log` (파일 이름의 1650은 실행 시각 증거가
 아니며 실제 HTTPS 응답/서비스 관측은 16:47 UTC). 기존 복구 wheel은 보존했다.
+
+## 실제 Runner 연결 — supported family 승격
+
+순수 provenance만 다루던 request3를 실제 기존 Runner에 연결할 때 `supported` dispatch가
+request3를 명시적으로 포함하도록 승격한다. 개별 request1/1.1/2 parser와 schema bytes는
+그대로 닫혀 있고, definition1에는 result1/receipt1, definition2에는 result2/receipt2만
+허용한다. 지원되는 Python union은 실행 권한이 아니다. 실제 configured namespace·controls·
+definition/hash·operator·원래 command/claim 및 보호된 native bundle 검사는 계속 필수다.
+모든 source 준비/실행/completion/read에 같은 family를 끝까지 전달하며, 구 설정이 public
+입력을 받을 경우 namespace/control 또는 definition 경계에서 거부한다. 기존 owner를 두고
+public 전용 Runner/queue/service를 복제하는 대안은 사용하지 않는다.
+
+## 사용자 후속 버그 — 현재 목표 완료 뒤 처리
+
+2026-10-30 사용자 보고: 슬롯 하나가 사용 중이면 그 슬롯과 다른 슬롯 모두에서 사용량
+새로고침 요청은 나가는 것으로 보이나 화면이 갱신되지 않는다. 아직 원인·재현은
+확인하지 않았다. 현재 증분 임베딩·공식 검색 연결을 먼저 마친 뒤 별도로 진단·수정한다.
+실제 응답/진행 중 slot 상태와 UI polling·stale-response·권한 처리의 관계를 확인하고,
+원인 없이 lock/lease/실행 정책을 해제하거나 진행 중 작업을 재시작하지 않는다.
+
+## 현재 목표의 최종 완료 조건 — 사용자 확정, 2026-10-30
+
+이 절은 위 작업 순서와 후속 버그의 처리 시점을 대체한다. 기존 활성 목표를 유지하되,
+다음 세 단계를 모두 충족해야 완료 처리한다. 목표 카드 도구는 활성 목표의 문구 변경을
+지원하지 않으므로, 기존 목표를 거짓 완료하거나 별도 목표를 중복 생성하지 않는다.
+
+1. 창작 Graph 등록 중단 원인을 수정하고, 기존 accepted 풀이보고서를 재사용해 등록을
+   이어간다. 공식 Orchestrator의 기존 queue/claim/lease/용량 정책 안에서 **3개 슬롯이
+   실제로 풀이보고서를 계속 작성**하는 것을 관찰한다. 서비스 active나 슬롯 사용 가능
+   표시만으로 통과하지 않는다. 서로 다른 문항의 실제 claim/실행과 후속 문항으로의 진행,
+   중복 accepted successor 없음, Graph 등록 진척을 확인한다. Graph publication은 기존
+   직렬화/CAS 경계를 유지하고 worker끼리 직접 통신하지 않는다.
+2. 사용 중인 슬롯이 있을 때 사용량 새로고침 결과가 화면에 반영되지 않는 사용자 보고를
+   재현·진단하고 수정한다. 진행 중 worker를 끊거나 사용량 소진·lease를 우회하지 않는다.
+   수정된 원인과 재발 방지 테스트 및 실제 운영 상태를 확인한다.
+3. 기존 목표의 공통 풀이 표현·정확한 revision/hash·공식 증분 임베딩/검색 경계를 지키며,
+   창작 5건의 실제 임베딩→정본 등록→공식 유사도 검색과 중단/재전송을 검증한다.
+   DB `조회 → 유사도 → 조회/배치` 실제 adapter를 연결하고, 호환 release set으로 운영
+   배포·활성화한다. 완료 backlog와 향후 등록의 자동 증분 처리, 기출 인덱스 및 실패
+   이력 보존도 확인한다. 비활성 검색 버튼·합성 브라우저 테스트만으로 완료하지 않는다.
+
+사용자에게는 위 순서의 실제 증거와 남은 조건을 간단히 보고한다. 아직 이 절의 어느
+단계도 완료했다고 주장하지 않는다. 기존 기출 520개·교과서·창작 정본은 보존한다.

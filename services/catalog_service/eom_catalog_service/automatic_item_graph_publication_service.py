@@ -39,8 +39,9 @@ from eom_catalog_service.curriculum_graph_structure import (
 )
 from eom_catalog_service.knowledge_graph_models import EvidenceBundleEntryRecord
 from eom_catalog_service.knowledge_graph_projection import (
-    ITEM_SCOPED_GRAPH_PUBLISHER_VERSION,
     AcceptedAnalysisProposal,
+    KnowledgeNodeIdentityPolicy,
+    node_identity_policy_for_publisher,
 )
 from eom_catalog_service.knowledge_graph_publication_service import (
     CurrentKnowledgeGraphStructure,
@@ -376,7 +377,8 @@ class AutomaticItemGraphPublicationService:
                         "analysis_run_ids": list(candidate_ids),
                         **(
                             {"publisher_version": publisher_version}
-                            if publisher_version == ITEM_SCOPED_GRAPH_PUBLISHER_VERSION
+                            if node_identity_policy_for_publisher(publisher_version)
+                            != KnowledgeNodeIdentityPolicy.SHARED_STABLE_KEY
                             else {}
                         ),
                     }

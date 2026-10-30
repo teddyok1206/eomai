@@ -44,20 +44,21 @@ from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 _LEXICAL_TOKEN = re.compile(r"[0-9A-Za-z가-힣]+")
 _MAX_NODE_ALIASES = 256
 ITEM_SCOPED_GRAPH_PUBLISHER_VERSION = "1.10.0"
+CURRENT_ITEM_GRAPH_PUBLISHER_VERSION = "1.11.0"
 
 
 class KnowledgeNodeIdentityPolicy(StrEnum):
     SHARED_STABLE_KEY = "SHARED_STABLE_KEY"
     ITEM_REVISION_SCOPED = "ITEM_REVISION_SCOPED"
+    ITEM_SCOPED_TYPED_SHARED = "ITEM_SCOPED_TYPED_SHARED"
 
 
 def node_identity_policy_for_publisher(version: str) -> KnowledgeNodeIdentityPolicy:
     """The existing manifest publisher version pins the projection algorithm."""
-    return (
-        KnowledgeNodeIdentityPolicy.ITEM_REVISION_SCOPED
-        if version == ITEM_SCOPED_GRAPH_PUBLISHER_VERSION
-        else KnowledgeNodeIdentityPolicy.SHARED_STABLE_KEY
-    )
+    return {
+        ITEM_SCOPED_GRAPH_PUBLISHER_VERSION: KnowledgeNodeIdentityPolicy.ITEM_REVISION_SCOPED,
+        CURRENT_ITEM_GRAPH_PUBLISHER_VERSION: KnowledgeNodeIdentityPolicy.ITEM_SCOPED_TYPED_SHARED,
+    }.get(version, KnowledgeNodeIdentityPolicy.SHARED_STABLE_KEY)
 
 
 def _projected_node_key(
@@ -68,7 +69,7 @@ def _projected_node_key(
     source = analysis.source
     key = node.stable_key
     if (
-        policy != KnowledgeNodeIdentityPolicy.ITEM_REVISION_SCOPED
+        policy == KnowledgeNodeIdentityPolicy.SHARED_STABLE_KEY
         or not isinstance(source, ApprovedItemKnowledgeSourceV2)
         or source.source_class != "APPROVED_ITEM"
     ):
@@ -81,6 +82,51 @@ def _projected_node_key(
     ):
         return key
     return f"item-source:{source.item_revision_id}:{content_sha256(key)[7:]}"
+
+
+def _typed_shared_node_keys(
+    analyses: tuple[AcceptedAnalysisProposal, ...],
+) -> dict[tuple[str, KnowledgeNodeType], str]:
+    """Resolve cross-source type ambiguity without changing protected corpus identities."""
+    types: dict[str, set[KnowledgeNodeType]] = {}
+    protected: dict[str, set[KnowledgeNodeType]] = {}
+    item_types: dict[tuple[str, str], KnowledgeNodeType] = {}
+    for analysis in analyses:
+        source = analysis.source
+        creative = (
+            isinstance(source, ApprovedItemKnowledgeSourceV2)
+            and source.source_class == "APPROVED_ITEM"
+        )
+        for node in analysis.proposal.nodes:
+            key = _projected_node_key(
+                analysis, node, KnowledgeNodeIdentityPolicy.ITEM_SCOPED_TYPED_SHARED
+            )
+            types.setdefault(key, set()).add(node.node_type)
+            if not creative:
+                protected.setdefault(key, set()).add(node.node_type)
+            else:
+                assert isinstance(source, ApprovedItemKnowledgeSourceV2)
+                item_key = (source.item_revision_id, node.stable_key)
+                previous = item_types.setdefault(item_key, node.node_type)
+                if previous != node.node_type:
+                    raise KnowledgeGraphProjectionError(
+                        "KNOWLEDGE_GRAPH_NODE_CONFLICT",
+                        "one immutable Item node key has conflicting type",
+                    )
+    replacements: dict[tuple[str, KnowledgeNodeType], str] = {}
+    for key, node_types in types.items():
+        original_types = protected.get(key, set())
+        if len(original_types) > 1:
+            raise KnowledgeGraphProjectionError(
+                "KNOWLEDGE_GRAPH_NODE_CONFLICT",
+                "protected corpus node key has conflicting type",
+            )
+        if len(node_types) > 1:
+            for node_type in node_types - original_types:
+                replacements[(key, node_type)] = (
+                    f"shared-type:{node_type.lower()}:{content_sha256(key)[7:]}"
+                )
+    return replacements
 
 
 _CURRICULUM_ALIGNED_NODE_TYPES = frozenset(
@@ -894,11 +940,17 @@ def build_education_graph_projection(
     local_node_ids: dict[tuple[str, str], str] = {}
     item_node_keys: dict[tuple[str, str], str] = {}
     edge_accumulators: dict[tuple[str, str, str], _EdgeAccumulator] = {}
+    typed_shared_keys = (
+        _typed_shared_node_keys(analyses)
+        if node_identity_policy == KnowledgeNodeIdentityPolicy.ITEM_SCOPED_TYPED_SHARED
+        else {}
+    )
     anchor_count = 0
     for analysis in analyses:
         anchor_count += len(analysis.proposal.anchors)
         for proposed_node in analysis.proposal.nodes:
             stable_key = _projected_node_key(analysis, proposed_node, node_identity_policy)
+            stable_key = typed_shared_keys.get((stable_key, proposed_node.node_type), stable_key)
             if isinstance(analysis.source, ApprovedItemKnowledgeSourceV2):
                 item_node_keys[(analysis.source.item_revision_id, proposed_node.stable_key)] = (
                     stable_key

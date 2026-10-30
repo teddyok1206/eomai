@@ -71,7 +71,7 @@ from eom_catalog_service.knowledge_graph_models import (
     KnowledgeSnapshotAnalysisRecord,
 )
 from eom_catalog_service.knowledge_graph_projection import (
-    ITEM_SCOPED_GRAPH_PUBLISHER_VERSION,
+    CURRENT_ITEM_GRAPH_PUBLISHER_VERSION,
     AcceptedAnalysisProposal,
 )
 from eom_catalog_service.knowledge_graph_publication_service import (
@@ -194,7 +194,7 @@ class OrdinaryItemGraphPublicationService:
             required_source_class="APPROVED_ITEM",
             retrieval_idempotency_namespace=_RETRIEVAL_NAMESPACE,
             publication_idempotency_namespace=_PUBLICATION_NAMESPACE,
-            publisher_version=ITEM_SCOPED_GRAPH_PUBLISHER_VERSION,
+            publisher_version=CURRENT_ITEM_GRAPH_PUBLISHER_VERSION,
             publication_idempotency_key=key,
             publication_authorized_at=command.authorized_at,
             analysis_validator=lambda session, analyses: self._validate_current(
