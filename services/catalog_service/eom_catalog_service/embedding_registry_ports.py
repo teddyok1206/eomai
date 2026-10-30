@@ -45,6 +45,7 @@ from eom_catalog_contracts.public_solution_embedding_index import PublicSolution
 from eom_catalog_contracts.public_solution_embedding_registry import (
     RegisterPublicSolutionIndexCommand,
 )
+from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityView
 from eom_catalog_contracts.similarity_context import SimilarityContext, SimilarityViewSelection
 from eom_catalog_contracts.similarity_context_v2 import SimilarityViewSelectionV2
 from eom_catalog_contracts.similarity_materials import SimilarityReferenceMaterials
@@ -266,7 +267,7 @@ class EmbeddingRegistryRead:
     """Owner-local exact immutable selection, never a wire query or authority grant."""
 
     scope: EmbeddingRegistryLookup
-    selection: SimilarityViewSelection | SimilarityViewSelectionV2
+    selection: SimilarityViewSelection | SimilarityViewSelectionV2 | PublicSolutionSimilarityView
 
 
 @dataclass(frozen=True, slots=True)

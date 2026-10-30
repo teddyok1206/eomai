@@ -34,6 +34,24 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "public-solution-work-batch-input-v2": CatalogSchemaResource(
+            "schemas/knowledge/public-solution-work-batch-input-v2.schema.json",
+            "resources/knowledge/public-solution-work-batch-input-v2.schema.json",
+            "2.0",
+            "sha256:1f5fca20f403d338045f66802a582db80134ec10525fea59c9aba1ee9ba8f381",
+        ),
+        "public-solution-work-batch-result-v2": CatalogSchemaResource(
+            "schemas/knowledge/public-solution-work-batch-result-v2.schema.json",
+            "resources/knowledge/public-solution-work-batch-result-v2.schema.json",
+            "2.0",
+            "sha256:c386497bcdaab67c3fb4476033bf5b8e6f3dc94cf3f77b4e35d81d8cf2c899e1",
+        ),
+        "public-solution-similarity-v3": CatalogSchemaResource(
+            "schemas/knowledge/public-solution-similarity-v3.schema.json",
+            "resources/knowledge/public-solution-similarity-v3.schema.json",
+            "3.0",
+            "sha256:3a19bca7baeaebba895ddac13cd35bd5b9c8d374065dc03cc6a232cfba05d673",
+        ),
         "public-solution-query-v2": CatalogSchemaResource(
             "schemas/knowledge/public-solution-query-v2.schema.json",
             "resources/knowledge/public-solution-query-v2.schema.json",

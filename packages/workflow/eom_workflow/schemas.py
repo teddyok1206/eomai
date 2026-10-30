@@ -563,6 +563,11 @@ REFERENCE_QUERY_EXECUTION_SCHEMA_RESOURCE = (
     "eom://schemas/workflow/reference-query-execution/1.0",
     "sha256:68e741506fec708956096aa5af6199e7c03821219385775cf9623aea88246c9b",
 )
+REFERENCE_QUERY_PUBLIC_EXECUTION_SCHEMA_RESOURCE = (
+    "reference-query-execution-v2.schema.json",
+    "eom://schemas/workflow/reference-query-execution/2.0",
+    "sha256:504959a2de7aae1cf4636a277e7144ff0f80526ee11fd4157c98c2776ef09892",
+)
 REFERENCE_QUERY_REQUEST_V11_SCHEMA_RESOURCE = (
     "reference-query-workflow-request-v1_1.schema.json",
     "eom://schemas/workflow/reference-query-workflow-request/1.1",
@@ -629,6 +634,15 @@ def load_reference_query_execution_schema() -> dict[str, Any]:
 
 
 @cache
+def _reference_query_public_execution_schema() -> dict[str, Any]:
+    return _load_pinned_reference_query_schema(REFERENCE_QUERY_PUBLIC_EXECUTION_SCHEMA_RESOURCE)
+
+
+def load_reference_query_public_execution_schema() -> dict[str, Any]:
+    return copy.deepcopy(_reference_query_public_execution_schema())
+
+
+@cache
 def _reference_query_execution_registry() -> Registry[Any]:
     try:
         return local_embedding_admission_schema_registry().with_resources(
@@ -671,6 +685,37 @@ def validate_reference_query_message(name: ReferenceQueryMessageName, value: obj
         Draft202012Validator(
             {"$ref": REFERENCE_QUERY_EXECUTION_SCHEMA_RESOURCE[1] + "#/$defs/" + name},
             registry=_reference_query_execution_registry(),
+            format_checker=FormatChecker(),
+        ).validate(document)
+    except ReferenceQueryContractError:
+        raise
+    except Exception:
+        raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID") from None
+
+
+@cache
+def _reference_query_public_execution_registry() -> Registry[Any]:
+    registry: Registry[Any] = _reference_query_execution_registry().with_resource(
+        REFERENCE_QUERY_PUBLIC_EXECUTION_SCHEMA_RESOURCE[1],
+        Resource.from_contents(_reference_query_public_execution_schema()),
+    )
+    return registry
+
+
+def validate_reference_query_public_message(
+    name: Literal["definition", "request", "receipt", "step-output"], value: object
+) -> None:
+    """Explicit public QUERY2 successor; no old frame is relabelled or broadened."""
+    try:
+        if name not in {"definition", "request", "receipt", "step-output"}:
+            raise ValueError("public QUERY message differs")
+        document = raw_similarity_contract_value(value)
+        maximum = 8 * 1024 if name == "step-output" else 64 * 1024
+        if len(canonical_json_bytes(document)) > maximum:
+            raise ValueError("public QUERY message exceeds its bound")
+        Draft202012Validator(
+            {"$ref": REFERENCE_QUERY_PUBLIC_EXECUTION_SCHEMA_RESOURCE[1] + "#/$defs/" + name},
+            registry=_reference_query_public_execution_registry(),
             format_checker=FormatChecker(),
         ).validate(document)
     except ReferenceQueryContractError:

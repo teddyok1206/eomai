@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-work-batch-input/2.0",
+  "title": "Finite public-solution QUERY2 work batch",
+  "description": "Explicit QUERY2 successor. Original scope, resource bounds and per-child source fences remain mandatory; this frame grants neither source access nor compute authority.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "purpose",
+    "scope",
+    "routing_decision_sha256",
+    "resource_profile_sha256",
+    "timeout_seconds",
+    "vector_max_bytes",
+    "children",
+    "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "embedding-work-batch-input/2.0"
+    },
+    "purpose": {
+      "const": "REFERENCE_QUERY"
+    },
+    "scope": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/knowledge/embedding-work-batch-input/1.0#/$defs/scope"
+        },
+        {
+          "properties": {
+            "actor_kind": {
+              "const": "OPERATOR"
+            }
+          }
+        }
+      ]
+    },
+    "routing_decision_sha256": {
+      "$ref": "eom://schemas/knowledge/embedding-work-batch-input/1.0#/$defs/hash"
+    },
+    "resource_profile_sha256": {
+      "$ref": "eom://schemas/knowledge/embedding-work-batch-input/1.0#/$defs/hash"
+    },
+    "timeout_seconds": {
+      "$ref": "eom://schemas/knowledge/embedding-work-batch-input/1.0#/properties/timeout_seconds"
+    },
+    "vector_max_bytes": {
+      "$ref": "eom://schemas/knowledge/embedding-work-batch-input/1.0#/properties/vector_max_bytes"
+    },
+    "children": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 32,
+      "items": {
+        "$ref": "#/$defs/child"
+      }
+    },
+    "request_sha256": {
+      "$ref": "eom://schemas/knowledge/embedding-work-batch-input/1.0#/$defs/hash"
+    }
+  },
+  "$defs": {
+    "child": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "scope_sha256",
+        "request"
+      ],
+      "properties": {
+        "scope_sha256": {
+          "$ref": "eom://schemas/knowledge/embedding-work-batch-input/1.0#/$defs/hash"
+        },
+        "request": {
+          "$ref": "eom://schemas/knowledge/public-solution-query/2.0#/$defs/PublicSolutionQueryInput"
+        }
+      }
+    }
+  }
+}

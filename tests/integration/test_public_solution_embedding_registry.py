@@ -10,6 +10,7 @@ from threading import Barrier
 from uuid import uuid4
 
 import pytest
+from eom_catalog_contracts.embedding_reference_query import ReferenceQuerySpaces
 from eom_catalog_contracts.inference_transfer_embedding import EmbeddingVectorRowRef
 from eom_catalog_contracts.inference_transfer_experiment import population_sha256
 from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
@@ -17,8 +18,17 @@ from eom_catalog_contracts.public_solution_embedding_index import PublicSolution
 from eom_catalog_contracts.public_solution_embedding_registry import (
     RegisterPublicSolutionIndexCommand,
 )
+from eom_catalog_contracts.public_solution_reference import PublicSolutionSourceReference
+from eom_catalog_contracts.public_solution_similarity import (
+    PublicSolutionSimilarityIndexPin,
+    PublicSolutionSimilarityView,
+)
 from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
-from eom_catalog_service.embedding_registry_application import register_embedding_index
+from eom_catalog_service.embedding_registry_application import (
+    prepare_missing_embedding_bindings,
+    read_pinned_embedding_index,
+    register_embedding_index,
+)
 from eom_catalog_service.embedding_registry_models import (
     EmbeddingEncodingRecord,
     EmbeddingIndexRecord,
@@ -26,8 +36,14 @@ from eom_catalog_service.embedding_registry_models import (
     EmbeddingSourceBindingRecord,
 )
 from eom_catalog_service.embedding_registry_ports import (
+    AuthorizedEmbeddingReadProfile,
     EmbeddingRegistryCaller,
+    EmbeddingRegistryLookup,
+    EmbeddingRegistryRead,
+    MaterializedEmbeddingReadRow,
+    ResolvedEmbeddingLookup,
     ResolvedEmbeddingRegistration,
+    ResolvedPinnedEmbeddingIndex,
 )
 from eom_catalog_service.embedding_registry_repository import EmbeddingRegistryRepository
 from eom_catalog_service.embedding_source_associations import embedding_binding_lookup_key
@@ -47,12 +63,51 @@ from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
 from tests.unit.embedding_registry_application_fixtures import SyntheticVerifier
-from tests.unit.inference_transfer_embedding_fixtures import seal, vector_shard
+from tests.unit.inference_transfer_embedding_fixtures import embedding_space, seal, vector_shard
 from tests.unit.inference_transfer_fixtures import NOW
 from tests.unit.test_public_solution_encoding import public_entry
 
 pytestmark = pytest.mark.integration
 CALLER = EmbeddingRegistryCaller("operator_" + "1" * 32)
+
+
+class PublicLookupVerifier(SyntheticVerifier):
+    """Synthetic source port only; real registry reads/constraints remain under test."""
+
+    def resolve_lookup(self, session, caller, query):
+        original = super().resolve_lookup(session, caller, query)
+        return ResolvedEmbeddingLookup(
+            original.corpus_id,
+            original.space,
+            original.recipe,
+            original.sources,
+            original.entries,
+            original.truncated,
+            self.capture.base_analysis_run_ids,
+        )
+
+    def resolve_pinned_read(self, session, caller, intent, registered):
+        capture = self.capture
+        one = (1.0,) + (0.0,) * (capture.index.space.model_spec.dimension - 1)
+        rows = {
+            binding.encoding.encoding_sha256: RegisteredEmbeddingRow(
+                binding.encoding, binding.row_ref
+            )
+            for binding in capture.index.bindings
+        }
+        return ResolvedPinnedEmbeddingIndex(
+            intent,
+            capture.sources,
+            tuple(
+                AuthorizedEmbeddingReadProfile(
+                    entry.source.item_revision_id,
+                    PublicSolutionSourceReference.from_entry(entry).profile,
+                )
+                for entry in capture.entries
+            ),
+            capture.index.bindings,
+            tuple(MaterializedEmbeddingReadRow(row, one) for row in rows.values()),
+        )
 
 
 def public_fixture(engine, *, creative=False):
@@ -147,6 +202,73 @@ def public_fixture(engine, *, creative=False):
         (entry,),
         base_analysis_run_ids=((entry.source.item_revision_id, entry.base_analysis_run_id),),
     )
+
+
+@pytest.mark.parametrize("creative", (False, True))
+def test_public_missing_binding_discovery_reuses_registered_numeric_identity(
+    guarded_engine, creative
+):
+    command, capture = public_fixture(guarded_engine, creative=creative)
+    owner = PublicLookupVerifier(capture)
+    query = EmbeddingRegistryLookup(
+        command.corpus_id,
+        command.namespace,
+        command.graph_snapshot,
+        command.policy_revision_id,
+        command.policy_sha256,
+    )
+    with Session(guarded_engine) as session, session.begin():
+        before = prepare_missing_embedding_bindings(session, CALLER, query, owner)
+        assert len(before.observation.missing) == 1
+        assert before.observation.reusable_rows == ()
+        register_embedding_index(session, CALLER, command, owner)
+    with Session(guarded_engine) as session, session.begin():
+        after = prepare_missing_embedding_bindings(session, CALLER, query, owner)
+        assert after.resolved.entries == capture.entries
+        assert after.resolved.base_analysis_run_ids == capture.base_analysis_run_ids
+        assert not after.observation.missing
+        assert len(after.observation.reusable_rows) == 1
+        assert after.bindings == capture.index.bindings
+
+
+@pytest.mark.parametrize("creative", (False, True))
+def test_registered_public_index_reads_exact_binding_and_source_proof(guarded_engine, creative):
+    command, capture = public_fixture(guarded_engine, creative=creative)
+    owner = PublicLookupVerifier(capture)
+    intent = EmbeddingRegistryRead(
+        EmbeddingRegistryLookup(
+            command.corpus_id,
+            command.namespace,
+            command.graph_snapshot,
+            command.policy_revision_id,
+            command.policy_sha256,
+            16384,
+        ),
+        PublicSolutionSimilarityView(
+            recipe=capture.index.recipe,
+            index=PublicSolutionSimilarityIndexPin(
+                index_id=command.index_id,
+                index_revision_id=command.index_revision_id,
+                index_manifest=command.index_manifest,
+                index_sha256=command.index_sha256,
+                storage_partition=command.namespace.storage_partition,
+                spaces=ReferenceQuerySpaces(
+                    query=embedding_space(purpose="QUERY"), document=capture.index.space
+                ),
+            ),
+        ),
+    )
+    with Session(guarded_engine) as session, session.begin():
+        register_embedding_index(session, CALLER, command, owner)
+    with Session(guarded_engine) as session, session.begin():
+        observed = read_pinned_embedding_index(session, CALLER, intent, owner)
+        assert observed.sources == capture.sources
+        assert observed.bindings == capture.index.bindings
+        assert len(observed.numerical_rows) == 1
+        assert (
+            observed.profiles[0].profile
+            == PublicSolutionSourceReference.from_entry(capture.entries[0]).profile
+        )
 
 
 @pytest.mark.parametrize("creative", (False, True))

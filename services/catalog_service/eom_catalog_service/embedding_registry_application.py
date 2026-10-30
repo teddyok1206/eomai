@@ -18,12 +18,12 @@ from eom_catalog_contracts.embedding_index_families import (
     parse_supported_embedding_binding,
     parse_supported_embedding_entry,
     parse_supported_embedding_index,
+    parse_supported_embedding_namespace,
     validate_supported_embedding_index_references,
     validate_supported_embedding_source_bindings,
 )
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_registry import (
-    EmbeddingIndexNamespace,
     EmbeddingIndexRegistrationResult,
     RegisterEmbeddingIndexCommand,
     parse_embedding_registration_command,
@@ -63,13 +63,16 @@ from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbedd
 from eom_catalog_contracts.public_solution_embedding_index import (
     MAX_PUBLIC_SOLUTION_SOURCES,
     PublicSolutionEmbeddingIndex,
+    PublicSolutionEmbeddingSourceBinding,
     PublicSolutionIndexNamespace,
+    PublicSolutionProfilePointer,
 )
 from eom_catalog_contracts.public_solution_embedding_registry import (
     PublicSolutionIndexRegistrationResult,
     RegisterPublicSolutionIndexCommand,
     validate_public_solution_registration_result,
 )
+from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityView
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import SimilarityViewSelection
 from eom_catalog_contracts.similarity_context_v2 import SimilarityViewSelectionV2
@@ -641,12 +644,7 @@ def _prepare_missing_embedding_bindings(
     """Exact bounded lookup after official owner admission; never corpus discovery."""
     owner = _context(session, caller, verification)
     try:
-        namespace_type = (
-            MixedEmbeddingIndexNamespace
-            if isinstance(query.namespace, MixedEmbeddingIndexNamespace)
-            else EmbeddingIndexNamespace
-        )
-        namespace_type.model_validate(query.namespace.model_dump(mode="json"))
+        parse_supported_embedding_namespace(query.namespace.model_dump(mode="json"))
         KnowledgeGraphSnapshotPointer.model_validate(query.graph_snapshot.model_dump(mode="json"))
         TypeAdapter(Sha256).validate_python(query.policy_sha256)
         if type(query.maximum_sources) is not int or not 1 <= query.maximum_sources <= (
@@ -817,34 +815,39 @@ def _validate_pinned_read_intent(intent: EmbeddingRegistryRead) -> EmbeddingRegi
         _fail("EMBEDDING_REGISTRY_REQUEST_INVALID")
     scope = intent.scope
     mixed = isinstance(scope.namespace, MixedEmbeddingIndexNamespace)
-    namespace = (
-        MixedEmbeddingIndexNamespace.model_validate(raw_similarity_contract_value(scope.namespace))
-        if mixed
-        else EmbeddingIndexNamespace.model_validate(raw_similarity_contract_value(scope.namespace))
-    )
+    public = isinstance(scope.namespace, PublicSolutionIndexNamespace)
+    namespace = parse_supported_embedding_namespace(raw_similarity_contract_value(scope.namespace))
     graph = KnowledgeGraphSnapshotPointer.model_validate(
         raw_similarity_contract_value(scope.graph_snapshot)
     )
     selection_values = raw_similarity_contract_value(intent.selection)
     canonical_json_bytes(selection_values)
-    if mixed != isinstance(intent.selection, SimilarityViewSelectionV2):
+    if mixed != isinstance(intent.selection, SimilarityViewSelectionV2) or public != isinstance(
+        intent.selection, PublicSolutionSimilarityView
+    ):
         _fail("EMBEDDING_REGISTRY_REQUEST_INVALID")
     family = "2.0" if mixed else "1.0"
     Draft202012Validator(
         {
-            "$ref": f"eom://schemas/knowledge/system-rag-similarity-context/{family}#/$defs/viewSelection"
+            "$ref": "eom://schemas/knowledge/public-solution-similarity/3.0#/$defs/view"
+            if public
+            else f"eom://schemas/knowledge/system-rag-similarity-context/{family}#/$defs/viewSelection"
         },
         registry=catalog_schema_registry(),
     ).validate(selection_values)
-    selection = (
-        SimilarityViewSelectionV2.model_validate(selection_values)
-        if mixed
-        else SimilarityViewSelection.model_validate(selection_values)
-    )
+    selection: PublicSolutionSimilarityView | SimilarityViewSelectionV2 | SimilarityViewSelection
+    if public:
+        selection = PublicSolutionSimilarityView.model_validate(selection_values)
+    elif mixed:
+        selection = SimilarityViewSelectionV2.model_validate(selection_values)
+    else:
+        selection = SimilarityViewSelection.model_validate(selection_values)
     pin = selection.index
     if pin is None or (
         type(scope.maximum_sources) is not int
-        or not 1 <= scope.maximum_sources <= MAX_EMBEDDING_ROWS
+        or not 1
+        <= scope.maximum_sources
+        <= (MAX_PUBLIC_SOLUTION_SOURCES if public else MAX_EMBEDDING_ROWS)
         or not re.fullmatch(r"corpus_[0-9a-f]{32}", scope.corpus_id)
         or not re.fullmatch(r"accessrev_[0-9a-f]{32}", scope.policy_revision_id)
         or graph.manifest_artifact.sha256 != graph.manifest_sha256
@@ -875,7 +878,13 @@ def validate_registered_embedding_index_read(
         or registered.policy_revision_id != intent.scope.policy_revision_id
         or registered.policy_sha256 != intent.scope.policy_sha256
         or type(registered.binding_count) is not int
-        or not 1 <= registered.binding_count <= MAX_EMBEDDING_ROWS
+        or not 1
+        <= registered.binding_count
+        <= (
+            MAX_PUBLIC_SOLUTION_SOURCES
+            if isinstance(intent.scope.namespace, PublicSolutionIndexNamespace)
+            else MAX_EMBEDDING_ROWS
+        )
     ):
         _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
     TypeAdapter(Sha256).validate_python(registered.binding_set_sha256)
@@ -925,6 +934,7 @@ def _validate_resolved_pinned_read(
     intent: EmbeddingRegistryRead, resolved: ResolvedPinnedEmbeddingIndex
 ) -> ResolvedPinnedEmbeddingIndex:
     mixed = isinstance(intent.scope.namespace, MixedEmbeddingIndexNamespace)
+    public = isinstance(intent.scope.namespace, PublicSolutionIndexNamespace)
     if (
         not isinstance(resolved, ResolvedPinnedEmbeddingIndex)
         or resolved.intent != intent
@@ -944,8 +954,16 @@ def _validate_resolved_pinned_read(
         any(not isinstance(value, ApprovedItemKnowledgeSourceV2) for value in resolved.sources)
         or any(not isinstance(value, AuthorizedEmbeddingReadProfile) for value in resolved.profiles)
         or any(
-            not isinstance(value, (EmbeddingSourceBinding, RegisteredReviewEmbeddingSourceBinding))
-            or (not mixed and not isinstance(value, EmbeddingSourceBinding))
+            not isinstance(
+                value,
+                (
+                    EmbeddingSourceBinding,
+                    RegisteredReviewEmbeddingSourceBinding,
+                    PublicSolutionEmbeddingSourceBinding,
+                ),
+            )
+            or public != isinstance(value, PublicSolutionEmbeddingSourceBinding)
+            or (not mixed and not public and not isinstance(value, EmbeddingSourceBinding))
             for value in resolved.bindings
         )
         or any(
@@ -956,9 +974,22 @@ def _validate_resolved_pinned_read(
     for source in resolved.sources:
         type(source).model_validate(raw_similarity_contract_value(source))
     for profile in resolved.profiles:
-        if not isinstance(
-            profile.profile, (InferenceTransferProfilePointer, RegisteredReviewProfilePointer)
-        ) or (not mixed and not isinstance(profile.profile, InferenceTransferProfilePointer)):
+        if (
+            not isinstance(
+                profile.profile,
+                (
+                    InferenceTransferProfilePointer,
+                    RegisteredReviewProfilePointer,
+                    PublicSolutionProfilePointer,
+                ),
+            )
+            or public != isinstance(profile.profile, PublicSolutionProfilePointer)
+            or (
+                not mixed
+                and not public
+                and not isinstance(profile.profile, InferenceTransferProfilePointer)
+            )
+        ):
             _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
         type(profile.profile).model_validate(raw_similarity_contract_value(profile.profile))
     for value in resolved.numerical_rows:

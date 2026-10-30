@@ -69,11 +69,13 @@ from eom_catalog_contracts.public_solution_embedding_index import (
     MAX_PUBLIC_SOLUTION_SOURCES,
     PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
     PublicSolutionEmbeddingIndex,
+    PublicSolutionEmbeddingSourceBinding,
     PublicSolutionIndexNamespace,
 )
 from eom_catalog_contracts.public_solution_embedding_registry import (
     RegisterPublicSolutionIndexCommand,
 )
+from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityView
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import (
     SimilarityContext,
@@ -253,10 +255,26 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _validate_similarity_manifest(
-    selection: SimilarityViewSelection | SimilarityViewSelectionV2,
+    selection: SimilarityViewSelection | SimilarityViewSelectionV2 | PublicSolutionSimilarityView,
     pointer: ArtifactMemberPointer,
     index: SupportedEmbeddingIndex,
 ) -> None:
+    if isinstance(selection, PublicSolutionSimilarityView):
+        if not isinstance(index, PublicSolutionEmbeddingIndex):
+            raise ValueError("public similarity requires an actual index3")
+        pin = selection.index
+        if (
+            pointer != pin.index_manifest
+            or index.index_id != pin.index_id
+            or index.index_revision_id != pin.index_revision_id
+            or index.index_sha256 != pin.index_sha256
+            or index.storage_partition != pin.storage_partition
+            or index.space != pin.spaces.document
+            or index.view != selection.view
+            or index.recipe != selection.recipe
+        ):
+            raise ValueError("public similarity index pin differs")
+        return
     if isinstance(selection, SimilarityViewSelectionV2):
         if not isinstance(index, MixedEmbeddingIndexManifest):
             raise ValueError("similarity request2 requires an actual index2")
@@ -2308,7 +2326,9 @@ class CatalogEmbeddingRegistryVerifier:
             admitted = {value.item_revision_id: value for value in sources}
             current = (
                 self._captured_lookup(session, caller, intent.scope, capture)
-                if isinstance(intent.selection, SimilarityViewSelectionV2)
+                if isinstance(
+                    intent.selection, (SimilarityViewSelectionV2, PublicSolutionSimilarityView)
+                )
                 else None
             )
             current_entries = capture.entries if current is None else current.entries
@@ -2330,7 +2350,13 @@ class CatalogEmbeddingRegistryVerifier:
                     or binding.recipe != intent.selection.recipe
                     or not intent.scope.namespace.accepts_projection(binding.projection_version)
                     or (
-                        isinstance(binding, RegisteredReviewEmbeddingSourceBinding)
+                        isinstance(
+                            binding,
+                            (
+                                RegisteredReviewEmbeddingSourceBinding,
+                                PublicSolutionEmbeddingSourceBinding,
+                            ),
+                        )
                         and binding.base_analysis_run_id
                         != base_ids.get(binding.source.item_revision_id)
                     )
@@ -2367,7 +2393,9 @@ class CatalogEmbeddingRegistryVerifier:
                     materialized[binding.encoding.encoding_sha256] = row
                 # Retain selected row tuples only, not every decoded corpus shard matrix.
                 del values
-            if isinstance(intent.selection, SimilarityViewSelectionV2):
+            if isinstance(
+                intent.selection, (SimilarityViewSelectionV2, PublicSolutionSimilarityView)
+            ):
                 validate_supported_embedding_source_bindings(
                     selected, current_entries, tuple(shards)
                 )

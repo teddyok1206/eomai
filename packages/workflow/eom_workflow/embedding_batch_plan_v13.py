@@ -9,16 +9,12 @@ from typing import Any, ClassVar, Literal, Self
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_work_batch import EmbeddingWorkBatchScope
-from eom_catalog_contracts.inference_transfer_experiment import PopulationSource
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_catalog_contracts.models import Sha256
-from eom_catalog_contracts.public_solution_embedding import (
-    AcceptedPublicSolutionEvidence,
-    PublicSolutionEmbeddingEntry,
-    PublicSolutionEmbeddingEvidence,
-    PublicSolutionEmbeddingRecipe,
+from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingRecipe
+from eom_catalog_contracts.public_solution_reference import (
+    PublicSolutionSourceReference as PublicSolutionBatchAnchor,
 )
-from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionProfilePointer
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import Field, model_validator
@@ -62,44 +58,6 @@ def _validator() -> Draft202012Validator:
         BATCH_PLAN_SCHEMA_REF, Resource.from_contents(embedding_batch_plan_schema())
     )
     return Draft202012Validator(schema, registry=registry, format_checker=FormatChecker())
-
-
-class PublicSolutionBatchAnchor(EmbeddingBatchPlanValue):
-    """No report/text duplication and no authority; admission must resolve these exact pointers."""
-
-    basis: Literal["VERIFIABLE_PUBLIC_SOLUTION"] = "VERIFIABLE_PUBLIC_SOLUTION"
-    source: PopulationSource
-    base_analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
-    profile: PublicSolutionProfilePointer
-    evidence: PublicSolutionEmbeddingEvidence
-
-    @model_validator(mode="after")
-    def exact_source(self) -> Self:
-        logical = content_sha256(
-            {"item_id": self.source.item_id, "projection_version": "public-solution-text/1.0"}
-        )
-        require_embedding_batch_plan_value(
-            self.profile.profile_id == "inferenceprofile_" + logical[7:39]
-            and self.profile.profile_revision_id
-            == "inferenceprofilerev_" + self.profile.profile_sha256[7:39]
-        )
-        if isinstance(self.evidence, AcceptedPublicSolutionEvidence):
-            require_embedding_batch_plan_value(
-                self.evidence.solution.base_analysis_run_id == self.base_analysis_run_id
-            )
-        else:
-            require_embedding_batch_plan_value(self.source.source_class == "APPROVED_ITEM")
-        return self
-
-    @classmethod
-    def from_entry(cls, entry: PublicSolutionEmbeddingEntry) -> Self:
-        entry = PublicSolutionEmbeddingEntry.model_validate(entry.model_dump(mode="json"))
-        return cls(
-            source=entry.source,
-            base_analysis_run_id=entry.base_analysis_run_id,
-            profile=PublicSolutionProfilePointer.from_entry(entry),
-            evidence=entry.evidence,
-        )
 
 
 class _PublicPlanMessage(EmbeddingBatchPlanValue):

@@ -17,6 +17,10 @@ from eom_catalog_contracts.embedding_reference_query_v11 import (
 from eom_catalog_contracts.embedding_runtime_bundle import EmbeddingRuntimeBundle
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
 from eom_catalog_contracts.inference_transfer_embedding import parse_embedding_shard
+from eom_catalog_contracts.public_solution_query import (
+    PublicSolutionQueryInput,
+    PublicSolutionQueryResult,
+)
 from eom_identifiers import canonical_json_bytes
 from eom_orchestrator.embedding_artifact_store import EMBEDDING_REFERENCE_QUERY_ARTIFACT_TYPE
 from eom_orchestrator.file_set_control_artifacts import CONTROL_FILE_SET_PROTOCOL
@@ -25,6 +29,12 @@ from eom_workflow.reference_query_execution import (
     ReferenceQueryExecutionPolicy,
     ReferenceQueryLaunchAssociation,
     ReferenceQueryWorkflowReceipt,
+    ReferenceQueryWorkflowReceiptV2,
+    ReferenceQueryWorkflowRequestV3,
+    SupportedReferenceQueryNativeInput,
+    SupportedReferenceQueryNativeResult,
+    SupportedReferenceQueryWorkflowIntent,
+    SupportedReferenceQueryWorkflowReceipt,
     SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_workflow_receipt,
     validate_reference_query_workflow_receipt,
@@ -41,6 +51,16 @@ class ResolvedReferenceQueryArtifacts:
 
     request: EmbeddingReferenceQueryInputV11
     result: EmbeddingReferenceQueryResult
+    binary: bytes
+    publication_job_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedPublicSolutionQueryArtifacts:
+    """Materialized QUERY2 bytes, not the actual producer/source execution authority."""
+
+    request: PublicSolutionQueryInput
+    result: PublicSolutionQueryResult
     binary: bytes
     publication_job_id: str
 
@@ -82,6 +102,63 @@ class CatalogReferenceQueryArtifacts:
         manifest_sha256: str | None = None,
     ) -> ResolvedReferenceQueryArtifacts:
         receipt = parse_reference_query_workflow_receipt(receipt)
+        resolved = self._resolve_publication(
+            workflow_request=workflow_request,
+            policy=policy,
+            bundle=bundle,
+            launch=launch,
+            receipt=receipt,
+            workflow_id=workflow_id,
+            step_run_id=step_run_id,
+            receipt_owner_job_id=receipt_owner_job_id,
+            manifest_sha256=manifest_sha256,
+        )
+        if not isinstance(resolved, ResolvedReferenceQueryArtifacts):
+            raise ValueError("REFERENCE_QUERY_READ_FAMILY_MISMATCH")
+        return resolved
+
+    def resolve_public_solution_publication(
+        self,
+        *,
+        workflow_request: ReferenceQueryWorkflowRequestV3,
+        policy: ReferenceQueryExecutionPolicy,
+        bundle: EmbeddingRuntimeBundle,
+        launch: ReferenceQueryLaunchAssociation,
+        receipt: ReferenceQueryWorkflowReceiptV2,
+        workflow_id: str,
+        step_run_id: str,
+        receipt_owner_job_id: str,
+        manifest_sha256: str | None = None,
+    ) -> ResolvedPublicSolutionQueryArtifacts:
+        receipt = ReferenceQueryWorkflowReceiptV2.model_validate(receipt)
+        resolved = self._resolve_publication(
+            workflow_request=workflow_request,
+            policy=policy,
+            bundle=bundle,
+            launch=launch,
+            receipt=receipt,
+            workflow_id=workflow_id,
+            step_run_id=step_run_id,
+            receipt_owner_job_id=receipt_owner_job_id,
+            manifest_sha256=manifest_sha256,
+        )
+        if not isinstance(resolved, ResolvedPublicSolutionQueryArtifacts):
+            raise ValueError("REFERENCE_QUERY_READ_FAMILY_MISMATCH")
+        return resolved
+
+    def _resolve_publication(
+        self,
+        *,
+        workflow_request: SupportedReferenceQueryWorkflowIntent,
+        policy: ReferenceQueryExecutionPolicy,
+        bundle: EmbeddingRuntimeBundle,
+        launch: ReferenceQueryLaunchAssociation,
+        receipt: SupportedReferenceQueryWorkflowReceipt,
+        workflow_id: str,
+        step_run_id: str,
+        receipt_owner_job_id: str,
+        manifest_sha256: str | None,
+    ) -> ResolvedReferenceQueryArtifacts | ResolvedPublicSolutionQueryArtifacts:
         input_pointer = receipt.query_input
         pointers = (
             input_pointer,
@@ -116,8 +193,14 @@ class CatalogReferenceQueryArtifacts:
                 raise ValueError("REFERENCE_QUERY_ARTIFACT_NONCANONICAL")
             return value
 
-        native_input = parse_embedding_reference_query_input_v11(document(pointers[0]))
-        result = parse_embedding_reference_query_result(document(pointers[1]))
+        native_input: SupportedReferenceQueryNativeInput
+        result: SupportedReferenceQueryNativeResult
+        if isinstance(receipt, ReferenceQueryWorkflowReceiptV2):
+            native_input = PublicSolutionQueryInput.model_validate(document(pointers[0]))
+            result = PublicSolutionQueryResult.model_validate(document(pointers[1]))
+        else:
+            native_input = parse_embedding_reference_query_input_v11(document(pointers[0]))
+            result = parse_embedding_reference_query_result(document(pointers[1]))
         shard_document = document(pointers[2])
         if not isinstance(shard_document, dict):
             raise ValueError("REFERENCE_QUERY_CANONICAL_SHARD_INVALID")
@@ -145,6 +228,14 @@ class CatalogReferenceQueryArtifacts:
             query_artifact_owner_job_id=receipt.query_artifact_owner_job_id,
             receipt_owner_job_id=receipt_owner_job_id,
         )
+        if isinstance(native_input, PublicSolutionQueryInput):
+            if not isinstance(result, PublicSolutionQueryResult):
+                raise ValueError("REFERENCE_QUERY_READ_FAMILY_MISMATCH")
+            return ResolvedPublicSolutionQueryArtifacts(
+                native_input, result, binary, receipt.query_artifact_owner_job_id
+            )
+        if not isinstance(result, EmbeddingReferenceQueryResult):
+            raise ValueError("REFERENCE_QUERY_READ_FAMILY_MISMATCH")
         return ResolvedReferenceQueryArtifacts(
             native_input, result, binary, receipt.query_artifact_owner_job_id
         )

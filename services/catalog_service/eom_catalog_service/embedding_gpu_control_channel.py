@@ -34,6 +34,8 @@ from eom_catalog_contracts.embedding_gpu_control import (
 from eom_catalog_contracts.embedding_work_batch import (
     EmbeddingWorkBatchChild,
     EmbeddingWorkBatchInput,
+    SupportedEmbeddingWorkBatchChild,
+    SupportedEmbeddingWorkBatchInput,
     parse_embedding_work_batch_input,
 )
 from eom_catalog_contracts.embedding_work_batch_result import (
@@ -261,10 +263,11 @@ class EmbeddingGpuControlChannel:
             if self._side != "WORKER" or self._phase != _Phase.GRANTED or self._grant is None:
                 raise EmbeddingGpuChannelError()
 
-    def assert_batch_current(self, batch: EmbeddingWorkBatchInput) -> None:
+    def assert_batch_current(self, batch: SupportedEmbeddingWorkBatchInput) -> None:
         with self._operation():
             if (
-                self._side != "WORKER"
+                not isinstance(batch, EmbeddingWorkBatchInput)
+                or self._side != "WORKER"
                 or self._phase != _Phase.GRANTED
                 or self._batch is None
                 or batch.request_sha256 != self._batch.request_sha256
@@ -274,11 +277,15 @@ class EmbeddingGpuControlChannel:
                 raise EmbeddingGpuChannelError()
 
     def assert_child_current(
-        self, batch: EmbeddingWorkBatchInput, child: EmbeddingWorkBatchChild
+        self, batch: SupportedEmbeddingWorkBatchInput, child: SupportedEmbeddingWorkBatchChild
     ) -> None:
         with self._operation():
             self.assert_batch_current(batch)
-            if self._grant is None or self._children.get(child.request.request_sha256) != child:
+            if (
+                not isinstance(child, EmbeddingWorkBatchChild)
+                or self._grant is None
+                or self._children.get(child.request.request_sha256) != child
+            ):
                 raise EmbeddingGpuChannelError()
             self._sequence += 1
             check = self._message(

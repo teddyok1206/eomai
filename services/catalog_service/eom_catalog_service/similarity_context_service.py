@@ -63,7 +63,6 @@ from eom_catalog_service.embedding_registry_ports import (
     ResolvedPinnedEmbeddingIndex,
 )
 from eom_catalog_service.inference_transfer_service import bounded_profile_channel_union
-from eom_catalog_service.inference_transfer_vectors import normalized_cosine_similarity
 from eom_catalog_service.similarity_context_ports import (
     PreparedSimilarityContext,
     PreparedSimilaritySource,
@@ -77,33 +76,9 @@ from eom_catalog_service.similarity_document_read_validation import (
     validate_prepared_similarity_sources,
     validate_similarity_document_reads,
 )
-
-
-def _rank_similarity_profiles(
-    query: tuple[float, ...],
-    candidates: tuple[tuple[MixedSimilarityProfilePointer, tuple[float, ...]], ...],
-    *,
-    top_k: int,
-) -> tuple[tuple[MixedSimilarityProfilePointer, float], ...]:
-    """Rank the bounded mixed-profile population without changing frozen HOST_L2 bytes.
-
-    The legacy numerical module is part of an immutable admitted implementation.
-    Mixed-profile adaptation belongs here; parity tests protect its exact score/tie rule.
-    """
-    scores = tuple(
-        (pointer, normalized_cosine_similarity(query, vector)) for pointer, vector in candidates
-    )
-    return tuple(
-        sorted(
-            scores,
-            key=lambda row: (
-                -row[1],
-                row[0].profile_id,
-                row[0].profile_revision_id,
-                row[0].profile_sha256,
-            ),
-        )[:top_k]
-    )
+from eom_catalog_service.similarity_vector_ranking import (
+    rank_similarity_profiles as _rank_similarity_profiles,
+)
 
 
 def validate_similarity_preparation(

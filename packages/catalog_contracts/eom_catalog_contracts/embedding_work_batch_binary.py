@@ -10,18 +10,18 @@ from eom_catalog_contracts.embedding_vector_binary import (
 )
 from eom_catalog_contracts.embedding_work_batch import (
     MAX_EMBEDDING_WORK_BATCH_VECTOR_BYTES,
-    EmbeddingWorkBatchInput,
+    SupportedEmbeddingWorkBatchInput,
 )
 from eom_catalog_contracts.embedding_work_batch_result import (
-    EmbeddingWorkBatchResult,
-    parse_embedding_work_batch_result,
+    SupportedEmbeddingWorkBatchResult,
+    parse_supported_embedding_work_batch_result,
     validate_embedding_work_batch_result,
 )
 
 
 def validate_embedding_work_batch_binary(
-    request: EmbeddingWorkBatchInput,
-    result: EmbeddingWorkBatchResult,
+    request: SupportedEmbeddingWorkBatchInput,
+    result: SupportedEmbeddingWorkBatchResult,
     payload: bytes,
 ) -> tuple[memoryview, ...]:
     """Return read-only child ranges sharing one explicitly materialized local buffer.
@@ -33,7 +33,7 @@ def validate_embedding_work_batch_binary(
     """
     if type(payload) is not bytes or not 4 <= len(payload) <= MAX_EMBEDDING_WORK_BATCH_VECTOR_BYTES:
         raise EmbeddingVectorBinaryError("EMBEDDING_VECTOR_LENGTH_MISMATCH")
-    result = parse_embedding_work_batch_result(result)
+    result = parse_supported_embedding_work_batch_result(result)
     validate_embedding_work_batch_result(request, result)
     if len(payload) != result.vectors.byte_count:
         raise EmbeddingVectorBinaryError("EMBEDDING_VECTOR_LENGTH_MISMATCH")

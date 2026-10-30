@@ -91,3 +91,92 @@ DB 검사는 실제 임시 PostgreSQL과 실제 control Artifact IO를 사용하
 운영 API/INDEX/QUERY/창작 owner와 production migration은 이 체크포인트에서 바꾸지 않았다.
 다음은 public query/result2의 공식 검색 소비 연결, installed wheel 검증과 호환 활성화,
 창작 5건의 실제 벡터·검색 canary다. 목표는 아직 완료되지 않았다.
+
+## 공식 공통 풀이 검색의 세부 연결 결정
+
+기존 context1/2의 accepted-analysis 또는 AI-review 필드에 창작 보고서를 끼우지 않는다.
+public context3는 같은 source/profile/evidence 참조를 anchor와 후보에 쓰고, 실제
+query/result2와 index3를 핀한다. producer는 기존 QUERY owner/고정 native 실행 경계,
+consumer는 기존 Catalog source·Artifact·registry read 경계다. 별도 모델·queue·벡터 DB는 없다.
+
+- 책임/정본/identity/권한은 위 1–4번과 같다. pointer 값 검증은 실제 read 권한의 증명이 아니다.
+- 순회·검색은 최대 16,384개 metadata head, 1,024개 source page, 실제 batch 한도를 분리한다.
+  query와 candidate는 동일 recipe2, 서로 짝지어 검증한 QUERY/DOCUMENT space를 사용한다.
+  텍스트를 같게 정규화해도 source·revision·보고서·Graph·policy는 각각 재검증한다.
+- source 순회와 vector 검증은 O(n·d), top-k는 기존 bounded exact cosine/tie rule을 재사용한다.
+  반환은 최대 64개 pointer/관측이고 전체 보고서나 binary를 DB/메시지에 복사하지 않는다.
+- 준비 시 actual operator와 index revision을 고정하고, 같은 요청의 재전송은 원래 pin을
+  재인가한다. 현재 head가 바뀌어도 latest로 바꾸지 않는다. 등록과 별도 transaction이다.
+- source/보고서/입력·실행·index proof가 틀리면 명시적 오류다. 없거나 아직 미계산인 근거를
+  0 벡터·다른 보고서·옛 recipe로 채우지 않는다. 부분 coverage와 과학적 정당성은 구별한다.
+- 기존 source capture·native QUERY·수치 codec·Catalog Registry의 adapter 소유권을 유지한다.
+  contract/domain은 DB/NAS/HTTP를 읽지 않는다. released context1/2 의미와 history는 보존한다.
+- 더 단순한 DOCUMENT 벡터 재명명이나 임시 cosine 스크립트는 실제 QUERY 실행·권한·출처를
+  증명하지 못한다. 기존 owner의 명시적 successor로 연결한다.
+
+### QUERY2의 기존 finite native batch 연결
+
+public QUERY2는 기존 numerical kernel과 QUERY/DOCUMENT space 쌍을 사용한다. 새 batch2는
+public QUERY2만 담는 명시적 successor이고 기존 batch1의 허용 입력을 넓히지 않는다.
+기존 scope/시간/행/출력 상한, 단일 모델 수명, child 전후 source fence와 연속 binary 배치를
+공유한다. 새 queue·lease·프로세스·자동 권한은 만들지 않는다. 개별 결과는 각 request/job,
+context/input hash와 recipe/space를 유지하고 배포 전 old/new dispatch·권한 거부를 검증한다.
+메타데이터 입력 검사는 O(n), 수치 검사는 O(n·d)이며 n≤32, 전체 행≤1,024다.
+실제 소스·물리 lease·Artifact commit 권한은 기존 owner가 별도로 증명해야 한다.
+
+QUERY workflow는 동일 key의 definition2.0.0과 request3/context3, receipt2/step2를 사용한다.
+기존 execution policy1/launch1은 definition·request·context·native input·recipe·runtime hash를
+이미 핀하므로 wire를 재출시하지 않고 동일 closure 검사를 공유한다. numerical input/result의
+family가 다르면 요청·영수증 모두 명시적으로 거부한다. definition1과 receipt1의 허용 입력은
+변경하지 않는다. Workflow/Job/CAS/원래 command·launch identity와 기존 producer 권한 검사를
+재사용하며 public frame 자체를 실행 권한으로 취급하지 않는다.
+
+15:14 UTC 병행 등록 조회: 창작 95/1,053 완료 뒤 원문 10413에서
+`KNOWLEDGE_GRAPH_NODE_CONFLICT`로 순차 owner가 중단됐다. INDEX/QUERY 서비스는 active였다.
+아직 운영 public 임베딩 배포나 복구 retry를 수행하지 않았으며 accepted report와 실패 이력은
+보존했다. 새 조회/검색 소스 검증과 별개로 정확한 accepted analysis의 충돌을 읽기 전용으로
+분류한 뒤 기존 지원 복구 경계를 사용한다.
+
+## 두 번째 소스 체크포인트 — 정본 검색 read와 QUERY2 저장 경계
+
+- 공통 source/report 참조를 INDEX selection과 context3가 함께 사용한다. public namespace의
+  누락 binding 발견이 legacy parser로 거부되던 경계를 기존 Registry에서 수정했다.
+- 실제 Catalog Registry의 index3·원래 revision·member/hash·producer/lifecycle read를
+  context3 준비/비교에 연결했다. 재전송은 current head가 아니라 원래 pin을 재인가한다.
+  순수 비교는 기존 exact cosine/tie 규칙을 공유하며 최대 64개 pointer/관측만 반환한다.
+- public QUERY2의 finite batch2와 definition2/request3/receipt2/step2를 추가했다.
+  policy1/launch1의 원래 값은 보존한다. legacy owner의 request parser와 root GPU grant는
+  아직 새 형식을 허용하지 않는다. 순수 provenance dispatch와 실제 실행 admission은 다르다.
+- 수치 계산은 기존 encoder/backend/float32 codec, 파일 출력은 기존 보호 FD writer,
+  저장·조회는 기존 Orchestrator `EmbeddingArtifactStore`와 Catalog pinned Artifact reader를
+  재사용한다. 새 public 진입점은 QUERY2만 허용하고 legacy 진입점은 계속 거부한다.
+- 복사·생성된 모델의 미선언 필드가 직렬화 중 사라지지 않도록 raw 값을 먼저 검증했다.
+  source·nested report·query/result/member·profile/binding의 부정 검사를 추가했다.
+
+동시 publication 테스트에서 기존 local manifest의 `O_EXCL create → write/fsync` 사이에
+다른 재전송이 부분 파일을 읽는 경합을 재현했다. 같은 소유 workspace directory FD의
+파일 작성 구간에만 advisory lock을 사용한다. DB/publication 전에 해제하고, crash 뒤 남은
+부분 파일이나 충돌 파일은 덮지 않는다. 새 persistent lock/queue/테이블은 만들지 않았다.
+
+검증 결과(서로 겹치는 suite이므로 합산하지 않는다):
+
+- QUERY2/공통 검색/기존 native·제어 계약 unit **383 PASS**.
+- 최종 raw-field·local manifest 경합·정본 저장/조회 관련 unit **172 PASS**.
+- dependency/runner/similarity read 경계 **119 PASS**.
+- disposable PostgreSQL의 기존 QUERY·Registry·재전송/복구 **90 PASS**.
+- 추가 QUERY2 publication concurrent replay·commit 후 재조회·다른 completion 거부
+  **3 PASS**. 실제 임시 DB/Artifact IO이며 모델/GPU/source IAM은 합성 seam이다.
+- 관련 core와 기존 caller 26개 mypy PASS. source 테스트를 운영 inference로 해석하지 않는다.
+
+남은 필수 작업:
+
+1. 기존 Runner의 실제 QUERY claim/checkpoint/completion과 public source 준비를 연결한다.
+2. 기존 GPU grant/routed owner 및 공식 similarity RPC/사용자 조회에 context3를 연결한다.
+3. installed wheel 검증, migration0063/policy/호환 owner 활성화를 안전한 시점에 수행한다.
+4. 이미 Graph 검증된 창작 5개로 실제 벡터·정본 등록·공식 검색·replay/복구를 확인한다.
+5. 완료 backlog와 신규 publication 자동 발견을 활성화하고 기출/실패 이력 보존을 확인한다.
+
+**운영 public 검색·5건 실제 임베딩 acceptance·backlog 자동 활성화는 여전히 PENDING이다.**
+이 체크포인트에서 운영 migration·GPU 실행환경·기출 인덱스는 변경하지 않았다.
+10413 충돌은 기존 `PROCESS` 키에 새 `CONCEPT`가 제안된 경우로 읽기 전용 분류를 마쳤다.
+원래 accepted report와 실패 상태를 재해석하거나 임의로 유형을 바꾸지 않았다.

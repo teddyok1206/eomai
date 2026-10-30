@@ -17,7 +17,10 @@ from eom_catalog_contracts.embedding_private_chat_query import (
     EmbeddingPrivateChatQueryInput,
     validate_private_chat_query_result,
 )
-from eom_catalog_contracts.embedding_reference_query import MAX_REFERENCE_QUERY_BYTES
+from eom_catalog_contracts.embedding_reference_query import (
+    MAX_REFERENCE_QUERY_BYTES,
+    EmbeddingReferenceQueryResult,
+)
 from eom_catalog_contracts.embedding_reference_query_v11 import (
     EmbeddingReferenceQueryInputV11,
     parse_embedding_reference_query_input_v11,
@@ -30,10 +33,14 @@ from eom_catalog_contracts.embedding_vector_binary import (
 from eom_catalog_contracts.embedding_work_batch import (
     MAX_EMBEDDING_WORK_BATCH_BYTES,
     EmbeddingWorkBatchInput,
+    PublicSolutionWorkBatchInput,
+    SupportedEmbeddingWorkBatchInput,
     parse_embedding_work_batch_input,
 )
 from eom_catalog_contracts.embedding_work_batch_result import (
     EmbeddingWorkBatchResult,
+    PublicSolutionWorkBatchResult,
+    SupportedEmbeddingWorkBatchResult,
     build_embedding_work_batch_result,
     embedding_work_batch_result_bytes,
 )
@@ -43,6 +50,11 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     IncrementalEmbeddingInput,
     parse_incremental_embedding_input,
     validate_incremental_embedding_result,
+)
+from eom_catalog_contracts.public_solution_query import (
+    PublicSolutionQueryInput,
+    PublicSolutionQueryResult,
+    validate_public_solution_query_result,
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from jsonschema.exceptions import ValidationError as JsonSchemaError
@@ -54,6 +66,7 @@ from eom_catalog_service.embedding_encoder_adapter import (
     ReferenceQueryEmbeddingEncodeError,
     encode_incremental_batch,
     encode_private_chat_query,
+    encode_public_solution_query,
     encode_reference_query_batch,
 )
 from eom_catalog_service.embedding_execution_ports import NativeEmbeddingBackend
@@ -319,13 +332,15 @@ class _CapturedWorkBatch:
 
     descriptors: NativeEmbeddingDescriptors
     initial: tuple[os.stat_result, os.stat_result, os.stat_result]
-    request: EmbeddingWorkBatchInput
+    request: SupportedEmbeddingWorkBatchInput
     input_raw_sha256: str
     input_byte_count: int
 
 
 def _capture_work_batch(
-    descriptors: NativeEmbeddingDescriptors, maximum_total_output_bytes: int
+    descriptors: NativeEmbeddingDescriptors,
+    maximum_total_output_bytes: int,
+    parse: Callable[[object], SupportedEmbeddingWorkBatchInput] = parse_embedding_work_batch_input,
 ) -> _CapturedWorkBatch:
     if (
         type(maximum_total_output_bytes) is not int
@@ -333,9 +348,7 @@ def _capture_work_batch(
     ):
         raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
     initial = _prepare_descriptors(descriptors, MAX_EMBEDDING_WORK_BATCH_BYTES)
-    request, raw = _read_canonical_capture(
-        descriptors.input, initial[0], parse_embedding_work_batch_input
-    )
+    request, raw = _read_canonical_capture(descriptors.input, initial[0], parse)
     _ready_outputs(descriptors, initial)
     return _CapturedWorkBatch(descriptors, initial, request, sha256_bytes(raw), len(raw))
 
@@ -355,13 +368,16 @@ def run_native_embedding_work_batch_descriptors(
     Metadata is the last write, after every child and the whole binary are checked.
     """
     try:
-        return _execute_captured_work_batch(
+        result = _execute_captured_work_batch(
             _capture_work_batch(descriptors, maximum_total_output_bytes),
             backend_scope,
             resources=resources,
             maximum_total_output_bytes=maximum_total_output_bytes,
             fence=fence,
         )
+        if not isinstance(result, EmbeddingWorkBatchResult):
+            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
+        return result
     except (
         NativeEmbeddingHandoffError,
         EmbeddingWorkBatchExecutionError,
@@ -395,6 +411,8 @@ def run_granted_native_embedding_gpu_batch_descriptors(
             raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_GRANT_INVALID")
         channel.assert_compute_granted()
         captured = _capture_work_batch(descriptors, maximum_total_output_bytes)
+        if not isinstance(captured.request, EmbeddingWorkBatchInput):
+            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_GRANT_INVALID")
         channel.bind_batch(
             captured.request,
             input_raw_sha256=captured.input_raw_sha256,
@@ -407,6 +425,8 @@ def run_granted_native_embedding_gpu_batch_descriptors(
             maximum_total_output_bytes=maximum_total_output_bytes,
             fence=channel,
         )
+        if not isinstance(result, EmbeddingWorkBatchResult):
+            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
         channel.announce_result(result)
         return result
     except (
@@ -428,7 +448,7 @@ def _execute_captured_work_batch(
     resources: EmbeddingWorkBatchExecutionResources,
     maximum_total_output_bytes: int,
     fence: EmbeddingWorkBatchFence,
-) -> EmbeddingWorkBatchResult:
+) -> SupportedEmbeddingWorkBatchResult:
     descriptors, initial, request = captured.descriptors, captured.initial, captured.request
     if request.expected_vector_bytes >= maximum_total_output_bytes:
         raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
@@ -496,19 +516,37 @@ def _run_native_reference_query_descriptors(
     descriptors: NativeEmbeddingDescriptors,
     backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
 ) -> None:
+    _run_native_query_descriptors(
+        descriptors, backend_scope, parse=parse_embedding_reference_query_input_v11
+    )
+
+
+def _run_native_query_descriptors(
+    descriptors: NativeEmbeddingDescriptors,
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+    *,
+    parse: Callable[[object], EmbeddingReferenceQueryInputV11 | PublicSolutionQueryInput],
+) -> None:
     initial = _prepare_descriptors(descriptors, MAX_REFERENCE_QUERY_BYTES)
-    request = _read_reference_query(descriptors.input, initial[0])
+    request = _read_canonical_request(descriptors.input, initial[0], parse)
     _ready_outputs(descriptors, initial)
     with backend_scope() as backend:
         _ready_outputs(descriptors, initial)
-        encoded = encode_reference_query_batch(request, backend)
-        validate_reference_query_result_v11(request, encoded.result)
+        result: PublicSolutionQueryResult | EmbeddingReferenceQueryResult
+        if isinstance(request, PublicSolutionQueryInput):
+            public_output = encode_public_solution_query(request, backend)
+            validate_public_solution_query_result(request, public_output.result)
+            result, vectors = public_output.result, public_output.vectors
+        else:
+            old_output = encode_reference_query_batch(request, backend)
+            validate_reference_query_result_v11(request, old_output.result)
+            result, vectors = old_output.result, old_output.vectors
         _write_outputs(
             descriptors,
             initial,
-            encoded.result.shard,
-            encoded.vectors,
-            canonical_json_bytes(encoded.result.model_dump(mode="json")),
+            result.shard,
+            vectors,
+            canonical_json_bytes(result.model_dump(mode="json")),
             MAX_REFERENCE_QUERY_BYTES,
         )
 
@@ -547,6 +585,65 @@ def run_native_reference_query_descriptors(
     except (
         NativeEmbeddingHandoffError,
         ReferenceQueryEmbeddingEncodeError,
+        EmbeddingVectorBinaryError,
+    ):
+        raise
+    except OSError:
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_IO_FAILED") from None
+    except Exception:
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_EXECUTION_FAILED") from None
+
+
+def run_native_public_solution_query_descriptors(
+    descriptors: NativeEmbeddingDescriptors,
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+) -> None:
+    """Explicit QUERY2 seam; not an installed launch, grant or publication capability."""
+    try:
+        _run_native_query_descriptors(
+            descriptors, backend_scope, parse=PublicSolutionQueryInput.model_validate
+        )
+    except (
+        NativeEmbeddingHandoffError,
+        ReferenceQueryEmbeddingEncodeError,
+        EmbeddingVectorBinaryError,
+    ):
+        raise
+    except OSError:
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_IO_FAILED") from None
+    except Exception:
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_EXECUTION_FAILED") from None
+
+
+def run_native_public_solution_work_batch_descriptors(
+    descriptors: NativeEmbeddingDescriptors,
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+    *,
+    resources: EmbeddingWorkBatchExecutionResources,
+    maximum_total_output_bytes: int,
+    fence: EmbeddingWorkBatchFence,
+) -> PublicSolutionWorkBatchResult:
+    """Use the existing bounded FD writer with explicit QUERY2 batch admission.
+
+    The old batch1 and root GPU grant parsers remain closed. Caller still owns
+    current authority, physical lease, completion observation and Artifact commit.
+    """
+    try:
+        result = _execute_captured_work_batch(
+            _capture_work_batch(
+                descriptors, maximum_total_output_bytes, PublicSolutionWorkBatchInput.model_validate
+            ),
+            backend_scope,
+            resources=resources,
+            maximum_total_output_bytes=maximum_total_output_bytes,
+            fence=fence,
+        )
+        if not isinstance(result, PublicSolutionWorkBatchResult):
+            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
+        return result
+    except (
+        NativeEmbeddingHandoffError,
+        EmbeddingWorkBatchExecutionError,
         EmbeddingVectorBinaryError,
     ):
         raise

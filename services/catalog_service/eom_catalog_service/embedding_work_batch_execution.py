@@ -16,20 +16,26 @@ from eom_catalog_contracts.embedding_reference_query_v11 import (
 from eom_catalog_contracts.embedding_work_batch import (
     MAX_EMBEDDING_WORK_BATCH_SECONDS,
     MAX_EMBEDDING_WORK_BATCH_VECTOR_BYTES,
-    EmbeddingWorkBatchChild,
-    EmbeddingWorkBatchInput,
-    parse_embedding_work_batch_input,
+    SupportedEmbeddingWorkBatchChild,
+    SupportedEmbeddingWorkBatchInput,
+    parse_supported_embedding_work_batch_input,
 )
 from eom_catalog_contracts.inference_transfer_embedding import (
     validate_incremental_embedding_result,
 )
+from eom_catalog_contracts.public_solution_query import (
+    PublicSolutionQueryInput,
+    validate_public_solution_query_result,
+)
 
 from eom_catalog_service.embedding_encoder_adapter import (
     encode_incremental_batch,
+    encode_public_solution_query,
     encode_reference_query_batch,
 )
 from eom_catalog_service.embedding_execution_ports import (
     EncodedEmbeddingBatch,
+    EncodedPublicSolutionQuery,
     EncodedReferenceQueryBatch,
     NativeEmbeddingBackend,
 )
@@ -44,12 +50,12 @@ class EmbeddingWorkBatchExecutionError(ValueError):
 class EmbeddingWorkBatchFence(Protocol):
     """Owner-supplied current source/lease checks, not labels supplied by the model."""
 
-    def assert_batch_current(self, batch: EmbeddingWorkBatchInput) -> None:
+    def assert_batch_current(self, batch: SupportedEmbeddingWorkBatchInput) -> None:
         """Verify actual owner, pinned policy/resources, lease and hard unit deadline."""
         ...
 
     def assert_child_current(
-        self, batch: EmbeddingWorkBatchInput, child: EmbeddingWorkBatchChild
+        self, batch: SupportedEmbeddingWorkBatchInput, child: SupportedEmbeddingWorkBatchChild
     ) -> None:
         """Resolve/reauthorize the exact child context and its source/hash/partition."""
         ...
@@ -84,11 +90,13 @@ class EncodedEmbeddingWorkBatch:
     """Temporary ordered child outputs, not an Artifact or persistent success receipt."""
 
     request_sha256: str
-    children: tuple[EncodedEmbeddingBatch | EncodedReferenceQueryBatch, ...]
+    children: tuple[
+        EncodedEmbeddingBatch | EncodedReferenceQueryBatch | EncodedPublicSolutionQuery, ...
+    ]
 
 
 def execute_embedding_work_batch(
-    batch: EmbeddingWorkBatchInput,
+    batch: SupportedEmbeddingWorkBatchInput,
     *,
     resources: EmbeddingWorkBatchExecutionResources,
     backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
@@ -104,7 +112,7 @@ def execute_embedding_work_batch(
     checkpoints: production resume/partial-output publication needs the existing
     owner journal and staged output handoff before this can be activated.
     """
-    batch = parse_embedding_work_batch_input(batch)
+    batch = parse_supported_embedding_work_batch_input(batch)
     if type(resources) is not EmbeddingWorkBatchExecutionResources:
         raise EmbeddingWorkBatchExecutionError("EMBEDDING_WORK_BATCH_RESOURCES_INVALID")
     resources.__post_init__()
@@ -132,7 +140,9 @@ def execute_embedding_work_batch(
     for child in batch.children:
         fence.assert_child_current(batch, child)
     check_time()
-    outputs: list[EncodedEmbeddingBatch | EncodedReferenceQueryBatch] = []
+    outputs: list[
+        EncodedEmbeddingBatch | EncodedReferenceQueryBatch | EncodedPublicSolutionQuery
+    ] = []
     completed = False
     with backend_scope() as backend:
         for child in batch.children:
@@ -140,8 +150,11 @@ def execute_embedding_work_batch(
             fence.assert_batch_current(batch)
             fence.assert_child_current(batch, child)
             request = child.request
-            output: EncodedEmbeddingBatch | EncodedReferenceQueryBatch
-            if isinstance(request, EmbeddingReferenceQueryInputV11):
+            output: EncodedEmbeddingBatch | EncodedReferenceQueryBatch | EncodedPublicSolutionQuery
+            if isinstance(request, PublicSolutionQueryInput):
+                output = encode_public_solution_query(request, backend)
+                validate_public_solution_query_result(request, output.result)
+            elif isinstance(request, EmbeddingReferenceQueryInputV11):
                 output = encode_reference_query_batch(request, backend)
                 validate_reference_query_result_v11(request, output.result)
             else:

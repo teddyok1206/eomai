@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import re
@@ -61,6 +62,13 @@ from eom_catalog_contracts.public_solution_embedding_index import (
     MAX_PUBLIC_SOLUTION_SOURCES,
     PublicSolutionEmbeddingIndex,
 )
+from eom_catalog_contracts.public_solution_query import (
+    PUBLIC_SOLUTION_QUERY_INPUT_REF,
+    PUBLIC_SOLUTION_QUERY_RESULT_REF,
+    PublicSolutionQueryInput,
+    PublicSolutionQueryResult,
+    validate_public_solution_query_result,
+)
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.models import ArtifactId, JobId, RevisionId
@@ -94,9 +102,15 @@ from eom_workflow.private_chat_query_publication import (
 from eom_workflow.reference_query_execution import (
     ReferenceQueryExecutionPolicy,
     ReferenceQueryLaunchAssociation,
+    ReferenceQueryWorkflowRequestV3,
+    SupportedReferenceQueryNativeInput,
+    SupportedReferenceQueryNativeResult,
+    SupportedReferenceQueryWorkflowIntent,
     SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_execution_policy,
     parse_reference_query_launch_association,
+    parse_reference_query_workflow_request_v3,
+    parse_supported_reference_query_workflow_intent,
     parse_supported_reference_query_workflow_request,
     validate_reference_query_launch_association,
 )
@@ -301,11 +315,19 @@ def _member(directory: int, name: str, maximum_bytes: int) -> Iterator[bytes]:
 
 
 def _materialize_manifest(directory: int, name: str, payload: bytes) -> None:
-    """Create once; a partial or conflicting preexisting file is never overwritten."""
+    """Serialize local create/fsync; never expose our own partial manifest to a replay.
+
+    The retained owner directory FD is the lock identity. It is released before
+    publication/DB locks; canonical uniqueness still belongs to the commit owner.
+    A partial or conflicting file left by an earlier crash is never overwritten.
+    """
     if name not in {"intent.json", "shard.json", EMBEDDING_INDEX_PRIMARY_MEMBER}:
         raise EmbeddingArtifactStoreError("EMBEDDING_ARTIFACT_MEMBER_INVALID")
     descriptor: int | None = None
+    locked = False
     try:
+        fcntl.flock(directory, fcntl.LOCK_EX)
+        locked = True
         descriptor = os.open(
             name,
             os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW | os.O_CLOEXEC,
@@ -338,6 +360,8 @@ def _materialize_manifest(directory: int, name: str, payload: bytes) -> None:
     finally:
         if descriptor is not None:
             os.close(descriptor)
+        if locked:
+            fcntl.flock(directory, fcntl.LOCK_UN)
 
 
 def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -391,11 +415,80 @@ class EmbeddingArtifactStore:
     ) -> PublishedReferenceQueryArtifacts:
         """Commit supplied QUERY closure; the calling owner retains current auth/lease checks."""
         try:
-            # Parse raw instances before serialization so model_copy cannot discard bad extras.
             workflow_request = parse_supported_reference_query_workflow_request(workflow_request)
+            request = parse_embedding_reference_query_input_v11(request)
+        except (ValueError, TypeError, JsonSchemaValidationError):
+            raise EmbeddingArtifactStoreError("EMBEDDING_REFERENCE_QUERY_CONTEXT_INVALID") from None
+        return self._publish_reference_query(
+            workflow_request=workflow_request,
+            policy=policy,
+            bundle=bundle,
+            launch=launch,
+            request=request,
+            workspace=workspace,
+            created_at=created_at,
+            identity=identity,
+            expected_result_sha256=expected_result_sha256,
+        )
+
+    def publish_public_solution_reference_query(
+        self,
+        *,
+        workflow_request: ReferenceQueryWorkflowRequestV3,
+        policy: ReferenceQueryExecutionPolicy,
+        bundle: EmbeddingRuntimeBundle,
+        launch: ReferenceQueryLaunchAssociation,
+        request: PublicSolutionQueryInput,
+        workspace: Path,
+        created_at: datetime,
+        identity: ControlFileSetIdentity | None = None,
+        expected_result_sha256: str | None = None,
+    ) -> PublishedReferenceQueryArtifacts:
+        """QUERY2 bytes through the same canonical commit owner, never a source/lease grant."""
+        try:
+            workflow_request = parse_reference_query_workflow_request_v3(workflow_request)
+            request = PublicSolutionQueryInput.model_validate(request)
+        except (ValueError, TypeError, JsonSchemaValidationError):
+            raise EmbeddingArtifactStoreError("EMBEDDING_REFERENCE_QUERY_CONTEXT_INVALID") from None
+        return self._publish_reference_query(
+            workflow_request=workflow_request,
+            policy=policy,
+            bundle=bundle,
+            launch=launch,
+            request=request,
+            workspace=workspace,
+            created_at=created_at,
+            identity=identity,
+            expected_result_sha256=expected_result_sha256,
+        )
+
+    def _publish_reference_query(
+        self,
+        *,
+        workflow_request: SupportedReferenceQueryWorkflowIntent,
+        policy: ReferenceQueryExecutionPolicy,
+        bundle: EmbeddingRuntimeBundle,
+        launch: ReferenceQueryLaunchAssociation,
+        request: SupportedReferenceQueryNativeInput,
+        workspace: Path,
+        created_at: datetime,
+        identity: ControlFileSetIdentity | None,
+        expected_result_sha256: str | None,
+    ) -> PublishedReferenceQueryArtifacts:
+        try:
+            # Parse raw instances before serialization so model_copy cannot discard bad extras.
+            workflow_request = parse_supported_reference_query_workflow_intent(workflow_request)
             policy = parse_reference_query_execution_policy(policy)
             launch = parse_reference_query_launch_association(launch)
-            request = parse_embedding_reference_query_input_v11(request)
+            if isinstance(workflow_request, ReferenceQueryWorkflowRequestV3):
+                request = PublicSolutionQueryInput.model_validate(request)
+                input_ref, result_ref = (
+                    PUBLIC_SOLUTION_QUERY_INPUT_REF,
+                    PUBLIC_SOLUTION_QUERY_RESULT_REF,
+                )
+            else:
+                request = parse_embedding_reference_query_input_v11(request)
+                input_ref, result_ref = REFERENCE_QUERY_INPUT_V11_REF, REFERENCE_QUERY_RESULT_REF
             validate_reference_query_launch_association(
                 launch, workflow_request, policy, bundle, request
             )
@@ -434,8 +527,13 @@ class EmbeddingArtifactStore:
                 raise EmbeddingArtifactStoreError("EMBEDDING_REFERENCE_QUERY_INPUT_INVALID")
             try:
                 document = json.loads(result_bytes, object_pairs_hook=_unique_object)
-                result = parse_embedding_reference_query_result(document)
-                validate_reference_query_result_v11(request, result)
+                result: SupportedReferenceQueryNativeResult
+                if isinstance(request, PublicSolutionQueryInput):
+                    result = PublicSolutionQueryResult.model_validate(document)
+                    validate_public_solution_query_result(request, result)
+                else:
+                    result = parse_embedding_reference_query_result(document)
+                    validate_reference_query_result_v11(request, result)
                 if (
                     expected_result_sha256 is not None
                     and result.result_sha256 != expected_result_sha256
@@ -465,7 +563,7 @@ class EmbeddingArtifactStore:
                         workspace / "input.json",
                         sha256_bytes(saved_input),
                         len(saved_input),
-                        REFERENCE_QUERY_INPUT_V11_REF,
+                        input_ref,
                         "application/json",
                     ),
                     ControlFileSetMember(
@@ -473,7 +571,7 @@ class EmbeddingArtifactStore:
                         workspace / "result.json",
                         sha256_bytes(result_bytes),
                         len(result_bytes),
-                        REFERENCE_QUERY_RESULT_REF,
+                        result_ref,
                         "application/json",
                     ),
                     ControlFileSetMember(
