@@ -87,6 +87,17 @@ DB 유사도의 실제 검색·호환 운영 배포**다. 목표는 ACTIVE이며
 encoding·canonical registration·공식 검색·replay를 확인하고 자동 증분 처리까지 운영 반영해야
 완료다. 기존 사용량 acceptance와 historical FAILED 기록은 재해석하지 않는다.
 
+후속 설치 후보 확인: `896c596684f721a36d663ff4dd05134521cc29b0` API/platform wheel
+build와 RECORD/source-free simulation PASS. protected owner installer로 같은 source를
+`/opt/eom/embedding-owner-releases/896c596684f721a36d663ff4dd05134521cc29b0`에 stage했다.
+설치본은 아직 **미활성**이며 CPU numerical runtime·기존 INDEX/QUERY/창작 process는 그대로다.
+처음 installer를 직접 실행한 호출은 파일이 non-executable이어서 실행 전에 거부됐다.
+기존 Bash 실행 방식으로 stage를 마쳤으며 runtime/DB 변경은 없었다.
+
+Web의 독립 wheel gate는 새 `item_db_similarity_contracts.py`가 명시적 runtime inventory에
+빠진 것을 탐지해 차단했다. inventory에 이 실제 모듈 하나를 추가하고 해당 release 회귀와
+독립 Web build를 재실행한다. 이 실패를 운영 장애나 미확인 성공으로 표시하지 않는다.
+
 ## 22:01 UTC 체크포인트 — 세 슬롯 복구와 public QUERY 공식 조회 연결
 
 목표 상태는 **ACTIVE / 미완료**다. 사용자 확정 세 단계와 기존 창작 5건의 실제 수치·등록·

@@ -26,6 +26,7 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "draft_integrity.py",
         "gateways.py",
         "general_chat_contracts.py",
+        "item_db_similarity_contracts.py",
         "item_preview_projection.py",
         "knowledge_quality.py",
         "redaction.py",
