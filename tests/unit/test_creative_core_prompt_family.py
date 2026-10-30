@@ -6,6 +6,7 @@ from types import SimpleNamespace as NS
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_contracts.creative_source_draft import CREATIVE_SOURCE_STATEMENT_GUIDANCE
 from eom_catalog_contracts.external_item_learning_result_v2 import (
     INDEPENDENT_SOURCE_SOLUTION_GUIDANCE,
 )
@@ -58,6 +59,7 @@ def test_actual_role_executor_selects_matching_core_without_mutating_v1(monkeypa
         assert "independent public solution" in passed["prompt_text"]
         assert "field-specific policy" in passed["prompt_text"]
         assert INDEPENDENT_SOURCE_SOLUTION_GUIDANCE in passed["prompt_text"]
+        assert CREATIVE_SOURCE_STATEMENT_GUIDANCE in passed["prompt_text"]
     else:
         assert passed["prompt_text"] is None
         assert passed["prompt_path"] == Path("/synthetic/prompts/external-item-learning.txt")

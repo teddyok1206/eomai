@@ -486,6 +486,9 @@ class PlatformRoleJobExecutor:
             # The installed V1 placeholder explicitly requests result@1.0.
             # Preserve those historical bytes; the V2 instruction bundle owns
             # the detailed source/visual/public-solution rules for this family.
+            from eom_catalog_contracts.creative_source_draft import (
+                CREATIVE_SOURCE_STATEMENT_GUIDANCE,
+            )
             from eom_catalog_contracts.external_item_learning_result_v2 import (
                 INDEPENDENT_SOURCE_SOLUTION_GUIDANCE,
             )
@@ -505,6 +508,8 @@ class PlatformRoleJobExecutor:
                 "the Orchestrator, not the worker, stamps result_sha256. "
                 "Do not access the network, database, NAS or other workers. "
                 + INDEPENDENT_SOURCE_SOLUTION_GUIDANCE
+                + " "
+                + CREATIVE_SOURCE_STATEMENT_GUIDANCE
             )
         prompt_path = (
             None

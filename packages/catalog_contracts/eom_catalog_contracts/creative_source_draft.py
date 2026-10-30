@@ -22,6 +22,18 @@ from eom_catalog_contracts.validation import validate_contract
 CREATIVE_SOURCE_DRAFT_SCHEMA = "creative-source-item-draft-v1"
 CREATIVE_SOURCE_DRAFT_SCHEMA_REF = "eom://schemas/external-item/source-item-draft/1.0"
 
+CREATIVE_SOURCE_STATEMENT_GUIDANCE = (
+    "Use statement_set for propositions the question asks the reader to judge, such as "
+    "the ㄱ/ㄴ/ㄷ 보기, not merely because source conditions or experimental steps form a list. "
+    "Preserve numbered conditions, given facts and procedure lists as native paragraph/table "
+    "blocks in source order; do not turn them into additional judged statements. Across all "
+    "body statement_set blocks, solution.statement_explanations must contain exactly one "
+    "entry for each declared statement_id, copying that ID exactly, with no missing or extra "
+    "IDs. With no statement_set, statement_explanations must be empty. Keep original editorial "
+    "explanations separate from the independent solution_report; never invent source "
+    "explanations to satisfy coverage. Check both ID sets before returning the result."
+)
+
 _TARGET_ROLES = frozenset({"TARGET_ITEM"})
 _SOLUTION_ROLES = frozenset({"TARGET_ITEM", "EDITORIAL_SOLUTION"})
 _METADATA_ROLES = frozenset({"TARGET_ITEM", "EDITORIAL_SOLUTION", "OTHER"})

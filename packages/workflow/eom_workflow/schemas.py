@@ -5497,6 +5497,7 @@ def _project_creative_answer_representations(schema: dict[str, Any]) -> None:
     Copy only the small schema nodes, never source/results. Canonical contracts
     and historical V1 generation stay unchanged; invalid responses are not repaired.
     """
+    from eom_catalog_contracts.creative_source_draft import CREATIVE_SOURCE_STATEMENT_GUIDANCE
     from eom_catalog_contracts.external_item_learning_result_v2 import (
         INDEPENDENT_SOURCE_SOLUTION_GUIDANCE,
     )
@@ -5511,9 +5512,16 @@ def _project_creative_answer_representations(schema: dict[str, Any]) -> None:
     ):
         branch = copy.deepcopy(draft)
         properties = _mapping(branch, "properties")
+        _append_projection_instruction(
+            _mapping(properties, "body"), CREATIVE_SOURCE_STATEMENT_GUIDANCE
+        )
         properties["interaction"] = {"$ref": f"#/$defs/AssessmentItemContent_{interaction}"}
         answer = copy.deepcopy(solution)
         answer_properties = _mapping(answer, "properties")
+        _append_projection_instruction(
+            _mapping(answer_properties, "statement_explanations"),
+            CREATIVE_SOURCE_STATEMENT_GUIDANCE,
+        )
         _mapping(answer_properties, used).update(minItems=1, maxItems=maximum)
         _mapping(answer_properties, unused)["maxItems"] = 0
         properties["solution"] = answer
