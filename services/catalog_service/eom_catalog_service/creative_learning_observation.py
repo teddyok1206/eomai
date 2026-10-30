@@ -41,6 +41,7 @@ def read_observation(root: Path, cohort_id: str) -> dict[str, object]:
             "STARTING",
             "EXTRACTING",
             "ANALYZING",
+            "PROCESSING",
             "VERIFIED",
             "CANARY_VERIFIED",
             "COMPLETED",
@@ -90,7 +91,7 @@ def main() -> None:
     healthy = (result["state"] == "COMPLETED" and properties.get("Result") == "success") or (
         active == "active"
         and not result["status_stale"]
-        and result["state"] in {"STARTING", "EXTRACTING", "ANALYZING", "VERIFIED"}
+        and result["state"] in {"STARTING", "EXTRACTING", "ANALYZING", "PROCESSING", "VERIFIED"}
     )
     result.update(service_active=active, check="OK" if healthy else "ATTENTION_REQUIRED")
     print(json.dumps(result, sort_keys=True), flush=True)

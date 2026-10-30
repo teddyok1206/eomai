@@ -159,6 +159,9 @@ def test_serve_reconciles_capacity_before_polling(
         def process_once(self) -> None:
             observed.append("control")
 
+        def process_observation_once(self) -> None:
+            raise AssertionError("role consumer used maintenance-only observation scope")
+
     class Validator:
         def process_once(self) -> None:
             observed.append("validation")
@@ -199,7 +202,7 @@ def test_serve_reconciles_capacity_before_polling(
     engine.dispose()
 
 
-def test_maintenance_service_never_claims_commands(
+def test_maintenance_service_only_claims_read_observations_not_model_or_state_commands(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     engine = create_engine("sqlite://")
@@ -217,6 +220,9 @@ def test_maintenance_service_never_claims_commands(
 
         def process_once(self) -> None:
             raise AssertionError("maintenance service claimed a control command")
+
+        def process_observation_once(self) -> None:
+            observed.append("usage-observation")
 
     class Validator:
         def process_once(self) -> None:
@@ -247,7 +253,7 @@ def test_maintenance_service_never_claims_commands(
     with pytest.raises(RuntimeError, match="stop-loop"):
         runner.serve_maintenance()
 
-    assert observed == ["capacity", "maintenance", "sleep"]
+    assert observed == ["usage-observation", "capacity", "maintenance", "sleep"]
     engine.dispose()
 
 

@@ -26,7 +26,7 @@ from eom_workflow_runner.models import (
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
 )
-from eom_workflow_runner.repository import create_workflow_instance
+from eom_workflow_runner.repository import CommandType, create_workflow_instance, enqueue_command
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
@@ -563,6 +563,51 @@ def test_concurrent_prepared_starts_create_one_original_command(creative_engine,
         assert commands[0].state == "PENDING" and commands[0].attempts == 0
         assert session.get(WorkflowInstanceRecord, selection.workflow_id).state == "REQUESTED"
         assert session.get(WorkflowStepRunRecord, selection.step_run_id).state == "READY"
+
+
+def test_start_replay_with_derived_commands_reuses_original_running_workflow(
+    creative_engine, monkeypatch
+):
+    request, selection = _prepared_start(creative_engine, monkeypatch)
+    with Session(creative_engine) as session, session.begin():
+        original = start.start_prepared_external_item_learning(
+            session,
+            selection=selection,
+            operator_id=OPERATOR,
+            source_authorizer=_owner(request),
+            page_publisher=None,
+        )
+        workflow = session.get(WorkflowInstanceRecord, selection.workflow_id)
+        workflow.state = "RUNNING"
+        derived, _ = enqueue_command(
+            session,
+            workflow_id=selection.workflow_id,
+            command_type=CommandType.ADVANCE_WORKFLOW,
+            payload={"step_run_id": selection.step_run_id},
+            actor_type="system",
+            actor_id="workflow-runner",
+            source="workflow_engine",
+            idempotency_key="synthetic-derived:" + uuid4().hex,
+        )
+        derived_id = derived.command_id
+    with Session(creative_engine) as session, session.begin():
+        replay = start.start_prepared_external_item_learning(
+            session,
+            selection=selection,
+            operator_id=OPERATOR,
+            source_authorizer=_owner(request),
+            page_publisher=None,
+        )
+        assert not replay.command_created and replay.command_id == original.command_id
+        assert session.get(WorkflowCommandRecord, derived_id).state == "PENDING"
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(WorkflowCommandRecord)
+                .where(WorkflowCommandRecord.workflow_id == selection.workflow_id)
+            )
+            == 2
+        )
 
 
 @pytest.mark.parametrize("failure", ["revoked", "interrupted"])

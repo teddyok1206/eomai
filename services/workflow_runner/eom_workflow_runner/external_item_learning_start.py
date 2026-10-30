@@ -134,7 +134,10 @@ def start_prepared_external_item_learning(
     commands = tuple(
         session.scalars(
             select(WorkflowCommandRecord)
-            .where(WorkflowCommandRecord.workflow_id == workflow.workflow_id)
+            .where(
+                WorkflowCommandRecord.workflow_id == workflow.workflow_id,
+                WorkflowCommandRecord.command_type == CommandType.START_WORKFLOW.value,
+            )
             .limit(2)
         )
     )
@@ -149,7 +152,14 @@ def start_prepared_external_item_learning(
         ):
             raise ValueError("creative start cannot adopt unrelated command history")
     elif (
-        workflow.state != "REQUESTED"
+        tuple(
+            session.scalars(
+                select(WorkflowCommandRecord.command_id)
+                .where(WorkflowCommandRecord.workflow_id == workflow.workflow_id)
+                .limit(1)
+            )
+        )
+        or workflow.state != "REQUESTED"
         or workflow.stage != "KNOWLEDGE_ANALYSIS"
         or workflow.current_step_key != "extract"
         or step.state != "READY"

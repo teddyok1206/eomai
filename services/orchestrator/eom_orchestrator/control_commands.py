@@ -138,6 +138,7 @@ def claim_next_codex_control_command(
     lease_owner: str,
     claimed_at: datetime,
     lease_ttl: timedelta,
+    command_type: Literal["OBSERVE"] | None = None,
 ) -> CodexControlCommandRecord | None:
     """Claim one FIFO command, reclaiming only expired nonterminal attempts."""
 
@@ -147,6 +148,11 @@ def claim_next_codex_control_command(
         raise ValueError("control command claim time must use UTC")
     if not timedelta(seconds=15) <= lease_ttl <= timedelta(minutes=5):
         raise ValueError("control command lease TTL is outside the reviewed bound")
+    if command_type not in (None, "OBSERVE"):
+        raise ValueError("unsupported control observation claim scope")
+    scope = (
+        () if command_type is None else (CodexControlCommandRecord.command_type == command_type,)
+    )
 
     exhausted = tuple(
         session.scalars(
@@ -155,6 +161,7 @@ def claim_next_codex_control_command(
                 CodexControlCommandRecord.state == "PROCESSING",
                 CodexControlCommandRecord.attempts >= MAX_COMMAND_ATTEMPTS,
                 CodexControlCommandRecord.lease_expires_at <= claimed_at,
+                *scope,
             )
             .order_by(
                 CodexControlCommandRecord.requested_at,
@@ -177,6 +184,7 @@ def claim_next_codex_control_command(
         select(CodexControlCommandRecord)
         .where(
             CodexControlCommandRecord.attempts < MAX_COMMAND_ATTEMPTS,
+            *scope,
             or_(
                 CodexControlCommandRecord.state == "PENDING",
                 and_(

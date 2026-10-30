@@ -7,6 +7,7 @@ from unittest.mock import Mock
 import pytest
 from eom_catalog_contracts.creative_learning_cohort import CreativeLearningCohort
 from eom_catalog_contracts.creative_learning_continuation import CreativeLearningExecutionScope
+from eom_catalog_contracts.knowledge import ApprovedItemKnowledgeSourceV2
 from eom_catalog_service import creative_cohort_execution as execution
 from eom_catalog_service.knowledge_graph_models import KnowledgeGraphSnapshotRecord
 from eom_catalog_service.models import ItemRevisionRecord
@@ -204,7 +205,8 @@ def test_pending_hint_reads_one_pinned_graph_and_one_bounded_query(monkeypatch):
     statement = session.scalars.call_args.args[0]
     parameters = statement.compile().params
     assert "graphrev_" + "7" * 32 in parameters.values()
-    assert "ACCEPTED" in parameters.values() and "APPROVED_ITEM" in parameters.values()
+    assert "ACCEPTED" in parameters.values() and "APPROVED_ITEM_REVISION" in parameters.values()
+    assert ApprovedItemKnowledgeSourceV2.model_fields["source_kind"].default in parameters.values()
     assert tuple(
         execution.creative_registration_key(t.source_id) for t in case.service.targets
     ) in tuple(tuple(v) for v in parameters.values() if isinstance(v, (tuple, list)))

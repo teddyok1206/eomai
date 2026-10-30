@@ -426,6 +426,8 @@ class ControlCommandProcessor(Protocol):
 
     def process_once(self) -> str | None: ...
 
+    def process_observation_once(self) -> str | None: ...
+
 
 class CapacityReconciler(Protocol):
     def reconcile_expired(self, *, observed_at: datetime) -> tuple[object, ...]: ...
@@ -901,7 +903,12 @@ class WorkflowRunner:
 
     def serve_maintenance(self) -> None:
         while True:
-            if self.maintain_once() is None:
+            observation = (
+                self.control_processor.process_observation_once()
+                if self.control_processor is not None
+                else None
+            )
+            if self.maintain_once() is None and observation is None:
                 time.sleep(self.runner_config.poll_interval_seconds)
 
     def reconcile(self, workflow_id: str) -> None:

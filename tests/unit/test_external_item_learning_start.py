@@ -178,6 +178,17 @@ def test_exact_start_replay_preserves_original_command_state(monkeypatch, workfl
     assert not replay.command_created
     assert replay.command_id == value.command.command_id
     assert replay.command_state == value.command.state
+    # A running Workflow also has derived advance/transition commands. Only
+    # its exact original START participates in submission replay admission.
+    assert "START_WORKFLOW" in value.session.scalars.call_args.args[0].compile().params.values()
+
+
+def test_no_original_start_cannot_adopt_foreign_derived_command_history(monkeypatch):
+    value = _case(monkeypatch)
+    value.session.scalars.side_effect = ((), ("wfcmd_" + "f" * 32,))
+    with pytest.raises(ValueError, match="untouched"):
+        start.start_prepared_external_item_learning(value.session, **value.args)
+    value.enqueue.assert_not_called()
 
 
 def test_start_cannot_adopt_another_start_or_reset_a_used_role(monkeypatch):

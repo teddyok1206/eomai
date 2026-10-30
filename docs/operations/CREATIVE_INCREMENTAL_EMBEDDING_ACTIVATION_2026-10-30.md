@@ -474,3 +474,38 @@ Release evidence: `/tmp/eom-creative-reviewed-migration-20261030.log`,
 `/tmp/eom-creative-three-consumer-pg-20261030.log`.
 Three actual workers/refill, usage-refresh bug and real similarity operating integration
 remain required; goal stays ACTIVE.
+
+### 20:18 UTC — actual two-worker progress and restart/observation follow-up
+
+- Isolated creative owner `19109fc1` was installed from exact clean wheels; shared API/
+  Platform remains `8a886677`, Web `82388ed1`, GPU INDEX unchanged. Fixed scale-out manager
+  activated two exact accelerator consumers (PIDs 3233490/3233505) alongside canonical
+  runner 3210513. Both inherit only the exact reviewed similarity-read drop-in.
+- Actual workers **05 and 06** were observed simultaneously with distinct active leases
+  and fixed native units. Slot06 finished one extraction and claimed the next original Job.
+  **Three workers are not yet proven**: current slot04 admits Terra/high only; this cohort
+  pins Terra/xhigh. No availability entry was fabricated or reasoning setting lowered.
+  A bounded official compatibility window is required before slot04 can join this scope.
+- A second actual restart failure was isolated without printing item content: exact START
+  replay rejected legitimate derived ADVANCE command history. The fix queries the original
+  START identity only, continues validating owner/plan/source, and rejects foreign history
+  when no original START exists. No new Workflow or successful-history reinterpretation.
+  Redacted frame evidence `/tmp/eom-creative-resume-diagnosis-20261030t2017.json`.
+- The pending-first query used source-class spelling where the persisted source-kind is
+  `APPROVED_ITEM_REVISION`; fixed with a regression tied to the actual contract discriminator.
+  This affected scheduling priority only, not stored reports/completion counts or permissions.
+- Source usage-refresh fix: maintenance claims only OBSERVE, independent of long synchronous
+  model commands; busy OBSERVE collects bounded native usage without auth refresh/state writes.
+  Same binding version/assignment and no enrollment are rechecked before committing its receipt.
+  UI sends official OBSERVE for both busy and idle accounts. No extra service/queue/schema.
+- Parallel PROCESSING is added to the read-only observer's closed healthy-state set. It was
+  missing from the previous sequential-only reader and caused the 30-minute check to fail.
+- Source regression runs: 45 + 73 tests PASS; restart/observation subset 56 PASS, core mypy6
+  PASS. Disposable observation-claim scope PASS; first two new test failures were fixture
+  mistakes (ENABLE reason / nonexistent command enum), not operating failures or waived gates.
+
+New restart/usage/observer changes are source candidates, not yet an operating PASS. The
+current creative owner stopped safely on the replay rejection; already-running worker Jobs
+continue independently. Restore that same admitted scope with the tested correction; do not
+submit replacement identities. Actual similarity search and full five-vector acceptance remain
+pending and the full goal remains ACTIVE.

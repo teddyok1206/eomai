@@ -9,14 +9,15 @@ from eom_catalog_service.creative_learning_runner import write_status
 COHORT_ID = "creativecohort_" + "a" * 32
 
 
-def test_observer_returns_only_bounded_metadata_not_arbitrary_saved_values(tmp_path):
+@pytest.mark.parametrize("state", ("ANALYZING", "PROCESSING"))
+def test_observer_returns_only_bounded_metadata_not_arbitrary_saved_values(tmp_path, state):
     root = tmp_path / "status"
     root.mkdir(mode=0o750)
     write_status(
         root,
         COHORT_ID,
         {
-            "state": "ANALYZING",
+            "state": state,
             "verified_count": 3,
             "target_count": 1053,
             "private": "not exported",

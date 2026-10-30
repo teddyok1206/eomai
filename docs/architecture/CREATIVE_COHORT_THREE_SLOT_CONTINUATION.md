@@ -198,3 +198,18 @@ accelerator, including an inactive orphan. Stop removes only exact reviewed runt
 durable Jobs/history survive. Complexity and memory are bounded to two additional consumers.
 One consumer plus a larger capacity cannot remove the blocking command call, while a new
 executor framework would duplicate the already tested cross-process claim mechanism.
+
+## Usage observation must not wait behind long model commands
+
+The existing maintenance process may consume **OBSERVE only** from the existing indexed
+control-command queue, separately from the synchronous Workflow consumers. Its SQL claim
+cannot take ENABLE/DRAIN/DISABLE, authentication enrollment, model validation, or Workflow
+commands. The existing durable lease/replay ownership is unchanged; no new queue/service/schema.
+
+For a busy binding, OBSERVE reads only the fixed App Server account/rate-limit/model-list
+surface (account/read has refreshToken=false); it never creates a thread/turn, refreshes auth,
+re-enables a slot, or changes its READY/DRAINING/capability state. The original binding resource
+version and assignment are rechecked in the final transaction, with enrollment excluded.
+Idle OBSERVE keeps the existing full auth/capability behavior. UI sends the same official
+OBSERVE for busy/idle accounts and keeps enrollment separate. Small typed usage results stay
+in their original command receipt and API projection; there is no guessed shared quota/cache.

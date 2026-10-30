@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from eom_workflow import CodexUsageObservationV2
 from sqlalchemy import and_, exists, func, or_, select
@@ -139,7 +139,14 @@ class CodexControlCommandProcessor:
         return target.binding_id
 
     def process_once(self) -> str | None:
-        if self.enrollment_processor is not None:
+        return self._process_once(claim_command_type=None)
+
+    def process_observation_once(self) -> str | None:
+        """Maintenance consumes read observations, never enrollment or state mutations."""
+        return self._process_once(claim_command_type="OBSERVE")
+
+    def _process_once(self, *, claim_command_type: Literal["OBSERVE"] | None) -> str | None:
+        if claim_command_type is None and self.enrollment_processor is not None:
             enrollment_id = self.enrollment_processor.process_once()
             if enrollment_id is not None:
                 return enrollment_id
@@ -150,6 +157,7 @@ class CodexControlCommandProcessor:
                 lease_owner=self.runner_id,
                 claimed_at=claimed_at,
                 lease_ttl=CONTROL_COMMAND_LEASE_TTL,
+                command_type=claim_command_type,
             )
             if record is None:
                 return None
@@ -258,10 +266,18 @@ class CodexControlCommandProcessor:
                 raise ControlPlaneError("CONTROL_AUTH_SLOT_MISSING", "auth slot is missing")
             slot = _worker_slot(slot_record)
             account_label = binding.account_label
-            if collect_usage and _binding_has_held_lease(session, binding=binding):
-                raise ControlPlaneError(
-                    "CODEX_USAGE_SLOT_BUSY", "usage observation waits for the active worker"
-                )
+            assignment_revision_id = binding.current_assignment_revision_id
+            busy_usage = collect_usage and _binding_has_held_lease(session, binding=binding)
+
+        if busy_usage:
+            self._observe_busy_usage(
+                command_id=command_id,
+                binding_id=binding_id,
+                expected_resource_version=expected_resource_version,
+                assignment_revision_id=assignment_revision_id,
+                slot=slot,
+            )
+            return
 
         observed_at = self.now()
         collected = self._collect_observation(
@@ -333,6 +349,46 @@ class CodexControlCommandProcessor:
                 reason_code=None,
                 processed_at=self.now(),
                 usage_observation=usage_observation,
+            )
+
+    def _observe_busy_usage(
+        self,
+        *,
+        command_id: str,
+        binding_id: str,
+        expected_resource_version: int,
+        assignment_revision_id: str | None,
+        slot: WorkerSlot,
+    ) -> None:
+        """No auth refresh/state promotion while a physical worker owns its slot."""
+        cli = observe_codex_cli_surface()
+        usage = observe_worker_usage(slot=slot, command_id=command_id, binding_id=binding_id)
+        if (
+            isinstance(usage, CodexUsageObservationV2)
+            and usage.model_catalog.codex_cli_version != cli[0]
+        ):
+            raise ControlPlaneError("CODEX_USAGE_INVALID", "native usage CLI identity differs")
+        with transaction(self.sessions) as session:
+            binding = _locked_binding(
+                session,
+                binding_id=binding_id,
+                expected_resource_version=expected_resource_version,
+            )
+            require_no_active_auth_enrollment(session, binding_id=binding_id)
+            if binding.current_assignment_revision_id != assignment_revision_id:
+                raise ControlPlaneError(
+                    "CONTROL_RESOURCE_VERSION_CONFLICT", "auth assignment changed"
+                )
+            terminalize_codex_control_command(
+                session,
+                command_id=command_id,
+                lease_owner=self.runner_id,
+                outcome="SUCCEEDED",
+                result_resource_version=binding.resource_version,
+                binding_state=binding.state,
+                reason_code=None,
+                processed_at=self.now(),
+                usage_observation=usage,
             )
 
     def _collect_observation(

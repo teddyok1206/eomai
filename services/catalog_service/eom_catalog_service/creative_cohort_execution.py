@@ -204,7 +204,7 @@ class CreativeCohortExecutionService:
                         ItemRevisionRecord.registration_key.in_(keys),
                         KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id
                         == context.graph_snapshot_revision_id,
-                        KnowledgeSnapshotAnalysisRecord.source_kind == "APPROVED_ITEM",
+                        KnowledgeSnapshotAnalysisRecord.source_kind == "APPROVED_ITEM_REVISION",
                         KnowledgeAnalysisRunRecord.state == "ACCEPTED",
                     )
                 )

@@ -3239,9 +3239,9 @@ function renderCodexUsage(usage) {
 }
 
 async function refreshCodexAccount(account) {
-  // Reading current state is always safe; a separate usage probe must not share
-  // the slot with a worker that still holds its lease.
-  if (Number(account.active_lease_count) > 0 || account.active_auth_enrollment_id) {
+  // Enrollment changes account identity. Busy workers only use the supported
+  // read-only usage branch; they do not turn a refresh into cached-state polling.
+  if (account.active_auth_enrollment_id) {
     await loadCodexAccounts();
     return;
   }
@@ -3303,7 +3303,7 @@ function renderCodexAccounts(accounts) {
     const actions = document.createElement("div");
     actions.className = "form-actions";
     actions.append(
-      actionButton(account.active_lease_count > 0 || account.active_auth_enrollment_id ? "상태 새로고침" : "상태·사용량 새로고침", () => refreshCodexAccount(account)),
+      actionButton(account.active_auth_enrollment_id ? "상태 새로고침" : "상태·사용량 새로고침", () => refreshCodexAccount(account)),
       actionButton("사용 시작", () => sendAccountCommand(account, "ENABLE")),
       actionButton("새 작업 중지", () => sendAccountCommand(account, "DRAIN"), true),
       actionButton("사용 중지", () => sendAccountCommand(account, "DISABLE"), true),
