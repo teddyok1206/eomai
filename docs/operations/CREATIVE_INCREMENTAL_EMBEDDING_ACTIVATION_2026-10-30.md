@@ -628,7 +628,7 @@ not a claim that DB similarity is live. No new model/GPU canary was run for this
   boundaries, exact replay and immutable failed history. These use synthetic IAM/model
   observations and temporary Artifact storage, never the production DB or NAS. Existing
   public coordinator/publisher coverage is preserved, not replaced by the executor tests.
-- Core mypy passed55 changed files, and the full39 QUERY/batch consumers passed separately.
+- Core mypy passed58 changed files, and the full39 QUERY/batch consumers passed separately.
   These sets overlap. Ruff/format and final clean-source verification are recorded alongside
   the candidate commit/build; no production acceptance is inferred from source tests.
 
@@ -637,7 +637,7 @@ Evidence: `/tmp/eom-public-query-controller-closure-tests-20261030.log`,
 `/tmp/eom-public-query-parent-final-2-20261030.log`,
 `/tmp/eom-public-query-legacy-consumers-20261030.log`,
 `/tmp/eom-public-query-all-postgres-20261030.log`,
-`/tmp/eom-public-query-core-mypy-20261030.log`,
+`/tmp/eom-public-query-final-core-mypy-20261030.log`,
 `/tmp/eom-public-query-consumers-mypy-20261030.log`.
 
 Next required scope: supported installed public QUERY configuration/composition (existing
@@ -655,3 +655,14 @@ definition paths, and the per-frame parse-spy test follows the closed supported-
 name. No obsolete parser alias or production validation relaxation was added for tests.
 These focused release/source checks **56 PASS**; the failed build/log remains preserved at
 `/tmp/eom-public-query-build-43b57013-20261030.log`. Operating services were not touched.
+
+Follow-up commit **376fd55d970ea2e79ff4655cce8a67344e0c6ce9** was pushed and its
+clean build-only release passed wheel RECORD and the non-editable installed simulation:
+`/tmp/eom-public-query-candidate-build-final-20261030.log`; wheels
+`/tmp/eom-api-build/376fd55d970ea2e79ff4655cce8a67344e0c6ce9.8FHUxI/dist`.
+This candidate is not installed into the operating shared or numerical runtimes.
+The operating shared/Web4cc9546c, creative owner PID3364628 and original INDEX PID2113256
+remain active. The 30-minute creative observation timer remains enabled; no frequent
+separate polling loop was installed. Slack usage milestone
+`devreport_911126f32b8a41ad869b9ba04d290205` was delivered with the required first Korean
+summary sentence. Public activation and the full five-vector/search acceptance stay pending.
