@@ -309,3 +309,30 @@ public 전용 Runner/queue/service를 복제하는 대안은 사용하지 않는
 
 사용자에게는 위 순서의 실제 증거와 남은 조건을 간단히 보고한다. 아직 이 절의 어느
 단계도 완료했다고 주장하지 않는다. 기존 기출 520개·교과서·창작 정본은 보존한다.
+
+3개 실제 슬롯 실행은 현재 slot05 전용 cohort 설정과 구분한다.
+[제한적 3슬롯 continuation 설계](../architecture/CREATIVE_COHORT_THREE_SLOT_CONTINUATION.md)는
+기존 물리 역할·용량 상한을 몰래 완화하지 않고 필요한 successor 경계와 실제 검증을 정한다.
+이는 아직 구현·운영 활성화 증거가 아니다.
+
+### 창작 등록 중단 복구 배포 — 2026-10-30 17:38 UTC
+
+- Graph 충돌 successor `2b374f5b`와 완료 기록 재확인 polling 수정 `54b39f7f`를
+  각각 검토·커밋·push했다. 관련 Graph/교육과정/Item publication 154 PASS,
+  control-loop/cohort 21 PASS, guarded disposable Graph/analysis 저장 검사 6 PASS다.
+  이 수치는 서로 겹치는 검사이며 합산한 전체 테스트 수가 아니다.
+- 실제 창작 owner는 격리 prefix
+  `/opt/eom/maintenance-releases/54b39f7f98b92e5cc75f4670363cb0766ebe4c26`를 사용한다.
+  원래 cohort revision `rev_36fc4e4e415f4e609e2033f7a4ab48dc`, target 1053,
+  original operator·source·preset·보고서는 그대로다. 별도 새 cohort를 제출하지 않았다.
+- wheel RECORD 검증 및 비편집 설치본 member 2,435개 바이트 대조·실제 import PASS.
+  API/Web/INDEX/QUERY PID·Invocation은 전후 동일, DB migration·GPU bundle 변경 없음.
+- 최초 설치 시 eom 소유 wheel을 root identity로 검증하려다 정상 거부됐다. 서비스/DB
+  변경 전에 중단됐으며 기록을 보존했다. root 전용 stage에 동일 hash의 wheel을
+  materialize한 뒤 그 소유자로 원래 verifier를 실행해 통과했다. 검증 규칙을 완화하지 않았다.
+- 재개 뒤 처음 95건은 기존 Graph/report 포인터 재확인이다. 표시가 0부터 증가하는 것은
+  기존 데이터를 삭제하거나 모델을 다시 실행하는 것이 아니다. 17:43 UTC의 95건까지
+  재확인을 관찰했다. **10413 새 Graph 등록·후속 worker·3슬롯 지속 실행은 이 시점에
+  아직 확인하지 않았으며 다음 검증 항목이다.**
+- Slack milestone 전송·보관 PASS: `devreport_25e5b878c4bb4774b34dff487f1b3e71`.
+  완료 조건 변경과 현재 source/운영 상태를 구분했고 목표 완료로 보고하지 않았다.
