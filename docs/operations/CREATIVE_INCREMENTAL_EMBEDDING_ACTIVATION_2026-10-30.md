@@ -509,3 +509,56 @@ current creative owner stopped safely on the replay rejection; already-running w
 continue independently. Restore that same admitted scope with the tested correction; do not
 submit replacement identities. Actual similarity search and full five-vector acceptance remain
 pending and the full goal remains ACTIVE.
+
+### 20:31 UTC — actual three physical workers, compatible release prepared
+
+The bounded official compatibility window waited for zero held leases/worker units, then
+held the existing host fence while stopping the same three command consumers and maintenance.
+No running worker was interrupted; no binding was manually drained, reset or promoted.
+Seven fresh synthetic cases retained the six existing scoped grants and tested only one new
+pair (slot04 Terra/xhigh). **7/7 actual calls PASS**, original consumers restored automatically.
+
+- Compatibility run `codexcompat_9725b7f8becb473c941726044e184e72`;
+  canonical report `artifact_b206a7b39b134bb4b5c7d03e25583211` /
+  `rev_f2a08ce1924a433991ffa616646826a4`, member `report.json`,
+  SHA `sha256:5cd3eab5c220c8b74289b35c412d84f6c5ddae1f7ce5ea0c7e1aa49dfb37b95d`.
+- Official protected policy owner installed
+  `sha256:d472d448f1e38a760ec17b2e00d4f9c3c3a91f9440c4ee108126eb7b95f05c73`.
+  Fresh capability snapshots were recorded against current assignments. Native slot04
+  role, credentials and original Workflow/model/reasoning pins were not changed.
+- Corrected isolated owner **4cc9546cf06c272ecf438716f24285244bd16cae** is active,
+  PID 3275042 / invocation `1899b08f827c4085a79a4b736a1b5579`, same admitted scope.
+  The read-only 30-minute observation service now completes successfully (PROCESSING supported).
+- **20:27:45 UTC actual DB leases and systemd executions**:
+  slot04 `job_86fe84b99f3d47fb94383795219f48d4` (PID 3275449),
+  slot05 `job_bd8ccc95e8fe4d0ca45e6542a2fa9da4` (PID 3275864),
+  slot06 `job_8a2ca9d884fa408c8a46d9120ea438c4` (PID 3276216).
+  All three held distinct ACTIVE KNOWLEDGE_ANALYSIS leases under the admitted capacity.
+  This is actual parallel execution, not three queued commands or available GUI cards.
+- At **20:30:46 UTC**, slot04/05 Jobs were SUCCEEDED with exit0/no error; slot06 was
+  still RUNNING. Graph publication is asynchronous and exact official report reads still
+  precede VERIFIED. Refill to further source Jobs remains a separate acceptance observation.
+  A restarted owner's derived counter does not reset the previously registered canonical corpus.
+- Clean-source **180 PASS**, core mypy6/Ruff PASS, guarded PostgreSQL restart/control-scope
+  **18 PASS**. One clean-source test initially consulted a live runtime drop-in: fixture paths
+  were isolated, production identity checks retained, then the full180 passed. Failed logs kept.
+- Matching API/Platform wheel and Web installed simulation/RECORD PASS. Web51 files verified.
+  Build `/tmp/eom-api-build/4cc9546cf06c272ecf438716f24285244bd16cae.6Xuv5v/dist`;
+  Web `/tmp/eom-web-gui-build/4cc9546cf06c272ecf438716f24285244bd16cae.W8JErN/dist`,
+  wheel SHA `9dd624ced91c9e34d5f8e635eed567e1c5b3a8931e73ebabd63a2b5efbcaafbb`.
+- Protected shared-release staging `/var/lib/eom-release-operator-stage.4cc9546c-xjyhsbhs`,
+  context `sha256:ff5b8f38f84a8dffb19273748208ebf51244f67451c80ebf544633936a3a279b`,
+  operator **ADMIT_PASS**. Shared activation has **not** happened. API/Platform stays8a886677,
+  Web82388ed1; INDEX2113256 and QUERY3210533 remain active with unchanged pins.
+
+Actual metadata-only evidence: `/tmp/eom-creative-three-live-observe-20261030t2028.json`,
+`/tmp/eom-creative-refill-observe-20261030t2032.json`,
+`/tmp/eom-creative-three-worker-capabilities-tail-20261030.log`,
+`/tmp/eom-creative-usage-source-final-2-20261030.log`,
+`/tmp/eom-creative-resume-usage-pg-final-20261030.log`.
+Slack milestone `devreport_dc97eeab62ae4925b03aacfe74c880ef` SENT.
+
+Completion still requires sustained/refilled three-slot work, usage refresh live activation /
+busy-and-idle verification, actual five creative embeddings and authenticated DB similarity
+search/return-to-detail/assembly integration, and compatible operating deployment. Do not
+mark the full goal achieved from this three-worker checkpoint or the prepared release alone.
