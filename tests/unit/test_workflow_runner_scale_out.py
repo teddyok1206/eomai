@@ -19,7 +19,7 @@ def _load() -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
-    module.SIMILARITY_DROP_IN = Path("/nonexistent-eom-test/40-eom-similarity.conf")
+    module.SIMILARITY_DROP_IN = Path("/nonexistent-eom-test/test-only-no-host-drop-in.conf")
     return module
 
 
