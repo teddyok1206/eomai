@@ -54,6 +54,70 @@
 현재 상태: `IN_PROGRESS`, 운영 public 검색 활성화 `PENDING`.
 소스 테스트·PID·캐시 membership 갱신만으로 목표 완료를 선언하지 않는다.
 
+## 22:01 UTC 체크포인트 — 세 슬롯 복구와 public QUERY 공식 조회 연결
+
+목표 상태는 **ACTIVE / 미완료**다. 사용자 확정 세 단계와 기존 창작 5건의 실제 수치·등록·
+검색·운영 검증 범위를 줄이지 않는다. 이번 체크포인트의 새 public 연결은 저장소 후보이며
+운영 source `4cc9546c`, 기존 QUERY `07ec7b32`, INDEX `b3c8a4c0`와 구분한다.
+
+### 실제 창작 처리 중단 및 공식 복구
+
+- 21:21 UTC 10668의 `workflow_2c8e7f50ef6942069f83cbd3b0c33842` /
+  `job_b75d959b00304af5a105c27370543494`가 `WORKER_RESULT_INVALID`로 끝났다.
+  원인은 결과의 content-region map이 허용되지 않은 원문 영역 역할을 가리킨 것이다.
+  모델 실행은 exit 0이었지만 출처 검증에 실패했다. 사용량 소진·슬롯 점유 표시 문제가 아니다.
+- 추측한 대표 문항 10514가 아니라 실제 실패한 10668을 읽기 전용 조회와 local result의
+  입력을 제외한 validation location/message로 특정했다. 잘못된 출처 연결을 자동 수정하거나
+  검증을 완화하지 않았다.
+- 배포된 `CreativeCohortPreparationService.recover_invalid_result`를 명시적으로 호출했다.
+  기존 Workflow/Job/step은 FAILED로 보존되고, no-commit/no-active-work 증명과 현재 원문
+  권한 재확인 후 successor `workflow_b70706d174c14d978a75096af9a05b95`만 준비됐다.
+  같은 복구 요청 재전송은 같은 successor이며 원래 request와 정책 핀은 변경하지 않았다.
+- 원래 cohort revision으로 기존 서비스를 재개했다. 21:47 UTC 실제 04·05·06 세 슬롯에서
+  각기 다른 RUNNING Job과 ACTIVE KNOWLEDGE_ANALYSIS lease를 확인했다. 22:00:54 UTC에는
+  모두 **다음** Job으로 refill된 것을 다시 확인했다:
+  04 `job_470fa6a6f78d410fa2e56ad783d51d63`,
+  05 `job_00e12058af03473ea31c461fc23e181d`,
+  06 `job_7ef1863ff9a244e992f6a3a454741c13`.
+- INDEX PID `2113256` / invocation `8b9b5ed1ec1a4c67bc9ec7c44f9debff`는 그대로다.
+  창작 서비스 재시작 시의 derived verified counter는 새 pending-first 순회 분모로 계산된다.
+  이를 누적 정본 수의 감소로 해석하거나 기존 완료 수에 무조건 합산하지 않는다.
+  30분 observe timer는 계속 활성화돼 있다.
+- 복구 회귀 32 PASS. 이 작업에 새 runtime 설치·DB 직접 UPDATE·인증 변경은 없었다.
+
+### 새 public QUERY 연결의 저장소 검증
+
+- 공개 풀이 namespace 전용 CPU4/routed5 설정과 prepare4를 기존 owner에 opt-in cohost했다.
+  같은 installed source/provider/DB identity를 확인하며 실제 HTTP capture를 재사용한다.
+  preparation2는 기존 parent1.4와 ordered source/policy/Graph/index 핀을 보존한다.
+- 1–32 source 준비는 실제 Catalog public-source read를 일괄 수행한다. 장치별 canonical
+  index를 한 번만 읽고 요청 순서를 유지한다. replay는 original preparation을 읽으며
+  head/index selection을 다시 실행하지 않는다. legacy single/16-item 계약의 한도는 유지한다.
+- 완료 결과의 read3는 기존 completed public QUERY reader를 호출한다. Catalog의 read-only
+  composition은 public QUERY5의 비밀 없는 고정 controls를 재사용하지만 DB role/fence와
+  policy/bundle/routing Artifact를 독립 검증한다. 새 queue·검색 엔진·reader 설정 계열은 없다.
+- HTTP는 기존 preparation과 similarity-context operation에 명시적 새 family를 추가했다.
+  완료 결과는 schema discriminator로 선택해 구형 응답을 새 family validator에 넣지 않는다.
+  단일 준비와 일괄 준비의 원래 raw-byte 한도를 각각 적용한다. 새 public read는 threadpool로
+  실행해 Catalog 응답 대기가 API event loop를 막지 않는다. OpenAPI도 함께 갱신했다.
+- focused selection/configuration/legacy prepare 회귀 219 PASS; 기존 runtime/native executor
+  회귀 25 PASS; completed-read/legacy 회귀 93 PASS; public read composition 6 PASS;
+  실제 HTTP/Unix/current-capture/API/OpenAPI 회귀 88 PASS;
+  schema resource/dependency/runner composition 회귀 74 PASS.
+- guarded disposable PostgreSQL에서 public native result·중단 복구·routed preparation/
+  publication·동시성 22 PASS. 임시 DB는 `/tmp/eom-api-testdb-20261030190926_69c250b2`이고
+  운영 DB에 mutating pytest를 실행하지 않았다. 새 DB migration은 없다.
+- 변경 core 25개와 QUERY/batch/read 관련 core 79개 mypy PASS; 변경 Python 38개 Ruff/
+  formatter PASS. 모델/GPU inference·추가 문항 생성은 이 source test에 포함되지 않는다.
+
+### 남은 필수 작업
+
+DB 선택 포인터→현재 권한으로 정확한 Graph/등록 원문 해석→공식 prepare/read adapter를
+`조회 → 유사도 → 조회/배치`에 실제 연결해야 한다. public INDEX/QUERY의 compatible installed
+release와 정책은 아직 활성화하지 않았다. 기존 수치 runtime pin을 보호하며 candidate wheel을
+검증한 뒤, 원래 창작 5건의 실제 encoding/Registry/search/replay와 자동 backlog/향후 증분을
+검증·배포해야 목표가 완료된다. 기존 사용량 버그의 운영 acceptance는 재개방하지 않는다.
+
 ## 첫 구현 체크포인트 — public GPU 실행 준비
 
 - `embedding-batch-plan/1.3`: 기존 INDEX batch owner가 public entry의 source/base analysis/

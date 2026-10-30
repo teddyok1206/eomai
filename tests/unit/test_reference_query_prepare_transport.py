@@ -97,6 +97,7 @@ def exchange(
             "system-rag-reference-query-prepare-request/1.1",
             "system-rag-reference-query-prepare-request/2.0",
             "system-rag-reference-query-prepare-request/3.0",
+            "system-rag-reference-query-prepare-request/4.0",
         }:
             preparation_sends.append(document["operation_id"])
             if fault == "noncanonical_request":
@@ -110,6 +111,7 @@ def exchange(
             "system-rag-reference-query-prepare-reply/1.0",
             "system-rag-reference-query-prepare-reply/2.0",
             "system-rag-reference-query-prepare-reply/3.0",
+            "system-rag-reference-query-prepare-reply/4.0",
         }:
             final_sends.append(document)
             if fault == "partial_final_write":

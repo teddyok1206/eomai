@@ -225,3 +225,39 @@ hashes and keep their schema bytes unchanged. No additional allocation, queue or
 copy is introduced. Both families retain current source/lease reauthorization, original
 parent/child ordering, device/recipe/space checks and interrupted-publication preservation.
 Runtime selection, five actual encodings and live DB search remain separate required gates.
+
+### Installed public QUERY and DB preparation boundary
+
+Completed-read wire3 carries only the original operator and exact completed selection;
+Catalog resolves the existing public context3 through the canonical completed reader.
+The read-only Catalog cohost reuses the explicitly installed public QUERY5 control
+selection rather than introducing duplicate reader configuration families. It independently
+checks the Catalog runtime role and fence installation and reads pinned policy/bundle
+Artifacts; it does not use provider credentials, capture a session, invoke a launcher,
+admit work or inherit the QUERY process's DB privileges. Legacy read1/2 remain closed.
+
+Extend the installed QUERY owner, not a second daemon or direct encoder adapter. Existing
+CPU selections1/2, routed selection3 and preparation messages1–3 remain closed. Public CPU
+selection4 pins the public namespace/recipe and existing owner/provider/runtime identities;
+routed selection5 wraps that selection with exact CUDA/routing policy pointers. It is an
+optional cohost beside the existing legacy/mixed owners, using the same genuine request
+capture. Matching installed provider, DB owner and source commit are required; no copied
+credential or fabricated actor is accepted.
+
+Public prepare request4 carries one pinned Graph/policy scope and 1–32 ordered source
+revision IDs, purpose and bounded top-k, not source text, authority or runtime options.
+Catalog resolves the original human's exact public reports and paired device indexes.
+Preparation Artifact2 pins parent1.4 and its exact intent/configuration hashes. Same-key
+replay reads and reauthorizes those original pins; it never selects a newer index. Reply4
+exposes original ordered child selections and a truthful PENDING/READY/UNAVAILABLE/FAILED
+state. Existing queue, parent Job, publication keys, transaction/CAS and physical lease
+boundaries remain canonical; no DB migration or new persistent tracker is needed.
+
+The DB HTTP use case resolves an authorized selected Graph/legacy source to an Item revision,
+then uses this supported prepare/read boundary. Browser/BFF cannot supply actor, artifact
+member, path, model or vector data. Final candidates return through the existing DB detail
+resolver, preserving preview/download/assembly behavior. Inputs are bounded O(32); source
+lookup uses existing indexed membership and maps; index pairing/ranking retains bounded
+O(N) canonical manifests (up to16,384) with no N+1 report reads. The simpler direct model
+call is rejected because it skips physical routing, canonical completion and replay safety.
+Embedding failure stays auxiliary and cannot roll back Item/report/Graph registration.

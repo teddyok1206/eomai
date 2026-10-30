@@ -21,7 +21,7 @@ from eom_catalog_contracts.public_solution_similarity import (
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import Field, model_validator
-from referencing import Resource
+from referencing import Registry, Resource
 
 from eom_workflow.embedding_batch_plan import (
     BATCH_PLAN_SCHEMA_REF,
@@ -51,8 +51,7 @@ BATCH_PLAN_V14_SCHEMA_SHA256 = (
 BATCH_SELECTION_V14_SCHEMA_REF = BATCH_PLAN_V14_SCHEMA_REF + "#/$defs/selection"
 
 
-@lru_cache(maxsize=1)
-def _validator() -> Draft202012Validator:
+def embedding_batch_public_query_plan_schema() -> dict[str, Any]:
     with (
         files("eom_workflow")
         .joinpath("resources/embedding-batch-plan-v1.4.schema.json")
@@ -64,10 +63,29 @@ def _validator() -> Draft202012Validator:
     )
     schema = json.loads(raw)
     Draft202012Validator.check_schema(schema)
-    registry = local_embedding_admission_schema_registry().with_resource(
-        BATCH_PLAN_SCHEMA_REF, Resource.from_contents(embedding_batch_plan_schema())
+    return dict(schema)
+
+
+@lru_cache(maxsize=1)
+def embedding_batch_public_query_plan_schema_registry() -> Registry[Any]:
+    return local_embedding_admission_schema_registry().with_resources(
+        (
+            (BATCH_PLAN_SCHEMA_REF, Resource.from_contents(embedding_batch_plan_schema())),
+            (
+                BATCH_PLAN_V14_SCHEMA_REF,
+                Resource.from_contents(embedding_batch_public_query_plan_schema()),
+            ),
+        )
     )
-    return Draft202012Validator(schema, registry=registry, format_checker=FormatChecker())
+
+
+@lru_cache(maxsize=1)
+def _validator() -> Draft202012Validator:
+    return Draft202012Validator(
+        embedding_batch_public_query_plan_schema(),
+        registry=embedding_batch_public_query_plan_schema_registry(),
+        format_checker=FormatChecker(),
+    )
 
 
 class _PublicQueryPlanMessage(EmbeddingBatchPlanValue):

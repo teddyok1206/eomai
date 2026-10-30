@@ -272,7 +272,8 @@ def serve() -> int:
         from eom_catalog_service.chat_rag_resolution import ChatRagResolutionService
 
         mixed_read_pin = os.environ.get("EOM_MIXED_SIMILARITY_READ_CONFIG_SHA256")
-        if mixed_read_pin is None:
+        public_read_pin = os.environ.get("EOM_PUBLIC_SIMILARITY_READ_CONFIG_SHA256")
+        if mixed_read_pin is None and public_read_pin is None:
             similarity_reads = build_catalog_similarity_context_reads(
                 engine,
                 mode=os.environ.get("EOM_SIMILARITY_READ_MODE", "DISABLED"),
@@ -284,6 +285,7 @@ def serve() -> int:
                 mode=os.environ.get("EOM_SIMILARITY_READ_MODE", "DISABLED"),
                 configuration_raw_sha256=os.environ.get("EOM_SIMILARITY_READ_CONFIG_SHA256"),
                 mixed_configuration_raw_sha256=mixed_read_pin,
+                public_configuration_raw_sha256=public_read_pin,
             )
         external_item_documents = ExternalItemDocumentMediaService(engine)
         external_item_previews = ExternalItemPreviewProjectionService(engine)

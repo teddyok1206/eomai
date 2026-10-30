@@ -45,3 +45,25 @@ class SimilarityContextReadSelectionV2(FrozenModel):
         return CompletedSimilarityQuerySelection.model_validate(
             self.model_dump(mode="json", exclude={"schema_version"})
         )
+
+
+class SimilarityContextReadSelectionV3(FrozenModel):
+    """Public-report read family; no actor or new source selection in the HTTP body."""
+
+    schema_version: Literal["system-rag-similarity-read-selection/3.0"]
+    workflow_id: str = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    workflow_request_sha256: Sha256
+    context_request_sha256: Sha256
+
+    @model_validator(mode="before")
+    @classmethod
+    def schema_first(cls, value: object) -> object:
+        try:
+            return similarity_contract_document(value, "system-rag-similarity-read-v3", 4096)
+        except SchemaError:
+            raise ValueError("invalid exact public solution similarity selector") from None
+
+    def exact_selection(self) -> CompletedSimilarityQuerySelection:
+        return CompletedSimilarityQuerySelection.model_validate(
+            self.model_dump(mode="json", exclude={"schema_version"})
+        )

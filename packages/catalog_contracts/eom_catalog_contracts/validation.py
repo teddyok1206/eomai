@@ -568,6 +568,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "3.0",
             "sha256:b9f6c62b7b1d778fc11a5bcecb17d8af7ac95208744ee80c603f1c4e7587d3e0",
         ),
+        "system-rag-reference-query-prepare-v4": CatalogSchemaResource(
+            "schemas/knowledge/system-rag-reference-query-prepare-v4.schema.json",
+            "resources/knowledge/system-rag-reference-query-prepare-v4.schema.json",
+            "4.0",
+            "sha256:fdd2cd340ef9bab72ea95452484a9a4cd4f2308a70acdaa373072db642682418",
+        ),
         "system-rag-similarity-context-v2": CatalogSchemaResource(
             "schemas/knowledge/system-rag-similarity-context-v2.schema.json",
             "resources/knowledge/system-rag-similarity-context-v2.schema.json",
@@ -579,6 +585,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/system-rag-similarity-materials-v2.schema.json",
             "2.0",
             "sha256:c22b5907a5b4d9be22b710da89973e445485a89c858a6758d9c568301daaaf40",
+        ),
+        "system-rag-similarity-read-v3": CatalogSchemaResource(
+            "schemas/knowledge/system-rag-similarity-read-v3.schema.json",
+            "resources/knowledge/system-rag-similarity-read-v3.schema.json",
+            "3.0",
+            "sha256:75a8f5f54a2f41ef62e90779cd342fe4bd72b5dc4296b129018517c7125a374d",
         ),
         "system-rag-similarity-read-v2": CatalogSchemaResource(
             "schemas/knowledge/system-rag-similarity-read-v2.schema.json",

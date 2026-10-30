@@ -128,6 +128,9 @@ def test_committed_mixed_similarity_entry_preserves_explicit_wire_families() -> 
             "system-rag-reference-query-prepare-request/3.0": (
                 "#/components/schemas/ReferenceQueryPrepareInputV3"
             ),
+            "system-rag-reference-query-prepare-request/4.0": (
+                "#/components/schemas/ReferenceQueryPrepareInputV4"
+            ),
         },
     }
     assert "consumer_purpose" not in schemas["ReferenceQueryPrepareInput"]["properties"]
@@ -136,6 +139,7 @@ def test_committed_mixed_similarity_entry_preserves_explicit_wire_families() -> 
     assert selection["anyOf"] == [
         {"$ref": "#/components/schemas/SimilarityContextReadSelection"},
         {"$ref": "#/components/schemas/SimilarityContextReadSelectionV2"},
+        {"$ref": "#/components/schemas/SimilarityContextReadSelectionV3"},
     ]
     assert read["x-eom-read-only"] is True
     review = schemas["RegisteredReviewSimilarityCandidateV2"]["properties"]

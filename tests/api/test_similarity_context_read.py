@@ -108,6 +108,43 @@ def test_missing_login_denies_before_any_catalog_read(setup):
     reader.read.assert_not_called()
 
 
+def test_public_context_http_uses_exact_selection_and_current_actor_without_new_work(setup):
+    from tests.unit.test_public_solution_similarity_read_boundary import pair as public_pair
+
+    app, _services, reader, _selector, _expected = setup
+    request, reply = public_pair()
+    reader.read_public.return_value = reply.result
+    body = request.selection.model_dump(mode="json") | {
+        "schema_version": "system-rag-similarity-read-selection/3.0",
+    }
+    with TestClient(app, base_url="http://localhost") as client:
+        for _ in range(2):
+            response = client.post(PATH, json=body)
+            assert response.status_code == 200
+            assert response.json()["data"] == reply.result.model_dump(mode="json")
+            assert response.headers["Cache-Control"] == "no-store"
+    assert reader.read_public.call_count == 2
+    reader.read_public.assert_called_with(authentication().operator.operator_id, request.selection)
+    reader.read.assert_not_called()
+    reader.read_v2.assert_not_called()
+
+
+@pytest.mark.parametrize("field", ("actor_id", "path", "vectors", "source_ids"))
+def test_public_context_http_rejects_untrusted_authority_and_values(setup, field):
+    from tests.unit.test_public_solution_similarity_read_boundary import pair as public_pair
+
+    app, _services, reader, _selector, _expected = setup
+    request, _reply = public_pair()
+    body = request.selection.model_dump(mode="json") | {
+        "schema_version": "system-rag-similarity-read-selection/3.0",
+        field: "untrusted",
+    }
+    with TestClient(app, base_url="http://localhost") as client:
+        response = client.post(PATH, json=body)
+        assert response.status_code == 422
+    reader.read_public.assert_not_called()
+
+
 @pytest.mark.parametrize(
     "field",
     ("actor_id", "role", "permissions", "token", "runtime_bundle", "workflow_request", "vectors"),

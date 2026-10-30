@@ -1,4 +1,4 @@
-"""Exact request-family routing between two explicitly admitted owner compositions."""
+"""Exact request-family routing among explicitly admitted owner compositions."""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from collections.abc import Callable
 from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareRequestV2,
     ReferenceQueryPrepareRequestV3,
+    ReferenceQueryPrepareRequestV4,
     SupportedReferenceQueryPrepareReply,
     SupportedReferenceQueryPrepareRequest,
     parse_supported_reference_query_prepare_request,
@@ -26,8 +27,9 @@ class ReferenceQueryFamilyPreparation:
         self,
         primary: Callable[[], ReferenceQueryPreparationPort],
         mixed: Callable[[], ReferenceQueryPreparationPort] | None,
+        public: Callable[[], ReferenceQueryPreparationPort] | None = None,
     ) -> None:
-        self.primary, self.mixed = primary, mixed
+        self.primary, self.mixed, self.public = primary, mixed, public
 
     def prepare(
         self, request: SupportedReferenceQueryPrepareRequest
@@ -36,7 +38,13 @@ class ReferenceQueryFamilyPreparation:
         single = (
             request.requests[0] if isinstance(request, ReferenceQueryPrepareRequestV3) else request
         )
-        factory = self.mixed if isinstance(single, ReferenceQueryPrepareRequestV2) else self.primary
+        factory = (
+            self.public
+            if isinstance(request, ReferenceQueryPrepareRequestV4)
+            else (
+                self.mixed if isinstance(single, ReferenceQueryPrepareRequestV2) else self.primary
+            )
+        )
         if factory is None:
             raise ValueError("REFERENCE_QUERY_PREPARE_UNAVAILABLE")
         reply = factory().prepare(request)

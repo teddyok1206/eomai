@@ -70,8 +70,11 @@ from eom_workflow.reference_query_execution import (
     parse_reference_query_execution_policy,
 )
 from eom_workflow.reference_query_routed_preparation import (
+    PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_REF,
     ROUTED_QUERY_PREPARATION_SCHEMA_REF,
+    PublicRoutedReferenceQueryPreparation,
     RoutedReferenceQueryPreparation,
+    SupportedRoutedReferenceQueryPreparation,
     routed_reference_query_preparation_key,
 )
 from jsonschema.exceptions import ValidationError as SchemaError
@@ -419,11 +422,24 @@ class LocalEmbeddingControlArtifactPublisher:
     ) -> PublishedLocalEmbeddingControl:
         """Current actual owner authorizes before publication; this leaf never grants access."""
         checked = RoutedReferenceQueryPreparation.model_validate(preparation)
+        return self._publish_routed_query_preparation(checked, ROUTED_QUERY_PREPARATION_SCHEMA_REF)
+
+    def publish_public_routed_reference_query_preparation(
+        self, preparation: PublicRoutedReferenceQueryPreparation
+    ) -> PublishedLocalEmbeddingControl:
+        checked = PublicRoutedReferenceQueryPreparation.model_validate(preparation)
+        return self._publish_routed_query_preparation(
+            checked, PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_REF
+        )
+
+    def _publish_routed_query_preparation(
+        self, checked: SupportedRoutedReferenceQueryPreparation, schema: str
+    ) -> PublishedLocalEmbeddingControl:
         return self._publish(
             raw=canonical_json_bytes(checked),
             semantic_sha256=checked.preparation_sha256,
             member="preparation.json",
-            schema=ROUTED_QUERY_PREPARATION_SCHEMA_REF,
+            schema=schema,
             artifact_type=REFERENCE_QUERY_PREPARATION_ARTIFACT_TYPE,
             idempotency_key=routed_reference_query_preparation_key(
                 checked.operator_id, checked.idempotency_key
@@ -435,6 +451,20 @@ class LocalEmbeddingControlArtifactPublisher:
         self, *, operator_id: str, idempotency_key: str
     ) -> ArtifactMemberPointer | None:
         """Exact original metadata pointer; the caller must still authorize and dereference it."""
+        return self._find_routed_query_preparation(
+            operator_id, idempotency_key, ROUTED_QUERY_PREPARATION_SCHEMA_REF
+        )
+
+    def find_public_routed_reference_query_preparation(
+        self, *, operator_id: str, idempotency_key: str
+    ) -> ArtifactMemberPointer | None:
+        return self._find_routed_query_preparation(
+            operator_id, idempotency_key, PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_REF
+        )
+
+    def _find_routed_query_preparation(
+        self, operator_id: str, idempotency_key: str, schema: str
+    ) -> ArtifactMemberPointer | None:
         saved = self.publisher.find_published(
             idempotency_key=routed_reference_query_preparation_key(operator_id, idempotency_key),
             artifact_type=REFERENCE_QUERY_PREPARATION_ARTIFACT_TYPE,
@@ -448,7 +478,7 @@ class LocalEmbeddingControlArtifactPublisher:
             artifact_revision_id=saved.artifact_revision_id,
             member_path="preparation.json",
             sha256=saved.primary_sha256,
-            schema_ref=ROUTED_QUERY_PREPARATION_SCHEMA_REF,
+            schema_ref=schema,
             media_type="application/json",
         )
 

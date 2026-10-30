@@ -18,8 +18,9 @@ from eom_orchestrator.inference_transfer_cpu_handoff import (
 from eom_workflow.embedding_device_routing import EmbeddingDeviceRoutingPolicy
 from eom_workflow.reference_query_execution import ReferenceQueryExecutionPolicy
 from eom_workflow.reference_query_routed_owner_configuration import (
-    RoutedReferenceQueryOwnerConfiguration,
-    require_routed_reference_query_policy,
+    SupportedRoutedReferenceQueryOwnerConfiguration,
+    require_supported_routed_reference_query_policy,
+    validate_supported_routed_reference_query_configuration,
 )
 from sqlalchemy import text
 
@@ -61,7 +62,7 @@ class RoutedReferenceQueryOwnerFactory:
     def __init__(
         self,
         runtime: ReferenceQueryOwnerRuntime,
-        configuration: RoutedReferenceQueryOwnerConfiguration,
+        configuration: SupportedRoutedReferenceQueryOwnerConfiguration,
         routing: EmbeddingDeviceRoutingPolicy,
         cpu_policy: ReferenceQueryExecutionPolicy,
         cuda_policy: ReferenceQueryExecutionPolicy,
@@ -115,14 +116,14 @@ class RoutedReferenceQueryOwnerFactory:
 
 def build_routed_reference_query_owner_factory(
     runtime: ReferenceQueryOwnerRuntime,
-    configuration: RoutedReferenceQueryOwnerConfiguration,
+    configuration: SupportedRoutedReferenceQueryOwnerConfiguration,
     *,
     configuration_guard: Callable[[], None],
 ) -> RoutedReferenceQueryOwnerFactory:
     """Read-only installed selection, no human capture, GPU, model, claim or activation."""
     if type(runtime) is not ReferenceQueryOwnerRuntime or not callable(configuration_guard):
         raise ValueError("REFERENCE_QUERY_ROUTED_OWNER_COMPOSITION_INVALID")
-    configuration = RoutedReferenceQueryOwnerConfiguration.model_validate(configuration)
+    configuration = validate_supported_routed_reference_query_configuration(configuration)
     if configuration.cpu_configuration != runtime.configuration:
         raise ValueError("REFERENCE_QUERY_ROUTED_OWNER_COMPOSITION_INVALID")
     configuration_guard()
@@ -157,7 +158,7 @@ def build_routed_reference_query_owner_factory(
             )
             policies.append(policy)
         cpu, cuda = policies
-        require_routed_reference_query_policy(configuration, routing, cpu, cuda)
+        require_supported_routed_reference_query_policy(configuration, routing, cpu, cuda)
         if cpu.spaces != runtime.spaces:
             raise ValueError("REFERENCE_QUERY_ROUTED_OWNER_SPACE_UNAVAILABLE")
         reader.revalidate_provenance()

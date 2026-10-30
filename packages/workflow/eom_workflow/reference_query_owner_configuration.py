@@ -13,6 +13,8 @@ from eom_catalog_contracts.embedding_runtime_bundle import EmbeddingRuntimeBundl
 from eom_catalog_contracts.inference_transfer_experiment import ExperimentViewRecipe
 from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
 from eom_catalog_contracts.models import Sha256
+from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingRecipe
+from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from jsonschema import Draft202012Validator
@@ -34,6 +36,12 @@ REFERENCE_QUERY_MIXED_OWNER_SCHEMA_REF = (
 )
 REFERENCE_QUERY_MIXED_OWNER_SCHEMA_SHA256 = (
     "sha256:6d46adf649190de97a00a5361f052c19f6a7df13d4c98919add182255c3bd9f6"
+)
+REFERENCE_QUERY_PUBLIC_OWNER_SCHEMA_REF = (
+    "eom://schemas/workflow/reference-query-owner-configuration/4.0"
+)
+REFERENCE_QUERY_PUBLIC_OWNER_SCHEMA_SHA256 = (
+    "sha256:7fe1391d061ff3f0a2ee9693ba8fa0f31e12fefe2011dd7066b3c98980592f99"
 )
 MAX_REFERENCE_QUERY_OWNER_BYTES = 64 * 1024
 _RESOURCE = "reference-query-owner-configuration-v1.schema.json"
@@ -104,6 +112,37 @@ def _mixed_validator() -> Draft202012Validator:
     )
 
 
+def reference_query_public_owner_configuration_schema() -> dict[str, Any]:
+    with (
+        files("eom_workflow")
+        .joinpath("resources/reference-query-owner-configuration-v4.schema.json")
+        .open("rb") as stream
+    ):
+        raw = stream.read(MAX_REFERENCE_QUERY_OWNER_BYTES + 1)
+    if (
+        not 0 < len(raw) <= MAX_REFERENCE_QUERY_OWNER_BYTES
+        or sha256_bytes(raw) != REFERENCE_QUERY_PUBLIC_OWNER_SCHEMA_SHA256
+    ):
+        raise ReferenceQueryOwnerConfigurationError()
+    schema: dict[str, Any] = json.loads(raw)
+    if schema.get("$id") != REFERENCE_QUERY_PUBLIC_OWNER_SCHEMA_REF:
+        raise ReferenceQueryOwnerConfigurationError()
+    return schema
+
+
+@lru_cache(maxsize=1)
+def _public_validator() -> Draft202012Validator:
+    schema = reference_query_public_owner_configuration_schema()
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(
+        schema,
+        registry=reference_query_execution_schema_registry().with_resource(
+            REFERENCE_QUERY_OWNER_SCHEMA_REF,
+            Resource.from_contents(reference_query_owner_configuration_schema()),
+        ),
+    )
+
+
 def _validate_document(value: object, validator: Draft202012Validator) -> Any:
     try:
         document = raw_similarity_contract_value(value)
@@ -147,12 +186,11 @@ class ReferenceQueryProviderConfiguration(_QueryOwnerValue):
         return self
 
 
-class _QueryOwnerSelectionFields(_QueryOwnerValue):
+class _QueryOwnerIdentityFields(_QueryOwnerValue):
     owner_source_commit: str = Field(
         strict=True, pattern=r"^[0-9a-f]{40}$", min_length=40, max_length=40
     )
     corpus_id: str = Field(strict=True, pattern=r"^corpus_[0-9a-f]{32}$")
-    recipe: ExperimentViewRecipe
     source_classes: tuple[Literal["APPROVED_ITEM", "PAST_EXAM"], ...]
     native_execution_policy: ArtifactMemberPointer
     native_execution_policy_sha256: Sha256
@@ -164,14 +202,22 @@ class _QueryOwnerSelectionFields(_QueryOwnerValue):
     api_provider: ReferenceQueryProviderConfiguration
 
     def _require_namespace(
-        self, namespace: EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace
+        self,
+        namespace: EmbeddingIndexNamespace
+        | MixedEmbeddingIndexNamespace
+        | PublicSolutionIndexNamespace,
+        recipe: ExperimentViewRecipe | PublicSolutionEmbeddingRecipe,
     ) -> None:
         if (
-            namespace.recipe_sha256 != self.recipe.recipe_sha256
+            namespace.recipe_sha256 != recipe.recipe_sha256
             or self.source_classes != tuple(sorted(set(self.source_classes)))
             or self.database_owner.role_name != "eom_app"
         ):
             raise ReferenceQueryOwnerConfigurationError()
+
+
+class _QueryOwnerSelectionFields(_QueryOwnerIdentityFields):
+    recipe: ExperimentViewRecipe
 
 
 class ReferenceQueryServiceConfiguration(_QueryOwnerSelectionFields):
@@ -185,7 +231,7 @@ class ReferenceQueryServiceConfiguration(_QueryOwnerSelectionFields):
 
     @model_validator(mode="after")
     def exact_selection(self) -> Self:
-        self._require_namespace(self.namespace)
+        self._require_namespace(self.namespace, self.recipe)
         return self
 
 
@@ -202,12 +248,32 @@ class ReferenceQueryServiceConfigurationV2(_QueryOwnerSelectionFields):
 
     @model_validator(mode="after")
     def exact_selection(self) -> Self:
-        self._require_namespace(self.namespace)
+        self._require_namespace(self.namespace, self.recipe)
+        return self
+
+
+class ReferenceQueryPublicServiceConfiguration(_QueryOwnerIdentityFields):
+    """Public CPU selection, also the CPU half of the optional routed cohost."""
+
+    schema_version: Literal["reference-query-owner-configuration/4.0"]
+    namespace: PublicSolutionIndexNamespace
+    recipe: PublicSolutionEmbeddingRecipe
+
+    @model_validator(mode="before")
+    @classmethod
+    def schema_first(cls, value: object) -> Any:
+        return _validate_document(value, _public_validator())
+
+    @model_validator(mode="after")
+    def exact_selection(self) -> Self:
+        self._require_namespace(self.namespace, self.recipe)
         return self
 
 
 type SupportedReferenceQueryServiceConfiguration = (
-    ReferenceQueryServiceConfiguration | ReferenceQueryServiceConfigurationV2
+    ReferenceQueryServiceConfiguration
+    | ReferenceQueryServiceConfigurationV2
+    | ReferenceQueryPublicServiceConfiguration
 )
 
 
@@ -217,6 +283,10 @@ def validate_supported_reference_query_service_configuration(
     """Closed raw-value revalidation, not authority, installed code or permission."""
     try:
         document = raw_similarity_contract_value(value)
+        if isinstance(document, dict) and document.get("schema_version") == (
+            "reference-query-owner-configuration/4.0"
+        ):
+            return ReferenceQueryPublicServiceConfiguration.model_validate(document)
         if isinstance(document, dict) and document.get("schema_version") == (
             "reference-query-owner-configuration/2.0"
         ):
@@ -249,6 +319,25 @@ def require_mixed_reference_query_cohost(
         or checked.database_owner != primary.database_owner
     ):
         raise ValueError("REFERENCE_QUERY_MIXED_COHOST_CONFIGURATION_INVALID")
+
+
+def require_public_reference_query_cohost(
+    primary: ReferenceQueryServiceConfiguration,
+    public: ReferenceQueryPublicServiceConfiguration,
+) -> None:
+    """Same installed owner/provider, not source authority or a replacement for IAM."""
+    primary = ReferenceQueryServiceConfiguration.model_validate(
+        raw_similarity_contract_value(primary)
+    )
+    public = ReferenceQueryPublicServiceConfiguration.model_validate(
+        raw_similarity_contract_value(public)
+    )
+    if (
+        public.owner_source_commit != primary.owner_source_commit
+        or public.api_provider != primary.api_provider
+        or public.database_owner != primary.database_owner
+    ):
+        raise ValueError("REFERENCE_QUERY_PUBLIC_COHOST_CONFIGURATION_INVALID")
 
 
 def reference_query_service_configuration_bytes(value: ReferenceQueryServiceConfiguration) -> bytes:

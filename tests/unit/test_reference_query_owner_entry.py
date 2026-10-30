@@ -60,6 +60,27 @@ def test_private_configuration_is_opt_in_and_does_not_read_files_when_absent(mon
     assert module._private_configuration_bytes() is None
 
 
+def test_public_configuration_is_opt_in_and_uses_only_the_fixed_pinned_file(monkeypatch):
+    from unittest.mock import Mock
+
+    from eom_catalog_service import embedding_runtime_files
+
+    monkeypatch.delenv("EOM_PUBLIC_REFERENCE_QUERY_CONFIGURATION_SHA256", raising=False)
+    assert module._public_configuration_bytes() is None
+    files = Mock()
+    files.read.return_value = b"synthetic public configuration"
+    monkeypatch.setattr(embedding_runtime_files, "NumericalRuntimeFileSnapshots", lambda: files)
+    pin = "sha256:" + "7" * 64
+    monkeypatch.setenv("EOM_PUBLIC_REFERENCE_QUERY_CONFIGURATION_SHA256", pin)
+    assert module._public_configuration_bytes() == files.read.return_value
+    files.read.assert_called_once_with(
+        Path("/etc/eom/public-reference-query-owner.json"), sha256=pin, maximum=64 * 1024
+    )
+    monkeypatch.setenv("EOM_PUBLIC_REFERENCE_QUERY_CONFIGURATION_SHA256", "bad")
+    with pytest.raises(ValueError, match="PUBLIC_CONFIGURATION_UNAVAILABLE"):
+        module._public_configuration_bytes()
+
+
 @pytest.mark.parametrize("pin", ("", "sha256:bad", "sha256:" + "g" * 64, "/tmp/config.json"))
 def test_malformed_private_configuration_pin_is_not_silently_disabled(monkeypatch, pin):
     monkeypatch.setenv("EOM_PRIVATE_CHAT_QUERY_CONFIGURATION_SHA256", pin)

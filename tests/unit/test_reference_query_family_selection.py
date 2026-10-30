@@ -62,6 +62,24 @@ def test_optional_mixed_absence_never_falls_back_to_primary() -> None:
     primary.assert_not_called()
 
 
+def test_public_family_requires_explicit_cohost_and_never_calls_legacy_or_mixed():
+    from eom_catalog_contracts.reference_query_prepare import routed_reference_query_error_reply
+
+    from tests.unit.test_public_solution_query_preparation_contracts import public_prepare_request
+
+    request = public_prepare_request()
+    primary, mixed = Mock(), Mock()
+    with pytest.raises(ValueError, match="PREPARE_UNAVAILABLE"):
+        ReferenceQueryFamilyPreparation(primary, mixed).prepare(request)
+    reply = routed_reference_query_error_reply(request)
+    public = Mock(return_value=SimpleNamespace(prepare=Mock(return_value=reply)))
+    assert ReferenceQueryFamilyPreparation(primary, mixed, public).prepare(request) == reply
+    primary.assert_not_called()
+    mixed.assert_not_called()
+    public.assert_called_once_with()
+    public.return_value.prepare.assert_called_once_with(request)
+
+
 def test_wrong_family_reply_has_no_fallback_or_replacement_request() -> None:
     request = _request("2.0")
     wrong = parse_supported_reference_query_prepare_reply(reply_body(request))

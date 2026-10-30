@@ -16,6 +16,7 @@ from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareReplyV2,
     ReferenceQueryPrepareRequestV2,
     ReferenceQueryPrepareRequestV3,
+    ReferenceQueryPrepareRequestV4,
     SupportedReferenceQueryPrepareRequest,
     parse_supported_reference_query_prepare_request,
     routed_reference_query_error_reply,
@@ -111,7 +112,7 @@ def handle_reference_query_prepare_connection(
     except Exception:
         # No response/capture/traceback contents leave this adapter. In particular,
         # database admission may already have committed before a disconnect.
-        if isinstance(request, ReferenceQueryPrepareRequestV3):
+        if isinstance(request, ReferenceQueryPrepareRequestV3 | ReferenceQueryPrepareRequestV4):
             reply = routed_reference_query_error_reply(request)
         else:
             reply = _legacy_failure_reply(request)

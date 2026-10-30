@@ -33,10 +33,22 @@ from eom_identity_service.operator_authorization_fence_sql import (
 )
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.settings import Settings
+from eom_workflow.reference_query_owner_configuration import (
+    ReferenceQueryPublicServiceConfiguration,
+)
+from eom_workflow.reference_query_routed_owner_configuration import (
+    PublicRoutedReferenceQueryOwnerConfiguration,
+    parse_reference_query_installed_owner_selection,
+    require_supported_routed_reference_query_policy,
+)
+from eom_workflow_runner.embedding_batch_plan_admission import (
+    resolve_embedding_device_routing_policy,
+)
 from eom_workflow_runner.reference_query_source_read import (
     CatalogReferenceQueryReadOwner,
     ReferenceQueryOwnerConfiguration,
     read_pinned_reference_query_controls,
+    read_selected_reference_query_controls,
 )
 from pydantic import TypeAdapter
 from sqlalchemy import Engine, text
@@ -58,6 +70,7 @@ from eom_catalog_service.workflow_similarity_read_service import (
 SIMILARITY_READER_CONFIGURATION_PATH = Path("/etc/eom/catalog-similarity-read.json")
 MIXED_SIMILARITY_READER_CONFIGURATION_PATH = Path("/etc/eom/catalog-mixed-similarity-read.json")
 EXAM_SIMILARITY_READER_CONFIGURATION_PATH = Path("/etc/eom/catalog-exam-similarity-read.json")
+PUBLIC_SIMILARITY_READER_CONFIGURATION_PATH = Path("/etc/eom/public-reference-query-owner.json")
 
 
 class SimilarityReaderRuntimeError(ValueError):
@@ -189,6 +202,13 @@ def read_mixed_similarity_reader_configuration(expected_raw_sha256: str) -> byte
     )
 
 
+def read_public_similarity_reader_configuration(expected_raw_sha256: str) -> bytes:
+    """Reuse the installed public controls, not QUERY process privileges or capture."""
+    return _read_reader_configuration(
+        PUBLIC_SIMILARITY_READER_CONFIGURATION_PATH, expected_raw_sha256
+    )
+
+
 def _read_reader_configuration(path: Path, expected_raw_sha256: str) -> bytes:
     TypeAdapter(Sha256).validate_python(expected_raw_sha256)
     directories: list[tuple[int, int | None, str, tuple[int, ...]]] = []
@@ -263,6 +283,20 @@ def _admit_reader_selection(
     pin = OperatorAuthorizationFenceOwnerPin(
         selection.database_owner.role_name, selection.database_owner.role_oid
     )
+    identity = _admit_reader_database_owner(engine, pin)
+    registry = EmbeddingRegistryOwnerConfiguration(
+        selection.corpus_id,
+        selection.namespace,
+        selection.document_space,
+        selection.recipe,
+        selection.source_classes,
+    )
+    return registry, identity
+
+
+def _admit_reader_database_owner(
+    engine: Engine, pin: OperatorAuthorizationFenceOwnerPin
+) -> PostgresOperatorAuthorizationFence:
     # Installation/role inspection is independent for each configured reader;
     # no source/operator admission is inferred or cached by this composition.
     with engine.connect() as connection:
@@ -272,14 +306,7 @@ def _admit_reader_selection(
         ):
             raise SimilarityReaderRuntimeError()
         require_operator_authorization_fence_installation(connection, pin)
-    registry = EmbeddingRegistryOwnerConfiguration(
-        selection.corpus_id,
-        selection.namespace,
-        selection.document_space,
-        selection.recipe,
-        selection.source_classes,
-    )
-    return registry, PostgresOperatorAuthorizationFence(pin)
+    return PostgresOperatorAuthorizationFence(pin)
 
 
 def build_catalog_similarity_context_reads(
@@ -288,6 +315,7 @@ def build_catalog_similarity_context_reads(
     mode: str,
     configuration_raw_sha256: str | None = None,
     mixed_configuration_raw_sha256: str | None = None,
+    public_configuration_raw_sha256: str | None = None,
     settings: CatalogSettings | None = None,
 ) -> CatalogSimilarityContextReadService | None:
     if mode == "DISABLED":
@@ -313,7 +341,21 @@ def build_catalog_similarity_context_reads(
                 raise SimilarityReaderRuntimeError()
             require_mixed_similarity_reader_cohost(selection, mixed)
             require_same_routed_reader_controls(routed, mixed_routed)
-        return CatalogSimilarityContextReadService(owner, mixed_owner=mixed_owner)
+        public_owner = None
+        if public_configuration_raw_sha256 is not None:
+            public_owner = _configured_public_reference_read_owner(
+                engine,
+                read_public_similarity_reader_configuration(public_configuration_raw_sha256),
+                settings=settings,
+            )
+            if (
+                public_owner.configuration.registry.corpus_id
+                != owner.configuration.registry.corpus_id
+            ):
+                raise SimilarityReaderRuntimeError()
+        return CatalogSimilarityContextReadService(
+            owner, mixed_owner=mixed_owner, public_owner=public_owner
+        )
     except Exception:
         raise SimilarityReaderRuntimeError() from None
 
@@ -362,3 +404,74 @@ def _configured_reference_read_owner(
         engine, cpu_configuration, identity_fence=identity, settings=settings, cuda_owner=cuda_owner
     )
     return selection, routed, owner
+
+
+def _configured_public_reference_read_owner(
+    engine: Engine, raw: bytes, *, settings: CatalogSettings | None
+) -> CatalogReferenceQueryReadOwner:
+    """Derive read-only CPU/CUDA owners from exact public controls, never a launcher."""
+    selected, routed = parse_reference_query_installed_owner_selection(raw)
+    if not isinstance(selected, ReferenceQueryPublicServiceConfiguration) or not isinstance(
+        routed, PublicRoutedReferenceQueryOwnerConfiguration
+    ):
+        raise SimilarityReaderRuntimeError()
+    identity = _admit_reader_database_owner(
+        engine,
+        OperatorAuthorizationFenceOwnerPin(
+            selected.database_owner.role_name, selected.database_owner.role_oid
+        ),
+    )
+    with Session(engine) as session, session.begin():
+        session.execute(text("SET TRANSACTION READ ONLY"))
+        reader = PinnedArtifactReadContext.for_session(
+            session, settings or CatalogSettings.from_environment()
+        )
+        cpu, _ = read_selected_reference_query_controls(
+            reader,
+            policy_member=selected.native_execution_policy,
+            policy_sha256=selected.native_execution_policy_sha256,
+            runtime_bundle=selected.runtime_bundle,
+        )
+        routing = resolve_embedding_device_routing_policy(reader, routed.routing_policy)
+        cuda, _ = read_selected_reference_query_controls(
+            reader,
+            policy_member=routed.cuda_native_execution_policy,
+            policy_sha256=routed.cuda_native_execution_policy_sha256,
+            runtime_bundle=routing.cuda.profile.runtime_bundle,
+        )
+        require_supported_routed_reference_query_policy(routed, routing, cpu, cuda)
+        reader.revalidate_provenance()
+    cpu_registry = EmbeddingRegistryOwnerConfiguration(
+        selected.corpus_id,
+        selected.namespace,
+        cpu.spaces.document,
+        selected.recipe,
+        selected.source_classes,
+    )
+    cuda_namespace = type(selected.namespace).model_validate(
+        selected.namespace.model_dump(mode="json")
+        | {"space_sha256": cuda.spaces.document.space_sha256}
+    )
+    cuda_owner = CatalogReferenceQueryReadOwner(
+        engine,
+        ReferenceQueryOwnerConfiguration(
+            replace(cpu_registry, namespace=cuda_namespace, space=cuda.spaces.document),
+            routed.cuda_native_execution_policy,
+            routed.cuda_native_execution_policy_sha256,
+            routing.cuda.profile.runtime_bundle,
+        ),
+        identity_fence=identity,
+        settings=settings,
+    )
+    return CatalogReferenceQueryReadOwner(
+        engine,
+        ReferenceQueryOwnerConfiguration(
+            cpu_registry,
+            selected.native_execution_policy,
+            selected.native_execution_policy_sha256,
+            selected.runtime_bundle,
+        ),
+        identity_fence=identity,
+        settings=settings,
+        cuda_owner=cuda_owner,
+    )

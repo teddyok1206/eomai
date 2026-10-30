@@ -244,9 +244,11 @@ def test_openapi_declares_exact_inputs_without_reinterpreting_predecessors(setup
             "system-rag-reference-query-prepare-request/1.0": prefix,
             "system-rag-reference-query-prepare-request/1.1": prefix + "V11",
             "system-rag-reference-query-prepare-request/2.0": prefix + "V2",
+            "system-rag-reference-query-prepare-request/3.0": prefix + "V3",
+            "system-rag-reference-query-prepare-request/4.0": prefix + "V4",
         },
     }
-    assert len(body["oneOf"]) == 3
+    assert len(body["oneOf"]) == 5
     old = schema["components"]["schemas"]["ReferenceQueryPrepareInput"]
     new = schema["components"]["schemas"]["ReferenceQueryPrepareInputV11"]
     mixed = schema["components"]["schemas"]["ReferenceQueryPrepareInputV2"]

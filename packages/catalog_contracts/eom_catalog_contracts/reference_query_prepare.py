@@ -14,6 +14,7 @@ from eom_catalog_contracts.embedding_reference_query import (
 )
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_catalog_contracts.models import FrozenModel, Sha256
+from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityPurpose
 from eom_catalog_contracts.similarity_context import SimilarityFailureCode
 from eom_catalog_contracts.similarity_read import CompletedSimilarityQuerySelection
 
@@ -23,6 +24,7 @@ MAX_REFERENCE_QUERY_PREPARE_REPLY_BYTES = 4096
 MAX_ROUTED_QUERY_PREPARE_REQUEST_BYTES = 128 * 1024
 MAX_ROUTED_QUERY_PREPARE_REPLY_BYTES = 32 * 1024
 MAX_ROUTED_REFERENCE_QUERIES = 16
+MAX_PUBLIC_REFERENCE_QUERIES = 32
 REFERENCE_QUERY_PREPARE_SOCKET = "/run/eom-reference-query-owner/owner.sock"
 type ReferenceQueryPrepareErrorCode = (
     SimilarityFailureCode
@@ -147,8 +149,41 @@ class ReferenceQueryPrepareRequestV3(_PrepareValue):
         return self
 
 
+class ReferenceQueryPrepareRequestV4(_PrepareValue):
+    """One bounded public-report source scope, never an authority or runtime selector."""
+
+    maximum_bytes = MAX_ROUTED_QUERY_PREPARE_REQUEST_BYTES
+    contract_schema: ClassVar[str] = "system-rag-reference-query-prepare-v4"
+    schema_version: Literal["system-rag-reference-query-prepare-request/4.0"]
+    operation: Literal["PREPARE_REFERENCE_QUERY"]
+    operation_id: str = Field(pattern=r"^queryprepare_[0-9a-f]{32}$")
+    idempotency_key: str = Field(min_length=8, max_length=128, pattern=r"^[A-Za-z0-9_.:-]{8,128}$")
+    source_item_revision_ids: tuple[str, ...] = Field(
+        min_length=1, max_length=MAX_PUBLIC_REFERENCE_QUERIES
+    )
+    graph_snapshot: KnowledgeGraphSnapshotPointer
+    policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
+    policy_sha256: Sha256
+    consumer_purpose: PublicSolutionSimilarityPurpose
+    top_k: int = Field(strict=True, ge=1, le=64)
+    request_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_scope(self) -> ReferenceQueryPrepareRequestV4:
+        if (
+            len(set(self.source_item_revision_ids)) != len(self.source_item_revision_ids)
+            or self.graph_snapshot.manifest_sha256 != self.graph_snapshot.manifest_artifact.sha256
+            or self.request_sha256
+            != content_sha256(self.model_dump(mode="json", exclude={"request_sha256"}))
+        ):
+            raise ValueError("REFERENCE_QUERY_PREPARE_REQUEST_INVALID")
+        return self
+
+
 type SupportedReferenceQueryPrepareRequest = (
-    SingleReferenceQueryPrepareRequest | ReferenceQueryPrepareRequestV3
+    SingleReferenceQueryPrepareRequest
+    | ReferenceQueryPrepareRequestV3
+    | ReferenceQueryPrepareRequestV4
 )
 
 
@@ -166,6 +201,8 @@ def parse_supported_reference_query_prepare_request(
             return ReferenceQueryPrepareRequestV2.model_validate(document)
         if version == "system-rag-reference-query-prepare-request/3.0":
             return ReferenceQueryPrepareRequestV3.model_validate(document)
+        if version == "system-rag-reference-query-prepare-request/4.0":
+            return ReferenceQueryPrepareRequestV4.model_validate(document)
     raise ValueError("REFERENCE_QUERY_PREPARE_REQUEST_INVALID")
 
 
@@ -173,7 +210,7 @@ def parse_single_reference_query_prepare_request(
     value: object,
 ) -> SingleReferenceQueryPrepareRequest:
     parsed = parse_supported_reference_query_prepare_request(value)
-    if isinstance(parsed, ReferenceQueryPrepareRequestV3):
+    if isinstance(parsed, ReferenceQueryPrepareRequestV3 | ReferenceQueryPrepareRequestV4):
         raise ValueError("REFERENCE_QUERY_PREPARE_REQUEST_INVALID")
     return parsed
 
@@ -264,40 +301,73 @@ class ReferenceQueryPrepareReplyV3(_PrepareValue):
 
     @model_validator(mode="after")
     def original_order_and_summary(self) -> ReferenceQueryPrepareReplyV3:
-        missing_binding = (
-            self.operation_id is None,
-            self.request_sha256 is None,
-            self.request_schema_version is None,
-        )
-        if any(missing_binding) and not all(missing_binding):
-            raise ValueError("REFERENCE_QUERY_PREPARE_REPLY_BINDING_INVALID")
-        if tuple(c.ordinal for c in self.children) != tuple(range(len(self.children))) or (
-            len({c.source_item_revision_id for c in self.children}) != len(self.children)
-        ):
-            raise ValueError("REFERENCE_QUERY_PREPARE_REPLY_BINDING_INVALID")
-        workflow_ids = [c.workflow_id for c in self.children if c.workflow_id is not None]
-        if len(set(workflow_ids)) != len(workflow_ids):
-            raise ValueError("REFERENCE_QUERY_PREPARE_REPLY_BINDING_INVALID")
-        if (
-            bool(self.preparation) != bool(self.parent_request_sha256)
-            or (self.children and self.preparation is None)
-            or (self.device is None and any(c.workflow_id is not None for c in self.children))
-        ):
-            raise ValueError("REFERENCE_QUERY_PREPARE_REPLY_BINDING_INVALID")
-        expected_workflow = self.children[0].workflow_id if len(self.children) == 1 else None
-        expected_selection = (
-            self.children[0].selection
-            if len(self.children) == 1 and self.status == "READY"
-            else None
-        )
-        if (
-            self.workflow_id != expected_workflow
-            or self.selection != expected_selection
-            or (self.status == "PENDING" and all(c.state == "COMPLETED" for c in self.children))
-            or (self.status == "PENDING" and any(c.state == "FAILED" for c in self.children))
-        ):
-            raise ValueError("REFERENCE_QUERY_PREPARE_REPLY_BINDING_INVALID")
+        _validate_routed_reply_summary(self)
         return self
+
+
+class PublicRoutedReferenceQueryChild(RoutedReferenceQueryChild):
+    ordinal: int = Field(strict=True, ge=0, lt=MAX_PUBLIC_REFERENCE_QUERIES)
+
+
+class ReferenceQueryPrepareReplyV4(_PrepareValue):
+    maximum_bytes = MAX_ROUTED_QUERY_PREPARE_REPLY_BYTES
+    contract_schema: ClassVar[str] = "system-rag-reference-query-prepare-v4"
+    schema_version: Literal["system-rag-reference-query-prepare-reply/4.0"]
+    operation: Literal["PREPARE_REFERENCE_QUERY"]
+    operation_id: str | None = Field(pattern=r"^queryprepare_[0-9a-f]{32}$")
+    request_sha256: Sha256 | None
+    request_schema_version: Literal["system-rag-reference-query-prepare-request/4.0"] | None
+    status: Literal["PENDING", "READY", "UNAVAILABLE", "FAILED"]
+    preparation: ArtifactMemberPointer | None
+    parent_request_sha256: Sha256 | None
+    device: Literal["CPU", "CUDA"] | None
+    children: tuple[PublicRoutedReferenceQueryChild, ...] = Field(
+        max_length=MAX_PUBLIC_REFERENCE_QUERIES
+    )
+    workflow_id: str | None = Field(pattern=r"^workflow_[0-9a-f]{32}$")
+    selection: CompletedSimilarityQuerySelection | None
+    error_code: ReferenceQueryPrepareErrorCode | None
+
+    @model_validator(mode="after")
+    def original_order_and_summary(self) -> ReferenceQueryPrepareReplyV4:
+        _validate_routed_reply_summary(self)
+        return self
+
+
+def _validate_routed_reply_summary(
+    self: ReferenceQueryPrepareReplyV3 | ReferenceQueryPrepareReplyV4,
+) -> None:
+    missing_binding = (
+        self.operation_id is None,
+        self.request_sha256 is None,
+        self.request_schema_version is None,
+    )
+    if any(missing_binding) and not all(missing_binding):
+        raise ValueError("REFERENCE_QUERY_PREPARE_REPLY_BINDING_INVALID")
+    if tuple(c.ordinal for c in self.children) != tuple(range(len(self.children))) or (
+        len({c.source_item_revision_id for c in self.children}) != len(self.children)
+    ):
+        raise ValueError("REFERENCE_QUERY_PREPARE_REPLY_BINDING_INVALID")
+    workflow_ids = [c.workflow_id for c in self.children if c.workflow_id is not None]
+    if len(set(workflow_ids)) != len(workflow_ids):
+        raise ValueError("REFERENCE_QUERY_PREPARE_REPLY_BINDING_INVALID")
+    if (
+        bool(self.preparation) != bool(self.parent_request_sha256)
+        or (self.children and self.preparation is None)
+        or (self.device is None and any(c.workflow_id is not None for c in self.children))
+    ):
+        raise ValueError("REFERENCE_QUERY_PREPARE_REPLY_BINDING_INVALID")
+    expected_workflow = self.children[0].workflow_id if len(self.children) == 1 else None
+    expected_selection = (
+        self.children[0].selection if len(self.children) == 1 and self.status == "READY" else None
+    )
+    if (
+        self.workflow_id != expected_workflow
+        or self.selection != expected_selection
+        or (self.status == "PENDING" and all(c.state == "COMPLETED" for c in self.children))
+        or (self.status == "PENDING" and any(c.state == "FAILED" for c in self.children))
+    ):
+        raise ValueError("REFERENCE_QUERY_PREPARE_REPLY_BINDING_INVALID")
 
 
 def routed_reference_query_error_reply(
@@ -305,11 +375,15 @@ def routed_reference_query_error_reply(
     *,
     status: str = "FAILED",
     error_code: str = "REFERENCE_QUERY_PREPARE_UNAVAILABLE",
-) -> ReferenceQueryPrepareReplyV3:
+) -> ReferenceQueryPrepareReplyV3 | ReferenceQueryPrepareReplyV4:
     """Closed failure value only; no retry, source resolution or authority side effect."""
-    return ReferenceQueryPrepareReplyV3.model_validate(
+    public = isinstance(request, ReferenceQueryPrepareRequestV4)
+    reply_type = ReferenceQueryPrepareReplyV4 if public else ReferenceQueryPrepareReplyV3
+    return reply_type.model_validate(
         dict(
-            schema_version="system-rag-reference-query-prepare-reply/3.0",
+            schema_version="system-rag-reference-query-prepare-reply/4.0"
+            if public
+            else "system-rag-reference-query-prepare-reply/3.0",
             operation="PREPARE_REFERENCE_QUERY",
             operation_id=None if request is None else request.operation_id,
             request_sha256=None if request is None else request.request_sha256,
@@ -327,7 +401,10 @@ def routed_reference_query_error_reply(
 
 
 type SupportedReferenceQueryPrepareReply = Annotated[
-    ReferenceQueryPrepareReply | ReferenceQueryPrepareReplyV2 | ReferenceQueryPrepareReplyV3,
+    ReferenceQueryPrepareReply
+    | ReferenceQueryPrepareReplyV2
+    | ReferenceQueryPrepareReplyV3
+    | ReferenceQueryPrepareReplyV4,
     Field(discriminator="schema_version"),
 ]
 
@@ -336,6 +413,10 @@ def parse_supported_reference_query_prepare_reply(
     value: object,
 ) -> SupportedReferenceQueryPrepareReply:
     raw = raw_similarity_contract_value(value)
+    if isinstance(raw, dict) and raw.get("schema_version") == (
+        "system-rag-reference-query-prepare-reply/4.0"
+    ):
+        return ReferenceQueryPrepareReplyV4.model_validate(raw)
     if (
         isinstance(raw, dict)
         and raw.get("schema_version") == "system-rag-reference-query-prepare-reply/3.0"
@@ -354,6 +435,22 @@ def validate_supported_reference_query_prepare_reply(
 ) -> None:
     request = parse_supported_reference_query_prepare_request(request)
     reply = parse_supported_reference_query_prepare_reply(reply)
+    if isinstance(request, ReferenceQueryPrepareRequestV4):
+        if (
+            not isinstance(reply, ReferenceQueryPrepareReplyV4)
+            or reply.operation_id != request.operation_id
+            or reply.request_sha256 != request.request_sha256
+            or reply.request_schema_version != request.schema_version
+            or (
+                reply.children
+                and tuple(c.source_item_revision_id for c in reply.children)
+                != request.source_item_revision_ids
+            )
+        ):
+            raise ValueError("REFERENCE_QUERY_PREPARE_REPLY_BINDING_INVALID")
+        return
+    if isinstance(reply, ReferenceQueryPrepareReplyV4):
+        raise ValueError("REFERENCE_QUERY_PREPARE_REPLY_BINDING_INVALID")
     if isinstance(reply, ReferenceQueryPrepareReplyV3):
         singles = (
             request.requests if isinstance(request, ReferenceQueryPrepareRequestV3) else (request,)
@@ -385,7 +482,12 @@ def validate_reference_query_prepare_reply(
     reply: ReferenceQueryPrepareReply,
 ) -> None:
     request = parse_supported_reference_query_prepare_request(request)
-    if isinstance(request, ReferenceQueryPrepareRequestV2 | ReferenceQueryPrepareRequestV3):
+    if isinstance(
+        request,
+        ReferenceQueryPrepareRequestV2
+        | ReferenceQueryPrepareRequestV3
+        | ReferenceQueryPrepareRequestV4,
+    ):
         raise ValueError("REFERENCE_QUERY_PREPARE_REPLY_BINDING_INVALID")
     reply = ReferenceQueryPrepareReply.model_validate(reply)
     if reply.operation_id != request.operation_id or reply.request_sha256 != request.request_sha256:

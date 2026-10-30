@@ -17,6 +17,7 @@ from eom_api_contracts.inference_transfer import (
 from eom_api_contracts.similarity_context import (
     SimilarityContextReadSelection,
     SimilarityContextReadSelectionV2,
+    SimilarityContextReadSelectionV3,
 )
 from eom_catalog_contracts.inference_transfer_invocation import InferenceTransferWorkflowReadMode
 from eom_catalog_contracts.inference_transfer_metadata import (
@@ -28,11 +29,13 @@ from eom_catalog_contracts.inference_transfer_snapshot import (
     InferenceTransferSnapshotRequest,
     InferenceTransferSnapshotResult,
 )
+from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityContext
 from eom_catalog_contracts.similarity_context_v2 import SupportedSimilarityContext
 from eom_identifiers import content_sha256
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Path, Query, Request, Response
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
+from starlette.concurrency import run_in_threadpool
 
 from eom_api.dependencies import Auth, ExpectedVersion, IdempotencyKey, require_permission
 from eom_api.errors import ApiError
@@ -40,12 +43,16 @@ from eom_api.routers.common import one, run_command
 from eom_api.services.similarity_context_read import MAX_PUBLIC_SIMILARITY_SELECTOR_BYTES
 
 router = APIRouter(tags=["inference-transfer"])
+type CompletedSimilarityContext = Annotated[
+    SupportedSimilarityContext | PublicSolutionSimilarityContext,
+    Field(discriminator="schema_version"),
+]
 
 
 @router.post(
     "/knowledge/inference-transfer/similarity-context",
     operation_id="inference_transfer_similarity_context_read",
-    response_model=SingleResponse[SupportedSimilarityContext],
+    response_model=SingleResponse[CompletedSimilarityContext],
     dependencies=[Depends(require_permission(PermissionKey.KNOWLEDGE_GRAPH_RETRIEVE))],
     openapi_extra={
         "x-eom-read-only": True,
@@ -59,10 +66,12 @@ router = APIRouter(tags=["inference-transfer"])
 )
 async def read_similarity_context(
     request: Request,
-    body: SimilarityContextReadSelection | SimilarityContextReadSelectionV2,
+    body: SimilarityContextReadSelection
+    | SimilarityContextReadSelectionV2
+    | SimilarityContextReadSelectionV3,
     response: Response,
     authentication: Auth,
-) -> SingleResponse[SupportedSimilarityContext]:
+) -> SingleResponse[CompletedSimilarityContext]:
     if len(await request.body()) > MAX_PUBLIC_SIMILARITY_SELECTOR_BYTES:
         raise ApiError(
             422,
@@ -72,6 +81,9 @@ async def read_similarity_context(
         )
     response.headers["Cache-Control"] = "no-store"
     reads = request.app.state.services.similarity_context_reads
+    if isinstance(body, SimilarityContextReadSelectionV3):
+        result = await run_in_threadpool(reads.read_public, authentication, body.exact_selection())
+        return one(request, result)
     return one(
         request,
         reads.read_v2(authentication, body.exact_selection())

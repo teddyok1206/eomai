@@ -4,7 +4,10 @@ from __future__ import annotations
 
 from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareReplyV3,
+    ReferenceQueryPrepareReplyV4,
     ReferenceQueryPrepareRequestV3,
+    ReferenceQueryPrepareRequestV4,
+    SingleReferenceQueryPrepareRequest,
     SupportedReferenceQueryPrepareReply,
     SupportedReferenceQueryPrepareRequest,
     parse_supported_reference_query_prepare_request,
@@ -32,17 +35,25 @@ class RoutedNativeReferenceQueryPreparation:
         self, request: SupportedReferenceQueryPrepareRequest
     ) -> SupportedReferenceQueryPrepareReply:
         request = parse_supported_reference_query_prepare_request(request)
-        if not isinstance(request, ReferenceQueryPrepareRequestV3):
+        if not isinstance(request, ReferenceQueryPrepareRequestV3 | ReferenceQueryPrepareRequestV4):
             original = self.session.cpu.observe_existing(request)
             if original is not None:
                 validate_supported_reference_query_prepare_reply(request, original)
                 return original
-        requests = (
-            request.requests if isinstance(request, ReferenceQueryPrepareRequestV3) else (request,)
-        )
+        requests: tuple[SingleReferenceQueryPrepareRequest, ...] = ()
+        if not isinstance(request, ReferenceQueryPrepareRequestV4):
+            requests = (
+                request.requests
+                if isinstance(request, ReferenceQueryPrepareRequestV3)
+                else (request,)
+            )
         try:
-            prepared = self.session.selection.prepare(
-                requests, idempotency_key=request.idempotency_key
+            prepared = (
+                self.session.selection.prepare_public(request)
+                if isinstance(request, ReferenceQueryPrepareRequestV4)
+                else self.session.selection.prepare(
+                    requests, idempotency_key=request.idempotency_key
+                )
             )
         except ReferenceQueryPreparationUnavailable as absent:
             return routed_reference_query_error_reply(
@@ -52,7 +63,9 @@ class RoutedNativeReferenceQueryPreparation:
         children = [
             dict(
                 ordinal=child.ordinal,
-                source_item_revision_id=requests[child.ordinal].source_item_revision_id,
+                source_item_revision_id=request.source_item_revision_ids[child.ordinal]
+                if isinstance(request, ReferenceQueryPrepareRequestV4)
+                else requests[child.ordinal].source_item_revision_id,
                 workflow_id=child.workflow_id,
                 state=child.state,
                 selection=None
@@ -61,9 +74,16 @@ class RoutedNativeReferenceQueryPreparation:
             )
             for child in observed.children
         ]
-        reply = ReferenceQueryPrepareReplyV3.model_validate(
+        reply_type = (
+            ReferenceQueryPrepareReplyV4
+            if isinstance(request, ReferenceQueryPrepareRequestV4)
+            else ReferenceQueryPrepareReplyV3
+        )
+        reply = reply_type.model_validate(
             dict(
-                schema_version="system-rag-reference-query-prepare-reply/3.0",
+                schema_version="system-rag-reference-query-prepare-reply/4.0"
+                if isinstance(request, ReferenceQueryPrepareRequestV4)
+                else "system-rag-reference-query-prepare-reply/3.0",
                 operation="PREPARE_REFERENCE_QUERY",
                 operation_id=request.operation_id,
                 request_sha256=request.request_sha256,

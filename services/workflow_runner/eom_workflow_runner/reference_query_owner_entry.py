@@ -29,12 +29,13 @@ if TYPE_CHECKING:
     from eom_orchestrator.reference_query_prepare_ports import ReferenceQueryPreparationPort
     from eom_workflow.reference_query_owner_configuration import ReferenceQueryServiceConfiguration
     from eom_workflow.reference_query_routed_owner_configuration import (
-        RoutedReferenceQueryOwnerConfiguration,
+        SupportedRoutedReferenceQueryOwnerConfiguration,
     )
 
 _RELEASES = Path("/opt/eom/embedding-owner-releases")
 _CONFIGURATION = Path("/etc/eom/reference-query-owner.json")
 _MIXED_CONFIGURATION = Path("/etc/eom/mixed-reference-query-owner.json")
+_PUBLIC_CONFIGURATION = Path("/etc/eom/public-reference-query-owner.json")
 _SOCKET_PARENT = Path("/run/eom-reference-query-owner")
 _PRIVATE_CONFIGURATION = Path("/etc/eom/private-chat-query-owner.json")
 _PRIVATE_SOCKET_PARENT = Path("/run/eom-private-chat-query-owner")
@@ -136,6 +137,19 @@ def _mixed_configuration_bytes() -> bytes | None:
     )
 
 
+def _public_configuration_bytes() -> bytes | None:
+    expected = os.environ.get("EOM_PUBLIC_REFERENCE_QUERY_CONFIGURATION_SHA256")
+    if expected is None:
+        return None
+    if re.fullmatch(r"sha256:[0-9a-f]{64}", expected) is None:
+        raise ValueError("REFERENCE_QUERY_PUBLIC_CONFIGURATION_UNAVAILABLE")
+    from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
+
+    return NumericalRuntimeFileSnapshots().read(
+        _PUBLIC_CONFIGURATION, sha256=expected, maximum=64 * 1024
+    )
+
+
 def _provision_query_socket_parent(parent: Path, group_name: str) -> None:
     owner, group = pwd.getpwnam("eom-workflow-runner"), grp.getgrnam(group_name)
     if owner.pw_uid <= 0 or group.gr_gid <= 0:
@@ -207,7 +221,8 @@ def _serve_child(
     *,
     private_raw: bytes | None = None,
     mixed_raw: bytes | None = None,
-    routed_configuration: RoutedReferenceQueryOwnerConfiguration | None = None,
+    public_raw: bytes | None = None,
+    routed_configuration: SupportedRoutedReferenceQueryOwnerConfiguration | None = None,
 ) -> int:
     owner = pwd.getpwnam("eom-workflow-runner")
     api = pwd.getpwnam("eom-api")
@@ -237,6 +252,7 @@ def _serve_child(
     server = None
     runtime = None
     mixed_runtime = None
+    public_runtime = None
 
     def stop_child(_signum: int, _frame: FrameType | None) -> None:
         # Parent forwarding and cgroup delivery may reenter this handler. Do not
@@ -266,6 +282,8 @@ def _serve_child(
         )
         mixed_snapshots = None
         mixed_routed_factory = None
+        public_snapshots = None
+        public_routed_factory = None
         if mixed_raw is not None:
             from eom_workflow.reference_query_owner_configuration import (
                 ReferenceQueryServiceConfigurationV2,
@@ -294,6 +312,34 @@ def _serve_child(
                     mixed_routed,
                     configuration_guard=mixed_snapshots.assert_unchanged,
                 )
+        if public_raw is not None:
+            from eom_workflow.reference_query_owner_configuration import (
+                ReferenceQueryPublicServiceConfiguration,
+                require_public_reference_query_cohost,
+            )
+            from eom_workflow.reference_query_routed_owner_configuration import (
+                PublicRoutedReferenceQueryOwnerConfiguration,
+                parse_reference_query_installed_owner_selection,
+            )
+
+            public_snapshots = NumericalRuntimeFileSnapshots()
+            current_public = public_snapshots.read(
+                _PUBLIC_CONFIGURATION,
+                sha256="sha256:" + hashlib.sha256(public_raw).hexdigest(),
+                maximum=64 * 1024,
+            )
+            public_selection, public_routed = parse_reference_query_installed_owner_selection(
+                current_public
+            )
+            if not isinstance(
+                public_selection, ReferenceQueryPublicServiceConfiguration
+            ) or not isinstance(public_routed, PublicRoutedReferenceQueryOwnerConfiguration):
+                raise ValueError("REFERENCE_QUERY_PUBLIC_CONFIGURATION_UNAVAILABLE")
+            require_public_reference_query_cohost(configuration, public_selection)
+            public_runtime = build_reference_query_owner_runtime(public_selection, admission)
+            public_routed_factory = build_routed_reference_query_owner_factory(
+                public_runtime, public_routed, configuration_guard=public_snapshots.assert_unchanged
+            )
         private_listener = None
         if private_raw is not None:
             from eom_orchestrator.private_chat_query_prepare_client import (
@@ -350,8 +396,15 @@ def _serve_child(
                     )
                 return mixed_runtime.application(capture)
 
+            def public_application() -> ReferenceQueryPreparationPort:
+                assert public_snapshots is not None and public_routed_factory is not None
+                public_snapshots.assert_unchanged()
+                return RoutedNativeReferenceQueryPreparation(public_routed_factory.session(capture))
+
             return ReferenceQueryFamilyPreparation(
-                primary_application, None if mixed_runtime is None else mixed_application
+                primary_application,
+                None if mixed_runtime is None else mixed_application,
+                None if public_runtime is None else public_application,
             )
 
         server = ReferenceQueryOwnerServer(
@@ -376,6 +429,8 @@ def _serve_child(
             runtime.close()
         if mixed_runtime is not None:
             mixed_runtime.close()
+        if public_runtime is not None:
+            public_runtime.close()
 
 
 def _require_dropped_identity(uid: int, gid: int) -> None:
@@ -459,6 +514,24 @@ def main() -> int:
                 raise ValueError("REFERENCE_QUERY_MIXED_CONFIGURATION_UNAVAILABLE")
             require_mixed_reference_query_cohost(configuration, mixed_selection)
         private_raw = _private_configuration_bytes()
+        public_raw = _public_configuration_bytes()
+        if public_raw is not None:
+            from eom_workflow.reference_query_owner_configuration import (
+                ReferenceQueryPublicServiceConfiguration,
+                require_public_reference_query_cohost,
+            )
+            from eom_workflow.reference_query_routed_owner_configuration import (
+                PublicRoutedReferenceQueryOwnerConfiguration,
+            )
+
+            public_selection, public_routed = parse_reference_query_installed_owner_selection(
+                public_raw
+            )
+            if not isinstance(
+                public_selection, ReferenceQueryPublicServiceConfiguration
+            ) or not isinstance(public_routed, PublicRoutedReferenceQueryOwnerConfiguration):
+                raise ValueError("REFERENCE_QUERY_PUBLIC_CONFIGURATION_UNAVAILABLE")
+            require_public_reference_query_cohost(configuration, public_selection)
         if private_raw is not None:
             from eom_workflow.private_chat_query_owner_configuration import (
                 parse_private_chat_query_service_configuration,
@@ -489,6 +562,7 @@ def main() -> int:
                     restore_mask,
                     private_raw=private_raw,
                     mixed_raw=mixed_raw,
+                    public_raw=public_raw,
                     routed_configuration=routed_configuration,
                 )
                 sys.stdout.flush()

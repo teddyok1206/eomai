@@ -81,29 +81,69 @@ class CatalogPublicSolutionSimilarityRead:
         caller: EmbeddingRegistryCaller,
         preparation: PublicSolutionSimilarityPreparation,
     ) -> PublicSolutionSimilarityRequest:
+        return self.prepare_many_in_session(session, caller, (preparation,))[0]
+
+    def prepare_many_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        preparations: tuple[PublicSolutionSimilarityPreparation, ...],
+    ) -> tuple[PublicSolutionSimilarityRequest, ...]:
+        """One current source capture and index read per device, not N full-index reads.
+
+        Only the ordered source/request identities differ. These returned pins
+        are never a cached permission or a numerical execution grant.
+        """
         self._require_root(session)
         if (
             type(caller) is not EmbeddingRegistryCaller
-            or type(preparation) is not PublicSolutionSimilarityPreparation
+            or type(preparations) is not tuple
+            or not 1 <= len(preparations) <= 32
+            or any(type(value) is not PublicSolutionSimilarityPreparation for value in preparations)
         ):
             raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
-        preparation.selection.__post_init__()
+        preparation = preparations[0]
+        for value in preparations:
+            value.selection.__post_init__()
         scope = preparation.selection.scope
         config = self.catalog.configuration
         if (
-            len(preparation.selection.source_revision_ids) != 1
+            any(
+                len(value.selection.source_revision_ids) != 1
+                or value.selection.scope != scope
+                or value.spaces != preparation.spaces
+                or value.consumer_purpose != preparation.consumer_purpose
+                or value.top_k != preparation.top_k
+                for value in preparations
+            )
             or scope.corpus_id != config.corpus_id
             or scope.namespace != config.namespace
             or preparation.spaces.document != config.space
         ):
             raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
-        captured = self.catalog.resolve_selected_sources(session, caller, preparation.selection)
-        if len(captured.entries) != 1 or not isinstance(
-            captured.entries[0], PublicSolutionEmbeddingEntry
+        ids = tuple(value.selection.source_revision_ids[0] for value in preparations)
+        if len(set(ids)) != len(ids) or len({value.request_id for value in preparations}) != len(
+            ids
         ):
             raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
-        entry = captured.entries[0]
-        if entry.public_solution.status != "AVAILABLE":
+        selection = SelectedEmbeddingSources(scope, tuple(sorted(ids)))
+        captured = self.catalog.resolve_selected_sources(session, caller, selection)
+        entries = {
+            entry.source.item_revision_id: entry
+            for entry in captured.entries
+            if isinstance(entry, PublicSolutionEmbeddingEntry)
+        }
+        if (
+            len(entries) != len(captured.entries)
+            or len(entries) != len(ids)
+            or set(entries) != set(ids)
+        ):
+            raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
+        entry = entries[ids[0]]
+        if any(
+            value.public_solution.status != "AVAILABLE" or value.recipe != entry.recipe
+            for value in entries.values()
+        ):
             raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
         current = EmbeddingRegistryRepository(session).current_namespace_revision(
             scope.corpus_id, scope.namespace
@@ -129,9 +169,7 @@ class CatalogPublicSolutionSimilarityRead:
         read_pinned_embedding_index(session, caller, intent, self.catalog)
         body = dict(
             schema_version="system-rag-similarity-request/3.0",
-            request_id=preparation.request_id,
             consumer_purpose=preparation.consumer_purpose,
-            anchor=PublicSolutionSourceReference.from_entry(entry).model_dump(mode="json"),
             graph_snapshot=scope.graph_snapshot.model_dump(mode="json"),
             policy_revision_id=scope.policy_revision_id,
             policy_sha256=scope.policy_sha256,
@@ -140,15 +178,22 @@ class CatalogPublicSolutionSimilarityRead:
             maximum_sources=scope.maximum_sources,
             top_k=preparation.top_k,
         )
-        result = PublicSolutionSimilarityRequest.model_validate(
-            body | {"request_sha256": content_sha256(body)}
-        )
-        if (
-            self.catalog.resolve_selected_sources(session, caller, preparation.selection)
-            != captured
-        ):
+        result = []
+        for prepared_value, source_id in zip(preparations, ids, strict=True):
+            child = body | {
+                "request_id": prepared_value.request_id,
+                "anchor": PublicSolutionSourceReference.from_entry(entries[source_id]).model_dump(
+                    mode="json"
+                ),
+            }
+            result.append(
+                PublicSolutionSimilarityRequest.model_validate(
+                    child | {"request_sha256": content_sha256(child)}
+                )
+            )
+        if self.catalog.resolve_selected_sources(session, caller, selection) != captured:
             raise SimilarityContextReadError("SOURCE_REVOKED")
-        return result
+        return tuple(result)
 
     def read_in_session(
         self,

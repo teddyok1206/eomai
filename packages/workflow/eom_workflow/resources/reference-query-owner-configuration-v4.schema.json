@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/reference-query-owner-configuration/4.0",
+  "title": "Fixed public-solution QUERY CPU owner selection; never authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "owner_source_commit",
+    "corpus_id",
+    "namespace",
+    "recipe",
+    "source_classes",
+    "native_execution_policy",
+    "native_execution_policy_sha256",
+    "runtime_bundle",
+    "database_owner",
+    "runtime_verifier",
+    "cpu_environment_raw_sha256",
+    "owner_environment_raw_sha256",
+    "api_provider"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "reference-query-owner-configuration/4.0"
+    },
+    "namespace": {
+      "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/3.0#/$defs/PublicSolutionIndexNamespace"
+    },
+    "owner_source_commit": {
+      "$ref": "eom://schemas/workflow/reference-query-owner-configuration/1.0#/properties/owner_source_commit"
+    },
+    "corpus_id": {
+      "$ref": "eom://schemas/workflow/reference-query-owner-configuration/1.0#/properties/corpus_id"
+    },
+    "recipe": {
+      "$ref": "eom://schemas/knowledge/public-solution-embedding-entry/1.0#/$defs/recipe"
+    },
+    "source_classes": {
+      "$ref": "eom://schemas/workflow/reference-query-owner-configuration/1.0#/properties/source_classes"
+    },
+    "native_execution_policy": {
+      "$ref": "eom://schemas/workflow/reference-query-owner-configuration/1.0#/properties/native_execution_policy"
+    },
+    "native_execution_policy_sha256": {
+      "$ref": "eom://schemas/workflow/reference-query-owner-configuration/1.0#/properties/native_execution_policy_sha256"
+    },
+    "runtime_bundle": {
+      "$ref": "eom://schemas/workflow/reference-query-owner-configuration/1.0#/properties/runtime_bundle"
+    },
+    "database_owner": {
+      "$ref": "eom://schemas/workflow/reference-query-owner-configuration/1.0#/properties/database_owner"
+    },
+    "runtime_verifier": {
+      "$ref": "eom://schemas/workflow/reference-query-owner-configuration/1.0#/properties/runtime_verifier"
+    },
+    "cpu_environment_raw_sha256": {
+      "$ref": "eom://schemas/workflow/reference-query-owner-configuration/1.0#/properties/cpu_environment_raw_sha256"
+    },
+    "owner_environment_raw_sha256": {
+      "$ref": "eom://schemas/workflow/reference-query-owner-configuration/1.0#/properties/owner_environment_raw_sha256"
+    },
+    "api_provider": {
+      "$ref": "eom://schemas/workflow/reference-query-owner-configuration/1.0#/properties/api_provider"
+    }
+  }
+}

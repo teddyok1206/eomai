@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/reference-query-owner-configuration/5.0",
+  "title": "Public-solution GPU-preferred QUERY owner selection; never authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "cpu_configuration",
+    "cuda_native_execution_policy",
+    "cuda_native_execution_policy_sha256",
+    "routing_policy",
+    "routing_policy_sha256",
+    "controller_release"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "reference-query-owner-configuration/5.0"
+    },
+    "cpu_configuration": {
+      "$ref": "eom://schemas/workflow/reference-query-owner-configuration/4.0"
+    },
+    "cuda_native_execution_policy": {
+      "$ref": "eom://schemas/workflow/reference-query-owner-configuration/1.0#/properties/native_execution_policy"
+    },
+    "cuda_native_execution_policy_sha256": {
+      "$ref": "eom://schemas/workflow/reference-query-owner-configuration/1.0#/$defs/hash"
+    },
+    "routing_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "sha256",
+        "schema_ref",
+        "media_type"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "const": "policy.json"
+        },
+        "sha256": {
+          "$ref": "eom://schemas/workflow/reference-query-owner-configuration/1.0#/$defs/hash"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/workflow/embedding-device-routing/1.0"
+        },
+        "media_type": {
+          "const": "application/json"
+        }
+      }
+    },
+    "routing_policy_sha256": {
+      "$ref": "eom://schemas/workflow/reference-query-owner-configuration/1.0#/$defs/hash"
+    },
+    "controller_release": {
+      "$ref": "eom://schemas/workflow/reference-query-owner-configuration/1.0#/$defs/commit"
+    }
+  }
+}
