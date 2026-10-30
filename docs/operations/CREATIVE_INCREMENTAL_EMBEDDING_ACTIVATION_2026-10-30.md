@@ -4,6 +4,53 @@
 기존 [공통 풀이 설계](../architecture/SOLUTION_EMBEDDING_FORMAT_COMPATIBILITY.md)와
 [구현 체크포인트](PUBLIC_SOLUTION_EMBEDDING_CONNECTION_2026-10-29.md)를 이어간다.
 
+## 사용자 확정 최종 완료 조건
+
+현재 활성 goal은 아래 세 조건과 본문의 실제 창작 5건 검증이 모두 닫힐 때만 완료한다.
+source test·패키지 설치·service active만으로 완료하지 않는다.
+
+1. 04/05/06 세 실제 슬롯이 서로 다른 풀이보고서를 작성하고 다음 작업으로 refill됨을 확인.
+2. 슬롯 사용 중에도 상태·사용량 새로고침이 완료·갱신되는 버그 수정과 운영 acceptance 보존.
+3. DB의 `조회 → 유사도 → 조회/배치`를 공식 Graph/Catalog/QUERY에 실제 연결·호환 배포하고,
+   canonical vector/binding·검색·같은 key replay/복구 및 backlog/향후 자동 증분까지 검증.
+
+30분 background 관측은 계속 유지하며 기존 520개 기출·교과서·정본·FAILED 이력을 보존한다.
+
+## 23:50 UTC 작업 체크포인트 — 실제 완료 아님
+
+- shared API/platform `c868a15c`, Web `f1a7ada4` 운영 배포와 설치 byte/source-free/isolation
+  검증을 완료했다. source migration head `0064`는 그대로이며 새 migration을 적용하지 않았다.
+- INDEX 이전 GPU 작업은 main-only graceful drain으로 실제 완료했다. 끝내 한 번도 claim되지
+  않은 원래 CPU 대기 3건만 공식 cancellation으로 정리해 receipt를 남겼다. 시작한 작업·완료
+  벡터·FAILED를 삭제하거나 성공으로 바꾸지 않았다.
+- QUERY의 실제 설치 API provider member 2개가 새 wheel과 불일치해 시작을 거부했다.
+  검증을 우회하지 않고 검증된 `c868a15c` wheel의 정확한 source/SHA/code members로 repin했다.
+  비밀번호·인증 파일·외부 API는 바꾸지 않았다.
+- public ownership/3.0은 기존 공식 schema-owner preparation으로 등록·확인했다. 이는 DB
+  migration이나 runtime self-grant가 아니다. 예전 6개 namespace·물리 CPU/CUDA prefix와
+  canonical index는 보존하며 public namespace 하나만 추가했다. 메모리 ceiling도 원래
+  운영 2 GiB로 유지한다.
+- `b5670ba9` CPU counterpart Graph pin 수정의 단위 54, 관련 실제 임시 PostgreSQL 9 PASS.
+  `9836f132`의 불변 metadata 읽기 권한 검증 10 PASS. `bedbb72b` lineage/file-set·selection
+  정상 transaction 수정 관련 99 PASS, 임시 PostgreSQL 11 PASS. `7e09a149` bounded reader /
+  256-source keyset page 관련 100 PASS. 각 변경 core의 mypy/Ruff/format PASS.
+- 실제 제한 Catalog 계정으로 고정 창작 5개의 canonical lineage/result/report를 읽고 원래
+  provenance를 재검증했다: `eom-public-five-creative-read-preflight.service` PASS, DML=0,
+  inference=0. 이는 **수치 계산·등록·사용자 검색 acceptance가 아니다**.
+- 23:44 UTC 실제 세 슬롯에서 각각 RUNNING Job을 재확인했다. `job_aae353ccf6da4a5f82bd1c3bb857681b`
+  (04), `job_7ad0142e2b4c4cf09437e434ebc17c2f` (05), `job_1220df32ab384801ab0c050607c6cb19`
+  (06). 기존 refill 증거도 보존한다. 10700의 no-Job preexecution 실패는 공식
+  `recover_unstarted`로 같은 입력/정책의 successor를 준비하고 재개했다. 원 실패의 정확한
+  내부 cause는 generic summary만 남아 확정하지 않았으며, 이를 current source defect로
+  단정해 코드를 바꾸지 않았다.
+- `7e09a149` INDEX/QUERY/Catalog successor의 호환 activation을 진행 중이다. 기출 및 창작
+  보고서 읽기에서 발견한 실제 권한·file-set·metadata budget 오류를 테스트로 고쳤다.
+  아직 public vector/index/실제 HTTP 검색은 미검증이며 goal은 ACTIVE다.
+
+운영 기록: `/var/lib/eom-public-solution-release-{b5670ba9,9836f132,bedbb72b,7e09a149}`의
+exact plan·rollback 원본·control pointers·identity/cancellation receipt. 이전 후보와 실패한
+preflight 기록은 보존했다. transient activation은 source Git을 runtime에서 읽지 않는다.
+
 ## 착수 기준선
 
 - source `39fb4de67e15d83bb20300294c760c367a8f1a39`, clean main/origin.
