@@ -15,7 +15,7 @@ from eom_identifiers import content_sha256
 from eom_identity_service import OperatorAuthorizationFenceError
 from eom_orchestrator.database import build_session_factory
 from eom_workflow_runner.reference_query_source_read import CatalogReferenceQueryReadOwner
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.creative_item_registration import creative_registration_key
@@ -66,7 +66,9 @@ class CatalogItemDbSimilaritySelection:
         caller = EmbeddingRegistryCaller(request.actor_id)
         try:
             with self.sessions.begin() as session:
-                session.execute(text("SET TRANSACTION READ ONLY"))
+                # Official source capture retains shared lifecycle/completion
+                # locks. PostgreSQL READ ONLY forbids even those SELECT locks;
+                # this existing read use case issues no DML in its normal root.
                 self.owner.identity.fence_current_operator(session, request.actor_id)
                 scope, snapshot_hash = self._scope(session, request)
                 self.owner.catalog.authorize_scope(session, caller, scope)

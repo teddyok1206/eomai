@@ -201,6 +201,20 @@ missing/hash/lifecycle 실패와 원래 idempotency는 변하지 않는다. 더 
 UPDATE grant 확대는 least privilege와 정본 불변성에 불필요하므로 배제한다. 제한된 실제
 PostgreSQL 역할로 SELECT 성공·FOR SHARE/UPDATE 거부를 함께 검증한다.
 
+또한 실제 lineage는 `lineage.json`을 primary로 가진 기존 file-set Artifact인데 batch
+경로에서 `result.json` 전용 JSON loader에 넘기던 불일치를 발견했다. 공통 Artifact loader의
+허용 범위를 넓히지 않는다. 기존 caller-owned `PinnedArtifactReadContext`로 lineage의 정확한
+member/schema/media/hash와 producer를 prefetch·검증하고, 역할 결과만 원래 result loader로
+batch 읽는다. Item component·lineage·result의 정본과 경고는 그대로다. 새 Artifact나 복사본,
+wire format은 없다. reader 전체 재검증은 원래 capture owner가 마지막에 수행하며, 각 작은
+batch에서 커진 공용 cache를 반복 재검증하지 않는다.
+
+DB 유사도 selection의 read use case 역시 원래 source capture의 shared lifecycle lock을
+사용하므로 PostgreSQL `READ ONLY` transaction을 강제하면 그 SELECT조차 25006으로 거부된다.
+기존 application-owned 정상 transaction에서 공식 source reader만 호출하도록 정렬하며,
+selection 자체에 DML·권한 확대·모델 실행을 추가하지 않는다. shared lock·정확한 current
+operator 양끝 fence·원래 replay scope는 유지하고 해당 PostgreSQL 동작을 임시 DB로 검증한다.
+
 ## 22:01 UTC 체크포인트 — 세 슬롯 복구와 public QUERY 공식 조회 연결
 
 목표 상태는 **ACTIVE / 미완료**다. 사용자 확정 세 단계와 기존 창작 5건의 실제 수치·등록·

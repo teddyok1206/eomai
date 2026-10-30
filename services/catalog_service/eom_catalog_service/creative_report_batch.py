@@ -25,6 +25,7 @@ from eom_catalog_service.creative_registered_report import (
     validate_registered_creative_report,
 )
 from eom_catalog_service.models import ItemComponentRecord, ItemRevisionRecord
+from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 
 
 @dataclass(frozen=True, slots=True)
@@ -58,12 +59,15 @@ def load_registered_creative_reports(
     session: Session,
     artifacts: CatalogArtifactService,
     revisions: tuple[ItemRevisionRecord, ...],
+    *,
+    artifact_reader: PinnedArtifactReadContext,
 ) -> dict[str, CapturedRegisteredCreativeReport]:
     """Caller admits Item/Graph access first. Constant SQL count per <=16 sources.
 
-    One component query, one primary materialization query and five ordered
-    Workflow/plan/Job queries replace per-Item metadata lookups. Original hashes,
-    lineage checks, result-schema checks and source warnings are not weakened.
+    One component query, prefetched lineage metadata, one result materialization
+    query and five Workflow/plan/Job queries replace per-Item metadata lookups.
+    The caller revalidates its shared Artifact reader after the complete capture,
+    not once per batch against a growing cache. Original validation is unchanged.
     """
     if not revisions:
         return {}
@@ -95,27 +99,43 @@ def load_registered_creative_reports(
         )
         for revision in revisions
     }
-    requests: dict[str, CatalogJsonRevisionRequest] = {}
-    for _content, lineage_component, report in selected.values():
-        for component, limit in ((lineage_component, 64 * 1024), (report, 4 * 1024 * 1024)):
-            request = CatalogJsonRevisionRequest(
-                component.artifact_id, component.artifact_revision_id, component.sha256, limit
-            )
-            previous = requests.get(request.revision_id)
-            if previous is not None and previous != request:
-                raise ValueError("CREATIVE_REPORT_BATCH_POINTER_INVALID")
-            requests[request.revision_id] = request
-    documents = artifacts.load_json_revisions(tuple(requests.values()))
-    if set(documents) != set(requests):
-        raise ValueError("CREATIVE_REPORT_BATCH_POINTER_INVALID")
+    artifact_reader.prefetch(
+        tuple(
+            (lineage.artifact_id, lineage.artifact_revision_id)
+            for _content, lineage, _report in selected.values()
+        )
+    )
     lineages = {}
     for revision in revisions:
         content, lineage_component, report = selected[revision.item_revision_id]
-        lineage = CreativeSourceLineage.model_validate(
-            documents[lineage_component.artifact_revision_id]
+        # Lineage is a file-set primary, not a legacy result.json Artifact.
+        # Reuse the already admitted transaction's exact member resolver.
+        raw = artifact_reader.read_pinned(
+            artifact_id=lineage_component.artifact_id,
+            artifact_revision_id=lineage_component.artifact_revision_id,
+            member_path="lineage.json",
+            schema_ref=lineage_component.schema_ref,
+            media_type="application/json",
+            sha256=lineage_component.sha256,
+            expected_artifact_types=("control_creative_source_lineage",),
+            expected_primary_file="lineage.json",
+            max_bytes=64 * 1024,
         )
+        lineage = CreativeSourceLineage.model_validate_json(raw.payload)
         validate_creative_report_lineage(revision, content, report, lineage)
         lineages[revision.item_revision_id] = lineage
+    requests: dict[str, CatalogJsonRevisionRequest] = {}
+    for _content, _lineage, report in selected.values():
+        request = CatalogJsonRevisionRequest(
+            report.artifact_id, report.artifact_revision_id, report.sha256, 4 * 1024 * 1024
+        )
+        previous = requests.get(request.revision_id)
+        if previous is not None and previous != request:
+            raise ValueError("CREATIVE_REPORT_BATCH_POINTER_INVALID")
+        requests[request.revision_id] = request
+    documents = artifacts.load_json_revisions(tuple(requests.values()))
+    if set(documents) != set(requests):
+        raise ValueError("CREATIVE_REPORT_BATCH_POINTER_INVALID")
     read_set = capture_creative_proposal_read_set(
         session, tuple(lineage.selection for lineage in lineages.values())
     )

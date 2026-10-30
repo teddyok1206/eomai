@@ -273,6 +273,7 @@ def test_successful_resolution_keeps_original_source_and_fences_both_ends(pinned
         )
     )
     assert service.resolve(value.request) == value.result
+    session.execute.assert_not_called()
     assert service.owner.identity.fence_current_operator.call_args_list == [
         ((session, value.request.actor_id),),
         ((session, value.request.actor_id),),

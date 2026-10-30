@@ -7,10 +7,10 @@ import pytest
 from eom_catalog_service.models import ItemComponentRecord
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.database import build_engine
-from eom_orchestrator.models import ArtifactRevisionRecord
+from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
 from sqlalchemy import false, select, text
 from sqlalchemy.engine import make_url
-from sqlalchemy.exc import ProgrammingError
+from sqlalchemy.exc import DBAPIError, ProgrammingError
 
 from scripts.api.testdb_guard import TestDatabaseManifest as DisposableManifest
 from scripts.api.testdb_guard import validate_state_directory
@@ -81,3 +81,13 @@ def test_existing_database_triggers_protect_the_pinned_immutable_records(guarded
             )
         )
     assert found == expected
+
+
+def test_source_completion_select_locks_need_a_normal_root_not_postgres_read_only(guarded_engine):
+    statement = select(JobRecord.job_id).where(false()).with_for_update(read=True)
+    with guarded_engine.begin() as connection, pytest.raises(DBAPIError) as error:
+        connection.execute(text("SET TRANSACTION READ ONLY"))
+        connection.execute(statement)
+    assert error.value.orig.sqlstate == "25006"
+    with guarded_engine.begin() as connection:
+        assert connection.execute(statement).all() == []

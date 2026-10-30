@@ -374,7 +374,10 @@ class CatalogPublicSolutionSourceCapture:
         for offset in range(0, len(creative_keys), MAX_CREATIVE_REPORT_CAPTURE):
             page = creative_keys[offset : offset + MAX_CREATIVE_REPORT_CAPTURE]
             reports = load_registered_creative_reports(
-                session, self.artifacts, tuple(revisions[key] for key in page)
+                session,
+                self.artifacts,
+                tuple(revisions[key] for key in page),
+                artifact_reader=artifact_reader,
             )
             if set(reports) != set(page):
                 raise ValueError("PUBLIC_SOLUTION_SOURCE_SET_INVALID")
