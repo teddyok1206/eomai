@@ -16,6 +16,9 @@ from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfi
 from eom_catalog_contracts.mixed_embedding_index import RegisteredReviewEmbeddingEntry
 from eom_catalog_contracts.models import Sha256
 from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
+from eom_catalog_contracts.public_solution_reference import (
+    PublicSolutionSourceReference as PublicSolutionBatchAnchor,
+)
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import ApprovedReferenceItemAnchor
 from eom_catalog_service.embedding_device_index_pair import EmbeddingDeviceIndexPair
@@ -48,7 +51,7 @@ from eom_workflow.embedding_batch_plan_family import (
     validate_embedding_batch_plan_controls,
 )
 from eom_workflow.embedding_batch_plan_v12 import EmbeddingBatchSelectionV12
-from eom_workflow.embedding_batch_plan_v13 import PublicSolutionBatchAnchor
+from eom_workflow.embedding_batch_plan_v14 import EmbeddingBatchSelectionV14
 from eom_workflow.embedding_device_routing import (
     EMBEDDING_DEVICE_ROUTING_SCHEMA_REF,
     MAX_EMBEDDING_DEVICE_ROUTING_BYTES,
@@ -216,7 +219,7 @@ class CatalogEmbeddingBatchPlanAdmission:
         reader: PinnedArtifactReadContext,
     ) -> tuple[EmbeddingDeviceIndexPair, ...]:
         """Both exact device populations before allocation; pins are not authority."""
-        if not isinstance(selection, EmbeddingBatchSelectionV12):
+        if not isinstance(selection, EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14):
             return ()
         _require(type(self.caller) is EmbeddingRegistryCaller)
         assert isinstance(self.caller, EmbeddingRegistryCaller)

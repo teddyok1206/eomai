@@ -68,8 +68,9 @@ from eom_workflow.reference_query_execution import (
     parse_supported_reference_query_workflow_request,
 )
 from eom_workflow.reference_query_workflow import (
-    REFERENCE_QUERY_EXECUTION_PROTOCOL,
+    REFERENCE_QUERY_EXECUTION_PROTOCOLS,
     REFERENCE_QUERY_RESULT_SCHEMA,
+    REFERENCE_QUERY_RESULT_SCHEMAS,
     REFERENCE_QUERY_WORKFLOW_KEY,
 )
 from eom_workflow.schemas import (
@@ -271,7 +272,7 @@ def _native_workflow_filter() -> ColumnElement[bool]:
     )
     native_protocols = (
         LOCAL_EMBEDDING_EXECUTION_PROTOCOL,
-        REFERENCE_QUERY_EXECUTION_PROTOCOL,
+        *REFERENCE_QUERY_EXECUTION_PROTOCOLS,
         PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL,
     )
     native_purposes = ("LOCAL_EMBEDDING", "REFERENCE_QUERY", "PRIVATE_CHAT_QUERY")
@@ -355,13 +356,13 @@ def _query_workflow_filter() -> ColumnElement[bool]:
         WorkflowStepRunRecord.workflow_id == WorkflowInstanceRecord.workflow_id,
         or_(
             WorkflowStepRunRecord.step_key == "encode_reference_query",
-            WorkflowStepRunRecord.result_schema == REFERENCE_QUERY_RESULT_SCHEMA,
+            WorkflowStepRunRecord.result_schema.in_(REFERENCE_QUERY_RESULT_SCHEMAS),
         ),
     )
     return func.coalesce(
         or_(
             WorkflowInstanceRecord.definition_key == REFERENCE_QUERY_WORKFLOW_KEY,
-            WorkflowInstanceRecord.role_schema_version == REFERENCE_QUERY_EXECUTION_PROTOCOL,
+            WorkflowInstanceRecord.role_schema_version.in_(REFERENCE_QUERY_EXECUTION_PROTOCOLS),
             WorkflowInstanceRecord.initial_request["schema_version"]
             .as_string()
             .in_(REFERENCE_QUERY_REQUEST_VERSIONS),
@@ -449,7 +450,7 @@ def _command_candidate(
     query_marked = (
         family is CommandExecutionFamily.REFERENCE_QUERY
         or workflow.definition_key == REFERENCE_QUERY_WORKFLOW_KEY
-        or workflow.role_schema_version == REFERENCE_QUERY_EXECUTION_PROTOCOL
+        or workflow.role_schema_version in REFERENCE_QUERY_EXECUTION_PROTOCOLS
         or any(
             isinstance(document, dict)
             and (
@@ -971,19 +972,20 @@ def validate_reference_query_workflow_submission(
         .execution_options(populate_existing=True)
     )
     expected = workflow_request_storage_document(request)
+    expected_protocol = _stored_role_protocol(definition)
     if current is None or (
         actor_type != "human"
         or actor_id != request.operator_audit.operator_id
         or definition.definition_key != request.workflow_definition_key
         or definition.definition_version != request.workflow_definition_version
         or definition.definition_hash != request.workflow_definition_sha256
-        or _stored_role_protocol(definition) != REFERENCE_QUERY_EXECUTION_PROTOCOL
+        or expected_protocol not in REFERENCE_QUERY_EXECUTION_PROTOCOLS
         or current.definition_id != definition.definition_id
         or current.definition_key != definition.definition_key
         or current.definition_version != definition.definition_version
         or current.definition_hash != definition.definition_hash
         or current.protocol_version != "1.0.1"
-        or current.role_schema_version != REFERENCE_QUERY_EXECUTION_PROTOCOL
+        or current.role_schema_version != expected_protocol
         or current.created_actor_type != actor_type
         or current.created_actor_id != actor_id
         or current.initial_request != expected

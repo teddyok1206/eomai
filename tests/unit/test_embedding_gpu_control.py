@@ -40,7 +40,7 @@ def _frame(kind, values):
     )
 
 
-def control_case(*, expires_ns=1000000000):
+def control_case(*, expires_ns=1000000000, batch=None):
     sha = "sha256:" + "a" * 64
     request = _frame(
         "ALLOCATION_REQUEST",
@@ -88,7 +88,7 @@ def control_case(*, expires_ns=1000000000):
             **identity,
         },
     )
-    batch = EmbeddingWorkBatchInput.model_validate(batch_body(device="CUDA"))
+    batch = batch or EmbeddingWorkBatchInput.model_validate(batch_body(device="CUDA"))
     raw = canonical_json_bytes(batch.model_dump(mode="json"))
     grant = _frame(
         "COMPUTE_GRANT",

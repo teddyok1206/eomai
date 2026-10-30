@@ -1,5 +1,7 @@
 """Public recipe2 QUERY values over unchanged numerical encoding/shard identities."""
 
+from __future__ import annotations
+
 from typing import Literal, Self
 
 from eom_identifiers import canonical_json_bytes, content_sha256
@@ -15,6 +17,10 @@ from eom_catalog_contracts.embedding_reference_query import (
     raw_similarity_contract_value,
     similarity_contract_document,
 )
+from eom_catalog_contracts.embedding_reference_query_v11 import (
+    EmbeddingReferenceQueryInputV11,
+    parse_embedding_reference_query_input_v11,
+)
 from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingVectorShardManifest,
     embedding_input_set_sha256,
@@ -26,6 +32,19 @@ from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbedd
 PUBLIC_SOLUTION_QUERY_SCHEMA = "public-solution-query-v2"
 PUBLIC_SOLUTION_QUERY_INPUT_REF = "eom://schemas/knowledge/embedding-reference-query-input/2.0"
 PUBLIC_SOLUTION_QUERY_RESULT_REF = "eom://schemas/knowledge/embedding-reference-query-result/2.0"
+
+
+def parse_supported_numerical_query_input(
+    value: object,
+) -> EmbeddingReferenceQueryInputV11 | PublicSolutionQueryInput:
+    """Numerical leaf dispatch only; the owner separately binds actual Workflow/policy."""
+    document = raw_similarity_contract_value(value)
+    if (
+        isinstance(document, dict)
+        and document.get("schema_version") == "embedding-reference-query-input/2.0"
+    ):
+        return PublicSolutionQueryInput.model_validate(document)
+    return parse_embedding_reference_query_input_v11(document)
 
 
 class _PublicQueryValue(FrozenModel):

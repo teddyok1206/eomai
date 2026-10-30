@@ -155,10 +155,10 @@ def run_native_embedding_reference_query(
             require_native_embedding_identity(profile)
             from eom_catalog_service.embedding_native_stdio import (
                 NativeEmbeddingDescriptors,
-                run_native_reference_query_descriptors,
+                run_native_supported_reference_query_descriptors,
             )
 
-            run_native_reference_query_descriptors(
+            run_native_supported_reference_query_descriptors(
                 NativeEmbeddingDescriptors(0, result, vectors), backend_scope
             )
     except Exception:

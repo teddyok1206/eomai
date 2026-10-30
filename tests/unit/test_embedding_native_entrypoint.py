@@ -154,7 +154,7 @@ def run(descriptors,scope):
     os.write(descriptors.vectors,b'binary'); os.write(descriptors.result,b'{}')
 entry.require_native_embedding_identity=identity
 if sys.argv[3]=='QUERY':
-    leaf.run_native_reference_query_descriptors=run
+    leaf.run_native_supported_reference_query_descriptors=run
     entry.run_native_embedding_reference_query(profile='CPU_INDEX_FP32',backend_scope=lambda:None)
 elif sys.argv[3]=='PRIVATE_CHAT_QUERY':
     leaf.run_native_private_chat_query_descriptors=run

@@ -41,6 +41,7 @@ from eom_workflow.reference_query_execution import (
     SupportedReferenceQueryWorkflowReceipt,
     parse_reference_query_workflow_receipt,
     parse_supported_reference_query_step_output,
+    parse_supported_reference_query_workflow_receipt,
     validate_reference_query_step_output,
 )
 
@@ -129,7 +130,7 @@ class NativeEmbeddingCompletionPublisher:
         self, receipt: ReferenceQueryWorkflowReceipt, *, identity: ControlFileSetIdentity
     ) -> ReferenceQueryStepOutput:
         receipt = parse_reference_query_workflow_receipt(receipt)
-        output = self._publish_reference_query(receipt, identity=identity)
+        output = self.publish_supported_reference_query(receipt, identity=identity)
         if not isinstance(output, ReferenceQueryStepOutput):
             raise ValueError("REFERENCE_QUERY_RECEIPT_PRODUCER_MISMATCH")
         return output
@@ -138,14 +139,15 @@ class NativeEmbeddingCompletionPublisher:
         self, receipt: ReferenceQueryWorkflowReceiptV2, *, identity: ControlFileSetIdentity
     ) -> ReferenceQueryStepOutputV2:
         receipt = ReferenceQueryWorkflowReceiptV2.model_validate(receipt)
-        output = self._publish_reference_query(receipt, identity=identity)
+        output = self.publish_supported_reference_query(receipt, identity=identity)
         if not isinstance(output, ReferenceQueryStepOutputV2):
             raise ValueError("REFERENCE_QUERY_RECEIPT_PRODUCER_MISMATCH")
         return output
 
-    def _publish_reference_query(
+    def publish_supported_reference_query(
         self, receipt: SupportedReferenceQueryWorkflowReceipt, *, identity: ControlFileSetIdentity
     ) -> SupportedReferenceQueryStepOutput:
+        receipt = parse_supported_reference_query_workflow_receipt(receipt)
         public = isinstance(receipt, ReferenceQueryWorkflowReceiptV2)
         schema_ref = PUBLIC_REFERENCE_QUERY_RECEIPT_REF if public else REFERENCE_QUERY_RECEIPT_REF
         identity = ControlFileSetIdentity(

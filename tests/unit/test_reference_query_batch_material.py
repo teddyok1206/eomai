@@ -6,29 +6,38 @@ import os
 from dataclasses import FrozenInstanceError
 
 import pytest
-from eom_catalog_service.embedding_encoder_adapter import encode_reference_query_batch
+from eom_catalog_service.embedding_encoder_adapter import (
+    encode_public_solution_query,
+    encode_reference_query_batch,
+)
 from eom_orchestrator.inference_transfer_cpu_handoff import CpuHandoffIdentity
 from eom_workflow_runner import reference_query_batch_material as material
 
 from tests.unit.test_embedding_incremental_encoding import SyntheticNativeBackend
+from tests.unit.test_public_solution_reference_query_execution import public_workflow_case
 from tests.unit.test_reference_query_execution_contracts import case
 
 
-@pytest.fixture
-def staged(tmp_path, monkeypatch):
+@pytest.fixture(params=("legacy", "public"))
+def staged(tmp_path, monkeypatch, request):
     root = tmp_path / "queries"
     root.mkdir(mode=0o700)
     monkeypatch.setattr(material, "QUERY_PUBLICATION_ROOT", root)
     monkeypatch.setattr(
         material, "fixed_owner_identity", lambda: CpuHandoffIdentity(os.getuid(), os.getgid())
     )
-    query = case(device="CUDA")
+    public = request.param == "public"
+    query = public_workflow_case(device="CUDA") if public else case(device="CUDA")
     prepared = material.PreparedBatchReferenceQuery(
         query.request, query.policy, query.bundle, query.launch, query.native_input
     )
     backend = SyntheticNativeBackend(query.native_input.spaces.query)
     backend.batch_size, backend.threads = query.native_input.batch_size, query.native_input.threads
-    encoded = encode_reference_query_batch(query.native_input, backend)
+    encoded = (
+        encode_public_solution_query(query.native_input, backend)
+        if public
+        else encode_reference_query_batch(query.native_input, backend)
+    )
     return prepared, encoded
 
 
@@ -75,4 +84,13 @@ def test_cpu_input_cannot_be_a_cuda_batch_publication_material():
     with pytest.raises(ValueError):
         material.PreparedBatchReferenceQuery(
             query.request, query.policy, query.bundle, query.launch, query.native_input
+        )
+
+
+def test_public_workflow_cannot_accept_legacy_native_material_despite_matching_device():
+    public = public_workflow_case(device="CUDA")
+    legacy = case(device="CUDA")
+    with pytest.raises(ValueError):
+        material.PreparedBatchReferenceQuery(
+            public.request, public.policy, public.bundle, public.launch, legacy.native_input
         )

@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 
-from eom_catalog_contracts.embedding_reference_query import EmbeddingReferenceQueryResult
-from eom_catalog_contracts.embedding_reference_query_v11 import EmbeddingReferenceQueryInputV11
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_identifiers import canonical_json_bytes
 from eom_orchestrator.embedding_batch_plan_store import EmbeddingBatchPlanStore
@@ -22,12 +20,16 @@ from eom_workflow.embedding_batch_plan_family import (
     validate_embedding_batch_query_context,
 )
 from eom_workflow.native_reference_query_coordinator import NativeQueryBatchExecuted
-from eom_workflow.reference_query_execution import ReferenceQueryLaunchAssociation
+from eom_workflow.reference_query_execution import (
+    ReferenceQueryLaunchAssociation,
+    SupportedReferenceQueryNativeInput,
+    SupportedReferenceQueryNativeResult,
+)
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.embedding_batch_plan_admission import resolve_embedding_batch_plan_controls
 from eom_workflow_runner.reference_query_source_read import (
-    ResolvedReferenceQuerySources,
+    SupportedResolvedReferenceQuerySources,
     validate_current_reference_query_input,
 )
 
@@ -41,9 +43,9 @@ def resolve_reference_query_batch_execution(
     session: Session,
     *,
     reader: PinnedArtifactReadContext,
-    sources: ResolvedReferenceQuerySources,
+    sources: SupportedResolvedReferenceQuerySources,
     launch: ReferenceQueryLaunchAssociation,
-    native_input: EmbeddingReferenceQueryInputV11,
+    native_input: SupportedReferenceQueryNativeInput,
     executed: NativeQueryBatchExecuted,
 ) -> EmbeddingBatchExecutedChild:
     """Caller already holds real current child source/command or completed-read authority.
@@ -135,7 +137,7 @@ def resolve_reference_query_batch_execution(
 
 
 def validate_reference_query_batch_child_result(
-    child: EmbeddingBatchExecutedChild, result: EmbeddingReferenceQueryResult
+    child: EmbeddingBatchExecutedChild, result: SupportedReferenceQueryNativeResult
 ) -> None:
     """Compare already verified canonical child metadata; do not duplicate vector reads/hashes."""
     shard = result.shard

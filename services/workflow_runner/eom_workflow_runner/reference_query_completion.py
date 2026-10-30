@@ -6,11 +6,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
-from eom_catalog_contracts.embedding_reference_query_v11 import EmbeddingReferenceQueryInputV11
 from eom_catalog_contracts.embedding_runtime_bundle import EmbeddingRuntimeBundle
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.reference_query_artifact_read import (
     CatalogReferenceQueryArtifacts,
+    ResolvedPublicSolutionQueryArtifacts,
     ResolvedReferenceQueryArtifacts,
 )
 from eom_orchestrator.native_reference_query_coordinator import (
@@ -21,18 +21,23 @@ from eom_workflow.native_reference_query_coordinator import (
     NativeQueryAllocation,
     NativeQueryBatchExecuted,
     NativeQueryCompleted,
+    NativeQueryCompletedV2,
     NativeQueryExecuted,
     NativeQueryExecutedV11,
     NativeQueryPublished,
+    NativeQueryPublishedV2,
     native_reference_query_continuation_checkpoint,
     reference_query_checkpoint_receipt,
 )
 from eom_workflow.reference_query_execution import (
     ReferenceQueryExecutionPolicy,
     ReferenceQueryLaunchAssociation,
-    ReferenceQueryStepOutput,
+    ReferenceQueryStepOutputV2,
+    ReferenceQueryWorkflowRequestV3,
+    SupportedReferenceQueryNativeInput,
+    SupportedReferenceQueryStepOutput,
     SupportedReferenceQueryWorkflowRequest,
-    parse_reference_query_step_output,
+    parse_supported_reference_query_step_output,
 )
 from sqlalchemy.orm import Session
 
@@ -48,10 +53,10 @@ from eom_workflow_runner.reference_query_batch_execution_read import (
 )
 from eom_workflow_runner.reference_query_owner_admission import (
     CatalogReferenceQueryOwnerAdmission,
-    ResolvedReferenceQuerySources,
     validate_current_reference_query_input,
 )
 from eom_workflow_runner.reference_query_publication_read import resolve_reference_query_publication
+from eom_workflow_runner.reference_query_source_read import SupportedResolvedReferenceQuerySources
 from eom_workflow_runner.repository import CommandLeaseIdentity
 
 
@@ -71,7 +76,7 @@ class ReferenceQueryPublicationMaterial(Protocol):
     @property
     def association(self) -> ReferenceQueryLaunchAssociation: ...
     @property
-    def request(self) -> EmbeddingReferenceQueryInputV11: ...
+    def request(self) -> SupportedReferenceQueryNativeInput: ...
     @property
     def workspace(self) -> Path: ...
 
@@ -100,7 +105,7 @@ class NativeReferenceQueryCompletion:
         allocation: NativeQueryAllocation,
         publications: NativeEmbeddingPublications,
         fenced_transaction: NativeFencedRunnerTransaction,
-    ) -> ReferenceQueryStepOutput:
+    ) -> SupportedReferenceQueryStepOutput:
         if (
             prepared.workflow_request != request
             or coordinator.request != request
@@ -139,7 +144,7 @@ class NativeReferenceQueryCompletion:
                     executed=executed,
                 )
             if len(history.records) == 2:
-                saved = publications.artifacts.publish_reference_query(
+                saved = publications.artifacts.publish_supported_reference_query(
                     workflow_request=request,
                     policy=sources.policy,
                     bundle=sources.bundle,
@@ -155,7 +160,11 @@ class NativeReferenceQueryCompletion:
                     native_reference_query_continuation_checkpoint(
                         prepared.association,
                         "PUBLISHED",
-                        NativeQueryPublished(
+                        (
+                            NativeQueryPublishedV2
+                            if isinstance(request, ReferenceQueryWorkflowRequestV3)
+                            else NativeQueryPublished
+                        )(
                             query_owner_job_id=saved.owner_job_id,
                             input=saved.input,
                             result=saved.result,
@@ -188,7 +197,7 @@ class NativeReferenceQueryCompletion:
                 raise ValueError("REFERENCE_QUERY_COMPLETION_NOT_PUBLISHED")
             if len(history.records) == 4:
                 completed = history.records[3].payload
-                assert isinstance(completed, NativeQueryCompleted)
+                assert isinstance(completed, (NativeQueryCompleted, NativeQueryCompletedV2))
                 return self.validate_completion(
                     session=session,
                     workflow=workflow,
@@ -201,13 +210,13 @@ class NativeReferenceQueryCompletion:
             assert isinstance(
                 executed, (NativeQueryExecuted, NativeQueryExecutedV11, NativeQueryBatchExecuted)
             )
-            assert isinstance(published, NativeQueryPublished)
+            assert isinstance(published, (NativeQueryPublished, NativeQueryPublishedV2))
             receipt = reference_query_checkpoint_receipt(
                 request, prepared.association, allocation, executed, published
             )
             canonical = CatalogReferenceQueryArtifacts(
                 session, self.owner.settings
-            ).resolve_publication(
+            ).resolve_supported_publication(
                 workflow_request=request,
                 policy=sources.policy,
                 bundle=sources.bundle,
@@ -233,7 +242,7 @@ class NativeReferenceQueryCompletion:
                     executed=executed,
                 )
                 validate_reference_query_batch_child_result(child, canonical.result)
-            output = publications.completions.publish_reference_query(
+            output = publications.completions.publish_supported_reference_query(
                 receipt, identity=native_publication_identity(allocation.receipt_producer)
             )
             self.validate_completion(
@@ -249,7 +258,9 @@ class NativeReferenceQueryCompletion:
                 native_reference_query_continuation_checkpoint(
                     prepared.association,
                     "COMPLETED",
-                    NativeQueryCompleted(output=output),
+                    NativeQueryCompletedV2(output=output)
+                    if isinstance(output, ReferenceQueryStepOutputV2)
+                    else NativeQueryCompleted(output=output),
                     previous=history.records,
                     initial_version=history.records[0].schema_version,
                 ),
@@ -264,9 +275,9 @@ class NativeReferenceQueryCompletion:
         step: WorkflowStepRunRecord,
         request: SupportedReferenceQueryWorkflowRequest,
         command_lease: CommandLeaseIdentity,
-        output: ReferenceQueryStepOutput,
-    ) -> ReferenceQueryStepOutput:
-        output = parse_reference_query_step_output(output)
+        output: SupportedReferenceQueryStepOutput,
+    ) -> SupportedReferenceQueryStepOutput:
+        output = parse_supported_reference_query_step_output(output)
         sources = self.owner.resolve_execution_sources(
             session,
             request,
@@ -286,9 +297,12 @@ class NativeReferenceQueryCompletion:
         session: Session,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        sources: ResolvedReferenceQuerySources,
-        output: ReferenceQueryStepOutput,
-    ) -> tuple[ResolvedReferenceQueryArtifacts, NativeReferenceQueryHistory]:
+        sources: SupportedResolvedReferenceQuerySources,
+        output: SupportedReferenceQueryStepOutput,
+    ) -> tuple[
+        ResolvedReferenceQueryArtifacts | ResolvedPublicSolutionQueryArtifacts,
+        NativeReferenceQueryHistory,
+    ]:
         return resolve_reference_query_publication(
             self.owner.settings,
             session=session,

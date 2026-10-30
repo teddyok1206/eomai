@@ -6,7 +6,6 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from typing import Literal
 
-from eom_catalog_contracts.similarity_context_v2 import SupportedSimilarityContextRequest
 from eom_catalog_contracts.similarity_read import CompletedSimilarityQuerySelection
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
 from eom_orchestrator.embedding_batch_plan_store import (
@@ -14,7 +13,10 @@ from eom_orchestrator.embedding_batch_plan_store import (
     EmbeddingBatchPlanStore,
 )
 from eom_workflow.embedding_batch_plan_family import embedding_batch_query_key
-from eom_workflow.reference_query_execution import parse_supported_reference_query_workflow_request
+from eom_workflow.reference_query_execution import (
+    SupportedReferenceQueryContext,
+    parse_supported_reference_query_workflow_request,
+)
 from sqlalchemy import select
 
 from eom_workflow_runner.embedding_batch_execution import (
@@ -101,7 +103,7 @@ def _history(prepared: PreparedRoutedReferenceQuerySelection) -> EmbeddingBatchP
 
 def _contexts(
     prepared: PreparedRoutedReferenceQuerySelection, history: EmbeddingBatchPlanHistory
-) -> tuple[SupportedSimilarityContextRequest, ...]:
+) -> tuple[SupportedReferenceQueryContext, ...]:
     _require(history.route is not None)
     assert history.route is not None
     return tuple(

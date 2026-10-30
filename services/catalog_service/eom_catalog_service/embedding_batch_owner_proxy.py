@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from typing import Any
 
 from eom_catalog_contracts.embedding_gpu_control import EmbeddingGpuAllocationRequest
-from eom_catalog_contracts.embedding_work_batch import EmbeddingWorkBatchInput
+from eom_catalog_contracts.embedding_work_batch import SupportedEmbeddingWorkBatchInput
 from eom_identifiers import content_sha256
 from eom_orchestrator.inference_transfer_cpu_handoff import fixed_owner_identity
 from eom_workflow.embedding_batch_owner_control import (
@@ -107,7 +107,7 @@ class RootEmbeddingBatchOwnerProxy:
 
     def admit_allocation(
         self, request: EmbeddingGpuAllocationRequest, ready: EmbeddingGpuBatchReadyObservation
-    ) -> EmbeddingWorkBatchInput:
+    ) -> SupportedEmbeddingWorkBatchInput:
         self._fence()
         _require(
             self._ready is None

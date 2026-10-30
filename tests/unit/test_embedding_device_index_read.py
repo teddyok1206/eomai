@@ -7,6 +7,11 @@ from unittest.mock import Mock
 import pytest
 from eom_catalog_contracts.embedding_reference_query import ReferenceQuerySpaces
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
+from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
+from eom_catalog_contracts.public_solution_similarity import (
+    PublicSolutionSimilarityIndexPin,
+    PublicSolutionSimilarityView,
+)
 from eom_catalog_contracts.similarity_context import SimilarityIndexPin, SimilarityViewSelection
 from eom_catalog_service import embedding_device_index_read as application
 from eom_catalog_service.embedding_device_index_pair import EmbeddingDeviceIndexPairError
@@ -25,11 +30,11 @@ from eom_catalog_service.settings import CatalogSettings
 from eom_identifiers import canonical_json_bytes
 
 from tests.unit.inference_transfer_embedding_fixtures import embedding_space, index_pointer
-from tests.unit.test_embedding_device_index_pair import _index
+from tests.unit.test_embedding_device_index_pair import _index, public_index
 
 
-@pytest.fixture
-def case(tmp_path, monkeypatch):
+@pytest.fixture(params=("legacy", "public"))
+def case(tmp_path, monkeypatch, request):
     engine = object()
     settings = CatalogSettings(nas_artifact_root=tmp_path)
     root = SimpleNamespace(is_active=True)
@@ -39,16 +44,21 @@ def case(tmp_path, monkeypatch):
     session.get_bind.return_value = engine
     session.new, session.dirty, session.deleted = [], [], []
     caller = EmbeddingRegistryCaller("operator_" + "a" * 32)
-    indexes = (_index("CPU", "a", "b"), _index("CUDA", "a", "b"))
+    public = request.param == "public"
+    indexes = (
+        (public_index("CPU")[1], public_index("CUDA")[1])
+        if public
+        else (_index("CPU", "a", "b"), _index("CUDA", "a", "b"))
+    )
     owners, intents, readings, payloads = [], [], [], {}
     for device, seed, index in zip(("CPU", "CUDA"), ("4", "5"), indexes, strict=True):
         binding = index.bindings[0]
-        namespace = EmbeddingIndexNamespace(
+        namespace_type = PublicSolutionIndexNamespace if public else EmbeddingIndexNamespace
+        namespace = namespace_type(
             storage_partition=index.storage_partition,
             space_sha256=index.space.space_sha256,
             recipe_sha256=index.recipe.recipe_sha256,
             view=index.view,
-            projection_version="accepted-solution-comparison/1.0",
             population_scope="ALL_ADMITTED_GRAPH_ITEMS",
         )
         scope = EmbeddingRegistryLookup(
@@ -58,11 +68,13 @@ def case(tmp_path, monkeypatch):
             binding.policy_revision_id,
             binding.policy_sha256,
         )
-        pointer = index_pointer(index, seed)
-        selection = SimilarityViewSelection(
+        pointer = public_index(device)[0] if public else index_pointer(index, seed)
+        view_type = PublicSolutionSimilarityView if public else SimilarityViewSelection
+        pin_type = PublicSolutionSimilarityIndexPin if public else SimilarityIndexPin
+        selection = view_type(
             view=index.view,
             recipe=index.recipe,
-            index=SimilarityIndexPin(
+            index=pin_type(
                 index_id=index.index_id,
                 index_revision_id=index.index_revision_id,
                 index_manifest=pointer,
@@ -77,7 +89,11 @@ def case(tmp_path, monkeypatch):
         owner = CatalogEmbeddingRegistryVerifier(
             engine,
             EmbeddingRegistryOwnerConfiguration(
-                scope.corpus_id, namespace, index.space, index.recipe, ("PAST_EXAM",)
+                scope.corpus_id,
+                namespace,
+                index.space,
+                index.recipe,
+                ("APPROVED_ITEM", "PAST_EXAM") if public else ("PAST_EXAM",),
             ),
             identity_fence=Mock(),
             settings=settings,
@@ -156,7 +172,10 @@ def test_scope_mismatch_is_not_smaller_device_fallback(case, fault):
     intent = case.intents[1]
     if fault == "class":
         case.owners[1].configuration = replace(
-            case.owners[1].configuration, source_classes=("APPROVED_ITEM", "PAST_EXAM")
+            case.owners[1].configuration,
+            source_classes=("PAST_EXAM",)
+            if len(case.owners[0].configuration.source_classes) == 2
+            else ("APPROVED_ITEM", "PAST_EXAM"),
         )
     else:
         changes = {

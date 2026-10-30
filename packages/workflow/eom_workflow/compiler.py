@@ -38,9 +38,11 @@ from eom_workflow.private_chat_query_workflow import (
     PrivateChatQueryWorkflowDefinition,
 )
 from eom_workflow.reference_query_workflow import (
+    PublicSolutionReferenceQueryStep,
+    PublicSolutionReferenceQueryWorkflowDefinition,
     ReferenceQueryStep,
     ReferenceQueryWorkflowDefinition,
-    parse_reference_query_workflow_definition,
+    parse_supported_reference_query_workflow_definition,
 )
 from eom_workflow.schemas import (
     RESULT_SCHEMA_FILES,
@@ -95,6 +97,7 @@ class CompiledWorkflowDefinition:
         | TerminalStep
         | LocalEmbeddingStep
         | ReferenceQueryStep
+        | PublicSolutionReferenceQueryStep
         | PrivateChatQueryStep,
     ]:
         return {step.key: step for step in self.definition.steps}
@@ -127,7 +130,7 @@ def compile_definition_data(
         if raw.get("schema_version") == "1.1":
             definition = parse_local_embedding_workflow_definition(raw)
         elif raw.get("schema_version") == "1.2":
-            definition = parse_reference_query_workflow_definition(raw)
+            definition = parse_supported_reference_query_workflow_definition(raw)
         elif raw.get("schema_version") == "1.3":
             definition = PrivateChatQueryWorkflowDefinition.model_validate(raw)
         elif raw.get("schema_version") == "1.4":
@@ -143,6 +146,7 @@ def compile_definition_data(
             LocalEmbeddingWorkflowDefinition,
             LocalEmbeddingWorkflowDefinitionV2,
             ReferenceQueryWorkflowDefinition,
+            PublicSolutionReferenceQueryWorkflowDefinition,
             PrivateChatQueryWorkflowDefinition,
         ),
     ):

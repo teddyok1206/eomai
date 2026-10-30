@@ -11,6 +11,8 @@ from eom_catalog_contracts.embedding_gpu_control import EmbeddingGpuAllocationRe
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_work_batch import (
     EmbeddingWorkBatchInput,
+    PublicSolutionWorkBatchInput,
+    SupportedEmbeddingWorkBatchInput,
 )
 from eom_catalog_contracts.models import Sha256
 from eom_catalog_contracts.similarity_context import (
@@ -50,6 +52,7 @@ from eom_workflow.native_embedding_backend_selection import (
     native_embedding_backend_selection_schema,
 )
 from eom_workflow.reference_query_execution import (
+    ReferenceQueryWorkflowRequestV3,
     SupportedReferenceQueryWorkflowRequest,
     parse_supported_reference_query_workflow_request,
 )
@@ -57,6 +60,7 @@ from eom_workflow.schemas import local_embedding_admission_schema_registry
 
 if TYPE_CHECKING:
     from eom_workflow.embedding_batch_plan_v13 import EmbeddingBatchSelectionV13
+    from eom_workflow.embedding_batch_plan_v14 import EmbeddingBatchSelectionV14
 
 BATCH_PLAN_PROTOCOL = "embedding-batch-plan/1.0"
 BATCH_PLAN_SCHEMA_REF = "eom://schemas/workflow/embedding-batch-plan/1.0"
@@ -218,7 +222,9 @@ def validate_embedding_batch_plan_controls(
 
 def validate_embedding_batch_plan_control_values(
     request: EmbeddingBatchPlanRequestValues,
-    selection: EmbeddingBatchSelectionValues | EmbeddingBatchSelectionV13,
+    selection: EmbeddingBatchSelectionValues
+    | EmbeddingBatchSelectionV13
+    | EmbeddingBatchSelectionV14,
     policy: EmbeddingDeviceRoutingPolicy,
 ) -> None:
     """One value closure shared by explicitly parsed wire versions; not source authority."""
@@ -302,6 +308,7 @@ def validate_embedding_batch_binding(
     bound: EmbeddingBatchBound,
     batch: EmbeddingWorkBatchInput | None = None,
 ) -> None:
+    _require(not isinstance(batch, PublicSolutionWorkBatchInput))
     bound = EmbeddingBatchBound.model_validate(bound)
     validate_embedding_batch_binding_values(request, route, bound, batch)
 
@@ -310,7 +317,7 @@ def validate_embedding_batch_binding_values(
     request: EmbeddingBatchPlanRequestValues,
     route: EmbeddingBatchRoute,
     bound: EmbeddingBatchBound,
-    batch: EmbeddingWorkBatchInput | None = None,
+    batch: SupportedEmbeddingWorkBatchInput | None = None,
 ) -> None:
     _require(
         bound.request_sha256 == request.request_sha256
@@ -379,6 +386,8 @@ def validate_embedding_batch_query_context_values(
     """Shared closure after explicit wire parsing; not source or execution authority."""
     decision = EmbeddingDeviceRoutingDecision.model_validate(decision)
     request = parse_supported_reference_query_workflow_request(request)
+    if isinstance(request, ReferenceQueryWorkflowRequestV3):
+        raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
     context, query, profile = request.context_request, selection.query, decision.selected.profile
     _require(
         selection.purpose == "REFERENCE_QUERY"

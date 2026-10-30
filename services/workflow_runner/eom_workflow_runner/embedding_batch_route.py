@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from eom_catalog_contracts.embedding_reference_query_v11 import EmbeddingReferenceQueryInputV11
 from eom_catalog_contracts.embedding_work_batch import (
-    EmbeddingWorkBatchInput,
+    SupportedEmbeddingWorkBatchInput,
 )
 from eom_catalog_contracts.inference_transfer_experiment import VIEWS, ExperimentView
+from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
 from eom_catalog_service.embedding_device_index_pair import (
     EmbeddingDeviceIndexPair,
     EmbeddingDeviceIndexPin,
@@ -30,7 +31,7 @@ def validate_embedding_batch_route(
     policy: EmbeddingDeviceRoutingPolicy,
     allocation: EmbeddingGpuAllocationObservation,
     decision: EmbeddingDeviceRoutingDecision,
-    batch: EmbeddingWorkBatchInput,
+    batch: SupportedEmbeddingWorkBatchInput,
     indexes: tuple[EmbeddingDeviceIndexPair, ...] = (),
 ) -> tuple[tuple[ExperimentView, EmbeddingDeviceIndexPin], ...]:
     """Validate exact selected numerical identity before launch/reservation.
@@ -60,7 +61,7 @@ def validate_embedding_batch_route(
     requested_views = {
         row.view
         for child in batch.children
-        if isinstance(child.request, EmbeddingReferenceQueryInputV11)
+        if isinstance(child.request, EmbeddingReferenceQueryInputV11 | PublicSolutionQueryInput)
         for row in child.request.rows
     }
     if len(by_view) != len(indexes) or set(by_view) != requested_views:

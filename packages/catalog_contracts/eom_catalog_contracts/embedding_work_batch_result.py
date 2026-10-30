@@ -115,6 +115,9 @@ class PublicSolutionWorkBatchResult(_ResultValue):
 
 
 type SupportedEmbeddingWorkBatchResult = EmbeddingWorkBatchResult | PublicSolutionWorkBatchResult
+type SupportedEmbeddingWorkBatchChildResult = (
+    EmbeddingWorkBatchChildResult | PublicSolutionWorkBatchChildResult
+)
 
 
 def _validate_batch_result_layout(batch: SupportedEmbeddingWorkBatchResult) -> None:

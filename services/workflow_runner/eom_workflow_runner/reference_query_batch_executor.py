@@ -7,6 +7,7 @@ from contextlib import contextmanager
 from datetime import UTC, datetime
 
 from eom_catalog_contracts.embedding_reference_query import EmbeddingReferenceQueryResult
+from eom_catalog_contracts.public_solution_query import PublicSolutionQueryResult
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_orchestrator.native_reference_query_coordinator import (
     NativeReferenceQueryCoordinator,
@@ -19,11 +20,12 @@ from eom_workflow.native_reference_query_coordinator import (
     NativeQueryAllocation,
     NativeQueryBatchExecuted,
     NativeQueryCompleted,
+    NativeQueryCompletedV2,
     native_reference_query_continuation_checkpoint,
 )
 from eom_workflow.reference_query_execution import (
     ReferenceQueryLaunchAssociation,
-    ReferenceQueryStepOutput,
+    SupportedReferenceQueryStepOutput,
     SupportedReferenceQueryWorkflowRequest,
     parse_supported_reference_query_workflow_request,
 )
@@ -190,7 +192,7 @@ class CatalogBatchReferenceQueryExecutor:
         command_lease: CommandLeaseIdentity,
         idempotency_key: str,
         fenced_transaction: NativeFencedRunnerTransaction,
-    ) -> ReferenceQueryStepOutput:
+    ) -> SupportedReferenceQueryStepOutput:
         request = parse_supported_reference_query_workflow_request(request)
         _require(
             idempotency_key
@@ -203,7 +205,7 @@ class CatalogBatchReferenceQueryExecutor:
             prepared, history = self._prepared(session, workflow, step, request, command_lease)
             if len(history.records) == 4:
                 completed = history.records[3].payload
-                assert isinstance(completed, NativeQueryCompleted)
+                assert isinstance(completed, NativeQueryCompleted | NativeQueryCompletedV2)
                 return self.validate_completion(
                     session=session,
                     workflow=workflow,
@@ -241,8 +243,10 @@ class CatalogBatchReferenceQueryExecutor:
         )
         verified = saved.verified
         child_result = verified.result.children[ordinal].result
-        _require(isinstance(child_result, EmbeddingReferenceQueryResult))
-        assert isinstance(child_result, EmbeddingReferenceQueryResult)
+        _require(
+            isinstance(child_result, EmbeddingReferenceQueryResult | PublicSolutionQueryResult)
+        )
+        assert isinstance(child_result, EmbeddingReferenceQueryResult | PublicSolutionQueryResult)
         observed = NativeQueryBatchExecuted(
             batch_receipt=saved.publication.member,
             batch_receipt_sha256=saved.publication.semantic_sha256,
@@ -307,8 +311,8 @@ class CatalogBatchReferenceQueryExecutor:
         step: WorkflowStepRunRecord,
         request: SupportedReferenceQueryWorkflowRequest,
         command_lease: CommandLeaseIdentity,
-        output: ReferenceQueryStepOutput,
-    ) -> ReferenceQueryStepOutput:
+        output: SupportedReferenceQueryStepOutput,
+    ) -> SupportedReferenceQueryStepOutput:
         return self.completion.validate_completion(
             session=session,
             workflow=workflow,

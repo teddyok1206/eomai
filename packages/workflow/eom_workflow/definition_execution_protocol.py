@@ -20,7 +20,10 @@ from eom_workflow.private_chat_query_workflow import (
 )
 from eom_workflow.reference_query_workflow import (
     REFERENCE_QUERY_EXECUTION_PROTOCOL,
+    REFERENCE_QUERY_PUBLIC_EXECUTION_PROTOCOL,
+    PublicSolutionReferenceQueryWorkflowDefinition,
     ReferenceQueryWorkflowDefinition,
+    parse_public_solution_reference_query_workflow_definition,
     parse_reference_query_workflow_definition,
 )
 from eom_workflow.schemas import result_schema_protocol
@@ -30,6 +33,7 @@ type ExecutionWorkflowDefinition = (
     | LocalEmbeddingWorkflowDefinition
     | LocalEmbeddingWorkflowDefinitionV2
     | ReferenceQueryWorkflowDefinition
+    | PublicSolutionReferenceQueryWorkflowDefinition
     | PrivateChatQueryWorkflowDefinition
 )
 
@@ -63,6 +67,14 @@ def definition_execution_protocol(definition: ExecutionWorkflowDefinition) -> st
                 "private query definition execution protocol is invalid"
             ) from None
         return PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL
+    if isinstance(definition, PublicSolutionReferenceQueryWorkflowDefinition):
+        try:
+            parse_public_solution_reference_query_workflow_definition(definition)
+        except ValueError:
+            raise DefinitionExecutionProtocolError(
+                "public reference query definition execution protocol is invalid"
+            ) from None
+        return REFERENCE_QUERY_PUBLIC_EXECUTION_PROTOCOL
     if isinstance(definition, ReferenceQueryWorkflowDefinition):
         try:
             parse_reference_query_workflow_definition(definition)

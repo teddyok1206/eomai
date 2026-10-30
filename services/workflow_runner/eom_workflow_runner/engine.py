@@ -88,7 +88,7 @@ from eom_workflow.reference_query_execution import (
     SupportedReferenceQueryWorkflowRequest,
     parse_supported_reference_query_workflow_request,
 )
-from eom_workflow.reference_query_workflow import ReferenceQueryWorkflowDefinition
+from eom_workflow.reference_query_workflow import SupportedReferenceQueryWorkflowDefinition
 from eom_workflow.similarity_control import (
     POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
     SupportedSimilarityExecutionPlan,
@@ -918,7 +918,7 @@ class WorkflowRunner:
             (
                 LocalEmbeddingWorkflowDefinition,
                 LocalEmbeddingWorkflowDefinitionV2,
-                ReferenceQueryWorkflowDefinition,
+                SupportedReferenceQueryWorkflowDefinition,
             ),
         ):
             raise WorkflowError(
@@ -1011,7 +1011,7 @@ class WorkflowRunner:
             ):
                 self._advance_local_embedding(workflow, compiled, command_id, actor_type, actor_id)
                 return
-            if isinstance(compiled.definition, ReferenceQueryWorkflowDefinition):
+            if isinstance(compiled.definition, SupportedReferenceQueryWorkflowDefinition):
                 self._advance_reference_query(workflow, compiled, command_id, actor_type, actor_id)
                 return
             if isinstance(compiled.definition, PrivateChatQueryWorkflowDefinition):
@@ -3365,7 +3365,7 @@ class WorkflowRunner:
                 (
                     LocalEmbeddingWorkflowDefinition,
                     LocalEmbeddingWorkflowDefinitionV2,
-                    ReferenceQueryWorkflowDefinition,
+                    SupportedReferenceQueryWorkflowDefinition,
                     PrivateChatQueryWorkflowDefinition,
                 ),
             ):

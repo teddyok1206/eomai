@@ -234,10 +234,10 @@ def test_public_source_request_native_launch_receipt_and_output_form_one_exact_c
     checked_receipt(c, c.receipt)
     validate_reference_query_step_output(c.output, c.receipt)
     assert parse_supported_reference_query_workflow_intent(c.request) == c.request
+    assert parse_supported_reference_query_workflow_request(c.request) == c.request
     assert parse_supported_reference_query_workflow_receipt(c.receipt) == c.receipt
     assert parse_supported_reference_query_step_output(c.output) == c.output
     for parse, value in [
-        (parse_supported_reference_query_workflow_request, c.request),
         (parse_reference_query_workflow_request_v2, c.request),
         (parse_reference_query_workflow_receipt, c.receipt),
         (parse_reference_query_step_output, c.output),

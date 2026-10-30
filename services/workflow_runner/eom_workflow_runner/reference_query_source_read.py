@@ -52,13 +52,15 @@ from eom_workflow.reference_query_execution import (
     REFERENCE_QUERY_POLICY_REF,
     ReferenceQueryExecutionPolicy,
     ReferenceQueryLaunchAssociation,
-    ReferenceQueryStepOutput,
     ReferenceQueryWorkflowRequestV3,
+    SupportedReferenceQueryNativeInput,
+    SupportedReferenceQueryStepOutput,
     SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_execution_policy,
-    parse_reference_query_step_output,
     parse_reference_query_workflow_request_v3,
+    parse_supported_reference_query_step_output,
     parse_supported_reference_query_workflow_request,
+    reference_query_result_schema,
     validate_reference_query_launch_association,
     validate_reference_query_policy_bundle,
     validate_reference_query_request_references,
@@ -122,6 +124,8 @@ class ResolvedReferenceQuerySources:
 
     def __post_init__(self) -> None:
         request = parse_supported_reference_query_workflow_request(self.request)
+        if isinstance(request, ReferenceQueryWorkflowRequestV3):
+            raise ValueError("REFERENCE_QUERY_SOURCE_FAMILY_INVALID")
         policy = parse_reference_query_execution_policy(self.policy)
         bundle = parse_embedding_runtime_bundle(raw_similarity_contract_value(self.bundle))
         validate_reference_query_request_references(request, policy, bundle)
@@ -175,14 +179,19 @@ class ResolvedPublicSolutionReferenceQuerySources:
         )
 
 
+type SupportedResolvedReferenceQuerySources = (
+    ResolvedReferenceQuerySources | ResolvedPublicSolutionReferenceQuerySources
+)
+
+
 @dataclass(frozen=True, slots=True)
 class ResolvedCompletedReferenceQuerySources:
     """Root-local attached records and exact values, never a durable read permission."""
 
-    sources: ResolvedReferenceQuerySources
+    sources: SupportedResolvedReferenceQuerySources
     workflow: WorkflowInstanceRecord
     step: WorkflowStepRunRecord
-    output: ReferenceQueryStepOutput
+    output: SupportedReferenceQueryStepOutput
 
 
 def build_reference_query_native_input(
@@ -229,12 +238,12 @@ def build_reference_query_native_input(
 
 
 def validate_current_reference_query_input(
-    sources: ResolvedReferenceQuerySources,
+    sources: SupportedResolvedReferenceQuerySources,
     launch: ReferenceQueryLaunchAssociation,
-    native_input: EmbeddingReferenceQueryInputV11,
+    native_input: SupportedReferenceQueryNativeInput,
 ) -> None:
     """Exact current derivation under original IDs; not authority or a launch grant."""
-    current = build_reference_query_native_input(
+    current = build_supported_reference_query_native_input(
         sources, job_id=launch.native_launch_job_id, query_request_id=launch.query_request_id
     )
     validate_reference_query_launch_association(
@@ -268,6 +277,18 @@ def build_public_solution_query_native_input(
         "input_set_sha256": embedding_input_set_sha256((row.encoding,)),
     }
     return PublicSolutionQueryInput.model_validate(body | {"request_sha256": content_sha256(body)})
+
+
+def build_supported_reference_query_native_input(
+    sources: SupportedResolvedReferenceQuerySources, *, job_id: str, query_request_id: str
+) -> SupportedReferenceQueryNativeInput:
+    if isinstance(sources, ResolvedPublicSolutionReferenceQuerySources):
+        return build_public_solution_query_native_input(
+            sources, job_id=job_id, query_request_id=query_request_id
+        )
+    return build_reference_query_native_input(
+        sources, job_id=job_id, query_request_id=query_request_id
+    )
 
 
 def resolve_public_solution_reference_query_sources(
@@ -345,7 +366,7 @@ class ReferenceQuerySourceOwner(Protocol):
         request: SupportedReferenceQueryWorkflowRequest,
         *,
         artifact_reader: PinnedArtifactReadContext | None = None,
-    ) -> ResolvedReferenceQuerySources: ...
+    ) -> SupportedResolvedReferenceQuerySources: ...
 
     def resolve_completed_sources(
         self,
@@ -418,7 +439,7 @@ class CatalogReferenceQueryReadOwner:
         request: SupportedReferenceQueryWorkflowRequest,
         *,
         artifact_reader: PinnedArtifactReadContext | None = None,
-    ) -> ResolvedReferenceQuerySources:
+    ) -> SupportedResolvedReferenceQuerySources:
         return resolve_reference_query_sources(
             self, session, request, artifact_reader=artifact_reader
         )
@@ -531,8 +552,12 @@ def resolve_reference_query_sources(
     request: SupportedReferenceQueryWorkflowRequest,
     *,
     artifact_reader: PinnedArtifactReadContext | None = None,
-) -> ResolvedReferenceQuerySources:
+) -> SupportedResolvedReferenceQuerySources:
     request = parse_supported_reference_query_workflow_request(request)
+    if isinstance(request, ReferenceQueryWorkflowRequestV3):
+        return resolve_public_solution_reference_query_sources(
+            owner, session, request, artifact_reader=artifact_reader
+        )
     caller = EmbeddingRegistryCaller(request.operator_audit.operator_id)
     owner.identity.fence_current_operator(session, caller.operator_id)
     config, context = owner.configuration, request.context_request
@@ -630,7 +655,7 @@ def resolve_completed_reference_query_sources(
     if step is None or (
         step.step_type != "application"
         or step.worker_role is not None
-        or step.result_schema != "embedding-reference-query-result@1.0"
+        or step.result_schema != reference_query_result_schema(request)
         or step.attempt != 1
         or step.input_pointer_manifest != {"workflow_request_sha256": request.request_sha256}
         or step.output_pointer_manifest is None
@@ -638,7 +663,9 @@ def resolve_completed_reference_query_sources(
         or step.superseded_by_step_run_id is not None
     ):
         raise ValueError("REFERENCE_QUERY_READ_STEP_INVALID")
-    output = parse_reference_query_step_output(step.output_pointer_manifest)
+    output = parse_supported_reference_query_step_output(step.output_pointer_manifest)
+    if output.execution_result_schema != reference_query_result_schema(request):
+        raise ValueError("REFERENCE_QUERY_READ_STEP_INVALID")
     validate_completed_native_workflow(session, workflow, step, output)
     sources = (
         owner.resolve_sources(session, request)

@@ -25,6 +25,7 @@ from eom_orchestrator.native_reference_query_coordinator import (
 from eom_workflow.reference_query_execution import (
     SupportedReferenceQueryWorkflowRequest,
     parse_supported_reference_query_workflow_request,
+    reference_query_result_schema,
 )
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session, object_session
@@ -54,11 +55,12 @@ from eom_workflow_runner.reference_query_source_read import (
     ResolvedReferenceQuerySources as ResolvedReferenceQuerySources,
 )
 from eom_workflow_runner.reference_query_source_read import (
-    build_reference_query_native_input as build_reference_query_native_input,
-)
-from eom_workflow_runner.reference_query_source_read import (
+    SupportedResolvedReferenceQuerySources,
     resolve_completed_reference_query_sources,
     resolve_reference_query_sources,
+)
+from eom_workflow_runner.reference_query_source_read import (
+    build_reference_query_native_input as build_reference_query_native_input,
 )
 from eom_workflow_runner.reference_query_source_read import (
     validate_current_reference_query_input as validate_current_reference_query_input,
@@ -173,7 +175,7 @@ class CatalogReferenceQueryOwnerAdmission:
             or step.state not in {"RUNNING", "SUCCEEDED"}
             or step.step_type != "application"
             or step.worker_role is not None
-            or step.result_schema != "embedding-reference-query-result@1.0"
+            or step.result_schema != reference_query_result_schema(request)
             or step.input_pointer_manifest != {"workflow_request_sha256": request.request_sha256}
         ):
             raise WorkflowError(
@@ -210,7 +212,7 @@ class CatalogReferenceQueryOwnerAdmission:
         session: Session,
         request: SupportedReferenceQueryWorkflowRequest,
         lease: CommandLeaseIdentity,
-    ) -> ResolvedReferenceQuerySources:
+    ) -> SupportedResolvedReferenceQuerySources:
         request = parse_supported_reference_query_workflow_request(request)
         self.identity.fence_current_operator(session, request.operator_audit.operator_id)
         command = self._command_fence.acquire(session, request.request_sha256, lease)
@@ -230,7 +232,7 @@ class CatalogReferenceQueryOwnerAdmission:
         *,
         workflow_id: str,
         step_run_id: str,
-    ) -> ResolvedReferenceQuerySources:
+    ) -> SupportedResolvedReferenceQuerySources:
         """Current attached Workflow/command/step closure for computation and completion."""
         sources = self.resolve_mutation_sources(session, request, lease)
         command = require_command_lease(session, lease)
@@ -247,7 +249,7 @@ class CatalogReferenceQueryOwnerAdmission:
             or step.state not in {"RUNNING", "SUCCEEDED"}
             or step.step_type != "application"
             or step.worker_role is not None
-            or step.result_schema != "embedding-reference-query-result@1.0"
+            or step.result_schema != reference_query_result_schema(request)
             or step.input_pointer_manifest != {"workflow_request_sha256": request.request_sha256}
         ):
             raise ValueError("REFERENCE_QUERY_EXECUTOR_CURRENT_STEP_INVALID")
@@ -259,7 +261,7 @@ class CatalogReferenceQueryOwnerAdmission:
         request: SupportedReferenceQueryWorkflowRequest,
         *,
         artifact_reader: PinnedArtifactReadContext | None = None,
-    ) -> ResolvedReferenceQuerySources:
+    ) -> SupportedResolvedReferenceQuerySources:
         return resolve_reference_query_sources(
             self, session, request, artifact_reader=artifact_reader
         )

@@ -507,7 +507,7 @@ def test_crash_at_each_publication_boundary_reuses_original_producers_without_re
     value = executor
     query = boundary.startswith("query")
     owner_type = EmbeddingArtifactStore if query else NativeEmbeddingCompletionPublisher
-    method = owner_type.publish_reference_query
+    method = owner_type.publish_supported_reference_query
 
     def crash(self, *a, **kw):
         if boundary.endswith("after"):
@@ -515,7 +515,7 @@ def test_crash_at_each_publication_boundary_reuses_original_producers_without_re
         raise KeyboardInterrupt("synthetic controller death; never a retry grant")
 
     with monkeypatch.context() as patch:
-        patch.setattr(owner_type, "publish_reference_query", crash)
+        patch.setattr(owner_type, "publish_supported_reference_query", crash)
         with pytest.raises(KeyboardInterrupt):
             value.execute()
     before = value.history()
@@ -562,7 +562,7 @@ def test_late_revoke_after_query_commit_cannot_promote_receipt_and_recovery_reus
     monkeypatch,
 ):
     value = executor
-    original = EmbeddingArtifactStore.publish_reference_query
+    original = EmbeddingArtifactStore.publish_supported_reference_query
 
     def revoke(self, **kwargs):
         result = original(self, **kwargs)
@@ -570,7 +570,7 @@ def test_late_revoke_after_query_commit_cannot_promote_receipt_and_recovery_reus
         return result
 
     with monkeypatch.context() as patch:
-        patch.setattr(EmbeddingArtifactStore, "publish_reference_query", revoke)
+        patch.setattr(EmbeddingArtifactStore, "publish_supported_reference_query", revoke)
         with pytest.raises(ValueError, match="REVOKED"):
             value.execute()
     with value.publisher.sessions() as session:

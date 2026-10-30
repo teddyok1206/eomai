@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
-from eom_catalog_contracts.embedding_work_batch import EmbeddingWorkBatchInput
+from eom_catalog_contracts.embedding_work_batch import (
+    PublicSolutionWorkBatchInput,
+    SupportedEmbeddingWorkBatchInput,
+    parse_supported_embedding_work_batch_input,
+)
 
 from eom_workflow.embedding_batch_plan import (
     BATCH_PLAN_PROTOCOL,
@@ -49,11 +53,21 @@ from eom_workflow.embedding_batch_plan_v13 import (
     EmbeddingBatchPlanRequestV13,
     EmbeddingBatchSelectionV13,
 )
+from eom_workflow.embedding_batch_plan_v14 import (
+    BATCH_PLAN_V14_PROTOCOL,
+    BATCH_PLAN_V14_SCHEMA_SHA256,
+    BATCH_SELECTION_V14_SCHEMA_REF,
+    EmbeddingBatchPlanRequestV14,
+    EmbeddingBatchSelectionV14,
+    validate_public_batch_query_context,
+    validate_public_query_index_controls,
+)
 from eom_workflow.embedding_device_routing import (
     EmbeddingDeviceRoutingDecision,
     EmbeddingDeviceRoutingPolicy,
 )
 from eom_workflow.reference_query_execution import (
+    ReferenceQueryWorkflowRequestV3,
     SupportedReferenceQueryWorkflowRequest,
     parse_supported_reference_query_workflow_request,
 )
@@ -63,12 +77,14 @@ type SupportedEmbeddingBatchRequest = (
     | EmbeddingBatchPlanRequestV11
     | EmbeddingBatchPlanRequestV12
     | EmbeddingBatchPlanRequestV13
+    | EmbeddingBatchPlanRequestV14
 )
 type SupportedEmbeddingBatchSelection = (
     EmbeddingBatchSelection
     | EmbeddingBatchSelectionV11
     | EmbeddingBatchSelectionV12
     | EmbeddingBatchSelectionV13
+    | EmbeddingBatchSelectionV14
 )
 
 
@@ -85,6 +101,8 @@ def parse_embedding_batch_plan_request(value: object) -> SupportedEmbeddingBatch
         return EmbeddingBatchPlanRequestV12.model_validate(document)
     if version == BATCH_PLAN_V13_PROTOCOL:
         return EmbeddingBatchPlanRequestV13.model_validate(document)
+    if version == BATCH_PLAN_V14_PROTOCOL:
+        return EmbeddingBatchPlanRequestV14.model_validate(document)
     raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
 
 
@@ -101,12 +119,19 @@ def parse_embedding_batch_selection(value: object) -> SupportedEmbeddingBatchSel
         return EmbeddingBatchSelectionV12.model_validate(document)
     if version == BATCH_PLAN_V13_PROTOCOL:
         return EmbeddingBatchSelectionV13.model_validate(document)
+    if version == BATCH_PLAN_V14_PROTOCOL:
+        return EmbeddingBatchSelectionV14.model_validate(document)
     raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
 
 
 def embedding_batch_plan_schema_identity(
     request: SupportedEmbeddingBatchRequest,
 ) -> tuple[str, str]:
+    if (
+        type(request) is EmbeddingBatchPlanRequestV14
+        and request.schema_version == BATCH_PLAN_V14_PROTOCOL
+    ):
+        return BATCH_PLAN_V14_PROTOCOL, BATCH_PLAN_V14_SCHEMA_SHA256
     if (
         type(request) is EmbeddingBatchPlanRequestV13
         and request.schema_version == BATCH_PLAN_V13_PROTOCOL
@@ -128,6 +153,11 @@ def embedding_batch_plan_schema_identity(
 
 
 def embedding_batch_selection_schema_ref(selection: SupportedEmbeddingBatchSelection) -> str:
+    if (
+        type(selection) is EmbeddingBatchSelectionV14
+        and selection.schema_version == BATCH_PLAN_V14_PROTOCOL
+    ):
+        return BATCH_SELECTION_V14_SCHEMA_REF
     if (
         type(selection) is EmbeddingBatchSelectionV13
         and selection.schema_version == BATCH_PLAN_V13_PROTOCOL
@@ -174,6 +204,8 @@ def validate_embedding_batch_plan_controls(
     )
     if isinstance(selection, EmbeddingBatchSelectionV12):
         validate_embedding_batch_query_index_controls(selection, policy)
+    elif isinstance(selection, EmbeddingBatchSelectionV14):
+        validate_public_query_index_controls(selection, policy)
 
 
 def validate_embedding_batch_allocation(
@@ -206,10 +238,17 @@ def validate_embedding_batch_binding(
     request: SupportedEmbeddingBatchRequest,
     route: EmbeddingBatchRoute,
     bound: EmbeddingBatchBound,
-    batch: EmbeddingWorkBatchInput | None = None,
+    batch: SupportedEmbeddingWorkBatchInput | None = None,
 ) -> None:
+    request = parse_embedding_batch_plan_request(request)
+    if batch is not None:
+        batch = parse_supported_embedding_work_batch_input(batch)
+        if isinstance(request, EmbeddingBatchPlanRequestV14) != isinstance(
+            batch, PublicSolutionWorkBatchInput
+        ):
+            raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
     validate_embedding_batch_binding_values(
-        parse_embedding_batch_plan_request(request),
+        request,
         EmbeddingBatchRoute.model_validate(route),
         EmbeddingBatchBound.model_validate(bound),
         batch,
@@ -218,7 +257,7 @@ def validate_embedding_batch_binding(
 
 def embedding_batch_query_key(request: SupportedEmbeddingBatchRequest, ordinal: int) -> str:
     request = parse_embedding_batch_plan_request(request)
-    if isinstance(request, EmbeddingBatchPlanRequestV12):
+    if isinstance(request, (EmbeddingBatchPlanRequestV12, EmbeddingBatchPlanRequestV14)):
         return embedding_batch_query_key_value(request, ordinal)
     # INDEX1.1 must not expand conversational authority.
     return v1_query_key(
@@ -233,8 +272,18 @@ def validate_embedding_batch_query_context(
     request: SupportedReferenceQueryWorkflowRequest,
 ) -> None:
     selection = parse_embedding_batch_selection(selection)
+    if isinstance(selection, EmbeddingBatchSelectionV14):
+        request = parse_supported_reference_query_workflow_request(request)
+        if not isinstance(request, ReferenceQueryWorkflowRequestV3):
+            raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
+        validate_public_batch_query_context(
+            selection, EmbeddingDeviceRoutingDecision.model_validate(decision), ordinal, request
+        )
+        return
     if isinstance(selection, EmbeddingBatchSelectionV12):
         request = parse_supported_reference_query_workflow_request(request)
+        if isinstance(request, ReferenceQueryWorkflowRequestV3):
+            raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
         decision = EmbeddingDeviceRoutingDecision.model_validate(decision)
         validate_embedding_batch_query_context_values(selection, decision, ordinal, request)
         context = request.context_request

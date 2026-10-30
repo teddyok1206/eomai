@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from eom_catalog_service.local_embedding_completion_artifacts import (
-    resolve_native_reference_query_completion,
+    resolve_supported_native_reference_query_completion,
 )
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.reference_query_artifact_read import (
     CatalogReferenceQueryArtifacts,
+    ResolvedPublicSolutionQueryArtifacts,
     ResolvedReferenceQueryArtifacts,
 )
 from eom_catalog_service.settings import CatalogSettings
@@ -20,14 +21,18 @@ from eom_workflow.native_reference_query_coordinator import (
     NativeQueryAllocation,
     NativeQueryBatchExecuted,
     NativeQueryCompleted,
+    NativeQueryCompletedV2,
     NativeQueryExecuted,
     NativeQueryExecutedV11,
     NativeQueryPublished,
+    NativeQueryPublishedV2,
     reference_query_checkpoint_receipt,
 )
 from eom_workflow.reference_query_execution import (
-    ReferenceQueryStepOutput,
-    parse_reference_query_step_output,
+    ReferenceQueryStepOutputV2,
+    SupportedReferenceQueryStepOutput,
+    parse_supported_reference_query_step_output,
+    reference_query_result_schema,
     validate_reference_query_launch_association,
 )
 from sqlalchemy.orm import Session
@@ -38,8 +43,8 @@ from eom_workflow_runner.reference_query_batch_execution_read import (
     validate_reference_query_batch_child_result,
 )
 from eom_workflow_runner.reference_query_source_read import (
-    ResolvedReferenceQuerySources,
-    build_reference_query_native_input,
+    SupportedResolvedReferenceQuerySources,
+    build_supported_reference_query_native_input,
 )
 
 
@@ -49,10 +54,13 @@ def resolve_reference_query_publication(
     session: Session,
     workflow: WorkflowInstanceRecord,
     step: WorkflowStepRunRecord,
-    sources: ResolvedReferenceQuerySources,
-    output: ReferenceQueryStepOutput,
+    sources: SupportedResolvedReferenceQuerySources,
+    output: SupportedReferenceQueryStepOutput,
     artifact_reader: PinnedArtifactReadContext | None = None,
-) -> tuple[ResolvedReferenceQueryArtifacts, NativeReferenceQueryHistory]:
+) -> tuple[
+    ResolvedReferenceQueryArtifacts | ResolvedPublicSolutionQueryArtifacts,
+    NativeReferenceQueryHistory,
+]:
     """Shared canonical closure; caller retains actual current owner root and late fence.
 
     This alone is not the consumer read capability. Before publication the
@@ -66,8 +74,10 @@ def resolve_reference_query_publication(
     reader.require_session(session)
     if reader.settings != settings:
         raise ValueError("REFERENCE_QUERY_READ_SETTINGS_MISMATCH")
-    output = parse_reference_query_step_output(output)
+    output = parse_supported_reference_query_step_output(output)
     request = sources.request
+    if output.execution_result_schema != reference_query_result_schema(request):
+        raise ValueError("REFERENCE_QUERY_COMPLETION_PRODUCER_MISMATCH")
     launch = read_native_reference_query_launch(
         session,
         request=request,
@@ -84,7 +94,7 @@ def resolve_reference_query_publication(
     assert isinstance(
         executed, (NativeQueryExecuted, NativeQueryExecutedV11, NativeQueryBatchExecuted)
     )
-    assert isinstance(published, NativeQueryPublished)
+    assert isinstance(published, (NativeQueryPublished, NativeQueryPublishedV2))
     # Read the current step row, never trust a detached caller's producer field.
     current_step = session.get(WorkflowStepRunRecord, step.step_run_id, populate_existing=True)
     if (
@@ -97,11 +107,16 @@ def resolve_reference_query_publication(
         )
         or (
             len(history.records) == 4
-            and history.records[3].payload != NativeQueryCompleted(output=output)
+            and history.records[3].payload
+            != (
+                NativeQueryCompletedV2(output=output)
+                if isinstance(output, ReferenceQueryStepOutputV2)
+                else NativeQueryCompleted(output=output)
+            )
         )
     ):
         raise ValueError("REFERENCE_QUERY_COMPLETION_PRODUCER_MISMATCH")
-    receipt = resolve_native_reference_query_completion(
+    receipt = resolve_supported_native_reference_query_completion(
         session, settings, output, artifact_reader=reader
     )
     expected = reference_query_checkpoint_receipt(request, launch, allocation, executed, published)
@@ -109,7 +124,7 @@ def resolve_reference_query_publication(
         raise ValueError("REFERENCE_QUERY_COMPLETION_HISTORY_MISMATCH")
     resolved = CatalogReferenceQueryArtifacts(
         session, settings, artifact_reader=reader
-    ).resolve_publication(
+    ).resolve_supported_publication(
         workflow_request=request,
         policy=sources.policy,
         bundle=sources.bundle,
@@ -120,7 +135,7 @@ def resolve_reference_query_publication(
         receipt_owner_job_id=allocation.receipt_producer.job_id,
         manifest_sha256=published.manifest_sha256,
     )
-    native_input = build_reference_query_native_input(
+    native_input = build_supported_reference_query_native_input(
         sources, job_id=launch.native_launch_job_id, query_request_id=launch.query_request_id
     )
     validate_reference_query_launch_association(

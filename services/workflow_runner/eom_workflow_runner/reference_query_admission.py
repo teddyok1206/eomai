@@ -19,7 +19,7 @@ from eom_workflow.reference_query_execution import (
     parse_supported_reference_query_workflow_request,
     validate_reference_query_request_references,
 )
-from eom_workflow.reference_query_workflow import ReferenceQueryWorkflowDefinition
+from eom_workflow.reference_query_workflow import SupportedReferenceQueryWorkflowDefinition
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -92,7 +92,7 @@ def validate_reference_query_runner_admission(
     scope = ResolvedReferenceQueryAdmission(scope.request, scope.policy, scope.bundle)
     checked = compile_definition_data(definition.as_dict(), definition.source_path, set())
     if (
-        not isinstance(checked.definition, ReferenceQueryWorkflowDefinition)
+        not isinstance(checked.definition, SupportedReferenceQueryWorkflowDefinition)
         or checked.sha256 != definition.sha256
         or checked.canonical_bytes != definition.canonical_bytes
         or checked.definition != definition.definition

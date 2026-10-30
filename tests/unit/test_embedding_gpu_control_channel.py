@@ -31,6 +31,7 @@ from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_embedding_gpu_control import control_case
 from tests.unit.test_embedding_work_batch import Fence
 from tests.unit.test_embedding_work_batch_result import local_case
+from tests.unit.test_public_solution_work_batch import public_case
 
 
 def send_raw(connection, value):
@@ -40,9 +41,16 @@ def send_raw(connection, value):
 
 @contextmanager
 def endpoints(
-    *, requested=True, ready=True, granted=True, bound=True, sender=None, peer_fence=None
+    *,
+    requested=True,
+    ready=True,
+    granted=True,
+    bound=True,
+    sender=None,
+    peer_fence=None,
+    batch=None,
 ):
-    case = control_case(expires_ns=time.monotonic_ns() + 15 * 10**9)
+    case = control_case(expires_ns=time.monotonic_ns() + 15 * 10**9, batch=batch)
     request, allocation, _, grant, _, _, batch, raw = case
     left, right = socket.socketpair()
     for connection in (left, right):
@@ -100,9 +108,12 @@ def synthetic_result():
     return result, vectors
 
 
-def test_real_unix_round_trip_source_fences_before_each_encode_and_output_ack():
-    with endpoints() as (root, worker, case, observations, _, _):
-        batch, backend, scope, resources, life = local_case(device="CUDA")
+@pytest.mark.parametrize("public", (False, True))
+def test_real_unix_round_trip_source_fences_before_each_encode_and_output_ack(public):
+    batch, backend, scope, resources, life = (
+        public_case(device="CUDA") if public else local_case(device="CUDA")
+    )
+    with endpoints(batch=batch) as (root, worker, case, observations, _, _):
         assert batch == case[6]
         authorized, outputs, verified = [], [], []
 
@@ -138,7 +149,8 @@ def test_real_unix_round_trip_source_fences_before_each_encode_and_output_ack():
         assert {check.child_request_sha256 for check in authorized} == {
             child.request.request_sha256 for child in batch.children
         }
-        assert life == ["open", "closed"] and len(backend.calls) == 2
+        assert life == (["load", "close"] if public else ["open", "closed"])
+        assert len(backend.calls) == 2
         assert len(verified) == 1 and observations
         with pytest.raises(EmbeddingGpuChannelError):
             worker.assert_batch_current(batch)

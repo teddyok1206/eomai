@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Final, Literal
+from typing import Final, Literal, TypeAlias
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.models import FrozenModel
@@ -18,7 +18,16 @@ from eom_workflow.schemas import (
 REFERENCE_QUERY_WORKFLOW_KEY: Final = "local-embedding-reference-query"
 REFERENCE_QUERY_WORKFLOW_VERSION: Final = "1.0.0"
 REFERENCE_QUERY_EXECUTION_PROTOCOL: Final = "reference-query/1.0"
+REFERENCE_QUERY_PUBLIC_EXECUTION_PROTOCOL: Final = "reference-query/2.0"
 REFERENCE_QUERY_RESULT_SCHEMA: Final = "embedding-reference-query-result@1.0"
+REFERENCE_QUERY_EXECUTION_PROTOCOLS: Final = (
+    REFERENCE_QUERY_EXECUTION_PROTOCOL,
+    REFERENCE_QUERY_PUBLIC_EXECUTION_PROTOCOL,
+)
+REFERENCE_QUERY_RESULT_SCHEMAS: Final = (
+    REFERENCE_QUERY_RESULT_SCHEMA,
+    "embedding-reference-query-result@2.0",
+)
 
 
 class ReferenceQueryStep(FrozenModel):
@@ -91,3 +100,17 @@ def parse_public_solution_reference_query_workflow_definition(
         return PublicSolutionReferenceQueryWorkflowDefinition.model_validate(value)
     except ValidationError:
         raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID") from None
+
+
+SupportedReferenceQueryWorkflowDefinition: TypeAlias = (  # noqa: UP040 -- runtime dispatch
+    ReferenceQueryWorkflowDefinition | PublicSolutionReferenceQueryWorkflowDefinition
+)
+
+
+def parse_supported_reference_query_workflow_definition(
+    value: object,
+) -> SupportedReferenceQueryWorkflowDefinition:
+    document = raw_similarity_contract_value(value)
+    if isinstance(document, dict) and document.get("definition_version") == "2.0.0":
+        return parse_public_solution_reference_query_workflow_definition(document)
+    return parse_reference_query_workflow_definition(document)

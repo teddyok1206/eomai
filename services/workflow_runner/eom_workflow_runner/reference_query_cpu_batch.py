@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 from threading import Condition
 
-from eom_catalog_contracts.embedding_reference_query import EmbeddingReferenceQueryResult
 from eom_orchestrator.embedding_batch_plan_store import (
     EmbeddingBatchPlanStore,
 )
@@ -20,6 +19,7 @@ from eom_workflow.embedding_batch_plan_family import (
     SupportedEmbeddingBatchRequest,
     validate_embedding_batch_query_context,
 )
+from eom_workflow.reference_query_execution import SupportedReferenceQueryNativeResult
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.embedding_batch_cpu_route import require_original_cpu_batch_route
@@ -244,7 +244,7 @@ class RoutedCpuReferenceQueryExecution:
 
     def run(
         self, prepared: PreparedNativeQuery, *, source: CpuReferenceQueryExecutionContext
-    ) -> EmbeddingReferenceQueryResult:
+    ) -> SupportedReferenceQueryNativeResult:
         _require(source.owner is self.group.owner)
 
         @contextmanager

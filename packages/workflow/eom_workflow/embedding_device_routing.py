@@ -13,10 +13,11 @@ from eom_catalog_contracts.embedding_contract_values import raw_similarity_contr
 from eom_catalog_contracts.embedding_model_recipe import same_embedding_payload_recipe
 from eom_catalog_contracts.embedding_reference_query_v11 import EmbeddingReferenceQueryInputV11
 from eom_catalog_contracts.embedding_work_batch import (
-    EmbeddingWorkBatchInput,
-    parse_embedding_work_batch_input,
+    SupportedEmbeddingWorkBatchInput,
+    parse_supported_embedding_work_batch_input,
 )
 from eom_catalog_contracts.models import Sha256, UtcDatetime
+from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -265,12 +266,12 @@ def validate_embedding_device_route_replay(
 def validate_embedding_device_batch_profile(
     policy: EmbeddingDeviceRoutingPolicy,
     decision: EmbeddingDeviceRoutingDecision,
-    batch: EmbeddingWorkBatchInput,
-) -> EmbeddingWorkBatchInput:
+    batch: SupportedEmbeddingWorkBatchInput,
+) -> SupportedEmbeddingWorkBatchInput:
     """One numerical profile invariant for planning and actual index-route composition."""
     policy = EmbeddingDeviceRoutingPolicy.model_validate(policy)
     decision = EmbeddingDeviceRoutingDecision.model_validate(decision)
-    batch = parse_embedding_work_batch_input(batch)
+    batch = parse_supported_embedding_work_batch_input(batch)
     selected = decision.selected
     profile, resources = selected.profile, selected.profile.resource_profile
     if (
@@ -293,7 +294,7 @@ def validate_embedding_device_batch_profile(
             or request.threads != resources.threads
         ):
             raise EmbeddingDeviceRoutingError()
-        if isinstance(request, EmbeddingReferenceQueryInputV11):
+        if isinstance(request, EmbeddingReferenceQueryInputV11 | PublicSolutionQueryInput):
             if (
                 request.spaces.document != profile.space
                 or request.recipe.recipe_sha256 != policy.view_recipe_sha256

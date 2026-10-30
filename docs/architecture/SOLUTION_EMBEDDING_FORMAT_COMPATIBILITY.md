@@ -182,3 +182,46 @@ format/ID/warning은 넣지 않는다. source와 정책은 별도 similarity/nat
 public INDEX의 batch1.3·owner6 연결, 기존 기출 view 보존, 같은 source의 CPU/CUDA pairing을
 검증한다. 기존 numeric wire/자원 lease/등록 owner를 재사용한다. 공식 QUERY/검색 소비와
 실제 창작 5건의 운영 검증이 남아 있으므로 alignment 상태는 아직 PENDING이다.
+
+### Public QUERY routing: existing parent planner, closed successor selection
+
+The remaining public QUERY uses the existing Orchestrator allocation/route/lease and
+numeric child owner; neither API nor Catalog calls the encoder directly. A QUERY-only
+`embedding-batch-plan/1.4` selection/request pins public report anchors and one concrete
+public-recipe CPU/CUDA index pair. Old1.0/1.1/1.2 and public INDEX1.3 remain closed and their
+bytes unchanged. Resource allocation/routed/bound frames stay1.0; actual numeric child is
+the already defined public QUERY2, with a distinct QUERY space, not a DOCUMENT vector reuse.
+
+- Boundary/canonical source: authenticated Catalog source/index resolution establishes
+  pointers; existing parent command/physical lease owns dispatch. Small metadata is not
+  source authority, runtime qualification, available GPU memory, or computation success.
+- Identity: exact source/revision/report/hash, Graph/policy, public recipe, CPU/CUDA
+  index/manifest/space and ordered child request hashes. Paths are only materialization.
+- Access/data structures: ordered tuple of at most32 anchors, set uniqueness checks,
+  device-keyed pair, existing indexed queue/claim and immutable Artifact manifest. O(N)
+  validation/bounded metadata, one current-root reauthorization per use case; no DB change.
+- Transaction/dependencies: API→existing application→typed protocols; Orchestrator's
+  parent transaction/host lease and Catalog's exact identity/source fence remain separate.
+  No worker DB/NAS, second queue, persistent model cache, or new renderer framework.
+- Failure/replay: replay selects the same physical decision and immutable pins; no latest
+  index substitution, unannounced CPU fallback, failed-history edit or fresh query identity.
+  Final read reauthorizes those references and joins the canonical result/shard commit.
+- Simpler alternative rejected: inserting public anchors into legacy QUERY1.2 would claim
+  legacy analysis semantics; direct CPU/GPU encoding would bypass existing allocation and
+  recovery. Only the small versioned metadata changes, not numerical/resource protocols.
+
+Public query options use the existing public similarity consumer purpose, source limit and
+top-k. Legacy topics/unit filtering is not invented inside public context. DB filter/source
+selection remains in its existing authorized Catalog owner. This is source integration work;
+it is not operating activation.
+
+The already-defined public numeric batch uses `embedding-work-batch-input/2.0` and
+result2, whereas predecessor numeric batch1 stays closed. Extend the existing protected
+workspace, root grant, FD/native execution and publication adapters through that closed
+supported-family dispatcher. Do not relabel public QUERY2 children as numeric batch1.
+Parent QUERY1.4 alone binds numeric batch2; legacy QUERY and public DOCUMENT INDEX1.3
+retain batch1. The small root control/receipt frames already bind immutable input/result
+hashes and keep their schema bytes unchanged. No additional allocation, queue or binary
+copy is introduced. Both families retain current source/lease reauthorization, original
+parent/child ordering, device/recipe/space checks and interrupted-publication preservation.
+Runtime selection, five actual encodings and live DB search remain separate required gates.

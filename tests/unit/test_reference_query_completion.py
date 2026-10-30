@@ -96,7 +96,9 @@ def completion(tmp_path, monkeypatch):
     )
     # Derivation itself has separate exact current-source tests; this is storage/completion closure.
     monkeypatch.setattr(
-        read_module, "build_reference_query_native_input", lambda *_a, **_kw: current.native_input
+        read_module,
+        "build_supported_reference_query_native_input",
+        lambda *_a, **_kw: current.native_input,
     )
     return SimpleNamespace(
         publisher=publisher,
@@ -172,7 +174,7 @@ def test_changed_history_bytes_or_current_authority_never_return_success(
         value.owner.fence_mutation = deny
     if fault == "derivation":
         monkeypatch.setattr(
-            read_module, "build_reference_query_native_input", lambda *_a, **_kw: None
+            read_module, "build_supported_reference_query_native_input", lambda *_a, **_kw: None
         )
     with value.publisher.sessions.begin() as session:
         if fault == "native_failed":

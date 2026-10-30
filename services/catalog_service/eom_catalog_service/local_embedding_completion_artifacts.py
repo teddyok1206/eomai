@@ -37,6 +37,7 @@ from eom_workflow.reference_query_execution import (
     SupportedReferenceQueryStepOutput,
     SupportedReferenceQueryWorkflowReceipt,
     parse_reference_query_step_output,
+    parse_supported_reference_query_step_output,
     parse_supported_reference_query_workflow_receipt,
     validate_reference_query_step_output,
 )
@@ -85,7 +86,7 @@ def resolve_native_reference_query_completion(
 ) -> ReferenceQueryWorkflowReceipt:
     """Canonical read only; caller must separately validate current source/Job closure."""
     output = parse_reference_query_step_output(output)
-    receipt = _resolve_reference_query_completion(
+    receipt = resolve_supported_native_reference_query_completion(
         session, settings, output, artifact_reader=artifact_reader
     )
     if not isinstance(receipt, ReferenceQueryWorkflowReceipt):
@@ -102,7 +103,7 @@ def resolve_native_public_solution_query_completion(
 ) -> ReferenceQueryWorkflowReceiptV2:
     """QUERY2 canonical receipt only; no source, Workflow or physical execution grant."""
     output = ReferenceQueryStepOutputV2.model_validate(output)
-    receipt = _resolve_reference_query_completion(
+    receipt = resolve_supported_native_reference_query_completion(
         session, settings, output, artifact_reader=artifact_reader
     )
     if not isinstance(receipt, ReferenceQueryWorkflowReceiptV2):
@@ -110,13 +111,14 @@ def resolve_native_public_solution_query_completion(
     return receipt
 
 
-def _resolve_reference_query_completion(
+def resolve_supported_native_reference_query_completion(
     session: Session,
     settings: CatalogSettings,
     output: SupportedReferenceQueryStepOutput,
     *,
-    artifact_reader: PinnedArtifactReadContext | None,
+    artifact_reader: PinnedArtifactReadContext | None = None,
 ) -> SupportedReferenceQueryWorkflowReceipt:
+    output = parse_supported_reference_query_step_output(output)
     materialized = _read_receipt(
         session,
         settings,

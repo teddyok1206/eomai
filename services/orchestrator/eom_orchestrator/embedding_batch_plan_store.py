@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from eom_catalog_contracts.embedding_work_batch import EmbeddingWorkBatchInput
+from eom_catalog_contracts.embedding_work_batch import SupportedEmbeddingWorkBatchInput
 from eom_identifiers import content_sha256, new_job_id, new_logical_artifact_id, new_revision_id
 from eom_workflow.embedding_batch_plan import (
     EmbeddingBatchAllocation,
@@ -314,7 +314,7 @@ class EmbeddingBatchPlanStore:
         self,
         session: Session,
         record: EmbeddingBatchBound,
-        batch: EmbeddingWorkBatchInput,
+        batch: SupportedEmbeddingWorkBatchInput,
         *,
         authorize_child: Callable[[EmbeddingBatchChildBinding], None],
     ) -> EmbeddingBatchPlanHistory:

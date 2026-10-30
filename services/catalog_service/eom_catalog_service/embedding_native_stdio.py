@@ -54,6 +54,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
 from eom_catalog_contracts.public_solution_query import (
     PublicSolutionQueryInput,
     PublicSolutionQueryResult,
+    parse_supported_numerical_query_input,
     validate_public_solution_query_result,
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
@@ -512,15 +513,6 @@ def _run_native_embedding_descriptors(
         )
 
 
-def _run_native_reference_query_descriptors(
-    descriptors: NativeEmbeddingDescriptors,
-    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
-) -> None:
-    _run_native_query_descriptors(
-        descriptors, backend_scope, parse=parse_embedding_reference_query_input_v11
-    )
-
-
 def _run_native_query_descriptors(
     descriptors: NativeEmbeddingDescriptors,
     backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
@@ -580,8 +572,29 @@ def run_native_reference_query_descriptors(
     backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
 ) -> None:
     """Fixed QUERY handoff; owner identity/purpose/unit admission is separately mandatory."""
+    _run_checked_query_descriptors(
+        descriptors, backend_scope, parse=parse_embedding_reference_query_input_v11
+    )
+
+
+def run_native_supported_reference_query_descriptors(
+    descriptors: NativeEmbeddingDescriptors,
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+) -> None:
+    """Installed admitted leaf; original literal parsers and purpose fences stay distinct."""
+    _run_checked_query_descriptors(
+        descriptors, backend_scope, parse=parse_supported_numerical_query_input
+    )
+
+
+def _run_checked_query_descriptors(
+    descriptors: NativeEmbeddingDescriptors,
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+    *,
+    parse: Callable[[object], EmbeddingReferenceQueryInputV11 | PublicSolutionQueryInput],
+) -> None:
     try:
-        _run_native_reference_query_descriptors(descriptors, backend_scope)
+        _run_native_query_descriptors(descriptors, backend_scope, parse=parse)
     except (
         NativeEmbeddingHandoffError,
         ReferenceQueryEmbeddingEncodeError,
@@ -599,20 +612,9 @@ def run_native_public_solution_query_descriptors(
     backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
 ) -> None:
     """Explicit QUERY2 seam; not an installed launch, grant or publication capability."""
-    try:
-        _run_native_query_descriptors(
-            descriptors, backend_scope, parse=PublicSolutionQueryInput.model_validate
-        )
-    except (
-        NativeEmbeddingHandoffError,
-        ReferenceQueryEmbeddingEncodeError,
-        EmbeddingVectorBinaryError,
-    ):
-        raise
-    except OSError:
-        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_IO_FAILED") from None
-    except Exception:
-        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_EXECUTION_FAILED") from None
+    _run_checked_query_descriptors(
+        descriptors, backend_scope, parse=PublicSolutionQueryInput.model_validate
+    )
 
 
 def run_native_public_solution_work_batch_descriptors(

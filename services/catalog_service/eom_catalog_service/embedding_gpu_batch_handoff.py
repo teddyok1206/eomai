@@ -17,8 +17,8 @@ from eom_catalog_contracts.embedding_gpu_control import (
     validate_embedding_gpu_batch_grant,
 )
 from eom_catalog_contracts.embedding_work_batch import (
-    EmbeddingWorkBatchInput,
-    parse_embedding_work_batch_input,
+    SupportedEmbeddingWorkBatchInput,
+    parse_supported_embedding_work_batch_input,
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_orchestrator.inference_transfer_cpu_handoff import (
@@ -140,7 +140,7 @@ def prepare_embedding_gpu_batch_handoff(
 def bind_embedding_gpu_batch_handoff(
     prepared: PreparedEmbeddingGpuBatch,
     grant: EmbeddingGpuComputeGrant,
-    batch: EmbeddingWorkBatchInput,
+    batch: SupportedEmbeddingWorkBatchInput,
 ) -> None:
     """Journal original intent, then bind the same inode once; never truncate or repair.
 
@@ -150,7 +150,7 @@ def bind_embedding_gpu_batch_handoff(
     """
     _require(type(prepared) is PreparedEmbeddingGpuBatch)
     original = validate_embedding_gpu_batch_original(prepared.launch, prepared.request)
-    batch = parse_embedding_work_batch_input(batch)
+    batch = parse_supported_embedding_work_batch_input(batch)
     raw = canonical_json_bytes(batch.model_dump(mode="json"))
     _require(
         time.monotonic_ns() < prepared.request.expires_monotonic_ns

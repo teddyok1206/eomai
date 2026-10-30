@@ -7,10 +7,11 @@ from types import MappingProxyType
 
 from eom_catalog_contracts.embedding_reference_query_v11 import EmbeddingReferenceQueryInputV11
 from eom_catalog_contracts.embedding_work_batch import (
-    EmbeddingWorkBatchChild,
-    EmbeddingWorkBatchInput,
-    parse_embedding_work_batch_input,
+    SupportedEmbeddingWorkBatchChild,
+    SupportedEmbeddingWorkBatchInput,
+    parse_supported_embedding_work_batch_input,
 )
+from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
 from eom_orchestrator.native_reference_query_coordinator import read_native_reference_query_launch
 from eom_workflow.embedding_batch_plan import EmbeddingBatchChildBinding
 from eom_workflow.local_embedding_encoding_dispatch import (
@@ -20,6 +21,7 @@ from eom_workflow.local_embedding_encoding_dispatch import (
 from eom_workflow.local_embedding_request_v2 import supported_local_embedding_request_actor
 from eom_workflow.reference_query_execution import (
     ReferenceQueryLaunchAssociation,
+    SupportedReferenceQueryNativeInput,
     SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_launch_association,
     parse_supported_reference_query_workflow_request,
@@ -57,7 +59,9 @@ class DocumentBatchSource:
     def input_sha256(self) -> str:
         return self.association.owned_input_request_sha256
 
-    def authorize(self, batch: EmbeddingWorkBatchInput, child: EmbeddingWorkBatchChild) -> None:
+    def authorize(
+        self, batch: SupportedEmbeddingWorkBatchInput, child: SupportedEmbeddingWorkBatchChild
+    ) -> None:
         _require(batch.purpose == "DOCUMENT")
         with self.transaction() as session:
             current = self.owner.resolve_launch(session, self.association)
@@ -104,10 +108,14 @@ class ReferenceQueryBatchSource:
     def input_sha256(self) -> str:
         return self.launch.query_request_sha256
 
-    def authorize(self, batch: EmbeddingWorkBatchInput, child: EmbeddingWorkBatchChild) -> None:
+    def authorize(
+        self, batch: SupportedEmbeddingWorkBatchInput, child: SupportedEmbeddingWorkBatchChild
+    ) -> None:
         _require(batch.purpose == "REFERENCE_QUERY")
-        _require(isinstance(child.request, EmbeddingReferenceQueryInputV11))
-        assert isinstance(child.request, EmbeddingReferenceQueryInputV11)
+        _require(
+            isinstance(child.request, EmbeddingReferenceQueryInputV11 | PublicSolutionQueryInput)
+        )
+        assert isinstance(child.request, EmbeddingReferenceQueryInputV11 | PublicSolutionQueryInput)
         _require(
             batch.scope.actor_kind == "OPERATOR"
             and batch.scope.actor_id == self.request.operator_audit.operator_id
@@ -117,7 +125,7 @@ class ReferenceQueryBatchSource:
         )
         self.authorize_current(child.request)
 
-    def authorize_current(self, native_input: EmbeddingReferenceQueryInputV11) -> None:
+    def authorize_current(self, native_input: SupportedReferenceQueryNativeInput) -> None:
         """Current child-only lease/source fence, also used after a prior canonical CPU binding."""
         with self.transaction() as session:
             current = self.owner.resolve_execution_sources(
@@ -154,8 +162,10 @@ class CatalogEmbeddingBatchSourceAuthorization:
     No SQL root, decoded Artifact, authenticated result or lease is cached here.
     """
 
-    def __init__(self, batch: EmbeddingWorkBatchInput, sources: tuple[BatchSource, ...]) -> None:
-        batch = parse_embedding_work_batch_input(batch)
+    def __init__(
+        self, batch: SupportedEmbeddingWorkBatchInput, sources: tuple[BatchSource, ...]
+    ) -> None:
+        batch = parse_supported_embedding_work_batch_input(batch)
         _require(type(sources) is tuple and len(sources) == len(batch.children))
         expected = DocumentBatchSource if batch.purpose == "DOCUMENT" else ReferenceQueryBatchSource
         _require(all(type(source) is expected for source in sources))

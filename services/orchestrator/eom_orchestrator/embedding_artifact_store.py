@@ -419,7 +419,7 @@ class EmbeddingArtifactStore:
             request = parse_embedding_reference_query_input_v11(request)
         except (ValueError, TypeError, JsonSchemaValidationError):
             raise EmbeddingArtifactStoreError("EMBEDDING_REFERENCE_QUERY_CONTEXT_INVALID") from None
-        return self._publish_reference_query(
+        return self.publish_supported_reference_query(
             workflow_request=workflow_request,
             policy=policy,
             bundle=bundle,
@@ -450,7 +450,7 @@ class EmbeddingArtifactStore:
             request = PublicSolutionQueryInput.model_validate(request)
         except (ValueError, TypeError, JsonSchemaValidationError):
             raise EmbeddingArtifactStoreError("EMBEDDING_REFERENCE_QUERY_CONTEXT_INVALID") from None
-        return self._publish_reference_query(
+        return self.publish_supported_reference_query(
             workflow_request=workflow_request,
             policy=policy,
             bundle=bundle,
@@ -462,7 +462,7 @@ class EmbeddingArtifactStore:
             expected_result_sha256=expected_result_sha256,
         )
 
-    def _publish_reference_query(
+    def publish_supported_reference_query(
         self,
         *,
         workflow_request: SupportedReferenceQueryWorkflowIntent,

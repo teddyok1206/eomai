@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 
+from eom_catalog_contracts.embedding_index_families import embedding_entry_source
 from eom_catalog_contracts.inference_transfer_experiment import VIEWS, StagedExperimentEntry
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
 from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
@@ -239,7 +240,7 @@ class CatalogRoutedReferenceQuerySelection:
             )
             sources = {source.item_revision_id: source for source in left.sources}
             entries = {
-                entry.profile.source_basis.source.item_revision_id: entry for entry in left.entries
+                embedding_entry_source(entry).item_revision_id: entry for entry in left.entries
             }
             _require(set(sources) == set(ids) and len(sources) == len(left.sources))
             anchors = []

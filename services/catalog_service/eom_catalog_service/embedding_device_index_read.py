@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 
+from eom_catalog_contracts.embedding_index_families import parse_supported_embedding_index
 from eom_catalog_contracts.inference_transfer_embedding import MAX_EMBEDDING_INPUT_BYTES
-from eom_catalog_contracts.mixed_embedding_index import parse_supported_embedding_index
 from eom_identifiers import canonical_json_bytes
 from eom_orchestrator.embedding_artifact_store import EMBEDDING_INDEX_ARTIFACT_TYPE
 from eom_protocol.artifact_members import ArtifactMemberPointer

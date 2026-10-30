@@ -28,13 +28,13 @@ from eom_catalog_contracts.embedding_native_installation_evidence import (
     parse_rootlocal_evidence_document,
 )
 from eom_catalog_contracts.embedding_work_batch import (
-    EmbeddingWorkBatchInput,
-    parse_embedding_work_batch_input,
+    SupportedEmbeddingWorkBatchInput,
+    parse_supported_embedding_work_batch_input,
 )
 from eom_catalog_contracts.embedding_work_batch_binary import validate_embedding_work_batch_binary
 from eom_catalog_contracts.embedding_work_batch_result import (
-    EmbeddingWorkBatchResult,
-    parse_embedding_work_batch_result,
+    SupportedEmbeddingWorkBatchResult,
+    parse_supported_embedding_work_batch_result,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.inference_transfer_cpu_handoff import (
@@ -106,7 +106,7 @@ class EmbeddingGpuBatchSourceOwner(Protocol):
 
     def admit_allocation(
         self, request: EmbeddingGpuAllocationRequest, ready: EmbeddingGpuBatchReadyObservation
-    ) -> EmbeddingWorkBatchInput:
+    ) -> SupportedEmbeddingWorkBatchInput:
         """Atomically pin original allocation/route and reserve exact authorized child work."""
         ...
 
@@ -117,9 +117,9 @@ class EmbeddingGpuBatchSourceOwner(Protocol):
 
 @dataclass(frozen=True, slots=True)
 class CompletedEmbeddingGpuBatch:
-    batch: EmbeddingWorkBatchInput
+    batch: SupportedEmbeddingWorkBatchInput
     grant: EmbeddingGpuComputeGrant
-    result: EmbeddingWorkBatchResult
+    result: SupportedEmbeddingWorkBatchResult
     child_vectors: tuple[memoryview, ...]
     retirement: EmbeddingGpuBatchRetirement
     output_claim: EmbeddingGpuResultReady
@@ -355,7 +355,7 @@ class _WorkerFence:
 def _grant(
     captured: CapturedEmbeddingGpuBatchMachine,
     ready: EmbeddingGpuBatchReadyObservation,
-    batch: EmbeddingWorkBatchInput,
+    batch: SupportedEmbeddingWorkBatchInput,
 ) -> tuple[EmbeddingGpuComputeGrant, bytes]:
     raw = canonical_json_bytes(batch.model_dump(mode="json"))
     body = {
@@ -378,9 +378,9 @@ def _grant(
 
 def _materialize_result(
     captured: CapturedEmbeddingGpuBatchMachine,
-    batch: EmbeddingWorkBatchInput,
+    batch: SupportedEmbeddingWorkBatchInput,
     claim: EmbeddingGpuResultReady,
-) -> tuple[EmbeddingWorkBatchResult, tuple[memoryview, ...]]:
+) -> tuple[SupportedEmbeddingWorkBatchResult, tuple[memoryview, ...]]:
     captured.assert_current()
     with protected_cpu_handoff_directory(
         captured.execution, owner=fixed_owner_identity(), uid=0, gid=captured.owner_gid, mode=0o750
@@ -405,7 +405,7 @@ def _materialize_result(
     )
     value = parse_rootlocal_evidence_document(raw, captured.prepared.launch.total_output_max_bytes)
     _require(canonical_json_bytes(value) == raw)
-    result = parse_embedding_work_batch_result(value)
+    result = parse_supported_embedding_work_batch_result(value)
     _require(result.result_sha256 == claim.result_sha256)
     ranges = validate_embedding_work_batch_binary(batch, result, vectors)
     captured.assert_current()
@@ -523,7 +523,7 @@ def run_embedding_gpu_batch(
         _require(ready.unit == original and ready.readiness.start_time_ticks == fence.start_ticks)
         _persist_ready_observation(captured, ready)
         fence.phase = "ACTIVE"
-        batch = parse_embedding_work_batch_input(
+        batch = parse_supported_embedding_work_batch_input(
             source_owner.admit_allocation(captured.prepared.request, ready)
         )
         children = tuple(child.request.request_sha256 for child in batch.children)

@@ -147,7 +147,7 @@ def test_postgres_crash_recovery_never_reencodes_or_reallocates(query, monkeypat
         if boundary.startswith("query")
         else NativeEmbeddingCompletionPublisher
     )
-    method = owner_type.publish_reference_query
+    method = owner_type.publish_supported_reference_query
 
     def crash(self, *args, **kwargs):
         if boundary.endswith("after"):
@@ -155,7 +155,7 @@ def test_postgres_crash_recovery_never_reencodes_or_reallocates(query, monkeypat
         raise KeyboardInterrupt("synthetic owner death; not a new inference grant")
 
     with monkeypatch.context() as patch:
-        patch.setattr(owner_type, "publish_reference_query", crash)
+        patch.setattr(owner_type, "publish_supported_reference_query", crash)
         with pytest.raises(KeyboardInterrupt):
             query.execute()
     original = query.history()

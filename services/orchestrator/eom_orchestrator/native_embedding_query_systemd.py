@@ -9,11 +9,13 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import ClassVar
 
-from eom_catalog_contracts.embedding_reference_query import EmbeddingReferenceQueryResult
-from eom_catalog_contracts.embedding_reference_query_v11 import validate_reference_query_result_v11
 from eom_workflow.native_reference_query_coordinator import (
     NativeQueryCheckpointVersion,
     NativeQueryExecutedV11,
+)
+from eom_workflow.reference_query_execution import (
+    SupportedReferenceQueryNativeResult,
+    validate_reference_query_native_result,
 )
 from jsonschema.exceptions import ValidationError as SchemaError
 
@@ -102,11 +104,11 @@ class FixedNativeQueryLauncher:
         self._installed()
 
     def completion_observation(
-        self, prepared: PreparedNativeQuery, result: EmbeddingReferenceQueryResult
+        self, prepared: PreparedNativeQuery, result: SupportedReferenceQueryNativeResult
     ) -> NativeQueryExecutedV11:
         """Observe successful original units, not a persisted-result or replay launch grant."""
         prepared.__post_init__()
-        validate_reference_query_result_v11(prepared.request, result)
+        validate_reference_query_native_result(prepared.request, result)
         boot_file = Path("/proc/sys/kernel/random/boot_id")
         boot_id = boot_file.read_text(encoding="ascii").strip()
         prepare, query = self.observe(prepared.execution_id)
@@ -141,7 +143,7 @@ class FixedNativeQueryLauncher:
         except ValueError:
             raise NativeQueryLaunchError("NATIVE_QUERY_COMPLETION_UNCERTAIN") from None
 
-    def run(self, prepared: PreparedNativeQuery) -> EmbeddingReferenceQueryResult:
+    def run(self, prepared: PreparedNativeQuery) -> SupportedReferenceQueryNativeResult:
         prepared.__post_init__()
         try:
             return run_fixed_native_cpu(

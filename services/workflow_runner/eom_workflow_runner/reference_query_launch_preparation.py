@@ -5,20 +5,22 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_reference_query_v11 import (
-    EmbeddingReferenceQueryInputV11,
     parse_embedding_reference_query_input_v11,
 )
+from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
 from eom_identifiers import content_sha256, new_job_id, new_revision_id
 from eom_workflow.reference_query_execution import (
     ReferenceQueryLaunchAssociation,
+    SupportedReferenceQueryNativeInput,
     parse_reference_query_launch_association,
     validate_reference_query_launch_association,
 )
 
 from eom_workflow_runner.reference_query_source_read import (
-    ResolvedReferenceQuerySources,
-    build_reference_query_native_input,
+    SupportedResolvedReferenceQuerySources,
+    build_supported_reference_query_native_input,
 )
 from eom_workflow_runner.repository import CommandLeaseIdentity
 
@@ -28,11 +30,15 @@ class ReferenceQueryLaunchCandidate:
     """Small identity/input relation, not current source authority or physical admission."""
 
     association: ReferenceQueryLaunchAssociation
-    request: EmbeddingReferenceQueryInputV11
+    request: SupportedReferenceQueryNativeInput
 
     def __post_init__(self) -> None:
         launch = parse_reference_query_launch_association(self.association)
-        request = parse_embedding_reference_query_input_v11(self.request)
+        request = (
+            PublicSolutionQueryInput.model_validate(raw_similarity_contract_value(self.request))
+            if isinstance(self.request, PublicSolutionQueryInput)
+            else parse_embedding_reference_query_input_v11(self.request)
+        )
         if (
             launch.native_launch_job_id != request.job_id
             or launch.query_request_id != request.query_request_id
@@ -47,7 +53,7 @@ class ReferenceQueryLaunchCandidate:
 
 
 def prepare_reference_query_launch_candidate(
-    sources: ResolvedReferenceQuerySources,
+    sources: SupportedResolvedReferenceQuerySources,
     *,
     workflow_id: str,
     step_run_id: str,
@@ -72,7 +78,9 @@ def prepare_reference_query_launch_candidate(
         if launch is None
         else launch.query_request_id
     )
-    native = build_reference_query_native_input(sources, job_id=job_id, query_request_id=query_id)
+    native = build_supported_reference_query_native_input(
+        sources, job_id=job_id, query_request_id=query_id
+    )
     if launch is None:
         body = dict(
             schema_version="reference-query-launch-association/1.0",

@@ -4,10 +4,6 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
-from eom_catalog_contracts.similarity_context_v2 import (
-    SupportedSimilarityContextRequest,
-    parse_supported_similarity_context_request,
-)
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
 from eom_identifiers import content_sha256
 from eom_workflow.embedding_batch_plan_family import (
@@ -15,7 +11,9 @@ from eom_workflow.embedding_batch_plan_family import (
     embedding_batch_query_key,
 )
 from eom_workflow.reference_query_execution import (
-    ReferenceQueryStepOutput,
+    SupportedReferenceQueryContext,
+    SupportedReferenceQueryStepOutput,
+    parse_supported_reference_query_context,
     parse_supported_reference_query_workflow_request,
 )
 
@@ -42,27 +40,25 @@ def _require(condition: bool) -> None:
 def prepare_batch_reference_query_context(
     parent: SupportedEmbeddingBatchRequest,
     ordinal: int,
-    context: SupportedSimilarityContextRequest,
-) -> SupportedSimilarityContextRequest:
+    context: SupportedReferenceQueryContext,
+) -> SupportedReferenceQueryContext:
     """New logical child intent, with every supplied immutable source/index pin unchanged.
 
     Reuse the existing QUERY logical-ID derivation. Otherwise generic Workflow
     equivalence could correctly return another parent's identical old QUERY.
     This does not edit that history or provide current source authority.
     """
-    context = parse_supported_similarity_context_request(context)
+    context = parse_supported_reference_query_context(context)
     _key, logical_id = reference_query_prepare_identity(
         parent.scope.actor_id, embedding_batch_query_key(parent, ordinal)
     )
     body = context.model_dump(mode="json", exclude={"request_sha256"}) | {"request_id": logical_id}
-    return parse_supported_similarity_context_request(
-        body | {"request_sha256": content_sha256(body)}
-    )
+    return parse_supported_reference_query_context(body | {"request_sha256": content_sha256(body)})
 
 
 def start_batch_reference_queries(
     executor: CatalogBatchReferenceQueryExecutor,
-    contexts: tuple[SupportedSimilarityContextRequest, ...],
+    contexts: tuple[SupportedReferenceQueryContext, ...],
 ) -> tuple[str, ...]:
     """Pinned sources become child intents through the original current-owner atomic START.
 
@@ -103,7 +99,7 @@ def _runner(executor: CatalogBatchReferenceQueryExecutor) -> WorkflowRunner:
 
 def _completed(
     executor: CatalogBatchReferenceQueryExecutor, workflow_id: str
-) -> ReferenceQueryStepOutput:
+) -> SupportedReferenceQueryStepOutput:
     owner, group = executor.owner, executor.group
     caller = EmbeddingRegistryCaller(group.selection.scope.actor_id)
     with group.publisher.sessions.begin() as session:
@@ -112,7 +108,7 @@ def _completed(
 
 def drive_batch_reference_queries(
     executor: CatalogBatchReferenceQueryExecutor, workflow_ids: tuple[str, ...]
-) -> tuple[ReferenceQueryStepOutput, ...]:
+) -> tuple[SupportedReferenceQueryStepOutput, ...]:
     """Each child keeps normal claim/heartbeat/completion; only numerical work is grouped.
 
     No SQL root crosses the bounded thread pool. Existing completed children are

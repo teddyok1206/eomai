@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from eom_catalog_contracts.embedding_work_batch import (
-    EmbeddingWorkBatchInput,
-    parse_embedding_work_batch_input,
+    SupportedEmbeddingWorkBatchInput,
+    parse_supported_embedding_work_batch_input,
 )
 from eom_catalog_service.embedding_batch_control_connection import (
     dispatch_embedding_batch_control,
@@ -118,7 +118,7 @@ class ActiveEmbeddingBatchExecution:
     def run(
         self,
         binding: EmbeddingBatchBound,
-        batch: EmbeddingWorkBatchInput,
+        batch: SupportedEmbeddingWorkBatchInput,
         *,
         authorization: CatalogEmbeddingBatchSourceAuthorization,
     ) -> PublishedEmbeddingBatchExecution:
@@ -128,7 +128,7 @@ class ActiveEmbeddingBatchExecution:
         try:
             _require(type(authorization) is CatalogEmbeddingBatchSourceAuthorization)
             binding = EmbeddingBatchBound.model_validate(binding)
-            batch = parse_embedding_work_batch_input(batch)
+            batch = parse_supported_embedding_work_batch_input(batch)
             _require(authorization.batch_request_sha256 == batch.request_sha256)
             # A current actual root channel is required before the short BOUND
             # transaction. A pure route value cannot supply physical authority.

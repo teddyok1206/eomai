@@ -34,12 +34,14 @@ from eom_catalog_contracts.embedding_gpu_control import (
 from eom_catalog_contracts.embedding_work_batch import (
     EmbeddingWorkBatchChild,
     EmbeddingWorkBatchInput,
+    PublicSolutionWorkBatchChild,
+    PublicSolutionWorkBatchInput,
     SupportedEmbeddingWorkBatchChild,
     SupportedEmbeddingWorkBatchInput,
-    parse_embedding_work_batch_input,
+    parse_supported_embedding_work_batch_input,
 )
 from eom_catalog_contracts.embedding_work_batch_result import (
-    EmbeddingWorkBatchResult,
+    SupportedEmbeddingWorkBatchResult,
     embedding_work_batch_result_bytes,
     validate_embedding_work_batch_result,
 )
@@ -111,8 +113,8 @@ class EmbeddingGpuControlChannel:
         self._ready: EmbeddingGpuAllocationReady | None = None
         self._grant: EmbeddingGpuComputeGrant | None = None
         self._result: EmbeddingGpuResultReady | None = None
-        self._batch: EmbeddingWorkBatchInput | None = None
-        self._children: dict[str, EmbeddingWorkBatchChild] = {}
+        self._batch: SupportedEmbeddingWorkBatchInput | None = None
+        self._children: dict[str, SupportedEmbeddingWorkBatchChild] = {}
         self._checked: set[str] = set()
         self._sequence = 0
         try:
@@ -241,12 +243,16 @@ class EmbeddingGpuControlChannel:
             return value
 
     def bind_batch(
-        self, batch: EmbeddingWorkBatchInput, *, input_raw_sha256: str, input_byte_count: int
+        self,
+        batch: SupportedEmbeddingWorkBatchInput,
+        *,
+        input_raw_sha256: str,
+        input_byte_count: int,
     ) -> None:
         with self._operation():
             if self._phase != _Phase.GRANTED or self._grant is None or self._batch is not None:
                 raise EmbeddingGpuChannelError()
-            checked = parse_embedding_work_batch_input(batch)
+            checked = parse_supported_embedding_work_batch_input(batch)
             validate_embedding_gpu_batch_grant(
                 self.request,
                 self._grant,
@@ -266,7 +272,7 @@ class EmbeddingGpuControlChannel:
     def assert_batch_current(self, batch: SupportedEmbeddingWorkBatchInput) -> None:
         with self._operation():
             if (
-                not isinstance(batch, EmbeddingWorkBatchInput)
+                not isinstance(batch, EmbeddingWorkBatchInput | PublicSolutionWorkBatchInput)
                 or self._side != "WORKER"
                 or self._phase != _Phase.GRANTED
                 or self._batch is None
@@ -282,7 +288,7 @@ class EmbeddingGpuControlChannel:
         with self._operation():
             self.assert_batch_current(batch)
             if (
-                not isinstance(child, EmbeddingWorkBatchChild)
+                not isinstance(child, EmbeddingWorkBatchChild | PublicSolutionWorkBatchChild)
                 or self._grant is None
                 or self._children.get(child.request.request_sha256) != child
             ):
@@ -365,7 +371,7 @@ class EmbeddingGpuControlChannel:
             self._checked.add(value.child_request_sha256)
             return None
 
-    def announce_result(self, result: EmbeddingWorkBatchResult) -> None:
+    def announce_result(self, result: SupportedEmbeddingWorkBatchResult) -> None:
         with self._operation():
             if (
                 self._side != "WORKER"

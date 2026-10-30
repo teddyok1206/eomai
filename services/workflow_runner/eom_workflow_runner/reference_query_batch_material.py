@@ -6,15 +6,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-from eom_catalog_contracts.embedding_reference_query import (
-    EmbeddingReferenceQueryResult,
-    raw_similarity_contract_value,
-)
-from eom_catalog_contracts.embedding_reference_query_v11 import (
-    EmbeddingReferenceQueryInputV11,
-    parse_embedding_reference_query_input_v11,
-    validate_reference_query_result_v11,
-)
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_runtime_bundle import (
     EmbeddingRuntimeBundle,
     parse_embedding_runtime_bundle,
@@ -32,11 +24,15 @@ from eom_orchestrator.native_embedding_query_handoff import OWNER_ROOT
 from eom_workflow.reference_query_execution import (
     ReferenceQueryExecutionPolicy,
     ReferenceQueryLaunchAssociation,
+    SupportedReferenceQueryNativeInput,
+    SupportedReferenceQueryNativeResult,
     SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_execution_policy,
     parse_reference_query_launch_association,
+    parse_reference_query_native_input,
     parse_supported_reference_query_workflow_request,
     validate_reference_query_launch_association,
+    validate_reference_query_native_result,
 )
 
 QUERY_PUBLICATION_ROOT = OWNER_ROOT
@@ -76,14 +72,14 @@ class PreparedBatchReferenceQuery:
     policy: ReferenceQueryExecutionPolicy
     bundle: EmbeddingRuntimeBundle
     association: ReferenceQueryLaunchAssociation
-    request: EmbeddingReferenceQueryInputV11
+    request: SupportedReferenceQueryNativeInput
 
     def __post_init__(self) -> None:
         workflow = parse_supported_reference_query_workflow_request(self.workflow_request)
         policy = parse_reference_query_execution_policy(self.policy)
         bundle = parse_embedding_runtime_bundle(raw_similarity_contract_value(self.bundle))
         association = parse_reference_query_launch_association(self.association)
-        request = parse_embedding_reference_query_input_v11(self.request)
+        request = parse_reference_query_native_input(workflow, self.request)
         validate_reference_query_launch_association(association, workflow, policy, bundle, request)
         _require(workflow.resource_profile.device == request.spaces.query.runtime.device == "CUDA")
         for name, value in (
@@ -102,7 +98,7 @@ class PreparedBatchReferenceQuery:
 
 def stage_batch_query_publication(
     prepared: PreparedBatchReferenceQuery,
-    result: EmbeddingReferenceQueryResult,
+    result: SupportedReferenceQueryNativeResult,
     vectors: memoryview,
 ) -> None:
     """Caller retains current canonical receipt/source fences; no NAS or DB writes.
@@ -112,7 +108,7 @@ def stage_batch_query_publication(
     """
     _require(type(prepared) is PreparedBatchReferenceQuery)
     require_batch_query_publication_layout()
-    validate_reference_query_result_v11(prepared.request, result)
+    result = validate_reference_query_native_result(prepared.request, result)
     _require(
         type(vectors) is memoryview
         and vectors.readonly

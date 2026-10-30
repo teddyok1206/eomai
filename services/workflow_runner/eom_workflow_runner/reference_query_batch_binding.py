@@ -5,8 +5,10 @@ from __future__ import annotations
 from eom_catalog_contracts.embedding_work_batch import (
     MAX_EMBEDDING_WORK_BATCH_SECONDS,
     MAX_EMBEDDING_WORK_BATCH_VECTOR_BYTES,
-    EmbeddingWorkBatchInput,
+    SupportedEmbeddingWorkBatchInput,
+    parse_supported_embedding_work_batch_input,
 )
+from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
 from eom_identifiers import content_sha256
 from eom_orchestrator.native_embedding_query_handoff import PreparedNativeQuery
 from eom_workflow.embedding_batch_plan import (
@@ -18,6 +20,7 @@ from eom_workflow.embedding_batch_plan_family import (
     SupportedEmbeddingBatchRequest,
     validate_embedding_batch_binding,
 )
+from eom_workflow.embedding_batch_plan_v14 import EmbeddingBatchPlanRequestV14
 
 from eom_workflow_runner.reference_query_batch_material import PreparedBatchReferenceQuery
 
@@ -26,7 +29,7 @@ def prepare_reference_query_batch_binding(
     parent: SupportedEmbeddingBatchRequest,
     route: EmbeddingBatchRoute,
     materials: tuple[PreparedNativeQuery | PreparedBatchReferenceQuery, ...],
-) -> tuple[EmbeddingBatchBound, EmbeddingWorkBatchInput]:
+) -> tuple[EmbeddingBatchBound, SupportedEmbeddingWorkBatchInput]:
     """Metadata/value construction only; current source, lease and route grants are separate.
 
     Preserve existing CUDA canonical bytes. A CPU value remains a genuine
@@ -42,10 +45,15 @@ def prepare_reference_query_batch_binding(
         )
     ):
         raise ValueError("REFERENCE_QUERY_BATCH_BINDING_INVALID")
+    public = isinstance(parent, EmbeddingBatchPlanRequestV14)
+    if any(isinstance(value.request, PublicSolutionQueryInput) != public for value in materials):
+        raise ValueError("REFERENCE_QUERY_BATCH_BINDING_INVALID")
     scope = parent.scope
     resources = route.decision.selected.profile.resource_profile
     body = dict(
-        schema_version="embedding-work-batch-input/1.0",
+        schema_version="embedding-work-batch-input/2.0"
+        if public
+        else "embedding-work-batch-input/1.0",
         purpose="REFERENCE_QUERY",
         scope=scope.model_dump(mode="json"),
         routing_decision_sha256=route.decision.decision_sha256,
@@ -57,7 +65,9 @@ def prepare_reference_query_batch_binding(
             for value in materials
         ],
     )
-    batch = EmbeddingWorkBatchInput.model_validate(body | {"request_sha256": content_sha256(body)})
+    batch = parse_supported_embedding_work_batch_input(
+        body | {"request_sha256": content_sha256(body)}
+    )
     binding_body = dict(
         schema_version=BATCH_PLAN_PROTOCOL,
         message_type="BOUND",

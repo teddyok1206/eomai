@@ -36,7 +36,10 @@ from eom_catalog_service.similarity_context_ports import (
 from eom_identifiers import content_sha256
 from eom_identity_service import OperatorAuthorizationFenceError
 from eom_orchestrator.database import build_session_factory
-from eom_workflow.reference_query_execution import parse_supported_reference_query_workflow_request
+from eom_workflow.reference_query_execution import (
+    ReferenceQueryWorkflowRequestV3,
+    parse_supported_reference_query_workflow_request,
+)
 from sqlalchemy import select
 
 from eom_workflow_runner.engine import WorkflowRunner
@@ -213,6 +216,10 @@ class NativeReferenceQueryPreparation:
                 original = parse_supported_reference_query_workflow_request(
                     workflow.initial_request
                 )
+                if isinstance(original, ReferenceQueryWorkflowRequestV3):
+                    # This installed legacy preparation owner cannot reinterpret
+                    # a public-report replay as accepted-analysis context1/2.
+                    raise ValueError("REFERENCE_QUERY_PREPARATION_REPLAY_MISMATCH")
                 selection = None
                 error_code: ReferenceQueryPrepareErrorCode | None = None
                 status: Literal["READY", "FAILED", "PENDING"]

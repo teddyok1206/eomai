@@ -12,14 +12,7 @@ from typing import Any
 
 from eom_catalog_contracts.embedding_reference_query import (
     MAX_REFERENCE_QUERY_BYTES,
-    EmbeddingReferenceQueryResult,
-    parse_embedding_reference_query_result,
     raw_similarity_contract_value,
-)
-from eom_catalog_contracts.embedding_reference_query_v11 import (
-    EmbeddingReferenceQueryInputV11,
-    parse_embedding_reference_query_input_v11,
-    validate_reference_query_result_v11,
 )
 from eom_catalog_contracts.embedding_runtime_bundle import (
     MAX_RUNTIME_BUNDLE_BYTES,
@@ -31,11 +24,15 @@ from eom_identifiers import canonical_json_bytes
 from eom_workflow.reference_query_execution import (
     ReferenceQueryExecutionPolicy,
     ReferenceQueryLaunchAssociation,
+    SupportedReferenceQueryNativeInput,
+    SupportedReferenceQueryNativeResult,
     SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_execution_policy,
     parse_reference_query_launch_association,
+    parse_reference_query_native_input,
     parse_supported_reference_query_workflow_request,
     validate_reference_query_launch_association,
+    validate_reference_query_native_result,
 )
 
 from eom_orchestrator.inference_transfer_cpu_handoff import (
@@ -76,7 +73,7 @@ class PreparedNativeQuery:
     policy: ReferenceQueryExecutionPolicy
     bundle: EmbeddingRuntimeBundle
     association: ReferenceQueryLaunchAssociation
-    request: EmbeddingReferenceQueryInputV11
+    request: SupportedReferenceQueryNativeInput
 
     def __post_init__(self) -> None:
         validate_native_query_execution_id(self.execution_id)
@@ -84,7 +81,7 @@ class PreparedNativeQuery:
         policy = parse_reference_query_execution_policy(self.policy)
         bundle = parse_embedding_runtime_bundle(raw_similarity_contract_value(self.bundle))
         association = parse_reference_query_launch_association(self.association)
-        request = parse_embedding_reference_query_input_v11(self.request)
+        request = parse_reference_query_native_input(workflow, self.request)
         validate_reference_query_launch_association(association, workflow, policy, bundle, request)
         validate_fixed_native_cpu_resources(workflow.resource_profile)
         if request.job_id != "job_" + self.execution_id:
@@ -182,13 +179,14 @@ def _read_prepared(execution_id: str, owner: CpuHandoffIdentity) -> PreparedNati
                 )
             )
 
+        workflow = parse_supported_reference_query_workflow_request(read("workflow.json"))
         return PreparedNativeQuery(
             execution_id,
-            parse_supported_reference_query_workflow_request(read("workflow.json")),
+            workflow,
             parse_reference_query_execution_policy(read("policy.json")),
             parse_embedding_runtime_bundle(read("bundle.json")),
             parse_reference_query_launch_association(read("association.json")),
-            parse_embedding_reference_query_input_v11(read("input.json")),
+            parse_reference_query_native_input(workflow, read("input.json")),
         )
 
 
@@ -232,7 +230,9 @@ def prepare_native_query_handoff(execution_id: str) -> None:
         raise NativeQueryHandoffError(error.code.replace("NATIVE_CPU_", "NATIVE_QUERY_")) from None
 
 
-def materialize_native_query_output(prepared: PreparedNativeQuery) -> EmbeddingReferenceQueryResult:
+def materialize_native_query_output(
+    prepared: PreparedNativeQuery,
+) -> SupportedReferenceQueryNativeResult:
     owner = _owner()
     if _read_prepared(prepared.execution_id, owner) != prepared:
         raise NativeQueryHandoffError("NATIVE_QUERY_STAGED_INPUT_CHANGED")
@@ -258,8 +258,7 @@ def materialize_native_query_output(prepared: PreparedNativeQuery) -> EmbeddingR
                 prepared.request.spaces.query.model_spec.dimension * len(prepared.request.rows) * 4,
             ),
         )
-    result = parse_embedding_reference_query_result(_canonical_value(result_raw))
-    validate_reference_query_result_v11(prepared.request, result)
+    result = validate_reference_query_native_result(prepared.request, _canonical_value(result_raw))
     read_unit_vectors(
         vectors,
         dimension=result.shard.dimension,

@@ -15,7 +15,7 @@ from eom_workflow.private_chat_query_submission_context import (
     validate_private_chat_query_submission_context,
 )
 from eom_workflow.private_chat_query_workflow import PrivateChatQueryStepOutput
-from eom_workflow.reference_query_execution import ReferenceQueryStepOutput
+from eom_workflow.reference_query_execution import SupportedReferenceQueryStepOutput
 from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -35,7 +35,9 @@ from eom_workflow_runner.state_machine import (
 
 type NativeStepKey = Literal["encode_batch", "encode_reference_query", "encode_private_chat_query"]
 type NativeStepOutput = (
-    SupportedLocalEmbeddingStepOutput | ReferenceQueryStepOutput | PrivateChatQueryStepOutput
+    SupportedLocalEmbeddingStepOutput
+    | SupportedReferenceQueryStepOutput
+    | PrivateChatQueryStepOutput
 )
 type ValidateNativeCompletion = Callable[
     [Session, WorkflowInstanceRecord, WorkflowStepRunRecord], NativeStepOutput

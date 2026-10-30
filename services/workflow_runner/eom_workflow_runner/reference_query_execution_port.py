@@ -9,7 +9,7 @@ from eom_catalog_contracts.models import Sha256
 from eom_workflow.models import JobId
 from eom_workflow.reference_query_execution import (
     ReferenceQueryLaunchAssociation,
-    ReferenceQueryStepOutput,
+    SupportedReferenceQueryStepOutput,
     SupportedReferenceQueryWorkflowRequest,
 )
 from pydantic import TypeAdapter
@@ -76,7 +76,7 @@ class ReferenceQueryNativeExecutor(Protocol):
         command_lease: CommandLeaseIdentity,
         idempotency_key: str,
         fenced_transaction: NativeFencedRunnerTransaction,
-    ) -> ReferenceQueryStepOutput | ReferenceQueryStepPending: ...
+    ) -> SupportedReferenceQueryStepOutput | ReferenceQueryStepPending: ...
 
     def validate_completion(
         self,
@@ -86,5 +86,5 @@ class ReferenceQueryNativeExecutor(Protocol):
         step: WorkflowStepRunRecord,
         request: SupportedReferenceQueryWorkflowRequest,
         command_lease: CommandLeaseIdentity,
-        output: ReferenceQueryStepOutput,
-    ) -> ReferenceQueryStepOutput: ...
+        output: SupportedReferenceQueryStepOutput,
+    ) -> SupportedReferenceQueryStepOutput: ...

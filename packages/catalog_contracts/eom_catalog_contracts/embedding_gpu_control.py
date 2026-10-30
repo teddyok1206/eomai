@@ -19,8 +19,8 @@ from eom_catalog_contracts.embedding_reference_query import (
 )
 from eom_catalog_contracts.embedding_work_batch import (
     MAX_EMBEDDING_WORK_BATCH_SECONDS,
-    EmbeddingWorkBatchInput,
-    parse_embedding_work_batch_input,
+    SupportedEmbeddingWorkBatchInput,
+    parse_supported_embedding_work_batch_input,
 )
 from eom_catalog_contracts.models import FrozenModel, Sha256
 
@@ -252,7 +252,7 @@ def validate_embedding_gpu_grant(
 def validate_embedding_gpu_batch_grant(
     request: EmbeddingGpuAllocationRequest,
     grant: EmbeddingGpuComputeGrant,
-    batch: EmbeddingWorkBatchInput,
+    batch: SupportedEmbeddingWorkBatchInput,
     *,
     input_raw_sha256: str,
     input_byte_count: int,
@@ -260,7 +260,7 @@ def validate_embedding_gpu_batch_grant(
     """Actual bounded FD read supplies raw SHA/count; no source authority is inferred."""
     request = EmbeddingGpuAllocationRequest.model_validate(raw_similarity_contract_value(request))
     grant = EmbeddingGpuComputeGrant.model_validate(raw_similarity_contract_value(grant))
-    batch = parse_embedding_work_batch_input(batch)
+    batch = parse_supported_embedding_work_batch_input(batch)
     if (
         grant.allocation_attempt_id != request.allocation_attempt_id
         or grant.allocation_request_sha256 != request.message_sha256

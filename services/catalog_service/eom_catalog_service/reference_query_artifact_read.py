@@ -37,6 +37,8 @@ from eom_workflow.reference_query_execution import (
     SupportedReferenceQueryWorkflowReceipt,
     SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_workflow_receipt,
+    parse_supported_reference_query_workflow_receipt,
+    parse_supported_reference_query_workflow_request,
     validate_reference_query_workflow_receipt,
 )
 from sqlalchemy.orm import Session
@@ -102,7 +104,7 @@ class CatalogReferenceQueryArtifacts:
         manifest_sha256: str | None = None,
     ) -> ResolvedReferenceQueryArtifacts:
         receipt = parse_reference_query_workflow_receipt(receipt)
-        resolved = self._resolve_publication(
+        resolved = self.resolve_supported_publication(
             workflow_request=workflow_request,
             policy=policy,
             bundle=bundle,
@@ -131,7 +133,7 @@ class CatalogReferenceQueryArtifacts:
         manifest_sha256: str | None = None,
     ) -> ResolvedPublicSolutionQueryArtifacts:
         receipt = ReferenceQueryWorkflowReceiptV2.model_validate(receipt)
-        resolved = self._resolve_publication(
+        resolved = self.resolve_supported_publication(
             workflow_request=workflow_request,
             policy=policy,
             bundle=bundle,
@@ -146,7 +148,7 @@ class CatalogReferenceQueryArtifacts:
             raise ValueError("REFERENCE_QUERY_READ_FAMILY_MISMATCH")
         return resolved
 
-    def _resolve_publication(
+    def resolve_supported_publication(
         self,
         *,
         workflow_request: SupportedReferenceQueryWorkflowIntent,
@@ -157,8 +159,14 @@ class CatalogReferenceQueryArtifacts:
         workflow_id: str,
         step_run_id: str,
         receipt_owner_job_id: str,
-        manifest_sha256: str | None,
+        manifest_sha256: str | None = None,
     ) -> ResolvedReferenceQueryArtifacts | ResolvedPublicSolutionQueryArtifacts:
+        workflow_request = parse_supported_reference_query_workflow_request(workflow_request)
+        receipt = parse_supported_reference_query_workflow_receipt(receipt)
+        if isinstance(workflow_request, ReferenceQueryWorkflowRequestV3) != isinstance(
+            receipt, ReferenceQueryWorkflowReceiptV2
+        ):
+            raise ValueError("REFERENCE_QUERY_READ_FAMILY_MISMATCH")
         input_pointer = receipt.query_input
         pointers = (
             input_pointer,

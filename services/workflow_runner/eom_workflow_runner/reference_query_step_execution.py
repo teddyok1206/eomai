@@ -9,15 +9,18 @@ from eom_orchestrator.native_reference_query_coordinator import (
     read_native_reference_query_launch,
 )
 from eom_workflow.compiler import CompiledWorkflowDefinition
-from eom_workflow.native_reference_query_coordinator import NativeQueryCompleted
+from eom_workflow.native_reference_query_coordinator import (
+    NativeQueryCompleted,
+    NativeQueryCompletedV2,
+)
 from eom_workflow.reference_query_execution import (
-    ReferenceQueryStepOutput,
+    SupportedReferenceQueryStepOutput,
     SupportedReferenceQueryWorkflowRequest,
-    parse_reference_query_step_output,
+    parse_supported_reference_query_step_output,
+    reference_query_result_schema,
 )
 from eom_workflow.reference_query_workflow import (
-    REFERENCE_QUERY_RESULT_SCHEMA,
-    ReferenceQueryWorkflowDefinition,
+    SupportedReferenceQueryWorkflowDefinition,
 )
 from sqlalchemy.orm import Session
 
@@ -59,7 +62,7 @@ def _checked_step(
         or step.attempt != 1
         or step.step_type != "application"
         or step.worker_role is not None
-        or step.result_schema != REFERENCE_QUERY_RESULT_SCHEMA
+        or step.result_schema != reference_query_result_schema(request)
         or step.input_pointer_manifest != {"workflow_request_sha256": request.request_sha256}
     ):
         raise WorkflowError(
@@ -76,11 +79,12 @@ def _checked_completion(
     step: WorkflowStepRunRecord,
     request: SupportedReferenceQueryWorkflowRequest,
     lease: CommandLeaseIdentity,
-    output: ReferenceQueryStepOutput,
-) -> ReferenceQueryStepOutput:
-    output = parse_reference_query_step_output(output)
+    output: SupportedReferenceQueryStepOutput,
+) -> SupportedReferenceQueryStepOutput:
+    output = parse_supported_reference_query_step_output(output)
     if (
         output.workflow_id != workflow.workflow_id
+        or output.execution_result_schema != reference_query_result_schema(request)
         or output.step_run_id != step.step_run_id
         or output.attempt != step.attempt
         or (
@@ -88,7 +92,7 @@ def _checked_completion(
         )
     ):
         raise ValueError("REFERENCE_QUERY_COMPLETION_IDENTITY_INVALID")
-    checked = parse_reference_query_step_output(
+    checked = parse_supported_reference_query_step_output(
         executor.validate_completion(
             session=session,
             workflow=workflow,
@@ -116,7 +120,7 @@ def advance_reference_query_step(
     actor_id: str,
     poll_interval_seconds: int = 30,
 ) -> bool:
-    if not isinstance(compiled.definition, ReferenceQueryWorkflowDefinition):
+    if not isinstance(compiled.definition, SupportedReferenceQueryWorkflowDefinition):
         raise WorkflowError(
             WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID, "QUERY fixed definition differs"
         )
@@ -158,7 +162,7 @@ def advance_reference_query_step(
                 step_key="encode_reference_query",
                 step_type="application",
                 worker_role=None,
-                result_schema=REFERENCE_QUERY_RESULT_SCHEMA,
+                result_schema=reference_query_result_schema(request),
                 input_pointer_manifest={"workflow_request_sha256": request.request_sha256},
                 max_attempts=1,
             )
@@ -172,7 +176,9 @@ def advance_reference_query_step(
                     step=step,
                     request=request,
                     lease=lease,
-                    output=parse_reference_query_step_output(step.output_pointer_manifest),
+                    output=parse_supported_reference_query_step_output(
+                        step.output_pointer_manifest
+                    ),
                 )
             except ValueError as exc:
                 raise WorkflowError(
@@ -262,7 +268,7 @@ def advance_reference_query_step(
             # Another owner may have completed the same Job since the pending read.
             # Adopt only that exact canonical result via the normal completion fence.
             outcome = completed
-        if not isinstance(outcome, ReferenceQueryStepOutput):
+        if not isinstance(outcome, SupportedReferenceQueryStepOutput):
             raise WorkflowError(
                 WorkflowErrorCode.LOCAL_EMBEDDING_OUTCOME_INVALID,
                 "QUERY executor returned another purpose's outcome",
@@ -305,7 +311,7 @@ def _checked_pending(
     workflow_id: str,
     step_run_id: str,
     outcome: ReferenceQueryStepPending,
-) -> ReferenceQueryStepOutput | None:
+) -> SupportedReferenceQueryStepOutput | None:
     pending = ReferenceQueryStepPending(
         outcome.native_launch_job_id, outcome.association_sha256, outcome.reason
     )
@@ -322,7 +328,7 @@ def _checked_pending(
         raise ValueError("QUERY pending requires allocated nonfailed original history")
     if len(history.records) == 4:
         completed = history.records[3].payload
-        if not isinstance(completed, NativeQueryCompleted):
+        if not isinstance(completed, (NativeQueryCompleted, NativeQueryCompletedV2)):
             raise ValueError("QUERY terminal checkpoint differs")
         return completed.output
     return None
@@ -340,7 +346,7 @@ def complete_reference_query_terminal(
 ) -> None:
     def validate(
         session: Session, workflow: WorkflowInstanceRecord, step: WorkflowStepRunRecord
-    ) -> ReferenceQueryStepOutput:
+    ) -> SupportedReferenceQueryStepOutput:
         _checked_step(step, request)
         return _checked_completion(
             session,
@@ -349,7 +355,7 @@ def complete_reference_query_terminal(
             step=step,
             request=request,
             lease=lease,
-            output=parse_reference_query_step_output(step.output_pointer_manifest),
+            output=parse_supported_reference_query_step_output(step.output_pointer_manifest),
         )
 
     complete_native_terminal(

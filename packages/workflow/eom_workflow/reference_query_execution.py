@@ -35,6 +35,7 @@ from eom_catalog_contracts.similarity_context import SimilarityContextRequest
 from eom_catalog_contracts.similarity_context_v2 import (
     SimilarityContextRequestV2,
     SupportedSimilarityContextRequest,
+    parse_supported_similarity_context_request,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -64,8 +65,24 @@ REFERENCE_QUERY_REQUEST_VERSIONS: Final = (
     "reference-query-workflow-request/1.0",
     "reference-query-workflow-request/1.1",
     "reference-query-workflow-request/2.0",
+    "reference-query-workflow-request/3.0",
 )
 _BINARY_REF = "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0"
+
+
+type SupportedReferenceQueryContext = (
+    SupportedSimilarityContextRequest | PublicSolutionSimilarityRequest
+)
+
+
+def parse_supported_reference_query_context(value: object) -> SupportedReferenceQueryContext:
+    """Closed additive context dispatch; old Catalog parsers stay legacy-only."""
+    document = raw_similarity_contract_value(value)
+    if isinstance(document, dict) and document.get("schema_version") == (
+        "system-rag-similarity-request/3.0"
+    ):
+        return PublicSolutionSimilarityRequest.model_validate(document)
+    return parse_supported_similarity_context_request(document)
 
 
 def _hash(value: FrozenModel, field: str) -> None:
@@ -217,14 +234,15 @@ class ReferenceQueryWorkflowRequestV3(FrozenModel):
 
 # Keep a runtime union: the fixed Runner dispatch uses isinstance as well as typing.
 # PEP695's TypeAliasType cannot serve that runtime boundary.
-SupportedReferenceQueryWorkflowRequest: TypeAlias = (  # noqa: UP040 -- used by runtime isinstance
+LegacyReferenceQueryWorkflowRequest: TypeAlias = (  # noqa: UP040 -- used by runtime isinstance
     ReferenceQueryWorkflowRequest
     | ReferenceQueryWorkflowRequestV11
     | ReferenceQueryWorkflowRequestV2
 )
-type SupportedReferenceQueryWorkflowIntent = (
-    SupportedReferenceQueryWorkflowRequest | ReferenceQueryWorkflowRequestV3
+SupportedReferenceQueryWorkflowRequest: TypeAlias = (  # noqa: UP040 -- used by runtime isinstance
+    LegacyReferenceQueryWorkflowRequest | ReferenceQueryWorkflowRequestV3
 )
+type SupportedReferenceQueryWorkflowIntent = SupportedReferenceQueryWorkflowRequest
 
 
 class ReferenceQueryExecutionPolicy(FrozenModel):
@@ -465,7 +483,9 @@ class ReferenceQueryStepOutputV2(FrozenModel):
         return self
 
 
-type SupportedReferenceQueryStepOutput = ReferenceQueryStepOutput | ReferenceQueryStepOutputV2
+SupportedReferenceQueryStepOutput: TypeAlias = (  # noqa: UP040 -- runtime outcome dispatch
+    ReferenceQueryStepOutput | ReferenceQueryStepOutputV2
+)
 
 
 def parse_reference_query_workflow_request(value: object) -> ReferenceQueryWorkflowRequest:
@@ -500,6 +520,8 @@ def parse_supported_reference_query_workflow_request(
                 return parse_reference_query_workflow_request_v11(document)
             case "reference-query-workflow-request/2.0":
                 return parse_reference_query_workflow_request_v2(document)
+            case "reference-query-workflow-request/3.0":
+                return parse_reference_query_workflow_request_v3(document)
     raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID")
 
 
@@ -522,14 +544,17 @@ def parse_reference_query_workflow_request_v3(value: object) -> ReferenceQueryWo
 def parse_supported_reference_query_workflow_intent(
     value: object,
 ) -> SupportedReferenceQueryWorkflowIntent:
-    """Pure family dispatch; legacy owner admission stays closed until explicitly connected."""
-    document = raw_similarity_contract_value(value)
-    if (
-        isinstance(document, dict)
-        and document.get("schema_version") == "reference-query-workflow-request/3.0"
-    ):
-        return parse_reference_query_workflow_request_v3(document)
-    return parse_supported_reference_query_workflow_request(document)
+    """Retained pure provenance entry; the actual owner separately admits execution."""
+    return parse_supported_reference_query_workflow_request(value)
+
+
+def reference_query_result_schema(request: SupportedReferenceQueryWorkflowRequest) -> str:
+    """The literal request family fixes its output, never the caller's chosen schema."""
+    if isinstance(request, ReferenceQueryWorkflowRequestV3):
+        return "embedding-reference-query-result@2.0"
+    if isinstance(request, LegacyReferenceQueryWorkflowRequest):
+        return "embedding-reference-query-result@1.0"
+    raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID")
 
 
 def parse_reference_query_execution_policy(value: object) -> ReferenceQueryExecutionPolicy:
@@ -594,7 +619,7 @@ def parse_supported_reference_query_step_output(value: object) -> SupportedRefer
     return parse_reference_query_step_output(document)
 
 
-def _parse_native_input_for_request(
+def parse_reference_query_native_input(
     request: SupportedReferenceQueryWorkflowIntent, native_input: object
 ) -> SupportedReferenceQueryNativeInput:
     try:
@@ -624,6 +649,20 @@ def validate_reference_query_policy_bundle(
     except ValueError:
         raise ValueError("reference QUERY control/bundle closure differs") from None
     return policy, bundle
+
+
+def validate_reference_query_native_result(
+    native_input: SupportedReferenceQueryNativeInput, native_result: object
+) -> SupportedReferenceQueryNativeResult:
+    """Literal numerical family closure shared by CPU, finite batch and publication."""
+    document = raw_similarity_contract_value(native_result)
+    if isinstance(native_input, PublicSolutionQueryInput):
+        result = PublicSolutionQueryResult.model_validate(document)
+        validate_public_solution_query_result(native_input, result)
+        return result
+    result_v1 = parse_embedding_reference_query_result(document)
+    validate_reference_query_result_v11(native_input, result_v1)
+    return result_v1
 
 
 def validate_reference_query_request_references(
@@ -659,7 +698,7 @@ def validate_reference_query_launch_association(
     launch = parse_reference_query_launch_association(launch)
     request = parse_supported_reference_query_workflow_intent(request)
     policy = parse_reference_query_execution_policy(policy)
-    native_input = _parse_native_input_for_request(request, native_input)
+    native_input = parse_reference_query_native_input(request, native_input)
     validate_reference_query_request_references(request, policy, bundle)
     indexed_views = {
         view.view: view.index for view in request.context_request.views if view.index is not None
@@ -707,7 +746,7 @@ def validate_reference_query_workflow_receipt(
     receipt = parse_supported_reference_query_workflow_receipt(receipt)
     request = parse_supported_reference_query_workflow_intent(request)
     launch = parse_reference_query_launch_association(launch)
-    native_input = _parse_native_input_for_request(request, native_input)
+    native_input = parse_reference_query_native_input(request, native_input)
     validate_reference_query_launch_association(launch, request, policy, bundle, native_input)
     if isinstance(native_input, PublicSolutionQueryInput):
         if not isinstance(receipt, ReferenceQueryWorkflowReceiptV2):

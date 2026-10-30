@@ -13,8 +13,8 @@ from eom_catalog_contracts.embedding_native_installation_evidence import (
 )
 from eom_catalog_contracts.embedding_work_batch import (
     MAX_EMBEDDING_WORK_BATCH_BYTES,
-    EmbeddingWorkBatchInput,
-    parse_embedding_work_batch_input,
+    SupportedEmbeddingWorkBatchInput,
+    parse_supported_embedding_work_batch_input,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.inference_transfer_cpu_handoff import (
@@ -63,19 +63,19 @@ def _epoch(value: os.stat_result) -> tuple[int, ...]:
 def validate_embedding_owner_bound_input(
     request: EmbeddingGpuAllocationRequest,
     notice: EmbeddingBatchOwnerBound,
-    batch: EmbeddingWorkBatchInput,
+    batch: SupportedEmbeddingWorkBatchInput,
 ) -> None:
     """Pure ordered input/reference closure, not current source or physical admission."""
     request = EmbeddingGpuAllocationRequest.model_validate(request)
     notice = EmbeddingBatchOwnerBound.model_validate(notice)
-    batch = parse_embedding_work_batch_input(batch)
+    batch = parse_supported_embedding_work_batch_input(batch)
     _validate_checked_binding(request, notice, batch)
 
 
 def _validate_checked_binding(
     request: EmbeddingGpuAllocationRequest,
     notice: EmbeddingBatchOwnerBound,
-    batch: EmbeddingWorkBatchInput,
+    batch: SupportedEmbeddingWorkBatchInput,
 ) -> None:
     binding = notice.binding
     _require(
@@ -96,7 +96,7 @@ class StagedOwnerEmbeddingBatch:
     """Original checked local inputs only; never canonical source or a compute grant."""
 
     notice: EmbeddingBatchOwnerBound
-    batch: EmbeddingWorkBatchInput
+    batch: SupportedEmbeddingWorkBatchInput
     input_epoch: tuple[int, ...]
     bound_epoch: tuple[int, ...]
 
@@ -124,7 +124,7 @@ def stage_owner_embedding_batch(
     request: EmbeddingGpuAllocationRequest,
     ready: EmbeddingBatchRootReady,
     binding: EmbeddingBatchBound,
-    batch: EmbeddingWorkBatchInput,
+    batch: SupportedEmbeddingWorkBatchInput,
 ) -> StagedOwnerEmbeddingBatch:
     """Call after real owner BOUND/source checks; exact replay never truncates a partial file."""
     owner = fixed_owner_identity()
@@ -134,7 +134,7 @@ def stage_owner_embedding_batch(
     _require(time.monotonic_ns() < request.expires_monotonic_ns)
     validate_embedding_batch_owner_context(request, ready.controller_release, ready)
     binding = EmbeddingBatchBound.model_validate(binding)
-    batch = parse_embedding_work_batch_input(batch)
+    batch = parse_supported_embedding_work_batch_input(batch)
     raw = canonical_json_bytes(batch.model_dump(mode="json"))
     _require(0 < len(raw) <= MAX_EMBEDDING_WORK_BATCH_BYTES)
     pid = os.getpid()
@@ -250,7 +250,7 @@ def _read_original_owner_batch(
         _require(
             len(raw) == notice.input_byte_count and sha256_bytes(raw) == notice.input_raw_sha256
         )
-        batch = parse_embedding_work_batch_input(
+        batch = parse_supported_embedding_work_batch_input(
             parse_rootlocal_evidence_document(raw, MAX_EMBEDDING_WORK_BATCH_BYTES)
         )
         _require(canonical_json_bytes(batch.model_dump(mode="json")) == raw)

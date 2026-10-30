@@ -25,14 +25,17 @@ from eom_orchestrator.native_reference_query_coordinator import (
 )
 from eom_workflow.native_reference_query_coordinator import (
     NativeQueryAllocation,
+    NativeQueryCheckpointVersion,
     NativeQueryCompleted,
+    NativeQueryCompletedV2,
     NativeQueryExecuted,
     NativeQueryExecutedV11,
     native_reference_query_continuation_checkpoint,
 )
 from eom_workflow.reference_query_execution import (
     ReferenceQueryLaunchAssociation,
-    ReferenceQueryStepOutput,
+    ReferenceQueryWorkflowRequestV3,
+    SupportedReferenceQueryStepOutput,
     SupportedReferenceQueryWorkflowRequest,
     parse_supported_reference_query_workflow_request,
 )
@@ -61,9 +64,9 @@ from eom_workflow_runner.reference_query_launch_preparation import (
 )
 from eom_workflow_runner.reference_query_owner_admission import (
     CatalogReferenceQueryOwnerAdmission,
-    ResolvedReferenceQuerySources,
     validate_current_reference_query_input,
 )
+from eom_workflow_runner.reference_query_source_read import SupportedResolvedReferenceQuerySources
 from eom_workflow_runner.repository import CommandLeaseIdentity
 
 
@@ -103,6 +106,15 @@ class CatalogNativeReferenceQueryExecutor:
             raise ValueError("REFERENCE_QUERY_EXECUTOR_OWNER_MISMATCH")
         self.completion = NativeReferenceQueryCompletion(owner)
 
+    def _checkpoint_version(
+        self, request: SupportedReferenceQueryWorkflowRequest
+    ) -> NativeQueryCheckpointVersion:
+        return (
+            "native-reference-query-coordinator/2.0"
+            if isinstance(request, ReferenceQueryWorkflowRequestV3)
+            else self.launcher.checkpoint_schema_version
+        )
+
     def evaluate(self, request: SupportedReferenceQueryWorkflowRequest) -> RuntimeReadinessReport:
         try:
             request = parse_supported_reference_query_workflow_request(request)
@@ -140,7 +152,7 @@ class CatalogNativeReferenceQueryExecutor:
         lease: CommandLeaseIdentity,
         workflow_id: str,
         step_run_id: str,
-    ) -> ResolvedReferenceQuerySources:
+    ) -> SupportedResolvedReferenceQuerySources:
         return self.owner.resolve_execution_sources(
             session, request, lease, workflow_id=workflow_id, step_run_id=step_run_id
         )
@@ -157,7 +169,7 @@ class CatalogNativeReferenceQueryExecutor:
     def _prepared(
         self,
         session: Session,
-        sources: ResolvedReferenceQuerySources,
+        sources: SupportedResolvedReferenceQuerySources,
         workflow_id: str,
         step_run_id: str,
         lease: CommandLeaseIdentity,
@@ -200,7 +212,7 @@ class CatalogNativeReferenceQueryExecutor:
         lease: CommandLeaseIdentity,
         fenced: NativeFencedRunnerTransaction,
         reason: Literal["BUSY", "UNCERTAIN"],
-    ) -> ReferenceQueryStepOutput | ReferenceQueryStepPending:
+    ) -> SupportedReferenceQueryStepOutput | ReferenceQueryStepPending:
         with fenced() as session:
             self._current(session, request, lease, workflow.workflow_id, step.step_run_id)
             history = self._history(
@@ -208,7 +220,7 @@ class CatalogNativeReferenceQueryExecutor:
             )
             if len(history.records) == 4:
                 completed = history.records[3].payload
-                assert isinstance(completed, NativeQueryCompleted)
+                assert isinstance(completed, (NativeQueryCompleted, NativeQueryCompletedV2))
                 return self.validate_completion(
                     session=session,
                     workflow=workflow,
@@ -252,7 +264,7 @@ class CatalogNativeReferenceQueryExecutor:
                         source_commit=self.source_commit,
                     ),
                     previous=history.records,
-                    initial_version=self.launcher.checkpoint_schema_version,
+                    initial_version=self._checkpoint_version(request),
                 ),
             )
         return prepared, history
@@ -285,7 +297,7 @@ class CatalogNativeReferenceQueryExecutor:
         command_lease: CommandLeaseIdentity,
         idempotency_key: str,
         fenced_transaction: NativeFencedRunnerTransaction,
-    ) -> ReferenceQueryStepOutput | ReferenceQueryStepPending:
+    ) -> SupportedReferenceQueryStepOutput | ReferenceQueryStepPending:
         request = parse_supported_reference_query_workflow_request(request)
         expected_key = (
             f"reference-query-step:{workflow.workflow_id}:encode_reference_query:1:"
@@ -302,7 +314,7 @@ class CatalogNativeReferenceQueryExecutor:
             assert isinstance(allocation, NativeQueryAllocation)
             if len(history.records) == 4:
                 completed = history.records[3].payload
-                assert isinstance(completed, NativeQueryCompleted)
+                assert isinstance(completed, (NativeQueryCompleted, NativeQueryCompletedV2))
                 return self.validate_completion(
                     session=session,
                     workflow=workflow,
@@ -312,7 +324,7 @@ class CatalogNativeReferenceQueryExecutor:
                     output=completed.output,
                 )
             if len(history.records) == 1:
-                if history.records[0].schema_version != self.launcher.checkpoint_schema_version:
+                if history.records[0].schema_version != self._checkpoint_version(request):
                     # Existing unknown physical work cannot be reinterpreted under new units.
                     return ReferenceQueryStepPending(
                         prepared.association.native_launch_job_id,
@@ -380,7 +392,7 @@ class CatalogNativeReferenceQueryExecutor:
                             "EXECUTED",
                             observed,
                             previous=history.records,
-                            initial_version=self.launcher.checkpoint_schema_version,
+                            initial_version=self._checkpoint_version(request),
                         ),
                     )
                 else:
@@ -411,8 +423,8 @@ class CatalogNativeReferenceQueryExecutor:
         step: WorkflowStepRunRecord,
         request: SupportedReferenceQueryWorkflowRequest,
         command_lease: CommandLeaseIdentity,
-        output: ReferenceQueryStepOutput,
-    ) -> ReferenceQueryStepOutput:
+        output: SupportedReferenceQueryStepOutput,
+    ) -> SupportedReferenceQueryStepOutput:
         return self.completion.validate_completion(
             session=session,
             workflow=workflow,

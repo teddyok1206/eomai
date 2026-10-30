@@ -11,10 +11,12 @@ from eom_catalog_contracts.embedding_gpu_control import validate_embedding_gpu_b
 from eom_catalog_contracts.embedding_native_installation_evidence import (
     parse_rootlocal_evidence_document,
 )
+from eom_catalog_contracts.embedding_work_batch import SupportedEmbeddingWorkBatchChild
 from eom_catalog_contracts.embedding_work_batch_binary import validate_embedding_work_batch_binary
 from eom_catalog_contracts.embedding_work_batch_result import (
-    EmbeddingWorkBatchResult,
-    parse_embedding_work_batch_result,
+    SupportedEmbeddingWorkBatchChildResult,
+    SupportedEmbeddingWorkBatchResult,
+    parse_supported_embedding_work_batch_result,
 )
 from eom_catalog_service.embedding_batch_owner_channel import EmbeddingBatchOwnerChannel
 from eom_catalog_service.embedding_batch_owner_workspace import (
@@ -82,7 +84,7 @@ class VerifiedLocalEmbeddingBatchResult:
     staged: StagedOwnerEmbeddingBatch
     ready: EmbeddingBatchRootReady
     completed: EmbeddingBatchRootCompleted
-    result: EmbeddingWorkBatchResult
+    result: SupportedEmbeddingWorkBatchResult
     child_vectors: tuple[memoryview, ...]
     result_epoch: tuple[int, ...]
     vectors_epoch: tuple[int, ...]
@@ -116,9 +118,9 @@ class VerifiedLocalEmbeddingBatchResult:
             and channel.request.parent_request_sha256 == self.staged.notice.binding.request_sha256
         )
         children: list[dict[str, Any]] = []
-        for ordinal, (source, child) in enumerate(
-            zip(self.staged.batch.children, self.result.children, strict=True)
-        ):
+        sources: tuple[SupportedEmbeddingWorkBatchChild, ...] = self.staged.batch.children
+        outputs: tuple[SupportedEmbeddingWorkBatchChildResult, ...] = self.result.children
+        for ordinal, (source, child) in enumerate(zip(sources, outputs, strict=True)):
             output, shard = child.result, child.result.shard
             children.append(
                 dict(
@@ -205,7 +207,8 @@ def read_completed_embedding_batch_result(
     )
     verified = _read_original_result(receipt.ready, staged, receipt.completed, authorization)
     _require(len(receipt.children) == len(verified.result.children))
-    for expected, actual in zip(receipt.children, verified.result.children, strict=True):
+    outputs: tuple[SupportedEmbeddingWorkBatchChildResult, ...] = verified.result.children
+    for expected, actual in zip(receipt.children, outputs, strict=True):
         result, shard = actual.result, actual.result.shard
         _require(
             expected.native_job_id == result.job_id
@@ -256,7 +259,7 @@ def _read_original_result(
             len(raw) == completed.result_byte_count
             and sha256_bytes(raw) == completed.result_raw_sha256
         )
-        result = parse_embedding_work_batch_result(
+        result = parse_supported_embedding_work_batch_result(
             parse_rootlocal_evidence_document(raw, completed.result_byte_count)
         )
         _require(

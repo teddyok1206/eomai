@@ -599,3 +599,49 @@ Evidence: `/tmp/eom-creative-usage-attempt2-terminal-20261030.log`,
 `/var/lib/eom-release-operator-stage.4cc9546c-xjyhsbhs/usage-release-completed.json`.
 Full goal remains ACTIVE: public-report INDEX activation, five actual creative vectors,
 official DB similarity QUERY/read/replay and automatic backlog/future increments remain.
+
+### Following source checkpoint — public QUERY through existing finite execution owners
+
+The operating release remains4cc9546c; the following changes are a **source candidate**,
+not a claim that DB similarity is live. No new model/GPU canary was run for this checkpoint.
+
+- Shared source preparation/native executor/completion/consumer read now dispatch public
+  Workflow2 / request3 / QUERY2 / receipt2 explicitly. Legacy concrete parsers stay closed.
+  Common public reports use context3 and canonical completed result/shard reads; no direct
+  API encoder call or substitute search engine is added.
+- Schema-first `embedding-batch-plan/1.4` is QUERY-only. It pins up to32 ordered public
+  report/source references, Graph/policy and one exact CPU/CUDA index pair. Original physical
+  allocation/route/bound/root receipt frames retain their bytes and meanings. Catalog
+  resolves and reauthorizes both actual device populations; it does not pair by item number.
+- The already-defined numeric public batch2 passes through the original protected local
+  workspace, root grant/channel, source/lease checks, native FD execution and publication
+  owners. Public parent1.4 binds batch2 only; older parents and DOCUMENT INDEX1.3 retain
+  batch1. A literal legacy/public mismatch is rejected, not relabeled. New tests exercise
+  real temporary protected files, real Unix peer framing and canonical result/ACK with
+  explicitly synthetic model and authority leaves.
+- Source verification: controller/contract/workspace matrix **273 PASS**; native/public
+  focused regression **65 PASS**; final public parent/routing/materialization **14 PASS**;
+  legacy routed/preparation consumers **69 PASS**. The separate public/legacy Unix round
+  trip **2 PASS** is included in later focused coverage; do not sum overlapping suites.
+- Marker-guarded disposable PostgreSQL native public/legacy tests **37 PASS**, including
+  seven additional actual-executor tests for concurrent checkpoint replay, four interruption
+  boundaries, exact replay and immutable failed history. These use synthetic IAM/model
+  observations and temporary Artifact storage, never the production DB or NAS. Existing
+  public coordinator/publisher coverage is preserved, not replaced by the executor tests.
+- Core mypy passed55 changed files, and the full39 QUERY/batch consumers passed separately.
+  These sets overlap. Ruff/format and final clean-source verification are recorded alongside
+  the candidate commit/build; no production acceptance is inferred from source tests.
+
+Evidence: `/tmp/eom-public-query-controller-closure-tests-20261030.log`,
+`/tmp/eom-public-query-final-focused-20261030.log`,
+`/tmp/eom-public-query-parent-final-2-20261030.log`,
+`/tmp/eom-public-query-legacy-consumers-20261030.log`,
+`/tmp/eom-public-query-all-postgres-20261030.log`,
+`/tmp/eom-public-query-core-mypy-20261030.log`,
+`/tmp/eom-public-query-consumers-mypy-20261030.log`.
+
+Next required scope: supported installed public QUERY configuration/composition (existing
+owner versions1/2 and routed3 already exist; do not reuse their version numbers/meanings),
+public selection/HTTP prepare/read/DB adapter, compatible isolated/public INDEX activation,
+five actual creative vectors and authenticated result/replay/return-to-detail. Three actual
+report slots and busy/idle operating usage acceptance are closed; the full goal stays ACTIVE.
