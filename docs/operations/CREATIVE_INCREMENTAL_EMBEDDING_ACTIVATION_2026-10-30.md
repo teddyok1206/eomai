@@ -185,6 +185,22 @@ public namespace는 이미 16,384 source를 계약으로 허용하지만 기존 
 population≤16,384다. 더 단순한 latest CPU discovery는 원래 Graph pin을 깨므로 적절하지
 않다. source 거부·범위 초과·내용 불일치는 실패하며 옛 보고서로 대체하지 않는다.
 
+### 운영 발견: 창작 보고서 batch read의 최소 권한과 불변성
+
+실제 제한된 Catalog DB 역할에서 public capture가 `item_components`의 `FOR SHARE` 때문에
+42501로 거부됐다. PostgreSQL의 row-lock SELECT는 UPDATE 권한도 필요하지만, 승인 문항의
+component·resolved plan·승인 Artifact Revision은 기존 DB trigger로 UPDATE/DELETE가 금지된
+불변 정본이다. 이 조회 때문에 해당 정본에 새로운 UPDATE 권한을 부여하지 않는다.
+
+책임은 기존 Catalog batch reader에 둔다. 승인 Item Revision 및 mutable Workflow/step/Job의
+기존 source/lifecycle lock은 유지하고, exact revision/hash로 고정된 불변 component/plan/
+Artifact metadata의 불필요한 row lock만 제거한다. 원래 hash·manifest·완료 상태·출처·권한
+검증과 caller-owned transaction은 유지한다. 변경은 wire/queue/schema/index가 아닌 SQL read
+선택이다. ID-keyed map과 batch 5개 metadata query, O(K) 공간·시간, K≤16도 그대로다.
+missing/hash/lifecycle 실패와 원래 idempotency는 변하지 않는다. 더 단순한 해결처럼 보이는
+UPDATE grant 확대는 least privilege와 정본 불변성에 불필요하므로 배제한다. 제한된 실제
+PostgreSQL 역할로 SELECT 성공·FOR SHARE/UPDATE 거부를 함께 검증한다.
+
 ## 22:01 UTC 체크포인트 — 세 슬롯 복구와 public QUERY 공식 조회 연결
 
 목표 상태는 **ACTIVE / 미완료**다. 사용자 확정 세 단계와 기존 창작 5건의 실제 수치·등록·

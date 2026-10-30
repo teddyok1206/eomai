@@ -55,9 +55,10 @@ def capture_creative_proposal_read_set(
 ) -> CreativeProposalReadSet:
     """Five ordered indexed metadata queries per <=16 sources, not five per Item.
 
-    Shared row locks preserve completion/plan/Job evidence until source admission
-    and Artifact checks finish in the caller's root transaction. Missing rows
-    remain explicit None values for the original validator's stable errors.
+    Shared locks preserve mutable Workflow/step/Job completion until admission
+    finishes. Plans and approved Artifact revisions are trigger-immutable, so
+    their exact-pointer reads need no UPDATE grant for an unnecessary row lock.
+    Missing rows remain None for the original validator's stable errors.
     """
     if (
         type(selections) is not tuple
@@ -109,7 +110,6 @@ def capture_creative_proposal_read_set(
                 )
             )
             .order_by(ResolvedExecutionPlanRecord.plan_id)
-            .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
     }
@@ -137,7 +137,6 @@ def capture_creative_proposal_read_set(
                 )
             )
             .order_by(ArtifactRevisionRecord.revision_id)
-            .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
     }

@@ -39,9 +39,10 @@ def test_captured_resolution_performs_five_indexed_queries_and_no_per_item_get(m
     assert result.selection == value.selection and result.role.job_id == value.job.job_id
     assert value.session.scalars.call_count == 5
     value.session.get.assert_not_called()
-    for call in value.session.scalars.call_args_list:
+    for ordinal, call in enumerate(value.session.scalars.call_args_list):
         sql = str(call.args[0].compile(dialect=dialect()))
-        assert "ORDER BY" in sql and "FOR SHARE" in sql and " IN " in sql
+        assert "ORDER BY" in sql and " IN " in sql
+        assert ("FOR SHARE" in sql) == (ordinal in (0, 1, 3))
 
 
 @pytest.mark.parametrize("state", ["FAILED", "RUNNING", "CANCELLED"])

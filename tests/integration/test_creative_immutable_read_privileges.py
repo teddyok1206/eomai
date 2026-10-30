@@ -1,0 +1,83 @@
+"""Actual restricted PostgreSQL reads; no real content, NAS, inference or role widening."""
+
+import os
+from pathlib import Path
+
+import pytest
+from eom_catalog_service.models import ItemComponentRecord
+from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
+from eom_orchestrator.database import build_engine
+from eom_orchestrator.models import ArtifactRevisionRecord
+from sqlalchemy import false, select, text
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ProgrammingError
+
+from scripts.api.testdb_guard import TestDatabaseManifest as DisposableManifest
+from scripts.api.testdb_guard import validate_state_directory
+from tests.integration.test_preset_model_validation_persistence import (
+    guarded_engine as guarded_engine,
+)
+
+pytestmark = pytest.mark.integration
+IMMUTABLE = (ItemComponentRecord, ResolvedExecutionPlanRecord, ArtifactRevisionRecord)
+
+
+@pytest.fixture
+def restricted(guarded_engine):
+    state = validate_state_directory(Path(os.environ["EOM_API_TEST_STATE"]))
+    manifest = DisposableManifest.load(state / "manifest.json")
+    values = dict(line.split("=", 1) for line in (state / "runtime.env").read_text().splitlines())
+    url = make_url(values["EOM_API_DATABASE_URL"])
+    assert (url.username, url.database) == (manifest.runtime_role, manifest.database)
+    engine = build_engine(str(url.render_as_string(hide_password=False)))
+    try:
+        yield engine
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize("model", IMMUTABLE)
+def test_actual_limited_role_reads_immutable_metadata_without_an_update_grant(restricted, model):
+    table = model.__tablename__
+    with restricted.connect() as connection:
+        assert connection.scalar(
+            text(
+                "SELECT has_table_privilege(current_user, :table, 'SELECT') "
+                "AND NOT has_table_privilege(current_user, :table, 'UPDATE')"
+            ),
+            {"table": "app." + table},
+        )
+        assert connection.execute(select(model).where(false())).all() == []
+
+
+@pytest.mark.parametrize("model", IMMUTABLE)
+@pytest.mark.parametrize("mutation", (False, True))
+def test_actual_limited_role_still_cannot_lock_or_mutate_immutable_metadata(
+    restricted, model, mutation
+):
+    statement = (
+        model.__table__.update()
+        .where(false())
+        .values({model.__table__.primary_key.columns.values()[0]: "unused"})
+        if mutation
+        else select(model).where(false()).with_for_update(read=True)
+    )
+    with restricted.connect() as connection, pytest.raises(ProgrammingError) as error:
+        connection.execute(statement)
+    assert error.value.orig.sqlstate == "42501"
+
+
+def test_existing_database_triggers_protect_the_pinned_immutable_records(guarded_engine):
+    expected = {model.__tablename__ + "_immutable" for model in IMMUTABLE}
+    with guarded_engine.connect() as connection:
+        found = set(
+            connection.scalars(
+                text(
+                    "SELECT tgname FROM pg_trigger JOIN pg_class ON pg_class.oid=tgrelid "
+                    "JOIN pg_namespace ON pg_namespace.oid=relnamespace "
+                    "WHERE nspname='app' AND tgname=ANY(:names) AND tgenabled='O'"
+                ),
+                {"names": sorted(expected)},
+            )
+        )
+    assert found == expected

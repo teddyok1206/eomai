@@ -84,7 +84,8 @@ def load_registered_creative_reports(
             ItemComponentRecord.component_type,
             ItemComponentRecord.ordinal,
         )
-        .with_for_update(read=True)
+        # Approved children are trigger-immutable. FOR SHARE would require an
+        # unnecessary UPDATE grant on this read-only canonical component table.
         .execution_options(populate_existing=True)
     ):
         components[row.item_revision_id].append(row)

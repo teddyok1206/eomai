@@ -5,6 +5,7 @@ from unittest.mock import Mock
 import pytest
 from eom_catalog_service import creative_report_batch as batch
 from eom_catalog_service.creative_report_batch import load_registered_creative_reports
+from sqlalchemy.dialects.postgresql import dialect
 
 from tests.unit.test_creative_registration_v2 import v2_registered
 
@@ -34,6 +35,8 @@ def test_batch_preserves_public_report_and_exact_lineage_pointer(monkeypatch):
     assert "ANSWER_DISAGREEMENT" in value.report.context_text()
     assert value.report.proposal.role.output.learning_result.status == "NEEDS_DECISION"
     assert session.scalars.call_count == 1 and artifacts.load_json_revisions.call_count == 1
+    sql = str(session.scalars.call_args.args[0].compile(dialect=dialect()))
+    assert "FOR SHARE" not in sql and " IN " in sql
     artifacts.read_member.assert_not_called()
     assert reader.call_args.kwargs["read_set"] is capture.return_value
     loaded = reader.call_args.args[1].load_json_revision(
