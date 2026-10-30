@@ -75,7 +75,7 @@ def test_batch_reader_refuses_a_different_hash_before_returning_cached_values(mo
         )
 
 
-def test_empty_batch_is_noop_but_duplicate_and_nested_batches_fail(monkeypatch):
+def test_empty_batch_is_noop_and_duplicate_batches_fail(monkeypatch):
     session, artifacts, revision, *_ = batch_case(monkeypatch)
     assert (
         load_registered_creative_reports(
@@ -88,11 +88,6 @@ def test_empty_batch_is_noop_but_duplicate_and_nested_batches_fail(monkeypatch):
             load_registered_creative_reports(
                 session, artifacts, revisions, artifact_reader=artifacts.member_reader
             )
-    session.in_nested_transaction.return_value = True
-    with pytest.raises(ValueError, match="BATCH_SELECTION_INVALID"):
-        load_registered_creative_reports(
-            session, artifacts, (revision,), artifact_reader=artifacts.member_reader
-        )
     artifacts.load_json_revisions.assert_not_called()
 
 

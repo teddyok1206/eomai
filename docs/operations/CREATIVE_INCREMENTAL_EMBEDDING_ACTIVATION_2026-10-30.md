@@ -270,6 +270,19 @@ keyset page도 최대 256 source로 제한해 provenance reader가 corpus 증가
 읽고 동일한 최종 membership·authority 재확인을 유지하며, 1,100/1,573 source synthetic
 회귀로 누락 없는 전체 순회와 페이지 간 변경 거부를 검증한다.
 
+23:51 UTC paginated capture는 진행됐지만, native START/등록의 정상 SQL SAVEPOINT 안에서
+기존 creative batch reader가 nested transaction 자체를 거부하는 경계를 확인했다. 이 reader는
+읽기만 하므로 정상 savepoint를 막지 않는다. read set은 root뿐 아니라 생성 시의 exact
+savepoint와 thread를 함께 핀하고 commit/rollback/다른 savepoint로 넘어가면 재사용을 거부한다.
+원래 source·lifecycle·hash 검증은 유지한다. 이 수정은 아직 운영 배포 전이며 실제 임시 DB의
+savepoint commit/rollback 경계와 제한 권한 회귀를 확인한 뒤 successor release로 반영한다.
+
+동시에 creative owner가 다시 no-Job preexecution failure로 멈췄다. 알려진 새 실패는
+`workflow_f44f5c995540491d83da44fe2634b6b5`다. 기존 실패는 보존하며 generic error summary만으로
+원인을 추측하지 않는다. 현재 INDEX와 creative owner의 실패를 active/완료로 보고하지 않는다.
+API/Web/Catalog/QUERY의 정상 운영과 원래 30분 관측 timer는 유지된다. 다음은 savepoint 수정
+검증·배포, 새 creative 실패의 원인 분류/공식 복구, 실제 vectors/검색 acceptance다.
+
 ## 22:01 UTC 체크포인트 — 세 슬롯 복구와 public QUERY 공식 조회 연결
 
 목표 상태는 **ACTIVE / 미완료**다. 사용자 확정 세 단계와 기존 창작 5건의 실제 수치·등록·

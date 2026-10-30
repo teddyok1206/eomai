@@ -34,6 +34,7 @@ class CreativeProposalReadSet:
     _session: Session = field(repr=False, compare=False)
     _transaction: SessionTransaction = field(repr=False, compare=False)
     _thread: int = field(repr=False, compare=False)
+    _savepoint: SessionTransaction | None = field(repr=False, compare=False)
 
     def for_selection(
         self, session: Session, selection: ExternalItemLearningRoleSelection
@@ -43,7 +44,8 @@ class CreativeProposalReadSet:
             or get_ident() != self._thread
             or session.get_transaction() is not self._transaction
             or not self._transaction.is_active
-            or session.in_nested_transaction()
+            or session.get_nested_transaction() is not self._savepoint
+            or (self._savepoint is not None and not self._savepoint.is_active)
             or selection not in self._rows
         ):
             raise ValueError("CREATIVE_PROPOSAL_READ_SET_INVALID")
@@ -64,7 +66,14 @@ def capture_creative_proposal_read_set(
         type(selections) is not tuple
         or not 1 <= len(selections) <= MAX_CREATIVE_REPORT_CAPTURE
         or len(set(selections)) != len(selections)
-        or session.in_nested_transaction()
+    ):
+        raise ValueError("CREATIVE_PROPOSAL_READ_SET_INVALID")
+    transaction = session.get_transaction()
+    savepoint = session.get_nested_transaction()
+    if (
+        transaction is None
+        or not transaction.is_active
+        or (savepoint is not None and not savepoint.is_active)
     ):
         raise ValueError("CREATIVE_PROPOSAL_READ_SET_INVALID")
     selections = tuple(
@@ -140,8 +149,10 @@ def capture_creative_proposal_read_set(
             .execution_options(populate_existing=True)
         )
     }
-    transaction = session.get_transaction()
-    if transaction is None:
+    if (
+        session.get_transaction() is not transaction
+        or session.get_nested_transaction() is not savepoint
+    ):
         raise ValueError("CREATIVE_PROPOSAL_READ_SET_INVALID")
     rows = {}
     for selection in selections:
@@ -154,4 +165,6 @@ def capture_creative_proposal_read_set(
             job,
             revisions.get(job.revision_id) if job is not None and job.revision_id else None,
         )
-    return CreativeProposalReadSet(MappingProxyType(rows), session, transaction, get_ident())
+    return CreativeProposalReadSet(
+        MappingProxyType(rows), session, transaction, get_ident(), savepoint
+    )

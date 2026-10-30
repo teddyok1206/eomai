@@ -2,8 +2,10 @@
 
 import os
 from pathlib import Path
+from uuid import uuid4
 
 import pytest
+from eom_catalog_service.creative_proposal_read_set import capture_creative_proposal_read_set
 from eom_catalog_service.models import ItemComponentRecord
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.database import build_engine
@@ -11,12 +13,14 @@ from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
 from sqlalchemy import false, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, ProgrammingError
+from sqlalchemy.orm import Session
 
 from scripts.api.testdb_guard import TestDatabaseManifest as DisposableManifest
 from scripts.api.testdb_guard import validate_state_directory
 from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
+from tests.unit.test_creative_proposal_resolution_v2 import _case
 
 pytestmark = pytest.mark.integration
 IMMUTABLE = (ItemComponentRecord, ResolvedExecutionPlanRecord, ArtifactRevisionRecord)
@@ -91,3 +95,33 @@ def test_source_completion_select_locks_need_a_normal_root_not_postgres_read_onl
     assert error.value.orig.sqlstate == "25006"
     with guarded_engine.begin() as connection:
         assert connection.execute(statement).all() == []
+
+
+def test_actual_savepoint_read_scope_cannot_escape_commit_or_rollback(guarded_engine, monkeypatch):
+    # Only the selection carrier is synthetic; transactions and SELECTs are real.
+    original = _case(monkeypatch).selection
+    selection = type(original).model_validate(
+        original.model_dump(mode="json")
+        | dict(
+            workflow_id="workflow_" + uuid4().hex,
+            step_run_id="steprun_" + uuid4().hex,
+            plan_id="execplan_" + uuid4().hex,
+        )
+    )
+    with Session(guarded_engine) as session, session.begin():
+        outside = capture_creative_proposal_read_set(session, (selection,))
+        with session.begin_nested():
+            with pytest.raises(ValueError, match="READ_SET_INVALID"):
+                outside.for_selection(session, selection)
+            inside = capture_creative_proposal_read_set(session, (selection,))
+            assert inside.for_selection(session, selection).workflow is None
+        with pytest.raises(ValueError, match="READ_SET_INVALID"):
+            inside.for_selection(session, selection)
+        assert outside.for_selection(session, selection).workflow is None
+        savepoint = session.begin_nested()
+        rolled_back = capture_creative_proposal_read_set(session, (selection,))
+        savepoint.rollback()
+        with pytest.raises(ValueError, match="READ_SET_INVALID"):
+            rolled_back.for_selection(session, selection)
+    with pytest.raises(ValueError, match="READ_SET_INVALID"):
+        outside.for_selection(session, selection)

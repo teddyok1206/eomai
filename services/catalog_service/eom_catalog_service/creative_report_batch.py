@@ -76,7 +76,6 @@ def load_registered_creative_reports(
         type(revisions) is not tuple
         or len(keys) > MAX_CREATIVE_REPORT_CAPTURE
         or len(set(keys)) != len(keys)
-        or session.in_nested_transaction()
     ):
         raise ValueError("CREATIVE_REPORT_BATCH_SELECTION_INVALID")
     components: dict[str, list[ItemComponentRecord]] = {key: [] for key in keys}

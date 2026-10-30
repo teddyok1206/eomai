@@ -20,6 +20,7 @@ def captured_case(monkeypatch):
     value.artifact.revision_id = value.job.revision_id
     value.session.in_nested_transaction.return_value = False
     value.session.get_transaction.return_value = NS(is_active=True)
+    value.session.get_nested_transaction.return_value = None
     value.session.scalars.side_effect = [
         (value.workflow,),
         (value.step,),
@@ -68,7 +69,7 @@ def test_read_set_cannot_be_reused_after_its_exact_root_scope(monkeypatch, chang
     elif change == "selection":
         selection = selection.model_copy(update={"work_input_sha256": "sha256:" + "e" * 64})
     else:
-        value.session.in_nested_transaction.return_value = True
+        value.session.get_nested_transaction.return_value = NS(is_active=True)
     with pytest.raises(ValueError, match="READ_SET_INVALID"):
         read_set.for_selection(session, selection)
 
@@ -80,3 +81,21 @@ def test_invalid_duplicate_or_over_budget_capture_has_no_sql(monkeypatch, count)
     with pytest.raises(ValueError, match="READ_SET_INVALID"):
         capture_creative_proposal_read_set(value.session, (value.selection,) * count)
     value.session.scalars.assert_not_called()
+
+
+def test_matching_active_savepoint_is_allowed_but_not_reusable_after_it_exits(monkeypatch):
+    value, _ = captured_case(monkeypatch)
+    savepoint = NS(is_active=True)
+    value.session.get_nested_transaction.return_value = savepoint
+    value.session.scalars.side_effect = [
+        (value.workflow,),
+        (value.step,),
+        (value.row,),
+        (value.job,),
+        (value.artifact,),
+    ]
+    read_set = capture_creative_proposal_read_set(value.session, (value.selection,))
+    assert read_set.for_selection(value.session, value.selection).job is value.job
+    value.session.get_nested_transaction.return_value = None
+    with pytest.raises(ValueError, match="READ_SET_INVALID"):
+        read_set.for_selection(value.session, value.selection)
