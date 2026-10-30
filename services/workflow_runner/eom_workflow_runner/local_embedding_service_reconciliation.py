@@ -24,6 +24,7 @@ from eom_catalog_contracts.mixed_embedding_index import (
 )
 from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
 from eom_catalog_contracts.public_solution_embedding_index import (
+    MAX_PUBLIC_SOLUTION_SOURCES,
     PublicSolutionEmbeddingIndex,
     PublicSolutionEmbeddingSourceBinding,
     PublicSolutionIndexNamespace,
@@ -329,16 +330,21 @@ class LocalEmbeddingServicePreparation:
         Both actual owners reauthorize in this root. No request DTO grants source
         access and neither a current head nor a newly missing target replaces it.
         """
+        registry = self.owner.configuration.registry
+        maximum = (
+            MAX_PUBLIC_SOLUTION_SOURCES
+            if isinstance(registry.namespace, PublicSolutionIndexNamespace)
+            else 1024
+        )
         if (
             type(counterpart) is not LocalEmbeddingServicePreparation
             or counterpart.publisher.engine is not self.publisher.engine
             or counterpart.owner.settings.nas_artifact_root != self.owner.settings.nas_artifact_root
             or type(maximum_sources) is not int
-            or not 1 <= maximum_sources <= 1024
+            or not 1 <= maximum_sources <= maximum
         ):
             raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
         request = parse_supported_local_embedding_request(request)
-        registry = self.owner.configuration.registry
         if (
             request.corpus_id != registry.corpus_id
             or request.namespace.view != registry.namespace.view

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
+from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
 from eom_identity_service import PostgresLocalIndexingServiceFence
 from eom_orchestrator.native_embedding_index_systemd import FixedNativeIndexLauncher
 from eom_workflow.local_embedding_request_v2 import (
@@ -165,7 +166,7 @@ class RoutedLocalIndexingNamespaceRuntime:
                 # Queue bounded standby coverage after the real GPU completion.
                 # The existing CPU Runner drains it on its normal next turn; no
                 # second model runs inside this GPU allocation or SQL root.
-                self.cpu_reconciliation.run_once()
+                self._queue_cpu_standby(request)
             return replace(
                 observed,
                 state=ReconciliationState.BATCH_COMPLETED
@@ -196,5 +197,26 @@ class RoutedLocalIndexingNamespaceRuntime:
     ) -> LocalEmbeddingReconciliationResult:
         result = publish_prepared_index_membership(self.pair.cuda, prepared, self.gpu_selection)
         if result.state is ReconciliationState.BATCH_COMPLETED:
-            self.cpu_reconciliation.run_once()
+            if prepared.request is None:
+                raise ValueError("LOCAL_INDEXING_ROUTED_WORKFLOW_MISSING")
+            self._queue_cpu_standby(prepared.request)
         return result
+
+    def _queue_cpu_standby(self, request: SupportedLocalEmbeddingRequest) -> None:
+        if not isinstance(request.namespace, PublicSolutionIndexNamespace):
+            self.cpu_reconciliation.run_once()
+            return
+        # Publication may advance the current Graph while the GPU computes.
+        # Standby must match that original immutable scope, not a newer head.
+        matched = self.pair.cpu.prepare_matching(
+            self.pair.cuda, request, maximum_sources=self.pair.maximum_sources
+        )
+        self.cpu_reconciliation.submit_prepared(
+            PreparedLocalEmbeddingReconciliation(
+                LocalEmbeddingReconciliationResult(
+                    ReconciliationState.PREPARED,
+                    matched.graph_snapshot.graph_snapshot_revision_id,
+                ),
+                matched,
+            )
+        )

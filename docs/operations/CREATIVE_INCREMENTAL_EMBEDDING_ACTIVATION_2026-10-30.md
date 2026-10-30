@@ -168,6 +168,23 @@ namespace 순서로 유지하도록 운영 adapter를 정리했고, 후보 검�
 작업을 보존한 quiescent INDEX/QUERY 활성화, API/Web compatible rollout, 고정 창작 5건의
 encoding/Registry/search/replay·backlog/future 자동 처리다. 목표는 계속 ACTIVE다.
 
+### 활성화 전 CPU counterpart 범위·snapshot 보정
+
+public namespace는 이미 16,384 source를 계약으로 허용하지만 기존 CPU counterpart 준비
+함수의 내부 상한은 1,024로 남아 있다. 또한 GPU 완료 후 일반 CPU discovery를 호출하면,
+그 사이 Graph publication이 진행된 경우 CPU/GPU head가 서로 다른 snapshot을 고를 수 있다.
+공식 검색은 같은 Graph/policy의 두 장치 index만 허용하므로 이 경계를 먼저 보정한다.
+
+기존 service preparation의 public namespace 상한만 선언된 16,384로 맞추고 legacy는
+1,024 그대로 둔다. GPU public 완료/metadata refresh의 CPU standby는 기존 `prepare_matching`
+과 `submit_prepared`로 원래 GPU request의 Graph/policy/ordered source를 재인가·핀한다.
+새 queue·selector·DB/index·wire family·모델 호출 경로는 만들지 않는다. CPU/GPU space는
+계속 별개이며 벡터를 이름만 바꿔 복사하지 않는다. API/UI가 target이나 권한을 주는 것도
+아니다. 준비/START 사이의 실제 service/source fence, stable key, CAS/unique 제약은 기존
+경계를 사용한다. 비용은 원래 선택 K개에 대한 O(K) metadata 준비이며 K≤1,024, 전체 허용
+population≤16,384다. 더 단순한 latest CPU discovery는 원래 Graph pin을 깨므로 적절하지
+않다. source 거부·범위 초과·내용 불일치는 실패하며 옛 보고서로 대체하지 않는다.
+
 ## 22:01 UTC 체크포인트 — 세 슬롯 복구와 public QUERY 공식 조회 연결
 
 목표 상태는 **ACTIVE / 미완료**다. 사용자 확정 세 단계와 기존 창작 5건의 실제 수치·등록·
