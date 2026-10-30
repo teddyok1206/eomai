@@ -304,7 +304,7 @@ def test_hash_lookup_is_bound_to_original_batch_and_never_parses_full_batch_per_
     value = request.getfixturevalue(fixture_name)
     monkeypatch.setattr(
         module,
-        "parse_embedding_work_batch_input",
+        "parse_supported_embedding_work_batch_input",
         lambda *args: (_ for _ in ()).throw(AssertionError("whole batch parse per frame")),
     )
     key = value.batch.children[0].request.request_sha256

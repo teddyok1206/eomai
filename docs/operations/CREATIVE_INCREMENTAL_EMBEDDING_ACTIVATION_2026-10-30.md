@@ -645,3 +645,13 @@ owner versions1/2 and routed3 already exist; do not reuse their version numbers/
 public selection/HTTP prepare/read/DB adapter, compatible isolated/public INDEX activation,
 five actual creative vectors and authenticated result/replay/return-to-detail. Three actual
 report slots and busy/idle operating usage acceptance are closed; the full goal stays ACTIVE.
+
+Source commit `43b57013` was pushed. Its first build-only run passed wheel RECORD but
+correctly rejected an incomplete installed-definition inventory: native QUERY2 had been
+admitted in source but omitted from the release simulation's materialized/compiled definitions.
+The follow-up explicitly stages, passes and checks that definition; the actual equality gate
+is retained. Release-inventory tests also execute the pre-existing two derived creative
+definition paths, and the per-frame parse-spy test follows the closed supported-family parser
+name. No obsolete parser alias or production validation relaxation was added for tests.
+These focused release/source checks **56 PASS**; the failed build/log remains preserved at
+`/tmp/eom-public-query-build-43b57013-20261030.log`. Operating services were not touched.

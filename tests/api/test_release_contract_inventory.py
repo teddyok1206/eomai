@@ -314,7 +314,11 @@ def test_installed_support_admission_covers_materialized_workflow_contracts() ->
 
 @pytest.mark.parametrize(
     "omitted_definition",
-    ("private_chat_query_definition", "local_embedding_definition_v2"),
+    (
+        "private_chat_query_definition",
+        "local_embedding_definition_v2",
+        "reference_query_definition_v2",
+    ),
 )
 def test_actual_installed_admission_comparison_rejects_an_omitted_native_definition(
     omitted_definition: str,
@@ -342,6 +346,14 @@ def test_actual_installed_admission_comparison_rejects_an_omitted_native_definit
             ROOT / f"config/workflows/knowledge-analysis.v{version}.yaml"
         )
     inner = ast.parse(installed_workflow_inspector_source())
+    derived_definitions = [
+        node
+        for node in inner.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id in {"creative_definition", "creative_source_definition"}
+    ]
+    assert len(derived_definitions) == 2
     assignment = next(
         node
         for node in inner.body
@@ -362,7 +374,11 @@ def test_actual_installed_admission_comparison_rejects_an_omitted_native_definit
         **bindings,
     }
     exec(
-        compile(ast.Module(body=[assignment, comparison], type_ignores=[]), "admission", "exec"),
+        compile(
+            ast.Module(body=[*derived_definitions, assignment, comparison], type_ignores=[]),
+            "admission",
+            "exec",
+        ),
         namespace,
     )
     omitted = deepcopy(assignment)
@@ -379,7 +395,7 @@ def test_actual_installed_admission_comparison_rejects_an_omitted_native_definit
     with pytest.raises(SystemExit, match="admission policy does not match"):
         exec(
             compile(
-                ast.Module(body=[omitted, comparison], type_ignores=[]),
+                ast.Module(body=[*derived_definitions, omitted, comparison], type_ignores=[]),
                 "omitted native admission",
                 "exec",
             ),
@@ -400,6 +416,11 @@ def test_actual_installed_admission_comparison_rejects_an_omitted_native_definit
             "local-embedding-reference-query.v1.yaml",
             "reference_query_definition",
             "reference-query/1.0",
+        ),
+        (
+            "local-embedding-reference-query.v2.yaml",
+            "reference_query_definition_v2",
+            "reference-query/2.0",
         ),
         (
             "local-embedding-private-chat-query.v1.yaml",
