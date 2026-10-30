@@ -1,4 +1,11 @@
 import {createItemDbDraft, selectedFinalSourcePlacement} from "./item-db-draft.js";
+import {createItemDbSimilarity, itemDbSimilaritySelection} from "./item-db-similarity.js";
+
+const DB_TABS = Object.freeze({
+  search: ["#item-db-search-tab", "#item-db-search-panel"],
+  assembly: ["#item-db-assembly-tab", "#item-db-assembly-panel"],
+  similarity: ["#item-db-similarity-tab", "#item-db-similarity-panel"],
+});
 
 const MATCH_LABELS = Object.freeze({
   MATCHED: "파일 연결됨",
@@ -38,7 +45,7 @@ function node(document, tag, className, value) {
   return element;
 }
 
-export function createItemDb({document, api, openRegisteredItem, openPastExamVariation, onAssemblyOpen, canReadSource}) {
+export function createItemDb({document, api, openRegisteredItem, openPastExamVariation, onAssemblyOpen, canReadSource, searchSimilar}) {
   const $ = (selector) => document.querySelector(selector);
   let cursor = null;
   let query = "";
@@ -48,11 +55,29 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   let detailSequence = 0;
   let resultCount = 0;
   let selectedRow = null;
+  let selectedItem = null;
   let savedCursor = null;
   let savedSequence = 0;
   let pendingSave = null;
   let assemblyLoaded = false;
   const draft = createItemDbDraft();
+  const similarity = createItemDbSimilarity({
+    document, search: searchSimilar, activate: activateTab,
+    openSelection(selection) {
+      activateTab("search");
+      resetDetail();
+      if (selection.kind === "GRAPH_ITEM") openGraphDetail(selection.entry, null);
+      else if (canReadSource()) openDetail(selection.entry.source_id, null, selection.entry.source_revision_id);
+      else message("이 원본을 열 수 있는 권한이 없습니다.", true);
+    },
+  });
+
+  function selectItem(kind, entry) {
+    selectedItem = entry ? itemDbSimilaritySelection(kind, entry) : null;
+    const button = $("#item-db-similarity-start");
+    button.disabled = !selectedItem || !similarity.available();
+    button.title = similarity.available() ? "선택한 문항과 유사한 문항을 찾습니다." : "유사도 검색 연결을 준비하고 있습니다.";
+  }
 
   function renderDraft() {
     const root = $("#item-db-draft-list");
@@ -334,6 +359,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
 
   function resetDetail() {
     detailSequence++;
+    selectItem(null, null);
     selectRow(null);
     $("#item-db-detail-close").hidden = true;
     $("#item-db-detail").replaceChildren(node(document, "p", "empty-state", "왼쪽 표에서 문항을 선택하세요."));
@@ -366,7 +392,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     return resultRow(entry.source_id, entry.external_number,
       [entry.field_label, entry.major_unit, entry.minor_unit, entry.grade_label, entry.author_label,
         MATCH_LABELS[entry.match_status] || "확인 필요"],
-      (row) => openDetail(entry.source_id, row));
+      (row) => openDetail(entry.source_id, row, entry.source_revision_id));
   }
 
   function graphLabel(entry) {
@@ -388,6 +414,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
 
   function openGraphDetail(entry, row) {
     detailSequence++;
+    selectItem("GRAPH_ITEM", entry);
     focusDetail(row);
     const root = $("#item-db-detail");
     root.replaceChildren(node(document, "h3", "", graphLabel(entry)), metadataList([
@@ -430,6 +457,8 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       const sameExam = node(document, "button", "button quiet", "같은 연도·월 찾기");
       sameExam.type = "button";
       sameExam.addEventListener("click", () => {
+        $("#item-db-source").value = "PAST_EXAM";
+        syncSourceControls();
         $("#item-db-graph-unit").value = "";
         $("#item-db-graph-year").value = String(entry.past_exam_context.administration_year);
         $("#item-db-graph-month").value = String(entry.past_exam_context.administration_month);
@@ -455,15 +484,15 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   }
 
   function activateTab(name) {
-    const assembly = name === "assembly";
-    $("#item-db-search-panel").hidden = assembly;
-    $("#item-db-assembly-panel").hidden = !assembly;
-    for (const [tab, selected] of [["#item-db-search-tab", !assembly], ["#item-db-assembly-tab", assembly]]) {
+    if (!Object.hasOwn(DB_TABS, name)) return;
+    for (const [key, [tab, panel]] of Object.entries(DB_TABS)) {
+      const selected = name === key;
+      $(panel).hidden = !selected;
       $(tab).setAttribute("aria-selected", String(selected));
       $(tab).classList.toggle("is-active", selected);
       $(tab).tabIndex = selected ? 0 : -1;
     }
-    if (assembly && !assemblyLoaded) {
+    if (name === "assembly" && !assemblyLoaded) {
       assemblyLoaded = true;
       loadSaved(true);
       onAssemblyOpen?.();
@@ -478,6 +507,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     if (!allowed && selectedSource() === "EXTERNAL_SOURCE") $("#item-db-source").value = "PAST_EXAM";
     syncSourceControls();
     const changed = lastSourceAccess !== allowed;
+    if (lastSourceAccess !== null && changed) similarity.reset();
     lastSourceAccess = allowed;
     return changed;
   }
@@ -552,14 +582,19 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     }
   }
 
-  async function openDetail(sourceId, row) {
+  async function openDetail(sourceId, row, expectedRevisionId) {
     const request = ++detailSequence;
+    selectItem(null, null);
     const root = $("#item-db-detail");
     focusDetail(row);
     root.replaceChildren(node(document, "p", "empty-state", "문항 정보를 불러오는 중입니다."));
     try {
       const detail = await api(`/item-db/external-sources/${encodeURIComponent(sourceId)}`);
       if (request !== detailSequence || detail.entry.source_id !== sourceId) return;
+      if (detail.entry.source_revision_id !== expectedRevisionId) {
+        throw new Error("선택한 문항의 버전이 바뀌었습니다. 다시 조회하거나 검색해 주세요.");
+      }
+      selectItem("EXTERNAL_SOURCE", detail.entry);
       root.replaceChildren();
       const byColumn = new Map(detail.cells.map((cell) => [cell.column, cell]));
       const cellValue = (column) => byColumn.get(column)?.raw_text || "";
@@ -668,7 +703,10 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       remaining.append(metadata);
       if (metadata.children.length) root.append(remaining);
     } catch (error) {
-      if (request === detailSequence) root.replaceChildren(node(document, "p", "empty-state", `정보를 불러오지 못했습니다: ${error.message || "다시 시도해 주세요."}`));
+      if (request === detailSequence) {
+        selectItem(null, null);
+        root.replaceChildren(node(document, "p", "empty-state", `정보를 불러오지 못했습니다: ${error.message || "다시 시도해 주세요."}`));
+      }
     }
   }
 
@@ -709,6 +747,8 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   return Object.freeze({
     install() {
       renderDraft();
+      similarity.install();
+      selectItem(null, null);
       activateTab("search");
       syncFilterControls();
       tableHeading(selectedSource());
@@ -717,16 +757,24 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
         load(true);
       });
       $("#item-db-filter-add").addEventListener("click", () => addFilter());
-      $("#item-db-search-tab").addEventListener("click", () => activateTab("search"));
-      $("#item-db-assembly-tab").addEventListener("click", () => activateTab("assembly"));
-      for (const [selector, next] of [["#item-db-search-tab", "#item-db-assembly-tab"], ["#item-db-assembly-tab", "#item-db-search-tab"]]) {
+      const names = Object.keys(DB_TABS);
+      for (const [name, [selector]] of Object.entries(DB_TABS)) {
+        $(selector).addEventListener("click", () => activateTab(name));
         $(selector).addEventListener("keydown", (event) => {
-          if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+          if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
           event.preventDefault();
-          $(next).click();
-          $(next).focus();
+          const index = event.key === "Home" ? 0 : event.key === "End" ? names.length - 1
+            : (names.indexOf(name) + (event.key === "ArrowRight" ? 1 : -1) + names.length) % names.length;
+          const target = $(DB_TABS[names[index]][0]);
+          target.click();
+          target.focus();
         });
       }
+      $("#item-db-similarity-start").addEventListener("click", () => {
+        if (!selectedItem) return;
+        similarity.start(selectedItem, selectedItem.kind === "GRAPH_ITEM"
+          ? graphLabel(selectedItem.entry) : `고유번호 ${selectedItem.entry.external_number}`);
+      });
       $("#item-db-filter-quick").addEventListener("click", (event) => {
         const button = event.target.closest("[data-filter-field]");
         if (button) addFilter(button.dataset.filterField);

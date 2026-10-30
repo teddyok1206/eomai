@@ -175,6 +175,12 @@ def test_db_screen_shows_business_number_but_hides_internal_db_ids() -> None:
     assert 'data-view="item-bank"' not in html
     assert 'id="item-db-search-tab"' in html
     assert 'id="item-db-assembly-tab"' in html
+    assert 'aria-selected="true">조회</button>' in html
+    assert 'id="item-db-similarity-tab"' in html
+    assert 'id="item-db-similarity-panel"' in html
+    assert 'id="item-db-similarity-start"' in html
+    assert 'id="item-db-similarity-progress"' in html
+    assert 'id="item-db-similarity-tab-progress"' in html
     assert html.index('id="item-db-assembly-panel"') < html.index('id="item-db-draft-list"')
     assert html.index('id="item-db-draft-list"') < html.index('id="mock-exam-selections"')
     assert 'id="item-db-filter-rows"' in html
@@ -232,3 +238,19 @@ def test_db_assembly_draft_order_and_deduplication_in_browser_model() -> None:
     )
     assert completed.returncode == 0, completed.stderr
     assert "item_db_draft=PASS" in completed.stdout
+
+
+def test_db_similarity_selection_preserves_exact_pointers_and_does_not_activate_a_fixture() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node runtime is unavailable")
+    completed = subprocess.run(
+        [node, "--experimental-default-type=module", "tests/web_gui/item_db_similarity_checks.mjs"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    assert "item_db_similarity_selection=PASS live_writes=0" in completed.stdout

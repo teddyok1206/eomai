@@ -5,14 +5,14 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const staticRoot = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const names = ["index.html", "styles.css", "item-db.js", "item-db-draft.js", "eom-mark.svg"];
+const names = ["index.html", "styles.css", "item-db.js", "item-db-draft.js", "item-db-similarity.js", "eom-mark.svg"];
 const assets = new Map(await Promise.all(names.map(async name => [name, await readFile(new URL(name, staticRoot), "utf8")])));
 
 // Exact repository HTML, CSS and controller; only the existing API and navigation
 // adapters are fixtures. No production credentials, DB or model calls are used.
 const fixtureApp = `
 import {createItemDb} from './item-db.js';
-const fixture = window.dbFixture = {calls: [], opened: [], variations: [], allowSource: true, hold: null, release: null};
+const fixture = window.dbFixture = {calls: [], similarCalls: [], opened: [], variations: [], allowSource: true, hold: null, release: null, releaseSimilar: {}};
 const columns = Array.from({length: 26}, (_, index) => String.fromCharCode(65 + index)).concat(['AA','AB','AC','AD','AE','AF']);
 function entry(number) {
   return {source_id: 'extitem_' + number.padStart(32, '0'), source_revision_id: 'extitemrev_' + number.padStart(32, '0'),
@@ -60,12 +60,32 @@ async function api(path, options = {}) {
       past_exam_context: params.get('source_class') === 'PAST_EXAM' ? graph.past_exam_context : null}], has_more: false, next_cursor: null};
   }
   if (path.includes('/preview?')) return {sha256: 'sha256:' + 'a'.repeat(64)};
-  if (path.startsWith('/item-db/external-sources/')) return detail(path.split('/')[3].slice(-5));
+  if (path.startsWith('/item-db/external-sources/')) {
+    const value = detail(path.split('/')[3].slice(-5));
+    if (fixture.staleSource) value.entry.source_revision_id = 'extitemrev_' + 'f'.repeat(32);
+    return value;
+  }
   throw new Error('UNEXPECTED_FIXTURE_REQUEST ' + path);
+}
+async function searchSimilar(pointer, key) {
+  fixture.similarCalls.push({pointer: structuredClone(pointer), key});
+  const candidate = {...graph, source_display_label: '합성 시험 18번', item_id: 'item_' + '8'.repeat(32),
+    item_revision_id: 'itemrev_' + '9'.repeat(32), past_exam_context: {...graph.past_exam_context, item_number: 18}};
+  const other = entry(pointer.source_id?.endsWith('10318') ? '10310' : '10318');
+  const result = {status: 'READY', candidates: [
+    {kind: 'GRAPH_ITEM', entry: candidate, label: '합성 시험 18번', unit_label: '물질의 규칙성', cosine_millionths: 921234},
+    {kind: 'EXTERNAL_SOURCE', entry: other, label: '고유번호 ' + other.external_number, unit_label: other.minor_unit, cosine_millionths: 870001}]};
+  if (fixture.pendingSimilarity) {fixture.pendingSimilarity = false; return {status: 'PENDING', phase: 'COMPUTING'};}
+  if (fixture.failSimilarity) {fixture.failSimilarity = false; throw new Error('합성 연결 시간 초과');}
+  if (fixture.holdSimilarity) {
+    const identity = pointer.source_id || pointer.item_revision_id;
+    await new Promise(resolve => {fixture.releaseSimilar[identity] = resolve;});
+  }
+  return result;
 }
 const controller = createItemDb({document, api, openRegisteredItem: entry => fixture.opened.push(entry),
   openPastExamVariation: entry => fixture.variations.push(entry),
-  canReadSource: () => fixture.allowSource});
+  canReadSource: () => fixture.allowSource, searchSimilar});
 controller.install(); controller.open();
 document.querySelectorAll('.view').forEach(view => view.classList.toggle('active', view.dataset.view === 'item-db'));
 fixture.controller = controller;
@@ -206,7 +226,7 @@ try {
   assert.doesNotMatch(await page.locator('#item-db-detail').innerText(), /itemrev_|graphrev_|extitemrev_/);
 
   // Small screens scroll the table itself, not the entire page, and show details below.
-  await page.getByRole("tab", {name: "문항 DB"}).click();
+  await page.getByRole("tab", {name: "조회", exact: true}).click();
   await page.setViewportSize({width: 390, height: 844});
   await page.locator("#item-db-source").selectOption("EXTERNAL_SOURCE");
   await page.waitForFunction(() => document.querySelectorAll('#item-db-results [data-selection-key]').length === 2);
@@ -226,6 +246,106 @@ try {
   assert.ok(assemblyWidth <= 390, "mobile assembly tab must not overflow the viewport");
   await page.getByRole("tab", {name: /배치/}).press("ArrowLeft");
   assert.equal(await page.locator("#item-db-search-panel").isVisible(), true);
+
+  // Similarity reuses the exact lookup/detail/draft rather than a second item viewer.
+  await page.setViewportSize({width: 1600, height: 1000});
+  assert.equal(await page.getByRole('tab').filter({hasText: /^(조회|배치|유사도)/u}).count(), 3);
+  assert.equal(await page.locator('#item-db-similarity-start').isEnabled(), true);
+  await page.locator('#item-db-similarity-start').click();
+  await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '2개');
+  assert.equal(await page.locator('#item-db-search-panel').isVisible(), false);
+  assert.equal(await page.locator('#item-db-similarity-panel').isVisible(), true);
+  assert.equal(await page.locator('#item-db-similarity-tab').getAttribute('aria-selected'), 'true');
+  assert.match(await page.locator('#item-db-similarity-anchor').innerText(), /10310/);
+  assert.match(await page.locator('#item-db-similarity-results').innerText(), /0\.921/u);
+  const selectedRequest = await page.evaluate(() => window.dbFixture.similarCalls.at(-1));
+  assert.equal(selectedRequest.pointer.source_revision_id, 'extitemrev_' + '10310'.padStart(32, '0'));
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '2개');
+  assert.doesNotMatch(await page.locator('#item-db-similarity-panel').innerText(), /itemrev_|graphrev_|extitemrev_/u);
+  await page.getByRole('button', {name: '합성 시험 18번 조회에서 열기'}).click();
+  assert.equal(await page.locator('#item-db-search-panel').isVisible(), true);
+  assert.match(await page.locator('#item-db-detail').innerText(), /합성 시험 18번/);
+  assert.equal(await rows.count(), 2, 'similarity navigation keeps the original lookup table');
+  await page.getByRole('button', {name: '문항 미리보기', exact: true}).click();
+  assert.equal(await page.evaluate(() => window.dbFixture.opened.at(-1).item_revision_id), 'itemrev_' + '9'.repeat(32));
+  await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).click();
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '3개');
+  await page.getByRole('tab', {name: '유사도', exact: true}).click();
+  assert.equal(await page.evaluate(() => window.dbFixture.similarCalls.length), 1, 'opening a tab does not resubmit');
+  await page.getByRole('button', {name: '고유번호 10318 조회에서 열기'}).click();
+  await page.waitForFunction(() => document.querySelector('.item-db-detail-heading h3')?.textContent === '고유번호 10318');
+  assert.equal(await page.locator('#item-db-search-panel').isVisible(), true);
+  await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).click();
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '4개');
+
+  // PENDING and transient errors retain the original request key for explicit observation.
+  await page.evaluate(() => {window.dbFixture.pendingSimilarity = true;});
+  await page.locator('#item-db-similarity-start').click();
+  await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '검색 중');
+  assert.equal(await page.locator('#item-db-similarity-progress').isVisible(), true);
+  assert.equal(await page.locator('#item-db-similarity-tab-progress').isVisible(), true);
+  assert.match(await page.locator('#item-db-similarity-progress-label').innerText(), /계산 중/u);
+  assert.match(await page.locator('#item-db-similarity-elapsed').innerText(), /요청 후/u);
+  await page.waitForFunction(() => !document.querySelector('#item-db-similarity-elapsed').textContent.endsWith(' 0초'));
+  assert.doesNotMatch(await page.locator('#item-db-similarity-progress').innerText(), /%/u);
+  const pendingKey = await page.evaluate(() => window.dbFixture.similarCalls.at(-1).key);
+  await page.locator('#item-db-similarity-refresh').click();
+  await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '2개');
+  assert.equal(await page.locator('#item-db-similarity-progress').isVisible(), false);
+  assert.equal(await page.locator('#item-db-similarity-tab-progress').isVisible(), false);
+  assert.equal(await page.evaluate(() => window.dbFixture.similarCalls.at(-1).key), pendingKey);
+
+  // A confirmed accepted PENDING is observed automatically, never submitted with a new key.
+  await page.evaluate(() => {window.dbFixture.pendingSimilarity = true;});
+  await page.locator('#item-db-similarity-refresh').click();
+  await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '검색 중');
+  await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '2개');
+  assert.equal(await page.evaluate(() => window.dbFixture.similarCalls.at(-1).key), pendingKey);
+  await page.evaluate(() => {window.dbFixture.failSimilarity = true;});
+  await page.locator('#item-db-similarity-refresh').click();
+  await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '확인 필요');
+  assert.equal(await page.locator('#item-db-similarity-results button').count(), 0);
+  await page.locator('#item-db-similarity-refresh').click();
+  await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '2개');
+  assert.equal(await page.evaluate(() => window.dbFixture.similarCalls.at(-1).key), pendingKey);
+
+  // Slow A cannot replace B; completion must not steal focus from a different tab.
+  await page.getByRole('tab', {name: '조회', exact: true}).click();
+  await page.evaluate(() => {window.dbFixture.holdSimilarity = true;});
+  await rows.first().getByRole('button').click();
+  await page.waitForFunction(() => document.querySelector('.item-db-detail-heading h3')?.textContent === '고유번호 10310');
+  await page.locator('#item-db-similarity-start').click();
+  await page.waitForFunction(() => Object.keys(window.dbFixture.releaseSimilar).length === 1);
+  await page.getByRole('tab', {name: '조회', exact: true}).click();
+  await rows.nth(1).getByRole('button').click();
+  await page.waitForFunction(() => document.querySelector('.item-db-detail-heading h3')?.textContent === '고유번호 10318');
+  await page.locator('#item-db-similarity-start').click();
+  await page.waitForFunction(() => Object.keys(window.dbFixture.releaseSimilar).length === 2);
+  await page.getByRole('tab', {name: /배치/}).click();
+  assert.equal(await page.locator('#item-db-similarity-tab-progress').isVisible(), true);
+  await page.evaluate(() => window.dbFixture.releaseSimilar['extitem_' + '10318'.padStart(32, '0')]());
+  await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '2개');
+  assert.equal(await page.locator('#item-db-assembly-panel').isVisible(), true);
+  await page.evaluate(() => {window.dbFixture.releaseSimilar['extitem_' + '10310'.padStart(32, '0')](); window.dbFixture.holdSimilarity = false;});
+  await page.getByRole('tab', {name: '유사도', exact: true}).click();
+  assert.match(await page.locator('#item-db-similarity-anchor').innerText(), /10318/u);
+  assert.match(await page.locator('#item-db-similarity-results').innerText(), /고유번호 10310/u);
+
+  // An external result is pinned: a changed source does not silently open latest.
+  await page.evaluate(() => {window.dbFixture.staleSource = true;});
+  await page.getByRole('button', {name: '고유번호 10310 조회에서 열기'}).click();
+  await page.waitForFunction(() => document.querySelector('#item-db-detail').textContent.includes('버전이 바뀌었습니다'));
+  assert.equal(await page.locator('#item-db-similarity-start').isDisabled(), true);
+  assert.equal(await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).count(), 0);
+  await page.evaluate(() => {window.dbFixture.staleSource = false;});
+  await page.locator('#item-db-search-tab').press('End');
+  assert.equal(await page.locator('#item-db-similarity-panel').isVisible(), true);
+  await page.locator('#item-db-similarity-tab').press('Home');
+  assert.equal(await page.locator('#item-db-search-panel').isVisible(), true);
+  await page.locator('#item-db-search-tab').press('ArrowLeft');
+  assert.equal(await page.locator('#item-db-similarity-panel').isVisible(), true);
+  await page.getByRole('tab', {name: '조회', exact: true}).click();
+
   const screenshot = process.env.EOM_ITEM_DB_SCREENSHOT;
   if (screenshot) {
     await page.setViewportSize({width: 1600, height: 1000});
@@ -241,6 +361,8 @@ try {
   await page.evaluate(() => {window.dbFixture.allowSource = false; window.dbFixture.controller.open();});
   await page.waitForFunction(() => document.querySelector('#item-db-source').value === 'PAST_EXAM');
   assert.equal(await page.locator('#item-db-source option[value="EXTERNAL_SOURCE"]').evaluate(option => option.disabled), true);
+  assert.equal(await page.locator('#item-db-similarity-results button').count(), 0, 'permission changes clear previous selections/results');
+  assert.equal(await page.locator('#item-db-similarity-tab-progress').isVisible(), false);
   assert.deepEqual(errors, []);
   assert.deepEqual(unexpected, []);
   console.log("item_db_browser=PASS live_writes=0");

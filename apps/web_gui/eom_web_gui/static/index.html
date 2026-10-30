@@ -212,8 +212,9 @@
           <section class="view" data-view="item-db" aria-labelledby="item-db-title">
             <div class="page-heading"><h1 id="item-db-title">문항 DB</h1></div>
             <div class="item-db-tabs" role="tablist" aria-label="문항 DB 화면">
-              <button id="item-db-search-tab" class="item-db-tab is-active" type="button" role="tab" aria-controls="item-db-search-panel" aria-selected="true">문항 DB</button>
+              <button id="item-db-search-tab" class="item-db-tab is-active" type="button" role="tab" aria-controls="item-db-search-panel" aria-selected="true">조회</button>
               <button id="item-db-assembly-tab" class="item-db-tab" type="button" role="tab" aria-controls="item-db-assembly-panel" aria-selected="false">배치 <span id="item-db-tab-count">0</span></button>
+              <button id="item-db-similarity-tab" class="item-db-tab" type="button" role="tab" aria-label="유사도" aria-controls="item-db-similarity-panel" aria-selected="false">유사도 <span id="item-db-similarity-tab-progress" class="item-db-computing-dot" aria-label="유사도 검색 진행 중" hidden></span></button>
             </div>
             <div id="item-db-search-panel" role="tabpanel" aria-labelledby="item-db-search-tab">
             <div class="item-db-workspace">
@@ -236,10 +237,21 @@
               <div class="form-actions"><button id="item-db-more" class="button secondary" type="button" hidden>더 보기</button></div>
             </section>
             <aside id="item-db-detail-panel" class="panel item-db-detail-panel" tabindex="-1" aria-label="선택한 문항 정보">
-              <div class="panel-heading"><h2>문항 정보</h2><button id="item-db-detail-close" class="button quiet" type="button" hidden>선택 해제</button></div>
+              <div class="panel-heading"><h2>문항 정보</h2><div class="item-db-result-actions"><button id="item-db-similarity-start" class="button secondary" type="button" disabled>유사도 검색</button><button id="item-db-detail-close" class="button quiet" type="button" hidden>선택 해제</button></div></div>
               <div id="item-db-detail"><p class="empty-state">왼쪽 표에서 문항을 선택하세요.</p></div>
             </aside>
             </div>
+            </div>
+            <div id="item-db-similarity-panel" role="tabpanel" aria-labelledby="item-db-similarity-tab" hidden>
+              <section class="panel item-db-similarity-panel" aria-labelledby="item-db-similarity-title">
+                <div class="panel-heading"><div><h2 id="item-db-similarity-title">유사한 문항</h2><p id="item-db-similarity-anchor">조회에서 문항을 선택해 주세요.</p></div><button id="item-db-similarity-refresh" class="button secondary" type="button" disabled>결과 확인</button></div>
+                <div class="panel-body">
+                  <div id="item-db-similarity-progress" class="item-db-progress" hidden><span class="item-db-computing-dot" aria-hidden="true"></span><span id="item-db-similarity-progress-label" role="status" aria-live="polite"></span><span id="item-db-similarity-elapsed" aria-hidden="true"></span></div>
+                  <p id="item-db-similarity-message" class="form-message" aria-live="polite">조회에서 문항을 고른 뒤 ‘유사도 검색’을 누르세요.</p>
+                  <div class="item-db-results-heading"><h3>검색 결과</h3><span id="item-db-similarity-count" class="status-badge tone-neutral">검색 전</span></div>
+                  <div class="item-db-table-wrap"><table class="item-db-table" aria-label="유사도 검색 결과"><thead><tr><th scope="col">순위</th><th scope="col">문항</th><th scope="col">종류</th><th scope="col">단원</th><th scope="col" title="문항을 찾는 데 쓰는 점수입니다. 풀이가 같은 비율을 뜻하지 않습니다.">검색 점수</th></tr></thead><tbody id="item-db-similarity-results"><tr><td colspan="5" class="empty-state">아직 검색한 문항이 없습니다.</td></tr></tbody></table></div>
+                </div>
+              </section>
             </div>
             <div id="item-db-assembly-panel" role="tabpanel" aria-labelledby="item-db-assembly-tab" hidden>
             <section class="panel item-db-draft-panel" aria-labelledby="item-db-draft-title">

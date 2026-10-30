@@ -50,6 +50,7 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "static/index.html",
         "static/item-db-draft.js",
         "static/item-db.js",
+        "static/item-db-similarity.js",
         "static/item-preview.js",
         "static/preview-math.js",
         "static/login.html",

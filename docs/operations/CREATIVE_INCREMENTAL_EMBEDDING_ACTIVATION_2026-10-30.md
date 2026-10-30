@@ -180,3 +180,20 @@ family가 다르면 요청·영수증 모두 명시적으로 거부한다. defin
 이 체크포인트에서 운영 migration·GPU 실행환경·기출 인덱스는 변경하지 않았다.
 10413 충돌은 기존 `PROCESS` 키에 새 `CONCEPT`가 제안된 경우로 읽기 전용 분류를 마쳤다.
 원래 accepted report와 실패 상태를 재해석하거나 임의로 유형을 바꾸지 않았다.
+
+## 추가 사용자 요구 — DB에서 검색하고 다시 열람하기
+
+[DB 작업 화면 설계](../architecture/ITEM_DATABASE_SIMILARITY_WORKSPACE.md)에 사용자 요구를
+보존했다. `조회 / 배치 / 유사도` 탭, 조회의 선택 문항으로 검색, 결과에서 기존 상세·미리보기·
+배치로 돌아가는 동선, 계산 표시/요청 경과시간을 같은 목표의 공식 소비 화면으로 연결한다.
+탭 자체는 계산을 재제출하지 않으며 이미 접수된 PENDING만 같은 key로 관찰한다.
+
+화면 controller와 실제 QUERY/API 연결은 구별한다. 합성 adapter 브라우저 테스트로 탭 왕복,
+핀 보존, stale/오류/중복 클릭, 동시 검색 응답 순서, 계산 표시를 확인하더라도 운영 검색
+성공이 아니다. 실제 application adapter가 없는 배포에서는 검색 버튼을 활성화하지 않는다.
+현재 UI 소스는 실제 검색 adapter 연결 전이며 별도 운영 배포하지 않았다.
+관련 Web 회귀 43개 PASS(실제 Chromium의 DB/안내 모드 검사 포함), Node 선택 포인터·문법,
+Python Ruff/format 및 release integrity mypy PASS다. 브라우저는 합성 API/search adapter를
+주입하고 운영 write·모델·GPU 실행은 하지 않았다. 계산 indicator는 접수된 PENDING 동안
+계속 보이고, 다른 탭에서도 작은 표시가 남는다. terminal/오류/권한 변경 시 정리하며
+관찰 timeout을 계산 실패로 단정하지 않고 같은 key를 유지한다.

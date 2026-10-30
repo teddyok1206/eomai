@@ -364,6 +364,15 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .item-db-tab:hover { color: var(--eom-primary-dark); }
 .item-db-tab.is-active { background: var(--eom-surface); color: var(--eom-primary-dark); box-shadow: var(--eom-shadow); }
 .item-db-tab span { margin-left: 4px; font-variant-numeric: tabular-nums; }
+.item-db-similarity-panel { min-width: 0; }
+.item-db-progress { display: flex; align-items: center; gap: 8px; color: var(--eom-primary-dark); font-size: var(--eom-type-label); }
+.item-db-computing-dot { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--eom-border); border-top-color: var(--eom-primary); border-radius: 50%; animation: item-db-computing 1s linear infinite; vertical-align: middle; }
+#item-db-similarity-elapsed { color: var(--eom-text-muted); font-variant-numeric: tabular-nums; }
+@keyframes item-db-computing { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .item-db-computing-dot { animation: none; } }
+#item-db-similarity-anchor { margin: 8px 0 0; color: var(--eom-text-muted); overflow-wrap: anywhere; }
+#item-db-similarity-results tr:has(button) { cursor: pointer; }
+#item-db-similarity-results tr:has(button):hover { background: var(--eom-porcelain); }
 .item-db-panel, .item-db-draft-panel { min-width: 0; }
 .item-db-panel { padding: 20px; }
 #item-db-detail { padding: 18px; }
