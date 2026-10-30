@@ -93,3 +93,71 @@ Item `itemrev_529ced1919c84ab5ae352d96dfba6328`, accepted 분석
 다음 10371의 `workflow_eb873569938a48c9802f307793cc08fe`가 자동 시작됐다.
 목표 5건 중 운영 진행은 2건이며, 다섯 문항의 별도 정본 대조 및 목표 완료는 아직 아니다.
 GPU INDEX/QUERY의 기존 PID·invocation과 재개 owner invocation은 모두 유지된다.
+
+## 목표 완료 — 2026-10-30 03:51:56 UTC
+
+`CREATIVE_RECOVERY_FIVE=PASS`. 공식 복구로 멈춘 10369를 다시 추출·등록했고,
+그 뒤 원래 대상 순서의 다섯 문항을 정본 기준으로 별도 대조했다. 운영 진행률은
+**54 → 59/1053**이다. 이후 10375의
+`workflow_f8bea8a152d4416b943ce089cd189b90`가 자동 시작돼 연속 처리가 유지된다.
+이 목표의 종료선은 추가 5건 검증이며 전체 1053건 완료가 아니다. 이 시점 잔여는
+10375를 포함한 994건이다.
+
+| 고유번호 | 정본 Item Revision | ACCEPTED 분석 | 공개 풀이 단계 |
+| --- | --- | --- | ---: |
+| 10369 | `itemrev_529ced1919c84ab5ae352d96dfba6328` | `analysisrun_060df2fb6d8545769c2a1a972b4cc894` | 5 |
+| 10370 | `itemrev_e809f0e338964edeb67fa82d868db95a` | `analysisrun_3c1320a280714eb2a35fada7f2cd0426` | 4 |
+| 10371 | `itemrev_7f7d159930224a00897b05464d87d0c4` | `analysisrun_f28b91d472fc4aaea84fa1b9e519b8b1` | 3 |
+| 10372 | `itemrev_829460f4788c462a986ef0ea5dc73d5b` | `analysisrun_8804a7b669864e0ca7e9559f0938abda` | 4 |
+| 10374 | `itemrev_3976067a748a4c59864b0a3a615a8b32` | `analysisrun_85e3c4f53629442bbda991a2a6c59318` | 3 |
+
+최종 대조에 사용한 exact Graph는 `graphrev_4d298fd8d363146a3b75e9fb48f9ad32`,
+SHA-256은 `21fff21d6719f346de1320ea7555898020245ad066843fb3ad9363ae102fb6c2`다.
+다섯 문항의 정본 역할 Artifact/revision/member/schema/media/hash는 실제 등록 계보와
+검증됐고, 각 accepted 분석이 이 Graph에 연결됐다. 공식 Catalog materialize를 통해
+공개 풀이 전체·원문/독립 답안·모든 issue/warning·원래 proposal status가 정본과
+일치함을 확인했다. 원문 미인쇄 배점 주의사항 5건과 10370의 `OTHER_OBSERVED`도
+그대로 조회된다. 이것은 등록·조회 및 기술 검증이지 사람의 과학적 품질 승인 대체가 아니다.
+
+### 보존·중복·실행 경계의 실제 확인
+
+- 추출 5개 + 후속 분석 5개 Job 모두 slot05에서 SUCCEEDED였다. 각 pair의 protocol은
+  `workflow-role/1.34.0` / `workflow-role/1.4.0`이다. 선택된 10개 Job의 lease는 모두
+  RELEASED이며 시간 구간 중복 0, 원문당 APPROVED canonical 중복 0이다.
+- 재개 전 Graph의 **1069개** source/accepted-result identity·revision·hash 참조가
+  모두 보존됐다. 최종 Graph membership은 1074개다. 기존 54개를 포함하는 재개 전의
+  노드 17964개와 edge 42555개도 전부 보존됐고, 최종 18055/42726개에서 기존 identity의
+  누락·재발급은 0이다. 교과서·기출의 1015개 기준선, 기출 base 520개 및 accepted
+  풀이 successor 520개도 별도 대조에서 유지됐다. 서로 다른 분모를 문항 수로 합산하지 않는다.
+- 원래 실패 Workflow/Job은 FAILED / `WORKER_RESULT_INVALID`를 유지한다. 원래 stdout의
+  SHA `d517941b11e11a730fbaa31b7e78ad920022c972fdf6fda22986d999bc799790`도 같다.
+  완료 후 같은 공식 recovery 요청을 실제 재전송하자 최초 준비한 exact selection을
+  반환했고 `workers_started=0`이었다. 실패를 성공으로 바꾸거나 새 identity로 우회하지 않았다.
+- cohort revision과 1053개 target-set SHA, 원래 owner·preset·policy pin은 유지한다.
+  새 DB migration·새 queue·계정/인증 변경·운영 DB pytest는 없었다.
+- GPU INDEX는 기존 b3c8a4c0의 PID2113256 /
+  `8b9b5ed1ec1a4c67bc9ec7c44f9debff`, QUERY는 기존 07ec7b32의 PID1708497 /
+  `9c60629b423547fc832a91b7e9f180e3`다. 보호된 공유 설정 9개 hash가 기존 기준선과
+  같고 INDEX runtime/owner JSON도 해당 release 기록과 byte-identical이다. 이후 최종
+  12개 hash 관측 역시 중간 관측과 동일했다. GPU 실행을 중단하거나 pin을 교체하지 않았다.
+- API READY 및 기존 30분 creative/embedding observer timer가 활성 상태다. 관측 timer는
+  상태를 읽을 뿐 자동 retry·등록·Slack 전송을 수행하지 않는다.
+
+### 증거와 의도적으로 남겨 둔 별도 범위
+
+- `/tmp/eom-creative-recovery-five-acceptance-20261030.json`: 다섯 건의 정본 포인터·hash,
+  원문/공개 풀이/주의사항의 공식 조회 대조, 10개 Job과 lease, 기존 source 참조 보존.
+- `/tmp/eom-creative-five-graph-preservation-reviewed-20261030.json`: 원래 54개를 포함한
+  재개 전 전체 Graph 노드·edge identity의 보존. bounded read-only DB 조회다.
+- `/tmp/eom-creative-10369-recovery-replay-0303.log`: 기존 recovery selection의 실제 멱등 재전송.
+- `/tmp/eom-creative-goal-final-gpu-pins-20261030.json`: hash-only GPU 설정 확인.
+
+위 파일은 작은 개발 검증 read model이며 정본을 대체하지 않는다. 실제 Worker 결과·Item·
+accepted 분석·Graph는 이미 등록된 immutable Artifact/pointer에서 재구성할 수 있다.
+
+운영 복구와 추가 5건 검증은 **기존 설치본의 supported recovery/정상 처리 경로**로
+성공했다. 생성 지침을 보강한 `c6dabde8`는 소스·wheel 검증 후보로 보존했으나 이번
+목표에서 공유 API/Runner에 배포하지 않았다. 이를 재발 방지 지침의 live 활성화로
+보고하지 않는다. 기존 공개 풀이 임베딩 successor/production migration 0063도
+이번 목표와 별도 미활성 범위로 유지한다. 목표를 전체 1053건 완료나 교육 품질,
+새 embedding/query family의 성공으로 확대하지 않는다.
