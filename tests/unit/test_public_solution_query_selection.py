@@ -75,16 +75,18 @@ def test_bulk_prepare_reads_one_real_canonical_index_and_keeps_source_order(
     assert official.call_count == 1
 
 
-@pytest.fixture
-def chosen(public, tmp_path, monkeypatch):
+def public_selection_case(tmp_path, monkeypatch, public, *, publisher=None, identity="a" * 32):
     body, routing, cpu_policy, cuda_policy, _primary = public
-    publication_root = tmp_path / "public-query-controls"
-    publication_root.mkdir()
-    publisher, engine = _publisher(publication_root)
-    publisher.settings = replace(publisher.settings, workspace_root=tmp_path)
+    if publisher is None:
+        publication_root = tmp_path / "public-query-controls"
+        publication_root.mkdir()
+        publisher, engine = _publisher(publication_root)
+        publisher.settings = replace(publisher.settings, workspace_root=tmp_path)
+    else:
+        engine = publisher.engine
     controls = LocalEmbeddingControlArtifactPublisher(publisher, source_commit="a" * 40)
     body["routing_policy"] = controls.publish_device_routing_policy(
-        routing, idempotency_key="synthetic-public-routing-policy"
+        routing, idempotency_key="synthetic-public-routing-policy:" + identity
     ).member.model_dump(mode="json")
     config = PublicRoutedReferenceQueryOwnerConfiguration.model_validate(body)
     template = public_similarity_case()[0]
@@ -188,8 +190,8 @@ def chosen(public, tmp_path, monkeypatch):
             dict(
                 schema_version="system-rag-reference-query-prepare-request/4.0",
                 operation="PREPARE_REFERENCE_QUERY",
-                operation_id="queryprepare_" + "a" * 32,
-                idempotency_key="synthetic-public-selection-key",
+                operation_id="queryprepare_" + identity,
+                idempotency_key="synthetic-public-selection-key:" + identity,
                 source_item_revision_ids=list(reversed(tuple(by_id))),
                 graph_snapshot=template.graph_snapshot.model_dump(mode="json"),
                 policy_revision_id=template.policy_revision_id,
@@ -200,8 +202,14 @@ def chosen(public, tmp_path, monkeypatch):
             "request_sha256",
         )
     )
+    return value
+
+
+@pytest.fixture
+def chosen(public, tmp_path, monkeypatch):
+    value = public_selection_case(tmp_path, monkeypatch, public)
     yield value
-    engine.dispose()
+    value.engine.dispose()
 
 
 def test_public_selection_publishes_parent14_preparation2_and_replay_never_selects_latest(chosen):

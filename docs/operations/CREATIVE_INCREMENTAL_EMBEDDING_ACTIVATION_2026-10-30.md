@@ -109,6 +109,13 @@
   운영 DB에 mutating pytest를 실행하지 않았다. 새 DB migration은 없다.
 - 변경 core 25개와 QUERY/batch/read 관련 core 79개 mypy PASS; 변경 Python 38개 Ruff/
   formatter PASS. 모델/GPU inference·추가 문항 생성은 이 source test에 포함되지 않는다.
+- 후속으로 public prepare4 자체의 동일 요청 동시 생성·publication 중단 후 원래 selection
+  재사용·현재 권한 거부·다른 intent 재전송 거부를 같은 guarded PostgreSQL에서 추가 확인했다.
+  새 integration 3 PASS, 공유 unit fixture 회귀 3 PASS. source/index/IAM 관측은 명시적 합성
+  leaf이고, 실제 PostgreSQL Job/event/Artifact의 uniqueness와 복구를 검사한 결과다.
+- source `3cc5792de80b70740c3c711d6891ad8e88764b45` clean build PASS:
+  `/tmp/eom-api-build/3cc5792de80b70740c3c711d6891ad8e88764b45.2ajqlw/dist`.
+  wheel RECORD와 source-free installed simulation을 검증했으며 운영에는 설치하지 않았다.
 
 ### 남은 필수 작업
 
