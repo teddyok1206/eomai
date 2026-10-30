@@ -17,6 +17,10 @@ from eom_catalog_contracts.mixed_embedding_index import (
     MIXED_EMBEDDING_INDEX_SCHEMA_REF,
     MixedEmbeddingIndexManifest,
 )
+from eom_catalog_contracts.public_solution_embedding_index import (
+    PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+    PublicSolutionEmbeddingIndex,
+)
 from eom_catalog_service.embedding_device_index_pair import (
     EmbeddingDeviceIndexPairError,
     pair_embedding_device_indexes,
@@ -35,6 +39,7 @@ from tests.unit.inference_transfer_embedding_fixtures import (
     vector_shard,
 )
 from tests.unit.mixed_embedding_fixtures import mixed_embedding_case
+from tests.unit.test_public_solution_index_assembly import assemble, setup
 
 
 def _index(
@@ -78,6 +83,81 @@ def test_exact_device_pair_preserves_actual_spaces_and_small_pointers() -> None:
         pair.target_count = 3  # type: ignore[misc]
     with pytest.raises(EmbeddingDeviceIndexPairError, match="DEVICE_INVALID"):
         pair.select("GPU")  # type: ignore[arg-type]
+
+
+def public_index(device):
+    seed = "2" if device == "CPU" else "3"
+    index = assemble(setup(device=device), revision=seed).index
+    index = PublicSolutionEmbeddingIndex.model_validate(
+        seal(
+            index.model_dump(mode="json") | {"index_id": "embeddingindex_" + seed * 32},
+            "index_sha256",
+        )
+    )
+    pointer = ArtifactMemberPointer(
+        artifact_id="artifact_" + seed * 32,
+        artifact_revision_id="rev_" + seed * 32,
+        member_path="index.json",
+        schema_ref=PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+        media_type="application/json",
+        sha256=content_sha256(index.model_dump(mode="json")),
+    )
+    return pointer, index
+
+
+def test_public_report_pair_keeps_source_proofs_and_separates_device_spaces():
+    cpu_member, cpu = public_index("CPU")
+    cuda_member, cuda = public_index("CUDA")
+    pair = pair_embedding_device_indexes(
+        cpu_member=cpu_member,
+        cpu_index=cpu,
+        cuda_member=cuda_member,
+        cuda_index=cuda,
+    )
+    assert pair.target_count == 2
+    assert pair.cpu.space != pair.cuda.space
+    assert (
+        pair.cpu.manifest.schema_ref
+        == pair.cuda.manifest.schema_ref
+        == PUBLIC_SOLUTION_INDEX_SCHEMA_REF
+    )
+    assert pair.recipe_sha256 == cpu.recipe.recipe_sha256 == cuda.recipe.recipe_sha256
+    assert {binding.evidence.kind for binding in cpu.bindings} == {
+        "ACCEPTED_SOLUTION_ANALYSIS",
+        "REGISTERED_CREATIVE_SOURCE_REPORT",
+    }
+
+
+@pytest.mark.parametrize("fault", ["lineage", "schema", "hash"])
+def test_public_report_pair_rejects_foreign_proof_or_member(fault):
+    cpu_member, cpu = public_index("CPU")
+    cuda_member, cuda = public_index("CUDA")
+    if fault == "lineage":
+        body = cuda.model_dump(mode="json")
+        index = next(
+            i
+            for i, binding in enumerate(cuda.bindings)
+            if binding.evidence.kind == "REGISTERED_CREATIVE_SOURCE_REPORT"
+        )
+        body["bindings"][index]["evidence"]["lineage_sha256"] = "sha256:" + "f" * 64
+        body["bindings"][index] = seal(body["bindings"][index], "binding_sha256")
+        cuda = PublicSolutionEmbeddingIndex.model_validate(seal(body, "index_sha256"))
+        cuda_member = cuda_member.model_copy(
+            update={"sha256": content_sha256(cuda.model_dump(mode="json"))}
+        )
+    elif fault == "schema":
+        cuda_member = cuda_member.model_copy(
+            update={"schema_ref": MIXED_EMBEDDING_INDEX_SCHEMA_REF}
+        )
+    else:
+        cuda_member = cuda_member.model_copy(update={"sha256": "sha256:" + "f" * 64})
+    with pytest.raises(EmbeddingDeviceIndexPairError):
+        pair_embedding_device_indexes(
+            cpu_member=cpu_member,
+            cpu_index=cpu,
+            cuda_member=cuda_member,
+            cuda_index=cuda,
+        )
 
 
 @pytest.mark.parametrize("seeds", [("a",), ("a", "c"), ("b", "c")])

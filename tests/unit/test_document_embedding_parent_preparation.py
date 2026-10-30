@@ -8,6 +8,7 @@ from eom_catalog_contracts.embedding_gpu_control import embedding_gpu_allocation
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_orchestrator.local_embedding_control_artifacts import SOURCE_PLAN_ARTIFACT_TYPE
 from eom_workflow.local_embedding_source_plan import parse_local_embedding_source_plan
+from eom_workflow.local_embedding_source_plan_v3 import parse_local_embedding_source_plan_v3
 from eom_workflow_runner import document_embedding_parent_preparation as parent_preparation
 from eom_workflow_runner import local_embedding_service_reconciliation as preparation
 from eom_workflow_runner.document_embedding_parent_preparation import (
@@ -108,3 +109,52 @@ def test_cpu_match_rebuilds_exact_gpu_targets_into_a_separate_native_space(
         cpu_plan = parse_local_embedding_source_plan(json.loads(raw))
         assert cpu_plan.plan_sha256 == matched.source_plan_sha256
         assert cpu_plan.sources == value.plan.sources and cpu_plan.space != value.plan.space
+
+
+@pytest.mark.parametrize("routed", ["public"], indirect=True)
+def test_public_parent_pins_report_proofs_and_cpu_matching_uses_same_solution_text(
+    parent_case, monkeypatch
+):
+    value = parent_case
+    first = prepare_document_embedding_parent(
+        value.pair, value.request, value.sources.configuration
+    )
+    replay = prepare_document_embedding_parent(
+        value.pair, value.request, value.sources.configuration
+    )
+    assert first.request == replay.request
+    assert first.request.schema_version == "embedding-batch-plan/1.3"
+    assert first.allocation != replay.allocation
+    with (
+        value.routed.publisher.sessions.begin() as session,
+        first.operation.admission.admit(session, first.request) as current,
+    ):
+        assert {anchor.evidence.kind for anchor in current.selection.anchors} == {
+            "ACCEPTED_SOLUTION_ANALYSIS",
+            "REGISTERED_CREATIVE_SOURCE_REPORT",
+        }
+        assert tuple(anchor.source for anchor in current.selection.anchors) == value.plan.sources
+    monkeypatch.setattr(
+        preparation,
+        "admitted_workflow_definition",
+        lambda *_args, **_kwargs: SimpleNamespace(definition_hash="sha256:" + "9" * 64),
+    )
+    matched = value.pair.cpu.prepare_matching(value.pair.cuda, value.request)
+    assert matched.schema_version == "local-embedding-workflow-request/3.0"
+    assert matched.space.runtime.device == "CPU"
+    with value.routed.publisher.sessions.begin() as session:
+        reader = PinnedArtifactReadContext.for_session(session, value.pair.cpu.owner.settings)
+        pointer = matched.source_plan
+        reader.prefetch(((pointer.artifact_id, pointer.artifact_revision_id),))
+        raw = reader.read_pinned(
+            **pointer.model_dump(mode="python"),
+            expected_artifact_types=(SOURCE_PLAN_ARTIFACT_TYPE,),
+            expected_primary_file="source-plan.json",
+            max_bytes=64 * 1024**2,
+        ).payload
+    cpu_plan = parse_local_embedding_source_plan_v3(json.loads(raw))
+    assert cpu_plan.plan_sha256 == matched.source_plan_sha256
+    assert cpu_plan.sources == value.plan.sources and cpu_plan.space != value.plan.space
+    assert tuple(d.encoding.input_text_sha256 for d in cpu_plan.demands) == tuple(
+        d.encoding.input_text_sha256 for d in value.plan.demands
+    )

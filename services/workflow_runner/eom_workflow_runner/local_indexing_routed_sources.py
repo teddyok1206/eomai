@@ -6,6 +6,10 @@ from dataclasses import dataclass
 
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
+from eom_catalog_contracts.public_solution_embedding_index import (
+    MAX_PUBLIC_SOLUTION_SOURCES,
+    PublicSolutionIndexNamespace,
+)
 from eom_catalog_service.embedding_registry_indexing_authority import (
     CatalogIndexingRegistrySourceAuthority,
 )
@@ -19,10 +23,11 @@ from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.embedding_device_routing import EmbeddingDeviceRoutingPolicy
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingRuntimeProfile
-from eom_workflow.local_indexing_owner_configuration import CpuLocalIndexingOwnerSelection
 from eom_workflow.local_indexing_routed_owner_configuration import (
+    RoutedCpuIndexingSelection,
     RoutedLocalIndexingOwnerConfiguration,
     require_routed_indexing_policy,
+    validate_supported_routed_indexing_configuration,
 )
 from eom_workflow.native_embedding_backend_selection import select_native_index_runtime_profile
 from sqlalchemy import Engine
@@ -70,11 +75,19 @@ class PairedIndexingNamespacePreparation:
             == cuda.namespace.model_dump(mode="json", exclude={"space_sha256"})
             and cpu.space.space_sha256 != cuda.space.space_sha256
             and type(self.maximum_sources) is int
-            and 1 <= self.maximum_sources <= 1024
+            and 1
+            <= self.maximum_sources
+            <= (
+                MAX_PUBLIC_SOLUTION_SOURCES
+                if isinstance(cpu.namespace, PublicSolutionIndexNamespace)
+                else 1024
+            )
         )
 
     @property
-    def namespace(self) -> EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace:
+    def namespace(
+        self,
+    ) -> EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace | PublicSolutionIndexNamespace:
         return self.cuda.owner.configuration.registry.namespace
 
 
@@ -89,8 +102,10 @@ def _preparation(
     engine: Engine,
     publisher: ControlFileSetPublisher,
     source_authority: CatalogLocalIndexingSourceAuthority,
-    cpu: CpuLocalIndexingOwnerSelection,
-    namespace: EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace,
+    cpu: RoutedCpuIndexingSelection,
+    namespace: EmbeddingIndexNamespace
+    | MixedEmbeddingIndexNamespace
+    | PublicSolutionIndexNamespace,
     profile: LocalEmbeddingRuntimeProfile,
     *,
     grant_revision_id: str,
@@ -170,16 +185,17 @@ def build_routed_indexing_sources(
         and publisher.settings.nas_artifact_root == settings.nas_artifact_root
         and source_commit == service_fence.pin.runtime_source_commit
     )
-    configuration = RoutedLocalIndexingOwnerConfiguration.model_validate(configuration)
+    configuration = validate_supported_routed_indexing_configuration(configuration)
     authority = CatalogLocalIndexingSourceAuthority(
         KnowledgeRetrievalApplicationService(engine, settings), service_fence
     )
     pairs = []
     for group in configuration.groups:
         cpu, grant = group.cpu, group.cuda_grant
-        cpu_namespaces: tuple[EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace, ...] = (
-            cpu.namespaces
-        )
+        cpu_namespaces: tuple[
+            EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace | PublicSolutionIndexNamespace,
+            ...,
+        ] = cpu.namespaces
         for cpu_ns, cuda_ns in zip(
             cpu_namespaces, group.cuda_namespaces(configuration.cuda_runtime_profile), strict=True
         ):

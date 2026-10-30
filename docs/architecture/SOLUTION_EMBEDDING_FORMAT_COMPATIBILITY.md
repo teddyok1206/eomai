@@ -175,3 +175,10 @@ identity와 encoder는 기존 것을 사용한다. 이 view에는 공개 풀이 
 format/ID/warning은 넣지 않는다. source와 정책은 별도 similarity/native owner가 검증한다.
 새 result2를 result1이라고 표시하거나 기존 fixed QUERY1 DAG에 위장 연결하지 않는다.
 후속 native definition/metadata·선택 정책을 정확하게 연결한 뒤 실제 검색을 활성화한다.
+
+### 2026-10-30 자동 증분 활성화 목표
+
+[새 운영 체크포인트](../operations/CREATIVE_INCREMENTAL_EMBEDDING_ACTIVATION_2026-10-30.md)에서
+public INDEX의 batch1.3·owner6 연결, 기존 기출 view 보존, 같은 source의 CPU/CUDA pairing을
+검증한다. 기존 numeric wire/자원 lease/등록 owner를 재사용한다. 공식 QUERY/검색 소비와
+실제 창작 5건의 운영 검증이 남아 있으므로 alignment 상태는 아직 PENDING이다.

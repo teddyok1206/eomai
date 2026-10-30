@@ -7,9 +7,15 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 
+from eom_catalog_contracts.embedding_index_families import (
+    embedding_entry_graph,
+    embedding_entry_source,
+)
 from eom_catalog_contracts.inference_transfer_experiment import StagedExperimentEntry
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
+from eom_catalog_contracts.mixed_embedding_index import RegisteredReviewEmbeddingEntry
 from eom_catalog_contracts.models import Sha256
+from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import ApprovedReferenceItemAnchor
 from eom_catalog_service.embedding_device_index_pair import EmbeddingDeviceIndexPair
@@ -42,6 +48,7 @@ from eom_workflow.embedding_batch_plan_family import (
     validate_embedding_batch_plan_controls,
 )
 from eom_workflow.embedding_batch_plan_v12 import EmbeddingBatchSelectionV12
+from eom_workflow.embedding_batch_plan_v13 import PublicSolutionBatchAnchor
 from eom_workflow.embedding_device_routing import (
     EMBEDDING_DEVICE_ROUTING_SCHEMA_REF,
     MAX_EMBEDDING_DEVICE_ROUTING_BYTES,
@@ -164,7 +171,7 @@ class CatalogEmbeddingBatchPlanAdmission:
     ) -> None:
         sources = {source.item_revision_id: source for source in current.sources}
         entries = {
-            entry.profile.source_basis.source.item_revision_id: entry for entry in current.entries
+            embedding_entry_source(entry).item_revision_id: entry for entry in current.entries
         }
         _require(
             not current.truncated
@@ -178,7 +185,11 @@ class CatalogEmbeddingBatchPlanAdmission:
             revision = anchor.source.item_revision_id
             _require(sources.get(revision) == anchor.source)
             entry = entries.get(revision)
-            if isinstance(anchor, ApprovedReferenceItemAnchor):
+            if isinstance(anchor, PublicSolutionBatchAnchor):
+                _require(isinstance(entry, PublicSolutionEmbeddingEntry))
+                assert isinstance(entry, PublicSolutionEmbeddingEntry)
+                _require(anchor == PublicSolutionBatchAnchor.from_entry(entry))
+            elif isinstance(anchor, ApprovedReferenceItemAnchor):
                 if entry is None:
                     _require(anchor.profile is None and anchor.solution_evidence is None)
                     continue
@@ -190,13 +201,13 @@ class CatalogEmbeddingBatchPlanAdmission:
                 )
             else:
                 _require(isinstance(anchor, RegisteredReviewBatchAnchor))
-                _require(entry is not None and not isinstance(entry, StagedExperimentEntry))
-                assert entry is not None and not isinstance(entry, StagedExperimentEntry)
+                _require(isinstance(entry, RegisteredReviewEmbeddingEntry))
+                assert isinstance(entry, RegisteredReviewEmbeddingEntry)
                 _require(
                     anchor.profile == RegisteredReviewProfilePointer.from_profile(entry.profile)
                     and anchor.review_evidence == entry.profile.source_basis.review_evidence
                 )
-            _require(entry.profile.source_basis.graph_snapshot == selection.graph_snapshot)
+            _require(embedding_entry_graph(entry) == selection.graph_snapshot)
 
     def _query_indexes(
         self,

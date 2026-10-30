@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 from importlib.resources import files
-from typing import Any, ClassVar, Literal, Self
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 from eom_catalog_contracts.embedding_gpu_control import EmbeddingGpuAllocationRequest
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
@@ -54,6 +54,9 @@ from eom_workflow.reference_query_execution import (
     parse_supported_reference_query_workflow_request,
 )
 from eom_workflow.schemas import local_embedding_admission_schema_registry
+
+if TYPE_CHECKING:
+    from eom_workflow.embedding_batch_plan_v13 import EmbeddingBatchSelectionV13
 
 BATCH_PLAN_PROTOCOL = "embedding-batch-plan/1.0"
 BATCH_PLAN_SCHEMA_REF = "eom://schemas/workflow/embedding-batch-plan/1.0"
@@ -215,7 +218,7 @@ def validate_embedding_batch_plan_controls(
 
 def validate_embedding_batch_plan_control_values(
     request: EmbeddingBatchPlanRequestValues,
-    selection: EmbeddingBatchSelectionValues,
+    selection: EmbeddingBatchSelectionValues | EmbeddingBatchSelectionV13,
     policy: EmbeddingDeviceRoutingPolicy,
 ) -> None:
     """One value closure shared by explicitly parsed wire versions; not source authority."""

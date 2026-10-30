@@ -7,11 +7,14 @@ import pytest
 from eom_catalog_contracts.local_indexing_mixed_policy import (
     supported_local_indexing_authorization_audit_sha256,
 )
+from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
+from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryLookup,
     ResolvedEmbeddingLookup,
 )
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
+from eom_catalog_service.local_embedding_source_plan_v3 import build_local_embedding_source_plan_v3
 from eom_identifiers import content_sha256
 from eom_workflow.local_embedding_request_v2 import parse_supported_local_embedding_request
 from eom_workflow_runner.local_embedding_admission import ResolvedLocalEmbeddingAdmission
@@ -20,7 +23,9 @@ from eom_workflow_runner.local_embedding_owner_admission import (
     ResolvedLocalEmbeddingSources,
 )
 
+from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.local_embedding_service_fixtures import service_fixture
+from tests.unit.test_local_embedding_source_plan_v3 import inputs as public_inputs
 
 
 @pytest.fixture
@@ -36,22 +41,61 @@ def parent_case(routed, monkeypatch):
         base.request.graph_snapshot,
         grant.source_access_policy_revision_id,
         grant.source_access_policy_sha256,
+        pair.maximum_sources,
     )
+    public = isinstance(pair.namespace, PublicSolutionIndexNamespace)
+    entries = base.base.entries
+    registered_sources = base.base.plan.sources
+    recipe = base.base.plan.recipe
+    if public:
+        entries = tuple(
+            PublicSolutionEmbeddingEntry.model_validate(
+                seal(
+                    entry.model_dump(mode="json")
+                    | {
+                        "graph_snapshot": query.graph_snapshot.model_dump(mode="json"),
+                        "policy_revision_id": query.policy_revision_id,
+                        "policy_sha256": query.policy_sha256,
+                    },
+                    "entry_sha256",
+                )
+            )
+            for entry in public_inputs()[1].entries
+        )
+        registered_sources = tuple(entry.source for entry in entries)
+        recipe = entries[0].recipe
     captured = ResolvedEmbeddingLookup(
         query.corpus_id,
         gpu.space,
-        base.base.plan.recipe,
-        base.base.plan.sources,
-        base.base.entries,
+        recipe,
+        registered_sources,
+        entries,
+        base_analysis_run_ids=tuple(
+            (entry.source.item_revision_id, entry.base_analysis_run_id) for entry in entries
+        )
+        if public
+        else (),
     )
     targets = tuple(s.item_revision_id for s in captured.sources)
-    plan = build_local_embedding_source_plan(query, captured, target_revision_ids=targets)
-    saved = pair.cuda.controls.publish_observed_source_plan(
+    build_plan = (
+        build_local_embedding_source_plan_v3 if public else build_local_embedding_source_plan
+    )
+    plan = build_plan(query, captured, target_revision_ids=targets)
+    publish_plan = (
+        pair.cuda.controls.publish_observed_source_plan_v3
+        if public
+        else pair.cuda.controls.publish_observed_source_plan
+    )
+    saved = publish_plan(
         plan, idempotency_key="test:parent-original-gpu-source-plan:" + uuid4().hex
     )
     with routed.publisher.sessions.begin() as session:
         controls = pair.cuda.owner.resolve_reconciliation_controls(session, query, gpu)
     body = base.request.model_dump(mode="json") | dict(
+        schema_version="local-embedding-workflow-request/3.0"
+        if public
+        else base.request.schema_version,
+        workflow_definition_version="2.0.0" if public else base.request.workflow_definition_version,
         corpus_id=query.corpus_id,
         graph_snapshot=query.graph_snapshot.model_dump(mode="json"),
         namespace=query.namespace.model_dump(mode="json"),
@@ -96,6 +140,7 @@ def parent_case(routed, monkeypatch):
             captured.recipe,
             captured.sources,
             captured.entries,
+            base_analysis_run_ids=captured.base_analysis_run_ids,
         )
 
     monkeypatch.setattr(CatalogLocalEmbeddingOwnerAdmission, "resolve_sources", resolve)

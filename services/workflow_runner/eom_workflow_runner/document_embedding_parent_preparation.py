@@ -5,9 +5,15 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
+from eom_catalog_contracts.embedding_index_families import embedding_entry_source
 from eom_catalog_contracts.embedding_work_batch import EmbeddingWorkBatchScope
 from eom_catalog_contracts.inference_transfer_experiment import StagedExperimentEntry
 from eom_catalog_contracts.item_inference_transfer import InferenceTransferProfilePointer
+from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
+from eom_catalog_contracts.public_solution_embedding_index import (
+    MAX_PUBLIC_SOLUTION_SOURCES,
+    PublicSolutionIndexNamespace,
+)
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryLookup,
@@ -26,6 +32,12 @@ from eom_workflow.embedding_batch_plan_v11 import (
     EmbeddingBatchPlanRequestV11,
     EmbeddingBatchSelectionV11,
 )
+from eom_workflow.embedding_batch_plan_v13 import (
+    BATCH_PLAN_V13_PROTOCOL,
+    EmbeddingBatchPlanRequestV13,
+    EmbeddingBatchSelectionV13,
+    PublicSolutionBatchAnchor,
+)
 from eom_workflow.local_embedding_request_v2 import (
     SupportedLocalEmbeddingRequest,
     parse_supported_local_embedding_request,
@@ -33,6 +45,7 @@ from eom_workflow.local_embedding_request_v2 import (
 from eom_workflow.local_indexing_routed_owner_configuration import (
     RoutedLocalIndexingOwnerConfiguration,
     require_routed_indexing_policy,
+    validate_supported_routed_indexing_configuration,
 )
 
 from eom_workflow_runner.embedding_batch_allocation_candidate import (
@@ -83,7 +96,7 @@ def prepare_document_embedding_parent(
     """
     _require(type(pair) is PairedIndexingNamespacePreparation)
     request = parse_supported_local_embedding_request(request)
-    configuration = RoutedLocalIndexingOwnerConfiguration.model_validate(configuration)
+    configuration = validate_supported_routed_indexing_configuration(configuration)
     cpu, cuda = pair.cpu, pair.cuda
     publisher, owner = cuda.publisher, cuda.owner
     _require(
@@ -94,7 +107,13 @@ def prepare_document_embedding_parent(
         and request.namespace == owner.configuration.registry.namespace
         and request.resource_profile == cuda.runtime_profile.resource_profile
         and type(pair.maximum_sources) is int
-        and 1 <= pair.maximum_sources <= 1024
+        and 1
+        <= pair.maximum_sources
+        <= (
+            MAX_PUBLIC_SOLUTION_SOURCES
+            if isinstance(pair.namespace, PublicSolutionIndexNamespace)
+            else 1024
+        )
     )
     scope = EmbeddingRegistryLookup(
         request.corpus_id,
@@ -114,14 +133,16 @@ def prepare_document_embedding_parent(
         policy = resolve_embedding_device_routing_policy(reader, configuration.routing_policy)
         require_routed_indexing_policy(configuration, policy)
         plan = original.admission.plan
-        entries = {e.profile.source_basis.source.item_revision_id: e for e in original.entries}
+        entries = {embedding_entry_source(e).item_revision_id: e for e in original.entries}
         _require(plan.recipe == cpu.owner.configuration.registry.recipe and bool(plan.sources))
         anchors = []
         for source in plan.sources:
             entry = entries.get(source.item_revision_id)
             _require(entry is not None)
             assert entry is not None
-            if isinstance(entry, StagedExperimentEntry):
+            if isinstance(entry, PublicSolutionEmbeddingEntry):
+                anchors.append(PublicSolutionBatchAnchor.from_entry(entry).model_dump(mode="json"))
+            elif isinstance(entry, StagedExperimentEntry):
                 anchors.append(
                     dict(
                         basis="APPROVED_REFERENCE_ITEM",
@@ -156,8 +177,10 @@ def prepare_document_embedding_parent(
         batch_scope = EmbeddingWorkBatchScope.model_validate(
             body | {"scope_sha256": content_sha256(body)}
         )
+        public = isinstance(pair.namespace, PublicSolutionIndexNamespace)
+        protocol = BATCH_PLAN_V13_PROTOCOL if public else BATCH_PLAN_V11_PROTOCOL
         body = dict(
-            schema_version=BATCH_PLAN_V11_PROTOCOL,
+            schema_version=protocol,
             message_type="SELECTION",
             purpose="INDEX",
             scope=batch_scope.model_dump(mode="json"),
@@ -169,9 +192,8 @@ def prepare_document_embedding_parent(
             views=[request.namespace.view],
             query=None,
         )
-        selection = EmbeddingBatchSelectionV11.model_validate(
-            body | {"selection_sha256": content_sha256(body)}
-        )
+        selection_type = EmbeddingBatchSelectionV13 if public else EmbeddingBatchSelectionV11
+        selection = selection_type.model_validate(body | {"selection_sha256": content_sha256(body)})
         key = "embedding-batch-selection:" + content_sha256(
             {
                 "selection": selection.selection_sha256,
@@ -191,7 +213,7 @@ def prepare_document_embedding_parent(
         }
     )
     body = dict(
-        schema_version=BATCH_PLAN_V11_PROTOCOL,
+        schema_version=protocol,
         message_type="REQUEST",
         batch_id="embeddingbatch_" + identity.removeprefix("sha256:")[:32],
         parent_request_sha256=request.request_sha256,
@@ -203,9 +225,8 @@ def prepare_document_embedding_parent(
         routing_policy_sha256=configuration.routing_policy_sha256,
         child_selection_sha256s=list(selection.child_selection_sha256s),
     )
-    parent = EmbeddingBatchPlanRequestV11.model_validate(
-        body | {"request_sha256": content_sha256(body)}
-    )
+    request_type = EmbeddingBatchPlanRequestV13 if public else EmbeddingBatchPlanRequestV11
+    parent = request_type.model_validate(body | {"request_sha256": content_sha256(body)})
     allocation = new_embedding_batch_allocation_candidate(
         parent, policy, now_monotonic_ns=time.monotonic_ns()
     )

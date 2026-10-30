@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 from eom_catalog_contracts.embedding_contract_values import raw_similarity_contract_value
+from eom_catalog_contracts.embedding_index_families import parse_supported_embedding_index
 from eom_catalog_contracts.embedding_model_recipe import same_embedding_payload_recipe
 from eom_catalog_contracts.inference_transfer_embedding import (
     INDEX_SCHEMA_REF,
@@ -15,7 +16,10 @@ from eom_catalog_contracts.inference_transfer_experiment import ExperimentView
 from eom_catalog_contracts.mixed_embedding_index import (
     MIXED_EMBEDDING_INDEX_SCHEMA_REF,
     MixedEmbeddingIndexManifest,
-    parse_supported_embedding_index,
+)
+from eom_catalog_contracts.public_solution_embedding_index import (
+    PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+    PublicSolutionEmbeddingIndex,
 )
 from eom_identifiers import content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -72,11 +76,12 @@ def validate_resolved_embedding_index(
         member = ArtifactMemberPointer.model_validate(raw_similarity_contract_value(pointer))
     except (ValueError, TypeError, AttributeError, SchemaError):
         raise EmbeddingDeviceIndexPairError("EMBEDDING_DEVICE_INDEX_INVALID") from None
-    expected_schema = (
-        MIXED_EMBEDDING_INDEX_SCHEMA_REF
-        if isinstance(checked, MixedEmbeddingIndexManifest)
-        else INDEX_SCHEMA_REF
-    )
+    if isinstance(checked, PublicSolutionEmbeddingIndex):
+        expected_schema = PUBLIC_SOLUTION_INDEX_SCHEMA_REF
+    elif isinstance(checked, MixedEmbeddingIndexManifest):
+        expected_schema = MIXED_EMBEDDING_INDEX_SCHEMA_REF
+    else:
+        expected_schema = INDEX_SCHEMA_REF
     if (
         member.member_path != "index.json"
         or member.schema_ref != expected_schema

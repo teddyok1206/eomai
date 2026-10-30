@@ -21,6 +21,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingVectorRowRef,
 )
 from eom_catalog_contracts.inference_transfer_experiment import ExperimentView
+from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionProfilePointer
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import (
     SimilarityCandidate,
@@ -394,11 +395,17 @@ class SimilarityContextApplicationService:
             if document is None or query_row is None or query is None:
                 raise SimilarityContextReadError("INDEX_POINTER_INVALID")
             rows = {value.row.encoding.encoding_sha256: value for value in document.numerical_rows}
-            eligible = tuple(
-                (binding.profile, rows[binding.encoding.encoding_sha256].values)
-                for binding in document.bindings
-                if binding.source.item_revision_id != request.anchor.source.item_revision_id
-            )
+            eligible_rows: list[tuple[MixedSimilarityProfilePointer, tuple[float, ...]]] = []
+            for binding in document.bindings:
+                # Legacy context1/2 must not reinterpret public-report index3.
+                # Its explicit successor consumer is admitted independently.
+                if isinstance(binding.profile, PublicSolutionProfilePointer):
+                    raise SimilarityContextReadError("INDEX_POINTER_INVALID")
+                if binding.source.item_revision_id != request.anchor.source.item_revision_id:
+                    eligible_rows.append(
+                        (binding.profile, rows[binding.encoding.encoding_sha256].values)
+                    )
+            eligible = tuple(eligible_rows)
             ranked = _rank_similarity_profiles(
                 vectors[query_row.row_index], eligible, top_k=request.top_k
             )

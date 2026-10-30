@@ -13,6 +13,11 @@ from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_contracts.embedding_work_batch import MAX_EMBEDDING_WORK_BATCH_SECONDS
 from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
 from eom_catalog_contracts.models import Sha256
+from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingRecipe
+from eom_catalog_contracts.public_solution_embedding_index import (
+    MAX_PUBLIC_SOLUTION_SOURCES,
+    PublicSolutionIndexNamespace,
+)
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from jsonschema import Draft202012Validator
@@ -29,6 +34,8 @@ from eom_workflow.local_indexing_owner_configuration import (
     CpuLocalIndexingOwnerSelection,
     LocalIndexingMixedOwnerConfiguration,
     LocalIndexingOwnerConfigurationError,
+    LocalIndexingOwnerDatabasePin,
+    LocalIndexingRuntimeVerifierPin,
     local_indexing_mixed_owner_configuration_schema,
     local_indexing_multiview_owner_configuration_schema,
     local_indexing_owner_configuration_bytes,
@@ -47,6 +54,12 @@ LOCAL_INDEXING_ROUTED_OWNER_SCHEMA_REF = (
 )
 LOCAL_INDEXING_ROUTED_OWNER_SCHEMA_SHA256 = (
     "sha256:9c04d3d14f4161e2cf2364ed9c422aa86e6629d3a4f6bcfb4c57c97fb4947f60"
+)
+LOCAL_INDEXING_PUBLIC_OWNER_SCHEMA_REF = (
+    "eom://schemas/workflow/local-indexing-owner-configuration/6.0"
+)
+LOCAL_INDEXING_PUBLIC_OWNER_SCHEMA_SHA256 = (
+    "sha256:bff68d37e24c2c024c3230805687d56c32b85a85892272bb72ec44c46cda4e99"
 )
 
 
@@ -70,9 +83,20 @@ def local_indexing_routed_owner_configuration_schema() -> dict[str, Any]:
     return value
 
 
-@lru_cache(maxsize=1)
-def _validator() -> Draft202012Validator:
+@lru_cache(maxsize=2)
+def _validator(*, public: bool = False) -> Draft202012Validator:
     schema = local_indexing_routed_owner_configuration_schema()
+    legacy_schema = schema
+    if public:
+        with (
+            files("eom_workflow")
+            .joinpath("resources/local-indexing-owner-configuration-v6.schema.json")
+            .open("rb") as stream
+        ):
+            raw = stream.read(MAX_LOCAL_INDEXING_OWNER_BYTES + 1)
+        if sha256_bytes(raw) != LOCAL_INDEXING_PUBLIC_OWNER_SCHEMA_SHA256:
+            raise LocalIndexingOwnerConfigurationError()
+        schema = json.loads(raw)
     Draft202012Validator.check_schema(schema)
     registry = local_embedding_admission_schema_registry().with_resources(
         (name, Resource.from_contents(value))
@@ -90,6 +114,7 @@ def _validator() -> Draft202012Validator:
                 NATIVE_EMBEDDING_BACKEND_SELECTION_SCHEMA_REF,
                 native_embedding_backend_selection_schema(),
             ),
+            (LOCAL_INDEXING_ROUTED_OWNER_SCHEMA_REF, legacy_schema),
         )
     )
     return Draft202012Validator(schema, registry=registry)
@@ -114,14 +139,61 @@ class LocalIndexingCudaGrant(_RoutedValue):
     native_execution_policy_sha256: Sha256
 
 
+class PublicSolutionCpuIndexingSelection(_RoutedValue):
+    """Nested config6 scope. It neither authenticates a service nor widens config1-5."""
+
+    corpus_id: str = Field(strict=True, pattern=r"^corpus_[0-9a-f]{32}$")
+    namespace: PublicSolutionIndexNamespace
+    recipe: PublicSolutionEmbeddingRecipe
+    source_classes: tuple[Literal["APPROVED_ITEM", "PAST_EXAM"], ...] = Field(
+        min_length=1, max_length=2
+    )
+    service_policy_revision_id: str = Field(strict=True, pattern=r"^accessrev_[0-9a-f]{32}$")
+    service_policy_sha256: Sha256
+    native_execution_policy: ArtifactMemberPointer
+    native_execution_policy_sha256: Sha256
+    runtime_profile: LocalEmbeddingRuntimeProfile
+    database_owner: LocalIndexingOwnerDatabasePin
+    runtime_verifier: LocalIndexingRuntimeVerifierPin
+    cpu_environment_raw_sha256: Sha256
+    owner_environment_raw_sha256: Sha256
+    poll_interval_seconds: int = Field(strict=True, ge=30, le=1800)
+    maximum_targets: int = Field(strict=True, ge=1, le=1024)
+    maximum_sources: int = Field(strict=True, ge=1, le=MAX_PUBLIC_SOLUTION_SOURCES)
+
+    @property
+    def namespaces(self) -> tuple[PublicSolutionIndexNamespace, ...]:
+        return (self.namespace,)
+
+    @model_validator(mode="after")
+    def exact_selection(self) -> Self:
+        if (
+            self.runtime_profile.resource_profile.device != "CPU"
+            or self.source_classes != tuple(sorted(set(self.source_classes)))
+            or self.database_owner.role_name == "eom_catalog_manager_runtime"
+            or self.maximum_targets > self.maximum_sources
+            or self.namespace.space_sha256 != self.runtime_profile.space.space_sha256
+            or self.namespace.recipe_sha256 != self.recipe.recipe_sha256
+        ):
+            raise LocalIndexingOwnerConfigurationError()
+        return self
+
+
+type RoutedCpuIndexingSelection = (
+    CpuLocalIndexingOwnerSelection | PublicSolutionCpuIndexingSelection
+)
+
+
 @dataclass(frozen=True, slots=True)
 class RoutedLocalIndexingGroup:
-    cpu: CpuLocalIndexingOwnerSelection
+    cpu: RoutedCpuIndexingSelection
     cuda_grant: LocalIndexingCudaGrant
 
     def cuda_namespaces(
         self, profile: LocalEmbeddingRuntimeProfile
-    ) -> tuple[EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace, ...]:
+    ) -> tuple[
+        EmbeddingIndexNamespace | MixedEmbeddingIndexNamespace | PublicSolutionIndexNamespace, ...
+    ]:
         """New namespace identities only; never reinterpret a CPU row as CUDA."""
         return tuple(
             type(namespace).model_validate(
@@ -133,7 +205,7 @@ class RoutedLocalIndexingGroup:
 
 class RoutedLocalIndexingOwnerConfiguration(_RoutedValue):
     schema_version: Literal["local-indexing-owner-configuration/5.0"]
-    cpu_configuration: CpuLocalIndexingOwnerSelection
+    cpu_configuration: RoutedCpuIndexingSelection
     cuda_runtime_profile: LocalEmbeddingRuntimeProfile
     cuda_backend: NativeEmbeddingBackendSelection
     cuda_grants: tuple[LocalIndexingCudaGrant, ...] = Field(min_length=1, max_length=2)
@@ -158,7 +230,7 @@ class RoutedLocalIndexingOwnerConfiguration(_RoutedValue):
             raise LocalIndexingOwnerConfigurationError() from None
 
     @property
-    def cpu_groups(self) -> tuple[CpuLocalIndexingOwnerSelection, ...]:
+    def cpu_groups(self) -> tuple[RoutedCpuIndexingSelection, ...]:
         cpu = self.cpu_configuration
         if isinstance(cpu, LocalIndexingMixedOwnerConfiguration) and cpu.legacy_configuration:
             return cpu, cpu.legacy_configuration
@@ -202,15 +274,101 @@ class RoutedLocalIndexingOwnerConfiguration(_RoutedValue):
         return self
 
 
+class PublicSolutionRoutedOwnerConfiguration(RoutedLocalIndexingOwnerConfiguration):
+    # The old schema guard remains closed; this successor shares only pure
+    # device/grant closure and the existing execution composition.
+    schema_version: Literal["local-indexing-owner-configuration/6.0"]  # type: ignore[assignment]
+    cpu_configuration: PublicSolutionCpuIndexingSelection
+    cuda_grants: tuple[LocalIndexingCudaGrant, ...] = Field(min_length=1, max_length=1)
+    legacy_configuration: RoutedLocalIndexingOwnerConfiguration | None
+
+    @model_validator(mode="before")
+    @classmethod
+    def schema_first(cls, value: object) -> Any:
+        try:
+            document = raw_similarity_contract_value(value)
+            if len(canonical_json_bytes(document)) > MAX_LOCAL_INDEXING_OWNER_BYTES:
+                raise LocalIndexingOwnerConfigurationError()
+            _validator(public=True).validate(document)
+            return document
+        except Exception:
+            raise LocalIndexingOwnerConfigurationError() from None
+
+    @model_validator(mode="after")
+    def exact_legacy_runtime(self) -> Self:
+        legacy = self.legacy_configuration
+        if legacy is None:
+            return self
+        cpu, old_cpu = self.cpu_configuration, legacy.cpu_configuration
+        if (
+            self.cuda_runtime_profile != legacy.cuda_runtime_profile
+            or self.cuda_backend != legacy.cuda_backend
+            or self.controller_release != legacy.controller_release
+            or any(
+                getattr(cpu, key) != getattr(old_cpu, key)
+                for key in (
+                    "corpus_id",
+                    "runtime_profile",
+                    "database_owner",
+                    "runtime_verifier",
+                    "cpu_environment_raw_sha256",
+                    "owner_environment_raw_sha256",
+                )
+            )
+        ):
+            raise LocalIndexingOwnerConfigurationError()
+        groups = (*self.groups, *legacy.groups)
+        revisions = [
+            revision
+            for group in groups
+            for revision in (
+                group.cpu.service_policy_revision_id,
+                group.cuda_grant.service_policy_revision_id,
+            )
+        ]
+        hashes = [
+            sha
+            for group in groups
+            for sha in (
+                group.cpu.service_policy_sha256,
+                group.cuda_grant.service_policy_sha256,
+            )
+        ]
+        if len(set(revisions)) != len(revisions) or len(set(hashes)) != len(hashes):
+            raise LocalIndexingOwnerConfigurationError()
+        return self
+
+
+type SupportedRoutedIndexingConfiguration = (
+    RoutedLocalIndexingOwnerConfiguration | PublicSolutionRoutedOwnerConfiguration
+)
+
+
+def validate_supported_routed_indexing_configuration(
+    value: object,
+) -> SupportedRoutedIndexingConfiguration:
+    document = raw_similarity_contract_value(value)
+    if isinstance(document, dict) and document.get("schema_version") == (
+        "local-indexing-owner-configuration/6.0"
+    ):
+        return PublicSolutionRoutedOwnerConfiguration.model_validate(document)
+    return RoutedLocalIndexingOwnerConfiguration.model_validate(document)
+
+
 def local_indexing_routed_owner_configuration_bytes(
-    value: RoutedLocalIndexingOwnerConfiguration,
+    value: SupportedRoutedIndexingConfiguration,
 ) -> bytes:
-    checked = RoutedLocalIndexingOwnerConfiguration.model_validate(value)
+    checked = validate_supported_routed_indexing_configuration(value)
     document = checked.model_dump(mode="json")
     # Preserve the old nested CPU4 absent-field canonical representation too.
-    document["cpu_configuration"] = json.loads(
-        local_indexing_owner_configuration_bytes(checked.cpu_configuration)
-    )
+    if not isinstance(checked.cpu_configuration, PublicSolutionCpuIndexingSelection):
+        document["cpu_configuration"] = json.loads(
+            local_indexing_owner_configuration_bytes(checked.cpu_configuration)
+        )
+    if isinstance(checked, PublicSolutionRoutedOwnerConfiguration) and checked.legacy_configuration:
+        document["legacy_configuration"] = json.loads(
+            local_indexing_routed_owner_configuration_bytes(checked.legacy_configuration)
+        )
     return canonical_json_bytes(document)
 
 
@@ -228,11 +386,25 @@ def parse_local_indexing_routed_owner_configuration(
         raise LocalIndexingOwnerConfigurationError() from None
 
 
+def parse_supported_routed_indexing_configuration(
+    raw: bytes,
+) -> SupportedRoutedIndexingConfiguration:
+    try:
+        if type(raw) is not bytes or not 0 < len(raw) <= MAX_LOCAL_INDEXING_OWNER_BYTES:
+            raise LocalIndexingOwnerConfigurationError()
+        value = validate_supported_routed_indexing_configuration(json.loads(raw))
+        if local_indexing_routed_owner_configuration_bytes(value) != raw:
+            raise LocalIndexingOwnerConfigurationError()
+        return value
+    except Exception:
+        raise LocalIndexingOwnerConfigurationError() from None
+
+
 def require_routed_indexing_policy(
-    configuration: RoutedLocalIndexingOwnerConfiguration, policy: EmbeddingDeviceRoutingPolicy
+    configuration: SupportedRoutedIndexingConfiguration, policy: EmbeddingDeviceRoutingPolicy
 ) -> None:
     """Fresh resolved control comparison, not source permission or allocation authority."""
-    checked = RoutedLocalIndexingOwnerConfiguration.model_validate(configuration)
+    checked = validate_supported_routed_indexing_configuration(configuration)
     policy = EmbeddingDeviceRoutingPolicy.model_validate(policy)
     cpu_backend = policy.cpu.backend.backend
     cpu = checked.cpu_configuration

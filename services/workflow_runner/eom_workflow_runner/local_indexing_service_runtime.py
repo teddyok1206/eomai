@@ -38,8 +38,10 @@ from eom_workflow.local_indexing_owner_configuration import (
     parse_cpu_local_indexing_owner_configuration,
 )
 from eom_workflow.local_indexing_routed_owner_configuration import (
+    PublicSolutionCpuIndexingSelection,
+    PublicSolutionRoutedOwnerConfiguration,
     RoutedLocalIndexingOwnerConfiguration,
-    parse_local_indexing_routed_owner_configuration,
+    parse_supported_routed_indexing_configuration,
 )
 from sqlalchemy import Engine
 
@@ -99,11 +101,11 @@ def parse_indexing_service_configuration(
         if type(raw) is not bytes or not 0 < len(raw) <= MAX_LOCAL_INDEXING_OWNER_BYTES:
             raise LocalIndexingOwnerConfigurationError()
         value = json.loads(raw)
-        if (
-            isinstance(value, dict)
-            and value.get("schema_version") == "local-indexing-owner-configuration/5.0"
-        ):
-            return parse_local_indexing_routed_owner_configuration(raw)
+        if isinstance(value, dict) and value.get("schema_version") in {
+            "local-indexing-owner-configuration/5.0",
+            "local-indexing-owner-configuration/6.0",
+        }:
+            return parse_supported_routed_indexing_configuration(raw)
         return parse_cpu_local_indexing_owner_configuration(raw)
     except Exception:
         raise LocalIndexingOwnerConfigurationError() from None
@@ -159,6 +161,8 @@ def build_local_indexing_service_runtime(
             EmbeddingEncodingReservationStorage.require_protocol(session)
             if isinstance(selection, LocalIndexingMixedOwnerConfiguration):
                 EmbeddingEncodingReservationStorage.require_mixed_ownership_protocol(session)
+            if isinstance(selected, PublicSolutionRoutedOwnerConfiguration):
+                EmbeddingEncodingReservationStorage.require_public_ownership_protocol(session)
         verifier = FixedIndexingRuntimeVerification(selection.runtime_verifier)
         launcher = FixedNativeIndexLauncher(
             selection.cpu_environment_raw_sha256.removeprefix("sha256:"),
@@ -167,19 +171,27 @@ def build_local_indexing_service_runtime(
         )
         launcher.assert_current_runtime()
         if isinstance(selected, RoutedLocalIndexingOwnerConfiguration):
-            routed = build_routed_indexing_sources(
-                engine,
-                publisher,
-                fence,
-                selected,
-                source_commit=pin.runtime_source_commit,
-                settings=catalog_settings,
-            )
+            configurations: tuple[RoutedLocalIndexingOwnerConfiguration, ...] = (selected,)
+            if (
+                isinstance(selected, PublicSolutionRoutedOwnerConfiguration)
+                and selected.legacy_configuration
+            ):
+                configurations = (selected, selected.legacy_configuration)
             routed_namespaces = tuple(
-                RoutedLocalIndexingNamespaceRuntime(pair, selected, launcher, fence)
-                for pair in routed.namespaces
+                RoutedLocalIndexingNamespaceRuntime(pair, configured, launcher, fence)
+                for configured in configurations
+                for pair in build_routed_indexing_sources(
+                    engine,
+                    publisher,
+                    fence,
+                    configured,
+                    source_commit=pin.runtime_source_commit,
+                    settings=catalog_settings,
+                ).namespaces
             )
             return LocalIndexingServiceRuntime(engine, routed_namespaces, selected)
+        if isinstance(selection, PublicSolutionCpuIndexingSelection):
+            raise ValueError("LOCAL_INDEXING_SERVICE_ROUTED_CONFIGURATION_REQUIRED")
         selections: tuple[CpuLocalIndexingOwnerSelection, ...] = (selection,)
         if (
             isinstance(selection, LocalIndexingMixedOwnerConfiguration)

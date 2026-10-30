@@ -10,6 +10,7 @@ from eom_workflow.local_indexing_owner_configuration import (
     parse_cpu_local_indexing_owner_configuration,
 )
 from eom_workflow.local_indexing_routed_owner_configuration import (
+    PublicSolutionRoutedOwnerConfiguration,
     RoutedLocalIndexingOwnerConfiguration,
     local_indexing_routed_owner_configuration_bytes,
 )
@@ -17,6 +18,7 @@ from eom_workflow_runner import local_indexing_service_runtime as runtime
 
 from tests.unit.test_local_indexing_dual_projection_owner import compose
 from tests.unit.test_local_indexing_routed_owner_configuration import routed_document
+from tests.unit.test_public_solution_indexing_owner import public_owner_with_legacy
 
 
 def test_only_executable_dispatcher_explicitly_accepts_routed5_and_preserves_poll_cadence():
@@ -76,4 +78,41 @@ def test_routed_source_denial_disposes_runtime_without_falling_back_to_cpu_disco
         runtime.build_local_indexing_service_runtime(case.capture, case.pin)
     case.engine.dispose.assert_called_once()
     namespace.assert_not_called()
+    assert case.owners == []
+
+
+def test_public_runtime_preserves_six_legacy_namespaces_with_separate_recipe_pins(monkeypatch):
+    case = compose(monkeypatch)
+    selected = PublicSolutionRoutedOwnerConfiguration.model_validate(public_owner_with_legacy())
+    monkeypatch.setattr(
+        AuthenticatedLocalIndexingRuntime,
+        "read_owner_configuration",
+        lambda _self: local_indexing_routed_owner_configuration_bytes(selected),
+    )
+    sources = Mock(
+        side_effect=[
+            SimpleNamespace(namespaces=(SimpleNamespace(namespace="public"),)),
+            SimpleNamespace(namespaces=tuple(SimpleNamespace(namespace=i) for i in range(6))),
+        ]
+    )
+    namespace = Mock(side_effect=lambda pair, *_args: pair)
+    public_protocol = Mock()
+    monkeypatch.setattr(runtime, "build_routed_indexing_sources", sources)
+    monkeypatch.setattr(runtime, "RoutedLocalIndexingNamespaceRuntime", namespace)
+    monkeypatch.setattr(
+        runtime.EmbeddingEncodingReservationStorage,
+        "require_public_ownership_protocol",
+        public_protocol,
+    )
+    value = runtime.build_local_indexing_service_runtime(case.capture, case.pin)
+    assert len(value.namespaces) == 7
+    assert value.configuration == selected
+    assert sources.call_count == 2 and namespace.call_count == 7
+    assert sources.call_args_list[0].args[3] == selected
+    assert sources.call_args_list[1].args[3] == selected.legacy_configuration
+    assert namespace.call_args_list[0].args[1] == selected
+    assert all(
+        call.args[1] == selected.legacy_configuration for call in namespace.call_args_list[1:]
+    )
+    public_protocol.assert_called_once()
     assert case.owners == []

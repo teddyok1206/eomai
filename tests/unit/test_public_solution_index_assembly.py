@@ -28,7 +28,7 @@ from tests.unit.inference_transfer_fixtures import NOW
 from tests.unit.test_public_solution_encoding import public_entry
 
 
-def setup(*, different_text=False):
+def setup(*, different_text=False, device="CPU"):
     first = public_entry()
     value = public_entry(
         creative=True, text="다른 과학 풀이" if different_text else first.public_solution.text
@@ -40,7 +40,7 @@ def setup(*, different_text=False):
     )
     second = PublicSolutionEmbeddingEntry.model_validate(value)
     entries = tuple(sorted((first, second), key=lambda entry: entry.source.item_revision_id))
-    space = embedding_space()
+    space = embedding_space(device=device)
     namespace = PublicSolutionIndexNamespace(
         storage_partition="public-solution",
         space_sha256=space.space_sha256,

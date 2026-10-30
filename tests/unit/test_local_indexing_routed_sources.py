@@ -7,6 +7,7 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
+from eom_catalog_contracts.public_solution_indexing_policy import PublicSolutionIndexingAccessPolicy
 from eom_catalog_service.embedding_registry_catalog_adapter import CatalogEmbeddingRegistryVerifier
 from eom_catalog_service.local_indexing_source_authority import CatalogLocalIndexingSourceAuthority
 from eom_catalog_service.settings import CatalogSettings
@@ -22,6 +23,7 @@ from eom_orchestrator.local_embedding_control_artifacts import (
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingServiceExecutionPolicy
 from eom_workflow.local_indexing_routed_owner_configuration import (
     RoutedLocalIndexingOwnerConfiguration,
+    validate_supported_routed_indexing_configuration,
 )
 from eom_workflow_runner.local_embedding_owner_admission import CatalogLocalEmbeddingOwnerAdmission
 from eom_workflow_runner.local_indexing_routed_sources import (
@@ -33,6 +35,7 @@ from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.local_embedding_service_fixtures import service_fixture
 from tests.unit.test_control_file_set_publication import _publisher
 from tests.unit.test_local_indexing_routed_owner_configuration import routed_document
+from tests.unit.test_public_solution_indexing_owner import public_owner_document
 
 
 @pytest.fixture
@@ -42,7 +45,8 @@ def routed_publisher(tmp_path):
 
 @pytest.fixture
 def routed(tmp_path, monkeypatch, request, routed_publisher):
-    body, policy = routed_document()
+    public = getattr(request, "param", None) == "public"
+    body, policy = public_owner_document() if public else routed_document()
     publisher, engine = routed_publisher
     publisher.settings = replace(publisher.settings, workspace_root=tmp_path)
     cohort = uuid4().hex
@@ -100,7 +104,8 @@ def routed(tmp_path, monkeypatch, request, routed_publisher):
         destination["native_execution_policy_sha256"] = native.policy_sha256
         ns = deepcopy(body["cpu_configuration"]["namespace"])
         ns["space_sha256"] = selected_profile.space.space_sha256
-        grant = type(base.grant).model_validate(
+        grant_type = PublicSolutionIndexingAccessPolicy if public else type(base.grant)
+        grant = grant_type.model_validate(
             seal(
                 base.grant.model_dump(mode="json")
                 | dict(
@@ -112,6 +117,17 @@ def routed(tmp_path, monkeypatch, request, routed_publisher):
                     recipe=body["cpu_configuration"]["recipe"],
                     native_execution_policy_sha256=native.policy_sha256,
                     resource_profile_sha256=selected_profile.resource_profile.resource_profile_sha256,
+                    **(
+                        {
+                            "schema_version": "education-retrieval-access-policy/1.4",
+                            "maximum_sources": body["cpu_configuration"]["maximum_sources"],
+                            "maximum_page_sources": 1024,
+                            "answer_bearing_use": "VERIFIABLE_PUBLIC_SOLUTION_ONLY",
+                            "source_classes": body["cpu_configuration"]["source_classes"],
+                        }
+                        if public
+                        else {}
+                    ),
                     **(
                         {
                             "source_access_policy_revision_id": "accessrev_" + "e" * 32,
@@ -173,7 +189,7 @@ def routed(tmp_path, monkeypatch, request, routed_publisher):
     body["cuda_grants"][0]["cpu_service_policy_revision_id"] = body["cpu_configuration"][
         "service_policy_revision_id"
     ]
-    selected = RoutedLocalIndexingOwnerConfiguration.model_validate(body)
+    selected = validate_supported_routed_indexing_configuration(body)
     settings = CatalogSettings(nas_artifact_root=publisher.settings.nas_artifact_root)
 
     def build(configuration=selected):

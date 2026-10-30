@@ -50,6 +50,7 @@ def allocate(value, candidate):
         ).allocate(session, candidate.allocation)
 
 
+@pytest.mark.parametrize("routed", [None, "public"], indirect=True)
 def test_concurrent_original_parent_preparation_and_allocation_have_one_identity_and_dispatch_owner(
     parent_case,
 ):
@@ -71,6 +72,7 @@ def test_concurrent_original_parent_preparation_and_allocation_have_one_identity
     assert allocations[0][0].allocation in tuple(c.allocation for c in candidates)
 
 
+@pytest.mark.parametrize("routed", [None, "public"], indirect=True)
 def test_interruption_after_original_allocation_preserves_history_without_another_root(
     parent_case, monkeypatch
 ):
@@ -92,6 +94,7 @@ def test_interruption_after_original_allocation_preserves_history_without_anothe
     assert not created and again == history
 
 
+@pytest.mark.parametrize("routed", [None, "public"], indirect=True)
 def test_metadata_release_change_replays_exact_original_parent_without_new_allocation(parent_case):
     value = parent_case
     original = prepare(value)
