@@ -79,7 +79,12 @@
 - guarded disposable PostgreSQL의 parent·plan store·routed/fallback/recovery **83 PASS**.
   이 중 public/legacy parent concurrent creation·allocation 후 중단·release 변경 replay 6개는
   같은 저장 identity와 물리 실행 중복 방지를 확인했다.
+- 별도 전체 model-free embedding persistence **151 PASS**. 기존 Artifact/registry/권한 경계와
+  public native 등록·수치 완료 후 중단·등록 후 중단 복구를 다시 확인했다. 이 검사는
+  임시 DB에서 477초가 걸렸으며 실제 모델 추론 시간이나 운영 처리량이 아니다.
 - 변경 core 11개 mypy PASS, 변경 Python 20개 Ruff/format PASS, diff whitespace PASS.
+- source `58a83bb394b318f9aeb212bff211d2cddfb43db2` commit/push 및 build-only PASS.
+  wheel RECORD와 비편집 설치본 simulation을 통과했다. wheel은 빌드 후보이며 운영 설치 아님.
 
 DB 검사는 실제 임시 PostgreSQL과 실제 control Artifact IO를 사용하나 IAM/source/runtime
 일부는 명시적인 합성 seam이다. **모델·실제 GPU·운영 검색 성공 증거는 아니다.**
