@@ -138,6 +138,36 @@ source 권한·실제 벡터 등록 성공 증거는 아니다. metadata 정책 
 namespace 순서로 유지하도록 운영 adapter를 정리했고, 후보 검증 전에 NAS controls를
 발행하지 않았다.
 
+### 후속 운영 준비 결과 — c868a15c, 아직 미활성
+
+- 수정 source `c868a15c155cf08669a35a0ee2b6ef645b366ed6` commit/push 및 clean API/platform
+  build/RECORD/source-free simulation PASS. 같은 source의 protected owner wheel stage PASS.
+  원래 CPU/CUDA numerical prefix는 설치·교체하지 않았다.
+- 실제 read-only preflight에서 현재 INDEX service revision에 CPU PENDING Workflow 1개를
+  확인했다. pending을 FAILED/성공으로 바꾸지 않았으며 실행 owner를 임의로 중단하지 않았다.
+  underlying source policy가 APPROVED_ITEM/PAST_EXAM을 허용함도 정확한 revision/hash로 확인했다.
+- `/var/lib/eom-public-solution-release-c868a15c/index-plan.json`에 successor identity·rollback
+  원본 hash·runtime·기존 6개 namespace·새 1개 namespace를 준비했다. 현재 service identity는
+  아직 바꾸지 않았다. `896c5966` 준비 기록은 미활성 predecessor로 보존한다.
+- 공식 Orchestrator `LocalEmbeddingControlArtifactPublisher`로 새 routing/native control
+  Artifact 발행을 마쳤다. `candidate-owner.json`/`candidate-grants.json`이 생성됐지만 **source
+  access grant의 DB publication, service 활성화, systemd 선택은 하지 않았다**. 실제 모델 호출 0.
+  root의 `public-index-policy.json`과 opt-in 환경 hash도 아직 운영 선택 파일이 아니다.
+- 기존 INDEX PID 2113256, QUERY PID 3364368, 창작 owner PID 3418846은 유지했다. 따라서 이
+  checkpoint를 창작 벡터 등록·공식 검색 성공으로 확대 해석하면 안 된다.
+
+실제 로그: `/tmp/eom-public-root-policy-final-20261030-2.log`,
+`/tmp/eom-public-root-cohost-compatibility-20261030-2.log`,
+`/tmp/eom-public-index-composition-successor-20261030.log`,
+`/tmp/eom-public-root-policy-build-c868a15c-20261030.log`,
+`/tmp/eom-public-owner-install-c868a15c-20261030.log`,
+`/tmp/eom-public-index-prepare-c868a15c-20261030.log`,
+`/tmp/eom-public-index-publish-c868a15c-20261030.log`。
+
+남은 실제 실행은 public QUERY의 native definition2/policy·공통 recipe 선택 준비, 현재 pending
+작업을 보존한 quiescent INDEX/QUERY 활성화, API/Web compatible rollout, 고정 창작 5건의
+encoding/Registry/search/replay·backlog/future 자동 처리다. 목표는 계속 ACTIVE다.
+
 ## 22:01 UTC 체크포인트 — 세 슬롯 복구와 public QUERY 공식 조회 연결
 
 목표 상태는 **ACTIVE / 미완료**다. 사용자 확정 세 단계와 기존 창작 5건의 실제 수치·등록·
