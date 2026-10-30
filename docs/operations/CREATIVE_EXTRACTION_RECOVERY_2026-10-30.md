@@ -43,3 +43,23 @@ unit 523개 PASS, core 3개 mypy 및 Ruff/format PASS다. 새 테스트 fixture�
 owner를 재개했으며 현재는 기존 완료 문항의 정본 검증으로 cursor를 복원 중이다.
 이는 새 지침 후보의 운영 배포 증거가 아니며, 원래 거부된 결과를 승격하지 않는
 명시적 재추출이다. 추가 5건의 끝단 증거는 완료 후 기록한다.
+
+추가로 같은 guarded DB의 recovery 저장소 사례만 별도 실행해 **6 PASS**를 확인했다.
+이전 전체 suite의 capacity key fixture 충돌은 그대로 기록하며 운영 오류로 해석하지
+않는다. 지침 후보 `c6dabde85233938758470399e4f5c8fdbeede85d`는 main에 push했고,
+정식 build-only의 wheel RECORD와 비편집 설치본 검증도 PASS다. 공유 API/Runner,
+production migration 0063 또는 공개 풀이 임베딩 successor를 이 복구 때문에
+묵시적으로 활성화하지 않는다.
+
+02:22 UTC 기존 완료 54개가 같은 Item/분석으로 재검증된 후, 10369의 후속 추출이
+slot05에서 시작됐다. Job `job_26b8f7e4386f4b9da0a1d4c6b7379e4f`는 RUNNING이며 실제
+ACTIVE lease 1개를 확인했다. 아직 등록 성공 증거가 아니다. 재개 owner invocation은
+`f5ce519df5d44d44b531a0296631b152`다.
+
+추가 5개는 부모 cohort의 기존 순서에서 **10369, 10370, 10371, 10372, 10374**다.
+10373을 실패 후 임의로 건너뛴 것이 아니라 원래 frozen target set의 다음 5개다.
+고정 대상 집합·원래 owner·source/정책 pin은 유지한다. 완료 시 이 다섯의 source/
+canonical/accepted analysis/Graph/공식 공개 풀이 pointer와 hash를 대조하고,
+재개 전 Graph `graphrev_a7a5f84bf68b2b860748797d868a1ffb`의 모든 source/accepted-result
+참조가 보존됨을 추가 확인한다. 기존 readonly acceptance를 재사용하는 bounded helper는
+검증되지 않은 status 숫자만으로 PASS를 만들지 않는다.
