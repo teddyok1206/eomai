@@ -141,3 +141,71 @@ def test_registered_source_is_reauthorized_and_reused_without_new_extraction(mon
     case.service.registration.register_completed.assert_not_called()
     case.start.assert_not_called()
     case.service.read.resolve.assert_called_once()
+
+
+def test_pending_first_is_a_stable_hint_and_never_omits_targets():
+    target = CreativeLearningCohort.model_validate(cohort_value()).targets[0]
+    targets = tuple(
+        target.model_copy(update={"source_id": "extitem_" + f"{i:032x}"}) for i in range(6)
+    )
+    published = frozenset(
+        execution.creative_registration_key(targets[i].source_id) for i in (0, 2, 4)
+    )
+    ordered = execution.pending_first_targets(targets, published)
+    assert ordered == tuple(targets[i] for i in (1, 3, 5, 0, 2, 4))
+    assert len(ordered) == len(targets) and set(t.source_id for t in ordered) == set(
+        t.source_id for t in targets
+    )
+    assert execution.pending_first_targets(targets, frozenset()) == targets
+    assert execution.pending_first_targets((), published) == ()
+
+
+def test_pending_first_does_one_membership_lookup_per_target_at_large_scale():
+    target = CreativeLearningCohort.model_validate(cohort_value()).targets[0]
+    targets = tuple(
+        target.model_copy(update={"source_id": "extitem_" + f"{i:032x}"}) for i in range(20_000)
+    )
+
+    class CountingSet(frozenset):
+        checks = 0
+
+        def __contains__(self, key):
+            self.checks += 1
+            return super().__contains__(key)
+
+    published = CountingSet(execution.creative_registration_key(t.source_id) for t in targets[::2])
+    assert len(execution.pending_first_targets(targets, published)) == len(targets)
+    assert published.checks == len(targets)
+
+
+def test_pending_hint_reads_one_pinned_graph_and_one_bounded_query(monkeypatch):
+    case = execution_case(monkeypatch)
+    publication = NS(
+        current_structure_context=Mock(
+            return_value=NS(graph_snapshot_revision_id="graphrev_" + "7" * 32)
+        )
+    )
+    case.service.learning.publication = publication
+    session = NS(
+        scalars=Mock(
+            return_value=[
+                None,
+                execution.creative_registration_key(case.service.targets[0].source_id),
+            ]
+        )
+    )
+    case.service.sessions = lambda: nullcontext(session)
+    result = case.service.pending_first_targets()
+    assert len(result) == len(case.service.targets)
+    publication.current_structure_context.assert_called_once_with(
+        execution.INTEGRATED_SCIENCE_CORPUS_KEY
+    )
+    session.scalars.assert_called_once()
+    statement = session.scalars.call_args.args[0]
+    parameters = statement.compile().params
+    assert "graphrev_" + "7" * 32 in parameters.values()
+    assert "ACCEPTED" in parameters.values() and "APPROVED_ITEM" in parameters.values()
+    assert tuple(
+        execution.creative_registration_key(t.source_id) for t in case.service.targets
+    ) in tuple(tuple(v) for v in parameters.values() if isinstance(v, (tuple, list)))
+    case.service.read.resolve.assert_not_called()  # a scheduling hint is never completion evidence

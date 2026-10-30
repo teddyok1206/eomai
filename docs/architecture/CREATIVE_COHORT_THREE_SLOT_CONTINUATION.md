@@ -162,3 +162,39 @@ Candidate capacity schema 1.4 SHA is
 The earlier unactivated candidate pool name was simplified before operating release; no
 new resolved plan 29 or another analysis plan family is introduced. Both root launcher and
 developer boundary now test exact parity with the closed 0064 callback enum.
+
+## Restart scheduling: unfinished sources first, not historical re-verification first
+
+Operating evidence showed the new owner spending minutes materializing already-published
+reports while no fresh worker could start (only nine historical sources checked after
+roughly two minutes). Full-cohort scheduling therefore uses one existing Graph-owner
+snapshot resolution and one indexed Item/accepted-analysis/snapshot-membership join as a
+**priority hint**. A set and stable O(N) partition put unfinished targets first. The original
+cohort tuple, target-set hash, seed, source pointers and order within each partition remain
+unchanged. Short canaries retain their original target order and count.
+
+This projection cannot mark a source complete, skip a target, grant access, trust status
+JSON or create a new request. All targets still pass the same source/Workflow/report/Graph
+and official report-read checks before VERIFIED. A stale/false-positive hint only delays
+that target; authoritative validation remains at execution. The projection is ephemeral,
+not a cache/table/queue, and is recomputed from one pinned Graph on restart. This removes
+the O(completed × Graph materialization) delay **before** the first unfinished worker
+submission; historical acceptance remains verifiable rather than being reinterpreted.
+
+## Three queue consumers for three bounded physical workers
+
+Operating observation found one synchronous Workflow command consumer waiting for a
+long-running worker while other admitted source commands could not be submitted. Capacity
+three alone is not parallel execution. Extend the existing fixed runner scale-out manager
+to at most two accelerator units (three consumers including the canonical runner), not a
+threaded executor or another queue. Both consume the same indexed command claims; existing
+command lease, Job idempotency and physical worker lease uniqueness remain authoritative.
+
+Each runtime unit retains the exact canonical fragment and only its reviewed optional
+similarity-read drop-in. No credentials, user, sandbox, worker protocol, DB schema or capacity
+ceiling changes. The manager verifies the closed two-name set, exact root-owned files,
+distinct healthy PIDs and inherited configuration. Deployment rejects either staged
+accelerator, including an inactive orphan. Stop removes only exact reviewed runtime files;
+durable Jobs/history survive. Complexity and memory are bounded to two additional consumers.
+One consumer plus a larger capacity cannot remove the blocking command call, while a new
+executor framework would duplicate the already tested cross-process claim mechanism.

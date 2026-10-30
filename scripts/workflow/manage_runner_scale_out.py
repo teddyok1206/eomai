@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Materialize or remove one exact bounded Workflow-runner accelerator."""
+"""Materialize at most two exact accelerators over the existing command queue."""
 
 from __future__ import annotations
 
@@ -19,6 +19,17 @@ BASE_UNIT_NAME = "eom-workflow-runner.service"
 ACCELERATOR_UNIT_NAME = "eom-workflow-runner-accelerator.service"
 BASE_UNIT_PATH = Path("/etc/systemd/system/eom-workflow-runner.service")
 ACCELERATOR_UNIT_PATH = Path("/run/systemd/system/eom-workflow-runner-accelerator.service")
+ACCELERATORS = (
+    (ACCELERATOR_UNIT_NAME, ACCELERATOR_UNIT_PATH),
+    (
+        "eom-workflow-runner-accelerator-2.service",
+        Path("/run/systemd/system/eom-workflow-runner-accelerator-2.service"),
+    ),
+)
+SIMILARITY_DROP_IN = Path(
+    "/etc/systemd/system/eom-workflow-runner.service.d/40-eom-similarity.conf"
+)
+SIMILARITY_DROP_IN_BYTES = b"[Service]\nEnvironment=EOM_WORKFLOW_SIMILARITY_READ_MODE=ENABLED\n"
 SYSTEMCTL = Path("/usr/bin/systemctl")
 EXPECTED_UNIT_SHA256 = "sha256:ac81b5650aa3bf0a1560df3e6f61f3c7b7dc246c35e278fc4cabedfabf3d6fe4"
 MAX_UNIT_BYTES = 65_536
@@ -377,7 +388,7 @@ def _require_base(properties: dict[str, str]) -> None:
     if (
         properties["LoadState"] != "loaded"
         or properties["FragmentPath"] != str(BASE_UNIT_PATH)
-        or properties["DropInPaths"]
+        or properties["DropInPaths"] != _expected_drop_in(BASE_UNIT_PATH)
         or properties["User"] != "eom-workflow-runner"
         or properties["Group"] != "eom"
         or properties["ActiveState"] != "active"
@@ -389,11 +400,13 @@ def _require_base(properties: dict[str, str]) -> None:
         raise ScaleOutError("Canonical Workflow runner service is not exact and healthy")
 
 
-def _require_accelerator(properties: dict[str, str], *, base_pid: int) -> None:
+def _require_accelerator(
+    properties: dict[str, str], *, base_pid: int, path: Path = ACCELERATOR_UNIT_PATH
+) -> None:
     if (
         properties["LoadState"] != "loaded"
-        or properties["FragmentPath"] != str(ACCELERATOR_UNIT_PATH)
-        or properties["DropInPaths"]
+        or properties["FragmentPath"] != str(path)
+        or properties["DropInPaths"] != _expected_drop_in(path)
         or properties["User"] != "eom-workflow-runner"
         or properties["Group"] != "eom"
         or properties["ActiveState"] != "active"
@@ -406,11 +419,13 @@ def _require_accelerator(properties: dict[str, str], *, base_pid: int) -> None:
         raise ScaleOutError("Workflow runner accelerator is not exact and healthy")
 
 
-def _require_staged_accelerator(properties: dict[str, str]) -> None:
+def _require_staged_accelerator(
+    properties: dict[str, str], *, path: Path = ACCELERATOR_UNIT_PATH
+) -> None:
     if (
         properties["LoadState"] != "loaded"
-        or properties["FragmentPath"] != str(ACCELERATOR_UNIT_PATH)
-        or properties["DropInPaths"]
+        or properties["FragmentPath"] != str(path)
+        or properties["DropInPaths"] != _expected_drop_in(path)
         or properties["User"] != "eom-workflow-runner"
         or properties["Group"] != "eom"
         or properties["ActiveState"] != "inactive"
@@ -422,103 +437,162 @@ def _require_staged_accelerator(properties: dict[str, str]) -> None:
         raise ScaleOutError("Staged Workflow runner accelerator is not exact and inactive")
 
 
+def _expected_drop_in(path: Path) -> str:
+    """Only the already reviewed, nonsecret similarity read flag may be inherited."""
+    if not SIMILARITY_DROP_IN.exists() and not SIMILARITY_DROP_IN.is_symlink():
+        target = Path(str(path) + ".d") / SIMILARITY_DROP_IN.name
+        if path != BASE_UNIT_PATH and (target.exists() or target.is_symlink()):
+            raise ScaleOutError("Orphan Workflow runner drop-in")
+        return ""
+    source = read_safe_unit(SIMILARITY_DROP_IN)
+    if source.content != SIMILARITY_DROP_IN_BYTES:
+        raise ScaleOutError("Canonical Workflow runner drop-in differs")
+    target = (
+        SIMILARITY_DROP_IN
+        if path == BASE_UNIT_PATH
+        else Path(str(path) + ".d") / SIMILARITY_DROP_IN.name
+    )
+    if read_safe_unit(target).content != source.content:
+        raise ScaleOutError("Workflow runner drop-in differs")
+    return str(target)
+
+
+def _publish_drop_in(path: Path) -> None:
+    if not SIMILARITY_DROP_IN.exists() and not SIMILARITY_DROP_IN.is_symlink():
+        return
+    source = read_safe_unit(SIMILARITY_DROP_IN)
+    if source.content != SIMILARITY_DROP_IN_BYTES:
+        raise ScaleOutError("Canonical Workflow runner drop-in differs")
+    directory = Path(str(path) + ".d")
+    try:
+        directory.mkdir(mode=0o755)
+        directory.chmod(0o755)  # do not inherit an operator's restrictive umask
+    except FileExistsError:
+        pass
+    _validate_runtime_directory(directory)
+    if any(entry.name != SIMILARITY_DROP_IN.name for entry in directory.iterdir()):
+        raise ScaleOutError("Foreign Workflow runner drop-in")
+    publish_runtime_unit(
+        SIMILARITY_DROP_IN, directory / SIMILARITY_DROP_IN.name, expected_sha256=source.sha256
+    )
+
+
 def _status() -> dict[str, object]:
     base_value = read_safe_unit(BASE_UNIT_PATH)
     if base_value.sha256 != EXPECTED_UNIT_SHA256:
         raise ScaleOutError("Installed canonical Workflow runner unit hash mismatch")
     base = _unit_properties(BASE_UNIT_NAME)
     _require_base(base)
-    target_present = ACCELERATOR_UNIT_PATH.exists() or ACCELERATOR_UNIT_PATH.is_symlink()
-    accelerator = _unit_properties(ACCELERATOR_UNIT_NAME)
-    if target_present:
-        target_value = read_safe_unit(ACCELERATOR_UNIT_PATH)
-        if target_value.sha256 != EXPECTED_UNIT_SHA256:
+    accelerators = []
+    pids = {int(base["MainPID"])}
+    for name, path in ACCELERATORS:
+        target_present = path.exists() or path.is_symlink()
+        accelerator = _unit_properties(name)
+        if target_present and read_safe_unit(path).sha256 != EXPECTED_UNIT_SHA256:
             raise ScaleOutError("Installed Workflow runner accelerator unit hash mismatch")
-    if accelerator["LoadState"] == "loaded":
-        if accelerator["ActiveState"] == "active":
-            _require_accelerator(accelerator, base_pid=int(base["MainPID"]))
-            state = "ACTIVE"
-        elif target_present:
-            _require_staged_accelerator(accelerator)
-            state = "STAGED"
+        if accelerator["LoadState"] == "loaded":
+            if accelerator["ActiveState"] == "active":
+                _require_accelerator(accelerator, base_pid=int(base["MainPID"]), path=path)
+                pid = int(accelerator["MainPID"])
+                if pid in pids:
+                    raise ScaleOutError("Workflow runner PID is duplicated")
+                pids.add(pid)
+                state = "ACTIVE"
+            elif target_present:
+                _require_staged_accelerator(accelerator, path=path)
+                state = "STAGED"
+            else:
+                raise ScaleOutError("Loaded Workflow runner accelerator has no exact unit file")
+        elif accelerator["LoadState"] == "not-found" and accelerator["ActiveState"] == "inactive":
+            state = "STAGED_UNLOADED" if target_present else "ABSENT"
         else:
-            raise ScaleOutError("Loaded Workflow runner accelerator has no exact unit file")
-    elif (
-        accelerator["LoadState"] == "not-found"
-        and accelerator["ActiveState"] == "inactive"
-        and not target_present
-    ):
-        state = "ABSENT"
-    elif (
-        accelerator["LoadState"] == "not-found"
-        and accelerator["ActiveState"] == "inactive"
-        and target_present
-    ):
-        state = "STAGED_UNLOADED"
-    else:
-        raise ScaleOutError("Workflow runner accelerator state is not bounded")
+            raise ScaleOutError("Workflow runner accelerator state is not bounded")
+        accelerators.append(
+            {"name": name, "state": state, "pid": int(accelerator["MainPID"] or "0")}
+        )
     active_transients = _active_transient_units()
-    expected_transients = frozenset({ACCELERATOR_UNIT_NAME}) if state == "ACTIVE" else frozenset()
+    expected_transients = frozenset(
+        entry["name"] for entry in accelerators if entry["state"] == "ACTIVE"
+    )
     if active_transients != expected_transients:
         raise ScaleOutError("Foreign or missing active Workflow runner transient unit")
     return {
-        "status": state,
+        "status": "ACTIVE"
+        if expected_transients
+        else "STAGED"
+        if any(entry["state"] != "ABSENT" for entry in accelerators)
+        else "ABSENT",
         "base_unit_sha256": base_value.sha256,
         "base_main_pid": int(base["MainPID"]),
-        "accelerator_main_pid": (int(accelerator["MainPID"]) if accelerator["MainPID"] else 0),
+        "accelerator_main_pid": accelerators[0]["pid"],
+        "accelerators": accelerators,
         "active_transient_units": sorted(active_transients),
     }
 
 
-def _start() -> dict[str, object]:
+def _start(*, workers: int = 2) -> dict[str, object]:
     if os.geteuid() != 0:
         raise ScaleOutError("Scale-out mutation requires root")
     before = _status()
-    if before["status"] == "ACTIVE":
+    if workers not in (2, 3):
+        raise ScaleOutError("Workflow runner count is outside the bound")
+    required = frozenset(name for name, _ in ACCELERATORS[: workers - 1])
+    if frozenset(before["active_transient_units"]) == required:
         return before | {"action": "ADOPTED_ACTIVE"}
-    publication = publish_runtime_unit(
-        BASE_UNIT_PATH,
-        ACCELERATOR_UNIT_PATH,
-        expected_sha256=EXPECTED_UNIT_SHA256,
-    )
+    if not frozenset(before["active_transient_units"]).issubset(required):
+        raise ScaleOutError("Stop excess accelerators before reducing capacity")
+    for _name, path in ACCELERATORS[: workers - 1]:
+        publish_runtime_unit(BASE_UNIT_PATH, path, expected_sha256=EXPECTED_UNIT_SHA256)
+        _publish_drop_in(path)
     _systemctl("daemon-reload")
-    _systemctl("start", ACCELERATOR_UNIT_NAME)
+    for name, _path in ACCELERATORS[: workers - 1]:
+        _systemctl("start", name)
     after = _status()
-    if after["status"] != "ACTIVE":
+    if frozenset(after["active_transient_units"]) != required:
         raise ScaleOutError("Workflow runner accelerator did not become active")
-    return after | {"action": publication}
+    return after | {"action": "STARTED", "workers": workers}
 
 
 def _stop() -> dict[str, object]:
     if os.geteuid() != 0:
         raise ScaleOutError("Scale-out mutation requires root")
-    accelerator = _unit_properties(ACCELERATOR_UNIT_NAME)
-    if accelerator["LoadState"] == "loaded" and accelerator["ActiveState"] != "inactive":
-        _systemctl("stop", ACCELERATOR_UNIT_NAME)
-    stopped = _unit_properties(ACCELERATOR_UNIT_NAME)
-    if stopped["ActiveState"] != "inactive" or int(stopped["MainPID"] or "0") != 0:
-        raise ScaleOutError("Workflow runner accelerator did not stop cleanly")
-    removal = remove_runtime_unit(
-        BASE_UNIT_PATH,
-        ACCELERATOR_UNIT_PATH,
-        expected_sha256=EXPECTED_UNIT_SHA256,
-    )
+    _status()  # validate identities before any stop or removal
+    for name, path in reversed(ACCELERATORS):
+        accelerator = _unit_properties(name)
+        if accelerator["LoadState"] == "loaded" and accelerator["ActiveState"] != "inactive":
+            _systemctl("stop", name)
+        stopped = _unit_properties(name)
+        if stopped["ActiveState"] != "inactive" or int(stopped["MainPID"] or "0") != 0:
+            raise ScaleOutError("Workflow runner accelerator did not stop cleanly")
+        directory = Path(str(path) + ".d")
+        if directory.exists() or directory.is_symlink():
+            _validate_runtime_directory(directory)
+            if any(entry.name != SIMILARITY_DROP_IN.name for entry in directory.iterdir()):
+                raise ScaleOutError("Foreign Workflow runner drop-in")
+            remove_runtime_unit(
+                SIMILARITY_DROP_IN,
+                directory / SIMILARITY_DROP_IN.name,
+                expected_sha256=_sha256(SIMILARITY_DROP_IN_BYTES),
+            )
+            directory.rmdir()
+        remove_runtime_unit(BASE_UNIT_PATH, path, expected_sha256=EXPECTED_UNIT_SHA256)
     _systemctl("daemon-reload")
     after = _status()
     if after["status"] != "ABSENT":
         raise ScaleOutError("Workflow runner accelerator removal is incomplete")
-    return after | {"action": removal}
+    return after | {"action": "REMOVED"}
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="manage-runner-scale-out")
     parser.add_argument("action", choices=("status", "start", "stop"))
+    parser.add_argument("--workers", type=int, choices=(2, 3), default=2)
     arguments = parser.parse_args()
     try:
         result = (
             _status()
             if arguments.action == "status"
-            else _start()
+            else _start(workers=arguments.workers)
             if arguments.action == "start"
             else _stop()
         )

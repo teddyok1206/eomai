@@ -19,7 +19,10 @@ from eom_orchestrator.external_item_learning_execution import (
 from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.models import ArtifactManifest
-from eom_workflow.creative_learning_profile import creative_learning_profile
+from eom_workflow.creative_learning_profile import (
+    creative_learning_profile,
+    creative_learning_profile_for_preset,
+)
 from eom_workflow.models import (
     ExternalItemLearningRoleResult,
     ExternalItemLearningRoleResultV2,
@@ -94,6 +97,12 @@ def resolve_completed_creative_learning_proposal(
     ):
         raise CreativeLearningProposalError("CREATIVE_LEARNING_PROPOSAL_NOT_COMPLETED")
     initial = load_persisted_workflow_request(workflow.initial_request)
+    try:
+        profile = creative_learning_profile_for_preset(
+            workflow.definition_version, initial.execution_preset_key or ""
+        )
+    except ValueError as exc:
+        raise CreativeLearningProposalError("CREATIVE_LEARNING_INPUT_MISMATCH") from exc
     request = initial.worker_request()
     if (
         initial != load_persisted_workflow_request(workflow.request_payload)

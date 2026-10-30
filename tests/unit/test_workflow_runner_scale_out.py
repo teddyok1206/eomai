@@ -19,6 +19,7 @@ def _load() -> ModuleType:
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
+    module.SIMILARITY_DROP_IN = Path("/nonexistent-eom-test/40-eom-similarity.conf")
     return module
 
 
@@ -113,8 +114,9 @@ def test_scale_out_script_pins_deployment_fenced_unit_family() -> None:
     assert module._sha256(canonical_unit) == module.EXPECTED_UNIT_SHA256
     assert "os.link(temporary, target, follow_symlinks=False)" in source
     assert '_systemctl("daemon-reload")' in source
-    assert '_systemctl("start", ACCELERATOR_UNIT_NAME)' in source
-    assert '_systemctl("stop", ACCELERATOR_UNIT_NAME)' in source
+    assert '_systemctl("start", name)' in source
+    assert '_systemctl("stop", name)' in source
+    assert "eom-workflow-runner-accelerator-2.service" in deployment
     assert '"eom-workflow-runner-*.service"' in source
 
 
@@ -174,3 +176,68 @@ def test_active_transient_inventory_is_closed(monkeypatch: pytest.MonkeyPatch) -
     )
     with pytest.raises(module.ScaleOutError, match="unexpected"):
         module._active_transient_units()
+
+
+def test_start_three_workers_uses_two_fixed_consumers_and_is_idempotent(monkeypatch):
+    module = _load()
+    names = [name for name, _ in module.ACCELERATORS]
+    status = iter(
+        (
+            {"active_transient_units": []},
+            {"active_transient_units": names, "status": "ACTIVE"},
+            {"active_transient_units": names, "status": "ACTIVE"},
+        )
+    )
+    monkeypatch.setattr(module.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(module, "_status", lambda: next(status))
+    operations = []
+    monkeypatch.setattr(
+        module, "publish_runtime_unit", lambda *args, **kw: operations.append(("publish", *args))
+    )
+    monkeypatch.setattr(
+        module, "_publish_drop_in", lambda path: operations.append(("drop-in", path))
+    )
+    monkeypatch.setattr(module, "_systemctl", lambda *args: operations.append(args))
+    result = module._start(workers=3)
+    assert result["workers"] == 3 and result["action"] == "STARTED"
+    assert [args[1] for args in operations if args[0] == "start"] == names
+    assert len([args for args in operations if args[0] == "publish"]) == 2
+    prior = len(operations)
+    assert module._start(workers=3)["action"] == "ADOPTED_ACTIVE"
+    assert len(operations) == prior
+
+
+@pytest.mark.parametrize("workers", (0, 1, 4, 100))
+def test_count_outside_closed_bound_is_rejected_before_mutation(monkeypatch, workers):
+    module = _load()
+    monkeypatch.setattr(module.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(module, "_status", lambda: {"active_transient_units": []})
+    monkeypatch.setattr(module, "_systemctl", lambda *args: pytest.fail("unexpected mutation"))
+    with pytest.raises(module.ScaleOutError, match="outside the bound"):
+        module._start(workers=workers)
+
+
+def test_scale_down_requires_explicit_stop_before_reducing_consumer_count(monkeypatch):
+    module = _load()
+    monkeypatch.setattr(module.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(
+        module,
+        "_status",
+        lambda: {"active_transient_units": [name for name, _ in module.ACCELERATORS]},
+    )
+    with pytest.raises(module.ScaleOutError, match="Stop excess"):
+        module._start(workers=2)
+
+
+def test_only_exact_reviewed_drop_in_is_accepted(monkeypatch, tmp_path):
+    module = _load()
+    source = tmp_path / "40-eom-similarity.conf"
+    source.write_bytes(module.SIMILARITY_DROP_IN_BYTES)
+    monkeypatch.setattr(module, "SIMILARITY_DROP_IN", source)
+    monkeypatch.setattr(
+        module, "read_safe_unit", lambda path: SimpleNamespace(content=path.read_bytes())
+    )
+    assert module._expected_drop_in(module.BASE_UNIT_PATH) == str(source)
+    source.write_bytes(module.SIMILARITY_DROP_IN_BYTES + b"User=root\n")
+    with pytest.raises(module.ScaleOutError, match="drop-in differs"):
+        module._expected_drop_in(module.BASE_UNIT_PATH)

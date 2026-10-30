@@ -433,3 +433,44 @@ Evidence: `/tmp/eom-creative-parallel-final-support-unit-20261030.log`,
   Three-slot activation, usage UI fix and live similarity search are still pending.
 
 Graph 복구 Slack 보고는 `devreport_e133ee93d7054d8a8b42b35988cb3dcb`로 전송·보관됐다.
+
+## Operating activation and three-consumer correction
+
+- Protected migration from operating 0062 through 0063 to **0064 PASS**. Shared
+  Platform/API/Catalog/Workflow/HWPX now use `8a886677`; API isolation verification PASS.
+  Wheel/RECORD and actual service-identity imports were checked. Web remains `82388ed1`.
+- Root staging initially inherited restrictive umask, first hiding operator code and later
+  making installed Python files unreadable to service identities. No authorization guard was
+  disabled. The latter was corrected by reinstalling the **same frozen wheels** with normal
+  release umask 022 under the owning eom account, then checking actual service UID imports.
+  Initial failure logs remain; failed Jobs/Workflow history were not changed.
+- INDEX PID 2113256 / invocation `8b9b5ed1ec1a4c67bc9ec7c44f9debff` stayed running.
+  QUERY coordinator was cleanly stopped by its existing `Requires=eom-api` dependency when
+  API was replaced; it was restored with the **same** `07ec7b32` code/config pins (PID
+  3210533 / invocation `a9b0bede71cb4372aff380ecf892562a`). Numeric bundles were untouched.
+- New parallel scope `creativecohort_a7772cd7546c0adce026108e667f635a` /
+  `rev_575315a22338491a9b09473d475f0139` was officially admitted for the original 1053
+  targets, original operator, Workflow 2.0, original model/reasoning and target-set hash.
+  Capacity `capacityrev_c754409b78514d0fa31e89cbcaa121d0` and private source/analysis
+  presets are separate from fixed-host defaults. No native slot role/auth was changed.
+- Operating owner reconstructed **102/1053** historical verifications and started new
+  extraction/analysis. This is **not yet three-worker acceptance**. One synchronous command
+  consumer serialized model submission despite capacity three; extend the already supported
+  runner scale-out manager to exactly two accelerators over the original indexed queue.
+  The existing reviewed similarity-read flag must be inherited byte-for-byte by both.
+- First newly completed parallel extraction exposed a real resolver defect:
+  `CREATIVE_LEARNING_INPUT_MISMATCH`. Completed-proposal registration only accepted the
+  serial preset key, unlike submission's existing closed purpose mapping. The fix reuses
+  that same mapping; the successful original result remains canonical and is not regenerated.
+  Failure evidence: `/tmp/eom-creative-three-slot-error-20261030t2007.log`.
+- New focused source tests **65 PASS**, actual disposable capacity/concurrent replay suite
+  **7 PASS**; core mypy/Ruff/shell syntax PASS. Pending-first scheduling is a bounded,
+  ephemeral priority hint only, never authority to skip historical validation or completion.
+
+Release evidence: `/tmp/eom-creative-reviewed-migration-20261030.log`,
+`/tmp/eom-creative-same-release-read-mode-20261030.log`,
+`/tmp/eom-creative-isolation-8a886677-20261030.log`,
+`/tmp/eom-creative-parallel-scope-8a886677-20261030.json`,
+`/tmp/eom-creative-three-consumer-pg-20261030.log`.
+Three actual workers/refill, usage-refresh bug and real similarity operating integration
+remain required; goal stays ACTIVE.

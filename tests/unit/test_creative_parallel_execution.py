@@ -80,6 +80,7 @@ def driver_case(monkeypatch, *, count=12, limit=None):
         advance_report=Mock(side_effect=advance),
         publish_sources=Mock(side_effect=publish),
         progress=progress,
+        pending_first_targets=Mock(return_value=targets),
     )
     executor = PublicationExecutor()
     monkeypatch.setattr(
@@ -115,12 +116,21 @@ def test_graph_publication_does_not_block_other_reports_or_expand_the_six_source
 
 def test_canary_limit_does_not_submit_sources_beyond_the_approved_limit(monkeypatch):
     case = driver_case(monkeypatch, limit=2)
+    case.owner.pending_first_targets.assert_not_called()
     case.driver.advance_once()
     assert len(case.visited) == len(case.driver.publishing) == 2
     case.executor.complete()
     result = case.driver.advance_once()
     assert result.verified_count == 2 and result.state == "VERIFIED"
     assert not case.driver.window and len(case.visited) == 2
+    case.driver.close()
+
+
+def test_full_run_uses_priority_hint_without_mutating_admitted_targets(monkeypatch):
+    case = driver_case(monkeypatch)
+    case.owner.pending_first_targets.assert_called_once_with()
+    assert case.owner.targets == case.targets
+    assert case.driver.verified_count == 0
     case.driver.close()
 
 

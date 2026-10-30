@@ -26,7 +26,11 @@ class CreativeCohortParallelExecutionService:
         if not 1 <= verified_limit <= len(owner.targets):
             raise ValueError("CREATIVE_COHORT_EXECUTION_LIMIT_INVALID")
         self.owner = owner
-        self.targets = owner.targets[:verified_limit]
+        self.targets = (
+            owner.pending_first_targets()
+            if verified_limit == len(owner.targets)
+            else owner.targets[:verified_limit]
+        )
         self.window_limit = continuation.max_in_flight_sources
         self.batch_size = continuation.graph_publication_batch_size
         self.next_target = 0

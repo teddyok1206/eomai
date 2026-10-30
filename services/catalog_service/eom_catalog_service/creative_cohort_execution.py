@@ -34,9 +34,12 @@ from eom_workflow.models import ExternalItemLearningWorkerRequest
 from eom_workflow_runner.external_item_learning_start import start_prepared_external_item_learning
 from eom_workflow_runner.models import WorkflowInstanceRecord
 from eom_workflow_runner.repository import load_persisted_workflow_request
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
+from eom_catalog_service.automatic_item_graph_publication_service import (
+    INTEGRATED_SCIENCE_CORPUS_KEY,
+)
 from eom_catalog_service.chat_knowledge_resolution import ChatKnowledgeResolutionService
 from eom_catalog_service.creative_cohort_preparation import CreativeCohortPreparationService
 from eom_catalog_service.creative_item_graph_learning import (
@@ -46,9 +49,13 @@ from eom_catalog_service.creative_item_graph_learning import (
 from eom_catalog_service.creative_item_registration import (
     CreativeItemRegistrationService,
     RegisteredCreativeItem,
+    creative_registration_key,
 )
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
-from eom_catalog_service.knowledge_graph_models import KnowledgeGraphSnapshotRecord
+from eom_catalog_service.knowledge_graph_models import (
+    KnowledgeGraphSnapshotRecord,
+    KnowledgeSnapshotAnalysisRecord,
+)
 from eom_catalog_service.models import ItemRevisionRecord
 from eom_catalog_service.settings import CatalogSettings
 
@@ -77,6 +84,20 @@ class CreativeSourceExecution:
     registered: RegisteredCreativeItem | None = None
     analysis: CreativeGraphLearningProgress | None = None
     state: str = "PREPARING"
+
+
+def pending_first_targets(
+    targets: tuple[CreativeCohortTarget, ...], published_keys: frozenset[str]
+) -> tuple[CreativeCohortTarget, ...]:
+    """O(N) stable scheduling hint; no target is omitted or marked complete."""
+    pending: list[CreativeCohortTarget] = []
+    history: list[CreativeCohortTarget] = []
+    for target in targets:
+        destination = (
+            history if creative_registration_key(target.source_id) in published_keys else pending
+        )
+        destination.append(target)
+    return (*pending, *history)
 
 
 class CreativeCohortExecutionService:
@@ -159,6 +180,37 @@ class CreativeCohortExecutionService:
                 raise ValueError("CREATIVE_COHORT_RISK_POLICY_PIN_MISMATCH")
         if self.learning.access_policy_sha256 != self.cohort.access_policy_sha256:
             raise ValueError("CREATIVE_COHORT_ACCESS_POLICY_PIN_MISMATCH")
+
+    def pending_first_targets(self) -> tuple[CreativeCohortTarget, ...]:
+        """Use canonical membership for priority only; execution still reauthorizes each source."""
+        context = self.learning.publication.current_structure_context(INTEGRATED_SCIENCE_CORPUS_KEY)
+        keys = tuple(creative_registration_key(target.source_id) for target in self.targets)
+        with self.sessions() as session:
+            published = frozenset(
+                key
+                for key in session.scalars(
+                    select(ItemRevisionRecord.registration_key)
+                    .join(
+                        KnowledgeSnapshotAnalysisRecord,
+                        KnowledgeSnapshotAnalysisRecord.source_revision_id
+                        == ItemRevisionRecord.item_revision_id,
+                    )
+                    .join(
+                        KnowledgeAnalysisRunRecord,
+                        KnowledgeAnalysisRunRecord.analysis_run_id
+                        == KnowledgeSnapshotAnalysisRecord.analysis_run_id,
+                    )
+                    .where(
+                        ItemRevisionRecord.registration_key.in_(keys),
+                        KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id
+                        == context.graph_snapshot_revision_id,
+                        KnowledgeSnapshotAnalysisRecord.source_kind == "APPROVED_ITEM",
+                        KnowledgeAnalysisRunRecord.state == "ACCEPTED",
+                    )
+                )
+                if key is not None
+            )
+        return pending_first_targets(self.targets, published)
 
     @staticmethod
     def _require_scope_pins(session: Session, scope: CreativeLearningExecutionScope) -> None:

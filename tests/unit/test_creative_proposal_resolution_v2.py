@@ -120,8 +120,13 @@ def _case(monkeypatch):
     return NS(**locals())
 
 
-def test_exact_v2_proposal_uses_the_existing_source_and_artifact_read_contract(monkeypatch):
+@pytest.mark.parametrize(
+    "preset", ("creative-source-learning", "creative-source-learning-parallel")
+)
+def test_exact_v2_proposal_uses_the_existing_source_and_artifact_read_contract(monkeypatch, preset):
     value = _case(monkeypatch)
+    value.workflow.initial_request["execution_preset_key"] = preset
+    value.workflow.request_payload["execution_preset_key"] = preset
     result = resolution.resolve_completed_creative_learning_proposal(
         value.session, value.artifacts, value.selection
     )
