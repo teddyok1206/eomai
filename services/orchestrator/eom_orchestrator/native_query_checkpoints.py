@@ -21,6 +21,7 @@ from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAs
 from eom_workflow.schemas import (
     NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_SCHEMA_RESOURCE,
     NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE,
+    NATIVE_REFERENCE_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE,
     NATIVE_REFERENCE_QUERY_COORDINATOR_V11_SCHEMA_RESOURCE,
     NATIVE_REFERENCE_QUERY_COORDINATOR_V12_SCHEMA_RESOURCE,
 )
@@ -61,6 +62,7 @@ _FAILURE_MESSAGES = MappingProxyType(
         "native-reference-query-coordinator/1.0": "fixed CPU QUERY unit failed",
         "native-reference-query-coordinator/1.1": "fixed CPU QUERY unit failed",
         "native-reference-query-coordinator/1.2": "original finite CUDA QUERY batch failed",
+        "native-reference-query-coordinator/2.0": "original public-solution QUERY execution failed",
         "native-private-chat-query-coordinator/1.0": "fixed CPU private QUERY unit failed",
     }
 )
@@ -82,6 +84,11 @@ def _checkpoint_protocol(record: NativeQueryCheckpoint) -> tuple[str, str]:
         return (
             NATIVE_PRIVATE_QUERY_COORDINATOR_PROTOCOL,
             NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_SCHEMA_RESOURCE[2],
+        )
+    if record.schema_version == "native-reference-query-coordinator/2.0":
+        return (
+            "native-query-coordinator/2.0",
+            NATIVE_REFERENCE_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE[2],
         )
     if record.schema_version == "native-reference-query-coordinator/1.1":
         return (

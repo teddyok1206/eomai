@@ -197,3 +197,72 @@ Python Ruff/format 및 release integrity mypy PASS다. 브라우저는 합성 AP
 주입하고 운영 write·모델·GPU 실행은 하지 않았다. 계산 indicator는 접수된 PENDING 동안
 계속 보이고, 다른 탭에서도 작은 표시가 남는다. terminal/오류/권한 변경 시 정리하며
 관찰 timeout을 계산 실패로 단정하지 않고 같은 key를 유지한다.
+
+## 실제 QUERY2 continuation 연결 결정
+
+public QUERY는 기존 native QUERY Job·append-only event store·command lease·producer 배정을
+그대로 사용한다. 새 checkpoint2는 같은 4단계(ALLOCATION/EXECUTED/PUBLISHED/COMPLETED)에
+QUERY2 member/receipt2를 핀한다. EXECUTED는 실제 고정 CPU unit1.1 관측 또는 기존 CUDA
+batch receipt 중 하나이며, request의 device와 반드시 일치한다. CPU를 GPU 관측으로
+바꾸거나 old checkpoint1 이력을 새 형식으로 해석하지 않는다.
+
+기존 Job은 `reference-query/1.0`, 새 public Job은 explicit `reference-query/2.0` protocol
+row/hash를 사용한다. 저장소·task·인덱스·이벤트 순서·트랜잭션·멱등 key 규칙은 같다.
+원래 request/launch hash와 revision을 핀하고, 동일 요청의 원래 Job과 allocation을
+재사용한다. protocol row 생성은 기존 공식 `ensure_protocol_version` 경계에서 한다.
+새 queue/schema/table은 필요 없다. 4단계 조회/검증은 O(1), 기존 indexed key lookup을
+사용한다. 올바르지 않은 device/family/hash/producer 또는 terminal 실패는 명시적으로
+거부한다. history를 삭제·재라벨링하거나 실패를 성공으로 바꾸지 않는다.
+
+### 세 번째 소스 체크포인트 — 원래 Job 복구와 검색 입력
+
+- checkpoint2는 기존 `NativeQueryCheckpointStore`와 원래 Job/event/protocol owner를
+  사용한다. CPU/CUDA의 관측 형식과 request device를 각각 대조한다. 기존 1/1.1/1.2의
+  parser, immutable schema bytes, Job identity와 실패 보존 규칙은 변경하지 않는다.
+- receipt2는 기존 completion publisher와 Catalog pinned Artifact reader로 저장·해결한다.
+  원래 launch/query Artifact/receipt producer를 분리하고 실제 member bytes와 lifecycle을
+  확인한다. 기존 receipt1 진입점은 새 family를 받지 않는다.
+- Catalog의 pinned query 준비는 최초 선택한 Graph/policy/report/index를 재인가한다.
+  원래 index를 latest로 교체하지 않는다. 계산 전 입력과 계산 후 비교가 같은 공통 풀이
+  renderer를 사용하고, QUERY space와 DOCUMENT space의 encoding identity는 분리한다.
+- Runner의 public source 입력 materialization은 actual Identity/Catalog/control owner를
+  사용한다. 이는 실제 Workflow claim 또는 CPU/GPU 실행 허가의 대체물이 아니다.
+  기존 실제 execution/admission/GPU/RPC 연결은 아직 남아 있어 운영 활성화하지 않았다.
+
+검증(겹치는 suite 합산 금지):
+
+- QUERY2/기존 continuation·private Query·completion·Catalog source 비교 **199 PASS**.
+- 기존 source/launch/admission/completed read와 새 public 입력 **142 PASS**.
+- dependency/runner/공식 similarity read 경계 **122 PASS**.
+- guarded disposable PostgreSQL의 public original Job 동시 생성, CPU/CUDA 각 prefix 재개,
+  동시 event replay, known failure 보존, receipt commit 전후 응답 유실 및 canonical read와
+  앞선 publication 검사 **11 PASS**. source/모델/unit/GPU 증거는 명시적인 합성 seam이다.
+- 기존 실제 QUERY persistence **22 PASS**. 운영 DB/모델/GPU 실행은 하지 않았다.
+- 관련 core/기존 caller mypy와 변경 Python Ruff/format, diff whitespace PASS.
+
+개발 중 public source를 legacy builder에 넘기는 부정 테스트에서 안정적인 family 오류
+대신 `AttributeError`가 발생했다. 두 materialization 진입점의 exact source family 검사를
+추가한 뒤 해당 검사와 전체 source/admission/read suite를 재실행해 위 PASS를 확인했다.
+
+### 완성된 DB 화면만 선행 운영 반영 — 2026-10-30 16:47 UTC
+
+사용자가 완성된 부분의 선행 배포를 요청했다. 이미 검증·커밋·빌드한 Web
+`82388ed1343bac631f5a731384881733e4ff7bc5`만 설치했다. 미완성 backend를 섞지 않았다.
+
+- 이전 Web `204ee18c7a4cf61c179a1b2953c2deca44d04b1e`의 rollback wheel/hash를 확보했다.
+  두 버전의 실제 BFF Python 21개는 동일했고, 변경은 화면·static inventory뿐이었다.
+- 새 wheel SHA-256: `08beb3173b44aeebb6f48ac94928e252390a896d8e9b3940fb3d8f64630d38eb`.
+  service identity로 비편집 설치본 RECORD/static 51개 검증 PASS.
+- 직전 관련 Web/API alignment·release·실제 Chromium 검사 **22 PASS**.
+  브라우저 기능 검사는 합성 API adapter이며 운영 인증 사용자의 검색 성공이 아니다.
+- Web만 stop/install/start했다. 실제 HTTPS live/ready PASS, 제공된 새 module hash가
+  source/installed wheel과 일치한다. 세션 없는 실제 DB 요청은 인증 경계에서 거부된다.
+- API/INDEX/QUERY의 PID와 InvocationID는 배포 전후 동일하다. DB migration·GPU 실행환경·
+  worker/창작 순차 owner·기출 index는 변경하지 않았다. Web in-memory session은 재시작으로
+  사라질 수 있음을 사용자에게 사전 고지했다.
+- 운영 `조회 / 배치 / 유사도` 탭은 반영됐다. 검색 adapter가 아직 없어 버튼은 비활성이다.
+  계산 indicator와 결과→기존 조회 연결은 실제 검색 adapter 활성화 때 동작한다.
+  이 선행 UI 배포를 운영 public 검색 또는 목표 완료로 해석하지 않는다.
+
+설치 기록: `/tmp/eom-db-ui-release-20261030T1650.log` (파일 이름의 1650은 실행 시각 증거가
+아니며 실제 HTTPS 응답/서비스 관측은 16:47 UTC). 기존 복구 wheel은 보존했다.

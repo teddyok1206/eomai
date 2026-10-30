@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from collections.abc import Mapping
+from typing import Literal, Self, overload
 
 from eom_catalog_contracts.embedding_reference_query import (
     REFERENCE_QUERY_RESULT_REF,
@@ -11,6 +12,10 @@ from eom_catalog_contracts.embedding_reference_query import (
 from eom_catalog_contracts.embedding_reference_query_v11 import REFERENCE_QUERY_INPUT_V11_REF
 from eom_catalog_contracts.inference_transfer_embedding import SHARD_SCHEMA_REF
 from eom_catalog_contracts.models import Sha256, UtcDatetime
+from eom_catalog_contracts.public_solution_query import (
+    PUBLIC_SOLUTION_QUERY_INPUT_REF,
+    PUBLIC_SOLUTION_QUERY_RESULT_REF,
+)
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from pydantic import Field, model_validator
@@ -21,16 +26,22 @@ from eom_workflow.native_embedding_coordinator import NativeArtifactProducerIden
 from eom_workflow.reference_query_execution import (
     ReferenceQueryLaunchAssociation,
     ReferenceQueryStepOutput,
+    ReferenceQueryStepOutputV2,
     ReferenceQueryWorkflowReceipt,
+    ReferenceQueryWorkflowReceiptV2,
+    ReferenceQueryWorkflowRequestV3,
+    SupportedReferenceQueryWorkflowIntent,
+    SupportedReferenceQueryWorkflowReceipt,
     SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_launch_association,
-    parse_reference_query_workflow_receipt,
-    parse_supported_reference_query_workflow_request,
+    parse_supported_reference_query_workflow_intent,
+    parse_supported_reference_query_workflow_receipt,
     validate_reference_query_step_output,
 )
 from eom_workflow.schemas import (
     NativeEmbeddingContract,
     validate_native_reference_query_checkpoint,
+    validate_native_reference_query_checkpoint_v2,
     validate_native_reference_query_checkpoint_v11,
     validate_native_reference_query_checkpoint_v12,
 )
@@ -136,10 +147,11 @@ type NativeQueryCheckpointVersion = Literal[
     "native-reference-query-coordinator/1.0",
     "native-reference-query-coordinator/1.1",
     "native-reference-query-coordinator/1.2",
+    "native-reference-query-coordinator/2.0",
 ]
 
 
-class NativeQueryPublished(NativeEmbeddingContract):
+class _NativeQueryPublishedFields(NativeEmbeddingContract):
     query_owner_job_id: JobId
     input: ArtifactMemberPointer
     result: ArtifactMemberPointer
@@ -148,11 +160,10 @@ class NativeQueryPublished(NativeEmbeddingContract):
     manifest_sha256: Sha256
     published_observed_at: UtcDatetime
 
-    @model_validator(mode="after")
-    def exact_file_set(self) -> NativeQueryPublished:
+    def require_file_set(self, input_ref: str, result_ref: str) -> None:
         expected = (
-            (self.input, "input.json", REFERENCE_QUERY_INPUT_V11_REF, "application/json"),
-            (self.result, "result.json", REFERENCE_QUERY_RESULT_REF, "application/json"),
+            (self.input, "input.json", input_ref, "application/json"),
+            (self.result, "result.json", result_ref, "application/json"),
             (self.shard, "shard.json", SHARD_SCHEMA_REF, "application/json"),
             (
                 self.binary,
@@ -166,11 +177,28 @@ class NativeQueryPublished(NativeEmbeddingContract):
             for p, name, schema, media in expected
         ):
             raise ValueError("QUERY checkpoint file set differs")
+
+
+class NativeQueryPublished(_NativeQueryPublishedFields):
+    @model_validator(mode="after")
+    def exact_file_set(self) -> Self:
+        self.require_file_set(REFERENCE_QUERY_INPUT_V11_REF, REFERENCE_QUERY_RESULT_REF)
+        return self
+
+
+class NativeQueryPublishedV2(_NativeQueryPublishedFields):
+    @model_validator(mode="after")
+    def exact_file_set(self) -> Self:
+        self.require_file_set(PUBLIC_SOLUTION_QUERY_INPUT_REF, PUBLIC_SOLUTION_QUERY_RESULT_REF)
         return self
 
 
 class NativeQueryCompleted(NativeEmbeddingContract):
     output: ReferenceQueryStepOutput
+
+
+class NativeQueryCompletedV2(NativeEmbeddingContract):
+    output: ReferenceQueryStepOutputV2
 
 
 type NativeQueryPayload = (
@@ -182,22 +210,51 @@ type NativeQueryPayloadV11 = (
 type NativeQueryPayloadV12 = (
     NativeQueryAllocation | NativeQueryBatchExecuted | NativeQueryPublished | NativeQueryCompleted
 )
-type SupportedNativeQueryPayload = (
-    NativeQueryPayload | NativeQueryExecutedV11 | NativeQueryBatchExecuted
+type NativeQueryPayloadV2 = (
+    NativeQueryAllocation
+    | NativeQueryExecutedV11
+    | NativeQueryBatchExecuted
+    | NativeQueryPublishedV2
+    | NativeQueryCompletedV2
 )
-_PAYLOADS = {
+type SupportedNativeQueryPayload = (
+    NativeQueryPayload
+    | NativeQueryExecutedV11
+    | NativeQueryBatchExecuted
+    | NativeQueryPublishedV2
+    | NativeQueryCompletedV2
+)
+_PAYLOADS: dict[str, type[NativeEmbeddingContract]] = {
     "ALLOCATION": NativeQueryAllocation,
     "EXECUTED": NativeQueryExecuted,
     "PUBLISHED": NativeQueryPublished,
     "COMPLETED": NativeQueryCompleted,
 }
-_PAYLOADS_V11 = {**_PAYLOADS, "EXECUTED": NativeQueryExecutedV11}
-_PAYLOADS_V12 = {**_PAYLOADS, "EXECUTED": NativeQueryBatchExecuted}
-_PAYLOADS_BY_VERSION = {
+_PAYLOADS_V11: dict[str, type[NativeEmbeddingContract]] = {
+    **_PAYLOADS,
+    "EXECUTED": NativeQueryExecutedV11,
+}
+_PAYLOADS_V12: dict[str, type[NativeEmbeddingContract]] = {
+    **_PAYLOADS,
+    "EXECUTED": NativeQueryBatchExecuted,
+}
+type _PayloadClass = type[NativeEmbeddingContract] | tuple[type[NativeEmbeddingContract], ...]
+_PAYLOADS_V2: dict[str, _PayloadClass] = {
+    "ALLOCATION": NativeQueryAllocation,
+    "EXECUTED": (NativeQueryExecutedV11, NativeQueryBatchExecuted),
+    "PUBLISHED": NativeQueryPublishedV2,
+    "COMPLETED": NativeQueryCompletedV2,
+}
+_PAYLOADS_BY_VERSION: Mapping[str, Mapping[str, _PayloadClass]] = {
     "native-reference-query-coordinator/1.0": _PAYLOADS,
     "native-reference-query-coordinator/1.1": _PAYLOADS_V11,
     "native-reference-query-coordinator/1.2": _PAYLOADS_V12,
+    "native-reference-query-coordinator/2.0": _PAYLOADS_V2,
 }
+
+
+def _payload_type_matches(payload: SupportedNativeQueryPayload, expected: _PayloadClass) -> bool:
+    return type(payload) in expected if isinstance(expected, tuple) else type(payload) is expected
 
 
 class NativeReferenceQueryCheckpoint(NativeEmbeddingContract):
@@ -266,17 +323,40 @@ class NativeReferenceQueryCheckpointV12(NativeEmbeddingContract):
         return self
 
 
+class NativeReferenceQueryCheckpointV2(NativeEmbeddingContract):
+    schema_version: Literal["native-reference-query-coordinator/2.0"] = (
+        "native-reference-query-coordinator/2.0"
+    )
+    record_type: NativeQueryPhase
+    native_launch_job_id: JobId
+    association_sha256: Sha256
+    payload: NativeQueryPayloadV2
+    checkpoint_sha256: Sha256
+
+    @model_validator(mode="before")
+    @classmethod
+    def schema_first(cls, value: object) -> object:
+        validate_native_reference_query_checkpoint_v2(value)
+        return raw_similarity_contract_value(value)
+
+    @model_validator(mode="after")
+    def exact_stage(self) -> Self:
+        _validate_checkpoint_stage(self)
+        return self
+
+
 type SupportedNativeReferenceQueryCheckpoint = (
     NativeReferenceQueryCheckpoint
     | NativeReferenceQueryCheckpointV11
     | NativeReferenceQueryCheckpointV12
+    | NativeReferenceQueryCheckpointV2
 )
 
 
 def _validate_checkpoint_stage(value: SupportedNativeReferenceQueryCheckpoint) -> None:
     payloads = _PAYLOADS_BY_VERSION[value.schema_version]
     if (
-        type(value.payload) is not payloads[value.record_type]
+        not _payload_type_matches(value.payload, payloads[value.record_type])
         or value.checkpoint_sha256
         != content_sha256(value.model_dump(mode="json", exclude={"checkpoint_sha256"}))
         or (
@@ -305,6 +385,8 @@ def parse_supported_native_reference_query_checkpoint(
         return NativeReferenceQueryCheckpointV11.model_validate(document)
     if document.get("schema_version") == "native-reference-query-coordinator/1.2":
         return NativeReferenceQueryCheckpointV12.model_validate(document)
+    if document.get("schema_version") == "native-reference-query-coordinator/2.0":
+        return NativeReferenceQueryCheckpointV2.model_validate(document)
     raise ValueError("QUERY checkpoint version is unsupported")
 
 
@@ -314,7 +396,7 @@ def native_reference_query_checkpoint(
     launch = parse_reference_query_launch_association(launch)
     if phase not in _PAYLOADS or type(payload) is not _PAYLOADS[phase]:
         raise ValueError("QUERY checkpoint payload purpose differs")
-    payload = _PAYLOADS[phase].model_validate(payload)
+    payload = type(payload).model_validate(raw_similarity_contract_value(payload))
     body = {
         "schema_version": "native-reference-query-coordinator/1.0",
         "record_type": phase,
@@ -350,9 +432,9 @@ def native_reference_query_continuation_checkpoint(
     if version not in _PAYLOADS_BY_VERSION:
         raise ValueError("QUERY checkpoint version is unsupported")
     payloads = _PAYLOADS_BY_VERSION[version]
-    if phase not in payloads or type(payload) is not payloads[phase]:
+    if phase not in payloads or not _payload_type_matches(payload, payloads[phase]):
         raise ValueError("QUERY checkpoint payload/runtime family differs")
-    payload = payloads[phase].model_validate(payload)
+    payload = type(payload).model_validate(raw_similarity_contract_value(payload))
     body = {
         "schema_version": version,
         "record_type": phase,
@@ -365,16 +447,51 @@ def native_reference_query_continuation_checkpoint(
     )
 
 
+@overload
 def reference_query_checkpoint_receipt(
     request: SupportedReferenceQueryWorkflowRequest,
     launch: ReferenceQueryLaunchAssociation,
     allocation: NativeQueryAllocation,
     executed: SupportedNativeQueryExecuted,
     published: NativeQueryPublished,
-) -> ReferenceQueryWorkflowReceipt:
+) -> ReferenceQueryWorkflowReceipt: ...
+
+
+@overload
+def reference_query_checkpoint_receipt(
+    request: ReferenceQueryWorkflowRequestV3,
+    launch: ReferenceQueryLaunchAssociation,
+    allocation: NativeQueryAllocation,
+    executed: SupportedNativeQueryExecuted,
+    published: NativeQueryPublishedV2,
+) -> ReferenceQueryWorkflowReceiptV2: ...
+
+
+@overload
+def reference_query_checkpoint_receipt(
+    request: SupportedReferenceQueryWorkflowIntent,
+    launch: ReferenceQueryLaunchAssociation,
+    allocation: NativeQueryAllocation,
+    executed: SupportedNativeQueryExecuted,
+    published: NativeQueryPublished | NativeQueryPublishedV2,
+) -> SupportedReferenceQueryWorkflowReceipt: ...
+
+
+def reference_query_checkpoint_receipt(
+    request: SupportedReferenceQueryWorkflowIntent,
+    launch: ReferenceQueryLaunchAssociation,
+    allocation: NativeQueryAllocation,
+    executed: SupportedNativeQueryExecuted,
+    published: NativeQueryPublished | NativeQueryPublishedV2,
+) -> SupportedReferenceQueryWorkflowReceipt:
     """Reconstruct immutable small metadata, not validation of an actual publication."""
+    public = isinstance(request, ReferenceQueryWorkflowRequestV3)
+    if public != isinstance(published, NativeQueryPublishedV2):
+        raise ValueError("QUERY receipt publication family differs")
     body = {
-        "schema_version": "reference-query-workflow-receipt/1.0",
+        "schema_version": "reference-query-workflow-receipt/2.0"
+        if public
+        else "reference-query-workflow-receipt/1.0",
         "purpose": "REFERENCE_QUERY",
         "workflow_id": launch.workflow_id,
         "step_run_id": launch.step_run_id,
@@ -387,7 +504,9 @@ def reference_query_checkpoint_receipt(
         "query_artifact_owner_job_id": published.query_owner_job_id,
         "native_launch_job_id": launch.native_launch_job_id,
         "launch_association_sha256": launch.association_sha256,
-        "execution_result_schema": "embedding-reference-query-result@1.0",
+        "execution_result_schema": "embedding-reference-query-result@2.0"
+        if public
+        else "embedding-reference-query-result@1.0",
         "query_input": published.input.model_dump(mode="json"),
         "query_execution": {
             "job_id": launch.native_launch_job_id,
@@ -403,16 +522,18 @@ def reference_query_checkpoint_receipt(
         "resource_profile_sha256": request.resource_profile.resource_profile_sha256,
         "published_at": published.published_observed_at.isoformat().replace("+00:00", "Z"),
     }
-    return parse_reference_query_workflow_receipt(body | {"receipt_sha256": content_sha256(body)})
+    return parse_supported_reference_query_workflow_receipt(
+        body | {"receipt_sha256": content_sha256(body)}
+    )
 
 
 def validate_native_reference_query_history(
     records: tuple[SupportedNativeReferenceQueryCheckpoint, ...],
     launch: ReferenceQueryLaunchAssociation,
-    request: SupportedReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowIntent,
 ) -> None:
     launch = parse_reference_query_launch_association(launch)
-    request = parse_supported_reference_query_workflow_request(request)
+    request = parse_supported_reference_query_workflow_intent(request)
     if (
         len(records) > 4
         or tuple(r.record_type for r in records) != NATIVE_QUERY_PHASES[: len(records)]
@@ -421,6 +542,11 @@ def validate_native_reference_query_history(
     checked = tuple(parse_supported_native_reference_query_checkpoint(row) for row in records)
     if checked and any(row.schema_version != checked[0].schema_version for row in checked):
         raise ValueError("QUERY checkpoint families are mixed")
+    if checked and (
+        isinstance(request, ReferenceQueryWorkflowRequestV3)
+        != isinstance(checked[0], NativeReferenceQueryCheckpointV2)
+    ):
+        raise ValueError("QUERY checkpoint and workflow request families differ")
     if (
         checked
         and checked[0].schema_version == "native-reference-query-coordinator/1.2"
@@ -450,12 +576,17 @@ def validate_native_reference_query_history(
     assert isinstance(
         executed, (NativeQueryExecuted, NativeQueryExecutedV11, NativeQueryBatchExecuted)
     )
+    if isinstance(request, ReferenceQueryWorkflowRequestV3) and (
+        isinstance(executed, NativeQueryBatchExecuted)
+        != (request.resource_profile.device == "CUDA")
+    ):
+        raise ValueError("public QUERY completion evidence device differs")
     if executed.completed_observed_at < allocation.created_at:
         raise ValueError("QUERY execution observation precedes allocation")
     if len(checked) < 3:
         return
     published = checked[2].payload
-    assert isinstance(published, NativeQueryPublished)
+    assert isinstance(published, (NativeQueryPublished, NativeQueryPublishedV2))
     if (
         published.query_owner_job_id != allocation.query_producer.job_id
         or published.input.artifact_id != allocation.query_producer.artifact_id
@@ -466,7 +597,7 @@ def validate_native_reference_query_history(
     receipt = reference_query_checkpoint_receipt(request, launch, allocation, executed, published)
     if len(checked) == 4:
         completed = checked[3].payload
-        assert isinstance(completed, NativeQueryCompleted)
+        assert isinstance(completed, (NativeQueryCompleted, NativeQueryCompletedV2))
         output = completed.output
         if (
             output.receipt.artifact_id != allocation.receipt_producer.artifact_id

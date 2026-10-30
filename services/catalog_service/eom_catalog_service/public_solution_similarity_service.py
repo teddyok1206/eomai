@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 
 from eom_catalog_contracts.embedding_contract_values import raw_similarity_contract_value
+from eom_catalog_contracts.embedding_reference_query import ReferenceQueryTextInput
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
 from eom_catalog_contracts.inference_transfer_embedding import (
     SHARD_SCHEMA_REF,
@@ -61,6 +62,48 @@ class VerifiedPublicSolutionQueryRead:
     result_member: ArtifactMemberPointer
     shard_member: ArtifactMemberPointer
     binary: bytes
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedPublicSolutionQuerySource:
+    """One owner-local normalized anchor, not a persistent source or execution grant."""
+
+    request_sha256: str
+    anchor: PublicSolutionSourceReference
+    row: ReferenceQueryTextInput
+
+
+def prepare_public_solution_query_source(
+    request: PublicSolutionSimilarityRequest,
+    capture: ResolvedEmbeddingLookup,
+) -> PreparedPublicSolutionQuerySource:
+    """Use the same report projection as DOCUMENT, with the distinct QUERY space.
+
+    The caller owns official current source/index reads and reauthorization in
+    one root. This pure materialization never substitutes DOCUMENT vectors.
+    """
+    request = PublicSolutionSimilarityRequest.model_validate(request)
+    entries = _public_entries(request, capture)
+    return PreparedPublicSolutionQuerySource(
+        request.request_sha256, request.anchor, _anchor_query_row(request, entries)
+    )
+
+
+def _anchor_query_row(
+    request: PublicSolutionSimilarityRequest,
+    entries: dict[str, PublicSolutionEmbeddingEntry],
+) -> ReferenceQueryTextInput:
+    view = request.views[0]
+    expected = prepare_public_solution_encoding(
+        entries[request.anchor.source.item_revision_id],
+        space=view.index.spaces.query,
+        storage_partition=view.index.storage_partition,
+    ).input
+    _require(expected is not None, "QUERY_RESULT_INVALID")
+    assert expected is not None
+    return ReferenceQueryTextInput(
+        view="CONCRETE_FACETS", encoding=expected.encoding, text=expected.text
+    )
 
 
 def _public_entries(
@@ -124,14 +167,9 @@ def _query_vector(
     result = PublicSolutionQueryResult.model_validate(query.result)
     validate_public_solution_query_result(numerical, result)
     view = request.views[0]
-    expected = prepare_public_solution_encoding(
-        entries[request.anchor.source.item_revision_id],
-        space=view.index.spaces.query,
-        storage_partition=view.index.storage_partition,
-    ).input
+    expected = _anchor_query_row(request, entries)
     _require(
-        expected is not None
-        and numerical.context_request_sha256 == request.request_sha256
+        numerical.context_request_sha256 == request.request_sha256
         and numerical.spaces == view.index.spaces
         and numerical.recipe == view.recipe
         and numerical.rows[0].encoding == expected.encoding

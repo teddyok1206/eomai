@@ -31,11 +31,16 @@ from eom_workflow.private_chat_query_workflow import (
     validate_private_chat_query_step_output,
 )
 from eom_workflow.reference_query_execution import (
+    PUBLIC_REFERENCE_QUERY_RECEIPT_REF,
     REFERENCE_QUERY_RECEIPT_REF,
     ReferenceQueryStepOutput,
+    ReferenceQueryStepOutputV2,
     ReferenceQueryWorkflowReceipt,
-    parse_reference_query_step_output,
+    ReferenceQueryWorkflowReceiptV2,
+    SupportedReferenceQueryStepOutput,
+    SupportedReferenceQueryWorkflowReceipt,
     parse_reference_query_workflow_receipt,
+    parse_supported_reference_query_step_output,
     validate_reference_query_step_output,
 )
 
@@ -124,6 +129,25 @@ class NativeEmbeddingCompletionPublisher:
         self, receipt: ReferenceQueryWorkflowReceipt, *, identity: ControlFileSetIdentity
     ) -> ReferenceQueryStepOutput:
         receipt = parse_reference_query_workflow_receipt(receipt)
+        output = self._publish_reference_query(receipt, identity=identity)
+        if not isinstance(output, ReferenceQueryStepOutput):
+            raise ValueError("REFERENCE_QUERY_RECEIPT_PRODUCER_MISMATCH")
+        return output
+
+    def publish_public_solution_reference_query(
+        self, receipt: ReferenceQueryWorkflowReceiptV2, *, identity: ControlFileSetIdentity
+    ) -> ReferenceQueryStepOutputV2:
+        receipt = ReferenceQueryWorkflowReceiptV2.model_validate(receipt)
+        output = self._publish_reference_query(receipt, identity=identity)
+        if not isinstance(output, ReferenceQueryStepOutputV2):
+            raise ValueError("REFERENCE_QUERY_RECEIPT_PRODUCER_MISMATCH")
+        return output
+
+    def _publish_reference_query(
+        self, receipt: SupportedReferenceQueryWorkflowReceipt, *, identity: ControlFileSetIdentity
+    ) -> SupportedReferenceQueryStepOutput:
+        public = isinstance(receipt, ReferenceQueryWorkflowReceiptV2)
+        schema_ref = PUBLIC_REFERENCE_QUERY_RECEIPT_REF if public else REFERENCE_QUERY_RECEIPT_REF
         identity = ControlFileSetIdentity(
             identity.job_id, identity.artifact_id, identity.artifact_revision_id
         )
@@ -155,12 +179,14 @@ class NativeEmbeddingCompletionPublisher:
             identity=identity,
             key=key,
             artifact_type=QUERY_COMPLETION_ARTIFACT_TYPE,
-            schema_ref=REFERENCE_QUERY_RECEIPT_REF,
+            schema_ref=schema_ref,
             created_at=receipt.published_at,
             mismatch_code="REFERENCE_QUERY_RECEIPT_PUBLICATION_MISMATCH",
         )
         body = {
-            "schema_version": "reference-query-step-output/1.0",
+            "schema_version": "reference-query-step-output/2.0"
+            if public
+            else "reference-query-step-output/1.0",
             "purpose": "REFERENCE_QUERY",
             **{
                 field: getattr(receipt, field)
@@ -174,10 +200,12 @@ class NativeEmbeddingCompletionPublisher:
                     "receipt_sha256",
                 )
             },
-            "receipt_schema": REFERENCE_QUERY_RECEIPT_REF,
+            "receipt_schema": schema_ref,
             "receipt": pointer.model_dump(mode="json"),
         }
-        output = parse_reference_query_step_output(body | {"output_sha256": content_sha256(body)})
+        output = parse_supported_reference_query_step_output(
+            body | {"output_sha256": content_sha256(body)}
+        )
         validate_reference_query_step_output(output, receipt)
         return output
 

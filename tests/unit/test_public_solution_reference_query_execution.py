@@ -50,8 +50,8 @@ def public_definition_body():
     return body
 
 
-def public_workflow_case(*, identity=None):
-    previous = case()
+def public_workflow_case(*, identity=None, device="CPU"):
+    previous = case(device=device)
     definition = parse_public_solution_reference_query_workflow_definition(public_definition_body())
     policy = type(previous.policy).model_validate(
         seal(
@@ -76,7 +76,7 @@ def public_workflow_case(*, identity=None):
         canonical_json_bytes(policy.model_dump(mode="json"))
     )
     request = ReferenceQueryWorkflowRequestV3.model_validate(seal(body, "request_sha256"))
-    numerical = public_query_input().model_dump(mode="json")
+    numerical = public_query_input(device=device).model_dump(mode="json")
     if identity is not None:
         numerical["job_id"] = "job_" + identity
         numerical["query_request_id"] = "embeddingquery_" + identity
@@ -155,6 +155,22 @@ def public_workflow_case(*, identity=None):
             media="application/octet-stream",
         ).model_dump(mode="json"),
     }
+    if identity is not None:
+        # Distinct original/Artifact/receipt producers remain independent even
+        # when several fixtures share the same disposable PostgreSQL database.
+        query_seed = content_sha256({"identity": identity, "role": "query"})[-32:]
+        receipt_seed = content_sha256({"identity": identity, "role": "receipt"})[-32:]
+        receipt_body["query_artifact_owner_job_id"] = "job_" + query_seed
+        receipt_body["receipt_owner_job_id"] = "job_" + receipt_seed
+        for member in (
+            receipt_body["query_input"],
+            receipt_body["query_execution"]["result_member"],
+            receipt_body["shard"],
+            receipt_body["binary"],
+        ):
+            member.update(
+                artifact_id="artifact_" + query_seed, artifact_revision_id="rev_" + query_seed
+            )
     receipt = ReferenceQueryWorkflowReceiptV2.model_validate(seal(receipt_body, "receipt_sha256"))
     output = ReferenceQueryStepOutputV2.model_validate(
         seal(
@@ -163,6 +179,7 @@ def public_workflow_case(*, identity=None):
                 "schema_version": "reference-query-step-output/2.0",
                 "workflow_id": launch.workflow_id,
                 "step_run_id": launch.step_run_id,
+                "receipt_owner_job_id": receipt.receipt_owner_job_id,
                 "execution_result_schema": "embedding-reference-query-result@2.0",
                 "receipt_schema": PUBLIC_REFERENCE_QUERY_RECEIPT_REF,
                 "receipt": pointer(
@@ -176,6 +193,12 @@ def public_workflow_case(*, identity=None):
             "output_sha256",
         )
     )
+    if identity is not None:
+        output_body = output.model_dump(mode="json")
+        output_body["receipt"].update(
+            artifact_id="artifact_" + receipt_seed, artifact_revision_id="rev_" + receipt_seed
+        )
+        output = ReferenceQueryStepOutputV2.model_validate(seal(output_body, "output_sha256"))
     return SimpleNamespace(
         definition=definition,
         request=request,

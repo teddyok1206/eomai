@@ -25,12 +25,16 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     EmbeddingRegistryLookup,
     EmbeddingRegistryRead,
+    ResolvedEmbeddingLookup,
+    ResolvedPinnedEmbeddingIndex,
     SelectedEmbeddingSources,
 )
 from eom_catalog_service.embedding_registry_repository import EmbeddingRegistryRepository
 from eom_catalog_service.public_solution_similarity_service import (
+    PreparedPublicSolutionQuerySource,
     VerifiedPublicSolutionQueryRead,
     compose_public_solution_similarity,
+    prepare_public_solution_query_source,
 )
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 
@@ -153,6 +157,29 @@ class CatalogPublicSolutionSimilarityRead:
         request: PublicSolutionSimilarityRequest,
         query: VerifiedPublicSolutionQueryRead,
     ) -> PublicSolutionSimilarityContext:
+        captured, document = self._read_pinned_request(session, caller, request)
+        result = compose_public_solution_similarity(request, captured, document, query)
+        self._reauthorize_pinned_read(session, caller, document, captured)
+        return result
+
+    def prepare_query_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: PublicSolutionSimilarityRequest,
+    ) -> PreparedPublicSolutionQuerySource:
+        """Materialize the original pinned QUERY text; never discover another head."""
+        captured, document = self._read_pinned_request(session, caller, request)
+        result = prepare_public_solution_query_source(request, captured)
+        self._reauthorize_pinned_read(session, caller, document, captured)
+        return result
+
+    def _read_pinned_request(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: PublicSolutionSimilarityRequest,
+    ) -> tuple[ResolvedEmbeddingLookup, ResolvedPinnedEmbeddingIndex]:
         self._require_root(session)
         request = PublicSolutionSimilarityRequest.model_validate(request)
         config = self.catalog.configuration
@@ -177,9 +204,16 @@ class CatalogPublicSolutionSimilarityRead:
         document = read_pinned_embedding_index(
             session, caller, EmbeddingRegistryRead(scope, view), self.catalog
         )
-        result = compose_public_solution_similarity(request, captured, document, query)
-        # The source owner retains the transaction locks. A second capture closes
-        # late revocation/source drift; it never reselects a mutable index head.
-        if self.catalog.resolve_lookup(session, caller, scope) != captured:
+        return captured, document
+
+    def _reauthorize_pinned_read(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        document: ResolvedPinnedEmbeddingIndex,
+        captured: ResolvedEmbeddingLookup,
+    ) -> None:
+        # Keep source locks and recheck after local text/ranking materialization.
+        # Never select the current index head for continuation or completed reads.
+        if self.catalog.resolve_lookup(session, caller, document.intent.scope) != captured:
             raise SimilarityContextReadError("SOURCE_REVOKED")
-        return result

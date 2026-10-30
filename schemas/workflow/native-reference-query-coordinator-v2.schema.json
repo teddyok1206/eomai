@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/native-reference-query-coordinator/2.0",
+  "title": "Public solution QUERY2 continuation over the existing native Job event store",
+  "description": "Explicit QUERY2 source family. CPU unit1.1 and finite CUDA execution receipt keep their exact evidence; request device, producer and lifecycle are separately validated. No authority or retry permission is granted.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "record_type",
+    "native_launch_job_id",
+    "association_sha256",
+    "payload",
+    "checkpoint_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "native-reference-query-coordinator/2.0"
+    },
+    "record_type": {
+      "enum": [
+        "ALLOCATION",
+        "EXECUTED",
+        "PUBLISHED",
+        "COMPLETED"
+      ]
+    },
+    "native_launch_job_id": {
+      "$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.0#/properties/native_launch_job_id"
+    },
+    "association_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "checkpoint_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "payload": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/allocation"
+        },
+        {
+          "$ref": "#/$defs/executed"
+        },
+        {
+          "$ref": "#/$defs/published"
+        },
+        {
+          "$ref": "#/$defs/completed"
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "ALLOCATION"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/allocation"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "EXECUTED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/executed"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "PUBLISHED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/published"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "record_type": {
+            "const": "COMPLETED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/completed"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "hash": {
+      "$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.0#/$defs/hash"
+    },
+    "allocation": {
+      "$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.0#/$defs/allocation"
+    },
+    "executed": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.1#/$defs/executed"
+        },
+        {
+          "$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.2#/$defs/executed"
+        }
+      ]
+    },
+    "published": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_owner_job_id",
+        "input",
+        "result",
+        "shard",
+        "binary",
+        "manifest_sha256",
+        "published_observed_at"
+      ],
+      "properties": {
+        "query_owner_job_id": {
+          "$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.0#/$defs/published/properties/query_owner_job_id"
+        },
+        "input": {
+          "$ref": "eom://schemas/workflow/reference-query-execution/2.0#/$defs/receipt/properties/query_input"
+        },
+        "result": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "result.json"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/embedding-reference-query-result/2.0"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "shard": {
+          "$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.0#/$defs/published/properties/shard"
+        },
+        "binary": {
+          "$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.0#/$defs/published/properties/binary"
+        },
+        "manifest_sha256": {
+          "$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.0#/$defs/published/properties/manifest_sha256"
+        },
+        "published_observed_at": {
+          "$ref": "eom://schemas/workflow/native-reference-query-coordinator/1.0#/$defs/published/properties/published_observed_at"
+        }
+      }
+    },
+    "completed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "output"
+      ],
+      "properties": {
+        "output": {
+          "$ref": "eom://schemas/workflow/reference-query-execution/2.0#/$defs/step-output"
+        }
+      }
+    }
+  }
+}

@@ -20,6 +20,7 @@ from eom_catalog_service.embedding_registry_ports import (
 from eom_catalog_service.public_solution_similarity_service import (
     VerifiedPublicSolutionQueryRead,
     compose_public_solution_similarity,
+    prepare_public_solution_query_source,
 )
 from eom_identifiers import content_sha256
 from jsonschema.exceptions import ValidationError as SchemaError
@@ -98,6 +99,39 @@ def test_public_composer_uses_common_report_text_and_real_query_purpose_without_
     assert result == compose_public_solution_similarity(request, capture, document, query)
     assert "public_solution" not in result.model_dump_json()
     assert "SCORE_IS_NOT_PROOF_OF_IDENTICAL_REASONING" in result.limitations
+
+
+def test_query_source_uses_exact_common_report_text_but_not_document_encoding_identity():
+    request, capture, document, query = composition_case()
+    prepared = prepare_public_solution_query_source(request, capture)
+    assert prepared.request_sha256 == request.request_sha256
+    assert prepared.anchor == request.anchor
+    assert prepared.row == query.request.rows[0]
+    assert prepared.row.encoding.space_sha256 == request.views[0].index.spaces.query.space_sha256
+    assert prepared.row.encoding.space_sha256 != request.views[0].index.spaces.document.space_sha256
+    assert prepared.row.text == capture.entries[0].public_solution.text
+    assert prepared.row.encoding not in tuple(binding.encoding for binding in document.bindings)
+
+
+@pytest.mark.parametrize("fault", ["missing_anchor", "extra", "base", "foreign_request"])
+def test_query_source_preparation_rejects_foreign_or_unvalidated_report(fault):
+    request, capture, _, _ = composition_case()
+    if fault == "missing_anchor":
+        capture = replace(capture, entries=())
+    elif fault == "extra":
+        capture = replace(
+            capture,
+            entries=(
+                capture.entries[0].model_copy(update={"authority": "ADMIN"}),
+                *capture.entries[1:],
+            ),
+        )
+    elif fault == "base":
+        capture = replace(capture, base_analysis_run_ids=())
+    else:
+        request = request.model_copy(update={"request_sha256": "sha256:" + "f" * 64})
+    with pytest.raises((ValueError, SchemaError)):
+        prepare_public_solution_query_source(request, capture)
 
 
 @pytest.mark.parametrize(

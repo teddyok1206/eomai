@@ -31,9 +31,13 @@ from eom_workflow.private_chat_query_workflow import (
 )
 from eom_workflow.reference_query_execution import (
     ReferenceQueryStepOutput,
+    ReferenceQueryStepOutputV2,
     ReferenceQueryWorkflowReceipt,
+    ReferenceQueryWorkflowReceiptV2,
+    SupportedReferenceQueryStepOutput,
+    SupportedReferenceQueryWorkflowReceipt,
     parse_reference_query_step_output,
-    parse_reference_query_workflow_receipt,
+    parse_supported_reference_query_workflow_receipt,
     validate_reference_query_step_output,
 )
 from sqlalchemy.orm import Session
@@ -81,6 +85,38 @@ def resolve_native_reference_query_completion(
 ) -> ReferenceQueryWorkflowReceipt:
     """Canonical read only; caller must separately validate current source/Job closure."""
     output = parse_reference_query_step_output(output)
+    receipt = _resolve_reference_query_completion(
+        session, settings, output, artifact_reader=artifact_reader
+    )
+    if not isinstance(receipt, ReferenceQueryWorkflowReceipt):
+        raise ValueError("REFERENCE_QUERY_RECEIPT_FAMILY_MISMATCH")
+    return receipt
+
+
+def resolve_native_public_solution_query_completion(
+    session: Session,
+    settings: CatalogSettings,
+    output: ReferenceQueryStepOutputV2,
+    *,
+    artifact_reader: PinnedArtifactReadContext | None = None,
+) -> ReferenceQueryWorkflowReceiptV2:
+    """QUERY2 canonical receipt only; no source, Workflow or physical execution grant."""
+    output = ReferenceQueryStepOutputV2.model_validate(output)
+    receipt = _resolve_reference_query_completion(
+        session, settings, output, artifact_reader=artifact_reader
+    )
+    if not isinstance(receipt, ReferenceQueryWorkflowReceiptV2):
+        raise ValueError("REFERENCE_QUERY_RECEIPT_FAMILY_MISMATCH")
+    return receipt
+
+
+def _resolve_reference_query_completion(
+    session: Session,
+    settings: CatalogSettings,
+    output: SupportedReferenceQueryStepOutput,
+    *,
+    artifact_reader: PinnedArtifactReadContext | None,
+) -> SupportedReferenceQueryWorkflowReceipt:
     materialized = _read_receipt(
         session,
         settings,
@@ -92,7 +128,7 @@ def resolve_native_reference_query_completion(
     body = json.loads(materialized.payload)
     if canonical_json_bytes(body) != materialized.payload:
         raise ValueError("REFERENCE_QUERY_RECEIPT_NONCANONICAL")
-    receipt = parse_reference_query_workflow_receipt(body)
+    receipt = parse_supported_reference_query_workflow_receipt(body)
     if (
         materialized.producer_job_id != receipt.receipt_owner_job_id
         or len(

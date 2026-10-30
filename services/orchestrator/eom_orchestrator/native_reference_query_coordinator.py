@@ -10,9 +10,9 @@ from eom_workflow.native_reference_query_coordinator import (
 )
 from eom_workflow.reference_query_execution import (
     ReferenceQueryLaunchAssociation,
-    SupportedReferenceQueryWorkflowRequest,
+    SupportedReferenceQueryWorkflowIntent,
     parse_reference_query_launch_association,
-    parse_supported_reference_query_workflow_request,
+    parse_supported_reference_query_workflow_intent,
 )
 from sqlalchemy.orm import Session
 
@@ -55,11 +55,11 @@ class NativeReferenceQueryHistory:
 def read_native_reference_query_launch(
     session: Session,
     *,
-    request: SupportedReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowIntent,
     workflow_id: str,
     step_run_id: str,
 ) -> ReferenceQueryLaunchAssociation | None:
-    request = parse_supported_reference_query_workflow_request(request)
+    request = parse_supported_reference_query_workflow_intent(request)
     try:
         result = read_native_query_launch(
             session, request=request, workflow_id=workflow_id, step_run_id=step_run_id
@@ -73,10 +73,10 @@ def read_native_reference_query_launch(
 def create_native_reference_query_launch(
     session: Session,
     *,
-    request: SupportedReferenceQueryWorkflowRequest,
+    request: SupportedReferenceQueryWorkflowIntent,
     launch: ReferenceQueryLaunchAssociation,
 ) -> ReferenceQueryLaunchAssociation:
-    request = parse_supported_reference_query_workflow_request(request)
+    request = parse_supported_reference_query_workflow_intent(request)
     launch = parse_reference_query_launch_association(launch)
     try:
         result = create_native_query_launch(session, request=request, launch=launch)
@@ -91,10 +91,10 @@ class NativeReferenceQueryCoordinator:
 
     def __init__(
         self,
-        request: SupportedReferenceQueryWorkflowRequest,
+        request: SupportedReferenceQueryWorkflowIntent,
         launch: ReferenceQueryLaunchAssociation,
     ) -> None:
-        self.request = parse_supported_reference_query_workflow_request(request)
+        self.request = parse_supported_reference_query_workflow_intent(request)
         self.launch = parse_reference_query_launch_association(launch)
         self._store = NativeQueryCheckpointStore(self.request, self.launch)
 

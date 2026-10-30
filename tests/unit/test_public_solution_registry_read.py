@@ -410,8 +410,48 @@ def test_public_read_replay_never_resolves_latest_index(public_read, monkeypatch
         latest,
     )
     application = CatalogPublicSolutionSimilarityRead(value.verifier)
+    prepared = application.prepare_query_in_session(
+        value.session, EmbeddingRegistryCaller("operator_" + "1" * 32), request
+    )
+    assert prepared.request_sha256 == request.request_sha256
+    assert prepared.anchor == request.anchor and prepared.row == numerical.rows[0]
     result = application.read_in_session(
         value.session, EmbeddingRegistryCaller("operator_" + "1" * 32), request, query
     )
     assert result.request.views[0].index.index_manifest == value.index_member
     latest.assert_not_called()
+
+
+def test_public_query_source_preparation_reauthorizes_after_text_materialization(
+    public_read, monkeypatch
+):
+    from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityRequest
+    from eom_catalog_service.public_solution_similarity_read import (
+        CatalogPublicSolutionSimilarityRead,
+    )
+    from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
+
+    value = public_read
+    request = PublicSolutionSimilarityRequest.model_validate(
+        seal(
+            value.original_request.model_dump(mode="json")
+            | {"views": [value.intent.selection.model_dump(mode="json")]},
+            "request_sha256",
+        )
+    )
+    original = value.verifier.resolve_lookup
+    calls = []
+
+    def changed(*args):
+        current = original(*args)
+        calls.append(current)
+        return current if len(calls) == 1 else replace(current, truncated=not current.truncated)
+
+    monkeypatch.setattr(value.verifier, "resolve_lookup", changed)
+    with pytest.raises(SimilarityContextReadError, match="SOURCE_REVOKED"):
+        CatalogPublicSolutionSimilarityRead(value.verifier).prepare_query_in_session(
+            value.session,
+            EmbeddingRegistryCaller("operator_" + "1" * 32),
+            request,
+        )
+    assert len(calls) == 2

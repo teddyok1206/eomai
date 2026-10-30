@@ -25,6 +25,9 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     embedding_input_set_sha256,
 )
 from eom_catalog_contracts.models import Sha256
+from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
+from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
+from eom_catalog_contracts.public_solution_reference import PublicSolutionSourceReference
 from eom_catalog_service.embedding_registry_catalog_adapter import (
     CatalogEmbeddingRegistryVerifier,
     EmbeddingRegistryOwnerConfiguration,
@@ -34,6 +37,8 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryLookup,
 )
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
+from eom_catalog_service.public_solution_similarity_read import CatalogPublicSolutionSimilarityRead
+from eom_catalog_service.public_solution_similarity_service import PreparedPublicSolutionQuerySource
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.similarity_context_ports import PreparedSimilarityContext
 from eom_catalog_service.similarity_context_service import validate_similarity_preparation
@@ -48,9 +53,11 @@ from eom_workflow.reference_query_execution import (
     ReferenceQueryExecutionPolicy,
     ReferenceQueryLaunchAssociation,
     ReferenceQueryStepOutput,
+    ReferenceQueryWorkflowRequestV3,
     SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_execution_policy,
     parse_reference_query_step_output,
+    parse_reference_query_workflow_request_v3,
     parse_supported_reference_query_workflow_request,
     validate_reference_query_launch_association,
     validate_reference_query_policy_bundle,
@@ -125,6 +132,50 @@ class ResolvedReferenceQuerySources:
 
 
 @dataclass(frozen=True, slots=True)
+class ResolvedPublicSolutionReferenceQuerySources:
+    """Current-root public source projection, not a source/lease/execution capability."""
+
+    request: ReferenceQueryWorkflowRequestV3
+    policy: ReferenceQueryExecutionPolicy
+    bundle: EmbeddingRuntimeBundle
+    prepared: PreparedPublicSolutionQuerySource
+
+    def __post_init__(self) -> None:
+        request = parse_reference_query_workflow_request_v3(self.request)
+        policy = parse_reference_query_execution_policy(self.policy)
+        bundle = parse_embedding_runtime_bundle(raw_similarity_contract_value(self.bundle))
+        validate_reference_query_request_references(request, policy, bundle)
+        if type(self.prepared) is not PreparedPublicSolutionQuerySource:
+            raise ValueError("REFERENCE_QUERY_PUBLIC_SOURCE_INVALID")
+        row = ReferenceQueryTextInput.model_validate(
+            raw_similarity_contract_value(self.prepared.row)
+        )
+        anchor = PublicSolutionSourceReference.model_validate(
+            raw_similarity_contract_value(self.prepared.anchor)
+        )
+        view = request.context_request.views[0]
+        if (
+            self.prepared.request_sha256 != request.context_request.request_sha256
+            or anchor != request.context_request.anchor
+            or row.view != "CONCRETE_FACETS"
+            or row.encoding.space_sha256 != policy.spaces.query.space_sha256
+            or row.encoding.storage_partition != view.index.storage_partition
+            or len(row.text.encode("utf-8")) > view.recipe.maximum_text_bytes
+        ):
+            raise ValueError("REFERENCE_QUERY_PUBLIC_SOURCE_INVALID")
+        object.__setattr__(self, "request", request)
+        object.__setattr__(self, "policy", policy)
+        object.__setattr__(self, "bundle", bundle)
+        object.__setattr__(
+            self,
+            "prepared",
+            PreparedPublicSolutionQuerySource(
+                self.prepared.request_sha256, request.context_request.anchor, row
+            ),
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class ResolvedCompletedReferenceQuerySources:
     """Root-local attached records and exact values, never a durable read permission."""
 
@@ -138,6 +189,8 @@ def build_reference_query_native_input(
     sources: ResolvedReferenceQuerySources, *, job_id: str, query_request_id: str
 ) -> EmbeddingReferenceQueryInputV11:
     """Derive bounded exact anchor rows, not permission or another source lookup."""
+    if type(sources) is not ResolvedReferenceQuerySources:
+        raise ValueError("REFERENCE_QUERY_SOURCE_FAMILY_INVALID")
     sources.__post_init__()
     context, policy = sources.request.context_request, sources.policy
     texts = dict(sources.prepared.query_texts)
@@ -189,6 +242,86 @@ def validate_current_reference_query_input(
     )
     if current != native_input:
         raise ValueError("REFERENCE_QUERY_EXECUTOR_CURRENT_INPUT_CHANGED")
+
+
+def build_public_solution_query_native_input(
+    sources: ResolvedPublicSolutionReferenceQuerySources,
+    *,
+    job_id: str,
+    query_request_id: str,
+) -> PublicSolutionQueryInput:
+    """Materialize one exact QUERY2 anchor; never reinterpret a DOCUMENT encoding."""
+    if type(sources) is not ResolvedPublicSolutionReferenceQuerySources:
+        raise ValueError("REFERENCE_QUERY_PUBLIC_SOURCE_INVALID")
+    sources.__post_init__()
+    row = sources.prepared.row
+    body = {
+        "schema_version": "embedding-reference-query-input/2.0",
+        "job_id": job_id,
+        "query_request_id": query_request_id,
+        "context_request_sha256": sources.request.context_request.request_sha256,
+        "spaces": sources.policy.spaces.model_dump(mode="json"),
+        "recipe": sources.request.context_request.views[0].recipe.model_dump(mode="json"),
+        "rows": [row.model_dump(mode="json")],
+        "batch_size": sources.policy.resource_profile.batch_size,
+        "threads": sources.policy.resource_profile.threads,
+        "input_set_sha256": embedding_input_set_sha256((row.encoding,)),
+    }
+    return PublicSolutionQueryInput.model_validate(body | {"request_sha256": content_sha256(body)})
+
+
+def resolve_public_solution_reference_query_sources(
+    owner: ReferenceQuerySourceOwner,
+    session: Session,
+    request: ReferenceQueryWorkflowRequestV3,
+    *,
+    artifact_reader: PinnedArtifactReadContext | None = None,
+) -> ResolvedPublicSolutionReferenceQuerySources:
+    """Same actual Identity/Catalog/control owners, distinct exact public-report request.
+
+    The running owner still requires its separate Workflow/claim/native admission.
+    This function neither changes installed configuration nor discovers latest.
+    """
+    request = parse_reference_query_workflow_request_v3(request)
+    caller = EmbeddingRegistryCaller(request.operator_audit.operator_id)
+    owner.identity.fence_current_operator(session, caller.operator_id)
+    config, context = owner.configuration, request.context_request
+    if (
+        not isinstance(config.registry.namespace, PublicSolutionIndexNamespace)
+        or request.native_execution_policy != config.native_execution_policy
+        or request.native_execution_policy_sha256 != config.native_execution_policy_sha256
+        or request.runtime_bundle != config.runtime_bundle
+    ):
+        raise ValueError("REFERENCE_QUERY_OWNER_CONFIGURATION_MISMATCH")
+    owner.catalog.authorize_scope(
+        session,
+        caller,
+        EmbeddingRegistryLookup(
+            config.registry.corpus_id,
+            config.registry.namespace,
+            context.graph_snapshot,
+            context.policy_revision_id,
+            context.policy_sha256,
+            context.maximum_sources,
+        ),
+    )
+    reader = (
+        PinnedArtifactReadContext.for_session(session, owner.settings)
+        if artifact_reader is None
+        else artifact_reader
+    )
+    reader.require_session(session)
+    if reader.settings != owner.settings:
+        raise ValueError("REFERENCE_QUERY_READ_ARTIFACT_CONTEXT_INVALID")
+    policy, bundle = read_pinned_reference_query_controls(reader, config)
+    validate_reference_query_request_references(request, policy, bundle)
+    prepared = CatalogPublicSolutionSimilarityRead(owner.catalog).prepare_query_in_session(
+        session, caller, context
+    )
+    reader.revalidate_provenance()
+    result = ResolvedPublicSolutionReferenceQuerySources(request, policy, bundle, prepared)
+    owner.identity.fence_current_operator(session, caller.operator_id)
+    return result
 
 
 class ReferenceQuerySourceOwner(Protocol):

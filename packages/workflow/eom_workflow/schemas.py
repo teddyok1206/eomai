@@ -1282,6 +1282,11 @@ NATIVE_REFERENCE_QUERY_COORDINATOR_V12_SCHEMA_RESOURCE = (
     "eom://schemas/workflow/native-reference-query-coordinator/1.2",
     "sha256:8e00ce9ceb8f0717bf6eb0c9a42481df4585b055d449a986e0471839df65bf65",
 )
+NATIVE_REFERENCE_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE = (
+    "native-reference-query-coordinator-v2.schema.json",
+    "eom://schemas/workflow/native-reference-query-coordinator/2.0",
+    "sha256:bc03cc4d0d9435ccf836810736586fc9fc5ab149c4cba8e963827b5ee1d264d1",
+)
 NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_SCHEMA_RESOURCE = (
     "native-private-chat-query-coordinator-v1.schema.json",
     "eom://schemas/workflow/native-private-chat-query-coordinator/1.0",
@@ -1310,6 +1315,14 @@ def _native_reference_query_coordinator_schema(
 
 def load_native_reference_query_coordinator_schema() -> dict[str, Any]:
     return copy.deepcopy(_native_reference_query_coordinator_schema())
+
+
+def load_native_reference_query_coordinator_v2_schema() -> dict[str, Any]:
+    return copy.deepcopy(
+        _native_reference_query_coordinator_schema(
+            NATIVE_REFERENCE_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE
+        )
+    )
 
 
 def load_native_private_chat_query_coordinator_schema() -> dict[str, Any]:
@@ -1369,6 +1382,12 @@ def validate_native_reference_query_checkpoint_v12(value: object) -> None:
     )
 
 
+def validate_native_reference_query_checkpoint_v2(value: object) -> None:
+    _validate_native_reference_query_checkpoint(
+        value, NATIVE_REFERENCE_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE
+    )
+
+
 def _validate_native_reference_query_checkpoint(
     value: object, resource: tuple[str, str, str]
 ) -> None:
@@ -1377,7 +1396,11 @@ def _validate_native_reference_query_checkpoint(
         if len(canonical_json_bytes(document)) > 16 * 1024:
             raise ValueError("QUERY checkpoint metadata exceeds its bound")
         registry = (
-            _reference_query_execution_registry()
+            (
+                _reference_query_public_execution_registry()
+                if resource == NATIVE_REFERENCE_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE
+                else _reference_query_execution_registry()
+            )
             .with_resource(
                 NATIVE_EMBEDDING_COORDINATOR_SCHEMA_RESOURCE[1],
                 Resource.from_contents(_native_embedding_coordinator_schema()),
@@ -1387,6 +1410,17 @@ def _validate_native_reference_query_checkpoint(
                 Resource.from_contents(_native_reference_query_coordinator_schema()),
             )
         )
+        if resource == NATIVE_REFERENCE_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE:
+            registry = registry.with_resources(
+                (
+                    selected[1],
+                    Resource.from_contents(_native_reference_query_coordinator_schema(selected)),
+                )
+                for selected in (
+                    NATIVE_REFERENCE_QUERY_COORDINATOR_V11_SCHEMA_RESOURCE,
+                    NATIVE_REFERENCE_QUERY_COORDINATOR_V12_SCHEMA_RESOURCE,
+                )
+            )
         Draft202012Validator(
             _native_reference_query_coordinator_schema(resource),
             registry=registry,
