@@ -8,6 +8,7 @@ import socket
 import sys
 from contextlib import suppress
 from pathlib import Path
+from types import MappingProxyType
 
 from eom_catalog_contracts.embedding_gpu_control import (
     EmbeddingGpuAllocationRequest,
@@ -41,16 +42,30 @@ from eom_catalog_service.embedding_gpu_batch_unit_descriptor import (
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
 
-_POLICIES = {
-    "INDEX": (
-        Path("/opt/eom/embedding-batch-policies/index.json"),
-        "EOM_GPU_BATCH_INDEX_POLICY_SHA256",
-    ),
-    "REFERENCE_QUERY": (
-        Path("/opt/eom/embedding-batch-policies/query.json"),
-        "EOM_GPU_BATCH_QUERY_POLICY_SHA256",
-    ),
-}
+_POLICIES = MappingProxyType(
+    {
+        "INDEX": (
+            Path("/opt/eom/embedding-batch-policies/index.json"),
+            "EOM_GPU_BATCH_INDEX_POLICY_SHA256",
+        ),
+        "REFERENCE_QUERY": (
+            Path("/opt/eom/embedding-batch-policies/query.json"),
+            "EOM_GPU_BATCH_QUERY_POLICY_SHA256",
+        ),
+    }
+)
+_PUBLIC_POLICIES = MappingProxyType(
+    {
+        "INDEX": (
+            Path("/opt/eom/embedding-batch-policies/public-index.json"),
+            "EOM_GPU_BATCH_PUBLIC_INDEX_POLICY_SHA256",
+        ),
+        "REFERENCE_QUERY": (
+            Path("/opt/eom/embedding-batch-policies/public-query.json"),
+            "EOM_GPU_BATCH_PUBLIC_QUERY_POLICY_SHA256",
+        ),
+    }
+)
 
 
 def _require(condition: bool) -> None:
@@ -58,20 +73,37 @@ def _require(condition: bool) -> None:
         raise ValueError("EMBEDDING_GPU_BATCH_OWNER_ENTRY_INVALID")
 
 
-def _policy(
-    files: NumericalRuntimeFileSnapshots, request: EmbeddingGpuAllocationRequest
+def _read_routing_policy(
+    files: NumericalRuntimeFileSnapshots, path: Path, variable: str
 ) -> EmbeddingDeviceRoutingPolicy:
-    _require(request.purpose in _POLICIES)
-    path, variable = _POLICIES[request.purpose]
     expected = os.environ.get(variable, "")
     _require(re.fullmatch(r"sha256:[0-9a-f]{64}", expected, re.ASCII) is not None)
     raw = files.read(path, sha256=expected, maximum=MAX_EMBEDDING_DEVICE_ROUTING_BYTES)
     policy = EmbeddingDeviceRoutingPolicy.model_validate(
         parse_rootlocal_evidence_document(raw, MAX_EMBEDDING_DEVICE_ROUTING_BYTES)
     )
+    _require(canonical_json_bytes(policy.model_dump(mode="json")) == raw)
+    return policy
+
+
+def _policy(
+    files: NumericalRuntimeFileSnapshots, request: EmbeddingGpuAllocationRequest
+) -> EmbeddingDeviceRoutingPolicy:
+    _require(request.purpose in _POLICIES)
+    primary = _read_routing_policy(files, *_POLICIES[request.purpose])
+    _require(primary.purpose == request.purpose)
+    policy = primary
+    if policy.policy_sha256 != request.routing_policy_sha256:
+        # Explicit opt-in to one fixed public recipe; neither request paths nor
+        # a malformed primary can select another policy or wider physical grant.
+        policy = _read_routing_policy(files, *_PUBLIC_POLICIES[request.purpose])
+        _require(
+            policy.cpu == primary.cpu
+            and policy.cuda == primary.cuda
+            and policy.view_recipe_sha256 != primary.view_recipe_sha256
+        )
     _require(
-        canonical_json_bytes(policy.model_dump(mode="json")) == raw
-        and policy.purpose == request.purpose
+        policy.purpose == request.purpose
         and policy.policy_sha256 == request.routing_policy_sha256
         and type(policy.cuda.backend.backend) is NativeCudaBackendSelection
         and policy.cuda.backend.backend.configuration == request.configuration

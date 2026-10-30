@@ -98,6 +98,46 @@ Web의 독립 wheel gate는 새 `item_db_similarity_contracts.py`가 명시적 r
 빠진 것을 탐지해 차단했다. inventory에 이 실제 모듈 하나를 추가하고 해당 release 회귀와
 독립 Web build를 재실행한다. 이 실패를 운영 장애나 미확인 성공으로 표시하지 않는다.
 
+## 운영 활성화 전 발견한 root GPU policy 선택 경계
+
+public INDEX6와 QUERY5는 기존 수치 runtime을 공유하지만 공통 풀이 recipe2에 대한 별도
+routing policy를 핀한다. 기존 고정 root batch entry는 purpose마다 policy 파일 하나만
+허용하므로, 기존 recipe1과 public recipe2를 cohost하면 새 public 실행이 거부된다.
+기존 정책 파일을 새 정책으로 덮으면 반대로 기존 작업이 깨진다. 실제 운영 controls를
+읽어 이 차이를 확인했으며, public activation 전에 기존 adapter의 이 경계만 보완한다.
+
+- 정본은 기존 root-protected routing Artifact와 고정 설치 파일·raw hash다. allocation
+  JSON Schema/wire·source 권한·native lease·수치 protocol·DB schema는 바꾸지 않는다.
+- purpose마다 기존 정책 하나 + 명시적 public 정책 하나만 허용한다. public 경로는 고정된
+  `public-index.json`/`public-query.json`이며 각각의 별도 root 환경 hash가 있어야 한다.
+  요청의 임의 경로·hash만으로 정책을 읽거나 등록할 수 없다.
+- 정상 기존 policy가 request의 exact semantic hash와 맞으면 기존 경로만 읽는다. 다를 때만
+  opt-in public policy를 읽고, CPU/CUDA backend·profile은 기존 정책과 정확히 같아야 한다.
+  recipe가 다른 것만 허용하므로 물리 권한·resource ceiling을 넓히는 fallback이 아니다.
+- malformed/missing/hash-mismatched 원 정책, public policy 부재·변조, 다른 request hash는
+  명시적 거부다. GPU BUSY로 바꾸거나 CPU로 강제 우회하지 않는다.
+- 기존 root adapter 소유권과 두 개의 O(1) fixed lookup을 유지한다. 새 registry·queue·
+  자유 형식 policy 목록이나 영속 cache는 만들지 않는다. 활성 native 실행 종료 후에만
+  설치 파일/hash/entrypoint를 호환 묶음으로 선택한다.
+
+`896c5966` owner stage와 미활성 read-only index plan은 보존한다. 위 수정까지 포함한
+successor 설치본을 준비하기 전에는 그 plan을 운영 활성화하지 않는다.
+
+후속 source gate: 기존 root entry/handoff/activation/controller/unit descriptor **100 PASS**,
+public/legacy indexing owner·finite batch **56 PASS**. 최종 immutable fixed-map root entry
+suite **28 PASS**(100 suite와 겹침), mypy 1개와 Ruff/format PASS다. 기존 정책의 정상 경로,
+INDEX/QUERY의 public opt-in, hash/미설정/다른 요청/더 넓은 자원/같은 recipe/원 정책 변조의
+거부를 포함한다. 물리 GPU·설치 grant·운영 동작은 아직 이 source gate로 입증하지 않았다.
+DB schema·lease·state-machine 변경은 없으므로 기존 guarded PostgreSQL evidence를 보존하고,
+이번 fixed-file selection diff만을 이유로 DB mutating suite를 다시 실행하지 않는다.
+
+별도 임시 디렉터리의 synthetic publisher로 실제 non-secret 준비 controls의 변환을 확인했다.
+새 public namespace 1개 + 기존 namespace 6개, 각 장치의 독립 grant, 실제 수치 runtime 입력
+보존, 같은 plan 재실행 결과 동일을 확인했다. 이 검사는 **1 PASS**, DB/NAS/model 호출 0이며
+source 권한·실제 벡터 등록 성공 증거는 아니다. metadata 정책 선택 순서를 grant의 정해진
+namespace 순서로 유지하도록 운영 adapter를 정리했고, 후보 검증 전에 NAS controls를
+발행하지 않았다.
+
 ## 22:01 UTC 체크포인트 — 세 슬롯 복구와 public QUERY 공식 조회 연결
 
 목표 상태는 **ACTIVE / 미완료**다. 사용자 확정 세 단계와 기존 창작 5건의 실제 수치·등록·

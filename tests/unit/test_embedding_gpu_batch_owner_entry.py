@@ -24,8 +24,8 @@ from tests.unit.test_embedding_device_routing import policy_document
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def policy_body():
-    body = policy_document("REFERENCE_QUERY")
+def policy_body(purpose="REFERENCE_QUERY"):
+    body = policy_document(purpose)
     resources = body["cuda"]["profile"]["resource_profile"]
     body["cuda"]["profile"]["resource_profile"] = seal(
         resources
@@ -152,6 +152,98 @@ def test_root_policy_or_resource_mismatch_is_not_gpu_busy_or_cpu_fallback(monkey
         )
     with pytest.raises(ValueError):
         entry._policy(file_seam(raw), request)
+
+
+@pytest.mark.parametrize("purpose", ("INDEX", "REFERENCE_QUERY"))
+def test_public_recipe_uses_fixed_opt_in_and_preserves_original_numerical_grant(
+    monkeypatch, purpose
+):
+    primary = EmbeddingDeviceRoutingPolicy.model_validate(policy_body(purpose))
+    public = EmbeddingDeviceRoutingPolicy.model_validate(
+        seal(
+            primary.model_dump(mode="json") | {"view_recipe_sha256": "sha256:" + "f" * 64},
+            "policy_sha256",
+        )
+    )
+    request = request_for(public)
+    request = EmbeddingGpuAllocationRequest.model_validate(
+        seal(request.model_dump(mode="json") | {"purpose": purpose}, "message_sha256")
+    )
+    paths = {}
+    for selection, policy in ((entry._POLICIES, primary), (entry._PUBLIC_POLICIES, public)):
+        path, variable = selection[purpose]
+        paths[path] = canonical_json_bytes(policy.model_dump(mode="json"))
+        monkeypatch.setenv(variable, sha256_bytes(paths[path]))
+    calls = []
+
+    def read(path, *, sha256, maximum):
+        calls.append(path)
+        raw = paths[path]
+        assert sha256_bytes(raw) == sha256 and len(raw) <= maximum
+        return raw
+
+    files = SimpleNamespace(read=read, assert_unchanged=Mock())
+    assert entry._policy(files, request) == public
+    assert calls == [entry._POLICIES[purpose][0], entry._PUBLIC_POLICIES[purpose][0]]
+    calls.clear()
+    original = request_for(primary)
+    original = EmbeddingGpuAllocationRequest.model_validate(
+        seal(original.model_dump(mode="json") | {"purpose": purpose}, "message_sha256")
+    )
+    assert entry._policy(files, original) == primary
+    assert calls == [entry._POLICIES[purpose][0]]
+
+
+@pytest.mark.parametrize(
+    "fault", ("missing", "hash", "resources", "same_recipe", "request", "primary")
+)
+def test_public_policy_never_masks_bad_original_or_expands_physical_grant(monkeypatch, fault):
+    primary = EmbeddingDeviceRoutingPolicy.model_validate(policy_body())
+    public_body = primary.model_dump(mode="json") | {"view_recipe_sha256": "sha256:" + "f" * 64}
+    if fault == "resources":
+        public_body["cuda"]["profile"]["resource_profile"] = seal(
+            public_body["cuda"]["profile"]["resource_profile"] | {"cpu_quota_percent": 500},
+            "resource_profile_sha256",
+        )
+    elif fault == "same_recipe":
+        public_body["view_recipe_sha256"] = primary.view_recipe_sha256
+        public_body["policy_revision_id"] = "embeddingroutingpolicyrev_" + "e" * 32
+    public = EmbeddingDeviceRoutingPolicy.model_validate(seal(public_body, "policy_sha256"))
+    request = request_for(public)
+    if fault == "request":
+        request = EmbeddingGpuAllocationRequest.model_validate(
+            seal(
+                request.model_dump(mode="json") | {"routing_policy_sha256": "sha256:" + "0" * 64},
+                "message_sha256",
+            )
+        )
+    paths = {}
+    for selection, policy in ((entry._POLICIES, primary), (entry._PUBLIC_POLICIES, public)):
+        path, variable = selection["REFERENCE_QUERY"]
+        paths[path] = canonical_json_bytes(policy.model_dump(mode="json"))
+        monkeypatch.setenv(variable, sha256_bytes(paths[path]))
+    if fault == "missing":
+        monkeypatch.delenv("EOM_GPU_BATCH_PUBLIC_QUERY_POLICY_SHA256")
+    elif fault in {"hash", "primary"}:
+        monkeypatch.setenv(
+            "EOM_GPU_BATCH_PUBLIC_QUERY_POLICY_SHA256"
+            if fault == "hash"
+            else "EOM_GPU_BATCH_QUERY_POLICY_SHA256",
+            "sha256:" + "0" * 64,
+        )
+    calls = []
+
+    def read(path, *, sha256, maximum):
+        calls.append(path)
+        raw = paths[path]
+        if sha256_bytes(raw) != sha256 or len(raw) > maximum:
+            raise ValueError("synthetic protected file mismatch")
+        return raw
+
+    with pytest.raises(ValueError):
+        entry._policy(SimpleNamespace(read=read, assert_unchanged=Mock()), request)
+    if fault == "primary":
+        assert calls == [entry._POLICIES["REFERENCE_QUERY"][0]]
 
 
 def test_fixed_unit_hash_bootstrap_and_secret_boundaries(monkeypatch):
