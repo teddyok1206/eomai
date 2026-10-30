@@ -408,4 +408,28 @@ index다. 원래 full-audit assertion을 완화하거나 목적과 무관한 모
 Evidence: `/tmp/eom-creative-parallel-final-support-unit-20261030.log`,
 `/tmp/eom-creative-parallel-final-pg-20261030.log`.
 
+### Exact release staging checkpoint
+
+- Source commit `8a88667700bdb2456871931ec94dc75b20908815`, pushed main.
+  Source tree `2391d5b917df29318e4c3648a1a60bcba33007e1`.
+- Build and wheel RECORD validation PASS:
+  `/tmp/eom-api-build/8a88667700bdb2456871931ec94dc75b20908815.BrNrD8/dist`.
+  The unfinished public QUERY2 work was preserved separately, excluded from the clean
+  release build, then restored unchanged. Do not claim that search adapter is deployed.
+- Immutable protected source/wheel staging succeeded, without a migration or service change:
+  `/var/lib/eom-release-operator-stage.8a886677-gzfrs2r_`.
+  Context 1.13 SHA `sha256:7716596a51a15c38223b6e9b1f976e3044235dd0d3e381829640f2e6eeded73e`.
+  Operator helper/launcher: `/usr/local/libexec/eom-release-operator-creative-8a886677/`.
+  Runtime ADMIT validation was started separately; inspect its terminal result before any
+  callback, never assume completion from the existence of this directory.
+- Retained root staging input: `/usr/local/libexec/eom-stage-creative-8a886677.py`.
+  SHA `ab0ecaabc408b124f3645f87f7a62640935f45dcdbd0120d6d12ed93ce837744`.
+  Staging evidence `/tmp/eom-creative-release-stage-8a886677-20261030.json`;
+  admission output `/tmp/eom-creative-release-admission-8a886677-20261030.log`.
+- 19:16 UTC operating observation: serial **102/1053** VERIFIED, next 10448 EXTRACTING.
+  Creative owner PID 3040218 / invocation e17abed891af4fd5a79e8799579809a7;
+  INDEX 2113256 / 8b9b5ed1ec1a4c67bc9ec7c44f9debff;
+  QUERY 1708497 / 9c60629b423547fc832a91b7e9f180e3 unchanged.
+  Three-slot activation, usage UI fix and live similarity search are still pending.
+
 Graph 복구 Slack 보고는 `devreport_e133ee93d7054d8a8b42b35988cb3dcb`로 전송·보관됐다.
