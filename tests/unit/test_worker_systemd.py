@@ -24,6 +24,7 @@ from eom_orchestrator.worker_registry import WorkerSlot
 from eom_orchestrator.worker_systemd import (
     AUTH_REQUIRED_EXIT,
     AUTH_TEMPLATE_SHA256,
+    CREATIVE_REPORT_WORKER_TEMPLATE_SHA256,
     CUSTOMER_SUPPORT_WORKER_TEMPLATE_SHA256,
     FIXED_CUSTOMER_SUPPORT_WORKER_TIMEOUT_SECONDS,
     FIXED_PDF_DOCUMENT_REVIEW_WORKER_TIMEOUT_SECONDS,
@@ -158,6 +159,59 @@ def test_execution_contract_selects_only_reviewed_fixed_templates() -> None:
         worker_unit_name_for_execution(support, JOB_ID, timeout_seconds=899)
     with pytest.raises(ValueError, match="fixed unit contract"):
         worker_unit_name_for_execution(_slot(), JOB_ID, timeout_seconds=900)
+
+
+def test_creative_report_purpose_keeps_slot04_default_contract_and_identity():
+    slot = _slot(4).model_copy(update={"role": "item_management"})
+    assert fixed_worker_timeout_seconds(slot) == 1800
+    assert worker_unit_name_for_execution(slot, JOB_ID, timeout_seconds=1800) == (
+        f"eom-worker-04@{JOB_ID}.service"
+    )
+    assert worker_unit_name_for_execution(slot, JOB_ID, timeout_seconds=7200) == (
+        f"eom-worker-analysis-04@{JOB_ID}.service"
+    )
+    with pytest.raises(ValueError, match="fixed unit contract"):
+        worker_unit_name_for_execution(slot, JOB_ID, timeout_seconds=7199)
+    with pytest.raises(ValueError, match="fixed unit contract"):
+        worker_unit_name_for_execution(_slot(4), JOB_ID, timeout_seconds=7200)
+
+
+def test_creative_report_template_changes_only_description_and_reviewed_timeout():
+    original = (ROOT / "infra/systemd/eom-worker-04@.service").read_text()
+    member = ROOT / "infra/systemd/eom-worker-analysis-04@.service"
+    assert hashlib.sha256(member.read_bytes()).hexdigest() == CREATIVE_REPORT_WORKER_TEMPLATE_SHA256
+    restored = (
+        member.read_text()
+        .replace(
+            "EOM fixed creative report worker slot 04 (purpose v1)",
+            "EOM fixed Codex worker slot 04 (contract v1)",
+        )
+        .replace("TimeoutStartSec=7200", "TimeoutStartSec=1800")
+    )
+    assert restored == original
+
+
+def test_slot04_recovery_observes_the_running_report_profile(monkeypatch):
+    name = f"eom-worker-analysis-04@{JOB_ID}.service"
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd._read_unit_active_returncode",
+        lambda unit: 0 if unit == name else 3,
+    )
+    monkeypatch.setattr(
+        "eom_orchestrator.worker_systemd._read_unit_status",
+        lambda unit: (
+            _status(active_state="active") if unit == name else _status(main_code=0, started=0)
+        ),
+    )
+    result = inspect_worker_unit_activity(_slot(4), JOB_ID)
+    assert result.state == "RUNNING" and result.unit_name == name
+
+
+def test_slot04_recovery_keeps_ambiguous_two_profile_history_unknown(monkeypatch):
+    monkeypatch.setattr("eom_orchestrator.worker_systemd._read_unit_active_returncode", lambda _: 3)
+    monkeypatch.setattr("eom_orchestrator.worker_systemd._read_unit_status", lambda _: _status())
+    result = inspect_worker_unit_activity(_slot(4), JOB_ID)
+    assert result.state == "UNKNOWN" and result.exit_code is None
 
 
 @pytest.mark.skipif(shutil.which("systemd-escape") is None, reason="systemd-escape unavailable")
@@ -1495,6 +1549,34 @@ def test_polkit_rule_has_no_external_execution_or_cached_authorization() -> None
             f"eom-worker-document-review-06@{JOB_ID}.service",
             "start",
             "yes",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            f"eom-worker-analysis-04@{JOB_ID}.service",
+            "start",
+            "yes",
+        ),
+        (
+            "eom",
+            "org.freedesktop.systemd1.manage-units",
+            f"eom-worker-analysis-04@{JOB_ID}.service",
+            "start",
+            "no",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            f"eom-worker-analysis-04@{JOB_ID}.service",
+            "restart",
+            "no",
+        ),
+        (
+            "eom-workflow-runner",
+            "org.freedesktop.systemd1.manage-units",
+            f"eom-worker-analysis-05@{JOB_ID}.service",
+            "start",
+            "no",
         ),
         (
             "eom-workflow-runner",

@@ -9,14 +9,26 @@ from threading import Barrier
 from typing import Any
 from uuid import uuid4
 
+# This module also checks the complete Alembic composition. Load every schema
+# owner explicitly rather than depend on which unrelated test module ran first.
+import eom_api.educational_quality_models
+import eom_api.pdf_document_review_models  # noqa: F401
+import eom_catalog_service.curated_document_assembly_models
+import eom_catalog_service.embedding_registry_models
+import eom_catalog_service.external_item_models
 import eom_catalog_service.item_origin_models
 import eom_catalog_service.knowledge_analysis_batch_models
 import eom_catalog_service.knowledge_graph_models
 import eom_catalog_service.legacy_assessment_models
+import eom_catalog_service.legacy_item_extraction_batch_models
+import eom_catalog_service.legacy_item_learning_models
 import eom_catalog_service.legacy_usage_models
-import eom_catalog_service.models  # noqa: F401
+import eom_catalog_service.models
+import eom_catalog_service.pdf_learning_completion_models  # noqa: F401
 import eom_hwpx_manager.models  # noqa: F401
+import eom_identity_service.local_indexing_service_models
 import eom_identity_service.models  # noqa: F401
+import eom_orchestrator.general_chat_models
 import eom_orchestrator.knowledge_analysis_models  # noqa: F401
 import eom_orchestrator.legacy_item_editorial_compatibility_bootstrap as editorial_bootstrap
 import eom_orchestrator.legacy_item_extraction_bootstrap as legacy_extraction_bootstrap

@@ -156,7 +156,9 @@ class WorkerCapacityPolicyRevisionRecord(Base):
         CheckConstraint(
             "max_configured_slots BETWEEN 1 AND 6 AND max_active_codex BETWEEN 1 AND 3 "
             "AND max_active_codex <= max_configured_slots AND max_active_per_slot = 1 "
-            "AND max_active_gpu = 1 AND max_active_knowledge_analysis BETWEEN 1 AND 2",
+            "AND max_active_gpu = 1 AND (max_active_knowledge_analysis BETWEEN 1 AND 2 "
+            "OR (schema_version = 'worker-capacity-policy/1.4' "
+            "AND max_active_knowledge_analysis = 3))",
             name="ck_capacity_policy_host_limits",
         ),
         CheckConstraint("revision_number >= 1", name="ck_capacity_policy_revision_number_value"),

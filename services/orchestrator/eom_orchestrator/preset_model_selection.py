@@ -18,6 +18,7 @@ from eom_workflow import (
     WorkerCapacityPolicyV2,
     WorkerCapacityPolicyV3,
     WorkerCapacityPolicyV4,
+    WorkerCapacityPolicyV5,
     validate_control_contract,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -45,13 +46,18 @@ from eom_orchestrator.worker_exec import codex_command
 
 Preset = ExecutionPresetRevision | ExecutionPresetRevisionV2
 Capacity = (
-    WorkerCapacityPolicy | WorkerCapacityPolicyV2 | WorkerCapacityPolicyV3 | WorkerCapacityPolicyV4
+    WorkerCapacityPolicy
+    | WorkerCapacityPolicyV2
+    | WorkerCapacityPolicyV3
+    | WorkerCapacityPolicyV4
+    | WorkerCapacityPolicyV5
 )
 _CAPACITY_MODELS: dict[str, tuple[str, type[Capacity]]] = {
     "worker-capacity-policy/1.0": ("worker-capacity-policy", WorkerCapacityPolicy),
     "worker-capacity-policy/1.1": ("worker-capacity-policy-v2", WorkerCapacityPolicyV2),
     "worker-capacity-policy/1.2": ("worker-capacity-policy-v3", WorkerCapacityPolicyV3),
     "worker-capacity-policy/1.3": ("worker-capacity-policy-v4", WorkerCapacityPolicyV4),
+    "worker-capacity-policy/1.4": ("worker-capacity-policy-v5", WorkerCapacityPolicyV5),
 }
 _EXECUTION_EFFORTS = frozenset(str(effort) for effort in ReasoningEffort)
 
@@ -430,9 +436,21 @@ def _available_capacity_models(
         }
         pairs.intersection_update(native_pairs)
         for pool_key, members in memberships.items():
-            if slot.slot_id in members and (pool_key, slot.role) in pool_roles:
-                eligible.setdefault((pool_key, slot.role), set()).update(pairs)
-                observed_pools.add((pool_key, str(slot.role)))
+            if slot.slot_id not in members:
+                continue
+            role = str(slot.role)
+            if isinstance(capacity_model, WorkerCapacityPolicyV5):
+                try:
+                    role = capacity_model.execution_role_for_slot(
+                        pool_key=pool_key, slot_key=f"slot{slot.slot_id}", native_role=role
+                    )
+                except ValueError as exc:
+                    raise ControlPlaneError(
+                        "CONTROL_CAPACITY_ROLE_MISMATCH", "delegated native slot role differs"
+                    ) from exc
+            if (pool_key, role) in pool_roles:
+                eligible.setdefault((pool_key, role), set()).update(pairs)
+                observed_pools.add((pool_key, role))
     options = {
         scope: tuple(
             ModelCandidate.model_validate({"model": model, "reasoning_effort": effort})

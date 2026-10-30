@@ -1,6 +1,6 @@
 # Creative cohort: three actual report-writing slots
 
-Status: design for the user's current goal; NOT installed or accepted.
+Status: capacity/fixed-unit source verified; cohort continuation NOT yet implemented or installed.
 Date: 2026-10-30 UTC.
 
 ## Decision and existing boundary
@@ -47,7 +47,8 @@ race-safe boundaries. The embedding owner discovers committed publications async
 
 ## Three physical workers without role or privilege bypass
 
-Implement one explicit fixed-host capacity successor for this bounded purpose. Review a
+Implement one explicit capacity successor for this bounded purpose, under a separate logical
+capacity key so the current `fixed-host` policy pointer remains unchanged. Review a
 purpose-limited SUPPORT grant on physical slot04 in addition to 05/06, retaining slot04's
 default item-management identity and authentication. Do not rewrite WorkerSlotRecord.role,
 copy auth, broaden Linux privileges or remove the old equality check globally. The exact
@@ -71,6 +72,18 @@ No new DB table/index is expected: use existing indexed commands, target lookup,
 records, publication and append-only history. Add a migration only if inspection proves a
 missing persistent invariant, not for an ephemeral three-entry window.
 
+Inspection found that the existing DB CHECK caps Knowledge Analysis at two, and Orchestrator
+correctly classifies both EXTERNAL_ITEM_LEARNING and knowledge analysis as that workload.
+Migration `0064` therefore admits a ceiling of three only for explicit capacity schema `1.4`;
+old schema rows retain their original upper bound. It adds no table, queue, role column or
+index. Downgrade refuses once three-report capacity history exists. The protected release
+operator needs an additive exact `0064` context/callback, not a direct production SQL change.
+
+The new schema carries an explicit immutable `slot04/item_management → support` delegation,
+limited to the `creative-reports` pool. The same mapping owns prepublication model options
+and actual lease eligibility. SQL eligibility additionally excludes a tampered slot04 default
+role. Existing host advisory lock and held-slot unique constraint remain authoritative.
+
 Before activation test schema mirrors, immutable predecessor replay, exact source/preset
 resolution, three distinct claims, cross-policy global ceiling, per-slot exclusivity,
 interruption/retransmission, serial Graph CAS, and report/source hash preservation. Mutating
@@ -92,3 +105,18 @@ or the analysis ceiling. Rewriting all old cohort/preset pins breaks reproducibi
 new worker account adds provisioning/authentication without needing a new physical slot.
 The bounded existing-owner continuation is the smallest change that can produce three actual
 workers while retaining current source, queue, Graph and operating ownership.
+
+## Capacity component source checkpoint
+
+New capacity, exact role-purpose delegation, old control contracts, fixed unit, polkit
+allow/deny cases and release context/callback tests: 268 PASS (overlapping groups, not summed
+with earlier checks). Guarded disposable PostgreSQL: 15 PASS covering actual three distinct
+claims, same-request concurrent replay, original role preservation/tamper rejection, shared
+host ceiling with old policies, old knowledge/GPU limits, downgrade history protection and
+the changed capacity table metadata. Empty-state 0064 upgrade/downgrade/re-upgrade also PASS.
+Ten affected core modules passed mypy; affected Ruff/format and shell syntax checks PASS.
+
+The separate complete metadata audit still reports 14 pre-existing differences; these were
+confirmed identical against the unchanged installed 54b39f7f baseline. Its assertion was not
+weakened. See the operating record. No capacity policy, migration, worker template or new
+three-slot execution scope has been activated in production at this checkpoint.

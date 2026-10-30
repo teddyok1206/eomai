@@ -2366,6 +2366,57 @@ class WorkerCapacityPolicyV4(FrozenModel):
         return self
 
 
+class CreativeReportSlotRoleDelegation(FrozenModel):
+    """One reviewed execution purpose; the physical default role is unchanged."""
+
+    pool_key: Literal["creative-reports"]
+    slot_key: Literal["slot04"]
+    native_role: Literal["item_management"]
+    execution_role: Literal["support"]
+
+
+class WorkerCapacityPolicyV5(FrozenModel):
+    """Independent creative-report capacity, not a mutation of fixed-host V4."""
+
+    schema_version: Literal["worker-capacity-policy/1.4"] = "worker-capacity-policy/1.4"
+    capacity_policy_id: str = Field(pattern=r"^capacity_[0-9a-f]{32}$")
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    revision_number: Literal[1] = 1
+    state: RevisionState
+    purpose: Literal["CREATIVE_REPORT_BACKFILL"] = "CREATIVE_REPORT_BACKFILL"
+    max_configured_slots: Literal[6] = 6
+    max_active_codex: Literal[3] = 3
+    max_active_per_slot: Literal[1] = 1
+    max_active_gpu: Literal[1] = 1
+    max_active_knowledge_analysis: Literal[3] = 3
+    pools: tuple[WorkerCapacityPoolV2, ...] = Field(min_length=1, max_length=1)
+    delegated_slot_roles: tuple[CreativeReportSlotRoleDelegation, ...] = Field(
+        min_length=1, max_length=1
+    )
+    content_sha256: Sha256
+    created_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def exact_creative_report_purpose(self) -> WorkerCapacityPolicyV5:
+        pool = self.pools[0]
+        if (pool.pool_key, pool.roles, pool.slot_keys, pool.max_active) != (
+            "creative-reports",
+            ("support",),
+            ("slot04", "slot05", "slot06"),
+            3,
+        ):
+            raise ValueError("creative report capacity differs from its reviewed purpose")
+        return self
+
+    def execution_role_for_slot(self, *, pool_key: str, slot_key: str, native_role: str) -> str:
+        grant = self.delegated_slot_roles[0]
+        if pool_key == grant.pool_key and slot_key == grant.slot_key:
+            if native_role != grant.native_role:
+                raise ValueError("delegated physical slot default role differs")
+            return grant.execution_role
+        return native_role
+
+
 class WorkerLeaseView(FrozenModel):
     schema_version: Literal["worker-lease-view/1.0"] = "worker-lease-view/1.0"
     lease_id: str = Field(pattern=r"^workerlease_[0-9a-f]{32}$")

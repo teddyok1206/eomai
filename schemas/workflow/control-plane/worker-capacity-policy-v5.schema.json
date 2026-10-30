@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/worker-capacity-policy/1.4",
+  "title": "EOM Creative Report Capacity Policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "capacity_policy_id", "capacity_policy_revision_id", "revision_number", "state", "purpose", "max_configured_slots", "max_active_codex", "max_active_per_slot", "max_active_gpu", "max_active_knowledge_analysis", "pools", "delegated_slot_roles", "content_sha256", "created_at"],
+  "properties": {
+    "schema_version": {"const": "worker-capacity-policy/1.4"},
+    "capacity_policy_id": {"type": "string", "pattern": "^capacity_[0-9a-f]{32}$"},
+    "capacity_policy_revision_id": {"type": "string", "pattern": "^capacityrev_[0-9a-f]{32}$"},
+    "revision_number": {"const": 1},
+    "state": {"enum": ["DRAFT", "RELEASED", "DEPRECATED"]},
+    "purpose": {"const": "CREATIVE_REPORT_BACKFILL"},
+    "max_configured_slots": {"const": 6},
+    "max_active_codex": {"const": 3},
+    "max_active_per_slot": {"const": 1},
+    "max_active_gpu": {"const": 1},
+    "max_active_knowledge_analysis": {"const": 3},
+    "pools": {"const": [{"pool_key": "creative-reports", "roles": ["support"], "slot_keys": ["slot04", "slot05", "slot06"], "max_active": 3}]},
+    "delegated_slot_roles": {"const": [{"pool_key": "creative-reports", "slot_key": "slot04", "native_role": "item_management", "execution_role": "support"}]},
+    "content_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "created_at": {"type": "string", "format": "date-time"}
+  }
+}

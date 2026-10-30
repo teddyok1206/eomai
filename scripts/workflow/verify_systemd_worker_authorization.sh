@@ -11,6 +11,8 @@ SUPPORT_WORKER_SOURCE="${REPOSITORY_ROOT}/infra/systemd/eom-worker-support-06@.s
 SUPPORT_WORKER_INSTALLED="${UNIT_ROOT}/eom-worker-support-06@.service"
 DOCUMENT_REVIEW_WORKER_SOURCE="${REPOSITORY_ROOT}/infra/systemd/eom-worker-document-review-06@.service"
 DOCUMENT_REVIEW_WORKER_INSTALLED="${UNIT_ROOT}/eom-worker-document-review-06@.service"
+CREATIVE_REPORT_WORKER_SOURCE="${REPOSITORY_ROOT}/infra/systemd/eom-worker-analysis-04@.service"
+CREATIVE_REPORT_WORKER_INSTALLED="${UNIT_ROOT}/eom-worker-analysis-04@.service"
 
 fail() {
   printf 'ERROR: %s\n' "$1" >&2
@@ -37,6 +39,10 @@ cmp --silent "${DOCUMENT_REVIEW_WORKER_SOURCE}" "${DOCUMENT_REVIEW_WORKER_INSTAL
   fail "PDF document-review worker template source drift"
 [[ "$(stat -c '%U:%G:%a' "${DOCUMENT_REVIEW_WORKER_INSTALLED}")" == "root:root:644" ]] || \
   fail "PDF document-review worker template ownership or mode is invalid"
+cmp --silent "${CREATIVE_REPORT_WORKER_SOURCE}" "${CREATIVE_REPORT_WORKER_INSTALLED}" || \
+  fail "creative-report worker template source drift"
+[[ "$(stat -c '%U:%G:%a' "${CREATIVE_REPORT_WORKER_INSTALLED}")" == "root:root:644" ]] || \
+  fail "creative-report worker template ownership or mode is invalid"
 
 for slot in 01 02 03 04 05 06; do
   worker_source="${REPOSITORY_ROOT}/infra/systemd/eom-worker-${slot}@.service"
@@ -68,6 +74,10 @@ for slot in 01 02 03 04 05 06; do
 done
 
 negative_probe="eom-worker-probe-01@probe_0123456789abcdef0123456789abcdef.service"
+if /usr/bin/systemctl --no-ask-password --wait restart \
+  "eom-worker-analysis-04@job_0123456789abcdef0123456789abcdef.service"; then
+  fail "creative-report worker restart authorization was unexpectedly granted"
+fi
 if /usr/bin/systemctl --no-ask-password --wait restart "${negative_probe}"; then
   fail "restart authorization was unexpectedly granted"
 fi

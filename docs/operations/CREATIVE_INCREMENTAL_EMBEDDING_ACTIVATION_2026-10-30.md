@@ -336,3 +336,50 @@ public 전용 Runner/queue/service를 복제하는 대안은 사용하지 않는
   아직 확인하지 않았으며 다음 검증 항목이다.**
 - Slack milestone 전송·보관 PASS: `devreport_25e5b878c4bb4774b34dff487f1b3e71`.
   완료 조건 변경과 현재 source/운영 상태를 구분했고 목표 완료로 보고하지 않았다.
+
+### 실제 Graph 복구 확인과 3슬롯 source 준비
+
+- 중단 문항 10413은 원래 accepted analysis와 Item Revision을 그대로 재사용해
+  `graphrev_093e67fbaa8f03b9ce1fb17df1eee7bc`에 등록됐다. 공식 보고서 조회까지 통과해
+  96/1053이 됐다. 18:17 UTC 관측은 98/1053, 다음 10416 추출 중이다. 새 문항들이
+  순차적으로 진행되는 증거이며 **3개 슬롯 병렬 실행의 증거는 아니다**.
+- 고정 전후 Graph의 accepted source 1110→1111, 기존 source/revision/hash 변경 0,
+  원래 accepted candidate 재사용을 read-only 확인했다. 교과서·기출 node 17,000개와
+  edge 40,652개 모두 누락/재발급 0이다. metadata evidence:
+  `/tmp/eom-creative-preservation-20261030T1800.json` (이름으로 시각을 추정하지 않는다).
+- 별도 capacity key의 schema 1.4는 4/5/6번을 이용한다. slot04의 물리 default-role은
+  그대로 두고, 명시된 `creative-reports/support` 목적에만 위임한다. 기존 fixed-host
+  current pointer·계정·auth·전역 Codex 상한 3·슬롯별 상한 1을 바꾸지 않는다.
+- 새 0064는 1.4 목적에만 analysis 상한 3을 허용한다. 전용 새 disposable DB
+  `/tmp/eom-api-testdb-20261030175640_02dc147e`에서 upgrade/downgrade/re-upgrade PASS.
+  실제 3개의 동시 claim, 같은 Job 재전송, 원래 역할 tamper 거부, legacy 정책과 공유하는
+  전역 상한, 3슬롯 이력 보존 downgrade guard를 검증했다. 운영 DB에 적용하지 않았다.
+- 보호된 release context/admission 1.13과 exact 0064 callback을 추가한다. 기존 1.12와
+  0063 callback 의미는 보존한다. 현재 운영 0062에서 0063+0064를 동일 승인 source로
+  올릴 때만 쓰는 별도 `MIGRATION_UPGRADE_0064_FROM_0062`도 정확한 predecessor를 검사한다.
+  generic/latest migration, 직접 production SQL, 예전 callback 재해석을 사용하지 않는다.
+- slot04의 별도 고정 analysis unit은 원래 identity·sandbox·명령을 유지하고 승인된
+  7200초 timeout만 구분한다. lease 복구는 두 profile을 모두 관측해 실행 중/이력 모호성을
+  없던 작업으로 오인하지 않는다. 소스·테스트 단계이며 아직 운영 설치하지 않았다.
+
+다음은 새 scope/preset admission과 bounded cohort driver, 호환 배포·실제 3슬롯 반복 실행이다.
+운영 창작 owner는 계속 54b39f7f이며 API/Web/INDEX/QUERY와 GPU runtime pin은 유지한다.
+전체 목표와 공식 유사도 검색 활성화는 여전히 미완료다.
+
+#### 넓은 metadata 감사에서 발견한 기존 차이 — 현재 변경과 분리
+
+완전한 ORM composition 감사는 관련 model import 순서에 의존하던 문제를 노출했다.
+필요한 owner를 명시적으로 불러온 뒤에도 14개의 차이가 남았다. 같은 disposable DB에서
+변경 전 실제 설치본 54b39f7f와 현재 source를 각각 별도 interpreter로 대조했고, **14개
+차이의 table/column/constraint/index 목록이 동일**했으며 worker_capacity 차이는 없었다.
+새 변경이 추가한 schema drift가 아니다. 전체 감사는 PASS로 바꾸지 않았다.
+
+차이는 curated assembly current-revision FK의 ondelete, 품질 검토/legacy/PDF 완료
+operator 열 길이, whole-exam HWPX job 열 길이·index 정의, private-chat turn expression
+index다. 원래 full-audit assertion을 완화하거나 목적과 무관한 모델·index를 변경해
+검사를 통과시키지 않는다. 별도 유지보수 대조 대상으로 보존하고, 이번 capacity는
+실제 새 DB 제약·동시성 및 변경한 capacity table 범위를 검증한다. read-only 대조 결과:
+`/tmp/eom-capacity-current-schema-diff-20261030.json` /
+`/tmp/eom-capacity-baseline-schema-diff-20261030.json`.
+
+Graph 복구 Slack 보고는 `devreport_e133ee93d7054d8a8b42b35988cb3dcb`로 전송·보관됐다.

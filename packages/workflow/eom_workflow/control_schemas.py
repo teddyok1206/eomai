@@ -776,6 +776,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "1.3",
             "sha256:6b0c09522db5c6995468a41cc54fdcab4ea3d9df1a5cdcfc8502d0833b47a3e5",
         ),
+        "worker-capacity-policy-v5": ControlSchemaResource(
+            "schemas/workflow/control-plane/worker-capacity-policy-v5.schema.json",
+            "resources/control-plane/worker-capacity-policy-v5.schema.json",
+            "1.4",
+            "sha256:80c6feba9c826430a1a65d9ca546c32d7af62fdac41eaab13b1ceb09c2c032b4",
+        ),
         "worker-slot-inventory-v2": ControlSchemaResource(
             "schemas/workflow/control-plane/worker-slot-inventory-v2.schema.json",
             "resources/control-plane/worker-slot-inventory-v2.schema.json",

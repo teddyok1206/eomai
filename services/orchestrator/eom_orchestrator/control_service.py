@@ -29,6 +29,7 @@ from eom_workflow import (
     WorkerCapacityPolicyV2,
     WorkerCapacityPolicyV3,
     WorkerCapacityPolicyV4,
+    WorkerCapacityPolicyV5,
     WorkerLeaseView,
     validate_control_contract,
 )
@@ -36,9 +37,10 @@ from eom_workflow.control_plane import BundleRevisionPointer, WorkerRole
 from eom_workflow.similarity_control import ResolvedExecutionPlanV23, ResolvedExecutionPlanV24
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
-from sqlalchemy import and_, exists, func, select
+from sqlalchemy import and_, exists, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from eom_orchestrator.capability_snapshot_queries import (
     current_assignment_snapshot_clause,
@@ -143,6 +145,7 @@ def _validated_document(
         | WorkerCapacityPolicyV2
         | WorkerCapacityPolicyV3
         | WorkerCapacityPolicyV4
+        | WorkerCapacityPolicyV5
         | ExecutionPresetRevision
         | ExecutionPresetRevisionV2
         | ResolvedExecutionPlan
@@ -164,6 +167,7 @@ def _validated_document(
     | WorkerCapacityPolicyV2
     | WorkerCapacityPolicyV3
     | WorkerCapacityPolicyV4
+    | WorkerCapacityPolicyV5
     | ExecutionPresetRevision
     | ExecutionPresetRevisionV2
     | ResolvedExecutionPlan
@@ -512,6 +516,10 @@ def record_capacity_policy_revision(
         model, normalized = _validated_document(
             "worker-capacity-policy-v4", document, WorkerCapacityPolicyV4
         )
+    elif schema_version == "worker-capacity-policy/1.4":
+        model, normalized = _validated_document(
+            "worker-capacity-policy-v5", document, WorkerCapacityPolicyV5
+        )
     else:
         raise ControlPlaneError(
             "CONTROL_DOCUMENT_INVALID", "worker capacity schema version is unsupported"
@@ -523,6 +531,7 @@ def record_capacity_policy_revision(
             WorkerCapacityPolicyV2,
             WorkerCapacityPolicyV3,
             WorkerCapacityPolicyV4,
+            WorkerCapacityPolicyV5,
         ),
     ):
         raise AssertionError("validated capacity model has the wrong type")
@@ -579,7 +588,19 @@ def record_capacity_policy_revision(
                     "CONTROL_CAPACITY_SLOT_MISSING", "capacity policy references an unknown slot"
                 )
             configured_slots[slot_id] = slot
-        actual_roles = {configured_slots[key.removeprefix("slot")].role for key in pool.slot_keys}
+        actual_roles: set[str] = set()
+        for key in pool.slot_keys:
+            native_role = configured_slots[key.removeprefix("slot")].role
+            if isinstance(model, WorkerCapacityPolicyV5):
+                try:
+                    native_role = model.execution_role_for_slot(
+                        pool_key=pool.pool_key, slot_key=key, native_role=native_role
+                    )
+                except ValueError as exc:
+                    raise ControlPlaneError(
+                        "CONTROL_CAPACITY_ROLE_MISMATCH", "delegated native slot role differs"
+                    ) from exc
+            actual_roles.add(native_role)
         if not actual_roles.issubset(set(pool.roles)) or not set(pool.roles).issubset(actual_roles):
             raise ControlPlaneError(
                 "CONTROL_CAPACITY_ROLE_MISMATCH", "capacity pool roles do not match fixed slots"
@@ -1389,6 +1410,67 @@ def _held_count(session: Session, *conditions: Any) -> int:
     )
 
 
+def capacity_worker_role_clause(
+    policy: WorkerCapacityPolicyRevisionRecord,
+    *,
+    pool_key: str,
+    execution_role: str,
+) -> ColumnElement[bool]:
+    """Translate only an exact released capacity's explicit native-role grant."""
+    native_role_clause = WorkerSlotRecord.role == execution_role
+    if policy.schema_version != "worker-capacity-policy/1.4":
+        return native_role_clause
+    value, normalized = _validated_document(
+        "worker-capacity-policy-v5", policy.canonical_document, WorkerCapacityPolicyV5
+    )
+    assert isinstance(value, WorkerCapacityPolicyV5)
+    _require_declared_hash(normalized, "content_sha256")
+    if (
+        value.capacity_policy_revision_id != policy.capacity_policy_revision_id
+        or value.capacity_policy_id != policy.capacity_policy_id
+        or value.content_sha256 != policy.content_sha256
+        or value.state != "RELEASED"
+        or policy.state != "RELEASED"
+        or any(
+            getattr(value, field) != getattr(policy, field)
+            for field in (
+                "revision_number",
+                "max_configured_slots",
+                "max_active_codex",
+                "max_active_per_slot",
+                "max_active_gpu",
+                "max_active_knowledge_analysis",
+            )
+        )
+    ):
+        raise ControlPlaneError(
+            "CONTROL_CAPACITY_POINTER_INVALID", "delegated capacity does not resolve exactly"
+        )
+    delegations = tuple(
+        grant
+        for grant in value.delegated_slot_roles
+        if grant.pool_key == pool_key and grant.execution_role == execution_role
+    )
+    grants = tuple(
+        and_(
+            WorkerSlotRecord.slot_id == grant.slot_key.removeprefix("slot"),
+            WorkerSlotRecord.role == grant.native_role,
+        )
+        for grant in delegations
+    )
+    if not grants:
+        return native_role_clause
+    return or_(
+        and_(
+            native_role_clause,
+            WorkerSlotRecord.slot_id.not_in(
+                tuple(grant.slot_key.removeprefix("slot") for grant in delegations)
+            ),
+        ),
+        *grants,
+    )
+
+
 def acquire_worker_lease(
     session: Session,
     *,
@@ -1559,7 +1641,9 @@ def acquire_worker_lease(
             == plan.capacity_policy_revision_id,
             WorkerCapacityPoolSlotRecord.pool_key == step.worker_pool_key,
             WorkerSlotRecord.enabled.is_(True),
-            WorkerSlotRecord.role == step.role,
+            capacity_worker_role_clause(
+                policy, pool_key=step.worker_pool_key, execution_role=step.role
+            ),
             CodexAuthBindingRecord.state == "READY",
             CodexAuthBindingRecord.valid_until > acquired_at,
             CodexCapabilitySnapshotRecord.valid_until > acquired_at,
