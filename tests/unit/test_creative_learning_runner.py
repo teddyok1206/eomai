@@ -83,3 +83,12 @@ def test_owner_template_pins_installed_code_and_cannot_read_worker_auth():
     assert "/srv/eom/worker-homes" in unit and "/etc/eom/secrets/api.env" in unit
     assert "IPAddressDeny=any" in unit and "RestartPreventExitStatus=78" in unit
     assert "EOM_DATABASE_URL" not in unit and "auth.json" not in unit
+
+
+@pytest.mark.parametrize("state", ["EXTRACTING", "ANALYZING", "STARTING", "UNKNOWN"])
+def test_actual_pending_work_retains_bounded_observation_delay(state):
+    assert runner.progress_poll_delay_seconds(state) == 10
+
+
+def test_verified_history_reconstruction_has_no_per_item_idle_sleep():
+    assert runner.progress_poll_delay_seconds("VERIFIED") == 0

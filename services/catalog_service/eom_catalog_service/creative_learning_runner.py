@@ -86,6 +86,13 @@ def stable_error_code(error: Exception) -> str:
     )
 
 
+def progress_poll_delay_seconds(state: str) -> int:
+    # VERIFIED already passed the authoritative read boundary. Sleeping after each
+    # cached-history reconstruction adds 10 seconds per completed source on restart.
+    # Actual pending worker work retains bounded polling and graceful stop checks.
+    return 0 if state == "VERIFIED" else 10
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="eom-creative-learning")
     parser.add_argument(
@@ -166,7 +173,7 @@ def main() -> None:
                 previous = marker
             if terminal:
                 break
-            stopped.wait(10)
+            stopped.wait(progress_poll_delay_seconds(progress.state))
         if stopped.is_set():
             write_status(STATE_ROOT, scope.cohort_id, {**status, "state": "STOPPED"})
     except Exception as error:

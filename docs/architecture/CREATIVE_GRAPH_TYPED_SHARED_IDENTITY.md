@@ -65,3 +65,10 @@ new endpoint test plus typed identity/cohort/status suites 27 PASS (overlapping 
 summed). Existing guarded disposable PostgreSQL Graph/analysis identity, concurrent create,
 acceptance, publication/replay and index checks 6 PASS. These are not operating acceptance
 and do not prove three actual worker slots are active.
+
+During operating restart, a second local scheduling defect was confirmed: the runner slept
+10 seconds even after each already-verified source. Reconstructing 95 source identities thus
+added 950 seconds of pure idle time, in addition to real pointer/read validation. Completed
+VERIFIED ticks now continue immediately; actual EXTRACTING/ANALYZING work keeps the existing
+10-second poll and graceful-stop boundary. No status-file cursor is trusted and no validation
+is skipped. This is a control-loop delay fix, not a faster model or an execution-policy bypass.
