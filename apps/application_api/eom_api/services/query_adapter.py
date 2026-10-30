@@ -111,6 +111,7 @@ from eom_catalog_contracts import (
     TextbookGroundedPairedReviewResultMemberPointer,
     load_integrated_science_mock_exam_policy,
 )
+from eom_catalog_contracts.inference_transfer_experiment import PopulationSource
 from eom_catalog_service.curriculum_graph_structure import (
     integrated_science_curriculum_units,
 )
@@ -220,6 +221,7 @@ from eom_workflow_runner.models import (
     WorkflowStepRunRecord,
 )
 from eom_workflow_runner.repository import load_persisted_workflow_request
+from pydantic import TypeAdapter
 from sqlalchemy import Engine, Select, and_, func, literal, or_, select
 from sqlalchemy.orm import Session
 
@@ -909,6 +911,7 @@ class QueryAdapter:
         administration_year: int | None = None,
         administration_month: int | None = None,
         item_number: int | None = None,
+        selected_item_revisions: tuple[PopulationSource, ...] | None = None,
     ) -> PageResult[ProductionItemCandidateViewContract]:
         """List Graph-accepted Item revisions without inventing examination placement data."""
 
@@ -957,6 +960,16 @@ class QueryAdapter:
                 KnowledgeSnapshotAnalysisRecord.source_kind == "APPROVED_ITEM_REVISION",
                 source_pointer_exists,
             ]
+            if selected_item_revisions is not None:
+                if not 1 <= len(selected_item_revisions) <= 64 or len(
+                    {pin.item_revision_id for pin in selected_item_revisions}
+                ) != len(selected_item_revisions):
+                    raise ValueError("selected Item revisions must be bounded and unique")
+                conditions.append(
+                    ItemRevisionRecord.item_revision_id.in_(
+                        pin.item_revision_id for pin in selected_item_revisions
+                    )
+                )
             if source_class is not None:
                 conditions.append(
                     select(literal(1))
@@ -1419,6 +1432,75 @@ class QueryAdapter:
                 else None
             )
             return PageResult(tuple(values), next_cursor, has_more)
+
+    def selected_production_item_candidates(
+        self,
+        selections: tuple[PopulationSource, ...],
+    ) -> tuple[ProductionItemCandidateViewContract, ...]:
+        """One bounded existing Graph projection for navigation, never a second ranking.
+
+        The search retains its original indexed Graph. Navigation resolves the same
+        immutable Item/hash in the current Graph so existing assembly admission works.
+        Absence or a different revision is explicit, not a latest Item substitution.
+        """
+        pins: tuple[PopulationSource, ...] = TypeAdapter(
+            tuple[PopulationSource, ...]
+        ).validate_python(selections)
+        if not 1 <= len(pins) <= 64 or len({pin.item_revision_id for pin in pins}) != len(pins):
+            raise ValueError("selected Item revisions must be bounded and unique")
+        page = self.production_item_candidates(
+            curriculum_unit_key=None,
+            source_class=None,
+            content_profile=None,
+            eligible=None,
+            item_type_key=None,
+            difficulty_band=None,
+            limit=len(pins),
+            cursor=None,
+            selected_item_revisions=pins,
+        )
+        by_revision = {row.item_revision_id: row for row in page.data}
+        if (
+            len(by_revision) != len(page.data)
+            or set(by_revision) != {pin.item_revision_id for pin in pins}
+            or any(
+                by_revision[pin.item_revision_id].item_id != pin.item_id
+                or by_revision[pin.item_revision_id].source_class != pin.source_class
+                or not self._candidate_content_matches_source(
+                    by_revision[pin.item_revision_id], pin
+                )
+                for pin in pins
+            )
+        ):
+            raise ApiError(
+                409,
+                "ITEM_DB_SIMILARITY_RESULT_STALE",
+                "Item navigation unavailable",
+                "An exact search candidate is no longer available in the current Graph.",
+            )
+        return tuple(by_revision[pin.item_revision_id] for pin in pins)
+
+    @staticmethod
+    def _candidate_content_matches_source(
+        candidate: ProductionItemCandidateViewContract,
+        source: PopulationSource,
+    ) -> bool:
+        component, member = candidate.content_component, source.artifact_member
+        return component is not None and (
+            component.artifact_id,
+            component.artifact_revision_id,
+            component.sha256,
+            component.schema_ref,
+            component.media_type,
+            component.logical_name,
+        ) == (
+            member.artifact_id,
+            member.artifact_revision_id,
+            member.sha256,
+            member.schema_ref,
+            member.media_type,
+            member.logical_name,
+        )
 
     @staticmethod
     def _current_assessment_snapshot_id(session: Session) -> str | None:

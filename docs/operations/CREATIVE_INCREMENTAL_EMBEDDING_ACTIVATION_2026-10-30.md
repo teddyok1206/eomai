@@ -54,6 +54,39 @@
 현재 상태: `IN_PROGRESS`, 운영 public 검색 활성화 `PENDING`.
 소스 테스트·PID·캐시 membership 갱신만으로 목표 완료를 선언하지 않는다.
 
+## 22:36 UTC 체크포인트 — DB의 실제 QUERY 연결 후보
+
+사용자 확정 완료 조건은 **세 실제 슬롯의 연속 refill → 사용량 새로고침 버그 수정 →
+DB 유사도의 실제 검색·호환 운영 배포**다. 목표는 ACTIVE이며 마지막 항목은 아직 미완료다.
+
+- DB 선택 포인터를 Catalog의 API-only Unix operation으로 해석하고, 실제 operator 권한과
+  원문 observation/등록 Item/Graph membership을 재확인한다. HTTP에서 actor·권한·경로·벡터는
+  받지 않는다. 자세한 결정은
+  [DB 연결 설계](../architecture/ITEM_DB_PUBLIC_SIMILARITY_CONNECTION.md)에 기록했다.
+- API는 기존 public QUERY prepare4와 completed read3를 호출한다. 이번 경계 테스트에서
+  새 route의 current authentication capture 누락을 발견해 기존 중앙 인증 분기에 추가했다.
+  별도 로그인·세션·권한 추측을 만들지 않았다. 초기 요청과 PENDING 재관측은 같은 key와
+  exact query/Graph/policy를 사용하며, 이미 처리 여부가 불명인 요청을 자동 재제출하지 않는다.
+- 검색 ranking과 source/report 핀은 원래 indexed Graph를 보존한다. 결과 열람·배치는 같은
+  immutable Item/revision/content pointer를 현재 Graph에서 한 번의 bounded metadata query로
+  재검증한다. 검색 Graph와 탐색 Graph는 별개이며 없는 문항을 latest revision으로 바꾸지 않는다.
+- Web BFF는 session/CSRF/key를 검사하고 기존 API만 호출한다. 실제 GUI adapter를 연결했으며
+  `조회 → 유사도 → 조회/배치`, 작은 계산 중 표시, 원래 검색 pin의 자동/수동 재관측을 유지한다.
+  새 DB·queue·벡터 복사본·검색 알고리즘·의존성은 없다.
+- focused source/HTTP/Unix peer/replay/BFF 검증 **42 PASS**. 실제 브라우저 엔진으로 기존 DB
+  조회·필터·responsive·유사도 이동·진행 표시·원래 pin 재관측과 OpenAPI/route 회귀 **25 PASS**.
+  package resource/dependency/release inventory **52 PASS**. 변경 core 15개 mypy PASS,
+  Python 20개 Ruff/format PASS. 이 테스트의 source/IAM/수치 leaf는 합성이며 운영 검색 성공이 아니다.
+- 22:31 UTC 창작 owner는 원래 invocation `43c4dd6e88ee45ba8473b7785ad68e97`로 실행 중이며
+  10679–10684가 Graph publication 단계다. 그 순간 ACTIVE worker lease 0은 publication 구간이지
+  서비스 중단 증거가 아니다. 앞서 04/05/06의 실제 다음 Job refill 증거는 그대로 보존한다.
+  derived counter 12를 전체 누적 완료 수로 표시하지 않는다. 기존 INDEX/QUERY도 교체하지 않았다.
+
+다음은 이 후보의 clean wheel/source-free 설치 검증과 protected public INDEX/QUERY controls의
+호환 활성화다. 기존 수치 runtime과 진행 중 native 실행을 보호하며 고정 창작 5건의 실제
+encoding·canonical registration·공식 검색·replay를 확인하고 자동 증분 처리까지 운영 반영해야
+완료다. 기존 사용량 acceptance와 historical FAILED 기록은 재해석하지 않는다.
+
 ## 22:01 UTC 체크포인트 — 세 슬롯 복구와 public QUERY 공식 조회 연결
 
 목표 상태는 **ACTIVE / 미완료**다. 사용자 확정 세 단계와 기존 창작 5건의 실제 수치·등록·

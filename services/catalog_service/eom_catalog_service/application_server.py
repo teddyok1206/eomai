@@ -131,6 +131,7 @@ from eom_protocol.general_chat_tools import (
     ChatSearchCatalogRequest,
     failed_tool,
 )
+from eom_workflow_runner.reference_query_source_read import CatalogReferenceQueryReadOwner
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 
@@ -202,6 +203,8 @@ from eom_catalog_service.inference_transfer_workflow_read import (
     CatalogInferenceTransferWorkflowReadService,
 )
 from eom_catalog_service.item_content_import import StructuredItemContentImportService
+from eom_catalog_service.item_db_similarity_dispatch import dispatch_item_db_similarity_selection
+from eom_catalog_service.item_db_similarity_selection import CatalogItemDbSimilaritySelection
 from eom_catalog_service.item_similarity_publication_dispatch import (
     dispatch_item_similarity_publication_frame,
 )
@@ -316,6 +319,15 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             if raw_operation == "READ_SIMILARITY_CONTEXT":
                 self.wfile.write(
                     dispatch_similarity_read_frame(self.server.similarity_context_reads, raw)
+                )
+                self.wfile.flush()
+                return
+            if raw_operation == "RESOLVE_ITEM_DB_SIMILARITY":
+                self.wfile.write(
+                    dispatch_item_db_similarity_selection(
+                        self.server.item_db_similarity_selection,
+                        raw,
+                    )
                 )
                 self.wfile.flush()
                 return
@@ -1880,6 +1892,14 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.chat_rag = chat_rag
         self.inference_transfer_metadata = inference_transfer_metadata
         self.similarity_context_reads = similarity_context_reads
+        public_owner = (
+            None if similarity_context_reads is None else similarity_context_reads.public_owner
+        )
+        self.item_db_similarity_selection = (
+            CatalogItemDbSimilaritySelection(public_owner)
+            if isinstance(public_owner, CatalogReferenceQueryReadOwner)
+            else None
+        )
         self.exam_similarity_reads = exam_similarity_reads
         self.authoring_reference_selection = (
             None

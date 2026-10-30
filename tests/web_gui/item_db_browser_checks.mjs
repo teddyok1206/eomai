@@ -67,15 +67,16 @@ async function api(path, options = {}) {
   }
   throw new Error('UNEXPECTED_FIXTURE_REQUEST ' + path);
 }
-async function searchSimilar(pointer, key) {
-  fixture.similarCalls.push({pointer: structuredClone(pointer), key});
+async function searchSimilar(pointer, key, pinnedQuery) {
+  fixture.similarCalls.push({pointer: structuredClone(pointer), key, pinnedQuery: structuredClone(pinnedQuery)});
   const candidate = {...graph, source_display_label: '합성 시험 18번', item_id: 'item_' + '8'.repeat(32),
     item_revision_id: 'itemrev_' + '9'.repeat(32), past_exam_context: {...graph.past_exam_context, item_number: 18}};
   const other = entry(pointer.source_id?.endsWith('10318') ? '10310' : '10318');
-  const result = {status: 'READY', candidates: [
+  const queryPin = pinnedQuery || {schema_version: 'system-rag-reference-query-prepare-request/4.0', idempotency_key: key};
+  const result = {status: 'READY', pinned_query: queryPin, candidates: [
     {kind: 'GRAPH_ITEM', entry: candidate, label: '합성 시험 18번', unit_label: '물질의 규칙성', cosine_millionths: 921234},
     {kind: 'EXTERNAL_SOURCE', entry: other, label: '고유번호 ' + other.external_number, unit_label: other.minor_unit, cosine_millionths: 870001}]};
-  if (fixture.pendingSimilarity) {fixture.pendingSimilarity = false; return {status: 'PENDING', phase: 'COMPUTING'};}
+  if (fixture.pendingSimilarity) {fixture.pendingSimilarity = false; return {status: 'PENDING', phase: 'COMPUTING', pinned_query: queryPin};}
   if (fixture.failSimilarity) {fixture.failSimilarity = false; throw new Error('합성 연결 시간 초과');}
   if (fixture.holdSimilarity) {
     const identity = pointer.source_id || pointer.item_revision_id;
@@ -294,6 +295,7 @@ try {
   assert.equal(await page.locator('#item-db-similarity-progress').isVisible(), false);
   assert.equal(await page.locator('#item-db-similarity-tab-progress').isVisible(), false);
   assert.equal(await page.evaluate(() => window.dbFixture.similarCalls.at(-1).key), pendingKey);
+  assert.equal(await page.evaluate(() => window.dbFixture.similarCalls.at(-1).pinnedQuery.idempotency_key), pendingKey);
 
   // A confirmed accepted PENDING is observed automatically, never submitted with a new key.
   await page.evaluate(() => {window.dbFixture.pendingSimilarity = true;});

@@ -1,0 +1,368 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/item-db-similarity-selection/1.0",
+  "title": "DB selected source to exact public QUERY preparation; no execution or permission grant",
+  "$defs": {
+    "selection": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/graph"
+        },
+        {
+          "$ref": "#/$defs/external"
+        }
+      ]
+    },
+    "graph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "item_id",
+        "item_revision_id",
+        "item_manifest_sha256",
+        "graph_snapshot_revision_id",
+        "graph_snapshot_sha256"
+      ],
+      "properties": {
+        "kind": {
+          "const": "GRAPH_ITEM"
+        },
+        "item_id": {
+          "type": "string",
+          "pattern": "^item_[0-9a-f]{32}$"
+        },
+        "item_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "item_manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "graph_snapshot_revision_id": {
+          "type": "string",
+          "pattern": "^graphrev_[0-9a-f]{32}$"
+        },
+        "graph_snapshot_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "external": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "source_id",
+        "source_revision_id",
+        "observation_sha256"
+      ],
+      "properties": {
+        "kind": {
+          "const": "EXTERNAL_SOURCE"
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^extitem_[0-9a-f]{32}$"
+        },
+        "source_revision_id": {
+          "type": "string",
+          "pattern": "^extitemrev_[0-9a-f]{32}$"
+        },
+        "observation_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "itemPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "item_id",
+        "item_revision_id",
+        "item_manifest_sha256"
+      ],
+      "properties": {
+        "item_id": {
+          "type": "string",
+          "pattern": "^item_[0-9a-f]{32}$"
+        },
+        "item_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "item_manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation",
+        "actor_id",
+        "operation_id",
+        "idempotency_key",
+        "selection",
+        "top_k",
+        "pinned_query"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "item-db-similarity-selection-request/1.0"
+        },
+        "operation": {
+          "const": "RESOLVE_ITEM_DB_SIMILARITY"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "operation_id": {
+          "type": "string",
+          "pattern": "^queryprepare_[0-9a-f]{32}$"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9_.:-]{8,128}$"
+        },
+        "selection": {
+          "$ref": "#/$defs/selection"
+        },
+        "top_k": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "pinned_query": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/knowledge/system-rag-reference-query-prepare/4.0#/$defs/request"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "prepared": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection_sha256",
+        "anchor",
+        "query",
+        "search_snapshot_sha256"
+      ],
+      "properties": {
+        "selection_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "anchor": {
+          "$ref": "#/$defs/itemPin"
+        },
+        "query": {
+          "$ref": "eom://schemas/knowledge/system-rag-reference-query-prepare/4.0#/$defs/request"
+        },
+        "search_snapshot_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "operation",
+        "status",
+        "actor_id",
+        "request_sha256",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "item-db-similarity-selection-reply/1.0"
+        },
+        "operation": {
+          "const": "RESOLVE_ITEM_DB_SIMILARITY"
+        },
+        "status": {
+          "enum": [
+            "READY",
+            "UNAVAILABLE",
+            "FAILED"
+          ]
+        },
+        "actor_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^operator_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "request_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "result": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/prepared"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "SOURCE_ACCESS_DENIED",
+                "SOURCE_REVOKED",
+                "SOURCE_POINTER_INVALID",
+                "SOURCE_HASH_MISMATCH",
+                "INDEX_POINTER_INVALID",
+                "INDEX_HASH_MISMATCH",
+                "QUERY_RESULT_INVALID",
+                "AUTHORITY_UNAVAILABLE",
+                "ITEM_DB_SIMILARITY_UNAVAILABLE",
+                "ITEM_DB_SIMILARITY_REQUEST_INVALID",
+                "ITEM_DB_SIMILARITY_REQUEST_CONFLICT",
+                "ITEM_DB_SIMILARITY_NOT_REGISTERED",
+                "ITEM_DB_SIMILARITY_NOT_INDEXED"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "READY"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "result": {
+                "$ref": "#/$defs/prepared"
+              },
+              "error_code": {
+                "type": "null"
+              },
+              "actor_id": {
+                "type": "string",
+                "pattern": "^operator_[0-9a-f]{32}$"
+              },
+              "request_sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "result": {
+                "type": "null"
+              },
+              "error_code": {
+                "enum": [
+                  "SOURCE_ACCESS_DENIED",
+                  "SOURCE_REVOKED",
+                  "SOURCE_POINTER_INVALID",
+                  "SOURCE_HASH_MISMATCH",
+                  "INDEX_POINTER_INVALID",
+                  "INDEX_HASH_MISMATCH",
+                  "QUERY_RESULT_INVALID",
+                  "AUTHORITY_UNAVAILABLE",
+                  "ITEM_DB_SIMILARITY_UNAVAILABLE",
+                  "ITEM_DB_SIMILARITY_REQUEST_INVALID",
+                  "ITEM_DB_SIMILARITY_REQUEST_CONFLICT",
+                  "ITEM_DB_SIMILARITY_NOT_REGISTERED",
+                  "ITEM_DB_SIMILARITY_NOT_INDEXED"
+                ]
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "actor_id": {
+                "type": "null"
+              }
+            },
+            "required": [
+              "actor_id"
+            ]
+          },
+          "then": {
+            "properties": {
+              "request_sha256": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "request_sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/selection"
+    },
+    {
+      "$ref": "#/$defs/itemPin"
+    },
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/prepared"
+    },
+    {
+      "$ref": "#/$defs/reply"
+    }
+  ]
+}

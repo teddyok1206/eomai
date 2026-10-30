@@ -172,9 +172,10 @@ export function createItemDbSimilarity({document, search, openSelection, activat
     controls();
     message("선택한 문항과 유사한 문항을 찾고 있습니다.");
     try {
-      const result = await search(operation.selection.pointer, operation.idempotencyKey);
+      const result = await search(operation.selection.pointer, operation.idempotencyKey, operation.pinnedQuery);
       if (request !== sequence) return;
       const candidates = readCandidates(result);
+      operation.pinnedQuery = result.pinned_query ?? operation.pinnedQuery;
       operation.result = result;
       if (["READY", "PARTIAL"].includes(result.status)) render(result, candidates);
       else {
@@ -230,7 +231,7 @@ export function createItemDbSimilarity({document, search, openSelection, activat
       sequence++;
       busy = false;
       operation = {selection, idempotencyKey: `studio:db-similarity:${crypto.randomUUID()}`, result: null,
-        startedAt: performance.now()};
+        pinnedQuery: null, startedAt: performance.now()};
       $("#item-db-similarity-anchor").textContent = label;
       $("#item-db-similarity-count").textContent = "검색 전";
       empty("선택한 문항으로 검색을 시작합니다.");

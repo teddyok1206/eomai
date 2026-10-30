@@ -62,6 +62,7 @@ from eom_web_gui.general_chat_contracts import (
     ChatDeleteSubmission,
     ChatTurnSubmission,
 )
+from eom_web_gui.item_db_similarity_contracts import ItemDbSimilaritySubmission
 from eom_web_gui.resources import installed_web_source_commit, static_resource
 from eom_web_gui.services import WebServices, build_services, validate_download_request
 from eom_web_gui.sessions import WebSession, utc_now
@@ -863,6 +864,21 @@ def create_app(
     ) -> dict[str, object]:
         value = await actual.gateway.save_curated_assembly(session, draft, idempotency_key)
         return value.model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/item-db/similarity")
+    async def item_db_similarity_search(
+        value: ItemDbSimilaritySubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+        idempotency_key: Annotated[
+            str,
+            Header(
+                alias="Idempotency-Key",
+                pattern=r"^[A-Za-z0-9_.:-]{8,128}$",
+            ),
+        ],
+    ) -> dict[str, object]:
+        result = await actual.gateway.item_db_similarity_search(session, value, idempotency_key)
+        return result.model_dump(mode="json")
 
     @app.get(f"{API_PREFIX}/item-db/assemblies")
     async def list_curated_assemblies(

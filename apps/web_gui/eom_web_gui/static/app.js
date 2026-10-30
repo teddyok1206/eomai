@@ -137,6 +137,10 @@ const generalChat = createGeneralChat({
 const itemDb = createItemDb({
   document,
   api,
+  searchSimilar: (selection, key, pinnedQuery) => api("/item-db/similarity", {
+    method: "POST", headers: {"Idempotency-Key": key},
+    body: JSON.stringify({selection, pinned_query: pinnedQuery ?? null}),
+  }),
   canReadSource: () => hasPermission(state.operator, "content_intake:read"),
   openPastExamVariation: async (entry) => beginPastExamVariation({
     ...entry,

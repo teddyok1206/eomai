@@ -99,6 +99,10 @@ from eom_web_gui.general_chat_contracts import (
     ChatSlot,
     ChatTurnSubmission,
 )
+from eom_web_gui.item_db_similarity_contracts import (
+    ItemDbSimilarityResult,
+    ItemDbSimilaritySubmission,
+)
 from eom_web_gui.item_preview_projection import (
     project_item_content,
     resolve_content_capability,
@@ -692,6 +696,13 @@ class ApplicationGateway(Protocol):
     async def external_item_db_search(
         self, session: WebSession, filters: ExternalItemDbFilterSubmission
     ) -> ExternalItemDbPage: ...
+
+    async def item_db_similarity_search(
+        self,
+        session: WebSession,
+        value: ItemDbSimilaritySubmission,
+        idempotency_key: str,
+    ) -> ItemDbSimilarityResult: ...
 
     async def external_item_db_export(
         self, session: WebSession, filters: ExternalItemDbFilterSubmission
@@ -1324,6 +1335,31 @@ class HttpApplicationGateway:
             )
         except (KeyError, ValueError) as exc:
             raise GatewayError(status=502, code="ITEM_DB_ASSEMBLY_RESPONSE_INVALID") from exc
+
+    async def item_db_similarity_search(
+        self,
+        session: WebSession,
+        value: ItemDbSimilaritySubmission,
+        idempotency_key: str,
+    ) -> ItemDbSimilarityResult:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/item-db/similarity",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+            timeout=240.0,
+        )
+        try:
+            result = ItemDbSimilarityResult.model_validate(self._data(response))
+            if result.pinned_query is not None and (
+                result.pinned_query.get("idempotency_key") != idempotency_key
+                or result.pinned_query.get("top_k") != value.top_k
+            ):
+                raise ValueError("original query differs")
+            return result
+        except (ValueError, TypeError, KeyError):
+            raise GatewayError(status=502, code="ITEM_DB_SIMILARITY_RESPONSE_INVALID") from None
 
     async def list_curated_assemblies(
         self, session: WebSession, limit: int, cursor: str | None
