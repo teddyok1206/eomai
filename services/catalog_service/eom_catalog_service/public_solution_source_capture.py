@@ -59,6 +59,7 @@ from eom_catalog_service.solution_embedding_projection import (
 from eom_catalog_service.solution_evidence_resolution import resolve_solution_evidence_by_base_run
 
 MAX_PUBLIC_SOLUTION_CAPTURE_BYTES = 64 * 1024**2
+MAX_PUBLIC_SOLUTION_PAGE_SOURCES = 256
 
 
 class CatalogPublicSolutionSourceCapture:
@@ -184,15 +185,22 @@ class CatalogPublicSolutionSourceCapture:
     ) -> CapturedPublicSolutionSources:
         """One traversal for the two real caller kinds; callbacks confer no authority."""
 
+        # Keep each provenance reader below its fixed metadata budget as the
+        # corpus grows. This only bounds keyset pages, never the admitted set.
+        page_scope = replace(
+            scope,
+            maximum_candidates=min(scope.maximum_candidates, MAX_PUBLIC_SOLUTION_PAGE_SOURCES),
+        )
+
         def read_page(after: str | None) -> CandidateSourcePage:
             return validate_candidate_source_page(
                 tuple(
                     tuple(row)
                     for row in session.execute(
-                        candidate_source_page_statement(scope, after_source_revision_id=after)
+                        candidate_source_page_statement(page_scope, after_source_revision_id=after)
                     )
                 ),
-                maximum=scope.maximum_candidates,
+                maximum=page_scope.maximum_candidates,
                 after_source_revision_id=after,
             )
 
@@ -373,12 +381,17 @@ class CatalogPublicSolutionSourceCapture:
                 )
         for offset in range(0, len(creative_keys), MAX_CREATIVE_REPORT_CAPTURE):
             page = creative_keys[offset : offset + MAX_CREATIVE_REPORT_CAPTURE]
+            # Graph/source provenance can already fill the parent reader. Keep
+            # these <=16 lineage primaries in a separate existing root-bound
+            # reader, then revalidate that small set before releasing it.
+            report_reader = PinnedArtifactReadContext(session, artifact_reader.settings)
             reports = load_registered_creative_reports(
                 session,
                 self.artifacts,
                 tuple(revisions[key] for key in page),
-                artifact_reader=artifact_reader,
+                artifact_reader=report_reader,
             )
+            report_reader.revalidate_provenance()
             if set(reports) != set(page):
                 raise ValueError("PUBLIC_SOLUTION_SOURCE_SET_INVALID")
             for key in page:

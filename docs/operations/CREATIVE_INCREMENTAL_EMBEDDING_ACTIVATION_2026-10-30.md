@@ -215,6 +215,14 @@ DB 유사도 selection의 read use case 역시 원래 source capture의 shared l
 selection 자체에 DML·권한 확대·모델 실행을 추가하지 않는다. shared lock·정확한 current
 operator 양끝 fence·원래 replay scope는 유지하고 해당 PostgreSQL 동작을 임시 DB로 검증한다.
 
+실제 full-corpus capture에서는 Graph/source metadata가 채운 공용 reader에 lineage를 계속
+추가해 기존 4,096 revision budget을 넘는 것도 확인했다. budget을 늘리는 대신 기존 root-bound
+reader를 lineage 16개 단위로 나누어 그 작은 집합만 재검증하고 해제한다. public population의
+keyset page도 최대 256 source로 제한해 provenance reader가 corpus 증가에 따라 무한히 커지지
+않게 한다. 이는 전체 모집단의 truncation이나 허용 정책 변경이 아니다. 모든 page를 순서대로
+읽고 동일한 최종 membership·authority 재확인을 유지하며, 1,100/1,573 source synthetic
+회귀로 누락 없는 전체 순회와 페이지 간 변경 거부를 검증한다.
+
 ## 22:01 UTC 체크포인트 — 세 슬롯 복구와 public QUERY 공식 조회 연결
 
 목표 상태는 **ACTIVE / 미완료**다. 사용자 확정 세 단계와 기존 창작 5건의 실제 수치·등록·

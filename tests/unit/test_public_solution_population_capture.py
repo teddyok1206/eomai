@@ -1,6 +1,6 @@
 """Pagination orchestration with explicit synthetic admission; no source authority."""
 
-from dataclasses import replace
+from dataclasses import dataclass, replace
 from types import SimpleNamespace as NS
 from unittest.mock import Mock
 
@@ -20,6 +20,11 @@ from eom_catalog_service.public_solution_source_capture import CatalogPublicSolu
 from tests.unit.test_public_solution_encoding import public_entry, public_recipe
 
 
+@dataclass(frozen=True)
+class SyntheticPageScope:
+    maximum_candidates: int
+
+
 def case(monkeypatch, count=1100):
     example = public_entry()
     command = InferenceTransferCorpusReadCommand(
@@ -33,7 +38,7 @@ def case(monkeypatch, count=1100):
     )
     owner = object.__new__(CatalogPublicSolutionSourceCapture)
     owner.sources = Mock()
-    scope = NS(maximum_candidates=1024)
+    scope = SyntheticPageScope(maximum_candidates=1024)
     owner.sources.authorize_scope_in_session.return_value = scope
     session, fence, reader = Mock(), Mock(), Mock()
     all_members = tuple(
@@ -42,12 +47,13 @@ def case(monkeypatch, count=1100):
     statements = []
 
     def statement(_scope, *, after_source_revision_id):
-        assert _scope is scope
+        assert _scope is not scope and _scope.maximum_candidates == 256
+        assert scope.maximum_candidates == 1024
         statements.append(after_source_revision_id)
         return after_source_revision_id
 
     def execute(after):
-        return tuple(value for value in all_members if after is None or value[0] > after)[:1025]
+        return tuple(value for value in all_members if after is None or value[0] > after)[:257]
 
     selections = []
 
@@ -88,13 +94,19 @@ def run(value, maximum=16384):
     )
 
 
-def test_population_larger_than_1024_uses_bounded_pages_and_rechecks_exact_membership(monkeypatch):
-    value = case(monkeypatch)
+@pytest.mark.parametrize("count", (1100, 1573))
+def test_population_larger_than_1024_uses_bounded_pages_and_rechecks_exact_membership(
+    monkeypatch, count
+):
+    value = case(monkeypatch, count=count)
     result = run(value)
-    assert tuple(map(len, value.selections)) == (1024, 76)
+    assert tuple(map(len, value.selections)) == (256,) * (count // 256) + (count % 256,)
     assert result.source_revision_ids == tuple(key for key, _ in value.all_members)
-    assert result.corpus.missing_solution_reports == 1100 and not result.corpus.truncated
-    assert value.statements == [None, value.all_members[1023][0]] * 2
+    assert result.corpus.missing_solution_reports == count and not result.corpus.truncated
+    assert (
+        value.statements
+        == ([None] + [value.all_members[i][0] for i in range(255, count - 1, 256)]) * 2
+    )
     assert value.owner.sources.authorize_scope_in_session.call_count == 2
     value.reader.revalidate_provenance.assert_called_once()
 

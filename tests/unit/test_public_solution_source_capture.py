@@ -62,6 +62,9 @@ def capture_case(monkeypatch, *, creative=False):
     batches = Mock(return_value={source.item_revision_id: registered})
     monkeypatch.setattr(capture_module, "resolve_solution_evidence_by_base_run", solutions)
     monkeypatch.setattr(capture_module, "load_registered_creative_reports", batches)
+    lineage_reader = Mock()
+    reader_factory = Mock(return_value=lineage_reader)
+    monkeypatch.setattr(capture_module, "PinnedArtifactReadContext", reader_factory)
     return NS(**locals())
 
 
@@ -107,6 +110,9 @@ def test_both_families_use_real_pool_pins_and_keep_original_public_content(monke
     )
     if creative:
         value.batches.assert_called_once()
+        value.reader_factory.assert_called_once_with(value.session, value.reader.settings)
+        assert value.batches.call_args.kwargs["artifact_reader"] is value.lineage_reader
+        value.lineage_reader.revalidate_provenance.assert_called_once()
     else:
         value.batches.assert_not_called()
 
