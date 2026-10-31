@@ -63,6 +63,38 @@ membership·권한·provenance를 재확인한다. 일부만 읽은 결과를 �
 5fdda admitted stage와 `eom-workflow-cause-release-5fdda815.service` journal. 세부 결과는
 장기 보관 evidence manifest로 이동할 때 pointer를 추가한다. 임시 파일을 정본으로 가장하지 않는다.
 
+### 00:38 UTC 후속 — 원래 CPU 요청의 준비 실패
+
+- `4166e6dc` bounded legacy reader/capacity 격리 수정은 관련 182 unit PASS,
+  core 5개 mypy·Ruff·format, clean wheel/RECORD PASS 후 main/origin에 반영했다.
+  protected owner stage와 7 namespace release composition test 1 PASS.
+  `/var/lib/eom-public-solution-release-4166e6dc`에 새 identity/controls 및 QUERY successor를
+  **준비만** 했으며 실제 선택은 아직 `31ddcf62`다. API shared runtime은 `5fdda815`다.
+- 새 계산을 만들지 않고 원래 CPU standby 요청을 기존 31dd runtime으로 재개했다.
+  원래 launch `job_953579322be640db8328b4d7145c7581`의 root handoff 준비 unit이
+  00:37:01–00:37:05에 exit-code/1로 종료했고 numeric unit은 invocation·start time이 없는
+  inactive 상태다. **CPU 모델 계산은 시작되지 않았다.** INDEX는
+  `NATIVE_INDEX_KNOWN_FAILED`로 종료했다. 이 요청을 성공으로 바꾸거나 같은 실패 unit을
+  다시 시작하지 않는다.
+- 이 Workflow는 RUNNING/PROCESSING이 남아 있고, 이미 launch/encoding 예약이 있어
+  preallocation retirement 대상이 아니다. 기존 CPU failure recovery는 준비 성공 + numeric
+  실패만 증명하며, public request3 지원도 확인이 필요하다. 기존 proof를 완화하거나 GPU 실패로
+  위장하지 말고, 원래 준비 실패·numeric 미실행을 공식 owner 경계에서 닫는 최소 보완이 필요하다.
+  현재 source 후보가 실제 운영에 적용됐다고 보고하거나 identity activation을 강행하지 않는다.
+- 다음은 CPU root handoff의 실제 bootstrap/code pin과 public association3 호환성을 읽기 전용으로
+  대조한다. 필요한 실패 정리·재시도는 기존 recovery owner/storage/schema 체계를 확장하고,
+  disposable PostgreSQL의 실제 동시성·rollback·replay 검사 후 수행한다. 새 큐/worker나 DB 직접
+  보정은 만들지 않는다. 기존 GPU 성공·16 binding·FAILED 기록과 물리 numerical runtime 보존.
+- 00:37 UTC 세 실제 슬롯은 각각 다음 RUNNING Job으로 refill됐다. 04
+  `job_2bd6a8cf93b74ea3bb8dca9ebd2f06ab`, 05 `job_2a801a7b96264d1cb533e938752aff70`,
+  06 `job_7365340337d245ee9f23ee7b6a42b678`. 창작 owner PID `3724425`, shared dispatchers
+  세 개는 active이며 이후에도 원래 cohort/scope를 유지한다.
+
+정확한 원 실패 metadata: `/tmp/eom-original-public-cpu-stop-metadata-2.jsonl`.
+첫 진단 스크립트는 read-only transaction 종료 후 expired ORM attribute를 접근해 실패했으며,
+불변 scalar를 root 안에서 캡처하도록 고친 뒤 같은 조회만 재실행했다. 운영 row·unit·예약을
+변경하지 않았다. 고정 5건 벡터/HTTP 검색 acceptance 미완료, goal ACTIVE.
+
 ## 23:50 UTC 작업 체크포인트 — 실제 완료 아님
 
 - shared API/platform `c868a15c`, Web `f1a7ada4` 운영 배포와 설치 byte/source-free/isolation
