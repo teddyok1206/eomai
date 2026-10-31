@@ -47,6 +47,77 @@
   공통 query/read/replay, 정확한 구 vector/index consumer retirement·삭제가 여전히 남아 있다.
   전체 goal은 **ACTIVE**이며 이 owner 전환으로 완료 범위를 축소하지 않는다.
 
+### 후속 실제 실행·남은 AI 준비 조건 — 20:30 UTC
+
+- 새 current service revision은 `localindexservicerev_b33104d5937c41da9cd6eb8cf6bc2671`이다.
+  원래 실패와 별도의 정상 missing-binding 요청
+  `workflow_c0947af4e7e04f3ebeba6abce9b8d0cb` / START
+  `wfcmd_4e0af76442b44bb78597ce3667ea3c7e`가 생성됐다. request4/source-plan4,
+  같은 CUDA space `39bc2c310299…`, command generation1/attempt1과 실제 heartbeat 갱신을
+  확인했다. 원 실패를 성공으로 바꾸거나 원 allocation을 다시 dispatch하지 않았다.
+- 실제 native launch `job_a1cda17662fd47528240bbf827c956e5`가 RUNNING/errorNULL이다.
+  GPU root/worker handle은 `9b649fd43e7b4eea8da26a25bc48361e`다. 실제 CUDA Python
+  PID1470134의 GPU 메모리2.6GiB를 확인했고, worker unit의 numeric 실행이 정상 종료했다.
+  root controller1469777과 canonical request는 아직 살아 있는 저장·검증 단계다.
+  worker 종료만으로 parent/Job/Artifact/index가 모두 완료됐다고 주장하지 않는다.
+  `/tmp/eom-index4-original-work-fb0ab555-20261031-v2.json`.
+- 같은 source의 별도 설치본에서 기출/창작/AI 동일 공개 풀이→동일 text/input/encoding
+  identity, 별도 provenance 유지와 INDEX4 producer/조립 회귀 **45 PASS**다.
+  앞선74건과 합산한 독립 test 수라고 표현하지 않는다. live identity provider도 root 관측과
+  실제 lower-UID admission 모두 PASS: `/tmp/eom-owner-pair-provider-fb0ab555-20261031.log`.
+- 20:30 기존 정기 관측은 **116/520, 잔여404**, CUDA RUNNING1을 확인했다. 보존한 이번
+  preallocation failure1을 포함한 historical FAILED는6개다. 정기 관측은 기존00/30분이며
+  이번 rollout의 동일 handle 검증과 구별한다. 실제 사용자 검색은 아직 PENDING이다.
+- 다음 AI 단계의 read-only metadata로 서로 다른 두 실제 generated Workflow provenance를
+  확인했다. 원래 남긴 APPROVED sample은 generic1.10이며 다른 generic1.16 문항은
+  IN_REVIEW다. 둘 다 accepted base/report는 아직0이다. source_kind NULL만 보고 임의로
+  분류/승인/정본을 바꾸지 않는다. current knowledge-analysis preset은 role1.21까지만
+  허용하며 definition11.0.0이 아직 없으므로, **API 설치가 control21/definition11 activation을
+  대신하지 않았음**을 확인했다. 실제 AI canary 전 기존 지원된 bootstrap/control publication과
+  올바른 origin-scoped Graph publication 경로를 선택해야 한다. 새 권한/사용자 session을
+  위조해 모델 작업을 제출하지 않았다.
+  `/tmp/eom-registered-solution-readiness-fb0ab555-20261031.json`.
+
+### 운영 control21 선택·창작 preexecution 복구 — 20:43 UTC
+
+- 새 설치본의 control/bootstrap 집중 회귀 **60 PASS** 후, 보호된 exact manifest/instruction/
+  definition4개를 hash pin으로 staging했다. 기존 `import_workflow_definition`과 Orchestrator
+  `bootstrap_knowledge_analysis_control_plane`만 호출해 definition11 및 preset
+  `execpresetrev_910221c75ae84adbbb1f365550ab7545`를 실제 RELEASED로 선택했다.
+  원래10개 protocol과 model/effort/timeout/support pool을 유지하고 role1.35만 추가했다.
+  새 model 실행0, 서비스 재시작0이며 수치 runtime/config를 바꾸지 않았다.
+- 발행 후 로컬 운영 receipt를 만들 때 Pydantic result에 dataclass `asdict`를 사용한
+  **출력 코드 TypeError**가 났다. 실제 발행이 취소됐다고 가정하거나 bootstrap을 반복하지
+  않았다. canonical current preset/role policy/definition을 read-only로 재조회해 적용 완료와
+  원래 global capacity/current account-assignment/6개 slot 설정 불변을 확인했다.
+  새 verifier에는 발행 경로가 없다. 원 실패 로그와 관측 receipt를 각각 보존했다:
+  `/tmp/eom-registered-control-activation-fb0ab555-20261031.json`,
+  `/tmp/eom-registered-control-verification-fb0ab555-20261031.json`,
+  `/var/lib/eom-registered-solution-controls-fb0ab555-20261031/observed-selected.json`.
+  NON_LIVE60건의 제어 검증을 실제 AI 보고서/모델 품질 PASS로 확대하지 않는다.
+- 20:37/20:39 원래 native Job은 **COMMITTING/errorNULL**, 새 manifest4 실제 등록1개를
+  확인했다. 같은 request/command generation1/attempt1을 유지하고 main INDEX1466344가
+  결과 검증을 계속한다. numerical worker/root의 terminal exit0과 parent/Artifact 전체
+  완료는 다른 증거다. 새 요청이나 allocation을 재발행하지 않았다.
+  `/tmp/eom-index4-original-work-fb0ab555-20261031-v4.json`, `-v5.json`.
+- 별도 창작 owner1381884는 **20:31:34 exit78**이었다. 이는 위 control21 발행보다 앞선
+  실행이다. actual failure는11615의 `workflow_c17c103926c94c85a75c0d7b343a4123`,
+  20:23:20 `WORKFLOW_STEP_FAILED`, platform Job0이었다. 문제 내용을 오류로 추정하거나
+  실패를 성공으로 보정하지 않았다. 직전 Catalog 전환 시각과 겹치지만 이 시간 일치만으로
+  source defect나 특정 dependency 오류를 확정하지 않는다.
+- 기존 creative 설치본1f88의 recovery 단위 회귀 **32 PASS**를 확인했다. 원래 admitted
+  cohort/source/controls/actor 권한을 다시 검사하는 기존 `recover_unstarted`로 정확한
+ 11615만 successor `workflow_2b8b372d7a2b42bea00a1899f59ece70`를 준비했고 동일 호출 replay가
+  같은 selection임을 확인했다. 원 FAILED/request bytes 보존, 다른 target/구 vector 삭제0이다.
+  같은 원래 cohort revision/verified-limit1053으로 서비스만 재개해1485477 active,
+  실제11615 EXTRACTING /11616 ANALYZING 진행을 확인했다. 기존 blocked4개도 그대로다.
+  restart read model의 verified_count0을 canonical 등록 손실이나 전체 미등록으로 해석하지 않는다.
+  `/tmp/eom-creative-terminal-failure-fb0ab555-20261031.json`,
+  `/tmp/eom-creative-11615-preexecution-recovery-20261031.json`.
+- 현재 목표는 여전히 전체 U01–U05다. 실제 AI accepted base/report/Graph canary와 실제
+  authorized user search/read/replay, frozen520 최종 GPU/해시 검증, 정확한 구 파생 벡터
+  retirement·삭제는 남아 있다. 이번 운영 준비/복구를 목표 전체 완료로 재정의하지 않는다.
+
 ## INDEX4 선택·실제 초기화 누락과 안전한 인계 보완 — 2026-10-31 20:11 UTC
 
 - 이번 turn은 **PROGRESS**다. 운영 CPU QUERY preparer와 INDEX4 control/service를 실제
