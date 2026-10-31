@@ -38,6 +38,58 @@
   연결은 후속 소비자 단계다. `OWNER_ACTIVATION=NOT_PERFORMED`, 서비스 재시작0,
   새 GPU/모델 요청0, 구형 벡터 삭제0, 정본 변경0이다. 정기 GPU 관측은00/30분으로 유지한다.
 
+### 실제 설치 패키지·창작 11645 공식 복구 — 22:27 UTC
+
+- source **`7d8694c8e4d40689f08f7127f91000df431cced9`**를 main에 commit/push했고
+  정식 build-only wheel RECORD PASS다. platform wheel
+  `8663d84e63749388309d642c656cee7fb64cf32c30316bfeaa13616edc792a6b`, API contracts wheel
+  `b8734db91df87ed18b7fae147e05d229bc040ba7b7ef872690bb48356778ee97`를 별도 immutable
+  owner prefix에만 설치했다. module4개의 실제 `__file__`이 이 prefix 아래임을 확인한 뒤
+  기존/새 material·source·Artifact·publication 회귀 **373 PASS /29.75s**를 재확인했다.
+  resource/build/dependency가 포함된 source390과 설치본373은 scope가 다른 별도 실행이며
+  합산하지 않는다. 실제 운영 API/Catalog/INDEX/QUERY pin이나 numeric prefix는 바꾸지 않았다.
+  `/tmp/eom-public-materials3-build-20261031.log`,
+  `/tmp/eom-owner-install-7d8694c8-20261031-v2.log`,
+  `/tmp/eom-public-materials3-installed-compatibility-20261031.log`.
+- 첫 shadow 설치 호출은 helper가 요구하는 bare SHA 대신 `sha256:` 접두 값을 주어
+  `NATIVE_OWNER_INSTALL_PINS_INVALID`로 stage 생성 전에 거부됐다. helper 원본과 SHA
+  `a603fea5ac3e1846e3975a15333f688935e75596e35fe1a94949f4f2c741be12`를 재확인하고 정확한
+  인자로 다시 호출했다. read-only helper의 첫 호출도 필수 `-I -B` 누락 assertion으로 실행
+  전에 거부됐고 같은 helper를 올바른 isolated 호출로 다시 조회했다. 검증을 완화하지 않았고
+  실패 log를 보존했다. 이는 새 운영 workload 재실행이나 수치 실패가 아니다.
+- 22:24 source-free read-only release 관측에서 INDEX1466344/QUERY1466291은 그대로
+  active였다. 당시 public CPU standby Workflow `workflow_aa7283050c1a426c9ed36ec9a1b827cb` /
+  command `wfcmd_b2ae685142ff42ae83c7b36512565836`는 RUNNING/PROCESSING, generation1/
+  attempt1, lease22:37:32 UTC였다. 22:25 physical lifetime 관측은 inspect211개가 모두 terminal,
+  blocking0이었고 GPU compute process도 없었다. 이를 현재 CUDA 계산 중이라고 보고하지
+  않는다. 기존 routed owner는 CUDA 완료 후 원래 CPU exact-space standby queue를 먼저
+  drain하는 계약이며 현재 CPU 작업을 GPU로 재선택하거나 중단하지 않았다.
+  `/tmp/eom-index-release-window-materials3-20261031-v2.json`,
+  `/tmp/eom-native-batch-materials3-20261031.json`.
+- 별도로 creative owner가 **22:14:44 UTC exit78**로 멈춘 사실을 확인했다. 원인은11645의
+  `workflow_89bf0d63bf6a4eaeacd45d9ff7419ad2` /
+  `job_1e6f5787c74c42139559af5a56b5872d`가 WORKER_RESULT_INVALID로 끝난 것이다. 마지막
+  status의 representative11640을 실패 원본으로 오인하지 않았다. 구체적인 invalid field는
+  이번 bounded metadata로 확정하지 않았고, 이를 current source defect로 추정해 schema/
+  상태기계를 바꾸지 않았다. 추가 preview blocked11643은 다른 source의 별도 상태다.
+- 기존 설치1f88의 supported `recover_invalid_result` 관련 회귀 **32 PASS /6.43s** 후,
+  같은 admitted cohort/source/정책과 실제 원래 operator 권한으로 no-commit/no-active-work를
+  증명하는 공식 application을 호출했다. successor
+  `workflow_4d95f6fd3f5d4f22a1aadf5215c81452` 준비와 같은 요청 replay를 확인했다. 원래
+  Workflow/Job은 FAILED, 원래 initial request는 byte-identical로 보존됐다. 준비 중 모델0,
+  직접 row UPDATE0이다. 실제 처리 재개는 원래 creative service만 start했고22:27:37 UTC
+  **PID1603535 / active running / NRestarts0**를 확인했다. 아직11645 등록 성공은 아니다.
+  `/var/lib/eom-registered-public-index-fb0ab555-20261031/creative-11645-invalid-result-recovery.json`,
+  `/tmp/eom-creative-terminal-materials3-20261031.json`,
+  `/tmp/eom-creative-11645-installed-recovery-tests-20261031.log`,
+  `/tmp/eom-creative-11645-invalid-result-recovery-20261031.log`.
+- 후속 소비자 작업은 기존 Item-start의 plan23/24와 runner/Catalog role staging, private Chat
+  old namespace를 명시적 successor에 연결하는 것이다. 현재 role1.24의 결과는 independent
+  review2와 정식 Evidence receipt이며 typed inference-profile 비교를 강제하지 않으므로,
+  근거 없이 새 worker protocol/Content Pack부터 만들지 않는다. 기존 max-three-review,
+  원본 콘텐츠팀장 prompt2개, Graph/Evidence 접근·publication·현재 권한 경계는 유지한다.
+  새 materials3 단독으로 실제 staging/Chat 운영 전환 PASS를 선언하지 않는다.
+
 ## 공식 Item publication2·현재 권한·실제 DB 재전송 검증 — 2026-10-31 21:51 UTC
 
 - 이전 turn은 source commit/설치본 검증·실제 registry inventory를 완료한 **PROGRESS**였고,
