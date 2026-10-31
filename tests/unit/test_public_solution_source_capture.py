@@ -117,8 +117,16 @@ def test_both_families_use_real_pool_pins_and_keep_original_public_content(monke
         value.batches.assert_not_called()
 
 
-def test_missing_ai_or_past_report_is_missing_not_editorial_or_review_fallback(monkeypatch):
+@pytest.mark.parametrize("source_kind", ["PAST_EXAM", "AI", "AI_GENERATED", "GENERATED", None])
+def test_missing_ai_or_past_report_is_missing_not_editorial_or_review_fallback(
+    monkeypatch, source_kind
+):
     value = capture_case(monkeypatch)
+    if source_kind != "PAST_EXAM":
+        value.candidate.source = ApprovedItemKnowledgeSourceV2.model_validate(
+            value.source.model_dump(mode="json") | {"source_class": "APPROVED_ITEM"}
+        )
+    value.revision.metadata_json = {} if source_kind is None else {"source_kind": source_kind}
     value.solutions.return_value = {}
     result = run(value)
     assert result.entries == () and result.missing_report_revision_ids == (
@@ -128,7 +136,9 @@ def test_missing_ai_or_past_report_is_missing_not_editorial_or_review_fallback(m
 
 
 @pytest.mark.parametrize("source_kind", ["AI", "AI_GENERATED", "GENERATED"])
-def test_ai_full_report_uses_the_same_public_encoder_text_as_past_exam(monkeypatch, source_kind):
+def test_conditional_ai_report_adapter_has_no_source_category_text_prefix(monkeypatch, source_kind):
+    # Deliberately mocked admitted report port: this proves projection semantics,
+    # NOT that the past-exam-only V10 producer can actually accept an AI source.
     value = capture_case(monkeypatch)
     past = run(value).entries[0]
     source = ApprovedItemKnowledgeSourceV2.model_validate(

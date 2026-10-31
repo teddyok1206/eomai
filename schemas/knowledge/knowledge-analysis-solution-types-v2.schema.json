@@ -1,0 +1,179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-analysis-solution-types/2.0",
+  "title": "EOM Approved Item Additive Solution Base Types V2",
+  "$defs": {
+    "baseAnalysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "analysis_run_id",
+        "analysis_result_id",
+        "analysis_request_id",
+        "accepted_result_sha256",
+        "accepted_result_artifact",
+        "proposal_receipt",
+        "proposal_content_set_sha256",
+        "base_members",
+        "base_counts",
+        "reference_index"
+      ],
+      "properties": {
+        "analysis_run_id": {
+          "type": "string",
+          "pattern": "^analysisrun_[0-9a-f]{32}$"
+        },
+        "analysis_result_id": {
+          "type": "string",
+          "pattern": "^knowledgeanalysisresult_[0-9a-f]{32}$"
+        },
+        "analysis_request_id": {
+          "type": "string",
+          "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+        },
+        "accepted_result_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "accepted_result_artifact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifact_id",
+            "artifact_revision_id",
+            "member_path",
+            "sha256",
+            "bytes",
+            "schema_ref",
+            "media_type",
+            "logical_name"
+          ],
+          "properties": {
+            "artifact_id": {
+              "type": "string",
+              "pattern": "^artifact_[0-9a-f]{32}$"
+            },
+            "artifact_revision_id": {
+              "type": "string",
+              "pattern": "^rev_[0-9a-f]{32}$"
+            },
+            "member_path": {
+              "const": "evidence/accepted-result.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2097152
+            },
+            "schema_ref": {
+              "const": "eom://schemas/knowledge/knowledge-analysis-result/2.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            },
+            "logical_name": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            }
+          }
+        },
+        "proposal_receipt": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "artifact_id",
+            "artifact_revision_id",
+            "member_path",
+            "sha256",
+            "bytes",
+            "schema_ref",
+            "media_type",
+            "logical_name"
+          ],
+          "properties": {
+            "artifact_id": {
+              "type": "string",
+              "pattern": "^artifact_[0-9a-f]{32}$"
+            },
+            "artifact_revision_id": {
+              "type": "string",
+              "pattern": "^rev_[0-9a-f]{32}$"
+            },
+            "member_path": {
+              "const": "normalized/proposal-receipt.json"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            "bytes": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 2097152
+            },
+            "schema_ref": {
+              "const": "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/1.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            },
+            "logical_name": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+            }
+          }
+        },
+        "proposal_content_set_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "base_members": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "normalized_markdown",
+            "anchors",
+            "nodes",
+            "edges",
+            "claims",
+            "component_observations",
+            "unresolved_ambiguities"
+          ],
+          "properties": {
+            "normalized_markdown": {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+            },
+            "anchors": {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+            },
+            "nodes": {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+            },
+            "edges": {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+            },
+            "claims": {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+            },
+            "component_observations": {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+            },
+            "unresolved_ambiguities": {
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+            }
+          }
+        },
+        "base_counts": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalCounts"
+        },
+        "reference_index": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-solution-types/1.0#/$defs/referenceIndex"
+        }
+      }
+    }
+  }
+}

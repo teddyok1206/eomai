@@ -39,6 +39,7 @@ from eom_workflow.schemas import (
     validate_role_result,
     validate_schema_message,
 )
+from jsonschema.exceptions import ValidationError as SchemaValidationError
 from pydantic import ValidationError
 
 NOW = datetime(2026, 9, 12, 3, tzinfo=UTC)
@@ -81,6 +82,30 @@ def test_solution_analysis_workflow_preserves_required_visual_input_mode() -> No
             image_mode="skip",
             analysis_request=request,
         )
+
+
+def test_released_solution_analysis_cannot_relabel_an_ai_item_as_a_past_exam() -> None:
+    """Common encoder-input tests do not prove an AI report producer is installed."""
+    value = _request_value()
+    original = cast(dict[str, Any], value["source"])
+    value["source"] = {
+        key: original[key]
+        for key in (
+            "source_kind",
+            "source_class",
+            "item_id",
+            "item_revision_id",
+            "lifecycle_state",
+            "artifact_member",
+        )
+    } | {"source_class": "APPROVED_ITEM"}
+    value["request_sha256"] = content_sha256(
+        {key: child for key, child in value.items() if key != "request_sha256"}
+    )
+    with pytest.raises(SchemaValidationError):
+        validate_contract("knowledge-analysis-request-v10", value)
+    with pytest.raises(ValidationError):
+        KnowledgeAnalysisRequestV10.model_validate(value)
 
 
 def _pointer(seed: str, *, member_path: str, schema_ref: str, media_type: str) -> dict[str, object]:

@@ -123,3 +123,40 @@ goal 완료는 GPU 프로세스 active나 설치 PASS가 아니라 U01–U05의 
   독립적으로 늦게 발행된 CPU head와 Graph가 다르다는 이유만으로 GPU 검색까지 차단하지 않는다.
   source 해석은 같은 공통 recipe이며, 실제 QUERY owner의 device/index/CPU fallback 검증은
   그대로 유지한다. replay는 원래 Graph/policy pin을 보존한다.
+
+### U02 추가 발견 — AI 전체 풀이보고서의 실제 producer 경계
+
+2026-10-31 10:16 UTC source/installed inventory를 대조했다. 공통 projection의 입력
+동등성 테스트는 세 분류에 대해 통과했지만, 그것은 **AI의 실제 보고서 생성·등록 경로가
+활성화됐다는 증거가 아니다**. 기존 `knowledge-analysis-request/10.0` 및 base pointer는
+occurrence/page evidence를 가진 기출 V9만 허용한다. 일반 승인 AI의 분석 V2를 V9/V10으로
+이름만 바꾸거나, `source_class=PAST_EXAM`으로 바꾸어 통과시켜서는 안 된다.
+이를 JSON Schema/Pydantic 양쪽에서 거부하는 회귀를 추가한다.
+
+현재 source_kind 미기록 APPROVED1/IN_REVIEW1은 accepted analysis와 Graph source가
+모두0이다. 실제 생성 Workflow provenance를 확인하기 전 미기록을 AI로 단정하지 않는다.
+이 문항을 향후 같은 basis로 자동 처리하려면 다음 경계를 닫아야 한다.
+
+1. 기존 Catalog 승인 Item 분석 → accepted base → 공개 가능한 전체 풀이보고서 → 같은
+   Graph source/index admission 순서를 재사용한다. 별도 학습 queue나 Graph는 만들지 않는다.
+2. 기출 V9/V10 및 report1 bytes는 그대로 보존한다. 일반 승인 Item의 accepted base와
+   포인터를 실제로 허용하는 additive successor를 먼저 정의한다. AI origin은 실제
+   생성 Workflow/Item revision provenance로 검증하며 분류명만 믿지 않는다.
+3. 공개 풀이보고서는 기존 `KnowledgeAnalysisSolutionReport`의 검증 가능한 풀이 단계,
+   개념 연결, 선지 진단, 해설 비교와 불확실성 기록을 재사용한다. 독립 검토의 결론이나
+   짧은 정답 문구를 전체 풀이로 승격하지 않는다. 모델의 비공개 사고 기록을 요구하지 않는다.
+4. 새 evidence pointer는 실제 accepted-result/receipt/report schema와 hash를 가리킨다.
+   기존 public entry/index의 closed evidence family에 새 의미를 몰래 추가하지 않고
+   필요한 successor를 사용한다. **텍스트 recipe/encoder는 동일**하며 이미 계산한
+   공통 text/space/hash의 수치 벡터는 재사용한다. provenance 변경을 수치 재계산과 혼동하지 않는다.
+5. source/read authority, 기존 원자적 claim, append-only 분석 이력과 accepted successor
+   uniqueness를 그대로 유지한다. 필요한 uniqueness 확장은 disposable DB에서 검증한다.
+   요청·분석 base·승인·Artifact revisions와 hash가 idempotency와 transaction 경계다.
+6. producer/Graph/public capture/INDEX/QUERY가 실제로 호환되는 조합으로 활성화되기 전에는
+   AI 입력 지원 전체 PASS라고 보고하지 않는다. 현재 GPU 재임베딩 runtime은 이 개발 때문에
+   중단·교체하지 않으며, 호환 전환은 수치 배치의 정상 종료 경계에서만 수행한다.
+
+이는 새 문항 생산 기능이나 검토 엔진 재설계가 아니라 이번 목표의 ‘AI도 같은 실제 풀이
+자료를 사용한다’는 조건을 닫기 위한 후속이다. 검토 요약을 재사용하는 더 작은 대안은
+보고서 내용 기준을 달리하므로 이번 목표의 대체가 될 수 없다. 구현 전 정확한 successor
+번호는 현재 registry를 확인해 선택하며, 이 문서만으로 새 release를 활성화하지 않는다.

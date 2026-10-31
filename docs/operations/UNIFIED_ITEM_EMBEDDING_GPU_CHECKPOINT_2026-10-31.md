@@ -1,6 +1,6 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
-시각: 2026-10-31 10:01 UTC. Goal ACTIVE. 재임베딩/검색 전환/구 벡터 삭제 완료 보고가 아니다.
+시각: 2026-10-31 10:18 UTC. Goal ACTIVE. 재임베딩/검색 전환/구 벡터 삭제 완료 보고가 아니다.
 
 설계 및 종료 조건:
 [공통 전환 목표](../architecture/UNIFIED_ITEM_EMBEDDING_GPU_MIGRATION_GOAL_2026-10-31.md).
@@ -122,3 +122,47 @@ identity와 shared-shard 참조를 함께 확인한다. 기존 Graph를 지우�
   모두 확인한 결과는 아니다. 이 검사만으로 삭제 승인 조건을 충족했다고 판정하지 않는다.
 
 **구 벡터 삭제0. 운영 검색 전환 acceptance 및 goal 완료는 아직 미확정이다.**
+
+## 저장 bytes 및 원보고서 역대조 — 10:12 UTC
+
+root 보호 `index-integrity-20261031T*.json`에 별도 결과를 보관했다. 기존 Catalog의
+pinned Artifact reader/공식 report resolver/JSON Schema·Pydantic·vector binary validator로
+현재 CUDA index를 검증했다. 별도 검색 엔진·모델 추론·DB write는 없다.
+
+- index `embeddingindexrev_6c28aad3c46575f29cb3463d60b2fdc4`, hash
+  `sha256:6ac13c48c7587693fd769c05ff48653c7b0a3efc133c3d81c0a44f5919bafb44`.
+- index44 binding과 DB encoding/binding의 해시·space·partition·row/shard 포인터 일치.
+- shard5개/실제 float32 binary44행의 SHA, 크기·shape, finite/L2 unit norm PASS.
+- 원 accepted 기출/registered 창작 보고서44개를 공식 resolver로 읽어 재투영했다.
+  실제 profile hash, encoder input text hash와 encoding identity가 모두 기존 저장값과 일치했다.
+  원래 기출 목표의 검증 범위는27/520이다. 520개 모두의 재임베딩 검증 PASS가 아니다.
+- 별도로 frozen520 Item revision의 ID/manifest hash/승인 상태 불변을 전수 확인했다.
+- 이 검사는 관리자 무결성 감사다. actual user 권한의 검색/GUI acceptance를 대체하지 않는다.
+  creative 공식 read는 SELECT FOR SHARE를 유지하므로 PostgreSQL READ ONLY root가 아닌
+  SELECT-only 실행 guard가 있는 일반 read root를 썼다. runtime 잠금/권한 검사를 제거하지 않았다.
+  검증 준비의 첫 실패(미prefetch 보고서 포인터, 이어 READ ONLY/공유 잠금 불일치)도 보존했다.
+  운영 source/state-machine의 실패나 모델 재실행이 아니며 해당 검증 helper만 수정했다.
+
+## AI 실제 producer 결측 — 10:16 UTC
+
+AI encoder 동등성은 mocked admitted report를 전제한 값 테스트였다. 실제 V10 보고서
+요청은 기출 V9 source 전용이며 승인 AI source를 받을 수 없다. 기존 V10을 강제로 열거나
+review 요약을 대입하지 않는다. 이 차이를 명시한 schema/Pydantic 거부 회귀와
+AI report missing 시 fallback 금지 회귀를 보강했다. 후속 범위/보존 규칙은 설계 문서의
+‘U02 추가 발견’에 기록했다. AI source producer/Graph/public evidence 연결은 아직 남은 일이다.
+**현재 기출 GPU INDEX는 이 개발과 독립적으로 계속 실행 중이며 전체 goal은 ACTIVE다.**
+
+### AI successor의 protocol-first 후보 — 10:23 UTC
+
+일반 승인 Item의 accepted V2 base를 가리키는 request11/receipt10/result11 및 base types2,
+role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로 정의했다.
+기존 공개 report1/worker proposal8은 그대로 재사용하며 기존 기출 schema bytes를 바꾸지 않는다.
+새 base에는 기출 occurrence/page observation을 조작해 넣지 않는다.
+
+- 재현 generator: `scripts/contracts/generate_registered_item_solution_analysis_v11_schema.py`.
+- canonical/package schema copies 및 `--check`, JSON Schema 2020-12 검증 PASS.
+- 새 후보의 source/base pins/closed outputs/worker protocol/plan source와 기존 경계 회귀
+  **60 PASS**, generator strict mypy 및 관련 Ruff/format PASS.
+- **Pydantic/application/worker/resolver/evidence successor/DB uniqueness/운영 연결은 아직 미구현**이다.
+  이 후보를 source 지원 활성화나 AI end-to-end PASS라고 보고하지 않는다.
+  현재 running INDEX/QUERY/private wheels/config/DB schema는 이 후보 때문에 바뀌지 않았다.
