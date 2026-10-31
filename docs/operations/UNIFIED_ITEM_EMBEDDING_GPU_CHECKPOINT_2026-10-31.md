@@ -1,5 +1,26 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 공식 배포0066 admission 연결 — 2026-10-31 17:59 UTC
+
+- 운영 전환 준비에서 기존 release operator가0064까지만 허용하는 실제 source gap을
+  확인했다. 운영 DB를 직접 수정하거나 옛 context의 target을 넓히지 않고, 같은 operator의
+  context/admission1.14와 literal0066 verify,0065→0066,0064→0066 callback을 추가했다.
+  standalone 역사적0051 wrapper와1.0–1.13 bytes는 불변이다. default deployment는
+  source head에 맞는 verify0066만 호출한다. 새 queue/registry/DB aggregate는 없다.
+- 단위/경계/기존 callback/schema/설치 admission **318 PASS**:
+  `/tmp/eom-release0066-focused-20261031.log`. strict mypy, Ruff/format, shell syntax,
+  diff 및 schema canonical/operator mirror SHA PASS.
+- guarded PostgreSQL 실제 Alembic callback **3 PASS**:
+  `/tmp/eom-release0066-native-callback-pg-20261031.log`.
+  0064→0066 실제 DDL,0066 replay DDL0, commit 뒤 응답 유실→원래 callback replay DDL0,
+  잘못된 predecessor/옛 context 거부 및 원래 V10 uniqueness+새 V11 index 공존을 확인했다.
+  DB owner/search-path는 실제 임시 DB에서 확인했고 root/private-stage/IAM은 synthetic이다.
+  운영 privileged acceptance로 확대하지 않는다.
+- `/tmp/eom-api-testdb-20261031175739_bbbbc755` migration0066 왕복/reconcile PASS.
+  운영 migration/서비스 package 교체/구 vector 삭제0. old API exact-head readiness는0064라서
+  compatible API/reader set을 준비하기 전 운영0066 DDL을 실행하지 않는다.
+  INDEX PID1242505의 고정 numerical runtime, QUERY1075361, 창작1088058은 보존했다.
+
 ## INDEX4 자동 producer 소스 검증 — 2026-10-31 17:50 UTC
 
 - 새 public discovery가 기존 공식 Catalog capture→plan4/request4→INDEX parent1.6을

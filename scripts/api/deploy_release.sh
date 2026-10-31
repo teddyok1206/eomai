@@ -799,7 +799,7 @@ verify_mock_exam_deployment_admission() {
 prepare_runtime_dependencies() {
   getent group eom-codex-auth >/dev/null || \
     fail "eom-codex-auth identity must be deployed before the API unit"
-  run_release_operator MIGRATION_VERIFY_0064 "${COMMIT}"
+  run_release_operator MIGRATION_VERIFY_0066 "${COMMIT}"
   run_release_operator API_ROLE_BOOTSTRAP "${COMMIT}"
 }
 

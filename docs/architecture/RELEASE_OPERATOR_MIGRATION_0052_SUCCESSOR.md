@@ -69,3 +69,29 @@ history; a bounded 1.1 successor preserves that evidence without broadening auth
     history. A separate1.7 resource preserves prior acceptance and supports the
     required0058 installation. Tests prove intent with fake ports only; actual
     migration and compatible forward recovery remain explicit operating gates.
+
+## Exact0066 common-public-report rollout — 2026-10-31 UTC
+
+The existing operator owns this metadata-only extension: context/admission1.14 pins
+`20261031_0066`, preserving all1.0–1.13 schema bytes and callbacks. Its only new
+callbacks verify0066, upgrade0065→0066, or explicitly upgrade0064→0066 through the
+reviewed0065/0066 Alembic chain. None accepts `head`, caller-chosen SQL/credentials
+or an arbitrary predecessor. Source/archive/wheel/runtime/hash/identity and actual
+DB owner checks are unchanged. The enum/map lookup is O(1), with the same bounded
+JSON/RECORD reads and no additional registry/table/queue/cache.
+
+0065 adds the existing accepted-V11 predecessor uniqueness index;0066 admits
+registered public index4 metadata in existing checks. No vector/report bytes or
+historical states are rewritten. Native Alembic retains transaction ownership and
+the fixed lock/statement limits. A timeout or failed callback requires actual-head
+inspection before replay. A completed0066 replay performs no DDL. New V11/index4
+history prevents unsafe downgrade; rollback keeps the compatible schema and
+withdraws only the candidate receiver/writer selection. Existing data is not deleted.
+
+The reviewed package set must be staged before the production DDL window because
+the old API's exact-head readiness pins0064. GPU numerical/runtime files remain
+immutable and active claims must be classified before changing any owning service.
+Deploy verification now selects only the0066 verification callback. The historical
+standalone0051 wrapper and context1.13 cannot authorize this transition. Updating
+that old contract in place would erase history, while running Alembic outside its
+official owner would duplicate the privilege boundary; this successor avoids both.
