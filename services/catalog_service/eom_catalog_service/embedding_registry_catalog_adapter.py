@@ -76,6 +76,9 @@ from eom_catalog_contracts.public_solution_embedding_registry import (
     RegisterPublicSolutionIndexCommand,
 )
 from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityView
+from eom_catalog_contracts.registered_public_solution_embedding import (
+    RegisteredPublicSolutionEmbeddingEntry,
+)
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import (
     SimilarityContext,
@@ -959,7 +962,9 @@ class CatalogEmbeddingRegistryVerifier:
             capture.corpus.sources, key=lambda value: value.source.item_revision_id
         ):
             entry = entries.get(value.source.item_revision_id)
-            if isinstance(entry, PublicSolutionEmbeddingEntry):
+            if isinstance(
+                entry, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry
+            ):
                 raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
             values.append(
                 PreparedSimilaritySource(
@@ -2052,7 +2057,12 @@ class CatalogEmbeddingRegistryVerifier:
             }
             if len(entries) != len(resolved.entries) or set(entries) != targets:
                 raise ValueError("selected reference projections differ")
-            if any(isinstance(entry, PublicSolutionEmbeddingEntry) for entry in entries.values()):
+            if any(
+                isinstance(
+                    entry, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry
+                )
+                for entry in entries.values()
+            ):
                 raise ValueError("legacy materials cannot reinterpret a public-solution entry")
             anchor_entry = entries.get(request.anchor.source.item_revision_id)
             if anchor_entry is not None and not isinstance(anchor_entry, StagedExperimentEntry):
@@ -2482,7 +2492,9 @@ class CatalogEmbeddingRegistryVerifier:
                 entry = entries[demand.source_revision_id]
                 binding: SupportedEmbeddingBinding
                 recipe = self.configuration.recipe
-                if isinstance(entry, PublicSolutionEmbeddingEntry):
+                if isinstance(
+                    entry, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry
+                ):
                     if not isinstance(intent.namespace, PublicSolutionIndexNamespace):
                         raise ValueError("public solution requires its exact namespace")
                     binding = assemble_public_solution_binding(

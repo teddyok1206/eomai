@@ -73,6 +73,9 @@ from eom_catalog_contracts.public_solution_embedding_registry import (
     validate_public_solution_registration_result,
 )
 from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityView
+from eom_catalog_contracts.registered_public_solution_embedding import (
+    RegisteredPublicSolutionEmbeddingEntry,
+)
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import SimilarityViewSelection
 from eom_catalog_contracts.similarity_context_v2 import SimilarityViewSelectionV2
@@ -686,7 +689,7 @@ def _prepare_missing_embedding_bindings(
         _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
     for entry in checked_entries:
         projection: str
-        if isinstance(entry, PublicSolutionEmbeddingEntry):
+        if isinstance(entry, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry):
             if not isinstance(query.namespace, PublicSolutionIndexNamespace):
                 _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
             projection = "public-solution-text/1.0"

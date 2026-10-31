@@ -61,7 +61,7 @@ def test_every_canonical_ledger_scalar_must_equal_current_reconstruction(
 ) -> None:
     verifier, session, _command, _index, binding, _scope, _root = owner
     record = session.binding_records[binding.binding_sha256]
-    setattr(record, column, getattr(record, column) + ":forged-ledger")
+    setattr(record, column, f"{getattr(record, column)}:forged-ledger")
     materialize = Mock(side_effect=AssertionError("reject forged ledger before origin IO"))
     monkeypatch.setattr(verifier, "_read_index_member", materialize)
     with pytest.raises(EmbeddingRegistryError) as rejected:
@@ -217,8 +217,8 @@ def test_reference_origins_skip_historical_dto_parse_but_selected_index_still_pa
     owner: OwnerFixture, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     verifier, session, command, index, binding, _scope, _root = owner
-    parse = Mock(wraps=catalog.parse_embedding_index)
-    monkeypatch.setattr(catalog, "parse_embedding_index", parse)
+    parse = Mock(wraps=catalog.parse_supported_embedding_index)
+    monkeypatch.setattr(catalog, "parse_supported_embedding_index", parse)
     references = _verify(owner)
     assert references.origins[0].binding == binding
     assert references.shards[0][0] == binding.row_ref.shard_manifest

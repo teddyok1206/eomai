@@ -81,6 +81,20 @@ def service_case(registry_owner, source_owner, monkeypatch: pytest.MonkeyPatch):
     )
     population = Mock(return_value=(corpus, resolved.entries))
     monkeypatch.setattr(verifier.sources, "_capture_population", population)
+    original_execute = session.execute
+
+    def execute(statement):
+        # The real owner now enumerates source/analysis pairs in bounded SQL
+        # pages before materializing each page. IAM and paging logic stay real;
+        # this test's SQL seam returns its one synthetic approved association.
+        names = tuple(column["name"] for column in statement.column_descriptions)
+        if names == ("source_revision_id", "analysis_run_id"):
+            return [
+                (binding.source.item_revision_id, binding.solution_evidence.base_analysis_run_id)
+            ]
+        return original_execute(statement)
+
+    monkeypatch.setattr(session, "execute", execute)
     return SimpleNamespace(
         verifier=verifier,
         base=base,
@@ -116,7 +130,8 @@ def test_service_selected_source_read_retains_actual_authority_and_exact_pins(se
     assert intent.service_policy_revision_id == c.policy.access_policy_revision_id
     assert c.source.iam.called
     c.verifier.resolve_lookup(c.session, c.caller, c.query)
-    assert c.population.call_args.args[1].source_revision_ids == ()
+    assert c.population.call_args.args[1].source_revision_ids == selection.source_revision_ids
+    assert c.gate.source_intent(c.caller, c.query, c.base.configuration).source_revision_ids == ()
 
 
 def test_service_selected_read_does_not_waive_current_denial(service_case):
@@ -156,7 +171,7 @@ def test_service_reuses_canonical_registration_and_separate_source_policy(servic
     assert not hasattr(intent, "requester_role") and not hasattr(
         intent, "requester_permission_keys"
     )
-    assert c.source.iam.call_count == 3
+    assert c.source.iam.call_count == 6
     assert all(call.args == (c.session,) for call in c.source.iam.call_args_list)
     assert not c.base.sources.capture_in_session.called
     assert c.verifier.identity_fence is None
@@ -271,7 +286,7 @@ def test_revocation_before_capture_or_after_file_read_blocks_result(service_case
     c = service_case
     checked = c.source.iam.return_value
     denied = LocalIndexingFenceError("LOCAL_INDEXING_FENCE_FORBIDDEN")
-    c.source.iam.side_effect = [denied] if stage == "initial" else [checked, checked, denied]
+    c.source.iam.side_effect = [denied] if stage == "initial" else [checked] * 5 + [denied]
     with pytest.raises(EmbeddingRegistryError, match="FORBIDDEN"):
         c.verifier.resolve_registration(c.session, c.caller, c.command)
     assert not c.base.sources.capture_in_session.called

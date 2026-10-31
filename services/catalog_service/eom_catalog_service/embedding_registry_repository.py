@@ -24,6 +24,12 @@ from eom_catalog_contracts.public_solution_embedding_index import (
     MAX_PUBLIC_SOLUTION_SOURCES,
     PublicSolutionEmbeddingSourceBinding,
 )
+from eom_catalog_contracts.registered_public_solution_embedding import (
+    RegisteredPublicSolutionEvidence,
+)
+from eom_catalog_contracts.registered_public_solution_index import (
+    RegisteredPublicSolutionSourceBinding,
+)
 from eom_identifiers import content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import Select, String, column, exists, select, tuple_, update, values
@@ -183,12 +189,16 @@ def binding_columns(
         "recipe_sha256": binding.recipe.recipe_sha256,
         "projection_version": binding.projection_version,
     }
-    if isinstance(binding, PublicSolutionEmbeddingSourceBinding):
+    if isinstance(
+        binding, PublicSolutionEmbeddingSourceBinding | RegisteredPublicSolutionSourceBinding
+    ):
         result.update(
             evidence_kind="PUBLIC_SOLUTION_REPORT",
             base_analysis_run_id=binding.base_analysis_run_id,
             solution_analysis_run_id=binding.evidence.solution.solution_analysis_run_id
-            if isinstance(binding.evidence, AcceptedPublicSolutionEvidence)
+            if isinstance(
+                binding.evidence, AcceptedPublicSolutionEvidence | RegisteredPublicSolutionEvidence
+            )
             else None,
             # This branch hashes its explicit public-evidence union, never
             # masquerading as a legacy KnowledgeSolutionEvidencePointer.

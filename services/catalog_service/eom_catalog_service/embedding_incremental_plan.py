@@ -25,6 +25,12 @@ from eom_catalog_contracts.public_solution_embedding_index import (
     MAX_PUBLIC_SOLUTION_SOURCES,
     PublicSolutionProfilePointer,
 )
+from eom_catalog_contracts.registered_public_solution_embedding import (
+    RegisteredPublicSolutionEmbeddingEntry,
+)
+from eom_catalog_contracts.registered_public_solution_index import (
+    RegisteredPublicSolutionProfilePointer,
+)
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_identifiers import content_sha256
 
@@ -35,10 +41,16 @@ from eom_catalog_service.registered_review_embedding_entry import (
 )
 
 type EmbeddingProfilePointer = (
-    InferenceTransferProfilePointer | RegisteredReviewProfilePointer | PublicSolutionProfilePointer
+    InferenceTransferProfilePointer
+    | RegisteredReviewProfilePointer
+    | PublicSolutionProfilePointer
+    | RegisteredPublicSolutionProfilePointer
 )
 type IncrementalEmbeddingEntry = (
-    StagedExperimentEntry | RegisteredReviewEmbeddingEntry | PublicSolutionEmbeddingEntry
+    StagedExperimentEntry
+    | RegisteredReviewEmbeddingEntry
+    | PublicSolutionEmbeddingEntry
+    | RegisteredPublicSolutionEmbeddingEntry
 )
 
 
@@ -106,7 +118,12 @@ def plan_embedding_delta(
         or len(entries)
         > (
             MAX_PUBLIC_SOLUTION_SOURCES
-            if all(isinstance(value, PublicSolutionEmbeddingEntry) for value in entries)
+            if all(
+                isinstance(
+                    value, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry
+                )
+                for value in entries
+            )
             else MAX_EMBEDDING_ROWS
         )
         or not isinstance(views, tuple)
@@ -146,7 +163,10 @@ def plan_embedding_delta(
     for original in entries:
         entry: IncrementalEmbeddingEntry
         profile: EmbeddingProfilePointer
-        if isinstance(original, PublicSolutionEmbeddingEntry):
+        if isinstance(original, RegisteredPublicSolutionEmbeddingEntry):
+            entry = RegisteredPublicSolutionEmbeddingEntry.model_validate(original)
+            profile = RegisteredPublicSolutionProfilePointer.from_entry(entry)
+        elif isinstance(original, PublicSolutionEmbeddingEntry):
             entry = PublicSolutionEmbeddingEntry.model_validate(original.model_dump(mode="json"))
             profile = PublicSolutionProfilePointer.from_entry(entry)
         elif isinstance(original, RegisteredReviewEmbeddingEntry):
@@ -160,7 +180,9 @@ def plan_embedding_delta(
             raise EmbeddingDeltaError("EMBEDDING_DELTA_DUPLICATE_SOURCE")
         source_revisions.add(revision)
         for view in views:
-            if isinstance(entry, PublicSolutionEmbeddingEntry):
+            if isinstance(
+                entry, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry
+            ):
                 text = entry.public_solution.text if view == "CONCRETE_FACETS" else None
                 if text is not None and len(text.encode("utf-8")) > entry.recipe.maximum_text_bytes:
                     unavailable.append(

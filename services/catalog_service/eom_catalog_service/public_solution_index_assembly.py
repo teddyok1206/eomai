@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime
+from typing import overload
 
 from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingSpace,
@@ -17,6 +18,15 @@ from eom_catalog_contracts.public_solution_embedding_index import (
     PublicSolutionEmbeddingSourceBinding,
     PublicSolutionIndexNamespace,
     PublicSolutionProfilePointer,
+)
+from eom_catalog_contracts.registered_public_solution_embedding import (
+    PublicSolutionEncodingEntry,
+    RegisteredPublicSolutionEmbeddingEntry,
+    parse_public_solution_encoding_entry,
+)
+from eom_catalog_contracts.registered_public_solution_index import (
+    RegisteredPublicSolutionProfilePointer,
+    RegisteredPublicSolutionSourceBinding,
 )
 from eom_identifiers import content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -48,15 +58,35 @@ class PreparedPublicSolutionIndexBasis:
     expected_lock_version: int
 
 
+@overload
 def assemble_public_solution_binding(
     entry: PublicSolutionEmbeddingEntry,
     *,
     row: RegisteredEmbeddingRow,
     space: EmbeddingSpace,
     namespace: PublicSolutionIndexNamespace,
-) -> PublicSolutionEmbeddingSourceBinding:
+) -> PublicSolutionEmbeddingSourceBinding: ...
+
+
+@overload
+def assemble_public_solution_binding(
+    entry: RegisteredPublicSolutionEmbeddingEntry,
+    *,
+    row: RegisteredEmbeddingRow,
+    space: EmbeddingSpace,
+    namespace: PublicSolutionIndexNamespace,
+) -> RegisteredPublicSolutionSourceBinding: ...
+
+
+def assemble_public_solution_binding(
+    entry: PublicSolutionEncodingEntry,
+    *,
+    row: RegisteredEmbeddingRow,
+    space: EmbeddingSpace,
+    namespace: PublicSolutionIndexNamespace,
+) -> PublicSolutionEmbeddingSourceBinding | RegisteredPublicSolutionSourceBinding:
     """Exact source/text/recipe closure; canonical source authority stays with Catalog."""
-    entry = PublicSolutionEmbeddingEntry.model_validate(entry.model_dump(mode="json"))
+    entry = parse_public_solution_encoding_entry(entry)
     namespace = PublicSolutionIndexNamespace.model_validate(namespace.model_dump(mode="json"))
     prepared = prepare_public_solution_encoding(
         entry, space=space, storage_partition=namespace.storage_partition
@@ -70,10 +100,18 @@ def assemble_public_solution_binding(
     ):
         raise ValueError("PUBLIC_SOLUTION_BINDING_INPUT_MISMATCH")
     body = {
-        "schema_version": "embedding-source-binding/3.0",
+        "schema_version": (
+            "embedding-source-binding/4.0"
+            if isinstance(entry, RegisteredPublicSolutionEmbeddingEntry)
+            else "embedding-source-binding/3.0"
+        ),
         "source": entry.source,
         "base_analysis_run_id": entry.base_analysis_run_id,
-        "profile": PublicSolutionProfilePointer.from_entry(entry),
+        "profile": (
+            RegisteredPublicSolutionProfilePointer.from_entry(entry)
+            if isinstance(entry, RegisteredPublicSolutionEmbeddingEntry)
+            else PublicSolutionProfilePointer.from_entry(entry)
+        ),
         "evidence": entry.evidence,
         "graph_snapshot": entry.graph_snapshot,
         "policy_revision_id": entry.policy_revision_id,
@@ -84,9 +122,10 @@ def assemble_public_solution_binding(
         "encoding": row.encoding,
         "row_ref": row.row_ref,
     }
-    return PublicSolutionEmbeddingSourceBinding.model_validate(
-        body | {"binding_sha256": content_sha256(body)}
-    )
+    value = body | {"binding_sha256": content_sha256(body)}
+    if isinstance(entry, RegisteredPublicSolutionEmbeddingEntry):
+        return RegisteredPublicSolutionSourceBinding.model_validate(value)
+    return PublicSolutionEmbeddingSourceBinding.model_validate(value)
 
 
 def assemble_public_solution_index(

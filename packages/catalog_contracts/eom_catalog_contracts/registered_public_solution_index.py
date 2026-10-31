@@ -7,7 +7,7 @@ from eom_protocol.artifact_members import ArtifactMemberPointer
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import ConfigDict, Field, model_validator
 
-from eom_catalog_contracts.embedding_contract_values import raw_similarity_contract_value
+from eom_catalog_contracts.embedding_contract_values import raw_public_solution_contract_value
 from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingEncodingIdentity,
     EmbeddingSpace,
@@ -46,7 +46,7 @@ class _RegisteredPublicIndexValue(FrozenModel):
     @model_validator(mode="before")
     @classmethod
     def schema_first(cls, value: object) -> object:
-        document = raw_similarity_contract_value(value)
+        document = raw_public_solution_contract_value(value)
         if not isinstance(document, dict) or len(canonical_json_bytes(document)) > 64 * 1024**2:
             raise ValueError("REGISTERED_PUBLIC_INDEX_METADATA_INVALID")
         try:

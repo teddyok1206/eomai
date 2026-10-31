@@ -260,3 +260,22 @@ work-batch2는 query2를 직접 포함하므로 그 경로는 별도 검증 대�
 frame과 QUERY의 근거 metadata frame을 구분하고, 모든 carrier를 일괄 재버전하지 않는다.
 번호는 실제 registry와 충돌하지 않는지 확인한 후 정한다. 기존 common pure validators,
 atomic claim/CAS/동일 text encoding lookup과 exact source permission boundary를 재사용한다.
+
+#### Source plan4 구현 시 확인한 경계 — 12:46 UTC
+
+- 기존 raw parser/native metadata는 배열1,024개까지만 읽지만 public index의 선언된 상한은
+ 16,384다. 기존 parser/계약의 상한은 유지한다. 신규 source plan4/index4만 별도 bounded raw
+  진입점으로16,384개와8M node/깊이32/각 계약 byte budget을 적용한다. 수치 native Job의
+  row/batch 상한은 늘리지 않는다. source plan4는 기존 native처럼 raw float를 정수로
+  coercion하지 않고 거부한다. source1,025개가 모두 보고서 미준비인 경우에도 임의 encoding을
+  만들지 않고 명시적 missing으로 보존하는 scale fixture를 사용한다.
+- plan3/4의 coverage/source-set/encoding-set/Graph/namespace/hash 규칙과 staged entry/index
+  대조는 같은 순수 validator를 사용한다. map/set/index join을 유지하며 새 queue/lookup store를
+  만들지 않는다. source plan4는 기존 기출/창작 profile1/evidence와 AI profile2/evidence의 정확한
+  짝만 받는다. 같은 text/space는 하나의 encoding row, source/report는 별도의 demand다.
+- AI Graph 등록 경로를 재대조했다. 과거25문항용 `ApprovedItemGraphPublicationService`의
+  production whitelist를 최신 single-item Workflow에 맞춰 넓힐 필요가 없다. 기존
+  `OrdinaryItemGraphPublicationService`가 이미 generic1.11–1.16의 실제 review/plan/Workflow
+  origin과 권한을 검증해 공식 공통 Graph publisher에 연결한다. V2 base를 그 경로로 등록하고
+  V11 additive report를 정확히 조회하는 방식을 재사용한다. 실제 운영 operation 활성화와
+  대상 sample provenance는 activation 때 별도 확인한다. source 확인을 live PASS로 간주하지 않는다.

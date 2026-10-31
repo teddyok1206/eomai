@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-embedding-source-plan/4.0",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "local-embedding-source-plan/4.0"
+    },
+    "corpus_id": {
+      "pattern": "^corpus_[0-9a-f]{32}$",
+      "title": "Corpus Id",
+      "type": "string"
+    },
+    "graph_snapshot": {
+      "$ref": "eom://schemas/workflow/local-embedding-source-plan/3.0#/$defs/KnowledgeGraphSnapshotPointer"
+    },
+    "access_policy_revision_id": {
+      "pattern": "^accessrev_[0-9a-f]{32}$",
+      "title": "Access Policy Revision Id",
+      "type": "string"
+    },
+    "access_policy_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Access Policy Sha256",
+      "type": "string"
+    },
+    "namespace": {
+      "$ref": "eom://schemas/workflow/local-embedding-source-plan/3.0#/$defs/PublicSolutionIndexNamespace"
+    },
+    "space": {
+      "$ref": "eom://schemas/workflow/local-embedding-source-plan/3.0#/$defs/EmbeddingSpace"
+    },
+    "recipe": {
+      "$ref": "eom://schemas/workflow/local-embedding-source-plan/3.0#/$defs/PublicSolutionEmbeddingRecipe"
+    },
+    "sources": {
+      "items": {
+        "$ref": "eom://schemas/workflow/local-embedding-source-plan/3.0#/$defs/PopulationSource"
+      },
+      "maxItems": 16384,
+      "minItems": 1,
+      "title": "Sources",
+      "type": "array"
+    },
+    "demands": {
+      "items": {
+        "$ref": "#/$defs/demand"
+      },
+      "maxItems": 16384,
+      "title": "Demands",
+      "type": "array"
+    },
+    "missing_solution_report_revision_ids": {
+      "items": {
+        "$ref": "eom://schemas/workflow/local-embedding-source-plan/3.0#/$defs/SourceRevisionId"
+      },
+      "maxItems": 16384,
+      "title": "Missing Solution Report Revision Ids",
+      "type": "array"
+    },
+    "unavailable_views": {
+      "items": {
+        "$ref": "eom://schemas/workflow/local-embedding-source-plan/3.0#/$defs/PublicSolutionUnavailableView"
+      },
+      "maxItems": 16384,
+      "title": "Unavailable Views",
+      "type": "array"
+    },
+    "source_set_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Source Set Sha256",
+      "type": "string"
+    },
+    "encoding_set_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Encoding Set Sha256",
+      "type": "string"
+    },
+    "plan_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Plan Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "corpus_id",
+    "graph_snapshot",
+    "access_policy_revision_id",
+    "access_policy_sha256",
+    "namespace",
+    "space",
+    "recipe",
+    "sources",
+    "demands",
+    "missing_solution_report_revision_ids",
+    "unavailable_views",
+    "source_set_sha256",
+    "encoding_set_sha256",
+    "plan_sha256"
+  ],
+  "title": "Exact past/creative/registered full report demands in one numeric space",
+  "type": "object",
+  "$defs": {
+    "demand": {
+      "additionalProperties": false,
+      "properties": {
+        "source_revision_id": {
+          "$ref": "eom://schemas/workflow/local-embedding-source-plan/3.0#/$defs/SourceRevisionId"
+        },
+        "base_analysis_run_id": {
+          "pattern": "^analysisrun_[0-9a-f]{32}$",
+          "title": "Base Analysis Run Id",
+          "type": "string"
+        },
+        "profile": {
+          "oneOf": [
+            {
+              "$ref": "eom://schemas/knowledge/public-solution-embedding-index/3.0#/$defs/PublicSolutionProfilePointer"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/public-solution-embedding-index/4.0#/$defs/registeredProfile"
+            }
+          ]
+        },
+        "evidence": {
+          "oneOf": [
+            {
+              "$ref": "eom://schemas/knowledge/public-solution-embedding-entry/1.0#/properties/evidence"
+            },
+            {
+              "$ref": "eom://schemas/knowledge/public-solution-embedding-entry/2.0#/$defs/registeredEvidence"
+            }
+          ]
+        },
+        "encoding": {
+          "$ref": "eom://schemas/workflow/local-embedding-source-plan/3.0#/$defs/EmbeddingEncodingIdentity"
+        }
+      },
+      "required": [
+        "source_revision_id",
+        "base_analysis_run_id",
+        "profile",
+        "evidence",
+        "encoding"
+      ],
+      "title": "PublicSolutionEncodingDemand",
+      "type": "object",
+      "oneOf": [
+        {
+          "properties": {
+            "profile": {
+              "$ref": "eom://schemas/knowledge/public-solution-embedding-index/3.0#/$defs/PublicSolutionProfilePointer"
+            },
+            "evidence": {
+              "$ref": "eom://schemas/knowledge/public-solution-embedding-entry/1.0#/properties/evidence"
+            }
+          }
+        },
+        {
+          "properties": {
+            "profile": {
+              "$ref": "eom://schemas/knowledge/public-solution-embedding-index/4.0#/$defs/registeredProfile"
+            },
+            "evidence": {
+              "$ref": "eom://schemas/knowledge/public-solution-embedding-entry/2.0#/$defs/registeredEvidence"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

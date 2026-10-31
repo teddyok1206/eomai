@@ -3,7 +3,10 @@
 from eom_identifiers import content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
 
-from eom_catalog_contracts.embedding_contract_values import raw_similarity_contract_value
+from eom_catalog_contracts.embedding_contract_values import (
+    raw_public_solution_contract_value,
+    raw_similarity_contract_value,
+)
 from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingIndexManifest,
@@ -45,21 +48,40 @@ from eom_catalog_contracts.public_solution_embedding_index import (
     PublicSolutionIndexNamespace,
     PublicSolutionProfilePointer,
 )
+from eom_catalog_contracts.registered_public_solution_embedding import (
+    RegisteredPublicSolutionEmbeddingEntry,
+)
+from eom_catalog_contracts.registered_public_solution_index import (
+    REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+    PublicSolutionEmbeddingIndexV4,
+    RegisteredPublicSolutionProfilePointer,
+    RegisteredPublicSolutionSourceBinding,
+)
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 
 type SupportedEmbeddingIndex = (
-    EmbeddingIndexManifest | MixedEmbeddingIndexManifest | PublicSolutionEmbeddingIndex
+    EmbeddingIndexManifest
+    | MixedEmbeddingIndexManifest
+    | PublicSolutionEmbeddingIndex
+    | PublicSolutionEmbeddingIndexV4
 )
 type SupportedEmbeddingBinding = (
     EmbeddingSourceBinding
     | RegisteredReviewEmbeddingSourceBinding
     | PublicSolutionEmbeddingSourceBinding
+    | RegisteredPublicSolutionSourceBinding
 )
 type SupportedEmbeddingEntry = (
-    StagedExperimentEntry | RegisteredReviewEmbeddingEntry | PublicSolutionEmbeddingEntry
+    StagedExperimentEntry
+    | RegisteredReviewEmbeddingEntry
+    | PublicSolutionEmbeddingEntry
+    | RegisteredPublicSolutionEmbeddingEntry
 )
 type SupportedEmbeddingProfilePointer = (
-    InferenceTransferProfilePointer | RegisteredReviewProfilePointer | PublicSolutionProfilePointer
+    InferenceTransferProfilePointer
+    | RegisteredReviewProfilePointer
+    | PublicSolutionProfilePointer
+    | RegisteredPublicSolutionProfilePointer
 )
 
 type SupportedEmbeddingNamespace = (
@@ -83,6 +105,12 @@ def parse_supported_embedding_namespace(value: object) -> SupportedEmbeddingName
 
 
 def parse_supported_embedding_index(value: object) -> SupportedEmbeddingIndex:
+    if isinstance(value, PublicSolutionEmbeddingIndexV4) or (
+        isinstance(value, dict) and value.get("schema_version") == "embedding-index-manifest/4.0"
+    ):
+        return PublicSolutionEmbeddingIndexV4.model_validate(
+            raw_public_solution_contract_value(value)
+        )
     document = raw_similarity_contract_value(value)
     if (
         isinstance(document, dict)
@@ -96,6 +124,11 @@ def parse_supported_embedding_binding(value: object) -> SupportedEmbeddingBindin
     document = raw_similarity_contract_value(value)
     if (
         isinstance(document, dict)
+        and document.get("schema_version") == "embedding-source-binding/4.0"
+    ):
+        return RegisteredPublicSolutionSourceBinding.model_validate(document)
+    if (
+        isinstance(document, dict)
         and document.get("schema_version") == "embedding-source-binding/3.0"
     ):
         return PublicSolutionEmbeddingSourceBinding.model_validate(document)
@@ -104,6 +137,11 @@ def parse_supported_embedding_binding(value: object) -> SupportedEmbeddingBindin
 
 def parse_supported_embedding_entry(value: object) -> SupportedEmbeddingEntry:
     document = raw_similarity_contract_value(value)
+    if (
+        isinstance(document, dict)
+        and document.get("schema_version") == "public-solution-embedding-entry/2.0"
+    ):
+        return RegisteredPublicSolutionEmbeddingEntry.model_validate(document)
     if (
         isinstance(document, dict)
         and document.get("schema_version") == "public-solution-embedding-entry/1.0"
@@ -115,7 +153,7 @@ def parse_supported_embedding_entry(value: object) -> SupportedEmbeddingEntry:
 def embedding_entry_source(entry: SupportedEmbeddingEntry) -> ApprovedItemKnowledgeSourceV2:
     return (
         entry.source
-        if isinstance(entry, PublicSolutionEmbeddingEntry)
+        if isinstance(entry, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry)
         else entry.profile.source_basis.source
     )
 
@@ -123,12 +161,14 @@ def embedding_entry_source(entry: SupportedEmbeddingEntry) -> ApprovedItemKnowle
 def embedding_entry_graph(entry: SupportedEmbeddingEntry) -> KnowledgeGraphSnapshotPointer:
     return (
         entry.graph_snapshot
-        if isinstance(entry, PublicSolutionEmbeddingEntry)
+        if isinstance(entry, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry)
         else entry.profile.source_basis.graph_snapshot
     )
 
 
 def embedding_entry_profile(entry: SupportedEmbeddingEntry) -> SupportedEmbeddingProfilePointer:
+    if isinstance(entry, RegisteredPublicSolutionEmbeddingEntry):
+        return RegisteredPublicSolutionProfilePointer.from_entry(entry)
     if isinstance(entry, PublicSolutionEmbeddingEntry):
         return PublicSolutionProfilePointer.from_entry(entry)
     if isinstance(entry, RegisteredReviewEmbeddingEntry):
@@ -142,12 +182,21 @@ def validate_supported_embedding_index_references(
     previous: tuple[ArtifactMemberPointer, SupportedEmbeddingIndex] | None,
 ) -> None:
     index = parse_supported_embedding_index(index)
-    if isinstance(index, PublicSolutionEmbeddingIndex):
+    if isinstance(index, PublicSolutionEmbeddingIndex | PublicSolutionEmbeddingIndexV4):
         if previous is not None:
-            if not isinstance(previous[1], PublicSolutionEmbeddingIndex):
+            if not isinstance(
+                previous[1], PublicSolutionEmbeddingIndex | PublicSolutionEmbeddingIndexV4
+            ) or (
+                isinstance(index, PublicSolutionEmbeddingIndex)
+                and not isinstance(previous[1], PublicSolutionEmbeddingIndex)
+            ):
                 raise ValueError("PUBLIC_SOLUTION_INDEX_PREDECESSOR_INVALID")
             validate_embedding_manifest_pointer(
-                previous[0], PUBLIC_SOLUTION_INDEX_SCHEMA_REF, "index.json"
+                previous[0],
+                REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF
+                if isinstance(previous[1], PublicSolutionEmbeddingIndexV4)
+                else PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+                "index.json",
             )
         validate_embedding_index_reference_layout(index, shards, previous)
     else:
@@ -176,8 +225,14 @@ def validate_supported_embedding_source_bindings(
 ) -> None:
     """One bounded family join; metadata validation is not numerical/source admission."""
     public = all(
-        isinstance(value, PublicSolutionEmbeddingSourceBinding) for value in bindings
-    ) and all(isinstance(value, PublicSolutionEmbeddingEntry) for value in entries)
+        isinstance(
+            value, PublicSolutionEmbeddingSourceBinding | RegisteredPublicSolutionSourceBinding
+        )
+        for value in bindings
+    ) and all(
+        isinstance(value, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry)
+        for value in entries
+    )
     maximum = MAX_PUBLIC_SOLUTION_SOURCES if public else 1024
     if any(len(values) > maximum for values in (bindings, entries, shards)):
         raise ValueError("EMBEDDING_BINDING_SCOPE_LIMIT")
@@ -194,7 +249,9 @@ def validate_supported_embedding_source_bindings(
     legacy = tuple(
         binding
         for binding in checked
-        if not isinstance(binding, PublicSolutionEmbeddingSourceBinding)
+        if not isinstance(
+            binding, PublicSolutionEmbeddingSourceBinding | RegisteredPublicSolutionSourceBinding
+        )
     )
     legacy_shards = {binding.row_ref.shard_manifest for binding in legacy}
     validate_mixed_embedding_source_bindings(
@@ -202,7 +259,9 @@ def validate_supported_embedding_source_bindings(
         tuple(
             entry
             for entry in checked_entries
-            if not isinstance(entry, PublicSolutionEmbeddingEntry)
+            if not isinstance(
+                entry, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry
+            )
         ),
         tuple((pointer, shard) for pointer, shard in shards if pointer in legacy_shards),
     )
@@ -215,16 +274,20 @@ def validate_supported_embedding_source_bindings(
         if pointer.sha256 != content_sha256(shard.model_dump(mode="json")):
             raise ValueError("EMBEDDING_BINDING_SHARD_HASH_INVALID")
     for binding in checked:
-        if not isinstance(binding, PublicSolutionEmbeddingSourceBinding):
+        if not isinstance(
+            binding, PublicSolutionEmbeddingSourceBinding | RegisteredPublicSolutionSourceBinding
+        ):
             continue
         entry = by_source.get(binding.source.item_revision_id)
-        if not isinstance(entry, PublicSolutionEmbeddingEntry):
+        if not isinstance(
+            entry, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry
+        ):
             raise ValueError("PUBLIC_SOLUTION_BINDING_ENTRY_REQUIRED")
         shard = manifests[binding.row_ref.shard_manifest]
         text = entry.public_solution.text
         if (
             binding.source != entry.source
-            or binding.profile != PublicSolutionProfilePointer.from_entry(entry)
+            or binding.profile != embedding_entry_profile(entry)
             or binding.evidence != entry.evidence
             or binding.base_analysis_run_id != entry.base_analysis_run_id
             or binding.graph_snapshot != entry.graph_snapshot

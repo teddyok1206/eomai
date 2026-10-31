@@ -343,3 +343,35 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
   QUERY carrier만 successor로 연결한다. 불필요한 전체 실행 그래프/수치 계약 재설계를 하지 않는다.
 - 현재 source head0065, 운영 head0064 구분은 유지한다. 현재 private GPU INDEX/QUERY의
   실행을 source 후보로 교체하지 않았고 구 encoding/index 삭제도 하지 않았다.
+
+### Source plan4·공통 delta/메타데이터 경계 — 12:46 UTC
+
+- source plan4의 별도 closed schema/package/hash pin과 typed plan/demand를 추가했다.
+  plan3의 source/coverage/encoding-set/hash 및 staged entry/index 대조 규칙은 공통 validator로
+  추출해 재사용한다. plan3의 wire/schema bytes와 실제 native numerical input/result1은 그대로다.
+- 공식 metadata dispatch가 entry1/2·binding3/4·index3/4를 명시적으로 읽게 연결했다. 이는
+  source 권한·현재 runtime activation을 부여하는 것이 아니다. 현재 등록 command3와 native
+  request3는 frozen 계약대로 index3/plan3만 수용한다. 새 command/request 연결은 아직 후속이다.
+- Catalog의 실제 pure source-plan builder와 incremental delta, binding assembly 및 pointer-only
+  ledger projection에 AI 보고서를 연결했다. 같은 풀이의 기출·창작·AI가 이미 등록된 row 한 개를
+  재사용하고 new_inputs0인 경우를 검사했다. provenance3개와 원 binding3 bytes는 보존한다.
+- 새 metadata parser는 선언된16,384개 source 상한을 지원하되 기존 raw parser1,024 상한을
+  바꾸지 않는다. source1,025개/missing1,025개/encoding0 scale fixture, raw float coercion 거부,
+  forged profile·report/base/source/space/hash/중복·빠진 coverage 부정 사례를 포함한다.
+- broadened 회귀293건에서는283 PASS/10 FAIL이었다. 수정 전 `debc72c7`의 독립 archive에서
+  대표7건을 재실행해 같은 실패를 재현했다. 원인은 nullable ledger column을 문자열에 더하던
+  fixture2건, 이미 제거된 legacy parser/path-hash 함수 이름을 계측하던 테스트4건, 실제 bounded
+  SQL paging을 모사하지 못하던 service fixture4건이었다. 운영 코드에 과거 alias/우회 권한을
+  추가하지 않고 테스트를 현재 공식 parser·guarded descriptor read·source/analysis SQL page에
+  맞췄다. IAM/late fence의 실제 검증은 유지했다.
+- 보정 후 ledger/실제 service authority78 PASS, core plan/index/capture/delta88 PASS,
+  일반 registry/package/의존 경계101 PASS(그룹 간 중복 있음). 새 plan/index와 누적 origin16건
+  계측 그룹26 PASS다. 누적 origin64/256 성능 fixture는 아직 최종 실행하지 않았다. 이전
+  partial benchmark의 실패/중단 로그는 보존하며 PASS로 재해석하지 않는다.
+- 관련 Catalog18개와 변경된 contracts/workflow/generator를 포함한 core25개 mypy PASS,
+  Ruff/format/schema generator 검사 PASS. 임시 SQL/schema/서비스 권한을 운영에 적용하지 않았다.
+- 12:30 UTC original 기출 GPU 등록 **73/520, 잔여447**, CUDA RUNNING1, 이전 historical 실패2건
+  증가0이다. 다음 정기 관측13:00 UTC. private INDEX/QUERY/runtime pins는 유지하며 구 벡터 삭제0이다.
+- AI Graph는 별도 신규 whitelist 대신 기존 ordinary-item 공식 publisher가 이미1.11–1.16을
+  지원함을 확인했다. 과거25문항 production whitelist는 수정하지 않는다. 실제 AI producer,
+  native/registry successor와 권한 검색 운영 연결은 남아 있으며 goal은 ACTIVE다.

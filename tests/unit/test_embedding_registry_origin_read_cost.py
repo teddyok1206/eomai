@@ -234,9 +234,11 @@ def test_cumulative_first_origin_manifest_read_and_decode_cost(
     calls: Counter[str] = Counter()
     timings: Counter[str] = Counter()
     parsed_bindings = []
-    original_parse = catalog.parse_embedding_index
+    original_parse = catalog.parse_supported_embedding_index
     original_binding = catalog.assemble_embedding_source_binding
-    original_hash = artifact_reads.sha256_file
+    # The current reader opens one guarded descriptor, reads bytes, then hashes
+    # those exact bytes. Instrument that actual leaf, not its retired path API.
+    original_hash = artifact_reads.sha256_bytes
     original_read = PinnedArtifactReadContext.read_pinned
 
     def capture(current, _caller, _intent, _phase):
@@ -261,17 +263,17 @@ def test_cumulative_first_origin_manifest_read_and_decode_cost(
 
     def read_member(reader, **options):
         if options["member_path"] == "index.json":
-            calls["index_member_read"] += 1
+            calls["index_member_read_boundary"] += 1
         return original_read(reader, **options)
 
-    def physical_hash(path):
-        assert Path(path).name == "index.json"
+    def physical_hash(payload):
+        assert isinstance(payload, bytes)
         calls["physical_index_read_hash"] += 1
         started = perf_counter_ns()
         try:
-            return original_hash(path)
+            return original_hash(payload)
         finally:
-            timings["physical_index_hash_ns"] += perf_counter_ns() - started
+            timings["physical_index_payload_hash_ns"] += perf_counter_ns() - started
 
     def shards(_reader, pointers):
         calls["shard_boundary"] += 1
@@ -281,10 +283,10 @@ def test_cumulative_first_origin_manifest_read_and_decode_cost(
 
     monkeypatch.setattr(verifier, "_capture", capture)
     monkeypatch.setattr(verifier, "_read_shards", shards)
-    monkeypatch.setattr(catalog, "parse_embedding_index", parse_index)
+    monkeypatch.setattr(catalog, "parse_supported_embedding_index", parse_index)
     monkeypatch.setattr(catalog, "assemble_embedding_source_binding", construct_binding)
     monkeypatch.setattr(PinnedArtifactReadContext, "read_pinned", read_member)
-    monkeypatch.setattr(artifact_reads, "sha256_file", physical_hash)
+    monkeypatch.setattr(artifact_reads, "sha256_bytes", physical_hash)
     query = EmbeddingRegistryLookup(
         last.corpus_id,
         last.namespace,
@@ -325,7 +327,9 @@ def test_cumulative_first_origin_manifest_read_and_decode_cost(
     assert sum(parsed_bindings) == 2 * expected_visits
     assert calls == {
         "index_dto_decode": 2 * revisions,
-        "index_member_read": 2 * revisions,
+        # _read_index verifies the member, then read_model_member revalidates
+        # that same cached member. There is still only one physical read/hash.
+        "index_member_read_boundary": 4 * revisions,
         "physical_index_read_hash": 2 * revisions,
     }
     baseline_calls, baseline_timings = dict(calls), dict(timings)
@@ -355,7 +359,7 @@ def test_cumulative_first_origin_manifest_read_and_decode_cost(
     assert calls == {
         "capture": 2,
         "current_binding_construction": 2 * count,
-        "index_member_read": 2 * revisions,
+        "index_member_read_boundary": 2 * revisions,
         "physical_index_read_hash": 2 * revisions,
         "shard_boundary": 2,
     }

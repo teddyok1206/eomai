@@ -180,9 +180,9 @@ def test_new_entry_does_not_change_historical_entry1_parser_or_imply_runtime_adm
         PublicSolutionEmbeddingEntry.model_validate(entry.model_dump(mode="json"))
     from eom_catalog_contracts.embedding_index_families import parse_supported_embedding_entry
 
-    # Global INDEX admission is deliberately separate until its successor is qualified.
-    with pytest.raises(ValueError):
-        parse_supported_embedding_entry(entry)
+    # Metadata parsing is not a runtime permission/activation grant. Native
+    # request/plan schemas still select their own exact supported family.
+    assert parse_supported_embedding_entry(entry) == entry
 
 
 def test_candidate_schema_is_closed_packaged_and_round_trips():

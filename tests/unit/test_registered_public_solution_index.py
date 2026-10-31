@@ -4,16 +4,28 @@ from copy import deepcopy
 from pathlib import Path
 
 import pytest
+from eom_catalog_contracts.embedding_index_families import (
+    parse_supported_embedding_binding,
+    parse_supported_embedding_index,
+    validate_supported_embedding_index_references,
+    validate_supported_embedding_source_bindings,
+)
 from eom_catalog_contracts.inference_transfer_embedding import (
     validate_embedding_index_reference_layout,
 )
-from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionEmbeddingIndex
+from eom_catalog_contracts.public_solution_embedding_index import (
+    PublicSolutionEmbeddingIndex,
+    PublicSolutionIndexNamespace,
+)
 from eom_catalog_contracts.registered_public_solution_index import (
     PublicSolutionEmbeddingIndexV4,
     RegisteredPublicSolutionProfilePointer,
     RegisteredPublicSolutionSourceBinding,
 )
 from eom_catalog_contracts.validation import load_schema, validate_contract
+from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
+from eom_catalog_service.embedding_registry_repository import binding_columns
+from eom_catalog_service.public_solution_index_assembly import assemble_public_solution_binding
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from jsonschema import Draft202012Validator
@@ -23,10 +35,7 @@ from tests.unit.test_public_solution_index_assembly import assemble, setup
 from tests.unit.test_registered_public_solution_embedding import registered_entry
 
 
-def successor():
-    data = setup(device="CUDA")
-    parent = assemble(data).index
-    # All three sources have the same actual public text. No new numeric row.
+def registered_index_entry():
     entry = registered_entry()
     source = entry.model_dump(mode="json")
     source["source"]["item_id"] = "item_" + "8" * 32
@@ -34,7 +43,14 @@ def successor():
     source["entry_sha256"] = content_sha256(
         {key: value for key, value in source.items() if key != "entry_sha256"}
     )
-    entry = type(entry).model_validate(source)
+    return type(entry).model_validate(source)
+
+
+def successor():
+    data = setup(device="CUDA")
+    parent = assemble(data).index
+    # All three sources have the same actual public text. No new numeric row.
+    entry = registered_index_entry()
     old = parent.bindings[0]
     body = dict(
         schema_version="embedding-source-binding/4.0",
@@ -91,9 +107,46 @@ def test_index4_preserves_all_past_and_creative_binding3_bytes_and_existing_vect
     assert {binding.encoding for binding in current.bindings} == {parent.bindings[0].encoding}
     assert current.shards == parent.shards
     validate_embedding_index_reference_layout(current, shards, (pointer, parent))
+    validate_supported_embedding_index_references(current, shards, (pointer, parent))
+    original_entries = setup(device="CUDA")[0]
+    selected = tuple(
+        sorted(
+            (*original_entries, registered_index_entry()),
+            key=lambda value: value.source.item_revision_id,
+        )
+    )
+    validate_supported_embedding_source_bindings(current.bindings, selected, shards)
+    assert parse_supported_embedding_index(current) == current
     assert PublicSolutionEmbeddingIndexV4.model_validate_json(current.model_dump_json()) == current
     with pytest.raises((ValueError, JsonSchemaValidationError)):
         PublicSolutionEmbeddingIndex.model_validate(current.model_dump(mode="json"))
+
+
+def test_actual_binding_assembly_and_pointer_only_ledger_preserve_the_registered_run():
+    _parent, current, _pointer, _shards = successor()
+    binding = next(
+        value
+        for value in current.bindings
+        if value.schema_version == "embedding-source-binding/4.0"
+    )
+    namespace = PublicSolutionIndexNamespace(
+        storage_partition=current.storage_partition,
+        space_sha256=current.space.space_sha256,
+        recipe_sha256=current.recipe.recipe_sha256,
+    )
+    built = assemble_public_solution_binding(
+        registered_index_entry(),
+        row=RegisteredEmbeddingRow(binding.encoding, binding.row_ref),
+        space=current.space,
+        namespace=namespace,
+    )
+    assert built == binding and parse_supported_embedding_binding(built) == binding
+    columns = binding_columns(built)
+    assert columns["evidence_kind"] == "PUBLIC_SOLUTION_REPORT"
+    assert columns["solution_analysis_run_id"] == built.evidence.solution.solution_analysis_run_id
+    assert columns["solution_pointer_sha256"] == content_sha256(built.evidence)
+    assert columns["review_job_id"] is None
+    assert not {"text", "report", "vector", "payload"}.intersection(columns)
 
 
 @pytest.mark.parametrize(

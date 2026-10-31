@@ -1,5 +1,7 @@
 """Pure public-solution plan from an actual, authorized Catalog capture."""
 
+from typing import Literal
+
 from eom_catalog_contracts.inference_transfer_embedding import embedding_input_set_sha256
 from eom_catalog_contracts.inference_transfer_experiment import population_sha256
 from eom_catalog_contracts.public_solution_embedding import (
@@ -11,12 +13,25 @@ from eom_catalog_contracts.public_solution_embedding_index import (
     PublicSolutionIndexNamespace,
     PublicSolutionProfilePointer,
 )
+from eom_catalog_contracts.registered_public_solution_embedding import (
+    PublicSolutionEncodingEntry,
+    RegisteredPublicSolutionEmbeddingEntry,
+    parse_public_solution_encoding_entry,
+)
+from eom_catalog_contracts.registered_public_solution_index import (
+    RegisteredPublicSolutionProfilePointer,
+)
 from eom_identifiers import content_sha256
 from eom_workflow.local_embedding_source_plan_v3 import (
     LocalEmbeddingSourcePlanV3,
     PublicSolutionEncodingDemand,
     PublicSolutionUnavailableView,
     parse_local_embedding_source_plan_v3,
+)
+from eom_workflow.local_embedding_source_plan_v4 import (
+    LocalEmbeddingSourcePlanV4,
+    PublicSolutionEncodingDemandV4,
+    parse_local_embedding_source_plan_v4,
 )
 
 from eom_catalog_service.embedding_incremental_plan import plan_embedding_delta
@@ -33,6 +48,33 @@ def build_local_embedding_source_plan_v3(
     *,
     target_revision_ids: tuple[str, ...],
 ) -> LocalEmbeddingSourcePlanV3:
+    value = _build_public_solution_source_plan(
+        query, resolved, target_revision_ids=target_revision_ids, plan_version="3.0"
+    )
+    assert isinstance(value, LocalEmbeddingSourcePlanV3)
+    return value
+
+
+def build_local_embedding_source_plan_v4(
+    query: EmbeddingRegistryLookup,
+    resolved: ResolvedEmbeddingLookup,
+    *,
+    target_revision_ids: tuple[str, ...],
+) -> LocalEmbeddingSourcePlanV4:
+    value = _build_public_solution_source_plan(
+        query, resolved, target_revision_ids=target_revision_ids, plan_version="4.0"
+    )
+    assert isinstance(value, LocalEmbeddingSourcePlanV4)
+    return value
+
+
+def _build_public_solution_source_plan(
+    query: EmbeddingRegistryLookup,
+    resolved: ResolvedEmbeddingLookup,
+    *,
+    target_revision_ids: tuple[str, ...],
+    plan_version: Literal["3.0", "4.0"],
+) -> LocalEmbeddingSourcePlanV3 | LocalEmbeddingSourcePlanV4:
     """No IO/authority/claim. Missing reports and unavailable text stay explicit."""
     if (
         not isinstance(query.namespace, PublicSolutionIndexNamespace)
@@ -48,11 +90,13 @@ def build_local_embedding_source_plan_v3(
     ):
         raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
     sources = {source.item_revision_id: source for source in resolved.sources}
-    entries = {}
+    entries: dict[str, PublicSolutionEncodingEntry] = {}
     for original in resolved.entries:
-        if not isinstance(original, PublicSolutionEmbeddingEntry):
+        if not isinstance(
+            original, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry
+        ) or (plan_version == "3.0" and not isinstance(original, PublicSolutionEmbeddingEntry)):
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
-        entry = PublicSolutionEmbeddingEntry.model_validate(original.model_dump(mode="json"))
+        entry = parse_public_solution_encoding_entry(original)
         entries[entry.source.item_revision_id] = entry
     bases = dict(resolved.base_analysis_run_ids)
     selected = frozenset(target_revision_ids)
@@ -83,18 +127,28 @@ def build_local_embedding_source_plan_v3(
         storage_partition=query.namespace.storage_partition,
         views=(query.namespace.view,),
     )
-    demands = tuple(
-        PublicSolutionEncodingDemand(
+    demands = []
+    for demand in delta.demands:
+        demanded = entries[demand.source_revision_id]
+        profile = (
+            RegisteredPublicSolutionProfilePointer.from_entry(demanded)
+            if isinstance(demanded, RegisteredPublicSolutionEmbeddingEntry)
+            else PublicSolutionProfilePointer.from_entry(demanded)
+        )
+        body = dict(
             source_revision_id=demand.source_revision_id,
-            base_analysis_run_id=entries[demand.source_revision_id].base_analysis_run_id,
-            profile=PublicSolutionProfilePointer.from_entry(entries[demand.source_revision_id]),
-            evidence=entries[demand.source_revision_id].evidence,
+            base_analysis_run_id=demanded.base_analysis_run_id,
+            profile=profile,
+            evidence=demanded.evidence,
             encoding=demand.encoding,
         )
-        for demand in delta.demands
-    )
+        demands.append(
+            PublicSolutionEncodingDemand.model_validate(body)
+            if plan_version == "3.0"
+            else PublicSolutionEncodingDemandV4.model_validate(body)
+        )
     value = {
-        "schema_version": "local-embedding-source-plan/3.0",
+        "schema_version": "local-embedding-source-plan/" + plan_version,
         "corpus_id": query.corpus_id,
         "graph_snapshot": query.graph_snapshot,
         "access_policy_revision_id": query.policy_revision_id,
@@ -103,7 +157,7 @@ def build_local_embedding_source_plan_v3(
         "space": resolved.space,
         "recipe": resolved.recipe,
         "sources": tuple(sources[key] for key in target_revision_ids),
-        "demands": demands,
+        "demands": tuple(demands),
         "missing_solution_report_revision_ids": tuple(
             key for key in target_revision_ids if key not in entries
         ),
@@ -118,4 +172,9 @@ def build_local_embedding_source_plan_v3(
             tuple(row.encoding for row in delta.new_inputs)
         ),
     }
-    return parse_local_embedding_source_plan_v3(value | {"plan_sha256": content_sha256(value)})
+    document = value | {"plan_sha256": content_sha256(value)}
+    return (
+        parse_local_embedding_source_plan_v3(document)
+        if plan_version == "3.0"
+        else parse_local_embedding_source_plan_v4(document)
+    )
