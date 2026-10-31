@@ -16,6 +16,55 @@ source test·패키지 설치·service active만으로 완료하지 않는다.
 
 30분 background 관측은 계속 유지하며 기존 520개 기출·교과서·정본·FAILED 이력을 보존한다.
 
+## 2026-10-31 02:20 UTC — 실제 native QUERY 설치 경계 갱신
+
+- 첫 4-target public CUDA 후속 배치는 실제 `COMPLETED/SUCCEEDED`다. canonical CUDA
+  bindings는 16→20이며 index revision은 `embeddingindexrev_e9f0879e20daa0ea8e9a943f4272e9c9`다.
+  고정 10369/10370/10371/10372/10374의 벡터와 사용자 검색 acceptance는 아직 아니다.
+- 실제 설치된 CPU QUERY root bootstrap은 오래된 `2eef9b20`였고, CPU/CUDA numerical
+  prefix도 public QUERY2 입력을 지원하지 않았다. source `8734b536`에서 실제 GPU worker가
+  이미 정의된 supported batch1/2 FD dispatcher를 호출하도록 연결했다. 원래 batch1 전용
+  parser는 그대로 유지했다. 별도 wire/schema/queue/encoder나 public→legacy 재해석은 없다.
+- `8734b536` clean build/RECORD와 protected metadata SDK 설치 PASS. source gates는
+  expanded415 PASS/2 opt-in SKIP, 실제 OLD pip의 tiny inert wheels2 PASS,
+  final affected native/FD259 PASS, disposable PostgreSQL unstarted-cancellation34 PASS다.
+  서로 겹치는 suite 수를 합산하지 않는다. full numerical 설치·native qualification과 별개다.
+- 기존 INDEX main은 진행 중이던 legacy GPU 배치를 정상 완료한 뒤 graceful drain됐다.
+  QUERY도 main-only graceful drain했다. creative owner PID3724425와 세 보고서 슬롯,
+  30분 observation timers는 중단/재시작하지 않았다. shared API health는 READY다.
+- 기존 private-successor installer의 source archive 상한64MiB를 늘리지 않았다. 같은
+  `8734b536` Git archive에서 전체 wheel source roots·pyproject·installer·lock을 보존하고
+  무관한 문서/테스트를 제외한30,822,400-byte archive를 사용했다. SHA는
+  `1ab1bfeb843721fb3550ae4ff3bee8620f4043fe7f793148c6ec183d513bd797`이다.
+  실제 OLD audit가 wheel 전체 source closure를 독립 검증했다. 원래 전체 build archive도 보존한다.
+- 초기 설치 invocation 두 건은 각각 필요한 cache mount 부재와 private input parent
+  layout 때문에 **prefix 교체 전에** 차단됐다. 검증 guard를 완화하지 않고 기존 readonly
+  cache mount와0700 installer input 경계를 사용했다. 두 failed 작업/격리본은 보존한다.
+  빈 wheel reservation만 정확히 확인해 root-private audit 보관으로 이동했다. 삭제 bytes0.
+- 실제 CPU private successor byte audit PASS: audit `/opt/eom/.embedding-index-install-IUIxK0OB`,
+  inventory31,427 entries/8,893,220 bytes, raw
+  `be9945628005ee21fb899a3611c68ff51064be2d09cc4fc64d9134abe95ca2b9`.
+  predecessor prefix는 installer의 지정 backup에 보존한다. CPU/CUDA math implementation3개,
+  모델·tokenizer·bundle·proof·host/cache·자원·embedding space는 바꾸지 않는다.
+- 실제 CPU no-forward probe/같은 live owner seal/독립 admission readback PASS:
+  execution `4edc61e259c74c0998e78ce0ec44344c`, invocation `f791f30850f64278a14e6f45b3c57eaa`,
+  config successor `embeddingnativeconfigrev_6840ce1caa324fb7aaa7252dbf3888d4`, receipt raw
+  `5458fc171db2ee27093bf0ccb787dccdf4d2e2037e77c70185489d03b5215664`.
+  model/tokenizer constructor와 forward 모두0. workflow activation은 아직 수행하지 않았다.
+- 원래 never-started CPU standby `workflow_b2209fb92be34cddbfdfce61875f7221`만 공식
+  cancellation application으로 CANCELLED 처리했고 exact replay PASS다. receipt
+  `19c18096eb857d5a4dd34125a817ec17af7025eff953e37e0d406c5408b2ea8c`.
+  step/model 실행0, 기존 FAILED나 성공 GPU 작업은 변경하지 않았다.
+- CUDA host-only preflight PASS. CUDA private successor의 실제 byte audit/새 receipt,
+  linked controls 선택과 INDEX/QUERY 재개는 후속 단계다. **goal ACTIVE**이며 설치 PASS를
+  실제 fixed-five 벡터·HTTP 검색 PASS로 확대하지 않는다.
+
+실행 근거: `/tmp/eom-native-query-cpu-private-publication-3.log`,
+`/tmp/eom-native-query-cpu-probe-preparation.log`, `/tmp/eom-native-query-cpu-probe-seal.log`,
+`/tmp/eom-native-query-cpu-standby-cancellation.log`,
+`/tmp/eom-native-query-cuda-host-preflight.log`. 민감정보 없는 운영 checkpoint이며,
+최종 완료 시 NAS manifest에 필요한 장기 증거를 고정한다.
+
 ## 2026-10-31 후속 — 계산 후 미등록과 처리 단위 조정
 
 두 번째 public 배치 `workflow_c6b81090c7d2468ea95eb4e4ad53dff9`의 실제 protected
