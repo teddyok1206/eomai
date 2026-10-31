@@ -177,7 +177,7 @@ def _object_maps(documents: tuple[NativeDocument, ...]) -> tuple[dict[str, str],
     return tuple(result)
 
 
-def _write_package(payloads: dict[str, bytes], output: Path) -> None:
+def write_native_package(payloads: dict[str, bytes], output: Path) -> None:
     output.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     if output.exists() or output.is_symlink():
         fail("curated output already exists")
@@ -296,7 +296,7 @@ def merge_native_hwpx(sources: tuple[Path, ...], output: Path) -> CuratedMergeRe
     _rebuild_section_rdf(payloads, len(section_positions))
     if sum(map(len, payloads.values())) > MAX_TOTAL_BYTES:
         fail("curated output byte budget exceeded")
-    _write_package(payloads, output)
+    write_native_package(payloads, output)
     try:
         candidate = _document(read_package(output, OUTPUT_LIMITS))
         verify_resource_relocation(
