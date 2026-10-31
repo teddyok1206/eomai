@@ -375,3 +375,21 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
 - AI Graph는 별도 신규 whitelist 대신 기존 ordinary-item 공식 publisher가 이미1.11–1.16을
   지원함을 확인했다. 과거25문항 production whitelist는 수정하지 않는다. 실제 AI producer,
   native/registry successor와 권한 검색 운영 연결은 남아 있으며 goal은 ACTIVE다.
+
+### 공통 plan/delta 후보 설치 검증 — 12:49 UTC
+
+- 후보 `4f5118175ac83fea566a55992bd82c66934a208d`를 push했고 공식 build-only의 wheel RECORD/
+  non-editable 설치 simulation PASS다. 산출물은
+  `/tmp/eom-api-build/4f5118175ac83fea566a55992bd82c66934a208d.UdKzE5/dist`다.
+- INDEX703354/QUERY470146/Catalog732310/API469955 PID, NRestarts0, active 상태는 유지했다.
+  운영 migration/서비스 재시작/새 model run0이다. 비교에 사용한 수정 전 Git source archive는
+  검사 후 휴지통으로 옮겼다. 복구 가능한 테스트 복사본일 뿐 원본 Git/문항/NAS를 삭제하지 않았다.
+- 누적 origin 계측의 오래된 함수명 두 번째 문제도 확인했다. 현재 파일 검증은 경로를 다시
+  열어 해시하는 함수가 아니라 guarded descriptor로 읽은 정확한 bytes의 SHA를 검증한다.
+  이 실제 leaf를 계측하도록 테스트를 보정했고16건 fixture PASS다. logical member-read
+  boundary는 model read 재검증으로2회 호출되지만 physical read/hash는1회임을 별도 계수한다.
+  비교 baseline의 실제 O(N²) 이력 DTO 방문을 실행하는64/256 fixture는 아직 미완료로 남긴다.
+- ordinary Graph publisher의 source 구현은 존재하지만 현재 Catalog application dispatcher에는
+  해당 command 연결이 없다. 따라서 기존 typed command/publisher를 정식 application 경계에
+  연결하고 권한·기존 origin 검증을 확인해야 한다. source 클래스 존재만으로 운영 기능이
+  활성화됐다고 간주하지 않는다. 과거25문항용 whitelist 확대는 여전히 불필요하다.
