@@ -65,6 +65,74 @@ source test·패키지 설치·service active만으로 완료하지 않는다.
 `/tmp/eom-native-query-cuda-host-preflight.log`. 민감정보 없는 운영 checkpoint이며,
 최종 완료 시 NAS manifest에 필요한 장기 증거를 고정한다.
 
+### Linked selection 설계 — native 갱신과 controller identity 분리
+
+1. root 설치 owner가 새 CPU/CUDA config·실제 sealed receipt와 기존 네 routing policy를
+   exact lookup한다. prefix/model/Graph/encoding과 기존 canonical policy Artifacts는 정본이며,
+   `/etc/eom`·root policy JSON은 검증된 현재 선택이다. worker/NAS/DB 권한을 새로 주지 않는다.
+2. 수치 runtime·space·resource·source grant·기존 native execution policy는 그대로다.
+   config와 routing은 같은 logical ID의 새 immutable revision/hash를 쓴다. CPU verifier,
+   CPU/CUDA environment와 관련 DTO/hash links를 하나의 호환 selection으로 고정한다.
+3. INDEX/QUERY **프로그램 source는 c68156dd를 유지**할 수 있는지 실제 closure로 검증한다.
+   GPU root bootstrap과 `controller_release`는 서로 같아야 하므로 하나만8734로 바꾸지 않는다.
+   public QUERY2를 이해하지 못하는 CPU QUERY bootstrap만8734로 올린다. 실제 service source와
+   runtime JSON이 바뀌지 않으면 Identity/service/source grant를 불필요하게 재발급하지 않는다.
+4. 접근은 고정 소수 파일의 map/set·typed pointer lookup이다. 크기/소유권/존재/스키마/
+   raw·semantic hash와 lifecycle을 검증하고 실제 같은 새 receipt를 선택한다. 비용은 작은
+   metadata bytes에 선형이다. 새 queue/index/DB schema/검색 엔진은 없다.
+5. Orchestrator의 기존 control Artifact publisher로 successor routing을 먼저 idempotent하게
+   게시한다. 변경 전/후 파일은 root-private manifest에 한 번 고정한다. 두 owner가 drain된
+   동안 exact before/after SHA CAS로 선택하고 fsync·readback한다. 분산 atomic transaction이라고
+   부르지 않는다. API/Web/creative workers나 불필요한 inactive legacy backend를 새로 만들지 않는다.
+6. 중단 후에는 같은 manifest의 before 또는 after만 허용해 남은 선택을 이어간다. 모르는
+   bytes/활성 native work/authority delta면 추가 변경을 멈춘다. 과거 FAILED·성공 결과는 보존한다.
+   old prefix가 backup에 있다는 사실만으로 old receipt가 현재 inode를 승인한다고 보지 않는다.
+7. 단순히 ROOT 환경 경로 하나만 바꾸거나 전 service를 latest로 갈아끼우면 linked hashes와
+   source-owner handshake가 어긋난다. 기존 typed controls의 작은 호환 갱신이 더 작은 해법이다.
+
+### 02:48 UTC — CUDA qualification과 호환 selection 실제 적용
+
+- CUDA OLD byte audit PASS: `/opt/eom/.embedding-index-install-HR2zc3vj`, 32,166 entries,
+  inventory9,108,792 bytes/raw `1667cabff3a6b765bf1d650a76c336297ab78c6fce0ffedb92b20a5e5d99dc4a`.
+  actual quarantine bytes의 predecessor tree를 독립 확인하고 기존 prefix를 보존했다.
+- actual CUDA no-forward execution `96a0d889097c477b8b2687c0ac54c585`, invocation
+  `078e8975c1d24435a1437b21ee75373b`: 같은 live PID의 READY/FINAL 각각 ACK, 정상 terminal,
+  same-live receipt seal·독립 `ProtectedCudaInstallationFiles` reader·supported retirement와
+  PID1 FD-store lease 해제 readback PASS. config revision
+  `embeddingnativeconfigrev_80235ddc9aa94de0a8162a53d868a977`, receipt raw
+  `0bdae7a7d46f4f0acae2a88ab53b9eb12b51ef2d2872a7beec33ae86c66ec0af`.
+  CUDA initialization/synchronize 각1회, model/tokenizer constructor/forward 모두0회다.
+  새 worker의 실제 모델 실행/admission 및 검색 검증과는 구분한다.
+- 첫 outer qualification unit은 잘못된 cwd로 Python 실행 전 CHDIR(200) 종료했다.
+  기존 실패 unit은 그대로 두고 실제 설치된 `embedding-cuda-loader-empty`에서 실행했다.
+  원래 native execution은 한 번만 시작했다. 복사한 helper의 `cpu_owners=CONTINUED_UNCHANGED`
+  로그는 owner를 바꾸지 않았다는 뜻이며, 당시 두 owner는 이미 drain 상태였다.
+- 기존 네 routing policy의 새 revision은 공식 Orchestrator control Artifact publisher로
+  게시했다. 수치 profile/model/space/recipe·선호 CUDA/검증된 busy 때 CPU fallback·자원·source
+  grant·기출/교과서/Item·기존 FAILED는 바꾸지 않았다. 14개 작은 control 파일의 before/after
+  SHA와 mode를 `/var/lib/eom-native-query-leaf-8734/selection/`에 고정해 exact CAS/readback했다.
+- actual installed **c68156dd** decoder로 새 legacy/public INDEX·QUERY·private cohost를
+  read-only 재검증했다. 네 policy families, 보존7 namespaces, public batch size4와 두 negative
+  candidate checks PASS. 새 CPU verifier도 실제 `eom-workflow-runner` identity에서 no-forward
+  실행 RC0 PASS다. source 모델 parse PASS만으로 설치 호환성을 추정하지 않았다.
+- INDEX/QUERY 프로그램과 GPU root controller/bootstrap는 c68156dd를 유지했다. CPU QUERY
+  root bootstrap만8734로 올려 public QUERY2를 받는다. native CPU/CUDA private code는8734다.
+  같은 service runtime JSON/Identity/source grant를 유지했으므로 재발급은0건이다. API5fdda815/
+  Webf1a7ada4와 creative owner는 재설치하지 않았다. inactive legacy backend 파일도 만들지 않았다.
+- QUERY PID225048, INDEX PID225508 재개·active, QUERY READY와 INDEX의 후속 source-admission
+  단계 진행을 확인했다. API READY. 02:48:30 UTC actual 04/05/06은 각각 새 Job91bfe59e/
+  8070b172/85ab5a32 RUNNING으로 이전02:28 세 Job과 달라 refill 연속성을 다시 확인했다.
+  creative owner3724425와 30분 timers는 그대로다. 실패 이력은 성공으로 바꾸지 않았다.
+- canonical public CUDA bindings20 유지. **고정5 bindings/실제 authenticated HTTP 검색·replay는
+  아직 미완료**이므로 goal ACTIVE다. 위 maintenance/release 완료를 최종 제품 acceptance로
+  확대하지 않는다. 이후 첫 실제 수치 배치와 matching CPU standby를 검증한다.
+
+근거: `/tmp/eom-native-query-cuda-private-publication.log`,
+`/tmp/eom-native-query-cuda-probe-seal-cwd.log`, `/tmp/eom-native-query-linked-prepare.log`,
+`/tmp/eom-native-query-c681-compatibility.log`, `/tmp/eom-native-query-selected-verifier.log`,
+`/tmp/eom-native-query-linked-select.log`, `/tmp/eom-public-state-linked-restarted.json`,
+`/tmp/eom-public-events-linked-restarted.jsonl`. root selection은 작은 metadata이며 credentials는 없다.
+
 ## 2026-10-31 후속 — 계산 후 미등록과 처리 단위 조정
 
 두 번째 public 배치 `workflow_c6b81090c7d2468ea95eb4e4ad53dff9`의 실제 protected
