@@ -30,10 +30,40 @@ from eom_catalog_service.inference_transfer_item_projection import (
     extract_original_item_metadata,
     project_staged_item_entry,
     render_no_solution_item_text,
+    render_public_reference_item_text,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256
 
 from tests.unit.inference_transfer_fixtures import profile, report, sha
+from tests.unit.test_public_solution_encoding import public_recipe
+
+
+@pytest.mark.parametrize("version", (1, 2, 3))
+def test_public_question_projection_reuses_exact_renderer_without_old_recipe_relabelling(version):
+    item = _item_v1() if version == 1 else _item_content_team(version)
+    source = _source(item)
+    old = render_no_solution_item_text(item=item, original_source=source, recipe=_recipe())
+    current = render_public_reference_item_text(
+        item=item, original_source=source, recipe=public_recipe()
+    )
+    assert old == current
+    for marker in (
+        "SOLUTION_ONLY",
+        "AUTHOR_INTENT_ONLY",
+        "ANSWER_CONTENT_ONLY",
+        "AGGREGATE_ANSWER_EQUATION_ONLY",
+        "CORRECT_EXPLANATION_ONLY",
+        "WRONG_EXPLANATION_ONLY",
+    ):
+        assert marker not in current.text
+    assert current.original_source == source
+
+
+def test_public_question_projection_rejects_forged_numeric_recipe():
+    item = _item_v1()
+    recipe = public_recipe().model_copy(update={"maximum_text_bytes": 999999})
+    with pytest.raises(ValueError):
+        render_public_reference_item_text(item=item, original_source=_source(item), recipe=recipe)
 
 
 def _recipe() -> ExperimentViewRecipe:
@@ -452,6 +482,10 @@ def test_utf8_byte_bound_rejects_whole_view_without_cutting_terminal_negation() 
     item = AssessmentItemContent.model_validate(body)
     with pytest.raises(ItemProjectionUnavailable, match="INFERENCE_ITEM_TEXT_TOO_LARGE"):
         render_no_solution_item_text(item=item, original_source=_source(item), recipe=_recipe())
+    with pytest.raises(ItemProjectionUnavailable, match="INFERENCE_ITEM_TEXT_TOO_LARGE"):
+        render_public_reference_item_text(
+            item=item, original_source=_source(item), recipe=public_recipe()
+        )
     accepted = _accepted_report()
     result = project_staged_item_entry(
         profile=_bound_profile(item, accepted),

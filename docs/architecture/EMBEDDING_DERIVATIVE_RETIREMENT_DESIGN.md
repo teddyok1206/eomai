@@ -140,3 +140,36 @@ dependency는 typed contracts → 기존 application → Catalog/Orchestrator st
 실제 plan/role/Item-start 선택과 Chat의 public-index 연결은 이후 별도 소비자 단계이며,
 이 publication2 지원만으로 운영 전환 완료를 주장하지 않는다. 단순히 publication1의 delivery
 union을 넓히는 대안은 구 caller가 새 context를 잘못 읽을 수 있어 사용하지 않는다.
+
+### 작업자에게 전달할 공통 원문·공개 풀이 자료
+
+기존 materials1은 context1, materials2는 mixed context2에 고정돼 있다. 이를 변조하지 않고
+local-workspace successor `system-rag-similarity-materials/3.0`을 추가한다. 실제 출처 정본은
+기출/창작/AI의 원래 승인 Item과 accepted/registered 공개 풀이 entry1/2다. 새 자료는 이
+정본의 일시적 bounded materialization이지 새 Item/profile/보고서 정본이나 권한 영수증이 아니다.
+
+- 자료는 context3/4의 원래 request/context semantic SHA에 고정한다. anchor 1개와 원래
+  순서의 후보 최대8개 각각에 exact public entry 및 question-only projection을 전달한다.
+  source Item/revision/Artifact/member/raw SHA와 report/Graph/policy/recipe 핀을 비교한다.
+  source가 달라도 같은 text hash라는 이유로 identity를 합치지 않는다.
+- question-only 표현은 기존 renderer를 그대로 재사용한다. 정답·해설과 aggregate
+  equation_sources를 원문 질문에 섞지 않는다. 렌더링 byte bound만 공통 recipe에서 받는다.
+  schema/media/byte·text limit 때문에 읽지 못한 경우에만 명시적 unavailable를 전달하며,
+  malformed JSON·dangling/hash/lifecycle/provenance 오류는 unavailable로 숨기지 않는다.
+  public solution은 반드시 AVAILABLE이어야 하고 review 요약·private 사고 기록을 대입하지 않는다.
+- Catalog의 기존 실제 operator-fenced `resolve_selected_sources`를 한 번 사용한다. 원래
+  session의 `PinnedArtifactReadContext`를 선택적으로 재사용해 source capture와 질문 원문
+  decoding이 불필요하게 같은 bytes를 다시 해석하지 않도록 한다. 기존 root/settings/권한
+  검사와 재검증은 생략하지 않는다. indexing service를 사람으로 취급하지 않는다.
+- 접근은 ≤9 revision의 set/map lookup, 한 번의 source batch와 Artifact prefetch, 원래
+  candidate 순서의 tuple이다. 조회는 기존 index를 사용하며 projection 비용은 선택한 질문·
+  공개 풀이 bytes에 선형이다. total workspace 자료는4MiB를 넘기지 않고 잘라 맞추지 않는다.
+  새로운 table/index/cache/queue/의존성은 없다. IO는 Catalog adapter, 순수 표현은 기존
+  projection module, 값/검증은 contracts, worker staging/commit은 기존 Orchestrator가 소유한다.
+- 바깥 completed QUERY reader/Item plan은 원래 QUERY와 현재 권한을 별도로 검사해야 한다.
+  이 자료만으로 vector 순위나 source 접근을 승인하지 않는다. 같은 pin을 재해석하고 실패를
+  명시하며 latest나 다른 후보로 대체하지 않는다. context 발행의 같은 key/replay 규칙을 유지한다.
+  실제 role/materialization 연결이 되기 전 이 값만 추가해 운영 전환 PASS로 표시하지 않는다.
+
+더 작은 대안인 기존 inference profile1을 공통 공개 풀이로 위장하거나 포인터만 작업자에게
+넘기는 것은 각각 양식/출처 의미 또는 staged-local-only 경계를 깨므로 사용하지 않는다.

@@ -1,5 +1,43 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 공통 원문·공개 풀이의 실제 Catalog 읽기 경계 — 2026-10-31 22:22 UTC
+
+- 이전 goal turn은 publication2 source/설치본·실제 disposable DB 검증을 마친
+  **PROGRESS**다. 중간 사용자 질의에는 기존 read-only GUI 준비 증거를 읽어 후보 번호만
+  안내했고 새 검색/모델 실행·서비스 변경은 하지 않았다. 이번 goal turn도 구현·검증의
+  **PROGRESS**이며 전체 U01–U05, 전체520 GPU·실제 검색·구형 파생 데이터 정리 범위를 유지한다.
+- JSON Schema-first materials3을 canonical/resource에 동일 bytes로 추가했다. context3/4
+  anchor와 후보 최대8개에 정확한 public entry1/2, 원문 질문 projection, request/context/
+  materials SHA를 연결한다. 기출·창작·AI의 공개 풀이 numeric text·recipe·model/space는
+  변경하지 않는다. materials1/2 schema bytes/hash·기존 해석은 보존했다. 새 canonical
+  Item/profile/report나 queue/table/migration/worker protocol은 만들지 않았다.
+- 새 `CatalogPublicSolutionMaterialsRead`는 실제 operator-fenced Registry owner의 기존
+  selected-source batch와 같은 root의 `PinnedArtifactReadContext`를 재사용한다. source
+  revision을 set/map으로 대조하고 원래 후보 순서를 복원한다. 원문은 기존 질문 renderer를
+  공유하며 정답·해설·aggregate equation_sources를 넣지 않는다. question schema/media/
+  resource limit만 명시적 unavailable이며 잘라 맞추지 않는다. dangling/foreign revision,
+  missing file, raw hash·byte count·schema pin·producer·승인 오류는 실패로 보존한다.
+- 같은 source text라는 이유로 Item/revision/report identity를 합치지 않는다. 읽은 뒤
+  실제 현재 권한과 Artifact provenance를 재검사하며 service identity/다른 root/engine의
+  권한을 빌리지 않는다. 바깥 실제 completed QUERY/Item plan 검증은 별도로 필수다.
+  이 module 자체로 QUERY 실행·교육적 정확성·PDF/PNG 픽셀 접근을 증명하지 않는다.
+- 최종 합집합 집중 회귀 **390 PASS /42.14s**, ruff/format·strict mypy5 source PASS다.
+  실제 임시 member FD/bytes·Catalog dispatch를 검사했고, source/IAM/QUERY fixture는
+  synthetic이며 운영 acceptance와 구별한다. source metadata prefetch3 + late provenance3은
+  문항 수2/3과 무관하게6회이며 per-question SQL0, 같은 root replay의 physical member read는
+  파일당1회를 유지했다. 기존 Catalog Registry·materials·publication·schema resource·dependency
+  회귀를 포함한다. 첫 Catalog fixture1건 실패는 지원하지 않는 schema URI의 문법 자체가
+  source 계약에 맞지 않았던 테스트 작성 오류다. 적법하지만 미지원 URI로 고쳐 재검증했다.
+  `/tmp/eom-public-materials3-contract-tests-20261031.log`,
+  `/tmp/eom-public-materials3-catalog-tests-20261031.log`,
+  `/tmp/eom-public-materials3-focused-tests-20261031-v2.log`,
+  `/tmp/eom-public-materials3-final-focused-tests-20261031.log`.
+- DB/state/persistence 변경이 없으므로 이번 source diff에 별도 DB migration이나 운영 pytest는
+  없다. 앞선 publication2 disposable PostgreSQL168 PASS의 history는 유지하며 새 source
+  읽기의 live 검증으로 확대하지 않는다. 실제 Item-start plan/role/staging·Chat public-index
+  연결은 후속 소비자 단계다. `OWNER_ACTIVATION=NOT_PERFORMED`, 서비스 재시작0,
+  새 GPU/모델 요청0, 구형 벡터 삭제0, 정본 변경0이다. 정기 GPU 관측은00/30분으로 유지한다.
+
 ## 공식 Item publication2·현재 권한·실제 DB 재전송 검증 — 2026-10-31 21:51 UTC
 
 - 이전 turn은 source commit/설치본 검증·실제 registry inventory를 완료한 **PROGRESS**였고,

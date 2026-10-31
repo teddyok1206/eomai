@@ -1631,6 +1631,8 @@ class CatalogEmbeddingRegistryVerifier:
         session: Session,
         caller: EmbeddingRegistryActor,
         selection: SelectedEmbeddingSources,
+        *,
+        artifact_reader: PinnedArtifactReadContext | None = None,
     ) -> ResolvedEmbeddingLookup:
         """Exact native-plan targets; never use this result as full index coverage."""
 
@@ -1644,6 +1646,7 @@ class CatalogEmbeddingRegistryVerifier:
                 selection.scope,
                 InferenceTransferSessionCapturePhase.CAPTURE_POPULATION,
                 source_revision_ids=selection.source_revision_ids,
+                artifact_reader=artifact_reader,
             )
             if capture.corpus is None:
                 raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")

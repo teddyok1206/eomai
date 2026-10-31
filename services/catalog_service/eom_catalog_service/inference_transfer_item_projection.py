@@ -40,6 +40,7 @@ from eom_catalog_contracts.knowledge import (
     KnowledgeAnalysisSourceArtifactMemberV2,
     KnowledgeSolutionEvidencePointer,
 )
+from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingRecipe
 from eom_hwpx_contracts import ContentTeamTable
 from eom_identifiers import content_sha256
 
@@ -166,13 +167,32 @@ def render_no_solution_item_text(
     """
     checked_recipe = ExperimentViewRecipe.model_validate(recipe.model_dump(mode="json"))
     checked_item, source = _validated_item(item, original_source)
-    return _render_checked_item_text(checked_item, source, checked_recipe)
+    return _render_checked_item_text(
+        checked_item, source, maximum_text_bytes=checked_recipe.maximum_text_bytes
+    )
+
+
+def render_public_reference_item_text(
+    *,
+    item: AssessmentItemContentContract,
+    original_source: KnowledgeAnalysisSourceArtifactMemberV2,
+    recipe: PublicSolutionEmbeddingRecipe,
+) -> CanonicalExperimentItemText:
+    """Reuse the exact question renderer without relabelling a legacy numeric recipe."""
+    checked_recipe = PublicSolutionEmbeddingRecipe.model_validate(
+        raw_similarity_contract_value(recipe)
+    )
+    checked_item, source = _validated_item(item, original_source)
+    return _render_checked_item_text(
+        checked_item, source, maximum_text_bytes=checked_recipe.maximum_text_bytes
+    )
 
 
 def _render_checked_item_text(
     item: AssessmentItemContentContract,
     source: KnowledgeAnalysisSourceArtifactMemberV2,
-    recipe: ExperimentViewRecipe,
+    *,
+    maximum_text_bytes: int,
 ) -> CanonicalExperimentItemText:
     parts = (
         _v1_question_parts(item)
@@ -180,7 +200,7 @@ def _render_checked_item_text(
         else _content_team_question_parts(item)
     )
     text = "\n\n".join(parts)
-    if len(text.encode("utf-8")) > recipe.maximum_text_bytes:
+    if len(text.encode("utf-8")) > maximum_text_bytes:
         raise ItemProjectionUnavailable("INFERENCE_ITEM_TEXT_TOO_LARGE")
     return CanonicalExperimentItemText(
         text=text, original_source=source, text_sha256=content_sha256(text)
@@ -345,7 +365,9 @@ def project_staged_item_entry(
     limitations: set[str] = set()
     content: CanonicalExperimentItemText | None = None
     try:
-        content = _render_checked_item_text(checked_item, source, checked_recipe)
+        content = _render_checked_item_text(
+            checked_item, source, maximum_text_bytes=checked_recipe.maximum_text_bytes
+        )
     except ItemProjectionUnavailable as exc:
         limitations.add(exc.code)
     result = _extract_checked_item_metadata(

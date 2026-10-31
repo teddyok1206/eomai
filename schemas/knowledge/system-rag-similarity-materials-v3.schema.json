@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-similarity-materials/3.0",
+  "title": "Bounded public solution and exact question materialization V3",
+  "description": "Temporary local workspace value over context3/4, not source authority, scientific approval or a new canonical Item/report. No vectors, arbitrary paths or hidden reasoning.",
+  "$defs": {
+    "questionAvailable": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "content"],
+      "properties": {
+        "status": {"const": "AVAILABLE"},
+        "content": {"$ref": "eom://schemas/knowledge/item-inference-transfer-experiment/1.0#/$defs/content"}
+      }
+    },
+    "questionUnavailable": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "reason"],
+      "properties": {
+        "status": {"const": "UNAVAILABLE"},
+        "reason": {"enum": ["MEDIA_TYPE_UNSUPPORTED", "SCHEMA_UNSUPPORTED", "SOURCE_BYTE_LIMIT_EXCEEDED", "QUESTION_TEXT_LIMIT_EXCEEDED"]}
+      }
+    },
+    "material": {
+      "type": "object", "additionalProperties": false,
+      "required": ["entry", "question"],
+      "properties": {
+        "entry": {"oneOf": [
+          {"$ref": "eom://schemas/knowledge/public-solution-embedding-entry/1.0"},
+          {"$ref": "eom://schemas/knowledge/public-solution-embedding-entry/2.0"}
+        ]},
+        "question": {"oneOf": [{"$ref": "#/$defs/questionAvailable"}, {"$ref": "#/$defs/questionUnavailable"}]}
+      }
+    }
+  },
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "request_sha256", "context_sha256", "anchor", "entries", "limitations", "materials_sha256"],
+  "properties": {
+    "schema_version": {"const": "system-rag-similarity-materials/3.0"},
+    "request_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"},
+    "context_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"},
+    "anchor": {"$ref": "#/$defs/material"},
+    "entries": {"type": "array", "maxItems": 8, "items": {"$ref": "#/$defs/material"}},
+    "limitations": {"const": ["PUBLIC_SOLUTION_TEXT_NOT_FULL_REPORT", "TEXT_ONLY_NO_PIXEL_INSPECTION"]},
+    "materials_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"}
+  }
+}
