@@ -50,6 +50,52 @@
   authorized DB query/read/replay·AI full-report/Graph/INDEX4·Chat 소비자, 전체520 integrity,
   구 vector 참조 조사와 정확한 삭제가 남아 있으므로 전체 목표 ACTIVE다.
 
+### source8eb의 설치·Pack 정식 발행과 안전 배포 대기 — 23:49 UTC
+
+- source **`8eb03e407049864c939050640081d6f726150286`**를 main/origin에 commit/push했다.
+  공식 build-only/RECORD PASS다. platform wheel SHA
+  `a7b36e0b53d59ef4e0e8a1955ef51308f3ab4c42c3c03843ed1d22d98a69204f`, contracts
+  `fa6b1a4af8b7c716de1774f92acd914ffa691fb3d9c94eeb291b21075aff62c3`, API
+  `1baa8aa028093db50ae3d27df9c434ded70156f8d80c03d8b023ac769188b34b`다.
+  immutable owner pair 및 API shadow 설치본의 실제 API/Catalog/control/runner4 module
+  origin을 확인했다. public Item-start·HTTP preparation·구 Item replay·role read 회귀
+  **128 PASS /172.95s**다. 운영 설치와는 구분한다.
+  `/tmp/eom-public-item8eb-build-20261031.log`,
+  `/tmp/eom-owner-install-8eb03e40-20261031.log`,
+  `/tmp/eom-public-item-installed-compatibility-20261031.log`.
+- Pack18을 Catalog의 기존 import/release와 Orchestrator Artifact commit으로 정식 발행했다.
+  release `packrel_60ce48b0c02b4a7eb67ab4e49cd41655`, exact bundle SHA는 위와 같다.
+  아직 activation은 하지 않았다. 원 팀장 prompt와 historical Pack은 불변이다.
+  `/tmp/eom-public-pack18-release-20261031.log`.
+- 기존 API/QUERY 호환 전환 절차를 같은 bounded 운영 helper로 준비했다. 새 source8eb의
+  API/Catalog/공유 application을 같은 조합으로 반영하고 QUERY owner **FB는 그대로** 두되
+  실제 API provider/code pin과 연결 raw SHA를 함께 바꾼다. namespace/recipe/space/model/
+  GPU numerical runtime/INDEX 설정·unit은 불변이며 migration은 없다. rollback wheel과
+  exact before/after config를 `/opt/eom/api-releases/8eb03e407049864c939050640081d6f726150286/`
+  에 보호 보관했다. PREPARE는 운영 package/config를 바꾸지 않았다.
+- 23:42 actual DB metadata에서 slot04/05/06의 KNOWLEDGE_ANALYSIS lease와 Job RUNNING을
+  확인했다. 이 실행 중에 공유 환경을 교체하지 않도록 creative main1603535에만 SIGTERM을
+  전달해 정상 iteration/publication 종료를 요청했다. child signal/강제 kill/작업 재제출은0이다.
+  기존 supported close는 commit 중 publication을 기다리며 이미 제출한 platform Job을 보존한다.
+  23:49에도 original creative process는 살아 있었고 현재 저장을 계속 기다리는 중이었다.
+  `/tmp/eom-public-item-release-activity-20261031.json`,
+  `/tmp/eom-public-item-creative-drain-20261031.log`.
+- finite release-window 실행
+  `eom-public-item8eb-compatible-release-20261031.service`를 실제 시작했다.
+  **23:49 MainPID1696775 active/running**, invocation
+  `e43f3655901a473e9644124e53228906`이다. root-protected reviewed helper로 최대20분
+  정상 drain을 기다린 뒤, fresh slot/lease/QUERY/chat/HWPX 작업0과 config CAS가 모두 맞을
+  때만 기존 호환 절차를 수행한다. INDEX는 제외·보존하며 실제 PID 불변을 대조한다.
+  이어 root/lower-UID provider admission·Pack18 activate·서비스 상태를 확인한다. 시간이
+  지나도 quiescence가 없으면 배포하지 않고 정상 종료된 creative만 원 설정으로 재개한다.
+  이 실행의 **terminal outcome은 아직 PENDING**이고 marker만 보고 성공 처리하지 않는다.
+  helper SHA `ccf1f61acd07a90a44c67e59ce3b22cdf42343915f171a1ffed807cf04f48096`,
+  `/tmp/eom-public-item8eb-release-window-start-20261031.log`.
+- Slack milestone `devreport_592c9eb4cc024ec3931527ff68878a53`는23:40:04 UTC SENT/200이다.
+  한국어 요약을 먼저 두고 source PASS·원 CUDA 실패 복구·미완료 actual 검색을 구분했다.
+  구 vector 삭제0, 정본 삭제/변조0, 추가 로그인 요청0이다. 실제 전체520 완료·AI/Chat 소비자
+  전환·authorized 검색과 안전한 구 derivative 삭제는 남아 있으며 목표 ACTIVE다.
+
 ## 출제·검토 공통 공개 풀이의 실제 role 읽기·배치 연결 — 2026-10-31 23:10 UTC
 
 - 직전 목표 실행은 plan30/31 source·저장/replay 검증의 **PROGRESS**였고, 설치본311 PASS도
