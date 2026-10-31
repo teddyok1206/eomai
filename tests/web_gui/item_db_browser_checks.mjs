@@ -48,11 +48,20 @@ async function api(path, options = {}) {
     fixture.saved = options.body;
     return {assembly_id: 'assembly_' + '1'.repeat(32), placement_count: options.body.placements.length};
   }
-  if (path === '/item-db/external-sources/search') {
+  if (path.startsWith('/item-db/registered/search?')) {
     if (fixture.failNextSearch) {fixture.failNextSearch = false; throw new Error('합성 조회 실패');}
-    if (options.body.cursor) return {values: [entry('10319')], has_more: false, next_cursor: null};
-    return {values: [entry('10310'), entry('10318')], has_more: true, next_cursor: 'next-page'};
+    const params = new URL('https://fixture' + path).searchParams;
+    const registration = {item_id: 'item_' + '1'.repeat(32), item_revision_id: 'itemrev_' + '2'.repeat(32),
+      item_manifest_sha256: 'sha256:' + '3'.repeat(64), approval_state: 'APPROVED',
+      difficulty_band: '상', item_type_key: 'external-creative-multiple-choice'};
+    if (params.get('kind') === 'AI') return {values: [{registration: {...registration, approval_state: 'IN_REVIEW'}, title: 'AI 생성 문항'}], has_more: false, next_cursor: null};
+    if (params.get('approval_state') === 'APPROVED') return {values: [{source: entry('10310'), registration}], has_more: false, next_cursor: null};
+    const number = options.body.conditions.find(value => value.field === 'U' && value.operator === 'EQ')?.value;
+    if (options.body.limit === 1 && number) return {values: [{source: entry(number), registration: null}], has_more: false, next_cursor: null};
+    if (options.body.cursor) return {values: [{source: entry('10319'), registration: null}], has_more: false, next_cursor: null};
+    return {values: [entry('10310'), entry('10318')].map(source => ({source, registration: null})), has_more: true, next_cursor: 'next-page'};
   }
+  if (path.startsWith('/item-db/registrations/')) return null;
   if (path.startsWith('/item-db/graph-items?')) {
     const params = new URL('https://fixture' + path).searchParams;
     if (params.has('item_number') && params.get('item_number') !== '17') return {values: [], has_more: false, next_cursor: null};
@@ -119,7 +128,7 @@ try {
   const right = await page.locator("#item-db-detail-panel").boundingBox();
   assert.ok(right.x >= left.x + left.width, "desktop detail must be to the right of the metadata table");
   assert.equal(await page.evaluate(() => window.dbFixture.calls.filter(call => /^\/item-db\/external-sources\/extitem_/.test(call.path)).length), 0, "listing must not add N+1 detail calls");
-  await page.evaluate(() => {window.dbFixture.hold = '/item-db/external-sources/search';});
+  await page.evaluate(() => {window.dbFixture.hold = '/item-db/registered/search?kind=CREATIVE';});
   await page.locator("#item-db-more").click();
   await page.waitForFunction(() => typeof window.dbFixture.release === 'function');
   await rows.first().getByRole("button").click();
@@ -169,13 +178,13 @@ try {
   await filters.nth(1).locator("input").fill("화학");
   await page.locator("#item-db-match-mode").selectOption("ANY");
   await page.locator("#item-db-search").click();
-  let body = await page.evaluate(() => window.dbFixture.calls.filter(call => call.path.endsWith('/search')).at(-1).body);
+  let body = await page.evaluate(() => window.dbFixture.calls.filter(call => call.path.startsWith('/item-db/registered/search?')).at(-1).body);
   assert.equal(body.match_mode, "ANY");
   assert.deepEqual(body.conditions, [{field: "U", operator: "EQ", value: "10318"}, {field: "Z", operator: "CONTAINS", value: "화학"}]);
   await filters.nth(1).locator(".item-db-filter-operator").selectOption("IS_EMPTY");
   assert.equal(await filters.nth(1).locator("input").isVisible(), false);
   await page.locator("#item-db-search").click();
-  body = await page.evaluate(() => window.dbFixture.calls.filter(call => call.path.endsWith('/search')).at(-1).body);
+  body = await page.evaluate(() => window.dbFixture.calls.filter(call => call.path.startsWith('/item-db/registered/search?')).at(-1).body);
   assert.deepEqual(body.conditions[1], {field: "Z", operator: "IS_EMPTY", value: null});
   await filters.first().getByRole("button", {name: "이 조건 지우기"}).click();
   assert.equal(await filters.count(), 1);
@@ -189,6 +198,22 @@ try {
   assert.equal(await filters.first().locator(".item-db-status-value").isVisible(), true);
   assert.equal(await filters.first().locator("input").isVisible(), false);
   await page.locator("#item-db-filter-clear").click();
+
+  // Category never encodes approval; the same original metadata and file tools remain.
+  assert.deepEqual(await page.locator('#item-db-source option').allTextContents(), ['창작', '기출', 'AI']);
+  await page.locator('#item-db-approval').selectOption('APPROVED');
+  await page.waitForFunction(() => document.querySelector('#item-db-result-count').textContent === '1개 표시');
+  assert.equal(await page.locator('#item-db-source-filters').isVisible(), true);
+  assert.match(await rows.first().innerText(), /10310[\s\S]*승인 완료/);
+  await rows.first().getByRole('button').click();
+  await page.getByRole('button', {name: '등록 문항 미리보기', exact: true}).waitFor();
+  assert.match(await page.locator('#item-db-detail').innerText(), /출제 의도[\s\S]*자료 해석/);
+  assert.equal(await page.locator('.item-db-edition.is-final').count(), 1);
+  await page.locator('#item-db-source').selectOption('AI');
+  await page.waitForFunction(() => document.querySelector('#item-db-results').textContent.includes('AI 생성 문항'));
+  await rows.first().getByRole('button').click();
+  assert.match(await page.locator('#item-db-detail').innerText(), /문항 종류[\s\S]*AI[\s\S]*승인 대기/);
+  await page.locator('#item-db-approval').selectOption('');
 
   // Published items keep exact Graph pointers and open through the existing item preview.
   await page.locator("#item-db-source").selectOption("PAST_EXAM");

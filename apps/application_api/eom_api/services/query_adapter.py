@@ -71,6 +71,7 @@ from eom_api_contracts.item_bank import (
     ProductionItemContentComponentViewV2,
     ProductionPastExamContextView,
 )
+from eom_api_contracts.item_db_registration import AiItemDbEntryView
 from eom_api_contracts.items import (
     ItemApprovalView,
     ItemComponentView,
@@ -897,6 +898,67 @@ class QueryAdapter:
             )
             return PageResult(tuple(values), next_cursor, has_more)
 
+    def ai_item_db_entries(
+        self, *, approval_state: str | None, limit: int, cursor: str | None
+    ) -> PageResult[AiItemDbEntryView]:
+        """Canonical current generated Items, including pending human approval."""
+        from eom_workflow_runner.models import WorkflowInstanceRecord
+
+        from eom_api.services.external_item_db_read import registration_view
+
+        scope = "ai-item-db:" + (approval_state or "ALL")
+        conditions = [
+            WorkflowInstanceRecord.definition_key == "generic-item-development",
+            ItemRecord.current_revision_id == ItemRevisionRecord.item_revision_id,
+            ItemRecord.lifecycle_state == "ACTIVE",
+        ]
+        if approval_state is not None:
+            conditions.append(ItemRevisionRecord.revision_state == approval_state)
+        if cursor:
+            last_created_at, last_revision_id = self.cursors.decode(cursor, scope)
+            conditions.append(
+                or_(
+                    ItemRevisionRecord.created_at < last_created_at,
+                    and_(
+                        ItemRevisionRecord.created_at == last_created_at,
+                        ItemRevisionRecord.item_revision_id > last_revision_id,
+                    ),
+                )
+            )
+        with self.sessions() as session:
+            revisions = tuple(
+                session.scalars(
+                    select(ItemRevisionRecord)
+                    .join(ItemRecord, ItemRecord.item_id == ItemRevisionRecord.item_id)
+                    .join(
+                        WorkflowInstanceRecord,
+                        WorkflowInstanceRecord.workflow_id == ItemRevisionRecord.workflow_id,
+                    )
+                    .where(*conditions)
+                    .order_by(
+                        ItemRevisionRecord.created_at.desc(), ItemRevisionRecord.item_revision_id
+                    )
+                    .limit(limit + 1)
+                )
+            )
+            values = tuple(
+                AiItemDbEntryView(
+                    registration=registration_view(revision),
+                    title="AI 생성 문항",
+                )
+                for revision in revisions[:limit]
+            )
+        more = len(revisions) > limit
+        return PageResult(
+            values,
+            self.cursors.encode(
+                scope, revisions[limit - 1].created_at, revisions[limit - 1].item_revision_id
+            )
+            if more
+            else None,
+            more,
+        )
+
     def production_item_candidates(
         self,
         *,
@@ -912,6 +974,8 @@ class QueryAdapter:
         administration_month: int | None = None,
         item_number: int | None = None,
         selected_item_revisions: tuple[PopulationSource, ...] | None = None,
+        selected_revision_id: str | None = None,
+        approval_state: str | None = None,
     ) -> PageResult[ProductionItemCandidateViewContract]:
         """List Graph-accepted Item revisions without inventing examination placement data."""
 
@@ -925,6 +989,8 @@ class QueryAdapter:
             "administration_year": administration_year,
             "administration_month": administration_month,
             "item_number": item_number,
+            **({"selected_revision_id": selected_revision_id} if selected_revision_id else {}),
+            **({"approval_state": approval_state} if approval_state else {}),
         }
         expected_units = integrated_science_curriculum_units()
         expected_by_id = {unit.curriculum_unit_id: unit for unit in expected_units}
@@ -970,6 +1036,10 @@ class QueryAdapter:
                         pin.item_revision_id for pin in selected_item_revisions
                     )
                 )
+            if selected_revision_id is not None:
+                conditions.append(ItemRevisionRecord.item_revision_id == selected_revision_id)
+            if approval_state is not None:
+                conditions.append(ItemRevisionRecord.revision_state == approval_state)
             if source_class is not None:
                 conditions.append(
                     select(literal(1))

@@ -70,6 +70,30 @@ def test_source_list_uses_current_revision_completed_import_and_keyset() -> None
     assert " LIMIT " in sql
 
 
+@pytest.mark.parametrize("state", ("APPROVED", "IN_REVIEW", "UNREGISTERED"))
+def test_creative_approval_filter_is_correlated_before_pagination(state: str) -> None:
+    session = MagicMock()
+    session.execute.return_value.all.return_value = []
+    list_external_item_sources(
+        session,
+        ExternalItemListFilter(
+            source_namespace="notion-integrated-science",
+            approval_state=state,
+            conditions=(ExternalItemMetadataPredicate("AD", "CONTAINS", "선생님"),),
+        ),
+    )
+    statement = session.execute.call_args.args[0]
+    compiled = statement.compile(dialect=postgresql.dialect())
+    sql = str(compiled)
+    assert "EXISTS" in sql
+    assert "item_revisions.metadata_json" in sql
+    assert "items.current_revision_id = item_revisions.item_revision_id" in sql
+    assert "source_revision_id" in compiled.params.values()
+    assert "CREATIVE" in compiled.params.values()
+    assert ("NOT (EXISTS" in sql) == (state == "UNREGISTERED")
+    assert sql.index("EXISTS") < sql.index("LIMIT")
+
+
 @pytest.mark.parametrize(
     "changes",
     [

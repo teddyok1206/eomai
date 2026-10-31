@@ -12,12 +12,14 @@ from eom_api_contracts.external_item_db import (
     ExternalItemDbEntryView,
     ExternalItemDbFilterRequest,
 )
+from eom_api_contracts.item_db_registration import CreativeItemDbEntryView, ItemDbRegistrationView
 from eom_catalog_service.external_item_models import ExternalItemSourceRecord
 from eom_catalog_service.external_item_read_service import (
     ExternalItemListEntry,
     ExternalItemListFilter,
     ExternalItemMetadataPredicate,
     ExternalItemReadError,
+    creative_item_registrations,
     export_external_item_sources,
     list_external_item_sources,
     read_external_item_source,
@@ -28,6 +30,7 @@ from eom_catalog_service.item_db_excel_export import (
     ItemDbRenderedXlsx,
     render_item_database_xlsx,
 )
+from eom_catalog_service.models import ItemRevisionRecord
 from eom_orchestrator.database import build_session_factory
 from sqlalchemy import Engine
 
@@ -50,7 +53,8 @@ def _conditions(
             )
             for condition in advanced.conditions
         )
-        if advanced else ()
+        if advanced
+        else ()
     )
 
 
@@ -87,6 +91,7 @@ class ExternalItemDbReadApplication:
         limit: int,
         cursor: str | None,
         advanced: ExternalItemDbFilterRequest | None = None,
+        approval_state: str | None = None,
     ) -> PageResult[ExternalItemDbEntryView]:
         scope = hashlib.sha256(
             json.dumps(
@@ -98,8 +103,10 @@ class ExternalItemDbReadApplication:
                     "match_mode": advanced.match_mode if advanced else "ALL",
                     "conditions": (
                         [condition.model_dump(mode="json") for condition in advanced.conditions]
-                        if advanced else []
+                        if advanced
+                        else []
                     ),
+                    **({"approval_state": approval_state} if approval_state is not None else {}),
                 },
                 sort_keys=True,
                 separators=(",", ":"),
@@ -119,6 +126,7 @@ class ExternalItemDbReadApplication:
                 match_status=match_status,
                 match_mode=advanced.match_mode if advanced else "ALL",
                 conditions=_conditions(advanced),
+                approval_state=approval_state,
                 limit=limit,
                 after_number=last_number,
             )
@@ -129,16 +137,61 @@ class ExternalItemDbReadApplication:
         return PageResult(
             data=tuple(_entry(value) for value in page.entries),
             next_cursor=(
-                self.cursors.encode_ordinal(
-                    _CURSOR_RESOURCE, scope, int(page.next_after_number)
-                )
+                self.cursors.encode_ordinal(_CURSOR_RESOURCE, scope, int(page.next_after_number))
                 if page.next_after_number is not None
                 else None
             ),
             has_more=page.next_after_number is not None,
         )
 
-    def export(self, filters: ExternalItemDbFilterRequest) -> ItemDbRenderedXlsx:
+    def creative_list(
+        self, filters: ExternalItemDbFilterRequest, approval_state: str | None
+    ) -> PageResult[CreativeItemDbEntryView]:
+        page = self.list(
+            exact_number=None,
+            major_unit=None,
+            field_label=None,
+            match_status=None,
+            limit=filters.limit,
+            cursor=filters.cursor,
+            advanced=filters,
+            approval_state=approval_state,
+        )
+        # Resolve all selected source identities in one query, not an N+1 detail loop.
+        with self.sessions() as session:
+            try:
+                registrations = creative_item_registrations(session, page.data)
+            except ExternalItemReadError as exc:
+                raise ApiError(409, exc.code, "Source registration changed", str(exc)) from exc
+            if approval_state is not None and any(
+                (
+                    registrations[source.source_id].revision_state
+                    if source.source_id in registrations
+                    else "UNREGISTERED"
+                )
+                != approval_state
+                for source in page.data
+            ):
+                raise ApiError(
+                    409,
+                    "ITEM_DB_SOURCE_STALE",
+                    "Item status changed",
+                    "Approval changed during the read; query again",
+                )
+            values = tuple(
+                CreativeItemDbEntryView(
+                    source=source,
+                    registration=registration_view(registrations[source.source_id])
+                    if source.source_id in registrations
+                    else None,
+                )
+                for source in page.data
+            )
+        return PageResult(values, page.next_cursor, page.has_more)
+
+    def export(
+        self, filters: ExternalItemDbFilterRequest, *, approval_state: str | None = None
+    ) -> ItemDbRenderedXlsx:
         if filters.cursor is not None:
             raise ApiError(
                 422, "ITEM_DB_EXPORT_CURSOR_INVALID", "Invalid export", "Use full filter"
@@ -149,6 +202,7 @@ class ExternalItemDbReadApplication:
                 match_mode=filters.match_mode,
                 conditions=_conditions(filters),
                 limit=100,
+                approval_state=approval_state,
             )
             with self.sessions() as session:
                 snapshot = export_external_item_sources(session, query)
@@ -166,15 +220,11 @@ class ExternalItemDbReadApplication:
                     worksheet_name=entry.row.worksheet_name,
                     source_row_number=entry.row.row_number,
                     original_cells=entry.row.cells,
-                    public_metadata=(
-                        (("분야", entry.field_label),) if entry.field_label else ()
-                    ),
+                    public_metadata=((("분야", entry.field_label),) if entry.field_label else ()),
                 )
                 for entry in snapshot.entries
             )
-            return render_item_database_xlsx(
-                rows, original_headers=snapshot.original_headers
-            )
+            return render_item_database_xlsx(rows, original_headers=snapshot.original_headers)
         except ExternalItemReadError as exc:
             status = 413 if exc.code == "EXTERNAL_ITEM_EXPORT_TOO_LARGE" else 409
             raise ApiError(status, exc.code, "Item DB export unavailable", str(exc)) from exc
@@ -216,3 +266,16 @@ class ExternalItemDbReadApplication:
                 for edition in detail.edition_links
             ),
         )
+
+
+def registration_view(value: ItemRevisionRecord) -> ItemDbRegistrationView:
+    return ItemDbRegistrationView.model_validate(
+        {
+            "item_id": value.item_id,
+            "item_revision_id": value.item_revision_id,
+            "item_manifest_sha256": value.manifest_sha256,
+            "approval_state": value.revision_state,
+            "difficulty_band": value.difficulty_band,
+            "item_type_key": value.item_type_key,
+        }
+    )

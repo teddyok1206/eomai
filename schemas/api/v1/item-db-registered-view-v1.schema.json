@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/item-db-registered-view/1.0",
+  "$defs": {
+    "creative": {
+      "type": "object", "additionalProperties": false, "required": ["source", "registration"],
+      "properties": {
+        "source": {"$ref": "eom://schemas/api/external-item-db-view/1.0#/$defs/entry"},
+        "registration": {"anyOf": [{"$ref": "eom://schemas/api/item-db-registration/1.0"}, {"type": "null"}]}
+      }
+    },
+    "ai": {
+      "type": "object", "additionalProperties": false, "required": ["title", "registration"],
+      "properties": {
+        "title": {"type": "string", "minLength": 1, "maxLength": 512},
+        "registration": {"$ref": "eom://schemas/api/item-db-registration/1.0"}
+      }
+    }
+  }
+}

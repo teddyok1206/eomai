@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from typing import Annotated
 from urllib.parse import quote
 
 from eom_api_contracts import ListResponse, SingleResponse
@@ -10,6 +11,7 @@ from eom_api_contracts.external_item_db import (
     ExternalItemDbEntryView,
     ExternalItemDbFilterRequest,
 )
+from eom_api_contracts.item_db_registration import ApprovalState
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Path, Query, Request
 from fastapi.responses import Response, StreamingResponse
@@ -109,9 +111,15 @@ def export_external_sources(
     request: Request,
     authentication: Auth,
     filters: ExternalItemDbFilterRequest,
+    approval_state: Annotated[ApprovalState | None, Query()] = None,
 ) -> Response:
     _source_access(authentication)
-    result = request.app.state.services.external_item_db_reads.export(filters)
+    reads = request.app.state.services.external_item_db_reads
+    result = (
+        reads.export(filters, approval_state=approval_state)
+        if approval_state
+        else reads.export(filters)
+    )
     request.app.state.services.audit.append(
         request.state.request_context,
         event_type="EXTERNAL_ITEM_DB_EXPORT_AUTHORIZED",

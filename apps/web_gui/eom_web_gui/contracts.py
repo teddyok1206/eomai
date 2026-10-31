@@ -1566,6 +1566,20 @@ class GraphItemDbEntry(BaseModel):
         return self
 
 
+class ItemDbRegistration(WebModel):
+    item_id: str = Field(pattern=r"^item_[0-9a-f]{32}$")
+    item_revision_id: str = Field(pattern=r"^itemrev_[0-9a-f]{32}$")
+    item_manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    approval_state: Literal["DRAFT", "IN_REVIEW", "APPROVED", "REJECTED", "SUPERSEDED", "RETIRED"]
+    difficulty_band: str | None = Field(default=None, max_length=64)
+    item_type_key: str = Field(min_length=1, max_length=128)
+
+
+class AiItemDbEntry(WebModel):
+    registration: ItemDbRegistration
+    title: str = Field(min_length=1, max_length=512)
+
+
 class ExternalItemDbEntry(WebModel):
     schema_version: Literal["external-item-db-entry/1.0"]
     source_id: str = Field(pattern=r"^extitem_[0-9a-f]{32}$")
@@ -1581,6 +1595,11 @@ class ExternalItemDbEntry(WebModel):
     selected_filename: str | None = Field(default=None, max_length=512)
     graph_state: Literal["NOT_PUBLISHED"]
     similarity_state: Literal["NOT_INDEXED"]
+
+
+class CreativeItemDbEntry(WebModel):
+    source: ExternalItemDbEntry
+    registration: ItemDbRegistration | None
 
 
 class ExternalItemDbCell(WebModel):

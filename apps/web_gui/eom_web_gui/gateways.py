@@ -20,6 +20,7 @@ from eom_web_gui.chat_grounding_contracts import (
 from eom_web_gui.chat_knowledge_contracts import ChatKnowledgeRequest, ChatKnowledgeSelection
 from eom_web_gui.chat_rag_contracts import ChatGroundingViewsV2
 from eom_web_gui.contracts import (
+    AiItemDbEntry,
     AssessmentLearningBatchStatus,
     AssessmentLearningCorpusStatusV2,
     AssessmentLearningExamStatus,
@@ -34,6 +35,7 @@ from eom_web_gui.contracts import (
     ContentIntakeOption,
     ContentIntakeSourcePointer,
     ContentTeamMaterialRequirementV2,
+    CreativeItemDbEntry,
     CuratedAssemblyItemPointerView,
     CuratedAssemblyListView,
     CuratedAssemblyReadView,
@@ -405,7 +407,26 @@ class GraphItemDbPage:
     has_more: bool
 
 
+@dataclass(frozen=True)
+class RegisteredItemDbPage:
+    values: tuple[CreativeItemDbEntry | AiItemDbEntry, ...]
+    next_cursor: str | None
+    has_more: bool
+
+
 class ApplicationGateway(Protocol):
+    async def item_db_registration_graph(
+        self, session: WebSession, revision_id: str, manifest_sha256: str
+    ) -> GraphItemDbEntry | None: ...
+
+    async def registered_item_db_entries(
+        self,
+        session: WebSession,
+        kind: str,
+        approval_state: str | None,
+        filters: ExternalItemDbFilterSubmission,
+    ) -> RegisteredItemDbPage: ...
+
     async def general_chat_knowledge_search(
         self, session: WebSession, value: ChatKnowledgeRequest
     ) -> ChatKnowledgeSelection: ...
@@ -676,6 +697,7 @@ class ApplicationGateway(Protocol):
         administration_year: int | None = None,
         administration_month: int | None = None,
         item_number: int | None = None,
+        approval_state: str | None = None,
     ) -> GraphItemDbPage: ...
 
     async def external_item_db_entries(
@@ -705,7 +727,11 @@ class ApplicationGateway(Protocol):
     ) -> ItemDbSimilarityResult: ...
 
     async def external_item_db_export(
-        self, session: WebSession, filters: ExternalItemDbFilterSubmission
+        self,
+        session: WebSession,
+        filters: ExternalItemDbFilterSubmission,
+        *,
+        approval_state: str | None = None,
     ) -> ItemDbExcelDownload: ...
 
     async def save_curated_assembly(
@@ -1269,6 +1295,81 @@ class HttpApplicationGateway:
         )
         return self._external_item_db_page(response)
 
+    async def item_db_registration_graph(
+        self, session: WebSession, revision_id: str, manifest_sha256: str
+    ) -> GraphItemDbEntry | None:
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/item-db/registrations/{revision_id}/graph",
+            params={"manifest_sha256": manifest_sha256},
+        )
+        document = self._document(response)
+        try:
+            value = document["data"]
+            if value is None:
+                return None
+            candidate = GraphItemDbEntry.model_validate(value)
+            if (
+                candidate.item_revision_id != revision_id
+                or candidate.item_manifest_sha256 != manifest_sha256
+            ):
+                raise ValueError("pinned Item differs")
+            return candidate
+        except (KeyError, TypeError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def registered_item_db_entries(
+        self,
+        session: WebSession,
+        kind: str,
+        approval_state: str | None,
+        filters: ExternalItemDbFilterSubmission,
+    ) -> RegisteredItemDbPage:
+        if kind not in {"CREATIVE", "AI"}:
+            raise GatewayError(status=422, code="ITEM_DB_SOURCE_INVALID")
+        if kind == "AI" and filters.conditions:
+            raise GatewayError(status=422, code="ITEM_DB_FILTER_NOT_APPLICABLE")
+        if kind == "CREATIVE":
+            response = await self._authorized(
+                session,
+                "POST",
+                "/api/v1/item-db/creative/search",
+                params={"approval_state": approval_state},
+                json=filters.model_dump(mode="json"),
+            )
+        else:
+            response = await self._authorized(
+                session,
+                "GET",
+                "/api/v1/item-db/ai",
+                params={
+                    "approval_state": approval_state,
+                    "limit": filters.limit,
+                    "cursor": filters.cursor,
+                },
+            )
+        document = self._document(response)
+        try:
+            page = document["page"]
+            if (
+                not isinstance(page, dict)
+                or not isinstance(document["data"], list)
+                or (
+                    page.get("next_cursor") is not None and not isinstance(page["next_cursor"], str)
+                )
+            ):
+                raise ValueError("invalid page shape")
+            model = CreativeItemDbEntry if kind == "CREATIVE" else AiItemDbEntry
+            values = tuple(model.model_validate(value) for value in document["data"])
+            if not isinstance(page["has_more"], bool) or (
+                page["has_more"] and not page.get("next_cursor")
+            ):
+                raise ValueError("invalid pagination")
+            return RegisteredItemDbPage(values, page.get("next_cursor"), page["has_more"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
     async def external_item_db_search(
         self, session: WebSession, filters: ExternalItemDbFilterSubmission
     ) -> ExternalItemDbPage:
@@ -1281,12 +1382,17 @@ class HttpApplicationGateway:
         return self._external_item_db_page(response)
 
     async def external_item_db_export(
-        self, session: WebSession, filters: ExternalItemDbFilterSubmission
+        self,
+        session: WebSession,
+        filters: ExternalItemDbFilterSubmission,
+        *,
+        approval_state: str | None = None,
     ) -> ItemDbExcelDownload:
         response = await self._authorized(
             session,
             "POST",
             "/api/v1/item-db/external-sources/export",
+            params={"approval_state": approval_state},
             json=filters.model_dump(mode="json"),
             headers={"Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
         )
@@ -3215,6 +3321,7 @@ class HttpApplicationGateway:
         administration_year: int | None = None,
         administration_month: int | None = None,
         item_number: int | None = None,
+        approval_state: str | None = None,
     ) -> GraphItemDbPage:
         if source_class not in {"APPROVED_ITEM", "PAST_EXAM"}:
             raise GatewayError(status=422, code="ITEM_DB_GRAPH_SOURCE_INVALID")
@@ -3228,6 +3335,7 @@ class HttpApplicationGateway:
                 "administration_year": administration_year,
                 "administration_month": administration_month,
                 "item_number": item_number,
+                "approval_state": approval_state,
                 "limit": 50,
                 "cursor": cursor,
             },

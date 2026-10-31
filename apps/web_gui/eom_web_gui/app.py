@@ -778,6 +778,10 @@ def create_app(
         administration_year: int | None = Query(default=None, ge=1900, le=2200),
         administration_month: int | None = Query(default=None, ge=1, le=12),
         item_number: int | None = Query(default=None, ge=1, le=200),
+        approval_state: Literal[
+            "UNREGISTERED", "DRAFT", "IN_REVIEW", "APPROVED", "REJECTED", "SUPERSEDED", "RETIRED"
+        ]
+        | None = Query(default=None),
     ) -> dict[str, object]:
         page = await actual.gateway.graph_item_db_entries(
             session,
@@ -787,6 +791,7 @@ def create_app(
             administration_year=administration_year,
             administration_month=administration_month,
             item_number=item_number,
+            **({"approval_state": approval_state} if approval_state else {}),
         )
         return {
             "values": tuple(value.model_dump(mode="json") for value in page.values),
@@ -825,6 +830,38 @@ def create_app(
         value = await actual.gateway.external_item_db_detail(session, source_id)
         return value.model_dump(mode="json")
 
+    @app.get(f"{API_PREFIX}/item-db/registrations/{{revision_id}}/graph")
+    async def item_db_registration_graph(
+        revision_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+        manifest_sha256: str = Query(pattern=r"^sha256:[0-9a-f]{64}$"),
+    ) -> dict[str, object] | None:
+        if not re.fullmatch(r"itemrev_[0-9a-f]{32}", revision_id):
+            raise GatewayError(status=422, code="ITEM_DB_REVISION_INVALID")
+        value = await actual.gateway.item_db_registration_graph(
+            session, revision_id, manifest_sha256
+        )
+        return value.model_dump(mode="json") if value else None
+
+    @app.post(f"{API_PREFIX}/item-db/registered/search")
+    async def registered_item_db_search(
+        filters: ExternalItemDbFilterSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+        kind: Literal["CREATIVE", "AI"] = Query(),
+        approval_state: Literal[
+            "UNREGISTERED", "DRAFT", "IN_REVIEW", "APPROVED", "REJECTED", "SUPERSEDED", "RETIRED"
+        ]
+        | None = Query(default=None),
+    ) -> dict[str, object]:
+        page = await actual.gateway.registered_item_db_entries(
+            session, kind, approval_state, filters
+        )
+        return {
+            "values": tuple(value.model_dump(mode="json") for value in page.values),
+            "next_cursor": page.next_cursor,
+            "has_more": page.has_more,
+        }
+
     @app.post(f"{API_PREFIX}/item-db/external-sources/search")
     async def external_item_db_search(
         filters: ExternalItemDbFilterSubmission,
@@ -841,8 +878,18 @@ def create_app(
     async def external_item_db_export(
         filters: ExternalItemDbFilterSubmission,
         session: Annotated[WebSession, Depends(require_csrf)],
+        approval_state: Literal[
+            "UNREGISTERED", "DRAFT", "IN_REVIEW", "APPROVED", "REJECTED", "SUPERSEDED", "RETIRED"
+        ]
+        | None = Query(default=None),
     ) -> Response:
-        value = await actual.gateway.external_item_db_export(session, filters)
+        value = (
+            await actual.gateway.external_item_db_export(
+                session, filters, approval_state=approval_state
+            )
+            if approval_state
+            else await actual.gateway.external_item_db_export(session, filters)
+        )
         return Response(
             content=value.content,
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

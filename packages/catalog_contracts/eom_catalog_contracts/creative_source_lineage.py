@@ -17,6 +17,14 @@ from eom_catalog_contracts.validation import validate_contract
 CREATIVE_SOURCE_LINEAGE_SCHEMA = "creative-source-lineage-v1"
 CREATIVE_SOURCE_LINEAGE_SCHEMA_REF = "eom://schemas/external-item/creative-source-lineage/1.0"
 CREATIVE_SOURCE_REGISTRATION_POLICY = "PRESERVE_SOURCE_WITH_REVIEW_WARNINGS_V1"
+CREATIVE_REGISTRATION_KEY_PREFIX = "creative-source:"
+
+
+def creative_registration_key(source_id: str) -> str:
+    """The existing unique registration identity, shared by writes and indexed reads."""
+    return CREATIVE_REGISTRATION_KEY_PREFIX + source_id
+
+
 type CreativeSourceAnswerMode = Literal[
     "EDITORIAL_SOURCE", "MODEL_PROPOSAL_UNVERIFIED", "NOT_APPLICABLE"
 ]

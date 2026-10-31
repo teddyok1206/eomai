@@ -119,6 +119,13 @@ fail() {
   exit 1
 }
 
+# A scoped installed closure must not silently shadow a later shared-runtime update.
+# Its rollback/retirement is explicit in the component release record.
+if [[ "$ACTION" == "install" && \
+  -e /etc/systemd/system/eom-api.service.d/45-eom-api-installed-release.conf ]]; then
+  fail "Scoped API release is active; review and retire its managed drop-in before shared installation"
+fi
+
 [[ -r "${WORKFLOW_RUNNER_HOLD_LIBRARY}" ]] || fail "workflow runner hold helper is unavailable"
 # shellcheck source=scripts/api/workflow_runner_deployment_hold.sh
 source "${WORKFLOW_RUNNER_HOLD_LIBRARY}"

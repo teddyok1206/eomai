@@ -9,14 +9,15 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 
 from eom_catalog_contracts import (
     ExternalItemCellObservation,
     ExternalItemRowObservation,
     ExternalItemWorkbookMapping,
 )
-from sqlalchemy import Select, and_, or_, select
+from eom_catalog_contracts.creative_source_lineage import CREATIVE_REGISTRATION_KEY_PREFIX
+from sqlalchemy import Select, and_, literal, or_, select
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.external_item_matching import ExternalItemMatchStatus
@@ -26,7 +27,7 @@ from eom_catalog_service.external_item_models import (
     ExternalItemSourceRecord,
     ExternalItemSourceRevisionRecord,
 )
-from eom_catalog_service.models import ContentIntakeSourceFileRecord
+from eom_catalog_service.models import ContentIntakeSourceFileRecord, ItemRecord, ItemRevisionRecord
 
 _NAMESPACE = re.compile(r"^[a-z0-9][a-z0-9._:-]{0,127}$")
 _NUMBER = re.compile(r"^[0-9]{5}$")
@@ -57,10 +58,13 @@ class ExternalItemMetadataPredicate:
             or self.operator not in _VALUE_OPERATORS | _EMPTY_OPERATORS
             or (self.operator in _VALUE_OPERATORS) != (self.value is not None)
             or (self.value is not None and (not self.value or len(self.value) > 255))
-            or (self.field == "MATCH_STATUS" and (
-                self.operator not in ("EQ", "NE")
-                or self.value not in ExternalItemMatchStatus.__members__
-            ))
+            or (
+                self.field == "MATCH_STATUS"
+                and (
+                    self.operator not in ("EQ", "NE")
+                    or self.value not in ExternalItemMatchStatus.__members__
+                )
+            )
             or (self.field == "U" and self.operator in _EMPTY_OPERATORS)
         ):
             raise ExternalItemReadError("EXTERNAL_ITEM_QUERY_INVALID", "metadata filter is invalid")
@@ -77,6 +81,7 @@ class ExternalItemListFilter:
     match_status: str | None = None
     match_mode: str = "ALL"
     conditions: tuple[ExternalItemMetadataPredicate, ...] = ()
+    approval_state: str | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -98,8 +103,18 @@ class ExternalItemListFilter:
             or self.match_mode not in ("ALL", "ANY")
             or len(self.conditions) > 8
             or any(
-                not isinstance(value, ExternalItemMetadataPredicate)
-                for value in self.conditions
+                not isinstance(value, ExternalItemMetadataPredicate) for value in self.conditions
+            )
+            or self.approval_state
+            not in (
+                None,
+                "UNREGISTERED",
+                "DRAFT",
+                "IN_REVIEW",
+                "APPROVED",
+                "REJECTED",
+                "SUPERSEDED",
+                "RETIRED",
             )
         ):
             raise ExternalItemReadError("EXTERNAL_ITEM_QUERY_INVALID", "query is invalid")
@@ -227,6 +242,22 @@ def _filtered_query(statement: Select[Any], query: ExternalItemListFilter) -> Se
     source = ExternalItemSourceRecord
     revision = ExternalItemSourceRevisionRecord
     statement = statement.where(source.source_namespace == query.source_namespace)
+    if query.approval_state is not None:
+        registered = (
+            select(ItemRevisionRecord.item_revision_id)
+            .join(ItemRecord, ItemRecord.item_id == ItemRevisionRecord.item_id)
+            .where(
+                creative_registration_source_condition(),
+                ItemRecord.lifecycle_state == "ACTIVE",
+                ItemRecord.current_revision_id == ItemRevisionRecord.item_revision_id,
+            )
+        )
+        if query.approval_state == "UNREGISTERED":
+            statement = statement.where(~registered.exists())
+        else:
+            statement = statement.where(
+                registered.where(ItemRevisionRecord.revision_state == query.approval_state).exists()
+            )
     if query.after_number is not None:
         statement = statement.where(source.external_number > query.after_number)
     if query.exact_number is not None:
@@ -243,6 +274,61 @@ def _filtered_query(statement: Select[Any], query: ExternalItemListFilter) -> Se
             and_(*expressions) if query.match_mode == "ALL" else or_(*expressions)
         )
     return statement
+
+
+def creative_registration_source_condition() -> Any:
+    """Correlate canonical registration to this exact source, never a filename/latest guess."""
+    metadata = ItemRevisionRecord.metadata_json
+    return and_(
+        ItemRevisionRecord.registration_key
+        == literal(CREATIVE_REGISTRATION_KEY_PREFIX) + ExternalItemSourceRecord.source_id,
+        metadata["source_kind"].as_string() == "CREATIVE",
+        metadata["source_id"].as_string() == ExternalItemSourceRecord.source_id,
+        metadata["source_revision_id"].as_string() == ExternalItemSourceRevisionRecord.revision_id,
+        metadata["external_number"].as_string() == ExternalItemSourceRecord.external_number,
+    )
+
+
+class CreativeSourceIdentity(Protocol):
+    @property
+    def source_id(self) -> str: ...
+
+    @property
+    def source_revision_id(self) -> str: ...
+
+
+def creative_item_registrations(
+    session: Session, entries: tuple[CreativeSourceIdentity, ...]
+) -> dict[str, ItemRevisionRecord]:
+    """One bounded indexed query enriches a page; no per-source registry lookup."""
+    if not entries:
+        return {}
+    expected = {entry.source_id: entry.source_revision_id for entry in entries}
+    rows = session.execute(
+        select(
+            ExternalItemSourceRecord.source_id,
+            ExternalItemSourceRevisionRecord.revision_id,
+            ItemRevisionRecord,
+        )
+        .join(
+            ExternalItemSourceRevisionRecord,
+            ExternalItemSourceRevisionRecord.revision_id
+            == ExternalItemSourceRecord.current_revision_id,
+        )
+        .join(ItemRevisionRecord, creative_registration_source_condition())
+        .join(ItemRecord, ItemRecord.item_id == ItemRevisionRecord.item_id)
+        .where(
+            ExternalItemSourceRecord.source_id.in_(expected),
+            ItemRecord.lifecycle_state == "ACTIVE",
+            ItemRecord.current_revision_id == ItemRevisionRecord.item_revision_id,
+        )
+    ).all()
+    result = {}
+    for source_id, revision_id, item in rows:
+        if revision_id != expected[source_id] or source_id in result:
+            raise ExternalItemReadError("ITEM_DB_SOURCE_STALE", "source registration changed")
+        result[source_id] = item
+    return result
 
 
 def list_external_item_sources(
@@ -314,10 +400,22 @@ def export_external_item_sources(
     entries: list[ExternalItemExportEntry] = []
     for value in values:
         (
-            number, status, filename, major, minor, field, worksheet, row_number,
-            observation_sha256, cells, workbook_artifact_id,
-            workbook_artifact_revision_id, workbook_sha256, mapping_revision_id,
-            mapping_sha256, _mapping_document,
+            number,
+            status,
+            filename,
+            major,
+            minor,
+            field,
+            worksheet,
+            row_number,
+            observation_sha256,
+            cells,
+            workbook_artifact_id,
+            workbook_artifact_revision_id,
+            workbook_sha256,
+            mapping_revision_id,
+            mapping_sha256,
+            _mapping_document,
         ) = value
         if (
             mapping_revision_id != mapping.mapping_revision_id

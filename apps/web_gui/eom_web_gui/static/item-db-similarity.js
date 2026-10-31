@@ -144,8 +144,8 @@ export function createItemDbSimilarity({document, search, openSelection, activat
       const cell = element("td");
       cell.append(title);
       row.append(element("td", String(index + 1)), cell,
-        element("td", candidate.kind === "EXTERNAL_SOURCE" ? "창작 원본"
-          : candidate.entry.source_class === "PAST_EXAM" ? "기출" : "창작·승인 문항"),
+        element("td", candidate.kind === "EXTERNAL_SOURCE" ? "창작"
+          : candidate.entry.source_class === "PAST_EXAM" ? "기출" : "등록 문항"),
         element("td", candidate.unit_label || "—"),
         element("td", (candidate.cosine_millionths / 1000000).toFixed(3)));
       row.addEventListener("click", () => openSelection(candidate.selection));

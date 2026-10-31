@@ -46,6 +46,9 @@ def source_session():
     try:
         with engine.connect() as connection, Session(bind=connection) as session:
             for table in (
+                "items",
+                "item_revisions",
+                "workflow_instances",
                 "external_item_sources",
                 "external_item_source_revisions",
                 "external_item_edition_documents",
@@ -191,6 +194,146 @@ def source_session():
             yield session
     finally:
         engine.dispose()
+
+
+def test_registered_creative_status_keeps_metadata_filters_and_pinned_sources(
+    source_session: Session,
+) -> None:
+    from eom_catalog_service.external_item_read_service import creative_item_registrations
+
+    for number, state in (("00001", "APPROVED"), ("00002", "IN_REVIEW")):
+        suffix = f"{int(number):032x}"
+        source_session.execute(
+            text(
+                "INSERT INTO items(item_id,current_revision_id,lifecycle_state) "
+                "VALUES (:item,:revision,'ACTIVE')"
+            ),
+            {"item": "item_" + suffix, "revision": "itemrev_" + suffix},
+        )
+        source_session.execute(
+            text(
+                "INSERT INTO item_revisions(item_id,item_revision_id,revision_state,"
+                "metadata_json,registration_key) "
+                "VALUES (:item,:revision,:state,CAST(:metadata AS jsonb),:registration)"
+            ),
+            {
+                "item": "item_" + suffix,
+                "revision": "itemrev_" + suffix,
+                "state": state,
+                "registration": "creative-source:extitem_" + suffix,
+                "metadata": json.dumps(
+                    {
+                        "source_kind": "CREATIVE",
+                        "source_id": "extitem_" + suffix,
+                        "source_revision_id": "extitemrev_" + suffix,
+                        "external_number": number,
+                    }
+                ),
+            },
+        )
+    for state, expected in (
+        ("APPROVED", "00001"),
+        ("IN_REVIEW", "00002"),
+        ("UNREGISTERED", "00003"),
+    ):
+        result = list_external_item_sources(
+            source_session,
+            ExternalItemListFilter(
+                source_namespace="notion-integrated-science", approval_state=state, limit=1
+            ),
+        )
+        assert [row.external_number for row in result.entries] == [expected]
+        assert result.next_after_number is None
+        registrations = creative_item_registrations(source_session, result.entries)
+        assert bool(registrations) == (state != "UNREGISTERED")
+    result = list_external_item_sources(
+        source_session,
+        ExternalItemListFilter(
+            source_namespace="notion-integrated-science",
+            approval_state="APPROVED",
+            conditions=(ExternalItemMetadataPredicate("Z", "CONTAINS", "物理"),),
+        ),
+    )
+    assert result.entries == ()
+    # An obsolete source pin must never inherit the current source's approval.
+    source_session.execute(
+        text(
+            "UPDATE item_revisions SET metadata_json=jsonb_set(metadata_json, "
+            "'{source_revision_id}', to_jsonb(CAST(:stale AS text)))"
+        ),
+        {"stale": "extitemrev_" + "f" * 32},
+    )
+    result = list_external_item_sources(
+        source_session,
+        ExternalItemListFilter(
+            source_namespace="notion-integrated-science", approval_state="APPROVED"
+        ),
+    )
+    assert result.entries == ()
+
+
+def test_ai_category_uses_authoring_provenance_and_status_scoped_keyset(
+    source_session: Session,
+) -> None:
+    from contextlib import nullcontext
+
+    from eom_api.services.pagination import CursorCodec
+    from eom_api.services.query_adapter import QueryAdapter
+
+    for index, (definition, state) in enumerate(
+        (
+            ("generic-item-development", "IN_REVIEW"),
+            ("generic-item-development", "APPROVED"),
+            ("external-item-learning", "APPROVED"),
+        ),
+        start=10,
+    ):
+        suffix = f"{index:032x}"
+        source_session.execute(
+            text(
+                "INSERT INTO workflow_instances(workflow_id,definition_key) "
+                "VALUES (:workflow,:definition)"
+            ),
+            {"workflow": "workflow_" + suffix, "definition": definition},
+        )
+        source_session.execute(
+            text(
+                "INSERT INTO items(item_id,current_revision_id,lifecycle_state) "
+                "VALUES (:item,:revision,'ACTIVE')"
+            ),
+            {"item": "item_" + suffix, "revision": "itemrev_" + suffix},
+        )
+        source_session.execute(
+            text(
+                "INSERT INTO item_revisions(item_id,item_revision_id,workflow_id,"
+                "revision_state,manifest_sha256,item_type_key,created_at) "
+                "VALUES (:item,:revision,:workflow,:state,:hash,'multiple-choice',now())"
+            ),
+            {
+                "item": "item_" + suffix,
+                "revision": "itemrev_" + suffix,
+                "workflow": "workflow_" + suffix,
+                "state": state,
+                "hash": "sha256:" + "a" * 64,
+            },
+        )
+    query = object.__new__(QueryAdapter)
+    query.sessions = lambda: nullcontext(source_session)
+    query.cursors = CursorCodec(b"test-only-db-category-cursor")
+    first = query.ai_item_db_entries(approval_state=None, limit=1, cursor=None)
+    second = query.ai_item_db_entries(approval_state=None, limit=1, cursor=first.next_cursor)
+    assert first.has_more and not second.has_more
+    assert {row.registration.approval_state for row in (*first.data, *second.data)} == {
+        "IN_REVIEW",
+        "APPROVED",
+    }
+    approved = query.ai_item_db_entries(approval_state="APPROVED", limit=50, cursor=None)
+    assert len(approved.data) == 1
+    assert approved.data[0].registration.item_revision_id == "itemrev_" + f"{11:032x}"
+    from eom_api.errors import ApiError
+
+    with pytest.raises(ApiError):
+        query.ai_item_db_entries(approval_state="APPROVED", limit=1, cursor=first.next_cursor)
 
 
 def test_all_any_exact_empty_and_keyset_use_real_postgres(source_session: Session) -> None:

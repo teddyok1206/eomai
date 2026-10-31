@@ -15,6 +15,7 @@ from eom_catalog_contracts.creative_source_draft import SourceImageBlock
 from eom_catalog_contracts.creative_source_lineage import (
     CREATIVE_SOURCE_LINEAGE_SCHEMA_REF,
     CreativeSourceLineage,
+    creative_registration_key,
 )
 from eom_catalog_contracts.external_item_learning_authorization import (
     ExternalItemLearningRoleSelection,
@@ -128,11 +129,6 @@ def prepare_creative_registration_pack(
     return packs.release(
         release.content_pack_release_id, actor_id=operator_id
     ).content_pack_release_id
-
-
-def creative_registration_key(source_id: str) -> str:
-    """An explicit existing unique business key, not an inferred file identity."""
-    return "creative-source:" + source_id
 
 
 def lock_creative_registration(session: Session, source_id: str) -> ItemRevisionRecord | None:

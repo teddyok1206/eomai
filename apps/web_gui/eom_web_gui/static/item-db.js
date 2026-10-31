@@ -37,6 +37,10 @@ const FILTER_OPERATORS = Object.freeze({
   EQ: "같음", NE: "다름", CONTAINS: "포함", IS_EMPTY: "값 없음", IS_NOT_EMPTY: "값 있음",
 });
 const SEARCH_FIELDS = ["MATCH_STATUS", ...FILTER_FIELDS];
+const APPROVAL_LABELS = Object.freeze({UNREGISTERED: "등록 전", DRAFT: "초안",
+  IN_REVIEW: "승인 대기", APPROVED: "승인 완료", REJECTED: "반려",
+  SUPERSEDED: "이전 승인 버전", RETIRED: "보관 종료"});
+const approvalLabel = (registration) => APPROVAL_LABELS[registration?.approval_state || "UNREGISTERED"];
 
 function node(document, tag, className, value) {
   const element = document.createElement(tag);
@@ -162,7 +166,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       return `창작 원본 ${placement.external_number} · ${placement.edition}교 · ${placement.source_format}`;
     }
     return placement.placement_kind === "PAST_EXAM_ITEM_REVISION"
-      ? "기출 승인 문항" : "창작 승인 문항";
+      ? "기출 문항" : "등록 문항";
   }
 
   async function openSaved(assemblyId) {
@@ -327,7 +331,8 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   function tableHeading(source) {
     const row = node(document, "tr", "");
     const labels = source === "EXTERNAL_SOURCE"
-      ? ["고유번호", "분야", "대단원", "소단원", "학년", "출제자", "파일 상태"]
+      ? ["고유번호", "분야", "대단원", "소단원", "학년", "출제자", "파일 상태", "승인 상태"]
+      : source === "AI" ? ["문항", "난이도", "승인 상태", "문항 확인"]
       : ["문항", source === "PAST_EXAM" ? "시험·번호" : "단원", "승인 상태", "HWPX 조립"];
     for (const label of labels) {
       const heading = node(document, "th", "", label);
@@ -340,7 +345,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   function emptyResults(value, source) {
     const row = node(document, "tr", "");
     const cell = node(document, "td", "empty-state", value);
-    cell.colSpan = source === "EXTERNAL_SOURCE" ? 7 : 4;
+    cell.colSpan = source === "EXTERNAL_SOURCE" ? 8 : 4;
     row.append(cell);
     $("#item-db-results").replaceChildren(row);
   }
@@ -391,12 +396,12 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   function renderEntry(entry) {
     return resultRow(entry.source_id, entry.external_number,
       [entry.field_label, entry.major_unit, entry.minor_unit, entry.grade_label, entry.author_label,
-        MATCH_LABELS[entry.match_status] || "확인 필요"],
-      (row) => openDetail(entry.source_id, row, entry.source_revision_id));
+        MATCH_LABELS[entry.match_status] || "확인 필요", approvalLabel(entry.registration)],
+      (row) => openDetail(entry.source_id, row, entry.source_revision_id, entry.registration));
   }
 
   function graphLabel(entry) {
-    const source = entry.source_class === "PAST_EXAM" ? "기출" : "창작·승인 문항";
+    const source = entry.source_class === "PAST_EXAM" ? "기출" : "등록 문항";
     const display = /^itemrev_[0-9a-f]{32}$/.test(entry.source_display_label)
       ? "승인 문항" : entry.source_display_label;
     return `${source} · ${display}`;
@@ -412,13 +417,65 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       (row) => openGraphDetail(entry, row));
   }
 
+  function appendRegistration(root, registration) {
+    const request = detailSequence;
+    const section = node(document, "section", "item-db-detail-section");
+    section.append(node(document, "h3", "", "등록 문항 정보"), metadataList([
+      ["승인 상태", approvalLabel(registration)],
+      ["등록된 난이도", registration.difficulty_band],
+      ["문항 형식", registration.item_type_key],
+    ], "item-db-detail-summary"));
+    const preview = node(document, "button", "button secondary", "등록 문항 미리보기");
+    preview.type = "button";
+    preview.addEventListener("click", () => openRegisteredItem(registration));
+    section.append(preview);
+    root.append(section);
+    api(`/item-db/registrations/${encodeURIComponent(registration.item_revision_id)}/graph?`
+      + new URLSearchParams({manifest_sha256: registration.item_manifest_sha256})).then((entry) => {
+      if (request !== detailSequence || !entry) return;
+      if (entry.item_revision_id !== registration.item_revision_id
+        || entry.item_manifest_sha256 !== registration.item_manifest_sha256) {
+        throw new Error("등록 문항의 연결 정보가 바뀌었습니다. 다시 조회해 주세요.");
+      }
+      selectItem("GRAPH_ITEM", entry);
+      section.append(metadataList([["교육과정 단원", entry.curriculum_units.map((unit) => unit.label).join(" · ")]],
+        "item-db-detail-summary"));
+      if (!entry.hwpx_exam_eligible) return;
+      const add = node(document, "button", "button secondary", "등록 문항을 조립 목록에 담기");
+      add.type = "button";
+      add.addEventListener("click", () => addToDraft({
+        placement_kind: "REGISTERED_ITEM_REVISION", item_id: entry.item_id,
+        item_revision_id: entry.item_revision_id, item_manifest_sha256: entry.item_manifest_sha256,
+        graph_snapshot_revision_id: entry.graph_snapshot_revision_id,
+        graph_snapshot_sha256: entry.snapshot_sha256,
+      }, `등록 문항 · ${approvalLabel(registration)}`));
+      section.append(add);
+    }).catch((error) => {
+      if (request === detailSequence) message(`Graph 연결 조회 실패: ${error.message}`, true);
+    });
+  }
+
+  function renderAiEntry(entry) {
+    return resultRow(entry.registration.item_revision_id, entry.title,
+      [entry.registration.difficulty_band || "미입력", approvalLabel(entry.registration), "문항 정보에서 확인"],
+      (row) => {
+        detailSequence++;
+        selectItem(null, null);
+        focusDetail(row);
+        const root = $("#item-db-detail");
+        root.replaceChildren(node(document, "h3", "", "AI 생성 문항"));
+        root.append(metadataList([["문항 종류", "AI"]], "item-db-detail-summary"));
+        appendRegistration(root, entry.registration);
+      });
+  }
+
   function openGraphDetail(entry, row) {
     detailSequence++;
     selectItem("GRAPH_ITEM", entry);
     focusDetail(row);
     const root = $("#item-db-detail");
     root.replaceChildren(node(document, "h3", "", graphLabel(entry)), metadataList([
-      ["문항 종류", entry.source_class === "PAST_EXAM" ? "기출" : "창작"],
+      ["문항 종류", entry.source_class === "PAST_EXAM" ? "기출" : "등록 문항"],
       ["승인 상태", entry.item_revision_state === "APPROVED" ? "승인 완료" : "이전 승인 버전"],
       ["단원", entry.curriculum_units.map((unit) => unit.label).join(" · ")],
       ...(entry.past_exam_context ? [
@@ -475,12 +532,13 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   function syncSourceControls() {
     const graph = selectedSource() !== "EXTERNAL_SOURCE";
     $("#item-db-source-filters").hidden = graph;
-    $("#item-db-graph-filters").hidden = !graph;
+    $("#item-db-graph-filters").hidden = selectedSource() !== "PAST_EXAM";
     $("#item-db-filter-add").hidden = graph;
     $("#item-db-export").hidden = graph;
     for (const field of document.querySelectorAll(".item-db-past-exam-filter")) {
       field.hidden = selectedSource() !== "PAST_EXAM";
     }
+    // Keep independent approval selection; never silently discard it on a category switch.
   }
 
   function activateTab(name) {
@@ -527,6 +585,8 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       message(error.message, true);
       return;
     }
+    const approval = $("#item-db-approval").value;
+    parameters.approval_state = approval;
     const request = ++sequence;
     const key = JSON.stringify(parameters);
     if (reset || key !== query) {
@@ -545,12 +605,17 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     $("#item-db-result-count").textContent = "조회 중";
     message("문항을 찾고 있습니다.");
     try {
-      const page = source === "EXTERNAL_SOURCE"
-        ? await api("/item-db/external-sources/search", {
-          method: "POST", mutation: true, body: parameters,
+      const {approval_state, ...filterBody} = parameters;
+      const page = source === "EXTERNAL_SOURCE" || source === "AI"
+        ? await api(`/item-db/registered/search?${new URLSearchParams({
+          kind: source === "AI" ? "AI" : "CREATIVE", ...(approval ? {approval_state: approval} : {}),
+        })}`, {
+          method: "POST", mutation: true, body: source === "EXTERNAL_SOURCE" ? filterBody
+            : {schema_version: "external-item-db-filter/1.0", match_mode: "ALL", conditions: [], limit: 50, cursor},
         })
         : await api(`/item-db/graph-items?${new URLSearchParams({
           source_class: source,
+          ...(approval ? {approval_state: approval} : {}),
           ...(parameters.curriculum_unit_key ? {curriculum_unit_key: parameters.curriculum_unit_key} : {}),
           ...(parameters.administration_year ? {administration_year: parameters.administration_year} : {}),
           ...(parameters.administration_month ? {administration_month: parameters.administration_month} : {}),
@@ -560,13 +625,14 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       if (request !== sequence) return;
       const root = $("#item-db-results");
       for (const entry of page.values) root.append(source === "EXTERNAL_SOURCE"
-        ? renderEntry(entry) : renderGraphEntry(entry));
+        ? renderEntry({...entry.source, registration: entry.registration})
+        : source === "AI" ? renderAiEntry(entry) : renderGraphEntry(entry));
       resultCount += page.values.length;
       if (!resultCount) emptyResults("조건에 맞는 문항이 없습니다.", source);
       cursor = page.next_cursor;
       more.hidden = !page.has_more;
       $("#item-db-result-count").textContent = `${resultCount}개 표시${page.has_more ? " · 더 있음" : ""}`;
-      message(source === "EXTERNAL_SOURCE" ? "원본 보관 문항입니다. 등록·승인된 문항과 구분됩니다." : "등록·승인된 문항에서 조회했습니다.");
+      message(source === "EXTERNAL_SOURCE" ? "창작 문항을 조회했습니다. 승인 상태는 각 문항에 표시됩니다." : "문항을 조회했습니다.");
       loaded = true;
     } catch (error) {
       if (request === sequence) {
@@ -582,7 +648,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     }
   }
 
-  async function openDetail(sourceId, row, expectedRevisionId) {
+  async function openDetail(sourceId, row, expectedRevisionId, registration) {
     const request = ++detailSequence;
     selectItem(null, null);
     const root = $("#item-db-detail");
@@ -594,6 +660,21 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       if (detail.entry.source_revision_id !== expectedRevisionId) {
         throw new Error("선택한 문항의 버전이 바뀌었습니다. 다시 조회하거나 검색해 주세요.");
       }
+      if (registration === undefined) {
+        // Similarity navigation carries a source pin, not a cached approval claim.
+        const page = await api("/item-db/registered/search?kind=CREATIVE", {
+          method: "POST", mutation: true, body: {schema_version: "external-item-db-filter/1.0",
+            match_mode: "ALL", conditions: [{field: "U", operator: "EQ", value: detail.entry.external_number}],
+            limit: 1, cursor: null},
+        });
+        if (request !== detailSequence) return;
+        const selected = page.values[0];
+        if (!selected || selected.source.source_id !== sourceId
+          || selected.source.source_revision_id !== expectedRevisionId) {
+          throw new Error("선택한 창작 문항의 등록 연결이 바뀌었습니다. 다시 조회해 주세요.");
+        }
+        registration = selected.registration;
+      }
       selectItem("EXTERNAL_SOURCE", detail.entry);
       root.replaceChildren();
       const byColumn = new Map(detail.cells.map((cell) => [cell.column, cell]));
@@ -602,7 +683,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       const heading = node(document, "div", "item-db-detail-heading");
       const title = node(document, "div", "item-db-result-heading");
       title.append(node(document, "h3", "", `고유번호 ${detail.entry.external_number}`),
-        node(document, "span", "status-badge tone-neutral", "창작 원본 · 원본 보관"));
+        node(document, "span", "status-badge tone-neutral", `창작 · ${approvalLabel(registration)}`));
       heading.append(title);
       if (placement) {
         const chosen = detail.editions.find((edition) => edition.edition === placement.edition);
@@ -615,11 +696,13 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
         }
       }
       root.append(heading, metadataList([
+        ["승인 상태", approvalLabel(registration)],
         ["대단원", cellValue("Q")], ["소단원", cellValue("R")], ["분야", cellValue("Z")],
         ["문항 분류", cellValue("Y")], ["난이도", cellValue("J")], ["배점", cellValue("H")],
         ["학년", cellValue("O")], ["교재 분류", cellValue("V")],
         ["출제자", cellValue("AD")], ["출제일", cellValue("AC")],
       ], "item-db-detail-summary"));
+      if (registration) appendRegistration(root, registration);
       const editionsSection = node(document, "section", "item-db-detail-section");
       editionsSection.append(node(document, "h3", "", "교정본 파일"));
       const editions = node(document, "div", "item-db-editions");
@@ -722,7 +805,9 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     button.disabled = true;
     message("검색 결과를 엑셀로 준비하고 있습니다.");
     try {
-      const blob = await api("/item-db/external-sources/export", {
+      const approval = $("#item-db-approval").value;
+      const blob = await api("/item-db/external-sources/export"
+        + (approval ? `?approval_state=${encodeURIComponent(approval)}` : ""), {
         method: "POST", mutation: true, body: parameters, binary: true,
       });
       if (blob.type !== "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
@@ -756,6 +841,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
         syncSourceControls();
         load(true);
       });
+      $("#item-db-approval").addEventListener("change", () => load(true));
       $("#item-db-filter-add").addEventListener("click", () => addFilter());
       const names = Object.keys(DB_TABS);
       for (const [name, [selector]] of Object.entries(DB_TABS)) {
