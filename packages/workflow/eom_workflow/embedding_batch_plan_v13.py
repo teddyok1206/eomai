@@ -96,12 +96,7 @@ class EmbeddingBatchSelectionV13(_PublicPlanMessage):
 
     @model_validator(mode="after")
     def exact_selection(self) -> Self:
-        revisions = {anchor.source.item_revision_id for anchor in self.anchors}
-        require_embedding_batch_plan_value(
-            len(revisions) == len(self.anchors)
-            and self.graph_snapshot.manifest_artifact.sha256 == self.graph_snapshot.manifest_sha256
-        )
-        validate_embedding_batch_value_hash(self, "selection_sha256")
+        validate_public_index_selection_values(self)
         return self
 
     @property
@@ -115,3 +110,14 @@ class EmbeddingBatchPlanRequestV13(EmbeddingBatchPlanRequestValues, _PublicPlanM
     selection_schema_ref: ClassVar[str] = BATCH_SELECTION_V13_SCHEMA_REF
     purpose: Literal["INDEX"]
     child_selection_sha256s: tuple[Sha256, ...] = Field(min_length=1, max_length=1)
+
+
+def validate_public_index_selection_values(selection: Any) -> None:
+    """One source uniqueness/hash rule for closed public INDEX metadata families."""
+    revisions = {anchor.source.item_revision_id for anchor in selection.anchors}
+    require_embedding_batch_plan_value(
+        len(revisions) == len(selection.anchors)
+        and selection.graph_snapshot.manifest_artifact.sha256
+        == selection.graph_snapshot.manifest_sha256
+    )
+    validate_embedding_batch_value_hash(selection, "selection_sha256")

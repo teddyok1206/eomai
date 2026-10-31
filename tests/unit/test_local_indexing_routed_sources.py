@@ -45,7 +45,7 @@ def routed_publisher(tmp_path):
 
 @pytest.fixture
 def routed(tmp_path, monkeypatch, request, routed_publisher):
-    public = getattr(request, "param", None) == "public"
+    public = getattr(request, "param", None) in {"public", "registered_public"}
     body, policy = public_owner_document() if public else routed_document()
     publisher, engine = routed_publisher
     publisher.settings = replace(publisher.settings, workspace_root=tmp_path)
@@ -198,6 +198,7 @@ def routed(tmp_path, monkeypatch, request, routed_publisher):
         )
 
     yield SimpleNamespace(
+        registered_public=getattr(request, "param", None) == "registered_public",
         build=build,
         body=body,
         selected=selected,

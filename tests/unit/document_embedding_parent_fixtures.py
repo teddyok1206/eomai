@@ -7,16 +7,19 @@ import pytest
 from eom_catalog_contracts.local_indexing_mixed_policy import (
     supported_local_indexing_authorization_audit_sha256,
 )
-from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
 from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryLookup,
     ResolvedEmbeddingLookup,
 )
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
-from eom_catalog_service.local_embedding_source_plan_v3 import build_local_embedding_source_plan_v3
+from eom_catalog_service.local_embedding_source_plan_v3 import (
+    build_local_embedding_source_plan_v3,
+    build_local_embedding_source_plan_v4,
+)
 from eom_identifiers import content_sha256
 from eom_workflow.local_embedding_request_v2 import parse_supported_local_embedding_request
+from eom_workflow.local_embedding_source_plan_v4 import parse_local_embedding_source_plan_v4
 from eom_workflow_runner.local_embedding_admission import ResolvedLocalEmbeddingAdmission
 from eom_workflow_runner.local_embedding_owner_admission import (
     CatalogLocalEmbeddingOwnerAdmission,
@@ -26,6 +29,8 @@ from eom_workflow_runner.local_embedding_owner_admission import (
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.local_embedding_service_fixtures import service_fixture
 from tests.unit.test_local_embedding_source_plan_v3 import inputs as public_inputs
+from tests.unit.test_local_embedding_source_plan_v4 import entries as registered_entries
+from tests.unit.test_local_embedding_source_plan_v4 import plan_value
 
 
 @pytest.fixture
@@ -44,12 +49,13 @@ def parent_case(routed, monkeypatch):
         pair.maximum_sources,
     )
     public = isinstance(pair.namespace, PublicSolutionIndexNamespace)
+    registered = routed.registered_public
     entries = base.base.entries
     registered_sources = base.base.plan.sources
     recipe = base.base.plan.recipe
     if public:
         entries = tuple(
-            PublicSolutionEmbeddingEntry.model_validate(
+            type(entry).model_validate(
                 seal(
                     entry.model_dump(mode="json")
                     | {
@@ -60,7 +66,11 @@ def parent_case(routed, monkeypatch):
                     "entry_sha256",
                 )
             )
-            for entry in public_inputs()[1].entries
+            for entry in (
+                registered_entries(parse_local_embedding_source_plan_v4(plan_value()))
+                if registered
+                else public_inputs()[1].entries
+            )
         )
         registered_sources = tuple(entry.source for entry in entries)
         recipe = entries[0].recipe
@@ -78,11 +88,17 @@ def parent_case(routed, monkeypatch):
     )
     targets = tuple(s.item_revision_id for s in captured.sources)
     build_plan = (
-        build_local_embedding_source_plan_v3 if public else build_local_embedding_source_plan
+        build_local_embedding_source_plan_v4
+        if registered
+        else build_local_embedding_source_plan_v3
+        if public
+        else build_local_embedding_source_plan
     )
     plan = build_plan(query, captured, target_revision_ids=targets)
     publish_plan = (
-        pair.cuda.controls.publish_observed_source_plan_v3
+        pair.cuda.controls.publish_observed_source_plan_v4
+        if registered
+        else pair.cuda.controls.publish_observed_source_plan_v3
         if public
         else pair.cuda.controls.publish_observed_source_plan
     )
@@ -92,7 +108,9 @@ def parent_case(routed, monkeypatch):
     with routed.publisher.sessions.begin() as session:
         controls = pair.cuda.owner.resolve_reconciliation_controls(session, query, gpu)
     body = base.request.model_dump(mode="json") | dict(
-        schema_version="local-embedding-workflow-request/3.0"
+        schema_version="local-embedding-workflow-request/4.0"
+        if registered
+        else "local-embedding-workflow-request/3.0"
         if public
         else base.request.schema_version,
         workflow_definition_version="2.0.0" if public else base.request.workflow_definition_version,

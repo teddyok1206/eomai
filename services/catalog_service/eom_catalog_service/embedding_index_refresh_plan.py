@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
 from typing import Literal
 
 from eom_catalog_contracts.embedding_index_families import (
@@ -28,6 +29,11 @@ from eom_catalog_contracts.public_solution_embedding_index import (
     PublicSolutionEmbeddingIndex,
     PublicSolutionEmbeddingSourceBinding,
 )
+from eom_catalog_contracts.registered_public_solution_index import (
+    REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+    PublicSolutionBindingV4,
+    PublicSolutionEmbeddingIndexV4,
+)
 from eom_identifiers import content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.local_embedding_index_refresh import (
@@ -37,6 +43,11 @@ from eom_workflow.local_embedding_index_refresh import (
 )
 from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import TypeAdapter
+
+
+@lru_cache(maxsize=1)
+def _public_binding_adapter() -> TypeAdapter[PublicSolutionBindingV4]:
+    return TypeAdapter(PublicSolutionBindingV4)
 
 
 def _require_binding_scope(
@@ -207,6 +218,42 @@ def public_index_membership_refresh_reason(
     previous: tuple[ArtifactMemberPointer, PublicSolutionEmbeddingIndex] | None,
 ) -> Literal["MISSING_NAMESPACE_INDEX", "INDEX_MEMBERSHIP_CHANGED"] | None:
     """Public family keeps full page provenance and has its own explicit larger bound."""
+    return _public_index_membership_refresh_reason(
+        eligible_sources=eligible_sources,
+        available_bindings=available_bindings,
+        previous=previous,
+        metadata_version="3.0",
+    )
+
+
+def registered_public_index_membership_refresh_reason(
+    *,
+    eligible_sources: tuple[PopulationSource, ...],
+    available_bindings: tuple[PublicSolutionBindingV4, ...],
+    previous: tuple[
+        ArtifactMemberPointer, PublicSolutionEmbeddingIndex | PublicSolutionEmbeddingIndexV4
+    ]
+    | None,
+) -> Literal["MISSING_NAMESPACE_INDEX", "INDEX_MEMBERSHIP_CHANGED"] | None:
+    """Explicit 3→4 reader; identical rows do not imply identical source-proof envelopes."""
+    return _public_index_membership_refresh_reason(
+        eligible_sources=eligible_sources,
+        available_bindings=available_bindings,
+        previous=previous,
+        metadata_version="4.0",
+    )
+
+
+def _public_index_membership_refresh_reason(
+    *,
+    eligible_sources: tuple[PopulationSource, ...],
+    available_bindings: tuple[PublicSolutionBindingV4, ...],
+    previous: tuple[
+        ArtifactMemberPointer, PublicSolutionEmbeddingIndex | PublicSolutionEmbeddingIndexV4
+    ]
+    | None,
+    metadata_version: Literal["3.0", "4.0"],
+) -> Literal["MISSING_NAMESPACE_INDEX", "INDEX_MEMBERSHIP_CHANGED"] | None:
     if (
         type(eligible_sources) is not tuple
         or type(available_bindings) is not tuple
@@ -223,31 +270,48 @@ def public_index_membership_refresh_reason(
         bindings = tuple(
             sorted(
                 (
-                    PublicSolutionEmbeddingSourceBinding.model_validate(
-                        raw_similarity_contract_value(value)
-                    )
+                    _public_binding_adapter().validate_python(raw_similarity_contract_value(value))
                     for value in available_bindings
                 ),
                 key=lambda value: value.source.item_revision_id,
             )
         )
+        if metadata_version == "3.0" and any(
+            not isinstance(binding, PublicSolutionEmbeddingSourceBinding) for binding in bindings
+        ):
+            raise IndexRefreshContractError()
         if (
             len(sources) != len(eligible_sources)
             or len({value.source.item_revision_id for value in bindings}) != len(bindings)
             or any(sources.get(value.source.item_revision_id) != value.source for value in bindings)
         ):
             raise IndexRefreshContractError()
-        index = None
+        index: PublicSolutionEmbeddingIndex | PublicSolutionEmbeddingIndexV4 | None = None
         if previous is not None:
             pointer = ArtifactMemberPointer.model_validate(
                 raw_similarity_contract_value(previous[0])
             )
-            index = PublicSolutionEmbeddingIndex.model_validate(
-                raw_similarity_contract_value(previous[1])
+            registered = (
+                metadata_version == "4.0"
+                and pointer.schema_ref == REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF
+            )
+            index = (
+                PublicSolutionEmbeddingIndexV4.model_validate(
+                    raw_similarity_contract_value(previous[1])
+                )
+                if registered
+                else PublicSolutionEmbeddingIndex.model_validate(
+                    raw_similarity_contract_value(previous[1])
+                )
             )
             if (
                 pointer.member_path != "index.json"
-                or pointer.schema_ref != PUBLIC_SOLUTION_INDEX_SCHEMA_REF
+                or pointer.schema_ref
+                != (
+                    REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF
+                    if registered
+                    else PUBLIC_SOLUTION_INDEX_SCHEMA_REF
+                )
                 or pointer.media_type != "application/json"
                 or pointer.sha256 != content_sha256(index.model_dump(mode="json"))
             ):
@@ -255,7 +319,11 @@ def public_index_membership_refresh_reason(
         if not bindings:
             return None
         _require_binding_scope(bindings, index)
-        if index is not None and index.bindings == bindings:
+        if (
+            index is not None
+            and index.bindings == bindings
+            and (metadata_version == "3.0" or isinstance(index, PublicSolutionEmbeddingIndexV4))
+        ):
             return None
         return "MISSING_NAMESPACE_INDEX" if index is None else "INDEX_MEMBERSHIP_CHANGED"
     except (ValueError, TypeError, AttributeError, SchemaError):

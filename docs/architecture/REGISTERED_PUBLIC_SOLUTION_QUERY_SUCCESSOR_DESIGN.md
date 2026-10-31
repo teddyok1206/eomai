@@ -99,3 +99,23 @@ coverage와 전환 중 index3/4의 차이는 source별 exact proof로 확인하�
 경계는 유지한다. preparation과 selection replay의 두 호출자가 이를 사용해 원래 family를
 고정한다. indexed key lookup·최대1,024개의 작은 member metadata 검사이며 새 테이블/
 index/queue는 없다. Artifact의 실제 byte/lifecycle/권한 재검증은 기존 독립 owner가 유지한다.
+
+## INDEX4 producer 연결
+
+새 설치본의 public discovery는 기존 Catalog의 authorized capture에서 plan4/request4를
+발행한다. 기존 request3를 replay하거나 반대 장치에 match할 때는 원래 plan3를 보존한다.
+정본은 accepted report/Graph/기존 수치 row이며 새로운 profile/encoding을 발명하지 않는다.
+INDEX parent1.3은 entry1 anchor에 고정돼 있으므로 INDEX-only parent1.6을 추가한다.
+이는 QUERY-only1.5와 별개이며 최대1,024 source, child view1개, allocation/route/bound1,
+기존 DOCUMENT input 및 수치 batch1과 parent Job/lease/transaction을 그대로 쓴다.
+기존 schema bytes는 불변이다.
+source request4일 때만 parent1.6을 선택하고, 원 request3는 parent1.3을 유지한다.
+
+현재 index3→4 전환 중 membership 비교는 원래 pointer의 실제 family/hash를 확인한다.
+새 helper는 binding3/4와 index3/4를 명시적으로 받고, 기존 public3 helper는 입력 범위를
+넓히지 않는다. revision→entry map과 binding hash의 정렬 비교 O(N log N)/O(N), 기존
+indexed capture와 publication key를 사용한다. 새 테이블/큐/index/권한 캐시는 없다.
+source·권한은 준비 전후 같은 transaction에서 재확인하고 원 publication/START idempotency,
+CAS와 실패 이력을 보존한다. 누락/해시/철회는 명시적으로 거부하며 latest로 치환하지 않는다.
+옛 anchor를 재사용하면 V11 proof가 손실되고 새 수치 wire까지 만드는 것은 불필요하므로
+source metadata만 successor로 둔다. reader4 설치와 migration 검증 전 writer를 활성화하지 않는다.

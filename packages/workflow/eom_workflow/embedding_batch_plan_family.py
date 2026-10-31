@@ -69,6 +69,13 @@ from eom_workflow.embedding_batch_plan_v15 import (
     EmbeddingBatchPlanRequestV15,
     EmbeddingBatchSelectionV15,
 )
+from eom_workflow.embedding_batch_plan_v16 import (
+    BATCH_PLAN_V16_PROTOCOL,
+    BATCH_PLAN_V16_SCHEMA_SHA256,
+    BATCH_SELECTION_V16_SCHEMA_REF,
+    EmbeddingBatchPlanRequestV16,
+    EmbeddingBatchSelectionV16,
+)
 from eom_workflow.embedding_device_routing import (
     EmbeddingDeviceRoutingDecision,
     EmbeddingDeviceRoutingPolicy,
@@ -87,6 +94,7 @@ type SupportedEmbeddingBatchRequest = (
     | EmbeddingBatchPlanRequestV13
     | EmbeddingBatchPlanRequestV14
     | EmbeddingBatchPlanRequestV15
+    | EmbeddingBatchPlanRequestV16
 )
 type SupportedEmbeddingBatchSelection = (
     EmbeddingBatchSelection
@@ -95,6 +103,7 @@ type SupportedEmbeddingBatchSelection = (
     | EmbeddingBatchSelectionV13
     | EmbeddingBatchSelectionV14
     | EmbeddingBatchSelectionV15
+    | EmbeddingBatchSelectionV16
 )
 
 
@@ -115,6 +124,8 @@ def parse_embedding_batch_plan_request(value: object) -> SupportedEmbeddingBatch
         return EmbeddingBatchPlanRequestV14.model_validate(document)
     if version == BATCH_PLAN_V15_PROTOCOL:
         return EmbeddingBatchPlanRequestV15.model_validate(document)
+    if version == BATCH_PLAN_V16_PROTOCOL:
+        return EmbeddingBatchPlanRequestV16.model_validate(document)
     raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
 
 
@@ -135,12 +146,19 @@ def parse_embedding_batch_selection(value: object) -> SupportedEmbeddingBatchSel
         return EmbeddingBatchSelectionV14.model_validate(document)
     if version == BATCH_PLAN_V15_PROTOCOL:
         return EmbeddingBatchSelectionV15.model_validate(document)
+    if version == BATCH_PLAN_V16_PROTOCOL:
+        return EmbeddingBatchSelectionV16.model_validate(document)
     raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
 
 
 def embedding_batch_plan_schema_identity(
     request: SupportedEmbeddingBatchRequest,
 ) -> tuple[str, str]:
+    if (
+        type(request) is EmbeddingBatchPlanRequestV16
+        and request.schema_version == BATCH_PLAN_V16_PROTOCOL
+    ):
+        return BATCH_PLAN_V16_PROTOCOL, BATCH_PLAN_V16_SCHEMA_SHA256
     if (
         type(request) is EmbeddingBatchPlanRequestV15
         and request.schema_version == BATCH_PLAN_V15_PROTOCOL
@@ -172,6 +190,11 @@ def embedding_batch_plan_schema_identity(
 
 
 def embedding_batch_selection_schema_ref(selection: SupportedEmbeddingBatchSelection) -> str:
+    if (
+        type(selection) is EmbeddingBatchSelectionV16
+        and selection.schema_version == BATCH_PLAN_V16_PROTOCOL
+    ):
+        return BATCH_SELECTION_V16_SCHEMA_REF
     if (
         type(selection) is EmbeddingBatchSelectionV15
         and selection.schema_version == BATCH_PLAN_V15_PROTOCOL
@@ -209,7 +232,7 @@ def embedding_batch_selection_read_maximum(request: SupportedEmbeddingBatchReque
     protocol, _sha = embedding_batch_plan_schema_identity(request)
     return (
         MAX_BULK_BATCH_SELECTION_BYTES
-        if protocol in {BATCH_PLAN_V11_PROTOCOL, BATCH_PLAN_V13_PROTOCOL}
+        if protocol in {BATCH_PLAN_V11_PROTOCOL, BATCH_PLAN_V13_PROTOCOL, BATCH_PLAN_V16_PROTOCOL}
         else MAX_BATCH_PLAN_BYTES
     )
 

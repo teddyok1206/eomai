@@ -62,6 +62,7 @@ if TYPE_CHECKING:
     from eom_workflow.embedding_batch_plan_v13 import EmbeddingBatchSelectionV13
     from eom_workflow.embedding_batch_plan_v14 import EmbeddingBatchSelectionV14
     from eom_workflow.embedding_batch_plan_v15 import EmbeddingBatchSelectionV15
+    from eom_workflow.embedding_batch_plan_v16 import EmbeddingBatchSelectionV16
 
 BATCH_PLAN_PROTOCOL = "embedding-batch-plan/1.0"
 BATCH_PLAN_SCHEMA_REF = "eom://schemas/workflow/embedding-batch-plan/1.0"
@@ -226,7 +227,8 @@ def validate_embedding_batch_plan_control_values(
     selection: EmbeddingBatchSelectionValues
     | EmbeddingBatchSelectionV13
     | EmbeddingBatchSelectionV14
-    | EmbeddingBatchSelectionV15,
+    | EmbeddingBatchSelectionV15
+    | EmbeddingBatchSelectionV16,
     policy: EmbeddingDeviceRoutingPolicy,
 ) -> None:
     """One value closure shared by explicitly parsed wire versions; not source authority."""

@@ -1,5 +1,71 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## INDEX4 자동 producer 소스 검증 — 2026-10-31 17:50 UTC
+
+- 새 public discovery가 기존 공식 Catalog capture→plan4/request4→INDEX parent1.6을
+  준비하도록 연결했다. 기출·창작·AI의 기존 공개 풀이 text/recipe/model/encoding은 동일하며
+  새 보고서 provenance만 담는다. INDEX의 실제 수치 carrier는 기존 DOCUMENT/batch1이다.
+  QUERY의 batch2와 혼동하지 않는다. 기존 request3 replay/CPU match는 plan3/parent1.3을
+  보존한다. 새 큐·DB 테이블·권한 캐시·새 numerical runtime은 추가하지 않았다.
+- 공개 membership 비교에 explicit index3/4 helper를 추가했다. 전환 중 실제 predecessor
+  pointer schema/hash를 보존하며 동일 row라도 index3→4 source envelope 승격은 필요하다.
+  기존 public3 helper는 registered binding4/index4를 계속 거부한다. 기존 schema1.3 bytes 불변.
+- 관련 source **134 PASS**, reader/completion/old namespace **61 PASS**, 최종 신규 producer·
+  dependency·batch admission **58 PASS**. 서로 겹치는 실행이며 고유 test 수로 합산하지 않는다.
+  JSON Schema generator mirror/SHA, Ruff/format/diff와 core7개 strict mypy PASS.
+  `/tmp/eom-index4-{producer-focused,reader-completion,final-qualification}-20261031.log`.
+- guarded PostgreSQL에서 actual control publication/동시 allocation winner1/중단 재전송
+  **9 PASS**, public3/registered4 actual native Workflow·encoding/index 등록·중단 복구
+  **6 PASS**. OS/IAM/model seam은 synthetic이며 실제 GPU 성공으로 보고하지 않는다.
+  `/tmp/eom-index4-parent-concurrency-pg-20261031.log`,
+  `/tmp/eom-index4-native-replay-pg-20261031.log`.
+  `/tmp/eom-api-testdb-20261031174544_e515f5dd`에서 source migration0066 왕복/reconcile PASS.
+  운영 DB 테스트0, 운영 migration0, 구형 vector 삭제0.
+- 앞선 QUERY parent1.5 build-only wheel의 임시 설치본 origin 검증과 계약 **61 PASS**도
+  확인했다: `/tmp/eom-registered-parent15-installed-qualification-20261031.log`.
+- **아직 운영 활성화하지 않았다.** API/Catalog/QUERY reader4 호환 릴리스 설치·검증,
+  정상 drain 시 새 producer 선택, 실제 accepted AI base2/V11/Graph 등록과 인증된 실제
+  검색/read/replay, frozen520 최종 CUDA 무결성, 구형 index/consumer 안전 삭제가 남아 있다.
+  17:49 관측 INDEX PID1242505/NRestarts0/active이며 API·QUERY·창작을 재시작하지 않았다.
+  기출 CUDA 수치는 마지막 routine17:30의112/520을 유지하며 새 완료 수를 추정하지 않는다.
+  전체 goal은 ACTIVE다.
+
+## 새 GPU 제한시간 종료 복구 — 2026-10-31 17:35 UTC
+
+- INDEX owner가17:15:57 UTC exit1로 종료된 것을 실제 PID0/service FAILED로 확인했다.
+  이번 source 후보는 미설치 상태이므로 위 QUERY 변경의 운영 효과로 분류하지 않는다.
+  numerical unit `1baa7e069f7e469e82b1620e33b5441e`는17:15:45 UTC SIGALRM으로
+  종료됐다. root의 FileNotFoundError/owner channel EOF는 그 후 관측된 오류이며,
+  아직 상세 시간비용을 분해하지 않았으므로 모델 forward만180초 걸렸다고 주장하지 않는다.
+- 기존 설치1f88 maintenance application의 RECOVER1으로 정확한 Workflow
+  `workflow_5610cc25dc7748ada5f29e10e48ec173`와 그16개 encoding의 실패를 정식
+  기록했다. 실측 original retirement/원 command/만료 lease/실제 schema owner를
+  검증했다. parent planning SUCCEEDED와 모든 기존 FAILED는 보존했다.
+  exact replay PASS, 추가 모델 실행0, FD0. 증거:
+  `/var/lib/eom-allocated-index-recovery-20261031-5610cc25/{command,result}.json`.
+- 17:30 timer의 원래 CUDA 기출 등록은112/520, 잔여408이다. 17:29 관측에서는 창작
+  슬롯04·05·06 모두 RUNNING이었고 API/QUERY/창작 서비스는 계속 active였다.
+- 재개 시 기존 config6의 `maximum_targets`만16→4로 낮추는 bounded backoff를 준비한다.
+  public4는 확대 전 사용하던 묶음 크기다. 전체520을 줄이거나 특정 문항을 제외하지 않는다.
+  모델·벡터 공간·전송/native runtime·자원 한도·계산180초·policy·권한은 변경하지 않는다.
+  재개 전 모든 public RUNNING/REGISTERING0과 원 numerical/controller PID0/FD0를 확인하고,
+  exact before/after SHA CAS로 선택한다. API/QUERY/Catalog/창작은 재시작하지 않는다.
+  영향은 처리량 감소이며, 계산 전 source/IO와 모델 시간 측정 후16행이 실제 제한 안에서
+  안정적으로 끝남을 검증하면 이 임시 backoff를 제거한다. rollback은 보존한16행 owner
+  config만 정상 drain 경계에서 되돌리는 것이며 source/실패 기록은 변경하지 않는다.
+  실제 적용과 재개 결과는 후속 activation evidence로 별도 기록한다.
+- **실제 적용17:36:29 UTC**: before/after CAS와 public RUNNING/REGISTERING0,
+  실패 원 numerical/controller PID0·FD0 확인 후 config6의 target window만4로 선택했다.
+  INDEX PID1242505/NRestarts0/active를 확인했다. API1069126, QUERY1075361,
+  Catalog732310, 창작1088058 PID는 그대로다. numerical source c68156dd와 runtime SHA
+  `sha256:e48b9b9f3c5eacb0ab2fe54dcbf476f7a2836f46ccd1dfd562779097fab006c5` 불변.
+  `/var/lib/eom-public-window-backoff-20261031-5610cc25/{plan,activation}.json`과
+  before/after-owner.json에 증거·rollback bytes를 보관했다. 실제 새 numerical completion은
+  아직 미확정이며 active PID만으로 GPU 완료·추가 등록을 보고하지 않는다.
+- Slack 중요 보고 `devreport_a787c736ee984bb8863d60f186ea3dcf` SENT/HTTP200,
+  RECOVERED. 새 source 두 체크포인트는 미활성화, 전체 목표 ACTIVE, 다음 writer4 closure와
+  실제 공통 검색·전체520/구 벡터 삭제 미완료를 구분했다.
+
 ## QUERY source closure — 2026-10-31 17:27 UTC
 
 - native request4/read4 경계는 `1d40677cb9df7b044fddbc8d1424a239e5a967b7`로
