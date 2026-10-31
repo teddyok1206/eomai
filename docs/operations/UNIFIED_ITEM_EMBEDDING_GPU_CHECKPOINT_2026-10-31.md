@@ -447,3 +447,11 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
 - 운영 source/schema 교체와 재시작·새 모델 호출·구 벡터 삭제는 하지 않았다. 다음 작업은
   native completion/coordinator와 INDEX/QUERY 실제 owner 연결, 이후 원래 목표의 전체520
   coverage·권한 검색·cutover·구 projection retirement다. 목표 범위를 source PASS로 축소하지 않는다.
+
+### Ownership4 설치 후보 검증 — 13:26 UTC
+
+- `8100dfe7763e0bf26e94ea4a65e5653604c809f6`를 push했고 공식 build-only wheel 설치 simulation/
+  RECORD PASS다. 산출물은
+  `/tmp/eom-api-build/8100dfe7763e0bf26e94ea4a65e5653604c809f6.k4gueh/dist`다.
+  실행 중인 private INDEX/QUERY나 운영 DB에는 설치하지 않았다. 위105개 source tests와
+  installed packaging proof를 구분한다. 다음 정기 GPU 관측은13:30 UTC다.
