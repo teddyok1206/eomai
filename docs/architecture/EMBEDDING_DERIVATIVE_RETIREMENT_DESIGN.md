@@ -117,3 +117,26 @@ file-set publisher를 재사용한다. 서로 다른 receipt family는 별도 fr
 history는 기존 decoder로 남긴다. 더 작은 대안인 delivery1의 schema union 확대는 released
 의미를 바꾸고 old consumer가 새 context를 잘못 해석할 수 있어 배제한다. native GPU 배치,
 공통 입력 text/recipe/수치 공간과 실행 pin은 이 내부 전달 변경으로 바꾸지 않는다.
+
+### 다음 owner 경계: 공식 Item publication2
+
+API-only 기존 `PUBLISH_ITEM_SIMILARITY_CONTEXT` operation에 closed request/reply2를
+추가한다. 입력은 실제 인증 operator ID와 원래 completed QUERY selection뿐이고, 출력은
+앞 절의 delivery2와 owner Job/manifest hash다. context3/4 원문을 API에서 발행하거나
+source 권한·native launch 지시를 전달하지 않는다. 기존 request/reply1은 그대로 해석한다.
+
+Catalog의 기존 publication application 안에서 원래 QUERY3/4와 consumer purpose
+`ITEM_AUTHORING`/`PAST_EXAM_VARIATION`을 확인한다. 실제 operator fence 및 WORKFLOW_START
+permission을 적용하고, 기존 공식 completed-public-query read로 exact Graph/report/index/
+query pins를 다시 해석한다. Orchestrator file-set commit 전후 같은 root에서 재허가·재조회하고
+Artifact member/provenance를 대조한다. 동일 key의 timeout/replay는 같은 canonical 발행을
+반환한다. 늦은 source 변경·권한 철회·receipt 오류는 실패이며 이미 commit된 산출물은 보존한다.
+
+별도 queue, table, migration, model 실행과 worker 동작 변경은 없다. 조회는 원래 selection의
+indexed lookup, ranking은 기존 bounded O(ND), 공통 payload materialization은 O(context bytes)다.
+key는 실제 operator/QUERY/context SHA에 고정하며 fresh request의 latest를 해석하지 않는다.
+dependency는 typed contracts → 기존 application → Catalog/Orchestrator storage adapters다.
+같은 engine/root와 IAM/Artifact owner를 재사용하고 외부 component 테이블을 우회 변경하지 않는다.
+실제 plan/role/Item-start 선택과 Chat의 public-index 연결은 이후 별도 소비자 단계이며,
+이 publication2 지원만으로 운영 전환 완료를 주장하지 않는다. 단순히 publication1의 delivery
+union을 넓히는 대안은 구 caller가 새 context를 잘못 읽을 수 있어 사용하지 않는다.

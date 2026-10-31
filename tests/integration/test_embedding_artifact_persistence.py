@@ -54,6 +54,7 @@ from eom_orchestrator.models import (
     JobRecord,
 )
 from eom_orchestrator.settings import Settings
+from eom_orchestrator.similarity_context_artifact import publish_public_solution_similarity_context
 from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowRequest
 from sqlalchemy import Engine, delete, select, update
 from sqlalchemy.exc import DBAPIError
@@ -68,6 +69,10 @@ from tests.unit.inference_transfer_embedding_fixtures import (
     vector_shard,
 )
 from tests.unit.inference_transfer_fixtures import NOW, sha, source_basis
+from tests.unit.test_public_solution_similarity_contracts import public_similarity_case
+from tests.unit.test_registered_public_solution_similarity_contracts import (
+    registered_similarity_case,
+)
 
 pytestmark = pytest.mark.integration
 SOURCE_COMMIT = "a" * 40
@@ -251,6 +256,73 @@ def test_actual_observed_time_survives_interruption_before_commit(publication, m
         saved = session.get(JobRecord, original_id)
         assert saved.status == "SUCCEEDED"
         assert saved.request["created_at_utc"] == original_time
+
+
+@pytest.mark.parametrize("version", (3, 4))
+def test_public_context_delivery2_concurrency_reuses_existing_owner_once(publication, version):
+    # QUERY/source authority is synthetic. This tests the actual shared PostgreSQL commit boundary.
+    _, context, *_ = (public_similarity_case if version == 3 else registered_similarity_case)()
+    key = "public-context2-concurrent:" + uuid4().hex
+    barrier = Barrier(2)
+
+    def publish(_ordinal):
+        publisher = ControlFileSetPublisher(publication.engine, publication.settings)
+        barrier.wait(timeout=30)
+        return publish_public_solution_similarity_context(
+            publisher,
+            context=context,
+            expected_request=context.request,
+            idempotency_key=key,
+            source_commit=SOURCE_COMMIT,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, replayed = tuple(pool.map(publish, range(2)))
+    assert (
+        first == replayed and first.delivery.schema_version == "system-rag-similarity-delivery/2.0"
+    )
+    with build_session_factory(publication.engine)() as session:
+        rows = tuple(session.scalars(select(JobRecord).where(JobRecord.idempotency_key == key)))
+        assert len(rows) == 1 and rows[0].status == "SUCCEEDED"
+        assert rows[0].job_id == first.owner_job_id
+        assert b'"candidates"' not in canonical_json_bytes(rows[0].request)
+        assert b'"query_execution"' not in canonical_json_bytes(rows[0].request)
+
+
+@pytest.mark.parametrize("version", (3, 4))
+def test_public_context_delivery2_interruption_keeps_original_allocation(
+    publication, monkeypatch, version
+):
+    _, context, *_ = (public_similarity_case if version == 3 else registered_similarity_case)()
+    publisher = ControlFileSetPublisher(publication.engine, publication.settings)
+    key = "public-context2-interrupted:" + uuid4().hex
+    original = publisher._advance
+
+    def interrupted(_job_id):
+        raise RuntimeError("synthetic interruption after owned public context allocation")
+
+    def publish():
+        return publish_public_solution_similarity_context(
+            publisher,
+            context=context,
+            expected_request=context.request,
+            idempotency_key=key,
+            source_commit=SOURCE_COMMIT,
+        )
+
+    monkeypatch.setattr(publisher, "_advance", interrupted)
+    with pytest.raises(RuntimeError, match="owned public context allocation"):
+        publish()
+    with publisher.sessions() as session:
+        job = session.scalar(select(JobRecord).where(JobRecord.idempotency_key == key))
+        assert job is not None and job.status == "CREATED"
+        original_id, original_time = job.job_id, job.request["created_at_utc"]
+    monkeypatch.setattr(publisher, "_advance", original)
+    first = publish()
+    assert publish() == first and first.owner_job_id == original_id
+    with publisher.sessions() as session:
+        job = session.get(JobRecord, original_id)
+        assert job.status == "SUCCEEDED" and job.request["created_at_utc"] == original_time
 
 
 def _metadata_only(value: object, texts: tuple[str, ...]) -> None:

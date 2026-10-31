@@ -55,9 +55,24 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.reference_query_consumer_read import CatalogCompletedReferenceQueryRead
+from eom_workflow_runner.reference_query_source_read import ReferenceQuerySourceOwner
 from eom_workflow_runner.similarity_context_session_reader import (
     CatalogSimilaritySessionContextReader,
 )
+
+
+def require_item_similarity_start_permission(
+    session: Session, owner: ReferenceQuerySourceOwner, caller: EmbeddingRegistryCaller
+) -> None:
+    """The same current operator/action fence for legacy and public context publication."""
+    owner.identity.fence_current_operator(session, caller.operator_id)
+    try:
+        with session.no_autoflush:
+            permissions = effective_permissions(session, caller.operator_id)
+    except (SQLAlchemyError, ValueError):
+        raise OperatorAuthorizationFenceError("OPERATOR_AUTHORIZATION_FENCE_UNAVAILABLE") from None
+    if PermissionKey.WORKFLOW_START not in permissions:
+        raise OperatorAuthorizationFenceError("OPERATOR_AUTHORIZATION_FENCE_FORBIDDEN")
 
 
 @dataclass(frozen=True, slots=True)
@@ -250,18 +265,6 @@ class CatalogItemSimilarityPreparation:
         self.publisher = publisher
         self.source_commit = source_commit
 
-    def _require_start_permission(self, session: Session, caller: EmbeddingRegistryCaller) -> None:
-        self.query.owner.identity.fence_current_operator(session, caller.operator_id)
-        try:
-            with session.no_autoflush:
-                permissions = effective_permissions(session, caller.operator_id)
-        except (SQLAlchemyError, ValueError):
-            raise OperatorAuthorizationFenceError(
-                "OPERATOR_AUTHORIZATION_FENCE_UNAVAILABLE"
-            ) from None
-        if PermissionKey.WORKFLOW_START not in permissions:
-            raise OperatorAuthorizationFenceError("OPERATOR_AUTHORIZATION_FENCE_FORBIDDEN")
-
     def prepare(
         self,
         caller: EmbeddingRegistryCaller,
@@ -347,7 +350,7 @@ class CatalogItemSimilarityPreparation:
         common = CatalogSimilaritySessionContextReader(self.query)
         with self.query.sessions.begin() as session:
             try:
-                self._require_start_permission(session, caller)
+                require_item_similarity_start_permission(session, self.query.owner, caller)
                 context = _current_context(
                     common.compose_in_session(session, caller, context_request), context_request
                 )
@@ -391,7 +394,7 @@ class CatalogItemSimilarityPreparation:
                 reader.revalidate_provenance()
                 if reader.read_pinned(**read_arguments).payload != member.payload:
                     raise ValueError("ITEM_SIMILARITY_PREPARATION_MEMBER_CHANGED")
-                self._require_start_permission(session, caller)
+                require_item_similarity_start_permission(session, self.query.owner, caller)
                 return PreparedSimilarityPlan(publication.delivery, context), publication
             except OperatorAuthorizationFenceError as error:
                 raise ControlPlaneError(

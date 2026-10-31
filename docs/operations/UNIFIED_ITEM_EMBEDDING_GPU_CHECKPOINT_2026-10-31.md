@@ -1,5 +1,60 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 공식 Item publication2·현재 권한·실제 DB 재전송 검증 — 2026-10-31 21:51 UTC
+
+- 이전 turn은 source commit/설치본 검증·실제 registry inventory를 완료한 **PROGRESS**였고,
+  이번 turn도 **PROGRESS**다. 전체 U01–U05 범위를 유지한다. 기출520 전체 완료나 구형
+  파생 데이터 삭제·모든 consumer 운영 전환 완료로 재정의하지 않는다.
+- 기존 API-only `PUBLISH_ITEM_SIMILARITY_CONTEXT`에 closed request/reply2와 delivery2
+  전달을 추가했다. 기존 request/reply1의 JSON bytes/hash와 해석은 보존했다. 새 operation,
+  queue/table/migration/worker protocol/모델 실행은 없다. frame은 operator와 원래 completed
+  QUERY selection, 응답은 Job/Artifact/member/hash만 담는다. 같은 UDS peer gate/byte budget/
+  timeout adapter를 재사용하며 malformed/unknown family나 timeout 뒤 legacy fallback·새 QUERY
+  실행·자동 재전송은 하지 않는다.
+- Catalog의 기존 publication application이 실제 QUERY3/4 원본과 authoring/variation
+  purpose를 확인한다. 기존 공식 completed-public-query reader를 통해 exact source/Graph/
+  policy/index/QUERY를 재해석하고, 현재 operator 및 WORKFLOW_START 권한을 원래 root에서
+  commit 전후 확인한다. 같은 source/context, producer/manifest/member/raw/semantic SHA와
+  provenance를 다시 검사한다. 실제 publication은 기존 Orchestrator owner가 수행한다.
+  legacy/public 권한 규칙은 기존 module의 한 함수로 공유하며 불필요한 private wrapper를
+  남기지 않았다. 다른 context/family의 같은 key는 재사용하지 않는다.
+- code review에서 `SimilarityContextReadError`가 ValueError의 하위형인 점을 확인했다.
+  새 public application에서 원래 revoke/missing/hash code가 일반 invalid로 덮이지 않도록
+  먼저 전달한다. 이후 error envelope/API가 기존 안정된 code를 보존한다. 늦은 권한 철회나
+  receipt 실패 뒤 이미 commit된 Job/Artifact는 보존하고 같은 key만 다시 확인한다.
+- 합집합 최종 unit/socket/IAM/Artifact/schema/dependency 회귀 **281 PASS /48.97s**,
+  strict mypy5 source/ruff/format PASS다. source/QUERY/native authority는 이 unit fixture에서
+  synthetic이고 실제 IAM/Artifact/UDS 경계와 구별한다. 앞선 fixture 작성 실패11건은
+  shared fixture의 `.value.query`를 잘못 참조한 것이었고, 뒤의4건은 exception 문자열 대신
+  `.code`를 비교해야 하는 test assertion 오류였다. 실패 로그를 보존하고 수정 후 재검증했다.
+  `/tmp/eom-public-publication2-focused-20261031.log`,
+  `/tmp/eom-public-publication2-service-tests-20261031-v2.log`,
+  `/tmp/eom-public-publication2-final-qualification-20261031.log`.
+- marker-guarded disposable PostgreSQL
+  `/tmp/eom-api-testdb-20261031213903_ba06a8c2`만 준비·migration 왕복·제한 role reconcile한 뒤
+  기존 model-free embedding 목적의 suite **168 PASS /538.11s**를 확인했다. 새 context3/4
+  canonical publication의 동시 호출/중단 후 같은 allocation·시간·Job·Artifact replay4건을
+  포함한다. 이는 실제 공통 commit/registry 경계 검증이며 새 Catalog source 권한의 live
+  acceptance를 대신하지 않는다. 운영 DB에 pytest를 실행하지 않았다.
+  `/tmp/eom-public-publication2-testdb-migrate-20261031.log`,
+  `/tmp/eom-public-publication2-testdb-reconcile-20261031.log`,
+  `/tmp/eom-public-publication2-postgres-tests-20261031.log`.
+  최종 source에서 같은 DB/같은 공식 suite의 새4건만 선택해 **4 PASS /164 deselected**를
+  재확인했다. hash-binding 이름 정리 후 contract 회귀 **85 PASS**다. 서로 겹치는 재실행을
+  합산하지 않는다. 완료 후 공식 cleanup으로 해당 임시 DB/nonce role/state만 삭제했고,
+  운영 데이터와 실패 이력은 삭제하지 않았다.
+  `/tmp/eom-public-publication2-postgres-final-exact-20261031.log`,
+  `/tmp/eom-public-publication2-final-hash-binding-tests-20261031.log`,
+  `/tmp/eom-public-publication2-testdb-cleanup-20261031.log`.
+- **21:30 정기 관측은 기출118/520·잔여402**, historical FAILED6이다. 실제
+  INDEX1466344/QUERY1466291/creative1485477 active, NRestarts0을 확인했다. 테스트 때문에
+  GPU model/numeric prefix·source selection·API/Catalog/worker service를 바꾸거나 재시작하지
+  않았다. 정기 관측은 기존00/30분을 유지한다. 새 protocol은 아직 source 후보이며 실제
+  Item-start plan/role/materialization와 Chat public-index 전환은 이후 소비자 단계다.
+- 다음은 실제 소비자 연결과 AI full-report/Graph/INDEX4 canary, authorized 공통 query/
+  read/replay, 전체520 GPU integrity·정확한 구 벡터 retirement/삭제다. approval/authentication
+  및 실제 검색 성공을 unit/PG test로 대체하지 않는다. 구 벡터 삭제0, 정본 변경0이다.
+
 ## INDEX4 실제 완료·구형 소비자 inventory·공통 전달 후보 — 2026-10-31 21:20 UTC
 
 - 이번 turn은 **PROGRESS**다. 첫 `fb0ab555` request4

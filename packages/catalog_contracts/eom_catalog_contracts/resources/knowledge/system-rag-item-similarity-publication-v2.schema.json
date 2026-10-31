@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-item-similarity-publication/2.0",
+  "title": "Exact completed public QUERY context publication for item preparation V2",
+  "description": "API-only authenticated metadata command over context3/4 and delivery2. No native execution, Item acceptance, source authority or implicit latest resolution.",
+  "$defs": {
+    "hash": {"$ref": "eom://schemas/knowledge/system-rag-item-similarity-publication/1.0#/$defs/hash"},
+    "actor": {"$ref": "eom://schemas/knowledge/system-rag-item-similarity-publication/1.0#/$defs/actor"},
+    "error": {"$ref": "eom://schemas/knowledge/system-rag-item-similarity-publication/1.0#/$defs/error"},
+    "publication": {
+      "type": "object", "additionalProperties": false,
+      "required": ["owner_job_id", "delivery", "manifest_sha256"],
+      "properties": {
+        "owner_job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+        "delivery": {"$ref": "eom://schemas/knowledge/system-rag-similarity-delivery/2.0"},
+        "manifest_sha256": {"$ref": "#/$defs/hash"}
+      }
+    },
+    "request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "operation", "actor_id", "selection"],
+      "properties": {
+        "schema_version": {"const": "system-rag-item-similarity-publication-request/2.0"},
+        "operation": {"const": "PUBLISH_ITEM_SIMILARITY_CONTEXT"},
+        "actor_id": {"$ref": "#/$defs/actor"},
+        "selection": {"$ref": "eom://schemas/knowledge/system-rag-similarity-read/1.0#/$defs/selection"}
+      }
+    },
+    "reply": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "operation", "status", "actor_id", "request_sha256", "publication", "error_code"],
+      "properties": {
+        "schema_version": {"const": "system-rag-item-similarity-publication-reply/2.0"},
+        "operation": {"const": "PUBLISH_ITEM_SIMILARITY_CONTEXT"},
+        "status": {"enum": ["SUCCESS", "FAILED"]},
+        "actor_id": {"anyOf": [{"$ref": "#/$defs/actor"}, {"type": "null"}]},
+        "request_sha256": {"anyOf": [{"$ref": "#/$defs/hash"}, {"type": "null"}]},
+        "publication": {"anyOf": [{"$ref": "#/$defs/publication"}, {"type": "null"}]},
+        "error_code": {"anyOf": [{"$ref": "#/$defs/error"}, {"type": "null"}]}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"status": {"const": "SUCCESS"}}, "required": ["status"]},
+          "then": {"properties": {
+            "actor_id": {"$ref": "#/$defs/actor"}, "request_sha256": {"$ref": "#/$defs/hash"},
+            "publication": {"$ref": "#/$defs/publication"}, "error_code": {"type": "null"}
+          }},
+          "else": {"properties": {"publication": {"type": "null"}, "error_code": {"$ref": "#/$defs/error"}}}
+        },
+        {
+          "if": {"properties": {"actor_id": {"type": "null"}}, "required": ["actor_id"]},
+          "then": {"properties": {"request_sha256": {"type": "null"}}},
+          "else": {"properties": {"request_sha256": {"$ref": "#/$defs/hash"}}}
+        }
+      ]
+    }
+  },
+  "oneOf": [{"$ref": "#/$defs/publication"}, {"$ref": "#/$defs/request"}, {"$ref": "#/$defs/reply"}]
+}
