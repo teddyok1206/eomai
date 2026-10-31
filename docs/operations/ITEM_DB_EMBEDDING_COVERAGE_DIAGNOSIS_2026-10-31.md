@@ -16,6 +16,12 @@ API role은 encoding 테이블을 읽을 수 없어 해당 거부를 보존했�
 - 현재 창작 cohort의 파생 상태(07:30 UTC): 111/1,053 PROCESSING.
   이 heartbeat를 전체 Graph 정본 집계나 완료 영수증으로 대체하지 않는다.
 
+후속 서비스 점검에서 실제 owner가 **07:39:40 UTC에 exit 78로 중단**된 것을
+확인했다. 마지막 상태는 114/1,053, 고유번호 11338의
+`CREATIVE_COHORT_EXTRACTION_TERMINAL_FAILURE`다. 07:30의 PROCESSING heartbeat가
+그 이후에도 작업 중이라는 증거는 아니다. 같은 시각의 GPU INDEX/QUERY는 active이고
+기존 PID가 유지됐다. 이 점검으로 실패 history를 변경하거나 재시작하지 않았다.
+
 ## 임베딩 생성과 실제 DB 검색을 분리해야 함
 
 기존 `accepted-solution-comparison/1.0`의 기출 520개는 두 embedding space에서
