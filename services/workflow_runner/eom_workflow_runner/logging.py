@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from datetime import UTC, datetime
 from typing import Any
 
@@ -21,7 +22,48 @@ WORKFLOW_LOG_FIELDS = (
     "actor_type",
     "actor_id",
     "error_code",
+    "cause_type",
+    "cause_code",
+    "cause_site",
+    "cause_sqlstate",
 )
+
+
+def workflow_failure_metadata(error: BaseException) -> dict[str, str]:
+    """Bounded technical cause only; never exception text, locals, SQL or payloads."""
+    current = error
+    seen = {id(current)}
+    for _ in range(4):
+        related = current.__cause__ or current.__context__
+        if related is None or id(related) in seen:
+            break
+        seen.add(id(related))
+        current = related
+    result: dict[str, str] = {}
+    name = type(current).__name__
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,95}", name):
+        result["cause_type"] = name
+    for attribute, key, pattern in (
+        ("code", "cause_code", r"[A-Z][A-Z0-9_]{1,95}"),
+        ("sqlstate", "cause_sqlstate", r"[A-Z0-9]{5}"),
+    ):
+        try:
+            value = getattr(current, attribute, None)
+        except Exception:
+            # Diagnostics must not replace the original failure if a future
+            # exception type implements an unavailable diagnostic property.
+            continue
+        if isinstance(value, str) and re.fullmatch(pattern, value):
+            result[key] = value
+    frame = current.__traceback__
+    for _ in range(64):
+        if frame is None:
+            break
+        module = frame.tb_frame.f_globals.get("__name__")
+        if isinstance(module, str) and re.fullmatch(r"eom_[a-z0-9_.]{1,120}", module):
+            result["cause_site"] = f"{module}:{frame.tb_lineno}"
+        frame = frame.tb_next
+    return result
 
 
 class WorkflowJsonFormatter(logging.Formatter):

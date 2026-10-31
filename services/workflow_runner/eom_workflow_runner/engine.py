@@ -119,7 +119,7 @@ from eom_workflow_runner.local_embedding_step_execution import (
     advance_local_embedding_step,
     complete_local_embedding_terminal,
 )
-from eom_workflow_runner.logging import log_workflow_event
+from eom_workflow_runner.logging import log_workflow_event, workflow_failure_metadata
 from eom_workflow_runner.models import (
     ApprovalRequestRecord,
     WorkflowCommandRecord,
@@ -744,6 +744,7 @@ class WorkflowRunner:
                     event="WORKFLOW_COMMAND_FAILED",
                     command_id=command_id,
                     error_code=exc.code.value,
+                    **workflow_failure_metadata(exc),
                 )
             else:
                 with self._fenced_transaction() as session:

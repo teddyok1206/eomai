@@ -283,6 +283,19 @@ savepoint commit/rollback 경계와 제한 권한 회귀를 확인한 뒤 succes
 API/Web/Catalog/QUERY의 정상 운영과 원래 30분 관측 timer는 유지된다. 다음은 savepoint 수정
 검증·배포, 새 creative 실패의 원인 분류/공식 복구, 실제 vectors/검색 acceptance다.
 
+2026-10-31 00:04 UTC `31ddcf62` INDEX/QUERY/Catalog successor를 실제 활성화했다. shared
+API/Web와 physical numerical prefixes는 바꾸지 않았다. 00:07 UTC finite native GPU owner /
+batch `71e77449bd684eb29b5a21f040f1c8fb`의 실제 PID 3646559/3647095가 확인됐다. 이는 살아 있는
+실행 handle이며 아직 수치 완료·등록 증거가 아니다. 앞선 no-Job 실패는 같은 원문/정책으로
+공식 successor `workflow_dec29de748d34038b392a955f8fe6f84`를 준비하고 creative owner를 재개했다.
+
+preexecution generic exception의 내부 원인이 기존 로그에 보존되지 않아, command-failure
+로그에 bounded cause type/code/EOM module:line/SQLSTATE만 추가한다. 메시지·locals·SQL·파일
+경로·입력/결과는 기록하지 않고, 예외 chain/cycle도 bounded로 처리한다. 실행·상태 전이·retry
+정책이나 과거 실패는 바꾸지 않는다. 실제 source defect 판정은 이 진단 증거를 본 뒤 한다.
+새 logging candidate는 운영 배포 전이며, 기존 protected INDEX/QUERY pin을 건드리지 않는
+shared release 창에서만 반영한다.
+
 ## 22:01 UTC 체크포인트 — 세 슬롯 복구와 public QUERY 공식 조회 연결
 
 목표 상태는 **ACTIVE / 미완료**다. 사용자 확정 세 단계와 기존 창작 5건의 실제 수치·등록·
