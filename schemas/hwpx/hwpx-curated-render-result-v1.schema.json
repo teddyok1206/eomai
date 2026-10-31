@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/hwpx/curated-render-result/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "build_id", "assembly_revision_id", "assembly_manifest_sha256", "request_sha256", "profile", "status", "source_sha256", "section_source_positions", "binary_count", "output_sha256", "output_size_bytes", "failure_code"],
+  "properties": {
+    "schema_version": {"const": "curated-hwpx-render-result/1.0"},
+    "build_id": {"type": "string", "pattern": "^hwpxbuild_[0-9a-f]{32}$"},
+    "assembly_revision_id": {"type": "string", "pattern": "^assemblyrev_[0-9a-f]{32}$"},
+    "assembly_manifest_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "request_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "profile": {"const": "NATIVE_EDITABLE_PRESERVATION_V1"},
+    "status": {"enum": ["SUCCEEDED", "FAILED"]},
+    "source_sha256": {"type": "array", "maxItems": 200, "items": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}},
+    "section_source_positions": {"type": "array", "maxItems": 10000, "items": {"type": "integer", "minimum": 1, "maximum": 200}},
+    "binary_count": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "output_sha256": {"anyOf": [{"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, {"type": "null"}]},
+    "output_size_bytes": {"anyOf": [{"type": "integer", "minimum": 1, "maximum": 268435456}, {"type": "null"}]},
+    "failure_code": {"anyOf": [{"enum": ["HWPX_CURATED_INPUT_INVALID", "HWPX_CURATED_INPUT_CHANGED", "HWPX_CURATED_FORMAT_UNSUPPORTED", "HWPX_CURATED_PRESERVATION_FAILED"]}, {"type": "null"}]}
+  },
+  "allOf": [{"if": {"properties": {"status": {"const": "SUCCEEDED"}}}, "then": {"properties": {"source_sha256": {"minItems": 1}, "section_source_positions": {"minItems": 1}, "output_sha256": {"type": "string"}, "output_size_bytes": {"type": "integer"}, "failure_code": {"type": "null"}}}, "else": {"properties": {"source_sha256": {"maxItems": 0}, "section_source_positions": {"maxItems": 0}, "binary_count": {"const": 0}, "output_sha256": {"type": "null"}, "output_size_bytes": {"type": "null"}, "failure_code": {"type": "string"}}}}]
+}

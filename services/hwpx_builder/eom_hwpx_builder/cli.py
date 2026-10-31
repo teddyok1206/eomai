@@ -21,6 +21,7 @@ from eom_hwpx_builder.content_team_renderer import (
     failed_content_team_result,
     render_content_team_workspace,
 )
+from eom_hwpx_builder.curated_renderer import render_curated_workspace
 from eom_hwpx_builder.doctor import run_doctor
 from eom_hwpx_builder.errors import HwpxError
 from eom_hwpx_builder.kordoc_renderer import failed_kordoc_result, render_kordoc_workspace
@@ -40,6 +41,21 @@ CONTENT_TEAM_EXAM_REQUEST_SCHEMA_VERSIONS = frozenset(
         "content-team-exam-render-request/3.0",
     }
 )
+
+
+@app.command("render-curated")
+def render_curated(
+    request: Annotated[Path, typer.Option("--request", exists=True, dir_okay=False)],
+    result: Annotated[Path, typer.Option("--result", dir_okay=False)],
+) -> None:
+    try:
+        receipt = render_curated_workspace(request, result)
+    except Exception:
+        _echo({"status": "FAILED", "error_code": "HWPX_CURATED_INPUT_INVALID"})
+        raise typer.Exit(1) from None
+    _echo({"status": receipt.status, "error_code": receipt.failure_code})
+    if receipt.status != "SUCCEEDED":
+        raise typer.Exit(1)
 
 
 def _echo(value: object) -> None:
