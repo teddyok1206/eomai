@@ -1,5 +1,72 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## INDEX4 선택·실제 초기화 누락과 안전한 인계 보완 — 2026-10-31 20:11 UTC
+
+- 이번 turn은 **PROGRESS**다. 운영 CPU QUERY preparer와 INDEX4 control/service를 실제
+  선택했고, 첫 실제 request4에서 누락된 준비 조건과 cold-resume 한계를 확인·보완 중이다.
+  아직 전체 성공이나 실제 사용자 검색 PASS가 아니다. 아래 실패와 대기 상태를 숨기지 않는다.
+- 원래 CUDA `workflow_eb54660e6cce4061bd9f2726a202e1bd`는19:27:51 BATCH_COMPLETED,
+  controller1381888은19:27:52 exit0이다. 19:30 정기 관측은 frozen 기출 **116/520,
+  잔여404**, 과거 FAILED5개 그대로다. CUDA 묶음4행을 기출4개로 합산하지 않는다.
+- 뒤따른 CPU standby `workflow_80bb3389d7664a74a41b931808d487e8`는 START PENDING/
+  attempts0/step0였다. actual owner의 기존 `cancel_unstarted_indexing_workflow`로
+  CANCELLED receipt를 남기고 같은 command replay가 같은 receipt임을 확인했다.
+  GPU 완료 결과와 비활성 accepted/mixed PENDING12개는 바꾸지 않았다.
+  `/tmp/eom-index4-standby-cancellation-20261031-v1.json`.
+- CPU QUERY preparer만8734→eb16으로 바꾸고 기존 primary/mixed/public/private config,
+  QUERY unit와 Catalog public-read raw pin을 함께 선택했다. Source 권한/recipe/model은
+  불변이며 인증 파일·비밀번호·API/Web·creative를 변경하지 않았다. QUERY1412275의
+  19:30:58 OWNER_READY와 API READY/HTTPS login200을 확인했다. native/config 회귀
+  **106 PASS**: `/tmp/eom-query4-native-selection-focused-20261031.log`.
+  controls: `/var/lib/eom-native-query4-selection-eb16d3ad-20261031/`.
+- 공식 Identity register/activate와 같은 범위의 CPU/CUDA policy2개를 한 transaction으로
+  적용해 INDEX controller/native preparer도eb16으로 선택했다. INDEX1414605의 실제
+  19:32:18 STARTED와 current identity/hash 일치를 확인했다. read-only metadata audit에서
+  frozen Item520개 ID/revision/manifest SHA 보존, 동일 recipe/CPU·CUDA profiles/backend/
+  routing, 세 INDEX/CPU-QUERY/GPU preparer prefix 일치를 확인했다.
+  `/tmp/eom-registered-public-release-verification-20261031-v1.json`.
+  이는 보고서 전체 bytes·최종520 GPU 무결성이나 실제 사용자 검색 acceptance가 아니다.
+- 실제 첫 request4 `workflow_3241917bd7ba42d6bcb869753e2341dd`의 처리 중19:36:12
+  `EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE`로 daemon이 중단됐다. production DB의
+  `embedding-encoding-ownership/4.0` 등록이 누락됐고 startup은3까지만 확인하던 빈틈이다.
+  실제 model/launch Job 생성 전이며 step의 platform_job_id는NULL이었다.
+- 19:44 실제 table owner의 지원된
+  `EmbeddingEncodingReservationStorage.prepare_registered_public_ownership_protocol`로
+  정확한4.0/hash `sha256:28d2448abee1c67b7b48ea2717aa59029aa5bf2a4a31a1aff9699c8ba9780284`
+  를 초기화하고 같은 key replay PASS를 확인했다. 기존 다른 hash를 덮지 않았고
+  Workflow/lease/Job를 직접 수정하지 않았다.
+  `/tmp/eom-registered-index-protocol-preparation-20261031-v1.json`.
+- 원 command `wfcmd_09a38e27c16143a1bc2547860803166a`의 DB lease deadline19:51:00을
+  기다린 뒤 기존 owner를1회 start했다. 그러나19:55 관측에서도 원 command generation1,
+  RUNNING/PROCESSING과 RECOVERY_REQUIRED였다. **재가동을 실행 재개라고 주장하지 않는다.**
+  이미 기록된 CUDA parent는 numerical completion이 없으면 원 allocation을 다시 dispatch하지
+  않는 기존 안전 규칙 때문에 cold reentry만으로 복구되지 않았다. 검증 없이 새 allocation을
+  재발행하지 않았으며1433314는20:05 main-only SIGTERM 후 정상 exit0으로 drain했다.
+- 현재 운영 INDEX는 이 명시적 유지보수를 위해 **inactive**다. API/QUERY/creative는 계속
+  동작하며 새 vector 삭제0이다. 원 request/step/lease와 실패 daemon journal은 보존한다.
+  다음은 기존 preallocation-retirement owner operation이 request3/4의 같은 무할당 조건을
+  검증하도록 보완해, 원 실패를 정식 보존한 뒤 corrected release에서 인계하는 일이다.
+  새 queue·복구 framework·직접 DB UPDATE·FAILED→성공 재해석은 하지 않는다.
+- source 보완은 public startup의 기존 protocol3 확인에4를 추가하고, 기존 retirement의
+  service-reference 해석을 이미 지원된1–4 공통 resolver로 바꾼 두 작은 경계다.
+  command/receipt1.0/1.1 bytes·숫자 실행 계약·DB schema는 불변이며 새 dependency0이다.
+  현재 **source candidate, 미배포**다. 관련 단위 **80 PASS**, core2개 strict mypy 및
+  Ruff/format/diff PASS. startup+호환성 확대 회귀는 **113 PASS**다.
+- disposable DB `/tmp/eom-api-testdb-20261031200538_bbda994f`에서66 migration cycle PASS.
+  최초 purpose-suite는 제한 login용 `runtime.env` 준비 단계를 빠뜨려218 PASS/9 FAIL/9 ERROR:
+  production 결함이 아닌 test environment invocation 오류다. 로그를 남기고 공식
+  `testdb_prepare.sh --reconcile`로 그 임시 DB만 준비한 뒤 같은 suite를 재검증 중이다.
+  실제 production DB pytest0, 기출/교과서/창작 정본 삭제0, 전체 goal ACTIVE다.
+- 20:13 후속 결과: 같은 임시 DB의 정식 제한 계정 준비 후 **236 PASS + 정책 발행22 PASS**.
+  새 public3/registered4와 legacy 요청에 대해 실제 owner의 원자적 FAILED 처리와 같은 command
+  replay, rollback/동시성/잠금 충돌, live lease·allocated Job·다른 actor·non-owner 거부,
+  기존 request/hash/lease audit·Job/Artifact 수 보존을 확인했다. OS/source admission은
+  synthetic이며 실제 운영 retirement 또는 모델 실행 PASS가 아니다.
+  `/tmp/eom-index4-retirement-disposable-tests-20261031-v2.log`.
+  원래 실패한 환경 invocation 로그는 보존했다. 수정된 core2개 strict mypy,
+  단위80 PASS와 Ruff/format/diff PASS다. 다음은 이 source의 immutable wheel 설치와
+  실제 quiescence 확인 후 원 실패 정식 보존/호환 owner handoff이며 아직 미실행이다.
+
 ## 공통 API/QUERY 배포 완료·INDEX4 controls 준비 — 2026-10-31 19:15 UTC
 
 - 이번 goal turn은 **PROGRESS**다. 실제 DB0066 upgrade/verify와 shared platform/API/

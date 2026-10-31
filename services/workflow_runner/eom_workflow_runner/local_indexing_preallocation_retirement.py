@@ -11,14 +11,9 @@ from eom_identifiers import content_sha256
 from eom_identity_service import lock_current_local_indexing_service_metadata
 from eom_orchestrator.models import JobRecord
 from eom_orchestrator.native_embedding_launch_identity import native_embedding_launch_key
-from eom_workflow.local_embedding_request import (
-    LocalEmbeddingServiceWorkflowRequest,
-    local_embedding_request_service,
-)
 from eom_workflow.local_embedding_request_v2 import (
-    LocalEmbeddingWorkflowRequestV2,
-    local_embedding_request_service_v2,
     parse_supported_local_embedding_request,
+    supported_local_embedding_request_service,
 )
 from eom_workflow.local_indexing_preallocation_retirement import (
     SupportedLocalIndexingRetirementCommand,
@@ -104,15 +99,10 @@ def _retire(
     if workflow is None:
         raise LocalIndexingRetirementError("LOCAL_INDEXING_RETIREMENT_SCOPE_INVALID")
     request = parse_supported_local_embedding_request(workflow.initial_request)
-    if not isinstance(
-        request, LocalEmbeddingServiceWorkflowRequest | LocalEmbeddingWorkflowRequestV2
-    ):
-        raise LocalIndexingRetirementError("LOCAL_INDEXING_RETIREMENT_SCOPE_INVALID")
-    service = (
-        local_embedding_request_service_v2(request)
-        if isinstance(request, LocalEmbeddingWorkflowRequestV2)
-        else local_embedding_request_service(request)
-    )
+    try:
+        service = supported_local_embedding_request_service(request)
+    except ValueError:
+        raise LocalIndexingRetirementError("LOCAL_INDEXING_RETIREMENT_SCOPE_INVALID") from None
     if (
         request.request_sha256 != command.workflow_request_sha256
         or service != command.service

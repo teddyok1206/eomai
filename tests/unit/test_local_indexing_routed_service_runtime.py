@@ -6,6 +6,9 @@ from unittest.mock import Mock
 import pytest
 from eom_identifiers import canonical_json_bytes
 from eom_identity_service.local_indexing_runtime import AuthenticatedLocalIndexingRuntime
+from eom_orchestrator.embedding_encoding_reservation_storage import (
+    EmbeddingEncodingReservationError,
+)
 from eom_workflow.local_indexing_owner_configuration import (
     parse_cpu_local_indexing_owner_configuration,
 )
@@ -59,6 +62,12 @@ def test_actual_capture_and_preflight_compose_six_routed_namespaces_without_old_
     monkeypatch,
 ):
     case, selected, sources, namespace = runtime_case(monkeypatch)
+    registered_protocol = Mock()
+    monkeypatch.setattr(
+        runtime.EmbeddingEncodingReservationStorage,
+        "require_registered_public_ownership_protocol",
+        registered_protocol,
+    )
     value = runtime.build_local_indexing_service_runtime(case.capture, case.pin)
     assert value.configuration == selected and len(value.namespaces) == 6
     case.current.assert_called_once()
@@ -69,6 +78,7 @@ def test_actual_capture_and_preflight_compose_six_routed_namespaces_without_old_
     assert all(call.args[3] is sources.call_args.args[2] for call in namespace.call_args_list)
     case.launcher.return_value.assert_current_runtime.assert_called_once()
     runtime.EmbeddingEncodingReservationStorage.require_mixed_ownership_protocol.assert_called_once()
+    registered_protocol.assert_not_called()
 
 
 def test_routed_source_denial_disposes_runtime_without_falling_back_to_cpu_discovery(monkeypatch):
@@ -97,12 +107,18 @@ def test_public_runtime_preserves_six_legacy_namespaces_with_separate_recipe_pin
     )
     namespace = Mock(side_effect=lambda pair, *_args: pair)
     public_protocol = Mock()
+    registered_protocol = Mock()
     monkeypatch.setattr(runtime, "build_routed_indexing_sources", sources)
     monkeypatch.setattr(runtime, "RoutedLocalIndexingNamespaceRuntime", namespace)
     monkeypatch.setattr(
         runtime.EmbeddingEncodingReservationStorage,
         "require_public_ownership_protocol",
         public_protocol,
+    )
+    monkeypatch.setattr(
+        runtime.EmbeddingEncodingReservationStorage,
+        "require_registered_public_ownership_protocol",
+        registered_protocol,
     )
     value = runtime.build_local_indexing_service_runtime(case.capture, case.pin)
     assert len(value.namespaces) == 7
@@ -115,4 +131,39 @@ def test_public_runtime_preserves_six_legacy_namespaces_with_separate_recipe_pin
         call.args[1] == selected.legacy_configuration for call in namespace.call_args_list[1:]
     )
     public_protocol.assert_called_once()
+    registered_protocol.assert_called_once()
+    assert case.owners == []
+
+
+@pytest.mark.parametrize(
+    "missing",
+    ("require_public_ownership_protocol", "require_registered_public_ownership_protocol"),
+)
+def test_public_missing_protocol_rejects_before_sources_launcher_or_queue(monkeypatch, missing):
+    case = compose(monkeypatch)
+    selected = PublicSolutionRoutedOwnerConfiguration.model_validate(public_owner_with_legacy())
+    monkeypatch.setattr(
+        AuthenticatedLocalIndexingRuntime,
+        "read_owner_configuration",
+        lambda _self: local_indexing_routed_owner_configuration_bytes(selected),
+    )
+    sources, namespace = Mock(), Mock()
+    monkeypatch.setattr(runtime, "build_routed_indexing_sources", sources)
+    monkeypatch.setattr(runtime, "RoutedLocalIndexingNamespaceRuntime", namespace)
+    for method in (
+        "require_public_ownership_protocol",
+        "require_registered_public_ownership_protocol",
+    ):
+        check = Mock()
+        if method == missing:
+            check.side_effect = EmbeddingEncodingReservationError(
+                "EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE"
+            )
+        monkeypatch.setattr(runtime.EmbeddingEncodingReservationStorage, method, check)
+    with pytest.raises(EmbeddingEncodingReservationError):
+        runtime.build_local_indexing_service_runtime(case.capture, case.pin)
+    sources.assert_not_called()
+    namespace.assert_not_called()
+    case.launcher.assert_not_called()
+    case.engine.dispose.assert_called_once()
     assert case.owners == []

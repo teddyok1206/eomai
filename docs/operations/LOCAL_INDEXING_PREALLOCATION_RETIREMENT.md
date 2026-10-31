@@ -44,3 +44,23 @@ is temporary operational materialization, not a second canonical execution. The
 function grants no source access and starts no successor. A runtime rollback does
 not undo the historical failure or revive its command; future work must use its
 own explicit compatible authorization and normal idempotency/claim boundaries.
+
+## Public source metadata3/4 compatibility
+
+The command/receipt1.0/1.1 bytes pin an exact Workflow request SHA, not a request
+family name. Apply the same supported service-reference resolver to stored
+requests1–4; do not recast public requests as legacy requests or change their hashes.
+The canonical state remains the original Workflow/command/step and append-only
+retirement receipt. All ID lookups, bounded row locks, real table-owner checks,
+expired lease, absent launch Job/output and successor-release checks remain intact.
+There is no new queue, table, protocol version or runtime self-repair permission.
+The operation still refuses human requests and allocated/uncertain native work.
+
+For a routed GPU request, the deployment owner must additionally verify the exact
+physical controller is terminal and its retained handles are closed before
+calling this operation: an allocated parent is not proof of a numerical launch,
+and absence of a completion is not proof of a dead controller. A cold parent with
+no numerical completion must not silently dispatch its original allocation again.
+Retain that failure and let the corrected release's existing missing-binding
+application create its own authorized successor. A direct row update or an
+unfenced second allocation is not an alternative.

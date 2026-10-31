@@ -28,6 +28,9 @@ from eom_orchestrator.embedding_encoding_reservation_storage import (
 )
 from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
 from eom_orchestrator.native_embedding_launch_identity import create_native_embedding_launch
+from eom_workflow.compiler import compile_definition
+from eom_workflow.local_embedding_execution_policy import LOCAL_EMBEDDING_SERVICE_POLICY_SCHEMA_REF
+from eom_workflow.local_embedding_request_v2 import parse_supported_local_embedding_request
 from eom_workflow.local_indexing_preallocation_retirement import (
     parse_supported_local_indexing_retirement_command,
 )
@@ -70,8 +73,11 @@ from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
 from tests.unit.inference_transfer_embedding_fixtures import seal
+from tests.unit.local_embedding_admission_fixtures import member
 from tests.unit.local_embedding_service_fixtures import service_fixture
 from tests.unit.test_local_embedding_runner_admission import scope_fixture
+from tests.unit.test_public_solution_native_carriers import public_native_fixture
+from tests.unit.test_registered_public_solution_request import request_case
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
@@ -91,9 +97,15 @@ class Case:
     step_id: str
 
 
-@pytest.fixture(params=("1.0", "1.1"))
+@pytest.fixture(
+    params=[
+        pytest.param((version, family), id=f"{version}-{family}")
+        for version in ("1.0", "1.1")
+        for family in ("legacy", "public3", "registered4")
+    ]
+)
 def case(guarded_engine, request):
-    retirement_version = request.param
+    retirement_version, family = request.param
     sessions = build_session_factory(guarded_engine)
     service = identity()
     reference = local_indexing_service_reference(service)
@@ -104,13 +116,56 @@ def case(guarded_engine, request):
             session, reference, expected_resource_version=1, operation_key=prefix + ":activate"
         )
     _scope, compiled = scope_fixture()
+    if family != "legacy":
+        compiled = compile_definition(
+            Path(__file__).resolve().parents[2] / "config/workflows/local-embedding-index.v2.yaml",
+            set(),
+        )
     native = service_fixture(service=reference, workflow_definition_sha256=compiled.sha256)
     request = native.request
-    owner = SyntheticOwner(
-        ResolvedLocalEmbeddingAdmission(request, native.base.plan, native.policy)
-    )
+    plan, policy = native.base.plan, native.policy
+    if family != "legacy":
+        if family == "registered4":
+            original, selected, plan = request_case()
+        else:
+            original = public_native_fixture()
+            selected, plan = original["request"], original["plan"]
+        policy = type(original["policy"]).model_validate(
+            seal(
+                original["policy"].model_dump(mode="json")
+                | {
+                    "service": reference.model_dump(mode="json"),
+                    "workflow_definition_sha256": compiled.sha256,
+                },
+                "policy_sha256",
+            )
+        )
+        request = parse_supported_local_embedding_request(
+            seal(
+                selected.model_dump(mode="json")
+                | {
+                    "workflow_definition_sha256": compiled.sha256,
+                    "actor_context": native.request.actor_context.model_dump(mode="json"),
+                    "native_execution_policy": member(
+                        "policy.json",
+                        LOCAL_EMBEDDING_SERVICE_POLICY_SCHEMA_REF,
+                        policy.model_dump(mode="json"),
+                        "4",
+                    ).model_dump(mode="json"),
+                    "native_execution_policy_sha256": policy.policy_sha256,
+                },
+                "request_sha256",
+            )
+        )
+    owner = SyntheticOwner(ResolvedLocalEmbeddingAdmission(request, plan, policy))
     with sessions.begin() as session:
         EmbeddingEncodingReservationStorage.prepare_protocol(session)
+        if family == "public3":
+            EmbeddingEncodingReservationStorage.prepare_public_ownership_protocol(session)
+        elif family == "registered4":
+            EmbeddingEncodingReservationStorage.prepare_registered_public_ownership_protocol(
+                session
+            )
         definition, _created = import_workflow_definition(session, compiled)
         submitted = start_local_embedding_in_session(
             session,
