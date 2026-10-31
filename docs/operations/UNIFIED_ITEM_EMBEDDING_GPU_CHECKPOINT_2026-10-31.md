@@ -525,3 +525,29 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
 - 창작/변환 집중 **92 PASS**. 새 JSON Schema/Pydantic 동일 계약과 foreign identity 거부,
   단일/전체 변환 실패에서 유한 종료, 기존 Graph 실패 중단, 상태 수 보존을 검사했다.
 - 이 시점에는 source 후보이며 isolated wheel/owner 배포·실제 3슬롯 재개 검증은 아직 남아 있다.
+
+### 실제 창작 owner 복구와 partial 검색 경계 — 14:31 UTC
+
+- `39557cbf`와 `3c8d3fad` push 완료. `3c8d3fad` 공식 build-only wheel/RECORD PASS,
+  `/tmp/eom-api-build/3c8d3fad2149ed9e5670d2b4e8496dfa7f77eec4.CeQqkY/dist`.
+- 보호된 isolated prefix `/opt/eom/maintenance-releases/3c8d3fad2149ed9e5670d2b4e8496dfa7f77eec4`
+  에 wheel hash/bytes·설치 경로·새 schema를 검사하고 기존 installer로 creative owner만 배포했다.
+  원 admitted cohort/revision/target1053/capacity/프리셋·모델 핀은 그대로다.
+- 14:26:15 owner PID981022 기동. 14:27 실제 슬롯04/05 analyze RUNNING, 슬롯06 extract
+  RUNNING, ACTIVE lease3 확인. 14:29 슬롯04는 첫 분석 성공 후 다음 extract로 넘어갔다.
+  이후11401도 ANALYZING으로 전이했다. 순간별 추출/풀이 혼합과 실제3슬롯 처리를 구분한다.
+- 원본11400은 명시적 deferred 한 건이며 성공으로 세지 않았다. 다른 source3개는 Graph
+  PUBLISHING으로 진행했다. 기존 성공/실패와 source bytes는 변경하지 않았다.
+- 14:30 creative observer `check=OK`, PROCESSING, `blocked_source_count=1`. 이 단계에서
+  verified_count0은 재개 후 재검증/발행 cursor이지 전체 과거 승인 문항 수0이라는 뜻이 아니다.
+- INDEX703354/QUERY470146/API469955/Catalog732310 PID와 NRestarts0 유지. DB migration0,
+  GPU 런타임·현재 vector space 변경0. 기존 prefix로 installer를 되돌리는 rollback이 가능하다.
+- 원 기출 GPU14:30 **102/520, 잔여418**, historical 실패2건 그대로다.
+- partial 검색/API/권한·재전송/reader/contract **107 PASS**. 운영 API의 해당 route/service와
+  Catalog의 scope/reader 소스가 현재 후보와 동일함을 Git diff로 확인했다. 보호 QUERY namespace도
+  public-solution이다. 실제 로그인된 Studio 검색 결과는 요청했으며 아직 evidence가 없다.
+- `REGISTERED_PUBLIC_SOLUTION_QUERY_SUCCESSOR_DESIGN.md`에 후속 경계를 기록했다. 중요 정정:
+  AI proof/index4의 metadata reader 확장에는 successor가 필요하지만, 숫자 QUERY2/work-batch2는
+  entry를 담지 않으므로 그대로 유지한다. 불필요한 수치 포맷 버전을 추가하지 않는다.
+- Slack milestone `devreport_f1d8cf27e12540b5900fcc4e7cbd80a8` SENT. 원 목표 ACTIVE,
+  전체 coverage/AI producer·QUERY metadata successor/실제 검색/구 vector retirement는 아직 미완료다.
