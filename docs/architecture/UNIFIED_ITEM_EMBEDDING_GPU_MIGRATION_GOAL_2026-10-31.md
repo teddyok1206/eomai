@@ -1,0 +1,125 @@
+# 기출·창작·AI 공통 임베딩 전환 목표
+
+작성: 2026-10-31 UTC. 사용자 승인: 공통 기준 재임베딩, GPU 사용,
+검증·검색 전환 후 구형 벡터 삭제. 목표 상태 ACTIVE이며 완료 보고서가 아니다.
+
+## 1. 확정 기준
+
+문항 분류(기출/창작/AI)는 출처·권한·필터용 메타데이터다. 분류에 따라 임베딩의
+입력 형식, 모델 또는 점수 기준을 다르게 선택하지 않는다.
+
+공통 수치 입력은 이미 정의된 `public-solution-text/1.0` 및
+`inference-transfer-view-recipe/2.0`의 **공개 가능한 풀이 단계 내용**으로 고정한다.
+기출의 accepted solution report, 창작의 등록된 source solution report, AI의
+검증된 전체 solution report를 같은 projection으로 보낸다. 보고서 JSON 전체,
+family 이름, 문항 ID, 출처명, 편집 경고, 승인 상태는 벡터화하지 않는다.
+문제 본문·단원 등 다른 자료는 원래 Graph/문항 정본과 필터에 보존한다.
+
+- 공개 풀이 문장을 본래 순서대로 연결한다. 수치·단위·부정·첨자·지수·수식은 보존한다.
+- Unicode NFC/레이아웃 공백만 정규화한다. 임의 요약·번역·빈 필드 추측·중간 절단은 금지한다.
+- 같은 과학 문장의 field/step 분할·줄바꿈만 바뀐 경우 같은 입력 text/hash여야 한다.
+- 전체 풀이 없는 AI review verdict를 전체 풀이로 위장하지 않는다. 해당 문항은
+  REPORT_REQUIRED로 분리하고 기존 공식 보고서 작성 경로에서 보완한다.
+- 같은 모델·revision·tokenizer·정밀도·normalization·DOCUMENT purpose 안에서 비교한다.
+  GPU는 기존 승인된 BGE-M3 CUDA FLOAT32 공간을 사용한다. CPU fallback은 별도
+  수치 공간의 명시적 경로이며, GPU 전환 완료 카운트로 합산하지 않는다.
+- 공통 입력이어도 풀이 내용이 다르면 다른 벡터가 정상이다. 유사도 1을 문항 동일성의
+  기준으로 쓰지 않고, 동일 문항 판정은 Item/revision/정본 hash로 한다.
+
+위 정의가 기존 released projection 의미를 바꾸지 않는지 기존 회귀와 source capture로
+확인한다. 변경이 필요하면 기존 bytes를 덮지 않고 successor를 먼저 정의한다.
+
+## 2. 책임·식별·데이터 구조
+
+1. **책임/경계**: Catalog가 공식 Graph source admission과 accepted/registered 보고서
+   해석을 소유한다. 기존 Orchestrator/INDEX owner만 계산·검증·NAS commit을 수행한다.
+2. **정본**: 기출 520개 원래 Item/accepted analysis/풀이보고서, 창작 원본·계보,
+   AI Item/보고서는 불변이다. 이번 ‘손보기’는 파생 공통 입력을 만드는 것이며 원문 수정이 아니다.
+3. **식별**: 대상 집합은 exact Item revisions + source/report/Graph/policy pins와 집합 hash로
+   동결한다. 이후 등록되는 창작은 별도 증분 진행률이며 520 분모에 섞지 않는다.
+4. **포인터 검증**: 존재·권한·승인/수명·schema/media·SHA·실제 Graph membership을
+   기존 owner가 검사한다. 같은 text hash로 서로 다른 문항 identity/권한을 합치지 않는다.
+5. **접근**: indexed revision/key lookup, bounded source paging, input hash set/dedup,
+   ordered batch execution, append-only receipts, index head CAS를 사용한다.
+6. **구조/index**: 기존 public source entry/encoding/binding/index/Artifact manifest 재사용.
+   새 vector DB, 별도 검색 엔진, 복제 queue, 임시 직접 DB vector 삽입은 만들지 않는다.
+7. **비용/규모**: projection은 O(공개 풀이 bytes), 입력 비교는 hash key 평균 O(1).
+   기존 최대 16,384 source/bounded page/numerical batch 한도를 유지한다. 전체 재파싱·
+   해시·Graph 조회의 반복은 실측해 줄이되 source/권한 검증을 제거하지 않는다.
+8. **트랜잭션/동시성**: 공식 source fence → encoding reservation → numeric result commit →
+   binding/index CAS 순서를 유지한다. creative registration과 INDEX는 독립 멱등 키로 연결한다.
+9. **의존성**: contracts → 순수 projection → Catalog application → 기존 DB/Artifact/GPU
+   adapters. UI는 공식 API만 호출한다. worker 간 직접 통신/DB/NAS 쓰기는 금지한다.
+10. **실패/재실행**: 이미 같은 새 recipe/space/input hash로 완료된 encoding은 재사용한다.
+    결측/길이 초과/철회/실패는 개별 사유를 기록한다. 구 벡터 relabel, 실패 이력 성공 변경,
+    미완료 target의 임의 제외, 다른 문항 보고서 대입은 금지한다.
+11. **단순 대안**: 기존 벡터 우회 검색만으로는 cross-format 비교가 통일되지 않는다.
+    raw JSON/출처별 renderer도 양식 편향을 남긴다. 기존 공통 projection의 정식 backfill이
+    새 검색 플랫폼보다 작고, 원래 source/권한/증분 프레임워크를 보존한다.
+
+## 3. 수행 순서와 종료 조건
+
+| 단계 | 작업 | 종료 증거 |
+| --- | --- | --- |
+| U01 | 현재 source/report/encoding/INDEX 실제 상태와 정확한 원래 520 대상 집합 동결 | 분류별 수, target-set hash, 현재 config/runtime pins |
+| U02 | 세 분류의 공통 입력 계약·adapter·동등성/정보 보존·AI full-report coverage 검증 | 회귀 PASS, report→공통 text/hash provenance, 결측 목록 |
+| U03 | 진행 중 GPU batch를 정상 drain하고 기존 owner에서 공통 namespace backfill을 우선 실행 | 실제 CUDA 결과·공식 commit/binding receipt, 대상별 처리 상태 |
+| U04 | 520 전체 GPU encoding과 정식 index, 동일 기준 검색/query·metadata·GUI 연동 검증·전환 | 520/520 또는 명확한 미완료, 실제 검색/replay, 새 기본 경로 |
+| U05 | 구 인덱스·벡터·조회/실험/runtime 참조 inventory → 지원되는 retirement/삭제 | exact deletion manifest, 보호 대상 불변, 삭제 후 신규 검색 PASS |
+
+U03는 기존 public GPU 결과 중 **같은 규격**으로 이미 완료된 것을 재사용한다.
+구 accepted/mixed projection 벡터를 새 형식으로 이름만 바꿔 세지 않는다.
+INDEX가 현재 구형 6 namespace와 새 공통 namespace를 번갈아 처리하는 비용도 확인한다.
+불필요한 구형 membership 갱신이 backfill을 계속 지연시키면 기존 지원된 owner config로
+후속 수치 작업 제출을 줄이고 public 작업을 우선한다. 진행 중 수치 runtime pin은 바꾸지 않는다.
+
+DB의 유사도 조회는 출처 종류가 아닌 동일한 recipe/space/input 기준을 사용한다.
+CPU/GPU current head의 Graph가 일시적으로 다르다는 사실만으로 전체 검색을 거부하지 않도록
+각 pinned source/index의 실제 권한과 준비 상태를 검증하는 기존 계약 안에서 정리한다.
+새 검색 준비가 확인되기 전 구형 데이터를 삭제하거나 READY로 과장하지 않는다.
+
+## 4. 구형 벡터 삭제 범위와 안전장치
+
+사용자는 새 임베딩 전환 후 기존 벡터 삭제를 승인했다. 삭제 대상은 해당 기출의 구형
+accepted/mixed embedding 파생 데이터이며, 기출·교과서·창작·AI Item/Graph/풀이보고서
+정본은 삭제 대상이 아니다. 공유 shard에 새 벡터/비대상 벡터가 있으면 파일 전체를 지우지 않는다.
+
+- 먼저 exact index revisions/encoding hashes/shard pointers/active consumers를 inventory한다.
+- 새 GPU 데이터·검색 전환·필요한 rollback 증거가 확인된 뒤 구형 writer를 멈춘다.
+- historical query/experiment 핀의 참조를 조사하고, 필요한 명시적 retirement/tombstone과
+  최소 감사 manifest를 남긴다. 구 핀을 새 인덱스로 몰래 바꾸지 않는다.
+- 참조가 남아 안전하게 삭제할 수 없는 범위는 원인과 필요한 지원 종료 절차를 기록한다.
+  무관한 기록까지 추가 삭제하는 권한으로 확대하지 않는다.
+- 실제 삭제 후 수량/byte 범위·복구 가능 여부를 보고한다. 삭제를 완료했다고 표시하려면
+  새 검색 재검증과 보호 정본 hash/수량 불변 확인이 필요하다.
+
+## 5. 진행·보고
+
+30분 기존 관측을 재사용하고 phase 전환·실패·완료만 Slack 중요 보고한다.
+Slack 첫 문장은 한국어 요약이며 문항 내용·보고서 전문·인증 정보는 보내지 않는다.
+goal 완료는 GPU 프로세스 active나 설치 PASS가 아니라 U01–U05의 실제 결과로 판단한다.
+
+기존 미배포 legacy stored-read 후보는
+`staging/unified-embedding-goal-20261031/deferred-legacy-read.patch` 및 같은 폴더
+`deferred/`에 복구 가능하게 보존했다. 이번 공통 전환과 섞어 활성화하지 않는다.
+
+### U01/U02 체크포인트 — 2026-10-31 09:00 UTC
+
+- 원래 기출 520개 exact Item revisions/manifest hashes를 고정했다. target-set hash:
+  `sha256:57a227ea705bedb73cc7573b38f1baf995fa3f697f81c323f251cf4e8e228678`.
+  원본 target 목록은 root 보호 운영 기록 `/var/lib/eom-unified-embedding-migration-20261031/baseline.json`.
+- 같은 snapshot의 Graph는 기출520/창작283이다. AI source는 해당 Graph에 0건이다.
+  이것을 전체 Registry AI가 0건이라는 뜻으로 확대하지 않는다. AI full-report source capture와
+  공통 CUDA 입력 동등성은 별도의 synthetic 회귀로 검증하고 실제 등록 범위는 추가 확인한다.
+- 공통 CUDA `39bc2c310299...`에서 기출16/등록 문항12의 binding이 이미 있었다.
+  CPU의 기출3/등록1은 별도 공간이고 overlap이 가능하므로 GPU 완료 수에 더하지 않는다.
+  원래 기출520 목표에서 새 GPU 형식 미완료는 이 snapshot 기준504개다.
+- installed config6 decoder는 `legacy_configuration=null` 및 `maximum_targets=16`을 지원한다.
+  기존 공통 recipe/모델/space/자원/서비스 권한/QUERY/API는 그대로 둔 채, 구형6 namespace의
+  추가 maintenance만 제외하는 protected selection을 preflight했다. 원래 최대4건에서16건은
+  discovery target 묶음이며 실제 model forward의 minibatch/resource profile은 변경하지 않는다.
+  config 전환은 아직 runtime activation 증거가 아니다.
+- DB initial 검색 범위는 **하나의 실제 published GPU head 전체**에서 Graph/policy를 선택한다.
+  독립적으로 늦게 발행된 CPU head와 Graph가 다르다는 이유만으로 GPU 검색까지 차단하지 않는다.
+  source 해석은 같은 공통 recipe이며, 실제 QUERY owner의 device/index/CPU fallback 검증은
+  그대로 유지한다. replay는 원래 Graph/policy pin을 보존한다.

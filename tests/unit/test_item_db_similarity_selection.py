@@ -190,7 +190,9 @@ def test_pinned_scope_replay_uses_exact_original_graph_and_never_reads_a_new_hea
     repository.assert_not_called()
 
 
-def test_mismatched_device_head_never_fabricates_one_search_scope(monkeypatch):
+def test_initial_scope_uses_one_gpu_head_without_requiring_cpu_to_publish_the_same_graph(
+    monkeypatch,
+):
     value = selected_case()
     registry = NS(corpus_id="corpus_" + "1" * 32, namespace="cpu")
     owner = NS(
@@ -199,14 +201,43 @@ def test_mismatched_device_head_never_fabricates_one_search_scope(monkeypatch):
     )
     service = object.__new__(module.CatalogItemDbSimilaritySelection)
     service.owner = owner
-    service.retrieval = Mock()
+    service.retrieval = NS(resolve_snapshot_pointer=Mock(return_value=value.query.graph_snapshot))
     cpu = NS(
         graph_snapshot_revision_id="graphrev_" + "1" * 32,
         policy_revision_id="accessrev_" + "1" * 32,
         policy_sha256="sha256:" + "1" * 64,
     )
-    cuda = NS(graph_snapshot_revision_id="graphrev_" + "2" * 32)
-    repository = NS(current_namespace_revision=Mock(side_effect=((cpu, 2), (cuda, 2))))
+    cuda = NS(
+        graph_snapshot_revision_id=value.query.graph_snapshot.graph_snapshot_revision_id,
+        policy_revision_id=value.query.policy_revision_id,
+        policy_sha256=value.query.policy_sha256,
+    )
+    repository = NS(current_namespace_revision=Mock(return_value=(cuda, 2)))
+    monkeypatch.setattr(module, "EmbeddingRegistryRepository", lambda _session: repository)
+    session = Mock()
+    session.get.return_value = NS(
+        state="PUBLISHED", snapshot_sha256=value.result.search_snapshot_sha256
+    )
+    scope, digest = service._scope(session, value.request)
+    assert scope.graph_snapshot == value.query.graph_snapshot
+    assert scope.policy_revision_id == cuda.policy_revision_id != cpu.policy_revision_id
+    assert scope.policy_sha256 == cuda.policy_sha256 != cpu.policy_sha256
+    assert digest == value.result.search_snapshot_sha256
+    repository.current_namespace_revision.assert_called_once_with(registry.corpus_id, "cuda")
+
+
+@pytest.mark.parametrize("missing", ["owner", "index"])
+def test_missing_gpu_scope_does_not_relabel_a_cpu_or_legacy_index(monkeypatch, missing):
+    value = selected_case()
+    service = object.__new__(module.CatalogItemDbSimilaritySelection)
+    service.owner = NS(
+        configuration=NS(registry=NS(corpus_id="corpus_" + "1" * 32)),
+        cuda_owner=None
+        if missing == "owner"
+        else NS(configuration=NS(registry=NS(namespace="cuda"))),
+    )
+    service.retrieval = Mock()
+    repository = NS(current_namespace_revision=Mock(return_value=None))
     monkeypatch.setattr(module, "EmbeddingRegistryRepository", lambda _session: repository)
     with pytest.raises(module.ItemDbSimilaritySelectionError, match="NOT_INDEXED"):
         service._scope(Mock(), value.request)

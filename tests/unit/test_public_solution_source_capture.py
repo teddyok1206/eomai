@@ -127,6 +127,26 @@ def test_missing_ai_or_past_report_is_missing_not_editorial_or_review_fallback(m
     value.batches.assert_not_called()
 
 
+@pytest.mark.parametrize("source_kind", ["AI", "AI_GENERATED", "GENERATED"])
+def test_ai_full_report_uses_the_same_public_encoder_text_as_past_exam(monkeypatch, source_kind):
+    value = capture_case(monkeypatch)
+    past = run(value).entries[0]
+    source = ApprovedItemKnowledgeSourceV2.model_validate(
+        value.source.model_dump(mode="json") | {"source_class": "APPROVED_ITEM"}
+    )
+    value.candidate.source = source
+    value.revision.metadata_json = {"source_kind": source_kind}
+    value.solutions.return_value[value.candidate.analysis_run_id].source = source
+    ai = run(value).entries[0]
+    assert ai.source.source_class == "APPROVED_ITEM"
+    assert past.source.source_class == "PAST_EXAM"
+    assert ai.public_solution == past.public_solution
+    assert ai.recipe == past.recipe
+    assert ai.evidence.kind == "ACCEPTED_SOLUTION_ANALYSIS"
+    assert ai.entry_sha256 != past.entry_sha256
+    value.batches.assert_not_called()
+
+
 @pytest.mark.parametrize("change", ["revoked", "different_item", "missing", "duplicate"])
 def test_current_source_eligibility_is_not_inferred_from_a_typed_candidate(monkeypatch, change):
     value = capture_case(monkeypatch)

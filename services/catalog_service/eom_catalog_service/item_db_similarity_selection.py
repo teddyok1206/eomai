@@ -1,5 +1,6 @@
 """Catalog resolves exact DB pointers and an explicit indexed search scope; no execution."""
 
+from eom_catalog_contracts.creative_source_lineage import creative_registration_key
 from eom_catalog_contracts.item_db_similarity_selection import (
     ItemDbExternalSelection,
     ItemDbGraphSelection,
@@ -18,7 +19,6 @@ from eom_workflow_runner.reference_query_source_read import CatalogReferenceQuer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.creative_item_registration import creative_registration_key
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
@@ -136,21 +136,19 @@ class CatalogItemDbSimilaritySelection:
         query = request.pinned_query
         if query is None:
             repository = EmbeddingRegistryRepository(session)
-            current = repository.current_namespace_revision(config.corpus_id, config.namespace)
             cuda_owner = self.owner.cuda_owner
-            if current is None or cuda_owner is None:
+            if cuda_owner is None:
                 raise ItemDbSimilaritySelectionError("ITEM_DB_SIMILARITY_NOT_INDEXED")
             cuda = repository.current_namespace_revision(
                 config.corpus_id,
                 cuda_owner.configuration.registry.namespace,
             )
-            registered = current[0]
-            if cuda is None or (
-                cuda[0].graph_snapshot_revision_id != registered.graph_snapshot_revision_id
-                or cuda[0].policy_revision_id != registered.policy_revision_id
-                or cuda[0].policy_sha256 != registered.policy_sha256
-            ):
+            if cuda is None:
                 raise ItemDbSimilaritySelectionError("ITEM_DB_SIMILARITY_NOT_INDEXED")
+            # Choose one complete published GPU scope, not a composite of two
+            # independently advancing heads. The QUERY owner still validates
+            # its exact device/index and any permitted CPU fallback separately.
+            registered = cuda[0]
             snapshot_id = registered.graph_snapshot_revision_id
             policy_id, policy_hash = registered.policy_revision_id, registered.policy_sha256
         else:
