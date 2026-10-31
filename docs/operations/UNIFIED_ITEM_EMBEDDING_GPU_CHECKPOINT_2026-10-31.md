@@ -577,3 +577,39 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
   QUERY receiver 준비 전 활성화하지 않는다. 이전 벡터 삭제0, GPU/API/QUERY 재시작0.
 - 창작 owner는 ACTIVE를 유지하며 복구 이후3개 source를 Graph 발행·정식 read 확인까지 마쳤다.
   이는3개의 새 LLM 보고서를 재생성했다는 뜻이 아니다. 이미 성공한 단계는 원 identity로 재사용했다.
+
+### 15:46 UTC — 실제 DB 유사도 장애의 호환 hotfix
+
+- 사용자 문의 `webreq_ca3d597215e4bbedd2a1c901`은 API의 원 검색 준비 요청이 약30.48초 뒤
+  끊긴 사례다. 앞선 provider 무효화와 구분한다. Catalog 준비는 HTTP 종료 뒤에도 계속됐고
+  read-only DB wait 관측에는 blocker가 없었다. 공통 public head의 Graph는 같았으나
+  GPU/CPU binding 수는156/136으로 달랐다. 원 key나 실패 이력은 바꾸지 않았다.
+- main `d0ebae80`은 provider의 부모 폴더 identity, 공유210초 response budget(인증 capture
+  시간은 불변), public 전용 독립 device coverage 선택을 수정한다. 구 exact-pair 규칙은
+  그대로다. source 회귀305 PASS, strict mypy8파일, Ruff/format/bash syntax PASS.
+- 운영0064와 GPU 수치 bundle을 그대로 보존하려고 운영 API `f419383c`에 필요한 수정만
+  backport한 release `34c6bcd385ab480bb981d6c35722792df60dfb14`를 만들었다. 별도 clean
+  linked worktree로 build하여 main을 이동하거나 source를 섞지 않았다. 이 후보 자체도305
+  PASS·mypy8·wheel RECORD/non-editable 검사 PASS였다. API health와 HTTPS `/studio/login`
+  200, 설치 member2460개의 실제 wheel bytes 대조를 확인했다. migration은 실행하지 않았다.
+- 초기 QUERY 기동은 실패했다. root provider 검사는 PASS였지만 실제 dropped UID/GID에서
+  CONFIGURATION의 named file `lstat`가 PermissionError였다. 수정 전 실제 fork/drop 재현으로
+  이를 확인했다. 폴더 권한/worker 그룹/비밀 파일을 바꾸지 않았다. main `7427afbb`, 호환
+  QUERY 후보 `94a51efd2ae336de1e3ac6c67d62b07813ec3a1c`는 root-staged config FD의
+  epoch/link/name/hash와 부모 identity를 유지하면서 private directory 재탐색에 의존하지
+  않는다. 집중62 PASS 및 **실제 root와 dropped owner 양쪽 admission PASS**다.
+- API는34c6, QUERY만94a51 cold owner로 선택한다. primary/mixed/public/private config와
+  unit의 exact hash/source를 CAS로 갱신하며 원본을 보호된 stage에 보존했다. API/provider
+  실제 source34c6, namespace/Graph/policy/model/numerical bundle은 바꾸지 않는다.
+- 초기 activation script의 PASS는 설치 단계이지 QUERY READY/사용자 검색 PASS가 아니다.
+  최종 cold boot의 READY 및 원 사용자 요청의 completion/replay를 별도로 확인한다.
+  실제 사용자 검색은 아직 PENDING이며 전체 목표를 완료로 표시하지 않는다.
+- GPU INDEX PID1017395와 독립 Catalog PID732310을 보존했다. 창작 owner는 재기동 이후
+  `CREATIVE_SOURCE_ITEM_UNREADABLE`로 별도 정지했으며 이를 정상3슬롯으로 과장하지 않는다.
+  검색 복구 후 해당 원본/등록 경계를 별도 진단·복구한다. 원본/FAILED 직접 수정은 없다.
+- deployment source 검사4건은 기존 HEAD에서도 같은 실패임을 별도 확인했다(0064 callback,
+  정의 inventory 등의 이전 기대값). 이번305 focused PASS와 전체 저장소 PASS는 구분한다.
+  새 route fixture의 초기 device/profile/partition 오류도 보존 후 올바른 fixture로 재검증했다.
+- 보호된 설치/rollback: `/opt/eom/api-releases/34c6bcd385ab480bb981d6c35722792df60dfb14`,
+  `/var/lib/eom-query-provider-recovery-94a51efd`. 실패한 이전 cold prefix도 보존한다.
+  INDEX4 writer·0065/0066 운영 활성화 및 구 벡터 삭제는 여전히 하지 않았다.
