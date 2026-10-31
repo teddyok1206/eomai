@@ -60,6 +60,11 @@ from eom_workflow.local_embedding_source_plan_v3 import (
     LocalEmbeddingSourcePlanV3,
     parse_local_embedding_source_plan_v3,
 )
+from eom_workflow.local_embedding_source_plan_v4 import (
+    LOCAL_EMBEDDING_SOURCE_PLAN_V4_SCHEMA_REF,
+    LocalEmbeddingSourcePlanV4,
+    parse_local_embedding_source_plan_v4,
+)
 from eom_workflow.private_chat_query_execution import (
     PRIVATE_CHAT_QUERY_POLICY_REF,
     PrivateChatQueryExecutionPolicy,
@@ -331,6 +336,20 @@ class LocalEmbeddingControlArtifactPublisher:
             semantic_sha256=checked.plan_sha256,
             member="source-plan.json",
             schema=LOCAL_EMBEDDING_SOURCE_PLAN_V3_SCHEMA_REF,
+            artifact_type=SOURCE_PLAN_ARTIFACT_TYPE,
+            idempotency_key=idempotency_key,
+            created_at=ControlPublicationTime.FIRST_OBSERVATION,
+        )
+
+    def publish_observed_source_plan_v4(
+        self, plan: LocalEmbeddingSourcePlanV4, *, idempotency_key: str
+    ) -> PublishedLocalEmbeddingControl:
+        checked = parse_local_embedding_source_plan_v4(plan)
+        return self._publish(
+            raw=canonical_json_bytes(checked.model_dump(mode="json")),
+            semantic_sha256=checked.plan_sha256,
+            member="source-plan.json",
+            schema=LOCAL_EMBEDDING_SOURCE_PLAN_V4_SCHEMA_REF,
             artifact_type=SOURCE_PLAN_ARTIFACT_TYPE,
             idempotency_key=idempotency_key,
             created_at=ControlPublicationTime.FIRST_OBSERVATION,

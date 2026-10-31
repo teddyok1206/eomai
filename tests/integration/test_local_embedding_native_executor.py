@@ -23,6 +23,9 @@ from eom_catalog_contracts.inference_transfer_experiment import StagedExperiment
 from eom_catalog_contracts.knowledge import ApprovedPastExamItemKnowledgeSourceV3
 from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
 from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
+from eom_catalog_contracts.registered_public_solution_embedding import (
+    RegisteredPublicSolutionEmbeddingEntry,
+)
 from eom_catalog_service.embedding_encoder_adapter import encode_incremental_batch
 from eom_catalog_service.embedding_index_refresh_plan import plan_index_membership_refresh
 from eom_catalog_service.embedding_registry_application import prepare_missing_embedding_bindings
@@ -55,7 +58,10 @@ from eom_catalog_service.knowledge_graph_models import (
     KnowledgeGraphSnapshotRecord,
 )
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
-from eom_catalog_service.local_embedding_source_plan_v3 import build_local_embedding_source_plan_v3
+from eom_catalog_service.local_embedding_source_plan_v3 import (
+    build_local_embedding_source_plan_v3,
+    build_local_embedding_source_plan_v4,
+)
 from eom_catalog_service.local_indexing_source_ports import LocalIndexingSourceReadIntent
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.public_solution_capture_ports import CapturedPublicSolutionSources
@@ -86,11 +92,13 @@ from eom_workflow.local_embedding_request import (
 from eom_workflow.local_embedding_request_v2 import (
     parse_supported_local_embedding_request,
     supported_local_embedding_request_actor,
+    supported_local_embedding_request_service,
 )
 from eom_workflow.local_embedding_request_v3 import (
     LocalEmbeddingWorkflowRequestV3,
     local_embedding_request_service_v3,
 )
+from eom_workflow.local_embedding_request_v4 import LocalEmbeddingWorkflowRequestV4
 from eom_workflow.native_embedding_coordinator import (
     NativeArtifactProducerIdentity,
     NativeCoordinatorAllocation,
@@ -136,6 +144,7 @@ from tests.unit.test_inference_transfer_pair_source_authorization import accepte
 from tests.unit.test_local_embedding_runner_admission import scope_fixture
 from tests.unit.test_mixed_local_embedding_owner_admission import mixed_scope
 from tests.unit.test_public_solution_encoding import public_entry
+from tests.unit.test_registered_public_solution_embedding import registered_entry
 
 pytestmark = pytest.mark.integration
 
@@ -196,8 +205,9 @@ def execution(
     request: pytest.FixtureRequest,
 ):
     execution_mode = getattr(request, "param", "operator")
-    public_mode = execution_mode == "public"
-    service_mode = execution_mode in {"service", "public"}
+    registered_public_mode = execution_mode == "registered_public"
+    public_mode = execution_mode in {"public", "registered_public"}
+    service_mode = execution_mode in {"service", "public", "registered_public"}
     cuda_mode = execution_mode in {"cuda", "cuda_bulk", "cuda_deferred"}
     cpu_fallback = execution_mode in {"cpu_fallback", "cpu_fallback_catchup"}
     addfinalizer = request.addfinalizer
@@ -270,6 +280,42 @@ def execution(
                 )
             )
         entries = tuple(public_entries)
+        if registered_public_mode:
+            # Synthetic accepted-report authority only. Real V11 bytes/receipt
+            # admission is tested by the separate registered-solution application suite.
+            registered_entries = []
+            for original_entry in entries:
+                value = registered_entry().model_dump(mode="json")
+                value.update(
+                    {
+                        field: getattr(original_entry, field).model_dump(mode="json")
+                        if hasattr(getattr(original_entry, field), "model_dump")
+                        else getattr(original_entry, field)
+                        for field in (
+                            "source",
+                            "base_analysis_run_id",
+                            "graph_snapshot",
+                            "policy_revision_id",
+                            "policy_sha256",
+                            "recipe",
+                            "public_solution",
+                        )
+                    }
+                )
+                value["source"]["source_class"] = "APPROVED_ITEM"
+                pointer = value["evidence"]["solution"]
+                pointer.update(
+                    base_analysis_run_id=original_entry.base_analysis_run_id,
+                    solution_analysis_run_id=original_entry.evidence.solution.solution_analysis_run_id,
+                )
+                value["evidence"]["solution"] = seal(pointer, "pointer_sha256")
+                registered_entries.append(
+                    RegisteredPublicSolutionEmbeddingEntry.model_validate(
+                        seal(value, "entry_sha256")
+                    )
+                )
+            entries = tuple(registered_entries)
+            capture = replace(capture, sources=tuple(entry.source for entry in entries))
         recipe = entries[0].recipe
         namespace = PublicSolutionIndexNamespace(
             storage_partition=namespace.storage_partition,
@@ -277,7 +323,11 @@ def execution(
             recipe_sha256=recipe.recipe_sha256,
         )
     config = EmbeddingRegistryOwnerConfiguration(
-        command.corpus_id, namespace, profile.space, recipe, ("PAST_EXAM",)
+        command.corpus_id,
+        namespace,
+        profile.space,
+        recipe,
+        ("APPROVED_ITEM",) if registered_public_mode else ("PAST_EXAM",),
     )
     query = EmbeddingRegistryLookup(
         command.corpus_id,
@@ -299,7 +349,11 @@ def execution(
         else (),
     )
     plan_builder = (
-        build_local_embedding_source_plan_v3 if public_mode else build_local_embedding_source_plan
+        build_local_embedding_source_plan_v4
+        if registered_public_mode
+        else build_local_embedding_source_plan_v3
+        if public_mode
+        else build_local_embedding_source_plan
     )
     plan = plan_builder(
         query, resolved, target_revision_ids=tuple(s.item_revision_id for s in capture.sources)
@@ -323,7 +377,11 @@ def execution(
     controls = LocalEmbeddingControlArtifactPublisher(publisher, source_commit="a" * 40)
     created = datetime.now(UTC)
     saved_plan = (
-        controls.publish_observed_source_plan_v3(plan, idempotency_key="test-plan:" + uuid4().hex)
+        controls.publish_observed_source_plan_v4(plan, idempotency_key="test-plan:" + uuid4().hex)
+        if registered_public_mode
+        else controls.publish_observed_source_plan_v3(
+            plan, idempotency_key="test-plan:" + uuid4().hex
+        )
         if public_mode
         else controls.publish_source_plan(
             plan, idempotency_key="test-plan:" + uuid4().hex, created_at=created
@@ -357,7 +415,9 @@ def execution(
     )
     if service_mode:
         body.update(
-            schema_version="local-embedding-workflow-request/3.0"
+            schema_version="local-embedding-workflow-request/4.0"
+            if registered_public_mode
+            else "local-embedding-workflow-request/3.0"
             if public_mode
             else "local-embedding-workflow-request/1.2",
             workflow_definition_version=compiled.definition.definition_version,
@@ -472,6 +532,10 @@ def execution(
             self.catalog, self.settings = catalog, settings
 
         def registry_caller(self, supplied):
+            if isinstance(supplied, LocalEmbeddingWorkflowRequestV4):
+                return EmbeddingRegistryServiceCaller(
+                    supported_local_embedding_request_service(supplied)
+                )
             if isinstance(supplied, LocalEmbeddingWorkflowRequestV3):
                 return EmbeddingRegistryServiceCaller(local_embedding_request_service_v3(supplied))
             if isinstance(supplied, LocalEmbeddingServiceWorkflowRequest):
@@ -583,7 +647,12 @@ def execution(
                 EmbeddingEncodingReservationStorage,
             )
 
-            EmbeddingEncodingReservationStorage.prepare_public_ownership_protocol(session)
+            if registered_public_mode:
+                EmbeddingEncodingReservationStorage.prepare_registered_public_ownership_protocol(
+                    session
+                )
+            else:
+                EmbeddingEncodingReservationStorage.prepare_public_ownership_protocol(session)
         ensure_protocol_version(
             session,
             ENCODING_PROTOCOL_VERSION,
@@ -643,6 +712,40 @@ def execution(
                 current.active_roots -= 1
 
         return workflow, lease, fenced
+
+    def upgrade_public_metadata():
+        """Same canonical source/text/space, new metadata4 frame only; no model run."""
+        nonlocal request
+        assert public_mode and not registered_public_mode
+        new_plan = build_local_embedding_source_plan_v4(
+            query,
+            resolved,
+            target_revision_ids=tuple(source.item_revision_id for source in resolved.sources),
+        )
+        saved = controls.publish_observed_source_plan_v4(
+            new_plan, idempotency_key="test-plan4:" + uuid4().hex
+        )
+        request = parse_supported_local_embedding_request(
+            seal(
+                request.model_dump(mode="json")
+                | {
+                    "schema_version": "local-embedding-workflow-request/4.0",
+                    "source_plan": saved.member.model_dump(mode="json"),
+                    "source_plan_sha256": new_plan.plan_sha256,
+                },
+                "request_sha256",
+            )
+        )
+        admitted[request.request_sha256] = (request, new_plan)
+        with sessions.begin() as session:
+            from eom_orchestrator.embedding_encoding_reservation_storage import (
+                EmbeddingEncodingReservationStorage,
+            )
+
+            EmbeddingEncodingReservationStorage.prepare_registered_public_ownership_protocol(
+                session
+            )
+        return new_plan
 
     def advance(workflow, lease, fenced, *, selected_executor=None):
         selected_request = parse_supported_local_embedding_request(workflow.initial_request)
@@ -861,6 +964,7 @@ def execution(
         current=current,
         graph_delta=graph_delta,
         refresh_membership=refresh_membership,
+        upgrade_public_metadata=upgrade_public_metadata,
         gpu=gpu,
     )
 
@@ -923,6 +1027,112 @@ def test_public_native_document_completes_with_real_registry_and_one_encoding(ex
 @pytest.mark.parametrize("phase", ["encoding_complete", "REGISTERED"])
 def test_public_native_interruption_reuses_original_numerical_output(execution, monkeypatch, phase):
     test_actual_interruption_resumes_same_outputs_without_reencoding(execution, monkeypatch, phase)
+
+
+@pytest.mark.parametrize("execution", ["registered_public"], indirect=True)
+def test_registered_public_native_completes_with_real_transactions_and_unchanged_numeric_job(
+    execution,
+):
+    started = execution.start()
+    assert execution.advance(*started) is True
+    execution.finish(*started)
+    assert execution.launcher.forwards == 1
+    with execution.sessions.begin() as session:
+        workflow = session.get(WorkflowInstanceRecord, started[0].workflow_id)
+        assert workflow.state == "COMPLETED"
+        assert workflow.initial_request["schema_version"] == "local-embedding-workflow-request/4.0"
+        bindings = tuple(
+            session.scalars(
+                select(EmbeddingSourceBindingRecord).where(
+                    EmbeddingSourceBindingRecord.item_revision_id.in_(
+                        tuple(source.item_revision_id for source in execution.plan.sources)
+                    ),
+                    EmbeddingSourceBindingRecord.evidence_kind == "PUBLIC_SOLUTION_REPORT",
+                )
+            )
+        )
+        assert len(bindings) == len(execution.plan.sources)
+        assert all(
+            row.binding_manifest_schema_ref
+            == "eom://schemas/knowledge/embedding-index-manifest/4.0"
+            for row in bindings
+        )
+        assert all(
+            row.source_class == "APPROVED_ITEM" and row.review_job_id is None for row in bindings
+        )
+        keys = tuple(
+            EMBEDDING_ENCODING_IDEMPOTENCY_PREFIX + demand.encoding.encoding_sha256
+            for demand in execution.plan.demands
+        )
+        jobs = tuple(session.scalars(select(JobRecord).where(JobRecord.idempotency_key.in_(keys))))
+        assert len(jobs) == 1 and jobs[0].protocol_version == ENCODING_PROTOCOL_VERSION
+        assert jobs[0].request["schema_version"] == "embedding-encoding-job/1.0"
+
+
+@pytest.mark.parametrize("execution", ["registered_public"], indirect=True)
+@pytest.mark.parametrize("phase", ["encoding_complete", "REGISTERED"])
+def test_registered_public_native_interruption_reuses_original_numeric_result(
+    execution, monkeypatch, phase
+):
+    test_actual_interruption_resumes_same_outputs_without_reencoding(execution, monkeypatch, phase)
+
+
+@pytest.mark.parametrize("execution", ["public"], indirect=True)
+def test_native3_to4_reuses_original_numeric_job_rows_and_binding_origins(execution):
+    first = execution.start()
+    assert execution.advance(*first) is True
+    execution.finish(*first)
+    assert execution.launcher.forwards == 1
+    keys = tuple(
+        EMBEDDING_ENCODING_IDEMPOTENCY_PREFIX + demand.encoding.encoding_sha256
+        for demand in execution.plan.demands
+    )
+    with execution.sessions.begin() as session:
+        before = tuple(
+            session.scalars(
+                select(EmbeddingSourceBindingRecord).where(
+                    EmbeddingSourceBindingRecord.item_revision_id.in_(
+                        tuple(source.item_revision_id for source in execution.plan.sources)
+                    ),
+                    EmbeddingSourceBindingRecord.evidence_kind == "PUBLIC_SOLUTION_REPORT",
+                )
+            )
+        )
+        origins = {row.binding_sha256: row.binding_manifest_artifact_revision_id for row in before}
+        original_jobs = tuple(
+            session.scalars(select(JobRecord.job_id).where(JobRecord.idempotency_key.in_(keys)))
+        )
+    upgraded = execution.upgrade_public_metadata()
+    assert {demand.encoding for demand in upgraded.demands} == {
+        demand.encoding for demand in execution.plan.demands
+    }
+    second = execution.start()
+    assert execution.advance(*second) is True
+    execution.finish(*second)
+    assert execution.launcher.forwards == 1
+    with execution.sessions.begin() as session:
+        assert (
+            tuple(
+                session.scalars(select(JobRecord.job_id).where(JobRecord.idempotency_key.in_(keys)))
+            )
+            == original_jobs
+        )
+        workflow = session.get(WorkflowInstanceRecord, second[0].workflow_id)
+        assert (
+            workflow.state == "COMPLETED"
+            and workflow.initial_request["schema_version"] == "local-embedding-workflow-request/4.0"
+        )
+        assert {
+            digest: session.get(
+                EmbeddingSourceBindingRecord, digest
+            ).binding_manifest_artifact_revision_id
+            for digest in origins
+        } == origins
+        assert all(
+            session.get(EmbeddingSourceBindingRecord, digest).binding_manifest_schema_ref
+            == "eom://schemas/knowledge/embedding-index-manifest/3.0"
+            for digest in origins
+        )
 
 
 @pytest.mark.parametrize(

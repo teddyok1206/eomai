@@ -70,6 +70,18 @@ class PreparedPublicSolutionIndexBasis:
     expected_lock_version: int
 
 
+@dataclass(frozen=True, slots=True)
+class PreparedRegisteredPublicSolutionIndexBasis:
+    full_plan: LocalEmbeddingSourcePlanV4
+    reusable_rows: tuple[RegisteredEmbeddingRow, ...]
+    shards: tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...]
+    previous: (
+        tuple[ArtifactMemberPointer, PublicSolutionEmbeddingIndex | PublicSolutionEmbeddingIndexV4]
+        | None
+    )
+    expected_lock_version: int
+
+
 @overload
 def assemble_public_solution_binding(
     entry: PublicSolutionEmbeddingEntry,

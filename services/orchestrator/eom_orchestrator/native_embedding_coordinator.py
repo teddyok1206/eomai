@@ -21,6 +21,7 @@ from eom_workflow.local_embedding_encoding_ownership_v2 import (
     parse_local_embedding_launch_intent_for_request,
 )
 from eom_workflow.local_embedding_encoding_ownership_v3 import LocalEmbeddingLaunchIntentV3
+from eom_workflow.local_embedding_encoding_ownership_v4 import LocalEmbeddingLaunchIntentV4
 from eom_workflow.local_embedding_request_v2 import (
     SupportedLocalEmbeddingRequest,
     parse_supported_local_embedding_request,
@@ -43,6 +44,12 @@ from eom_workflow.native_embedding_coordinator_v3 import (
     NativeEmbeddingCoordinatorCheckpointV3,
     parse_native_embedding_coordinator_checkpoint_v3,
     validate_native_coordinator_history_v3,
+)
+from eom_workflow.native_embedding_coordinator_v4 import (
+    NativeCoordinatorIndexPreparedV4,
+    NativeEmbeddingCoordinatorCheckpointV4,
+    parse_native_embedding_coordinator_checkpoint_v4,
+    validate_native_coordinator_history_v4,
 )
 from eom_workflow.schemas import (
     NATIVE_EMBEDDING_COORDINATOR_SCHEMA_RESOURCE,
@@ -75,6 +82,7 @@ type SupportedNativeCoordinatorCheckpoint = (
     NativeEmbeddingCoordinatorCheckpoint
     | NativeEmbeddingCoordinatorCheckpointV2
     | NativeEmbeddingCoordinatorCheckpointV3
+    | NativeEmbeddingCoordinatorCheckpointV4
 )
 
 
@@ -106,6 +114,8 @@ class NativeEmbeddingCoordinator:
         self.intent = parse_local_embedding_launch_intent_for_request(intent, self.request)
 
     def _parse_checkpoint(self, value: object) -> SupportedNativeCoordinatorCheckpoint:
+        if isinstance(self.intent, LocalEmbeddingLaunchIntentV4):
+            return parse_native_embedding_coordinator_checkpoint_v4(value)
         if isinstance(self.intent, LocalEmbeddingLaunchIntentV3):
             return parse_native_embedding_coordinator_checkpoint_v3(value)
         if isinstance(self.intent, LocalEmbeddingLaunchIntentV2):
@@ -126,7 +136,13 @@ class NativeEmbeddingCoordinator:
         return self._parse_checkpoint(body | {"checkpoint_sha256": content_sha256(body)})
 
     def _validate_history(self, records: tuple[SupportedNativeCoordinatorCheckpoint, ...]) -> None:
-        if isinstance(self.intent, LocalEmbeddingLaunchIntentV3):
+        if isinstance(self.intent, LocalEmbeddingLaunchIntentV4):
+            if any(type(row) is not NativeEmbeddingCoordinatorCheckpointV4 for row in records):
+                raise ValueError("registered public coordinator checkpoint family differs")
+            validate_native_coordinator_history_v4(
+                cast(tuple[NativeEmbeddingCoordinatorCheckpointV4, ...], records), self.intent
+            )
+        elif isinstance(self.intent, LocalEmbeddingLaunchIntentV3):
             if any(type(row) is not NativeEmbeddingCoordinatorCheckpointV3 for row in records):
                 raise ValueError("public-solution coordinator checkpoint family differs")
             validate_native_coordinator_history_v3(
@@ -148,6 +164,12 @@ class NativeEmbeddingCoordinator:
             )
 
     def _checkpoint_protocol(self) -> tuple[str, str]:
+        if isinstance(self.intent, LocalEmbeddingLaunchIntentV4):
+            return "native-embedding-coordinator/4.0", next(
+                row[3]
+                for row in PUBLIC_NATIVE_WORKFLOW_SCHEMA_RESOURCES
+                if row[0] == "registered-public-coordinator"
+            )
         if isinstance(self.intent, LocalEmbeddingLaunchIntentV3):
             return "native-embedding-coordinator/3.0", next(
                 row[3]
@@ -198,6 +220,7 @@ class NativeEmbeddingCoordinator:
                         NativeCoordinatorIndexPrepared,
                         NativeCoordinatorIndexPreparedV2,
                         NativeCoordinatorIndexPreparedV3,
+                        NativeCoordinatorIndexPreparedV4,
                     ),
                 ):
                     command, request = record.payload.registration_command, self.request

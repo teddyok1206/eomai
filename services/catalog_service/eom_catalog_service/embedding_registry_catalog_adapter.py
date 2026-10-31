@@ -81,6 +81,7 @@ from eom_catalog_contracts.registered_public_solution_embedding import (
 )
 from eom_catalog_contracts.registered_public_solution_index import (
     REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+    PublicSolutionEmbeddingIndexV4,
     RegisteredPublicSolutionSourceBinding,
 )
 from eom_catalog_contracts.registered_public_solution_registry import (
@@ -128,14 +129,15 @@ from eom_orchestrator.embedding_artifact_store import (
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.local_embedding_source_plan import (
-    LocalEmbeddingSourcePlan,
     validate_local_embedding_entry_source,
 )
+from eom_workflow.local_embedding_source_plan_dispatch import SupportedLocalEmbeddingSourcePlan
 from eom_workflow.local_embedding_source_plan_v2 import (
     LocalEmbeddingSourcePlanV2,
     validate_local_embedding_entry_source_v2,
 )
 from eom_workflow.local_embedding_source_plan_v3 import LocalEmbeddingSourcePlanV3
+from eom_workflow.local_embedding_source_plan_v4 import LocalEmbeddingSourcePlanV4
 from jsonschema.exceptions import ValidationError as JsonSchemaError
 from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
@@ -218,7 +220,10 @@ from eom_catalog_service.knowledge_graph_models import (
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalServiceError
 from eom_catalog_service.local_embedding_source_plan import build_local_embedding_source_plan
 from eom_catalog_service.local_embedding_source_plan_v2 import build_local_embedding_source_plan_v2
-from eom_catalog_service.local_embedding_source_plan_v3 import build_local_embedding_source_plan_v3
+from eom_catalog_service.local_embedding_source_plan_v3 import (
+    build_local_embedding_source_plan_v3,
+    build_local_embedding_source_plan_v4,
+)
 from eom_catalog_service.local_indexing_source_ports import (
     LocalIndexingSourceError,
     LocalIndexingSourceReadIntent,
@@ -238,6 +243,7 @@ from eom_catalog_service.private_chat_similarity_ports import PreparedPrivateCha
 from eom_catalog_service.public_solution_capture_ports import CapturedPublicSolutionSources
 from eom_catalog_service.public_solution_index_assembly import (
     PreparedPublicSolutionIndexBasis,
+    PreparedRegisteredPublicSolutionIndexBasis,
     assemble_public_solution_binding,
 )
 from eom_catalog_service.reference_query_context_preparation import (
@@ -2198,12 +2204,28 @@ class CatalogEmbeddingRegistryVerifier:
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
         return basis
 
-    def _prepare_index_basis(
+    def prepare_registered_public_index_basis(
         self, session: Session, caller: EmbeddingRegistryActor, query: EmbeddingRegistryLookup
+    ) -> PreparedRegisteredPublicSolutionIndexBasis:
+        if not isinstance(query.namespace, PublicSolutionIndexNamespace):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+        basis = self._prepare_index_basis(session, caller, query, public_metadata_version="4.0")
+        if not isinstance(basis, PreparedRegisteredPublicSolutionIndexBasis):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+        return basis
+
+    def _prepare_index_basis(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryActor,
+        query: EmbeddingRegistryLookup,
+        *,
+        public_metadata_version: Literal["3.0", "4.0"] = "3.0",
     ) -> (
         PreparedEmbeddingIndexBasis
         | PreparedMixedEmbeddingIndexBasis
         | PreparedPublicSolutionIndexBasis
+        | PreparedRegisteredPublicSolutionIndexBasis
     ):
         """Capture full current eligibility and reusable rows once before index assembly.
 
@@ -2217,6 +2239,7 @@ class CatalogEmbeddingRegistryVerifier:
             PreparedEmbeddingIndexBasis
             | PreparedMixedEmbeddingIndexBasis
             | PreparedPublicSolutionIndexBasis
+            | PreparedRegisteredPublicSolutionIndexBasis
         ):
             reader, capture = self._capture(
                 session, caller, query, InferenceTransferSessionCapturePhase.CAPTURE_POPULATION
@@ -2225,10 +2248,16 @@ class CatalogEmbeddingRegistryVerifier:
                 raise ValueError("index basis has no complete current population")
             resolved = self._captured_lookup(session, caller, query, capture)
             targets = tuple(sorted(s.item_revision_id for s in resolved.sources))
-            plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3
+            plan: SupportedLocalEmbeddingSourcePlan
             if isinstance(query.namespace, PublicSolutionIndexNamespace):
-                plan = build_local_embedding_source_plan_v3(
-                    query, resolved, target_revision_ids=targets
+                plan = (
+                    build_local_embedding_source_plan_v4(
+                        query, resolved, target_revision_ids=targets
+                    )
+                    if public_metadata_version == "4.0"
+                    else build_local_embedding_source_plan_v3(
+                        query, resolved, target_revision_ids=targets
+                    )
                 )
             elif isinstance(query.namespace, MixedEmbeddingIndexNamespace):
                 plan = build_local_embedding_source_plan_v2(
@@ -2266,6 +2295,19 @@ class CatalogEmbeddingRegistryVerifier:
             # The proof is root-local. Later publication roots independently
             # recapture review dependencies rather than reusing this observation.
             self.authorize_scope(session, caller, query)
+            if isinstance(plan, LocalEmbeddingSourcePlanV4):
+                registered_previous = None
+                if previous is not None:
+                    registered_index = previous[1]
+                    if not isinstance(
+                        registered_index,
+                        PublicSolutionEmbeddingIndex | PublicSolutionEmbeddingIndexV4,
+                    ):
+                        raise ValueError("source-plan4 cannot reinterpret non-public index history")
+                    registered_previous = (previous[0], registered_index)
+                return PreparedRegisteredPublicSolutionIndexBasis(
+                    plan, rows, shards, registered_previous, version
+                )
             if isinstance(plan, LocalEmbeddingSourcePlanV3):
                 public_previous = None
                 if previous is not None:

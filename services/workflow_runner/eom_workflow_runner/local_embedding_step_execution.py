@@ -10,6 +10,7 @@ from eom_workflow.local_embedding_request_v2 import (
     SupportedLocalEmbeddingRequest,
 )
 from eom_workflow.local_embedding_request_v3 import LocalEmbeddingWorkflowRequestV3
+from eom_workflow.local_embedding_request_v4 import LocalEmbeddingWorkflowRequestV4
 from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowDefinition
 from eom_workflow.local_embedding_workflow_receipt_v2 import (
     LocalEmbeddingStepOutputV2,
@@ -17,6 +18,7 @@ from eom_workflow.local_embedding_workflow_receipt_v2 import (
     parse_supported_local_embedding_step_output,
 )
 from eom_workflow.local_embedding_workflow_receipt_v3 import LocalEmbeddingStepOutputV3
+from eom_workflow.local_embedding_workflow_receipt_v4 import LocalEmbeddingStepOutputV4
 from eom_workflow.local_embedding_workflow_v2 import LocalEmbeddingWorkflowDefinitionV2
 from sqlalchemy.orm import Session
 
@@ -90,11 +92,17 @@ def _checked_completion(
     output: SupportedLocalEmbeddingStepOutput,
 ) -> SupportedLocalEmbeddingStepOutput:
     output = parse_supported_local_embedding_step_output(output)
-    if isinstance(request, LocalEmbeddingWorkflowRequestV2) != isinstance(
-        output, LocalEmbeddingStepOutputV2
-    ) or (
-        isinstance(request, LocalEmbeddingWorkflowRequestV3)
-        != isinstance(output, LocalEmbeddingStepOutputV3)
+    if (
+        isinstance(request, LocalEmbeddingWorkflowRequestV2)
+        != isinstance(output, LocalEmbeddingStepOutputV2)
+        or (
+            isinstance(request, LocalEmbeddingWorkflowRequestV3)
+            != isinstance(output, LocalEmbeddingStepOutputV3)
+        )
+        or (
+            isinstance(request, LocalEmbeddingWorkflowRequestV4)
+            != isinstance(output, LocalEmbeddingStepOutputV4)
+        )
     ):
         raise ValueError("LOCAL_EMBEDDING_COMPLETION_FAMILY_MISMATCH")
     if (

@@ -3,15 +3,32 @@
 from eom_catalog_contracts.inference_transfer_embedding import EmbeddingIndexManifest
 from eom_catalog_contracts.mixed_embedding_index import MixedEmbeddingIndexManifest
 from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionEmbeddingIndex
+from eom_catalog_contracts.registered_public_solution_index import PublicSolutionEmbeddingIndexV4
 from eom_catalog_service.embedding_registry_ports import ResolvedEmbeddingRegistration
 from eom_workflow.local_embedding_workflow_receipt import ResolvedNativeIndexCoverage
 from eom_workflow.local_embedding_workflow_receipt_v2 import ResolvedNativeIndexCoverageV2
 from eom_workflow.local_embedding_workflow_receipt_v3 import ResolvedNativeIndexCoverageV3
+from eom_workflow.local_embedding_workflow_receipt_v4 import ResolvedNativeIndexCoverageV4
 
 
 def resolved_native_index_coverage(
     resolved: ResolvedEmbeddingRegistration,
-) -> ResolvedNativeIndexCoverage | ResolvedNativeIndexCoverageV2 | ResolvedNativeIndexCoverageV3:
+) -> (
+    ResolvedNativeIndexCoverage
+    | ResolvedNativeIndexCoverageV2
+    | ResolvedNativeIndexCoverageV3
+    | ResolvedNativeIndexCoverageV4
+):
+    if isinstance(resolved.index, PublicSolutionEmbeddingIndexV4):
+        registered_previous = None
+        if resolved.previous is not None:
+            pointer, registered_index = resolved.previous
+            if not isinstance(
+                registered_index, PublicSolutionEmbeddingIndex | PublicSolutionEmbeddingIndexV4
+            ):
+                raise ValueError("LOCAL_EMBEDDING_COMPLETION_FAMILY_MISMATCH")
+            registered_previous = (pointer, registered_index)
+        return ResolvedNativeIndexCoverageV4(resolved.index, resolved.sources, registered_previous)
     if isinstance(resolved.index, PublicSolutionEmbeddingIndex):
         public_previous = None
         if resolved.previous is not None:

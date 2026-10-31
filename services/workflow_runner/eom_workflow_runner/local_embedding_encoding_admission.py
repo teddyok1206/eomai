@@ -35,9 +35,7 @@ from eom_workflow.local_embedding_request_v2 import (
     SupportedLocalEmbeddingRequest,
     parse_supported_local_embedding_request,
 )
-from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
-from eom_workflow.local_embedding_source_plan_v2 import LocalEmbeddingSourcePlanV2
-from eom_workflow.local_embedding_source_plan_v3 import LocalEmbeddingSourcePlanV3
+from eom_workflow.local_embedding_source_plan_dispatch import SupportedLocalEmbeddingSourcePlan
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -83,7 +81,7 @@ def _scope(value: ResolvedLocalEmbeddingSources) -> ResolvedEncodingScope:
 
 
 def _keys(
-    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3,
+    plan: SupportedLocalEmbeddingSourcePlan,
 ) -> dict[str, EmbeddingEncodingJobRequest]:
     # Derive the exact small request identities, not source data or permission.
     from eom_identifiers import content_sha256

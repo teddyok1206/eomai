@@ -4,20 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_workflow.local_embedding_index_refresh import LocalEmbeddingIndexRefreshRequest
 from eom_workflow.local_embedding_request_v2 import SupportedLocalEmbeddingRequest
-from eom_workflow.local_embedding_source_plan import (
-    LocalEmbeddingSourcePlan,
-    parse_local_embedding_source_plan,
-)
-from eom_workflow.local_embedding_source_plan_v2 import (
-    LocalEmbeddingSourcePlanV2,
-    parse_local_embedding_source_plan_v2,
-)
-from eom_workflow.local_embedding_source_plan_v3 import (
-    LocalEmbeddingSourcePlanV3,
-    parse_local_embedding_source_plan_v3,
+from eom_workflow.local_embedding_source_plan_dispatch import (
+    SupportedLocalEmbeddingSourcePlan,
+    parse_supported_local_embedding_source_plan,
 )
 from sqlalchemy.orm import Session
 
@@ -43,16 +34,10 @@ from eom_workflow_runner.repository import create_workflow_instance
 class LocalEmbeddingCoverageOnly:
     """Reuse the verified immutable plan, without inventing a zero-output Artifact."""
 
-    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3
+    plan: SupportedLocalEmbeddingSourcePlan
 
     def __post_init__(self) -> None:
-        plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3
-        if isinstance(self.plan, LocalEmbeddingSourcePlanV3):
-            plan = parse_local_embedding_source_plan_v3(self.plan)
-        elif isinstance(self.plan, LocalEmbeddingSourcePlanV2):
-            plan = parse_local_embedding_source_plan_v2(self.plan)
-        else:
-            plan = parse_local_embedding_source_plan(raw_similarity_contract_value(self.plan))
+        plan = parse_supported_local_embedding_source_plan(self.plan)
         if plan.demands:
             raise ValueError("LOCAL_EMBEDDING_COVERAGE_ONLY_INVALID")
         object.__setattr__(self, "plan", plan)

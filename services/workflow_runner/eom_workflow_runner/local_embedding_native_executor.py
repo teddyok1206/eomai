@@ -47,9 +47,8 @@ from eom_workflow.local_embedding_request_v2 import (
     parse_supported_local_embedding_request,
 )
 from eom_workflow.local_embedding_request_v3 import LocalEmbeddingWorkflowRequestV3
-from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
-from eom_workflow.local_embedding_source_plan_v2 import LocalEmbeddingSourcePlanV2
-from eom_workflow.local_embedding_source_plan_v3 import LocalEmbeddingSourcePlanV3
+from eom_workflow.local_embedding_request_v4 import LocalEmbeddingWorkflowRequestV4
+from eom_workflow.local_embedding_source_plan_dispatch import SupportedLocalEmbeddingSourcePlan
 from eom_workflow.local_embedding_workflow_receipt_v2 import SupportedLocalEmbeddingStepOutput
 from eom_workflow.native_embedding_coordinator import (
     NativeCoordinatorAllocation,
@@ -57,6 +56,7 @@ from eom_workflow.native_embedding_coordinator import (
 )
 from eom_workflow.native_embedding_coordinator_v2 import NativeCoordinatorCompletedV2
 from eom_workflow.native_embedding_coordinator_v3 import NativeCoordinatorCompletedV3
+from eom_workflow.native_embedding_coordinator_v4 import NativeCoordinatorCompletedV4
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.document_embedding_execution import (
@@ -94,7 +94,7 @@ from eom_workflow_runner.repository import CommandLeaseIdentity
 
 
 def _encoding_requests(
-    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3,
+    plan: SupportedLocalEmbeddingSourcePlan,
     *,
     reusable_encodings: frozenset[str] = frozenset(),
 ) -> tuple[EmbeddingEncodingJobRequest, ...]:
@@ -307,7 +307,8 @@ class CatalogNativeEmbeddingExecutor:
                     completed,
                     NativeCoordinatorCompleted
                     | NativeCoordinatorCompletedV2
-                    | NativeCoordinatorCompletedV3,
+                    | NativeCoordinatorCompletedV3
+                    | NativeCoordinatorCompletedV4,
                 )
                 return self.validate_completion(
                     session=session,
@@ -326,7 +327,12 @@ class CatalogNativeEmbeddingExecutor:
                     row.encoding.encoding_sha256 for row in basis.reusable_rows
                 )
             elif not isinstance(
-                request, (LocalEmbeddingIndexRefreshRequest, LocalEmbeddingWorkflowRequestV3)
+                request,
+                (
+                    LocalEmbeddingIndexRefreshRequest,
+                    LocalEmbeddingWorkflowRequestV3,
+                    LocalEmbeddingWorkflowRequestV4,
+                ),
             ):
                 legacy_basis = self.owner.catalog.prepare_index_basis(
                     session, caller, native_embedding_registry_scope(request)
@@ -340,7 +346,10 @@ class CatalogNativeEmbeddingExecutor:
             else _encoding_requests(sources.admission.plan, reusable_encodings=reusable_encodings)
         )
         if isinstance(request, LocalEmbeddingIndexRefreshRequest) or (
-            not isinstance(request, LocalEmbeddingWorkflowRequestV3) and not encoding_requests
+            not isinstance(
+                request, LocalEmbeddingWorkflowRequestV3 | LocalEmbeddingWorkflowRequestV4
+            )
+            and not encoding_requests
         ):
             # Reuse canonical registry rows directly. A membership-only request
             # must never allocate encoding reservations or launch numerical work.

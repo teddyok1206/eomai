@@ -62,6 +62,9 @@ from eom_workflow.local_embedding_encoding_ownership_v2 import (
 from eom_workflow.local_embedding_encoding_ownership_v3 import (
     EMBEDDING_ENCODING_OWNERSHIP_V3_SCHEMA_SHA256,
 )
+from eom_workflow.local_embedding_encoding_ownership_v4 import (
+    EMBEDDING_ENCODING_OWNERSHIP_V4_SCHEMA_SHA256,
+)
 from eom_workflow.schemas import LOCAL_EMBEDDING_SCHEMA_RESOURCES
 from pydantic import BaseModel
 from sqlalchemy import func, insert, select, text
@@ -198,6 +201,15 @@ class EmbeddingEncodingReservationStorage:
         )
 
     @staticmethod
+    def prepare_registered_public_ownership_protocol(session: Session) -> None:
+        """Schema-owner release preparation, never runtime self-registration."""
+        EmbeddingEncodingReservationStorage._prepare_protocol(
+            session,
+            "embedding-encoding-ownership/4.0",
+            EMBEDDING_ENCODING_OWNERSHIP_V4_SCHEMA_SHA256,
+        )
+
+    @staticmethod
     def prepare_recovery_protocol(session: Session) -> None:
         """Explicit schema-owner deployment preparation, not runtime bootstrap."""
         EmbeddingEncodingReservationStorage._prepare_protocol(
@@ -305,6 +317,14 @@ class EmbeddingEncodingReservationStorage:
             ProtocolVersionRecord, "embedding-encoding-ownership/3.0", populate_existing=True
         )
         if record is None or record.schema_sha256 != EMBEDDING_ENCODING_OWNERSHIP_V3_SCHEMA_SHA256:
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE")
+
+    @staticmethod
+    def require_registered_public_ownership_protocol(session: Session) -> None:
+        record = session.get(
+            ProtocolVersionRecord, "embedding-encoding-ownership/4.0", populate_existing=True
+        )
+        if record is None or record.schema_sha256 != EMBEDDING_ENCODING_OWNERSHIP_V4_SCHEMA_SHA256:
             raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE")
 
     @staticmethod

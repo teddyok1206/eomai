@@ -46,6 +46,7 @@ from eom_workflow.local_embedding_request_v2 import (
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
 from eom_workflow.local_embedding_source_plan_v2 import LocalEmbeddingSourcePlanV2
 from eom_workflow.local_embedding_source_plan_v3 import LocalEmbeddingSourcePlanV3
+from eom_workflow.local_embedding_source_plan_v4 import LocalEmbeddingSourcePlanV4
 from eom_workflow.schemas import NativeEmbeddingContract
 from jsonschema import ValidationError as JsonSchemaValidationError
 from sqlalchemy.orm import Session, sessionmaker
@@ -63,7 +64,12 @@ from eom_orchestrator.state_machine import JobState
 @dataclass(frozen=True, slots=True)
 class ResolvedEncodingScope:
     workflow_request: SupportedLocalEmbeddingRequest
-    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3
+    plan: (
+        LocalEmbeddingSourcePlan
+        | LocalEmbeddingSourcePlanV2
+        | LocalEmbeddingSourcePlanV3
+        | LocalEmbeddingSourcePlanV4
+    )
     policy: LocalEmbeddingExecutablePolicy
 
 

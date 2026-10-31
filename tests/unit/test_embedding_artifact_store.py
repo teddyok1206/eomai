@@ -320,6 +320,7 @@ def test_store_source_has_no_parallel_database_network_process_or_git_boundary()
     }
     assert imports <= {
         "__future__",
+        "fcntl",  # existing local file-set lock, not another execution boundary
         "json",
         "os",
         "re",
@@ -335,9 +336,13 @@ def test_store_source_has_no_parallel_database_network_process_or_git_boundary()
         "eom_catalog_contracts.embedding_private_chat_query",
         "eom_catalog_contracts.embedding_reference_query_v11",
         "eom_catalog_contracts.embedding_runtime_bundle",
+        "eom_catalog_contracts.embedding_index_families",
         "eom_catalog_contracts.embedding_vector_binary",
         "eom_catalog_contracts.inference_transfer_embedding",
         "eom_catalog_contracts.mixed_embedding_index",
+        "eom_catalog_contracts.public_solution_embedding_index",
+        "eom_catalog_contracts.public_solution_query",
+        "eom_catalog_contracts.registered_public_solution_index",
         "eom_catalog_contracts.knowledge",
         "eom_catalog_contracts.models",
         "eom_identifiers",
@@ -351,6 +356,7 @@ def test_store_source_has_no_parallel_database_network_process_or_git_boundary()
         "eom_workflow.local_embedding_request_v2",
         "eom_workflow.local_embedding_source_plan",
         "eom_workflow.local_embedding_source_plan_v2",
+        "eom_workflow.local_embedding_source_plan_dispatch",
         "eom_workflow.reference_query_execution",
         "eom_workflow.private_chat_query_execution",
         "eom_workflow.private_chat_query_publication",

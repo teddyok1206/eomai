@@ -69,6 +69,7 @@ from eom_catalog_contracts.public_solution_query import (
     PublicSolutionQueryResult,
     validate_public_solution_query_result,
 )
+from eom_catalog_contracts.registered_public_solution_index import PublicSolutionEmbeddingIndexV4
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.models import ArtifactId, JobId, RevisionId
@@ -83,9 +84,7 @@ from eom_workflow.local_embedding_request_v2 import (
     parse_supported_local_embedding_request,
     validate_supported_local_embedding_request_references,
 )
-from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
-from eom_workflow.local_embedding_source_plan_v2 import LocalEmbeddingSourcePlanV2
-from eom_workflow.local_embedding_source_plan_v3 import LocalEmbeddingSourcePlanV3
+from eom_workflow.local_embedding_source_plan_dispatch import SupportedLocalEmbeddingSourcePlan
 from eom_workflow.local_embedding_workflow import (
     LocalEmbeddingWorkflowRequest,
     parse_local_embedding_workflow_request,
@@ -846,7 +845,9 @@ class EmbeddingArtifactStore:
                 <= len(shards)
                 <= (
                     MAX_PUBLIC_SOLUTION_SOURCES
-                    if isinstance(index, PublicSolutionEmbeddingIndex)
+                    if isinstance(
+                        index, PublicSolutionEmbeddingIndex | PublicSolutionEmbeddingIndexV4
+                    )
                     else MAX_EMBEDDING_ROWS
                 )
                 or any(not isinstance(value, tuple) or len(value) != 2 for value in shards)
@@ -969,13 +970,27 @@ class EmbeddingArtifactStore:
             raise EmbeddingArtifactStoreError("EMBEDDING_INDEX_CONTEXT_INVALID")
         return index
 
-    def _read_staged_index(
+    def read_staged_registered_public_index(
         self, *, workspace: Path, expected_sha256: str
+    ) -> PublicSolutionEmbeddingIndexV4:
+        index = self._read_staged_index(
+            workspace=workspace, expected_sha256=expected_sha256, maximum_bytes=64 * 1024**2
+        )
+        if not isinstance(index, PublicSolutionEmbeddingIndexV4):
+            raise EmbeddingArtifactStoreError("EMBEDDING_INDEX_CONTEXT_INVALID")
+        return index
+
+    def _read_staged_index(
+        self,
+        *,
+        workspace: Path,
+        expected_sha256: str,
+        maximum_bytes: int = MAX_EMBEDDING_INPUT_BYTES,
     ) -> SupportedEmbeddingIndex:
         """Read the exact checkpointed local bytes; never regenerate from current/latest."""
         with (
             _directory(workspace) as directory,
-            _member(directory, EMBEDDING_INDEX_PRIMARY_MEMBER, MAX_EMBEDDING_INPUT_BYTES) as raw,
+            _member(directory, EMBEDDING_INDEX_PRIMARY_MEMBER, maximum_bytes) as raw,
         ):
             if sha256_bytes(raw) != TypeAdapter(Sha256).validate_python(expected_sha256):
                 raise EmbeddingArtifactStoreError("EMBEDDING_INDEX_MEMBER_CONFLICT")
@@ -1025,7 +1040,7 @@ class EmbeddingArtifactStore:
         self,
         *,
         workflow_request: SupportedLocalEmbeddingRequest,
-        plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3,
+        plan: SupportedLocalEmbeddingSourcePlan,
         policy: LocalEmbeddingExecutablePolicy,
         association: SupportedEmbeddingAssociation,
         request: IncrementalEmbeddingInput,

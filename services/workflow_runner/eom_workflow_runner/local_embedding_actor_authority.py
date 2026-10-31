@@ -34,17 +34,16 @@ from eom_workflow.local_embedding_execution_policy import (
 from eom_workflow.local_embedding_request import (
     LocalEmbeddingServiceWorkflowRequest,
     LocalEmbeddingWorkflowRequestV11,
-    local_embedding_request_service,
     require_local_embedding_operator_seed,
 )
 from eom_workflow.local_embedding_request_v2 import (
     LocalEmbeddingWorkflowRequestV2,
-    local_embedding_request_service_v2,
+    supported_local_embedding_request_service,
 )
 from eom_workflow.local_embedding_request_v3 import (
     LocalEmbeddingWorkflowRequestV3,
-    local_embedding_request_service_v3,
 )
+from eom_workflow.local_embedding_request_v4 import LocalEmbeddingWorkflowRequestV4
 from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
@@ -100,19 +99,12 @@ class ServiceLocalEmbeddingActorAuthority:
             checked,
             LocalEmbeddingServiceWorkflowRequest
             | LocalEmbeddingWorkflowRequestV2
-            | LocalEmbeddingWorkflowRequestV3,
+            | LocalEmbeddingWorkflowRequestV3
+            | LocalEmbeddingWorkflowRequestV4,
         ):
             raise ValueError("LOCAL_EMBEDDING_SERVICE_UNAVAILABLE")
         gate, audit = self.source_authority, checked.actor_context
-        service = (
-            local_embedding_request_service_v3(checked)
-            if isinstance(checked, LocalEmbeddingWorkflowRequestV3)
-            else (
-                local_embedding_request_service_v2(checked)
-                if isinstance(checked, LocalEmbeddingWorkflowRequestV2)
-                else local_embedding_request_service(checked)
-            )
-        )
+        service = supported_local_embedding_request_service(checked)
         caller = EmbeddingRegistryServiceCaller(service)
         if (
             caller.service != gate.authority.service_fence.pin.service
@@ -145,14 +137,17 @@ class ServiceLocalEmbeddingActorAuthority:
                 request,
                 LocalEmbeddingServiceWorkflowRequest
                 | LocalEmbeddingWorkflowRequestV2
-                | LocalEmbeddingWorkflowRequestV3,
+                | LocalEmbeddingWorkflowRequestV3
+                | LocalEmbeddingWorkflowRequestV4,
             )
             or (
                 isinstance(request, LocalEmbeddingWorkflowRequestV2)
                 != isinstance(policy, LocalIndexingMixedAccessPolicy)
             )
             or (
-                isinstance(request, LocalEmbeddingWorkflowRequestV3)
+                isinstance(
+                    request, LocalEmbeddingWorkflowRequestV3 | LocalEmbeddingWorkflowRequestV4
+                )
                 != isinstance(policy, PublicSolutionIndexingAccessPolicy)
             )
             or (

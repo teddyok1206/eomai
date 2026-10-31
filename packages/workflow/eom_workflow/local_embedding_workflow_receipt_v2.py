@@ -29,6 +29,7 @@ from eom_workflow.local_embedding_encoding_ownership_v2 import (
     validate_local_embedding_launch_association_v2,
 )
 from eom_workflow.local_embedding_encoding_ownership_v3 import LocalEmbeddingLaunchAssociationV3
+from eom_workflow.local_embedding_encoding_ownership_v4 import LocalEmbeddingLaunchAssociationV4
 from eom_workflow.local_embedding_execution_policy import (
     LocalEmbeddingExecutablePolicy,
     LocalEmbeddingServiceExecutionPolicy,
@@ -40,6 +41,7 @@ from eom_workflow.local_embedding_request_v2 import (
     validate_local_embedding_request_references_v2,
 )
 from eom_workflow.local_embedding_request_v3 import LocalEmbeddingWorkflowRequestV3
+from eom_workflow.local_embedding_request_v4 import LocalEmbeddingWorkflowRequestV4
 from eom_workflow.local_embedding_source_plan import LocalEmbeddingSourcePlan
 from eom_workflow.local_embedding_source_plan_v2 import (
     LOCAL_EMBEDDING_SOURCE_PLAN_V2_SCHEMA_REF,
@@ -48,6 +50,7 @@ from eom_workflow.local_embedding_source_plan_v2 import (
     validate_local_embedding_selected_index_coverage_v2,
 )
 from eom_workflow.local_embedding_source_plan_v3 import LocalEmbeddingSourcePlanV3
+from eom_workflow.local_embedding_source_plan_v4 import LocalEmbeddingSourcePlanV4
 from eom_workflow.local_embedding_workflow_receipt import (
     MAX_LOCAL_EMBEDDING_STEP_OUTPUT_BYTES,
     MAX_LOCAL_EMBEDDING_WORKFLOW_RECEIPT_BYTES,
@@ -68,6 +71,15 @@ from eom_workflow.local_embedding_workflow_receipt_v3 import (
     parse_local_embedding_workflow_receipt_v3,
     validate_local_embedding_step_output_v3,
     validate_local_embedding_workflow_receipt_v3,
+)
+from eom_workflow.local_embedding_workflow_receipt_v4 import (
+    LocalEmbeddingStepOutputV4,
+    LocalEmbeddingWorkflowReceiptV4,
+    ResolvedNativeIndexCoverageV4,
+    parse_local_embedding_step_output_v4,
+    parse_local_embedding_workflow_receipt_v4,
+    validate_local_embedding_step_output_v4,
+    validate_local_embedding_workflow_receipt_v4,
 )
 from eom_workflow.models import JobId, StepRunId, WorkflowId
 from eom_workflow.schemas import (
@@ -202,17 +214,26 @@ def local_embedding_step_output_v2_bytes(value: LocalEmbeddingStepOutputV2) -> b
 
 
 type SupportedLocalEmbeddingStepOutput = (
-    LocalEmbeddingStepOutput | LocalEmbeddingStepOutputV2 | LocalEmbeddingStepOutputV3
+    LocalEmbeddingStepOutput
+    | LocalEmbeddingStepOutputV2
+    | LocalEmbeddingStepOutputV3
+    | LocalEmbeddingStepOutputV4
 )
 type SupportedLocalEmbeddingWorkflowReceipt = (
     LocalEmbeddingWorkflowReceipt
     | LocalEmbeddingWorkflowReceiptV2
     | LocalEmbeddingWorkflowReceiptV3
+    | LocalEmbeddingWorkflowReceiptV4
 )
 
 
 def parse_supported_local_embedding_step_output(value: object) -> SupportedLocalEmbeddingStepOutput:
     document = raw_similarity_contract_value(value)
+    if (
+        isinstance(document, dict)
+        and document.get("schema_version") == "local-embedding-step-output/4.0"
+    ):
+        return parse_local_embedding_step_output_v4(document)
     if (
         isinstance(document, dict)
         and document.get("schema_version") == "local-embedding-step-output/3.0"
@@ -232,6 +253,11 @@ def parse_supported_local_embedding_workflow_receipt(
     document = raw_similarity_contract_value(value)
     if (
         isinstance(document, dict)
+        and document.get("schema_version") == "local-embedding-workflow-receipt/4.0"
+    ):
+        return parse_local_embedding_workflow_receipt_v4(document)
+    if (
+        isinstance(document, dict)
         and document.get("schema_version") == "local-embedding-workflow-receipt/3.0"
     ):
         return parse_local_embedding_workflow_receipt_v3(document)
@@ -246,6 +272,10 @@ def parse_supported_local_embedding_workflow_receipt(
 def validate_supported_local_embedding_step_output(
     output: SupportedLocalEmbeddingStepOutput, receipt: SupportedLocalEmbeddingWorkflowReceipt
 ) -> SupportedLocalEmbeddingStepOutput:
+    if isinstance(output, LocalEmbeddingStepOutputV4) and isinstance(
+        receipt, LocalEmbeddingWorkflowReceiptV4
+    ):
+        return validate_local_embedding_step_output_v4(output, receipt)
     if isinstance(output, LocalEmbeddingStepOutputV3) and isinstance(
         receipt, LocalEmbeddingWorkflowReceiptV3
     ):
@@ -261,10 +291,58 @@ def validate_supported_local_embedding_step_output(
     raise ValueError("LOCAL_EMBEDDING_COMPLETION_FAMILY_MISMATCH")
 
 
+def local_embedding_step_output_type_for_receipt(
+    receipt: SupportedLocalEmbeddingWorkflowReceipt,
+) -> type[SupportedLocalEmbeddingStepOutput]:
+    """Closed type selection only, not receipt validation or publication authority."""
+    if isinstance(receipt, LocalEmbeddingWorkflowReceiptV4):
+        return LocalEmbeddingStepOutputV4
+    if isinstance(receipt, LocalEmbeddingWorkflowReceiptV3):
+        return LocalEmbeddingStepOutputV3
+    if isinstance(receipt, LocalEmbeddingWorkflowReceiptV2):
+        return LocalEmbeddingStepOutputV2
+    if isinstance(receipt, LocalEmbeddingWorkflowReceipt):
+        return LocalEmbeddingStepOutput
+    raise ValueError("LOCAL_EMBEDDING_COMPLETION_FAMILY_MISMATCH")
+
+
+def build_supported_local_embedding_step_output(
+    receipt: SupportedLocalEmbeddingWorkflowReceipt, pointer: ArtifactMemberPointer
+) -> SupportedLocalEmbeddingStepOutput:
+    """Build the exact declared carrier; the adapter separately proves committed bytes."""
+    receipt = parse_supported_local_embedding_workflow_receipt(receipt)
+    model = local_embedding_step_output_type_for_receipt(receipt)
+    body = {
+        "schema_version": model.model_fields["schema_version"].default,
+        "purpose": "LOCAL_EMBEDDING",
+        **{
+            field: getattr(receipt, field)
+            for field in (
+                "workflow_id",
+                "step_run_id",
+                "step_key",
+                "attempt",
+                "receipt_owner_job_id",
+                "execution_result_schema",
+                "receipt_sha256",
+            )
+        },
+        "receipt_schema": model.model_fields["receipt_schema"].default,
+        "receipt": pointer.model_dump(mode="json"),
+    }
+    output = parse_supported_local_embedding_step_output(
+        body | {"output_sha256": content_sha256(body)}
+    )
+    return validate_supported_local_embedding_step_output(output, receipt)
+
+
 def validate_supported_local_embedding_workflow_receipt(
     receipt: SupportedLocalEmbeddingWorkflowReceipt,
     request: SupportedLocalEmbeddingRequest,
-    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3,
+    plan: LocalEmbeddingSourcePlan
+    | LocalEmbeddingSourcePlanV2
+    | LocalEmbeddingSourcePlanV3
+    | LocalEmbeddingSourcePlanV4,
     policy: LocalEmbeddingExecutablePolicy,
     *,
     workflow_id: str,
@@ -273,12 +351,37 @@ def validate_supported_local_embedding_workflow_receipt(
     launch_association: LocalEmbeddingLaunchAssociation
     | LocalEmbeddingLaunchAssociationV2
     | LocalEmbeddingLaunchAssociationV3
+    | LocalEmbeddingLaunchAssociationV4
     | None,
     owned_input: IncrementalEmbeddingInput | None,
     index_coverage: ResolvedNativeIndexCoverage
     | ResolvedNativeIndexCoverageV2
-    | ResolvedNativeIndexCoverageV3,
+    | ResolvedNativeIndexCoverageV3
+    | ResolvedNativeIndexCoverageV4,
 ) -> SupportedLocalEmbeddingWorkflowReceipt:
+    if (
+        isinstance(receipt, LocalEmbeddingWorkflowReceiptV4)
+        and isinstance(request, LocalEmbeddingWorkflowRequestV4)
+        and isinstance(plan, LocalEmbeddingSourcePlanV4)
+        and isinstance(policy, LocalEmbeddingServiceExecutionPolicy)
+        and isinstance(index_coverage, ResolvedNativeIndexCoverageV4)
+        and (
+            launch_association is None
+            or isinstance(launch_association, LocalEmbeddingLaunchAssociationV4)
+        )
+    ):
+        return validate_local_embedding_workflow_receipt_v4(
+            receipt,
+            request,
+            plan,
+            policy,
+            workflow_id=workflow_id,
+            step_run_id=step_run_id,
+            receipt_owner_job_id=receipt_owner_job_id,
+            launch_association=launch_association,
+            owned_input=owned_input,
+            index_coverage=index_coverage,
+        )
     if (
         isinstance(receipt, LocalEmbeddingWorkflowReceiptV3)
         and isinstance(request, LocalEmbeddingWorkflowRequestV3)
@@ -328,7 +431,12 @@ def validate_supported_local_embedding_workflow_receipt(
     if (
         isinstance(receipt, LocalEmbeddingWorkflowReceipt)
         and not isinstance(
-            request, (LocalEmbeddingWorkflowRequestV2, LocalEmbeddingWorkflowRequestV3)
+            request,
+            (
+                LocalEmbeddingWorkflowRequestV2,
+                LocalEmbeddingWorkflowRequestV3,
+                LocalEmbeddingWorkflowRequestV4,
+            ),
         )
         and isinstance(plan, LocalEmbeddingSourcePlan)
         and isinstance(index_coverage, ResolvedNativeIndexCoverage)

@@ -11,34 +11,20 @@ from eom_workflow.compiler import CompiledWorkflowDefinition, compile_definition
 from eom_workflow.definition_execution_protocol import definition_execution_protocol
 from eom_workflow.local_embedding_execution_policy import (
     LocalEmbeddingExecutablePolicy,
-    LocalEmbeddingServiceExecutionPolicy,
     parse_local_embedding_executable_policy,
-)
-from eom_workflow.local_embedding_request import (
-    validate_local_embedding_request_references,
 )
 from eom_workflow.local_embedding_request_v2 import (
     LocalEmbeddingWorkflowRequestV2,
     SupportedLocalEmbeddingRequest,
     parse_supported_local_embedding_request,
     supported_local_embedding_request_actor,
-    validate_local_embedding_request_references_v2,
+    validate_supported_local_embedding_request_references,
 )
-from eom_workflow.local_embedding_request_v3 import (
-    LocalEmbeddingWorkflowRequestV3,
-    validate_local_embedding_request_references_v3,
-)
-from eom_workflow.local_embedding_source_plan import (
-    LocalEmbeddingSourcePlan,
-    parse_local_embedding_source_plan,
-)
-from eom_workflow.local_embedding_source_plan_v2 import (
-    LocalEmbeddingSourcePlanV2,
-    parse_local_embedding_source_plan_v2,
-)
-from eom_workflow.local_embedding_source_plan_v3 import (
-    LocalEmbeddingSourcePlanV3,
-    parse_local_embedding_source_plan_v3,
+from eom_workflow.local_embedding_request_v3 import LocalEmbeddingWorkflowRequestV3
+from eom_workflow.local_embedding_request_v4 import LocalEmbeddingWorkflowRequestV4
+from eom_workflow.local_embedding_source_plan_dispatch import (
+    SupportedLocalEmbeddingSourcePlan,
+    parse_supported_local_embedding_source_plan,
 )
 from eom_workflow.local_embedding_workflow import (
     LOCAL_EMBEDDING_EXECUTION_PROTOCOL,
@@ -72,26 +58,14 @@ class ResolvedLocalEmbeddingAdmission:
     """Validated immutable controls only; no caller/session/source authority is carried."""
 
     request: SupportedLocalEmbeddingOwnerRequest
-    plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3
+    plan: SupportedLocalEmbeddingSourcePlan
     policy: LocalEmbeddingExecutablePolicy
 
     def __post_init__(self) -> None:
         request = parse_supported_local_embedding_owner_request(self.request)
         policy = parse_local_embedding_executable_policy(raw_similarity_contract_value(self.policy))
-        plan: LocalEmbeddingSourcePlan | LocalEmbeddingSourcePlanV2 | LocalEmbeddingSourcePlanV3
-        if isinstance(request, LocalEmbeddingWorkflowRequestV3):
-            plan = parse_local_embedding_source_plan_v3(self.plan)
-            if not isinstance(policy, LocalEmbeddingServiceExecutionPolicy):
-                raise ValueError("LOCAL_EMBEDDING_PURPOSE_INVALID")
-            validate_local_embedding_request_references_v3(request, plan, policy)
-        elif isinstance(request, LocalEmbeddingWorkflowRequestV2):
-            plan = parse_local_embedding_source_plan_v2(self.plan)
-            if not isinstance(policy, LocalEmbeddingServiceExecutionPolicy):
-                raise ValueError("LOCAL_EMBEDDING_PURPOSE_INVALID")
-            validate_local_embedding_request_references_v2(request, plan, policy)
-        else:
-            plan = parse_local_embedding_source_plan(raw_similarity_contract_value(self.plan))
-            validate_local_embedding_request_references(request, plan, policy)
+        plan = parse_supported_local_embedding_source_plan(self.plan)
+        validate_supported_local_embedding_request_references(request, plan, policy)
         object.__setattr__(self, "request", request)
         object.__setattr__(self, "plan", plan)
         object.__setattr__(self, "policy", policy)
@@ -157,7 +131,12 @@ def validate_local_embedding_submission_controls(
     expected_definition = (
         LocalEmbeddingWorkflowDefinitionV2
         if isinstance(
-            scope.request, (LocalEmbeddingWorkflowRequestV2, LocalEmbeddingWorkflowRequestV3)
+            scope.request,
+            (
+                LocalEmbeddingWorkflowRequestV2,
+                LocalEmbeddingWorkflowRequestV3,
+                LocalEmbeddingWorkflowRequestV4,
+            ),
         )
         else LocalEmbeddingWorkflowDefinition
     )
