@@ -99,6 +99,7 @@ from eom_workflow.models import RoleWorkerInput
 from eom_workflow.public_similarity_control import (
     PUBLIC_SIMILARITY_PLAN_SCHEMAS,
     SupportedPublicSimilarityExecutionPlan,
+    select_public_similarity_evidence_source,
 )
 from eom_workflow.schemas import validate_role_input
 from eom_workflow.similarity_control import (
@@ -127,6 +128,12 @@ from eom_orchestrator.external_item_learning_page_publication import (
 )
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
+from eom_orchestrator.public_similarity_materialization import (
+    PUBLIC_SIMILARITY_ROLE_CONTRACT,
+    PublicSimilarityMaterializationContext,
+    require_public_similarity_materialization_context,
+    resolve_public_similarity_materials,
+)
 from eom_orchestrator.similarity_materialization import (
     ORDINARY_SIMILARITY_ROLE_CONTRACT,
     SIMILARITY_MATERIALS_WORKSPACE_ALIAS,
@@ -214,18 +221,6 @@ class ResolvedEvidenceMaterials:
     variation_source_payload: bytes | None = None
 
 
-def _require_connected_public_similarity_staging(plan: object, role: str) -> None:
-    # Incremental rollout guard: plan30/31 can be persisted/replayed before their
-    # typed role/UDS reader is activated, but must never run as plain plan19.
-    # Replace with the actual public staging handoff + current-read tests when
-    # connecting that consumer; see EMBEDDING_DERIVATIVE_RETIREMENT_DESIGN.md.
-    if isinstance(plan, SupportedPublicSimilarityExecutionPlan) and role in {"authoring", "review"}:
-        raise ControlPlaneError(
-            "CONTROL_SIMILARITY_AUTHORITY_UNAVAILABLE",
-            "the public similarity role staging reader is not connected",
-        )
-
-
 def materialize_execution_step(
     session: Session,
     *,
@@ -237,7 +232,9 @@ def materialize_execution_step(
     authorized_artifact_revision_ids: frozenset[str],
     execution_tier: Literal["PRIMARY", "ESCALATED"] = "PRIMARY",
     inference_transfer_context: InferenceTransferMaterializationContext | None = None,
-    similarity_context: SimilarityMaterializationContext | None = None,
+    similarity_context: SimilarityMaterializationContext
+    | PublicSimilarityMaterializationContext
+    | None = None,
     creative_page_publisher: ControlFileSetPublisher | None = None,
 ) -> MaterializedExecution:
     """Materialize one exact plan step without resolving any mutable current pointer."""
@@ -370,10 +367,27 @@ def materialize_execution_step(
             "CONTROL_POINTER_SIZE_INVALID",
             "creative page images exceed the worker input limit",
         )
-    _require_connected_public_similarity_staging(plan, step.role)
-    if isinstance(plan, SupportedSimilarityExecutionPlan) and step.role in {"authoring", "review"}:
+    if isinstance(plan, SupportedPublicSimilarityExecutionPlan) and step.role in {
+        "authoring",
+        "review",
+    }:
+        require_public_similarity_materialization_context(
+            plan,
+            step_key=step_key,
+            context=similarity_context
+            if isinstance(similarity_context, PublicSimilarityMaterializationContext)
+            else None,
+        )
+    elif isinstance(plan, SupportedSimilarityExecutionPlan) and step.role in {
+        "authoring",
+        "review",
+    }:
         require_similarity_materialization_context(
-            plan, step_key=step_key, context=similarity_context
+            plan,
+            step_key=step_key,
+            context=similarity_context
+            if isinstance(similarity_context, SimilarityMaterializationContext)
+            else None,
         )
     if isinstance(plan, ResolvedExecutionPlanV21):
         assert inference_transfer_context is not None
@@ -510,33 +524,52 @@ def materialize_execution_step(
                 total_bytes += len(evidence_materials.variation_request_payload)
                 total_bytes += len(evidence_materials.variation_source_payload)
                 member_count += 2
-            if isinstance(plan, SupportedSimilarityExecutionPlan) and step.role in {
+            if isinstance(
+                plan, SupportedSimilarityExecutionPlan | SupportedPublicSimilarityExecutionPlan
+            ) and step.role in {
                 "authoring",
                 "review",
             }:
                 try:
-                    original_source = select_similarity_evidence_source(
-                        plan,
-                        tuple(
-                            entry.source
-                            for entry in evidence_materials.manifest.entries
-                            if isinstance(entry.source, ApprovedItemKnowledgeSourceV2)
-                        ),
+                    reference_sources = tuple(
+                        entry.source
+                        for entry in evidence_materials.manifest.entries
+                        if isinstance(entry.source, ApprovedItemKnowledgeSourceV2)
+                    )
+                    original_source = (
+                        select_public_similarity_evidence_source(plan, reference_sources)
+                        if isinstance(plan, SupportedPublicSimilarityExecutionPlan)
+                        else select_similarity_evidence_source(plan, reference_sources)
                     )
                 except ValueError:
                     raise ControlPlaneError(
                         "CONTROL_SIMILARITY_SOURCE_MISMATCH",
                         "exact reference is not uniquely present in official Evidence",
                     ) from None
-                similarity_materials = resolve_similarity_materials(
-                    session,
-                    plan=plan,
-                    step_key=step_key,
-                    context=similarity_context,
-                    original_source=original_source,
-                    canonical_artifact_root=artifact_root,
-                    authorized_artifact_revision_ids=authorized_artifact_revision_ids,
-                )
+                if isinstance(plan, SupportedPublicSimilarityExecutionPlan):
+                    similarity_materials = resolve_public_similarity_materials(
+                        session,
+                        plan=plan,
+                        step_key=step_key,
+                        context=similarity_context
+                        if isinstance(similarity_context, PublicSimilarityMaterializationContext)
+                        else None,
+                        original_source=original_source,
+                        canonical_artifact_root=artifact_root,
+                        authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+                    )
+                else:
+                    similarity_materials = resolve_similarity_materials(
+                        session,
+                        plan=plan,
+                        step_key=step_key,
+                        context=similarity_context
+                        if isinstance(similarity_context, SimilarityMaterializationContext)
+                        else None,
+                        original_source=original_source,
+                        canonical_artifact_root=artifact_root,
+                        authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+                    )
                 for alias, payload in (
                     (SIMILARITY_WORKSPACE_ALIAS, similarity_materials.context_payload),
                     (SIMILARITY_MATERIALS_WORKSPACE_ALIAS, similarity_materials.references_payload),
@@ -755,7 +788,15 @@ def materialize_execution_step(
         _require_total_size(total_bytes, analysis=True)
 
     agents_bytes = _agents_document(instruction_docs)
-    if isinstance(plan, SupportedSimilarityExecutionPlan) and step.role in {"authoring", "review"}:
+    if isinstance(plan, SupportedPublicSimilarityExecutionPlan) and step.role in {
+        "authoring",
+        "review",
+    }:
+        agents_bytes += PUBLIC_SIMILARITY_ROLE_CONTRACT
+    elif isinstance(plan, SupportedSimilarityExecutionPlan) and step.role in {
+        "authoring",
+        "review",
+    }:
         agents_bytes += (
             ORDINARY_SIMILARITY_ROLE_CONTRACT
             if isinstance(plan, ResolvedExecutionPlanV24)
@@ -1041,7 +1082,9 @@ def authorized_execution_artifact_revisions(
     plan_id: str,
     step_key: str,
     inference_transfer_context: InferenceTransferMaterializationContext | None = None,
-    similarity_context: SimilarityMaterializationContext | None = None,
+    similarity_context: SimilarityMaterializationContext
+    | PublicSimilarityMaterializationContext
+    | None = None,
 ) -> frozenset[str]:
     """Derive the exact materialization allowlist from one immutable plan and its manifests."""
 
@@ -1152,10 +1195,28 @@ def authorized_execution_artifact_revisions(
     if isinstance(plan, ResolvedExecutionPlanV21):
         return _authorized_transfer_control_revisions(session, plan)
     revision_ids: set[str] = set()
-    _require_connected_public_similarity_staging(plan, step.role)
-    if isinstance(plan, SupportedSimilarityExecutionPlan) and step.role in {"authoring", "review"}:
+    if isinstance(plan, SupportedPublicSimilarityExecutionPlan) and step.role in {
+        "authoring",
+        "review",
+    }:
+        require_public_similarity_materialization_context(
+            plan,
+            step_key=step_key,
+            context=similarity_context
+            if isinstance(similarity_context, PublicSimilarityMaterializationContext)
+            else None,
+        )
+        revision_ids.add(plan.similarity_delivery.context_member.artifact_revision_id)
+    elif isinstance(plan, SupportedSimilarityExecutionPlan) and step.role in {
+        "authoring",
+        "review",
+    }:
         require_similarity_materialization_context(
-            plan, step_key=step_key, context=similarity_context
+            plan,
+            step_key=step_key,
+            context=similarity_context
+            if isinstance(similarity_context, SimilarityMaterializationContext)
+            else None,
         )
         revision_ids.add(plan.similarity_delivery.context_member.artifact_revision_id)
     if isinstance(plan, ResolvedExecutionPlanV2):

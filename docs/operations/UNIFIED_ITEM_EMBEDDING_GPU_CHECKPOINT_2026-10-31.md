@@ -1,5 +1,69 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 출제·검토 공통 공개 풀이의 실제 role 읽기·배치 연결 — 2026-10-31 23:10 UTC
+
+- 직전 목표 실행은 plan30/31 source·저장/replay 검증의 **PROGRESS**였고, 설치본311 PASS도
+  아래에 확인했다. 사용자 GUI 질의에는 준비 메타데이터로 후보 번호만 안내했으며 검색을
+  대신 제출하지 않았다. 이번 실행도 actual reader/staging을 구현·검증한 **PROGRESS**다.
+- schema-first `system-rag-workflow-similarity-read` request/reply2를 추가했다. canonical과
+  package resource SHA는 `785758337e710c430536720ea4326ad93046d35785d63ec04fd1712e2504dfee`다.
+  operation/runner-only peer와 기존 작은 workflow/step/plan/QUERY selection을 재사용하며
+  wire operator/path/native 실행 권한을 추가하지 않았다. V1 bytes/hash는 보존했다.
+- 기존 Catalog service와 runner provider가 plan30/31을 명시적으로 선택한다. actual Catalog
+  completed-public-query read, exact context Artifact와 materials3 read를 같은 root에서
+  전후 재확인하고 runner에는 고정 UDS로 반환한다. Orchestrator는 canonical bytes/raw SHA/
+  request/context/materials/원 기출 identity를 검사한 뒤 기존 두 workspace alias에 배치한다.
+  authoring·review·escalation이 같은 pin을 사용하며 구형 profile로 relabel하지 않는다.
+- 별도 public read owner가 기존 runtime builder의 publication2/role read2에도 전달되도록
+  연결했다. 같은 engine/settings를 확인하며 public 설정이 없으면 명시적으로 unavailable다.
+  legacy owner를 빌려 읽거나 original QUERY를 새로 생성하지 않는다. actual stored creator,
+  role/request/definition/Pack/plan hash 및 QUERY를 확인한다. late role attempt/취소/plan
+  삭제와 원래 pin 변경을 검출한다. 작은 role/plan snapshot만 복사하며 큰 source는 복제하지 않는다.
+- 전후 권한 철회·Artifact producer/lifecycle/hash·정확한 ordered question/public text·대체
+  응답·cross-family 거부·여러 operator의 별도 root·최대3교 re-read를 검증했다. 새 queue/
+  table/index/migration/worker protocol/dependency는 없다. 원래 팀장 prompt2개는 불변이다.
+- 집중 합집합 **442 PASS /249.42s**, 이후 plan row를 populate-existing으로 재확인하는
+  마지막 보강과 late change 회귀는 구 경로까지 **141 PASS /150.34s**다. 추가 schema pin/
+  직접 operator 철회 **40 PASS /21.75s**, publication/owner 호환 **82 PASS /7.95s**,
+  실제 schema wheel resource·dependency 경계 **27 PASS /43.34s**다. 범위가 겹쳐 합산하지 않는다.
+  strict mypy15 source 및 Ruff/format/diff PASS다. source의 실제 SQLite/UDS/임시 Artifact IO와
+  synthetic IAM/QUERY/source 관측을 구분한다. 운영 인증/실제 corpus role 실행 PASS는 아니다.
+  `/tmp/eom-public-role-final-focused-20261031.log`,
+  `/tmp/eom-public-role-late-current-tests-20261031.log`,
+  `/tmp/eom-public-role-extra-contract-tests-20261031.log`,
+  `/tmp/eom-public-role-owner-compatibility-20261031-v2.log`,
+  `/tmp/eom-public-role-resource-boundary-20261031.log`.
+- 초기 mypy union 오류와 formatting을 수정했다. 존재하지 않는 focused test 파일명을 지정한
+  두 invocation은 no-tests로 종료되어 올바른 기존 파일 목록으로 재실행했다. 중간 log는
+  보존했으며 검증/권한을 느슨하게 하거나 실제 FAILED를 성공으로 바꾸지 않았다. 새 persistence
+  mutation이 없어 이번에 별도 DB migration/운영 pytest는 없다. 이전 disposable PG evidence는
+  유지하되 새 reader의 live acceptance로 확대하지 않는다.
+- **23:00 정기 관측 GPU122/520·잔여398**, CPU standby RUNNING1, historical FAILED6이다.
+  23:08에도 INDEX1466344/QUERY1466291/creative1603535 프로세스는 살아 있었다. service/process
+  생존을 CUDA forward 또는 모든 target integrity PASS로 해석하지 않는다. API READY를 확인했다.
+  운영 API/Catalog/INDEX/QUERY/numeric pin 변경0, 서비스 재시작0, 수동 모델/QUERY 제출0,
+  정본 변경0, 구 벡터 삭제0이다.
+- 추가 발견: Pack1.20.17 보조 지침은 `anchor_profile`을 명시해 materials3의 public text와
+  표현이 다르다. actual caller 활성화 전에 원문2개를 보존한 immutable 지침/Pack successor로
+  명확히 한다. 기존 지침을 제자리 수정하거나 AGENTS로 모순을 덮지 않는다. 이후 실제 API
+  Item-start·Chat 연결, authorized query/read/replay·AI full-report/Graph/INDEX4, 전체520
+  integrity와 정확한 구 파생 vector consumer retirement/삭제를 계속한다. 목표 ACTIVE다.
+
+### plan30/31 비활성 설치본 검증 — 2026-10-31 22:54 UTC
+
+- `fe17777c3b5835cea6b4a8ff3fec62d8d2057fc4`를 commit/push한 뒤 정식 build-only와
+  wheel RECORD 검사를 통과했다. platform wheel SHA는
+  `8128dff13d5e5c26cd64704cc9a2b0cf0bef4e53cc25c3f178b34bfe451bb23a`, contracts는
+  `2c6cbb039720639fe88e5c4fa32ac1f2035aada3d9c23a1ef2c0b63888256200`이다.
+- 기존 보호된 installer로 별도 immutable prefix에만 설치했다. 실제 plan/parser/writer/
+  resolver/materializer 5개 module의 import origin이 해당 prefix인 것을 확인했고,
+  설치본 구/새 호환 회귀 **311 PASS /57.95s**를 확인했다. source327과 범위가 다르므로
+  합산하지 않는다. 로그는 `/tmp/eom-public-plan30-31-installed-origins-20261031.log`,
+  `/tmp/eom-public-plan30-31-installed-compatibility-20261031.log`다.
+- installer 완료 전에 시작한 첫 import 확인은 ModuleNotFoundError로 실패했다. 설치 완료
+  후 같은 prefix로 재검증했으며 재설치/운영 activation/모델 실행은 하지 않았다.
+  `OWNER_ACTIVATION=NOT_PERFORMED`; API/Catalog/INDEX/QUERY pin, 정본, 구 벡터는 불변이다.
+
 ## 실제 출제 계획의 공통 자료 successor·저장/replay — 2026-10-31 22:47 UTC
 
 - 이전 goal turn은 materials3 source/설치본 검증과11645 supported recovery를 마친

@@ -203,3 +203,38 @@ QUERY 재검증은 Catalog, staging은 기존 role materialization boundary가 �
 넓히면 같은 schema version으로 공개 풀이와 구형 profile을 혼동하므로 그 대안은 사용하지
 않는다. successor parsing/저장·staging·권한·재전송 회귀를 갖춘 뒤에만 실제 caller를 활성화하며,
 schema/model 추가만으로 기존 운영 출제 경로가 전환됐다고 보고하지 않는다.
+
+### 공통 출제·검토 role의 실제 Catalog 읽기와 workspace
+
+기존 runner-only `READ_WORKFLOW_SIMILARITY_MATERIALS`에 closed request/reply2를 추가한다.
+selection은 기존 workflow/step/plan/완료 QUERY 포인터를 그대로 재사용한다. operator나
+filesystem path를 요청에 추가하지 않는다. Catalog는 저장된 human creator, RUNNING role,
+원래 request/definition/Pack/plan hash 및 완료 QUERY의 동일성을 자기 root에서 검증한다.
+plan30/31만 새 family를 받고 plan23/24는 기존 family로 계속 읽는다. cross-family replay는
+오류이며 구형 profile로 fallback하지 않는다.
+
+정본은 원래 완료 QUERY와 공개 풀이 context Artifact 및 승인 Item/report다. 실제 Catalog
+reader가 기존 completed-public-query read와 selected owner를 재사용해 전후 현재 권한·
+source/index/provenance를 검사하고, 같은 root의 pinned Artifact reader로 exact context
+member와 materials3을 일시 materialize한다. runner는 고정 UDS peer로만 읽고 NAS를 직접
+읽지 않는다. Orchestrator는 반환된 canonical bytes/raw hash/request/context/materials 핀을
+다시 검사한 뒤 기존 두 workspace alias에 쓴다. 새 공개 풀이를 구형 inference profile로
+설명하지 않으며 질문 unavailable과 pixel 미확인·Evidence receipt 비대체를 명시한다.
+
+lookup은 기존 indexed workflow/step/plan/QUERY lookup이고 후보는 최대8개의 ordered tuple,
+원문 선택은 기존 bounded set/map batch다. 비용은 선택 자료 bytes와 원래 ranking read에
+비례하며 새 table/index/queue/cache/migration/worker protocol은 없다. transaction은 기존
+Catalog current-read root, 파일 쓰기는 기존 Orchestrator staging boundary다. 실패/timeout은
+같은 selection으로 재조회하며 모델 실행·다른 QUERY·latest source를 자동 생성하지 않는다.
+이 작은 읽기 successor보다 단순한 union 확대/guard 삭제만으로는 released 의미와 권한
+경계를 지키지 못한다. 실제 API caller·Chat 전환은 후속 작업이며 이 연결의 source PASS와
+운영 activation을 구분한다.
+
+구/공통 Catalog configuration은 `context_reads.owner`와 명시적인 `public_owner`로 분리한다.
+같은 engine/settings root를 확인하고 publication2와 role read2에 public owner를 전달한다.
+public 설정이 없을 때 legacy owner를 빌려 읽지 않는다. 이 연결을 운영 builder에서도
+검사한다. 새 공개 풀이 전달은 원래 content-team 원문 두 파일을 바꾸는 이유가 아니다.
+다만 현재 Pack1.20.17의 보조 지침 v1에는 실제 JSON 필드 `anchor_profile`이 명시되어 있다.
+실제 API caller 활성화 전에 이 부분은 공개 풀이의 `anchor.entry.public_solution` 및 질문
+표현에 맞는 immutable 지침/Pack successor로 명확히 해야 한다. 구 Pack/지침을 제자리
+수정하거나 AGENTS 문구만으로 서로 모순되는 필드 요구를 덮어 운영 승인하지 않는다.

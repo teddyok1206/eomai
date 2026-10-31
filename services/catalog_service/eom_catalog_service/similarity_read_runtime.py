@@ -152,7 +152,7 @@ def build_catalog_item_similarity_publications(
             ),
         )
         return CatalogItemSimilarityPublicationService(
-            owner, publisher, source_commit=source_commit
+            owner, publisher, source_commit=source_commit, public_owner=context_reads.public_owner
         )
     except OSError:
         raise SimilarityReaderRuntimeError() from None
@@ -166,7 +166,9 @@ def build_catalog_workflow_similarity_reads(
         return None
     if mode != "ENABLED" or not isinstance(context_reads, CatalogSimilarityContextReadService):
         raise SimilarityReaderRuntimeError()
-    return CatalogWorkflowSimilarityReadService(context_reads.owner)
+    return CatalogWorkflowSimilarityReadService(
+        context_reads.owner, public_owner=context_reads.public_owner
+    )
 
 
 def _directory_identity(value: os.stat_result) -> tuple[int, ...]:

@@ -9,6 +9,7 @@ from eom_identifiers import canonical_json_bytes
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_workflow.control_plane import ResolvedExecutionPlanV19, ResolvedExecutionPlanV20
 from eom_workflow.control_schemas import validate_control_contract
+from eom_workflow.public_similarity_control import SupportedPublicSimilarityExecutionPlan
 from eom_workflow.similarity_control import (
     MAX_SIMILARITY_EXECUTION_PLAN_BYTES,
     SupportedSimilarityExecutionPlan,
@@ -81,7 +82,12 @@ def read_similarity_prompt_context(
             len(canonical_json_bytes(document)) > MAX_SIMILARITY_EXECUTION_PLAN_BYTES
         ):
             raise ValueError("SIMILARITY_PROMPT_PLAN_TOO_LARGE")
-        plan: ResolvedExecutionPlanV19 | ResolvedExecutionPlanV20 | SupportedSimilarityExecutionPlan
+        plan: (
+            ResolvedExecutionPlanV19
+            | ResolvedExecutionPlanV20
+            | SupportedSimilarityExecutionPlan
+            | SupportedPublicSimilarityExecutionPlan
+        )
         if document.get("schema_version") == "resolved-execution-plan/20.0":
             validate_control_contract("resolved-execution-plan-v20", document)
             plan = ResolvedExecutionPlanV20.model_validate(document)
@@ -112,7 +118,9 @@ def read_similarity_prompt_context(
     return SimilarityPromptContext(
         reference_mode=(
             "PINNED_REFERENCE_CONTEXT"
-            if isinstance(plan, SupportedSimilarityExecutionPlan)
+            if isinstance(
+                plan, SupportedSimilarityExecutionPlan | SupportedPublicSimilarityExecutionPlan
+            )
             else "NOT_OFFERED"
         ),
         plan_id=plan.plan_id,

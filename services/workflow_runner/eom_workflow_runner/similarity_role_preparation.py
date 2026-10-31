@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TypeAlias
 
+from eom_catalog_contracts.similarity_context import SimilarityContextRequest
 from eom_catalog_contracts.similarity_read import CompletedSimilarityQuerySelection
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
@@ -12,8 +14,18 @@ from eom_identity_service import OperatorAuthorizationFenceError
 from eom_image_contracts import SVG_LABEL_LAYOUT_PACK_BUNDLES
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.control_service import ControlPlaneError
+from eom_orchestrator.public_similarity_materialization import (
+    PublicSimilarityMaterializationContext,
+)
 from eom_orchestrator.similarity_materialization import SimilarityMaterializationContext
 from eom_workflow.models import WorkerRequest
+from eom_workflow.public_similarity_control import (
+    PUBLIC_SIMILARITY_PLAN_SCHEMAS,
+    SupportedPublicSimilarityExecutionPlan,
+    parse_public_similarity_execution_plan,
+    validate_public_similarity_plan_request,
+)
+from eom_workflow.reference_query_execution import PublicReferenceQueryWorkflowRequest
 from eom_workflow.schemas import result_schema_protocol
 from eom_workflow.similarity_control import (
     SIMILARITY_EXECUTION_PLAN_SCHEMAS,
@@ -28,6 +40,9 @@ from eom_workflow_runner.models import (
     WorkflowDefinitionRecord,
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
+)
+from eom_workflow_runner.public_similarity_materialization_adapter import (
+    CatalogPublicSimilarityMaterializationReader,
 )
 from eom_workflow_runner.reference_query_consumer_read import (
     CatalogCompletedReferenceQueryRead,
@@ -47,6 +62,15 @@ from eom_workflow_runner.similarity_materialization_adapter import (
 from eom_workflow_runner.state_machine import StepState, WorkflowState
 
 SIMILARITY_QUERY_CONTEXT_KEY = "similarity_query"
+SupportedRoleSimilarityPlan: TypeAlias = (  # noqa: UP040
+    SupportedSimilarityExecutionPlan | SupportedPublicSimilarityExecutionPlan
+)
+
+
+def parse_role_similarity_plan(value: dict[str, object]) -> SupportedRoleSimilarityPlan:
+    if value.get("schema_version") in PUBLIC_SIMILARITY_PLAN_SCHEMAS:
+        return parse_public_similarity_execution_plan(value)
+    return parse_supported_similarity_execution_plan(value)
 
 
 @dataclass(frozen=True, slots=True)
@@ -54,7 +78,7 @@ class _SimilarityRoleBinding:
     """Attached root-local records/values only, not stored authority or a grant."""
 
     workflow: WorkflowInstanceRecord
-    plan: SupportedSimilarityExecutionPlan
+    plan: SupportedRoleSimilarityPlan
 
 
 def _bind_role(
@@ -90,12 +114,14 @@ def _bind_role(
     raw_pin = actual.runtime_context.get("execution_plan")
     if not isinstance(raw_pin, dict) or not isinstance(raw_pin.get("plan_id"), str):
         return None  # Legacy/no-plan retains its original Orchestrator guards.
-    record = session.get(ResolvedExecutionPlanRecord, raw_pin["plan_id"])
+    record = session.get(ResolvedExecutionPlanRecord, raw_pin["plan_id"], populate_existing=True)
     if record is None:
         raise ControlPlaneError("CONTROL_PLAN_MISSING", "stored execution plan is missing")
     if not isinstance(record.canonical_document, dict):
         raise ControlPlaneError("CONTROL_SIMILARITY_CONTEXT_INVALID", "stored plan is invalid")
-    if record.canonical_document.get("schema_version") not in SIMILARITY_EXECUTION_PLAN_SCHEMAS:
+    if record.canonical_document.get("schema_version") not in (
+        SIMILARITY_EXECUTION_PLAN_SCHEMAS | PUBLIC_SIMILARITY_PLAN_SCHEMAS
+    ):
         return None
     try:
         declaration = read_similarity_prompt_context(
@@ -104,11 +130,16 @@ def _bind_role(
             step=current,
             pack_release_id=record.canonical_document["content_pack_release_id"],
         )
-        plan = parse_supported_similarity_execution_plan(record.canonical_document)
+        plan = parse_role_similarity_plan(record.canonical_document)
         stored_request = load_persisted_workflow_request(actual.initial_request)
         definition = session.get(WorkflowDefinitionRecord, actual.definition_id)
         if (
-            declaration.reference_mode != "PINNED_REFERENCE_CONTEXT"
+            raw_pin.get("plan_id") != plan.plan_id
+            or raw_pin.get("plan_sha256") != plan.plan_sha256
+            or record.plan_sha256 != plan.plan_sha256
+            or record.workflow_id != actual.workflow_id
+            or plan.workflow_id != actual.workflow_id
+            or declaration.reference_mode != "PINNED_REFERENCE_CONTEXT"
             or definition is None
             or definition.definition_key != actual.definition_key
             or definition.definition_version != actual.definition_version
@@ -137,6 +168,10 @@ def _materialization_context(
     binding: _SimilarityRoleBinding, query: CatalogCompletedReferenceQueryRead
 ) -> SimilarityMaterializationContext:
     try:
+        if not isinstance(binding.plan, SupportedSimilarityExecutionPlan) or not isinstance(
+            query.request.context_request, SimilarityContextRequest
+        ):
+            raise ValueError("SIMILARITY_ROLE_FAMILY_MISMATCH")
         if binding.workflow.created_actor_id != query.request.operator_audit.operator_id:
             raise ValueError("SIMILARITY_ROLE_CREATOR_MISMATCH")
         validate_similarity_plan_request(binding.plan, query.request.context_request)
@@ -203,7 +238,7 @@ class CatalogWorkflowSimilarityRoleContextProvider:
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
         request: WorkerRequest,
-    ) -> SimilarityMaterializationContext | None:
+    ) -> SimilarityMaterializationContext | PublicSimilarityMaterializationContext | None:
         binding = _bind_role(session, workflow, step, request)
         if binding is None:
             return None
@@ -219,6 +254,19 @@ class CatalogWorkflowSimilarityRoleContextProvider:
                 EmbeddingRegistryCaller(binding.workflow.created_actor_id),
                 selection,
             )
+            if isinstance(binding.plan, SupportedPublicSimilarityExecutionPlan):
+                if not isinstance(original, PublicReferenceQueryWorkflowRequest):
+                    raise ValueError("PUBLIC_SIMILARITY_ROLE_QUERY_FAMILY_MISMATCH")
+                validate_public_similarity_plan_request(binding.plan, original.context_request)
+                caller = EmbeddingRegistryCaller(binding.workflow.created_actor_id)
+                return PublicSimilarityMaterializationContext(
+                    workflow_id=binding.workflow.workflow_id,
+                    operator_id=caller.operator_id,
+                    request=original.context_request,
+                    reader=CatalogPublicSimilarityMaterializationReader(
+                        self.owner, caller, selection
+                    ),
+                )
             query = CatalogCompletedReferenceQueryRead(
                 self.owner, workflow_id=selection.workflow_id, request=original
             )

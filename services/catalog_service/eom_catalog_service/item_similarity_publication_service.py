@@ -52,8 +52,15 @@ class CatalogItemSimilarityPublicationService:
         publisher: ControlFileSetPublisher,
         *,
         source_commit: str,
+        public_owner: ReferenceQuerySourceOwner | None = None,
     ) -> None:
+        if public_owner is not None and (
+            public_owner.catalog.engine is not owner.catalog.engine
+            or public_owner.settings != owner.settings
+        ):
+            raise ValueError("public publication root differs")
         self.owner = owner
+        self.public_owner = public_owner
         self.publisher = publisher
         self.source_commit = source_commit
         self.sessions = build_session_factory(owner.catalog.engine)
@@ -88,21 +95,26 @@ class CatalogItemSimilarityPublicationService:
         A late failure may leave a valid committed Artifact; preserve its original key.
         """
         request = ItemSimilarityPublicationRequestV2.model_validate(request)
+        owner = self.public_owner
+        if owner is None:
+            raise ControlPlaneError(
+                "CONTROL_SIMILARITY_AUTHORITY_UNAVAILABLE", "public read owner not configured"
+            )
         caller = EmbeddingRegistryCaller(request.actor_id)
         with self.sessions.begin() as session:
             try:
                 original = select_completed_reference_query_request(
-                    session, self.owner, caller, request.selection
+                    session, owner, caller, request.selection
                 )
                 if not isinstance(original, PublicReferenceQueryWorkflowRequest) or (
                     original.context_request.consumer_purpose
                     not in {"ITEM_AUTHORING", "PAST_EXAM_VARIATION"}
                 ):
                     raise ValueError("ITEM_SIMILARITY_PREPARATION_FAMILY_INVALID")
-                require_item_similarity_start_permission(session, self.owner, caller)
+                require_item_similarity_start_permission(session, owner, caller)
                 context = validate_deliverable_public_solution_context(
                     read_completed_public_solution_similarity_in_session(
-                        session, self.owner, caller, request.selection
+                        session, owner, caller, request.selection
                     ),
                     expected_request=original.context_request,
                 )
@@ -121,7 +133,7 @@ class CatalogItemSimilarityPublicationService:
                     source_commit=self.source_commit,
                 )
                 pin = publication.delivery.context_member
-                reader = PinnedArtifactReadContext(session, self.owner.settings)
+                reader = PinnedArtifactReadContext(session, owner.settings)
                 reader.prefetch(((pin.artifact_id, pin.artifact_revision_id),))
                 reader.require_file_set(
                     pin.artifact_id,
@@ -142,7 +154,7 @@ class CatalogItemSimilarityPublicationService:
                 ):
                     raise ValueError("ITEM_SIMILARITY_PREPARATION_BYTES_MISMATCH")
                 late = read_completed_public_solution_similarity_in_session(
-                    session, self.owner, caller, request.selection
+                    session, owner, caller, request.selection
                 )
                 if late != context:
                     raise ValueError("ITEM_SIMILARITY_PREPARATION_SOURCE_CHANGED")
@@ -152,7 +164,7 @@ class CatalogItemSimilarityPublicationService:
                 reader.revalidate_provenance()
                 if reader.read_pinned(**read_arguments).payload != member.payload:
                     raise ValueError("ITEM_SIMILARITY_PREPARATION_MEMBER_CHANGED")
-                require_item_similarity_start_permission(session, self.owner, caller)
+                require_item_similarity_start_permission(session, owner, caller)
                 return ItemSimilarityPublicationV2(
                     owner_job_id=publication.owner_job_id,
                     delivery=publication.delivery,

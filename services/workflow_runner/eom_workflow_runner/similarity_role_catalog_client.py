@@ -30,11 +30,19 @@ from eom_orchestrator.general_chat_socket import (
     ChatTransportError,
     exchange_chat_frame,
 )
+from eom_orchestrator.public_similarity_materialization import (
+    PublicSimilarityMaterializationContext,
+)
 from eom_orchestrator.similarity_materialization import (
     SimilarityMaterializationContext,
     SimilarityWorkspaceMaterials,
 )
 from eom_workflow.models import WorkerRequest
+from eom_workflow.public_similarity_control import (
+    SupportedPublicSimilarityExecutionPlan,
+    validate_public_similarity_plan_request,
+)
+from eom_workflow.reference_query_execution import PublicReferenceQueryWorkflowRequest
 from eom_workflow.similarity_control import (
     SupportedSimilarityExecutionPlan,
     validate_similarity_original_source,
@@ -45,6 +53,9 @@ from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
+from eom_workflow_runner.public_similarity_role_catalog_client import (
+    CatalogPublicRoleSimilarityMaterialsReader,
+)
 from eom_workflow_runner.reference_query_consumer_read import (
     require_completed_query_selection_metadata,
 )
@@ -153,7 +164,7 @@ class CatalogSocketSimilarityRoleContextProvider:
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
         request: WorkerRequest,
-    ) -> SimilarityMaterializationContext | None:
+    ) -> SimilarityMaterializationContext | PublicSimilarityMaterializationContext | None:
         binding = _bind_role(session, workflow, step, request)
         if binding is None:
             return None
@@ -164,7 +175,6 @@ class CatalogSocketSimilarityRoleContextProvider:
             caller = EmbeddingRegistryCaller(binding.workflow.created_actor_id)
             row = session.get(WorkflowInstanceRecord, query.workflow_id, populate_existing=True)
             original = require_completed_query_selection_metadata(row, caller, query)
-            validate_similarity_plan_request(binding.plan, original.context_request)
             selection = WorkflowSimilarityRoleSelection(
                 workflow_id=binding.workflow.workflow_id,
                 step_run_id=step.step_run_id,
@@ -172,6 +182,21 @@ class CatalogSocketSimilarityRoleContextProvider:
                 plan_sha256=binding.plan.plan_sha256,
                 query=query,
             )
+            if isinstance(binding.plan, SupportedPublicSimilarityExecutionPlan):
+                if not isinstance(original, PublicReferenceQueryWorkflowRequest):
+                    raise ValueError("PUBLIC_SIMILARITY_ROLE_QUERY_FAMILY_MISMATCH")
+                validate_public_similarity_plan_request(binding.plan, original.context_request)
+                return PublicSimilarityMaterializationContext(
+                    workflow_id=binding.workflow.workflow_id,
+                    operator_id=caller.operator_id,
+                    request=original.context_request,
+                    reader=CatalogPublicRoleSimilarityMaterialsReader(
+                        selection, expected_operator_id=caller.operator_id, endpoint=self.endpoint
+                    ),
+                )
+            if not isinstance(original.context_request, SimilarityContextRequest):
+                raise ValueError("SIMILARITY_ROLE_QUERY_FAMILY_MISMATCH")
+            validate_similarity_plan_request(binding.plan, original.context_request)
             return SimilarityMaterializationContext(
                 workflow_id=binding.workflow.workflow_id,
                 operator_id=caller.operator_id,

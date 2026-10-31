@@ -6,6 +6,9 @@ from typing import Protocol
 
 from eom_catalog_contracts.similarity_context import SimilarityContext, SimilarityContextRequest
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
+from eom_orchestrator.public_similarity_materialization import (
+    PublicSimilarityMaterializationContext,
+)
 from eom_orchestrator.similarity_materialization import SimilarityMaterializationContext
 from eom_workflow.models import WorkerRequest
 from sqlalchemy.orm import Session
@@ -32,6 +35,6 @@ class SimilarityRoleContextProvider(Protocol):
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
         request: WorkerRequest,
-    ) -> SimilarityMaterializationContext | None:
+    ) -> SimilarityMaterializationContext | PublicSimilarityMaterializationContext | None:
         """Caller owns the command-fenced root; actual source authority is rechecked later."""
         ...

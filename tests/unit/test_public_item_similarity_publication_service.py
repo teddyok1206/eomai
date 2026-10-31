@@ -69,7 +69,10 @@ def public_service_case(tmp_path, monkeypatch, version=4, purpose="ITEM_AUTHORIN
     monkeypatch.setattr(module, "select_completed_reference_query_request", selected)
     monkeypatch.setattr(module, "read_completed_public_solution_similarity_in_session", reader)
     service = CatalogItemSimilarityPublicationService(
-        value.value.query.owner, value.publisher, source_commit=SOURCE
+        value.value.query.owner,
+        value.publisher,
+        source_commit=SOURCE,
+        public_owner=value.value.query.owner,
     )
     return value, service, request, selected, reader, context
 
@@ -92,6 +95,17 @@ def test_public_owner_rechecks_one_root_and_replays_one_canonical_artifact(
         assert before.args[1:] == (service.owner, value.caller, request.selection)
         assert after.args[1:] == before.args[1:]
     assert reader.call_args_list[0].args[0] is not reader.call_args_list[2].args[0]
+
+
+def test_publication_requires_explicit_public_owner_without_legacy_fallback(tmp_path, monkeypatch):
+    value, service, request, selected, reader, _ = public_service_case(tmp_path, monkeypatch)
+    service.public_owner = None
+    with pytest.raises(ControlPlaneError) as caught:
+        service.publish_public(request)
+    assert caught.value.code == "CONTROL_SIMILARITY_AUTHORITY_UNAVAILABLE"
+    selected.assert_not_called()
+    reader.assert_not_called()
+    assert counts(value) == (0, 0)
 
 
 @pytest.mark.parametrize("purpose", ("ITEM_DATABASE_SEARCH", "ITEM_REVIEW"))

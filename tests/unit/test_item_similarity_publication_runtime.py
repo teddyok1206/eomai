@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import replace
+from types import SimpleNamespace
 
 import pytest
 from eom_catalog_service.item_similarity_publication_service import (
@@ -73,6 +74,18 @@ def test_enabled_publication_reuses_verified_read_owner_and_private_local_paths(
         ).publisher.settings
         == settings
     )
+
+
+def test_publication_builder_preserves_explicit_public_owner_without_replacing_legacy(
+    tmp_path, monkeypatch
+):
+    reads = context_reads(tmp_path, monkeypatch)
+    public = SimpleNamespace(catalog=reads.owner.catalog, settings=reads.owner.settings)
+    reads.public_owner = public
+    result = build_catalog_item_similarity_publications(
+        mode="ENABLED", context_reads=reads, source_commit="a" * 40
+    )
+    assert result.public_owner is public and result.owner is reads.owner
 
 
 @pytest.mark.parametrize(

@@ -84,6 +84,7 @@ from eom_workflow.private_chat_query_execution import (
     parse_private_chat_query_workflow_request,
 )
 from eom_workflow.private_chat_query_workflow import PrivateChatQueryWorkflowDefinition
+from eom_workflow.public_similarity_control import SupportedPublicSimilarityExecutionPlan
 from eom_workflow.reference_query_execution import (
     SupportedReferenceQueryWorkflowRequest,
     parse_supported_reference_query_workflow_request,
@@ -300,6 +301,7 @@ def _parse_review_escalation_plan(
     | ResolvedExecutionPlanV19
     | ResolvedExecutionPlanV20
     | SupportedSimilarityExecutionPlan
+    | SupportedPublicSimilarityExecutionPlan
 ):
     """Parse schema-selected plan families that carry an escalatable review step."""
 

@@ -171,6 +171,9 @@ from eom_orchestrator.legacy_item_extraction_artifact import (
 from eom_orchestrator.logging import log_event
 from eom_orchestrator.models import JobRecord
 from eom_orchestrator.protocol import protocol_schema_hash
+from eom_orchestrator.public_similarity_materialization import (
+    PublicSimilarityMaterializationContext,
+)
 from eom_orchestrator.repository import (
     create_artifact_records,
     ensure_protocol_version,
@@ -699,7 +702,9 @@ class Orchestrator:
         transfer_core_prompt_sha256: str | None = None,
         transfer_workflow_request: InferenceTransferWorkflowRequest | None = None,
         execution_tier: Literal["PRIMARY", "ESCALATED"] = "PRIMARY",
-        similarity_context: SimilarityMaterializationContext | None = None,
+        similarity_context: SimilarityMaterializationContext
+        | PublicSimilarityMaterializationContext
+        | None = None,
         external_item_learning: ExternalItemLearningExecutionContext | None = None,
     ) -> JobRecord:
         if (prompt_path is None) == (prompt_text is None):
