@@ -1,5 +1,52 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## request4 실패 보존·호환 owner 실제 전환 — 2026-10-31 20:25 UTC
+
+- 이번 turn은 **PROGRESS**다. `fb0ab5555f98c1358229550b4527eb9837459554`의
+  immutable owner wheel pair를 설치·선택했다. platform SHA
+  `7f22d80467ecf4f45b6d1a98a423013c1fd5b9e3c1bf66bd89bf2425de844b03`,
+  API contracts SHA `837d43bcf08efb428a74bf6af79733b7bcbaf04c7676a4a20de98c17c583892a`.
+  RECORD 검증 및 별도 설치본 집중 회귀 **74 PASS**다. 수치 interpreter/model prefix는
+  바꾸지 않았다. 첫 installer 호출은 read-only 보호 스크립트를 직접 실행해 permission
+  denied로 끝났으며 설치 부작용0이었다. 보호된 `/bin/bash` 호출로 정상 설치했고
+  첫 실패 로그도 보존했다. `/tmp/eom-owner-install-fb0ab555-20261031-v2.log`.
+- 실제 INDEX PID0/inactive/exit0, root/owner native handles drained를 다시 확인했다.
+  새 설치본의 공식 `retire_unallocated_indexing_workflow`로 원 request4
+  `workflow_3241917bd7ba42d6bcb869753e2341dd`를 원인
+  `EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE`의 **FAILED**로 기록했다. Workflow/stage/
+  command/step 실패와 동일 command replay receipt1개를 확인했다. 원 request bytes/hash와
+  lease owner/token/generation/attempts를 보존했고 launch Job0/output0이다. row 직접 수정,
+  FAILED→성공 재해석, model 실행·벡터 삭제0이다.
+  `/tmp/eom-index4-retirement-fb0ab555-20261031.json` 및
+  `/var/lib/eom-registered-public-index-fb0ab555-20261031/preallocation-retirement-*.json`.
+- PREPARE/PUBLISH는 원래 같은 source 범위의 CPU/CUDA control2개만 새 Identity에 고정했다.
+  실제 QUERY work0을 재확인한 뒤1412275에 main-only SIGTERM으로 정상 drain했다.
+  두 controller가 멈춘 동안 INDEX config/shared GPU preparer를 먼저 선택하고, QUERY의
+  primary/mixed/public/private config와 CPU preparer/unit/Catalog public raw pin을 함께
+  선택한 뒤 Catalog/QUERY, INDEX 순서로 기동했다. 이것은 복수 파일의 staged rollout이지
+  distributed atomic transaction이라고 부르지 않는다. API1381502/creative1381884와
+  Web·인증·비밀번호 파일은 변경하지 않았다. 운영 migration0이다.
+- actual current INDEX service reference는 위 root release의 `selected.json` 및 운영
+  `local-indexing-runtime.json`에 고정된다. API provider/code pin은 호환되는 **eb16d3ad**를
+  유지하고 INDEX/QUERY owner와
+  INDEX CPU / QUERY CPU / shared GPU preparer만 **fb0ab555**로 일치시켰다.
+- INDEX1466344의 **20:23:36 STARTED**, QUERY1466291의 **20:24:15 OWNER_READY**,
+  Catalog1466286 active, 실제 API `/api/v1/health/ready` READY 및 HTTPS login200을 확인했다.
+  `/tmp/eom-index4-select-fb0ab555-20261031.json`,
+  `/tmp/eom-query4-select-fb0ab555-20261031.json`.
+- read-only installed/identity 감사 PASS: current identity/hash, 동일 recipe·CPU/CUDA
+  model/runtime profiles/backend/routing, 세 preparer prefix, frozen520 Item ID/revision/
+  manifest SHA 보존을 대조했다. 이는 보고서 전체 bytes·전체520 vector·실제 user search의
+  최종 acceptance가 아니다. `/tmp/eom-verify-owner-pair-fb0ab555-20261031.json`.
+  마지막 frozen coverage는116/520이며 새 owner는 actual source preparation 중이다.
+  실제 native 실행/Artifact/index4 commit은 아직 **PENDING**이다.
+- GUI 시험 후보는20:19 read-only metadata로10316/10321/10353/10354/10357의 current
+  approved/full-report/encoding/index scope 연결을 확인했다. actual user 검색 성공은
+  별도 확인이며 자동으로 PASS로 바꾸지 않는다. source metadata만 읽었고 새 검색 제출0이다.
+- 전체520 GPU 완료·대상별 무결성, 실제 AI base2/V11/Graph/INDEX4 증분, actual authorized
+  공통 query/read/replay, 정확한 구 vector/index consumer retirement·삭제가 여전히 남아 있다.
+  전체 goal은 **ACTIVE**이며 이 owner 전환으로 완료 범위를 축소하지 않는다.
+
 ## INDEX4 선택·실제 초기화 누락과 안전한 인계 보완 — 2026-10-31 20:11 UTC
 
 - 이번 turn은 **PROGRESS**다. 운영 CPU QUERY preparer와 INDEX4 control/service를 실제
