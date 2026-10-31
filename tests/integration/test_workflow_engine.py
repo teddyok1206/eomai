@@ -2350,7 +2350,9 @@ def test_platform_adapter_exception_is_sanitized_as_terminal_failure(
             assert failed_step.error_summary == "platform role execution raised an exception"
             assert "untrusted" not in failed_step.error_summary
         recorded = [
-            row for row in caplog.records if getattr(row, "event", None) == "WORKFLOW_COMMAND_FAILED"
+            row
+            for row in caplog.records
+            if getattr(row, "event", None) == "WORKFLOW_COMMAND_FAILED"
         ]
         assert len(recorded) == 1 and recorded[0].cause_type == "OSError"
         assert "untrusted" not in recorded[0].getMessage()
