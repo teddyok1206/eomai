@@ -1,6 +1,6 @@
 """Successor public-solution associations over unchanged numeric vector shards."""
 
-from typing import Literal, Self
+from typing import Any, Literal, Self
 
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -32,6 +32,33 @@ PUBLIC_SOLUTION_INDEX_SCHEMA = "public-solution-embedding-index-v3"
 PUBLIC_SOLUTION_INDEX_SCHEMA_REF = "eom://schemas/knowledge/embedding-index-manifest/3.0"
 PUBLIC_SOLUTION_BINDING_SCHEMA_REF = "eom://schemas/knowledge/embedding-source-binding/3.0"
 MAX_PUBLIC_SOLUTION_SOURCES = 16384
+
+
+def validate_public_solution_binding_identity(document: dict[str, Any]) -> None:
+    """One identity rule AFTER binding3/4's distinct closed schema validation.
+
+    This small JSON-mode view is internal validation, not a cross-service payload
+    or authority. It preserves the historical canonical binding hash exactly.
+    """
+    logical = content_sha256(
+        {
+            "item_id": document["source"]["item_id"],
+            "projection_version": document["projection_version"],
+        }
+    )
+    profile, graph = document["profile"], document["graph_snapshot"]
+    if (
+        graph["manifest_sha256"] != graph["manifest_artifact"]["sha256"]
+        or document["encoding"]["encoding_sha256"] != document["row_ref"]["encoding_sha256"]
+        or profile["profile_id"] != "inferenceprofile_" + logical[7:39]
+        or profile["profile_revision_id"]
+        != "inferenceprofilerev_" + profile["profile_sha256"][7:39]
+        or document["binding_sha256"]
+        != content_sha256(
+            {key: value for key, value in document.items() if key != "binding_sha256"}
+        )
+    ):
+        raise ValueError("PUBLIC_SOLUTION_BINDING_MISMATCH")
 
 
 class PublicSolutionProfilePointer(FrozenModel):
@@ -100,19 +127,7 @@ class PublicSolutionEmbeddingSourceBinding(_PublicSolutionIndexValue):
 
     @model_validator(mode="after")
     def exact_binding(self) -> Self:
-        logical = content_sha256(
-            {"item_id": self.source.item_id, "projection_version": self.projection_version}
-        )
-        if (
-            self.graph_snapshot.manifest_sha256 != self.graph_snapshot.manifest_artifact.sha256
-            or self.encoding.encoding_sha256 != self.row_ref.encoding_sha256
-            or self.profile.profile_id != "inferenceprofile_" + logical[7:39]
-            or self.profile.profile_revision_id
-            != "inferenceprofilerev_" + self.profile.profile_sha256[7:39]
-            or self.binding_sha256
-            != content_sha256(self.model_dump(mode="json", exclude={"binding_sha256"}))
-        ):
-            raise ValueError("PUBLIC_SOLUTION_BINDING_MISMATCH")
+        validate_public_solution_binding_identity(self.model_dump(mode="json"))
         if isinstance(self.evidence, AcceptedPublicSolutionEvidence):
             if self.base_analysis_run_id != self.evidence.solution.base_analysis_run_id:
                 raise ValueError("PUBLIC_SOLUTION_BASE_ANALYSIS_MISMATCH")

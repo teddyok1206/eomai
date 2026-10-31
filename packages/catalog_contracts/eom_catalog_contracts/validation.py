@@ -76,6 +76,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "3.0",
             "sha256:a7097861a77dfa1b012c9f22088a97dfed47e0a3df4cdcd7137aecd828f4ee68",
         ),
+        "public-solution-embedding-index-v4": CatalogSchemaResource(
+            "schemas/knowledge/public-solution-embedding-index-v4.schema.json",
+            "resources/knowledge/public-solution-embedding-index-v4.schema.json",
+            "4.0",
+            "sha256:935d449fa01349fffde339a3d776b287e3f09d1d048ccaf113fe4c11c14816c8",
+        ),
         "public-solution-embedding-index-v3": CatalogSchemaResource(
             "schemas/knowledge/public-solution-embedding-index-v3.schema.json",
             "resources/knowledge/public-solution-embedding-index-v3.schema.json",

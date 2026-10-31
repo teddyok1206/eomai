@@ -309,3 +309,26 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
   successor의 qualification 전에는 현재 GPU runtime에 새 shape를 넣지 않는다. 해당 DB
   CHECK/carrier 의존은 goal 설계 문서에 기록했다. 새 source 후보를 AI 운영 end-to-end PASS로
   표시하지 않으며, 현재520 재임베딩과 보호 정본·구 벡터는 이 구현 때문에 변경하지 않았다.
+
+### AI evidence 설치 후보·index4 값 계약 — 12:15 UTC
+
+- 공통 수치 입력/V11 read 후보 `50107f257d8df5506ffc6fd3462e862029d998e0`를 push했고
+  공식 build-only PASS다. wheel RECORD/격리 설치 검증 산출물은
+  `/tmp/eom-api-build/50107f257d8df5506ffc6fd3462e862029d998e0.QogYYn/dist`다.
+  실제 운영 설치·migration·모델/사용자 검색은 실행하지 않았다.
+- index4/profile2/binding4의 별도 closed schema와 immutable value model을 추가했다.
+  index4는 원래 binding3를 byte/hash 그대로 포함하고 AI용 binding4만 추가할 수 있다.
+  기존 encoding identity·vector row·shard·recipe·space를 바꾸지 않으며 previous manifest는
+  실제 index3/index4만 허용한다. 기존 index3 parser/bytes는 그대로다.
+- binding3/4의 공통 identity/hash 규칙은 하나의 함수로 유지한다. 새 index의 binding union은
+  schema_version discriminator로 분기한다. 단순 union의 첫 frozen validator가 다른 가족을
+  검증하다 중단하는 문제를 개발 회귀에서 발견해, 검사를 느슨하게 하지 않고 명시적 dispatch로
+  해결했다. generator local ref fragment 오류도 운영 반영 전 회귀에서 수정했다.
+- 합성 기출·창작 binding3 두 개와 AI binding4 한 개가 동일 numeric row 한 개를 참조하는
+  positive 사례, 원 binding3 bytes 보존, schema/profile/base/hash/중복/source/space/partition/
+  predecessor 부정 사례와 기존 registry/package/의존 경계 **88 PASS**다. core3개 mypy,
+  Ruff/format, canonical/package 및 generator `--check` PASS다.
+- 이 단계는 **metadata 값 계약 후보**다. global INDEX dispatch·source capture·native carrier·
+  registry publication·QUERY successor와 DB CHECK migration을 아직 활성화하지 않았다.
+  현재 실행 중인520 GPU INDEX/QUERY의 private 설치본은 건드리지 않았다. full520 완료·
+  실제 검색 전환 전 구 벡터 삭제0이라는 조건은 유지한다.

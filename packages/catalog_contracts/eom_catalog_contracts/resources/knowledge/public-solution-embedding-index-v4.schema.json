@@ -1,0 +1,227 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/public-solution-embedding-index/4.0",
+  "title": "Unchanged public numerical rows with exact historical and registered report bindings",
+  "$defs": {
+    "registeredProfile": {
+      "additionalProperties": false,
+      "properties": {
+        "profile_id": {
+          "pattern": "^inferenceprofile_[0-9a-f]{32}$",
+          "title": "Profile Id",
+          "type": "string"
+        },
+        "profile_revision_id": {
+          "pattern": "^inferenceprofilerev_[0-9a-f]{32}$",
+          "title": "Profile Revision Id",
+          "type": "string"
+        },
+        "profile_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Profile Sha256",
+          "type": "string"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/knowledge/public-solution-embedding-entry/2.0"
+        }
+      },
+      "required": [
+        "profile_id",
+        "profile_revision_id",
+        "profile_sha256",
+        "schema_ref"
+      ],
+      "title": "PublicSolutionProfilePointer",
+      "type": "object"
+    },
+    "registeredBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "embedding-source-binding/4.0"
+        },
+        "source": {
+          "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/approvedItemSource",
+          "properties": {
+            "source_class": {
+              "const": "APPROVED_ITEM"
+            }
+          }
+        },
+        "base_analysis_run_id": {
+          "pattern": "^analysisrun_[0-9a-f]{32}$",
+          "title": "Base Analysis Run Id",
+          "type": "string"
+        },
+        "profile": {
+          "$ref": "#/$defs/registeredProfile"
+        },
+        "evidence": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-entry/2.0#/$defs/registeredEvidence"
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-index/3.0#/$defs/KnowledgeGraphSnapshotPointer"
+        },
+        "policy_revision_id": {
+          "pattern": "^accessrev_[0-9a-f]{32}$",
+          "title": "Policy Revision Id",
+          "type": "string"
+        },
+        "policy_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Policy Sha256",
+          "type": "string"
+        },
+        "recipe": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-index/3.0#/$defs/PublicSolutionEmbeddingRecipe"
+        },
+        "view": {
+          "const": "CONCRETE_FACETS",
+          "default": "CONCRETE_FACETS",
+          "title": "View",
+          "type": "string"
+        },
+        "projection_version": {
+          "const": "public-solution-text/1.0",
+          "default": "public-solution-text/1.0",
+          "title": "Projection Version",
+          "type": "string"
+        },
+        "encoding": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-index/3.0#/$defs/EmbeddingEncodingIdentity"
+        },
+        "row_ref": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-index/3.0#/$defs/EmbeddingVectorRowRef"
+        },
+        "binding_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Binding Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "source",
+        "base_analysis_run_id",
+        "profile",
+        "evidence",
+        "graph_snapshot",
+        "policy_revision_id",
+        "policy_sha256",
+        "recipe",
+        "view",
+        "projection_version",
+        "encoding",
+        "row_ref",
+        "binding_sha256"
+      ],
+      "title": "PublicSolutionEmbeddingSourceBinding",
+      "type": "object"
+    },
+    "publicIndex": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "embedding-index-manifest/4.0"
+        },
+        "index_id": {
+          "pattern": "^embeddingindex_[0-9a-f]{32}$",
+          "title": "Index Id",
+          "type": "string"
+        },
+        "index_revision_id": {
+          "pattern": "^embeddingindexrev_[0-9a-f]{32}$",
+          "title": "Index Revision Id",
+          "type": "string"
+        },
+        "previous_manifest": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/knowledge/public-solution-embedding-index/3.0#/$defs/ArtifactMemberPointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "storage_partition": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-index/3.0#/$defs/StoragePartition"
+        },
+        "space": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-index/3.0#/$defs/EmbeddingSpace"
+        },
+        "view": {
+          "const": "CONCRETE_FACETS",
+          "default": "CONCRETE_FACETS",
+          "title": "View",
+          "type": "string"
+        },
+        "recipe": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-index/3.0#/$defs/PublicSolutionEmbeddingRecipe"
+        },
+        "shards": {
+          "items": {
+            "$ref": "eom://schemas/knowledge/public-solution-embedding-index/3.0#/$defs/ArtifactMemberPointer"
+          },
+          "maxItems": 16384,
+          "minItems": 1,
+          "title": "Shards",
+          "type": "array"
+        },
+        "bindings": {
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "eom://schemas/knowledge/public-solution-embedding-index/3.0#/$defs/PublicSolutionEmbeddingSourceBinding"
+              },
+              {
+                "$ref": "#/$defs/registeredBinding"
+              }
+            ]
+          },
+          "maxItems": 16384,
+          "minItems": 1,
+          "title": "Bindings",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "index_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Index Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "index_id",
+        "index_revision_id",
+        "previous_manifest",
+        "storage_partition",
+        "space",
+        "view",
+        "recipe",
+        "shards",
+        "bindings",
+        "created_at",
+        "index_sha256"
+      ],
+      "title": "PublicSolutionEmbeddingIndex",
+      "type": "object"
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/registeredProfile"
+    },
+    {
+      "$ref": "#/$defs/registeredBinding"
+    },
+    {
+      "$ref": "#/$defs/publicIndex"
+    }
+  ]
+}
