@@ -9,7 +9,10 @@ from eom_identifiers import canonical_json_bytes
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_workflow.control_plane import ResolvedExecutionPlanV19, ResolvedExecutionPlanV20
 from eom_workflow.control_schemas import validate_control_contract
-from eom_workflow.public_similarity_control import SupportedPublicSimilarityExecutionPlan
+from eom_workflow.public_similarity_control import (
+    PUBLIC_SIMILARITY_PACK_VERSION,
+    SupportedPublicSimilarityExecutionPlan,
+)
 from eom_workflow.similarity_control import (
     MAX_SIMILARITY_EXECUTION_PLAN_BYTES,
     SupportedSimilarityExecutionPlan,
@@ -20,6 +23,10 @@ from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy.orm import Session
 
 SIMILARITY_REFERENCE_PACK_VERSION = "1.20.17"
+PUBLIC_SIMILARITY_REFERENCE_PACK_VERSION = PUBLIC_SIMILARITY_PACK_VERSION
+SIMILARITY_REFERENCE_PACK_VERSIONS = frozenset(
+    {SIMILARITY_REFERENCE_PACK_VERSION, PUBLIC_SIMILARITY_REFERENCE_PACK_VERSION}
+)
 SimilarityReferenceMode = Literal["NOT_OFFERED", "PINNED_REFERENCE_CONTEXT"]
 _PLAN_PIN_KEYS = frozenset({"plan_id", "plan_sha256", "preset_id", "preset_revision_id"})
 
@@ -47,7 +54,7 @@ def requires_similarity_prompt_context(
     return (
         isinstance(snapshot, dict)
         and snapshot.get("pack_key") == "generated-knowledge-item"
-        and snapshot.get("version") == SIMILARITY_REFERENCE_PACK_VERSION
+        and snapshot.get("version") in SIMILARITY_REFERENCE_PACK_VERSIONS
         and getattr(step, "worker_role", None) in {"authoring", "review"}
     )
 
@@ -65,7 +72,7 @@ def read_similarity_prompt_context(
     if (
         not isinstance(snapshot, dict)
         or snapshot.get("pack_key") != "generated-knowledge-item"
-        or snapshot.get("version") != SIMILARITY_REFERENCE_PACK_VERSION
+        or snapshot.get("version") not in SIMILARITY_REFERENCE_PACK_VERSIONS
         or snapshot.get("release_id") != pack_release_id
         or step.worker_role not in {"authoring", "review"}
         or not isinstance(pin, dict)
@@ -96,7 +103,15 @@ def read_similarity_prompt_context(
     except (ValueError, TypeError, SchemaError):
         raise ValueError("SIMILARITY_PROMPT_PLAN_INVALID") from None
     if (
-        plan.plan_id != record.plan_id
+        (
+            isinstance(plan, SupportedPublicSimilarityExecutionPlan)
+            and snapshot.get("version") != PUBLIC_SIMILARITY_REFERENCE_PACK_VERSION
+        )
+        or (
+            isinstance(plan, SupportedSimilarityExecutionPlan)
+            and snapshot.get("version") != SIMILARITY_REFERENCE_PACK_VERSION
+        )
+        or plan.plan_id != record.plan_id
         or plan.plan_id != pin["plan_id"]
         or plan.workflow_id != record.workflow_id
         or plan.workflow_id != workflow.workflow_id

@@ -11,6 +11,11 @@ from eom_catalog_contracts.knowledge import (
     EducationalRetrievalRequirement,
     EducationalRetrievalRequirementV2,
 )
+from eom_catalog_contracts.public_solution_reference import PublicSolutionSourceReference
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    SupportedPublicSolutionSimilarityRequest,
+    parse_supported_public_solution_similarity_request,
+)
 from eom_catalog_contracts.similarity_context import (
     MAX_SIMILARITY_CONTEXT_BYTES,
     SimilarityContext,
@@ -22,6 +27,7 @@ from eom_catalog_contracts.similarity_delivery import (
     validate_deliverable_similarity_context,
     validate_similarity_context_delivery,
 )
+from eom_catalog_contracts.similarity_materials import MAX_SIMILARITY_MATERIAL_CANDIDATES
 from eom_catalog_contracts.similarity_read import CompletedSimilarityQuerySelection
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
@@ -42,12 +48,17 @@ from eom_orchestrator.file_set_control_artifacts import (
 )
 from eom_orchestrator.similarity_context_artifact import (
     SIMILARITY_CONTEXT_ARTIFACT_TYPE,
+    PublishedPublicSolutionSimilarityContext,
     PublishedSimilarityContext,
     publish_similarity_context,
 )
 from eom_workflow.control_plane import ExecutionPresetRevisionV2
 from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.models import ExpectedWorkflowResolution, WorkflowId, WorkflowRequest
+from eom_workflow.public_similarity_control import (
+    PUBLIC_SIMILARITY_PACK_VERSION,
+    PreparedPublicSimilarityPlan,
+)
 from eom_workflow.similarity_control import PreparedSimilarityPlan
 from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import TypeAdapter
@@ -87,6 +98,23 @@ class PreparedItemSimilarity:
     resolution: ExpectedWorkflowResolution
     query_selection: CompletedSimilarityQuerySelection
     operator_id: OperatorId
+
+
+@dataclass(frozen=True, slots=True)
+class PreparedPublicItemSimilarity:
+    """Same private acceptance boundary, with explicit public family instead of a profile."""
+
+    plan: PreparedPublicSimilarityPlan
+    publication: PublishedPublicSolutionSimilarityContext
+    workflow_request_sha256: str
+    evidence_result_sha256: str
+    preset_content_sha256: str
+    resolution: ExpectedWorkflowResolution
+    query_selection: CompletedSimilarityQuerySelection
+    operator_id: OperatorId
+
+
+type SupportedPreparedItemSimilarity = PreparedItemSimilarity | PreparedPublicItemSimilarity
 
 
 def _current_context(
@@ -144,8 +172,9 @@ def validate_item_similarity_start_controls(
             or expected.workflow_definition_key != "generic-item-development"
             or expected.workflow_definition_version != "1.16.0"
             or expected.content_pack_key != "generated-knowledge-item"
-            or expected.content_pack_version != "1.20.17"
-            or expected.content_pack_bundle_sha256 != SVG_LABEL_LAYOUT_PACK_BUNDLES["1.20.17"]
+            or expected.content_pack_version not in {"1.20.17", PUBLIC_SIMILARITY_PACK_VERSION}
+            or expected.content_pack_bundle_sha256
+            != SVG_LABEL_LAYOUT_PACK_BUNDLES[expected.content_pack_version]
             or expected.execution_preset_id != preset.preset_id
             or expected.execution_preset_revision_id != preset.preset_revision_id
             or expected.execution_preset_content_sha256 != preset.content_sha256
@@ -217,6 +246,8 @@ def validate_item_similarity_scope(
         preset=preset,
     )
     try:
+        if expected_resolution.content_pack_version != "1.20.17":
+            raise ValueError("legacy similarity controls differ")
         context_request = parse_similarity_context_request(context_request)
         requirement = workflow_request.educational_retrieval
         policy = preset.retrieval_policy
@@ -241,6 +272,58 @@ def validate_item_similarity_scope(
     except (ValueError, TypeError, SchemaError):
         raise ControlPlaneError(
             "CONTROL_SIMILARITY_PREPARATION_INVALID", "item preparation inputs differ"
+        ) from None
+
+
+def validate_public_item_similarity_scope(
+    *,
+    workflow_request: WorkflowRequest,
+    expected_resolution: ExpectedWorkflowResolution,
+    evidence: EvidenceBundlePublicationResultV5,
+    preset: ExecutionPresetRevisionV2,
+    context_request: SupportedPublicSolutionSimilarityRequest,
+) -> tuple[
+    WorkflowRequest,
+    ExpectedWorkflowResolution,
+    EvidenceBundlePublicationResultV5,
+    ExecutionPresetRevisionV2,
+]:
+    """Public request family only; no current source access or additional authority."""
+    values = validate_item_similarity_start_inputs(
+        workflow_request=workflow_request,
+        expected_resolution=expected_resolution,
+        evidence=evidence,
+        preset=preset,
+    )
+    request, expected, evidence, preset = values
+    try:
+        context = parse_supported_public_solution_similarity_request(context_request)
+        policy = preset.retrieval_policy
+        requirement = request.educational_retrieval
+        if (
+            expected.content_pack_version != PUBLIC_SIMILARITY_PACK_VERSION
+            or not isinstance(context.anchor, PublicSolutionSourceReference)
+            or context.anchor.source.source_class != "PAST_EXAM"
+            or context.top_k > MAX_SIMILARITY_MATERIAL_CANDIDATES
+            or evidence.graph_snapshot != context.graph_snapshot
+            or evidence.access_policy_revision_id != context.policy_revision_id
+            or evidence.access_policy_sha256 != context.policy_sha256
+            or policy is None
+            or not set(context.source_classes).issubset(policy.allowed_source_classes)
+        ):
+            raise ValueError("public similarity scope differs")
+        if isinstance(requirement, EducationalRetrievalRequirementV2):
+            if context.consumer_purpose != "PAST_EXAM_VARIATION" or (
+                context.anchor.source.item_revision_id
+                != requirement.past_exam_variation.source_item_revision_id
+            ):
+                raise ValueError("public variation anchor differs")
+        elif context.consumer_purpose != "ITEM_AUTHORING":
+            raise ValueError("public consumer purpose differs")
+        return values
+    except (ValueError, TypeError, SchemaError):
+        raise ControlPlaneError(
+            "CONTROL_SIMILARITY_PREPARATION_INVALID", "public item scope differs"
         ) from None
 
 

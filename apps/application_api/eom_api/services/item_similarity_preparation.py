@@ -3,20 +3,40 @@
 from __future__ import annotations
 
 from eom_catalog_contracts import EvidenceBundlePublicationResultV5
-from eom_catalog_contracts.item_similarity_publication import ItemSimilarityPublication
+from eom_catalog_contracts.item_similarity_publication import (
+    ItemSimilarityPublication,
+    ItemSimilarityPublicationV2,
+)
+from eom_catalog_contracts.public_solution_delivery import (
+    validate_public_solution_similarity_delivery,
+)
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    parse_supported_public_solution_similarity_context,
+)
 from eom_catalog_contracts.similarity_context import parse_similarity_context
 from eom_catalog_contracts.similarity_delivery import validate_similarity_context_delivery
 from eom_catalog_contracts.similarity_read import CompletedSimilarityQuerySelection
 from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext, ActorType, PermissionKey
 from eom_orchestrator.control_service import ControlPlaneError
-from eom_orchestrator.similarity_context_artifact import PublishedSimilarityContext
+from eom_orchestrator.similarity_context_artifact import (
+    PublishedPublicSolutionSimilarityContext,
+    PublishedSimilarityContext,
+)
 from eom_workflow.control_plane import ExecutionPresetRevisionV2
 from eom_workflow.models import ExpectedWorkflowResolution, WorkflowRequest
+from eom_workflow.public_similarity_control import (
+    PUBLIC_SIMILARITY_PACK_VERSION,
+    PreparedPublicSimilarityPlan,
+)
 from eom_workflow.similarity_control import PreparedSimilarityPlan
 from eom_workflow_runner.item_similarity_preparation import (
     PreparedItemSimilarity,
+    PreparedPublicItemSimilarity,
+    SupportedPreparedItemSimilarity,
     validate_item_similarity_scope,
+    validate_item_similarity_start_inputs,
+    validate_public_item_similarity_scope,
 )
 from jsonschema.exceptions import ValidationError as SchemaError
 
@@ -56,7 +76,7 @@ class ItemSimilarityStartPreparationService:
         expected_resolution: ExpectedWorkflowResolution,
         evidence: EvidenceBundlePublicationResultV5,
         preset: ExecutionPresetRevisionV2,
-    ) -> PreparedItemSimilarity:
+    ) -> SupportedPreparedItemSimilarity:
         if actor.actor_type is not ActorType.OPERATOR or (
             PermissionKey.WORKFLOW_START not in actor.permissions
         ):
@@ -68,6 +88,42 @@ class ItemSimilarityStartPreparationService:
             )
         try:
             selection = CompletedSimilarityQuerySelection.model_validate(selection)
+            if expected_resolution.content_pack_version == PUBLIC_SIMILARITY_PACK_VERSION:
+                request, resolution, evidence, preset = validate_item_similarity_start_inputs(
+                    workflow_request=workflow_request,
+                    expected_resolution=expected_resolution,
+                    evidence=evidence,
+                    preset=preset,
+                )
+                public = ItemSimilarityPublicationV2.model_validate(
+                    self.publications.publish_public(actor.actor_id, selection)
+                )
+                current = parse_supported_public_solution_similarity_context(
+                    self.contexts.read_public(actor.actor_id, selection)
+                )
+                request, resolution, evidence, preset = validate_public_item_similarity_scope(
+                    workflow_request=request,
+                    expected_resolution=resolution,
+                    evidence=evidence,
+                    preset=preset,
+                    context_request=current.request,
+                )
+                validate_public_solution_similarity_delivery(
+                    public.delivery, current, expected_request=current.request
+                )
+                prepared_public = PreparedPublicItemSimilarity(
+                    PreparedPublicSimilarityPlan(public.delivery, current),
+                    PublishedPublicSolutionSimilarityContext(
+                        public.owner_job_id, public.delivery, public.manifest_sha256
+                    ),
+                    content_sha256(request.model_dump(mode="json")),
+                    evidence.result_sha256,
+                    preset.content_sha256,
+                    resolution,
+                    selection,
+                    actor.actor_id,
+                )
+                return check_similarity_start(prepared_public, request, actor).preparation
             # Publication is an independently authorized canonical auxiliary result,
             # not item acceptance. Materialize it once at this validation boundary.
             publication = ItemSimilarityPublication.model_validate(

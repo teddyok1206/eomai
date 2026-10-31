@@ -23,6 +23,7 @@ from eom_catalog_contracts.registered_public_solution_similarity import (
     parse_supported_public_solution_similarity_context,
     parse_supported_public_solution_similarity_request,
 )
+from eom_catalog_contracts.similarity_materials import MAX_SIMILARITY_MATERIAL_CANDIDATES
 from eom_identifiers import content_sha256
 from pydantic import ConfigDict, TypeAdapter, model_validator
 
@@ -37,6 +38,7 @@ from eom_workflow.similarity_control import (
 PUBLIC_SIMILARITY_PLAN_SCHEMAS = frozenset(
     {"resolved-execution-plan/30.0", "resolved-execution-plan/31.0"}
 )
+PUBLIC_SIMILARITY_PACK_VERSION = "1.20.18"
 
 
 @dataclass(frozen=True, slots=True)
@@ -48,6 +50,8 @@ class PreparedPublicSimilarityPlan:
 
     def __post_init__(self) -> None:
         context = parse_supported_public_solution_similarity_context(self.context)
+        if len(context.candidates) > MAX_SIMILARITY_MATERIAL_CANDIDATES:
+            raise ValueError("PUBLIC_SIMILARITY_ROLE_REFERENCE_BUDGET_EXCEEDED")
         validate_public_solution_similarity_delivery(
             self.delivery, context, expected_request=context.request
         )

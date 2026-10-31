@@ -78,7 +78,7 @@ from eom_workflow import (
 from eom_workflow.control_plane import WorkerRole
 from eom_workflow.schemas import result_schema_protocol
 from eom_workflow_runner.errors import WorkflowError, WorkflowErrorCode
-from eom_workflow_runner.item_similarity_preparation import PreparedItemSimilarity
+from eom_workflow_runner.item_similarity_preparation import SupportedPreparedItemSimilarity
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
     WorkflowDefinitionRecord,
@@ -291,7 +291,7 @@ class CommandAdapter:
         actor: ActorContext,
         *,
         idempotency_key: str,
-        prepared_similarity: PreparedItemSimilarity | None = None,
+        prepared_similarity: SupportedPreparedItemSimilarity | None = None,
     ) -> tuple[str, str, int]:
         result = self._start_workflow(
             request,
@@ -326,7 +326,7 @@ class CommandAdapter:
         actor: ActorContext,
         *,
         idempotency_key: str,
-        prepared_similarity: PreparedItemSimilarity | None,
+        prepared_similarity: SupportedPreparedItemSimilarity | None,
         reference_preparation: ReferenceItemStartPreparationPort | None,
     ) -> tuple[str, str, int] | ReferenceItemStartPending:
         workflow_request = _workflow_request_from_api(request)

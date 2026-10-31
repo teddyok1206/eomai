@@ -12,7 +12,7 @@ from eom_operator_identity import ActorContext
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.control_plane import ExecutionPresetRevisionV2
 from eom_workflow.models import ExpectedWorkflowResolution, WorkflowId, WorkflowRequest
-from eom_workflow_runner.item_similarity_preparation import PreparedItemSimilarity
+from eom_workflow_runner.item_similarity_preparation import SupportedPreparedItemSimilarity
 from pydantic import TypeAdapter
 
 
@@ -65,4 +65,8 @@ class ReferenceItemStartPreparationPort(Protocol):
         evidence: EvidenceBundlePublicationResultV5,
         preset: ExecutionPresetRevisionV2,
         idempotency_key: str,
-    ) -> PreparedItemSimilarity | ReferenceItemStartPending | ReferenceItemSimilarityNotOffered: ...
+    ) -> (
+        SupportedPreparedItemSimilarity
+        | ReferenceItemStartPending
+        | ReferenceItemSimilarityNotOffered
+    ): ...

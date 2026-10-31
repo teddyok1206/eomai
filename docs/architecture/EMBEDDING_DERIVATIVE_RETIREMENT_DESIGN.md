@@ -238,3 +238,29 @@ public 설정이 없을 때 legacy owner를 빌려 읽지 않는다. 이 연결�
 실제 API caller 활성화 전에 이 부분은 공개 풀이의 `anchor.entry.public_solution` 및 질문
 표현에 맞는 immutable 지침/Pack successor로 명확히 해야 한다. 구 Pack/지침을 제자리
 수정하거나 AGENTS 문구만으로 서로 모순되는 필드 요구를 덮어 운영 승인하지 않는다.
+
+### 실제 Item-start의 공개 풀이 전환
+
+Pack1.20.18은 1.20.17의 authoring/review 보조 지침만 v2로 바꾼 immutable successor다.
+원래 컨텐츠팀장2개 원문, 이미지/HWPX/편집 규칙, 독립 검토와 최대3교·result schema는
+보존한다. v2는 context3/4와 materials3의 실제 `anchor/entries[].entry.public_solution`,
+question AVAILABLE/UNAVAILABLE, 보고서 종류/출처 차이와 텍스트 접근 한계를 설명한다.
+profile ID는 identity carrier일 뿐 구형 profile fields를 새 문서에서 찾지 않는다.
+
+API의 기존 reference-start use case에서 실제 resolved Pack18이면 기존 prepare-request4로
+단일 원 기출 reference를 요청한다. source scope/Graph/policy는 기존 Evidence와 정확히
+같아야 하며 실제 owner가 GPU/CPU 공간을 선택한다. 후보는 worker 자료 상한8개로 미리
+제한하며 자르거나 다른 index로 재검색하지 않는다. Pack17의 기존 request/plan23·24는
+그대로 replay한다. request4의 pending Artifact/parent와 원 key를 유지하고 새 child를
+중복 생성하지 않는다. 선행 QUERY 없이 Item을 만들거나 old response를 public으로 relabel
+하지 않는다. 실제 source/권한이 없으면 기존 명시적 오류 또는 허용된 ordinary NOT_OFFERED
+의미를 사용하며 오류를 absence로 숨기지 않는다.
+
+실제 publication2/read3·4로 얻은 결과는 frozen public preparation으로만 전달한다. 기존
+단일 Item transaction에서 request/resolution/preset/Evidence/operator와 모든 작은 hash를
+검증하고 plan30·31·acceptance2 metadata·START를 함께 저장한다. old acceptance1/fingerprint는
+변경하지 않는다. rollback/재전송은 같은 identity로 하며 committed auxiliary Artifact와
+기존 FAILED는 보존한다. HTTP/CLI는 business invariant를 새로 복제하지 않고 기존 runner
+scope validator와 Orchestrator resolver를 재사용한다. 새 wire schema/DB/table/index/queue나
+캐시는 필요 없다. 준비는 기존 bounded read, acceptance는 indexed key lookup과 원 root
+transaction이므로 큰 payload의 DB 복제나 N+1을 추가하지 않는다.

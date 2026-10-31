@@ -10,8 +10,11 @@ from eom_catalog_contracts import (
     EvidenceBundlePublicationResultV5,
 )
 from eom_catalog_contracts.authoring_reference import AuthoringReferenceSelection
+from eom_catalog_contracts.public_solution_embedding import AcceptedPublicSolutionEvidence
+from eom_catalog_contracts.public_solution_reference import PublicSolutionSourceReference
 from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareReplyV3,
+    ReferenceQueryPrepareReplyV4,
     parse_supported_reference_query_prepare_request,
 )
 from eom_identifiers import content_sha256
@@ -19,8 +22,10 @@ from eom_operator_identity import ActorContext
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_workflow.control_plane import ExecutionPresetRevisionV2
 from eom_workflow.models import ExpectedWorkflowResolution, WorkflowRequest
+from eom_workflow.public_similarity_control import PUBLIC_SIMILARITY_PACK_VERSION
 from eom_workflow_runner.item_similarity_preparation import (
-    PreparedItemSimilarity,
+    PreparedPublicItemSimilarity,
+    SupportedPreparedItemSimilarity,
     validate_item_similarity_start_controls,
 )
 from jsonschema.exceptions import ValidationError as SchemaError
@@ -84,7 +89,11 @@ class HttpReferenceItemStartPreparation:
         evidence: EvidenceBundlePublicationResultV5,
         preset: ExecutionPresetRevisionV2,
         idempotency_key: str,
-    ) -> PreparedItemSimilarity | ReferenceItemStartPending | ReferenceItemSimilarityNotOffered:
+    ) -> (
+        SupportedPreparedItemSimilarity
+        | ReferenceItemStartPending
+        | ReferenceItemSimilarityNotOffered
+    ):
         if actor != self.context.actor():
             raise ApiError(403, "PERMISSION_DENIED", "Permission denied", "Current caller differs.")
         self.context.owner_capture()
@@ -148,7 +157,7 @@ class HttpReferenceItemStartPreparation:
         # The domain key also scopes the QUERY to this actual operator/operation.
         key = idempotency_key + ":reference"
         operation = content_sha256({"purpose": "REFERENCE_ITEM_START/1.0", "key": key})
-        body = {
+        body: dict[str, object] = {
             "schema_version": "system-rag-reference-query-prepare-request/1.0",
             "operation": "PREPARE_REFERENCE_QUERY",
             "operation_id": "queryprepare_" + operation.removeprefix("sha256:")[:32],
@@ -163,12 +172,22 @@ class HttpReferenceItemStartPreparation:
                 schema_version="system-rag-reference-query-prepare-request/1.1",
                 consumer_purpose="ITEM_AUTHORING",
             )
+        if expected_resolution.content_pack_version == PUBLIC_SIMILARITY_PACK_VERSION:
+            body.pop("source_item_revision_id")
+            body.update(
+                schema_version="system-rag-reference-query-prepare-request/4.0",
+                source_item_revision_ids=[source_id],
+                consumer_purpose="PAST_EXAM_VARIATION"
+                if isinstance(requirement, EducationalRetrievalRequirementV2)
+                else "ITEM_AUTHORING",
+                top_k=5,
+            )
         query = parse_supported_reference_query_prepare_request(
             {**body, "request_sha256": content_sha256(body)}
         )
         reply = self.queries.prepare(self.context, query, idempotency_key=key)
         if reply.status == "PENDING":
-            if isinstance(reply, ReferenceQueryPrepareReplyV3):
+            if isinstance(reply, ReferenceQueryPrepareReplyV3 | ReferenceQueryPrepareReplyV4):
                 assert reply.preparation is not None and reply.parent_request_sha256 is not None
                 return ReferenceItemStartPending(
                     reply.workflow_id, reply.preparation, reply.parent_request_sha256
@@ -197,12 +216,34 @@ class HttpReferenceItemStartPreparation:
             preset=preset,
         )
         if reference is not None:
-            anchor = prepared.plan.context.request.anchor
+            solution_pointer: str | None
+            if isinstance(prepared, PreparedPublicItemSimilarity):
+                public_anchor = prepared.plan.context.request.anchor
+                if not isinstance(public_anchor, PublicSolutionSourceReference) or not isinstance(
+                    public_anchor.evidence, AcceptedPublicSolutionEvidence
+                ):
+                    raise ApiError(
+                        409,
+                        "CONTROL_SIMILARITY_PREPARATION_INVALID",
+                        "Reference differs",
+                        "Original Evidence solution is missing.",
+                    )
+                solution_pointer = public_anchor.evidence.solution.pointer_sha256
+                source_revision = public_anchor.source.item_revision_id
+                source_sha = public_anchor.source.artifact_member.sha256
+            else:
+                anchor = prepared.plan.context.request.anchor
+                solution_pointer = (
+                    None
+                    if anchor.solution_evidence is None
+                    else anchor.solution_evidence.pointer_sha256
+                )
+                source_revision = anchor.source.item_revision_id
+                source_sha = anchor.source.artifact_member.sha256
             if (
-                anchor.source.item_revision_id != reference.source_item_revision_id
-                or anchor.source.artifact_member.sha256 != reference.source_sha256
-                or anchor.solution_evidence is None
-                or anchor.solution_evidence.pointer_sha256 != reference.solution_pointer_sha256
+                source_revision != reference.source_item_revision_id
+                or source_sha != reference.source_sha256
+                or solution_pointer != reference.solution_pointer_sha256
             ):
                 # Publication may already exist; do not retry/re-key or start an Item.
                 raise ApiError(

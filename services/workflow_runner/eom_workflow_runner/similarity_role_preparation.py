@@ -20,6 +20,7 @@ from eom_orchestrator.public_similarity_materialization import (
 from eom_orchestrator.similarity_materialization import SimilarityMaterializationContext
 from eom_workflow.models import WorkerRequest
 from eom_workflow.public_similarity_control import (
+    PUBLIC_SIMILARITY_PACK_VERSION,
     PUBLIC_SIMILARITY_PLAN_SCHEMAS,
     SupportedPublicSimilarityExecutionPlan,
     parse_public_similarity_execution_plan,
@@ -148,7 +149,12 @@ def _bind_role(
             or plan.workflow_definition_sha256 != actual.definition_hash
             or actual.role_schema_version != "workflow-role/1.24.0"
             or result_schema_protocol(current.result_schema) != actual.role_schema_version
-            or plan.content_pack_sha256 != SVG_LABEL_LAYOUT_PACK_BUNDLES["1.20.17"]
+            or plan.content_pack_sha256
+            != SVG_LABEL_LAYOUT_PACK_BUNDLES[
+                PUBLIC_SIMILARITY_PACK_VERSION
+                if isinstance(plan, SupportedPublicSimilarityExecutionPlan)
+                else "1.20.17"
+            ]
             or stored_request.content_pack is None
             or stored_request.content_pack.pack_key != "generated-knowledge-item"
             or stored_request.worker_request() != request

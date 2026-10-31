@@ -22,6 +22,7 @@ from eom_catalog_service.similarity_read_service import CatalogSimilarityContext
 from eom_catalog_service.workflow_similarity_read_service import (
     CatalogWorkflowSimilarityReadService,
 )
+from eom_image_contracts import SVG_LABEL_LAYOUT_PACK_BUNDLES
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.general_chat_socket import ChatSocketEndpoint
@@ -68,6 +69,7 @@ def public_rpc(workflows, request, tmp_path, monkeypatch):
             raw.pop("similarity_delivery")
             raw.pop("similarity_reference", None)
             raw.update(schema_version="resolved-execution-plan/19.0", resolver_version="19.0.0")
+            raw["content_pack_sha256"] = SVG_LABEL_LAYOUT_PACK_BUNDLES["1.20.18"]
             base = ResolvedExecutionPlanV19.model_validate(seal(raw, "plan_sha256"))
             plan = bind_public_similarity_execution_plan(base, case["delivery"], case["context"])
             record.canonical_document = plan.model_dump(mode="json")
@@ -94,6 +96,8 @@ def public_rpc(workflows, request, tmp_path, monkeypatch):
             )
             runtime = deepcopy(workflow.runtime_context)
             runtime["execution_plan"]["plan_sha256"] = plan.plan_sha256
+            runtime["content_pack"]["version"] = "1.20.18"
+            runtime["content_pack"]["release_sha256"] = plan.content_pack_sha256
             runtime["similarity_query"] = selection.model_dump(mode="json")
             workflow.runtime_context = runtime
             selections[pointer.item_id] = selection

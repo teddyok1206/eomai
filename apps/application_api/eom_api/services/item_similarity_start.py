@@ -21,11 +21,20 @@ from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext, ActorType, PermissionKey
 from eom_operator_identity.contracts import OperatorId
 from eom_orchestrator.control_service import ControlPlaneError
-from eom_orchestrator.similarity_context_artifact import PublishedSimilarityContext
+from eom_orchestrator.similarity_context_artifact import (
+    PublishedPublicSolutionSimilarityContext,
+    PublishedSimilarityContext,
+)
 from eom_protocol.models import JobId
 from eom_workflow.control_plane import ExecutionPresetRevisionV2
 from eom_workflow.control_schemas import validate_control_contract
 from eom_workflow.models import ExpectedWorkflowResolution, WorkflowRequest
+from eom_workflow.public_similarity_control import (
+    PUBLIC_SIMILARITY_PACK_VERSION,
+    PreparedPublicSimilarityPlan,
+    SupportedPublicSimilarityExecutionPlan,
+    validate_public_similarity_plan_context,
+)
 from eom_workflow.similarity_control import (
     PreparedSimilarityPlan,
     SupportedSimilarityExecutionPlan,
@@ -33,6 +42,8 @@ from eom_workflow.similarity_control import (
 )
 from eom_workflow_runner.item_similarity_preparation import (
     PreparedItemSimilarity,
+    PreparedPublicItemSimilarity,
+    SupportedPreparedItemSimilarity,
     validate_item_similarity_start_controls,
 )
 from eom_workflow_runner.models import WorkflowDefinitionRecord
@@ -44,13 +55,14 @@ from eom_api.errors import ApiError
 from eom_api.services.reference_item_start_ports import ReferenceItemSimilarityNotOffered
 
 SIMILARITY_PREPARATION_ACCEPTANCE_KEY = "similarity_preparation_v1_sha256"
+PUBLIC_SIMILARITY_PREPARATION_ACCEPTANCE_KEY = "similarity_preparation_v2_sha256"
 
 
 @dataclass(frozen=True, slots=True)
 class CheckedSimilarityStart:
     """Pure operation-local binding value, never current authority or a durable grant."""
 
-    preparation: PreparedItemSimilarity
+    preparation: SupportedPreparedItemSimilarity
     fingerprint: str
 
 
@@ -121,13 +133,24 @@ def selected_workflow_resolution(
 
 
 def check_similarity_start(
-    preparation: PreparedItemSimilarity, request: WorkflowRequest, actor: ActorContext
+    preparation: SupportedPreparedItemSimilarity, request: WorkflowRequest, actor: ActorContext
 ) -> CheckedSimilarityStart:
     try:
-        if type(preparation) is not PreparedItemSimilarity or (
-            type(preparation.plan) is not PreparedSimilarityPlan
-            or type(preparation.publication) is not PublishedSimilarityContext
-        ):
+        if type(preparation) is PreparedItemSimilarity:
+            family_matches = (
+                type(preparation.plan) is PreparedSimilarityPlan
+                and type(preparation.publication) is PublishedSimilarityContext
+                and preparation.resolution.content_pack_version == "1.20.17"
+            )
+        elif type(preparation) is PreparedPublicItemSimilarity:
+            family_matches = (
+                type(preparation.plan) is PreparedPublicSimilarityPlan
+                and type(preparation.publication) is PublishedPublicSolutionSimilarityContext
+                and preparation.resolution.content_pack_version == PUBLIC_SIMILARITY_PACK_VERSION
+            )
+        else:
+            family_matches = False
+        if not family_matches:
             raise ValueError("invalid preparation value")
         preparation.plan.__post_init__()
         selection = CompletedSimilarityQuerySelection.model_validate(preparation.query_selection)
@@ -168,7 +191,9 @@ def check_similarity_start(
         )
     fingerprint = content_sha256(
         {
-            "purpose": "ITEM_SIMILARITY_PREPARATION_V1",
+            "purpose": "ITEM_SIMILARITY_PREPARATION_V2"
+            if isinstance(preparation, PreparedPublicItemSimilarity)
+            else "ITEM_SIMILARITY_PREPARATION_V1",
             "operator_id": preparation.operator_id,
             "workflow_request_sha256": preparation.workflow_request_sha256,
             "evidence_result_sha256": preparation.evidence_result_sha256,
@@ -227,16 +252,23 @@ def similarity_start_context(
 ) -> dict[str, Any]:
     """Small immutable acceptance metadata; caller commits it with plan and START."""
     try:
-        if not isinstance(plan, SupportedSimilarityExecutionPlan):
-            raise ValueError("similarity plan not bound before persistence")
-        validate_similarity_plan_context(plan, checked.preparation.plan.context)
+        if isinstance(checked.preparation, PreparedPublicItemSimilarity):
+            if not isinstance(plan, SupportedPublicSimilarityExecutionPlan):
+                raise ValueError("public plan not bound before persistence")
+            validate_public_similarity_plan_context(plan, checked.preparation.plan.context)
+            acceptance_key = PUBLIC_SIMILARITY_PREPARATION_ACCEPTANCE_KEY
+        else:
+            if not isinstance(plan, SupportedSimilarityExecutionPlan):
+                raise ValueError("similarity plan not bound before persistence")
+            validate_similarity_plan_context(plan, checked.preparation.plan.context)
+            acceptance_key = SIMILARITY_PREPARATION_ACCEPTANCE_KEY
         if plan.similarity_delivery != checked.preparation.plan.delivery:
             raise ValueError("prepared delivery differs")
         result = dict(context)
         result[SIMILARITY_QUERY_CONTEXT_KEY] = checked.preparation.query_selection.model_dump(
             mode="json"
         )
-        result[SIMILARITY_PREPARATION_ACCEPTANCE_KEY] = checked.fingerprint
+        result[acceptance_key] = checked.fingerprint
         return result
     except (ValueError, TypeError, AttributeError, KeyError, SchemaError):
         raise _invalid() from None
@@ -246,10 +278,21 @@ def require_similarity_start_replay(
     context: dict[str, Any], checked: CheckedSimilarityStart
 ) -> None:
     """Metadata-only original acceptance; no current source/activation or bytes read."""
+    key = (
+        PUBLIC_SIMILARITY_PREPARATION_ACCEPTANCE_KEY
+        if isinstance(checked.preparation, PreparedPublicItemSimilarity)
+        else SIMILARITY_PREPARATION_ACCEPTANCE_KEY
+    )
+    other_key = (
+        SIMILARITY_PREPARATION_ACCEPTANCE_KEY
+        if key == PUBLIC_SIMILARITY_PREPARATION_ACCEPTANCE_KEY
+        else PUBLIC_SIMILARITY_PREPARATION_ACCEPTANCE_KEY
+    )
     if (
-        context.get(SIMILARITY_QUERY_CONTEXT_KEY)
+        other_key in context
+        or context.get(SIMILARITY_QUERY_CONTEXT_KEY)
         != checked.preparation.query_selection.model_dump(mode="json")
-        or context.get(SIMILARITY_PREPARATION_ACCEPTANCE_KEY) != checked.fingerprint
+        or context.get(key) != checked.fingerprint
     ):
         raise ApiError(
             409,

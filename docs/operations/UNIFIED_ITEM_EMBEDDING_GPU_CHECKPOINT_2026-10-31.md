@@ -1,5 +1,55 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 공통 자료의 실제 문항 시작 연결과 원래 CUDA 실패 복구 — 2026-10-31 23:39 UTC
+
+- 직전 사용자 응답은 GUI 시험 후보 안내였으며 목표 구현 자체로는 **NO_PROGRESS**였다.
+  이번 실행은 실제 source/저장 검증을 마무리하고 끊긴 원래 CUDA 실행을 공식 복구한
+  **PROGRESS**다. 전체 목표를 후보 안내·source PASS로 축소하지 않는다.
+- immutable Pack **1.20.18**과 reference guidance2를 추가했다. Pack SHA는
+  `sha256:ec6da3c32b8f878756e34676c74282211cc6a4d7155158e6b230fcb37a432296`다.
+  source17의 원문 팀장 prompt2개와 image/template/assets는 그대로이고, authoring/review의
+  보조 안내만 context3/4·materials3의 실제 공개 풀이/문항 구조와 맞췄다. 없는
+  `anchor_profile`을 읽도록 하지 않는다. full/private 보고서·픽셀 열람을 가장하지 않는다.
+- 기존 API preparation과 Item-start use case에 exact Pack18 분기를 연결했다. 공식
+  prepare-request4, publication2, completed context3/4, plan30/31과 START가 같은 원래
+  request/Graph/policy/operator/QUERY pin을 사용한다. 일반출제의 원 기출 Evidence/풀이
+  pointer와 기출변형의 원문 revision도 대조한다. 실제 허용 source-class만 사용하고 old17
+  replay를 보존한다. public acceptance2와 legacy acceptance1을 구분하며 교차 replay는
+  거부한다. pending의 원래 preparation/parent를 유지하고 timeout에서 새 key를 만들지 않는다.
+- 최종 집중 합집합 **277 PASS /90.49s**, package resource/dependency **27 PASS /42.90s**,
+  Ruff/format/diff 및 strict mypy10 PASS다. FastAPI 기존 httpx deprecation warning1은 남았다.
+  source fixtures와 synthetic 권한/QUERY는 실제 운영 로그인·모델 실행 증거가 아니다.
+  `/tmp/eom-public-item-final-focused-20261031-v2.log`,
+  `/tmp/eom-public-item-resource-tests-20261031.log`,
+  `/tmp/eom-public-item-caller-mypy-20261031-final-v2.log`.
+- guarded disposable PostgreSQL에서 실제 plan30/31·START·acceptance 저장, 같은 요청 replay,
+  concurrent one-Workflow/plan/command, plan flush 후 중단 rollback/원 요청 재개와 다른
+  fingerprint 거부 **8 PASS /12.96s**다. test DB를 정리하고 부재를 확인했다. 운영 DB pytest,
+  migration/새 queue/새 dependency는 없다.
+  `/tmp/eom-public-item-postgres-tests-20261031.log`,
+  `/tmp/eom-public-item-testdb-cleanup-20261031-v2.log`.
+- 별도로 기존 INDEX가 **23:16:33 UTC FAILED/exit1**임을 확인했다. 원래 CUDA unit은
+  ALRM/14 종료였다. protected retirement raw SHA
+  `sha256:d08b74def2533d1938ae529dac29e0b315afbc80ef7290d4c02a709bab33a386`,
+  original invocation `dc233b0e9ee34ec6b8c5b94fd8ddbfda`, FD0·실제 OS/file 전후 검증을
+  installed failure reader로 통과했다. 별도 model/source 변경은 아직 없었고, ALRM의 발생
+  사실과 구체적인 지연 원인 확정은 구분한다.
+- exact original `workflow_44e60833bdf643ec97db40a895148527`의 association/parent BOUND와
+  native launch/encoding4를 확인하고 lease 만료 후 기존
+  `recover_retired_indexing_workflow`로 FAILED를 정직하게 확정했다. 같은 command replay PASS,
+  원래 request/lease 이력 보존, 새 모델 실행0/벡터 삭제0이다. 직접 SQL UPDATE나 FAILED의
+  성공 재해석은 없다. root/schema-owner maintenance 증거는
+  `/var/lib/eom-index-failure-recovery-44e60833-20261031/`에 보존했다.
+  `/tmp/eom-index-eof-44e60833-retirement-20261031-v2.json`,
+  `/tmp/eom-index-eof-44e60833-recovery-20261031.json`.
+- 기존 FB numerical/INDEX 설정을 바꾸지 않고 INDEX service만 다시 시작했다.
+  **23:38:59 INDEX1683578/QUERY1466291 active**다. 새 PID 생존은 새 CUDA 결과 저장 완료를
+  뜻하지 않는다. 마지막 정기 관측의 성공 **122/520·잔여398**은 보존한다. 실패 복구로 늘어난
+  historical FAILED와 현재 처리량은 다음 typed 관측에서 별도로 확인한다. timer00/30 유지다.
+- Pack18/API 수정은 아직 운영 활성화하지 않았다. actual compatible release/QUERY auth pin,
+  authorized DB query/read/replay·AI full-report/Graph/INDEX4·Chat 소비자, 전체520 integrity,
+  구 vector 참조 조사와 정확한 삭제가 남아 있으므로 전체 목표 ACTIVE다.
+
 ## 출제·검토 공통 공개 풀이의 실제 role 읽기·배치 연결 — 2026-10-31 23:10 UTC
 
 - 직전 목표 실행은 plan30/31 source·저장/replay 검증의 **PROGRESS**였고, 설치본311 PASS도

@@ -34,6 +34,7 @@ SVG_LABEL_LAYOUT_PACK_BUNDLES: Final[Mapping[str, str]] = MappingProxyType(
         "1.20.15": "sha256:63785945ceaa226dcb63a278cb08cbc82f8dcf35b0a9e7df9b65dde5810f6f6c",
         "1.20.16": "sha256:3b995ea8e4f83805c1e9e3fd87457aed1c879e2c11a66909e5a19bd144189232",
         "1.20.17": "sha256:2d93ac0f13c6ea24b1a3c8fe2740c32ed089cb076cdfb6f1d8e3586519751794",
+        "1.20.18": "sha256:ec6da3c32b8f878756e34676c74282211cc6a4d7155158e6b230fcb37a432296",
     }
 )
 SVG_LABEL_LAYOUT_PACK_BUNDLE_SHA256S: Final = frozenset(SVG_LABEL_LAYOUT_PACK_BUNDLES.values())

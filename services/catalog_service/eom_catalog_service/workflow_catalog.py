@@ -182,6 +182,7 @@ from eom_catalog_service.pack_resources import PackResourceResolver
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.similarity_prompt_context import (
+    PUBLIC_SIMILARITY_REFERENCE_PACK_VERSION,
     SIMILARITY_REFERENCE_PACK_VERSION,
     read_similarity_prompt_context,
     requires_similarity_prompt_context,
@@ -242,7 +243,15 @@ def _review_correction_prompt_supplement(context: dict[str, str]) -> str:
 # Reuse each membership set across brief and image bindings so a compatible editorial
 # successor cannot acquire a different material schema or lose its image policy.
 CONTENT_TEAM_MATERIAL_V5_PACK_VERSIONS = frozenset(
-    {"1.20.12", "1.20.13", "1.20.14", "1.20.15", "1.20.16", SIMILARITY_REFERENCE_PACK_VERSION}
+    {
+        "1.20.12",
+        "1.20.13",
+        "1.20.14",
+        "1.20.15",
+        "1.20.16",
+        SIMILARITY_REFERENCE_PACK_VERSION,
+        PUBLIC_SIMILARITY_REFERENCE_PACK_VERSION,
+    }
 )
 CONTENT_TEAM_MATERIAL_V4_PACK_VERSIONS = frozenset(
     {
