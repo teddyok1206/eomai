@@ -4,14 +4,9 @@ from __future__ import annotations
 
 from eom_identifiers import content_sha256
 from eom_identity_service import lock_current_local_indexing_service_metadata
-from eom_workflow.local_embedding_request import (
-    LocalEmbeddingServiceWorkflowRequest,
-    local_embedding_request_service,
-)
 from eom_workflow.local_embedding_request_v2 import (
-    LocalEmbeddingWorkflowRequestV2,
-    local_embedding_request_service_v2,
     parse_supported_local_embedding_request,
+    supported_local_embedding_request_service,
 )
 from eom_workflow.local_indexing_unstarted_cancellation import (
     LocalIndexingUnstartedCancellationCommand,
@@ -96,15 +91,10 @@ def _cancel(
     if workflow is None:
         raise LocalIndexingCancellationError("LOCAL_INDEXING_CANCELLATION_SCOPE_INVALID")
     request = parse_supported_local_embedding_request(workflow.initial_request)
-    if not isinstance(
-        request, LocalEmbeddingServiceWorkflowRequest | LocalEmbeddingWorkflowRequestV2
-    ):
-        raise LocalIndexingCancellationError("LOCAL_INDEXING_CANCELLATION_SCOPE_INVALID")
-    service = (
-        local_embedding_request_service_v2(request)
-        if isinstance(request, LocalEmbeddingWorkflowRequestV2)
-        else local_embedding_request_service(request)
-    )
+    try:
+        service = supported_local_embedding_request_service(request)
+    except ValueError as error:
+        raise LocalIndexingCancellationError("LOCAL_INDEXING_CANCELLATION_SCOPE_INVALID") from error
     if (
         request.request_sha256 != command.workflow_request_sha256
         or service != command.service

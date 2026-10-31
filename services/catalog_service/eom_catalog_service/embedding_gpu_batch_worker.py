@@ -14,7 +14,7 @@ from eom_catalog_service.embedding_native_entrypoint import require_native_embed
 
 if TYPE_CHECKING:
     from eom_catalog_contracts.embedding_gpu_control import EmbeddingGpuAllocationBusy
-    from eom_catalog_contracts.embedding_work_batch_result import EmbeddingWorkBatchResult
+    from eom_catalog_contracts.embedding_work_batch_result import SupportedEmbeddingWorkBatchResult
 
     from eom_catalog_service.embedding_gpu_control_channel import EmbeddingGpuControlChannel
     from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
@@ -57,7 +57,7 @@ def run_native_embedding_gpu_batch_worker(
     expected_backend: NativeEmbeddingBackendPins,
     resources: EmbeddingWorkBatchExecutionResources,
     maximum_total_output_bytes: int,
-) -> EmbeddingGpuAllocationBusy | EmbeddingWorkBatchResult:
+) -> EmbeddingGpuAllocationBusy | SupportedEmbeddingWorkBatchResult:
     """Consume one exact-peer channel after quiet bootstrap and original-unit admission.
 
     The caller independently constructs the channel with actual root peer/unit fences
@@ -88,7 +88,7 @@ def run_native_embedding_gpu_batch_worker(
             read_pinned_cuda_admission_receipt,
         )
         from eom_catalog_service.embedding_native_stdio import (
-            run_granted_native_embedding_gpu_batch_descriptors,
+            run_granted_supported_embedding_gpu_batch_descriptors,
         )
         from eom_catalog_service.embedding_runtime_files import (
             NumericalRuntimeFileSnapshots,
@@ -173,7 +173,7 @@ def run_native_embedding_gpu_batch_worker(
                     files.assert_unchanged()
                     captured.assert_current()
                     with open_cuda_probe_device_access(captured) as ownership:
-                        return run_granted_native_embedding_gpu_batch_descriptors(
+                        return run_granted_supported_embedding_gpu_batch_descriptors(
                             descriptors,
                             lambda: native_cuda_backend_scope(
                                 configuration,

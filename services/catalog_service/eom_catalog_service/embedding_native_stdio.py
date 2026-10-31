@@ -32,10 +32,10 @@ from eom_catalog_contracts.embedding_vector_binary import (
 )
 from eom_catalog_contracts.embedding_work_batch import (
     MAX_EMBEDDING_WORK_BATCH_BYTES,
-    EmbeddingWorkBatchInput,
     PublicSolutionWorkBatchInput,
     SupportedEmbeddingWorkBatchInput,
     parse_embedding_work_batch_input,
+    parse_supported_embedding_work_batch_input,
 )
 from eom_catalog_contracts.embedding_work_batch_result import (
     EmbeddingWorkBatchResult,
@@ -43,6 +43,7 @@ from eom_catalog_contracts.embedding_work_batch_result import (
     SupportedEmbeddingWorkBatchResult,
     build_embedding_work_batch_result,
     embedding_work_batch_result_bytes,
+    validate_embedding_work_batch_result,
 )
 from eom_catalog_contracts.inference_transfer_embedding import (
     MAX_EMBEDDING_INPUT_BYTES,
@@ -399,6 +400,48 @@ def run_granted_native_embedding_gpu_batch_descriptors(
     maximum_total_output_bytes: int,
     channel: EmbeddingGpuControlChannel,
 ) -> EmbeddingWorkBatchResult:
+    """Released batch1-only seam. The installed worker opts into the family dispatcher."""
+    result = _run_granted_embedding_gpu_batch_descriptors(
+        descriptors,
+        backend_scope,
+        resources=resources,
+        maximum_total_output_bytes=maximum_total_output_bytes,
+        channel=channel,
+        parse=parse_embedding_work_batch_input,
+    )
+    if not isinstance(result, EmbeddingWorkBatchResult):
+        raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
+    return result
+
+
+def run_granted_supported_embedding_gpu_batch_descriptors(
+    descriptors: NativeEmbeddingDescriptors,
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+    *,
+    resources: EmbeddingWorkBatchExecutionResources,
+    maximum_total_output_bytes: int,
+    channel: EmbeddingGpuControlChannel,
+) -> SupportedEmbeddingWorkBatchResult:
+    """Installed GPU leaf for exact batch1/batch2 grants; no schema relabelling."""
+    return _run_granted_embedding_gpu_batch_descriptors(
+        descriptors,
+        backend_scope,
+        resources=resources,
+        maximum_total_output_bytes=maximum_total_output_bytes,
+        channel=channel,
+        parse=parse_supported_embedding_work_batch_input,
+    )
+
+
+def _run_granted_embedding_gpu_batch_descriptors(
+    descriptors: NativeEmbeddingDescriptors,
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+    *,
+    resources: EmbeddingWorkBatchExecutionResources,
+    maximum_total_output_bytes: int,
+    channel: EmbeddingGpuControlChannel,
+    parse: Callable[[object], SupportedEmbeddingWorkBatchInput],
+) -> SupportedEmbeddingWorkBatchResult:
     """Connect an original root grant to one FD batch and wait for actual output ACK.
 
     Caller separately admits native identity, unit, retained physical lease and backend.
@@ -411,9 +454,7 @@ def run_granted_native_embedding_gpu_batch_descriptors(
         if type(channel) is not EmbeddingGpuControlChannel:
             raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_GRANT_INVALID")
         channel.assert_compute_granted()
-        captured = _capture_work_batch(descriptors, maximum_total_output_bytes)
-        if not isinstance(captured.request, EmbeddingWorkBatchInput):
-            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_GRANT_INVALID")
+        captured = _capture_work_batch(descriptors, maximum_total_output_bytes, parse)
         channel.bind_batch(
             captured.request,
             input_raw_sha256=captured.input_raw_sha256,
@@ -426,8 +467,10 @@ def run_granted_native_embedding_gpu_batch_descriptors(
             maximum_total_output_bytes=maximum_total_output_bytes,
             fence=channel,
         )
-        if not isinstance(result, EmbeddingWorkBatchResult):
-            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID")
+        try:
+            validate_embedding_work_batch_result(captured.request, result)
+        except ValueError as error:
+            raise NativeEmbeddingHandoffError("EMBEDDING_HANDOFF_RESULT_INVALID") from error
         channel.announce_result(result)
         return result
     except (

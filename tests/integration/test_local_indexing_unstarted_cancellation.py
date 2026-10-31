@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from threading import Barrier
 from unittest.mock import Mock
@@ -22,6 +22,8 @@ from eom_orchestrator.embedding_encoding_reservation_storage import (
     EmbeddingEncodingReservationStorage,
 )
 from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
+from eom_workflow.compiler import compile_definition
+from eom_workflow.local_embedding_request_v2 import parse_supported_local_embedding_request
 from eom_workflow.local_indexing_unstarted_cancellation import (
     parse_local_indexing_cancellation_command,
 )
@@ -58,6 +60,7 @@ from tests.integration.test_preset_model_validation_persistence import (
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.local_embedding_service_fixtures import service_fixture
 from tests.unit.test_local_embedding_runner_admission import scope_fixture
+from tests.unit.test_public_solution_native_carriers import public_native_fixture
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
@@ -75,8 +78,8 @@ class Case:
     service: object
 
 
-@pytest.fixture
-def case(guarded_engine):
+@pytest.fixture(params=("legacy", "public"))
+def case(guarded_engine, request):
     sessions = build_session_factory(guarded_engine)
     service = identity()
     reference = local_indexing_service_reference(service)
@@ -87,7 +90,28 @@ def case(guarded_engine):
             session, reference, expected_resource_version=1, operation_key=prefix + ":activate"
         )
     _scope, compiled = scope_fixture()
+    if request.param == "public":
+        compiled = compile_definition(
+            Path(__file__).resolve().parents[2] / "config/workflows/local-embedding-index.v2.yaml",
+            set(),
+        )
     native = service_fixture(service=reference, workflow_definition_sha256=compiled.sha256)
+    if request.param == "public":
+        public = public_native_fixture()
+        body = public["request"].model_dump(mode="json") | {
+            "workflow_definition_sha256": compiled.sha256,
+            "actor_context": native.request.actor_context.model_dump(mode="json"),
+            "native_execution_policy": native.request.native_execution_policy.model_dump(
+                mode="json"
+            ),
+            "native_execution_policy_sha256": native.policy.policy_sha256,
+        }
+        selected = parse_supported_local_embedding_request(seal(body, "request_sha256"))
+        native = replace(
+            native,
+            request=selected,
+            base=replace(native.base, request=selected, plan=public["plan"]),
+        )
     owner = SyntheticOwner(
         ResolvedLocalEmbeddingAdmission(native.request, native.base.plan, native.policy)
     )

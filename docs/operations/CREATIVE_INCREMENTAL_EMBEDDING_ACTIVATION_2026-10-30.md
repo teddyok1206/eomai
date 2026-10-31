@@ -87,6 +87,61 @@ fixture 행 수 오류는 보존한 실패 로그에 남겼으며 수정 후 같
 Slack milestone `devreport_47839f6f8c0c4bd1a40026023220e459` SENT, 원문 정본 보관은 기존
 development reporter archive. 임시 파일을 canonical Artifact라고 주장하지 않는다.
 
+### Native QUERY 실제 설치 호환성 발견 — 01:42 UTC
+
+- 4건 배치 `workflow_0f7ad6956d204155ad3613ea01c383d3`는 실제 COMPLETED/SUCCEEDED.
+  public CUDA index revision `embeddingindexrev_e9f0879e20daa0ea8e9a943f4272e9c9`에
+  binding20, 해당 Graph pin의 eligible701 등록을 확인했다. 원래 성공16과 FAILED는 유지.
+- 다음 실제 검색을 준비하며 보호된 실행기를 읽기 전용으로 대조했다. CPU QUERY root
+  bootstrap은 `2eef9b20`, CPU/CUDA 숫자 실행기의 stdio/encoder adapters에는 public
+  QUERY2가 없다. 이는 source/설정 배포만으로 실제 검색 PASS를 주장할 수 없는 누락이다.
+- 반면 숫자 구현 세 파일은 양쪽 CPU/CUDA/현재 source에서 **동일 raw SHA**다:
+  FLOAT32 codec `3487cae0…`, HOST_L2 `440d7406…`, offline backend `f667e54d…`.
+  기존 numerical-runtime 계약은 이 숫자 구현/모델/library/recipe와 private-code release
+  감사를 분리하므로, 이 동일성의 실제 audit/probe 증명 없이는 space/vector를 재사용하지 않는다.
+- 기존 `publish-private-successor` → OLD full-prefix audit → native no-forward admission/
+  fresh receipt → 원래 configuration/owner selection 경계를 재사용한다. 새 설치 framework,
+  queue, 모델 재학습, 구 입력으로 위장 변환, 새 authority/worker DB 접근은 만들지 않는다.
+  CPU/CUDA 각각 exact wheel/source/archive/inventory/proof를 고정하고 predecessor prefix와
+  성공/실패 이력을 보존한다. 수치 identity가 같으면 기존 vector/space를 보존하고, 다르면
+  자동 재해석하지 않는다. 변경은 bounded private adapter inventory, 비용 O(prefix bytes).
+- 현재 finite 계산은 끝났고, INDEX main PID3786230에 SIGTERM을 보내 기존 handler의
+  **현재 iteration 완료 후 정지**만 요청했다. child kill/systemd stop timeout은 쓰지 않았다.
+  창작 세 슬롯은 계속 동작한다. CPU standby `workflow_b2209fb92be34cddbfdfce61875f7221`
+  PENDING/attempt0가 생성돼 있으므로, 새 설치 전 실제 quiescence를 확인하고 미실행 정리는
+  기존 application만 사용한다. V3의 service-reference 추출 누락을 기존 shared parser로
+  맞추며 schema·멱등 key·미실행/authority/동시성 guard는 완화하지 않는다.
+- 새로운 request/protocol/DB schema는 필요 없다. enqueue/claim은 기존 indexed queue,
+  설치 publication은 기존 profile flock/no-clobber evidence, cancellation은 짧은 SQL root다.
+  현재/추후 source report·Graph 등록은 embedding maintenance와 독립적으로 계속된다.
+
+기존 설계: `docs/architecture/EMBEDDING_CPU_PRIVATE_SUCCESSOR_DESIGN.md`,
+`docs/architecture/EMBEDDING_HOST_REQUALIFICATION_2026_10_21.md`.
+실제 호환성 읽기 증거 `/tmp/eom-public-query-capabilities-both.jsonl`,
+배치 완료 `/tmp/eom-public-state-before-native-query-successor.json`.
+
+Source 후속: 실제 GPU worker가 부르던 stdio 함수는 batch1 전용이어서 source에도 마지막
+연결 누락이 있었다. 원래 함수/닫힌 literal parser는 그대로 두고, 이미 정의된 batch1/2
+family parser를 쓰는 명시적 supported entry를 같은 FD writer/grant owner에 연결했다.
+새 wire/schema나 legacy→public relabelling은 없다. 실제 Unix credential framing·FD와
+synthetic numeric backend를 거친 GPU worker 경로에서 public QUERY2의 READY→GRANT→
+현재 source check→result ACK→local cleanup을 검증하고, 구 함수의 public 거부와
+GRANT 부재/다른 input hash 거부를 유지한다. numeric 구현 세 파일은 변경하지 않는다.
+
+후속 회귀 413 PASS/opt-in OLD pip assembly 2 SKIP; 이 2개는 모델/운영 검증이 아니며
+기존 환경별 opt-in 구분을 유지한다. 임시 PostgreSQL cancellation 34 PASS는 public V3
+exact replay, transaction rollback, 실제 concurrent claim/cancel과 runtime-role 거부를 포함.
+초기 확장 regression invocation의 존재하지 않는 테스트 경로 오류는 수정 후 같은 범위로
+재실행했다. core 3개 mypy와 Ruff/format/diff PASS. **source candidate이며 native prefix와
+QUERY bootstrap은 아직 미갱신**. 전체 goal/고정 5건 검색 acceptance 미완료를 유지한다.
+
+추가 최종 FD 회귀에서는 public GPU의 verified/lost ACK도 실제 Unix/FD seam으로 통과했다.
+동일 확대 suite는 415 PASS/기본 opt-in 2 SKIP, 별도 명시적 OLD pip opt-in은 2 PASS다.
+후자는 tiny synthetic wheels와 test-only ownership substitute를 쓰므로 privileged admission
+증거로 확대하지 않는다. 마지막 public cancellation 실제 PG 34 PASS도 재확인했다.
+결과를 peer에 알리기 전 공통 contract validator로 원 input/result family·해시를 다시
+확인한 최종 source는 관련 native/FD/channel 259 PASS, core 3개 mypy·Ruff·format PASS다.
+
 ## 기존 namespace 용량 격리 결정
 
 현재 public 모집단 677개에서 기존 namespace의 1,024 상한은 아직 도달하지 않았다.

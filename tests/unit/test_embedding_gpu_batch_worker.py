@@ -150,9 +150,13 @@ def pins(request):
     )
 
 
+@pytest.mark.parametrize("cuda_descriptors", ["legacy", "public"], indirect=True)
 def test_worker_connects_original_lease_ready_grant_fd_work_ack_then_local_cleanup(ports, tmp_path):
     batch, backend, resources, life, descriptors, events, _ = ports
-    with endpoints(requested=False, ready=False, granted=False, bound=False) as (
+    expected_life = (
+        ["load", "close"] if batch.schema_version.endswith("/2.0") else ["open", "closed"]
+    )
+    with endpoints(requested=False, ready=False, granted=False, bound=False, batch=batch) as (
         root,
         native,
         case,
@@ -177,7 +181,7 @@ def test_worker_connects_original_lease_ready_grant_fd_work_ack_then_local_clean
             )
             while (claim := root.authorize_next(lambda _: None)) is None:
                 pass
-            assert not future.done() and life == ["open", "closed"]
+            assert not future.done() and life == expected_life
             assert "device-close" not in events and "worker-lease-close" not in events
             raw = (tmp_path / "result.json").read_bytes()
             assert sha256_bytes(raw) == claim.result_raw_sha256
@@ -196,7 +200,7 @@ def test_worker_connects_original_lease_ready_grant_fd_work_ack_then_local_clean
             < events.index("device-open")
             < events.index("model-scope")
         )
-        assert life == ["open", "closed"] and len(backend.calls) == 2
+        assert life == expected_life and len(backend.calls) == 2
 
 
 def test_busy_never_reads_numeric_input_opens_device_or_constructs_model(ports, tmp_path):
