@@ -53,6 +53,40 @@ public V3의 concurrent recovery·exact replay·late OS proof rollback·runtime 
 core mypy 1개·Ruff·format·diff PASS. 초기 fixture의 encoding 개수 기대값 오류와 CUDA
 fixture 행 수 오류는 보존한 실패 로그에 남겼으며 수정 후 같은 suite를 재실행했다.
 
+### 01:24 UTC 실제 복구·재개 체크포인트
+
+- `a21eaa1e6fdb9eaf0f62a5f9ad0e593c5ce067de` main/origin 반영, clean source build와
+  wheel RECORD PASS. protected maintenance SDK만 이 source로 설치했다. platform wheel
+  SHA `fc05207f7319b012af8b67689c45d200b672e715f4eed6a7ff0a0bfdbfd2d4c4`, contracts
+  SHA `e467d3f66480b7fcd996b112bbcab82c60f16f2ed7b42ac9ed7510364aa2dc1a`.
+  일반 INDEX/Catalog/QUERY source `c68156dd`, shared API `5fdda815`, Web `f1a7ada4`와
+  물리 CPU/CUDA 모델·interpreter는 교체하지 않았다. recovery-only compatible 조합이다.
+- 원래 두 번째 배치의 native 성공/컨트롤러 실패를 protected retirement와 actual OS로
+  확인한 뒤 공식 recovery2를 수행했다. 원래 Workflow/command/native Job/encoding 16개는
+  `EMBEDDING_NATIVE_RESULT_UNPUBLISHED` 실패로 닫혔고 exact replay는 동일 receipt였다.
+  새 추론 0, 원래 numeric SUCCEEDED와 parent planning SUCCEEDED는 보존했다.
+  `/var/lib/eom-public-unpublished-recovery-e02ebfe6/{command,receipt}.json`.
+  첫 시도는 아직 만료되지 않은 command claim 때문에 롤백됐고, 만료 후 같은 요청만
+  재확인해 처리했다. lease나 DB row를 직접 보정하지 않았다.
+- 지원된 public owner config의 maximum_targets만 16→4 변경하고 INDEX를 재개했다.
+  원래/후속 SHA는 각각 `1fc10068de8c2765f05e3e1ab96c0dad4c5288ead07b1776014873fc1ed1ad3a`,
+  `b10698ab411e87875a1fff553a499068783fb8c4c9e784fad26e44d9ea239e8a`.
+  실제 원본/후속 config는 `/var/lib/eom-public-batch-four-e02ebfe6/`에 보관했다.
+  source/policy/권한/legacy6 namespaces/수치 제한 변경 없음. INDEX 새 PID3786230,
+  01:23:48 시작 및 후속 source-admission 단계 진행 확인. **새 4건 완료 증거는 아직 아님**.
+- 01:24:20 actual 04/05/06은 각각 `job_8a455670366f4252b746f47219577c05`,
+  `job_23b1bec89a7d46b09387a5cf25d15b50`, `job_1e2648ae94ee470ca36d691acd78a29b`
+  RUNNING. 이전 01:09 세 Job과 달라 refill 연속성도 확인했다. creative owner3724425와
+  QUERY3760267은 재시작하지 않았다. 두 30분 observation timer active, 다음 01:30 UTC.
+- public HTTPS 로그인 화면 read-only 200. 기존 public CUDA canonical binding16 유지,
+  고정 5건 binding 없음. 실제 사용자 유사도 검색/replay는 아직 미검증이며 goal ACTIVE.
+
+근거: `/tmp/eom-public-gpu-recovery-{unit,pg-3,mypy,build}.log`,
+`/tmp/eom-second-gpu-recovery-a21-2.log`, `/tmp/eom-public-batch-four-selection.log`,
+`/tmp/eom-public-state-batch-four-followup.json`, `/tmp/eom-public-selected-service-status.txt`.
+Slack milestone `devreport_47839f6f8c0c4bd1a40026023220e459` SENT, 원문 정본 보관은 기존
+development reporter archive. 임시 파일을 canonical Artifact라고 주장하지 않는다.
+
 ## 기존 namespace 용량 격리 결정
 
 현재 public 모집단 677개에서 기존 namespace의 1,024 상한은 아직 도달하지 않았다.
