@@ -332,3 +332,14 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
   registry publication·QUERY successor와 DB CHECK migration을 아직 활성화하지 않았다.
   현재 실행 중인520 GPU INDEX/QUERY의 private 설치본은 건드리지 않았다. full520 완료·
   실제 검색 전환 전 구 벡터 삭제0이라는 조건은 유지한다.
+
+### Index4 후보의 설치 package checkpoint — 12:18 UTC
+
+- 값 계약 후보 `b3ff716b84071634bd5fd67479e5568fec61cc44` main/origin 보존 및 공식 build-only
+  PASS. wheel RECORD/격리 설치 검증 산출물은
+  `/tmp/eom-api-build/b3ff716b84071634bd5fd67479e5568fec61cc44.5V7VDp/dist`다.
+- 실제 참조 inventory를 통해 INDEX의 수치 work-batch/input/result/shard/definition2는
+  provenance 변경과 무관해 그대로 재사용 가능함을 확인했다. 필요한 metadata carrier와
+  QUERY carrier만 successor로 연결한다. 불필요한 전체 실행 그래프/수치 계약 재설계를 하지 않는다.
+- 현재 source head0065, 운영 head0064 구분은 유지한다. 현재 private GPU INDEX/QUERY의
+  실행을 source 후보로 교체하지 않았고 구 encoding/index 삭제도 하지 않았다.

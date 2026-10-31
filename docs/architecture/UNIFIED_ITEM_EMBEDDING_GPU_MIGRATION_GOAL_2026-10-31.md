@@ -243,3 +243,20 @@ binding/index revision의 manifest schema whitelist와16384 coverage 조건은 i
 대신 해당 carrier와 registry/QUERY까지 필요한 successor를 먼저 정의한다. entry2 parser와
 공통 encoder의 지원만으로 현재 INDEX runtime이 새 AI 입력을 지원한다고 선언하지 않는다.
 이전 결과를 새 계약으로 재해석하거나 JSON schema 검사를 우회하지 않는다.
+
+#### 변경하지 않을 수치·실행 경계 — 12:18 UTC
+
+실제 참조를 대조하니 INDEX의 native work-batch와 아래 수치 계약에는 AI provenance가
+들어가지 않는다. entry2를 지원한다는 이유만으로 이 계약/실행 그래프를 새로 만들지 않는다.
+
+- numerical space/recipe, unit-f32le vector binary와 shard1;
+- incremental embedding input/result1과 실제 tokenizer/encoder/pooling/L2;
+- GPU 할당·host-capacity lock·자원 상한·유한 배치 수명;
+- `local-embedding-index@2.0.0`의 동일한 application step 그래프.
+
+새 shape를 실제 포함하는 source plan, request의 source-plan schema pin, ownership/receipt,
+registry/index 참조와 검색 anchor/result의 metadata carrier만 successor가 필요하다. QUERY
+work-batch2는 query2를 직접 포함하므로 그 경로는 별도 검증 대상이다. INDEX의 수치 실행
+frame과 QUERY의 근거 metadata frame을 구분하고, 모든 carrier를 일괄 재버전하지 않는다.
+번호는 실제 registry와 충돌하지 않는지 확인한 후 정한다. 기존 common pure validators,
+atomic claim/CAS/동일 text encoding lookup과 exact source permission boundary를 재사용한다.
