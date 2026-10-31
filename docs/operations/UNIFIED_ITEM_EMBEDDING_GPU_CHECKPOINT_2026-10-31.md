@@ -55,6 +55,26 @@
   read/replay, 전체520 GPU integrity·정확한 구 벡터 retirement/삭제다. approval/authentication
   및 실제 검색 성공을 unit/PG test로 대체하지 않는다. 구 벡터 삭제0, 정본 변경0이다.
 
+### publication2 별도 패키지 설치·API/Catalog 호환 검증 — 21:59 UTC
+
+- source **`eeafaba090e81081abd28c20d8fd5a3f01fb7b66`** commit/push/build-only RECORD
+  PASS다. platform wheel SHA
+  `ac589defd8461d0ca7d269646ff562cb4b6dbdbc0c10a8539b1ca12d086f3750`, API contracts SHA
+  `e206a7880f949b7d2a7116e1392783ec6c0d4f3e6bdbef84f108d6faba90960f`, Application API SHA
+  `10e4e17eda62d6bebb0d47b64fd76f8b570791c1b6285c3efabfc60528daf7b8`.
+- 별도 immutable owner prefix와 임시 non-editable API wheel prefix
+  `/tmp/eom-public-publication2-api-wheel-G1RmsA6U`만 설치했다. 실제 core module4개는 owner
+  prefix, API client는 API wheel prefix 아래임을 먼저 확인한 뒤 기존/새 contract·실제 UDS·
+  IAM/Artifact·permission/replay 회귀를 **166 PASS /27.31s**했다. Git source를 runtime으로
+  설치하거나 기존 공용 API Conda 환경을 교체한 것이 아니다.
+- `OWNER_ACTIVATION=NOT_PERFORMED`, numeric prefix/config/서비스 재시작0이다. 실제
+  Item-start는 아직 기존 plan23/24를 사용하므로 이 후보를 운영 전체 소비자 전환이라고
+  표시하지 않는다. 후속 plan/role/materialization와 private Chat 연결이 남았다.
+  `/tmp/eom-public-publication2-build-20261031.log`,
+  `/tmp/eom-owner-install-eeafaba0-20261031.log`,
+  `/tmp/eom-public-publication2-api-shadow-install-20261031.log`,
+  `/tmp/eom-public-publication2-installed-compatibility-20261031.log`.
+
 ## INDEX4 실제 완료·구형 소비자 inventory·공통 전달 후보 — 2026-10-31 21:20 UTC
 
 - 이번 turn은 **PROGRESS**다. 첫 `fb0ab555` request4
