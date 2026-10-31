@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-similarity-delivery/2.0",
+  "title": "Pinned public solution similarity context delivery V2",
+  "description": "Exact immutable public context3/4 pointer only; not source permission, Evidence, model execution or consumer activation. Raw member and semantic hashes stay distinct.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "context_member", "request_sha256", "context_sha256"],
+  "properties": {
+    "schema_version": {"const": "system-rag-similarity-delivery/2.0"},
+    "context_member": {
+      "allOf": [
+        {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"},
+        {
+          "type": "object",
+          "properties": {
+            "member_path": {"const": "context.json"},
+            "schema_ref": {"enum": ["eom://schemas/knowledge/system-rag-similarity-context/3.0", "eom://schemas/knowledge/system-rag-similarity-context/4.0"]},
+            "media_type": {"const": "application/json"}
+          }
+        }
+      ]
+    },
+    "request_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"},
+    "context_sha256": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"}
+  }
+}

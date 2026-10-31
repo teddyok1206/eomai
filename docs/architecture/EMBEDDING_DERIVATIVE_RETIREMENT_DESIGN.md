@@ -37,7 +37,7 @@ binding이 없어진 미귀속 row도 공유 shard의 실제 잔여 encoding이�
 
 ## 최소 구현 순서
 
-1. 읽기 전용 registry 소유권 분류기를 구현·검증한다. 현재 core 구현 범위는 여기까지다.
+1. 읽기 전용 registry 소유권 분류기를 먼저 구현·검증한다.
    이는 새 wire message나 worker 동작이 아닌 내부 frozen value/순수 함수다. 새 schema,
    DB migration, queue, runtime feature flag는 만들지 않는다.
 2. 실제 동결 집합에 대해 metadata inventory를 얻는다. legacy partition과 accepted
@@ -80,3 +80,40 @@ Catalog는 자기 테이블만 변경하고, Orchestrator는 자기 Artifact 경
 검증은 중복·dangling encoding·서로 다른 Artifact revision·공유 encoding/shard·미귀속 row·
 public partition 보호·결정적 출력·단일 source iteration과 대규모 합성 입력을 포함한다.
 향후 실제 삭제/replay/중단/동시성은 disposable PostgreSQL에서만 검사한다.
+
+## 실제 소비자 조사와 최소 연결 변경 — 2026-10-31 21:12 UTC
+
+별도 immutable 설치본 `65112860`의 순수 분류기를 사용한 read-only inventory에서,
+동결 기출의 구형 binding 80,474개와 수치 encoding 3,120개가 후보로 확인됐다. 이는
+서로 다른 Graph/revision의 alias와 수치 row를 구분한 수이며 삭제 실행 수가 아니다.
+같은 shard closure에 비귀속 encoding 6개가 있어 공유 shard 6개는 보호한다. 전체 파일을
+지워 이 잔여 row를 잃는 처리는 하지 않는다. manifest membership/FK/JSON 소비자는 아직
+별도 검증 대상이다. 정확한 사유·ID는 보호된 운영 inventory에 남긴다.
+
+actual API process/config에서 reference preparation, reference Item start, exam similarity
+observation이 켜져 있고, Chat process도 `NATIVE_TOPIC`/`READ_ONLY`다. 설치된 source와
+대조하면 출제·기출변형은 기존 context1/delivery1/plan23·24, 채팅 주제 검색은 private
+context1/CONTENT_ONLY namespace를 사용한다. DB 화면의 공통 검색만 통과했다고 이 구형
+인덱스를 지우면 현재 켜진 다른 기능이 깨질 수 있다. 기능을 끄거나 원 request를 새
+recipe라고 재해석해 정리 조건을 맞추지 않는다.
+
+첫 최소 변경은 기존 전달 책임의 successor `system-rag-similarity-delivery/2.0`이다.
+이미 있는 공통 context3/4의 exact Artifact member/raw SHA와 request/context semantic SHA만
+전달한다. 기존 delivery1 bytes는 그대로 두며 두 family를 상호 relabel하지 않는다. 추가
+DB/queue/cache/모델/벡터 저장소나 대형 payload는 필요 없다. 검증 비용은 bounded context
+bytes에 선형이고, 이 값 자체에는 transaction·권한·독립 lifecycle이 없다. 실제 publication,
+Item-start plan/worker read, 채팅의 공통-index successor는 각 기존 owner에서 후속 연결한다.
+이 계약만 추가한 상태는 실제 소비자 전환이나 삭제 gate PASS가 아니다.
+
+source 후보는 기존 Orchestrator `similarity_context_artifact`의 공개 풀이 발행 경로까지
+연결한다. context1과 context3/4 각각의 closed validator를 거친 뒤 같은 canonical-byte
+file-set publisher를 재사용한다. 서로 다른 receipt family는 별도 frozen typed result로
+돌려주며, 동일 키의 다른 context/family는 conflict다. commit 이후 잘못된 receipt를 받으면
+이미 생긴 Artifact/Job를 보존하고 같은 키로 재확인한다. 새 키/추가 native 실행은 없다.
+이 단계는 Item-start API·plan·role와 Chat의 활성 consumer 전환을 대신하지 않는다.
+
+공개 보고서 context의 READY/PARTIAL/EMPTY를 그대로 유지하며 FAILED는 전달하지 않는다.
+선택한 request와 schema family/raw/semantic hash가 다르면 복구 추측 없이 거부한다. 과거
+history는 기존 decoder로 남긴다. 더 작은 대안인 delivery1의 schema union 확대는 released
+의미를 바꾸고 old consumer가 새 context를 잘못 해석할 수 있어 배제한다. native GPU 배치,
+공통 입력 text/recipe/수치 공간과 실행 pin은 이 내부 전달 변경으로 바꾸지 않는다.

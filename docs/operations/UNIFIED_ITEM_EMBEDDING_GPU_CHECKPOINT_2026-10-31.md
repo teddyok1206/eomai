@@ -1,5 +1,61 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## INDEX4 실제 완료·구형 소비자 inventory·공통 전달 후보 — 2026-10-31 21:20 UTC
+
+- 이번 turn은 **PROGRESS**다. 첫 `fb0ab555` request4
+  `workflow_c0947af4e7e04f3ebeba6abce9b8d0cb`가 **20:45:58 관측에서 COMPLETED**,
+  원 START command/encode·terminal step/native launch Job/commit Job 모두 SUCCEEDED다.
+  원 command generation1/attempt1과 request SHA를 보존했다. 실제 manifest4 등록1개도
+  확인했다. `/tmp/eom-index4-original-work-fb0ab555-20261031-v6.json`.
+  첫 numeric 성공을 전체520 완료나 actual user search PASS로 확대하지 않는다.
+- **21:00 정기 관측은 기출116/520·잔여404**, historical FAILED6을 그대로 기록했다.
+  **21:16 원래 queue의 별도 현재 CUDA 작업** `workflow_8a149b4548524ac1994410c1bc99d134`
+  RUNNING/command PROCESSING/generation1/attempt1/live lease를 확인했다. 이전 service
+  revision의 legacy PENDING12는 현재 실행 작업과 분리하며 상태/identity를 변경하지 않았다.
+  INDEX1466344/QUERY1466291/creative1485477 실제 active를 확인했다.
+- GPU를 재시작하지 않고 `65112860`의 별도 owner pair만 설치했다. platform wheel SHA
+  `bf0b0359321ac16016319086ddc25cc6e1646bad554dc77b20279c0eb1d690a2`, API contracts
+  `75cee3a260b0c0926e6b910e4eed0033ba6dc89f27dbaf3906996b7e933af32e`, RECORD PASS,
+  `OWNER_ACTIVATION=NOT_PERFORMED`다. 실제 INDEX/QUERY 수치 pin은 원래fb0 유지다.
+  `/tmp/eom-owner-install-65112860-20261031.log`.
+- 새 설치본의 순수 classifier로 기존 indexed encoding/shard/binding closure를 실제 읽었다.
+  원래520 exact ID/revision/manifest SHA 불변, 후보 legacy binding **80,474**, exclusive
+  encoding **3,120**, exclusive shard536, shared shard6이다. closure encoding3,126 중
+  미귀속6개는 보호한다. binding80,474개는 Graph별 alias history를 포함하므로 문항 수나
+  vector row 수가 아니다. 이는 **registry 소유권만** 검증했고 실제 manifest membership,
+  다른 FK/JSON consumer, 수명·권한·최종 검색 gate를 대신하지 않는다. 삭제0이다.
+  root exact manifest:
+  `/var/lib/eom-unified-embedding-migration-20261031/retirement-registry-ownership-65112860.json`,
+  요약 `/tmp/eom-retirement-registry-65112860-20261031.json`.
+- actual API flags는 reference preparation/start/exam observation 모두true다. Chat actual
+  process는 `NATIVE_TOPIC`/`READ_ONLY`다. 현재 출제·변형의 context1/delivery1/plan23·24와
+  private Chat CONTENT_ONLY가 구형 index를 사용하므로, DB 공통 검색 전환만으로 이 파생
+  데이터를 삭제하면 기존 활성 기능이 깨질 수 있다. disable/relabel로 우회하지 않는다.
+- 이를 위한 최소 source 후보로 JSON Schema-first **delivery2**를 추가했다. 기존 공개
+  context3/4의 exact member/raw/request/context SHA만 전달한다. 기존 delivery1/schema
+  bytes와 수치 recipe/model/space는 유지했다. Orchestrator의 기존 file-set publisher에
+  공개 context 발행 leaf를 연결하고 canonical byte materialization/commit·같은 key replay를
+  공유한다. 다른 family/context의 같은 key는 conflict이며 late receipt 오류 후 이미 commit된
+  Job/Artifact를 보존한다. API/plan/role/Chat 실제 consumer activation은 아직 아니다.
+- 계약·schema resource·dependency/classifier 묶음 **189 PASS**, 공개/기존 발행·재전송과
+  Item preparation 회귀 묶음 **191 PASS**, 기존 publication boundary/runtime·resource·
+  dependency 묶음 **52 PASS**, ruff/format/strict mypy PASS다. 이 묶음은
+  overlap이 있으므로 합산한 독립 테스트 수로 보고하지 않는다. 발행 회귀 첫 실행16실패는
+  새 caller가 schema-first 생성에 `schema_version`을 생략한 개발 오류였다. explicit2.0
+  인자를 추가하고 같은 suite를 재실행해191 PASS했다. 실패 로그를 보존했다. 임시 SQLite/
+  Artifact fixture만 사용했고 운영 DB pytest/새 model/GPU 요청/서비스 재시작/벡터 삭제0이다.
+  `/tmp/eom-public-delivery2-contract-tests-20261031.log`,
+  `/tmp/eom-public-delivery2-publication-tests-20261031.log`, `-v2.log`.
+  마지막 동일 source의 합집합 집중 suite는 **324 PASS /47.56s**다. 중복 파일을 한 번씩만
+  지정했으며 `/tmp/eom-public-delivery2-final-focused-20261031.log`에 보존했다.
+- GUI 후보는 **21:11 read-only**로10316/10321/10353/10354/10357 current approved와
+  공통 report/encoding/current scope 연결을 재확인했다. 사용자가 직접 시험할 수 있도록
+  안내했으며 새 검색 제출0/actual GUI success PENDING이다. 새 AI canary에 필요한 기존
+  IN_REVIEW 문항1개 승인 선택도 아직 응답 대기다. 인증·승인을 위조하지 않는다.
+- 전체 목표는 ACTIVE다. 남은 것은 전체520 GPU 완료·대상별 integrity, 실제 AI report/
+  Graph/INDEX4 연결, authorized DB query/read/replay, 구형 활성 consumer 전환과 정확한
+  파생 데이터 retirement·삭제다. 위 source 후보만으로 U04/U05 완료를 선언하지 않는다.
+
 ## request4 실패 보존·호환 owner 실제 전환 — 2026-10-31 20:25 UTC
 
 - 이번 turn은 **PROGRESS**다. `fb0ab5555f98c1358229550b4527eb9837459554`의

@@ -8,6 +8,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from eom_catalog_contracts.models import Sha256
+from eom_catalog_contracts.public_solution_delivery import (
+    PublicSolutionSimilarityDelivery,
+    public_solution_context_schema_ref,
+    validate_deliverable_public_solution_context,
+)
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    SupportedPublicSolutionSimilarityContext,
+    SupportedPublicSolutionSimilarityRequest,
+)
 from eom_catalog_contracts.similarity_context import (
     SIMILARITY_CONTEXT_REF,
     SimilarityContext,
@@ -41,6 +50,15 @@ class PublishedSimilarityContext:
     manifest_sha256: str
 
 
+@dataclass(frozen=True, slots=True)
+class PublishedPublicSolutionSimilarityContext:
+    """Public context publication lineage, not consumer activation or source permission."""
+
+    owner_job_id: str
+    delivery: PublicSolutionSimilarityDelivery
+    manifest_sha256: str
+
+
 def publish_similarity_context(
     publisher: ControlFileSetPublisher,
     *,
@@ -54,10 +72,72 @@ def publish_similarity_context(
     The existing publisher owns commit/replay, not this leaf. Failures after its return
     may already have committed; preserve and reconcile the original immutable key.
     """
+    checked = validate_deliverable_similarity_context(context, expected_request=expected_request)
+    job_id, pointer, manifest_sha256 = _publish_context_member(
+        publisher,
+        raw=canonical_json_bytes(checked.model_dump(mode="json")),
+        schema_ref=SIMILARITY_CONTEXT_REF,
+        idempotency_key=idempotency_key,
+        source_commit=source_commit,
+    )
+    return PublishedSimilarityContext(
+        owner_job_id=job_id,
+        delivery=SimilarityContextDelivery(
+            schema_version="system-rag-similarity-delivery/1.0",
+            context_member=pointer,
+            request_sha256=checked.request.request_sha256,
+            context_sha256=checked.context_sha256,
+        ),
+        manifest_sha256=manifest_sha256,
+    )
+
+
+def publish_public_solution_similarity_context(
+    publisher: ControlFileSetPublisher,
+    *,
+    context: SupportedPublicSolutionSimilarityContext,
+    expected_request: SupportedPublicSolutionSimilarityRequest,
+    idempotency_key: str,
+    source_commit: str,
+) -> PublishedPublicSolutionSimilarityContext:
+    """Use the same canonical commit owner; caller holds current source/operator fences.
+
+    Replay is the original key, not a new delivery when observation/receipt times out.
+    Legacy context1 is not converted and numerical execution is not launched here.
+    """
+    checked = validate_deliverable_public_solution_context(
+        context, expected_request=expected_request
+    )
+    job_id, pointer, manifest_sha256 = _publish_context_member(
+        publisher,
+        raw=canonical_json_bytes(checked.model_dump(mode="json")),
+        schema_ref=public_solution_context_schema_ref(checked),
+        idempotency_key=idempotency_key,
+        source_commit=source_commit,
+    )
+    return PublishedPublicSolutionSimilarityContext(
+        owner_job_id=job_id,
+        delivery=PublicSolutionSimilarityDelivery(
+            schema_version="system-rag-similarity-delivery/2.0",
+            context_member=pointer,
+            request_sha256=checked.request.request_sha256,
+            context_sha256=checked.context_sha256,
+        ),
+        manifest_sha256=manifest_sha256,
+    )
+
+
+def _publish_context_member(
+    publisher: ControlFileSetPublisher,
+    *,
+    raw: bytes,
+    schema_ref: str,
+    idempotency_key: str,
+    source_commit: str,
+) -> tuple[str, ArtifactMemberPointer, str]:
+    """Shared canonical-byte boundary; closed typed callers validate their own context family."""
     if type(source_commit) is not str or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
         raise ValueError("SIMILARITY_CONTEXT_PUBLICATION_SOURCE_INVALID")
-    checked = validate_deliverable_similarity_context(context, expected_request=expected_request)
-    raw = canonical_json_bytes(checked.model_dump(mode="json"))
     digest = sha256_bytes(raw)
     member = "context.json"
     with tempfile.TemporaryDirectory(
@@ -69,7 +149,7 @@ def publish_similarity_context(
         published = publisher.publish_first_observation(
             members=(
                 ControlFileSetMember(
-                    member, path, digest, len(raw), SIMILARITY_CONTEXT_REF, "application/json"
+                    member, path, digest, len(raw), schema_ref, "application/json"
                 ),
             ),
             primary_file=member,
@@ -91,19 +171,10 @@ def publish_similarity_context(
             artifact_id=published.artifact_id,
             artifact_revision_id=published.artifact_revision_id,
             member_path=member,
-            schema_ref=SIMILARITY_CONTEXT_REF,
+            schema_ref=schema_ref,
             media_type="application/json",
             sha256=digest,
         )
     except ValidationError:
         raise ValueError("SIMILARITY_CONTEXT_PUBLICATION_RECEIPT_INVALID") from None
-    return PublishedSimilarityContext(
-        owner_job_id=job_id,
-        delivery=SimilarityContextDelivery(
-            schema_version="system-rag-similarity-delivery/1.0",
-            context_member=pointer,
-            request_sha256=checked.request.request_sha256,
-            context_sha256=checked.context_sha256,
-        ),
-        manifest_sha256=manifest_sha256,
-    )
+    return job_id, pointer, manifest_sha256
