@@ -23,6 +23,7 @@ from eom_orchestrator.native_embedding_launch_identity import (
 )
 from eom_orchestrator.workflow_job_retirement import require_no_held_worker_leases
 from eom_workflow.embedding_cpu_failure_recovery import CpuEmbeddingFailureRecoveryCommand
+from eom_workflow.embedding_cpu_preparation_failure import CpuPreparationFailureRecoveryCommand
 from eom_workflow.embedding_encoding_recovery import (
     SupportedFailureRecoveryCommand,
     SupportedGpuFailureRecoveryCommand,
@@ -107,8 +108,15 @@ def recover_retired_indexing_workflow(
     No source data, model, unit effect, retry producer or new allocation is created.
     """
     command = parse_supported_failure_recovery(command)
-    _require(not isinstance(command, CpuEmbeddingFailureRecoveryCommand), "CONTEXT_INVALID")
-    assert not isinstance(command, CpuEmbeddingFailureRecoveryCommand)
+    _require(
+        not isinstance(
+            command, CpuEmbeddingFailureRecoveryCommand | CpuPreparationFailureRecoveryCommand
+        ),
+        "CONTEXT_INVALID",
+    )
+    assert not isinstance(
+        command, CpuEmbeddingFailureRecoveryCommand | CpuPreparationFailureRecoveryCommand
+    )
     try:
         with sessions.begin() as session:
             principal = require_native_workflow_maintenance_owner(

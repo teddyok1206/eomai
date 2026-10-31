@@ -95,6 +95,41 @@ membership·권한·provenance를 재확인한다. 일부만 읽은 결과를 �
 불변 scalar를 root 안에서 캡처하도록 고친 뒤 같은 조회만 재실행했다. 운영 row·unit·예약을
 변경하지 않았다. 고정 5건 벡터/HTTP 검색 acceptance 미완료, goal ACTIVE.
 
+## CPU 준비 실패의 공식 복구 확장 설계
+
+1. 경계: 기존 CPU failure recovery application/OS read adapter/encoding storage를 확장한다.
+   새 queue·registry·worker·DB table을 만들지 않는다.
+2. 정본: 원래 Workflow/step/command, native launch association, 예약 Job/event 및 PID1의
+   원래 invocation이다. 복구 명령이나 root-shaped JSON 자체는 권한이 아니다.
+3. identity: 원래 request/intent/hash·Job identity·boot·unit template·prepare invocation을
+   핀한다. 재시도는 기존 append-only producer relation이며 실패를 성공으로 바꾸지 않는다.
+4. pointer: root-only OS adapter가 prepare 실패 + numeric **미시작** + 빈 cgroup/FD를 전후
+   확인한다. schema-owner application이 exact request/association/현재 service와 대조한다.
+5. 접근: PK/unique key와 bounded Job/event batch lookup, 기존 monotonic event sequence.
+6. 구조: 기존 ordered association/typed failure values와 unique constraints 재사용.
+7. 비용: 최대 1,024 encoding의 O(n) map/sort와 기존 bounded DB query. 큰 bytes는 전달하지 않는다.
+8. 동시성: 기존 한 transaction의 Workflow/command/encoding locks, 만료 lease와 current
+   identity fence, late OS proof 재확인. 동시 복구/replay는 같은 원 실패 기록 하나로 닫힌다.
+9. 의존성: JSON Schema 2020-12 → frozen Pydantic → 기존 application → OS/SQL adapters.
+10. 실패: 기존 recovery3는 numeric 실패 의미 그대로 둔다. 별도 recovery4는 준비 실패만
+   기록하며 잘못된/재사용된 OS 증거, active work, hash·권한·lease 불일치는 rollback한다.
+   운영 재시작·새 producer 생성은 이 복구 안에서 하지 않는다.
+11. 대안: 준비 실패를 numeric 실패로 relabel하거나 기존 실패 unit을 reset/restart하면
+   original-start-once와 재현성을 잃는다. released schema3를 느슨하게 바꾸지 않는다.
+
+public request3의 service 참조는 기존 request parser 다음의 공통 typed extractor로 다룬다.
+source 권한·runtime admission·DB 역할을 추가하지 않는다. 기존 V1/V2도 동일 extractor를 쓰며,
+필요한 maintenance owner에서만 재사용한다. 원래 CPU handoff bootstrap의 호환성은 별도 실제
+code pin 조회로 확정한 후 successor config에 반영하고, 물리 CPU/CUDA 환경은 바꾸지 않는다.
+
+검증 기록: 원래 association의 같은 SHA `3944ed3191e3245c2dc91d8d1fe55f02f3a1e7519bf33b80d538bc09dbebaaf6`
+를 기존 root bootstrap `e013d350` decoder는 UNSUPPORTED, 새 `4166e6dc` decoder는 PASS로
+판독했다. 상태 변경·계산=0. 기존 CPU owner env는 실제로 그 이전 bootstrap을 가리켰다.
+새 recovery4 관련 unit/주변 회귀 172 PASS, 추가 GPU 경계 negative 포함 계약 13 PASS,
+기존/혼합/public 준비 실패를 포함한 disposable PostgreSQL 19 PASS. PG 검사에는 실제
+concurrent recovery·retry producer uniqueness·late-proof rollback·terminal replay가 포함된다.
+core 8개 mypy 및 Ruff/format PASS. 이는 아직 운영 복구/활성화 완료가 아니다.
+
 ## 23:50 UTC 작업 체크포인트 — 실제 완료 아님
 
 - shared API/platform `c868a15c`, Web `f1a7ada4` 운영 배포와 설치 byte/source-free/isolation

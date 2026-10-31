@@ -69,6 +69,7 @@ from tests.unit.test_embedding_encoding_reservations import SyntheticAdmission
 from tests.unit.test_embedding_runtime_bundle_contracts import _bundle, _pointer
 from tests.unit.test_local_embedding_runner_admission import scope_fixture
 from tests.unit.test_mixed_native_workflow_carriers import carrier_fixture
+from tests.unit.test_public_solution_native_carriers import public_native_fixture
 
 
 def seed_allocated_execution(engine, *, device="CUDA", request_family="1.2"):
@@ -82,7 +83,7 @@ def seed_allocated_execution(engine, *, device="CUDA", request_family="1.2"):
             session, ref, expected_resource_version=1, operation_key=key + ":activate"
         )
     _, compiled = scope_fixture()
-    if request_family == "2.0":
+    if request_family in {"2.0", "3.0"}:
         assert device == "CPU"
         compiled = compile_definition(
             Path(__file__).resolve().parents[2] / "config/workflows/local-embedding-index.v2.yaml",
@@ -95,8 +96,8 @@ def seed_allocated_execution(engine, *, device="CUDA", request_family="1.2"):
         service=ref,
         workflow_definition_sha256=compiled.sha256,
     )
-    if request_family == "2.0":
-        mixed = carrier_fixture()
+    if request_family in {"2.0", "3.0"}:
+        mixed = public_native_fixture() if request_family == "3.0" else carrier_fixture()
         plan = mixed["plan"]
         policy = type(native.policy).model_validate(
             seal(
@@ -106,7 +107,7 @@ def seed_allocated_execution(engine, *, device="CUDA", request_family="1.2"):
             )
         )
         body = native.request.model_dump(mode="json") | {
-            "schema_version": "local-embedding-workflow-request/2.0",
+            "schema_version": "local-embedding-workflow-request/" + request_family,
             "workflow_definition_version": "2.0.0",
             "workflow_definition_sha256": compiled.sha256,
             **{
@@ -160,6 +161,9 @@ def seed_allocated_execution(engine, *, device="CUDA", request_family="1.2"):
         EmbeddingEncodingReservationStorage.prepare_protocol(session)
         if request_family == "2.0":
             EmbeddingEncodingReservationStorage.prepare_mixed_ownership_protocol(session)
+        elif request_family == "3.0":
+            EmbeddingEncodingReservationStorage.prepare_mixed_ownership_protocol(session)
+            EmbeddingEncodingReservationStorage.prepare_public_ownership_protocol(session)
         definition, _ = import_workflow_definition(session, compiled)
         submitted = start_local_embedding_in_session(
             session,

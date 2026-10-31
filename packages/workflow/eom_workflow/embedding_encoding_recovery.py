@@ -18,6 +18,10 @@ from eom_workflow.embedding_cpu_failure_recovery import (
     CpuEmbeddingFailureRecoveryCommand,
     KnownFailedCpuEmbeddingEncoding,
 )
+from eom_workflow.embedding_cpu_preparation_failure import (
+    CpuPreparationFailureRecoveryCommand,
+    KnownFailedCpuPreparationEncoding,
+)
 from eom_workflow.embedding_unpublished_recovery import (
     UNPUBLISHED_ENCODING_FAILURE_CODE,
     UNPUBLISHED_ENCODING_FAILURE_EVENT,
@@ -185,12 +189,15 @@ type SupportedEncodingFailure = (
     KnownFailedEmbeddingEncoding
     | UnpublishedEmbeddingEncodingFailure
     | KnownFailedCpuEmbeddingEncoding
+    | KnownFailedCpuPreparationEncoding
 )
 type SupportedGpuFailureRecoveryCommand = (
     NativeEmbeddingFailureRecoveryCommand | UnpublishedEmbeddingRecoveryCommand
 )
 type SupportedFailureRecoveryCommand = (
-    SupportedGpuFailureRecoveryCommand | CpuEmbeddingFailureRecoveryCommand
+    SupportedGpuFailureRecoveryCommand
+    | CpuEmbeddingFailureRecoveryCommand
+    | CpuPreparationFailureRecoveryCommand
 )
 type SupportedRetiredEmbeddingFailure = (
     RetiredEmbeddingRootFailure | RetiredUnpublishedEmbeddingResult
@@ -217,16 +224,27 @@ _UNPUBLISHED = EncodingFailureDisposition(
     "EMBEDDING_NATIVE_RESULT_UNPUBLISHED",
     "Numerical execution succeeded, but its failed controller never published completion.",
 )
-RECOVERABLE_ENCODING_FAILURE_CODES = frozenset((_NUMERICAL_FAILED.code, _UNPUBLISHED.code))
+_PREPARATION_FAILED = EncodingFailureDisposition(
+    "EMBEDDING_NATIVE_PREPARATION_FAILED_RETIRED",
+    "EMBEDDING_ENCODING_PREPARATION_FAILED",
+    "EMBEDDING_NATIVE_PREPARATION_FAILED",
+    "Original CPU preparation failed; numerical execution never started.",
+)
+RECOVERABLE_ENCODING_FAILURE_CODES = frozenset(
+    (_NUMERICAL_FAILED.code, _UNPUBLISHED.code, _PREPARATION_FAILED.code)
+)
 RECOVERABLE_ENCODING_FAILURE_EVENTS = (
     _NUMERICAL_FAILED.encoding_event,
     _UNPUBLISHED.encoding_event,
+    _PREPARATION_FAILED.encoding_event,
 )
 
 
 def encoding_failure_disposition(
     value: SupportedEncodingFailure | SupportedFailureRecoveryCommand,
 ) -> EncodingFailureDisposition:
+    if isinstance(value, KnownFailedCpuPreparationEncoding | CpuPreparationFailureRecoveryCommand):
+        return _PREPARATION_FAILED
     if isinstance(value, UnpublishedEmbeddingEncodingFailure | UnpublishedEmbeddingRecoveryCommand):
         return _UNPUBLISHED
     if isinstance(
@@ -242,6 +260,8 @@ def encoding_failure_disposition(
 
 def parse_supported_encoding_failure(value: object) -> SupportedEncodingFailure:
     document = raw_similarity_contract_value(value)
+    if document.get("schema_version") == "embedding-encoding-recovery/4.0":
+        return KnownFailedCpuPreparationEncoding.model_validate(document)
     if document.get("schema_version") == "embedding-encoding-recovery/3.0":
         return KnownFailedCpuEmbeddingEncoding.model_validate(document)
     if document.get("schema_version") == "embedding-encoding-recovery/2.0":
@@ -251,6 +271,8 @@ def parse_supported_encoding_failure(value: object) -> SupportedEncodingFailure:
 
 def parse_supported_failure_recovery(value: object) -> SupportedFailureRecoveryCommand:
     document = raw_similarity_contract_value(value)
+    if document.get("schema_version") == "embedding-encoding-recovery/4.0":
+        return CpuPreparationFailureRecoveryCommand.model_validate(document)
     if document.get("schema_version") == "embedding-encoding-recovery/3.0":
         return CpuEmbeddingFailureRecoveryCommand.model_validate(document)
     if document.get("schema_version") == "embedding-encoding-recovery/2.0":

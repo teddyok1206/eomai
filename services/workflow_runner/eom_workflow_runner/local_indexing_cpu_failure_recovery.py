@@ -27,15 +27,17 @@ from eom_workflow.embedding_cpu_failure_recovery import (
     CpuEmbeddingFailureRecoveryCommand,
     KnownFailedCpuEmbeddingEncoding,
 )
-from eom_workflow.embedding_encoding_recovery import encoding_failure_disposition
-from eom_workflow.local_embedding_request import (
-    LocalEmbeddingServiceWorkflowRequest,
-    local_embedding_request_service,
+from eom_workflow.embedding_cpu_preparation_failure import (
+    CpuPreparationFailureRecoveryCommand,
+    KnownFailedCpuPreparationEncoding,
+)
+from eom_workflow.embedding_encoding_recovery import (
+    encoding_failure_disposition,
+    parse_supported_failure_recovery,
 )
 from eom_workflow.local_embedding_request_v2 import (
-    LocalEmbeddingWorkflowRequestV2,
-    local_embedding_request_service_v2,
     parse_supported_local_embedding_request,
+    supported_local_embedding_request_service,
 )
 from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError
@@ -69,6 +71,7 @@ from eom_workflow_runner.state_machine import (
 )
 
 CPU_FAILURE_RECOVERY_EVENT = "LOCAL_INDEXING_CPU_FAILURE_RECOVERED"
+type CpuRecoveryCommand = CpuEmbeddingFailureRecoveryCommand | CpuPreparationFailureRecoveryCommand
 
 
 class CpuIndexingFailureRecoveryError(ValueError):
@@ -84,7 +87,7 @@ def _require(condition: bool, reason: str = "CONTEXT_INVALID") -> None:
 
 @dataclass(frozen=True, slots=True)
 class RecoveredCpuIndexingFailure:
-    command: CpuEmbeddingFailureRecoveryCommand
+    command: CpuRecoveryCommand
     step_run_id: str
     native_launch_job_id: str
     encoding_job_ids: tuple[str, ...]
@@ -95,11 +98,20 @@ class RecoveredCpuIndexingFailure:
 
 
 def recover_retired_cpu_indexing_workflow(
-    sessions: sessionmaker[Session], command: CpuEmbeddingFailureRecoveryCommand
+    sessions: sessionmaker[Session], command: CpuRecoveryCommand
 ) -> RecoveredCpuIndexingFailure:
     """One root/schema-owner transaction; never source authority, restart or failed→success."""
     _require(os.getresuid() == (0, 0, 0), "ROOT_REQUIRED")
-    command = CpuEmbeddingFailureRecoveryCommand.model_validate(command)
+    checked = parse_supported_failure_recovery(command)
+    _require(
+        isinstance(
+            checked, CpuEmbeddingFailureRecoveryCommand | CpuPreparationFailureRecoveryCommand
+        )
+    )
+    assert isinstance(
+        checked, CpuEmbeddingFailureRecoveryCommand | CpuPreparationFailureRecoveryCommand
+    )
+    command = checked
     try:
         with sessions.begin() as session:
             principal = require_native_workflow_maintenance_owner(
@@ -113,7 +125,7 @@ def recover_retired_cpu_indexing_workflow(
 
 
 def _recover(
-    session: Session, command: CpuEmbeddingFailureRecoveryCommand, principal: str
+    session: Session, command: CpuRecoveryCommand, principal: str
 ) -> RecoveredCpuIndexingFailure:
     kind = encoding_failure_disposition(command)
     workflow = session.scalar(
@@ -125,17 +137,7 @@ def _recover(
     _require(workflow is not None)
     assert workflow is not None
     request = parse_supported_local_embedding_request(workflow.initial_request)
-    _require(
-        isinstance(request, LocalEmbeddingServiceWorkflowRequest | LocalEmbeddingWorkflowRequestV2)
-    )
-    assert isinstance(
-        request, LocalEmbeddingServiceWorkflowRequest | LocalEmbeddingWorkflowRequestV2
-    )
-    service = (
-        local_embedding_request_service_v2(request)
-        if isinstance(request, LocalEmbeddingWorkflowRequestV2)
-        else local_embedding_request_service(request)
-    )
+    service = supported_local_embedding_request_service(request)
     _require(
         request.resource_profile.device == request.space.runtime.device == "CPU"
         and request.request_sha256 == command.workflow_request_sha256
@@ -268,7 +270,7 @@ def _recover(
         _require(
             set(failed) == {job.job_id for job in jobs}
             and all(
-                isinstance(f, KnownFailedCpuEmbeddingEncoding)
+                isinstance(f, KnownFailedCpuEmbeddingEncoding | KnownFailedCpuPreparationEncoding)
                 and f.root == command.root
                 and f.native_launch_job_id == launch.intent.native_launch_job_id
                 for f in failed.values()
@@ -320,9 +322,11 @@ def _recover(
             root=command.root.model_dump(mode="json"),
         )
         records.append(
-            KnownFailedCpuEmbeddingEncoding.model_validate(
-                body | {"event_sha256": content_sha256(body)}
-            )
+            (
+                KnownFailedCpuPreparationEncoding
+                if isinstance(command, CpuPreparationFailureRecoveryCommand)
+                else KnownFailedCpuEmbeddingEncoding
+            ).model_validate(body | {"event_sha256": content_sha256(body)})
         )
     with read_retired_native_cpu_index_failure(command.root):
         storage.prepare_recovery_protocol(session)

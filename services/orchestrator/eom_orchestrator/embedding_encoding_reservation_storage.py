@@ -17,6 +17,11 @@ from eom_workflow.embedding_cpu_failure_recovery import (
     CPU_FAILURE_RECOVERY_SCHEMA_SHA256,
     KnownFailedCpuEmbeddingEncoding,
 )
+from eom_workflow.embedding_cpu_preparation_failure import (
+    CPU_PREPARATION_FAILURE_PROTOCOL,
+    CPU_PREPARATION_FAILURE_SCHEMA_SHA256,
+    KnownFailedCpuPreparationEncoding,
+)
 from eom_workflow.embedding_encoding_recovery import (
     ENCODING_RECOVERY_PROTOCOL,
     ENCODING_RECOVERY_SCHEMA_SHA256,
@@ -204,6 +209,9 @@ class EmbeddingEncodingReservationStorage:
         EmbeddingEncodingReservationStorage._prepare_protocol(
             session, CPU_FAILURE_RECOVERY_PROTOCOL, CPU_FAILURE_RECOVERY_SCHEMA_SHA256
         )
+        EmbeddingEncodingReservationStorage._prepare_protocol(
+            session, CPU_PREPARATION_FAILURE_PROTOCOL, CPU_PREPARATION_FAILURE_SCHEMA_SHA256
+        )
 
     @staticmethod
     def require_recovery_protocol(session: Session) -> None:
@@ -227,6 +235,14 @@ class EmbeddingEncodingReservationStorage:
             ProtocolVersionRecord, CPU_FAILURE_RECOVERY_PROTOCOL, populate_existing=True
         )
         if record is None or record.schema_sha256 != CPU_FAILURE_RECOVERY_SCHEMA_SHA256:
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_RECOVERY_UNAVAILABLE")
+
+    @staticmethod
+    def require_cpu_preparation_failure_protocol(session: Session) -> None:
+        record = session.get(
+            ProtocolVersionRecord, CPU_PREPARATION_FAILURE_PROTOCOL, populate_existing=True
+        )
+        if record is None or record.schema_sha256 != CPU_PREPARATION_FAILURE_SCHEMA_SHA256:
             raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_RECOVERY_UNAVAILABLE")
 
     @staticmethod
@@ -617,6 +633,8 @@ class EmbeddingEncodingReservationStorage:
                 cls.require_unpublished_recovery_protocol(session)
             if isinstance(record, KnownFailedCpuEmbeddingEncoding):
                 cls.require_cpu_failure_recovery_protocol(session)
+            if isinstance(record, KnownFailedCpuPreparationEncoding):
+                cls.require_cpu_preparation_failure_protocol(session)
             prior = reservations[event.job_id]
             if (
                 event.job_id in values
@@ -668,6 +686,8 @@ class EmbeddingEncodingReservationStorage:
                 cls.require_unpublished_recovery_protocol(session)
             if isinstance(value, KnownFailedCpuEmbeddingEncoding):
                 cls.require_cpu_failure_recovery_protocol(session)
+            if isinstance(value, KnownFailedCpuPreparationEncoding):
+                cls.require_cpu_preparation_failure_protocol(session)
             job = by_id[value.owned_job.job_reference.job_id]
             owner = observed[job.job_id]
             if (

@@ -25,6 +25,7 @@ from eom_orchestrator.embedding_encoding_reservations import EmbeddingEncodingRe
 from eom_orchestrator.models import JobEventRecord, JobRecord
 from eom_orchestrator.native_embedding_launch_identity import create_native_embedding_launch
 from eom_workflow.embedding_cpu_failure_recovery import CpuEmbeddingFailureRecoveryCommand
+from eom_workflow.embedding_cpu_preparation_failure import CpuPreparationFailureRecoveryCommand
 from eom_workflow.embedding_encoding_recovery import ENCODING_RETRY_SUCCESSOR_EVENT
 from eom_workflow_runner import local_indexing_cpu_failure_recovery as application
 from eom_workflow_runner.models import (
@@ -48,6 +49,7 @@ from tests.integration.test_preset_model_validation_persistence import (
 )
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_embedding_cpu_failure_recovery import cpu_root
+from tests.unit.test_embedding_cpu_preparation_failure import preparation_root
 from tests.unit.test_embedding_encoding_reservations import SyntheticAdmission
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
@@ -57,9 +59,15 @@ pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 def cpu(guarded_engine, monkeypatch, request):
     variant = getattr(request, "param", 3)
     value = seed_allocated_execution(
-        guarded_engine, device="CPU", request_family="2.0" if variant == "mixed" else "1.2"
+        guarded_engine,
+        device="CPU",
+        request_family="3.0"
+        if variant == "public_prepare"
+        else "2.0"
+        if variant == "mixed"
+        else "1.2",
     )
-    count = 3 if variant == "mixed" else variant
+    count = 3 if isinstance(variant, str) else variant
     with value.sessions.begin() as session:
         transition_command(
             session.get(WorkflowCommandRecord, value.origin_command_id), CommandState.SUCCEEDED
@@ -104,10 +112,16 @@ def cpu(guarded_engine, monkeypatch, request):
             expected_resource_version=registered.status_after_operation.resource_version,
             operation_key="cpu-test-activate:" + uuid4().hex,
         )
-    value.command = CpuEmbeddingFailureRecoveryCommand.model_validate(
+    preparation = variant == "public_prepare"
+    command_type = (
+        CpuPreparationFailureRecoveryCommand if preparation else CpuEmbeddingFailureRecoveryCommand
+    )
+    value.command = command_type.model_validate(
         seal(
             dict(
-                schema_version="embedding-encoding-recovery/3.0",
+                schema_version="embedding-encoding-recovery/4.0"
+                if preparation
+                else "embedding-encoding-recovery/3.0",
                 record_type="RECOVER",
                 workflow_id=value.workflow_id,
                 workflow_request_sha256=value.request.request_sha256,
@@ -115,7 +129,9 @@ def cpu(guarded_engine, monkeypatch, request):
                 lease_generation=1,
                 native_intent_sha256=value.association.intent.intent_sha256,
                 current_service=current_service.model_dump(mode="json"),
-                root=cpu_root(native_job_id=value.association.intent.native_launch_job_id),
+                root=(preparation_root if preparation else cpu_root)(
+                    native_job_id=value.association.intent.native_launch_job_id
+                ),
             ),
             "command_sha256",
         )
@@ -184,7 +200,7 @@ def snapshot(case):
         )
 
 
-@pytest.mark.parametrize("cpu", [3, 128, "mixed"], indirect=True)
+@pytest.mark.parametrize("cpu", [3, 128, "mixed", "public_prepare"], indirect=True)
 def test_exact_failed_cpu_closure_preserves_all_previous_commands_and_replays_read_only(cpu):
     before = snapshot(cpu)
     first = application.recover_retired_cpu_indexing_workflow(cpu.sessions, cpu.command)
@@ -192,12 +208,20 @@ def test_exact_failed_cpu_closure_preserves_all_previous_commands_and_replays_re
     assert first.state == "FAILED" and first.preserved_command_count == len(before["preserved"])
     assert after["state"] == ("FAILED",) * 4 and after["preserved"] == before["preserved"]
     assert all(
-        row[1:] == ("FAILED", "EMBEDDING_NATIVE_KNOWN_FAILED_RETIRED") for row in after["jobs"]
+        row[1:]
+        == (
+            "FAILED",
+            "EMBEDDING_NATIVE_PREPARATION_FAILED_RETIRED"
+            if isinstance(cpu.command, CpuPreparationFailureRecoveryCommand)
+            else "EMBEDDING_NATIVE_KNOWN_FAILED_RETIRED",
+        )
+        for row in after["jobs"]
     )
     assert application.recover_retired_cpu_indexing_workflow(cpu.sessions, cpu.command) == first
     assert snapshot(cpu) == after and cpu.physical_calls == 1
 
 
+@pytest.mark.parametrize("cpu", [3, "public_prepare"], indirect=True)
 def test_late_cpu_identity_change_rolls_back_every_event_job_and_state(cpu):
     before = snapshot(cpu)
     cpu.late_failure = True
@@ -256,6 +280,7 @@ def test_changed_or_nonrecoverable_context_never_rewrites_cpu_history(cpu, fault
     assert snapshot(cpu) == before and cpu.physical_calls == 0
 
 
+@pytest.mark.parametrize("cpu", [3, "public_prepare"], indirect=True)
 def test_concurrent_same_command_has_one_failure_receipt_and_no_duplicate_mutation(cpu):
     barrier = Barrier(2)
 
@@ -286,7 +311,7 @@ def test_concurrent_same_command_has_one_failure_receipt_and_no_duplicate_mutati
         )
 
 
-@pytest.mark.parametrize("cpu", [3, "mixed"], indirect=True)
+@pytest.mark.parametrize("cpu", [3, "mixed", "public_prepare"], indirect=True)
 def test_ordinary_concurrent_retry_creates_one_successor_and_preserves_failed_cpu_jobs(cpu):
     application.recover_retired_cpu_indexing_workflow(cpu.sessions, cpu.command)
     # Only admission/source/Workflow execution are synthetic; producer claims,

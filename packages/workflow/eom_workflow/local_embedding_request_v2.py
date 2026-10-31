@@ -166,6 +166,25 @@ def local_embedding_request_service_v2(
     )
 
 
+def supported_local_embedding_request_service(
+    request: SupportedLocalEmbeddingRequest,
+) -> LocalIndexingServiceReference:
+    """Service identity value after family validation, never current runtime authority."""
+    checked = parse_supported_local_embedding_request(request)
+    if isinstance(checked, (LocalEmbeddingWorkflowRequestV2, LocalEmbeddingWorkflowRequestV3)):
+        audit = checked.actor_context
+        return LocalIndexingServiceReference(
+            service_id=audit.service_id,
+            service_revision_id=audit.service_revision_id,
+            service_identity_sha256=audit.service_identity_sha256,
+        )
+    if isinstance(checked, LocalEmbeddingServiceWorkflowRequest):
+        from eom_workflow.local_embedding_request import local_embedding_request_service
+
+        return local_embedding_request_service(checked)
+    raise ValueError("LOCAL_EMBEDDING_SERVICE_REQUEST_REQUIRED")
+
+
 def validate_local_embedding_request_references_v2(
     request: LocalEmbeddingWorkflowRequestV2,
     plan: LocalEmbeddingSourcePlanV2,

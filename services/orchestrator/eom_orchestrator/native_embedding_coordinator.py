@@ -8,6 +8,7 @@ from typing import cast
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_identifiers import content_sha256
 from eom_workflow.embedding_cpu_failure_recovery import CpuEmbeddingFailureRecoveryCommand
+from eom_workflow.embedding_cpu_preparation_failure import CpuPreparationFailureRecoveryCommand
 from eom_workflow.embedding_encoding_recovery import (
     SupportedFailureRecoveryCommand,
     encoding_failure_disposition,
@@ -292,8 +293,15 @@ class NativeEmbeddingCoordinator:
         EmbeddingEncodingReservationStorage.require_recovery_protocol(session)
         if isinstance(command, UnpublishedEmbeddingRecoveryCommand):
             EmbeddingEncodingReservationStorage.require_unpublished_recovery_protocol(session)
-        if isinstance(command, CpuEmbeddingFailureRecoveryCommand):
-            EmbeddingEncodingReservationStorage.require_cpu_failure_recovery_protocol(session)
+        if isinstance(
+            command, CpuEmbeddingFailureRecoveryCommand | CpuPreparationFailureRecoveryCommand
+        ):
+            if isinstance(command, CpuPreparationFailureRecoveryCommand):
+                EmbeddingEncodingReservationStorage.require_cpu_preparation_failure_protocol(
+                    session
+                )
+            else:
+                EmbeddingEncodingReservationStorage.require_cpu_failure_recovery_protocol(session)
             origin_matches = (
                 command.native_intent_sha256 == self.intent.intent_sha256
                 and command.root.native_launch_job_id == self.intent.native_launch_job_id

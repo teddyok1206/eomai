@@ -6,7 +6,7 @@ import os
 import re
 import stat
 import subprocess
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +22,7 @@ from eom_orchestrator.native_embedding_index_systemd import (
 )
 from eom_orchestrator.systemd_unit_processes import root_owned_unit_processes
 from eom_workflow.embedding_cpu_failure_recovery import RetiredNativeCpuIndexFailure
+from eom_workflow.embedding_cpu_preparation_failure import RetiredNativeCpuPreparationFailure
 
 from eom_catalog_service.embedding_runtime_files import NumericalRuntimeFileSnapshots
 
@@ -132,6 +133,57 @@ def _observe(native_job_id: str) -> RetiredNativeCpuIndexFailure:
     )
 
 
+def validate_retired_native_cpu_preparation_units(
+    prepare: CpuUnitObservation, numeric: CpuUnitObservation
+) -> None:
+    """A failed preparer is not a failed numeric invocation or permission to restart it."""
+    status = prepare.status
+    _require(
+        prepare.main_pid == 0
+        and status.active_state == status.sub_state == "failed"
+        and status.result in _FAILED_RESULTS
+        and status.exec_main_code in {1, 2, 3}
+        and 0 <= status.exec_main_status <= 255
+        and status.exec_main_started_monotonic > 0
+        and prepare.exited_monotonic >= status.exec_main_started_monotonic
+        and re.fullmatch(r"[0-9a-f]{32}", prepare.invocation_id) is not None
+        and numeric.main_pid == 0
+        and numeric.fresh
+        and not numeric.invocation_id
+        and numeric.exited_monotonic == 0
+    )
+
+
+def _observe_preparation(native_job_id: str) -> RetiredNativeCpuPreparationFailure:
+    _root()
+    _require(re.fullmatch(r"job_[0-9a-f]{32}", native_job_id) is not None)
+    units = native_index_unit_names(native_job_id.removeprefix("job_"))
+    prepare = inspect_cpu_unit(units[0], template=PREPARE_TEMPLATE)
+    numeric = inspect_cpu_unit(units[1], template=INDEX_TEMPLATE)
+    validate_retired_native_cpu_preparation_units(prepare, numeric)
+    for unit in units:
+        _empty_original_unit(unit)
+    body = dict(
+        kind="NATIVE_CPU_INDEX_PREPARATION_FAILED",
+        native_launch_job_id=native_job_id,
+        boot_id=_boot_id(),
+        prepare_invocation_id=prepare.invocation_id,
+        prepare_template_sha256="sha256:" + PREPARE_TEMPLATE_SHA256,
+        numeric_template_sha256="sha256:" + INDEX_TEMPLATE_SHA256,
+        prepare_started_monotonic_us=prepare.status.exec_main_started_monotonic,
+        prepare_exited_monotonic_us=prepare.exited_monotonic,
+        prepare_result=prepare.status.result,
+        prepare_exec_main_code=prepare.status.exec_main_code,
+        prepare_exec_main_status=prepare.status.exec_main_status,
+        numeric_state="NOT_STARTED",
+        original_outcome="FAILED",
+        stored_descriptors=0,
+    )
+    return RetiredNativeCpuPreparationFailure.model_validate(
+        body | {"proof_sha256": content_sha256(body)}
+    )
+
+
 def _templates(reader: NumericalRuntimeFileSnapshots) -> None:
     for template, expected in (
         (PREPARE_TEMPLATE, PREPARE_TEMPLATE_SHA256),
@@ -145,7 +197,7 @@ def _templates(reader: NumericalRuntimeFileSnapshots) -> None:
 
 @dataclass(frozen=True, slots=True)
 class ResolvedRetiredNativeCpuIndexFailure:
-    proof: RetiredNativeCpuIndexFailure
+    proof: RetiredNativeCpuIndexFailure | RetiredNativeCpuPreparationFailure
 
 
 def capture_retired_native_cpu_index_failure(native_job_id: str) -> RetiredNativeCpuIndexFailure:
@@ -159,16 +211,35 @@ def capture_retired_native_cpu_index_failure(native_job_id: str) -> RetiredNativ
     return proof
 
 
+def capture_retired_native_cpu_preparation_failure(
+    native_job_id: str,
+) -> RetiredNativeCpuPreparationFailure:
+    """Observe only the original prepare failure, without reset/start/file writes."""
+    _root()
+    reader = NumericalRuntimeFileSnapshots()
+    _templates(reader)
+    proof = _observe_preparation(native_job_id)
+    reader.assert_unchanged()
+    _require(_observe_preparation(native_job_id) == proof)
+    return proof
+
+
 @contextmanager
 def read_retired_native_cpu_index_failure(
-    proof: RetiredNativeCpuIndexFailure,
+    proof: RetiredNativeCpuIndexFailure | RetiredNativeCpuPreparationFailure,
 ) -> Iterator[ResolvedRetiredNativeCpuIndexFailure]:
     """Stay inside a short owner root; late identity changes roll back all its writes."""
     _root()
-    proof = RetiredNativeCpuIndexFailure.model_validate(proof)
+    observe: Callable[[str], RetiredNativeCpuIndexFailure | RetiredNativeCpuPreparationFailure]
+    if isinstance(proof, RetiredNativeCpuPreparationFailure):
+        proof = RetiredNativeCpuPreparationFailure.model_validate(proof)
+        observe = _observe_preparation
+    else:
+        proof = RetiredNativeCpuIndexFailure.model_validate(proof)
+        observe = _observe
     reader = NumericalRuntimeFileSnapshots()
     _templates(reader)
-    _require(_observe(proof.native_launch_job_id) == proof)
+    _require(observe(proof.native_launch_job_id) == proof)
     yield ResolvedRetiredNativeCpuIndexFailure(proof)
     reader.assert_unchanged()
-    _require(_observe(proof.native_launch_job_id) == proof)
+    _require(observe(proof.native_launch_job_id) == proof)

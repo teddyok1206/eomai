@@ -59,6 +59,61 @@ def test_original_timeout_has_stronger_root_proof_without_weakening_generic_obse
     assert original.inspect.call_count == 8 and original.reader.assert_unchanged.call_count == 2
 
 
+@pytest.fixture
+def original_preparation(original):
+    original.prepare = replace(
+        original.prepare,
+        status=FixedUnitStatus("loaded", "failed", "failed", "exit-code", 1, 1, 100, False),
+    )
+    original.numeric = replace(
+        original.numeric,
+        status=FixedUnitStatus("loaded", "inactive", "dead", "success", 0, 0, 0, False),
+        exited_monotonic=0,
+        invocation_id="",
+    )
+    return original
+
+
+def test_preparation_failure_is_distinct_and_never_claims_numeric_start(original_preparation):
+    value = original_preparation
+    proof = module.capture_retired_native_cpu_preparation_failure("job_" + "a" * 32)
+    assert proof.numeric_state == "NOT_STARTED" and proof.prepare_exec_main_status == 1
+    with module.read_retired_native_cpu_index_failure(proof) as captured:
+        assert captured.proof == proof
+    assert value.inspect.call_count == 8
+    with pytest.raises(ValueError):
+        module.capture_retired_native_cpu_index_failure("job_" + "a" * 32)
+
+
+@pytest.mark.parametrize("fault", ["pid", "invocation", "started", "exited", "prepare_success"])
+def test_prepare_failure_cannot_absorb_started_or_unknown_numeric_work(original_preparation, fault):
+    value = original_preparation
+    if fault == "pid":
+        value.numeric = replace(value.numeric, main_pid=123)
+    elif fault == "invocation":
+        value.numeric = replace(value.numeric, invocation_id="f" * 32)
+    elif fault == "started":
+        value.numeric = replace(
+            value.numeric, status=replace(value.numeric.status, exec_main_started_monotonic=1)
+        )
+    elif fault == "exited":
+        value.numeric = replace(value.numeric, exited_monotonic=1)
+    else:
+        value.prepare = replace(
+            value.prepare, status=replace(value.prepare.status, result="success")
+        )
+    with pytest.raises(ValueError):
+        module.capture_retired_native_cpu_preparation_failure("job_" + "a" * 32)
+    value.empty.assert_not_called()
+
+
+def test_late_preparation_identity_change_invalidates_recovery_window(original_preparation):
+    value = original_preparation
+    proof = module.capture_retired_native_cpu_preparation_failure("job_" + "a" * 32)
+    with pytest.raises(ValueError), module.read_retired_native_cpu_index_failure(proof):
+        value.prepare = replace(value.prepare, invocation_id="f" * 32)
+
+
 @pytest.mark.parametrize(
     "fault", ("pid", "running", "success", "fresh", "time", "invocation", "prepare", "code")
 )
