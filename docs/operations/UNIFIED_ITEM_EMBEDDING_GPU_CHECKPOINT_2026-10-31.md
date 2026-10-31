@@ -1,6 +1,6 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
-시각: 2026-10-31 10:42 UTC. Goal ACTIVE. 재임베딩/검색 전환/구 벡터 삭제 완료 보고가 아니다.
+시각: 2026-10-31 11:19 UTC. Goal ACTIVE. 재임베딩/검색 전환/구 벡터 삭제 완료 보고가 아니다.
 
 설계 및 종료 조건:
 [공통 전환 목표](../architecture/UNIFIED_ITEM_EMBEDDING_GPU_MIGRATION_GOAL_2026-10-31.md).
@@ -190,3 +190,36 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
 - 10:30 timer의 frozen 기출 GPU 등록은 **37/520, 잔여483**, 실제 non-terminal CUDA Workflow1이었다.
   INDEX PID703354/NRestarts0, QUERY470146/Catalog732310은 이 구현 때문에 재시작하지 않았다.
   다음 주기 관측은11:00 UTC다. 이번 구현은 source 후보이며 운영 배포·DB migration·모델 실행0이다.
+
+### 일반 Item 보고서 application·실행 준비 경계 — 11:19 UTC
+
+- Plan29의 typed resolver/replay/materializer를 연결했다. 승인 Item JSON과 accepted V2의
+  원래7개 members/receipt/result를 exact allowlist·schema/media·byte count·hash로 준비한다.
+  기출에만 있는 occurrence/page-images 파일을 만들거나 요구하지 않는다. 기존 V8/V9 계획은
+  source 의미와 validation을 유지한다. 새 replay는 request/base/Workflow/definition/preset pins를
+  모두 대조하며 다른 current revision으로 바꾸지 않는다.
+- Catalog의 기존 `create_solution → reconcile → risk → accept`에 V11을 추가했다.
+  원자적 Workflow/plan/run/event/command 생성과 기존 지원 재전송을 재사용한다. 일반 Item은
+  definition11/role1.35가 실제로 지원되는 preset에서만 요청할 수 있다. 다른 key/가족으로
+  우회하거나 기존 FAILED를 성공으로 바꾸지 않는다. 새 accepted Artifact는 `catalog/1.27`,
+  result11/receipt10이며 기존 기출 V10/receipt9 protocol identity는 그대로다.
+- base 해석은 별도 책임 모듈 `registered_item_solution_base.py`다. 기존 canonical Item reader와
+  Artifact byte reader를 사용하고, accepted-result cache와 실제 JSON 및 원 receipt/member를
+  대조한다. source JSON pointer/excerpt hash와 problem/answer 역할, typed node prefix를 확인한다.
+  anchor 이름으로 역할을 추측하지 않으며 빈/null 필드를 실제 근거로 취급하지 않는다.
+  self-hash와 raw member SHA를 혼동하지 않는 real-file 회귀를 포함한다.
+- candidate migration `20261031_0065`는 V11 accepted successor의 별도 partial unique B-tree만
+  추가한다. 기존 V10 index/데이터는 바꾸지 않는다. V11 이력이 있으면 downgrade가 보장을
+  지우지 못하게 거부한다. **source migration head와 live migration head는 아직 다르다.**
+- 임시 DB `eom-api-testdb-20261031111016_5f2728e8`에서 upgrade/downgrade/upgrade PASS,
+  실제 B-tree·동시 승인 winner1·중단 rollback/replay·FAILED 보존·이력 있는 downgrade 거부
+  **4 PASS**. 모델·운영 DB·worker·NAS 실행이 아닌 synthetic relational constraint 검증이다.
+  재현: 기존 `scripts/api/testdb_run.sh registered-solution-tests <guarded-state>`.
+  검사 후 marker 검증 cleanup으로 해당 임시 DB·제한 계정을 제거했다. cleanup PASS.
+- source 집중 회귀 **245 PASS**, package resources/의존 방향 **16 PASS**, core8개 모듈 mypy,
+  Ruff/format, schema generator `--check`, shell syntax/diff 검사 PASS.
+- **아직 source 후보**다. AI base 생성 지침/preset·실제 정의 activation, 새 accepted report의
+  Graph/public evidence/index 연결과 사용자 권한 실제 검색은 후속이며 end-to-end PASS가 아니다.
+  API/Catalog/INDEX/QUERY 설치본, runtime config, 운영 DB schema, 모델 실행은 변경0이다.
+- 실제11:00 관측은 기출 GPU **37/520, 잔여483**, CUDA RUNNING1, 새 historical failure 증가0이다.
+  30분 관측 간격을 유지한다. 새 벡터 전환 검증 전 구 벡터 삭제0, 보호 정본 변경0이다.

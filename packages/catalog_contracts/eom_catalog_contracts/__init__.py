@@ -1066,6 +1066,7 @@ from eom_catalog_contracts.registered_item_solution_analysis import (
     KnowledgeAnalysisProposalReceiptV10,
     KnowledgeAnalysisRequestV11,
     KnowledgeAnalysisResultV11,
+    RegisteredItemAcceptedResultArtifactMember,
     RegisteredItemSolutionBasePointer,
 )
 from eom_catalog_contracts.review_textbook_evidence import (
@@ -1989,6 +1990,7 @@ __all__ = [
     "ReferenceQueryTextInput",
     "ReferenceQueryViewRow",
     "RegisterEmbeddingIndexCommand",
+    "RegisteredItemAcceptedResultArtifactMember",
     "RegisteredItemSolutionBasePointer",
     "ReleaseContentPack",
     "ReserveUsagePlan",

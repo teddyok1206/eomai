@@ -33,6 +33,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceiptV7,
     KnowledgeAnalysisProposalReceiptV8,
     KnowledgeAnalysisProposalReceiptV9,
+    KnowledgeAnalysisProposalReceiptV10,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
@@ -42,6 +43,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV8,
     KnowledgeAnalysisRequestV9,
     KnowledgeAnalysisRequestV10,
+    KnowledgeAnalysisRequestV11,
     KnowledgeAnalysisResultV2,
     KnowledgeAnalysisResultV3,
     KnowledgeAnalysisResultV4,
@@ -51,12 +53,14 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisResultV8,
     KnowledgeAnalysisResultV9,
     KnowledgeAnalysisResultV10,
+    KnowledgeAnalysisResultV11,
     KnowledgeAnalysisReviewDecision,
     KnowledgeAnalysisRiskPolicy,
     KnowledgeAnalysisWorkerProposalV7,
     KnowledgeArtifactMemberPointer,
     KnowledgeProposalArtifactMember,
     ReconcileKnowledgeAnalysisCommand,
+    RegisteredItemSolutionBasePointer,
     ReviewKnowledgeAnalysisCommand,
     validate_contract,
     validate_knowledge_analysis_proposal_ontology,
@@ -95,6 +99,7 @@ from eom_workflow_runner.repository import (
     enqueue_command,
 )
 from eom_workflow_runner.state_machine import WorkflowState
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError
 from sqlalchemy import Engine, func, select
 from sqlalchemy.exc import IntegrityError
@@ -113,6 +118,7 @@ from eom_catalog_service.knowledge_proposal_resolution import (
     resolve_knowledge_analysis_proposal,
     resolve_knowledge_solution_proposal,
 )
+from eom_catalog_service.registered_item_solution_base import resolve_registered_item_solution_base
 from eom_catalog_service.settings import CatalogSettings
 
 KNOWLEDGE_ANALYSIS_WORKFLOW_VERSION = "1.0.0"
@@ -125,6 +131,7 @@ KNOWLEDGE_ANALYSIS_TYPED_IDENTITY_MULTIMODAL_WORKFLOW_VERSION = "7.0.0"
 KNOWLEDGE_ANALYSIS_STABLE_IDENTITY_MULTIMODAL_WORKFLOW_VERSION = "8.0.0"
 KNOWLEDGE_ANALYSIS_VISUAL_ITEM_WORKFLOW_VERSION = "9.0.0"
 KNOWLEDGE_ANALYSIS_SOLUTION_WORKFLOW_VERSION = "10.0.0"
+KNOWLEDGE_ANALYSIS_REGISTERED_SOLUTION_WORKFLOW_VERSION = "11.0.0"
 # ``catalog/1.2`` is the immutable Item-content V2 protocol in production.  Approved-Item
 # knowledge-analysis review/result artifacts have a different contract set, so they need their
 # own protocol identity instead of attempting to reuse that version with another schema hash.
@@ -252,6 +259,20 @@ KNOWLEDGE_ANALYSIS_SOLUTION_CATALOG_SCHEMA_HASH = content_sha256(
         ],
     }
 )
+KNOWLEDGE_ANALYSIS_REGISTERED_SOLUTION_CATALOG_PROTOCOL = "catalog/1.27"
+KNOWLEDGE_ANALYSIS_REGISTERED_SOLUTION_CATALOG_SCHEMA_HASH = content_sha256(
+    {
+        "protocol": KNOWLEDGE_ANALYSIS_REGISTERED_SOLUTION_CATALOG_PROTOCOL,
+        "contracts": [
+            "knowledge-analysis-request/11.0",
+            "knowledge-analysis-worker-proposal/8.0",
+            "knowledge-analysis-proposal-receipt/10.0",
+            "knowledge-analysis-risk-policy/1.0",
+            "knowledge-analysis-review-decision/1.0",
+            "knowledge-analysis-result/11.0",
+        ],
+    }
+)
 REQUESTED_OUTPUTS = (
     "NORMALIZED_MARKDOWN",
     "SOURCE_ANCHORS",
@@ -277,6 +298,7 @@ type KnowledgeAnalysisRequestContract = (
     | KnowledgeAnalysisRequestV8
     | KnowledgeAnalysisRequestV9
     | KnowledgeAnalysisRequestV10
+    | KnowledgeAnalysisRequestV11
 )
 type KnowledgeAnalysisReceiptContract = (
     KnowledgeAnalysisProposalReceipt
@@ -288,6 +310,7 @@ type KnowledgeAnalysisReceiptContract = (
     | KnowledgeAnalysisProposalReceiptV7
     | KnowledgeAnalysisProposalReceiptV8
     | KnowledgeAnalysisProposalReceiptV9
+    | KnowledgeAnalysisProposalReceiptV10
 )
 type KnowledgeAnalysisResultContract = (
     KnowledgeAnalysisResultV2
@@ -299,6 +322,7 @@ type KnowledgeAnalysisResultContract = (
     | KnowledgeAnalysisResultV8
     | KnowledgeAnalysisResultV9
     | KnowledgeAnalysisResultV10
+    | KnowledgeAnalysisResultV11
 )
 type KnowledgeAnalysisSourceContract = (
     ContentIntakeKnowledgeSourceV2
@@ -337,6 +361,13 @@ def _analysis_request(value: dict[str, Any]) -> KnowledgeAnalysisRequestContract
         return KnowledgeAnalysisRequestV9.model_validate(value)
     if version == "knowledge-analysis-request/10.0":
         return KnowledgeAnalysisRequestV10.model_validate(value)
+    if version == "knowledge-analysis-request/11.0":
+        try:
+            return KnowledgeAnalysisRequestV11.model_validate(value)
+        except ValueError as exc:
+            raise KnowledgeAnalysisServiceError(
+                "KNOWLEDGE_ANALYSIS_REQUEST_INVALID", "registered solution request is invalid"
+            ) from exc
     raise KnowledgeAnalysisServiceError(
         "KNOWLEDGE_ANALYSIS_REQUEST_INVALID", "knowledge analysis request schema is unsupported"
     )
@@ -402,12 +433,14 @@ def _visual_item_contract(value: KnowledgeAnalysisRequestContract) -> bool:
 
 
 def _solution_contract(value: KnowledgeAnalysisRequestContract) -> bool:
-    return isinstance(value, KnowledgeAnalysisRequestV10)
+    return isinstance(value, (KnowledgeAnalysisRequestV10, KnowledgeAnalysisRequestV11))
 
 
 def _proposal_result_schema(
     value: KnowledgeAnalysisRequestContract, *, workflow_version: str | None = None
 ) -> str:
+    if isinstance(value, KnowledgeAnalysisRequestV11):
+        return "knowledge-analysis-proposal-result@11.0"
     if _solution_contract(value):
         return "knowledge-analysis-proposal-result@10.0"
     if _visual_item_contract(value):
@@ -432,6 +465,11 @@ def _proposal_result_schema(
 
 
 def _proposal_receipt_schema(value: KnowledgeAnalysisRequestContract) -> tuple[str, str]:
+    if isinstance(value, KnowledgeAnalysisRequestV11):
+        return (
+            "knowledge-analysis-proposal-receipt-v10",
+            "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/10.0",
+        )
     if _solution_contract(value):
         return (
             "knowledge-analysis-proposal-receipt-v9",
@@ -481,6 +519,21 @@ def _proposal_receipt_schema(value: KnowledgeAnalysisRequestContract) -> tuple[s
 def _receipt_contract(
     value: dict[str, Any], request: KnowledgeAnalysisRequestContract
 ) -> KnowledgeAnalysisReceiptContract:
+    if isinstance(request, KnowledgeAnalysisRequestV11):
+        try:
+            validate_contract("knowledge-analysis-proposal-receipt-v10", value)
+            receipt = KnowledgeAnalysisProposalReceiptV10.model_validate(value)
+            if (
+                receipt.analysis_request_id != request.analysis_request_id
+                or receipt.source != request.source
+                or receipt.base_analysis != request.base_analysis
+            ):
+                raise ValueError("registered solution receipt request/base differs")
+            return receipt
+        except (ValueError, JsonSchemaValidationError) as exc:
+            raise KnowledgeAnalysisServiceError(
+                "KNOWLEDGE_ANALYSIS_POINTER_INVALID", "registered solution receipt is invalid"
+            ) from exc
     if _solution_contract(request):
         validate_contract("knowledge-analysis-proposal-receipt-v9", value)
         return KnowledgeAnalysisProposalReceiptV9.model_validate(value)
@@ -510,6 +563,11 @@ def _receipt_contract(
 
 
 def _catalog_protocol(request: KnowledgeAnalysisRequestContract) -> tuple[str, str]:
+    if isinstance(request, KnowledgeAnalysisRequestV11):
+        return (
+            KNOWLEDGE_ANALYSIS_REGISTERED_SOLUTION_CATALOG_PROTOCOL,
+            KNOWLEDGE_ANALYSIS_REGISTERED_SOLUTION_CATALOG_SCHEMA_HASH,
+        )
     if _solution_contract(request):
         return (
             KNOWLEDGE_ANALYSIS_SOLUTION_CATALOG_PROTOCOL,
@@ -602,7 +660,7 @@ class KnowledgeAnalysisApplicationService:
     def create_solution(
         self, command: CreateKnowledgeSolutionAnalysisCommand
     ) -> KnowledgeAnalysisApplicationResult:
-        """Create one additive solution pass over an immutable accepted V9 analysis."""
+        """Create an additive public solution over one exact accepted Item analysis."""
 
         submission_sha256 = content_sha256(
             command.model_dump(mode="json", exclude={"operation", "idempotency_key"})
@@ -635,11 +693,18 @@ class KnowledgeAnalysisApplicationService:
                         "solution analysis base is absent or not accepted",
                     )
                 base_request = _analysis_request(base.canonical_request)
-                if not isinstance(base_request, KnowledgeAnalysisRequestV9):
+                registered = (
+                    isinstance(base_request, KnowledgeAnalysisRequestV2)
+                    and isinstance(base_request.source, ApprovedItemKnowledgeSourceV2)
+                    and base_request.source.source_class == "APPROVED_ITEM"
+                )
+                if not registered and not isinstance(base_request, KnowledgeAnalysisRequestV9):
                     raise KnowledgeAnalysisServiceError(
                         "KNOWLEDGE_ANALYSIS_BASE_INVALID",
-                        "solution analysis requires an accepted visual Item V9 base",
+                        "solution analysis requires an accepted exam or registered Item base",
                     )
+                successor_version = "11.0" if registered else "10.0"
+                role_protocol = "workflow-role/1.35.0" if registered else "workflow-role/1.21.0"
                 existing_successors = session.scalars(
                     select(KnowledgeAnalysisRunRecord)
                     .where(
@@ -652,36 +717,75 @@ class KnowledgeAnalysisApplicationService:
                     )
                 ).all()
                 for successor in existing_successors:
-                    if successor.canonical_request.get(
-                        "schema_version"
-                    ) == "knowledge-analysis-request/10.0" and successor.state not in {
-                        "FAILED",
-                        "REJECTED",
-                        "CANCELLED",
-                    }:
+                    if (
+                        successor.canonical_request.get("schema_version")
+                        == f"knowledge-analysis-request/{successor_version}"
+                        and successor.state
+                        not in {
+                            "FAILED",
+                            "REJECTED",
+                            "CANCELLED",
+                        }
+                    ):
                         return self._projection(successor)
 
                 preset_logical, preset_revision = self.published_preset(session, command.preset_key)
-                if "workflow-role/1.21.0" not in preset_revision.compatible_workflow_protocols:
+                if role_protocol not in preset_revision.compatible_workflow_protocols:
                     raise KnowledgeAnalysisServiceError(
                         "KNOWLEDGE_ANALYSIS_PRESET_INCOMPATIBLE",
-                        "solution analysis requires workflow-role/1.21.0",
+                        f"solution analysis requires {role_protocol}",
                     )
                 policy = self.risk_policy(session, base.risk_policy_revision_id)
                 definition = admitted_workflow_definition(
                     session,
                     definition_key="knowledge-analysis",
-                    definition_version=KNOWLEDGE_ANALYSIS_SOLUTION_WORKFLOW_VERSION,
+                    definition_version=(
+                        KNOWLEDGE_ANALYSIS_REGISTERED_SOLUTION_WORKFLOW_VERSION
+                        if registered
+                        else KNOWLEDGE_ANALYSIS_SOLUTION_WORKFLOW_VERSION
+                    ),
                 )
                 if definition is None:
                     raise KnowledgeAnalysisServiceError(
                         "KNOWLEDGE_ANALYSIS_WORKFLOW_UNAVAILABLE",
                         "solution analysis workflow definition is unavailable",
                     )
-                base_analysis = self._base_result_pointer(session, base, base_request)
+                base_analysis: (
+                    KnowledgeAnalysisBaseResultPointer | RegisteredItemSolutionBasePointer
+                )
+                if registered:
+                    assert isinstance(base_request, KnowledgeAnalysisRequestV2)
+                    assert isinstance(base_request.source, ApprovedItemKnowledgeSourceV2)
+                    current_source = resolve_approved_item_source(
+                        session,
+                        artifacts=self.artifacts,
+                        item_revision_id=base_request.source.item_revision_id,
+                        source_class="APPROVED_ITEM",
+                    )
+                    if current_source != base_request.source:
+                        raise KnowledgeAnalysisServiceError(
+                            "KNOWLEDGE_ANALYSIS_BASE_INVALID",
+                            "registered solution source no longer matches its accepted base",
+                        )
+                    receipt = self._stored_receipt(session, base)
+                    if not isinstance(receipt, KnowledgeAnalysisProposalReceipt):
+                        raise KnowledgeAnalysisServiceError(
+                            "KNOWLEDGE_ANALYSIS_BASE_INVALID", "registered base receipt differs"
+                        )
+                    base_analysis = resolve_registered_item_solution_base(
+                        session,
+                        self.artifacts,
+                        run=base,
+                        request=base_request,
+                        receipt=receipt,
+                        receipt_pointer=self._proposal_receipt_pointer(session, base),
+                    )
+                else:
+                    assert isinstance(base_request, KnowledgeAnalysisRequestV9)
+                    base_analysis = self._base_result_pointer(session, base, base_request)
                 created_at = datetime.now(UTC)
                 request_document: dict[str, Any] = {
-                    "schema_version": "knowledge-analysis-request/10.0",
+                    "schema_version": f"knowledge-analysis-request/{successor_version}",
                     "analysis_request_id": new_knowledge_analysis_request_id(),
                     "source": base_request.source.model_dump(mode="json"),
                     "execution_preset_id": preset_logical.preset_id,
@@ -691,7 +795,7 @@ class KnowledgeAnalysisApplicationService:
                         "eom://schemas/knowledge/knowledge-analysis-worker-proposal/8.0"
                     ),
                     "accepted_result_schema_ref": (
-                        "eom://schemas/knowledge/knowledge-analysis-result/10.0"
+                        f"eom://schemas/knowledge/knowledge-analysis-result/{successor_version}"
                     ),
                     "predecessor_analysis_run_id": base.analysis_run_id,
                     "prior_graph_snapshot": None,
@@ -709,11 +813,20 @@ class KnowledgeAnalysisApplicationService:
                         if key != "request_sha256"
                     }
                 )
-                validate_contract("knowledge-analysis-request-v10", request_document)
-                request = KnowledgeAnalysisRequestV10.model_validate(request_document)
+                request_schema = (
+                    "knowledge-analysis-request-v11"
+                    if registered
+                    else "knowledge-analysis-request-v10"
+                )
+                validate_contract(request_schema, request_document)
+                request: KnowledgeAnalysisRequestV10 | KnowledgeAnalysisRequestV11 = (
+                    KnowledgeAnalysisRequestV11.model_validate(request_document)
+                    if registered
+                    else KnowledgeAnalysisRequestV10.model_validate(request_document)
+                )
                 workflow_request = WorkflowRequest(
                     request_name="KNOWLEDGE_ANALYSIS_REQUEST",
-                    image_mode="required",
+                    image_mode="skip" if registered else "required",
                     analysis_request=request,
                 )
                 workflow, created = create_workflow_instance(
@@ -837,7 +950,14 @@ class KnowledgeAnalysisApplicationService:
                 "KNOWLEDGE_ANALYSIS_CONCURRENCY_CONFLICT",
                 "solution analysis raced with another transaction",
             ) from exc
-        except (KnowledgeProposalResolutionError, ValidationError, ValueError) as exc:
+        except (
+            KnowledgeProposalResolutionError,
+            KnowledgeAnalysisSourceError,
+            JsonSchemaValidationError,
+            OSError,
+            ValidationError,
+            ValueError,
+        ) as exc:
             raise KnowledgeAnalysisServiceError(
                 "KNOWLEDGE_ANALYSIS_BASE_INVALID",
                 "solution analysis base could not be validated",
@@ -1452,8 +1572,20 @@ class KnowledgeAnalysisApplicationService:
                     )
                 self._apply_proposal(run, receipt, pointer)
             try:
-                if isinstance(receipt, KnowledgeAnalysisProposalReceiptV9):
-                    if not isinstance(request, KnowledgeAnalysisRequestV10):
+                if isinstance(
+                    receipt,
+                    (KnowledgeAnalysisProposalReceiptV9, KnowledgeAnalysisProposalReceiptV10),
+                ):
+                    if (
+                        not isinstance(
+                            request, (KnowledgeAnalysisRequestV10, KnowledgeAnalysisRequestV11)
+                        )
+                        or (
+                            isinstance(receipt, KnowledgeAnalysisProposalReceiptV10)
+                            != isinstance(request, KnowledgeAnalysisRequestV11)
+                        )
+                        or receipt.base_analysis != request.base_analysis
+                    ):
                         raise KnowledgeProposalResolutionError(
                             "CONTENT_INVALID", "solution receipt request family differs"
                         )
@@ -1479,7 +1611,9 @@ class KnowledgeAnalysisApplicationService:
                     "KNOWLEDGE_ANALYSIS_PROPOSAL_INVALID",
                     command.requested_by,
                 )
-            if not isinstance(receipt, KnowledgeAnalysisProposalReceiptV9):
+            if not isinstance(
+                receipt, (KnowledgeAnalysisProposalReceiptV9, KnowledgeAnalysisProposalReceiptV10)
+            ):
                 try:
                     validate_knowledge_analysis_proposal_ontology(base_proposal)
                 except ValueError:
@@ -1853,7 +1987,9 @@ class KnowledgeAnalysisApplicationService:
         solution = _solution_contract(request)
         receipt_counts = (
             receipt.base_analysis.base_counts
-            if isinstance(receipt, KnowledgeAnalysisProposalReceiptV9)
+            if isinstance(
+                receipt, (KnowledgeAnalysisProposalReceiptV9, KnowledgeAnalysisProposalReceiptV10)
+            )
             else receipt.counts
         )
         result_data: dict[str, Any] = {
@@ -1906,24 +2042,37 @@ class KnowledgeAnalysisApplicationService:
             "general_knowledge_used": receipt.general_knowledge_used,
             "minimum_confidence_milli": (
                 None
-                if isinstance(receipt, KnowledgeAnalysisProposalReceiptV9)
+                if isinstance(
+                    receipt,
+                    (KnowledgeAnalysisProposalReceiptV9, KnowledgeAnalysisProposalReceiptV10),
+                )
                 else receipt.minimum_confidence_milli
             ),
             "blocking_ambiguity_count": (
                 receipt.solution_counts.unresolved_issues
-                if isinstance(receipt, KnowledgeAnalysisProposalReceiptV9)
+                if isinstance(
+                    receipt,
+                    (KnowledgeAnalysisProposalReceiptV9, KnowledgeAnalysisProposalReceiptV10),
+                )
                 else receipt.blocking_ambiguity_count
             ),
             "accepted_at": _utc_json_timestamp(accepted_at),
             "result_sha256": "sha256:" + "0" * 64,
         }
-        if isinstance(receipt, KnowledgeAnalysisProposalReceiptV9):
+        if isinstance(
+            receipt, (KnowledgeAnalysisProposalReceiptV9, KnowledgeAnalysisProposalReceiptV10)
+        ):
             result_data["base_analysis"] = receipt.base_analysis.model_dump(mode="json")
             result_data["solution_counts"] = receipt.solution_counts.model_dump(mode="json")
+        if isinstance(request, KnowledgeAnalysisRequestV11):
+            result_data["schema_version"] = "knowledge-analysis-result/11.0"
         result_data["result_sha256"] = content_sha256(
             {key: value for key, value in result_data.items() if key != "result_sha256"}
         )
-        if solution:
+        if isinstance(request, KnowledgeAnalysisRequestV11):
+            result_schema_name = "knowledge-analysis-result-v11"
+            result_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/11.0"
+        elif solution:
             result_schema_name = "knowledge-analysis-result-v10"
             result_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/10.0"
         elif visual_item:
@@ -1952,7 +2101,9 @@ class KnowledgeAnalysisApplicationService:
             result_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/2.0"
         validate_contract(result_schema_name, result_data)
         result: KnowledgeAnalysisResultContract
-        if solution:
+        if isinstance(request, KnowledgeAnalysisRequestV11):
+            result = KnowledgeAnalysisResultV11.model_validate(result_data)
+        elif solution:
             result = KnowledgeAnalysisResultV10.model_validate(result_data)
         elif visual_item:
             result = KnowledgeAnalysisResultV9.model_validate(result_data)
@@ -1997,8 +2148,11 @@ class KnowledgeAnalysisApplicationService:
             | type[KnowledgeAnalysisResultV8]
             | type[KnowledgeAnalysisResultV9]
             | type[KnowledgeAnalysisResultV10]
+            | type[KnowledgeAnalysisResultV11]
         )
-        if solution:
+        if isinstance(request, KnowledgeAnalysisRequestV11):
+            result_model = KnowledgeAnalysisResultV11
+        elif solution:
             result_model = KnowledgeAnalysisResultV10
         elif visual_item:
             result_model = KnowledgeAnalysisResultV9
@@ -2029,6 +2183,7 @@ class KnowledgeAnalysisApplicationService:
                 KnowledgeAnalysisResultV8,
                 KnowledgeAnalysisResultV9,
                 KnowledgeAnalysisResultV10,
+                KnowledgeAnalysisResultV11,
             ),
         )
         if (
@@ -2141,6 +2296,7 @@ class KnowledgeAnalysisApplicationService:
             | KnowledgeAnalysisResultV8
             | KnowledgeAnalysisResultV9
             | KnowledgeAnalysisResultV10
+            | KnowledgeAnalysisResultV11
         ],
         schema_name: str,
     ) -> (
@@ -2154,6 +2310,7 @@ class KnowledgeAnalysisApplicationService:
         | KnowledgeAnalysisResultV8
         | KnowledgeAnalysisResultV9
         | KnowledgeAnalysisResultV10
+        | KnowledgeAnalysisResultV11
     ):
         with self.sessions() as session:
             revision = session.get(ArtifactRevisionRecord, artifact.revision_id)
@@ -2494,7 +2651,9 @@ class KnowledgeAnalysisApplicationService:
         run.proposal_content_set_sha256 = receipt.content_set_sha256
         counts = (
             receipt.base_analysis.base_counts
-            if isinstance(receipt, KnowledgeAnalysisProposalReceiptV9)
+            if isinstance(
+                receipt, (KnowledgeAnalysisProposalReceiptV9, KnowledgeAnalysisProposalReceiptV10)
+            )
             else receipt.counts
         )
         run.anchor_count = counts.anchors

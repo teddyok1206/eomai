@@ -10,6 +10,7 @@ from unicodedata import normalize
 from urllib.parse import urlsplit
 
 from eom_catalog_contracts import (
+    ApprovedItemKnowledgeSourceV2,
     ApprovedPastExamItemKnowledgeSourceV3,
     EducationalDocumentKnowledgeSourceV3,
     EducationalDocumentKnowledgeSourceV4,
@@ -24,6 +25,7 @@ from eom_catalog_contracts import (
     LegacyItemEditorialCompatibilityRequest,
     LegacyItemExtractionRequest,
     PdfReviewDocumentPointer,
+    RegisteredItemSolutionBasePointer,
     ReviewTextbookEvidence,
 )
 from eom_identifiers import content_sha256
@@ -978,10 +980,10 @@ class ResolvedExecutionPlanV7(FrozenModel):
         return self
 
 
-class ResolvedExecutionPlanV8(FrozenModel):
-    """One past-exam Item analysis pinned to exact Item JSON and selected page PNGs."""
+class _ResolvedItemKnowledgePlanBase(FrozenModel):
+    """Shared isolated Item analysis values; each released family closes its own source."""
 
-    schema_version: Literal["resolved-execution-plan/8.0"] = "resolved-execution-plan/8.0"
+    schema_version: str
     plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
     workflow_id: WorkflowId
     workload_class: Literal["KNOWLEDGE_ANALYSIS"] = "KNOWLEDGE_ANALYSIS"
@@ -995,15 +997,15 @@ class ResolvedExecutionPlanV8(FrozenModel):
     workflow_definition_sha256: Sha256
     analysis_request_id: str = Field(pattern=r"^knowledgeanalysis_[0-9a-f]{32}$")
     analysis_request_sha256: Sha256
-    item_source: ApprovedPastExamItemKnowledgeSourceV3
+    item_source: ApprovedItemKnowledgeSourceV2
     capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
     steps: tuple[ResolvedStepExecution, ...] = Field(min_length=1, max_length=1)
-    resolver_version: Literal["8.0.0"] = "8.0.0"
+    resolver_version: str
     resolved_at: UtcDatetime
     plan_sha256: Sha256
 
     @model_validator(mode="after")
-    def one_visual_item_support_step_and_exact_hash(self) -> ResolvedExecutionPlanV8:
+    def one_visual_item_support_step_and_exact_hash(self) -> _ResolvedItemKnowledgePlanBase:
         step = self.steps[0]
         if (
             step.step_key != "analyze"
@@ -1018,12 +1020,34 @@ class ResolvedExecutionPlanV8(FrozenModel):
         return self
 
 
+class ResolvedExecutionPlanV8(_ResolvedItemKnowledgePlanBase):
+    """One past-exam Item analysis pinned to exact Item JSON and selected page PNGs."""
+
+    schema_version: Literal["resolved-execution-plan/8.0"] = "resolved-execution-plan/8.0"
+    item_source: ApprovedPastExamItemKnowledgeSourceV3
+    resolver_version: Literal["8.0.0"] = "8.0.0"
+
+
 class ResolvedExecutionPlanV9(ResolvedExecutionPlanV8):
     """One additive solution pass pinned to an exact accepted visual analysis."""
 
     schema_version: Literal["resolved-execution-plan/9.0"] = "resolved-execution-plan/9.0"  # type: ignore[assignment]
     base_analysis: KnowledgeAnalysisBaseResultPointer
     resolver_version: Literal["9.0.0"] = "9.0.0"  # type: ignore[assignment]
+
+
+class ResolvedExecutionPlanV29(_ResolvedItemKnowledgePlanBase):
+    """A registered Item full report; not an occurrence-backed past-exam plan."""
+
+    schema_version: Literal["resolved-execution-plan/29.0"] = "resolved-execution-plan/29.0"
+    resolver_version: Literal["29.0.0"] = "29.0.0"
+    base_analysis: RegisteredItemSolutionBasePointer
+
+    @model_validator(mode="after")
+    def approved_registered_source(self) -> ResolvedExecutionPlanV29:
+        if self.item_source.source_class != "APPROVED_ITEM":
+            raise ValueError("registered Item solution plan requires an approved Item source")
+        return self
 
 
 class ResolvedExecutionPlanV10(FrozenModel):

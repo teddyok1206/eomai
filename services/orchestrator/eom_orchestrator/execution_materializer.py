@@ -21,7 +21,9 @@ from eom_catalog_contracts import (
     EvidenceBundleManifestV3,
     EvidenceBundleManifestV4,
     EvidenceBundleManifestV5,
+    KnowledgeAnalysisProposalReceipt,
     KnowledgeAnalysisProposalReceiptV8,
+    KnowledgeAnalysisResultV2,
     KnowledgeAnalysisResultV9,
     KnowledgeAnalysisSourceArtifactMemberV2,
     KnowledgeArtifactMemberPointer,
@@ -71,6 +73,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV26,
     ResolvedExecutionPlanV27,
     ResolvedExecutionPlanV28,
+    ResolvedExecutionPlanV29,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
     parse_creative_learning_execution_plan,
@@ -238,6 +241,7 @@ def materialize_execution_step(
         "resolved-execution-plan/7.0",
         "resolved-execution-plan/8.0",
         "resolved-execution-plan/9.0",
+        "resolved-execution-plan/29.0",
         "resolved-execution-plan/13.0",
         "resolved-execution-plan/25.0",
         "resolved-execution-plan/26.0",
@@ -256,6 +260,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV7
         | ResolvedExecutionPlanV8
         | ResolvedExecutionPlanV9
+        | ResolvedExecutionPlanV29
         | ResolvedExecutionPlanV10
         | ResolvedExecutionPlanV11
         | ResolvedExecutionPlanV12
@@ -290,6 +295,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV8.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/9.0":
         plan = ResolvedExecutionPlanV9.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/29.0":
+        plan = ResolvedExecutionPlanV29.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/10.0":
         plan = ResolvedExecutionPlanV10.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/11.0":
@@ -559,6 +566,43 @@ def materialize_execution_step(
             plan.compatibility_request.source.item_content.artifact_revision_id
         )
         source_sha256 = plan.compatibility_request.source.item_content.sha256
+    elif isinstance(plan, ResolvedExecutionPlanV29):
+        source = plan.item_source.artifact_member
+        if source.schema_ref is None or source.media_type != "application/json":
+            raise ControlPlaneError(
+                "CONTROL_POINTER_MANIFEST_MISMATCH", "registered Item requires typed JSON content"
+            )
+        original = _materialize_assessment_member(
+            session,
+            pointer=OriginArtifactMemberPointer(
+                artifact_id=source.artifact_id,
+                artifact_revision_id=source.artifact_revision_id,
+                member_path=source.member_path,
+                schema_ref=source.schema_ref,
+                media_type=source.media_type,
+                sha256=source.sha256,
+            ),
+            relative_path=source.materialized_path,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            maximum_bytes=16 * 1024 * 1024,
+        )
+        if len(original) != source.bytes:
+            raise ControlPlaneError("CONTROL_POINTER_MANIFEST_MISMATCH", "Item source size differs")
+        base_bytes, base_members = _materialize_base_analysis(
+            session,
+            plan=plan,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+        )
+        total_bytes += len(original) + base_bytes
+        member_count += 1 + base_members
+        _require_total_size(total_bytes, analysis=True)
+        source_artifact_revision_id, source_sha256 = source.artifact_revision_id, source.sha256
     elif isinstance(plan, ResolvedExecutionPlanV8):
         visual_item_bytes, visual_item_members = _materialize_past_exam_item_source(
             session,
@@ -1006,6 +1050,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV7
             | ResolvedExecutionPlanV8
             | ResolvedExecutionPlanV9
+            | ResolvedExecutionPlanV29
             | ResolvedExecutionPlanV10
             | ResolvedExecutionPlanV11
             | ResolvedExecutionPlanV12
@@ -1038,6 +1083,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV8.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/9.0":
         plan = ResolvedExecutionPlanV9.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/29.0":
+        plan = ResolvedExecutionPlanV29.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/10.0":
         plan = ResolvedExecutionPlanV10.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/11.0":
@@ -1134,6 +1181,19 @@ def authorized_execution_artifact_revisions(
         revision_ids.update(
             authority.artifact_member.artifact_revision_id
             for authority in compatibility_request.authorities
+        )
+    elif isinstance(plan, ResolvedExecutionPlanV29):
+        registered_base = plan.base_analysis
+        revision_ids.update(
+            {
+                plan.item_source.artifact_member.artifact_revision_id,
+                registered_base.accepted_result_artifact.artifact_revision_id,
+                registered_base.proposal_receipt.artifact_revision_id,
+                *(
+                    getattr(registered_base.base_members, name).artifact_revision_id
+                    for name in type(registered_base.base_members).model_fields
+                ),
+            }
         )
     elif isinstance(plan, ResolvedExecutionPlanV8):
         source = plan.item_source
@@ -2200,7 +2260,7 @@ def _materialize_past_exam_item_source(
 def _materialize_base_analysis(
     session: Session,
     *,
-    plan: ResolvedExecutionPlanV9,
+    plan: ResolvedExecutionPlanV9 | ResolvedExecutionPlanV29,
     workspace: Path,
     artifact_root: Path,
     worker_group_id: int,
@@ -2215,14 +2275,7 @@ def _materialize_base_analysis(
         *(
             (pointer.member_path.removeprefix("normalized/"), pointer)
             for pointer in (
-                base.base_members.normalized_markdown,
-                base.base_members.anchors,
-                base.base_members.nodes,
-                base.base_members.edges,
-                base.base_members.claims,
-                base.base_members.component_observations,
-                base.base_members.page_image_observations,
-                base.base_members.unresolved_ambiguities,
+                getattr(base.base_members, name) for name in type(base.base_members).model_fields
             )
         ),
     )
@@ -2245,10 +2298,18 @@ def _materialize_base_analysis(
             authorized_artifact_revision_ids=authorized_artifact_revision_ids,
             maximum_bytes=2 * 1024 * 1024,
             allow_empty=(
-                relative_name == "ambiguities.jsonl"
-                and pointer.member_path == "normalized/ambiguities.jsonl"
-                and pointer.schema_ref == "eom://schemas/knowledge/ambiguity/3.0"
-                and pointer.media_type == "application/x-ndjson"
+                (
+                    isinstance(plan, ResolvedExecutionPlanV29)
+                    and relative_name
+                    in {"edges.jsonl", "claims.jsonl", "components.jsonl", "ambiguities.jsonl"}
+                    and pointer.bytes == 0
+                )
+                or (
+                    relative_name == "ambiguities.jsonl"
+                    and pointer.member_path == "normalized/ambiguities.jsonl"
+                    and pointer.schema_ref == "eom://schemas/knowledge/ambiguity/3.0"
+                    and pointer.media_type == "application/x-ndjson"
+                )
             ),
         )
         if len(payload) != pointer.bytes:
@@ -2260,11 +2321,19 @@ def _materialize_base_analysis(
 
     accepted_value = _json_object(payloads["accepted-result.json"], "accepted base result")
     receipt_value = _json_object(payloads["proposal-receipt.json"], "base proposal receipt")
+    accepted: KnowledgeAnalysisResultV2 | KnowledgeAnalysisResultV9
+    receipt: KnowledgeAnalysisProposalReceipt | KnowledgeAnalysisProposalReceiptV8
     try:
-        validate_catalog_contract("knowledge-analysis-result-v9", accepted_value)
-        validate_catalog_contract("knowledge-analysis-proposal-receipt-v8", receipt_value)
-        accepted = KnowledgeAnalysisResultV9.model_validate(accepted_value)
-        receipt = KnowledgeAnalysisProposalReceiptV8.model_validate(receipt_value)
+        if isinstance(plan, ResolvedExecutionPlanV29):
+            validate_catalog_contract("knowledge-analysis-result-v2", accepted_value)
+            validate_catalog_contract("knowledge-analysis-proposal-receipt", receipt_value)
+            accepted = KnowledgeAnalysisResultV2.model_validate(accepted_value)
+            receipt = KnowledgeAnalysisProposalReceipt.model_validate(receipt_value)
+        else:
+            validate_catalog_contract("knowledge-analysis-result-v9", accepted_value)
+            validate_catalog_contract("knowledge-analysis-proposal-receipt-v8", receipt_value)
+            accepted = KnowledgeAnalysisResultV9.model_validate(accepted_value)
+            receipt = KnowledgeAnalysisProposalReceiptV8.model_validate(receipt_value)
     except (JsonSchemaValidationError, ValueError) as exc:
         raise ControlPlaneError(
             "CONTROL_BASE_ANALYSIS_INVALID",
@@ -2304,9 +2373,12 @@ def _materialize_base_analysis(
         "edges.jsonl": base.base_counts.edges,
         "claims.jsonl": base.base_counts.claims,
         "components.jsonl": base.base_counts.component_observations,
-        "page-images.jsonl": base.base_counts.page_image_observations,
         "ambiguities.jsonl": base.base_counts.ambiguities,
     }
+    if isinstance(plan, ResolvedExecutionPlanV9):
+        expected_counts["page-images.jsonl"] = (
+            plan.base_analysis.base_counts.page_image_observations
+        )
     for name, expected_count in expected_counts.items():
         if _jsonl_object_count(payloads[name], name) != expected_count:
             raise ControlPlaneError(

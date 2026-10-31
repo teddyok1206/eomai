@@ -14,6 +14,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceiptV7,
     KnowledgeAnalysisProposalReceiptV8,
     KnowledgeAnalysisProposalReceiptV9,
+    KnowledgeAnalysisProposalReceiptV10,
     KnowledgeAnalysisRiskPolicy,
 )
 
@@ -35,6 +36,7 @@ def evaluate_knowledge_analysis_risk(
         | KnowledgeAnalysisProposalReceiptV7
         | KnowledgeAnalysisProposalReceiptV8
         | KnowledgeAnalysisProposalReceiptV9
+        | KnowledgeAnalysisProposalReceiptV10
     ),
     policy: KnowledgeAnalysisRiskPolicy,
 ) -> KnowledgeAnalysisRiskEvaluation:
@@ -47,14 +49,18 @@ def evaluate_knowledge_analysis_risk(
         reasons.add("GENERAL_KNOWLEDGE_USED")
     blocking_count = (
         receipt.solution_counts.unresolved_issues
-        if isinstance(receipt, KnowledgeAnalysisProposalReceiptV9)
+        if isinstance(
+            receipt, (KnowledgeAnalysisProposalReceiptV9, KnowledgeAnalysisProposalReceiptV10)
+        )
         else receipt.blocking_ambiguity_count
     )
     if policy.review_when_blocking_ambiguity_present and blocking_count > 0:
         reasons.add("BLOCKING_AMBIGUITY_PRESENT")
     minimum_confidence = (
         None
-        if isinstance(receipt, KnowledgeAnalysisProposalReceiptV9)
+        if isinstance(
+            receipt, (KnowledgeAnalysisProposalReceiptV9, KnowledgeAnalysisProposalReceiptV10)
+        )
         else receipt.minimum_confidence_milli
     )
     if minimum_confidence is not None and minimum_confidence < policy.minimum_confidence_milli:
@@ -62,7 +68,9 @@ def evaluate_knowledge_analysis_risk(
     limits = policy.maximum_auto_accept_counts
     counts = (
         receipt.base_analysis.base_counts
-        if isinstance(receipt, KnowledgeAnalysisProposalReceiptV9)
+        if isinstance(
+            receipt, (KnowledgeAnalysisProposalReceiptV9, KnowledgeAnalysisProposalReceiptV10)
+        )
         else receipt.counts
     )
     if any(

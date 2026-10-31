@@ -515,6 +515,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "9.0",
             "sha256:cf7cb9c5309d61558a6e5d55f0520d9d6911413382e8e4258f1111240b42f328",
         ),
+        "resolved-execution-plan-v29": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v29.schema.json",
+            "resources/control-plane/resolved-execution-plan-v29.schema.json",
+            "29.0",
+            "sha256:584cf6d8a58c291853e95a1047de6530f0cd044258864d0a87aa5036331a2176",
+        ),
         "resolved-execution-plan-v10": ControlSchemaResource(
             "schemas/workflow/control-plane/resolved-execution-plan-v10.schema.json",
             "resources/control-plane/resolved-execution-plan-v10.schema.json",
@@ -884,6 +890,7 @@ def _control_schema_registry() -> Registry[Any]:
         "knowledge-analysis-types-v4",
         "knowledge-analysis-types-v5",
         "knowledge-analysis-solution-types-v1",
+        "knowledge-analysis-solution-types-v2",
         "knowledge-analysis-request-v9",
         "evidence-bundle-manifest-v5",
         "item-origin-types",

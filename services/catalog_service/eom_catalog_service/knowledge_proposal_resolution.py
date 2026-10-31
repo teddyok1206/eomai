@@ -15,6 +15,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceiptV7,
     KnowledgeAnalysisProposalReceiptV8,
     KnowledgeAnalysisProposalReceiptV9,
+    KnowledgeAnalysisProposalReceiptV10,
     KnowledgeAnalysisSolutionReport,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
@@ -215,7 +216,7 @@ def _decode_solution_report(_schema_ref: str, raw: bytes) -> KnowledgeAnalysisSo
 
 def resolve_knowledge_solution_proposal(
     artifacts: CatalogArtifactReader,
-    receipt: KnowledgeAnalysisProposalReceiptV9,
+    receipt: KnowledgeAnalysisProposalReceiptV9 | KnowledgeAnalysisProposalReceiptV10,
 ) -> KnowledgeAnalysisWorkerProposalV8:
     """Resolve the one additive report member without copying accepted base members."""
 

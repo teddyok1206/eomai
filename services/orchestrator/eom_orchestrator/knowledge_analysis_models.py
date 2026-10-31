@@ -183,6 +183,16 @@ class KnowledgeAnalysisRunRecord(Base):
             ),
         ),
         Index(
+            "uq_knowledge_analysis_registered_solution_predecessor",
+            "predecessor_analysis_run_id",
+            unique=True,
+            postgresql_where=text(
+                "state = 'ACCEPTED' AND predecessor_analysis_run_id IS NOT NULL "
+                "AND canonical_request ->> 'schema_version' = "
+                "'knowledge-analysis-request/11.0'"
+            ),
+        ),
+        Index(
             "ix_knowledge_analysis_state_history",
             "state",
             text("created_at DESC"),

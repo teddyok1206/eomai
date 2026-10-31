@@ -24,6 +24,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV8,
     KnowledgeAnalysisRequestV9,
     KnowledgeAnalysisRequestV10,
+    KnowledgeAnalysisRequestV11,
     LegacyItemEditorialCompatibilityRequest,
     LegacyItemExtractionRequest,
     ReviewTextbookEvidence,
@@ -56,6 +57,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV26,
     ResolvedExecutionPlanV27,
     ResolvedExecutionPlanV28,
+    ResolvedExecutionPlanV29,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
@@ -1811,6 +1813,7 @@ def resolve_knowledge_analysis_plan(
         | KnowledgeAnalysisRequestV8
         | KnowledgeAnalysisRequestV9
         | KnowledgeAnalysisRequestV10
+        | KnowledgeAnalysisRequestV11
     ),
     resolved_at: datetime | None = None,
 ) -> (
@@ -1819,15 +1822,42 @@ def resolve_knowledge_analysis_plan(
     | ResolvedExecutionPlanV5
     | ResolvedExecutionPlanV8
     | ResolvedExecutionPlanV9
+    | ResolvedExecutionPlanV29
 ):
     """Resolve one exact released support policy without consulting a mutable latest pointer."""
 
+    if isinstance(request, KnowledgeAnalysisRequestV11) and (
+        workflow_definition_version != "11.0.0"
+        or workflow_role_schema_version != "workflow-role/1.35.0"
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_INCOMPATIBLE",
+            "registered Item full solution requires its exact admitted definition/protocol",
+        )
     existing = session.scalar(
         select(ResolvedExecutionPlanRecord).where(
             ResolvedExecutionPlanRecord.workflow_id == workflow_id
         )
     )
     if existing is not None:
+        if isinstance(request, KnowledgeAnalysisRequestV11):
+            recovered = ResolvedExecutionPlanV29.model_validate(existing.canonical_document)
+            if (
+                recovered.workflow_id != workflow_id
+                or recovered.preset_id != request.execution_preset_id
+                or recovered.preset_revision_id != request.execution_preset_revision_id
+                or recovered.preset_sha256 != request.execution_preset_sha256
+                or recovered.analysis_request_id != request.analysis_request_id
+                or recovered.analysis_request_sha256 != request.request_sha256
+                or recovered.item_source != request.source
+                or recovered.base_analysis != request.base_analysis
+                or recovered.workflow_definition_version != workflow_definition_version
+                or recovered.workflow_definition_sha256 != workflow_definition_sha256
+            ):
+                raise ControlPlaneError(
+                    "CONTROL_PRESET_INCOMPATIBLE", "stored registered solution plan differs"
+                )
+            return recovered
         if isinstance(request, KnowledgeAnalysisRequestV10):
             return ResolvedExecutionPlanV9.model_validate(existing.canonical_document)
         if isinstance(request, KnowledgeAnalysisRequestV9):
@@ -1851,6 +1881,14 @@ def resolve_knowledge_analysis_plan(
             "CONTROL_PRESET_POINTER_INVALID", "knowledge analysis preset pointer is stale"
         )
     preset = ExecutionPresetRevision.model_validate(preset_record.canonical_document)
+    if isinstance(request, KnowledgeAnalysisRequestV11) and (
+        preset.preset_id != request.execution_preset_id
+        or preset.preset_revision_id != request.execution_preset_revision_id
+        or preset.content_sha256 != request.execution_preset_sha256
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_POINTER_INVALID", "registered solution preset document differs"
+        )
     support_policies = [policy for policy in preset.role_policies if policy.role == "support"]
     if len(support_policies) != 1:
         raise ControlPlaneError(
@@ -1899,7 +1937,16 @@ def resolve_knowledge_analysis_plan(
         "resolved_at": actual_resolved_at.isoformat().replace("+00:00", "Z"),
         "plan_sha256": "sha256:" + "0" * 64,
     }
-    if isinstance(request, KnowledgeAnalysisRequestV10):
+    if isinstance(request, KnowledgeAnalysisRequestV11):
+        document.update(
+            {
+                "schema_version": "resolved-execution-plan/29.0",
+                "item_source": request.source.model_dump(mode="json"),
+                "base_analysis": request.base_analysis.model_dump(mode="json"),
+                "resolver_version": "29.0.0",
+            }
+        )
+    elif isinstance(request, KnowledgeAnalysisRequestV10):
         document.update(
             {
                 "schema_version": "resolved-execution-plan/9.0",
@@ -1955,8 +2002,12 @@ def resolve_knowledge_analysis_plan(
         | ResolvedExecutionPlanV5
         | ResolvedExecutionPlanV8
         | ResolvedExecutionPlanV9
+        | ResolvedExecutionPlanV29
     )
-    if document["schema_version"] == "resolved-execution-plan/9.0":
+    if document["schema_version"] == "resolved-execution-plan/29.0":
+        validate_control_contract("resolved-execution-plan-v29", document)
+        model = ResolvedExecutionPlanV29.model_validate(document)
+    elif document["schema_version"] == "resolved-execution-plan/9.0":
         validate_control_contract("resolved-execution-plan-v9", document)
         model = ResolvedExecutionPlanV9.model_validate(document)
     elif document["schema_version"] == "resolved-execution-plan/8.0":

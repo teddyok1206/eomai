@@ -160,3 +160,35 @@ occurrence/page evidence를 가진 기출 V9만 허용한다. 일반 승인 AI�
 자료를 사용한다’는 조건을 닫기 위한 후속이다. 검토 요약을 재사용하는 더 작은 대안은
 보고서 내용 기준을 달리하므로 이번 목표의 대체가 될 수 없다. 구현 전 정확한 successor
 번호는 현재 registry를 확인해 선택하며, 이 문서만으로 새 release를 활성화하지 않는다.
+
+### 일반 승인 Item의 전체 풀이보고서 연결 설계 — source 후보
+
+- 책임: 기존 Catalog KnowledgeAnalysis application이 accepted V2 base를 검증하고
+  V11 풀이보고서 요청·reconcile·risk·accept를 처리한다. Orchestrator의 기존 support
+  worker/Artifact commit을 재사용한다. 새 queue/Graph/DB 보고서 본문 테이블은 만들지 않는다.
+- 정본/identity: 원래 Item revision, V2 accepted-result Artifact와 receipt1/7개 normalized
+  members는 불변이다. V11은 새 분석 run/revision과 report1 한 개만 추가한다. accepted-result의
+  self-hash와 실제 JSON 파일의 SHA는 다른 핀으로 각각 검증한다. reference index는 작은 파생
+  값이며 정확한 base members와 request hash에 고정된다.
+- source 역할: 새 일반 Item base의 locator는 실제 canonical Item JSON의 RFC6901 pointer다.
+  excerpt hash는 그 위치의 **canonical JSON value** SHA다. V1 `body`/`interaction`과
+  `solution`, V2/V3의 발문·자료·선지와 `answer`/`explanations`를 구조로 구분한다.
+  anchor 이름/출처명으로 답안 위치를 추측하지 않는다. 모델이 pixels를 보지 않은 JSON-only
+  입력에는 시각 검수/기출 페이지를 만들어 넣지 않는다. 예전 다른 locator 관례의 accepted
+  base를 제자리에서 변환하지 않으며 명시적으로 호환되지 않는 입력으로 남긴다.
+- access pattern: predecessor의 indexed lookup, successor history의 ordered iteration,
+  accepted successor uniqueness, anchor/node membership map, append-only events다. base-row
+  lock으로 요청 생성과 replay를 직렬화하고 기존 unique idempotency/workflow 제약을 유지한다.
+  새 V11 accepted successor에는 `predecessor_analysis_run_id`의 별도 partial unique B-tree를
+  추가한다. 기존 V10 index/predicate와 기존 승인 이력을 바꾸지 않는다. lookup/insert는
+  O(log N), pointer depth가 제한된 source index 생성은 O(A * D + V log V), 작은 파생 metadata만
+  저장한다. 수천/수만 문항으로 늘어도 전체 report/NAS 스캔을 요청별 lookup에 쓰지 않는다.
+- transaction: 기존 원자적 Workflow/plan/run/event/command 생성과 Artifact commit 후
+  acceptance CAS를 재사용한다. V11 partial uniqueness의 migration 왕복과 동시 승인은
+  disposable PostgreSQL에서 검증하고 운영 GPU pin이 유지되는 릴리스 경계에서만 적용한다.
+- dependency/실패: typed contracts → application → 기존 Catalog byte reader/DB adapter 방향이다.
+  missing/stale/schema/media/hash/source-role 불일치는 bounded error로 거부한다. 같은 key는 원래
+  request/result를 replay하고 다른 입력은 conflict다. FAILED 이력은 성공으로 고치지 않는다.
+- 더 작은 대안인 기존 V10을 일반 Item까지 넓히기/검토 요약을 전체 풀이로 대신하기는 각각
+  released source 의미 또는 공통 수치 입력 기준을 깨므로 사용하지 않는다. 운영 활성화 전
+  source candidate를 production-ready로 표시하지 않는다.
