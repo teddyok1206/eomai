@@ -262,7 +262,7 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
 - AI evidence/index successor와 실제 Graph·권한 검색 연결, full520 token 길이 사전 점검,
   운영0065 호환 릴리스와 구 벡터 retirement는 아직 남아 있다. goal은 ACTIVE다.
 
-### 전체 기출 입력 길이·새 control 설치본 검증 — 12:04 UTC
+### 전체 기출 입력 길이·새 control 설치본 검증 — 12:02 UTC
 
 - control/materialization 후보 `195e11c8329b6bf901bb6687285ddcc52bc5f2ca`를 main/origin에
   보존했다. 공식 `deploy_release.sh --build-only` PASS: wheel RECORD와 격리 설치본의
@@ -280,3 +280,32 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
   보고서/worker 원문은 로그·Git·Slack에 저장하지 않았다. DB writes/model inference/CUDA0이다.
 - INDEX703354/QUERY470146/Catalog732310/API469955 PID와 NRestarts0을 유지했다.
   새 vector59/520의 처리와 기존 서비스는 이 source qualification 때문에 재시작하지 않았다.
+
+### AI accepted report의 공통 수치 입력 qualification — 12:10 UTC
+
+- closed entry2는 실제 registered accepted V11/receipt10/report1의 provenance를 보존한다.
+  기존 entry1·기출/창작 evidence와 public text1/recipe2 bytes는 그대로다. 새 schema의 canonical/
+  package 사본,2020-12 검증과 재현 generator `--check`를 연결했다. source class를 기출로
+  위장하거나 기존 검토 결론을 full solution으로 사용하지 않는다.
+- 공통 encoder는 entry1/entry2를 명시적으로 구분한 뒤 같은 text/space/partition으로 같은
+  input과 encoding identity를 만든다. CPU/CUDA 및 QUERY/DOCUMENT 각각에서 기출·창작·AI
+  세 종류의 동일 텍스트 입력이 정확히 같고 provenance hash는 서로 다름을 검사했다.
+  semantic result hash와 accepted JSON raw SHA는 별도 핀이다. 검사는 합성 입력이며 실제
+  모델 inference의 수치 비교 또는 운영 source admission 증거가 아니다.
+- 기존 solution evidence resolver의 indexed bulk query와 accepted-chain 검증을 공유해 V11
+  report의 공식 read를 추가했다. V10 함수·envelope와 과거 metadata hash encoding은 보존한다.
+  새 read는 실제 accepted JSON/receipt bytes와 report를 읽고 schema/media/hash를 검증한다.
+  request/run/source identities 불일치도 명시적으로 거부한다. missing은 명시적 empty이며
+  review/latest로 fallback하지 않는다. 실제 operator/Graph/source 권한은 기존 capture owner의
+  책임이며 이 resolver 자체가 권한을 부여하지 않는다.
+- marker-guarded 임시 DB `eom-api-testdb-20261031120739_947028e5`의 실제 application·staging·
+  acceptance·재전송·V11 report read와 기존 승인 회귀 **6 PASS**. accepted JSON/receipt/report
+  각각의 변조도 거부했다. worker 결과는 synthetic이며 live 모델 실행이 아니다. 확인 후
+  DB/제한 계정을 marker 검증 cleanup으로 제거했다.
+- 공통 입출력·과거 evidence·capture·native 및 package/의존 경계 그룹118 PASS, assembly/
+  similarity/신규 entry 집중 그룹67 PASS(서로 겹치는 검사는 합산하지 않음). core6개 mypy,
+  관련 Ruff/format 및 generator 검사 PASS다.
+- **entry2의 global INDEX admission은 아직 닫혀 있다.** frozen carrier/registry/index/QUERY
+  successor의 qualification 전에는 현재 GPU runtime에 새 shape를 넣지 않는다. 해당 DB
+  CHECK/carrier 의존은 goal 설계 문서에 기록했다. 새 source 후보를 AI 운영 end-to-end PASS로
+  표시하지 않으며, 현재520 재임베딩과 보호 정본·구 벡터는 이 구현 때문에 변경하지 않았다.

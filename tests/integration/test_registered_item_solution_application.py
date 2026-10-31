@@ -23,8 +23,15 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisWorkerProposalV8,
     ReconcileKnowledgeAnalysisCommand,
 )
+from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
 from eom_catalog_service.registry_service import RegistryService
+from eom_catalog_service.solution_embedding_projection import project_public_solution_text
+from eom_catalog_service.solution_evidence_resolution import (
+    SolutionEvidenceResolutionError,
+    resolve_registered_solution_evidence_by_base_run,
+    resolve_solution_evidence_by_base_run,
+)
 from eom_identifiers import content_sha256, new_job_id, new_logical_artifact_id, new_revision_id
 from eom_orchestrator.artifacts import commit_file_set_artifact
 from eom_orchestrator.control_bootstrap import bootstrap_knowledge_analysis_control_plane
@@ -326,3 +333,48 @@ def test_registered_item_base_to_full_solution_uses_real_persistence_and_replays
             value.base_analysis.accepted_result_sha256
             != value.base_analysis.accepted_result_artifact.sha256
         )
+        artifacts = CatalogArtifactService(engine, catalog)
+        resolved = resolve_registered_solution_evidence_by_base_run(
+            session, artifacts, base_analysis_run_ids=(base.analysis_run_id,)
+        )
+        evidence = resolved[base.analysis_run_id]
+        assert evidence.source == value.source
+        assert evidence.pointer.solution_result_sha256 == value.result_sha256
+        assert evidence.pointer.accepted_result_artifact.sha256 == revision.content_hash
+        assert evidence.pointer.solution_analysis_run_id == result.analysis_run_id
+        assert evidence.pointer.base_analysis_run_id == base.analysis_run_id
+        assert evidence.report.base_analysis_result_id == value.base_analysis.analysis_result_id
+        assert project_public_solution_text(evidence.report).status == "AVAILABLE"
+        # The new report remains unavailable through the old past-exam family.
+        assert (
+            resolve_solution_evidence_by_base_run(
+                session, artifacts, base_analysis_run_ids=(base.analysis_run_id,)
+            )
+            == {}
+        )
+        assert (
+            resolve_registered_solution_evidence_by_base_run(
+                session, artifacts, base_analysis_run_ids=("analysisrun_" + "0" * 32,)
+            )
+            == {}
+        )
+
+        class AlteredMemberReader:
+            def __init__(self, path):
+                self.path = path
+
+            def read_member(self, **kwargs):
+                raw = artifacts.read_member(**kwargs)
+                return raw + b"\n" if kwargs["member_path"] == self.path else raw
+
+        for altered_path in (
+            "evidence/accepted-result.json",
+            "normalized/proposal-receipt.json",
+            "normalized/solution-report.json",
+        ):
+            with pytest.raises(SolutionEvidenceResolutionError):
+                resolve_registered_solution_evidence_by_base_run(
+                    session,
+                    AlteredMemberReader(altered_path),
+                    base_analysis_run_ids=(base.analysis_run_id,),
+                )

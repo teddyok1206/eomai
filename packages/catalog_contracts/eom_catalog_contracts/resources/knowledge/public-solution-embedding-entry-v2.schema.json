@@ -1,0 +1,256 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/public-solution-embedding-entry/2.0",
+  "title": "Registered Item full report over unchanged public text and numeric recipe",
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "member": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "schema_ref": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "recipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "content",
+        "facets",
+        "metadata",
+        "overflow",
+        "maximum_text_bytes",
+        "ranking",
+        "recipe_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "inference-transfer-view-recipe/2.0"
+        },
+        "content": {
+          "const": "CANONICAL_ITEM_TEXT_NO_SOLUTION"
+        },
+        "facets": {
+          "const": "FORMAT_NEUTRAL_PUBLIC_SOLUTION"
+        },
+        "metadata": {
+          "const": "SORTED_ACCEPTED_FIELDS"
+        },
+        "overflow": {
+          "const": "REJECT_OVERFLOW"
+        },
+        "maximum_text_bytes": {
+          "const": 262144
+        },
+        "ranking": {
+          "const": "EXACT_FLOAT64_COSINE_REF_TIES"
+        },
+        "recipe_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "registeredSolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "base_analysis_run_id",
+        "base_analysis_result_id",
+        "solution_analysis_run_id",
+        "solution_analysis_result_id",
+        "solution_result_sha256",
+        "accepted_result_artifact",
+        "proposal_receipt",
+        "solution_report",
+        "proposal_content_set_sha256",
+        "pointer_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "registered-item-solution-evidence-pointer/1.0"
+        },
+        "base_analysis_run_id": {
+          "type": "string",
+          "pattern": "^analysisrun_[0-9a-f]{32}$"
+        },
+        "base_analysis_result_id": {
+          "type": "string",
+          "pattern": "^knowledgeanalysisresult_[0-9a-f]{32}$"
+        },
+        "solution_analysis_run_id": {
+          "type": "string",
+          "pattern": "^analysisrun_[0-9a-f]{32}$"
+        },
+        "solution_analysis_result_id": {
+          "type": "string",
+          "pattern": "^knowledgeanalysisresult_[0-9a-f]{32}$"
+        },
+        "solution_result_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        },
+        "accepted_result_artifact": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer",
+          "properties": {
+            "member_path": {
+              "const": "evidence/accepted-result.json"
+            },
+            "logical_name": {
+              "const": "accepted-result.json"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/knowledge/knowledge-analysis-result/11.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        },
+        "proposal_receipt": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer",
+          "properties": {
+            "member_path": {
+              "const": "normalized/proposal-receipt.json"
+            },
+            "logical_name": {
+              "const": "proposal-receipt.json"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/10.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        },
+        "solution_report": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/artifactMemberPointer",
+          "properties": {
+            "member_path": {
+              "const": "normalized/solution-report.json"
+            },
+            "logical_name": {
+              "const": "solution-report.json"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/knowledge/knowledge-analysis-solution-report/1.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        },
+        "proposal_content_set_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        },
+        "pointer_sha256": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/sha256"
+        }
+      }
+    },
+    "registeredEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "solution"
+      ],
+      "properties": {
+        "kind": {
+          "const": "ACCEPTED_REGISTERED_SOLUTION_ANALYSIS"
+        },
+        "solution": {
+          "$ref": "#/$defs/registeredSolution"
+        }
+      }
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "source",
+    "base_analysis_run_id",
+    "graph_snapshot",
+    "policy_revision_id",
+    "policy_sha256",
+    "recipe",
+    "evidence",
+    "public_solution",
+    "entry_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "public-solution-embedding-entry/2.0"
+    },
+    "source": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/approvedItemSource",
+      "properties": {
+        "source_class": {
+          "const": "APPROVED_ITEM"
+        }
+      }
+    },
+    "base_analysis_run_id": {
+      "type": "string",
+      "pattern": "^analysisrun_[0-9a-f]{32}$"
+    },
+    "graph_snapshot": {
+      "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+    },
+    "policy_revision_id": {
+      "type": "string",
+      "pattern": "^accessrev_[0-9a-f]{32}$"
+    },
+    "policy_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "recipe": {
+      "$ref": "#/$defs/recipe"
+    },
+    "evidence": {
+      "$ref": "#/$defs/registeredEvidence"
+    },
+    "public_solution": {
+      "$ref": "eom://schemas/knowledge/public-solution-text/1.0"
+    },
+    "entry_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  }
+}

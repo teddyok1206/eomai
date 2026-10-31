@@ -1047,6 +1047,8 @@ def _solution_resolution_records() -> tuple[object, object, object, object, obje
             "analysis_request_id": request["analysis_request_id"],
             "request_sha256": request["request_sha256"],
             "canonical_request": request,
+            "item_id": request["source"]["item_id"],
+            "item_revision_id": request["source"]["item_revision_id"],
             "predecessor_analysis_run_id": "analysisrun_" + "a" * 32,
             "accepted_result_artifact_id": "artifact_" + "d" * 32,
             "accepted_result_artifact_revision_id": "rev_" + "d" * 32,
@@ -1154,5 +1156,18 @@ def test_solution_evidence_resolver_rejects_report_content_drift() -> None:
     with pytest.raises(SolutionEvidenceResolutionError, match="solution evidence is invalid"):
         _resolve_row(
             cast(CatalogArtifactService, _SolutionReportReader(report_bytes + b"\n")),
+            cast(Any, tuple(records)),
+        )
+
+
+@pytest.mark.parametrize(
+    "field", ["item_id", "item_revision_id", "analysis_request_id", "request_sha256"]
+)
+def test_solution_evidence_does_not_ignore_run_source_or_request_identity(field) -> None:
+    *records, report_bytes = _solution_resolution_records()
+    setattr(records[0], field, "different")
+    with pytest.raises(SolutionEvidenceResolutionError, match="chain differs"):
+        _resolve_row(
+            cast(CatalogArtifactService, _SolutionReportReader(report_bytes)),
             cast(Any, tuple(records)),
         )

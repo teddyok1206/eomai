@@ -229,3 +229,17 @@ occurrence/page evidence를 가진 기출 V9만 허용한다. 일반 승인 AI�
 - 더 작은 대안인 entry1의 frozen evidence union에 AI를 끼워 넣기 또는 AI를 creative/past로
   가장하기는 lineage를 깨므로 사용하지 않는다. 모든 과거 binding을 새 metadata로 일괄
   복제하는 것도 불필요하므로 하지 않는다. 이 설계는 아직 운영 activation 증거가 아니다.
+
+#### 실제 DB/carrier 대조 결과 — 12:10 UTC
+
+`PUBLIC_SOLUTION_REPORT`의 기존 evidence 제약은 APPROVED_ITEM과 실제 solution run을 이미
+수용한다. 별도 AI encoding table이나 새 evidence-kind DB column은 필요하지 않다. 다만
+binding/index revision의 manifest schema whitelist와16384 coverage 조건은 index3에
+고정돼 있어 index4를 발행하기 전 그 세 CHECK만 명시적으로 확장하는 migration이 필요하다.
+기존 binding3/encoding rows는 수정·복제하지 않는다. downgrade는 신규 index4 이력이 있으면
+거부해야 하며, concurrent head CAS와 immutable predecessor 보존을 disposable DB에서 검증한다.
+
+현재 source plan/native work carrier는 entry1의 closed shape다. entry2를 무리하게 통과시키는
+대신 해당 carrier와 registry/QUERY까지 필요한 successor를 먼저 정의한다. entry2 parser와
+공통 encoder의 지원만으로 현재 INDEX runtime이 새 AI 입력을 지원한다고 선언하지 않는다.
+이전 결과를 새 계약으로 재해석하거나 JSON schema 검사를 우회하지 않는다.

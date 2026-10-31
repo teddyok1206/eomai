@@ -137,12 +137,12 @@ def assemble_public_solution_index(
     )
     bindings = tuple(
         assemble_public_solution_binding(
-            value.source,
+            entry,
             row=rows[value.input.encoding.encoding_sha256],
             space=space,
             namespace=namespace,
         )
-        for value in inputs
+        for entry, value in zip(checked, inputs, strict=True)
         if value.input is not None and value.input.encoding.encoding_sha256 in rows
     )
     if not bindings:

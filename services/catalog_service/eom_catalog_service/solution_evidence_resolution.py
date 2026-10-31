@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from eom_catalog_contracts import (
     ApprovedItemKnowledgeSourceV2,
@@ -20,9 +20,19 @@ from eom_catalog_contracts import (
     validate_contract,
     validate_knowledge_solution_report_references,
 )
+from eom_catalog_contracts.registered_item_solution_analysis import (
+    KnowledgeAnalysisProposalReceiptV10,
+    KnowledgeAnalysisRequestV11,
+    KnowledgeAnalysisResultV11,
+    RegisteredItemAcceptedResultArtifactMember,
+)
+from eom_catalog_contracts.registered_public_solution_embedding import (
+    RegisteredItemSolutionEvidencePointer,
+)
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
+from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, ConfigDict, ValidationError
 from sqlalchemy import select
 from sqlalchemy.orm import Session, aliased
@@ -47,28 +57,48 @@ class ResolvedSolutionEvidence:
     accepted_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class ResolvedRegisteredSolutionEvidence:
+    pointer: RegisteredItemSolutionEvidencePointer
+    report: KnowledgeAnalysisSolutionReport
+    source: ApprovedItemKnowledgeSourceV2
+    base_accepted_result: RegisteredItemAcceptedResultArtifactMember
+    accepted_at: datetime
+
+
 class _SolutionMetadataInterpretation(BaseModel):
     """One bounded entry per immutable interpretation, not three competing LRUs."""
 
     model_config = ConfigDict(frozen=True, extra="forbid")
 
-    request: KnowledgeAnalysisRequestV10
-    accepted: KnowledgeAnalysisResultV10
-    receipt: KnowledgeAnalysisProposalReceiptV9
+    request: KnowledgeAnalysisRequestV10 | KnowledgeAnalysisRequestV11
+    accepted: KnowledgeAnalysisResultV10 | KnowledgeAnalysisResultV11
+    receipt: KnowledgeAnalysisProposalReceiptV9 | KnowledgeAnalysisProposalReceiptV10
     accepted_artifact_sha256: str
     receipt_artifact_sha256: str
 
 
 _SOLUTION_METADATA_SCHEMA = "catalog-accepted-solution-metadata/1.0"
+_REGISTERED_SOLUTION_METADATA_SCHEMA = "catalog-accepted-registered-solution-metadata/1.0"
 
 
 def _decode_solution_metadata(_schema: str, raw: bytes) -> _SolutionMetadataInterpretation:
     value = json.loads(raw)
-    request = KnowledgeAnalysisRequestV10.model_validate(value["request"])
-    validate_contract("knowledge-analysis-result-v10", value["accepted"])
-    accepted = KnowledgeAnalysisResultV10.model_validate(value["accepted"])
-    validate_contract("knowledge-analysis-proposal-receipt-v9", value["receipt"])
-    receipt = KnowledgeAnalysisProposalReceiptV9.model_validate(value["receipt"])
+    request: KnowledgeAnalysisRequestV10 | KnowledgeAnalysisRequestV11
+    accepted: KnowledgeAnalysisResultV10 | KnowledgeAnalysisResultV11
+    receipt: KnowledgeAnalysisProposalReceiptV9 | KnowledgeAnalysisProposalReceiptV10
+    if _schema == _SOLUTION_METADATA_SCHEMA:
+        request = KnowledgeAnalysisRequestV10.model_validate(value["request"])
+        validate_contract("knowledge-analysis-result-v10", value["accepted"])
+        accepted = KnowledgeAnalysisResultV10.model_validate(value["accepted"])
+        validate_contract("knowledge-analysis-proposal-receipt-v9", value["receipt"])
+        receipt = KnowledgeAnalysisProposalReceiptV9.model_validate(value["receipt"])
+    elif _schema == _REGISTERED_SOLUTION_METADATA_SCHEMA:
+        request = KnowledgeAnalysisRequestV11.model_validate(value["request"])
+        accepted = KnowledgeAnalysisResultV11.model_validate(value["accepted"])
+        receipt = KnowledgeAnalysisProposalReceiptV10.model_validate(value["receipt"])
+    else:
+        raise SolutionEvidenceResolutionError("unsupported solution metadata family")
     return _SolutionMetadataInterpretation(
         request=request,
         accepted=accepted,
@@ -137,17 +167,47 @@ def _proposal_pointer(
     )
 
 
+type _SolutionRow = tuple[
+    KnowledgeAnalysisRunRecord,
+    ArtifactRevisionRecord,
+    ArtifactRecord,
+    ArtifactRevisionRecord,
+    ArtifactRecord,
+]
+
+
 def _resolve_row(
     artifacts: CatalogArtifactReader,
-    row: tuple[
-        KnowledgeAnalysisRunRecord,
-        ArtifactRevisionRecord,
-        ArtifactRecord,
-        ArtifactRevisionRecord,
-        ArtifactRecord,
-    ],
+    row: _SolutionRow,
 ) -> ResolvedSolutionEvidence:
+    value = _resolve_supported_solution_row(artifacts, row, family="PAST_EXAM_V10")
+    if not isinstance(value, ResolvedSolutionEvidence):
+        raise SolutionEvidenceResolutionError("past-exam solution family differs")
+    return value
+
+
+def _resolve_supported_solution_row(
+    artifacts: CatalogArtifactReader,
+    row: _SolutionRow,
+    *,
+    family: Literal["PAST_EXAM_V10", "REGISTERED_ITEM_V11"],
+) -> ResolvedSolutionEvidence | ResolvedRegisteredSolutionEvidence:
     run, accepted_revision, accepted_artifact, proposal_revision, proposal_artifact = row
+    metadata_schema = (
+        _SOLUTION_METADATA_SCHEMA
+        if family == "PAST_EXAM_V10"
+        else _REGISTERED_SOLUTION_METADATA_SCHEMA
+    )
+    accepted_schema = (
+        "eom://schemas/knowledge/knowledge-analysis-result/10.0"
+        if family == "PAST_EXAM_V10"
+        else "eom://schemas/knowledge/knowledge-analysis-result/11.0"
+    )
+    receipt_schema = (
+        "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/9.0"
+        if family == "PAST_EXAM_V10"
+        else "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/10.0"
+    )
     try:
         current_metadata = {
             "request": run.canonical_request,
@@ -156,13 +216,13 @@ def _resolve_row(
         }
         if isinstance(artifacts, CatalogModelValueDecoder):
             metadata = artifacts.decode_model_value(
-                _SOLUTION_METADATA_SCHEMA,
+                metadata_schema,
                 current_metadata,
                 decoder=_decode_solution_metadata,
             )
         else:
             metadata = _decode_solution_metadata(
-                _SOLUTION_METADATA_SCHEMA, canonical_json_bytes(current_metadata)
+                metadata_schema, canonical_json_bytes(current_metadata)
             )
         request, accepted, receipt = metadata.request, metadata.accepted, metadata.receipt
 
@@ -171,14 +231,14 @@ def _resolve_row(
             artifact_id=accepted_artifact.logical_artifact_id,
             member_path="evidence/accepted-result.json",
             logical_name="accepted-result.json",
-            schema_ref="eom://schemas/knowledge/knowledge-analysis-result/10.0",
+            schema_ref=accepted_schema,
         )
         receipt_pointer, receipt_bytes = _manifest_member(
             proposal_revision,
             artifact_id=proposal_artifact.logical_artifact_id,
             member_path="normalized/proposal-receipt.json",
             logical_name="proposal-receipt.json",
-            schema_ref=("eom://schemas/knowledge/knowledge-analysis-proposal-receipt/9.0"),
+            schema_ref=receipt_schema,
         )
         report_pointer, report_bytes = _manifest_member(
             proposal_revision,
@@ -190,6 +250,10 @@ def _resolve_row(
         if (
             run.state != "ACCEPTED"
             or run.predecessor_analysis_run_id is None
+            or request.analysis_request_id != run.analysis_request_id
+            or request.request_sha256 != run.request_sha256
+            or request.source.item_id != run.item_id
+            or request.source.item_revision_id != run.item_revision_id
             or run.accepted_result_artifact_id != accepted_artifact.logical_artifact_id
             or run.accepted_result_artifact_revision_id != accepted_revision.revision_id
             or run.accepted_result_sha256 != accepted_revision.content_hash
@@ -235,6 +299,24 @@ def _resolve_row(
             != _proposal_pointer(report_pointer, bytes_count=report_bytes)
         ):
             raise SolutionEvidenceResolutionError("accepted solution evidence chain differs")
+        if family == "REGISTERED_ITEM_V11":
+            # A DB cache/hash alone is not proof of the actual committed member.
+            # Both immutable encodings remain distinct from result self-hashes.
+            for pointer, byte_count in (
+                (accepted_pointer, accepted_bytes),
+                (receipt_pointer, receipt_bytes),
+            ):
+                raw = artifacts.read_member(
+                    artifact_id=pointer.artifact_id,
+                    revision_id=pointer.artifact_revision_id,
+                    member_path=pointer.member_path,
+                    sha256=pointer.sha256,
+                    media_type=pointer.media_type,
+                    schema_ref=pointer.schema_ref,
+                    max_bytes=byte_count,
+                )
+                if len(raw) != byte_count or sha256_bytes(raw) != pointer.sha256:
+                    raise SolutionEvidenceResolutionError("registered committed member differs")
         proposal = resolve_knowledge_solution_proposal(artifacts, receipt)
         validate_knowledge_solution_report_references(request, proposal)
         if (
@@ -243,7 +325,11 @@ def _resolve_row(
         ):
             raise SolutionEvidenceResolutionError("solution report identity differs")
         pointer_value: dict[str, Any] = {
-            "schema_version": "knowledge-solution-evidence-pointer/1.0",
+            "schema_version": (
+                "knowledge-solution-evidence-pointer/1.0"
+                if family == "PAST_EXAM_V10"
+                else "registered-item-solution-evidence-pointer/1.0"
+            ),
             "base_analysis_run_id": run.predecessor_analysis_run_id,
             "base_analysis_result_id": accepted.base_analysis.analysis_result_id,
             "solution_analysis_run_id": run.analysis_run_id,
@@ -258,35 +344,51 @@ def _resolve_row(
         pointer_value["pointer_sha256"] = content_sha256(
             {key: value for key, value in pointer_value.items() if key != "pointer_sha256"}
         )
+        source = ApprovedItemKnowledgeSourceV2(
+            source_class=request.source.source_class,
+            item_id=request.source.item_id,
+            item_revision_id=request.source.item_revision_id,
+            artifact_member=request.source.artifact_member,
+        )
+        if isinstance(request, KnowledgeAnalysisRequestV11):
+            return ResolvedRegisteredSolutionEvidence(
+                pointer=RegisteredItemSolutionEvidencePointer.model_validate(pointer_value),
+                report=proposal.solution_report,
+                source=source,
+                base_accepted_result=request.base_analysis.accepted_result_artifact,
+                accepted_at=accepted.accepted_at,
+            )
         return ResolvedSolutionEvidence(
             pointer=KnowledgeSolutionEvidencePointer.model_validate(pointer_value),
             report=proposal.solution_report,
-            source=ApprovedItemKnowledgeSourceV2(
-                source_class=request.source.source_class,
-                item_id=request.source.item_id,
-                item_revision_id=request.source.item_revision_id,
-                artifact_member=request.source.artifact_member,
-            ),
+            source=source,
             base_accepted_result=request.base_analysis.accepted_result_artifact,
             accepted_at=accepted.accepted_at,
         )
-    except (KnowledgeProposalResolutionError, ValidationError, ValueError) as exc:
+    except (
+        KnowledgeProposalResolutionError,
+        JsonSchemaValidationError,
+        ValidationError,
+        ValueError,
+    ) as exc:
         if isinstance(exc, SolutionEvidenceResolutionError):
             raise
         raise SolutionEvidenceResolutionError("accepted solution evidence is invalid") from exc
 
 
-def resolve_solution_evidence_by_base_run(
+def _accepted_solution_rows(
     session: Session,
-    artifacts: CatalogArtifactReader,
     *,
     base_analysis_run_ids: tuple[str, ...],
-) -> dict[str, ResolvedSolutionEvidence]:
-    """Resolve accepted V10 successors using one indexed relational query."""
+    request_schema_version: Literal[
+        "knowledge-analysis-request/10.0", "knowledge-analysis-request/11.0"
+    ],
+) -> list[_SolutionRow]:
+    """The same indexed relational join serves both exact accepted families."""
 
     base_ids = tuple(sorted(set(base_analysis_run_ids)))
     if not base_ids:
-        return {}
+        return []
     accepted_revision = aliased(ArtifactRevisionRecord)
     accepted_artifact = aliased(ArtifactRecord)
     proposal_revision = aliased(ArtifactRevisionRecord)
@@ -323,11 +425,26 @@ def resolve_solution_evidence_by_base_run(
             KnowledgeAnalysisRunRecord.state == "ACCEPTED",
             KnowledgeAnalysisRunRecord.predecessor_analysis_run_id.in_(base_ids),
             KnowledgeAnalysisRunRecord.canonical_request["schema_version"].astext
-            == "knowledge-analysis-request/10.0",
+            == request_schema_version,
         )
         .order_by(KnowledgeAnalysisRunRecord.predecessor_analysis_run_id)
         .execution_options(populate_existing=True)
     ).all()
+    return [tuple(row) for row in rows]
+
+
+def resolve_solution_evidence_by_base_run(
+    session: Session,
+    artifacts: CatalogArtifactReader,
+    *,
+    base_analysis_run_ids: tuple[str, ...],
+) -> dict[str, ResolvedSolutionEvidence]:
+    """Resolve accepted V10 successors without changing their historical envelope."""
+    rows = _accepted_solution_rows(
+        session,
+        base_analysis_run_ids=base_analysis_run_ids,
+        request_schema_version="knowledge-analysis-request/10.0",
+    )
     resolved: dict[str, ResolvedSolutionEvidence] = {}
     for row in rows:
         run, accepted_rev, accepted_logical, proposal_rev, proposal_logical = row
@@ -340,5 +457,33 @@ def resolve_solution_evidence_by_base_run(
             raise SolutionEvidenceResolutionError(
                 "base analysis has more than one accepted solution successor"
             )
+        resolved[base_id] = value
+    return resolved
+
+
+def resolve_registered_solution_evidence_by_base_run(
+    session: Session,
+    artifacts: CatalogArtifactReader,
+    *,
+    base_analysis_run_ids: tuple[str, ...],
+) -> dict[str, ResolvedRegisteredSolutionEvidence]:
+    """Resolve real accepted V11 reports; no review or implicit-latest fallback.
+
+    Source/Graph/operator admission remains with the calling read owner. This
+    bounded bulk lookup does not independently confer permission to that source.
+    """
+    rows = _accepted_solution_rows(
+        session,
+        base_analysis_run_ids=base_analysis_run_ids,
+        request_schema_version="knowledge-analysis-request/11.0",
+    )
+    resolved: dict[str, ResolvedRegisteredSolutionEvidence] = {}
+    for row in rows:
+        value = _resolve_supported_solution_row(artifacts, row, family="REGISTERED_ITEM_V11")
+        if not isinstance(value, ResolvedRegisteredSolutionEvidence):
+            raise SolutionEvidenceResolutionError("registered solution family differs")
+        base_id = value.pointer.base_analysis_run_id
+        if base_id in resolved:
+            raise SolutionEvidenceResolutionError("registered base has duplicate accepted reports")
         resolved[base_id] = value
     return resolved

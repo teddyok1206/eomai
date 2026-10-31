@@ -8,19 +8,22 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingSpace,
     EmbeddingTextInput,
 )
-from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
+from eom_catalog_contracts.registered_public_solution_embedding import (
+    PublicSolutionEncodingEntry,
+    parse_public_solution_encoding_entry,
+)
 from eom_identifiers import content_sha256
 
 
 @dataclass(frozen=True, slots=True)
 class PublicSolutionEncodingInput:
-    source: PublicSolutionEmbeddingEntry
+    source: PublicSolutionEncodingEntry
     input: EmbeddingTextInput | None
     unavailable_reason: Literal["MISSING_PUBLIC_SOLUTION", "PUBLIC_SOLUTION_TEXT_LIMIT"] | None
 
 
 def prepare_public_solution_encoding(
-    entry: PublicSolutionEmbeddingEntry,
+    entry: PublicSolutionEncodingEntry,
     *,
     space: EmbeddingSpace,
     storage_partition: str,
@@ -30,7 +33,7 @@ def prepare_public_solution_encoding(
     The same renderer serves QUERY and DOCUMENT. Numerical purpose/prefix and
     device remain in the supplied released space, not in rewritten report text.
     """
-    entry = PublicSolutionEmbeddingEntry.model_validate(entry.model_dump(mode="json"))
+    entry = parse_public_solution_encoding_entry(entry)
     space = EmbeddingSpace.model_validate(space.model_dump(mode="json"))
     # Validate the partition even for unavailable views, without making an input.
     probe = {
