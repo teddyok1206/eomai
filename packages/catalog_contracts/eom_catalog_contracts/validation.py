@@ -2164,6 +2164,30 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "10.0",
             "sha256:bd8c32b905729735b0513b699ef01661d3df719c403048c04ed5e658ea97b7fc",
         ),
+        "knowledge-analysis-request-v11": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-request-v11.schema.json",
+            "resources/knowledge/knowledge-analysis-request-v11.schema.json",
+            "11.0",
+            "sha256:c95d9ce1ef91cb147a321eb1bde6a5d2aee028d687c2074ee7264a1ef33c601f",
+        ),
+        "knowledge-analysis-proposal-receipt-v10": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-proposal-receipt-v10.schema.json",
+            "resources/knowledge/knowledge-analysis-proposal-receipt-v10.schema.json",
+            "10.0",
+            "sha256:f12529a7b2fb3ba07760556b033b8da6c093ecbc9d722f059be5fcc61f7037b5",
+        ),
+        "knowledge-analysis-result-v11": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-result-v11.schema.json",
+            "resources/knowledge/knowledge-analysis-result-v11.schema.json",
+            "11.0",
+            "sha256:1249ea0714298454b55d308c0727bff1836f4f6151608fd242850f3992800b89",
+        ),
+        "knowledge-analysis-solution-types-v2": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-solution-types-v2.schema.json",
+            "resources/knowledge/knowledge-analysis-solution-types-v2.schema.json",
+            "2.0",
+            "sha256:50ec3b57ea8a6f533c8061029fac421f7b8c1f3055694761847d0d6180c982e3",
+        ),
         "knowledge-analysis-batch-request": CatalogSchemaResource(
             "schemas/knowledge/knowledge-analysis-batch-request-v1.schema.json",
             "resources/knowledge/knowledge-analysis-batch-request-v1.schema.json",

@@ -33,6 +33,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV8,
     KnowledgeAnalysisRequestV9,
     KnowledgeAnalysisRequestV10,
+    KnowledgeAnalysisRequestV11,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
     KnowledgeAnalysisWorkerProposalV3,
@@ -218,6 +219,7 @@ class KnowledgeAnalysisWorkerRequest(FrozenModel):
         | KnowledgeAnalysisRequestV8
         | KnowledgeAnalysisRequestV9
         | KnowledgeAnalysisRequestV10
+        | KnowledgeAnalysisRequestV11
     )
 
 
@@ -505,6 +507,7 @@ class WorkflowRequest(FrozenModel):
         | KnowledgeAnalysisRequestV8
         | KnowledgeAnalysisRequestV9
         | KnowledgeAnalysisRequestV10
+        | KnowledgeAnalysisRequestV11
         | None
     ) = None
     legacy_extraction_request: LegacyItemExtractionRequest | None = None
@@ -1113,6 +1116,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.32.0",
         "workflow-role/1.33.0",
         "workflow-role/1.34.0",
+        "workflow-role/1.35.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1301,6 +1305,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.32.0",
         "workflow-role/1.33.0",
         "workflow-role/1.34.0",
+        "workflow-role/1.35.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -2883,6 +2888,12 @@ class KnowledgeAnalysisProposalRoleResultV10(RoleResultBase):
     output: KnowledgeAnalysisProposalOutputV8
 
 
+class KnowledgeAnalysisProposalRoleResultV11(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.35.0"] = "workflow-role/1.35.0"
+    role: Literal["support"] = "support"
+    output: KnowledgeAnalysisProposalOutputV8
+
+
 class LegacyItemExtractionOutput(FrozenModel):
     extraction_result: LegacyItemExtractionResult
 
@@ -3075,6 +3086,7 @@ RoleResult = (
     | KnowledgeAnalysisProposalRoleResultV8
     | KnowledgeAnalysisProposalRoleResultV9
     | KnowledgeAnalysisProposalRoleResultV10
+    | KnowledgeAnalysisProposalRoleResultV11
     | LegacyItemExtractionRoleResult
     | ExternalItemLearningRoleResult
     | ExternalItemLearningRoleResultV2

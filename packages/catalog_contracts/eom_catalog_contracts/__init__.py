@@ -1062,6 +1062,12 @@ from eom_catalog_contracts.private_chat_similarity import (
     PrivateChatSimilarityRequest,
     validate_private_chat_query_execution,
 )
+from eom_catalog_contracts.registered_item_solution_analysis import (
+    KnowledgeAnalysisProposalReceiptV10,
+    KnowledgeAnalysisRequestV11,
+    KnowledgeAnalysisResultV11,
+    RegisteredItemSolutionBasePointer,
+)
 from eom_catalog_contracts.review_textbook_evidence import (
     ReviewTextbookCitation,
     ReviewTextbookEvidence,
@@ -1678,6 +1684,7 @@ __all__ = [
     "KnowledgeAnalysisProposalReceiptV7",
     "KnowledgeAnalysisProposalReceiptV8",
     "KnowledgeAnalysisProposalReceiptV9",
+    "KnowledgeAnalysisProposalReceiptV10",
     "KnowledgeAnalysisRequest",
     "KnowledgeAnalysisRequestV2",
     "KnowledgeAnalysisRequestV3",
@@ -1688,6 +1695,7 @@ __all__ = [
     "KnowledgeAnalysisRequestV8",
     "KnowledgeAnalysisRequestV9",
     "KnowledgeAnalysisRequestV10",
+    "KnowledgeAnalysisRequestV11",
     "KnowledgeAnalysisResult",
     "KnowledgeAnalysisResultV2",
     "KnowledgeAnalysisResultV3",
@@ -1698,6 +1706,7 @@ __all__ = [
     "KnowledgeAnalysisResultV8",
     "KnowledgeAnalysisResultV9",
     "KnowledgeAnalysisResultV10",
+    "KnowledgeAnalysisResultV11",
     "KnowledgeAnalysisReviewDecision",
     "KnowledgeAnalysisRiskPolicy",
     "KnowledgeAnalysisSolutionReport",
@@ -1980,6 +1989,7 @@ __all__ = [
     "ReferenceQueryTextInput",
     "ReferenceQueryViewRow",
     "RegisterEmbeddingIndexCommand",
+    "RegisteredItemSolutionBasePointer",
     "ReleaseContentPack",
     "ReserveUsagePlan",
     "ReuseAcceptedKnowledgeAnalysisRange",

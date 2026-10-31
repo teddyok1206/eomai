@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from enum import StrEnum
 from pathlib import PurePosixPath
-from typing import Annotated, Literal, get_args
+from typing import Annotated, Literal, Protocol, get_args
 
 from eom_identifiers import content_sha256
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -1795,6 +1795,24 @@ class KnowledgeProposalMembersV2(KnowledgeProposalMembers):
     page_image_observations: KnowledgeProposalArtifactMember
 
 
+def knowledge_proposal_member_set_sha256(
+    members: tuple[KnowledgeProposalArtifactMember, ...],
+) -> str:
+    """Canonical original proposal descriptors, before additive identity-bearing receipts."""
+    return content_sha256(
+        [
+            {
+                "member_path": value.member_path,
+                "sha256": value.sha256,
+                "bytes": value.bytes,
+                "schema_ref": value.schema_ref,
+                "media_type": value.media_type,
+            }
+            for value in sorted(members, key=lambda member: member.member_path)
+        ]
+    )
+
+
 class KnowledgeAnalysisAcceptedResultArtifactMember(KnowledgeProposalArtifactMember):
     """Exact accepted V9 result member reused by an additive solution pass."""
 
@@ -1940,17 +1958,10 @@ class KnowledgeAnalysisBaseResultPointer(FrozenModel):
         for name, value in values:
             if (value.member_path, value.schema_ref, value.media_type) != expected[name]:
                 raise ValueError("base proposal member contract differs")
-        descriptors = [
-            {
-                "member_path": value.member_path,
-                "sha256": value.sha256,
-                "bytes": value.bytes,
-                "schema_ref": value.schema_ref,
-                "media_type": value.media_type,
-            }
-            for _, value in sorted(values, key=lambda pair: pair[1].member_path)
-        ]
-        if content_sha256(descriptors) != self.proposal_content_set_sha256:
+        if (
+            knowledge_proposal_member_set_sha256(tuple(value for _, value in values))
+            != self.proposal_content_set_sha256
+        ):
             raise ValueError("base proposal content-set hash differs")
         return self
 
@@ -2208,8 +2219,29 @@ class KnowledgeAnalysisRequestV10(_KnowledgeAnalysisRequestBase):
         return self
 
 
+class KnowledgeSolutionReferenceBase(Protocol):
+    """The real shared report reference boundary, independent of source family."""
+
+    @property
+    def analysis_result_id(self) -> str: ...
+
+    @property
+    def reference_index(self) -> KnowledgeAnalysisBaseReferenceIndex: ...
+
+
+class KnowledgeSolutionReferenceRequest(Protocol):
+    @property
+    def analysis_request_id(self) -> str: ...
+
+    @property
+    def general_knowledge_mode(self) -> str: ...
+
+    @property
+    def base_analysis(self) -> KnowledgeSolutionReferenceBase: ...
+
+
 def validate_knowledge_solution_report_references(
-    request: KnowledgeAnalysisRequestV10,
+    request: KnowledgeSolutionReferenceRequest,
     proposal: KnowledgeAnalysisWorkerProposalV8,
 ) -> None:
     """Resolve every report-local identity against the pinned base reference index in O(n)."""
@@ -2271,6 +2303,27 @@ class KnowledgeSolutionCounts(FrozenModel):
     unresolved_issues: int = Field(ge=0, le=32)
 
 
+def knowledge_solution_content_set_sha256(
+    base_members: KnowledgeProposalMembers | KnowledgeProposalMembersV2,
+    solution_report: KnowledgeProposalArtifactMember,
+) -> str:
+    """One additive content identity; pin Artifact identities, not copied base bytes."""
+    values = tuple(getattr(base_members, name) for name in type(base_members).model_fields)
+    descriptors = [
+        {
+            "artifact_id": value.artifact_id,
+            "artifact_revision_id": value.artifact_revision_id,
+            "member_path": value.member_path,
+            "sha256": value.sha256,
+            "bytes": value.bytes,
+            "schema_ref": value.schema_ref,
+            "media_type": value.media_type,
+        }
+        for value in (*values, solution_report)
+    ]
+    return content_sha256(sorted(descriptors, key=lambda item: str(item["member_path"])))
+
+
 class KnowledgeAnalysisProposalReceiptV9(FrozenModel):
     """Pointer-only composite of an existing V8 receipt and one new report member."""
 
@@ -2297,24 +2350,11 @@ class KnowledgeAnalysisProposalReceiptV9(FrozenModel):
             or self.solution_report.bytes < 1
         ):
             raise ValueError("solution report Artifact member contract differs")
-        base_values = [
-            getattr(self.base_analysis.base_members, name)
-            for name in self.base_analysis.base_members.__class__.model_fields
-        ]
-        descriptors = [
-            {
-                "artifact_id": value.artifact_id,
-                "artifact_revision_id": value.artifact_revision_id,
-                "member_path": value.member_path,
-                "sha256": value.sha256,
-                "bytes": value.bytes,
-                "schema_ref": value.schema_ref,
-                "media_type": value.media_type,
-            }
-            for value in (*base_values, self.solution_report)
-        ]
-        if content_sha256(sorted(descriptors, key=lambda item: str(item["member_path"]))) != (
-            self.content_set_sha256
+        if (
+            knowledge_solution_content_set_sha256(
+                self.base_analysis.base_members, self.solution_report
+            )
+            != self.content_set_sha256
         ):
             raise ValueError("additive proposal content-set hash differs")
         return self
@@ -2363,17 +2403,7 @@ class _KnowledgeAnalysisProposalReceiptBase(FrozenModel):
             for name in members
         ):
             raise ValueError("proposal member path or media type is inconsistent")
-        descriptors = [
-            {
-                "member_path": value.member_path,
-                "sha256": value.sha256,
-                "bytes": value.bytes,
-                "schema_ref": value.schema_ref,
-                "media_type": value.media_type,
-            }
-            for value in sorted(values, key=lambda item: item.member_path)
-        ]
-        if content_sha256(descriptors) != self.content_set_sha256:
+        if knowledge_proposal_member_set_sha256(tuple(values)) != self.content_set_sha256:
             raise ValueError("proposal content-set hash does not match member descriptors")
         return self
 

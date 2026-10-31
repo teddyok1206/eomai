@@ -66,6 +66,8 @@ def request_value() -> dict[str, Any]:
     base["accepted_result_artifact"]["schema_ref"] = (
         "eom://schemas/knowledge/knowledge-analysis-result/2.0"
     )
+    base["accepted_result_artifact"]["artifact_id"] = "artifact_" + "f" * 32
+    base["accepted_result_artifact"]["artifact_revision_id"] = "rev_" + "f" * 32
     base["proposal_receipt"]["schema_ref"] = (
         "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/1.0"
     )
@@ -74,6 +76,17 @@ def request_value() -> dict[str, Any]:
     for field, version in (("nodes", "2.0"), ("edges", "2.0"), ("unresolved_ambiguities", "2.0")):
         descriptor = base["base_members"][field]
         descriptor["schema_ref"] = descriptor["schema_ref"].rsplit("/", 1)[0] + "/" + version
+    base["proposal_content_set_sha256"] = content_sha256(
+        [
+            {
+                key: member[key]
+                for key in ("member_path", "sha256", "bytes", "schema_ref", "media_type")
+            }
+            for member in sorted(
+                base["base_members"].values(), key=lambda item: item["member_path"]
+            )
+        ]
+    )
     value["request_sha256"] = content_sha256(
         {key: item for key, item in value.items() if key != "request_sha256"}
     )

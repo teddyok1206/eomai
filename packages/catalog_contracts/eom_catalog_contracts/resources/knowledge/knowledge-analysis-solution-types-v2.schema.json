@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "eom://schemas/knowledge/knowledge-analysis-solution-types/2.0",
   "title": "EOM Approved Item Additive Solution Base Types V2",
+  "$ref": "#/$defs/baseAnalysis",
   "$defs": {
     "baseAnalysis": {
       "type": "object",
@@ -145,25 +146,102 @@
           ],
           "properties": {
             "normalized_markdown": {
-              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember",
+              "properties": {
+                "member_path": {
+                  "const": "normalized/document.md"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/normalized-markdown/1.0"
+                },
+                "media_type": {
+                  "const": "text/markdown"
+                }
+              }
             },
             "anchors": {
-              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember",
+              "properties": {
+                "member_path": {
+                  "const": "normalized/anchors.jsonl"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/source-anchor/2.0"
+                },
+                "media_type": {
+                  "const": "application/x-ndjson"
+                }
+              }
             },
             "nodes": {
-              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember",
+              "properties": {
+                "member_path": {
+                  "const": "normalized/nodes.jsonl"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/proposed-node/2.0"
+                },
+                "media_type": {
+                  "const": "application/x-ndjson"
+                }
+              }
             },
             "edges": {
-              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember",
+              "properties": {
+                "member_path": {
+                  "const": "normalized/edges.jsonl"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/proposed-edge/2.0"
+                },
+                "media_type": {
+                  "const": "application/x-ndjson"
+                }
+              }
             },
             "claims": {
-              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember",
+              "properties": {
+                "member_path": {
+                  "const": "normalized/claims.jsonl"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/proposed-claim/2.0"
+                },
+                "media_type": {
+                  "const": "application/x-ndjson"
+                }
+              }
             },
             "component_observations": {
-              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember",
+              "properties": {
+                "member_path": {
+                  "const": "normalized/components.jsonl"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/component-observation/2.0"
+                },
+                "media_type": {
+                  "const": "application/x-ndjson"
+                }
+              }
             },
             "unresolved_ambiguities": {
-              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember"
+              "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/proposalArtifactMember",
+              "properties": {
+                "member_path": {
+                  "const": "normalized/ambiguities.jsonl"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/ambiguity/2.0"
+                },
+                "media_type": {
+                  "const": "application/x-ndjson"
+                }
+              }
             }
           }
         },

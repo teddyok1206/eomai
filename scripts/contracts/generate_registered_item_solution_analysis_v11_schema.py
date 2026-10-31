@@ -26,6 +26,23 @@ APPROVED_SOURCE = {
     "$ref": "eom://schemas/knowledge/knowledge-analysis-types/2.0#/$defs/approvedItemSource",
     "properties": {"source_class": {"const": "APPROVED_ITEM"}},
 }
+BASE_MEMBER_SHAPES = {
+    "normalized_markdown": ("normalized/document.md", "normalized-markdown/1.0", "text/markdown"),
+    "anchors": ("normalized/anchors.jsonl", "source-anchor/2.0", "application/x-ndjson"),
+    "nodes": ("normalized/nodes.jsonl", "proposed-node/2.0", "application/x-ndjson"),
+    "edges": ("normalized/edges.jsonl", "proposed-edge/2.0", "application/x-ndjson"),
+    "claims": ("normalized/claims.jsonl", "proposed-claim/2.0", "application/x-ndjson"),
+    "component_observations": (
+        "normalized/components.jsonl",
+        "component-observation/2.0",
+        "application/x-ndjson",
+    ),
+    "unresolved_ambiguities": (
+        "normalized/ambiguities.jsonl",
+        "ambiguity/2.0",
+        "application/x-ndjson",
+    ),
+}
 
 
 def load(directory: Path, name: str) -> dict[str, Any]:
@@ -47,6 +64,12 @@ def build_contracts() -> dict[str, dict[str, Any]]:
     }
     receipt = load(KNOWLEDGE, "knowledge-analysis-proposal-receipt-v1.schema.json")
     fields["base_members"] = copy.deepcopy(receipt["properties"]["members"])
+    for name, (path, schema, media) in BASE_MEMBER_SHAPES.items():
+        fields["base_members"]["properties"][name]["properties"] = {
+            "member_path": {"const": path},
+            "schema_ref": {"const": "eom://schemas/knowledge/" + schema},
+            "media_type": {"const": media},
+        }
     fields["base_counts"] = copy.deepcopy(receipt["properties"]["counts"])
     fields["reference_index"] = {
         "$ref": "eom://schemas/knowledge/knowledge-analysis-solution-types/1.0#/$defs/referenceIndex"
@@ -55,6 +78,7 @@ def build_contracts() -> dict[str, dict[str, Any]]:
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "$id": TYPES,
         "title": "EOM Approved Item Additive Solution Base Types V2",
+        "$ref": "#/$defs/baseAnalysis",
         "$defs": {"baseAnalysis": base},
     }
 

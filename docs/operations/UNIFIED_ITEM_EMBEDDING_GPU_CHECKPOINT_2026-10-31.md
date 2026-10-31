@@ -1,6 +1,6 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
-시각: 2026-10-31 10:18 UTC. Goal ACTIVE. 재임베딩/검색 전환/구 벡터 삭제 완료 보고가 아니다.
+시각: 2026-10-31 10:42 UTC. Goal ACTIVE. 재임베딩/검색 전환/구 벡터 삭제 완료 보고가 아니다.
 
 설계 및 종료 조건:
 [공통 전환 목표](../architecture/UNIFIED_ITEM_EMBEDDING_GPU_MIGRATION_GOAL_2026-10-31.md).
@@ -166,3 +166,27 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
 - **Pydantic/application/worker/resolver/evidence successor/DB uniqueness/운영 연결은 아직 미구현**이다.
   이 후보를 source 지원 활성화나 AI end-to-end PASS라고 보고하지 않는다.
   현재 running INDEX/QUERY/private wheels/config/DB schema는 이 후보 때문에 바뀌지 않았다.
+
+### Typed worker/산출물 경계 구현 — 10:42 UTC
+
+- 기존 Catalog schema registry에 후보4개를 hash pin으로 등록하고, 별도
+  `registered_item_solution_analysis.py`에 immutable V2 base/request11/receipt10/result11
+  Pydantic 모델을 구현했다. schema-first raw 검증으로 extras·coercion·forged nested models를 거부한다.
+- 실제 Workflow request/role input/result/Codex constrained schema에1.35를 연결했다.
+  보고서의 base identity·node/anchor allowlist는 기출과 같은 report1 검증 로직을 사용한다.
+  일반 AI를 기출 page/occurrence로 바꾸지 않고 `image_mode=skip`인 기존 일반 Item 분석 경계를 따른다.
+- Orchestrator stage는 새 report와 receipt 두 파일만 로컬에 만든다. 기존 base 파일을 복사하거나
+  NAS에 worker가 직접 쓰지 않는다. 원 base 밖의 anchor는 파일 생성 전에 거부한다.
+- 기존 V9/V10와 신규 경계의 descriptor/content-set hash 함수 및 report-reference Protocol을
+  공유하도록 정리했다. 결과 self-hash와 Artifact member bytes hash는 서로 다른 pin이며
+  같다고 가정하지 않는다. 과거 V10의 이 차이도 회귀로 보존했다.
+- 설치된9319 private wheel과 source 후보에서 과거 V10의 input/result/Codex schema canonical
+  hash3개가 각각 동일함을 독립 interpreter로 확인했다. 기존 schema bytes/의미를 바꾸지 않았다.
+- 해당 신·구 경계, 기존 문서/Artifact/source/risk/batch와 공통 projection 회귀 **160 PASS**.
+  core6개 모듈 mypy PASS, 관련 Ruff/format 및 generator `--check` PASS.
+- **application create/reconcile/accept, resolver/materializer, 신규 evidence의 공통 index 연결,
+  accepted successor uniqueness의 disposable DB 검증과 실제 운영 검증은 아직 남아 있다.**
+  타입 및 stage PASS를 실제 AI 보고서 생성·등록 완료로 표시하지 않는다.
+- 10:30 timer의 frozen 기출 GPU 등록은 **37/520, 잔여483**, 실제 non-terminal CUDA Workflow1이었다.
+  INDEX PID703354/NRestarts0, QUERY470146/Catalog732310은 이 구현 때문에 재시작하지 않았다.
+  다음 주기 관측은11:00 UTC다. 이번 구현은 source 후보이며 운영 배포·DB migration·모델 실행0이다.

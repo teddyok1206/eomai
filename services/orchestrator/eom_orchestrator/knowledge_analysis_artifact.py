@@ -16,6 +16,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisProposalReceiptV7,
     KnowledgeAnalysisProposalReceiptV8,
     KnowledgeAnalysisProposalReceiptV9,
+    KnowledgeAnalysisProposalReceiptV10,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
@@ -25,6 +26,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisRequestV8,
     KnowledgeAnalysisRequestV9,
     KnowledgeAnalysisRequestV10,
+    KnowledgeAnalysisRequestV11,
     KnowledgeAnalysisWorkerProposal,
     KnowledgeAnalysisWorkerProposalV2,
     KnowledgeAnalysisWorkerProposalV3,
@@ -44,6 +46,7 @@ from eom_catalog_contracts import (
     validate_knowledge_edge_endpoint_types,
     validate_knowledge_solution_report_references,
 )
+from eom_catalog_contracts.knowledge import knowledge_solution_content_set_sha256
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol import ErrorCode
 
@@ -201,12 +204,12 @@ def _validate_observed_page_structured_evidence(
 def _stage_solution_report(
     *,
     proposal: KnowledgeAnalysisWorkerProposalV8,
-    request: KnowledgeAnalysisRequestV10,
+    request: KnowledgeAnalysisRequestV10 | KnowledgeAnalysisRequestV11,
     job_id: str,
     logical_artifact_id: str,
     revision_id: str,
     staging: Path,
-) -> tuple[StagedFileSet, KnowledgeAnalysisProposalReceiptV9]:
+) -> tuple[StagedFileSet, KnowledgeAnalysisProposalReceiptV9 | KnowledgeAnalysisProposalReceiptV10]:
     """Commit only the additive report while retaining immutable base pointers."""
 
     try:
@@ -241,23 +244,12 @@ def _stage_solution_report(
             media_type="application/json",
             logical_name="solution-report.json",
         )
-        base_members = tuple(
-            getattr(request.base_analysis.base_members, name)
-            for name in request.base_analysis.base_members.__class__.model_fields
-        )
-        descriptors = [
-            {
-                "artifact_id": member.artifact_id,
-                "artifact_revision_id": member.artifact_revision_id,
-                "member_path": member.member_path,
-                "sha256": member.sha256,
-                "bytes": member.bytes,
-                "schema_ref": member.schema_ref,
-                "media_type": member.media_type,
-            }
-            for member in (*base_members, report_member)
-        ]
-        receipt = KnowledgeAnalysisProposalReceiptV9(
+        registered = isinstance(request, KnowledgeAnalysisRequestV11)
+        receipt_value = dict(
+            schema_version="knowledge-analysis-proposal-receipt/10.0"
+            if registered
+            else "knowledge-analysis-proposal-receipt/9.0",
+            status="PROPOSED_VALIDATED",
             analysis_request_id=request.analysis_request_id,
             source=request.source,
             base_analysis=request.base_analysis,
@@ -269,10 +261,15 @@ def _stage_solution_report(
                 unresolved_issues=len(proposal.solution_report.unresolved_issues),
             ),
             general_knowledge_used=proposal.solution_report.general_knowledge_used,
-            content_set_sha256=content_sha256(
-                sorted(descriptors, key=lambda item: str(item["member_path"]))
+            content_set_sha256=knowledge_solution_content_set_sha256(
+                request.base_analysis.base_members, report_member
             ),
             completed_at=proposal.completed_at,
+        )
+        receipt = (
+            KnowledgeAnalysisProposalReceiptV10.model_validate(receipt_value)
+            if registered
+            else KnowledgeAnalysisProposalReceiptV9.model_validate(receipt_value)
         )
         receipt_payload = canonical_json_bytes(receipt)
         receipt_path = source_directory / "proposal-receipt.json"
@@ -294,9 +291,7 @@ def _stage_solution_report(
                     "media_type": report_member.media_type,
                 },
                 receipt_member_path: {
-                    "schema_ref": (
-                        "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/9.0"
-                    ),
+                    "schema_ref": "eom://schemas/knowledge/" + receipt.schema_version,
                     "media_type": "application/json",
                 },
             },
@@ -337,6 +332,7 @@ def stage_knowledge_analysis_proposal(
         | KnowledgeAnalysisRequestV8
         | KnowledgeAnalysisRequestV9
         | KnowledgeAnalysisRequestV10
+        | KnowledgeAnalysisRequestV11
     ),
     job_id: str,
     logical_artifact_id: str,
@@ -352,11 +348,12 @@ def stage_knowledge_analysis_proposal(
     | KnowledgeAnalysisProposalReceiptV6
     | KnowledgeAnalysisProposalReceiptV7
     | KnowledgeAnalysisProposalReceiptV8
-    | KnowledgeAnalysisProposalReceiptV9,
+    | KnowledgeAnalysisProposalReceiptV9
+    | KnowledgeAnalysisProposalReceiptV10,
 ]:
     """Split one bounded worker value into deterministic immutable Artifact members."""
 
-    if isinstance(request, KnowledgeAnalysisRequestV10):
+    if isinstance(request, (KnowledgeAnalysisRequestV10, KnowledgeAnalysisRequestV11)):
         if not isinstance(proposal, KnowledgeAnalysisWorkerProposalV8):
             raise PlatformError(
                 ErrorCode.WORKER_RESULT_INVALID,
