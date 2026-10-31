@@ -1,5 +1,104 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 공통 API/QUERY 배포 완료·INDEX4 controls 준비 — 2026-10-31 19:15 UTC
+
+- 이번 goal turn은 **PROGRESS**다. 실제 DB0066 upgrade/verify와 shared platform/API/
+  contracts 설치, API·QUERY·관련 공유 서비스의 호환 선택을 끝냈다. 실제 설치 member
+  **2,504개**를 wheel bytes와 대조했다. 기존 실패 callback은 그대로 보존했다.
+  `/tmp/eom-release0066-after-lock-driver-20261031-v2.log`의 activation PASS와
+  `/tmp/eom-release0066-live-verification-20261031-v1.json`의 actual head/source/보존 hash,
+  기존 root stage의 `after-lock-driver-v2-terminal.json`을 함께 확인했다.
+- API PID1381502 READY, QUERY supervisor1381634/child1381933의 **19:05:46 OWNER_READY**,
+  creative1381884 및 INDEX1381888 active/NRestarts0을 확인했다. protected provider의
+  root 관측 및 실제 lower UID의 current admission 모두 PASS다.
+  `/tmp/eom-release0066-live-provider-20261031-v1.log`.
+  이 기동/권한 증거는 실제 사용자의 QUERY/read/replay PASS를 대신하지 않는다.
+- 기존 creative runner1f88이 재개 후11588/11589/11590을 PUBLISHING으로 진행하는
+  실제 journal을 확인했다. 기존1053 목표/슬롯·Graph 등록 경로는 바꾸지 않았다.
+  원래 blocked4개의 오류도 그대로 표시되며 성공으로 보정하지 않는다.
+- INDEX4의 새 immutable service revision 및 **같은 source 범위** CPU/CUDA native control
+  Artifact2개를 기존 Orchestrator publisher로 준비·정식 보관했다. 아직 service activation이나
+  실제 INDEX4 publication 완료는 아니다. plan:
+  `/var/lib/eom-registered-public-index-eb16d3ad-20261031/`의 `plan.json`,
+  `controls-published.json`, `candidate-grants.json`, 각 `*.before/*.after`.
+  실제 public recipe/namespace/model/CUDA profile/backend/routing과 목표 window4를 대조해
+  불변임을 확인했다. scope를 넓히지 않았고 수치 추론은 준비 단계에서0회다.
+- 기존 policy publication/public policy/config/INDEX4 producer 회귀 **58 PASS /12.91s**:
+  `/tmp/eom-index4-release-owner-focused-20261031.log`. release helper Ruff/format PASS.
+  기존 단위·PG acceptance를 실제 GPU 모델 실행으로 확대 해석하지 않는다.
+- read-only 관측에서 현재 공개 CUDA Workflow
+  `workflow_eb54660e6cce4061bd9f2726a202e1bd` / command
+  `wfcmd_af57abbc14ee4bd6a9a629c9ffc1e8ce` PROCESSING1회와 실제 controller1381888을 확인했다.
+  19:13:27에 **그 main PID에만 SIGTERM**으로 정상 iteration drain을 요청했다. child signal0,
+  강제 kill0. 종료·저장 여부를 검증하기 전 다른 identity로 실행을 재제출하지 않는다.
+  `/tmp/eom-index4-drain-request-20261031-v1.json`.
+- 별도로 발견한 옛 accepted/mixed projection PENDING12개는 과거/비활성 namespace 기록이다.
+  현재 public 실행과 혼합해 전부 실행 중으로 세거나 임의 CANCEL/FAILED로 바꾸지 않는다.
+  다음 INDEX4 activation gate는 **이전 current service reference+현재 public projection**의
+  비종료 작업0과 실제 전체 native handle0을 함께 확인한다. 실제 current public pending은
+  계속 blocker이며 scope 조건을 바꿔 우회하지 않는다.
+  관측: `/tmp/eom-index4-release-window-20261031-v2.json`.
+- 후속 activation helper는 root-owned
+  `/usr/local/libexec/eom-release-registered-public-index-v2-20261031.py`,
+  SHA `e72a37e95b90ffc4f6ec2939accc5889adba299bad41d4fa57a50101559a10eb`로 별도 준비했다.
+  원래 PREPARE/PUBLISH helper와 evidence는 남긴다. 다음 ACTIVATE는 root service/DB 실제
+  상태 재조회 후 이 helper로만 수행하며, 성공했다는 marker를 미리 만들지 않는다.
+- 이후 새 AI V2 base/V11 report·Graph/INDEX4 증분 등록, 실제 common 사용자 검색/read/replay,
+  frozen520 CUDA 완료/해시/권한 검증 및 정확한 구 vector consumer 정리·삭제가 남아 있다.
+  CPU QUERY preparer(`8734…`)와 shared GPU preparer(`c681…`)는 현재 선택과 구분해 검토하며,
+  신규 native request4의 실제 CPU/GPU 호환 선택도 사용자 검색 acceptance 전에 확인한다.
+  부분 설치를 전체 목표 완료라고 보고하지 않는다. **구 vector 삭제0, 정본 변경0, goal ACTIVE**.
+- Slack `devreport_54c3597760a543328c673b786fb3034b`는19:08:48 UTC SENT/HTTP200.
+  한국어 요약을 첫 문장으로 배포 성공·원 실패 보존·115/520·미완료 실제 검색을 구분했다.
+
+## 공통 API/QUERY 전환의 잠금 실패·복구 및 재개 — 2026-10-31 19:04 UTC
+
+- 18:32의 공식0064→0066 callback은 PostgreSQL의 **lock timeout**으로 실패했다.
+  18:33:05.685 UTC 서버 오류와 실제 head0064, 기존 API34c6 및 원 config hash를
+  대조했다. 보호 interpreter의 import/권한/offline DDL compile은 PASS여서 permission이나
+  손상된 migration으로 추측하지 않는다. 실패한 callback receipt는 그대로 남겼다.
+- 18:35:19 UTC에 기존 API/QUERY/Catalog/runner/chat/HWPX 호환 서비스를 복구했다.
+  이 첫 실패에서 운영 schema/package/config 변경0, 구 vector 삭제0, 정본 변경0이다.
+  증거: `/opt/eom/api-releases/eb16d3ad4d6919fea6b05c385bc65c2b708f9046/`
+  `MIGRATION_UPGRADE_0066_FROM_0064.json`, `pre-migration-failure-recovery.json`.
+- 최초 creative 종료 대기 중 정상 종료를 기다리기 위한 임시 stop grace를 적용했으나,
+  해당 프로세스는 exit0으로 끝났다. `/run`→`/opt` rename의 EXDEV는 배포 전 helper 오류다.
+  정확한 임시 override만 검증 복사·보관 후 제거하고 원래180초/SendSIGKILL=yes를 복구했다.
+  작업 이력·DB row·Artifact는 지우지 않았다.
+- 18:48:42 UTC에 현재 INDEX1242505와 creative1350383의 **main PID에만 SIGTERM**을
+  전달했다. 실제 iteration이 끝난 뒤 두 프로세스 모두 정상 exit0/inactive를 확인했다.
+  cgroup-wide worker kill·강제 종료·모델/정규화/물리 GPU runtime/config 변경은 없었다.
+- 19:00 routine의 frozen520 CUDA 등록은 **115/520, 잔여405**, non-terminal0이다.
+  현재 관리 프로세스는 호환 배포를 위해 정상 drain한 상태이며 완료520으로 표시하지 않는다.
+- 후속 대기 gate가 RemainAfterExit인 역사적 native unit207개를 실행 중으로 세는 오류를
+  수정했다. 한 번의 batched `systemctl show`로 MainPID/ControlPID/FDStore를 확인한다.
+  active/exited이면서 세 값이 모두 명시적0인 이력만 nonblocking이다. 실제 handle/transition/
+  missing metadata는 fail-closed다. 이력을 stop/reset/delete하지 않는다. 작은 gate 회귀
+  **13 PASS**, helper syntax PASS. 기존 및 후속 marker/log는 별도 이름으로 보존했다.
+- 19:04:24 UTC에는 실제 slot job0/lease0/진행 검색0와 physical handle0을 확인한 뒤,
+  같은 검증 후보eb16/wheel/config 조합의 **후속 mutation1회**를 시작했다. 자동 재시도0.
+  원 실패 receipt를 덮어쓰지 않고 `.after-lock.json`과 `after-lock-driver-v2-*`로 기록한다.
+  최종 서비스 activation/실제 사용자 검색 PASS는 이 시작 증거로 대신하지 않는다.
+  로그: `/tmp/eom-release0066-after-lock-driver-20261031-v2.log`.
+- 사용자 GUI 시험 후보10321/10353/10354는17:01의 read-only 준비 정보에서 안내했다.
+  actual user search 성공 기록은 아직 없고 새 검색을 대신 제출하지 않았다.
+  전체 goal ACTIVE, frozen520 정식 완료·신규AI V11/INDEX4·공통 검색·구 vector 안전 삭제는
+  각각 실제 후속 evidence로 닫는다.
+
+### INDEX4 설치 선택의 후속 범위
+
+기존 INDEX3 관리자가 다시 동작하는 동안 INDEX4 후보만 준비한다. 같은 logical service의
+불변 successor identity와 정확히 같은 source-policy/namespace/model/recipe/resource scope의
+CPU/CUDA service-policy를 공식 Identity/Catalog owner로 등록한다. native control Artifact는
+기존 Orchestrator publisher만 저장한다. 새 큐·테이블·수치 모델은 만들지 않는다.
+현재 revision/status의 indexed lookup, 두 device별 keyed map, 고정 config manifest만 사용한다.
+service revision과 config hash가 달라지므로 과거 identity/policy bytes를 수정하지 않는다.
+활성화는 이전 main PID의 정상 종료, 진행 INDEX Workflow0 및 물리 handle0을 재확인한
+뒤 한 transaction의 register/activate/policy publication과 정지 상태의 파일 선택으로 한다.
+정상 실행의 완료를 기다리며 파일들을 distributed atomic transaction이라고 부르지 않는다.
+응답 유실은 고정 plan/operation key를 읽어 확인하며 새 identity로 재준비하지 않는다.
+단순 ExecStart만 바꾸는 방법은 service/runtime/source fence와 어긋나므로 사용하지 않는다.
+
 ## 보호된 릴리스 준비 및 Catalog receiver 반영 — 2026-10-31 18:11 UTC
 
 - source `eb16d3ad4d6919fea6b05c385bc65c2b708f9046` main/origin 커밋·푸시와 build-only
