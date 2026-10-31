@@ -483,3 +483,14 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
   새 metadata4는 아직 운영 활성화하지 않았다. 다음 작업은 기존 official owner/dispatcher의
   전체4 연결·qualification, QUERY successor와 AI producer 연결, full520 검증·검색 전환·
   구 projection 소비자 조사/안전한 삭제다. 목표는 전체 범위 그대로 ACTIVE다.
+
+### Completion4 설치 후보 확인 — 13:44 UTC
+
+- `161d6b7b8f61c8e1eb46f60c5de20a0e579491c5`를 push했고 공식 build-only non-editable
+  wheel 설치 simulation/RECORD PASS다. 산출물은
+  `/tmp/eom-api-build/161d6b7b8f61c8e1eb46f60c5de20a0e579491c5.IqbFe7/dist`다.
+- 설치 패키지 검증과 실제 owner/INDEX/QUERY 활성화는 구별한다. 신규4는 아직 일반
+  dispatcher/producer/publisher 전체에 연결하지 않았으며, 다음 source qualification의 대상이다.
+  현재 source PASS를 운영 검색 전환이나 전체 기출 GPU 완료로 간주하지 않는다.
+- 다음 연결에서는 기존 immutable numeric runtime bundle와 CUDA space를 보존하는지 확인한다.
+  metadata-only release로 GPU 모델·precision·숫자 계산을 바꾸거나 같은520개를 재생성하지 않는다.
