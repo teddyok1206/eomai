@@ -1,6 +1,6 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
-시각: 2026-10-31 09:38 UTC. Goal ACTIVE. 재임베딩/검색 전환/구 벡터 삭제 완료 보고가 아니다.
+시각: 2026-10-31 10:01 UTC. Goal ACTIVE. 재임베딩/검색 전환/구 벡터 삭제 완료 보고가 아니다.
 
 설계 및 종료 조건:
 [공통 전환 목표](../architecture/UNIFIED_ITEM_EMBEDDING_GPU_MIGRATION_GOAL_2026-10-31.md).
@@ -83,4 +83,42 @@ BGE-M3 CUDA space hash를 가질 수 있다. 반드시 projection/partition/exac
 identity와 shared-shard 참조를 함께 확인한다. 기존 Graph를 지우는 prelaunch cleanup을
 이번 작업에 호출하면 안 된다. source Graph·교과서·기출·창작·AI 정본과 풀이보고서는 보호한다.
 
-**구 벡터 삭제0. 운영 검색 전환 및 goal 완료는 아직 미확정이다.**
+## 실제 CUDA 완료와 Catalog 반영 — 10:01 UTC
+
+- 공통 형식의 새 CUDA Workflow `workflow_4ec1cbd475c64c4f8b0926772ebd9a05`가
+  09:55:42 UTC에 COMPLETED, Runner 명령도 SUCCEEDED다. CPU fallback 결과가 아니다.
+- CUDA public index `embeddingindexrev_6c28aad3c46575f29cb3463d60b2fdc4`의
+  binding44/eligible803을 확인했다. **10:00 UTC 원래 기출 목표 진행률은27/520, 잔여493**.
+  등록 문항을 포함한44를 기출 진행률로 세지 않는다. 이후 기존 CPU standby가 실행 중이다.
+- Catalog만 private source `9319a75ade8c0cde077ae6bf2f11809d57cd0051`로 선택했다.
+  실제 Catalog UID composition, API peer의 Unix socket protocol smoke, API READY 확인.
+  Catalog PID732310, NRestarts0 확인. API469955/INDEX703354/QUERY470146 PID는 보존했다.
+  authenticated search/GUI acceptance는 아직 실행하지 않았다.
+- 첫 Catalog activation은 기존 drop-in의 public-reader config hash가 실제 파일과 달라
+  기동 실패했다. source만 원복해도 같은 stale pin 때문에 실패가 지속됐다.
+  hash 검사를 우회하지 않고 검증된 실제 public config hash
+  `ecb34eae39fe05c3b5bd00331e4104ba27d7b811b19cd6160a17c4a96c8680ce`로
+  선택값을 정합화해 복구했다. 설정 파일 bytes와 API/INDEX/QUERY는 변경하지 않았다.
+  최초 preflight는 파일의 실제 hash를 계산해 넘겨서 service expected pin의 drift를
+  놓쳤다. 후속 preflight는 검토된 expected pin과 실제 파일을 대조하고, rollout 전
+  effective unit pin과도 일치해야 한다. API READY만으로 Catalog 기동을 판정하지 않는다.
+- rollback은 구 source c68156dd와 **정합화된** public-reader pin의 조합이다.
+  stale pin을 포함한 원본을 무조건 복구하는 방식은 쓰지 않는다.
+  root evidence: `catalog-v2-before-dropin.conf`, `catalog-v2-after-dropin.conf`,
+  `catalog-v2-compatible-rollback.conf`, `catalog-activation.json`.
+- Registry의 source_kind 미기록 문항은 APPROVED1/IN_REVIEW1이며 두 문항 모두 accepted
+  analysis0/Graph source pointer0이다. 현재803 Graph 대상의 보고서 결측0과 이 두 문항의
+  준비 상태를 혼동하지 않는다. synthetic AI 공통 입력 회귀 PASS를 실제 AI 등록 완료로
+  확대하지 않는다. 기존 공식 분석→Graph→전체 풀이보고서 경계의 연결을 추가 확인한다.
+- 구 accepted/mixed index head12개와 public head2개를 확인했다. 구 head도 Graph가 서로
+  다르며 historical Artifact/Workflow JSON pins는 FK 목록만으로 발견되지 않는다.
+  삭제 전 exact consumer/pin inventory가 필요하다. 새 public와 같은 space라는 이유로
+  구형 partition이나 Graph 전체를 삭제하지 않는다.
+- 10:04 UTC metadata inventory: 구 partition은 CPU/CUDA 각각1,563 encoding,
+  shard revisions 각각356/186이다. 520×3 외 나머지3개씩은 비대상/공유 여부를 별도
+  확인해야 한다. 새 public는 CUDA44/CPU24이며 cross-partition shared shard0이다.
+  Workflow initial request와 Artifact result의 nested `index_revision_id` 검사에서는
+  참조0이지만, manifest/member bytes·다른 키의 포인터·설정·active consumer 코드까지
+  모두 확인한 결과는 아니다. 이 검사만으로 삭제 승인 조건을 충족했다고 판정하지 않는다.
+
+**구 벡터 삭제0. 운영 검색 전환 acceptance 및 goal 완료는 아직 미확정이다.**
