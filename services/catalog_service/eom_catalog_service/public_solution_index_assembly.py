@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import overload
+from typing import Literal, overload
 
 from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingSpace,
@@ -22,9 +22,11 @@ from eom_catalog_contracts.public_solution_embedding_index import (
 from eom_catalog_contracts.registered_public_solution_embedding import (
     PublicSolutionEncodingEntry,
     RegisteredPublicSolutionEmbeddingEntry,
+    RegisteredPublicSolutionEvidence,
     parse_public_solution_encoding_entry,
 )
 from eom_catalog_contracts.registered_public_solution_index import (
+    PublicSolutionEmbeddingIndexV4,
     RegisteredPublicSolutionProfilePointer,
     RegisteredPublicSolutionSourceBinding,
 )
@@ -33,6 +35,10 @@ from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.local_embedding_source_plan_v3 import (
     LocalEmbeddingSourcePlanV3,
     parse_local_embedding_source_plan_v3,
+)
+from eom_workflow.local_embedding_source_plan_v4 import (
+    LocalEmbeddingSourcePlanV4,
+    parse_local_embedding_source_plan_v4,
 )
 
 from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
@@ -46,6 +52,12 @@ from eom_catalog_service.public_solution_encoding import prepare_public_solution
 @dataclass(frozen=True, slots=True)
 class AssembledPublicSolutionIndex:
     index: PublicSolutionEmbeddingIndex
+    shards: tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...]
+
+
+@dataclass(frozen=True, slots=True)
+class AssembledRegisteredPublicSolutionIndex:
+    index: PublicSolutionEmbeddingIndexV4
     shards: tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...]
 
 
@@ -140,6 +152,63 @@ def assemble_public_solution_index(
     previous_manifest: ArtifactMemberPointer | None,
     created_at: datetime,
 ) -> AssembledPublicSolutionIndex:
+    result = _assemble_public_solution_entries(
+        entries,
+        available_rows=available_rows,
+        shards=shards,
+        namespace=namespace,
+        space=space,
+        index_id=index_id,
+        index_revision_id=index_revision_id,
+        previous_manifest=previous_manifest,
+        created_at=created_at,
+        version="3.0",
+    )
+    assert isinstance(result, AssembledPublicSolutionIndex)
+    return result
+
+
+def assemble_registered_public_solution_index(
+    entries: tuple[PublicSolutionEncodingEntry, ...],
+    *,
+    available_rows: tuple[RegisteredEmbeddingRow, ...],
+    shards: tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...],
+    namespace: PublicSolutionIndexNamespace,
+    space: EmbeddingSpace,
+    index_id: str,
+    index_revision_id: str,
+    previous_manifest: ArtifactMemberPointer | None,
+    created_at: datetime,
+) -> AssembledRegisteredPublicSolutionIndex:
+    result = _assemble_public_solution_entries(
+        entries,
+        available_rows=available_rows,
+        shards=shards,
+        namespace=namespace,
+        space=space,
+        index_id=index_id,
+        index_revision_id=index_revision_id,
+        previous_manifest=previous_manifest,
+        created_at=created_at,
+        version="4.0",
+    )
+    assert isinstance(result, AssembledRegisteredPublicSolutionIndex)
+    return result
+
+
+def _assemble_public_solution_entries(
+    entries: tuple[PublicSolutionEncodingEntry, ...],
+    *,
+    available_rows: tuple[RegisteredEmbeddingRow, ...],
+    shards: tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...],
+    namespace: PublicSolutionIndexNamespace,
+    space: EmbeddingSpace,
+    index_id: str,
+    index_revision_id: str,
+    previous_manifest: ArtifactMemberPointer | None,
+    created_at: datetime,
+    version: Literal["3.0", "4.0"],
+) -> AssembledPublicSolutionIndex | AssembledRegisteredPublicSolutionIndex:
     """O(entries + rows), plus canonical ordering; no fake rows for missing input.
 
     One bounded index segment is assembled here. Larger source populations retain
@@ -147,10 +216,11 @@ def assemble_public_solution_index(
     """
     if type(entries) is not tuple or not 1 <= len(entries) <= MAX_PUBLIC_SOLUTION_SOURCES:
         raise ValueError("PUBLIC_SOLUTION_INDEX_SELECTION_INVALID")
-    checked = tuple(
-        PublicSolutionEmbeddingEntry.model_validate(entry.model_dump(mode="json"))
-        for entry in entries
-    )
+    checked = tuple(parse_public_solution_encoding_entry(entry) for entry in entries)
+    if version == "3.0" and any(
+        isinstance(entry, RegisteredPublicSolutionEmbeddingEntry) for entry in checked
+    ):
+        raise ValueError("PUBLIC_SOLUTION_INDEX_ENTRY_FAMILY_MISMATCH")
     keys = tuple(entry.source.item_revision_id for entry in checked)
     first = checked[0]
     if keys != tuple(sorted(set(keys))) or any(
@@ -201,6 +271,7 @@ def assemble_public_solution_index(
         index_revision_id=index_revision_id,
         previous_manifest=previous_manifest,
         created_at=created_at,
+        version=version,
     )
 
 
@@ -214,8 +285,55 @@ def assemble_public_solution_index_revision(
     previous_manifest: ArtifactMemberPointer | None,
     created_at: datetime,
 ) -> AssembledPublicSolutionIndex:
-    """Assemble from admitted metadata pins; never synthesize report text for a plan."""
     plan = parse_local_embedding_source_plan_v3(plan)
+    result = _assemble_public_solution_plan(
+        plan,
+        available_rows=available_rows,
+        shards=shards,
+        index_id=index_id,
+        index_revision_id=index_revision_id,
+        previous_manifest=previous_manifest,
+        created_at=created_at,
+    )
+    assert isinstance(result, AssembledPublicSolutionIndex)
+    return result
+
+
+def assemble_registered_public_solution_index_revision(
+    plan: LocalEmbeddingSourcePlanV4,
+    *,
+    available_rows: tuple[RegisteredEmbeddingRow, ...],
+    shards: tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...],
+    index_id: str,
+    index_revision_id: str,
+    previous_manifest: ArtifactMemberPointer | None,
+    created_at: datetime,
+) -> AssembledRegisteredPublicSolutionIndex:
+    plan = parse_local_embedding_source_plan_v4(plan)
+    result = _assemble_public_solution_plan(
+        plan,
+        available_rows=available_rows,
+        shards=shards,
+        index_id=index_id,
+        index_revision_id=index_revision_id,
+        previous_manifest=previous_manifest,
+        created_at=created_at,
+    )
+    assert isinstance(result, AssembledRegisteredPublicSolutionIndex)
+    return result
+
+
+def _assemble_public_solution_plan(
+    plan: LocalEmbeddingSourcePlanV3 | LocalEmbeddingSourcePlanV4,
+    *,
+    available_rows: tuple[RegisteredEmbeddingRow, ...],
+    shards: tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...],
+    index_id: str,
+    index_revision_id: str,
+    previous_manifest: ArtifactMemberPointer | None,
+    created_at: datetime,
+) -> AssembledPublicSolutionIndex | AssembledRegisteredPublicSolutionIndex:
+    """Assemble from admitted metadata pins; never synthesize report text for a plan."""
     unique = {demand.encoding.encoding_sha256: demand.encoding for demand in plan.demands}
     rows = select_embedding_index_rows(
         tuple(unique[key] for key in sorted(unique)),
@@ -223,13 +341,17 @@ def assemble_public_solution_index_revision(
         maximum_rows=MAX_PUBLIC_SOLUTION_SOURCES,
     )
     sources = {source.item_revision_id: source for source in plan.sources}
-    bindings = []
+    bindings: list[
+        PublicSolutionEmbeddingSourceBinding | RegisteredPublicSolutionSourceBinding
+    ] = []
     for demand in plan.demands:
         row = rows.get(demand.encoding.encoding_sha256)
         if row is None:
             continue
         body = {
-            "schema_version": "embedding-source-binding/3.0",
+            "schema_version": "embedding-source-binding/4.0"
+            if isinstance(demand.evidence, RegisteredPublicSolutionEvidence)
+            else "embedding-source-binding/3.0",
             "source": sources[demand.source_revision_id],
             "base_analysis_run_id": demand.base_analysis_run_id,
             "profile": demand.profile,
@@ -243,10 +365,13 @@ def assemble_public_solution_index_revision(
             "encoding": row.encoding,
             "row_ref": row.row_ref,
         }
+        binding_type = (
+            RegisteredPublicSolutionSourceBinding
+            if isinstance(demand.evidence, RegisteredPublicSolutionEvidence)
+            else PublicSolutionEmbeddingSourceBinding
+        )
         bindings.append(
-            PublicSolutionEmbeddingSourceBinding.model_validate(
-                body | {"binding_sha256": content_sha256(body)}
-            )
+            binding_type.model_validate(body | {"binding_sha256": content_sha256(body)})
         )
     if not bindings:
         raise ValueError("PUBLIC_SOLUTION_INDEX_NO_AVAILABLE_BINDING")
@@ -265,12 +390,15 @@ def assemble_public_solution_index_revision(
         index_revision_id=index_revision_id,
         previous_manifest=previous_manifest,
         created_at=created_at,
+        version="4.0" if isinstance(plan, LocalEmbeddingSourcePlanV4) else "3.0",
     )
 
 
 def _assemble_public_solution_manifest(
     *,
-    bindings: tuple[PublicSolutionEmbeddingSourceBinding, ...],
+    bindings: tuple[
+        PublicSolutionEmbeddingSourceBinding | RegisteredPublicSolutionSourceBinding, ...
+    ],
     shards: tuple[tuple[ArtifactMemberPointer, EmbeddingVectorShardManifest], ...],
     namespace: PublicSolutionIndexNamespace,
     space: EmbeddingSpace,
@@ -279,9 +407,10 @@ def _assemble_public_solution_manifest(
     index_revision_id: str,
     previous_manifest: ArtifactMemberPointer | None,
     created_at: datetime,
-) -> AssembledPublicSolutionIndex:
+    version: Literal["3.0", "4.0"],
+) -> AssembledPublicSolutionIndex | AssembledRegisteredPublicSolutionIndex:
     body = {
-        "schema_version": "embedding-index-manifest/3.0",
+        "schema_version": "embedding-index-manifest/" + version,
         "index_id": index_id,
         "index_revision_id": index_revision_id,
         "previous_manifest": previous_manifest,
@@ -293,6 +422,13 @@ def _assemble_public_solution_manifest(
         "bindings": bindings,
         "created_at": created_at.isoformat().replace("+00:00", "Z"),
     }
+    if version == "4.0":
+        return AssembledRegisteredPublicSolutionIndex(
+            PublicSolutionEmbeddingIndexV4.model_validate(
+                body | {"index_sha256": content_sha256(body)}
+            ),
+            shards,
+        )
     return AssembledPublicSolutionIndex(
         PublicSolutionEmbeddingIndex.model_validate(body | {"index_sha256": content_sha256(body)}),
         shards,

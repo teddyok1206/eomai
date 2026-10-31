@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/native-embedding-coordinator/4.0",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "native-embedding-coordinator/4.0"
+    },
+    "record_type": {
+      "$ref": "eom://schemas/workflow/native-embedding-coordinator/3.0#/$defs/NativeCoordinatorPhase"
+    },
+    "native_launch_job_id": {
+      "pattern": "^job_[0-9a-f]{32}$",
+      "title": "Native Launch Job Id",
+      "type": "string"
+    },
+    "intent_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Intent Sha256",
+      "type": "string"
+    },
+    "payload": {
+      "anyOf": [
+        {
+          "$ref": "eom://schemas/workflow/native-embedding-coordinator/3.0#/$defs/NativeCoordinatorAllocation"
+        },
+        {
+          "$ref": "#/$defs/NativeCoordinatorIndexPreparedV4"
+        },
+        {
+          "$ref": "#/$defs/NativeCoordinatorRegisteredV4"
+        },
+        {
+          "$ref": "#/$defs/NativeCoordinatorCompletedV4"
+        }
+      ],
+      "title": "Payload"
+    },
+    "checkpoint_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Checkpoint Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "record_type",
+    "native_launch_job_id",
+    "intent_sha256",
+    "payload",
+    "checkpoint_sha256"
+  ],
+  "title": "Exact full-report continuation metadata over unchanged numeric execution",
+  "type": "object",
+  "$defs": {
+    "NativeCoordinatorIndexPreparedV4": {
+      "additionalProperties": false,
+      "properties": {
+        "registration_command": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/4.0#/$defs/command"
+        },
+        "index_created_at": {
+          "format": "date-time",
+          "title": "Index Created At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "registration_command",
+        "index_created_at"
+      ],
+      "title": "NativeCoordinatorIndexPreparedV4",
+      "type": "object"
+    },
+    "NativeCoordinatorRegisteredV4": {
+      "additionalProperties": false,
+      "properties": {
+        "registration_result": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/4.0#/$defs/result"
+        },
+        "registration_observed_at": {
+          "format": "date-time",
+          "title": "Registration Observed At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "registration_result",
+        "registration_observed_at"
+      ],
+      "title": "NativeCoordinatorRegisteredV4",
+      "type": "object"
+    },
+    "NativeCoordinatorCompletedV4": {
+      "additionalProperties": false,
+      "properties": {
+        "output": {
+          "$ref": "eom://schemas/workflow/local-embedding-completion/4.0#/$defs/LocalEmbeddingStepOutputV4"
+        }
+      },
+      "required": [
+        "output"
+      ],
+      "title": "NativeCoordinatorCompletedV4",
+      "type": "object"
+    }
+  }
+}

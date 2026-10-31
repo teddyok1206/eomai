@@ -840,6 +840,18 @@ MIXED_NATIVE_WORKFLOW_SCHEMA_RESOURCES = (
 )
 PUBLIC_NATIVE_WORKFLOW_SCHEMA_RESOURCES = (
     (
+        "registered-public-coordinator",
+        "native-embedding-coordinator-v4.schema.json",
+        "eom://schemas/workflow/native-embedding-coordinator/4.0",
+        "sha256:542b52c9572b69df24ec7d3a707e828c71b050c23dc5ed3bb023bb3014cb96ba",
+    ),
+    (
+        "registered-public-completion",
+        "local-embedding-completion-v4.schema.json",
+        "eom://schemas/workflow/local-embedding-completion/4.0",
+        "sha256:6f5724a071d44927b04430d097d0671c2027488961f96fe61800e386b239b4e1",
+    ),
+    (
         "registered-public-ownership",
         "embedding-encoding-ownership-v4.schema.json",
         "eom://schemas/workflow/embedding-encoding-ownership/4.0",
@@ -935,6 +947,8 @@ EMBEDDING_BENCHMARK_LAUNCH_CONTROL_SCHEMA_RESOURCE = (
     "sha256:2ceb6cb0150ffc64f2b4e94fed17cff36181b486885c8f78d8e6c0cd4c34de27",
 )
 type LocalEmbeddingSchemaName = Literal[
+    "registered-public-coordinator",
+    "registered-public-completion",
     "registered-public-ownership",
     "registered-public-request",
     "registered-public-source-plan",
@@ -1103,8 +1117,11 @@ def validate_local_embedding_admission_message(
                 "request",
                 "mixed-request",
                 "public-request",
+                "registered-public-request",
                 "public-completion",
+                "registered-public-completion",
                 "public-coordinator",
+                "registered-public-coordinator",
                 "mixed-completion",
                 "definition-v2",
                 "execution-policy",

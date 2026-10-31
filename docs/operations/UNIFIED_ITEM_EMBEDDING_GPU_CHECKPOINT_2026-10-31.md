@@ -455,3 +455,31 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
   `/tmp/eom-api-build/8100dfe7763e0bf26e94ea4a65e5653604c809f6.k4gueh/dist`다.
   실행 중인 private INDEX/QUERY나 운영 DB에는 설치하지 않았다. 위105개 source tests와
   installed packaging proof를 구분한다. 다음 정기 GPU 관측은13:30 UTC다.
+
+### Completion4·실제 index4 조립·coordinator4 후보 — 13:42 UTC
+
+- 기존 INDEX2의 수치 Job/input/result1과 고정 단계 순서는 유지하고 metadata completion4와
+  coordinator4 schema/Pydantic을 추가했다. request/plan/ownership/registration의 원래 pins,
+  raw SHA와 semantic SHA, 정확한 population/binding set과 producer를 결합한다. version3
+  schema bytes는 수정하지 않았다. metadata request/completion/coordinator의64KiB 상한도 유지한다.
+- receipt3/4의 field·hash·registration pair·full-context closure는 공통 typed body와 pure
+  validator를 사용한다. INDEX4 최초 entry 조립과 후속 plan 조립은 기존 map 기반 row/shard
+  선택과 manifest builder를 재사용한다. 같은 풀이 source3개의 binding과 수치 row1개를
+  보존하며 parent3의 binding bytes를 바꾸지 않는다. 캐시 row만으로 새 수치 추론 없이 완료하는
+  receipt도 검사했다. queue/framework/DB table을 추가하지 않았다.
+- ALLOCATION→INDEX_PREPARED→REGISTERED→COMPLETED의 각 prefix·producer·operation binding과
+  잘못된 순서/중복/foreign intent/다른 producer/result/float/추가 권한 필드를 검사했다.
+  누락·다른 provenance를 받아주거나 historical FAILED를 고치지 않는다.
+- 관련 공통 format/registry/capture/source-plan/assembly/ownership/request/completion/coordinator/
+  기존 mixed/native/encoding unit 회귀 **193 PASS**, source7개 mypy와 Ruff/format/generator PASS다.
+  첫 completion fixture의 nested model timestamp hash 불일치는 JSON-mode wire 표현으로 보정했다.
+  원래 실패 log는 보존하며 production hash 규칙을 느슨하게 바꾸지 않았다.
+- disposable DB`20261031133651_04e763cb` migration 왕복 PASS 후 기존 native3 실제 Workflow/
+  Job/Artifact/Registry 흐름의 동시 첫 checkpoint·문서 완료·encoding_complete/REGISTERED
+  중단 복구 **4 PASS**, cleanup PASS다. 명시적 synthetic IAM/model을 사용한 storage 회귀이며,
+  새 native4의 installed admission/actual owner 실행 증거나 실사용 권한 검색을 대신하지 않는다.
+- 13:30 UTC GPU **84/520**, 잔여436, CUDA RUNNING1, historical failed2 그대로다.
+  INDEX703354/QUERY470146 active·NRestarts0을 유지했다. 다음 정기 점검14:00 UTC.
+  새 metadata4는 아직 운영 활성화하지 않았다. 다음 작업은 기존 official owner/dispatcher의
+  전체4 연결·qualification, QUERY successor와 AI producer 연결, full520 검증·검색 전환·
+  구 projection 소비자 조사/안전한 삭제다. 목표는 전체 범위 그대로 ACTIVE다.

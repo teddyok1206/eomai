@@ -1,0 +1,249 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-embedding-completion/4.0",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/LocalEmbeddingStepOutputV4"
+    },
+    {
+      "$ref": "#/$defs/LocalEmbeddingWorkflowReceiptV4"
+    }
+  ],
+  "title": "Exact registered full-report native registration receipt and carrier",
+  "$defs": {
+    "LocalEmbeddingStepOutputV4": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "local-embedding-step-output/4.0"
+        },
+        "purpose": {
+          "const": "LOCAL_EMBEDDING",
+          "default": "LOCAL_EMBEDDING",
+          "title": "Purpose",
+          "type": "string"
+        },
+        "workflow_id": {
+          "pattern": "^workflow_[0-9a-f]{32}$",
+          "title": "Workflow Id",
+          "type": "string"
+        },
+        "step_run_id": {
+          "pattern": "^steprun_[0-9a-f]{32}$",
+          "title": "Step Run Id",
+          "type": "string"
+        },
+        "step_key": {
+          "const": "encode_batch",
+          "default": "encode_batch",
+          "title": "Step Key",
+          "type": "string"
+        },
+        "attempt": {
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "receipt_owner_job_id": {
+          "pattern": "^job_[0-9a-f]{32}$",
+          "title": "Receipt Owner Job Id",
+          "type": "string"
+        },
+        "execution_result_schema": {
+          "const": "incremental-embedding-result@1.0",
+          "default": "incremental-embedding-result@1.0",
+          "title": "Execution Result Schema",
+          "type": "string"
+        },
+        "receipt_schema": {
+          "const": "eom://schemas/workflow/local-embedding-workflow-receipt/4.0"
+        },
+        "receipt": {
+          "$ref": "eom://schemas/workflow/local-embedding-completion/3.0#/$defs/ArtifactMemberPointer",
+          "properties": {
+            "member_path": {
+              "const": "receipt.json"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/workflow/local-embedding-workflow-receipt/4.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        },
+        "receipt_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Receipt Sha256",
+          "type": "string"
+        },
+        "output_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Output Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "purpose",
+        "workflow_id",
+        "step_run_id",
+        "step_key",
+        "attempt",
+        "receipt_owner_job_id",
+        "execution_result_schema",
+        "receipt_schema",
+        "receipt",
+        "receipt_sha256",
+        "output_sha256"
+      ],
+      "title": "LocalEmbeddingStepOutputV4",
+      "type": "object"
+    },
+    "LocalEmbeddingWorkflowReceiptV4": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "local-embedding-workflow-receipt/4.0"
+        },
+        "purpose": {
+          "const": "LOCAL_EMBEDDING",
+          "default": "LOCAL_EMBEDDING",
+          "title": "Purpose",
+          "type": "string"
+        },
+        "workflow_id": {
+          "pattern": "^workflow_[0-9a-f]{32}$",
+          "title": "Workflow Id",
+          "type": "string"
+        },
+        "workflow_definition_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Workflow Definition Sha256",
+          "type": "string"
+        },
+        "workflow_request_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Workflow Request Sha256",
+          "type": "string"
+        },
+        "source_plan": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/workflow/local-embedding-workflow-request/3.0#/$defs/ArtifactMemberPointer"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "source-plan.json"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/workflow/local-embedding-source-plan/4.0"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "source_plan_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Source Plan Sha256",
+          "type": "string"
+        },
+        "step_run_id": {
+          "pattern": "^steprun_[0-9a-f]{32}$",
+          "title": "Step Run Id",
+          "type": "string"
+        },
+        "step_key": {
+          "const": "encode_batch",
+          "default": "encode_batch",
+          "title": "Step Key",
+          "type": "string"
+        },
+        "attempt": {
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "receipt_owner_job_id": {
+          "pattern": "^job_[0-9a-f]{32}$",
+          "title": "Receipt Owner Job Id",
+          "type": "string"
+        },
+        "execution_result_schema": {
+          "const": "incremental-embedding-result@1.0",
+          "default": "incremental-embedding-result@1.0",
+          "title": "Execution Result Schema",
+          "type": "string"
+        },
+        "native_launch_job_id": {
+          "anyOf": [
+            {
+              "pattern": "^job_[0-9a-f]{32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Native Launch Job Id"
+        },
+        "launch_association_sha256": {
+          "anyOf": [
+            {
+              "pattern": "^sha256:[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Launch Association Sha256"
+        },
+        "registration_command": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/4.0#/$defs/command"
+        },
+        "registration_result": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/4.0#/$defs/result"
+        },
+        "registration_observed_at": {
+          "format": "date-time",
+          "title": "Registration Observed At",
+          "type": "string"
+        },
+        "receipt_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Receipt Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "purpose",
+        "workflow_id",
+        "workflow_definition_sha256",
+        "workflow_request_sha256",
+        "source_plan",
+        "source_plan_sha256",
+        "step_run_id",
+        "step_key",
+        "attempt",
+        "receipt_owner_job_id",
+        "execution_result_schema",
+        "native_launch_job_id",
+        "launch_association_sha256",
+        "registration_command",
+        "registration_result",
+        "registration_observed_at",
+        "receipt_sha256"
+      ],
+      "title": "LocalEmbeddingWorkflowReceiptV4",
+      "type": "object"
+    }
+  }
+}

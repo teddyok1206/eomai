@@ -22,6 +22,8 @@ INDEX4 = "eom://schemas/knowledge/public-solution-embedding-index/4.0"
 ENTRY2 = "eom://schemas/knowledge/public-solution-embedding-entry/2.0"
 REQUEST3 = "eom://schemas/workflow/local-embedding-workflow-request/3.0"
 OWNERSHIP3 = "eom://schemas/workflow/embedding-encoding-ownership/3.0"
+COMPLETION3 = "eom://schemas/workflow/local-embedding-completion/3.0"
+COORDINATOR3 = "eom://schemas/workflow/native-embedding-coordinator/3.0"
 
 
 def externalize(value: Any, schema_id: str) -> None:
@@ -34,6 +36,25 @@ def externalize(value: Any, schema_id: str) -> None:
     elif isinstance(value, list):
         for child in value:
             externalize(child, schema_id)
+
+
+def retarget_references(value: Any, references: dict[str, str], predecessor: str) -> None:
+    """Only explicitly selected metadata definitions acquire successor identities."""
+    if isinstance(value, dict):
+        reference = value.get("$ref")
+        if isinstance(reference, str) and reference in references:
+            value["$ref"] = references[reference]
+        discriminator = value.get("discriminator")
+        if isinstance(discriminator, dict):
+            for tag, target in discriminator.get("mapping", {}).items():
+                if target.startswith("#/$defs/"):
+                    target = predecessor + target
+                discriminator["mapping"][tag] = references.get(target, target)
+        for child in value.values():
+            retarget_references(child, references, predecessor)
+    elif isinstance(value, list):
+        for child in value:
+            retarget_references(child, references, predecessor)
 
 
 def source_plan() -> dict[str, Any]:
@@ -111,23 +132,6 @@ def ownership() -> dict[str, Any]:
         OWNERSHIP3 + "#/$defs/" + name: "#/$defs/" + successor for name, successor in names.items()
     }
 
-    def retarget(value: Any) -> None:
-        if isinstance(value, dict):
-            reference = value.get("$ref")
-            if isinstance(reference, str) and reference in references:
-                value["$ref"] = references[reference]
-            discriminator = value.get("discriminator")
-            if isinstance(discriminator, dict):
-                for tag, target in discriminator.get("mapping", {}).items():
-                    if target.startswith("#/$defs/"):
-                        target = OWNERSHIP3 + target
-                    discriminator["mapping"][tag] = references.get(target, target)
-            for child in value.values():
-                retarget(child)
-        elif isinstance(value, list):
-            for child in value:
-                retarget(child)
-
     value = {name: copy.deepcopy(part) for name, part in old.items() if name != "$defs"}
     externalize(value, OWNERSHIP3)
     definitions = {}
@@ -161,7 +165,103 @@ def ownership() -> dict[str, Any]:
             "$defs": definitions,
         }
     )
-    retarget(value)
+    retarget_references(value, references, OWNERSHIP3)
+    return value
+
+
+def completion() -> dict[str, Any]:
+    old = json.loads((SCHEMAS / "local-embedding-completion-v3.schema.json").read_bytes())
+    names = {
+        "LocalEmbeddingStepOutputV3": "LocalEmbeddingStepOutputV4",
+        "LocalEmbeddingWorkflowReceiptV3": "LocalEmbeddingWorkflowReceiptV4",
+    }
+    value = {name: copy.deepcopy(part) for name, part in old.items() if name != "$defs"}
+    externalize(value, COMPLETION3)
+    definitions = {}
+    for name, successor in names.items():
+        definition = copy.deepcopy(old["$defs"][name])
+        externalize(definition, COMPLETION3)
+        definition["title"] = successor
+        version = definition["properties"]["schema_version"]["const"].removesuffix("3.0") + "4.0"
+        definition["properties"]["schema_version"] = {"const": version}
+        definition["required"] = list(definition["properties"])
+        definitions[successor] = definition
+    registry = "eom://schemas/knowledge/public-solution-embedding-registry/4.0"
+    receipt = definitions["LocalEmbeddingWorkflowReceiptV4"]["properties"]
+    receipt["registration_command"] = {"$ref": registry + "#/$defs/command"}
+    receipt["registration_result"] = {"$ref": registry + "#/$defs/result"}
+    receipt["source_plan"] = request()["properties"]["source_plan"]
+    output = definitions["LocalEmbeddingStepOutputV4"]["properties"]
+    receipt_schema = "eom://schemas/workflow/local-embedding-workflow-receipt/4.0"
+    output["receipt_schema"] = {"const": receipt_schema}
+    output["receipt"] = {
+        "$ref": COMPLETION3 + "#/$defs/ArtifactMemberPointer",
+        "properties": {
+            "member_path": {"const": "receipt.json"},
+            "schema_ref": {"const": receipt_schema},
+            "media_type": {"const": "application/json"},
+        },
+    }
+    value.update(
+        {
+            "$id": "eom://schemas/workflow/local-embedding-completion/4.0",
+            "title": "Exact registered full-report native registration receipt and carrier",
+            "$defs": definitions,
+        }
+    )
+    retarget_references(
+        value,
+        {
+            COMPLETION3 + "#/$defs/" + name: "#/$defs/" + successor
+            for name, successor in names.items()
+        },
+        COMPLETION3,
+    )
+    return value
+
+
+def coordinator() -> dict[str, Any]:
+    old = json.loads((SCHEMAS / "native-embedding-coordinator-v3.schema.json").read_bytes())
+    names = {
+        "NativeCoordinatorIndexPreparedV3": "NativeCoordinatorIndexPreparedV4",
+        "NativeCoordinatorRegisteredV3": "NativeCoordinatorRegisteredV4",
+        "NativeCoordinatorCompletedV3": "NativeCoordinatorCompletedV4",
+    }
+    value = {name: copy.deepcopy(part) for name, part in old.items() if name != "$defs"}
+    externalize(value, COORDINATOR3)
+    definitions = {}
+    for name, successor in names.items():
+        definition = copy.deepcopy(old["$defs"][name])
+        externalize(definition, COORDINATOR3)
+        definition["title"] = successor
+        definitions[successor] = definition
+    registry = "eom://schemas/knowledge/public-solution-embedding-registry/4.0"
+    definitions["NativeCoordinatorIndexPreparedV4"]["properties"]["registration_command"] = {
+        "$ref": registry + "#/$defs/command"
+    }
+    definitions["NativeCoordinatorRegisteredV4"]["properties"]["registration_result"] = {
+        "$ref": registry + "#/$defs/result"
+    }
+    definitions["NativeCoordinatorCompletedV4"]["properties"]["output"] = {
+        "$ref": "eom://schemas/workflow/local-embedding-completion/4.0#/$defs/LocalEmbeddingStepOutputV4"
+    }
+    value.update(
+        {
+            "$id": "eom://schemas/workflow/native-embedding-coordinator/4.0",
+            "title": "Exact full-report continuation metadata over unchanged numeric execution",
+            "$defs": definitions,
+        }
+    )
+    value["properties"]["schema_version"] = {"const": "native-embedding-coordinator/4.0"}
+    value["required"] = list(value["properties"])
+    retarget_references(
+        value,
+        {
+            COORDINATOR3 + "#/$defs/" + name: "#/$defs/" + successor
+            for name, successor in names.items()
+        },
+        COORDINATOR3,
+    )
     return value
 
 
@@ -173,6 +273,8 @@ def main() -> int:
         "local-embedding-source-plan-v4.schema.json": source_plan(),
         "local-embedding-workflow-request-v4.schema.json": request(),
         "embedding-encoding-ownership-v4.schema.json": ownership(),
+        "local-embedding-completion-v4.schema.json": completion(),
+        "native-embedding-coordinator-v4.schema.json": coordinator(),
     }
     for name, schema in documents.items():
         payload = (json.dumps(schema, ensure_ascii=False, indent=2) + "\n").encode()

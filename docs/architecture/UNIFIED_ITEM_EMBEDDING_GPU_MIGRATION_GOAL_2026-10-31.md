@@ -320,3 +320,11 @@ provenance carrier만 필요한 successor를 이어서 추가하고 기존 trans
 재사용한다. source-plan3로 실제 V11 evidence를 위장하는 단순 대안은 허용하지 않는다.
 원본 source lookup·권한과 canonical Artifact 저장은 기존 owner 경계이며 새 DB table·queue는
 없다. 새 metadata4의 installed/recovery/negative qualification 전에는 운영 활성화하지 않는다.
+
+Completion4는 registry4의 exact command/result와 plan4/request4/ownership4를 묶는다.
+기존 receipt3/4의 공통 closure는 typed body와 pure validator 한 곳에서 검사하고, concrete
+schema parser는 서로 교환하지 않는다. INDEX4 조립은 기존 map 기반 row/shard 선택과 binding
+생성 경계를 재사용한다. 원본 report text를 재구성하거나 DB/NAS를 직접 쓰지 않으며,
+entry 기반 최초 조립과 plan 기반 후속 조립은 같은 manifest builder를 이용한다.
+동일 encoding은 수치 row1개·provenance별 binding으로 유지하고 ordered hash는 결정적이다.
+중단 후에는 기존 append-only coordinator 순서와 exact original producer pointers를 재사용한다.
