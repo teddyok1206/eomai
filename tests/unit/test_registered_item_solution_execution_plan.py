@@ -20,7 +20,10 @@ from eom_catalog_contracts.knowledge import (
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.control_models import ExecutionPresetRecord, ExecutionPresetRevisionRecord
 from eom_orchestrator.control_service import ControlPlaneError
-from eom_orchestrator.execution_materializer import _materialize_base_analysis
+from eom_orchestrator.execution_materializer import (
+    _materialize_assessment_member,
+    _materialize_base_analysis,
+)
 from eom_orchestrator.execution_resolver import resolve_knowledge_analysis_plan
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from eom_workflow import ResolvedExecutionPlanV29
@@ -383,6 +386,46 @@ def test_real_registered_base_materialization_keeps_original_7_member_shape_and_
     assert size > 0 and count == 9
     assert not (fixture.workspace / "source/base-analysis/page-images.jsonl").exists()
     assert (fixture.workspace / "source/base-analysis/edges.jsonl").read_bytes() == b""
+
+
+def test_registered_item_materialization_keeps_its_canonical_non_origin_schema_alias(tmp_path):
+    import os
+
+    fixture = base_files(tmp_path)
+    source = fixture.plan.item_source.artifact_member
+    assert source.schema_ref == "eom.assessment.item-content/3.0"
+    payload = _materialize_assessment_member(
+        fixture.session,
+        pointer=source,
+        relative_path=source.materialized_path,
+        workspace=fixture.workspace,
+        artifact_root=fixture.root,
+        worker_group_id=os.getgid(),
+        authorized_artifact_revision_ids=frozenset({source.artifact_revision_id}),
+        maximum_bytes=16 * 1024**2,
+    )
+    assert sha256_bytes(payload) == source.sha256
+    assert (fixture.workspace / source.materialized_path).read_bytes() == payload
+
+
+def test_registered_item_without_schema_never_becomes_untyped_materialized_input(tmp_path):
+    import os
+
+    fixture = base_files(tmp_path)
+    source = fixture.plan.item_source.artifact_member.model_copy(update={"schema_ref": None})
+    with pytest.raises(ControlPlaneError) as exc:
+        _materialize_assessment_member(
+            fixture.session,
+            pointer=source,
+            relative_path=source.materialized_path,
+            workspace=fixture.workspace,
+            artifact_root=fixture.root,
+            worker_group_id=os.getgid(),
+            authorized_artifact_revision_ids=frozenset({source.artifact_revision_id}),
+            maximum_bytes=16 * 1024**2,
+        )
+    assert exc.value.code == "CONTROL_POINTER_MANIFEST_MISMATCH"
+    assert not (fixture.workspace / source.materialized_path).exists()
 
 
 def test_base_materialization_never_dereferences_an_unapproved_revision_or_repairs_bad_bytes(

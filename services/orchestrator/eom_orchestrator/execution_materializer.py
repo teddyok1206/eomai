@@ -574,14 +574,7 @@ def materialize_execution_step(
             )
         original = _materialize_assessment_member(
             session,
-            pointer=OriginArtifactMemberPointer(
-                artifact_id=source.artifact_id,
-                artifact_revision_id=source.artifact_revision_id,
-                member_path=source.member_path,
-                schema_ref=source.schema_ref,
-                media_type=source.media_type,
-                sha256=source.sha256,
-            ),
+            pointer=source,
             relative_path=source.materialized_path,
             workspace=workspace,
             artifact_root=artifact_root,
@@ -2175,16 +2168,10 @@ def _materialize_past_exam_item_source(
             "CONTROL_POINTER_SCHEMA_MISMATCH",
             "past-exam Item content has no schema reference",
         )
-    item_pointer = OriginArtifactMemberPointer(
-        artifact_id=source.artifact_member.artifact_id,
-        artifact_revision_id=source.artifact_member.artifact_revision_id,
-        member_path=source.artifact_member.member_path,
-        schema_ref=source.artifact_member.schema_ref,
-        media_type=source.artifact_member.media_type,
-        sha256=source.artifact_member.sha256,
-    )
-    materials: tuple[tuple[OriginArtifactMemberPointer, str, int], ...] = (
-        (item_pointer, source.artifact_member.materialized_path, 16 * 1024 * 1024),
+    materials: tuple[
+        tuple[OriginArtifactMemberPointer | KnowledgeAnalysisSourceArtifactMemberV2, str, int], ...
+    ] = (
+        (source.artifact_member, source.artifact_member.materialized_path, 16 * 1024 * 1024),
         (
             source.extraction_acceptance_artifact,
             "source/extraction-acceptance.json",
@@ -2495,7 +2482,7 @@ def _jsonl_object_count(payload: bytes, label: str) -> int:
 def _assessment_member_expected_bytes(
     session: Session,
     *,
-    pointer: OriginArtifactMemberPointer,
+    pointer: OriginArtifactMemberPointer | KnowledgeAnalysisSourceArtifactMemberV2,
     authorized_artifact_revision_ids: frozenset[str],
     allow_empty: bool = False,
 ) -> int:
@@ -2522,7 +2509,8 @@ def _assessment_member_expected_bytes(
     entry = _manifest_entry(revision.manifest, pointer.member_path)
     expected_bytes = entry.get("bytes")
     if (
-        entry.get("sha256") != pointer.sha256
+        pointer.schema_ref is None
+        or entry.get("sha256") != pointer.sha256
         or entry.get("media_type") != pointer.media_type
         or entry.get("schema_ref") != pointer.schema_ref
         or not isinstance(expected_bytes, int)
@@ -2564,7 +2552,7 @@ def _validate_assessment_member_pointer(
 def _materialize_assessment_member(
     session: Session,
     *,
-    pointer: OriginArtifactMemberPointer,
+    pointer: OriginArtifactMemberPointer | KnowledgeAnalysisSourceArtifactMemberV2,
     relative_path: str,
     workspace: Path,
     artifact_root: Path,

@@ -38,12 +38,13 @@ if (($# != 2)) || \
     "$1" != "embedding-stage-tests" && "$1" != "private-chat-context-tests" && \
     "$1" != "authenticated-session-tests" && \
     "$1" != "local-indexing-service-tests" && "$1" != "registered-solution-tests" && \
+    "$1" != "registered-solution-application-tests" && \
     "$1" != "pdf-review-tests" && "$1" != "external-item-tests" && \
     "$1" != "creative-registration-tests" && "$1" != "creative-graph-tests" && \
     "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
     "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|inspect|migrate|hwpx-tests|embedding-tests|embedding-registry-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|authenticated-session-tests|local-indexing-service-tests|registered-solution-tests|pdf-review-tests|external-item-tests|creative-registration-tests|creative-graph-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|inspect|migrate|hwpx-tests|embedding-tests|embedding-registry-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|authenticated-session-tests|local-indexing-service-tests|registered-solution-tests|registered-solution-application-tests|pdf-review-tests|external-item-tests|creative-registration-tests|creative-graph-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -234,6 +235,17 @@ if [[ "${action}" == "registered-solution-tests" ]]; then
   export EOM_API_TEST_STATE="${state_directory}"
   "${PYTHON}" -m pytest -q tests/integration/test_registered_item_solution_uniqueness.py
   printf 'Disposable registered-Item solution uniqueness and interruption tests passed.\n'
+  exit 0
+fi
+
+if [[ "${action}" == "registered-solution-application-tests" ]]; then
+  # A fresh guarded database is required: unrelated relational-only fixtures
+  # deliberately use synthetic worker-binding identities, not bootstrap IDs.
+  export EOM_RUN_INTEGRATION=1
+  export EOM_API_TEST_STATE="${state_directory}"
+  "${PYTHON}" -m pytest -q tests/integration/test_registered_item_solution_application.py \
+    tests/integration/test_post_registration_item_approval.py
+  printf 'Disposable registered-Item solution application and control tests passed.\n'
   exit 0
 fi
 

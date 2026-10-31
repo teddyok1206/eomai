@@ -1,0 +1,122 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/knowledge-analysis-control-bootstrap/21.0",
+  "title": "Knowledge analysis with registered Item public solution reports V21",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "preset_key",
+    "display_name",
+    "description",
+    "created_at",
+    "model",
+    "reasoning_effort",
+    "general_knowledge_policy",
+    "compatible_workflow_protocols",
+    "platform_instruction_path",
+    "role_instruction_path",
+    "slot_key",
+    "worker_pool_key",
+    "timeout_seconds"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-analysis-control-bootstrap/21.0"
+    },
+    "preset_key": {
+      "const": "knowledge-analysis"
+    },
+    "display_name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 1000
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "model": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"
+    },
+    "reasoning_effort": {
+      "enum": [
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh"
+      ]
+    },
+    "general_knowledge_policy": {
+      "enum": [
+        "ALLOW_WITH_PROVENANCE",
+        "DENY"
+      ]
+    },
+    "compatible_workflow_protocols": {
+      "type": "array",
+      "prefixItems": [
+        {
+          "const": "workflow-role/1.4.0"
+        },
+        {
+          "const": "workflow-role/1.5.0"
+        },
+        {
+          "const": "workflow-role/1.6.0"
+        },
+        {
+          "const": "workflow-role/1.7.0"
+        },
+        {
+          "const": "workflow-role/1.8.0"
+        },
+        {
+          "const": "workflow-role/1.9.0"
+        },
+        {
+          "const": "workflow-role/1.10.0"
+        },
+        {
+          "const": "workflow-role/1.11.0"
+        },
+        {
+          "const": "workflow-role/1.18.0"
+        },
+        {
+          "const": "workflow-role/1.21.0"
+        },
+        {
+          "const": "workflow-role/1.35.0"
+        }
+      ],
+      "minItems": 11,
+      "maxItems": 11,
+      "uniqueItems": true
+    },
+    "platform_instruction_path": {
+      "const": "instructions/platform.md"
+    },
+    "role_instruction_path": {
+      "const": "instructions/knowledge-analysis.md"
+    },
+    "slot_key": {
+      "const": "slot05"
+    },
+    "worker_pool_key": {
+      "const": "support"
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 7200
+    }
+  }
+}

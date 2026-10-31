@@ -29,6 +29,12 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "knowledge-analysis-control-bootstrap-v21": ControlSchemaResource(
+            "schemas/workflow/control-plane/knowledge-analysis-control-bootstrap-v21.schema.json",
+            "resources/control-plane/knowledge-analysis-control-bootstrap-v21.schema.json",
+            "21.0",
+            "sha256:53b8dfeabb20855bfaa46c6eb82ce2a8d854d670b4591bcd39ea25ed282e5e45",
+        ),
         "review-textbook-validation-receipt": ControlSchemaResource(
             "schemas/workflow/control-plane/review-textbook-validation-receipt-v1.schema.json",
             "resources/control-plane/review-textbook-validation-receipt-v1.schema.json",

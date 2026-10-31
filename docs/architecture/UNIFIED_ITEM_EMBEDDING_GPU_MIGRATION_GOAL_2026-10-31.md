@@ -192,3 +192,40 @@ occurrence/page evidence를 가진 기출 V9만 허용한다. 일반 승인 AI�
 - 더 작은 대안인 기존 V10을 일반 Item까지 넓히기/검토 요약을 전체 풀이로 대신하기는 각각
   released source 의미 또는 공통 수치 입력 기준을 깨므로 사용하지 않는다. 운영 활성화 전
   source candidate를 production-ready로 표시하지 않는다.
+
+### AI 보고서의 공통 evidence/index 연결 — 다음 구현 경계
+
+기준은 ‘세 분류가 같은 공개 풀이 텍스트/recipe/encoder/수치 공간을 사용한다’는 것이다.
+출처별 정본이 다른데 evidence envelope까지 같은 과거 schema라고 위장하는 것은 기준이 아니다.
+다음 successor는 수치 입력을 다시 설계하는 작업이 아니라 실제 승인된 V11 보고서의 출처 핀을
+전달하는 작업이다. 2026-10-31 11:54 UTC registry에서 아래 제안 번호의 기존 사용0을 확인했다.
+
+- canonical source: 승인 Item revision + accepted V2 base + accepted V11/report1 + 공식 Graph
+  admission. 기존 기출 V10/창작 source report도 그대로 정본이다. 새 AI evidence kind는
+  `ACCEPTED_REGISTERED_SOLUTION_ANALYSIS`로 구분하고 result11/receipt10/report1의 exact
+  Artifact member/semantic hash/raw SHA를 가진다. PAST_EXAM이나 creative lineage로 재분류하지 않는다.
+- JSON Schema-first: 제안 entry2/profile2/binding4/index4는 별도 closed 계약이다. 과거
+  entry1/binding3/index3 bytes는 바꾸지 않는다. 새 입력 해석은 entry1(기출·창작)과 entry2(AI)를
+  명시적으로 dispatch하되 **공통 public text1/recipe2만** encoder에 보낸다. type 이름·kind·ID·
+  hash·분류·경고는 임베딩하지 않는다. 숫자/수식/부정어를 바꾸거나 본문을 잘라 길이를 맞추지 않는다.
+- metadata 재포장 때문에 이미 계산한 기출/창작 vector를 또 만들지 않는다. index4는 원래
+  binding3를 그 identity/hash/schema 그대로 참조하고 신규 AI binding4만 추가할 수 있어야 한다.
+  previous manifest는 정확한 index3/index4 핀만 허용한다. source 중복/row/shard 정렬과 hash,
+  schema/media/lifecycle/permission 검증은 기존 owner에서 유지한다.
+- access pattern은 기존 indexed Graph/source lookup, keyset paging, text/space hash encoding
+  deduplication, immutable ordered manifests, atomic registration/CAS다. 새 queue/DB/vector store를
+  만들지 않는다. 기존 index/unique constraints가 새 provenance를 실제 수용하는지 먼저 대조하고
+  필요한 좁은 successor만 추가한다. 목표 규모와 paging 상한은 현재16,384/페이지256을 유지한다.
+  lookup/dedup은 indexed O(log N), rank는 기존 실제 cosine의 bounded O(ND)다.
+- shared schema/model/projection → Catalog capture/application → 기존 DB/Artifact/native adapter
+  의존 방향을 유지한다. actual operator/pinned policy로 source를 재허가하며 metadata 계약을
+  새 권한으로 취급하지 않는다. worker는 staged local input만 읽고 Orchestrator만 commit한다.
+- 동일 text hash + partition + numerical space는 같은 encoding identity를 사용한다. 서로 다른
+  source/report revision은 별도 binding으로 보존한다. missing/변조/revoked/report 불완전은
+  explicit unavailable/error다. review 요약이나 최신 revision으로 fallback하지 않는다.
+- INDEX/QUERY/registry/read/실제 DB 검색이 같은 successor를 지원하는 조합을 검증하고
+  실행 중인 GPU 배치의 정상 종료 경계에서만 선택한다. 과거 history나 현재 request pin을
+  몰래 새 schema로 바꾸지 않는다. 실패하면 새 head의 발행을 막고 기존 검증된 head를 보존한다.
+- 더 작은 대안인 entry1의 frozen evidence union에 AI를 끼워 넣기 또는 AI를 creative/past로
+  가장하기는 lineage를 깨므로 사용하지 않는다. 모든 과거 binding을 새 metadata로 일괄
+  복제하는 것도 불필요하므로 하지 않는다. 이 설계는 아직 운영 activation 증거가 아니다.

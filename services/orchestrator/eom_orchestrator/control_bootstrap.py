@@ -232,7 +232,19 @@ STANDARD_COMPATIBLE_CURRENT_CAPACITY_REVISIONS = MappingProxyType(
     }
 )
 KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS = MappingProxyType(
-    {f"knowledge-analysis-control-bootstrap/{revision}.0": revision for revision in range(1, 21)}
+    {f"knowledge-analysis-control-bootstrap/{revision}.0": revision for revision in range(1, 22)}
+)
+_FULL_SOLUTION_ANALYSIS_PROTOCOLS = (
+    "workflow-role/1.4.0",
+    "workflow-role/1.5.0",
+    "workflow-role/1.6.0",
+    "workflow-role/1.7.0",
+    "workflow-role/1.8.0",
+    "workflow-role/1.9.0",
+    "workflow-role/1.10.0",
+    "workflow-role/1.11.0",
+    "workflow-role/1.18.0",
+    "workflow-role/1.21.0",
 )
 
 
@@ -515,6 +527,7 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
         "knowledge-analysis-control-bootstrap/18.0",
         "knowledge-analysis-control-bootstrap/19.0",
         "knowledge-analysis-control-bootstrap/20.0",
+        "knowledge-analysis-control-bootstrap/21.0",
     ]
     preset_key: Literal["knowledge-analysis"]
     display_name: str = Field(min_length=1, max_length=128)
@@ -535,9 +548,10 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
             "workflow-role/1.11.0",
             "workflow-role/1.18.0",
             "workflow-role/1.21.0",
+            "workflow-role/1.35.0",
         ],
         ...,
-    ] = Field(min_length=1, max_length=10)
+    ] = Field(min_length=1, max_length=11)
     platform_instruction_path: Literal["instructions/platform.md"]
     role_instruction_path: Literal["instructions/knowledge-analysis.md"]
     slot_key: Literal["slot05"]
@@ -551,6 +565,8 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
         expected_protocols: tuple[str, ...]
         if self.schema_version == "knowledge-analysis-control-bootstrap/1.0":
             expected_protocols = ("workflow-role/1.4.0",)
+        elif self.schema_version == "knowledge-analysis-control-bootstrap/21.0":
+            expected_protocols = (*_FULL_SOLUTION_ANALYSIS_PROTOCOLS, "workflow-role/1.35.0")
         elif self.schema_version in {
             "knowledge-analysis-control-bootstrap/16.0",
             "knowledge-analysis-control-bootstrap/17.0",
@@ -558,18 +574,7 @@ class KnowledgeAnalysisBootstrapManifest(BaseModel):
             "knowledge-analysis-control-bootstrap/19.0",
             "knowledge-analysis-control-bootstrap/20.0",
         }:
-            expected_protocols = (
-                "workflow-role/1.4.0",
-                "workflow-role/1.5.0",
-                "workflow-role/1.6.0",
-                "workflow-role/1.7.0",
-                "workflow-role/1.8.0",
-                "workflow-role/1.9.0",
-                "workflow-role/1.10.0",
-                "workflow-role/1.11.0",
-                "workflow-role/1.18.0",
-                "workflow-role/1.21.0",
-            )
+            expected_protocols = _FULL_SOLUTION_ANALYSIS_PROTOCOLS
         elif self.schema_version == "knowledge-analysis-control-bootstrap/15.0":
             expected_protocols = (
                 "workflow-role/1.4.0",
@@ -1094,6 +1099,7 @@ def bootstrap_knowledge_analysis_control_plane(
         "knowledge-analysis-control-bootstrap/18.0",
         "knowledge-analysis-control-bootstrap/19.0",
         "knowledge-analysis-control-bootstrap/20.0",
+        "knowledge-analysis-control-bootstrap/21.0",
     }
     support_slots = tuple(
         slot for slot in registry.config.slots if str(slot.role) == "support" and slot.enabled
@@ -1327,8 +1333,12 @@ def load_knowledge_analysis_bootstrap_manifest(
     raw = _read_file(root / "bootstrap.yaml", root=root, max_bytes=MAX_BOOTSTRAP_MANIFEST_BYTES)
     try:
         value: object = yaml.safe_load(raw.decode("utf-8"))
+        if isinstance(value, dict) and value.get("schema_version") == (
+            "knowledge-analysis-control-bootstrap/21.0"
+        ):
+            validate_control_contract("knowledge-analysis-control-bootstrap-v21", value)
         return KnowledgeAnalysisBootstrapManifest.model_validate(value)
-    except (UnicodeError, yaml.YAMLError, ValueError) as exc:
+    except (UnicodeError, yaml.YAMLError, JsonSchemaValidationError, ValueError) as exc:
         raise ControlPlaneError(
             "CONTROL_BOOTSTRAP_INVALID",
             "knowledge analysis bootstrap manifest is invalid",

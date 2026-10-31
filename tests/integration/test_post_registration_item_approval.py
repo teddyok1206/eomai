@@ -76,7 +76,7 @@ def _artifact(
     artifact_id = _opaque("artifact_")
     revision_id = _opaque("rev_")
     content_hash = "sha256:" + hashlib.sha256(payload).hexdigest()
-    artifact_root = root / revision_id
+    artifact_root = root / artifact_id / revision_id
     artifact_root.mkdir(parents=True)
     (artifact_root / file_name).write_bytes(payload)
     manifest: dict[str, object] = {
@@ -131,6 +131,7 @@ def _seed_fixture(
     root: Path,
     *,
     manifest_pack_release_override: str | None = None,
+    item_content: dict[str, object] | None = None,
 ) -> ApprovalFixture:
     sessions = build_session_factory(engine)
     with transaction(sessions) as session:
@@ -143,12 +144,32 @@ def _seed_fixture(
             file_name="pack.tar",
             payload=f"post-registration-pack-{uuid4().hex}".encode(),
         )
+        content_payload = (
+            canonical_json_bytes(item_content)
+            if item_content is not None
+            else b'{"schema_version":"3.0"}'
+        )
         component_artifact, component_revision = _artifact(
             session,
             root,
             artifact_type="assessment-item-content",
             file_name="item-content.json",
-            payload=b'{"schema_version":"3.0"}',
+            payload=content_payload,
+            manifest_extra=(
+                {
+                    "files": [
+                        {
+                            "file_name": "item-content.json",
+                            "bytes": len(content_payload),
+                            "sha256": "sha256:" + hashlib.sha256(content_payload).hexdigest(),
+                            "schema_ref": "eom.assessment.item-content/3.0",
+                            "media_type": "application/json",
+                        }
+                    ]
+                }
+                if item_content is not None
+                else None
+            ),
         )
         item_id = _opaque("item_")
         item_revision_id = _opaque("itemrev_")

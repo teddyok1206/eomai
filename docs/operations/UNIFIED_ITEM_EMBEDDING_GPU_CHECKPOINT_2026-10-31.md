@@ -238,3 +238,26 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
 - 운영0065 적용에는 reviewed migration operator successor 및 API/Catalog/INDEX/QUERY의
   호환 runtime 선택이 필요하다. 실행 중인 GPU 작업의 pinned 설치본을 덮어쓰지 않는다.
   새로운 입력 source/control/public evidence/index 연결은 여전히 후속 단계다.
+
+### 일반 Item의 실제 실행 입력·등록 회귀 — 12:02 UTC
+
+- control21/definition11은 기존 모델 `gpt-5.6-terra`/`xhigh`, support pool과 원래10개
+  protocol을 유지하고 role1.35만 추가한다. 기존 binding identity·관리자 상태와 이후 capacity
+  정책을 덮어쓰지 않는다. bootstrap raw JSON Schema 검증과 재전송을 확인했다.
+- disposable DB에서 정본 Item3 → 원래 V2 분석 → V11 전체 풀이 요청 → 실제 실행 입력
+  materialization → Orchestrator 산출물 staging/commit → Catalog reconcile/accept → 같은 요청
+  재전송을 검증했다. **worker 출력은 synthetic이며 모델 실행·교육 품질 승인이 아니다.**
+  기존 post-registration approval5건을 함께 실행해 총 **6 PASS**다.
+- 이 통합검사로 canonical Item schema alias를 좁은 Origin pointer로 재포장하던 실제 결함을
+  발견했다. 기존 Knowledge source pointer를 그대로 전달해 해결했다. frozen Origin schema를
+  넓히지 않았고 media/schema/hash/권한 검사는 보존했다. schema 없는 입력은 계속 거부한다.
+- source 집중 회귀101건과 package/의존 경계27건 PASS, core4개 모듈 mypy 및 관련9개 파일
+  Ruff/format, shell syntax/diff PASS. 독립 interpreter에서 기존10개 protocol의 schema bundle
+  hash가 운영9319 설치본과 각각 같음을 확인했다.
+- 임시 DB `eom-api-testdb-20261031114946_efebe863`는0065 migration 왕복 PASS 후 검증했으며,
+  marker 검증 cleanup으로 DB와 제한 계정을 제거했다. 운영 DB·서비스·모델 실행 변경0이다.
+- 12:00 UTC timer의 original 기출 GPU 등록은 **59/520, 잔여461**이다. 기존 historical 실패2건은
+  그대로이며 증가하지 않았다. 관측 당시 CPU standby Workflow1이 실행 중이라는 사실을
+  GPU59건과 구분한다. GPU 전체 완료나 실제 사용자 검색 PASS로 확대하지 않는다.
+- AI evidence/index successor와 실제 Graph·권한 검색 연결, full520 token 길이 사전 점검,
+  운영0065 호환 릴리스와 구 벡터 retirement는 아직 남아 있다. goal은 ACTIVE다.

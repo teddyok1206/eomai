@@ -86,7 +86,7 @@ def test_knowledge_analysis_bootstrap_revision_map_covers_every_manifest_version
     )
 
     assert set(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS) == schema_versions
-    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 21))
+    assert tuple(KNOWLEDGE_ANALYSIS_BOOTSTRAP_REVISIONS.values()) == tuple(range(1, 22))
 
 
 def test_knowledge_analysis_v13_adds_parallel_capacity_without_changing_worker_semantics() -> None:
