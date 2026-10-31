@@ -56,6 +56,27 @@
   Graph/INDEX4 연결, authorized DB query/read/replay, 구형 활성 consumer 전환과 정확한
   파생 데이터 retirement·삭제다. 위 source 후보만으로 U04/U05 완료를 선언하지 않는다.
 
+### 별도 설치본 검증과 알려진 carrier 조사 — 21:24 UTC
+
+- source **`b92774a20803e4f169927878107c2324965e1a07`**를 main에 push했고 build-only
+  wheel RECORD PASS다. 별도 immutable owner pair 설치만 수행했다. platform wheel SHA
+  `06296b02844362f18a2ab132dcea58a49edffc53704fed8351ceb17eba4426a9`, contracts SHA
+  `d006142c87513ba2b916b882e1f9613f756f918701811e37634ed88585324439`.
+  actual imported contract/publisher/classifier가 이 prefix 아래임을 먼저 검사하고 새·기존
+  발행 및 전달 회귀를 별도 설치본에서 **101 PASS /14.51s**했다. source test와 별개이며
+  activation은 하지 않았다. actual API readiness도 READY다.
+  `/tmp/eom-public-delivery2-build-20261031.log`,
+  `/tmp/eom-owner-install-b92774a2-20261031.log`,
+  `/tmp/eom-public-delivery2-installed-tests-20261031.log`.
+- actual FK inventory는 binding→encoding, index head→revision, revision→index,
+  previous revision→revision의 **4개 RESTRICT 관계**를 확인했다. 알려진 QUERY request1/
+  1.1/2/private1의 typed `context_request.views[].index.index_id` 위치에서 현재 구 namespace
+  12개를 가리키는 row는 이 snapshot에0이었다. 다른 JSON carrier, 과거 manifest의 내부
+  binding/shard 참조까지0이라는 뜻이 아니다. 최근 공통 QUERY3/4 Workflow도 이 조회
+  시간 범위에는0이며 사용자 실제 검색 결과 확인으로 대체하지 않는다.
+  `/tmp/eom-retirement-consumers-20261031.json`. 위 actual 활성 기능의 미래 요청은 여전히
+  구 namespace를 사용하므로 이0을 근거로 consumer migration을 생략하지 않는다.
+
 ## request4 실패 보존·호환 owner 실제 전환 — 2026-10-31 20:25 UTC
 
 - 이번 turn은 **PROGRESS**다. `fb0ab5555f98c1358229550b4527eb9837459554`의
