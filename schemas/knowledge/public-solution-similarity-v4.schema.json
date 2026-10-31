@@ -1,0 +1,346 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/public-solution-similarity/4.0",
+  "title": "Pinned past/creative/registered public solution observations over QUERY2",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/context"
+    }
+  ],
+  "$defs": {
+    "anchor": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/knowledge/public-solution-similarity/3.0#/$defs/anchor"
+        },
+        {
+          "$ref": "#/$defs/registeredAnchor"
+        }
+      ]
+    },
+    "registeredAnchor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis",
+        "source",
+        "base_analysis_run_id",
+        "profile",
+        "evidence"
+      ],
+      "properties": {
+        "basis": {
+          "const": "VERIFIABLE_PUBLIC_SOLUTION"
+        },
+        "source": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-entry/2.0#/properties/source"
+        },
+        "base_analysis_run_id": {
+          "type": "string",
+          "pattern": "^analysisrun_[0-9a-f]{32}$"
+        },
+        "profile": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-index/4.0#/$defs/registeredProfile"
+        },
+        "evidence": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-entry/2.0#/$defs/registeredEvidence"
+        }
+      }
+    },
+    "indexPin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "index_id",
+        "index_revision_id",
+        "index_manifest",
+        "index_sha256",
+        "storage_partition",
+        "spaces"
+      ],
+      "properties": {
+        "index_id": {
+          "type": "string",
+          "pattern": "^embeddingindex_[0-9a-f]{32}$"
+        },
+        "index_revision_id": {
+          "type": "string",
+          "pattern": "^embeddingindexrev_[0-9a-f]{32}$"
+        },
+        "index_manifest": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "index.json"
+                },
+                "schema_ref": {
+                  "enum": [
+                    "eom://schemas/knowledge/embedding-index-manifest/3.0",
+                    "eom://schemas/knowledge/embedding-index-manifest/4.0"
+                  ]
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "index_sha256": {
+          "$ref": "eom://schemas/knowledge/public-solution-similarity/3.0#/$defs/hash"
+        },
+        "storage_partition": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/partition"
+        },
+        "spaces": {
+          "$ref": "eom://schemas/knowledge/embedding-reference-query/1.0#/$defs/spaces"
+        }
+      }
+    },
+    "view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "view",
+        "recipe",
+        "index"
+      ],
+      "properties": {
+        "view": {
+          "const": "CONCRETE_FACETS"
+        },
+        "recipe": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-entry/1.0#/$defs/recipe"
+        },
+        "index": {
+          "$ref": "#/$defs/indexPin"
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "request_id",
+        "consumer_purpose",
+        "anchor",
+        "graph_snapshot",
+        "policy_revision_id",
+        "policy_sha256",
+        "source_classes",
+        "views",
+        "maximum_sources",
+        "top_k",
+        "request_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "system-rag-similarity-request/4.0"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^similarityrequest_[0-9a-f]{32}$"
+        },
+        "consumer_purpose": {
+          "enum": [
+            "ITEM_DATABASE_SEARCH",
+            "PAST_EXAM_VARIATION",
+            "ITEM_AUTHORING",
+            "ITEM_REVIEW"
+          ]
+        },
+        "anchor": {
+          "$ref": "#/$defs/anchor"
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/knowledge-types-v1#/$defs/graphSnapshotPointer"
+        },
+        "policy_revision_id": {
+          "type": "string",
+          "pattern": "^accessrev_[0-9a-f]{32}$"
+        },
+        "policy_sha256": {
+          "$ref": "eom://schemas/knowledge/public-solution-similarity/3.0#/$defs/hash"
+        },
+        "source_classes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "APPROVED_ITEM",
+              "PAST_EXAM"
+            ]
+          }
+        },
+        "views": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/$defs/view"
+          }
+        },
+        "maximum_sources": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "top_k": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "request_sha256": {
+          "$ref": "eom://schemas/knowledge/public-solution-similarity/3.0#/$defs/hash"
+        }
+      }
+    },
+    "candidate": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/knowledge/public-solution-similarity/3.0#/$defs/candidate"
+        },
+        {
+          "$ref": "#/$defs/registeredCandidate"
+        }
+      ]
+    },
+    "registeredCandidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis",
+        "source",
+        "base_analysis_run_id",
+        "profile",
+        "evidence",
+        "observation"
+      ],
+      "properties": {
+        "basis": {
+          "const": "VERIFIABLE_PUBLIC_SOLUTION"
+        },
+        "source": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-entry/2.0#/properties/source"
+        },
+        "base_analysis_run_id": {
+          "type": "string",
+          "pattern": "^analysisrun_[0-9a-f]{32}$"
+        },
+        "profile": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-index/4.0#/$defs/registeredProfile"
+        },
+        "evidence": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-entry/2.0#/$defs/registeredEvidence"
+        },
+        "observation": {
+          "$ref": "eom://schemas/knowledge/system-rag-similarity-context/1.0#/$defs/vectorObservation"
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "request",
+        "status",
+        "population",
+        "query_execution",
+        "candidates",
+        "limitations",
+        "error_code",
+        "context_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "system-rag-similarity-context/4.0"
+        },
+        "request": {
+          "$ref": "#/$defs/request"
+        },
+        "status": {
+          "enum": [
+            "READY",
+            "PARTIAL",
+            "EMPTY",
+            "FAILED"
+          ]
+        },
+        "population": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/knowledge/public-solution-similarity/3.0#/$defs/population"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "query_execution": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/knowledge/public-solution-query/2.0#/$defs/PublicSolutionQueryExecutionPointer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "candidates": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/candidate"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 4,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "SCORE_IS_NOT_PROOF_OF_IDENTICAL_REASONING",
+              "PARTIAL_REPORT_COVERAGE",
+              "PARTIAL_VIEW_COVERAGE",
+              "BOUNDED_SCOPE_TRUNCATED"
+            ]
+          }
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "enum": [
+                "SOURCE_ACCESS_DENIED",
+                "SOURCE_REVOKED",
+                "SOURCE_POINTER_INVALID",
+                "SOURCE_HASH_MISMATCH",
+                "INDEX_POINTER_INVALID",
+                "INDEX_HASH_MISMATCH",
+                "QUERY_RESULT_INVALID",
+                "AUTHORITY_UNAVAILABLE"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "context_sha256": {
+          "$ref": "eom://schemas/knowledge/public-solution-similarity/3.0#/$defs/hash"
+        }
+      }
+    }
+  }
+}

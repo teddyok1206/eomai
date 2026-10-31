@@ -16,6 +16,18 @@ from eom_catalog_contracts.public_solution_embedding import (
 from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionProfilePointer
 
 
+def validate_public_solution_profile_identity(
+    *, item_id: str, profile_id: str, profile_revision_id: str, profile_sha256: str
+) -> None:
+    """Provenance carrier versions never change the logical public-report identity."""
+    logical = content_sha256({"item_id": item_id, "projection_version": "public-solution-text/1.0"})
+    if (
+        profile_id != "inferenceprofile_" + logical[7:39]
+        or profile_revision_id != "inferenceprofilerev_" + profile_sha256[7:39]
+    ):
+        raise ValueError("PUBLIC_SOLUTION_REFERENCE_INVALID")
+
+
 class PublicSolutionSourceReference(FrozenModel):
     """Value closure only; actual source/Graph/Artifact authorization belongs to Catalog."""
 
@@ -33,21 +45,18 @@ class PublicSolutionSourceReference(FrozenModel):
 
     @model_validator(mode="after")
     def exact_source(self) -> Self:
-        logical = content_sha256(
-            {"item_id": self.source.item_id, "projection_version": "public-solution-text/1.0"}
+        validate_public_solution_profile_identity(
+            item_id=self.source.item_id,
+            profile_id=self.profile.profile_id,
+            profile_revision_id=self.profile.profile_revision_id,
+            profile_sha256=self.profile.profile_sha256,
         )
         if (
-            self.profile.profile_id != "inferenceprofile_" + logical[7:39]
-            or self.profile.profile_revision_id
-            != "inferenceprofilerev_" + self.profile.profile_sha256[7:39]
-            or (
-                isinstance(self.evidence, AcceptedPublicSolutionEvidence)
-                and self.evidence.solution.base_analysis_run_id != self.base_analysis_run_id
-            )
-            or (
-                not isinstance(self.evidence, AcceptedPublicSolutionEvidence)
-                and self.source.source_class != "APPROVED_ITEM"
-            )
+            isinstance(self.evidence, AcceptedPublicSolutionEvidence)
+            and self.evidence.solution.base_analysis_run_id != self.base_analysis_run_id
+        ) or (
+            not isinstance(self.evidence, AcceptedPublicSolutionEvidence)
+            and self.source.source_class != "APPROVED_ITEM"
         ):
             raise ValueError("PUBLIC_SOLUTION_REFERENCE_INVALID")
         return self

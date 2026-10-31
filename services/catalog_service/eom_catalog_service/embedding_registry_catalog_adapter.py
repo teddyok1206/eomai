@@ -87,6 +87,9 @@ from eom_catalog_contracts.registered_public_solution_index import (
 from eom_catalog_contracts.registered_public_solution_registry import (
     RegisterPublicSolutionIndexCommandV4,
 )
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    PublicSolutionSimilarityViewV4,
+)
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import (
     SimilarityContext,
@@ -272,13 +275,19 @@ def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
 
 
 def _validate_similarity_manifest(
-    selection: SimilarityViewSelection | SimilarityViewSelectionV2 | PublicSolutionSimilarityView,
+    selection: SimilarityViewSelection
+    | SimilarityViewSelectionV2
+    | PublicSolutionSimilarityView
+    | PublicSolutionSimilarityViewV4,
     pointer: ArtifactMemberPointer,
     index: SupportedEmbeddingIndex,
 ) -> None:
-    if isinstance(selection, PublicSolutionSimilarityView):
-        if not isinstance(index, PublicSolutionEmbeddingIndex):
-            raise ValueError("public similarity requires an actual index3")
+    if isinstance(selection, PublicSolutionSimilarityView | PublicSolutionSimilarityViewV4):
+        if not isinstance(index, PublicSolutionEmbeddingIndex | PublicSolutionEmbeddingIndexV4) or (
+            isinstance(selection, PublicSolutionSimilarityView)
+            and not isinstance(index, PublicSolutionEmbeddingIndex)
+        ):
+            raise ValueError("public similarity requires its exact supported index family")
         pin = selection.index
         if (
             pointer != pin.index_manifest
@@ -2393,7 +2402,12 @@ class CatalogEmbeddingRegistryVerifier:
             current = (
                 self._captured_lookup(session, caller, intent.scope, capture)
                 if isinstance(
-                    intent.selection, (SimilarityViewSelectionV2, PublicSolutionSimilarityView)
+                    intent.selection,
+                    (
+                        SimilarityViewSelectionV2,
+                        PublicSolutionSimilarityView,
+                        PublicSolutionSimilarityViewV4,
+                    ),
                 )
                 else None
             )
@@ -2461,7 +2475,12 @@ class CatalogEmbeddingRegistryVerifier:
                 # Retain selected row tuples only, not every decoded corpus shard matrix.
                 del values
             if isinstance(
-                intent.selection, (SimilarityViewSelectionV2, PublicSolutionSimilarityView)
+                intent.selection,
+                (
+                    SimilarityViewSelectionV2,
+                    PublicSolutionSimilarityView,
+                    PublicSolutionSimilarityViewV4,
+                ),
             ):
                 validate_supported_embedding_source_bindings(
                     selected, current_entries, tuple(shards)

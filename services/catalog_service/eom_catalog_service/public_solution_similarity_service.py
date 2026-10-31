@@ -1,8 +1,10 @@
 """Common public-solution composition over official Catalog reads, not another search store."""
 
 from dataclasses import dataclass
+from typing import overload
 
 from eom_catalog_contracts.embedding_contract_values import raw_similarity_contract_value
+from eom_catalog_contracts.embedding_index_families import parse_supported_embedding_binding
 from eom_catalog_contracts.embedding_reference_query import ReferenceQueryTextInput
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
 from eom_catalog_contracts.inference_transfer_embedding import (
@@ -22,15 +24,32 @@ from eom_catalog_contracts.public_solution_query import (
     PublicSolutionQueryResult,
     validate_public_solution_query_result,
 )
-from eom_catalog_contracts.public_solution_reference import PublicSolutionSourceReference
 from eom_catalog_contracts.public_solution_similarity import (
     PublicSolutionSimilarityContext,
     PublicSolutionSimilarityLimitation,
     PublicSolutionSimilarityRequest,
 )
+from eom_catalog_contracts.registered_public_solution_embedding import (
+    PublicSolutionEncodingEntry,
+    parse_public_solution_encoding_entry,
+)
+from eom_catalog_contracts.registered_public_solution_index import (
+    RegisteredPublicSolutionProfilePointer,
+    RegisteredPublicSolutionSourceBinding,
+)
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    PublicSolutionReferenceV4,
+    PublicSolutionSimilarityContextV4,
+    PublicSolutionSimilarityRequestV4,
+    SupportedPublicSolutionSimilarityContext,
+    SupportedPublicSolutionSimilarityRequest,
+    parse_supported_public_solution_similarity_request,
+    public_solution_reference_for_entry,
+)
 from eom_catalog_contracts.similarity_context import SimilarityFailureCode
 from eom_identifiers import content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
+from pydantic import TypeAdapter
 
 from eom_catalog_service.embedding_registry_ports import (
     ResolvedEmbeddingLookup,
@@ -69,12 +88,12 @@ class PreparedPublicSolutionQuerySource:
     """One owner-local normalized anchor, not a persistent source or execution grant."""
 
     request_sha256: str
-    anchor: PublicSolutionSourceReference
+    anchor: PublicSolutionReferenceV4
     row: ReferenceQueryTextInput
 
 
 def prepare_public_solution_query_source(
-    request: PublicSolutionSimilarityRequest,
+    request: SupportedPublicSolutionSimilarityRequest,
     capture: ResolvedEmbeddingLookup,
 ) -> PreparedPublicSolutionQuerySource:
     """Use the same report projection as DOCUMENT, with the distinct QUERY space.
@@ -82,7 +101,7 @@ def prepare_public_solution_query_source(
     The caller owns official current source/index reads and reauthorization in
     one root. This pure materialization never substitutes DOCUMENT vectors.
     """
-    request = PublicSolutionSimilarityRequest.model_validate(request)
+    request = parse_supported_public_solution_similarity_request(request)
     entries = _public_entries(request, capture)
     return PreparedPublicSolutionQuerySource(
         request.request_sha256, request.anchor, _anchor_query_row(request, entries)
@@ -90,8 +109,8 @@ def prepare_public_solution_query_source(
 
 
 def _anchor_query_row(
-    request: PublicSolutionSimilarityRequest,
-    entries: dict[str, PublicSolutionEmbeddingEntry],
+    request: SupportedPublicSolutionSimilarityRequest,
+    entries: dict[str, PublicSolutionEncodingEntry],
 ) -> ReferenceQueryTextInput:
     view = request.views[0]
     expected = prepare_public_solution_encoding(
@@ -107,9 +126,9 @@ def _anchor_query_row(
 
 
 def _public_entries(
-    request: PublicSolutionSimilarityRequest,
+    request: SupportedPublicSolutionSimilarityRequest,
     capture: ResolvedEmbeddingLookup,
-) -> dict[str, PublicSolutionEmbeddingEntry]:
+) -> dict[str, PublicSolutionEncodingEntry]:
     view = request.views[0]
     _require(
         type(capture) is ResolvedEmbeddingLookup
@@ -130,11 +149,11 @@ def _public_entries(
         and all(source.source_class in request.source_classes for source in capture.sources),
         "SOURCE_POINTER_INVALID",
     )
-    entries = {}
+    entries: dict[str, PublicSolutionEncodingEntry] = {}
     for original in capture.entries:
-        _require(isinstance(original, PublicSolutionEmbeddingEntry), "SOURCE_POINTER_INVALID")
-        assert isinstance(original, PublicSolutionEmbeddingEntry)
-        entry = PublicSolutionEmbeddingEntry.model_validate(raw_similarity_contract_value(original))
+        if isinstance(request, PublicSolutionSimilarityRequest):
+            _require(isinstance(original, PublicSolutionEmbeddingEntry), "SOURCE_POINTER_INVALID")
+        entry = parse_public_solution_encoding_entry(original)
         key = entry.source.item_revision_id
         _require(
             key not in entries
@@ -151,15 +170,15 @@ def _public_entries(
     _require(anchor is not None, "SOURCE_POINTER_INVALID")
     assert anchor is not None
     _require(
-        PublicSolutionSourceReference.from_entry(anchor) == request.anchor,
+        public_solution_reference_for_entry(anchor) == request.anchor,
         "SOURCE_POINTER_INVALID",
     )
     return entries
 
 
 def _query_vector(
-    request: PublicSolutionSimilarityRequest,
-    entries: dict[str, PublicSolutionEmbeddingEntry],
+    request: SupportedPublicSolutionSimilarityRequest,
+    entries: dict[str, PublicSolutionEncodingEntry],
     query: VerifiedPublicSolutionQueryRead,
 ) -> tuple[tuple[float, ...], PublicSolutionQueryExecutionPointer]:
     _require(type(query) is VerifiedPublicSolutionQueryRead, "QUERY_RESULT_INVALID")
@@ -209,18 +228,36 @@ def _query_vector(
     )
 
 
+@overload
 def compose_public_solution_similarity(
     request: PublicSolutionSimilarityRequest,
     capture: ResolvedEmbeddingLookup,
     document: ResolvedPinnedEmbeddingIndex,
     query: VerifiedPublicSolutionQueryRead,
-) -> PublicSolutionSimilarityContext:
+) -> PublicSolutionSimilarityContext: ...
+
+
+@overload
+def compose_public_solution_similarity(
+    request: PublicSolutionSimilarityRequestV4,
+    capture: ResolvedEmbeddingLookup,
+    document: ResolvedPinnedEmbeddingIndex,
+    query: VerifiedPublicSolutionQueryRead,
+) -> PublicSolutionSimilarityContextV4: ...
+
+
+def compose_public_solution_similarity(
+    request: SupportedPublicSolutionSimilarityRequest,
+    capture: ResolvedEmbeddingLookup,
+    document: ResolvedPinnedEmbeddingIndex,
+    query: VerifiedPublicSolutionQueryRead,
+) -> SupportedPublicSolutionSimilarityContext:
     """Compose owner-local values only. No DB/IO/launch or substitute for actual authorization.
 
     Sources and unique numerical rows use keyed maps; exact ranking is the shared
     O(n*d + n*log(n)) rule. Bounded context contains references, never report text.
     """
-    request = PublicSolutionSimilarityRequest.model_validate(request)
+    request = parse_supported_public_solution_similarity_request(request)
     entries = _public_entries(request, capture)
     view = request.views[0]
     _require(
@@ -236,28 +273,35 @@ def compose_public_solution_similarity(
         and len(document.sources) == len(capture.sources),
         "INDEX_POINTER_INVALID",
     )
+    profile_reader: TypeAdapter[
+        PublicSolutionProfilePointer | RegisteredPublicSolutionProfilePointer
+    ] = TypeAdapter(PublicSolutionProfilePointer | RegisteredPublicSolutionProfilePointer)
+    references = {key: public_solution_reference_for_entry(entry) for key, entry in entries.items()}
     profiles = {
-        row.source_item_revision_id: PublicSolutionProfilePointer.model_validate(
+        row.source_item_revision_id: profile_reader.validate_python(
             raw_similarity_contract_value(row.profile)
         )
         for row in document.profiles
     }
     _require(
         len(profiles) == len(document.profiles)
-        and profiles
-        == {key: PublicSolutionProfilePointer.from_entry(entry) for key, entry in entries.items()},
+        and profiles == {key: reference.profile for key, reference in references.items()},
         "INDEX_POINTER_INVALID",
     )
     rows = {row.row.encoding.encoding_sha256: row for row in document.numerical_rows}
     _require(len(rows) == len(document.numerical_rows), "INDEX_POINTER_INVALID")
     bindings = {}
     for original in document.bindings:
+        binding = parse_supported_embedding_binding(original)
         _require(
-            isinstance(original, PublicSolutionEmbeddingSourceBinding), "INDEX_POINTER_INVALID"
+            isinstance(
+                binding,
+                PublicSolutionEmbeddingSourceBinding | RegisteredPublicSolutionSourceBinding,
+            ),
+            "INDEX_POINTER_INVALID",
         )
-        assert isinstance(original, PublicSolutionEmbeddingSourceBinding)
-        binding = PublicSolutionEmbeddingSourceBinding.model_validate(
-            raw_similarity_contract_value(original)
+        assert isinstance(
+            binding, PublicSolutionEmbeddingSourceBinding | RegisteredPublicSolutionSourceBinding
         )
         key = binding.source.item_revision_id
         entry = entries.get(key)
@@ -308,9 +352,7 @@ def compose_public_solution_similarity(
     candidates = []
     for rank, (profile, score) in enumerate(ranked, 1):
         binding = by_profile[profile]
-        reference = PublicSolutionSourceReference.from_entry(
-            entries[binding.source.item_revision_id]
-        )
+        reference = references[binding.source.item_revision_id]
         candidates.append(
             reference.model_dump(mode="json")
             | {
@@ -340,7 +382,9 @@ def compose_public_solution_similarity(
         limitations.append("BOUNDED_SCOPE_TRUNCATED")
     scored = len(bindings) - int(request.anchor.source.item_revision_id in bindings)
     body = dict(
-        schema_version="system-rag-similarity-context/3.0",
+        schema_version="system-rag-similarity-context/4.0"
+        if isinstance(request, PublicSolutionSimilarityRequestV4)
+        else "system-rag-similarity-context/3.0",
         request=request.model_dump(mode="json"),
         status="EMPTY" if not scored else "PARTIAL" if len(limitations) > 1 else "READY",
         population=dict(
@@ -362,6 +406,9 @@ def compose_public_solution_similarity(
         limitations=limitations,
         error_code=None,
     )
-    return PublicSolutionSimilarityContext.model_validate(
-        body | {"context_sha256": content_sha256(body)}
+    result_type = (
+        PublicSolutionSimilarityContextV4
+        if isinstance(request, PublicSolutionSimilarityRequestV4)
+        else PublicSolutionSimilarityContext
     )
+    return result_type.model_validate(body | {"context_sha256": content_sha256(body)})

@@ -47,11 +47,21 @@ from tests.unit.test_public_solution_similarity_service import composition_case
 
 
 @pytest.fixture
-def public_read(owner, tmp_path, monkeypatch):
+def public_read(owner, tmp_path, monkeypatch, request):
+    registered_metadata = getattr(request, "param", None) == "registered"
     old, _, command, _, _, scope, _ = owner
     request, captured, old_document, _ = composition_case()
     data = setup()
     entries, available, ((_, original_shard),), namespace, space = data
+    if registered_metadata:
+        from tests.unit.test_registered_public_solution_index import registered_index_entry
+
+        entries = tuple(
+            sorted(
+                (*entries, registered_index_entry()),
+                key=lambda entry: entry.source.item_revision_id,
+            )
+        )
     binary = pack_unit_vectors(
         (old_document.numerical_rows[0].values,), dimension=space.model_spec.dimension
     )
@@ -65,10 +75,29 @@ def public_read(owner, tmp_path, monkeypatch):
         )
         for row in available
     )
-    index = assemble((entries, rows, ((shard_member, shard),), namespace, space)).index
+    if registered_metadata:
+        from eom_catalog_service.public_solution_index_assembly import (
+            assemble_registered_public_solution_index,
+        )
+
+        from tests.unit.inference_transfer_fixtures import NOW
+
+        index = assemble_registered_public_solution_index(
+            entries,
+            available_rows=rows,
+            shards=((shard_member, shard),),
+            namespace=namespace,
+            space=space,
+            index_id=request.views[0].index.index_id,
+            index_revision_id=request.views[0].index.index_revision_id,
+            previous_manifest=None,
+            created_at=NOW,
+        ).index
+    else:
+        index = assemble((entries, rows, ((shard_member, shard),), namespace, space)).index
     index_member = member(
         index,
-        schema="eom://schemas/knowledge/embedding-index-manifest/3.0",
+        schema="eom://schemas/knowledge/" + index.schema_version,
         name="index.json",
         seed="b",
     )
@@ -82,6 +111,12 @@ def public_read(owner, tmp_path, monkeypatch):
             )
         }
     )
+    if registered_metadata:
+        from eom_catalog_contracts.registered_public_solution_similarity import (
+            PublicSolutionSimilarityViewV4,
+        )
+
+        selection = PublicSolutionSimilarityViewV4.model_validate(selection.model_dump(mode="json"))
     intent = replace(old_document.intent, selection=selection)
     native = embedding_input(
         entries[0].public_solution.text, space=space, storage_partition=namespace.storage_partition

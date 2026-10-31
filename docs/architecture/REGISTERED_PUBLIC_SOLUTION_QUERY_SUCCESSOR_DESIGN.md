@@ -19,6 +19,11 @@ PARTIAL 결과를 제공하고, 미준비 source/보고서/벡터 수를 원래 
 - 같은 이유로 QUERY2만 감싸는 `embedding-work-batch-input/result/2.0`과 수치 shard1도
   그대로 재사용한다. metadata 확장 때문에 새 모델·벡터 공간·GPU 이미지·batch queue를
   만들거나 기출 벡터를 다시 계산하지 않는다.
+- 기존 public receipt2와 coordinator2도 원본 request/context SHA와 QUERY2 file-set을
+  고정하고 report envelope를 내장하지 않는다. 후속 native 연결에서 이 실제 closure를
+  검증해 재사용한다. 단지 source provenance가 늘었다는 이유로 receipt/coordinator 버전까지
+  일괄 증분하지 않는다. 입력 context를 내장한 native request와 read reply/parent Artifact 등은
+  각각 실제 필드를 확인해 필요한 closed successor만 추가한다.
 
 ## 짧은 설계 검토
 

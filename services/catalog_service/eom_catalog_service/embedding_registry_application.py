@@ -86,6 +86,9 @@ from eom_catalog_contracts.registered_public_solution_registry import (
     RegisterPublicSolutionIndexCommandV4,
     validate_public_solution_registration_result_v4,
 )
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    PublicSolutionSimilarityViewV4,
+)
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import SimilarityViewSelection
 from eom_catalog_contracts.similarity_context_v2 import SimilarityViewSelectionV2
@@ -876,20 +879,28 @@ def _validate_pinned_read_intent(intent: EmbeddingRegistryRead) -> EmbeddingRegi
     selection_values = raw_similarity_contract_value(intent.selection)
     canonical_json_bytes(selection_values)
     if mixed != isinstance(intent.selection, SimilarityViewSelectionV2) or public != isinstance(
-        intent.selection, PublicSolutionSimilarityView
+        intent.selection, PublicSolutionSimilarityView | PublicSolutionSimilarityViewV4
     ):
         _fail("EMBEDDING_REGISTRY_REQUEST_INVALID")
     family = "2.0" if mixed else "1.0"
+    public_family = "4.0" if isinstance(intent.selection, PublicSolutionSimilarityViewV4) else "3.0"
     Draft202012Validator(
         {
-            "$ref": "eom://schemas/knowledge/public-solution-similarity/3.0#/$defs/view"
+            "$ref": f"eom://schemas/knowledge/public-solution-similarity/{public_family}#/$defs/view"
             if public
             else f"eom://schemas/knowledge/system-rag-similarity-context/{family}#/$defs/viewSelection"
         },
         registry=catalog_schema_registry(),
     ).validate(selection_values)
-    selection: PublicSolutionSimilarityView | SimilarityViewSelectionV2 | SimilarityViewSelection
-    if public:
+    selection: (
+        PublicSolutionSimilarityView
+        | PublicSolutionSimilarityViewV4
+        | SimilarityViewSelectionV2
+        | SimilarityViewSelection
+    )
+    if public and isinstance(intent.selection, PublicSolutionSimilarityViewV4):
+        selection = PublicSolutionSimilarityViewV4.model_validate(selection_values)
+    elif public:
         selection = PublicSolutionSimilarityView.model_validate(selection_values)
     elif mixed:
         selection = SimilarityViewSelectionV2.model_validate(selection_values)

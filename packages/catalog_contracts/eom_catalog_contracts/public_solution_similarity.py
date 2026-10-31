@@ -1,6 +1,9 @@
 """Public-report QUERY/index observations; never source authority or scientific approval."""
 
-from typing import Literal, Self
+from __future__ import annotations
+
+from collections.abc import Sequence
+from typing import Any, Literal, Protocol, Self
 
 from eom_identifiers import content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -12,6 +15,7 @@ from eom_catalog_contracts.embedding_reference_query import (
     similarity_contract_document,
 )
 from eom_catalog_contracts.inference_transfer_embedding import StoragePartition
+from eom_catalog_contracts.inference_transfer_experiment import PopulationSource
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_catalog_contracts.models import FrozenModel, Sha256
 from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingRecipe
@@ -59,12 +63,9 @@ class PublicSolutionSimilarityIndexPin(_PublicSimilarityValue):
 
     @model_validator(mode="after")
     def exact_manifest(self) -> Self:
-        if (
-            self.index_manifest.member_path != "index.json"
-            or self.index_manifest.schema_ref != PUBLIC_SOLUTION_INDEX_SCHEMA_REF
-            or self.index_manifest.media_type != "application/json"
-        ):
-            raise ValueError("PUBLIC_SIMILARITY_INDEX_POINTER_INVALID")
+        validate_public_similarity_index_pointer(
+            self.index_manifest, schema_refs=(PUBLIC_SOLUTION_INDEX_SCHEMA_REF,)
+        )
         return self
 
 
@@ -101,15 +102,7 @@ class PublicSolutionSimilarityRequest(_PublicSimilarityValue):
 
     @model_validator(mode="after")
     def exact_scope(self) -> Self:
-        if (
-            self.source_classes != tuple(sorted(set(self.source_classes)))
-            or self.anchor.source.source_class not in self.source_classes
-            or self.graph_snapshot.manifest_sha256 != self.graph_snapshot.manifest_artifact.sha256
-            or self.request_sha256
-            != content_sha256(self.model_dump(mode="json", exclude={"request_sha256"}))
-        ):
-            raise ValueError("PUBLIC_SIMILARITY_REQUEST_INVALID")
-        return self
+        return validate_public_similarity_request_values(self)
 
 
 class PublicSolutionSimilarityPopulation(_PublicSimilarityValue):
@@ -139,8 +132,7 @@ class PublicSolutionSimilarityCandidate(PublicSolutionSourceReference):
 
     @model_validator(mode="after")
     def public_view(self) -> Self:
-        if self.observation.view != "CONCRETE_FACETS":
-            raise ValueError("PUBLIC_SIMILARITY_CANDIDATE_VIEW_INVALID")
+        validate_public_similarity_observation(self.observation)
         return self
 
 
@@ -166,65 +158,159 @@ class PublicSolutionSimilarityContext(_PublicSimilarityValue):
 
     @model_validator(mode="after")
     def exact_observations(self) -> Self:
+        return validate_public_similarity_context_values(self)
+
+
+class PublicSimilarityReferenceValues(Protocol):
+    @property
+    def source(self) -> PopulationSource: ...
+
+
+class PublicSimilarityRequestValues(Protocol):
+    @property
+    def anchor(self) -> PublicSimilarityReferenceValues: ...
+
+    @property
+    def source_classes(self) -> tuple[Literal["APPROVED_ITEM", "PAST_EXAM"], ...]: ...
+
+    @property
+    def graph_snapshot(self) -> KnowledgeGraphSnapshotPointer: ...
+
+    @property
+    def request_sha256(self) -> str: ...
+
+    @property
+    def maximum_sources(self) -> int: ...
+
+    @property
+    def top_k(self) -> int: ...
+
+    def model_dump(self, *, mode: Literal["json"], exclude: set[str]) -> dict[str, Any]: ...
+
+
+class PublicSimilarityCandidateValues(PublicSimilarityReferenceValues, Protocol):
+    @property
+    def observation(self) -> SimilarityVectorObservation: ...
+
+
+class PublicSimilarityContextValues(Protocol):
+    @property
+    def request(self) -> PublicSimilarityRequestValues: ...
+
+    @property
+    def status(self) -> str: ...
+
+    @property
+    def population(self) -> PublicSolutionSimilarityPopulation | None: ...
+
+    @property
+    def query_execution(self) -> PublicSolutionQueryExecutionPointer | None: ...
+
+    @property
+    def candidates(self) -> Sequence[PublicSimilarityCandidateValues]: ...
+
+    @property
+    def limitations(self) -> tuple[PublicSolutionSimilarityLimitation, ...]: ...
+
+    @property
+    def error_code(self) -> SimilarityFailureCode | None: ...
+
+    @property
+    def context_sha256(self) -> str: ...
+
+    def model_dump(self, *, mode: Literal["json"], exclude: set[str]) -> dict[str, Any]: ...
+
+
+def validate_public_similarity_index_pointer(
+    pointer: ArtifactMemberPointer, *, schema_refs: tuple[str, ...]
+) -> None:
+    if (
+        pointer.member_path != "index.json"
+        or pointer.schema_ref not in schema_refs
+        or pointer.media_type != "application/json"
+    ):
+        raise ValueError("PUBLIC_SIMILARITY_INDEX_POINTER_INVALID")
+
+
+def validate_public_similarity_observation(observation: SimilarityVectorObservation) -> None:
+    if observation.view != "CONCRETE_FACETS":
+        raise ValueError("PUBLIC_SIMILARITY_CANDIDATE_VIEW_INVALID")
+
+
+def validate_public_similarity_request_values[T: PublicSimilarityRequestValues](value: T) -> T:
+    """One scope/hash rule for closed predecessor3 and registered metadata4."""
+    if (
+        value.source_classes != tuple(sorted(set(value.source_classes)))
+        or value.anchor.source.source_class not in value.source_classes
+        or value.graph_snapshot.manifest_sha256 != value.graph_snapshot.manifest_artifact.sha256
+        or value.request_sha256
+        != content_sha256(value.model_dump(mode="json", exclude={"request_sha256"}))
+    ):
+        raise ValueError("PUBLIC_SIMILARITY_REQUEST_INVALID")
+    return value
+
+
+def validate_public_similarity_context_values[T: PublicSimilarityContextValues](self: T) -> T:
+    """Same finite coverage/rank/execution closure, independent of report proof envelope."""
+    if (
+        len(set(self.limitations)) != len(self.limitations)
+        or "SCORE_IS_NOT_PROOF_OF_IDENTICAL_REASONING" not in self.limitations
+        or self.context_sha256
+        != content_sha256(self.model_dump(mode="json", exclude={"context_sha256"}))
+    ):
+        raise ValueError("PUBLIC_SIMILARITY_CONTEXT_HASH_INVALID")
+    if self.status == "FAILED":
         if (
-            len(set(self.limitations)) != len(self.limitations)
-            or "SCORE_IS_NOT_PROOF_OF_IDENTICAL_REASONING" not in self.limitations
-            or self.context_sha256
-            != content_sha256(self.model_dump(mode="json", exclude={"context_sha256"}))
+            self.error_code is None
+            or self.population is not None
+            or self.query_execution is not None
+            or self.candidates
         ):
-            raise ValueError("PUBLIC_SIMILARITY_CONTEXT_HASH_INVALID")
-        if self.status == "FAILED":
-            if (
-                self.error_code is None
-                or self.population is not None
-                or self.query_execution is not None
-                or self.candidates
-            ):
-                raise ValueError("PUBLIC_SIMILARITY_FAILED_HAS_RESULT")
-            return self
-        population, query = self.population, self.query_execution
-        if population is None or query is None or self.error_code is not None:
-            raise ValueError("PUBLIC_SIMILARITY_EXECUTION_MISSING")
-        if population.authorized_source_count > self.request.maximum_sources or len(
-            self.candidates
-        ) != min(population.scored_count, self.request.top_k):
-            raise ValueError("PUBLIC_SIMILARITY_RESULT_SCOPE_INVALID")
-        partial = False
-        for condition, limitation in (
-            (
-                population.available_report_count < population.authorized_source_count,
-                "PARTIAL_REPORT_COVERAGE",
-            ),
-            (
-                population.available_binding_count < population.available_report_count,
-                "PARTIAL_VIEW_COVERAGE",
-            ),
-            (population.truncated, "BOUNDED_SCOPE_TRUNCATED"),
-        ):
-            if condition != (limitation in self.limitations):
-                raise ValueError("PUBLIC_SIMILARITY_LIMITATION_INVALID")
-            partial = partial or condition
-        expected = "EMPTY" if not population.scored_count else "PARTIAL" if partial else "READY"
-        if self.status != expected:
-            raise ValueError("PUBLIC_SIMILARITY_STATUS_INVALID")
-        revisions = {candidate.source.item_revision_id for candidate in self.candidates}
-        if (
-            len(revisions) != len(self.candidates)
-            or self.request.anchor.source.item_revision_id in revisions
-        ):
-            raise ValueError("PUBLIC_SIMILARITY_DUPLICATE_CANDIDATE")
-        query_artifact = (query.result_member.artifact_id, query.result_member.artifact_revision_id)
-        for rank, candidate in enumerate(self.candidates, 1):
-            observation = candidate.observation
-            if (
-                observation.rank != rank
-                or candidate.source.source_class not in self.request.source_classes
-                or (
-                    observation.query_row.shard_manifest.artifact_id,
-                    observation.query_row.shard_manifest.artifact_revision_id,
-                )
-                != query_artifact
-                or observation.query_row.row_index != 0
-            ):
-                raise ValueError("PUBLIC_SIMILARITY_CANDIDATE_EXECUTION_INVALID")
+            raise ValueError("PUBLIC_SIMILARITY_FAILED_HAS_RESULT")
         return self
+    population, query = self.population, self.query_execution
+    if population is None or query is None or self.error_code is not None:
+        raise ValueError("PUBLIC_SIMILARITY_EXECUTION_MISSING")
+    if population.authorized_source_count > self.request.maximum_sources or len(
+        self.candidates
+    ) != min(population.scored_count, self.request.top_k):
+        raise ValueError("PUBLIC_SIMILARITY_RESULT_SCOPE_INVALID")
+    partial = False
+    for condition, limitation in (
+        (
+            population.available_report_count < population.authorized_source_count,
+            "PARTIAL_REPORT_COVERAGE",
+        ),
+        (
+            population.available_binding_count < population.available_report_count,
+            "PARTIAL_VIEW_COVERAGE",
+        ),
+        (population.truncated, "BOUNDED_SCOPE_TRUNCATED"),
+    ):
+        if condition != (limitation in self.limitations):
+            raise ValueError("PUBLIC_SIMILARITY_LIMITATION_INVALID")
+        partial = partial or condition
+    expected = "EMPTY" if not population.scored_count else "PARTIAL" if partial else "READY"
+    if self.status != expected:
+        raise ValueError("PUBLIC_SIMILARITY_STATUS_INVALID")
+    revisions = {candidate.source.item_revision_id for candidate in self.candidates}
+    if (
+        len(revisions) != len(self.candidates)
+        or self.request.anchor.source.item_revision_id in revisions
+    ):
+        raise ValueError("PUBLIC_SIMILARITY_DUPLICATE_CANDIDATE")
+    query_artifact = (query.result_member.artifact_id, query.result_member.artifact_revision_id)
+    for rank, candidate in enumerate(self.candidates, 1):
+        observation = candidate.observation
+        if (
+            observation.rank != rank
+            or candidate.source.source_class not in self.request.source_classes
+            or (
+                observation.query_row.shard_manifest.artifact_id,
+                observation.query_row.shard_manifest.artifact_revision_id,
+            )
+            != query_artifact
+            or observation.query_row.row_index != 0
+        ):
+            raise ValueError("PUBLIC_SIMILARITY_CANDIDATE_EXECUTION_INVALID")
+    return self

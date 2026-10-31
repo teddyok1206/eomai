@@ -551,3 +551,29 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
   entry를 담지 않으므로 그대로 유지한다. 불필요한 수치 포맷 버전을 추가하지 않는다.
 - Slack milestone `devreport_f1d8cf27e12540b5900fcc4e7cbd80a8` SENT. 원 목표 ACTIVE,
   전체 coverage/AI producer·QUERY metadata successor/실제 검색/구 vector retirement는 아직 미완료다.
+
+## 공통 검색 metadata4·실제 로컬 index4 reader 후보 — 14:53 UTC
+
+- schema-first `public-solution-similarity/4.0`를 추가했다. 기존3의 JSON bytes는 그대로이며
+  anchor/candidate의 원 entry1과 실제 V11 entry2 proof를 구별한다. index pointer도3/4만 허용한다.
+  원본 source class·base accepted analysis·profile logical/revision/hash를 혼동하지 않는다.
+- old/new source identity·scope/hash·coverage·rank·query producer 검증은 공통 순수 함수로
+  정리했다. 기존 public3 parser/shape는 그대로이며 source4를3으로 retag하거나 허용하지 않는다.
+- 순수 composer는 기존 source capture/Registry read port를 통해 세 종류의 source를 읽고
+  같은 full public text와 한 DOCUMENT row로 랭킹한다. anchor가 아직 DOCUMENT에 없더라도
+  QUERY2로 다른 준비된 binding을 PARTIAL로 검색한다. 결과에 full report text를 복사하지 않는다.
+- `CatalogEmbeddingRegistryVerifier.resolve_pinned_read`와 application의 read intent 검사도
+  명시적 view4에 연결했다. 실제 local canonical index4/shard1/f32 bytes를 읽는 검사에서
+  세 proof family/한 row를 확인하고 physical SHA·lifecycle·source/report 재검증을 유지했다.
+  IAM/source/ledger test leaves는 합성이므로 actual 운영 V11/사용자 검색 성공은 아니다.
+- 초기 실제 reader 검사가 기존 intent whitelist의4 거부를 찾아 해당 application 경계에서
+  수정했다. 테스트 float case는 canonical serializer가 먼저 거부하므로 raw input 거부 검사로
+  고쳤으며, 생산 hash/float 규칙이나 기존 실패 이력은 완화하지 않았다.
+- focused core7파일 mypy PASS, 기존 QUERY/API/Catalog 소비자35파일 mypy PASS, formatter/Ruff/
+  schema generator PASS. 새 closure45건 및 기존 public3/API/reader 회귀 합계 **152 PASS**.
+- 운영 native QUERY는 여전히 기존 request3/context3이다. 다음은 context4를 내장하는 native
+  request/prepare parent/read wire의 실제 변경 경계를 확인하고 기존 QUERY2/receipt2/
+  coordinator2를 유지한 채 전체 연결·설치·실제 검색을 검증하는 것이다. INDEX4 writer를
+  QUERY receiver 준비 전 활성화하지 않는다. 이전 벡터 삭제0, GPU/API/QUERY 재시작0.
+- 창작 owner는 ACTIVE를 유지하며 복구 이후3개 source를 Graph 발행·정식 read 확인까지 마쳤다.
+  이는3개의 새 LLM 보고서를 재생성했다는 뜻이 아니다. 이미 성공한 단계는 원 identity로 재사용했다.
