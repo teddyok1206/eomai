@@ -19,6 +19,11 @@ from eom_catalog_contracts.similarity_read_v3 import (
     SimilarityContextReadRequestV3,
     validate_similarity_read_reply_v3,
 )
+from eom_catalog_contracts.similarity_read_v4 import (
+    SimilarityContextReadReplyV4,
+    SimilarityContextReadRequestV4,
+    validate_similarity_read_reply_v4,
+)
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_orchestrator.general_chat_socket import ChatTransportError, decode_chat_frame
 from jsonschema.exceptions import ValidationError as SchemaError
@@ -27,14 +32,22 @@ from eom_catalog_service.similarity_context_ports import SimilarityContextReadEr
 from eom_catalog_service.similarity_read_service import CatalogSimilarityContextReadService
 
 type ReadRequest = (
-    SimilarityContextReadRequest | SimilarityContextReadRequestV2 | SimilarityContextReadRequestV3
+    SimilarityContextReadRequest
+    | SimilarityContextReadRequestV2
+    | SimilarityContextReadRequestV3
+    | SimilarityContextReadRequestV4
 )
 type ReadReply = (
-    SimilarityContextReadReply | SimilarityContextReadReplyV2 | SimilarityContextReadReplyV3
+    SimilarityContextReadReply
+    | SimilarityContextReadReplyV2
+    | SimilarityContextReadReplyV3
+    | SimilarityContextReadReplyV4
 )
 
 
 def _reply_family(request: ReadRequest | None) -> tuple[str, type[ReadReply]]:
+    if isinstance(request, SimilarityContextReadRequestV4):
+        return "4.0", SimilarityContextReadReplyV4
     if isinstance(request, SimilarityContextReadRequestV3):
         return "3.0", SimilarityContextReadReplyV3
     if isinstance(request, SimilarityContextReadRequestV2):
@@ -79,6 +92,7 @@ def dispatch_similarity_read_frame(
             "system-rag-similarity-read-request/1.0": SimilarityContextReadRequest,
             "system-rag-similarity-read-request/2.0": SimilarityContextReadRequestV2,
             "system-rag-similarity-read-request/3.0": SimilarityContextReadRequestV3,
+            "system-rag-similarity-read-request/4.0": SimilarityContextReadRequestV4,
         }
         request_type = request_types.get(version, SimilarityContextReadRequest)
         request = request_type.model_validate(value)
@@ -100,7 +114,11 @@ def dispatch_similarity_read_frame(
                 error_code=None,
             )
         )
-        if isinstance(request, SimilarityContextReadRequestV3) and isinstance(
+        if isinstance(request, SimilarityContextReadRequestV4) and isinstance(
+            reply, SimilarityContextReadReplyV4
+        ):
+            validate_similarity_read_reply_v4(request, reply)
+        elif isinstance(request, SimilarityContextReadRequestV3) and isinstance(
             reply, SimilarityContextReadReplyV3
         ):
             validate_similarity_read_reply_v3(request, reply)

@@ -108,11 +108,15 @@ def test_missing_login_denies_before_any_catalog_read(setup):
     reader.read.assert_not_called()
 
 
-def test_public_context_http_uses_exact_selection_and_current_actor_without_new_work(setup):
+@pytest.mark.parametrize("registered", [False, True])
+def test_public_context_http_uses_exact_selection_and_current_actor_without_new_work(
+    setup, registered
+):
     from tests.unit.test_public_solution_similarity_read_boundary import pair as public_pair
+    from tests.unit.test_registered_public_similarity_read_boundary import pair as registered_pair
 
     app, _services, reader, _selector, _expected = setup
-    request, reply = public_pair()
+    request, reply = registered_pair() if registered else public_pair()
     reader.read_public.return_value = reply.result
     body = request.selection.model_dump(mode="json") | {
         "schema_version": "system-rag-similarity-read-selection/3.0",

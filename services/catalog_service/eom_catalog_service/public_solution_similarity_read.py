@@ -1,17 +1,33 @@
 """Official Catalog source/index reads for public reports; no model, queue or authority cache."""
 
 from dataclasses import dataclass
+from typing import overload
 
 from eom_catalog_contracts.embedding_reference_query import ReferenceQuerySpaces
 from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
 from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
-from eom_catalog_contracts.public_solution_reference import PublicSolutionSourceReference
 from eom_catalog_contracts.public_solution_similarity import (
     PublicSolutionSimilarityContext,
     PublicSolutionSimilarityIndexPin,
     PublicSolutionSimilarityPurpose,
     PublicSolutionSimilarityRequest,
     PublicSolutionSimilarityView,
+)
+from eom_catalog_contracts.registered_public_solution_embedding import (
+    RegisteredPublicSolutionEmbeddingEntry,
+)
+from eom_catalog_contracts.registered_public_solution_index import (
+    REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+)
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    PublicSolutionSimilarityContextV4,
+    PublicSolutionSimilarityIndexPinV4,
+    PublicSolutionSimilarityRequestV4,
+    PublicSolutionSimilarityViewV4,
+    SupportedPublicSolutionSimilarityContext,
+    SupportedPublicSolutionSimilarityRequest,
+    parse_supported_public_solution_similarity_request,
+    public_solution_reference_for_entry,
 )
 from eom_identifiers import content_sha256
 from sqlalchemy.orm import Session
@@ -80,7 +96,7 @@ class CatalogPublicSolutionSimilarityRead:
         session: Session,
         caller: EmbeddingRegistryCaller,
         preparation: PublicSolutionSimilarityPreparation,
-    ) -> PublicSolutionSimilarityRequest:
+    ) -> SupportedPublicSolutionSimilarityRequest:
         return self.prepare_many_in_session(session, caller, (preparation,))[0]
 
     def prepare_many_in_session(
@@ -88,7 +104,7 @@ class CatalogPublicSolutionSimilarityRead:
         session: Session,
         caller: EmbeddingRegistryCaller,
         preparations: tuple[PublicSolutionSimilarityPreparation, ...],
-    ) -> tuple[PublicSolutionSimilarityRequest, ...]:
+    ) -> tuple[SupportedPublicSolutionSimilarityRequest, ...]:
         """One current source capture and index read per device, not N full-index reads.
 
         Only the ordered source/request identities differ. These returned pins
@@ -131,7 +147,9 @@ class CatalogPublicSolutionSimilarityRead:
         entries = {
             entry.source.item_revision_id: entry
             for entry in captured.entries
-            if isinstance(entry, PublicSolutionEmbeddingEntry)
+            if isinstance(
+                entry, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry
+            )
         }
         if (
             len(entries) != len(captured.entries)
@@ -151,16 +169,31 @@ class CatalogPublicSolutionSimilarityRead:
         if current is None:
             raise SimilarityContextReadError("INDEX_POINTER_INVALID")
         registered, _version = current
-        selected = PublicSolutionSimilarityView(
-            recipe=entry.recipe,
-            index=PublicSolutionSimilarityIndexPin(
-                index_id=registered.index_id,
-                index_revision_id=registered.index_revision_id,
-                index_manifest=registered.index_manifest,
-                index_sha256=registered.index_sha256,
-                storage_partition=scope.namespace.storage_partition,
-                spaces=preparation.spaces,
-            ),
+        registered_source = (
+            registered.index_manifest.schema_ref == REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF
+            or any(
+                isinstance(value, RegisteredPublicSolutionEmbeddingEntry)
+                for value in entries.values()
+            )
+        )
+        view_type = (
+            PublicSolutionSimilarityViewV4 if registered_source else PublicSolutionSimilarityView
+        )
+        pin_type = (
+            PublicSolutionSimilarityIndexPinV4
+            if registered_source
+            else PublicSolutionSimilarityIndexPin
+        )
+        pin = pin_type(
+            index_id=registered.index_id,
+            index_revision_id=registered.index_revision_id,
+            index_manifest=registered.index_manifest,
+            index_sha256=registered.index_sha256,
+            storage_partition=scope.namespace.storage_partition,
+            spaces=preparation.spaces,
+        )
+        selected = view_type.model_validate(
+            {"recipe": entry.recipe.model_dump(mode="json"), "index": pin.model_dump(mode="json")}
         )
         intent = EmbeddingRegistryRead(scope, selected)
         validate_registered_embedding_index_read(intent, registered)
@@ -168,7 +201,9 @@ class CatalogPublicSolutionSimilarityRead:
         # identity under the actual operator before any request is submitted.
         read_pinned_embedding_index(session, caller, intent, self.catalog)
         body = dict(
-            schema_version="system-rag-similarity-request/3.0",
+            schema_version="system-rag-similarity-request/4.0"
+            if registered_source
+            else "system-rag-similarity-request/3.0",
             consumer_purpose=preparation.consumer_purpose,
             graph_snapshot=scope.graph_snapshot.model_dump(mode="json"),
             policy_revision_id=scope.policy_revision_id,
@@ -182,12 +217,12 @@ class CatalogPublicSolutionSimilarityRead:
         for prepared_value, source_id in zip(preparations, ids, strict=True):
             child = body | {
                 "request_id": prepared_value.request_id,
-                "anchor": PublicSolutionSourceReference.from_entry(entries[source_id]).model_dump(
+                "anchor": public_solution_reference_for_entry(entries[source_id]).model_dump(
                     mode="json"
                 ),
             }
             result.append(
-                PublicSolutionSimilarityRequest.model_validate(
+                parse_supported_public_solution_similarity_request(
                     child | {"request_sha256": content_sha256(child)}
                 )
             )
@@ -195,13 +230,40 @@ class CatalogPublicSolutionSimilarityRead:
             raise SimilarityContextReadError("SOURCE_REVOKED")
         return tuple(result)
 
+    @overload
     def read_in_session(
         self,
         session: Session,
         caller: EmbeddingRegistryCaller,
         request: PublicSolutionSimilarityRequest,
         query: VerifiedPublicSolutionQueryRead,
-    ) -> PublicSolutionSimilarityContext:
+    ) -> PublicSolutionSimilarityContext: ...
+
+    @overload
+    def read_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: PublicSolutionSimilarityRequestV4,
+        query: VerifiedPublicSolutionQueryRead,
+    ) -> PublicSolutionSimilarityContextV4: ...
+
+    @overload
+    def read_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: SupportedPublicSolutionSimilarityRequest,
+        query: VerifiedPublicSolutionQueryRead,
+    ) -> SupportedPublicSolutionSimilarityContext: ...
+
+    def read_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: SupportedPublicSolutionSimilarityRequest,
+        query: VerifiedPublicSolutionQueryRead,
+    ) -> SupportedPublicSolutionSimilarityContext:
         captured, document = self._read_pinned_request(session, caller, request)
         result = compose_public_solution_similarity(request, captured, document, query)
         self._reauthorize_pinned_read(session, caller, document, captured)
@@ -211,7 +273,7 @@ class CatalogPublicSolutionSimilarityRead:
         self,
         session: Session,
         caller: EmbeddingRegistryCaller,
-        request: PublicSolutionSimilarityRequest,
+        request: SupportedPublicSolutionSimilarityRequest,
     ) -> PreparedPublicSolutionQuerySource:
         """Materialize the original pinned QUERY text; never discover another head."""
         captured, document = self._read_pinned_request(session, caller, request)
@@ -223,10 +285,10 @@ class CatalogPublicSolutionSimilarityRead:
         self,
         session: Session,
         caller: EmbeddingRegistryCaller,
-        request: PublicSolutionSimilarityRequest,
+        request: SupportedPublicSolutionSimilarityRequest,
     ) -> tuple[ResolvedEmbeddingLookup, ResolvedPinnedEmbeddingIndex]:
         self._require_root(session)
-        request = PublicSolutionSimilarityRequest.model_validate(request)
+        request = parse_supported_public_solution_similarity_request(request)
         config = self.catalog.configuration
         view = request.views[0]
         if (

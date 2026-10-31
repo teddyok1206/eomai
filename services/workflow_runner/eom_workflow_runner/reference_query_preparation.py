@@ -6,10 +6,11 @@ from dataclasses import replace
 from typing import Literal
 
 from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityRequest
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    PublicSolutionSimilarityRequestV4,
+)
 from eom_catalog_contracts.similarity_context_v2 import (
     SimilarityContextRequestV2,
-    SupportedSimilarityContextRequest,
-    parse_supported_similarity_context_request,
 )
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
@@ -29,8 +30,10 @@ from eom_catalog_service.reference_query_context_preparation import (
 from eom_identifiers import content_sha256
 from eom_identity_service.repository import effective_permissions
 from eom_workflow.reference_query_execution import (
-    ReferenceQueryWorkflowRequestV3,
+    PublicReferenceQueryWorkflowRequest,
+    SupportedReferenceQueryContext,
     SupportedReferenceQueryWorkflowRequest,
+    parse_supported_reference_query_context,
     parse_supported_reference_query_workflow_request,
     validate_reference_query_request_references,
 )
@@ -163,7 +166,7 @@ def _prepare_selected_reference_query(
 ) -> ReferenceQueryWorkflowSubmitted:
     replay_preparation = preparation
     registry = owner.configuration.registry
-    if isinstance(original, ReferenceQueryWorkflowRequestV3):
+    if isinstance(original, PublicReferenceQueryWorkflowRequest):
         raise ValueError("REFERENCE_QUERY_PREPARATION_REPLAY_MISMATCH")
     if original is not None:
         catalog = owner.catalog.for_pinned_similarity_request_in_session(
@@ -220,7 +223,7 @@ def prepare_and_start_public_solution_query_selection_in_session(
             session, caller, preparation
         )
     else:
-        if not isinstance(original, ReferenceQueryWorkflowRequestV3):
+        if not isinstance(original, PublicReferenceQueryWorkflowRequest):
             raise ValueError("REFERENCE_QUERY_PREPARATION_REPLAY_MISMATCH")
         context = original.context_request
         scope = preparation.selection.scope
@@ -255,7 +258,7 @@ def prepare_and_start_reference_query_in_session(
     session: Session,
     *,
     caller: EmbeddingRegistryCaller,
-    context: SupportedSimilarityContextRequest | PublicSolutionSimilarityRequest,
+    context: SupportedReferenceQueryContext,
     idempotency_key: str,
     owner: CatalogReferenceQueryOwnerAdmission,
     executor: ReferenceQueryNativeExecutor,
@@ -266,11 +269,7 @@ def prepare_and_start_reference_query_in_session(
     atomic admission. Both preparation entrypoints share this single start path.
     """
     _require_preparation_root(session, owner, caller)
-    context = (
-        PublicSolutionSimilarityRequest.model_validate(context)
-        if isinstance(context, PublicSolutionSimilarityRequest)
-        else parse_supported_similarity_context_request(context)
-    )
+    context = parse_supported_reference_query_context(context)
     original = _current_query_request(session, owner, caller, idempotency_key)
     return _start_with_pinned_context(
         session,
@@ -287,7 +286,7 @@ def _start_with_pinned_context(
     session: Session,
     *,
     caller: EmbeddingRegistryCaller,
-    context: SupportedSimilarityContextRequest | PublicSolutionSimilarityRequest,
+    context: SupportedReferenceQueryContext,
     original: SupportedReferenceQueryWorkflowRequest | None,
     idempotency_key: str,
     owner: CatalogReferenceQueryOwnerAdmission,
@@ -313,7 +312,7 @@ def _start_with_pinned_context(
             ),
         )
         reader = PinnedArtifactReadContext(session, owner.settings)
-        if isinstance(context, PublicSolutionSimilarityRequest):
+        if isinstance(context, PublicSolutionSimilarityRequest | PublicSolutionSimilarityRequestV4):
             CatalogPublicSolutionSimilarityRead(owner.catalog).prepare_query_in_session(
                 session, caller, context
             )
@@ -325,7 +324,9 @@ def _start_with_pinned_context(
                 raise ValueError("REFERENCE_QUERY_INITIAL_NAMESPACE_MISMATCH")
         policy, bundle = read_pinned_reference_query_controls(reader, config)
         body = {
-            "schema_version": "reference-query-workflow-request/3.0"
+            "schema_version": "reference-query-workflow-request/4.0"
+            if isinstance(context, PublicSolutionSimilarityRequestV4)
+            else "reference-query-workflow-request/3.0"
             if isinstance(context, PublicSolutionSimilarityRequest)
             else "reference-query-workflow-request/2.0"
             if isinstance(context, SimilarityContextRequestV2)
@@ -338,7 +339,9 @@ def _start_with_pinned_context(
             "purpose": "REFERENCE_QUERY",
             "workflow_definition_key": "local-embedding-reference-query",
             "workflow_definition_version": "2.0.0"
-            if isinstance(context, PublicSolutionSimilarityRequest)
+            if isinstance(
+                context, PublicSolutionSimilarityRequest | PublicSolutionSimilarityRequestV4
+            )
             else "1.0.0",
             "workflow_definition_sha256": policy.workflow_definition_sha256,
             "operator_audit": {

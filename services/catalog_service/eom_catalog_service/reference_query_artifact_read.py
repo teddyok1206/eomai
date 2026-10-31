@@ -26,11 +26,11 @@ from eom_orchestrator.embedding_artifact_store import EMBEDDING_REFERENCE_QUERY_
 from eom_orchestrator.file_set_control_artifacts import CONTROL_FILE_SET_PROTOCOL
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.reference_query_execution import (
+    PublicReferenceQueryWorkflowRequest,
     ReferenceQueryExecutionPolicy,
     ReferenceQueryLaunchAssociation,
     ReferenceQueryWorkflowReceipt,
     ReferenceQueryWorkflowReceiptV2,
-    ReferenceQueryWorkflowRequestV3,
     SupportedReferenceQueryNativeInput,
     SupportedReferenceQueryNativeResult,
     SupportedReferenceQueryWorkflowIntent,
@@ -122,7 +122,7 @@ class CatalogReferenceQueryArtifacts:
     def resolve_public_solution_publication(
         self,
         *,
-        workflow_request: ReferenceQueryWorkflowRequestV3,
+        workflow_request: PublicReferenceQueryWorkflowRequest,
         policy: ReferenceQueryExecutionPolicy,
         bundle: EmbeddingRuntimeBundle,
         launch: ReferenceQueryLaunchAssociation,
@@ -163,7 +163,7 @@ class CatalogReferenceQueryArtifacts:
     ) -> ResolvedReferenceQueryArtifacts | ResolvedPublicSolutionQueryArtifacts:
         workflow_request = parse_supported_reference_query_workflow_request(workflow_request)
         receipt = parse_supported_reference_query_workflow_receipt(receipt)
-        if isinstance(workflow_request, ReferenceQueryWorkflowRequestV3) != isinstance(
+        if isinstance(workflow_request, PublicReferenceQueryWorkflowRequest) != isinstance(
             receipt, ReferenceQueryWorkflowReceiptV2
         ):
             raise ValueError("REFERENCE_QUERY_READ_FAMILY_MISMATCH")

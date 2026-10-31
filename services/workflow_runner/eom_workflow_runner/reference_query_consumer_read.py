@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from eom_catalog_contracts.public_solution_similarity import (
-    PublicSolutionSimilarityContext,
-    PublicSolutionSimilarityRequest,
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    SupportedPublicSolutionSimilarityContext,
+    SupportedPublicSolutionSimilarityRequest,
+    parse_supported_public_solution_similarity_request,
 )
 from eom_catalog_contracts.similarity_context_v2 import (
     SupportedSimilarityContextRequest,
@@ -45,9 +46,9 @@ from eom_workflow.native_reference_query_coordinator import (
     NativeQueryPublishedV2,
 )
 from eom_workflow.reference_query_execution import (
+    PublicReferenceQueryWorkflowRequest,
     ReferenceQueryStepOutput,
     ReferenceQueryStepOutputV2,
-    ReferenceQueryWorkflowRequestV3,
     SupportedReferenceQueryStepOutput,
     SupportedReferenceQueryWorkflowRequest,
     parse_supported_reference_query_workflow_request,
@@ -108,7 +109,7 @@ def read_completed_reference_query_selection(
     query_reader = CatalogCompletedReferenceQueryRead(
         owner, workflow_id=workflow_id, request=request, artifact_reader=reader
     )
-    if isinstance(request, ReferenceQueryWorkflowRequestV3):
+    if isinstance(request, PublicReferenceQueryWorkflowRequest):
         if not isinstance(current.sources, ResolvedPublicSolutionReferenceQuerySources):
             raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
         query_reader.resolve_public_solution_query_in_session(
@@ -157,10 +158,10 @@ def read_completed_public_solution_similarity_in_session(
     owner: ReferenceQuerySourceOwner,
     caller: EmbeddingRegistryCaller,
     selection: CompletedSimilarityQuerySelection,
-) -> PublicSolutionSimilarityContext:
+) -> SupportedPublicSolutionSimilarityContext:
     """Official completed QUERY2 → current authorized Graph/registry ranking, no new computation."""
     request = select_completed_reference_query_request(session, owner, caller, selection)
-    if not isinstance(request, ReferenceQueryWorkflowRequestV3):
+    if not isinstance(request, PublicReferenceQueryWorkflowRequest):
         raise SimilarityContextReadError("QUERY_RESULT_INVALID")
     owner = select_completed_reference_query_read_owner(owner, request)
     provenance = PinnedArtifactReadContext.for_session(session, owner.settings)
@@ -259,7 +260,7 @@ class CatalogCompletedReferenceQueryRead:
         self,
         session: Session,
         caller: EmbeddingRegistryCaller,
-        request: PublicSolutionSimilarityRequest,
+        request: SupportedPublicSolutionSimilarityRequest,
         prepared: PreparedPublicSolutionQuerySource,
     ) -> VerifiedPublicSolutionQueryRead:
         """Same canonical completion owner, with exact public-report source/result family."""
@@ -267,10 +268,10 @@ class CatalogCompletedReferenceQueryRead:
         if root is None or not root.is_active or session.in_nested_transaction():
             raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
         try:
-            request = PublicSolutionSimilarityRequest.model_validate(request)
+            request = parse_supported_public_solution_similarity_request(request)
             if (
                 type(caller) is not EmbeddingRegistryCaller
-                or not isinstance(self.request, ReferenceQueryWorkflowRequestV3)
+                or not isinstance(self.request, PublicReferenceQueryWorkflowRequest)
                 or caller.operator_id != self.request.operator_audit.operator_id
                 or request != self.request.context_request
                 or type(prepared) is not PreparedPublicSolutionQuerySource

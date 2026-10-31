@@ -15,15 +15,18 @@ from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAs
 from eom_workflow.reference_query_execution import (
     ReferenceQueryLaunchAssociation,
     ReferenceQueryWorkflowRequestV3,
+    ReferenceQueryWorkflowRequestV4,
     SupportedReferenceQueryWorkflowIntent,
     parse_reference_query_launch_association,
     parse_reference_query_workflow_request_v3,
+    parse_reference_query_workflow_request_v4,
     parse_supported_reference_query_workflow_request,
 )
 from eom_workflow.schemas import (
     PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
     REFERENCE_QUERY_EXECUTION_SCHEMA_RESOURCE,
     REFERENCE_QUERY_PUBLIC_EXECUTION_SCHEMA_RESOURCE,
+    REFERENCE_QUERY_REQUEST_V4_SCHEMA_RESOURCE,
 )
 from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy import select
@@ -70,6 +73,13 @@ _PUBLIC_REFERENCE = _Purpose(
     REFERENCE_QUERY_PUBLIC_EXECUTION_SCHEMA_RESOURCE[2],
     "native-reference-query:",
 )
+_REGISTERED_PUBLIC_REFERENCE = _Purpose(
+    "REFERENCE_QUERY",
+    "native_reference_query_launch",
+    "reference-query/3.0",
+    REFERENCE_QUERY_REQUEST_V4_SCHEMA_RESOURCE[2],
+    "native-reference-query:",
+)
 _PRIVATE = _Purpose(
     "PRIVATE_CHAT_QUERY",
     "native_private_chat_query_launch",
@@ -113,6 +123,8 @@ def _intent(value: QueryIntent) -> tuple[QueryIntent, _Purpose]:
             )
         except (ValueError, TypeError, SchemaError):
             raise NativeQueryLaunchError("PRIVATE_CHAT_QUERY_LAUNCH_REQUEST_INVALID") from None
+    if isinstance(value, ReferenceQueryWorkflowRequestV4):
+        return parse_reference_query_workflow_request_v4(value), _REGISTERED_PUBLIC_REFERENCE
     if isinstance(value, ReferenceQueryWorkflowRequestV3):
         return parse_reference_query_workflow_request_v3(value), _PUBLIC_REFERENCE
     return parse_supported_reference_query_workflow_request(value), _REFERENCE
@@ -121,7 +133,7 @@ def _intent(value: QueryIntent) -> tuple[QueryIntent, _Purpose]:
 def native_query_launch_key(request: QueryIntent, workflow_id: str, step_run_id: str) -> str:
     request, purpose = _intent(request)
     identity = {"workflow_id": workflow_id, "step_run_id": step_run_id, "attempt": 1}
-    if purpose in (_REFERENCE, _PUBLIC_REFERENCE):
+    if purpose in (_REFERENCE, _PUBLIC_REFERENCE, _REGISTERED_PUBLIC_REFERENCE):
         return native_reference_query_key(workflow_id, step_run_id, request.request_sha256)
     return purpose.key_prefix + content_sha256(identity).removeprefix("sha256:")
 

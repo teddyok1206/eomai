@@ -1,5 +1,42 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 후속 체크포인트 — 2026-10-31 17:09 UTC
+
+- 16:47:52 UTC에 새 CUDA Workflow `workflow_fba5e1e76bc641eaa4ebfc051983e961`의
+  canonical `LOCAL_INDEXING_RECONCILIATION_OBSERVED/BATCH_COMPLETED`를 확인했다.
+  numerical/controller 모두 성공·종료 상태다. 중간 retirement 이벤트만 보고 실패로
+  재분류하지 않는다. 16행에는 기출10/등록 문항6이 포함됐으며 원래 frozen520의 CUDA
+  등록은 **112/520, 잔여408**(16:52 UTC 관측)이다. 전체 CUDA binding 수와 혼합하지 않는다.
+- 운영 검색 준비 상태만 읽어 17:01 UTC 현재 창작 고유번호10321/10353/10354의 승인본·
+  공통 공개 풀이·등록 encoding·현재 CUDA index의 Graph/policy/recipe 연결을 확인했다.
+  이를 사용자에게 GUI 시험 대상으로 안내했다. 새 검색·추론·인덱싱 요청은 만들지 않았으며,
+  actual user 검색 성공을 대신하는 evidence도 아니다.
+- 새 AI accepted V11 source proof를 담는 native request4와 completed-read4 수신 경계를
+  구현했다. 동일 공개 풀이와 모델 공간의 QUERY2 row/encoding/input-set hash는 보존한다.
+  source envelope·Graph/policy/index 핀이 다르면 외부 request/context hash는 달라야 한다.
+  native Job은 별도 `reference-query/3.0` schema pin을 사용하지만 coordinator2/result2/
+  receipt2/step-output2/수치 batch2는 그대로 사용한다. 기존 request3/read3 bytes는 보존한다.
+- 실제 Artifact 저장·복구 회귀에서 canonical reader의 request3-only 분기를 발견해
+  명시적인 public3/4 dispatch로 수정했다. 최초 실패11건의 test log도 남겼다.
+  수정 후 **26 disposable PostgreSQL +14 local executor =40 PASS**:
+  `/tmp/eom-registered-query-native-executor-fixed-pg-20261031.log`.
+  동시 최초 제출 winner1/동일 Job, 모든 checkpoint prefix 재개, concurrent replay,
+  commit 전후 응답 유실, 동일 encoding1회, 기존 FAILED 보존을 양쪽 metadata family로 검사했다.
+- source 집중 회귀482 PASS, 최종 HTTP/Artifact52 PASS, OpenAPI·Web alignment/의존·resource29 PASS,
+  core22개 strict mypy PASS, Ruff/format/schema generator/diff PASS다.
+  committed OpenAPI도 새 응답 family를 반영했고 기존 계약 대비 breaking finding0이다.
+  synthetic IAM/model 관측을 사용한 DB/file 검증을 실제 사용자·GPU acceptance로 확대하지 않는다.
+- **이번 변경은 저장소 후보이며 운영 활성화0이다.** 실제 routed public parent1.4와
+  preparation2는 old public anchor/view3를 내장한다. registered anchor/index4를 담는
+  closed successor 및 device-index/DB selection 연결이 아직 필요하다. 이 closure를
+  끝내기 전 INDEX4 writer/API read4를 부분 배포하지 않는다. 새 보고서·entry metadata 때문에
+  기존 숫자 모델/벡터 공간이나 완료된 기출 벡터를 다시 만들지 않는다.
+- 계정 상태 새로고침의 서버 결과는 slot06 OBSERVE/SUCCEEDED로 확인했다.
+  긴 검색 준비와 겹친 요청 대기 가능성이 있으나 Web 문의 번호와 서버 요청의 직접
+  correlation은 확인되지 않았다. 사용자가 정상 조회를 확인했고 중복 OBSERVE/인증 변경0이다.
+- 기존 GPU/창작 서비스·수치 runtime pin·운영 schema0064는 보존했고 구 벡터 삭제0이다.
+  목표 전체는 계속 ACTIVE이며 전체520 완료·실제 공통 검색·AI 증분·구 벡터 retirement가 남아 있다.
+
 시각: 2026-10-31 11:19 UTC. Goal ACTIVE. 재임베딩/검색 전환/구 벡터 삭제 완료 보고가 아니다.
 
 설계 및 종료 조건:

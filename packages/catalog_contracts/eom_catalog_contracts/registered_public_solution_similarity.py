@@ -4,7 +4,7 @@ No value here grants source access, launches work, resolves latest or proves
 scientific correctness. Catalog/QUERY owners retain those actual boundaries.
 """
 
-from typing import Literal, Self
+from typing import Annotated, Literal, Self
 
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from pydantic import ConfigDict, Field, model_validator
@@ -218,9 +218,10 @@ class PublicSolutionSimilarityContextV4(_RegisteredSimilarityValue):
 type SupportedPublicSolutionSimilarityRequest = (
     PublicSolutionSimilarityRequest | PublicSolutionSimilarityRequestV4
 )
-type SupportedPublicSolutionSimilarityContext = (
-    PublicSolutionSimilarityContext | PublicSolutionSimilarityContextV4
-)
+type SupportedPublicSolutionSimilarityContext = Annotated[
+    PublicSolutionSimilarityContext | PublicSolutionSimilarityContextV4,
+    Field(discriminator="schema_version"),
+]
 
 
 def parse_supported_public_solution_similarity_request(

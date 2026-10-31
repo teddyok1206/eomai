@@ -30,10 +30,10 @@ from eom_workflow.native_reference_query_coordinator import (
     reference_query_checkpoint_receipt,
 )
 from eom_workflow.reference_query_execution import (
+    PublicReferenceQueryWorkflowRequest,
     ReferenceQueryExecutionPolicy,
     ReferenceQueryLaunchAssociation,
     ReferenceQueryStepOutputV2,
-    ReferenceQueryWorkflowRequestV3,
     SupportedReferenceQueryNativeInput,
     SupportedReferenceQueryStepOutput,
     SupportedReferenceQueryWorkflowRequest,
@@ -162,7 +162,7 @@ class NativeReferenceQueryCompletion:
                         "PUBLISHED",
                         (
                             NativeQueryPublishedV2
-                            if isinstance(request, ReferenceQueryWorkflowRequestV3)
+                            if isinstance(request, PublicReferenceQueryWorkflowRequest)
                             else NativeQueryPublished
                         )(
                             query_owner_job_id=saved.owner_job_id,

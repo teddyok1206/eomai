@@ -31,6 +31,10 @@ from eom_catalog_contracts.public_solution_query import (
     validate_public_solution_query_result,
 )
 from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityRequest
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    PublicSolutionSimilarityRequestV4,
+    parse_supported_public_solution_similarity_request,
+)
 from eom_catalog_contracts.similarity_context import SimilarityContextRequest
 from eom_catalog_contracts.similarity_context_v2 import (
     SimilarityContextRequestV2,
@@ -53,6 +57,7 @@ from eom_workflow.schemas import (
     validate_reference_query_message,
     validate_reference_query_public_message,
     validate_reference_query_request_v2,
+    validate_reference_query_request_v4,
     validate_reference_query_request_v11,
 )
 
@@ -66,22 +71,26 @@ REFERENCE_QUERY_REQUEST_VERSIONS: Final = (
     "reference-query-workflow-request/1.1",
     "reference-query-workflow-request/2.0",
     "reference-query-workflow-request/3.0",
+    "reference-query-workflow-request/4.0",
 )
 _BINARY_REF = "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0"
 
 
 type SupportedReferenceQueryContext = (
-    SupportedSimilarityContextRequest | PublicSolutionSimilarityRequest
+    SupportedSimilarityContextRequest
+    | PublicSolutionSimilarityRequest
+    | PublicSolutionSimilarityRequestV4
 )
 
 
 def parse_supported_reference_query_context(value: object) -> SupportedReferenceQueryContext:
     """Closed additive context dispatch; old Catalog parsers stay legacy-only."""
     document = raw_similarity_contract_value(value)
-    if isinstance(document, dict) and document.get("schema_version") == (
-        "system-rag-similarity-request/3.0"
-    ):
-        return PublicSolutionSimilarityRequest.model_validate(document)
+    if isinstance(document, dict) and document.get("schema_version") in {
+        "system-rag-similarity-request/3.0",
+        "system-rag-similarity-request/4.0",
+    }:
+        return parse_supported_public_solution_similarity_request(document)
     return parse_supported_similarity_context_request(document)
 
 
@@ -98,7 +107,7 @@ def _member(
 
 
 def _validate_reference_query_context_controls(
-    context: SupportedSimilarityContextRequest | PublicSolutionSimilarityRequest,
+    context: SupportedReferenceQueryContext,
     resources: LocalEmbeddingResourceProfile,
     policy: ArtifactMemberPointer,
 ) -> None:
@@ -232,15 +241,55 @@ class ReferenceQueryWorkflowRequestV3(FrozenModel):
         return self
 
 
-# Keep a runtime union: the fixed Runner dispatch uses isinstance as well as typing.
+class ReferenceQueryWorkflowRequestV4(FrozenModel):
+    """New closed source-proof carrier; numerical input/output and definition stay2."""
+
+    model_config = ConfigDict(revalidate_instances="always")
+    schema_version: Literal["reference-query-workflow-request/4.0"] = (
+        "reference-query-workflow-request/4.0"
+    )
+    request_name: Literal["REFERENCE_QUERY_WORKFLOW_REQUEST"] = "REFERENCE_QUERY_WORKFLOW_REQUEST"
+    purpose: Literal["REFERENCE_QUERY"] = "REFERENCE_QUERY"
+    workflow_definition_key: Literal["local-embedding-reference-query"] = (
+        "local-embedding-reference-query"
+    )
+    workflow_definition_version: Literal["2.0.0"] = "2.0.0"
+    workflow_definition_sha256: Sha256
+    operator_audit: LocalEmbeddingOperatorAudit
+    context_request: PublicSolutionSimilarityRequestV4
+    runtime_bundle: EmbeddingRuntimeBundlePointer
+    resource_profile: LocalEmbeddingResourceProfile
+    native_execution_policy: ArtifactMemberPointer
+    native_execution_policy_sha256: Sha256
+    request_sha256: Sha256
+
+    @model_validator(mode="before")
+    @classmethod
+    def schema_first(cls, value: object) -> object:
+        validate_reference_query_request_v4(value)
+        return raw_similarity_contract_value(value)
+
+    @model_validator(mode="after")
+    def exact_request(self) -> Self:
+        _validate_reference_query_context_controls(
+            self.context_request, self.resource_profile, self.native_execution_policy
+        )
+        _hash(self, "request_sha256")
+        return self
+
+
+# Keep runtime unions: fixed Runner dispatch uses isinstance as well as typing.
 # PEP695's TypeAliasType cannot serve that runtime boundary.
-LegacyReferenceQueryWorkflowRequest: TypeAlias = (  # noqa: UP040 -- used by runtime isinstance
+LegacyReferenceQueryWorkflowRequest: TypeAlias = (  # noqa: UP040 -- runtime isinstance
     ReferenceQueryWorkflowRequest
     | ReferenceQueryWorkflowRequestV11
     | ReferenceQueryWorkflowRequestV2
 )
-SupportedReferenceQueryWorkflowRequest: TypeAlias = (  # noqa: UP040 -- used by runtime isinstance
-    LegacyReferenceQueryWorkflowRequest | ReferenceQueryWorkflowRequestV3
+PublicReferenceQueryWorkflowRequest: TypeAlias = (  # noqa: UP040 -- runtime isinstance
+    ReferenceQueryWorkflowRequestV3 | ReferenceQueryWorkflowRequestV4
+)
+SupportedReferenceQueryWorkflowRequest: TypeAlias = (  # noqa: UP040 -- runtime isinstance
+    LegacyReferenceQueryWorkflowRequest | PublicReferenceQueryWorkflowRequest
 )
 type SupportedReferenceQueryWorkflowIntent = SupportedReferenceQueryWorkflowRequest
 
@@ -522,6 +571,8 @@ def parse_supported_reference_query_workflow_request(
                 return parse_reference_query_workflow_request_v2(document)
             case "reference-query-workflow-request/3.0":
                 return parse_reference_query_workflow_request_v3(document)
+            case "reference-query-workflow-request/4.0":
+                return parse_reference_query_workflow_request_v4(document)
     raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID")
 
 
@@ -541,6 +592,14 @@ def parse_reference_query_workflow_request_v3(value: object) -> ReferenceQueryWo
         raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID") from None
 
 
+def parse_reference_query_workflow_request_v4(value: object) -> ReferenceQueryWorkflowRequestV4:
+    validate_reference_query_request_v4(value)
+    try:
+        return ReferenceQueryWorkflowRequestV4.model_validate(value)
+    except ValidationError:
+        raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID") from None
+
+
 def parse_supported_reference_query_workflow_intent(
     value: object,
 ) -> SupportedReferenceQueryWorkflowIntent:
@@ -550,7 +609,7 @@ def parse_supported_reference_query_workflow_intent(
 
 def reference_query_result_schema(request: SupportedReferenceQueryWorkflowRequest) -> str:
     """The literal request family fixes its output, never the caller's chosen schema."""
-    if isinstance(request, ReferenceQueryWorkflowRequestV3):
+    if isinstance(request, PublicReferenceQueryWorkflowRequest):
         return "embedding-reference-query-result@2.0"
     if isinstance(request, LegacyReferenceQueryWorkflowRequest):
         return "embedding-reference-query-result@1.0"
@@ -624,7 +683,7 @@ def parse_reference_query_native_input(
 ) -> SupportedReferenceQueryNativeInput:
     try:
         document = raw_similarity_contract_value(native_input)
-        if isinstance(request, ReferenceQueryWorkflowRequestV3):
+        if isinstance(request, PublicReferenceQueryWorkflowRequest):
             if (
                 not isinstance(document, dict)
                 or document.get("schema_version") != "embedding-reference-query-input/2.0"

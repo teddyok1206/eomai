@@ -23,6 +23,7 @@ from eom_catalog_contracts.similarity_read_v3 import (
     SimilarityContextReadRequestV3,
     validate_similarity_read_reply_v3,
 )
+from eom_catalog_contracts.similarity_read_v4 import SimilarityContextReadRequestV4
 from eom_catalog_service import similarity_read_service as read_module
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
@@ -125,9 +126,19 @@ def test_reply_binding_requires_exact_actual_actor_request_and_context(change):
 def test_dispatch_and_api_client_keep_public_family_and_actual_caller(monkeypatch):
     request, reply = pair()
     service = NS(read=Mock(return_value=reply.result))
+    old = dispatch_similarity_read_frame(service, canonical_json_bytes(request) + b"\n")
+    assert SimilarityContextReadReplyV3.model_validate_json(old) == reply
+    service.read.assert_called_once_with(request)
+    service.read.reset_mock()
+    current = SimilarityContextReadRequestV4(
+        schema_version="system-rag-similarity-read-request/4.0",
+        operation="READ_SIMILARITY_CONTEXT",
+        actor_id=request.actor_id,
+        selection=request.selection,
+    )
 
     def exchange(endpoint, value, **options):
-        assert value == request.model_dump(mode="json")
+        assert value == current.model_dump(mode="json")
         assert options["timeout"] == 90
         return json.loads(
             dispatch_similarity_read_frame(service, canonical_json_bytes(value) + b"\n")
@@ -136,7 +147,7 @@ def test_dispatch_and_api_client_keep_public_family_and_actual_caller(monkeypatc
     monkeypatch.setattr(client_module, "exchange_chat_frame", exchange)
     client = CatalogSimilarityContextClient(ChatSocketEndpoint(Path("/tmp/synthetic.sock"), 42, 43))
     assert client.read_public(request.actor_id, request.selection) == reply.result
-    service.read.assert_called_once_with(request)
+    service.read.assert_called_once_with(current)
 
 
 @pytest.mark.parametrize("missing", (True, False))

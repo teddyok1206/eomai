@@ -588,6 +588,11 @@ REFERENCE_QUERY_REQUEST_V2_SCHEMA_RESOURCE = (
     "eom://schemas/workflow/reference-query-workflow-request/2.0",
     "sha256:2239f158e9aebd5495e57b12751cf63b1302259a19ce229e35c7de0a579ac20a",
 )
+REFERENCE_QUERY_REQUEST_V4_SCHEMA_RESOURCE = (
+    "reference-query-workflow-request-v4.schema.json",
+    "eom://schemas/workflow/reference-query-workflow-request/4.0",
+    "sha256:133f561b4a9f6508654e06fe48ee8f7a7719b261d1aa9e8413cbbbad54314702",
+)
 type ReferenceQueryMessageName = Literal[
     "definition", "request", "policy", "launch", "receipt", "step-output"
 ]
@@ -631,12 +636,21 @@ def _reference_query_request_v2_schema() -> dict[str, Any]:
     return _load_pinned_reference_query_schema(REFERENCE_QUERY_REQUEST_V2_SCHEMA_RESOURCE)
 
 
+@cache
+def _reference_query_request_v4_schema() -> dict[str, Any]:
+    return _load_pinned_reference_query_schema(REFERENCE_QUERY_REQUEST_V4_SCHEMA_RESOURCE)
+
+
 def load_reference_query_request_v11_schema() -> dict[str, Any]:
     return copy.deepcopy(_reference_query_request_v11_schema())
 
 
 def load_reference_query_request_v2_schema() -> dict[str, Any]:
     return copy.deepcopy(_reference_query_request_v2_schema())
+
+
+def load_reference_query_request_v4_schema() -> dict[str, Any]:
+    return copy.deepcopy(_reference_query_request_v4_schema())
 
 
 def load_reference_query_execution_schema() -> dict[str, Any]:
@@ -753,6 +767,11 @@ def validate_reference_query_request_v2(value: object) -> None:
     _validate_reference_query_request_successor(value, REFERENCE_QUERY_REQUEST_V2_SCHEMA_RESOURCE)
 
 
+def validate_reference_query_request_v4(value: object) -> None:
+    """Registered source proof metadata only; numerical QUERY and receipt remain2."""
+    _validate_reference_query_request_successor(value, REFERENCE_QUERY_REQUEST_V4_SCHEMA_RESOURCE)
+
+
 def _validate_reference_query_request_successor(
     value: object, resource: tuple[str, str, str]
 ) -> None:
@@ -760,11 +779,11 @@ def _validate_reference_query_request_successor(
         document = raw_similarity_contract_value(value)
         if len(canonical_json_bytes(document)) > 64 * 1024:
             raise ValueError("QUERY request exceeds its bound")
-        schema = (
-            _reference_query_request_v2_schema()
-            if resource == REFERENCE_QUERY_REQUEST_V2_SCHEMA_RESOURCE
-            else _reference_query_request_v11_schema()
-        )
+        schema = {
+            REFERENCE_QUERY_REQUEST_V11_SCHEMA_RESOURCE: _reference_query_request_v11_schema,
+            REFERENCE_QUERY_REQUEST_V2_SCHEMA_RESOURCE: _reference_query_request_v2_schema,
+            REFERENCE_QUERY_REQUEST_V4_SCHEMA_RESOURCE: _reference_query_request_v4_schema,
+        }[resource]()
         Draft202012Validator(
             {"$ref": resource[1]},
             registry=_reference_query_execution_registry().with_resource(

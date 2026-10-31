@@ -29,7 +29,9 @@ from eom_catalog_contracts.inference_transfer_snapshot import (
     InferenceTransferSnapshotRequest,
     InferenceTransferSnapshotResult,
 )
-from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityContext
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    SupportedPublicSolutionSimilarityContext,
+)
 from eom_catalog_contracts.similarity_context_v2 import SupportedSimilarityContext
 from eom_identifiers import content_sha256
 from eom_operator_identity import PermissionKey
@@ -44,7 +46,7 @@ from eom_api.services.similarity_context_read import MAX_PUBLIC_SIMILARITY_SELEC
 
 router = APIRouter(tags=["inference-transfer"])
 type CompletedSimilarityContext = Annotated[
-    SupportedSimilarityContext | PublicSolutionSimilarityContext,
+    SupportedSimilarityContext | SupportedPublicSolutionSimilarityContext,
     Field(discriminator="schema_version"),
 ]
 

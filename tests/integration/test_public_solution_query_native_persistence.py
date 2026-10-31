@@ -44,6 +44,7 @@ from eom_workflow.native_reference_query_coordinator import (
 from eom_workflow.schemas import (
     NATIVE_REFERENCE_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE,
     REFERENCE_QUERY_PUBLIC_EXECUTION_SCHEMA_RESOURCE,
+    REFERENCE_QUERY_REQUEST_V4_SCHEMA_RESOURCE,
 )
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -57,6 +58,9 @@ from tests.unit.test_public_solution_query_artifacts import (
 )
 from tests.unit.test_public_solution_query_continuation import VERSION, public_query_records
 from tests.unit.test_public_solution_reference_query_execution import public_workflow_case
+from tests.unit.test_registered_public_reference_query_execution import (
+    registered_public_workflow_case,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -84,9 +88,28 @@ def original(publisher, value):
     return NativeReferenceQueryCoordinator(value.request, launch)
 
 
+@pytest.fixture(params=["public", "registered-public"])
+def native_case(request):
+    """Both metadata families retain the same numerical QUERY2 event journal."""
+    if request.param == "registered-public":
+        return (
+            registered_public_workflow_case,
+            "reference-query/3.0",
+            REFERENCE_QUERY_REQUEST_V4_SCHEMA_RESOURCE[2],
+        )
+    return (
+        public_workflow_case,
+        "reference-query/2.0",
+        REFERENCE_QUERY_PUBLIC_EXECUTION_SCHEMA_RESOURCE[2],
+    )
+
+
 @pytest.mark.parametrize("device", ["CPU", "CUDA"])
-def test_query2_concurrent_original_launch_reuses_one_job_after_conflict(publisher, device):
-    value = public_workflow_case(identity=uuid4().hex, device=device)
+def test_query2_concurrent_original_launch_reuses_one_job_after_conflict(
+    publisher, native_case, device
+):
+    factory, protocol, schema_hash = native_case
+    value = factory(identity=uuid4().hex, device=device)
     barrier = Barrier(2)
 
     def submit():
@@ -116,11 +139,8 @@ def test_query2_concurrent_original_launch_reuses_one_job_after_conflict(publish
     assert first == second == value.launch
     with publisher.sessions.begin() as session:
         job = session.get(JobRecord, first.native_launch_job_id)
-        assert job.protocol_version == "reference-query/2.0" and job.status == "CLAIMED"
-        assert (
-            session.get(ProtocolVersionRecord, job.protocol_version).schema_sha256
-            == (REFERENCE_QUERY_PUBLIC_EXECUTION_SCHEMA_RESOURCE[2])
-        )
+        assert job.protocol_version == protocol and job.status == "CLAIMED"
+        assert session.get(ProtocolVersionRecord, job.protocol_version).schema_sha256 == schema_hash
         assert (
             session.scalar(
                 select(func.count())
@@ -136,9 +156,9 @@ def test_query2_concurrent_original_launch_reuses_one_job_after_conflict(publish
 
 @pytest.mark.parametrize("device", ["CPU", "CUDA"])
 def test_query2_every_committed_prefix_resumes_and_concurrent_replay_keeps_four_events(
-    publisher, device
+    publisher, native_case, device
 ):
-    value = public_workflow_case(identity=uuid4().hex, device=device)
+    value = native_case[0](identity=uuid4().hex, device=device)
     records = public_query_records(value, device=device)
     owner = original(publisher, value)
     for index, record in enumerate(records):
@@ -179,8 +199,10 @@ def test_query2_every_committed_prefix_resumes_and_concurrent_replay_keeps_four_
 
 
 @pytest.mark.parametrize("device", ["CPU", "CUDA"])
-def test_query2_known_failure_is_preserved_and_cannot_be_replayed_as_success(publisher, device):
-    value = public_workflow_case(identity=uuid4().hex, device=device)
+def test_query2_known_failure_is_preserved_and_cannot_be_replayed_as_success(
+    publisher, native_case, device
+):
+    value = native_case[0](identity=uuid4().hex, device=device)
     records = public_query_records(value, device=device)
     owner = original(publisher, value)
     with publisher.sessions.begin() as session:

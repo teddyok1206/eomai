@@ -8,6 +8,10 @@ from pathlib import Path
 
 from eom_catalog_contracts import CATALOG_APPLICATION_SOCKET_PATH
 from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityContext
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    PublicSolutionSimilarityContextV4,
+    SupportedPublicSolutionSimilarityContext,
+)
 from eom_catalog_contracts.similarity_context import SimilarityContext
 from eom_catalog_contracts.similarity_context_v2 import (
     SimilarityContextV2,
@@ -30,6 +34,11 @@ from eom_catalog_contracts.similarity_read_v3 import (
     SimilarityContextReadReplyV3,
     SimilarityContextReadRequestV3,
     validate_similarity_read_reply_v3,
+)
+from eom_catalog_contracts.similarity_read_v4 import (
+    SimilarityContextReadReplyV4,
+    SimilarityContextReadRequestV4,
+    validate_similarity_read_reply_v4,
 )
 from eom_orchestrator.general_chat_socket import (
     ChatSocketEndpoint,
@@ -69,7 +78,14 @@ class CatalogSimilarityContextClient:
         except (ValueError, SchemaError):
             raise SimilarityContextClientError("SIMILARITY_CONTEXT_REQUEST_INVALID") from None
         result = self._exchange(request)
-        if isinstance(result, (SimilarityContextV2, PublicSolutionSimilarityContext)):
+        if isinstance(
+            result,
+            (
+                SimilarityContextV2,
+                PublicSolutionSimilarityContext,
+                PublicSolutionSimilarityContextV4,
+            ),
+        ):
             raise SimilarityContextClientError("SIMILARITY_CONTEXT_UNAVAILABLE")
         return result
 
@@ -92,10 +108,10 @@ class CatalogSimilarityContextClient:
 
     def read_public(
         self, actor_id: str, selection: CompletedSimilarityQuerySelection
-    ) -> PublicSolutionSimilarityContext:
+    ) -> SupportedPublicSolutionSimilarityContext:
         try:
-            request = SimilarityContextReadRequestV3(
-                schema_version="system-rag-similarity-read-request/3.0",
+            request = SimilarityContextReadRequestV4(
+                schema_version="system-rag-similarity-read-request/4.0",
                 operation="READ_SIMILARITY_CONTEXT",
                 actor_id=actor_id,
                 selection=selection,
@@ -103,7 +119,9 @@ class CatalogSimilarityContextClient:
         except (ValueError, SchemaError):
             raise SimilarityContextClientError("SIMILARITY_CONTEXT_REQUEST_INVALID") from None
         result = self._exchange(request)
-        if not isinstance(result, PublicSolutionSimilarityContext):
+        if not isinstance(
+            result, PublicSolutionSimilarityContext | PublicSolutionSimilarityContextV4
+        ):
             raise SimilarityContextClientError("SIMILARITY_CONTEXT_UNAVAILABLE")
         return result
 
@@ -111,8 +129,9 @@ class CatalogSimilarityContextClient:
         self,
         request: SimilarityContextReadRequest
         | SimilarityContextReadRequestV2
-        | SimilarityContextReadRequestV3,
-    ) -> SupportedSimilarityContext | PublicSolutionSimilarityContext:
+        | SimilarityContextReadRequestV3
+        | SimilarityContextReadRequestV4,
+    ) -> SupportedSimilarityContext | SupportedPublicSolutionSimilarityContext:
         try:
             endpoint = self.endpoint or ChatSocketEndpoint(
                 Path(CATALOG_APPLICATION_SOCKET_PATH),
@@ -130,8 +149,12 @@ class CatalogSimilarityContextClient:
                 SimilarityContextReadReply
                 | SimilarityContextReadReplyV2
                 | SimilarityContextReadReplyV3
+                | SimilarityContextReadReplyV4
             )
-            if isinstance(request, SimilarityContextReadRequestV3):
+            if isinstance(request, SimilarityContextReadRequestV4):
+                reply = SimilarityContextReadReplyV4.model_validate(value)
+                validate_similarity_read_reply_v4(request, reply)
+            elif isinstance(request, SimilarityContextReadRequestV3):
                 reply = SimilarityContextReadReplyV3.model_validate(value)
                 validate_similarity_read_reply_v3(request, reply)
             elif isinstance(request, SimilarityContextReadRequestV2):

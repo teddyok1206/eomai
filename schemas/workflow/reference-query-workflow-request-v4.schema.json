@@ -1,0 +1,63 @@
+{
+  "$id": "eom://schemas/workflow/reference-query-workflow-request/4.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "request_name",
+    "purpose",
+    "workflow_definition_key",
+    "workflow_definition_version",
+    "workflow_definition_sha256",
+    "operator_audit",
+    "context_request",
+    "runtime_bundle",
+    "resource_profile",
+    "native_execution_policy",
+    "native_execution_policy_sha256",
+    "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "reference-query-workflow-request/4.0"
+    },
+    "request_name": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/request_name"
+    },
+    "purpose": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/purpose"
+    },
+    "workflow_definition_key": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/workflow_definition_key"
+    },
+    "workflow_definition_version": {
+      "const": "2.0.0"
+    },
+    "workflow_definition_sha256": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/workflow_definition_sha256"
+    },
+    "operator_audit": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/operator_audit"
+    },
+    "context_request": {
+      "$ref": "eom://schemas/knowledge/public-solution-similarity/4.0#/$defs/request"
+    },
+    "runtime_bundle": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/runtime_bundle"
+    },
+    "resource_profile": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/resource_profile"
+    },
+    "native_execution_policy": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/native_execution_policy"
+    },
+    "native_execution_policy_sha256": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/native_execution_policy_sha256"
+    },
+    "request_sha256": {
+      "$ref": "eom://schemas/workflow/reference-query-execution/1.0#/$defs/request/properties/request_sha256"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Registered public solution metadata over unchanged numerical QUERY2"
+}

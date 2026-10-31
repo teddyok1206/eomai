@@ -37,7 +37,7 @@ from eom_identifiers import content_sha256
 from eom_identity_service import OperatorAuthorizationFenceError
 from eom_orchestrator.database import build_session_factory
 from eom_workflow.reference_query_execution import (
-    ReferenceQueryWorkflowRequestV3,
+    PublicReferenceQueryWorkflowRequest,
     parse_supported_reference_query_workflow_request,
 )
 from sqlalchemy import select
@@ -216,7 +216,7 @@ class NativeReferenceQueryPreparation:
                 original = parse_supported_reference_query_workflow_request(
                     workflow.initial_request
                 )
-                if isinstance(original, ReferenceQueryWorkflowRequestV3):
+                if isinstance(original, PublicReferenceQueryWorkflowRequest):
                     # This installed legacy preparation owner cannot reinterpret
                     # a public-report replay as accepted-analysis context1/2.
                     raise ValueError("REFERENCE_QUERY_PREPARATION_REPLAY_MISMATCH")

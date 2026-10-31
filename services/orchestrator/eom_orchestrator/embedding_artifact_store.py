@@ -99,16 +99,15 @@ from eom_workflow.private_chat_query_publication import (
     validate_private_chat_query_launch,
 )
 from eom_workflow.reference_query_execution import (
+    PublicReferenceQueryWorkflowRequest,
     ReferenceQueryExecutionPolicy,
     ReferenceQueryLaunchAssociation,
-    ReferenceQueryWorkflowRequestV3,
     SupportedReferenceQueryNativeInput,
     SupportedReferenceQueryNativeResult,
     SupportedReferenceQueryWorkflowIntent,
     SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_execution_policy,
     parse_reference_query_launch_association,
-    parse_reference_query_workflow_request_v3,
     parse_supported_reference_query_workflow_intent,
     parse_supported_reference_query_workflow_request,
     validate_reference_query_launch_association,
@@ -433,7 +432,7 @@ class EmbeddingArtifactStore:
     def publish_public_solution_reference_query(
         self,
         *,
-        workflow_request: ReferenceQueryWorkflowRequestV3,
+        workflow_request: PublicReferenceQueryWorkflowRequest,
         policy: ReferenceQueryExecutionPolicy,
         bundle: EmbeddingRuntimeBundle,
         launch: ReferenceQueryLaunchAssociation,
@@ -445,7 +444,10 @@ class EmbeddingArtifactStore:
     ) -> PublishedReferenceQueryArtifacts:
         """QUERY2 bytes through the same canonical commit owner, never a source/lease grant."""
         try:
-            workflow_request = parse_reference_query_workflow_request_v3(workflow_request)
+            checked_workflow = parse_supported_reference_query_workflow_intent(workflow_request)
+            if not isinstance(checked_workflow, PublicReferenceQueryWorkflowRequest):
+                raise ValueError("public QUERY metadata family differs")
+            workflow_request = checked_workflow
             request = PublicSolutionQueryInput.model_validate(request)
         except (ValueError, TypeError, JsonSchemaValidationError):
             raise EmbeddingArtifactStoreError("EMBEDDING_REFERENCE_QUERY_CONTEXT_INVALID") from None
@@ -479,7 +481,7 @@ class EmbeddingArtifactStore:
             workflow_request = parse_supported_reference_query_workflow_intent(workflow_request)
             policy = parse_reference_query_execution_policy(policy)
             launch = parse_reference_query_launch_association(launch)
-            if isinstance(workflow_request, ReferenceQueryWorkflowRequestV3):
+            if isinstance(workflow_request, PublicReferenceQueryWorkflowRequest):
                 request = PublicSolutionQueryInput.model_validate(request)
                 input_ref, result_ref = (
                     PUBLIC_SOLUTION_QUERY_INPUT_REF,

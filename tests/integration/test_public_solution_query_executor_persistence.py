@@ -26,12 +26,16 @@ from tests.integration.test_reference_query_native_persistence import (
     assert_exact_completed_producers,
 )
 from tests.unit.test_public_solution_query_native_executor import make_public_executor_case
+from tests.unit.test_public_solution_reference_query_execution import public_workflow_case
+from tests.unit.test_registered_public_reference_query_execution import (
+    registered_public_workflow_case,
+)
 
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-def query(guarded_engine: Engine, tmp_path: Path, monkeypatch):
+@pytest.fixture(params=[public_workflow_case, registered_public_workflow_case], ids=["v3", "v4"])
+def query(guarded_engine: Engine, tmp_path: Path, monkeypatch, request):
     assert guarded_engine.dialect.name == "postgresql"
     assert not tmp_path.is_relative_to(Path("/mnt/nas"))
     artifacts, workspace = tmp_path / "artifacts", tmp_path / "workspace"
@@ -44,7 +48,7 @@ def query(guarded_engine: Engine, tmp_path: Path, monkeypatch):
         ),
     )
     return make_public_executor_case(
-        tmp_path, monkeypatch, publisher=publisher, identity=uuid4().hex
+        tmp_path, monkeypatch, publisher=publisher, identity=uuid4().hex, case_factory=request.param
     )
 
 

@@ -33,8 +33,8 @@ from eom_workflow.native_reference_query_coordinator import (
     native_reference_query_continuation_checkpoint,
 )
 from eom_workflow.reference_query_execution import (
+    PublicReferenceQueryWorkflowRequest,
     ReferenceQueryLaunchAssociation,
-    ReferenceQueryWorkflowRequestV3,
     SupportedReferenceQueryStepOutput,
     SupportedReferenceQueryWorkflowRequest,
     parse_supported_reference_query_workflow_request,
@@ -111,7 +111,7 @@ class CatalogNativeReferenceQueryExecutor:
     ) -> NativeQueryCheckpointVersion:
         return (
             "native-reference-query-coordinator/2.0"
-            if isinstance(request, ReferenceQueryWorkflowRequestV3)
+            if isinstance(request, PublicReferenceQueryWorkflowRequest)
             else self.launcher.checkpoint_schema_version
         )
 

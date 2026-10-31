@@ -5,7 +5,10 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Protocol
 
-from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityContext
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    SupportedPublicSolutionSimilarityContext,
+    parse_supported_public_solution_similarity_context,
+)
 from eom_catalog_contracts.similarity_context import SimilarityContext, parse_similarity_context
 from eom_catalog_contracts.similarity_context_v2 import (
     SimilarityContextV2,
@@ -35,7 +38,7 @@ class SimilarityContextReadPort(Protocol):
 
     def read_public(
         self, actor_id: str, selection: CompletedSimilarityQuerySelection
-    ) -> PublicSolutionSimilarityContext: ...
+    ) -> SupportedPublicSolutionSimilarityContext: ...
 
 
 _FAILURE_STATUS = {
@@ -81,15 +84,15 @@ class SimilarityContextReadApplicationService:
 
     def read_public(
         self, authentication: AccessAuthentication, selection: CompletedSimilarityQuerySelection
-    ) -> PublicSolutionSimilarityContext:
+    ) -> SupportedPublicSolutionSimilarityContext:
         return self._read(
             authentication,
             selection,
             self.reader.read_public,
-            PublicSolutionSimilarityContext.model_validate,
+            parse_supported_public_solution_similarity_context,
         )
 
-    def _read[Context: SupportedSimilarityContext | PublicSolutionSimilarityContext](
+    def _read[Context: SupportedSimilarityContext | SupportedPublicSolutionSimilarityContext](
         self,
         authentication: AccessAuthentication,
         selection: CompletedSimilarityQuerySelection,

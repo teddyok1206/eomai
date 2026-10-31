@@ -27,7 +27,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
 from eom_catalog_contracts.models import Sha256
 from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
 from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
-from eom_catalog_contracts.public_solution_reference import PublicSolutionSourceReference
+from eom_catalog_contracts.registered_public_solution_similarity import PublicSolutionReferenceV4
 from eom_catalog_service.embedding_registry_catalog_adapter import (
     CatalogEmbeddingRegistryVerifier,
     EmbeddingRegistryOwnerConfiguration,
@@ -50,14 +50,14 @@ from eom_orchestrator.local_embedding_control_artifacts import REFERENCE_QUERY_P
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.reference_query_execution import (
     REFERENCE_QUERY_POLICY_REF,
+    LegacyReferenceQueryWorkflowRequest,
+    PublicReferenceQueryWorkflowRequest,
     ReferenceQueryExecutionPolicy,
     ReferenceQueryLaunchAssociation,
-    ReferenceQueryWorkflowRequestV3,
     SupportedReferenceQueryNativeInput,
     SupportedReferenceQueryStepOutput,
     SupportedReferenceQueryWorkflowRequest,
     parse_reference_query_execution_policy,
-    parse_reference_query_workflow_request_v3,
     parse_supported_reference_query_step_output,
     parse_supported_reference_query_workflow_request,
     reference_query_result_schema,
@@ -117,14 +117,14 @@ class ReferenceQueryOwnerConfiguration:
 class ResolvedReferenceQuerySources:
     """Exact current-root values only; never a cached authority or claim grant."""
 
-    request: SupportedReferenceQueryWorkflowRequest
+    request: LegacyReferenceQueryWorkflowRequest
     policy: ReferenceQueryExecutionPolicy
     bundle: EmbeddingRuntimeBundle
     prepared: PreparedSimilarityContext
 
     def __post_init__(self) -> None:
         request = parse_supported_reference_query_workflow_request(self.request)
-        if isinstance(request, ReferenceQueryWorkflowRequestV3):
+        if isinstance(request, PublicReferenceQueryWorkflowRequest):
             raise ValueError("REFERENCE_QUERY_SOURCE_FAMILY_INVALID")
         policy = parse_reference_query_execution_policy(self.policy)
         bundle = parse_embedding_runtime_bundle(raw_similarity_contract_value(self.bundle))
@@ -139,13 +139,15 @@ class ResolvedReferenceQuerySources:
 class ResolvedPublicSolutionReferenceQuerySources:
     """Current-root public source projection, not a source/lease/execution capability."""
 
-    request: ReferenceQueryWorkflowRequestV3
+    request: PublicReferenceQueryWorkflowRequest
     policy: ReferenceQueryExecutionPolicy
     bundle: EmbeddingRuntimeBundle
     prepared: PreparedPublicSolutionQuerySource
 
     def __post_init__(self) -> None:
-        request = parse_reference_query_workflow_request_v3(self.request)
+        request = parse_supported_reference_query_workflow_request(self.request)
+        if not isinstance(request, PublicReferenceQueryWorkflowRequest):
+            raise ValueError("REFERENCE_QUERY_PUBLIC_SOURCE_INVALID")
         policy = parse_reference_query_execution_policy(self.policy)
         bundle = parse_embedding_runtime_bundle(raw_similarity_contract_value(self.bundle))
         validate_reference_query_request_references(request, policy, bundle)
@@ -154,7 +156,7 @@ class ResolvedPublicSolutionReferenceQuerySources:
         row = ReferenceQueryTextInput.model_validate(
             raw_similarity_contract_value(self.prepared.row)
         )
-        anchor = PublicSolutionSourceReference.model_validate(
+        anchor: PublicSolutionReferenceV4 = TypeAdapter(PublicSolutionReferenceV4).validate_python(
             raw_similarity_contract_value(self.prepared.anchor)
         )
         view = request.context_request.views[0]
@@ -294,7 +296,7 @@ def build_supported_reference_query_native_input(
 def resolve_public_solution_reference_query_sources(
     owner: ReferenceQuerySourceOwner,
     session: Session,
-    request: ReferenceQueryWorkflowRequestV3,
+    request: PublicReferenceQueryWorkflowRequest,
     *,
     artifact_reader: PinnedArtifactReadContext | None = None,
 ) -> ResolvedPublicSolutionReferenceQuerySources:
@@ -303,7 +305,10 @@ def resolve_public_solution_reference_query_sources(
     The running owner still requires its separate Workflow/claim/native admission.
     This function neither changes installed configuration nor discovers latest.
     """
-    request = parse_reference_query_workflow_request_v3(request)
+    checked = parse_supported_reference_query_workflow_request(request)
+    if not isinstance(checked, PublicReferenceQueryWorkflowRequest):
+        raise ValueError("REFERENCE_QUERY_PUBLIC_SOURCE_INVALID")
+    request = checked
     caller = EmbeddingRegistryCaller(request.operator_audit.operator_id)
     owner.identity.fence_current_operator(session, caller.operator_id)
     config, context = owner.configuration, request.context_request
@@ -554,7 +559,7 @@ def resolve_reference_query_sources(
     artifact_reader: PinnedArtifactReadContext | None = None,
 ) -> SupportedResolvedReferenceQuerySources:
     request = parse_supported_reference_query_workflow_request(request)
-    if isinstance(request, ReferenceQueryWorkflowRequestV3):
+    if isinstance(request, PublicReferenceQueryWorkflowRequest):
         return resolve_public_solution_reference_query_sources(
             owner, session, request, artifact_reader=artifact_reader
         )

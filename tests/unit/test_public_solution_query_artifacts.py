@@ -24,10 +24,13 @@ from tests.unit.test_control_file_set_publication import _publisher
 from tests.unit.test_embedding_incremental_encoding import SyntheticNativeBackend
 from tests.unit.test_public_solution_reference_query_execution import public_workflow_case
 from tests.unit.test_reference_query_execution_contracts import case
+from tests.unit.test_registered_public_reference_query_execution import (
+    registered_public_workflow_case,
+)
 
 
-def public_artifact_case(tmp_path, publisher=None):
-    c = public_workflow_case(identity=uuid4().hex)
+def public_artifact_case(tmp_path, publisher=None, *, case_factory=public_workflow_case):
+    c = case_factory(identity=uuid4().hex)
     backend = SyntheticNativeBackend(c.native_input.spaces.query)
     backend.batch_size, backend.threads = c.native_input.batch_size, c.native_input.threads
     encoded = encode_public_solution_query(c.native_input, backend)
@@ -106,8 +109,11 @@ def published_read_arguments(value, published):
     )
 
 
-def test_public_query_publication_and_canonical_read_preserve_producer_and_exact_family(tmp_path):
-    value = public_artifact_case(tmp_path)
+@pytest.mark.parametrize("case_factory", [public_workflow_case, registered_public_workflow_case])
+def test_public_query_publication_and_canonical_read_preserve_producer_and_exact_family(
+    tmp_path, case_factory
+):
+    value = public_artifact_case(tmp_path, case_factory=case_factory)
     first, replay = publish_public_query(value), publish_public_query(value)
     assert first == replay and first.logical_query_job_id == value.case.native_input.job_id
     assert first.owner_job_id != first.logical_query_job_id

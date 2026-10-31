@@ -24,12 +24,12 @@ from eom_workflow.embedding_batch_execution_receipt import BATCH_EXECUTION_RECEI
 from eom_workflow.models import JobId
 from eom_workflow.native_embedding_coordinator import NativeArtifactProducerIdentity
 from eom_workflow.reference_query_execution import (
+    PublicReferenceQueryWorkflowRequest,
     ReferenceQueryLaunchAssociation,
     ReferenceQueryStepOutput,
     ReferenceQueryStepOutputV2,
     ReferenceQueryWorkflowReceipt,
     ReferenceQueryWorkflowReceiptV2,
-    ReferenceQueryWorkflowRequestV3,
     SupportedReferenceQueryWorkflowIntent,
     SupportedReferenceQueryWorkflowReceipt,
     SupportedReferenceQueryWorkflowRequest,
@@ -459,7 +459,7 @@ def reference_query_checkpoint_receipt(
 
 @overload
 def reference_query_checkpoint_receipt(
-    request: ReferenceQueryWorkflowRequestV3,
+    request: PublicReferenceQueryWorkflowRequest,
     launch: ReferenceQueryLaunchAssociation,
     allocation: NativeQueryAllocation,
     executed: SupportedNativeQueryExecuted,
@@ -485,7 +485,7 @@ def reference_query_checkpoint_receipt(
     published: NativeQueryPublished | NativeQueryPublishedV2,
 ) -> SupportedReferenceQueryWorkflowReceipt:
     """Reconstruct immutable small metadata, not validation of an actual publication."""
-    public = isinstance(request, ReferenceQueryWorkflowRequestV3)
+    public = isinstance(request, PublicReferenceQueryWorkflowRequest)
     if public != isinstance(published, NativeQueryPublishedV2):
         raise ValueError("QUERY receipt publication family differs")
     body = {
@@ -543,7 +543,7 @@ def validate_native_reference_query_history(
     if checked and any(row.schema_version != checked[0].schema_version for row in checked):
         raise ValueError("QUERY checkpoint families are mixed")
     if checked and (
-        isinstance(request, ReferenceQueryWorkflowRequestV3)
+        isinstance(request, PublicReferenceQueryWorkflowRequest)
         != isinstance(checked[0], NativeReferenceQueryCheckpointV2)
     ):
         raise ValueError("QUERY checkpoint and workflow request families differ")
@@ -576,7 +576,7 @@ def validate_native_reference_query_history(
     assert isinstance(
         executed, (NativeQueryExecuted, NativeQueryExecutedV11, NativeQueryBatchExecuted)
     )
-    if isinstance(request, ReferenceQueryWorkflowRequestV3) and (
+    if isinstance(request, PublicReferenceQueryWorkflowRequest) and (
         isinstance(executed, NativeQueryBatchExecuted)
         != (request.resource_profile.device == "CUDA")
     ):

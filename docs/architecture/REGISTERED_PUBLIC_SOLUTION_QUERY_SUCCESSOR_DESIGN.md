@@ -56,3 +56,38 @@ PARTIAL 결과를 제공하고, 미준비 source/보고서/벡터 수를 원래 
 3. QUERY reader가 index3/4를 모두 읽도록 설치 검증한 뒤에만 INDEX4 writer를 활성화한다.
 4. AI 정식 Graph/base2/V11 보고서 producer와 증분 등록을 실제 canary로 닫는다.
 5. 전체 기출520 검증·검색 범위 확정 후 정확한 구 projection 소비자만 조사·정리한다.
+
+## 실제 native carrier 범위 — 2026-10-31
+
+기존 public request3는 context3를 내장하므로 그대로 넓히지 않는다. 독립적인
+`reference-query-workflow-request/4.0`은 context4와 index3/4의 정확한 source proof를
+담는다. Workflow definition2/result2/receipt2/step-output2/launch1/coordinator2 및
+수치 QUERY2/shard1은 같은 의미이므로 재사용한다. native Job의 protocol pin은 새 request
+schema SHA에 고정한 별도 metadata family로 구분한다. 원 request3/native protocol2의
+역사적 hash는 변하지 않는다.
+
+동일한 공개 풀이 text/hash와 수치 공간이면 context3/4에서 QUERY2의 row/encoding 및
+input_set_sha256은 같아야 한다. 출처·base/result/report/Graph/policy/index identity가
+다르면 context와 외부 request hash는 달라야 한다. QUERY2에도 context_request_sha256과
+원 Job ID가 있으므로 전체 native request SHA까지 같다고 주장하지 않는다. 수치 동등성과
+출처 envelope의 동일성을 혼동하지 않는다. 새 native Job metadata pin은
+`reference-query/3.0`과 request4의 exact schema SHA를 사용한다.
+새 schema·parser·native read/submit/prepare/registration을 먼저 연결·검증하며 receiver가
+설치되기 전 INDEX4 writer 또는 현재 GPU numerical runtime은 활성화·교체하지 않는다.
+
+Completed-read RPC는 result에 context를 내장하므로 `system-rag-similarity-read/4.0`을
+추가한다. request4/reply4는 기존 exact Workflow/hash selector로 context3 또는4를 읽는다.
+read3의 bytes/허용 결과는 그대로 유지하고 context4를 read3으로 위장하지 않는다. 새 API
+client 선택은 read4 receiver 설치와 함께만 활성화한다. 새 queue/DB/수치 작업은 없다.
+
+### Routed parent의 실제 closure
+
+실제 source의 public QUERY parent는 `embedding-batch-plan/1.4`이며 INDEX parent1.3과
+다르다. parent1.4 selection의 anchor/view는 context3 proof에 고정되고 preparation2는
+그 parent request를 내장한다. registered entry2/index4를 넣기 위해 이 기존 schema를
+넓히지 않는다. 필요한 successor는 이 두 metadata carrier로 제한하며 기존 allocation/
+route/bound/finite numerical batch/checkpoint 형식과 indexed publication key는 재사용한다.
+재전송 시 저장된 preparation과 selection의 원래 schema family를 먼저 확인하고 그대로
+읽는다. 새 family 이름을 옛 Artifact pointer에 붙여 재해석하지 않는다. CPU/GPU의 부분
+coverage와 전환 중 index3/4의 차이는 source별 exact proof로 확인하며, 전체 target-set을
+같다고 가정하거나 구형 private/accepted projection으로 fallback하지 않는다.

@@ -21,7 +21,7 @@ from eom_workflow.native_reference_query_coordinator import NativeQueryCompleted
 from eom_workflow.reference_query_execution import (
     ReferenceQueryStepOutputV2,
     parse_reference_query_execution_policy,
-    parse_reference_query_workflow_request_v3,
+    parse_supported_reference_query_workflow_request,
 )
 from sqlalchemy import func, select
 
@@ -30,11 +30,16 @@ from tests.unit.test_embedding_incremental_encoding import SyntheticNativeBacken
 from tests.unit.test_public_solution_query_source import public_query_sources
 from tests.unit.test_public_solution_reference_query_execution import public_workflow_case
 from tests.unit.test_reference_query_native_executor import make_executor_case
+from tests.unit.test_registered_public_reference_query_execution import (
+    registered_public_workflow_case,
+)
 
 
-def make_public_executor_case(tmp_path, monkeypatch, *, publisher=None, identity=None):
+def make_public_executor_case(
+    tmp_path, monkeypatch, *, publisher=None, identity=None, case_factory=public_workflow_case
+):
     value = make_executor_case(tmp_path, monkeypatch, publisher=publisher)
-    case = public_workflow_case(identity=identity)
+    case = case_factory(identity=identity)
     resources = value.sources.policy.resource_profile
     case.policy = parse_reference_query_execution_policy(
         seal(
@@ -43,7 +48,7 @@ def make_public_executor_case(tmp_path, monkeypatch, *, publisher=None, identity
             "policy_sha256",
         )
     )
-    case.request = parse_reference_query_workflow_request_v3(
+    case.request = parse_supported_reference_query_workflow_request(
         seal(
             case.request.model_dump(mode="json")
             | {
@@ -111,9 +116,9 @@ def make_public_executor_case(tmp_path, monkeypatch, *, publisher=None, identity
     return value
 
 
-@pytest.fixture
-def query(tmp_path, monkeypatch):
-    return make_public_executor_case(tmp_path, monkeypatch)
+@pytest.fixture(params=[public_workflow_case, registered_public_workflow_case], ids=["v3", "v4"])
+def query(tmp_path, monkeypatch, request):
+    return make_public_executor_case(tmp_path, monkeypatch, case_factory=request.param)
 
 
 def test_existing_executor_query2_staging_four_checkpoints_canonical_result_and_exact_replay(query):

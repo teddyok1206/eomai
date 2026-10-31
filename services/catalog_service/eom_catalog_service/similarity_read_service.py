@@ -7,6 +7,9 @@ from dataclasses import replace
 from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNamespace
 from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
 from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityContext
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    SupportedPublicSolutionSimilarityContext,
+)
 from eom_catalog_contracts.similarity_context_v2 import (
     SimilarityContextRequestV2,
     SupportedSimilarityContext,
@@ -16,9 +19,10 @@ from eom_catalog_contracts.similarity_read import (
 )
 from eom_catalog_contracts.similarity_read_v2 import SimilarityContextReadRequestV2
 from eom_catalog_contracts.similarity_read_v3 import SimilarityContextReadRequestV3
+from eom_catalog_contracts.similarity_read_v4 import SimilarityContextReadRequestV4
 from eom_identity_service import OperatorAuthorizationFenceError
 from eom_orchestrator.database import build_session_factory
-from eom_workflow.reference_query_execution import ReferenceQueryWorkflowRequestV3
+from eom_workflow.reference_query_execution import PublicReferenceQueryWorkflowRequest
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.reference_query_consumer_read import (
     CatalogCompletedReferenceQueryRead,
@@ -83,9 +87,10 @@ class CatalogSimilarityContextReadService:
         self,
         request: SimilarityContextReadRequest
         | SimilarityContextReadRequestV2
-        | SimilarityContextReadRequestV3,
-    ) -> SupportedSimilarityContext | PublicSolutionSimilarityContext:
-        if isinstance(request, SimilarityContextReadRequestV3):
+        | SimilarityContextReadRequestV3
+        | SimilarityContextReadRequestV4,
+    ) -> SupportedSimilarityContext | SupportedPublicSolutionSimilarityContext:
+        if isinstance(request, SimilarityContextReadRequestV3 | SimilarityContextReadRequestV4):
             return self._read_public(request)
         request = (
             SimilarityContextReadRequestV2.model_validate(request)
@@ -106,7 +111,7 @@ class CatalogSimilarityContextReadService:
                 original = select_completed_reference_query_request(
                     session, source_owner, caller, request.selection
                 )
-                if isinstance(original, ReferenceQueryWorkflowRequestV3):
+                if isinstance(original, PublicReferenceQueryWorkflowRequest):
                     raise SimilarityContextReadError("QUERY_RESULT_INVALID")
                 if isinstance(original.context_request, SimilarityContextRequestV2) != isinstance(
                     request, SimilarityContextReadRequestV2
@@ -176,17 +181,22 @@ class CatalogSimilarityContextReadService:
             raise SimilarityContextReadError("QUERY_RESULT_INVALID") from None
 
     def _read_public(
-        self, request: SimilarityContextReadRequestV3
-    ) -> PublicSolutionSimilarityContext:
-        request = SimilarityContextReadRequestV3.model_validate(request)
+        self, request: SimilarityContextReadRequestV3 | SimilarityContextReadRequestV4
+    ) -> SupportedPublicSolutionSimilarityContext:
+        request = type(request).model_validate(request)
         owner = self.public_owner
         if owner is None:
             raise SimilarityContextReadError("QUERY_RESULT_INVALID")
         try:
             with self.sessions.begin() as session:
-                return read_completed_public_solution_similarity_in_session(
+                result = read_completed_public_solution_similarity_in_session(
                     session, owner, EmbeddingRegistryCaller(request.actor_id), request.selection
                 )
+                if isinstance(request, SimilarityContextReadRequestV3) and not isinstance(
+                    result, PublicSolutionSimilarityContext
+                ):
+                    raise SimilarityContextReadError("QUERY_RESULT_INVALID")
+                return result
         except SimilarityContextReadError:
             raise
         except OperatorAuthorizationFenceError:

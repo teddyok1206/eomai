@@ -14,7 +14,7 @@ from eom_workflow.local_embedding_request_v2 import (
 )
 from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
 from eom_workflow.reference_query_execution import (
-    ReferenceQueryWorkflowRequestV3,
+    PublicReferenceQueryWorkflowRequest,
     SupportedReferenceQueryWorkflowRequest,
     parse_supported_reference_query_workflow_request,
 )
@@ -78,7 +78,7 @@ def native_fenced_runner_transaction[Request: NativeWorkflowRequest](
             original = parse_supported_reference_query_workflow_request(workflow.initial_request)
             protocol = (
                 "reference-query/2.0"
-                if isinstance(request, ReferenceQueryWorkflowRequestV3)
+                if isinstance(request, PublicReferenceQueryWorkflowRequest)
                 else "reference-query/1.0"
             )
         else:
