@@ -15,6 +15,9 @@ from eom_catalog_contracts.public_solution_embedding_index import (
 from eom_catalog_contracts.public_solution_embedding_registry import (
     RegisterPublicSolutionIndexCommand,
 )
+from eom_catalog_contracts.registered_public_solution_registry import (
+    RegisterPublicSolutionIndexCommandV4,
+)
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.embedding_registry_ports import (
@@ -88,7 +91,8 @@ class CatalogIndexingRegistrySourceAuthority:
             intent,
             RegisterEmbeddingIndexCommand
             | RegisterEmbeddingIndexCommandV2
-            | RegisterPublicSolutionIndexCommand,
+            | RegisterPublicSolutionIndexCommand
+            | RegisterPublicSolutionIndexCommandV4,
         ):
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
         maximum = (
@@ -99,6 +103,7 @@ class CatalogIndexingRegistrySourceAuthority:
                     RegisterEmbeddingIndexCommand,
                     RegisterEmbeddingIndexCommandV2,
                     RegisterPublicSolutionIndexCommand,
+                    RegisterPublicSolutionIndexCommandV4,
                 ),
             )
             else intent.maximum_sources
@@ -203,7 +208,10 @@ class CatalogIndexingRegistrySourceAuthority:
                 )
             maximum = (
                 self.maximum_sources
-                if isinstance(intent, RegisterPublicSolutionIndexCommand)
+                if isinstance(
+                    intent,
+                    RegisterPublicSolutionIndexCommand | RegisterPublicSolutionIndexCommandV4,
+                )
                 else intent.maximum_sources
                 if isinstance(intent, EmbeddingRegistryLookup)
                 else 1024

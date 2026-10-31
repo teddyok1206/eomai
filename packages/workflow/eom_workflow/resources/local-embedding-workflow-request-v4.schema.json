@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/local-embedding-workflow-request/4.0",
+  "additionalProperties": false,
+  "description": "Independent public-solution service frame; not an instance of a released request1.",
+  "properties": {
+    "schema_version": {
+      "const": "local-embedding-workflow-request/4.0"
+    },
+    "request_name": {
+      "const": "LOCAL_EMBEDDING_WORKFLOW_REQUEST",
+      "default": "LOCAL_EMBEDDING_WORKFLOW_REQUEST",
+      "title": "Request Name",
+      "type": "string"
+    },
+    "purpose": {
+      "const": "LOCAL_EMBEDDING",
+      "default": "LOCAL_EMBEDDING",
+      "title": "Purpose",
+      "type": "string"
+    },
+    "workflow_definition_key": {
+      "const": "local-embedding-index",
+      "default": "local-embedding-index",
+      "title": "Workflow Definition Key",
+      "type": "string"
+    },
+    "workflow_definition_version": {
+      "const": "2.0.0",
+      "default": "2.0.0",
+      "title": "Workflow Definition Version",
+      "type": "string"
+    },
+    "workflow_definition_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Workflow Definition Sha256",
+      "type": "string"
+    },
+    "actor_context": {
+      "$ref": "eom://schemas/workflow/local-embedding-workflow-request/3.0#/$defs/LocalEmbeddingServiceAudit"
+    },
+    "corpus_id": {
+      "pattern": "^corpus_[0-9a-f]{32}$",
+      "title": "Corpus Id",
+      "type": "string"
+    },
+    "graph_snapshot": {
+      "$ref": "eom://schemas/workflow/local-embedding-workflow-request/3.0#/$defs/KnowledgeGraphSnapshotPointer"
+    },
+    "access_policy_revision_id": {
+      "pattern": "^accessrev_[0-9a-f]{32}$",
+      "title": "Access Policy Revision Id",
+      "type": "string"
+    },
+    "access_policy_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Access Policy Sha256",
+      "type": "string"
+    },
+    "namespace": {
+      "$ref": "eom://schemas/workflow/local-embedding-workflow-request/3.0#/$defs/PublicSolutionIndexNamespace"
+    },
+    "space": {
+      "$ref": "eom://schemas/workflow/local-embedding-workflow-request/3.0#/$defs/EmbeddingSpace"
+    },
+    "runtime_bundle": {
+      "$ref": "eom://schemas/workflow/local-embedding-workflow-request/3.0#/$defs/EmbeddingRuntimeBundlePointer"
+    },
+    "source_plan": {
+      "allOf": [
+        {
+          "$ref": "eom://schemas/workflow/local-embedding-workflow-request/3.0#/$defs/ArtifactMemberPointer"
+        },
+        {
+          "properties": {
+            "member_path": {
+              "const": "source-plan.json"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/workflow/local-embedding-source-plan/4.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        }
+      ]
+    },
+    "source_plan_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Source Plan Sha256",
+      "type": "string"
+    },
+    "native_execution_policy": {
+      "$ref": "eom://schemas/workflow/local-embedding-workflow-request/3.0#/$defs/ArtifactMemberPointer"
+    },
+    "native_execution_policy_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Native Execution Policy Sha256",
+      "type": "string"
+    },
+    "resource_profile": {
+      "$ref": "eom://schemas/workflow/local-embedding-workflow-request/3.0#/$defs/LocalEmbeddingResourceProfile"
+    },
+    "request_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Request Sha256",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_name",
+    "purpose",
+    "workflow_definition_key",
+    "workflow_definition_version",
+    "workflow_definition_sha256",
+    "actor_context",
+    "corpus_id",
+    "graph_snapshot",
+    "access_policy_revision_id",
+    "access_policy_sha256",
+    "namespace",
+    "space",
+    "runtime_bundle",
+    "source_plan",
+    "source_plan_sha256",
+    "native_execution_policy",
+    "native_execution_policy_sha256",
+    "resource_profile",
+    "request_sha256"
+  ],
+  "title": "Registered full-report request over unchanged INDEX2 numerical execution",
+  "type": "object"
+}

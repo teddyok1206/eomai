@@ -10,6 +10,7 @@ import re
 
 from eom_catalog_contracts.embedding_index_families import (
     SupportedEmbeddingBinding,
+    embedding_entry_profile,
     parse_supported_embedding_entry,
 )
 from eom_catalog_contracts.inference_transfer_embedding import (
@@ -24,7 +25,12 @@ from eom_catalog_contracts.mixed_embedding_index import (
 from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
 from eom_catalog_contracts.public_solution_embedding_index import (
     PublicSolutionEmbeddingSourceBinding,
-    PublicSolutionProfilePointer,
+)
+from eom_catalog_contracts.registered_public_solution_embedding import (
+    RegisteredPublicSolutionEmbeddingEntry,
+)
+from eom_catalog_contracts.registered_public_solution_index import (
+    RegisteredPublicSolutionSourceBinding,
 )
 from eom_identifiers import content_sha256
 
@@ -50,7 +56,9 @@ def embedding_binding_lookup_key(
         binding.view,
         binding.projection_version,
     )
-    if isinstance(binding, PublicSolutionEmbeddingSourceBinding):
+    if isinstance(
+        binding, PublicSolutionEmbeddingSourceBinding | RegisteredPublicSolutionSourceBinding
+    ):
         return PublicSolutionEmbeddingBindingLookupKey(
             *common,
             binding.base_analysis_run_id,
@@ -99,7 +107,7 @@ def validated_embedding_base_associations(
         raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
     for original in entries:
         entry = parse_supported_embedding_entry(original)
-        if isinstance(entry, PublicSolutionEmbeddingEntry):
+        if isinstance(entry, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry):
             revision = entry.source.item_revision_id
             if (
                 by_source.get(revision) != entry.source
@@ -132,7 +140,7 @@ def embedding_entry_lookup_key(
     scope: EmbeddingRegistryLookup,
     base_analysis_run_id: str,
 ) -> SupportedEmbeddingBindingLookupKey:
-    if isinstance(entry, PublicSolutionEmbeddingEntry):
+    if isinstance(entry, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry):
         if entry.base_analysis_run_id != base_analysis_run_id:
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
         return PublicSolutionEmbeddingBindingLookupKey(
@@ -143,7 +151,7 @@ def embedding_entry_lookup_key(
             scope.namespace.view,
             "public-solution-text/1.0",
             entry.base_analysis_run_id,
-            PublicSolutionProfilePointer.from_entry(entry).profile_revision_id,
+            embedding_entry_profile(entry).profile_revision_id,
             encoding.encoding_sha256,
             content_sha256(entry.evidence),
         )

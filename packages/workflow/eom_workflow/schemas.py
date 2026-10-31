@@ -840,6 +840,12 @@ MIXED_NATIVE_WORKFLOW_SCHEMA_RESOURCES = (
 )
 PUBLIC_NATIVE_WORKFLOW_SCHEMA_RESOURCES = (
     (
+        "registered-public-request",
+        "local-embedding-workflow-request-v4.schema.json",
+        "eom://schemas/workflow/local-embedding-workflow-request/4.0",
+        "sha256:7e2a32a4c211f5a13d8b1ad9b9894a1eceee9ae352166e51b192428931d9dc5e",
+    ),
+    (
         "registered-public-source-plan",
         "local-embedding-source-plan-v4.schema.json",
         "eom://schemas/workflow/local-embedding-source-plan/4.0",
@@ -923,6 +929,7 @@ EMBEDDING_BENCHMARK_LAUNCH_CONTROL_SCHEMA_RESOURCE = (
     "sha256:2ceb6cb0150ffc64f2b4e94fed17cff36181b486885c8f78d8e6c0cd4c34de27",
 )
 type LocalEmbeddingSchemaName = Literal[
+    "registered-public-request",
     "registered-public-source-plan",
     "private-chat-submission",
     "private-chat-runner",

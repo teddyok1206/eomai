@@ -79,6 +79,13 @@ from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimil
 from eom_catalog_contracts.registered_public_solution_embedding import (
     RegisteredPublicSolutionEmbeddingEntry,
 )
+from eom_catalog_contracts.registered_public_solution_index import (
+    REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+    RegisteredPublicSolutionSourceBinding,
+)
+from eom_catalog_contracts.registered_public_solution_registry import (
+    RegisterPublicSolutionIndexCommandV4,
+)
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import (
     SimilarityContext,
@@ -304,6 +311,7 @@ _REGISTRATION_TYPES = (
     RegisterEmbeddingIndexCommand,
     RegisterEmbeddingIndexCommandV2,
     RegisterPublicSolutionIndexCommand,
+    RegisterPublicSolutionIndexCommandV4,
 )
 
 
@@ -312,6 +320,7 @@ def _decode_index_manifest(schema_ref: str, payload: bytes) -> SupportedEmbeddin
         INDEX_SCHEMA_REF,
         MIXED_EMBEDDING_INDEX_SCHEMA_REF,
         PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+        REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
     ):
         raise ValueError("foreign index schema")
     index = parse_supported_embedding_index(_document(payload))
@@ -476,7 +485,10 @@ class CatalogEmbeddingRegistryVerifier:
             if not source_revision_ids:
                 maximum = (
                     MAX_PUBLIC_SOLUTION_SOURCES
-                    if isinstance(intent, RegisterPublicSolutionIndexCommand)
+                    if isinstance(
+                        intent,
+                        RegisterPublicSolutionIndexCommand | RegisterPublicSolutionIndexCommandV4,
+                    )
                     else intent.maximum_sources
                     if isinstance(intent, EmbeddingRegistryLookup)
                     else 1024
@@ -721,6 +733,7 @@ class CatalogEmbeddingRegistryVerifier:
                 INDEX_SCHEMA_REF,
                 MIXED_EMBEDDING_INDEX_SCHEMA_REF,
                 PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+                REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
             )
             or pointer.member_path != EMBEDDING_INDEX_PRIMARY_MEMBER
             or pointer.media_type != "application/json"
@@ -2366,6 +2379,7 @@ class CatalogEmbeddingRegistryVerifier:
                             (
                                 RegisteredReviewEmbeddingSourceBinding,
                                 PublicSolutionEmbeddingSourceBinding,
+                                RegisteredPublicSolutionSourceBinding,
                             ),
                         )
                         and binding.base_analysis_run_id

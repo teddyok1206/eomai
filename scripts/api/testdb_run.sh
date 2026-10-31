@@ -335,6 +335,7 @@ if [[ "${action}" == "embedding-registry-tests" ]]; then
   "${PYTHON}" -m pytest -q tests/integration/test_embedding_registry_persistence.py \
     tests/integration/test_embedding_registry_application.py \
     tests/integration/test_public_solution_embedding_registry.py \
+    tests/integration/test_registered_public_solution_registry.py \
     tests/integration/test_local_embedding_native_executor.py
   printf 'Disposable embedding registry and native transaction tests passed.\n'
   exit 0
@@ -355,6 +356,7 @@ if [[ "${action}" == "embedding-tests" ]]; then
     tests/integration/test_embedding_registry_persistence.py \
     tests/integration/test_embedding_registry_application.py \
     tests/integration/test_public_solution_embedding_registry.py \
+    tests/integration/test_registered_public_solution_registry.py \
     tests/integration/test_registered_review_restricted_role.py \
     tests/integration/test_private_chat_document_read.py \
     tests/integration/test_private_chat_query_source_owner.py \

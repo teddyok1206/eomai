@@ -44,6 +44,15 @@ def test_frozen_checks_indexes_and_order_match_current_models(monkeypatch):
         for check in model.__table__.constraints
         if isinstance(check, CheckConstraint)
     }
+    # 0063 remains frozen;0066 records its exact predecessor CHECK expressions.
+    from tests.unit.test_registered_public_solution_migration import registered_public_migration
+
+    checks.update(
+        {
+            (table, name): value
+            for table, name, value in registered_public_migration()._PREVIOUS_CHECKS
+        }
+    )
     assert len(module._CHECKS) == len(module._PREVIOUS_CHECKS) == 6
     assert all(checks[(owner, name)] == value for owner, name, value in module._CHECKS)
     indexes = {value.name: value for value in EmbeddingSourceBindingRecord.__table__.indexes}

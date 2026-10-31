@@ -10,11 +10,12 @@ from eom_catalog_service.creative_registered_report import RegisteredCreativeRep
 from eom_catalog_service.creative_report_batch import CapturedRegisteredCreativeReport
 from eom_catalog_service.public_solution_source_capture import CatalogPublicSolutionSourceCapture
 from eom_catalog_service.solution_embedding_projection import project_public_solution_text
-from eom_identifiers import canonical_json_bytes
+from eom_identifiers import canonical_json_bytes, content_sha256
 
 from tests.unit.inference_transfer_fixtures import profile, report
 from tests.unit.test_creative_registered_report import proposal
 from tests.unit.test_public_solution_encoding import public_entry, public_recipe
+from tests.unit.test_registered_public_solution_embedding import registered_entry
 
 
 def capture_case(monkeypatch, *, creative=False):
@@ -61,6 +62,10 @@ def capture_case(monkeypatch, *, creative=False):
     )
     batches = Mock(return_value={source.item_revision_id: registered})
     monkeypatch.setattr(capture_module, "resolve_solution_evidence_by_base_run", solutions)
+    registered_solutions = Mock(return_value={})
+    monkeypatch.setattr(
+        capture_module, "resolve_registered_solution_evidence_by_base_run", registered_solutions
+    )
     monkeypatch.setattr(capture_module, "load_registered_creative_reports", batches)
     lineage_reader = Mock()
     reader_factory = Mock(return_value=lineage_reader)
@@ -137,8 +142,8 @@ def test_missing_ai_or_past_report_is_missing_not_editorial_or_review_fallback(
 
 @pytest.mark.parametrize("source_kind", ["AI", "AI_GENERATED", "GENERATED"])
 def test_conditional_ai_report_adapter_has_no_source_category_text_prefix(monkeypatch, source_kind):
-    # Deliberately mocked admitted report port: this proves projection semantics,
-    # NOT that the past-exam-only V10 producer can actually accept an AI source.
+    # Synthetic V11 read port; actual accepted bytes/receipt validation is covered
+    # by the separate disposable registered-solution application suite.
     value = capture_case(monkeypatch)
     past = run(value).entries[0]
     source = ApprovedItemKnowledgeSourceV2.model_validate(
@@ -146,15 +151,30 @@ def test_conditional_ai_report_adapter_has_no_source_category_text_prefix(monkey
     )
     value.candidate.source = source
     value.revision.metadata_json = {"source_kind": source_kind}
-    value.solutions.return_value[value.candidate.analysis_run_id].source = source
+    pointer_type = type(registered_entry().evidence.solution)
+    body = registered_entry().evidence.solution.model_dump(mode="json")
+    body["base_analysis_run_id"] = value.candidate.analysis_run_id
+    body["pointer_sha256"] = content_sha256(
+        {key: part for key, part in body.items() if key != "pointer_sha256"}
+    )
+    value.registered_solutions.return_value = {
+        value.candidate.analysis_run_id: NS(
+            source=source, report=value.original_report, pointer=pointer_type.model_validate(body)
+        )
+    }
     ai = run(value).entries[0]
     assert ai.source.source_class == "APPROVED_ITEM"
     assert past.source.source_class == "PAST_EXAM"
     assert ai.public_solution == past.public_solution
     assert ai.recipe == past.recipe
-    assert ai.evidence.kind == "ACCEPTED_SOLUTION_ANALYSIS"
+    assert ai.evidence.kind == "ACCEPTED_REGISTERED_SOLUTION_ANALYSIS"
+    assert ai.schema_version == "public-solution-embedding-entry/2.0"
     assert ai.entry_sha256 != past.entry_sha256
     value.batches.assert_not_called()
+    assert value.solutions.call_args.kwargs["base_analysis_run_ids"] == ()
+    assert value.registered_solutions.call_args.kwargs["base_analysis_run_ids"] == (
+        value.candidate.analysis_run_id,
+    )
 
 
 @pytest.mark.parametrize("change", ["revoked", "different_item", "missing", "duplicate"])
@@ -170,6 +190,23 @@ def test_current_source_eligibility_is_not_inferred_from_a_typed_candidate(monke
         value.pool.candidates *= 2
     with pytest.raises(ValueError, match="SOURCE_SET_INVALID"):
         run(value)
+
+
+def test_registered_source_never_borrows_a_past_exam_report_when_real_v11_is_missing(monkeypatch):
+    value = capture_case(monkeypatch)
+    source = ApprovedItemKnowledgeSourceV2.model_validate(
+        value.source.model_dump(mode="json") | {"source_class": "APPROVED_ITEM"}
+    )
+    value.candidate.source = source
+    value.revision.metadata_json = {}
+    value.solutions.return_value[value.candidate.analysis_run_id].source = source
+    result = run(value)
+    assert result.entries == ()
+    assert result.missing_report_revision_ids == (source.item_revision_id,)
+    assert value.registered_solutions.call_args.kwargs["base_analysis_run_ids"] == (
+        value.candidate.analysis_run_id,
+    )
+    assert value.solutions.call_args.kwargs["base_analysis_run_ids"] == ()
 
 
 def test_actor_or_policy_change_after_materialization_aborts_capture(monkeypatch):

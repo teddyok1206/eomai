@@ -612,11 +612,20 @@ def test_historical_namespace_uses_one_registered_pk_batch_and_real_artifact(
         # Bitmap Index Scan records its index on a child without Relation Name;
         # inherit ONLY that exact relation, not indexes from the joined head.
         if relation == "embedding_index_revisions" and node.get("Index Name"):
-            indexes.append(node.get("Index Name", ""))
+            indexes.append(node)
         pending.extend((child, relation) for child in node.get("Plans", ()))
     assert any(
-        name in {"embedding_index_revisions_pkey", "uq_embedding_index_revision_identity"}
-        for name in indexes
+        node["Index Name"]
+        in {"embedding_index_revisions_pkey", "uq_embedding_index_revision_identity"}
+        # Tiny disposable cohorts can make PostgreSQL prefer the equally
+        # index_id-bounded revision-number index and filter the pinned revision.
+        # Do not confuse that legal cost choice with an unbounded table scan.
+        or (
+            node["Index Name"] == "uq_embedding_index_revision_number"
+            and "index_id" in node.get("Index Cond", "")
+            and "index_revision_id" in node.get("Filter", "")
+        )
+        for node in indexes
     ), explained
 
 

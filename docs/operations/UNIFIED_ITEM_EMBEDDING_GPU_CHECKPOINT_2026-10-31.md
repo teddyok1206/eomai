@@ -393,3 +393,35 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
   해당 command 연결이 없다. 따라서 기존 typed command/publisher를 정식 application 경계에
   연결하고 권한·기존 origin 검증을 확인해야 한다. source 클래스 존재만으로 운영 기능이
   활성화됐다고 간주하지 않는다. 과거25문항용 whitelist 확대는 여전히 불필요하다.
+
+### Registry4·실제 registered report capture·request4 후보 — 13:17 UTC
+
+- 기존 Registry의 transaction/savepoint/operation replay/head CAS로 command4/result4를
+  연결했다. index3→4에서 같은 수치 row를 재사용하고 기존 binding3의 최초 Artifact origin을
+  바꾸지 않는다. 예전 command replay로 current head를 되돌리지 않는다. 새 테이블이나 queue,
+  vector payload는 추가하지 않았다.
+- 후보 migration`20261031_0066`은 manifest4와 public coverage를 위한 CHECK3개만 확장한다.
+  frozen0063/0065는 수정하지 않았다. 설치 admission의 source head도0066으로 맞췄다.
+  **운영 DB0064에는 적용하지 않았다.** index4 history가 존재하면 downgrade는 삭제 대신 거부한다.
+- disposable DB`20261031130508_771b1c19`의 깨끗한 migration 왕복 PASS 후, 실제 PostgreSQL
+  registry3/4·동시 등록·중단 rollback/replay·stale CAS·구 command 재전송·이력 보존 검사
+  **26 PASS**다. DB/역할 cleanup PASS다. 테스트 권한/Artifact는 명시적 synthetic port이며
+  실제 NAS/권한 검색/새 AI 보고서 모델 실행의 acceptance를 주장하지 않는다.
+- 첫 broad DB 실행은 새 fixture의 timestamp JSON hash 표현 문제5 FAIL/55 PASS 후, 영향 없는
+  오래 걸리는 native matrix를 중단했다. 이어 raw JSON hash와 유효한 stale CAS fixture를 보정했다.
+  '신규 이력이 없는 downgrade'는 이미 성공한 clean migration cycle로 검증하고, committed
+  history를 공유하는 등록 suite에서는 이력 거부만 검사한다. 이전 실패/중단 log는 보존한다.
+- 과거 namespace EXPLAIN 테스트는 작은 cohort에서 실제로 선택된 기존 unique revision-number
+  B-tree를 허용하도록 보정했다. 정확한 index_id 조건+revision filter를 요구하므로 full scan은
+  허용하지 않는다. query·production index·권한은 바꾸지 않았다.
+- 실제 Catalog source capture에 accepted V11 reader를 연결했다. Graph source의 PAST_EXAM은
+  V10, 창작은 기존 lineage, 다른 APPROVED_ITEM은 V11을 읽는다. 누락된 metadata를 AI 증거로
+  간주하지 않고 V10/report 결론으로 fallback하지 않는다. 공통 projection 함수는 하나다.
+- request4는 plan4의 raw/semantic hash와 기존 INDEX2 service/policy를 고정한다. request3/4는
+  pure body/reference validator를 재사용하며 frozen request3 schema bytes와 numeric input/result1은
+  그대로다. native ownership/receipt/coordinator 및 QUERY successor 운영 연결은 아직 남아 있다.
+- registry/migration/capture/plan 관련 unit 회귀 **165 PASS**, request3/4·기존 native carrier
+  **13 PASS**, 핵심 Catalog12개와 request/generator3개 mypy PASS, Ruff/schema generator PASS다.
+  서로 다른 실행/overlap 여부를 구분하며 full native matrix PASS로 확대하지 않는다.
+- 13:00 정기 관측은 GPU **73/520**, 잔여447, CUDA RUNNING1, historical failed2 그대로다.
+  운영 INDEX/QUERY/API/Catalog 재시작0, 원본 변경0, 구 벡터 삭제0이다. 전체 goal은 ACTIVE다.

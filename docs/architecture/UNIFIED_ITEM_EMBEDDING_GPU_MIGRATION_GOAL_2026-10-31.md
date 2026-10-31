@@ -279,3 +279,44 @@ atomic claim/CAS/동일 text encoding lookup과 exact source permission boundary
   origin과 권한을 검증해 공식 공통 Graph publisher에 연결한다. V2 base를 그 경로로 등록하고
   V11 additive report를 정확히 조회하는 방식을 재사용한다. 실제 운영 operation 활성화와
   대상 sample provenance는 activation 때 별도 확인한다. source 확인을 live PASS로 간주하지 않는다.
+
+#### Index4 저장 경계의 후보 migration0066 — 12:59 UTC
+
+기존 Registry application transaction/operation replay/head CAS와 PUBLIC_SOLUTION_REPORT
+binding의 indexed key를 그대로 사용한다. canonical source는 승인된 보고서/Graph와 immutable
+index/shard Artifacts이며 command4/receipt4는 그 exact pins와 이전/현재 head 관측만 전달한다.
+`20261031_0066`은 binding manifest/schema, index revision manifest/schema, public coverage의
+세 CHECK에 index4를 추가하는 후보다. 기존1–3과 다른 evidence kind 제약, FK, unique B-tree,
+불변 trigger와 canonical 데이터는 바꾸지 않는다. 새 테이블·queue·vector store·DB payload는 없다.
+
+lookup은 기존 indexed O(log N), association 구성은 기존 map/set 및 canonical sort다. 같은
+text/space의 numeric row는 재사용하며 원 binding3의 최초 manifest와 SHA는 갱신하지 않는다.
+기존 lock/savepoint/CAS가 transaction/concurrent boundary다. migration 왕복·기존3→4 전환·
+동시 등록·중단 rollback/replay는 disposable DB에서 검증한다. index4/binding4 이력이 있으면
+downgrade가 이를 지우거나 기존 계약으로 재해석하지 못하게 거부한다. 새 운영 schema 적용은
+호환 release/operator qualification 이후에만 한다. 더 작은 대안인 manifest3 위장은 실제
+V11/receipt10 provenance를 표현하지 못하므로 사용하지 않는다.
+
+#### 공통 source capture의 실제 registered-report 연결
+
+기존 Catalog public-solution capture의 Graph/source/operator admission을 재사용한다.
+창작은 기존 등록 lineage 보고서, 기출은 accepted V10, 나머지 APPROVED_ITEM은 실제 accepted
+V11을 읽는다. `metadata.source_kind` 문자열을 AI 권한·근거로 믿거나 V10 기출 pointer로
+위장하지 않는다. 각 resolver는 accepted predecessor run을 indexed bulk lookup하고 원본
+Artifact bytes/hash/receipt/report를 검증한다. metadata 누락이나 report 부재는 missing으로
+남긴다. text는 동일한 projection 함수 한 곳에서만 만든다. candidate map/set과 bounded
+capture를 유지하여 N+1을 추가하지 않는다. 이 변경 자체로 source-plan3 runtime에 entry2를
+허용하지 않으며, native/QUERY successor의 exact pins와 호환 release 검증 전까지 활성화하지
+않는다. 원본 보고서·Graph·DB schema 변경은 없다.
+
+#### Native metadata4 연결 경계
+
+source-plan4를 native request4가 exact pointer/raw SHA/semantic hash로 고정한다. 기존 request3
+wire/schema bytes와 INDEX2 실행 graph 및 numeric Job/input/result1은 변경하지 않는다.
+request3/4의 공통 field와 service/policy/reference 검증은 한 pure body/helper로 재사용하며
+최상위 released literal와 source-plan schema 선택은 각 concrete parser가 소유한다. 계산 batch
+상한1,024와 기존 GPU/host lease·실행 정책은 그대로다. ownership/receipt/coordinator의
+provenance carrier만 필요한 successor를 이어서 추가하고 기존 transaction/claim/replay/CAS를
+재사용한다. source-plan3로 실제 V11 evidence를 위장하는 단순 대안은 허용하지 않는다.
+원본 source lookup·권한과 canonical Artifact 저장은 기존 owner 경계이며 새 DB table·queue는
+없다. 새 metadata4의 installed/recovery/negative qualification 전에는 운영 활성화하지 않는다.

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import ClassVar, Literal, Self
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_runtime_bundle import EmbeddingRuntimeBundlePointer
@@ -31,6 +31,7 @@ from eom_workflow.local_embedding_source_plan_v3 import (
     LocalEmbeddingSourcePlanV3,
     parse_local_embedding_source_plan_v3,
 )
+from eom_workflow.local_embedding_source_plan_v4 import LocalEmbeddingSourcePlanV4
 from eom_workflow.schemas import (
     LocalEmbeddingAdmissionContractError,
     NativeEmbeddingContract,
@@ -42,12 +43,10 @@ LOCAL_EMBEDDING_REQUEST_V3_SCHEMA_REF = (
 )
 
 
-class LocalEmbeddingWorkflowRequestV3(NativeEmbeddingContract):
-    """Independent public-solution service frame; not an instance of a released request1."""
+class PublicSolutionWorkflowRequestBody(NativeEmbeddingContract):
+    """Shared immutable values, not a parseable released or executable request."""
 
-    schema_version: Literal["local-embedding-workflow-request/3.0"] = (
-        "local-embedding-workflow-request/3.0"
-    )
+    _source_plan_schema_ref: ClassVar[str] = LOCAL_EMBEDDING_SOURCE_PLAN_V3_SCHEMA_REF
     request_name: Literal["LOCAL_EMBEDDING_WORKFLOW_REQUEST"] = "LOCAL_EMBEDDING_WORKFLOW_REQUEST"
     purpose: Literal["LOCAL_EMBEDDING"] = "LOCAL_EMBEDDING"
     workflow_definition_key: Literal["local-embedding-index"] = "local-embedding-index"
@@ -69,10 +68,10 @@ class LocalEmbeddingWorkflowRequestV3(NativeEmbeddingContract):
     request_sha256: Sha256
 
     @model_validator(mode="after")
-    def exact_request(self) -> LocalEmbeddingWorkflowRequestV3:
+    def exact_request(self) -> Self:
         validate_local_embedding_request_control_values(
             source_plan=self.source_plan,
-            source_plan_schema_ref=LOCAL_EMBEDDING_SOURCE_PLAN_V3_SCHEMA_REF,
+            source_plan_schema_ref=self._source_plan_schema_ref,
             native_execution_policy=self.native_execution_policy,
             policy_schema_ref=LOCAL_EMBEDDING_SERVICE_POLICY_SCHEMA_REF,
             graph_snapshot=self.graph_snapshot,
@@ -82,6 +81,14 @@ class LocalEmbeddingWorkflowRequestV3(NativeEmbeddingContract):
         )
         validate_local_embedding_request_hash(self, self.request_sha256)
         return self
+
+
+class LocalEmbeddingWorkflowRequestV3(PublicSolutionWorkflowRequestBody):
+    """Frozen public-report3 frame over the unchanged INDEX2 definition."""
+
+    schema_version: Literal["local-embedding-workflow-request/3.0"] = (
+        "local-embedding-workflow-request/3.0"
+    )
 
 
 def parse_local_embedding_workflow_request_v3(value: object) -> LocalEmbeddingWorkflowRequestV3:
@@ -96,7 +103,14 @@ def parse_local_embedding_workflow_request_v3(value: object) -> LocalEmbeddingWo
 def local_embedding_request_service_v3(
     request: LocalEmbeddingWorkflowRequestV3,
 ) -> LocalIndexingServiceReference:
-    audit = parse_local_embedding_workflow_request_v3(request).actor_context
+    return public_solution_request_service(parse_local_embedding_workflow_request_v3(request))
+
+
+def public_solution_request_service(
+    request: PublicSolutionWorkflowRequestBody,
+) -> LocalIndexingServiceReference:
+    """Value projection only; concrete callers parse their exact wire family first."""
+    audit = request.actor_context
     return LocalIndexingServiceReference(
         service_id=audit.service_id,
         service_revision_id=audit.service_revision_id,
@@ -112,10 +126,19 @@ def validate_local_embedding_request_references_v3(
     """Same genuine service/numerical policy type, but new immutable definition/plan."""
     request = parse_local_embedding_workflow_request_v3(request)
     plan = parse_local_embedding_source_plan_v3(plan)
+    validate_public_solution_request_reference_values(request, plan, policy)
+
+
+def validate_public_solution_request_reference_values(
+    request: PublicSolutionWorkflowRequestBody,
+    plan: LocalEmbeddingSourcePlanV3 | LocalEmbeddingSourcePlanV4,
+    policy: LocalEmbeddingServiceExecutionPolicy,
+) -> None:
+    """Pure exact reference closure after concrete request/plan family parsing."""
     policy = parse_local_embedding_service_execution_policy(raw_similarity_contract_value(policy))
     if (
         len(plan.sources) > 1024
-        or policy.service != local_embedding_request_service_v3(request)
+        or policy.service != public_solution_request_service(request)
         or any(
             getattr(request, field) != getattr(plan, field)
             for field in (

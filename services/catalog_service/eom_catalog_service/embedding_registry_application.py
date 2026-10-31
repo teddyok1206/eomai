@@ -76,6 +76,16 @@ from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimil
 from eom_catalog_contracts.registered_public_solution_embedding import (
     RegisteredPublicSolutionEmbeddingEntry,
 )
+from eom_catalog_contracts.registered_public_solution_index import (
+    PublicSolutionEmbeddingIndexV4,
+    RegisteredPublicSolutionProfilePointer,
+    RegisteredPublicSolutionSourceBinding,
+)
+from eom_catalog_contracts.registered_public_solution_registry import (
+    PublicSolutionIndexRegistrationResultV4,
+    RegisterPublicSolutionIndexCommandV4,
+    validate_public_solution_registration_result_v4,
+)
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import SimilarityViewSelection
 from eom_catalog_contracts.similarity_context_v2 import SimilarityViewSelectionV2
@@ -143,10 +153,13 @@ type SupportedRegistrationResult = (
     EmbeddingIndexRegistrationResult
     | EmbeddingIndexRegistrationResultV2
     | PublicSolutionIndexRegistrationResult
+    | PublicSolutionIndexRegistrationResultV4
 )
 
 
 def _command(value: SupportedEmbeddingRegistrationCommand) -> SupportedEmbeddingRegistrationCommand:
+    if isinstance(value, RegisterPublicSolutionIndexCommandV4):
+        return RegisterPublicSolutionIndexCommandV4.model_validate(value)
     if isinstance(value, RegisterPublicSolutionIndexCommand):
         return RegisterPublicSolutionIndexCommand.model_validate(
             raw_similarity_contract_value(value)
@@ -169,9 +182,15 @@ def validate_resolved_embedding_registration(
         command = _command(command)
         index = parse_supported_embedding_index(resolved.index)
         mixed = isinstance(command, RegisterEmbeddingIndexCommandV2)
-        public = isinstance(command, RegisterPublicSolutionIndexCommand)
-        if public != isinstance(index, PublicSolutionEmbeddingIndex) or mixed != isinstance(
-            index, MixedEmbeddingIndexManifest
+        public = isinstance(
+            command, RegisterPublicSolutionIndexCommand | RegisterPublicSolutionIndexCommandV4
+        )
+        if (
+            public
+            != isinstance(index, PublicSolutionEmbeddingIndex | PublicSolutionEmbeddingIndexV4)
+            or isinstance(command, RegisterPublicSolutionIndexCommandV4)
+            != isinstance(index, PublicSolutionEmbeddingIndexV4)
+            or mixed != isinstance(index, MixedEmbeddingIndexManifest)
         ):
             _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
         if (
@@ -192,8 +211,18 @@ def validate_resolved_embedding_registration(
         entries = {}
         for original in resolved.entries:
             entry = parse_supported_embedding_entry(original)
-            if (public != isinstance(entry, PublicSolutionEmbeddingEntry)) or (
-                not public and not mixed and not isinstance(entry, StagedExperimentEntry)
+            if (
+                (
+                    public
+                    != isinstance(
+                        entry, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry
+                    )
+                )
+                or (
+                    isinstance(command, RegisterPublicSolutionIndexCommand)
+                    and isinstance(entry, RegisteredPublicSolutionEmbeddingEntry)
+                )
+                or (not public and not mixed and not isinstance(entry, StagedExperimentEntry))
             ):
                 _fail("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
             entries[embedding_entry_source(entry).item_revision_id] = entry
@@ -332,7 +361,9 @@ def _receipt(
     if head.current_index_revision_id is None:
         _fail("EMBEDDING_REGISTRY_POINTER_INVALID")
     result_type = (
-        PublicSolutionIndexRegistrationResult
+        PublicSolutionIndexRegistrationResultV4
+        if isinstance(command, RegisterPublicSolutionIndexCommandV4)
+        else PublicSolutionIndexRegistrationResult
         if isinstance(command, RegisterPublicSolutionIndexCommand)
         else EmbeddingIndexRegistrationResultV2
         if isinstance(command, RegisterEmbeddingIndexCommandV2)
@@ -354,6 +385,9 @@ def _receipt(
         registered_at=row.created_at,
     ).model_dump(mode="json", exclude={"result_sha256"})
     result = result_type.model_validate(body | {"result_sha256": content_sha256(body)})
+    if isinstance(command, RegisterPublicSolutionIndexCommandV4):
+        assert isinstance(result, PublicSolutionIndexRegistrationResultV4)
+        return validate_public_solution_registration_result_v4(command, result)
     if isinstance(command, RegisterPublicSolutionIndexCommand):
         assert isinstance(result, PublicSolutionIndexRegistrationResult)
         return validate_public_solution_registration_result(command, result)
@@ -380,7 +414,10 @@ def verify_embedding_index_registration_observation(
     """
     try:
         command = _command(command)
-        if isinstance(command, RegisterPublicSolutionIndexCommand):
+        if isinstance(command, RegisterPublicSolutionIndexCommandV4):
+            result = PublicSolutionIndexRegistrationResultV4.model_validate(result)
+            validate_public_solution_registration_result_v4(command, result)
+        elif isinstance(command, RegisterPublicSolutionIndexCommand):
             result = PublicSolutionIndexRegistrationResult.model_validate(
                 raw_similarity_contract_value(result)
             )
@@ -562,6 +599,17 @@ def _registration(
         _fail("EMBEDDING_INDEX_STALE_CURRENT")
     session.refresh(head)
     return _receipt(command, row, head, replayed=False)
+
+
+@overload
+def register_embedding_index(
+    session: Session,
+    caller: EmbeddingRegistryActor,
+    command: RegisterPublicSolutionIndexCommandV4,
+    verification: EmbeddingRegistryVerificationPort | None,
+    *,
+    now: datetime | None = None,
+) -> PublicSolutionIndexRegistrationResultV4: ...
 
 
 @overload
@@ -909,7 +957,7 @@ def validate_registered_embedding_index_manifest(
     if (
         (
             isinstance(namespace, PublicSolutionIndexNamespace)
-            != isinstance(index, PublicSolutionEmbeddingIndex)
+            != isinstance(index, PublicSolutionEmbeddingIndex | PublicSolutionEmbeddingIndexV4)
         )
         or isinstance(namespace, MixedEmbeddingIndexNamespace)
         != isinstance(index, MixedEmbeddingIndexManifest)
@@ -965,9 +1013,13 @@ def _validate_resolved_pinned_read(
                     EmbeddingSourceBinding,
                     RegisteredReviewEmbeddingSourceBinding,
                     PublicSolutionEmbeddingSourceBinding,
+                    RegisteredPublicSolutionSourceBinding,
                 ),
             )
-            or public != isinstance(value, PublicSolutionEmbeddingSourceBinding)
+            or public
+            != isinstance(
+                value, PublicSolutionEmbeddingSourceBinding | RegisteredPublicSolutionSourceBinding
+            )
             or (not mixed and not public and not isinstance(value, EmbeddingSourceBinding))
             for value in resolved.bindings
         )
@@ -986,9 +1038,14 @@ def _validate_resolved_pinned_read(
                     InferenceTransferProfilePointer,
                     RegisteredReviewProfilePointer,
                     PublicSolutionProfilePointer,
+                    RegisteredPublicSolutionProfilePointer,
                 ),
             )
-            or public != isinstance(profile.profile, PublicSolutionProfilePointer)
+            or public
+            != isinstance(
+                profile.profile,
+                PublicSolutionProfilePointer | RegisteredPublicSolutionProfilePointer,
+            )
             or (
                 not mixed
                 and not public

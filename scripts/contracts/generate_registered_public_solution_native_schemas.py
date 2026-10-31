@@ -20,6 +20,7 @@ SOURCE3 = "eom://schemas/workflow/local-embedding-source-plan/3.0"
 INDEX3 = "eom://schemas/knowledge/public-solution-embedding-index/3.0"
 INDEX4 = "eom://schemas/knowledge/public-solution-embedding-index/4.0"
 ENTRY2 = "eom://schemas/knowledge/public-solution-embedding-entry/2.0"
+REQUEST3 = "eom://schemas/workflow/local-embedding-workflow-request/3.0"
 
 
 def externalize(value: Any, schema_id: str) -> None:
@@ -67,11 +68,44 @@ def source_plan() -> dict[str, Any]:
     return value
 
 
+def request() -> dict[str, Any]:
+    old = json.loads((SCHEMAS / "local-embedding-workflow-request-v3.schema.json").read_bytes())
+    value = {name: copy.deepcopy(part) for name, part in old.items() if name != "$defs"}
+    externalize(value, REQUEST3)
+    value.update(
+        {
+            "$id": "eom://schemas/workflow/local-embedding-workflow-request/4.0",
+            "title": "Registered full-report request over unchanged INDEX2 numerical execution",
+        }
+    )
+    value["properties"]["schema_version"] = {"const": "local-embedding-workflow-request/4.0"}
+    value["properties"]["source_plan"] = {
+        "allOf": [
+            {"$ref": REQUEST3 + "#/$defs/ArtifactMemberPointer"},
+            {
+                "properties": {
+                    "member_path": {"const": "source-plan.json"},
+                    "schema_ref": {
+                        "const": "eom://schemas/workflow/local-embedding-source-plan/4.0"
+                    },
+                    "media_type": {"const": "application/json"},
+                }
+            },
+        ]
+    }
+    value["required"] = list(value["properties"])
+    return value
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
     arguments = parser.parse_args()
-    for name, schema in {"local-embedding-source-plan-v4.schema.json": source_plan()}.items():
+    documents = {
+        "local-embedding-source-plan-v4.schema.json": source_plan(),
+        "local-embedding-workflow-request-v4.schema.json": request(),
+    }
+    for name, schema in documents.items():
         payload = (json.dumps(schema, ensure_ascii=False, indent=2) + "\n").encode()
         for directory in (SCHEMAS, PACKAGED):
             path = directory / name

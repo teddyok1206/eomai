@@ -15,6 +15,11 @@ from eom_catalog_contracts.public_solution_embedding import (
 )
 from eom_catalog_contracts.public_solution_embedding_index import MAX_PUBLIC_SOLUTION_SOURCES
 from eom_catalog_contracts.public_solution_indexing_policy import PublicSolutionIndexingAccessPolicy
+from eom_catalog_contracts.registered_public_solution_embedding import (
+    PublicSolutionEncodingEntry,
+    RegisteredPublicSolutionEmbeddingEntry,
+    RegisteredPublicSolutionEvidence,
+)
 from eom_identifiers import content_sha256
 from eom_identity_service.operator_authorization_fence import OperatorAuthorizationFence
 from sqlalchemy import Engine, select
@@ -56,7 +61,10 @@ from eom_catalog_service.solution_embedding_projection import (
     PublicSolutionReport,
     project_public_solution_text,
 )
-from eom_catalog_service.solution_evidence_resolution import resolve_solution_evidence_by_base_run
+from eom_catalog_service.solution_evidence_resolution import (
+    resolve_registered_solution_evidence_by_base_run,
+    resolve_solution_evidence_by_base_run,
+)
 
 MAX_PUBLIC_SOLUTION_CAPTURE_BYTES = 64 * 1024**2
 MAX_PUBLIC_SOLUTION_PAGE_SOURCES = 256
@@ -333,16 +341,27 @@ class CatalogPublicSolutionSourceCapture:
             base_analysis_run_ids=tuple(
                 candidate.analysis_run_id
                 for key, candidate in candidates.items()
-                if key not in creative_set
+                if key not in creative_set and sources[key].source_class == "PAST_EXAM"
             ),
         )
-        entries = {}
+        registered = resolve_registered_solution_evidence_by_base_run(
+            session,
+            artifact_reader,
+            base_analysis_run_ids=tuple(
+                candidate.analysis_run_id
+                for key, candidate in candidates.items()
+                if key not in creative_set and sources[key].source_class == "APPROVED_ITEM"
+            ),
+        )
+        entries: dict[str, PublicSolutionEncodingEntry] = {}
         missing = []
         total_bytes = 0
 
         def store(
             key: str,
-            evidence: AcceptedPublicSolutionEvidence | CreativePublicSolutionEvidence,
+            evidence: AcceptedPublicSolutionEvidence
+            | CreativePublicSolutionEvidence
+            | RegisteredPublicSolutionEvidence,
             report: PublicSolutionReport,
         ) -> None:
             nonlocal total_bytes
@@ -352,7 +371,9 @@ class CatalogPublicSolutionSourceCapture:
             if total_bytes > MAX_PUBLIC_SOLUTION_CAPTURE_BYTES:
                 raise ValueError("PUBLIC_SOLUTION_CAPTURE_BUDGET_EXCEEDED")
             body = {
-                "schema_version": "public-solution-embedding-entry/1.0",
+                "schema_version": "public-solution-embedding-entry/2.0"
+                if isinstance(evidence, RegisteredPublicSolutionEvidence)
+                else "public-solution-embedding-entry/1.0",
                 "source": candidate.source,
                 "base_analysis_run_id": candidate.analysis_run_id,
                 "graph_snapshot": pool.graph_snapshot,
@@ -362,16 +383,32 @@ class CatalogPublicSolutionSourceCapture:
                 "evidence": evidence,
                 "public_solution": text,
             }
-            entries[key] = PublicSolutionEmbeddingEntry.model_validate(
-                body | {"entry_sha256": content_sha256(body)}
+            entry_type = (
+                RegisteredPublicSolutionEmbeddingEntry
+                if isinstance(evidence, RegisteredPublicSolutionEvidence)
+                else PublicSolutionEmbeddingEntry
             )
+            entries[key] = entry_type.model_validate(body | {"entry_sha256": content_sha256(body)})
 
         for key in keys:
             if key in creative_set:
                 continue
             candidate = candidates[key]
-            solution = resolved.get(candidate.analysis_run_id)
-            if solution is None:
+            if sources[key].source_class == "APPROVED_ITEM":
+                registered_solution = registered.get(candidate.analysis_run_id)
+                if registered_solution is None:
+                    missing.append(key)
+                elif not same_approved_item_source_identity(
+                    registered_solution.source, sources[key]
+                ):
+                    raise ValueError("PUBLIC_SOLUTION_SOURCE_POINTER_MISMATCH")
+                else:
+                    store(
+                        key,
+                        RegisteredPublicSolutionEvidence(solution=registered_solution.pointer),
+                        registered_solution.report,
+                    )
+            elif (solution := resolved.get(candidate.analysis_run_id)) is None:
                 missing.append(key)
             elif not same_approved_item_source_identity(solution.source, sources[key]):
                 raise ValueError("PUBLIC_SOLUTION_SOURCE_POINTER_MISMATCH")

@@ -1,0 +1,250 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/public-solution-embedding-registry/4.0",
+  "title": "Exact index4 registration command and historical replay receipt",
+  "$defs": {
+    "command": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "embedding-registry-registration-command/4.0"
+        },
+        "operation": {
+          "const": "REGISTER_EMBEDDING_INDEX",
+          "default": "REGISTER_EMBEDDING_INDEX",
+          "title": "Operation",
+          "type": "string"
+        },
+        "operation_key": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/3.0#/$defs/EmbeddingRegistrationOperationKey"
+        },
+        "corpus_id": {
+          "pattern": "^corpus_[0-9a-f]{32}$",
+          "title": "Corpus Id",
+          "type": "string"
+        },
+        "namespace": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/3.0#/$defs/PublicSolutionIndexNamespace"
+        },
+        "index_id": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/3.0#/$defs/EmbeddingIndexId"
+        },
+        "index_revision_id": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/3.0#/$defs/EmbeddingIndexRevisionId"
+        },
+        "index_manifest": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/3.0#/$defs/ArtifactMemberPointer",
+          "properties": {
+            "member_path": {
+              "const": "index.json"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/knowledge/embedding-index-manifest/4.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        },
+        "index_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Index Sha256",
+          "type": "string"
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/3.0#/$defs/KnowledgeGraphSnapshotPointer"
+        },
+        "policy_revision_id": {
+          "pattern": "^accessrev_[0-9a-f]{32}$",
+          "title": "Policy Revision Id",
+          "type": "string"
+        },
+        "policy_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Policy Sha256",
+          "type": "string"
+        },
+        "expected_current_index_revision_id": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/3.0#/$defs/EmbeddingIndexRevisionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expected_lock_version": {
+          "minimum": 1,
+          "title": "Expected Lock Version",
+          "type": "integer"
+        },
+        "source_set_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Source Set Sha256",
+          "type": "string"
+        },
+        "binding_set_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Binding Set Sha256",
+          "type": "string"
+        },
+        "eligible_source_count": {
+          "maximum": 16384,
+          "minimum": 1,
+          "title": "Eligible Source Count",
+          "type": "integer"
+        },
+        "binding_count": {
+          "maximum": 16384,
+          "minimum": 1,
+          "title": "Binding Count",
+          "type": "integer"
+        },
+        "requested_at": {
+          "format": "date-time",
+          "title": "Requested At",
+          "type": "string"
+        },
+        "request_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Request Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "operation_key",
+        "corpus_id",
+        "namespace",
+        "index_id",
+        "index_revision_id",
+        "index_manifest",
+        "index_sha256",
+        "graph_snapshot",
+        "policy_revision_id",
+        "policy_sha256",
+        "expected_current_index_revision_id",
+        "expected_lock_version",
+        "source_set_sha256",
+        "binding_set_sha256",
+        "eligible_source_count",
+        "binding_count",
+        "requested_at",
+        "request_sha256"
+      ],
+      "title": "RegisterPublicSolutionIndexCommand",
+      "type": "object"
+    },
+    "result": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "embedding-registry-registration-result/4.0"
+        },
+        "operation_key": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/3.0#/$defs/EmbeddingRegistrationOperationKey"
+        },
+        "request_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Request Sha256",
+          "type": "string"
+        },
+        "index_id": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/3.0#/$defs/EmbeddingIndexId"
+        },
+        "index_revision_id": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/3.0#/$defs/EmbeddingIndexRevisionId"
+        },
+        "previous_index_revision_id": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/3.0#/$defs/EmbeddingIndexRevisionId"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "index_manifest": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/3.0#/$defs/ArtifactMemberPointer",
+          "properties": {
+            "member_path": {
+              "const": "index.json"
+            },
+            "schema_ref": {
+              "const": "eom://schemas/knowledge/embedding-index-manifest/4.0"
+            },
+            "media_type": {
+              "const": "application/json"
+            }
+          }
+        },
+        "index_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Index Sha256",
+          "type": "string"
+        },
+        "registered_lock_version": {
+          "minimum": 2,
+          "title": "Registered Lock Version",
+          "type": "integer"
+        },
+        "current_index_revision_id": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-registry/3.0#/$defs/EmbeddingIndexRevisionId"
+        },
+        "current_lock_version": {
+          "minimum": 2,
+          "title": "Current Lock Version",
+          "type": "integer"
+        },
+        "replayed": {
+          "title": "Replayed",
+          "type": "boolean"
+        },
+        "is_current": {
+          "title": "Is Current",
+          "type": "boolean"
+        },
+        "registered_at": {
+          "format": "date-time",
+          "title": "Registered At",
+          "type": "string"
+        },
+        "result_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Result Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation_key",
+        "request_sha256",
+        "index_id",
+        "index_revision_id",
+        "previous_index_revision_id",
+        "index_manifest",
+        "index_sha256",
+        "registered_lock_version",
+        "current_index_revision_id",
+        "current_lock_version",
+        "replayed",
+        "is_current",
+        "registered_at",
+        "result_sha256"
+      ],
+      "title": "PublicSolutionIndexRegistrationResult",
+      "type": "object"
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/command"
+    },
+    {
+      "$ref": "#/$defs/result"
+    }
+  ]
+}

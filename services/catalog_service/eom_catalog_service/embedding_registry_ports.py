@@ -46,6 +46,9 @@ from eom_catalog_contracts.public_solution_embedding_registry import (
     RegisterPublicSolutionIndexCommand,
 )
 from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityView
+from eom_catalog_contracts.registered_public_solution_registry import (
+    RegisterPublicSolutionIndexCommandV4,
+)
 from eom_catalog_contracts.similarity_context import SimilarityContext, SimilarityViewSelection
 from eom_catalog_contracts.similarity_context_v2 import SimilarityViewSelectionV2
 from eom_catalog_contracts.similarity_materials import SimilarityReferenceMaterials
@@ -94,6 +97,7 @@ type SupportedEmbeddingRegistrationCommand = (
     RegisterEmbeddingIndexCommand
     | RegisterEmbeddingIndexCommandV2
     | RegisterPublicSolutionIndexCommand
+    | RegisterPublicSolutionIndexCommandV4
 )
 
 type AuthoringReferencePurpose = Literal["PAST_EXAM_VARIATION", "ITEM_AUTHORING", "ITEM_REVIEW"]
