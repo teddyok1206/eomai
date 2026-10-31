@@ -4,12 +4,19 @@ from types import SimpleNamespace as NS
 from unittest.mock import MagicMock, Mock
 
 import pytest
+from eom_catalog_contracts.public_solution_indexing_policy import PublicSolutionIndexingAccessPolicy
+from eom_catalog_service.embedding_registry_ports import (
+    EmbeddingPopulationTruncated,
+    EmbeddingRegistryLookup,
+)
+from eom_workflow_runner import local_embedding_service_reconciliation as application
 from eom_workflow_runner.local_embedding_service_reconciliation import (
     LocalEmbeddingServicePreparation,
 )
 from eom_workflow_runner.local_indexing_routed_namespace import RoutedLocalIndexingNamespaceRuntime
 
 from tests.unit.test_local_embedding_source_plan_v3 import inputs
+from tests.unit.test_public_solution_indexing_policy import public_policy_document
 from tests.unit.test_public_solution_native_carriers import public_native_fixture
 
 
@@ -80,6 +87,31 @@ def test_public_matching_rechecks_authority_before_creating_a_cpu_request():
         value.cpu.prepare_matching(value.gpu, value.request, maximum_sources=16384)
     value.cpu._prepare_request.assert_not_called()
     value.owner.catalog.resolve_selected_sources.assert_not_called()
+
+
+def test_public_population_truncation_remains_an_explicit_failure(monkeypatch):
+    value = preparation()
+    request = value.request
+    value.owner.current_reconciliation_lookup = Mock(
+        return_value=EmbeddingRegistryLookup(
+            request.corpus_id,
+            request.namespace,
+            request.graph_snapshot,
+            request.access_policy_revision_id,
+            request.access_policy_sha256,
+            maximum_sources=16384,
+        )
+    )
+    value.owner.resolve_reconciliation_controls.return_value = NS(
+        caller=value.caller,
+        grant=PublicSolutionIndexingAccessPolicy.model_validate(public_policy_document()),
+    )
+    error = EmbeddingPopulationTruncated()
+    monkeypatch.setattr(application, "prepare_missing_embedding_bindings", Mock(side_effect=error))
+    with pytest.raises(EmbeddingPopulationTruncated) as caught:
+        value.cpu.prepare_once()
+    assert caught.value is error
+    value.cpu._prepare_request.assert_not_called()
 
 
 @pytest.mark.parametrize("deny", (False, True))

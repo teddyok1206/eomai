@@ -314,6 +314,41 @@ def test_queue_is_drained_before_reconciliation_without_independent_claim(capsys
     assert runner.run_once.call_count == 2
 
 
+def test_capacity_limited_namespace_does_not_block_other_round_robin_work(monkeypatch, capsys):
+    stop = Event()
+    monkeypatch.setattr(stop, "wait", lambda _seconds: False)
+    legacy = scheduled_runtime(
+        runner=Mock(),
+        reconciliation=Mock(),
+        configuration=SimpleNamespace(poll_interval_seconds=60),
+    ).namespaces[0]
+    legacy.runner.run_once.return_value = None
+    legacy.reconciliation.run_once.return_value = LocalEmbeddingReconciliationResult(
+        ReconciliationState.SOURCE_CAPACITY_EXCEEDED, "graphrev_" + "a" * 32
+    )
+    public = scheduled_runtime(
+        runner=Mock(),
+        reconciliation=Mock(),
+        configuration=SimpleNamespace(poll_interval_seconds=60),
+    ).namespaces[0]
+    public.runner.run_once.return_value = None
+
+    def observe_public():
+        stop.set()
+        return LocalEmbeddingReconciliationResult(ReconciliationState.UP_TO_DATE, None)
+
+    public.reconciliation.run_once.side_effect = observe_public
+    runtime = SimpleNamespace(
+        engine=Mock(),
+        namespaces=(legacy, public),
+        configuration=SimpleNamespace(poll_interval_seconds=60),
+    )
+    entry.serve_local_indexing(runtime, stop)
+    legacy.reconciliation.run_once.assert_called_once()
+    public.reconciliation.run_once.assert_called_once()
+    assert "SOURCE_CAPACITY_EXCEEDED" in capsys.readouterr().out
+
+
 def test_unchanged_reconciliation_does_not_spam_journal(monkeypatch, capsys):
     stop = Event()
     clock = [0.0]

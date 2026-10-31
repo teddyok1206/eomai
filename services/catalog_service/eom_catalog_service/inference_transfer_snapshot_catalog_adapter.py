@@ -87,7 +87,11 @@ from eom_catalog_service.knowledge_retrieval_service import (
     ReadOnlyKnowledgeReuseContext,
 )
 from eom_catalog_service.local_indexing_source_authority import CatalogLocalIndexingSourceAuthority
-from eom_catalog_service.local_indexing_source_paging import CandidateSourcePage
+from eom_catalog_service.local_indexing_source_paging import (
+    CandidateSourcePage,
+    candidate_source_page_statement,
+    validate_candidate_source_page,
+)
 from eom_catalog_service.local_indexing_source_ports import (
     LocalIndexingSourceAuthorization,
     LocalIndexingSourceError,
@@ -107,6 +111,7 @@ from eom_catalog_service.settings import CatalogSettings
 
 _MAXIMUM_ITEM_MEMBER_BYTES = 16 * 1024**2
 _MAXIMUM_ARTIFACT_BATCH_BYTES = 128 * 1024**2
+_MAXIMUM_INDEXING_CAPTURE_PAGE_SOURCES = 128
 
 
 def _unique_json_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -432,6 +437,10 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
             return LocalIndexingSessionCapture(intent)
         if not isinstance(intent.recipe, ExperimentViewRecipe):
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_SCOPE_INVALID")
+        if not intent.source_revision_ids and not intent.analysis_run_ids:
+            return self._capture_indexing_population_pages(
+                session, intent, authority=authority, artifact_reader=artifact_reader
+            )
         corpus, entries = self._capture_population(
             session,
             intent,
@@ -447,6 +456,89 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
         if authority.authorize_scope(session, intent) != policy:
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_UNAVAILABLE")
         return LocalIndexingSessionCapture(intent, corpus, entries)
+
+    def _capture_indexing_population_pages(
+        self,
+        session: Session,
+        intent: LocalIndexingSourceReadIntent,
+        *,
+        authority: LocalIndexingSourceAuthorization,
+        artifact_reader: PinnedArtifactReadContext,
+    ) -> LocalIndexingSessionCapture:
+        """Released population, bounded reader lifetimes; no segmented-policy reinterpretation."""
+        policy = authority.authorize_scope(session, intent)
+        page_scope = replace(
+            intent,
+            maximum_candidates=min(
+                intent.maximum_candidates, _MAXIMUM_INDEXING_CAPTURE_PAGE_SOURCES
+            ),
+        )
+
+        def read_page(after: str | None) -> CandidateSourcePage:
+            return validate_candidate_source_page(
+                tuple(
+                    tuple(row)
+                    for row in session.execute(
+                        candidate_source_page_statement(page_scope, after_source_revision_id=after)
+                    )
+                ),
+                maximum=page_scope.maximum_candidates,
+                after_source_revision_id=after,
+            )
+
+        pages: list[tuple[str | None, CandidateSourcePage]] = []
+        captured: list[LocalIndexingSessionCapture] = []
+        total = 0
+        after = None
+        while True:
+            page = read_page(after)
+            total += len(page.members)
+            if total > intent.maximum_candidates:
+                raise InferenceTransferServiceError(
+                    "INFERENCE_TRANSFER_SNAPSHOT_POPULATION_TRUNCATED"
+                )
+            pages.append((after, page))
+            if page.members:
+                page_reader = PinnedArtifactReadContext(session, artifact_reader.settings)
+                value = self.capture_indexing_in_session(
+                    session,
+                    replace(intent, source_revision_ids=tuple(key for key, _ in page.members)),
+                    authority=authority,
+                    artifact_reader=page_reader,
+                )
+                if (
+                    value.corpus is None
+                    or tuple(
+                        sorted(
+                            (row.source.item_revision_id, row.analysis_run_id)
+                            for row in value.corpus.sources
+                        )
+                    )
+                    != page.members
+                ):
+                    raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
+                page_reader.revalidate_provenance()
+                captured.append(value)
+            if page.complete:
+                break
+            after = page.next_after_source_revision_id
+        if any(read_page(cursor) != page for cursor, page in pages):
+            raise InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
+        if authority.authorize_scope(session, intent) != policy:
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_UNAVAILABLE")
+        artifact_reader.revalidate_provenance()
+        corpora = tuple(value.corpus for value in captured if value.corpus is not None)
+        return LocalIndexingSessionCapture(
+            intent,
+            AdmittedInferenceTransferCorpus(
+                profiles=tuple(profile for corpus in corpora for profile in corpus.profiles),
+                graph_scores=(),
+                truncated=False,
+                missing_solution_reports=sum(corpus.missing_solution_reports for corpus in corpora),
+                sources=tuple(source for corpus in corpora for source in corpus.sources),
+            ),
+            tuple(entry for value in captured for entry in value.entries),
+        )
 
     def capture_segmented_indexing_page_in_session(
         self,

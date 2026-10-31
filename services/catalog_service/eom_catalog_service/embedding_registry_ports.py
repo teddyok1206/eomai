@@ -64,6 +64,13 @@ class EmbeddingRegistryError(ValueError):
         self.code = code
 
 
+class EmbeddingPopulationTruncated(EmbeddingRegistryError):
+    """Explicit bounded discovery only; never a generic identity/scope mismatch."""
+
+    def __init__(self) -> None:
+        super().__init__("EMBEDDING_REGISTRY_SCOPE_LIMIT")
+
+
 @dataclass(frozen=True, slots=True)
 class EmbeddingRegistryCaller:
     """Captured by the authentication owner, never parsed from a worker/request DTO.

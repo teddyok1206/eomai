@@ -95,6 +95,7 @@ from eom_catalog_service.embedding_registry_models import (
 )
 from eom_catalog_service.embedding_registry_ports import (
     AuthorizedEmbeddingReadProfile,
+    EmbeddingPopulationTruncated,
     EmbeddingRegistryActor,
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
@@ -662,14 +663,15 @@ def _prepare_missing_embedding_bindings(
     owner.authorize_scope(session, caller, query)
     resolved = owner.resolve_lookup(session, caller, query)
     if (
-        resolved.truncated
-        or resolved.corpus_id != query.corpus_id
+        resolved.corpus_id != query.corpus_id
         or not 0 <= len(resolved.sources) <= query.maximum_sources
         or len(resolved.entries) > query.maximum_sources
         or resolved.space.space_sha256 != query.namespace.space_sha256
         or resolved.recipe.recipe_sha256 != query.namespace.recipe_sha256
     ):
         _fail("EMBEDDING_REGISTRY_SCOPE_LIMIT")
+    if resolved.truncated:
+        raise EmbeddingPopulationTruncated()
     sources = {
         value.item_revision_id: type(value).model_validate(raw_similarity_contract_value(value))
         for value in resolved.sources

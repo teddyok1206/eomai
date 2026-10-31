@@ -37,6 +37,7 @@ from eom_catalog_service.embedding_index_refresh_plan import (
 )
 from eom_catalog_service.embedding_registry_application import prepare_missing_embedding_bindings
 from eom_catalog_service.embedding_registry_ports import (
+    EmbeddingPopulationTruncated,
     EmbeddingRegistryLookup,
     ResolvedEmbeddingLookup,
     SelectedEmbeddingSources,
@@ -85,6 +86,7 @@ class ReconciliationState(StrEnum):
     NO_ELIGIBLE_SOURCE = "NO_ELIGIBLE_SOURCE"
     WAITING_FOR_SOLUTION_REPORT = "WAITING_FOR_SOLUTION_REPORT"
     VIEW_UNAVAILABLE = "VIEW_UNAVAILABLE"
+    SOURCE_CAPACITY_EXCEEDED = "SOURCE_CAPACITY_EXCEEDED"
     UP_TO_DATE = "UP_TO_DATE"
     PREPARED = "PREPARED"
     BATCH_COMPLETED = "BATCH_COMPLETED"
@@ -172,9 +174,21 @@ class LocalEmbeddingServicePreparation:
                 controls.grant, LocalIndexingMixedAccessPolicy
             ) or public != isinstance(controls.grant, PublicSolutionIndexingAccessPolicy):
                 raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
-            prepared = prepare_missing_embedding_bindings(
-                session, controls.caller, query, owner.catalog
-            )
+            try:
+                prepared = prepare_missing_embedding_bindings(
+                    session, controls.caller, query, owner.catalog
+                )
+            except EmbeddingPopulationTruncated:
+                if public:
+                    raise
+                # A released legacy namespace keeps its own bounded population.
+                # No incomplete index is published and other namespaces proceed.
+                return PreparedLocalEmbeddingReconciliation(
+                    LocalEmbeddingReconciliationResult(
+                        ReconciliationState.SOURCE_CAPACITY_EXCEEDED,
+                        query.graph_snapshot.graph_snapshot_revision_id,
+                    )
+                )
             missing, resolved = prepared.observation, prepared.resolved
             source_ids = {source.item_revision_id for source in resolved.sources}
             profile_ids = {

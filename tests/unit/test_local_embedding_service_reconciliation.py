@@ -17,6 +17,8 @@ from eom_catalog_service.embedding_registry_indexing_authority import (
 )
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingBindingLookupKey,
+    EmbeddingPopulationTruncated,
+    EmbeddingRegistryError,
     EmbeddingRegistryLookup,
     MissingEmbeddingBindings,
     PreparedEmbeddingBindingLookup,
@@ -264,6 +266,30 @@ def counts(c):
             session.scalar(select(func.count()).select_from(model))
             for model in (WorkflowInstanceRecord, WorkflowCommandRecord, JobRecord)
         )
+
+
+@pytest.mark.parametrize("truncated", [True, False])
+def test_legacy_capacity_deferral_preserves_queue_and_does_not_hide_scope_errors(
+    reconciliation, monkeypatch, truncated
+):
+    c = reconciliation
+    before = counts(c)
+    error = (
+        EmbeddingPopulationTruncated()
+        if truncated
+        else EmbeddingRegistryError("EMBEDDING_REGISTRY_SCOPE_LIMIT")
+    )
+    monkeypatch.setattr(application, "prepare_missing_embedding_bindings", Mock(side_effect=error))
+    if truncated:
+        result = c.app.run_once()
+        assert result.state is ReconciliationState.SOURCE_CAPACITY_EXCEEDED
+        assert result.workflow_id is result.command_id is None
+    else:
+        with pytest.raises(EmbeddingRegistryError) as caught:
+            c.app.run_once()
+        assert caught.value is error
+    assert counts(c) == before
+    c.launcher.run.assert_not_called()
 
 
 def test_observation_replays_actual_plan_and_atomic_workflow_without_model(reconciliation):

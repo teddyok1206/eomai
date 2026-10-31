@@ -16,6 +16,53 @@ source test·패키지 설치·service active만으로 완료하지 않는다.
 
 30분 background 관측은 계속 유지하며 기존 520개 기출·교과서·정본·FAILED 이력을 보존한다.
 
+## 기존 namespace 용량 격리 결정
+
+현재 public 모집단 677개에서 기존 namespace의 1,024 상한은 아직 도달하지 않았다.
+그러나 창작 등록이 계속되면 이 상한의 `truncated` 결과가 공유 INDEX 전체를 종료할 수 있다.
+기존 상한·recipe·index를 확대/재해석하지 않고 기존 preparation application에서만 격리한다.
+
+- 정본·revision·pointer·권한/Graph/hash 검증과 DB/Artifact 소유자는 그대로다. 새 schema,
+  queue, DB/index, worker, 캐시는 추가하지 않는다.
+- 공식 Catalog discovery의 **명시적 population truncation**을 owner-local typed exception으로
+  구별한다. 기존 오류 code는 보존한다. corpus/space/recipe mismatch와 일반 scope 오류는
+  이 예외로 변환하지 않는다.
+- 기존 legacy namespace의 discovery만 `SOURCE_CAPACITY_EXCEEDED`로 관측하고 보류한다.
+  그 namespace의 기존 queue drain·완료 index는 유지하고 round-robin의 public 경로를 막지 않는다.
+  public 자체의 상한 초과는 계속 명시적으로 실패한다.
+- 접근은 bounded discovery와 기존 ordered namespace iteration, 비용 O(n)/O(n) 그대로다.
+  별도 retry/transaction을 만들지 않고 다음 원래 polling에서 재관측한다. DML/벡터 실행은 없다.
+- 단순히 모든 `SCOPE_LIMIT`을 무시하는 대안은 핀 불일치까지 숨기므로 사용하지 않는다.
+  합성 회귀로 원래 장애와 격리·negative case를 확인한 뒤 별도 compatible successor로 반영한다.
+
+2026-10-31 00:26 UTC 실제 후속 점검에서 기존 namespace의 단일 reader가 4,096 metadata
+한도를 넘는 별도 문제가 드러났다. 한도를 늘리지 않고 기존 Catalog capture owner 안에서
+128-source keyset page마다 같은 DB root에 묶인 reader를 사용한다. 전체 legacy 최대 1,024,
+원래 recipe/source/Graph/정책과 각 문항의 공식 admission은 그대로이며, 모든 page의 전후
+membership·권한·provenance를 재확인한다. 일부만 읽은 결과를 전체 모집단으로 발행하지 않는다.
+
+## 2026-10-31 00:29 UTC 운영 체크포인트 — goal ACTIVE
+
+- 첫 public GPU Workflow `workflow_717f75c98c98402680bb7353a5dbbe2e`는 실제
+  `COMPLETED` / command `SUCCEEDED`. 정식 index `embeddingindex_b348e38f7a46ee69cbca92fa6e8e2891`
+  revision `embeddingindexrev_1512df28b0688992e1ddbcb6b7ad05e5`에 16 binding 등록.
+  모집단은 해당 pin 기준 677개다. 고정 창작 5개는 아직 미등록이며 사용자 검색 PASS가 아니다.
+- 원래 GPU Graph와 맞춘 CPU standby 요청 `workflow_ae33623e030341eb9179d660faa8d3d5`는
+  `REQUESTED/PENDING`. GPU 16개를 다시 계산하거나 기존 성공/FAILED를 수정하지 않았다.
+- 이후 기존 namespace metadata budget 오류로 INDEX가 명시적으로 종료했다. 이를 성공으로
+  표시하지 않고 위 bounded legacy capture 수정과 회귀를 진행한다. 수치 환경은 바꾸지 않았다.
+- safe failure logging `5fdda815` shared API/platform 설치·byte/import·isolation 검증 완료,
+  API ready 정상. Web `f1a7ada4`, Catalog/QUERY protected reader `31ddcf62` 선택은 보존했다.
+  배포 controller는 그 사이 별도로 발생한 INDEX 종료를 PID 보존 assertion으로 탐지해 FAILED를
+  남겼다. 설치 완료 marker와 서비스 상태를 실제 대조했으며 재설치하거나 FAILED를 바꾸지 않았다.
+- 같은 창작 scope를 재개해 00:28 UTC 04/05/06에서 각각 새 RUNNING Job
+  `job_1b15f2cc844b4f7eb5255b596c8d6e8d`, `job_c4f76ba1691e43a0879cbcc0a1997eb8`,
+  `job_a32bd69ff33a416eabff896e74cfeff7`을 확인했다. 기존 refill/사용량 갱신 acceptance 유지.
+
+기록: `/tmp/eom-public-state-after-stop-0032.json`, `/tmp/eom-index-reconciliation-0032.jsonl`,
+5fdda admitted stage와 `eom-workflow-cause-release-5fdda815.service` journal. 세부 결과는
+장기 보관 evidence manifest로 이동할 때 pointer를 추가한다. 임시 파일을 정본으로 가장하지 않는다.
+
 ## 23:50 UTC 작업 체크포인트 — 실제 완료 아님
 
 - shared API/platform `c868a15c`, Web `f1a7ada4` 운영 배포와 설치 byte/source-free/isolation

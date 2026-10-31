@@ -17,6 +17,7 @@ from eom_catalog_contracts.embedding_registry import (
 from eom_catalog_contracts.inference_transfer_experiment import StagedExperimentEntry
 from eom_catalog_service import embedding_registry_application as application
 from eom_catalog_service.embedding_registry_ports import (
+    EmbeddingPopulationTruncated,
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
     EmbeddingRegistryLookup,
@@ -420,6 +421,24 @@ def test_graph_only_binding_change_reuses_encoding_without_registering_rows(
     assert len(result.missing) == len(result.reusable_rows) == 1
     assert result.missing[0].encoding_sha256 == capture.index.bindings[0].encoding.encoding_sha256
     assert len(session.state["encodings"]) == len(session.state["bindings"]) == 1
+
+
+@pytest.mark.parametrize("corpus_mismatch", [False, True])
+def test_only_explicit_population_truncation_is_capacity_deferral(
+    memory: MemoryFixture, corpus_mismatch: bool
+) -> None:
+    session, owner = memory
+    command, capture = capture_pair()
+    owner.capture = replace(
+        capture,
+        truncated=True,
+        corpus_id="corpus_" + "f" * 32 if corpus_mismatch else capture.corpus_id,
+    )
+    with pytest.raises(EmbeddingRegistryError) as caught:
+        application.prepare_missing_embedding_bindings(session, CALLER, _query(command), owner)
+    assert caught.value.code == "EMBEDDING_REGISTRY_SCOPE_LIMIT"
+    assert isinstance(caught.value, EmbeddingPopulationTruncated) is not corpus_mismatch
+    assert not any(session.state.values())
 
 
 @pytest.mark.parametrize(

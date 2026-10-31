@@ -154,6 +154,7 @@ from eom_catalog_service.embedding_registry_ports import (
     AUTHORING_REFERENCE_PURPOSES,
     AuthorizedEmbeddingReadProfile,
     EmbeddingBindingOrigin,
+    EmbeddingPopulationTruncated,
     EmbeddingRegistryActor,
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
@@ -1419,11 +1420,11 @@ class CatalogEmbeddingRegistryVerifier:
             )
             raise EmbeddingRegistryError(code) from None
         except InferenceTransferServiceError as error:
+            if error.code == "INFERENCE_TRANSFER_SNAPSHOT_POPULATION_TRUNCATED":
+                raise EmbeddingPopulationTruncated() from None
             code = (
                 "EMBEDDING_REGISTRY_FORBIDDEN"
                 if error.code == "INFERENCE_TRANSFER_FORBIDDEN"
-                else "EMBEDDING_REGISTRY_SCOPE_LIMIT"
-                if error.code == "INFERENCE_TRANSFER_SNAPSHOT_POPULATION_TRUNCATED"
                 else "EMBEDDING_REGISTRY_POINTER_INVALID"
             )
             raise EmbeddingRegistryError(code) from None

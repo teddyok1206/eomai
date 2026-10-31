@@ -391,11 +391,12 @@ def test_scope_only_service_capture_reads_no_population_or_source_bytes(owner) -
     adapter._capture_population.assert_not_called()
 
 
-def test_population_service_capture_uses_shared_body_and_rechecks_late(owner) -> None:
+def test_selected_service_capture_uses_shared_body_and_rechecks_late(owner) -> None:
     adapter = object.__new__(CatalogInferenceTransferSnapshotSourceAdapter)
     adapter.sources = Mock()
     authority, reader = Mock(), Mock()
     authority.authorize_scope.return_value = owner.policy
+    selected_intent = replace(owner.intent, source_revision_ids=("itemrev_" + "1" * 32,))
     pool = ReadOnlyKnowledgeCandidatePool(owner.intent.graph_snapshot, (), False)
     adapter.sources.retrieval.admit_local_indexing_candidate_pool.return_value = pool
     corpus = AdmittedInferenceTransferCorpus((), (), False, 0, ())
@@ -403,8 +404,8 @@ def test_population_service_capture_uses_shared_body_and_rechecks_late(owner) ->
     def capture(session, scope, recipe, *, artifact_reader, read_pool):
         assert (session, scope, recipe, artifact_reader) == (
             owner.session,
-            owner.intent,
-            owner.intent.recipe,
+            selected_intent,
+            selected_intent.recipe,
             reader,
         )
         assert read_pool() is pool
@@ -413,11 +414,11 @@ def test_population_service_capture_uses_shared_body_and_rechecks_late(owner) ->
     adapter._capture_population = Mock(side_effect=capture)
     result = adapter.capture_indexing_in_session(
         owner.session,
-        owner.intent,
+        selected_intent,
         authority=authority,
         artifact_reader=reader,
     )
-    assert result == LocalIndexingSessionCapture(owner.intent, corpus, ())
+    assert result == LocalIndexingSessionCapture(selected_intent, corpus, ())
     assert authority.authorize_scope.call_count == 2
     adapter.sources._scope.assert_not_called()
     adapter.sources.retrieval.admit_read_only_candidate_pool.assert_not_called()
@@ -428,7 +429,7 @@ def test_population_service_capture_uses_shared_body_and_rechecks_late(owner) ->
     with pytest.raises(LocalIndexingSourceError):
         adapter.capture_indexing_in_session(
             owner.session,
-            owner.intent,
+            selected_intent,
             authority=authority,
             artifact_reader=reader,
         )
