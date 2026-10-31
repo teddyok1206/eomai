@@ -48,6 +48,7 @@ from eom_catalog_service.creative_registered_report import (
     load_registered_creative_report,
 )
 from eom_catalog_service.creative_source_content import (
+    CREATIVE_CONTENT_UNAVAILABLE_CODE,
     CreativeSourceContent,
     materialize_creative_source_content,
     materialize_creative_source_content_v2,
@@ -80,6 +81,28 @@ class CreativeItemRegistrationError(ValueError):
     def __init__(self, code: str) -> None:
         self.code = code
         super().__init__(code)
+
+
+class CreativeItemContentUnavailable(CreativeItemRegistrationError):
+    """Exact source/report pins for scheduling only, never registration authority."""
+
+    def __init__(self, resolved: ResolvedCreativeLearningProposal) -> None:
+        result = resolved.role.output.learning_result
+        if result.proposal is not None or result.status != "NEEDS_DECISION":
+            raise ValueError("CREATIVE_CONTENT_UNAVAILABLE_PROOF_INVALID")
+        source = resolved.work.source
+        self.target = CreativeCohortTarget.model_validate(
+            dict(
+                source_id=source.source_id,
+                source_revision_id=source.source_revision_id,
+                external_number=source.external_number,
+                observation_sha256=source.observation_sha256,
+                selected_edition=source.selected_edition,
+            )
+        )
+        self.selection = resolved.selection
+        self.report = resolved.pointer
+        super().__init__(CREATIVE_CONTENT_UNAVAILABLE_CODE)
 
 
 @dataclass(frozen=True, slots=True)
@@ -222,6 +245,8 @@ class CreativeItemRegistrationService:
                 )
             )
             already_registered = present is not None
+        if not already_registered and prepared.role.output.learning_result.proposal is None:
+            raise CreativeItemContentUnavailable(prepared)
         prepared_content = (
             self._prepare_successor_content(prepared)
             if isinstance(prepared.role.output.learning_result, ExternalItemLearningResultV2)
@@ -406,7 +431,7 @@ class CreativeItemRegistrationService:
         result = resolved.role.output.learning_result
         assert isinstance(result, ExternalItemLearningResultV2)
         if result.proposal is None:
-            raise CreativeItemRegistrationError("CREATIVE_SOURCE_ITEM_UNREADABLE")
+            raise CreativeItemRegistrationError(CREATIVE_CONTENT_UNAVAILABLE_CODE)
         if not any(isinstance(block, SourceImageBlock) for block in result.proposal.content.body):
             return materialize_creative_source_content_v2(result, resolved_images={})
         source = resolved.work.source

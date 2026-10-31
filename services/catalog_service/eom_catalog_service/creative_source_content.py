@@ -19,6 +19,8 @@ from eom_catalog_service.creative_source_draft_materialization import (
     materialize_creative_source_draft,
 )
 
+CREATIVE_CONTENT_UNAVAILABLE_CODE = "CREATIVE_SOURCE_ITEM_UNREADABLE"
+
 
 class CreativeSourceContentError(ValueError):
     def __init__(self, code: str) -> None:
@@ -42,7 +44,7 @@ def materialize_creative_source_content_v2(
     """Original answer/explanation remain source content, independent work stays separate."""
     result = ExternalItemLearningResultV2.model_validate(result.model_dump(mode="json"))
     if result.proposal is None:
-        raise CreativeSourceContentError("CREATIVE_SOURCE_ITEM_UNREADABLE")
+        raise CreativeSourceContentError(CREATIVE_CONTENT_UNAVAILABLE_CODE)
     draft = result.proposal.content
     materialized = materialize_creative_source_draft(draft, resolved_images=resolved_images)
     return CreativeSourceContent(
@@ -73,7 +75,7 @@ def materialize_creative_source_content(
     """
     proposal = result.proposal
     if proposal is None:
-        raise CreativeSourceContentError("CREATIVE_SOURCE_ITEM_UNREADABLE")
+        raise CreativeSourceContentError(CREATIVE_CONTENT_UNAVAILABLE_CODE)
     original = proposal.content
     data = original.model_dump(mode="json")
     before = content_sha256(data)

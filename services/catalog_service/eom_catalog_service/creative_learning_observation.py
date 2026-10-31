@@ -13,6 +13,7 @@ from eom_catalog_service.creative_learning_runner import (
     STATE_ROOT,
     validate_state_root,
 )
+from eom_catalog_service.creative_source_content import CREATIVE_CONTENT_UNAVAILABLE_CODE
 
 
 def read_observation(root: Path, cohort_id: str) -> dict[str, object]:
@@ -71,7 +72,8 @@ def read_observation(root: Path, cohort_id: str) -> dict[str, object]:
             or len(entry) != 2
             or not isinstance(entry[0], str)
             or re.fullmatch(r"[0-9]{5}", entry[0]) is None
-            or entry[1] != "OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING"
+            or entry[1]
+            not in {"OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING", CREATIVE_CONTENT_UNAVAILABLE_CODE}
             for entry in blocked
         )
         or len({entry[0] for entry in blocked}) != len(blocked)
