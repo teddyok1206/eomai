@@ -312,7 +312,10 @@ class ProtectedInstalledIdentityProviderAdmission:
             # the member itself retains its full epoch and byte hash below.
             or _epoch(parent)[:5] != value.parent_epoch[:5]
             or _epoch(value.path.parent.lstat())[:5] != value.parent_epoch[:5]
-            or _epoch(value.path.lstat()) != value.epoch
+            # The root-staged configuration FD remains readable after dropping
+            # privilege, but its private directory intentionally is not traversable.
+            # FD epoch/link/name/hash below still reject replacement and mutation.
+            or (kind != "CONFIGURATION" and _epoch(value.path.lstat()) != value.epoch)
             or not stat.S_ISREG(before.st_mode)
             or before.st_nlink != 1
             or before.st_mode & 0o022

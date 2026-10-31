@@ -30,3 +30,13 @@ mtime/ctime이 바뀌어 있었다. 기존 `_check_file`은 폴더의 전체 fil
 parent 교체·symlink·권한 변경·PID/InvocationID 변경)를 함께 실행한다. 단순 예외 무시나
 인증 검사 삭제는 대안이 아니다. 동일 버전 재기동으로 현재 witness를 새로 잡는 긴급 복구와,
 설치 wheel/compatible release의 영구 수정은 구분한다.
+
+## 실제 privilege-drop 검증에서 확인한 보완
+
+첫 호환 배포의 API health는 PASS였지만 QUERY child는 private API configuration의 named
+file을 `lstat`하려다 권한 거부됐다. `/etc/eom-api`를 새로 개방하거나 worker 그룹을
+늘리지 않는다. root가 전달한 읽기 전용 FD의 full epoch/link/name/hash와 held/named 부모
+identity는 유지하고, CONFIGURATION만 inaccessible named file 재조회에 의존하지 않는다.
+교체·이동·삭제는 held FD의 link 수와 `/proc/self/fd`의 현재 이름 및 hash로 거부한다.
+CODE와 KEY_METADATA는 기존 named target 확인도 유지한다. 정상 root 검사뿐 아니라
+실제 dropped UID/GID 및 supplementary groups 없음 조건을 별도 운영 preflight로 확인한다.
