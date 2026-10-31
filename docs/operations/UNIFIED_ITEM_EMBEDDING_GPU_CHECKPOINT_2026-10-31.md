@@ -223,3 +223,18 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
   API/Catalog/INDEX/QUERY 설치본, runtime config, 운영 DB schema, 모델 실행은 변경0이다.
 - 실제11:00 관측은 기출 GPU **37/520, 잔여483**, CUDA RUNNING1, 새 historical failure 증가0이다.
   30분 관측 간격을 유지한다. 새 벡터 전환 검증 전 구 벡터 삭제0, 보호 정본 변경0이다.
+
+### Source candidate의 설치 wheel 검증 — 11:24 UTC
+
+- application/실행 경계 후보는 `df7a168c`로 main/origin에 보존했다.
+- 최초 build-only는 wheel RECORD 확인 후 설치 시뮬레이션에서, 이전0064를 고정한 기대값과
+  새 source head0065가 달라 중단됐다. 운영 migration/설치/서비스 재시작은 실행하지 않았다.
+  기존 배포 검사를 우회하지 않고 기대값을 정합화하고, 앞으로 비싼 빌드 전에 이 drift를
+  잡는 `test_api_installed_migration_admission.py` 회귀1개를 추가했다.
+- 보정 source `60aa2d9b0fcb90db9942194bb9e23ccc04ed64c8`의 공식 `--build-only` 재실행 PASS.
+  세 wheel RECORD 및 non-editable installed simulation 검증을 마쳤다. 산출물은
+  `/tmp/eom-api-build/60aa2d9b0fcb90db9942194bb9e23ccc04ed64c8.e308um/dist`의 후보이며
+  아직 운영 설치나 새 AI source end-to-end acceptance가 아니다.
+- 운영0065 적용에는 reviewed migration operator successor 및 API/Catalog/INDEX/QUERY의
+  호환 runtime 선택이 필요하다. 실행 중인 GPU 작업의 pinned 설치본을 덮어쓰지 않는다.
+  새로운 입력 source/control/public evidence/index 연결은 여전히 후속 단계다.
