@@ -589,6 +589,23 @@ def prepare_embedding_completion_context(
     )
 
 
+def validate_embedding_completion_batch_values(
+    events: tuple[EmbeddingCompletedEventValues, ...],
+    association: EmbeddingLaunchAssociationValues,
+    owned_input: IncrementalEmbeddingInput,
+    result: IncrementalEmbeddingResult,
+) -> None:
+    """One numeric coverage rule, after concrete ownership-family parsing."""
+    if not 1 <= len(events) <= 1024:
+        raise ValueError("encoding completion batch is invalid")
+    context = prepare_embedding_completion_context(association, owned_input, result)
+    keys = tuple(event.owned_job.request.encoding.encoding_sha256 for event in events)
+    if keys != tuple(sorted(set(keys))) or keys != tuple(context.by_encoding):
+        raise ValueError("encoding completion batch does not cover the exact owned set")
+    for event in events:
+        validate_embedding_completion_event_context(event, context)
+
+
 def _validate_completion_event(
     event: EmbeddingCompletedEventValues,
     context: EmbeddingCompletionContext,

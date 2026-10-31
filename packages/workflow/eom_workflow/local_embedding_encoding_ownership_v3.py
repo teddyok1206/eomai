@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from typing import Annotated, ClassVar, Literal, Self
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.inference_transfer_embedding import (
@@ -18,9 +18,8 @@ from pydantic import Field, TypeAdapter, model_validator
 from eom_workflow.local_embedding_encoding_job import (
     EmbeddingSharedRowReceipt,
     LocalEmbeddingOwnedJob,
-    prepare_embedding_completion_context,
     validate_embedding_completed_event_values,
-    validate_embedding_completion_event_context,
+    validate_embedding_completion_batch_values,
     validate_embedding_encoding_member,
     validate_embedding_encoding_metadata,
     validate_embedding_encoding_read_values,
@@ -48,7 +47,10 @@ EMBEDDING_ENCODING_OWNERSHIP_V3_SCHEMA_SHA256 = (
 )
 
 
-class LocalEmbeddingLaunchIntentV3(NativeEmbeddingContract):
+class PublicSolutionLaunchIntentBody(NativeEmbeddingContract):
+    """Shared value fields; concrete families retain their exact plan schema."""
+
+    _source_plan_schema_ref: ClassVar[str] = LOCAL_EMBEDDING_SOURCE_PLAN_V3_SCHEMA_REF
     workflow_id: WorkflowId
     step_run_id: StepRunId
     step_key: Literal["encode_batch"] = "encode_batch"
@@ -64,12 +66,16 @@ class LocalEmbeddingLaunchIntentV3(NativeEmbeddingContract):
     intent_sha256: Sha256
 
     @model_validator(mode="after")
-    def exact_intent(self) -> LocalEmbeddingLaunchIntentV3:
+    def exact_intent(self) -> Self:
         validate_embedding_encoding_member(
-            self.source_plan, "source-plan.json", LOCAL_EMBEDDING_SOURCE_PLAN_V3_SCHEMA_REF
+            self.source_plan, "source-plan.json", self._source_plan_schema_ref
         )
         validate_embedding_encoding_metadata(self, "intent_sha256")
         return self
+
+
+class LocalEmbeddingLaunchIntentV3(PublicSolutionLaunchIntentBody):
+    """Frozen source-plan3 intent, not interchangeable with intent4."""
 
 
 class LocalEmbeddingLaunchAssociationV3(NativeEmbeddingContract):
@@ -206,12 +212,4 @@ def validate_embedding_encoding_completions_v3(
             raise ValueError("public-solution encoding completion event family differs")
         checked.append(event)
     association = parse_local_embedding_launch_association_v3(association)
-    context = prepare_embedding_completion_context(association, owned_input, result)
-    keys = tuple(event.owned_job.request.encoding.encoding_sha256 for event in checked)
-    if keys != tuple(sorted(set(keys))) or keys != tuple(context.by_encoding):
-        raise ValueError(
-            "public-solution encoding completion batch does not cover exact original owned set"
-        )
-    for event in checked:
-        assert isinstance(event, EmbeddingEncodingCompletedEventV3)
-        validate_embedding_completion_event_context(event, context)
+    validate_embedding_completion_batch_values(tuple(checked), association, owned_input, result)

@@ -1,0 +1,318 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/embedding-encoding-ownership/4.0",
+  "discriminator": {
+    "mapping": {
+      "ATTACHED": "#/$defs/EmbeddingEncodingAttachedEventV4",
+      "COMPLETED": "#/$defs/EmbeddingEncodingCompletedEventV4",
+      "LAUNCH_ASSOCIATION": "#/$defs/LocalEmbeddingLaunchAssociationV4",
+      "READ_RESULT": "#/$defs/EmbeddingEncodingReadResultV4"
+    },
+    "propertyName": "record_type"
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/LocalEmbeddingLaunchAssociationV4"
+    },
+    {
+      "$ref": "#/$defs/EmbeddingEncodingAttachedEventV4"
+    },
+    {
+      "$ref": "#/$defs/EmbeddingEncodingCompletedEventV4"
+    },
+    {
+      "$ref": "#/$defs/EmbeddingEncodingReadResultV4"
+    }
+  ],
+  "title": "Source-plan4 ownership metadata over unchanged numerical Job/input/result1",
+  "$defs": {
+    "LocalEmbeddingLaunchIntentV4": {
+      "additionalProperties": false,
+      "properties": {
+        "workflow_id": {
+          "pattern": "^workflow_[0-9a-f]{32}$",
+          "title": "Workflow Id",
+          "type": "string"
+        },
+        "step_run_id": {
+          "pattern": "^steprun_[0-9a-f]{32}$",
+          "title": "Step Run Id",
+          "type": "string"
+        },
+        "step_key": {
+          "const": "encode_batch",
+          "default": "encode_batch",
+          "title": "Step Key",
+          "type": "string"
+        },
+        "attempt": {
+          "maximum": 1,
+          "minimum": 1,
+          "title": "Attempt",
+          "type": "integer"
+        },
+        "native_launch_job_id": {
+          "pattern": "^job_[0-9a-f]{32}$",
+          "title": "Native Launch Job Id",
+          "type": "string"
+        },
+        "workflow_request_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Workflow Request Sha256",
+          "type": "string"
+        },
+        "source_plan": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/workflow/embedding-encoding-ownership/3.0#/$defs/ArtifactMemberPointer"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "source-plan.json"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/workflow/local-embedding-source-plan/4.0"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              }
+            }
+          ]
+        },
+        "source_plan_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Source Plan Sha256",
+          "type": "string"
+        },
+        "resource_profile_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Resource Profile Sha256",
+          "type": "string"
+        },
+        "command_id": {
+          "pattern": "^wfcmd_[0-9a-f]{32}$",
+          "title": "Command Id",
+          "type": "string"
+        },
+        "runner_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Runner Id",
+          "type": "string"
+        },
+        "lease_generation": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Lease Generation",
+          "type": "integer"
+        },
+        "intent_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Intent Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "workflow_id",
+        "step_run_id",
+        "attempt",
+        "native_launch_job_id",
+        "workflow_request_sha256",
+        "source_plan",
+        "source_plan_sha256",
+        "resource_profile_sha256",
+        "command_id",
+        "runner_id",
+        "lease_generation",
+        "intent_sha256"
+      ],
+      "title": "LocalEmbeddingLaunchIntentV4",
+      "type": "object"
+    },
+    "LocalEmbeddingLaunchAssociationV4": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "embedding-encoding-ownership/4.0"
+        },
+        "record_type": {
+          "const": "LAUNCH_ASSOCIATION",
+          "default": "LAUNCH_ASSOCIATION",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "intent": {
+          "$ref": "#/$defs/LocalEmbeddingLaunchIntentV4"
+        },
+        "owned_jobs": {
+          "items": {
+            "$ref": "eom://schemas/workflow/embedding-encoding-ownership/3.0#/$defs/LocalEmbeddingOwnedJob"
+          },
+          "maxItems": 1024,
+          "minItems": 1,
+          "title": "Owned Jobs",
+          "type": "array"
+        },
+        "owned_input": {
+          "$ref": "eom://schemas/workflow/embedding-encoding-ownership/3.0#/$defs/ArtifactMemberPointer"
+        },
+        "owned_input_request_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Owned Input Request Sha256",
+          "type": "string"
+        },
+        "owned_input_set_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Owned Input Set Sha256",
+          "type": "string"
+        },
+        "association_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Association Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "intent",
+        "owned_jobs",
+        "owned_input",
+        "owned_input_request_sha256",
+        "owned_input_set_sha256",
+        "association_sha256"
+      ],
+      "title": "LocalEmbeddingLaunchAssociationV4",
+      "type": "object"
+    },
+    "EmbeddingEncodingAttachedEventV4": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "embedding-encoding-ownership/4.0"
+        },
+        "record_type": {
+          "const": "ATTACHED",
+          "default": "ATTACHED",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "owned_job": {
+          "$ref": "eom://schemas/workflow/embedding-encoding-ownership/3.0#/$defs/LocalEmbeddingOwnedJob"
+        },
+        "intent": {
+          "$ref": "#/$defs/LocalEmbeddingLaunchIntentV4"
+        },
+        "event_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Event Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "owned_job",
+        "intent",
+        "event_sha256"
+      ],
+      "title": "EmbeddingEncodingAttachedEventV4",
+      "type": "object"
+    },
+    "EmbeddingEncodingCompletedEventV4": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "embedding-encoding-ownership/4.0"
+        },
+        "record_type": {
+          "const": "COMPLETED",
+          "default": "COMPLETED",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "owned_job": {
+          "$ref": "eom://schemas/workflow/embedding-encoding-ownership/3.0#/$defs/LocalEmbeddingOwnedJob"
+        },
+        "intent": {
+          "$ref": "#/$defs/LocalEmbeddingLaunchIntentV4"
+        },
+        "launch_association_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Launch Association Sha256",
+          "type": "string"
+        },
+        "receipt": {
+          "$ref": "eom://schemas/workflow/embedding-encoding-ownership/3.0#/$defs/EmbeddingSharedRowReceipt"
+        },
+        "event_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Event Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "owned_job",
+        "intent",
+        "launch_association_sha256",
+        "receipt",
+        "event_sha256"
+      ],
+      "title": "EmbeddingEncodingCompletedEventV4",
+      "type": "object"
+    },
+    "EmbeddingEncodingReadResultV4": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "embedding-encoding-ownership/4.0"
+        },
+        "record_type": {
+          "const": "READ_RESULT",
+          "default": "READ_RESULT",
+          "title": "Record Type",
+          "type": "string"
+        },
+        "owned_job": {
+          "$ref": "eom://schemas/workflow/embedding-encoding-ownership/3.0#/$defs/LocalEmbeddingOwnedJob"
+        },
+        "owner_intent": {
+          "$ref": "#/$defs/LocalEmbeddingLaunchIntentV4"
+        },
+        "status": {
+          "enum": [
+            "OWNED",
+            "BORROWED",
+            "COMPLETED",
+            "FAILED",
+            "CANCELLED",
+            "UNCERTAIN"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "completion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/EmbeddingEncodingCompletedEventV4"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "read_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Read Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "owned_job",
+        "owner_intent",
+        "status",
+        "completion",
+        "read_sha256"
+      ],
+      "title": "EmbeddingEncodingReadResultV4",
+      "type": "object"
+    }
+  }
+}

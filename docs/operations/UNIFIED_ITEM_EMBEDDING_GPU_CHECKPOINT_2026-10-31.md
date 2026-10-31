@@ -425,3 +425,25 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
   서로 다른 실행/overlap 여부를 구분하며 full native matrix PASS로 확대하지 않는다.
 - 13:00 정기 관측은 GPU **73/520**, 잔여447, CUDA RUNNING1, historical failed2 그대로다.
   운영 INDEX/QUERY/API/Catalog 재시작0, 원본 변경0, 구 벡터 삭제0이다. 전체 goal은 ACTIVE다.
+
+### 설치 검증과 ownership4 후보 — 13:24 UTC
+
+- source`521a25b0e88ff39fba7c871d30dea10a3ad9488f`를 push했고 공식 build-only의 non-editable
+  wheel 설치 simulation/RECORD 검사가 PASS다. 산출물은
+  `/tmp/eom-api-build/521a25b0e88ff39fba7c871d30dea10a3ad9488f.zmZw87/dist`다.
+  INDEX703354/QUERY470146/Catalog732310/API469955 PID·active·NRestarts0을 유지했다.
+- 다음 provenance carrier인 ownership4를 schema-first로 추가했다. 바뀌는 것은 source-plan4의
+  exact pointer와 association/attachment/completion/read envelope4뿐이다. numerical
+  `embedding-encoding-job/1.0`, input/result1과 수치 계산·GPU lease는 그대로다.
+- intent3/4의 공통 field/hash 검증과 public completion batch의 exact-set 검증은 각각 한
+  pure body/helper를 재사용한다. concrete parser는 버전과 source-plan schema를 고정한다.
+  기존 schema3 bytes를 수정하지 않았다. 기존 dispatch에4를 명시적으로 추가했지만
+  request/completion/owner의 전체 호환 연결 전에는 새 native family를 운영 활성화하지 않는다.
+- 기출·창작·AI demand3개가 full public text와 numeric Job/row1개를 공유하고, 잘못된 plan/schema,
+  raw/semantic hash, workflow request, float coercion, duplicate receipt, 다른 row를 거부한다.
+  ownership/request3·4, 기존 mixed/public carrier·encoding admission·incremental encoding 회귀
+  **105 PASS**, 관련 source6개 mypy, Ruff/format/generator PASS다. installed521 검증은
+  이 후속 ownership 변경까지 검증했다는 뜻이 아니다.
+- 운영 source/schema 교체와 재시작·새 모델 호출·구 벡터 삭제는 하지 않았다. 다음 작업은
+  native completion/coordinator와 INDEX/QUERY 실제 owner 연결, 이후 원래 목표의 전체520
+  coverage·권한 검색·cutover·구 projection retirement다. 목표 범위를 source PASS로 축소하지 않는다.

@@ -21,6 +21,7 @@ INDEX3 = "eom://schemas/knowledge/public-solution-embedding-index/3.0"
 INDEX4 = "eom://schemas/knowledge/public-solution-embedding-index/4.0"
 ENTRY2 = "eom://schemas/knowledge/public-solution-embedding-entry/2.0"
 REQUEST3 = "eom://schemas/workflow/local-embedding-workflow-request/3.0"
+OWNERSHIP3 = "eom://schemas/workflow/embedding-encoding-ownership/3.0"
 
 
 def externalize(value: Any, schema_id: str) -> None:
@@ -97,6 +98,73 @@ def request() -> dict[str, Any]:
     return value
 
 
+def ownership() -> dict[str, Any]:
+    old = json.loads((SCHEMAS / "embedding-encoding-ownership-v3.schema.json").read_bytes())
+    names = {
+        "LocalEmbeddingLaunchIntentV3": "LocalEmbeddingLaunchIntentV4",
+        "LocalEmbeddingLaunchAssociationV3": "LocalEmbeddingLaunchAssociationV4",
+        "EmbeddingEncodingAttachedEventV3": "EmbeddingEncodingAttachedEventV4",
+        "EmbeddingEncodingCompletedEventV3": "EmbeddingEncodingCompletedEventV4",
+        "EmbeddingEncodingReadResultV3": "EmbeddingEncodingReadResultV4",
+    }
+    references = {
+        OWNERSHIP3 + "#/$defs/" + name: "#/$defs/" + successor for name, successor in names.items()
+    }
+
+    def retarget(value: Any) -> None:
+        if isinstance(value, dict):
+            reference = value.get("$ref")
+            if isinstance(reference, str) and reference in references:
+                value["$ref"] = references[reference]
+            discriminator = value.get("discriminator")
+            if isinstance(discriminator, dict):
+                for tag, target in discriminator.get("mapping", {}).items():
+                    if target.startswith("#/$defs/"):
+                        target = OWNERSHIP3 + target
+                    discriminator["mapping"][tag] = references.get(target, target)
+            for child in value.values():
+                retarget(child)
+        elif isinstance(value, list):
+            for child in value:
+                retarget(child)
+
+    value = {name: copy.deepcopy(part) for name, part in old.items() if name != "$defs"}
+    externalize(value, OWNERSHIP3)
+    definitions = {}
+    for name, successor in names.items():
+        definition = copy.deepcopy(old["$defs"][name])
+        externalize(definition, OWNERSHIP3)
+        definition["title"] = successor
+        if "schema_version" in definition["properties"]:
+            definition["properties"]["schema_version"] = {
+                "const": "embedding-encoding-ownership/4.0"
+            }
+        definitions[successor] = definition
+    definitions["LocalEmbeddingLaunchIntentV4"]["properties"]["source_plan"] = {
+        "allOf": [
+            {"$ref": OWNERSHIP3 + "#/$defs/ArtifactMemberPointer"},
+            {
+                "properties": {
+                    "member_path": {"const": "source-plan.json"},
+                    "schema_ref": {
+                        "const": "eom://schemas/workflow/local-embedding-source-plan/4.0"
+                    },
+                    "media_type": {"const": "application/json"},
+                }
+            },
+        ]
+    }
+    value.update(
+        {
+            "$id": "eom://schemas/workflow/embedding-encoding-ownership/4.0",
+            "title": "Source-plan4 ownership metadata over unchanged numerical Job/input/result1",
+            "$defs": definitions,
+        }
+    )
+    retarget(value)
+    return value
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--check", action="store_true")
@@ -104,6 +172,7 @@ def main() -> int:
     documents = {
         "local-embedding-source-plan-v4.schema.json": source_plan(),
         "local-embedding-workflow-request-v4.schema.json": request(),
+        "embedding-encoding-ownership-v4.schema.json": ownership(),
     }
     for name, schema in documents.items():
         payload = (json.dumps(schema, ensure_ascii=False, indent=2) + "\n").encode()
