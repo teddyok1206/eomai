@@ -96,6 +96,36 @@
   구 vector 삭제0, 정본 삭제/변조0, 추가 로그인 요청0이다. 실제 전체520 완료·AI/Chat 소비자
   전환·authorized 검색과 안전한 구 derivative 삭제는 남아 있으며 목표 ACTIVE다.
 
+### API/Catalog·provider·Pack18 실제 호환 활성화 — 23:51 UTC
+
+- 위 대기 실행은 실제 quiescence를 얻어 **23:50:15**에 전환을 시작했고,
+  **23:50:57.896794 UTC exit0**으로 끝났다. unit inactive/dead/MainPID0와
+  ExecMainStatus0 및 terminal event `PUBLIC_ITEM_RELEASE_AND_PACK_ACTIVE`를 확인했다.
+  이제 대기 중인 실행을 다시 제출하거나 PREPARE/ACTIVATE를 반복하지 않는다.
+- `/opt/eom/api-releases/8eb03e407049864c939050640081d6f726150286/activated.json`의
+  actual installed member **2,519개 SHA PASS**다. API/Catalog의 runtime source는8eb이며,
+  QUERY owner/numerical prefix는FB 그대로다. API provider를 실제 새 설치본에 맞춰 바꾼
+  root admission와 실제 lower-UID admission 모두 PASS했다. INDEX PID **1683578**과
+  numeric/INDEX/unit SHA는 전후 동일하고 DB migration0이다.
+- Pack18의 실제 development activation은 `activation_7c3535170ff84b4ab17c1db7488003c8`,
+  release `packrel_60ce48b0c02b4a7eb67ab4e49cd41655`다. 이전 선택은
+  `pack18-prior-activation.json`과 기존 activation history에 보존했다. public/구형 경로의
+  historical replay는 그대로이며 활성화를 이미 완료한 문항 재실행으로 확인하지 않았다.
+- 실제 API **READY**, HTTPS redirect를 정상 따라간 공개 화면 **HTTP200**이다. 배포 중
+  23:50:30 로컬 health 연결1회가 거부된 관측도 보존한다. 이후 API1697848,
+  Catalog1697847, QUERY1698073, creative1698293 active를 확인했다. creative는 원래
+  cohort/source/preset pin으로 다시 시작했으며 새 계정 인증·worker 재제출은 하지 않았다.
+- 실제 QUERY의 `REFERENCE_QUERY_OWNER_READY`도 **23:51:35.515828 UTC**에 확인했다.
+  기존 설치된 deployment metadata verifier 및 실제 API identity의 runtime-isolation
+  verifier PASS다. 허용된 config/local-image-binding/state/installed-import와 금지된
+  repo/EOMIS/NAS/worker-auth/root-auth/socket/각종 secret 접근을 구분해 확인했다.
+  `/tmp/eom-public-item8eb-live-metadata-20261031.log`,
+  `/tmp/eom-public-item8eb-live-isolation-20261031.log`.
+- 활성화는 실제 사용자 QUERY/read/replay·새 AI report/Graph/INDEX4·교육 품질 PASS가 아니다.
+  마지막 frozen520 성공 관측122와 전체 완료를 구분하고, 다음 정기 GPU 결과 관측을 계속한다.
+  Chat의 legacy CONTENT_ONLY 소비자와 구 vector 참조 정리·안전 삭제도 아직 남아 있다.
+  따라서 전체 goal ACTIVE이며 완료 gate를 닫지 않는다.
+
 ## 출제·검토 공통 공개 풀이의 실제 role 읽기·배치 연결 — 2026-10-31 23:10 UTC
 
 - 직전 목표 실행은 plan30/31 source·저장/replay 검증의 **PROGRESS**였고, 설치본311 PASS도
