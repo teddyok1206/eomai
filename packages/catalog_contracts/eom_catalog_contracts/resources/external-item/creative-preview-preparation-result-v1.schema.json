@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/external-item/creative-preview-preparation-result/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_id", "source_revision_id", "edition", "status", "error_code"],
+  "properties": {
+    "schema_version": {"const": "creative-preview-preparation-result/1.0"},
+    "source_id": {"type": "string", "pattern": "^extitem_[0-9a-f]{32}$"},
+    "source_revision_id": {"type": "string", "pattern": "^extitemrev_[0-9a-f]{32}$"},
+    "edition": {"type": "integer", "minimum": 1, "maximum": 3},
+    "status": {"enum": ["READY", "DEFERRED"]},
+    "error_code": {"enum": [null, "OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING"]}
+  },
+  "oneOf": [
+    {"properties": {"status": {"const": "READY"}, "error_code": {"type": "null"}}},
+    {"properties": {"status": {"const": "DEFERRED"}, "error_code": {"const": "OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING"}}}
+  ]
+}

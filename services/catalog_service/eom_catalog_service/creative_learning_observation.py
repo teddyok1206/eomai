@@ -8,7 +8,11 @@ import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from eom_catalog_service.creative_learning_runner import STATE_ROOT, validate_state_root
+from eom_catalog_service.creative_learning_runner import (
+    MAX_STATUS_BYTES,
+    STATE_ROOT,
+    validate_state_root,
+)
 
 
 def read_observation(root: Path, cohort_id: str) -> dict[str, object]:
@@ -23,10 +27,10 @@ def read_observation(root: Path, cohort_id: str) -> dict[str, object]:
             or metadata.st_uid != os.geteuid()
             or metadata.st_nlink != 1
             or stat.S_IMODE(metadata.st_mode) != 0o640
-            or not 0 < metadata.st_size <= 16384
+            or not 0 < metadata.st_size <= MAX_STATUS_BYTES
         ):
             raise ValueError("CREATIVE_OBSERVATION_FILE_INVALID")
-        payload = os.read(descriptor, 16385)
+        payload = os.read(descriptor, MAX_STATUS_BYTES + 1)
         if len(payload) != metadata.st_size:
             raise ValueError("CREATIVE_OBSERVATION_FILE_INVALID")
     finally:
@@ -57,11 +61,28 @@ def read_observation(root: Path, cohort_id: str) -> dict[str, object]:
     timestamp = datetime.fromisoformat(observed_at)
     if timestamp.utcoffset() != timedelta(0):
         raise ValueError("CREATIVE_OBSERVATION_STATUS_INVALID")
+    blocked = document.get("blocked_sources", [])
+    if (
+        not isinstance(blocked, list)
+        or len(blocked) > total
+        or completed + len(blocked) > total
+        or any(
+            not isinstance(entry, list)
+            or len(entry) != 2
+            or not isinstance(entry[0], str)
+            or re.fullmatch(r"[0-9]{5}", entry[0]) is None
+            or entry[1] != "OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING"
+            for entry in blocked
+        )
+        or len({entry[0] for entry in blocked}) != len(blocked)
+    ):
+        raise ValueError("CREATIVE_OBSERVATION_STATUS_INVALID")
     return {
         "cohort_id": cohort_id,
         "state": state,
         "verified_count": completed,
         "target_count": total,
+        "blocked_source_count": len(blocked),
         "observed_at": observed_at,
         "status_stale": datetime.now(UTC) - timestamp > timedelta(minutes=30),
         "authority": "DERIVED_OPERATIONAL_STATUS_NOT_ACCEPTANCE_RECEIPT",

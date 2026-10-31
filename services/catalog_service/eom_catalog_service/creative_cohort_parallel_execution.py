@@ -6,6 +6,7 @@ three actual model claims. Restart reconstructs state from original immutable pi
 """
 
 from concurrent.futures import Future, ThreadPoolExecutor
+from dataclasses import replace
 
 from eom_catalog_contracts.creative_learning_continuation import (
     CreativeLearningParallelContinuation,
@@ -16,6 +17,7 @@ from eom_catalog_service.creative_cohort_execution import (
     CreativeCohortProgress,
     CreativeSourceExecution,
 )
+from eom_catalog_service.creative_preview_preparation import CreativeSourcePreviewDeferred
 
 
 class CreativeCohortParallelExecutionService:
@@ -36,6 +38,7 @@ class CreativeCohortParallelExecutionService:
         self.next_target = 0
         self.verified_count = 0
         self.window: dict[str, CreativeSourceExecution] = {}
+        self.blocked: dict[str, tuple[str, str]] = {}
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="creative-graph")
         self.publication: Future[None] | None = None
         self.publishing: tuple[CreativeSourceExecution, ...] = ()
@@ -57,9 +60,20 @@ class CreativeCohortParallelExecutionService:
             self.window[target.source_id] = CreativeSourceExecution(target)
             self.next_target += 1
         publishing_ids = {source.target.source_id for source in self.publishing}
-        for source_id, source in self.window.items():
+        for source_id, source in tuple(self.window.items()):
             if source_id not in publishing_ids and source.state != "READY_TO_PUBLISH":
-                self.owner.advance_report(source)
+                try:
+                    self.owner.advance_report(source)
+                except CreativeSourcePreviewDeferred as error:
+                    result = error.result
+                    if (result.source_id, result.source_revision_id, result.edition) != (
+                        source.target.source_id,
+                        source.target.source_revision_id,
+                        source.target.selected_edition,
+                    ) or result.error_code is None:
+                        raise ValueError("CREATIVE_PREVIEW_RESULT_IDENTITY_MISMATCH") from error
+                    self.blocked[source_id] = (source.target.external_number, result.error_code)
+                    del self.window[source_id]
         ready = tuple(
             source
             for source_id, source in self.window.items()
@@ -79,11 +93,18 @@ class CreativeCohortParallelExecutionService:
         )
         state = "VERIFIED" if completed else "PROCESSING"
         if not self.window and self.next_target == len(self.targets):
-            state = "COMPLETED" if self.verified_count == len(self.owner.targets) else "VERIFIED"
+            state = (
+                "BLOCKED_SOURCES"
+                if self.blocked
+                else "COMPLETED"
+                if self.verified_count == len(self.owner.targets)
+                else "VERIFIED"
+            )
         representative = completed or next(iter(self.window.values()), None)
-        return self.owner.progress(
+        progress = self.owner.progress(
             state, representative, self.verified_count, active_sources=activities
         )
+        return replace(progress, blocked_sources=tuple(self.blocked.values()))
 
     def close(self) -> None:
         # Never release the cohort fence while a canonical publication is still

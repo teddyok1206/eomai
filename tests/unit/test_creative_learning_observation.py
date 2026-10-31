@@ -56,3 +56,31 @@ def test_stale_status_is_not_reported_as_recent_progress(tmp_path, monkeypatch):
 
     monkeypatch.setattr(observation, "datetime", Clock)
     assert observation.read_observation(root, COHORT_ID)["status_stale"]
+
+
+@pytest.mark.parametrize("fault", [None, "duplicate", "unknown_error", "overcount"])
+def test_deferred_sources_are_counted_separately_without_becoming_completed(tmp_path, fault):
+    root = tmp_path / "status"
+    root.mkdir(mode=0o750)
+    blocked = [["11400", "OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING"]]
+    if fault == "duplicate":
+        blocked *= 2
+    elif fault == "unknown_error":
+        blocked[0][1] = "SOURCE_PERMISSION_DENIED"
+    write_status(
+        root,
+        COHORT_ID,
+        {
+            "state": "PROCESSING",
+            "verified_count": 3 if fault == "overcount" else 2,
+            "target_count": 3,
+            "blocked_sources": blocked,
+        },
+    )
+    if fault is None:
+        result = observation.read_observation(root, COHORT_ID)
+        assert result["verified_count"] == 2 and result["blocked_source_count"] == 1
+        assert "blocked_sources" not in result
+    else:
+        with pytest.raises(ValueError):
+            observation.read_observation(root, COHORT_ID)

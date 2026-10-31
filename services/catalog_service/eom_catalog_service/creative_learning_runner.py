@@ -27,6 +27,7 @@ from eom_catalog_service.creative_learning_cohort import read_creative_execution
 from eom_catalog_service.settings import CatalogSettings
 
 STATE_ROOT = Path("/var/lib/eom/creative-learning")
+MAX_STATUS_BYTES = 4 * 1024 * 1024  # bounded source/error metadata for at most 20,000 targets
 
 
 def validate_state_root(root: Path) -> None:
@@ -54,7 +55,7 @@ def write_status(root: Path, cohort_id: str, value: dict[str, object]) -> None:
         ).encode()
         + b"\n"
     )
-    if len(payload) > 16 * 1024:
+    if len(payload) > MAX_STATUS_BYTES:
         raise ValueError("CREATIVE_COHORT_STATUS_TOO_LARGE")
     target = root / (cohort_id + ".json")
     if target.exists() or target.is_symlink():
@@ -169,6 +170,7 @@ def main() -> None:
             status["cohort_revision_id"] = arguments.cohort_revision_id
             status["verified_limit"] = arguments.verified_limit
             terminal = progress.verified_count >= arguments.verified_limit
+            source_blocked = progress.state == "BLOCKED_SOURCES"
             if terminal:
                 status["state"] = (
                     "COMPLETED"
@@ -181,10 +183,13 @@ def main() -> None:
                 status["state"],
                 progress.verified_count,
                 progress.active_sources,
+                progress.blocked_sources,
             )
             if marker != previous:
                 print(json.dumps(status, ensure_ascii=False, sort_keys=True), flush=True)
                 previous = marker
+            if source_blocked:
+                raise ValueError("CREATIVE_COHORT_SOURCE_PREVIEWS_PENDING")
             if terminal:
                 break
             stopped.wait(progress_poll_delay_seconds(progress.state))

@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "creative-preview-preparation-result-v1": CatalogSchemaResource(
+            "schemas/external-item/creative-preview-preparation-result-v1.schema.json",
+            "resources/external-item/creative-preview-preparation-result-v1.schema.json",
+            "1.0",
+            "sha256:9de4f07ab5520f85525c6daa2f2d59e874ce669d3d2fe56314549fc7c75a2ac0",
+        ),
         "item-db-similarity-selection-v1": CatalogSchemaResource(
             "schemas/knowledge/item-db-similarity-selection-v1.schema.json",
             "resources/knowledge/item-db-similarity-selection-v1.schema.json",

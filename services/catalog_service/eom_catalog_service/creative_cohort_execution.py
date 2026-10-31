@@ -10,6 +10,7 @@ from eom_catalog_contracts.creative_learning_continuation import (
     CreativeLearningExecutionScope,
     CreativeLearningParallelContinuation,
 )
+from eom_catalog_contracts.creative_source_lineage import creative_registration_key
 from eom_catalog_contracts.external_item_learning_authorization import (
     ExternalItemLearningRoleSelection,
 )
@@ -49,7 +50,6 @@ from eom_catalog_service.creative_item_graph_learning import (
 from eom_catalog_service.creative_item_registration import (
     CreativeItemRegistrationService,
     RegisteredCreativeItem,
-    creative_registration_key,
 )
 from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
 from eom_catalog_service.knowledge_graph_models import (
@@ -72,6 +72,7 @@ class CreativeCohortProgress:
     analysis_run_id: str | None
     graph_snapshot_revision_id: str | None
     active_sources: tuple[tuple[str, str], ...] = ()
+    blocked_sources: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(slots=True)

@@ -51,7 +51,7 @@ def test_status_rejects_unsafe_roots_and_targets_without_overwriting(tmp_path, k
 def test_long_status_and_untrusted_identity_are_not_written(tmp_path):
     root = state_root(tmp_path)
     with pytest.raises(ValueError, match="TOO_LARGE"):
-        runner.write_status(root, COHORT_ID, {"text": "x" * 17000})
+        runner.write_status(root, COHORT_ID, {"text": "x" * (runner.MAX_STATUS_BYTES + 1)})
     with pytest.raises(ValueError):
         runner.write_status(root, "../outside", {"state": "STARTING"})
     assert not tuple(root.iterdir())

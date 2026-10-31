@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from uuid import uuid4
 
+from eom_catalog_contracts.creative_preview_preparation import CreativePreviewPreparationResult
 from eom_catalog_contracts.external_item_media import (
     ExternalItemDocumentMediaQuery,
     ExternalItemPreviewPrepareCommand,
@@ -17,6 +18,17 @@ from eom_catalog_service.external_item_preview_projection import (
     ExternalItemPreviewProjectionService,
     ExternalItemPreviewUnavailable,
 )
+from eom_catalog_service.office_document_converter import OfficeDocumentConversionError
+
+
+class CreativeSourcePreviewDeferred(ValueError):
+    """This exact source has no converter output; it remains unprocessed, not accepted."""
+
+    def __init__(self, result: CreativePreviewPreparationResult) -> None:
+        if result.status != "DEFERRED" or result.error_code is None:
+            raise ValueError("CREATIVE_PREVIEW_RESULT_INVALID")
+        super().__init__(result.error_code)
+        self.result = result
 
 
 def prepare_in_catalog_owner() -> None:
@@ -37,14 +49,35 @@ def prepare_in_catalog_owner() -> None:
     try:
         service = ExternalItemPreviewProjectionService(engine)
         try:
-            preview = service.open(query)
-        except ExternalItemPreviewUnavailable as error:
-            if error.code != "EXTERNAL_ITEM_PREVIEW_NOT_READY":
+            try:
+                preview = service.open(query)
+            except ExternalItemPreviewUnavailable as error:
+                if error.code != "EXTERNAL_ITEM_PREVIEW_NOT_READY":
+                    raise
+                service.build(query)
+                preview = service.open(query)
+        except OfficeDocumentConversionError as error:
+            if error.code != "OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING":
                 raise
-            service.build(query)
-            preview = service.open(query)
+            result = CreativePreviewPreparationResult(
+                source_id=command.source_id,
+                source_revision_id=command.source_revision_id,
+                edition=command.edition,
+                status="DEFERRED",
+                error_code="OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING",
+            )
+            print(result.model_dump_json(), flush=True)
+            return
         preview.member.stream.close()
-        print("CREATIVE_PREVIEW_READY", flush=True)
+        print(
+            CreativePreviewPreparationResult(
+                source_id=command.source_id,
+                source_revision_id=command.source_revision_id,
+                edition=command.edition,
+                status="READY",
+            ).model_dump_json(),
+            flush=True,
+        )
     finally:
         engine.dispose()
 
@@ -111,9 +144,17 @@ def prepare_creative_preview(query: ExternalItemDocumentMediaQuery) -> None:
         )
     except (OSError, subprocess.TimeoutExpired) as error:
         raise ValueError("CREATIVE_PREVIEW_PREPARATION_FAILED") from error
-    if (
-        result.returncode != 0
-        or result.stdout.strip() != b"CREATIVE_PREVIEW_READY"
-        or len(result.stderr) > 65536
-    ):
+    if result.returncode != 0 or len(result.stdout) > 4096 or len(result.stderr) > 65536:
         raise ValueError("CREATIVE_PREVIEW_PREPARATION_FAILED")
+    try:
+        prepared = CreativePreviewPreparationResult.model_validate_json(result.stdout)
+    except ValueError as error:
+        raise ValueError("CREATIVE_PREVIEW_PREPARATION_FAILED") from error
+    if (prepared.source_id, prepared.source_revision_id, prepared.edition) != (
+        query.source_id,
+        query.source_revision_id,
+        query.edition,
+    ):
+        raise ValueError("CREATIVE_PREVIEW_RESULT_IDENTITY_MISMATCH")
+    if prepared.status == "DEFERRED":
+        raise CreativeSourcePreviewDeferred(prepared)

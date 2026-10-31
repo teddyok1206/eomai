@@ -10,6 +10,7 @@ from eom_catalog_contracts.creative_learning_continuation import (
     CreativeLearningExecutionScope,
     CreativeLearningParallelContinuation,
 )
+from eom_catalog_service.creative_cohort_execution import CreativeCohortProgress
 from eom_catalog_service.creative_cohort_parallel_execution import (
     CreativeCohortParallelExecutionService,
 )
@@ -72,7 +73,18 @@ def driver_case(monkeypatch, *, count=12, limit=None):
             source.state = "VERIFIED"
 
     def progress(state, current, verified_count, **kwargs):
-        return NS(state=state, verified_count=verified_count, **kwargs)
+        return CreativeCohortProgress(
+            cohort_id=scope.cohort_id,
+            state=state,
+            verified_count=verified_count,
+            target_count=count,
+            external_number=None,
+            workflow_id=None,
+            item_revision_id=None,
+            analysis_run_id=None,
+            graph_snapshot_revision_id=None,
+            **kwargs,
+        )
 
     owner = NS(
         scope=scope,

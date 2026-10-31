@@ -494,3 +494,34 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
   현재 source PASS를 운영 검색 전환이나 전체 기출 GPU 완료로 간주하지 않는다.
 - 다음 연결에서는 기존 immutable numeric runtime bundle와 CUDA space를 보존하는지 확인한다.
   metadata-only release로 GPU 모델·precision·숫자 계산을 바꾸거나 같은520개를 재생성하지 않는다.
+
+## Native owner4 연결 검증과 사용자가 정한 우선순위 — 14:24 UTC
+
+- `39557cbf`에서 기존 native admission/ownership/coordinator/Artifact publisher/Registry를
+  metadata4에 연결했다. INDEX 숫자 Job/input/result1, 모델·공간·기출/창작 binding3는 유지한다.
+- 집중 source unit **298 PASS**, 새 metadata dispatch9건 포함. 변경 core29파일 mypy PASS,
+  Ruff/formatter/schema generator PASS. 이 중 일부 검사는 아래 창작 복구 후보와 함께 실행됐다.
+- disposable PostgreSQL에서 실제 public3/native4 완료·중단 복구 **6 PASS**, 별도3→4 승격
+  **1 PASS**. 승격 전후 숫자 Job·row·기존 binding origin이 같고 model forward는 합계1회다.
+  테스트의 IAM/report/model은 합성이므로 실제 V11 AI 생성이나 사용자 검색 승인으로 확대하지 않는다.
+- `/tmp/eom-api-testdb-20261031140148_677539ab` cleanup PASS. 운영 DB 테스트/이력 보정0.
+- 14:00 원 기출 GPU 등록93/520. 14:06 현재 public CUDA index의 전체 binding140에는 창작도
+  포함되므로140/520으로 표시하지 않는다. public QUERY 보호 설정도 동일 public-solution
+  namespace다. 서비스 active/인덱스 존재만으로 실제 HTTPS 사용자 검색 PASS를 선언하지 않는다.
+- 사용자는 3슬롯 복구와 **부분 coverage에서의 공통 검색 운영 전환을 우선** 요청했다.
+  전체520 완료 전에도 전환하되 미준비 문항·부분 검색 모집단을 숨기지 않는다. 구형 벡터 삭제는
+  원래대로 전체 coverage/실제 검색/소비자 조사를 통과한 뒤에만 수행한다.
+
+### 창작 3슬롯 복구 후보
+
+- owner는08:22 UTC부터 기술 실패 상태이며14:10 active lease0. 마지막 분석 Job은08:18:42
+  슬롯06 성공이다. 사용량 소진 때문이라는 증거는 없으며 정상 3슬롯 연속 실행도 아니다.
+- 원본11400의 고정 SHA/OLE 서명 확인 후 공식 Catalog 변환 경로2회 재현:
+  `OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING`. 원본·기존 성공/실패 이력 변경0.
+- 설계: `docs/architecture/CREATIVE_SOURCE_PREVIEW_FAILURE_ISOLATION_2026-10-31.md`.
+  local owner 결과를 schema-first로 구분하고, 정확한 source revision/edition의 산출물 없음만
+  deferred로 남긴다. 나머지 source 처리와3슬롯 기존 claim을 계속하며 권한/해시/Graph 오류는
+  여전히 전체 중단이다. deferred는 완료 수에 더하지 않고 전부 처리 후 잔여가 있으면 명시적 실패다.
+- 창작/변환 집중 **92 PASS**. 새 JSON Schema/Pydantic 동일 계약과 foreign identity 거부,
+  단일/전체 변환 실패에서 유한 종료, 기존 Graph 실패 중단, 상태 수 보존을 검사했다.
+- 이 시점에는 source 후보이며 isolated wheel/owner 배포·실제 3슬롯 재개 검증은 아직 남아 있다.
