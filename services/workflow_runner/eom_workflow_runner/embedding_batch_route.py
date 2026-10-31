@@ -11,6 +11,7 @@ from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
 from eom_catalog_service.embedding_device_index_pair import (
     EmbeddingDeviceIndexPair,
     EmbeddingDeviceIndexPin,
+    PublicSolutionDeviceIndexChoices,
 )
 from eom_workflow.embedding_device_routing import (
     EmbeddingDeviceRoutingDecision,
@@ -32,7 +33,7 @@ def validate_embedding_batch_route(
     allocation: EmbeddingGpuAllocationObservation,
     decision: EmbeddingDeviceRoutingDecision,
     batch: SupportedEmbeddingWorkBatchInput,
-    indexes: tuple[EmbeddingDeviceIndexPair, ...] = (),
+    indexes: tuple[EmbeddingDeviceIndexPair | PublicSolutionDeviceIndexChoices, ...] = (),
 ) -> tuple[tuple[ExperimentView, EmbeddingDeviceIndexPin], ...]:
     """Validate exact selected numerical identity before launch/reservation.
 
@@ -53,8 +54,13 @@ def validate_embedding_batch_route(
         if indexes:
             raise EmbeddingBatchRouteError()
         return ()
+    public_query = all(
+        isinstance(child.request, PublicSolutionQueryInput) for child in batch.children
+    )
     if not 1 <= len(indexes) <= len(VIEWS) or any(
-        type(pair) is not EmbeddingDeviceIndexPair for pair in indexes
+        type(pair) is not EmbeddingDeviceIndexPair
+        and not (public_query and type(pair) is PublicSolutionDeviceIndexChoices)
+        for pair in indexes
     ):
         raise EmbeddingBatchRouteError()
     by_view = {pair.view: pair for pair in indexes}

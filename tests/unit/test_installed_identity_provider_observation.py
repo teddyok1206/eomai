@@ -239,6 +239,38 @@ def test_root_capture_factory_never_opens_paths_for_nonroot(monkeypatch):
     assert not opened
 
 
+@pytest.mark.parametrize("kind", ("code", "configuration", "key_metadata"))
+def test_unrelated_sibling_change_does_not_invalidate_pinned_provider_file(observation, kind):
+    value, *_ = observation
+    member = value.code[0] if kind == "code" else getattr(value, kind)
+    assert_current(value)
+    sibling = member.path.parent / "unrelated-cache-metadata"
+    sibling.write_bytes(b"not authentication material")
+    assert_current(value)
+    sibling.unlink()
+    assert_current(value)
+
+
+@pytest.mark.parametrize("kind", ("code", "configuration", "key_metadata"))
+@pytest.mark.parametrize("mutation", ("mode", "replacement", "symlink"))
+def test_named_parent_identity_and_permissions_remain_pinned(observation, kind, mutation):
+    value, *_ = observation
+    member = value.code[0] if kind == "code" else getattr(value, kind)
+    assert_current(value)
+    parent = member.path.parent
+    if mutation == "mode":
+        parent.chmod(0o777)
+    else:
+        backup = parent.with_name(parent.name + "-previous")
+        parent.rename(backup)
+        if mutation == "symlink":
+            parent.symlink_to(backup, target_is_directory=True)
+        else:
+            parent.mkdir(mode=0o755)
+    with pytest.raises(OwnerSessionTransportError, match=r"^OWNER_SESSION_PROVIDER_UNAVAILABLE$"):
+        assert_current(value)
+
+
 def test_fixed_code_inventory_contains_no_key_or_caller_selected_member():
     members = module.identity_provider_code_members()
     assert members == tuple(sorted(set(members)))

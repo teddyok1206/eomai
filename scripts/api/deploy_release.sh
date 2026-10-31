@@ -126,6 +126,18 @@ if [[ "$ACTION" == "install" && \
   fail "Scoped API release is active; review and retire its managed drop-in before shared installation"
 fi
 
+# A compatible hotfix can be built from a clean linked worktree without moving
+# main or packaging unrelated migrations. Installation still owns the main root.
+if [[ "$ACTION" == build ]]; then
+  BUILD_CHECKOUT_ROOT="$("${GIT}" rev-parse --show-toplevel)"
+  [[ "$("${GIT}" -C "$BUILD_CHECKOUT_ROOT" rev-parse --path-format=absolute --git-common-dir)" == \
+     "$("${GIT}" -C "$REPOSITORY_ROOT" rev-parse --path-format=absolute --git-common-dir)" ]] || \
+    fail "build checkout must belong to the EOM repository"
+  REPOSITORY_ROOT="$BUILD_CHECKOUT_ROOT"
+  WORKFLOW_RUNNER_HOLD_LIBRARY="${REPOSITORY_ROOT}/scripts/api/workflow_runner_deployment_hold.sh"
+  RELEASE_OPERATOR_LIBRARY="${REPOSITORY_ROOT}/scripts/api/release_operator_boundary.sh"
+fi
+
 [[ -r "${WORKFLOW_RUNNER_HOLD_LIBRARY}" ]] || fail "workflow runner hold helper is unavailable"
 # shellcheck source=scripts/api/workflow_runner_deployment_hold.sh
 source "${WORKFLOW_RUNNER_HOLD_LIBRARY}"
@@ -834,6 +846,9 @@ for candidate in "${EXPECTED_BRANCHES[@]}"; do
     break
   fi
 done
+if [[ "$ACTION" == build && "$CURRENT_BRANCH" == hotfix/* ]]; then
+  branch_allowed=true
+fi
 [[ "${branch_allowed}" == true ]] || fail "branch mismatch"
 [[ -x "${API_PYTHON}" ]] || fail "isolated eom-api Python is unavailable"
 

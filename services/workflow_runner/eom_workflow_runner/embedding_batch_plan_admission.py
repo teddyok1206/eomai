@@ -21,8 +21,14 @@ from eom_catalog_contracts.public_solution_reference import (
 )
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import ApprovedReferenceItemAnchor
-from eom_catalog_service.embedding_device_index_pair import EmbeddingDeviceIndexPair
-from eom_catalog_service.embedding_device_index_read import resolve_embedding_device_index_pair
+from eom_catalog_service.embedding_device_index_pair import (
+    EmbeddingDeviceIndexPair,
+    PublicSolutionDeviceIndexChoices,
+)
+from eom_catalog_service.embedding_device_index_read import (
+    resolve_embedding_device_index_pair,
+    resolve_public_solution_device_indexes,
+)
 from eom_catalog_service.embedding_registry_catalog_adapter import CatalogEmbeddingRegistryVerifier
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryActor,
@@ -93,7 +99,7 @@ class ResolvedEmbeddingBatchPlanSources:
     selection: SupportedEmbeddingBatchSelection
     policy: EmbeddingDeviceRoutingPolicy
     sources: ResolvedEmbeddingLookup
-    indexes: tuple[EmbeddingDeviceIndexPair, ...] = ()
+    indexes: tuple[EmbeddingDeviceIndexPair | PublicSolutionDeviceIndexChoices, ...] = ()
 
 
 class CatalogEmbeddingBatchPlanAdmission:
@@ -217,7 +223,7 @@ class CatalogEmbeddingBatchPlanAdmission:
         session: Session,
         selection: SupportedEmbeddingBatchSelection,
         reader: PinnedArtifactReadContext,
-    ) -> tuple[EmbeddingDeviceIndexPair, ...]:
+    ) -> tuple[EmbeddingDeviceIndexPair | PublicSolutionDeviceIndexChoices, ...]:
         """Both exact device populations before allocation; pins are not authority."""
         if not isinstance(selection, EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14):
             return ()
@@ -244,8 +250,13 @@ class CatalogEmbeddingBatchPlanAdmission:
                     )
                 )
                 intents.append(EmbeddingRegistryRead(replace(scope, namespace=namespace), row))
+            resolve = (
+                resolve_public_solution_device_indexes
+                if isinstance(selection, EmbeddingBatchSelectionV14)
+                else resolve_embedding_device_index_pair
+            )
             resolved.append(
-                resolve_embedding_device_index_pair(
+                resolve(
                     session,
                     self.caller,
                     cpu_owner=owners[0],

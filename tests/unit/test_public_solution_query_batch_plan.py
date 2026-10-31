@@ -7,7 +7,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityRequest
-from eom_identifiers import sha256_bytes
+from eom_identifiers import content_sha256, sha256_bytes
 from eom_workflow.embedding_batch_plan import (
     EmbeddingBatchPlanRequest,
     EmbeddingBatchRoute,
@@ -299,3 +299,79 @@ def test_public_parent_binds_only_numeric_batch2_and_stages_exact_bytes(tmp_path
     )
     with pytest.raises(ValueError, match="BINDING_INVALID"):
         prepare_reference_query_batch_binding(value.case.request, value.route, (wrong,))
+
+
+@pytest.mark.parametrize("status,device", (("ACQUIRED", "CUDA"), ("BUSY", "CPU")))
+def test_public_route_uses_only_selected_device_pin_with_independent_coverage(status, device):
+    from eom_catalog_contracts.embedding_work_batch import PublicSolutionWorkBatchInput
+    from eom_catalog_contracts.inference_transfer_embedding import EmbeddingSpace
+    from eom_catalog_service.embedding_device_index_pair import (
+        EmbeddingDeviceIndexPin,
+        PublicSolutionDeviceIndexChoices,
+    )
+    from eom_workflow_runner.embedding_batch_route import validate_embedding_batch_route
+
+    from tests.unit.inference_transfer_embedding_fixtures import encoding_identity
+    from tests.unit.test_public_solution_work_batch import public_batch_body
+
+    value = public_parent_route_case(status)
+    resources = value.decision.selected.profile.resource_profile
+    body = public_batch_body(count=1, device=device)
+    body.update(
+        scope=value.case.request.scope.model_dump(mode="json"),
+        routing_decision_sha256=value.decision.decision_sha256,
+        resource_profile_sha256=resources.resource_profile_sha256,
+        timeout_seconds=min(resources.timeout_seconds, 180),
+    )
+    body["children"][0]["scope_sha256"] = value.case.request.scope.scope_sha256
+    body["children"][0]["request"].update(
+        batch_size=resources.batch_size, threads=resources.threads
+    )
+    query = seal(
+        value.decision.selected.profile.space.model_dump(mode="json") | {"purpose": "QUERY"},
+        "space_sha256",
+    )
+    request = body["children"][0]["request"]
+    request["spaces"] = {
+        "document": value.decision.selected.profile.space.model_dump(mode="json"),
+        "query": query,
+    }
+    for row in request["rows"]:
+        row["encoding"] = encoding_identity(
+            row["text"],
+            EmbeddingSpace.model_validate(query),
+            storage_partition=value.case.request.scope.storage_partition,
+        ).model_dump(mode="json")
+    request["rows"].sort(key=lambda row: row["encoding"]["encoding_sha256"])
+    request["input_set_sha256"] = content_sha256([row["encoding"] for row in request["rows"]])
+    body["children"][0]["request"] = seal(body["children"][0]["request"], "request_sha256")
+    batch = PublicSolutionWorkBatchInput.model_validate(seal(body, "request_sha256"))
+    pair = value.case.selection.index_pairs[0]
+
+    def pin(row):
+        index = row.index
+        return EmbeddingDeviceIndexPin(
+            index.index_id,
+            index.index_revision_id,
+            index.index_manifest,
+            index.index_sha256,
+            index.spaces.document,
+        )
+
+    choices = PublicSolutionDeviceIndexChoices(
+        cpu=pin(pair.cpu),
+        cuda=pin(pair.cuda),
+        storage_partition=pair.cpu.index.storage_partition,
+        view="CONCRETE_FACETS",
+        recipe_sha256=pair.cpu.recipe.recipe_sha256,
+        cpu_target_count=136,
+        cuda_target_count=156,
+    )
+    selected = validate_embedding_batch_route(
+        policy=value.case.policy,
+        allocation=value.route.observation,
+        decision=value.decision,
+        batch=batch,
+        indexes=(choices,),
+    )
+    assert selected == (("CONCRETE_FACETS", choices.select(device)),)
