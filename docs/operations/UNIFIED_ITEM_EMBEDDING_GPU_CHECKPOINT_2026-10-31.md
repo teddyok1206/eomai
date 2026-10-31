@@ -1,5 +1,48 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## QUERY source closure — 2026-10-31 17:27 UTC
+
+- native request4/read4 경계는 `1d40677cb9df7b044fddbc8d1424a239e5a967b7`로
+  커밋·푸시했다. build-only 3개 wheel의 RECORD PASS이며 운영 설치/활성화는 하지 않았다.
+  임시 설치본에서 production10개 모듈의 실제 import origin이 wheel인 것을 확인하고
+  설치 resource·native request·source proof·Artifact 저장/복구 **51 PASS**를 검증했다.
+  모델/수치 runtime이나 운영 API를 덮어쓰지 않았다.
+- registered public QUERY의 parent1.5/preparation3를 protocol-first로 추가했다.
+  새 source anchor와 index3/4를 담는 metadata만 확장한다. 기출·창작의 기존 parent1.4/
+  preparation2, allocation/route/bound1과 숫자 batch2/QUERY2는 그대로 유지한다.
+  actual source 준비가 새 proof를 요구할 때만 새 family를 선택하며 재전송은 저장된
+  원본 family/pointer/hash를 사용한다. 과거 pointer에 새 schema 이름을 붙이지 않는다.
+- Orchestrator file-set owner의 `find_published_primary_member`는 기존 검증 결과의
+  primary member schema/media/hash만 typed pointer로 제공한다. 기존 find 결과/권한
+  책임은 변하지 않으며 bytes를 다시 읽거나 저장하지 않는다. public preparation과
+  selection 재전송 두 곳에서 원래 schema를 보존하는 데 사용한다.
+- Catalog의 DB 문항 선택은 accepted V11 entry2도 기존 공식 capture에서만 받는다.
+  CPU/GPU public index3/4의 독립된 coverage와 공유 source proof를 검증한다. 기존
+  exact-target pair API는 다른 metadata family를 거부하는 기존 의미를 유지한다.
+- 관련 신·구 source/route/batch/control/resource/의존 경계 **795 PASS**:
+  `/tmp/eom-registered-query-parent15-final-unit-20261031.log`.
+  core35개 strict mypy, Ruff/format, schema generator `--check` 및 diff PASS.
+  공통 입력 동등성·최종 API/OpenAPI/Web alignment 별도90 PASS:
+  `/tmp/eom-registered-query-final-api-basis-20261031.log`.
+- guarded 임시 PostgreSQL에서 **18 PASS**:
+  `/tmp/eom-registered-query-parent15-complete-pg-fixed-20261031.log`.
+  실제 parent1.5 Job/protocol SHA/append-only journal, 동시 allocation winner1,
+  중단 rollback·prefix 재개·replay·FAILED 보존과 public3/registered4 preparation 동시성을
+  검사했다. parent SUCCEEDED는 계획 binding만 뜻하며 numerical success가 아니다.
+  source/child-admission seam은 synthetic이라고 명시했다.
+  처음2건은 시험 데이터의 model revision이 선택한 route와 달라 기존 physical guard가
+  거부했다. guard를 완화하지 않고 fixture를 exact route space에 맞췄고 실패 log도 남겼다.
+- 앞선 임시 DB와 이번 `/tmp/eom-api-testdb-20261031171822_935af06a`는 official marker
+  guard cleanup으로 제거했다. 운영 DB 테스트0, 운영 migration0, 구 벡터 삭제0이다.
+- **아직 운영 활성화 완료가 아니다.** 다음은 INDEX service preparation의 기존 plan3
+  선택과 `document_embedding_parent_preparation`의 INDEX parent1.3 anchor를 actual entry2/
+  request4로 연결하는 일이다. 단위 typed completion4 지원만으로 자동 INDEX4 producer가
+  이미 켜졌다고 주장하지 않는다. 그 closure와 compatible receiver 설치를 확인한 뒤
+  정상 GPU drain 경계에서 전환하며, 현재 기출 CUDA 실행은 보존한다.
+- 실제 승인 AI의 base2/V11 생성·Graph/증분 등록, 실제 사용자 common QUERY/read/replay,
+  전체 frozen520 GPU 정식 저장/무결성, 구 accepted/mixed 소비자 retirement/삭제가 남아 있다.
+  전체 goal은 ACTIVE이며 이번 source 체크포인트를 전체 완료로 축소하지 않는다.
+
 ## 후속 체크포인트 — 2026-10-31 17:09 UTC
 
 - 16:47:52 UTC에 새 CUDA Workflow `workflow_fba5e1e76bc641eaa4ebfc051983e961`의

@@ -52,7 +52,7 @@ from eom_workflow.native_embedding_backend_selection import (
     native_embedding_backend_selection_schema,
 )
 from eom_workflow.reference_query_execution import (
-    ReferenceQueryWorkflowRequestV3,
+    PublicReferenceQueryWorkflowRequest,
     SupportedReferenceQueryWorkflowRequest,
     parse_supported_reference_query_workflow_request,
 )
@@ -61,6 +61,7 @@ from eom_workflow.schemas import local_embedding_admission_schema_registry
 if TYPE_CHECKING:
     from eom_workflow.embedding_batch_plan_v13 import EmbeddingBatchSelectionV13
     from eom_workflow.embedding_batch_plan_v14 import EmbeddingBatchSelectionV14
+    from eom_workflow.embedding_batch_plan_v15 import EmbeddingBatchSelectionV15
 
 BATCH_PLAN_PROTOCOL = "embedding-batch-plan/1.0"
 BATCH_PLAN_SCHEMA_REF = "eom://schemas/workflow/embedding-batch-plan/1.0"
@@ -224,7 +225,8 @@ def validate_embedding_batch_plan_control_values(
     request: EmbeddingBatchPlanRequestValues,
     selection: EmbeddingBatchSelectionValues
     | EmbeddingBatchSelectionV13
-    | EmbeddingBatchSelectionV14,
+    | EmbeddingBatchSelectionV14
+    | EmbeddingBatchSelectionV15,
     policy: EmbeddingDeviceRoutingPolicy,
 ) -> None:
     """One value closure shared by explicitly parsed wire versions; not source authority."""
@@ -386,7 +388,7 @@ def validate_embedding_batch_query_context_values(
     """Shared closure after explicit wire parsing; not source or execution authority."""
     decision = EmbeddingDeviceRoutingDecision.model_validate(decision)
     request = parse_supported_reference_query_workflow_request(request)
-    if isinstance(request, ReferenceQueryWorkflowRequestV3):
+    if isinstance(request, PublicReferenceQueryWorkflowRequest):
         raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
     context, query, profile = request.context_request, selection.query, decision.selected.profile
     _require(

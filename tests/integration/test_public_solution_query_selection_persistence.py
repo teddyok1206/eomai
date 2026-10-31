@@ -17,16 +17,18 @@ from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
 from tests.unit.inference_transfer_embedding_fixtures import seal
+from tests.unit.test_public_solution_index_assembly import setup
 from tests.unit.test_public_solution_query_owner_configuration import public as public
 from tests.unit.test_public_solution_query_selection import public_selection_case
 from tests.unit.test_reference_query_owner_admission import source as source
 from tests.unit.test_reference_query_routed_owner_configuration import selected as selected
+from tests.unit.test_registered_public_solution_index import registered_index_entry
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
 
-@pytest.fixture
-def prepared(guarded_engine, tmp_path, monkeypatch, public):
+@pytest.fixture(params=[False, True], ids=["public3", "registered4"])
+def prepared(guarded_engine, tmp_path, monkeypatch, public, request):
     assert guarded_engine.dialect.name == "postgresql"
     artifacts = tmp_path / "pg-artifacts"
     artifacts.mkdir(mode=0o700)
@@ -38,13 +40,19 @@ def prepared(guarded_engine, tmp_path, monkeypatch, public):
             nas_artifact_root=artifacts,
         ),
     )
-    return public_selection_case(
+    value = public_selection_case(
         tmp_path,
         monkeypatch,
         public,
         publisher=publisher,
         identity=uuid4().hex,
+        entries=(*setup()[0], registered_index_entry()) if request.param else None,
+        registered_devices=("CUDA",) if request.param else (),
     )
+    value.expected_parent_protocol = (
+        "embedding-batch-plan/1.5" if request.param else "embedding-batch-plan/1.4"
+    )
+    return value
 
 
 def test_public_prepare_same_key_concurrently_returns_one_original_revision_without_dispatch(
@@ -60,7 +68,7 @@ def test_public_prepare_same_key_concurrently_returns_one_original_revision_with
         one, two = tuple(pool.map(lambda _ordinal: prepare(), range(2)))
     assert one.manifest == two.manifest and one.preparation == two.preparation
     assert one.selection == two.selection
-    assert one.selection.schema_version == "embedding-batch-plan/1.4"
+    assert one.selection.schema_version == value.expected_parent_protocol
     key = routed_reference_query_preparation_key(
         value.app.cpu.identity.capture.operator_id,
         value.request.idempotency_key,

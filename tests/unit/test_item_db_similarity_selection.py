@@ -26,9 +26,9 @@ from tests.unit.test_public_solution_similarity_contracts import public_similari
 ERRORS = (ValueError, SchemaError)
 
 
-def selected_case(*, pinned=False):
+def selected_case(*, pinned=False, source=None):
     context = public_similarity_case()[1]
-    source = context.request.anchor.source
+    source = context.request.anchor.source if source is None else source
     key = "studio:db-similarity:synthetic-request"
     op = "queryprepare_" + content_sha256({"purpose": "ITEM_DATABASE_SEARCH/1.0", "key": key})[7:39]
     selection = ItemDbGraphSelection(
@@ -265,13 +265,18 @@ def test_revoked_identity_stops_before_any_source_or_index_work():
 
 
 @pytest.mark.parametrize("pinned", (False, True))
-def test_successful_resolution_keeps_original_source_and_fences_both_ends(pinned):
+@pytest.mark.parametrize("registered", (False, True))
+def test_successful_resolution_keeps_original_source_and_fences_both_ends(pinned, registered):
     from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
     from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryLookup
 
     from tests.unit.test_public_solution_index_assembly import setup
+    from tests.unit.test_registered_public_solution_index import registered_index_entry
 
-    value = selected_case(pinned=pinned)
+    registered_entry = registered_index_entry() if registered else None
+    value = selected_case(
+        pinned=pinned, source=None if registered_entry is None else registered_entry.source
+    )
     service = object.__new__(module.CatalogItemDbSimilaritySelection)
     root = MagicMock()
     session = root.__enter__.return_value
@@ -285,7 +290,7 @@ def test_successful_resolution_keeps_original_source_and_fences_both_ends(pinned
     )
     # The real public entry's remaining fields are already covered by its own
     # schema tests; this leaf only tests adapter selection and identity closure.
-    entry = PublicSolutionEmbeddingEntry.model_construct(
+    entry = registered_entry or PublicSolutionEmbeddingEntry.model_construct(
         source=value.source, public_solution=NS(status="AVAILABLE")
     )
     service.owner = NS(

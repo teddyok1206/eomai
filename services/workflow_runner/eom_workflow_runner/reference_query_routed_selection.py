@@ -24,6 +24,9 @@ from eom_catalog_contracts.reference_query_prepare import (
 from eom_catalog_contracts.reference_query_prepare import (
     parse_single_reference_query_prepare_request as parse_supported_reference_query_prepare_request,
 )
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    PublicSolutionSimilarityRequestV4,
+)
 from eom_catalog_contracts.similarity_context import ApprovedReferenceItemAnchor
 from eom_catalog_service.embedding_registry_ports import (
     AuthoringReferencePurpose,
@@ -55,13 +58,16 @@ from eom_workflow.embedding_batch_plan_family import (
 )
 from eom_workflow.embedding_batch_plan_v12 import (
     BATCH_PLAN_V12_PROTOCOL,
-    BATCH_SELECTION_V12_SCHEMA_REF,
     EmbeddingBatchSelectionV12,
 )
 from eom_workflow.embedding_batch_plan_v14 import (
     BATCH_PLAN_V14_PROTOCOL,
-    BATCH_SELECTION_V14_SCHEMA_REF,
     EmbeddingBatchSelectionV14,
+)
+from eom_workflow.embedding_batch_plan_v15 import (
+    BATCH_PLAN_V15_PROTOCOL,
+    EmbeddingBatchPlanRequestV15,
+    EmbeddingBatchSelectionV15,
 )
 from eom_workflow.embedding_device_routing import EmbeddingDeviceRoutingPolicy
 from eom_workflow.reference_query_execution import ReferenceQueryExecutionPolicy
@@ -74,6 +80,7 @@ from eom_workflow.reference_query_routed_owner_configuration import (
 from eom_workflow.reference_query_routed_preparation import (
     MAX_ROUTED_QUERY_PREPARATION_BYTES,
     PublicRoutedReferenceQueryPreparation,
+    RegisteredPublicRoutedReferenceQueryPreparation,
     RoutedReferenceQueryPreparation,
     SupportedRoutedReferenceQueryPreparation,
     parse_supported_reference_query_routed_preparation,
@@ -156,7 +163,7 @@ def _purpose(
 class PreparedRoutedReferenceQuerySelection:
     manifest: ArtifactMemberPointer
     preparation: SupportedRoutedReferenceQueryPreparation
-    selection: EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14
+    selection: EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14 | EmbeddingBatchSelectionV15
     operation: CatalogEmbeddingBatchExecution
     routing_policy: EmbeddingDeviceRoutingPolicy
 
@@ -370,7 +377,7 @@ class CatalogRoutedReferenceQuerySelection:
 
     def _new_public_selection(
         self, request: ReferenceQueryPrepareRequestV4, key: str
-    ) -> EmbeddingBatchSelectionV14:
+    ) -> EmbeddingBatchSelectionV14 | EmbeddingBatchSelectionV15:
         """One bulk canonical index/source read per device; no per-item full-index scan."""
         first = PublicQuerySourceSelection(request, 0)
         with self.publisher.sessions.begin() as session:
@@ -398,11 +405,18 @@ class CatalogRoutedReferenceQuerySelection:
                     )
                 )
             cpu, cuda = contexts
-            _require(
-                tuple(row.anchor for row in cpu) == tuple(row.anchor for row in cuda)
-                and all(row.views == cpu[0].views for row in cpu)
-                and all(row.views == cuda[0].views for row in cuda)
-            )
+            _require(tuple(row.anchor for row in cpu) == tuple(row.anchor for row in cuda))
+            # Context3/4 have distinct model classes but may retain the same
+            # exact index3 member. Compare their small pointer values, not class
+            # equality; never retag the saved Artifact or context for a replay.
+            for device_contexts in (cpu, cuda):
+                original_views = [view.model_dump(mode="json") for view in device_contexts[0].views]
+                _require(
+                    all(
+                        [view.model_dump(mode="json") for view in row.views] == original_views
+                        for row in device_contexts
+                    )
+                )
             scope_body = dict(
                 actor_kind="OPERATOR",
                 actor_id=caller.operator_id,
@@ -410,8 +424,13 @@ class CatalogRoutedReferenceQuerySelection:
                 access_policy_sha256=request.policy_sha256,
             )
             scope_body["scope_sha256"] = content_sha256(scope_body)
+            registered = any(
+                isinstance(row, PublicSolutionSimilarityRequestV4)
+                for group in contexts
+                for row in group
+            )
             body = dict(
-                schema_version=BATCH_PLAN_V14_PROTOCOL,
+                schema_version=BATCH_PLAN_V15_PROTOCOL if registered else BATCH_PLAN_V14_PROTOCOL,
                 message_type="SELECTION",
                 purpose="REFERENCE_QUERY",
                 scope=scope_body,
@@ -434,7 +453,10 @@ class CatalogRoutedReferenceQuerySelection:
                     )
                 ],
             )
-            selected = EmbeddingBatchSelectionV14.model_validate(
+            selection_type = (
+                EmbeddingBatchSelectionV15 if registered else EmbeddingBatchSelectionV14
+            )
+            selected = selection_type.model_validate(
                 body | {"selection_sha256": content_sha256(body)}
             )
             self._authorize(session, first)
@@ -442,7 +464,7 @@ class CatalogRoutedReferenceQuerySelection:
 
     def _read_original_selection(
         self, pointer: ArtifactMemberPointer, request: RoutedQuerySourceSelection
-    ) -> EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14:
+    ) -> EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14 | EmbeddingBatchSelectionV15:
         with self.publisher.sessions.begin() as session:
             self._authorize(session, request)
             reader = PinnedArtifactReadContext.for_session(session, self.cpu.settings)
@@ -460,10 +482,22 @@ class CatalogRoutedReferenceQuerySelection:
                 max_bytes=512 * 1024,
             ).payload
             selected = parse_embedding_batch_selection(json.loads(raw))
-            _require(isinstance(selected, EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14))
-            assert isinstance(selected, EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14)
             _require(
-                isinstance(selected, EmbeddingBatchSelectionV14)
+                isinstance(
+                    selected,
+                    EmbeddingBatchSelectionV12
+                    | EmbeddingBatchSelectionV14
+                    | EmbeddingBatchSelectionV15,
+                )
+            )
+            assert isinstance(
+                selected,
+                EmbeddingBatchSelectionV12
+                | EmbeddingBatchSelectionV14
+                | EmbeddingBatchSelectionV15,
+            )
+            _require(
+                isinstance(selected, EmbeddingBatchSelectionV14 | EmbeddingBatchSelectionV15)
                 == isinstance(request, PublicQuerySourceSelection)
             )
             _require(canonical_json_bytes(selected) == raw)
@@ -473,10 +507,12 @@ class CatalogRoutedReferenceQuerySelection:
 
     @staticmethod
     def _require_requested_selection(
-        selection: EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14,
+        selection: EmbeddingBatchSelectionV12
+        | EmbeddingBatchSelectionV14
+        | EmbeddingBatchSelectionV15,
         requests: tuple[RoutedQuerySourceSelection, ...],
     ) -> None:
-        if isinstance(selection, EmbeddingBatchSelectionV14):
+        if isinstance(selection, EmbeddingBatchSelectionV14 | EmbeddingBatchSelectionV15):
             first = requests[0]
             _require(isinstance(first, PublicQuerySourceSelection))
             assert isinstance(first, PublicQuerySourceSelection)
@@ -602,11 +638,13 @@ class CatalogRoutedReferenceQuerySelection:
             else self.controls.find_routed_reference_query_preparation
         )
         pointer = finder(operator_id=operator_id, idempotency_key=idempotency_key)
-        selection: EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14
+        selection: (
+            EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14 | EmbeddingBatchSelectionV15
+        )
         prepared: SupportedRoutedReferenceQueryPreparation
         if pointer is None:
             selection_key = "routed-query-selection:" + intent[7:]
-            original_selection = self.controls.publisher.find_published(
+            original_selection = self.controls.publisher.find_published_primary_member(
                 idempotency_key=selection_key, artifact_type=BATCH_SELECTION_ARTIFACT_TYPE
             )
             if original_selection is None:
@@ -624,22 +662,11 @@ class CatalogRoutedReferenceQuerySelection:
                     selection, idempotency_key=selection_key
                 )
             else:
-                _require(original_selection.primary_file == "selection.json")
-                selected = ArtifactMemberPointer(
-                    artifact_id=original_selection.artifact_id,
-                    artifact_revision_id=original_selection.artifact_revision_id,
-                    member_path="selection.json",
-                    sha256=original_selection.primary_sha256,
-                    schema_ref=BATCH_SELECTION_V14_SCHEMA_REF
-                    if isinstance(first, PublicQuerySourceSelection)
-                    else BATCH_SELECTION_V12_SCHEMA_REF,
-                    media_type="application/json",
-                )
+                _require(original_selection.member_path == "selection.json")
+                selected = original_selection
                 selection = self._read_original_selection(selected, first)
             body = dict(
-                schema_version=BATCH_PLAN_V14_PROTOCOL
-                if isinstance(first, PublicQuerySourceSelection)
-                else BATCH_PLAN_V12_PROTOCOL,
+                schema_version=selection.schema_version,
                 message_type="REQUEST",
                 batch_id="embeddingbatch_"
                 + content_sha256(dict(operator_id=operator_id, key=idempotency_key))[7:39],
@@ -661,15 +688,23 @@ class CatalogRoutedReferenceQuerySelection:
             ):
                 _require(
                     isinstance(
-                        current.selection, EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14
+                        current.selection,
+                        EmbeddingBatchSelectionV12
+                        | EmbeddingBatchSelectionV14
+                        | EmbeddingBatchSelectionV15,
                     )
                 )
                 assert isinstance(
-                    current.selection, EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14
+                    current.selection,
+                    EmbeddingBatchSelectionV12
+                    | EmbeddingBatchSelectionV14
+                    | EmbeddingBatchSelectionV15,
                 )
                 self._require_requested_selection(current.selection, requests)
             body = dict(
-                schema_version="reference-query-routed-preparation/2.0"
+                schema_version="reference-query-routed-preparation/3.0"
+                if isinstance(parent, EmbeddingBatchPlanRequestV15)
+                else "reference-query-routed-preparation/2.0"
                 if isinstance(first, PublicQuerySourceSelection)
                 else "reference-query-routed-preparation/1.0",
                 operator_id=operator_id,
@@ -681,7 +716,12 @@ class CatalogRoutedReferenceQuerySelection:
                 parent=parent.model_dump(mode="json"),
             )
             if isinstance(first, PublicQuerySourceSelection):
-                prepared = PublicRoutedReferenceQueryPreparation.model_validate(
+                preparation_type = (
+                    RegisteredPublicRoutedReferenceQueryPreparation
+                    if isinstance(parent, EmbeddingBatchPlanRequestV15)
+                    else PublicRoutedReferenceQueryPreparation
+                )
+                prepared = preparation_type.model_validate(
                     body | {"preparation_sha256": content_sha256(body)}
                 )
                 pointer = self.controls.publish_public_routed_reference_query_preparation(
@@ -717,11 +757,17 @@ class CatalogRoutedReferenceQuerySelection:
             with admission.admit(session, prepared.parent) as current:
                 _require(
                     isinstance(
-                        current.selection, EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14
+                        current.selection,
+                        EmbeddingBatchSelectionV12
+                        | EmbeddingBatchSelectionV14
+                        | EmbeddingBatchSelectionV15,
                     )
                 )
                 assert isinstance(
-                    current.selection, EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14
+                    current.selection,
+                    EmbeddingBatchSelectionV12
+                    | EmbeddingBatchSelectionV14
+                    | EmbeddingBatchSelectionV15,
                 )
                 selection = current.selection
                 self._require_requested_selection(selection, requests)

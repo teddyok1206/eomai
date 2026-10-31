@@ -21,6 +21,7 @@ from eom_identifiers import (
     new_revision_id,
     sha256_file,
 )
+from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import Engine, select, text
 
 from eom_orchestrator.artifacts import commit_file_set_artifact, stage_file_set_artifact
@@ -153,6 +154,29 @@ class ControlFileSetPublisher:
         Current use-case authorization belongs to the caller. An existing
         incomplete or conflicting publication raises; it is never missing.
         """
+        found = self._find_published_primary(idempotency_key, artifact_type)
+        return None if found is None else found[0]
+
+    def find_published_primary_member(
+        self, *, idempotency_key: str, artifact_type: str
+    ) -> ArtifactMemberPointer | None:
+        """Original validated member schema, not a caller's guessed successor identity."""
+        found = self._find_published_primary(idempotency_key, artifact_type)
+        if found is None:
+            return None
+        published, schema_ref, media_type = found
+        return ArtifactMemberPointer(
+            artifact_id=published.artifact_id,
+            artifact_revision_id=published.artifact_revision_id,
+            member_path=published.primary_file,
+            sha256=published.primary_sha256,
+            schema_ref=schema_ref,
+            media_type=media_type,
+        )
+
+    def _find_published_primary(
+        self, idempotency_key: str, artifact_type: str
+    ) -> tuple[PublishedControlFileSet, str, str] | None:
         if type(idempotency_key) is not str or not 16 <= len(idempotency_key) <= 128:
             raise ControlPlaneError("CONTROL_FILE_SET_INVALID", "publication key is invalid")
         # Wait for an in-flight official publisher, not a partially committed
@@ -167,7 +191,12 @@ class ControlFileSetPublisher:
                 if job.task_type != artifact_type:
                     raise ControlPlaneError("CONTROL_FILE_SET_CONFLICT", "publication type differs")
                 job_id, request = job.job_id, job.request
-            return self._existing(job_id, request)
+            published = self._existing(job_id, request)
+            # _existing validated the exact immutable member set and bytes. Keep
+            # its metadata identity without another file read or latest lookup.
+            members = {member["file_name"]: member for member in request["members"]}
+            primary = members[published.primary_file]
+            return published, primary["schema_ref"], primary["media_type"]
 
     def read_published_revision(
         self, *, artifact_revision_id: str, artifact_type: str

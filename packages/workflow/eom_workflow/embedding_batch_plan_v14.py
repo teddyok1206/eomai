@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from functools import lru_cache
 from importlib.resources import files
-from typing import Any, ClassVar, Literal, Self
+from typing import TYPE_CHECKING, Any, ClassVar, Literal, Self
 
 from eom_catalog_contracts.embedding_model_recipe import same_embedding_payload_recipe
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
@@ -17,6 +17,9 @@ from eom_catalog_contracts.public_solution_reference import PublicSolutionSource
 from eom_catalog_contracts.public_solution_similarity import (
     PublicSolutionSimilarityPurpose,
     PublicSolutionSimilarityView,
+)
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    PublicSolutionSimilarityViewV4,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from jsonschema import Draft202012Validator, FormatChecker
@@ -40,8 +43,11 @@ from eom_workflow.embedding_device_routing import (
     EmbeddingDeviceRoutingDecision,
     EmbeddingDeviceRoutingPolicy,
 )
-from eom_workflow.reference_query_execution import ReferenceQueryWorkflowRequestV3
+from eom_workflow.reference_query_execution import PublicReferenceQueryWorkflowRequest
 from eom_workflow.schemas import local_embedding_admission_schema_registry
+
+if TYPE_CHECKING:
+    from eom_workflow.embedding_batch_plan_v15 import EmbeddingBatchSelectionV15
 
 BATCH_PLAN_V14_PROTOCOL = "embedding-batch-plan/1.4"
 BATCH_PLAN_V14_SCHEMA_REF = "eom://schemas/workflow/embedding-batch-plan/1.4"
@@ -115,23 +121,7 @@ class PublicSolutionQueryIndexPair(EmbeddingBatchPlanValue):
 
     @model_validator(mode="after")
     def exact_devices(self) -> Self:
-        cpu, cuda = self.cpu.index, self.cuda.index
-        require(
-            self.cpu.recipe == self.cuda.recipe
-            and cpu.storage_partition == cuda.storage_partition
-            and cpu.spaces.document.runtime.device == "CPU"
-            and cuda.spaces.document.runtime.device == "CUDA"
-            and cpu.spaces.document.runtime.execution_runtime_sha256
-            != cuda.spaces.document.runtime.execution_runtime_sha256
-            and cpu.spaces.document.space_sha256 != cuda.spaces.document.space_sha256
-            and same_embedding_payload_recipe(
-                cpu.spaces.document.model_spec, cuda.spaces.document.model_spec
-            )
-            and cpu.index_id != cuda.index_id
-            and cpu.index_revision_id != cuda.index_revision_id
-            and (cpu.index_manifest.artifact_id, cpu.index_manifest.artifact_revision_id)
-            != (cuda.index_manifest.artifact_id, cuda.index_manifest.artifact_revision_id)
-        )
+        validate_public_query_index_pair_values(self.cpu, self.cuda)
         return self
 
     def select(self, device: Literal["CPU", "CUDA"]) -> PublicSolutionSimilarityView:
@@ -158,20 +148,7 @@ class EmbeddingBatchSelectionV14(_PublicQueryPlanMessage):
 
     @model_validator(mode="after")
     def exact_selection(self) -> Self:
-        require(
-            self.scope.actor_kind == "OPERATOR"
-            and len({a.source.item_revision_id for a in self.anchors}) == len(self.anchors)
-            and self.source_classes == tuple(sorted(set(self.source_classes)))
-            and all(a.source.source_class in self.source_classes for a in self.anchors)
-            and self.graph_snapshot.manifest_sha256 == self.graph_snapshot.manifest_artifact.sha256
-            and all(
-                view.recipe == self.recipe
-                and view.index.storage_partition == self.scope.storage_partition
-                for pair in self.index_pairs
-                for view in (pair.cpu, pair.cuda)
-            )
-        )
-        validate_embedding_batch_value_hash(self, "selection_sha256")
+        validate_public_query_selection_values(self)
         return self
 
     @property
@@ -193,7 +170,8 @@ class EmbeddingBatchPlanRequestV14(EmbeddingBatchPlanRequestValues, _PublicQuery
 
 
 def validate_public_query_index_controls(
-    selection: EmbeddingBatchSelectionV14, policy: EmbeddingDeviceRoutingPolicy
+    selection: EmbeddingBatchSelectionV14 | EmbeddingBatchSelectionV15,
+    policy: EmbeddingDeviceRoutingPolicy,
 ) -> None:
     devices: tuple[Literal["CPU", "CUDA"], ...] = ("CPU", "CUDA")
     for device, profile in zip(devices, (policy.cpu.profile, policy.cuda.profile), strict=True):
@@ -206,10 +184,10 @@ def validate_public_query_index_controls(
 
 
 def validate_public_batch_query_context(
-    selection: EmbeddingBatchSelectionV14,
+    selection: EmbeddingBatchSelectionV14 | EmbeddingBatchSelectionV15,
     decision: EmbeddingDeviceRoutingDecision,
     ordinal: int,
-    request: ReferenceQueryWorkflowRequestV3,
+    request: PublicReferenceQueryWorkflowRequest,
 ) -> None:
     context, query, profile = request.context_request, selection.query, decision.selected.profile
     require(type(ordinal) is int and 0 <= ordinal < len(selection.anchors))
@@ -232,3 +210,47 @@ def validate_public_batch_query_context(
         and request.resource_profile == profile.resource_profile
         and request.runtime_bundle == profile.runtime_bundle
     )
+
+
+def validate_public_query_index_pair_values(
+    cpu_view: PublicSolutionSimilarityView | PublicSolutionSimilarityViewV4,
+    cuda_view: PublicSolutionSimilarityView | PublicSolutionSimilarityViewV4,
+) -> None:
+    """One numeric/device invariant; concrete carriers validate their own closed schemas."""
+    cpu, cuda = cpu_view.index, cuda_view.index
+    require(
+        cpu_view.recipe == cuda_view.recipe
+        and cpu.storage_partition == cuda.storage_partition
+        and cpu.spaces.document.runtime.device == "CPU"
+        and cuda.spaces.document.runtime.device == "CUDA"
+        and cpu.spaces.document.runtime.execution_runtime_sha256
+        != cuda.spaces.document.runtime.execution_runtime_sha256
+        and cpu.spaces.document.space_sha256 != cuda.spaces.document.space_sha256
+        and same_embedding_payload_recipe(
+            cpu.spaces.document.model_spec, cuda.spaces.document.model_spec
+        )
+        and cpu.index_id != cuda.index_id
+        and cpu.index_revision_id != cuda.index_revision_id
+        and (cpu.index_manifest.artifact_id, cpu.index_manifest.artifact_revision_id)
+        != (cuda.index_manifest.artifact_id, cuda.index_manifest.artifact_revision_id)
+    )
+
+
+def validate_public_query_selection_values(
+    selection: EmbeddingBatchSelectionV14 | EmbeddingBatchSelectionV15,
+) -> None:
+    require(
+        selection.scope.actor_kind == "OPERATOR"
+        and len({a.source.item_revision_id for a in selection.anchors}) == len(selection.anchors)
+        and selection.source_classes == tuple(sorted(set(selection.source_classes)))
+        and all(a.source.source_class in selection.source_classes for a in selection.anchors)
+        and selection.graph_snapshot.manifest_sha256
+        == selection.graph_snapshot.manifest_artifact.sha256
+        and all(
+            view.recipe == selection.recipe
+            and view.index.storage_partition == selection.scope.storage_partition
+            for pair in selection.index_pairs
+            for view in (pair.cpu, pair.cuda)
+        )
+    )
+    validate_embedding_batch_value_hash(selection, "selection_sha256")

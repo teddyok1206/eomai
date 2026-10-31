@@ -106,10 +106,36 @@ def test_control_file_set_publication_is_idempotent_and_exact(tmp_path: Path) ->
     primary = members[1].source
     image = members[0].source
 
+    assert (
+        publisher.find_published_primary_member(
+            idempotency_key=str(arguments["idempotency_key"]),
+            artifact_type=str(arguments["artifact_type"]),
+        )
+        is None
+    )
+
     first = publisher.publish(**arguments)
     second = publisher.publish(**arguments)
 
     assert second == first
+    pointer = publisher.find_published_primary_member(
+        idempotency_key=str(arguments["idempotency_key"]),
+        artifact_type=str(arguments["artifact_type"]),
+    )
+    assert pointer is not None
+    assert pointer.artifact_id == first.artifact_id
+    assert pointer.artifact_revision_id == first.artifact_revision_id
+    assert pointer.member_path == first.primary_file == "result.json"
+    assert pointer.sha256 == first.primary_sha256
+    assert pointer.schema_ref == members[1].schema_ref
+    assert pointer.media_type == members[1].media_type
+    assert (
+        publisher.find_published(
+            idempotency_key=str(arguments["idempotency_key"]),
+            artifact_type=str(arguments["artifact_type"]),
+        )
+        == first
+    )
     assert Path(first.nas_path, "result.json").read_bytes() == primary.read_bytes()
     assert Path(first.nas_path, "outputs/output.png").read_bytes() == image.read_bytes()
     with publisher.sessions() as session:
@@ -122,6 +148,18 @@ def test_control_file_set_publication_is_idempotent_and_exact(tmp_path: Path) ->
         assert not _contains_bytes(job.request)
         assert not _contains_bytes(revision.result)
         assert revision.content_bytes == primary.stat().st_size
+
+
+def test_original_primary_pointer_requires_the_complete_unchanged_file_set(tmp_path: Path) -> None:
+    publisher, _engine = _publisher(tmp_path)
+    arguments = _arguments(tmp_path)
+    saved = publisher.publish(**arguments)
+    Path(saved.nas_path, "outputs/output.png").write_bytes(b"corrupted local fixture")
+    with pytest.raises(ControlPlaneError, match="NAS member is invalid"):
+        publisher.find_published_primary_member(
+            idempotency_key=str(arguments["idempotency_key"]),
+            artifact_type=str(arguments["artifact_type"]),
+        )
 
 
 def test_file_set_read_by_exact_revision_rejects_wrong_type_and_storage(tmp_path: Path) -> None:

@@ -21,6 +21,10 @@ from eom_catalog_contracts.public_solution_embedding_index import (
     PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
     PublicSolutionEmbeddingIndex,
 )
+from eom_catalog_contracts.registered_public_solution_index import (
+    REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+    PublicSolutionEmbeddingIndexV4,
+)
 from eom_identifiers import content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from jsonschema.exceptions import ValidationError as SchemaError
@@ -96,7 +100,9 @@ def validate_resolved_embedding_index(
         member = ArtifactMemberPointer.model_validate(raw_similarity_contract_value(pointer))
     except (ValueError, TypeError, AttributeError, SchemaError):
         raise EmbeddingDeviceIndexPairError("EMBEDDING_DEVICE_INDEX_INVALID") from None
-    if isinstance(checked, PublicSolutionEmbeddingIndex):
+    if isinstance(checked, PublicSolutionEmbeddingIndexV4):
+        expected_schema = REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF
+    elif isinstance(checked, PublicSolutionEmbeddingIndex):
         expected_schema = PUBLIC_SOLUTION_INDEX_SCHEMA_REF
     elif isinstance(checked, MixedEmbeddingIndexManifest):
         expected_schema = MIXED_EMBEDDING_INDEX_SCHEMA_REF
@@ -149,8 +155,7 @@ def _validate_device_indexes(
     cpu_member, cpu_index = validate_resolved_embedding_index(cpu_member, cpu_index, "CPU")
     cuda_member, cuda_index = validate_resolved_embedding_index(cuda_member, cuda_index, "CUDA")
     if (
-        type(cpu_index) is not type(cuda_index)
-        or cpu_index.storage_partition != cuda_index.storage_partition
+        cpu_index.storage_partition != cuda_index.storage_partition
         or cpu_index.view != cuda_index.view
         or cpu_index.recipe != cuda_index.recipe
         or not same_embedding_payload_recipe(
@@ -193,6 +198,8 @@ def pair_embedding_device_indexes(
     cpu_member, cpu_index, cuda_member, cuda_index = _validate_device_indexes(
         cpu_member=cpu_member, cpu_index=cpu_index, cuda_member=cuda_member, cuda_index=cuda_index
     )
+    if type(cpu_index) is not type(cuda_index):
+        raise EmbeddingDeviceIndexPairError("EMBEDDING_DEVICE_INDEX_NAMESPACE_MISMATCH")
     cpu_targets, cuda_targets = (
         canonical_embedding_index_targets(cpu_index),
         canonical_embedding_index_targets(cuda_index),
@@ -233,9 +240,9 @@ def choose_public_solution_device_indexes(
     cpu_member, cpu_index, cuda_member, cuda_index = _validate_device_indexes(
         cpu_member=cpu_member, cpu_index=cpu_index, cuda_member=cuda_member, cuda_index=cuda_index
     )
-    if not isinstance(cpu_index, PublicSolutionEmbeddingIndex) or not isinstance(
-        cuda_index, PublicSolutionEmbeddingIndex
-    ):
+    if not isinstance(
+        cpu_index, PublicSolutionEmbeddingIndex | PublicSolutionEmbeddingIndexV4
+    ) or not isinstance(cuda_index, PublicSolutionEmbeddingIndex | PublicSolutionEmbeddingIndexV4):
         raise EmbeddingDeviceIndexPairError("EMBEDDING_DEVICE_INDEX_NAMESPACE_MISMATCH")
     cpu_targets, cuda_targets = (
         canonical_embedding_index_targets(cpu_index),

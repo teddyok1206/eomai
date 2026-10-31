@@ -75,7 +75,16 @@ def test_bulk_prepare_reads_one_real_canonical_index_and_keeps_source_order(
     assert official.call_count == 1
 
 
-def public_selection_case(tmp_path, monkeypatch, public, *, publisher=None, identity="a" * 32):
+def public_selection_case(
+    tmp_path,
+    monkeypatch,
+    public,
+    *,
+    publisher=None,
+    identity="a" * 32,
+    entries=None,
+    registered_devices=(),
+):
     body, routing, cpu_policy, cuda_policy, _primary = public
     if publisher is None:
         publication_root = tmp_path / "public-query-controls"
@@ -90,7 +99,7 @@ def public_selection_case(tmp_path, monkeypatch, public, *, publisher=None, iden
     ).member.model_dump(mode="json")
     config = PublicRoutedReferenceQueryOwnerConfiguration.model_validate(body)
     template = public_similarity_case()[0]
-    entries = setup()[0]
+    entries = setup()[0] if entries is None else entries
     by_id = {entry.source.item_revision_id: entry for entry in entries}
     capture = NS(operator_id="operator_" + "1" * 32)
     value = NS(deny=False, heads=Mock(), index_reads=Mock(), publisher=publisher, engine=engine)
@@ -148,6 +157,9 @@ def public_selection_case(tmp_path, monkeypatch, public, *, publisher=None, iden
             update={
                 "artifact_id": "artifact_" + seed * 32,
                 "artifact_revision_id": "rev_" + seed * 32,
+                "schema_ref": "eom://schemas/knowledge/embedding-index-manifest/4.0"
+                if policy.spaces.document.runtime.device in registered_devices
+                else index.index_manifest.schema_ref,
             }
         )
         registered[ns.space_sha256] = RegisteredEmbeddingIndexRead(
@@ -160,7 +172,7 @@ def public_selection_case(tmp_path, monkeypatch, public, *, publisher=None, iden
             template.graph_snapshot.graph_snapshot_revision_id,
             template.policy_revision_id,
             template.policy_sha256,
-            2,
+            len(entries),
             content_sha256({"synthetic_bindings": seed}),
         )
         owners.append(owner)
@@ -205,18 +217,34 @@ def public_selection_case(tmp_path, monkeypatch, public, *, publisher=None, iden
     return value
 
 
-@pytest.fixture
-def chosen(public, tmp_path, monkeypatch):
-    value = public_selection_case(tmp_path, monkeypatch, public)
+@pytest.fixture(params=[False, True], ids=["public3", "registered4"])
+def chosen(public, tmp_path, monkeypatch, request):
+    from tests.unit.test_registered_public_solution_index import registered_index_entry
+
+    value = public_selection_case(
+        tmp_path,
+        monkeypatch,
+        public,
+        entries=(*setup()[0], registered_index_entry()) if request.param else None,
+        registered_devices=("CUDA",) if request.param else (),
+    )
+    value.expected_parent_protocol = (
+        "embedding-batch-plan/1.5" if request.param else "embedding-batch-plan/1.4"
+    )
+    value.expected_preparation_protocol = (
+        "reference-query-routed-preparation/3.0"
+        if request.param
+        else "reference-query-routed-preparation/2.0"
+    )
     yield value
     value.engine.dispose()
 
 
-def test_public_selection_publishes_parent14_preparation2_and_replay_never_selects_latest(chosen):
+def test_public_selection_preserves_its_family_and_replay_never_selects_latest(chosen):
     value = chosen
     first = value.app.prepare_public(value.request)
-    assert first.selection.schema_version == "embedding-batch-plan/1.4"
-    assert first.preparation.schema_version == "reference-query-routed-preparation/2.0"
+    assert first.selection.schema_version == value.expected_parent_protocol
+    assert first.preparation.schema_version == value.expected_preparation_protocol
     assert (
         tuple(anchor.source.item_revision_id for anchor in first.selection.anchors)
         == value.request.source_item_revision_ids

@@ -204,8 +204,8 @@ def test_public_query_parent_schema_is_mirrored_and_pinned():
     assert sha256_bytes(raw) == BATCH_PLAN_V14_SCHEMA_SHA256
 
 
-def public_parent_route_case(status="ACQUIRED"):
-    case = public_parent_case()
+def public_parent_route_case(status="ACQUIRED", *, case_factory=public_parent_case):
+    case = case_factory()
     allocation = new_embedding_batch_allocation_candidate(
         case.request, case.policy, now_monotonic_ns=time.monotonic_ns()
     )

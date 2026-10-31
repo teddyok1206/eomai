@@ -21,6 +21,7 @@ from eom_workflow.embedding_batch_plan_family import (
     validate_embedding_batch_binding,
 )
 from eom_workflow.embedding_batch_plan_v14 import EmbeddingBatchPlanRequestV14
+from eom_workflow.embedding_batch_plan_v15 import EmbeddingBatchPlanRequestV15
 
 from eom_workflow_runner.reference_query_batch_material import PreparedBatchReferenceQuery
 
@@ -45,7 +46,7 @@ def prepare_reference_query_batch_binding(
         )
     ):
         raise ValueError("REFERENCE_QUERY_BATCH_BINDING_INVALID")
-    public = isinstance(parent, EmbeddingBatchPlanRequestV14)
+    public = isinstance(parent, EmbeddingBatchPlanRequestV14 | EmbeddingBatchPlanRequestV15)
     if any(isinstance(value.request, PublicSolutionQueryInput) != public for value in materials):
         raise ValueError("REFERENCE_QUERY_BATCH_BINDING_INVALID")
     scope = parent.scope

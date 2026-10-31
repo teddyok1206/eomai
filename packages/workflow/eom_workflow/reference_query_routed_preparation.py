@@ -23,6 +23,10 @@ from eom_workflow.embedding_batch_plan_v14 import (
     EmbeddingBatchPlanRequestV14,
     embedding_batch_public_query_plan_schema_registry,
 )
+from eom_workflow.embedding_batch_plan_v15 import (
+    EmbeddingBatchPlanRequestV15,
+    embedding_batch_registered_public_query_plan_schema_registry,
+)
 from eom_workflow.embedding_batch_plan_values import EmbeddingBatchPlanRequestValues
 
 ROUTED_QUERY_PREPARATION_SCHEMA_REF = (
@@ -36,6 +40,12 @@ PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_REF = (
 )
 PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_SHA256 = (
     "sha256:38d7d03387d13d57e55a07c2dee96846f8fde13b86e8ca4daf93533ca9db92ba"
+)
+REGISTERED_PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_REF = (
+    "eom://schemas/workflow/reference-query-routed-preparation/3.0"
+)
+REGISTERED_PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_SHA256 = (
+    "sha256:1043a7e13c85943154506580c1beeef912c3bf4ee1a3c45361622d98c2d19d01"
 )
 MAX_ROUTED_QUERY_PREPARATION_BYTES = 64 * 1024
 
@@ -81,6 +91,25 @@ def _public_validator() -> Draft202012Validator:
     return Draft202012Validator(
         schema,
         registry=embedding_batch_public_query_plan_schema_registry(),
+        format_checker=FormatChecker(),
+    )
+
+
+@lru_cache(maxsize=1)
+def _registered_public_validator() -> Draft202012Validator:
+    with (
+        files("eom_workflow")
+        .joinpath("resources/reference-query-routed-preparation-v3.schema.json")
+        .open("rb") as stream
+    ):
+        raw = stream.read(MAX_ROUTED_QUERY_PREPARATION_BYTES + 1)
+    if sha256_bytes(raw) != REGISTERED_PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_SHA256:
+        raise ValueError("REFERENCE_QUERY_ROUTED_PREPARATION_SCHEMA_INVALID")
+    schema = json.loads(raw)
+    Draft202012Validator.check_schema(schema)
+    return Draft202012Validator(
+        schema,
+        registry=embedding_batch_registered_public_query_plan_schema_registry(),
         format_checker=FormatChecker(),
     )
 
@@ -153,8 +182,32 @@ class PublicRoutedReferenceQueryPreparation(_RoutedPreparationFields):
         return self
 
 
+class RegisteredPublicRoutedReferenceQueryPreparation(_RoutedPreparationFields):
+    schema_version: Literal["reference-query-routed-preparation/3.0"]
+    parent: EmbeddingBatchPlanRequestV15
+
+    @model_validator(mode="before")
+    @classmethod
+    def schema_first(cls, value: object) -> Any:
+        try:
+            document = raw_similarity_contract_value(value)
+            if len(canonical_json_bytes(document)) > MAX_ROUTED_QUERY_PREPARATION_BYTES:
+                raise ValueError("REFERENCE_QUERY_ROUTED_PREPARATION_INVALID")
+            _registered_public_validator().validate(document)
+            return document
+        except Exception:
+            raise ValueError("REFERENCE_QUERY_ROUTED_PREPARATION_INVALID") from None
+
+    @model_validator(mode="after")
+    def exact_intent(self) -> Self:
+        self._require_parent_intent(self.parent)
+        return self
+
+
 type SupportedRoutedReferenceQueryPreparation = (
-    RoutedReferenceQueryPreparation | PublicRoutedReferenceQueryPreparation
+    RoutedReferenceQueryPreparation
+    | PublicRoutedReferenceQueryPreparation
+    | RegisteredPublicRoutedReferenceQueryPreparation
 )
 
 
@@ -162,6 +215,10 @@ def validate_supported_routed_reference_query_preparation(
     value: object,
 ) -> SupportedRoutedReferenceQueryPreparation:
     document = raw_similarity_contract_value(value)
+    if isinstance(document, dict) and document.get("schema_version") == (
+        "reference-query-routed-preparation/3.0"
+    ):
+        return RegisteredPublicRoutedReferenceQueryPreparation.model_validate(document)
     if isinstance(document, dict) and document.get("schema_version") == (
         "reference-query-routed-preparation/2.0"
     ):

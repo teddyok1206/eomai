@@ -19,6 +19,13 @@ from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbedd
 from eom_catalog_contracts.public_solution_reference import (
     PublicSolutionSourceReference as PublicSolutionBatchAnchor,
 )
+from eom_catalog_contracts.registered_public_solution_embedding import (
+    RegisteredPublicSolutionEmbeddingEntry,
+)
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    RegisteredPublicSolutionSourceReference,
+    public_solution_reference_for_entry,
+)
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import ApprovedReferenceItemAnchor
 from eom_catalog_service.embedding_device_index_pair import (
@@ -58,6 +65,7 @@ from eom_workflow.embedding_batch_plan_family import (
 )
 from eom_workflow.embedding_batch_plan_v12 import EmbeddingBatchSelectionV12
 from eom_workflow.embedding_batch_plan_v14 import EmbeddingBatchSelectionV14
+from eom_workflow.embedding_batch_plan_v15 import EmbeddingBatchSelectionV15
 from eom_workflow.embedding_device_routing import (
     EMBEDDING_DEVICE_ROUTING_SCHEMA_REF,
     MAX_EMBEDDING_DEVICE_ROUTING_BYTES,
@@ -194,7 +202,11 @@ class CatalogEmbeddingBatchPlanAdmission:
             revision = anchor.source.item_revision_id
             _require(sources.get(revision) == anchor.source)
             entry = entries.get(revision)
-            if isinstance(anchor, PublicSolutionBatchAnchor):
+            if isinstance(anchor, RegisteredPublicSolutionSourceReference):
+                _require(isinstance(entry, RegisteredPublicSolutionEmbeddingEntry))
+                assert isinstance(entry, RegisteredPublicSolutionEmbeddingEntry)
+                _require(anchor == public_solution_reference_for_entry(entry))
+            elif isinstance(anchor, PublicSolutionBatchAnchor):
                 _require(isinstance(entry, PublicSolutionEmbeddingEntry))
                 assert isinstance(entry, PublicSolutionEmbeddingEntry)
                 _require(anchor == PublicSolutionBatchAnchor.from_entry(entry))
@@ -225,7 +237,10 @@ class CatalogEmbeddingBatchPlanAdmission:
         reader: PinnedArtifactReadContext,
     ) -> tuple[EmbeddingDeviceIndexPair | PublicSolutionDeviceIndexChoices, ...]:
         """Both exact device populations before allocation; pins are not authority."""
-        if not isinstance(selection, EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14):
+        if not isinstance(
+            selection,
+            EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14 | EmbeddingBatchSelectionV15,
+        ):
             return ()
         _require(type(self.caller) is EmbeddingRegistryCaller)
         assert isinstance(self.caller, EmbeddingRegistryCaller)
@@ -252,7 +267,7 @@ class CatalogEmbeddingBatchPlanAdmission:
                 intents.append(EmbeddingRegistryRead(replace(scope, namespace=namespace), row))
             resolve = (
                 resolve_public_solution_device_indexes
-                if isinstance(selection, EmbeddingBatchSelectionV14)
+                if isinstance(selection, EmbeddingBatchSelectionV14 | EmbeddingBatchSelectionV15)
                 else resolve_embedding_device_index_pair
             )
             resolved.append(

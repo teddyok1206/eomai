@@ -12,6 +12,9 @@ from eom_catalog_contracts.item_db_similarity_selection import (
 from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
 from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
 from eom_catalog_contracts.reference_query_prepare import ReferenceQueryPrepareRequestV4
+from eom_catalog_contracts.registered_public_solution_embedding import (
+    RegisteredPublicSolutionEmbeddingEntry,
+)
 from eom_identifiers import content_sha256
 from eom_identity_service import OperatorAuthorizationFenceError
 from eom_orchestrator.database import build_session_factory
@@ -81,7 +84,9 @@ class CatalogItemDbSimilaritySelection:
                 if len(captured.entries) != 1:
                     raise ItemDbSimilaritySelectionError("ITEM_DB_SIMILARITY_NOT_INDEXED")
                 entry = captured.entries[0]
-                if not isinstance(entry, PublicSolutionEmbeddingEntry) or (
+                if not isinstance(
+                    entry, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry
+                ) or (
                     entry.source.item_revision_id != revision.item_revision_id
                     or entry.source.item_id != revision.item_id
                     or entry.public_solution.status != "AVAILABLE"

@@ -91,3 +91,11 @@ route/bound/finite numerical batch/checkpoint 형식과 indexed publication key�
 읽는다. 새 family 이름을 옛 Artifact pointer에 붙여 재해석하지 않는다. CPU/GPU의 부분
 coverage와 전환 중 index3/4의 차이는 source별 exact proof로 확인하며, 전체 target-set을
 같다고 가정하거나 구형 private/accepted projection으로 fallback하지 않는다.
+
+이 successor는 QUERY parent1.5/preparation3로 명시한다. 원래 file-set commit owner가
+고유 publication key로 찾은 정식 primary member의 typed pointer를 제공하도록 확장한다.
+같은 조회에서 이미 검증한 원 request의 member schema/media/hash를 사용하며, payload를
+다시 복사하거나 다른 서비스의 private DB를 읽지 않는다. 기존 find API의 결과와 성능
+경계는 유지한다. preparation과 selection replay의 두 호출자가 이를 사용해 원래 family를
+고정한다. indexed key lookup·최대1,024개의 작은 member metadata 검사이며 새 테이블/
+index/queue는 없다. Artifact의 실제 byte/lifecycle/권한 재검증은 기존 독립 owner가 유지한다.

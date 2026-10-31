@@ -76,11 +76,14 @@ from eom_workflow.reference_query_execution import (
 )
 from eom_workflow.reference_query_routed_preparation import (
     PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_REF,
+    REGISTERED_PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_REF,
     ROUTED_QUERY_PREPARATION_SCHEMA_REF,
     PublicRoutedReferenceQueryPreparation,
+    RegisteredPublicRoutedReferenceQueryPreparation,
     RoutedReferenceQueryPreparation,
     SupportedRoutedReferenceQueryPreparation,
     routed_reference_query_preparation_key,
+    validate_supported_routed_reference_query_preparation,
 )
 from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import TypeAdapter
@@ -444,12 +447,22 @@ class LocalEmbeddingControlArtifactPublisher:
         return self._publish_routed_query_preparation(checked, ROUTED_QUERY_PREPARATION_SCHEMA_REF)
 
     def publish_public_routed_reference_query_preparation(
-        self, preparation: PublicRoutedReferenceQueryPreparation
+        self,
+        preparation: PublicRoutedReferenceQueryPreparation
+        | RegisteredPublicRoutedReferenceQueryPreparation,
     ) -> PublishedLocalEmbeddingControl:
-        checked = PublicRoutedReferenceQueryPreparation.model_validate(preparation)
-        return self._publish_routed_query_preparation(
-            checked, PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_REF
+        checked = validate_supported_routed_reference_query_preparation(preparation)
+        if not isinstance(
+            checked,
+            PublicRoutedReferenceQueryPreparation | RegisteredPublicRoutedReferenceQueryPreparation,
+        ):
+            raise ValueError("REFERENCE_QUERY_ROUTED_PREPARATION_PUBLICATION_INVALID")
+        schema = (
+            REGISTERED_PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_REF
+            if isinstance(checked, RegisteredPublicRoutedReferenceQueryPreparation)
+            else PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_REF
         )
+        return self._publish_routed_query_preparation(checked, schema)
 
     def _publish_routed_query_preparation(
         self, checked: SupportedRoutedReferenceQueryPreparation, schema: str
@@ -477,9 +490,21 @@ class LocalEmbeddingControlArtifactPublisher:
     def find_public_routed_reference_query_preparation(
         self, *, operator_id: str, idempotency_key: str
     ) -> ArtifactMemberPointer | None:
-        return self._find_routed_query_preparation(
-            operator_id, idempotency_key, PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_REF
+        pointer = self.publisher.find_published_primary_member(
+            idempotency_key=routed_reference_query_preparation_key(operator_id, idempotency_key),
+            artifact_type=REFERENCE_QUERY_PREPARATION_ARTIFACT_TYPE,
         )
+        if pointer is not None and (
+            pointer.member_path != "preparation.json"
+            or pointer.media_type != "application/json"
+            or pointer.schema_ref
+            not in {
+                PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_REF,
+                REGISTERED_PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_REF,
+            }
+        ):
+            raise ValueError("REFERENCE_QUERY_ROUTED_PREPARATION_PUBLICATION_INVALID")
+        return pointer
 
     def _find_routed_query_preparation(
         self, operator_id: str, idempotency_key: str, schema: str

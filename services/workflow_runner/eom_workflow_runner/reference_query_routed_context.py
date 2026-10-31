@@ -22,6 +22,10 @@ from eom_workflow.embedding_batch_plan_v14 import (
     EmbeddingBatchPlanRequestV14,
     EmbeddingBatchSelectionV14,
 )
+from eom_workflow.embedding_batch_plan_v15 import (
+    EmbeddingBatchPlanRequestV15,
+    EmbeddingBatchSelectionV15,
+)
 from eom_workflow.embedding_device_routing import EmbeddingDeviceRoutingPolicy
 from eom_workflow.reference_query_execution import (
     SupportedReferenceQueryContext,
@@ -33,8 +37,10 @@ from eom_workflow_runner.reference_query_prepare_application import reference_qu
 
 def build_routed_reference_query_context(
     *,
-    parent: EmbeddingBatchPlanRequestV12 | EmbeddingBatchPlanRequestV14,
-    selection: EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14,
+    parent: EmbeddingBatchPlanRequestV12
+    | EmbeddingBatchPlanRequestV14
+    | EmbeddingBatchPlanRequestV15,
+    selection: EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14 | EmbeddingBatchSelectionV15,
     policy: EmbeddingDeviceRoutingPolicy,
     allocation: EmbeddingBatchAllocation,
     route: EmbeddingBatchRoute,
@@ -49,8 +55,12 @@ def build_routed_reference_query_context(
     checked_parent = parse_embedding_batch_plan_request(parent)
     checked_selection = parse_embedding_batch_selection(selection)
     if not isinstance(
-        checked_parent, EmbeddingBatchPlanRequestV12 | EmbeddingBatchPlanRequestV14
-    ) or not isinstance(checked_selection, EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14):
+        checked_parent,
+        EmbeddingBatchPlanRequestV12 | EmbeddingBatchPlanRequestV14 | EmbeddingBatchPlanRequestV15,
+    ) or not isinstance(
+        checked_selection,
+        EmbeddingBatchSelectionV12 | EmbeddingBatchSelectionV14 | EmbeddingBatchSelectionV15,
+    ):
         raise ValueError("REFERENCE_QUERY_ROUTED_CONTEXT_FAMILY_INVALID")
     parent, selection = checked_parent, checked_selection
     policy = EmbeddingDeviceRoutingPolicy.model_validate(policy)
@@ -81,7 +91,9 @@ def build_routed_reference_query_context(
         maximum_sources=query.maximum_sources,
         top_k=query.top_k,
     )
-    if isinstance(selection, EmbeddingBatchSelectionV14):
+    if isinstance(selection, EmbeddingBatchSelectionV15):
+        body["schema_version"] = "system-rag-similarity-request/4.0"
+    elif isinstance(selection, EmbeddingBatchSelectionV14):
         body["schema_version"] = "system-rag-similarity-request/3.0"
     else:
         assert selection.query is not None
