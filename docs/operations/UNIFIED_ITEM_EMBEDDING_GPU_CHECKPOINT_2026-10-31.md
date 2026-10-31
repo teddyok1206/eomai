@@ -29,6 +29,17 @@
   17:49 관측 INDEX PID1242505/NRestarts0/active이며 API·QUERY·창작을 재시작하지 않았다.
   기출 CUDA 수치는 마지막 routine17:30의112/520을 유지하며 새 완료 수를 추정하지 않는다.
   전체 goal은 ACTIVE다.
+- 위 producer 소스는 `98fa12de0748e306c955bfe8bb9cf75ba3dc688a`로 커밋·푸시했다.
+  build-only wheel RECORD PASS:
+  `/tmp/eom-api-build/98fa12de0748e306c955bfe8bb9cf75ba3dc688a.2iRTTu/dist`.
+  임시 설치본에서 production8개 모듈이 해당 wheel에서 import됨을 검증하고 **34 PASS**:
+  `/tmp/eom-index4-installed-qualification-20261031.log`.
+  실제 서비스 prefix는 변경하지 않았다. 임시 DB는 official `--confirm` marker guard로
+  제거했다. 최초 cleanup 호출은 인수 누락으로 usage만 출력했고, mutation 없이 거절됐다.
+- Slack milestone `devreport_e1fee6bac47047bea07b90381564ea6d`는17:52:36 UTC
+  SENT/HTTP200이다. 소스 후보·미설치·실제 GPU 최종 수치 미확정·전체 goal ACTIVE를
+  구분했고 한국어 요약을 첫 문장으로 보냈다. 마지막 service 확인에서 INDEX1242505,
+  QUERY1075361, 창작1088058은 모두 active/NRestarts0으로 유지됐다.
 
 ## 새 GPU 제한시간 종료 복구 — 2026-10-31 17:35 UTC
 
