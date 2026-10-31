@@ -2327,6 +2327,7 @@ def test_nonretryable_or_artifact_backed_failure_remains_terminal_on_first_attem
 
 def test_platform_adapter_exception_is_sanitized_as_terminal_failure(
     integration_engine: Engine,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     runner, _executor, sessions, workflow_id, resources = _environment(
         integration_engine, "skip", "workflow-integration-adapter-exception"
@@ -2348,6 +2349,11 @@ def test_platform_adapter_exception_is_sanitized_as_terminal_failure(
             assert failed_step.state == StepState.FAILED.value
             assert failed_step.error_summary == "platform role execution raised an exception"
             assert "untrusted" not in failed_step.error_summary
+        recorded = [
+            row for row in caplog.records if getattr(row, "event", None) == "WORKFLOW_COMMAND_FAILED"
+        ]
+        assert len(recorded) == 1 and recorded[0].cause_type == "OSError"
+        assert "untrusted" not in recorded[0].getMessage()
     finally:
         _close(resources)
 
