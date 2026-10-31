@@ -745,6 +745,8 @@ class ResolvedExecutionPlanV3(FrozenModel):
             "resolved-execution-plan/19.0",
             "resolved-execution-plan/23.0",
             "resolved-execution-plan/24.0",
+            "resolved-execution-plan/30.0",
+            "resolved-execution-plan/31.0",
         }:
             allowed_manifest_schemas.add("eom://schemas/knowledge/evidence-bundle-manifest/5.0")
         if (

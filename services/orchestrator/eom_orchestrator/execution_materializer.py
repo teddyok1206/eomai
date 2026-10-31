@@ -96,6 +96,10 @@ from eom_workflow.inference_transfer_materialization import (
     validate_inference_transfer_materialization_plan_v11,
 )
 from eom_workflow.models import RoleWorkerInput
+from eom_workflow.public_similarity_control import (
+    PUBLIC_SIMILARITY_PLAN_SCHEMAS,
+    SupportedPublicSimilarityExecutionPlan,
+)
 from eom_workflow.schemas import validate_role_input
 from eom_workflow.similarity_control import (
     POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
@@ -103,7 +107,6 @@ from eom_workflow.similarity_control import (
     ResolvedExecutionPlanV24,
     SupportedSimilarityExecutionPlan,
     parse_post_registration_grounded_plan,
-    parse_supported_similarity_execution_plan,
     select_similarity_evidence_source,
 )
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
@@ -209,6 +212,18 @@ class ResolvedEvidenceMaterials:
     context_payload: bytes
     variation_request_payload: bytes | None = None
     variation_source_payload: bytes | None = None
+
+
+def _require_connected_public_similarity_staging(plan: object, role: str) -> None:
+    # Incremental rollout guard: plan30/31 can be persisted/replayed before their
+    # typed role/UDS reader is activated, but must never run as plain plan19.
+    # Replace with the actual public staging handoff + current-read tests when
+    # connecting that consumer; see EMBEDDING_DERIVATIVE_RETIREMENT_DESIGN.md.
+    if isinstance(plan, SupportedPublicSimilarityExecutionPlan) and role in {"authoring", "review"}:
+        raise ControlPlaneError(
+            "CONTROL_SIMILARITY_AUTHORITY_UNAVAILABLE",
+            "the public similarity role staging reader is not connected",
+        )
 
 
 def materialize_execution_step(
@@ -355,6 +370,7 @@ def materialize_execution_step(
             "CONTROL_POINTER_SIZE_INVALID",
             "creative page images exceed the worker input limit",
         )
+    _require_connected_public_similarity_staging(plan, step.role)
     if isinstance(plan, SupportedSimilarityExecutionPlan) and step.role in {"authoring", "review"}:
         require_similarity_materialization_context(
             plan, step_key=step_key, context=similarity_context
@@ -1136,6 +1152,7 @@ def authorized_execution_artifact_revisions(
     if isinstance(plan, ResolvedExecutionPlanV21):
         return _authorized_transfer_control_revisions(session, plan)
     revision_ids: set[str] = set()
+    _require_connected_public_similarity_staging(plan, step.role)
     if isinstance(plan, SupportedSimilarityExecutionPlan) and step.role in {"authoring", "review"}:
         require_similarity_materialization_context(
             plan, step_key=step_key, context=similarity_context
@@ -1258,9 +1275,11 @@ def authorized_evidence_artifact_revisions(
     record = session.get(ResolvedExecutionPlanRecord, plan_id)
     if record is None:
         raise ControlPlaneError("CONTROL_PLAN_MISSING", "resolved execution plan is missing")
-    if record.canonical_document.get("schema_version") not in SIMILARITY_EXECUTION_PLAN_SCHEMAS:
+    if record.canonical_document.get("schema_version") not in (
+        SIMILARITY_EXECUTION_PLAN_SCHEMAS | PUBLIC_SIMILARITY_PLAN_SCHEMAS
+    ):
         return authorized_execution_artifact_revisions(session, plan_id=plan_id, step_key=step_key)
-    plan = parse_supported_similarity_execution_plan(record.canonical_document)
+    plan = parse_post_registration_grounded_plan(record.canonical_document)
     if (
         plan.plan_id != plan_id
         or plan.workflow_id != record.workflow_id

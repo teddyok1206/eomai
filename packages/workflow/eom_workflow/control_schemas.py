@@ -29,6 +29,18 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "resolved-execution-plan-v30": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v30.schema.json",
+            "resources/control-plane/resolved-execution-plan-v30.schema.json",
+            "30.0",
+            "sha256:601afd4b1b2648cca68a51efb6e7d60315f726aac7373920d840bbf932f8db4c",
+        ),
+        "resolved-execution-plan-v31": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v31.schema.json",
+            "resources/control-plane/resolved-execution-plan-v31.schema.json",
+            "31.0",
+            "sha256:016f9b2c0d4872f21b387f71f0f126f5ebda9c0e668915060d99915d8d60eee3",
+        ),
         "knowledge-analysis-control-bootstrap-v21": ControlSchemaResource(
             "schemas/workflow/control-plane/knowledge-analysis-control-bootstrap-v21.schema.json",
             "resources/control-plane/knowledge-analysis-control-bootstrap-v21.schema.json",
@@ -915,6 +927,13 @@ def _control_schema_registry() -> Registry[Any]:
         "item-inference-transfer-embedding",
         "system-rag-similarity-delivery",
         "system-rag-similarity-context",
+        "system-rag-similarity-delivery-v2",
+        "public-solution-similarity-v3",
+        "public-solution-embedding-entry-v1",
+        "public-solution-embedding-index-v3",
+        "public-solution-text-v1",
+        "public-solution-query-v2",
+        "embedding-reference-query",
         "review-textbook-evidence",
         "evidence-bundle-publication-result-v3",
         "evidence-bundle-publication-result-v4",

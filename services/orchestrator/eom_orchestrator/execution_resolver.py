@@ -75,6 +75,12 @@ from eom_workflow.document_review import (
     PdfDocumentReviewRequest,
 )
 from eom_workflow.models import CustomerSupportCase
+from eom_workflow.public_similarity_control import (
+    PreparedPublicSimilarityPlan,
+    SupportedPublicSimilarityExecutionPlan,
+    bind_public_similarity_execution_plan,
+    validate_public_similarity_plan_context,
+)
 from eom_workflow.similarity_control import (
     POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS,
     PreparedSimilarityPlan,
@@ -283,7 +289,7 @@ def resolve_knowledge_backed_execution_plan(
     dependencies: ResolvedPlanDependencyEvidence,
     steps: tuple[ExecutionStepRequirement, ...],
     resolved_at: datetime | None = None,
-    similarity: PreparedSimilarityPlan | None = None,
+    similarity: PreparedSimilarityPlan | PreparedPublicSimilarityPlan | None = None,
 ) -> (
     ResolvedExecutionPlanV3
     | ResolvedExecutionPlanV16
@@ -296,7 +302,7 @@ def resolve_knowledge_backed_execution_plan(
         raise ControlPlaneError("CONTROL_PLAN_STEPS_MISSING", "execution plan has no steps")
     if similarity is not None:
         try:
-            if not isinstance(similarity, PreparedSimilarityPlan):
+            if not isinstance(similarity, PreparedSimilarityPlan | PreparedPublicSimilarityPlan):
                 raise ValueError("SIMILARITY_PLAN_PREPARATION_INVALID")
             similarity.__post_init__()
         except (ValueError, TypeError, JsonSchemaValidationError):
@@ -315,7 +321,10 @@ def resolve_knowledge_backed_execution_plan(
                 in POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS
             ):
                 replay = parse_post_registration_grounded_plan(existing.canonical_document)
-                if isinstance(replay, SupportedSimilarityExecutionPlan):
+                if isinstance(
+                    replay,
+                    SupportedSimilarityExecutionPlan | SupportedPublicSimilarityExecutionPlan,
+                ):
                     if (
                         replay.plan_id != existing.plan_id
                         or replay.workflow_id != existing.workflow_id
@@ -329,7 +338,20 @@ def resolve_knowledge_backed_execution_plan(
                                 "CONTROL_PLAN_CONFLICT",
                                 "existing plan pins another reference context",
                             )
-                        validate_similarity_plan_context(replay, similarity.context)
+                        if isinstance(replay, SupportedPublicSimilarityExecutionPlan):
+                            if not isinstance(similarity, PreparedPublicSimilarityPlan):
+                                raise ControlPlaneError(
+                                    "CONTROL_PLAN_CONFLICT",
+                                    "stored plan uses public reference materials",
+                                )
+                            validate_public_similarity_plan_context(replay, similarity.context)
+                        else:
+                            if not isinstance(similarity, PreparedSimilarityPlan):
+                                raise ControlPlaneError(
+                                    "CONTROL_PLAN_CONFLICT",
+                                    "stored plan uses legacy reference materials",
+                                )
+                            validate_similarity_plan_context(replay, similarity.context)
                 elif similarity is not None:
                     raise ControlPlaneError(
                         "CONTROL_PLAN_CONFLICT",
@@ -585,7 +607,11 @@ def resolve_knowledge_backed_execution_plan(
                 "CONTROL_SIMILARITY_PLAN_UNSUPPORTED", "similarity requires the grounded 1.16 plan"
             )
         try:
-            if similarity.context.request.consumer_purpose == "ITEM_AUTHORING":
+            if isinstance(similarity, PreparedPublicSimilarityPlan):
+                model = bind_public_similarity_execution_plan(
+                    model, similarity.delivery, similarity.context
+                )
+            elif similarity.context.request.consumer_purpose == "ITEM_AUTHORING":
                 model = bind_authoring_similarity_execution_plan(
                     model, similarity.delivery, similarity.context
                 )

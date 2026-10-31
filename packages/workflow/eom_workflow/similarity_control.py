@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, TypeAlias
+from typing import TYPE_CHECKING, Literal, TypeAlias
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.inference_transfer_experiment import PopulationSource
@@ -31,12 +31,17 @@ from pydantic import ConfigDict, TypeAdapter, model_validator
 from eom_workflow.control_plane import ResolvedExecutionPlanV19
 from eom_workflow.control_schemas import validate_control_contract
 
+if TYPE_CHECKING:
+    from eom_workflow.public_similarity_control import SupportedPublicSimilarityExecutionPlan
+
 MAX_SIMILARITY_EXECUTION_PLAN_BYTES = 1024 * 1024
 SIMILARITY_EXECUTION_PLAN_SCHEMAS = frozenset(
     {"resolved-execution-plan/23.0", "resolved-execution-plan/24.0"}
 )
 POST_REGISTRATION_GROUNDED_PLAN_SCHEMAS = SIMILARITY_EXECUTION_PLAN_SCHEMAS | {
-    "resolved-execution-plan/19.0"
+    "resolved-execution-plan/19.0",
+    "resolved-execution-plan/30.0",
+    "resolved-execution-plan/31.0",
 }
 
 
@@ -150,9 +155,22 @@ def parse_supported_similarity_execution_plan(value: object) -> SupportedSimilar
 
 def parse_post_registration_grounded_plan(
     document: dict[str, object],
-) -> ResolvedExecutionPlanV19 | SupportedSimilarityExecutionPlan:
+) -> (
+    ResolvedExecutionPlanV19
+    | SupportedSimilarityExecutionPlan
+    | SupportedPublicSimilarityExecutionPlan
+):
     """One explicit family choice for existing consumers, without rewriting old plan values."""
     schema = document.get("schema_version")
+    if schema in {"resolved-execution-plan/30.0", "resolved-execution-plan/31.0"}:
+        # Keep successor control values out of legacy decoder/bootstrap imports.
+        # This is explicit family dispatch, not a repair of old plan bytes.
+        from eom_workflow.public_similarity_control import parse_public_similarity_execution_plan
+
+        try:
+            return parse_public_similarity_execution_plan(document)
+        except SchemaValidationError:
+            raise ValueError("POST_REGISTRATION_GROUNDED_PLAN_INVALID") from None
     if schema in SIMILARITY_EXECUTION_PLAN_SCHEMAS:
         try:
             return parse_supported_similarity_execution_plan(document)

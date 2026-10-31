@@ -1,5 +1,63 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 실제 출제 계획의 공통 자료 successor·저장/replay — 2026-10-31 22:47 UTC
+
+- 이전 goal turn은 materials3 source/설치본 검증과11645 supported recovery를 마친
+  **PROGRESS**다. 이번 turn도 **PROGRESS**이며 전체 목표를 저장 계약만으로 줄이지 않는다.
+- schema-first plan30(기출변형)/31(일반출제)을 추가했다. 기존 grounded generic1.16의
+  steps·instruction/Pack·Graph/Evidence/policy·최대3교 의미는 유지하고 delivery2/context3·4의
+  공개 풀이 참조를 명시적으로 핀한다. 기준 원문은 기존처럼 PAST_EXAM이고, 검색 후보는
+  실제 허가된 공통 index의 기출/창작/AI다. 새 source 접근 권한은 없다. released plan19/23/24
+  bytes·hash는 그대로다. schema30/31 canonical/mirror SHA는 각각
+  `601afd4b1b2648cca68a51efb6e7d60315f726aac7373920d840bbf932f8db4c`,
+  `016f9b2c0d4872f21b387f71f0f126f5ebda9c0e668915060d99915d8d60eee3`다.
+- 기존 Orchestrator resolver와 plan 저장 application에 fresh public preparation을 연결했다.
+  plan19를 먼저 저장한 뒤 승격하지 않고 새 public plan을 최초 저장 전에 bind한다. 저장된
+  old/public plan은 다른 context/family를 새로 취득할 수 없다. 같은 요청은 저장된 exact
+  plan/핀을 반환하며 mutable current preset·새 context 발행을 다시 조회하지 않는다.
+  READY/PARTIAL/EMPTY와 정식 Evidence 접근·receipt 의미는 별도로 유지한다.
+- 새 role staging/RPC가 연결되기 전 plan30/31을 plan19처럼 실행하며 필수 참조를 누락하는
+  것을 막는 명시적 interim guard를 추가했다. allowlist와 실제 workspace 경계 모두 아직
+  연결되지 않은 public role을 `CONTROL_SIMILARITY_AUTHORITY_UNAVAILABLE`로 거부한다.
+  정식 Graph Evidence-only read는 별도로 동작하며 similarity Artifact를 권한 목록에 섞지
+  않는다. 이 guard는 실제 typed public role reader/UDS/current pre/post read·workspace 양성
+  검증과 함께 교체한다. 현재 API caller/role/Chat 전환이나 운영 활성화 완료가 아니다.
+- 최종 합집합 source 회귀 **327 PASS /91.90s**, ruff/format 및 strict mypy7 source PASS다.
+  구/새 plan·resolver·재전송·권한/불변 포인터·materials·실제 임시 member IO·resource wheel·
+  dependency 경계를 포함한다. source/IAM/QUERY authority가 synthetic인 fixture는 운영
+  검증과 구별한다. 새 staging 거부8건을 포함한 local resolver suite는18 PASS다.
+  `/tmp/eom-public-plan30-31-final-qualification-20261031-v4.log`,
+  `/tmp/eom-public-plan30-31-staging-denial-tests-20261031-v3.log`.
+- 새로운 marker-guarded disposable PostgreSQL
+  `/tmp/eom-api-testdb-20261031223649_a1defb46`만 준비·0066 migration 왕복·제한 role
+  reconcile 후 **8 PASS /168 deselected /7.53s**를 확인했다. real plan/step transaction,
+  중단 후 전체 rollback과 retry, 같은 delivery replay, 다른 delivery conflict, concurrent
+  저장의 unique winner·step 중복0을 검사했다. 직접 writer의 경합은 실제 UNIQUE 제약을
+  검증하며 한 호출의 알려진23505를 허용한다. 정상 API의 선행 workflow 생성/멱등 경계나
+  동시 HTTPS 호출 성공까지 이 test가 증명한 것으로 확대하지 않는다. nominal preset/
+  source/Graph/QUERY seed는 테스트용이며 모델 검증/권한 활성화 증거가 아니다.
+  `/tmp/eom-public-plan30-31-postgres-tests-20261031-v3.log`.
+- 완료 후 공식 cleanup으로 해당 임시 DB/nonce role/state만 삭제했다. 로그와 실패 증거는
+  보존했다. 운영 DB pytest, 운영 schema 변경, 계정/인증 변경, worker/numeric pin 변경은0이다.
+  `/tmp/eom-public-plan30-31-testdb-{prepare,migrate,reconcile,cleanup}-20261031.log`.
+- 개발 중 schema registry의 public delivery2 참조 누락과 새 plan의 Evidence5 allowlist 누락을
+  실제 테스트로 발견해 closed offline registry/기존 검증기에 정확한 successor만 추가했다.
+  이후 report pointer self-hash, nominal base와 실제 preset DENY 차이, 고정 definition key와
+  독립 테스트 plan ID 중복, SimpleNamespace의 workflow ID 누락 등 fixture/assertion 오류를
+  수정했다. 중간 실패 log는 보존하며 최종 PASS로 과거 실패를 덮지 않는다.
+  `/tmp/eom-public-plan30-31-contract-tests-20261031{,-v2,-v3,-v4}.log`,
+  `/tmp/eom-public-plan30-31-resolution-tests-20261031.log`,
+  `/tmp/eom-public-plan30-31-postgres-tests-20261031{,-v2}.log`.
+- **22:30 정기 관측**은 기출 GPU119/520·잔여401, CUDA RUNNING1, historical FAILED6으로
+  닫혔다. 이 관측을 최종 hash/권한·검색 acceptance로 보지 않는다. INDEX1466344/
+  QUERY1466291/creative1603535는22:46에도 active/NRestarts0이었다.11645는 READY 다음
+  실제 PUBLISHING으로 진행했고 다음11647–11649는 ANALYZING projection이다. 이를 세 개
+  active lease의 별도 증명이나11645 Graph 등록 완료로 확대하지 않는다. 재개 owner의
+  verified3은 새 pending-first 순회 값이며 기존 누적 정본 수의 감소/덧셈에 사용하지 않는다.
+- 다음은 actual public role/UDS/workspace/Item-start caller와 Chat 소비 연결, 실제 AI
+  full-report/Graph/INDEX4, authorized DB query/read/replay, 전체520 GPU 완료·대상별
+  integrity·정확한 구 파생 벡터 retirement/삭제다. 구 벡터 삭제0, 정본 변경0, 목표 ACTIVE다.
+
 ## 공통 원문·공개 풀이의 실제 Catalog 읽기 경계 — 2026-10-31 22:22 UTC
 
 - 이전 goal turn은 publication2 source/설치본·실제 disposable DB 검증을 마친

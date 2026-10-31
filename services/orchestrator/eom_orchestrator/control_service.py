@@ -34,6 +34,10 @@ from eom_workflow import (
     validate_control_contract,
 )
 from eom_workflow.control_plane import BundleRevisionPointer, WorkerRole
+from eom_workflow.public_similarity_control import (
+    ResolvedExecutionPlanV30,
+    ResolvedExecutionPlanV31,
+)
 from eom_workflow.similarity_control import ResolvedExecutionPlanV23, ResolvedExecutionPlanV24
 from jsonschema import ValidationError as JsonSchemaValidationError
 from pydantic import ValidationError as PydanticValidationError
@@ -1098,6 +1102,8 @@ def record_knowledge_backed_execution_plan(
         "resolved-execution-plan/19.0": "resolved-execution-plan-v19",
         "resolved-execution-plan/23.0": "resolved-execution-plan-v23",
         "resolved-execution-plan/24.0": "resolved-execution-plan-v24",
+        "resolved-execution-plan/30.0": "resolved-execution-plan-v30",
+        "resolved-execution-plan/31.0": "resolved-execution-plan-v31",
     }.get(str(schema_version), "resolved-execution-plan-v3")
     model_type: type[
         ResolvedExecutionPlanV3
@@ -1121,6 +1127,10 @@ def record_knowledge_backed_execution_plan(
         model_type = ResolvedExecutionPlanV23
     elif schema_version == "resolved-execution-plan/24.0":
         model_type = ResolvedExecutionPlanV24
+    elif schema_version == "resolved-execution-plan/30.0":
+        model_type = ResolvedExecutionPlanV30
+    elif schema_version == "resolved-execution-plan/31.0":
+        model_type = ResolvedExecutionPlanV31
     else:
         model_type = ResolvedExecutionPlanV3
     model, normalized = _validated_document(schema_name, document, model_type)

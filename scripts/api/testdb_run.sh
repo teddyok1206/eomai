@@ -350,6 +350,7 @@ if [[ "${action}" == "embedding-tests" ]]; then
   export EOM_RUN_INTEGRATION=1
   export EOM_API_TEST_STATE="${state_directory}"
   "${PYTHON}" -m pytest -q tests/integration/test_embedding_artifact_persistence.py \
+    tests/integration/test_public_similarity_plan_persistence.py \
     tests/integration/test_private_chat_query_artifact_persistence.py \
     tests/integration/test_embedding_index_artifact_persistence.py \
     tests/integration/test_embedding_runtime_bundle_persistence.py \

@@ -173,3 +173,33 @@ local-workspace successor `system-rag-similarity-materials/3.0`을 추가한다.
 
 더 작은 대안인 기존 inference profile1을 공통 공개 풀이로 위장하거나 포인터만 작업자에게
 넘기는 것은 각각 양식/출처 의미 또는 staged-local-only 경계를 깨므로 사용하지 않는다.
+
+### 실제 출제·검토 실행 계획의 공통 공개 풀이 successor
+
+책임은 기존 `resolve_knowledge_backed_execution_plan`과 plan 저장 application이다. 새
+plan30(기출변형)/31(일반출제)은 현재 generic1.16 topology·review 최대3회·Pack/instruction/
+Evidence/Graph/policy/권한 핀을 그대로 보존하고 similarity delivery2/context3·4만 명시적으로
+연결한다. 기존 plan19/23/24와 그 schema bytes는 재해석하거나 제자리 승격하지 않는다.
+Content Pack/worker protocol은 이 보조 자료 전달만을 이유로 새로 만들지 않는다.
+
+정본은 기존 immutable Evidence Bundle, 승인 기출 원문과 공개 풀이, 원래 완료 QUERY와
+Orchestrator가 발행한 context Artifact다. 작은 plan은 이들의 typed revision/hash pointers와
+필요한 실행 값만 보관한다. 모든 출처를 검색할 수 있다는 것이 변형 기준 원문을 임의로
+창작/AI로 바꾸는 권한은 아니다. reference anchor는 기존처럼 PAST_EXAM이고, 후보는 공통
+index에 승인된 기출/창작/AI가 가능하다. 원래 Graph/policy와 anchor content member의
+identity/hash를 비교하며 다른 head/latest로 맞추지 않는다. 원래 request/context SHA와
+READY/PARTIAL/EMPTY 의미도 보존한다. public context만으로 과학적 승인이나 Evidence
+usage receipt를 대신하지 않는다.
+
+자료구조는 bounded frozen plan/tuple, 저장·replay는 기존 workflow unique indexed lookup이다.
+validation은 plan/selected context bytes에 선형이고 source full scan을 추가하지 않는다.
+기존 root transaction/plan allocation/unique-workflow 경계와 동일 request replay를 사용한다.
+이미 저장된 old/public plan은 다른 family/context를 새로 취득할 수 없고 conflict가 된다.
+누락·hash/권한/producer 불일치는 실패하며 자동 legacy fallback이나 새 QUERY 재실행은 없다.
+값·schema는 workflow/contracts, persistence/Artifact는 기존 Orchestrator, source와 completed
+QUERY 재검증은 Catalog, staging은 기존 role materialization boundary가 소유한다.
+
+새 table/index/queue/registry/의존성은 없다. 단순히 released plan23/24의 delivery field union을
+넓히면 같은 schema version으로 공개 풀이와 구형 profile을 혼동하므로 그 대안은 사용하지
+않는다. successor parsing/저장·staging·권한·재전송 회귀를 갖춘 뒤에만 실제 caller를 활성화하며,
+schema/model 추가만으로 기존 운영 출제 경로가 전환됐다고 보고하지 않는다.
