@@ -29,6 +29,13 @@ from eom_workflow.embedding_batch_plan import (
     EmbeddingBatchRoute,
     EmbeddingBatchSelection,
 )
+from eom_workflow.embedding_batch_plan_v13 import (
+    BATCH_PLAN_V13_PROTOCOL,
+    BATCH_SELECTION_V13_SCHEMA_REF,
+    EmbeddingBatchPlanRequestV13,
+    EmbeddingBatchSelectionV13,
+    PublicSolutionBatchAnchor,
+)
 from eom_workflow.embedding_device_routing import (
     EmbeddingDeviceRoutingPolicy,
     EmbeddingGpuAllocationObservation,
@@ -40,6 +47,7 @@ from eom_workflow.embedding_encoding_recovery import (
 )
 from eom_workflow.local_embedding_execution_policy import LocalEmbeddingRuntimeProfile
 from eom_workflow.local_embedding_request_v2 import parse_supported_local_embedding_request
+from eom_workflow.local_embedding_request_v3 import LocalEmbeddingWorkflowRequestV3
 from eom_workflow.native_embedding_coordinator import NativeCoordinatorAllocation
 from eom_workflow_runner.local_embedding_admission import ResolvedLocalEmbeddingAdmission
 from eom_workflow_runner.local_embedding_publications import new_native_artifact_producer
@@ -68,6 +76,7 @@ from tests.unit.test_embedding_batch_plan import member, planning_case
 from tests.unit.test_embedding_encoding_reservations import SyntheticAdmission
 from tests.unit.test_embedding_runtime_bundle_contracts import _bundle, _pointer
 from tests.unit.test_local_embedding_runner_admission import scope_fixture
+from tests.unit.test_local_embedding_source_plan_v3 import inputs as public_inputs
 from tests.unit.test_mixed_native_workflow_carriers import carrier_fixture
 from tests.unit.test_public_solution_native_carriers import public_native_fixture
 
@@ -84,7 +93,7 @@ def seed_allocated_execution(engine, *, device="CUDA", request_family="1.2"):
         )
     _, compiled = scope_fixture()
     if request_family in {"2.0", "3.0"}:
-        assert device == "CPU"
+        assert device == "CPU" or request_family == "3.0"
         compiled = compile_definition(
             Path(__file__).resolve().parents[2] / "config/workflows/local-embedding-index.v2.yaml",
             set(),
@@ -97,7 +106,9 @@ def seed_allocated_execution(engine, *, device="CUDA", request_family="1.2"):
         workflow_definition_sha256=compiled.sha256,
     )
     if request_family in {"2.0", "3.0"}:
-        mixed = public_native_fixture() if request_family == "3.0" else carrier_fixture()
+        mixed = (
+            public_native_fixture(device=device) if request_family == "3.0" else carrier_fixture()
+        )
         plan = mixed["plan"]
         policy = type(native.policy).model_validate(
             seal(
@@ -253,8 +264,8 @@ def seed_allocated_execution(engine, *, device="CUDA", request_family="1.2"):
     )
 
 
-def seed_allocated_failure(engine):
-    value = seed_allocated_execution(engine)
+def seed_allocated_failure(engine, *, request_family="1.2"):
+    value = seed_allocated_execution(engine, request_family=request_family)
     sessions, request = value.sessions, value.request
     workflow_id, command_id = value.workflow_id, value.origin_command_id
     parent = parent_case(request, value.association, value.native_input)
@@ -321,6 +332,9 @@ def parent_case(request, association, native_input):
         runtime_bundle=request.runtime_bundle,
         resource_profile=request.resource_profile,
     ).model_dump(mode="json")
+    public = isinstance(request, LocalEmbeddingWorkflowRequestV3)
+    if public:
+        policy_body["view_recipe_sha256"] = request.namespace.recipe_sha256
     value.policy = EmbeddingDeviceRoutingPolicy.model_validate(seal(policy_body, "policy_sha256"))
     scope = seal(
         value.selection.scope.model_dump(mode="json")
@@ -332,7 +346,20 @@ def parent_case(request, association, native_input):
         ),
         "scope_sha256",
     )
-    value.selection = EmbeddingBatchSelection.model_validate(
+    selection_body = (
+        {
+            "schema_version": BATCH_PLAN_V13_PROTOCOL,
+            "anchors": [
+                PublicSolutionBatchAnchor.from_entry(e).model_dump(mode="json")
+                for e in public_inputs()[1].entries
+            ],
+            "recipe": public_inputs()[1].recipe.model_dump(mode="json"),
+        }
+        if public
+        else {}
+    )
+    selection_type = EmbeddingBatchSelectionV13 if public else EmbeddingBatchSelection
+    value.selection = selection_type.model_validate(
         seal(
             value.selection.model_dump(mode="json")
             | dict(
@@ -341,18 +368,24 @@ def parent_case(request, association, native_input):
                 corpus_id=request.corpus_id,
                 graph_snapshot=request.graph_snapshot.model_dump(mode="json"),
                 access_policy_revision_id=request.access_policy_revision_id,
-            ),
+            )
+            | selection_body,
             "selection_sha256",
         )
     )
-    value.request = EmbeddingBatchPlanRequest.model_validate(
+    request_type = EmbeddingBatchPlanRequestV13 if public else EmbeddingBatchPlanRequest
+    value.request = request_type.model_validate(
         seal(
             value.request.model_dump(mode="json")
             | dict(
                 scope=scope,
+                schema_version=BATCH_PLAN_V13_PROTOCOL if public else value.request.schema_version,
                 parent_request_sha256=request.request_sha256,
                 selection_manifest=member(
-                    "selection.json", BATCH_SELECTION_SCHEMA_REF, value.selection, "1"
+                    "selection.json",
+                    BATCH_SELECTION_V13_SCHEMA_REF if public else BATCH_SELECTION_SCHEMA_REF,
+                    value.selection,
+                    "1",
                 ).model_dump(mode="json"),
                 selection_sha256=value.selection.selection_sha256,
                 child_selection_sha256s=list(value.selection.child_selection_sha256s),

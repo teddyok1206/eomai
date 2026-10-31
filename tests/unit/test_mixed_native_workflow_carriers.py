@@ -68,16 +68,20 @@ from eom_workflow.schemas import (
 from jsonschema import Draft202012Validator
 
 from tests.unit.inference_transfer_embedding_fixtures import embedding_input, embedding_result, seal
-from tests.unit.local_embedding_admission_fixtures import member
+from tests.unit.local_embedding_admission_fixtures import member, native_fixture
 from tests.unit.local_embedding_service_fixtures import service_fixture
 from tests.unit.local_embedding_workflow_receipt_fixtures import receipt_fixture
 from tests.unit.test_embedding_index_assembly_v2 import assemble, pointer, rows_for
 from tests.unit.test_local_embedding_source_plan_v2 import inputs
 
 
-@lru_cache(maxsize=1)
-def carrier_fixture() -> dict[str, Any]:
-    original = service_fixture()
+@lru_cache(maxsize=2)
+def carrier_fixture(*, device="CPU") -> dict[str, Any]:
+    original = (
+        service_fixture()
+        if device == "CPU"
+        else service_fixture(base=native_fixture("a", "b", device=device, timeout_seconds=180))
+    )
     query, resolved, bases = inputs("CONTENT_ONLY")
     space = original.base.plan.space
     query = replace(

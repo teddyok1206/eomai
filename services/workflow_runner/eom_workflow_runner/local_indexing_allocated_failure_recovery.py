@@ -32,15 +32,10 @@ from eom_workflow.embedding_encoding_recovery import (
     parse_supported_failure_recovery,
 )
 from eom_workflow.local_embedding_encoding_dispatch import SupportedEmbeddingAssociation
-from eom_workflow.local_embedding_request import (
-    LocalEmbeddingServiceWorkflowRequest,
-    local_embedding_request_service,
-)
 from eom_workflow.local_embedding_request_v2 import (
-    LocalEmbeddingWorkflowRequestV2,
     SupportedLocalEmbeddingRequest,
-    local_embedding_request_service_v2,
     parse_supported_local_embedding_request,
+    supported_local_embedding_request_service,
 )
 from sqlalchemy import func, select
 from sqlalchemy.exc import DBAPIError
@@ -220,17 +215,7 @@ def _recover(
     _require(workflow is not None)
     assert workflow is not None
     request = parse_supported_local_embedding_request(workflow.initial_request)
-    _require(
-        isinstance(request, LocalEmbeddingServiceWorkflowRequest | LocalEmbeddingWorkflowRequestV2)
-    )
-    assert isinstance(
-        request, LocalEmbeddingServiceWorkflowRequest | LocalEmbeddingWorkflowRequestV2
-    )
-    service = (
-        local_embedding_request_service_v2(request)
-        if isinstance(request, LocalEmbeddingWorkflowRequestV2)
-        else local_embedding_request_service(request)
-    )
+    service = supported_local_embedding_request_service(request)
     _require(
         workflow.created_actor_type == "local_indexing_service"
         and workflow.created_actor_id == service.service_id

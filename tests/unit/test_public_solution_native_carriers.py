@@ -56,9 +56,9 @@ from tests.unit.test_local_embedding_source_plan_v3 import inputs
 from tests.unit.test_mixed_native_workflow_carriers import carrier_fixture
 
 
-@lru_cache(maxsize=1)
-def public_native_fixture():
-    original = carrier_fixture()
+@lru_cache(maxsize=2)
+def public_native_fixture(*, device="CPU"):
+    original = carrier_fixture(device=device)
     policy = original["policy"]
     profile = policy.profiles[0]
     query, resolved, _ = inputs()

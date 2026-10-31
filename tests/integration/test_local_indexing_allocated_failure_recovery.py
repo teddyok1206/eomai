@@ -40,10 +40,12 @@ from tests.unit.inference_transfer_embedding_fixtures import seal
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture(params=["numerical_failed", "unpublished_success"])
+@pytest.fixture(params=["numerical_failed", "unpublished_success", "public_unpublished_success"])
 def allocated(guarded_engine, monkeypatch, request):
-    value = seed_allocated_failure(guarded_engine)
-    if request.param == "unpublished_success":
+    value = seed_allocated_failure(
+        guarded_engine, request_family="3.0" if request.param.startswith("public_") else "1.2"
+    )
+    if request.param.endswith("unpublished_success"):
         body = value.command.model_dump(mode="json")
         body["schema_version"] = "embedding-encoding-recovery/2.0"
         body["root"] |= dict(
@@ -130,7 +132,7 @@ def test_actual_exact_failure_replay_preserves_original_identity_and_successful_
         == result
     )
     assert snapshot(allocated) == after
-    assert len(result.encoding_job_ids) == 2
+    assert len(result.encoding_job_ids) == len(allocated.association.owned_jobs)
 
 
 def test_actual_late_root_change_rolls_back_all_workflow_native_encoding_events(allocated):
@@ -206,18 +208,15 @@ def test_actual_concurrent_recovery_has_one_canonical_failure_event(allocated):
             )
             == 1
         )
-        assert (
-            session.scalar(
-                select(func.count())
-                .select_from(JobEventRecord)
-                .where(
-                    JobEventRecord.job_id.in_(result.encoding_job_ids),
-                    JobEventRecord.event
-                    == encoding_failure_disposition(allocated.command).encoding_event,
-                )
+        assert session.scalar(
+            select(func.count())
+            .select_from(JobEventRecord)
+            .where(
+                JobEventRecord.job_id.in_(result.encoding_job_ids),
+                JobEventRecord.event
+                == encoding_failure_disposition(allocated.command).encoding_event,
             )
-            == 2
-        )
+        ) == len(result.encoding_job_ids)
 
 
 def test_actual_nonowner_login_cannot_recover_even_with_a_proof_shaped_command(allocated):

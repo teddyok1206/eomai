@@ -16,6 +16,43 @@ source test·패키지 설치·service active만으로 완료하지 않는다.
 
 30분 background 관측은 계속 유지하며 기존 520개 기출·교과서·정본·FAILED 이력을 보존한다.
 
+## 2026-10-31 후속 — 계산 후 미등록과 처리 단위 조정
+
+두 번째 public 배치 `workflow_c6b81090c7d2468ea95eb4e4ad53dff9`의 실제 protected
+retirement는 numeric `SUCCEEDED`, 01:06:52 UTC 정상 퇴거다. 이후 source 재검증과
+OWNER completion 전달 중 원래 allocation의 420초가 끝났고 root controller는 FAILED다.
+따라서 계산 미실행/계산 실패로 해석하지 않는다. 정식 publication이 없는 계산 결과는 검색
+인덱스에 넣지 않으며, 기존 `embedding-encoding-recovery/2.0`의 unpublished-success 경계로
+원래 delivery 실패와 encoding producer를 기록한다. 실제 GPU 결과 성공을 DB 성공으로
+위장하지 않는다. 원래 parent planning SUCCEEDED와 첫 16 canonical bindings도 보존한다.
+
+- 기존 recovery application에서 V1/V2에 한정된 service-reference 추출을 CPU recovery와
+  같은 supported V1/V2/V3 parser로 통일한다. 새 프로토콜·DB·권한·큐를 추가하지 않는다.
+  실제 schema owner, 원래 parent/association/hash, expired claim, root OS proof,
+  publication 부재, exact replay와 transaction rollback 검증은 그대로다.
+- 측정: 원래 16-target 배치의 420초 구간에 source capture 103회, 그중 population lock
+  10.6초·provenance 26.6초·candidate admission 89.1초. 별도 새 프로세스의 원래 입력
+  schema validation은 7.36초(대부분 registry 첫 로드)다. 계산 시간 하나만의 문제가 아니다.
+- 우선 기존 root-selected public `maximum_targets`를 16에서 4로 줄여 동일 finite clock
+  안에 settlement 여유를 확보한다. 새 요청에만 적용하며 원래 요청·Graph·space·recipe·입력
+  hash·수치 자원/timeout은 바꾸지 않는다. 전체 corpus 상한 16,384와 legacy6 namespace는
+  유지한다. 작은 ordered batch와 기존 unique encoding/claim을 쓰므로 별도 queue나 cache는
+  없으며, 단위 작업 O(k)의 k만 줄고 전체 backlog는 계속 순차 처리한다. 원래 처리량보다
+  per-request overhead가 커질 수 있으므로 다음 실제 배치 소요시간/완료를 관측한다.
+- control selection은 기존 protected owner configuration과 hash/backups로만 변경한다.
+  old runtime이 없는 것을 확인한 뒤 같은 source/policy runtime으로 재개한다. rollback은
+  미실행 때만 원래 설정을 복원하며 진행 중 batch를 중단하거나 과거 요청을 재작성하지 않는다.
+  deadline을 늘리거나 source 검증을 생략하는 대안은 선택하지 않는다.
+- public V3 + original GPU-success/controller-failure의 exact replay, 동시성, late-proof
+  rollback과 runtime-role 거부를 disposable PostgreSQL에서 확인한 뒤 운영 복구한다.
+
+아직 고정 5개 벡터와 실제 사용자 검색은 미완료이므로 goal은 ACTIVE다.
+
+수정 source gate: 관련 unit 94 PASS, disposable PostgreSQL 39 PASS(기존 V1과
+public V3의 concurrent recovery·exact replay·late OS proof rollback·runtime role 거부 포함),
+core mypy 1개·Ruff·format·diff PASS. 초기 fixture의 encoding 개수 기대값 오류와 CUDA
+fixture 행 수 오류는 보존한 실패 로그에 남겼으며 수정 후 같은 suite를 재실행했다.
+
 ## 기존 namespace 용량 격리 결정
 
 현재 public 모집단 677개에서 기존 namespace의 1,024 상한은 아직 도달하지 않았다.
