@@ -622,3 +622,38 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
 종료됐다. 후속 selector는 그 기존 실패를 그대로 기록·보존하고 QUERY만 선택했다.
 사용자 검색 원 요청의 실제 completion은 아직 PENDING이다. Slack milestone
 `devreport_dd5cdafecdca4944a728943cc2c5c9b3`는 한국어 요약 먼저 전송했고 전달200을 확인했다.
+
+### 창작 재개와 중단 GPU 작업의 정직한 복구 — 16:19 UTC
+
+- 창작 `CREATIVE_SOURCE_ITEM_UNREADABLE`의 원 결과는 V2 NEEDS_DECISION이며 proposal=null이었다.
+  보고서가 지적한 과학적 불일치와 실제 문항 내용 부재를 구분한다. 내용이 없는 원본11416은
+  원 target/selection/report Artifact pin을 가진 typed 예외로만 deferred 처리하며 성공으로
+  세거나 추측한 문항을 등록하지 않는다. 기존 converter OUTPUT_MISSING11400과 별개다.
+- main `1f88b746fd4bbd64512097b0fb1a4c799d4ccb5b` 집중103 PASS·strict mypy4·Ruff/format 및
+  공식 build/RECORD 검증 후 cold maintenance prefix에 설치해 창작 owner만 선택했다.
+  원 cohort/1053 targets/슬롯 용량/모델/정책은 불변이다. 16:01 슬롯04/05/06의 실제3 ACTIVE
+  lease를 확인했고 16:17에는 세 슬롯 각각의 이후 분석 SUCCEEDED 기록을 확인했다.
+  순간 동시 실행 수는 추출/발행 중 변할 수 있으므로 항상3 RUNNING이라고 표현하지 않는다.
+- GPU의 멈춘 두 원 작업을 실제 protected retirement·plan·command·native metadata와 대조했다.
+  원래520 GPU 완료102는 아직 그대로다. INDEX owner는16:02 새 작업 제출을 멈춘 상태로 두고
+  numerical PID/FD0 및 종료된 원 invocation을 확인했다. running service 자체를 계산 증거로 삼지 않는다.
+- `workflow_96f92bc5187f49ff8dda0a899b8c9f98`은 numerical SUCCEEDED지만 controller FAILED로
+  정식 publication이 없었다. 보호된 `embedding-encoding-recovery/2.0` 명령을 만들고 기존
+  공식 `recover_retired_indexing_workflow`로 원16 encoding을 실패 사유와 함께 닫았다.
+  numerical SUCCEEDED와 parent planning SUCCEEDED는 보존한다. exact replay PASS, 새 모델 실행0.
+  앞선 구c681 실행은 request3 whitelist에서 mutation 전 거부됐고, 이미 public3를 지원하는
+  installed1f88을 사용했다. 이 public3 경계의 disposable 회귀13 PASS 및 실패 기록을 보존했다.
+- `workflow_b974e634ef744c859bb85622dee523e8`은 START SUCCEEDED/ADVANCE PENDING(gen0),
+  native ALLOCATION1/association 없음, parent ROUTED CUDA/RUNNING/BOUND 없음이었다.
+  원 numerical unit은 FAILED retirement/PID0/FD0, controller도 원 invocation FAILED/PID0이다.
+  기존 bound/CPU/unstarted 복구를 느슨하게 적용하지 않는다. 새 좁은 application이 기존
+  RECOVER1·Artifact pointer·전이/store를 재사용하여 해당 경우만 닫도록 구현했다.
+  원 START 성공과 과거 실패는 불변이며 미실행 ADVANCE만 CANCELLED가 된다.
+- 새 경계와 기존 allocated/unbound/CPU 복구의 disposable PostgreSQL **84 PASS**. root/schema
+  owner·concurrent one event·exact replay·late fence rollback·claimed/BOUND/association/publication
+  거부를 확인했다. 초기 BOUND fixture의 native input Job 불일치2건은 올바른 pure fixture로
+  수정했다. 생산 pointer/BOUND 검증은 그대로다. strict mypy1·Ruff/format/diff PASS.
+  이 시점에 새 경계는 source 후보이며 설치·원b974 복구·INDEX 재개 증거는 다음에 기록한다.
+- API34c6/QUERY94a51/독립 Catalog를 재배포하지 않았다. HTTPS login200, QUERY ACTIVE를
+  확인했다. 원 사용자 검색의 completion/replay는 아직 PENDING이다. main0065/0066 운영
+  migration0, 구 벡터 삭제0. Slack `devreport_5c501a625dd548169abefe24acae2b12` 전달200.

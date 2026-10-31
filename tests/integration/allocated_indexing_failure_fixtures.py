@@ -81,7 +81,9 @@ from tests.unit.test_mixed_native_workflow_carriers import carrier_fixture
 from tests.unit.test_public_solution_native_carriers import public_native_fixture
 
 
-def seed_allocated_execution(engine, *, device="CUDA", request_family="1.2"):
+def seed_allocated_execution(
+    engine, *, device="CUDA", request_family="1.2", preparation_only=False
+):
     sessions = build_session_factory(engine)
     service = identity()
     ref = local_indexing_service_reference(service)
@@ -242,6 +244,21 @@ def seed_allocated_execution(engine, *, device="CUDA", request_family="1.2"):
         policy=native.policy,
         association=native.base.association.model_copy(update={"intent": launch.intent}),
     )
+    if preparation_only:
+        # Expected binding values only: no reservation or association is persisted.
+        synthetic = fixture_for_jobs(synthetic, synthetic.association.owned_jobs)
+        return SimpleNamespace(
+            sessions=sessions,
+            request=request,
+            workflow_id=workflow_id,
+            origin_command_id=command_id,
+            step_id=step_id,
+            coordinator=coordinator,
+            association=synthetic.association,
+            native_input=synthetic.native_input,
+            service=service,
+            owner=owner,
+        )
     gate = SyntheticAdmission(synthetic)
     encoding = EmbeddingEncodingReservations(sessions, gate)
     rows = encoding.reserve_and_attach(requests(synthetic), launch.intent)
