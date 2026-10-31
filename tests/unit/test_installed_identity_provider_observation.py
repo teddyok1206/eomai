@@ -125,6 +125,21 @@ def assert_current(value):
     )
 
 
+def test_staged_configuration_does_not_require_traversing_private_api_directory(
+    observation, monkeypatch
+):
+    value, *_ = observation
+    original = Path.lstat
+
+    def private_configuration(path, *args, **kwargs):
+        if path == value.configuration.path:
+            raise PermissionError("dropped owner cannot traverse API private directory")
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "lstat", private_configuration)
+    assert_current(value)
+
+
 @pytest.mark.parametrize("observation", (0o640, 0o644), indirect=True)
 def test_real_readonly_and_metadata_only_descriptors_match_synthetic_unit(observation):
     value, *_ = observation
