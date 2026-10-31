@@ -657,3 +657,34 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
 - API34c6/QUERY94a51/독립 Catalog를 재배포하지 않았다. HTTPS login200, QUERY ACTIVE를
   확인했다. 원 사용자 검색의 completion/replay는 아직 PENDING이다. main0065/0066 운영
   migration0, 구 벡터 삭제0. Slack `devreport_5c501a625dd548169abefe24acae2b12` 전달200.
+
+### 원 routed 준비 실패 복구와 INDEX 재개 — 16:23 UTC
+
+- 위 source는 `db9323237072847c89b380526a8fbea7577f77da`로 commit/push했다.
+  기존 root/retirement/RECOVER 계약 회귀59 PASS를 추가 확인했다. 공식 build-only/RECORD PASS,
+  isolated SDK의 wheel3개·실제 installed member2499개 bytes 대조와 비편집 설치 import PASS다.
+  prefix는 `/opt/eom/maintenance-releases/db9323237072847c89b380526a8fbea7577f77da`다.
+  SDK 설치 자체의 서비스 변경0, migration0이다.
+- `/var/lib/eom-routed-preparation-recovery-20261031-b974e634`에 exact 원 명령과 역사적 FAILED
+  digest를 보호 저장했다. actual numerical FAILED retirement·controller invocation FAILED/PID0/FD0,
+  INDEX quiescence와 API/QUERY/Catalog PID를 확인한 뒤 기존 Orchestrator로 작은 recovery.json을
+  Artifact `artifact_a62c7ddfabb241e5a23145984cba8dff` /
+  `rev_b5b62f710a5440ae8e3da4764ec91aeb`에 정식 commit했다. raw SHA는
+  `sha256:645c0e1d36cc13f2e8fff460db3b3af701cae21889a9e52f1b1c4811a60fcac9`다.
+- official application 첫 실행 및 exact replay PASS. 원 b974 parent/native/Workflow FAILED,
+  미실행 ADVANCE CANCELLED, 원 START SUCCEEDED 그대로다. association 없음, 새 encoding Job0,
+  모델 실행0, 이미 FAILED였던3 Workflow와 API/QUERY/Catalog PID 불변이다. 결과는 root stage의
+  result.json과 `/tmp/eom-original-routed-preparation-recover-20261031.log`에 기록했다.
+- GPU INDEX만 기존 c681 런타임/config/model/resource/수치 bundle 그대로 재개했다.
+  PID1113276·NRestarts0·`LOCAL_INDEXING_SERVICE_STARTED`16:21:48 UTC, 실제 source admission
+  진행을 확인했다. 이 시점은 **CUDA forward/새 vector commit 완료 증거가 아니다**.
+  원520의 마지막 확정 완료는102이며 이후 수치 결과/coverage는 기존30분 관측으로 확인한다.
+- production head0064 유지. API34c6 READY, QUERY94a51 ACTIVE, HTTPS login200.
+  잘못 지정한 `/health/ready`의404는 endpoint 오타이며 정식 `/api/v1/health/ready`는 READY다.
+  실제 사용자 원 검색은 여전히 PENDING이다. root 로그의 namespace read만 사용자 검색 성공으로
+  간주하지 않는다. creative owner는 같은 PID1088058로 유지했다.
+- 임시 PostgreSQL `/tmp/eom-api-testdb-20261031160356_c82375bf`는 공식 cleanup으로 삭제했고
+  테스트 로그/실패 이력은 보존했다. 운영 DB의 데이터나 NAS source를 이 cleanup에 사용하지 않았다.
+- 남은 목표: 실제 CUDA commit과520 GPU coverage, metadata4 QUERY receiver→writer 연결,
+  AI 보고서 실제 producer/Graph/검색 연동, 원 권한 검색 증거와 구형 vector consumer audit/retirement.
+  scope를 줄이거나 서비스 active만으로 전체 목표를 완료 처리하지 않는다.
