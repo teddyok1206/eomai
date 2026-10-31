@@ -261,3 +261,22 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
   GPU59건과 구분한다. GPU 전체 완료나 실제 사용자 검색 PASS로 확대하지 않는다.
 - AI evidence/index successor와 실제 Graph·권한 검색 연결, full520 token 길이 사전 점검,
   운영0065 호환 릴리스와 구 벡터 retirement는 아직 남아 있다. goal은 ACTIVE다.
+
+### 전체 기출 입력 길이·새 control 설치본 검증 — 12:04 UTC
+
+- control/materialization 후보 `195e11c8329b6bf901bb6687285ddcc52bc5f2ca`를 main/origin에
+  보존했다. 공식 `deploy_release.sh --build-only` PASS: wheel RECORD와 격리 설치본의
+  definition11/role1.35 입출력 schema/정의 admission까지 확인했다. 후보 산출물은
+  `/tmp/eom-api-build/195e11c8329b6bf901bb6687285ddcc52bc5f2ca.fZ1VuB/dist`다.
+  운영 설치·migration·bootstrap activation은 아직 실행하지 않았다.
+- frozen Graph의 원래520개 Item revision을 공식 accepted V10 report resolver로 읽어 공통
+  public text1로 projection하고, 실제 선택된 BGE-M3의 보호된 동일 tokenizer로 전체 token
+  길이를 검사했다. 모델 weight 추론이나 CUDA를 사용하지 않은 일회성 관리자 read audit다.
+  정본 Item manifest520개도 frozen pins와 대조했다. 전체520개 AVAILABLE, token 최대621,
+  현재 모델 한도2048 초과0이다. truncation/chunking/요약 교체 없이 현재 동일 space로 계속
+  재임베딩할 수 있다. 이는 실제 사용자 권한 검색 또는 vector 전체 완료 증거는 아니다.
+- 보고서는 보호된 운영 감사 폴더의 `solution-token-budget-20261031T120201.json`이며,
+  token manifest SHA는 `sha256:dcf2d6e3bdcf9ff5c4395a9fb13e06990809c461def09dcfa1f745eacb96e5bd`다.
+  보고서/worker 원문은 로그·Git·Slack에 저장하지 않았다. DB writes/model inference/CUDA0이다.
+- INDEX703354/QUERY470146/Catalog732310/API469955 PID와 NRestarts0을 유지했다.
+  새 vector59/520의 처리와 기존 서비스는 이 source qualification 때문에 재시작하지 않았다.
