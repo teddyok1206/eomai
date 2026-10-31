@@ -11,6 +11,7 @@ from time import monotonic
 from eom_catalog_contracts.reference_query_prepare import (
     MAX_ROUTED_QUERY_PREPARE_REPLY_BYTES,
     MAX_ROUTED_QUERY_PREPARE_REQUEST_BYTES,
+    REFERENCE_QUERY_PREPARE_RESPONSE_SECONDS,
     REFERENCE_QUERY_PREPARE_SOCKET,
     SupportedReferenceQueryPrepareReply,
     SupportedReferenceQueryPrepareRequest,
@@ -78,7 +79,7 @@ class NativeReferenceQueryPrepareClient:
                 parent_mode=0o2750,
             )
             endpoint.require_socket()
-            deadline = monotonic() + 30.0
+            deadline = monotonic() + REFERENCE_QUERY_PREPARE_RESPONSE_SECONDS
             with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
                 connection.settimeout(max(0.001, deadline - monotonic()))
                 connection.connect(str(endpoint.path))

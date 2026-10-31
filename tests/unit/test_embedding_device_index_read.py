@@ -167,6 +167,25 @@ def test_two_exact_official_reads_return_only_small_pair(case):
     case.reader.revalidate_provenance.assert_called_once()
 
 
+def test_public_partial_selection_keeps_both_current_authority_reads(case):
+    if not isinstance(case.intents[0].selection, PublicSolutionSimilarityView):
+        with pytest.raises(EmbeddingDeviceIndexPairError, match="NAMESPACE_MISMATCH"):
+            application.resolve_public_solution_device_indexes(
+                case.session, case.caller, **case.arguments
+            )
+        return
+    selected = application.resolve_public_solution_device_indexes(
+        case.session, case.caller, **case.arguments
+    )
+    assert selected.cpu_target_count == selected.cuda_target_count == 2
+    assert case.official.call_count == 2
+    case.reader.revalidate_provenance.assert_called_once()
+    for position, owner in enumerate(case.owners):
+        owner.authorize_scope.assert_called_once_with(
+            case.session, case.caller, case.intents[position].scope
+        )
+
+
 @pytest.mark.parametrize("fault", ("corpus", "policy", "graph", "bound", "namespace", "class"))
 def test_scope_mismatch_is_not_smaller_device_fallback(case, fault):
     intent = case.intents[1]

@@ -26,6 +26,9 @@ MAX_ROUTED_QUERY_PREPARE_REPLY_BYTES = 32 * 1024
 MAX_ROUTED_REFERENCE_QUERIES = 16
 MAX_PUBLIC_REFERENCE_QUERIES = 32
 REFERENCE_QUERY_PREPARE_SOCKET = "/run/eom-reference-query-owner/owner.sock"
+# Response work may validate both device indexes. Keep this below the BFF's
+# 240-second HTTP budget; authentication capture retains its separate short limit.
+REFERENCE_QUERY_PREPARE_RESPONSE_SECONDS = 210.0
 type ReferenceQueryPrepareErrorCode = (
     SimilarityFailureCode
     | Literal[

@@ -67,6 +67,26 @@ class EmbeddingDeviceIndexPair:
         raise EmbeddingDeviceIndexPairError("EMBEDDING_DEVICE_INDEX_DEVICE_INVALID")
 
 
+@dataclass(frozen=True, slots=True)
+class PublicSolutionDeviceIndexChoices:
+    """Independent public coverage, never a claim of identical target populations."""
+
+    cpu: EmbeddingDeviceIndexPin
+    cuda: EmbeddingDeviceIndexPin
+    storage_partition: str
+    view: ExperimentView
+    recipe_sha256: str
+    cpu_target_count: int
+    cuda_target_count: int
+
+    def select(self, device: Literal["CPU", "CUDA"]) -> EmbeddingDeviceIndexPin:
+        if device == "CPU":
+            return self.cpu
+        if device == "CUDA":
+            return self.cuda
+        raise EmbeddingDeviceIndexPairError("EMBEDDING_DEVICE_INDEX_DEVICE_INVALID")
+
+
 def validate_resolved_embedding_index(
     pointer: ArtifactMemberPointer, index: SupportedEmbeddingIndex, device: str
 ) -> tuple[ArtifactMemberPointer, SupportedEmbeddingIndex]:
@@ -111,13 +131,15 @@ def canonical_embedding_index_targets(index: SupportedEmbeddingIndex) -> tuple[d
     return tuple(targets)
 
 
-def pair_embedding_device_indexes(
+def _validate_device_indexes(
     *,
     cpu_member: ArtifactMemberPointer,
     cpu_index: SupportedEmbeddingIndex,
     cuda_member: ArtifactMemberPointer,
     cuda_index: SupportedEmbeddingIndex,
-) -> EmbeddingDeviceIndexPair:
+) -> tuple[
+    ArtifactMemberPointer, SupportedEmbeddingIndex, ArtifactMemberPointer, SupportedEmbeddingIndex
+]:
     """O(n) closure over two already-resolved manifests, without reading any store.
 
     The calling Catalog owner must resolve/re-authorize both pinned members and their
@@ -157,6 +179,20 @@ def pair_embedding_device_indexes(
         or cpu_index.index_revision_id == cuda_index.index_revision_id
     ):
         raise EmbeddingDeviceIndexPairError("EMBEDDING_DEVICE_INDEX_NAMESPACE_MISMATCH")
+    return cpu_member, cpu_index, cuda_member, cuda_index
+
+
+def pair_embedding_device_indexes(
+    *,
+    cpu_member: ArtifactMemberPointer,
+    cpu_index: SupportedEmbeddingIndex,
+    cuda_member: ArtifactMemberPointer,
+    cuda_index: SupportedEmbeddingIndex,
+) -> EmbeddingDeviceIndexPair:
+    """Keep the released exact-target relation, including public exact comparisons."""
+    cpu_member, cpu_index, cuda_member, cuda_index = _validate_device_indexes(
+        cpu_member=cpu_member, cpu_index=cpu_index, cuda_member=cuda_member, cuda_index=cuda_index
+    )
     cpu_targets, cuda_targets = (
         canonical_embedding_index_targets(cpu_index),
         canonical_embedding_index_targets(cuda_index),
@@ -183,4 +219,53 @@ def pair_embedding_device_indexes(
         recipe_sha256=cpu_index.recipe.recipe_sha256,
         target_set_sha256=content_sha256(cpu_targets),
         target_count=len(cpu_targets),
+    )
+
+
+def choose_public_solution_device_indexes(
+    *,
+    cpu_member: ArtifactMemberPointer,
+    cpu_index: SupportedEmbeddingIndex,
+    cuda_member: ArtifactMemberPointer,
+    cuda_index: SupportedEmbeddingIndex,
+) -> PublicSolutionDeviceIndexChoices:
+    """O(N+M) closure for partial public indexes after official current-source reads."""
+    cpu_member, cpu_index, cuda_member, cuda_index = _validate_device_indexes(
+        cpu_member=cpu_member, cpu_index=cpu_index, cuda_member=cuda_member, cuda_index=cuda_index
+    )
+    if not isinstance(cpu_index, PublicSolutionEmbeddingIndex) or not isinstance(
+        cuda_index, PublicSolutionEmbeddingIndex
+    ):
+        raise EmbeddingDeviceIndexPairError("EMBEDDING_DEVICE_INDEX_NAMESPACE_MISMATCH")
+    cpu_targets, cuda_targets = (
+        canonical_embedding_index_targets(cpu_index),
+        canonical_embedding_index_targets(cuda_index),
+    )
+    by_source = {row["source"]["item_revision_id"]: row for row in cpu_targets}
+    if any(
+        row != by_source[row["source"]["item_revision_id"]]
+        for row in cuda_targets
+        if row["source"]["item_revision_id"] in by_source
+    ):
+        raise EmbeddingDeviceIndexPairError("EMBEDDING_DEVICE_INDEX_TARGET_SET_MISMATCH")
+    return PublicSolutionDeviceIndexChoices(
+        cpu=EmbeddingDeviceIndexPin(
+            cpu_index.index_id,
+            cpu_index.index_revision_id,
+            cpu_member,
+            cpu_index.index_sha256,
+            cpu_index.space,
+        ),
+        cuda=EmbeddingDeviceIndexPin(
+            cuda_index.index_id,
+            cuda_index.index_revision_id,
+            cuda_member,
+            cuda_index.index_sha256,
+            cuda_index.space,
+        ),
+        storage_partition=cpu_index.storage_partition,
+        view=cpu_index.view,
+        recipe_sha256=cpu_index.recipe.recipe_sha256,
+        cpu_target_count=len(cpu_targets),
+        cuda_target_count=len(cuda_targets),
     )

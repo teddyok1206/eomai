@@ -307,7 +307,12 @@ class ProtectedInstalledIdentityProviderAdmission:
         flags = fcntl.fcntl(value.descriptor, fcntl.F_GETFL)
         if (
             _epoch(before) != value.epoch
-            or _epoch(parent) != value.parent_epoch
+            # Folder timestamps/size describe siblings, not this pinned member.
+            # Keep named + held directory identity, ownership and permissions;
+            # the member itself retains its full epoch and byte hash below.
+            or _epoch(parent)[:5] != value.parent_epoch[:5]
+            or _epoch(value.path.parent.lstat())[:5] != value.parent_epoch[:5]
+            or _epoch(value.path.lstat()) != value.epoch
             or not stat.S_ISREG(before.st_mode)
             or before.st_nlink != 1
             or before.st_mode & 0o022
@@ -325,7 +330,6 @@ class ProtectedInstalledIdentityProviderAdmission:
                 or parent.st_uid != 0
                 or before.st_gid != api_gid
                 or stat.S_IMODE(before.st_mode) not in (0o600, 0o640)
-                or _epoch(value.path.lstat()) != value.epoch
             ):
                 raise _failure()
             return

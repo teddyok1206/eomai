@@ -250,6 +250,48 @@ def test_real_handshake_imports_same_current_capture_before_application(
     assert source.raw_token not in repr(reply) and source.token.verifier_hash not in repr(reply)
 
 
+@pytest.mark.parametrize("elapsed", (45.0, 180.0))
+def test_slow_preparation_keeps_response_budget_not_authentication_window(
+    observation, monkeypatch, elapsed
+):
+    offset = [0.0]
+    clock = monotonic
+    for module in (client_module, transport_module, carrier):
+        monkeypatch.setattr(module, "monotonic", lambda: clock() + offset[0])
+
+    def prepare(request):
+        offset[0] = elapsed
+        return ReferenceQueryPrepareReply.model_validate(reply_body(request))
+
+    source, reply, calls = exchange(observation, monkeypatch, reply_factory=prepare)
+    assert reply is not None and reply.status == "PENDING"
+    assert calls == [source.operator.operator_id]
+
+
+def test_response_budget_is_still_finite_and_timeout_does_not_resubmit(observation, monkeypatch):
+    offset = [0.0]
+    clock = monotonic
+    for module in (client_module, transport_module, carrier):
+        monkeypatch.setattr(module, "monotonic", lambda: clock() + offset[0])
+
+    def prepare(request):
+        offset[0] = client_module.REFERENCE_QUERY_PREPARE_RESPONSE_SECONDS + 1
+        return ReferenceQueryPrepareReply.model_validate(reply_body(request))
+
+    source, reply, calls = exchange(observation, monkeypatch, reply_factory=prepare)
+    assert reply is None
+    assert calls == [source.operator.operator_id]
+
+
+def test_failure_diagnostics_do_not_include_exception_prose_or_capture(
+    observation, monkeypatch, caplog
+):
+    source, _reply, _calls = exchange(observation, monkeypatch, fault="application")
+    assert "stage=PREPARE_APPLICATION" in caplog.text
+    assert "synthetic private details" not in caplog.text
+    assert source.raw_token not in caplog.text
+
+
 @pytest.mark.parametrize("purpose", ("PAST_EXAM_VARIATION", "ITEM_AUTHORING", "ITEM_REVIEW"))
 def test_http_to_real_unix_handshake_preserves_actual_current_capture(
     observation, monkeypatch, purpose

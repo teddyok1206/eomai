@@ -173,7 +173,7 @@ def public_selection_case(tmp_path, monkeypatch, public, *, publisher=None, iden
     monkeypatch.setattr(reads, "read_pinned_embedding_index", value.index_reads)
     monkeypatch.setattr(
         admission,
-        "resolve_embedding_device_index_pair",
+        "resolve_public_solution_device_indexes",
         lambda *_args, **_kw: NS(synthetic_pair=True),
     )
     value.app = CatalogRoutedReferenceQuerySelection(

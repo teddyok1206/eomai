@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import re
 import secrets
 import socket
 from collections.abc import Callable
@@ -12,6 +14,7 @@ from time import monotonic
 from eom_catalog_contracts.reference_query_prepare import (
     MAX_ROUTED_QUERY_PREPARE_REPLY_BYTES,
     MAX_ROUTED_QUERY_PREPARE_REQUEST_BYTES,
+    REFERENCE_QUERY_PREPARE_RESPONSE_SECONDS,
     ReferenceQueryPrepareReply,
     ReferenceQueryPrepareReplyV2,
     ReferenceQueryPrepareRequestV2,
@@ -42,6 +45,8 @@ from eom_orchestrator.general_chat_socket import (
 )
 from eom_orchestrator.reference_query_prepare_ports import ReferenceQueryPreparationPort
 
+_LOGGER = logging.getLogger(__name__)
+
 
 def handle_reference_query_prepare_connection(
     connection: socket.socket,
@@ -56,7 +61,9 @@ def handle_reference_query_prepare_connection(
     An error after application entry is an unknown outcome, never a retry grant.
     """
     request: SupportedReferenceQueryPrepareRequest | None = None
-    deadline = monotonic() + 30.0
+    started = monotonic()
+    deadline = started + REFERENCE_QUERY_PREPARE_RESPONSE_SECONDS
+    stage = "ADMIT_PROVIDER"
     try:
         if type(admission) is not ProtectedInstalledIdentityProviderAdmission:
             raise ValueError("current installed provider required")
@@ -68,6 +75,7 @@ def handle_reference_query_prepare_connection(
             wheel_sha256=pin.wheel_sha256,
             configuration_sha256=pin.configuration_sha256,
         )
+        stage = "READ_REQUEST"
         raw = receive_chat_stream_payload(
             connection,
             deadline=deadline,
@@ -77,6 +85,7 @@ def handle_reference_query_prepare_connection(
         if canonical_json_bytes(parsed.model_dump(mode="json")) != raw:
             raise ValueError("noncanonical request")
         request = parsed
+        stage = "CAPTURE_CURRENT_OPERATOR"
         challenge = OwnerSessionCaptureRequestV11(
             schema_version="operator-owner-session-capture-request/1.1",
             request_id="ownercapture_" + secrets.token_hex(16),
@@ -106,10 +115,33 @@ def handle_reference_query_prepare_connection(
         del response_raw
         # The returned application must bind this genuine capture itself. A peer
         # UID or syntactically valid response is never passed as authority.
+        stage = "PREPARE_APPLICATION"
         reply = application(capture).prepare(request)
         del capture
+        stage = "VALIDATE_REPLY"
         validate_supported_reference_query_prepare_reply(request, reply)
-    except Exception:
+    except Exception as error:
+        # Never log exception prose, traceback, request, capture or credentials.
+        # A closed metadata record distinguishes admission failure from slow IO.
+        with suppress(Exception):
+            code = getattr(error, "code", None)
+            if code is None and isinstance(error, ValueError) and len(error.args) == 1:
+                code = error.args[0]
+            safe_code = (
+                code
+                if isinstance(code, str)
+                and re.fullmatch(
+                    r"(?:REFERENCE|EMBEDDING|INFERENCE|PUBLIC|OWNER|SOURCE|INDEX|AUTHORITY)_[A-Z0-9_]{1,85}",
+                    code,
+                )
+                else "REFERENCE_QUERY_PREPARE_UNAVAILABLE"
+            )
+            _LOGGER.warning(
+                "REFERENCE_QUERY_PREPARATION_FAILED stage=%s code=%s elapsed_ms=%d",
+                stage,
+                safe_code,
+                max(0, int((monotonic() - started) * 1000)),
+            )
         # No response/capture/traceback contents leave this adapter. In particular,
         # database admission may already have committed before a disconnect.
         if isinstance(request, ReferenceQueryPrepareRequestV3 | ReferenceQueryPrepareRequestV4):

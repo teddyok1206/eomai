@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Literal
 
 from eom_catalog_contracts.embedding_index_families import parse_supported_embedding_index
 from eom_catalog_contracts.inference_transfer_embedding import MAX_EMBEDDING_INPUT_BYTES
@@ -14,6 +15,8 @@ from sqlalchemy.orm import Session
 from eom_catalog_service.embedding_device_index_pair import (
     EmbeddingDeviceIndexPair,
     EmbeddingDeviceIndexPairError,
+    PublicSolutionDeviceIndexChoices,
+    choose_public_solution_device_indexes,
     pair_embedding_device_indexes,
 )
 from eom_catalog_service.embedding_registry_application import read_pinned_embedding_index
@@ -36,6 +39,55 @@ def resolve_embedding_device_index_pair(
     cuda_intent: EmbeddingRegistryRead,
     artifact_reader: PinnedArtifactReadContext,
 ) -> EmbeddingDeviceIndexPair:
+    result = _resolve_device_indexes(
+        session,
+        caller,
+        cpu_owner=cpu_owner,
+        cpu_intent=cpu_intent,
+        cuda_owner=cuda_owner,
+        cuda_intent=cuda_intent,
+        artifact_reader=artifact_reader,
+        relation="EXACT_TARGETS",
+    )
+    assert isinstance(result, EmbeddingDeviceIndexPair)
+    return result
+
+
+def resolve_public_solution_device_indexes(
+    session: Session,
+    caller: EmbeddingRegistryCaller,
+    *,
+    cpu_owner: CatalogEmbeddingRegistryVerifier,
+    cpu_intent: EmbeddingRegistryRead,
+    cuda_owner: CatalogEmbeddingRegistryVerifier,
+    cuda_intent: EmbeddingRegistryRead,
+    artifact_reader: PinnedArtifactReadContext,
+) -> PublicSolutionDeviceIndexChoices:
+    result = _resolve_device_indexes(
+        session,
+        caller,
+        cpu_owner=cpu_owner,
+        cpu_intent=cpu_intent,
+        cuda_owner=cuda_owner,
+        cuda_intent=cuda_intent,
+        artifact_reader=artifact_reader,
+        relation="PUBLIC_PARTIAL",
+    )
+    assert isinstance(result, PublicSolutionDeviceIndexChoices)
+    return result
+
+
+def _resolve_device_indexes(
+    session: Session,
+    caller: EmbeddingRegistryCaller,
+    *,
+    cpu_owner: CatalogEmbeddingRegistryVerifier,
+    cpu_intent: EmbeddingRegistryRead,
+    cuda_owner: CatalogEmbeddingRegistryVerifier,
+    cuda_intent: EmbeddingRegistryRead,
+    artifact_reader: PinnedArtifactReadContext,
+    relation: Literal["EXACT_TARGETS", "PUBLIC_PARTIAL"],
+) -> EmbeddingDeviceIndexPair | PublicSolutionDeviceIndexChoices:
     """Resolve exact revisions; this returned small value never grants future access.
 
     Each public Registry read performs actual current source, registered metadata,
@@ -110,7 +162,12 @@ def resolve_embedding_device_index_pair(
             )
         indexes.append(index)
         members.append(member)
-    pair = pair_embedding_device_indexes(
+    choose = (
+        choose_public_solution_device_indexes
+        if relation == "PUBLIC_PARTIAL"
+        else pair_embedding_device_indexes
+    )
+    pair = choose(
         cpu_member=members[0],
         cpu_index=indexes[0],
         cuda_member=members[1],
