@@ -49,6 +49,26 @@
   Item-start·Chat 연결, authorized query/read/replay·AI full-report/Graph/INDEX4, 전체520
   integrity와 정확한 구 파생 vector consumer retirement/삭제를 계속한다. 목표 ACTIVE다.
 
+### role read2 분리 설치본 검증 — 2026-10-31 23:14 UTC
+
+- source `42b57fe463815a4e4a21a9d23fda9cd280cfa510`를 main에 commit/push했다. 정식
+  build-only/RECORD PASS 후 platform wheel
+  `0e019545566c593dd294707c0574e58831edff7c1b1d30d43bf64e5562860e14`, contracts
+  `9a4596d8c9e0b0ddba6374f3543d62404b88e4ba462ad52bb5f113f805ebff1c`를 검증했다.
+  기존 root-protected installer의 SHA/내용을 재확인하고 새 immutable owner prefix에만
+  설치했다. `OWNER_ACTIVATION=NOT_PERFORMED`, CPU/numeric/runtime 선택은 불변이다.
+- 16개 실제 module import origin이 새 prefix인 것을 확인한 뒤 public/legacy role,
+  workspace/실제 context member/권한·late 변경/원 publication 호환 회귀
+  **252 PASS /186.54s**를 확인했다. source442·후속141과 범위가 달라 합산하지 않는다.
+  `/tmp/eom-public-role-build-20261031.log`,
+  `/tmp/eom-owner-install-42b57fe4-20261031.log`,
+  `/tmp/eom-public-role-installed-origins-20261031.log`,
+  `/tmp/eom-public-role-installed-compatibility-20261031.log`.
+- 23:14 INDEX1466344/QUERY1466291/creative1603535는 같은 PID로 살아 있었고 API는 READY였다.
+  새 user QUERY/모델 실행·계정 인증·서비스 재시작·DB migration·구 vector 삭제는 하지 않았다.
+  실제 caller와 지침 successor를 연결하기 전 source/분리 설치본 PASS를 운영 활성화로
+  해석하지 않는다. 전체 목표 ACTIVE, 최종 대상별 acceptance/old derivative 정리는 미완료다.
+
 ### plan30/31 비활성 설치본 검증 — 2026-10-31 22:54 UTC
 
 - `fe17777c3b5835cea6b4a8ff3fec62d8d2057fc4`를 commit/push한 뒤 정식 build-only와
