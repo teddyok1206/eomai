@@ -613,3 +613,12 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
 - 보호된 설치/rollback: `/opt/eom/api-releases/34c6bcd385ab480bb981d6c35722792df60dfb14`,
   `/var/lib/eom-query-provider-recovery-94a51efd`. 실패한 이전 cold prefix도 보존한다.
   INDEX4 writer·0065/0066 운영 활성화 및 구 벡터 삭제는 여전히 하지 않았다.
+
+15:48 UTC 보완: QUERY94a51의 **`REFERENCE_QUERY_OWNER_READY`를15:46:45 UTC에 확인**했다.
+실제 낮은 권한 preflight는 변경 전34c6에서 CONFIGURATION PermissionError를 재현했고,
+변경 후94a51에서는 root/drop 양쪽 PASS다. API1069126·GPU INDEX1017395·독립 Catalog732310을
+그대로 유지한 QUERY-only 후속 선택이다. API READY 및 HTTPS `/studio/login`200을 확인했다.
+초기 selector는 이미 별도 정지한 창작 owner의 PID0을 precondition에서 발견하여 변경 전에
+종료됐다. 후속 selector는 그 기존 실패를 그대로 기록·보존하고 QUERY만 선택했다.
+사용자 검색 원 요청의 실제 completion은 아직 PENDING이다. Slack milestone
+`devreport_dd5cdafecdca4944a728943cc2c5c9b3`는 한국어 요약 먼저 전송했고 전달200을 확인했다.
