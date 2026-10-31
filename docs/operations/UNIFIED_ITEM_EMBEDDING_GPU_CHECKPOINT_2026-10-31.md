@@ -1,5 +1,44 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 보호된 릴리스 준비 및 Catalog receiver 반영 — 2026-10-31 18:11 UTC
+
+- source `eb16d3ad4d6919fea6b05c385bc65c2b708f9046` main/origin 커밋·푸시와 build-only
+  wheel RECORD 검증 PASS. 산출물:
+  `/tmp/eom-api-build/eb16d3ad4d6919fea6b05c385bc65c2b708f9046.hvQYy5/dist`.
+  공식 보호 installer로 같은 source의 owner wheel/API-contract pair를 새 prefix에
+  설치했다. 기존 numerical/CPU runtime과 선택된 INDEX/QUERY는 덮어쓰지 않았다.
+- raw source archive/세 wheel/RECORD/새 source tree를 root-private stage에 고정했다.
+  보호된 interpreter와 launcher의 **실제 ADMIT PASS**다. 운영 migration callback은
+  아직 실행하지 않았다. source/runtime/권한 admission과 실제 DB upgrade를 혼동하지 않는다.
+  stage: `/var/lib/eom-release-operator-stage.eb16d3ad-registered-public`;
+  libexec: `/usr/local/libexec/eom-release-operator-public-0066-eb16d3ad`.
+  context SHA `sha256:ad471c4753dfa3617e3438d0314aff131ce668248350c396d5597a429caca70c`.
+  `/tmp/eom-release0066-operator-{stage,admission}-20261031-v1.json`.
+- 실제 Catalog service UID의 기존9319 및 새eb16 설치본 composition 둘 다 PASS다.
+  기존/혼합/public/시험지 reader와 DB 선택 구성을 확인했다. 권한·model·업무 요청0이며
+  isolated systemd/user-authenticated search acceptance 자체는 아니다.
+  `/tmp/eom-release0066-catalog-principal-preflight-20261031-v1.json`.
+- rollout 대조에서 Catalog의 public 기대 pin은ecb34…인데 실제 파일과 QUERY unit은
+  51b99…인 drift를 발견했다. 검사를 우회하지 않고 검증한 현재51b99…로 정합화했다.
+  source eb16의 Catalog receiver만 선택·재시작했다. actual API peer의 private socket
+  protocol smoke PASS, API READY, Catalog PID1323249/NRestarts0/active 확인.
+  API1069126/QUERY1075361/INDEX1242505/창작1088058 PID와 모든 원 config bytes는 보존했다.
+  증거: `/var/lib/eom-common-public-receiver-20261031-eb16d3ad/catalog-activation.json`.
+  rollback은9319 + **현재 public pin51b99…** 조합이며 stale ecb34…를 복구하지 않는다.
+- 18:00 routine은 frozen 기출 CUDA **113/520, 잔여407**을 확인했다. 새4문항 묶음
+  `workflow_e17ad472e67448e7ad097bcf635bfa1b`은 실제 CUDA request3/COMPLETED,
+  command `wfcmd_10a7aa0e5f5c4991807684460249741d` SUCCEEDED다. 원실행 완료17:58:45와
+  canonical BATCH_COMPLETED 관측17:59:10을 구분한다. 전체4행을 기출4개로 세지 않는다.
+  `/tmp/eom-backoff-completed-workflow-20261031-v1.json`, 원 service journal.
+  다음 CPU standby RUNNING1은 이 GPU 수치와 별개다. 기존 실패5개는 그대로 보존했다.
+- 임시 DB `/tmp/eom-api-testdb-20261031175739_bbbbc755`는 official marker guard로
+  제거했다. 운영0066 migration/전체 API·QUERY 전환/신규 AI V11 canary/실제 인증 검색은
+  **아직 미완료**다. frozen520 최종 무결성·권한 및 정확한 구형 index/vector 삭제도 남는다.
+  구 vector 삭제0, 정본 변경0, 전체 goal ACTIVE. 다음 regular 점검18:30 UTC.
+- Slack `devreport_92772b3b71ee4dc99e048ca6ec5ef5b9`는18:11:52 UTC SENT/HTTP200.
+  한국어 첫 문장 요약과 함께 partial Catalog activation, 아직 미실행인 운영0066/전체전환,
+  새 CUDA 완료와113/520, 실패·정본·구 vector 보존을 구분해 보고했다.
+
 ## 공식 배포0066 admission 연결 — 2026-10-31 17:59 UTC
 
 - 운영 전환 준비에서 기존 release operator가0064까지만 허용하는 실제 source gap을
