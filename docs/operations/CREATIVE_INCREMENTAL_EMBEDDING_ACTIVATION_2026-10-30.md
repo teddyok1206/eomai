@@ -16,6 +16,16 @@ source test·패키지 설치·service active만으로 완료하지 않는다.
 
 30분 background 관측은 계속 유지하며 기존 520개 기출·교과서·정본·FAILED 이력을 보존한다.
 
+## 2026-10-31 03:20 UTC — 사용자 확정 운영 방침
+
+- 수일 소요를 허용한다. 현재 batch/resource/순차 처리 설정을 유지하며, 속도만을 위한
+  처리 순서 변경·CPU/GPU 병렬화·추가 queue 도입은 진행하지 않는다. 순서 진단은 읽기 전용이었고
+  운영의 target selection이나 기존 결과를 바꾸지 않았다.
+- 보고서 세 슬롯과 임베딩은 그대로 실행한다. 기존 두30분 observation timer로 오류·실제 중단을
+  확인하며, 관측 timeout이나 GPU의 정상 CPU 보조 처리 대기만으로 재시작/재제출하지 않는다.
+- 실제 오류가 확인될 때만 원래 application/recovery 경계로 조치하고 중요 milestone을 보고한다.
+  고정5건의 벡터·공식 검색·replay/복구와 최종 완료 조건은 그대로이며 goal은 ACTIVE다.
+
 ## 2026-10-31 02:20 UTC — 실제 native QUERY 설치 경계 갱신
 
 - 첫 4-target public CUDA 후속 배치는 실제 `COMPLETED/SUCCEEDED`다. canonical CUDA
