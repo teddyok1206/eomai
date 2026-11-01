@@ -1,5 +1,58 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## private2 원 명령·lease/step·중단 재조회 연결 — 2026-11-01 04:19 UTC
+
+- 직전 goal turn은 live-origin source owner/정책 publication의 **PROGRESS**였다. 이번은 실제
+  worktree/원 실행 PID를 확인하고 원 명령·step·lease owner에 private2를 연결·검증한
+  **PROGRESS**다. 전체 U01–U05 목표 ACTIVE이며 전체520/AI/실제 검색/전환/구 파생 삭제를
+  metadata guard PASS로 대체하지 않는다.
+- source **`d842e20d44c9566d1f5be6c10fba93d07b59fa8d`**에서 기존 attached Workflow closure와
+  START/ADVANCE parent/원 launch Job 검증을1/2에 공유했다. expected result schema는 순수
+  `private_chat_query_result_schema`, protocol은 기존 `definition_execution_protocol`에서만
+  고른다. fixed definition/request family·원 bytes/hash·origin/actor·lease generation·step
+  attempt/result/input hash를 맞추고 구1 row나 checkpoint를2로 relabel하지 않는다.
+- `CatalogPrivateChatQueryOwnerAdmission`은 같은 row/source/lease fence를 사용하며 typed
+  overload로 request1→legacy scope, request2→common scope를 돌려준다. 잘못된 source value
+  family/다른 retained request/origin도 거부한다. 원 ALLOCATION을 가진 expired original과
+  SUCCEEDED parent continuation만 이어가고, missing original/FAILED·CANCELLED/다른 parent/
+  stale hash/현재 source 철회는 거부한다. 새 queue/worker protocol/table/index/migration은 없다.
+  새2 submission/executor/dispatch/runtime 조립은 아직 미완료이며 global admission2는
+  **CLOSED**다. metadata read 지원을 실제 신규 실행 허가로 바꾸지 않는다.
+- source 합집합 **152 PASS /104.66s**, 별도 non-editable 설치본 동일 합집합
+  **152 PASS /123.76s**, strict mypy 영향7/Ruff/format/shell/diff PASS다. 최초 SQLite recovery
+  fixture의 naive timestamp는 그 fixture에서만 UTC로 복원했고 운영 datetime 검사를 완화하지
+  않았다. global2 CLOSED, mixed request/definition/result/role schema, retained source,
+  pending write/no-autoflush, terminal parent, 원 Job/단일 checkpoint reuse를 확인했다.
+  `/tmp/eom-private2-command-owner-final-source-20261101.log`,
+  `/tmp/eom-private2-command-owner-recovery-20261101-v2.log`,
+  `/tmp/eom-private2-command-owner-installed-20261101.tests`.
+- disposable PostgreSQL 최종 **55 PASS /41.59s**다. 실제 command/step/Job/원 checkpoint와
+  row lock·현재 lease를 사용해 private2 expired 재조회/부모 성공·실패/late source·lease loss
+  rollback/2-writer 원 Job replay를 검증했다. source/IAM authority는 명시적 fake port이며 실제
+  Chat/source permission 또는 실제 native execution PASS는 아니다. 기존 Artifact/receipt/
+  checkpoint/policy suite도 같은 실행에 포함되며 겹치는 수를 따로 합산하지 않는다.
+  첫7 setup error는 pytest fixture alias가 제거된 문제라 재사용 factory로 정리했다. 다음6
+  setup error는 공유 DB에서 동일 synthetic actor/turn을 재사용해 unique guard가 막은 것이다.
+  기존 PG metadata fixture처럼 case마다 고유 선언 actor를 사용했다. 제약을 지우거나 실패
+  row를 성공으로 바꾸지 않았다. 모든 실패 로그를 보존했다.
+- DB `20261101040654_9e324a73`의 migration67 왕복/reconcile/공식 cleanup PASS와 state-directory
+  부재를 확인했다. 운영 DB pytest/운영 migration0이며 삭제는 이 임시 DB·시험 역할·state뿐이다.
+  `/tmp/eom-private2-command-owner-testdb-20261101.tests`, `-v2.tests`, `-v3.tests`, `.cleanup`.
+- 공식 build-only/RECORD PASS, wheel directory
+  `/tmp/eom-api-build/d842e20d44c9566d1f5be6c10fba93d07b59fa8d.fsrAxP/dist`;
+  platform SHA `1841d58a483046bc721f6a83cbc9a2d369d8e1fa11a0ebe1179caf2edf01aa26`,
+  contracts `9d1f1a55811eae172e17135e8e495c034a26347777d09ad1ba52f6158cfae358`,
+  API `2e5cdcb03b6b52b8715d810110a1c500aa81a05155c6c685d0ab1da548f987b1`다.
+  별도 prefix `/tmp/eom-private2-command-owner-installed.FHe5U7h9/site-packages`에서 exact source와
+  실제 module import 경로를 확인했다. 이를 운영 API/공용 CPU 프로그램/env에 설치하지 않았다.
+- **04:00 UTC 기존 timer GPU127/520·잔여393, CUDA Workflow1 RUNNING, historical FAILED7**
+  기록이며 새 count polling0이다.04:18 실제 INDEX PID1683578/creative1876923은 active/
+  NRestarts0으로 유지됐고 이번 phase의 운영 재시작0이다. 정본/구 vector/index 삭제0이다.
+- 다음은 같은 기존 owner에 private2 numerical executor/PUBLISHED·COMPLETED·canonical receipt
+  조립과 prepare/dispatch/install을 연결하는 것이다. 실제 operator67/runtime 호환 rollout,
+  원래520 CUDA 전체/대상별 integrity, AI full-report→Graph→INDEX4, authorized DB search/
+  read/replay, 모든 소비자 전환/정확한 retirement/delete의 종료 조건은 그대로 남아 있다.
+
 ## live-origin 공통 source owner·정책 publication — 2026-11-01 03:54 UTC
 
 - 직전 goal turn은 physical leaf와 Catalog DOCUMENT read의 **PROGRESS**였다. 이번은
