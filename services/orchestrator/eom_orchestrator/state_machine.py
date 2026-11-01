@@ -102,3 +102,36 @@ def transition_job(
         )
     )
     return job
+
+
+def record_job_observation(
+    session: Session,
+    job_id: str,
+    event: str,
+    *,
+    expected_state: JobState,
+    data: dict[str, Any],
+) -> None:
+    """Append owner-validated evidence without rewriting lifecycle or earlier events."""
+    job = session.execute(
+        select(JobRecord).where(JobRecord.job_id == job_id).with_for_update()
+    ).scalar_one()
+    if JobState(job.status) != expected_state:
+        raise RuntimeError("JOB_OBSERVATION_STATE_CHANGED")
+    sequence = session.scalar(
+        select(func.coalesce(func.max(JobEventRecord.sequence), 0) + 1).where(
+            JobEventRecord.job_id == job_id
+        )
+    )
+    if sequence is None:
+        raise RuntimeError("failed to allocate job event sequence")
+    session.add(
+        JobEventRecord(
+            job_id=job_id,
+            sequence=sequence,
+            from_state=job.status,
+            to_state=job.status,
+            event=event,
+            data=data,
+        )
+    )

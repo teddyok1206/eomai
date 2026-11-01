@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/orchestrator/catalog-file-set-commit-intent/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "job_id",
+    "artifact_id",
+    "artifact_revision_id",
+    "request_sha256",
+    "result_sha256",
+    "manifest_sha256",
+    "manifest_created_at",
+    "recovery_basis",
+    "intent_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "catalog-file-set-commit-intent/1.0"
+    },
+    "job_id": {
+      "type": "string",
+      "pattern": "^job_[0-9a-f]{32}$"
+    },
+    "artifact_id": {
+      "type": "string",
+      "pattern": "^artifact_[0-9a-f]{32}$"
+    },
+    "artifact_revision_id": {
+      "type": "string",
+      "pattern": "^rev_[0-9a-f]{32}$"
+    },
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "result_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "manifest_created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(?:Z|\\+00:00)$"
+    },
+    "recovery_basis": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/RecoveryBasis"
+        }
+      ]
+    },
+    "intent_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "RecoveryBasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "actor_id",
+        "source_basis_sha256"
+      ],
+      "properties": {
+        "kind": {
+          "const": "PINNED_KNOWLEDGE_ACCEPTANCE"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "source_basis_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

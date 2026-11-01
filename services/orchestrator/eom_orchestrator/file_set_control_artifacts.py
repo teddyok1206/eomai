@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import re
 import stat
 import threading
@@ -22,8 +21,9 @@ from eom_identifiers import (
     sha256_file,
 )
 from eom_protocol.artifact_members import ArtifactMemberPointer
-from sqlalchemy import Engine, select, text
+from sqlalchemy import Engine, select
 
+from eom_orchestrator.artifact_publication_lock import artifact_publication_lock
 from eom_orchestrator.artifacts import commit_file_set_artifact, stage_file_set_artifact
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.database import build_session_factory, transaction
@@ -535,21 +535,13 @@ class ControlFileSetPublisher:
 
     @contextmanager
     def _publication_lock(self, idempotency_key: str) -> Iterator[None]:
-        if self.engine.dialect.name != "postgresql":
-            with _LOCAL_LOCK:
-                yield
-            return
-        lock_key = int.from_bytes(
-            hashlib.sha256(f"{_LOCK_NAMESPACE}:{idempotency_key}".encode()).digest()[:8],
-            byteorder="big",
-            signed=True,
-        )
-        with self.engine.connect() as connection:
-            connection.execute(text("SELECT pg_advisory_lock(:value)"), {"value": lock_key})
-            try:
-                yield
-            finally:
-                connection.execute(text("SELECT pg_advisory_unlock(:value)"), {"value": lock_key})
+        with artifact_publication_lock(
+            self.engine,
+            namespace=_LOCK_NAMESPACE,
+            idempotency_key=idempotency_key,
+            local_lock=_LOCAL_LOCK,
+        ):
+            yield
 
     def _load_or_create_job(
         self,

@@ -34,6 +34,7 @@ fi
 
 if (($# != 2)) || \
   [[ "$1" != "verify" && "$1" != "inspect" && "$1" != "migrate" && "$1" != "hwpx-tests" && \
+    "$1" != "catalog-artifact-tests" && \
     "$1" != "embedding-tests" && "$1" != "embedding-registry-tests" && "$1" != "embedding-encoding-tests" && \
     "$1" != "embedding-stage-tests" && "$1" != "private-chat-context-tests" && \
     "$1" != "authenticated-session-tests" && \
@@ -44,7 +45,7 @@ if (($# != 2)) || \
     "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
     "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|inspect|migrate|hwpx-tests|embedding-tests|embedding-registry-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|authenticated-session-tests|local-indexing-service-tests|registered-solution-tests|registered-solution-application-tests|pdf-review-tests|external-item-tests|creative-registration-tests|creative-graph-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|inspect|migrate|hwpx-tests|catalog-artifact-tests|embedding-tests|embedding-registry-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|authenticated-session-tests|local-indexing-service-tests|registered-solution-tests|registered-solution-application-tests|pdf-review-tests|external-item-tests|creative-registration-tests|creative-graph-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -123,6 +124,14 @@ except TestDatabaseGuardError as exc:
 PY
 
 cd "${REPOSITORY_ROOT}"
+if [[ "${action}" == "catalog-artifact-tests" ]]; then
+  export EOM_RUN_INTEGRATION=1
+  "${PYTHON}" -m pytest -q \
+    tests/integration/test_catalog_artifact_created_recovery.py \
+    tests/integration/test_catalog_artifact_committing_recovery.py
+  printf 'Disposable Catalog Artifact interruption, replay and concurrency tests passed.\n'
+  exit 0
+fi
 if [[ "${action}" == "verify" ]]; then
   printf 'Disposable application schema prerequisite passed.\n'
   exit 0

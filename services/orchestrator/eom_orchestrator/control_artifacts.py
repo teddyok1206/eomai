@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import re
 import tempfile
 import threading
@@ -20,8 +19,9 @@ from eom_identifiers import (
     sha256_bytes,
 )
 from eom_workflow import ControlArtifactPointer
-from sqlalchemy import Engine, select, text
+from sqlalchemy import Engine, select
 
+from eom_orchestrator.artifact_publication_lock import artifact_publication_lock
 from eom_orchestrator.artifacts import (
     StagedFileSet,
     commit_file_set_artifact,
@@ -190,27 +190,13 @@ class ControlArtifactPublisher:
     def _publication_lock(self, idempotency_key: str) -> Iterator[None]:
         """Serialize one semantic publication across all production processes."""
 
-        if self.engine.dialect.name != "postgresql":
-            with _NON_POSTGRES_PUBLICATION_LOCK:
-                yield
-            return
-
-        lock_key = int.from_bytes(
-            hashlib.sha256(f"{_PUBLICATION_LOCK_NAMESPACE}:{idempotency_key}".encode()).digest()[
-                :8
-            ],
-            byteorder="big",
-            signed=True,
-        )
-        with self.engine.connect() as connection:
-            connection.execute(text("SELECT pg_advisory_lock(:lock_key)"), {"lock_key": lock_key})
-            try:
-                yield
-            finally:
-                connection.execute(
-                    text("SELECT pg_advisory_unlock(:lock_key)"),
-                    {"lock_key": lock_key},
-                )
+        with artifact_publication_lock(
+            self.engine,
+            namespace=_PUBLICATION_LOCK_NAMESPACE,
+            idempotency_key=idempotency_key,
+            local_lock=_NON_POSTGRES_PUBLICATION_LOCK,
+        ):
+            yield
 
     def _load_or_create_job(
         self,
