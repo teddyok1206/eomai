@@ -1,5 +1,42 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## GUI 실제 할당·제어 서비스 버전 불일치 — 2026-11-01 17:55 UTC 이후
+
+- 재인증은17:55:11 UTC PASS다. 원10321/key/operation/request SHA가 보존됐고 준비와
+  reply5 응답은 정상 PENDING으로 통과했다. 수치 검색 결과가 나왔다는 뜻은 아니다.
+- 처음으로 원 parent `job_47a96b462ea144729fd87db47aac863e`가17:57:04 UTC CLAIMED로
+  생성됐다. 원 controller attempt `embeddingallocation_8b9383bf2e314668b01665f207991b2c`는
+  17:58:46 시작·17:59:18 exit1이다. root 진단은 owner 채널 EOF이며 ROUTED/BOUND/QUERY
+  Workflow가 생기지 않았다. native GPU batch unit은 실제 시작 시각 없음/PID0/FD store0다.
+- 보호된 root entrypoint를 읽기 전용 대조했다. 실제 controller는b5900c7d지만 QUERY가
+  기대한 controller는8630ff6f였다. QUERY owner wheel과 실제 root controller를 같은 release로
+  취급한 배포 설정 오류다. root/env/template/peer 검증을 완화하지 않는다. INDEX2258114와
+  numerical runtime을 그대로 두고 QUERY의 controller pin만b5900c7d로 맞춘다.
+- 원 parent는 CLAIMED·route/bound 없음 상태로 보존한다. terminal root 실패를 성공으로
+  바꾸거나 원 unit을 재시작하지 않는다. 원 key의 결과를 성공으로 보이게 하지 않는다.
+  기존 unbound-failure maintenance는 INDEX 전용이므로 QUERY에 그대로 호출하거나 DB row를
+  직접 바꾸지 않는다. QUERY용 정식 실패 종결은 남은 실제 복구 범위다.
+- 17:55 test session만18:06 정상 로그아웃해 추가 관측/offer를 멈췄다. 현재 read-only
+  관측을 drain한 뒤 QUERY 연결 설정을 호환 반영한다. source fields, actor/Graph/policy,
+  다른 사용자 세션, 실패 원 기록 및 구 vectors는 변경하지 않는다.
+- 최초 QUERY pin 변경의 정지 대기180초가 만료돼 해당 rollout은 원 설정으로 복구됐다.
+  그 실패 evidence를 `/var/lib/eom-query-controller-pin-b5900c7d`에 보존했다. 복구 후 원
+  pid가 끝났음을 확인하고 새 rollout checkpoint `...-retry1`에서 같은 pin 정정을 수행한다.
+  모델/원 allocation의 기한을 늘린 것이 아니며, operator의 정상 stop 관측 시간만 unit의
+  기존6분 종료 한도보다 길게 맞췄다. INDEX/API/Catalog는 재시작하지 않는다.
+- retry1 반영 후 QUERY PID2759763/18:11:35 UTC READY다. 보호된 root entrypoint와 실제
+  QUERY controller pin을 다시 대조해 모두b5900c7d/MATCH를 확인했다. owner source는
+  8630ff6f로 별개이며, API2738888/Catalog2256180/INDEX2258114와 numerical pins는 불변이다.
+  설치본 config/기존 독립 controller schema 회귀47 PASS는 실제 검색 결과 증거가 아니다.
+- 원 controller 실패를 보존한 뒤 성공 경로 검증에는 **명시적인 별도 canary 검색1건**이
+  필요하다. 실패한 원 key의 자동 우회 재생성으로 숨기지 않고 두 identity를 따로 보고한다.
+  새 canary가 실제 성공하면 그 요청의 결과 문항 열기·동일 key 재조회/중복 계산 방지를
+  검증한다. 실제 결과 목록/DB 열기는 아직 PENDING이다.
+- 이 identity 변경을 사용자에게 명시하고 `EOM:2 similarity-gui`의
+  `실패 원 기록 보존 · 새 GUI 검증 검색1회` no-echo 입력창을 준비했다. 승인/입력 전 새
+  검색이나 수치 작업은 제출하지 않는다. 원 실패 요청 로그와 원 CLAIMED metadata를
+  보존하며, 새 canary에는 기존 nonce 강제 선택을 사용하지 않고 실제 GUI의 새 key를 쓴다.
+
 ## 실제 GUI 등록 풀이 응답 불일치 수정 — 2026-11-01 17:33 UTC 이후
 
 - 재인증 성공 후10321/원 key/원 operation/request SHA를 그대로 재사용했다. 최초 pin 응답은

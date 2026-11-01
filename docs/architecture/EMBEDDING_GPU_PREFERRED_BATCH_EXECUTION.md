@@ -2922,3 +2922,14 @@ both released bytes and the original operation, rather than retagging its Artifa
 10. Retry: the same original key/pin is replayed; FAILED records are never rewritten.
 11. A relaxed old schema or relabelled preparation pointer would change released
     history, so add only the response successor needed by this confirmed mismatch.
+
+### Owner release and physical controller are independent pins
+
+The QUERY owner's `cpu_configuration.owner_source_commit` identifies the owner
+wheel; `controller_release` identifies the protected root controller actually
+selected by `EOM_EMBEDDING_INDEX_PREPARE_ENTRYPOINT`. Updating the owner must not
+automatically update the controller pin. A release operator compares the latter
+against the protected root entrypoint before activation and preserves the GPU
+controller, numerical environment and INDEX configuration unless those components
+are explicitly in the rollout. A mismatch is a configuration error, not GPU BUSY
+or permission to disable peer/release validation.
