@@ -9,8 +9,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from eom_catalog_contracts.embedding_private_chat_query import (
-    EmbeddingPrivateChatQueryResult,
-    validate_private_chat_query_result,
+    SupportedPrivateNumericalQueryResult,
+    parse_private_numerical_query_result,
 )
 from eom_workflow.native_private_chat_query_coordinator import NativePrivateQueryExecuted
 
@@ -96,7 +96,7 @@ class FixedNativePrivateQueryLauncher:
         self.assert_current_runtime()
         return self._observe(execution_id)
 
-    def run(self, prepared: PreparedNativePrivateChatQuery) -> EmbeddingPrivateChatQueryResult:
+    def run(self, prepared: PreparedNativePrivateChatQuery) -> SupportedPrivateNumericalQueryResult:
         prepared.__post_init__()
         try:
             return run_fixed_native_cpu(
@@ -121,12 +121,12 @@ class FixedNativePrivateQueryLauncher:
             raise NativePrivateQueryLaunchError("NATIVE_PRIVATE_QUERY_UNCERTAIN") from None
 
     def completion_observation(
-        self, prepared: PreparedNativePrivateChatQuery, result: EmbeddingPrivateChatQueryResult
+        self, prepared: PreparedNativePrivateChatQuery, result: SupportedPrivateNumericalQueryResult
     ) -> NativePrivateQueryExecuted:
         """Observe the exact private units; saved result bytes never authorize a launch."""
         prepared.__post_init__()
         try:
-            validate_private_chat_query_result(prepared.request, result)
+            result = parse_private_numerical_query_result(prepared.request, result)
             boot_file = Path("/proc/sys/kernel/random/boot_id")
             boot = boot_file.read_text(encoding="ascii").strip()
             prepare, query = self.observe(prepared.execution_id)

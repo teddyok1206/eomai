@@ -157,7 +157,7 @@ if sys.argv[3]=='QUERY':
     leaf.run_native_supported_reference_query_descriptors=run
     entry.run_native_embedding_reference_query(profile='CPU_INDEX_FP32',backend_scope=lambda:None)
 elif sys.argv[3]=='PRIVATE_CHAT_QUERY':
-    leaf.run_native_private_chat_query_descriptors=run
+    leaf.run_native_supported_private_chat_query_descriptors=run
     entry.run_native_embedding_private_chat_query(profile='CPU_INDEX_FP32',backend_scope=lambda:None)
 else:
     leaf.run_native_embedding_descriptors=run

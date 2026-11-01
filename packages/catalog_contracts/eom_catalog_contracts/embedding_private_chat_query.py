@@ -6,6 +6,7 @@ from typing import Literal
 
 from eom_identifiers import content_sha256
 from eom_protocol.models import JobId
+from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import ConfigDict, Field, model_validator
 
 from eom_catalog_contracts.embedding_reference_query import (
@@ -24,6 +25,11 @@ from eom_catalog_contracts.models import FrozenModel, Sha256
 from eom_catalog_contracts.private_chat_query_basis import (
     PrivateChatQueryBasis,
     private_chat_query_text_sha256,
+)
+from eom_catalog_contracts.public_solution_query import (
+    PublicSolutionQueryInput,
+    PublicSolutionQueryResult,
+    validate_public_solution_query_result,
 )
 
 MAX_PRIVATE_CHAT_QUERY_BYTES = 128 * 1024
@@ -118,3 +124,42 @@ def validate_private_chat_query_result(
         or result.shard.rows != (request.row.encoding,)
     ):
         raise ValueError("private Chat result differs from its exact request")
+
+
+type SupportedPrivateNumericalQueryInput = EmbeddingPrivateChatQueryInput | PublicSolutionQueryInput
+type SupportedPrivateNumericalQueryResult = (
+    EmbeddingPrivateChatQueryResult | PublicSolutionQueryResult
+)
+
+
+def parse_private_numerical_query_input(value: object) -> SupportedPrivateNumericalQueryInput:
+    """Numerical family selection only, never Chat ownership or physical execution admission."""
+    try:
+        document = raw_similarity_contract_value(value)
+        if (
+            isinstance(document, dict)
+            and document.get("schema_version") == "embedding-reference-query-input/2.0"
+        ):
+            return PublicSolutionQueryInput.model_validate(document)
+        return EmbeddingPrivateChatQueryInput.model_validate(document)
+    except (ValueError, TypeError, AttributeError, SchemaError):
+        raise ValueError("PRIVATE_CHAT_QUERY_NUMERICAL_INPUT_INVALID") from None
+
+
+def parse_private_numerical_query_result(
+    request: SupportedPrivateNumericalQueryInput, value: object
+) -> SupportedPrivateNumericalQueryResult:
+    """Resolve only the exact result family/hash of the supplied canonical numerical input."""
+    try:
+        document = raw_similarity_contract_value(value)
+        if isinstance(request, PublicSolutionQueryInput):
+            common = PublicSolutionQueryResult.model_validate(document)
+            validate_public_solution_query_result(request, common)
+            return common
+        if isinstance(request, EmbeddingPrivateChatQueryInput):
+            legacy = EmbeddingPrivateChatQueryResult.model_validate(document)
+            validate_private_chat_query_result(request, legacy)
+            return legacy
+        raise ValueError()
+    except (ValueError, TypeError, AttributeError, SchemaError):
+        raise ValueError("PRIVATE_CHAT_QUERY_NUMERICAL_RESULT_INVALID") from None

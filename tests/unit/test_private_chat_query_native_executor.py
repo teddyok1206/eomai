@@ -50,6 +50,7 @@ from sqlalchemy.orm import Session
 
 from tests.unit.test_embedding_private_chat_query import backend
 from tests.unit.test_native_embedding_query_handoff import prepared as reference_prepared
+from tests.unit.test_private_chat_public_query_projection import inputs, project
 from tests.unit.test_private_chat_query_basis import TEXT
 from tests.unit.test_private_chat_query_source_owner import make_private_source_case
 from tests.unit.test_private_chat_query_workflow import definition_body
@@ -281,6 +282,25 @@ def test_wrong_step_key_never_allocates_or_launches(executor):
     assert not executor.runs
     with executor.publisher.sessions() as session:
         assert session.scalar(select(func.count()).select_from(JobRecord)) == 2
+
+
+def test_legacy_executor_rejects_common_input_before_staging_or_launch(executor, monkeypatch):
+    common = project(*inputs()).native
+    monkeypatch.setattr(
+        executor.service,
+        "_allocate",
+        Mock(return_value=(SimpleNamespace(request=common), None)),
+    )
+    stage = Mock()
+    monkeypatch.setattr(
+        "eom_workflow_runner.private_chat_query_native_executor.stage_native_private_chat_query",
+        stage,
+    )
+    with pytest.raises(ValueError, match=r"^PRIVATE_CHAT_QUERY_EXECUTOR_CONTEXT_INVALID$"):
+        executor.execute()
+    stage.assert_not_called()
+    executor.launcher.run.assert_not_called()
+    assert executor.encodes == 0
 
 
 @pytest.mark.parametrize(

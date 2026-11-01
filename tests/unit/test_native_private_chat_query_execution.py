@@ -9,8 +9,12 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
 from eom_catalog_service import embedding_native_cpu as leaf
-from eom_catalog_service.embedding_encoder_adapter import encode_private_chat_query
+from eom_catalog_service.embedding_encoder_adapter import (
+    encode_private_chat_query,
+    encode_public_solution_query,
+)
 from eom_identifiers import canonical_json_bytes, sha256_bytes, sha256_file
 from eom_orchestrator import native_embedding_cpu_execution as cpu
 from eom_orchestrator import native_private_chat_query_handoff as handoff
@@ -28,6 +32,7 @@ from eom_workflow.private_chat_query_execution import (
 from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAssociation
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
+from tests.unit.test_embedding_incremental_encoding import SyntheticNativeBackend
 from tests.unit.test_embedding_native_cpu import PINS
 from tests.unit.test_embedding_private_chat_query import backend
 from tests.unit.test_inference_transfer_cpu_systemd import observation
@@ -91,6 +96,7 @@ def staged(tmp_path, monkeypatch, prepared):
 
 
 def test_exact_five_controls_and_marking_replay_keep_private_question_local(staged):
+    assert "2 m/s와 3 m/s는 같지 않다" not in repr(staged)
     assert {path.name for path in staged.workspace.iterdir()} == {
         "workflow.json",
         "policy.json",
@@ -209,7 +215,7 @@ def runtime_output(staged, monkeypatch):
     root = handoff.RUNTIME_ROOT / staged.execution_id
     root.mkdir(mode=0o750)
     root.chmod(0o750)
-    encoded = encode_private_chat_query(staged.request, backend(staged.request))
+    encoded = numerical_output(staged)
     for name, raw in (
         ("result.json", canonical_json_bytes(encoded.result)),
         ("vectors.f32", encoded.vectors),
@@ -218,6 +224,17 @@ def runtime_output(staged, monkeypatch):
         path.write_bytes(raw)
         path.chmod(0o640)
     return root, encoded
+
+
+def numerical_output(prepared):
+    if isinstance(prepared.request, PublicSolutionQueryInput):
+        numerical_backend = SyntheticNativeBackend(prepared.request.spaces.query)
+        numerical_backend.batch_size, numerical_backend.threads = (
+            prepared.request.batch_size,
+            prepared.request.threads,
+        )
+        return encode_public_solution_query(prepared.request, numerical_backend)
+    return encode_private_chat_query(prepared.request, backend(prepared.request))
 
 
 def test_exact_private_result_hash_finite_l2_row_and_local_publication_inputs(staged, monkeypatch):
@@ -567,7 +584,7 @@ def test_private_checkpoint_completion_requires_exact_successful_unit_observatio
     monkeypatch.setattr(
         launcher.FixedNativePrivateQueryLauncher, "_observe", lambda *_: (prepare, query)
     )
-    result = encode_private_chat_query(prepared.request, backend(prepared.request)).result
+    result = numerical_output(prepared).result
     owner = launcher.FixedNativePrivateQueryLauncher("a" * 64, "b" * 64, lambda: None)
     if fault:
         with pytest.raises(launcher.NativePrivateQueryLaunchError, match="COMPLETION_UNCERTAIN"):

@@ -15,7 +15,10 @@ from typing import TYPE_CHECKING, Any
 from eom_catalog_contracts.embedding_private_chat_query import (
     MAX_PRIVATE_CHAT_QUERY_BYTES,
     EmbeddingPrivateChatQueryInput,
-    validate_private_chat_query_result,
+    SupportedPrivateNumericalQueryInput,
+    SupportedPrivateNumericalQueryResult,
+    parse_private_numerical_query_input,
+    parse_private_numerical_query_result,
 )
 from eom_catalog_contracts.embedding_reference_query import (
     MAX_REFERENCE_QUERY_BYTES,
@@ -702,24 +705,58 @@ def run_native_private_chat_query_descriptors(
     descriptors: NativeEmbeddingDescriptors,
     backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
 ) -> None:
-    """Distinct source-only private handoff; an old reference unit/policy is not a grant."""
+    """Released private numerical1 entry remains closed to common QUERY2 input."""
+    _run_private_numerical_descriptors(
+        descriptors,
+        backend_scope,
+        parse=EmbeddingPrivateChatQueryInput.model_validate,
+        maximum_input_bytes=MAX_PRIVATE_CHAT_QUERY_BYTES,
+    )
+
+
+def run_native_supported_private_chat_query_descriptors(
+    descriptors: NativeEmbeddingDescriptors,
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+) -> None:
+    """Private-purpose numerical1/2 leaf; no Workflow/source/physical grant is adopted."""
+    _run_private_numerical_descriptors(
+        descriptors,
+        backend_scope,
+        parse=parse_private_numerical_query_input,
+        maximum_input_bytes=MAX_REFERENCE_QUERY_BYTES,
+    )
+
+
+def _run_private_numerical_descriptors(
+    descriptors: NativeEmbeddingDescriptors,
+    backend_scope: Callable[[], AbstractContextManager[NativeEmbeddingBackend]],
+    *,
+    parse: Callable[[dict[str, Any]], SupportedPrivateNumericalQueryInput],
+    maximum_input_bytes: int,
+) -> None:
     try:
-        initial = _prepare_descriptors(descriptors, MAX_PRIVATE_CHAT_QUERY_BYTES)
-        request = _read_canonical_request(
-            descriptors.input, initial[0], EmbeddingPrivateChatQueryInput.model_validate
-        )
+        initial = _prepare_descriptors(descriptors, maximum_input_bytes)
+        request = _read_canonical_request(descriptors.input, initial[0], parse)
         _ready_outputs(descriptors, initial)
         with backend_scope() as backend:
             _ready_outputs(descriptors, initial)
-            encoded = encode_private_chat_query(request, backend)
-            validate_private_chat_query_result(request, encoded.result)
+            result: SupportedPrivateNumericalQueryResult
+            if isinstance(request, PublicSolutionQueryInput):
+                common = encode_public_solution_query(request, backend)
+                result, vectors = common.result, common.vectors
+            else:
+                legacy = encode_private_chat_query(request, backend)
+                result, vectors = legacy.result, legacy.vectors
+            result = parse_private_numerical_query_result(request, result)
             _write_outputs(
                 descriptors,
                 initial,
-                encoded.result.shard,
-                encoded.vectors,
-                canonical_json_bytes(encoded.result),
-                MAX_PRIVATE_CHAT_QUERY_BYTES,
+                result.shard,
+                vectors,
+                canonical_json_bytes(result),
+                MAX_REFERENCE_QUERY_BYTES
+                if isinstance(request, PublicSolutionQueryInput)
+                else MAX_PRIVATE_CHAT_QUERY_BYTES,
             )
     except (
         NativeEmbeddingHandoffError,

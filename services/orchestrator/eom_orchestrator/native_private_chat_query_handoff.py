@@ -5,32 +5,46 @@ from __future__ import annotations
 import argparse
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from eom_catalog_contracts.embedding_private_chat_query import (
     MAX_PRIVATE_CHAT_QUERY_BYTES,
     EmbeddingPrivateChatQueryInput,
-    EmbeddingPrivateChatQueryResult,
-    validate_private_chat_query_result,
+    SupportedPrivateNumericalQueryInput,
+    SupportedPrivateNumericalQueryResult,
+    parse_private_numerical_query_input,
+    parse_private_numerical_query_result,
 )
-from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
+from eom_catalog_contracts.embedding_reference_query import (
+    MAX_REFERENCE_QUERY_BYTES,
+    raw_similarity_contract_value,
+)
 from eom_catalog_contracts.embedding_runtime_bundle import (
     MAX_RUNTIME_BUNDLE_BYTES,
     EmbeddingRuntimeBundle,
     parse_embedding_runtime_bundle,
 )
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
+from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
 from eom_identifiers import canonical_json_bytes
 from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryExecutionPolicy,
-    PrivateChatQueryWorkflowRequest,
+)
+from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryExecutionPolicyV2,
+    PrivateChatQueryWorkflowRequestV2,
+    SupportedPrivateChatQueryExecutionPolicy,
+    SupportedPrivateChatQueryWorkflowRequest,
+    parse_supported_private_chat_query_execution_policy,
+    parse_supported_private_chat_query_workflow_request,
 )
 from eom_workflow.private_chat_query_publication import (
     PrivateChatQueryLaunchAssociation,
     validate_private_chat_query_launch,
 )
+from eom_workflow.private_chat_query_publication_v2 import validate_private_chat_public_query_launch
 
 from eom_orchestrator.inference_transfer_cpu_handoff import (
     CpuHandoffError,
@@ -58,43 +72,54 @@ class NativePrivateQueryHandoffError(ValueError):
 @dataclass(frozen=True, slots=True)
 class PreparedNativePrivateChatQuery:
     execution_id: str
-    workflow_request: PrivateChatQueryWorkflowRequest
-    policy: PrivateChatQueryExecutionPolicy
+    workflow_request: SupportedPrivateChatQueryWorkflowRequest
+    policy: SupportedPrivateChatQueryExecutionPolicy
     bundle: EmbeddingRuntimeBundle
     association: PrivateChatQueryLaunchAssociation
-    request: EmbeddingPrivateChatQueryInput
+    request: SupportedPrivateNumericalQueryInput = field(repr=False)
 
     def __post_init__(self) -> None:
         try:
             validate_native_query_execution_id(self.execution_id)
-            request = PrivateChatQueryWorkflowRequest.model_validate(
+            request = parse_supported_private_chat_query_workflow_request(
                 raw_similarity_contract_value(self.workflow_request)
             )
-            policy = PrivateChatQueryExecutionPolicy.model_validate(
+            policy = parse_supported_private_chat_query_execution_policy(
                 raw_similarity_contract_value(self.policy)
             )
             bundle = parse_embedding_runtime_bundle(raw_similarity_contract_value(self.bundle))
             launch = PrivateChatQueryLaunchAssociation.model_validate(
                 raw_similarity_contract_value(self.association)
             )
-            native = EmbeddingPrivateChatQueryInput.model_validate(
+            native = parse_private_numerical_query_input(
                 raw_similarity_contract_value(self.request)
             )
-            validate_private_chat_query_launch(launch, request, policy, bundle, native)
+            if isinstance(request, PrivateChatQueryWorkflowRequestV2):
+                if not isinstance(policy, PrivateChatQueryExecutionPolicyV2) or not isinstance(
+                    native, PublicSolutionQueryInput
+                ):
+                    raise ValueError()
+                validate_private_chat_public_query_launch(launch, request, policy, bundle, native)
+            else:
+                if not isinstance(policy, PrivateChatQueryExecutionPolicy) or not isinstance(
+                    native, EmbeddingPrivateChatQueryInput
+                ):
+                    raise ValueError()
+                validate_private_chat_query_launch(launch, request, policy, bundle, native)
             validate_fixed_native_cpu_resources(request.resource_profile)
             if native.job_id != "job_" + self.execution_id:
                 raise ValueError()
         except Exception:
             # Nested schema failures can contain private question bytes.
             raise NativePrivateQueryHandoffError("NATIVE_PRIVATE_QUERY_INPUT_INVALID") from None
-        for field, value in (
+        for attribute, value in (
             ("workflow_request", request),
             ("policy", policy),
             ("bundle", bundle),
             ("association", launch),
             ("request", native),
         ):
-            object.__setattr__(self, field, value)
+            object.__setattr__(self, attribute, value)
 
     @property
     def workspace(self) -> Path:
@@ -155,7 +180,7 @@ def _read_prepared(execution_id: str, owner: CpuHandoffIdentity) -> PreparedNati
         OWNER_ROOT / execution_id, owner=owner, uid=owner.owner_uid, gid=owner.owner_gid, mode=0o700
     ) as directory:
 
-        def read(name: str) -> dict[str, Any]:
+        def read(name: str, maximum_bytes: int) -> dict[str, Any]:
             return _canonical_value(
                 read_protected_cpu_handoff_member(
                     directory,
@@ -163,20 +188,27 @@ def _read_prepared(execution_id: str, owner: CpuHandoffIdentity) -> PreparedNati
                     uid=owner.owner_uid,
                     gid=owner.owner_gid,
                     mode=0o600,
-                    maximum_bytes=MAX_RUNTIME_BUNDLE_BYTES
-                    if name == "bundle.json"
-                    else MAX_PRIVATE_CHAT_QUERY_BYTES,
+                    maximum_bytes=maximum_bytes,
                 )
             )
 
         try:
+            raw_workflow = read("workflow.json", MAX_REFERENCE_QUERY_BYTES)
+            workflow = parse_supported_private_chat_query_workflow_request(raw_workflow)
+            limit = (
+                MAX_REFERENCE_QUERY_BYTES
+                if isinstance(workflow, PrivateChatQueryWorkflowRequestV2)
+                else MAX_PRIVATE_CHAT_QUERY_BYTES
+            )
+            if len(canonical_json_bytes(raw_workflow)) > limit:
+                raise ValueError()
             return PreparedNativePrivateChatQuery(
                 execution_id,
-                PrivateChatQueryWorkflowRequest.model_validate(read("workflow.json")),
-                PrivateChatQueryExecutionPolicy.model_validate(read("policy.json")),
-                parse_embedding_runtime_bundle(read("bundle.json")),
-                PrivateChatQueryLaunchAssociation.model_validate(read("association.json")),
-                EmbeddingPrivateChatQueryInput.model_validate(read("input.json")),
+                workflow,
+                parse_supported_private_chat_query_execution_policy(read("policy.json", limit)),
+                parse_embedding_runtime_bundle(read("bundle.json", MAX_RUNTIME_BUNDLE_BYTES)),
+                PrivateChatQueryLaunchAssociation.model_validate(read("association.json", limit)),
+                parse_private_numerical_query_input(read("input.json", limit)),
             )
         except Exception:
             raise NativePrivateQueryHandoffError(
@@ -221,7 +253,7 @@ def prepare_native_private_query_handoff(execution_id: str) -> None:
 
 def materialize_native_private_query_output(
     prepared: PreparedNativePrivateChatQuery,
-) -> EmbeddingPrivateChatQueryResult:
+) -> SupportedPrivateNumericalQueryResult:
     prepared.__post_init__()
     owner = _owner()
     if _read_prepared(prepared.execution_id, owner) != prepared:
@@ -235,7 +267,11 @@ def materialize_native_private_query_output(
             uid=0,
             gid=owner.owner_gid,
             mode=0o640,
-            maximum_bytes=MAX_PRIVATE_CHAT_QUERY_BYTES,
+            maximum_bytes=(
+                MAX_REFERENCE_QUERY_BYTES
+                if isinstance(prepared.request, PublicSolutionQueryInput)
+                else MAX_PRIVATE_CHAT_QUERY_BYTES
+            ),
         )
         vectors = read_protected_cpu_handoff_member(
             directory,
@@ -246,8 +282,7 @@ def materialize_native_private_query_output(
             maximum_bytes=prepared.request.spaces.query.model_spec.dimension * 4,
         )
     try:
-        result = EmbeddingPrivateChatQueryResult.model_validate(_canonical_value(raw))
-        validate_private_chat_query_result(prepared.request, result)
+        result = parse_private_numerical_query_result(prepared.request, _canonical_value(raw))
         read_unit_vectors(
             vectors,
             dimension=result.shard.dimension,

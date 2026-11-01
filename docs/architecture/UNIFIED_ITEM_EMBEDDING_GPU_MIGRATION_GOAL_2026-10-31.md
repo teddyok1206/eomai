@@ -191,6 +191,25 @@ activation이나 old vector 삭제의 근거가 아니다.
 root release-operator의 migration allowlist는 그대로다. 이는 패키지 일치 검사일 뿐 DB67
 업그레이드 승인이나 운영 호환성 증명이 아니다. 실제67 배포는 기존 operator successor와
 drain/rollback·활성 consumer 검증을 마친 후에만 수행한다.
+
+다음 physical leaf는 기존 private CPU unit/owner directory/고정 FD·host capacity lock을
+공유한다. Prepared value는 private request1/policy1/native1 또는 private request2/policy2/
+common numerical2의 정확한 조합만 받는다. public REFERENCE Workflow를 private 권한으로
+채택하지 않는다. unknown family의 최초 읽기는 기존 common QUERY 상한1MiB 안에서만
+수행하고, private1의 기존128KiB 상한은 원 schema 및 후속 family 검사로 그대로 유지한다.
+private2에는 이미 정의된 common1MiB 상한을 적용하며 truncation은 없다. 파일 identity/mode/
+hash와 원 launch marker·실제 unit invocation·벡터 차원/유한성/L2 검증을 생략하지 않는다.
+질문은 owner-local input에만 있고 canonical intent/result/shard/binary publication은 기존
+소유자를 사용한다. 새 service/template/실행 권한/DB·queue를 만들지 않으며 actual owner/
+admission이 준비되기 전 numerical leaf 지원만으로 운영2를 켜지 않는다.
+기존 `run_native_private_chat_query_descriptors`는1-only/128KiB로 남긴다. 새 supported leaf만
+1/2를 받으며, 고정 private entrypoint는 설치된 source pin 아래 이 leaf를 선택한다. 기존
+reference leaf/INDEX purpose로 바꾸지 않고, 라이브 구형 private owner는 계속1-only를 검사한다.
+현 private QUERY unit은 다른 CPU 작업과 동일한 보호 Conda 실행환경과
+`/etc/eom/embedding-native-cpu.env`를 쓴다. 실제 private2 전환 때에는 이 공용 프로그램/
+configuration/receipt/runtime bundle과 소비자 정책을 함께 검증·조율해야 하며, 실행 중인
+수치 작업 밑에서 package나 env를 바꿔치기하지 않는다. GPU 실행 파일·환경의 원 pin도
+유지한다. source-only FD 테스트는 이 운영 호환성 증명을 대신하지 않는다.
 Slack 첫 문장은 한국어 요약이며 문항 내용·보고서 전문·인증 정보는 보내지 않는다.
 goal 완료는 GPU 프로세스 active나 설치 PASS가 아니라 U01–U05의 실제 결과로 판단한다.
 

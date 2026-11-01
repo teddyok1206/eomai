@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Literal
 
+from eom_catalog_contracts.embedding_private_chat_query import EmbeddingPrivateChatQueryInput
 from eom_identifiers import content_sha256, new_job_id, new_revision_id
 from eom_orchestrator.embedding_artifact_store import EmbeddingArtifactStore
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
@@ -329,6 +330,9 @@ class CatalogNativePrivateChatQueryExecutor:
             prepared, history = self._allocate(
                 session, request, command_lease, workflow.workflow_id, step.step_run_id
             )
+            original_native = prepared.request
+            if not isinstance(original_native, EmbeddingPrivateChatQueryInput):
+                raise ValueError("PRIVATE_CHAT_QUERY_EXECUTOR_CONTEXT_INVALID")
             coordinator = NativePrivateChatQueryCoordinator(request, prepared.association)
             allocation = history.records[0].payload
             if not isinstance(allocation, NativePrivateQueryAllocation):
@@ -414,7 +418,7 @@ class CatalogNativePrivateChatQueryExecutor:
                     session, request, command_lease, workflow.workflow_id, step.step_run_id
                 )
                 validate_current_private_chat_query_input(
-                    current, prepared.association, prepared.request
+                    current, prepared.association, original_native
                 )
                 history = self._history(coordinator, session)
                 if len(history.records) == 1:
