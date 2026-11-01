@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
+from eom_workflow.private_chat_query_execution_v2 import SupportedPrivateChatQueryWorkflowRequest
 from eom_workflow.private_chat_query_submission_context import (
     PrivateChatQuerySubmissionContext,
     private_chat_query_submission_key,
@@ -43,7 +43,7 @@ def start_private_chat_query_in_session(
     session: Session,
     *,
     definition: WorkflowDefinitionRecord,
-    request: PrivateChatQueryWorkflowRequest,
+    request: SupportedPrivateChatQueryWorkflowRequest,
     context: PrivateChatQuerySubmissionContext,
     actor_type: str,
     actor_id: str,

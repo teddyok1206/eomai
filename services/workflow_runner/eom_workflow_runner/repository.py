@@ -49,6 +49,11 @@ from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryWorkflowRequest,
     parse_private_chat_query_workflow_request,
 )
+from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryWorkflowRequestV2,
+    SupportedPrivateChatQueryWorkflowRequest,
+    parse_supported_private_chat_query_workflow_request,
+)
 from eom_workflow.private_chat_query_submission_context import (
     PrivateChatQuerySubmissionContext,
     private_chat_query_submission_fingerprint,
@@ -711,12 +716,12 @@ def workflow_request_storage_document(
         | InferenceTransferWorkflowRequest
         | SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
-        | PrivateChatQueryWorkflowRequest
+        | SupportedPrivateChatQueryWorkflowRequest
     ),
 ) -> dict[str, Any]:
     """Serialize a request without dropping schema-required nullable values."""
-    if isinstance(request, PrivateChatQueryWorkflowRequest):
-        return parse_private_chat_query_workflow_request(request).model_dump(mode="json")
+    if isinstance(request, (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2)):
+        return parse_supported_private_chat_query_workflow_request(request).model_dump(mode="json")
     if isinstance(request, SupportedReferenceQueryWorkflowRequest):
         return parse_supported_reference_query_workflow_request(request).model_dump(mode="json")
     if isinstance(request, LOCAL_EMBEDDING_REQUEST_TYPES):
@@ -1072,7 +1077,7 @@ def create_workflow_instance(
         | InferenceTransferWorkflowRequest
         | SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
-        | PrivateChatQueryWorkflowRequest
+        | SupportedPrivateChatQueryWorkflowRequest
     ),
     idempotency_key: str,
     actor_type: str,
@@ -1164,11 +1169,13 @@ def create_workflow_instance(
             "creative learning source owner cannot admit another Workflow purpose",
         )
     if (
-        isinstance(request, PrivateChatQueryWorkflowRequest)
+        isinstance(request, (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2))
         or definition.definition_key == PRIVATE_CHAT_QUERY_WORKFLOW_KEY
     ):
         if (
-            not isinstance(request, PrivateChatQueryWorkflowRequest)
+            not isinstance(
+                request, (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2)
+            )
             or definition.definition_key != PRIVATE_CHAT_QUERY_WORKFLOW_KEY
             or private_chat_query_context is None
             or runtime_context is not None
@@ -1425,7 +1432,7 @@ def _persist_workflow_instance(
         | InferenceTransferWorkflowRequest
         | SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
-        | PrivateChatQueryWorkflowRequest
+        | SupportedPrivateChatQueryWorkflowRequest
     ),
     idempotency_key: str,
     actor_type: str,
@@ -1435,7 +1442,7 @@ def _persist_workflow_instance(
     private_chat_query_context: PrivateChatQuerySubmissionContext | None = None,
 ) -> tuple[WorkflowInstanceRecord, bool]:
     request_data = workflow_request_storage_document(request)
-    if isinstance(request, PrivateChatQueryWorkflowRequest):
+    if isinstance(request, (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2)):
         if private_chat_query_context is None:
             raise WorkflowError(
                 WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
@@ -1497,6 +1504,7 @@ def _persist_workflow_instance(
             *LOCAL_EMBEDDING_REQUEST_TYPES,
             SupportedReferenceQueryWorkflowRequest,
             PrivateChatQueryWorkflowRequest,
+            PrivateChatQueryWorkflowRequestV2,
         ),
     ):
         role_schema_version = _stored_role_protocol(definition)
@@ -1535,6 +1543,7 @@ def _persist_workflow_instance(
                     *LOCAL_EMBEDDING_REQUEST_TYPES,
                     SupportedReferenceQueryWorkflowRequest,
                     PrivateChatQueryWorkflowRequest,
+                    PrivateChatQueryWorkflowRequestV2,
                 ),
             )
             else WorkflowStage.INFERENCE_TRANSFER.value

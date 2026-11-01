@@ -136,7 +136,12 @@ def make_private_public_source_from_legacy(
 
     def read(_application, session, caller, context):
         assert _application.catalog is owner.catalog
-        assert session is old.fault.session
+        # Each concurrent caller owns its actual root; a shared fixture Session
+        # slot is not a valid concurrency/authority observation.
+        assert session.get_bind() is old.publisher.engine
+        assert session.get_transaction() is not None and session.get_transaction().is_active
+        assert not session.in_nested_transaction()
+        assert not session.new and not session.dirty and not session.deleted
         assert caller.operator_id == old.projection.origin.actor_id
         assert context == request.context_request
         old.events.append("common_document")

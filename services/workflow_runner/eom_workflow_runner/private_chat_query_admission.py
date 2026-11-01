@@ -11,7 +11,6 @@ from eom_workflow.compiler import compile_definition_data
 from eom_workflow.definition_execution_protocol import definition_execution_protocol
 from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryWorkflowRequest,
-    parse_private_chat_query_workflow_request,
 )
 from eom_workflow.private_chat_query_execution_v2 import (
     PrivateChatQueryWorkflowRequestV2,
@@ -27,9 +26,9 @@ from eom_workflow.private_chat_query_submission_context import (
 )
 from eom_workflow.private_chat_query_workflow import (
     PrivateChatQueryWorkflowDefinition,
-    validate_private_chat_query_definition,
 )
 from eom_workflow.private_chat_query_workflow_v2 import (
+    PrivateChatQueryWorkflowDefinitionV2,
     parse_supported_private_chat_query_workflow_definition,
     validate_supported_private_chat_query_definition,
 )
@@ -102,15 +101,15 @@ def resolve_private_chat_query_submission_controls(
     session: Session,
     *,
     definition: WorkflowDefinitionRecord,
-    request: PrivateChatQueryWorkflowRequest,
+    request: SupportedPrivateChatQueryWorkflowRequest,
     context: PrivateChatQuerySubmissionContext,
     actor_type: str,
     actor_id: str,
     owner: PrivateChatQueryOwnerAdmission | None,
     executor: PrivateChatQueryNativeExecutor | None,
-) -> ResolvedPrivateChatQuerySources:
+) -> ResolvedPrivateChatQuerySources | ResolvedPrivateChatPublicQuerySources:
     """Current clean-root authority, not retained submission/physical permission."""
-    request = parse_private_chat_query_workflow_request(request)
+    request = parse_supported_private_chat_query_workflow_request(request)
     context = validate_private_chat_query_submission_context(request, context)
     if (
         owner is None
@@ -132,7 +131,10 @@ def resolve_private_chat_query_submission_controls(
     if current is None or current.active is not True:
         raise ValueError("PRIVATE_CHAT_QUERY_SUBMISSION_DEFINITION_INVALID")
     compiled = compile_definition_data(current.canonical_definition, current.source_path, set())
-    if not isinstance(compiled.definition, PrivateChatQueryWorkflowDefinition) or (
+    if not isinstance(
+        compiled.definition,
+        (PrivateChatQueryWorkflowDefinition, PrivateChatQueryWorkflowDefinitionV2),
+    ) or (
         current.definition_key != compiled.definition.definition_key
         or current.definition_version != compiled.definition.definition_version
         or current.schema_version != compiled.definition.schema_version
@@ -144,9 +146,14 @@ def resolve_private_chat_query_submission_controls(
         or definition.canonical_definition != compiled.as_dict()
     ):
         raise ValueError("PRIVATE_CHAT_QUERY_SUBMISSION_DEFINITION_INVALID")
-    validate_private_chat_query_definition(compiled.definition, request)
+    validate_supported_private_chat_query_definition(compiled.definition, request)
     scope = owner.resolve_submission(session, request, context)
-    if type(scope) is not ResolvedPrivateChatQuerySources:
+    expected_scope = (
+        ResolvedPrivateChatPublicQuerySources
+        if isinstance(request, PrivateChatQueryWorkflowRequestV2)
+        else ResolvedPrivateChatQuerySources
+    )
+    if type(scope) is not expected_scope:
         raise ValueError("PRIVATE_CHAT_QUERY_SUBMISSION_CONTEXT_INVALID")
     scope.__post_init__()
     if scope.request != request or scope.projection.origin != context.origin:
