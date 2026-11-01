@@ -72,6 +72,19 @@
   전체520 GPU 대상별 무결성·모든 구 소비자 전환·참조 감사 뒤 정확한 구 derivative 삭제라는
   원 종료 조건은 그대로다. 사용자에게 같은 화면의 결과 확인1회만 요청했고 비밀번호는
   요구하지 않았다. 창작11737 slot04 USAGE_LIMIT 실패도 임의 재시도/성공 처리하지 않는다.
+- 09:20 후속에서는 같은 실제 새 attempt `56bb8a59e8cf4343ab82a45ccfa71d2e`의 root
+  PID2260154/native2261127이 live였다. native FD store1, 원 ready-observation8,764 bytes,
+  input-grant783 bytes/input8,929 bytes를 확인했다. 앞선 pregrant 관측 경계를 통과해 실제
+  입력이 배정됐지만 이 시점 출력은0이므로 완료/수치 forward PASS로 확대하지 않는다.
+  `/tmp/eom-gpu-resumed-original-file-metadata-20261101.txt` 참조. GPU work를 새로 제출하거나
+  원 handle을 재시작하지 않았다. Slack `devreport_f0c4e52be5a34ecba145fdcd9366e781`는
+  IN_PROGRESS/SENT200이며 한국어 요약을 첫 문장에 두었다.
+- root Slack 보고의 Git status가 optional index refresh로 `.git/index`만 root0600으로
+  재생성한 부작용을 발견했다. 해당 파일의 regular/nlink1·lock 부재와 정확한 소유권을
+  확인하고 eom:eom0600으로만 복구했다. Git/작업 파일 내용 변경이나 recursive chown은
+  하지 않았고 일반 사용자 `git status`가 다시 정상이다. 후속 root 개발 보고/읽기 진단은
+  `GIT_OPTIONAL_LOCKS=0`으로 실행한다. 실패 출력과 복구 metadata는
+  `/tmp/eom-git-index-ownership-restoration-20261101.log`에 보존했다.
 
 ## private 공통 준비의 원 head·원 요청 보존 — 2026-11-01 08:39 UTC
 
