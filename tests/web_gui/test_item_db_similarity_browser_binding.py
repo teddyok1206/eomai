@@ -58,3 +58,23 @@ vm.runInContext(transport+'\nthis.searchSimilar='+binding+';',context);
         [node, "-e", program, str(source)], capture_output=True, text=True, timeout=20
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_preparing_progress_and_failed_observation_preserve_original_query_pin():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is required for the production presentation check")
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [
+            node,
+            "--experimental-default-type=module",
+            str(root / "tests/web_gui/item_db_similarity_progress_checks.mjs"),
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "similarity_preparing_original_pin_and_timeout_replay=PASS" in result.stdout

@@ -307,6 +307,29 @@ vector materialization으로 O(control/input bytes + vector bytes)다. source/cl
 executor/상태기계를 복제하는 대안보다 기존 finite run/증거/완료 경로에 native port 하나를
 연결하는 것이 작다. 이 후보는 private physical worker/global2 운영 활성화와 구별한다.
 
+### DB 검색 최초 응답과 원 범위 재조회 — 2026-11-01
+
+책임은 기존 DB search application의 HTTP 진행 순서다. 정본은 선택한 immutable Item,
+Graph/policy pin과 기존 QUERY/parent/receipt이며 browser state나 latest head가 아니다.
+기존 `item-db-similarity-view/1.0`의 PENDING/PREPARING + pinned_query를 재사용한다.
+첫 unpinned 호출은 현재 실제 operator의 source selection만 검증해 그 pin을 반환하고,
+native prepare/Workflow/model을 시작하지 않는다. 화면이 pin을 받은 후 같은 key와 pin으로
+재조회하면 기존 QUERY를 시작/관측한다. 첫 응답이 유실되면 아직 실행이 없으므로 다시
+선택할 수 있고, 이후 유실은 이미 받은 원 pin을 그대로 전달한다. 중간에 head가 바뀌어도
+accepted 원 실행을 latest로 재해석하거나 새 key로 우회하지 않는다.
+
+지배 접근은 O(1) 작은 request/pin 전달과 기존 indexed source/Job lookup이다. binary 복제,
+새 DB/queue/cache/index/endpoint/schema/dependency는 없다. source/current permission은
+기존 Catalog adapter가 매 호출 검증하고 command/idempotency/commit은 기존 owners가
+담당한다. 첫 PREPARING은 실행 접수가 아니라 read-only selection 완료다. source가 준비되지
+않았거나 권한이 바뀌면 기존 오류로 닫고 fake vector/결과는 만들지 않는다. 브라우저는 이미
+받은 pin을 실패 후에도 보존하며 다른 문항의 늦은 응답은 적용하지 않는다.
+
+첫 요청에서 준비와 실행을 모두 기다리는 대안은 timeout 전에 pin을 전달하지 못한다.
+별도 영속 준비 추적기보다 기존 202 진행 응답과 자동 observation을 사용하는 것이 작다.
+검증은 초기 응답 전 실행0, 같은 key/pin 재조회, 원 response 유실·head 변경·source 권한 거부,
+HTTP/BFF/browser의 PREPARING 표시와 오류 후 pin 보존을 포함한다.
+
 ### private 공통 parent의 실제 source admission — 2026-11-01
 
 책임은 기존 private source owner와 finite parent application이다. 정본은 원 Chat origin과

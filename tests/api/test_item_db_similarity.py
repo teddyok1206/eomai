@@ -64,6 +64,20 @@ def test_db_selection_to_official_query_read_and_current_navigation_over_http(cl
     )
 
 
+def test_first_http_response_returns_preparing_pin_before_slow_query(client):
+    http, value, _app = client
+    body = value.body.model_dump(mode="json") | {"pinned_query": None}
+    first = post(http, value, body=body)
+    assert first.status_code == 202 and first.headers["Cache-Control"] == "no-store"
+    data = first.json()["data"]
+    assert (data["status"], data["phase"]) == ("PENDING", "PREPARING")
+    value.queries.prepare.assert_not_called()
+    second = post(http, value, body=body | {"pinned_query": data["pinned_query"]})
+    assert second.status_code == 200 and second.json()["data"]["status"] == "READY"
+    value.queries.prepare.assert_called_once()
+    assert value.selector.resolve.call_args.args[0].pinned_query == value.value.query
+
+
 @pytest.mark.parametrize("field", ("actor_id", "permissions", "runtime", "vectors", "path"))
 def test_public_http_body_cannot_supply_authority_execution_or_paths(client, field):
     http, value, _app = client

@@ -100,6 +100,19 @@ class ItemDbSimilarityApplicationService:
                 "Similarity source unavailable",
                 "The exact selected source could not be verified.",
             )
+        if body.pinned_query is None:
+            # Deliver the exact scope before any potentially long native prepare.
+            # Losing this read-only response cannot orphan an execution; after
+            # receipt, the client keeps this pin through timeout/head changes.
+            return ItemDbSimilarityView(
+                status="PENDING",
+                phase="PREPARING",
+                candidates=(),
+                pinned_query=selected.query,
+                search_snapshot_sha256=selected.search_snapshot_sha256,
+                message="검색할 문항과 범위를 확인했습니다. 같은 범위로 검색을 이어갑니다.",
+                error_code=None,
+            )
         reply = self.queries.prepare(context, selected.query, idempotency_key=idempotency_key)
         if not isinstance(reply, ReferenceQueryPrepareReplyV4):
             raise ApiError(

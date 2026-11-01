@@ -170,8 +170,116 @@ def flow():
         )
     )
     app = ItemDbSimilarityApplicationService(selector, queries, results, metadata)
-    body = ItemDbSimilarityInput(selection=value.selection)
+    body = ItemDbSimilarityInput(selection=value.selection, pinned_query=value.query)
     return NS(**locals())
+
+
+def test_initial_selection_delivers_pin_before_any_native_work(flow):
+    body = ItemDbSimilarityInput(selection=flow.value.selection)
+    result = flow.app.search(flow.context, body, idempotency_key=flow.value.key)
+    assert result.status == "PENDING" and result.phase == "PREPARING"
+    assert result.pinned_query == flow.value.query
+    assert result.search_snapshot_sha256 == flow.value.result.search_snapshot_sha256
+    assert result.error_code is None and result.candidates == ()
+    flow.queries.prepare.assert_not_called()
+    flow.results.read_public.assert_not_called()
+    flow.metadata.selected_production_item_candidates.assert_not_called()
+    assert flow.selector.resolve.call_args.args[0].pinned_query is None
+    result = flow.app.search(
+        flow.context,
+        ItemDbSimilarityInput(selection=body.selection, pinned_query=result.pinned_query),
+        idempotency_key=flow.value.key,
+    )
+    assert result.status == "READY"
+    flow.queries.prepare.assert_called_once_with(
+        flow.context, flow.value.query, idempotency_key=flow.value.key
+    )
+
+
+def test_lost_initial_selection_response_has_no_execution_to_restart(flow):
+    body = ItemDbSimilarityInput(selection=flow.value.selection)
+    one = flow.app.search(flow.context, body, idempotency_key=flow.value.key)
+    two = flow.app.search(flow.context, body, idempotency_key=flow.value.key)
+    assert one == two and one.status == "PENDING"
+    assert flow.selector.resolve.call_count == 2
+    flow.queries.prepare.assert_not_called()
+
+
+def test_native_timeout_after_pin_keeps_exact_scope_and_original_key(flow):
+    first = flow.app.search(
+        flow.context,
+        ItemDbSimilarityInput(selection=flow.value.selection),
+        idempotency_key=flow.value.key,
+    )
+    original = ItemDbSimilarityInput(
+        selection=flow.value.selection, pinned_query=first.pinned_query
+    )
+    flow.queries.prepare.side_effect = ApiError(
+        503, "REFERENCE_QUERY_PREPARE_UNAVAILABLE", "Unavailable", "Synthetic lost response"
+    )
+    with pytest.raises(ApiError):
+        flow.app.search(flow.context, original, idempotency_key=flow.value.key)
+    flow.queries.prepare.side_effect = None
+    result = flow.app.search(flow.context, original, idempotency_key=flow.value.key)
+    assert result.status == "READY" and result.pinned_query == first.pinned_query
+    assert all(
+        call.args[1] == flow.value.query and call.kwargs["idempotency_key"] == flow.value.key
+        for call in flow.queries.prepare.call_args_list
+    )
+    assert all(
+        call.args[0].pinned_query == first.pinned_query
+        for call in flow.selector.resolve.call_args_list[1:]
+    )
+
+
+def test_head_change_after_preparing_uses_real_catalog_pinned_scope(flow, monkeypatch):
+    from eom_catalog_service import item_db_similarity_selection as selection_module
+
+    catalog = object.__new__(selection_module.CatalogItemDbSimilaritySelection)
+    catalog.owner = NS(
+        configuration=NS(registry=NS(corpus_id="corpus_" + "1" * 32, namespace="cpu")),
+        cuda_owner=NS(configuration=NS(registry=NS(namespace="cuda"))),
+    )
+    catalog.retrieval = NS(
+        resolve_snapshot_pointer=Mock(return_value=flow.value.query.graph_snapshot)
+    )
+    head = NS(
+        graph_snapshot_revision_id=flow.value.query.graph_snapshot.graph_snapshot_revision_id,
+        policy_revision_id=flow.value.query.policy_revision_id,
+        policy_sha256=flow.value.query.policy_sha256,
+    )
+    repository = NS(current_namespace_revision=Mock(return_value=(head, 1)))
+    monkeypatch.setattr(
+        selection_module, "EmbeddingRegistryRepository", lambda _session: repository
+    )
+    session = Mock()
+    session.get.return_value = NS(
+        state="PUBLISHED", snapshot_sha256=flow.value.result.search_snapshot_sha256
+    )
+    original = flow.selector.resolve.side_effect
+
+    def resolve(request):
+        scope, _ = catalog._scope(session, request)
+        assert scope.graph_snapshot == flow.value.query.graph_snapshot
+        return original(request)
+
+    flow.selector.resolve.side_effect = resolve
+    first = flow.app.search(
+        flow.context,
+        ItemDbSimilarityInput(selection=flow.value.selection),
+        idempotency_key=flow.value.key,
+    )
+    assert repository.current_namespace_revision.call_count == 1
+    repository.current_namespace_revision.side_effect = AssertionError(
+        "a newer index head must not replace the acknowledged scope"
+    )
+    result = flow.app.search(
+        flow.context,
+        ItemDbSimilarityInput(selection=flow.value.selection, pinned_query=first.pinned_query),
+        idempotency_key=flow.value.key,
+    )
+    assert result.status == "READY" and result.pinned_query == first.pinned_query
+    assert repository.current_namespace_revision.call_count == 1
 
 
 def test_actual_context_and_same_source_go_through_official_query_and_read_in_rank_order(flow):
