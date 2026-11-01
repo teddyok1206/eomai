@@ -16,6 +16,7 @@ from eom_api_contracts.item_db_similarity import ItemDbSimilarityInput
 from eom_catalog_contracts.item_db_similarity_selection import ItemDbSimilaritySelectionReply
 from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareReplyV4,
+    ReferenceQueryPrepareReplyV5,
     routed_reference_query_error_reply,
 )
 from eom_catalog_service.curriculum_graph_structure import integrated_science_curriculum_units
@@ -174,7 +175,17 @@ def flow():
     return NS(**locals())
 
 
-def test_actual_context_and_same_source_go_through_official_query_and_read_in_rank_order(flow):
+@pytest.mark.parametrize("registered", (False, True))
+def test_actual_context_and_same_source_go_through_official_query_and_read_in_rank_order(
+    flow, registered
+):
+    if registered:
+        document = flow.queries.prepare.return_value.model_dump(mode="json")
+        document["schema_version"] = "system-rag-reference-query-prepare-reply/5.0"
+        document["preparation"]["schema_ref"] = (
+            "eom://schemas/workflow/reference-query-routed-preparation/3.0"
+        )
+        flow.queries.prepare.return_value = ReferenceQueryPrepareReplyV5.model_validate(document)
     result = flow.app.search(flow.context, flow.body, idempotency_key=flow.value.key)
     assert result.status == "READY" and result.pinned_query == flow.value.query
     assert (
