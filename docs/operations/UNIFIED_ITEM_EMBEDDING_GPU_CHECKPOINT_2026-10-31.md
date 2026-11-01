@@ -1,5 +1,64 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## private 공통 준비의 원 head·원 요청 보존 — 2026-11-01 08:39 UTC
+
+- 직전 turn은 QUERY26782 운영 반영과 private2 기존 Runner/claim 연결의 **PROGRESS**였다.
+  이번 source **`100474a045a3469c6b7c8135078e6c6df7a25cc2`**은 기존 Catalog/Runner의
+  처음 선택·원 요청 준비·read/replay에 private context2/request2를 연결했다. 전체 목표는
+  ACTIVE이며 실제 private2 wire/runtime 활성화나 완료 결과 조회를 달성한 것으로 표시하지
+  않는다. 기존 private prepare/reply1 bytes는 그대로다.
+- 같은 small frozen preparation은 namespace로 legacy CONTENT_ONLY/1,024 또는 common
+  CONCRETE_FACETS/16,384 한도를 명확히 구분한다. 새로운 상한을 임의로 만든 것이 아니라
+  기존 common16,384를 재사용한다. recipe/purpose/space/현재 actor/Graph/policy/원 origin과
+  source/manifest/hash/producer 권한 검증은 유지한다. 질문을 가짜 approved Item으로 만들거나
+  old request1을2로 덮지 않는다. 새로운 queue/DB/index/cache/dependency/worker 권한은 없다.
+- 최초만 공식 current head를1회 선택해 exact index revision/member/hash를 request2에 핀한다.
+  같은 origin/key의 replay/read는 원 선택을 재인가하며 최신 head/정책/실행 설정으로
+  바꾸지 않는다. 실제 정책2·runtime bundle bytes와 actor의 effective permission digest를
+  읽고 원 Workflow/START를 기존 atomic application으로 제출한다. missing index는 typed
+  UNAVAILABLE이며 새 실행·다른 view/구형 벡터 fallback이 아니다. family·origin·권한·범위가
+  바뀐 재전송은 명시적으로 거부하고 원 기록을 보존한다.
+- source 기존/공통 준비·서비스1·transport1·공통 document read **187 PASS /45.01s**, 추가
+  revoked Chat와 old1 relabel 거부 **3 PASS /7.29s**다. initial common index3/4 파일검사
+  첫24 실패는 test fake의 authorize hook에 존재하지 않는 `phase` 인자를 읽은 문제였다.
+  실제 hook을 그대로 호출하고 invocation 수만 세도록 fixture를 고쳤다. 해당26 PASS와
+  최종187을 확인했으며 production guard를 완화하지 않았다. strict mypy 영향4 및
+  Ruff/format/shell/diff PASS다. source/IAM/START ports는 명시적 synthetic이며 모델 실행0.
+  `/tmp/eom-private2-initial-prepare-final-source-20261101.log`,
+  `/tmp/eom-private2-initial-prepare-final-guards-source-20261101.log` 참조.
+- disposable PostgreSQL 전체 첫 결과 **113 PASS/1 FAIL /192.16s**다. 실패1은 기존 테스트가
+  확장 전 imported control-reader 함수명을 patch한 fixture 오류였다. 같은 원 replay 때
+  새 control/head를 읽으면 실패시키는 의도를 유지하고 supported reader를 감시하도록 수정했다.
+  해당1과 새 준비3을 **집중 재실행4 PASS/110 DESELECTED /12.98s**로 확인했다. 이 결과를
+  전체114를 한 명령으로 다시 PASS했다고 보고하지 않는다. 실제 source core는 두 실행 사이
+  동일하고, 새3도 첫 전체 실행부터 PASS다. 원 Workflow/START/read/replay, missing head의
+  무생성, changed scope의 무재선택을 실제 PG에서 확인했다. Chat/IAM/head는 fake ports다.
+  `.tests`, `-v2.tests`는 `/tmp/eom-private2-prepare-testdb-20261101` prefix에 보존했다.
+- 테스트 DB `/tmp/eom-api-testdb-20261101082849_e8bb8aef` migration67 왕복/role reconcile/
+  공식 cleanup PASS, state directory REMOVED다. 첫 migration invocation은 잘못 입력한
+  존재하지 않는 test-state 경로를 guard가 쓰기 전에 거부했다. 해당 log를 보존하고 실제
+  준비 log의 경로를 확인해 실행했다. 운영 DB migration/pytest/정본·구 vectors 삭제0이다.
+- 공식 build/RECORD 및 별도 non-editable 설치본 **190 PASS /45.77s**다. API build metadata와
+  실제5 module 경로가 candidate prefix 안인지 먼저 확인했고 production credentials를
+  전달하지 않았다. wheel directory
+  `/tmp/eom-api-build/100474a045a3469c6b7c8135078e6c6df7a25cc2.zzPzrt/dist`, platform SHA
+  `a0fccb076a49b299da504311fe7ed7e2258dc83cadcb3e33d8f8b9afc43341c1`, contracts
+  `9de5acfeceb0a6527d38d2ba97b54005b2b7f0b727709bdde6cdae5f7e40eef0`, API
+  `5d76afa454967cdccdb3b496d95ab50206cff8927011b8813ee745984e1d7730`다.
+  설치본 `/tmp/eom-private2-prepare-installed.dCQOxXGH/site-packages`,
+  `/tmp/eom-private2-prepare-installed-20261101.tests` 참조. 운영 shared install/재시작0이다.
+- 기존08:30 timer에서 공통 CUDA space 등록 기출은 **137/520·잔여383**이다.08:00의134보다
+ 3개 늘었으며 frozen target-set/space hash는 불변, historical FAILED7도 그대로다. 관측 시
+  후속CPU1 RUNNING이며 이를 CUDA forward라고 부르지 않는다. 이 수는 read-only registered
+  binding metadata이지 전체520 최종 무결성 acceptance가 아니다. INDEX PID1683578 및
+  QUERY2191271을 그대로 유지했다. 창작11737의 slot04 사용량 한도 실패도 재해석/재시도하지
+  않았다. 새 authorized GUI query 완료/read/replay는 여전히 PENDING이다.
+- 다음은 기존 completed private reader/application의1/2 공통 closure와 schema-first
+  prepare/reply2·receiver/client/runtime 연결이다. global2 CLOSED를 유지하며 source 후보
+  검증만으로 활성화하지 않는다. operator67/호환 rollout, 실제 AI full-report→Graph→INDEX4,
+  실제 GUI query/read/replay, 전체520 CUDA integrity 및 모든 구 consumer 전환 뒤 정확한
+  old derivative retirement/delete의 종료 조건은 그대로다. 정본과 기존 실패 이력은 보존한다.
+
 ## QUERY 준비 비용의 운영 반영·공통 private 명령 연결 — 2026-11-01 08:16 UTC
 
 - 직전 설명 turn도 실제 임시 DB 검사106 PASS를 확인하고 해당 DB/제한 역할/state를 공식
