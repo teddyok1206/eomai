@@ -34,7 +34,11 @@ from tests.unit.test_private_chat_query_batch_plan import child_request, private
 
 
 def private_planning_case(*, batch_id=None, status="ACQUIRED"):
-    original = private_parent_case()
+    return private_planning_case_for_parent(private_parent_case(), batch_id=batch_id, status=status)
+
+
+def private_planning_case_for_parent(original, *, batch_id=None, status="ACQUIRED"):
+    """The same finite metadata over supplied canonical test controls, not current authority."""
     request = original.request
     if batch_id is not None:
         request = EmbeddingBatchPlanRequestV17.model_validate(

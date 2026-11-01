@@ -230,6 +230,25 @@ state 검증, SQL/등록은 기존 Orchestrator adapter 책임이다. 별도 GPU
 복제보다 원 store의 명시적 protocol family 확장이 작다. actual private completion/driver/
 cohost 연결 전에는 metadata support만으로 physical worker나 global2를 활성화하지 않는다.
 
+private GPU 완료 증거 읽기는 기존 public QUERY의 canonical receipt/parent/binding 해석을
+하나의 query-batch read adapter로 공유한다. 공개 entry는 기존 함수명/오류 의미를 유지하고,
+private entry는 actual current private source DTO·원 launch·private2.1 observation만 받는다.
+정본은 receipt1.0/1.1 Artifact와 원 parent Job/selection/routing/history다. exact revision/
+schema/media/bytes/hash/lifecycle·원 actor/Graph/policy/recipe/space·child input/result/producer
+관계를 확인하고 private origin도 실제 현재 source origin과 맞춘다. public Reference authority를
+private 권한으로 빌리거나 current/latest를 찾지 않는다. 작은 typed reference만 공유하고
+질문/벡터를 새 store나 history에 복제하지 않는다.
+
+주 접근은 Job PK와 원 event의 bounded read, keyed Artifact prefetch 및 한 receipt의 bounded
+JSON 해석이며 O(receipt/control bytes + child 수), private child는1개다. 기존 clean root 안에서
+읽고 actual current source/lease·전후 권한은 caller application이 소유한다. resolver 결과는
+권한이 아니라 이미 검증한 child metadata다. 원 key 재조회만 허용하며 missing/stale/hash/
+origin/FAILED parent는 명시적 오류이고 모델 재실행·복구/최신값 대입은 없다. contracts는
+순수하고 SQL/파일 해석은 기존 Runner/Catalog adapters에 남는다. 새 schema/DB/migration/
+queue/캐시는 없으며 두 목적의 거의 같은 전체 reader를 복제하는 대안보다 공통 immutable
+proof 해석과 명시적 목적별 source/context 검증이 작다. 기존 public entry는 얇은 호환 export로
+보존하며 실제 GPU 실행/등록 또는 private cohost를 이 read support만으로 활성화하지 않는다.
+
 ### private 공통 parent의 실제 source admission — 2026-11-01
 
 책임은 기존 private source owner와 finite parent application이다. 정본은 원 Chat origin과
