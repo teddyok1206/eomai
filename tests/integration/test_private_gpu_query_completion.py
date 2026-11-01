@@ -1,5 +1,6 @@
 """Real PG/Artifact/parent completion; command/Workflow/IAM and GPU math are synthetic."""
 
+import os
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import contextmanager
 from pathlib import Path
@@ -8,6 +9,7 @@ from types import SimpleNamespace as NS
 import pytest
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactResolutionError
 from eom_identifiers import canonical_json_bytes
+from eom_orchestrator.inference_transfer_cpu_handoff import CpuHandoffIdentity
 from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
 from eom_orchestrator.native_private_chat_query_coordinator import NativePrivateChatQueryCoordinator
 from eom_orchestrator.native_query_job_allocation import create_native_query_launch
@@ -17,6 +19,7 @@ from eom_workflow.native_private_chat_query_coordinator import (
 )
 from eom_workflow.native_reference_query_coordinator import NativeQueryAllocation
 from eom_workflow.private_chat_query_workflow_v2 import private_chat_query_result_schema
+from eom_workflow_runner import private_chat_query_batch_material as batch_material
 from eom_workflow_runner.local_embedding_publications import (
     native_embedding_publications,
     new_native_artifact_producer,
@@ -69,16 +72,16 @@ def completion(private_batch, tmp_path, monkeypatch, request):
             coordinator.append(
                 session, native_private_chat_gpu_query_checkpoint(launch, phase, payload)
             )
-    workspace = tmp_path / "private-child-output"
-    workspace.mkdir(mode=0o700)
-    for name, raw in (
-        ("input.json", canonical_json_bytes(value.native)),
-        ("result.json", canonical_json_bytes(value.numeric.result.children[0].result)),
-        ("vectors.f32", value.numeric.vectors),
-    ):
-        target = workspace / name
-        target.write_bytes(raw)
-        target.chmod(0o600)
+    publication_root = tmp_path / "private-child-output"
+    publication_root.mkdir(mode=0o700)
+    monkeypatch.setattr(batch_material, "PRIVATE_QUERY_PUBLICATION_ROOT", publication_root)
+    monkeypatch.setattr(
+        batch_material, "fixed_owner_identity", lambda: CpuHandoffIdentity(os.getuid(), os.getgid())
+    )
+    batch_material.stage_private_batch_query_publication(
+        value.material, value.numeric.result.children[0].result, memoryview(value.numeric.vectors)
+    )
+    workspace = value.material.workspace
     workflow = NS(
         workflow_id=launch.workflow_id,
         state="RUNNING",
@@ -115,12 +118,7 @@ def completion(private_batch, tmp_path, monkeypatch, request):
     )
     application = NativePrivateChatQueryCompletion(owner)
     publications = native_embedding_publications(value.publisher, source_commit="a" * 40)
-    prepared = NS(
-        workflow_request=child,
-        association=launch,
-        request=value.native,
-        workspace=workspace,
-    )
+    prepared = value.material
 
     @contextmanager
     def root():

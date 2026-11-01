@@ -15,6 +15,7 @@ from eom_workflow_runner.embedding_batch_execution import (
     ActiveEmbeddingBatchExecution,
     PublishedEmbeddingBatchExecution,
 )
+from eom_workflow_runner.embedding_batch_plan_admission import ResolvedEmbeddingBatchPlanSources
 from eom_workflow_runner.embedding_batch_route import validate_embedding_batch_route
 from eom_workflow_runner.embedding_batch_source_authorization import (
     CatalogEmbeddingBatchSourceAuthorization,
@@ -75,6 +76,8 @@ class CatalogReferenceQueryBatchGroup:
             operation.publisher.sessions.begin() as session,
             operation.admission.admit(session, active.request) as sources,
         ):
+            if not isinstance(sources, ResolvedEmbeddingBatchPlanSources):
+                raise ValueError("REFERENCE_QUERY_BATCH_GROUP_INVALID")
             self.selection = sources.selection
             self.indexes = sources.indexes
             self.routing_policy = sources.policy

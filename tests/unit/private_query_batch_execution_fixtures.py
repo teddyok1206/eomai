@@ -2,17 +2,17 @@
 
 from types import SimpleNamespace as NS
 
-from eom_catalog_contracts.embedding_work_batch import PrivateChatWorkBatchInput
 from eom_orchestrator.embedding_batch_plan_store import EmbeddingBatchPlanStore
-from eom_workflow.embedding_batch_plan import EmbeddingBatchBound
 from eom_workflow.native_private_chat_query_coordinator import NativePrivateQueryBatchExecuted
 from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAssociation
 from eom_workflow.private_chat_query_submission_context import (
     build_private_chat_query_submission_context,
 )
+from eom_workflow_runner.private_chat_query_batch_material import PreparedBatchPrivateChatQuery
 from eom_workflow_runner.private_chat_query_source_read import (
     build_private_chat_public_query_native_input,
 )
+from eom_workflow_runner.query_batch_binding import prepare_private_chat_query_batch_binding
 
 from tests.unit.embedding_batch_execution_fixtures import execution_case
 from tests.unit.embedding_batch_publication_fixtures import replace_receipt_parent
@@ -65,40 +65,8 @@ def private_query_batch_case(tmp_path, monkeypatch, *, publisher=None, key):
             "association_sha256",
         )
     )
-    batch = PrivateChatWorkBatchInput.model_validate(
-        seal(
-            planned.batch.model_dump(mode="json")
-            | {
-                "children": [
-                    dict(
-                        scope_sha256=planned.batch.scope.scope_sha256,
-                        request=native.model_dump(mode="json"),
-                    )
-                ],
-            },
-            "request_sha256",
-        )
-    )
-    bound = EmbeddingBatchBound.model_validate(
-        seal(
-            planned.bound.model_dump(mode="json")
-            | {
-                "batch_request_sha256": batch.request_sha256,
-                "children": [
-                    dict(
-                        selection_sha256=value.request.child_selection_sha256s[0],
-                        workflow_id=launch.workflow_id,
-                        step_run_id=launch.step_run_id,
-                        native_job_id=native.job_id,
-                        workflow_request_sha256=child.request_sha256,
-                        native_input_sha256=native.request_sha256,
-                        launch_association_sha256=launch.association_sha256,
-                    )
-                ],
-            },
-            "record_sha256",
-        )
-    )
+    material = PreparedBatchPrivateChatQuery(child, sources.policy, sources.bundle, launch, native)
+    bound, batch = prepare_private_chat_query_batch_binding(value.request, planned.route, material)
     planned.batch, planned.bound = batch, bound
     numeric = execution_case(planned=planned)
     store = EmbeddingBatchPlanStore(value.request, value.selection, value.routing)
@@ -123,6 +91,7 @@ def private_query_batch_case(tmp_path, monkeypatch, *, publisher=None, key):
     )
     value.child, value.origin_context, value.sources = child, origin_context, sources
     value.native, value.launch, value.planned = native, launch, planned
+    value.material = material
     value.numeric, value.store, value.history = numeric, store, history
     value.receipt, value.saved, value.executed = receipt, saved, executed
     return value

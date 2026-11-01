@@ -17,6 +17,9 @@ from eom_workflow_runner.embedding_batch_execution import (
     PublishedEmbeddingBatchExecution,
 )
 from eom_workflow_runner.embedding_batch_source_authorization import ReferenceQueryBatchSource
+from eom_workflow_runner.private_chat_batch_plan_admission import (
+    ResolvedPrivateChatBatchPlanSources,
+)
 from eom_workflow_runner.reference_query_batch_group import (
     CatalogReferenceQueryBatchGroup,
     PreparedReferenceQueryBatchChild,
@@ -26,6 +29,7 @@ from eom_workflow_runner.reference_query_owner_admission import CatalogReference
 from eom_workflow_runner.reference_query_source_read import ReferenceQueryOwnerConfiguration
 from eom_workflow_runner.repository import CommandLeaseIdentity
 
+from tests.unit.private_chat_batch_plan_fixtures import private_planning_case
 from tests.unit.reference_query_batch_execution_fixtures import two_query_plan_case
 from tests.unit.test_embedding_batch_plan_admission import source_case
 
@@ -134,6 +138,22 @@ def test_out_of_order_gathering_keeps_original_child_order_and_one_shared_result
         ),
     )
     assert value.group.join(replay) is value.saved and len(value.run_calls) == 1
+
+
+def test_public_group_rejects_private_admission_before_reading_public_anchor_fields(
+    grouped, monkeypatch
+):
+    plan = private_planning_case()
+
+    @contextmanager
+    def private_controls(*_args, **_kwargs):
+        yield ResolvedPrivateChatBatchPlanSources(plan.selection, plan.policy)
+
+    operation = grouped.group.active.operation
+    monkeypatch.setattr(operation.admission, "admit", private_controls)
+    with pytest.raises(ValueError, match="REFERENCE_QUERY_BATCH_GROUP_INVALID"):
+        CatalogReferenceQueryBatchGroup(grouped.group.active, grouped.group.owner)
+    assert grouped.run_calls == []
 
 
 def test_duplicate_child_is_not_a_second_source_or_numerical_dispatch(grouped):

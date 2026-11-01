@@ -269,6 +269,22 @@ adapters에 남는다. 중단 후 원 producer/key로 재개하고 FAILED나 has
 application의 명시적 proof 분기와 원 history continuation이 작다. 운영 private physical/
 cohost 활성화는 이 application 후보의 검증과 별개다.
 
+GPU driver가 넘길 private material은 request2/policy2/bundle/launch1/numerical2를 검증하는
+frozen 값이며 CPU 고정 handoff와 구별한다. public/private는 서로 다른 기존 owner-local
+0700 root를 사용하되, readonly vector 검증·600 파일 생성·기존 member replay를 담당하는
+파일 adapter 하나를 공유한다. root/UID는 코드의 고정 composition 값이고 worker/API 입력이
+아니다. local→canonical publication 때만 bytes를 복사하며 Job/DB에는 질문·binary를 넣지
+않는다. partial/foreign marker/hash/권한 변경은 원 파일을 보존하고 명시적으로 거부한다.
+
+같은 pure binding builder가 기존 public1/2와 private3 envelope의 공통 bound metadata를
+만들되 entry별 concrete family/purpose 검증을 유지한다. private는 parent17의 child0 하나,
+같은 route/profile/scope와 원 launch/input hash만 연결한다. actual source/origin/lease 검증은
+기존 owner/parent admission 책임이며 이 작은 값은 실행 허가가 아니다. key lookup/ordered
+tuple 한 번으로 O(child 수 + input bytes), local materialization은 O(vector bytes)다. 새
+schema/table/queue/index/cache/수치 executor는 없고 기존 state/producer/key를 사용한다.
+public/predecessor bytes는 보존하며 CPU 고정 guard를 풀지 않는다. public IO/binding 코드를
+private용으로 복제하는 대안보다 공통 adapter와 목적별 작은 typed entry가 작다.
+
 ### private 공통 parent의 실제 source admission — 2026-11-01
 
 책임은 기존 private source owner와 finite parent application이다. 정본은 원 Chat origin과

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,15 +10,7 @@ from eom_catalog_contracts.embedding_runtime_bundle import (
     EmbeddingRuntimeBundle,
     parse_embedding_runtime_bundle,
 )
-from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
-from eom_identifiers import canonical_json_bytes
-from eom_orchestrator.inference_transfer_cpu_handoff import (
-    CpuHandoffError,
-    ensure_protected_cpu_owner_workspace,
-    fixed_owner_identity,
-    protected_cpu_handoff_directory,
-    write_protected_cpu_owner_member,
-)
+from eom_orchestrator.inference_transfer_cpu_handoff import fixed_owner_identity
 from eom_orchestrator.native_embedding_query_handoff import OWNER_ROOT
 from eom_workflow.reference_query_execution import (
     ReferenceQueryExecutionPolicy,
@@ -35,8 +26,13 @@ from eom_workflow.reference_query_execution import (
     validate_reference_query_native_result,
 )
 
+from eom_workflow_runner.query_batch_publication_files import (
+    QueryBatchPublicationFilesError,
+    require_query_batch_publication_layout,
+    stage_query_batch_publication_files,
+)
+
 QUERY_PUBLICATION_ROOT = OWNER_ROOT
-_MEMBERS = frozenset({"input.json", "result.json", "vectors.f32", "shard.json"})
 
 
 def _require(condition: bool) -> None:
@@ -45,18 +41,9 @@ def _require(condition: bool) -> None:
 
 
 def require_batch_query_publication_layout() -> None:
-    owner = fixed_owner_identity()
-    _require(os.getresuid() == (owner.owner_uid,) * 3 and os.getresgid() == (owner.owner_gid,) * 3)
     try:
-        with protected_cpu_handoff_directory(
-            QUERY_PUBLICATION_ROOT,
-            owner=owner,
-            uid=owner.owner_uid,
-            gid=owner.owner_gid,
-            mode=0o700,
-        ):
-            pass
-    except CpuHandoffError:
+        require_query_batch_publication_layout(QUERY_PUBLICATION_ROOT, fixed_owner_identity())
+    except QueryBatchPublicationFilesError:
         raise ValueError("REFERENCE_QUERY_BATCH_MATERIAL_INVALID") from None
 
 
@@ -107,38 +94,10 @@ def stage_batch_query_publication(
     replay never truncates an existing or partially written publication member.
     """
     _require(type(prepared) is PreparedBatchReferenceQuery)
-    require_batch_query_publication_layout()
     result = validate_reference_query_native_result(prepared.request, result)
-    _require(
-        type(vectors) is memoryview
-        and vectors.readonly
-        and vectors.ndim == 1
-        and vectors.c_contiguous
-        and vectors.format == "B"
-    )
-    binary = vectors.tobytes()
-    read_unit_vectors(
-        binary,
-        dimension=result.shard.dimension,
-        row_count=result.shard.row_count,
-        expected_sha256=result.shard.binary.sha256,
-    )
-    owner = fixed_owner_identity()
     try:
-        path = ensure_protected_cpu_owner_workspace(
-            QUERY_PUBLICATION_ROOT,
-            prepared.association.native_launch_job_id.removeprefix("job_"),
-            owner=owner,
+        stage_query_batch_publication_files(
+            QUERY_PUBLICATION_ROOT, fixed_owner_identity(), prepared.request, result, vectors
         )
-        with protected_cpu_handoff_directory(
-            path, owner=owner, uid=owner.owner_uid, gid=owner.owner_gid, mode=0o700
-        ) as directory:
-            _require(set(os.listdir(directory)).issubset(_MEMBERS))
-            for name, raw in (
-                ("input.json", canonical_json_bytes(prepared.request.model_dump(mode="json"))),
-                ("result.json", canonical_json_bytes(result.model_dump(mode="json"))),
-                ("vectors.f32", binary),
-            ):
-                write_protected_cpu_owner_member(directory, name, raw, owner=owner)
-    except CpuHandoffError:
+    except QueryBatchPublicationFilesError:
         raise ValueError("REFERENCE_QUERY_BATCH_MATERIAL_INVALID") from None
