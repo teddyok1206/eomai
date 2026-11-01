@@ -1,5 +1,59 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## private GPU canonical 결과의 실제 완료 처리 후보 — 2026-11-01
+
+- 직전 goal turn은 `2c79b52c`의 공통 proof reader와 검증을 완료한 **PROGRESS**였다.
+  이번 source **`a215d6dca0fdf29fdd325428a0c81d1fd805c2b6`**, tree
+  `61db99986012a059bf8ebc73ad5cc32ccb415e0b`는 그 reader를 실제 private 완료 application과
+  completed-publication reader에 연결한 **PROGRESS**다. 전체 목표는 ACTIVE다.
+- 기존 CPU 고정 handoff 대신 publication에 필요한 최소4개 typed 속성만 받는다. 이는
+  materialization adapter 경계이지 GPU/source 권한이 아니다. 같은 완료 application이
+  기존 CPU 관측과 GPU receipt1.1 관측을 구분하고, 실제 현재 source/origin/command root에서
+  원 parent17/bound/child0 proof를 확인한 뒤에만 기존 publisher로 query를 저장한다.
+  다음 독립 root에서 canonical result/binary와 proof를 대조하고 receipt를 저장한다.
+  완료 재조회에도 현재 source와 원 proof가 필요하지만 옛 unit/PID/임시 파일은 필요 없다.
+- 원1.0/2.0/2.1 family를 유지하는 continuation helper를 추가했다. ALLOCATION은 기존
+  명시적 builder가 선택하고 continuation은 저장된 prefix만 따른다. empty/mixed/foreign/
+  순서/완료 뒤 append를 거부한다. 과거 CPU 관측을 현재 CUDA 설정 때문에 GPU로 해석하지
+  않는다. 원 launch Job은 private2.0, checkpoint만2.1이며 final receipt2/numerical2와
+  released schema bytes/hash는 그대로다. 새 DB/table/index/queue/migration/dependency는 없다.
+- source 합집합 **423 PASS/300.77s**, 같은 범위의 비편집 별도 설치본
+  **423 PASS/321.45s**다. 현재 완료 조회/owner factory 회귀도 별도로
+  **79 PASS/187.58s**이며, strict mypy 직접/consumer8와 Ruff/format/shell syntax/diff PASS다.
+  최초 CPU128 및 continuation38은 합집합과 겹치므로 합산하지 않는다.
+- 공식 disposable PostgreSQL **314 PASS/566.39s**다. 새 GPU 완료13건은 먼저 집중
+  **13 PASS/83.06s**했으며 314건에 포함된다. query commit 직후·receipt 전후의 중단,
+  원 producer 재사용, 임시 파일 없는 재조회, concurrent exact checkpoint replay,
+  Chat/public/identity 철회, 원 proof 누락/손상, canonical binary 손상, FAILED 보존을 검사했다.
+  실제 Job/store/publisher/Artifact 파일을 사용하지만 Workflow/command/IAM와 GPU 수치
+  backend는 명시적 synthetic seam이다. 운영 admission/실제 CUDA/사용자 GUI PASS가 아니다.
+- 첫 negative subset은6 PASS/1 FAIL이었다. 이미 EXECUTED인 fixture에 계산 전 known-failure
+  API를 호출해 기존 `FAILURE_TERMINAL_OR_FOREIGN` guard가 거부했다. 실제 ALLOCATION-only
+  상태에서 supported failure를 기록하는 fixture로 고쳤고 final13/314에서 통과했다.
+  history 삭제/직접 row 보정/guard 완화는 하지 않았다. 초기 mypy의 존재하지 않는 파일
+  경로도 실제 consumer 경로로 교정해8개를 재실행했다. 최초 실패 log를 보존한다.
+- 임시 DB `/tmp/eom-api-testdb-20261101140854_4f416376`만 migration67 왕복/reconcile 후
+  사용했다. 최종 read_only/other_connections0 확인 뒤 공식 cleanup PASS/REMOVED다.
+  production66과 운영 데이터/FAILED/정본/구 vector는 변경0이다.
+- build/RECORD PASS. wheels는
+  `/tmp/eom-api-build/a215d6dca0fdf29fdd325428a0c81d1fd805c2b6.shzP0W/dist`다.
+  platform SHA `0660cbec2667268be20eb8ef7992ac651479916b1f749af0d6d19fc5e195f966`,
+  contracts `a4bdb8e674c2934f451983ba4e0bff3623187c1c78aaf3a482d6860b0d1fa97a`,
+  API `98c3a383bb37ba135a1b808920e9a108e761a6147142c7e94977a2314c17f0c8`다.
+  prefix `/tmp/eom-private-gpu-completion-installed.6F2HVS8O/site-packages`의 실제 module
+  paths를 먼저 확인했다. source/installed/PG 증거는 `/tmp/eom-private-gpu-completion-*20261101*`다.
+- 참고로14:21 read-only 기존 INDEX log의 최근600개 stage event(14:01:14–14:21:12)에서
+  LOCK_POPULATION/PREFETCH_PROVENANCE/ADMIT_CANDIDATES 각200회, 평균158/335/1570ms를
+  관측했다. 이는 bounded 표본이며 전체 wall-time 기여율이나 불필요한 호출이라는 증명이
+  아니다. 실제 source 준비 반복 비용의 후속 근거로만 남기며 새 cache/timeout 인상/검증
+  생략 또는 실행 중 pin 변경은 하지 않았다.
+- API1697848/Catalog2256180/QUERY2256183/INDEX2258114와30분 timer ACTIVE를 유지했다.
+  최신 정기 coverage는14:00 UTC의155/520·잔여365이며 당시 CPU RUNNING1/FAILED7이었다.
+  routine coverage를 더 자주 읽지 않았고 다음은14:30이다. 운영 배포/재시작/모델 제출/
+  인증 변경/구 vector 삭제0이고 private physical/global2는 CLOSED다. actual GUI query/read/
+  replay, 실제 AI full-report canary, 전체520 대상별 무결성/권한, private GPU driver/cohost와
+  모든 consumer 전환 후 정확한 구 파생 retirement/삭제는 여전히 미완료다.
+
 ## 공통 QUERY batch의 canonical proof reader 후보 — 2026-11-01
 
 - 직전 사용자 설명 turn은 기존 준비 오류와 최신 read-only 상태를 설명한
