@@ -1,5 +1,43 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 기존 Runner step·terminal의 private1/2 공유 — 2026-11-01 04:52 UTC
+
+- 같은 goal turn의 후속 **PROGRESS**다. source **`5a355c32c603b2c64ec2a8d291d72933a56fb31e`**
+  에서 기존 application step/공통 native terminal과 application-defined owner/executor port를
+  명시적1/2 family로 연결했다. source/lease owner·최대1 attempt·같은 command continuation·
+  DB root 밖 numerical 실행·원 private context·원 receipt identity와 현재 재인가를 유지한다.
+  새 runner/queue/DB schema/migration/service는 만들지 않았다.
+- request2의 step은 순수 `private_chat_query_result_schema`로 result2를 고른다. request/
+  output family가 다르거나 actor·Workflow/step·producer identity가 다르면 전이하지 않는다.
+  READY→RUNNING allocation과 late completion rollback, 완료 재조회/현재 receipt validator,
+  원 context 보존과 terminal shape를 같은 기존 상태기계로 처리한다.1/2 typed overload가
+  실제 owner/executor와 맞는지 engine/repository를 포함한 strict mypy10 PASS다.
+- source 최종 합집합 **265 PASS /196.03s**다. 이전 executor/coordinator/source·신규 step22·
+  legacy step/terminal·원 submission/command/1·2 owner admission 회귀를 한 번씩 포함했다.
+  별도 설치본의 변경 step/terminal/owner factory 범위는 **58 PASS /42.78s**다. 두 suite가
+  겹치므로 별도 고유 테스트 수로 합산하지 않는다. 초기22 setup error는 외부 fixture의
+  `completed` dependency를 test module에 노출하지 않은 문제였고 fixture import만 수정했다.
+  malformed 출력의 질문 노출 금지와 global2 CLOSED도 유지했다. source/IAM/receipt authority와
+  Workflow view는 이 step suite에서 명시적 synthetic이다. 실제 private2 SQL/claim/모델
+  end-to-end PASS가 아니다. 직전 canonical/metadata PG74 evidence는 앞 절에 보존한다.
+  `/tmp/eom-private2-runner-step-source-20261101.log`,
+  `/tmp/eom-private2-runner-step-final-source-20261101.log`,
+  `/tmp/eom-private2-runner-step-installed-20261101.tests`.
+- 공식 build-only/RECORD PASS. wheel directory
+  `/tmp/eom-api-build/5a355c32c603b2c64ec2a8d291d72933a56fb31e.lFVcZK/dist`;
+  platform SHA `c3c874a496df4d87143e76b9a51ae51ab5744aca73e1852d4a939a5541c33a55`,
+  contracts `bb468b4020dc06b01cf38d8065b38932f3ff160d4dba888336f8fafad0124408`,
+  API `6cd4d26457ae1de9838e92d51fb8e772bff1672830b807088646687186b92352`다.
+  `/tmp/eom-private2-runner-step-installed.jWU5jp9s/site-packages`의 실제 module 경로/source를
+  먼저 확인했다. 운영 runtime/공유 CPU env/API/QUERY/INDEX/creative 재시작0이며 삭제0이다.
+- Slack의04:49 canonical 복구 milestone은 SENT/HTTP200이며 한국어 한 문장 요약이 앞에
+  있다. 같은 후속 source 진척으로 추가 Slack을 보내지 않았다.
+- **여전히 전체 목표 ACTIVE**다. private2 fresh submission, repository/Runner command dispatch,
+  prepare/completed-read/실제 runtime 조립과 operator67/호환 rollout이 남아 있다. actual
+  authorized DB query/read/replay와 AI full-report→Graph→INDEX4, 전체 frozen520 CUDA 완료·
+  대상별 integrity, 기존 모든 consumer 전환 후 exact 구 파생 retirement/delete를 수행해야 한다.
+  이 source/설치본 PASS로 global2를 열거나 구 벡터를 먼저 삭제하지 않는다.
+
 ## private2 수치 실행·원 canonical 완료 복구 — 2026-11-01 04:49 UTC
 
 - 직전 GUI 안내 turn은 기존 준비 증거의 안내였고 goal implementation 진척으로 합산하지 않는다.
