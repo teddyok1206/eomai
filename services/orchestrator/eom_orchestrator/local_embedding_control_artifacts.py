@@ -69,6 +69,10 @@ from eom_workflow.private_chat_query_execution import (
     PRIVATE_CHAT_QUERY_POLICY_REF,
     PrivateChatQueryExecutionPolicy,
 )
+from eom_workflow.private_chat_query_execution_v2 import (
+    PRIVATE_CHAT_PUBLIC_QUERY_POLICY_REF,
+    PrivateChatQueryExecutionPolicyV2,
+)
 from eom_workflow.reference_query_execution import (
     REFERENCE_QUERY_POLICY_REF,
     ReferenceQueryExecutionPolicy,
@@ -545,6 +549,30 @@ class LocalEmbeddingControlArtifactPublisher:
             semantic_sha256=checked.policy_sha256,
             member="policy.json",
             schema=PRIVATE_CHAT_QUERY_POLICY_REF,
+            artifact_type=PRIVATE_CHAT_QUERY_POLICY_ARTIFACT_TYPE,
+            idempotency_key=idempotency_key,
+            created_at=created_at,
+        )
+
+    def publish_private_chat_public_query_policy(
+        self,
+        policy: PrivateChatQueryExecutionPolicyV2,
+        *,
+        idempotency_key: str,
+        created_at: datetime,
+    ) -> PublishedLocalEmbeddingControl:
+        """Common QUERY2 policy bytes, not current Chat ownership or execution admission."""
+        try:
+            checked = PrivateChatQueryExecutionPolicyV2.model_validate(
+                raw_similarity_contract_value(policy)
+            )
+        except (ValueError, TypeError, SchemaError):
+            raise ValueError("PRIVATE_CHAT_QUERY_CONTROL_INVALID") from None
+        return self._publish(
+            raw=canonical_json_bytes(checked),
+            semantic_sha256=checked.policy_sha256,
+            member="policy.json",
+            schema=PRIVATE_CHAT_PUBLIC_QUERY_POLICY_REF,
             artifact_type=PRIVATE_CHAT_QUERY_POLICY_ARTIFACT_TYPE,
             idempotency_key=idempotency_key,
             created_at=created_at,

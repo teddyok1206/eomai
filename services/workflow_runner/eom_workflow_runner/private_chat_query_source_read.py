@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Protocol, overload
 
 from eom_catalog_contracts.embedding_private_chat_query import EmbeddingPrivateChatQueryInput
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
@@ -19,22 +19,36 @@ from eom_catalog_contracts.private_chat_query_read import (
     ChatPrivateQueryOrigin,
     LiveChatQueryProjection,
 )
+from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
+from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    PublicSolutionSimilarityViewV4,
+)
 from eom_catalog_service.embedding_registry_catalog_adapter import CatalogEmbeddingRegistryVerifier
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     EmbeddingRegistryOwnerConfiguration,
+    ResolvedEmbeddingLookup,
 )
 from eom_catalog_service.pinned_artifact_resolution import (
     PinnedArtifactReadContext,
     PinnedArtifactResolutionError,
 )
 from eom_catalog_service.private_chat_similarity_ports import PreparedPrivateChatDocumentScope
+from eom_catalog_service.public_solution_document_scope import (
+    PublicSolutionDocumentScope,
+    validated_public_solution_entries,
+)
+from eom_catalog_service.public_solution_similarity_read import CatalogPublicSolutionSimilarityRead
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_identifiers import canonical_json_bytes
 from eom_identity_service import OperatorAuthorizationFence, OperatorAuthorizationFenceError
 from eom_orchestrator.embedding_runtime_bundle_artifacts import RUNTIME_BUNDLE_ARTIFACT_TYPE
 from eom_orchestrator.file_set_control_artifacts import CONTROL_FILE_SET_PROTOCOL
+from eom_orchestrator.general_chat_public_query_projection import (
+    prepare_private_chat_public_query_execution_input,
+)
 from eom_orchestrator.general_chat_similarity_basis import (
     PreparedPrivateChatQuery,
     prepare_private_chat_query_execution_input,
@@ -51,10 +65,21 @@ from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryWorkflowRequest,
     validate_private_chat_query_request_references,
 )
+from eom_workflow.private_chat_query_execution_v2 import (
+    PRIVATE_CHAT_PUBLIC_QUERY_POLICY_REF,
+    PrivateChatQueryExecutionPolicyV2,
+    PrivateChatQueryWorkflowRequestV2,
+    SupportedPrivateChatQueryExecutionPolicy,
+    SupportedPrivateChatQueryWorkflowRequest,
+    parse_supported_private_chat_query_execution_policy,
+    parse_supported_private_chat_query_workflow_request,
+    validate_private_chat_public_query_request_references,
+)
 from eom_workflow.private_chat_query_publication import (
     PrivateChatQueryLaunchAssociation,
     validate_private_chat_query_launch,
 )
+from eom_workflow.private_chat_query_publication_v2 import validate_private_chat_public_query_launch
 from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import TypeAdapter
 from sqlalchemy import Engine
@@ -81,8 +106,11 @@ class PrivateChatQueryOwnerConfiguration:
         )
         if (
             pointer.member_path != "policy.json"
-            or pointer.schema_ref != PRIVATE_CHAT_QUERY_POLICY_REF
+            or pointer.schema_ref
+            not in {PRIVATE_CHAT_QUERY_POLICY_REF, PRIVATE_CHAT_PUBLIC_QUERY_POLICY_REF}
             or pointer.media_type != "application/json"
+            or (pointer.schema_ref == PRIVATE_CHAT_PUBLIC_QUERY_POLICY_REF)
+            != isinstance(self.registry.namespace, PublicSolutionIndexNamespace)
         ):
             raise ValueError("PRIVATE_CHAT_QUERY_OWNER_CONFIGURATION_INVALID")
         TypeAdapter(Sha256).validate_python(self.native_execution_policy_sha256, strict=True)
@@ -125,6 +153,88 @@ class ResolvedPrivateChatQuerySources:
         object.__setattr__(self, "request", request)
         object.__setattr__(self, "policy", policy)
         object.__setattr__(self, "projection", projection)
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedPrivateChatPublicQuerySources:
+    """Current private origin and common public source closure, not retained authority."""
+
+    request: PrivateChatQueryWorkflowRequestV2
+    policy: PrivateChatQueryExecutionPolicyV2
+    bundle: EmbeddingRuntimeBundle
+    projection: LiveChatQueryProjection = field(repr=False)
+    documents: ResolvedEmbeddingLookup = field(repr=False)
+
+    def __post_init__(self) -> None:
+        request, policy = validate_private_chat_public_query_request_references(
+            self.request, self.policy, self.bundle
+        )
+        projection = LiveChatQueryProjection.model_validate(
+            raw_similarity_contract_value(self.projection)
+        )
+        if (
+            type(self.documents) is not ResolvedEmbeddingLookup
+            or projection.origin.actor_id != request.operator_audit.operator_id
+            or projection.origin.basis != request.context_request.query_basis
+        ):
+            raise ValueError("PRIVATE_CHAT_QUERY_SOURCE_CLOSURE_INVALID")
+        context = request.context_request
+        validated_public_solution_entries(
+            PublicSolutionDocumentScope(
+                PublicSolutionSimilarityViewV4.model_validate(
+                    context.views[0].model_dump(mode="json")
+                ),
+                context.graph_snapshot,
+                context.policy_revision_id,
+                context.policy_sha256,
+                context.source_classes,
+                context.maximum_sources,
+            ),
+            self.documents,
+        )
+        object.__setattr__(self, "request", request)
+        object.__setattr__(self, "policy", policy)
+        object.__setattr__(self, "projection", projection)
+
+
+def build_private_chat_public_query_native_input(
+    sources: ResolvedPrivateChatPublicQuerySources, *, job_id: str, query_request_id: str
+) -> PublicSolutionQueryInput:
+    """The original current question becomes common QUERY2, without a fake Item source."""
+    try:
+        if type(sources) is not ResolvedPrivateChatPublicQuerySources:
+            raise ValueError()
+        sources.__post_init__()
+        return prepare_private_chat_public_query_execution_input(
+            PreparedPrivateChatQuery(sources.projection.origin.basis, sources.projection.text),
+            sources.request,
+            sources.policy,
+            sources.bundle,
+            job_id=job_id,
+            query_request_id=query_request_id,
+        ).native
+    except (SchemaError, ValueError, TypeError, AttributeError):
+        raise ValueError("PRIVATE_CHAT_QUERY_CURRENT_INPUT_INVALID") from None
+
+
+def validate_current_private_chat_public_query_input(
+    sources: ResolvedPrivateChatPublicQuerySources,
+    launch: PrivateChatQueryLaunchAssociation,
+    native: PublicSolutionQueryInput,
+) -> None:
+    """Reconstruct exact original text/hash; actual actor/source access is checked elsewhere."""
+    try:
+        current = build_private_chat_public_query_native_input(
+            sources, job_id=launch.native_launch_job_id, query_request_id=launch.query_request_id
+        )
+        native = PublicSolutionQueryInput.model_validate(raw_similarity_contract_value(native))
+        validate_private_chat_public_query_launch(
+            launch, sources.request, sources.policy, sources.bundle, native
+        )
+        if current != native:
+            raise ValueError()
+    except (ValueError, TypeError, AttributeError, SchemaError):
+        raise ValueError("PRIVATE_CHAT_QUERY_CURRENT_INPUT_INVALID") from None
 
 
 def build_private_chat_query_native_input(
@@ -186,6 +296,16 @@ def require_private_chat_query_source_root(session: Session) -> object:
 def read_pinned_private_chat_query_controls(
     reader: PinnedArtifactReadContext, config: PrivateChatQueryOwnerConfiguration
 ) -> tuple[PrivateChatQueryExecutionPolicy, EmbeddingRuntimeBundle]:
+    """The legacy owner stays1-only; supported successors use their explicit read below."""
+    policy, bundle = read_pinned_supported_private_chat_query_controls(reader, config)
+    if not isinstance(policy, PrivateChatQueryExecutionPolicy):
+        raise ValueError("PRIVATE_CHAT_QUERY_CONTROL_SELECTION_INVALID")
+    return policy, bundle
+
+
+def read_pinned_supported_private_chat_query_controls(
+    reader: PinnedArtifactReadContext, config: PrivateChatQueryOwnerConfiguration
+) -> tuple[SupportedPrivateChatQueryExecutionPolicy, EmbeddingRuntimeBundle]:
     """Selected immutable bytes, never a release, source permission or default latest."""
     config.__post_init__()
     pointers = (config.native_execution_policy, config.runtime_bundle.manifest_member)
@@ -210,7 +330,7 @@ def read_pinned_private_chat_query_controls(
             raise ValueError("PRIVATE_CHAT_QUERY_CONTROL_NONCANONICAL")
         return value
 
-    policy = PrivateChatQueryExecutionPolicy.model_validate(
+    policy = parse_supported_private_chat_query_execution_policy(
         read(policy_member, PRIVATE_CHAT_QUERY_POLICY_ARTIFACT_TYPE, 64 * 1024)
     )
     raw_bundle = read(
@@ -224,6 +344,8 @@ def read_pinned_private_chat_query_controls(
     if (
         policy.policy_sha256 != config.native_execution_policy_sha256
         or policy.runtime_bundle != config.runtime_bundle
+        or (policy_member.schema_ref == PRIVATE_CHAT_PUBLIC_QUERY_POLICY_REF)
+        != isinstance(policy, PrivateChatQueryExecutionPolicyV2)
     ):
         raise ValueError("PRIVATE_CHAT_QUERY_CONTROL_SELECTION_INVALID")
     return policy, bundle
@@ -255,6 +377,7 @@ class CatalogPrivateChatQuerySourceOwner:
             engine, configuration.registry, identity_fence=identity_fence, settings=self.settings
         )
 
+    @overload
     def resolve_sources(
         self,
         session: Session,
@@ -262,10 +385,29 @@ class CatalogPrivateChatQuerySourceOwner:
         origin: ChatPrivateQueryOrigin,
         *,
         artifact_reader: PinnedArtifactReadContext | None = None,
-    ) -> ResolvedPrivateChatQuerySources:
+    ) -> ResolvedPrivateChatQuerySources: ...
+
+    @overload
+    def resolve_sources(
+        self,
+        session: Session,
+        request: PrivateChatQueryWorkflowRequestV2,
+        origin: ChatPrivateQueryOrigin,
+        *,
+        artifact_reader: PinnedArtifactReadContext | None = None,
+    ) -> ResolvedPrivateChatPublicQuerySources: ...
+
+    def resolve_sources(
+        self,
+        session: Session,
+        request: SupportedPrivateChatQueryWorkflowRequest,
+        origin: ChatPrivateQueryOrigin,
+        *,
+        artifact_reader: PinnedArtifactReadContext | None = None,
+    ) -> ResolvedPrivateChatQuerySources | ResolvedPrivateChatPublicQuerySources:
         root = require_private_chat_query_source_root(session)
         try:
-            request = PrivateChatQueryWorkflowRequest.model_validate(
+            request = parse_supported_private_chat_query_workflow_request(
                 raw_similarity_contract_value(request)
             )
             origin = ChatPrivateQueryOrigin.model_validate(raw_similarity_contract_value(origin))
@@ -297,20 +439,34 @@ class CatalogPrivateChatQuerySourceOwner:
                 reader.require_session(session)
                 if reader.settings != self.settings:
                     raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
-                policy, bundle = read_pinned_private_chat_query_controls(reader, config)
-                validate_private_chat_query_request_references(request, policy, bundle)
+                policy, bundle = read_pinned_supported_private_chat_query_controls(reader, config)
                 caller = EmbeddingRegistryCaller(origin.actor_id)
-                documents = self.catalog.prepare_private_chat_document_scope_in_session(
-                    session, caller, request.context_request, artifact_reader=reader
-                )
-                reads = self.catalog.read_private_chat_document_index_in_session(
-                    session, caller, request.context_request, documents, artifact_reader=reader
-                )
-                if len(reads) != 1:
-                    raise SimilarityContextReadError("INDEX_POINTER_INVALID")
-                result = ResolvedPrivateChatQuerySources(
-                    request, policy, bundle, projection, documents
-                )
+                result: ResolvedPrivateChatQuerySources | ResolvedPrivateChatPublicQuerySources
+                if isinstance(request, PrivateChatQueryWorkflowRequestV2):
+                    if not isinstance(policy, PrivateChatQueryExecutionPolicyV2):
+                        raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
+                    validate_private_chat_public_query_request_references(request, policy, bundle)
+                    public_documents, _document = CatalogPublicSolutionSimilarityRead(
+                        self.catalog
+                    ).read_private_documents_in_session(session, caller, request.context_request)
+                    result = ResolvedPrivateChatPublicQuerySources(
+                        request, policy, bundle, projection, public_documents
+                    )
+                else:
+                    if not isinstance(policy, PrivateChatQueryExecutionPolicy):
+                        raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
+                    validate_private_chat_query_request_references(request, policy, bundle)
+                    documents = self.catalog.prepare_private_chat_document_scope_in_session(
+                        session, caller, request.context_request, artifact_reader=reader
+                    )
+                    reads = self.catalog.read_private_chat_document_index_in_session(
+                        session, caller, request.context_request, documents, artifact_reader=reader
+                    )
+                    if len(reads) != 1:
+                        raise SimilarityContextReadError("INDEX_POINTER_INVALID")
+                    result = ResolvedPrivateChatQuerySources(
+                        request, policy, bundle, projection, documents
+                    )
                 final_origin = ChatPrivateQueryOrigin.model_validate(
                     raw_similarity_contract_value(self.chat.authorize(origin))
                 )
@@ -321,11 +477,18 @@ class CatalogPrivateChatQuerySourceOwner:
                 self.identity.fence_current_operator(session, origin.actor_id)
                 # The private owner RPC may overlap a public-source revocation.
                 # Reuse immutable decoding, never the earlier source authority.
-                final_documents = self.catalog.prepare_private_chat_document_scope_in_session(
-                    session, caller, request.context_request, artifact_reader=reader
-                )
-                if final_documents != documents:
-                    raise SimilarityContextReadError("SOURCE_REVOKED")
+                if isinstance(request, PrivateChatQueryWorkflowRequestV2):
+                    final_public_documents, _document = CatalogPublicSolutionSimilarityRead(
+                        self.catalog
+                    ).read_private_documents_in_session(session, caller, request.context_request)
+                    if final_public_documents != result.documents:
+                        raise SimilarityContextReadError("SOURCE_REVOKED")
+                else:
+                    final_documents = self.catalog.prepare_private_chat_document_scope_in_session(
+                        session, caller, request.context_request, artifact_reader=reader
+                    )
+                    if final_documents != result.documents:
+                        raise SimilarityContextReadError("SOURCE_REVOKED")
                 reader.revalidate_provenance()
                 if require_private_chat_query_source_root(session) is not root:
                     raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")

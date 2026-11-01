@@ -236,6 +236,29 @@ source-only read는 실행·권한 부여가 아니며 실제 private source own
 write/retry/new query를 만들지 않는다. 더 단순해 보이는 가짜 Item anchor나 legacy CONTENT_ONLY
 read 재사용은 공통 report/index4 및 비공개 질문의 의미를 보존하지 못하므로 사용하지 않는다.
 
+### 실제 Chat origin과 공통 풀이 source owner 연결 — 2026-11-01
+
+기존 `CatalogPrivateChatQuerySourceOwner`의 원 operator/현재 turn/claim 및 canonical policy/
+runtime bundle 읽기를 공유한다. 작은 closed policy2는 기존 Orchestrator file-set publisher의
+명시적 새 publication으로만 저장하고, 기존 policy1 publication/read API는1-only로 보존한다.
+설정의 policy schema와 Registry namespace family가 일치해야 한다. question은 실제 Chat
+owner에서만 materialize하며 Job/control Artifact/DB/로그에 복제하지 않는다.
+
+원 request1/2와 origin/Graph/policy/space/report pointers를 핀하고 동일 root에서 원 actor를
+읽기 전후 확인한다. 공통 request2는 기존 Catalog DOCUMENT owner를 사용하며, 마지막
+Chat authorization RPC 뒤 source/index closure를 다시 확인해 중간 철회·교체를 거부한다.
+전후 O(공개 풀이 bytes + N*D)의 bounded capture와 immutable pointer/hash 비교이며 새 DB/
+queue/index/cache는 없다. canonical question의 NFC/공백 등 내용도 이 단계에서 다시 쓰지 않는다.
+materialization scope가 끝나면 권한을 재사용할 수 없다.
+
+legacy와 common의 resolved value 및 native input builder는 명시적으로 구별한다. 공통형은
+기존 numerical QUERY2를 생성하고 원 launch/input hash와 재구성 비교한다. 실제 source
+owner 검증이 native 실행 허가는 아니며 executor/dispatch/install/admission은 별도 연결한다.
+기존 application→Catalog/Chat/Artifact adapters 방향, caller transaction, 멱등 publication과
+실패 이력을 유지한다. 결측/철회/잘못된 family/hash는 stable redacted 오류이며 latest/retry/
+새 Job로 우회하지 않는다. 모델이 준 actor나 가짜 approved Item으로 만드는 대안은 실제
+사용자 권한·계보를 보존하지 못하므로 사용하지 않는다. 새 의존성·운영 schema 변경은 없다.
+
 기존 미배포 legacy stored-read 후보는
 `staging/unified-embedding-goal-20261031/deferred-legacy-read.patch` 및 같은 폴더
 `deferred/`에 복구 가능하게 보존했다. 이번 공통 전환과 섞어 활성화하지 않는다.

@@ -20,6 +20,7 @@ from eom_workflow.private_chat_query_owner_configuration import (
     PrivateChatQueryServiceConfiguration,
     require_private_chat_query_reference_configuration,
 )
+from eom_workflow.reference_query_owner_configuration import ReferenceQueryServiceConfiguration
 from sqlalchemy import text
 
 from eom_workflow_runner.private_chat_query_owner_factory import PrivateChatQueryOwnerFactory
@@ -41,7 +42,11 @@ def build_private_chat_query_owner_factory(
     configuration_guard: Callable[[], None],
 ) -> PrivateChatQueryOwnerFactory:
     """Read-only startup; no actor, session capture, native launch or extra lifecycle."""
-    if type(runtime) is not ReferenceQueryOwnerRuntime or not callable(configuration_guard):
+    if (
+        type(runtime) is not ReferenceQueryOwnerRuntime
+        or not isinstance(runtime.configuration, ReferenceQueryServiceConfiguration)
+        or not callable(configuration_guard)
+    ):
         raise ValueError("PRIVATE_CHAT_QUERY_OWNER_COMPOSITION_INVALID")
     configuration = PrivateChatQueryServiceConfiguration.model_validate(configuration)
     require_private_chat_query_reference_configuration(configuration, runtime.configuration)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+from eom_catalog_contracts.embedding_private_chat_query import EmbeddingPrivateChatQueryInput
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_service.private_chat_query_artifact_read import CatalogPrivateChatQueryArtifacts
 from eom_orchestrator.native_private_chat_query_coordinator import NativePrivateChatQueryCoordinator
@@ -56,6 +57,9 @@ class NativePrivateChatQueryCompletion:
         publications: NativeEmbeddingPublications,
         fenced_transaction: NativeFencedRunnerTransaction,
     ) -> PrivateChatQueryStepOutput:
+        native = prepared.request
+        if not isinstance(native, EmbeddingPrivateChatQueryInput):
+            raise ValueError("PRIVATE_CHAT_QUERY_COMPLETION_CONTEXT_INVALID")
         original = allocation.allocation
         if (
             prepared.workflow_request != request
@@ -73,9 +77,7 @@ class NativePrivateChatQueryCompletion:
                 workflow_id=workflow.workflow_id,
                 step_run_id=step.step_run_id,
             )
-            validate_current_private_chat_query_input(
-                sources, prepared.association, prepared.request
-            )
+            validate_current_private_chat_query_input(sources, prepared.association, native)
             history = coordinator.read(session)
             if (
                 len(history.records) < 2
@@ -93,7 +95,7 @@ class NativePrivateChatQueryCompletion:
                     policy=sources.policy,
                     bundle=sources.bundle,
                     launch=prepared.association,
-                    request=prepared.request,
+                    request=native,
                     workspace=prepared.workspace,
                     created_at=executed.completed_observed_at,
                     identity=native_publication_identity(original.query_producer),
@@ -124,9 +126,7 @@ class NativePrivateChatQueryCompletion:
                 workflow_id=workflow.workflow_id,
                 step_run_id=step.step_run_id,
             )
-            validate_current_private_chat_query_input(
-                sources, prepared.association, prepared.request
-            )
+            validate_current_private_chat_query_input(sources, prepared.association, native)
             history = coordinator.read(session)
             if (
                 len(history.records) < 3
@@ -162,7 +162,7 @@ class NativePrivateChatQueryCompletion:
                 policy=sources.policy,
                 bundle=sources.bundle,
                 launch=prepared.association,
-                native_input=prepared.request,
+                native_input=native,
                 receipt=receipt,
                 origin=allocation.origin,
                 workflow_id=workflow.workflow_id,

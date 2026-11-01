@@ -303,6 +303,25 @@ def test_legacy_executor_rejects_common_input_before_staging_or_launch(executor,
     assert executor.encodes == 0
 
 
+def test_legacy_completion_rejects_common_input_before_source_read_or_publication(executor):
+    fenced = Mock(side_effect=AssertionError("legacy completion must reject before owner access"))
+    with pytest.raises(ValueError, match=r"^PRIVATE_CHAT_QUERY_COMPLETION_CONTEXT_INVALID$"):
+        executor.service.completion.publish(
+            workflow=executor.workflow,
+            step=executor.step,
+            request=executor.request,
+            command_lease=executor.lease(),
+            prepared=SimpleNamespace(request=project(*inputs()).native),
+            coordinator=Mock(),
+            allocation=Mock(),
+            publications=Mock(),
+            fenced_transaction=fenced,
+        )
+    fenced.assert_not_called()
+    executor.launcher.run.assert_not_called()
+    assert executor.encodes == 0
+
+
 @pytest.mark.parametrize(
     "code,reason",
     [

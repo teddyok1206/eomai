@@ -1,6 +1,7 @@
 """Startup composition; SQL roots, installed provider/OS/runtime reads are declared fixtures."""
 
 from contextlib import contextmanager
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -198,5 +199,14 @@ def test_foreign_runtime_or_noncallable_snapshot_guard_is_rejected(startup):
     with pytest.raises(ValueError, match="COMPOSITION_INVALID"):
         module.build_private_chat_query_owner_factory(
             startup.runtime, startup.private, configuration_guard=None
+        )
+    startup.guard.assert_not_called()
+
+
+def test_legacy_private_factory_requires_its_own_reference_configuration_family(startup):
+    runtime = replace(startup.runtime, configuration=object())
+    with pytest.raises(ValueError, match="PRIVATE_CHAT_QUERY_OWNER_COMPOSITION_INVALID"):
+        module.build_private_chat_query_owner_factory(
+            runtime, startup.private, configuration_guard=startup.guard
         )
     startup.guard.assert_not_called()
