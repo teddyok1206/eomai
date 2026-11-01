@@ -20,8 +20,10 @@
   source focused91 PASS와 추가 manifest 부정 검사 포함 registry13 PASS, actual-baseline94 PASS,
   보호 설치본94 PASS를 확인했다(집합이 겹치므로 합산하지 않는다). strict mypy3개·Ruff/format·
   diff·공식 clean build/RECORD PASS다. 초기 fixture schema/import 오류와 실패 로그는 보존했다.
-- QUERY-only 설치 완료; activation은 별도 `/var/lib/eom-query-anchor-input-03a5aa40` 기록으로
-  확인한다. owner source만03a5aa40, 실제 physical controller는b5900c7d로 독립 pin한다.
+- QUERY-only 설치와 activation 완료,18:39:48 UTC `REFERENCE_QUERY_OWNER_READY`를 확인했다.
+  QUERY PID2788304, evidence는 `/var/lib/eom-query-anchor-input-03a5aa40`다. API/Catalog/INDEX
+  PID와 numerical pins 불변을 전후 대조했다. owner source만03a5aa40, 실제 physical
+  controller는b5900c7d로 독립 pin한다. 이 준비 상태는 실제 검색 성공 증거가 아니다.
   API9377ee2c/Catalog8eb03e40/GPU INDEXfb0ab555 및 numerical 환경을 교체하지 않는다.
   18:17 test session만18:35 정상 로그아웃했다. 비밀번호·다른 세션·계정은 변경하지 않았다.
 - 18:36 UTC frozen520 target metadata는 GPU 등록170/520, 잔여350이다. 조회 순간 non-terminal
