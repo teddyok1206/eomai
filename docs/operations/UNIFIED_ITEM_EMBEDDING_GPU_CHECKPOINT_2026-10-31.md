@@ -59,7 +59,8 @@
   **09:15:22 INDEX PID2258114**를 시작했다.09:16 실제 source admission 단계가 진행 중이다.
   이것은 INDEX 서비스 재개이지 아직 새 CUDA forward/Artifact 등록 완료가 아니다.
   마지막 frozen520 집계137/520과 기존 vector는 보존하며 새 완료를 임의 가산하지 않았다.
-  원 실패8건(이번 pregrant1 포함)을 과거7건과 구분한다. 30분 timer는 계속 ACTIVE다.
+  과거 Workflow FAILED7과 이번 planning FAILED1은 분모가 다르므로 합산하지 않는다.
+  30분 timer는 계속 ACTIVE다.
 - 보호된 release evidence는
   `/var/lib/eom-gpu-proc-controller-release-b5900c7d-20261101`와 `/tmp/eom-gpu-proc-controller-release-20261101*`다.
   원 before/after bytes와 CAS·보존 hash·선택/시작 시각을 기록했다. before는 이미 불일치한
