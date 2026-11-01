@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 import subprocess
 import sys
 import tomllib
@@ -40,6 +41,20 @@ def installed_workflow_inspector_source() -> str:
     )
     assert isinstance(value, str)
     return value
+
+
+def migration_declaration_reader() -> Callable[[Path], str]:
+    declaration = next(
+        node
+        for node in ast.parse(release_inspector_source()).body
+        if isinstance(node, ast.FunctionDef) and node.name == "source_migration_revision"
+    )
+    namespace: dict[str, object] = {"ast": ast, "re": re, "Path": Path}
+    exec(
+        compile(ast.Module(body=[declaration], type_ignores=[]), "migration reader", "exec"),
+        namespace,
+    )
+    return cast(Callable[[Path], str], namespace["source_migration_revision"])
 
 
 def test_embedded_release_inspector_has_no_undefined_names() -> None:
@@ -93,11 +108,90 @@ def test_installed_migration_admission_matches_the_authoritative_runtime_head() 
     assert isinstance(guard.test, ast.Compare)
     assert len(guard.test.ops) == 1 and isinstance(guard.test.ops[0], ast.NotEq)
     assert len(guard.test.comparators) == 1
-    assert ast.literal_eval(guard.test.comparators[0]) == CURRENT_MIGRATION_REVISION
+    expected = guard.test.comparators[0]
+    assert isinstance(expected, ast.Name) and expected.id == "expected_migration_revision"
+    assert migration_declaration_reader()(ROOT) == CURRENT_MIGRATION_REVISION
+    source = release_inspector_source()
+    expected_assignment = (
+        "expected_migration_revision = source_migration_revision("
+        'Path(os.environ["REPOSITORY_ROOT"]))'
+    )
+    assert expected_assignment in source
+    assert "expected_migration_revision = sys.argv.pop()" in installed_workflow_inspector_source()
+    check_invocation = next(
+        node.args[0]
+        for node in ast.walk(ast.parse(source))
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "run"
+        and node.args
+        and isinstance(node.args[0], ast.List)
+        and any(isinstance(value, ast.Name) and value.id == "check" for value in node.args[0].elts)
+    )
+    assert isinstance(check_invocation.elts[-1], ast.Name)
+    assert check_invocation.elts[-1].id == "expected_migration_revision"
     checked = compile(ast.Module(body=[guard], type_ignores=[]), "migration admission", "exec")
-    exec(checked, {"CURRENT_MIGRATION_REVISION": CURRENT_MIGRATION_REVISION})
+    exec(
+        checked,
+        {
+            "CURRENT_MIGRATION_REVISION": CURRENT_MIGRATION_REVISION,
+            "expected_migration_revision": CURRENT_MIGRATION_REVISION,
+        },
+    )
     with pytest.raises(SystemExit, match="installed runtime migration admission head mismatch"):
-        exec(checked, {"CURRENT_MIGRATION_REVISION": "unexpected-head"})
+        exec(
+            checked,
+            {
+                "CURRENT_MIGRATION_REVISION": "unexpected-head",
+                "expected_migration_revision": CURRENT_MIGRATION_REVISION,
+            },
+        )
+
+
+@pytest.mark.parametrize("head", ["20261031_0066", "20261101_0067", "20270101_0099"])
+def test_source_head_is_read_as_a_single_declared_value_without_import(
+    tmp_path: Path, head: str
+) -> None:
+    source = tmp_path / "services/orchestrator/eom_orchestrator/migration.py"
+    source.parent.mkdir(parents=True)
+    source.write_text(
+        f'CURRENT_MIGRATION_REVISION = "{head}"\nraise RuntimeError("must not execute")\n'
+    )
+    assert migration_declaration_reader()(tmp_path) == head
+
+
+@pytest.mark.parametrize(
+    "fault", ["missing", "duplicate", "expression", "head", "offset", "oversized", "symlink"]
+)
+def test_invalid_or_executable_migration_declarations_do_not_weaken_release_gate(
+    tmp_path: Path, fault: str
+) -> None:
+    source = tmp_path / "services/orchestrator/eom_orchestrator/migration.py"
+    source.parent.mkdir(parents=True)
+    sentinel = tmp_path / "must-not-execute"
+    value = 'CURRENT_MIGRATION_REVISION = "20261101_0067"\n'
+    if fault == "missing":
+        value = "PASS = True\n"
+    elif fault == "duplicate":
+        value *= 2
+    elif fault == "expression":
+        value = (
+            f'CURRENT_MIGRATION_REVISION = __import__("pathlib").Path({str(sentinel)!r}).touch()\n'
+        )
+    elif fault == "head":
+        value = 'CURRENT_MIGRATION_REVISION = "head"\n'
+    elif fault == "offset":
+        value = 'CURRENT_MIGRATION_REVISION = "20261101_0067 suffix"\n'
+    elif fault == "oversized":
+        value += "#" * (16 * 1024)
+    source.write_text(value)
+    if fault == "symlink":
+        other = source.with_suffix(".saved")
+        source.rename(other)
+        source.symlink_to(other)
+    with pytest.raises(SystemExit, match="source migration declaration is invalid"):
+        migration_declaration_reader()(tmp_path)
+    assert not sentinel.exists()
 
 
 def test_model_selection_runtime_is_required_in_release_wheel_inventory() -> None:
@@ -341,11 +435,14 @@ def test_actual_installed_admission_comparison_rejects_an_omitted_native_definit
         bindings[f"definition_v1_{version}"] = str(
             ROOT / f"config/workflows/generic-item-development.v1.{version}.yaml"
         )
-    for version in range(1, 11):
-        bindings[f"analysis_v{version}"] = str(
-            ROOT / f"config/workflows/knowledge-analysis.v{version}.yaml"
-        )
     inner = ast.parse(installed_workflow_inspector_source())
+    # Populate the fixture from the actual declared argument family, not a stale version range.
+    for node in ast.walk(inner):
+        match = re.fullmatch(r"analysis_v([0-9]+)", node.id) if isinstance(node, ast.Name) else None
+        if match is not None:
+            bindings[match.group(0)] = str(
+                ROOT / f"config/workflows/knowledge-analysis.v{match.group(1)}.yaml"
+            )
     derived_definitions = [
         node
         for node in inner.body
