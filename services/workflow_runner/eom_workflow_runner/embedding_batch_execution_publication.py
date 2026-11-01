@@ -22,6 +22,10 @@ from eom_workflow_runner.embedding_batch_result_read import VerifiedLocalEmbeddi
 from eom_workflow_runner.embedding_batch_source_authorization import (
     CatalogEmbeddingBatchSourceAuthorization,
 )
+from eom_workflow_runner.private_chat_batch_plan_admission import (
+    CatalogPrivateChatBatchPlanAdmission,
+    SupportedEmbeddingBatchPlanAdmission,
+)
 
 
 def _require(condition: bool) -> None:
@@ -39,7 +43,7 @@ class CatalogEmbeddingBatchExecutionPublication:
 
     def __init__(
         self,
-        admission: CatalogEmbeddingBatchPlanAdmission,
+        admission: SupportedEmbeddingBatchPlanAdmission,
         request: SupportedEmbeddingBatchRequest,
         authorization: CatalogEmbeddingBatchSourceAuthorization,
         publisher: ControlFileSetPublisher,
@@ -47,7 +51,8 @@ class CatalogEmbeddingBatchExecutionPublication:
         source_commit: str,
     ) -> None:
         _require(
-            type(admission) is CatalogEmbeddingBatchPlanAdmission
+            type(admission)
+            in {CatalogEmbeddingBatchPlanAdmission, CatalogPrivateChatBatchPlanAdmission}
             and type(authorization) is CatalogEmbeddingBatchSourceAuthorization
             and publisher.engine is admission.catalog.engine
             and publisher.settings.nas_artifact_root == admission.catalog.settings.nas_artifact_root

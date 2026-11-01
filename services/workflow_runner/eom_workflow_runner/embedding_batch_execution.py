@@ -61,6 +61,10 @@ from eom_workflow_runner.embedding_batch_result_read import (
 from eom_workflow_runner.embedding_batch_source_authorization import (
     CatalogEmbeddingBatchSourceAuthorization,
 )
+from eom_workflow_runner.private_chat_batch_plan_admission import (
+    CatalogPrivateChatBatchPlanAdmission,
+    SupportedEmbeddingBatchPlanAdmission,
+)
 
 
 def _require(condition: bool) -> None:
@@ -189,14 +193,15 @@ class CatalogEmbeddingBatchExecution:
 
     def __init__(
         self,
-        admission: CatalogEmbeddingBatchPlanAdmission,
+        admission: SupportedEmbeddingBatchPlanAdmission,
         publisher: ControlFileSetPublisher,
         *,
         source_commit: str,
         controller_release: str,
     ) -> None:
         _require(
-            type(admission) is CatalogEmbeddingBatchPlanAdmission
+            type(admission)
+            in {CatalogEmbeddingBatchPlanAdmission, CatalogPrivateChatBatchPlanAdmission}
             and publisher.engine is admission.catalog.engine
             and publisher.settings.nas_artifact_root == admission.catalog.settings.nas_artifact_root
             and re.fullmatch(r"[0-9a-f]{40}", source_commit, re.ASCII) is not None

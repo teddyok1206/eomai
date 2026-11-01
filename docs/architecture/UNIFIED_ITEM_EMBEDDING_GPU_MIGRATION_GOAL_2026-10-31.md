@@ -173,6 +173,31 @@ accepted/mixed embedding 파생 데이터이며, 기출·교과서·창작·AI I
 
 ## 5. 진행·보고
 
+### private 공통 parent의 실제 source admission — 2026-11-01
+
+책임은 기존 private source owner와 finite parent application이다. 정본은 원 Chat origin과
+parent17의 exact selection/routing/두 private policy, 각각의 common document index다.
+public Reference owner를 빌리거나 질문을 Item anchor로 바꾸지 않는다. 동일 OPERATOR와
+Graph/access policy/recipe/source-class 범위를 trusted composition에 고정하고, 공식 pinned
+reader로 control identity/schema/media/hash/lifecycle을 검증한다. 기존 private request 준비의
+순수 metadata 조립을 재사용하되, 두 device의 사전 검증은 Workflow/START/Job을 만들지 않는다.
+현재 Chat 소유권·질문 revision과 public source 권한은 기존 private source owner가 확인한다.
+
+주 접근은 exact control/Artifact/Graph의 indexed lookup과 기존 bounded document paging이다.
+device 수는2로 고정하며 시간 O(두 index의 기존 검증 비용), 메모리는 기존 root reader와
+source materialization 한도다. 원 session/root에서 parent metadata 작업을 감싸고, 종료 전에
+같은 원 origin/source와 control provenance를 재검증한다. CPU index가 없으면 CPU 실행을
+꾸미지 않고 정책 pin만 검사한다. 실패·늦은 철회는 caller root rollback이며 재시도는 원
+parent/key를 재인가한다. 새 table/index/queue/cache/DB migration은 없다. application→기존
+Catalog/Chat/Identity·Artifact adapters 방향을 지키며, private source 규칙을 parent에 복사하는
+대안보다 기존 source owner의 실제 검증을 호출하는 쪽이 작다. metadata admission은 물리
+GPU grant/실행 완료 proof나 global2 활성화를 대신하지 않는다.
+
+연결 범위의 strict type 검사에서 legacy context1/2의 최종 composer가 public index3만
+명시적으로 거부하고 registered public index4는 놓치는 것을 재현했다. 기존 document reader의
+앞선 검증을 대신하지 않고 같은 순수 family guard에4도 추가한다. 구형 결과의 허용 profile
+union을 넓히거나 새 벡터를 구형 형식으로 relabel하지 않는다. 새 wire/DB/권한 변경은 없다.
+
 ### 원 Catalog 파일 저장의 중단 복구 — 2026-11-01
 
 책임은 기존 core-owned `CatalogArtifactService`와 Orchestrator Job/Artifact 경계다. 정본은

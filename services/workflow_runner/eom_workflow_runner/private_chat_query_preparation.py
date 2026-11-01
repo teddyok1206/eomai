@@ -240,6 +240,61 @@ def prepare_and_start_private_chat_query_selection_in_session(
     )
 
 
+def prepare_private_chat_query_request_in_session(
+    session: Session,
+    *,
+    caller: EmbeddingRegistryCaller,
+    context: SupportedPrivateChatSimilarityRequest,
+    owner: CatalogPrivateChatQueryOwnerAdmission,
+    artifact_reader: PinnedArtifactReadContext | None = None,
+) -> SupportedPrivateChatQueryWorkflowRequest:
+    """Prepare exact request metadata only; actual source admission remains mandatory.
+
+    Shared by initial submission and private parent preflight. This neither
+    creates a Workflow/Job nor returns a private question or retained authority.
+    """
+    _preparation_root(session, caller, owner)
+    context = parse_supported_private_chat_similarity_request(
+        raw_similarity_contract_value(context)
+    )
+    config = owner.configuration
+    reader = artifact_reader or PinnedArtifactReadContext.for_session(session, owner.settings)
+    reader.require_session(session)
+    if reader.settings != owner.settings:
+        raise ValueError("PRIVATE_CHAT_QUERY_PREPARATION_CONTEXT_INVALID")
+    policy, bundle = read_pinned_supported_private_chat_query_controls(reader, config)
+    public = isinstance(policy, PrivateChatQueryExecutionPolicyV2)
+    if public != isinstance(context, PrivateChatSimilarityRequestV2):
+        raise ValueError("PRIVATE_CHAT_QUERY_PREPARATION_CONTEXT_INVALID")
+    body = {
+        "schema_version": "private-chat-query-workflow-request/2.0"
+        if public
+        else "private-chat-query-workflow-request/1.0",
+        "request_name": "PRIVATE_CHAT_QUERY_WORKFLOW_REQUEST",
+        "purpose": "PRIVATE_CHAT_QUERY",
+        "workflow_definition_key": "local-embedding-private-chat-query",
+        "workflow_definition_version": "2.0.0" if public else "1.0.0",
+        "workflow_definition_sha256": policy.workflow_definition_sha256,
+        "operator_audit": {
+            "kind": "OPERATOR",
+            "operator_id": caller.operator_id,
+            "requester_permissions_sha256": content_sha256(
+                sorted(key.value for key in effective_permissions(session, caller.operator_id))
+            ),
+        },
+        "context_request": context.model_dump(mode="json"),
+        "runtime_bundle": config.runtime_bundle.model_dump(mode="json"),
+        "resource_profile": policy.resource_profile.model_dump(mode="json"),
+        "native_execution_policy": config.native_execution_policy.model_dump(mode="json"),
+        "native_execution_policy_sha256": config.native_execution_policy_sha256,
+    }
+    request = parse_supported_private_chat_query_workflow_request(
+        body | {"request_sha256": content_sha256(body)}
+    )
+    validate_supported_private_chat_query_request_references(request, policy, bundle)
+    return request
+
+
 def _start_with_pinned_context(
     session: Session,
     *,
@@ -256,39 +311,9 @@ def _start_with_pinned_context(
         if request.context_request != context:
             raise ValueError("PRIVATE_CHAT_QUERY_PREPARATION_REPLAY_MISMATCH")
     else:
-        config = owner.configuration
-        policy, bundle = read_pinned_supported_private_chat_query_controls(
-            PinnedArtifactReadContext(session, owner.settings), config
+        request = prepare_private_chat_query_request_in_session(
+            session, caller=caller, context=context, owner=owner
         )
-        public = isinstance(policy, PrivateChatQueryExecutionPolicyV2)
-        if public != isinstance(context, PrivateChatSimilarityRequestV2):
-            raise ValueError("PRIVATE_CHAT_QUERY_PREPARATION_CONTEXT_INVALID")
-        body = {
-            "schema_version": "private-chat-query-workflow-request/2.0"
-            if public
-            else "private-chat-query-workflow-request/1.0",
-            "request_name": "PRIVATE_CHAT_QUERY_WORKFLOW_REQUEST",
-            "purpose": "PRIVATE_CHAT_QUERY",
-            "workflow_definition_key": "local-embedding-private-chat-query",
-            "workflow_definition_version": "2.0.0" if public else "1.0.0",
-            "workflow_definition_sha256": policy.workflow_definition_sha256,
-            "operator_audit": {
-                "kind": "OPERATOR",
-                "operator_id": caller.operator_id,
-                "requester_permissions_sha256": content_sha256(
-                    sorted(key.value for key in effective_permissions(session, caller.operator_id))
-                ),
-            },
-            "context_request": context.model_dump(mode="json"),
-            "runtime_bundle": config.runtime_bundle.model_dump(mode="json"),
-            "resource_profile": policy.resource_profile.model_dump(mode="json"),
-            "native_execution_policy": config.native_execution_policy.model_dump(mode="json"),
-            "native_execution_policy_sha256": config.native_execution_policy_sha256,
-        }
-        request = parse_supported_private_chat_query_workflow_request(
-            body | {"request_sha256": content_sha256(body)}
-        )
-        validate_supported_private_chat_query_request_references(request, policy, bundle)
         original_context = build_private_chat_query_submission_context(request, origin)
 
     if require_private_chat_query_source_root(session) is not root:
