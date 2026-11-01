@@ -293,6 +293,22 @@ class CatalogEmbeddingBatchPlanAdmission:
     def admit(
         self, session: Session, request: SupportedEmbeddingBatchRequest
     ) -> Iterator[ResolvedEmbeddingBatchPlanSources]:
+        """Physical planning still resolves both exact device populations before allocation."""
+        with self.observe_sources(session, request) as sources:
+            reader = PinnedArtifactReadContext.for_session(session, self.catalog.settings)
+            indexes = self._query_indexes(session, sources.selection, reader)
+            yield replace(sources, indexes=indexes)
+
+    @contextmanager
+    def observe_sources(
+        self, session: Session, request: SupportedEmbeddingBatchRequest
+    ) -> Iterator[ResolvedEmbeddingBatchPlanSources]:
+        """Canonical parent/anchor observation, not numerical/index or allocation admission.
+
+        Polling a parent must not load every document/vector for both devices.
+        Current actor, exact anchors and controls are still checked before/after;
+        the execution owner must enter admit() for physical planning.
+        """
         request = parse_public_embedding_batch_plan_request(request)
         root = session.get_transaction()
         _require(
@@ -314,8 +330,7 @@ class CatalogEmbeddingBatchPlanAdmission:
         selected = self._validate_selection(request, selection)
         current = self.catalog.resolve_selected_sources(session, self.caller, selected)
         self._validate_sources(selection, current)
-        indexes = self._query_indexes(session, selection, reader)
-        yield ResolvedEmbeddingBatchPlanSources(selection, policy, current, indexes)
+        yield ResolvedEmbeddingBatchPlanSources(selection, policy, current)
         _require(session.get_transaction() is root and root.is_active)
         # Do not repeat immutable file reads/hashes. Recheck current metadata and
         # the official actual source authority before the caller commits this root.

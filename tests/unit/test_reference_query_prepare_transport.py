@@ -288,6 +288,7 @@ def test_failure_diagnostics_do_not_include_exception_prose_or_capture(
 ):
     source, _reply, _calls = exchange(observation, monkeypatch, fault="application")
     assert "stage=PREPARE_APPLICATION" in caplog.text
+    assert "error_type=RuntimeError" in caplog.text
     assert "synthetic private details" not in caplog.text
     assert source.raw_token not in caplog.text
 

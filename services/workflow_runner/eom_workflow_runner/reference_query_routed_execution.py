@@ -13,6 +13,8 @@ from eom_orchestrator.embedding_batch_plan_store import (
     EmbeddingBatchPlanStore,
 )
 from eom_workflow.embedding_batch_plan_family import embedding_batch_query_key
+from eom_workflow.embedding_batch_plan_v14 import EmbeddingBatchSelectionV14
+from eom_workflow.embedding_batch_plan_v15 import EmbeddingBatchSelectionV15
 from eom_workflow.reference_query_execution import (
     SupportedReferenceQueryContext,
     parse_supported_reference_query_workflow_request,
@@ -24,6 +26,7 @@ from eom_workflow_runner.embedding_batch_execution import (
     ExistingEmbeddingBatchExecution,
     UnavailableEmbeddingBatchExecution,
 )
+from eom_workflow_runner.embedding_batch_plan_admission import CatalogEmbeddingBatchPlanAdmission
 from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowInstanceRecord
 from eom_workflow_runner.reference_query_batch_driver import (
     drive_batch_reference_queries,
@@ -83,6 +86,7 @@ def _composition(
     _require(
         session.cpu.owner is session.selection.cpu
         and session.selection.publisher is prepared.operation.publisher
+        and type(prepared.operation.admission) is CatalogEmbeddingBatchPlanAdmission
         and prepared.operation.admission.catalog is session.cpu.owner.catalog
         and session.cpu.owner.identity.capture is session.selection.cuda.identity.capture
         and prepared.preparation.parent.scope.actor_id
@@ -127,9 +131,16 @@ def observe_routed_reference_queries(
     _composition(session, prepared)
     parent = prepared.preparation.parent
     caller = EmbeddingRegistryCaller(parent.scope.actor_id)
+    admission = prepared.operation.admission
+    assert isinstance(admission, CatalogEmbeddingBatchPlanAdmission)
+    observe = (
+        admission.observe_sources
+        if isinstance(prepared.selection, EmbeddingBatchSelectionV14 | EmbeddingBatchSelectionV15)
+        else admission.admit
+    )
     with (
         prepared.operation.publisher.sessions.begin() as root,
-        prepared.operation.admission.admit(root, parent) as sources,
+        observe(root, parent) as sources,
     ):
         _require(sources.selection == prepared.selection)
         current = EmbeddingBatchPlanStore(parent, sources.selection, sources.policy).read(root)

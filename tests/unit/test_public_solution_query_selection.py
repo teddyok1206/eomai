@@ -58,8 +58,12 @@ def test_bulk_prepare_reads_one_real_canonical_index_and_keeps_source_order(
         )
         for ordinal, entry in enumerate(reversed(value.entries))
     )
-    official = Mock(wraps=reads.read_pinned_embedding_index)
-    monkeypatch.setattr(reads, "read_pinned_embedding_index", official)
+    official = Mock(wraps=value.verifier.validate_initial_public_query_index)
+    monkeypatch.setattr(value.verifier, "validate_initial_public_query_index", official)
+    vectors = Mock(
+        side_effect=AssertionError("initial pins must not materialize full document vectors")
+    )
+    monkeypatch.setattr(reads, "read_pinned_embedding_index", vectors)
     result = reads.CatalogPublicSolutionSimilarityRead(value.verifier).prepare_many_in_session(
         value.session, caller, inputs
     )
@@ -68,6 +72,7 @@ def test_bulk_prepare_reads_one_real_canonical_index_and_keeps_source_order(
     )
     assert all(row.views[0].index.index_manifest == value.index_member for row in result)
     assert official.call_count == 1
+    vectors.assert_not_called()
     with pytest.raises(ValueError):
         reads.CatalogPublicSolutionSimilarityRead(value.verifier).prepare_many_in_session(
             value.session, caller, (inputs[0], inputs[0])
@@ -152,6 +157,7 @@ def public_selection_case(
 
         monkeypatch.setattr(owner.catalog, "authorize_scope", authorize)
         monkeypatch.setattr(owner.catalog, "resolve_selected_sources", resolve)
+        monkeypatch.setattr(owner.catalog, "validate_initial_public_query_index", value.index_reads)
         index = template.views[0].index
         member = index.index_manifest.model_copy(
             update={

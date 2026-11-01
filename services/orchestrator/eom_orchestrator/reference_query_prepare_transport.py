@@ -137,9 +137,12 @@ def handle_reference_query_prepare_connection(
                 else "REFERENCE_QUERY_PREPARE_UNAVAILABLE"
             )
             _LOGGER.warning(
-                "REFERENCE_QUERY_PREPARATION_FAILED stage=%s code=%s elapsed_ms=%d",
+                "REFERENCE_QUERY_PREPARATION_FAILED stage=%s code=%s error_type=%s elapsed_ms=%d",
                 stage,
                 safe_code,
+                type(error).__name__
+                if re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,63}", type(error).__name__)
+                else "UNCLASSIFIED",
                 max(0, int((monotonic() - started) * 1000)),
             )
         # No response/capture/traceback contents leave this adapter. In particular,

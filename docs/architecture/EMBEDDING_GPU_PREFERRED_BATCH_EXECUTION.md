@@ -5,6 +5,33 @@
 
 ## 목적과 현재 경계
 
+### 2026-11-01 실제 GUI 요청의 준비·관측 경계 수정
+
+실제 10321 검색은 최초 source pin 응답661ms 뒤, 같은 key/pin의 두 번째 요청이 약210초에
+`REFERENCE_QUERY_PREPARE_UNAVAILABLE`로 끝났다. 원 owner는 그 뒤에도 전체 후보를 읽었다.
+장치별 initial pin 준비만 각각49초였다. 단순 시간 제한 증가나 GPU 재시작으로 해결하지 않는다.
+
+1. 책임은 기존 Catalog의 initial pin 확인, Runner의 parent 관측과 실제 실행 admission이다.
+2. 정본은 원 source/Graph/policy와 게시된 selection/preparation/parent/query Artifact다.
+3. 원 logical/revision/hash/key를 유지하며 재조회가 새 실행 identity를 만들지 않는다.
+4. initial pin은 실제 caller/선택 문항 및 index manifest/schema/hash/등록 관계를 검증한다.
+   전체 후보·수치 row 검증은 계산 admission과 실제 결과 읽기에 그대로 남는다.
+5. 빈번한 상태 조회는 indexed parent/key 조회와 선택된 anchor 확인이다. 전체 문서/벡터
+   순회는 실제 실행·결과 use case에 필요한 경계에서만 한다.
+6. 기존 map/unique key/Artifact reader/같은 SQL root를 사용한다. 새 cache/queue/table은 없다.
+7. 관측 비용은 선택한 문항 수와 bounded control 크기에 비례하며, corpus 전체 재료를
+   매 polling마다 CPU/CUDA 양쪽에서 반복 materialize하지 않는다.
+8. 현재 권한·원 anchor·producer/provenance를 root 전후 재검증한다. 관측 결과는 실행 허가가
+   아니며 실제 operation.open은 기존 admit의 양 장치 population 검사를 반드시 수행한다.
+9. API → Runner application → Catalog owner 방향을 유지한다. worker 권한은 늘리지 않는다.
+10. stale/revoked/hash/failed는 그대로 거부하고 timeout 후에는 원 요청만 관측한다. 현재 원
+    실행의 처리 여부를 확인하기 전 재시작/새 key/실패 상태 보정은 하지 않는다.
+11. 관측에 physical admission을 재사용하는 것은 불필요한 전체 순회를 강제한다. 명시적
+    observe_sources와 기존 admit을 구분하는 것이 새 비동기 framework나 권한 cache보다 작다.
+
+실제 GUI 결과 목록·DB 열기·동일 요청 재조회는 별도 운영 증거로 확인해야 한다.
+이 설계나 테스트 통과 자체는 사용자 검색 성공이 아니다.
+
 - 기본 실행 장치는 GPU, GPU 자원 할당이 불가능할 때만 CPU를 사용한다.
 - 다문항 검색과 대량 증분 임베딩에서 한정된 묶음 동안 모델을 재사용한다.
 - 기존 Catalog source resolution, 실제 사용자 권한, Graph/정책/분석 revision,

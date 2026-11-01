@@ -216,9 +216,9 @@ class CatalogPublicSolutionSimilarityRead:
         )
         intent = EmbeddingRegistryRead(scope, selected)
         validate_registered_embedding_index_read(intent, registered)
-        # This also validates canonical package bytes and current report/binding
-        # identity under the actual operator before any request is submitted.
-        read_pinned_embedding_index(session, caller, intent, self.catalog)
+        # Initial source/index selection is not a vector read or execution grant.
+        # Full population/binding/vector checks remain in the actual batch owner.
+        self.catalog.validate_initial_public_query_index(session, caller, intent, registered)
         body = dict(
             schema_version="system-rag-similarity-request/4.0"
             if registered_source

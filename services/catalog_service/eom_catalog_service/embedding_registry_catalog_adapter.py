@@ -2408,6 +2408,49 @@ class CatalogEmbeddingRegistryVerifier:
 
         return self._guard(resolve)
 
+    def validate_initial_public_query_index(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        intent: EmbeddingRegistryRead,
+        registered: RegisteredEmbeddingIndexRead,
+    ) -> None:
+        """Pin a canonical public manifest, not population/vector or execution authority.
+
+        The selected source is separately resolved by the initial-query use case.
+        Full current document/binding/vector validation remains in physical batch
+        admission and result delivery; polling must not repeat it to name an index.
+        """
+        self._require_similarity_root(session)
+
+        def resolve() -> None:
+            if (
+                type(caller) is not EmbeddingRegistryCaller
+                or self._indexing_source_authority is not None
+                or session.get_bind() is not self.engine
+                or not isinstance(intent.scope.namespace, PublicSolutionIndexNamespace)
+                or not isinstance(
+                    intent.selection, PublicSolutionSimilarityView | PublicSolutionSimilarityViewV4
+                )
+                or intent.selection.index is None
+            ):
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+            self.authorize_scope(session, caller, intent.scope)
+            validate_registered_embedding_index_read(intent, registered)
+            reader = PinnedArtifactReadContext.for_session(session, self.settings)
+            pin = intent.selection.index
+            index = self._read_index(reader, pin.index_manifest)
+            _validate_similarity_manifest(intent.selection, pin.index_manifest, index)
+            validate_registered_embedding_index_manifest(registered, index)
+            if index.space != self.configuration.space or index.recipe != self.configuration.recipe:
+                raise ValueError(
+                    "initial public index differs from the configured numerical namespace"
+                )
+            reader.revalidate_provenance()
+            self.authorize_scope(session, caller, intent.scope)
+
+        self._guard(resolve)
+
     def resolve_pinned_read(
         self,
         session: Session,
