@@ -1,5 +1,48 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 공통 QUERY2 private numerical envelope3 후보 — 2026-11-01
+
+- source **`f799049f8003cdc8eaa999030776a8f6b9047ec5`**는 실제 private2 projection이 만든
+  기존 QUERY2 입력을 단일 child envelope3으로 전달한다. 원 purpose는 PRIVATE_CHAT_QUERY,
+  actor scope는 OPERATOR이며 공개 batch1/2의 bytes/schema는 바꾸지 않는다. supported
+  input/result parser·기존 finite executor·단일 결과 builder·binary 범위 검증을 재사용한다.
+  같은 QUERY2 입력을 기존 encoder로 직접 계산한 결과와 envelope3의 child/벡터 bytes가
+  CPU/CUDA 조건 모두 같음을 synthetic backend로 확인했다. 실제 GPU 수치 실행 증거는 아니다.
+- 순수 shared validator는 입력/결과 family·원 request/route/hash·한 child/연속 offset·
+  기존180초/16MiB/1024-row 한도를 지킨다. 기존 INDEX/REFERENCE 물리 grant로 private3을
+  실행할 수 없고 private allocation도 현재의 닫힌 gate에서는 거부한다. source 권한/원 Chat
+  origin/parent·실제 GPU grant·수명 검증을 대신하지 않는다. 새 encoder·DB·queue·dependency,
+  production migration/activation·기존 vector 변경은 없다.
+- 추가 source **`9f1b4ad0e251d474e5fa72810f456536bebb3787`**는 기존 공개 batch source
+  authorization의 default Reference 분기를 private3이 빌리지 못하도록 생성 시점에 명시적으로
+  거부한다. 실제 private source fence의 연결 전에는 기존 Reference owner의 input hash조차
+  읽지 않는 회귀를 추가했다. private를 실행 가능하게 했다는 뜻이 아니다.
+- numerical 합집합 source **240 PASS/66.82s**, f799의 비편집 설치본 **240 PASS/66.98s**,
+  source-owner 추가 suite **21 PASS/15.22s**다. 최종9f1 설치본은 같은 두 범위를 함께 실행해
+  **261 PASS/77.03s**다. strict mypy numerical 영향10+추가 source-owner1/Ruff/format/diff
+  PASS다. 실제 kernel FD/Unix tests도 포함하지만 source/IAM/숫자·장치 관측은 명시적 fixture다.
+  DB/transaction 변경이 없어 기존 PG 증거는 보존하고 운영 DB pytest는 하지 않았다.
+- 설치본에서 기존 stdlib-only `eom_gpu_lease`가 빠진 첫 실행은232 PASS/8 setup ERROR였다.
+  오래된 optional wheel의 소스 대조 실패 후 해당 임시 실행은 중단(exit130)했으며 운영에
+  설치하지 않았다. 현재 두 구현 파일과 일치하는 기존 공식 wheel SHA
+  `f527cc610b7df2a384e40f450d5758a87ad76ff9684a778201a43b60d4593763`를 검증해
+  격리 prefix에만 넣었다. 새 dependency를 추가하거나 운영 interpreter를 변경하지 않았다.
+  추가 source-owner test의 첫 실패20 PASS/1 FAIL은 새 test를 원 test의 중간에 삽입한
+  위치 오류였고 원 assertions를 복구한 뒤21 PASS다. 실패/중단 로그는 그대로 보존한다.
+- 최종 build/RECORD PASS이며 wheel directory는
+  `/tmp/eom-api-build/9f1b4ad0e251d474e5fa72810f456536bebb3787.N8mkpw/dist`다. platform SHA
+  `28862298a82a29d3f761956625704768fcac8f62ceed587cb9040cba1afbf552`, contracts
+  `1201991c1a1cc390c229468d89ff961b83ac9faf2124e26eaa4c9bbd6405914e`, API
+  `5e7a539f9cf6d0bbca8843cd42fe2360d8a4d687cef0153e5d0239a8978cdde2`다. 설치본은
+  `/tmp/eom-private-query-batch3-installed.SHhJO66m/site-packages`이며 source/module 경로와
+  FLOAT32_CODEC/HOST_L2/OFFLINE_ENCODER 실제 설치 bytes를 확인했다. 모델·정규화·수치
+  공간을 바꾼 전환이 아니다. `/tmp/eom-private-query-batch3-*-20261101.*`와 ignored harness 참조.
+- 전체 목표 ACTIVE다. 11:00의 frozen143/520 집계·정본·과거 FAILED·구 벡터를 보존하며
+  운영 private global2는 계속 CLOSED다. 다음은 원 Chat origin과 lease를 보존하는 실제
+  private parent/source/GPU 연결 및 consumer 전환이다. 실제 사용자 DB query/read/replay,
+  전체520 대상별 완료·hash/권한, AI 실제 canary와 정확한 구형 파생 retirement/삭제는 아직
+  완료되지 않았으며 이번 source/installed PASS로 대체하지 않는다.
+
 ## private GPU 부모 선택·정식 Artifact 발행 후보 — 2026-11-01
 
 - 전체 목표는 ACTIVE다. source **`3bcc71e80583d26dc971f029053271014af9efe5`**는 기존
