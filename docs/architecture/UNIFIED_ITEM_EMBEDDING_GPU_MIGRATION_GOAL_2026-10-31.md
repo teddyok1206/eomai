@@ -129,6 +129,37 @@ accepted/mixed embedding 파생 데이터이며, 기출·교과서·창작·AI I
 
 ## 5. 진행·보고
 
+### 원 Catalog 파일 저장의 중단 복구 — 2026-11-01
+
+책임은 기존 core-owned `CatalogArtifactService`와 Orchestrator Job/Artifact 경계다. 정본은
+원 semantic request/Job ID/Artifact ID/revision 및 검증된 source·proposal·risk pins다. 기출/
+창작/AI 보고서나 worker 실행을 새로 만들지 않는다. dominant access는 원 idempotency key와
+Job event sequence의 indexed lookup, 고정 크기 intent의 hash 비교, 한 file-set의 bounded
+stage/commit이다. 새 queue/table/index/DB migration 없이 원 unique key와 append-only events를
+사용한다. 비용은 한 번의 명시적 stage O(file bytes), metadata 검증 O(member count)다.
+
+새 저장은 최초 COMMITTING event에 원 request/result/manifest SHA·고정 created_at을 schema-
+validated intent로 남긴다. exact replay는 같은 Job/key/Artifact revision과 intent를 사용한다.
+같은 publication key는 기존 Orchestrator 방식의 session advisory lock으로 직렬화하며 NAS
+I/O 동안 관계 row transaction은 열어두지 않는다. 마지막 DB commit은 원 Job row를 잠가
+COMMITTING→SUCCEEDED만 수행한다. FAILED/CANCELLED/기타 중간 상태의 성공 재해석은 없다.
+
+구형 unsealed COMMITTING은 기본 fail-closed다. 단, knowledge acceptance application이 원
+actor/creator/현재 permission·완료 Workflow·정본 source·proposal receipt·risk policy·result를
+재검증하고 NAS final/등록 revision 모두 없음을 확인한 경우만 명시적 재구성 근거를 append해
+같은 Job을 이어간다. 이 근거 DTO는 권한이 아니며 실제 application callback을 다시 호출한다.
+구형 NAS final이 이미 있거나 확인이 불명확하면 채택/덮어쓰기하지 않는다. 새로운 sealed
+저장은 NAS rename 전후/DB commit 전후 중단 모두 원 intent로 복구한다. 불명확한 결과를
+새 key로 우회하거나 이전 로그/이력을 지우지 않는다.
+
+Protocol의 작은 frozen intent/basis는 schema-first이며 질문/보고서/bytes를 event에 복제하지
+않는다. DB/NAS/locking은 기존 infrastructure adapter에 두고 domain은 filesystem/SQL을
+import하지 않는다. 최초 실패의 NAS 원인은 아직 미확정이며, 재현 가능한 결함은 adapter에
+원 COMMITTING 복구와 고정 manifest epoch가 없다는 점이다. schema/event·pointer/hash/
+lifecycle·동시성·rename 전후/DB commit 중단은 unit 및 disposable PostgreSQL에서 검증한 뒤
+isolated creative owner에 반영한다. 직접 row UPDATE나 새 Artifact key보다 기존 owner의
+검증된 original-identity replay가 작고 원 이력을 보존한다.
+
 30분 기존 관측을 재사용하고 phase 전환·실패·완료만 Slack 중요 보고한다.
 Slack 첫 문장은 한국어 요약이며 문항 내용·보고서 전문·인증 정보는 보내지 않는다.
 goal 완료는 GPU 프로세스 active나 설치 PASS가 아니라 U01–U05의 실제 결과로 판단한다.

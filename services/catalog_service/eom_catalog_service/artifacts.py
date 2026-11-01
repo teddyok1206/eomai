@@ -8,8 +8,10 @@ import os
 import re
 import shutil
 import stat
+import threading
 from collections.abc import Callable, Generator
 from dataclasses import dataclass
+from datetime import UTC
 from pathlib import Path
 from typing import Any, BinaryIO, Protocol, runtime_checkable
 from uuid import uuid4
@@ -22,19 +24,31 @@ from eom_identifiers import (
     sha256_bytes,
     sha256_file,
 )
+from eom_orchestrator.artifact_publication_lock import artifact_publication_lock
 from eom_orchestrator.artifacts import commit_file_set_artifact, stage_file_set_artifact
 from eom_orchestrator.database import build_session_factory, transaction
-from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
+from eom_orchestrator.models import (
+    ArtifactRecord,
+    ArtifactRevisionRecord,
+    JobEventRecord,
+    JobRecord,
+)
 from eom_orchestrator.repository import (
     create_artifact_records,
     ensure_protocol_version,
     submit_structured_job,
 )
-from eom_orchestrator.state_machine import JobState, transition_job
+from eom_orchestrator.state_machine import JobState, record_job_observation, transition_job
+from eom_protocol.artifact_commit_intent import (
+    CATALOG_COMMIT_INTENT_SCHEMA,
+    CatalogArtifactRecoveryBasis,
+    CatalogFileSetCommitIntent,
+)
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.models import ArtifactManifest
 from pydantic import BaseModel
 from sqlalchemy import Engine, select
+from sqlalchemy.orm import Session
 
 from eom_catalog_service.settings import CatalogSettings
 
@@ -81,6 +95,10 @@ CATALOG_ITEM_CONTENT_V3_SCHEMA_HASH = content_sha256(
 MAX_JOB_IDEMPOTENCY_KEY_LENGTH = 128
 MAX_JSON_REVISION_BATCH = 3072
 MAX_JSON_REVISION_BATCH_BYTES = 256 * 1024 * 1024
+_CATALOG_FILE_SET_LOCK = threading.Lock()
+type CatalogArtifactRecoveryAuthorizer = Callable[
+    [Session, JobRecord], CatalogArtifactRecoveryBasis
+]
 
 
 @dataclass(frozen=True, slots=True)
@@ -443,6 +461,7 @@ class CatalogModelValueDecoder(Protocol):
 
 class CatalogArtifactService:
     def __init__(self, engine: Engine, settings: CatalogSettings | None = None) -> None:
+        self.engine = engine
         self.settings = settings or CatalogSettings.from_environment()
         self.sessions = build_session_factory(engine)
 
@@ -460,8 +479,46 @@ class CatalogArtifactService:
         protocol_version: str = CATALOG_PROTOCOL_VERSION,
         protocol_schema_hash: str = CATALOG_SCHEMA_HASH,
         expected_file_sha256: dict[str, str] | None = None,
+        recovery_authorizer: CatalogArtifactRecoveryAuthorizer | None = None,
     ) -> CatalogArtifact:
         idempotency_key = normalize_catalog_idempotency_key(idempotency_key)
+        with artifact_publication_lock(
+            self.engine,
+            namespace="eom:catalog-artifact-publication",
+            idempotency_key=idempotency_key,
+            local_lock=_CATALOG_FILE_SET_LOCK,
+        ):
+            return self._commit_file_set_locked(
+                files=files,
+                primary_file=primary_file,
+                artifact_type=artifact_type,
+                idempotency_key=idempotency_key,
+                request=request,
+                result=result,
+                file_metadata=file_metadata,
+                manifest_version=manifest_version,
+                protocol_version=protocol_version,
+                protocol_schema_hash=protocol_schema_hash,
+                expected_file_sha256=expected_file_sha256,
+                recovery_authorizer=recovery_authorizer,
+            )
+
+    def _commit_file_set_locked(
+        self,
+        *,
+        files: dict[str, Path],
+        primary_file: str,
+        artifact_type: str,
+        idempotency_key: str,
+        request: dict[str, Any],
+        result: dict[str, Any],
+        file_metadata: dict[str, dict[str, str]] | None,
+        manifest_version: str,
+        protocol_version: str,
+        protocol_schema_hash: str,
+        expected_file_sha256: dict[str, str] | None,
+        recovery_authorizer: CatalogArtifactRecoveryAuthorizer | None,
+    ) -> CatalogArtifact:
         job_id = new_job_id()
         artifact_id = new_logical_artifact_id()
         revision_id = new_revision_id()
@@ -480,12 +537,31 @@ class CatalogArtifactService:
             job_id = job.job_id
             artifact_id = job.logical_artifact_id
             revision_id = job.revision_id
+        intent: CatalogFileSetCommitIntent | None = None
+        recovery_basis: CatalogArtifactRecoveryBasis | None = None
+        created_at = job.created_at
+        if created_at.tzinfo is None:
+            created_at = created_at.replace(tzinfo=UTC)
+        resume = False
         if not created:
             with self.sessions() as session:
                 revision = session.scalar(
                     select(ArtifactRevisionRecord).where(ArtifactRevisionRecord.job_id == job_id)
                 )
                 if revision is not None:
+                    if job.status != JobState.SUCCEEDED.value:
+                        raise RuntimeError("catalog artifact job is incomplete")
+                    intent = self._commit_intent(session, job_id)
+                    if intent is not None and (
+                        intent.artifact_id != revision.logical_artifact_id
+                        or intent.artifact_revision_id != revision.revision_id
+                        or intent.request_sha256 != job.request_hash
+                        or intent.result_sha256 != content_sha256(result)
+                        or intent.result_sha256 != content_sha256(revision.result)
+                        or intent.manifest_sha256 != revision.manifest_hash
+                        or intent.manifest_sha256 != content_sha256(revision.manifest)
+                    ):
+                        raise ValueError("CATALOG_ARTIFACT_COMMIT_INTENT_MISMATCH")
                     return CatalogArtifact(
                         job_id=job_id,
                         artifact_id=revision.logical_artifact_id,
@@ -497,13 +573,34 @@ class CatalogArtifactService:
                         manifest=revision.manifest,
                     )
                 existing_job = session.get(JobRecord, job_id)
-                if existing_job is None or existing_job.status != JobState.CREATED.value:
+                if existing_job is None or existing_job.status not in {
+                    JobState.CREATED.value,
+                    JobState.COMMITTING.value,
+                }:
                     raise RuntimeError("catalog artifact job is incomplete")
+                if existing_job.status == JobState.COMMITTING.value:
+                    resume = True
+                    if existing_job.worker_slot_id is not None:
+                        raise RuntimeError("catalog artifact job is incomplete")
+                    intent = self._commit_intent(session, job_id)
+                    if recovery_authorizer is not None:
+                        recovery_basis = recovery_authorizer(session, existing_job)
+                    if intent is None:
+                        if recovery_basis is None:
+                            raise RuntimeError("CATALOG_ARTIFACT_RECOVERY_AUTHORITY_REQUIRED")
+                        self._require_unregistered_destination_absent(existing_job)
+                    else:
+                        created_at = intent.manifest_created_at
+                        if (
+                            intent.recovery_basis is not None
+                            and recovery_basis != intent.recovery_basis
+                        ):
+                            raise RuntimeError("CATALOG_ARTIFACT_RECOVERY_AUTHORITY_REQUIRED")
 
         # A source or expected-hash validation failure intentionally leaves the immutable Job in
-        # CREATED.  Exact idempotent replay may therefore restage it, while every later state stays
-        # fail-closed.  Per-attempt directories prevent concurrent callers from copying over one
-        # another; the locked CREATED -> VALIDATED transition selects the sole commit winner.
+        # CREATED. Exact replay may restage it; COMMITTING requires the pinned intent or explicit
+        # acceptance-owner reconstruction above. The per-key publication lock serializes writers,
+        # and per-attempt directories isolate temporary materialization from the canonical output.
         attempt_root = self.settings.staging_root / job_id / f"attempt-{uuid4().hex}"
         try:
             staged = stage_file_set_artifact(
@@ -516,6 +613,7 @@ class CatalogArtifactService:
                 staging=attempt_root / "artifact",
                 manifest_version=manifest_version,
                 file_metadata=file_metadata,
+                created_at=created_at,
             )
             if expected_file_sha256 is not None:
                 actual_file_sha256 = {
@@ -523,28 +621,91 @@ class CatalogArtifactService:
                 }
                 if actual_file_sha256 != expected_file_sha256:
                     raise ValueError("catalog artifact staged members do not match expected hashes")
+            body = dict(
+                schema_version=CATALOG_COMMIT_INTENT_SCHEMA,
+                job_id=job_id,
+                artifact_id=artifact_id,
+                artifact_revision_id=revision_id,
+                request_sha256=job.request_hash,
+                result_sha256=content_sha256(result),
+                manifest_sha256=staged.manifest_hash,
+                manifest_created_at=staged.manifest["created_at"],
+                recovery_basis=(
+                    intent.recovery_basis.model_dump(mode="json")
+                    if intent is not None and intent.recovery_basis is not None
+                    else recovery_basis.model_dump(mode="json")
+                    if intent is None and recovery_basis is not None
+                    else None
+                ),
+            )
+            proposed = CatalogFileSetCommitIntent.model_validate(
+                body | {"intent_sha256": content_sha256(body)}
+            )
+            if intent is not None and proposed != intent:
+                raise ValueError("CATALOG_ARTIFACT_COMMIT_INTENT_MISMATCH")
             with transaction(self.sessions) as session:
-                transition_job(session, job_id, JobState.VALIDATED, "CATALOG_ARTIFACT_VALIDATED")
-                transition_job(session, job_id, JobState.QUEUED, "CATALOG_ARTIFACT_QUEUED")
-                transition_job(session, job_id, JobState.CLAIMED, "CATALOG_CORE_CLAIMED")
-                transition_job(session, job_id, JobState.RUNNING, "CATALOG_ARTIFACT_STAGED")
-                transition_job(
-                    session,
-                    job_id,
-                    JobState.VALIDATING_RESULT,
-                    "CATALOG_ARTIFACT_HASHED",
-                )
-                transition_job(
-                    session,
-                    job_id,
-                    JobState.COMMITTING,
-                    "CATALOG_ARTIFACT_COMMITTING",
-                )
+                if resume:
+                    locked = session.execute(
+                        select(JobRecord).where(JobRecord.job_id == job_id).with_for_update()
+                    ).scalar_one()
+                    if (
+                        locked.status != JobState.COMMITTING.value
+                        or locked.request_hash != proposed.request_sha256
+                    ):
+                        raise RuntimeError("CATALOG_ARTIFACT_RECOVERY_STATE_CHANGED")
+                    if intent is None:
+                        if (
+                            recovery_authorizer is None
+                            or recovery_authorizer(session, locked) != recovery_basis
+                        ):
+                            raise RuntimeError("CATALOG_ARTIFACT_RECOVERY_AUTHORITY_REQUIRED")
+                        self._require_unregistered_destination_absent(locked)
+                        if (
+                            session.scalar(
+                                select(ArtifactRevisionRecord).where(
+                                    ArtifactRevisionRecord.job_id == job_id
+                                )
+                            )
+                            is not None
+                        ):
+                            raise RuntimeError("CATALOG_ARTIFACT_RECOVERY_STATE_CHANGED")
+                        record_job_observation(
+                            session,
+                            job_id,
+                            "CATALOG_ARTIFACT_COMMIT_RECONSTRUCTED",
+                            expected_state=JobState.COMMITTING,
+                            data={"publication_intent": proposed.model_dump(mode="json")},
+                        )
+                else:
+                    transition_job(
+                        session, job_id, JobState.VALIDATED, "CATALOG_ARTIFACT_VALIDATED"
+                    )
+                    transition_job(session, job_id, JobState.QUEUED, "CATALOG_ARTIFACT_QUEUED")
+                    transition_job(session, job_id, JobState.CLAIMED, "CATALOG_CORE_CLAIMED")
+                    transition_job(session, job_id, JobState.RUNNING, "CATALOG_ARTIFACT_STAGED")
+                    transition_job(
+                        session, job_id, JobState.VALIDATING_RESULT, "CATALOG_ARTIFACT_HASHED"
+                    )
+                    transition_job(
+                        session,
+                        job_id,
+                        JobState.COMMITTING,
+                        "CATALOG_ARTIFACT_COMMITTING",
+                        data={"publication_intent": proposed.model_dump(mode="json")},
+                    )
             final = commit_file_set_artifact(staged, self.settings.nas_artifact_root)
             with transaction(self.sessions) as session:
                 job = session.execute(
                     select(JobRecord).where(JobRecord.job_id == job_id).with_for_update()
                 ).scalar_one()
+                if job.status != JobState.COMMITTING.value:
+                    raise RuntimeError("CATALOG_ARTIFACT_RECOVERY_STATE_CHANGED")
+                if (
+                    resume
+                    and recovery_authorizer is not None
+                    and recovery_authorizer(session, job) != recovery_basis
+                ):
+                    raise RuntimeError("CATALOG_ARTIFACT_RECOVERY_AUTHORITY_REQUIRED")
                 create_artifact_records(
                     session,
                     job=job,
@@ -578,6 +739,44 @@ class CatalogArtifactService:
             )
         finally:
             shutil.rmtree(attempt_root, ignore_errors=True)
+
+    @staticmethod
+    def _commit_intent(session: Session, job_id: str) -> CatalogFileSetCommitIntent | None:
+        rows = tuple(
+            session.scalars(
+                select(JobEventRecord)
+                .where(
+                    JobEventRecord.job_id == job_id,
+                    JobEventRecord.event.in_(
+                        ("CATALOG_ARTIFACT_COMMITTING", "CATALOG_ARTIFACT_COMMIT_RECONSTRUCTED")
+                    ),
+                )
+                .order_by(JobEventRecord.sequence)
+                .limit(3)
+            )
+        )
+        if len(rows) > 2:
+            raise ValueError("CATALOG_ARTIFACT_COMMIT_INTENT_INVALID")
+        intents = [
+            CatalogFileSetCommitIntent.model_validate(row.data["publication_intent"])
+            for row in rows
+            if "publication_intent" in row.data
+        ]
+        if any(value.job_id != job_id or value != intents[0] for value in intents):
+            raise ValueError("CATALOG_ARTIFACT_COMMIT_INTENT_MISMATCH")
+        return intents[0] if intents else None
+
+    def _require_unregistered_destination_absent(self, job: JobRecord) -> None:
+        root = self.settings.nas_artifact_root.resolve(strict=True)
+        parent = root / job.logical_artifact_id
+        if parent.is_symlink() or (parent.exists() and not parent.is_dir()):
+            raise ValueError("CATALOG_ARTIFACT_RECOVERY_DESTINATION_INVALID")
+        target = parent / job.revision_id
+        try:
+            target.lstat()
+        except FileNotFoundError:
+            return
+        raise RuntimeError("CATALOG_ARTIFACT_RECOVERY_EXISTING_UNSEALED_DESTINATION")
 
     def read_member(
         self,

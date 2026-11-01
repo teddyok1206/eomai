@@ -461,6 +461,7 @@ def test_registered_solution_acceptance_keeps_v11_schema_protocol_and_full_repor
     run = NS(
         analysis_run_id="analysisrun_" + "6" * 32,
         state="VALIDATING",
+        workflow_id="workflow_" + "7" * 32,
         canonical_request=request.model_dump(mode="json"),
         risk_policy_revision_id=request.risk_policy_revision_id,
     )

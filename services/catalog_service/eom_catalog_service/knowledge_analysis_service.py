@@ -75,6 +75,8 @@ from eom_identifiers import (
     sha256_bytes,
 )
 from eom_identity_service.models import OperatorRecord
+from eom_identity_service.repository import effective_permissions
+from eom_operator_identity import PermissionKey
 from eom_orchestrator.control_models import (
     ExecutionPresetRecord,
     ExecutionPresetRevisionRecord,
@@ -89,6 +91,7 @@ from eom_orchestrator.knowledge_analysis_models import (
     KnowledgeAnalysisRunRecord,
 )
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
+from eom_protocol.artifact_commit_intent import CatalogArtifactRecoveryBasis
 from eom_workflow import ArtifactPointer, WorkflowRequest
 from eom_workflow.control_plane import ExecutionPresetRevision
 from eom_workflow_runner.models import WorkflowInstanceRecord
@@ -105,7 +108,11 @@ from sqlalchemy import Engine, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.artifacts import CatalogArtifact, CatalogArtifactService
+from eom_catalog_service.artifacts import (
+    CatalogArtifact,
+    CatalogArtifactRecoveryAuthorizer,
+    CatalogArtifactService,
+)
 from eom_catalog_service.knowledge_analysis_risk import evaluate_knowledge_analysis_risk
 from eom_catalog_service.knowledge_analysis_sources import (
     KnowledgeAnalysisSourceError,
@@ -2121,6 +2128,70 @@ class KnowledgeAnalysisApplicationService:
             result = KnowledgeAnalysisResultV3.model_validate(result_data)
         else:
             result = KnowledgeAnalysisResultV2.model_validate(result_data)
+        recovery_authorizer: CatalogArtifactRecoveryAuthorizer | None = None
+        pinned_source = request.source
+        if acceptance_mode == "AUTO_POLICY" and isinstance(
+            pinned_source, ApprovedItemKnowledgeSourceV2
+        ):
+            recovery_workflow_id = run.workflow_id
+            source_basis_sha256 = content_sha256(
+                {
+                    "analysis_run_id": run_id,
+                    "request_sha256": request.request_sha256,
+                    "proposal_receipt": proposal_receipt_pointer.model_dump(mode="json"),
+                    "risk_policy_sha256": policy.content_sha256,
+                }
+            )
+
+            def authorize_recovery(
+                session: Session, job: JobRecord
+            ) -> CatalogArtifactRecoveryBasis:
+                current = session.get(KnowledgeAnalysisRunRecord, run_id, populate_existing=True)
+                operator = session.get(OperatorRecord, actor_id, populate_existing=True)
+                permissions = effective_permissions(session, actor_id)
+                workflow = session.get(
+                    WorkflowInstanceRecord, recovery_workflow_id, populate_existing=True
+                )
+                if (
+                    current is None
+                    or current.state not in allowed_states
+                    or current.workflow_id != recovery_workflow_id
+                    or current.created_by_operator_id != actor_id
+                    or _analysis_request(current.canonical_request) != request
+                    or operator is None
+                    or operator.status != "ACTIVE"
+                    or operator.deleted_at is not None
+                    or operator.must_change_password
+                    or not {
+                        PermissionKey.ITEM_READ,
+                        PermissionKey.KNOWLEDGE_ANALYSIS_CREATE,
+                    }.issubset(permissions)
+                    or workflow is None
+                    or workflow.state != WorkflowState.COMPLETED.value
+                    or job.task_type != "knowledge-analysis-accepted-result"
+                    or job.request.get("analysis_run_id") != run_id
+                    or self._stored_receipt(session, current) != receipt
+                    or self.risk_policy(session, current.risk_policy_revision_id) != policy
+                    or resolve_approved_item_source(
+                        session,
+                        item_revision_id=pinned_source.item_revision_id,
+                        source_class=pinned_source.source_class,
+                        artifacts=self.artifacts,
+                    )
+                    != pinned_source
+                ):
+                    raise KnowledgeAnalysisServiceError(
+                        "KNOWLEDGE_ANALYSIS_RECOVERY_FORBIDDEN",
+                        "original acceptance authority or immutable source differs",
+                    )
+                return CatalogArtifactRecoveryBasis(
+                    kind="PINNED_KNOWLEDGE_ACCEPTANCE",
+                    actor_id=actor_id,
+                    source_basis_sha256=source_basis_sha256,
+                )
+
+            recovery_authorizer = authorize_recovery
+
         artifact = self._commit_json_artifact(
             relative_path="evidence/accepted-result.json",
             schema_ref=result_schema_ref,
@@ -2137,6 +2208,7 @@ class KnowledgeAnalysisApplicationService:
             },
             result=result.model_dump(mode="json"),
             protocol=_catalog_protocol(request),
+            recovery_authorizer=recovery_authorizer,
         )
         result_model: (
             type[KnowledgeAnalysisResultV2]
@@ -2248,6 +2320,7 @@ class KnowledgeAnalysisApplicationService:
             KNOWLEDGE_ANALYSIS_CATALOG_PROTOCOL,
             KNOWLEDGE_ANALYSIS_CATALOG_SCHEMA_HASH,
         ),
+        recovery_authorizer: CatalogArtifactRecoveryAuthorizer | None = None,
     ) -> CatalogArtifact:
         try:
             with tempfile.TemporaryDirectory(
@@ -2273,6 +2346,7 @@ class KnowledgeAnalysisApplicationService:
                     manifest_version="knowledge-analysis-file-set/1.0",
                     protocol_version=protocol[0],
                     protocol_schema_hash=protocol[1],
+                    recovery_authorizer=recovery_authorizer,
                 )
         except KnowledgeAnalysisServiceError:
             raise
