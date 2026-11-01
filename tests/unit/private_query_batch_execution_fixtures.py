@@ -21,7 +21,7 @@ from tests.unit.private_chat_batch_plan_fixtures import private_planning_case_fo
 from tests.unit.test_private_chat_batch_plan_admission import make_private_batch_admission_case
 
 
-def private_query_batch_case(tmp_path, monkeypatch, *, publisher=None, key):
+def private_query_batch_case(tmp_path, monkeypatch, *, publisher=None, key, bind=True):
     value = make_private_batch_admission_case(tmp_path, monkeypatch, publisher=publisher, key=key)
     planned = private_planning_case_for_parent(
         NS(
@@ -76,8 +76,15 @@ def private_query_batch_case(tmp_path, monkeypatch, *, publisher=None, key):
 
     with value.publisher.sessions.begin() as session, value.owner.admit(session, value.request):
         store.allocate(session, planned.allocation)
-        store.route(session, planned.route)
-        history = store.bind(session, bound, batch, authorize_child=authorize)
+        history = store.route(session, planned.route)
+        if bind:
+            history = store.bind(session, bound, batch, authorize_child=authorize)
+    value.child, value.origin_context, value.sources = child, origin_context, sources
+    value.native, value.launch, value.planned = native, launch, planned
+    value.material = material
+    value.numeric, value.store, value.history = numeric, store, history
+    if not bind:
+        return value
     receipt = replace_receipt_parent(numeric.receipt, history.job_id)
     saved = value.controls.publish_batch_execution_receipt(
         receipt, idempotency_key="private-query-batch-proof:" + key
@@ -89,9 +96,5 @@ def private_query_batch_case(tmp_path, monkeypatch, *, publisher=None, key):
         result_sha256=numeric.result.children[0].result.result_sha256,
         completed_observed_at=receipt.completed.retired_at,
     )
-    value.child, value.origin_context, value.sources = child, origin_context, sources
-    value.native, value.launch, value.planned = native, launch, planned
-    value.material = material
-    value.numeric, value.store, value.history = numeric, store, history
     value.receipt, value.saved, value.executed = receipt, saved, executed
     return value

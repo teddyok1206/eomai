@@ -285,6 +285,28 @@ schema/table/queue/index/cache/수치 executor는 없고 기존 state/producer/k
 public/predecessor bytes는 보존하며 CPU 고정 guard를 풀지 않는다. public IO/binding 코드를
 private용으로 복제하는 대안보다 공통 adapter와 목적별 작은 typed entry가 작다.
 
+private GPU executor는 기존 native private port를 구현하고 원 origin key/Workflow/step/claim,
+parent17의 실제 current admission과 finite batch execution을 연결한다. 한 질문/child0이므로
+별도 gathering/queue/큰 batch registry는 없다. CPU/GPU는 같은 device-neutral launch candidate
+생성을 공유하되 CPU 고정 handoff와 GPU material의 guard는 각각 유지한다. 정본은 원 parent/
+launch Job·네 checkpoint·canonical receipt/query artifacts이며 volatile flag가 아니다.
+
+새 active parent만 원 channel에서 한 번 run할 수 있고, existing parent는 정식 original
+receipt lookup과 completed-result cold-read만 사용한다. 동일 caller/key여도 original origin/
+Graph/policy/recipe/space/producer/binding/hash를 재검증하며 old physical PID/unit 생존이나
+latest 대입은 사용하지 않는다. 이미 PUBLISHED/COMPLETED이면 canonical 완료 경로만 읽는다.
+원 receipt가 아직 없거나 binding 상태가 불명확하면 같은 launch의 UNCERTAIN을 반환하고
+새 root/key/추론을 만들지 않는다. FAILED는 그대로 거부한다. per-operation lock은 중복 진입을
+막는 작은 동기화 수단이지 전역 slot/권한/작업 queue가 아니다. source callback은 explicit
+workflow/request/lease의 기존 fenced transaction을 열며 SQL root가 수치 실행을 가로지르지 않는다.
+
+접근은 origin unique key·Job PK·bounded4 event·original publication key lookup과 readonly
+vector materialization으로 O(control/input bytes + vector bytes)다. source/claim/transaction은
+기존 owner/Runner, canonical commit은 Orchestrator, 로컬 파일/물리는 기존 adapters 책임이다.
+새 wire/schema/table/index/cache/dependency나 worker 간 통신은 없다. private용 numerical
+executor/상태기계를 복제하는 대안보다 기존 finite run/증거/완료 경로에 native port 하나를
+연결하는 것이 작다. 이 후보는 private physical worker/global2 운영 활성화와 구별한다.
+
 ### private 공통 parent의 실제 source admission — 2026-11-01
 
 책임은 기존 private source owner와 finite parent application이다. 정본은 원 Chat origin과

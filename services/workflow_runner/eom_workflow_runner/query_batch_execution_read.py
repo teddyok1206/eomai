@@ -11,11 +11,13 @@ from eom_orchestrator.embedding_batch_plan_store import EmbeddingBatchPlanStore
 from eom_orchestrator.file_set_control_artifacts import CONTROL_FILE_SET_PROTOCOL
 from eom_orchestrator.local_embedding_control_artifacts import BATCH_EXECUTION_RECEIPT_ARTIFACT_TYPE
 from eom_orchestrator.models import JobRecord
+from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.embedding_batch_execution_receipt import (
     MAX_BATCH_EXECUTION_RECEIPT_BYTES,
     EmbeddingBatchExecutedChild,
     EmbeddingBatchExecutionReceipt,
     PrivateChatBatchExecutionReceipt,
+    SupportedEmbeddingBatchExecutionReceipt,
     parse_supported_embedding_batch_execution_receipt,
 )
 from eom_workflow.embedding_batch_plan_family import (
@@ -57,6 +59,33 @@ class QueryBatchExecutionReadError(ValueError):
 def _require(condition: bool) -> None:
     if not condition:
         raise QueryBatchExecutionReadError()
+
+
+def read_query_batch_execution_receipt(
+    reader: PinnedArtifactReadContext, pointer: ArtifactMemberPointer
+) -> SupportedEmbeddingBatchExecutionReceipt:
+    """Read the exact canonical file; caller still proves parent, current source and claim.
+
+    This is storage resolution, not an execution or source capability. Both live
+    completion and cold continuation use the same bounded schema/hash/file-set
+    checks before the existing purpose-specific parent proof below.
+    """
+    reader.prefetch(((pointer.artifact_id, pointer.artifact_revision_id),))
+    reader.require_file_set(
+        pointer.artifact_id,
+        pointer.artifact_revision_id,
+        ("receipt.json",),
+        manifest_version=CONTROL_FILE_SET_PROTOCOL,
+    )
+    raw = reader.read_pinned(
+        **pointer.model_dump(mode="python"),
+        expected_artifact_types=(BATCH_EXECUTION_RECEIPT_ARTIFACT_TYPE,),
+        expected_primary_file="receipt.json",
+        max_bytes=MAX_BATCH_EXECUTION_RECEIPT_BYTES,
+    ).payload
+    receipt = parse_supported_embedding_batch_execution_receipt(json.loads(raw))
+    _require(canonical_json_bytes(receipt.model_dump(mode="json")) == raw)
+    return receipt
 
 
 def resolve_reference_query_batch_execution(
@@ -143,20 +172,7 @@ def _resolve_original_query_batch(
             raise QueryBatchExecutionReadError()
         validate_current_reference_query_input(sources, launch, native_input)
     pointer = executed.batch_receipt
-    reader.prefetch(((pointer.artifact_id, pointer.artifact_revision_id),))
-    reader.require_file_set(
-        pointer.artifact_id,
-        pointer.artifact_revision_id,
-        ("receipt.json",),
-        manifest_version=CONTROL_FILE_SET_PROTOCOL,
-    )
-    raw = reader.read_pinned(
-        **pointer.model_dump(mode="python"),
-        expected_artifact_types=(BATCH_EXECUTION_RECEIPT_ARTIFACT_TYPE,),
-        expected_primary_file="receipt.json",
-        max_bytes=MAX_BATCH_EXECUTION_RECEIPT_BYTES,
-    ).payload
-    receipt = parse_supported_embedding_batch_execution_receipt(json.loads(raw))
+    receipt = read_query_batch_execution_receipt(reader, pointer)
     if isinstance(executed, NativePrivateQueryBatchExecuted):
         _require(type(receipt) is PrivateChatBatchExecutionReceipt)
     else:
@@ -166,8 +182,7 @@ def _resolve_original_query_batch(
     request, context = sources.request, sources.request.context_request
     ordinal = executed.child_ordinal
     _require(
-        canonical_json_bytes(receipt.model_dump(mode="json")) == raw
-        and receipt.receipt_sha256 == executed.batch_receipt_sha256
+        receipt.receipt_sha256 == executed.batch_receipt_sha256
         and request.resource_profile.device == "CUDA"
         and receipt.scope.actor_kind == "OPERATOR"
         and receipt.scope.actor_id == request.operator_audit.operator_id

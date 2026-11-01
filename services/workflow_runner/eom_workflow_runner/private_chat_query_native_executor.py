@@ -7,7 +7,6 @@ from typing import Literal, overload
 
 from eom_catalog_contracts.embedding_private_chat_query import EmbeddingPrivateChatQueryInput
 from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
-from eom_identifiers import content_sha256, new_job_id, new_revision_id
 from eom_orchestrator.embedding_artifact_store import EmbeddingArtifactStore
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.native_embedding_cpu_execution import validate_fixed_native_cpu_resources
@@ -61,13 +60,15 @@ from eom_workflow_runner.local_embedding_publications import (
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from eom_workflow_runner.private_chat_query_completion import NativePrivateChatQueryCompletion
 from eom_workflow_runner.private_chat_query_execution_port import PrivateChatQueryStepPending
+from eom_workflow_runner.private_chat_query_launch_preparation import (
+    prepare_private_chat_query_launch_candidate,
+)
 from eom_workflow_runner.private_chat_query_owner_admission import (
     CatalogPrivateChatQueryOwnerAdmission,
 )
 from eom_workflow_runner.private_chat_query_source_read import (
     ResolvedPrivateChatPublicQuerySources,
     ResolvedPrivateChatQuerySources,
-    build_supported_private_chat_query_native_input,
     validate_supported_current_private_chat_query_input,
 )
 from eom_workflow_runner.readiness import (
@@ -168,67 +169,44 @@ class CatalogNativePrivateChatQueryExecutor:
         )
         if launch is not None and not isinstance(launch, PrivateChatQueryLaunchAssociation):
             raise ValueError("PRIVATE_CHAT_QUERY_EXECUTOR_PURPOSE_INVALID")
-        job_id = new_job_id() if launch is None else launch.native_launch_job_id
-        query_id = (
-            "embeddingquery_" + new_revision_id().removeprefix("rev_")
-            if launch is None
-            else launch.query_request_id
-        )
-        native = build_supported_private_chat_query_native_input(
-            sources, job_id=job_id, query_request_id=query_id
+        if launch is None and not self.evaluate(request).ready:
+            raise ValueError("PRIVATE_CHAT_QUERY_EXECUTOR_CONTEXT_INVALID")
+        candidate = prepare_private_chat_query_launch_candidate(
+            sources,
+            workflow_id=workflow_id,
+            step_run_id=step_run_id,
+            command_lease=lease,
+            existing=launch,
         )
         if launch is None:
-            if not self.evaluate(request).ready:
-                raise ValueError("PRIVATE_CHAT_QUERY_EXECUTOR_CONTEXT_INVALID")
-            body = dict(
-                schema_version="private-chat-query-launch-association/1.0",
-                purpose="PRIVATE_CHAT_QUERY",
-                workflow_id=workflow_id,
-                step_run_id=step_run_id,
-                step_key="encode_private_chat_query",
-                attempt=1,
-                workflow_request_sha256=request.request_sha256,
-                context_request_sha256=request.context_request.request_sha256,
-                basis_sha256=request.context_request.query_basis.basis_sha256,
-                native_launch_job_id=job_id,
-                query_request_id=query_id,
-                query_request_sha256=native.request_sha256,
-                query_input_set_sha256=native.input_set_sha256,
-                recipe_sha256=request.context_request.views[0].recipe.recipe_sha256,
-                runtime_bundle=request.runtime_bundle.model_dump(mode="json"),
-                resource_profile_sha256=request.resource_profile.resource_profile_sha256,
-                original_command_id=lease.command_id,
-                original_command_generation=lease.lease_generation,
-                launched_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
-            )
-            candidate = PrivateChatQueryLaunchAssociation.model_validate(
-                body | {"association_sha256": content_sha256(body)}
-            )
             PreparedNativePrivateChatQuery(
-                job_id.removeprefix("job_"),
+                candidate.association.native_launch_job_id.removeprefix("job_"),
                 request,
                 sources.policy,
                 sources.bundle,
-                candidate,
-                native,
+                candidate.association,
+                candidate.request,
             )
-            adopted = create_native_query_launch(session, request=request, launch=candidate)
+            adopted = create_native_query_launch(
+                session, request=request, launch=candidate.association
+            )
             if not isinstance(adopted, PrivateChatQueryLaunchAssociation):
                 raise ValueError("PRIVATE_CHAT_QUERY_EXECUTOR_PURPOSE_INVALID")
-            launch = adopted
-            if launch != candidate:
-                native = build_supported_private_chat_query_native_input(
+            if adopted != candidate.association:
+                candidate = prepare_private_chat_query_launch_candidate(
                     sources,
-                    job_id=launch.native_launch_job_id,
-                    query_request_id=launch.query_request_id,
+                    workflow_id=workflow_id,
+                    step_run_id=step_run_id,
+                    command_lease=lease,
+                    existing=adopted,
                 )
         return PreparedNativePrivateChatQuery(
-            launch.native_launch_job_id.removeprefix("job_"),
+            candidate.association.native_launch_job_id.removeprefix("job_"),
             request,
             sources.policy,
             sources.bundle,
-            launch,
-            native,
+            candidate.association,
+            candidate.request,
         )
 
     def _allocate(
