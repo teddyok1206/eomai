@@ -1,5 +1,46 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## private 원 GPU 결과의 owner-local 검증·재조회 후보 — 2026-11-01
+
+- source **`e56525d981704ec586bbdd5c4fd13252e38f93bd`**는 기존 shared result reader와
+  owner-local workspace reader에 receipt1.1을 연결했다. 원 parent/bound/ACK와 input/result/
+  binary의 exact file identity·mode·raw/semantic hash, row/range/finite/L2 및 현재 source
+  fence를 기존 경로에서 확인한다. 한 번 읽은 bounded binary의 readonly memoryview를
+  공유하며 새 private 수치 executor·queue·DB/index/cache를 만들지 않았다.
+- pure allocation→numerical purpose의 불변3-key lookup을 기존 두 검증 지점이 공유한다.
+  이미 schema에 있는 PRIVATE_CHAT_QUERY는 정확한 private envelope3와만 대응한다.
+  이것은 source 권한·물리 GPU grant가 아니다. actual worker entry의 private 거부는 그대로며
+  실제 Unix request를 보낸 unit test에서 GPU claim/device/model/input read 전에 거부됨을
+  확인했다. 공개 INDEX/REFERENCE grant를 private 입력에 사용하는 것도 계속 거부한다.
+- 원 ACK 뒤에는 목적별 exact1.0/1.1 receipt를 만들고, cold read는 같은 원 receipt/input/
+  result를 확인한다. 과거 PID/unit이 없다고 새 추론을 하지 않는다. source 철회·hash/mode/
+  inode 변경·누락·외부 receipt metadata는 복구/최신값 대입 없이 거부한다. 공개/비공개를
+  같은 실제 로컬 파일·channel DFA 검사에 parameterize했다. identity/GPU/source ports는
+  명시적 synthetic seams이며 실제 CUDA 실행·OS 권한 격리 승인으로 확대하지 않는다.
+- source 최종 **341 PASS/120.37s**, 직접/consumer strict mypy8 및 physical consumer4,
+  Ruff/format/diff PASS다. 첫 집중129건은 이 합집합에 포함된다. 별도 비편집 설치본의 같은
+  범위도 **341 PASS/121.07s**이며 actual source/module paths를 먼저 확인했다.
+  source 변경은 pure purpose/file IO/result dispatch뿐이며 SQL/
+  canonical publisher/Job transition은 바꾸지 않았다. 해당 persistence의 직전51361e43
+  disposable PG **276 PASS**와 cleanup 증거를 재사용하고 이번 커밋의 새 PG 실행으로
+  표시하지 않는다. 초기 mypy 명령의 존재하지 않는 파일 경로는 수정 후 영향8개를 재실행했다.
+- build/RECORD PASS, wheel directory는
+  `/tmp/eom-api-build/e56525d981704ec586bbdd5c4fd13252e38f93bd.UtluiH/dist`다. platform SHA
+  `e6b9dca2b18d8d0607aca4a5cf19554ca73749d934e89a9cfb4d22a4b2c20f36`, contracts
+  `58b5e0a7d209ede00f00b4d5d7e73cd6ca4ca4eebaa1f765361829cee8eb29f8`, API
+  `15d1c3848b5ed299026cfefdfc26b592297b50bde6025d5cc6a528059aa61388`다. 설치 prefix는
+  `/tmp/eom-private-batch-local-result-installed.k2U1mlOd/site-packages`다. worker의 닫힌
+  physical gate 회귀에 기존 optional `eom_gpu_lease` wheel을 함께 설치했고 source e2326626/
+  SHA `f527cc610b7df2a384e40f450d5758a87ad76ff9684a778201a43b60d4593763`를 확인했다.
+  이 optional helper는 새 수치 환경 설치나 기존 공개 runtime 변경이 아니다.
+- `/tmp/eom-private-batch-local-result-*20261101*` 및 ignored installed harness에 검증
+  근거를 남겼다. 실제 INDEX2258114/QUERY2256183과 모든 운영 pin은 유지했다. 이번 단계의
+  live 배포/모델 제출/인증 변경/생산 migration/정본·구 vector·FAILED 변경0이며 private
+  global2도 CLOSED다. 마지막 정기 관측152/520은13:00 UTC 기준이며 임의로 가산하지 않는다.
+- 전체 목표 ACTIVE다. 다음은 CPU unit 관측과 구별되는 private GPU checkpoint/actual
+  canonical proof·cohost 연결, actual GUI query/read/replay와 실제 AI canary, 전체520
+  대상별 무결성/권한, consumer 전환 이후 정확한 구 파생 retirement/삭제다.
+
 ## private CUDA receipt의 canonical 저장 후보 — 2026-11-01
 
 - source **`51361e43ce8a611542d1600e073766ef3992b9b3`**를 main/origin에 commit/push했다.
