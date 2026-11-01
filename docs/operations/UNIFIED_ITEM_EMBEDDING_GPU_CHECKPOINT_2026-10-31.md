@@ -50,6 +50,8 @@
   `workflow_bd19b2e1f5ee4a39b1175369dfb629fc`의 BATCH_COMPLETED/selected_targets4**를 확인했다.
   이것은 추가 frozen-target4 완료 수를 뜻하지 않는다. 후속 metadata/source 준비를 GPU
   forward라고 부르거나 stage 관측 timeout만으로 작업을 재시작하지 않았다.
+  다음16:00 정기 관측은 **163/520·잔여357**, 후속CPU RUNNING1/historical FAILED7이다.
+  frozen target-set/space hash는 불변이다. 별도 전체520 최종 무결성 acceptance는 아직 아니다.
 - 새 GUI 시험은10321로 한 번 요청했으며 **actual authorized query/read/replay는 PENDING**이다.
   전체 목표는 ACTIVE다. private 공통 cohost/실제 활성화, AI V11 canary, 모든520 CUDA의
   대상별 무결성 및 구 소비자 전환 후 정확한 retirement/delete 종료 조건은 그대로다.
