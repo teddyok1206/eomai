@@ -1,5 +1,79 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 창작 Graph seed·최종 hop 복구와 별도 저장 중단 진단 — 2026-11-01 UTC
+
+- 직전 `1156821b`의 private2 Artifact 연결·검증은 **PROGRESS**였다. 이번 시작에서
+  HEAD/clean을 재확인했고 기존 Graph 검색·단원 연결의 두 결함을 재현·수정·호환 배포했으므로
+  이번도 **PROGRESS**다. 전체 목표 ACTIVE다. source private2 활성화/전체520 GPU/구 벡터
+  삭제를 이번 작업으로 대체하지 않는다.
+- actual source11694는 원 concept key가 현재 Graph의 exact key에 없었다. 후보가 아예
+  없다는 뜻은 아니며, 원 lexical query의 한정된 seed budget을 요청 범위 밖 Item 노드들이
+  먼저 채우는 결함이었다. 기존 lexical query에 같은 Graph/node의 요청 source-class
+  membership `EXISTS`만 추가했다. 다른 source-class의 중복 pointer가 frequency를 늘리지
+  않으며, final actor/policy/source/hash/lifecycle 검증은 그대로다. wire topic keys/보고서/
+  source-class/예산/승인 상태/원 idempotency key 변경0이다. main **`bf62dd21`**다.
+- synthetic SQL에서 범위 밖 Item1000개가 textbook seed를 밀어내던 원 쿼리를 재현했다.
+  scope/기존 RAG/정책/의존성 **52 PASS /13.20s**, Ruff/strict mypy PASS다. 원 운영8eb를
+  기반으로 같은 patch만 clean linked worktree에 cherry-pick한 hotfix **`708d4a43`**는
+  source52·실제 isolated 설치본101 PASS, 정식 build/wheel RECORD PASS였다. 새 schema67
+  또는 private2 코드를 이 릴리스에 섞지 않았다. 원 Graph/actor/policy의 read-only canary는
+  원 세 보고서 모두 ACCEPTED,11694 candidate31·11692/11693 candidate38/46을 확인했다.
+  단순 검색 성공을 Graph 최종 발행 완료로 확대하지 않았다.
+- 원 cohort/continuation/limit1053 그대로 creative unit만01:51:34 UTC 재개했다. 이후
+  **01:52:46 exit78**은 `AUTOMATIC_ALIGNMENT_NEIGHBORHOOD_TOO_LARGE`였다. 실제 원인은
+ 11694의 마지막 hop(depth2→3)이 단원이 아닌 목적지까지 확장해 seed-node 관계140,725개를
+  만들던 것이다. safety bound131,072를 올리거나 정책을 바꾸지 않았다. 마지막 SQL에서만
+  같은 Graph의 MINOR 목적지를 선택해 어떤3-hop 단원/최단거리/support/ranking도 잃지
+  않고 불필요한 final leaves를 제거했다. 기존1.0/1.1/1.2 정책 hashes/한도는 그대로다.
+  main **`bc483c48`**다.17000 dead-end fanout과 무제한 BFS oracle/기존 회귀 **71 PASS**다.
+- 두 수정만 포함한 source66 hotfix **`92f75533b9dbcc4b5d5ab3ffb0d76ce9720f2a04`**를
+  `/opt/eom/maintenance-releases/92f75533b9dbcc4b5d5ab3ffb0d76ce9720f2a04`에 isolated 설치했다.
+  실제 wheel import/RECORD/원 code SHA를 검증했고 final installed 회귀 **107 PASS /21.11s**다.
+  원 Graph의 exact published evidence에서11694 단원2개, 앞 두 문항의 원 단원1/3개를 모두
+  공식 derive 경로로 확인했다. 실제 PostgreSQL lexical query plan은
+  `ix_knowledge_node_term_lookup`/`uq_knowledge_node_source_pointer`를 사용한다. 새 index0이다.
+  `/tmp/eom-creative-seed-final-candidate-read-20261101.json`,
+  `/tmp/eom-creative-seed-final-installed-tests-20261101.log`,
+  `/tmp/eom-creative-alignment-neighborhood-depth-20261101.json`.
+- **02:00:40 UTC creative PID1840115**로 같은 원 cohort를 재개했다. API/Catalog는8eb,
+  QUERY/INDEX는FB·INDEX1683578/NRestarts0, production migration66을 유지한다. API readiness
+  READY도 확인했다. private2/source67 activation이나 numeric pin 변경·GPU/QUERY 재시작0이다.
+ 11692–11694의 원 모델/보고서를 재생성하지 않고 accepted 분석·원 Evidence replay를 사용했다.
+- 이후 별도 **11697**에서 `KNOWLEDGE_ANALYSIS_ARTIFACT_COMMIT_FAILED`가 발생했다.
+  마지막 representative11692를 실패 source로 오인하지 않았다.11692–11696 분석은 ACCEPTED,
+ 11697은 원 `analysisrun_a7a64a2603f84746901060a38164c412`의 VALIDATING이다. 원 accepted-result
+  Job **`job_002f75e5eec44d22bf50903fc1111f3b`**는 COMMITTING, Artifact registry0·NAS final0다.
+  FAILED를 성공으로 바꾸거나 새 모델/Job/key로 우회하지 않았다. 구체적인 최초 파일 오류는
+  아직 확인되지 않았다. 기존 Catalog Artifact adapter는 이런 incomplete Job을 의도적으로
+  fail-closed하므로, 원 input/Job/event·실제 commit 상태에 근거한 공식 복구가 다음 작업이다.
+  `/tmp/eom-creative-commit-state-20261101.json`, `-v2.json`.
+- operational status의 STOPPED_TECHNICAL_FAILURE만으로 process 종료를 가정하지 않았다.
+  **02:07:45 현재 PID1840115는 실제 active**이며 이미 제출한11692–11694의 Graph publication
+  future를 안전하게 마치기 위해 close에서 기다린다. 취소/강제 종료/중복 재시작하지 않는다.
+  이 세 문항의 최종 Graph membership과 canonical read는 아직 PENDING이다. restart-local
+  verified_count0을 기존 등록 손실로 해석하지 않는다.
+  후속 **02:10:02 actual exit78**을 확인했고, canonical current Graph
+  **`graphrev_c32f38c6e1b3fa2bf959d4d09c34faaf`에 세 원 분석이 모두 등록**됐음을 metadata로
+  확인했다. publication future를 강제 종료하지 않은 결과다. 별도 canonical report read를
+  진행하며, 앞선 PENDING을 소급 PASS로 고치지 않고 이 후속 결과로 구분한다.
+  `/tmp/eom-creative-commit-state-20261101-v3.json`.
+  후속 공식 `ChatKnowledgeResolutionService`의 실제 원 admitted actor/Graph 핀으로
+  **canonical report3 PASS**, 원 lineage Artifact pointer 일치·warning notes 보존을 확인했다.
+  해당 read의 model/DB write0이며 HTTP 로그인 사용자 검색 acceptance와는 별개다.
+  `/tmp/eom-creative-published-read-20261101.json` (reviewed helper SHA
+  `11935080d1c406f32fb65748b6eaec6d4b55e227949b4e28a9b896cdcaec1cb4`). 현재 creative unit은
+  위 저장 중단 때문에 failed이며3슬롯 연속 처리 재개까지 완료했다고 보고하지 않는다.
+- **02:00:00 정기 GPU123/520·잔여397·CUDA1 RUNNING**, 원 target/space hashes·historical
+  FAILED7은 불변이다.01:30:44의 원 CUDA Workflow `workflow_7ae97cda78044da3ba8728348aee272b`
+  는 공식 metadata read에서 COMPLETED, native/coordinator/encoding4 모두 SUCCEEDED다.
+  helper의 model_runs0은 이번 읽기의 신규 실행0이라는 의미이지 원 계산이 없었다는 뜻이
+  아니다. 새 count polling/재제출0, 실제 GPU forward가 매 순간 돈다는 주장도 하지 않는다.
+  `/tmp/eom-index-7ae-original-completion-20261101.json`.
+- 다음은 위 원 Graph future의 실제 완료 확인,11697의 공식 Artifact commit 복구·cohort 재개,
+  이후 private2 실제 owner/current source/native-purpose 연결과 호환 release67이다. 전체520
+  CUDA/AI full report→Graph→INDEX4·authorized DB query/read/replay·소비자 전환·정확한
+  retirement/삭제의 원래 종료 조건은 그대로 남아 있다. 정본/구 벡터 삭제0이다.
+
 ## private2 정식 Artifact 저장·재조회와 창작 Graph 정지 원인 확인 — 2026-11-01 UTC
 
 - 직전 turn은 기존 준비 증거에서 GUI 후보 번호만 안내한 **NO_PROGRESS**였다. worktree의
