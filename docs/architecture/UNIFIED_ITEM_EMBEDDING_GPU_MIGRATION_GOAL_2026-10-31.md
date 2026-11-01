@@ -105,6 +105,15 @@ index를 재사용하며 N+1/materialization/Graph 복제는 없다. bounded que
 배포는 source·actual pinned Graph read 회귀 뒤 isolated creative owner만 대상으로 하고,
 숫자 runtime/API/QUERY/INDEX 및 그 실행 pin은 그대로 둔다.
 
+후속 실제 단원 연결은 마지막 hop에서 불필요한 비단원 노드까지 확장해 node↔seed 관계가
+한도를 넘었다. 최대3-hop의 마지막 이웃은 MINOR unit인 경우만 결과에 영향을 준다.
+마지막 SQL에서만 같은 Graph의 MINOR 목적지를 제한한다. 앞선 hop·모든 가능한3-hop 단원·
+seed별 최단거리·support/distance/tie ranking과 원 정책/hash/한도는 그대로다. 실제로 결과에
+사용하지 않을 마지막 비단원 상태를 만들지 않는 정확한 pruning이며 임의 early-stop이나
+한도 인상이 아니다. 기존 Graph/endpoint·unit unique index를 이용하고 새 round trip은 없다.
+동일 ranking을 무제한 BFS oracle와 대조하고 큰 dead-end fanout에서도 원 safety bound와
+정책1.0/1.1/1.2 replay를 검증한 뒤 같은 isolated owner에 반영한다.
+
 사용자는 새 임베딩 전환 후 기존 벡터 삭제를 승인했다. 삭제 대상은 해당 기출의 구형
 accepted/mixed embedding 파생 데이터이며, 기출·교과서·창작·AI Item/Graph/풀이보고서
 정본은 삭제 대상이 아니다. 공유 shard에 새 벡터/비대상 벡터가 있으면 파일 전체를 지우지 않는다.
