@@ -1,5 +1,49 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## private parent의 기존 저장 경계 연결 후보 — 2026-11-01
+
+- source **`2426ddb74581bdab10033a3da37ead2157c5e47b`**는 private parent1.7을 기존
+  family parser/PlanStore/control Artifact publisher에 연결했다. 원 unique Job key와
+  append-only allocation/route/binding/failure history를 재사용한다. 공개 admission은 별도
+  public family parser에서 private를 source RPC 전에 거부한다. metadata 지원을 actual
+  private origin/source 권한이나 GPU grant로 해석하지 않는다. 기존1.0–1.6 schema bytes는
+  유지하고 concrete1.0의 Pydantic purpose enum도 기존 공개 두 값으로 명시했다.
+- 기존 순수 profile 검증에 PRIVATE_CHAT_QUERY의 동일 목적 대응만 추가했다. 원 numeric
+  QUERY2/batch3·현재 root/worker 물리 purpose gate·운영 private global2 CLOSED는 그대로다.
+  parent17의 routing/control/profile/hash 및 private batch3의 한 child closure를 확인하되,
+  실제 private parent admission/GPU 실행·완료 proof는 여전히 후속 연결이다. 별도 DB/schema/
+  migration/queue/cache/수치 모델/벡터 공간은 만들거나 바꾸지 않았다.
+- source 합집합 **241 PASS/56.06s**, 별도 비편집 설치본 **241 PASS/56.04s**다.
+  private/public family 격리, 원 publisher/계약 resource/dependency/route와 공개 admission의
+  source 접근 전 거부를 포함한다. 첫 focused run의 잘못된 fixture 속성1 FAIL/103 PASS는
+  보존했고 실제 owner 속성으로 고친 후104 PASS다. strict mypy 영향10 및 consumer18,
+  Ruff/format/shell/diff PASS다. 원 synthetic child/authority를 운영 증거로 부르지 않는다.
+- 공식 disposable PG는 **238 PASS/302.47s**다. 기존 공개 PlanStore/admission 및 private
+  ACQUIRED/BUSY parent의 동시 allocation·원 dispatch 1개·중단 rollback·같은 logical key의
+  다른 selection 거부·FAILED 보존·late source denial을 검사했다. private suite는 기존
+  persistence case 함수를 재사용하며 source/IAM/physical child는 명시적 fixture다.
+  `/tmp/eom-api-testdb-20261101114402_77965ef3`만 migration67 왕복/reconcile했고,
+  other_connections0/read_only를 확인한 뒤 공식 cleanup PASS, REMOVED다. production66은
+  바꾸지 않았다. `/tmp/eom-private-query-parent17-*20261101*` 계열 logs 참조.
+- 공식 build/RECORD PASS. wheel directory는
+  `/tmp/eom-api-build/2426ddb74581bdab10033a3da37ead2157c5e47b.Ocz9zF/dist`이며 platform SHA
+  `3159ad6c4c544081153ca2dbe0c6967d024dc95bfdae5b850c952e9cb5ddac0a`, contracts
+  `918885d493f03db00d3b941b11df0ca67c1363c560f84434ba6f30c56993a737`, API
+  `192341099eaafaf4dcd254618912f1f354b748435a37c16f3df9f15359131293`다. 설치본
+  `/tmp/eom-private-query-parent17-installed.6JPiaQJT/site-packages`의 source/module 경로를
+  확인했다. ignored installed harness를 쓰며 운영 interpreter는 변경하지 않았다.
+- 11:50 READ ONLY metadata에서 public QUERY Workflow0/active DB query0이고, 마지막 실제
+  GUI 요청은07:24 준비 단계 실패다. 운영 설정 정렬 후의 actual query/read/replay는 여전히
+  PENDING이며 서비스 READY나 source PASS로 대체하지 않는다. 기존 화면의 같은 요청
+  `결과 확인`만 비차단 요청했고 추가 로그인/새 검색은 만들지 않았다.
+- 11:55 READ ONLY INDEX metadata는 원 CUDA Workflow가 **11:39:51 COMPLETED**이고,
+  encode step/원 Job `job_23a78a46726c45cc8b3d1889fca40268`가 SUCCEEDED/schema4임을
+  확인했다. 앞선 CUDA 두 건도 COMPLETED다. 이것만으로 frozen520 binding 집계나 전체
+  대상별 hash/권한을 임의 가산하지 않는다. INDEX2258114/QUERY2256183은 같은 프로세스다.
+  이번 후보 작업에서 live 배포·수치 실행 제출·기존 벡터/정본/FAILED 수정0이며 전체 목표
+  ACTIVE다. 다음은 실제 검색 확인, private 원 origin의 GPU parent/proof·consumer 전환,
+  전체520/AI 실제 canary와 정확한 구형 파생 retirement/삭제다.
+
 ## private batch 실제 source owner·현재 lease 연결 후보 — 2026-11-01
 
 - source **`48863c9aab888b14aa8247e4785582c42c83b3a6`**는 기존 batch source authorization에
