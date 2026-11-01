@@ -601,6 +601,9 @@ class CatalogEmbeddingRegistryVerifier:
             if window is not None
             else artifact_reader
             if artifact_reader is not None
+            else PinnedArtifactReadContext.for_session(session, self.settings)
+            if isinstance(intent.namespace, PublicSolutionIndexNamespace)
+            and type(caller) is EmbeddingRegistryCaller
             else PinnedArtifactReadContext(session, self.settings)
         )
         reader.require_session(session)

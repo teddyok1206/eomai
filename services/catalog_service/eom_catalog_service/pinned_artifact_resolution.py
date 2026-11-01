@@ -474,7 +474,13 @@ class PinnedArtifactReadContext:
     MAX_DECODED_BYTES = 32 * 1024**2
     MAX_DECODED_MEMBERS = 2048
 
-    def __init__(self, session: Session, settings: CatalogSettings) -> None:
+    def __init__(
+        self,
+        session: Session,
+        settings: CatalogSettings,
+        *,
+        decoding_context: PinnedArtifactReadContext | None = None,
+    ) -> None:
         root = session.get_transaction()
         if root is None or not root.is_active:
             raise PinnedArtifactResolutionError("pinned Artifact read transaction is invalid")
@@ -492,6 +498,17 @@ class PinnedArtifactReadContext:
             OrderedDict()
         )
         self._decoded_bytes = 0
+        self._decoding_context: PinnedArtifactReadContext | None = None
+        if decoding_context is not None:
+            if type(decoding_context) is not PinnedArtifactReadContext:
+                raise PinnedArtifactResolutionError("pinned Artifact decoding context is invalid")
+            decoding_context.require_session(session)
+            if (
+                decoding_context.settings != settings
+                or decoding_context._decoding_context is not None
+            ):
+                raise PinnedArtifactResolutionError("pinned Artifact decoding context differs")
+        self._decoding_context = decoding_context
 
     @classmethod
     def for_session(cls, session: Session, settings: CatalogSettings) -> PinnedArtifactReadContext:
@@ -942,6 +959,10 @@ class PinnedArtifactReadContext:
         payload: bytes,
         decoder: Callable[[str, bytes], Model],
     ) -> Model:
+        if self._decoding_context is not None:
+            self.require_session(self._session)
+            self._decoding_context.require_session(self._session)
+            return self._decoding_context._decode_immutable(key, schema_ref, payload, decoder)
         cached = self._decoded.get(key)
         if cached is not None and cached.decoder is decoder:
             self._decoded.move_to_end(key)

@@ -52,6 +52,10 @@ from eom_catalog_service.embedding_registry_ports import (
     SelectedEmbeddingSources,
 )
 from eom_catalog_service.embedding_registry_repository import EmbeddingRegistryRepository
+from eom_catalog_service.inference_transfer_read_timing import (
+    InferenceTransferReadStage,
+    observe_read_stage,
+)
 from eom_catalog_service.public_solution_document_scope import (
     PublicSolutionDocumentScope,
     validate_public_solution_document,
@@ -113,6 +117,7 @@ class CatalogPublicSolutionSimilarityRead:
     ) -> SupportedPublicSolutionSimilarityRequest:
         return self.prepare_many_in_session(session, caller, (preparation,))[0]
 
+    @observe_read_stage(InferenceTransferReadStage.PUBLIC_INDEX_PREPARATION)
     def prepare_many_in_session(
         self,
         session: Session,

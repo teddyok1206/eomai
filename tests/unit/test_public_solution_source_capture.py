@@ -115,7 +115,11 @@ def test_both_families_use_real_pool_pins_and_keep_original_public_content(monke
     )
     if creative:
         value.batches.assert_called_once()
-        value.reader_factory.assert_called_once_with(value.session, value.reader.settings)
+        value.reader_factory.assert_called_once_with(
+            value.session,
+            value.reader.settings,
+            decoding_context=value.reader_factory.for_session.return_value,
+        )
         assert value.batches.call_args.kwargs["artifact_reader"] is value.lineage_reader
         value.lineage_reader.revalidate_provenance.assert_called_once()
     else:

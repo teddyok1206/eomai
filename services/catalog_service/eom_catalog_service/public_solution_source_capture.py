@@ -31,6 +31,10 @@ from eom_catalog_service.creative_report_batch import load_registered_creative_r
 from eom_catalog_service.inference_transfer_catalog_adapter import (
     InferenceTransferCorpusReadCommand,
 )
+from eom_catalog_service.inference_transfer_read_timing import (
+    InferenceTransferReadStage,
+    observe_read_stage,
+)
 from eom_catalog_service.inference_transfer_service import (
     AdmittedInferenceTransferCorpus,
     AdmittedInferenceTransferSource,
@@ -224,7 +228,9 @@ class CatalogPublicSolutionSourceCapture:
             pages.append((after, page))
             if page.members:
                 selected = tuple(source for source, _run in page.members)
-                page_reader = PinnedArtifactReadContext(session, artifact_reader.settings)
+                page_reader = PinnedArtifactReadContext(
+                    session, artifact_reader.settings, decoding_context=artifact_reader
+                )
                 value = capture_page(selected, page_reader)
                 if (
                     value.corpus is None
@@ -293,6 +299,7 @@ class CatalogPublicSolutionSourceCapture:
             raise ValueError("PUBLIC_SOLUTION_AUTHORITY_CHANGED")
         return value
 
+    @observe_read_stage(InferenceTransferReadStage.PUBLIC_SOLUTION_REPORTS)
     def _capture_reports_in_session(
         self,
         session: Session,
@@ -421,7 +428,13 @@ class CatalogPublicSolutionSourceCapture:
             # Graph/source provenance can already fill the parent reader. Keep
             # these <=16 lineage primaries in a separate existing root-bound
             # reader, then revalidate that small set before releasing it.
-            report_reader = PinnedArtifactReadContext(session, artifact_reader.settings)
+            report_reader = PinnedArtifactReadContext(
+                session,
+                artifact_reader.settings,
+                decoding_context=PinnedArtifactReadContext.for_session(
+                    session, artifact_reader.settings
+                ),
+            )
             reports = load_registered_creative_reports(
                 session,
                 self.artifacts,

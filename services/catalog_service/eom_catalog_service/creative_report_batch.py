@@ -1,12 +1,13 @@
 """Batch IO for authorized creative reports, reusing the original report validator."""
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Any
 
 from eom_catalog_contracts.creative_source_lineage import CreativeSourceLineage
 from eom_protocol.artifact_members import ArtifactMemberPointer
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -40,6 +41,12 @@ class _CapturedJsonPrimaries:
 
     requests: Mapping[str, CatalogJsonRevisionRequest]
     documents: Mapping[str, dict[str, Any]]
+    decoder: PinnedArtifactReadContext
+
+    def decode_model_value[Model: BaseModel](
+        self, schema_ref: str, value: object, *, decoder: Callable[[str, bytes], Model]
+    ) -> Model:
+        return self.decoder.decode_model_value(schema_ref, value, decoder=decoder)
 
     def load_json_revision(
         self, *, artifact_id: str, revision_id: str, content_hash: str, max_bytes: int = 1_048_576
@@ -138,7 +145,9 @@ def load_registered_creative_reports(
     read_set = capture_creative_proposal_read_set(
         session, tuple(lineage.selection for lineage in lineages.values())
     )
-    reader = _CapturedJsonPrimaries(MappingProxyType(requests), MappingProxyType(documents))
+    reader = _CapturedJsonPrimaries(
+        MappingProxyType(requests), MappingProxyType(documents), artifact_reader
+    )
     result = {}
     for revision_id, lineage in lineages.items():
         resolved = resolve_completed_creative_learning_proposal(

@@ -326,6 +326,45 @@ schema validator를 재사용한다. adapter가 규칙을 복제하지 않는다
 대안보다 기존 책임 소유자에 명시적 family 검사를 추가하는 쪽이 작다. 이 연결만으로 global2
 admission이나 새로운 runtime/SQL 권한을 열지 않으며, 실제 dispatch/submit/설치는 별도다.
 
+### private2 원 접수·START 저장 경계 — 2026-11-01
+
+기존 private submission과 Workflow repository에 supported1/2 request를 연결한다. canonical
+source는 exact validated request/origin context·released definition·current source/정책/runtime
+pins이며 새 최신값 대입은 없다. 원 actor/turn 기반 key로 indexed Workflow lookup 및 unique
+request fingerprint를 재사용한다. 신규 생성/동일 replay/late source withdrawal은 같은 root와
+기존 savepoint에서 처리하고, 다른 family/hash/origin은 conflict다. START는 원 Workflow에
+하나만 연결되며 late 거부는 caller root 전체를 rollback한다. 큰 payload/질문/binary를 새 DB
+필드에 저장하지 않으며 새 schema/migration/index/queue는 없다. bounded indexed metadata와
+기존 권한·Artifact 해시 검증으로 동작한다. contracts→application→기존 repository/Artifact
+adapters 방향을 유지한다. 별도 submission framework보다 기존 owner의 family 검증과 저장
+타입을 확장하는 편이 작다. global2 admission은 전체 dispatch/runtime 검증 전에는 열지 않는다.
+
+### DB 검색 준비의 root-local 불변 해석 재사용 — 2026-11-01
+
+07:20–07:24 UTC 실제 GUI 요청은210.655초 걸렸고, 같은 준비 작업의 source admission이21회
+관측됐으며 아직 QUERY Workflow는 없었다. 별도 read-only canonical control profile에서
+selection1.5 최초 해석8.26초(cProfile overhead 포함)와 schema registry 초기화가 확인됐다.
+전체 원인이나 운영 개선률을 이 수치만으로 단정하지 않는다. 기존 권한/Graph/현재 상태
+검사를 생략하거나 timeout만 올리지 않고, 반복되는 불변 schema 해석을 먼저 줄인다.
+
+책임은 기존 `PinnedArtifactReadContext`의 bounded root-local decoding이다. canonical source는
+계속 Artifact revision/member/raw SHA와 매번 읽는 현재 DB metadata다. logical/revision/hash를
+합치지 않는다. page reader는 원 metadata·physical member/FD/hash·현재 source/권한 검증을
+각자 수행하고, 오직 같은 Session/root/thread/settings의 decoder만 root reader에 위임한다.
+큰 corpus의 page별 provenance budget과 root decoder32MiB/2048 LRU 한도를 그대로 유지한다.
+임의 source/auth/result DTO나 mutable model은 재사용하지 않는다. key는 exact member tuple
+또는 complete canonical current-value SHA와 stable decoder identity다. lookup 평균O(1),
+space는 기존 bounded LRU이며 root 종료·다른 Session/thread/settings에는 재사용하지 않는다.
+
+공통 operator source capture만 기존 `for_session` root reader를 사용하고256-source page는
+별도 provenance reader를 유지한다. shared decoding은 actual validation을 통과한 불변 모델만
+대상이며 현재 source recapture·metadata/provenance recheck·late withdrawal guard는 유지한다.
+worker/protocol/DB/schema/migration/queue/영속 cache/전역registry를 추가하지 않는다. dependency
+방향은 기존 application→Catalog artifact adapter다. 같은 canonical 해석을 source별로 매번
+반복하는 대안보다 기존 decoder owner를 공유하는 쪽이 작다. cache hit/eviction/변조/현재권한/
+root·Session·thread 경계/대규모 paging과 설치본을 검사한다. end-to-end210초 개선 여부는
+실제 authorized same-request 검증 전까지 PENDING이며 단위 PASS로 운영 성공을 대신하지 않는다.
+
 기존 미배포 legacy stored-read 후보는
 `staging/unified-embedding-goal-20261031/deferred-legacy-read.patch` 및 같은 폴더
 `deferred/`에 복구 가능하게 보존했다. 이번 공통 전환과 섞어 활성화하지 않는다.
