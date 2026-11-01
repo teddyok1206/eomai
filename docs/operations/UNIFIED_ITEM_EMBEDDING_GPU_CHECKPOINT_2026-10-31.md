@@ -1,5 +1,52 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## private2 수치 실행·원 canonical 완료 복구 — 2026-11-01 04:49 UTC
+
+- 직전 GUI 안내 turn은 기존 준비 증거의 안내였고 goal implementation 진척으로 합산하지 않는다.
+  이번 turn은 현재 worktree와 실제 원 INDEX/creative PID를 확인하고 canonical executor2를
+  구현·검증한 **PROGRESS**다. U01–U05 전체 목표는 ACTIVE다.
+- source **`9447c2c007ef40df179dac6679defceff24038b9`**에서 기존 private executor와
+  completion/publication reader가 request1/native1/receipt1 또는 request2/common native2/
+  receipt2를 명시적으로 받는다. 원 launch/key/producer와 최대4 checkpoint를 재사용하며
+  mixed family·현재 source 철회·해시/바이너리 변조·retained authority는 거부한다. old1 API는
+  closed family로 보존했고 schema bytes/원 source/기존 수치 공간을 덮지 않았다.
+- 실제 계산은 SQL root 밖이다. BUSY/UNCERTAIN은 같은 원 Job을 보존하고 known failure는
+  terminal이다. query/receipt 저장 전후 중단은 원 numerical output과 producer를 재사용한다.
+  이미 canonical 완료된 결과는 이전 물리 unit이 사라져도 재추론하지 않으며 현재 source/
+  origin/lease와 Artifact/receipt closure를 다시 확인한다. 질문은 canonical private
+  Job request/Artifact/manifest에 저장하지 않는다.
+- source 최종 **133 PASS /129.51s**, 별도 non-editable 설치본 같은 합집합
+  **133 PASS /126.98s**, strict mypy 영향7/Ruff/format/shell/diff PASS다. 첫 legacy 실행의
+  receipt interruption fixture2개는 supported publisher가 아닌 predecessor-only 메서드를
+  감시한 문제였다. common fixture 초기 Artifact 수3과 legacy2 차이도 fixture snapshot으로
+  표현했다. 기존 guard를 완화하지 않았고 실패 로그를 보존했다.
+  `/tmp/eom-private2-native-executor-final-source-v2-20261101.log`,
+  `/tmp/eom-private2-native-owner-installed-20261101.tests`.
+- disposable PostgreSQL 최종 **74 PASS /119.01s**다. canonical controls/Job/Artifact/receipt
+  bytes,1/2 저장 전후 중단과 same-original replay, 동시 history replay, allocation rollback,
+  늦은 source loss를 검증했다. source/IAM/Workflow views와 물리 units/numerics는 명시적
+  synthetic port다. 실제 live claim·Chat·모델 PASS로 확대하지 않는다. 첫 **67 PASS/5 FAIL**은
+  공통 PG fixture의 고정 Workflow/step ID를 재사용해 원 launch guard가 막은 것이다. legacy
+  PG fixture와 같이 case별 UUID를 선언했으며 같은 임시 DB에서 재검증했다.
+  `/tmp/eom-private2-native-owner-testdb-20261101.tests`, `-v2.tests`.
+- 임시 DB `20261101043720_a68d7776` migration67 왕복/reconcile/공식 cleanup PASS,
+  state-directory REMOVED다. 정리된 것은 해당 시험 DB·역할·state뿐이다. 운영 DB pytest/
+  운영 migration/정본·구 vectors/index 삭제0이다. `.migrate`, `.cleanup` 로그를 보존했다.
+- 공식 build-only/RECORD PASS. wheel directory:
+  `/tmp/eom-api-build/9447c2c007ef40df179dac6679defceff24038b9.Edmi5w/dist`.
+  platform SHA `c7cbecebfa5ca9c7b195cbb205562445c63329a39d843499518a678a513b7f05`,
+  contracts `e68b60254fb342724b73a9e26bc6ab2dc594690e6522b0648f05597624682a12`,
+  API `4e98b5a7309c2281918b087037c704754fb2c4650cca17661206c99212650f33`다.
+  prefix `/tmp/eom-private2-native-owner-installed.EFGc3mVj/site-packages`의 실제 모듈 경로와
+  installed build-info source를 먼저 검증했다. 공유 CPU env나 운영 API에 설치하지 않았다.
+- **04:30 UTC 기존 timer GPU127/520·잔여393, CPU 후속1 RUNNING, historical FAILED7**다.
+  CPU 후속을 CUDA forward라고 표시하지 않는다.04:48 실제 INDEX PID1683578/creative1876923은
+  live이며 이번 turn의 운영 재시작0이다. 새 count polling0이다.
+- 다음 기존 Runner step/terminal supported port 연결은 별도 source 후보로 작업 중이다.
+  새2 submission/전체 dispatcher/prepare/runtime 조립은 아직 미완료이며 global admission2는
+  CLOSED다. operator67/호환 rollout, 전체520 CUDA integrity, 실제 AI report→Graph→INDEX4,
+  authorized DB query/read/replay, 모든 구형 consumer 전환과 정확한 retirement/delete는 남는다.
+
 ## private2 원 명령·lease/step·중단 재조회 연결 — 2026-11-01 04:19 UTC
 
 - 직전 goal turn은 live-origin source owner/정책 publication의 **PROGRESS**였다. 이번은 실제
