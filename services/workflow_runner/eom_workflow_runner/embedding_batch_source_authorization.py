@@ -5,13 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from types import MappingProxyType
 
+from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_reference_query_v11 import EmbeddingReferenceQueryInputV11
 from eom_catalog_contracts.embedding_work_batch import (
+    PrivateChatWorkBatchInput,
     SupportedEmbeddingWorkBatchChild,
     SupportedEmbeddingWorkBatchInput,
     parse_supported_embedding_work_batch_input,
 )
 from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
+from eom_identifiers import content_sha256
+from eom_orchestrator.native_private_chat_query_coordinator import NativePrivateChatQueryCoordinator
+from eom_orchestrator.native_query_job_allocation import read_native_query_launch
 from eom_orchestrator.native_reference_query_coordinator import read_native_reference_query_launch
 from eom_workflow.embedding_batch_plan import EmbeddingBatchChildBinding
 from eom_workflow.local_embedding_encoding_dispatch import (
@@ -19,6 +24,10 @@ from eom_workflow.local_embedding_encoding_dispatch import (
     parse_supported_embedding_association,
 )
 from eom_workflow.local_embedding_request_v2 import supported_local_embedding_request_actor
+from eom_workflow.native_private_chat_query_coordinator import NativePrivateQueryAllocation
+from eom_workflow.private_chat_query_execution_v2 import PrivateChatQueryWorkflowRequestV2
+from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAssociation
+from eom_workflow.private_chat_query_publication_v2 import PrivateChatPublicQueryExecutionRecord
 from eom_workflow.reference_query_execution import (
     ReferenceQueryLaunchAssociation,
     SupportedReferenceQueryNativeInput,
@@ -29,6 +38,13 @@ from eom_workflow.reference_query_execution import (
 
 from eom_workflow_runner.local_embedding_encoding_admission import CatalogEncodingOwnerAdmission
 from eom_workflow_runner.local_embedding_execution_port import NativeFencedRunnerTransaction
+from eom_workflow_runner.private_chat_query_owner_admission import (
+    CatalogPrivateChatQueryOwnerAdmission,
+)
+from eom_workflow_runner.private_chat_query_source_read import (
+    ResolvedPrivateChatPublicQuerySources,
+    validate_current_private_chat_public_query_input,
+)
 from eom_workflow_runner.reference_query_owner_admission import (
     CatalogReferenceQueryOwnerAdmission,
     validate_current_reference_query_input,
@@ -151,7 +167,90 @@ class ReferenceQueryBatchSource:
             require_command_lease(session, self.command_lease)
 
 
-type BatchSource = DocumentBatchSource | ReferenceQueryBatchSource
+@dataclass(frozen=True, slots=True)
+class PrivateChatQueryBatchSource:
+    """Existing actual private owner; never a Reference owner or retained source grant."""
+
+    owner: CatalogPrivateChatQueryOwnerAdmission
+    request: PrivateChatQueryWorkflowRequestV2
+    launch: PrivateChatQueryLaunchAssociation
+    command_lease: CommandLeaseIdentity
+    transaction: NativeFencedRunnerTransaction
+
+    def __post_init__(self) -> None:
+        _require(
+            type(self.owner) is CatalogPrivateChatQueryOwnerAdmission
+            and type(self.command_lease) is CommandLeaseIdentity
+            and callable(self.transaction)
+        )
+        body = dict(
+            schema_version="private-chat-query-execution-record/2.0",
+            purpose="PRIVATE_CHAT_QUERY",
+            workflow_request=raw_similarity_contract_value(self.request),
+            launch=raw_similarity_contract_value(self.launch),
+        )
+        record = PrivateChatPublicQueryExecutionRecord.model_validate(
+            body | dict(record_sha256=content_sha256(body))
+        )
+        object.__setattr__(self, "request", record.workflow_request)
+        object.__setattr__(self, "launch", record.launch)
+
+    @property
+    def input_sha256(self) -> str:
+        return self.launch.query_request_sha256
+
+    def authorize(
+        self, batch: SupportedEmbeddingWorkBatchInput, child: SupportedEmbeddingWorkBatchChild
+    ) -> None:
+        _require(type(batch) is PrivateChatWorkBatchInput)
+        _require(type(child.request) is PublicSolutionQueryInput)
+        assert isinstance(child.request, PublicSolutionQueryInput)
+        selected = self.request.context_request.views[0]
+        _require(
+            batch.scope.actor_kind == "OPERATOR"
+            and batch.scope.actor_id == self.request.operator_audit.operator_id
+            and selected.index is not None
+            and batch.scope.storage_partition == selected.index.storage_partition
+            and batch.scope.access_policy_sha256 == self.request.context_request.policy_sha256
+            and batch.resource_profile_sha256
+            == self.request.resource_profile.resource_profile_sha256
+        )
+        self.authorize_current(child.request)
+
+    def authorize_current(self, native_input: PublicSolutionQueryInput) -> None:
+        with self.transaction() as session:
+            current = self.owner.resolve_execution_sources(
+                session,
+                self.request,
+                self.command_lease,
+                workflow_id=self.launch.workflow_id,
+                step_run_id=self.launch.step_run_id,
+            )
+            _require(type(current) is ResolvedPrivateChatPublicQuerySources)
+            _require(
+                read_native_query_launch(
+                    session,
+                    request=self.request,
+                    workflow_id=self.launch.workflow_id,
+                    step_run_id=self.launch.step_run_id,
+                )
+                == self.launch
+            )
+            history = NativePrivateChatQueryCoordinator(self.request, self.launch).read(session)
+            _require(bool(history.records) and history.state in {"RUNNING", "SUCCEEDED"})
+            allocation = history.records[0].payload
+            _require(
+                type(allocation) is NativePrivateQueryAllocation
+                and allocation.origin == current.projection.origin
+            )
+            validate_current_private_chat_public_query_input(current, self.launch, native_input)
+            self.owner.sources.identity.fence_current_operator(
+                session, current.request.operator_audit.operator_id
+            )
+            require_command_lease(session, self.command_lease)
+
+
+type BatchSource = DocumentBatchSource | ReferenceQueryBatchSource | PrivateChatQueryBatchSource
 
 
 class CatalogEmbeddingBatchSourceAuthorization:
@@ -166,11 +265,12 @@ class CatalogEmbeddingBatchSourceAuthorization:
         self, batch: SupportedEmbeddingWorkBatchInput, sources: tuple[BatchSource, ...]
     ) -> None:
         batch = parse_supported_embedding_work_batch_input(batch)
-        # Numerical envelope support is not a private source-owner admission.
-        # Keep it closed until an actual Chat origin/lease fence is composed.
-        _require(batch.purpose in {"DOCUMENT", "REFERENCE_QUERY"})
         _require(type(sources) is tuple and len(sources) == len(batch.children))
-        expected = DocumentBatchSource if batch.purpose == "DOCUMENT" else ReferenceQueryBatchSource
+        expected = {
+            "DOCUMENT": DocumentBatchSource,
+            "REFERENCE_QUERY": ReferenceQueryBatchSource,
+            "PRIVATE_CHAT_QUERY": PrivateChatQueryBatchSource,
+        }[batch.purpose]
         _require(all(type(source) is expected for source in sources))
         keys = tuple(source.input_sha256 for source in sources)
         _require(keys == tuple(child.request.request_sha256 for child in batch.children))

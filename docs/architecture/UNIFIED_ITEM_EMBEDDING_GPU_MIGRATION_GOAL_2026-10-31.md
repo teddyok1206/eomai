@@ -791,3 +791,23 @@ import하지 않으며 numerical adapter만 기존 encoder를 호출한다. 오�
 기존 FAILED를 수정하지 않는다. 공개2로 private 목적을 위장하거나 encoder를 복제하는
 대안보다 명시적 envelope successor가 작다. worker/root allocation purpose gate는 실제
 private parent·물리 실행 검증 연결 전까지 닫아 두고, 이 library 검사를 운영 활성화로 부르지 않는다.
+
+### private batch의 실제 source 권한 연결
+
+기존 `CatalogEmbeddingBatchSourceAuthorization`에 private QUERY2 source 타입을 명시적으로
+추가한다. 정본은 원 request2·launch1/record2·현재 Chat origin·Graph/policy/member/hash와
+command lease다. 별도 origin/질문 저장이나 권한 운반 DTO를 만들지 않고 기존 private owner가
+같은 짧은 SQL root에서 source·원 Workflow/step·lease를 확인한다. record2의 순수 연결 규칙과
+기존 current-input validator를 재사용해 과거/다른 대화·다른 수치 입력을 거부한다.
+원 native coordinator history의 ALLOCATION origin 전체도 현재 origin과 대조하고,
+FAILED/CANCELLED·빈 history는 새 계산이나 성공 기록의 근거로 사용하지 않는다.
+
+접근은 원 input hash의 O(1) map lookup과 고정1 child다. 현재 문항 자료 권한 검증 비용은
+기존 bounded Catalog read(N≤16384)를 그대로 사용하며 성공한 권한을 cache하지 않는다.
+source adapter만 SQL/Chat/Artifact owner를 호출하고 domain/contract는 infrastructure를
+import하지 않는다. 원 scope/partition/resource와 원 launch/request/hash가 일치해야 하며
+늦은 operator/lease 철회도 원 root에서 거부한다. 읽기 전용 source fence이므로 새 DB/schema/
+index/lock/queue와 영속 전이는 없다. 실패는 원 오류/안정된 거부로 반환하고 새 요청·성공
+기록·벡터를 만들지 않는다. 단순히 default Reference 분기를 private에도 적용하는 대안은
+소유권이 다른 권한을 빌리므로 부적절하다. 실제 GPU grant/parent admission·운영 global2는
+이 source adapter만으로 열지 않고, 권한·replay·현재 lease·원본 변조를 별도 검증한다.

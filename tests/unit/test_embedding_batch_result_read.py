@@ -75,6 +75,9 @@ def local(tmp_path, monkeypatch):
         "embeddingallocation_"
     )
     output.mkdir(mode=0o750)
+    # The production reader requires an exact group-traversable leaf, even when
+    # this test is launched with a restrictive umask.
+    output.chmod(0o750)
     for name, raw in (("result.json", value.raw), ("vectors.f32", value.vectors)):
         path = output / name
         path.write_bytes(raw)

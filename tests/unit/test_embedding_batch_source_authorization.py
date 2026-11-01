@@ -196,9 +196,7 @@ def test_document_reuses_actual_original_encoding_owner_each_time_without_cached
     assert document.artifacts.return_value.resolve_input.call_count == 2
 
 
-def test_private_envelope_cannot_borrow_reference_owner_before_a_private_fence_exists(
-    query, monkeypatch
-):
+def test_private_envelope_cannot_borrow_reference_owner_or_inspect_its_input(query, monkeypatch):
     from tests.unit.test_private_chat_work_batch import private_case
 
     batch, *_ = private_case()
