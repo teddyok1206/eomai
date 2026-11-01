@@ -1,5 +1,58 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 원 Catalog 저장 중단 복구·창작 처리 재개 — 2026-11-01 02:42 UTC
+
+- 직전 turn은 기존 준비 증거로 GUI 시험 후보를 안내한 **NO_PROGRESS**였다. 이번에는
+  미완료 worktree와 실제 failed unit/MainPID0을 재확인하고 원 저장 복구를 구현·검증·호환
+  배포했으므로 **PROGRESS**다. 전체 목표는 ACTIVE이며 범위를 축소하지 않는다.
+- Main **`6653a9e5`**를 push했다. 최초 COMMITTING event에 작은 closed JSON Schema2020-12 /
+  Pydantic intent(request/result/manifest SHA, 원 manifest epoch, 필요시 application proof)를
+  남긴다. 같은 key/Job/Artifact revision의 replay만 허용하고 원 Job row를 잠가 정상
+  COMMITTING→SUCCEEDED로 진행한다. FAILED/CANCELLED/다른 중간 상태는 계속 거부한다.
+  기존 두 publication adapter의 동일 session-advisory-lock 알고리즘을 공유 함수로 추출했고
+  획득/해제 불명확 시 물리 connection을 invalidate한다. 새 queue/table/index/migration0다.
+- 구형 unsealed COMMITTING은 자동 채택하지 않는다. 원 knowledge acceptance application이
+  실제 creator/현재 권한·source·완료 Workflow·receipt·risk를 재검증하고 NAS final/Registry
+  revision 부재를 확인한 경우에만 재구성 observation을 append한다. 이미 있는 unsealed NAS
+  final은 거부한다. 새 key 생성/직접 row UPDATE/원 보고서·Worker 재생성은 하지 않는다.
+  최초 NAS 오류의 구체 원인은 여전히 미확정이며, 입증된 결함은 원 adapter의 저장 중단
+  복구 부재다. 초기 설계 후보의 visual-only gate는 실제 창작 request2를 커버하지 못했으므로
+  source-family fixture/실제 read-only preflight로 확인해 original approved-Item AUTO_POLICY
+  acceptance 경계로 바로잡았다. 기출 V9에 창작 source를 억지로 넣지 않는다.
+- 최종 source 집중 **192 PASS /11.43s**, disposable PostgreSQL 중단/재전송/3-writer 동시성
+  **9 PASS /0.34s**, 별도 installed wheel 집중 **183 PASS /7.19s**, Ruff/strict mypy7 PASS다.
+  겹치는 suite를 합산하지 않는다. 임시 DB `20261101023311_0f5535ae`의 migration 왕복/cleanup
+  PASS, 운영 DB pytest0다. 개발 중 model-instance 재검증 오류·fixture source/anchor/부모
+  디렉터리 불일치를 수정한 기록을 보존했다. PG 재실행 시 tmp basename key가 이전 성공
+  fixture와 충돌한 실패4건은 fixture 전체 경로 hash key로 고쳤고 같은 suite를 재실행했다.
+  `/tmp/eom-catalog-recovery-final-focused-20261101-v2.log`,
+  `/tmp/eom-catalog-recovery-testdb-20261101.final-tests-v2`, `.cleanup`,
+  `/tmp/eom-catalog-recovery-installed-focused-20261101.log`.
+- 실제 운영8eb/source66 hotfix branch에 cherry-pick한 release **`6de3ec4fbd87e75494e991589a87d4ec18fc5bbb`**를
+  `/opt/eom/maintenance-releases/6de3ec4fbd87e75494e991589a87d4ec18fc5bbb`에 별도 설치했다.
+  build-only/RECORD·세 wheel SHA·설치 import·packaged schema·head66을 검증했다. 충돌은
+  testdb usage의 private2 신규 action 문구만 분리했으며 unrelated private2/schema67을 넣지
+  않았다. 이전 prefix92가 rollback 위치다. API/Web/Catalog/QUERY/INDEX 교체·재시작0다.
+- 원 11697 request/hash/actor/source/NAS 부재의 **read-only preflight PASS** 후
+  **02:39:50 UTC PID1876923**로 동일 cohort/revision/limit1053을 재개했다. 원
+  `job_002f75e5eec44d22bf50903fc1111f3b`는 **SUCCEEDED**, 원
+  `analysisrun_a7a64a2603f84746901060a38164c412`는 **ACCEPTED**, 원 Artifact revision
+  `rev_0dc2f7a0aec744d4b8a57d2d2c8aa57f`의 canonical bytes/schema/result/manifest SHA PASS다.
+  원 key Job 수1·재구성 observation1·FAILED 이력 성공 재해석0을 확인했다.
+  `/tmp/eom-creative-commit-recovery-preflight-20261101.json`,
+  `/tmp/eom-creative-commit-recovery-result-20261101.json` (각 stderr0).
+- 11695–11697는 **PUBLISHING**, 11699/11700/11701은 **EXTRACTING**이다. Graph 미래 작업이
+  진행 중이며 위 Artifact acceptance를 Graph 완료/3슬롯 실제 claim 완료로 확대하지 않는다.
+  기존 읽을 수 없는 source7건은 별도 blocked로 남아 있고 등록됐다고 세지 않는다.
+  **02:30 UTC GPU125/520·잔여395**, historical FAILED7 불변이다. INDEX PID1683578/
+  NRestarts0, API8eb/QUERY·INDEX FB/migration66, API READY 유지. 새 count polling0,
+  전체520/교육 품질/실제 사용자 검색 PASS를 선언하지 않는다.
+- Slack 중요 보고 `devreport_fe3c94d294614bca82c296abb8b9d6e1`는02:42:34 SENT200이며 한국어
+  한 문장 요약으로 시작했다. 다음은 원 Graph publication/canonical report read/후속 claim,
+  private2 실제 owner/source/native-purpose·호환 release67·전체520 CUDA·AI full-report→
+  Graph→INDEX4·authorized DB query/read/replay·소비자 전환·정확한 old derivative retirement/
+  삭제다. 구 vector/기출/교과서/문항/풀이 정본 삭제0이다.
+
 ## 창작 Graph seed·최종 hop 복구와 별도 저장 중단 진단 — 2026-11-01 UTC
 
 - 직전 `1156821b`의 private2 Artifact 연결·검증은 **PROGRESS**였다. 이번 시작에서
