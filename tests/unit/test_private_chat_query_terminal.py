@@ -10,6 +10,7 @@ from eom_identifiers import canonical_json_bytes
 from eom_workflow.private_chat_query_submission_context import (
     build_private_chat_query_submission_context,
 )
+from eom_workflow.private_chat_query_workflow_v2 import private_chat_query_result_schema
 from eom_workflow_runner import native_step_completion as terminal_module
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
@@ -21,7 +22,10 @@ from tests.unit.test_private_chat_query_workflow import completed as completed
 
 @pytest.fixture
 def private_terminal(completed, monkeypatch):
-    value = completed
+    return make_private_terminal_case(completed, monkeypatch)
+
+
+def make_private_terminal_case(value, monkeypatch):
     origin = value.expected["origin"]
     context = build_private_chat_query_submission_context(value.request, origin)
     workflow = WorkflowInstanceRecord(
@@ -46,7 +50,7 @@ def private_terminal(completed, monkeypatch):
         step_type="application",
         state="SUCCEEDED",
         worker_role=None,
-        result_schema="embedding-private-chat-query-result@1.0",
+        result_schema=private_chat_query_result_schema(value.request),
         platform_job_id=value.output.receipt_owner_job_id,
         input_pointer_manifest={"workflow_request_sha256": value.request.request_sha256},
         output_pointer_manifest=value.output.model_dump(mode="json"),

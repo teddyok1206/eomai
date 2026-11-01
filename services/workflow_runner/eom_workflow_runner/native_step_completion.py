@@ -9,12 +9,19 @@ from typing import Literal
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_workflow.local_embedding_workflow_receipt_v2 import SupportedLocalEmbeddingStepOutput
-from eom_workflow.private_chat_query_execution import parse_private_chat_query_workflow_request
+from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryWorkflowRequestV2,
+    parse_supported_private_chat_query_workflow_request,
+)
 from eom_workflow.private_chat_query_submission_context import (
     parse_private_chat_query_submission_context,
     validate_private_chat_query_submission_context,
 )
-from eom_workflow.private_chat_query_workflow import PrivateChatQueryStepOutput
+from eom_workflow.private_chat_query_workflow_v2 import (
+    PrivateChatQueryStepOutputV2,
+    SupportedPrivateChatQueryStepOutput,
+    parse_supported_private_chat_query_step_output,
+)
 from eom_workflow.reference_query_execution import SupportedReferenceQueryStepOutput
 from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy import select
@@ -37,7 +44,7 @@ type NativeStepKey = Literal["encode_batch", "encode_reference_query", "encode_p
 type NativeStepOutput = (
     SupportedLocalEmbeddingStepOutput
     | SupportedReferenceQueryStepOutput
-    | PrivateChatQueryStepOutput
+    | SupportedPrivateChatQueryStepOutput
 )
 type ValidateNativeCompletion = Callable[
     [Session, WorkflowInstanceRecord, WorkflowStepRunRecord], NativeStepOutput
@@ -94,10 +101,14 @@ def _require_private_terminal_context(
 ) -> None:
     """Original metadata closure only; the callback owns current permission/receipt checks."""
     try:
-        if not isinstance(output, PrivateChatQueryStepOutput):
+        output = parse_supported_private_chat_query_step_output(
+            raw_similarity_contract_value(output)
+        )
+        request = parse_supported_private_chat_query_workflow_request(workflow.initial_request)
+        if isinstance(request, PrivateChatQueryWorkflowRequestV2) != isinstance(
+            output, PrivateChatQueryStepOutputV2
+        ):
             raise ValueError()
-        PrivateChatQueryStepOutput.model_validate(raw_similarity_contract_value(output))
-        request = parse_private_chat_query_workflow_request(workflow.initial_request)
         context = validate_private_chat_query_submission_context(
             request, parse_private_chat_query_submission_context(workflow.runtime_context)
         )

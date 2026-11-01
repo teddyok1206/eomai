@@ -14,10 +14,12 @@ from eom_orchestrator.native_query_job_allocation import read_native_query_launc
 from eom_workflow.native_private_chat_query_coordinator import (
     NativePrivateQueryAllocation,
     NativePrivateQueryCompleted,
+    NativePrivateQueryCompletedV2,
 )
-from eom_workflow.private_chat_query_execution import (
-    PrivateChatQueryWorkflowRequest,
-    parse_private_chat_query_workflow_request,
+from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryWorkflowRequestV2,
+    SupportedPrivateChatQueryWorkflowRequest,
+    parse_supported_private_chat_query_workflow_request,
 )
 from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAssociation
 from eom_workflow.private_chat_query_submission_context import (
@@ -25,11 +27,13 @@ from eom_workflow.private_chat_query_submission_context import (
     parse_private_chat_query_submission_context,
     validate_private_chat_query_submission_context,
 )
-from eom_workflow.private_chat_query_workflow import (
-    PRIVATE_CHAT_QUERY_RESULT_SCHEMA,
-    PrivateChatQueryStepOutput,
-    PrivateChatQueryWorkflowDefinition,
-    validate_private_chat_query_definition,
+from eom_workflow.private_chat_query_workflow_v2 import (
+    PrivateChatQueryStepOutputV2,
+    SupportedPrivateChatQueryStepOutput,
+    SupportedPrivateChatQueryWorkflowDefinition,
+    parse_supported_private_chat_query_step_output,
+    private_chat_query_result_schema,
+    validate_supported_private_chat_query_definition,
 )
 from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy.orm import Session
@@ -68,9 +72,18 @@ from eom_workflow_runner.state_machine import (
 )
 
 
-def _output(value: object) -> PrivateChatQueryStepOutput:
+def _output(
+    value: object, request: SupportedPrivateChatQueryWorkflowRequest
+) -> SupportedPrivateChatQueryStepOutput:
     try:
-        return PrivateChatQueryStepOutput.model_validate(raw_similarity_contract_value(value))
+        output = parse_supported_private_chat_query_step_output(
+            raw_similarity_contract_value(value)
+        )
+        if isinstance(request, PrivateChatQueryWorkflowRequestV2) != isinstance(
+            output, PrivateChatQueryStepOutputV2
+        ):
+            raise ValueError()
+        return output
     except (ValueError, TypeError, SchemaError):
         raise ValueError("PRIVATE_CHAT_QUERY_STEP_OUTPUT_INVALID") from None
 
@@ -81,12 +94,12 @@ def _completion(
     executor: PrivateChatQueryNativeExecutor,
     workflow: WorkflowInstanceRecord,
     step: WorkflowStepRunRecord,
-    request: PrivateChatQueryWorkflowRequest,
+    request: SupportedPrivateChatQueryWorkflowRequest,
     lease: CommandLeaseIdentity,
     output: object,
-) -> PrivateChatQueryStepOutput:
+) -> SupportedPrivateChatQueryStepOutput:
     validate_private_chat_query_execution_step(step, workflow, request)
-    result = _output(output)
+    result = _output(output, request)
     if (
         result.workflow_id != workflow.workflow_id
         or result.step_run_id != step.step_run_id
@@ -96,8 +109,11 @@ def _completion(
         )
     ):
         raise ValueError("PRIVATE_CHAT_QUERY_COMPLETION_IDENTITY_INVALID")
-    checked = _output(
-        executor.validate_completion(
+    checked: SupportedPrivateChatQueryStepOutput
+    if isinstance(request, PrivateChatQueryWorkflowRequestV2):
+        if not isinstance(result, PrivateChatQueryStepOutputV2):
+            raise ValueError("PRIVATE_CHAT_QUERY_STEP_OUTPUT_INVALID")
+        checked = executor.validate_completion(
             session=session,
             workflow=workflow,
             step=step,
@@ -105,7 +121,18 @@ def _completion(
             command_lease=lease,
             output=result,
         )
-    )
+    else:
+        if isinstance(result, PrivateChatQueryStepOutputV2):
+            raise ValueError("PRIVATE_CHAT_QUERY_STEP_OUTPUT_INVALID")
+        checked = executor.validate_completion(
+            session=session,
+            workflow=workflow,
+            step=step,
+            request=request,
+            command_lease=lease,
+            output=result,
+        )
+    checked = _output(checked, request)
     if checked != result:
         raise ValueError("PRIVATE_CHAT_QUERY_COMPLETION_REPLACEMENT_DENIED")
     return checked
@@ -113,12 +140,12 @@ def _completion(
 
 def _pending(
     session: Session,
-    request: PrivateChatQueryWorkflowRequest,
+    request: SupportedPrivateChatQueryWorkflowRequest,
     workflow: WorkflowInstanceRecord,
     step: WorkflowStepRunRecord,
     outcome: PrivateChatQueryStepPending,
     context: PrivateChatQuerySubmissionContext,
-) -> PrivateChatQueryStepOutput | None:
+) -> SupportedPrivateChatQueryStepOutput | None:
     pending = PrivateChatQueryStepPending(
         outcome.native_launch_job_id, outcome.association_sha256, outcome.reason
     )
@@ -140,17 +167,17 @@ def _pending(
         raise ValueError("PRIVATE_CHAT_QUERY_PENDING_HISTORY_INVALID")
     if len(history.records) == 4:
         completed = history.records[3].payload
-        if not isinstance(completed, NativePrivateQueryCompleted):
+        if not isinstance(completed, (NativePrivateQueryCompleted, NativePrivateQueryCompletedV2)):
             raise ValueError("PRIVATE_CHAT_QUERY_PENDING_HISTORY_INVALID")
-        return completed.output
+        return _output(completed.output, request)
     return None
 
 
 def advance_private_chat_query_step(
     *,
     workflow: WorkflowInstanceRecord,
-    definition: PrivateChatQueryWorkflowDefinition,
-    request: PrivateChatQueryWorkflowRequest,
+    definition: SupportedPrivateChatQueryWorkflowDefinition,
+    request: SupportedPrivateChatQueryWorkflowRequest,
     lease: CommandLeaseIdentity,
     owner: PrivateChatQueryOwnerAdmission,
     executor: PrivateChatQueryNativeExecutor,
@@ -159,8 +186,8 @@ def advance_private_chat_query_step(
     actor_id: str,
     poll_interval_seconds: int = 30,
 ) -> bool:
-    request = parse_private_chat_query_workflow_request(request)
-    validate_private_chat_query_definition(definition, request)
+    request = parse_supported_private_chat_query_workflow_request(request)
+    validate_supported_private_chat_query_definition(definition, request)
     workflow_id = workflow.workflow_id
     with fenced_transaction() as session:
         current = session.get(WorkflowInstanceRecord, workflow_id)
@@ -209,7 +236,7 @@ def advance_private_chat_query_step(
                 step_key="encode_private_chat_query",
                 step_type="application",
                 worker_role=None,
-                result_schema=PRIVATE_CHAT_QUERY_RESULT_SCHEMA,
+                result_schema=private_chat_query_result_schema(request),
                 input_pointer_manifest={"workflow_request_sha256": request.request_sha256},
                 max_attempts=1,
             )
@@ -331,18 +358,18 @@ def advance_private_chat_query_step(
 def complete_private_chat_query_terminal(
     *,
     workflow_id: str,
-    request: PrivateChatQueryWorkflowRequest,
+    request: SupportedPrivateChatQueryWorkflowRequest,
     lease: CommandLeaseIdentity,
     executor: PrivateChatQueryNativeExecutor,
     fenced_transaction: NativeFencedRunnerTransaction,
     actor_type: str,
     actor_id: str,
 ) -> None:
-    request = parse_private_chat_query_workflow_request(request)
+    request = parse_supported_private_chat_query_workflow_request(request)
 
     def validate(
         session: Session, workflow: WorkflowInstanceRecord, step: WorkflowStepRunRecord
-    ) -> PrivateChatQueryStepOutput:
+    ) -> SupportedPrivateChatQueryStepOutput:
         if actor_type != workflow.created_actor_type or actor_id != workflow.created_actor_id:
             raise ValueError("PRIVATE_CHAT_QUERY_TERMINAL_ACTOR_INVALID")
         return _completion(

@@ -41,6 +41,10 @@ def lifecycle(private_terminal, tmp_path, monkeypatch):
     source = make_private_source_case(
         tmp_path, monkeypatch, definition_sha256=sha256_bytes(canonical_json_bytes(fixed))
     )
+    return make_private_lifecycle_case(value, source, fixed, monkeypatch)
+
+
+def make_private_lifecycle_case(value, source, fixed, monkeypatch):
     with source.publisher.sessions.begin() as session:
         source.fault.session = session
         scope = source.owner.resolve_sources(session, source.request, source.projection.origin)
@@ -261,6 +265,7 @@ def test_original_start_resolves_sources_before_writing_and_allocates_in_same_ro
 
     def create(_session, **kwargs):
         assert kwargs["max_attempts"] == 1
+        assert kwargs["result_schema"] == value.step.result_schema
         assert kwargs["input_pointer_manifest"] == {
             "workflow_request_sha256": value.request.request_sha256
         }

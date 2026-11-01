@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, overload
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_identifiers import canonical_json_bytes, sha256_bytes
@@ -14,6 +14,7 @@ from eom_workflow.private_chat_query_execution import (
     parse_private_chat_query_workflow_request,
 )
 from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryWorkflowRequestV2,
     SupportedPrivateChatQueryWorkflowRequest,
     parse_supported_private_chat_query_workflow_request,
 )
@@ -42,6 +43,7 @@ from eom_workflow_runner.models import (
     WorkflowInstanceRecord,
 )
 from eom_workflow_runner.private_chat_query_source_read import (
+    ResolvedPrivateChatPublicQuerySources,
     ResolvedPrivateChatQuerySources,
     require_private_chat_query_source_root,
 )
@@ -52,6 +54,7 @@ if TYPE_CHECKING:
 
 
 class PrivateChatQueryOwnerAdmission(Protocol):
+    @overload
     def resolve_submission(
         self,
         session: Session,
@@ -59,6 +62,15 @@ class PrivateChatQueryOwnerAdmission(Protocol):
         context: PrivateChatQuerySubmissionContext,
     ) -> ResolvedPrivateChatQuerySources: ...
 
+    @overload
+    def resolve_submission(
+        self,
+        session: Session,
+        request: PrivateChatQueryWorkflowRequestV2,
+        context: PrivateChatQuerySubmissionContext,
+    ) -> ResolvedPrivateChatPublicQuerySources: ...
+
+    @overload
     def resolve_claim(
         self,
         session: Session,
@@ -68,10 +80,20 @@ class PrivateChatQueryOwnerAdmission(Protocol):
         request: PrivateChatQueryWorkflowRequest,
     ) -> ResolvedPrivateChatQuerySources: ...
 
+    @overload
+    def resolve_claim(
+        self,
+        session: Session,
+        *,
+        command: WorkflowCommandRecord,
+        workflow: WorkflowInstanceRecord,
+        request: PrivateChatQueryWorkflowRequestV2,
+    ) -> ResolvedPrivateChatPublicQuerySources: ...
+
     def fence_mutation(
         self,
         session: Session,
-        request: PrivateChatQueryWorkflowRequest,
+        request: SupportedPrivateChatQueryWorkflowRequest,
         lease: CommandLeaseIdentity,
     ) -> None: ...
 

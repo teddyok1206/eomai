@@ -3,13 +3,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Literal, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol, overload
 
 from eom_catalog_contracts.models import Sha256
 from eom_workflow.models import JobId
 from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
+from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryWorkflowRequestV2,
+    SupportedPrivateChatQueryWorkflowRequest,
+)
 from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAssociation
 from eom_workflow.private_chat_query_workflow import PrivateChatQueryStepOutput
+from eom_workflow.private_chat_query_workflow_v2 import PrivateChatQueryStepOutputV2
 from pydantic import TypeAdapter
 from sqlalchemy.orm import Session
 
@@ -40,7 +45,9 @@ class PrivateChatQueryStepPending:
 
 
 class PrivateChatQueryNativeExecutor(Protocol):
-    def evaluate(self, request: PrivateChatQueryWorkflowRequest) -> RuntimeReadinessReport: ...
+    def evaluate(
+        self, request: SupportedPrivateChatQueryWorkflowRequest
+    ) -> RuntimeReadinessReport: ...
 
     def allocate_execution(
         self,
@@ -48,10 +55,11 @@ class PrivateChatQueryNativeExecutor(Protocol):
         session: Session,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: PrivateChatQueryWorkflowRequest,
+        request: SupportedPrivateChatQueryWorkflowRequest,
         command_lease: CommandLeaseIdentity,
     ) -> PrivateChatQueryLaunchAssociation: ...
 
+    @overload
     def execute(
         self,
         *,
@@ -63,6 +71,19 @@ class PrivateChatQueryNativeExecutor(Protocol):
         fenced_transaction: NativeFencedRunnerTransaction,
     ) -> PrivateChatQueryStepOutput | PrivateChatQueryStepPending: ...
 
+    @overload
+    def execute(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        request: PrivateChatQueryWorkflowRequestV2,
+        command_lease: CommandLeaseIdentity,
+        idempotency_key: str,
+        fenced_transaction: NativeFencedRunnerTransaction,
+    ) -> PrivateChatQueryStepOutputV2 | PrivateChatQueryStepPending: ...
+
+    @overload
     def validate_completion(
         self,
         *,
@@ -73,3 +94,15 @@ class PrivateChatQueryNativeExecutor(Protocol):
         command_lease: CommandLeaseIdentity,
         output: PrivateChatQueryStepOutput,
     ) -> PrivateChatQueryStepOutput: ...
+
+    @overload
+    def validate_completion(
+        self,
+        *,
+        session: Session,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        request: PrivateChatQueryWorkflowRequestV2,
+        command_lease: CommandLeaseIdentity,
+        output: PrivateChatQueryStepOutputV2,
+    ) -> PrivateChatQueryStepOutputV2: ...

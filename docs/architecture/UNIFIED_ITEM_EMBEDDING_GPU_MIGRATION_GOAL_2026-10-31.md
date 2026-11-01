@@ -309,6 +309,23 @@ REFERENCE 목적을 private 권한으로 채택하는 대안보다 작다.1/2 �
 known failure·원 producer/해시 불일치와 임시 PG canonical 저장을 확인하고, 실제 runtime/
 모델·authenticated Chat 검증은 설치·activation 이후의 별도 증거로 남긴다.
 
+### private1/2 Runner step·terminal 공유 — 2026-11-01
+
+기존 private application step과 공통 native terminal이 원 request family에 맞는 output만
+받도록 확장한다. 정본은 같은 Workflow/step/command/launch/receipt이고 current origin과
+lease 권한은 기존 owner가 계속 검사한다. 원 definition/request/result family·hash를 맞춘 뒤
+하나의 attempt에서만 READY→RUNNING→SUCCEEDED→기존 terminal을 진행한다. 최대4 checkpoint와
+step/Job PK lookup은 기존 indexed O(1)·bounded 구조이며 새 DB/index/queue/migration은 없다.
+질문·풀이·binary를 Workflow context에 복제하지 않고 private origin context를 그대로 보존한다.
+
+application-defined port는 supported request/output union을 받고, 순수 계약의 family selector와
+schema validator를 재사용한다. adapter가 규칙을 복제하지 않는다. DB root 밖 numerical 실행,
+완료 전후 root fence, 동일 command continuation·idempotent replay 및 original ALLOCATION
+검증은 그대로다. uncertain은 원 작업 대기, FAILED는 terminal로 유지한다. 다른 family output,
+잘못된 actor·step·receipt·늦은 lease 철회는 전이를 거부한다. 두 Runner/terminal을 복제하는
+대안보다 기존 책임 소유자에 명시적 family 검사를 추가하는 쪽이 작다. 이 연결만으로 global2
+admission이나 새로운 runtime/SQL 권한을 열지 않으며, 실제 dispatch/submit/설치는 별도다.
+
 기존 미배포 legacy stored-read 후보는
 `staging/unified-embedding-goal-20261031/deferred-legacy-read.patch` 및 같은 폴더
 `deferred/`에 복구 가능하게 보존했다. 이번 공통 전환과 섞어 활성화하지 않는다.
