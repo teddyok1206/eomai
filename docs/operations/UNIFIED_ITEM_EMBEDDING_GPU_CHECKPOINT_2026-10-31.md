@@ -1,5 +1,66 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## private2 정식 Artifact 저장·재조회와 창작 Graph 정지 원인 확인 — 2026-11-01 UTC
+
+- 직전 turn은 기존 준비 증거에서 GUI 후보 번호만 안내한 **NO_PROGRESS**였다. worktree의
+  미완료 ArtifactStore 변경과 실제 INDEX unit를 다시 확인한 뒤 canonical private2 저장·읽기/
+  완료 영수증을 연결·검증했으므로 이번은 **PROGRESS**다. 전체 U01–U05 목표 ACTIVE이며
+  이 source 변경을 private2 운영 활성화나 구 벡터 삭제 완료로 바꾸지 않는다.
+- 기존 private 수치 Artifact type과 four-member file-set, 별도 one-member completion,
+  원 idempotency key/FD pin/Job 분리/현재 clean transaction root/승인 producer·hash/shape/
+  norm 검증을 유지한다. 새 저장소·queue·DB table·질문/보고서 원문 복제는 없다. legacy
+  entry point는 기존 family만 반환하고 supported entry는1/2를 명시적으로 구분한다.
+  마지막 bytes를 읽은 뒤 producer 철회와 다른 root 재사용도 거부한다. 늦은 관측 실패나
+  commit 중단은 원 identity로 복구하며 저장된 결과를 삭제하거나 재추론하지 않는다.
+- 최종 source/legacy/public completion·publication·read·dependency 회귀 **248 PASS /108.42s**,
+  source 없이 설치한 wheel/resource/inventory **11 PASS /47.80s**, strict mypy **8 source PASS**,
+  Ruff/format/shell syntax/diff PASS다. 예비 file suite는73 PASS 후 두 family로 확대했다.
+  그 확대의 최초96 PASS/1 FAIL은 legacy fixture의 실제 `row`를 `rows`로 잘못 지정한 테스트
+  오류였고 정확한 원 row text를 훼손하도록 보정해97 PASS 후 위 최종248을 통과했다.
+  `/tmp/eom-private-public-query2-files-focused-20261101.log`, `-v2.log`, `-v3.log`,
+  `/tmp/eom-private-public-query2-files-final-gates-20261101.log`,
+  `/tmp/eom-private-public-query2-files-installed-gates-20261101.log`,
+  `/tmp/eom-private-public-query2-files-final-mypy-20261101.log`.
+  기존 Catalog entry가1만 반환하는 추가 회귀도 **2 PASS /7.66s**이며
+  `/tmp/eom-private-public-query2-files-legacy-entry-20261101.log`에 보존했다.
+- 실제 marked disposable PostgreSQL은 **32 PASS /23.13s**다. private1/2 각각의 concurrent
+  identified commit, 한 canonical revision, 정확한 원 key replay, commit 전후 interruption,
+  intent/time/origin 변경 거부, last-member producer 철회 및 immutable approved revision의
+  trigger를 확인했다. Chat/source/native와 numerical backend는 synthetic이다. 실제 사용자
+  query/GPU/native admission PASS로 확대하지 않는다. 공식 migrate는67 왕복 PASS했고,
+  공식 cleanup으로 그 임시 DB를 제거한 뒤 state directory 부재도 확인했다. 운영 head66과
+  GPU/QUERY 설치 pin은 바꾸지 않았다. `/tmp/eom-private-public-query2-files-postgres-20261101.log`,
+  `/tmp/eom-private-public-query2-files-testdb-migrate-20261101.log`,
+  `/tmp/eom-private-public-query2-files-testdb-cleanup-20261101.log`.
+- **01:30:00 UTC 정기 관측 GPU123/520·잔여397**, 원 space/target hash 및 historical FAILED7
+  불변이다. nonterminal은 이번에 **CUDA1 RUNNING**이며01:00의 CPU1과 구분한다. 기존
+  routed owner는 GPU 완료 후 원 exact-space CPU standby 큐를 drain하는 계약이다.
+  01:08:36 원 CPU Workflow `workflow_b360da5b3c88450c90516f1eda9b6bc3` SUCCEEDED를 journal에서
+  확인했다. 단순 CPU 선택을 GPU 고장으로 보고 중복 제출하거나 원 실행을 GPU로 바꾸지 않았다.
+  실제 INDEX1683578 active/NRestarts0, timer active다. frozen 분모의 추가 count polling은 없다.
+- creative service는 **01:14:55 UTC exit78**이었다. 마지막 status representative11692를
+  실제 실패 문항으로 단정하지 않고 원 cohort/권한의 공식 accepted-analysis resolver와
+  `retrieve_read_only`를 SELECT/SET/SHOW-only guard 아래 실행했다.11692/11693/11694의
+  분석은 모두 ACCEPTED다. 앞 두 문항은 교과서/교육과정 candidate16/13이고, 실제 실패는
+  **11694의 `chemistry.covalent_bonding` → authorized source 0**이다. 원 풀이 실패가 아니라
+  Graph alignment retrieval 단계의 `KNOWLEDGE_RETRIEVAL_INSUFFICIENT_EVIDENCE`다.
+  원 Graph `graphrev_6958fd489d631c47acbfa2daae719014`와 보고서를 변경하지 않았다.
+  `/tmp/eom-creative-alignment-diagnosis-20261101.json` 및 root-reviewed bounded helper SHA
+  `4faa53e1b19c070f7b1009b80307dc788564bbd856e1de252922d1a2a1f6605a`에 진단을 보존했다.
+  labels를 wire topic key로 넣는 예비 read probe는 ASCII-key schema에 의해 model/DB write 전에
+  거부됐다. 이 계약을 완화하지 않고 기존 Graph lexical/source-class adapter로 검증을 이어간다.
+  이어 같은 pinned Graph/원 actor의 기존 `topic_keys_for_terms`에 accepted label의 lexical
+  terms만 넣은 read-only probe는 실제 CURRICULUM/TEXTBOOK topic keys와 candidate201개를
+  찾았다. authorized evidence가 없는 것이 아니라 accepted key와 Graph namespace 간 seed
+  연결이 빠진 경우다. `/tmp/eom-creative-alignment-diagnosis-20261101-v3.json`.
+  대안 probe는 canonical evidence 발행/기존 topic request 교체가 아니며201은 임베딩/문항
+  완료 수가 아니다. 현재 계약 안의 indexed seed 해석 개선을 먼저 검토하고 fake topic,
+  source-class 확대, evidence 생략이나 accepted 보고서 재작성으로 우회하지 않는다.
+- 다음은 creative의 해당 Graph 연결 회귀·공식 재개와 private2 실제 owner/current source/native
+  admission/권한·원 query replay·답변 전달 연결이다. 실제 release operator67 호환·drain·배포,
+  전체520 CUDA/AI full report→Graph→INDEX4, 실제 사용자 검색 및 구 소비자 전환/정확한
+  retirement·삭제도 그대로 남아 있다. 정본/구 벡터 삭제0, 운영 DDL/서비스 재시작0이다.
+
 ## private2 완료 영수증·compiler와 임시 PostgreSQL 저장 검증 — 2026-11-01 UTC
 
 - 직전 `4e81fc06`은 private request/policy/owner2와 원 turn key 연결 및360회귀를

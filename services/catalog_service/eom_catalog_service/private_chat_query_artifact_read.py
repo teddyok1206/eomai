@@ -11,12 +11,20 @@ from eom_catalog_contracts.embedding_private_chat_query import (
     EmbeddingPrivateChatQueryResult,
     validate_private_chat_query_result,
 )
-from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
+from eom_catalog_contracts.embedding_reference_query import (
+    MAX_REFERENCE_QUERY_BYTES,
+    raw_similarity_contract_value,
+)
 from eom_catalog_contracts.embedding_runtime_bundle import EmbeddingRuntimeBundle
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
 from eom_catalog_contracts.inference_transfer_embedding import parse_embedding_shard
 from eom_catalog_contracts.models import Sha256
 from eom_catalog_contracts.private_chat_query_read import ChatPrivateQueryOrigin
+from eom_catalog_contracts.public_solution_query import (
+    PublicSolutionQueryInput,
+    PublicSolutionQueryResult,
+    validate_public_solution_query_result,
+)
 from eom_identifiers import canonical_json_bytes
 from eom_orchestrator.embedding_artifact_store import EMBEDDING_PRIVATE_CHAT_QUERY_ARTIFACT_TYPE
 from eom_orchestrator.file_set_control_artifacts import CONTROL_FILE_SET_PROTOCOL
@@ -25,14 +33,32 @@ from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryExecutionPolicy,
     PrivateChatQueryWorkflowRequest,
 )
+from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryExecutionPolicyV2,
+    PrivateChatQueryWorkflowRequestV2,
+    SupportedPrivateChatQueryExecutionPolicy,
+    SupportedPrivateChatQueryWorkflowRequest,
+    parse_supported_private_chat_query_execution_policy,
+    parse_supported_private_chat_query_workflow_request,
+)
 from eom_workflow.private_chat_query_publication import (
     PrivateChatQueryExecutionRecord,
     PrivateChatQueryLaunchAssociation,
     validate_private_chat_query_launch,
 )
+from eom_workflow.private_chat_query_publication_v2 import (
+    PrivateChatPublicQueryExecutionRecord,
+    validate_private_chat_public_query_launch,
+)
 from eom_workflow.private_chat_query_workflow import (
     PrivateChatQueryWorkflowReceipt,
     validate_private_chat_query_workflow_receipt,
+)
+from eom_workflow.private_chat_query_workflow_v2 import (
+    PrivateChatQueryWorkflowReceiptV2,
+    SupportedPrivateChatQueryWorkflowReceipt,
+    parse_supported_private_chat_query_workflow_receipt,
+    validate_private_chat_public_query_workflow_receipt,
 )
 from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import TypeAdapter
@@ -48,6 +74,16 @@ class ResolvedPrivateChatQueryArtifacts:
 
     request: EmbeddingPrivateChatQueryInput = field(repr=False)
     result: EmbeddingPrivateChatQueryResult
+    binary: bytes = field(repr=False)
+    publication_job_id: str
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedPrivateChatPublicQueryArtifacts:
+    """Same private file-set owner, with the common recipe2 numerical family."""
+
+    request: PublicSolutionQueryInput = field(repr=False)
+    result: PublicSolutionQueryResult
     binary: bytes = field(repr=False)
     publication_job_id: str
 
@@ -100,19 +136,70 @@ class CatalogPrivateChatQueryArtifacts:
         receipt_owner_job_id: str,
         manifest_sha256: str,
     ) -> ResolvedPrivateChatQueryArtifacts:
+        resolved = self.resolve_supported_publication(
+            workflow_request=workflow_request,
+            policy=policy,
+            bundle=bundle,
+            launch=launch,
+            native_input=native_input,
+            receipt=receipt,
+            origin=origin,
+            workflow_id=workflow_id,
+            step_run_id=step_run_id,
+            receipt_owner_job_id=receipt_owner_job_id,
+            manifest_sha256=manifest_sha256,
+        )
+        if not isinstance(resolved, ResolvedPrivateChatQueryArtifacts):
+            raise ValueError("PRIVATE_CHAT_QUERY_ARTIFACT_READ_INVALID")
+        return resolved
+
+    def resolve_supported_publication(
+        self,
+        *,
+        workflow_request: SupportedPrivateChatQueryWorkflowRequest,
+        policy: SupportedPrivateChatQueryExecutionPolicy,
+        bundle: EmbeddingRuntimeBundle,
+        launch: PrivateChatQueryLaunchAssociation,
+        native_input: EmbeddingPrivateChatQueryInput | PublicSolutionQueryInput,
+        receipt: SupportedPrivateChatQueryWorkflowReceipt,
+        origin: ChatPrivateQueryOrigin,
+        workflow_id: str,
+        step_run_id: str,
+        receipt_owner_job_id: str,
+        manifest_sha256: str,
+    ) -> ResolvedPrivateChatQueryArtifacts | ResolvedPrivateChatPublicQueryArtifacts:
         """Current-owned input is supplied; the committed file set contains no question copy."""
         self._require_root()
         try:
             TypeAdapter(Sha256).validate_python(manifest_sha256, strict=True)
-            native_input = EmbeddingPrivateChatQueryInput.model_validate(
-                raw_similarity_contract_value(native_input)
-            )
-            receipt = PrivateChatQueryWorkflowReceipt.model_validate(
-                raw_similarity_contract_value(receipt)
-            )
-            expected_record = validate_private_chat_query_launch(
-                launch, workflow_request, policy, bundle, native_input
-            )
+            workflow_request = parse_supported_private_chat_query_workflow_request(workflow_request)
+            policy = parse_supported_private_chat_query_execution_policy(policy)
+            receipt = parse_supported_private_chat_query_workflow_receipt(receipt)
+            expected_record: PrivateChatQueryExecutionRecord | PrivateChatPublicQueryExecutionRecord
+            if isinstance(workflow_request, PrivateChatQueryWorkflowRequestV2):
+                if not isinstance(policy, PrivateChatQueryExecutionPolicyV2) or not isinstance(
+                    receipt, PrivateChatQueryWorkflowReceiptV2
+                ):
+                    raise ValueError()
+                native_input = PublicSolutionQueryInput.model_validate(
+                    raw_similarity_contract_value(native_input)
+                )
+                expected_record = validate_private_chat_public_query_launch(
+                    launch, workflow_request, policy, bundle, native_input
+                )
+                maximum_bytes = MAX_REFERENCE_QUERY_BYTES
+            else:
+                if not isinstance(policy, PrivateChatQueryExecutionPolicy) or not isinstance(
+                    receipt, PrivateChatQueryWorkflowReceipt
+                ):
+                    raise ValueError()
+                native_input = EmbeddingPrivateChatQueryInput.model_validate(
+                    raw_similarity_contract_value(native_input)
+                )
+                expected_record = validate_private_chat_query_launch(
+                    launch, workflow_request, policy, bundle, native_input
+                )
+                maximum_bytes = MAX_PRIVATE_CHAT_QUERY_BYTES
             pointers = (
                 receipt.execution_record,
                 receipt.query_execution.result_member,
@@ -141,15 +228,22 @@ class CatalogPrivateChatQueryArtifacts:
                 return member.payload
 
             def document(pointer: ArtifactMemberPointer) -> object:
-                raw = read(pointer, MAX_PRIVATE_CHAT_QUERY_BYTES)
+                raw = read(pointer, maximum_bytes)
                 value: object = json.loads(raw)
                 if canonical_json_bytes(value) != raw:
                     raise ValueError()
                 return value
 
-            record = PrivateChatQueryExecutionRecord.model_validate(document(pointers[0]))
-            result = EmbeddingPrivateChatQueryResult.model_validate(document(pointers[1]))
-            validate_private_chat_query_result(native_input, result)
+            record: PrivateChatQueryExecutionRecord | PrivateChatPublicQueryExecutionRecord
+            result: EmbeddingPrivateChatQueryResult | PublicSolutionQueryResult
+            if isinstance(native_input, PublicSolutionQueryInput):
+                record = PrivateChatPublicQueryExecutionRecord.model_validate(document(pointers[0]))
+                result = PublicSolutionQueryResult.model_validate(document(pointers[1]))
+                validate_public_solution_query_result(native_input, result)
+            else:
+                record = PrivateChatQueryExecutionRecord.model_validate(document(pointers[0]))
+                result = EmbeddingPrivateChatQueryResult.model_validate(document(pointers[1]))
+                validate_private_chat_query_result(native_input, result)
             shard = document(pointers[2])
             if (
                 record != expected_record
@@ -166,24 +260,61 @@ class CatalogPrivateChatQueryArtifacts:
             )
             if producers != {receipt.query_artifact_owner_job_id}:
                 raise ValueError()
-            validate_private_chat_query_workflow_receipt(
-                receipt,
-                workflow_request,
-                policy,
-                bundle,
-                launch,
-                native_input,
-                result,
-                origin=origin,
-                workflow_id=workflow_id,
-                step_run_id=step_run_id,
-                query_artifact_owner_job_id=receipt.query_artifact_owner_job_id,
-                receipt_owner_job_id=receipt_owner_job_id,
-            )
+            if isinstance(workflow_request, PrivateChatQueryWorkflowRequestV2):
+                if (
+                    not isinstance(policy, PrivateChatQueryExecutionPolicyV2)
+                    or not isinstance(receipt, PrivateChatQueryWorkflowReceiptV2)
+                    or not isinstance(native_input, PublicSolutionQueryInput)
+                    or not isinstance(result, PublicSolutionQueryResult)
+                ):
+                    raise ValueError()
+                validate_private_chat_public_query_workflow_receipt(
+                    receipt,
+                    workflow_request,
+                    policy,
+                    bundle,
+                    launch,
+                    native_input,
+                    result,
+                    origin=origin,
+                    workflow_id=workflow_id,
+                    step_run_id=step_run_id,
+                    query_artifact_owner_job_id=receipt.query_artifact_owner_job_id,
+                    receipt_owner_job_id=receipt_owner_job_id,
+                )
+                resolved: (
+                    ResolvedPrivateChatQueryArtifacts | ResolvedPrivateChatPublicQueryArtifacts
+                )
+                resolved = ResolvedPrivateChatPublicQueryArtifacts(
+                    native_input, result, binary, receipt.query_artifact_owner_job_id
+                )
+            else:
+                if (
+                    not isinstance(policy, PrivateChatQueryExecutionPolicy)
+                    or not isinstance(receipt, PrivateChatQueryWorkflowReceipt)
+                    or not isinstance(native_input, EmbeddingPrivateChatQueryInput)
+                    or not isinstance(result, EmbeddingPrivateChatQueryResult)
+                ):
+                    raise ValueError()
+                validate_private_chat_query_workflow_receipt(
+                    receipt,
+                    workflow_request,
+                    policy,
+                    bundle,
+                    launch,
+                    native_input,
+                    result,
+                    origin=origin,
+                    workflow_id=workflow_id,
+                    step_run_id=step_run_id,
+                    query_artifact_owner_job_id=receipt.query_artifact_owner_job_id,
+                    receipt_owner_job_id=receipt_owner_job_id,
+                )
+                resolved = ResolvedPrivateChatQueryArtifacts(
+                    native_input, result, binary, receipt.query_artifact_owner_job_id
+                )
             self.reader.revalidate_provenance()
             self._require_root()
-            return ResolvedPrivateChatQueryArtifacts(
-                native_input, result, binary, receipt.query_artifact_owner_job_id
-            )
+            return resolved
         except (ValueError, TypeError, SchemaError, OSError):
             raise ValueError("PRIVATE_CHAT_QUERY_ARTIFACT_READ_INVALID") from None

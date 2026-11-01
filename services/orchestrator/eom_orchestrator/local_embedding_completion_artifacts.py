@@ -19,7 +19,15 @@ from eom_workflow.private_chat_query_workflow import (
     PRIVATE_CHAT_QUERY_RECEIPT_REF,
     PrivateChatQueryStepOutput,
     PrivateChatQueryWorkflowReceipt,
-    validate_private_chat_query_step_output,
+)
+from eom_workflow.private_chat_query_workflow_v2 import (
+    PRIVATE_CHAT_PUBLIC_QUERY_RECEIPT_REF,
+    PrivateChatQueryWorkflowReceiptV2,
+    SupportedPrivateChatQueryStepOutput,
+    SupportedPrivateChatQueryWorkflowReceipt,
+    parse_supported_private_chat_query_step_output,
+    parse_supported_private_chat_query_workflow_receipt,
+    validate_supported_private_chat_query_step_output,
 )
 from eom_workflow.reference_query_execution import (
     PUBLIC_REFERENCE_QUERY_RECEIPT_REF,
@@ -173,8 +181,21 @@ class NativeEmbeddingCompletionPublisher:
     def publish_private_chat_query(
         self, receipt: PrivateChatQueryWorkflowReceipt, *, identity: ControlFileSetIdentity
     ) -> PrivateChatQueryStepOutput:
-        """Commit validated metadata only; caller retains original live-source/native fences."""
         receipt = PrivateChatQueryWorkflowReceipt.model_validate(receipt)
+        output = self.publish_supported_private_chat_query(receipt, identity=identity)
+        if not isinstance(output, PrivateChatQueryStepOutput):
+            raise ValueError("PRIVATE_CHAT_QUERY_RECEIPT_PRODUCER_MISMATCH")
+        return output
+
+    def publish_supported_private_chat_query(
+        self, receipt: SupportedPrivateChatQueryWorkflowReceipt, *, identity: ControlFileSetIdentity
+    ) -> SupportedPrivateChatQueryStepOutput:
+        """Commit validated metadata only; caller retains original live-source/native fences."""
+        receipt = parse_supported_private_chat_query_workflow_receipt(receipt)
+        public = isinstance(receipt, PrivateChatQueryWorkflowReceiptV2)
+        schema_ref = (
+            PRIVATE_CHAT_PUBLIC_QUERY_RECEIPT_REF if public else PRIVATE_CHAT_QUERY_RECEIPT_REF
+        )
         identity = ControlFileSetIdentity(
             identity.job_id, identity.artifact_id, identity.artifact_revision_id
         )
@@ -182,7 +203,9 @@ class NativeEmbeddingCompletionPublisher:
             raise ValueError("PRIVATE_CHAT_QUERY_RECEIPT_PRODUCER_MISMATCH")
         raw = canonical_json_bytes(receipt)
         body = {
-            "schema_version": "private-chat-query-step-output/1.0",
+            "schema_version": "private-chat-query-step-output/2.0"
+            if public
+            else "private-chat-query-step-output/1.0",
             "purpose": "PRIVATE_CHAT_QUERY",
             **{
                 field: getattr(receipt, field)
@@ -196,21 +219,21 @@ class NativeEmbeddingCompletionPublisher:
                     "receipt_sha256",
                 )
             },
-            "receipt_schema": PRIVATE_CHAT_QUERY_RECEIPT_REF,
+            "receipt_schema": schema_ref,
             "receipt": ArtifactMemberPointer(
                 artifact_id=identity.artifact_id,
                 artifact_revision_id=identity.artifact_revision_id,
                 member_path="receipt.json",
-                schema_ref=PRIVATE_CHAT_QUERY_RECEIPT_REF,
+                schema_ref=schema_ref,
                 media_type="application/json",
                 sha256=sha256_bytes(raw),
             ).model_dump(mode="json"),
         }
-        output = PrivateChatQueryStepOutput.model_validate(
+        output = parse_supported_private_chat_query_step_output(
             body | {"output_sha256": content_sha256(body)}
         )
         # A four-member numeric file set cannot be reused as the one-member receipt set.
-        validate_private_chat_query_step_output(output, receipt)
+        validate_supported_private_chat_query_step_output(output, receipt)
         key = "native-private-chat-query-receipt:" + content_sha256(
             {
                 "workflow_id": receipt.workflow_id,
@@ -223,7 +246,7 @@ class NativeEmbeddingCompletionPublisher:
             identity=identity,
             key=key,
             artifact_type=PRIVATE_CHAT_QUERY_COMPLETION_ARTIFACT_TYPE,
-            schema_ref=PRIVATE_CHAT_QUERY_RECEIPT_REF,
+            schema_ref=schema_ref,
             created_at=receipt.published_at,
             mismatch_code="PRIVATE_CHAT_QUERY_RECEIPT_PUBLICATION_MISMATCH",
         )

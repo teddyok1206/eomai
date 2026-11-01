@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 from eom_catalog_service.local_embedding_completion_artifacts import (
     resolve_native_private_chat_query_completion,
+    resolve_supported_native_private_chat_query_completion,
 )
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.settings import CatalogSettings
@@ -18,18 +19,22 @@ from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetIdentity
 from eom_orchestrator.local_embedding_completion_artifacts import NativeEmbeddingCompletionPublisher
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
-from eom_workflow.private_chat_query_workflow import PrivateChatQueryWorkflowReceipt
+from eom_workflow.private_chat_query_workflow_v2 import (
+    parse_supported_private_chat_query_workflow_receipt,
+)
 from sqlalchemy import func, select, update
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_control_file_set_publication import _contains_bytes
+from tests.unit.test_private_chat_public_query_workflow import public_completed as public_completed
 from tests.unit.test_private_chat_query_basis import TEXT
 from tests.unit.test_private_chat_query_workflow import completed as completed
 from tests.unit.test_reference_query_completion_artifacts import owner
 
 
-@pytest.fixture
-def completion(tmp_path, completed):
+@pytest.fixture(params=("legacy", "public"))
+def completion(tmp_path, completed, public_completed, request):
+    completed = completed if request.param == "legacy" else public_completed
     publisher = owner(tmp_path)
     identity = ControlFileSetIdentity(
         completed.receipt.receipt_owner_job_id,
@@ -44,7 +49,7 @@ def completion(tmp_path, completed):
 
 
 def read(session, publisher, output, **kwargs):
-    return resolve_native_private_chat_query_completion(
+    return resolve_supported_native_private_chat_query_completion(
         session,
         CatalogSettings(nas_artifact_root=publisher.publisher.settings.nas_artifact_root),
         output,
@@ -52,10 +57,28 @@ def read(session, publisher, output, **kwargs):
     )
 
 
+def test_legacy_completion_entry_points_stay_exact(tmp_path, completed, public_completed):
+    publisher = NativeEmbeddingCompletionPublisher(owner(tmp_path), source_commit="a" * 40)
+    identity = ControlFileSetIdentity(
+        completed.receipt.receipt_owner_job_id, "artifact_" + "e" * 32, "rev_" + "e" * 32
+    )
+    output = publisher.publish_private_chat_query(completed.receipt, identity=identity)
+    settings = CatalogSettings(nas_artifact_root=publisher.publisher.settings.nas_artifact_root)
+    with publisher.publisher.sessions.begin() as session:
+        assert (
+            resolve_native_private_chat_query_completion(session, settings, output)
+            == completed.receipt
+        )
+        with pytest.raises(ValueError):
+            resolve_native_private_chat_query_completion(session, settings, public_completed.output)
+    with pytest.raises(ValueError):
+        publisher.publish_private_chat_query(public_completed.receipt, identity=identity)
+
+
 def test_private_completion_actual_canonical_commit_read_and_exact_replay(completion):
     publisher, receipt, identity = completion
-    output = publisher.publish_private_chat_query(receipt, identity=identity)
-    assert publisher.publish_private_chat_query(receipt, identity=identity) == output
+    output = publisher.publish_supported_private_chat_query(receipt, identity=identity)
+    assert publisher.publish_supported_private_chat_query(receipt, identity=identity) == output
     assert (
         output.receipt.sha256
         == sha256_bytes(canonical_json_bytes(receipt))
@@ -80,7 +103,7 @@ def test_private_completion_actual_canonical_commit_read_and_exact_replay(comple
 @pytest.mark.parametrize("fault", ["producer", "unapproved", "bytes", "missing", "type", "carrier"])
 def test_private_completion_actual_read_denies_changed_provenance_and_members(completion, fault):
     publisher, receipt, identity = completion
-    output = publisher.publish_private_chat_query(receipt, identity=identity)
+    output = publisher.publish_supported_private_chat_query(receipt, identity=identity)
     with publisher.publisher.sessions.begin() as session:
         revision = session.get(ArtifactRevisionRecord, identity.artifact_revision_id)
         if fault == "producer":
@@ -113,7 +136,7 @@ def test_invalid_original_producer_or_merged_file_set_fails_before_writes(comple
             identity, artifact_revision_id=receipt.execution_record.artifact_revision_id
         )
     with pytest.raises(ValueError):
-        publisher.publish_private_chat_query(receipt, identity=identity)
+        publisher.publish_supported_private_chat_query(receipt, identity=identity)
     with publisher.publisher.sessions() as session:
         assert session.scalar(select(func.count()).select_from(JobRecord)) == 0
     assert tuple(publisher.publisher.settings.workspace_root.iterdir()) == ()
@@ -122,17 +145,17 @@ def test_invalid_original_producer_or_merged_file_set_fails_before_writes(comple
 @pytest.mark.parametrize("field", ["origin_sha256", "workflow_request_sha256", "published_at"])
 def test_changed_intent_origin_or_time_cannot_create_another_original_key(completion, field):
     publisher, receipt, identity = completion
-    original = publisher.publish_private_chat_query(receipt, identity=identity)
+    original = publisher.publish_supported_private_chat_query(receipt, identity=identity)
     body = receipt.model_dump(mode="json")
     body[field] = (
         ("sha256:" + "f" * 64)
         if field.endswith("sha256")
         else (receipt.published_at + timedelta(seconds=1)).isoformat().replace("+00:00", "Z")
     )
-    changed = PrivateChatQueryWorkflowReceipt.model_validate(seal(body, "receipt_sha256"))
+    changed = parse_supported_private_chat_query_workflow_receipt(seal(body, "receipt_sha256"))
     with pytest.raises(ControlPlaneError):
-        publisher.publish_private_chat_query(changed, identity=identity)
-    assert publisher.publish_private_chat_query(receipt, identity=identity) == original
+        publisher.publish_supported_private_chat_query(changed, identity=identity)
+    assert publisher.publish_supported_private_chat_query(receipt, identity=identity) == original
     with publisher.publisher.sessions() as session:
         assert session.scalar(select(func.count()).select_from(JobRecord)) == 1
 
@@ -142,7 +165,7 @@ def test_changed_intent_origin_or_time_cannot_create_another_original_key(comple
 )
 def test_private_completion_read_retains_clean_current_root_and_reader_settings(completion, fault):
     publisher, receipt, identity = completion
-    output = publisher.publish_private_chat_query(receipt, identity=identity)
+    output = publisher.publish_supported_private_chat_query(receipt, identity=identity)
     with publisher.publisher.sessions() as session, publisher.publisher.sessions() as other:
         kwargs = {}
         if fault != "none":
@@ -184,7 +207,7 @@ def test_commit_interruption_and_lost_observation_reuse_same_private_completion(
 
     monkeypatch.setattr(publication, "create_artifact_records", interrupted)
     with pytest.raises(RuntimeError):
-        publisher.publish_private_chat_query(receipt, identity=identity)
+        publisher.publish_supported_private_chat_query(receipt, identity=identity)
     monkeypatch.setattr(publication, "create_artifact_records", original)
     publish = publisher.publisher.publish_identified
 
@@ -194,9 +217,9 @@ def test_commit_interruption_and_lost_observation_reuse_same_private_completion(
 
     monkeypatch.setattr(publisher.publisher, "publish_identified", lost)
     with pytest.raises(RuntimeError):
-        publisher.publish_private_chat_query(receipt, identity=identity)
+        publisher.publish_supported_private_chat_query(receipt, identity=identity)
     monkeypatch.setattr(publisher.publisher, "publish_identified", publish)
-    output = publisher.publish_private_chat_query(receipt, identity=identity)
+    output = publisher.publish_supported_private_chat_query(receipt, identity=identity)
     with publisher.publisher.sessions.begin() as session:
         assert read(session, publisher, output) == receipt
         assert session.scalar(select(func.count()).select_from(JobRecord)) == 1
@@ -208,7 +231,7 @@ def test_private_receipt_revoked_during_materialization_is_not_returned(
     completion, monkeypatch, fault
 ):
     publisher, receipt, identity = completion
-    output = publisher.publish_private_chat_query(receipt, identity=identity)
+    output = publisher.publish_supported_private_chat_query(receipt, identity=identity)
     settings = CatalogSettings(nas_artifact_root=publisher.publisher.settings.nas_artifact_root)
     with publisher.publisher.sessions.begin() as session:
         reader = PinnedArtifactReadContext(session, settings)
@@ -235,7 +258,7 @@ def test_private_receipt_revoked_during_materialization_is_not_returned(
 
         monkeypatch.setattr(reader, "read_pinned", revoke_after_read)
         with pytest.raises(ValueError):
-            resolve_native_private_chat_query_completion(
+            resolve_supported_native_private_chat_query_completion(
                 session, settings, output, artifact_reader=reader
             )
         session.rollback()

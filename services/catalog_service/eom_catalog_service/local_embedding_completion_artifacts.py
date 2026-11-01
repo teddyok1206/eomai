@@ -27,7 +27,13 @@ from eom_workflow.private_chat_query_workflow import (
     MAX_PRIVATE_CHAT_QUERY_RECEIPT_BYTES,
     PrivateChatQueryStepOutput,
     PrivateChatQueryWorkflowReceipt,
-    validate_private_chat_query_step_output,
+)
+from eom_workflow.private_chat_query_workflow_v2 import (
+    SupportedPrivateChatQueryStepOutput,
+    SupportedPrivateChatQueryWorkflowReceipt,
+    parse_supported_private_chat_query_step_output,
+    parse_supported_private_chat_query_workflow_receipt,
+    validate_supported_private_chat_query_step_output,
 )
 from eom_workflow.reference_query_execution import (
     ReferenceQueryStepOutput,
@@ -154,6 +160,22 @@ def resolve_native_private_chat_query_completion(
     *,
     artifact_reader: PinnedArtifactReadContext | None = None,
 ) -> PrivateChatQueryWorkflowReceipt:
+    output = PrivateChatQueryStepOutput.model_validate(output)
+    receipt = resolve_supported_native_private_chat_query_completion(
+        session, settings, output, artifact_reader=artifact_reader
+    )
+    if not isinstance(receipt, PrivateChatQueryWorkflowReceipt):
+        raise ValueError("PRIVATE_CHAT_QUERY_RECEIPT_FAMILY_MISMATCH")
+    return receipt
+
+
+def resolve_supported_native_private_chat_query_completion(
+    session: Session,
+    settings: CatalogSettings,
+    output: SupportedPrivateChatQueryStepOutput,
+    *,
+    artifact_reader: PinnedArtifactReadContext | None = None,
+) -> SupportedPrivateChatQueryWorkflowReceipt:
     """Receipt provenance only; current owned-source/public scope admission is upstream."""
     root = session.get_transaction()
     if (
@@ -165,7 +187,7 @@ def resolve_native_private_chat_query_completion(
         or session.deleted
     ):
         raise ValueError("PRIVATE_CHAT_QUERY_COMPLETION_READ_ROOT_INVALID")
-    output = PrivateChatQueryStepOutput.model_validate(output)
+    output = parse_supported_private_chat_query_step_output(output)
     reader = (
         PinnedArtifactReadContext(session, settings) if artifact_reader is None else artifact_reader
     )
@@ -180,10 +202,10 @@ def resolve_native_private_chat_query_completion(
     body = json.loads(materialized.payload)
     if canonical_json_bytes(body) != materialized.payload:
         raise ValueError("PRIVATE_CHAT_QUERY_RECEIPT_NONCANONICAL")
-    receipt = PrivateChatQueryWorkflowReceipt.model_validate(body)
+    receipt = parse_supported_private_chat_query_workflow_receipt(body)
     if materialized.producer_job_id != receipt.receipt_owner_job_id:
         raise ValueError("PRIVATE_CHAT_QUERY_RECEIPT_PRODUCER_MISMATCH")
-    validate_private_chat_query_step_output(output, receipt)
+    validate_supported_private_chat_query_step_output(output, receipt)
     # Initial capture/file hashes do not prove current approval after materialization.
     reader.revalidate_provenance()
     if (

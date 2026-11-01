@@ -407,3 +407,36 @@ private2 history가 생긴 뒤의 기능 rollback은 DB를66으로 내리는 것
 private2 읽기/복구 호환성을 유지하는 release set에서 새 admission/consumer 활성화만 철회한다.
 실제67 호환 검증 없이 과거66 wheel 재설치가 안전하다고 주장하지 않는다. 이미 시작한2는
 원 pin으로 종료/조회하고1로 relabel하거나 구 vector fallback을 몰래 재활성화하지 않는다.
+
+#### private2의 canonical 수치 파일과 완료 영수증 저장·조회
+
+기존 Orchestrator `EmbeddingArtifactStore.publish_private_chat_query`가 private request/policy
+1/2를 명시적으로 구분한다. private2는 공통 numerical QUERY2를 사용하지만 Artifact type은
+여전히 private 전용이다. 공개 reference Artifact나 그 실행 권한으로 바꾸지 않는다.
+입력·원 질문은 원 owned-message와 잠긴 임시 workspace에만 있고, commit하는 파일은 기존
+`intent.json/result.json/shard.json/vectors.f32` 네 개다. 새 DB table/queue/vector store는 없다.
+
+각 family의 record/result parser와 원 launch/input/result/observed-hash 검증을 통과한 뒤 같은
+FD-pinned file-set publisher를 사용한다. 같은 원 idempotency key와 publication/native Job의
+분리를 유지한다. file identity가 commit 중 바뀌거나 늦은 receipt 검사가 실패해도 이미 저장된
+Artifact를 삭제하거나 성공으로 위장하지 않는다. 결과 관측이 불명확하면 재추론하지 않고
+원 identity의 commit을 조회·replay한다.
+
+Catalog의 기존 private Artifact reader에는 supported-family 경로만 추가한다. legacy entry는
+계속1만 반환한다. 공통 수치2도 같은 current clean root, 정확한 네 member와 manifest SHA,
+private type, approved producer/lifecycle, 각 raw SHA/schema/media, canonical JSON, shard·float32
+shape/norm/hash, 원 origin/Workflow/step/Job/receipt를 검증한다. 마지막 bytes를 읽은 뒤에도
+producer와 root를 재확인한다. 로컬 결과 모델은 family별 frozen value이며 질문·vector bytes는
+repr에서 숨긴다. 같은 질문 text hash는 다른 actor/turn 접근 권한을 합치지 않는다.
+
+별도 한 member `receipt.json`의 publisher/reader도 기존 owner와 key를 재사용하며
+receipt/output1/2의 조합을 공통 Workflow validator 한 곳에서 구분한다. 네 member 수치
+Artifact를 완료 receipt로 재사용하거나 private2를 legacy completion으로 반환하지 않는다.
+동시 publisher/중단/replay는 marked disposable PostgreSQL에서만 검사한다. 주 접근은
+Artifact revision key lookup과 고정5 member의 bounded bytes 해석이며 저장은 원 transaction,
+시간·공간 비용은 O(input bytes + D)다. 새로운 추상 publisher/별도 저장소보다 기존 경계의
+명시적 dispatch가 작고, 이미 승인된 private1의 의미와 이력을 보존한다.
+
+이 저장·조회 구현만으로 private2의 실제 현재 권한/native-purpose admission·owner 실행·
+채팅 답변 전달이 활성화되지는 않는다. 그 후속과 호환 release67 배포가 끝나기 전까지 실제
+private1 소비자와 구 인덱스는 유지한다. source/임시 DB PASS는 구 벡터 삭제 gate가 아니다.

@@ -11,26 +11,35 @@ from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadCon
 from eom_catalog_service.private_chat_query_artifact_read import CatalogPrivateChatQueryArtifacts
 from eom_catalog_service.settings import CatalogSettings
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
-from eom_workflow.private_chat_query_workflow import PrivateChatQueryWorkflowReceipt
+from eom_workflow.private_chat_query_workflow_v2 import (
+    parse_supported_private_chat_query_workflow_receipt,
+)
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
+from tests.unit.test_private_chat_public_query_publication import prepare_public
+from tests.unit.test_private_chat_public_query_workflow import public_completed as public_completed
 from tests.unit.test_private_chat_query_basis import TEXT
 from tests.unit.test_private_chat_query_publication import prepare
 from tests.unit.test_private_chat_query_workflow import completed as completed
 from tests.unit.test_reference_query_completion_artifacts import owner
 
 
-@pytest.fixture
-def published(tmp_path, completed):
+@pytest.fixture(params=("legacy", "public"))
+def published(tmp_path, completed, public_completed, request):
     publisher = owner(tmp_path)
-    value = prepare(tmp_path, publisher=publisher)
+    selected = completed if request.param == "legacy" else public_completed
+    value = (
+        prepare(tmp_path, publisher=publisher)
+        if request.param == "legacy"
+        else prepare_public(tmp_path, selected, publisher=publisher)
+    )
     saved = value.store.publish_private_chat_query(**value.arguments)
-    receipt = receipt_for_publication(completed, value, saved)
+    receipt = receipt_for_publication(selected, value, saved)
     return SimpleNamespace(
         publisher=publisher,
         value=value,
         receipt=receipt,
-        completed=completed,
+        completed=selected,
         saved=saved,
         settings=CatalogSettings(nas_artifact_root=publisher.settings.nas_artifact_root),
     )
@@ -48,10 +57,10 @@ def receipt_for_publication(completed, value, saved):
         "binary": saved.binary.model_dump(mode="json"),
     }
     body["query_execution"]["result_member"] = saved.result.model_dump(mode="json")
-    return PrivateChatQueryWorkflowReceipt.model_validate(seal(body, "receipt_sha256"))
+    return parse_supported_private_chat_query_workflow_receipt(seal(body, "receipt_sha256"))
 
 
-def read(value, session, *, reader=None, **overrides):
+def read(value, session, *, reader=None, legacy=False, **overrides):
     arguments = dict(
         workflow_request=value.completed.request,
         policy=value.completed.policy,
@@ -65,9 +74,18 @@ def read(value, session, *, reader=None, **overrides):
         receipt_owner_job_id=value.receipt.receipt_owner_job_id,
         manifest_sha256=value.saved.manifest_sha256,
     )
-    return CatalogPrivateChatQueryArtifacts(
-        session, value.settings, artifact_reader=reader
-    ).resolve_publication(**(arguments | overrides))
+    adapter = CatalogPrivateChatQueryArtifacts(session, value.settings, artifact_reader=reader)
+    resolve = adapter.resolve_publication if legacy else adapter.resolve_supported_publication
+    return resolve(**(arguments | overrides))
+
+
+def test_legacy_read_entry_preserves_its_exact_return_family(published):
+    with published.publisher.sessions.begin() as session:
+        if published.completed.request.schema_version.endswith("/2.0"):
+            with pytest.raises(ValueError, match="PRIVATE_CHAT_QUERY_ARTIFACT_READ_INVALID"):
+                read(published, session, legacy=True)
+        else:
+            assert read(published, session, legacy=True) == read(published, session)
 
 
 def test_private_four_member_read_and_replay_keep_question_only_in_original_source(published):
@@ -83,6 +101,21 @@ def test_private_four_member_read_and_replay_keep_question_only_in_original_sour
         revision = session.get(ArtifactRevisionRecord, published.saved.intent.artifact_revision_id)
         assert not Path(revision.nas_path, "input.json").exists()
         assert len(revision.manifest["files"]) == 4
+
+
+@pytest.mark.parametrize("field", ("workflow_request", "policy", "native_input", "receipt"))
+def test_private_read_never_mixes_control_or_numerical_families(published, public_completed, field):
+    other = (
+        public_completed.previous
+        if published.completed.request.schema_version.endswith("/2.0")
+        else public_completed
+    )
+    attribute = {"workflow_request": "request", "native_input": "native"}.get(field, field)
+    with (
+        published.publisher.sessions.begin() as session,
+        pytest.raises(ValueError, match="PRIVATE_CHAT_QUERY_ARTIFACT_READ_INVALID"),
+    ):
+        read(published, session, **{field: getattr(other, attribute)})
 
 
 @pytest.mark.parametrize("member", ("intent.json", "result.json", "shard.json", "vectors.f32"))
@@ -134,9 +167,12 @@ def test_private_result_cannot_be_rebound_to_another_origin_or_execution(publish
             )
         )
     elif fault == "input":
-        changes["native_input"] = published.completed.native.model_copy(
-            update={"question": "PRIVATE_UNTRUSTED_QUESTION"}
-        )
+        native = published.completed.native.model_dump(mode="json")
+        if "row" in native:
+            native["row"]["text"] = "PRIVATE_UNTRUSTED_QUESTION"
+        else:
+            native["rows"][0]["text"] = "PRIVATE_UNTRUSTED_QUESTION"
+        changes["native_input"] = native
     elif fault == "producer":
         changes["receipt_owner_job_id"] = "job_" + "f" * 32
     else:

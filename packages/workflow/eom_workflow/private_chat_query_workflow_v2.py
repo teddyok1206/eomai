@@ -32,6 +32,7 @@ from eom_workflow.private_chat_query_workflow import (
     PrivateChatQueryStepOutput,
     PrivateChatQueryWorkflowDefinition,
     PrivateChatQueryWorkflowReceipt,
+    validate_private_chat_query_step_output,
 )
 from eom_workflow.schemas import NativeEmbeddingContract, validate_local_embedding_admission_message
 
@@ -302,3 +303,20 @@ def parse_supported_private_chat_query_step_output(
     ):
         return PrivateChatQueryStepOutputV2.model_validate(document)
     return PrivateChatQueryStepOutput.model_validate(document)
+
+
+def validate_supported_private_chat_query_step_output(
+    output: SupportedPrivateChatQueryStepOutput,
+    receipt: SupportedPrivateChatQueryWorkflowReceipt,
+) -> None:
+    """Keep receipt/output families exact for both canonical publication and reads."""
+    output = parse_supported_private_chat_query_step_output(output)
+    receipt = parse_supported_private_chat_query_workflow_receipt(receipt)
+    if isinstance(receipt, PrivateChatQueryWorkflowReceiptV2):
+        if not isinstance(output, PrivateChatQueryStepOutputV2):
+            raise ValueError("PRIVATE_CHAT_QUERY_OUTPUT_PROVENANCE_INVALID")
+        validate_private_chat_public_query_step_output(output, receipt)
+    else:
+        if not isinstance(output, PrivateChatQueryStepOutput):
+            raise ValueError("PRIVATE_CHAT_QUERY_OUTPUT_PROVENANCE_INVALID")
+        validate_private_chat_query_step_output(output, receipt)

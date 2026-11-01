@@ -10,7 +10,7 @@ from uuid import uuid4
 
 import pytest
 from eom_catalog_service.local_embedding_completion_artifacts import (
-    resolve_native_private_chat_query_completion,
+    resolve_supported_native_private_chat_query_completion,
 )
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.settings import CatalogSettings
@@ -28,9 +28,13 @@ from eom_workflow.private_chat_query_publication import (
     PrivateChatQueryLaunchAssociation,
     validate_private_chat_query_launch,
 )
+from eom_workflow.private_chat_query_publication_v2 import validate_private_chat_public_query_launch
 from eom_workflow.private_chat_query_workflow import (
-    PrivateChatQueryWorkflowReceipt,
     validate_private_chat_query_workflow_receipt,
+)
+from eom_workflow.private_chat_query_workflow_v2 import (
+    parse_supported_private_chat_query_workflow_receipt,
+    validate_private_chat_public_query_workflow_receipt,
 )
 from sqlalchemy import Engine, func, select, update
 from sqlalchemy.exc import DBAPIError
@@ -39,14 +43,19 @@ from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
 from tests.unit.inference_transfer_embedding_fixtures import seal
+from tests.unit.test_private_chat_public_query_workflow import public_completed as public_completed
 from tests.unit.test_private_chat_query_basis import TEXT
 from tests.unit.test_private_chat_query_workflow import completed as completed
 
 pytestmark = pytest.mark.integration
 
 
-@pytest.fixture
-def private_completion(guarded_engine: Engine, tmp_path: Path, completed):
+@pytest.fixture(params=("legacy", "public"))
+def private_completion(
+    guarded_engine: Engine, tmp_path: Path, completed, public_completed, request
+):
+    public = request.param == "public"
+    completed = public_completed if public else completed
     assert guarded_engine.dialect.name == "postgresql"
     assert not tmp_path.is_relative_to(Path("/mnt/nas"))
     identity = ControlFileSetIdentity(
@@ -63,7 +72,10 @@ def private_completion(guarded_engine: Engine, tmp_path: Path, completed):
             "association_sha256",
         )
     )
-    record = validate_private_chat_query_launch(
+    validate_launch = (
+        validate_private_chat_public_query_launch if public else validate_private_chat_query_launch
+    )
+    record = validate_launch(
         launch, completed.request, completed.policy, completed.bundle, completed.native
     )
     body = completed.receipt.model_dump(mode="json") | {
@@ -76,8 +88,13 @@ def private_completion(guarded_engine: Engine, tmp_path: Path, completed):
             "sha256": sha256_bytes(canonical_json_bytes(record)),
         },
     }
-    receipt = PrivateChatQueryWorkflowReceipt.model_validate(seal(body, "receipt_sha256"))
-    validate_private_chat_query_workflow_receipt(
+    receipt = parse_supported_private_chat_query_workflow_receipt(seal(body, "receipt_sha256"))
+    validate_receipt = (
+        validate_private_chat_public_query_workflow_receipt
+        if public
+        else validate_private_chat_query_workflow_receipt
+    )
+    validate_receipt(
         receipt,
         completed.request,
         completed.policy,
@@ -106,7 +123,7 @@ def private_completion(guarded_engine: Engine, tmp_path: Path, completed):
 def assert_original(publisher, receipt, identity, output):
     with publisher.publisher.sessions.begin() as session:
         assert (
-            resolve_native_private_chat_query_completion(
+            resolve_supported_native_private_chat_query_completion(
                 session,
                 CatalogSettings(nas_artifact_root=publisher.publisher.settings.nas_artifact_root),
                 output,
@@ -140,11 +157,15 @@ def test_two_postgres_publishers_commit_one_original_private_receipt(private_com
 
     def run(_ordinal):
         barrier.wait(timeout=20)
-        return publisher.publish_private_chat_query(receipt, identity=identity)
+        return publisher.publish_supported_private_chat_query(receipt, identity=identity)
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         first, second = tuple(pool.map(run, range(2)))
-    assert first == second == publisher.publish_private_chat_query(receipt, identity=identity)
+    assert (
+        first
+        == second
+        == publisher.publish_supported_private_chat_query(receipt, identity=identity)
+    )
     assert_original(publisher, receipt, identity, first)
 
 
@@ -171,16 +192,16 @@ def test_private_receipt_interruption_never_reexecutes_or_reallocates(
     )
     monkeypatch.setattr(target, name, interrupted)
     with pytest.raises(RuntimeError):
-        publisher.publish_private_chat_query(receipt, identity=identity)
+        publisher.publish_supported_private_chat_query(receipt, identity=identity)
     monkeypatch.setattr(target, name, original)
-    output = publisher.publish_private_chat_query(receipt, identity=identity)
+    output = publisher.publish_supported_private_chat_query(receipt, identity=identity)
     assert_original(publisher, receipt, identity, output)
 
 
 @pytest.mark.parametrize("fault", ["request", "origin", "time", "identity"])
 def test_changed_private_intent_cannot_bypass_original_postgres_key(private_completion, fault):
     publisher, receipt, identity = private_completion
-    first = publisher.publish_private_chat_query(receipt, identity=identity)
+    first = publisher.publish_supported_private_chat_query(receipt, identity=identity)
     body = receipt.model_dump(mode="json")
     selected = identity
     if fault == "identity":
@@ -196,10 +217,10 @@ def test_changed_private_intent_cannot_bypass_original_postgres_key(private_comp
         body["workflow_request_sha256" if fault == "request" else "origin_sha256"] = (
             "sha256:" + "f" * 64
         )
-    changed = PrivateChatQueryWorkflowReceipt.model_validate(seal(body, "receipt_sha256"))
+    changed = parse_supported_private_chat_query_workflow_receipt(seal(body, "receipt_sha256"))
     with pytest.raises(ControlPlaneError):
-        publisher.publish_private_chat_query(changed, identity=selected)
-    assert publisher.publish_private_chat_query(receipt, identity=identity) == first
+        publisher.publish_supported_private_chat_query(changed, identity=selected)
+    assert publisher.publish_supported_private_chat_query(receipt, identity=identity) == first
     assert_original(publisher, receipt, identity, first)
     if fault == "identity":
         with publisher.publisher.sessions() as session:
@@ -211,7 +232,7 @@ def test_private_read_rechecks_mutable_producer_and_preserves_immutable_artifact
     private_completion, monkeypatch, fault
 ):
     publisher, receipt, identity = private_completion
-    output = publisher.publish_private_chat_query(receipt, identity=identity)
+    output = publisher.publish_supported_private_chat_query(receipt, identity=identity)
     settings = CatalogSettings(nas_artifact_root=publisher.publisher.settings.nas_artifact_root)
     with publisher.publisher.sessions.begin() as session:
         reader = PinnedArtifactReadContext(session, settings)
@@ -247,12 +268,12 @@ def test_private_read_rechecks_mutable_producer_and_preserves_immutable_artifact
         monkeypatch.setattr(reader, "read_pinned", revoke_after_read)
         if fault == "job":
             with pytest.raises(ValueError):
-                resolve_native_private_chat_query_completion(
+                resolve_supported_native_private_chat_query_completion(
                     session, settings, output, artifact_reader=reader
                 )
         else:
             assert (
-                resolve_native_private_chat_query_completion(
+                resolve_supported_native_private_chat_query_completion(
                     session, settings, output, artifact_reader=reader
                 )
                 == receipt

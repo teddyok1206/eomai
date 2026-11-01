@@ -33,6 +33,8 @@ from tests.integration.test_preset_model_validation_persistence import (
 )
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.test_embedding_artifact_store import SOURCE_COMMIT
+from tests.unit.test_private_chat_public_query_publication import prepare_public
+from tests.unit.test_private_chat_public_query_workflow import public_completed as public_completed
 from tests.unit.test_private_chat_query_artifact_read import receipt_for_publication
 from tests.unit.test_private_chat_query_basis import TEXT
 from tests.unit.test_private_chat_query_publication import prepare, write_member
@@ -42,10 +44,14 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
-def publication(guarded_engine: Engine, tmp_path: Path):
+def publication(guarded_engine: Engine, tmp_path: Path, selected_completion):
     assert guarded_engine.dialect.name == "postgresql"
     assert not tmp_path.is_relative_to(Path("/mnt/nas"))
-    value = prepare(tmp_path)
+    value = (
+        prepare(tmp_path)
+        if selected_completion.native.schema_version.endswith("/1.0")
+        else prepare_public(tmp_path, selected_completion)
+    )
     identity = ControlFileSetIdentity(
         "job_" + uuid4().hex, "artifact_" + uuid4().hex, "rev_" + uuid4().hex
     )
@@ -68,6 +74,11 @@ def publication(guarded_engine: Engine, tmp_path: Path):
     publisher = ControlFileSetPublisher(guarded_engine, settings)
     value.store = EmbeddingArtifactStore(publisher, source_commit=SOURCE_COMMIT)
     return value, publisher
+
+
+@pytest.fixture(params=("legacy", "public"))
+def selected_completion(request, completed, public_completed):
+    return completed if request.param == "legacy" else public_completed
 
 
 def assert_one_text_free_committed_result(value, publisher):
@@ -180,8 +191,9 @@ def _read_arguments(value, receipt, completed, saved):
 
 
 def test_private_numeric_canonical_postgres_read_is_repeatable_without_writes(
-    publication, completed
+    publication, selected_completion
 ):
+    completed = selected_completion
     value, publisher = publication
     saved = value.store.publish_private_chat_query(**value.arguments)
     receipt = receipt_for_publication(completed, value, saved)
@@ -190,9 +202,13 @@ def test_private_numeric_canonical_postgres_read_is_repeatable_without_writes(
         before = session.scalar(select(func.count()).select_from(JobRecord))
         reader = PinnedArtifactReadContext(session, settings)
         adapter = CatalogPrivateChatQueryArtifacts(session, settings, artifact_reader=reader)
-        first = adapter.resolve_publication(**_read_arguments(value, receipt, completed, saved))
+        first = adapter.resolve_supported_publication(
+            **_read_arguments(value, receipt, completed, saved)
+        )
         assert (
-            adapter.resolve_publication(**_read_arguments(value, receipt, completed, saved))
+            adapter.resolve_supported_publication(
+                **_read_arguments(value, receipt, completed, saved)
+            )
             == first
         )
         assert (
@@ -205,8 +221,9 @@ def test_private_numeric_canonical_postgres_read_is_repeatable_without_writes(
 
 
 def test_private_numeric_postgres_read_denies_late_producer_withdrawal(
-    publication, completed, monkeypatch
+    publication, selected_completion, monkeypatch
 ):
+    completed = selected_completion
     value, publisher = publication
     saved = value.store.publish_private_chat_query(**value.arguments)
     receipt = receipt_for_publication(completed, value, saved)
@@ -227,13 +244,16 @@ def test_private_numeric_postgres_read_denies_late_producer_withdrawal(
         monkeypatch.setattr(reader, "read_pinned", withdrawn)
         adapter = CatalogPrivateChatQueryArtifacts(session, settings, artifact_reader=reader)
         with pytest.raises(ValueError, match="PRIVATE_CHAT_QUERY_ARTIFACT_READ_INVALID"):
-            adapter.resolve_publication(**_read_arguments(value, receipt, completed, saved))
+            adapter.resolve_supported_publication(
+                **_read_arguments(value, receipt, completed, saved)
+            )
     assert reads == ["intent.json", "result.json", "shard.json", "vectors.f32"]
 
 
 def test_private_numeric_postgres_read_context_cannot_survive_into_another_root(
-    publication, completed
+    publication, selected_completion
 ):
+    completed = selected_completion
     value, publisher = publication
     saved = value.store.publish_private_chat_query(**value.arguments)
     receipt = receipt_for_publication(completed, value, saved)
@@ -242,7 +262,7 @@ def test_private_numeric_postgres_read_context_cannot_survive_into_another_root(
         reader = PinnedArtifactReadContext(session, settings)
         CatalogPrivateChatQueryArtifacts(
             session, settings, artifact_reader=reader
-        ).resolve_publication(**_read_arguments(value, receipt, completed, saved))
+        ).resolve_supported_publication(**_read_arguments(value, receipt, completed, saved))
     with (
         publisher.sessions.begin() as session,
         pytest.raises(ValueError, match="transaction is invalid"),

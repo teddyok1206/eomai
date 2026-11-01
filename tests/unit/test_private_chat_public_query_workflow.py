@@ -42,6 +42,7 @@ from eom_workflow.private_chat_query_workflow_v2 import (
     validate_private_chat_public_query_definition,
     validate_private_chat_public_query_step_output,
     validate_private_chat_public_query_workflow_receipt,
+    validate_supported_private_chat_query_step_output,
 )
 from eom_workflow.schemas import (
     PRIVATE_CHAT_PUBLIC_QUERY_PUBLICATION_SCHEMA_RESOURCE,
@@ -344,3 +345,12 @@ def test_invalid_private_metadata_does_not_echo_untrusted_question_in_model_erro
     with pytest.raises(ValueError) as error:
         type(value).model_validate(value.model_copy(update={"authority": TEXT}))
     assert TEXT not in str(error.value) and repr(TEXT) not in str(error.value)
+
+
+def test_supported_output_validator_keeps_both_families_exact(public_completed):
+    public, legacy = public_completed, public_completed.previous
+    validate_supported_private_chat_query_step_output(public.output, public.receipt)
+    validate_supported_private_chat_query_step_output(legacy.output, legacy.receipt)
+    for output, receipt in ((public.output, legacy.receipt), (legacy.output, public.receipt)):
+        with pytest.raises(ValueError, match="PRIVATE_CHAT_QUERY_OUTPUT_PROVENANCE_INVALID"):
+            validate_supported_private_chat_query_step_output(output, receipt)

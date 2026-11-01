@@ -36,6 +36,7 @@ if (($# != 2)) || \
   [[ "$1" != "verify" && "$1" != "inspect" && "$1" != "migrate" && "$1" != "hwpx-tests" && \
     "$1" != "embedding-tests" && "$1" != "embedding-registry-tests" && "$1" != "embedding-encoding-tests" && \
     "$1" != "embedding-stage-tests" && "$1" != "private-chat-context-tests" && \
+    "$1" != "private-chat-artifact-tests" && \
     "$1" != "authenticated-session-tests" && \
     "$1" != "local-indexing-service-tests" && "$1" != "registered-solution-tests" && \
     "$1" != "registered-solution-application-tests" && \
@@ -44,7 +45,7 @@ if (($# != 2)) || \
     "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
     "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|inspect|migrate|hwpx-tests|embedding-tests|embedding-registry-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|authenticated-session-tests|local-indexing-service-tests|registered-solution-tests|registered-solution-application-tests|pdf-review-tests|external-item-tests|creative-registration-tests|creative-graph-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|inspect|migrate|hwpx-tests|embedding-tests|embedding-registry-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|private-chat-artifact-tests|authenticated-session-tests|local-indexing-service-tests|registered-solution-tests|registered-solution-application-tests|pdf-review-tests|external-item-tests|creative-registration-tests|creative-graph-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -286,6 +287,15 @@ if [[ "${action}" == "private-chat-context-tests" ]]; then
   "${PYTHON}" -m pytest -q tests/integration/test_private_chat_query_context_persistence.py \
     tests/integration/test_private_chat_public_query_persistence.py
   printf 'Disposable fresh private-context migration guards passed.\n'
+  exit 0
+fi
+
+if [[ "${action}" == "private-chat-artifact-tests" ]]; then
+  export EOM_RUN_INTEGRATION=1
+  export EOM_API_TEST_STATE="${state_directory}"
+  "${PYTHON}" -m pytest -q tests/integration/test_private_chat_query_artifact_persistence.py \
+    tests/integration/test_private_chat_query_completion_persistence.py
+  printf 'Disposable private-query canonical Artifact and receipt tests passed.\n'
   exit 0
 fi
 

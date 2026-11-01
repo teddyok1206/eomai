@@ -91,12 +91,25 @@ from eom_workflow.local_embedding_workflow import (
 )
 from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryExecutionPolicy,
-    PrivateChatQueryWorkflowRequest,
+)
+from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryExecutionPolicyV2,
+    PrivateChatQueryWorkflowRequestV2,
+    SupportedPrivateChatQueryExecutionPolicy,
+    SupportedPrivateChatQueryWorkflowRequest,
+    parse_supported_private_chat_query_execution_policy,
+    parse_supported_private_chat_query_workflow_request,
 )
 from eom_workflow.private_chat_query_publication import (
     PRIVATE_CHAT_QUERY_RECORD_REF,
+    PrivateChatQueryExecutionRecord,
     PrivateChatQueryLaunchAssociation,
     validate_private_chat_query_launch,
+)
+from eom_workflow.private_chat_query_publication_v2 import (
+    PRIVATE_CHAT_PUBLIC_QUERY_RECORD_REF,
+    PrivateChatPublicQueryExecutionRecord,
+    validate_private_chat_public_query_launch,
 )
 from eom_workflow.reference_query_execution import (
     PublicReferenceQueryWorkflowRequest,
@@ -681,11 +694,11 @@ class EmbeddingArtifactStore:
     def publish_private_chat_query(
         self,
         *,
-        workflow_request: PrivateChatQueryWorkflowRequest,
-        policy: PrivateChatQueryExecutionPolicy,
+        workflow_request: SupportedPrivateChatQueryWorkflowRequest,
+        policy: SupportedPrivateChatQueryExecutionPolicy,
         bundle: EmbeddingRuntimeBundle,
         launch: PrivateChatQueryLaunchAssociation,
-        request: EmbeddingPrivateChatQueryInput,
+        request: EmbeddingPrivateChatQueryInput | PublicSolutionQueryInput,
         workspace: Path,
         created_at: datetime,
         identity: ControlFileSetIdentity,
@@ -697,12 +710,37 @@ class EmbeddingArtifactStore:
         command/lease and native execution admission remain the calling owner's duty.
         """
         try:
-            request = EmbeddingPrivateChatQueryInput.model_validate(
-                raw_similarity_contract_value(request)
-            )
-            record = validate_private_chat_query_launch(
-                launch, workflow_request, policy, bundle, request
-            )
+            workflow_request = parse_supported_private_chat_query_workflow_request(workflow_request)
+            policy = parse_supported_private_chat_query_execution_policy(policy)
+            record: PrivateChatQueryExecutionRecord | PrivateChatPublicQueryExecutionRecord
+            if isinstance(workflow_request, PrivateChatQueryWorkflowRequestV2):
+                if not isinstance(policy, PrivateChatQueryExecutionPolicyV2):
+                    raise ValueError("private QUERY control family differs")
+                request = PublicSolutionQueryInput.model_validate(
+                    raw_similarity_contract_value(request)
+                )
+                record = validate_private_chat_public_query_launch(
+                    launch, workflow_request, policy, bundle, request
+                )
+                record_ref, result_ref, maximum_bytes = (
+                    PRIVATE_CHAT_PUBLIC_QUERY_RECORD_REF,
+                    PUBLIC_SOLUTION_QUERY_RESULT_REF,
+                    MAX_REFERENCE_QUERY_BYTES,
+                )
+            else:
+                if not isinstance(policy, PrivateChatQueryExecutionPolicy):
+                    raise ValueError("private QUERY control family differs")
+                request = EmbeddingPrivateChatQueryInput.model_validate(
+                    raw_similarity_contract_value(request)
+                )
+                record = validate_private_chat_query_launch(
+                    launch, workflow_request, policy, bundle, request
+                )
+                record_ref, result_ref, maximum_bytes = (
+                    PRIVATE_CHAT_QUERY_RECORD_REF,
+                    PRIVATE_CHAT_QUERY_RESULT_REF,
+                    MAX_PRIVATE_CHAT_QUERY_BYTES,
+                )
             TypeAdapter(Sha256).validate_python(expected_result_sha256, strict=True)
             if type(identity) is not ControlFileSetIdentity:
                 raise ValueError("private QUERY publication identity differs")
@@ -732,8 +770,8 @@ class EmbeddingArtifactStore:
         ).removeprefix("sha256:")
         with (
             _directory(workspace) as directory,
-            _member(directory, "input.json", MAX_PRIVATE_CHAT_QUERY_BYTES) as saved_input,
-            _member(directory, "result.json", MAX_PRIVATE_CHAT_QUERY_BYTES) as result_bytes,
+            _member(directory, "input.json", maximum_bytes) as saved_input,
+            _member(directory, "result.json", maximum_bytes) as result_bytes,
             _member(
                 directory, "vectors.f32", request.spaces.query.model_spec.dimension * 4
             ) as binary_bytes,
@@ -741,10 +779,14 @@ class EmbeddingArtifactStore:
             if saved_input != input_bytes:
                 raise EmbeddingArtifactStoreError("EMBEDDING_PRIVATE_CHAT_QUERY_INPUT_INVALID")
             try:
-                result = EmbeddingPrivateChatQueryResult.model_validate(
-                    json.loads(result_bytes, object_pairs_hook=_unique_object)
-                )
-                validate_private_chat_query_result(request, result)
+                document = json.loads(result_bytes, object_pairs_hook=_unique_object)
+                result: EmbeddingPrivateChatQueryResult | PublicSolutionQueryResult
+                if isinstance(request, PublicSolutionQueryInput):
+                    result = PublicSolutionQueryResult.model_validate(document)
+                    validate_public_solution_query_result(request, result)
+                else:
+                    result = EmbeddingPrivateChatQueryResult.model_validate(document)
+                    validate_private_chat_query_result(request, result)
                 if (
                     result.result_sha256 != expected_result_sha256
                     or result_bytes != canonical_json_bytes(result)
@@ -766,7 +808,7 @@ class EmbeddingArtifactStore:
             _materialize_manifest(directory, "shard.json", shard_bytes)
             with (
                 _member(directory, "intent.json", 64 * 1024) as saved_intent,
-                _member(directory, "shard.json", MAX_PRIVATE_CHAT_QUERY_BYTES) as saved_shard,
+                _member(directory, "shard.json", maximum_bytes) as saved_shard,
             ):
                 if saved_intent != intent_bytes or saved_shard != shard_bytes:
                     raise EmbeddingArtifactStoreError(
@@ -778,7 +820,7 @@ class EmbeddingArtifactStore:
                         workspace / "intent.json",
                         sha256_bytes(saved_intent),
                         len(saved_intent),
-                        PRIVATE_CHAT_QUERY_RECORD_REF,
+                        record_ref,
                         "application/json",
                     ),
                     ControlFileSetMember(
@@ -786,7 +828,7 @@ class EmbeddingArtifactStore:
                         workspace / "result.json",
                         sha256_bytes(result_bytes),
                         len(result_bytes),
-                        PRIVATE_CHAT_QUERY_RESULT_REF,
+                        result_ref,
                         "application/json",
                     ),
                     ControlFileSetMember(
