@@ -2874,3 +2874,24 @@ protected selection을 변경하지 않았다. configuration5는 실제 finite d
 selection/parent 생성과 routed START/finite loop, no-model/cold recovery, 실제 canonical-source
 GPU/CPU canary와 장치별 index coverage/default/rollback이다.
 CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
+
+## Registered QUERY response compatibility — 2026-11-01
+
+The actual DB GUI request for prepared creative Item 10321 fails before any
+numerical Workflow: public preparation uses the registered preparation/3.0
+pointer, but reply/4.0's released schema permits preparation/2.0 only. Preserve
+both released bytes and the original operation, rather than retagging its Artifact.
+
+1. Responsibility: the existing QUERY response contract and its API/owner decoders.
+2. Canonical source: the already published, immutable preparation Artifact member.
+3. Identity/revision: the original request/parent/control identities are unchanged.
+4. Pointers: reply/5.0 explicitly admits preparation/3.0; normal source, access,
+   schema, lifecycle and hash fences remain required before execution/result read.
+5. Access: indexed original-request lookup and ordered child response serialization.
+6. Structures: reuse the bounded typed reply and existing publication/Workflow stores.
+7. Complexity: O(children), at most 32; no new population scan or binary DB payload.
+8. Concurrency: existing original parent, claim, lease and numerical idempotency only.
+9. Direction: contracts -> owner/application; transport still grants no authority.
+10. Retry: the same original key/pin is replayed; FAILED records are never rewritten.
+11. A relaxed old schema or relabelled preparation pointer would change released
+    history, so add only the response successor needed by this confirmed mismatch.

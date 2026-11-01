@@ -5,6 +5,7 @@ from __future__ import annotations
 from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareReplyV3,
     ReferenceQueryPrepareReplyV4,
+    ReferenceQueryPrepareReplyV5,
     ReferenceQueryPrepareRequestV3,
     ReferenceQueryPrepareRequestV4,
     SingleReferenceQueryPrepareRequest,
@@ -74,14 +75,21 @@ class RoutedNativeReferenceQueryPreparation:
             )
             for child in observed.children
         ]
+        registered = prepared.manifest.schema_ref == (
+            "eom://schemas/workflow/reference-query-routed-preparation/3.0"
+        )
         reply_type = (
-            ReferenceQueryPrepareReplyV4
+            ReferenceQueryPrepareReplyV5
+            if registered
+            else ReferenceQueryPrepareReplyV4
             if isinstance(request, ReferenceQueryPrepareRequestV4)
             else ReferenceQueryPrepareReplyV3
         )
         reply = reply_type.model_validate(
             dict(
-                schema_version="system-rag-reference-query-prepare-reply/4.0"
+                schema_version="system-rag-reference-query-prepare-reply/5.0"
+                if registered
+                else "system-rag-reference-query-prepare-reply/4.0"
                 if isinstance(request, ReferenceQueryPrepareRequestV4)
                 else "system-rag-reference-query-prepare-reply/3.0",
                 operation="PREPARE_REFERENCE_QUERY",
