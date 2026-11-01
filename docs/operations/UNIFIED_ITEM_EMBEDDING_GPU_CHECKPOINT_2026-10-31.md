@@ -1,5 +1,77 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## private 공통 완료 조회·wire2 후보 — 2026-11-01
+
+- 직전 사용자 설명 turn은 실제 query metadata의 READ ONLY 조회와 운영 로그를 대조했다.
+  09:50 UTC 현재 reference QUERY Workflow0/active DB query0이며 직접 새 검색/모델 실행/
+  운영 수정0이었다. 07:24 원 GUI 요청은 준비 단계214283ms 실패였고09:13 운영 정렬 이후의
+  실제 GUI 성공 증거는 없다. 이 진단을 서비스 READY나 검색 결과0으로 확대하지 않는다.
+  이번 실행은 다음 실제 consumer 전환에 필요한 source 구현·검증의 **PROGRESS**다.
+  전체 목표는 ACTIVE이고 전체520·실제 검색·AI canary·구 파생 삭제를 완료하지 않았다.
+- source **`4bf7b789552da88a7d6f49c7f89276ae6bff9d35`**는 기존 private 완료 reader/application에
+  family2를 연결했다. 원 origin key/Workflow/START/step/4 event/terminal/receipt/Artifact와
+  실제 현재 actor·source·Graph/policy/member/hash를 원 root에서 검증한다. legacy1과 공통2는
+  같은 원 완료 검증을 사용하되 서로 relabel하지 않는다. 공통 DOCUMENT reader/composer는
+  DB 검색과 공유하며 같은 completed read가 새 Job/추론/Artifact를 만들지 않는다.
+- synthetic DOCUMENT fault에서 intent.namespace의 space/partition/view/recipe 대조 누락을
+  재현해 공통 순수 검증기 한 곳을 보강했다. 실제 Registry/encoding row 검증은 이미 별도로
+  있었으므로 이 발견만으로 운영 vector가 섞였다고 주장하지 않는다. EMPTY2는 scored0이면
+  query_execution이 없고, 기존 EMPTY1의 실행 포인터 의미와 이전 schema bytes는 보존했다.
+- schema-first PREPARE/READ wire2와 typed model, 기존 client/receiver/dispatch의 family2
+  지원을 추가했다. 원 Chat origin/Graph/policy 포인터만 운반하며 권한·질문 원문·경로·runtime
+  선택을 받지 않는다. 잘못된 owner namespace/family는 application 호출 전에 거부한다.
+  READ→PREPARE, timeout→새 identity/retry, unknown outcome→missing/success 전환은 없다.
+  schema2 canonical/resource SHA는
+  `574a074a1b8fb135fe5490300bc10bf4953262747fb81bc6d64667191757d939`다.
+  원 wire1 SHA `9af37ac1…`는 그대로다. context 상한이640KiB라는 초안 가정은 테스트에서
+  실제512KiB 상수와 불일치했다. 기존 request32KiB/reply640KiB로 충분하므로 한도 확장이나
+  context/hash 축소를 하지 않았다. 새 DB/migration/queue/cache/dependency는 없다.
+- source 합집합 **318 PASS/248.86s**와 추가 실제 canonical→application→wire2 read/replay
+  **1 PASS/11.34s**다. 추가1은 기존 source 합집합 수에 들어 있지 않다. common/legacy
+  read·준비·실제 kernel peer/frame·현재 권한 거부·원 receipt/hash 변조·같은 요청 후속 조회와
+  기존 Chat consumer 회귀를 포함한다. source/IAM/수치값은 명시적인 synthetic port이며
+  실제 private2 운영 추론이나 사용자 GUI success가 아니다. dependency/resource17 PASS,
+  strict mypy 영향9/Ruff/format/shell/diff PASS다.
+- disposable PostgreSQL의 공식 private-artifact gate는 **127 PASS/250.03s**다. 원
+  Workflow/START/terminal/Artifact·4단계 history와 원 submission/replay/concurrent claim 및
+  새 common/legacy completed reader의 동시 조회를 포함한다. 이후 wire2 추가는 순수
+  계약/adapter 경계이며 persistence 코드·schema 변경은 없다. source/Chat/IAM/수치/실제
+  물리 unit은 fixture이므로 실제 GPU/Chat PASS라고 부르지 않는다. migration67 왕복·제한
+  role reconcile은 해당 임시 DB에서만 했고, 검사 후 other_connections0/read_only를 확인해
+  공식 cleanup PASS했다. `/tmp/eom-api-testdb-20261101093724_f3e470ea`는 REMOVED다.
+- source 검사 첫 합집합은216 PASS/5 fixture ERROR였다. umask077로 만든 socket parent가
+  기대750 대신700이 되어 기존 보안 guard가 거부했다. 테스트가 필요한 정확한 peer layout을
+  chmod로 명시했고 guard는 완화하지 않았다. 재검사40 PASS와 최종318 PASS를 구분한다.
+  wire2 첫 budget assertion 실패와 follow-up mock의 불필요한 listener thread 경고3건도
+  보존했다. 후속 mock은 listener 없이 client만 사용하고 실제 kernel tests는 그대로다.
+  `/tmp/eom-private2-completed-*-20261101*`,
+  `/tmp/eom-private2-prepare-wire-*-20261101.tests` logs 참조.
+- 공식 build/RECORD PASS다. wheel directory
+  `/tmp/eom-api-build/4bf7b789552da88a7d6f49c7f89276ae6bff9d35.IgyKtN/dist`, platform SHA
+  `8ce0bc5a19fe92acdc24862f1a64bd9f020dc776578b6be789481a14ee44f593`, contracts
+  `c81bab4b5dc1c230a8e686414f01f91d8f69c964f37416bdd7408283c84e857c`, API
+  `0f1354d1261739c634bdd3eadb958bfc68203df2959f19d11253f3d6dacc49e9`다. 별도 비편집 설치본
+  `/tmp/eom-private2-completed-installed.mTDViAMW/site-packages`의 source/module 경로를
+  먼저 확인했으며 동일 source 합집합+추가 canonical case는 **319 PASS/242.63s**다.
+  별도 기존 owner factory/runtime/entry/host/server 설치본 회귀도 **54 PASS/19.69s**다.
+  `/tmp/eom-private2-completed-wire-installed-20261101.tests`와
+  `/tmp/eom-private2-completed-wire-installed-cohost-20261101.tests` 참조.
+  production credentials 없이 설치본 모듈만 사용했다. 운영 설치/활성화와 구 vector 삭제는
+  0이다. production DB66·global private2 CLOSED는 그대로다.
+- 09:39 read-only canonical evidence는09:20에 입력이 배정된 원 attempt `56bb8a59…`의
+  planning Job `job_b18c033136b047fd84d41d058a95d4bb` SUCCEEDED/ROUTED/BOUND와 child
+  `workflow_83dcb2aac85e4d3b896fa3032edd85d4` COMPLETED/CUDA, native Job `job_f16db…`
+  SUCCEEDED를 확인했다. 이는 원 실패 `e1c007…`를 성공으로 수정한 것이 아니다.
+  `/tmp/eom-gpu-resumed-canonical-20261101.json` 참조. 이번10:00 정기 timer는 원 frozen
+  target/hash·CUDA space에서 **139/520·잔여381**, CUDA RUNNING Workflow1과 historical
+  FAILED Workflow7을 보고했다. 이 binding metadata를 최종 대상별 hash/권한 검증으로
+  부르지 않는다. INDEX2258114/QUERY2256183은 유지했고 직접 재시작/새 GPU 제출0이다.
+- 다음은 private cohost configuration/runtime/factory2 및 operator67의 호환 연결·실제
+  private2 query/read/replay다. 현재 source wire2 지원을 운영 활성화로 부르지 않는다.
+  실제 권한 GUI DB search/read/replay, 새 AI full-report→Graph→INDEX4, 전체520 GPU
+  integrity 및 모든 구 consumer 전환·참조 감사 뒤 정확한 구 derivative 삭제 조건도 남아 있다.
+  창작11737의 USAGE_LIMIT 실패는 보존하고 새 retry나3슬롯 RUNNING으로 표시하지 않는다.
+
 ## pregrant 실패 보존·공용 controller 정렬·INDEX 재개 — 2026-11-01 09:16 UTC
 
 - 직전 사용자 설명 turn은 새 구현이 아닌 진단/설명이었다. 이번 turn은 실제 source 수정,
