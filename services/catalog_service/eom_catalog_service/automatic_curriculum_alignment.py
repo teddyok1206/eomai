@@ -10,6 +10,7 @@ from eom_catalog_contracts import CurriculumRetrievalScope
 from eom_identifiers import content_sha256
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from eom_catalog_service.knowledge_graph_models import (
     CurriculumUnitRecord,
@@ -282,15 +283,23 @@ def derive_automatic_item_curriculum_unit_ids(
         if depth == AUTOMATIC_ITEM_ALIGNMENT_MAX_DEPTH:
             break
 
+        outbound: ColumnElement[bool] = KnowledgeEdgeRecord.from_node_id.in_(frontier_node_ids)
+        inbound: ColumnElement[bool] = KnowledgeEdgeRecord.to_node_id.in_(frontier_node_ids)
+        if depth == AUTOMATIC_ITEM_ALIGNMENT_MAX_DEPTH - 1:
+            targets = select(CurriculumUnitRecord.node_id).where(
+                CurriculumUnitRecord.graph_snapshot_revision_id == graph_snapshot_revision_id,
+                CurriculumUnitRecord.unit_level == "MINOR",
+            )
+            # No further hop remains: non-unit destinations cannot affect any ranked result.
+            # Prune before materializing associations, without relaxing the policy bound.
+            outbound = outbound & KnowledgeEdgeRecord.to_node_id.in_(targets)
+            inbound = inbound & KnowledgeEdgeRecord.from_node_id.in_(targets)
         rows = tuple(
             session.execute(
                 select(KnowledgeEdgeRecord.from_node_id, KnowledgeEdgeRecord.to_node_id)
                 .where(
                     KnowledgeEdgeRecord.graph_snapshot_revision_id == graph_snapshot_revision_id,
-                    (
-                        KnowledgeEdgeRecord.from_node_id.in_(frontier_node_ids)
-                        | KnowledgeEdgeRecord.to_node_id.in_(frontier_node_ids)
-                    ),
+                    outbound | inbound,
                 )
                 .order_by(KnowledgeEdgeRecord.edge_id)
                 .limit(policy.maximum_associations + 1)
