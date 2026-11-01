@@ -298,7 +298,7 @@ class CatalogPublicSolutionSimilarityRead:
         """Materialize only the anchor QUERY text, not unrelated DOCUMENT vectors.
 
         The exact index manifest is verified here; full current document/binding/
-        vector validation remains in physical admission and final ranking/read.
+        vector validation remains in final ranking/read.
         No document bytes enter QUERY encoding, and no current head is selected.
         """
         self._require_root(session)

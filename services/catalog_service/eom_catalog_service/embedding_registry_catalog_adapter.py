@@ -2424,16 +2424,16 @@ class CatalogEmbeddingRegistryVerifier:
         caller: EmbeddingRegistryCaller,
         intent: EmbeddingRegistryRead,
         registered: RegisteredEmbeddingIndexRead,
-    ) -> None:
+    ) -> SupportedEmbeddingIndex:
         """Pin a canonical public manifest, not population/vector or execution authority.
 
         The selected source is separately resolved by the initial-query use case.
-        Full current document/binding/vector validation remains in physical batch
-        admission and result delivery; polling must not repeat it to name an index.
+        Full current document/binding/vector validation remains in result delivery;
+        QUERY admission does not consume those ranking bytes.
         """
         self._require_similarity_root(session)
 
-        def resolve() -> None:
+        def resolve() -> SupportedEmbeddingIndex:
             if (
                 type(caller) is not EmbeddingRegistryCaller
                 or self._indexing_source_authority is not None
@@ -2458,8 +2458,9 @@ class CatalogEmbeddingRegistryVerifier:
                 )
             reader.revalidate_provenance()
             self.authorize_scope(session, caller, intent.scope)
+            return index
 
-        self._guard(resolve)
+        return self._guard(resolve)
 
     def resolve_pinned_read(
         self,

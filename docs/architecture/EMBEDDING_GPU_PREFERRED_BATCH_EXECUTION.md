@@ -2957,3 +2957,27 @@ without a QUERY Workflow/input binding. Do not extend or renew that original.
     and final ranking retain their existing complete validation. Preserve failures.
 11. Reusing DOCUMENT vectors as QUERY, weakening validation or increasing a lease
     is not a fix. Materialize only the data this stage actually consumes.
+
+### Public QUERY device admission resolves manifests, not ranking bytes
+
+The next real canary has a protected GPU READY observation at18:44:37 UTC, but
+does not record its CUDA route until18:46:26. The full device-index read repeats
+again while constructing the child group and again before binding. Thus even
+anchor-only text preparation cannot fit the original finite precompute window.
+
+1. Responsibility: the existing Catalog public device-index choice reader.
+2. Canonical source: exact registered CPU/CUDA index manifests, not a current head.
+3. Revisions: keep original Graph/policy/source/index/recipe/model/space pins.
+4. Checks: registered revision metadata, canonical manifest schema/hash/lifecycle,
+   actual caller authority and device relation remain current before/after reads.
+5. Access: two indexed revision reads and two immutable manifest resolutions.
+6. Structures: existing typed device choices and manifest DTOs; no cache or queue.
+7. Cost: O(manifest bindings), without O(N*D) numerical-vector reads per fence.
+8. Transactions: existing physical owner roots and claim/lease/BOUND transitions.
+9. Ownership: device admission names the exact target index; final Catalog ranking
+   owns complete current DOCUMENT source/profile/binding/shard/vector validation.
+10. Failure: missing/stale/tampered/revoked manifests still fail, not CPU fallback.
+    An invalid DOCUMENT vector still fails before ranking/result disclosure.
+11. Repeated full DOCUMENT materialization before encoding an anchor is not needed
+    by QUERY execution. Legacy exact-population pairing remains unchanged; move no
+    checks out of result delivery and extend no original deadline or allocation.
