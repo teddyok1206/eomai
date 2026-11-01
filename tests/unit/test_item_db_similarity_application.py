@@ -170,7 +170,7 @@ def flow():
         )
     )
     app = ItemDbSimilarityApplicationService(selector, queries, results, metadata)
-    body = ItemDbSimilarityInput(selection=value.selection)
+    body = ItemDbSimilarityInput(selection=value.selection, pinned_query=value.query)
     return NS(**locals())
 
 
