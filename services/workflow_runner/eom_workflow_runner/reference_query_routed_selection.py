@@ -630,6 +630,11 @@ class CatalogRoutedReferenceQuerySelection:
             source_commit=self.configuration.cpu_configuration.owner_source_commit,
             controller_release=self.configuration.controller_release,
         )
+        observe = (
+            admission.observe_sources
+            if isinstance(first, PublicQuerySourceSelection)
+            else admission.admit
+        )
         with self.publisher.sessions.begin() as session:
             self._authorize(session, first)
         finder = (
@@ -684,7 +689,7 @@ class CatalogRoutedReferenceQuerySelection:
             )
             with (
                 self.publisher.sessions.begin() as session,
-                admission.admit(session, parent) as current,
+                observe(session, parent) as current,
             ):
                 _require(
                     isinstance(
@@ -754,7 +759,7 @@ class CatalogRoutedReferenceQuerySelection:
                 and prepared.idempotency_key == idempotency_key
                 and prepared.intent_sha256 == intent
             )
-            with admission.admit(session, prepared.parent) as current:
+            with observe(session, prepared.parent) as current:
                 _require(
                     isinstance(
                         current.selection,

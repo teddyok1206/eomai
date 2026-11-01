@@ -231,6 +231,38 @@ def test_canonical_publication_replay_and_current_source_window(admitted):
             assert len(raw) < 4096 and b'"anchors"' not in raw and b'"rows"' not in raw
 
 
+def test_parent_observation_does_not_repeat_physical_device_population_reads(admitted, monkeypatch):
+    value = admitted
+    physical = Mock(return_value=(SimpleNamespace(synthetic_device_proof=True),))
+    monkeypatch.setattr(value.owner, "_query_indexes", physical)
+    with value.publisher.sessions.begin() as session:
+        with value.owner.observe_sources(session, value.request) as observed:
+            assert observed.sources is value.current and observed.indexes == ()
+        physical.assert_not_called()
+        with value.owner.admit(session, value.request) as admitted_sources:
+            assert admitted_sources.indexes == physical.return_value
+        physical.assert_called_once()
+    assert [kind for kind, _ in value.calls].count("sources") == 4
+
+
+@pytest.mark.parametrize("fault", ("revoked", "changed_source", "producer"))
+def test_light_observation_keeps_current_source_and_late_provenance_fences(admitted, fault):
+    value = admitted
+    with (
+        pytest.raises(ValueError),
+        value.publisher.sessions.begin() as session,
+        value.owner.observe_sources(session, value.request),
+    ):
+        if fault == "revoked":
+            value.denied = True
+        elif fault == "changed_source":
+            value.current = replace(value.current, entries=())
+        else:
+            session.get(JobRecord, value.saved_selection.owner_job_id).status = "FAILED"
+    with value.publisher.sessions() as session:
+        assert session.get(JobRecord, value.saved_selection.owner_job_id).status == "SUCCEEDED"
+
+
 def test_publication_cannot_switch_kind_or_forge_hash(admitted):
     value = admitted
     with pytest.raises(ControlPlaneError):
