@@ -80,6 +80,24 @@ CPU/GPU current head의 Graph가 일시적으로 다르다는 사실만으로 �
 
 ## 4. 구형 벡터 삭제 범위와 안전장치
 
+### 기존 private QUERY 명령의 공통 형식 dispatch — 2026-11-01
+
+책임은 기존 Runner의 FIFO candidate/원 command claim/짧은 fenced root와 application step
+dispatch다. 정본은1/2의 원 request/definition/protocol/actor/lease이며 candidate는 권한이
+아닌 재검증할 metadata snapshot이다. 기존 indexed family predicate와 exact command-ID
+lookup·row lock·lease generation/CAS를 재사용한다. 조회는 기존 bounded FIFO/index 비용,
+원 command 처리는 고정 metadata O(1)이며 새 queue/index/schema/서비스는 없다.
+
+지원된1/2 parser와 순수 protocol/step-family 규칙을 공유하되, 공통 numerical result2는
+공개 QUERY와도 같으므로 그것만으로 private family를 판정하지 않는다. private 고유
+request/protocol/definition/origin markers가 quarantine을 소유한다. 모순·손상 history는
+role/public/INDEX 실행으로 우회하지 않는다. claim 직전 current owner와 같은 원 actor/
+request를 검증하고 원 lease 안에서만 전이한다. 만료·경합·late source loss는 기존 rollback/
+same-original replay를 따른다. FAILED 이력과 실행 pin은 바꾸지 않는다. domain은 순수
+family 규칙만 제공하고 SQL/locking은 Runner adapter에 남긴다. 병렬 private2 dispatcher를
+만드는 대안보다 기존 owner/step/transaction의 명시적1/2 지원이 작다. 이 변경만으로
+global2 admission을 열지 않으며, 실제 source/runtime/consumer 활성화는 별도 검증한다.
+
 ### 창작 Graph 재개의 검색 seed 범위 — 2026-11-01
 
 책임은 기존 Catalog GraphRAG의 bounded lexical seed 선정이다. 정본은 요청에 핀된 Graph의

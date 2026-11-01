@@ -81,9 +81,13 @@ from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowDefiniti
 from eom_workflow.local_embedding_workflow_v2 import LocalEmbeddingWorkflowDefinitionV2
 from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryWorkflowRequest,
-    parse_private_chat_query_workflow_request,
+)
+from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryWorkflowRequestV2,
+    parse_supported_private_chat_query_workflow_request,
 )
 from eom_workflow.private_chat_query_workflow import PrivateChatQueryWorkflowDefinition
+from eom_workflow.private_chat_query_workflow_v2 import PrivateChatQueryWorkflowDefinitionV2
 from eom_workflow.public_similarity_control import SupportedPublicSimilarityExecutionPlan
 from eom_workflow.reference_query_execution import (
     SupportedReferenceQueryWorkflowRequest,
@@ -789,11 +793,15 @@ class WorkflowRunner:
             if candidate.family is CommandExecutionFamily.ROLE:
                 report = self.readiness.evaluate()
             elif candidate.family is CommandExecutionFamily.PRIVATE_CHAT_QUERY or isinstance(
-                candidate.native_request, PrivateChatQueryWorkflowRequest
+                candidate.native_request,
+                (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2),
             ):
                 if (
                     candidate.family is not CommandExecutionFamily.PRIVATE_CHAT_QUERY
-                    or not isinstance(candidate.native_request, PrivateChatQueryWorkflowRequest)
+                    or not isinstance(
+                        candidate.native_request,
+                        (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2),
+                    )
                     or self.private_chat_query_owner is None
                     or self.private_chat_query_executor is None
                 ):
@@ -1017,7 +1025,10 @@ class WorkflowRunner:
             if isinstance(compiled.definition, SupportedReferenceQueryWorkflowDefinition):
                 self._advance_reference_query(workflow, compiled, command_id, actor_type, actor_id)
                 return
-            if isinstance(compiled.definition, PrivateChatQueryWorkflowDefinition):
+            if isinstance(
+                compiled.definition,
+                (PrivateChatQueryWorkflowDefinition, PrivateChatQueryWorkflowDefinitionV2),
+            ):
                 self._advance_private_chat_query(
                     workflow, compiled, command_id, actor_type, actor_id
                 )
@@ -1186,8 +1197,13 @@ class WorkflowRunner:
             or native is None
             or native[0] != workflow.workflow_id
             or native[2] != lease
-            or not isinstance(native[1], PrivateChatQueryWorkflowRequest)
-            or not isinstance(compiled.definition, PrivateChatQueryWorkflowDefinition)
+            or not isinstance(
+                native[1], (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2)
+            )
+            or not isinstance(
+                compiled.definition,
+                (PrivateChatQueryWorkflowDefinition, PrivateChatQueryWorkflowDefinitionV2),
+            )
             or self.private_chat_query_owner is None
             or self.private_chat_query_executor is None
         ):
@@ -1196,7 +1212,7 @@ class WorkflowRunner:
                 "private QUERY advancement requires its actual leased owner context",
             )
         try:
-            request = parse_private_chat_query_workflow_request(workflow.initial_request)
+            request = parse_supported_private_chat_query_workflow_request(workflow.initial_request)
             if (
                 request != native[1]
                 or actor_type != "human"
@@ -3688,7 +3704,9 @@ class WorkflowRunner:
         self, native: tuple[str, NativeWorkflowRequest, CommandLeaseIdentity]
     ) -> Iterator[Session]:
         workflow_id, request, lease = native
-        if isinstance(request, PrivateChatQueryWorkflowRequest):
+        if isinstance(
+            request, (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2)
+        ):
             if (
                 CommandExecutionFamily.PRIVATE_CHAT_QUERY not in self.command_families
                 or self.private_chat_query_owner is None

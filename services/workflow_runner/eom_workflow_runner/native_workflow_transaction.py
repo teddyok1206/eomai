@@ -13,6 +13,12 @@ from eom_workflow.local_embedding_request_v2 import (
     parse_supported_local_embedding_request,
 )
 from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
+from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryWorkflowRequestV2,
+    SupportedPrivateChatQueryWorkflowRequest,
+    parse_supported_private_chat_query_workflow_request,
+)
+from eom_workflow.private_chat_query_workflow_v2 import private_chat_query_execution_protocol
 from eom_workflow.reference_query_execution import (
     PublicReferenceQueryWorkflowRequest,
     SupportedReferenceQueryWorkflowRequest,
@@ -30,7 +36,7 @@ from eom_workflow_runner.state_machine import CommandState
 type NativeWorkflowRequest = (
     SupportedLocalEmbeddingRequest
     | SupportedReferenceQueryWorkflowRequest
-    | PrivateChatQueryWorkflowRequest
+    | SupportedPrivateChatQueryWorkflowRequest
 )
 
 
@@ -63,17 +69,19 @@ def native_fenced_runner_transaction[Request: NativeWorkflowRequest](
             raise WorkflowError(WorkflowErrorCode.WORKFLOW_NOT_FOUND, "native workflow disappeared")
         command = require_command_lease(session, lease, for_update=True)
         initial_command_state = command.state
-        if isinstance(request, PrivateChatQueryWorkflowRequest):
+        if isinstance(
+            request, (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2)
+        ):
             try:
-                original: NativeWorkflowRequest = PrivateChatQueryWorkflowRequest.model_validate(
-                    workflow.initial_request
+                original: NativeWorkflowRequest = (
+                    parse_supported_private_chat_query_workflow_request(workflow.initial_request)
                 )
             except (ValueError, TypeError, SchemaError):
                 raise WorkflowError(
                     WorkflowErrorCode.WORKFLOW_CONCURRENCY_CONFLICT,
                     "private native mutation original request is invalid",
                 ) from None
-            protocol = "private-chat-query/1.0"
+            protocol = private_chat_query_execution_protocol(request)
         elif isinstance(request, SupportedReferenceQueryWorkflowRequest):
             original = parse_supported_reference_query_workflow_request(workflow.initial_request)
             protocol = (

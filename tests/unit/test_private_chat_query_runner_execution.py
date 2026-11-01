@@ -41,7 +41,6 @@ from tests.unit.test_private_chat_query_step_execution import (
 from tests.unit.test_private_chat_query_step_execution import (
     private_terminal as private_terminal,
 )
-from tests.unit.test_private_chat_query_workflow import definition_body
 
 
 def configured_runner(value):
@@ -54,7 +53,9 @@ def configured_runner(value):
     runner.local_embedding_owner = runner.local_embedding_executor = None
     runner.reference_query_owner = runner.reference_query_executor = None
     runner._fenced_transaction = value.root
-    compiled = compile_definition_data(definition_body(), "synthetic-private-runner", set())
+    compiled = compile_definition_data(
+        value.definition.model_dump(mode="json"), "synthetic-private-runner", set()
+    )
     runner._load_workflow = lambda _identity: (value.workflow, compiled)
     lease = CommandLeaseIdentity("wfcmd_" + "a" * 32, "synthetic-private", "lease", 1)
     return runner, lease

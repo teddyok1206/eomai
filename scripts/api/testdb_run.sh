@@ -310,7 +310,8 @@ if [[ "${action}" == "private-chat-artifact-tests" ]]; then
     tests/integration/test_private_chat_query_native_persistence.py \
     tests/integration/test_private_chat_public_query_native_persistence.py \
     tests/integration/test_private_chat_query_submission.py \
-    tests/integration/test_private_chat_public_query_submission.py
+    tests/integration/test_private_chat_public_query_submission.py \
+    tests/integration/test_private_chat_public_query_dispatch.py
   printf 'Disposable private-query canonical Artifact and receipt tests passed.\n'
   exit 0
 fi

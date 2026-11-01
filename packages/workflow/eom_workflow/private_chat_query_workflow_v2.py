@@ -31,6 +31,7 @@ from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAs
 from eom_workflow.private_chat_query_publication_v2 import validate_private_chat_public_query_launch
 from eom_workflow.private_chat_query_workflow import (
     MAX_PRIVATE_CHAT_QUERY_OUTPUT_BYTES,
+    PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL,
     PRIVATE_CHAT_QUERY_RESULT_SCHEMA,
     PrivateChatQueryStepOutput,
     PrivateChatQueryWorkflowDefinition,
@@ -41,6 +42,10 @@ from eom_workflow.private_chat_query_workflow import (
 from eom_workflow.schemas import NativeEmbeddingContract, validate_local_embedding_admission_message
 
 PRIVATE_CHAT_PUBLIC_QUERY_EXECUTION_PROTOCOL: Final = "private-chat-query/2.0"
+PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOLS: Final = (
+    PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL,
+    PRIVATE_CHAT_PUBLIC_QUERY_EXECUTION_PROTOCOL,
+)
 PRIVATE_CHAT_PUBLIC_QUERY_RESULT_SCHEMA: Final = "embedding-reference-query-result@2.0"
 PRIVATE_CHAT_PUBLIC_QUERY_RECEIPT_REF: Final = (
     "eom://schemas/workflow/private-chat-query-workflow-receipt/2.0"
@@ -292,6 +297,16 @@ def private_chat_query_result_schema(request: SupportedPrivateChatQueryWorkflowR
         PRIVATE_CHAT_PUBLIC_QUERY_RESULT_SCHEMA
         if isinstance(request, PrivateChatQueryWorkflowRequestV2)
         else PRIVATE_CHAT_QUERY_RESULT_SCHEMA
+    )
+
+
+def private_chat_query_execution_protocol(request: SupportedPrivateChatQueryWorkflowRequest) -> str:
+    """Exact persisted family marker, not source admission or execution permission."""
+    request = parse_supported_private_chat_query_workflow_request(request)
+    return (
+        PRIVATE_CHAT_PUBLIC_QUERY_EXECUTION_PROTOCOL
+        if isinstance(request, PrivateChatQueryWorkflowRequestV2)
+        else PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL
     )
 
 

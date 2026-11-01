@@ -41,6 +41,10 @@ from eom_workflow.schemas import NativeEmbeddingContract, validate_local_embeddi
 PRIVATE_CHAT_PUBLIC_QUERY_POLICY_REF: Final = (
     "eom://schemas/workflow/private-chat-query-execution-policy/2.0"
 )
+PRIVATE_CHAT_QUERY_REQUEST_VERSIONS: Final = (
+    "private-chat-query-workflow-request/1.0",
+    "private-chat-query-workflow-request/2.0",
+)
 
 
 class _PrivatePublicExecutionValue(NativeEmbeddingContract):

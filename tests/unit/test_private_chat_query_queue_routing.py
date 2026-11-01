@@ -36,7 +36,9 @@ def test_private_markers_are_total_in_every_family_selection(family):
     for marker in (
         "local-embedding-private-chat-query",
         "private-chat-query/1.0",
+        "private-chat-query/2.0",
         "private-chat-query-workflow-request/1.0",
+        "private-chat-query-workflow-request/2.0",
         "PRIVATE_CHAT_QUERY_WORKFLOW_REQUEST",
         "private-chat-query-submission-context/1.0",
         "encode_private_chat_query",

@@ -661,7 +661,9 @@ def test_submission_replay_checks_exact_actor_and_original_snapshot(
         source.workflow.request_hash = "sha256:" + "b" * 64
     else:
         source.definition.definition_key = "local-embedding-index"
-    with pytest.raises(ValueError, match="REPLAY_INVALID"):
+    # A corrupt stored definition is rejected by the earlier definition guard;
+    # actor/payload/hash changes reach the exact original-request replay guard.
+    with pytest.raises(WorkflowError if field == "definition" else ValueError) as error:
         validate_reference_query_workflow_submission(
             cast(Session, source.session),
             source.workflow,
@@ -670,6 +672,10 @@ def test_submission_replay_checks_exact_actor_and_original_snapshot(
             actor_type="human",
             actor_id=source.scope.request.operator_audit.operator_id,
         )
+    if field == "definition":
+        assert error.value.code is WorkflowErrorCode.WORKFLOW_DEFINITION_INVALID
+    else:
+        assert str(error.value) == "REFERENCE_QUERY_SUBMISSION_REPLAY_INVALID"
 
 
 def test_raw_unknown_control_fields_are_not_dropped(source: QueryFixture) -> None:
