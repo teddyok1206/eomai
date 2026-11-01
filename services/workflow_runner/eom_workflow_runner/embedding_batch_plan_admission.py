@@ -58,14 +58,18 @@ from eom_workflow.embedding_batch_plan import RegisteredReviewBatchAnchor
 from eom_workflow.embedding_batch_plan_family import (
     SupportedEmbeddingBatchRequest,
     SupportedEmbeddingBatchSelection,
+    SupportedPublicEmbeddingBatchRequest,
+    SupportedPublicEmbeddingBatchSelection,
     embedding_batch_selection_read_maximum,
     parse_embedding_batch_plan_request,
     parse_embedding_batch_selection,
+    parse_public_embedding_batch_plan_request,
     validate_embedding_batch_plan_controls,
 )
 from eom_workflow.embedding_batch_plan_v12 import EmbeddingBatchSelectionV12
 from eom_workflow.embedding_batch_plan_v14 import EmbeddingBatchSelectionV14
 from eom_workflow.embedding_batch_plan_v15 import EmbeddingBatchSelectionV15
+from eom_workflow.embedding_batch_plan_v17 import EmbeddingBatchSelectionV17
 from eom_workflow.embedding_device_routing import (
     EMBEDDING_DEVICE_ROUTING_SCHEMA_REF,
     MAX_EMBEDDING_DEVICE_ROUTING_BYTES,
@@ -104,7 +108,7 @@ class EmbeddingBatchPlanOwnerConfiguration:
 class ResolvedEmbeddingBatchPlanSources:
     """Only this root's materialization; no cached permission, claim or GPU grant."""
 
-    selection: SupportedEmbeddingBatchSelection
+    selection: SupportedPublicEmbeddingBatchSelection
     policy: EmbeddingDeviceRoutingPolicy
     sources: ResolvedEmbeddingLookup
     indexes: tuple[EmbeddingDeviceIndexPair | PublicSolutionDeviceIndexChoices, ...] = ()
@@ -157,7 +161,9 @@ class CatalogEmbeddingBatchPlanAdmission:
         return value
 
     def _validate_selection(
-        self, request: SupportedEmbeddingBatchRequest, selection: SupportedEmbeddingBatchSelection
+        self,
+        request: SupportedPublicEmbeddingBatchRequest,
+        selection: SupportedPublicEmbeddingBatchSelection,
     ) -> SelectedEmbeddingSources:
         scope = self.configuration.source_scope
         actor_kind, actor_id = (
@@ -184,7 +190,7 @@ class CatalogEmbeddingBatchPlanAdmission:
 
     @staticmethod
     def _validate_sources(
-        selection: SupportedEmbeddingBatchSelection, current: ResolvedEmbeddingLookup
+        selection: SupportedPublicEmbeddingBatchSelection, current: ResolvedEmbeddingLookup
     ) -> None:
         sources = {source.item_revision_id: source for source in current.sources}
         entries = {
@@ -233,7 +239,7 @@ class CatalogEmbeddingBatchPlanAdmission:
     def _query_indexes(
         self,
         session: Session,
-        selection: SupportedEmbeddingBatchSelection,
+        selection: SupportedPublicEmbeddingBatchSelection,
         reader: PinnedArtifactReadContext,
     ) -> tuple[EmbeddingDeviceIndexPair | PublicSolutionDeviceIndexChoices, ...]:
         """Both exact device populations before allocation; pins are not authority."""
@@ -287,7 +293,7 @@ class CatalogEmbeddingBatchPlanAdmission:
     def admit(
         self, session: Session, request: SupportedEmbeddingBatchRequest
     ) -> Iterator[ResolvedEmbeddingBatchPlanSources]:
-        request = parse_embedding_batch_plan_request(request)
+        request = parse_public_embedding_batch_plan_request(request)
         root = session.get_transaction()
         _require(
             root is not None
@@ -302,6 +308,8 @@ class CatalogEmbeddingBatchPlanAdmission:
         self.catalog.authorize_scope(session, self.caller, scope)
         reader = PinnedArtifactReadContext.for_session(session, self.catalog.settings)
         selection, policy = resolve_embedding_batch_plan_controls(reader, request)
+        if isinstance(selection, EmbeddingBatchSelectionV17):
+            raise ValueError("EMBEDDING_BATCH_PLAN_ADMISSION_INVALID")
         _require(policy.cpu.profile.space == self.catalog.configuration.space)
         selected = self._validate_selection(request, selection)
         current = self.catalog.resolve_selected_sources(session, self.caller, selected)

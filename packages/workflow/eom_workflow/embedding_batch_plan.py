@@ -135,6 +135,7 @@ class EmbeddingBatchSelection(EmbeddingBatchSelectionValues, _PlanMessage):
 
 
 class EmbeddingBatchPlanRequest(EmbeddingBatchPlanRequestValues, _PlanMessage):
+    purpose: Literal["INDEX", "REFERENCE_QUERY"]
     selection_schema_ref: ClassVar[str] = BATCH_SELECTION_SCHEMA_REF
 
 

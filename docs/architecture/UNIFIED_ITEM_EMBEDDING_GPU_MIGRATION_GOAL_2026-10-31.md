@@ -811,3 +811,22 @@ index/lock/queue와 영속 전이는 없다. 실패는 원 오류/안정된 거�
 기록·벡터를 만들지 않는다. 단순히 default Reference 분기를 private에도 적용하는 대안은
 소유권이 다른 권한을 빌리므로 부적절하다. 실제 GPU grant/parent admission·운영 global2는
 이 source adapter만으로 열지 않고, 권한·replay·현재 lease·원본 변조를 별도 검증한다.
+
+### private 부모의 기존 Job history 연결
+
+기존 family parser/PlanStore가 계약1.7의 작은 포인터 metadata도 명시적으로 처리한다.
+공개 INDEX/Reference의 source admission은 별도 좁은 typed family로 유지하고 private17을
+source RPC 전에 거부한다. parsing·원 planning Job의 8개 append-only event 저장은 현재
+private origin·leaf policy·GPU grant의 증명이 아니다. 실제 private source owner가 양 device
+policy2·원 origin/권한을 검증한 root에서만 상위 실행을 허용해야 한다.
+
+정본은 pinned1.7 request/selection/routing과 원 allocation/route/bound다. 같은 actor/batch ID의
+indexed unique Job key·row lock·원 protocol/schema/hash·root transaction을 재사용한다.
+logical ID/revision/hash는 구분하고 selection은 Artifact로만 저장한다. map/unique lookup은
+O(1) 또는 indexed lookup, history는 고정8 event, child는1개다. 큰 원문·vector·권한 DTO를
+새 DB 값으로 저장하지 않고 새 table/index/queue/migration을 만들지 않는다. domain의 순수
+metadata closure와 기존 adapter의 SQL/저장을 분리하고 공개 query key의 의미는 넓히지 않는다.
+동일 replay는 원 allocation/deadline을 유지하며 protocol·scope·hash·child/route가 다르면
+거부한다. FAILED를 성공으로 바꾸거나 새 dispatch를 허용하지 않는다. 같은 source/권한을
+다시 확인하지 않은 metadata replay는 실행 권한이 아니다. 별도 private planning store를
+만드는 대안보다 기존 저장·동시성 경계에 명시적 family를 연결하는 쪽이 작다.

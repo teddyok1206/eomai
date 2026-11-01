@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_work_batch import (
+    PrivateChatWorkBatchInput,
     PublicSolutionWorkBatchInput,
     SupportedEmbeddingWorkBatchInput,
     parse_supported_embedding_work_batch_input,
@@ -76,6 +77,14 @@ from eom_workflow.embedding_batch_plan_v16 import (
     EmbeddingBatchPlanRequestV16,
     EmbeddingBatchSelectionV16,
 )
+from eom_workflow.embedding_batch_plan_v17 import (
+    BATCH_PLAN_V17_PROTOCOL,
+    BATCH_PLAN_V17_SCHEMA_SHA256,
+    BATCH_SELECTION_V17_SCHEMA_REF,
+    EmbeddingBatchPlanRequestV17,
+    EmbeddingBatchSelectionV17,
+    validate_private_query_batch_plan_values,
+)
 from eom_workflow.embedding_device_routing import (
     EmbeddingDeviceRoutingDecision,
     EmbeddingDeviceRoutingPolicy,
@@ -87,7 +96,7 @@ from eom_workflow.reference_query_execution import (
     parse_supported_reference_query_workflow_request,
 )
 
-type SupportedEmbeddingBatchRequest = (
+type SupportedPublicEmbeddingBatchRequest = (
     EmbeddingBatchPlanRequest
     | EmbeddingBatchPlanRequestV11
     | EmbeddingBatchPlanRequestV12
@@ -96,7 +105,7 @@ type SupportedEmbeddingBatchRequest = (
     | EmbeddingBatchPlanRequestV15
     | EmbeddingBatchPlanRequestV16
 )
-type SupportedEmbeddingBatchSelection = (
+type SupportedPublicEmbeddingBatchSelection = (
     EmbeddingBatchSelection
     | EmbeddingBatchSelectionV11
     | EmbeddingBatchSelectionV12
@@ -104,6 +113,12 @@ type SupportedEmbeddingBatchSelection = (
     | EmbeddingBatchSelectionV14
     | EmbeddingBatchSelectionV15
     | EmbeddingBatchSelectionV16
+)
+type SupportedEmbeddingBatchRequest = (
+    SupportedPublicEmbeddingBatchRequest | EmbeddingBatchPlanRequestV17
+)
+type SupportedEmbeddingBatchSelection = (
+    SupportedPublicEmbeddingBatchSelection | EmbeddingBatchSelectionV17
 )
 
 
@@ -126,7 +141,19 @@ def parse_embedding_batch_plan_request(value: object) -> SupportedEmbeddingBatch
         return EmbeddingBatchPlanRequestV15.model_validate(document)
     if version == BATCH_PLAN_V16_PROTOCOL:
         return EmbeddingBatchPlanRequestV16.model_validate(document)
+    if version == BATCH_PLAN_V17_PROTOCOL:
+        return EmbeddingBatchPlanRequestV17.model_validate(document)
     raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
+
+
+def parse_public_embedding_batch_plan_request(
+    value: object,
+) -> SupportedPublicEmbeddingBatchRequest:
+    """Public source owners cannot acquire authority from private metadata parsing."""
+    request = parse_embedding_batch_plan_request(value)
+    if isinstance(request, EmbeddingBatchPlanRequestV17):
+        raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
+    return request
 
 
 def parse_embedding_batch_selection(value: object) -> SupportedEmbeddingBatchSelection:
@@ -148,12 +175,19 @@ def parse_embedding_batch_selection(value: object) -> SupportedEmbeddingBatchSel
         return EmbeddingBatchSelectionV15.model_validate(document)
     if version == BATCH_PLAN_V16_PROTOCOL:
         return EmbeddingBatchSelectionV16.model_validate(document)
+    if version == BATCH_PLAN_V17_PROTOCOL:
+        return EmbeddingBatchSelectionV17.model_validate(document)
     raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
 
 
 def embedding_batch_plan_schema_identity(
     request: SupportedEmbeddingBatchRequest,
 ) -> tuple[str, str]:
+    if (
+        type(request) is EmbeddingBatchPlanRequestV17
+        and request.schema_version == BATCH_PLAN_V17_PROTOCOL
+    ):
+        return BATCH_PLAN_V17_PROTOCOL, BATCH_PLAN_V17_SCHEMA_SHA256
     if (
         type(request) is EmbeddingBatchPlanRequestV16
         and request.schema_version == BATCH_PLAN_V16_PROTOCOL
@@ -190,6 +224,11 @@ def embedding_batch_plan_schema_identity(
 
 
 def embedding_batch_selection_schema_ref(selection: SupportedEmbeddingBatchSelection) -> str:
+    if (
+        type(selection) is EmbeddingBatchSelectionV17
+        and selection.schema_version == BATCH_PLAN_V17_PROTOCOL
+    ):
+        return BATCH_SELECTION_V17_SCHEMA_REF
     if (
         type(selection) is EmbeddingBatchSelectionV16
         and selection.schema_version == BATCH_PLAN_V16_PROTOCOL
@@ -246,6 +285,13 @@ def validate_embedding_batch_plan_controls(
     selection = parse_embedding_batch_selection(selection)
     if request.schema_version != selection.schema_version:
         raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
+    if isinstance(request, EmbeddingBatchPlanRequestV17):
+        if not isinstance(selection, EmbeddingBatchSelectionV17):
+            raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
+        validate_private_query_batch_plan_values(request, selection, policy)
+        return
+    if isinstance(selection, EmbeddingBatchSelectionV17):
+        raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
     validate_embedding_batch_plan_control_values(
         request, selection, EmbeddingDeviceRoutingPolicy.model_validate(policy)
     )
@@ -290,6 +336,10 @@ def validate_embedding_batch_binding(
     request = parse_embedding_batch_plan_request(request)
     if batch is not None:
         batch = parse_supported_embedding_work_batch_input(batch)
+        if isinstance(request, EmbeddingBatchPlanRequestV17) != isinstance(
+            batch, PrivateChatWorkBatchInput
+        ):
+            raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
         if isinstance(
             request, EmbeddingBatchPlanRequestV14 | EmbeddingBatchPlanRequestV15
         ) != isinstance(batch, PublicSolutionWorkBatchInput):
@@ -304,6 +354,8 @@ def validate_embedding_batch_binding(
 
 def embedding_batch_query_key(request: SupportedEmbeddingBatchRequest, ordinal: int) -> str:
     request = parse_embedding_batch_plan_request(request)
+    if isinstance(request, EmbeddingBatchPlanRequestV17):
+        raise ValueError("EMBEDDING_BATCH_PLAN_INVALID")
     if isinstance(
         request,
         EmbeddingBatchPlanRequestV12 | EmbeddingBatchPlanRequestV14 | EmbeddingBatchPlanRequestV15,

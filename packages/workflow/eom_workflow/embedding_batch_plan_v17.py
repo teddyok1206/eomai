@@ -238,18 +238,15 @@ def private_chat_batch_parent_request_sha256(selection: EmbeddingBatchSelectionV
     )
 
 
-def validate_private_query_batch_controls(
+def validate_private_query_batch_plan_values(
     request: EmbeddingBatchPlanRequestV17,
     selection: EmbeddingBatchSelectionV17,
     routing: EmbeddingDeviceRoutingPolicy,
-    cpu: PrivateChatQueryExecutionPolicyV2,
-    cuda: PrivateChatQueryExecutionPolicyV2,
-) -> None:
+) -> tuple[EmbeddingBatchPlanRequestV17, EmbeddingBatchSelectionV17, EmbeddingDeviceRoutingPolicy]:
+    """Canonical planning metadata only; actual origin and both leaf policies are separate."""
     request = EmbeddingBatchPlanRequestV17.model_validate(raw_similarity_contract_value(request))
     selection = EmbeddingBatchSelectionV17.model_validate(raw_similarity_contract_value(selection))
     routing = EmbeddingDeviceRoutingPolicy.model_validate(raw_similarity_contract_value(routing))
-    cpu = PrivateChatQueryExecutionPolicyV2.model_validate(raw_similarity_contract_value(cpu))
-    cuda = PrivateChatQueryExecutionPolicyV2.model_validate(raw_similarity_contract_value(cuda))
     require(
         request.scope == selection.scope
         and routing.purpose == request.purpose == selection.purpose
@@ -264,8 +261,31 @@ def validate_private_query_batch_controls(
         and routing.view_recipe_sha256 == selection.recipe.recipe_sha256
         and routing.preferred_device == "CUDA"
         and routing.fallback_device == "CPU"
-        and cpu.workflow_definition_sha256 == cuda.workflow_definition_sha256
+        and all(
+            profile.resource_profile.timeout_seconds <= MAX_EMBEDDING_WORK_BATCH_SECONDS
+            and (view.index is None or view.index.spaces.document == profile.space)
+            for profile, view in (
+                (routing.cpu.profile, selection.index_pair.cpu),
+                (routing.cuda.profile, selection.index_pair.cuda),
+            )
+        )
     )
+    return request, selection, routing
+
+
+def validate_private_query_batch_controls(
+    request: EmbeddingBatchPlanRequestV17,
+    selection: EmbeddingBatchSelectionV17,
+    routing: EmbeddingDeviceRoutingPolicy,
+    cpu: PrivateChatQueryExecutionPolicyV2,
+    cuda: PrivateChatQueryExecutionPolicyV2,
+) -> None:
+    request, selection, routing = validate_private_query_batch_plan_values(
+        request, selection, routing
+    )
+    cpu = PrivateChatQueryExecutionPolicyV2.model_validate(raw_similarity_contract_value(cpu))
+    cuda = PrivateChatQueryExecutionPolicyV2.model_validate(raw_similarity_contract_value(cuda))
+    require(cpu.workflow_definition_sha256 == cuda.workflow_definition_sha256)
     for pin, policy, profile, view in (
         (selection.private_policies.cpu, cpu, routing.cpu.profile, selection.index_pair.cpu),
         (selection.private_policies.cuda, cuda, routing.cuda.profile, selection.index_pair.cuda),
@@ -276,7 +296,6 @@ def validate_private_query_batch_controls(
             and policy.spaces.document == profile.space
             and policy.runtime_bundle == profile.runtime_bundle
             and policy.resource_profile == profile.resource_profile
-            and policy.resource_profile.timeout_seconds <= MAX_EMBEDDING_WORK_BATCH_SECONDS
             and (view.index is None or view.index.spaces == policy.spaces)
         )
 

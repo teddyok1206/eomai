@@ -33,10 +33,7 @@ from eom_workflow.embedding_batch_plan_family import (
     embedding_batch_selection_schema_ref,
     parse_embedding_batch_selection,
 )
-from eom_workflow.embedding_batch_plan_v17 import (
-    BATCH_SELECTION_V17_SCHEMA_REF,
-    EmbeddingBatchSelectionV17,
-)
+from eom_workflow.embedding_batch_plan_v17 import EmbeddingBatchSelectionV17
 from eom_workflow.embedding_device_routing import (
     EMBEDDING_DEVICE_ROUTING_SCHEMA_REF,
     EmbeddingDeviceRoutingPolicy,
@@ -235,17 +232,9 @@ class LocalEmbeddingControlArtifactPublisher:
         idempotency_key: str,
     ) -> PublishedLocalEmbeddingControl:
         """Pin private parent metadata without admitting it as public batch work."""
-        checked = EmbeddingBatchSelectionV17.model_validate(
-            raw_similarity_contract_value(selection)
-        )
-        return self._publish(
-            raw=canonical_json_bytes(checked.model_dump(mode="json")),
-            semantic_sha256=checked.selection_sha256,
-            member="selection.json",
-            schema=BATCH_SELECTION_V17_SCHEMA_REF,
-            artifact_type=BATCH_SELECTION_ARTIFACT_TYPE,
+        return self.publish_batch_selection(
+            EmbeddingBatchSelectionV17.model_validate(raw_similarity_contract_value(selection)),
             idempotency_key=idempotency_key,
-            created_at=ControlPublicationTime.FIRST_OBSERVATION,
         )
 
     def publish_batch_execution_receipt(

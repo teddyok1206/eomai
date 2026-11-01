@@ -14,6 +14,7 @@ from eom_workflow.embedding_batch_plan import EmbeddingBatchPlanRequest
 from eom_workflow.embedding_batch_plan_family import (
     parse_embedding_batch_plan_request,
     parse_embedding_batch_selection,
+    parse_public_embedding_batch_plan_request,
 )
 from eom_workflow.embedding_batch_plan_v17 import (
     BATCH_PLAN_V17_PROTOCOL,
@@ -230,13 +231,14 @@ def test_private_parent17_is_independently_pinned_and_has_no_text_or_approved_an
         == value.request.parent_request_sha256
     )
     assert not workflow_definition_is_admitted("local-embedding-private-chat-query", "2.0.0")
-    # Metadata is not silently executable through the old operational parent parser.
+    # Shared metadata parsing is not admission through the public source owner.
     for parser, data in (
         (parse_embedding_batch_selection, value.selection),
         (parse_embedding_batch_plan_request, value.request),
     ):
-        with pytest.raises(ValueError, match="EMBEDDING_BATCH_PLAN_INVALID"):
-            parser(data)
+        assert parser(data) == data
+    with pytest.raises(ValueError, match="EMBEDDING_BATCH_PLAN_INVALID"):
+        parse_public_embedding_batch_plan_request(value.request)
 
 
 @pytest.mark.parametrize("version", ("1.0", "1.1", "1.2", "1.3", "1.4", "1.5", "1.6"))

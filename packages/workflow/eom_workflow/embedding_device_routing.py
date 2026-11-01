@@ -278,7 +278,11 @@ def validate_embedding_device_batch_profile(
         decision.policy_sha256 != policy.policy_sha256
         or selected != (policy.cuda if selected.backend.device == "CUDA" else policy.cpu)
         or batch.purpose
-        != {"INDEX": "DOCUMENT", "REFERENCE_QUERY": "REFERENCE_QUERY"}.get(policy.purpose)
+        != {
+            "INDEX": "DOCUMENT",
+            "REFERENCE_QUERY": "REFERENCE_QUERY",
+            "PRIVATE_CHAT_QUERY": "PRIVATE_CHAT_QUERY",
+        }.get(policy.purpose)
         or batch.routing_decision_sha256 != decision.decision_sha256
         or batch.resource_profile_sha256 != resources.resource_profile_sha256
         or batch.timeout_seconds > resources.timeout_seconds
