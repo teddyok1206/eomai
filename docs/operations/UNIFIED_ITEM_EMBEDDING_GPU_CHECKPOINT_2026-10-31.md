@@ -1,5 +1,44 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## private batch 실제 source owner·현재 lease 연결 후보 — 2026-11-01
+
+- source **`48863c9aab888b14aa8247e4785582c42c83b3a6`**는 기존 batch source authorization에
+  실제 `CatalogPrivateChatQueryOwnerAdmission`용 private 타입을 추가했다. 목적별 명시적
+  타입 선택으로 공개 Reference owner를 빌릴 수 없으며, 기존 record2/current-input 검증과
+  원 launch/Workflow/step/command lease·현재 private/public source·operator를 매번 확인한다.
+  원 native history의 ALLOCATION origin 전체가 현재 origin과 같아야 하며 FAILED/CANCELLED·
+  빈/다른 origin history는 거부한다. 원 key/실패를 바꾸거나 새 Job·모델·Artifact를 만들지 않는다.
+- 순수 source fence의 연결이며 실제 private GPU parent/grant·완료 proof 연결이나 운영
+  global2 활성화는 아니다. 기존 CPU 실행 관측을 GPU 증거로 위장하지 않는다. 새 DB/schema/
+  migration/queue/dependency는 없고, 현재 INDEX/QUERY runtime/model/space도 바꾸지 않았다.
+- source 합집합 **176 PASS/98.53s**, 별도 비편집 설치본 **176 PASS/100.47s**다. 원 control/
+  Chat 읽기는 실제 임시 파일/SQL을 쓰되 unit command/launch·IAM/public document ports는
+  명시적 fixture다. strict mypy 영향4/Ruff/format/shell/diff PASS다. private 단독+기존 source
+  범위45 PASS도 별도 보존했다. 첫 작은 범위2 FAIL/39 PASS는 test binding의 기존 필드명을
+  잘못 가정한 오류였다. broad 최초 invocation의 존재하지 않는 test 경로(0개 실행)와
+  9 FAIL/167 PASS도 보존했다. 후자는 umask077가 fixture의750 leaf를700으로 만든 오류로,
+  test 준비에서 정확한 chmod750을 명시했고 운영 directory guard는 완화하지 않았다.
+- 공식 disposable PG `private-chat-artifact-tests`는 **133 PASS/262.17s**다. 새6건은 실제
+  원 command/launch/Job과 동시 read/binding, 현재 source/operator 철회, 늦은 lease 만료의
+  root rollback, 만료 상태·실패 이력 보존을 검사한다. 실제 Chat/IAM/document authority와
+  GPU는 fixture이며 이를 운영 성공으로 부르지 않는다. 임시 DB만 migration67 왕복·제한
+  role reconcile 후 실행했고, read_only/other_connections0을 확인해 공식 cleanup PASS했다.
+  `/tmp/eom-api-testdb-20261101111951_e5a38c66`은 REMOVED다. production66은 그대로다.
+- build/RECORD PASS. wheel directory는
+  `/tmp/eom-api-build/48863c9aab888b14aa8247e4785582c42c83b3a6.8H9UJU/dist`이며 platform SHA
+  `f3c261d3f3f28dcc020206a7fe0d7eb32c2688d16b9c69f81d2566432c960c1d`, contracts
+  `aab9e89cb90bda94f17380f97744cbb5620948456179cece93ec404289d2836e`, API
+  `252671d99ab6c58ca4faaafd156199dc6a9859a90e90ff1d653e23dac1d8a0e5`다. 설치본
+  `/tmp/eom-private-query-batch-source-installed.ewye2DSZ/site-packages`의 실제 source/module
+  경로를 확인했다. 이 core source-fence 설치 검사에 optional GPU lease 패키지를 추가하지
+  않았다. `/tmp/eom-private-query-batch-source-*20261101*`와 ignored installed harness 참조.
+- 11:30 정기 집계는 원 target/hash/공통 CUDA 공간에서 **143/520·잔여377·CUDA RUNNING1**,
+  historical FAILED Workflow7이다. INDEX2258114/QUERY2256183은 같은 프로세스다.
+  이번 source 후보 검증에서 운영 배포·기존 벡터/정본/실패 이력 변경·신규 인증 요청0이다.
+  전체 목표 ACTIVE이며 다음은 실제 private parent/GPU 실행·완료 관측의 호환 연결이다.
+  사용자 DB query/read/replay 성공, 전체520 대상별 hash/권한, 실제 AI canary 및 정확한
+  구형 파생 retirement/삭제는 여전히 미완료이고 source/설치/PG PASS로 대체하지 않는다.
+
 ## 공통 QUERY2 private numerical envelope3 후보 — 2026-11-01
 
 - source **`f799049f8003cdc8eaa999030776a8f6b9047ec5`**는 실제 private2 projection이 만든
