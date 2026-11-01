@@ -1,5 +1,54 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## private GPU 실행·원 결과 재개 후보 — 2026-11-01
+
+- 사용자 설명 turn의 read-only 조회는15:00 정기 관측 **162/520·잔여358**, 실제 GUI 시험
+  후보10321과 최근 준비214283ms 실패/수치 QUERY 미생성을 구분한 evidence였다. 이번 source
+  **`e09d204474755385250eaae767664188a8be5d4b`**는 기존 native private port를 실제 finite
+  batch에 연결한 **PROGRESS**이며 tree `27ba0ce292c188eda737cbdeb3da55a69c9533ad`다.
+  전체 목표는 ACTIVE다.
+- `CatalogBatchPrivateChatQueryExecutor`는 원 private origin key/parent17/child0/launch Job을
+  유지한다. 실제 private owner의 source·origin·claim과 canonical parent/receipt를 확인하고
+  기존 실행·완료·Artifact commit owner를 호출한다. 새로운 큐·DB·schema·수치 executor는 없다.
+  CPU1/CPU2/GPU2는 같은 launch candidate builder를 공유하되 각 physical guard는 보존한다.
+- 원 canonical receipt가 있으면 GPU를 다시 띄우지 않고 기존 protected result reader로
+  이어간다. PUBLISHED/COMPLETED는 기존 canonical 완료 read만 사용한다. existing parent에
+  receipt가 없으면 원 launch의 UNCERTAIN, 동시 실행 관측은 BUSY이며 다른 key/root/추론을
+  만들지 않는다. FAILED는 보존·거부하고 수치 실행 동안 SQL/source root는 닫는다.
+- source 회귀는 CPU/공통 private48, 보호 파일·공유 증거·의존 경계80, 새 launch9, 공개 DB/
+  공통 입력74 PASS다. 공유 증거6개가 겹치므로 합집합 **205**이며 같은 비편집 설치본에서
+  **205 PASS/227.52s**를 실행했다. strict mypy 직접4/port 호환과 Ruff/format/shell/diff PASS다.
+  구현 pin 검사1 PASS 및 기존 INDEX release fb0ab…→e09d…의 세 수치 구현 파일 diff0은
+  제어 코드와 수치 fingerprint의 분리를 확인한다. 실제 numerical 환경의 후속 검증을
+  대신하지는 않는다. 기존 Starlette deprecation warning1은 이번 변경과 별도다.
+- disposable PostgreSQL 새 실행·중단 복구·동시 관측·terminal 보존 **9 PASS/82.23s**다.
+  전체 관련 PG **323 PASS/645.31s**, 같은 설치본 PG **9 PASS/81.30s**다. 실제 parent/Job/Artifact/
+  checkpoint/FS를 사용하되 IAM/Workflow/claim/물리 GPU는 명시적 synthetic seam이다.
+  `/tmp/eom-api-testdb-20261101151020_3c8d3e91`에서만 migration67 왕복/reconcile 후 실행했다.
+  마지막 검사는 disposable identity PASS/read_only true/other_connections0이며 공식 cleanup
+  PASS/REMOVED다. 결과는 `/tmp/eom-private-gpu-executor-testdb-20261101.cleanup`에 기록했다. 상세 근거는
+  `/tmp/eom-private-gpu-executor-*20261101*`이며 source 최초 잘못 지정한 test 파일명도
+  실행 전에 거부됐고 같은 invocation의 실패 log와 수정된 실행 결과를 모두 보존했다.
+- 최초 검사에서 PG 전용 store를 SQLite로 실행하려던 fixture는 guard가 거부했다. 실행 검사를
+  guarded PG로 옮겼으며 schema guard를 약화하지 않았다. synthetic October24 completion 시각,
+  반복된 Workflow ID, UTC canonical Z 표현도 fixture에서 수정했다. 원 실패 log를 보존했고
+  테스트용 비밀번호/URL·실제 사용자 인증은 변경하지 않았다.
+- build/RECORD PASS, wheels
+  `/tmp/eom-api-build/e09d204474755385250eaae767664188a8be5d4b.nfYB9G/dist`, 설치본
+  `/tmp/eom-private-gpu-executor-installed.VfhujsFU/site-packages`다. platform SHA
+  `b954ce7c386a69e7afebc94acfa5426d6ec9d270bf71ebfa3f7195053e168f4e`, api-contracts
+  `ec4e2e495fac1af0656f1015a1a5bc9f303586263fbd179b15b6b4aec0ebefe8`, API
+  `017274331c339247e6560f5e0c7eb8010b5df9ff42c5a43f39eb0ed81fc07763`다.
+  최초 wheel 파일명 오타는 설치 전에 거부됐고 실제 파일명으로 같은 별도 prefix에 설치했다.
+- 별도 synthetic selector probe에서 **같은 unpinned 요청이 새 head를 다시 고를 수 있음**을
+  확인했다. 이는 full native replay/운영 재현이 아니다. 첫 응답 유실 시 원 범위를 보존하도록
+  무거운 준비 전에 기존 PENDING/PREPARING 응답으로 pin을 전달하는 작은 대안을 다음에
+  검증한다. 별도 cache/queue를 추가하거나 현재 실패 원인을 이 probe로 단정하지 않는다.
+- 운영 API1697848/Catalog2256180/QUERY2256183/INDEX2258114는 유지했고 production66,
+  private physical/global2 CLOSED도 그대로다. 운영 재시작/모델 제출/인증 변경/구 vector
+  삭제0이다. 실제 GUI common query/read/replay, private cohost·운영 활성화, AI V11 canary,
+  전체520 CUDA 무결성과 모든 구 소비자 전환 뒤 정확한 retirement/delete는 아직 남아 있다.
+
 ## private GPU 입력 연결·공유 publication 파일 adapter 후보 — 2026-11-01
 
 - 직전 goal turn은 `a215d6dc`의 private GPU 완료 처리까지 검증한 **PROGRESS**였다.
