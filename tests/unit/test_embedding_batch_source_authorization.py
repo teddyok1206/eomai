@@ -196,6 +196,23 @@ def test_document_reuses_actual_original_encoding_owner_each_time_without_cached
     assert document.artifacts.return_value.resolve_input.call_count == 2
 
 
+def test_private_envelope_cannot_borrow_reference_owner_before_a_private_fence_exists(
+    query, monkeypatch
+):
+    from tests.unit.test_private_chat_work_batch import private_case
+
+    batch, *_ = private_case()
+    before = tuple(query.roots)
+
+    def borrowed(_source):
+        raise AssertionError("private input must not inspect a public Reference owner")
+
+    monkeypatch.setattr(module.ReferenceQueryBatchSource, "input_sha256", property(borrowed))
+    with pytest.raises(ValueError, match="EMBEDDING_BATCH_SOURCE_AUTHORIZATION_INVALID"):
+        module.CatalogEmbeddingBatchSourceAuthorization(batch, (query.binding,))
+    assert tuple(query.roots) == before
+
+
 def test_changed_document_artifact_input_is_not_replaced_by_current_or_latest(document):
     document.artifacts.return_value.resolve_input.return_value = None
     with pytest.raises((ValueError, AttributeError)):

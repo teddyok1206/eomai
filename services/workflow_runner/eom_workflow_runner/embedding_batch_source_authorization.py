@@ -166,6 +166,9 @@ class CatalogEmbeddingBatchSourceAuthorization:
         self, batch: SupportedEmbeddingWorkBatchInput, sources: tuple[BatchSource, ...]
     ) -> None:
         batch = parse_supported_embedding_work_batch_input(batch)
+        # Numerical envelope support is not a private source-owner admission.
+        # Keep it closed until an actual Chat origin/lease fence is composed.
+        _require(batch.purpose in {"DOCUMENT", "REFERENCE_QUERY"})
         _require(type(sources) is tuple and len(sources) == len(batch.children))
         expected = DocumentBatchSource if batch.purpose == "DOCUMENT" else ReferenceQueryBatchSource
         _require(all(type(source) is expected for source in sources))
