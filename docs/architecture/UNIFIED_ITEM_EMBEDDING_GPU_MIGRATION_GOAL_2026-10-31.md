@@ -249,6 +249,26 @@ queue/캐시는 없으며 두 목적의 거의 같은 전체 reader를 복제하
 proof 해석과 명시적 목적별 source/context 검증이 작다. 기존 public entry는 얇은 호환 export로
 보존하며 실제 GPU 실행/등록 또는 private cohost를 이 read support만으로 활성화하지 않는다.
 
+private 완료 application은 같은 CPU/GPU publication material의 최소 typed 속성(원 request,
+launch, numerical input, owner-local workspace)만 받는다. CPU 고정 handoff나 GPU physical
+grant를 새로 해석하지 않는다. 정본은 원 launch Job의 ALLOCATION/EXECUTED/PUBLISHED/
+COMPLETED와 기존 query/receipt Artifact다. 시작은 기존 명시적 builder가 선택하고 이후에는
+이미 저장된 같은1.0/2.0/2.1 family만 이어 쓴다. empty/mixed/foreign launch/순서 오류를
+거부하며 현재 release/device를 보고 과거 family를 재선택하지 않는다. wire schema/receipt2/
+원 numerical2는 그대로이고 새 DB/table/queue/migration은 없다.
+
+실제 현재 private source/origin/command lease를 가진 root에서 GPU receipt1.1과 원 parent/
+child를 읽은 뒤에만 기존 Orchestrator publisher로 결과를 저장한다. 다음 독립 root에서
+canonical query/result/binary와 그 proof를 대조하고 receipt를 저장한다. 완료 재조회에도
+같은 검사를 적용하며 원 physical unit/PID나 임시 파일 생존은 요구하지 않는다. private
+질문은 canonical file set/Job/history에 복사하지 않는다. Job PK·최대4 event·keyed Artifact
+read, 한 번의 bounded binary materialization으로 O(control bytes + vector bytes)다.
+현재 권한 fence와 두 publication transaction은 기존 application 소유이고 IO/SQL은 기존
+adapters에 남는다. 중단 후 원 producer/key로 재개하고 FAILED나 hash 불일치를 성공으로
+바꾸지 않는다. 별도 GPU 완료 executor/state machine을 복제하는 대안보다 같은 완료
+application의 명시적 proof 분기와 원 history continuation이 작다. 운영 private physical/
+cohost 활성화는 이 application 후보의 검증과 별개다.
+
 ### private 공통 parent의 실제 source admission — 2026-11-01
 
 책임은 기존 private source owner와 finite parent application이다. 정본은 원 Chat origin과

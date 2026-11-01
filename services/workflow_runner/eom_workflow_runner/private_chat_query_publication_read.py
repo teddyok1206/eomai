@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
+from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
 from eom_catalog_service.local_embedding_completion_artifacts import (
     resolve_supported_native_private_chat_query_completion,
 )
@@ -20,6 +21,7 @@ from eom_orchestrator.native_private_chat_query_coordinator import (
 from eom_orchestrator.native_query_job_allocation import read_native_query_launch
 from eom_workflow.native_private_chat_query_coordinator import (
     NativePrivateQueryAllocation,
+    NativePrivateQueryBatchExecuted,
     NativePrivateQueryCompleted,
     NativePrivateQueryCompletedV2,
     NativePrivateQueryExecuted,
@@ -50,6 +52,10 @@ from eom_workflow_runner.private_chat_query_source_read import (
     ResolvedPrivateChatQuerySources,
     build_supported_private_chat_query_native_input,
     require_private_chat_query_source_root,
+)
+from eom_workflow_runner.query_batch_execution_read import (
+    resolve_private_chat_query_batch_execution,
+    validate_query_batch_child_result,
 )
 
 
@@ -143,7 +149,9 @@ def resolve_supported_private_chat_query_publication(
         allocation, executed, published = (r.payload for r in history.records[:3])
         if (
             not isinstance(allocation, NativePrivateQueryAllocation)
-            or not isinstance(executed, NativePrivateQueryExecuted)
+            or not isinstance(
+                executed, (NativePrivateQueryExecuted, NativePrivateQueryBatchExecuted)
+            )
             or not isinstance(
                 published, (NativePrivateQueryPublished, NativePrivateQueryPublishedV2)
             )
@@ -198,6 +206,22 @@ def resolve_supported_private_chat_query_publication(
         )
         if resolved.result.result_sha256 != executed.result_sha256:
             raise ValueError()
+        if isinstance(executed, NativePrivateQueryBatchExecuted):
+            if (
+                not isinstance(sources, ResolvedPrivateChatPublicQuerySources)
+                or not isinstance(native, PublicSolutionQueryInput)
+                or not isinstance(resolved, ResolvedPrivateChatPublicQueryArtifacts)
+            ):
+                raise ValueError()
+            child = resolve_private_chat_query_batch_execution(
+                session,
+                reader=reader,
+                sources=sources,
+                launch=launch,
+                native_input=native,
+                executed=executed,
+            )
+            validate_query_batch_child_result(child, resolved.result)
         reader.revalidate_provenance()
         if require_private_chat_query_source_root(session) is not root:
             raise ValueError()

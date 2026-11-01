@@ -11,6 +11,7 @@ from eom_workflow.native_private_chat_query_coordinator import (
     NativePrivateQueryBatchExecuted,
     native_private_chat_gpu_query_checkpoint,
     native_private_chat_public_query_checkpoint,
+    native_private_chat_query_continuation_checkpoint,
     parse_native_private_chat_query_checkpoint_v2,
     parse_native_private_chat_query_checkpoint_v21,
     parse_supported_native_private_chat_query_checkpoint,
@@ -140,6 +141,64 @@ def test_gpu_successor_does_not_change_existing_cpu_builders(records, gpu_comple
         native_private_chat_gpu_query_checkpoint(gpu_completed.launch, "EXECUTED", cpu[1].payload)
     with pytest.raises(ValueError):
         NativeQueryBatchExecuted.model_validate(records[1].payload.model_dump(mode="json"))
+
+
+@pytest.mark.parametrize("family", ("legacy", "cpu", "gpu", "historical-cpu-metadata"))
+def test_continuation_preserves_original_family_not_current_device(
+    completed, public_completed, gpu_completed, family
+):
+    value = (
+        completed if family == "legacy" else public_completed if family == "cpu" else gpu_completed
+    )
+    original = (private_gpu_query_records if family == "gpu" else private_query_records)(value)
+    previous = original[:1]
+    for expected in original[1:]:
+        actual = native_private_chat_query_continuation_checkpoint(
+            value.request,
+            value.launch,
+            expected.record_type,
+            expected.payload,
+            previous=previous,
+        )
+        assert actual == expected
+        previous += (actual,)
+
+
+@pytest.mark.parametrize("fault", ("empty", "mixed", "launch", "phase", "payload", "complete"))
+def test_continuation_never_invents_allocation_or_changes_a_saved_gpu_history(
+    records, gpu_completed, fault
+):
+    launch = gpu_completed.launch
+    previous = records[:1]
+    selected = records[1]
+    if fault == "empty":
+        previous = ()
+        selected = records[0]
+    elif fault == "mixed":
+        previous = (records[0], private_query_records(gpu_completed)[1])
+        selected = records[2]
+    elif fault == "launch":
+        launch = type(launch).model_validate(
+            seal(
+                launch.model_dump(mode="json") | {"workflow_id": "workflow_" + "f" * 32},
+                "association_sha256",
+            )
+        )
+    elif fault == "phase":
+        selected = records[2]
+    elif fault == "payload":
+        selected = private_query_records(gpu_completed)[1]
+    else:
+        previous = records
+        selected = records[0]
+    with pytest.raises(ValueError):
+        native_private_chat_query_continuation_checkpoint(
+            gpu_completed.request,
+            launch,
+            selected.record_type,
+            selected.payload,
+            previous=previous,
+        )
 
 
 def test_gpu_metadata_cannot_make_a_cpu_request_or_legacy_origin_cuda(public_completed, completed):

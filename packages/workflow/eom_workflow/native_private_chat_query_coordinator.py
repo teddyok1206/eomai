@@ -363,6 +363,34 @@ def supported_native_private_chat_query_checkpoint(
     )
 
 
+def native_private_chat_query_continuation_checkpoint(
+    request: SupportedPrivateChatQueryWorkflowRequest,
+    launch: PrivateChatQueryLaunchAssociation,
+    phase: NativeQueryPhase,
+    payload: SupportedNativePrivateQueryPayload,
+    *,
+    previous: tuple[SupportedNativePrivateChatQueryCheckpoint, ...],
+) -> SupportedNativePrivateChatQueryCheckpoint:
+    """Continue a saved family; initial allocation still needs its explicit builder."""
+    request = parse_supported_private_chat_query_workflow_request(request)
+    checked = tuple(parse_supported_native_private_chat_query_checkpoint(row) for row in previous)
+    if not checked or launch.workflow_request_sha256 != request.request_sha256:
+        raise ValueError("PRIVATE_CHAT_QUERY_CHECKPOINT_HISTORY_INVALID")
+    validate_native_private_chat_query_history(checked, launch, request)
+    version: Literal["1.0", "2.0", "2.1"] = (
+        "2.1"
+        if isinstance(checked[0], NativePrivateChatQueryCheckpointV21)
+        else "2.0"
+        if isinstance(checked[0], NativePrivateChatQueryCheckpointV2)
+        else "1.0"
+    )
+    record = parse_supported_native_private_chat_query_checkpoint(
+        _private_chat_query_checkpoint_document(launch, phase, payload, version=version)
+    )
+    validate_native_private_chat_query_history((*checked, record), launch, request)
+    return record
+
+
 def _private_chat_query_checkpoint_document(
     launch: PrivateChatQueryLaunchAssociation,
     phase: NativeQueryPhase,
