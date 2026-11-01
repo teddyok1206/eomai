@@ -44,12 +44,23 @@ def private(owner, monkeypatch):
         )
     )
     original = verifier.sources.capture_in_session.side_effect
-    phases, windows, commands, files = [], [], [], []
+    phases, windows, commands, files, index_reads = [], [], [], [], []
     fault = SimpleNamespace(value=None)
     reader = PinnedArtifactReadContext.read_pinned
 
     def counted(actual_reader, **arguments):
         files.append(arguments["member_path"])
+        if arguments["member_path"] == "index.json":
+            index_reads.append(
+                tuple(
+                    arguments[key]
+                    for key in (
+                        "artifact_id",
+                        "artifact_revision_id",
+                        "sha256",
+                    )
+                )
+            )
         return reader(actual_reader, **arguments)
 
     def capture(actual_session, source_command, recipe, **options):
@@ -108,6 +119,7 @@ def private(owner, monkeypatch):
         windows=windows,
         commands=commands,
         files=files,
+        index_reads=index_reads,
         fault=fault,
         binding=binding,
         root=root,
@@ -146,7 +158,20 @@ def test_private_scope_no_fake_anchor_and_same_official_document_read(private, h
     if has_index:
         assert values[0].bindings == (value.binding,)
         assert values[0].numerical_rows[0].values[0] == 1.0
-        assert sorted(value.files) == ["index.json", "result.json", "shard.json", "vectors.f32"]
+        # Selected-head and immutable binding-origin reads independently revalidate
+        # the same pinned member; a second read is not a second selected index.
+        assert sorted(value.files) == [
+            "index.json",
+            "index.json",
+            "result.json",
+            "shard.json",
+            "vectors.f32",
+        ]
+        pointer = request.views[0].index.index_manifest
+        assert (
+            value.index_reads
+            == [(pointer.artifact_id, pointer.artifact_revision_id, pointer.sha256)] * 2
+        )
         assert len(value.windows) == 1 and value.windows[0].session is value.session
     else:
         assert not value.files and not value.windows

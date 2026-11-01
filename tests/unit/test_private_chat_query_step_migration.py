@@ -6,6 +6,8 @@ import sqlite3
 from pathlib import Path
 
 import pytest
+from alembic.config import Config
+from alembic.script import ScriptDirectory
 from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_workflow_runner.models import WorkflowStepRunRecord
 from sqlalchemy import CheckConstraint
@@ -27,7 +29,13 @@ def private_step_migration():
 def test_private_check_preserves_frozen_0054_and_matches_current_model(monkeypatch):
     module = private_step_migration()
     assert module.revision == "20261017_0057"
-    assert CURRENT_MIGRATION_REVISION == "20261019_0058"
+    scripts = ScriptDirectory.from_config(
+        Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+    )
+    assert scripts.get_heads() == [CURRENT_MIGRATION_REVISION]
+    assert module.revision in {
+        revision.revision for revision in scripts.walk_revisions(head=CURRENT_MIGRATION_REVISION)
+    }
     assert module.down_revision == "20261017_0056"
     assert module._PREVIOUS_PREDICATE == query_migration()._PREDICATE
     guard = next(

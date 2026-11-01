@@ -472,8 +472,15 @@ def test_actual_identity_denial_is_not_an_authentication_or_submission(preparati
 
 def test_preparation_still_cannot_offer_closed_private_definition(preparation, monkeypatch):
     value = preparation
+    from eom_workflow_runner import private_chat_query_admission
     from eom_workflow_runner.private_chat_query_submission import (
         start_private_chat_query_in_session,
+    )
+
+    # The production private definition is now admitted. This negative case
+    # explicitly closes its declared admission seam, not an absent SQLite table.
+    monkeypatch.setattr(
+        private_chat_query_admission, "workflow_definition_is_admitted", lambda *_: False
     )
 
     monkeypatch.setattr(

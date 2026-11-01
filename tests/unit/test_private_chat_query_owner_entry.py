@@ -32,7 +32,7 @@ def child(source, monkeypatch):
     raw = private_chat_query_service_configuration_bytes(
         PrivateChatQueryServiceConfiguration.model_validate(private_body(source, reference))
     )
-    events = []
+    events, handlers = [], {}
     files = Mock()
     files.assert_unchanged = Mock()
     files.read.side_effect = lambda path, **_: (
@@ -53,7 +53,9 @@ def child(source, monkeypatch):
     monkeypatch.setattr(
         module, "_require_dropped_identity", lambda *_: events.append("dropped_verified")
     )
-    monkeypatch.setattr(module.signal, "signal", lambda *_: None)
+    monkeypatch.setattr(
+        module.signal, "signal", lambda signum, handler: handlers.__setitem__(signum, handler)
+    )
     monkeypatch.setattr(module.signal, "pthread_sigmask", lambda *_: set())
     monkeypatch.setattr(
         installed_owner_session_provider,
@@ -82,6 +84,7 @@ def child(source, monkeypatch):
         server=server,
         host=host,
         events=events,
+        handlers=handlers,
     )
 
 
@@ -112,7 +115,15 @@ def test_same_dropped_child_and_runtime_own_both_optional_listeners_and_shutdown
         assert private is None
         child.private_builder.assert_not_called()
         assert len(child.files.read.call_args_list) == 1
-    child.host.serve.assert_called_once_with()
+    child.host.serve.assert_called_once()
+    assert child.host.serve.call_args.args == ()
+    assert set(child.host.serve.call_args.kwargs) == {"stop_requested"}
+    stop_requested = child.host.serve.call_args.kwargs["stop_requested"]
+    assert stop_requested() is False
+    child.handlers[module.signal.SIGTERM](module.signal.SIGTERM, None)
+    assert stop_requested() is True
+    child.handlers[module.signal.SIGINT](module.signal.SIGINT, None)
+    assert stop_requested() is True
     child.host.close.assert_called_once_with()
     child.runtime.close.assert_called_once_with()
 

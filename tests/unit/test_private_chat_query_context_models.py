@@ -38,10 +38,12 @@ def migration_module():
 def test_model_guard_matches_frozen_additive_migration_and_latest_head():
     migration = migration_module()
     assert migration.revision == "20261017_0056"
-    assert CURRENT_MIGRATION_REVISION == "20261017_0057"
     assert migration.down_revision == "20261014_0055"
     scripts = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
     assert scripts.get_heads() == [CURRENT_MIGRATION_REVISION]
+    assert migration.revision in {
+        revision.revision for revision in scripts.walk_revisions(head=CURRENT_MIGRATION_REVISION)
+    }
     checks = {
         c.name: str(c.sqltext)
         for c in WorkflowInstanceRecord.__table__.constraints
