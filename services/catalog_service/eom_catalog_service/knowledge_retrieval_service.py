@@ -2116,6 +2116,11 @@ class KnowledgeRetrievalApplicationService:
         )
         if terms:
             term_frequency = func.count().over(partition_by=KnowledgeNodeTermRecord.term)
+            source_membership = select(KnowledgeNodeSourcePointerRecord.pointer_id).where(
+                KnowledgeNodeSourcePointerRecord.graph_snapshot_revision_id == snapshot_id,
+                KnowledgeNodeSourcePointerRecord.node_id == KnowledgeNodeTermRecord.node_id,
+                KnowledgeNodeSourcePointerRecord.source_class.in_(command.source_classes),
+            )
             lexical_rows = tuple(
                 (str(term), str(node_id), int(frequency))
                 for term, node_id, frequency in session.execute(
@@ -2127,6 +2132,9 @@ class KnowledgeRetrievalApplicationService:
                     .where(
                         KnowledgeNodeTermRecord.graph_snapshot_revision_id == snapshot_id,
                         KnowledgeNodeTermRecord.term.in_(terms),
+                        # Out-of-scope Item seeds must not consume the bounded textbook budget.
+                        # Final source authority and immutable pointer checks remain below.
+                        source_membership.exists(),
                     )
                     .order_by(
                         term_frequency,

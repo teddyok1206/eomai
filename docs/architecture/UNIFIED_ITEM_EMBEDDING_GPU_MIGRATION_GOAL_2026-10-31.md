@@ -80,6 +80,31 @@ CPU/GPU current head의 Graph가 일시적으로 다르다는 사실만으로 �
 
 ## 4. 구형 벡터 삭제 범위와 안전장치
 
+### 창작 Graph 재개의 검색 seed 범위 — 2026-11-01
+
+책임은 기존 Catalog GraphRAG의 bounded lexical seed 선정이다. 정본은 요청에 핀된 Graph의
+node/term/source-pointer이고, accepted 보고서와 원 topic keys/request/evidence는 변경하지
+않는다. read-only 진단에서 새 accepted concept key가 현재 Graph의 exact key에는 없지만,
+기존 lexical adapter로 실제 교과서 자료를 찾을 수 있음을 확인했다. 다른 source-class의
+노드가 작은 seed budget을 먼저 채우는지 재현하고, 그렇다면 lexical 후보를 요청한
+source-class membership으로 제한한 뒤 기존 rank/walk/source resolver를 그대로 사용한다.
+이 조건은 권한 부여가 아니며 원 actor/정책·최종 source/hash/lifecycle 검증은 유지한다.
+
+주 접근은 `(Graph revision, term)`의 indexed lookup 및 같은 Graph/node/source-class의
+`EXISTS`다. 원 term B-tree, source-pointer unique key의 Graph/node prefix와 source-class
+index를 재사용하며 N+1/materialization/Graph 복제는 없다. bounded query와 map/set ranking,
+기존 max_nodes와 두 hop 한도를 유지한다. 정확한 query plan을 확인하고 새 index는 필요가
+실측될 때만 검토한다. source-class가 다른 pointer를 join해 frequency를 중복 계산하지 않는다.
+
+새 wire/worker behavior/영속 schema/queue는 없으며 dependency 방향도 Catalog application→
+기존 DB adapter 그대로다. 읽기 root와 canonical evidence commit/replay transaction은 기존
+소유자에 둔다. 이미 발행한 Evidence는 같은 원 key로 반환하고 새 알고리즘으로 덮지 않는다.
+실제 근거가 없으면 기존 insufficient-evidence 오류를 유지한다. 실패를 성공 처리하거나
+문항별 하드코딩 alias, 한국어를 ASCII topic key로 삽입, source-class 확대, 근거 생략으로
+우회하지 않는다. 별도 검색 플랫폼/보고서 재작성보다 기존 seed query의 범위 수정이 작다.
+배포는 source·actual pinned Graph read 회귀 뒤 isolated creative owner만 대상으로 하고,
+숫자 runtime/API/QUERY/INDEX 및 그 실행 pin은 그대로 둔다.
+
 사용자는 새 임베딩 전환 후 기존 벡터 삭제를 승인했다. 삭제 대상은 해당 기출의 구형
 accepted/mixed embedding 파생 데이터이며, 기출·교과서·창작·AI Item/Graph/풀이보고서
 정본은 삭제 대상이 아니다. 공유 shard에 새 벡터/비대상 벡터가 있으면 파일 전체를 지우지 않는다.
