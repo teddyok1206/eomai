@@ -1,5 +1,58 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## private 실제 parent admission·공개 consumer 경계 후보 — 2026-11-01
+
+- source **`26a583abe51a720fc51546c262d1520b4f92be7f`**는 parent17의 실제 private source
+  admission을 추가했다. 원 Chat origin과 actual private CPU/CUDA source owners, current
+  OPERATOR·Graph/access policy/recipe/source classes, 두 private policy/bundle와 control
+  provenance를 같은 root 앞뒤에서 확인한다. 기존 초기 request metadata 준비 함수를
+  재사용하며 사전 검증이 Workflow/START/Job이나 새 질문·검색을 만들지 않는다. CPU index가
+  없으면 CPU 결과를 꾸미지 않는다. 공유 finite execution/publication owner만 확장했고 별도
+  queue/store/DB migration/수치 모델·공간은 추가하지 않았다. 실제 GPU grant를 뜻하지 않는다.
+- source **`c4855442`**는 strict 검사에서 발견한 legacy composer의 profile4 거부 누락을
+  보강했다. 검증된 successor binding을 주입한 독립 reproducer에서 기존 public3는 거부하나
+  registered public4는 KeyError로 넘어가는 것을 재현했다(1 PASS/1 FAIL). 원 document
+  reader의 앞선 검증은 별도로 유지하며 이 결과를 운영 정보 노출로 확대하지 않는다.
+  기존1/2 결과의 허용 profile을 넓히지 않고 같은 concrete family guard에서3/4를 거부한다.
+- 최종 source **`2960f544a08654c5172594b3b2e3d40c0f7de495`**는 shared admission union을
+  쓰는 공개 DOCUMENT INDEX·CPU QUERY consumer도 private17 결과를 명시적으로 거부한다.
+  DOCUMENT 목적은 source admission 전에 INDEX로 확인한다. 초기 consumer strict 검사의
+  두 파일/5 union-attr 오류를 숨기거나 cast로 덮지 않았다. 이미 검증된 결과의 O(1) family
+  guard만 추가하며 전체 schema 재파싱·DB/state/worker 동작 변경은 없다.
+- source 검사는 서로 다른 파일 범위 **186 PASS/102.27s +57 PASS/17.30s +37 PASS/15.22s**,
+  최종 별도 비편집 설치본은 이 합집합 **280 PASS/113.51s**다. final strict mypy 영향5 및
+  consumer12, Ruff/format/shell/diff PASS다. 중간26a 설치본243 PASS/94.62s도 보존했다.
+  원 질문·control/Artifact bytes/ORM은 실제 로컬 fixture이고 IAM/Chat repository/public
+  DOCUMENT authority/물리 numerical 실행은 명시적인 synthetic ports다. 운영 성공이 아니다.
+- 공식 disposable PG는 **248 PASS/316.92s**다. 실제 private parent admission을 감싼
+  동시 allocation/같은 key 재전송·중단/늦은 Chat·public source 철회 rollback과 FAILED
+  원 parent의 shared execution 관측(재dispatch 없음)을 기존 공개/비공개 persistence 회귀와
+  함께 검사했다. 그 이후 순수 public family guard는 persistence 의미를 바꾸지 않아 이
+  증거를 재사용하고 source/installed consumer 회귀를 추가했다. 임시 DB
+  `/tmp/eom-api-testdb-20261101121055_3108f842`만 migration67 왕복·role reconcile했고,
+  read_only/other_connections0 확인 후 공식 cleanup PASS, REMOVED다. production66은 그대로다.
+- 실패/수정 이력은 `/tmp/eom-private-parent-admission-*20261101*`에 보존했다. 첫 source는
+  기존 회귀53 PASS/새 fixture12 setup ERROR였다. 독립 CPU/CUDA fixture가 bundle revision을
+  공유해 실제 publisher가 충돌을 거부한 것으로 서로 다른 immutable revision을 사용했다.
+  이후 GPU fixture의 runtime/model manifest pin 불일치도 실제 bundle/policy closure에 맞춰
+  고쳤다. 운영 guard·수치 기준은 완화하지 않았다. 존재하지 않는 test 경로의0개 실행과
+  legacy reproducer 실패/consumer strict 실패도 보존했다.
+- 최종 build/RECORD PASS. directory는
+  `/tmp/eom-api-build/2960f544a08654c5172594b3b2e3d40c0f7de495.7Cf1ww/dist`이며 platform SHA
+  `5344abb5cbc6da1d44b6a12c5140aeea2f7bf4e2bc760e7afc36d1cc2d97fa64`, contracts
+  `06bf8839894e88cc9a613bc555fcd0841650a17d019be621cf4ba42411e3b91e`, API
+  `4e9f7a4141dd88c37bb73cc68a77a4ffcc19ca82c55eab14d7d4c1e6077cf72c`다. 설치본은
+  `/tmp/eom-private-parent-admission-installed.HzfXD8YZ/site-packages`이며 actual source/
+  module paths를 먼저 확인했다. 이전26a prefix `.4Jl9Y1v7`도 중간 증거로 보존했다.
+- 12:00 정기 frozen 집계는 **146/520·잔여374**, historical FAILED Workflow7 불변이다.
+  그 순간 non-terminal Workflow0이나 실제 INDEX2258114는 active이며 다음 source 검증을
+  진행한다. QUERY2256183도 보존했다. 11:50 실제 query metadata는 Workflow0이었고 운영
+  설정 정렬 이후 actual GUI query/read/replay PASS는 여전히 없다. 새 로그인/인증 변경/
+  모델 제출/live 배포/정본·구 vector·과거 FAILED 변경0이다. private global2 CLOSED다.
+- 전체 목표 ACTIVE다. 다음은 실제 GUI 확인, CPU 고정 unit 관측을 GPU로 위장하지 않는
+  private GPU parent·실행/완료 proof와 protected cohost/consumer 연결, 전체520 대상별
+  hash/권한, 실제 AI full-report canary 및 정확한 구형 파생 retirement/삭제다.
+
 ## private parent의 기존 저장 경계 연결 후보 — 2026-11-01
 
 - source **`2426ddb74581bdab10033a3da37ead2157c5e47b`**는 private parent1.7을 기존
