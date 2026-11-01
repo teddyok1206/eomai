@@ -37,6 +37,11 @@ from eom_workflow.private_chat_query_workflow import (
     PrivateChatQueryStep,
     PrivateChatQueryWorkflowDefinition,
 )
+from eom_workflow.private_chat_query_workflow_v2 import (
+    PrivateChatPublicQueryStep,
+    PrivateChatQueryWorkflowDefinitionV2,
+    parse_supported_private_chat_query_workflow_definition,
+)
 from eom_workflow.reference_query_workflow import (
     PublicSolutionReferenceQueryStep,
     PublicSolutionReferenceQueryWorkflowDefinition,
@@ -98,7 +103,8 @@ class CompiledWorkflowDefinition:
         | LocalEmbeddingStep
         | ReferenceQueryStep
         | PublicSolutionReferenceQueryStep
-        | PrivateChatQueryStep,
+        | PrivateChatQueryStep
+        | PrivateChatPublicQueryStep,
     ]:
         return {step.key: step for step in self.definition.steps}
 
@@ -132,7 +138,7 @@ def compile_definition_data(
         elif raw.get("schema_version") == "1.2":
             definition = parse_supported_reference_query_workflow_definition(raw)
         elif raw.get("schema_version") == "1.3":
-            definition = PrivateChatQueryWorkflowDefinition.model_validate(raw)
+            definition = parse_supported_private_chat_query_workflow_definition(raw)
         elif raw.get("schema_version") == "1.4":
             definition = parse_local_embedding_workflow_definition_v2(raw)
         else:
@@ -148,6 +154,7 @@ def compile_definition_data(
             ReferenceQueryWorkflowDefinition,
             PublicSolutionReferenceQueryWorkflowDefinition,
             PrivateChatQueryWorkflowDefinition,
+            PrivateChatQueryWorkflowDefinitionV2,
         ),
     ):
         # The native contract fixes both ordered steps, their transition and

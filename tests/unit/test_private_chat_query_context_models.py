@@ -19,6 +19,7 @@ from sqlalchemy import CheckConstraint
 from sqlalchemy.dialects.postgresql import dialect
 from sqlalchemy.schema import CreateIndex
 
+from tests.unit.test_private_chat_public_query_persistence import public_query_migration
 from tests.unit.test_private_chat_query_submission_context import context_case
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -37,6 +38,7 @@ def migration_module():
 
 def test_model_guard_matches_frozen_additive_migration_and_latest_head():
     migration = migration_module()
+    successor = public_query_migration()
     assert migration.revision == "20261017_0056"
     assert migration.down_revision == "20261014_0055"
     scripts = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
@@ -52,8 +54,9 @@ def test_model_guard_matches_frozen_additive_migration_and_latest_head():
     assert (
         checks[PRIVATE_CHAT_QUERY_CONTEXT_CHECK]
         == PRIVATE_CHAT_QUERY_CONTEXT_PREDICATE
-        == migration._PREDICATE
+        == successor._CONTEXT_PREDICATE
     )
+    assert migration._PREDICATE == successor._PREVIOUS_CONTEXT_PREDICATE
     assert "IS TRUE ELSE TRUE END" in migration._PREDICATE
     assert "octet_length(runtime_context::text) <= 65536" in migration._PREDICATE
     assert "runtime_context - ARRAY" in migration._PREDICATE

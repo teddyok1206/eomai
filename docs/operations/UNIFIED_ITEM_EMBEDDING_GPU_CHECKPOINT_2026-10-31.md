@@ -1,5 +1,56 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## private2 완료 영수증·compiler와 임시 PostgreSQL 저장 검증 — 2026-11-01 UTC
+
+- 직전 `4e81fc06`은 private request/policy/owner2와 원 turn key 연결 및360회귀를
+  commit/push한 **PROGRESS**였다. 현재HEAD/clean을 확인하고 이번에는 고정 definition2,
+  execution-record2·receipt/output2와 실제 disposable DB guard를 구현·검증한 **PROGRESS**다.
+  전체 목표 ACTIVE이며 새 작업 admission/운영 private2 실행은 아직 아니다.
+- 기존 two-step DAG와 schema1.3 framing을 재사용한다. private2 protocol과 실제
+  common numerical result2를 명시한다. 원 launch-association1과 submission-context1의
+  hash/원 command/actor/turn 의미는 그대로 재사용한다. 새 record/receipt는 exact private
+  parent/basis/Job3개/Artifact revision/member raw SHA/semantic SHA/model/bundle/resource/
+  publish time을 검증한다. 질문이나 vector bytes를 DB/완료 영수증에 복제하지 않는다.
+- source head는 **20261101_0067**, 운영은 여전히 설치8eb의 **20261031_0066**이다.
+  새 migration은 CHECK2개만 확장하고 원 unique turn index와 immutable snapshot/origin
+  triggers를 보존한다. private1 허용 의미는 그대로이며 private2 version/protocol/request/
+  context·actor/definition hash의 일치와 정확한 application tuple을 강제한다. successor
+  history가 있으면 downgrade를 DDL 전에 거부한다. 운영 DB migration은 실행하지 않았다.
+- 최종 marked disposable PostgreSQL **43 PASS /11.85s**다. migration 왕복과 원 index OID/
+  trigger 보존, rollback 후 같은 원 metadata 재조회, 잘못된 family/actor/hash/step 거부,
+  원 snapshot 불변, 서로 다른 key의 V2/V2·V1/V2 동시 생성에서 원 turn index의 정확한
+  1저장/1중복 거부를 확인했다. inactive synthetic rows이며 application/native/source 권한
+  acceptance가 아니다. `/tmp/eom-private-public-query2-postgres-20261101-final.log`.
+- 예비35 PASS 후 audit actor/definition hash 및 별도 PostgreSQL step tuple 검증을 보강했고
+  **새 임시 DB**를 생성·migration해 위43을 재검증했다. 두 marked test DB는 공식 cleanup으로
+  제거했고 state directory 부재도 확인했다. 운영·NAS·정본·실제 FAILED는 변경하지 않았다.
+  임시 DB의 synthetic records만 제거됐으며 개발 evidence logs는 보존한다.
+  `/tmp/eom-private-public-query2-testdb-preliminary-cleanup-20261101-v2.log`,
+  `/tmp/eom-private-public-query2-testdb-final-migrate-20261101.log`,
+  `/tmp/eom-private-public-query2-testdb-final-cleanup-20261101.log`.
+  최초 cleanup invocation은 필수--confirm 누락으로 side effect 전에 거부됐다. 원 log를
+  보존하고 올바른 동일-target 공식 명령으로 정리했다. 운영 승인/범위를 확장한 것이 아니다.
+- source·기존 private compiler/receipt/launch·소스 없는 설치본/resource/의존성 묶음
+  **199 PASS /76.11s**, 최종 privacy·guard 집중 **27 PASS /14.51s**(서로 중복), strict
+  mypy8 source(기존 engine/repository 포함)·Ruff/format/diff PASS다. 새 fixture의 alias import가
+  lint에 제거되어 최초68 PASS/18 setup ERROR였고, 명시적 기존fixture 재사용 이름을 고쳐
+  97 PASS 후 위 최종 묶음을 실행했다. metadata 거부 오류가 private text를 echo하지 않는
+  추가27도 확인했다. unit CPU/CUDA는 fake backend이며 실제 모델 실행0이다.
+  `/tmp/eom-private-public-query2-runner-focused-20261101.log`, `-v2.log`,
+  `/tmp/eom-private-public-query2-runner-final-gates-20261101.log`,
+  `/tmp/eom-private-public-query2-final-privacy-and-guards-20261101.log`,
+  `/tmp/eom-private-public-query2-runner-mypy-20261101-final.log`.
+- **01:00:00 UTC 정기 관측은 GPU123/520·잔여397**, 원 CUDA space/target hash와
+  historical FAILED7은 같다. 이때 nonterminal은 **CPU1**이며 이를 CUDA 실행으로 부르거나
+  CPU 완료를 GPU 분모에 합산하지 않는다. INDEX1683578/creative1698293 process는 실제
+  살아 있고 관측 시 GPU compute process는 없다. 추가 count polling/재시작/재제출0이다.
+- 다음은 Orchestrator의 canonical private2 Artifact commit/read와 기존 owner의 실제
+  native-purpose2/CPU·GPU routing·현재 소유권/permission/원 요청 replay·답변 전달을 잇는
+  일이다. 실제 새 작업 admission과 release operator67 지원·호환 배포는 그 경계가 준비된 뒤
+  수행한다. 현재 CPU 경로 선택 이유도 기존 원 실행 metadata로 확인하며 임의 GPU 재제출은
+  하지 않는다. 전체520 CUDA·AI 실제 full report/Graph/INDEX4·authorized DB query/read/replay·
+  구 소비자 전환·정확한 retirement/삭제의 원래 종료 조건은 그대로 남아 있다.
+
 ## 공통 QUERY의 private 실행 요청·CPU/CUDA owner 핀 연결 — 2026-11-01 UTC
 
 - 직전 `daf9f2a0`은 private context2와 공통 document proof를 구현·검증·push한

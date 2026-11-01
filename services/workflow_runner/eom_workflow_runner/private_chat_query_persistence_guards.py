@@ -4,7 +4,7 @@ PRIVATE_CHAT_QUERY_CONTEXT_CHECK = "ck_workflow_instances_private_query_context"
 PRIVATE_CHAT_QUERY_TURN_INDEX = "uq_workflow_private_chat_query_turn"
 PRIVATE_CHAT_QUERY_CONTEXT_PREDICATE = r"""CASE WHEN (
     definition_key = 'local-embedding-private-chat-query'
-    OR role_schema_version = 'private-chat-query/1.0'
+    OR role_schema_version IN ('private-chat-query/1.0','private-chat-query/2.0')
     OR initial_request ->> 'purpose' = 'PRIVATE_CHAT_QUERY'
     OR request_payload ->> 'purpose' = 'PRIVATE_CHAT_QUERY'
     OR initial_request ->> 'request_name' = 'PRIVATE_CHAT_QUERY_WORKFLOW_REQUEST'
@@ -12,14 +12,26 @@ PRIVATE_CHAT_QUERY_CONTEXT_PREDICATE = r"""CASE WHEN (
     OR runtime_context ->> 'schema_version' = 'private-chat-query-submission-context/1.0'
 ) THEN (
     definition_key = 'local-embedding-private-chat-query'
-    AND definition_version = '1.0.0'
-    AND role_schema_version = 'private-chat-query/1.0'
+    AND (
+        (definition_version = '1.0.0'
+         AND role_schema_version = 'private-chat-query/1.0'
+         AND initial_request ->> 'schema_version' = 'private-chat-query-workflow-request/1.0')
+        OR
+        (definition_version = '2.0.0'
+         AND role_schema_version = 'private-chat-query/2.0'
+         AND initial_request ->> 'schema_version' = 'private-chat-query-workflow-request/2.0'
+         AND initial_request ->> 'workflow_definition_key' = definition_key
+         AND initial_request ->> 'workflow_definition_version' = definition_version
+         AND initial_request ->> 'workflow_definition_sha256' = definition_hash
+         AND initial_request #>> '{operator_audit,operator_id}' = created_actor_id
+         AND initial_request #>> '{context_request,schema_version}'
+             = 'system-rag-private-chat-similarity-request/2.0')
+    )
     AND created_actor_type = 'human'
     AND created_actor_id ~ '^operator_[0-9a-f]{32}$'
     AND state IN ('REQUESTED','RUNNING','COMPLETED','FAILED','CANCELLED')
     AND stage IN ('LOCAL_EMBEDDING','COMPLETED','FAILED','CANCELLED')
     AND current_step_key IN ('encode_private_chat_query','complete')
-    AND initial_request ->> 'schema_version' = 'private-chat-query-workflow-request/1.0'
     AND initial_request ->> 'request_name' = 'PRIVATE_CHAT_QUERY_WORKFLOW_REQUEST'
     AND initial_request ->> 'purpose' = 'PRIVATE_CHAT_QUERY'
     AND request_payload = initial_request

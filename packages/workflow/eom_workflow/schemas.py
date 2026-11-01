@@ -953,11 +953,23 @@ PRIVATE_CHAT_QUERY_PUBLICATION_SCHEMA_RESOURCE = (
     "eom://schemas/workflow/private-chat-query-publication/1.0",
     "sha256:0e1282a4f912a4aaa25cb7cb4062179742a5d8165a875c3b17d101547eaacf0a",
 )
+PRIVATE_CHAT_PUBLIC_QUERY_PUBLICATION_SCHEMA_RESOURCE = (
+    "private-chat-publication-v2",
+    "private-chat-query-publication-v2.schema.json",
+    "eom://schemas/workflow/private-chat-query-publication/2.0",
+    "sha256:198771fbbfea7767ac5416cc52661a28b659f23c3d31ba365d3769519bfd2580",
+)
 PRIVATE_CHAT_QUERY_RUNNER_SCHEMA_RESOURCE = (
     "private-chat-runner",
     "private-chat-query-runner-v1.schema.json",
     "eom://schemas/workflow/private-chat-query-runner/1.0",
     "sha256:694c6043fc7f78f662b01bf05d7d812453efdbdfa400b3b4fcfc85c31f21195a",
+)
+PRIVATE_CHAT_PUBLIC_QUERY_RUNNER_SCHEMA_RESOURCE = (
+    "private-chat-runner-v2",
+    "private-chat-query-runner-v2.schema.json",
+    "eom://schemas/workflow/private-chat-query-runner/2.0",
+    "sha256:7e8334a4acd73d05de59eeac67213c5b4f6715dec026294b097174ae96885138",
 )
 PRIVATE_CHAT_QUERY_SUBMISSION_SCHEMA_RESOURCE = (
     "private-chat-submission",
@@ -972,6 +984,8 @@ EMBEDDING_BENCHMARK_LAUNCH_CONTROL_SCHEMA_RESOURCE = (
     "sha256:2ceb6cb0150ffc64f2b4e94fed17cff36181b486885c8f78d8e6c0cd4c34de27",
 )
 type LocalEmbeddingSchemaName = Literal[
+    "private-chat-publication-v2",
+    "private-chat-runner-v2",
     "private-chat-public-execution",
     "registered-public-coordinator",
     "registered-public-completion",
@@ -1055,7 +1069,9 @@ def _local_embedding_admission_schema(name: LocalEmbeddingSchemaName) -> dict[st
                 PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
                 PRIVATE_CHAT_PUBLIC_QUERY_EXECUTION_SCHEMA_RESOURCE,
                 PRIVATE_CHAT_QUERY_PUBLICATION_SCHEMA_RESOURCE,
+                PRIVATE_CHAT_PUBLIC_QUERY_PUBLICATION_SCHEMA_RESOURCE,
                 PRIVATE_CHAT_QUERY_RUNNER_SCHEMA_RESOURCE,
+                PRIVATE_CHAT_PUBLIC_QUERY_RUNNER_SCHEMA_RESOURCE,
                 PRIVATE_CHAT_QUERY_SUBMISSION_SCHEMA_RESOURCE,
                 EMBEDDING_BENCHMARK_LAUNCH_CONTROL_SCHEMA_RESOURCE,
             )
@@ -1100,7 +1116,9 @@ def _local_embedding_admission_schema_registry() -> Registry[Any]:
             PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
             PRIVATE_CHAT_PUBLIC_QUERY_EXECUTION_SCHEMA_RESOURCE,
             PRIVATE_CHAT_QUERY_PUBLICATION_SCHEMA_RESOURCE,
+            PRIVATE_CHAT_PUBLIC_QUERY_PUBLICATION_SCHEMA_RESOURCE,
             PRIVATE_CHAT_QUERY_RUNNER_SCHEMA_RESOURCE,
+            PRIVATE_CHAT_PUBLIC_QUERY_RUNNER_SCHEMA_RESOURCE,
             PRIVATE_CHAT_QUERY_SUBMISSION_SCHEMA_RESOURCE,
             EMBEDDING_BENCHMARK_LAUNCH_CONTROL_SCHEMA_RESOURCE,
         )
@@ -1127,7 +1145,9 @@ def local_embedding_admission_schema_registry() -> Registry[Any]:
             PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
             PRIVATE_CHAT_PUBLIC_QUERY_EXECUTION_SCHEMA_RESOURCE,
             PRIVATE_CHAT_QUERY_PUBLICATION_SCHEMA_RESOURCE,
+            PRIVATE_CHAT_PUBLIC_QUERY_PUBLICATION_SCHEMA_RESOURCE,
             PRIVATE_CHAT_QUERY_RUNNER_SCHEMA_RESOURCE,
+            PRIVATE_CHAT_PUBLIC_QUERY_RUNNER_SCHEMA_RESOURCE,
             PRIVATE_CHAT_QUERY_SUBMISSION_SCHEMA_RESOURCE,
             EMBEDDING_BENCHMARK_LAUNCH_CONTROL_SCHEMA_RESOURCE,
         )
@@ -1160,7 +1180,9 @@ def validate_local_embedding_admission_message(
                 "private-chat-execution",
                 "private-chat-public-execution",
                 "private-chat-publication",
+                "private-chat-publication-v2",
                 "private-chat-runner",
+                "private-chat-runner-v2",
                 "private-chat-submission",
             }
             else 64 * 1024**2

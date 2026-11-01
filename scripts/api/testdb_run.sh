@@ -283,7 +283,8 @@ if [[ "${action}" == "private-chat-context-tests" ]]; then
   export EOM_RUN_API_INTEGRATION=1
   export EOM_API_TEST_STATE="${state_directory}"
   export EOM_CHAT_KNOWLEDGE_TEST_STATE="${state_directory}"
-  "${PYTHON}" -m pytest -q tests/integration/test_private_chat_query_context_persistence.py
+  "${PYTHON}" -m pytest -q tests/integration/test_private_chat_query_context_persistence.py \
+    tests/integration/test_private_chat_public_query_persistence.py
   printf 'Disposable fresh private-context migration guards passed.\n'
   exit 0
 fi

@@ -13,6 +13,7 @@ from eom_workflow_runner.models import WorkflowStepRunRecord
 from sqlalchemy import CheckConstraint
 
 from tests.unit.test_local_embedding_stage_migration import RecordingOperations
+from tests.unit.test_private_chat_public_query_persistence import public_query_migration
 from tests.unit.test_reference_query_step_migration import query_migration
 
 PATH = Path("migrations/versions/20261017_0057_private_chat_query_step.py")
@@ -43,12 +44,14 @@ def test_private_check_preserves_frozen_0054_and_matches_current_model(monkeypat
         for constraint in WorkflowStepRunRecord.__table__.constraints
         if isinstance(constraint, CheckConstraint) and constraint.name == module._CHECK
     )
-    assert guard == module._PREDICATE
+    successor = public_query_migration()
+    assert guard == successor._STEP_PREDICATE
+    assert module._PREDICATE == successor._PREVIOUS_STEP_PREDICATE
     operations = RecordingOperations()
     monkeypatch.setattr(module, "op", operations)
     module.upgrade()
     assert [call[0] for call in operations.calls] == ["drop", "create"]
-    assert operations.calls[-1][1][2] == guard
+    assert operations.calls[-1][1][2] == module._PREDICATE
     for forbidden in ("CREATE TABLE", "UPDATE workflow", "DELETE FROM", "eom_workflow_runner"):
         assert forbidden not in PATH.read_text()
 

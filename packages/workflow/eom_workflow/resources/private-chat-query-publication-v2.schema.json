@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/private-chat-query-publication/2.0",
+  "title": "Private request2 and unchanged launch1 provenance for common numerical QUERY2",
+  "description": "Text-free metadata only. The original actor/turn and source/runtime admission must be verified by the actual owners.",
+  "$ref": "#/$defs/record",
+  "$defs": {
+    "record": {
+      "$id": "eom://schemas/workflow/private-chat-query-execution-record/2.0",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "purpose",
+        "workflow_request",
+        "launch",
+        "record_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "private-chat-query-execution-record/2.0"
+        },
+        "purpose": {
+          "const": "PRIVATE_CHAT_QUERY"
+        },
+        "workflow_request": {
+          "$ref": "eom://schemas/workflow/private-chat-query-execution/2.0#/$defs/request"
+        },
+        "launch": {
+          "$ref": "eom://schemas/workflow/private-chat-query-publication/1.0#/$defs/launch"
+        },
+        "record_sha256": {
+          "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/hash"
+        }
+      }
+    }
+  }
+}

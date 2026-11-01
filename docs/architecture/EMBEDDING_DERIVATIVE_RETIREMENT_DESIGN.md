@@ -374,3 +374,36 @@ capacity 부족 시 CPU fallback은 기존 router와 purpose를 그대로 사용
 전에는 이 설정을 보호 운영 파일에 설치·활성화하지 않는다. 새 queue/테이블/임베딩 모델/
 수치 payload/worker 권한은 추가하지 않는다. metadata lookup은 기존 indexed actor/turn,
 policy 검증은 고정 크기의 두 device와 소수 pin에 대해 O(1)이다.
+
+#### private2 완료 영수증과 저장 guard
+
+새 고정 definition2는 기존 `encode_private_chat_query → complete` DAG를 유지하고,
+result schema를 실제 numerical QUERY2인 `embedding-reference-query-result@2.0`으로 표시한다.
+새 arbitrary worker 역할/SQL/실행 명령이나 자동 재생성 loop는 없다. compiler가2를 해석하는
+것과 actual owner/admission이2를 실행하는 것은 별도다. native owner 준비 전에는 새 작업
+admission을 추가하지 않는다.
+
+해시·Job·원 command generation·원 basis만 담는 launch-association1은 의미가 같으므로
+재사용한다. request2를 담는 execution-record2와 QUERY2 pointer를 담는 receipt/output2만
+새로 정의한다. receipt owner/Artifact owner/native launch Job은 서로 다르고, data members는
+하나의 Artifact revision에 속하며 receipt는 별도 revision이어야 한다. 원 actor/basis/Workflow/
+step/native input/result/hash/bundle/resource를 닫고, current permission·producer/lifecycle 확인은
+기존 owner가 소유한다. 원 질문·보고서·vector bytes를 DB에 복제하지 않는다.
+
+additive migration `20261101_0067`은 context/step CHECK만 교체한다. private1의 허용 범위는
+그대로 두고 private2는 definition/version/protocol/request/context2·실제 actor/definition hash를
+상호 대조한다. 새 result2는 private application step/worker 없음/attempt1 조합만 허용한다.
+원 turn unique partial B-tree와 snapshot/origin immutable triggers는 **교체하지 않는다**.
+모든 버전의 같은 actor/turn은 같은 영속 키 공간에 있고 insert/lookup은 O(log N), metadata
+검증은 기존64KiB 한도 안이다. 중단은 원 transaction rollback, 재조회는 원 key/hash를 쓴다.
+다운그레이드는 successor instance/step history가 있으면 DDL 전에 거부하며 과거 row를
+변환·삭제하지 않는다. schema가 원 요청을 자동 실행하거나 source 권한을 부여하지 않는다.
+
+설계는 기존 queue/transaction/application 경계를 재사용하며 새 table/index/framework는 없다.
+source head67의 disposable DB guard 검증은 운영 migration을 뜻하지 않는다. 운영 반영 전에는
+기존 release operator의67 지원과 API/Catalog/QUERY/INDEX controller 호환·drain·rollback을
+별도로 검증한다. 진행 중 numerical runtime/model/space pin은 이 DDL 때문에 바꾸지 않는다.
+private2 history가 생긴 뒤의 기능 rollback은 DB를66으로 내리는 것이 아니다. head67과 원
+private2 읽기/복구 호환성을 유지하는 release set에서 새 admission/consumer 활성화만 철회한다.
+실제67 호환 검증 없이 과거66 wheel 재설치가 안전하다고 주장하지 않는다. 이미 시작한2는
+원 pin으로 종료/조회하고1로 relabel하거나 구 vector fallback을 몰래 재활성화하지 않는다.
