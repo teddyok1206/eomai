@@ -3,7 +3,11 @@
 from dataclasses import dataclass
 from typing import overload
 
-from eom_catalog_contracts.embedding_reference_query import ReferenceQuerySpaces
+from eom_catalog_contracts.embedding_reference_query import (
+    ReferenceQuerySpaces,
+    raw_similarity_contract_value,
+)
+from eom_catalog_contracts.private_chat_similarity_v2 import PrivateChatSimilarityRequestV2
 from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
 from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
 from eom_catalog_contracts.public_solution_similarity import (
@@ -30,6 +34,7 @@ from eom_catalog_contracts.registered_public_solution_similarity import (
     public_solution_reference_for_entry,
 )
 from eom_identifiers import content_sha256
+from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.embedding_registry_application import (
@@ -39,6 +44,7 @@ from eom_catalog_service.embedding_registry_application import (
 from eom_catalog_service.embedding_registry_catalog_adapter import CatalogEmbeddingRegistryVerifier
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
+    EmbeddingRegistryError,
     EmbeddingRegistryLookup,
     EmbeddingRegistryRead,
     ResolvedEmbeddingLookup,
@@ -46,13 +52,21 @@ from eom_catalog_service.embedding_registry_ports import (
     SelectedEmbeddingSources,
 )
 from eom_catalog_service.embedding_registry_repository import EmbeddingRegistryRepository
+from eom_catalog_service.public_solution_document_scope import (
+    PublicSolutionDocumentScope,
+    validate_public_solution_document,
+    validated_public_solution_entries,
+)
 from eom_catalog_service.public_solution_similarity_service import (
     PreparedPublicSolutionQuerySource,
     VerifiedPublicSolutionQueryRead,
     compose_public_solution_similarity,
     prepare_public_solution_query_source,
 )
-from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
+from eom_catalog_service.similarity_context_ports import (
+    SimilarityContextReadError,
+    similarity_context_error_from_registry,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -287,10 +301,82 @@ class CatalogPublicSolutionSimilarityRead:
         caller: EmbeddingRegistryCaller,
         request: SupportedPublicSolutionSimilarityRequest,
     ) -> tuple[ResolvedEmbeddingLookup, ResolvedPinnedEmbeddingIndex]:
-        self._require_root(session)
         request = parse_supported_public_solution_similarity_request(request)
+        return self._read_pinned_document(session, caller, request)
+
+    def read_private_documents_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: PrivateChatSimilarityRequestV2,
+    ) -> tuple[ResolvedEmbeddingLookup, ResolvedPinnedEmbeddingIndex]:
+        """Read the same official DOCUMENT closure without inventing a private self Item.
+
+        This is neither a private-origin check nor a native execution grant. The
+        actual private owner must fence the current turn independently.
+        """
+        self._require_root(session)
+        root = session.get_transaction()
+        if (
+            session.new
+            or session.dirty
+            or session.deleted
+            or self.catalog.identity_fence is None
+            or self.catalog._indexing_source_authority is not None
+        ):
+            raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
+        try:
+            request = PrivateChatSimilarityRequestV2.model_validate(
+                raw_similarity_contract_value(request)
+            )
+            with session.no_autoflush:
+                captured, document = self._read_pinned_document(session, caller, request)
+                scope = PublicSolutionDocumentScope(
+                    PublicSolutionSimilarityViewV4.model_validate(
+                        request.views[0].model_dump(mode="json")
+                    ),
+                    request.graph_snapshot,
+                    request.policy_revision_id,
+                    request.policy_sha256,
+                    request.source_classes,
+                    request.maximum_sources,
+                )
+                entries = validated_public_solution_entries(scope, captured)
+                validate_public_solution_document(scope, captured, entries, document)
+                self._reauthorize_pinned_read(session, caller, document, captured)
+                self._require_root(session)
+                if (
+                    session.get_transaction() is not root
+                    or session.new
+                    or session.dirty
+                    or session.deleted
+                ):
+                    raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
+                return captured, document
+        except SimilarityContextReadError:
+            raise
+        except EmbeddingRegistryError as error:
+            raise similarity_context_error_from_registry(error) from None
+        except (SchemaError, ValueError, TypeError, AttributeError):
+            raise SimilarityContextReadError("SOURCE_POINTER_INVALID") from None
+
+    def _read_pinned_document(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: SupportedPublicSolutionSimilarityRequest | PrivateChatSimilarityRequestV2,
+    ) -> tuple[ResolvedEmbeddingLookup, ResolvedPinnedEmbeddingIndex]:
+        self._require_root(session)
         config = self.catalog.configuration
-        view = request.views[0]
+        view: PublicSolutionSimilarityView | PublicSolutionSimilarityViewV4
+        if isinstance(request, PrivateChatSimilarityRequestV2):
+            if request.views[0].index is None:
+                raise SimilarityContextReadError("INDEX_POINTER_INVALID")
+            view = PublicSolutionSimilarityViewV4.model_validate(
+                request.views[0].model_dump(mode="json")
+            )
+        else:
+            view = request.views[0]
         if (
             type(caller) is not EmbeddingRegistryCaller
             or request.source_classes != config.source_classes

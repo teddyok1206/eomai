@@ -213,6 +213,29 @@ configuration/receipt/runtime bundle과 소비자 정책을 함께 검증·조�
 Slack 첫 문장은 한국어 요약이며 문항 내용·보고서 전문·인증 정보는 보내지 않는다.
 goal 완료는 GPU 프로세스 active나 설치 PASS가 아니라 U01–U05의 실제 결과로 판단한다.
 
+### 채팅의 공통 DOCUMENT 실제 읽기 경계 — 2026-11-01
+
+책임은 기존 `CatalogPublicSolutionSimilarityRead`의 공식 Graph/source/index 읽기다.
+이미 정의한 private similarity request2의 exact Graph/policy/index/recipe/space pins를 사용하고,
+개인 질문을 approved Item anchor로 만들지 않는다. 정본은 원 accepted/registered 보고서와
+기존 encoding/index Artifact이며, 이 작업은 새 corpus/index/queue/schema를 추가하지 않는다.
+동일한 actor-fenced Catalog owner의 `resolve_lookup`와 pinned index reader를 사용한다.
+새 private read만 closed request2를 받고, 기존 Item-to-Item request3/4의 의미는 유지한다.
+
+주 접근은 bounded source capture, revision/hash map과 indexed Artifact lookup, 한 index의
+ordered numerical rows다. 같은 materialization boundary에서 원 capture/document 값을 반환하며
+보고서나 파일을 새로 복제·영속화하지 않는다. 공유 pure document proof를 재사용해 등록된
+기출/창작/AI 계보·base/report hash·binding·finite/L2 vector closure를 동일하게 검사한다.
+비용은 기존 bounded O(공개 풀이 bytes + N*D), 공간 O(N*D), 최대16,384 source다. 새 index나
+list 반복 탐색은 없다. source/permission/lifecycle은 읽기 전후 같은 caller root에서 새로 확인하고
+원 index pin을 latest로 대체하지 않는다. private origin/현재 turn 검증은 별도 Chat owner 책임이다.
+
+Catalog application→기존 Registry/Artifact adapters 의존 방향과 read-only transaction을 유지한다.
+source-only read는 실행·권한 부여가 아니며 실제 private source owner/native admission 연결이
+완료되기 전 활성화하지 않는다. 실패는 기존 redacted source/index/authority 오류를 반환하고
+write/retry/new query를 만들지 않는다. 더 단순해 보이는 가짜 Item anchor나 legacy CONTENT_ONLY
+read 재사용은 공통 report/index4 및 비공개 질문의 의미를 보존하지 못하므로 사용하지 않는다.
+
 기존 미배포 legacy stored-read 후보는
 `staging/unified-embedding-goal-20261031/deferred-legacy-read.patch` 및 같은 폴더
 `deferred/`에 복구 가능하게 보존했다. 이번 공통 전환과 섞어 활성화하지 않는다.
