@@ -11,7 +11,9 @@ from eom_catalog_service.embedding_work_batch_execution import (
     execute_embedding_work_batch,
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
-from eom_workflow.embedding_batch_execution_receipt import EmbeddingBatchExecutionReceipt
+from eom_workflow.embedding_batch_execution_receipt import (
+    parse_supported_embedding_batch_execution_receipt,
+)
 from eom_workflow.embedding_batch_owner_control import EmbeddingBatchRootCompleted
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
@@ -82,10 +84,12 @@ def execution_case(*, planned=None):
         )
         for ordinal, (source, child) in enumerate(zip(batch.children, result.children, strict=True))
     ]
-    receipt = EmbeddingBatchExecutionReceipt.model_validate(
+    receipt = parse_supported_embedding_batch_execution_receipt(
         seal(
             dict(
-                schema_version="embedding-batch-execution-receipt/1.0",
+                schema_version="embedding-batch-execution-receipt/1.1"
+                if frames.request.purpose == "PRIVATE_CHAT_QUERY"
+                else "embedding-batch-execution-receipt/1.0",
                 purpose=frames.request.purpose,
                 device="CUDA",
                 parent_plan_job_id="job_" + "9" * 32,

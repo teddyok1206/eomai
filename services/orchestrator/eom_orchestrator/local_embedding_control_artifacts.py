@@ -26,7 +26,10 @@ from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_protocol.models import JobId
 from eom_workflow.embedding_batch_execution_receipt import (
     BATCH_EXECUTION_RECEIPT_SCHEMA_REF,
-    EmbeddingBatchExecutionReceipt,
+    PRIVATE_CHAT_BATCH_EXECUTION_RECEIPT_SCHEMA_REF,
+    SupportedEmbeddingBatchExecutionReceipt,
+    embedding_batch_execution_receipt_schema_ref,
+    parse_supported_embedding_batch_execution_receipt,
 )
 from eom_workflow.embedding_batch_plan_family import (
     SupportedEmbeddingBatchSelection,
@@ -238,17 +241,15 @@ class LocalEmbeddingControlArtifactPublisher:
         )
 
     def publish_batch_execution_receipt(
-        self, receipt: EmbeddingBatchExecutionReceipt, *, idempotency_key: str
+        self, receipt: SupportedEmbeddingBatchExecutionReceipt, *, idempotency_key: str
     ) -> PublishedLocalEmbeddingControl:
         """Current application authority is mandatory outside this publication leaf."""
-        checked = EmbeddingBatchExecutionReceipt.model_validate(
-            raw_similarity_contract_value(receipt)
-        )
+        checked = parse_supported_embedding_batch_execution_receipt(receipt)
         return self._publish(
             raw=canonical_json_bytes(checked.model_dump(mode="json")),
             semantic_sha256=checked.receipt_sha256,
             member="receipt.json",
-            schema=BATCH_EXECUTION_RECEIPT_SCHEMA_REF,
+            schema=embedding_batch_execution_receipt_schema_ref(checked),
             artifact_type=BATCH_EXECUTION_RECEIPT_ARTIFACT_TYPE,
             idempotency_key=idempotency_key,
             created_at=ControlPublicationTime.FIRST_OBSERVATION,
@@ -258,7 +259,7 @@ class LocalEmbeddingControlArtifactPublisher:
         self, *, parent_request_sha256: str, allocation_record_sha256: str
     ) -> ArtifactMemberPointer | None:
         """Original canonical completion pointer; caller reauthorizes and resolves its bytes."""
-        saved = self.publisher.find_published(
+        saved = self.publisher.find_published_primary_member(
             idempotency_key=batch_execution_receipt_publication_key(
                 parent_request_sha256, allocation_record_sha256
             ),
@@ -266,16 +267,17 @@ class LocalEmbeddingControlArtifactPublisher:
         )
         if saved is None:
             return None
-        if saved.primary_file != "receipt.json":
+        if (
+            saved.member_path != "receipt.json"
+            or saved.schema_ref
+            not in {
+                BATCH_EXECUTION_RECEIPT_SCHEMA_REF,
+                PRIVATE_CHAT_BATCH_EXECUTION_RECEIPT_SCHEMA_REF,
+            }
+            or saved.media_type != "application/json"
+        ):
             raise ValueError("BATCH_EXECUTION_RECEIPT_PUBLICATION_INVALID")
-        return ArtifactMemberPointer(
-            artifact_id=saved.artifact_id,
-            artifact_revision_id=saved.artifact_revision_id,
-            member_path="receipt.json",
-            sha256=saved.primary_sha256,
-            schema_ref=BATCH_EXECUTION_RECEIPT_SCHEMA_REF,
-            media_type="application/json",
-        )
+        return saved
 
     def publish_device_routing_policy(
         self,

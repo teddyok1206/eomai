@@ -312,6 +312,9 @@ if [[ "${action}" == "private-chat-artifact-tests" ]]; then
     tests/integration/test_embedding_batch_plan_admission.py \
     tests/integration/test_private_chat_batch_plan_store.py \
     tests/integration/test_private_chat_batch_plan_admission.py \
+    tests/integration/test_private_chat_batch_execution_receipt.py \
+    tests/integration/test_document_embedding_recovery.py \
+    tests/integration/test_reference_query_batch_execution_read.py \
     tests/integration/test_private_chat_query_native_persistence.py \
     tests/integration/test_private_chat_public_query_native_persistence.py \
     tests/integration/test_private_chat_similarity_read.py \

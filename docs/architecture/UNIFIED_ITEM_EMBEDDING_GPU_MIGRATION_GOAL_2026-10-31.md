@@ -173,6 +173,32 @@ accepted/mixed embedding 파생 데이터이며, 기출·교과서·창작·AI I
 
 ## 5. 진행·보고
 
+### private GPU 완료 증거의 명시적 successor — 2026-11-01
+
+기존 private checkpoint1/2의 EXECUTED는 고정 CPU unit template의 관측이다. 이를 GPU
+실행에 재사용하거나 released schema bytes를 바꾸지 않는다. GPU private 경로는 기존
+finite parent의 실제 allocation/readiness/binding/completion/ACK와 한 numerical QUERY2 child
+hash/range를 담는 private 전용 batch receipt successor로 정식 발행한다. 정본은 원 parent17,
+원 private origin/Workflow/launch 및 Orchestrator가 검증·commit한 receipt Artifact다.
+
+receipt는 작은 immutable pointer/hash metadata이며 private 질문·벡터·권한·임의 경로를
+넣지 않는다. 기존 공개 receipt의 순수 closure/range 검증과 publication owner를 재사용하고,
+private 목적/OPERATOR/한 child를 별도 schema-first family로 닫는다. primary access는 원
+Job/key의 indexed lookup, 단일 Artifact/member resolution 및 고정4단계 append-only history다.
+검증은 O(child 수), private는1개다. 기존 root transaction/command lease와 현재 Chat/public
+source fence를 유지하며 metadata receipt가 실행 권한이나 최종 source 검증을 대신하지 않는다.
+CPU fallback은 원 CPU 관측을 유지한다. 같은 원 실행의 재조회는 새 추론/새 identity를 만들지
+않고 uncertain/FAILED는 원 기록대로 남긴다. Catalog/Runner application→기존 receipt/Artifact/
+GPU adapters 방향이며 새 queue/vector store/수치 구현/모델·공간을 만들지 않는다. CPU 증거를
+GPU로 위장하거나 질문을 public Reference로 relabel하는 대안은 원 실행을 입증하지 못한다.
+물리 purpose와 protected cohost/global2 활성화는 전체 연결·설치 검증 후에만 선택한다.
+
+정식 receipt 재조회는 기존 file-set publisher의 실제 primary-member pointer를 사용한다.
+구형 schema1.0으로 URI를 추측해 붙이지 않으며, 같은 원 key가 private successor를 반환하면
+그 exact revision/schema/hash를 유지한다. 공개 INDEX/QUERY consumer는 자신의 기존 family
+검증을 그대로 유지한다. 변경된 lookup의 공개 중단 복구·batch proof 조회도 임시 DB에서
+함께 회귀 확인한다.
+
 ### private 공통 parent의 실제 source admission — 2026-11-01
 
 책임은 기존 private source owner와 finite parent application이다. 정본은 원 Chat origin과

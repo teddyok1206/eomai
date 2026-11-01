@@ -31,6 +31,12 @@ BATCH_EXECUTION_RECEIPT_SCHEMA_REF = "eom://schemas/workflow/embedding-batch-exe
 BATCH_EXECUTION_RECEIPT_SCHEMA_SHA256 = (
     "sha256:6858a52c0dff379c7db3dd79325a2ea82f168e2b847f22a57f55e3baf3bcc7f7"
 )
+PRIVATE_CHAT_BATCH_EXECUTION_RECEIPT_SCHEMA_REF = (
+    "eom://schemas/workflow/embedding-batch-execution-receipt/1.1"
+)
+PRIVATE_CHAT_BATCH_EXECUTION_RECEIPT_SCHEMA_SHA256 = (
+    "sha256:33b17403aeded45e83291aa5f8b68ffb5d5872119d2c7d22f88ced9967874e34"
+)
 MAX_BATCH_EXECUTION_RECEIPT_BYTES = 512 * 1024
 
 
@@ -39,32 +45,42 @@ def _require(condition: bool) -> None:
         raise ValueError("EMBEDDING_BATCH_EXECUTION_RECEIPT_INVALID")
 
 
-@lru_cache(maxsize=1)
-def _schema_raw() -> bytes:
-    with (
-        files("eom_workflow")
-        .joinpath("resources/embedding-batch-execution-receipt-v1.schema.json")
-        .open("rb") as stream
-    ):
+@lru_cache(maxsize=2)
+def _schema_raw(version: str = "embedding-batch-execution-receipt/1.0") -> bytes:
+    if version == "embedding-batch-execution-receipt/1.0":
+        filename = "embedding-batch-execution-receipt-v1.schema.json"
+        expected = BATCH_EXECUTION_RECEIPT_SCHEMA_SHA256
+    elif version == "embedding-batch-execution-receipt/1.1":
+        filename = "private-chat-batch-execution-receipt-v1.1.schema.json"
+        expected = PRIVATE_CHAT_BATCH_EXECUTION_RECEIPT_SCHEMA_SHA256
+    else:
+        raise ValueError("EMBEDDING_BATCH_EXECUTION_RECEIPT_INVALID")
+    with files("eom_workflow").joinpath("resources", filename).open("rb") as stream:
         raw = stream.read(MAX_BATCH_EXECUTION_RECEIPT_BYTES + 1)
-    _require(
-        0 < len(raw) <= MAX_BATCH_EXECUTION_RECEIPT_BYTES
-        and sha256_bytes(raw) == BATCH_EXECUTION_RECEIPT_SCHEMA_SHA256
-    )
+    _require(0 < len(raw) <= MAX_BATCH_EXECUTION_RECEIPT_BYTES and sha256_bytes(raw) == expected)
     return raw
 
 
 def embedding_batch_execution_receipt_schema() -> dict[str, Any]:
-    value: dict[str, Any] = json.loads(_schema_raw())
+    value: dict[str, Any] = json.loads(_schema_raw("embedding-batch-execution-receipt/1.0"))
     return value
 
 
-@lru_cache(maxsize=1)
-def _validator() -> Draft202012Validator:
-    schema = embedding_batch_execution_receipt_schema()
+def private_chat_batch_execution_receipt_schema() -> dict[str, Any]:
+    value: dict[str, Any] = json.loads(_schema_raw("embedding-batch-execution-receipt/1.1"))
+    return value
+
+
+@lru_cache(maxsize=2)
+def _validator(version: str) -> Draft202012Validator:
+    schema = json.loads(_schema_raw(version))
     Draft202012Validator.check_schema(schema)
     registry = local_embedding_admission_schema_registry().with_resources(
         (
+            (
+                BATCH_EXECUTION_RECEIPT_SCHEMA_REF,
+                Resource.from_contents(embedding_batch_execution_receipt_schema()),
+            ),
             (BATCH_PLAN_SCHEMA_REF, Resource.from_contents(embedding_batch_plan_schema())),
             (
                 BATCH_OWNER_CONTROL_SCHEMA_REF,
@@ -105,13 +121,15 @@ class EmbeddingBatchExecutedChild(BaseModel):
         return self
 
 
-class EmbeddingBatchExecutionReceipt(BaseModel):
+class _EmbeddingBatchExecutionReceiptFields(BaseModel):
     model_config = ConfigDict(
         frozen=True, extra="forbid", revalidate_instances="always", hide_input_in_errors=True
     )
 
-    schema_version: Literal["embedding-batch-execution-receipt/1.0"]
-    purpose: Literal["INDEX", "REFERENCE_QUERY"]
+    schema_version: Literal[
+        "embedding-batch-execution-receipt/1.0", "embedding-batch-execution-receipt/1.1"
+    ]
+    purpose: Literal["INDEX", "REFERENCE_QUERY", "PRIVATE_CHAT_QUERY"]
     device: Literal["CUDA"]
     parent_plan_job_id: str = Field(pattern=r"^job_[0-9a-f]{32}$", strict=True)
     scope: EmbeddingWorkBatchScope
@@ -128,7 +146,8 @@ class EmbeddingBatchExecutionReceipt(BaseModel):
         try:
             document = raw_similarity_contract_value(value)
             _require(len(canonical_json_bytes(document)) <= MAX_BATCH_EXECUTION_RECEIPT_BYTES)
-            _validator().validate(document)
+            _require(isinstance(document, dict))
+            _validator(document.get("schema_version", "")).validate(document)
             return document
         except Exception:
             raise ValueError("EMBEDDING_BATCH_EXECUTION_RECEIPT_INVALID") from None
@@ -161,3 +180,61 @@ class EmbeddingBatchExecutionReceipt(BaseModel):
             rows += child.row_count
         _require(position == self.completed.vectors_byte_count and rows <= 1024)
         return self
+
+
+class EmbeddingBatchExecutionReceipt(_EmbeddingBatchExecutionReceiptFields):
+    """Released public receipt1 remains closed to its original two purposes."""
+
+    schema_version: Literal["embedding-batch-execution-receipt/1.0"]
+    purpose: Literal["INDEX", "REFERENCE_QUERY"]
+
+
+class PrivateChatBatchExecutionReceipt(_EmbeddingBatchExecutionReceiptFields):
+    schema_version: Literal["embedding-batch-execution-receipt/1.1"]
+    purpose: Literal["PRIVATE_CHAT_QUERY"]
+    children: tuple[EmbeddingBatchExecutedChild, ...] = Field(min_length=1, max_length=1)
+
+    @model_validator(mode="after")
+    def private_scope(self) -> Self:
+        _require(
+            self.scope.actor_kind == "OPERATOR"
+            and self.scope.storage_partition == "public-solution"
+            and self.children[0].ordinal == 0
+            and self.children[0].row_count == 1
+            and self.children[0].binary_sha256 == self.completed.vectors_sha256
+        )
+        return self
+
+
+type SupportedEmbeddingBatchExecutionReceipt = (
+    EmbeddingBatchExecutionReceipt | PrivateChatBatchExecutionReceipt
+)
+
+
+def parse_supported_embedding_batch_execution_receipt(
+    value: object,
+) -> SupportedEmbeddingBatchExecutionReceipt:
+    document = raw_similarity_contract_value(value)
+    if isinstance(document, dict):
+        if document.get("schema_version") == "embedding-batch-execution-receipt/1.0":
+            return EmbeddingBatchExecutionReceipt.model_validate(document)
+        if document.get("schema_version") == "embedding-batch-execution-receipt/1.1":
+            return PrivateChatBatchExecutionReceipt.model_validate(document)
+    raise ValueError("EMBEDDING_BATCH_EXECUTION_RECEIPT_INVALID")
+
+
+def embedding_batch_execution_receipt_schema_ref(
+    value: SupportedEmbeddingBatchExecutionReceipt,
+) -> str:
+    """O(1) identity of an already validated concrete family, not source authority."""
+    if (
+        type(value) is PrivateChatBatchExecutionReceipt
+        and value.schema_version == "embedding-batch-execution-receipt/1.1"
+    ):
+        return PRIVATE_CHAT_BATCH_EXECUTION_RECEIPT_SCHEMA_REF
+    if (
+        type(value) is EmbeddingBatchExecutionReceipt
+        and value.schema_version == "embedding-batch-execution-receipt/1.0"
+    ):
+        return BATCH_EXECUTION_RECEIPT_SCHEMA_REF
+    raise ValueError("EMBEDDING_BATCH_EXECUTION_RECEIPT_INVALID")

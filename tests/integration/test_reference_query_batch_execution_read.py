@@ -297,9 +297,9 @@ def test_existing_query_completion_consumes_batch_proof_and_resumes_original_pro
     execution = completion_case(value, tmp_path, monkeypatch)
     if interruption != "NONE":
         leaf, name = (
-            (execution.publications.artifacts, "publish_reference_query")
+            (execution.publications.artifacts, "publish_supported_reference_query")
             if interruption == "QUERY_COMMITTED"
-            else (execution.publications.completions, "publish_reference_query")
+            else (execution.publications.completions, "publish_supported_reference_query")
         )
         original = getattr(leaf, name)
 
