@@ -1,5 +1,52 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## private GPU 원 실행 이력의 명시적 successor 후보 — 2026-11-01
+
+- source **`342b87f3152560a0931f21fdb42c6aa5370a70c0`**는 private checkpoint2.1을
+  기존 네 단계/원 Job 저장소에 연결했다. GPU EXECUTED는 private receipt1.1의 exact
+  member/raw SHA·semantic SHA·child0/result SHA/관측시각만 담는다. 공개 GPU와 작은 공통
+  observation 필드만 공유하며 목적별 URI/ordinal 검증은 분리했다. private1/2 CPU schema
+  bytes·고정 unit template 필드와 기존 builder는 그대로다. 새 GPU builder만2.1을 선택한다.
+- 같은 원 request2/launch/현재 origin·producer·순서·시간·최종 receipt2 hash를 검증한다.
+  private2.1은 CUDA request2의 일관된 history만 허용하고 CPU·legacy/public 또는 중간 단계의
+  family 혼합을 거부한다. 수치 QUERY2/result2/workflow receipt2는 그대로 재사용하며 question/
+  벡터/권한 payload를 history에 복제하지 않는다. metadata가 실제 GPU/source 권한은 아니다.
+- 기존 Job PK/indexed 최대5 event read, 같은 row lock/root transaction/unique sequence와
+  protocol registry를 재사용했다. 실제 PG에서 checkpoint protocol2.1/hash가 등록되더라도
+  원 launch Job의 protocol은 private2.0으로 보존됨을 확인했다. 새 table/index/queue/
+  migration/수치 모델·공간은 없고 FAILED/CANCELLED 및 기존 receipt는 바꾸지 않는다.
+- source 합집합 **402 PASS/259.34s**, strict mypy 직접/consumer11, Ruff/format/diff PASS다.
+  집중110건은 합집합에 포함된다. 별도 비편집 설치본도 같은 범위 **402 PASS/267.45s**이며
+  actual source/module paths를 먼저 확인했다.
+  최초 새 unit28건 중27 PASS/1 FAIL은 float를 검사 전에 canonical hash로 만들려 한 fixture
+  오류였다. 부동소수점은 canonical EOM message에서 금지되므로 raw malformed body로 전달해
+  원 거부를 확인했고 guard는 완화하지 않았다. 원 실패 log를 보존했다.
+- 공식 disposable PG는 **282 PASS/432.81s**다. legacy/private2 CPU/GPU의 같은 원 history,
+  동시 append 1 event, caller rollback, origin 충돌·known FAILED 보존과 공개 INDEX/QUERY
+  canonical 중단 복구를 함께 검사했다. IAM·실제 receipt/GPU 관측은 명시적 synthetic
+  fixture이며 실제 모델 실행이나 운영 성공이 아니다. 임시 DB
+  `/tmp/eom-api-testdb-20261101132117_471a20c4`만 migration67 왕복/reconcile 후 사용했고,
+  read_only/other_connections0 확인 뒤 공식 cleanup PASS, REMOVED다. production66 유지다.
+- 공식 build/RECORD PASS. directory는
+  `/tmp/eom-api-build/342b87f3152560a0931f21fdb42c6aa5370a70c0.fg08VT/dist`이며 platform SHA
+  `54c903df7a896cec3eade872116c8ab5bba8166a8a20a02ef63626fe004cc03c`, contracts
+  `370ed473c271f0ae5426cab796d79a6e9058fc5a6c8af6f087115cdfe09fb2ef`, API
+  `04459d2bc38a9d084bcfa213b9309be50c5443acd794f2f039784ad0d2476aa5`다. 설치 prefix는
+  `/tmp/eom-private-gpu-checkpoint-installed.zlk0vDAz/site-packages`다. core3 wheel만 설치했고
+  numerical Conda나 optional GPU helper를 바꾸지 않았다. logs는
+  `/tmp/eom-private-gpu-checkpoint-*20261101*` 및 ignored installed harness를 참조한다.
+- **13:30 UTC 정기 집계는152/520·잔여368·CUDA RUNNING1**, historical FAILED7 불변이다.
+  수가13:00과 같아13:31 READ ONLY 진단했다. 앞 CUDA 원 Workflow는13:01:39 COMPLETED/
+  Job SUCCEEDED/schema4이며, 다음 원 Workflow는13:23:02 생성돼 encode_batch RUNNING/
+  command PROCESSING이다. 아직 platform Job이 없고 실제 source 검증 stage가 계속 COMPLETED
+  로그를 낸다. DB active query/lock wait0이었다. 이는 계산 시작 전 준비 진행 증거이지
+  GPU forward 또는 새 binding 완료가 아니다. 새 submit/restart/원 FAILED 변경은 하지 않았다.
+- INDEX2258114/QUERY2256183과 모든 운영 pin, private physical gate/global2 CLOSED를
+  유지했다. 이번 source 후보의 live 배포/모델 제출/인증 변경/정본·구 vector 삭제0이다.
+  전체 목표 ACTIVE이며 다음은 실제 private GPU canonical proof·완료 reader/driver/cohost
+  연결이다. 실제 GUI query/read/replay, AI canary, 전체520 대상별 hash/권한과 모든 consumer
+  전환 후 구 파생 retirement/삭제는 여전히 별도 미완료다.
+
 ## private 원 GPU 결과의 owner-local 검증·재조회 후보 — 2026-11-01
 
 - source **`e56525d981704ec586bbdd5c4fd13252e38f93bd`**는 기존 shared result reader와
