@@ -13,6 +13,7 @@ from eom_workflow.embedding_batch_plan_family import (
     SupportedEmbeddingBatchRequest,
     parse_embedding_batch_plan_request,
 )
+from eom_workflow.embedding_batch_plan_v17 import EmbeddingBatchSelectionV17
 from eom_workflow.embedding_device_routing import EmbeddingDeviceRoutingDecision
 from eom_workflow.local_embedding_encoding_dispatch import SupportedEmbeddingIntent
 from eom_workflow.local_embedding_request_v2 import (
@@ -70,12 +71,15 @@ class OriginalDocumentEmbeddingBatchContext:
             parse_embedding_batch_plan_request(parent),
             owner,
         )
+        require_document_batch_context(self.parent.purpose == "INDEX")
         self.decision = EmbeddingDeviceRoutingDecision.model_validate(decision)
         self.request = parse_supported_local_embedding_request(request)
         with (
             operation.publisher.sessions.begin() as session,
             operation.admission.admit(session, self.parent) as sources,
         ):
+            if isinstance(sources.selection, EmbeddingBatchSelectionV17):
+                raise ValueError("DOCUMENT_BATCH_CONTEXT_INVALID")
             self.selection = sources.selection
         self.workflow_key = document_embedding_batch_workflow_key(self.parent)
         self.validate_request(self.request)

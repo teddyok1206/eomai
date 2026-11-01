@@ -19,6 +19,7 @@ from eom_workflow.embedding_batch_plan_family import (
     SupportedEmbeddingBatchRequest,
     validate_embedding_batch_query_context,
 )
+from eom_workflow.embedding_batch_plan_v17 import EmbeddingBatchSelectionV17
 from eom_workflow.reference_query_execution import SupportedReferenceQueryNativeResult
 from sqlalchemy.orm import Session
 
@@ -84,6 +85,8 @@ class CatalogCpuReferenceQueryBatchGroup:
             operation.publisher.sessions.begin() as session,
             operation.admission.admit(session, parent) as sources,
         ):
+            if isinstance(sources.selection, EmbeddingBatchSelectionV17):
+                raise ValueError("REFERENCE_QUERY_CPU_BATCH_INVALID")
             self.selection, self.policy = sources.selection, sources.policy
             _require(owner.configuration.registry.space == self.policy.cpu.profile.space)
         self.decision = history.route.decision

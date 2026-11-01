@@ -198,6 +198,13 @@ GPU grant/실행 완료 proof나 global2 활성화를 대신하지 않는다.
 앞선 검증을 대신하지 않고 같은 순수 family guard에4도 추가한다. 구형 결과의 허용 profile
 union을 넓히거나 새 벡터를 구형 형식으로 relabel하지 않는다. 새 wire/DB/권한 변경은 없다.
 
+shared execution이 private admission을 지원해도 기존 DOCUMENT INDEX와 public CPU QUERY
+consumer가 private selection17의 존재하지 않는 Item anchors를 해석해서는 안 된다. 해당
+두 consumer는 이미 검증된 selection의 concrete family를 O(1)로 거부하며 DOCUMENT는
+source admission 전 INDEX 목적도 확인한다. 전체 control schema를 다시 파싱하거나 새로운
+wrapper/상속 계층을 만들지 않는다. 이는 순수 입력/결과 family 경계 보강이며 기존 persistence
+검증을 재사용한다. source·설치본의 consumer 회귀와 guard 전후 동작을 별도로 확인한다.
+
 ### 원 Catalog 파일 저장의 중단 복구 — 2026-11-01
 
 책임은 기존 core-owned `CatalogArtifactService`와 Orchestrator Job/Artifact 경계다. 정본은
