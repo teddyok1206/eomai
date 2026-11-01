@@ -1,5 +1,63 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 공통 private 수치 leaf·실제 Catalog DOCUMENT 읽기 — 2026-11-01 03:38 UTC
+
+- 직전 사용자 turn은 기존 준비 기록의 GUI 시험 후보 안내인 **NO_PROGRESS**였다. 실제
+  worktree/프로세스를 다시 확인해 미완료 physical leaf를 검증·커밋하고 기존 Catalog의
+  공통 DOCUMENT 읽기 경계를 추가한 이번 turn은 **PROGRESS**다. 전체 U01–U05 목표는
+  ACTIVE다. 전체520·AI full report·실제 검색 전환·구형 파생 삭제의 종료 조건은 그대로다.
+- **`d175638021ce099f2176421187e35446dbcb8ec3`**는 기존 private CPU unit/owner files/FD와
+  host capacity owner를 재사용한다. private request1/policy1/native1 또는 private request2/
+  policy2/common numerical2의 정확한 조합만 받는다. 기존1-only numerical API와 executor는
+  계속2를 거부하며, legacy executor는 staging/실행 전에 거부한다. 별도 queue/service/template/
+  실행 권한이나 migration은 만들지 않았다. 출력 파일의 identity/mode/hash와 finite/L2 검증,
+  실제 unit/invocation 관측, 원 marker/같은 Job replay 및 uncertain 상태의 재시작 금지는 유지한다.
+  owner-local question을 Prepared repr와 canonical private numerical Artifact에 남기지 않는다.
+- 최종 source **305 PASS /121.60s**, 별도 non-editable 설치본 동일 suite **305 PASS /122.50s**,
+  strict mypy source6, Ruff/format/diff PASS다. 최초 설치본 검사 **304 PASS/1 FAIL**은 하위
+  Python이 보호된 운영 구버전을 import한 검증 환경 불일치였다. 같은 wheel을 유지한 채
+  하위 프로세스에도 해당 prefix만 명시했고 부모 `-I -B`의 실제 module 경로/source commit과
+  최종305를 확인했다. 실패 로그는 보존하며 운영 Python/package는 변경하지 않았다.
+  `/tmp/eom-private2-native-final-source-20261101-v2.log`,
+  `/tmp/eom-private2-native-installed-20261101.tests`, `-v2.tests`.
+- **`23b7cd11fec3a4a579b8490c5e2c39660a8fb2e2`**는 기존
+  `CatalogPublicSolutionSimilarityRead`에 closed private request2의 실제 DOCUMENT read를
+  연결했다. 기존 Registry의 operator-fenced capture와 pinned index read, 공통 document proof를
+  재사용하며 질문을 가짜 approved Item anchor로 만들지 않는다. 기출/창작/AI 보고서 계보와
+  같은 shared row를 index4 실제 fixture bytes로 확인했다. source/revision/hash/lifecycle/
+  permission·전후 source 재확인·원 root/읽기 전후 pending write 검사, no-latest를 유지한다.
+  공개 Item-to-Item request3/4는 같은 공통 읽기 kernel을 사용하며 이전 의미를 보존한다.
+  source/IAM/ledger fixture는 synthetic이며 실제 사용자 Chat/HTTPS 검증으로 세지 않는다.
+- Catalog source **106 PASS /23.87s**, 별도 설치본 Catalog+고정 FD entrypoint 합집합
+  **141 PASS /24.13s**, strict mypy source1/Ruff/format/diff PASS다. 최초 test의 예상 authority
+  call3은 실제 fresh capture 전후2회와 달랐으므로 같은 두 scope의 capture를 직접 추적하도록
+  fixture assertion을 바로잡았다. 최종 부정 조건은 파일/권한/계보/외부 caller/누락 index/
+  source 교체/숨은 write/질문 extra를 거부한다. DB state/schema 변경이 없어 이번 phase에
+  운영/임시 DB mutating pytest는 없으며 기존 coordinator/Artifact의 실제 PG44 PASS는
+  앞 section의 별도 증거로 보존한다. 겹치는 suite 수는 합산하지 않는다.
+  `/tmp/eom-private2-document-read-focused-20261101.log`,
+  `/tmp/eom-private2-document-read-final-20261101-v2.log`,
+  `/tmp/eom-private2-document-installed-20261101.tests`.
+- 두 commit 모두 공식 build-only/RECORD PASS다. 최신 wheel directory는
+  `/tmp/eom-api-build/23b7cd11fec3a4a579b8490c5e2c39660a8fb2e2.Gat9Yg/dist`이며 SHA는
+  platform `61c8a23e6cf62a0387cbae31bdfcafdc5c84a6f72497f9875a2322a519e897bc`,
+  contracts `f240d842b0ff35a04d2a1c2af15969980d898e1ba26556f561aabdecbc5f2d30`,
+  API `3b3129ee5ad925d844bab3572c7067905d804547eda2fe81226edb186c7ec3c5`다.
+  별도 prefix `/tmp/eom-private2-document-installed.0UmXjA2h/site-packages`에서 exact source와
+  module paths를 확인했다. 이는 source67 candidate이며 운영 DB head66/API8eb/QUERY·INDEX
+  FB/isolated creative6de 및 보호된 공용 CPU Conda/env를 교체한 것이 아니다.
+- **03:30 UTC 기존 timer: GPU127/520·잔여393, CUDA Workflow1 RUNNING**, historical FAILED7
+  불변이다. 새 coverage polling은 만들지 않았다. creative runtime은 재개 이후 verified_count15,
+  후속11712/11713 준비·11714/11716 분석 등으로 진행했다. 이는 전체 corpus 완료 수나 새
+  canonical report15건 직접 읽기 증거가 아니다. INDEX PID1683578, creative1876923은 실제
+  active/NRestarts0으로 유지됐고 이번 source-only 작업의 restart0다. 기출/교과서/Item/보고서
+  정본과 구 vector/index 삭제0이다.
+- 남은 연결은 private2의 실제 live-origin source owner/정책 publication/native executor/
+  dispatch·prepare·install composition과 admission, 공용 CPU runtime의 안전한 compatible
+  successor 및 operator67, 실제 AI full report→Graph→INDEX4·authorized DB search/read/replay,
+  원래520 전체 CUDA 완료/대상별 integrity, consumer 전환/정확한 retirement/delete다.
+  numerical/source read 지원만으로 private2를 운영 활성화하거나 전체 목표 완료로 선언하지 않는다.
+
 ## 창작 Graph 재개 확인·private2 네 단계 history 연결 — 2026-11-01 03:08 UTC
 
 - 직전 goal turn은 원 Catalog 저장 복구·운영 재개까지 수행한 **PROGRESS**였다. 이번도
