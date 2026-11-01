@@ -120,14 +120,18 @@ class NativeQueryExecutedV11(NativeQueryExecutedObservation):
     ]
 
 
-class NativeQueryBatchExecuted(NativeEmbeddingContract):
-    """Canonical finite CUDA batch evidence pointer, never an implicit CPU unit proof."""
+class NativeQueryBatchExecutionObservation(NativeEmbeddingContract):
+    """Small shared observation fields; each purpose validates its own receipt family."""
 
     batch_receipt: ArtifactMemberPointer
     batch_receipt_sha256: Sha256
     child_ordinal: int = Field(ge=0, le=31, strict=True)
     result_sha256: Sha256
     completed_observed_at: UtcDatetime
+
+
+class NativeQueryBatchExecuted(NativeQueryBatchExecutionObservation):
+    """Canonical public CUDA batch pointer, never private authority or CPU unit proof."""
 
     @model_validator(mode="after")
     def exact_member(self) -> Self:

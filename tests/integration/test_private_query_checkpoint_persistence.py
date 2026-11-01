@@ -12,7 +12,7 @@ from eom_catalog_service.embedding_encoder_adapter import (
     encode_public_solution_query,
 )
 from eom_identifiers import canonical_json_bytes, sha256_bytes
-from eom_orchestrator.models import JobEventRecord, JobRecord
+from eom_orchestrator.models import JobEventRecord, JobRecord, ProtocolVersionRecord
 from eom_orchestrator.native_private_chat_query_coordinator import (
     NativePrivateChatQueryCoordinator,
     NativePrivateQueryHistoryError,
@@ -37,6 +37,7 @@ from eom_workflow.private_chat_query_workflow_v2 import (
     PrivateChatQueryWorkflowReceiptV2,
     validate_private_chat_public_query_workflow_receipt,
 )
+from eom_workflow.schemas import NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_V21_SCHEMA_RESOURCE
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -44,10 +45,18 @@ from tests.integration.test_preset_model_validation_persistence import (
     guarded_engine as guarded_engine,
 )
 from tests.unit.inference_transfer_embedding_fixtures import seal
-from tests.unit.native_private_query_coordinator_fixtures import private_query_records
+from tests.unit.native_private_query_coordinator_fixtures import (
+    private_gpu_query_records,
+    private_query_records,
+)
 from tests.unit.test_embedding_incremental_encoding import SyntheticNativeBackend
 from tests.unit.test_embedding_private_chat_query import backend
-from tests.unit.test_private_chat_public_query_workflow import public_completed as public_completed
+from tests.unit.test_private_chat_public_query_workflow import (
+    public_completed as public_completed,
+)
+from tests.unit.test_private_chat_public_query_workflow import (
+    public_query_completed,
+)
 from tests.unit.test_private_chat_query_workflow import completed as completed
 
 pytestmark = pytest.mark.integration
@@ -146,14 +155,20 @@ def private_history(guarded_engine, selected_completion):
     value.output = (
         PrivateChatQueryStepOutputV2 if public else PrivateChatQueryStepOutput
     ).model_validate(seal(output, "output_sha256"))
-    records = private_query_records(value)
+    records = (
+        private_gpu_query_records(value)
+        if value.request.resource_profile.device == "CUDA"
+        else private_query_records(value)
+    )
     with Session(guarded_engine) as session, session.begin():
         create_native_query_launch(session, request=value.request, launch=value.launch)
     return NativePrivateChatQueryCoordinator(value.request, value.launch), records
 
 
-@pytest.fixture(params=("legacy", "public"))
+@pytest.fixture(params=("legacy", "public", "public-gpu"))
 def selected_completion(request, completed, public_completed):
+    if request.param == "public-gpu":
+        return public_query_completed(completed, device="CUDA")
     return completed if request.param == "legacy" else public_completed
 
 
@@ -178,6 +193,13 @@ def test_postgres_four_original_phases_commit_and_replay_text_free(guarded_engin
         assert len(rows) == 5
         job = session.get(JobRecord, owner.launch.native_launch_job_id)
         assert job.worker_slot_id is None
+        if records[0].schema_version == "native-private-chat-query-coordinator/2.1":
+            protocol = session.get(ProtocolVersionRecord, "native-private-query/2.1")
+            assert (
+                protocol.schema_sha256
+                == NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_V21_SCHEMA_RESOURCE[2]
+            )
+            assert job.protocol_version == "private-chat-query/2.0"
         assert b'"text"' not in canonical_json_bytes(job.request)
         assert all(b'"text"' not in canonical_json_bytes(row.data) for row in rows)
 

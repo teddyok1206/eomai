@@ -64,11 +64,15 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.fixture
 def public_completed(completed):
-    old = completed
+    return public_query_completed(completed)
+
+
+def public_query_completed(old, *, device="CPU"):
+    """Shared typed completion fixture; device/IAM/native completion remain synthetic."""
     compiled = compile_definition(
         ROOT / "config/workflows/local-embedding-private-chat-query.v2.yaml", set()
     )
-    request, policy, bundle = execution_case()
+    request, policy, bundle = execution_case(device)
     policy = PrivateChatQueryExecutionPolicyV2.model_validate(
         seal(
             policy.model_dump(mode="json")

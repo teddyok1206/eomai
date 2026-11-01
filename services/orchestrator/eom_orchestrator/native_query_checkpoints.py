@@ -8,6 +8,7 @@ from types import MappingProxyType
 from eom_workflow.native_private_chat_query_coordinator import (
     NativePrivateChatQueryCheckpoint,
     NativePrivateChatQueryCheckpointV2,
+    NativePrivateChatQueryCheckpointV21,
     SupportedNativePrivateChatQueryCheckpoint,
     parse_supported_native_private_chat_query_checkpoint,
     validate_native_private_chat_query_history,
@@ -24,6 +25,7 @@ from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAs
 from eom_workflow.schemas import (
     NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_SCHEMA_RESOURCE,
     NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE,
+    NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_V21_SCHEMA_RESOURCE,
     NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE,
     NATIVE_REFERENCE_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE,
     NATIVE_REFERENCE_QUERY_COORDINATOR_V11_SCHEMA_RESOURCE,
@@ -71,6 +73,9 @@ _FAILURE_MESSAGES = MappingProxyType(
         "native-private-chat-query-coordinator/2.0": (
             "original private common QUERY execution failed"
         ),
+        "native-private-chat-query-coordinator/2.1": (
+            "original private finite CUDA QUERY batch failed"
+        ),
     }
 )
 
@@ -87,6 +92,11 @@ class NativeQueryHistory:
 
 
 def _checkpoint_protocol(record: NativeQueryCheckpoint) -> tuple[str, str]:
+    if isinstance(record, NativePrivateChatQueryCheckpointV21):
+        return (
+            "native-private-query/2.1",
+            NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_V21_SCHEMA_RESOURCE[2],
+        )
     if isinstance(record, NativePrivateChatQueryCheckpointV2):
         return (
             "native-private-query/2.0",
@@ -149,7 +159,12 @@ class NativeQueryCheckpointStore:
         ):
             if not isinstance(self.launch, PrivateChatQueryLaunchAssociation) or not all(
                 isinstance(
-                    row, (NativePrivateChatQueryCheckpoint, NativePrivateChatQueryCheckpointV2)
+                    row,
+                    (
+                        NativePrivateChatQueryCheckpoint,
+                        NativePrivateChatQueryCheckpointV2,
+                        NativePrivateChatQueryCheckpointV21,
+                    ),
                 )
                 for row in records
             ):
@@ -159,7 +174,12 @@ class NativeQueryCheckpointStore:
                     row
                     for row in records
                     if isinstance(
-                        row, (NativePrivateChatQueryCheckpoint, NativePrivateChatQueryCheckpointV2)
+                        row,
+                        (
+                            NativePrivateChatQueryCheckpoint,
+                            NativePrivateChatQueryCheckpointV2,
+                            NativePrivateChatQueryCheckpointV21,
+                        ),
                     )
                 ),
                 self.launch,
@@ -168,7 +188,12 @@ class NativeQueryCheckpointStore:
         else:
             if isinstance(self.launch, PrivateChatQueryLaunchAssociation) or any(
                 isinstance(
-                    row, (NativePrivateChatQueryCheckpoint, NativePrivateChatQueryCheckpointV2)
+                    row,
+                    (
+                        NativePrivateChatQueryCheckpoint,
+                        NativePrivateChatQueryCheckpointV2,
+                        NativePrivateChatQueryCheckpointV21,
+                    ),
                 )
                 for row in records
             ):
@@ -178,7 +203,12 @@ class NativeQueryCheckpointStore:
                     row
                     for row in records
                     if not isinstance(
-                        row, (NativePrivateChatQueryCheckpoint, NativePrivateChatQueryCheckpointV2)
+                        row,
+                        (
+                            NativePrivateChatQueryCheckpoint,
+                            NativePrivateChatQueryCheckpointV2,
+                            NativePrivateChatQueryCheckpointV21,
+                        ),
                     )
                 ),
                 self.launch,

@@ -213,6 +213,23 @@ IO는 기존 Catalog/Runner adapters에 남는다. 같은 원 key/포인터가 �
 철회되면 explicit failure이며 새 경로나 latest를 찾지 않는다. private 전용 reader/수치
 executor를 복제하는 대안보다 기존 owner-local 검증의 명시적 family 지원이 작다.
 
+private CUDA continuation은 CPU 고정 unit 필드가 있는 기존1.0/2.0을 바꾸지 않고 명시적
+checkpoint2.1을 사용한다. 정본은 동일한 원 request2/launch Job과4단계 append-only history다.
+새 EXECUTED는 private receipt1.1의 exact Artifact/member/raw SHA와 semantic SHA, child0/
+result SHA/관측시각만 담는다. 공개 QUERY와 작은 공통 관측 필드만 공유하고 목적·schema
+검증은 분리한다. 순수 history 검증은 current authority나 실제 receipt resolution이 아니다.
+현재 source/origin/lease와 canonical GPU parent/proof는 기존 application이 별도로 확인한다.
+
+기존 CPU builder/이력은 그대로 둔다. 새 명시적 builder와 일관된2.1 history만 request2의
+CUDA profile에 대응하고 family·단계·producer·시간·최종 receipt hash 혼합을 거부한다.
+Workflow receipt2/수치 QUERY2와 결과 bytes는 재사용한다. 원 Job PK lookup·최대4 event의
+O(1) bounded ordered read, 같은 row lock/root transaction/unique sequence와 기존 protocol
+registry를 사용하며 새 table/queue/index/migration은 없다. 중단·동시 append·동일 key replay는
+원 identity에서 처리하고 FAILED/CANCELLED를 성공으로 바꾸지 않는다. 계약은 순수 value/
+state 검증, SQL/등록은 기존 Orchestrator adapter 책임이다. 별도 GPU 상태기계/Job/큰 결과
+복제보다 원 store의 명시적 protocol family 확장이 작다. actual private completion/driver/
+cohost 연결 전에는 metadata support만으로 physical worker나 global2를 활성화하지 않는다.
+
 ### private 공통 parent의 실제 source admission — 2026-11-01
 
 책임은 기존 private source owner와 finite parent application이다. 정본은 원 Chat origin과

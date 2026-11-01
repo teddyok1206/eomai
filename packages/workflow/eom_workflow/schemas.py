@@ -1397,6 +1397,11 @@ NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE = (
     "eom://schemas/workflow/native-private-chat-query-coordinator/2.0",
     "sha256:3fdb7ec4a71e7cd38add1c579e847e5f69cf897ee6fcbde56609b55983da22c1",
 )
+NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_V21_SCHEMA_RESOURCE = (
+    "native-private-chat-query-coordinator-v2.1.schema.json",
+    "eom://schemas/workflow/native-private-chat-query-coordinator/2.1",
+    "sha256:9657bf5850a1909fe94aea7d2d752c94deb199fb6500bd2d0cad290257f23a73",
+)
 
 
 @cache
@@ -1451,6 +1456,12 @@ def validate_native_private_chat_query_checkpoint_v2(value: object) -> None:
     )
 
 
+def validate_native_private_chat_query_checkpoint_v21(value: object) -> None:
+    _validate_native_private_chat_query_checkpoint(
+        value, NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_V21_SCHEMA_RESOURCE
+    )
+
+
 def _validate_native_private_chat_query_checkpoint(
     value: object, resource: tuple[str, str, str]
 ) -> None:
@@ -1478,6 +1489,17 @@ def _validate_native_private_chat_query_checkpoint(
                 ),
             )
         )
+        if resource == NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_V21_SCHEMA_RESOURCE:
+            registry = registry.with_resources(
+                (
+                    dependency[1],
+                    Resource.from_contents(_native_reference_query_coordinator_schema(dependency)),
+                )
+                for dependency in (
+                    NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE,
+                    NATIVE_REFERENCE_QUERY_COORDINATOR_V12_SCHEMA_RESOURCE,
+                )
+            )
         Draft202012Validator(
             _native_reference_query_coordinator_schema(resource),
             registry=registry,

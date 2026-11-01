@@ -13,12 +13,16 @@ from eom_catalog_contracts.private_chat_query_read import ChatPrivateQueryOrigin
 from eom_catalog_contracts.public_solution_query import PUBLIC_SOLUTION_QUERY_RESULT_REF
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer
-from pydantic import model_validator
+from pydantic import Field, model_validator
 
+from eom_workflow.embedding_batch_execution_receipt import (
+    PRIVATE_CHAT_BATCH_EXECUTION_RECEIPT_SCHEMA_REF,
+)
 from eom_workflow.models import JobId
 from eom_workflow.native_reference_query_coordinator import (
     NATIVE_QUERY_PHASES,
     NativeQueryAllocation,
+    NativeQueryBatchExecutionObservation,
     NativeQueryExecutedObservation,
     NativeQueryPhase,
 )
@@ -51,6 +55,7 @@ from eom_workflow.schemas import (
     NativeEmbeddingContract,
     validate_native_private_chat_query_checkpoint,
     validate_native_private_chat_query_checkpoint_v2,
+    validate_native_private_chat_query_checkpoint_v21,
 )
 
 
@@ -66,6 +71,22 @@ class NativePrivateQueryExecuted(NativeQueryExecutedObservation):
     query_template_sha256: Literal[
         "sha256:cecb3128eaf33b0e897a813aab7ec4559ca26e63291fb7622a5c429826538bde"
     ]
+
+
+class NativePrivateQueryBatchExecuted(NativeQueryBatchExecutionObservation):
+    """Private receipt1.1 child0 only; actual producer/source resolution is separate."""
+
+    child_ordinal: int = Field(ge=0, le=0, strict=True)
+
+    @model_validator(mode="after")
+    def exact_private_member(self) -> Self:
+        if (
+            self.batch_receipt.member_path != "receipt.json"
+            or self.batch_receipt.schema_ref != PRIVATE_CHAT_BATCH_EXECUTION_RECEIPT_SCHEMA_REF
+            or self.batch_receipt.media_type != "application/json"
+        ):
+            raise ValueError("PRIVATE_CHAT_QUERY_CHECKPOINT_FILE_SET_INVALID")
+        return self
 
 
 class _NativePrivateQueryPublishedFields(NativeEmbeddingContract):
@@ -135,7 +156,15 @@ type NativePrivateQueryPayloadV2 = (
     | NativePrivateQueryPublishedV2
     | NativePrivateQueryCompletedV2
 )
-type SupportedNativePrivateQueryPayload = NativePrivateQueryPayload | NativePrivateQueryPayloadV2
+type NativePrivateQueryPayloadV21 = (
+    NativePrivateQueryAllocation
+    | NativePrivateQueryBatchExecuted
+    | NativePrivateQueryPublishedV2
+    | NativePrivateQueryCompletedV2
+)
+type SupportedNativePrivateQueryPayload = (
+    NativePrivateQueryPayload | NativePrivateQueryPayloadV2 | NativePrivateQueryPayloadV21
+)
 _PAYLOADS = MappingProxyType(
     {
         "ALLOCATION": NativePrivateQueryAllocation,
@@ -151,11 +180,21 @@ _PAYLOADS_V2 = MappingProxyType(
         "COMPLETED": NativePrivateQueryCompletedV2,
     }
 )
+_PAYLOADS_V21 = MappingProxyType({**_PAYLOADS_V2, "EXECUTED": NativePrivateQueryBatchExecuted})
+_PAYLOAD_FAMILIES = MappingProxyType(
+    {
+        "native-private-chat-query-coordinator/1.0": _PAYLOADS,
+        "native-private-chat-query-coordinator/2.0": _PAYLOADS_V2,
+        "native-private-chat-query-coordinator/2.1": _PAYLOADS_V21,
+    }
+)
 
 
 class _NativePrivateChatQueryCheckpointFields(NativeEmbeddingContract):
     schema_version: Literal[
-        "native-private-chat-query-coordinator/1.0", "native-private-chat-query-coordinator/2.0"
+        "native-private-chat-query-coordinator/1.0",
+        "native-private-chat-query-coordinator/2.0",
+        "native-private-chat-query-coordinator/2.1",
     ]
     record_type: NativeQueryPhase
     native_launch_job_id: JobId
@@ -167,10 +206,10 @@ class _NativePrivateChatQueryCheckpointFields(NativeEmbeddingContract):
     @classmethod
     def schema_first(cls, value: object) -> object:
         value = raw_similarity_contract_value(value)
-        if (
-            isinstance(value, dict)
-            and value.get("schema_version") == "native-private-chat-query-coordinator/2.0"
-        ):
+        version = value.get("schema_version") if isinstance(value, dict) else None
+        if version == "native-private-chat-query-coordinator/2.1":
+            validate_native_private_chat_query_checkpoint_v21(value)
+        elif version == "native-private-chat-query-coordinator/2.0":
             validate_native_private_chat_query_checkpoint_v2(value)
         else:
             validate_native_private_chat_query_checkpoint(value)
@@ -178,11 +217,7 @@ class _NativePrivateChatQueryCheckpointFields(NativeEmbeddingContract):
 
     @model_validator(mode="after")
     def exact_stage(self) -> Self:
-        payloads = (
-            _PAYLOADS_V2
-            if self.schema_version == "native-private-chat-query-coordinator/2.0"
-            else _PAYLOADS
-        )
+        payloads = _PAYLOAD_FAMILIES[self.schema_version]
         if (
             type(self.payload) is not payloads[self.record_type]
             or (
@@ -216,8 +251,17 @@ class NativePrivateChatQueryCheckpointV2(_NativePrivateChatQueryCheckpointFields
     payload: NativePrivateQueryPayloadV2
 
 
+class NativePrivateChatQueryCheckpointV21(_NativePrivateChatQueryCheckpointFields):
+    schema_version: Literal["native-private-chat-query-coordinator/2.1"] = (
+        "native-private-chat-query-coordinator/2.1"
+    )
+    payload: NativePrivateQueryPayloadV21
+
+
 type SupportedNativePrivateChatQueryCheckpoint = (
-    NativePrivateChatQueryCheckpoint | NativePrivateChatQueryCheckpointV2
+    NativePrivateChatQueryCheckpoint
+    | NativePrivateChatQueryCheckpointV2
+    | NativePrivateChatQueryCheckpointV21
 )
 
 
@@ -240,10 +284,26 @@ def parse_native_private_chat_query_checkpoint_v2(
         raise ValueError("PRIVATE_CHAT_QUERY_CHECKPOINT_INVALID") from None
 
 
+def parse_native_private_chat_query_checkpoint_v21(
+    value: object,
+) -> NativePrivateChatQueryCheckpointV21:
+    try:
+        return NativePrivateChatQueryCheckpointV21.model_validate(
+            raw_similarity_contract_value(value)
+        )
+    except (ValueError, TypeError):
+        raise ValueError("PRIVATE_CHAT_QUERY_CHECKPOINT_INVALID") from None
+
+
 def parse_supported_native_private_chat_query_checkpoint(
     value: object,
 ) -> SupportedNativePrivateChatQueryCheckpoint:
     value = raw_similarity_contract_value(value)
+    if (
+        isinstance(value, dict)
+        and value.get("schema_version") == "native-private-chat-query-coordinator/2.1"
+    ):
+        return parse_native_private_chat_query_checkpoint_v21(value)
     if (
         isinstance(value, dict)
         and value.get("schema_version") == "native-private-chat-query-coordinator/2.0"
@@ -272,6 +332,17 @@ def native_private_chat_public_query_checkpoint(
     )
 
 
+def native_private_chat_gpu_query_checkpoint(
+    launch: PrivateChatQueryLaunchAssociation,
+    phase: NativeQueryPhase,
+    payload: NativePrivateQueryPayloadV21,
+) -> NativePrivateChatQueryCheckpointV21:
+    """Explicit successor; historical CPU builders never silently change families."""
+    return parse_native_private_chat_query_checkpoint_v21(
+        _private_chat_query_checkpoint_document(launch, phase, payload, version="2.1")
+    )
+
+
 def supported_native_private_chat_query_checkpoint(
     request: SupportedPrivateChatQueryWorkflowRequest,
     launch: PrivateChatQueryLaunchAssociation,
@@ -297,10 +368,10 @@ def _private_chat_query_checkpoint_document(
     phase: NativeQueryPhase,
     payload: SupportedNativePrivateQueryPayload,
     *,
-    version: Literal["1.0", "2.0"],
+    version: Literal["1.0", "2.0", "2.1"],
 ) -> dict[str, Any]:
     launch = PrivateChatQueryLaunchAssociation.model_validate(raw_similarity_contract_value(launch))
-    payloads = _PAYLOADS_V2 if version == "2.0" else _PAYLOADS
+    payloads = _PAYLOAD_FAMILIES["native-private-chat-query-coordinator/" + version]
     if phase not in payloads or type(payload) is not payloads[phase]:
         raise ValueError("PRIVATE_CHAT_QUERY_CHECKPOINT_PURPOSE_INVALID")
     payload = type(payload).model_validate(raw_similarity_contract_value(payload))
@@ -333,7 +404,7 @@ def private_chat_public_query_checkpoint_receipt(
     request: PrivateChatQueryWorkflowRequestV2,
     launch: PrivateChatQueryLaunchAssociation,
     allocation: NativePrivateQueryAllocation,
-    executed: NativePrivateQueryExecuted,
+    executed: NativePrivateQueryExecuted | NativePrivateQueryBatchExecuted,
     published: NativePrivateQueryPublishedV2,
 ) -> PrivateChatQueryWorkflowReceiptV2:
     return PrivateChatQueryWorkflowReceiptV2.model_validate(
@@ -347,7 +418,7 @@ def supported_private_chat_query_checkpoint_receipt(
     request: SupportedPrivateChatQueryWorkflowRequest,
     launch: PrivateChatQueryLaunchAssociation,
     allocation: NativePrivateQueryAllocation,
-    executed: NativePrivateQueryExecuted,
+    executed: NativePrivateQueryExecuted | NativePrivateQueryBatchExecuted,
     published: NativePrivateQueryPublished | NativePrivateQueryPublishedV2,
 ) -> PrivateChatQueryWorkflowReceipt | PrivateChatQueryWorkflowReceiptV2:
     """One exact family choice around the unchanged predecessor/successor receipt rules."""
@@ -358,7 +429,9 @@ def supported_private_chat_query_checkpoint_receipt(
         return private_chat_public_query_checkpoint_receipt(
             request, launch, allocation, executed, published
         )
-    if not isinstance(published, NativePrivateQueryPublished):
+    if not isinstance(published, NativePrivateQueryPublished) or not isinstance(
+        executed, NativePrivateQueryExecuted
+    ):
         raise ValueError("PRIVATE_CHAT_QUERY_CHECKPOINT_INVALID")
     return private_chat_query_checkpoint_receipt(request, launch, allocation, executed, published)
 
@@ -367,9 +440,14 @@ def _private_chat_query_checkpoint_receipt_body(
     request: PrivateChatQueryWorkflowRequest | PrivateChatQueryWorkflowRequestV2,
     launch: PrivateChatQueryLaunchAssociation,
     allocation: NativePrivateQueryAllocation,
-    executed: NativePrivateQueryExecuted,
+    executed: NativePrivateQueryExecuted | NativePrivateQueryBatchExecuted,
     published: _NativePrivateQueryPublishedFields,
 ) -> dict[str, Any]:
+    if isinstance(executed, NativePrivateQueryBatchExecuted) and (
+        not isinstance(request, PrivateChatQueryWorkflowRequestV2)
+        or request.resource_profile.device != "CUDA"
+    ):
+        raise ValueError("PRIVATE_CHAT_QUERY_CHECKPOINT_PURPOSE_INVALID")
     version = "2.0" if isinstance(request, PrivateChatQueryWorkflowRequestV2) else "1.0"
     body = {
         "schema_version": "private-chat-query-workflow-receipt/" + version,
@@ -440,13 +518,20 @@ def validate_native_private_chat_query_history(
         )
     )
     checked = tuple(
-        parse_native_private_chat_query_checkpoint_v2(value)
+        parse_supported_native_private_chat_query_checkpoint(value) for value in records
+    )
+    gpu = bool(checked) and type(checked[0]) is NativePrivateChatQueryCheckpointV21
+    expected_type = (
+        NativePrivateChatQueryCheckpointV21
+        if gpu
+        else NativePrivateChatQueryCheckpointV2
         if public
-        else parse_native_private_chat_query_checkpoint(value)
-        for value in records
+        else NativePrivateChatQueryCheckpoint
     )
     if (
-        len(checked) > 4
+        (gpu and (not public or request.resource_profile.device != "CUDA"))
+        or any(type(row) is not expected_type for row in checked)
+        or len(checked) > 4
         or tuple(r.record_type for r in checked) != NATIVE_QUERY_PHASES[: len(checked)]
         or any(
             r.native_launch_job_id != launch.native_launch_job_id
@@ -467,7 +552,7 @@ def validate_native_private_chat_query_history(
     if len(checked) < 2:
         return
     executed = checked[1].payload
-    assert isinstance(executed, NativePrivateQueryExecuted)
+    assert isinstance(executed, (NativePrivateQueryExecuted, NativePrivateQueryBatchExecuted))
     if executed.completed_observed_at < allocation.allocation.created_at:
         raise ValueError("PRIVATE_CHAT_QUERY_CHECKPOINT_ORDER_INVALID")
     if len(checked) < 3:
@@ -492,7 +577,9 @@ def validate_native_private_chat_query_history(
             request, launch, allocation, executed, published
         )
     else:
-        if not isinstance(published, NativePrivateQueryPublished):
+        if not isinstance(published, NativePrivateQueryPublished) or not isinstance(
+            executed, NativePrivateQueryExecuted
+        ):
             raise ValueError("PRIVATE_CHAT_QUERY_CHECKPOINT_PURPOSE_INVALID")
         receipt = private_chat_query_checkpoint_receipt(
             request, launch, allocation, executed, published
