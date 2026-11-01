@@ -20,7 +20,10 @@ from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_catalog_contracts.models import Sha256
 from eom_catalog_contracts.private_chat_query_prepare import private_chat_query_context_request_id
 from eom_catalog_contracts.private_chat_query_read import ChatPrivateQueryOrigin
-from eom_catalog_contracts.private_chat_similarity_v2 import PrivateChatPublicDocumentView
+from eom_catalog_contracts.private_chat_similarity_v2 import (
+    PrivateChatPublicDocumentView,
+    PrivateChatSimilarityRequestV2,
+)
 from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingRecipe
 from eom_catalog_contracts.registered_public_solution_similarity import (
     PublicSolutionSimilarityViewV4,
@@ -224,6 +227,30 @@ class EmbeddingBatchPlanRequestV17(EmbeddingBatchPlanRequestValues, _PrivateQuer
     selection_schema_ref: ClassVar[str] = BATCH_SELECTION_V17_SCHEMA_REF
     purpose: Literal["PRIVATE_CHAT_QUERY"]
     child_selection_sha256s: tuple[Sha256, ...] = Field(min_length=1, max_length=1)
+
+
+def build_private_chat_batch_query_context(
+    selection: EmbeddingBatchSelectionV17, device: Literal["CPU", "CUDA"]
+) -> PrivateChatSimilarityRequestV2:
+    """Original private child pins; a pure value, never source/compute authority."""
+    selection = EmbeddingBatchSelectionV17.model_validate(raw_similarity_contract_value(selection))
+    body = dict(
+        schema_version="system-rag-private-chat-similarity-request/2.0",
+        request_id=selection.query.context_request_id,
+        consumer_purpose=selection.query.consumer_purpose,
+        query_basis=selection.origin.basis.model_dump(mode="json"),
+        graph_snapshot=selection.graph_snapshot.model_dump(mode="json"),
+        policy_revision_id=selection.access_policy_revision_id,
+        policy_sha256=selection.scope.access_policy_sha256,
+        source_classes=list(selection.source_classes),
+        views=[view.model_dump(mode="json") for view in selection.selected_views(device)],
+        vector_mode="REQUIRED",
+        maximum_sources=selection.query.maximum_sources,
+        top_k=selection.query.top_k,
+    )
+    return PrivateChatSimilarityRequestV2.model_validate(
+        body | {"request_sha256": content_sha256(body)}
+    )
 
 
 def private_chat_batch_parent_request_sha256(selection: EmbeddingBatchSelectionV17) -> str:

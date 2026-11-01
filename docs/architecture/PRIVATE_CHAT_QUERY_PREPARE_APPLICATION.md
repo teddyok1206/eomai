@@ -1,5 +1,39 @@
 # Private Chat QUERY preparation and finite drive
 
+## Common CPU/CUDA initial selection — 2026-11-01 design before behavior
+
+1. Extend the private prepare application with an owner-local selector over the
+   existing prepare2/selection17/parent17 contracts. No new wire, queue or DB.
+2. Canonical sources remain the current owned Chat origin, official Catalog
+   Graph/policy/source resolution and Orchestrator-published immutable selection.
+3. One indexed publication key per original origin pins both device indexes.
+   Retry reads that exact selection; a changed Graph/policy/options is a conflict,
+   never permission to select a newer index. READ must not invoke this selector.
+4. Selection metadata contains origin hashes/IDs, not the private question. Check
+   exact Artifact revision, schema, media, canonical bytes, raw/semantic hashes,
+   producer provenance and current owner authorization on every replay.
+5. Access patterns are one indexed original lookup, two initial device reads and
+   bounded canonical metadata resolution. Existing map/index/unique publication
+   is sufficient; there is no scan of conversations or persistent derived cache.
+6. Additional selection state is O(1) per question, bounded by the existing
+   selection contract. Document admission keeps the existing bounded corpus cost.
+7. Source reads use a clean actual caller root; canonical publication uses the
+   existing commit owner. Reauthorize after publication and before returning the
+   parent. A late denial may leave audit metadata but must not start computation.
+8. Concurrent different initial heads cannot overwrite the original; existing
+   unique publication rejects conflicting bytes. Exact replay reuses it.
+9. Runner application composes private Catalog owners and Orchestrator publisher.
+   Pure device-context construction belongs to the existing workflow contract
+   module and is shared with actual private batch admission. No private-module
+   cross-service reads, public Reference authority or model-supplied authority.
+10. CUDA index is required, CPU index may be absent. Source revocation, foreign
+    origin, stale pointers and conflicting pins fail explicitly. Physical work
+    still requires the existing batch operation/claim/lease and qualified runtime.
+11. Selecting current heads on every retry or storing a separate preparation
+    aggregate is unnecessary and breaks original identity. Reuse selection17 and
+    the canonical publication lookup instead. This source implementation alone
+    does not activate private GPU admission or migrate operating Chat consumers.
+
 ## Acknowledged original continuation — 2026-10-18 design before behavior
 
 1. Extend the existing private preparation application/client, not a queue or a

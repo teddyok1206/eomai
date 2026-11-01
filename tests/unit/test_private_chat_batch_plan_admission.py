@@ -5,6 +5,7 @@ from types import SimpleNamespace as NS
 
 import pytest
 from eom_catalog_contracts.embedding_runtime_bundle import EmbeddingRuntimeBundle
+from eom_catalog_contracts.private_chat_query_prepare import private_chat_query_context_request_id
 from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
@@ -59,16 +60,23 @@ from tests.unit.test_private_chat_query_source import source_case
 
 
 def make_private_batch_admission_case(
-    tmp_path, monkeypatch, *, cpu_index=True, publisher=None, key="synthetic-private-parent"
+    tmp_path,
+    monkeypatch,
+    *,
+    cpu_index=True,
+    publisher=None,
+    key="synthetic-private-parent",
+    identity_seed=None,
 ):
     if publisher is None:
         publisher, _ = _publisher(tmp_path)
         publisher.settings = replace(publisher.settings, workspace_root=tmp_path)
     controls = LocalEmbeddingControlArtifactPublisher(publisher, source_commit="a" * 40)
     original = private_parent_case()
-    chat = source_case(question=TEXT)
+    chat = source_case(question=TEXT, identity_seed=identity_seed)
     origin = chat.execution.materialize_live_private_query(chat.ticket).origin
-    assert origin == original.selection.origin
+    if identity_seed is None:
+        assert origin == original.selection.origin
     settings = CatalogSettings(nas_artifact_root=publisher.settings.nas_artifact_root)
     bundles, policies, saved_policies = {}, {}, {}
     for device in ("CPU", "CUDA"):
@@ -130,6 +138,8 @@ def make_private_batch_admission_case(
         routing, idempotency_key=key + ":routing"
     )
     selection_body = original.selection.model_dump(mode="json")
+    selection_body["origin"] = origin.model_dump(mode="json")
+    selection_body["query"]["context_request_id"] = private_chat_query_context_request_id(origin)
     for device in ("CPU", "CUDA"):
         selection_body["index_pair"][device.lower()]["index"]["spaces"] = policies[
             device

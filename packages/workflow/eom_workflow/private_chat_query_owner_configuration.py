@@ -334,8 +334,16 @@ def require_private_chat_public_query_policies(
         ),
         (configuration.routing_policy, configuration.routing_policy_sha256, routing),
     ):
+        # Routing is an existing released publisher family: its JSON timestamp
+        # spelling differs from canonical BaseModel datetime serialization.
+        # Compare the exact published bytes, not an equivalent re-encoding.
+        published = (
+            policy.model_dump(mode="json")
+            if isinstance(policy, EmbeddingDeviceRoutingPolicy)
+            else policy
+        )
         if (
-            pointer.sha256 != sha256_bytes(canonical_json_bytes(policy))
+            pointer.sha256 != sha256_bytes(canonical_json_bytes(published))
             or expected_sha != policy.policy_sha256
         ):
             raise PrivateChatQueryOwnerConfigurationError()

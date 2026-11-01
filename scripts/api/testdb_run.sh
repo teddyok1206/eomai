@@ -318,6 +318,7 @@ if [[ "${action}" == "private-chat-artifact-tests" ]]; then
     tests/integration/test_private_query_batch_execution_read.py \
     tests/integration/test_private_gpu_query_completion.py \
     tests/integration/test_private_chat_query_batch_executor.py \
+    tests/integration/test_private_chat_query_batch_selection.py \
     tests/integration/test_private_chat_query_native_persistence.py \
     tests/integration/test_private_chat_public_query_native_persistence.py \
     tests/integration/test_private_chat_similarity_read.py \

@@ -7,11 +7,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import Literal
 
-from eom_catalog_contracts.private_chat_similarity_v2 import PrivateChatSimilarityRequestV2
 from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
 from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryCaller
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
-from eom_identifiers import content_sha256
 from eom_workflow.embedding_batch_plan_family import (
     SupportedEmbeddingBatchRequest,
     parse_embedding_batch_plan_request,
@@ -19,6 +17,7 @@ from eom_workflow.embedding_batch_plan_family import (
 from eom_workflow.embedding_batch_plan_v17 import (
     EmbeddingBatchPlanRequestV17,
     EmbeddingBatchSelectionV17,
+    build_private_chat_batch_query_context,
     validate_private_query_batch_controls,
 )
 from eom_workflow.embedding_device_routing import EmbeddingDeviceRoutingPolicy
@@ -98,27 +97,6 @@ class CatalogPrivateChatBatchPlanAdmission:
         self.cpu, self.cuda, self.caller, self.configuration = cpu, cuda, caller, configuration
         self.catalog = cpu.catalog
 
-    def _context(
-        self, selection: EmbeddingBatchSelectionV17, device: Literal["CPU", "CUDA"]
-    ) -> PrivateChatSimilarityRequestV2:
-        body = dict(
-            schema_version="system-rag-private-chat-similarity-request/2.0",
-            request_id=selection.query.context_request_id,
-            consumer_purpose=selection.query.consumer_purpose,
-            query_basis=selection.origin.basis.model_dump(mode="json"),
-            graph_snapshot=selection.graph_snapshot.model_dump(mode="json"),
-            policy_revision_id=selection.access_policy_revision_id,
-            policy_sha256=selection.scope.access_policy_sha256,
-            source_classes=list(selection.source_classes),
-            views=[view.model_dump(mode="json") for view in selection.selected_views(device)],
-            vector_mode="REQUIRED",
-            maximum_sources=selection.query.maximum_sources,
-            top_k=selection.query.top_k,
-        )
-        return PrivateChatSimilarityRequestV2.model_validate(
-            body | {"request_sha256": content_sha256(body)}
-        )
-
     @contextmanager
     def admit(
         self, session: Session, request: SupportedEmbeddingBatchRequest
@@ -186,7 +164,7 @@ class CatalogPrivateChatBatchPlanAdmission:
             child = prepare_private_chat_query_request_in_session(
                 session,
                 caller=self.caller,
-                context=self._context(selection, device),
+                context=build_private_chat_batch_query_context(selection, device),
                 owner=owner,
                 artifact_reader=reader,
             )

@@ -86,7 +86,7 @@ def private(public):
             cuda_native_execution_policy_sha256=cuda.policy_sha256,
             routing_policy=reference.routing_policy.model_dump(mode="json")
             | {
-                "sha256": sha256_bytes(canonical_json_bytes(routing)),
+                "sha256": sha256_bytes(canonical_json_bytes(routing.model_dump(mode="json"))),
             },
             routing_policy_sha256=routing.policy_sha256,
         )
@@ -107,6 +107,17 @@ def test_closed_private_routed_controls_are_canonical_and_reuse_real_public_coho
     assert cpu.spaces.document != cuda.spaces.document
     with pytest.raises(ValueError):
         parse_private_chat_query_service_configuration(raw)
+
+
+def test_equivalent_timestamp_reencoding_cannot_replace_the_published_routing_bytes(private):
+    configuration, _reference, routing, cpu, cuda = private
+    body = configuration.model_dump(mode="json")
+    reencoded = sha256_bytes(canonical_json_bytes(routing))
+    assert reencoded != configuration.routing_policy.sha256
+    body["routing_policy"]["sha256"] = reencoded
+    changed = PrivateChatQueryPublicServiceConfiguration.model_validate(body)
+    with pytest.raises(PrivateChatQueryOwnerConfigurationError):
+        require_private_chat_public_query_policies(changed, routing, cpu, cuda)
 
 
 def test_owner2_schema_is_closed_pinned_and_mirrored():
@@ -241,7 +252,9 @@ def test_resolved_policies_need_exact_purpose_profile_and_artifact_hashes(privat
         ] = "sha256:" + "f" * 64
     elif fault == "reference_routing":
         routing = public[1]
-        body["routing_policy"]["sha256"] = sha256_bytes(canonical_json_bytes(routing))
+        body["routing_policy"]["sha256"] = sha256_bytes(
+            canonical_json_bytes(routing.model_dump(mode="json"))
+        )
         body["routing_policy_sha256"] = routing.policy_sha256
     elif fault == "wrong_profiles":
         cpu, cuda = cuda, cpu
@@ -276,7 +289,9 @@ def test_even_resealed_controls_cannot_exceed_existing_finite_native_window(priv
     field = "native_execution_policy" if device == "cpu" else "cuda_native_execution_policy"
     body[field]["sha256"] = sha256_bytes(canonical_json_bytes(controls[device]))
     body[field + "_sha256"] = controls[device].policy_sha256
-    body["routing_policy"]["sha256"] = sha256_bytes(canonical_json_bytes(routing))
+    body["routing_policy"]["sha256"] = sha256_bytes(
+        canonical_json_bytes(routing.model_dump(mode="json"))
+    )
     body["routing_policy_sha256"] = routing.policy_sha256
     configuration = PrivateChatQueryPublicServiceConfiguration.model_validate(body)
     with pytest.raises(PrivateChatQueryOwnerConfigurationError):
