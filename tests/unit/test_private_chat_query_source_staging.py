@@ -65,6 +65,7 @@ def source_stage(monkeypatch, tmp_path):
         assert target.read_bytes() == PAYLOAD and target.stat().st_mode & 0o777 == 0o644
         actions.append("tmpfiles")
         endpoint.path.parent.mkdir(mode=0o750)
+        endpoint.path.parent.chmod(0o750)
 
     monkeypatch.setattr(installation.subprocess, "run", run)
     return SimpleNamespace(target=target, endpoint=endpoint, actions=actions)
@@ -88,7 +89,9 @@ def test_source_parent_or_endpoint_conflict_never_repairs_or_reclaims(source_sta
     if kind == "symlink":
         parent.symlink_to(value.target.parent, target_is_directory=True)
     else:
-        parent.mkdir(mode=0o700 if kind == "wrong-mode" else 0o750)
+        mode = 0o700 if kind == "wrong-mode" else 0o750
+        parent.mkdir(mode=mode)
+        parent.chmod(mode)
         if kind == "endpoint-file":
             value.endpoint.path.write_bytes(b"not a socket")
         elif kind == "endpoint-link":
