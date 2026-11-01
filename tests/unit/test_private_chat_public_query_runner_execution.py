@@ -25,14 +25,10 @@ def test_common_private_candidate_retains_exact_request2(lifecycle):
     fixture.owner.resolve_claim.assert_not_called()
 
 
-@pytest.mark.parametrize(
-    "case",
-    [
-        runner_cases.test_runner_dispatches_private_step_and_terminal_without_role_or_public_fallback,
-    ],
-)
-def test_common_private_runner_reuses_original_dispatch_and_late_fence(lifecycle, case):
-    case(lifecycle)
+def test_common_private_runner_reuses_original_dispatch_and_terminal(lifecycle):
+    runner_cases.test_runner_dispatches_private_step_and_terminal_without_role_or_public_fallback(
+        lifecycle
+    )
 
 
 @pytest.mark.parametrize(

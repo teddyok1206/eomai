@@ -1,5 +1,87 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## QUERY 준비 비용의 운영 반영·공통 private 명령 연결 — 2026-11-01 08:16 UTC
+
+- 직전 설명 turn도 실제 임시 DB 검사106 PASS를 확인하고 해당 DB/제한 역할/state를 공식
+  cleanup한 **PROGRESS**였다. 이번에는 검색 준비 개선을 QUERY-only로 운영 반영하고
+  기존 private Runner의 공통 형식 연결을 구현·검증했다. 전체 U01–U05 목표는 ACTIVE다.
+- 실제 사용자 `/item-db/similarity`는07:24:11 UTC API 기록상 **210655ms**였다. QUERY
+  준비 owner는 PREPARE_APPLICATION/REFERENCE_QUERY_PREPARE_UNAVAILABLE **214283ms**를
+  기록했다. 동시대 원 numerical QUERY Workflow는 아직 만들어지지 않았다. 이 사례는
+  검색 결과0이나 GPU 계산 지연이 아니라 준비 응답 한도 초과다. source 준비 로그에서
+  population/provenance/candidate admission의 반복을 확인했다. 모든214초의 세부 원인이
+  새 cache 하나로 해소됐다고 단정하지 않는다.
+- source **`eb07e901`**은 같은 실제 Session/root/thread에 한정해 검증된 불변 보고서 해석을
+  재사용한다. 현재 actor/source/row/member/물리 bytes/hash 검증을 생략하지 않는다. 각
+  page의 provenance/FD 한도와 기존32MiB/2048 LRU를 유지하고 외부·중첩 decoder context는
+  거부한다. 새로운 cache 서비스/DB/index/timeout 인상/worker 권한은 없다. 합성20회 해석
+  benchmark는0.12334→0.03372초,3.658배이며 실제210초 요청의 개선 증거와 구분한다.
+- source 최종 집중228 PASS, strict mypy 영향11/Ruff/format/diff PASS, 이전 private2
+  atomic submission 합집합121 PASS다. **`26782b4d1d7b52842ebd8e0da4ee066bce76219c`**의
+  공식 build/RECORD·별도 설치본248 PASS 및 disposable PostgreSQL private106/registry66
+  PASS를 확인했다. 처음 private106의 fixture Session 공유와 서로 다른 PG suite를 같은
+  DB에 동시에 돌린 뒤 Job 수 비교가 변한 실패를 보존했다. fixture는 실제 같은 engine의
+  깨끗한 root를 확인하도록 고치고 두 suite를 분리해 최종 PASS했다. 운영 guard는 완화하지
+  않았다. `/tmp/eom-common-query-decode-testdb-20261101-v3.private-tests`, `.registry-tests`,
+  `/tmp/eom-common-query-decode-installed-20261101.tests`, 원 testdb `.cleanup` 참조.
+- QUERY 배포 첫 관측 도구의30초 대기가 기존 여러60초 runtime 검증보다 짧았다. 아직
+  cold preflight 중이던 후보를 도구가 중단했으며 exact 원 config/unit을 복원했다. 원
+  fb owner의07:58:06 READY를 확인한 뒤 새 protected retry stage에서 재검증했다. verifier
+  제한이나 HTTP210초를 늘리지 않고 deployment readiness 관측만 기존 검증 예산에 맞췄다.
+  첫 실패/rollback stage도 보존한다. 이는 numerical pin 불일치 확정 증거가 아니다.
+- **07:59:56 QUERY26782 READY**, 실제 QUERY PID2191271이다. API1697848/Catalog1697847/
+  INDEX1683578 PID와 INDEX config3개·수치 bundle/model/environment는 동일하다. API/provider는
+  **8eb03e40** 유지, 생산 DB migration0, shared install0, GPU 재시작0이다. 새 private2
+  global admission도 CLOSED다. 보호된 owner prefix `/opt/eom/embedding-owner-releases/26782…`,
+  rollback/config CAS evidence `/var/lib/eom-query-decode-release-26782b4d{,-retry1}` 및
+  `/tmp/eom-query-decode-release-20261101-retry1.activation`의 ACTIVATED를 확인했다.
+  `/api/v1/health/ready`도 READY지만 실제 GUI query/read/replay PASS로 확대하지 않는다.
+  사용자에게 기존 화면의 같은 요청 `결과 확인`을1회 요청했으며 그 결과는 아직 PENDING이다.
+- source **`6ebebe0e8a115d7492de57584f2caf177fc6644c`**은 private1/2 candidate/quarantine,
+  원 command claim, Runner dispatch/readiness와 짧은 fenced root를 기존 경로에 연결한다.
+  정확한 request/protocol/definition/actor/lease를 확인하며 새 실행기/queue/schema/migration/
+  service를 만들지 않았다. 공통 numerical result2는 공개 QUERY와도 같으므로 그것만으로
+  private routing을 판정하지 않는다. malformed/교차 family는 role/public/INDEX로 우회하지
+  않는다. source91 PASS와 기존 경계189 PASS, strict mypy5/Ruff/format/shell/diff PASS다.
+- boundary 최초188 PASS/1 FAIL의 definition 예외 기대 불일치는 변경 전26782 별도
+  설치본에서도 동일하게 재현했다. 실제 guard가 먼저 내는 WORKFLOW_DEFINITION_INVALID를
+  구체적으로 확인하도록 테스트만 수정했다. actor/payload/hash의 REPLAY_INVALID 검사는
+  그대로다. 기존 실패 로그와 baseline 재현을 보존한다.
+- disposable PostgreSQL **111 PASS /186.15s**다. canonical/receipt·원 submission 회귀106과
+  새 실제 FIFO family 분리/원 claim·fenced root/동시2 claim의1 winner/late fence rollback/
+  global admission 거부5를 포함한다. Source/Chat/IAM/모델·unit은 명시적 synthetic port이며
+  실제 private2 운영 모델 PASS가 아니다. migration67 왕복·role reconcile·공식 cleanup을
+  완료하고 `/tmp/eom-api-testdb-20261101080737_e1a52de3` 제거를 확인했다. `.tests`, `.migrate`,
+  `.cleanup`은 `/tmp/eom-private2-dispatch-testdb-20261101` prefix에 보존했다. 생산 DB는
+  여전히66이며 테스트에 사용하지 않았다.
+- 공식6eb build/RECORD 및 비편집 설치본 **135 PASS /66.27s**, 마지막 테스트 표현 정리와
+  shared-result2 negative 추가 검사2 PASS /7.44s다.135와2는 범위가 일부 겹친다. source와
+  실제 모듈 경로를 먼저 확인하고 production credentials 없이 테스트했다. wheel directory
+  `/tmp/eom-api-build/6ebebe0e8a115d7492de57584f2caf177fc6644c.6n2h0x/dist`, platform SHA
+  `90da31b4f44701ad714e44c06128a79ab6fd46ccfe7ad0fc5cb9ca4dd08b2dee`, contracts
+  `282b660ff2d0b9f06af80552f2a6a2d1bc3f32a82bf6f0607b2cad491fe7781f`, API
+  `9d08da25a41452dbaef94b1d00ed56bcab441b4d998a43b53d2a116bf8d60230`다.
+  설치본 `/tmp/eom-private2-dispatch-installed.eIPqjfX0/site-packages`, 검증 결과
+  `/tmp/eom-private2-dispatch-installed-20261101.tests`와 `…final-guards-installed…` 참조.
+  이6eb private dispatch는 **미운영 source 후보**다.
+- 창작11733 원본은 COMPLETED/ACCEPTED였고 실제 정지는11737 extract였다. 원
+  `workflow_c75fb0b5f19041609cc69c65d13375d4`는 WORKER_RESULT_INVALID였으며 실제 local
+  result의 `proposal.content.interaction.single_choice` 구조 검증 실패를 확인했다. 기존
+  supported invalid-result recovery1회는 같은 원 work/plan/source를 유지하고 exact replay도
+  확인했다. 그러나 successor `workflow_021da0b79f934e3eb0fefdbfba1ddbd5`가07:22:38에
+  **WORKER_EXEC_FAILED**로 종료됐다. 실제 Job42fc…/slot04/exit1·bounded stderr에서
+  USAGE_LIMIT 진단 신호를 확인했다. 원 FAILED 둘 다 보존하고 이후 retry0이며3슬롯
+  RUNNING이라고 보고하지 않는다. raw worker 로그/내용은 보고·Slack에 포함하지 않았다.
+- 기존08:00 timer는 **GPU134/520·잔여386, CUDA REQUESTED1, historical FAILED7**이다.
+  frozen target/공통 CUDA space hash는 그대로다. 별도 owner journal의07:56:43 원 command
+  SUCCEEDED는 확인했지만 이를 새 기출 완료 수로 임의 가산하지 않는다. 새 count polling0,
+  과거 vector/index 삭제0, 정본 source/보고서 수정0이다.
+- Slack `devreport_ba4fd345c73a4b3689f4445e035c36be`는 한국어 요약 먼저 SENT/HTTP200이다.
+  **남은 목표**는 실제 권한 GUI 검색 완료/read/replay, private2 prepare/owner/runtime와
+  기존 consumer 전환·operator67 호환 배포, AI full-report→Graph→INDEX4 실제 연결,
+  원520 전체 CUDA integrity 및 참조 감사 후 정확한 구 파생 retirement/delete다. 사용량
+  한도에 걸린 창작 subtask와 전체 goal의 BLOCKED 상태를 혼동하지 않는다.
+
 ## 기존 Runner step·terminal의 private1/2 공유 — 2026-11-01 04:52 UTC
 
 - 같은 goal turn의 후속 **PROGRESS**다. source **`5a355c32c603b2c64ec2a8d291d72933a56fb31e`**

@@ -6,6 +6,8 @@ from unittest.mock import Mock
 
 import pytest
 from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
+from eom_workflow.private_chat_query_workflow_v2 import PRIVATE_CHAT_PUBLIC_QUERY_RESULT_SCHEMA
+from eom_workflow_runner import repository
 from eom_workflow_runner.engine import WorkflowRunner
 from eom_workflow_runner.errors import WorkflowError
 from eom_workflow_runner.repository import (
@@ -21,6 +23,17 @@ from sqlalchemy.orm import Session
 
 from tests.unit.test_local_embedding_command_claim import candidate_fixture
 from tests.unit.test_private_chat_query_execution import execution_case
+
+
+def test_shared_numerical_result2_alone_is_not_a_private_routing_marker():
+    sql = str(
+        repository._private_query_workflow_filter().compile(
+            dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+        )
+    )
+    assert PRIVATE_CHAT_PUBLIC_QUERY_RESULT_SCHEMA not in sql
+    assert "private-chat-query/2.0" in sql
+    assert "private-chat-query-workflow-request/2.0" in sql
 
 
 @pytest.mark.parametrize("family", list(CommandExecutionFamily))
