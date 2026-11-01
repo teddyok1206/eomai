@@ -1,5 +1,55 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 채팅의 공통 document 검증·context2 source 연결 — 2026-11-01 UTC
+
+- 직전 사용자 turn은 GUI 시험 후보 안내로 목표 구현 자체는 **NO_PROGRESS**였다.
+  worktree와 실제 기존 timer/process를 다시 확인한 뒤 source 작업을 이어간 이번 turn은
+  **PROGRESS**다. 전체 목표는 여전히 ACTIVE이며 source 후보를 운영 전환으로 세지 않는다.
+- JSON Schema2020-12를 먼저 추가한 private request/context2가 원 basis1과 기존 QUERY2
+  execution/result/member의 exact hash를 연결한다. 질문을 승인 Item으로 위장하거나 source
+  corpus에 등록하지 않는다. bound source 전체를 점수화하며 최대16,384에서도 가짜 self1개를
+  빼지 않는다. unavailable와 empty를 구분하고 전자는 no-match나 모집단0을 주장하지 않는다.
+  기존 private1/public3·4/수치 QUERY2 schema bytes는 변경하지 않았다.
+- 기존 DB 검색의 source·profile·binding·수치 row 검증을 Catalog의
+  `public_solution_document_scope`로 추출하고 private2 composer에서 함께 사용한다.
+  공개3의 실제 anchor/family 제한은 그대로다. 공통 query의 committed JSON/bytes/norm
+  검증도 공유한다. map/set/read-only views와 기존 ranking을 사용하며 새 검색 store/queue/
+  DB binary/worker 권한/외부 API/dependency는 추가하지 않았다.
+- source 집중 회귀 **116 PASS /18.20s**, strict mypy4 source와 Ruff/format/diff PASS다.
+  합성 source/수치 fixture이며 실제 GPU/Chat 권한·실행 admission을 증명하지 않는다.
+  `/tmp/eom-private-common-context2-focused-20261101-final-v4.log`,
+  `/tmp/eom-private-common-context2-mypy-20261101-final-v3.log`.
+  공통 committed-read 값은 개인 질문/native 원문과 vector bytes를 repr에서 제외한다.
+  private numerical schema 거부도 원문을 포함한 validator 예외 대신 안정적인 오류 코드만
+  전달한다. 표현 테스트의 중간1실패는 binary metadata까지 금지한 너무 넓은 문자열
+  기대였고, 정확한 dataclass repr field와 private text 비노출을 검증하도록 고쳤다.
+- pre-refactor `515eda73` composer와 같은 합성 입력4종의 canonical context bytes/hash가
+  완전히 같음을 별도 확인했다. context3 및 기출/창작/등록 AI anchor 각각의 context4가
+  포함된다. 이4개 frozen hash를 회귀에도 고정했다. 최초 비교 helper는 별도로 로드한
+  dataclass의 exact-type 경계에 걸렸고, 동일 값의 원 class로 감싼 재검사에서 PASS했다.
+  실패 log도 보존했으며 이를 운영 장애로 분류하지 않는다.
+  `/tmp/eom-private-common-document-refactor-baseline-20261101.log`, `-v2.log`.
+- 넓은 기존 private/query/read/권한·resource·의존성 회귀는 **1,098 PASS/1 FAIL**이었다.
+  `/tmp/eom-private-common-context2-regression-20261101.log`. 실패는 withdraw한 private
+  numeric2 schema가 setuptools의 generated `build/lib`에 남아 wheel에 섞인 exact-member
+  오류다. canonical/source 파일 부재와 Git 비추적을 확인한 뒤 해당 .py/schema/.pyc3개만
+  복구 가능한 `/tmp/eom-build-residue-20261101.JtolGE/`로 격리했다. 운영·NAS·정본 파일을
+  지우거나 package exact-member 검사를 완화하지 않았다. 최종 source 집중·깨끗한 wheel/
+  설치본·resource·dependency 회귀는 함께 **143 PASS /56.61s**다. wheel의 schemas/RECORD
+  exact-member와 source checkout 없는 설치본 로딩도 포함된다. 최종143은 넓은1098과
+  범위가 겹치므로 합산한 독립 테스트 수가 아니다.
+  `/tmp/eom-private-common-context2-final-gates-20261101.log`.
+- **00:30:00 UTC 정기 관측은122/520·잔여398**, 원 target-set/common CUDA space는
+  동일하고 nonterminal CUDA1/historical FAILED7이다. INDEX1683578/creative1698293 process가
+  실제 살아 있음을 확인했다. 관측 시 GPU compute process는 없었으므로 이를 현재 forward
+  연산 중이라고 말하지 않는다. 기존 owner의 준비/등록 phase와 새 실행 여부는 별도다.
+  원 timer의 다음 관측은01:00 UTC이며 이 source 작업에서 재시작·재제출0이다.
+- 다음은 이 private context2를 기존 원 turn/Workflow/launch/native-purpose/GPU route와
+  실제 owner read/provenance에 연결하는 일이다. 아직 private2 운영 선택/DB CHECK 변경/
+  실제 Chat acceptance가 아니다. AI 승인 대기 canary의 실제 report→Graph→INDEX4, 실제
+  사용자 DB query/read/replay, 전체520 CUDA 완료·무결성, 구 소비자 전환·정확한 파생 삭제가
+  남아 있다. 운영8eb/QUERY FB/INDEX 수치 pin과 모든 정본·기존 FAILED 이력은 보존했다.
+
 ## 재개 후 실제 CUDA 묶음 완료·채팅 공통 QUERY 재사용 — 2026-11-01 UTC
 
 - 직전 goal turn은 source8eb/API·Catalog·Pack18의 실제 운영 활성화였으며 **PROGRESS**다.

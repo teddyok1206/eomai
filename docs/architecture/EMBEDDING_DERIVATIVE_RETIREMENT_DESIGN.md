@@ -321,3 +321,29 @@ GPU 우선/CPU fallback은 기존 public routing의 실제 선택된 document/qu
 확인하기 전에는 기존 private1 unit에 새 입력을 보내지 않는다. old private1 parser는 계속
 이 입력을 거부한다. Chat read/provenance/답변 전달까지 이어서 새 authorized turn1회와
 삭제/철회/중단·원 요청 replay를 확인해야 active legacy private consumer 전환이 끝난다.
+
+#### 공통 document proof의 단일 소유권과 private context2
+
+2026-11-01 source 구현 경계다. 새로운 wire contract는
+`system-rag-private-chat-similarity/2.0`이고 기존 context1/request1 bytes는 보존한다.
+질문 basis1과 실행된 공통 QUERY2의 정확한 parent/input-set/result/member hash를 연결한다.
+개인 질문은 문항 anchor가 아니므로 모든 문서 binding을 점수화하며 source-count에서
+임의로1개를 빼지 않는다. 최대16,384개는 기존 공통 corpus 상한이다. unavailable는 결과가
+없다는 뜻이 아니므로 `NO_RELATED_CANDIDATES`를 붙이거나 모집단0을 만들어내지 않는다.
+
+DB 문항 검색과 개인 질문 검색의 document 검증은 기존 Catalog application의
+`public_solution_document_scope`가 함께 소유한다. 같은 Graph/policy/recipe의 source·base
+analysis·entry·profile·binding·row를 map/set으로 대조하고 정규화된 vector의 dimension/
+finite/norm을 기존 codec으로 확인한다. 공개3은 기존 family/실제 anchor 검증을 그대로
+더하고, 공개4와 private2는 등록 AI를 포함한 기존 공통 entry union을 사용한다. 원문과
+긴 보고서를 복사한 별도 검색 store·registry·cache는 없다. 반환 map은 read-only view이며
+현재 승인/권한 fence를 대신하지 않는다. shared encoding은 한 numerical row를 재사용한다.
+
+질문 QUERY의 committed member/schema/media/raw SHA 및 binary/norm 검증도 기존
+`read_verified_public_solution_query_vector`를 공유한다. numerical QUERY2 입력·결과 schema,
+encoder, 수치 runtime/정규화/model space는 변경하지 않는다. source capture가 비었거나
+등록 binding이0이면 임의 zero-vector/model 호출 없이 실제 빈 범위의 count/hash만 반환한다.
+access pattern은 bounded revision/encoding hash lookup이며 비용은 O(total text bytes + N·D),
+ranking은 기존 O(N·D + N log N)이다. 영속 DB/transaction/lease/queue 변경은 이 pure 단계에
+없으며 native-purpose successor와 원 turn uniqueness/current-read fence는 후속 owner 작업이다.
+이 source 계약·composer PASS를 private2 운영 활성화 또는 구 vector 삭제 허가로 해석하지 않는다.

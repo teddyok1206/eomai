@@ -101,6 +101,15 @@ def test_public_composer_uses_common_report_text_and_real_query_purpose_without_
     assert "SCORE_IS_NOT_PROOF_OF_IDENTICAL_REASONING" in result.limitations
 
 
+def test_shared_document_proof_preserves_frozen_context3_canonical_hash():
+    # Captured from the pre-extraction 515eda73 composer, not computed from this
+    # implementation. Moving the shared proof must not reinterpret frozen history.
+    result = compose_public_solution_similarity(*composition_case())
+    assert result.context_sha256 == (
+        "sha256:0a43a0836252c32d6ab840e827c92d779aa1b5579dbcf758f222fe13bb704aba"
+    )
+
+
 def test_query_source_uses_exact_common_report_text_but_not_document_encoding_identity():
     request, capture, document, query = composition_case()
     prepared = prepare_public_solution_query_source(request, capture)

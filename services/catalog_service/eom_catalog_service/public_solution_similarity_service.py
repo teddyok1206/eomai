@@ -1,10 +1,10 @@
 """Common public-solution composition over official Catalog reads, not another search store."""
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from typing import overload
 
 from eom_catalog_contracts.embedding_contract_values import raw_similarity_contract_value
-from eom_catalog_contracts.embedding_index_families import parse_supported_embedding_binding
 from eom_catalog_contracts.embedding_reference_query import ReferenceQueryTextInput
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
 from eom_catalog_contracts.inference_transfer_embedding import (
@@ -13,10 +13,6 @@ from eom_catalog_contracts.inference_transfer_embedding import (
 )
 from eom_catalog_contracts.inference_transfer_experiment import population_sha256
 from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
-from eom_catalog_contracts.public_solution_embedding_index import (
-    PublicSolutionEmbeddingSourceBinding,
-    PublicSolutionProfilePointer,
-)
 from eom_catalog_contracts.public_solution_query import (
     PUBLIC_SOLUTION_QUERY_RESULT_REF,
     PublicSolutionQueryExecutionPointer,
@@ -31,11 +27,6 @@ from eom_catalog_contracts.public_solution_similarity import (
 )
 from eom_catalog_contracts.registered_public_solution_embedding import (
     PublicSolutionEncodingEntry,
-    parse_public_solution_encoding_entry,
-)
-from eom_catalog_contracts.registered_public_solution_index import (
-    RegisteredPublicSolutionProfilePointer,
-    RegisteredPublicSolutionSourceBinding,
 )
 from eom_catalog_contracts.registered_public_solution_similarity import (
     PublicSolutionReferenceV4,
@@ -49,18 +40,19 @@ from eom_catalog_contracts.registered_public_solution_similarity import (
 from eom_catalog_contracts.similarity_context import SimilarityFailureCode
 from eom_identifiers import content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
-from pydantic import TypeAdapter
 
 from eom_catalog_service.embedding_registry_ports import (
     ResolvedEmbeddingLookup,
     ResolvedPinnedEmbeddingIndex,
 )
+from eom_catalog_service.public_solution_document_scope import (
+    PublicSolutionDocumentScope,
+    validate_public_solution_document,
+    validated_public_solution_entries,
+)
 from eom_catalog_service.public_solution_encoding import prepare_public_solution_encoding
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
-from eom_catalog_service.similarity_vector_ranking import (
-    rank_similarity_profiles,
-    validate_similarity_vectors,
-)
+from eom_catalog_service.similarity_vector_ranking import rank_similarity_profiles
 
 
 def _require(condition: bool, code: SimilarityFailureCode) -> None:
@@ -76,11 +68,11 @@ class VerifiedPublicSolutionQueryRead:
     lifecycle and Artifact metadata. The composer independently closes values/hash.
     """
 
-    request: PublicSolutionQueryInput
+    request: PublicSolutionQueryInput = field(repr=False)
     result: PublicSolutionQueryResult
     result_member: ArtifactMemberPointer
     shard_member: ArtifactMemberPointer
-    binary: bytes
+    binary: bytes = field(repr=False)
 
 
 @dataclass(frozen=True, slots=True)
@@ -110,7 +102,7 @@ def prepare_public_solution_query_source(
 
 def _anchor_query_row(
     request: SupportedPublicSolutionSimilarityRequest,
-    entries: dict[str, PublicSolutionEncodingEntry],
+    entries: Mapping[str, PublicSolutionEncodingEntry],
 ) -> ReferenceQueryTextInput:
     view = request.views[0]
     expected = prepare_public_solution_encoding(
@@ -125,47 +117,33 @@ def _anchor_query_row(
     )
 
 
+def _document_scope(
+    request: SupportedPublicSolutionSimilarityRequest,
+) -> PublicSolutionDocumentScope:
+    return PublicSolutionDocumentScope(
+        request.views[0],
+        request.graph_snapshot,
+        request.policy_revision_id,
+        request.policy_sha256,
+        request.source_classes,
+        request.maximum_sources,
+    )
+
+
 def _public_entries(
     request: SupportedPublicSolutionSimilarityRequest,
     capture: ResolvedEmbeddingLookup,
 ) -> dict[str, PublicSolutionEncodingEntry]:
-    view = request.views[0]
     _require(
-        type(capture) is ResolvedEmbeddingLookup
-        and type(capture.sources) is tuple
-        and type(capture.entries) is tuple
-        and type(capture.truncated) is bool
-        and 1 <= len(capture.sources) <= request.maximum_sources
-        and capture.space == view.index.spaces.document
-        and capture.recipe == view.recipe,
+        type(capture) is ResolvedEmbeddingLookup and bool(capture.sources),
         "SOURCE_POINTER_INVALID",
     )
-    sources = {source.item_revision_id: source for source in capture.sources}
-    bases = dict(capture.base_analysis_run_ids)
-    _require(
-        len(sources) == len(capture.sources)
-        and len(bases) == len(capture.base_analysis_run_ids)
-        and set(bases) == set(sources)
-        and all(source.source_class in request.source_classes for source in capture.sources),
-        "SOURCE_POINTER_INVALID",
-    )
-    entries: dict[str, PublicSolutionEncodingEntry] = {}
-    for original in capture.entries:
-        if isinstance(request, PublicSolutionSimilarityRequest):
-            _require(isinstance(original, PublicSolutionEmbeddingEntry), "SOURCE_POINTER_INVALID")
-        entry = parse_public_solution_encoding_entry(original)
-        key = entry.source.item_revision_id
+    entries = validated_public_solution_entries(_document_scope(request), capture)
+    if isinstance(request, PublicSolutionSimilarityRequest):
         _require(
-            key not in entries
-            and entry.source == sources.get(key)
-            and entry.base_analysis_run_id == bases.get(key)
-            and entry.graph_snapshot == request.graph_snapshot
-            and entry.policy_revision_id == request.policy_revision_id
-            and entry.policy_sha256 == request.policy_sha256
-            and entry.recipe == view.recipe,
+            all(isinstance(entry, PublicSolutionEmbeddingEntry) for entry in entries.values()),
             "SOURCE_POINTER_INVALID",
         )
-        entries[key] = entry
     anchor = entries.get(request.anchor.source.item_revision_id)
     _require(anchor is not None, "SOURCE_POINTER_INVALID")
     assert anchor is not None
@@ -178,13 +156,11 @@ def _public_entries(
 
 def _query_vector(
     request: SupportedPublicSolutionSimilarityRequest,
-    entries: dict[str, PublicSolutionEncodingEntry],
+    entries: Mapping[str, PublicSolutionEncodingEntry],
     query: VerifiedPublicSolutionQueryRead,
 ) -> tuple[tuple[float, ...], PublicSolutionQueryExecutionPointer]:
-    _require(type(query) is VerifiedPublicSolutionQueryRead, "QUERY_RESULT_INVALID")
-    numerical = PublicSolutionQueryInput.model_validate(query.request)
-    result = PublicSolutionQueryResult.model_validate(query.result)
-    validate_public_solution_query_result(numerical, result)
+    vector, execution = read_verified_public_solution_query_vector(query)
+    numerical = query.request
     view = request.views[0]
     expected = _anchor_query_row(request, entries)
     _require(
@@ -195,6 +171,17 @@ def _query_vector(
         and numerical.rows[0].text == expected.text,
         "QUERY_RESULT_INVALID",
     )
+    return vector, execution
+
+
+def read_verified_public_solution_query_vector(
+    query: VerifiedPublicSolutionQueryRead,
+) -> tuple[tuple[float, ...], PublicSolutionQueryExecutionPointer]:
+    """Validate common QUERY2 committed members/bytes; not its Item/private ownership."""
+    _require(type(query) is VerifiedPublicSolutionQueryRead, "QUERY_RESULT_INVALID")
+    numerical = PublicSolutionQueryInput.model_validate(query.request)
+    result = PublicSolutionQueryResult.model_validate(query.result)
+    validate_public_solution_query_result(numerical, result)
     for pointer, name, schema, value in (
         (query.result_member, "result.json", PUBLIC_SOLUTION_QUERY_RESULT_REF, result),
         (query.shard_member, "shard.json", SHARD_SCHEMA_REF, result.shard),
@@ -259,85 +246,11 @@ def compose_public_solution_similarity(
     """
     request = parse_supported_public_solution_similarity_request(request)
     entries = _public_entries(request, capture)
-    view = request.views[0]
-    _require(
-        type(document) is ResolvedPinnedEmbeddingIndex
-        and document.intent.selection == view
-        and document.intent.scope.corpus_id == capture.corpus_id
-        and document.intent.scope.graph_snapshot == request.graph_snapshot
-        and document.intent.scope.policy_revision_id == request.policy_revision_id
-        and document.intent.scope.policy_sha256 == request.policy_sha256
-        and document.intent.scope.maximum_sources == request.maximum_sources
-        and {source.item_revision_id: source for source in document.sources}
-        == {source.item_revision_id: source for source in capture.sources}
-        and len(document.sources) == len(capture.sources),
-        "INDEX_POINTER_INVALID",
+    validated = validate_public_solution_document(
+        _document_scope(request), capture, entries, document
     )
-    profile_reader: TypeAdapter[
-        PublicSolutionProfilePointer | RegisteredPublicSolutionProfilePointer
-    ] = TypeAdapter(PublicSolutionProfilePointer | RegisteredPublicSolutionProfilePointer)
-    references = {key: public_solution_reference_for_entry(entry) for key, entry in entries.items()}
-    profiles = {
-        row.source_item_revision_id: profile_reader.validate_python(
-            raw_similarity_contract_value(row.profile)
-        )
-        for row in document.profiles
-    }
-    _require(
-        len(profiles) == len(document.profiles)
-        and profiles == {key: reference.profile for key, reference in references.items()},
-        "INDEX_POINTER_INVALID",
-    )
-    rows = {row.row.encoding.encoding_sha256: row for row in document.numerical_rows}
-    _require(len(rows) == len(document.numerical_rows), "INDEX_POINTER_INVALID")
-    bindings = {}
-    for original in document.bindings:
-        binding = parse_supported_embedding_binding(original)
-        _require(
-            isinstance(
-                binding,
-                PublicSolutionEmbeddingSourceBinding | RegisteredPublicSolutionSourceBinding,
-            ),
-            "INDEX_POINTER_INVALID",
-        )
-        assert isinstance(
-            binding, PublicSolutionEmbeddingSourceBinding | RegisteredPublicSolutionSourceBinding
-        )
-        key = binding.source.item_revision_id
-        entry = entries.get(key)
-        _require(entry is not None and key not in bindings, "INDEX_POINTER_INVALID")
-        assert entry is not None
-        encoded = prepare_public_solution_encoding(
-            entry,
-            space=view.index.spaces.document,
-            storage_partition=view.index.storage_partition,
-        ).input
-        row = rows.get(binding.encoding.encoding_sha256)
-        _require(
-            encoded is not None
-            and binding.source == entry.source
-            and binding.profile == profiles[key]
-            and binding.evidence == entry.evidence
-            and binding.base_analysis_run_id == entry.base_analysis_run_id
-            and binding.graph_snapshot == entry.graph_snapshot
-            and binding.policy_revision_id == entry.policy_revision_id
-            and binding.policy_sha256 == entry.policy_sha256
-            and binding.recipe == entry.recipe
-            and binding.encoding == encoded.encoding
-            and row is not None
-            and row.row.encoding == binding.encoding
-            and row.row.row_ref == binding.row_ref,
-            "INDEX_POINTER_INVALID",
-        )
-        bindings[key] = binding
-    _require(
-        set(rows) == {binding.encoding.encoding_sha256 for binding in bindings.values()},
-        "INDEX_POINTER_INVALID",
-    )
-    validate_similarity_vectors(
-        tuple(row.values for row in rows.values()),
-        dimension=view.index.spaces.document.model_spec.dimension,
-    )
+    references, profiles = validated.references, validated.profiles
+    bindings, rows = validated.bindings, validated.rows
     vector, execution = _query_vector(request, entries, query)
     ranked = rank_similarity_profiles(
         vector,

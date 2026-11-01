@@ -167,6 +167,33 @@ def test_all_three_source_kinds_rank_through_same_query2_text_row_and_one_docume
     }
 
 
+@pytest.mark.parametrize(
+    "kind,expected",
+    (
+        (
+            "ACCEPTED_SOLUTION_ANALYSIS",
+            "sha256:8cb76b6d614e5ca21bf9ddf4d1e14445d293c4fdaee07a3c47df950e72f1cae6",
+        ),
+        (
+            "REGISTERED_CREATIVE_SOURCE_REPORT",
+            "sha256:61048937a85eca4340e18978f847d236f5bf88e4bba694ab1ff837e9991d4d8a",
+        ),
+        (
+            "ACCEPTED_REGISTERED_SOLUTION_ANALYSIS",
+            "sha256:23e262994e5a16f8ccdc51f97930e82e5fd8208aab2e416831929c2d1647bb0b",
+        ),
+    ),
+)
+def test_shared_document_proof_preserves_frozen_context4_bytes_for_every_source_kind(
+    kind, expected
+):
+    # Independently captured with the 515eda73 composer before sharing its proof.
+    assert (
+        compose_public_solution_similarity(*registered_composition_case(kind)).context_sha256
+        == expected
+    )
+
+
 def test_missing_anchor_document_vector_still_ranks_other_sources_as_partial():
     request, capture, document, query = registered_composition_case()
     document = replace(

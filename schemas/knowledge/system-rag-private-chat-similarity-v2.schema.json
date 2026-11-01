@@ -1,0 +1,505 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-private-chat-similarity/2.0",
+  "title": "Private owned question over the common public-solution Item index",
+  "description": "Private basis1 and public document recipe2/index3/4 remain distinct. No accepted anchor or question corpus enrollment. Actual ownership, source permission and private-purpose native admission are mandatory outside these values. Numerical input/result reuse unchanged QUERY2.",
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "view": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "view",
+        "recipe",
+        "index"
+      ],
+      "properties": {
+        "view": {
+          "const": "CONCRETE_FACETS"
+        },
+        "recipe": {
+          "$ref": "eom://schemas/knowledge/public-solution-embedding-entry/1.0#/$defs/recipe"
+        },
+        "index": {
+          "oneOf": [
+            {
+              "$ref": "eom://schemas/knowledge/public-solution-similarity/4.0#/$defs/indexPin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "request_id",
+        "consumer_purpose",
+        "query_basis",
+        "graph_snapshot",
+        "policy_revision_id",
+        "policy_sha256",
+        "source_classes",
+        "views",
+        "vector_mode",
+        "maximum_sources",
+        "top_k",
+        "request_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "system-rag-private-chat-similarity-request/2.0"
+        },
+        "request_id": {
+          "type": "string",
+          "pattern": "^similarityrequest_[0-9a-f]{32}$"
+        },
+        "consumer_purpose": {
+          "const": "GENERAL_CHAT_READ"
+        },
+        "query_basis": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-basis/1.0"
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-similarity/1.0#/$defs/request/properties/graph_snapshot"
+        },
+        "policy_revision_id": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-similarity/1.0#/$defs/request/properties/policy_revision_id"
+        },
+        "policy_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "source_classes": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-similarity/1.0#/$defs/request/properties/source_classes"
+        },
+        "views": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 1,
+          "items": {
+            "$ref": "#/$defs/view"
+          }
+        },
+        "vector_mode": {
+          "const": "REQUIRED"
+        },
+        "maximum_sources": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "top_k": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 64
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "job_id",
+        "query_request_id",
+        "request_sha256",
+        "input_set_sha256",
+        "basis_sha256",
+        "result_member",
+        "result_sha256"
+      ],
+      "properties": {
+        "job_id": {
+          "type": "string",
+          "pattern": "^job_[0-9a-f]{32}$"
+        },
+        "query_request_id": {
+          "type": "string",
+          "pattern": "^embeddingquery_[0-9a-f]{32}$"
+        },
+        "request_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "input_set_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "basis_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "result_member": {
+          "allOf": [
+            {
+              "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"
+            },
+            {
+              "properties": {
+                "member_path": {
+                  "const": "result.json"
+                },
+                "schema_ref": {
+                  "const": "eom://schemas/knowledge/embedding-reference-query-result/2.0"
+                },
+                "media_type": {
+                  "const": "application/json"
+                }
+              },
+              "required": [
+                "member_path",
+                "schema_ref",
+                "media_type"
+              ]
+            }
+          ]
+        },
+        "result_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      }
+    },
+    "population": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "authorized_source_count",
+        "available_report_count",
+        "available_binding_count",
+        "scored_count",
+        "authorized_source_set_sha256",
+        "available_report_set_sha256",
+        "binding_set_sha256",
+        "truncated"
+      ],
+      "properties": {
+        "authorized_source_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "available_report_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "available_binding_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "scored_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 16384
+        },
+        "authorized_source_set_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "available_report_set_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "binding_set_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "truncated": {
+          "type": "boolean"
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "request",
+        "status",
+        "population",
+        "query_execution",
+        "candidates",
+        "limitations",
+        "unavailable_reason",
+        "error_code",
+        "context_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "system-rag-private-chat-similarity-context/2.0"
+        },
+        "request": {
+          "$ref": "#/$defs/request"
+        },
+        "status": {
+          "enum": [
+            "READY",
+            "PARTIAL",
+            "EMPTY",
+            "UNAVAILABLE",
+            "FAILED"
+          ]
+        },
+        "population": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/population"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "query_execution": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/execution"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "candidates": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "eom://schemas/knowledge/public-solution-similarity/4.0#/$defs/candidate"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "minItems": 3,
+          "maxItems": 8,
+          "uniqueItems": true,
+          "items": {
+            "enum": [
+              "PRIVATE_QUERY_IS_NOT_SOURCE_EVIDENCE",
+              "SINGLE_USER_MESSAGE_ONLY",
+              "SCORES_ARE_NOT_SOLUTION_EQUALITY_OR_APPROVAL",
+              "VECTOR_NOT_AVAILABLE",
+              "PARTIAL_REPORT_COVERAGE",
+              "PARTIAL_VIEW_COVERAGE",
+              "BOUNDED_SCOPE_TRUNCATED",
+              "NO_RELATED_CANDIDATES"
+            ]
+          }
+        },
+        "unavailable_reason": {
+          "enum": [
+            null,
+            "INDEX_NOT_PREPARED",
+            "QUERY_NOT_OFFERED",
+            "INPUT_OVERFLOW"
+          ]
+        },
+        "error_code": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-similarity/1.0#/$defs/result/properties/error_code"
+        },
+        "context_sha256": {
+          "$ref": "#/$defs/hash"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "FAILED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "population": {
+                "type": "null"
+              },
+              "query_execution": {
+                "type": "null"
+              },
+              "candidates": {
+                "maxItems": 0
+              },
+              "error_code": {
+                "type": "string"
+              },
+              "unavailable_reason": {
+                "type": "null"
+              },
+              "limitations": {
+                "const": [
+                  "PRIVATE_QUERY_IS_NOT_SOURCE_EVIDENCE",
+                  "SINGLE_USER_MESSAGE_ONLY",
+                  "SCORES_ARE_NOT_SOLUTION_EQUALITY_OR_APPROVAL"
+                ]
+              }
+            }
+          },
+          "else": {
+            "if": {
+              "properties": {
+                "status": {
+                  "const": "UNAVAILABLE"
+                }
+              }
+            },
+            "then": {
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "unavailable_reason": { "const": "INDEX_NOT_PREPARED" }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "request": {
+                        "properties": {
+                          "views": { "items": { "properties": { "index": { "type": "null" } } } }
+                        }
+                      }
+                    }
+                  },
+                  "else": {
+                    "properties": {
+                      "request": {
+                        "properties": {
+                          "views": { "items": { "properties": { "index": { "type": "object" } } } }
+                        }
+                      }
+                    }
+                  }
+                }
+              ],
+              "properties": {
+                "population": {
+                  "type": "null"
+                },
+                "query_execution": {
+                  "type": "null"
+                },
+                "candidates": {
+                  "maxItems": 0
+                },
+                "error_code": {
+                  "type": "null"
+                },
+                "unavailable_reason": {
+                  "enum": [
+                    "INDEX_NOT_PREPARED",
+                    "QUERY_NOT_OFFERED",
+                    "INPUT_OVERFLOW"
+                  ]
+                },
+                "limitations": {
+                  "const": [
+                    "PRIVATE_QUERY_IS_NOT_SOURCE_EVIDENCE",
+                    "SINGLE_USER_MESSAGE_ONLY",
+                    "SCORES_ARE_NOT_SOLUTION_EQUALITY_OR_APPROVAL",
+                    "VECTOR_NOT_AVAILABLE"
+                  ]
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "request": {
+                  "properties": {
+                    "views": { "items": { "properties": { "index": { "type": "object" } } } }
+                  }
+                },
+                "population": {
+                  "$ref": "#/$defs/population"
+                },
+                "error_code": {
+                  "type": "null"
+                },
+                "unavailable_reason": {
+                  "type": "null"
+                },
+                "limitations": {
+                  "maxItems": 7,
+                  "items": {
+                    "enum": [
+                      "PRIVATE_QUERY_IS_NOT_SOURCE_EVIDENCE",
+                      "SINGLE_USER_MESSAGE_ONLY",
+                      "SCORES_ARE_NOT_SOLUTION_EQUALITY_OR_APPROVAL",
+                      "PARTIAL_REPORT_COVERAGE",
+                      "PARTIAL_VIEW_COVERAGE",
+                      "BOUNDED_SCOPE_TRUNCATED",
+                      "NO_RELATED_CANDIDATES"
+                    ]
+                  }
+                }
+              },
+              "allOf": [
+                {
+                  "if": {
+                    "properties": {
+                      "status": {
+                        "const": "EMPTY"
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "candidates": {
+                        "maxItems": 0
+                      }
+                    }
+                  },
+                  "else": {
+                    "properties": {
+                      "candidates": {
+                        "minItems": 1
+                      }
+                    }
+                  }
+                },
+                {
+                  "if": {
+                    "properties": {
+                      "population": {
+                        "properties": {
+                          "available_binding_count": {
+                            "const": 0
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "then": {
+                    "properties": {
+                      "query_execution": {
+                        "type": "null"
+                      }
+                    }
+                  },
+                  "else": {
+                    "properties": {
+                      "query_execution": {
+                        "$ref": "#/$defs/execution"
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/result"
+    }
+  ]
+}
