@@ -2371,6 +2371,16 @@ class CatalogEmbeddingRegistryVerifier:
         intent: EmbeddingRegistryRead,
         registered: RegisteredEmbeddingIndexRead,
     ) -> None:
+        """Preserved initial-pin entry; no numerical or execution authority."""
+        self.validate_public_query_manifest(session, caller, intent, registered)
+
+    def validate_public_query_manifest(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        intent: EmbeddingRegistryRead,
+        registered: RegisteredEmbeddingIndexRead,
+    ) -> None:
         """Pin a canonical public manifest, not population/vector or execution authority.
 
         The selected source is separately resolved by the initial-query use case.
