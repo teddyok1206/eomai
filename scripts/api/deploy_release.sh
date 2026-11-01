@@ -1010,6 +1010,7 @@ import ast
 import hashlib
 import json
 import os
+import re
 import stat
 import subprocess
 import tempfile
@@ -1017,6 +1018,33 @@ import zipfile
 from pathlib import Path
 
 from jsonschema import Draft202012Validator, FormatChecker
+
+def source_migration_revision(root: Path) -> str:
+    """Read the pinned archive's declaration as data, never execute source imports."""
+    path = root / "services/orchestrator/eom_orchestrator/migration.py"
+    try:
+        if path.is_symlink() or not path.is_file():
+            raise ValueError()
+        raw = path.read_bytes()
+        if not 0 < len(raw) <= 16 * 1024:
+            raise ValueError()
+        values = [
+            node.value
+            for node in ast.parse(raw.decode("utf-8")).body
+            if isinstance(node, ast.Assign) and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == "CURRENT_MIGRATION_REVISION"
+        ]
+        if len(values) != 1:
+            raise ValueError()
+        value = ast.literal_eval(values[0])
+        if not isinstance(value, str) or re.fullmatch(r"[0-9]{8}_[0-9]{4}", value) is None:
+            raise ValueError()
+        return value
+    except (OSError, ValueError, SyntaxError, UnicodeError):
+        raise SystemExit("release source migration declaration is invalid") from None
+
+expected_migration_revision = source_migration_revision(Path(os.environ["REPOSITORY_ROOT"]))
 
 dist = Path(os.environ["DIST_DIR"])
 wheels = sorted(dist.glob("*.whl"))
@@ -1980,6 +2008,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 installed_root = Path(sys.argv[1]).resolve()
+expected_migration_revision = sys.argv.pop()
 repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, definition_v1_15, definition_v1_16, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, analysis_v11, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, pdf_document_review_definition_v1_3, pdf_document_review_definition_v1_4, pdf_document_review_definition_v1_5, inference_transfer_definition, inference_transfer_definition_v1_1, local_embedding_definition, local_embedding_definition_v2, reference_query_definition, reference_query_definition_v2, private_chat_query_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256, expected_catalog_resources_json = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
@@ -2183,7 +2212,7 @@ if any(
     )
 ):
     raise SystemExit("mock-exam retirement contract package exports are incomplete")
-if CURRENT_MIGRATION_REVISION != "20261031_0066":
+if CURRENT_MIGRATION_REVISION != expected_migration_revision:
     raise SystemExit("installed runtime migration admission head mismatch")
 settings = Settings.from_environment()
 if settings.worker_config != Path(worker_config).resolve():
@@ -2501,6 +2530,7 @@ validate_contract(
             os.environ["EXPECTED_SOURCE_TREE"],
             os.environ["EXPECTED_SOURCE_ARCHIVE_SHA256"],
             json.dumps(catalog_resources, sort_keys=True, separators=(",", ":")),
+            expected_migration_revision,
         ],
         cwd=root,
         check=True,

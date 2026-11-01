@@ -183,6 +183,14 @@ SQL/NAS/Chat client를 import하지 않고 기존 Orchestrator adapter만 영속
 purpose 혼합을 거부한다. 별도 coordinator/queue를 만드는 대안보다 기존 순수 invariant와
 같은 store의 명시적 successor가 작다. 최초 contract/fixture 단계는 source-only이고 운영
 activation이나 old vector 삭제의 근거가 아니다.
+
+릴리스의 비편집 설치본 검사는 과거 head0066을 하드코딩해 새 소스67도 거부하고 있었다.
+빌드한 exact Git archive의 `migration.py`에서 단일 정적 문자열을 AST로 읽어 설치본의
+선언과 정확히 비교한다. 소스를 import/실행하지 않으며 누락·중복·표현식·symlink·크기 초과나
+잘못된 버전 표기는 거부한다. 기존 build commit/tree/archive SHA/RECORD 검증과 별도
+root release-operator의 migration allowlist는 그대로다. 이는 패키지 일치 검사일 뿐 DB67
+업그레이드 승인이나 운영 호환성 증명이 아니다. 실제67 배포는 기존 operator successor와
+drain/rollback·활성 consumer 검증을 마친 후에만 수행한다.
 Slack 첫 문장은 한국어 요약이며 문항 내용·보고서 전문·인증 정보는 보내지 않는다.
 goal 완료는 GPU 프로세스 active나 설치 PASS가 아니라 U01–U05의 실제 결과로 판단한다.
 
