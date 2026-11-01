@@ -137,7 +137,7 @@ class EmbeddingBatchPlanRequestValues(EmbeddingBatchPlanValue):
     message_type: Literal["REQUEST"]
     batch_id: str = Field(pattern=r"^embeddingbatch_[0-9a-f]{32}$")
     parent_request_sha256: Sha256
-    purpose: Literal["INDEX", "REFERENCE_QUERY"]
+    purpose: Literal["INDEX", "REFERENCE_QUERY", "PRIVATE_CHAT_QUERY"]
     scope: EmbeddingWorkBatchScope
     selection_manifest: ArtifactMemberPointer
     selection_sha256: Sha256

@@ -731,3 +731,44 @@ GPU 정책을 대신하는 새 fallback 규칙이 아니다. protected cohost co
 정본 검증·GPU leaf/선택·원 실행 복구가 닫히기 전에는 global2를 열지 않는다. 별도 factory,
 queue, identity cache, DB/Artifact 모델은 만들지 않는다. 실제 origin마다 기존 owner/Runner를
 독립 생성하고 권한·고정 revision/hash·런타임의 전후 검사를 그대로 유지한다.
+
+## private GPU 부모 선택 계약1.7 — 2026-11-01
+
+1. **책임/경계**: 기존 batch parent의 private QUERY source 선택이다. 이미 있는 INDEX1.6을
+   바꾸지 않고 successor1.7을 사용한다. 이 metadata는 실제 Chat 권한·GPU grant가 아니다.
+2. **정본**: 원 live Chat origin/turn, published Graph/policy, 공통 DOCUMENT index3/4,
+   private 실행 정책2 두 개와 routing 정책1이다. 질문을 Item anchor로 등록하지 않는다.
+3. **identity/revision**: origin의 전체 hash와 원 parent key를 보존한다. batch ID·selection/
+   request hash·Artifact revision은 구분한다. READ/replay가 latest head를 다시 선택하지 않는다.
+4. **포인터**: selection에는 origin, Graph, CPU/CUDA index pin과 두 private policy의 member/
+   별도 semantic hash만 둔다. 원문·벡터·실행 경로·role·권한을 넣지 않는다. owner가 현재
+   소유권, 모든 정본 revision/schema/media/lifecycle/hash를 앞뒤로 확인해야 한다.
+5. **접근/구조**: 원 origin key indexed lookup, 단일 child, CPU/CUDA keyed pair, 고정 개수
+   control closure다. 새 DB/index/queue를 만들지 않고 기존 append-only parent event를 쓴다.
+6. **규모/복잡도**: schema/model 검증은 작은 bounded metadata에 선형이며 선택/child key는
+   O(1)이다. 실제 source/vector 순회는 기존16384 상한과 공통 read/ranking을 재사용한다.
+7. **동시성**: 기존 atomic parent/claim/lease와 origin unique 경계를 유지한다. 실제 질문
+   하나당 child 하나다. top-k64를64개 모델 실행으로 바꾸지 않는다.
+8. **의존**: contracts/domain의 순수 validator와 source-owner adapter를 분리한다. 실제
+   private origin 재인가 없이 공개 Reference owner/approved-anchor 경로로 우회하지 않는다.
+9. **실패/retry**: 잘못된 actor/basis/scope/control/device pin은 명시적으로 거부한다. CUDA
+   index는 필수이고 CPU index가 없을 수도 있다. 그 경우 BUSY 뒤 CPU 결과를 꾸미거나 다른
+   Graph의 최신 CPU index로 대체하지 않고 unavailable로 기록한다. 재시도는 원 key만 쓴다.
+10. **실행/배포**: 기존 routing·GPU lease/FD retention·수치 QUERY2·Artifact commit를
+    재사용하되 private parent/실행/완료 관측 연결은 별도 검증한다. 수치 fingerprint는
+    FLOAT32_CODEC/HOST_L2/OFFLINE_ENCODER와 library/device/recipe로 고정돼 있고 source/
+    transport release audit와 구분된다. 현재 model/bundle/space를 임의 변경하지 않는다.
+11. **대안**: public batch1.5 anchor에 질문을 끼우면 출처/권한이 거짓이 된다. CPU-only로
+    완료를 선언하거나 parallel queue를 만드는 방법도 원 목표를 충족하지 못한다. 실제
+    parent/worker/reader와 호환 runtime/operator67 및 consumer 전환 전 global2는 닫아 둔다.
+
+새1.7 값은 기존1.0–1.6 parser/운영 admission을 자동으로 넓히지 않는다. JSON Schema를
+먼저 고정하고, 원 요청/family/권한·pointer·수치 공간 연결과 과거 가족 거부를 검증한 뒤
+기존 owner/state machine에 명시적으로 통합한다.
+
+selection1.7은 기존 Orchestrator control-file-set publisher의 명시적 private 메서드로만
+발행한다. 같은 작은 포인터 문서를 `selection.json` Artifact로 저장하고 FIRST_OBSERVATION과
+기존 원 key/충돌/해시 검사를 재사용한다. 공개 batch parser/admission을 넓히지 않으며, DB에는
+원문이나 전체 selection을 복제하지 않는다. 실제 임시 저장·Catalog pinned read·동일 요청
+재전송·변조/다른 family/같은 key의 내용·종류 변경 거부를 검사한다. 이 발행 leaf는 private
+권한 검증/부모 실행 연결을 대신하거나 운영 global2를 활성화하지 않는다.
