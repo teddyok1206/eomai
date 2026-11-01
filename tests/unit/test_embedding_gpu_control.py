@@ -9,6 +9,7 @@ from eom_catalog_contracts.embedding_gpu_control import (
     EmbeddingGpuAllocationBusy,
     EmbeddingGpuAllocationReady,
     EmbeddingGpuControlError,
+    embedding_gpu_batch_purpose,
     embedding_gpu_control_bytes,
     parse_embedding_gpu_control,
     parse_embedding_gpu_control_bytes,
@@ -40,7 +41,7 @@ def _frame(kind, values):
     )
 
 
-def control_case(*, expires_ns=1000000000, batch=None):
+def control_case(*, expires_ns=1000000000, batch=None, purpose="REFERENCE_QUERY"):
     sha = "sha256:" + "a" * 64
     request = _frame(
         "ALLOCATION_REQUEST",
@@ -48,7 +49,7 @@ def control_case(*, expires_ns=1000000000, batch=None):
             "parent_request_sha256": sha,
             "child_set_sha256": sha,
             "routing_policy_sha256": sha,
-            "purpose": "REFERENCE_QUERY",
+            "purpose": purpose,
             "configuration": {
                 "configuration_id": "embeddingnativeconfig_" + "a" * 32,
                 "configuration_revision_id": "embeddingnativeconfigrev_" + "b" * 32,
@@ -143,6 +144,24 @@ def test_exact_original_request_ready_grant_batch_and_child_ack_close():
         request, grant, batch, input_raw_sha256=sha256_bytes(raw), input_byte_count=len(raw)
     )
     validate_embedding_gpu_fence_ack(grant, check, ack)
+
+
+@pytest.mark.parametrize(
+    "allocation,numerical",
+    (
+        ("INDEX", "DOCUMENT"),
+        ("REFERENCE_QUERY", "REFERENCE_QUERY"),
+        ("PRIVATE_CHAT_QUERY", "PRIVATE_CHAT_QUERY"),
+    ),
+)
+def test_purpose_correspondence_is_exact_metadata_not_worker_activation(allocation, numerical):
+    assert embedding_gpu_batch_purpose(allocation) == numerical
+
+
+@pytest.mark.parametrize("purpose", ("", "DOCUMENT", "UNKNOWN", True, [], {}))
+def test_unknown_or_coerced_purpose_has_no_numerical_family(purpose):
+    with pytest.raises(EmbeddingGpuControlError):
+        embedding_gpu_batch_purpose(purpose)
 
 
 def test_busy_or_grant_cannot_masquerade_as_an_acquired_readiness():

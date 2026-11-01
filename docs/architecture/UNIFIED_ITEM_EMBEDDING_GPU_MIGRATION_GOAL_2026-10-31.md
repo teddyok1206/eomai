@@ -199,6 +199,20 @@ GPU로 위장하거나 질문을 public Reference로 relabel하는 대안은 원
 검증을 그대로 유지한다. 변경된 lookup의 공개 중단 복구·batch proof 조회도 임시 DB에서
 함께 회귀 확인한다.
 
+후속 owner-local 결과 읽기는 같은 원 allocation의 input/bound/result/binary를 고정 FD와
+byte bound·epoch·raw/semantic hash로 검사하고 실제 ACK가 확인된 때만 목적에 맞는1.0/1.1
+receipt를 만든다. 현재 source/lease fence는 읽기 전후와 publication에서 유지한다. cold read는
+원 canonical receipt와 원 workspace를 사용하고 이전 PID나 재추론에 의존하지 않는다.
+purpose→numerical family의 작은 불변 lookup은 두 기존 검증 지점이 공유한다. 이는 이미
+schema에 존재하는 PRIVATE_CHAT_QUERY와 envelope3의 정확한 관계 검사이며 실행 허가가
+아니다. 실제 worker entry의 private-purpose 거부와 운영 global2 CLOSED는 이번 단계에서도
+유지한다. 기존 request/schema bytes·timeout·GPU/backend/model/space는 바꾸지 않는다.
+입력/결과는 기존 한 번의 bounded materialization과 shared readonly memoryview를 쓰며
+비용은 O(batch bytes), private child는1개다. 새 persistent schema/index/queue/cache가 없고
+IO는 기존 Catalog/Runner adapters에 남는다. 같은 원 key/포인터가 없거나 현재 source가
+철회되면 explicit failure이며 새 경로나 latest를 찾지 않는다. private 전용 reader/수치
+executor를 복제하는 대안보다 기존 owner-local 검증의 명시적 family 지원이 작다.
+
 ### private 공통 parent의 실제 source admission — 2026-11-01
 
 책임은 기존 private source owner와 finite parent application이다. 정본은 원 Chat origin과

@@ -30,7 +30,10 @@ from eom_orchestrator.inference_transfer_cpu_handoff import (
     protected_cpu_handoff_directory,
     read_protected_cpu_handoff_member,
 )
-from eom_workflow.embedding_batch_execution_receipt import EmbeddingBatchExecutionReceipt
+from eom_workflow.embedding_batch_execution_receipt import (
+    SupportedEmbeddingBatchExecutionReceipt,
+    parse_supported_embedding_batch_execution_receipt,
+)
 from eom_workflow.embedding_batch_owner_control import (
     EmbeddingBatchRootCompleted,
     EmbeddingBatchRootReady,
@@ -110,7 +113,7 @@ class VerifiedLocalEmbeddingBatchResult:
 
     def receipt(
         self, parent_plan_job_id: str, channel: EmbeddingBatchOwnerChannel
-    ) -> EmbeddingBatchExecutionReceipt:
+    ) -> SupportedEmbeddingBatchExecutionReceipt:
         """Build small verified metadata only; caller separately validates parent history."""
         self.assert_current()
         _require(
@@ -137,7 +140,9 @@ class VerifiedLocalEmbeddingBatchResult:
                 )
             )
         body = dict(
-            schema_version="embedding-batch-execution-receipt/1.0",
+            schema_version="embedding-batch-execution-receipt/1.1"
+            if channel.request.purpose == "PRIVATE_CHAT_QUERY"
+            else "embedding-batch-execution-receipt/1.0",
             purpose=channel.request.purpose,
             device="CUDA",
             parent_plan_job_id=parent_plan_job_id,
@@ -148,7 +153,7 @@ class VerifiedLocalEmbeddingBatchResult:
             completed=self.completed.model_dump(mode="json"),
             children=children,
         )
-        return EmbeddingBatchExecutionReceipt.model_validate(
+        return parse_supported_embedding_batch_execution_receipt(
             body | {"receipt_sha256": content_sha256(body)}
         )
 
@@ -183,7 +188,7 @@ def read_verified_embedding_batch_result(
 
 
 def read_completed_embedding_batch_result(
-    receipt: EmbeddingBatchExecutionReceipt,
+    receipt: SupportedEmbeddingBatchExecutionReceipt,
     *,
     authorization: CatalogEmbeddingBatchSourceAuthorization,
 ) -> VerifiedLocalEmbeddingBatchResult:
@@ -193,7 +198,7 @@ def read_completed_embedding_batch_result(
     parent/receipt and supplies current actual child source/lease authorization.
     """
     _owner()
-    receipt = EmbeddingBatchExecutionReceipt.model_validate(receipt)
+    receipt = parse_supported_embedding_batch_execution_receipt(receipt)
     _require(type(authorization) is CatalogEmbeddingBatchSourceAuthorization)
     _authorize(authorization)
     staged = read_completed_owner_embedding_batch(receipt)

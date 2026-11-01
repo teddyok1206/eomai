@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping
+from types import MappingProxyType
 from typing import Annotated, Literal, Self
 
 from eom_identifiers import canonical_json_bytes, content_sha256
@@ -46,6 +48,26 @@ type ProcessBirth = Annotated[int, Field(ge=1, le=18446744073709551615, strict=T
 class EmbeddingGpuControlError(ValueError):
     def __init__(self) -> None:
         super().__init__("EMBEDDING_GPU_CONTROL_INVALID")
+
+
+_NUMERICAL_PURPOSES: Mapping[str, Literal["DOCUMENT", "REFERENCE_QUERY", "PRIVATE_CHAT_QUERY"]] = (
+    MappingProxyType(
+        {
+            "INDEX": "DOCUMENT",
+            "REFERENCE_QUERY": "REFERENCE_QUERY",
+            "PRIVATE_CHAT_QUERY": "PRIVATE_CHAT_QUERY",
+        }
+    )
+)
+
+
+def embedding_gpu_batch_purpose(
+    allocation_purpose: str,
+) -> Literal["DOCUMENT", "REFERENCE_QUERY", "PRIVATE_CHAT_QUERY"]:
+    """Closed wire/numerical correspondence only, never a physical execution grant."""
+    if type(allocation_purpose) is not str or allocation_purpose not in _NUMERICAL_PURPOSES:
+        raise EmbeddingGpuControlError()
+    return _NUMERICAL_PURPOSES[allocation_purpose]
 
 
 def embedding_gpu_allocation_window_seconds(numerical_timeout_seconds: int) -> int:
@@ -264,8 +286,7 @@ def validate_embedding_gpu_batch_grant(
     if (
         grant.allocation_attempt_id != request.allocation_attempt_id
         or grant.allocation_request_sha256 != request.message_sha256
-        or batch.purpose
-        != {"INDEX": "DOCUMENT", "REFERENCE_QUERY": "REFERENCE_QUERY"}.get(request.purpose)
+        or batch.purpose != embedding_gpu_batch_purpose(request.purpose)
         or type(input_byte_count) is not int
         or grant.batch_input_raw_sha256 != input_raw_sha256
         or grant.batch_input_byte_count != input_byte_count

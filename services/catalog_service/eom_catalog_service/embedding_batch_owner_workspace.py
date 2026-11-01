@@ -7,7 +7,10 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
-from eom_catalog_contracts.embedding_gpu_control import EmbeddingGpuAllocationRequest
+from eom_catalog_contracts.embedding_gpu_control import (
+    EmbeddingGpuAllocationRequest,
+    embedding_gpu_batch_purpose,
+)
 from eom_catalog_contracts.embedding_native_installation_evidence import (
     parse_rootlocal_evidence_document,
 )
@@ -24,7 +27,10 @@ from eom_orchestrator.inference_transfer_cpu_handoff import (
     read_protected_cpu_handoff_member,
     write_protected_cpu_owner_member,
 )
-from eom_workflow.embedding_batch_execution_receipt import EmbeddingBatchExecutionReceipt
+from eom_workflow.embedding_batch_execution_receipt import (
+    SupportedEmbeddingBatchExecutionReceipt,
+    parse_supported_embedding_batch_execution_receipt,
+)
 from eom_workflow.embedding_batch_owner_control import (
     MAX_BATCH_OWNER_CONTROL_BYTES,
     EmbeddingBatchOwnerBound,
@@ -82,8 +88,7 @@ def _validate_checked_binding(
         binding.request_sha256 == request.parent_request_sha256
         and binding.batch_request_sha256 == batch.request_sha256
         and binding.resource_profile_sha256 == batch.resource_profile_sha256
-        and batch.purpose
-        == {"INDEX": "DOCUMENT", "REFERENCE_QUERY": "REFERENCE_QUERY"}.get(request.purpose)
+        and batch.purpose == embedding_gpu_batch_purpose(request.purpose)
         and tuple(child.native_job_id for child in binding.children)
         == tuple(child.request.job_id for child in batch.children)
         and tuple(child.native_input_sha256 for child in binding.children)
@@ -202,7 +207,7 @@ def read_owner_embedding_batch(
 
 
 def read_completed_owner_embedding_batch(
-    receipt: EmbeddingBatchExecutionReceipt,
+    receipt: SupportedEmbeddingBatchExecutionReceipt,
 ) -> StagedOwnerEmbeddingBatch:
     """Read a retired original input, not a live owner's PID or a new compute grant.
 
@@ -212,7 +217,7 @@ def read_completed_owner_embedding_batch(
     owner = fixed_owner_identity()
     _require(os.getresuid() == (owner.owner_uid,) * 3)
     _require(os.getresgid() == (owner.owner_gid,) * 3)
-    receipt = EmbeddingBatchExecutionReceipt.model_validate(receipt)
+    receipt = parse_supported_embedding_batch_execution_receipt(receipt)
     return _read_original_owner_batch(receipt.allocation, receipt.bound)
 
 

@@ -217,7 +217,7 @@ def test_private_source_withdrawal_closes_model_without_returning_aggregate_succ
 
 
 @pytest.mark.parametrize("purpose", ("INDEX", "REFERENCE_QUERY", "PRIVATE_CHAT_QUERY"))
-def test_private_numeric_library_does_not_open_the_existing_physical_gpu_admission(purpose):
+def test_private_grant_metadata_requires_the_exact_private_purpose_not_a_public_grant(purpose):
     from eom_catalog_contracts.embedding_gpu_control import (
         EmbeddingGpuAllocationRequest,
         EmbeddingGpuComputeGrant,
@@ -238,7 +238,12 @@ def test_private_numeric_library_does_not_open_the_existing_physical_gpu_admissi
             "message_sha256",
         )
     )
-    with pytest.raises(EmbeddingGpuControlError):
+    if purpose == "PRIVATE_CHAT_QUERY":
         validate_embedding_gpu_batch_grant(
             request, grant, batch, input_raw_sha256=sha256_bytes(raw), input_byte_count=len(raw)
         )
+    else:
+        with pytest.raises(EmbeddingGpuControlError):
+            validate_embedding_gpu_batch_grant(
+                request, grant, batch, input_raw_sha256=sha256_bytes(raw), input_byte_count=len(raw)
+            )

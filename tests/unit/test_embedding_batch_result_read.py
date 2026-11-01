@@ -11,7 +11,10 @@ from eom_catalog_service import embedding_batch_owner_workspace as workspace
 from eom_catalog_service.embedding_batch_owner_channel import EmbeddingBatchOwnerChannel
 from eom_catalog_service.embedding_benchmark_channel import BenchmarkUnixPeer
 from eom_orchestrator.inference_transfer_cpu_handoff import CpuHandoffError, CpuHandoffIdentity
-from eom_workflow.embedding_batch_execution_receipt import EmbeddingBatchExecutionReceipt
+from eom_workflow.embedding_batch_execution_receipt import (
+    PrivateChatBatchExecutionReceipt,
+    parse_supported_embedding_batch_execution_receipt,
+)
 from eom_workflow.embedding_batch_owner_control import EmbeddingBatchRootCompleted
 from eom_workflow_runner import embedding_batch_result_read as reader
 from eom_workflow_runner.embedding_batch_source_authorization import (
@@ -20,12 +23,13 @@ from eom_workflow_runner.embedding_batch_source_authorization import (
 
 from tests.unit.embedding_batch_execution_fixtures import execution_case
 from tests.unit.inference_transfer_embedding_fixtures import seal
+from tests.unit.private_chat_batch_plan_fixtures import private_planning_case
 from tests.unit.test_embedding_batch_owner_channel import checked_once, endpoints, raw_send
 
 
-@pytest.fixture
-def local(tmp_path, monkeypatch):
-    value = execution_case()
+@pytest.fixture(params=("public", "private"))
+def local(tmp_path, monkeypatch, request):
+    value = execution_case(planned=private_planning_case() if request.param == "private" else None)
     owner = CpuHandoffIdentity(os.getuid(), os.getgid())
     owner_root, output_root = tmp_path / "owner", tmp_path / "root-output"
     owner_root.mkdir(mode=0o700)
@@ -128,6 +132,9 @@ def test_owner_checks_original_output_and_shares_one_readonly_binary_buffer(loca
         owner.acknowledge_completion(lambda _: verified.assert_current())
         owner.close()
         receipt = verified.receipt("job_" + "9" * 32, owner)
+        assert isinstance(receipt, PrivateChatBatchExecutionReceipt) == (
+            local.batch.purpose == "PRIVATE_CHAT_QUERY"
+        )
         assert receipt.bound == local.staged.notice
         assert receipt.children == local.receipt.children
         assert receipt.completed == local.completed
@@ -250,7 +257,7 @@ def test_cold_read_never_repairs_missing_or_foreign_result_or_bypasses_current_s
     elif fault == "child_metadata":
         body = receipt.model_dump(mode="json")
         body["children"][0]["result_sha256"] = "sha256:" + "f" * 64
-        receipt = EmbeddingBatchExecutionReceipt.model_validate(seal(body, "receipt_sha256"))
+        receipt = parse_supported_embedding_batch_execution_receipt(seal(body, "receipt_sha256"))
     else:
         local.state.deny_at = len(local.calls) + 1
     with pytest.raises((ValueError, OSError, CpuHandoffError, PermissionError)):

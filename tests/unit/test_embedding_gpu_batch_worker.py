@@ -258,6 +258,34 @@ def test_configuration_mismatch_is_failure_before_claim_not_busy_fallback(ports)
         assert events == ["identity"] and not life and not backend.calls
 
 
+def test_private_metadata_support_does_not_open_worker_or_claim_gpu(ports):
+    from tests.unit.test_private_chat_work_batch import private_case
+
+    _, backend, resources, life, descriptors, events, _ = ports
+    batch, *_ = private_case("CUDA")
+    with endpoints(
+        requested=False,
+        ready=False,
+        granted=False,
+        bound=False,
+        batch=batch,
+        purpose="PRIVATE_CHAT_QUERY",
+    ) as (root, native, case, *_):
+        root.send_request()
+        with pytest.raises(ValueError, match="BINDING_INVALID"):
+            worker.run_native_embedding_gpu_batch_worker(
+                native,
+                descriptors,
+                expected_backend=pins(case[0]),
+                resources=resources,
+                maximum_total_output_bytes=64 * 1024**2,
+            )
+        with pytest.raises(EmbeddingGpuChannelError):
+            root.receive_allocation()
+    assert events == ["identity"] and not life and not backend.calls
+    assert os.lseek(descriptors.input, 0, os.SEEK_CUR) == 0
+
+
 def test_invalid_native_identity_closes_channel_without_reading_request_or_claiming(
     ports, monkeypatch
 ):

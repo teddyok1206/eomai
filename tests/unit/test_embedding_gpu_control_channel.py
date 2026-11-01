@@ -49,8 +49,9 @@ def endpoints(
     sender=None,
     peer_fence=None,
     batch=None,
+    purpose="REFERENCE_QUERY",
 ):
-    case = control_case(expires_ns=time.monotonic_ns() + 15 * 10**9, batch=batch)
+    case = control_case(expires_ns=time.monotonic_ns() + 15 * 10**9, batch=batch, purpose=purpose)
     request, allocation, _, grant, _, _, batch, raw = case
     left, right = socket.socketpair()
     for connection in (left, right):
