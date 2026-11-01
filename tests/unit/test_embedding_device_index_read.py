@@ -23,11 +23,12 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryLookup,
     EmbeddingRegistryOwnerConfiguration,
     EmbeddingRegistryRead,
+    RegisteredEmbeddingIndexRead,
     ResolvedPinnedEmbeddingIndex,
 )
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.settings import CatalogSettings
-from eom_identifiers import canonical_json_bytes
+from eom_identifiers import canonical_json_bytes, content_sha256
 
 from tests.unit.inference_transfer_embedding_fixtures import embedding_space, index_pointer
 from tests.unit.test_embedding_device_index_pair import _index, public_index
@@ -50,7 +51,7 @@ def case(tmp_path, monkeypatch, request):
         if public
         else (_index("CPU", "a", "b"), _index("CUDA", "a", "b"))
     )
-    owners, intents, readings, payloads = [], [], [], {}
+    owners, intents, readings, payloads, registered = [], [], [], {}, {}
     for device, seed, index in zip(("CPU", "CUDA"), ("4", "5"), indexes, strict=True):
         binding = index.bindings[0]
         namespace_type = PublicSolutionIndexNamespace if public else EmbeddingIndexNamespace
@@ -99,6 +100,20 @@ def case(tmp_path, monkeypatch, request):
             settings=settings,
         )
         owner.authorize_scope = Mock()
+        owner.validate_public_query_manifest = Mock(return_value=index)
+        registered[(index.index_id, index.index_revision_id)] = RegisteredEmbeddingIndexRead(
+            scope.corpus_id,
+            namespace,
+            index.index_id,
+            index.index_revision_id,
+            pointer,
+            index.index_sha256,
+            scope.graph_snapshot.graph_snapshot_revision_id,
+            scope.policy_revision_id,
+            scope.policy_sha256,
+            len(index.bindings),
+            content_sha256([binding.binding_sha256 for binding in index.bindings]),
+        )
         owners.append(owner)
         intents.append(intent)
         readings.append(
@@ -119,6 +134,10 @@ def case(tmp_path, monkeypatch, request):
     reader.read_pinned.side_effect = lambda **kw: SimpleNamespace(payload=payloads[kw["sha256"]])
     official = Mock(side_effect=readings)
     monkeypatch.setattr(application, "read_pinned_embedding_index", official)
+    revision_read = Mock(side_effect=lambda *_a: registered.get(tuple(_a[-2:])))
+    monkeypatch.setattr(
+        application.EmbeddingRegistryRepository, "read_pinned_revision", revision_read
+    )
     arguments = dict(
         cpu_owner=owners[0],
         cpu_intent=intents[0],
@@ -136,6 +155,7 @@ def case(tmp_path, monkeypatch, request):
         readings=readings,
         reader=reader,
         official=official,
+        revision_read=revision_read,
         arguments=arguments,
     )
 
@@ -167,7 +187,7 @@ def test_two_exact_official_reads_return_only_small_pair(case):
     case.reader.revalidate_provenance.assert_called_once()
 
 
-def test_public_partial_selection_keeps_both_current_authority_reads(case):
+def test_public_partial_selection_uses_exact_manifests_not_ranking_vectors(case):
     if not isinstance(case.intents[0].selection, PublicSolutionSimilarityView):
         with pytest.raises(EmbeddingDeviceIndexPairError, match="NAMESPACE_MISMATCH"):
             application.resolve_public_solution_device_indexes(
@@ -178,12 +198,51 @@ def test_public_partial_selection_keeps_both_current_authority_reads(case):
         case.session, case.caller, **case.arguments
     )
     assert selected.cpu_target_count == selected.cuda_target_count == 2
-    assert case.official.call_count == 2
+    case.official.assert_not_called()
+    case.reader.read_pinned.assert_not_called()
+    assert case.revision_read.call_count == 2
     case.reader.revalidate_provenance.assert_called_once()
     for position, owner in enumerate(case.owners):
         owner.authorize_scope.assert_called_once_with(
             case.session, case.caller, case.intents[position].scope
         )
+        owner.validate_public_query_manifest.assert_called_once()
+        assert owner.validate_public_query_manifest.call_args.args[:3] == (
+            case.session,
+            case.caller,
+            case.intents[position],
+        )
+
+
+@pytest.mark.parametrize("position", (0, 1))
+@pytest.mark.parametrize("fault", ("missing", "stale", "manifest"))
+def test_public_admission_keeps_registry_and_manifest_denials(case, position, fault):
+    if not isinstance(case.intents[0].selection, PublicSolutionSimilarityView):
+        return
+    if fault == "manifest":
+        case.owners[position].validate_public_query_manifest.side_effect = EmbeddingRegistryError(
+            "EMBEDDING_REGISTRY_FORBIDDEN"
+        )
+    else:
+        current = case.revision_read.side_effect
+
+        def invalid(*args):
+            original = current(*args)
+            if args[-2] != case.indexes[position].index_id:
+                return original
+            return (
+                None
+                if fault == "missing"
+                else replace(original, index_revision_id="embeddingindexrev_" + "f" * 32)
+            )
+
+        case.revision_read.side_effect = invalid
+    with pytest.raises(EmbeddingRegistryError):
+        application.resolve_public_solution_device_indexes(
+            case.session, case.caller, **case.arguments
+        )
+    case.official.assert_not_called()
+    case.reader.revalidate_provenance.assert_not_called()
 
 
 @pytest.mark.parametrize("fault", ("corpus", "policy", "graph", "bound", "namespace", "class"))
