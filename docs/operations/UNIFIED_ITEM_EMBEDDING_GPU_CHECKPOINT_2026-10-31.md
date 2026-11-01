@@ -1,5 +1,33 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 실제 GUI QUERY 입력 준비 지연 — 2026-11-01 18:17 UTC 이후
+
+- 승인받은 별도 canary는 실제 Chromium/HTTPS/guiadmin 로그인18:17:30 UTC와10321
+  선택을 통과했다. GUI가 만든 key는 `studio:db-similarity:149f5c73-08cc-4ff3-b588-c42d050be379`,
+  operation은 `queryprepare_0e699f673a158219036eb4349afd8497`이다. 모든 재조회는 이 key/pin을
+  유지했으며 결과 목록은 아직 나오지 않았다. READY나 테스트 PASS로 대체하지 않는다.
+- controller pin 정정 후 실제 parent `job_218eb9243f65458ea6e8a69fd6a2ff4e`는 CUDA ROUTED까지
+  도달했다. 그러나 QUERY Workflow/BOUND가 생기기 전에 원 finite allocation이 만료됐다.
+  18:29:11 GUI 응답은503/APPLICATION_API_UNAVAILABLE다. parent는 RUNNING/BOUND 없음 상태로
+  보존하며 이를 canonical FAILED 또는 성공이라고 바꾸어 보고하지 않는다.
+- 원 root의 binding 대기와 전체 DOCUMENT 재해석 경로를 확인했다. 한 anchor의 QUERY text를
+  만드는 `prepare_query_in_session`이 매번 전체 capture/numerical index를 읽었고, routed
+  history 조회도 full admission을 반복했다. 처리 한도를 늘리거나 DOCUMENT vector를 QUERY로
+  재사용하지 않고 기존 Catalog owner에서 정확한 anchor만 materialize하도록 수정했다.
+  exact index revision/manifest/schema/hash·권한·anchor provenance를 전후 확인하며, physical
+  admission과 최종 ranking/result read의 전체 검증은 그대로다. 새 schema/DB/cache는 없다.
+- main `efbf1904`, 실제 QUERY baseline8630ff6f 위 후보 `03a5aa402c8e382a851e9a539c1fec7f5d124e3b`다.
+  source focused91 PASS와 추가 manifest 부정 검사 포함 registry13 PASS, actual-baseline94 PASS,
+  보호 설치본94 PASS를 확인했다(집합이 겹치므로 합산하지 않는다). strict mypy3개·Ruff/format·
+  diff·공식 clean build/RECORD PASS다. 초기 fixture schema/import 오류와 실패 로그는 보존했다.
+- QUERY-only 설치 완료; activation은 별도 `/var/lib/eom-query-anchor-input-03a5aa40` 기록으로
+  확인한다. owner source만03a5aa40, 실제 physical controller는b5900c7d로 독립 pin한다.
+  API9377ee2c/Catalog8eb03e40/GPU INDEXfb0ab555 및 numerical 환경을 교체하지 않는다.
+  18:17 test session만18:35 정상 로그아웃했다. 비밀번호·다른 세션·계정은 변경하지 않았다.
+- 18:36 UTC frozen520 target metadata는 GPU 등록170/520, 잔여350이다. 조회 순간 non-terminal
+  INDEX는 CPU1건으로, 이 숫자는 현재 CUDA forward 중 또는 최종 대상별 integrity PASS라는
+  뜻이 아니다. INDEX PID2258114는 보존했다. 구형 vector 삭제0, 실제 GUI 결과 검증 PENDING.
+
 ## GUI 실제 할당·제어 서비스 버전 불일치 — 2026-11-01 17:55 UTC 이후
 
 - 재인증은17:55:11 UTC PASS다. 원10321/key/operation/request SHA가 보존됐고 준비와
