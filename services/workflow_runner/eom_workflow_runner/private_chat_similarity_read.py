@@ -2,9 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+from typing import overload
+
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.private_chat_query_read import ChatPrivateQueryOrigin
 from eom_catalog_contracts.private_chat_similarity import PrivateChatSimilarityRequest
+from eom_catalog_contracts.private_chat_similarity_v2 import (
+    PrivateChatSimilarityContextV2,
+    PrivateChatSimilarityRequestV2,
+    SupportedPrivateChatSimilarityRequest,
+    parse_supported_private_chat_similarity_request,
+)
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
@@ -12,11 +22,19 @@ from eom_catalog_service.embedding_registry_ports import (
     validate_embedding_registry_actor,
 )
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
+from eom_catalog_service.private_chat_public_similarity_service import (
+    compose_private_chat_public_similarity,
+)
+from eom_catalog_service.private_chat_query_artifact_read import (
+    ResolvedPrivateChatPublicQueryArtifacts,
+)
 from eom_catalog_service.private_chat_similarity_ports import (
     PreparedPrivateChatSimilarity,
     PrivateChatQueryUnavailable,
     VerifiedPrivateChatQueryRead,
 )
+from eom_catalog_service.public_solution_similarity_read import CatalogPublicSolutionSimilarityRead
+from eom_catalog_service.public_solution_similarity_service import VerifiedPublicSolutionQueryRead
 from eom_catalog_service.similarity_context_ports import (
     SimilarityContextReadError,
     similarity_context_error_from_registry,
@@ -25,17 +43,22 @@ from eom_identity_service import OperatorAuthorizationFenceError
 from eom_orchestrator.database import build_session_factory
 from eom_workflow.native_private_chat_query_coordinator import (
     NativePrivateQueryCompleted,
+    NativePrivateQueryCompletedV2,
     NativePrivateQueryPublished,
+    NativePrivateQueryPublishedV2,
 )
-from eom_workflow.private_chat_query_execution import (
-    PrivateChatQueryWorkflowRequest,
-    parse_private_chat_query_workflow_request,
+from eom_workflow.private_chat_query_execution_v2 import (
+    SupportedPrivateChatQueryWorkflowRequest,
+    parse_supported_private_chat_query_workflow_request,
 )
 from eom_workflow.private_chat_query_submission_context import (
     build_private_chat_query_submission_context,
     private_chat_query_origin_key,
 )
-from eom_workflow.private_chat_query_workflow import PrivateChatQueryStepOutput
+from eom_workflow.private_chat_query_workflow_v2 import (
+    PrivateChatQueryStepOutputV2,
+    parse_supported_private_chat_query_step_output,
+)
 from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -50,13 +73,29 @@ from eom_workflow_runner.private_chat_query_admission import (
     validate_private_chat_query_workflow_submission,
 )
 from eom_workflow_runner.private_chat_query_publication_read import (
-    resolve_private_chat_query_publication,
+    resolve_supported_private_chat_query_publication,
 )
 from eom_workflow_runner.private_chat_query_source_read import (
     CatalogPrivateChatQuerySourceOwner,
+    ResolvedPrivateChatPublicQuerySources,
     ResolvedPrivateChatQuerySources,
     require_private_chat_query_source_root,
 )
+
+
+@contextmanager
+def _private_query_read_boundary() -> Iterator[None]:
+    """Stable private-safe errors shared by the two real completion consumers."""
+    try:
+        yield
+    except SimilarityContextReadError:
+        raise
+    except OperatorAuthorizationFenceError:
+        raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE") from None
+    except EmbeddingRegistryError as error:
+        raise similarity_context_error_from_registry(error) from None
+    except (ValueError, TypeError, SchemaError, KeyError, OSError, WorkflowError):
+        raise SimilarityContextReadError("QUERY_RESULT_INVALID") from None
 
 
 def _prepared(sources: ResolvedPrivateChatQuerySources) -> PreparedPrivateChatSimilarity:
@@ -69,6 +108,13 @@ def _prepared(sources: ResolvedPrivateChatQuerySources) -> PreparedPrivateChatSi
     )
 
 
+def _legacy_request(value: object) -> PrivateChatSimilarityRequest:
+    try:
+        return PrivateChatSimilarityRequest.model_validate(raw_similarity_contract_value(value))
+    except (ValueError, TypeError, SchemaError):
+        raise SimilarityContextReadError("SOURCE_POINTER_INVALID") from None
+
+
 class CatalogPrivateChatSimilarityRead:
     """Operation-local trusted pins; every method reacquires actual current authority."""
 
@@ -76,29 +122,45 @@ class CatalogPrivateChatSimilarityRead:
         self,
         owner: CatalogPrivateChatQuerySourceOwner,
         *,
-        request: PrivateChatQueryWorkflowRequest,
+        request: SupportedPrivateChatQueryWorkflowRequest,
         origin: ChatPrivateQueryOrigin,
     ) -> None:
-        self.request = parse_private_chat_query_workflow_request(request)
+        self.request = parse_supported_private_chat_query_workflow_request(request)
         self.origin = build_private_chat_query_submission_context(self.request, origin).origin
         self.owner = owner
         self.sessions = build_session_factory(owner.catalog.engine)
 
+    @overload
     def _sources(
         self,
         session: Session,
         caller: EmbeddingRegistryCaller,
         request: PrivateChatSimilarityRequest,
         reader: PinnedArtifactReadContext,
-    ) -> ResolvedPrivateChatQuerySources:
+    ) -> ResolvedPrivateChatQuerySources: ...
+
+    @overload
+    def _sources(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: PrivateChatSimilarityRequestV2,
+        reader: PinnedArtifactReadContext,
+    ) -> ResolvedPrivateChatPublicQuerySources: ...
+
+    def _sources(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: SupportedPrivateChatSimilarityRequest,
+        reader: PinnedArtifactReadContext,
+    ) -> ResolvedPrivateChatQuerySources | ResolvedPrivateChatPublicQuerySources:
         root = require_private_chat_query_source_root(session)
         if type(caller) is not EmbeddingRegistryCaller:
             raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
         validate_embedding_registry_actor(caller)
         try:
-            request = PrivateChatSimilarityRequest.model_validate(
-                raw_similarity_contract_value(request)
-            )
+            request = parse_supported_private_chat_similarity_request(request)
             if (
                 caller.operator_id != self.origin.actor_id
                 or request != self.request.context_request
@@ -124,6 +186,7 @@ class CatalogPrivateChatSimilarityRead:
         prepared: PreparedPrivateChatSimilarity,
     ) -> ResolvedPrivateChatQuerySources:
         # Missing preparation cannot select first capture or skip comparison.
+        request = _legacy_request(request)
         if (
             type(prepared) is not PreparedPrivateChatSimilarity
             or type(prepared.truncated) is not bool
@@ -137,8 +200,9 @@ class CatalogPrivateChatSimilarityRead:
     def prepare_private_chat_similarity(
         self, caller: EmbeddingRegistryCaller, request: PrivateChatSimilarityRequest
     ) -> PreparedPrivateChatSimilarity:
+        request = _legacy_request(request)
         with self.sessions.begin() as session:
-            reader = PinnedArtifactReadContext(session, self.owner.settings)
+            reader = PinnedArtifactReadContext.for_session(session, self.owner.settings)
             return _prepared(self._sources(session, caller, request, reader))
 
     def reauthorize_private_chat_similarity(
@@ -148,7 +212,7 @@ class CatalogPrivateChatSimilarityRead:
         prepared: PreparedPrivateChatSimilarity,
     ) -> None:
         with self.sessions.begin() as session:
-            reader = PinnedArtifactReadContext(session, self.owner.settings)
+            reader = PinnedArtifactReadContext.for_session(session, self.owner.settings)
             self._checked_sources(session, caller, request, reader, prepared)
 
     def read_private_chat_similarity_index(
@@ -158,7 +222,7 @@ class CatalogPrivateChatSimilarityRead:
         prepared: PreparedPrivateChatSimilarity,
     ) -> tuple[ResolvedPinnedEmbeddingIndex, ...]:
         with self.sessions.begin() as session:
-            reader = PinnedArtifactReadContext(session, self.owner.settings)
+            reader = PinnedArtifactReadContext.for_session(session, self.owner.settings)
             sources = self._checked_sources(session, caller, request, reader, prepared)
             result = self.owner.catalog.read_private_chat_document_index_in_session(
                 session,
@@ -188,12 +252,76 @@ class CatalogPrivateChatSimilarityRead:
         prepared: PreparedPrivateChatSimilarity,
     ) -> VerifiedPrivateChatQueryRead | PrivateChatQueryUnavailable:
         """Exact original key/terminal/receipt/bytes; no command lease or unit revival."""
-        try:
+        with _private_query_read_boundary():
+            reader = PinnedArtifactReadContext.for_session(session, self.owner.settings)
+            sources = self._checked_sources(session, caller, request, reader, prepared)
+            result = self._resolve_current_query_in_session(session, caller, sources, reader)
+            if isinstance(result, VerifiedPublicSolutionQueryRead):
+                raise SimilarityContextReadError("QUERY_RESULT_INVALID")
+            return result
+
+    def resolve_public_private_chat_query_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        request: PrivateChatSimilarityRequestV2,
+    ) -> VerifiedPublicSolutionQueryRead | PrivateChatQueryUnavailable:
+        """Common-only canonical read; no context1 relabel, compute or source enrollment."""
+        with _private_query_read_boundary():
+            request = PrivateChatSimilarityRequestV2.model_validate(
+                raw_similarity_contract_value(request)
+            )
+            reader = PinnedArtifactReadContext.for_session(session, self.owner.settings)
+            sources = self._sources(session, caller, request, reader)
+            result = self._resolve_current_query_in_session(session, caller, sources, reader)
+            if isinstance(result, VerifiedPrivateChatQueryRead):
+                raise SimilarityContextReadError("QUERY_RESULT_INVALID")
+            return result
+
+    def compose_public_similarity(
+        self, caller: EmbeddingRegistryCaller, request: PrivateChatSimilarityRequestV2
+    ) -> PrivateChatSimilarityContextV2:
+        """Owned question + original common QUERY + the official shared DOCUMENT reader."""
+        with _private_query_read_boundary(), self.sessions.begin() as session:
+            request = PrivateChatSimilarityRequestV2.model_validate(
+                raw_similarity_contract_value(request)
+            )
+            reader = PinnedArtifactReadContext.for_session(session, self.owner.settings)
+            sources = self._sources(session, caller, request, reader)
+            query = self._resolve_current_query_in_session(session, caller, sources, reader)
+            if not isinstance(query, VerifiedPublicSolutionQueryRead):
+                raise SimilarityContextReadError("QUERY_RESULT_INVALID")
+            captured, document = CatalogPublicSolutionSimilarityRead(
+                self.owner.catalog
+            ).read_private_documents_in_session(session, caller, request)
+            if captured != sources.documents:
+                raise SimilarityContextReadError("SOURCE_REVOKED")
+            result = compose_private_chat_public_similarity(
+                request,
+                captured,
+                document,
+                query if document.bindings else None,
+                question_text=sources.projection.text,
+            )
+            if self._sources(session, caller, request, reader) != sources:
+                raise SimilarityContextReadError("SOURCE_REVOKED")
+            reader.revalidate_provenance()
+            return result
+
+    def _resolve_current_query_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        sources: ResolvedPrivateChatQuerySources | ResolvedPrivateChatPublicQuerySources,
+        reader: PinnedArtifactReadContext,
+    ) -> (
+        VerifiedPrivateChatQueryRead | VerifiedPublicSolutionQueryRead | PrivateChatQueryUnavailable
+    ):
+        """One original Workflow/terminal/history/receipt closure for both result families."""
+        with _private_query_read_boundary():
             root = require_private_chat_query_source_root(session)
             if session.get_bind() is not self.owner.catalog.engine:
                 raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
-            reader = PinnedArtifactReadContext(session, self.owner.settings)
-            sources = self._checked_sources(session, caller, request, reader, prepared)
             workflow = session.scalar(
                 select(WorkflowInstanceRecord)
                 .where(
@@ -216,11 +344,9 @@ class CatalogPrivateChatSimilarityRead:
             )
             if workflow.state != "COMPLETED" or step is None:
                 raise SimilarityContextReadError("QUERY_RESULT_INVALID")
-            output = PrivateChatQueryStepOutput.model_validate(
-                raw_similarity_contract_value(step.output_pointer_manifest)
-            )
+            output = parse_supported_private_chat_query_step_output(step.output_pointer_manifest)
             validate_completed_native_workflow(session, workflow, step, output)
-            canonical, history = resolve_private_chat_query_publication(
+            canonical, history = resolve_supported_private_chat_query_publication(
                 self.owner.settings,
                 session=session,
                 workflow=workflow,
@@ -232,10 +358,16 @@ class CatalogPrivateChatSimilarityRead:
             if (
                 history.state != "SUCCEEDED"
                 or len(history.records) != 4
-                or history.records[3].payload != NativePrivateQueryCompleted(output=output)
+                or history.records[3].payload
+                != (
+                    NativePrivateQueryCompletedV2(output=output)
+                    if isinstance(output, PrivateChatQueryStepOutputV2)
+                    else NativePrivateQueryCompleted(output=output)
+                )
             ):
                 raise SimilarityContextReadError("QUERY_RESULT_INVALID")
-            self._checked_sources(session, caller, request, reader, prepared)
+            if self._sources(session, caller, sources.request.context_request, reader) != sources:
+                raise SimilarityContextReadError("SOURCE_REVOKED")
             session.refresh(workflow)
             session.refresh(step)
             late_context = validate_private_chat_query_workflow_submission(
@@ -248,6 +380,16 @@ class CatalogPrivateChatSimilarityRead:
             if require_private_chat_query_source_root(session) is not root:
                 raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
             publication = history.records[2].payload
+            if isinstance(canonical, ResolvedPrivateChatPublicQueryArtifacts):
+                if not isinstance(publication, NativePrivateQueryPublishedV2):
+                    raise SimilarityContextReadError("QUERY_RESULT_INVALID")
+                return VerifiedPublicSolutionQueryRead(
+                    canonical.request,
+                    canonical.result,
+                    publication.result,
+                    publication.shard,
+                    canonical.binary,
+                )
             if not isinstance(publication, NativePrivateQueryPublished):
                 raise SimilarityContextReadError("QUERY_RESULT_INVALID")
             return VerifiedPrivateChatQueryRead(
@@ -257,11 +399,3 @@ class CatalogPrivateChatSimilarityRead:
                 publication.shard,
                 canonical.binary,
             )
-        except SimilarityContextReadError:
-            raise
-        except OperatorAuthorizationFenceError:
-            raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE") from None
-        except EmbeddingRegistryError as error:
-            raise similarity_context_error_from_registry(error) from None
-        except (ValueError, TypeError, SchemaError, KeyError, OSError, WorkflowError):
-            raise SimilarityContextReadError("QUERY_RESULT_INVALID") from None

@@ -15,6 +15,7 @@ from eom_catalog_contracts.embedding_index_families import parse_supported_embed
 from eom_catalog_contracts.knowledge import KnowledgeGraphSnapshotPointer
 from eom_catalog_contracts.public_solution_embedding_index import (
     PublicSolutionEmbeddingSourceBinding,
+    PublicSolutionIndexNamespace,
     PublicSolutionProfilePointer,
 )
 from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityView
@@ -135,6 +136,13 @@ def validate_public_solution_document(
     _require(
         type(document) is ResolvedPinnedEmbeddingIndex
         and document.intent.selection == view
+        and document.intent.scope.namespace
+        == PublicSolutionIndexNamespace(
+            storage_partition=view.index.storage_partition,
+            space_sha256=view.index.spaces.document.space_sha256,
+            view=view.view,
+            recipe_sha256=view.recipe.recipe_sha256,
+        )
         and document.intent.scope.corpus_id == capture.corpus_id
         and document.intent.scope.graph_snapshot == scope.graph_snapshot
         and document.intent.scope.policy_revision_id == scope.policy_revision_id

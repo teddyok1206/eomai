@@ -19,6 +19,7 @@ from eom_catalog_service.similarity_context_ports import SimilarityContextReadEr
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_orchestrator.models import ArtifactRevisionRecord, Base, JobRecord
 from eom_workflow.private_chat_query_workflow import PrivateChatQueryWorkflowDefinition
+from eom_workflow.private_chat_query_workflow_v2 import private_chat_query_result_schema
 from eom_workflow_runner.models import (
     WorkflowCommandRecord,
     WorkflowDefinitionRecord,
@@ -82,7 +83,7 @@ def make_private_similarity_read_case(source, tmp_path, monkeypatch):
             state="SUCCEEDED",
             step_type="application",
             worker_role=None,
-            result_schema="embedding-private-chat-query-result@1.0",
+            result_schema=private_chat_query_result_schema(value.request),
             input_pointer_manifest={"workflow_request_sha256": value.request.request_sha256},
             output_pointer_manifest=output.model_dump(mode="json"),
             platform_job_id=output.receipt_owner_job_id,

@@ -44,6 +44,27 @@ pytestmark = [
 
 @pytest.fixture
 def query(registered, guarded_engine, tmp_path, monkeypatch):
+    current = make_owned_common_private_source(registered, guarded_engine, monkeypatch)
+    old = current.old
+    source = SimpleNamespace(
+        owner=current.owner,
+        publisher=old.publisher,
+        request=current.request,
+        policy=current.policy,
+        bundle=old.bundle,
+        projection=old.projection,
+        fault=old.fault,
+        events=old.events,
+    )
+    value = cases.make_public_private_executor_case(tmp_path, monkeypatch, source=source)
+    value.workflow.workflow_id = "workflow_" + uuid4().hex
+    value.step.workflow_id = value.workflow.workflow_id
+    value.step.step_run_id = "steprun_" + uuid4().hex
+    return value
+
+
+def make_owned_common_private_source(registered, guarded_engine, monkeypatch):
+    """Reuse real PostgreSQL control ownership for execution and completed-reader suites."""
     resources = reference_prepared().workflow_request.resource_profile
     previous = make_owned_private_source(registered, guarded_engine, resource_profile=resources)
     with previous.publisher.sessions.begin() as session:
@@ -66,21 +87,7 @@ def query(registered, guarded_engine, tmp_path, monkeypatch):
     current = make_private_public_source_from_legacy(
         old, monkeypatch, definition_sha256=compiled.sha256, resource_profile=resources
     )
-    source = SimpleNamespace(
-        owner=current.owner,
-        publisher=old.publisher,
-        request=current.request,
-        policy=current.policy,
-        bundle=bundle,
-        projection=old.projection,
-        fault=old.fault,
-        events=old.events,
-    )
-    value = cases.make_public_private_executor_case(tmp_path, monkeypatch, source=source)
-    value.workflow.workflow_id = "workflow_" + uuid4().hex
-    value.step.workflow_id = value.workflow.workflow_id
-    value.step.step_run_id = "steprun_" + uuid4().hex
-    return value
+    return current
 
 
 def test_postgres_common_private_executor_commits_original_text_free_result_and_receipt(query):

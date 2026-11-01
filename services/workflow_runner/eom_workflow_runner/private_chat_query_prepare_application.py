@@ -7,6 +7,11 @@ from typing import Literal, Protocol
 
 from eom_catalog_contracts.private_chat_query_read import ChatPrivateQueryOrigin
 from eom_catalog_contracts.private_chat_similarity import PrivateChatSimilarityContext
+from eom_catalog_contracts.private_chat_similarity_v2 import (
+    PrivateChatSimilarityContextV2,
+    SupportedPrivateChatSimilarityContext,
+    parse_supported_private_chat_similarity_context,
+)
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     PrivateChatContextPreparation,
@@ -17,9 +22,10 @@ from eom_catalog_service.private_chat_similarity_service import (
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_orchestrator.database import build_session_factory
 from eom_workflow.models import WorkflowId
-from eom_workflow.private_chat_query_execution import (
-    PrivateChatQueryWorkflowRequest,
-    parse_private_chat_query_workflow_request,
+from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryWorkflowRequestV2,
+    SupportedPrivateChatQueryWorkflowRequest,
+    parse_supported_private_chat_query_workflow_request,
 )
 from eom_workflow.private_chat_query_submission_context import (
     build_private_chat_query_submission_context,
@@ -84,22 +90,38 @@ def _observed_failure(
     return None
 
 
+def _completed_context(
+    request: SupportedPrivateChatQueryWorkflowRequest,
+    value: SupportedPrivateChatSimilarityContext,
+) -> SupportedPrivateChatSimilarityContext:
+    context = parse_supported_private_chat_similarity_context(value)
+    if (
+        context.request != request.context_request
+        or isinstance(context, PrivateChatSimilarityContextV2)
+        != isinstance(request, PrivateChatQueryWorkflowRequestV2)
+        or context.status not in {"READY", "PARTIAL", "EMPTY"}
+        or (isinstance(context, PrivateChatSimilarityContext) and context.query_execution is None)
+    ):
+        raise ValueError("PRIVATE_CHAT_QUERY_PREPARE_RESULT_INVALID")
+    return context
+
+
 @dataclass(frozen=True, slots=True)
 class PreparedPrivateChatQueryWorkflow:
     """Owner-local observations, not a source grant, worker reply or persisted payload."""
 
     workflow_id: str
-    request: PrivateChatQueryWorkflowRequest
+    request: SupportedPrivateChatQueryWorkflowRequest
     origin: ChatPrivateQueryOrigin
     status: Literal["PENDING", "READY", "FAILED"]
-    context: PrivateChatSimilarityContext | None = None
+    context: SupportedPrivateChatSimilarityContext | None = None
     failure_code: Literal["PRIVATE_CHAT_QUERY_EXECUTION_FAILED", "QUERY_RESULT_INVALID"] | None = (
         None
     )
 
     def __post_init__(self) -> None:
         TypeAdapter(WorkflowId).validate_python(self.workflow_id, strict=True)
-        request = parse_private_chat_query_workflow_request(self.request)
+        request = parse_supported_private_chat_query_workflow_request(self.request)
         origin = build_private_chat_query_submission_context(request, self.origin).origin
         if (
             type(self.status) is not str
@@ -112,13 +134,7 @@ class PreparedPrivateChatQueryWorkflow:
         ):
             raise ValueError("PRIVATE_CHAT_QUERY_PREPARE_RESULT_INVALID")
         if self.context is not None:
-            context = PrivateChatSimilarityContext.model_validate(self.context)
-            if (
-                context.request != request.context_request
-                or context.status not in {"READY", "PARTIAL", "EMPTY"}
-                or context.query_execution is None
-            ):
-                raise ValueError("PRIVATE_CHAT_QUERY_PREPARE_RESULT_INVALID")
+            context = _completed_context(request, self.context)
             object.__setattr__(self, "context", context)
         object.__setattr__(self, "request", request)
         object.__setattr__(self, "origin", origin)
@@ -164,7 +180,7 @@ class NativePrivateChatQueryPreparation:
                 executor=self.executor,
             )
             workflow = submitted.workflow
-            original = parse_private_chat_query_workflow_request(workflow.initial_request)
+            original = parse_supported_private_chat_query_workflow_request(workflow.initial_request)
             origin = build_private_chat_query_submission_context(original, origin).origin
             workflow_id, state = workflow.workflow_id, workflow.state
             failure = _observed_failure(session, workflow_id, state)
@@ -205,17 +221,23 @@ class NativePrivateChatQueryPreparation:
     def _completed(
         self,
         workflow_id: str,
-        original: PrivateChatQueryWorkflowRequest,
+        original: SupportedPrivateChatQueryWorkflowRequest,
         origin: ChatPrivateQueryOrigin,
         caller: EmbeddingRegistryCaller,
     ) -> PreparedPrivateChatQueryWorkflow:
         read = CatalogPrivateChatSimilarityRead(self.owner.sources, request=original, origin=origin)
-        context = PrivateChatSimilarityApplicationService(read).compose(
-            caller, original.context_request
+        context = (
+            read.compose_public_similarity(caller, original.context_request)
+            if isinstance(original, PrivateChatQueryWorkflowRequestV2)
+            else PrivateChatSimilarityApplicationService(read).compose(
+                caller, original.context_request
+            )
         )
         if context.status == "FAILED":
             assert context.error_code is not None
             raise SimilarityContextReadError(context.error_code)
-        if context.status == "UNAVAILABLE" or context.query_execution is None:
-            raise SimilarityContextReadError("QUERY_RESULT_INVALID")
+        try:
+            context = _completed_context(original, context)
+        except (ValueError, TypeError):
+            raise SimilarityContextReadError("QUERY_RESULT_INVALID") from None
         return PreparedPrivateChatQueryWorkflow(workflow_id, original, origin, "READY", context)

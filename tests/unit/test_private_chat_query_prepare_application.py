@@ -9,9 +9,11 @@ from eom_catalog_contracts.private_chat_similarity import (
     PRIVATE_CHAT_LIMITATION_ORDER,
     PrivateChatSimilarityContext,
 )
+from eom_catalog_contracts.private_chat_similarity_v2 import PrivateChatSimilarityContextV2
 from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_identifiers import content_sha256
+from eom_workflow.private_chat_query_execution_v2 import PrivateChatQueryWorkflowRequestV2
 from eom_workflow_runner import private_chat_query_prepare_application as module
 from eom_workflow_runner.actor_authorization_adapters import (
     OperatorIdentityWorkflowActorAuthorizer,
@@ -64,6 +66,32 @@ def private_runner(source, owner, executor):
 
 def empty_completed_context(source):
     request = source.request.context_request
+    if isinstance(source.request, PrivateChatQueryWorkflowRequestV2):
+        return PrivateChatSimilarityContextV2.model_validate(
+            seal(
+                dict(
+                    schema_version="system-rag-private-chat-similarity-context/2.0",
+                    request=request.model_dump(mode="json"),
+                    status="EMPTY",
+                    population=dict(
+                        authorized_source_count=0,
+                        authorized_source_set_sha256=content_sha256([]),
+                        available_report_count=0,
+                        available_report_set_sha256=content_sha256([]),
+                        available_binding_count=0,
+                        binding_set_sha256=content_sha256([]),
+                        scored_count=0,
+                        truncated=False,
+                    ),
+                    query_execution=None,
+                    candidates=[],
+                    limitations=[*PRIVATE_CHAT_LIMITATION_ORDER[:3], "NO_RELATED_CANDIDATES"],
+                    unavailable_reason=None,
+                    error_code=None,
+                ),
+                "context_sha256",
+            )
+        )
     body = dict(
         schema_version="system-rag-private-chat-similarity-context/1.0",
         request=request.model_dump(mode="json"),
@@ -112,6 +140,11 @@ def empty_completed_context(source):
 
 @pytest.fixture
 def application(source, monkeypatch):
+    return make_private_prepare_application_case(source, monkeypatch)
+
+
+def make_private_prepare_application_case(source, monkeypatch):
+    """Shared declared application seams; both real result families use the same Runner."""
     owner = CatalogPrivateChatQueryOwnerAdmission(source.owner)
     executor = Mock(spec=PrivateChatQueryNativeExecutor)
     runner = private_runner(source, owner, executor)
@@ -154,16 +187,28 @@ def application(source, monkeypatch):
         value.offers.append(workflow)
         return "BUSY"  # Busy is still the same durable pending work, not a failed/new request.
 
-    def compose(actual, caller, request):
+    def context_result(reader, caller, request):
         assert value.roots[-1].get_transaction() is None
-        assert actual.owner.request.context_request == request == source.request.context_request
-        assert actual.owner.origin == source.projection.origin
+        assert reader.request.context_request == request == source.request.context_request
+        assert reader.origin == source.projection.origin
+        assert caller.operator_id == source.projection.origin.actor_id
         value.compose_calls.append(request)
         return value.context
+
+    def compose(actual, caller, request):
+        assert not isinstance(source.request, PrivateChatQueryWorkflowRequestV2)
+        return context_result(actual.owner, caller, request)
+
+    def compose_public(actual, caller, request):
+        assert isinstance(source.request, PrivateChatQueryWorkflowRequestV2)
+        return context_result(actual, caller, request)
 
     monkeypatch.setattr(module, "prepare_and_start_private_chat_query_selection_in_session", admit)
     monkeypatch.setattr(driver, "offer_private_chat_query", offer)
     monkeypatch.setattr(module.PrivateChatSimilarityApplicationService, "compose", compose)
+    monkeypatch.setattr(
+        module.CatalogPrivateChatSimilarityRead, "compose_public_similarity", compose_public
+    )
     original_scalar = app.sessions.class_.scalar
 
     def scalar(session, statement, *args, **kwargs):

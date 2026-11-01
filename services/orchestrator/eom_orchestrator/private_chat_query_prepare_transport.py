@@ -11,9 +11,14 @@ from eom_catalog_contracts.private_chat_query_prepare import (
     PRIVATE_CHAT_PREPARE_REPLY_BYTES,
     PRIVATE_CHAT_PREPARE_REQUEST_BYTES,
     PrivateChatQueryPrepareReply,
-    PrivateChatQueryPrepareRequest,
-    parse_private_chat_query_prepare_request,
-    validate_private_chat_query_prepare_reply,
+)
+from eom_catalog_contracts.private_chat_query_prepare_v2 import (
+    PrivateChatQueryPrepareReplyV2,
+    PrivateChatQueryPrepareRequestV2,
+    SupportedPrivateChatQueryPrepareReply,
+    SupportedPrivateChatQueryPrepareRequest,
+    parse_supported_private_chat_query_prepare_request,
+    validate_supported_private_chat_query_prepare_reply,
 )
 from eom_catalog_contracts.private_chat_query_read import ChatPrivateQueryOrigin
 from eom_identifiers import canonical_json_bytes
@@ -27,7 +32,9 @@ from eom_orchestrator.general_chat_socket import (
 
 
 class PrivateChatQueryPreparationPort(Protocol):
-    def execute(self, request: PrivateChatQueryPrepareRequest) -> PrivateChatQueryPrepareReply: ...
+    def execute(
+        self, request: SupportedPrivateChatQueryPrepareRequest
+    ) -> SupportedPrivateChatQueryPrepareReply: ...
 
 
 class PrivateChatQueryPreparationFactory(Protocol):
@@ -49,26 +56,36 @@ def handle_private_chat_query_prepare_connection(
         raw = receive_chat_frame(
             connection, deadline=deadline, limit=PRIVATE_CHAT_PREPARE_REQUEST_BYTES
         )
-        parsed = parse_private_chat_query_prepare_request(decode_chat_frame(raw))
+        parsed = parse_supported_private_chat_query_prepare_request(decode_chat_frame(raw))
         if canonical_json_bytes(parsed.model_dump(mode="json")) != raw:
             return
         request = parsed
         application = factory.application(request.origin)
-        reply = validate_private_chat_query_prepare_reply(request, application.execute(request))
+        reply = validate_supported_private_chat_query_prepare_reply(
+            request, application.execute(request)
+        )
     except Exception:
         # The application may already have committed. Never turn unknown outcome
         # into NOT_PREPARED or send an additional request with another identity.
         if request is None:
             return
-        reply = PrivateChatQueryPrepareReply(
-            schema_version="system-rag-private-chat-query-prepare-reply/1.0",
-            action=request.action,
-            request_id=request.request_id,
-            request_sha256=request.request_sha256,
-            status="FAILED",
-            workflow_id=None,
-            context=None,
-            error_code="PRIVATE_CHAT_QUERY_UNAVAILABLE",
+        reply_type = (
+            PrivateChatQueryPrepareReplyV2
+            if isinstance(request, PrivateChatQueryPrepareRequestV2)
+            else PrivateChatQueryPrepareReply
+        )
+        family = "2.0" if isinstance(request, PrivateChatQueryPrepareRequestV2) else "1.0"
+        reply = reply_type.model_validate(
+            dict(
+                schema_version=f"system-rag-private-chat-query-prepare-reply/{family}",
+                action=request.action,
+                request_id=request.request_id,
+                request_sha256=request.request_sha256,
+                status="FAILED",
+                workflow_id=None,
+                context=None,
+                error_code="PRIVATE_CHAT_QUERY_UNAVAILABLE",
+            )
         )
     with suppress(Exception):
         send_chat_frame(

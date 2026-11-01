@@ -663,3 +663,59 @@ NOT_GRANTED 의미와 schema bytes를 보존한다. 실패한 allocation은 재�
 단순 재시작은 같은 original parent에 걸려 재개되지 않고, 권한 검사 제거 또는 fake BUSY는
 잘못된 권한/계산을 허용하므로 대안으로 사용하지 않는다. 임시 PG의 원 failure·replay·
 concurrency와 별도 설치본을 검증한 후에만 운영 적용한다.
+
+## private 공통 완료 조회 — 2026-11-01
+
+기존 private QUERY reader/application이 완료된 family1/2를 같은 원 Workflow·START·step·
+4단계 coordinator·receipt/Artifact/producer 검증으로 읽는다. canonical은 원 요청과 불변
+실행/출력이며 latest head 선택·재추론·새 key 생성은 없다. 원 Chat origin/실제 actor와
+현재 Graph/policy/source/member/hash를 read root의 앞뒤에 재인가한다. legacy1의 public
+메서드는2를 거부하고 common2는 기존 공개 DOCUMENT reader와 순수 composer를 재사용한다.
+질문을 approved Item으로 위장하거나 legacy1 결과를2로 relabel하지 않는다.
+
+접근은 원 origin key indexed lookup, 순서가 고정된4 event 순회와 제한된 source/vector
+iteration이다. 기존 map 기반 ranking의 O(ND + N log N)와16,384 source 상한을 유지한다.
+작은 immutable DTO와 현재 root의 pinned reader만 사용하고 새 DB/queue/cache/wire를 만들지
+않는다. source/parser/template 파일이나 큰 payload를 다른 서비스로 복제하지 않는다.
+동일 root의 불변 해석 재사용은 허용하지만 permission/row/hash/late fence는 생략하지 않는다.
+
+common2에서 scored_count0인 EMPTY는 query_execution이 없고, legacy1 EMPTY의 실행 포인터
+의미는 그대로다. 실행이 이미 있었다면 원 canonical completion은 검증하되0개 점수를
+실행 점수로 표시하지 않는다. 누락·미완료·현재 접근 철회·receipt/hash/family 불일치는
+기존 안정된 실패/부재로 반환하고 state를 수정하지 않는다. 같은 completed read를 반복해도
+새 모델/Job/Artifact가 없어야 한다. 임시 PG·기존 family1 회귀 및 non-editable 설치본을
+검증하며 source PASS만으로 global2나 prepare/reply2 wire/runtime을 활성화하지 않는다.
+별도 common 전용 completion engine 복제는 같은 원 이력을 두 곳에서 해석하게 하므로
+채택하지 않는다. Schema-first prepare/reply2 연결은 이 완료 조회 위의 다음 작업이다.
+
+추가 synthetic fault에서 순수 DOCUMENT 검증기가 intent.namespace의 space/partition/view/
+recipe를 selection과 직접 대조하지 않는 누락을 재현했다. 실제 행 encoding/벡터 차원 및
+공식 Registry read는 별도로 검증되지만, 공통 순수 검증기에서도 namespace 전체를 대조한다.
+출처·수치 입력·정본/schema bytes는 그대로이며 다른 공간의 intent를 받아 점수를 내지 않는다.
+v1 dispatch는 legacy namespace/result family를 명시적으로 닫아 두고, common2 원 요청을
+구 reply1에 실어 보내거나 재해석하지 않는다. 새로운 wire2 활성화는 별도 후속 경계다.
+
+## private 공통 준비·조회 wire2 — 2026-11-01
+
+책임은 기존 Chat owner→private QUERY owner의 PREPARE/READ 경계다. 원 Chat origin과
+Graph/policy revision/hash를 그대로 전달하며 질문 원문·worker authority·runtime 선택은
+넣지 않는다. 논리 요청과 원 Workflow는 기존 origin key로 연결하고, RPC correlation ID와
+content hash를 구분한다. canonical은 원 Chat turn과 검증된 실행/Artifact다. reply2만 공통
+context2를 담으며 request/reply1 및 이전 schema bytes는 바꾸지 않는다.
+
+주 접근은 작은 typed request의 key lookup과 고정 scope 대조다. 새 DB/index/queue/cache는
+없고, 직렬화와 검증은 bounded message 크기에 선형이다. 실제 context1/2 상한은512KiB이며
+기존 reply의640KiB에 envelope 여유128KiB가 이미 있으므로 request32KiB/reply640KiB를
+그대로 공유한다. 이 한도는 RPC 운반 한도이며 source 수나 실행 권한을 늘리지 않는다.
+owner application의 기존
+transaction/claim/원 key 멱등 경계를 재사용하고 transport는 재시도/재인증/새 identity를
+만들지 않는다. READ의 부재는 PREPARE로 바뀌지 않는다.
+
+transport adapter→application→contract의 의존 방향을 지킨다. family/version/action/
+request hash·원 basis·Graph/policy가 다른 reply는 거부한다. READY의 context는 검증된
+READY/PARTIAL/EMPTY뿐이며, EMPTY2의 scored0/no-query-execution 의미를 보존한다. unknown
+outcome은 missing/success로 재해석하지 않고 안정된 오류로 남긴다. schema/model과 canonical
+resource pin부터 검증하고 client/receiver/dispatch·runtime의 호환 조합이 준비되기 전에는
+운영 wire2/global admission을 열지 않는다. 대안인 reply1 relabel은 이전 벡터/EMPTY 의미를
+섞으므로 거부한다. 최초 설계 초안의 context640KiB/새 reply672KiB 가정은 실제512KiB
+상수 대조 테스트에서 틀렸음을 확인했다. 새 한도 확장이나 context 축소는 필요 없다.

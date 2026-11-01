@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/2.0",
+  "title": "Original private Chat QUERY over common public-solution documents",
+  "description": "Pointer-only origin/scope and common context2. Origin is not authentication or a retry grant. Existing request maximum32KiB and reply maximum640KiB are retained by model/transport. Legacy wire1 is immutable.",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/request"
+    },
+    {
+      "$ref": "#/$defs/reply"
+    }
+  ],
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "action",
+        "request_id",
+        "origin",
+        "graph_snapshot",
+        "policy_revision_id",
+        "policy_sha256",
+        "request_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "system-rag-private-chat-query-prepare-request/2.0"
+        },
+        "action": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/request/properties/action"
+        },
+        "request_id": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/request/properties/request_id"
+        },
+        "origin": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/request/properties/origin"
+        },
+        "graph_snapshot": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/request/properties/graph_snapshot"
+        },
+        "policy_revision_id": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/request/properties/policy_revision_id"
+        },
+        "policy_sha256": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/request/properties/policy_sha256"
+        },
+        "request_sha256": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/request/properties/request_sha256"
+        }
+      }
+    },
+    "reply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "action",
+        "request_id",
+        "request_sha256",
+        "status",
+        "workflow_id",
+        "context",
+        "error_code"
+      ],
+      "properties": {
+        "schema_version": {
+          "const": "system-rag-private-chat-query-prepare-reply/2.0"
+        },
+        "action": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/reply/properties/action"
+        },
+        "request_id": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/reply/properties/request_id"
+        },
+        "request_sha256": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/reply/properties/request_sha256"
+        },
+        "status": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/reply/properties/status"
+        },
+        "workflow_id": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/reply/properties/workflow_id"
+        },
+        "context": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/knowledge/system-rag-private-chat-similarity/2.0#/$defs/result"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/reply/properties/error_code"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "READY"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "workflow_id": {
+                "type": "string",
+                "pattern": "^workflow_[0-9a-f]{32}$"
+              },
+              "context": {
+                "allOf": [
+                  {
+                    "$ref": "eom://schemas/knowledge/system-rag-private-chat-similarity/2.0#/$defs/result"
+                  },
+                  {
+                    "properties": {
+                      "status": {
+                        "enum": [
+                          "READY",
+                          "PARTIAL",
+                          "EMPTY"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              },
+              "error_code": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/reply/allOf/1"
+        },
+        {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/reply/allOf/2"
+        },
+        {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/reply/allOf/3"
+        },
+        {
+          "$ref": "eom://schemas/knowledge/system-rag-private-chat-query-prepare/1.0#/$defs/reply/allOf/4"
+        }
+      ]
+    }
+  }
+}

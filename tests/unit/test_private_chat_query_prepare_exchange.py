@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import socket
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from threading import Thread
@@ -127,6 +128,64 @@ def case():
 
 def changed_request(case, **changes):
     return parse_private_chat_query_prepare_request(seal(case.body | changes, "request_sha256"))
+
+
+def test_legacy_dispatch_cannot_activate_a_common_namespace(case):
+    from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
+
+    registry = case.application.owner.configuration.registry
+    case.application.owner.configuration.registry = replace(
+        registry,
+        namespace=PublicSolutionIndexNamespace(
+            storage_partition=registry.namespace.storage_partition,
+            space_sha256=registry.space.space_sha256,
+            recipe_sha256=registry.namespace.recipe_sha256,
+        ),
+    )
+    dispatch = NativePrivateChatQueryPrepareDispatch(case.application, case.spaces)
+    reply = dispatch.execute(case.request)
+    assert reply.status == "FAILED" and reply.error_code == "AUTHORITY_UNAVAILABLE"
+    assert reply.context is None and reply.workflow_id is None
+    case.application.prepare.assert_not_called()
+    case.application.read.assert_not_called()
+
+
+def test_legacy_dispatch_cannot_relabel_a_common_pending_original(case):
+    from eom_workflow.private_chat_query_execution_v2 import PrivateChatQueryWorkflowRequestV2
+
+    from tests.unit.test_private_chat_public_query_execution import (
+        execution_case as common_execution_case,
+    )
+
+    work, _policy, _bundle = common_execution_case()
+    context = seal(
+        work.context_request.model_dump(mode="json")
+        | {
+            "query_basis": case.result.origin.basis.model_dump(mode="json"),
+        },
+        "request_sha256",
+    )
+    work = PrivateChatQueryWorkflowRequestV2.model_validate(
+        seal(
+            work.model_dump(mode="json")
+            | {
+                "context_request": context,
+                "operator_audit": work.operator_audit.model_dump(mode="json")
+                | {"operator_id": case.result.origin.actor_id},
+            },
+            "request_sha256",
+        )
+    )
+    case.application.prepare.return_value = PreparedPrivateChatQueryWorkflow(
+        case.result.workflow_id,
+        work,
+        case.result.origin,
+        "PENDING",
+    )
+    reply = case.dispatch.execute(case.request)
+    assert reply.status == "FAILED" and reply.error_code == "QUERY_RESULT_INVALID"
+    assert reply.workflow_id is None and reply.context is None
+    case.application.read.assert_not_called()
 
 
 def ready(case):
@@ -294,8 +353,16 @@ def test_ready_context_cannot_cross_original_scope(case, field):
 
 @pytest.fixture
 def socket_case(case, tmp_path):
+    with prepare_socket_case(case, tmp_path) as value:
+        yield value
+
+
+@contextmanager
+def prepare_socket_case(case, tmp_path):
+    """One actual kernel peer/frame fixture shared by both immutable wire families."""
     parent = tmp_path / "query-owner"
     parent.mkdir(mode=0o750)
+    parent.chmod(0o750)  # Explicit peer layout must not depend on the invoking umask.
     endpoint = ChatSocketEndpoint(parent / "private.sock", os.getuid(), os.getgid())
     listener = bind_chat_listener(endpoint, backlog=1)
     observed = []

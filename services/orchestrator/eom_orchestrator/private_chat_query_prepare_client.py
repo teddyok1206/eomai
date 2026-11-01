@@ -3,7 +3,7 @@
 import grp
 import pwd
 from pathlib import Path
-from typing import Self
+from typing import Self, overload
 
 from eom_catalog_contracts.private_chat_query_prepare import (
     PRIVATE_CHAT_PREPARE_REPLY_BYTES,
@@ -12,8 +12,14 @@ from eom_catalog_contracts.private_chat_query_prepare import (
     PrivateChatQueryPrepareProtocolError,
     PrivateChatQueryPrepareReply,
     PrivateChatQueryPrepareRequest,
-    parse_private_chat_query_prepare_request,
-    validate_private_chat_query_prepare_reply,
+)
+from eom_catalog_contracts.private_chat_query_prepare_v2 import (
+    PrivateChatQueryPrepareReplyV2,
+    PrivateChatQueryPrepareRequestV2,
+    SupportedPrivateChatQueryPrepareReply,
+    SupportedPrivateChatQueryPrepareRequest,
+    parse_supported_private_chat_query_prepare_request,
+    validate_supported_private_chat_query_prepare_reply,
 )
 from eom_identifiers import content_sha256
 
@@ -49,8 +55,18 @@ class PrivateChatQueryPrepareClient:
         """Select only fixed OS identities/layout; each exchange still validates DAC/peer."""
         return cls(fixed_private_chat_query_prepare_endpoint())
 
-    def execute(self, request: PrivateChatQueryPrepareRequest) -> PrivateChatQueryPrepareReply:
-        request = parse_private_chat_query_prepare_request(request)
+    @overload
+    def execute(self, request: PrivateChatQueryPrepareRequest) -> PrivateChatQueryPrepareReply: ...
+
+    @overload
+    def execute(
+        self, request: PrivateChatQueryPrepareRequestV2
+    ) -> PrivateChatQueryPrepareReplyV2: ...
+
+    def execute(
+        self, request: SupportedPrivateChatQueryPrepareRequest
+    ) -> SupportedPrivateChatQueryPrepareReply:
+        request = parse_supported_private_chat_query_prepare_request(request)
         # A timeout/disconnect is an unknown outcome. Let the existing transport
         # error propagate; no new key, fallback prepare or authentication occurs.
         value = exchange_chat_frame(
@@ -60,11 +76,25 @@ class PrivateChatQueryPrepareClient:
             reply_limit=PRIVATE_CHAT_PREPARE_REPLY_BYTES,
             timeout=PRIVATE_CHAT_QUERY_RPC_TIMEOUT,
         )
-        return validate_private_chat_query_prepare_reply(request, value)
+        return validate_supported_private_chat_query_prepare_reply(request, value)
 
+    @overload
     def continue_pending_original(
         self, request: PrivateChatQueryPrepareRequest, acknowledged: PrivateChatQueryPrepareReply
-    ) -> PrivateChatQueryPrepareReply:
+    ) -> PrivateChatQueryPrepareReply: ...
+
+    @overload
+    def continue_pending_original(
+        self,
+        request: PrivateChatQueryPrepareRequestV2,
+        acknowledged: PrivateChatQueryPrepareReplyV2,
+    ) -> PrivateChatQueryPrepareReplyV2: ...
+
+    def continue_pending_original(
+        self,
+        request: SupportedPrivateChatQueryPrepareRequest,
+        acknowledged: SupportedPrivateChatQueryPrepareReply,
+    ) -> SupportedPrivateChatQueryPrepareReply:
         """One explicit progress action after known PENDING; never a transport retry or read."""
         request, acknowledged = _original_acknowledgement(request, acknowledged)
         if acknowledged.status != "PENDING":
@@ -73,31 +103,46 @@ class PrivateChatQueryPrepareClient:
         _same_original(acknowledged, reply)
         return reply
 
+    @overload
     def read_original(
         self, request: PrivateChatQueryPrepareRequest, acknowledged: PrivateChatQueryPrepareReply
-    ) -> PrivateChatQueryPrepareReply:
+    ) -> PrivateChatQueryPrepareReply: ...
+
+    @overload
+    def read_original(
+        self,
+        request: PrivateChatQueryPrepareRequestV2,
+        acknowledged: PrivateChatQueryPrepareReplyV2,
+    ) -> PrivateChatQueryPrepareReplyV2: ...
+
+    def read_original(
+        self,
+        request: SupportedPrivateChatQueryPrepareRequest,
+        acknowledged: SupportedPrivateChatQueryPrepareReply,
+    ) -> SupportedPrivateChatQueryPrepareReply:
         """One READ of an acknowledged original; absent/failed/unknown never causes PREPARE."""
         request, acknowledged = _original_acknowledgement(request, acknowledged)
         document = request.model_dump(mode="json", exclude={"request_sha256"})
         document["action"] = "READ_PRIVATE_CHAT_QUERY"
         document["request_sha256"] = content_sha256(document)
-        reply = self.execute(parse_private_chat_query_prepare_request(document))
+        reply = self.execute(parse_supported_private_chat_query_prepare_request(document))
         _same_original(acknowledged, reply)
         return reply
 
 
 def _original_acknowledgement(
-    request: PrivateChatQueryPrepareRequest, reply: PrivateChatQueryPrepareReply
-) -> tuple[PrivateChatQueryPrepareRequest, PrivateChatQueryPrepareReply]:
-    request = parse_private_chat_query_prepare_request(request)
-    reply = validate_private_chat_query_prepare_reply(request, reply)
+    request: SupportedPrivateChatQueryPrepareRequest, reply: SupportedPrivateChatQueryPrepareReply
+) -> tuple[SupportedPrivateChatQueryPrepareRequest, SupportedPrivateChatQueryPrepareReply]:
+    request = parse_supported_private_chat_query_prepare_request(request)
+    reply = validate_supported_private_chat_query_prepare_reply(request, reply)
     if request.action != "PREPARE_PRIVATE_CHAT_QUERY" or reply.status not in {"PENDING", "READY"}:
         raise PrivateChatQueryPrepareProtocolError("PRIVATE_CHAT_QUERY_REQUEST_INVALID")
     return request, reply
 
 
 def _same_original(
-    acknowledged: PrivateChatQueryPrepareReply, reply: PrivateChatQueryPrepareReply
+    acknowledged: SupportedPrivateChatQueryPrepareReply,
+    reply: SupportedPrivateChatQueryPrepareReply,
 ) -> None:
     if reply.workflow_id is not None and reply.workflow_id != acknowledged.workflow_id:
         raise PrivateChatQueryPrepareProtocolError("PRIVATE_CHAT_QUERY_REPLY_INVALID")
