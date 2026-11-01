@@ -1,5 +1,48 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## private CUDA receipt의 canonical 저장 후보 — 2026-11-01
+
+- source **`51361e43ce8a611542d1600e073766ef3992b9b3`**를 main/origin에 commit/push했다.
+  CPU 고정 unit 관측을 GPU로 재해석하지 않고 private 단일 QUERY2의 실제 parent/원
+  allocation·binding·completion 및 한 child hash/range를 담는 receipt1.1을 추가했다.
+  공개 receipt1.0 bytes/hash와 INDEX/REFERENCE 목적은 그대로다. 현재 source 후보는
+  metadata·canonical publication 연결이며 private 물리 purpose/global2를 활성화하지 않는다.
+- 기존 receipt closure/range 검증과 file-set publisher를 공유한다. 새 DB/table/queue/
+  migration/수치 모델·벡터 공간은 없다. canonical 재조회는 기존 publisher가 반환한 실제
+  primary-member schema/revision/hash를 사용하며 구형1.0 URI를 추측해 붙이지 않는다.
+  question/벡터/권한 payload를 receipt 또는 DB에 추가하지 않는다.
+- source 회귀 **111 PASS/46.99s**, 별도 비편집 설치본 **111 PASS/47.94s**다. 실제 source/
+  module 경로를 먼저 확인했다. 기존 공통 입력의 기출/창작/AI 동등성·분류별 provenance 및
+  수치 family 검사는 별도 **77 PASS/8.22s**다. 후자는 synthetic numerical backend이며
+  실제 GPU 또는 교육 품질 증거가 아니다. strict mypy 직접2/consumer6, Ruff/format/shell/
+  diff PASS다. 존재하지 않는 한 mypy 경로의 invocation 실패도 원 log에 보존했다.
+- 임시 PG 첫 넓은 회귀는 **273 PASS/3 FAIL**였다. 실패3건은 기존 중단 주입 테스트가
+  현재 사용되는 `publish_supported_reference_query` 대신 더 이상 호출되지 않는 구형
+  wrapper를 patch한 경우였다. 운영 동작·검증을 완화하지 않고 actual boundary로 주입점을
+  수정했다. 중단·원 producer 복구/완료 재조회와 새 private publication의 집중 범위는
+  **21 PASS/55.97s**다. 같은 guarded DB의 전체 최종 회귀는 **276 PASS/430.41s**다.
+  실제 canonical PG/file 저장에서 동시 publication·동일 key 충돌·원 parent/proof hash와
+  공개 INDEX/QUERY 중단 복구를 검사하며, IAM/물리 GPU는 명시적 synthetic seam이다.
+  `/tmp/eom-api-testdb-20261101124100_7ccfdee1`만 migration67 왕복/reconcile했고,
+  read_only/other_connections0 확인 후 공식 cleanup PASS, REMOVED다. 운영 DB는 검사나
+  정리에 사용하지 않았다. 집중21건은 전체276건에 포함되므로 별도 성공 건수로 합산하지 않는다.
+- 공식 build/RECORD PASS. directory는
+  `/tmp/eom-api-build/51361e43ce8a611542d1600e073766ef3992b9b3.JsqL1r/dist`, platform SHA
+  `fd185e693b888347d551b9463cbdc9a8db9ce5668f65c585f8628e4fd4162f88`, contracts
+  `af1274d0f8793f581eb8c98a0cb0fe233f21cd5881a68ad1a11fec1c664a43f4`, API
+  `9eea771fe1cd4a83c824e6f71f9aced84db2ee76088ff8deede9fca8fb45c9e4`다. 설치본은
+  `/tmp/eom-private-batch-receipt-installed.tDOz9J7j/site-packages`다.
+  `/tmp/eom-private-batch-receipt-*20261101*` 및 별도 common equivalence log 참조.
+- **13:00 UTC/22:00 KST** 기존 정기 관측은 **152/520·잔여368·CUDA RUNNING1**이다.
+  frozen target-set/공통 CUDA space와 historical FAILED Workflow7은 그대로다. actual
+  INDEX2258114/QUERY2256183을 유지했고 이번 source 후보의 운영 배포/재시작/모델 제출/
+  정본·구 vector·FAILED 변경0이다. production66/private global2 CLOSED도 유지한다.
+- **12:52:47 UTC** read-only 진단은 public QUERY Workflow0/active DB query0이었다.
+  마지막 실제 GUI 실패는 준비 단계214초이며 운영 정렬 이후 actual query/read/replay
+  PASS는 아직 없다. 기존 요청의 `결과 확인`만 비차단 요청했고 인증을 만들거나 빌리지
+  않았다. 전체 목표는 ACTIVE이며 전체520 대상별 무결성/권한·실제 GUI/AI canary·consumer
+  전환과 구 파생 retirement/삭제를 source/설치본 테스트로 대체하지 않는다.
+
 ## private 실제 parent admission·공개 consumer 경계 후보 — 2026-11-01
 
 - source **`26a583abe51a720fc51546c262d1520b4f92be7f`**는 parent17의 실제 private source
