@@ -281,6 +281,34 @@ pure family 선택은 contracts에, attached ORM/lease 검사는 기존 runner a
 successor 지원이 작다. 실제 임시 PostgreSQL의1/2 중단·재전송·중복 claim을 확인하며 운영 DB
 pytest/실제 native 추론 없이 먼저 검증한다. 실제 deployment/operator/runtime 승인은 별도다.
 
+### private2 계산·네 단계 canonical 완료 연결 — 2026-11-01
+
+기존 `CatalogNativePrivateChatQueryExecutor`와 completion/publication reader를1/2가 공유한다.
+정본은 원 request/launch Job, 최대4개 ALLOCATION/EXECUTED/PUBLISHED/COMPLETED 기록과
+원 producer의 validated Artifact/receipt다. family dispatch는 pure/기존 source adapter에 두고
+새 runner/queue/상태기계를 복제하지 않는다. request1은 native1/result1/receipt1만, request2는
+common numerical2/result2/receipt2만 받으며 predecessor bytes/hash와 원 key는 바꾸지 않는다.
+
+접근은 원 launch key/Job PK·최대4 event·typed file-set pointer lookup이다. O(1) metadata와
+기존 bounded source 재확인/단일 numerical row 검증이며 새 DB/index/migration은 없다. alias/
+문항/Graph/report를 복사하지 않고 question은 owner-local 입력에만 둔다. canonical private
+결과는 기존 intent/result/shard/binary, 완료는 기존 one-member receipt publication만 사용한다.
+원 source와 recipe/model/space/runtime/worker-purpose pins, 실제 file identity/hash/finite/L2와
+producer/manifest provenance를 Catalog·Orchestrator의 원 경계에서 검증한다.
+
+같은 caller-root command/lease/source fence 안에서 allocate·checkpoint·publish하고 물리 CPU
+실행은 DB root 밖에서 한다. 저장/전달 전에는 actual origin/source/lease를 다시 확인한다.
+terminal completion은 canonical bytes와 현재 권한으로 재조회하며 이전 unit이 사라졌다고
+재추론하지 않는다. uncertain/BUSY는 같은 원 작업으로 대기하고 FAILED/CANCELLED는 성공으로
+바꾸거나 새 identity로 우회하지 않는다. 공유 protected CPU 환경과 runtime bundle 변경은
+별도 drain·호환 rollout 후에만 가능하며 이 source 연결로 admission2를 열지 않는다.
+
+contracts→기존 application→고정 launcher/FS/Artifact adapters 방향을 유지한다. 공통 builder/
+receipt/checkpoint의 명시적 family dispatch를 재사용하는 것이 두 실행기를 복제하거나 public
+REFERENCE 목적을 private 권한으로 채택하는 대안보다 작다.1/2 정상·중단 후 재전송·권한 철회·
+known failure·원 producer/해시 불일치와 임시 PG canonical 저장을 확인하고, 실제 runtime/
+모델·authenticated Chat 검증은 설치·activation 이후의 별도 증거로 남긴다.
+
 기존 미배포 legacy stored-read 후보는
 `staging/unified-embedding-goal-20261031/deferred-legacy-read.patch` 및 같은 폴더
 `deferred/`에 복구 가능하게 보존했다. 이번 공통 전환과 섞어 활성화하지 않는다.

@@ -6,7 +6,10 @@ import json
 from dataclasses import dataclass, field
 from typing import Protocol, overload
 
-from eom_catalog_contracts.embedding_private_chat_query import EmbeddingPrivateChatQueryInput
+from eom_catalog_contracts.embedding_private_chat_query import (
+    EmbeddingPrivateChatQueryInput,
+    SupportedPrivateNumericalQueryInput,
+)
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_runtime_bundle import (
     MAX_RUNTIME_BUNDLE_BYTES,
@@ -275,6 +278,40 @@ def validate_current_private_chat_query_input(
             raise ValueError()
     except (ValueError, TypeError, SchemaError):
         raise ValueError("PRIVATE_CHAT_QUERY_CURRENT_INPUT_INVALID") from None
+
+
+def build_supported_private_chat_query_native_input(
+    sources: ResolvedPrivateChatQuerySources | ResolvedPrivateChatPublicQuerySources,
+    *,
+    job_id: str,
+    query_request_id: str,
+) -> SupportedPrivateNumericalQueryInput:
+    if type(sources) is ResolvedPrivateChatPublicQuerySources:
+        return build_private_chat_public_query_native_input(
+            sources, job_id=job_id, query_request_id=query_request_id
+        )
+    if type(sources) is ResolvedPrivateChatQuerySources:
+        return build_private_chat_query_native_input(
+            sources, job_id=job_id, query_request_id=query_request_id
+        )
+    raise ValueError("PRIVATE_CHAT_QUERY_CURRENT_INPUT_INVALID")
+
+
+def validate_supported_current_private_chat_query_input(
+    sources: ResolvedPrivateChatQuerySources | ResolvedPrivateChatPublicQuerySources,
+    launch: PrivateChatQueryLaunchAssociation,
+    native: SupportedPrivateNumericalQueryInput,
+) -> None:
+    if type(sources) is ResolvedPrivateChatPublicQuerySources and isinstance(
+        native, PublicSolutionQueryInput
+    ):
+        validate_current_private_chat_public_query_input(sources, launch, native)
+    elif type(sources) is ResolvedPrivateChatQuerySources and isinstance(
+        native, EmbeddingPrivateChatQueryInput
+    ):
+        validate_current_private_chat_query_input(sources, launch, native)
+    else:
+        raise ValueError("PRIVATE_CHAT_QUERY_CURRENT_INPUT_INVALID")
 
 
 def require_private_chat_query_source_root(session: Session) -> object:

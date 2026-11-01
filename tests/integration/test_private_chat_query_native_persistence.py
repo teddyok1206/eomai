@@ -97,7 +97,12 @@ def test_postgres_private_commit_boundary_crash_reuses_original_producers(
         if boundary.startswith("query")
         else NativeEmbeddingCompletionPublisher
     )
-    method = owner_type.publish_private_chat_query
+    name = (
+        "publish_private_chat_query"
+        if boundary.startswith("query")
+        else "publish_supported_private_chat_query"
+    )
+    method = getattr(owner_type, name)
 
     def crash(self, *args, **kwargs):
         if boundary.endswith("after"):
@@ -105,7 +110,7 @@ def test_postgres_private_commit_boundary_crash_reuses_original_producers(
         raise KeyboardInterrupt("synthetic owner death; never a new encoding grant")
 
     with monkeypatch.context() as patch:
-        patch.setattr(owner_type, "publish_private_chat_query", crash)
+        patch.setattr(owner_type, name, crash)
         with pytest.raises(KeyboardInterrupt):
             query.execute()
     launch, before = query.history()

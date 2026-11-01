@@ -16,7 +16,11 @@ from typing import Any
 from unittest.mock import Mock
 
 import pytest
-from eom_catalog_service.embedding_encoder_adapter import encode_private_chat_query
+from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
+from eom_catalog_service.embedding_encoder_adapter import (
+    encode_private_chat_query,
+    encode_public_solution_query,
+)
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_orchestrator import native_private_chat_query_handoff as handoff
 from eom_orchestrator.embedding_artifact_store import EmbeddingArtifactStore
@@ -39,6 +43,7 @@ from eom_workflow.private_chat_query_workflow import (
     PrivateChatQueryStepOutput,
     PrivateChatQueryWorkflowDefinition,
 )
+from eom_workflow.private_chat_query_workflow_v2 import private_chat_query_result_schema
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from eom_workflow_runner.private_chat_query_execution_port import PrivateChatQueryStepPending
 from eom_workflow_runner.private_chat_query_native_executor import (
@@ -48,6 +53,7 @@ from eom_workflow_runner.repository import CommandLeaseIdentity
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from tests.unit.test_embedding_incremental_encoding import SyntheticNativeBackend
 from tests.unit.test_embedding_private_chat_query import backend
 from tests.unit.test_native_embedding_query_handoff import prepared as reference_prepared
 from tests.unit.test_private_chat_public_query_projection import inputs, project
@@ -176,7 +182,7 @@ def make_private_executor_case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, 
         state="RUNNING",
         step_type="application",
         worker_role=None,
-        result_schema="embedding-private-chat-query-result@1.0",
+        result_schema=private_chat_query_result_schema(source.request),
         input_pointer_manifest={"workflow_request_sha256": source.request.request_sha256},
         platform_job_id=None,
     )
@@ -202,7 +208,12 @@ def make_private_executor_case(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, 
         if fixture.failure:
             raise fixture.failure
         # Numerical backend is synthetic; real publication, hashes and bytes are not.
-        encoded = encode_private_chat_query(value.request, backend(value.request))
+        if isinstance(value.request, PublicSolutionQueryInput):
+            encoder = SyntheticNativeBackend(value.request.spaces.query)
+            encoder.batch_size, encoder.threads = value.request.batch_size, value.request.threads
+            encoded = encode_public_solution_query(value.request, encoder)
+        else:
+            encoded = encode_private_chat_query(value.request, backend(value.request))
         fixture.encodes += 1
         for name, raw in (
             ("result.json", canonical_json_bytes(encoded.result)),
@@ -412,7 +423,12 @@ def test_crash_at_each_commit_boundary_reuses_original_identity_and_numeric_outp
         if boundary.startswith("query")
         else NativeEmbeddingCompletionPublisher
     )
-    original = owner_type.publish_private_chat_query
+    method = (
+        "publish_private_chat_query"
+        if boundary.startswith("query")
+        else "publish_supported_private_chat_query"
+    )
+    original = getattr(owner_type, method)
 
     def crash(self, *args, **kwargs):
         if boundary.endswith("after"):
@@ -420,7 +436,7 @@ def test_crash_at_each_commit_boundary_reuses_original_identity_and_numeric_outp
         raise KeyboardInterrupt("synthetic controller death, not another encoding grant")
 
     with monkeypatch.context() as patch:
-        patch.setattr(owner_type, "publish_private_chat_query", crash)
+        patch.setattr(owner_type, method, crash)
         with pytest.raises(KeyboardInterrupt):
             executor.execute()
     launch, prefix = executor.history()

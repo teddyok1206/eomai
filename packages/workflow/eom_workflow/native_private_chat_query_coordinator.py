@@ -23,7 +23,11 @@ from eom_workflow.native_reference_query_coordinator import (
     NativeQueryPhase,
 )
 from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
-from eom_workflow.private_chat_query_execution_v2 import PrivateChatQueryWorkflowRequestV2
+from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryWorkflowRequestV2,
+    SupportedPrivateChatQueryWorkflowRequest,
+    parse_supported_private_chat_query_workflow_request,
+)
 from eom_workflow.private_chat_query_publication import (
     PRIVATE_CHAT_QUERY_RECORD_REF,
     PrivateChatQueryExecutionRecord,
@@ -268,6 +272,26 @@ def native_private_chat_public_query_checkpoint(
     )
 
 
+def supported_native_private_chat_query_checkpoint(
+    request: SupportedPrivateChatQueryWorkflowRequest,
+    launch: PrivateChatQueryLaunchAssociation,
+    phase: NativeQueryPhase,
+    payload: SupportedNativePrivateQueryPayload,
+) -> SupportedNativePrivateChatQueryCheckpoint:
+    """Select the original request family, not a new launch or an execution grant."""
+    request = parse_supported_private_chat_query_workflow_request(request)
+    if launch.workflow_request_sha256 != request.request_sha256:
+        raise ValueError("PRIVATE_CHAT_QUERY_CHECKPOINT_INVALID")
+    return parse_supported_native_private_chat_query_checkpoint(
+        _private_chat_query_checkpoint_document(
+            launch,
+            phase,
+            payload,
+            version="2.0" if isinstance(request, PrivateChatQueryWorkflowRequestV2) else "1.0",
+        )
+    )
+
+
 def _private_chat_query_checkpoint_document(
     launch: PrivateChatQueryLaunchAssociation,
     phase: NativeQueryPhase,
@@ -317,6 +341,26 @@ def private_chat_public_query_checkpoint_receipt(
             request, launch, allocation, executed, published
         )
     )
+
+
+def supported_private_chat_query_checkpoint_receipt(
+    request: SupportedPrivateChatQueryWorkflowRequest,
+    launch: PrivateChatQueryLaunchAssociation,
+    allocation: NativePrivateQueryAllocation,
+    executed: NativePrivateQueryExecuted,
+    published: NativePrivateQueryPublished | NativePrivateQueryPublishedV2,
+) -> PrivateChatQueryWorkflowReceipt | PrivateChatQueryWorkflowReceiptV2:
+    """One exact family choice around the unchanged predecessor/successor receipt rules."""
+    request = parse_supported_private_chat_query_workflow_request(request)
+    if isinstance(request, PrivateChatQueryWorkflowRequestV2):
+        if not isinstance(published, NativePrivateQueryPublishedV2):
+            raise ValueError("PRIVATE_CHAT_QUERY_CHECKPOINT_INVALID")
+        return private_chat_public_query_checkpoint_receipt(
+            request, launch, allocation, executed, published
+        )
+    if not isinstance(published, NativePrivateQueryPublished):
+        raise ValueError("PRIVATE_CHAT_QUERY_CHECKPOINT_INVALID")
+    return private_chat_query_checkpoint_receipt(request, launch, allocation, executed, published)
 
 
 def _private_chat_query_checkpoint_receipt_body(

@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Literal
+from typing import Literal, overload
 
 from eom_catalog_contracts.embedding_private_chat_query import EmbeddingPrivateChatQueryInput
+from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
 from eom_identifiers import content_sha256, new_job_id, new_revision_id
 from eom_orchestrator.embedding_artifact_store import EmbeddingArtifactStore
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
@@ -32,15 +33,24 @@ from eom_orchestrator.native_query_job_allocation import (
 from eom_workflow.native_private_chat_query_coordinator import (
     NativePrivateQueryAllocation,
     NativePrivateQueryCompleted,
-    native_private_chat_query_checkpoint,
+    NativePrivateQueryCompletedV2,
+    supported_native_private_chat_query_checkpoint,
 )
 from eom_workflow.native_reference_query_coordinator import NativeQueryAllocation
 from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryWorkflowRequest,
-    parse_private_chat_query_workflow_request,
+)
+from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryWorkflowRequestV2,
+    SupportedPrivateChatQueryWorkflowRequest,
+    parse_supported_private_chat_query_workflow_request,
 )
 from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAssociation
 from eom_workflow.private_chat_query_workflow import PrivateChatQueryStepOutput
+from eom_workflow.private_chat_query_workflow_v2 import (
+    PrivateChatQueryStepOutputV2,
+    SupportedPrivateChatQueryStepOutput,
+)
 from sqlalchemy.orm import Session
 
 from eom_workflow_runner.local_embedding_execution_port import NativeFencedRunnerTransaction
@@ -55,9 +65,10 @@ from eom_workflow_runner.private_chat_query_owner_admission import (
     CatalogPrivateChatQueryOwnerAdmission,
 )
 from eom_workflow_runner.private_chat_query_source_read import (
+    ResolvedPrivateChatPublicQuerySources,
     ResolvedPrivateChatQuerySources,
-    build_private_chat_query_native_input,
-    validate_current_private_chat_query_input,
+    build_supported_private_chat_query_native_input,
+    validate_supported_current_private_chat_query_input,
 )
 from eom_workflow_runner.readiness import (
     ReadinessStatus,
@@ -92,9 +103,9 @@ class CatalogNativePrivateChatQueryExecutor:
         )
         self.completion = NativePrivateChatQueryCompletion(owner)
 
-    def evaluate(self, request: PrivateChatQueryWorkflowRequest) -> RuntimeReadinessReport:
+    def evaluate(self, request: SupportedPrivateChatQueryWorkflowRequest) -> RuntimeReadinessReport:
         try:
-            request = parse_private_chat_query_workflow_request(request)
+            request = parse_supported_private_chat_query_workflow_request(request)
             config = self.owner.configuration
             index = request.context_request.views[0].index
             if (
@@ -125,11 +136,11 @@ class CatalogNativePrivateChatQueryExecutor:
     def _current(
         self,
         session: Session,
-        request: PrivateChatQueryWorkflowRequest,
+        request: SupportedPrivateChatQueryWorkflowRequest,
         lease: CommandLeaseIdentity,
         workflow_id: str,
         step_run_id: str,
-    ) -> ResolvedPrivateChatQuerySources:
+    ) -> ResolvedPrivateChatQuerySources | ResolvedPrivateChatPublicQuerySources:
         return self.owner.resolve_execution_sources(
             session, request, lease, workflow_id=workflow_id, step_run_id=step_run_id
         )
@@ -146,7 +157,7 @@ class CatalogNativePrivateChatQueryExecutor:
     def _prepared(
         self,
         session: Session,
-        sources: ResolvedPrivateChatQuerySources,
+        sources: ResolvedPrivateChatQuerySources | ResolvedPrivateChatPublicQuerySources,
         workflow_id: str,
         step_run_id: str,
         lease: CommandLeaseIdentity,
@@ -163,7 +174,7 @@ class CatalogNativePrivateChatQueryExecutor:
             if launch is None
             else launch.query_request_id
         )
-        native = build_private_chat_query_native_input(
+        native = build_supported_private_chat_query_native_input(
             sources, job_id=job_id, query_request_id=query_id
         )
         if launch is None:
@@ -178,12 +189,12 @@ class CatalogNativePrivateChatQueryExecutor:
                 attempt=1,
                 workflow_request_sha256=request.request_sha256,
                 context_request_sha256=request.context_request.request_sha256,
-                basis_sha256=native.basis.basis_sha256,
+                basis_sha256=request.context_request.query_basis.basis_sha256,
                 native_launch_job_id=job_id,
                 query_request_id=query_id,
                 query_request_sha256=native.request_sha256,
                 query_input_set_sha256=native.input_set_sha256,
-                recipe_sha256=native.document_recipe.recipe_sha256,
+                recipe_sha256=request.context_request.views[0].recipe.recipe_sha256,
                 runtime_bundle=request.runtime_bundle.model_dump(mode="json"),
                 resource_profile_sha256=request.resource_profile.resource_profile_sha256,
                 original_command_id=lease.command_id,
@@ -206,7 +217,7 @@ class CatalogNativePrivateChatQueryExecutor:
                 raise ValueError("PRIVATE_CHAT_QUERY_EXECUTOR_PURPOSE_INVALID")
             launch = adopted
             if launch != candidate:
-                native = build_private_chat_query_native_input(
+                native = build_supported_private_chat_query_native_input(
                     sources,
                     job_id=launch.native_launch_job_id,
                     query_request_id=launch.query_request_id,
@@ -223,7 +234,7 @@ class CatalogNativePrivateChatQueryExecutor:
     def _allocate(
         self,
         session: Session,
-        request: PrivateChatQueryWorkflowRequest,
+        request: SupportedPrivateChatQueryWorkflowRequest,
         lease: CommandLeaseIdentity,
         workflow_id: str,
         step_run_id: str,
@@ -238,7 +249,8 @@ class CatalogNativePrivateChatQueryExecutor:
         if not history.records:
             history = coordinator.append(
                 session,
-                native_private_chat_query_checkpoint(
+                supported_native_private_chat_query_checkpoint(
+                    request,
                     prepared.association,
                     "ALLOCATION",
                     NativePrivateQueryAllocation(
@@ -266,10 +278,10 @@ class CatalogNativePrivateChatQueryExecutor:
         session: Session,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: PrivateChatQueryWorkflowRequest,
+        request: SupportedPrivateChatQueryWorkflowRequest,
         command_lease: CommandLeaseIdentity,
     ) -> PrivateChatQueryLaunchAssociation:
-        request = parse_private_chat_query_workflow_request(request)
+        request = parse_supported_private_chat_query_workflow_request(request)
         prepared, _history = self._allocate(
             session, request, command_lease, workflow.workflow_id, step.step_run_id
         )
@@ -281,11 +293,11 @@ class CatalogNativePrivateChatQueryExecutor:
         prepared: PreparedNativePrivateChatQuery,
         workflow: WorkflowInstanceRecord,
         step: WorkflowStepRunRecord,
-        request: PrivateChatQueryWorkflowRequest,
+        request: SupportedPrivateChatQueryWorkflowRequest,
         lease: CommandLeaseIdentity,
         fenced: NativeFencedRunnerTransaction,
         reason: Literal["BUSY", "UNCERTAIN"],
-    ) -> PrivateChatQueryStepOutput | PrivateChatQueryStepPending:
+    ) -> SupportedPrivateChatQueryStepOutput | PrivateChatQueryStepPending:
         with fenced() as session:
             self._current(session, request, lease, workflow.workflow_id, step.step_run_id)
             history = self._history(
@@ -293,9 +305,11 @@ class CatalogNativePrivateChatQueryExecutor:
             )
             if len(history.records) == 4:
                 completed = history.records[3].payload
-                if not isinstance(completed, NativePrivateQueryCompleted):
+                if not isinstance(
+                    completed, (NativePrivateQueryCompleted, NativePrivateQueryCompletedV2)
+                ):
                     raise ValueError("PRIVATE_CHAT_QUERY_EXECUTOR_HISTORY_INVALID")
-                return self.validate_completion(
+                return self.completion.validate_completion(
                     session=session,
                     workflow=workflow,
                     step=step,
@@ -309,6 +323,7 @@ class CatalogNativePrivateChatQueryExecutor:
             reason,
         )
 
+    @overload
     def execute(
         self,
         *,
@@ -318,8 +333,31 @@ class CatalogNativePrivateChatQueryExecutor:
         command_lease: CommandLeaseIdentity,
         idempotency_key: str,
         fenced_transaction: NativeFencedRunnerTransaction,
-    ) -> PrivateChatQueryStepOutput | PrivateChatQueryStepPending:
-        request = parse_private_chat_query_workflow_request(request)
+    ) -> PrivateChatQueryStepOutput | PrivateChatQueryStepPending: ...
+
+    @overload
+    def execute(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        request: PrivateChatQueryWorkflowRequestV2,
+        command_lease: CommandLeaseIdentity,
+        idempotency_key: str,
+        fenced_transaction: NativeFencedRunnerTransaction,
+    ) -> PrivateChatQueryStepOutputV2 | PrivateChatQueryStepPending: ...
+
+    def execute(
+        self,
+        *,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        request: SupportedPrivateChatQueryWorkflowRequest,
+        command_lease: CommandLeaseIdentity,
+        idempotency_key: str,
+        fenced_transaction: NativeFencedRunnerTransaction,
+    ) -> SupportedPrivateChatQueryStepOutput | PrivateChatQueryStepPending:
+        request = parse_supported_private_chat_query_workflow_request(request)
         expected = (
             f"private-chat-query-step:{workflow.workflow_id}:encode_private_chat_query:1:"
             f"{request.workflow_definition_sha256}"
@@ -331,7 +369,13 @@ class CatalogNativePrivateChatQueryExecutor:
                 session, request, command_lease, workflow.workflow_id, step.step_run_id
             )
             original_native = prepared.request
-            if not isinstance(original_native, EmbeddingPrivateChatQueryInput):
+            if (
+                isinstance(request, PrivateChatQueryWorkflowRequestV2)
+                and not isinstance(original_native, PublicSolutionQueryInput)
+            ) or (
+                not isinstance(request, PrivateChatQueryWorkflowRequestV2)
+                and not isinstance(original_native, EmbeddingPrivateChatQueryInput)
+            ):
                 raise ValueError("PRIVATE_CHAT_QUERY_EXECUTOR_CONTEXT_INVALID")
             coordinator = NativePrivateChatQueryCoordinator(request, prepared.association)
             allocation = history.records[0].payload
@@ -339,9 +383,11 @@ class CatalogNativePrivateChatQueryExecutor:
                 raise ValueError("PRIVATE_CHAT_QUERY_EXECUTOR_HISTORY_INVALID")
             if len(history.records) == 4:
                 completed = history.records[3].payload
-                if not isinstance(completed, NativePrivateQueryCompleted):
+                if not isinstance(
+                    completed, (NativePrivateQueryCompleted, NativePrivateQueryCompletedV2)
+                ):
                     raise ValueError("PRIVATE_CHAT_QUERY_EXECUTOR_HISTORY_INVALID")
-                return self.validate_completion(
+                return self.completion.validate_completion(
                     session=session,
                     workflow=workflow,
                     step=step,
@@ -417,15 +463,15 @@ class CatalogNativePrivateChatQueryExecutor:
                 current = self._current(
                     session, request, command_lease, workflow.workflow_id, step.step_run_id
                 )
-                validate_current_private_chat_query_input(
+                validate_supported_current_private_chat_query_input(
                     current, prepared.association, original_native
                 )
                 history = self._history(coordinator, session)
                 if len(history.records) == 1:
                     coordinator.append(
                         session,
-                        native_private_chat_query_checkpoint(
-                            prepared.association, "EXECUTED", observed
+                        supported_native_private_chat_query_checkpoint(
+                            request, prepared.association, "EXECUTED", observed
                         ),
                     )
                 elif history.records[1].payload.model_dump(
@@ -446,6 +492,7 @@ class CatalogNativePrivateChatQueryExecutor:
             fenced_transaction=fenced_transaction,
         )
 
+    @overload
     def validate_completion(
         self,
         *,
@@ -455,7 +502,30 @@ class CatalogNativePrivateChatQueryExecutor:
         request: PrivateChatQueryWorkflowRequest,
         command_lease: CommandLeaseIdentity,
         output: PrivateChatQueryStepOutput,
-    ) -> PrivateChatQueryStepOutput:
+    ) -> PrivateChatQueryStepOutput: ...
+
+    @overload
+    def validate_completion(
+        self,
+        *,
+        session: Session,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        request: PrivateChatQueryWorkflowRequestV2,
+        command_lease: CommandLeaseIdentity,
+        output: PrivateChatQueryStepOutputV2,
+    ) -> PrivateChatQueryStepOutputV2: ...
+
+    def validate_completion(
+        self,
+        *,
+        session: Session,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord,
+        request: SupportedPrivateChatQueryWorkflowRequest,
+        command_lease: CommandLeaseIdentity,
+        output: SupportedPrivateChatQueryStepOutput,
+    ) -> SupportedPrivateChatQueryStepOutput:
         return self.completion.validate_completion(
             session=session,
             workflow=workflow,

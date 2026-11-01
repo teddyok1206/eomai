@@ -49,22 +49,39 @@ def source(tmp_path, monkeypatch):
     return make_private_public_source_case(tmp_path, monkeypatch)
 
 
-def make_private_public_source_case(tmp_path, monkeypatch, *, definition_sha256=None):
-    old = make_private_source_case(tmp_path, monkeypatch)
+def make_private_public_source_case(
+    tmp_path, monkeypatch, *, definition_sha256=None, resource_profile=None
+):
+    old = make_private_source_case(tmp_path, monkeypatch, resource_profile=resource_profile)
+    return make_private_public_source_from_legacy(
+        old, monkeypatch, definition_sha256=definition_sha256, resource_profile=resource_profile
+    )
+
+
+def make_private_public_source_from_legacy(
+    old, monkeypatch, *, definition_sha256=None, resource_profile=None
+):
     request, policy, _bundle = execution_case()
     policy = PrivateChatQueryExecutionPolicyV2.model_validate(
         seal(
             policy.model_dump(mode="json")
             | {
                 "runtime_bundle": old.request.runtime_bundle.model_dump(mode="json"),
+                "resource_profile": (resource_profile or policy.resource_profile).model_dump(
+                    mode="json"
+                ),
                 "workflow_definition_sha256": definition_sha256
                 or policy.workflow_definition_sha256,
             },
             "policy_sha256",
         )
     )
+    key = (
+        "private-public-owner-test:policy:"
+        + old.request.runtime_bundle.manifest_member.artifact_revision_id
+    )
     saved = old.controls.publish_private_chat_public_query_policy(
-        policy, idempotency_key="private-public-owner-test:policy", created_at=NOW
+        policy, idempotency_key=key, created_at=NOW
     )
     context = seal(
         request.context_request.model_dump(mode="json")
@@ -82,6 +99,7 @@ def make_private_public_source_case(tmp_path, monkeypatch, *, definition_sha256=
                 "native_execution_policy_sha256": policy.policy_sha256,
                 "runtime_bundle": old.request.runtime_bundle.model_dump(mode="json"),
                 "workflow_definition_sha256": policy.workflow_definition_sha256,
+                "resource_profile": policy.resource_profile.model_dump(mode="json"),
             },
             "request_sha256",
         )
@@ -202,7 +220,7 @@ def test_common_policy_publication_replays_original_identity_without_overwriting
     original = source.saved
     assert (
         source.old.controls.publish_private_chat_public_query_policy(
-            source.policy, idempotency_key="private-public-owner-test:policy", created_at=NOW
+            source.policy, idempotency_key=source.key, created_at=NOW
         )
         == original
     )
@@ -215,7 +233,7 @@ def test_common_policy_publication_replays_original_identity_without_overwriting
     )
     with pytest.raises(ControlPlaneError) as conflict:
         source.old.controls.publish_private_chat_public_query_policy(
-            changed, idempotency_key="private-public-owner-test:policy", created_at=NOW
+            changed, idempotency_key=source.key, created_at=NOW
         )
     assert conflict.value.code == "CONTROL_FILE_SET_CONFLICT"
 

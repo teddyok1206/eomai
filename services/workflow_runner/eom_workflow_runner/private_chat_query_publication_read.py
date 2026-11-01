@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_service.local_embedding_completion_artifacts import (
-    resolve_native_private_chat_query_completion,
+    resolve_supported_native_private_chat_query_completion,
 )
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.private_chat_query_artifact_read import (
     CatalogPrivateChatQueryArtifacts,
+    ResolvedPrivateChatPublicQueryArtifacts,
     ResolvedPrivateChatQueryArtifacts,
 )
 from eom_catalog_service.settings import CatalogSettings
@@ -20,9 +21,11 @@ from eom_orchestrator.native_query_job_allocation import read_native_query_launc
 from eom_workflow.native_private_chat_query_coordinator import (
     NativePrivateQueryAllocation,
     NativePrivateQueryCompleted,
+    NativePrivateQueryCompletedV2,
     NativePrivateQueryExecuted,
     NativePrivateQueryPublished,
-    private_chat_query_checkpoint_receipt,
+    NativePrivateQueryPublishedV2,
+    supported_private_chat_query_checkpoint_receipt,
 )
 from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAssociation
 from eom_workflow.private_chat_query_submission_context import (
@@ -30,6 +33,11 @@ from eom_workflow.private_chat_query_submission_context import (
     validate_private_chat_query_submission_context,
 )
 from eom_workflow.private_chat_query_workflow import PrivateChatQueryStepOutput
+from eom_workflow.private_chat_query_workflow_v2 import (
+    PrivateChatQueryStepOutputV2,
+    SupportedPrivateChatQueryStepOutput,
+    parse_supported_private_chat_query_step_output,
+)
 from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy.orm import Session
 
@@ -38,8 +46,9 @@ from eom_workflow_runner.private_chat_query_owner_admission import (
     validate_private_chat_query_execution_step,
 )
 from eom_workflow_runner.private_chat_query_source_read import (
+    ResolvedPrivateChatPublicQuerySources,
     ResolvedPrivateChatQuerySources,
-    build_private_chat_query_native_input,
+    build_supported_private_chat_query_native_input,
     require_private_chat_query_source_root,
 )
 
@@ -54,10 +63,50 @@ def resolve_private_chat_query_publication(
     output: PrivateChatQueryStepOutput,
     artifact_reader: PinnedArtifactReadContext | None = None,
 ) -> tuple[ResolvedPrivateChatQueryArtifacts, NativePrivateChatQueryHistory]:
+    """Legacy numerical1 publication API remains closed to common QUERY2."""
+    try:
+        if type(sources) is not ResolvedPrivateChatQuerySources:
+            raise ValueError()
+        output = PrivateChatQueryStepOutput.model_validate(raw_similarity_contract_value(output))
+    except (ValueError, TypeError, SchemaError):
+        raise ValueError("PRIVATE_CHAT_QUERY_COMPLETION_PUBLICATION_INVALID") from None
+    resolved, history = resolve_supported_private_chat_query_publication(
+        settings,
+        session=session,
+        workflow=workflow,
+        step=step,
+        sources=sources,
+        output=output,
+        artifact_reader=artifact_reader,
+    )
+    if not isinstance(resolved, ResolvedPrivateChatQueryArtifacts):
+        raise ValueError("PRIVATE_CHAT_QUERY_COMPLETION_PUBLICATION_INVALID")
+    return resolved, history
+
+
+def resolve_supported_private_chat_query_publication(
+    settings: CatalogSettings,
+    *,
+    session: Session,
+    workflow: WorkflowInstanceRecord,
+    step: WorkflowStepRunRecord,
+    sources: ResolvedPrivateChatQuerySources | ResolvedPrivateChatPublicQuerySources,
+    output: SupportedPrivateChatQueryStepOutput,
+    artifact_reader: PinnedArtifactReadContext | None = None,
+) -> tuple[
+    ResolvedPrivateChatQueryArtifacts | ResolvedPrivateChatPublicQueryArtifacts,
+    NativePrivateChatQueryHistory,
+]:
     """Caller holds actual current ownership/lease; no physical unit survival is required."""
     root = require_private_chat_query_source_root(session)
     try:
-        output = PrivateChatQueryStepOutput.model_validate(raw_similarity_contract_value(output))
+        output = parse_supported_private_chat_query_step_output(
+            raw_similarity_contract_value(output)
+        )
+        if isinstance(sources, ResolvedPrivateChatPublicQuerySources) != isinstance(
+            output, PrivateChatQueryStepOutputV2
+        ):
+            raise ValueError()
         sources.__post_init__()
         reader = (
             PinnedArtifactReadContext(session, settings)
@@ -95,10 +144,13 @@ def resolve_private_chat_query_publication(
         if (
             not isinstance(allocation, NativePrivateQueryAllocation)
             or not isinstance(executed, NativePrivateQueryExecuted)
-            or not isinstance(published, NativePrivateQueryPublished)
+            or not isinstance(
+                published, (NativePrivateQueryPublished, NativePrivateQueryPublishedV2)
+            )
         ):
             raise ValueError()
         producer = allocation.allocation.receipt_producer
+        completed = history.records[3].payload if len(history.records) == 4 else None
         if (
             allocation.origin != context.origin
             or output.receipt.artifact_id != producer.artifact_id
@@ -108,25 +160,30 @@ def resolve_private_chat_query_publication(
                 and current_step.platform_job_id != producer.job_id
             )
             or (
-                len(history.records) == 4
-                and history.records[3].payload != NativePrivateQueryCompleted(output=output)
+                completed is not None
+                and (
+                    not isinstance(
+                        completed, (NativePrivateQueryCompleted, NativePrivateQueryCompletedV2)
+                    )
+                    or completed.output != output
+                )
             )
         ):
             raise ValueError()
-        receipt = resolve_native_private_chat_query_completion(
+        receipt = resolve_supported_native_private_chat_query_completion(
             session, settings, output, artifact_reader=reader
         )
-        expected = private_chat_query_checkpoint_receipt(
+        expected = supported_private_chat_query_checkpoint_receipt(
             sources.request, launch, allocation, executed, published
         )
         if receipt != expected:
             raise ValueError()
-        native = build_private_chat_query_native_input(
+        native = build_supported_private_chat_query_native_input(
             sources, job_id=launch.native_launch_job_id, query_request_id=launch.query_request_id
         )
         resolved = CatalogPrivateChatQueryArtifacts(
             session, settings, artifact_reader=reader
-        ).resolve_publication(
+        ).resolve_supported_publication(
             workflow_request=sources.request,
             policy=sources.policy,
             bundle=sources.bundle,
@@ -145,5 +202,5 @@ def resolve_private_chat_query_publication(
         if require_private_chat_query_source_root(session) is not root:
             raise ValueError()
         return resolved, history
-    except (ValueError, TypeError, SchemaError):
+    except (ValueError, TypeError, AttributeError, SchemaError):
         raise ValueError("PRIVATE_CHAT_QUERY_COMPLETION_PUBLICATION_INVALID") from None
