@@ -1,5 +1,46 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 공통 QUERY의 private 실행 요청·CPU/CUDA owner 핀 연결 — 2026-11-01 UTC
+
+- 직전 `daf9f2a0`은 private context2와 공통 document proof를 구현·검증·push한
+  **PROGRESS**였다. 이번 시작 시 HEAD와 clean worktree를 재확인했고, 아래 실행 요청/
+  owner 선택/원 turn key를 실제 source에 연결한 이번 turn도 **PROGRESS**다. 전체 목표 ACTIVE다.
+- JSON Schema-first `private-chat-query-execution/2.0`과 owner-configuration2를 추가했다.
+  request2는 context2와 기존 numerical QUERY2를 사용하되 별도 PRIVATE_CHAT_QUERY
+  policy2의 exact raw/semantic SHA, Workflow/원 context, model/query/document space,
+  bundle/resource 및 질문 raw-text SHA를 검증한다. 기존 private1/ref policy를 빌리지 않는다.
+  `prepare_private_chat_public_query_execution_input`이 원 basis와 exact text를 대조한 뒤
+  기존 공통 projection을 호출한다. 같은 text의 다른 turn도 이 실행을 빌릴 수 없다.
+- owner2는 보호 public routed cohost5 전체 canonical raw SHA와 corpus/namespace/recipe/
+  source-class/owner environment를 일치시킨다. private CPU/CUDA 정책 및 private-purpose
+  router의 raw/semantic SHA, device/profile/bundle/space/definition/기존180초 finite window를
+  대조한다. metadata 선택이며 실제 runtime/source 권한을 부여하지 않는다. 기존 GPU 우선/
+  실행 전 capacity 부족 시 CPU fallback을 재사용하며 새 CPU-only 임시 경로를 만들지 않는다.
+- 원 actor/turn/request hash만 담는 submission-context1의 의미/bytes는 유지하고 지원
+  request1/2를 명시적으로 dispatch한다. 두 family는 **같은 원 turn key**를 사용하며
+  다른 request/pins의 fingerprint는 달라야 한다. 같은 질문의 새 버전이라는 이유로 새 key나
+  중복 실행을 만들지 않는다. 실제 DB CHECK/unique/lease 검증과 private2 admission은 후속이다.
+- 최종 합집합 source 집중·기존 preparation/submission/admission/compiler·공개 cohost·
+  context2·wheel/설치본/resource·dependency 회귀 **360 PASS /107.27s**,
+  strict mypy5 source·Ruff/format/diff PASS다. CPU/CUDA는 synthetic backend이며 실제 GPU
+  실행/현재 권한/운영 활성화 PASS가 아니다. 원 private1 schema3개의 SHA도 그대로다.
+  `/tmp/eom-private-public-owner2-final-gates-20261101.log`,
+  `/tmp/eom-private-public-execution2-mypy-20261101-final.log`.
+- 최초 owner 집중은147 PASS/7 FAIL이었다. 6개는 Pydantic이 custom ValueError를
+  ValidationError로 감싸는 실제 경계와 fixture의 너무 좁은 예외 기대가 달랐고, 1개는 이미f인
+  bundle revision을f로 다시 바꿔 변화가 없던 fixture였다. 정확한 ValueError code와 실제 다른
+  revision으로 보정해153 PASS했다. 이어 올바르게 re-seal한 다른 텍스트/REFERENCE router/
+  finite-window 초과도 거부하는 회귀를 추가해 위 최종360을 통과했다. 실패 log는 보존한다.
+  `/tmp/eom-private-public-owner2-focused-20261101.log`, `-v2.log`.
+- source 작업 중 운영 API/Catalog/QUERY/INDEX/creative 또는 numerical pin/config 재시작·
+  변경0, 새 모델/QUERY/Workflow 제출0, DB migration/운영 DB pytest/구 vector 삭제0이다.
+  최근 정기 GPU 집계는 앞 절의00:30 기준122/520이며 이 turn의 새 집계처럼 보고하지 않는다.
+- 다음은 새 private Workflow definition/receipt·원 요청의 저장·재개/read와 physical
+  private-purpose2 admission을 기존 owner에 연결하는 일이다. 그 변경의 disposable DB
+  concurrency/replay/중단 검증과 actual authorized Chat delivery까지 끝나야 활성 old
+  CONTENT_ONLY consumer를 전환한다. 전체520 CUDA, 실제 AI full-report/Graph/INDEX4,
+  authorized DB 검색·정확한 retirement/삭제의 미완료 조건도 그대로 유지한다.
+
 ## 채팅의 공통 document 검증·context2 source 연결 — 2026-11-01 UTC
 
 - 직전 사용자 turn은 GUI 시험 후보 안내로 목표 구현 자체는 **NO_PROGRESS**였다.

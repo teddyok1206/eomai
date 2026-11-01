@@ -10,6 +10,7 @@ from eom_catalog_contracts.embedding_reference_query import (
     ReferenceQueryTextInput,
     raw_similarity_contract_value,
 )
+from eom_catalog_contracts.embedding_runtime_bundle import EmbeddingRuntimeBundle
 from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingEncodingIdentity,
     embedding_input_set_sha256,
@@ -27,6 +28,12 @@ from eom_catalog_contracts.registered_public_solution_similarity import (
     PublicSolutionSimilarityViewV4,
 )
 from eom_identifiers import content_sha256
+from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryExecutionPolicyV2,
+    PrivateChatQueryWorkflowRequestV2,
+    validate_private_chat_public_query_execution_input,
+    validate_private_chat_public_query_request_references,
+)
 from jsonschema.exceptions import ValidationError as SchemaError
 
 from eom_orchestrator.general_chat_similarity_basis import PreparedPrivateChatQuery
@@ -111,3 +118,44 @@ def validate_private_chat_public_query_result(
         return result
     except (ValueError, TypeError, AttributeError, SchemaError):
         raise ValueError("PRIVATE_CHAT_PUBLIC_QUERY_RESULT_INVALID") from None
+
+
+def prepare_private_chat_public_query_execution_input(
+    prepared: PreparedPrivateChatQuery,
+    request: PrivateChatQueryWorkflowRequestV2,
+    policy: PrivateChatQueryExecutionPolicyV2,
+    bundle: EmbeddingRuntimeBundle,
+    *,
+    job_id: str,
+    query_request_id: str,
+) -> PreparedPrivateChatPublicQuery:
+    """Close private policy/basis2, then reuse the existing exact QUERY2 projection.
+
+    CPU/CUDA comes only from the owner-selected, pinned policy/index pair. This
+    function neither changes device after execution nor borrows reference policy.
+    """
+    try:
+        request, policy = validate_private_chat_public_query_request_references(
+            request, policy, bundle
+        )
+        if type(prepared) is not PreparedPrivateChatQuery:
+            raise ValueError()
+        prepared.__post_init__()
+        if prepared.basis != request.context_request.query_basis:
+            raise ValueError()
+        view = PublicSolutionSimilarityViewV4.model_validate(
+            request.context_request.views[0].model_dump(mode="json")
+        )
+        result = project_private_chat_public_query(
+            prepared,
+            view,
+            context_request_sha256=request.context_request.request_sha256,
+            job_id=job_id,
+            query_request_id=query_request_id,
+            batch_size=request.resource_profile.batch_size,
+            threads=request.resource_profile.threads,
+        )
+        validate_private_chat_public_query_execution_input(request, policy, bundle, result.native)
+        return result
+    except (ValueError, TypeError, AttributeError, SchemaError):
+        raise ValueError("PRIVATE_CHAT_PUBLIC_QUERY_EXECUTION_INPUT_INVALID") from None

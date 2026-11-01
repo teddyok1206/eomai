@@ -11,7 +11,10 @@ from eom_identifiers import content_sha256
 from jsonschema.exceptions import ValidationError as SchemaError
 from pydantic import model_validator
 
-from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
+from eom_workflow.private_chat_query_execution_v2 import (
+    SupportedPrivateChatQueryWorkflowRequest,
+    parse_supported_private_chat_query_workflow_request,
+)
 from eom_workflow.schemas import NativeEmbeddingContract, validate_local_embedding_admission_message
 
 
@@ -55,14 +58,12 @@ def parse_private_chat_query_submission_context(value: object) -> PrivateChatQue
 
 
 def validate_private_chat_query_submission_context(
-    request: PrivateChatQueryWorkflowRequest,
+    request: SupportedPrivateChatQueryWorkflowRequest,
     context: PrivateChatQuerySubmissionContext,
 ) -> PrivateChatQuerySubmissionContext:
     """Exact supplied parent/actor/basis only; actual source and claim stay with owners."""
     try:
-        request = PrivateChatQueryWorkflowRequest.model_validate(
-            raw_similarity_contract_value(request)
-        )
+        request = parse_supported_private_chat_query_workflow_request(request)
         context = parse_private_chat_query_submission_context(context)
         if (
             context.workflow_request_sha256 != request.request_sha256
@@ -78,12 +79,10 @@ def validate_private_chat_query_submission_context(
 
 
 def build_private_chat_query_submission_context(
-    request: PrivateChatQueryWorkflowRequest, origin: ChatPrivateQueryOrigin
+    request: SupportedPrivateChatQueryWorkflowRequest, origin: ChatPrivateQueryOrigin
 ) -> PrivateChatQuerySubmissionContext:
     try:
-        request = PrivateChatQueryWorkflowRequest.model_validate(
-            raw_similarity_contract_value(request)
-        )
+        request = parse_supported_private_chat_query_workflow_request(request)
         origin = ChatPrivateQueryOrigin.model_validate(raw_similarity_contract_value(origin))
         body = {
             "schema_version": "private-chat-query-submission-context/1.0",
@@ -131,7 +130,7 @@ def private_chat_query_origin_key(origin: ChatPrivateQueryOrigin) -> str:
 
 
 def private_chat_query_submission_fingerprint(
-    request: PrivateChatQueryWorkflowRequest,
+    request: SupportedPrivateChatQueryWorkflowRequest,
     context: PrivateChatQuerySubmissionContext,
     *,
     definition_sha256: str,
@@ -139,9 +138,7 @@ def private_chat_query_submission_fingerprint(
     actor_id: str,
 ) -> str:
     try:
-        request = PrivateChatQueryWorkflowRequest.model_validate(
-            raw_similarity_contract_value(request)
-        )
+        request = parse_supported_private_chat_query_workflow_request(request)
     except (ValueError, TypeError, SchemaError):
         raise PrivateChatQuerySubmissionContextError(
             "PRIVATE_CHAT_QUERY_SUBMISSION_CONTEXT_INVALID"

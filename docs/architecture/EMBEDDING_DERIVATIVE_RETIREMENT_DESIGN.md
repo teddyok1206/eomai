@@ -347,3 +347,30 @@ access pattern은 bounded revision/encoding hash lookup이며 비용은 O(total 
 ranking은 기존 O(N·D + N log N)이다. 영속 DB/transaction/lease/queue 변경은 이 pure 단계에
 없으며 native-purpose successor와 원 turn uniqueness/current-read fence는 후속 owner 작업이다.
 이 source 계약·composer PASS를 private2 운영 활성화 또는 구 vector 삭제 허가로 해석하지 않는다.
+
+#### 원 turn과 공통 QUERY2의 실제 실행 요청 연결
+
+private `workflow-request/2.0`·`execution-policy/2.0`은 공통 context2/QUERY2와 실제
+runtime bundle/resource/index-space를 정확히 묶는다. 원래 private request/policy1은 별도
+family로 계속 해석한다. 단순한 reference-query 정책 재사용은 목적 권한을 바꾸므로 금지한다.
+원 owned-message basis와 exact text가 먼저 일치해야 하며, 그 후 동일한 공통 QUERY2
+projection/encoder를 사용한다. 동일 text라도 다른 turn의 basis로 이 실행을 빌릴 수 없다.
+
+질문의 actor/turn·workflow request hash만 담는 기존 submission-context1의 의미는 변하지
+않으므로 버전을 새로 늘리지 않는다. 지원된 request parser에서1/2를 분리하고 같은
+`private-chat-query:<actor>:<turn>` 키를 쓴다. version2로 바뀌었다고 새 실행 key를 만들지
+않는다. request/definition pin이 달라지면 fingerprint는 달라져 기존 key와의 충돌로 처리한다.
+기존 unique partial B-tree와 origin immutable trigger를 유지하는 것이 transaction 경계다.
+DB CHECK의 version/protocol 쌍 확장은 실제 compiler/receipt2와 함께 disposable DB에서
+검증할 후속이며, 현재의 순수 metadata 지원만으로 DB가2를 허용하거나 운영 실행하지 않는다.
+
+owner-configuration2는 기존 public routed cohost5의 전체 canonical raw SHA와 동일 corpus/
+namespace/recipe/source-class/owner environment를 핀한다. private CPU/CUDA native policy2와
+private-purpose routing policy1은 별도 Artifact로 읽어 raw/semantic SHA·device/bundle/resource/
+document space·동일 Workflow definition·기존 finite timeout을 대조한다. GPU 우선/실행 전
+capacity 부족 시 CPU fallback은 기존 router와 purpose를 그대로 사용하며, device를 바꾸면서
+진행 중 실행·원 request를 바꾸거나 CPU 부분집합을 GPU 전체로 표시하지 않는다.
+새 native parser/physical-purpose admission과 current source fence·원 요청/read/replay 검증
+전에는 이 설정을 보호 운영 파일에 설치·활성화하지 않는다. 새 queue/테이블/임베딩 모델/
+수치 payload/worker 권한은 추가하지 않는다. metadata lookup은 기존 indexed actor/turn,
+policy 검증은 고정 크기의 두 device와 소수 pin에 대해 O(1)이다.

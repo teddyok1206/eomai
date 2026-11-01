@@ -941,6 +941,12 @@ PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE = (
     "eom://schemas/workflow/private-chat-query-execution/1.0",
     "sha256:b1a2d42eb5d7ed9ce8b6447e7524a90121820961a22882d5b91f331312609a6f",
 )
+PRIVATE_CHAT_PUBLIC_QUERY_EXECUTION_SCHEMA_RESOURCE = (
+    "private-chat-public-execution",
+    "private-chat-query-execution-v2.schema.json",
+    "eom://schemas/workflow/private-chat-query-execution/2.0",
+    "sha256:6bbaca86a45c0bcea2482fc4c0e226680f99012f106ee09f420b08d230dee1fe",
+)
 PRIVATE_CHAT_QUERY_PUBLICATION_SCHEMA_RESOURCE = (
     "private-chat-publication",
     "private-chat-query-publication-v1.schema.json",
@@ -966,6 +972,7 @@ EMBEDDING_BENCHMARK_LAUNCH_CONTROL_SCHEMA_RESOURCE = (
     "sha256:2ceb6cb0150ffc64f2b4e94fed17cff36181b486885c8f78d8e6c0cd4c34de27",
 )
 type LocalEmbeddingSchemaName = Literal[
+    "private-chat-public-execution",
     "registered-public-coordinator",
     "registered-public-completion",
     "registered-public-ownership",
@@ -1046,6 +1053,7 @@ def _local_embedding_admission_schema(name: LocalEmbeddingSchemaName) -> dict[st
                 WORKFLOW_DEFINITION_V1_4_SCHEMA_RESOURCE,
                 *LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES,
                 PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
+                PRIVATE_CHAT_PUBLIC_QUERY_EXECUTION_SCHEMA_RESOURCE,
                 PRIVATE_CHAT_QUERY_PUBLICATION_SCHEMA_RESOURCE,
                 PRIVATE_CHAT_QUERY_RUNNER_SCHEMA_RESOURCE,
                 PRIVATE_CHAT_QUERY_SUBMISSION_SCHEMA_RESOURCE,
@@ -1090,6 +1098,7 @@ def _local_embedding_admission_schema_registry() -> Registry[Any]:
             WORKFLOW_DEFINITION_V1_4_SCHEMA_RESOURCE,
             *LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES,
             PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
+            PRIVATE_CHAT_PUBLIC_QUERY_EXECUTION_SCHEMA_RESOURCE,
             PRIVATE_CHAT_QUERY_PUBLICATION_SCHEMA_RESOURCE,
             PRIVATE_CHAT_QUERY_RUNNER_SCHEMA_RESOURCE,
             PRIVATE_CHAT_QUERY_SUBMISSION_SCHEMA_RESOURCE,
@@ -1116,6 +1125,7 @@ def local_embedding_admission_schema_registry() -> Registry[Any]:
             WORKFLOW_DEFINITION_V1_4_SCHEMA_RESOURCE,
             *LOCAL_EMBEDDING_SERVICE_SCHEMA_RESOURCES,
             PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
+            PRIVATE_CHAT_PUBLIC_QUERY_EXECUTION_SCHEMA_RESOURCE,
             PRIVATE_CHAT_QUERY_PUBLICATION_SCHEMA_RESOURCE,
             PRIVATE_CHAT_QUERY_RUNNER_SCHEMA_RESOURCE,
             PRIVATE_CHAT_QUERY_SUBMISSION_SCHEMA_RESOURCE,
@@ -1148,6 +1158,7 @@ def validate_local_embedding_admission_message(
                 "service-execution-policy",
                 "benchmark-launch-control",
                 "private-chat-execution",
+                "private-chat-public-execution",
                 "private-chat-publication",
                 "private-chat-runner",
                 "private-chat-submission",
