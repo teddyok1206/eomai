@@ -1,5 +1,38 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## GPU 준비 후 반복 DOCUMENT 검사의 실제 지연 — 2026-11-01 18:42 UTC 이후
+
+- guiadmin/HTTPS 로그인18:42:17 UTC,10321 선택과 최초 pin 응답은 PASS다. 실제 GUI key는
+  `studio:db-similarity:1b07f991-e293-47d9-9865-647e3e0f752b`, operation은
+  `queryprepare_66f65df481224ed11668c6fe674dcda2`다. 요청을 중복 생성하지 않고 동일 key를
+  재조회했으나 결과 목록은 아직 없다. 준비 상태/phase명 COMPUTING은 수치 실행 증거가 아니다.
+- parent `job_07623af00b1a4fe38bcc13792c0256e7`의 실제 보호 READY는18:44:37 UTC다. 그러나
+  ROUTED 응답은18:46:26이고, QUERY Workflow `workflow_ff1132ca706b40cf816a8877c5e01a6c`는
+ 18:48:07에야 생성됐다. root는 binding 대기에서 종료했다. 실제 unit의 PID0/FD store0를
+  확인했으며 parent/Workflow의 비종결 기록을 성공 또는 canonical FAILED로 고치지 않았다.
+- `_dispatch`의 route admission, child group 구성, BOUND admission이 같은 DOCUMENT/vector
+  전체 읽기를 반복한다. anchor-only text 수정만으로 부족했음을 실제 경로에서 확인했다.
+  기존 public device reader가 exact registered CPU/CUDA manifest를 확인해 선택하게 고쳤다.
+  schema/hash/lifecycle/actual authority·anchor·원 pins·physical route/lease는 유지한다.
+  전체 current DOCUMENT source/profile/binding/shard/vector 검사는 최종 ranking/read에 남는다.
+  legacy exact-population 경로는 변경하지 않았으며 새 schema/cache/DB/queue는 없다.
+- main `e4a481ec`, actual QUERY baseline 후보 `8b52244315bbb8a37dce84a72e8bfa23ed173c86`이다.
+  source172 PASS, actual-baseline172 PASS, protected installed172 PASS(서로 중복 집합), strict
+  mypy3개·Ruff/format/diff·공식 build/RECORD를 확인했다. 설치와 activation은 별도 기록이다.
+  root controller b5900c7d·numerical·API/Catalog/INDEX pins를 바꾸지 않는다.
+- 첫 rollout은18:53:14 INDEX의 `LOCAL_INDEXING_SERVICE_STOPPED`/채널 EOF와 exit1을 감지해
+  QUERY만 원03a5aa40으로 자동 복구했다. 원 stage의 failed/rollback 기록을 보존했다.
+  INDEX에 stop/restart나 설정 갱신을 수행하지 않았다. 현재 INDEX PID0/FAILED를 새 baseline에
+  명시한 retry1에서 QUERY만8b522443으로 반영했고18:56:07 UTC READY/PID2806149다.
+  API2738888/Catalog2256180, INDEX 정지 상태 및 numerical/control pins를 그대로 유지했다.
+  evidence: `/var/lib/eom-query-device-manifest-8b522443`와 같은 경로의 `-retry1`.
+  API ready/실제 HTTPS login HTTP200이며, 실제 검색 결과 PASS와는 구분한다.
+- 이번 test session만18:51:53 정상 로그아웃했다. 비밀번호/다른 사용자 세션/기존 원문·보고서·
+  FAILED를 변경하지 않았다. 실제 GUI 결과 목록/DB 문항 열기/완료 결과 동일 key 재조회는
+  계속 PENDING이며, 이 경로 전에는 부가 소비자 확장이나 구 vector 삭제를 하지 않는다.
+- 추가 터미널 인증을 반복하지 않고 실제 Studio에서10321의 새 검색1건을 요청했다.
+  사용자의 새 GUI 요청 확인 후 그 정확한 key/parent/Workflow/result를 추적한다.
+
 ## 실제 GUI QUERY 입력 준비 지연 — 2026-11-01 18:17 UTC 이후
 
 - 승인받은 별도 canary는 실제 Chromium/HTTPS/guiadmin 로그인18:17:30 UTC와10321
