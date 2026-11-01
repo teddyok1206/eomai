@@ -1,5 +1,58 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## live-origin 공통 source owner·정책 publication — 2026-11-01 03:54 UTC
+
+- 직전 goal turn은 physical leaf와 Catalog DOCUMENT read의 **PROGRESS**였다. 이번은
+  실제 worktree/원 INDEX·creative PID를 확인한 뒤 source owner와 canonical policy publication을
+  구현·검증한 **PROGRESS**다. 전체 U01–U05 목표 ACTIVE, 전체520/AI/실제 검색/전환/안전한
+  구 파생 삭제의 종료 조건은 유지한다.
+- source **`e03f4b134bacd988191af099b6ddabf91c9650a8`**는 원
+  `CatalogPrivateChatQuerySourceOwner`의 operator/현재 origin/turn/claim, canonical policy/
+  runtime bundle fence를 공유해 request2를 공통 Catalog DOCUMENT 경계로 보낸다. 마지막
+  Chat authorization 뒤에도 같은 원 source/index closure를 새로 확인한다. 질문은 원문 그대로
+  common QUERY2로 만들며 가짜 Item/worker 권한/다른 actor/최신 index 대입은 없다.
+- 명시적 `ResolvedPrivateChatPublicQuerySources`와 common native builder/원 launch 재구성
+  검증을 추가했다. legacy resolved value/builder/control read/publication은1-only로 보존한다.
+  config policy schema와 Registry namespace family를 맞추고, 기존 file-set owner로만 policy2를
+  저장한다. 같은 key는 원 Job/revision을 재사용하고 충돌은 거부한다. 기존 completion도
+  common input을 source read/publication 전에 거부하며 legacy runtime factory는 원 reference
+  configuration family만 받는다. 새 queue/service/worker protocol/DB migration/권한은 없다.
+- source 회귀 **163 PASS /83.74s**, runtime/staging/release inventory **68 PASS /13.67s**,
+  strict mypy 영향 source8/Ruff/format/shell/diff PASS다. source fixture의 최초2 FAIL은 정책에
+  없는 recipe/launch-count 필드를 가정한 테스트를 실제 closed contract로 바로잡은 것이다.
+  `/tmp/eom-private2-source-owner-final-20261101.log`,
+  `/tmp/eom-private2-source-owner-runtime-regression-20261101-v2.log`.
+  Chat/공개 source/IAM authority는 선언된 fixture이며 실제 사용자 인증/운영 검색 PASS가 아니다.
+- disposable PostgreSQL은 정책2의 3-writer 동일 key/원 revision replay·conflict 및 invalid
+  family/no-create를 추가해 기존 Artifact/receipt/checkpoint와 **48 PASS /33.82s**다.
+  첫 실행47 PASS/1 FAIL은 fixture의 UTC `+00:00` 시각을 해시한 뒤 canonical `Z`로 바뀐
+  불일치였다. model의 JSON-mode 표현으로 seal한 후 같은 DB에서 최종48을 확인했다.
+  원 실패 기록을 보존했다. DB `20261101034500_2a3862cf`의 migrate67 왕복·제한 role reconcile·
+  공식 cleanup PASS와 실제 state-directory 부재를 확인했다. 운영 DB pytest0, 삭제는 임시
+  DB/시험 역할/그 state에 한정되며 운영 정본·벡터를 지우지 않았다.
+  `/tmp/eom-private2-source-owner-testdb-20261101-v2.tests`, `.cleanup`.
+- 공식 build-only/RECORD PASS, wheel directory
+  `/tmp/eom-api-build/e03f4b134bacd988191af099b6ddabf91c9650a8.bE88vq/dist`;
+  platform SHA `f293400bfa1a0d8ebcd0f618fb23e2dea085d01a028eea761d73b7499c896e87`,
+  contracts `741b8f2d299d8540387ffb7e579eeb7d16f84c5709ae95202c005204323e0957`,
+  API `d6106759e1a9b62166a208219e95e976ea15850f6900cdd0eb6b3a93442ee59f`다.
+  별도 설치 prefix `/tmp/eom-private2-source-owner-installed.VHtUYT0m/site-packages`.
+  최초 설치본230 PASS/1 FAIL은 restrictive umask077에서 fake tmpfiles의 mkdir0750이0700이
+  된 fixture 문제였다. **`a4236482`**는 fake tmpfiles가 실제 정책의 exact mode를 설정하도록
+  바꾼 test-only commit이며 e03 implementation은 바꾸지 않았다. 같은 wheel/source/module 경로와
+  umask077을 유지한 최종 설치본 합집합 재검증은 **231 PASS /89.38s**다. production implementation
+  source는 e03이며 a423의 test harness로 검증했다. 겹치는 source/installed 수를 합산하지 않는다.
+  `/tmp/eom-private2-source-owner-installed-20261101.tests`, `-v2.tests`.
+- 실제 운영 INDEX PID1683578·creative1876923 active/NRestarts0을03:53에 재확인했다.
+  API8eb/QUERY·INDEX FB/creative6de·DB66와 보호된 공용 CPU 프로그램/env는 그대로다.
+  coverage 최신 기록은 기존03:30 timer의127/520·잔여393/CUDA Workflow1 RUNNING이며 새
+  count polling0이다. 원 historical FAILED7은 그 시각의 기록이고 이번 phase의 수동 재해석0,
+  정본/old vector 삭제0이다. source owner2 지원은 실제 owner admission2 활성화가 아니다.
+- 다음은 기존 START/ADVANCE 명령·lease/step/original Job에 맞춘 private2 admission/executor/
+  completion·prepare/dispatch/install 조립, 호환 operator67/runtime rollout, 실제 AI full-report/
+  Graph/INDEX4와 authorized DB search/read/replay, 원래520 CUDA 및 consumer 전환/retirement/
+  정확한 파생 삭제다. 이 source-only milestone로 전체 목표를 축소하거나 완료하지 않는다.
+
 ## 공통 private 수치 leaf·실제 Catalog DOCUMENT 읽기 — 2026-11-01 03:38 UTC
 
 - 직전 사용자 turn은 기존 준비 기록의 GUI 시험 후보 안내인 **NO_PROGRESS**였다. 실제
