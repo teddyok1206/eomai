@@ -80,6 +80,32 @@ CPU/GPU current head의 Graph가 일시적으로 다르다는 사실만으로 �
 
 ## 4. 구형 벡터 삭제 범위와 안전장치
 
+### private 공통 형식의 첫 선택과 완료 재조회 — 2026-11-01
+
+책임은 기존 Catalog initial-head capture, Runner의 원 origin/key 준비와 canonical 완료
+reader다. 정본은 private request1/2, 승인된 document index의 exact revision/member/hash와
+원 Workflow/receipt다. 처음만 current namespace head를 indexed lookup하고, replay/read는
+원 origin의 unique key로 같은 request/Graph/policy/index를 재인가한다. 질문을 가짜 Item
+anchor로 만들거나 기출/창작 보고서를 다른 양식으로 복제하지 않는다.
+
+기존 small frozen preparation은 legacy CONTENT_ONLY 또는 common CONCRETE_FACETS의
+명시적 namespace/recipe 조합을 받는다. common은 기존16,384-source 한도, legacy는 기존
+1,024 한도를 유지한다. source capture와 manifest/binding/row 검증은 기존 Catalog public
+document owner를 재사용하며 indexed head/PK lookup, bounded paging 및 keyed map을 쓴다.
+원 권한·보고서·정본 hash/lifecycle/producer 검증은 생략하지 않는다. 수치 비교는 기존
+공통 composer이고 새 search store/cache/queue/DB migration/dependency는 없다.
+
+원 Workflow/START의 atomic commit 뒤에만 drive한다. 완료 read는 current Chat origin과
+source 권한을 앞뒤로 재검증하고 원4 checkpoint/step/terminal/receipt/Artifact bytes만
+채택한다. FAILED/CANCELLED/미완료는 새 실행이나 성공으로 해석하지 않는다. history1을
+request2로 relabel하지 않으며 family가 다른 재전송은 명시적 mismatch다. SQL/IO는 기존
+adapter, 순수 ranking/protocol은 기존 domain/contract에 남긴다. 별도 private2 pipeline을
+만드는 것보다 기존 준비·원 request/replay·완료 reader의 정확한 family 확장이 작다.
+
+이 단계의 내부 값은 이미 released schema2를 사용한다. owner-only wire1에 context2를
+끼워 넣지는 않는다. 실제 연결은 별도 schema-first prepare/reply2와 receiver/client/runtime
+조립까지 검증한 뒤 활성화하며, 그 전에는 global2 CLOSED와 기존 운영1을 유지한다.
+
 ### 기존 private QUERY 명령의 공통 형식 dispatch — 2026-11-01
 
 책임은 기존 Runner의 FIFO candidate/원 command claim/짧은 fenced root와 application step

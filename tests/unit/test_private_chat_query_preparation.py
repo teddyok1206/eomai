@@ -6,7 +6,9 @@ from unittest.mock import Mock
 
 import pytest
 from eom_catalog_contracts.private_chat_query_read import ChatPrivateQueryOrigin
-from eom_catalog_contracts.private_chat_similarity import PrivateChatSimilarityRequest
+from eom_catalog_contracts.private_chat_similarity_v2 import (
+    parse_supported_private_chat_similarity_request,
+)
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
@@ -40,6 +42,10 @@ from tests.unit.test_private_chat_query_source_owner import source as source
 
 @pytest.fixture
 def preparation(source, monkeypatch):
+    return make_private_preparation_case(source, monkeypatch)
+
+
+def make_private_preparation_case(source, monkeypatch):
     value = SimpleNamespace(
         source=source,
         owner=CatalogPrivateChatQueryOwnerAdmission(source.owner),
@@ -175,7 +181,7 @@ def test_read_original_pins_never_reselects_head_rebuilds_or_starts(preparation,
     value.existing = original_row(value)
     value.start.reset_mock()
     value.lookups.clear()
-    for name in ("read_pinned_private_chat_query_controls", "effective_permissions"):
+    for name in ("read_pinned_supported_private_chat_query_controls", "effective_permissions"):
         monkeypatch.setattr(module, name, Mock(side_effect=AssertionError("rebuilding read")))
     capture = Mock(side_effect=AssertionError("reselecting read"))
     monkeypatch.setattr(value.owner.catalog, "prepare_private_chat_context_in_session", capture)
@@ -262,7 +268,7 @@ def test_selection_captures_once_then_replays_same_original_without_recapturing(
     with value.source.publisher.sessions.begin() as session:
         assert prepare_selection(value, session, selected).workflow_created
     value.existing = original_row(value)
-    for name in ("read_pinned_private_chat_query_controls", "effective_permissions"):
+    for name in ("read_pinned_supported_private_chat_query_controls", "effective_permissions"):
         monkeypatch.setattr(module, name, Mock(side_effect=AssertionError("rebuilding replay")))
     capture.side_effect = AssertionError("reselecting a newer head")
     with value.source.publisher.sessions.begin() as session:
@@ -298,11 +304,11 @@ def test_initial_missing_index_does_not_build_controls_start_or_fallback(prepara
     value = preparation
     data = value.source.request.context_request.model_dump(mode="json")
     data["views"][0]["index"] = None
-    context = PrivateChatSimilarityRequest.model_validate(seal(data, "request_sha256"))
+    context = parse_supported_private_chat_similarity_request(seal(data, "request_sha256"))
     monkeypatch.setattr(
         value.owner.catalog, "prepare_private_chat_context_in_session", Mock(return_value=context)
     )
-    for name in ("read_pinned_private_chat_query_controls", "effective_permissions"):
+    for name in ("read_pinned_supported_private_chat_query_controls", "effective_permissions"):
         monkeypatch.setattr(
             module, name, Mock(side_effect=AssertionError("unexpected new request"))
         )
@@ -360,7 +366,7 @@ def test_exact_replay_retains_original_audit_context_and_pins_without_rebuilding
     with value.source.publisher.sessions.begin() as session:
         prepare(value, session)
     value.existing = original_row(value)
-    for name in ("read_pinned_private_chat_query_controls", "effective_permissions"):
+    for name in ("read_pinned_supported_private_chat_query_controls", "effective_permissions"):
         monkeypatch.setattr(module, name, Mock(side_effect=AssertionError("rebuilding replay")))
     with value.source.publisher.sessions.begin() as session:
         assert not prepare(value, session).workflow_created
@@ -382,7 +388,7 @@ def test_changed_original_replay_is_rejected_without_reselect_or_new_start(
     if field == "context":
         body = value.source.request.context_request.model_dump(mode="json")
         body["top_k"] = body["top_k"] + 1
-        overrides["context"] = PrivateChatSimilarityRequest.model_validate(
+        overrides["context"] = parse_supported_private_chat_similarity_request(
             seal(body, "request_sha256")
         )
     elif field == "origin":
@@ -395,7 +401,7 @@ def test_changed_original_replay_is_rejected_without_reselect_or_new_start(
         value.existing.created_actor_type = "system"
     monkeypatch.setattr(
         module,
-        "read_pinned_private_chat_query_controls",
+        "read_pinned_supported_private_chat_query_controls",
         Mock(side_effect=AssertionError("reselection")),
     )
     with (

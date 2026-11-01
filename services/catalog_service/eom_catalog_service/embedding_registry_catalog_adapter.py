@@ -61,6 +61,11 @@ from eom_catalog_contracts.mixed_embedding_registry import (
     RegisterEmbeddingIndexCommandV2,
 )
 from eom_catalog_contracts.private_chat_similarity import PrivateChatSimilarityRequest
+from eom_catalog_contracts.private_chat_similarity_v2 import (
+    PrivateChatPublicDocumentView,
+    SupportedPrivateChatSimilarityRequest,
+    parse_supported_private_chat_similarity_request,
+)
 from eom_catalog_contracts.public_solution_embedding import (
     PublicSolutionEmbeddingEntry,
     PublicSolutionEmbeddingRecipe,
@@ -88,6 +93,7 @@ from eom_catalog_contracts.registered_public_solution_registry import (
     RegisterPublicSolutionIndexCommandV4,
 )
 from eom_catalog_contracts.registered_public_solution_similarity import (
+    PublicSolutionSimilarityIndexPinV4,
     PublicSolutionSimilarityViewV4,
 )
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
@@ -1989,11 +1995,11 @@ class CatalogEmbeddingRegistryVerifier:
         session: Session,
         caller: EmbeddingRegistryCaller,
         preparation: PrivateChatContextPreparation,
-    ) -> PrivateChatSimilarityRequest:
+    ) -> SupportedPrivateChatSimilarityRequest:
         """Initial official index pins for an owned question; no invented Item or native run."""
         self._require_similarity_root(session)
 
-        def resolve() -> PrivateChatSimilarityRequest:
+        def resolve() -> SupportedPrivateChatSimilarityRequest:
             if (
                 type(caller) is not EmbeddingRegistryCaller
                 or type(preparation) is not PrivateChatContextPreparation
@@ -2005,11 +2011,18 @@ class CatalogEmbeddingRegistryVerifier:
             scope = preparation.scope
             self.authorize_scope(session, caller, scope)
             reader = PinnedArtifactReadContext(session, self.settings)
-            views = self._initial_similarity_views(
-                session, scope, preparation.spaces, ("CONTENT_ONLY",), reader
+            public = isinstance(scope.namespace, PublicSolutionIndexNamespace)
+            views = (
+                (self._initial_private_public_view(session, preparation, reader),)
+                if public
+                else self._initial_similarity_views(
+                    session, scope, preparation.spaces, ("CONTENT_ONLY",), reader
+                )
             )
             body = {
-                "schema_version": "system-rag-private-chat-similarity-request/1.0",
+                "schema_version": "system-rag-private-chat-similarity-request/2.0"
+                if public
+                else "system-rag-private-chat-similarity-request/1.0",
                 "request_id": preparation.request_id,
                 "consumer_purpose": "GENERAL_CHAT_READ",
                 "query_basis": preparation.query_basis.model_dump(mode="json"),
@@ -2022,7 +2035,7 @@ class CatalogEmbeddingRegistryVerifier:
                 "maximum_sources": scope.maximum_sources,
                 "top_k": preparation.top_k,
             }
-            request = PrivateChatSimilarityRequest.model_validate(
+            request = parse_supported_private_chat_similarity_request(
                 body | {"request_sha256": content_sha256(body)}
             )
             validate_private_chat_context_preparation(preparation, self.configuration, request)
@@ -2032,6 +2045,37 @@ class CatalogEmbeddingRegistryVerifier:
             return request
 
         return self._guard(resolve)
+
+    def _initial_private_public_view(
+        self,
+        session: Session,
+        preparation: PrivateChatContextPreparation,
+        reader: PinnedArtifactReadContext,
+    ) -> PrivateChatPublicDocumentView:
+        """One official common head; no fake private Item and no replay head lookup."""
+        if not isinstance(self.configuration.recipe, PublicSolutionEmbeddingRecipe):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+        scope = preparation.scope
+        current = EmbeddingRegistryRepository(session).current_namespace_revision(
+            scope.corpus_id, scope.namespace
+        )
+        if current is None:
+            return PrivateChatPublicDocumentView(recipe=self.configuration.recipe, index=None)
+        registered, _version = current
+        pin = PublicSolutionSimilarityIndexPinV4(
+            index_id=registered.index_id,
+            index_revision_id=registered.index_revision_id,
+            index_manifest=registered.index_manifest,
+            index_sha256=registered.index_sha256,
+            storage_partition=scope.namespace.storage_partition,
+            spaces=preparation.spaces,
+        )
+        selected = PublicSolutionSimilarityViewV4(recipe=self.configuration.recipe, index=pin)
+        validate_registered_embedding_index_read(EmbeddingRegistryRead(scope, selected), registered)
+        manifest = self._read_index(reader, registered.index_manifest)
+        _validate_similarity_manifest(selected, registered.index_manifest, manifest)
+        validate_registered_embedding_index_manifest(registered, manifest)
+        return PrivateChatPublicDocumentView(recipe=selected.recipe, index=pin)
 
     @overload
     def read_similarity_materials_in_session(

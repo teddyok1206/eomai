@@ -41,7 +41,10 @@ from eom_catalog_contracts.mixed_embedding_registry import (
 )
 from eom_catalog_contracts.private_chat_query_basis import PrivateChatQueryBasis
 from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingRecipe
-from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
+from eom_catalog_contracts.public_solution_embedding_index import (
+    MAX_PUBLIC_SOLUTION_SOURCES,
+    PublicSolutionIndexNamespace,
+)
 from eom_catalog_contracts.public_solution_embedding_registry import (
     RegisterPublicSolutionIndexCommand,
 )
@@ -239,14 +242,21 @@ class PrivateChatContextPreparation:
     top_k: int
 
     def __post_init__(self) -> None:
+        public = (
+            type(self.scope) is EmbeddingRegistryLookup
+            and type(self.scope.namespace) is PublicSolutionIndexNamespace
+        )
         if (
             type(self.request_id) is not str
             or re.fullmatch(r"similarityrequest_[0-9a-f]{32}", self.request_id) is None
             or type(self.scope) is not EmbeddingRegistryLookup
-            or type(self.scope.namespace) is not EmbeddingIndexNamespace
-            or self.scope.namespace.view != "CONTENT_ONLY"
+            or type(self.scope.namespace)
+            not in {EmbeddingIndexNamespace, PublicSolutionIndexNamespace}
+            or self.scope.namespace.view != ("CONCRETE_FACETS" if public else "CONTENT_ONLY")
             or type(self.scope.maximum_sources) is not int
-            or not 1 <= self.scope.maximum_sources <= 1024
+            or not 1
+            <= self.scope.maximum_sources
+            <= (MAX_PUBLIC_SOLUTION_SOURCES if public else 1024)
             or type(self.top_k) is not int
             or not 1 <= self.top_k <= 64
         ):

@@ -8,7 +8,11 @@ from typing import Literal
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.private_chat_query_basis import PrivateChatQueryBasis
 from eom_catalog_contracts.private_chat_query_read import ChatPrivateQueryOrigin
-from eom_catalog_contracts.private_chat_similarity import PrivateChatSimilarityRequest
+from eom_catalog_contracts.private_chat_similarity_v2 import (
+    PrivateChatSimilarityRequestV2,
+    SupportedPrivateChatSimilarityRequest,
+    parse_supported_private_chat_similarity_request,
+)
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     PrivateChatContextPreparation,
@@ -22,10 +26,11 @@ from eom_catalog_service.similarity_context_ports import SimilarityContextReadEr
 from eom_identifiers import content_sha256
 from eom_identity_service.repository import effective_permissions
 from eom_orchestrator.general_chat_state import ChatError
-from eom_workflow.private_chat_query_execution import (
-    PrivateChatQueryWorkflowRequest,
-    parse_private_chat_query_workflow_request,
-    validate_private_chat_query_request_references,
+from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryExecutionPolicyV2,
+    SupportedPrivateChatQueryWorkflowRequest,
+    parse_supported_private_chat_query_workflow_request,
+    validate_supported_private_chat_query_request_references,
 )
 from eom_workflow.private_chat_query_submission_context import (
     PrivateChatQuerySubmissionContext,
@@ -45,7 +50,7 @@ from eom_workflow_runner.private_chat_query_owner_admission import (
     CatalogPrivateChatQueryOwnerAdmission,
 )
 from eom_workflow_runner.private_chat_query_source_read import (
-    read_pinned_private_chat_query_controls,
+    read_pinned_supported_private_chat_query_controls,
     require_private_chat_query_source_root,
 )
 from eom_workflow_runner.private_chat_query_submission import (
@@ -60,7 +65,7 @@ class SelectedPrivateChatQueryWorkflow:
 
     workflow_id: str
     state: str
-    request: PrivateChatQueryWorkflowRequest
+    request: SupportedPrivateChatQueryWorkflowRequest
     context: PrivateChatQuerySubmissionContext
 
 
@@ -115,7 +120,7 @@ def _original_request(
     )
     if existing is None:
         return None
-    request = parse_private_chat_query_workflow_request(existing.initial_request)
+    request = parse_supported_private_chat_query_workflow_request(existing.initial_request)
     context = validate_private_chat_query_workflow_submission(session, existing, request)
     if (
         existing.created_actor_type != "human"
@@ -168,7 +173,7 @@ def prepare_and_start_private_chat_query_in_session(
     *,
     caller: EmbeddingRegistryCaller,
     origin: ChatPrivateQueryOrigin,
-    context: PrivateChatSimilarityRequest,
+    context: SupportedPrivateChatSimilarityRequest,
     owner: CatalogPrivateChatQueryOwnerAdmission,
     executor: PrivateChatQueryNativeExecutor,
 ) -> PrivateChatQueryWorkflowSubmitted:
@@ -180,7 +185,7 @@ def prepare_and_start_private_chat_query_in_session(
     """
     root = _preparation_root(session, caller, owner)
     try:
-        context = PrivateChatSimilarityRequest.model_validate(
+        context = parse_supported_private_chat_similarity_request(
             raw_similarity_contract_value(context)
         )
     except (ValueError, TypeError, SchemaError):
@@ -240,7 +245,7 @@ def _start_with_pinned_context(
     *,
     caller: EmbeddingRegistryCaller,
     origin: ChatPrivateQueryOrigin,
-    context: PrivateChatSimilarityRequest,
+    context: SupportedPrivateChatSimilarityRequest,
     original: SelectedPrivateChatQueryWorkflow | None,
     root: object,
     owner: CatalogPrivateChatQueryOwnerAdmission,
@@ -252,15 +257,20 @@ def _start_with_pinned_context(
             raise ValueError("PRIVATE_CHAT_QUERY_PREPARATION_REPLAY_MISMATCH")
     else:
         config = owner.configuration
-        policy, bundle = read_pinned_private_chat_query_controls(
+        policy, bundle = read_pinned_supported_private_chat_query_controls(
             PinnedArtifactReadContext(session, owner.settings), config
         )
+        public = isinstance(policy, PrivateChatQueryExecutionPolicyV2)
+        if public != isinstance(context, PrivateChatSimilarityRequestV2):
+            raise ValueError("PRIVATE_CHAT_QUERY_PREPARATION_CONTEXT_INVALID")
         body = {
-            "schema_version": "private-chat-query-workflow-request/1.0",
+            "schema_version": "private-chat-query-workflow-request/2.0"
+            if public
+            else "private-chat-query-workflow-request/1.0",
             "request_name": "PRIVATE_CHAT_QUERY_WORKFLOW_REQUEST",
             "purpose": "PRIVATE_CHAT_QUERY",
             "workflow_definition_key": "local-embedding-private-chat-query",
-            "workflow_definition_version": "1.0.0",
+            "workflow_definition_version": "2.0.0" if public else "1.0.0",
             "workflow_definition_sha256": policy.workflow_definition_sha256,
             "operator_audit": {
                 "kind": "OPERATOR",
@@ -275,10 +285,10 @@ def _start_with_pinned_context(
             "native_execution_policy": config.native_execution_policy.model_dump(mode="json"),
             "native_execution_policy_sha256": config.native_execution_policy_sha256,
         }
-        request = parse_private_chat_query_workflow_request(
+        request = parse_supported_private_chat_query_workflow_request(
             body | {"request_sha256": content_sha256(body)}
         )
-        validate_private_chat_query_request_references(request, policy, bundle)
+        validate_supported_private_chat_query_request_references(request, policy, bundle)
         original_context = build_private_chat_query_submission_context(request, origin)
 
     if require_private_chat_query_source_root(session) is not root:

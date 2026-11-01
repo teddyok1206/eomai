@@ -194,7 +194,7 @@ def test_postgres_private_preparation_constructs_first_request_and_reuses_origin
         assert TEXT.encode() not in canonical_json_bytes(initial)
     monkeypatch.setattr(
         preparation_module,
-        "read_pinned_private_chat_query_controls",
+        "read_pinned_supported_private_chat_query_controls",
         Mock(side_effect=AssertionError("rebuilding original preparation controls")),
     )
     monkeypatch.setattr(
