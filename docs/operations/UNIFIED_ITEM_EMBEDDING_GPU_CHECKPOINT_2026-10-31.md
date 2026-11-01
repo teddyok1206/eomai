@@ -1,5 +1,84 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 실제 GUI 등록 풀이 응답 불일치 수정 — 2026-11-01 17:33 UTC 이후
+
+- 재인증 성공 후10321/원 key/원 operation/request SHA를 그대로 재사용했다. 최초 pin 응답은
+  HTTP200이며, 두 번째 응답은 약5초에 FAILED/REFERENCE_QUERY_PREPARE_UNAVAILABLE다.
+  이전 수분 지연과 별개로 owner의 PREPARE_APPLICATION/ValidationError를 확인했다.
+- 정확한 원 idempotency key의 control Job을 read-only 조회했다. Job
+  `job_b01f6a6327eb40959f6af0cc65d1316b`는 SUCCEEDED이고 `preparation.json`의 정식 schema는
+  preparation/3.0이다. 그러나 released reply/4.0는 preparation/2.0만 허용한다.
+  원 준비 Artifact의 실패나 GPU 계산 실패가 아니라 응답 직렬화 경계의 누락이다.
+- 기존 request4/operation/parent/저장된 preparation3를 보존하는 reply5를 schema-first로
+  추가했다. old reply4/schema bytes는 그대로이며 pointer를2.0로 바꾸지 않는다. 명시적
+  decoder/owner response와 OpenAPI successor만 추가한다. 새 DB/table/queue/model은 없다.
+- main source `93283795` + OpenAPI/hash `419e082d`다. 실제 API baseline5e8ffe75 위 후보는
+  `9377ee2cf75e6a31c317d463f2de4141e4466e0a`, QUERY2f046972 위 후보는
+  `8630ff6f674c10afd8c7fb7dd3d619e05fa993d7`다. QUERY-only의 private/67 후보를 공유 API에
+  섞지 않기 위해 호환 조합으로 분리했다. 공유 API wheel의 migration은 기존66이다.
+- source52 PASS와 강화된 API13 PASS, 각 actual-baseline source53/49 PASS다. 보호된 QUERY
+  설치본 + 실제 API5e8ffe75 조합의 해당 baseline fixture로 owner40/API13 PASS다. 처음
+  main 미래 fixture의 import 실패4건, 이어 QUERY 과거 API fixture의 pin-first 기대 차이4건은
+  invocation 오류로 보존했다. 이를 운영 장애나 검증 PASS로 재해석하지 않는다.
+- 공식 build가 OpenAPI 미갱신, 다음 hash sidecar 미commit을 차례로 거부했다. 둘 다 운영
+  설치 전에 발생했다. 공식 export로 각 후보의 OpenAPI와 SHA를 갱신한 후 clean build와
+  RECORD/installed-wheel OpenAPI 검사를 통과했다. 기존 경계를 완화하지 않았다.
+- API 후보의 platform을 실제 공유8eb03e40 wheel과 비교해 새 response schema1개와
+  응답 decoder/registry/QUERY response builder/RECORD만 바뀐 것을 확인했다. API contracts
+  wheel의 모든 member bytes는 동일하여 기존 것을 유지한다. 나머지 소비자의 실행 코드와
+  기존 schema 의미, GPU INDEX의 별도 prefix/PID/config는 그대로다.
+- API9377ee2c/PID2738888의 정상 기동과 reply5 decoder 설치를 확인했다. QUERY8630ff6f는
+  PID2741401로 activation을 완료했다. API/Catalog/INDEX PIDs와 numerical pins를 B 반영 전후
+  대조했으며 INDEX2258114는 처음부터 그대로다. source migration67 후보를 운영 DB에
+  적용하지 않았다. root release evidence는 `/opt/eom/api-releases/9377ee2cf75e6a31c317d463f2de4141e4466e0a`
+  및 `/var/lib/eom-registered-query-owner-release-8630ff6f`에 있다.
+- 검증에 사용한17:33 test session만17:51 정상 로그아웃했다. 운영 배포 중 실제900초
+  recent-password 기한이 지났기 때문이다. 계정·비밀번호·다른 세션·FAILED를 바꾸거나
+  reauthentication을 token refresh로 우회하지 않았다. 실제 GUI 재인증 후 원 요청의
+  결과 목록/DB 열기/동일 요청 수치 실행1회 증거는 여전히 PENDING이다.
+
+## 실제 GUI 10321 요청 재현·QUERY 관측 수정 운영 반영 — 2026-11-01
+
+- 우선순위는 사용자가 지정한 GUI 검색 → 결과 목록 → DB에서 열기 → 동일 요청 재조회다.
+  채팅 확장·부가 구조 정리는 이 경로의 실제 검증 전 진행하지 않는다. 전체 목표는 유지한다.
+- 실제 Chromium/HTTPS/guiadmin 로그인과10321 선택 PASS다. 원 key는
+  `studio:db-similarity:ca022b90-247c-470c-8a86-b365f8990359`이며, 첫 source pin 응답은
+  16:56:59 UTC PENDING/PREPARING·HTTP200/661ms다. 같은 key/pin의 두 번째 응답은
+  17:00:32 UTC HTTP503/REFERENCE_QUERY_PREPARE_UNAVAILABLE, 문의
+  `webreq_64c06c80c682f43701f9f8c5`다. owner는 이후에도 준비를 수행하다402976ms에
+  실패했다. 실제 QUERY Workflow는17:04 read-only 관측에서0이며 재시작/새 검색은 하지 않았다.
+- 실제 stage에서 장치별 initial index 준비49.8/49.4초와 반복 population/report 읽기를
+  확인했다. 최종 exception은 당시 안전 로그가 종류를 숨겼으므로 추가 원인이 없다고 단정하지
+  않는다. 새 로그는 exception 본문/credential 없이 종류만 기록한다.
+- main `4f3c80948327a908c37501dde5cff7c520f786e6`의 수정은 공통 public family만 initial
+  canonical manifest pin과 parent 관측을 분리한다. 현재 actor/anchor/Graph/policy/producer/
+  hash/late fence는 유지하며, 물리 operation.open/admit과 결과 읽기의 전체 검증은 남는다.
+  legacy family 의미, schema/DB/queue/수치 코드와 원 identity는 변경하지 않았다.
+- 운영 owner26782 기준 hotfix `2f0469729ea3cf8f50729c34b51e8e2d79294727`만 별도 빌드했다.
+  source96, hotfix source90, 실제 설치 prefix 모듈 확인 및 같은 조합90 PASS다. 이는 실제 GUI
+  성공의 대체 증거가 아니다. 최초 cherry-pick 충돌 상태의 build/collection은 거부됐고 실패
+  log를 보존했다. 기존 parser family를 유지해 충돌 해결 후 재실행했다.
+- 보호된 공식 owner installer와 기존 QUERY-only staged/rollback 절차로 반영했다. 최초
+  비실행 권한 script 직접 호출은 설치 전에 거부됐고, 보호된 bash 진입으로 실행했다.
+  17:13:57 UTC QUERY READY/PID2698489다. API2623173/Catalog2256180/INDEX2258114는
+  그대로이며 numerical pins/운영 migration/정본/FAILED/구 vector 변경0이다.
+- 17:15 같은 요청 재조회는 계산 전에 HTTP403/AUTH_REAUTHENTICATION_REQUIRED로 거부됐다.
+  실제900초 recent-password 정책이며 access-token refresh로 우회하지 않는다. 문의
+  `webreq_6d1c335303b7b4daba3a1633`다. 원 test session만17:19 로그아웃했다.
+- `EOM:2 similarity-gui`는 재인증을 기다린다. 후속 브라우저는 원 nonce/key만 선택하며
+  HTTP 응답/권한/자료를 mock하지 않는다. original control과 다른 Graph/policy는 서버가
+  거부하며 latest index 대입/새 key/모델 중복 계산으로 우회하지 않는다.
+- 17:24:53 UTC의 후속 로그인은 HTTP401/AUTH_INVALID_CREDENTIALS다. API request
+  `req_b60f6aaf93f45b168c866ca47ee5ae36`의 시간 범위·request ID로 제한한 read-only 감사
+  조회에서 LOGIN_FAILED를 확인했다. 새 검색/계산이나 비밀번호·실패 이력 변경은 없다.
+  자동 로그인 재시도는 하지 않았으며, 원 key를 유지하는 별도 no-echo 입력창만 준비했다.
+  다음 진단은 로그인 HTTP status·safe code만 기록하고 입력이 비면 제출하지 않는다.
+- 실제 결과 목록/DB 열기/완료 결과 재조회/원 계산1회 증거는 **아직 PENDING**이다.
+  다음은 재인증 후 이 원 요청만 검증하는 일이다. 근거는
+  `/tmp/eom-db-similarity-live-browser-20261101*.events.jsonl`,
+  `/tmp/eom-gui-query-observation-*20261101*`, 보호된
+  `/var/lib/eom-query-observation-release-2f046972`에 보존했다.
+
 ## DB 최초 범위 응답·호환 API 운영 반영 — 2026-11-01
 
 - 직전 private 실행 후보의 source/설치본/PG 검증과 push는 **PROGRESS**였다. 이번 main
