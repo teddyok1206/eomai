@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-work-batch-result/3.0",
+  "title": "One owned private Chat QUERY2 numerical result",
+  "description": "One existing QUERY2 child and an exact contiguous binary range. Not a source authorization, physical compute proof or committed result.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "purpose",
+    "request_sha256",
+    "routing_decision_sha256",
+    "children",
+    "vectors",
+    "result_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "embedding-work-batch-result/3.0"
+    },
+    "purpose": {
+      "const": "PRIVATE_CHAT_QUERY"
+    },
+    "request_sha256": {
+      "$ref": "eom://schemas/knowledge/embedding-work-batch-input/1.0#/$defs/hash"
+    },
+    "routing_decision_sha256": {
+      "$ref": "eom://schemas/knowledge/embedding-work-batch-input/1.0#/$defs/hash"
+    },
+    "children": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "$ref": "eom://schemas/knowledge/embedding-work-batch-result/2.0#/$defs/child"
+      }
+    },
+    "vectors": {
+      "$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/binary"
+    },
+    "result_sha256": {
+      "$ref": "eom://schemas/knowledge/embedding-work-batch-input/1.0#/$defs/hash"
+    }
+  }
+}

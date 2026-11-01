@@ -151,7 +151,44 @@ class PublicSolutionWorkBatchInput(_BatchValue):
         )
 
 
-type SupportedEmbeddingWorkBatchInput = EmbeddingWorkBatchInput | PublicSolutionWorkBatchInput
+class PrivateChatWorkBatchInput(_BatchValue):
+    """One owned private question; identical QUERY2 numerical input, distinct owner purpose."""
+
+    schema_version: Literal["embedding-work-batch-input/3.0"] = "embedding-work-batch-input/3.0"
+    purpose: Literal["PRIVATE_CHAT_QUERY"] = "PRIVATE_CHAT_QUERY"
+    scope: EmbeddingWorkBatchScope
+    routing_decision_sha256: Sha256
+    resource_profile_sha256: Sha256
+    timeout_seconds: int = Field(ge=1, le=MAX_EMBEDDING_WORK_BATCH_SECONDS, strict=True)
+    vector_max_bytes: int = Field(ge=4, le=MAX_EMBEDDING_WORK_BATCH_VECTOR_BYTES, strict=True)
+    children: tuple[PublicSolutionWorkBatchChild, ...] = Field(min_length=1, max_length=1)
+    request_sha256: Sha256
+
+    @model_validator(mode="before")
+    @classmethod
+    def schema_first(cls, value: object) -> object:
+        return similarity_contract_document(
+            value, "private-chat-work-batch-input-v3", MAX_EMBEDDING_WORK_BATCH_BYTES
+        )
+
+    @model_validator(mode="after")
+    def exact_children(self) -> PrivateChatWorkBatchInput:
+        if self.scope.actor_kind != "OPERATOR":
+            raise ValueError("private QUERY batch requires an operator scope")
+        _validate_batch_children(self)
+        return self
+
+    @property
+    def expected_vector_bytes(self) -> int:
+        return sum(
+            len(child.request.rows) * child.space.model_spec.dimension * 4
+            for child in self.children
+        )
+
+
+type SupportedEmbeddingWorkBatchInput = (
+    EmbeddingWorkBatchInput | PublicSolutionWorkBatchInput | PrivateChatWorkBatchInput
+)
 type SupportedEmbeddingWorkBatchChild = EmbeddingWorkBatchChild | PublicSolutionWorkBatchChild
 
 
@@ -165,7 +202,7 @@ def _validate_batch_children(batch: SupportedEmbeddingWorkBatchInput) -> None:
         request = child.request
         is_query = isinstance(request, (EmbeddingReferenceQueryInputV11, PublicSolutionQueryInput))
         if (
-            is_query != (batch.purpose == "REFERENCE_QUERY")
+            is_query != (batch.purpose in {"REFERENCE_QUERY", "PRIVATE_CHAT_QUERY"})
             or type(request) is not type(first.request)
             or child.scope_sha256 != batch.scope.scope_sha256
             or child.space != first.space
@@ -215,4 +252,6 @@ def parse_supported_embedding_work_batch_input(value: object) -> SupportedEmbedd
                 return parse_embedding_work_batch_input(document)
             case "embedding-work-batch-input/2.0":
                 return PublicSolutionWorkBatchInput.model_validate(document)
+            case "embedding-work-batch-input/3.0":
+                return PrivateChatWorkBatchInput.model_validate(document)
     raise ValueError("embedding work batch family is unsupported")

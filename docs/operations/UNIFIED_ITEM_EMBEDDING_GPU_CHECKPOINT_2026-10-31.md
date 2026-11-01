@@ -1,5 +1,43 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## private GPU 부모 선택·정식 Artifact 발행 후보 — 2026-11-01
+
+- 전체 목표는 ACTIVE다. source **`3bcc71e80583d26dc971f029053271014af9efe5`**는 기존
+  batch1.6 INDEX를 바꾸지 않고 private 원 Chat origin용 선택/부모 계약1.7을 추가했다.
+  원 actor/turn·Graph/policy·공통 CPU/CUDA index·private 정책2의 정확한 참조를 유지하고
+  한 질문당 child1만 허용한다. 질문을 approved Item anchor로 위장하거나 질문/벡터/
+  권한·runtime 경로를 부모 문서에 넣지 않는다. CPU index가 없으면 fallback을 꾸미지 않는다.
+- 기존 Orchestrator control-file-set owner의 명시적 발행 메서드로 selection.json을 저장하고
+  Catalog pinned reader로 같은 Artifact revision/member/hash를 읽는 실제 임시 저장 검사를
+  추가했다. 원 key replay는 Job/Artifact를 더 만들지 않고, 변경된 내용·종류·family/hash는
+  발행 전 또는 기존 충돌 경계에서 거부한다. 기존1.0–1.6 parser·운영 admission은1.7을
+  계속 거부한다. private global2/실제 GPU purpose gate를 열거나 새 DB/queue를 만들지 않았다.
+- source 합집합 **195 PASS/50.32s**, 별도 비편집 설치본 **195 PASS/50.80s**다. 기존
+  batch1.0–1.6/정식 publisher/Catalog reader/dependency/resource 회귀와 양 device·정책/원
+  origin/route/child 변조를 포함한다. strict mypy 영향3·Ruff/format/diff PASS다. 첫 추가
+  저장 검사는 reader의 필수 metadata prefetch를 fixture가 빼서61 PASS/1 FAIL이었다.
+  guard를 풀지 않고 실제 reader 사용 계약에 맞춰 fixture를 수정했다. 앞선 routing serializer
+  가정 실패도 로그에 보존했다. private policy는 canonical model bytes, routing은 기존
+  model_dump(json) bytes라는 정식 publisher 의미를 그대로 대조한다.
+- 공식 build/RECORD PASS이며 wheel directory는
+  `/tmp/eom-api-build/3bcc71e80583d26dc971f029053271014af9efe5.c4nuFd/dist`다. platform SHA
+  `8ae1d2029046c53b40ddc7b73539213e47ef3d8e97d10582a43b8a3df8eab883`, contracts
+  `e12f95e408d32009948b6de23357ab80c887b8213d760dcbf656e310080c7c99`, API
+  `b1ffd5e7a154b881c5968296293db304929e6ae8271d6f9d0d7284a5c28d3ff2`다. 설치본은
+  `/tmp/eom-private-query-batch17-installed.8wA2M5Cb/site-packages`이며 실제 source/module
+  경로를 먼저 확인했다. `/tmp/eom-private-query-batch17-{publisher-final-source,installed}-20261101.tests`
+  및 ignored installed harness 참조. DB/transaction 코드를 바꾸지 않은 순수 값·기존 publisher
+  leaf이므로 기존 PG127 증거는 보존하며 운영 DB를 pytest에 사용하지 않았다.
+- 10:50:30 READ ONLY metadata는 reference QUERY Workflow0·active DB query0를 확인했다.
+  새 검색/DB write0이며, service READY나 준비 실패를 실제 사용자 검색 PASS로 해석하지
+  않는다. 사용자에게 원 GUI 요청의 결과 확인만 비차단 요청했고 새 인증창은 만들지 않았다.
+- 11:00 정기 집계는 원 frozen target/hash와 공통 CUDA space에서 **143/520·잔여377**,
+  CPU REQUESTED Workflow1, historical FAILED Workflow7이다. INDEX PID2258114는 같은
+  프로세스로 실제 source admission을 계속 기록했다. metadata count는 최종520 대상별
+  hash/권한 acceptance가 아니다. 원 임베딩 model/bundle/space·운영 API/QUERY·production66과
+  FAILED 이력·정본·구 벡터를 변경하지 않았다. 다음은 동일 QUERY2 encoder를 재사용하는
+  private finite envelope/실제 GPU parent 연결, actual DB search, AI canary 및 전체 완료 검증이다.
+
 ## 공통 CPU leaf factory·다음 CUDA 묶음 완료 확인 — 2026-11-01
 
 - 직전 goal turn은 source4bf7b789의 공통 완료 조회/wire2, 설치본319 PASS·원 PG127 PASS와

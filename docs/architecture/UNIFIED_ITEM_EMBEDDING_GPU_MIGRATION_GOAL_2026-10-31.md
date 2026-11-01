@@ -772,3 +772,22 @@ selection1.7은 기존 Orchestrator control-file-set publisher의 명시적 priv
 원문이나 전체 selection을 복제하지 않는다. 실제 임시 저장·Catalog pinned read·동일 요청
 재전송·변조/다른 family/같은 key의 내용·종류 변경 거부를 검사한다. 이 발행 leaf는 private
 권한 검증/부모 실행 연결을 대신하거나 운영 global2를 활성화하지 않는다.
+
+### private QUERY의 공통 수치 envelope3
+
+책임은 기존 finite numerical batch의 입출력이다. 정본은 source owner가 실제 원 Chat
+origin에서 해석한 기존 `public-solution-query/2.0` 입력이며, envelope3은 PRIVATE_CHAT_QUERY
+목적과 OPERATOR scope·원 routing/resource/hash를 보존한다. 한 질문/한 child만 허용하고
+원문을 별도 DB·queue·Artifact에 복제하지 않는다. 외부 위치/role/grant를 입력받지 않는다.
+수치 child·FLOAT32 codec/normalizer/model fingerprint는 바꾸지 않는다. legacy1/공개2는
+닫힌 schema로 보존하고, 기존 supported parser/실행/결과·binary 검증기가 명시적3을
+처리한다. source 권한·원 origin·실제 GPU grant는 기존 owner/fence의 독립 의무다.
+
+주 접근은 고정1-child 순회와 bounded vector range 검증 O(rows×dimension), 원180초/
+16MiB vector·1024-row 한도를 유지한다. 작은 frozen contract와 set 기반 중복 검사/기존
+연속 offset layout을 재사용하고 새 persistence/lock/index는 없다. contracts는 infrastructure를
+import하지 않으며 numerical adapter만 기존 encoder를 호출한다. 오류/철회/hash·family 변경은
+결과를 반환하지 않고 원 key의 상위 복구에 맡긴다. 동일 입력은 동일 numeric result여야 하며
+기존 FAILED를 수정하지 않는다. 공개2로 private 목적을 위장하거나 encoder를 복제하는
+대안보다 명시적 envelope successor가 작다. worker/root allocation purpose gate는 실제
+private parent·물리 실행 검증 연결 전까지 닫아 두고, 이 library 검사를 운영 활성화로 부르지 않는다.

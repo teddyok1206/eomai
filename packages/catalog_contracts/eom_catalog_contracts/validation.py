@@ -70,6 +70,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "2.0",
             "sha256:c386497bcdaab67c3fb4476033bf5b8e6f3dc94cf3f77b4e35d81d8cf2c899e1",
         ),
+        "private-chat-work-batch-input-v3": CatalogSchemaResource(
+            "schemas/knowledge/private-chat-work-batch-input-v3.schema.json",
+            "resources/knowledge/private-chat-work-batch-input-v3.schema.json",
+            "3.0",
+            "sha256:38a31dd7027ae2989dafc81450026bce74461749f124e4320ac9bad51392ab2b",
+        ),
+        "private-chat-work-batch-result-v3": CatalogSchemaResource(
+            "schemas/knowledge/private-chat-work-batch-result-v3.schema.json",
+            "resources/knowledge/private-chat-work-batch-result-v3.schema.json",
+            "3.0",
+            "sha256:ef0ff8bd3584df05b95b2272529814c71a2abff051c7aa811ab148f6f318df1e",
+        ),
         "public-solution-similarity-v3": CatalogSchemaResource(
             "schemas/knowledge/public-solution-similarity-v3.schema.json",
             "resources/knowledge/public-solution-similarity-v3.schema.json",

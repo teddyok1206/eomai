@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/embedding-work-batch-input/3.0",
+  "title": "One owned private Chat QUERY2 numerical child",
+  "description": "No authority or activation. Original Chat source, actual operator, routing, resource and compute grant fences remain mandatory. Released batches1/2 are unchanged.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "purpose",
+    "scope",
+    "routing_decision_sha256",
+    "resource_profile_sha256",
+    "timeout_seconds",
+    "vector_max_bytes",
+    "children",
+    "request_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "embedding-work-batch-input/3.0"
+    },
+    "purpose": {
+      "const": "PRIVATE_CHAT_QUERY"
+    },
+    "scope": {
+      "$ref": "eom://schemas/knowledge/embedding-work-batch-input/2.0#/properties/scope"
+    },
+    "routing_decision_sha256": {
+      "$ref": "eom://schemas/knowledge/embedding-work-batch-input/1.0#/$defs/hash"
+    },
+    "resource_profile_sha256": {
+      "$ref": "eom://schemas/knowledge/embedding-work-batch-input/1.0#/$defs/hash"
+    },
+    "timeout_seconds": {
+      "$ref": "eom://schemas/knowledge/embedding-work-batch-input/1.0#/properties/timeout_seconds"
+    },
+    "vector_max_bytes": {
+      "$ref": "eom://schemas/knowledge/embedding-work-batch-input/1.0#/properties/vector_max_bytes"
+    },
+    "children": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "$ref": "eom://schemas/knowledge/embedding-work-batch-input/2.0#/$defs/child"
+      }
+    },
+    "request_sha256": {
+      "$ref": "eom://schemas/knowledge/embedding-work-batch-input/1.0#/$defs/hash"
+    }
+  }
+}

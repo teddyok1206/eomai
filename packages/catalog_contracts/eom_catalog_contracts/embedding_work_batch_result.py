@@ -21,6 +21,7 @@ from eom_catalog_contracts.embedding_work_batch import (
     MAX_EMBEDDING_WORK_BATCH_CHILDREN,
     MAX_EMBEDDING_WORK_BATCH_ROWS,
     EmbeddingWorkBatchInput,
+    PrivateChatWorkBatchInput,
     PublicSolutionWorkBatchInput,
     SupportedEmbeddingWorkBatchChild,
     SupportedEmbeddingWorkBatchInput,
@@ -114,7 +115,31 @@ class PublicSolutionWorkBatchResult(_ResultValue):
         return self
 
 
-type SupportedEmbeddingWorkBatchResult = EmbeddingWorkBatchResult | PublicSolutionWorkBatchResult
+class PrivateChatWorkBatchResult(_ResultValue):
+    schema_version: Literal["embedding-work-batch-result/3.0"] = "embedding-work-batch-result/3.0"
+    purpose: Literal["PRIVATE_CHAT_QUERY"] = "PRIVATE_CHAT_QUERY"
+    request_sha256: Sha256
+    routing_decision_sha256: Sha256
+    children: tuple[PublicSolutionWorkBatchChildResult, ...] = Field(min_length=1, max_length=1)
+    vectors: EmbeddingBinaryMember
+    result_sha256: Sha256
+
+    @model_validator(mode="before")
+    @classmethod
+    def schema_first(cls, value: object) -> object:
+        return similarity_contract_document(
+            value, "private-chat-work-batch-result-v3", MAX_EMBEDDING_WORK_BATCH_BYTES
+        )
+
+    @model_validator(mode="after")
+    def exact_layout(self) -> PrivateChatWorkBatchResult:
+        _validate_batch_result_layout(self)
+        return self
+
+
+type SupportedEmbeddingWorkBatchResult = (
+    EmbeddingWorkBatchResult | PublicSolutionWorkBatchResult | PrivateChatWorkBatchResult
+)
 type SupportedEmbeddingWorkBatchChildResult = (
     EmbeddingWorkBatchChildResult | PublicSolutionWorkBatchChildResult
 )
@@ -130,7 +155,7 @@ def _validate_batch_result_layout(batch: SupportedEmbeddingWorkBatchResult) -> N
         result = child.result
         is_query = isinstance(result, (EmbeddingReferenceQueryResult, PublicSolutionQueryResult))
         if (
-            is_query != (batch.purpose == "REFERENCE_QUERY")
+            is_query != (batch.purpose in {"REFERENCE_QUERY", "PRIVATE_CHAT_QUERY"})
             or child.vector_offset != position
             or child.vector_offset % 4
             or result.shard.space != space
@@ -165,7 +190,20 @@ def parse_supported_embedding_work_batch_result(value: object) -> SupportedEmbed
                 return parse_embedding_work_batch_result(document)
             case "embedding-work-batch-result/2.0":
                 return PublicSolutionWorkBatchResult.model_validate(document)
+            case "embedding-work-batch-result/3.0":
+                return PrivateChatWorkBatchResult.model_validate(document)
     raise ValueError("embedding work batch result family is unsupported")
+
+
+def _result_schema_version(request: SupportedEmbeddingWorkBatchInput) -> str:
+    match request.schema_version:
+        case "embedding-work-batch-input/1.0":
+            return "embedding-work-batch-result/1.0"
+        case "embedding-work-batch-input/2.0":
+            return "embedding-work-batch-result/2.0"
+        case "embedding-work-batch-input/3.0":
+            return "embedding-work-batch-result/3.0"
+    raise ValueError("embedding work batch input family is unsupported")
 
 
 def validate_embedding_work_batch_result(
@@ -175,8 +213,7 @@ def validate_embedding_work_batch_result(
     request = parse_supported_embedding_work_batch_input(request)
     result = parse_supported_embedding_work_batch_result(result)
     if (
-        isinstance(request, PublicSolutionWorkBatchInput)
-        != isinstance(result, PublicSolutionWorkBatchResult)
+        result.schema_version != _result_schema_version(request)
         or request.request_sha256 != result.request_sha256
         or request.routing_decision_sha256 != result.routing_decision_sha256
         or request.purpose != result.purpose
@@ -201,6 +238,14 @@ def validate_embedding_work_batch_result(
             if not isinstance(output.result, IncrementalEmbeddingResult):
                 raise ValueError("embedding batch output child purpose differs")
             validate_incremental_embedding_result(source.request, output.result)
+
+
+@overload
+def build_embedding_work_batch_result(
+    request: PrivateChatWorkBatchInput,
+    children: tuple[PublicSolutionQueryResult, ...],
+    vectors_sha256: str,
+) -> PrivateChatWorkBatchResult: ...
 
 
 @overload
@@ -243,11 +288,7 @@ def build_embedding_work_batch_result(
         position += child.shard.binary.byte_count
     binary = EmbeddingBinaryMember(sha256=vectors_sha256, byte_count=position)
     body = {
-        "schema_version": (
-            "embedding-work-batch-result/2.0"
-            if isinstance(request, PublicSolutionWorkBatchInput)
-            else "embedding-work-batch-result/1.0"
-        ),
+        "schema_version": _result_schema_version(request),
         "purpose": request.purpose,
         "request_sha256": request.request_sha256,
         "routing_decision_sha256": request.routing_decision_sha256,
