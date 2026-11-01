@@ -1,5 +1,77 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## pregrant 실패 보존·공용 controller 정렬·INDEX 재개 — 2026-11-01 09:16 UTC
+
+- 직전 사용자 설명 turn은 새 구현이 아닌 진단/설명이었다. 이번 turn은 실제 source 수정,
+  검증·운영 선택·원 실패의 공식 기록과 INDEX 재개를 수행한 **PROGRESS**다. 전체 목표는
+  ACTIVE이며 520 완료·실제 사용자 검색·구 벡터 삭제를 달성했다고 표시하지 않는다.
+- 08:40:42 INDEX가 CHANNEL_EOF로 실제 중단됐다. 원 allocation `e1c007…`의 planning Job
+  `job_1d093fac95d84c26b32c4eb0372d8003`은 CLAIMED/ROUTED 없음/BOUND 없음이었고,
+  연결된 child INDEX Workflow도 없었다. 원 native PID2232323은 실제 시작 후 FAILED였으며
+  입출력은 비어 있고 compute grant/ACK와 retained FD는 없었다. native를 미실행이라고
+  재해석하지 않는다. root의 FILE_UNPROTECTED 로그는 정확한 leaf를 남기지 않았다.
+- 같은 mount의 static CUDA proof와 원 allocation/launch/descriptor의 현재 검사는 PASS다.
+  별도 non-dumpable 실제 Linux 프로세스에서 root-owned stat/status/cgroup 때문에 기존
+  FILE_UNPROTECTED를 재현했다. 그러나 이것만으로 원 운영 실패의 정확한 leaf를 확정하지
+  않는다. source **`b5900c7dd49d5aacd7318c03a5350cae301d92e1`**은 고정 proc member의
+  storage UID0/worker UID를 구분하며 원 보호 reader, actual UID/GID/capability·birth·unit/
+  cgroup/FD 검증을 유지한다. 일반 설치 파일·worker 수치 코드·모델/space는 바꾸지 않는다.
+- 기존 NOT_GRANTED physical reader는 exact original native가 FAILED여도 root 실행 구간 안의
+  시작/종료, dead PID/zero FD store/empty cgroup, no ACK·grant·empty bytes를 양쪽 fence로
+  검증한다. 새 schema bytes·DB·queue·dependency는 없다. 임의 FAILED reset/성공 해석 대신
+  기존 `record_unbound_embedding_plan_failure`를 사용했다. 원 planning Job은 FAILED event
+  1개를 append했고 같은 evidence의 exact replay PASS, 새 Workflow/모델 실행0이다.
+  Artifact `artifact_1716b19843d54da4a789454da815fec3` /
+  `rev_65aeb78d5ec544abbd0653335683bae0`의 `controller-failure.json`, SHA
+  `213ca2d32817c3f86516d1855adb4e2369b734bde3aa12be878849615f04da45`다.
+  root/native FAILED 자체는 보존했다. `/var/lib/eom-gpu-unbound-recovery-20261101` 참조.
+- source 합집합 **217 PASS/39.52s**, 별도 non-editable 설치본 **217 PASS/40.31s**다.
+  실제 non-root/non-dumpable child, foreign UID/임의 proc member 거부, 원 GPU controller/
+  observation/lifetime 회귀와 late grant/invocation/failed native 검사 등을 포함한다.
+  strict mypy 영향4·Ruff/format/diff PASS다. 별도 disposable PostgreSQL의 원 planning/
+  failure·concurrent replay/late rollback은 **63 PASS/28.46s**다. source/IAM/물리 leaf를 fake로
+  쓰는 테스트를 실제 GPU 수치 PASS로 부르지 않는다. 임시 DB는 migration67 왕복·role
+  reconcile 후 공식 cleanup PASS, `/tmp/eom-api-testdb-20261101090222_c68e019f` REMOVED다.
+  `/tmp/eom-gpu-proc-unbound-{combined-source,installed,testdb}-20261101` 계열 logs 참조.
+- 공식 build/RECORD와 protected owner pair 설치 PASS다. wheel directory
+  `/tmp/eom-api-build/b5900c7dd49d5aacd7318c03a5350cae301d92e1.tTm7Go/dist`, platform SHA
+  `729923c23fa25e09d14fec4bb7abdb3bac7d70307126aaec56e52a4b611d7837`, contracts SHA
+  `0a02fcd6644203a918a3a18b1d0b47dd54cc77c9030c7f6aa558df2771c80ac2`다. prefix는
+  `/opt/eom/embedding-owner-releases/b5900…`이며 CPU/CUDA numerical interpreter와 bundle,
+  수치 worker package/inventory·model·recipe2·vector space는 그대로다.
+- 별도로 **현재 운영 설정 불일치**를 확인했다. 공용 GPU preparer/INDEX controller는 fb0ab555,
+  public QUERY controller는26782, Catalog public-config hash는 현재 QUERY 설정 bytes와
+  달랐다. 앞 절의 QUERY-only rollout/READY는 이 전체 연결의 PASS가 아니었다. 첫 release
+  PREPARE가 이 Catalog mismatch를 쓰기 전에 거부했고 로그를 보존했다. 실제 관측한 exact
+  이전 hash를 CAS로 기록하고 candidate의 모든 수신자/공용 preparer를 함께 정렬했다.
+- 이번은 **controller-only staged selection**이다. 공용 GPU preparer 및 INDEX/public QUERY의
+  controller release만 b5900으로 정렬했다. INDEX owner/runtime/Identity/grants는fb0ab555,
+  QUERY owner와 CPU 설정은26782, API/provider/Catalog code는8eb03e40을 보존한다. private1
+  설정·global2 CLOSED, INDEX runtime JSON/unit, CPU preparer2개 hash 및 API PID1697848도
+  그대로다. 새 Identity/policy/Graph/생산 migration·원 vector 삭제0이다. Catalog public hash와
+  QUERY unit config hashes를 함께 선택하고 실제 old QUERY가 SIGTERM/exit0로 drain된 뒤
+  Catalog/QUERY만 시작했다. distributed atomic transaction이라고 부르지 않는다.
+- **09:13:37 QUERY READY**, PID2256183이며 Catalog2256180 active다. 실제 HTTPS
+  `/studio/api/v1/health/ready` READY와 `/studio/login`200을 확인했다. 처음 잘못 조회한
+  `/api/v1/health/ready`, `/login`의 HTTPS404는 실제 Studio route와 구분한다. 이 health/
+  화면 접근을 실제 로그인·유사도 query/read/replay PASS로 확대하지 않는다.
+- QUERY의 실제 InvocationID 안 READY와 모든 candidate/preserved hash를 확인한 뒤
+  **09:15:22 INDEX PID2258114**를 시작했다.09:16 실제 source admission 단계가 진행 중이다.
+  이것은 INDEX 서비스 재개이지 아직 새 CUDA forward/Artifact 등록 완료가 아니다.
+  마지막 frozen520 집계137/520과 기존 vector는 보존하며 새 완료를 임의 가산하지 않았다.
+  원 실패8건(이번 pregrant1 포함)을 과거7건과 구분한다. 30분 timer는 계속 ACTIVE다.
+- 보호된 release evidence는
+  `/var/lib/eom-gpu-proc-controller-release-b5900c7d-20261101`와 `/tmp/eom-gpu-proc-controller-release-20261101*`다.
+  원 before/after bytes와 CAS·보존 hash·선택/시작 시각을 기록했다. before는 이미 불일치한
+  조합이므로 단순 before 복원이 호환 rollback PASS라고 주장하지 않는다. actual failure
+  또는 drift 발생 시 같은 handle을 조사하며 원 allocation 재시작/새 key 우회를 하지 않는다.
+- 다음은 새 original physical batch의 CUDA/등록 증거, 실제 사용자 GUI query/read/replay와
+  release closure의 재발 방지 검증이다. 이어서 private2 completed-reader/application 및
+  schema-first wire/runtime·operator67을 완료한다. AI full-report→Graph→INDEX4 실제 연결,
+  전체520 GPU 대상별 무결성·모든 구 소비자 전환·참조 감사 뒤 정확한 구 derivative 삭제라는
+  원 종료 조건은 그대로다. 사용자에게 같은 화면의 결과 확인1회만 요청했고 비밀번호는
+  요구하지 않았다. 창작11737 slot04 USAGE_LIMIT 실패도 임의 재시도/성공 처리하지 않는다.
+
 ## private 공통 준비의 원 head·원 요청 보존 — 2026-11-01 08:39 UTC
 
 - 직전 turn은 QUERY26782 운영 반영과 private2 기존 Runner/claim 연결의 **PROGRESS**였다.
