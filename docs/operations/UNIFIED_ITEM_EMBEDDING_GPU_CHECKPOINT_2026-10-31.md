@@ -1,5 +1,56 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## private GPU 입력 연결·공유 publication 파일 adapter 후보 — 2026-11-01
+
+- 직전 goal turn은 `a215d6dc`의 private GPU 완료 처리까지 검증한 **PROGRESS**였다.
+  이번 source **`657e1920d281776afd244728c74ff43eb1e229b9`**, tree
+  `df4d1c75124bc6d8c68fc4d101d6ee88dbf0784c`는 실제 입력 binding과 owner-local 파일 준비를
+  연결한 **PROGRESS**다. private physical driver/cohost까지 완료한 것으로 확대하지 않는다.
+- public/private의 공통 bound metadata는 `query_batch_binding`, 보호된 파일 쓰기는
+  `query_batch_publication_files`가 소유한다. 기존 public binding 함수는 같은 함수 identity의
+  얇은 export로 보존했다. private는 request2/policy2/launch1/bundle/numerical2를 검증하는
+  frozen CUDA material과 parent17/child0/envelope3만 사용한다. CPU 고정 handoff와 공개
+  Reference 권한을 빌리지 않는다. private/public은 각 기존0700 root를 유지하고 파일은600,
+  readonly vector 검증과 local→child publication 때 한 번의 bytes copy를 공유한다.
+- partial/foreign launch marker/잘못된 hash·result·mode·symlink·UID를 기존 파일 덮어쓰기나
+  repair 없이 거부한다. private question은 repr/Job/history/canonical file set에 복제하지
+  않는다. 새 schema/table/index/queue/cache/dependency/수치 executor는 없다. 실제 source/
+  origin/lease와 parent/context 검증은 기존 owners가 계속 담당하며 material은 권한이 아니다.
+- canonical proof/완료 PG fixtures도 더 이상 수작업 batch/binding/workspace를 만들지 않고
+  실제 constructor와 보호된 writer를 사용한다. 공개 group은 private admission DTO를
+  public anchors로 해석하기 전에 stable error로 거부하도록 보강했다. 이는 shared execution의
+  admission union을 public consumer에서 명시적으로 좁히는 O(1) 경계이며 별도 state가 아니다.
+- 최종 source 합집합 **221 PASS/195.94s**, 같은 비편집 설치본
+  **221 PASS/204.53s**, strict mypy 직접/consumer9 및 Ruff/format/diff PASS다. guard 추가 전
+  첫220 PASS, 공개 경계 집중6 PASS와 최초 public23/private12는 최종 합집합과 겹친다.
+  공식 disposable PG는 **314 PASS/561.37s**다. 실제 material/binding/writer를 거친 private
+  완료 집중13 PASS/84.12s도 포함한다. IAM/Workflow/command/GPU math는 명시적 synthetic
+  seam이므로 실제 CUDA/운영 권한/사용자 검색 acceptance가 아니다.
+- 최초 정적 검사에서 result validator가 None을 반환하는데 대입한 부분을 실제 result parse
+  후 검증 호출로 바로잡았다. consumer mypy에서 확인한 public group의 private DTO union은
+  실제 거부 guard와 회귀 test로 닫았다. 최초 apply-patch 파일 이동 충돌은 적용 전에 거부됐고,
+  처음 임시 DB 경로 오타도 state guard가 DB 연결 전에 거부했다. 실패 기록은 보존했고 실제
+  준비 경로로 검사했으며 source/운영 보호 조건은 완화하지 않았다.
+- `/tmp/eom-api-testdb-20261101143646_6f5194fe`만 migration67 왕복/reconcile 후 사용했다.
+  최종 read_only/other_connections0을 확인하고 공식 cleanup PASS/REMOVED다. production66,
+  운영 정본/FAILED/구 vector는 변경0이다. 근거는 `/tmp/eom-private-gpu-material-*20261101*`다.
+- build/RECORD PASS. wheels는
+  `/tmp/eom-api-build/657e1920d281776afd244728c74ff43eb1e229b9.XvrHnt/dist`다.
+  platform SHA `0228a2e99036d1d49b43e9abb4c9bb9d1e95c75d81974d2a263112aa37c98581`,
+  contracts `2d1003bde5417ad46893e3dcd0a28b3dd8c17c5b4fc2237255c8971300ed3f8f`,
+  API `8463044bbad18309920407e3a97ae91bbcd063f9d6b9c6a1b40bc1c24e719ffe`다.
+  prefix `/tmp/eom-private-gpu-material-installed.hq5fixg0/site-packages`의 실제 module paths와
+  public facade identity를 먼저 확인했고 protected numerical env는 바꾸지 않았다.
+- **14:30 UTC 정기 관측158/520·잔여362**, 당시 CPU RUNNING1/historical FAILED7이다.
+  frozen target-set/space hash와 원 520 정본을 유지했다. API1697848/Catalog2256180/
+  QUERY2256183/INDEX2258114 및30분 timer ACTIVE이며 이번 후보의 운영 배포/재시작/모델
+  제출/인증 변경/구 vector 삭제0이다. private physical/global2는 계속 CLOSED다.
+- 다음 실제 driver는 기존 private origin key와 `find_batch_execution_receipt`/
+  `read_completed_embedding_batch_result`의 canonical cold-read를 재사용해야 한다. 새 key나
+  root 재시작으로 중단을 우회하지 않는다. actual GUI query/read/replay, private driver/cohost,
+  AI full-report canary, 전체520 대상별 hash/권한과 모든 consumer 전환 후 정확한 구 파생
+  retirement/삭제는 그대로 미완료이며 전체 목표 ACTIVE다.
+
 ## private GPU canonical 결과의 실제 완료 처리 후보 — 2026-11-01
 
 - 직전 goal turn은 `2c79b52c`의 공통 proof reader와 검증을 완료한 **PROGRESS**였다.
