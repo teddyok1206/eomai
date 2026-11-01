@@ -303,7 +303,8 @@ if [[ "${action}" == "private-chat-artifact-tests" ]]; then
   export EOM_RUN_INTEGRATION=1
   export EOM_API_TEST_STATE="${state_directory}"
   "${PYTHON}" -m pytest -q tests/integration/test_private_chat_query_artifact_persistence.py \
-    tests/integration/test_private_chat_query_completion_persistence.py
+    tests/integration/test_private_chat_query_completion_persistence.py \
+    tests/integration/test_private_query_checkpoint_persistence.py
   printf 'Disposable private-query canonical Artifact and receipt tests passed.\n'
   exit 0
 fi

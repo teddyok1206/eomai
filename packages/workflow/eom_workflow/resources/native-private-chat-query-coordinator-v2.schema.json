@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/native-private-chat-query-coordinator/2.0",
+  "title": "Private Chat common numerical QUERY2 continuation",
+  "description": "Private origin and producer history without private question text. Existing private CPU unit observations remain exact; this does not authorize execution or retry.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "record_type", "native_launch_job_id", "association_sha256", "payload", "checkpoint_sha256"],
+  "properties": {
+    "schema_version": {"const": "native-private-chat-query-coordinator/2.0"},
+    "record_type": {"enum": ["ALLOCATION", "EXECUTED", "PUBLISHED", "COMPLETED"]},
+    "native_launch_job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+    "association_sha256": {"$ref": "#/$defs/hash"},
+    "checkpoint_sha256": {"$ref": "#/$defs/hash"},
+    "payload": {"oneOf": [{"$ref": "#/$defs/allocation"}, {"$ref": "#/$defs/executed"}, {"$ref": "#/$defs/published"}, {"$ref": "#/$defs/completed"}]}
+  },
+  "allOf": [
+    {"if": {"properties": {"record_type": {"const": "ALLOCATION"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/allocation"}}}},
+    {"if": {"properties": {"record_type": {"const": "EXECUTED"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/executed"}}}},
+    {"if": {"properties": {"record_type": {"const": "PUBLISHED"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/published"}}}},
+    {"if": {"properties": {"record_type": {"const": "COMPLETED"}}}, "then": {"properties": {"payload": {"$ref": "#/$defs/completed"}}}}
+  ],
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "utc": {"type": "string", "format": "date-time", "pattern": "(?:Z|\\+00:00)$"},
+    "member": {"$ref": "eom://schemas/knowledge/item-inference-transfer-embedding/1.0#/$defs/artifactMember"},
+    "allocation": {"$ref": "eom://schemas/workflow/native-private-chat-query-coordinator/1.0#/$defs/allocation"},
+    "executed": {"$ref": "eom://schemas/workflow/native-private-chat-query-coordinator/1.0#/$defs/executed"},
+    "published": {
+      "type": "object", "additionalProperties": false,
+      "required": ["query_owner_job_id", "execution_record", "result", "shard", "binary", "manifest_sha256", "published_observed_at"],
+      "properties": {
+        "query_owner_job_id": {"type": "string", "pattern": "^job_[0-9a-f]{32}$"},
+        "execution_record": {"$ref": "#/$defs/member"}, "result": {"$ref": "#/$defs/member"},
+        "shard": {"$ref": "#/$defs/member"}, "binary": {"$ref": "#/$defs/member"},
+        "manifest_sha256": {"$ref": "#/$defs/hash"}, "published_observed_at": {"$ref": "#/$defs/utc"}
+      }
+    },
+    "completed": {
+      "type": "object", "additionalProperties": false, "required": ["output"],
+      "properties": {"output": {"$ref": "eom://schemas/workflow/private-chat-query-runner/2.0#/$defs/step-output"}}
+    }
+  }
+}

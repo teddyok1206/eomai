@@ -7,7 +7,9 @@ from types import MappingProxyType
 
 from eom_workflow.native_private_chat_query_coordinator import (
     NativePrivateChatQueryCheckpoint,
-    parse_native_private_chat_query_checkpoint,
+    NativePrivateChatQueryCheckpointV2,
+    SupportedNativePrivateChatQueryCheckpoint,
+    parse_supported_native_private_chat_query_checkpoint,
     validate_native_private_chat_query_history,
 )
 from eom_workflow.native_reference_query_coordinator import (
@@ -17,9 +19,11 @@ from eom_workflow.native_reference_query_coordinator import (
     validate_native_reference_query_history,
 )
 from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
+from eom_workflow.private_chat_query_execution_v2 import PrivateChatQueryWorkflowRequestV2
 from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAssociation
 from eom_workflow.schemas import (
     NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_SCHEMA_RESOURCE,
+    NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE,
     NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE,
     NATIVE_REFERENCE_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE,
     NATIVE_REFERENCE_QUERY_COORDINATOR_V11_SCHEMA_RESOURCE,
@@ -40,7 +44,7 @@ from eom_orchestrator.native_query_job_allocation import (
 from eom_orchestrator.state_machine import JobState, transition_job
 
 type NativeQueryCheckpoint = (
-    SupportedNativeReferenceQueryCheckpoint | NativePrivateChatQueryCheckpoint
+    SupportedNativeReferenceQueryCheckpoint | SupportedNativePrivateChatQueryCheckpoint
 )
 NATIVE_REFERENCE_QUERY_COORDINATOR_PROTOCOL = "native-query-coordinator/1.0"
 NATIVE_PRIVATE_QUERY_COORDINATOR_PROTOCOL = "native-private-query/1.0"
@@ -64,6 +68,9 @@ _FAILURE_MESSAGES = MappingProxyType(
         "native-reference-query-coordinator/1.2": "original finite CUDA QUERY batch failed",
         "native-reference-query-coordinator/2.0": "original public-solution QUERY execution failed",
         "native-private-chat-query-coordinator/1.0": "fixed CPU private QUERY unit failed",
+        "native-private-chat-query-coordinator/2.0": (
+            "original private common QUERY execution failed"
+        ),
     }
 )
 
@@ -80,6 +87,11 @@ class NativeQueryHistory:
 
 
 def _checkpoint_protocol(record: NativeQueryCheckpoint) -> tuple[str, str]:
+    if isinstance(record, NativePrivateChatQueryCheckpointV2):
+        return (
+            "native-private-query/2.0",
+            NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE[2],
+        )
     if isinstance(record, NativePrivateChatQueryCheckpoint):
         return (
             NATIVE_PRIVATE_QUERY_COORDINATOR_PROTOCOL,
@@ -111,7 +123,9 @@ class NativeQueryCheckpointStore:
 
     def __init__(self, request: QueryIntent, launch: QueryLaunch) -> None:
         self.request, self.launch = request, launch
-        private = isinstance(request, PrivateChatQueryWorkflowRequest)
+        private = isinstance(
+            request, (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2)
+        )
         if private != isinstance(launch, PrivateChatQueryLaunchAssociation):
             raise NativeQueryHistoryError("QUERY_CHECKPOINT_PURPOSE_INVALID")
         self.prefix = "PRIVATE_CHAT_QUERY" if private else "REFERENCE_QUERY"
@@ -123,29 +137,49 @@ class NativeQueryCheckpointStore:
             raise NativeQueryHistoryError(str(error)) from None
 
     def _parse(self, value: object) -> NativeQueryCheckpoint:
-        if isinstance(self.request, PrivateChatQueryWorkflowRequest):
-            return parse_native_private_chat_query_checkpoint(value)
+        if isinstance(
+            self.request, (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2)
+        ):
+            return parse_supported_native_private_chat_query_checkpoint(value)
         return parse_supported_native_reference_query_checkpoint(value)
 
     def _validate(self, records: tuple[NativeQueryCheckpoint, ...]) -> None:
-        if isinstance(self.request, PrivateChatQueryWorkflowRequest):
+        if isinstance(
+            self.request, (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2)
+        ):
             if not isinstance(self.launch, PrivateChatQueryLaunchAssociation) or not all(
-                isinstance(row, NativePrivateChatQueryCheckpoint) for row in records
+                isinstance(
+                    row, (NativePrivateChatQueryCheckpoint, NativePrivateChatQueryCheckpointV2)
+                )
+                for row in records
             ):
                 raise ValueError()
             validate_native_private_chat_query_history(
-                tuple(row for row in records if isinstance(row, NativePrivateChatQueryCheckpoint)),
+                tuple(
+                    row
+                    for row in records
+                    if isinstance(
+                        row, (NativePrivateChatQueryCheckpoint, NativePrivateChatQueryCheckpointV2)
+                    )
+                ),
                 self.launch,
                 self.request,
             )
         else:
             if isinstance(self.launch, PrivateChatQueryLaunchAssociation) or any(
-                isinstance(row, NativePrivateChatQueryCheckpoint) for row in records
+                isinstance(
+                    row, (NativePrivateChatQueryCheckpoint, NativePrivateChatQueryCheckpointV2)
+                )
+                for row in records
             ):
                 raise ValueError()
             validate_native_reference_query_history(
                 tuple(
-                    row for row in records if not isinstance(row, NativePrivateChatQueryCheckpoint)
+                    row
+                    for row in records
+                    if not isinstance(
+                        row, (NativePrivateChatQueryCheckpoint, NativePrivateChatQueryCheckpointV2)
+                    )
                 ),
                 self.launch,
                 self.request,
@@ -238,7 +272,9 @@ class NativeQueryCheckpointStore:
         history = self.read(session)
         code = (
             "NATIVE_PRIVATE_QUERY_KNOWN_FAILED"
-            if isinstance(self.request, PrivateChatQueryWorkflowRequest)
+            if isinstance(
+                self.request, (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2)
+            )
             else "NATIVE_QUERY_KNOWN_FAILED"
         )
         if job is not None and history.state == JobState.FAILED.value and job.error_code == code:

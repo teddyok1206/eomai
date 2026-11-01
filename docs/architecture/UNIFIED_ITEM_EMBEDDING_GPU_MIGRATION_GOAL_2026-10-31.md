@@ -161,6 +161,28 @@ isolated creative owner에 반영한다. 직접 row UPDATE나 새 Artifact key�
 검증된 original-identity replay가 작고 원 이력을 보존한다.
 
 30분 기존 관측을 재사용하고 phase 전환·실패·완료만 Slack 중요 보고한다.
+
+### 채팅 검색의 공통 수치 형식 중단 복구 — 2026-11-01
+
+책임은 기존 private Chat QUERY의 네 단계(ALLOCATION/EXECUTED/PUBLISHED/COMPLETED)와
+원 Job/event store다. 정본은 실제 Chat origin/원 Workflow request2/launch1/작은 원 실행
+record2와 committed receipt2이며, 비공개 질문은 history에 복제하지 않는다. logical/revision/
+hash/producer IDs는 그대로 분리한다. coordinator2는 기존 allocation·실제 private CPU unit
+observation을 재사용하되 PUBLISHED는 private execution-record2 + 공통 numerical result2,
+COMPLETED는 private output2만 허용한다. PUBLIC REFERENCE purpose로 바꾸거나 private1
+frame을 relabel해 채택하지 않는다. 실제 고정 private unit의 template hash와 runtime bundle/
+환경·source pin 검증은 기존 physical owner에 남긴다. source model만 추가해 실행을 허가하지
+않으며 실제 numeric entrypoint/owner/runtime 설치·역할 권한/현재 origin을 별도로 검증한다.
+
+주 접근은 원 launch Job PK lookup, sequence가 연속인 최대4 event의 ordered history와 작은
+hash 비교다. 기존 unique Job/sequence, 원 Job row lock와 per-original command/root transaction을
+재사용하므로 O(1) bounded metadata/space이며 새 table/index/queue는 없다. pure contract는
+SQL/NAS/Chat client를 import하지 않고 기존 Orchestrator adapter만 영속화를 소유한다.
+중단은 같은 원 launch/producer/member와 pinned receipt로 재개하며 FAILED를 성공으로
+바꾸거나 새 identity로 우회하지 않는다. 기존1 bytes/hash·판정은 유지하고 private1/2·public
+purpose 혼합을 거부한다. 별도 coordinator/queue를 만드는 대안보다 기존 순수 invariant와
+같은 store의 명시적 successor가 작다. 최초 contract/fixture 단계는 source-only이고 운영
+activation이나 old vector 삭제의 근거가 아니다.
 Slack 첫 문장은 한국어 요약이며 문항 내용·보고서 전문·인증 정보는 보내지 않는다.
 goal 완료는 GPU 프로세스 active나 설치 PASS가 아니라 U01–U05의 실제 결과로 판단한다.
 

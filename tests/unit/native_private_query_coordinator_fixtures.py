@@ -4,18 +4,25 @@ from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_workflow.native_private_chat_query_coordinator import (
     NativePrivateQueryAllocation,
     NativePrivateQueryCompleted,
+    NativePrivateQueryCompletedV2,
     NativePrivateQueryExecuted,
     NativePrivateQueryPublished,
+    NativePrivateQueryPublishedV2,
+    native_private_chat_public_query_checkpoint,
     native_private_chat_query_checkpoint,
+    private_chat_public_query_checkpoint_receipt,
     private_chat_query_checkpoint_receipt,
 )
 from eom_workflow.native_reference_query_coordinator import NativeQueryAllocation
+from eom_workflow.private_chat_query_execution_v2 import PrivateChatQueryWorkflowRequestV2
 from eom_workflow.private_chat_query_workflow import PrivateChatQueryStepOutput
+from eom_workflow.private_chat_query_workflow_v2 import PrivateChatQueryStepOutputV2
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
 
 
 def private_query_records(value):
+    public = isinstance(value.request, PrivateChatQueryWorkflowRequestV2)
     receipt = value.receipt
     allocation = NativePrivateQueryAllocation(
         allocation=NativeQueryAllocation.model_validate(
@@ -53,7 +60,9 @@ def private_query_records(value):
             "completed_observed_at": value.launch.launched_at,
         }
     )
-    published = NativePrivateQueryPublished.model_validate(
+    published = (
+        NativePrivateQueryPublishedV2 if public else NativePrivateQueryPublished
+    ).model_validate(
         {
             "query_owner_job_id": receipt.query_artifact_owner_job_id,
             "execution_record": receipt.execution_record,
@@ -64,17 +73,25 @@ def private_query_records(value):
             "published_observed_at": receipt.published_at,
         }
     )
-    checked = private_chat_query_checkpoint_receipt(
-        value.request, value.launch, allocation, executed, published
-    )
+    checked = (
+        private_chat_public_query_checkpoint_receipt
+        if public
+        else private_chat_query_checkpoint_receipt
+    )(value.request, value.launch, allocation, executed, published)
     body = value.output.model_dump(mode="json")
     body["receipt_sha256"] = checked.receipt_sha256
     body["receipt"]["sha256"] = sha256_bytes(canonical_json_bytes(checked))
-    completed = NativePrivateQueryCompleted(
-        output=PrivateChatQueryStepOutput.model_validate(seal(body, "output_sha256"))
+    completed = (NativePrivateQueryCompletedV2 if public else NativePrivateQueryCompleted)(
+        output=(
+            PrivateChatQueryStepOutputV2 if public else PrivateChatQueryStepOutput
+        ).model_validate(seal(body, "output_sha256"))
     )
     return tuple(
-        native_private_chat_query_checkpoint(value.launch, phase, payload)
+        (
+            native_private_chat_public_query_checkpoint
+            if public
+            else native_private_chat_query_checkpoint
+        )(value.launch, phase, payload)
         for phase, payload in (
             ("ALLOCATION", allocation),
             ("EXECUTED", executed),

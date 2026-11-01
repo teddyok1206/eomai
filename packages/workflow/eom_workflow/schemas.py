@@ -1392,6 +1392,11 @@ NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_SCHEMA_RESOURCE = (
     "eom://schemas/workflow/native-private-chat-query-coordinator/1.0",
     "sha256:52b9d892e9010a923ed287163d60030113f2f03dc19fc79c1f26902e7187ae3f",
 )
+NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE = (
+    "native-private-chat-query-coordinator-v2.schema.json",
+    "eom://schemas/workflow/native-private-chat-query-coordinator/2.0",
+    "sha256:3fdb7ec4a71e7cd38add1c579e847e5f69cf897ee6fcbde56609b55983da22c1",
+)
 
 
 @cache
@@ -1435,6 +1440,20 @@ def load_native_private_chat_query_coordinator_schema() -> dict[str, Any]:
 
 def validate_native_private_chat_query_checkpoint(value: object) -> None:
     """Separate private purpose; no remote resolution or mutation of old resources."""
+    _validate_native_private_chat_query_checkpoint(
+        value, NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_SCHEMA_RESOURCE
+    )
+
+
+def validate_native_private_chat_query_checkpoint_v2(value: object) -> None:
+    _validate_native_private_chat_query_checkpoint(
+        value, NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_V2_SCHEMA_RESOURCE
+    )
+
+
+def _validate_native_private_chat_query_checkpoint(
+    value: object, resource: tuple[str, str, str]
+) -> None:
     try:
         document = raw_similarity_contract_value(value)
         if len(canonical_json_bytes(document)) > 64 * 1024:
@@ -1449,12 +1468,18 @@ def validate_native_private_chat_query_checkpoint(value: object) -> None:
                     NATIVE_REFERENCE_QUERY_COORDINATOR_SCHEMA_RESOURCE[1],
                     Resource.from_contents(_native_reference_query_coordinator_schema()),
                 ),
+                (
+                    NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_SCHEMA_RESOURCE[1],
+                    Resource.from_contents(
+                        _native_reference_query_coordinator_schema(
+                            NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_SCHEMA_RESOURCE
+                        )
+                    ),
+                ),
             )
         )
         Draft202012Validator(
-            _native_reference_query_coordinator_schema(
-                NATIVE_PRIVATE_CHAT_QUERY_COORDINATOR_SCHEMA_RESOURCE
-            ),
+            _native_reference_query_coordinator_schema(resource),
             registry=registry,
             format_checker=FormatChecker(),
         ).validate(document)

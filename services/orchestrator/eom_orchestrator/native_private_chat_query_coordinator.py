@@ -6,8 +6,11 @@ from dataclasses import dataclass
 from typing import cast
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
-from eom_workflow.native_private_chat_query_coordinator import NativePrivateChatQueryCheckpoint
+from eom_workflow.native_private_chat_query_coordinator import (
+    SupportedNativePrivateChatQueryCheckpoint,
+)
 from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
+from eom_workflow.private_chat_query_execution_v2 import PrivateChatQueryWorkflowRequestV2
 from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAssociation
 from sqlalchemy.orm import Session
 
@@ -29,15 +32,21 @@ class NativePrivateQueryHistoryError(ValueError):
 class NativePrivateChatQueryHistory:
     state: str
     launch: PrivateChatQueryLaunchAssociation
-    records: tuple[NativePrivateChatQueryCheckpoint, ...]
+    records: tuple[SupportedNativePrivateChatQueryCheckpoint, ...]
 
 
 class NativePrivateChatQueryCoordinator:
     def __init__(
-        self, request: PrivateChatQueryWorkflowRequest, launch: PrivateChatQueryLaunchAssociation
+        self,
+        request: PrivateChatQueryWorkflowRequest | PrivateChatQueryWorkflowRequestV2,
+        launch: PrivateChatQueryLaunchAssociation,
     ) -> None:
-        self.request = PrivateChatQueryWorkflowRequest.model_validate(
-            raw_similarity_contract_value(request)
+        self.request = (
+            PrivateChatQueryWorkflowRequestV2.model_validate(raw_similarity_contract_value(request))
+            if isinstance(request, PrivateChatQueryWorkflowRequestV2)
+            else PrivateChatQueryWorkflowRequest.model_validate(
+                raw_similarity_contract_value(request)
+            )
         )
         self.launch = PrivateChatQueryLaunchAssociation.model_validate(
             raw_similarity_contract_value(launch)
@@ -49,7 +58,7 @@ class NativePrivateChatQueryCoordinator:
         return NativePrivateChatQueryHistory(
             value.state,
             value.launch,
-            cast(tuple[NativePrivateChatQueryCheckpoint, ...], value.records),
+            cast(tuple[SupportedNativePrivateChatQueryCheckpoint, ...], value.records),
         )
 
     def read(self, session: Session) -> NativePrivateChatQueryHistory:
@@ -59,7 +68,7 @@ class NativePrivateChatQueryCoordinator:
             raise NativePrivateQueryHistoryError(str(error)) from None
 
     def append(
-        self, session: Session, record: NativePrivateChatQueryCheckpoint
+        self, session: Session, record: SupportedNativePrivateChatQueryCheckpoint
     ) -> NativePrivateChatQueryHistory:
         try:
             return self._history(self._store.append(session, record))

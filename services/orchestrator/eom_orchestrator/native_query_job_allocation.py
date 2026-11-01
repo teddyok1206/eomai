@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_identifiers import content_sha256, new_logical_artifact_id, new_revision_id
 from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
+from eom_workflow.private_chat_query_execution_v2 import PrivateChatQueryWorkflowRequestV2
 from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAssociation
 from eom_workflow.reference_query_execution import (
     ReferenceQueryLaunchAssociation,
@@ -23,6 +24,7 @@ from eom_workflow.reference_query_execution import (
     parse_supported_reference_query_workflow_request,
 )
 from eom_workflow.schemas import (
+    PRIVATE_CHAT_PUBLIC_QUERY_EXECUTION_SCHEMA_RESOURCE,
     PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE,
     REFERENCE_QUERY_EXECUTION_SCHEMA_RESOURCE,
     REFERENCE_QUERY_PUBLIC_EXECUTION_SCHEMA_RESOURCE,
@@ -38,7 +40,11 @@ from eom_orchestrator.models import JobEventRecord, JobRecord, ProtocolVersionRe
 from eom_orchestrator.repository import ensure_protocol_version, submit_structured_job
 from eom_orchestrator.state_machine import JobState, transition_job
 
-type QueryIntent = SupportedReferenceQueryWorkflowIntent | PrivateChatQueryWorkflowRequest
+type QueryIntent = (
+    SupportedReferenceQueryWorkflowIntent
+    | PrivateChatQueryWorkflowRequest
+    | PrivateChatQueryWorkflowRequestV2
+)
 type QueryLaunch = ReferenceQueryLaunchAssociation | PrivateChatQueryLaunchAssociation
 
 
@@ -87,6 +93,13 @@ _PRIVATE = _Purpose(
     PRIVATE_CHAT_QUERY_EXECUTION_SCHEMA_RESOURCE[3],
     "native-private-chat-query:",
 )
+_PRIVATE_PUBLIC = _Purpose(
+    "PRIVATE_CHAT_QUERY",
+    "native_private_chat_query_launch",
+    "private-chat-query/2.0",
+    PRIVATE_CHAT_PUBLIC_QUERY_EXECUTION_SCHEMA_RESOURCE[3],
+    "native-private-chat-query:",
+)
 
 
 def require_native_query_root(session: Session) -> None:
@@ -113,6 +126,16 @@ def require_native_query_protocol(
 
 
 def _intent(value: QueryIntent) -> tuple[QueryIntent, _Purpose]:
+    if isinstance(value, PrivateChatQueryWorkflowRequestV2):
+        try:
+            return (
+                PrivateChatQueryWorkflowRequestV2.model_validate(
+                    raw_similarity_contract_value(value)
+                ),
+                _PRIVATE_PUBLIC,
+            )
+        except (ValueError, TypeError, SchemaError):
+            raise NativeQueryLaunchError("PRIVATE_CHAT_QUERY_LAUNCH_REQUEST_INVALID") from None
     if isinstance(value, PrivateChatQueryWorkflowRequest):
         try:
             return (
@@ -150,7 +173,7 @@ def native_reference_query_key(workflow_id: str, step_run_id: str, request_sha25
 
 
 def _launch(request: QueryIntent, value: object) -> QueryLaunch:
-    if isinstance(request, PrivateChatQueryWorkflowRequest):
+    if isinstance(request, (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2)):
         try:
             launch = PrivateChatQueryLaunchAssociation.model_validate(
                 raw_similarity_contract_value(value)
@@ -255,7 +278,7 @@ def create_native_query_launch(
             revision_id=new_revision_id(),
         )
     except IntegrityError:
-        if purpose is _PRIVATE:
+        if purpose in (_PRIVATE, _PRIVATE_PUBLIC):
             # The caller must roll back its root, then inspect the original key.
             # Conflict is not proof of no committed work or permission to retry.
             raise NativeQueryLaunchError("PRIVATE_CHAT_QUERY_LAUNCH_CONFLICT") from None

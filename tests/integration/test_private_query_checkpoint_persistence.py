@@ -7,8 +7,10 @@ from threading import Barrier
 from uuid import uuid4
 
 import pytest
-from eom_catalog_contracts.embedding_private_chat_query import EmbeddingPrivateChatQueryInput
-from eom_catalog_service.embedding_encoder_adapter import encode_private_chat_query
+from eom_catalog_service.embedding_encoder_adapter import (
+    encode_private_chat_query,
+    encode_public_solution_query,
+)
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_orchestrator.models import JobEventRecord, JobRecord
 from eom_orchestrator.native_private_chat_query_coordinator import (
@@ -17,16 +19,23 @@ from eom_orchestrator.native_private_chat_query_coordinator import (
 )
 from eom_orchestrator.native_query_job_allocation import create_native_query_launch
 from eom_workflow.native_private_chat_query_coordinator import (
-    parse_native_private_chat_query_checkpoint,
+    parse_supported_native_private_chat_query_checkpoint,
 )
+from eom_workflow.private_chat_query_execution_v2 import PrivateChatQueryWorkflowRequestV2
 from eom_workflow.private_chat_query_publication import (
     PrivateChatQueryLaunchAssociation,
     validate_private_chat_query_launch,
 )
+from eom_workflow.private_chat_query_publication_v2 import validate_private_chat_public_query_launch
 from eom_workflow.private_chat_query_workflow import (
     PrivateChatQueryStepOutput,
     PrivateChatQueryWorkflowReceipt,
     validate_private_chat_query_workflow_receipt,
+)
+from eom_workflow.private_chat_query_workflow_v2 import (
+    PrivateChatQueryStepOutputV2,
+    PrivateChatQueryWorkflowReceiptV2,
+    validate_private_chat_public_query_workflow_receipt,
 )
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -36,17 +45,20 @@ from tests.integration.test_preset_model_validation_persistence import (
 )
 from tests.unit.inference_transfer_embedding_fixtures import seal
 from tests.unit.native_private_query_coordinator_fixtures import private_query_records
+from tests.unit.test_embedding_incremental_encoding import SyntheticNativeBackend
 from tests.unit.test_embedding_private_chat_query import backend
+from tests.unit.test_private_chat_public_query_workflow import public_completed as public_completed
 from tests.unit.test_private_chat_query_workflow import completed as completed
 
 pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
-def private_history(guarded_engine, completed):
+def private_history(guarded_engine, selected_completion):
     assert guarded_engine.dialect.name == "postgresql"
-    value = completed
-    value.native = EmbeddingPrivateChatQueryInput.model_validate(
+    value = selected_completion
+    public = isinstance(value.request, PrivateChatQueryWorkflowRequestV2)
+    value.native = type(value.native).model_validate(
         seal(
             value.native.model_dump(mode="json")
             | {"job_id": "job_" + uuid4().hex, "query_request_id": "embeddingquery_" + uuid4().hex},
@@ -67,10 +79,18 @@ def private_history(guarded_engine, completed):
             "association_sha256",
         )
     )
-    intent = validate_private_chat_query_launch(
-        value.launch, value.request, value.policy, value.bundle, value.native
-    )
-    value.result = encode_private_chat_query(value.native, backend(value.native)).result
+    intent = (
+        validate_private_chat_public_query_launch if public else validate_private_chat_query_launch
+    )(value.launch, value.request, value.policy, value.bundle, value.native)
+    if public:
+        numerical_backend = SyntheticNativeBackend(value.native.spaces.query)
+        numerical_backend.batch_size, numerical_backend.threads = (
+            value.native.batch_size,
+            value.native.threads,
+        )
+        value.result = encode_public_solution_query(value.native, numerical_backend).result
+    else:
+        value.result = encode_private_chat_query(value.native, backend(value.native)).result
     receipt = value.receipt.model_dump(mode="json")
     receipt.update(
         {
@@ -93,8 +113,14 @@ def private_history(guarded_engine, completed):
             },
         }
     )
-    value.receipt = PrivateChatQueryWorkflowReceipt.model_validate(seal(receipt, "receipt_sha256"))
-    validate_private_chat_query_workflow_receipt(
+    value.receipt = (
+        PrivateChatQueryWorkflowReceiptV2 if public else PrivateChatQueryWorkflowReceipt
+    ).model_validate(seal(receipt, "receipt_sha256"))
+    (
+        validate_private_chat_public_query_workflow_receipt
+        if public
+        else validate_private_chat_query_workflow_receipt
+    )(
         value.receipt,
         value.request,
         value.policy,
@@ -117,11 +143,18 @@ def private_history(guarded_engine, completed):
             "sha256": sha256_bytes(canonical_json_bytes(value.receipt)),
         },
     }
-    value.output = PrivateChatQueryStepOutput.model_validate(seal(output, "output_sha256"))
+    value.output = (
+        PrivateChatQueryStepOutputV2 if public else PrivateChatQueryStepOutput
+    ).model_validate(seal(output, "output_sha256"))
     records = private_query_records(value)
     with Session(guarded_engine) as session, session.begin():
         create_native_query_launch(session, request=value.request, launch=value.launch)
     return NativePrivateChatQueryCoordinator(value.request, value.launch), records
+
+
+@pytest.fixture(params=("legacy", "public"))
+def selected_completion(request, completed, public_completed):
+    return completed if request.param == "legacy" else public_completed
 
 
 def test_postgres_four_original_phases_commit_and_replay_text_free(guarded_engine, private_history):
@@ -203,7 +236,7 @@ def test_postgres_changed_original_chat_origin_is_a_conflict_not_new_work(
     origin = body["payload"]["origin"]
     origin["runtime_id"] = "chatrt_" + uuid4().hex
     body["payload"]["origin"] = seal(origin, "origin_sha256")
-    changed = parse_native_private_chat_query_checkpoint(seal(body, "checkpoint_sha256"))
+    changed = parse_supported_native_private_chat_query_checkpoint(seal(body, "checkpoint_sha256"))
     with Session(guarded_engine) as session, session.begin():
         with pytest.raises(NativePrivateQueryHistoryError, match="CHECKPOINT_CONFLICT"):
             owner.append(session, changed)
