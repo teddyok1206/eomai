@@ -61,7 +61,7 @@ from eom_catalog_service.embedding_native_probe_observation import (
 from eom_catalog_service.embedding_runtime_files import (
     CUDA_LOADER_EMPTY_DIRECTORY,
     NumericalRuntimeFileSnapshots,
-    read_live_runtime_os_file,
+    read_live_native_process_member,
 )
 from eom_catalog_service.embedding_runtime_os_identity import observe_runtime_device
 from eom_catalog_service.embedding_runtime_process_identity import (
@@ -362,7 +362,7 @@ def _handoff_descriptors(
         number: int, expected: tuple[int, ...], *, access: int, position: int, cloexec: bool
     ) -> None:
         actual = _epoch((process / "fd" / str(number)).stat())
-        raw = read_live_runtime_os_file(
+        raw = read_live_native_process_member(
             process / "fdinfo" / str(number), maximum=16384, owner_uid=captured.worker_uid
         )
         fields = {}
@@ -465,7 +465,7 @@ def observe_embedding_gpu_batch_ready(
     )
 
     def read(name: str, maximum: int = 128 * 1024) -> bytes:
-        return read_live_runtime_os_file(
+        return read_live_native_process_member(
             process / name, maximum=maximum, owner_uid=captured.worker_uid
         )
 

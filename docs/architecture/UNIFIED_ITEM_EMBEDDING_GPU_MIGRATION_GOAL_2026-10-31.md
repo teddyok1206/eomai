@@ -638,3 +638,28 @@ schema parser는 서로 교환하지 않는다. INDEX4 조립은 기존 map 기�
 entry 기반 최초 조립과 plan 기반 후속 조립은 같은 manifest builder를 이용한다.
 동일 encoding은 수치 row1개·provenance별 binding으로 유지하고 ordered hash는 결정적이다.
 중단 후에는 기존 append-only coordinator 순서와 exact original producer pointers를 재사용한다.
+
+## GPU 시작 전 관측·실패 복구 보강 — 2026-11-01
+
+책임은 기존 root controller의 Linux 프로세스 관측과 기존 Orchestrator의 unbound
+실패 기록 경계다. 정본·벡터·수치 모델/공간·worker protocol/권한은 변경하지 않는다.
+실제 원 allocation/launch/descriptor와 systemd invocation, append-only planning Job가
+canonical이다. PID/시작 시각, 실제 UID/GID/capability, exact unit/cgroup/FD와 파일 hash를
+계속 검사한다. Linux non-dumpable 프로세스의 root-owned proc leaf는 실제 worker 권한과
+다르므로 고정 proc member에 한해 storage UID 0/worker UID를 구분한다. 일반 설치 파일의
+보호 검사는 완화하지 않는다. 실험 프로세스에서 기존 FILE_UNPROTECTED를 재현했지만,
+08:40 운영 실패의 정확한 leaf는 기존 로그가 남기지 않아 해당 원인 확정은 보류한다.
+
+접근은 고정 proc key 조회와 원 Job indexed lookup·최대 9개 event 순회이며 시간/공간은
+각각 O(1), O(events)다. 새 DB/index/queue/cache/dependency가 없다. Native unit이 이미
+FAILED인 경우에도 원 root 실행 구간 안의 exact invocation/PID·zero FD store·빈 cgroup·
+부재한 compute ACK/grant·빈 입출력을 양쪽 fence로 확인하면 기존 NOT_GRANTED evidence를
+기록할 수 있다. 이는 uninvoked라고 주장하거나 native FAILED를 reset/성공으로 바꾸는
+작업이 아니다. 늦은 grant/BOUND/상태 변경은 기존 root transaction 전체를 거부한다.
+
+기존 지원된 failure application과 Artifact commit owner만 사용한다. Released evidence1의
+NOT_GRANTED 의미와 schema bytes를 보존한다. 실패한 allocation은 재사용하지 않으며,
+새 실행은 수정된 실제 controller release 선택과 기존 source admission을 거친다.
+단순 재시작은 같은 original parent에 걸려 재개되지 않고, 권한 검사 제거 또는 fake BUSY는
+잘못된 권한/계산을 허용하므로 대안으로 사용하지 않는다. 임시 PG의 원 failure·replay·
+concurrency와 별도 설치본을 검증한 후에만 운영 적용한다.

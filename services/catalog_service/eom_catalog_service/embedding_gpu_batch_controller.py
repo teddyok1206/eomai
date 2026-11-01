@@ -72,7 +72,7 @@ from eom_catalog_service.embedding_gpu_batch_unit_descriptor import (
     require_embedding_gpu_batch_descriptor,
 )
 from eom_catalog_service.embedding_gpu_control_channel import EmbeddingGpuControlChannel
-from eom_catalog_service.embedding_runtime_files import read_live_runtime_os_file
+from eom_catalog_service.embedding_runtime_files import read_live_native_process_member
 from eom_catalog_service.embedding_runtime_os_identity import observe_runtime_device
 from eom_catalog_service.embedding_runtime_process_identity import (
     native_process_start_ticks,
@@ -299,18 +299,18 @@ class _WorkerFence:
     def _live(self) -> int:
         process = Path("/proc") / str(self.original.main_pid)
         captured = self.captured
-        raw = read_live_runtime_os_file(
+        raw = read_live_native_process_member(
             process / "stat", maximum=65536, owner_uid=captured.worker_uid
         )
         ticks = native_process_start_ticks(raw, self.original.main_pid)
         _require(
-            read_live_runtime_os_file(
+            read_live_native_process_member(
                 process / "cgroup", maximum=4096, owner_uid=captured.worker_uid
             )
             == f"0::/system.slice/{_unit(captured)}\n".encode()
         )
         require_native_cuda_process_status(
-            read_live_runtime_os_file(
+            read_live_native_process_member(
                 process / "status", maximum=128 * 1024, owner_uid=captured.worker_uid
             ),
             uid=captured.worker_uid,

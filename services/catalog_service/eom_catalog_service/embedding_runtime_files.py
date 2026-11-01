@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import stat
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -461,3 +462,36 @@ def read_live_runtime_os_file(
             chunks.append(chunk)
         _require(count > 0, "OS_OBSERVATION_EMPTY")
         return b"".join(chunks)
+
+
+def read_live_native_process_member(path: Path, *, maximum: int, owner_uid: int) -> bytes:
+    """Read a fixed proc member without confusing dumpability with process credentials.
+
+    Linux can make these leaves root-owned while the process still runs as the
+    unprivileged worker. Callers independently fence actual UID/GID, birth, unit,
+    capabilities and descriptors. This grants neither process authority nor a
+    general exception for root-owned installation files.
+    """
+    parts = path.parts
+    _require(
+        type(owner_uid) is int
+        and 0 < owner_uid < 2**32
+        and len(parts) in {4, 5}
+        and parts[:2] == ("/", "proc")
+        and re.fullmatch(r"[1-9][0-9]{0,9}", parts[2]) is not None
+        and 0 < int(parts[2]) < 2**31
+        and (
+            (len(parts) == 4 and parts[3] in {"stat", "status", "cgroup", "cmdline", "maps"})
+            or (
+                len(parts) == 5
+                and parts[3] == "fdinfo"
+                and re.fullmatch(r"0|[1-9][0-9]{0,6}", parts[4]) is not None
+            )
+        ),
+        "PROCESS_MEMBER_INVALID",
+    )
+    leaf_uid = path.lstat().st_uid
+    _require(leaf_uid in {0, owner_uid}, "PROCESS_MEMBER_OWNER_INVALID")
+    return read_live_runtime_os_file(
+        path, maximum=maximum, owner_uid=owner_uid, leaf_owner_uid=leaf_uid
+    )

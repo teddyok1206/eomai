@@ -248,7 +248,7 @@ def driver(machine, monkeypatch):
     )
     monkeypatch.setattr(controller, "_wait_started", lambda _: ready.unit)
     monkeypatch.setattr(controller, "inspect_embedding_gpu_batch_unit", inspect)
-    monkeypatch.setattr(controller, "read_live_runtime_os_file", process)
+    monkeypatch.setattr(controller, "read_live_native_process_member", process)
     monkeypatch.setattr(controller, "EmbeddingGpuControlChannel", Channel)
     monkeypatch.setattr(controller, "protected_cpu_handoff_directory", directory)
     monkeypatch.setattr(controller, "create_protected_cpu_handoff_member", create)
@@ -433,7 +433,7 @@ def test_active_peer_fence_is_cheap_and_rejects_process_birth_or_cgroup_change(d
     fence(controller._ACTIVATOR)
     monkeypatch.setattr(
         controller,
-        "read_live_runtime_os_file",
+        "read_live_native_process_member",
         lambda path, **kwargs: (
             process_stat(123, start=457) if path.name == "stat" else b"wrong cgroup"
         ),

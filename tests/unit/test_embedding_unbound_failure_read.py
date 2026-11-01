@@ -203,3 +203,77 @@ def test_late_change_is_not_success(original, fault):
             original.native.return_value = replace(original.native.return_value, main_pid=123)
         else:
             (original.directory / "input-grant.json").touch()
+
+
+@pytest.fixture
+def failed_native(original, monkeypatch):
+    root = original.root.return_value
+    original.native.return_value = replace(
+        root,
+        invocation_id="a" * 32,
+        status=replace(
+            root.status,
+            exec_main_started_monotonic=root.status.exec_main_started_monotonic + 1,
+        ),
+        exited_monotonic=root.exited_monotonic - 1,
+    )
+    original.native_metadata = Mock(return_value=(456, 0))
+    original.ack_absent = Mock()
+    monkeypatch.setattr(
+        reader, "observe_embedding_gpu_batch_terminal_metadata", original.native_metadata
+    )
+    monkeypatch.setattr(reader, "require_unit_effect_phase_absent", original.ack_absent)
+    return original
+
+
+def test_failed_native_without_grant_preserves_failure_and_never_resets_unit(failed_native):
+    with reader.read_unbound_embedding_control_failure(failed_native.proof) as resolved:
+        assert resolved.allocation == failed_native.allocation
+    assert failed_native.native_metadata.call_count == failed_native.ack_absent.call_count == 2
+    assert failed_native.native.return_value.status.active_state == "failed"
+    failed_native.stopped.assert_not_called()
+
+
+@pytest.mark.parametrize("fault", ("running", "success", "store", "ack", "early", "late"))
+def test_failed_native_must_be_exact_dead_pregrant_original(failed_native, fault):
+    native = failed_native.native.return_value
+    if fault == "running":
+        failed_native.native.return_value = replace(native, main_pid=456)
+    elif fault == "success":
+        failed_native.native.return_value = replace(
+            native,
+            status=replace(
+                native.status,
+                active_state="active",
+                sub_state="exited",
+                result="success",
+                exec_main_status=0,
+            ),
+        )
+    elif fault == "store":
+        failed_native.native_metadata.return_value = (456, 1)
+    elif fault == "ack":
+        failed_native.ack_absent.side_effect = ValueError("ACK intent exists")
+    elif fault == "early":
+        failed_native.native.return_value = replace(
+            native, status=replace(native.status, exec_main_started_monotonic=1)
+        )
+    else:
+        failed_native.native.return_value = replace(
+            native, exited_monotonic=failed_native.root.return_value.exited_monotonic + 1
+        )
+    with (
+        pytest.raises(ValueError),
+        reader.read_unbound_embedding_control_failure(failed_native.proof),
+    ):
+        pytest.fail("uncertain or granted native entered mutation window")
+
+
+def test_late_native_invocation_change_aborts_failure_root(failed_native):
+    with (
+        pytest.raises(ValueError),
+        reader.read_unbound_embedding_control_failure(failed_native.proof),
+    ):
+        failed_native.native.return_value = replace(
+            failed_native.native.return_value, invocation_id="b" * 32
+        )

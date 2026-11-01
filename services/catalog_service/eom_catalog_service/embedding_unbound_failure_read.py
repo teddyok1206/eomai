@@ -30,6 +30,7 @@ from eom_catalog_service.embedding_gpu_batch_launch import (
     native_embedding_gpu_batch_unit,
     parse_native_embedding_gpu_batch_environment,
 )
+from eom_catalog_service.embedding_gpu_batch_lifetime import GPU_BATCH_LIFETIME_ROOT
 from eom_catalog_service.embedding_gpu_batch_unit_descriptor import (
     embedding_gpu_batch_descriptor_bytes,
     embedding_gpu_batch_descriptor_path,
@@ -42,9 +43,11 @@ from eom_catalog_service.embedding_runtime_files import (
 from eom_catalog_service.gpu_unit_terminal_observation import (
     StoppedGpuUnit,
     gpu_unit_terminal_outcome,
+    observe_embedding_gpu_batch_terminal_metadata,
     observe_failed_gpu_unit_metadata,
     observe_uninvoked_embedding_gpu_batch_unit,
 )
+from eom_catalog_service.unit_effect_records import require_unit_effect_phase_absent
 
 
 def _require(condition: bool) -> None:
@@ -78,13 +81,29 @@ def _controller(proof: UnboundEmbeddingControlFailure, unit: str) -> CpuUnitObse
     return observed
 
 
-def _native(unit: str) -> tuple[CpuUnitObservation, StoppedGpuUnit]:
+@dataclass(frozen=True, slots=True)
+class FailedUnboundNativeObservation:
+    pid: int
+
+
+def _native(
+    unit: str,
+) -> tuple[CpuUnitObservation, StoppedGpuUnit | FailedUnboundNativeObservation]:
     observed = inspect_embedding_gpu_batch_unit(unit, template=GPU_BATCH_TEMPLATE)
-    _require(observed.fresh)
-    stopped = observe_uninvoked_embedding_gpu_batch_unit(unit)
-    _require(stopped.invocation_id == "" and stopped.stored_descriptors == 0)
+    if observed.fresh:
+        stopped = observe_uninvoked_embedding_gpu_batch_unit(unit)
+        _require(stopped.invocation_id == "" and stopped.stored_descriptors == 0)
+        state: StoppedGpuUnit | FailedUnboundNativeObservation = stopped
+    else:
+        _require(observed.main_pid == 0 and gpu_unit_terminal_outcome(observed) == "FAILED")
+        pid, store = observe_embedding_gpu_batch_terminal_metadata(unit, expected=observed)
+        _require(store == 0)
+        require_unit_effect_phase_absent(
+            GPU_BATCH_LIFETIME_ROOT, unit, observed.invocation_id, "ack"
+        )
+        state = FailedUnboundNativeObservation(pid)
     _empty_cgroup(unit)
-    return observed, stopped
+    return observed, state
 
 
 def _no_grant(directory: Path) -> None:
@@ -123,6 +142,14 @@ def read_unbound_embedding_control_failure(
     root_unit = BATCH_CONTROL_TEMPLATE.replace("@.service", f"@{attempt}.service")
     native_unit = native_embedding_gpu_batch_unit(attempt)
     before_root, before_native = _controller(proof, root_unit), _native(native_unit)
+    if isinstance(before_native[1], FailedUnboundNativeObservation):
+        native = before_native[0]
+        _require(
+            before_root.status.exec_main_started_monotonic
+            <= native.status.exec_main_started_monotonic
+            <= native.exited_monotonic
+            <= before_root.exited_monotonic
+        )
     files = NumericalRuntimeFileSnapshots()
     for template, expected in (
         # systemd's fixed-template helper uses a plain hexadecimal constant;
