@@ -1,5 +1,66 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 창작 Graph 재개 확인·private2 네 단계 history 연결 — 2026-11-01 03:08 UTC
+
+- 직전 goal turn은 원 Catalog 저장 복구·운영 재개까지 수행한 **PROGRESS**였다. 이번도
+  새 private2 continuation을 기존 Job store에 연결하고 실제 복구 후 Graph/report를 확인한
+  **PROGRESS**다. 전체 U01–U05 목표 ACTIVE다. 전체520/AI/소비자 전환/삭제를 source test로
+  대체하지 않는다.
+- 창작 실제 PID1876923/isolated release6de는 재시작0으로 계속 실행한다. 원11695–11697는
+  **`graphrev_007f1976bcc2b4f9391f08ab85ee972e` 등록·원 admitted actor의 공식 canonical report3
+  조회 PASS**다. exact lineage Artifact pointer와 warning notes가 보존됐다. 읽기 자체의 모델/
+  DB write0이며 실제 로그인 사용자의 HTTPS 검색을 대신하지 않는다.
+  `/tmp/eom-creative-recovered-graph-read-20261101.json`, stderr0, helper SHA
+  `1d4f65319d2ab5fe17c6ed3f3beb4df7b9f980f9ff59b8892928a83fb497c80c`.
+- 이어11699–11701도 runtime VERIFIED가 되어 **재개 이후 verified_count6**이며,
+ 11703–11705는 다음 publication,11706–11708은 분석/준비로 진행했다. 이는 전체 창작 누적
+  완료 수가 아니라 이 owner의 재개 이후 수다. 별도 read 순간 실제 worker04/06은
+  ACTIVE/RUNNING이었다. 세 슬롯이 매 순간 동시에 RUNNING이었다고 과장하지 않는다.
+  기존 unreadable/preview blocked7은 별도 보존하며 완료로 세지 않는다.
+- source **`828e9230`**에 `native-private-chat-query-coordinator/2.0`을 Schema-first로 추가했다.
+  기존1 schema bytes/hash(`52b9d892…`)는 그대로다. allocation/private physical CPU unit
+  observation을 공유하고, 새 PUBLISHED는 private execution-record2 + common numerical
+  result2, COMPLETED는 private output2만 받는다. 같은 네 단계 invariant/최대4개 순서/
+  해시·원 producer·origin·Artifact identity 검사를 공유하며 별도 coordinator DB/queue는 없다.
+  같은 원 launch key를 request1→2로 relabel하거나 새 key로 우회하는 것도 거부한다.
+  실제 질문 bytes는 Job request/event/Artifact metadata에 넣지 않는다.
+- 기존 `native_query_job_allocation`/`NativeQueryCheckpointStore`/private wrapper에서 명시적
+  request2와 protocol2를 처리한다. caller transaction/row lock/순서·같은 frame replay·rollback/
+  concurrent append/FAILED terminal 보존은 기존 owner 그대로다. private와 public REFERENCE
+  purpose를 혼용하지 않는다. 실제 Catalog source owner/CPU FD entrypoint/native executor/
+  install composition과 admission2는 아직 **PENDING/CLOSED**이며 운영 활성화하지 않았다.
+- source broad **225 PASS /77.05s**, 마지막 표현 정리 후 private1/2 **58 PASS /31.95s**,
+  실제 disposable PostgreSQL private Artifact+receipt+checkpoint **44 PASS /34.35s**,
+  별도 non-editable installed wheel **104 PASS /29.06s**다. suite overlap을 합산하지 않는다.
+  strict mypy 영향 source9 및 release test1 PASS, Ruff/format/shell/diff PASS다. 임시 DB
+  `20261101025308_c5654163`은 migrate67 왕복·cleanup PASS로 제거했다. 운영 DB pytest0다.
+  최초 float fixture는 재서명 전에 canonical serializer가 올바르게 거부하므로 미서명 악성
+  입력을 parser에 전달하게 고쳤다. 실패 로그를 보존했다.
+  `/tmp/eom-private2-coordinator-focused-20261101-v2.log`,
+  `/tmp/eom-private2-coordinator-last-source-20261101.log`,
+  `/tmp/eom-private2-coordinator-testdb-20261101.tests`, `.cleanup`,
+  `/tmp/eom-private2-coordinator-installed-20261101.tests`.
+- 첫 source828 build는 과거 inspector의 head66 상수 때문에 차단됐다. **`7eafa7f0`**에서
+  exact pinned Git archive의 단일 정적 migration declaration을 AST로 읽어 installed head와
+  비교하도록 고쳤다. source import/실행·head/latest 허용·privileged migration allowlist 변경은
+  없다. 관련 **46 PASS /6.80s**다. 기존 테스트의 analysis_v11 누락3건은 실제 선언된 argument
+  family에서 fixture를 구성해 고쳤다. root release-operator67 지원/실제 rollout은 별도 잔여
+  작업이다. build gate 수정만으로 migration67 운영 승인/호환성 PASS를 주장하지 않는다.
+- 공식 build-only/RECORD/모든 설치 검사는 **7eafa7f0b627bed6ab3031d58ab57cdda0ec188e PASS**다.
+  wheel directory `/tmp/eom-api-build/7eafa7f0b627bed6ab3031d58ab57cdda0ec188e.mrR0Vw/dist`;
+  platform SHA `6a1577b9d9f538c46bcf5d3c452cf246d029e9d7114adbe8a91232081a179507`,
+  contracts `5525e9a6dc49c8e059054450abbaa1eb86dfe551834b8e53ed0bc240ea45ff67`,
+  API `7e95b2641c873bb450c99bab7f34fad8e35b2eae21ce9b8fcdfc997aa2df91ea`.
+  별도 설치 `/tmp/eom-private2-coordinator-installed.1p5bcqsk/site-packages`에서 실제 module
+  import path/source commit/resource를 확인했고 source Git import 없이 위104를 통과했다.
+- **03:00 UTC GPU125/520·잔여395, CPU 후속 Workflow1 RUNNING**, historical FAILED7은
+  불변이다. 이는 그 순간 CUDA forward RUNNING이라는 뜻이 아니다. INDEX PID1683578/
+  NRestarts0, creative1876923/NRestarts0, API readiness READY를 확인했다. API8eb/
+  QUERY·INDEX FB/migration66은 그대로이며 private2 후보를 운영에 덮지 않았다. old vector/
+  기출·교과서·Item·풀이 정본 삭제0다. 다음은 private2 실제 source/FD/native-purpose 연결과
+  호환 operator67, 실제 AI full report/authorized search/read/replay 및 원 전체520·안전한
+  consumer 전환/retirement/delete다.
+
 ## 원 Catalog 저장 중단 복구·창작 처리 재개 — 2026-11-01 02:42 UTC
 
 - 직전 turn은 기존 준비 증거로 GUI 시험 후보를 안내한 **NO_PROGRESS**였다. 이번에는
