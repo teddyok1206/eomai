@@ -337,6 +337,13 @@ class ReferenceQueryPrepareReplyV4(_PrepareValue):
         return self
 
 
+class ReferenceQueryPrepareReplyV5(ReferenceQueryPrepareReplyV4):
+    """Registered preparation3 response to the unchanged, pinned public request4."""
+
+    contract_schema: ClassVar[str] = "system-rag-reference-query-prepare-v5"
+    schema_version: Literal["system-rag-reference-query-prepare-reply/5.0"]  # type: ignore[assignment]
+
+
 def _validate_routed_reply_summary(
     self: ReferenceQueryPrepareReplyV3 | ReferenceQueryPrepareReplyV4,
 ) -> None:
@@ -407,7 +414,8 @@ type SupportedReferenceQueryPrepareReply = Annotated[
     ReferenceQueryPrepareReply
     | ReferenceQueryPrepareReplyV2
     | ReferenceQueryPrepareReplyV3
-    | ReferenceQueryPrepareReplyV4,
+    | ReferenceQueryPrepareReplyV4
+    | ReferenceQueryPrepareReplyV5,
     Field(discriminator="schema_version"),
 ]
 
@@ -416,6 +424,10 @@ def parse_supported_reference_query_prepare_reply(
     value: object,
 ) -> SupportedReferenceQueryPrepareReply:
     raw = raw_similarity_contract_value(value)
+    if isinstance(raw, dict) and raw.get("schema_version") == (
+        "system-rag-reference-query-prepare-reply/5.0"
+    ):
+        return ReferenceQueryPrepareReplyV5.model_validate(raw)
     if isinstance(raw, dict) and raw.get("schema_version") == (
         "system-rag-reference-query-prepare-reply/4.0"
     ):

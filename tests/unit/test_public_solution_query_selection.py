@@ -30,6 +30,7 @@ from eom_workflow_runner.reference_query_routed_selection import (
     CatalogRoutedReferenceQuerySelection,
 )
 from eom_workflow_runner.reference_query_source_read import ReferenceQueryOwnerConfiguration
+from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy import func, select
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
@@ -288,3 +289,45 @@ def test_public_same_key_with_different_intent_cannot_allocate_new_work(chosen):
         first.selection,
         first.routing_policy,
     )
+
+
+def test_public_application_serializes_original_registered_preparation_without_retagging(
+    chosen, monkeypatch
+):
+    from eom_catalog_contracts.reference_query_prepare import (
+        ReferenceQueryPrepareReplyV4,
+        ReferenceQueryPrepareReplyV5,
+        parse_supported_reference_query_prepare_reply,
+    )
+    from eom_workflow_runner import reference_query_routed_application as application
+    from eom_workflow_runner.reference_query_prepare_driver import ReferenceQueryPrepareDriver
+    from eom_workflow_runner.reference_query_routed_application import (
+        RoutedNativeReferenceQueryPreparation,
+    )
+    from eom_workflow_runner.reference_query_routed_runtime import RoutedReferenceQuerySession
+
+    from tests.unit.test_reference_query_routed_application import snapshot
+
+    driver = ReferenceQueryPrepareDriver()
+    cpu = NS(driver=driver)
+    offered = Mock(return_value="BUSY")
+    monkeypatch.setattr(driver, "offer_routed_reference_batch", offered)
+    monkeypatch.setattr(application, "observe_routed_reference_queries", lambda _s, p: snapshot(p))
+    app = RoutedNativeReferenceQueryPreparation(RoutedReferenceQuerySession(cpu, chosen.app))
+    first, again = app.prepare(chosen.request), app.prepare(chosen.request)
+    registered = chosen.expected_preparation_protocol.endswith("/3.0")
+    assert isinstance(
+        first, ReferenceQueryPrepareReplyV5 if registered else ReferenceQueryPrepareReplyV4
+    )
+    assert first == again and first.status == "PENDING" and first.device is None
+    assert first.preparation == chosen.app.prepare_public(chosen.request).manifest
+    assert first.preparation.schema_ref.endswith("/3.0" if registered else "/2.0")
+    assert parse_supported_reference_query_prepare_reply(first) == first
+    assert chosen.heads.call_count == chosen.index_reads.call_count == 2
+    assert offered.call_count == 2
+    if registered:
+        with pytest.raises((ValueError, SchemaError)):
+            ReferenceQueryPrepareReplyV4.model_validate(
+                first.model_dump(mode="json")
+                | {"schema_version": "system-rag-reference-query-prepare-reply/4.0"}
+            )
