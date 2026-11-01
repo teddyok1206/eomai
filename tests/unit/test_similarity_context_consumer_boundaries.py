@@ -3,16 +3,56 @@
 from __future__ import annotations
 
 import ast
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
+from eom_catalog_contracts.registered_public_solution_index import (
+    RegisteredPublicSolutionProfilePointer,
+)
 from eom_catalog_contracts.similarity_context import parse_similarity_context_request
+from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_catalog_service.similarity_context_service import SimilarityContextApplicationService
 
 from tests.unit.inference_transfer_embedding_fixtures import seal
+from tests.unit.test_registered_public_solution_index import successor
 from tests.unit.test_similarity_context_service import CALLER, case
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+@pytest.mark.parametrize("registered", (False, True))
+def test_legacy_composer_does_not_reinterpret_either_common_public_binding_family(registered):
+    request, source, query = case()
+    _old, index, _pointer, _rows = successor()
+    binding = next(
+        value
+        for value in index.bindings
+        if isinstance(value.profile, RegisteredPublicSolutionProfilePointer) is registered
+    )
+    reads = {read.intent.selection.view: read for read in source.reads}
+    view = source.reads[0].intent.selection.view
+    # Exercise the composer's own closed-family guard independently of the
+    # earlier document-reader validation, with a real validated successor DTO.
+    reads[view] = replace(reads[view], bindings=(binding,))
+    native = query.value
+    vectors = read_unit_vectors(
+        native.binary,
+        dimension=native.result.shard.dimension,
+        row_count=native.result.shard.row_count,
+        expected_sha256=native.result.shard.binary.sha256,
+    )
+    with pytest.raises(SimilarityContextReadError, match="INDEX_POINTER_INVALID"):
+        SimilarityContextApplicationService._compose(
+            request,
+            source.prepared,
+            {value.source.item_revision_id: value for value in source.prepared.sources},
+            native,
+            vectors,
+            reads,
+            "QUERY_NOT_OFFERED",
+        )
 
 
 @pytest.mark.parametrize("purpose", ["GENERAL_CHAT_READ", "MOCK_EXAM_OBSERVATION"])

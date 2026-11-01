@@ -22,6 +22,9 @@ from eom_catalog_contracts.inference_transfer_embedding import (
 )
 from eom_catalog_contracts.inference_transfer_experiment import ExperimentView
 from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionProfilePointer
+from eom_catalog_contracts.registered_public_solution_index import (
+    RegisteredPublicSolutionProfilePointer,
+)
 from eom_catalog_contracts.registered_review_profile import RegisteredReviewProfilePointer
 from eom_catalog_contracts.similarity_context import (
     SimilarityCandidate,
@@ -372,9 +375,12 @@ class SimilarityContextApplicationService:
             rows = {value.row.encoding.encoding_sha256: value for value in document.numerical_rows}
             eligible_rows: list[tuple[MixedSimilarityProfilePointer, tuple[float, ...]]] = []
             for binding in document.bindings:
-                # Legacy context1/2 must not reinterpret public-report index3.
+                # Legacy context1/2 must not reinterpret public-report index3/4.
                 # Its explicit successor consumer is admitted independently.
-                if isinstance(binding.profile, PublicSolutionProfilePointer):
+                if isinstance(
+                    binding.profile,
+                    PublicSolutionProfilePointer | RegisteredPublicSolutionProfilePointer,
+                ):
                     raise SimilarityContextReadError("INDEX_POINTER_INVALID")
                 if binding.source.item_revision_id != request.anchor.source.item_revision_id:
                     eligible_rows.append(
