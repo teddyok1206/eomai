@@ -3,19 +3,22 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import overload
 
 from eom_orchestrator.native_private_chat_query_coordinator import NativePrivateChatQueryCoordinator
 from eom_orchestrator.native_query_job_allocation import read_native_query_launch
 from eom_workflow.native_private_chat_query_coordinator import NativePrivateQueryAllocation
 from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
+from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryWorkflowRequestV2,
+    SupportedPrivateChatQueryWorkflowRequest,
+)
 from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAssociation
 from eom_workflow.private_chat_query_submission_context import (
     PrivateChatQuerySubmissionContext,
     validate_private_chat_query_submission_context,
 )
-from eom_workflow.private_chat_query_workflow import (
-    PRIVATE_CHAT_QUERY_RESULT_SCHEMA,
-)
+from eom_workflow.private_chat_query_workflow_v2 import private_chat_query_result_schema
 from sqlalchemy.orm import Session, object_session
 
 from eom_workflow_runner.models import (
@@ -39,6 +42,7 @@ from eom_workflow_runner.private_chat_query_command_lineage import (
 )
 from eom_workflow_runner.private_chat_query_source_read import (
     CatalogPrivateChatQuerySourceOwner,
+    ResolvedPrivateChatPublicQuerySources,
     ResolvedPrivateChatQuerySources,
     require_private_chat_query_source_root,
 )
@@ -53,7 +57,7 @@ validate_private_chat_query_workflow_submission = _validate_private_submission
 def validate_private_chat_query_execution_step(
     step: WorkflowStepRunRecord,
     workflow: WorkflowInstanceRecord,
-    request: PrivateChatQueryWorkflowRequest,
+    request: SupportedPrivateChatQueryWorkflowRequest,
 ) -> None:
     if (
         step.workflow_id != workflow.workflow_id
@@ -66,7 +70,7 @@ def validate_private_chat_query_execution_step(
         or step.state not in {"RUNNING", "SUCCEEDED"}
         or step.step_type != "application"
         or step.worker_role is not None
-        or step.result_schema != PRIVATE_CHAT_QUERY_RESULT_SCHEMA
+        or step.result_schema != private_chat_query_result_schema(request)
         or step.input_pointer_manifest != {"workflow_request_sha256": request.request_sha256}
     ):
         raise ValueError("PRIVATE_CHAT_QUERY_CURRENT_STEP_INVALID")
@@ -85,21 +89,49 @@ class CatalogPrivateChatQueryOwnerAdmission:
         )
         self._command_fence = NativeCommandMutationFence()
 
+    @overload
     def resolve_submission(
         self,
         session: Session,
         request: PrivateChatQueryWorkflowRequest,
         context: PrivateChatQuerySubmissionContext,
-    ) -> ResolvedPrivateChatQuerySources:
+    ) -> ResolvedPrivateChatQuerySources: ...
+
+    @overload
+    def resolve_submission(
+        self,
+        session: Session,
+        request: PrivateChatQueryWorkflowRequestV2,
+        context: PrivateChatQuerySubmissionContext,
+    ) -> ResolvedPrivateChatPublicQuerySources: ...
+
+    def resolve_submission(
+        self,
+        session: Session,
+        request: SupportedPrivateChatQueryWorkflowRequest,
+        context: PrivateChatQuerySubmissionContext,
+    ) -> ResolvedPrivateChatQuerySources | ResolvedPrivateChatPublicQuerySources:
         context = validate_private_chat_query_submission_context(request, context)
-        return self.sources.resolve_sources(session, request, context.origin)
+        resolved = self.sources.resolve_sources(session, request, context.origin)
+        expected = (
+            ResolvedPrivateChatPublicQuerySources
+            if isinstance(request, PrivateChatQueryWorkflowRequestV2)
+            else ResolvedPrivateChatQuerySources
+        )
+        if (
+            type(resolved) is not expected
+            or resolved.request != request
+            or resolved.projection.origin != context.origin
+        ):
+            raise ValueError("PRIVATE_CHAT_QUERY_SUBMISSION_CONTEXT_INVALID")
+        return resolved
 
     def _rows(
         self,
         session: Session,
         command: WorkflowCommandRecord,
         workflow: WorkflowInstanceRecord,
-        request: PrivateChatQueryWorkflowRequest,
+        request: SupportedPrivateChatQueryWorkflowRequest,
     ) -> PrivateChatQuerySubmissionContext:
         if object_session(command) is not session:
             raise ValueError("PRIVATE_CHAT_QUERY_COMMAND_CONTEXT_INVALID")
@@ -107,6 +139,7 @@ class CatalogPrivateChatQueryOwnerAdmission:
         require_private_chat_query_command(session, workflow, command, request)
         return context
 
+    @overload
     def resolve_claim(
         self,
         session: Session,
@@ -114,7 +147,26 @@ class CatalogPrivateChatQueryOwnerAdmission:
         command: WorkflowCommandRecord,
         workflow: WorkflowInstanceRecord,
         request: PrivateChatQueryWorkflowRequest,
-    ) -> ResolvedPrivateChatQuerySources:
+    ) -> ResolvedPrivateChatQuerySources: ...
+
+    @overload
+    def resolve_claim(
+        self,
+        session: Session,
+        *,
+        command: WorkflowCommandRecord,
+        workflow: WorkflowInstanceRecord,
+        request: PrivateChatQueryWorkflowRequestV2,
+    ) -> ResolvedPrivateChatPublicQuerySources: ...
+
+    def resolve_claim(
+        self,
+        session: Session,
+        *,
+        command: WorkflowCommandRecord,
+        workflow: WorkflowInstanceRecord,
+        request: SupportedPrivateChatQueryWorkflowRequest,
+    ) -> ResolvedPrivateChatQuerySources | ResolvedPrivateChatPublicQuerySources:
         context = self._rows(session, command, workflow, request)
         fresh = (
             command.state == "PENDING"
@@ -165,12 +217,28 @@ class CatalogPrivateChatQueryOwnerAdmission:
             raise ValueError("PRIVATE_CHAT_QUERY_ORIGINAL_ORIGIN_MISMATCH")
         return sources
 
+    @overload
     def resolve_mutation_sources(
         self,
         session: Session,
         request: PrivateChatQueryWorkflowRequest,
         lease: CommandLeaseIdentity,
-    ) -> ResolvedPrivateChatQuerySources:
+    ) -> ResolvedPrivateChatQuerySources: ...
+
+    @overload
+    def resolve_mutation_sources(
+        self,
+        session: Session,
+        request: PrivateChatQueryWorkflowRequestV2,
+        lease: CommandLeaseIdentity,
+    ) -> ResolvedPrivateChatPublicQuerySources: ...
+
+    def resolve_mutation_sources(
+        self,
+        session: Session,
+        request: SupportedPrivateChatQueryWorkflowRequest,
+        lease: CommandLeaseIdentity,
+    ) -> ResolvedPrivateChatQuerySources | ResolvedPrivateChatPublicQuerySources:
         require_private_chat_query_source_root(session)
         command = self._command_fence.acquire(session, request.request_sha256, lease)
         workflow = session.get(WorkflowInstanceRecord, command.workflow_id)
@@ -184,11 +252,12 @@ class CatalogPrivateChatQueryOwnerAdmission:
     def fence_mutation(
         self,
         session: Session,
-        request: PrivateChatQueryWorkflowRequest,
+        request: SupportedPrivateChatQueryWorkflowRequest,
         lease: CommandLeaseIdentity,
     ) -> None:
         self.resolve_mutation_sources(session, request, lease)
 
+    @overload
     def resolve_execution_sources(
         self,
         session: Session,
@@ -197,7 +266,28 @@ class CatalogPrivateChatQueryOwnerAdmission:
         *,
         workflow_id: str,
         step_run_id: str,
-    ) -> ResolvedPrivateChatQuerySources:
+    ) -> ResolvedPrivateChatQuerySources: ...
+
+    @overload
+    def resolve_execution_sources(
+        self,
+        session: Session,
+        request: PrivateChatQueryWorkflowRequestV2,
+        lease: CommandLeaseIdentity,
+        *,
+        workflow_id: str,
+        step_run_id: str,
+    ) -> ResolvedPrivateChatPublicQuerySources: ...
+
+    def resolve_execution_sources(
+        self,
+        session: Session,
+        request: SupportedPrivateChatQueryWorkflowRequest,
+        lease: CommandLeaseIdentity,
+        *,
+        workflow_id: str,
+        step_run_id: str,
+    ) -> ResolvedPrivateChatQuerySources | ResolvedPrivateChatPublicQuerySources:
         sources = self.resolve_mutation_sources(session, request, lease)
         command = require_command_lease(session, lease)
         workflow = session.get(WorkflowInstanceRecord, workflow_id)

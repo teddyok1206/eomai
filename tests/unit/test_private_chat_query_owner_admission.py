@@ -7,6 +7,7 @@ is activated; the guarded PostgreSQL inventory owns persistence acceptance.
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -15,7 +16,12 @@ from eom_catalog_service.similarity_context_ports import SimilarityContextReadEr
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_orchestrator.models import Base
 from eom_workflow.admission import workflow_definition_is_admitted
-from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
+from eom_workflow.compiler import compile_definition
+from eom_workflow.definition_execution_protocol import definition_execution_protocol
+from eom_workflow.private_chat_query_execution_v2 import (
+    PrivateChatQueryWorkflowRequestV2,
+    parse_supported_private_chat_query_workflow_request,
+)
 from eom_workflow.private_chat_query_submission_context import (
     build_private_chat_query_submission_context,
     private_chat_query_submission_fingerprint,
@@ -51,9 +57,17 @@ from tests.unit.test_private_chat_query_workflow import definition_body
 
 def seed_owner_rows(publisher, request, origin):
     """Declared fixtures only; source/private definition admission is not inferred."""
-    fixed = PrivateChatQueryWorkflowDefinition.model_validate(definition_body())
+    fixed = (
+        compile_definition(
+            Path(__file__).resolve().parents[2]
+            / "config/workflows/local-embedding-private-chat-query.v2.yaml",
+            set(),
+        ).definition
+        if isinstance(request, PrivateChatQueryWorkflowRequestV2)
+        else PrivateChatQueryWorkflowDefinition.model_validate(definition_body())
+    )
     digest = sha256_bytes(canonical_json_bytes(fixed))
-    request = PrivateChatQueryWorkflowRequest.model_validate(
+    request = parse_supported_private_chat_query_workflow_request(
         seal(
             request.model_dump(mode="json") | {"workflow_definition_sha256": digest},
             "request_sha256",
@@ -92,7 +106,7 @@ def seed_owner_rows(publisher, request, origin):
             definition_version=fixed.definition_version,
             definition_hash=digest,
             protocol_version="1.0.1",
-            role_schema_version="private-chat-query/1.0",
+            role_schema_version=definition_execution_protocol(fixed),
             state="REQUESTED",
             stage="LOCAL_EMBEDDING",
             current_step_key=fixed.start_step,

@@ -8,9 +8,14 @@ from eom_catalog_contracts.embedding_reference_query import raw_similarity_contr
 from eom_identifiers import canonical_json_bytes, sha256_bytes
 from eom_workflow.admission import workflow_definition_is_admitted
 from eom_workflow.compiler import compile_definition_data
+from eom_workflow.definition_execution_protocol import definition_execution_protocol
 from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryWorkflowRequest,
     parse_private_chat_query_workflow_request,
+)
+from eom_workflow.private_chat_query_execution_v2 import (
+    SupportedPrivateChatQueryWorkflowRequest,
+    parse_supported_private_chat_query_workflow_request,
 )
 from eom_workflow.private_chat_query_submission_context import (
     PrivateChatQuerySubmissionContext,
@@ -20,9 +25,12 @@ from eom_workflow.private_chat_query_submission_context import (
     validate_private_chat_query_submission_context,
 )
 from eom_workflow.private_chat_query_workflow import (
-    PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL,
     PrivateChatQueryWorkflowDefinition,
     validate_private_chat_query_definition,
+)
+from eom_workflow.private_chat_query_workflow_v2 import (
+    parse_supported_private_chat_query_workflow_definition,
+    validate_supported_private_chat_query_definition,
 )
 from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy.orm import Session, object_session
@@ -127,12 +135,12 @@ def resolve_private_chat_query_submission_controls(
 def validate_private_chat_query_workflow_submission(
     session: Session,
     workflow: WorkflowInstanceRecord,
-    request: PrivateChatQueryWorkflowRequest,
+    request: SupportedPrivateChatQueryWorkflowRequest,
 ) -> PrivateChatQuerySubmissionContext:
     """Attached immutable row closure only; live source/claim permission is separate."""
     require_private_chat_query_source_root(session)
     try:
-        request = PrivateChatQueryWorkflowRequest.model_validate(
+        request = parse_supported_private_chat_query_workflow_request(
             raw_similarity_contract_value(request)
         )
         if object_session(workflow) is not session:
@@ -142,8 +150,10 @@ def validate_private_chat_query_workflow_submission(
         )
         if definition is None or definition.active is not True:
             raise ValueError()
-        fixed = PrivateChatQueryWorkflowDefinition.model_validate(definition.canonical_definition)
-        validate_private_chat_query_definition(fixed, request)
+        fixed = parse_supported_private_chat_query_workflow_definition(
+            definition.canonical_definition
+        )
+        validate_supported_private_chat_query_definition(fixed, request)
         context = validate_private_chat_query_submission_context(
             request, parse_private_chat_query_submission_context(workflow.runtime_context)
         )
@@ -159,7 +169,7 @@ def validate_private_chat_query_workflow_submission(
             != expected_definition
             or definition.schema_version != fixed.schema_version
             or sha256_bytes(canonical_json_bytes(fixed)) != definition.definition_hash
-            or workflow.role_schema_version != PRIVATE_CHAT_QUERY_EXECUTION_PROTOCOL
+            or workflow.role_schema_version != definition_execution_protocol(fixed)
             or workflow.protocol_version != "1.0.1"
             or workflow.created_actor_type != "human"
             or workflow.created_actor_id != context.origin.actor_id

@@ -46,12 +46,20 @@ from tests.unit.test_private_chat_query_workflow import completed as completed
 
 @pytest.fixture
 def source(tmp_path, monkeypatch):
+    return make_private_public_source_case(tmp_path, monkeypatch)
+
+
+def make_private_public_source_case(tmp_path, monkeypatch, *, definition_sha256=None):
     old = make_private_source_case(tmp_path, monkeypatch)
     request, policy, _bundle = execution_case()
     policy = PrivateChatQueryExecutionPolicyV2.model_validate(
         seal(
             policy.model_dump(mode="json")
-            | {"runtime_bundle": old.request.runtime_bundle.model_dump(mode="json")},
+            | {
+                "runtime_bundle": old.request.runtime_bundle.model_dump(mode="json"),
+                "workflow_definition_sha256": definition_sha256
+                or policy.workflow_definition_sha256,
+            },
             "policy_sha256",
         )
     )
@@ -73,6 +81,7 @@ def source(tmp_path, monkeypatch):
                 "native_execution_policy": saved.member.model_dump(mode="json"),
                 "native_execution_policy_sha256": policy.policy_sha256,
                 "runtime_bundle": old.request.runtime_bundle.model_dump(mode="json"),
+                "workflow_definition_sha256": policy.workflow_definition_sha256,
             },
             "request_sha256",
         )

@@ -259,6 +259,28 @@ owner 검증이 native 실행 허가는 아니며 executor/dispatch/install/admi
 새 Job로 우회하지 않는다. 모델이 준 actor나 가짜 approved Item으로 만드는 대안은 실제
 사용자 권한·계보를 보존하지 못하므로 사용하지 않는다. 새 의존성·운영 schema 변경은 없다.
 
+### common private 요청의 기존 명령·lease/step 연결 — 2026-11-01
+
+책임은 원 private START/ADVANCE row lineage와 source owner admission이며 새 실행 scheduler가
+아니다. 이미 정의한 request/definition/protocol2와 numerical result2를 같은 원 Workflow/step/
+command/launch Job에 연결한다. 정본은 원 initial request·고정 definition bytes/hash·Chat origin/
+operator와 append-only 원 command/checkpoint다. metadata support만으로 전역 admission2를
+열지 않으며 실제 executor/완료/dispatch/runtime 조립 전에는 새 운영 요청을 받지 않는다.
+
+PK/원 idempotency key/command parent의 indexed lookup과 최대4개 checkpoint 순서를 공유한다.
+step의 expected result schema와 Workflow protocol은 canonical pure family 규칙에서 선택하고
+legacy row를2로 relabel하지 않는다. 상태·계보·attempt/generation·현재 lease/원 producer/
+현재 actor/claim/Graph/source를 같은 caller root에서 확인한다. application source admission은
+두 resolved family의 정확한 typed 결과만 돌려주고 어느 family의 현재 권한도 캐시하지 않는다.
+원 transaction/CAS/unique constraints/DB67 guard를 사용하므로 작은 O(1) metadata와 기존
+bounded source read 외 새 queue/index/table/migration이 없다. 원 command/advisory lock 순서는
+바꾸지 않는다. 종료/FAILED/다른 parent/hash/만료 claim을 새 key나 성공 재해석으로 우회하지 않는다.
+
+pure family 선택은 contracts에, attached ORM/lease 검사는 기존 runner application/adapters에
+둔다. 별도2 전용 queue/runner와 복제 상태기계를 만드는 대안보다 동일 원 명령 경계의 명시적
+successor 지원이 작다. 실제 임시 PostgreSQL의1/2 중단·재전송·중복 claim을 확인하며 운영 DB
+pytest/실제 native 추론 없이 먼저 검증한다. 실제 deployment/operator/runtime 승인은 별도다.
+
 기존 미배포 legacy stored-read 후보는
 `staging/unified-embedding-goal-20261031/deferred-legacy-read.patch` 및 같은 폴더
 `deferred/`에 복구 가능하게 보존했다. 이번 공통 전환과 섞어 활성화하지 않는다.

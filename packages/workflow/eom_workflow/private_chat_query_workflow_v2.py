@@ -24,14 +24,18 @@ from eom_workflow.models import JobId, StepRunId, TerminalStep, WorkflowId, Work
 from eom_workflow.private_chat_query_execution_v2 import (
     PrivateChatQueryExecutionPolicyV2,
     PrivateChatQueryWorkflowRequestV2,
+    SupportedPrivateChatQueryWorkflowRequest,
+    parse_supported_private_chat_query_workflow_request,
 )
 from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAssociation
 from eom_workflow.private_chat_query_publication_v2 import validate_private_chat_public_query_launch
 from eom_workflow.private_chat_query_workflow import (
     MAX_PRIVATE_CHAT_QUERY_OUTPUT_BYTES,
+    PRIVATE_CHAT_QUERY_RESULT_SCHEMA,
     PrivateChatQueryStepOutput,
     PrivateChatQueryWorkflowDefinition,
     PrivateChatQueryWorkflowReceipt,
+    validate_private_chat_query_definition,
     validate_private_chat_query_step_output,
 )
 from eom_workflow.schemas import NativeEmbeddingContract, validate_local_embedding_admission_message
@@ -279,6 +283,32 @@ def parse_supported_private_chat_query_workflow_definition(
     if isinstance(document, dict) and document.get("definition_version") == "2.0.0":
         return PrivateChatQueryWorkflowDefinitionV2.model_validate(document)
     return PrivateChatQueryWorkflowDefinition.model_validate(document)
+
+
+def private_chat_query_result_schema(request: SupportedPrivateChatQueryWorkflowRequest) -> str:
+    """One pure step-family rule, never definition admission or execution permission."""
+    request = parse_supported_private_chat_query_workflow_request(request)
+    return (
+        PRIVATE_CHAT_PUBLIC_QUERY_RESULT_SCHEMA
+        if isinstance(request, PrivateChatQueryWorkflowRequestV2)
+        else PRIVATE_CHAT_QUERY_RESULT_SCHEMA
+    )
+
+
+def validate_supported_private_chat_query_definition(
+    definition: SupportedPrivateChatQueryWorkflowDefinition,
+    request: SupportedPrivateChatQueryWorkflowRequest,
+) -> None:
+    definition = parse_supported_private_chat_query_workflow_definition(definition)
+    request = parse_supported_private_chat_query_workflow_request(request)
+    if isinstance(definition, PrivateChatQueryWorkflowDefinitionV2):
+        if not isinstance(request, PrivateChatQueryWorkflowRequestV2):
+            raise ValueError("PRIVATE_CHAT_QUERY_DEFINITION_FAMILY_MISMATCH")
+        validate_private_chat_public_query_definition(definition, request)
+    else:
+        if isinstance(request, PrivateChatQueryWorkflowRequestV2):
+            raise ValueError("PRIVATE_CHAT_QUERY_DEFINITION_FAMILY_MISMATCH")
+        validate_private_chat_query_definition(definition, request)
 
 
 def parse_supported_private_chat_query_workflow_receipt(

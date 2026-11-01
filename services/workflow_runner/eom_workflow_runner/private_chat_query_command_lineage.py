@@ -5,8 +5,12 @@ from __future__ import annotations
 import re
 
 from eom_orchestrator.native_query_job_allocation import read_native_query_launch
-from eom_workflow.private_chat_query_execution import PrivateChatQueryWorkflowRequest
+from eom_workflow.private_chat_query_execution_v2 import (
+    SupportedPrivateChatQueryWorkflowRequest,
+    parse_supported_private_chat_query_workflow_request,
+)
 from eom_workflow.private_chat_query_publication import PrivateChatQueryLaunchAssociation
+from eom_workflow.private_chat_query_workflow_v2 import private_chat_query_result_schema
 from sqlalchemy.orm import Session, object_session
 
 from eom_workflow_runner.models import WorkflowCommandRecord, WorkflowInstanceRecord
@@ -101,8 +105,12 @@ def require_private_chat_query_command(
     session: Session,
     workflow: WorkflowInstanceRecord,
     command: WorkflowCommandRecord,
-    request: PrivateChatQueryWorkflowRequest,
+    request: SupportedPrivateChatQueryWorkflowRequest,
 ) -> None:
+    try:
+        request = parse_supported_private_chat_query_workflow_request(request)
+    except (ValueError, TypeError):
+        raise ValueError("PRIVATE_CHAT_QUERY_COMMAND_CONTEXT_INVALID") from None
     if command.command_type == CommandType.START_WORKFLOW.value:
         _require_start(workflow, command)
         return
@@ -115,7 +123,7 @@ def require_private_chat_query_command(
         or step.workflow_id != workflow.workflow_id
         or step.step_type != "application"
         or step.worker_role is not None
-        or step.result_schema != "embedding-private-chat-query-result@1.0"
+        or step.result_schema != private_chat_query_result_schema(request)
         or step.input_pointer_manifest != {"workflow_request_sha256": request.request_sha256}
     ):
         raise ValueError("PRIVATE_CHAT_QUERY_COMMAND_CONTEXT_INVALID")
