@@ -1,5 +1,60 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 공통 QUERY batch의 canonical proof reader 후보 — 2026-11-01
+
+- 직전 사용자 설명 turn은 기존 준비 오류와 최신 read-only 상태를 설명한
+  **NO_PROGRESS**였다. 이번에는 source
+  **`2c79b52c486103b8cf295eaf7a4b9a7e0bb6be49`**, tree
+  `b4b77e78b8ca33a3bd8f1815f6e51c4fc9b79b3d`의 공통 canonical proof reader를
+  구현·검증한 **PROGRESS**다. 전체 목표/520 분모/종료 조건을 축소하지 않는다.
+- 기존 공개 QUERY의 parent/receipt/binding 해석을 `query_batch_execution_read`가
+  소유하고 이전 모듈은 함수 identity가 같은 얇은 공개 export로 보존했다. private entry는
+  실제 현재 private source DTO/원 Chat origin과 receipt1.1/parent17/원 child0을 검사한다.
+  public entry는 기존 공개 source/context/error 의미를 유지하며 private purpose를 거부한다.
+  같은 actor라도 다른 Chat origin은 결과를 빌릴 수 없다. 이 reader는 source 권한 또는
+  물리 실행 허가가 아니며 caller의 현재 권한/lease fence를 대신하지 않는다.
+- exact Artifact revision/schema/media/raw SHA/semantic SHA, canonical bytes/producer 상태,
+  원 parent Job/selection/routing/SUCCEEDED history, Graph/policy/recipe/model space와
+  child input/result/launch/row/dimension을 확인한다. 잘못된 원본·철회·hash·FAILED는 복구나
+  latest 대입 없이 거부한다. 작은 child metadata를 공유하며 새 질문/벡터 복제, DB/schema/
+  queue/cache/dependency 또는 별도 private 수치 executor는 없다.
+- source **358 PASS/158.76s**, 비편집 별도 설치본의 같은 범위
+  **358 PASS/159.70s**, strict mypy 직접/consumer7 및 Ruff/format/diff PASS다.
+  의존성/기존 공개 검색 경계 **56 PASS/22.70s**, 기출·창작·AI 공통 입력 동등성
+  **34 PASS/5.44s**, DB API/GUI 연동 회귀 **47 PASS/15.95s**도 확인했다. 마지막 검사의
+  Starlette/httpx deprecation warning1은 실패가 아니며 새 dependency를 추가하지 않았다.
+- 공식 disposable PostgreSQL **301 PASS/477.66s**다. 실제 canonical 파일·parent store·
+  publisher와 공개 중단/동시 replay 회귀를 포함하고 IAM/document/GPU 관측은 명시적
+  synthetic seam이다. 모델/CUDA/운영 사용자 검색 PASS가 아니다. 새 private canonical
+  positive1건은 먼저 별도 PASS했으며 301건에 포함된다. 첫 SQLite fixture가 PG 전용
+  parent store에서 거부된 기록은 보존하고 검사를 실제 guarded PG로 옮겼다. 초기 unit의
+  digest 인수 누락2건도 fixture를 바로잡아 최종6건 PASS했으며 운영 guard는 완화하지 않았다.
+- 임시 DB `/tmp/eom-api-testdb-20261101134928_72fcadaa`만 migration67 왕복/reconcile 후
+  사용했다. 최종 read_only/other_connections0을 확인하고 공식 cleanup PASS/REMOVED다.
+  source head67와 production66을 구별한다. 운영 DB mutating pytest/row repair는 없다.
+- build/RECORD PASS. wheels는
+  `/tmp/eom-api-build/2c79b52c486103b8cf295eaf7a4b9a7e0bb6be49.dnI2BN/dist`다.
+  platform SHA `45ce0aed0f8001c7298f9b6749d2084dda1804318f88c566e9b581b0fe05dab7`,
+  contracts `0446250c222038f34c73bb5fc9defdb15d49d0f3d291fbc75acff67a062a2f6c`,
+  API `ca35a91c2f97530cbf5b6ab3ec41e8b8160f511dc4407bfa43848e6c3f450804`다.
+  prefix `/tmp/eom-private-query-batch-proof-installed.9OKTYXiF/site-packages`에서 실제
+  module paths/public facade identity를 먼저 확인했다. 보호된 numerical env는 변경0이다.
+  logs는 `/tmp/eom-private-query-batch-proof-*20261101*`를 참조한다.
+- **14:00 UTC 정기 집계155/520·잔여365**, historical FAILED7 불변이다. 당시 nonterminal은
+  CPU RUNNING1이었다.14:00:48 read-only 진단에서 앞 CUDA 원 Workflow
+  `workflow_75e217258adc4311a9342af6cb008f08`가13:42:49 COMPLETED, 원 numerical Job
+  `job_a469fbbfade149f0a29175c3216a24d0`가 SUCCEEDED/schema4임을 확인했다.
+  이는 새 GPU 등록 진행 증거이지 전체 대상별 hash/권한 최종 acceptance가 아니다.
+- 최신 실제 GUI metadata13:53:25는 public QUERY Workflow0/active DB query0이었다.
+  마지막07:24 준비 단계214초 실패를 결과0/GPU 연산 지연으로 해석하지 않는다.09:13 운영
+  설정 정렬 이후 actual user search/read/replay는 아직 PENDING이다. 새 검색·로그인 요청을
+  만들거나 과거 실패를 성공으로 바꾸지 않았다.
+- API1697848/Catalog2256180/QUERY2256183/INDEX2258114와 운영 pins를 유지했다. source 후보의
+  운영 배포/재시작/새 모델 제출/인증 변경/정본·구 벡터 삭제0이며 private physical/global2는
+  CLOSED다. 다음은 실제 private completion/publication에서 이 canonical proof를 소비하는
+  연결과 원2.1 history continuation/driver/cohost다. 전체520, 실제 GUI/AI canary, 모든 구
+  consumer 전환과 정확한 구 파생 retirement/삭제는 그대로 미완료이고 전체 목표 ACTIVE다.
+
 ## private GPU 원 실행 이력의 명시적 successor 후보 — 2026-11-01
 
 - source **`342b87f3152560a0931f21fdb42c6aa5370a70c0`**는 private checkpoint2.1을
