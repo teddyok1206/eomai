@@ -1,5 +1,6 @@
 """Concrete private composition; live source/runtime observations are declared fixtures."""
 
+from contextlib import contextmanager
 from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -21,6 +22,13 @@ from tests.unit.test_private_chat_query_source_owner import source as source
 
 @pytest.fixture
 def factory(source, monkeypatch):
+    with make_private_query_owner_factory_case(source, monkeypatch) as value:
+        yield value
+
+
+@contextmanager
+def make_private_query_owner_factory_case(source, monkeypatch):
+    """Both real namespace families share the same declared fixed CPU runtime seams."""
     chat = GeneralChatPrivateQueryClient()
     authorize = Mock(side_effect=source.owner.chat.authorize)
     monkeypatch.setattr(chat, "authorize", authorize)

@@ -719,3 +719,15 @@ resource pin부터 검증하고 client/receiver/dispatch·runtime의 호환 조�
 운영 wire2/global admission을 열지 않는다. 대안인 reply1 relabel은 이전 벡터/EMPTY 의미를
 섞으므로 거부한다. 최초 설계 초안의 context640KiB/새 reply672KiB 가정은 실제512KiB
 상수 대조 테스트에서 틀렸음을 확인했다. 새 한도 확장이나 context 축소는 필요 없다.
+
+### 공통 CPU leaf factory의 연결
+
+기존 private CPU factory는 namespace의 명시적 타입으로 legacy1/공통2를 구분하고 각각
+CONTENT_ONLY/CONCRETE_FACETS 및 기존 source 상한1024/16384를 사용한다. policy family는
+기존 PrivateChatQueryOwnerConfiguration의 정본 검증 규칙을 재사용한다. view 문자열만으로
+mixed namespace를 private 실행으로 해석하지 않는다. 고정 CPU launcher에 CUDA space를
+잘못 묶는 구성도 source RPC 전에 거부한다. 이 factory는 routed 공통 실행의 CPU leaf이지
+GPU 정책을 대신하는 새 fallback 규칙이 아니다. protected cohost config2의 CPU/CUDA/routing
+정본 검증·GPU leaf/선택·원 실행 복구가 닫히기 전에는 global2를 열지 않는다. 별도 factory,
+queue, identity cache, DB/Artifact 모델은 만들지 않는다. 실제 origin마다 기존 owner/Runner를
+독립 생성하고 권한·고정 revision/hash·런타임의 전후 검사를 그대로 유지한다.

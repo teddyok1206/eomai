@@ -10,7 +10,12 @@ from eom_catalog_contracts.embedding_reference_query import (
     ReferenceQuerySpaces,
     raw_similarity_contract_value,
 )
+from eom_catalog_contracts.embedding_registry import EmbeddingIndexNamespace
 from eom_catalog_contracts.private_chat_query_read import ChatPrivateQueryOrigin
+from eom_catalog_contracts.public_solution_embedding_index import (
+    MAX_PUBLIC_SOLUTION_SOURCES,
+    PublicSolutionIndexNamespace,
+)
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_identity_service.operator_authorization_fence_sql import OperatorAuthorizationFenceOwnerPin
@@ -88,11 +93,20 @@ class PrivateChatQueryOwnerFactory:
         self.configuration.__post_init__()
         self.operator_owner.__post_init__()
         spaces = ReferenceQuerySpaces.model_validate(raw_similarity_contract_value(self.spaces))
+        namespace = self.configuration.registry.namespace
         if (
             self.publisher.engine is not self.engine
             or self.publisher.settings.nas_artifact_root != self.settings.nas_artifact_root
-            or self.configuration.registry.namespace.view != "CONTENT_ONLY"
+            or not isinstance(namespace, EmbeddingIndexNamespace | PublicSolutionIndexNamespace)
+            or namespace.view
+            != (
+                "CONCRETE_FACETS"
+                if isinstance(namespace, PublicSolutionIndexNamespace)
+                else "CONTENT_ONLY"
+            )
             or self.configuration.registry.space != spaces.document
+            or spaces.document.runtime.device != "CPU"
+            or spaces.query.runtime.device != "CPU"
             or type(self.chat) is not GeneralChatPrivateQueryClient
             or type(self.launcher) is not FixedNativePrivateQueryLauncher
             or type(self.driver) is not NativeQueryPrepareDriver
@@ -160,4 +174,9 @@ class PrivateChatQueryOwnerFactory:
                 driver=self.driver,
             ),
             self.spaces,
+            maximum_sources=(
+                MAX_PUBLIC_SOLUTION_SOURCES
+                if isinstance(self.configuration.registry.namespace, PublicSolutionIndexNamespace)
+                else 1024
+            ),
         )
