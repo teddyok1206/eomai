@@ -95,9 +95,17 @@ def _composition(
 
 
 def _history(prepared: PreparedRoutedReferenceQuerySelection) -> EmbeddingBatchPlanHistory | None:
+    admission = prepared.operation.admission
+    _require(type(admission) is CatalogEmbeddingBatchPlanAdmission)
+    assert isinstance(admission, CatalogEmbeddingBatchPlanAdmission)
+    observe = (
+        admission.observe_sources
+        if isinstance(prepared.selection, EmbeddingBatchSelectionV14 | EmbeddingBatchSelectionV15)
+        else admission.admit
+    )
     with (
         prepared.operation.publisher.sessions.begin() as session,
-        prepared.operation.admission.admit(session, prepared.preparation.parent) as sources,
+        observe(session, prepared.preparation.parent) as sources,
     ):
         _require(sources.selection == prepared.selection)
         return EmbeddingBatchPlanStore(

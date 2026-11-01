@@ -2933,3 +2933,27 @@ against the protected root entrypoint before activation and preserves the GPU
 controller, numerical environment and INDEX configuration unless those components
 are explicitly in the rollout. A mismatch is a configuration error, not GPU BUSY
 or permission to disable peer/release validation.
+
+### Public QUERY input preparation is not DOCUMENT ranking
+
+The real GUI canary reached ROUTED with the corrected controller, but its root
+waited for binding while the owner repeatedly resolved all DOCUMENT vectors to
+prepare a single anchor's QUERY text. The original finite allocation expired
+without a QUERY Workflow/input binding. Do not extend or renew that original.
+
+1. Boundary: existing Catalog public QUERY materialization and routed history read.
+2. Canonical input: the same accepted anchor report and common projection/recipe.
+3. Identity: preserve all source, analysis, Graph, policy, index and request revisions.
+4. Resolution: exact registered index PK/FK + canonical manifest/schema/hash and
+   current selected-anchor authority before/after materialization; never latest.
+5. Access: one indexed immutable index lookup and one selected-anchor capture.
+6. Structures: reuse RegisteredEmbeddingIndexRead and SelectedEmbeddingSources;
+   no authority/result cache, extra queue, schema, DB table or numerical backend.
+7. Cost: QUERY preparation depends on anchor text + pinned manifest, not every
+   DOCUMENT vector; O(N*D) remains at the explicit ranking/result-read boundary.
+8. Transactions: keep existing caller-owned root, source fences and native claims.
+9. Ownership: Catalog owns resolution; the pure projection remains unchanged.
+10. Replay/failure: history observation cannot grant compute; physical admission
+    and final ranking retain their existing complete validation. Preserve failures.
+11. Reusing DOCUMENT vectors as QUERY, weakening validation or increasing a lease
+    is not a fix. Materialize only the data this stage actually consumes.
