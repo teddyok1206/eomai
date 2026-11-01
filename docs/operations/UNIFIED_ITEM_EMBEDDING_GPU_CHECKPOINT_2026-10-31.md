@@ -1,5 +1,59 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## DB 최초 범위 응답·호환 API 운영 반영 — 2026-11-01
+
+- 직전 private 실행 후보의 source/설치본/PG 검증과 push는 **PROGRESS**였다. 이번 main
+  **`61737b84aa8d63dda24de2c637f15912c9a5f519`**는 기존 PENDING/PREPARING 응답으로
+  Graph/policy/source pin을 무거운 native prepare 전에 전달한다. 최초 응답은 실행 접수가
+  아닌 source selection이며 model/Workflow를 만들지 않는다. 이후 같은 key/pin으로 기존
+  QUERY를 시작·관측한다. 실제 index/control pin은 기존 native parent/receipt가 계속 소유한다.
+- 첫 응답 유실은 실행을 남기지 않으며, pin을 받은 뒤 timeout이 발생해도 화면은 원 pin을
+  보존한다. 실제 Catalog `_scope`를 사용한 head 변경 회귀와 production JS의 PREPARING
+  표시/오류 후 pin 보존을 검사했다. 권한·source·hash는 기존 owner가 매번 확인하며 latest
+  대입/다른 key/별도 queue·cache·DB·schema·endpoint·dependency는 추가하지 않았다.
+- 최종 source **77 PASS/24.59s**: application/HTTP/OpenAPI 및 Web/BFF/Node presentation이다.
+  기존 warning1은 유지했다. Ruff/format/diff와 strict mypy 영향1 PASS다. main의 후속 private
+  코드/migration67을 운영에 섞지 않도록 actual installed API baseline8eb03e40에 같은 API
+  bytes를 반영한 **`hotfix/db-similarity-pin-20261101` / `5e8ffe754d3c7e493e1d92df874de636b7529ccb`**를
+  별도 빌드했다. main/API 파일 bytes는 동일하며 tree `25d9fb348fd2d3402cf82a25186bf4a236570fb0`다.
+- hotfix source53 PASS/22.44s, 실제 운영 platform/contracts8eb03e40 + 별도 API 설치본 조합
+  **53 PASS/22.73s**다. 첫-party module origin을 먼저 검사했고 current migration constant66도
+  확인했다. DB/wire/state-machine을 바꾸지 않아 mutating PG suite는 이번 API-only diff에
+  재실행하지 않았다. 앞선 private 후보323/설치본PG9 PASS를 이번 운영 API의 실제 검색
+  acceptance로 재사용하지 않는다. IAM/소스 leaves는 synthetic이며 browser fixture도 live
+  authenticated user 검색을 의미하지 않는다.
+- 공식 build/RECORD PASS. wheel directory
+  `/tmp/eom-api-build/5e8ffe754d3c7e493e1d92df874de636b7529ccb.szjKFQ/dist`, 적용한 API wheel SHA
+  `8582cc03d1dbd1446641e92e83adfbdb6ad3780cb4a41de0e36c121aac8dbb1c`다. API package만
+  기존 공유 prefix에 설치하고 기존 platform/contracts8eb03e40은 그대로 뒀다. API unit/entrypoint와
+  no-drop-in 원칙, QUERY owner26782b4d/controller b5900c7d 및 numerical/policy/recipe는 유지했다.
+  QUERY의 API provider source/wheel pin과 cohost raw-config hash만 정확히 갱신했다.
+- 배포 도중 두 permission 문제가 있었다. root umask077 때문에 wheel 보관 directory가700이
+  되어 첫 설치는 pip가 파일을 읽기 전에 거부됐다. 설치 member/설정이 원본 그대로임을
+  검증하고 이전 API/QUERY를 먼저 복구했다. 실패 이력과 복구 증거는 보존했다.
+  별도 retry1은 실제 설치 계정의 wheel 읽기를 먼저 확인했지만 installer에 전달된077로
+  새 API module이700/600이 되어 서비스 UID가 import하지 못했다. 같은 wheel의 모든 member
+  hash와 적용 설정을 확인한 뒤 그 public package/metadata에만755/644를 복원했고 실제
+  **eom-api UID CLI/build-info import PASS** 후 원 배포를 재개했다. 재설치/Graph·Job 수정은0이다.
+  해당 one-off installer의 child umask를022로 고쳤다. 공식 deploy_release의022 처리는 원래
+  있었으므로 이를 다시 고치거나 병렬 installer framework로 확장하지 않았다.
+- **15:53:36 UTC QUERY READY**, API PID2623173/QUERY2623324다. 실제 API isolation allow/deny
+  전부 PASS, local readiness READY, HTTPS redirect 후200, 무인증 similarity POST401이다.
+  production migration은 read-only로 **20261031_0066**을 확인했다. INDEX2258114/Catalog2256180,
+  creative owner inactive 상태, 보호된 INDEX/numerical/config/인증 파일을 보존했다. production
+  migration/model 제출/FAILED 재해석/구 vectors 삭제0이며 private physical/global2는 CLOSED다.
+- root evidence `/opt/eom/api-releases/5e8ffe754d3c7e493e1d92df874de636b7529ccb/retry1`,
+  bounded log `/tmp/eom-db-pin-api-*20261101*` 참조. pip가 남긴 `site-packages/~-m_api`는
+  정확한 경로·UID·directory·같은 filesystem을 확인해 `retry1/pip-retired-api`로 이동했다.
+  import 경로에서만 뺐고 삭제하지 않았으며 복구용 원 wheel도 보존한다.
+- source 등록은15:30 정기 관측162/520이고, 그 이후 **15:46:53 원 Workflow
+  `workflow_bd19b2e1f5ee4a39b1175369dfb629fc`의 BATCH_COMPLETED/selected_targets4**를 확인했다.
+  이것은 추가 frozen-target4 완료 수를 뜻하지 않는다. 후속 metadata/source 준비를 GPU
+  forward라고 부르거나 stage 관측 timeout만으로 작업을 재시작하지 않았다.
+- 새 GUI 시험은10321로 한 번 요청했으며 **actual authorized query/read/replay는 PENDING**이다.
+  전체 목표는 ACTIVE다. private 공통 cohost/실제 활성화, AI V11 canary, 모든520 CUDA의
+  대상별 무결성 및 구 소비자 전환 후 정확한 retirement/delete 종료 조건은 그대로다.
+
 ## private GPU 실행·원 결과 재개 후보 — 2026-11-01
 
 - 사용자 설명 turn의 read-only 조회는15:00 정기 관측 **162/520·잔여358**, 실제 GUI 시험
