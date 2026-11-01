@@ -1,5 +1,50 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 공통 CPU leaf factory·다음 CUDA 묶음 완료 확인 — 2026-11-01
+
+- 직전 goal turn은 source4bf7b789의 공통 완료 조회/wire2, 설치본319 PASS·원 PG127 PASS와
+  checkpoint4760431d를 main/origin에 보존한 **PROGRESS**였다. 이번도 구현·검증의
+  **PROGRESS**이며 전체 목표 ACTIVE다. CPU leaf source 완료를 routed private GPU 우선
+  운영·전체520 GPU·실제 GUI 검색·AI canary·구 vector 삭제 완료로 바꾸지 않는다.
+- source **`3d1984e7de33d37d9a279fb4509ebf919bf1a17c`**는 원 private factory의 blanket
+  CONTENT_ONLY 제한을 명시적 namespace family 선택으로 바꿨다. legacy1은 기존1024,
+  공통2는 기존 계약의16384 상한을 쓰고 실제 origin마다 독립 owner/Runner와 같은 제한된
+  driver를 사용한다. source RPC 앞뒤의 실제 Chat origin/런타임/보호 설정 검사와
+  OwnedOperatorAuthorizationFence를 보존한다. fixed CPU launcher에 CUDA space나 다른
+  namespace/view를 잘못 묶는 구성은 source RPC 전에 거부한다. private2 policy family는
+  기존 owner configuration의 정본 규칙을 재사용했다. factory를 복제하지 않았다.
+- source 합집합 **124 PASS/37.10s**, 별도 비편집 설치본 **124 PASS/37.08s**다. common/
+  legacy factory·기존 runtime/host/entry/server와 두 wire family를 포함하며 source/IAM/
+  설치 OS leaf는 명시적인 fixture다. 실제 source deny/원 origin 변경/설정·runtime의 전후
+  변경/외부 구성·잘못된CUDA leaf 거부, Job 증가0·driver 미실행·global2 CLOSED를 확인했다.
+  strict mypy 영향2/Ruff/format/diff PASS다. DB/state/schema/transaction 변경이 없는
+  construction 경계라 이전 공식 PG127의 증거는 보존하고 운영 DB에 pytest하지 않았다.
+- 공식 build/RECORD PASS, wheel directory
+  `/tmp/eom-api-build/3d1984e7de33d37d9a279fb4509ebf919bf1a17c.oJkAMP/dist`, platform SHA
+  `9207fa92c51b57207c6c62ba220ccdfa162de42a3d57189163044fe78634ab0a`, contracts
+  `8db8be58b7c3e3bb34b7660b23ab5c6a5755eb0f841225567b0b608dc64dd607`, API
+  `89afbf618b6f22361cf65d765a2ca22954b7bedb80f3f327a9194efafc5bdde3`다. 설치본
+  `/tmp/eom-private2-common-factory-installed.ehpExZgk/site-packages`의 실제 module/source
+  경로를 먼저 확인했다. 로그는 `/tmp/eom-private2-common-factory-{final-source,installed}-20261101.tests`다.
+  source 후보이며 운영 활성화·production migration·기존 numerical bundle/space 변경0이다.
+- 10:21:47 UTC 별도 READ ONLY metadata 진단은 다음 CUDA 요청
+  `workflow_8aaebfd0e35d47479690ff272346dd4b`가 **10:18:39 COMPLETED**, command/encode step
+  및 step Job `job_c63136a12c284f169510874e2d212320` SUCCEEDED이고 출력 schema4임을
+  확인했다. 09:59 요청 생성 후 검증/실행/등록을 거친 정상 완료이며 원 실패를 수정한 것이
+  아니다. `/tmp/eom-gpu-current-index-metadata-20261101.json` 참조. 같은 INDEX2258114는
+  10:20에도 다음 source 검증 stage를 기록했다. 이 metadata만으로 물리 grant/전체520
+  대상별 hash 무결성이나 새 frozen 완료 수를 임의 가산하지 않는다. 집계는30분 timer를
+  계속 사용하고, 원 작업 재시작/새 key 제출/직접 모델 실행·DB write0이다.
+- 추가 경계 확인: 공통 private protected configuration2와 CPU/CUDA/routing 정책 계약은
+  이미 존재한다. 이를 다시 만들지 않는다. 그러나 현재 runtime/entry의 private cohost는
+  legacy1만 연결하고, 기존 fixed private launcher/완료 관측은 CPU이며 GPU numerical
+  worker의 allocation purpose gate는 INDEX/REFERENCE_QUERY만 받는다. 기존 batch1.5의
+  source selection도 approved Item anchor를 전제로 한다. 따라서 설정2를 켜거나 CPU leaf만
+  연결해 GPU 우선 private QUERY까지 된 것으로 보고하지 않는다. 다음은 실제 private origin
+  권한을 보존한 GPU parent/실행/완료 연결과 cohost/consumer 전환이다. 질문을 approved Item으로
+  위장하거나 REFERENCE owner 권한을 빌리지 않고, 기존 수치 QUERY2·공유 GPU lease·정식
+  Artifact commit 경계를 최대한 재사용한다. 현재 GPU model/space 재임베딩 pin은 보존한다.
+
 ## private 공통 완료 조회·wire2 후보 — 2026-11-01
 
 - 직전 사용자 설명 turn은 실제 query metadata의 READ ONLY 조회와 운영 로그를 대조했다.
