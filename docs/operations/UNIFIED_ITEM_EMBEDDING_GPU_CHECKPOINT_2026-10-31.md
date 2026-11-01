@@ -1,5 +1,67 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 재개 후 실제 CUDA 묶음 완료·채팅 공통 QUERY 재사용 — 2026-11-01 UTC
+
+- 직전 goal turn은 source8eb/API·Catalog·Pack18의 실제 운영 활성화였으며 **PROGRESS**다.
+  이번에도 원래 CUDA 실행의 공식 completion/등록·retry 계보를 확인하고, active legacy
+  Chat consumer를 옮길 owner-local projection을 구현하는 **PROGRESS**다. 전체 목표 ACTIVE다.
+- **00:00 정기 관측은 기출122/520·잔여398**이다. target-set SHA
+  `sha256:57a227ea705bedb73cc7573b38f1baf995fa3f697f81c323f251cf4e8e228678`, 공통 CUDA
+  space `39bc2c310299...`는 그대로이고 non-terminal CUDA1, historical FAILED7이다.
+  원래00/30분 timer를 유지하며 process active를 대상별 최종 완료로 세지 않는다.
+- 원래 재개한 `workflow_c48b86c2effd43ecb48ac93a18a5401c`는00:05 실제 read에서
+  **COMPLETED**, native/coordinator SUCCEEDED였다. ALLOCATION → INDEX_PREPARED →
+  REGISTERED → COMPLETED의 공식 checkpoints와 encoding Job4개 SUCCEEDED/errorNULL을
+  확인했다. 이는 위00:00 집계 뒤의 별도 exact 실행 증거이며 4개를 그대로 기출 분모에
+  더하지 않는다. 전체 수는 다음 typed 관측 및 frozen target 매칭으로 확인한다.
+  `/tmp/eom-current-public-index-owner-20261101-v3.json`.
+- 00:15 exact retry-history 검증에서 이4개 중 **3개**는 원 ALRM 실패 encoding과 같은
+  logical Job/encoding hash의 supported retry attempt1임을 확인했다. 나머지1개는 해당
+  원 실패4개의 retry로 기록되지 않았으므로 원래4개 모두의 복구 완료라고 확대하지 않는다.
+  원래 FAILED4개와 failure receipts는 모두 그대로다. 직접 row 보정/수동 새 key/model
+  제출/벡터 삭제0이다. `/tmp/eom-current-public-index-owner-20261101-v4.json`.
+  첫 diagnostic reader는 terminal `complete` step까지1개라고 가정해 assert 실패했고,
+  후속 read에서 encode step을 분리했다. 중간 log는 보존했으며 진단 실패를 runtime 실패로
+  재해석하거나 원 Workflow를 재제출하지 않았다.
+- AI 실제 provenance를23:54:56 read-only로 다시 확인했다. generic1.16 canary는 여전히
+  IN_REVIEW이고 기존 승인 sample은 generic1.10이다. accepted base/report0, 현재 preset21/
+  definition11이 실제 선택된 상태다. 구 sample을 ordinary1.16으로 relabel하거나 25문항
+  전용 publisher의 상한을 풀지 않는다. 기존 승인 대기 canary1개 승인 여부를 비차단 질문으로
+  요청했으며 응답 전에는 승인/실제 모델 작업을 대신 실행하지 않았다.
+  `/tmp/eom-registered-solution-readiness-post8eb-20261031.json`.
+- private 질문은 원 basis1/exact text를 유지하고 문항 document는 공통 recipe2/index3·4를
+  사용한다. numerical QUERY2에는 승인 Item anchor가 원래 없으므로 기존
+  `PublicSolutionQueryInput/Result2`를 그대로 재사용하기로 했다. owner-local
+  `PreparedPrivateChatPublicQuery`가 질문 basis/hash와 exact native input/result를 묶는다.
+  conversation/turn ID를 수치 payload에 복제하거나 질문을 corpus Item으로 등록하지 않는다.
+  whitespace/Unicode/부정문·별도 context를 보존하며 기존 encoder/packer/수치 schema bytes는
+  변경0이다. 검토 중의 별도 private numeric2 source 후보는 미배포 상태에서 제거했다.
+  probe logs는 보존하지만 그 후보의65 PASS를 최종 구현의 gate로 사용하지 않는다.
+- 최종 projection·기존 private/query 수치 집중 **64 PASS /8.31s**, strict mypy1 source,
+  Ruff/format/diff PASS다. CPU/CUDA는 synthetic backend이며 실제 private2 GPU admission이
+  아니다. 기존 private1 native purpose가 새 QUERY2를 backend 생성 전에 계속 거부하는 것도
+  확인했다. `/tmp/eom-private-common-numeric-projection-focused-20261101-final.log`,
+  `/tmp/eom-private-common-numeric-projection-mypy-20261101.log`.
+- 넓은 최초 회귀는1082 PASS/6 FAIL이었다. 4개 실패는 별도 설치된 baseline8에서도 같은
+  원인으로 재현됐고, 나머지2개는0057/0058을 전역 latest로 고정한 낡은 기대였다. exact
+  binding-origin index 재조회2회와 stop callback을 검증하고, frozen migration의 current-head
+  ancestry와 명시적 unadmitted seam을 확인하도록 test fixtures만 보정했다. 유지보수
+  commit `c854d48f`, 관련 묶음33/35 PASS다. source 거부/권한/수명 규칙을 약화하지 않았다.
+  `/tmp/eom-private-public-query2-regression-20261101.log`,
+  `/tmp/eom-private-public-query2-baseline8-read-test-20261101.log`,
+  `/tmp/eom-private-public-query2-baseline8-other-failures-20261101.log`.
+- 최종 넓은 회귀는 동일 exec session52372에서 **1,079 PASS /399.57s**로 끝났다.
+  마지막 집중64와 범위가 겹치므로 독립 테스트 수로 합산하지 않는다. 최종 mypy/Ruff/format/
+  diff PASS이며 source 수치 adapter/stdio/contract schema는 현재 운영8eb와 byte 변경0이다.
+  `/tmp/eom-private-common-numeric-projection-regression-20261101.log`,
+  `/tmp/eom-private-common-numeric-projection-focused-20261101-final.log`,
+  `/tmp/eom-private-common-numeric-projection-mypy-20261101-final.log`.
+  source projection은 아직
+  private context/execution/policy·native-purpose·Chat read/provenance 경로의 운영 선택이
+  아니다. 그 successor와 필요 DB CHECK를 먼저 닫고 actual authorized Chat/query/replay로
+  확인해야 active CONTENT_ONLY 소비자를 전환할 수 있다. 기존 운영 source8eb/QUERY FB/
+  INDEX1683578/creative1698293을 이 source-only 작업 때문에 바꾸지 않았다.
+
 ## 공통 자료의 실제 문항 시작 연결과 원래 CUDA 실패 복구 — 2026-10-31 23:39 UTC
 
 - 직전 사용자 응답은 GUI 시험 후보 안내였으며 목표 구현 자체로는 **NO_PROGRESS**였다.

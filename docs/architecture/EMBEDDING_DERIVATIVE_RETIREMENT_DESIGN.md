@@ -264,3 +264,60 @@ API의 기존 reference-start use case에서 실제 resolved Pack18이면 기존
 scope validator와 Orchestrator resolver를 재사용한다. 새 wire schema/DB/table/index/queue나
 캐시는 필요 없다. 준비는 기존 bounded read, acceptance는 indexed key lookup과 원 root
 transaction이므로 큰 payload의 DB 복제나 N+1을 추가하지 않는다.
+
+### 일반 채팅의 private 질의를 공통 문항 인덱스로 연결
+
+현재 NATIVE_TOPIC/READ_ONLY의 private QUERY1은 CONTENT_ONLY 구형 문항 인덱스 소비자다.
+새 문항 벡터를 완성해도 이 active consumer가 같은 구 벡터를 사용하면 삭제할 수 없다.
+다음 additive successor로 private 질문 provenance와 공통 문항 document scope를 분리한다.
+이 절은 설계이며 구현·설치·활성화·실제 채팅 검증의 PASS를 뜻하지 않는다.
+
+1. 책임/경계: 기존 Chat owned-turn → private QUERY application → Catalog current Graph/
+   public index read → 기존 native encoder/Orchestrator commit 경로를 확장한다. 새로운
+   검색 엔진·queue·worker 권한이나 arbitrary index/path 입력을 추가하지 않는다.
+2. 정본: 질문은 원래 owned user-message Artifact와 basis1이다. 문항 document는 현재
+   승인 source와 report의 공통 public-solution-text/1.0·recipe2 entry/index3·4다. 질문을
+   accepted Item/풀이보고서로 위장하거나 corpus의 새 문항으로 등록하지 않는다.
+3. identity/revision: 원 conversation/turn/message revision/raw UTF-8 text SHA와 basis SHA,
+   Graph/policy/index revision·manifest SHA, 실제 model/query/document space를 핀한다.
+   private context/execution/policy successor는 기존1의 의미/bytes와 분리한다. 수치 메시지는
+   승인 문항 anchor가 없는 기존 PublicSolutionQueryInput/Result2를 그대로 재사용한다.
+4. 해석: private 질문은 기존 exact-user-text 규칙으로 유지한다. trim/요약/추론/가짜 풀이
+   단계로 재작성하지 않는다. 문항 쪽은 출처와 무관하게 같은 공통 입력·model/정규화·공간을
+   사용한다. 질문의 공개 문항 근거 여부와 문항 간 풀이 유사도의 의미를 혼동하지 않는다.
+5. 포인터: 실제 owner가 owned/live turn, source permission/lifecycle, pinned Artifact schema/
+   media/hash, index membership·space/recipe, native original association을 전후 검증한다.
+   질문/문서 철회와 old-family 응답은 명시적으로 거부하며 latest/old index로 우회하지 않는다.
+6. 접근/구조: 하나의 질문 encoding key lookup, bounded source revision map/set, 기존
+   exact ranking O(N·D + N log N), ordered top-k tuple, append-only checkpoint를 재사용한다.
+   N은 기존 공통 corpus 상한16,384 안이며 중복 vector는 encoding hash map으로 재사용한다.
+7. 공간/DB: DB에 새 binary/text 복제나 table/index를 추가하지 않는다. 기존 owner-config와
+   typed references만 successor가 필요하다. 긴 질문/토큰 초과는 거부하며 자르지 않는다.
+8. 동시성: 원 turn/claim·operator fence와 existing private Workflow transaction, 원래
+   publication/checkpoint root 및 current-read fence가 소유한다. worker는 DB/NAS에 접근하지 않는다.
+9. 의존성: 계약 → domain/use case → 기존 infrastructure adapter 방향이다. native numerical
+   leaf는 model/space와 입력·결과 association만 검증하며 Chat 권한/Graph 선택을 맡지 않는다.
+   private basis와 원문 hash는 owner-local projection/launch association에 묶고, numerical
+   QUERY2에는 원 conversation/turn ID를 복제하지 않는다. 기존 shared encoder/packer와
+   native schema bytes·backend/numerical pin은 변경하지 않는다. 이는 private purpose2의
+   owner/정책/물리 실행 admission을 생략하거나 구 reference 정책을 빌려 쓰는 허가가 아니다.
+10. 실패/retry: 같은 basis/request/command로 조회·replay한다. Chat 삭제/권한 철회/중단 후
+    늦은 결과는 원 application에서 차단하고 실패 이력을 바꾸지 않는다. 새 public 인덱스가
+    없거나 private2 미설치이면 명시적 unavailable이지 legacy vector 사용 허가는 아니다.
+11. 단순 대안: private 질문을 임의의 승인 문항 anchor로 치환하거나 CONTENT_ONLY 이름만
+    CONCRETE_FACETS로 바꾸면 provenance/수치 recipe가 거짓이 된다. 기존 private lifecycle와
+    public document reader를 명시적으로 연결하는 successor가 필요한 최소 범위다. 배포는 현재
+    GPU numerical pin을 보존하고 private consumer의 준비·원 요청/read/replay를 실제 확인한 뒤 한다.
+
+구현 경계는 순서대로 닫는다. owner-local `PreparedPrivateChatPublicQuery`는 기존 basis1과
+native QUERY2를 연결하는 작은 검증 값이며 권한/launch/runtime activation이 아니다. 이후
+private context/execution/policy·Workflow successor에서 정확한 원 turn과 public index3·4,
+native QUERY2 input/result hash를 함께 핀한다. 기존 원 turn unique key·immutability guard를
+유지하는 additive DB CHECK가 필요하면 disposable PostgreSQL에서 검증한다. private2의
+source owner는 새 public document read를 사용하되 질문을 승인 anchor로 만들지 않는다.
+GPU 우선/CPU fallback은 기존 public routing의 실제 선택된 document/query space를 동일하게
+적용한다. CPU의 작은 부분집합을 전체 GPU corpus의 대체라고 부르거나 공간을 섞지 않는다.
+물리 native private-purpose successor가 exact QUERY2를 받아들이는 admission을 명시적으로
+확인하기 전에는 기존 private1 unit에 새 입력을 보내지 않는다. old private1 parser는 계속
+이 입력을 거부한다. Chat read/provenance/답변 전달까지 이어서 새 authorized turn1회와
+삭제/철회/중단·원 요청 replay를 확인해야 active legacy private consumer 전환이 끝난다.
