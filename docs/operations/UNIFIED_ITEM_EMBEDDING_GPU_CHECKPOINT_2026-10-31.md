@@ -1,5 +1,25 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 완료 결과의 실제 재조회 응답 — 2026-11-02 09:49 UTC
+
+- 사용자가 현재 화면의 **결과 확인**을 눌렀다. 원
+  `workflow_a192b0dc5a9b4f47a5c327e529e7e58e`는 CPU fallback coordinator2 네 단계/Workflow
+  COMPLETED, exact Workflow/native Job 각1개다. 원 SHA
+  `sha256:8d504bfa9654b7c762081fc01d833c9158a928a975e9b82c4565731b6f2e69cf`와 receipt
+  `rev_39a91c76e34b475c952e3f9b91177c8d`는 재조회 후에도 같다. 새 numerical Job 추가0이다.
+- 실제 재조회 HTTP `req_e7830174b07d77667452a451bb072b2a`는09:40:35에147,892ms로 종료됐다.
+  현재 Catalog failure observer에 예외 기록은 없으며 처리 thread도 종료됐다. 이것을 HTTP200,
+  GUI 결과 목록 성공이나 navigation 성공으로 대신하지 않는다. 기존 API HTTP journal에는
+  response status/error code가 없어 사용자 화면의 정확한 오류 문구 확인이 남아 있다.
+- 운영 metadata만 읽어 current Graph의 승인 Item 분석1,003행/고유 revision1,003개/중복0을
+  확인했다. 단순한 같은 revision의 분석 중복이라는 가설은 근거가 없으므로 변경하지 않았다.
+  proxy의 확인된 numeric timeout override/해당 경로 error metadata도 없었다. 추정으로
+  source/hash/권한 검사나 routing 정책을 완화하지 않았다. actual installed43 PASS는 별도
+  회귀 증거일 뿐 GUI 성공 증거가 아니다.
+- 다음은 실제 화면 오류를 정확히 연결해 API/BFF/문항 navigation 중 거절 지점을 수정하는 일이다.
+  사용자에게 새 검색·재로그인·새로고침은 요청하지 않았다. Web continuation 배포와 관리자
+  로그인 수명 변경은 사용자 요청대로 이 core 검색 경로 성공 뒤로 둔다. 구 vector 삭제0이다.
+
 ## 재인증 거절 확인·진행 중 새 GUI 요청 — 2026-11-02 09:34 UTC
 
 -09:12:06/09:18:15의 실제 결과 조회 HTTP는 각각155,303/152,268ms에 종료됐지만 사용자는
@@ -20,7 +40,7 @@
   `/var/lib/eom-catalog-public-read-diagnostics-6589d16d-20261102`, PREPARE/ACTIVATE PASS다.
   Catalog PID3513494이며 API3457728/QUERY3457888/INDEX3284474 및 config/수치 pin은 그대로다.
   migration/DB write/model 실행/새 검색/INDEX 재시작0이다. 사용자 요청은 독립적으로 이어진다.
-- main `133ae1d6`의 같은-tab continuation은 browser27 PASS/공식 build·설치 simulation PASS,
+- main `133ae1d6`의 같은-tab continuation은 Web 회귀27 PASS/공식 build·설치 simulation PASS,
   wheel SHA `8a385b7f1d9cd62244f39ed55b5c0f0773ead6a0b67c99f57dd7450672c22c50`다.
   운영 Web은 아직ed353249로 유지한다. 현재 검색 화면을 지우지 않도록 보완본 배포는 보류했다.
   관리자 로그인 유지 시간은 사용자가 **검색 성공 후 조정**하라고 했으므로 현재 변경하지 않았다.
