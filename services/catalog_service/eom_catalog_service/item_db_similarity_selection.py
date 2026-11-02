@@ -109,7 +109,9 @@ class CatalogItemDbSimilaritySelection:
                 captured = self.owner.catalog.resolve_selected_sources(
                     session,
                     caller,
-                    SelectedEmbeddingSources(scope, revision_ids),
+                    # Capture takes a canonical set, while the user/query list
+                    # retains its authored order through the keyed map below.
+                    SelectedEmbeddingSources(scope, tuple(sorted(revision_ids))),
                 )
                 if len(captured.entries) != len(revisions):
                     raise ItemDbSimilaritySelectionError("ITEM_DB_SIMILARITY_NOT_INDEXED")

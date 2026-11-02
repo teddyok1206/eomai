@@ -130,7 +130,8 @@ def test_list_failure_observation_never_records_source_or_exception_prose(caplog
     assert request.actor_id not in caplog.text
 
 
-def test_catalog_resolves_two_anchors_once_and_restores_input_order():
+@pytest.mark.parametrize("reverse", (False, True))
+def test_catalog_resolves_two_anchors_once_and_restores_input_order(reverse):
     from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
     from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryLookup
     from eom_catalog_service.item_db_similarity_selection import CatalogItemDbSimilaritySelection
@@ -138,6 +139,8 @@ def test_catalog_resolves_two_anchors_once_and_restores_input_order():
     from tests.unit.test_public_solution_index_assembly import setup
 
     value, raw = list_case(2)
+    if reverse:
+        raw["selections"].reverse()
     request = ItemDbSimilaritySelectionRequestV2.model_validate(raw)
     root = MagicMock()
     session = root.__enter__.return_value
@@ -181,6 +184,10 @@ def test_catalog_resolves_two_anchors_once_and_restores_input_order():
     )
     assert len(result.anchors) == 2
     assert service.owner.catalog.resolve_selected_sources.call_count == 1
+    captured_selection = service.owner.catalog.resolve_selected_sources.call_args.args[2]
+    assert captured_selection.source_revision_ids == tuple(
+        sorted(selection.item_revision_id for selection in request.selections)
+    )
     assert service.owner.identity.fence_current_operator.call_count == 2
     session.execute.assert_not_called()
 
