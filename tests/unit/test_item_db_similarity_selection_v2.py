@@ -106,6 +106,30 @@ def test_legacy_selection_contract_is_still_closed():
     assert value.request.schema_version == "item-db-similarity-selection-request/1.0"
 
 
+def test_list_failure_observation_never_records_source_or_exception_prose(caplog, monkeypatch):
+    from eom_catalog_service import inference_transfer_read_timing as timing
+    from eom_catalog_service.item_db_similarity_selection import CatalogItemDbSimilaritySelection
+
+    _value, raw = list_case(2)
+    request = ItemDbSimilaritySelectionRequestV2.model_validate(raw)
+    service = object.__new__(CatalogItemDbSimilaritySelection)
+    service.sessions = NS(begin=MagicMock())
+    service.owner = NS(identity=NS(fence_current_operator=Mock()))
+    service._scope = Mock(side_effect=ValueError("synthetic-private-source-must-not-be-logged"))
+    monkeypatch.setattr(timing._LOGGER, "propagate", True)
+    with caplog.at_level("INFO"), pytest.raises(ValueError):
+        service.resolve_many(request)
+    records = [
+        record
+        for record in caplog.records
+        if getattr(record, "event", None) == "SIMILARITY_READ_FAILURE"
+    ]
+    assert len(records) == 1
+    assert "ValueError" in records[0].message
+    assert "synthetic-private-source" not in caplog.text
+    assert request.actor_id not in caplog.text
+
+
 def test_catalog_resolves_two_anchors_once_and_restores_input_order():
     from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
     from eom_catalog_service.embedding_registry_ports import EmbeddingRegistryLookup

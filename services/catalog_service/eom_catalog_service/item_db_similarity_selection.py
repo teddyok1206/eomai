@@ -38,6 +38,7 @@ from eom_catalog_service.external_item_models import (
     ExternalItemSourceRecord,
     ExternalItemSourceRevisionRecord,
 )
+from eom_catalog_service.inference_transfer_read_timing import observe_read_failure
 from eom_catalog_service.knowledge_graph_models import (
     KnowledgeGraphSnapshotRecord,
     KnowledgeNodeRecord,
@@ -89,7 +90,7 @@ class CatalogItemDbSimilaritySelection:
     ) -> ItemDbSimilarityPreparedSelectionV2:
         caller = EmbeddingRegistryCaller(request.actor_id)
         try:
-            with self.sessions.begin() as session:
+            with self.sessions.begin() as session, observe_read_failure():
                 # Official source capture retains shared lifecycle/completion
                 # locks. PostgreSQL READ ONLY forbids even those SELECT locks;
                 # this existing read use case issues no DML in its normal root.
