@@ -1,5 +1,29 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## INDEX coordinator4 readback 수정 운영 반영 — 2026-11-02 05:21 UTC
+
+- main84d8b18d의 completed-reader 수정만 actual INDEX fb0ab555 baseline에 반영한 release는
+  `aac484339651b53f9bd5e2d29e1215a052754f08`다. platform wheel의 차이는 reader1개와
+  RECORD뿐이다. 공식 build/RECORD/owner installer PASS, baseline57·protected installed57
+  PASS이며 중복 집합이다. source의 canonical PG4 PASS와 별개로 보고한다.
+- 기존 Identity service revision/Catalog native·source grant owner 경계로 새 runtime revision을
+  등록·선택했다. source scope/namespace/recipe/routing policy/CUDA resource profile은 동일하다.
+  이미 완료된 CPU Workflow/Job/binding과 실패 history를 수정하거나 삭제하지 않았다.
+  GPU controllera70와 CPU/GPU preparer 환경 bytes는 그대로 두었다. API3272283/QUERY3272443/
+  Catalog3272280도 재시작하지 않았다. schema68/GUI QUERY 수정은 유지한다.
+- root checkpoint `/var/lib/eom-index-completed4-aac48433-20261102`, reviewed one-off helper
+  `staging/index-completed4-release-20261102.py`다. PREPARE/PUBLISH/ACTIVATE 단계 증거와
+  원 config bytes를 보존했다. 새 policy의 service/runtime pin만 바꾸며 scope는 확장하지 않는다.
+  build `/tmp/eom-api-build/aac484339651b53f9bd5e2d29e1215a052754f08.YDlfAa/dist`, platform SHA
+  `5eb06be69a7cb187985178a09ac48c6db34d164f8f2785d05a056c899116d92d`다.
+-05:21:01 INDEX를 정상 start1회, PID3284474/active 및 새 source/controller pin 일치를 확인했다.
+  기존 native/Workflow/벡터의 재시작을 의미하지 않는다. 서비스 STARTED만으로 CUDA forward나
+  대상 수 증가를 주장하지 않는다.30분 observer timer는 재시작하지 않았고 다음05:30이다.
+  최신 CUDA target 집계와 새 numerical/registration 진척은 이후 관측할 별도 증거다.
+-05:21 metadata에는 post-schema68 GUI QUERY가 아직 없다. 실제 목록/DB 열기/동일 key 재조회는
+  계속 PENDING이다.14:04 KST 배포 전·후 요청 여부를 사용자에게 한 번 확인 중이며 터미널
+  인증·다른 사용자 세션·비밀번호를 요구하거나 변경하지 않았다. 구 vector 삭제0/목표 ACTIVE다.
+
 ## 실제 QUERY DB 제약 원인·schema68/API 운영 반영 — 2026-11-02 05:04 UTC
 
 - 사용자04:21 실제 검색 parent `job_8367e6ed73014c16a99f587cfe93bd2b`, Workflow
