@@ -12,6 +12,44 @@ import pytest
 from eom_catalog_service import inference_transfer_read_timing as module
 
 
+@pytest.mark.parametrize("logger_fails", (False, True))
+def test_read_failure_retains_exception_and_never_logs_its_prose(monkeypatch, logger_fails):
+    recorder = Mock(side_effect=OSError("private log failure") if logger_fails else None)
+    monkeypatch.setattr(module, "log_event", recorder)
+    original = ValueError("secret credentials and original item content")
+    with pytest.raises(ValueError) as caught, module.observe_read_failure():
+        raise original
+    assert caught.value is original
+    recorder.assert_called_once()
+    args, fields = recorder.call_args
+    rows = json.loads(args[2])["failures"]
+    assert len(rows) == 1 and rows[0]["error_type"] == "ValueError"
+    assert all(site.startswith("eom_catalog_service.") for site in rows[0]["sites"])
+    assert fields["event"] == "SIMILARITY_READ_FAILURE"
+    assert "secret" not in str(recorder.call_args)
+
+
+def test_failure_diagnostics_do_not_log_success_or_change_context_chain(monkeypatch):
+    recorder = Mock()
+    monkeypatch.setattr(module, "log_event", recorder)
+    with module.observe_read_failure():
+        pass
+    recorder.assert_not_called()
+    cause = KeyError("private field")
+    error = ValueError("private response")
+    try:
+        raise cause
+    except KeyError:
+        try:
+            with module.observe_read_failure():
+                raise error from None
+        except ValueError as caught:
+            assert caught is error and caught.__context__ is cause
+    value = json.loads(recorder.call_args.args[2])
+    assert [row["error_type"] for row in value["failures"]] == ["ValueError", "KeyError"]
+    assert "private" not in str(recorder.call_args)
+
+
 @pytest.fixture
 def preserved_stage_logger():
     logger = module._LOGGER

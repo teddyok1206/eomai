@@ -45,6 +45,7 @@ from eom_catalog_service.embedding_registry_ports import (
 )
 from eom_catalog_service.inference_transfer_read_timing import (
     InferenceTransferReadStage,
+    observe_read_failure,
     observe_read_stage,
 )
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
@@ -188,7 +189,7 @@ class CatalogSimilarityContextReadService:
         if owner is None:
             raise SimilarityContextReadError("QUERY_RESULT_INVALID")
         try:
-            with self.sessions.begin() as session:
+            with self.sessions.begin() as session, observe_read_failure():
                 result = read_completed_public_solution_similarity_in_session(
                     session, owner, EmbeddingRegistryCaller(request.actor_id), request.selection
                 )
