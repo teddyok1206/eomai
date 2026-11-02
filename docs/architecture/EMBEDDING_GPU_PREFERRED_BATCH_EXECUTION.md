@@ -3021,3 +3021,11 @@ Read-only protected installation capture in an isolated readonly-cache mount
 passes; capture outside that required mount correctly fails and is not live
 admission evidence. Actual QUERY results and resumed INDEX commits remain
 independent operating gates.
+
+The Catalog public similarity consumer pins the complete public QUERY
+configuration bytes. A QUERY owner-source or controller selection that changes
+those bytes must update the consumer's independently verified configuration
+digest in the same compatible rollout, even when the Catalog wheel is unchanged.
+Preserving its process/configuration unconditionally can leave a live digest
+mismatch. Preserve the old bytes, report the observed mismatch explicitly, and
+verify the replacement digest and receiver readiness; never bypass that check.

@@ -1,5 +1,52 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## GPU resource reader·소비자 digest 정렬·실제 QUERY 미완료 — 2026-11-02 04:16 UTC
+
+- 새 목표의 6개 슬롯 관측은 모두 주간100%다. quota 없는4개 Graph worker를 강제로
+  시작하지 않았다. 기존 global/inventory ceiling3도 바꾸지 않았다. 아래 작업은 로컬
+  임베딩/공식 QUERY 경계이며 LLM 실행·인증 복사·직접 DB 상태 수정은 없다.
+- 원 INDEX의 CUDA installation을 실제 controller SDK b5900c7d로 읽기 전용 검사했다.
+  처음 일반 mount에서는 HOST_CONFIGURATION_MOUNT_INVALID로 정상 거부됐다. 별도
+  transient 진단 unit에서 원 readonly-cache bind 조건을 맞춘 뒤13.263초 PASS다.
+  GPU lock/model/unit launch 없이 검사했으며 이 결과를 source/work/compute 허가로
+  쓰지 않았다. 원 FILE_UNPROTECTED의 정확한 historical leaf를 특정한 증거는 아니다.
+- root resource observer의 worker fdinfo가 여전히 generic owner reader를 쓰는 누락을
+  재현했다(수정 전2 FAIL/루트 PID1 케이스1 PASS). 기존 closed native process reader로
+  non-root fdinfo만 연결했고 PID1/설치 파일·UID/GID/birth/unit/inode/flock 검사는 유지했다.
+  main04143ad0, 실제 root baseline b590의 hotfixa70cd43415598db500763ccf329cd762177cbe3c다.
+  source241+별도 controller95, root baseline336, protected installed336 PASS이며 중복을
+  합산하지 않는다. 초기 fake-kernel fixture의 새 read port 누락 실패는 보존하고 고쳤다.
+  Ruff/format/strict mypy1개·공식 build/RECORD PASS, production migration0이다.
+- 새 roota70/INDEX·QUERY controller pins를 일치시켰다. 실제 Catalog public QUERY
+  configuration digest가 당시 파일 bytes와 다른 것도 관측해 같은 release에서 정렬했다.
+  이전 bytes/rollback은 `/var/lib/eom-gpu-proc-controller-release-a70cd434-20261102`에 보존했다.
+  실제 work가 없는 stale QUERY의 REQUESTED/PROCESSING history는 그대로 두고 physical
+  unit0과 step 없음으로 확인했다. 새 nonce로 원 FAILED를 재해석하지 않았다.
+- QUERY READY 확인 후04:01:13 INDEX owner PID3172142를 한 번 시작했다. 새 controller 선택에
+  따른 공식 application parent `job_ace79fa2dd464ef792c088eb871a0bde`는 ROUTED/BOUND/
+  SUCCEEDED지만 **device=CPU**다. 당시 QUERY가 GPU를 잡아 정상 fallback한 것이므로 이를
+  CUDA 등록/520 진척으로 부르지 않는다. frozen CUDA170/520은 여전히 마지막 집계일 뿐이다.
+- 사용자 실제 새 검색03:55 `job_b87f5af6ef454b518baa43070564c2f7`,04:03:43
+  `job_a511fe332d7f4e92a58b537ae734ed4b`를 확인했다. 후자는 CUDA ROUTED 후 Workflow
+  `workflow_4c9fc7cb6e864b41bf14cfead2559e38` START/PROCESSING, step0/BOUND 없음이며
+  root50c6f045가 channel EOF로 끝났다. 실제 수치 계산이나 결과 성공 증거가 아니다.
+- driver가 예외를 안전하게 숨기지만 위치까지 없어 원인 추적이 막혔다. exception prose/
+  locals/traceback/capture 없이 mode·예외 type·끝2개 code 위치만 남기고 diagnostic sink
+  실패도 원 결과/비밀 보호를 바꾸지 않게 했다. main1ee4f87e, actual QUERY baseline9e의
+  hotfix4f5f2e86db240e0c70b9b03210940480171ddedd다. source19, actual baseline34/installed34
+  PASS와 Ruff/format/strict mypy1개·공식 build/RECORD를 확인했다. invocation 없는 초기 test
+  path 오류와 원 source/fixture 실패 로그는 덮지 않았다.
+- 4f QUERY/Catalog consumer digest를 함께 반영했고 QUERY PID3183714/Catalog3183711이다.
+  실제 roota70·INDEX3172142·API2738888·numerical pins 불변, DB mutation0이다. HTTPS
+  `/studio/login`200과 `/studio/api/v1/health/ready` READY는 actual result PASS와 구분한다.
+  04:15:56 metadata에 새 diagnostic release 이후 QUERY는 아직 없었다. 새 사용자 GUI
+  요청1건을 부탁했으며 추가 터미널 인증이나 기존 실패 자동 재계산은 요구하지 않았다.
+
+실제 결과 목록→결과 문항 DB 열기→같은 요청 재조회는 PENDING이다. driver diagnostic은
+실행 원인을 알아내기 위한 최소 보완이지 문제 해결/계산 성공이 아니다. GPU 전체 집계·
+CUDA catch-up도 검증해야 한다. 기출520/교과서/창작/AI 정본·보고서·FAILED·구 vector는 보존,
+구 vector 삭제0, 목표 ACTIVE다.
+
 ## 새 목표·최신 슬롯 사용량·QUERY checkpoint 수정 — 2026-11-02
 
 - 사용자가 기존 목표를 해제했고 새 목표를 등록했다. 핵심은 실제 DB GUI 유사도 검색 완주,
