@@ -1,5 +1,21 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## Public 결과 조회의 유한 RPC 예산 — 2026-11-02 08:25 UTC
+
+- 새 사용자 intent는 `workflow_0b6c01fe09bd4c9da3f2d1eaba3e69a6`, native Job
+  `job_17a4a7ae07484a11aecd5109a043dac1`다. CUDA coordinator2/Workflow/step COMPLETED,
+  exact key의 Workflow/native Job 각1개, output SHA
+  `sha256:b39704a6ebde4b93acc87a30a45f41e30c57a3cbebdf4294e799bbd568a222b9`를 확인했다.
+- Catalogb21 교체 후에도 완료 읽기 HTTP가08:21:56에100,872ms로 종료됐다. 이후 Catalog의
+  1,003-source PUBLIC_SOLUTION_REPORTS/current-admission 로그는08:22:48까지 이어졌다.
+  이는 old521-source 측정으로 정한 API90s read budget이 현재 실제 검증 tail보다 짧다는
+  증거이며, 최종 성공 또는 정확한 전체 실행시간을 증명하는 자료는 아니다.
+- 이미 반영한 anchor-only preparation/동일 root decode 재사용은 유지한다. 공통 public
+  결과 읽기(request4)에만 one-call180s 예산을 선택한다. legacy read1/2/3은90s, Web240s,
+  numerical/권한/현재 Source/Graph/policy/index/member/hash와 모든 late fence는 그대로다.
+  retry·schema·queue·global cache·새 계산은 추가하지 않는다. 현재 문항 수를 무제한 처리하는
+  보장이나 GUI 성공 선언이 아니며 실제 같은-key 결과 확인을 이어가야 한다.
+
 ## 실제 GUI QUERY 완료·Catalog 결과 조회 수신기 정렬 — 2026-11-02 08:15 UTC
 
 - 사용자의07:50 GUI 요청은 `workflow_069bffbac9664bb7b73713efd82ee387`다. CUDA route/BOUND,

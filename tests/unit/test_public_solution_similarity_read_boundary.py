@@ -7,7 +7,10 @@ from unittest.mock import Mock
 
 import pytest
 from eom_api.services import similarity_context_client as client_module
-from eom_api.services.similarity_context_client import CatalogSimilarityContextClient
+from eom_api.services.similarity_context_client import (
+    CatalogSimilarityContextClient,
+    SimilarityContextClientError,
+)
 from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
 from eom_catalog_contracts.similarity_read import (
     CompletedSimilarityQuerySelection,
@@ -31,7 +34,7 @@ from eom_catalog_service.similarity_read_dispatch import dispatch_similarity_rea
 from eom_catalog_service.similarity_read_service import CatalogSimilarityContextReadService
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_identity_service import OperatorAuthorizationFenceError
-from eom_orchestrator.general_chat_socket import ChatSocketEndpoint
+from eom_orchestrator.general_chat_socket import ChatSocketEndpoint, ChatTransportError
 from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy import create_engine
 
@@ -139,7 +142,7 @@ def test_dispatch_and_api_client_keep_public_family_and_actual_caller(monkeypatc
 
     def exchange(endpoint, value, **options):
         assert value == current.model_dump(mode="json")
-        assert options["timeout"] == 90
+        assert options["timeout"] == 180
         return json.loads(
             dispatch_similarity_read_frame(service, canonical_json_bytes(value) + b"\n")
         )
@@ -148,6 +151,24 @@ def test_dispatch_and_api_client_keep_public_family_and_actual_caller(monkeypatc
     client = CatalogSimilarityContextClient(ChatSocketEndpoint(Path("/tmp/synthetic.sock"), 42, 43))
     assert client.read_public(request.actor_id, request.selection) == reply.result
     service.read.assert_called_once_with(current)
+
+
+@pytest.mark.parametrize("failure", ("timeout", "malformed_reply"))
+def test_public_full_population_deadline_is_finite_without_retry_or_legacy_fallback(
+    monkeypatch, failure
+):
+    request, _ = pair()
+    exchange = Mock(
+        side_effect=ChatTransportError("bounded read expired") if failure == "timeout" else None,
+        return_value={},
+    )
+    monkeypatch.setattr(client_module, "exchange_chat_frame", exchange)
+    endpoint = ChatSocketEndpoint(Path("/tmp/synthetic.sock"), 42, 43)
+    with pytest.raises(SimilarityContextClientError, match="SIMILARITY_CONTEXT_UNAVAILABLE"):
+        CatalogSimilarityContextClient(endpoint).read_public(request.actor_id, request.selection)
+    assert exchange.call_count == 1
+    assert exchange.call_args.kwargs["timeout"] == 180.0
+    assert exchange.call_args.args[1]["schema_version"] == "system-rag-similarity-read-request/4.0"
 
 
 @pytest.mark.parametrize("missing", (True, False))

@@ -51,6 +51,11 @@ from jsonschema.exceptions import ValidationError as SchemaError
 # Keep one finite monotonic RPC budget, not a retry or a general API timeout.
 # Measurement and rollback: REFERENCE_QUERY_PREPARATION_TIMEOUT_2026-10-20.md.
 _CONTEXT_READ_DEADLINE_SECONDS = 90.0
+# The unified public population is now1,003 sources. After the anchor/decode
+# correction, live report admission still continues beyond the original90s
+# bound. Scope only this result read below the existing240s Web budget; keep one
+# finite transport call and the original source/policy/Artifact fences.
+_PUBLIC_CONTEXT_READ_DEADLINE_SECONDS = 180.0
 
 
 class SimilarityContextClientError(ValueError):
@@ -143,7 +148,11 @@ class CatalogSimilarityContextClient:
                 request.model_dump(mode="json"),
                 request_limit=MAX_SIMILARITY_READ_FRAME_BYTES,
                 reply_limit=MAX_SIMILARITY_READ_FRAME_BYTES,
-                timeout=_CONTEXT_READ_DEADLINE_SECONDS,
+                timeout=(
+                    _PUBLIC_CONTEXT_READ_DEADLINE_SECONDS
+                    if isinstance(request, SimilarityContextReadRequestV4)
+                    else _CONTEXT_READ_DEADLINE_SECONDS
+                ),
             )
             reply: (
                 SimilarityContextReadReply
