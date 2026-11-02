@@ -1,5 +1,6 @@
 import {createItemDbDraft, selectedFinalSourcePlacement} from "./item-db-draft.js";
-import {createItemDbSimilarity, itemDbSimilaritySelection} from "./item-db-similarity.js";
+import {itemDbSimilaritySelection} from "./item-db-similarity.js";
+import {createItemDbSimilarityList} from "./item-db-similarity-list.js";
 
 const DB_TABS = Object.freeze({
   search: ["#item-db-search-tab", "#item-db-search-panel"],
@@ -49,7 +50,7 @@ function node(document, tag, className, value) {
   return element;
 }
 
-export function createItemDb({document, api, openRegisteredItem, openPastExamVariation, onAssemblyOpen, canReadSource, searchSimilar}) {
+export function createItemDb({document, api, openRegisteredItem, openPastExamVariation, onAssemblyOpen, canReadSource, similaritySearches, previewRegisteredItem}) {
   const $ = (selector) => document.querySelector(selector);
   let cursor = null;
   let query = "";
@@ -65,8 +66,24 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   let pendingSave = null;
   let assemblyLoaded = false;
   const draft = createItemDbDraft();
-  const similarity = createItemDbSimilarity({
-    document, search: searchSimilar, activate: activateTab,
+  const similarity = createItemDbSimilarityList({
+    document, searches: similaritySearches, activate: activateTab,
+    async previewSelection(pointer, root, isCurrent) {
+      if (pointer.kind === "GRAPH_ITEM") return previewRegisteredItem(pointer, root, isCurrent);
+      const detail = await api(`/item-db/external-sources/${encodeURIComponent(pointer.source_id)}`);
+      if (!isCurrent()) return;
+      if (detail.entry.source_revision_id !== pointer.source_revision_id || detail.entry.observation_sha256 !== pointer.observation_sha256) {
+        throw new Error("기준 문항의 원본 버전이 바뀌었습니다.");
+      }
+      const placement = selectedFinalSourcePlacement(detail);
+      if (!placement) throw new Error("미리보기로 열 수 있는 최종본이 없습니다.");
+      await api(`/item-db/external-sources/${encodeURIComponent(pointer.source_id)}/editions/${placement.edition}/preview?source_revision_id=${encodeURIComponent(pointer.source_revision_id)}`, {method: "POST", mutation: true});
+      if (!isCurrent()) return;
+      const frame = node(document, "iframe", "item-db-similarity-pdf");
+      frame.title = `기준 문항 ${detail.entry.external_number} PDF 미리보기`;
+      frame.src = `/studio/api/v1/item-db/external-sources/${encodeURIComponent(pointer.source_id)}/editions/${placement.edition}/preview.pdf?source_revision_id=${encodeURIComponent(pointer.source_revision_id)}#toolbar=0&navpanes=0&view=FitH`;
+      root.replaceChildren(frame);
+    },
     openSelection(selection) {
       activateTab("search");
       resetDetail();
@@ -830,6 +847,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   }
 
   return Object.freeze({
+    setOwner: (owner) => similarity.setOwner(owner, canReadSource()),
     install() {
       renderDraft();
       similarity.install();

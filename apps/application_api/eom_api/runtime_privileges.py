@@ -78,6 +78,7 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "hwpx_application_builds",
     "hwpx_assessment_assembly_builds",
     "item_components",
+    "item_db_similarity_searches",
     "item_events",
     "item_relationships",
     "item_revisions",
@@ -140,6 +141,7 @@ READ_TABLES: Final[tuple[str, ...]] = (
 )
 
 INSERT_TABLES: Final[tuple[str, ...]] = (
+    "item_db_similarity_searches",
     "api_audit_events",
     "api_idempotency_records",
     "api_sessions",
@@ -225,6 +227,10 @@ UPDATE_TABLES: Final[tuple[str, ...]] = (
 # Keep these column grants separate from table-wide UPDATE so the API role cannot rewrite identity,
 # provenance, lease ownership, command payload, or append-only event history.
 UPDATE_COLUMN_PRIVILEGES: Final[tuple[UpdateColumnPrivilege, ...]] = (
+    (
+        "item_db_similarity_searches",
+        ("pinned_query", "children_json", "state", "device", "error_code", "updated_at"),
+    ),
     ("jobs", ("completed_at", "status", "updated_at")),
     ("worker_leases", ("release_reason", "released_at", "state")),
     ("workflow_commands", ("processed_at", "state")),

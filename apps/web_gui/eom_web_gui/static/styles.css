@@ -365,6 +365,21 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .item-db-tab.is-active { background: var(--eom-surface); color: var(--eom-primary-dark); box-shadow: var(--eom-shadow); }
 .item-db-tab span { margin-left: 4px; font-variant-numeric: tabular-nums; }
 .item-db-similarity-panel { min-width: 0; }
+.item-db-similarity-workspace { display: grid; grid-template-columns: minmax(220px, 0.7fr) minmax(0, 2fr); gap: 24px; align-items: start; }
+.item-db-similarity-controls { display: grid; gap: 16px; min-width: 0; }
+.item-db-similarity-draft { margin: 0; padding-left: 24px; max-height: 240px; overflow: auto; }
+.item-db-similarity-draft li { padding: 6px 0; overflow-wrap: anywhere; }
+.item-db-similarity-draft li button { margin-left: 8px; }
+.item-db-similarity-history { display: grid; gap: 8px; max-height: 300px; overflow: auto; }
+.item-db-history-entry { padding: 12px; border: 1px solid var(--eom-line); border-radius: 12px; background: var(--eom-porcelain); text-align: left; color: inherit; cursor: pointer; font: inherit; }
+.item-db-history-entry:hover { background: var(--eom-surface); }
+.item-db-similarity-output { min-width: 0; }
+.item-db-similarity-preview { margin: 16px 0; padding: 14px; border: 1px solid var(--eom-line); border-radius: 14px; }
+.item-db-similarity-preview summary { cursor: pointer; }
+#item-db-similarity-source-preview { max-height: 340px; overflow: auto; font-size: 13px; line-height: 1.7; background: white; color: #202329; margin-top: 12px; }
+#item-db-similarity-source-preview img { max-width: 100%; height: auto; }
+#item-db-similarity-source-preview table { max-width: 100%; border-collapse: collapse; }
+.item-db-similarity-pdf { border: 0; width: 100%; height: 330px; display: block; }
 .item-db-progress { display: flex; align-items: center; gap: 8px; color: var(--eom-primary-dark); font-size: var(--eom-type-label); }
 .item-db-computing-dot { display: inline-block; width: 13px; height: 13px; border: 2px solid var(--eom-border); border-top-color: var(--eom-primary); border-radius: 50%; animation: item-db-computing 1s linear infinite; vertical-align: middle; }
 #item-db-similarity-elapsed { color: var(--eom-text-muted); font-variant-numeric: tabular-nums; }
@@ -441,6 +456,7 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .item-db-draft-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 @media (max-width: 1100px) {
   .item-db-workspace { grid-template-columns: minmax(0, 1fr); }
+  .item-db-similarity-workspace { grid-template-columns: minmax(0, 1fr); }
   .item-db-detail-panel { position: static; max-height: none; }
   .item-db-detail-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
