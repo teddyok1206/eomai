@@ -39,6 +39,11 @@ def main() -> int:
             sys.argv.pop(1)
             from eom_catalog_service.embedding_native_cuda_index_controller import main as prepare
         elif len(sys.argv) == 3 and sys.argv[1] == "GPU_BATCH":
+            from eom_catalog_service.embedding_index_controller_selection import (
+                delegate_pinned_index_controller,
+            )
+
+            delegate_pinned_index_controller(sys.argv[2], current_release=release.name)
             sys.argv.pop(1)
             from eom_catalog_service.embedding_gpu_batch_owner_entry import main as prepare
         else:

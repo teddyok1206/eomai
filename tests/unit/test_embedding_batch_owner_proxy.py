@@ -123,8 +123,26 @@ def test_existing_root_lifecycle_uses_owner_staging_and_each_source_fence(
     assert completed.result_raw_sha256 == result.output_claim.result_raw_sha256
     assert completed.grant == result.grant
     assert completed.unit_invocation_id == driver.ready.unit.invocation_id
-    assert driver.authorization_count == 4 * len(driver.batch.children)
+    assert driver.authorization_count == 3 * len(driver.batch.children)
     assert driver.events.index("result-ACK") < driver.events.index("retire")
+
+
+def test_local_result_ack_cannot_publish_after_final_source_revocation(bridge, monkeypatch):
+    original = bridge.channel.check_child
+
+    def check(batch, child):
+        if "result-ACK" in bridge.driver.events:
+            assert "retire" in bridge.driver.events
+            raise PermissionError("source revoked before completion")
+        return original(batch, child)
+
+    monkeypatch.setattr(bridge.channel, "check_child", check)
+    with pytest.raises(PermissionError, match="before completion"):
+        proxy.run_embedding_gpu_batch_with_owner(
+            bridge.driver.captured, bridge.channel, owner_start_ticks=bridge.birth
+        )
+    assert bridge.closed
+    assert [notice.message_type for notice in bridge.notices] == ["ROOT_READY"]
 
 
 @pytest.mark.parametrize("cleared_invocation", (False, True))
