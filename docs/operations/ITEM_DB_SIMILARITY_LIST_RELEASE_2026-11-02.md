@@ -232,6 +232,22 @@ CUDA로 진행됐다. 두 child는 하나의 GPU batch에서 모델을 공유했
 CPU356/1003이었다.17:22의376/352에서 실제 등록 증가를 확인했다. 두 공간은 합산하지 않으며,
 검색 속도 개선 작업 때문에 INDEX를 중단/재시작하거나 이전 vector를 삭제하지 않았다.
 
+### 기존 기록 재열람 실측 — 2026-11-02 18:07 UTC
+
+사용자가 기존 기록을 다시 열었다고 확인한 뒤, metadata GET은18:05:30에 종료됐고 결과
+GET `req_dd5dd4472d3c7fed0286340257ca23a0`의 응답 종료는18:07:15 UTC였다.
+`HTTP_REQUEST_COMPLETED.duration_ms=104921.710`으로 약105초다. 앞서146.284초였던
+응답보다 약41초 짧은 단일 관측이며, 통제된 benchmark나 즉시 조회 달성으로 해석하지 않는다.
+
+동시에 공식 native coordinator read에서 위 두 child의 원 launch identity 각각1개,
+동일한 COMPLETED 상태·원 output SHA·공유 batch receipt가 그대로임을 대조했다.
+새 QUERY/임베딩으로 이번 조회를 대체하지 않았다. API 완료 로그에는 HTTP status가 없고
+별도 Web 상태 관측에서도 확정 응답을 얻지 못했으므로 **실제 목록 표시 성공은 사용자 확인
+대기**다. 응답이 끝났다는 이유만으로 이 확인을 PASS로 만들지 않는다.
+
+증거: `/tmp/eom-db-existing-result-20261102T1807.http`,
+`/tmp/eom-db-existing-result-20261102T1806.metadata`。
+
 화면 후속 수정은 `NOT_REGISTERED`/`NOT_INDEXED`만 ‘준비 필요’로 구분하고, 일반 연결 오류는
 ‘연결 확인 필요’로 표시한다. 승인 상태·공개 풀이·벡터 준비를 같은 상태로 설명하지 않는다.
 이 화면 문구와 앞의 PDF header 수정은 별도 Web 배포 후 실제 기록 재열람에서 확인한다.
