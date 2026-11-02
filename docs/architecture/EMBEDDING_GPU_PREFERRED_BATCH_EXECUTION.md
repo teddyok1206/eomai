@@ -3001,3 +3001,23 @@ exercise the actual batch method and actual history validator with explicit
 SQL/Identity/physical leaves; before the fix legacy passes and both public cases
 fail with a checkpoint/request family mismatch. Actual GUI success remains a
 separate live gate. Preserve original failed/unfinished requests and vectors.
+
+### Root GPU resource fdinfo readback — 2026-11-02
+
+The root GPU resource observer still read worker `/proc/<pid>/fdinfo/<fd>` with
+the generic fixed-owner reader, unlike the batch process/descriptor observer.
+A nondumpable worker can expose a root-owned proc leaf without changing its
+actual unprivileged credentials. Route only non-root worker fdinfo through the
+existing closed-member `read_live_native_process_member`; keep PID1 observations
+on the root-only reader. The original protected open, fixed proc member bounds,
+independent UID/GID/birth/cgroup/unit checks, descriptor inode/flags, retained
+GPU lease and exclusive flock checks remain mandatory. No GPU grant, source
+authority, installed-file exception, new schema or numerical-runtime change.
+
+Routing regression reproduces two failures before correction and keeps the PID1
+case passing. It is a real code-path defect but not retrospective proof of the
+exact leaf rejected in the historical controller log, which omitted the path.
+Read-only protected installation capture in an isolated readonly-cache mount
+passes; capture outside that required mount correctly fails and is not live
+admission evidence. Actual QUERY results and resumed INDEX commits remain
+independent operating gates.

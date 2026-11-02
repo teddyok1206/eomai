@@ -115,6 +115,7 @@ def kernel(monkeypatch, ready_case):
         ),
     )
     monkeypatch.setattr(owner, "read_live_runtime_os_file", read)
+    monkeypatch.setattr(owner, "read_live_native_process_member", read)
     monkeypatch.setattr(owner.subprocess, "run", command)
     return report, k, state, store
 
