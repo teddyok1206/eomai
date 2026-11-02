@@ -17,9 +17,11 @@
 | 구성요소 | 고정 source |
 | --- | --- |
 | API / shared platform / API contracts | `217d28bf8c918f501fcf6396066a2abcf1579e15` |
-| Catalog 별도 설치본 | `281692c8b2def44cfae0808d144d1f72fff641e7` |
-| Web | `7bd2df330768f379a8c83e149b93b0d544196b6c` |
+| Catalog 별도 설치본 | `89dab6fa8ea8f0bb162d0984e63d7cad7cb3bd56` |
+| Web | `1dc35993fd557fba89a455a6ce2aeef9aefc6fc2` |
 | QUERY 수치 owner | `7ba7524da3d7fd8dc86892b1654af89031380641`, 코드 변경 없음 |
+| QUERY root controller | `0d7dbf22afa3ff6a36c3d350c15b74babe7fd4ba` |
+| INDEX root controller / 수치 환경 | `a70cd43415598db500763ccf329cd762177cbe3c` / 기존 고정 환경 보존 |
 | INDEX | `aac484339651b53f9bd5e2d29e1215a052754f08`, process `3284474` 유지 |
 | DB head | `20261102_0069` |
 
@@ -123,6 +125,56 @@ Graph 소속 조회도 성공했으나 선택 순서는 내부 canonical set의 
 - 일반 오류는 기존의 비밀값 없는 failure-site observer로 진단하고 내용/예외 문구는 기록하지 않는다.
 - 실제2문항 성공은 아직 PENDING이다. 새 identity를 만들지 않고 사용자가 현재 요청의
   ‘결과 확인’을 눌러 같은 의도와 선택을 이어가는 경계로 검증한다.
+
+## 실제 두 문항 GPU 실패와 결과 인계 수정 — 2026-11-02 17:24 UTC
+
+위 준비 오류를 수정한 뒤 동일 요청 `dbsearch_4fe4b8b955f30ad17e46ff0d6d74decf`가 실제
+CUDA로 진행됐다. 두 child는 하나의 GPU batch에서 모델을 공유했지만 **최종 성공은 아니다**.
+원 parent의 SUCCEEDED는 계획 binding만 뜻한다.
+
+- 원 allocation `embeddingallocation_75e75cff15fe4eff84bec02c7403a134`의 native는
+  `RESULT_READY`를 보냈다. 최종 source RPC를 기다리는 중17:00:02 UTC에 `14/ALRM`으로
+  종료됐고 root의 최종 ACK 전송은 BrokenPipe로 실패했다. OOM/비밀번호 오류로 분류하지 않는다.
+- 검색 기록은17:04에 FAILED가 됐다. 원 두 Workflow의 RUNNING/ALLOCATION 잔여는 실제
+  GPU 실행 중이라는 뜻이 아니다. native/controller 종료·retirement 기록을 보존한다.
+  FAILED를 성공으로 바꾸거나 같은 allocation을 다시 실행하지 않았다.
+- main `24133d2e`는 ACK 전 중복된 전체 source 순회를 제거하고, 원래 있던 **retirement 후
+  모든 source의 현재 권한/정본 검증**으로 공개를 계속 차단한다. ACK는 검증한 로컬 bytes의
+  수령 확인일 뿐 publication 승인이 아니라는 기존 wire 의미를 지킨다. hash/FD/원 unit/lease,
+  계산 전·중 source check, 실제 terminal/retirement 및 상위 commit fence는 유지한다.
+- SIGALRM 시간 자체·GPU 모델·수치 prefix·저장 vector·DB schema 변경0이다. 실제 worker가
+  ACK를 기다리는 중 불필요한 source roundtrip을 제거하는 root 담당 변경이다.
+- root controller는 기존A70의 작은 successor `0d7dbf22`로 별도 설치했다. wheel 대조에서 추가는
+  목적별 INDEX controller 선택 모듈1개, 변경은 controller/bootstrap/RECORD뿐이며 API contracts는
+  byte 동일하다. 진행 중 INDEX는 원A70 controller로 넘기고 QUERY만 새 controller를 사용한다.
+  INDEX config/PID3284474/InvocationID/수치 worker bytes는 변하지 않았다.
+- 관련 source 집중124 PASS, 최종 owner revoke14 PASS, 호환 branch94 PASS·mypy3·Ruff/format·
+  build/RECORD PASS. 실행 범위가 겹치므로 합산하지 않는다. ACK 뒤 source가 취소되면
+  ROOT_COMPLETED도 반환하지 않는 회귀를 추가했다. 새로운 DB mutation 경계는 없다.
+- 첫 설치 시도는 보호된 shell script를 직접 exec해 EACCES로 실패했고 서비스 변경0이었다.
+  `/bin/bash`로 공식 script를 호출해 cold 설치한 뒤, primary의 non-routed config를 routed라고
+  가정한 preflight가 중단됐다. 이미 설치한 wheel은 재설치하지 않고 현재 구성을 확인해
+  non-routed 설정은 그대로 보존하는 준비 단계만 이어갔다. 실패 로그도 보존했다.
+- QUERY/Catalog만 호환 선택 후 실제 QUERY READY를 확인했다. 초기 즉시 관측의 NOT_READY와
+  이후 READY를 구분한다. API READY 및 HTTPS 로그인200을 확인했다. 잘못된 외부 API health
+  URL의404는 관측 URL 오류이며 실제 내부 `/api/v1/health/ready`는 READY다.
+- 후속 Web1dc35993도 배포했다. 정확한 인증 PDF 미리보기200 응답만 SAMEORIGIN, 나머지는
+  DENY다. 실제 installed Web UID/RECORD53파일 검증 PASS. Web 시작 순간 login502 한 번은
+  제한된 재조회로200이 됐고 API/QUERY/Catalog/INDEX PID는 Web 배포 동안 그대로였다.
+- 공개 풀이 projection의17:22 UTC metadata는 CUDA376/1003, CPU352/1003이다. 합산하지 않는다.
+  기존 전체 INDEX를 중단/재시작하지 않았다. 새 GPU commit 증가를 이 관측만으로 주장하지 않는다.
+
+**다음 실제 gate:** 새 코드로 명시적2문항/top_k5 검색1건을 사용자 GUI에서 시작해 각 결과,
+결과→DB, 같은 결과 재확인, 최근 기록 재열람·원 문항 미리보기를 확인한다. 실패 요청은 자동
+재실행하지 않는다. 사용자는 일반 Studio 로그인만 사용하며 터미널 비밀번호를 재요청하지 않는다.
+실제 두 문항 결과는 이 문단 시점에 아직 PENDING이다.
+
+증거: `/var/lib/eom-query-local-ack-0d7dbf22-20261102-r2/`,
+`/var/lib/eom-db-preview-web-1dc35993-20261102/`,
+`/tmp/eom-db-list-gpu-terminal-proof-20261102.metadata`,
+`/tmp/eom-db-list-local-ack-20261102.ready`,
+`/tmp/eom-db-list-preview-web-20261102.activated`,
+`/tmp/eom-db-list-local-ack-compatible-20261102.tests`。
 
 화면 후속 수정은 `NOT_REGISTERED`/`NOT_INDEXED`만 ‘준비 필요’로 구분하고, 일반 연결 오류는
 ‘연결 확인 필요’로 표시한다. 승인 상태·공개 풀이·벡터 준비를 같은 상태로 설명하지 않는다.
