@@ -9,7 +9,7 @@ import pytest
 from alembic.config import Config
 from alembic.script import ScriptDirectory
 from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
-from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
+from eom_workflow_runner.models import WorkflowInstanceRecord
 from eom_workflow_runner.private_chat_query_persistence_guards import (
     PRIVATE_CHAT_QUERY_CONTEXT_PREDICATE,
 )
@@ -28,7 +28,7 @@ def public_query_migration():
     return module
 
 
-def test_successor_check_matches_model_and_keeps_one_original_turn_index(monkeypatch):
+def test_frozen_private2_check_and_context_keep_one_original_turn_index(monkeypatch):
     module = public_query_migration()
     assert module.revision == "20261101_0067"
     scripts = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
@@ -38,12 +38,6 @@ def test_successor_check_matches_model_and_keeps_one_original_turn_index(monkeyp
     }
     assert module.down_revision == "20261031_0066"
     assert module._CONTEXT_PREDICATE == PRIVATE_CHAT_QUERY_CONTEXT_PREDICATE
-    steps = next(
-        str(c.sqltext)
-        for c in WorkflowStepRunRecord.__table__.constraints
-        if c.name == module._STEP_CHECK
-    )
-    assert steps == module._STEP_PREDICATE
     indexes = [
         index
         for index in WorkflowInstanceRecord.__table__.indexes

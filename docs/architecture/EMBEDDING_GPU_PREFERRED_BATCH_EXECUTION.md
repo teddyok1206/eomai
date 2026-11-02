@@ -3029,3 +3029,50 @@ digest in the same compatible rollout, even when the Catalog wheel is unchanged.
 Preserving its process/configuration unconditionally can leave a live digest
 mismatch. Preserve the old bytes, report the observed mismatch explicitly, and
 verify the replacement digest and receiver readiness; never bypass that check.
+
+### Actual public QUERY step persistence alignment — 2026-11-02
+
+The instrumented real GUI request fails with IntegrityError in create_step_run,
+before an application step commits. Production66's step CHECK admits only legacy
+reference result1. Migration67/model additionally admit result2 only with the
+private-chat step key. The released public definition2/request3/4 requires
+result2 with encode_reference_query; neither database revision admits that tuple.
+
+1. Boundary: application-step persistence and compatible schema/API deployment.
+2. Canonical source: released public definition2/result2 and immutable migrations.
+3. Identity: preserve Workflow/step attempt/revision, failed plans and vector pins.
+4. Pointers: exact request -> definition -> step key/result schema; no relabeling.
+5. Access: indexed step creation, unique Workflow/key/attempt and append-only events.
+6. Structure: successor68 CHECK admits that exact public tuple while preserving
+   existing legacy/private tuples. An early-return trigger uses the immutable
+   parent's indexed PK to keep result2's public/private step keys correlated;
+   a row-only CHECK cannot express this cross-row relation. No table/index/queue/
+   binary or worker change; existing parent immutability and foreign key remain.
+7. Cost: constant-size CHECK; result2 adds one indexed parent lookup, O(log N).
+   Non-result2 returns immediately; unchanged binary storage/index complexity.
+8. Concurrency: existing schema-owner migration lock, transactional DDL with bounded
+   lock wait; never force-stop live numerical work to acquire a table lock.
+9. Direction: frozen migration SQL, matching persistence model; no runtime imports
+   in migrations. API health and release metadata select the compatible head.
+10. Retry: failed history is not made successful. Public2 history blocks downgrade
+    to67; existing private2 history remains compatible with67. Preserve inputs.
+11. Result1 retagging, changing released66/67, or manually editing an untracked
+    production CHECK would conceal the mismatch. Use the normal successor and
+    disposable66/67 ->68 insertion, negative tuple and downgrade tests instead.
+
+Schema support does not activate private-chat2, broaden permissions or change
+the numerical model/space. Actual GUI result/read/replay remains a separate gate.
+
+### Registered-public completion readback — 2026-11-02
+
+The actual registered-public CPU fallback completed its native Job, Workflow and
+registration, but subsequent CUDA catch-up rejected its released coordinator4
+completion. The completed-reader accepted only families1–3, although its request,
+receipt and registration parsers already support4. Extend that existing closed
+type union to4; do not relax any source, identity, launch, hash, registration,
+producer, scope or final authority fence. No schema/migration/queue/numerical
+change or re-encoding of the completed CPU output is needed. The same official
+readback must support all four released families and repeat without another Job,
+while current source revocation still rejects the read. Exercise the actual PG,
+Artifact and coordinator paths with only the existing synthetic IAM/numerical
+leaves. This fixes INDEX continuation, not a claim of actual GUI QUERY success.

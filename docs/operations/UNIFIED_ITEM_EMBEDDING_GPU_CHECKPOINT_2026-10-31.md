@@ -1,5 +1,52 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 실제 QUERY DB 제약 원인·schema68/API 운영 반영 — 2026-11-02 05:04 UTC
+
+- 사용자04:21 실제 검색 parent `job_8367e6ed73014c16a99f587cfe93bd2b`, Workflow
+  `workflow_ea48e4b88aa24896890e7c73ef06e1b9`는 application step INSERT의 IntegrityError로
+  막혔다. live66 CHECK는 result2 자체가 없고 frozen67은 private step key만 허용했다.
+  released public definition2/request3·4는 `encode_reference_query`/result2를 요구한다.
+  이전 PG publication tests는 Artifact/result 저장이지 실제 public application step INSERT
+  검증이 아니었음을 구분한다. request/FAILED/미완료 history를 성공으로 바꾸지 않았다.
+- main985571f0의 successor68 CHECK와 exact parent-family trigger를 추가했다. old66/67 bytes는
+  보존하며 public2/private2의 step key 혼용을 거부한다. 일반 API role bootstrap이 migration
+  직후 PUBLIC function 권한을 재조정한다. private2 기능/정책을 활성화한 것이 아니다.
+  disposable `/tmp/eom-api-testdb-20261102043026_6a445499`에서 actual repository INSERT,
+  wrong family, downgrade refusal,66→68/replay/response-loss, public query publication/replay
+  8 PASS와 private tuple 부정6 PASS다. source122·actual API baseline118 및 release inventory46
+  PASS, strict mypy/Ruff/format/shell/build/RECORD PASS다. 집합은 합산하지 않는다.
+- operating API9377ee2c에서 필요한 frozen67/schema68와 기존 pinned-archive build correction만
+  반영한 실제 release `bf3e4999147c3c1955a56e6ed2e3156fcfe20531`, tree
+  `13720dac753215b371209158c11a29806492fcb5`를 별도 빌드·설치했다. platform 변경은
+  migration metadata/models/private persistence predicate3개와 RECORD뿐이다. API business
+  bytes/API contract 내용은 predecessor와 동일하다. build archive admission66 고정으로
+  처음 거부된 로그를 보존했고 이미 main에 있던 검증된 build correction7eafa7f0를 재사용했다.
+- 보호 stage `/var/lib/eom-release-operator-stage.public-step68-leoh7gek`에서 context1.15를
+  ADMIT 후 MIGRATION_UPGRADE_0068_FROM_0066/API_ROLE_BOOTSTRAP/MIGRATION_VERIFY_0068를
+  모두 EXECUTE_PASS로 완료했다. exact installed API/platform local wheels를 사용했다.
+  QUERY provider source/wheel과 cohost/Catalog config digest를 같은 rollout에서 갱신했다.
+  runtime/secret 설정 bytes와 roota70, numerical env/model/recipe/space는 유지했다.
+  API PID3272283/QUERY3272443, actual API readiness READY다.05:08 live CHECK read로68의
+  public tuple을 확인했다. 이 증거를 실제 GUI 결과 성공으로 간주하지 않는다.
+- deployment helper `staging/public-step68-api-release-20261102.py`, root evidence는
+  `/opt/eom/api-releases/bf3e4999147c3c1955a56e6ed2e3156fcfe20531`다. build/dist는
+  `/tmp/eom-api-build/bf3e4999147c3c1955a56e6ed2e3156fcfe20531.jAghck/dist`다.
+  sanitized logs `/tmp/eom-public-step68-api-20261102.{prepare,activate}` 참조.
+- INDEX는 API rollout 전04:26:59에 이미 exit1/PID0였다. INDEX stop/restart를 배포에서 하지
+  않았다.04:04 CPU fallback Workflow `workflow_1c014ef5b1de4ee486a2c3370a677358`는 실제
+  encode/complete SUCCEEDED와 Workflow COMPLETED로 등록됐다. 다음 CUDA catch-up에서
+  read_completed_local_embedding의 completed type union1–3에 released4가 빠져 거부됐다.
+  read-only official coordinator read는4 records/SUCCEEDED/NativeCoordinatorCompletedV4와
+  원 Workflow/step/Job 일치를 확인했다. current source/권한을 대신한 증거는 아니다.
+- 이 completion reader 누락의 actual PG regression은 operator/service/public3 PASS,
+  registered-public1 FAIL을 재현했고 type union4 추가 후4 PASS다. 실제 Artifact/coordinator/
+  registration read와 동일 결과 재조회, numerical Job 추가0, source revoke 거부를 검사했다.
+  IAM/모델은 기존 synthetic seam이다. INDEX 수정의 운영 반영은 아직 PENDING이다.
+
+05:14 UTC 현재 배포 후 새 QUERY parent는 아직 관측되지 않았다. 사용자에게10321의 새 검색
+1건을 요청해 두었으며, 별도 터미널 로그인이나 old failed request의 자동 재계산은 하지 않았다.
+실제 목록→결과 문항 DB 열기→동일 요청 재조회는 PENDING, 구 vector 삭제0, 목표 ACTIVE다.
+
 ## GPU resource reader·소비자 digest 정렬·실제 QUERY 미완료 — 2026-11-02 04:16 UTC
 
 - 새 목표의 6개 슬롯 관측은 모두 주간100%다. quota 없는4개 Graph worker를 강제로
