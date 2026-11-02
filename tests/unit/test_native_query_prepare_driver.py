@@ -5,6 +5,7 @@ from threading import Event
 from unittest.mock import Mock
 
 import pytest
+from eom_workflow_runner import native_query_prepare_driver as drive
 from eom_workflow_runner.native_query_prepare_driver import NativeQueryPrepareDriver
 
 from tests.unit.test_private_chat_query_prepare_application import application as application
@@ -119,7 +120,9 @@ def test_busy_original_is_later_driven_once_and_read_never_drives_it(
         driver.close()
 
 
-def test_private_exception_has_no_automatic_retry_or_retained_authority(application, monkeypatch):
+def test_private_exception_has_no_automatic_retry_or_retained_authority(
+    application, monkeypatch, caplog
+):
     private = application.runner
     run = Mock(side_effect=RuntimeError("private question must not enter drive metadata"))
     monkeypatch.setattr(private, "run_once", run)
@@ -130,7 +133,29 @@ def test_private_exception_has_no_automatic_retry_or_retained_authority(applicat
     assert driver.observe().outcome == "UNAVAILABLE"
     assert not driver.observe().active and not hasattr(driver._thread, "_args")
     assert "private question" not in repr(driver.observe())
+    assert "private question" not in caplog.text
+    assert "REFERENCE_QUERY_DRIVER_STOPPED mode=WORKFLOW error_type=RuntimeError" in caplog.text
+    assert "Traceback" not in caplog.text
     run.assert_called_once_with(workflow)
+
+
+def test_diagnostic_failure_cannot_disclose_original_error_or_change_outcome(
+    application, monkeypatch
+):
+    monkeypatch.setattr(
+        drive._LOGGER, "warning", Mock(side_effect=OSError("synthetic log sink unavailable"))
+    )
+    monkeypatch.setattr(
+        application.runner, "run_once", Mock(side_effect=ValueError("private source text"))
+    )
+    hook = Mock()
+    monkeypatch.setattr(threading, "excepthook", hook)
+    driver = NativeQueryPrepareDriver()
+    workflow = "workflow_" + "a" * 32
+    assert driver.offer_private_chat_query(workflow, application.runner) == "STARTED"
+    driver._thread.join(timeout=3)
+    assert not driver.observe().active and driver.observe().outcome == "UNAVAILABLE"
+    hook.assert_not_called()
 
 
 @pytest.mark.parametrize("error_type", (KeyboardInterrupt, SystemExit))
