@@ -387,7 +387,7 @@ def test_partial_child_publication_recovers_original_expired_command_without_ree
             if boundary.startswith("query")
             else NativeEmbeddingCompletionPublisher
         )
-        original = target.publish_reference_query
+        original = target.publish_supported_reference_query
         failed = []
         failure_lock = Lock()
 
@@ -404,7 +404,7 @@ def test_partial_child_publication_recovers_original_expired_command_without_ree
             return original(self, *args, **kwargs)
 
         with monkeypatch.context() as patch:
-            patch.setattr(target, "publish_reference_query", interrupt)
+            patch.setattr(target, "publish_supported_reference_query", interrupt)
             with pytest.raises(RuntimeError):
                 drive_batch_reference_queries(value.executor, value.workflow_ids)
         prior = histories(value)
