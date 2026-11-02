@@ -2981,3 +2981,23 @@ anchor-only text preparation cannot fit the original finite precompute window.
 11. Repeated full DOCUMENT materialization before encoding an anchor is not needed
     by QUERY execution. Legacy exact-population pairing remains unchanged; move no
     checks out of result delivery and extend no original deadline or allocation.
+
+### Public QUERY batch checkpoint family — 2026-11-02
+
+Two actual GUI requests reached CUDA routing/Workflow START but committed no
+application step. Their request4/definition2/role protocol2 persisted inputs pass
+read-only validation. The batch executor unconditionally builds checkpoint1.2,
+while public request3/4 requires the already released checkpoint2.0. The real
+history validator rejects this at ALLOCATION, rolling back step creation; the
+background driver's unknown outcome must not be described as active computation.
+
+The existing batch executor selects the checkpoint family from its validated
+request exactly once: legacy CUDA keeps1.2, public3/registered4 uses2.0. Creation
+and replay both enforce that choice; no old record is retagged or reinterpreted.
+Reuse existing request/launch/Job/checkpoint pointers, stores, claims, leases and
+transactions. This is a local executor correction, not a new schema, Workflow,
+DB migration, queue, model or authority. Three synthetic allocation/replay cases
+exercise the actual batch method and actual history validator with explicit
+SQL/Identity/physical leaves; before the fix legacy passes and both public cases
+fail with a checkpoint/request family mismatch. Actual GUI success remains a
+separate live gate. Preserve original failed/unfinished requests and vectors.
