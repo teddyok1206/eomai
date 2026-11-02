@@ -14,6 +14,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import yaml
 from eom_identity_service import installed_owner_session_provider as module
 from eom_identity_service.owner_session_transport import (
     FixedIdentityProviderPin,
@@ -23,6 +24,8 @@ from eom_identity_service.owner_session_transport import (
 
 @pytest.fixture
 def observation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest):
+    profile = getattr(request, "param", 0o644)
+    fresh_seconds = profile.get("fresh_auth_seconds", 900) if isinstance(profile, dict) else 900
     configuration = tmp_path / "config/api.yaml"
     secret = tmp_path / "keys/api.env"
     code_root = tmp_path / "code"
@@ -35,8 +38,14 @@ def observation(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest
         path.parent.mkdir(parents=True, exist_ok=True)
         path.parent.chmod(0o755)
         path.write_bytes(b"synthetic configuration/code" if path != secret else b"NOT-A-REAL-KEY")
+        if path == configuration:
+            path.write_bytes(
+                yaml.safe_dump(
+                    {"schema_version": 1, "auth": {"fresh_auth_seconds": fresh_seconds}}
+                ).encode()
+            )
         path.chmod(0o644 if path != secret else 0o600)
-    configuration.chmod(getattr(request, "param", 0o644))
+    configuration.chmod(profile.get("mode", 0o644) if isinstance(profile, dict) else profile)
     process_path = tmp_path / "process.stat"
     process_path.write_text("12345 (python) S " + " ".join(["0"] * 18 + ["9876"]) + "\n")
     descriptor = os.open(process_path, os.O_RDONLY)
@@ -123,6 +132,38 @@ def assert_current(value):
         wheel_sha256=value.pin.wheel_sha256,
         configuration_sha256=value.pin.configuration_sha256,
     )
+
+
+def test_fresh_auth_policy_uses_only_current_pinned_configuration(observation):
+    value, *_ = observation
+    admission = module.ProtectedInstalledIdentityProviderAdmission(value)
+    assert admission.fresh_auth_seconds() == 900
+    value.configuration.path.write_text("auth:\n  fresh_auth_seconds: 2700\n")
+    with pytest.raises(OwnerSessionTransportError):
+        admission.fresh_auth_seconds()
+
+
+@pytest.mark.parametrize("seconds", (60, 900, 2700, 3600, True, "2700", 0, 3601))
+def test_fresh_auth_policy_value_and_identity_bounds(observation, monkeypatch, seconds):
+    value, *_ = observation
+    admission = module.ProtectedInstalledIdentityProviderAdmission(value)
+    checked = []
+    monkeypatch.setattr(type(admission), "assert_current", lambda _self, **kw: checked.append(kw))
+    monkeypatch.setattr(
+        module,
+        "_raw",
+        lambda fd, size: (
+            yaml.safe_dump({"auth": {"fresh_auth_seconds": seconds}}).encode()
+            if fd == value.configuration.descriptor
+            else pytest.fail("secret or non-config read")
+        ),
+    )
+    if type(seconds) is int and 60 <= seconds <= 3600:
+        assert admission.fresh_auth_seconds() == seconds
+        assert len(checked) == 2
+    else:
+        with pytest.raises(OwnerSessionTransportError):
+            admission.fresh_auth_seconds()
 
 
 def test_staged_configuration_does_not_require_traversing_private_api_directory(

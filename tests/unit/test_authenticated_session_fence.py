@@ -522,6 +522,26 @@ def test_fresh_auth_expiry_not_idle_refresh_is_enforced(monkeypatch: pytest.Monk
         assert_current(source, capture)
 
 
+@pytest.mark.parametrize(
+    ("minutes", "window", "allowed"),
+    ((16, 900, False), (16, 2700, True), (44, 2700, True), (46, 2700, False)),
+)
+def test_configured_45_minute_window_preserves_real_session_and_expiry(
+    monkeypatch: pytest.MonkeyPatch, minutes: int, window: int, allowed: bool
+) -> None:
+    source = SyntheticSession()
+    source.api_session.authenticated_at -= timedelta(minutes=minutes)
+    source, capture = verified_capture(monkeypatch, source)
+    original = source.api_session.authenticated_at, source.token.expires_at
+    adapter = AuthenticatedSessionFence(replace(PIN, fresh_auth_seconds=window))
+    if allowed:
+        assert_current(source, capture, adapter)
+    else:
+        with pytest.raises(AuthenticatedSessionFenceError, match="FORBIDDEN"):
+            assert_current(source, capture, adapter)
+    assert (source.api_session.authenticated_at, source.token.expires_at) == original
+
+
 def test_database_error_is_content_free_and_requires_root_rollback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -3,8 +3,17 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-from eom_api.settings import ApiSecrets, load_settings
+from eom_api.settings import ApiSecrets, AuthSettings, load_settings
 from pydantic import ValidationError
+
+
+def test_tripled_reauthentication_policy_does_not_change_token_or_lock_policy():
+    before = AuthSettings()
+    after = AuthSettings(fresh_auth_seconds=2700)
+    assert after.fresh_auth_seconds == before.fresh_auth_seconds * 3
+    assert after.model_dump(exclude={"fresh_auth_seconds"}) == before.model_dump(
+        exclude={"fresh_auth_seconds"}
+    )
 
 
 def test_default_config_uses_service_specific_directory(

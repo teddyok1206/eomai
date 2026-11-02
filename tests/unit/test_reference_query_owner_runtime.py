@@ -36,8 +36,13 @@ def configuration(source, observation):
     return ReferenceQueryServiceConfiguration.model_validate(body)
 
 
+@pytest.mark.parametrize(
+    ("observation", "fresh_seconds"),
+    ((0o644, 900), ({"fresh_auth_seconds": 2700}, 2700)),
+    indirect=("observation",),
+)
 def test_each_request_binds_actual_capture_to_own_owner_and_shared_finite_driver(
-    source, observation
+    source, observation, fresh_seconds
 ):
     selected = configuration(source, observation)
     runtime = module.ReferenceQueryOwnerRuntime(
@@ -59,7 +64,7 @@ def test_each_request_binds_actual_capture_to_own_owner_and_shared_finite_driver
     assert first.runner.command_families == frozenset({CommandExecutionFamily.REFERENCE_QUERY})
     assert first.runner.command_actor_selection.actor_id == capture.operator_id
     assert not first.runner.available_roles and first.runner.executor is None
-    assert first.owner.identity.fence.owner.fresh_auth_seconds == 900
+    assert first.owner.identity.fence.owner.fresh_auth_seconds == fresh_seconds
     runtime.close()
 
 

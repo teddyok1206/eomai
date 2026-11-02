@@ -125,7 +125,7 @@ class ReferenceQueryOwnerRuntime:
                 AuthenticatedSessionFenceOwnerPin(
                     self.configuration.database_owner.role_name,
                     self.configuration.database_owner.role_oid,
-                    900,
+                    self.admission.fresh_auth_seconds(),
                 )
             ),
             settings=self.catalog_settings,
