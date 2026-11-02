@@ -1,5 +1,29 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## Public 결과 조회 예산 운영 반영 — 2026-11-02 08:37 UTC
+
+- main `3bdf7649`의 public request4 전용180s/legacy90s 변경을 실제 API `bf3e4999`에만
+  backport한 release는 `0f6be3cc2117a02e862e4503f00f73fe25cd6ade`다. 실제 baseline60,
+  별도 wheel 설치본의 read boundary16 PASS이며 중복 집합을 합산하지 않는다. Ruff/format,
+  strict mypy/source gate와 공식 build/RECORD 검증을 통과했다.
+- API wheel SHA는 `0f60cbab5b88c139e4a6d89bb1df11dc21b29648e26d4c8bdc62f2cff72edf52`다.
+  predecessor 대비 변경 member는 client1개/build-info/RECORD뿐이다. platform과 API contracts는
+  새 build와 기존 canonical wheel의 member bytes 일치를 확인하고 운영 설치본을 유지했다.
+  DB schema68/migration/모델/worker/credential 변경0이다. 첫 preflight의 canonical contract
+  보관 경로 오류는 서비스 변경 전에 발견·보존했고, 기존8e canonical pointer로 바로잡았다.
+- 기존 release helper의 API-only 설치와 QUERY provider pin/cohost digest/Catalog read-config
+  digest를 함께 갱신했다. Catalog `b21d8c91`의 코드 prefix는 유지했다. 보호 evidence는
+  `/var/lib/eom-public-result-budget-0f6be3cc-20261102`와 해당 API release root에 있다.
+  `staging/public-result-budget-api-release-20261102.py`의 PREPARE/ACTIVATE PASS, API READY,
+  QUERY READY를 확인했다. 실제 API PID3457728/QUERY3457888/Catalog3457723이다.
+- INDEX PID3284474와 creative owner PID/config/수치 실행환경/secret bytes의 전후 동일성을
+  검증했다. INDEX 재시작/새 검색/구 vector 삭제0, 기존30분 observer는 active다.
+- 배포 후 같은 `workflow_0b6c01fe09bd4c9da3f2d1eaba3e69a6`를 공식 coordinator로 읽어
+  COMPLETED/SUCCEEDED, exact Workflow/native Job 각1개와 기존 output SHA
+  `sha256:b39704a6ebde4b93acc87a30a45f41e30c57a3cbebdf4294e799bbd568a222b9` 보존을 확인했다.
+  사용자에게 현재 유사도 화면의 **결과 확인**만 요청했다. 실제 목록→DB 상세→같은 요청 재조회는
+  계속 PENDING이며, READY나 계산 완료를 GUI 성공으로 해석하지 않는다.
+
 ## Public 결과 조회의 유한 RPC 예산 — 2026-11-02 08:25 UTC
 
 - 새 사용자 intent는 `workflow_0b6c01fe09bd4c9da3f2d1eaba3e69a6`, native Job
