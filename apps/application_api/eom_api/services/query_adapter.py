@@ -1569,7 +1569,8 @@ class QueryAdapter:
             member.sha256,
             member.schema_ref,
             member.media_type,
-            member.logical_name,
+            # Analysis logical_name is the staged worker alias, not the NAS member.
+            member.member_path,
         )
 
     @staticmethod
