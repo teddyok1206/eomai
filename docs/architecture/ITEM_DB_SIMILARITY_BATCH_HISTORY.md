@@ -171,3 +171,26 @@ ACK를 먼저 보냈다는 이유로 실패 결과를 성공으로 재해석하�
   중단하거나 config·수치 prefix를 바꾸지 않고 목적별 호환 controller를 함께 둔다.
 - 대안: timeout 일괄 증가는 실제 단계 혼동을 숨기고, native prefix 갱신은 진행 중 INDEX의
   고정 runtime을 침해한다. 로컬 ACK와 기존 공개 전 source fence를 분리하는 변경이 더 작다.
+
+## 완료 결과 조회의 중복 자료 읽기 제거
+
+실제 완료 결과 GET은146초였다. 기존 public reader는 시작의 전체 source capture, index reader
+내부의 같은 capture, 마지막 재검증을 각각 수행한다. 첫 두 번은 동일 transaction/actor/Graph/
+policy/index에서 같은 자료를 읽는다. 두 번째를 기존 `SimilarityDocumentReadWindow`로 공유하고
+마지막 fresh capture는 유지한다. 요청을 넘는 결과·권한 cache나 새 저장소를 만들지 않는다.
+
+- 책임/정본/identity: Catalog 공식 read use case만 변경한다. 원 QUERY/Artifact/index revision,
+  source/hash와 실제 actor 권한은 보존한다. 새 계산·최신 head 재선택·실패 이력 변경은 없다.
+- pointer/검증: 기존 registry read가 artifact/schema/media/hash/등록 row·vector를 검증하며,
+  종료 시 전체 source를 다시 읽어 승인·source membership·report 변경을 거부한다.
+- 접근/구조/규모: 동일 SQL root 내 ordered capture tuple과 기존 window를 공유한다. 자료의
+  전체 순회3N→2N이며 byte 복사0, 추가 장기 보관0이다. 최대16384 source 의미는 불변이다.
+- transaction/동시성: actor/session/transaction이 같은 경우만 사용하고 새 Catalog owner-local
+  window를 만든다. service singleton에 mutable request state를 저장하지 않는다.
+- 의존/오류/retry: public reader→Catalog application→기존 registry/Artifact adapter다. window의
+  scope·권한·원 transaction 불일치는 명시적 오류다. 읽기 실패는 새 QUERY나 CPU fallback을
+  만들지 않는다. 원 완료 결과의 exact pinned selector만 재조회한다.
+- 대안: 결과를 무조건 브라우저/서버 cache에서 반환하면 권한 변경을 놓칠 수 있다. 새 결과
+  snapshot 계약보다 기존 요청 내 중복 materialization을 먼저 제거하는 쪽이 작고 안전하다.
+- 측정: 회귀에서 전체 capture가3회에서2회로 줄고 마지막 revoke가 여전히 거부됨을 확인한다.
+  운영 시간 단축은 같은 완료 요청 GET의 실제 관측 후에만 보고한다.
