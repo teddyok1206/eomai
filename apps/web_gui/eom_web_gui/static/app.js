@@ -1765,18 +1765,14 @@ function renderPreviewBlock(block) {
     image.height = block.height_px;
     image.loading = "eager";
     image.decoding = "async";
-    const caption = document.createElement("figcaption");
+    figure.append(image);
     if (block.label) {
+      const caption = document.createElement("figcaption");
       const label = document.createElement("strong");
       label.textContent = block.label;
       caption.append(label);
-      const description = document.createElement("span");
-      renderPreviewText(description, ` ${block.alt_text}`);
-      caption.append(description);
-    } else {
-      renderPreviewText(caption, block.alt_text);
+      figure.append(caption);
     }
-    figure.append(image, caption);
     return figure;
   }
   if (block.type === "equation") {

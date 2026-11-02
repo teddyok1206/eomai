@@ -95,6 +95,48 @@ def test_item_preview_dom_uses_safe_text_and_same_origin_media() -> None:
     assert ".innerHTML" not in source
 
 
+def test_item_preview_keeps_image_alt_accessible_without_visible_description() -> None:
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is not available for the preview image regression")
+    source = (ROOT / "apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
+    renderer = source[
+        source.index("function renderPreviewBlock(") : source.index(
+            "function installStructuredImport("
+        )
+    ]
+    script = r"""
+const assert = require("node:assert/strict");
+class Element {
+  constructor(tag) { this.tag = tag; this.children = []; this.textContent = ""; }
+  append(...children) { this.children.push(...children); }
+}
+const document = {createElement: tag => new Element(tag)};
+const renderPreviewText = (element, text) => {element.textContent = text;};
+RENDERER
+const description = "수평면 위의 공 A, B, C의 출발 위치를 나타낸 도식.";
+const block = {type: "image", media_url: "/api/item/image", alt_text: description,
+  width_px: 320, height_px: 240};
+const single = renderPreviewBlock(block);
+assert.equal(single.children.length, 1);
+assert.equal(single.children[0].tag, "img");
+assert.equal(single.children[0].alt, description);
+assert.equal(single.children[0].src, block.media_url);
+assert.equal(single.children[0].width, 320);
+assert.equal(single.children[0].height, 240);
+const labeled = renderPreviewBlock({...block, label: "(가)"});
+assert.equal(labeled.children.length, 2);
+assert.equal(labeled.children[1].tag, "figcaption");
+assert.equal(labeled.children[1].children.length, 1);
+assert.equal(labeled.children[1].children[0].textContent, "(가)");
+assert.equal(labeled.children[0].alt, description);
+""".replace("RENDERER", renderer)
+    completed = subprocess.run(
+        [node, "--eval", script], check=False, text=True, capture_output=True
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
 def test_item_preview_clears_stale_hwpx_target_and_requires_capability_pair() -> None:
     source = (ROOT / "apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
 
