@@ -90,7 +90,7 @@ file-set publisher의 identified publication을 사용한다. 새 DB 테이블·
 참고: [olefile read-only API](https://olefile.readthedocs.io/en/stable/olefile.html),
 [한컴 HWP 구조 설명](https://tech.hancom.com/%ED%95%9C-%EA%B8%80-%EB%AC%B8%EC%84%9C-%ED%8C%8C%EC%9D%BC-%ED%98%95%EC%8B%9D-hwp-%ED%8F%AC%EB%A7%B7-%EA%B5%AC%EC%A1%B0-%EC%82%B4%ED%8E%B4%EB%B3%B4%EA%B8%B0/).
 
-## 2026-11-02 운영 체크포인트 — 전체 작업은 아직 진행 중
+## 2026-11-02 초기 운영 체크포인트 — 당시 전체 작업 진행 중
 
 - Caption 수정 `8afb4f64`, 표시용 복구/미디어/HWPX source 연결 `30d8a985`.
   API·Catalog·Web 호환 릴리스는 `30d8a985`로 반영했다. DB migration은 없다.
@@ -155,3 +155,65 @@ Artifact를 재사용한다. 새 DB·migration·queue·프레임워크는 만들
 단순히 원본 전체 PNG를 쓰는 대안은 panel 중복과 발문/보기 혼입을 만들므로
 이 실제 예외에는 부족하다. 1.1은 PDF 재캡처의 우회가 아니라 원본 bitmap의
 검수된 부분만 사용하는 추가 표현 계약이다.
+
+## 2026-11-02 종료 체크포인트 — 333문항 복구, 6문항 미복구 예외
+
+API·Catalog·Web의 실제 호환 릴리스는 `eba075219eca5e35caa10ad10dccb06b4860ecc1`이다.
+문서만 추가한 이후 Git commit과 실제 설치 commit을 혼동하지 않는다. migration은 없다.
+
+| 범위 | 결과 |
+| --- | --- |
+| 시작 시점 승인 창작 문항 | 485 |
+| 그림 없는 문항 | 146, 변경 없음 |
+| 그림을 가진 대상 | 339문항·369개 image block |
+| 원본 bitmap 복구·발행 | **333문항·362그림** |
+| 복구 프로필 | whole-image/1.0 283문항 + bitmap-region/1.1 50문항 |
+| 실제 설치 API 서비스 계정 → private Catalog → PNG stream SHA → 같은 조회 재실행 | 333/333 PASS |
+| 제외한 원본 기출·해설 이미지 / PDF page 캡처 / 모델 실행 | 각각 0 |
+| 정본 문항·풀이·Graph·embedding revision 변경 | 0 |
+| 긴 alt_text의 Preview 화면 캡션 | 제거, 접근성 alt·실제 panel label 유지 |
+
+1.1 발행 후에도 1.0의 schema bytes와 이미 발행한 Artifact는 그대로다. 기존 canonical
+Item content와 과거 crop PNG는 역사적 참조로 보존하고, 현재 Preview와 HWPX 입력
+projection에서 승인된 새 표시 Artifact를 선택한다. 과거 증거를 새 pixels로 바꾸지 않는다.
+INDEX PID `3284474`와 고정 설치/설정은 두 번의 릴리스 전후 동일하며 재시작하지 않았다.
+
+후속 소스 회귀 215 PASS, whole-image extractor 20 PASS, 새 disposable PostgreSQL에서
+두 프로필의 동시 발행·중단 후 재개·동일 요청 재사용을 포함한 6 PASS를 확인했다.
+그 임시 DB는 제거했다. 333건의 실제 media 검증은 이 테스트들과 별개로 실행했다.
+실제 사용자 브라우저 재확인 및 새 HWPX 파일의 Hancom 육안 검수는 이번 기록에 없다.
+
+### 교체하지 않은 6문항 — 잘못된 복구본을 성공으로 승격하지 않음
+
+| 고유번호 | 실제 원본과 중단 이유 |
+| --- | --- |
+| 10325 | 과정의 bitmap만으로 결과의 분류 도식을 복구할 수 없다. 같은 bitmap을 두 번 넣는 후보와 결과 도형이 누락된 native 재구성본을 모두 거부했다. |
+| 10485 | 독립 PNG가 아닌 native 연대표·셀·글자다. 원래 표 경계가 보존되지 않는 재구성본은 발행하지 않았다. |
+| 10901 | 염기 서열이 native 글자·수식이며, 대체 폰트의 원형 문자 간격이 원문과 맞지 않았다. 원본 glyph outline을 확인해도 현재 변환본의 겹침을 정확하게 해소할 수 없어 그대로 두었다. |
+| 11404 | RNA 서열이 native 수식이다. 현 PDF 변환 결과에 수식 스타일 토큰이 노출돼 있어 그대로 그림으로 승격하지 않았다. |
+| 11472 | native 코돈 표의 수식 개체 일부가 현재 converter에서 제대로 표현되지 않는다. 알 수 없는 기호를 임의로 정정하거나 참고 기출 표를 빌리지 않았다. |
+| 11657 | DNA/아미노산 표가 native 글자·수식이다. 원래 수식 및 표 구조의 정확한 복원이 먼저 필요하며, 본문의 임의 캡처나 유사한 다른 그림으로 대체하지 않았다. |
+
+이 6문항·7개 block의 기존 정본/그림은 손대지 않았다. 따라서 **339문항 전체의
+잘림을 해결했다고 표기하지 않는다.** 원본 내장 이미지를 직접 교체할 수 있는 대상은
+마쳤고, 이 예외는 원본 native 표·수식 변환/구조 복원의 별도 작업이다. 픽셀 없는 영역을
+억지로 이미지라고 선언하거나 불완전한 프로토타입을 운영에 내보내지 않는다.
+
+### 증거 보관과 미활성 범위
+
+각 문항의 최종 PNG·표시 content·source proof는 Orchestrator가 NAS에 발행했다.
+전체 333개 publication pointer·전수 조회 결과·테스트 로그·6개 예외는 별도의 작은
+검증 JSON Schema와 함께 같은 file-set publisher로 감사 Artifact에 보관했다.
+이 보고서는 이미지 사본이나 새 정본이 아니라 이미 발행한 immutable revision의
+목록이며, DB에 binary/긴 로그를 넣지 않는다.
+
+- 감사 Artifact: `artifact_085dfdebefe04fcfa906e5f4091900d7`
+- 감사 revision: `rev_4685ea28efdb4e969e239738a4d8e172`
+- `report.json` SHA: `sha256:79e571009bf332f5819987fca84420e44d0dff20c4c463847eadb4b2dfb64b50`
+- 저장 위치: `/mnt/nas/eom/artifacts/artifact_085dfdebefe04fcfa906e5f4091900d7/rev_4685ea28efdb4e969e239738a4d8e172/`
+- 실제 전수 읽기: `/tmp/eom-restored-creative-runtime-333-20261102.metadata`
+- 운영 릴리스/rollback: `/var/lib/eom-creative-bitmap-release-20261102/`
+
+현재 복구는 원본을 직접 대조한 operator-assisted 정비 경로다. 이후 신규 등록을
+무검수로 자동 추출·교체하는 기능을 활성화했다고 주장하지 않는다. Graph/RAG의 과거
+근거 재생은 기존 pinned history를 유지하며, 문항의 표시용 read와 정본 read를 구분한다.
