@@ -1,5 +1,31 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 재인증 거절 확인·진행 중 새 GUI 요청 — 2026-11-02 09:34 UTC
+
+-09:12:06/09:18:15의 실제 결과 조회 HTTP는 각각155,303/152,268ms에 종료됐지만 사용자는
+  결과가 안 보인다고 확인했다. HTTP 종료를 성공으로 해석하지 않는다.09:21의 세 재조회는
+  API audit에서 `FRESH_AUTH_REQUIRED`/403/`AUTH_REAUTHENTICATION_REQUIRED`로 확인했다.
+  이15분 fresh-auth 거절을 앞선 긴 결과 조회 오류의 원인까지로 확대하지 않는다.
+- 사용자가 재로그인해 새 검색을 시작했다. 원 parent `job_d3b1348b9174490a84c09831d6c50047`,
+  Workflow `workflow_a192b0dc5a9b4f47a5c327e529e7e58e`를09:34에 RUNNING으로 관측했다.
+  이전 completed 결과/실패 history는 보존하며 이것을 동일-key replay라고 보고하지 않는다.
+- 이미 구성된 Catalog read-stage 채널에 예외 class·EOM module/line만 최대3원인×2위치로
+  남기는 선택적 failure observer를 추가했다. prompt/locals/exception prose/request/result/
+  auth를 기록하지 않고, 로깅 실패가 원 예외나 wire 오류를 변경하지 않는다. main `1480f80a`,
+  실제 Catalog b21 successor `6589d16d6306681dccf95d155177131f99fa57cc`다. source59,
+  actual baseline57 PASS와 strict mypy2/Ruff/공식 wheel/RECORD를 확인했다. 중복 집합이다.
+- actual platform wheel SHA `90b77a4750c92eeffb4880aab17e442f9ac05e1d3065e6c04f83849e472601fd`,
+  predecessor 대비 Catalog2개+RECORD만 바뀐다. API contracts member bytes는 동일하다.
+  기존 owner installer로 별도 prefix에 설치하고 unit42 source/prefix2줄만 교체했다. 보호 stage
+  `/var/lib/eom-catalog-public-read-diagnostics-6589d16d-20261102`, PREPARE/ACTIVATE PASS다.
+  Catalog PID3513494이며 API3457728/QUERY3457888/INDEX3284474 및 config/수치 pin은 그대로다.
+  migration/DB write/model 실행/새 검색/INDEX 재시작0이다. 사용자 요청은 독립적으로 이어진다.
+- main `133ae1d6`의 같은-tab continuation은 browser27 PASS/공식 build·설치 simulation PASS,
+  wheel SHA `8a385b7f1d9cd62244f39ed55b5c0f0773ead6a0b67c99f57dd7450672c22c50`다.
+  운영 Web은 아직ed353249로 유지한다. 현재 검색 화면을 지우지 않도록 보완본 배포는 보류했다.
+  관리자 로그인 유지 시간은 사용자가 **검색 성공 후 조정**하라고 했으므로 현재 변경하지 않았다.
+  실제 목록→DB 상세→같은 요청 재조회는 여전히 PENDING이다. 구 vector 삭제0이다.
+
 ## 재로그인 후 같은 GUI 검색 이어보기 — 2026-11-02 09:17 UTC 설계
 
 - 실제 새 검색 `workflow_f4b2a937a8c64d0f954d1ee92ea921dd`는09:09:27 COMPLETED다.
