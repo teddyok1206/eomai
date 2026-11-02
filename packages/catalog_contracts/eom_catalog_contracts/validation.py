@@ -58,6 +58,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:e07c5eaa6df31dbd0025b8441aad13bdc67eb4922a354b87b37a9d261353d3c4",
         ),
+        "item-db-similarity-selection-v2": CatalogSchemaResource(
+            "schemas/knowledge/item-db-similarity-selection-v2.schema.json",
+            "resources/knowledge/item-db-similarity-selection-v2.schema.json",
+            "2.0",
+            "sha256:971519ca14146227ef632a2214b09589419a81e77494e1bac9a3cbd220b8a898",
+        ),
         "public-solution-work-batch-input-v2": CatalogSchemaResource(
             "schemas/knowledge/public-solution-work-batch-input-v2.schema.json",
             "resources/knowledge/public-solution-work-batch-input-v2.schema.json",
