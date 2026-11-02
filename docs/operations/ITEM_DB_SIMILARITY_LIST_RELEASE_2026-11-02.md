@@ -44,6 +44,9 @@ API 서비스 정의와 인증 시간·비밀값도 변경하지 않았다. Web 
   이는 실제 로그인·실제 PDF 픽셀 검증이 아니다.
 - API/Catalog/Web wheel/RECORD·독립 설치 검증 PASS. API 첫 빌드의 OpenAPI snapshot 미갱신은
   운영 변경 전에 발견·수정했으며 실패 이력을 보존했다. 새 호환 묶음은 다시 빌드해 PASS했다.
+- 배포 뒤 실제 `eom-catalog-manager` UID에서 설치된 V2 schema hash와 dispatcher를 검증했다.
+  서비스 미제공 합성 요청은 정확한 V2 `UNAVAILABLE`로 반환했다. DB/모델 실행0이며 실제
+  사용자 권한으로 source를 해석하거나 검색한 증거는 아니므로 아래 GUI 검증은 여전히 남는다.
 
 ## 운영 보존과 현재 미완료
 
