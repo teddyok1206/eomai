@@ -38,7 +38,6 @@ from jsonschema.exceptions import ValidationError as SchemaError
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.embedding_registry_application import (
-    read_pinned_embedding_index,
     validate_registered_embedding_index_read,
 )
 from eom_catalog_service.embedding_registry_catalog_adapter import CatalogEmbeddingRegistryVerifier
@@ -438,9 +437,8 @@ class CatalogPublicSolutionSimilarityRead:
             request.policy_sha256,
             request.maximum_sources,
         )
-        captured = self.catalog.resolve_lookup(session, caller, scope)
-        document = read_pinned_embedding_index(
-            session, caller, EmbeddingRegistryRead(scope, view), self.catalog
+        captured, document = self.catalog.read_public_similarity_document_in_session(
+            session, caller, EmbeddingRegistryRead(scope, view)
         )
         return captured, document
 

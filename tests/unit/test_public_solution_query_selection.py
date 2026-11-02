@@ -64,7 +64,10 @@ def test_bulk_prepare_reads_one_real_canonical_index_and_keeps_source_order(
     vectors = Mock(
         side_effect=AssertionError("initial pins must not materialize full document vectors")
     )
-    monkeypatch.setattr(reads, "read_pinned_embedding_index", vectors)
+    monkeypatch.setattr(
+        "eom_catalog_service.embedding_registry_catalog_adapter.read_pinned_embedding_index",
+        vectors,
+    )
     result = reads.CatalogPublicSolutionSimilarityRead(value.verifier).prepare_many_in_session(
         value.session, caller, inputs
     )
@@ -189,7 +192,10 @@ def public_selection_case(
         return registered[namespace.space_sha256], 1
 
     monkeypatch.setattr(reads.EmbeddingRegistryRepository, "current_namespace_revision", head)
-    monkeypatch.setattr(reads, "read_pinned_embedding_index", value.index_reads)
+    monkeypatch.setattr(
+        "eom_catalog_service.embedding_registry_catalog_adapter.read_pinned_embedding_index",
+        value.index_reads,
+    )
     monkeypatch.setattr(
         admission,
         "resolve_public_solution_device_indexes",
