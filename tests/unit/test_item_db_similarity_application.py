@@ -82,7 +82,7 @@ def candidate_view(source):
             sha256=member.sha256,
             schema_ref=member.schema_ref,
             media_type=member.media_type,
-            logical_name=member.logical_name,
+            logical_name=member.member_path,
         ),
         mock_exam_assembly_eligible=False,
         hwpx_exam_eligible=False,
@@ -390,3 +390,49 @@ def test_navigation_is_one_indexed_batch_and_cannot_change_the_original_content_
     with pytest.raises(ApiError) as raised:
         adapter.selected_production_item_candidates((source,))
     assert raised.value.error_code == "ITEM_DB_SIMILARITY_RESULT_STALE"
+
+
+def test_navigation_compares_canonical_member_path_not_worker_input_alias(flow):
+    original = flow.value.context.candidates[0].source
+    member = original.artifact_member.model_copy(
+        update={"member_path": "assessment-item-content.json"}
+    )
+    source = original.model_copy(update={"artifact_member": member})
+    assert source.artifact_member.logical_name != source.artifact_member.member_path
+    view = candidate_view(source)
+    adapter = object.__new__(QueryAdapter)
+    adapter.production_item_candidates = Mock(return_value=PageResult((view,), None, False))
+    assert adapter.selected_production_item_candidates((source,)) == (view,)
+    adapter.production_item_candidates.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    (
+        ("artifact_id", "artifact_" + "f" * 32),
+        ("artifact_revision_id", "rev_" + "f" * 32),
+        ("sha256", "sha256:" + "f" * 64),
+        ("schema_ref", "eom.assessment.item-content/2.0"),
+        ("media_type", "text/plain"),
+        ("logical_name", "different-canonical-member.json"),
+        ("logical_name", "item-content.json"),
+    ),
+)
+def test_canonical_navigation_still_rejects_different_member_identity(flow, field, value):
+    original = flow.value.context.candidates[0].source
+    source = original.model_copy(
+        update={
+            "artifact_member": original.artifact_member.model_copy(
+                update={"member_path": "assessment-item-content.json"}
+            )
+        }
+    )
+    view = candidate_view(source)
+    broken = view.model_copy(
+        update={"content_component": view.content_component.model_copy(update={field: value})}
+    )
+    adapter = object.__new__(QueryAdapter)
+    adapter.production_item_candidates = Mock(return_value=PageResult((broken,), None, False))
+    with pytest.raises(ApiError) as caught:
+        adapter.selected_production_item_candidates((source,))
+    assert caught.value.error_code == "ITEM_DB_SIMILARITY_RESULT_STALE"
