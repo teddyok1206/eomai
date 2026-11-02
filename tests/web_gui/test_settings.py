@@ -1,8 +1,15 @@
 from __future__ import annotations
 
 import pytest
-from eom_web_gui.settings import UpstreamSettings
+from eom_web_gui.settings import SessionSettings, UpstreamSettings
 from pydantic import ValidationError
+
+
+def test_tripled_gui_login_lifetime_keeps_other_session_controls():
+    before = SessionSettings()
+    after = SessionSettings(ttl_seconds=5400)
+    assert after.ttl_seconds == before.ttl_seconds * 3
+    assert after.model_dump(exclude={"ttl_seconds"}) == before.model_dump(exclude={"ttl_seconds"})
 
 
 def test_workflow_start_timeout_is_bounded_separately_from_short_requests() -> None:

@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
+import yaml
 from eom_operator_identity.owner_session_capture_v11 import OwnerSessionCaptureRequestV11
 
 from eom_identity_service.authenticated_session_fence import AuthenticatedOperatorSession
@@ -237,6 +238,28 @@ class ProtectedInstalledIdentityProviderAdmission:
             return import_owner_session_capture(observation)
         except OwnerSessionTransportError:
             raise
+        except Exception:
+            raise _failure() from None
+
+    def fresh_auth_seconds(self) -> int:
+        """Read only the loaded provider's pinned public policy, never its secret FD."""
+        pin = self.observation.pin
+        controls = dict(
+            source_commit=pin.source_commit,
+            wheel_sha256=pin.wheel_sha256,
+            configuration_sha256=pin.configuration_sha256,
+        )
+        try:
+            self.assert_current(**controls)
+            value = yaml.safe_load(_raw(self.observation.configuration.descriptor, 1024 * 1024))
+            if type(value) is not dict or type(value.get("auth", {})) is not dict:
+                raise _failure()
+            seconds = value.get("auth", {}).get("fresh_auth_seconds", 900)
+            # Preserve Identity's existing bound; config cannot grant an unlimited session.
+            if type(seconds) is not int or not 60 <= seconds <= 3600:
+                raise _failure()
+            self.assert_current(**controls)
+            return seconds
         except Exception:
             raise _failure() from None
 
