@@ -137,6 +137,7 @@ const generalChat = createGeneralChat({
 const itemDb = createItemDb({
   document,
   api,
+  continuationStorage: () => window.sessionStorage,
   searchSimilar: (selection, key, pinnedQuery) => api("/item-db/similarity", {
     method: "POST", mutation: true, headers: {"Idempotency-Key": key},
     body: {selection, pinned_query: pinnedQuery ?? null},
@@ -477,6 +478,7 @@ async function initializeSession() {
   state.csrf = session.csrf_token;
   state.operator = session.operator;
   generalChat.setOwner(session.operator.operator_id);
+  itemDb.setOwner(session.operator.operator_id);
   $("#current-user").textContent = session.operator.display_name || session.operator.username || "운영 사용자";
   const roles = Array.isArray(session.operator.roles) ? session.operator.roles : [];
   $("#current-role").textContent = roles.map(roleLabel).join(" · ") || "운영 사용자";
@@ -5445,6 +5447,7 @@ async function logout() {
   state.adminSettingsRequestSequence += 1;
   presetEditor.reset();
   generalChat.setOwner(null);
+  itemDb.setOwner(null);
   try { await api("/logout", {method: "POST", mutation: true, body: {}}); } finally { window.location.replace("/studio/login"); }
 }
 

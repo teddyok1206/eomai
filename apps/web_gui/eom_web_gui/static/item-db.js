@@ -49,7 +49,7 @@ function node(document, tag, className, value) {
   return element;
 }
 
-export function createItemDb({document, api, openRegisteredItem, openPastExamVariation, onAssemblyOpen, canReadSource, searchSimilar}) {
+export function createItemDb({document, api, openRegisteredItem, openPastExamVariation, onAssemblyOpen, canReadSource, searchSimilar, continuationStorage}) {
   const $ = (selector) => document.querySelector(selector);
   let cursor = null;
   let query = "";
@@ -66,7 +66,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   let assemblyLoaded = false;
   const draft = createItemDbDraft();
   const similarity = createItemDbSimilarity({
-    document, search: searchSimilar, activate: activateTab,
+    document, search: searchSimilar, activate: activateTab, continuationStorage,
     openSelection(selection) {
       activateTab("search");
       resetDetail();
@@ -830,6 +830,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   }
 
   return Object.freeze({
+    setOwner: (owner) => similarity.setOwner(owner, canReadSource()),
     install() {
       renderDraft();
       similarity.install();

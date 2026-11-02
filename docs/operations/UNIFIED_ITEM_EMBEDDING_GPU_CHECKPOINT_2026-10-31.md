@@ -1,5 +1,29 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 재로그인 후 같은 GUI 검색 이어보기 — 2026-11-02 09:17 UTC 설계
+
+- 실제 새 검색 `workflow_f4b2a937a8c64d0f954d1ee92ea921dd`는09:09:27 COMPLETED다.
+ 09:12:06의 결과 조회 HTTP는155,303ms에 종료됐다. 응답 종료만으로 목록 PASS라 하지 않는다.
+  사용자 확인은 PENDING이다. 원 QUERY/native Job 각1개와 output SHA 보존을 확인했다.
+- 확인된 UI 원인: 검색 identity/pin은 JavaScript 메모리에만 있어 인증 만료 후 페이지 이동 시
+  사라진다. 서버의 완료 Workflow/Artifact가 삭제된 것은 아니다. 새 검색 history DB나 검색 엔진은
+  만들지 않고 기존 similarity UI가 같은 탭의 재로그인에 필요한 continuation1개만 소유한다.
+- 정본은 기존 API/QUERY/Catalog의 immutable request/output다. 브라우저에는 같은 사용자 ID,
+  작은 선택 pointer·고정 query pin·idempotency key·label·시작 시각만 sessionStorage에 둔다.
+  token/비밀번호/답변·문항 본문/결과 목록/vector는 저장하지 않는다. logical/revision/hash는
+  기존 typed selection을 재사용하며 저장된 값은 권한 또는 성공 증거가 아니다.
+- dominant access는 고정 key lookup/replace1개(O(1), 최대64KiB)다. 같은 origin·브라우저 탭,
+  같은 인증 사용자에만 최대24시간 복원하고 로그아웃/계정·권한 변경 시 제거한다. 별도 index/DB,
+  queue/worker/protocol/migration은 없다. sessionStorage 차단·오류는 검색 자체를 막지 않는다.
+- 재로그인 후 자동 제출은 하지 않는다. **결과 확인**을 눌러 원 key/pin을 현재 CSRF/정상 인증으로
+  공식 BFF→API에 전달한다. API가 매번 권한·source/Graph/policy/hash를 다시 검증한다. local
+  continuation의 tamper/expiry/owner 불일치는 폐기하고 최신 버전으로 대체하지 않는다.
+- in-flight UI는 sequence fence로 이전 사용자 응답을 버린다. API와 기존 idempotency/동시성 경계는
+  바꾸지 않는다. browser fixture에서 reload/재로그인·같은 key/pin·권한/계정 전환·stale 응답·저장
+  실패를 검증한다. 메모리만 유지하는 단순 대안은 실제 재로그인 문제를 해결하지 못한다.
+- 이 보완은 전체 검색 기록 기능이나 로그인 수명 연장이 아니다. 원 검색 완료/실패 이력과 GPU INDEX,
+  저장 벡터를 변경하지 않고 Web만 호환 배포한다. actual GUI 목록/DB 상세/재조회 gate는 유지한다.
+
 ## Public 결과 조회 예산 운영 반영 — 2026-11-02 08:37 UTC
 
 - main `3bdf7649`의 public request4 전용180s/legacy90s 변경을 실제 API `bf3e4999`에만

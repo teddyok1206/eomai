@@ -13,6 +13,10 @@ const PHASE_LABELS = Object.freeze({
   COMPUTING: "유사도 계산 중",
   READING_RESULTS: "결과 불러오는 중",
 });
+const CONTINUATION_KEY = "eom:item-db-similarity:1";
+const CONTINUATION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const OPERATOR_ID = /^operator_[0-9a-f]{32}$/;
+const SEARCH_KEY = /^studio:db-similarity:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export function itemDbSimilaritySelection(kind, entry) {
   let pointer;
@@ -44,13 +48,59 @@ function sourceIdentity(selection) {
     : `${selection.kind}:${selection.pointer.source_id}:${selection.pointer.source_revision_id}`;
 }
 
-export function createItemDbSimilarity({document, search, openSelection, activate}) {
+export function createItemDbSimilarity({document, search, openSelection, activate, continuationStorage}) {
   const $ = (selector) => document.querySelector(selector);
   let operation = null;
   let sequence = 0;
   let busy = false;
   let elapsedTimer = null;
   let observationTimer = null;
+  let owner = null;
+
+  function forgetContinuation() {
+    try { continuationStorage?.()?.removeItem(CONTINUATION_KEY); } catch { /* Storage is optional. */ }
+  }
+
+  function saveContinuation() {
+    if (!owner || !operation) return;
+    // Only continuation identity, never credentials, source content or prior results.
+    const value = {version: 1, owner, selection: operation.selection.pointer,
+      sourceClass: operation.selection.entry.source_class ?? null, label: operation.label,
+      key: operation.idempotencyKey, pin: operation.pinnedQuery, startedAt: operation.startedAt};
+    try {
+      const raw = JSON.stringify(value);
+      if (new TextEncoder().encode(raw).length <= 64 * 1024) continuationStorage?.()?.setItem(CONTINUATION_KEY, raw);
+      else forgetContinuation();
+    } catch { /* A blocked or full browser store must not break the search. */ }
+  }
+
+  function restoreContinuation() {
+    try {
+      const raw = continuationStorage?.()?.getItem(CONTINUATION_KEY);
+      if (!raw) return null;
+      if (new TextEncoder().encode(raw).length > 64 * 1024) throw new Error();
+      const value = JSON.parse(raw);
+      const now = Date.now();
+      if (value.version !== 1 || value.owner !== owner || !SEARCH_KEY.test(value.key)
+        || typeof value.label !== "string" || !value.label.trim() || value.label.length > 512
+        || !Number.isSafeInteger(value.startedAt) || value.startedAt > now
+        || now - value.startedAt > CONTINUATION_MAX_AGE_MS
+        || !value.selection || !["GRAPH_ITEM", "EXTERNAL_SOURCE"].includes(value.selection.kind)
+        || (value.pin !== null && (typeof value.pin !== "object" || Array.isArray(value.pin)
+          || Object.keys(value.pin).length > 16
+          || value.pin.schema_version !== "system-rag-reference-query-prepare-request/4.0"
+          || value.pin.idempotency_key !== value.key || !ID.hash.test(value.pin.request_sha256)))) throw new Error();
+      const pointer = value.selection;
+      const selection = itemDbSimilaritySelection(pointer.kind, pointer.kind === "GRAPH_ITEM"
+        ? {...pointer, source_class: value.sourceClass, snapshot_sha256: pointer.graph_snapshot_sha256}
+        : pointer);
+      return {selection, label: value.label, idempotencyKey: value.key, pinnedQuery: value.pin,
+        startedAt: value.startedAt, result: null};
+    } catch {
+      forgetContinuation();
+      return null;
+    }
+  }
 
   function clearObservation() {
     if (observationTimer !== null) clearTimeout(observationTimer);
@@ -59,7 +109,7 @@ export function createItemDbSimilarity({document, search, openSelection, activat
 
   function updateElapsed() {
     if (!operation) return;
-    const seconds = Math.max(0, Math.floor((performance.now() - operation.startedAt) / 1000));
+    const seconds = Math.max(0, Math.floor((Date.now() - operation.startedAt) / 1000));
     const elapsed = seconds >= 60 ? `${Math.floor(seconds / 60)}분 ${seconds % 60}초` : `${seconds}초`;
     $("#item-db-similarity-elapsed").textContent = `요청 후 ${elapsed}`;
   }
@@ -176,6 +226,7 @@ export function createItemDbSimilarity({document, search, openSelection, activat
       if (request !== sequence) return;
       const candidates = readCandidates(result);
       operation.pinnedQuery = result.pinned_query ?? operation.pinnedQuery;
+      saveContinuation();
       operation.result = result;
       if (["READY", "PARTIAL"].includes(result.status)) render(result, candidates);
       else {
@@ -217,6 +268,7 @@ export function createItemDbSimilarity({document, search, openSelection, activat
       sequence++;
       clearObservation();
       operation = null;
+      forgetContinuation();
       busy = false;
       controls();
       $("#item-db-similarity-anchor").textContent = "조회에서 문항을 선택해 주세요.";
@@ -224,14 +276,42 @@ export function createItemDbSimilarity({document, search, openSelection, activat
       empty("아직 검색한 문항이 없습니다.");
       message("사용 권한이 바뀌었습니다. 조회에서 문항을 다시 선택해 주세요.");
     },
+    setOwner(value, allowExternal = true) {
+      const next = typeof value === "string" && OPERATOR_ID.test(value) ? value : null;
+      if (next === owner) return;
+      if (owner !== null) forgetContinuation();
+      sequence++;
+      clearObservation();
+      owner = next;
+      busy = false;
+      operation = owner === null ? null : restoreContinuation();
+      if (operation?.selection.kind === "EXTERNAL_SOURCE" && !allowExternal) {
+        operation = null;
+        forgetContinuation();
+      }
+      if (operation) {
+        $("#item-db-similarity-anchor").textContent = operation.label;
+        $("#item-db-similarity-count").textContent = "이전 검색";
+        empty("이전 검색을 이어서 확인할 수 있습니다.");
+        message("‘결과 확인’을 누르면 새로 계산하지 않고 같은 검색을 이어서 확인합니다.");
+        activate("similarity");
+      } else {
+        $("#item-db-similarity-anchor").textContent = "조회에서 문항을 선택해 주세요.";
+        $("#item-db-similarity-count").textContent = "검색 전";
+        empty("아직 검색한 문항이 없습니다.");
+        message("조회에서 문항을 선택해 주세요.");
+      }
+      controls();
+    },
     start(selection, label) {
       activate("similarity");
       if (operation && selectionKey(operation.selection) === selectionKey(selection)) return observe();
       clearObservation();
       sequence++;
       busy = false;
-      operation = {selection, idempotencyKey: `studio:db-similarity:${crypto.randomUUID()}`, result: null,
-        pinnedQuery: null, startedAt: performance.now()};
+      operation = {selection, label, idempotencyKey: `studio:db-similarity:${crypto.randomUUID()}`, result: null,
+        pinnedQuery: null, startedAt: Date.now()};
+      saveContinuation();
       $("#item-db-similarity-anchor").textContent = label;
       $("#item-db-similarity-count").textContent = "검색 전";
       empty("선택한 문항으로 검색을 시작합니다.");

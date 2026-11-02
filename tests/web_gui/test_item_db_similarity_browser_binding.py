@@ -78,3 +78,27 @@ def test_preparing_progress_and_failed_observation_preserve_original_query_pin()
     )
     assert result.returncode == 0, result.stderr
     assert "similarity_preparing_original_pin_and_timeout_replay=PASS" in result.stdout
+
+
+def test_relogin_preserves_same_request_without_credentials_or_automatic_execution():
+    node = shutil.which("node")
+    if node is None:
+        pytest.skip("Node is required for the production presentation check")
+    root = Path(__file__).resolve().parents[2]
+    result = subprocess.run(
+        [
+            node,
+            "--experimental-default-type=module",
+            str(root / "tests/web_gui/item_db_similarity_continuation_checks.mjs"),
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "similarity_same_owner_relogin_original_request_continuation=PASS" in result.stdout
+    source = (root / "apps/web_gui/eom_web_gui/static/app.js").read_text()
+    assert "itemDb.setOwner(session.operator.operator_id)" in source
+    logout = source[source.index("async function logout()") : source.index("async function boot()")]
+    assert "itemDb.setOwner(null)" in logout
