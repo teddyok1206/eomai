@@ -1,5 +1,40 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 실제 GUI QUERY 완료·Catalog 결과 조회 수신기 정렬 — 2026-11-02 08:15 UTC
+
+- 사용자의07:50 GUI 요청은 `workflow_069bffbac9664bb7b73713efd82ee387`다. CUDA route/BOUND,
+  native `job_6bd96938000542c39683df78c7b5e473`의 coordinator2 네 단계와07:55:15 Workflow/
+  START/step SUCCEEDED·COMPLETED를 확인했다. exact key의 Workflow/native Job은 각1개다.
+  output SHA `sha256:11ecd464bfe475b74df798ac2e01d1bdf17729b8345bd7e8619c2434303a0a05`,
+  receipt revision `rev_b83af47b857a4a6f9351338cb0cfc00f`다. 이 증거는 GUI 목록 PASS가 아니다.
+- 사용자는 목록이 안 보인다고 확인했다. 실제 완료 결과 읽기 요청은100,804ms 뒤 종료됐다.
+  Catalog receiver8eb03e40에는 이미 QUERY4f에 반영한 anchor-only preparation과 eb07e901의
+  root-local report decode 재사용이 빠져 있었다. 실제 완료 source read도 이 구 helper를
+  호출하므로 같은 anchor 확인에 unrelated population/DOCUMENT를 다시 materialize했다.
+- receiver8e baseline에 관련 Catalog7개만 backport한 actual release는
+  `b21d8c918b071d09e73c0e0b237bb4328360edfb`다. 원 baseline의 anchor IO 회귀2 FAIL/manifest
+  negatives3 PASS를 재현했고, 수정 후 관련93·consumer77·protected installed93 PASS다.
+  집합은 합산하지 않는다. Ruff/format/strict mypy6·공식 build/RECORD·서비스 UID import PASS다.
+  새 schema/DB migration/dependency/queue/global cache나 timeout 증가는 없다. API read90s,
+  Web240s와 현재 권한/late source/manifest/numeric/provenance 검사는 그대로다.
+- protected platform wheel diff는 정확히 Catalog7개와 RECORD다. API contract member bytes는
+  predecessor와 동일하며 unrelated private-query 변경은 가져오지 않았다. 기존 owner installer로
+  stage했고 `/var/lib/eom-catalog-completed-query-b21d8c91-20261102`에 before/after·rollback과
+  보존 digest를 남겼다. Catalog unit42의 prefix/source만 바꿔08:14 운영 반영했다. Catalog PID
+ 3434331이며 API3272283/QUERY3272443/INDEX3284474와 numerical/controller/config/credential
+  bytes는 전후 동일했다. 운영 helper는 `staging/catalog-completed-query-release-20261102.py`다.
+- build `/tmp/eom-api-build/b21d8c918b071d09e73c0e0b237bb4328360edfb.0Mog9J/dist`, platform SHA
+  `5bb43cf6d856c28105abed08da887fafd3ad0afcacdafc8a1abe985fe2fc74fb`다. API wheel은 빌드 검사에만
+  사용하고 운영 API/platform 공용 prefix에는 설치하지 않았다. actual source branch의 상세 note는
+  `docs/operations/CATALOG_COMPLETED_PUBLIC_QUERY_READ_ALIGNMENT_2026-11-02.md`다.
+- 사용자가 안내 전에 새로 요청해08:15 parent `job_bd6ae82292aa4b30ad1caf40e5780454`가 생겼다.
+  이것을 old same-key replay라고 보고하지 않는다. 기존 completed QUERY와 새 user intent 모두
+  보존하며 새 제출은 추가로 만들지 않았다. 다음 gate는 이 새 요청의 실제 목록→DB 문항 열기→
+  같은 key 결과 확인이다. 첫 old 결과 조회 실패를 성공으로 바꾸거나 재계산하지 않는다.
+- background INDEX는 복구 뒤05:44/06:23/07:04/07:45에 연속 BATCH_COMPLETED를 관측했다.
+  마지막 로그의missing683/eligible1003은 해당 view이며 frozen520 전체 집계가 아니다. 기존
+ 30분 감시와 현재 실행은 유지했고 vectors 삭제0이다. GUI 최종 gate는 아직 PENDING이다.
+
 ## 실제 CUDA 재개·새 인덱스 등록·GUI 요청 대기 — 2026-11-02 05:37 UTC
 
 - 재개 후 parent `job_e7328cacef4b4de9abca634caaabd06a`가 CUDA ROUTED/BOUND에 도달했다.
