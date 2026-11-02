@@ -6,6 +6,7 @@ const OWNER_ID = /^operator_[0-9a-f]{32}$/;
 const pointerKey = (pointer) => JSON.stringify(Object.fromEntries(Object.entries(pointer).sort(([a], [b]) => a.localeCompare(b))));
 const sourceKey = (pointer) => pointer.kind === "GRAPH_ITEM" ? pointer.item_revision_id : pointer.source_revision_id;
 const intentKey = (selections, topK) => JSON.stringify([selections.map(pointerKey), topK]);
+const sourcePending = (record) => ["ITEM_DB_SIMILARITY_NOT_REGISTERED", "ITEM_DB_SIMILARITY_NOT_INDEXED"].includes(record?.error_code);
 
 function fromPointer(pointer) {
   return itemDbSimilaritySelection(pointer.kind, pointer.kind === "GRAPH_ITEM"
@@ -156,7 +157,9 @@ export function createItemDbSimilarityList({document, searches, previewSelection
       await view.start(fromPointer(pointer), label);
     } else {
       message(record.status === "FAILED" ? "일부 검색이 실패했습니다. 완료된 문항의 결과는 계속 열 수 있습니다."
-        : record.status === "UNAVAILABLE" ? "목록의 문항 중 풀이보고서 또는 검색 자료가 아직 준비되지 않은 문항이 있습니다."
+        : record.status === "UNAVAILABLE" ? sourcePending(record)
+          ? "목록의 문항 중 풀이보고서 또는 검색 자료가 아직 준비되지 않은 문항이 있습니다."
+          : "문항 연결을 확인하지 못했습니다. 새 검색 대신 ‘결과 확인’으로 같은 요청을 다시 확인해 주세요."
           : "선택한 기준 문항의 계산을 기다리고 있습니다.", record.status === "FAILED");
       controls();
     }
@@ -173,7 +176,7 @@ export function createItemDbSimilarityList({document, searches, previewSelection
       for (const raw of page.values) {
         const record = validRecord(raw);
         const time = new Intl.DateTimeFormat("ko-KR", {timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit"}).format(new Date(record.created_at));
-        const state = {READY: "완료", PENDING: "계산 중", PREPARING: "준비 중", FAILED: "실패", UNAVAILABLE: "준비 필요"}[record.status];
+        const state = {READY: "완료", PENDING: "계산 중", PREPARING: "준비 중", FAILED: "실패", UNAVAILABLE: sourcePending(record) ? "준비 필요" : "연결 확인 필요"}[record.status];
         const button = element("button", `${time} · ${record.selections.length}문항 · 상위 ${record.top_k}개 · ${state}`);
         button.type = "button"; button.className = "item-db-history-entry";
         button.addEventListener("click", () => openRecord(record.search_id));

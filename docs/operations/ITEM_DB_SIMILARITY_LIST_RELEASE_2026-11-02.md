@@ -104,3 +104,26 @@ SAMEORIGIN/`'self'`로 허용하는 Web 수정과53개 회귀·타입/린트 검
 
 다음은 실제2문항/top_k5 및 각 기준 결과·기록 재열람, GPU 묶음 사용 여부와 같은 결과 재조회다.
 단일 성공을 이 남은 범위의 PASS로 확대하지 않는다.
+
+## 두 문항 준비 오류 수정 — 2026-11-02 16:52 UTC
+
+사용자의2문항/top_k5 요청은 원 자료 캡처 전에 `ITEM_DB_SIMILARITY_UNAVAILABLE`가 됐다.
+이는 보고서 누락을 확인한 결과가 아니다. 실제 저장 intent의2개 revision은 서로 다르고,
+Graph 소속 조회도 성공했으나 선택 순서는 내부 canonical set의 정렬 순서와 달랐다.
+
+`SelectedEmbeddingSources`는 원래부터 정렬·중복 제거된 집합을 요구한다. 새 GUI의 순서 있는
+목록을 그대로 전달한 구현 결함을 역순2문항 테스트로 재현했다. 캡처에만 정렬된 revision tuple을
+전달하고, 결과 keyed map·query/anchors에는 원 사용자 순서를 그대로 유지하도록 수정했다.
+기존 집합 계약을 느슨하게 하거나 Graph/보고서를 새로 등록해서 우회하지 않았다.
+
+- main 수정 `4c0305c1`, 서비스 successor `89dab6fa8ea8f0bb162d0984e63d7cad7cb3bd56`.
+- focused44 PASS, strict mypy/Ruff/format PASS. 정상순서·역순서 모두 query 순서 보존을 확인했다.
+- Catalog만 새 검증 wheel/RECORD 설치본으로 교체했다. API/Web/QUERY/INDEX PID와 모든 해당
+  runtime·인증 설정은 보존했다. source protocol·DB migration 변경0, 사용자 로그아웃0.
+- 일반 오류는 기존의 비밀값 없는 failure-site observer로 진단하고 내용/예외 문구는 기록하지 않는다.
+- 실제2문항 성공은 아직 PENDING이다. 새 identity를 만들지 않고 사용자가 현재 요청의
+  ‘결과 확인’을 눌러 같은 의도와 선택을 이어가는 경계로 검증한다.
+
+화면 후속 수정은 `NOT_REGISTERED`/`NOT_INDEXED`만 ‘준비 필요’로 구분하고, 일반 연결 오류는
+‘연결 확인 필요’로 표시한다. 승인 상태·공개 풀이·벡터 준비를 같은 상태로 설명하지 않는다.
+이 화면 문구와 앞의 PDF header 수정은 별도 Web 배포 후 실제 기록 재열람에서 확인한다.
