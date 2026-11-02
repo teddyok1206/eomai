@@ -3879,3 +3879,34 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
 - 남은 목표: 실제 CUDA commit과520 GPU coverage, metadata4 QUERY receiver→writer 연결,
   AI 보고서 실제 producer/Graph/검색 연동, 원 권한 검색 증거와 구형 vector consumer audit/retirement.
   scope를 줄이거나 서비스 active만으로 전체 목표를 완료 처리하지 않는다.
+
+### GUI 결과의 잘못된 STALE 판정 수정 — 2026-11-02 11:24 UTC
+
+- 사용자 문의 `webreq_8f34fb621a901dc4c6e230f8`의 기술 코드는
+  `ITEM_DB_SIMILARITY_RESULT_STALE`였다. 결과→DB 문항 연결을 담당하는 기존
+  `QueryAdapter`가 원본 component의 canonical member 이름을 분석 입력의 worker 별칭과
+  비교하고 있었다. 실제 원본 경로는 `assessment-item-content.json`, worker 별칭은
+  `item-content.json`이었다. 잘못된 비교를 `artifact_member.member_path`로 고쳤다.
+  Artifact ID/revision/hash/schema/media/lifecycle/권한 검사는 완화하지 않았다.
+- 운영 metadata 읽기 전용 집계에서 현재 Graph의1,003개 Item revision 모두 같은
+  canonical/alias 구분을 확인했다. 문항 내용 복사·DB 쓰기·재임베딩·새 검색 제출은0이다.
+  수정 전 재현은 같은 STALE 코드로 실패했고, 수정 후 source63 PASS, 실제 baseline60 PASS,
+  wheel 설치본60 PASS다. 중복 suite를 합산하지 않는다. 잘못된 canonical member/Artifact/
+  revision/hash/schema/media는 계속 거부한다. Ruff/format/strict mypy·build/RECORD PASS다.
+- main 수정은 `cdeeb7d7`, 운영 API0f6 baseline의 좁은 successor는
+  `247a8c8894e5a4726abdb8beb47e89eddd78368a`다. API wheel 변경은 QueryAdapter/build-info/RECORD
+  세 member뿐이다. 공유 platform bf3 및 API contracts의 bytes는 그대로 유지했다.
+  primary/mixed/public/private의 provider pin과 Catalog configuration digest만 함께 갱신했다.
+- 실제 진행 중이던 QUERY `workflow_0d7ca02bd51a4f69ba53659e0cbf7fb4`가 자연 완료한 후
+  API를 교체했다. 최초 PREPARE는 실행 중 guard에서 무변경 거부됐고, 뒤이은 잘못된 ACTIVATE도
+  prepared manifest 부재로 무변경 종료됐다. 이 실패 로그는 보존하고, 상태 확인 후 새 PREPARE/
+  ACTIVATE를 각각 PASS로 실행했다. 운영 migration0, 실패 기록 재해석0이다.
+- API PID3618605/source247a8c88, QUERY PID3618809/source7ba7524d READY,
+  Catalog PID3618578이다. Web PID3583719와 INDEX PID3284474·보호된 설정/secret hash를 보존했다.
+  Web 재시작0이며 재인증45분/화면 session90분 정책도 유지했다.
+  보호된 배포/rollback 기록은 `/opt/eom/api-releases/247a8c8894e5a4726abdb8beb47e89eddd78368a`다.
+- 원 QUERY는 COMPLETED, native launch1개이며 output SHA
+  `sha256:54c7593605712a0ecb753098a394c82a7a8ac3e51a0ddcd79c1c742fa871fb73`가 배포 전후 같다.
+  이는 기존 계산 보존 증거이지 실제 GUI PASS가 아니다. 사용자에게 현재 화면의 `결과 확인`만
+  요청했다. 실제 목록 표시→결과 선택→DB 상세 열기와 같은 key 재조회는 아직 확인 대기다.
+  구형 벡터는 삭제하지 않았고 전체 목표를 완료로 처리하지 않는다.
