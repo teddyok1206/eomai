@@ -17,7 +17,7 @@
 | 구성요소 | 고정 source |
 | --- | --- |
 | API / shared platform / API contracts | `217d28bf8c918f501fcf6396066a2abcf1579e15` |
-| Catalog 별도 설치본 | `89dab6fa8ea8f0bb162d0984e63d7cad7cb3bd56` |
+| Catalog 별도 설치본 | `6ad2e4c08332be0a6276a4d879f9ab429f27a22b` |
 | Web | `1dc35993fd557fba89a455a6ce2aeef9aefc6fc2` |
 | QUERY 수치 owner | `7ba7524da3d7fd8dc86892b1654af89031380641`, 코드 변경 없음 |
 | QUERY root controller | `0d7dbf22afa3ff6a36c3d350c15b74babe7fd4ba` |
@@ -175,6 +175,56 @@ CUDA로 진행됐다. 두 child는 하나의 GPU batch에서 모델을 공유했
 `/tmp/eom-db-list-local-ack-20261102.ready`,
 `/tmp/eom-db-list-preview-web-20261102.activated`,
 `/tmp/eom-db-list-local-ack-compatible-20261102.tests`。
+
+## 실제 두 문항 CUDA 완료와 기존 결과 조회 개선 — 2026-11-02
+
+사용자가 검색이 정상으로 보인다고 확인했다. 준비 실패까지만 있던 원 intent
+`dbsearch_bc7157f963ce4c604527d556c0995c57`는17:36:32 UTC에 READY가 됐다.
+이는 이미 native가 실패한 `dbsearch_4fe4b8b955f30ad17e46ff0d6d74decf`를 성공으로 바꾼
+것이 아니다. 후자의 FAILED와 원 종료 기록은 그대로 남아 있다.
+
+- 입력2/top_k5, 실제 CUDA child Workflow 두 건 모두 COMPLETED/step SUCCEEDED이며
+  coordinator는 ALLOCATION/EXECUTED/PUBLISHED/COMPLETED를 갖춘 SUCCEEDED다.
+- 원 child는 `workflow_3e55c6b4cc48487ca02147bf8fe5ed08`,
+  `workflow_f24ee8f312ff45d6bc86a292f7b822d1`이다. 각각 native identity1건이며 동일한
+  batch receipt Artifact/revision/hash의 ordinal0/1을 가리킨다. 수치 결과 공유 batch를
+  확인했으며 QUERY당 새 프로세스로 모델을 두 번 올린 것으로 설명하지 않는다.
+- 실제 batch receipt는 `artifact_674fd60aded049dc9c5b51454a7710f2` /
+  `rev_b236099f39f54c6498bd85d7f4784626`, SHA
+  `sha256:071a12890f617c8ef4ea1bf8db823b9d78edb719b054d7c1d4752241139b2c1e`다.
+- 사용자에게 기존 결과 열람이 느리다는 피드백을 받았다. 완료 GET
+  `req_2a27fed1bafc110e841127f6bd5db348`는146.284초였다. 새 임베딩이 아니라 공식
+  완료 QUERY proof와 source/index/vector read·조합을 하는 요청이다.
+- 같은 SQL root의 전체 source를 시작·index 내부·마지막에3회 읽었다. 기존
+  `SimilarityDocumentReadWindow`를 public에도 사용해 처음 두 번을 공유하고 마지막
+  실제 전체 capture/권한·정본 재검증은 유지했다. source 순회3N→2N을 회귀로 확인했다.
+  service singleton에 요청 state를 저장하지 않고 새 owner-local window를 쓴다.
+- main `b23ec8c6`, Catalog-only 호환 successor `6ad2e4c0`를 commit/push·배포했다.
+  wheel의 실제 변경은 Catalog3모듈+RECORD이며 API contracts bytes는 그대로다.
+  API/Web/QUERY/INDEX PID·InvocationID·각 설정/수치 환경은 보존했다. 기존 Catalog의
+  요청 socket이 비어 있을 때만 교체했다. 사용자 로그인 세션·검색 이력·모델 실행 변경0.
+- main focused71 PASS, 마지막 권한·파일/승인 거부5 PASS, 호환 branch51 PASS다.
+  main strict mypy3·Ruff/format·build/RECORD PASS. 호환 branch의 전체 import 추적은
+  수정하지 않은 legacy `similarity_context_service.py:381`의 기존 profile union 오류1개가
+  있었고 **수정 전89dab6fa에서도 동일하게 재현**했다. 변경3파일의 focused strict type check는
+  PASS다. 이 범위에서 무관한 legacy composer나 수치 runtime을 다시 설계하지 않았다.
+- source backport 첫 cherry-pick은 linked worktree의 HEAD를 잘못 기준 삼아 이미 포함된
+  commit으로 빈 적용이 됐다. 변경 없이 skip 후 명시적 source commit을 적용했다.
+  이전 preparation 경로의 테스트 conflict는 그 경로를 보존하고 이번 완료 read만 반영했다.
+  실제 호환 branch 자체의51 PASS·wheel diff로 검증했다. 실패/중단된 이전 테스트는 보존했다.
+
+증거: `/tmp/eom-db-list-two-gpu-completed-20261102.metadata`,
+`/tmp/eom-db-list-existing-read-20261102T1744.metadata`,
+`/tmp/eom-db-result-read-window-final-20261102.tests`,
+`/tmp/eom-db-result-read-window-security-20261102.tests`,
+`/tmp/eom-db-result-read-window-compatible-20261102.tests`,
+`/tmp/eom-db-result-read-window-predecessor-20261102.mypy`,
+`/var/lib/eom-db-result-read-window-6ad2e4c0-20261102/`。
+
+배포 뒤 API READY·HTTPS 로그인200을 확인했다. **조회 시간 단축의 실제 수치는 아직
+미측정**이다. 사용자가 기존 완료 기록을 다시 여는 같은 GET으로 비교하며, 새 검색이나
+새 임베딩으로 속도 개선을 대신하지 않는다. 두 기준 모두의 실제 목록/미리보기와 기록 복원은
+사용자 확인 범위에 맞춰 별도로 기록한다.
 
 화면 후속 수정은 `NOT_REGISTERED`/`NOT_INDEXED`만 ‘준비 필요’로 구분하고, 일반 연결 오류는
 ‘연결 확인 필요’로 표시한다. 승인 상태·공개 풀이·벡터 준비를 같은 상태로 설명하지 않는다.
