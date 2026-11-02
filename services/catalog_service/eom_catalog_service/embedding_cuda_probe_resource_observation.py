@@ -32,7 +32,10 @@ from eom_catalog_contracts.embedding_native_installation_evidence import (
 from jsonschema.exceptions import ValidationError as JsonSchemaError
 
 from eom_catalog_service.embedding_benchmark_unit_policy import benchmark_unit_family_from_service
-from eom_catalog_service.embedding_runtime_files import read_live_runtime_os_file
+from eom_catalog_service.embedding_runtime_files import (
+    read_live_native_process_member,
+    read_live_runtime_os_file,
+)
 from eom_catalog_service.embedding_runtime_process_identity import require_exclusive_flock_fdinfo
 
 if TYPE_CHECKING:
@@ -76,7 +79,10 @@ def _fd_flags(raw: bytes) -> int:
 
 
 def _read_fdinfo(pid: int, descriptor: int, uid: int) -> bytes:
-    return read_live_runtime_os_file(
+    # A nondumpable worker's proc leaf can be root-owned. PID1 remains root-only;
+    # the native reader preserves the independent worker credential/FD fences.
+    reader = read_live_runtime_os_file if uid == 0 else read_live_native_process_member
+    return reader(
         Path("/proc") / str(pid) / "fdinfo" / str(descriptor), maximum=16384, owner_uid=uid
     )
 

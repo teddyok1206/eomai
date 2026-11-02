@@ -2874,3 +2874,123 @@ protected selection을 변경하지 않았다. configuration5는 실제 finite d
 selection/parent 생성과 routed START/finite loop, no-model/cold recovery, 실제 canonical-source
 GPU/CPU canary와 장치별 index coverage/default/rollback이다.
 CURRENT_DEFAULT=CPU, GPU_PREFERRED_ACTIVE=NO, GOAL=ACTIVE.
+
+## Registered QUERY response compatibility — 2026-11-01
+
+The actual DB GUI request for prepared creative Item 10321 fails before any
+numerical Workflow: public preparation uses the registered preparation/3.0
+pointer, but reply/4.0's released schema permits preparation/2.0 only. Preserve
+both released bytes and the original operation, rather than retagging its Artifact.
+
+1. Responsibility: the existing QUERY response contract and its API/owner decoders.
+2. Canonical source: the already published, immutable preparation Artifact member.
+3. Identity/revision: the original request/parent/control identities are unchanged.
+4. Pointers: reply/5.0 explicitly admits preparation/3.0; normal source, access,
+   schema, lifecycle and hash fences remain required before execution/result read.
+5. Access: indexed original-request lookup and ordered child response serialization.
+6. Structures: reuse the bounded typed reply and existing publication/Workflow stores.
+7. Complexity: O(children), at most 32; no new population scan or binary DB payload.
+8. Concurrency: existing original parent, claim, lease and numerical idempotency only.
+9. Direction: contracts -> owner/application; transport still grants no authority.
+10. Retry: the same original key/pin is replayed; FAILED records are never rewritten.
+11. A relaxed old schema or relabelled preparation pointer would change released
+    history, so add only the response successor needed by this confirmed mismatch.
+
+### Owner release and physical controller are independent pins
+
+The QUERY owner's `cpu_configuration.owner_source_commit` identifies the owner
+wheel; `controller_release` identifies the protected root controller actually
+selected by `EOM_EMBEDDING_INDEX_PREPARE_ENTRYPOINT`. Updating the owner must not
+automatically update the controller pin. A release operator compares the latter
+against the protected root entrypoint before activation and preserves the GPU
+controller, numerical environment and INDEX configuration unless those components
+are explicitly in the rollout. A mismatch is a configuration error, not GPU BUSY
+or permission to disable peer/release validation.
+
+### Public QUERY input preparation is not DOCUMENT ranking
+
+The real GUI canary reached ROUTED with the corrected controller, but its root
+waited for binding while the owner repeatedly resolved all DOCUMENT vectors to
+prepare a single anchor's QUERY text. The original finite allocation expired
+without a QUERY Workflow/input binding. Do not extend or renew that original.
+
+1. Boundary: existing Catalog public QUERY materialization and routed history read.
+2. Canonical input: the same accepted anchor report and common projection/recipe.
+3. Identity: preserve all source, analysis, Graph, policy, index and request revisions.
+4. Resolution: exact registered index PK/FK + canonical manifest/schema/hash and
+   current selected-anchor authority before/after materialization; never latest.
+5. Access: one indexed immutable index lookup and one selected-anchor capture.
+6. Structures: reuse RegisteredEmbeddingIndexRead and SelectedEmbeddingSources;
+   no authority/result cache, extra queue, schema, DB table or numerical backend.
+7. Cost: QUERY preparation depends on anchor text + pinned manifest, not every
+   DOCUMENT vector; O(N*D) remains at the explicit ranking/result-read boundary.
+8. Transactions: keep existing caller-owned root, source fences and native claims.
+9. Ownership: Catalog owns resolution; the pure projection remains unchanged.
+10. Replay/failure: history observation cannot grant compute; physical admission
+    and final ranking retain their existing complete validation. Preserve failures.
+11. Reusing DOCUMENT vectors as QUERY, weakening validation or increasing a lease
+    is not a fix. Materialize only the data this stage actually consumes.
+
+### Public QUERY device admission resolves manifests, not ranking bytes
+
+The next real canary has a protected GPU READY observation at18:44:37 UTC, but
+does not record its CUDA route until18:46:26. The full device-index read repeats
+again while constructing the child group and again before binding. Thus even
+anchor-only text preparation cannot fit the original finite precompute window.
+
+1. Responsibility: the existing Catalog public device-index choice reader.
+2. Canonical source: exact registered CPU/CUDA index manifests, not a current head.
+3. Revisions: keep original Graph/policy/source/index/recipe/model/space pins.
+4. Checks: registered revision metadata, canonical manifest schema/hash/lifecycle,
+   actual caller authority and device relation remain current before/after reads.
+5. Access: two indexed revision reads and two immutable manifest resolutions.
+6. Structures: existing typed device choices and manifest DTOs; no cache or queue.
+7. Cost: O(manifest bindings), without O(N*D) numerical-vector reads per fence.
+8. Transactions: existing physical owner roots and claim/lease/BOUND transitions.
+9. Ownership: device admission names the exact target index; final Catalog ranking
+   owns complete current DOCUMENT source/profile/binding/shard/vector validation.
+10. Failure: missing/stale/tampered/revoked manifests still fail, not CPU fallback.
+    An invalid DOCUMENT vector still fails before ranking/result disclosure.
+11. Repeated full DOCUMENT materialization before encoding an anchor is not needed
+    by QUERY execution. Legacy exact-population pairing remains unchanged; move no
+    checks out of result delivery and extend no original deadline or allocation.
+
+### Public QUERY batch checkpoint family — 2026-11-02
+
+Two actual GUI requests reached CUDA routing/Workflow START but committed no
+application step. Their request4/definition2/role protocol2 persisted inputs pass
+read-only validation. The batch executor unconditionally builds checkpoint1.2,
+while public request3/4 requires the already released checkpoint2.0. The real
+history validator rejects this at ALLOCATION, rolling back step creation; the
+background driver's unknown outcome must not be described as active computation.
+
+The existing batch executor selects the checkpoint family from its validated
+request exactly once: legacy CUDA keeps1.2, public3/registered4 uses2.0. Creation
+and replay both enforce that choice; no old record is retagged or reinterpreted.
+Reuse existing request/launch/Job/checkpoint pointers, stores, claims, leases and
+transactions. This is a local executor correction, not a new schema, Workflow,
+DB migration, queue, model or authority. Three synthetic allocation/replay cases
+exercise the actual batch method and actual history validator with explicit
+SQL/Identity/physical leaves; before the fix legacy passes and both public cases
+fail with a checkpoint/request family mismatch. Actual GUI success remains a
+separate live gate. Preserve original failed/unfinished requests and vectors.
+
+### Root GPU resource fdinfo readback — 2026-11-02
+
+The root GPU resource observer still read worker `/proc/<pid>/fdinfo/<fd>` with
+the generic fixed-owner reader, unlike the batch process/descriptor observer.
+A nondumpable worker can expose a root-owned proc leaf without changing its
+actual unprivileged credentials. Route only non-root worker fdinfo through the
+existing closed-member `read_live_native_process_member`; keep PID1 observations
+on the root-only reader. The original protected open, fixed proc member bounds,
+independent UID/GID/birth/cgroup/unit checks, descriptor inode/flags, retained
+GPU lease and exclusive flock checks remain mandatory. No GPU grant, source
+authority, installed-file exception, new schema or numerical-runtime change.
+
+Routing regression reproduces two failures before correction and keeps the PID1
+case passing. It is a real code-path defect but not retrospective proof of the
+exact leaf rejected in the historical controller log, which omitted the path.
+Read-only protected installation capture in an isolated readonly-cache mount
+passes; capture outside that required mount correctly fails and is not live
+admission evidence. Actual QUERY results and resumed INDEX commits remain
+independent operating gates.
