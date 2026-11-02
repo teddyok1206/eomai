@@ -1,5 +1,36 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 새 목표·최신 슬롯 사용량·QUERY checkpoint 수정 — 2026-11-02
+
+- 사용자가 기존 목표를 해제했고 새 목표를 등록했다. 핵심은 실제 DB GUI 유사도 검색 완주,
+  잔여 주간 사용량이 있는 경우 최대4개 슬롯의 창작 풀이/Graph 등록 지속 실행, 중단 INDEX의
+  정식 복구다. 기출/교과서/창작/AI 정본·보고서·FAILED와 구 vector 삭제 전 검증 조건은 보존한다.
+- 03:29 UTC 실제 guiadmin 권한을 확인한 기존 Orchestrator command owner를 통해 six OBSERVE를
+  접수했다. 별도 worker 직접 호출, 인증 복사·변경, 추론·문항 생성은 없다. 고정 idempotency
+  key로 동일 명령을 재사용하며 원 queue/claim/lease와 maintenance가 처리한다.
+- 6/6 SUCCEEDED,03:29:46~53 UTC 최신 provider 관측에서 **01~06 모두 주간100%**다.
+  duration10080분, reset11월4일09:09:40~41 UTC(한국18:09)다. 오래된0/20/64/66%를 현재 값으로
+  쓰지 않는다. 계정 READY는 인증/호환성 상태이지 잔여 사용량이 있다는 뜻이 아니다.
+  따라서 지금은4개 Graph worker를 시작하지 않는다. 기존 inventory/global ceiling3도 임의로
+  넘기지 않는다. quota와 별개인 로컬 임베딩 검색 복구는 계속한다.
+- 실제 최근 QUERY 두 건은 request4/definition2/protocol2,CUDA routing/START 이후 REQUESTED,
+  command PROCESSING이고 step 없음이다. 저장 request/definition/relation 순수 검사는 PASS다.
+  batch executor가 ALLOCATION을 legacy checkpoint1.2로 고정 생성하는 누락을 확인했다.
+  real history validator의 isolated 재현은 legacy1 PASS/public3·registered4 각각 FAIL이다.
+  초기 fixture policy 필드 누락3건도 로그를 보존하고 바로잡았으며 재현과 구분한다.
+- main `05d65148`, actual QUERY baseline의 hotfix `9eebbf1a27938fd2bcdb42bcb492360141de1e87`다.
+  검증된 request에서 checkpoint family를 한번 선택해 생성/재조회에 같은 값을 사용한다.
+  public3/registered4는 이미 출시된2.0, 기존 legacy CUDA는1.2다. 기존 기록/실패를 retag하지
+  않는다. 새 schema/migration/queue/model/권한 확장은 없다. source60 PASS, installed59 PASS,
+  mypy1개·Ruff/format·공식 build/RECORD PASS이며 집합 차이/중복을 합산하지 않는다.
+- guarded disposable PG 최초3 PASS/3 FAIL 후 진단을 위해 정상 interrupt했다. 실패3건은
+  interruption fixture가 더 이상 실행되지 않는 구 `publish_reference_query` wrapper를 patch해
+  fault가 주입되지 않은 것임을 확인했다. 실제 owner가 쓰는 `publish_supported_reference_query`
+  경계에 fault를 주입하도록 fixture 두 줄을 고쳤고, legacy interruption recovery와 public3/4의
+  exact result/replay·concurrent checkpoint replay **5 PASS,53.33초**를 확인했다. IAM/physical
+  leaves는 synthetic, PG/Job/Artifact/checkpoint는 실제다. 운영 DB pytest가 아니다.
+  fixture 수정은 `3affd438`이며 이전 실패 로그를 보존한다. 실제 GUI 결과 성공은 아직 PENDING.
+
 ## GPU 준비 후 반복 DOCUMENT 검사의 실제 지연 — 2026-11-01 18:42 UTC 이후
 
 - guiadmin/HTTPS 로그인18:42:17 UTC,10321 선택과 최초 pin 응답은 PASS다. 실제 GUI key는
