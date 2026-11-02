@@ -30,6 +30,32 @@
   exact result/replay·concurrent checkpoint replay **5 PASS,53.33초**를 확인했다. IAM/physical
   leaves는 synthetic, PG/Job/Artifact/checkpoint는 실제다. 운영 DB pytest가 아니다.
   fixture 수정은 `3affd438`이며 이전 실패 로그를 보존한다. 실제 GUI 결과 성공은 아직 PENDING.
+- QUERY-only9eebbf1a를 반영했고03:33:39 UTC READY/PID3146057을 확인했다. API2738888/
+  Catalog2256180/INDEX PID0, 실제 controller b5900c7d 및 numerical pins 불변이다. 운영 DB
+  migration0이다. 사용자가 이미 로그인한 Studio에서10321의 **새** 검색1건을 요청했으며
+  별도 터미널 비밀번호 입력은 요청하지 않았다. 03:40 metadata에는 배포 전03:09/03:12의
+  두 요청만 보이고 배포 후 새 QUERY는 아직 없다. 따라서 실제 GUI 결과 PASS는 주장하지 않는다.
+  검증용 DB `/tmp/eom-api-testdb-20261102032507_9435cb4d`는 공식 guard cleanup으로 제거했고
+  실패/성공 테스트 로그는 보존했다. 운영 DB/Artifact 정본은 이 cleanup 대상이 아니다.
+- INDEX의 원 중단은11월1일18:53, parent `job_5fa901d784ca4477abeb58752ee2b3c9`, allocation
+  `embeddingallocation_c1532c749a834c968ec07532ecc24506`다. root의 실제 오류는
+  `INSTALLED_RUNTIME_FILE_UNPROTECTED`다. INDEX/QUERY의 실제 controller 및 CUDA configuration
+  pin은 동일하고 현재 명시적 regular file metadata28,600개에 소유권/모드/링크 이상은 없었다.
+  이는 과거 오류의 정확한 파일을 특정했거나 현재 runtime 전체를 승인했다는 뜻이 아니다.
+- 원 root/native PID0/FD0, grant/ACK 없음, empty input과 원 파일/hash/systemd invocation을
+  기존 root reader로 대조했다. 첫 QUERY SDK9eebbf1a는 오래된 native-fresh 전용 복구 reader라
+  mutation 전에 거부됐다. 이미 설치된 실제 root controller SDK b5900c7d의 failed-before-grant
+  지원 경계를 사용해 PREPARE/공식 RECORD 및 exact replay를 통과했다. 원 parent는 정식
+  FAILED로 종결했고 native 실패는 보존했다. 새 모델/재제출/직접 DB UPDATE는0이다.
+  evidence `artifact_e6d065ea40be451ea6958e49f45203ee` /
+  `rev_cb0ac02926a9489dbb4d7ffb17757e0f` / `controller-failure.json`, SHA
+  `sha256:0b17d82ebb38259e7e5d4b2db47aafc796fcc93015440041a19932df28c3241d`.
+  root checkpoint `/var/lib/eom-gpu-unbound-recovery-c1532c74-20261102`다. INDEX 서비스는 아직
+  재개하지 않았다. failed parent를 새 nonce로 우회하거나 SDK를 임의 latest로 바꾸지 않는다.
+
+현재 우선순위는 배포 후 실제 GUI 검색 결과·문항 열기·동일 요청 재조회다. 슬롯 quota0 때문에
+4-worker 실행은 보류하며 원3 ceiling을 바꾸지 않았다. INDEX170/520은 마지막 등록 관측값이고
+진행 중이라는 뜻이 아니다. 구 vector 삭제0, 목표 ACTIVE다.
 
 ## GPU 준비 후 반복 DOCUMENT 검사의 실제 지연 — 2026-11-01 18:42 UTC 이후
 
