@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from enum import StrEnum
@@ -27,6 +28,51 @@ class InferenceTransferReadStage(StrEnum):
 
 
 _LOGGER = logging.getLogger(__name__)
+
+
+@contextmanager
+def observe_read_failure() -> Iterator[None]:
+    """Expose only bounded exception classes/code sites, never values or stack locals."""
+    try:
+        yield
+    except Exception as original:
+        with suppress(Exception):
+            failures = []
+            current: BaseException | None = original
+            seen: set[int] = set()
+            for _ in range(3):
+                if current is None or id(current) in seen:
+                    break
+                seen.add(id(current))
+                sites: list[str] = []
+                frame = current.__traceback__
+                for _ in range(64):
+                    if frame is None:
+                        break
+                    module = frame.tb_frame.f_globals.get("__name__")
+                    if type(module) is str and re.fullmatch(r"eom_[a-z0-9_.]{1,120}", module):
+                        sites.append(f"{module}:{frame.tb_lineno}")
+                    frame = frame.tb_next
+                name = type(current).__name__
+                failures.append(
+                    {
+                        "error_type": name
+                        if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", name)
+                        else "Exception",
+                        "sites": sites[-2:],
+                    }
+                )
+                current = current.__cause__ or current.__context__
+            log_event(
+                _LOGGER,
+                logging.INFO,
+                canonical_json_bytes({"failures": failures}).decode(),
+                job_id=None,
+                worker_slot=None,
+                component="catalog_similarity_read",
+                event="SIMILARITY_READ_FAILURE",
+            )
+        raise
 
 
 def configure_read_stage_logging() -> None:
