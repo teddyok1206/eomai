@@ -315,7 +315,39 @@ def test_original_grant_sources_outputs_and_retirement_form_one_flow(driver):
         events.index("actual-owner-admission") < events.index("input-bind") < events.index("grant")
     )
     assert events.index("result-ACK") < events.index("retire") < events.index("socket-stop")
-    assert driver.authorization_count == 4 * len(driver.batch.children)
+    assert driver.authorization_count == 3 * len(driver.batch.children)
+
+
+def test_result_ack_does_not_wait_for_duplicate_source_roundtrip(driver, monkeypatch):
+    """ACK is local-output receipt, not publication; source checks continue after retirement."""
+    original = type(driver.owner).authorize_child
+
+    def authorize(owner, batch_sha256, child_sha256):
+        if driver.authorization_count >= 2 * len(driver.batch.children):
+            assert "result-ACK" in driver.events
+            assert "retire" in driver.events
+            assert "socket-stop" in driver.events
+        return original(owner, batch_sha256, child_sha256)
+
+    monkeypatch.setattr(type(driver.owner), "authorize_child", authorize)
+    result = controller.run_embedding_gpu_batch(driver.captured, source_owner=driver.owner)
+    assert isinstance(result, controller.CompletedEmbeddingGpuBatch)
+
+
+def test_source_revoked_after_local_ack_is_not_returned_as_completed(driver, monkeypatch):
+    original = type(driver.owner).authorize_child
+
+    def authorize(owner, batch_sha256, child_sha256):
+        if "result-ACK" in driver.events:
+            assert "retire" in driver.events
+            raise PermissionError("source revoked before publication")
+        return original(owner, batch_sha256, child_sha256)
+
+    monkeypatch.setattr(type(driver.owner), "authorize_child", authorize)
+    with pytest.raises(PermissionError, match="before publication"):
+        controller.run_embedding_gpu_batch(driver.captured, source_owner=driver.owner)
+    assert driver.events.count("grant") == driver.events.count("result-ACK") == 1
+    assert driver.events.count("retire") == 1
 
 
 @pytest.mark.parametrize("fault", ["deny", "false"])

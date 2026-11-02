@@ -566,9 +566,10 @@ def run_embedding_gpu_batch(
 
         def verify(original_claim: EmbeddingGpuResultReady) -> None:
             _require(original_claim == claim)
-            for child in children:
-                authorize(child)
             captured.assert_current()
+            # ACK confirms validated local bytes, not publication authority. The
+            # current-source fence below still gates completion after retirement;
+            # waiting for its RPC here consumes the native compute-only timer.
             # Worker may exit as soon as ACK arrives, including before send() returns.
             fence.phase = "TERMINATING"
 
