@@ -24,6 +24,8 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Read-only CFB streams for whole HWP source rasters; no Office execution or PDF capture.
+office-images = ["olefile==0.47"]
 # CPU Canny conditioning in the numerical lab only; no Qt/X11/contrib or model download.
 sdxl-canny = ["opencv-python-headless==4.11.0.86"]
 # Optional CPU CLIP input validation/canonical float32 bytes; matches the installed trainer.

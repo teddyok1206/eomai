@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/office-embedded-image-set/1.0",
+  "title": "Whole embedded Office images, never PDF crops",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "source_sha256", "source_format", "extractor_profile", "images", "unsupported_members", "manifest_sha256"],
+  "properties": {
+    "schema_version": {"const": "office-embedded-image-set/1.0"},
+    "source_sha256": {"$ref": "#/$defs/sha256"},
+    "source_format": {"enum": ["HWP5", "HWPX"]},
+    "extractor_profile": {"const": "WHOLE_EMBEDDED_RASTER_V1"},
+    "images": {"type": "array", "maxItems": 512, "items": {"$ref": "#/$defs/image"}},
+    "unsupported_members": {"type": "array", "maxItems": 512, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 256}},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_member", "source_member_sha256", "source_format", "pixel_sha256", "member_path", "sha256", "width_px", "height_px", "content_length"],
+      "properties": {
+        "source_member": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^BinData/[^/\\\\]+$"},
+        "source_member_sha256": {"$ref": "#/$defs/sha256"},
+        "source_format": {"enum": ["PNG", "JPEG", "BMP", "GIF", "TIFF"]},
+        "pixel_sha256": {"$ref": "#/$defs/sha256"},
+        "member_path": {"type": "string", "pattern": "^images/[0-9a-f]{64}\\.png$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "width_px": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "height_px": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "content_length": {"type": "integer", "minimum": 24, "maximum": 67108864}
+      }
+    }
+  }
+}

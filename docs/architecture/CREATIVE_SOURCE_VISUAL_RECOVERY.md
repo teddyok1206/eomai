@@ -58,6 +58,26 @@
 기존 문항의 전후 원본·PNG를 실제로 확인하고 운영 조회까지 성공해야 완료다.
 원본에서 도저히 복구할 수 없는 항목은 완료 수에 섞지 않고 남긴다.
 
+## 채택한 등록/조회 경계
+
+기존 Item Revision·Graph·풀이보고서·현재 INDEX의 참조는 유지한다. Orchestrator가
+같은 문항에 연결된 `control_creative_source_visual_presentation` Artifact를 승인해 발행하고,
+Catalog의 공식 표시용 조회에서만 이 원본 이미지 복구본을 해석한다. Artifact는 기존
+file-set publisher의 identified publication을 사용한다. 새 DB 테이블·queue·Graph 노드가
+필요하지 않으며, 기존 검색 요청·벡터를 다시 계산하거나 다른 문항으로 바꾸지 않는다.
+
+- 표시용 content는 원래 발문·선지·정답·해설·표·순서를 그대로 보존한다.
+  복구한 image block의 pointer·크기·표시용 block ID만 달라질 수 있다.
+- 공식 canonical content 조회/기존 media block은 원래의 pinned history를 유지한다.
+  새 표시용 block ID는 Catalog가 승인된 복구 Artifact에서만 해석한다.
+- Preview와 HWPX renderer는 같은 표시용 content Artifact를 사용한다.
+  표시 결과의 SHA와 미디어 응답의 SHA를 실제 복구본으로 일치시킨다.
+- 최초 버전은 원본을 직접 비교한 operator-assisted 복구만 승인한다.
+  원본 기출 첨부·해설 영역을 사용하지 않았다는 기록과 실제 source region을 남긴다.
+- 새 조회는 독립된 typed read contract로 추가하며 기존 pinned request schema는 바꾸지 않는다.
+  프로필과 문항 revision으로 고정된 publication key를 조회하고 latest 검색은 하지 않는다.
+  등록된 복구본이 변조/누락된 경우 원래의 잘린 그림으로 조용히 되돌아가지 않는다.
+
 ## 제한된 도구 조사
 
 2026-11-02 대표 4개 파일은 확장자만 HWP인 ZIP이 아니라 실제 HWP5 OLE이다.

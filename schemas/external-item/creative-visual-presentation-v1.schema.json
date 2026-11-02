@@ -1,0 +1,363 @@
+{
+  "$defs": {
+    "ArtifactMemberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ArtifactMemberPointer",
+      "type": "object"
+    },
+    "EmbeddedSourceImageProof": {
+      "additionalProperties": false,
+      "description": "One selected original stream, not a path to arbitrary worker bytes.",
+      "properties": {
+        "height_px": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "pixel_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Pixel Sha256",
+          "type": "string"
+        },
+        "source_member": {
+          "maxLength": 256,
+          "pattern": "^BinData/[^/\\\\]+$",
+          "title": "Source Member",
+          "type": "string"
+        },
+        "source_member_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Source Member Sha256",
+          "type": "string"
+        },
+        "source_object_number": {
+          "maximum": 1000000,
+          "minimum": 1,
+          "title": "Source Object Number",
+          "type": "integer"
+        },
+        "width_px": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Width Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "source_member",
+        "source_member_sha256",
+        "pixel_sha256",
+        "width_px",
+        "height_px",
+        "source_object_number"
+      ],
+      "title": "EmbeddedSourceImageProof",
+      "type": "object"
+    },
+    "NormalizedBoundingBox": {
+      "additionalProperties": false,
+      "properties": {
+        "bottom": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Bottom",
+          "type": "integer"
+        },
+        "left": {
+          "maximum": 9999,
+          "minimum": 0,
+          "title": "Left",
+          "type": "integer"
+        },
+        "right": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Right",
+          "type": "integer"
+        },
+        "top": {
+          "maximum": 9999,
+          "minimum": 0,
+          "title": "Top",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "left",
+        "top",
+        "right",
+        "bottom"
+      ],
+      "title": "NormalizedBoundingBox",
+      "type": "object"
+    },
+    "RecoveredSourceVisual": {
+      "additionalProperties": false,
+      "properties": {
+        "canonical_block_id": {
+          "pattern": "^block_[a-z][a-z0-9_]{0,63}$",
+          "title": "Canonical Block Id",
+          "type": "string"
+        },
+        "content_length": {
+          "maximum": 16777216,
+          "minimum": 24,
+          "title": "Content Length",
+          "type": "integer"
+        },
+        "display_block_id": {
+          "pattern": "^block_restored_[0-9a-f]{24}$",
+          "title": "Display Block Id",
+          "type": "string"
+        },
+        "height_px": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "member_path": {
+          "pattern": "^images/[0-9a-f]{64}\\.png$",
+          "title": "Member Path",
+          "type": "string"
+        },
+        "page_captures": {
+          "const": 0,
+          "default": 0,
+          "title": "Page Captures",
+          "type": "integer"
+        },
+        "physical_page": {
+          "maximum": 32,
+          "minimum": 1,
+          "title": "Physical Page",
+          "type": "integer"
+        },
+        "reference_original_used": {
+          "const": false,
+          "default": false,
+          "title": "Reference Original Used",
+          "type": "boolean"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "source_image_crops": {
+          "const": 0,
+          "default": 0,
+          "title": "Source Image Crops",
+          "type": "integer"
+        },
+        "source_images": {
+          "items": {
+            "$ref": "#/$defs/EmbeddedSourceImageProof"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Source Images",
+          "type": "array"
+        },
+        "source_region_id": {
+          "pattern": "^extregion_[0-9a-f]{32}$",
+          "title": "Source Region Id",
+          "type": "string"
+        },
+        "target_box": {
+          "$ref": "#/$defs/NormalizedBoundingBox"
+        },
+        "target_region_id": {
+          "pattern": "^extregion_[0-9a-f]{32}$",
+          "title": "Target Region Id",
+          "type": "string"
+        },
+        "width_px": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Width Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "canonical_block_id",
+        "display_block_id",
+        "source_region_id",
+        "target_region_id",
+        "physical_page",
+        "target_box",
+        "source_images",
+        "member_path",
+        "sha256",
+        "width_px",
+        "height_px",
+        "content_length"
+      ],
+      "title": "RecoveredSourceVisual",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/external-item/creative-visual-presentation/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "authorized_by_operator_id": {
+      "pattern": "^operator_[0-9a-f]{32}$",
+      "title": "Authorized By Operator Id",
+      "type": "string"
+    },
+    "canonical_content": {
+      "$ref": "#/$defs/ArtifactMemberPointer"
+    },
+    "content_member": {
+      "const": "assessment-item-content.json",
+      "default": "assessment-item-content.json",
+      "title": "Content Member",
+      "type": "string"
+    },
+    "content_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Content Sha256",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "item_id": {
+      "pattern": "^item_[0-9a-f]{32}$",
+      "title": "Item Id",
+      "type": "string"
+    },
+    "item_revision_id": {
+      "pattern": "^itemrev_[0-9a-f]{32}$",
+      "title": "Item Revision Id",
+      "type": "string"
+    },
+    "manifest_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Manifest Sha256",
+      "type": "string"
+    },
+    "nonvisual_content_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Nonvisual Content Sha256",
+      "type": "string"
+    },
+    "profile": {
+      "const": "WHOLE_HANCOM_SOURCE_IMAGES_V1",
+      "default": "WHOLE_HANCOM_SOURCE_IMAGES_V1",
+      "title": "Profile",
+      "type": "string"
+    },
+    "role_result": {
+      "$ref": "#/$defs/ArtifactMemberPointer"
+    },
+    "role_work_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Role Work Sha256",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "creative-visual-presentation/1.0",
+      "default": "creative-visual-presentation/1.0",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "source_document": {
+      "$ref": "#/$defs/ArtifactMemberPointer"
+    },
+    "source_id": {
+      "pattern": "^extitem_[0-9a-f]{32}$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_pdf": {
+      "$ref": "#/$defs/ArtifactMemberPointer"
+    },
+    "source_revision_id": {
+      "pattern": "^extitemrev_[0-9a-f]{32}$",
+      "title": "Source Revision Id",
+      "type": "string"
+    },
+    "verification": {
+      "const": "CODEX_OPERATOR_ASSISTED_SOURCE_COMPARISON",
+      "default": "CODEX_OPERATOR_ASSISTED_SOURCE_COMPARISON",
+      "title": "Verification",
+      "type": "string"
+    },
+    "visuals": {
+      "items": {
+        "$ref": "#/$defs/RecoveredSourceVisual"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Visuals",
+      "type": "array"
+    }
+  },
+  "required": [
+    "item_id",
+    "item_revision_id",
+    "source_id",
+    "source_revision_id",
+    "canonical_content",
+    "source_document",
+    "source_pdf",
+    "role_result",
+    "role_work_sha256",
+    "content_sha256",
+    "nonvisual_content_sha256",
+    "visuals",
+    "authorized_by_operator_id",
+    "created_at",
+    "manifest_sha256"
+  ],
+  "title": "CreativeVisualPresentationManifest",
+  "type": "object"
+}

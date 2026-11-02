@@ -12,6 +12,7 @@ from jsonschema import Draft202012Validator, FormatChecker
 from referencing import Registry, Resource
 
 SCHEMA_FILES = {
+    "office-embedded-image-set": "office-embedded-image-set-v1.schema.json",
     "sdxl-ip-style-comparison-command": (
         "local-image-sdxl-ip-style-comparison-command-v1.schema.json"
     ),
@@ -440,6 +441,9 @@ SCHEMA_FILES = {
     "svg-label-layout-validation-receipt": ("svg-label-layout-validation-receipt-v1.schema.json"),
 }
 SCHEMA_SHA256 = {
+    "office-embedded-image-set": (
+        "sha256:f3fd7bd660783fe4c82b5d96d3c3057bb3f041f7261b8ba15734417649bbf27a"
+    ),
     "sdxl-ip-style-comparison-command": (
         "sha256:ff43000d9002e0627771f63c8eef1532368dbb452cc071440f04434a312a30c8"
     ),

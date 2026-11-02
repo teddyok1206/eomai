@@ -34,6 +34,24 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "creative-visual-presentation-v1": CatalogSchemaResource(
+            "schemas/external-item/creative-visual-presentation-v1.schema.json",
+            "resources/external-item/creative-visual-presentation-v1.schema.json",
+            "1.0",
+            "sha256:732b287e9d212bc1da1301f990d9d5f7fb8089fce4fad10290030517b4a6afc0",
+        ),
+        "catalog-item-visual-presentation-request-v1": CatalogSchemaResource(
+            "schemas/item-registry/catalog-item-visual-presentation-request-v1.schema.json",
+            "resources/item-registry/catalog-item-visual-presentation-request-v1.schema.json",
+            "1.0",
+            "sha256:5855cb596e7d3e63f8b201d4646ee0bbbcde23d89ac2821b7a43b4e1d2ab302e",
+        ),
+        "catalog-item-visual-presentation-response-v1": CatalogSchemaResource(
+            "schemas/item-registry/catalog-item-visual-presentation-response-v1.schema.json",
+            "resources/item-registry/catalog-item-visual-presentation-response-v1.schema.json",
+            "1.0",
+            "sha256:7f3e369f90cc8e361a879e55d0d7322cff4eda78579350820567b19804f874a9",
+        ),
         "system-rag-workflow-similarity-read-v2": CatalogSchemaResource(
             "schemas/knowledge/system-rag-workflow-similarity-read-v2.schema.json",
             "resources/knowledge/system-rag-workflow-similarity-read-v2.schema.json",

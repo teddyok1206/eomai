@@ -215,6 +215,24 @@ def get_structured_content(
 
 
 @router.get(
+    "/item-revisions/{item_revision_id}/render-content",
+    operation_id="item_render_content_get",
+    response_model=SingleResponse[AssessmentItemContentContract],
+    dependencies=[Depends(require_permission(PermissionKey.ITEM_READ))],
+)
+def get_render_content(
+    request: Request, item_revision_id: str
+) -> SingleResponse[AssessmentItemContentContract]:
+    """Read approved visual restoration; canonical structured-content remains pinned."""
+    return one(
+        request,
+        request.app.state.services.catalog_application.load_item_visual_presentation(
+            item_revision_id
+        ).content,
+    )
+
+
+@router.get(
     "/item-revisions/{item_revision_id}/material-requirement",
     operation_id="item_material_requirement_get",
     response_model=SingleResponse[ContentTeamMaterialRequirementV2],

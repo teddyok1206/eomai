@@ -2475,7 +2475,7 @@ async def test_item_preview_reports_exact_structured_template_component() -> Non
                     ]
                 ),
             )
-        if request.url.path == f"/api/v1/item-revisions/{revision_id}/structured-content":
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}/render-content":
             return httpx.Response(200, json=_single(structured_item_content()))
         raise AssertionError(request.url.path)
 
@@ -2559,6 +2559,7 @@ async def test_unknown_item_preview_schema_is_not_reported_as_processing() -> No
     assert preview.unavailable_reason == "UNSUPPORTED_CONTENT_SCHEMA"
     assert preview.template_delivery_available is False
     assert f"/api/v1/item-revisions/{revision_id}/structured-content" not in paths
+    assert f"/api/v1/item-revisions/{revision_id}/render-content" not in paths
     await gateway.close()
 
 
@@ -2610,7 +2611,7 @@ async def test_content_team_table_only_item_is_available_without_image_component
                     ]
                 ),
             )
-        if request.url.path == f"/api/v1/item-revisions/{revision_id}/structured-content":
+        if request.url.path == f"/api/v1/item-revisions/{revision_id}/render-content":
             return httpx.Response(200, json=_single(content))
         raise AssertionError(request.url.path)
 

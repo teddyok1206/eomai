@@ -286,6 +286,14 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             raw_operation = value.get("operation")
             if not self.server.peer_can_operate(self.request, raw_operation):
                 return
+            if raw_operation == "GET_ITEM_VISUAL_PRESENTATION":
+                from eom_catalog_service.item_visual_presentation_dispatch import (
+                    dispatch_item_visual_presentation,
+                )
+
+                self.wfile.write(dispatch_item_visual_presentation(self.server.registry, raw))
+                self.wfile.flush()
+                return
             if raw_operation == "AUTHORIZE_EXTERNAL_ITEM_LEARNING_INPUT":
                 self.wfile.write(
                     dispatch_external_item_learning_authorization_frame(

@@ -122,6 +122,7 @@ from eom_catalog_contracts import (
     catalog_application_schema_route,
     validate_contract,
 )
+from eom_catalog_contracts.creative_visual_presentation import ItemVisualPresentation
 from eom_item_registry import RegistryError, RegistryErrorCode
 from eom_operator_identity import ActorContext
 from eom_workflow import PdfReviewDocumentPointer
@@ -743,6 +744,37 @@ class CatalogApplicationClient:
                 "Catalog application content response is invalid",
             )
         return response.content
+
+    def load_item_visual_presentation(self, item_revision_id: str) -> ItemVisualPresentation:
+        """Read an explicitly identified rendering, without changing the canonical query."""
+        from eom_catalog_contracts.creative_visual_presentation import (
+            ItemVisualPresentationQuery,
+            ItemVisualPresentationResponse,
+        )
+
+        command = ItemVisualPresentationQuery(item_revision_id=item_revision_id)
+        payload = command.model_dump(mode="json")
+        try:
+            validate_contract("catalog-item-visual-presentation-request-v1", payload)
+            value = self._raw_request(payload, timeout_seconds=RESPONSE_TIMEOUT_SECONDS)
+            validate_contract("catalog-item-visual-presentation-response-v1", value)
+            response = ItemVisualPresentationResponse.model_validate(value)
+        except (JsonSchemaValidationError, ValidationError, ValueError) as exc:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog item visual-presentation response is invalid",
+            ) from exc
+        if response.status == "ERROR":
+            self._raise_remote_error(response.error_code)
+        if (
+            response.presentation is None
+            or response.presentation.item_revision_id != item_revision_id
+        ):
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog item visual-presentation identity differs",
+            )
+        return response.presentation
 
     def download_item_media(self, item_revision_id: str, block_id: str) -> ProxiedItemMedia:
         command = ItemMediaQuery(item_revision_id=item_revision_id, block_id=block_id)
@@ -1737,6 +1769,11 @@ class CatalogApplicationClient:
                     raise CatalogApplicationClientError(
                         error_code,
                         "Catalog external Item resolution failed",
+                    ) from None
+                if error_code.startswith("ITEM_VISUAL_PRESENTATION_"):
+                    raise CatalogApplicationClientError(
+                        error_code,
+                        "Catalog Item visual presentation is unavailable",
                     ) from None
                 if error_code.startswith("CURATED_"):
                     raise CatalogApplicationClientError(

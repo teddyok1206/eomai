@@ -3120,7 +3120,7 @@ class HttpApplicationGateway:
             content_response = await self._authorized(
                 session,
                 "GET",
-                f"/api/v1/item-revisions/{item_revision_id}/structured-content",
+                f"/api/v1/item-revisions/{item_revision_id}/render-content",
             )
             projected = project_item_content(
                 content=self._data(content_response),

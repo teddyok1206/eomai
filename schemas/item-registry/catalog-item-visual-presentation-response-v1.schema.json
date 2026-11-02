@@ -1,0 +1,1470 @@
+{
+  "$defs": {
+    "ArtifactMemberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "ArtifactMemberPointer",
+      "type": "object"
+    },
+    "AssessmentItemContent": {
+      "additionalProperties": false,
+      "description": "Canonical small value artifact pinned by an Item Revision component.",
+      "properties": {
+        "body": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "equation": "#/$defs/EquationBlock",
+                "image": "#/$defs/ImageBlock",
+                "paragraph": "#/$defs/ParagraphBlock",
+                "statement_set": "#/$defs/StatementSetBlock",
+                "table": "#/$defs/TableBlock"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ParagraphBlock"
+              },
+              {
+                "$ref": "#/$defs/EquationBlock"
+              },
+              {
+                "$ref": "#/$defs/TableBlock"
+              },
+              {
+                "$ref": "#/$defs/ImageBlock"
+              },
+              {
+                "$ref": "#/$defs/StatementSetBlock"
+              }
+            ]
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Body",
+          "type": "array"
+        },
+        "interaction": {
+          "discriminator": {
+            "mapping": {
+              "constructed_response": "#/$defs/ConstructedResponseInteraction",
+              "single_choice": "#/$defs/SingleChoiceInteraction"
+            },
+            "propertyName": "type"
+          },
+          "oneOf": [
+            {
+              "$ref": "#/$defs/SingleChoiceInteraction"
+            },
+            {
+              "$ref": "#/$defs/ConstructedResponseInteraction"
+            }
+          ],
+          "title": "Interaction"
+        },
+        "locale": {
+          "pattern": "^[a-z]{2}-[A-Z]{2}$",
+          "title": "Locale",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "score": {
+          "$ref": "#/$defs/ItemScore"
+        },
+        "solution": {
+          "$ref": "#/$defs/ItemSolution"
+        },
+        "title": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "locale",
+        "title",
+        "body",
+        "interaction",
+        "solution",
+        "score"
+      ],
+      "title": "AssessmentItemContent",
+      "type": "object"
+    },
+    "AssessmentItemContentContract": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AssessmentItemContent"
+        },
+        {
+          "$ref": "#/$defs/AssessmentItemContentV2"
+        },
+        {
+          "$ref": "#/$defs/AssessmentItemContentV3"
+        }
+      ]
+    },
+    "AssessmentItemContentV2": {
+      "additionalProperties": false,
+      "description": "Content-team-first canonical item; HWPX is one deterministic projection of it.",
+      "properties": {
+        "answer": {
+          "$ref": "#/$defs/ContentTeamAnswer"
+        },
+        "authoring_prompt_sha256": {
+          "const": "sha256:62f245320a4776a2ee3dcd273fb1180b6f3c431a45d2504d125816102f017435",
+          "default": "sha256:62f245320a4776a2ee3dcd273fb1180b6f3c431a45d2504d125816102f017435",
+          "title": "Authoring Prompt Sha256",
+          "type": "string"
+        },
+        "bottom_stem": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Bottom Stem",
+          "type": "string"
+        },
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/ContentTeamChoice"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "title": "Choices",
+          "type": "array"
+        },
+        "equation_sources": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Equation Sources",
+          "type": "array"
+        },
+        "explanations": {
+          "$ref": "#/$defs/ContentTeamExplanationSections"
+        },
+        "handoff_archive_sha256": {
+          "const": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91",
+          "default": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91",
+          "title": "Handoff Archive Sha256",
+          "type": "string"
+        },
+        "inquiry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentTeamInquiry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "item_number": {
+          "maximum": 999,
+          "minimum": 1,
+          "title": "Item Number",
+          "type": "integer"
+        },
+        "labeled_blocks": {
+          "items": {
+            "$ref": "#/$defs/ContentTeamLabeledBlock"
+          },
+          "maxItems": 2,
+          "title": "Labeled Blocks",
+          "type": "array"
+        },
+        "renderer_profile": {
+          "const": "content-team-hwp-question-editor-v1",
+          "default": "content-team-hwp-question-editor-v1",
+          "title": "Renderer Profile",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "2.0",
+          "default": "2.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "score_display": {
+          "enum": [
+            "2",
+            "2.5",
+            "3"
+          ],
+          "title": "Score Display",
+          "type": "string"
+        },
+        "statements": {
+          "anyOf": [
+            {
+              "maxItems": 0,
+              "minItems": 0,
+              "type": "array"
+            },
+            {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/ContentTeamStatement"
+                },
+                {
+                  "$ref": "#/$defs/ContentTeamStatement"
+                },
+                {
+                  "$ref": "#/$defs/ContentTeamStatement"
+                }
+              ],
+              "type": "array"
+            }
+          ],
+          "title": "Statements"
+        },
+        "stem": {
+          "maxLength": 24000,
+          "minLength": 1,
+          "title": "Stem",
+          "type": "string"
+        },
+        "visual_layout": {
+          "enum": [
+            "NONE",
+            "IMAGE_ONLY",
+            "TABLE_ONLY",
+            "IMAGE_TABLE",
+            "TABLE_IMAGE",
+            "IMAGE_IMAGE",
+            "TABLE_TABLE",
+            "INQUIRY_BOX"
+          ],
+          "title": "Visual Layout",
+          "type": "string"
+        },
+        "visuals": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "IMAGE": "#/$defs/ContentTeamImageSlot",
+                "TABLE": "#/$defs/ContentTeamTable"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ContentTeamTable"
+              },
+              {
+                "$ref": "#/$defs/ContentTeamImageSlot"
+              }
+            ]
+          },
+          "maxItems": 2,
+          "title": "Visuals",
+          "type": "array"
+        }
+      },
+      "required": [
+        "item_number",
+        "score_display",
+        "stem",
+        "bottom_stem",
+        "labeled_blocks",
+        "visuals",
+        "visual_layout",
+        "statements",
+        "choices",
+        "answer",
+        "explanations",
+        "equation_sources"
+      ],
+      "title": "AssessmentItemContentV2",
+      "type": "object"
+    },
+    "AssessmentItemContentV3": {
+      "additionalProperties": false,
+      "description": "Score-corrected content-team Item used by the V9 workflow family.",
+      "properties": {
+        "answer": {
+          "$ref": "#/$defs/ContentTeamAnswer"
+        },
+        "authoring_prompt_sha256": {
+          "const": "sha256:62f245320a4776a2ee3dcd273fb1180b6f3c431a45d2504d125816102f017435",
+          "default": "sha256:62f245320a4776a2ee3dcd273fb1180b6f3c431a45d2504d125816102f017435",
+          "title": "Authoring Prompt Sha256",
+          "type": "string"
+        },
+        "bottom_stem": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Bottom Stem",
+          "type": "string"
+        },
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/ContentTeamChoice"
+          },
+          "maxItems": 5,
+          "minItems": 5,
+          "title": "Choices",
+          "type": "array"
+        },
+        "equation_sources": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 128,
+          "title": "Equation Sources",
+          "type": "array"
+        },
+        "explanations": {
+          "$ref": "#/$defs/ContentTeamExplanationSections"
+        },
+        "handoff_archive_sha256": {
+          "const": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91",
+          "default": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91",
+          "title": "Handoff Archive Sha256",
+          "type": "string"
+        },
+        "inquiry": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentTeamInquiry"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "item_number": {
+          "maximum": 999,
+          "minimum": 1,
+          "title": "Item Number",
+          "type": "integer"
+        },
+        "labeled_blocks": {
+          "items": {
+            "$ref": "#/$defs/ContentTeamLabeledBlock"
+          },
+          "maxItems": 2,
+          "title": "Labeled Blocks",
+          "type": "array"
+        },
+        "renderer_profile": {
+          "const": "content-team-hwp-question-editor-v1",
+          "default": "content-team-hwp-question-editor-v1",
+          "title": "Renderer Profile",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "3.0",
+          "default": "3.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "score_display": {
+          "enum": [
+            "1.5",
+            "2",
+            "2.5",
+            "3"
+          ],
+          "title": "Score Display",
+          "type": "string"
+        },
+        "statements": {
+          "anyOf": [
+            {
+              "maxItems": 0,
+              "minItems": 0,
+              "type": "array"
+            },
+            {
+              "maxItems": 3,
+              "minItems": 3,
+              "prefixItems": [
+                {
+                  "$ref": "#/$defs/ContentTeamStatement"
+                },
+                {
+                  "$ref": "#/$defs/ContentTeamStatement"
+                },
+                {
+                  "$ref": "#/$defs/ContentTeamStatement"
+                }
+              ],
+              "type": "array"
+            }
+          ],
+          "title": "Statements"
+        },
+        "stem": {
+          "maxLength": 24000,
+          "minLength": 1,
+          "title": "Stem",
+          "type": "string"
+        },
+        "visual_layout": {
+          "enum": [
+            "NONE",
+            "IMAGE_ONLY",
+            "TABLE_ONLY",
+            "IMAGE_TABLE",
+            "TABLE_IMAGE",
+            "IMAGE_IMAGE",
+            "TABLE_TABLE",
+            "INQUIRY_BOX"
+          ],
+          "title": "Visual Layout",
+          "type": "string"
+        },
+        "visuals": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "IMAGE": "#/$defs/ContentTeamImageSlot",
+                "TABLE": "#/$defs/ContentTeamTable"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/ContentTeamTable"
+              },
+              {
+                "$ref": "#/$defs/ContentTeamImageSlot"
+              }
+            ]
+          },
+          "maxItems": 2,
+          "title": "Visuals",
+          "type": "array"
+        }
+      },
+      "required": [
+        "item_number",
+        "score_display",
+        "stem",
+        "bottom_stem",
+        "labeled_blocks",
+        "visuals",
+        "visual_layout",
+        "statements",
+        "choices",
+        "answer",
+        "explanations",
+        "equation_sources"
+      ],
+      "title": "AssessmentItemContentV3",
+      "type": "object"
+    },
+    "Choice": {
+      "additionalProperties": false,
+      "properties": {
+        "choice_id": {
+          "pattern": "^choice_[a-z0-9][a-z0-9_]{0,31}$",
+          "title": "Choice Id",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 16,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "choice_id",
+        "label",
+        "text"
+      ],
+      "title": "Choice",
+      "type": "object"
+    },
+    "ConstructedResponseInteraction": {
+      "additionalProperties": false,
+      "properties": {
+        "response_format": {
+          "enum": [
+            "short_text",
+            "long_text",
+            "numeric"
+          ],
+          "title": "Response Format",
+          "type": "string"
+        },
+        "type": {
+          "const": "constructed_response",
+          "default": "constructed_response",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "response_format"
+      ],
+      "title": "ConstructedResponseInteraction",
+      "type": "object"
+    },
+    "ContentTeamAnswer": {
+      "discriminator": {
+        "mapping": {
+          "DIRECT_CHOICE": "#/$defs/ContentTeamDirectChoiceAnswer",
+          "STATEMENT_COMBINATION": "#/$defs/ContentTeamCombinationAnswer"
+        },
+        "propertyName": "answer_kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/ContentTeamCombinationAnswer"
+        },
+        {
+          "$ref": "#/$defs/ContentTeamDirectChoiceAnswer"
+        }
+      ]
+    },
+    "ContentTeamChoice": {
+      "additionalProperties": false,
+      "properties": {
+        "number": {
+          "enum": [
+            "①",
+            "②",
+            "③",
+            "④",
+            "⑤"
+          ],
+          "title": "Number",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "number",
+        "text"
+      ],
+      "title": "ContentTeamChoice",
+      "type": "object"
+    },
+    "ContentTeamCombinationAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_content": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]+$",
+          "title": "Answer Content",
+          "type": "string"
+        },
+        "answer_kind": {
+          "const": "STATEMENT_COMBINATION",
+          "default": "STATEMENT_COMBINATION",
+          "title": "Answer Kind",
+          "type": "string"
+        },
+        "number": {
+          "enum": [
+            "①",
+            "②",
+            "③",
+            "④",
+            "⑤"
+          ],
+          "title": "Number",
+          "type": "string"
+        },
+        "raw_line": {
+          "maxLength": 2020,
+          "minLength": 9,
+          "pattern": "^정답 : [①②③④⑤] \\([^\\r\\n]+\\)$",
+          "title": "Raw Line",
+          "type": "string"
+        },
+        "statement_labels": {
+          "items": {
+            "enum": [
+              "ㄱ",
+              "ㄴ",
+              "ㄷ"
+            ],
+            "type": "string"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Statement Labels",
+          "type": "array"
+        }
+      },
+      "required": [
+        "number",
+        "answer_content",
+        "raw_line",
+        "statement_labels"
+      ],
+      "title": "ContentTeamCombinationAnswer",
+      "type": "object"
+    },
+    "ContentTeamDirectChoiceAnswer": {
+      "additionalProperties": false,
+      "properties": {
+        "answer_content": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "pattern": "^[^\\r\\n]+$",
+          "title": "Answer Content",
+          "type": "string"
+        },
+        "answer_kind": {
+          "const": "DIRECT_CHOICE",
+          "default": "DIRECT_CHOICE",
+          "title": "Answer Kind",
+          "type": "string"
+        },
+        "number": {
+          "enum": [
+            "①",
+            "②",
+            "③",
+            "④",
+            "⑤"
+          ],
+          "title": "Number",
+          "type": "string"
+        },
+        "raw_line": {
+          "maxLength": 2020,
+          "minLength": 9,
+          "pattern": "^정답 : [①②③④⑤] \\([^\\r\\n]+\\)$",
+          "title": "Raw Line",
+          "type": "string"
+        },
+        "statement_labels": {
+          "items": {
+            "enum": [
+              "ㄱ",
+              "ㄴ",
+              "ㄷ"
+            ],
+            "type": "string"
+          },
+          "maxItems": 0,
+          "title": "Statement Labels",
+          "type": "array"
+        }
+      },
+      "required": [
+        "number",
+        "answer_content",
+        "raw_line",
+        "statement_labels"
+      ],
+      "title": "ContentTeamDirectChoiceAnswer",
+      "type": "object"
+    },
+    "ContentTeamExplanationSections": {
+      "additionalProperties": false,
+      "properties": {
+        "authoring_intent": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Authoring Intent",
+          "type": "string"
+        },
+        "concept_source": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Concept Source",
+          "type": "string"
+        },
+        "correct_answer": {
+          "maxLength": 24000,
+          "minLength": 1,
+          "title": "Correct Answer",
+          "type": "string"
+        },
+        "wrong_answer": {
+          "maxLength": 24000,
+          "title": "Wrong Answer",
+          "type": "string"
+        }
+      },
+      "required": [
+        "authoring_intent",
+        "concept_source",
+        "correct_answer",
+        "wrong_answer"
+      ],
+      "title": "ContentTeamExplanationSections",
+      "type": "object"
+    },
+    "ContentTeamImageSlot": {
+      "additionalProperties": false,
+      "description": "An empty image slot; image bytes remain a separately pinned artifact.",
+      "properties": {
+        "kind": {
+          "const": "IMAGE",
+          "default": "IMAGE",
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "default": "",
+          "enum": [
+            "",
+            "(가)",
+            "(나)"
+          ],
+          "title": "Label",
+          "type": "string"
+        }
+      },
+      "title": "ContentTeamImageSlot",
+      "type": "object"
+    },
+    "ContentTeamInquiry": {
+      "additionalProperties": false,
+      "properties": {
+        "goal": {
+          "anyOf": [
+            {
+              "maxLength": 4000,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Goal"
+        },
+        "kind": {
+          "enum": [
+            "탐구",
+            "실험"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "procedure": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Procedure",
+          "type": "string"
+        },
+        "result": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Result",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "procedure",
+        "result"
+      ],
+      "title": "ContentTeamInquiry",
+      "type": "object"
+    },
+    "ContentTeamLabeledBlock": {
+      "additionalProperties": false,
+      "description": "Prototype-backed 자료/조건 content, independent of subject matter.",
+      "properties": {
+        "content": {
+          "maxLength": 12000,
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "DATA",
+            "CONDITION"
+          ],
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "content"
+      ],
+      "title": "ContentTeamLabeledBlock",
+      "type": "object"
+    },
+    "ContentTeamStatement": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "enum": [
+            "ㄱ",
+            "ㄴ",
+            "ㄷ"
+          ],
+          "title": "Label",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "label",
+        "text"
+      ],
+      "title": "ContentTeamStatement",
+      "type": "object"
+    },
+    "ContentTeamTable": {
+      "additionalProperties": false,
+      "description": "Semantic Markdown table consumed by the reviewed content-team renderer.",
+      "properties": {
+        "alignments": {
+          "items": {
+            "enum": [
+              "default",
+              "left",
+              "right",
+              "center"
+            ],
+            "type": "string"
+          },
+          "title": "Alignments",
+          "type": "array"
+        },
+        "headers": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 5,
+          "minItems": 2,
+          "title": "Headers",
+          "type": "array"
+        },
+        "kind": {
+          "const": "TABLE",
+          "default": "TABLE",
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "default": "",
+          "enum": [
+            "",
+            "(가)",
+            "(나)"
+          ],
+          "title": "Label",
+          "type": "string"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "headers",
+        "rows",
+        "alignments"
+      ],
+      "title": "ContentTeamTable",
+      "type": "object"
+    },
+    "EquationBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "pattern": "^block_[a-z][a-z0-9_]{0,63}$",
+          "title": "Block Id",
+          "type": "string"
+        },
+        "notation": {
+          "enum": [
+            "latex",
+            "hancom-equation-script"
+          ],
+          "title": "Notation",
+          "type": "string"
+        },
+        "purpose": {
+          "enum": [
+            "stimulus",
+            "stem"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "source": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "type": {
+          "const": "equation",
+          "default": "equation",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id",
+        "purpose",
+        "notation",
+        "source"
+      ],
+      "title": "EquationBlock",
+      "type": "object"
+    },
+    "ImageBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "alt_text": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Alt Text",
+          "type": "string"
+        },
+        "artifact": {
+          "$ref": "#/$defs/MediaArtifactPointer"
+        },
+        "block_id": {
+          "pattern": "^block_[a-z][a-z0-9_]{0,63}$",
+          "title": "Block Id",
+          "type": "string"
+        },
+        "height_px": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Height Px",
+          "type": "integer"
+        },
+        "purpose": {
+          "enum": [
+            "stimulus",
+            "reference"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "type": {
+          "const": "image",
+          "default": "image",
+          "title": "Type",
+          "type": "string"
+        },
+        "width_px": {
+          "maximum": 10000,
+          "minimum": 1,
+          "title": "Width Px",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block_id",
+        "purpose",
+        "artifact",
+        "alt_text",
+        "width_px",
+        "height_px"
+      ],
+      "title": "ImageBlock",
+      "type": "object"
+    },
+    "ItemScore": {
+      "additionalProperties": false,
+      "properties": {
+        "points": {
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Points",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "points"
+      ],
+      "title": "ItemScore",
+      "type": "object"
+    },
+    "ItemSolution": {
+      "additionalProperties": false,
+      "properties": {
+        "accepted_answers": {
+          "default": [],
+          "items": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 20,
+          "title": "Accepted Answers",
+          "type": "array"
+        },
+        "authoring_intent": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "title": "Authoring Intent",
+          "type": "string"
+        },
+        "correct_choice_ids": {
+          "default": [],
+          "items": {
+            "pattern": "^choice_[a-z0-9][a-z0-9_]{0,31}$",
+            "type": "string"
+          },
+          "maxItems": 10,
+          "title": "Correct Choice Ids",
+          "type": "array"
+        },
+        "explanation": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "title": "Explanation",
+          "type": "string"
+        },
+        "statement_explanations": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/StatementExplanation"
+          },
+          "maxItems": 10,
+          "title": "Statement Explanations",
+          "type": "array"
+        }
+      },
+      "required": [
+        "explanation",
+        "authoring_intent"
+      ],
+      "title": "ItemSolution",
+      "type": "object"
+    },
+    "ItemVisualPresentation": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/AssessmentItemContentContract"
+        },
+        "display_content": {
+          "$ref": "#/$defs/ArtifactMemberPointer"
+        },
+        "item_id": {
+          "pattern": "^item_[a-z0-9]{8,59}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "item_revision_id": {
+          "pattern": "^itemrev_[a-z0-9]{8,55}$",
+          "title": "Item Revision Id",
+          "type": "string"
+        },
+        "recovery_manifest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ArtifactMemberPointer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_content": {
+          "$ref": "#/$defs/ArtifactMemberPointer"
+        }
+      },
+      "required": [
+        "item_id",
+        "item_revision_id",
+        "source_content",
+        "display_content",
+        "content"
+      ],
+      "title": "ItemVisualPresentation",
+      "type": "object"
+    },
+    "MediaArtifactPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_member": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Artifact Member",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "media_type": {
+          "enum": [
+            "image/png",
+            "image/jpeg"
+          ],
+          "title": "Media Type",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "artifact_member",
+        "sha256",
+        "media_type"
+      ],
+      "title": "MediaArtifactPointer",
+      "type": "object"
+    },
+    "ParagraphBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "pattern": "^block_[a-z][a-z0-9_]{0,63}$",
+          "title": "Block Id",
+          "type": "string"
+        },
+        "purpose": {
+          "enum": [
+            "stem",
+            "prompt",
+            "context"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "const": "paragraph",
+          "default": "paragraph",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id",
+        "purpose",
+        "text"
+      ],
+      "title": "ParagraphBlock",
+      "type": "object"
+    },
+    "SingleChoiceInteraction": {
+      "additionalProperties": false,
+      "properties": {
+        "choices": {
+          "items": {
+            "$ref": "#/$defs/Choice"
+          },
+          "maxItems": 10,
+          "minItems": 2,
+          "title": "Choices",
+          "type": "array"
+        },
+        "type": {
+          "const": "single_choice",
+          "default": "single_choice",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "choices"
+      ],
+      "title": "SingleChoiceInteraction",
+      "type": "object"
+    },
+    "Statement": {
+      "additionalProperties": false,
+      "properties": {
+        "label": {
+          "maxLength": 16,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "statement_id": {
+          "pattern": "^statement_[a-z][a-z0-9_]{0,31}$",
+          "title": "Statement Id",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "statement_id",
+        "label",
+        "text"
+      ],
+      "title": "Statement",
+      "type": "object"
+    },
+    "StatementExplanation": {
+      "additionalProperties": false,
+      "properties": {
+        "statement_id": {
+          "pattern": "^statement_[a-z][a-z0-9_]{0,31}$",
+          "title": "Statement Id",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "statement_id",
+        "text"
+      ],
+      "title": "StatementExplanation",
+      "type": "object"
+    },
+    "StatementSetBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "pattern": "^block_[a-z][a-z0-9_]{0,63}$",
+          "title": "Block Id",
+          "type": "string"
+        },
+        "purpose": {
+          "const": "claims",
+          "default": "claims",
+          "title": "Purpose",
+          "type": "string"
+        },
+        "statements": {
+          "items": {
+            "$ref": "#/$defs/Statement"
+          },
+          "maxItems": 10,
+          "minItems": 2,
+          "title": "Statements",
+          "type": "array"
+        },
+        "type": {
+          "const": "statement_set",
+          "default": "statement_set",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id",
+        "statements"
+      ],
+      "title": "StatementSetBlock",
+      "type": "object"
+    },
+    "TableBlock": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "pattern": "^block_[a-z][a-z0-9_]{0,63}$",
+          "title": "Block Id",
+          "type": "string"
+        },
+        "caption": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Caption"
+        },
+        "headers": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Headers",
+          "type": "array"
+        },
+        "purpose": {
+          "enum": [
+            "stimulus",
+            "data",
+            "reference"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Rows",
+          "type": "array"
+        },
+        "type": {
+          "const": "table",
+          "default": "table",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "block_id",
+        "purpose",
+        "headers",
+        "rows"
+      ],
+      "title": "TableBlock",
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/item-registry/catalog-item-visual-presentation-response/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "error_code": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Z][A-Z0-9_]{2,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Code"
+    },
+    "operation": {
+      "const": "GET_ITEM_VISUAL_PRESENTATION",
+      "default": "GET_ITEM_VISUAL_PRESENTATION",
+      "title": "Operation",
+      "type": "string"
+    },
+    "presentation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ItemVisualPresentation"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "status": {
+      "enum": [
+        "OK",
+        "ERROR"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "status"
+  ],
+  "title": "ItemVisualPresentationResponse",
+  "type": "object"
+}

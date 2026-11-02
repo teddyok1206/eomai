@@ -1,0 +1,23 @@
+{
+  "$id": "eom://schemas/item-registry/catalog-item-visual-presentation-request/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "item_revision_id": {
+      "pattern": "^itemrev_[a-z0-9]{8,55}$",
+      "title": "Item Revision Id",
+      "type": "string"
+    },
+    "operation": {
+      "const": "GET_ITEM_VISUAL_PRESENTATION",
+      "default": "GET_ITEM_VISUAL_PRESENTATION",
+      "title": "Operation",
+      "type": "string"
+    }
+  },
+  "required": [
+    "item_revision_id"
+  ],
+  "title": "ItemVisualPresentationQuery",
+  "type": "object"
+}

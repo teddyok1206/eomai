@@ -37,6 +37,7 @@ from eom_catalog_contracts import (
     PdfDocumentReviewPageMediaQuery,
     validate_contract,
 )
+from eom_catalog_contracts.creative_visual_presentation import ItemVisualPresentation
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_file
 from eom_item_registry import (
     ComponentPointer,
@@ -149,6 +150,7 @@ class ResolvedPastExamVariationContent:
 
 class RegistryService:
     def __init__(self, engine: Engine, settings: CatalogSettings | None = None) -> None:
+        self.engine = engine
         self.settings = settings or CatalogSettings.from_environment()
         self.sessions = build_session_factory(engine)
         self.artifacts = CatalogArtifactService(engine, self.settings)
@@ -814,6 +816,16 @@ class RegistryService:
         with self.sessions() as session:
             return self._load_item_content(session, revision_id)
 
+    def load_item_visual_presentation(self, revision_id: str) -> ItemVisualPresentation:
+        """Read the source-bound rendering; never substitute canonical Item history."""
+        from eom_catalog_service.creative_visual_presentation_service import (
+            CreativeVisualPresentationService,
+        )
+
+        return CreativeVisualPresentationService(
+            self.engine, source=self, settings=self.settings
+        ).read(revision_id)
+
     def load_item_media(self, revision_id: str, block_id: str) -> ResolvedItemMedia:
         """Open exactly one image block after revalidating its immutable pointer and bytes."""
 
@@ -829,7 +841,11 @@ class RegistryService:
                     RegistryErrorCode.ITEM_REVISION_NOT_APPROVED,
                     "item revision is not approved or awaiting supported human review",
                 )
-            content = self._load_item_content(session, revision_id)
+            content = (
+                self.load_item_visual_presentation(revision_id).content
+                if block_id.startswith("block_restored_")
+                else self._load_item_content(session, revision_id)
+            )
             matches = [
                 block
                 for block in (content.body if isinstance(content, AssessmentItemContent) else ())
