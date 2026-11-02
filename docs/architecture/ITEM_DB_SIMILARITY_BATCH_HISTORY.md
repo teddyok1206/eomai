@@ -145,3 +145,29 @@ query 최초 연결/children 관측은 짧은 row-lock transaction으로 병합�
   결과→조회/배치, 늦은 A/B 응답과 viewport를 검사했다. 이는 운영 인증/GPU 검증의 대체물이 아니다.
 - GPU INDEX process/config와 원 계산은 유지했다. 관측된 GPU bindings는348/1003이며
   API/Web/QUERY 신규 release, 실제2문항 GPU batch 및 단일/연속 대비 측정은 다음 단계다.
+
+## GPU 결과 인계와 공개 승인 — 2026-11-02 장애 수정
+
+실제 두 문항 batch는 `RESULT_READY` 이후 마지막 출처 재검증을 기다리는 중 native의
+180초 SIGALRM으로 종료됐다. `RESULT_ACK`의 기존 계약은 **검증한 로컬 출력 수령 확인**이며
+문항의 열람 허가·GPU 안전 종료·Artifact 공개 승인이 아니다. root controller는 원래부터
+실제 worker 종료/retirement 뒤 모든 child의 현재 권한·정본을 다시 검증한다.
+
+따라서 ACK 전의 중복된 전체 출처 순회를 제거하고, 출력 hash/원 grant/FD·설치 동일성 검증과
+실제 ACK는 유지한다. 모든 child의 계산 전·중 검증, retirement 뒤 전체 현재 출처 검증 및
+상위 owner의 commit fence를 유지한다. 마지막 검증이 거부되면 완료/공개를 반환하지 않는다.
+ACK를 먼저 보냈다는 이유로 실패 결과를 성공으로 재해석하지 않는다.
+
+- 책임/정본: 기존 root 수치 controller는 로컬 결과 수령·원 unit 종료만 담당한다. 출처/공개는
+  기존 실제 operator의 owner가 담당하며 NAS 정본·실패 기록은 변하지 않는다.
+- identity/pointer: 원 attempt/grant/batch/child/hash와 고정 runtime/config를 그대로 사용한다.
+  새 wire schema/DB/queue/cache/모델/벡터를 만들지 않는다.
+- access/자료구조: 기존 ordered child tuple의 순차 검증 O(children), 공유 출력 view O(bytes),
+  최대32 QUERY source를 유지한다. 공개 전 검증은 생략하거나 성공 cache로 대체하지 않는다.
+- 동시성/실패: 원 단일 allocation/channel과 command lease 경계다. ACK 후 source revoke,
+  worker 실패·retirement 실패 모두 반환/공개를 거부하며 자동 CPU 재계산하지 않는다.
+- 배포: 새 QUERY controller만 선택하고 INDEX가 고정한 구 controller/runtime은 보존한다.
+  기존 bootstrap에서 root가 명시적으로 pin한 INDEX entrypoint를 선택하게 하여, 활성 INDEX를
+  중단하거나 config·수치 prefix를 바꾸지 않고 목적별 호환 controller를 함께 둔다.
+- 대안: timeout 일괄 증가는 실제 단계 혼동을 숨기고, native prefix 갱신은 진행 중 INDEX의
+  고정 runtime을 침해한다. 로컬 ACK와 기존 공개 전 source fence를 분리하는 변경이 더 작다.
