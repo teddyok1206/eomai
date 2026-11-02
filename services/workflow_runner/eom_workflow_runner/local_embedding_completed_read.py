@@ -26,6 +26,7 @@ from eom_workflow.local_embedding_workflow_receipt_v2 import (
 from eom_workflow.native_embedding_coordinator import NativeCoordinatorCompleted
 from eom_workflow.native_embedding_coordinator_v2 import NativeCoordinatorCompletedV2
 from eom_workflow.native_embedding_coordinator_v3 import NativeCoordinatorCompletedV3
+from eom_workflow.native_embedding_coordinator_v4 import NativeCoordinatorCompletedV4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -91,12 +92,18 @@ def read_completed_local_embedding(
                 NativeCoordinatorCompleted,
                 NativeCoordinatorCompletedV2,
                 NativeCoordinatorCompletedV3,
+                NativeCoordinatorCompletedV4,
             ),
         )
     )
     assert isinstance(
         completed,
-        (NativeCoordinatorCompleted, NativeCoordinatorCompletedV2, NativeCoordinatorCompletedV3),
+        (
+            NativeCoordinatorCompleted,
+            NativeCoordinatorCompletedV2,
+            NativeCoordinatorCompletedV3,
+            NativeCoordinatorCompletedV4,
+        ),
     )
     _require(
         completed.output == output
