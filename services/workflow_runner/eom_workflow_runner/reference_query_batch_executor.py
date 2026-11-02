@@ -19,11 +19,13 @@ from eom_workflow.embedding_batch_plan_family import embedding_batch_query_key
 from eom_workflow.native_reference_query_coordinator import (
     NativeQueryAllocation,
     NativeQueryBatchExecuted,
+    NativeQueryCheckpointVersion,
     NativeQueryCompleted,
     NativeQueryCompletedV2,
     native_reference_query_continuation_checkpoint,
 )
 from eom_workflow.reference_query_execution import (
+    PublicReferenceQueryWorkflowRequest,
     ReferenceQueryLaunchAssociation,
     SupportedReferenceQueryStepOutput,
     SupportedReferenceQueryWorkflowRequest,
@@ -142,6 +144,11 @@ class CatalogBatchReferenceQueryExecutor:
         coordinator = NativeReferenceQueryCoordinator(request, launch)
         history = coordinator.read(session)
         _require(history.state not in {"FAILED", "CANCELLED"})
+        checkpoint_version: NativeQueryCheckpointVersion = (
+            "native-reference-query-coordinator/2.0"
+            if isinstance(request, PublicReferenceQueryWorkflowRequest)
+            else "native-reference-query-coordinator/1.2"
+        )
         if not history.records:
             _require(fresh)
             history = coordinator.append(
@@ -156,12 +163,12 @@ class CatalogBatchReferenceQueryExecutor:
                         source_commit=self.group.source_commit,
                     ),
                     previous=(),
-                    initial_version="native-reference-query-coordinator/1.2",
+                    initial_version=checkpoint_version,
                 ),
             )
         _require(
             1 <= len(history.records) <= 4
-            and history.records[0].schema_version == "native-reference-query-coordinator/1.2"
+            and history.records[0].schema_version == checkpoint_version
         )
         return prepared, history
 
