@@ -16,6 +16,7 @@ if TYPE_CHECKING:
         InferenceTransferSessionCapture,
     )
     from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
+    from eom_catalog_service.public_solution_capture_ports import CapturedPublicSolutionSources
 
 
 @dataclass(frozen=True, slots=True)
@@ -26,6 +27,6 @@ class SimilarityDocumentReadWindow:
     transaction: object
     caller: EmbeddingRegistryActor
     reader: PinnedArtifactReadContext
-    capture: InferenceTransferSessionCapture
+    capture: InferenceTransferSessionCapture | CapturedPublicSolutionSources
     source_revision_ids: tuple[str, ...] = ()
     population_read_set: InferenceTransferPopulationReadSet | None = None

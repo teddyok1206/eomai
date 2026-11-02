@@ -342,9 +342,8 @@ class CatalogPublicSolutionSimilarityRead:
             request.policy_sha256,
             request.maximum_sources,
         )
-        captured = self.catalog.resolve_lookup(session, caller, scope)
-        document = read_pinned_embedding_index(
-            session, caller, EmbeddingRegistryRead(scope, view), self.catalog
+        captured, document = self.catalog.read_public_similarity_document_in_session(
+            session, caller, EmbeddingRegistryRead(scope, view)
         )
         return captured, document
 

@@ -1275,7 +1275,10 @@ class CatalogEmbeddingRegistryVerifier:
         self,
         window: _SimilarityReadWindow,
         scope: EmbeddingRegistryLookup,
-        selection: SimilarityViewSelection | SimilarityViewSelectionV2,
+        selection: SimilarityViewSelection
+        | SimilarityViewSelectionV2
+        | PublicSolutionSimilarityView
+        | PublicSolutionSimilarityViewV4,
     ) -> ResolvedPinnedEmbeddingIndex:
         self._similarity_read_window = window
         try:
@@ -1289,6 +1292,49 @@ class CatalogEmbeddingRegistryVerifier:
             }:
                 raise similarity_context_error_from_registry(error) from None
             raise SimilarityContextReadError("INDEX_POINTER_INVALID") from None
+
+    def read_public_similarity_document_in_session(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        intent: EmbeddingRegistryRead,
+    ) -> tuple[ResolvedEmbeddingLookup, ResolvedPinnedEmbeddingIndex]:
+        """One full materialization for capture and DOCUMENT in this exact read root.
+
+        The returned values are not authority. The public composer retains its
+        independent full final source capture; each index check still fences
+        current scope/provenance through the existing bounded window.
+        """
+        self._require_similarity_root(session)
+        if (
+            type(caller) is not EmbeddingRegistryCaller
+            or type(intent) is not EmbeddingRegistryRead
+            or not isinstance(self.configuration.namespace, PublicSolutionIndexNamespace)
+            or not isinstance(
+                intent.selection, PublicSolutionSimilarityView | PublicSolutionSimilarityViewV4
+            )
+            or self._indexing_source_authority is not None
+            or self._similarity_read_window is not None
+        ):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+        reader, capture = self._capture(
+            session, caller, intent.scope, InferenceTransferSessionCapturePhase.CAPTURE_POPULATION
+        )
+        if type(capture) is not CapturedPublicSolutionSources or capture.corpus is None:
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_SOURCE_PIN_MISMATCH")
+        resolved = self._captured_lookup(session, caller, intent.scope, capture)
+        window = _SimilarityReadWindow(session, session.get_transaction(), caller, reader, capture)
+        # A window belongs to this call, never the shared service's verifier.
+        owner = CatalogEmbeddingRegistryVerifier(
+            self.engine,
+            self.configuration,
+            identity_fence=self.identity_fence,
+            settings=self.settings,
+        )
+        owner.sources = self.sources
+        owner._similarity_requested_top_k = self._similarity_requested_top_k
+        document = owner._read_document_index_in_window(window, intent.scope, intent.selection)
+        return resolved, document
 
     def observe_exam_similarity_in_session(
         self,

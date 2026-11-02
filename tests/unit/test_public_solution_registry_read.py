@@ -30,6 +30,7 @@ from eom_catalog_service.inference_transfer_service import (
 from eom_catalog_service.public_solution_capture_ports import CapturedPublicSolutionSources
 from eom_catalog_service.public_solution_source_capture import CatalogPublicSolutionSourceCapture
 from eom_catalog_service.settings import CatalogSettings
+from eom_catalog_service.similarity_context_ports import SimilarityContextReadError
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.models import ArtifactRecord
 
@@ -311,6 +312,35 @@ def test_actual_public_index_and_shared_numeric_row_keep_distinct_source_proofs(
     assert observed.bindings[0].source != observed.bindings[1].source
 
 
+@pytest.mark.parametrize("fault", ("tamper", "revoked", "late_scope"))
+def test_public_document_window_retains_file_lifecycle_and_fresh_scope_fences(
+    public_read, monkeypatch, fault
+):
+    value = public_read
+    if fault == "tamper":
+        (
+            value.root / value.shard.artifact_id / value.shard.artifact_revision_id / "vectors.f32"
+        ).write_bytes(b"bad")
+    elif fault == "revoked":
+        value.session.get(ArtifactRecord, value.shard.artifact_id).approved = False
+    else:
+        original = value.verifier.sources.authorize_scope_in_session.side_effect
+        calls = []
+
+        def scope(*args, **kwargs):
+            calls.append(1)
+            if len(calls) > 1:
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
+            return original(*args, **kwargs)
+
+        value.verifier.sources.authorize_scope_in_session.side_effect = scope
+    with pytest.raises((EmbeddingRegistryError, SimilarityContextReadError)):
+        value.verifier.read_public_similarity_document_in_session(
+            value.session, EmbeddingRegistryCaller("operator_" + "1" * 32), value.intent
+        )
+    assert value.verifier._similarity_read_window is None
+
+
 @pytest.mark.parametrize("fault", ["tamper", "revoked", "report", "base"])
 def test_public_read_keeps_file_report_and_lifecycle_validation(public_read, fault, monkeypatch):
     value = public_read
@@ -342,7 +372,10 @@ def test_public_read_keeps_file_report_and_lifecycle_validation(public_read, fau
         invoke(value)
 
 
-def test_official_public_read_prepares_pinned_request_and_recaptures_exact_sources(public_read):
+@pytest.mark.parametrize("late_revoke", (False, True))
+def test_official_public_read_prepares_pinned_request_and_recaptures_exact_sources(
+    public_read, monkeypatch, late_revoke
+):
     from eom_catalog_contracts.public_solution_query import PublicSolutionQueryInput
     from eom_catalog_service.embedding_encoder_adapter import encode_public_solution_query
     from eom_catalog_service.embedding_registry_ports import SelectedEmbeddingSources
@@ -391,10 +424,30 @@ def test_official_public_read_prepares_pinned_request_and_recaptures_exact_sourc
             encoded.result.shard, schema=original_query.shard_member.schema_ref, name="shard.json"
         ),
     )
+    original = CatalogPublicSolutionSourceCapture.capture_population_in_session
+    full_reads = []
+
+    def capture(*args, **kwargs):
+        full_reads.append(1)
+        if late_revoke and len(full_reads) == 2:
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(
+        CatalogPublicSolutionSourceCapture, "capture_population_in_session", capture
+    )
+    if late_revoke:
+        with pytest.raises(EmbeddingRegistryError, match="EMBEDDING_REGISTRY_FORBIDDEN"):
+            application.read_in_session(value.session, caller, request, query)
+        assert len(full_reads) == 2
+        assert value.verifier._similarity_read_window is None
+        return
     result = application.read_in_session(value.session, caller, request, query)
     assert result.status == "READY" and len(result.candidates) == 1
     assert result.request == request
     assert value.verifier.sources.authorize_scope_in_session.call_count >= 4
+    assert len(full_reads) == 2  # Previously 3: capture + duplicate index capture + late fence.
+    assert value.verifier._similarity_read_window is None
 
 
 def test_public_read_replay_never_resolves_latest_index(public_read, monkeypatch):
@@ -529,7 +582,10 @@ def test_query_text_matches_full_capture_without_reading_document_vectors(public
     numerical = Mock(side_effect=AssertionError("QUERY text must not materialize DOCUMENT vectors"))
     population = Mock(side_effect=AssertionError("QUERY text must not capture unrelated documents"))
     selected = Mock(wraps=value.verifier.resolve_selected_sources)
-    monkeypatch.setattr(reads, "read_pinned_embedding_index", numerical)
+    monkeypatch.setattr(
+        "eom_catalog_service.embedding_registry_catalog_adapter.read_pinned_embedding_index",
+        numerical,
+    )
     monkeypatch.setattr(value.verifier, "resolve_lookup", population)
     monkeypatch.setattr(value.verifier, "resolve_selected_sources", selected)
     actual = reads.CatalogPublicSolutionSimilarityRead(value.verifier).prepare_query_in_session(
