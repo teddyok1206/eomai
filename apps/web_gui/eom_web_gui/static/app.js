@@ -142,7 +142,7 @@ const itemDb = createItemDb({
       method: "POST", mutation: true, headers: {"Idempotency-Key": key},
       body: {schema_version: "item-db-similarity-list-input/1.0", selections, top_k: topK},
     }),
-    check: (id) => api(`/item-db/similarity/searches/${encodeURIComponent(id)}/check`, {method: "POST", mutation: true}),
+    check: (id) => api(`/item-db/similarity/searches/${encodeURIComponent(id)}/check`, {method: "POST", mutation: true, headers: {"Idempotency-Key": id}}),
     read: (id) => api(`/item-db/similarity/searches/${encodeURIComponent(id)}`),
     recent: () => api("/item-db/similarity/searches"),
     result: (id, ordinal) => api(`/item-db/similarity/searches/${encodeURIComponent(id)}/results/${ordinal}`),

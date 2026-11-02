@@ -17,6 +17,8 @@
    다른 사용자의 기록·선택·결과는 노출하지 않는다. 관리 권한만으로 타인을 가장하지 않는다.
 5. 완료한 검색의 ‘결과 확인’은 기존 결과 읽기다. 화면의 기존 목록을 지우거나 계산 중으로
    바꾸지 않는다. 새 QUERY prepare/native launch를 만들지 않으며 원 ranking/pin을 유지한다.
+   ‘새 검색 시작’은 별개의 명시적 intent다. 같은 문항으로 새 임베딩 범위를 검색할 때도 새 key를
+   사용하고 예전 결과를 덮지 않는다. 접수 timeout 재확인은 원 key를 유지한다.
 6. 진행 중 조회는 원 요청/key를 관찰한다. timeout을 미접수로 해석하거나 새 key로 제출하지
    않는다. 일부 기준 문항이 완료돼도 다른 문항의 실패를 성공으로 바꾸지 않는다.
 7. GPU의 연속 처리 이점은 실제 단일2회와 동일2문항 묶음의 launch/model-load/실행/결과 읽기를
@@ -77,6 +79,7 @@
 UI 목록 intent 전체를 API의 owner별 최근 기록으로 제공하지 않는다. API-owned
 `item_db_similarity_searches` 한 테이블에 bounded input/query/child selector metadata만 저장한다.
 접수는 POST, 진행 확인은 같은 search ID의 POST(check), 완료 결과는 ordinal별 GET으로 분리한다.
+check의 HTTP 멱등 key는 그 search ID다. native 계산에는 저장된 원래 key만 사용한다.
 GET 결과는 QUERY prepare/dispatch를 호출할 수 없다. 목록 전체의 무거운 completed read32회를
 한 HTTP 응답에 모으지 않고 사용자가 고른 기준 문항 하나만 지연 조회한다.
 owner/key UNIQUE와 owner/created_at/search_id index, operator FK를 둔다. 원 input은 불변이고

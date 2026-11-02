@@ -963,8 +963,13 @@ def create_app(
     async def item_db_similarity_list_check(
         search_id: Annotated[str, Path(pattern=r"^dbsearch_[0-9a-f]{32}$")],
         session: Annotated[WebSession, Depends(require_csrf)],
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", pattern=r"^dbsearch_[0-9a-f]{32}$")
+        ],
     ) -> dict[str, object]:
-        result = await actual.gateway.item_db_similarity_list_check(session, search_id)
+        result = await actual.gateway.item_db_similarity_list_check(
+            session, search_id, idempotency_key
+        )
         return result.model_dump(mode="json")
 
     @app.get(f"{API_PREFIX}/item-db/similarity/searches/{{search_id}}/results/{{ordinal}}")

@@ -61,7 +61,14 @@ def test_submit_and_check_use_csrf_and_only_submit_has_idempotency_key(search_ca
         assert client.post(BASE, json=raw, headers=headers).status_code == 200
         path = BASE + f"/{view.search_id}/check"
         assert client.post(path).status_code == 403
-        assert client.post(path, headers={"X-CSRF-Token": session["csrf_token"]}).status_code == 200
+        assert client.post(path, headers={"X-CSRF-Token": session["csrf_token"]}).status_code == 422
+        assert (
+            client.post(
+                path,
+                headers={"X-CSRF-Token": session["csrf_token"], "Idempotency-Key": view.search_id},
+            ).status_code
+            == 200
+        )
     gateway.item_db_similarity_list_submit.assert_awaited_once()
     gateway.item_db_similarity_list_check.assert_awaited_once()
 
