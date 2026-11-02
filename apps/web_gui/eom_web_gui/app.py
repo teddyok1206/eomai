@@ -62,7 +62,10 @@ from eom_web_gui.general_chat_contracts import (
     ChatDeleteSubmission,
     ChatTurnSubmission,
 )
-from eom_web_gui.item_db_similarity_contracts import ItemDbSimilaritySubmission
+from eom_web_gui.item_db_similarity_contracts import (
+    ItemDbSimilarityListSubmission,
+    ItemDbSimilaritySubmission,
+)
 from eom_web_gui.resources import installed_web_source_commit, static_resource
 from eom_web_gui.services import WebServices, build_services, validate_download_request
 from eom_web_gui.sessions import WebSession, utc_now
@@ -925,6 +928,52 @@ def create_app(
         ],
     ) -> dict[str, object]:
         result = await actual.gateway.item_db_similarity_search(session, value, idempotency_key)
+        return result.model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/item-db/similarity/searches")
+    async def item_db_similarity_list_submit(
+        value: ItemDbSimilarityListSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", pattern=r"^[A-Za-z0-9_.:-]{8,128}$")
+        ],
+    ) -> dict[str, object]:
+        result = await actual.gateway.item_db_similarity_list_submit(
+            session, value, idempotency_key
+        )
+        return result.model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/item-db/similarity/searches")
+    async def item_db_similarity_list_recent(
+        session: Annotated[WebSession, Depends(require_session)],
+        cursor: str | None = Query(default=None, max_length=2048),
+    ) -> dict[str, object]:
+        result = await actual.gateway.item_db_similarity_list_recent(session, cursor)
+        return result.model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/item-db/similarity/searches/{{search_id}}")
+    async def item_db_similarity_list_read(
+        search_id: Annotated[str, Path(pattern=r"^dbsearch_[0-9a-f]{32}$")],
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, object]:
+        result = await actual.gateway.item_db_similarity_list_read(session, search_id)
+        return result.model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/item-db/similarity/searches/{{search_id}}/check")
+    async def item_db_similarity_list_check(
+        search_id: Annotated[str, Path(pattern=r"^dbsearch_[0-9a-f]{32}$")],
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, object]:
+        result = await actual.gateway.item_db_similarity_list_check(session, search_id)
+        return result.model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/item-db/similarity/searches/{{search_id}}/results/{{ordinal}}")
+    async def item_db_similarity_list_result(
+        search_id: Annotated[str, Path(pattern=r"^dbsearch_[0-9a-f]{32}$")],
+        ordinal: Annotated[int, Path(ge=0, le=31)],
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, object]:
+        result = await actual.gateway.item_db_similarity_list_result(session, search_id, ordinal)
         return result.model_dump(mode="json")
 
     @app.get(f"{API_PREFIX}/item-db/assemblies")

@@ -11,6 +11,11 @@ from eom_catalog_contracts.item_db_similarity_selection import (
     ItemDbSimilaritySelectionRequest,
     validate_item_db_similarity_selection_reply,
 )
+from eom_catalog_contracts.item_db_similarity_selection_v2 import (
+    ItemDbSimilaritySelectionReplyV2,
+    ItemDbSimilaritySelectionRequestV2,
+    validate_item_db_similarity_selection_reply_v2,
+)
 from eom_orchestrator.general_chat_socket import (
     ChatSocketEndpoint,
     ChatTransportError,
@@ -28,6 +33,29 @@ class ItemDbSimilarityClientError(ValueError):
 class CatalogItemDbSimilarityClient:
     def __init__(self, endpoint: ChatSocketEndpoint | None = None) -> None:
         self.endpoint = endpoint
+
+    def resolve_many(
+        self, request: ItemDbSimilaritySelectionRequestV2
+    ) -> ItemDbSimilaritySelectionReplyV2:
+        try:
+            request = ItemDbSimilaritySelectionRequestV2.model_validate(request)
+            endpoint = self.endpoint or ChatSocketEndpoint(
+                Path(CATALOG_APPLICATION_SOCKET_PATH),
+                pwd.getpwnam("eom-catalog-manager").pw_uid,
+                grp.getgrnam("eom-api").gr_gid,
+            )
+            raw = exchange_chat_frame(
+                endpoint,
+                request.model_dump(mode="json"),
+                request_limit=MAX_ITEM_DB_SIMILARITY_SELECTION_BYTES,
+                reply_limit=MAX_ITEM_DB_SIMILARITY_SELECTION_BYTES,
+                timeout=90.0,
+            )
+            reply = ItemDbSimilaritySelectionReplyV2.model_validate(raw)
+            validate_item_db_similarity_selection_reply_v2(request, reply)
+            return reply
+        except (ValueError, SchemaError, ChatTransportError, KeyError, OSError):
+            raise ItemDbSimilarityClientError() from None
 
     def resolve(self, request: ItemDbSimilaritySelectionRequest) -> ItemDbSimilaritySelectionReply:
         try:

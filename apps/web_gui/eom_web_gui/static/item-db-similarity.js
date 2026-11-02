@@ -20,7 +20,7 @@ const SEARCH_KEY = /^studio:db-similarity:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0
 
 export function itemDbSimilaritySelection(kind, entry) {
   let pointer;
-  if (kind === "GRAPH_ITEM" && ["PAST_EXAM", "APPROVED_ITEM"].includes(entry?.source_class)
+  if (kind === "GRAPH_ITEM" && (entry?.source_class === undefined || ["PAST_EXAM", "APPROVED_ITEM"].includes(entry.source_class))
     && ID.item.test(entry.item_id) && ID.revision.test(entry.item_revision_id)
     && ID.hash.test(entry.item_manifest_sha256) && ID.graph.test(entry.graph_snapshot_revision_id)
     && ID.hash.test(entry.snapshot_sha256)) {
@@ -119,7 +119,7 @@ export function createItemDbSimilarity({document, search, openSelection, activat
     $("#item-db-similarity-progress").hidden = !processing;
     $("#item-db-similarity-tab-progress").hidden = !processing;
     if (processing) {
-      $("#item-db-similarity-progress-label").textContent = PHASE_LABELS[operation.result?.phase] || "유사도 검색 중";
+      $("#item-db-similarity-progress-label").textContent = PHASE_LABELS[operation.result?.phase] || "기존 결과 불러오는 중";
       updateElapsed();
       if (elapsedTimer === null) elapsedTimer = setInterval(updateElapsed, 1000);
     } else if (elapsedTimer !== null) {
@@ -170,7 +170,8 @@ export function createItemDbSimilarity({document, search, openSelection, activat
     return result.candidates.map((candidate) => {
       const selection = itemDbSimilaritySelection(candidate.kind, candidate.entry);
       const key = sourceIdentity(selection);
-      if (seen.has(key) || key === sourceIdentity(operation.selection)
+      if ((candidate.kind === "GRAPH_ITEM" && !["PAST_EXAM", "APPROVED_ITEM"].includes(candidate.entry.source_class))
+        || seen.has(key) || key === sourceIdentity(operation.selection)
         || typeof candidate.label !== "string" || !candidate.label.trim() || candidate.label.length > 512
         || (candidate.unit_label !== undefined && (typeof candidate.unit_label !== "string" || candidate.unit_label.length > 512))
         || !Number.isInteger(candidate.cosine_millionths)
@@ -211,6 +212,13 @@ export function createItemDbSimilarity({document, search, openSelection, activat
   async function observe() {
     if (!operation || busy) return;
     clearObservation();
+    if (["READY", "PARTIAL"].includes(operation.result?.status)) {
+      // This already displayed immutable result is not a new search intent.
+      // Server history reopening separately reauthorizes its completed selectors.
+      render(operation.result, readCandidates(operation.result));
+      controls();
+      return;
+    }
     const request = ++sequence;
     if (typeof search !== "function") {
       message("유사도 검색 연결을 준비하고 있습니다. 기존 조회와 배치는 그대로 이용할 수 있습니다.");
@@ -218,9 +226,9 @@ export function createItemDbSimilarity({document, search, openSelection, activat
     }
     busy = true;
     if (operation.result?.status !== "PENDING") operation.result = null;
-    empty("유사한 문항을 찾고 있습니다.");
+    empty("기존 검색 결과를 불러오고 있습니다.");
     controls();
-    message("선택한 문항과 유사한 문항을 찾고 있습니다.");
+    message("기존 검색 결과를 확인하고 있습니다.");
     try {
       const result = await search(operation.selection.pointer, operation.idempotencyKey, operation.pinnedQuery);
       if (request !== sequence) return;

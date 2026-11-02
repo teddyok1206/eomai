@@ -71,6 +71,8 @@ from eom_api.services.inference_transfer_workflow_read import (
 from eom_api.services.item_approval_service import ItemApprovalApplicationService
 from eom_api.services.item_db_similarity import ItemDbSimilarityApplicationService
 from eom_api.services.item_db_similarity_client import CatalogItemDbSimilarityClient
+from eom_api.services.item_db_similarity_searches import ItemDbSimilaritySearchApplication
+from eom_api.services.item_db_similarity_store import ItemDbSimilaritySearchStore
 from eom_api.services.item_similarity_preparation import ItemSimilarityStartPreparationService
 from eom_api.services.item_similarity_publication_client import (
     CatalogItemSimilarityPublicationClient,
@@ -163,6 +165,13 @@ class AppServices:
         self.external_item_db_reads = ExternalItemDbReadApplication(engine, fingerprint_key)
         self.item_db_similarity = ItemDbSimilarityApplicationService(
             CatalogItemDbSimilarityClient(),
+            self.reference_query_preparation,
+            self.similarity_context_reads,
+            self.queries,
+        )
+        self.item_db_similarity_searches = ItemDbSimilaritySearchApplication(
+            ItemDbSimilaritySearchStore(engine, fingerprint_key),
+            self.item_db_similarity.selection,
             self.reference_query_preparation,
             self.similarity_context_reads,
             self.queries,

@@ -137,11 +137,30 @@ const generalChat = createGeneralChat({
 const itemDb = createItemDb({
   document,
   api,
-  continuationStorage: () => window.sessionStorage,
-  searchSimilar: (selection, key, pinnedQuery) => api("/item-db/similarity", {
-    method: "POST", mutation: true, headers: {"Idempotency-Key": key},
-    body: {selection, pinned_query: pinnedQuery ?? null},
-  }),
+  similaritySearches: {
+    submit: (selections, topK, key) => api("/item-db/similarity/searches", {
+      method: "POST", mutation: true, headers: {"Idempotency-Key": key},
+      body: {schema_version: "item-db-similarity-list-input/1.0", selections, top_k: topK},
+    }),
+    check: (id) => api(`/item-db/similarity/searches/${encodeURIComponent(id)}/check`, {method: "POST", mutation: true}),
+    read: (id) => api(`/item-db/similarity/searches/${encodeURIComponent(id)}`),
+    recent: () => api("/item-db/similarity/searches"),
+    result: (id, ordinal) => api(`/item-db/similarity/searches/${encodeURIComponent(id)}/results/${ordinal}`),
+  },
+  previewRegisteredItem: async (pointer, root, isCurrent) => {
+    const preview = await api(`/items/${encodeURIComponent(pointer.item_id)}/revisions/${encodeURIComponent(pointer.item_revision_id)}/preview`);
+    if (!isCurrent()) return;
+    if (preview.item_id !== pointer.item_id || preview.item_revision_id !== pointer.item_revision_id || preview.preview_state !== "AVAILABLE") throw new Error("기준 문항 미리보기를 확인하지 못했습니다.");
+    const heading = document.createElement("h3");
+    renderPreviewText(heading, preview.title || "기준 문항");
+    root.replaceChildren(heading);
+    for (const block of orderedItemPreviewBlocks(preview)) root.append(renderPreviewBlock(block));
+    const choices = document.createElement("ol");
+    for (const choice of preview.choices || []) {
+      const row = document.createElement("li"); renderPreviewText(row, `${choice.label} ${choice.text}`); choices.append(row);
+    }
+    root.append(choices);
+  },
   canReadSource: () => hasPermission(state.operator, "content_intake:read"),
   openPastExamVariation: async (entry) => beginPastExamVariation({
     ...entry,

@@ -246,10 +246,24 @@
               <section class="panel item-db-similarity-panel" aria-labelledby="item-db-similarity-title">
                 <div class="panel-heading"><div><h2 id="item-db-similarity-title">유사한 문항</h2><p id="item-db-similarity-anchor">조회에서 문항을 선택해 주세요.</p></div><button id="item-db-similarity-refresh" class="button secondary" type="button" disabled>결과 확인</button></div>
                 <div class="panel-body">
+                  <div class="item-db-similarity-workspace">
+                  <aside class="item-db-similarity-controls" aria-label="검색할 문항과 최근 기록">
+                    <div class="panel-heading"><h3>검색할 문항</h3><span id="item-db-similarity-draft-count" class="status-badge tone-neutral">0문항</span></div>
+                    <ol id="item-db-similarity-draft" class="item-db-similarity-draft"></ol>
+                    <label>새 검색의 문항별 결과 수<input id="item-db-similarity-top-k" type="number" min="1" max="64" value="5" inputmode="numeric"></label>
+                    <button id="item-db-similarity-run" class="button primary" type="button" disabled>검색 시작</button>
+                    <div class="panel-heading"><h3>최근 검색</h3><button id="item-db-similarity-history-refresh" class="button quiet" type="button">새로고침</button></div>
+                    <div id="item-db-similarity-history" class="item-db-similarity-history"><p>로그인 후 검색 기록을 확인할 수 있습니다.</p></div>
+                  </aside>
+                  <div class="item-db-similarity-output">
+                    <label>기준 문항<select id="item-db-similarity-source-select" aria-label="결과를 볼 기준 문항 선택" disabled></select></label>
+                    <details class="item-db-similarity-preview" open><summary>기준 문항 미리보기</summary><div id="item-db-similarity-source-preview" aria-live="polite"><p>검색할 문항을 선택해 주세요.</p></div></details>
                   <div id="item-db-similarity-progress" class="item-db-progress" hidden><span class="item-db-computing-dot" aria-hidden="true"></span><span id="item-db-similarity-progress-label" role="status" aria-live="polite"></span><span id="item-db-similarity-elapsed" aria-hidden="true"></span></div>
                   <p id="item-db-similarity-message" class="form-message" aria-live="polite">조회에서 문항을 고른 뒤 ‘유사도 검색’을 누르세요.</p>
                   <div class="item-db-results-heading"><h3>검색 결과</h3><span id="item-db-similarity-count" class="status-badge tone-neutral">검색 전</span></div>
                   <div class="item-db-table-wrap"><table class="item-db-table" aria-label="유사도 검색 결과"><thead><tr><th scope="col">순위</th><th scope="col">문항</th><th scope="col">종류</th><th scope="col">단원</th><th scope="col" title="문항을 찾는 데 쓰는 점수입니다. 풀이가 같은 비율을 뜻하지 않습니다.">검색 점수</th></tr></thead><tbody id="item-db-similarity-results"><tr><td colspan="5" class="empty-state">아직 검색한 문항이 없습니다.</td></tr></tbody></table></div>
+                  </div>
+                  </div>
                 </div>
               </section>
             </div>

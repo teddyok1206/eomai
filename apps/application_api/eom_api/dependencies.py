@@ -49,6 +49,8 @@ def get_authentication(
         "reference_query_prepare",
         "workflow_reference_start",
         "item_db_similarity_search",
+        "item_db_similarity_list_submit",
+        "item_db_similarity_list_check",
     }:
         observed = services.auth.authenticate_and_capture_access(credentials.credentials)
         authentication = observed.authentication

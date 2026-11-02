@@ -42,11 +42,12 @@ if (($# != 2)) || \
     "$1" != "local-indexing-service-tests" && "$1" != "registered-solution-tests" && \
     "$1" != "registered-solution-application-tests" && \
     "$1" != "pdf-review-tests" && "$1" != "external-item-tests" && \
+    "$1" != "item-db-search-tests" && \
     "$1" != "creative-registration-tests" && "$1" != "creative-graph-tests" && \
     "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
     "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
-    "usage: $0 {verify|inspect|migrate|hwpx-tests|catalog-artifact-tests|embedding-tests|embedding-registry-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|private-chat-artifact-tests|authenticated-session-tests|local-indexing-service-tests|registered-solution-tests|registered-solution-application-tests|pdf-review-tests|external-item-tests|creative-registration-tests|creative-graph-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
+    "usage: $0 {verify|inspect|migrate|hwpx-tests|catalog-artifact-tests|embedding-tests|embedding-registry-tests|embedding-encoding-tests|embedding-stage-tests|private-chat-context-tests|private-chat-artifact-tests|authenticated-session-tests|local-indexing-service-tests|registered-solution-tests|registered-solution-application-tests|pdf-review-tests|external-item-tests|item-db-search-tests|creative-registration-tests|creative-graph-tests|quality-review-tests|chat-tests|chat-role-tests|chat-knowledge-tests|tests} /tmp/eom-api-testdb-<ID>" >&2
   exit 2
 fi
 [[ "$(id -un)" == "eom" ]] || fail "test database execution must run as eom"
@@ -237,6 +238,14 @@ PY
   printf 'Disposable API test database migration cycle passed.\n'
   printf 'Next privileged phase: scripts/api/testdb_prepare.sh --reconcile %s\n' \
     "${state_directory}"
+  exit 0
+fi
+
+if [[ "${action}" == "item-db-search-tests" ]]; then
+  export EOM_RUN_API_INTEGRATION=1
+  export EOM_ITEM_DB_SEARCH_TEST_STATE="${state_directory}"
+  "${PYTHON}" -m pytest -q tests/integration/test_item_db_similarity_search_storage.py
+  printf 'Disposable owned search history, concurrent replay and completion tests passed.\n'
   exit 0
 fi
 

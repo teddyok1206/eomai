@@ -322,7 +322,7 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 )
                 self.wfile.flush()
                 return
-            if raw_operation == "RESOLVE_ITEM_DB_SIMILARITY":
+            if raw_operation in {"RESOLVE_ITEM_DB_SIMILARITY", "RESOLVE_ITEM_DB_SIMILARITY_LIST"}:
                 self.wfile.write(
                     dispatch_item_db_similarity_selection(
                         self.server.item_db_similarity_selection,

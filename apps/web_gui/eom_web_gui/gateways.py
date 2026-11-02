@@ -10,6 +10,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
+from urllib.parse import quote
 
 import httpx
 
@@ -102,6 +103,10 @@ from eom_web_gui.general_chat_contracts import (
     ChatTurnSubmission,
 )
 from eom_web_gui.item_db_similarity_contracts import (
+    ItemDbSearchAnchorResult,
+    ItemDbSearchHistory,
+    ItemDbSearchView,
+    ItemDbSimilarityListSubmission,
     ItemDbSimilarityResult,
     ItemDbSimilaritySubmission,
 )
@@ -725,6 +730,26 @@ class ApplicationGateway(Protocol):
         value: ItemDbSimilaritySubmission,
         idempotency_key: str,
     ) -> ItemDbSimilarityResult: ...
+
+    async def item_db_similarity_list_submit(
+        self, session: WebSession, value: ItemDbSimilarityListSubmission, idempotency_key: str
+    ) -> ItemDbSearchView: ...
+
+    async def item_db_similarity_list_recent(
+        self, session: WebSession, cursor: str | None
+    ) -> ItemDbSearchHistory: ...
+
+    async def item_db_similarity_list_check(
+        self, session: WebSession, search_id: str
+    ) -> ItemDbSearchView: ...
+
+    async def item_db_similarity_list_read(
+        self, session: WebSession, search_id: str
+    ) -> ItemDbSearchView: ...
+
+    async def item_db_similarity_list_result(
+        self, session: WebSession, search_id: str, ordinal: int
+    ) -> ItemDbSearchAnchorResult: ...
 
     async def external_item_db_export(
         self,
@@ -1463,6 +1488,91 @@ class HttpApplicationGateway:
                 or result.pinned_query.get("top_k") != value.top_k
             ):
                 raise ValueError("original query differs")
+            return result
+        except (ValueError, TypeError, KeyError):
+            raise GatewayError(status=502, code="ITEM_DB_SIMILARITY_RESPONSE_INVALID") from None
+
+    async def item_db_similarity_list_submit(
+        self, session: WebSession, value: ItemDbSimilarityListSubmission, idempotency_key: str
+    ) -> ItemDbSearchView:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/item-db/similarity/searches",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+            timeout=120.0,
+        )
+        try:
+            result = ItemDbSearchView.model_validate(self._data(response))
+            if result.selections != value.selections or result.top_k != value.top_k:
+                raise ValueError("search intent differs")
+            return result
+        except (ValueError, TypeError, KeyError):
+            raise GatewayError(status=502, code="ITEM_DB_SIMILARITY_RESPONSE_INVALID") from None
+
+    async def item_db_similarity_list_recent(
+        self, session: WebSession, cursor: str | None
+    ) -> ItemDbSearchHistory:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/item-db/similarity/searches",
+            params={"limit": 20, **({"cursor": cursor} if cursor is not None else {})},
+        )
+        try:
+            raw = self._document(response)
+            page = raw["page"]
+            if page["has_more"] != (page["next_cursor"] is not None):
+                raise ValueError("search page differs")
+            return ItemDbSearchHistory(values=raw["data"], next_cursor=page["next_cursor"])
+        except (ValueError, TypeError, KeyError):
+            raise GatewayError(status=502, code="ITEM_DB_SIMILARITY_RESPONSE_INVALID") from None
+
+    async def item_db_similarity_list_check(
+        self, session: WebSession, search_id: str
+    ) -> ItemDbSearchView:
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/item-db/similarity/searches/{quote(search_id, safe='')}/check",
+            timeout=120.0,
+        )
+        try:
+            result = ItemDbSearchView.model_validate(self._data(response))
+            if result.search_id != search_id:
+                raise ValueError("search identity differs")
+            return result
+        except (ValueError, TypeError, KeyError):
+            raise GatewayError(status=502, code="ITEM_DB_SIMILARITY_RESPONSE_INVALID") from None
+
+    async def item_db_similarity_list_read(
+        self, session: WebSession, search_id: str
+    ) -> ItemDbSearchView:
+        response = await self._authorized(
+            session, "GET", f"/api/v1/item-db/similarity/searches/{quote(search_id, safe='')}"
+        )
+        try:
+            result = ItemDbSearchView.model_validate(self._data(response))
+            if result.search_id != search_id:
+                raise ValueError("search identity differs")
+            return result
+        except (ValueError, TypeError, KeyError):
+            raise GatewayError(status=502, code="ITEM_DB_SIMILARITY_RESPONSE_INVALID") from None
+
+    async def item_db_similarity_list_result(
+        self, session: WebSession, search_id: str, ordinal: int
+    ) -> ItemDbSearchAnchorResult:
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/item-db/similarity/searches/{quote(search_id, safe='')}/results/{ordinal}",
+            timeout=240.0,
+        )
+        try:
+            result = ItemDbSearchAnchorResult.model_validate(self._data(response))
+            if result.search_id != search_id or result.ordinal != ordinal:
+                raise ValueError("search result identity differs")
             return result
         except (ValueError, TypeError, KeyError):
             raise GatewayError(status=502, code="ITEM_DB_SIMILARITY_RESPONSE_INVALID") from None

@@ -6,8 +6,13 @@ from eom_catalog_contracts.item_db_similarity_selection import (
     ItemDbGraphSelection,
     ItemDbSimilarityItemPin,
     ItemDbSimilarityPreparedSelection,
+    ItemDbSimilaritySelection,
     ItemDbSimilaritySelectionErrorCode,
     ItemDbSimilaritySelectionRequest,
+)
+from eom_catalog_contracts.item_db_similarity_selection_v2 import (
+    ItemDbSimilarityPreparedSelectionV2,
+    ItemDbSimilaritySelectionRequestV2,
 )
 from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
 from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
@@ -19,7 +24,7 @@ from eom_identifiers import content_sha256
 from eom_identity_service import OperatorAuthorizationFenceError
 from eom_orchestrator.database import build_session_factory
 from eom_workflow_runner.reference_query_source_read import CatalogReferenceQueryReadOwner
-from sqlalchemy import select
+from sqlalchemy import Select, literal, or_, select, tuple_
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.embedding_registry_ports import (
@@ -66,6 +71,22 @@ class CatalogItemDbSimilaritySelection:
         self, request: ItemDbSimilaritySelectionRequest
     ) -> ItemDbSimilarityPreparedSelection:
         request = ItemDbSimilaritySelectionRequest.model_validate(request)
+        result = self._resolve(request)
+        return ItemDbSimilarityPreparedSelection(
+            selection_sha256=content_sha256(request.selection),
+            anchor=result.anchors[0],
+            query=result.query,
+            search_snapshot_sha256=result.search_snapshot_sha256,
+        )
+
+    def resolve_many(
+        self, request: ItemDbSimilaritySelectionRequestV2
+    ) -> ItemDbSimilarityPreparedSelectionV2:
+        return self._resolve(ItemDbSimilaritySelectionRequestV2.model_validate(request))
+
+    def _resolve(
+        self, request: ItemDbSimilaritySelectionRequest | ItemDbSimilaritySelectionRequestV2
+    ) -> ItemDbSimilarityPreparedSelectionV2:
         caller = EmbeddingRegistryCaller(request.actor_id)
         try:
             with self.sessions.begin() as session:
@@ -75,23 +96,43 @@ class CatalogItemDbSimilaritySelection:
                 self.owner.identity.fence_current_operator(session, request.actor_id)
                 scope, snapshot_hash = self._scope(session, request)
                 self.owner.catalog.authorize_scope(session, caller, scope)
-                revision = self._selected_revision(session, request, caller, scope)
+                revisions = (
+                    (self._selected_revision(session, request, caller, scope),)
+                    if isinstance(request, ItemDbSimilaritySelectionRequest)
+                    else self._selected_pointers(session, request.selections, caller, scope)
+                )
+                revision_ids = tuple(revision.item_revision_id for revision in revisions)
+                if len(set(revision_ids)) != len(revision_ids):
+                    # External and Graph selections can resolve to the same canonical Item.
+                    raise ItemDbSimilaritySelectionError("ITEM_DB_SIMILARITY_REQUEST_CONFLICT")
                 captured = self.owner.catalog.resolve_selected_sources(
                     session,
                     caller,
-                    SelectedEmbeddingSources(scope, (revision.item_revision_id,)),
+                    SelectedEmbeddingSources(scope, revision_ids),
                 )
-                if len(captured.entries) != 1:
+                if len(captured.entries) != len(revisions):
                     raise ItemDbSimilaritySelectionError("ITEM_DB_SIMILARITY_NOT_INDEXED")
-                entry = captured.entries[0]
-                if not isinstance(
-                    entry, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry
-                ) or (
-                    entry.source.item_revision_id != revision.item_revision_id
-                    or entry.source.item_id != revision.item_id
-                    or entry.public_solution.status != "AVAILABLE"
-                ):
+                entries: dict[
+                    str, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry
+                ] = {}
+                for entry in captured.entries:
+                    if not isinstance(
+                        entry, PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry
+                    ):
+                        raise ItemDbSimilaritySelectionError("ITEM_DB_SIMILARITY_NOT_INDEXED")
+                    entries[entry.source.item_revision_id] = entry
+                if len(entries) != len(revisions):
                     raise ItemDbSimilaritySelectionError("ITEM_DB_SIMILARITY_NOT_INDEXED")
+                for revision in revisions:
+                    selected_entry = entries.get(revision.item_revision_id)
+                    if not isinstance(
+                        selected_entry,
+                        PublicSolutionEmbeddingEntry | RegisteredPublicSolutionEmbeddingEntry,
+                    ) or (
+                        selected_entry.source.item_id != revision.item_id
+                        or selected_entry.public_solution.status != "AVAILABLE"
+                    ):
+                        raise ItemDbSimilaritySelectionError("ITEM_DB_SIMILARITY_NOT_INDEXED")
                 query = request.pinned_query
                 if query is None:
                     value = dict(
@@ -99,7 +140,7 @@ class CatalogItemDbSimilaritySelection:
                         operation="PREPARE_REFERENCE_QUERY",
                         operation_id=request.operation_id,
                         idempotency_key=request.idempotency_key,
-                        source_item_revision_ids=[revision.item_revision_id],
+                        source_item_revision_ids=list(revision_ids),
                         graph_snapshot=scope.graph_snapshot.model_dump(mode="json"),
                         policy_revision_id=scope.policy_revision_id,
                         policy_sha256=scope.policy_sha256,
@@ -109,14 +150,22 @@ class CatalogItemDbSimilaritySelection:
                     query = ReferenceQueryPrepareRequestV4.model_validate(
                         value | {"request_sha256": content_sha256(value)}
                     )
-                elif query.source_item_revision_ids != (revision.item_revision_id,):
+                elif query.source_item_revision_ids != revision_ids:
                     raise ItemDbSimilaritySelectionError("ITEM_DB_SIMILARITY_REQUEST_CONFLICT")
-                result = ItemDbSimilarityPreparedSelection(
-                    selection_sha256=content_sha256(request.selection),
-                    anchor=ItemDbSimilarityItemPin(
-                        item_id=revision.item_id,
-                        item_revision_id=revision.item_revision_id,
-                        item_manifest_sha256=revision.manifest_sha256,
+                selections = (
+                    (request.selection,)
+                    if isinstance(request, ItemDbSimilaritySelectionRequest)
+                    else request.selections
+                )
+                result = ItemDbSimilarityPreparedSelectionV2(
+                    selection_sha256=content_sha256(selections),
+                    anchors=tuple(
+                        ItemDbSimilarityItemPin(
+                            item_id=revision.item_id,
+                            item_revision_id=revision.item_revision_id,
+                            item_manifest_sha256=revision.manifest_sha256,
+                        )
+                        for revision in revisions
                     ),
                     query=query,
                     search_snapshot_sha256=snapshot_hash,
@@ -135,7 +184,7 @@ class CatalogItemDbSimilaritySelection:
     def _scope(
         self,
         session: Session,
-        request: ItemDbSimilaritySelectionRequest,
+        request: ItemDbSimilaritySelectionRequest | ItemDbSimilaritySelectionRequestV2,
     ) -> tuple[EmbeddingRegistryLookup, str]:
         config = self.owner.configuration.registry
         query = request.pinned_query
@@ -181,7 +230,15 @@ class CatalogItemDbSimilaritySelection:
         caller: EmbeddingRegistryCaller,
         scope: EmbeddingRegistryLookup,
     ) -> ItemRevisionRecord:
-        selected = request.selection
+        return self._selected_pointer(session, request.selection, caller, scope)
+
+    def _selected_pointer(
+        self,
+        session: Session,
+        selected: ItemDbSimilaritySelection,
+        caller: EmbeddingRegistryCaller,
+        scope: EmbeddingRegistryLookup,
+    ) -> ItemRevisionRecord:
         if isinstance(selected, ItemDbExternalSelection):
             source = session.get(ExternalItemSourceRecord, selected.source_id)
             observation = session.get(ExternalItemSourceRevisionRecord, selected.source_revision_id)
@@ -224,6 +281,158 @@ class CatalogItemDbSimilaritySelection:
             raise ItemDbSimilaritySelectionError("SOURCE_REVOKED")
         return revision
 
+    def _selected_pointers(
+        self,
+        session: Session,
+        selections: tuple[ItemDbSimilaritySelection, ...],
+        caller: EmbeddingRegistryCaller,
+        scope: EmbeddingRegistryLookup,
+    ) -> tuple[ItemRevisionRecord, ...]:
+        """Batch metadata once; only distinct Graph scopes need separate authority reads."""
+        external = tuple(
+            value for value in selections if isinstance(value, ItemDbExternalSelection)
+        )
+        graph = tuple(value for value in selections if isinstance(value, ItemDbGraphSelection))
+        external_rows = (
+            {
+                (source.source_id, observation.revision_id): (source, observation)
+                for source, observation in session.execute(
+                    select(
+                        ExternalItemSourceRecord,
+                        ExternalItemSourceRevisionRecord,
+                    )
+                    .join(
+                        ExternalItemSourceRevisionRecord,
+                        ExternalItemSourceRevisionRecord.source_id
+                        == ExternalItemSourceRecord.source_id,
+                    )
+                    .where(
+                        tuple_(
+                            ExternalItemSourceRecord.source_id,
+                            ExternalItemSourceRevisionRecord.revision_id,
+                        ).in_(
+                            tuple((value.source_id, value.source_revision_id) for value in external)
+                        )
+                    )
+                )
+            }
+            if external
+            else {}
+        )
+        keys = tuple(creative_registration_key(value.source_id) for value in external)
+        registration_keys = set(keys)
+        revisions = tuple(
+            session.scalars(
+                select(ItemRevisionRecord).where(
+                    or_(
+                        ItemRevisionRecord.item_revision_id.in_(
+                            tuple(value.item_revision_id for value in graph)
+                        ),
+                        ItemRevisionRecord.registration_key.in_(keys),
+                    )
+                )
+            )
+        )
+        by_revision = {value.item_revision_id: value for value in revisions}
+        by_registration = {
+            value.registration_key: value
+            for value in revisions
+            if value.registration_key in registration_keys
+        }
+        items = {
+            value.item_id: value
+            for value in session.scalars(
+                select(ItemRecord).where(
+                    ItemRecord.item_id.in_(tuple({value.item_id for value in revisions})),
+                )
+            )
+        }
+        ordered = []
+        graph_scopes: dict[str, str] = {}
+        for selected in selections:
+            if isinstance(selected, ItemDbExternalSelection):
+                pair = external_rows.get((selected.source_id, selected.source_revision_id))
+                if pair is None:
+                    raise ItemDbSimilaritySelectionError("SOURCE_POINTER_INVALID")
+                source, observation = pair
+                if (
+                    source.current_revision_id != selected.source_revision_id
+                    or observation.observation_sha256 != selected.observation_sha256
+                ):
+                    raise ItemDbSimilaritySelectionError("SOURCE_POINTER_INVALID")
+                revision = by_registration.get(creative_registration_key(selected.source_id))
+                if revision is None:
+                    raise ItemDbSimilaritySelectionError("ITEM_DB_SIMILARITY_NOT_REGISTERED")
+                if (
+                    revision.metadata_json.get("source_id") != selected.source_id
+                    or revision.metadata_json.get("source_revision_id")
+                    != selected.source_revision_id
+                ):
+                    raise ItemDbSimilaritySelectionError("SOURCE_POINTER_INVALID")
+            else:
+                revision = by_revision.get(selected.item_revision_id)
+                if (
+                    revision is None
+                    or revision.item_id != selected.item_id
+                    or revision.manifest_sha256 != selected.item_manifest_sha256
+                ):
+                    raise ItemDbSimilaritySelectionError("SOURCE_POINTER_INVALID")
+                previous_hash = graph_scopes.get(selected.graph_snapshot_revision_id)
+                if previous_hash is None:
+                    self._require_selected_graph(session, selected, revision, caller, scope)
+                    graph_scopes[selected.graph_snapshot_revision_id] = (
+                        selected.graph_snapshot_sha256
+                    )
+                elif previous_hash != selected.graph_snapshot_sha256:
+                    raise ItemDbSimilaritySelectionError("SOURCE_HASH_MISMATCH")
+            item = items.get(revision.item_id)
+            if (
+                item is None
+                or item.lifecycle_state != "ACTIVE"
+                or revision.revision_state not in {"APPROVED", "SUPERSEDED"}
+            ):
+                raise ItemDbSimilaritySelectionError("SOURCE_REVOKED")
+            ordered.append(revision)
+        if graph:
+            wanted = {(value.graph_snapshot_revision_id, value.item_revision_id) for value in graph}
+            found = set(
+                session.execute(
+                    self._graph_memberships().where(
+                        tuple_(
+                            KnowledgeNodeSourcePointerRecord.graph_snapshot_revision_id,
+                            KnowledgeNodeSourcePointerRecord.source_revision_id,
+                        ).in_(tuple(wanted))
+                    )
+                ).all()
+            )
+            if found != wanted:
+                raise ItemDbSimilaritySelectionError("SOURCE_POINTER_INVALID")
+        return tuple(ordered)
+
+    def _graph_memberships(self) -> Select[tuple[str, str]]:
+        return (
+            select(
+                KnowledgeNodeSourcePointerRecord.graph_snapshot_revision_id,
+                KnowledgeNodeSourcePointerRecord.source_revision_id,
+            )
+            .join(
+                KnowledgeNodeRecord,
+                (
+                    KnowledgeNodeRecord.graph_snapshot_revision_id
+                    == KnowledgeNodeSourcePointerRecord.graph_snapshot_revision_id
+                )
+                & (KnowledgeNodeRecord.node_id == KnowledgeNodeSourcePointerRecord.node_id),
+            )
+            .where(
+                KnowledgeNodeSourcePointerRecord.source_class.in_(
+                    self.owner.configuration.registry.source_classes
+                ),
+                KnowledgeNodeRecord.node_type == "ITEM_REVISION",
+                KnowledgeNodeRecord.stable_key
+                == literal("item-revision:") + KnowledgeNodeSourcePointerRecord.source_revision_id,
+            )
+        )
+
     def _require_selected_graph(
         self,
         session: Session,
@@ -249,26 +458,13 @@ class CatalogItemDbSimilaritySelection:
                 scope.maximum_sources,
             ),
         )
-        exists = session.scalar(
-            select(KnowledgeNodeSourcePointerRecord.pointer_id)
-            .join(
-                KnowledgeNodeRecord,
-                (
-                    KnowledgeNodeRecord.graph_snapshot_revision_id
-                    == KnowledgeNodeSourcePointerRecord.graph_snapshot_revision_id
-                )
-                & (KnowledgeNodeRecord.node_id == KnowledgeNodeSourcePointerRecord.node_id),
-            )
+        exists = session.execute(
+            self._graph_memberships()
             .where(
                 KnowledgeNodeSourcePointerRecord.graph_snapshot_revision_id == snapshot_id,
                 KnowledgeNodeSourcePointerRecord.source_revision_id == revision.item_revision_id,
-                KnowledgeNodeSourcePointerRecord.source_class.in_(
-                    self.owner.configuration.registry.source_classes
-                ),
-                KnowledgeNodeRecord.node_type == "ITEM_REVISION",
-                KnowledgeNodeRecord.stable_key == "item-revision:" + revision.item_revision_id,
             )
             .limit(1)
-        )
+        ).first()
         if exists is None:
             raise ItemDbSimilaritySelectionError("SOURCE_POINTER_INVALID")

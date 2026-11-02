@@ -5,14 +5,14 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const staticRoot = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const names = ["index.html", "styles.css", "item-db.js", "item-db-draft.js", "item-db-similarity.js", "eom-mark.svg"];
+const names = ["index.html", "styles.css", "item-db.js", "item-db-draft.js", "item-db-similarity.js", "item-db-similarity-list.js", "eom-mark.svg"];
 const assets = new Map(await Promise.all(names.map(async name => [name, await readFile(new URL(name, staticRoot), "utf8")])));
 
 // Exact repository HTML, CSS and controller; only the existing API and navigation
 // adapters are fixtures. No production credentials, DB or model calls are used.
 const fixtureApp = `
 import {createItemDb} from './item-db.js';
-const fixture = window.dbFixture = {calls: [], similarCalls: [], opened: [], variations: [], allowSource: true, hold: null, release: null, releaseSimilar: {}};
+const fixture = window.dbFixture = {calls: [], similarCalls: [], similarChecks: [], similarReads: [], records: [], opened: [], variations: [], allowSource: true, hold: null, release: null, releaseSimilar: {}};
 const columns = Array.from({length: 26}, (_, index) => String.fromCharCode(65 + index)).concat(['AA','AB','AC','AD','AE','AF']);
 function entry(number) {
   return {source_id: 'extitem_' + number.padStart(32, '0'), source_revision_id: 'extitemrev_' + number.padStart(32, '0'),
@@ -77,7 +77,6 @@ async function api(path, options = {}) {
   throw new Error('UNEXPECTED_FIXTURE_REQUEST ' + path);
 }
 async function searchSimilar(pointer, key, pinnedQuery) {
-  fixture.similarCalls.push({pointer: structuredClone(pointer), key, pinnedQuery: structuredClone(pinnedQuery)});
   const candidate = {...graph, source_display_label: '합성 시험 18번', item_id: 'item_' + '8'.repeat(32),
     item_revision_id: 'itemrev_' + '9'.repeat(32), past_exam_context: {...graph.past_exam_context, item_number: 18}};
   const other = entry(pointer.source_id?.endsWith('10318') ? '10310' : '10318');
@@ -93,10 +92,38 @@ async function searchSimilar(pointer, key, pinnedQuery) {
   }
   return result;
 }
+const searches = {
+  async submit(selections, top_k, key) {
+    const record = {schema_version: 'item-db-similarity-search-view/1.0',
+      search_id: 'dbsearch_' + String(fixture.records.length + 1).padStart(32, '0'),
+      selections, top_k, created_at: new Date().toISOString(), status: 'PENDING', device: 'CUDA', children: [], error_code: null};
+    fixture.records.unshift(record); fixture.similarCalls.push({selections, key}); return record;
+  },
+  async check(id) {
+    fixture.similarChecks.push(id);
+    const record = fixture.records.find(value => value.search_id === id);
+    if (fixture.pendingSimilarity) {fixture.pendingSimilarity = false; return record;}
+    record.status = 'READY';
+    record.children = record.selections.map((pointer, ordinal) => ({ordinal,
+      source_item_revision_id: pointer.item_revision_id || 'itemrev_' + pointer.source_id.slice(-32),
+      state: 'COMPLETED', selection: {workflow_id: 'workflow_' + String(ordinal + 1).padStart(32, '0')}}));
+    return structuredClone(record);
+  },
+  async read(id) {return structuredClone(fixture.records.find(value => value.search_id === id));},
+  async recent() {return {values: structuredClone(fixture.records), next_cursor: null};},
+  async result(id, ordinal) {
+    fixture.similarReads.push({id, ordinal});
+    const record = fixture.records.find(value => value.search_id === id);
+    const value = await searchSimilar(record.selections[ordinal], 'existing-result-get-only', null);
+    return {...value, search_id: id, ordinal, source_item_revision_id: record.children[ordinal].source_item_revision_id,
+      candidates: value.candidates.slice(0, record.top_k)};
+  },
+};
 const controller = createItemDb({document, api, openRegisteredItem: entry => fixture.opened.push(entry),
   openPastExamVariation: entry => fixture.variations.push(entry),
-  canReadSource: () => fixture.allowSource, searchSimilar});
-controller.install(); controller.open();
+  canReadSource: () => fixture.allowSource, similaritySearches: searches,
+  previewRegisteredItem: async (_pointer, root) => {root.textContent = '합성 기준 문항 미리보기';}});
+controller.install(); controller.setOwner('operator_' + '1'.repeat(32)); controller.open();
 document.querySelectorAll('.view').forEach(view => view.classList.toggle('active', view.dataset.view === 'item-db'));
 fixture.controller = controller;
 fixture.ready = true;
@@ -110,6 +137,7 @@ try {
   page.on("pageerror", error => errors.push(error.message));
   await page.route("**/*", async route => {
     const url = new URL(route.request().url());
+    if (url.pathname.endsWith('/preview.pdf')) return route.fulfill({contentType: 'text/html', body: '<p>합성 PDF 미리보기</p>'});
     if (url.pathname === "/studio") return route.fulfill({contentType: "text/html", body: assets.get("index.html")});
     const name = url.pathname.split("/").at(-1);
     if (name === "app.js") return route.fulfill({contentType: "text/javascript", body: fixtureApp});
@@ -278,6 +306,7 @@ try {
   assert.equal(await page.getByRole('tab').filter({hasText: /^(조회|배치|유사도)/u}).count(), 3);
   assert.equal(await page.locator('#item-db-similarity-start').isEnabled(), true);
   await page.locator('#item-db-similarity-start').click();
+  await page.locator('#item-db-similarity-run').click();
   await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '2개');
   assert.equal(await page.locator('#item-db-search-panel').isVisible(), false);
   assert.equal(await page.locator('#item-db-similarity-panel').isVisible(), true);
@@ -285,7 +314,7 @@ try {
   assert.match(await page.locator('#item-db-similarity-anchor').innerText(), /10310/);
   assert.match(await page.locator('#item-db-similarity-results').innerText(), /0\.921/u);
   const selectedRequest = await page.evaluate(() => window.dbFixture.similarCalls.at(-1));
-  assert.equal(selectedRequest.pointer.source_revision_id, 'extitemrev_' + '10310'.padStart(32, '0'));
+  assert.equal(selectedRequest.selections[0].source_revision_id, 'extitemrev_' + '10310'.padStart(32, '0'));
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '2개');
   assert.doesNotMatch(await page.locator('#item-db-similarity-panel').innerText(), /itemrev_|graphrev_|extitemrev_/u);
   await page.getByRole('button', {name: '합성 시험 18번 조회에서 열기'}).click();
@@ -304,52 +333,55 @@ try {
   await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).click();
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '4개');
 
-  // PENDING and transient errors retain the original request key for explicit observation.
+  // A list is one immutable intent; top_k is pinned and PENDING observation keeps it.
   await page.evaluate(() => {window.dbFixture.pendingSimilarity = true;});
   await page.locator('#item-db-similarity-start').click();
-  await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '검색 중');
+  await page.locator('#item-db-similarity-top-k').fill('10');
+  await page.locator('#item-db-similarity-run').click();
+  await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent.includes('0/2'));
   assert.equal(await page.locator('#item-db-similarity-progress').isVisible(), true);
-  assert.equal(await page.locator('#item-db-similarity-tab-progress').isVisible(), true);
   assert.match(await page.locator('#item-db-similarity-progress-label').innerText(), /계산 중/u);
   assert.match(await page.locator('#item-db-similarity-elapsed').innerText(), /요청 후/u);
-  await page.waitForFunction(() => !document.querySelector('#item-db-similarity-elapsed').textContent.endsWith(' 0초'));
   assert.doesNotMatch(await page.locator('#item-db-similarity-progress').innerText(), /%/u);
-  const pendingKey = await page.evaluate(() => window.dbFixture.similarCalls.at(-1).key);
-  await page.locator('#item-db-similarity-refresh').click();
   await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '2개');
+  assert.equal(await page.evaluate(() => window.dbFixture.similarCalls.length), 2);
+  assert.equal(await page.evaluate(() => window.dbFixture.similarCalls.at(-1).selections.length), 2);
+  assert.equal(await page.evaluate(() => window.dbFixture.records[0].top_k), 10);
+  assert.equal(await page.locator('#item-db-similarity-source-select option').count(), 2);
+  assert.equal(await page.locator('#item-db-similarity-source-preview iframe').count(), 1);
+
+  // Completed confirmation retains the visible rows: no new intent, check or result GET.
+  const completedCounts = await page.evaluate(() => [window.dbFixture.similarCalls.length,
+    window.dbFixture.similarChecks.length, window.dbFixture.similarReads.length]);
+  await page.locator('#item-db-similarity-refresh').click();
+  assert.equal(await page.locator('#item-db-similarity-count').innerText(), '2개');
+  assert.deepEqual(await page.evaluate(() => [window.dbFixture.similarCalls.length,
+    window.dbFixture.similarChecks.length, window.dbFixture.similarReads.length]), completedCounts);
   assert.equal(await page.locator('#item-db-similarity-progress').isVisible(), false);
-  assert.equal(await page.locator('#item-db-similarity-tab-progress').isVisible(), false);
-  assert.equal(await page.evaluate(() => window.dbFixture.similarCalls.at(-1).key), pendingKey);
-  assert.equal(await page.evaluate(() => window.dbFixture.similarCalls.at(-1).pinnedQuery.idempotency_key), pendingKey);
 
-  // A confirmed accepted PENDING is observed automatically, never submitted with a new key.
-  await page.evaluate(() => {window.dbFixture.pendingSimilarity = true;});
-  await page.locator('#item-db-similarity-refresh').click();
-  await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '검색 중');
+  await page.locator('#item-db-similarity-source-select').selectOption('1');
+  await page.waitForFunction(() => document.querySelector('#item-db-similarity-anchor').textContent.includes('10318'));
   await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '2개');
-  assert.equal(await page.evaluate(() => window.dbFixture.similarCalls.at(-1).key), pendingKey);
-  await page.evaluate(() => {window.dbFixture.failSimilarity = true;});
-  await page.locator('#item-db-similarity-refresh').click();
-  await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '확인 필요');
-  assert.equal(await page.locator('#item-db-similarity-results button').count(), 0);
-  await page.locator('#item-db-similarity-refresh').click();
-  await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '2개');
-  assert.equal(await page.evaluate(() => window.dbFixture.similarCalls.at(-1).key), pendingKey);
+  await page.locator('#item-db-similarity-source-select').selectOption('0');
+  await page.waitForFunction(() => document.querySelector('#item-db-similarity-anchor').textContent.includes('10310'));
+  assert.equal(await page.evaluate(() => window.dbFixture.similarCalls.length), 2);
+  assert.equal(await page.evaluate(() => window.dbFixture.similarReads.length), completedCounts[2] + 1);
 
-  // Slow A cannot replace B; completion must not steal focus from a different tab.
-  await page.getByRole('tab', {name: '조회', exact: true}).click();
-  await page.evaluate(() => {window.dbFixture.holdSimilarity = true;});
-  await rows.first().getByRole('button').click();
-  await page.waitForFunction(() => document.querySelector('.item-db-detail-heading h3')?.textContent === '고유번호 10310');
-  await page.locator('#item-db-similarity-start').click();
+  // Reopening history reauthorizes existing results but never dispatches another calculation.
+  await page.locator('#item-db-similarity-history-refresh').click();
+  await page.waitForFunction(() => document.querySelectorAll('.item-db-history-entry').length === 2);
+  await page.locator('.item-db-history-entry').first().click();
+  await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '2개');
+  assert.equal(await page.evaluate(() => window.dbFixture.similarCalls.length), 2);
+  assert.equal(await page.evaluate(() => window.dbFixture.similarReads.length), completedCounts[2] + 2);
+
+  // Slow source A cannot overwrite B or force the user back from the assembly tab.
+  await page.evaluate(() => {window.dbFixture.holdSimilarity = true; window.dbFixture.releaseSimilar = {};});
+  await page.locator('.item-db-history-entry').first().click();
   await page.waitForFunction(() => Object.keys(window.dbFixture.releaseSimilar).length === 1);
-  await page.getByRole('tab', {name: '조회', exact: true}).click();
-  await rows.nth(1).getByRole('button').click();
-  await page.waitForFunction(() => document.querySelector('.item-db-detail-heading h3')?.textContent === '고유번호 10318');
-  await page.locator('#item-db-similarity-start').click();
+  await page.locator('#item-db-similarity-source-select').selectOption('1');
   await page.waitForFunction(() => Object.keys(window.dbFixture.releaseSimilar).length === 2);
   await page.getByRole('tab', {name: /배치/}).click();
-  assert.equal(await page.locator('#item-db-similarity-tab-progress').isVisible(), true);
   await page.evaluate(() => window.dbFixture.releaseSimilar['extitem_' + '10318'.padStart(32, '0')]());
   await page.waitForFunction(() => document.querySelector('#item-db-similarity-count').textContent === '2개');
   assert.equal(await page.locator('#item-db-assembly-panel').isVisible(), true);

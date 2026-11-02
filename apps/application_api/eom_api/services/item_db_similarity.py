@@ -7,6 +7,9 @@ from eom_api_contracts.item_db_similarity import (
 )
 from eom_catalog_contracts.item_db_similarity_selection import ItemDbSimilaritySelectionRequest
 from eom_catalog_contracts.reference_query_prepare import ReferenceQueryPrepareReplyV4
+from eom_catalog_contracts.registered_public_solution_similarity import (
+    SupportedPublicSolutionSimilarityContext,
+)
 from eom_identifiers import content_sha256
 from eom_operator_identity import PermissionKey
 from jsonschema.exceptions import ValidationError as SchemaError
@@ -21,6 +24,31 @@ from eom_api.services.item_db_similarity_client import (
 from eom_api.services.query_adapter import QueryAdapter
 from eom_api.services.reference_query_preparation import ReferenceQueryPreparationApplicationService
 from eom_api.services.similarity_context_read import SimilarityContextReadApplicationService
+
+
+def item_db_similarity_candidates(
+    result: SupportedPublicSolutionSimilarityContext, metadata: QueryAdapter
+) -> tuple[ItemDbSimilarityCandidate, ...]:
+    entries = (
+        metadata.selected_production_item_candidates(
+            tuple(candidate.source for candidate in result.candidates)
+        )
+        if result.candidates
+        else ()
+    )
+    by_revision = {entry.item_revision_id: entry for entry in entries}
+    return tuple(
+        ItemDbSimilarityCandidate(
+            entry=by_revision[candidate.source.item_revision_id],
+            label=by_revision[candidate.source.item_revision_id].source_display_label,
+            unit_label=" · ".join(
+                unit.label
+                for unit in by_revision[candidate.source.item_revision_id].curriculum_units
+            ),
+            cosine_millionths=candidate.observation.cosine_millionths,
+        )
+        for candidate in result.candidates
+    )
 
 
 class ItemDbSimilarityApplicationService:
@@ -159,31 +187,12 @@ class ItemDbSimilarityApplicationService:
                 "Search source differs",
                 "The completed query differs from the exact selected Item.",
             )
-        metadata = (
-            self.metadata.selected_production_item_candidates(
-                tuple(candidate.source for candidate in result.candidates)
-            )
-            if result.candidates
-            else ()
-        )
-        by_revision = {entry.item_revision_id: entry for entry in metadata}
         return ItemDbSimilarityView(
             status="READY" if result.status == "EMPTY" else result.status,
             phase="READING_RESULTS",
             pinned_query=selected.query,
             search_snapshot_sha256=selected.search_snapshot_sha256,
-            candidates=tuple(
-                ItemDbSimilarityCandidate(
-                    entry=by_revision[candidate.source.item_revision_id],
-                    label=by_revision[candidate.source.item_revision_id].source_display_label,
-                    unit_label=" · ".join(
-                        unit.label
-                        for unit in by_revision[candidate.source.item_revision_id].curriculum_units
-                    ),
-                    cosine_millionths=candidate.observation.cosine_millionths,
-                )
-                for candidate in result.candidates
-            ),
+            candidates=item_db_similarity_candidates(result, self.metadata),
             message="점수는 참고값이며 풀이의 동일성이나 정확성을 뜻하지 않습니다.",
             error_code=None,
         )

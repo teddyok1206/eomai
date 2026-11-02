@@ -55,6 +55,9 @@ assert(calls.every(call => call.pointer === selection.pointer && call.key === ca
 assert.equal(calls[2].pin, original, "response failure must not lose the original query pin");
 assert.equal(document.querySelector("#item-db-similarity-progress").hidden, true);
 assert.equal(document.querySelector("#item-db-similarity-tab-progress").hidden, true);
+await document.querySelector("#item-db-similarity-refresh").events.get("click")();
+assert.equal(calls.length, 3, "completed result confirmation must never submit another query");
+assert.equal(document.querySelector("#item-db-similarity-progress").hidden, true);
 app.reset();
 assert.equal(timers.size, 0);
 console.log("similarity_preparing_original_pin_and_timeout_replay=PASS live_writes=0");
