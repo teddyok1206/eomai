@@ -107,7 +107,7 @@ file-set publisher의 identified publication을 사용한다. 새 DB 테이블·
   동시성·중단 재개 6 PASS. 해당 검사들은 실제 그림 교체 증거의 대체물이 아니다.
 
 추가로 발견한 실제 원본 형태를 구분한다. 일부는 도식 PNG만이 아니라 발문·보기까지
-포함한 **문항 전체 PNG**가 본문에 들어 있다(예: 10323). 이 전체 PNG를 그대로
+포함한 **문항 전체 PNG**의 일부를 본문에서 재사용하기도 한다(예: 10336). 이 전체 PNG를 그대로
 그림으로 등록하면 요구사항 위반이다. 또한 native 글자·화살표·도형을 조합한 사례가
 있어 BinData 파일 하나만으로 완성 그림이라고 선언할 수 없다.
 
@@ -125,3 +125,33 @@ file-set publisher의 identified publication을 사용한다. 새 DB 테이블·
 추출된 모든 BinData를 한꺼번에 승인한 것이 아니다. 특히 우측 원본 기출/해설 그림,
 본문의 전체 문항 screenshot, 부분 문장만 남는 조합은 검수 전 운영에 연결하지 않는다.
 전체 목표는 진행 중이며 29건의 성공을 corpus 전체 완료로 보고하지 않는다.
+
+후속 검수에서 1.0으로 직접 복구한 문항은 283개로 늘었다. 먼저 발행한 237개는
+실제 API 서비스 계정에서 private Catalog → PNG stream SHA → 같은 조회 재실행까지
+모두 확인했다. 추가 46개는 Orchestrator 발행 및 Catalog read를 확인했다.
+10323의 초기 혼입은 bitmap 자체가 아니라 주변 native 문장/표 경계까지 선택했던
+조합 문제로 재분류했다. 이미지 전체 크기가 맞다는 사실만으로 그림 선택을 승인하지 않는다.
+
+## 원본 bitmap 영역 선택 — 1.1 추가 설계
+
+추가 원본 조사에서 한 내장 PNG/BMP를 서로 다른 viewport로 재사용하는 HWP를
+확인했다. 본문에 쓰인 개체라도 원래 bitmap 전체에는 두 panel 또는 별도 문제까지
+들어 있을 수 있다. 기존 1.0의 `source_image_crops=0` 의미는 바꾸지 않는다.
+
+1.1은 기존 표시 Artifact/단일 publication key/Orchestrator commit을 그대로 사용하되,
+각 원본 member의 전체 pixel 크기·hash와 선택한 정수 pixel box를 명시한다.
+선택 사유는 본문 개체 viewport, composite의 본문 panel, 빈 여백 제거로 한정한다.
+PDF page pixel/capture는 여전히 0이며, 본문 위치와 원본 개체를 직접 대조한 경우만
+발행한다. DocInfo의 BinData 순번과 실제 storage ID가 다를 수 있어 파일명 숫자만으로
+대응하지 않는다. 참고 기출의 개체 위치에서 잘라낸 이미지는 승인하지 않는다.
+
+기존 1.0 Artifact와 source/Item/Graph/풀이/embedding revision은 보존한다. 새 1.1
+schema를 먼저 추가하고 Catalog가 정확한 manifest schema를 읽도록 확장한다.
+이미 발행한 같은 문항의 1.0을 조용히 바꾸지 않는다. key lookup은 기존 unique/indexed
+Job lookup, 그림은 member map, 작업량은 선택한 pixel/개체 수에 선형이다.
+경계/순서/해시/참조 대상 불일치는 등록 전 실패하며 같은 계획의 replay는 같은
+Artifact를 재사용한다. 새 DB·migration·queue·프레임워크는 만들지 않는다.
+
+단순히 원본 전체 PNG를 쓰는 대안은 panel 중복과 발문/보기 혼입을 만들므로
+이 실제 예외에는 부족하다. 1.1은 PDF 재캡처의 우회가 아니라 원본 bitmap의
+검수된 부분만 사용하는 추가 표현 계약이다.

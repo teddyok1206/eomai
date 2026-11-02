@@ -9,18 +9,17 @@ from eom_catalog_contracts.assessment_item import (
     AssessmentItemContent,
     AssessmentItemContentContract,
 )
+from eom_catalog_contracts.creative_bitmap_presentation import read_visual_presentation_manifest
 from eom_catalog_contracts.creative_visual_derivation import derive_creative_visual_content
 from eom_catalog_contracts.creative_visual_presentation import (
     VISUAL_PRESENTATION_ARTIFACT_TYPE,
     VISUAL_PRESENTATION_CONTENT_MEMBER,
     VISUAL_PRESENTATION_CONTENT_SCHEMA_REF,
     VISUAL_PRESENTATION_MEMBER,
-    VISUAL_PRESENTATION_SCHEMA_REF,
-    CreativeVisualPresentationManifest,
+    VISUAL_PRESENTATION_SCHEMA_REFS,
     ItemVisualPresentation,
     visual_presentation_key,
 )
-from eom_catalog_contracts.validation import validate_contract
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
@@ -142,7 +141,10 @@ class CreativeVisualPresentationService:
                 for v in entries
                 if isinstance(v, dict) and v.get("file_name") == VISUAL_PRESENTATION_MEMBER
             ]
-            if len(manifests) != 1:
+            if (
+                len(manifests) != 1
+                or manifests[0].get("schema_ref") not in VISUAL_PRESENTATION_SCHEMA_REFS
+            ):
                 raise CreativeVisualPresentationError(
                     "ITEM_VISUAL_PRESENTATION_PUBLICATION_INVALID"
                 )
@@ -151,7 +153,7 @@ class CreativeVisualPresentationService:
                 artifact_revision_id=job.revision_id,
                 member_path=VISUAL_PRESENTATION_MEMBER,
                 sha256=manifests[0]["sha256"],
-                schema_ref=VISUAL_PRESENTATION_SCHEMA_REF,
+                schema_ref=manifests[0]["schema_ref"],
                 media_type="application/json",
             )
             recovery_raw = resolve_pinned_artifact_member(
@@ -163,8 +165,9 @@ class CreativeVisualPresentationService:
                 max_bytes=256 * 1024,
             ).payload
             recovered_value = json.loads(recovery_raw)
-            validate_contract("creative-visual-presentation-v1", recovered_value)
-            manifest = CreativeVisualPresentationManifest.model_validate(recovered_value)
+            manifest = read_visual_presentation_manifest(
+                recovered_value, recovery_pointer.schema_ref
+            )
             report = session.scalar(
                 select(ItemComponentRecord).where(
                     ItemComponentRecord.item_revision_id == revision_id,

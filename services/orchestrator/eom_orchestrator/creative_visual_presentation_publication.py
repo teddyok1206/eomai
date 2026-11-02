@@ -11,18 +11,22 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from eom_catalog_contracts.assessment_item import AssessmentItemContent
+from eom_catalog_contracts.creative_bitmap_presentation import (
+    CreativeBitmapPresentationManifest,
+    RecoveredBitmapVisual,
+    VisualPresentationManifest,
+    read_visual_presentation_manifest,
+    visual_presentation_schema_ref,
+)
 from eom_catalog_contracts.creative_visual_derivation import derive_creative_visual_content
 from eom_catalog_contracts.creative_visual_presentation import (
     VISUAL_PRESENTATION_ARTIFACT_TYPE,
     VISUAL_PRESENTATION_CONTENT_MEMBER,
     VISUAL_PRESENTATION_CONTENT_SCHEMA_REF,
     VISUAL_PRESENTATION_MEMBER,
-    VISUAL_PRESENTATION_SCHEMA_REF,
-    CreativeVisualPresentationManifest,
     RecoveredSourceVisual,
     visual_presentation_key,
 )
-from eom_catalog_contracts.validation import validate_contract
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 
 from eom_orchestrator.file_set_control_artifacts import (
@@ -35,7 +39,7 @@ from eom_orchestrator.file_set_control_artifacts import (
 WHOLE_SOURCE_PNG_SCHEMA_REF = "eom://schemas/external-item/whole-source-png/1.0"
 
 
-def _read_verified_png(path: Path, visual: RecoveredSourceVisual) -> bytes:
+def _read_verified_png(path: Path, visual: RecoveredSourceVisual | RecoveredBitmapVisual) -> bytes:
     if not path.is_absolute():
         raise ValueError("CREATIVE_VISUAL_PUBLICATION_IMAGE_INVALID")
     descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
@@ -67,7 +71,7 @@ def publish_creative_visual_presentation(
     publisher: ControlFileSetPublisher,
     *,
     identity: ControlFileSetIdentity,
-    manifest: CreativeVisualPresentationManifest,
+    manifest: VisualPresentationManifest,
     canonical: AssessmentItemContent,
     image_files: Mapping[str, Path],
     source_commit: str,
@@ -79,8 +83,8 @@ def publish_creative_visual_presentation(
     and extraction happen in the local document/image adapter, never in a Codex
     slot. The existing publisher alone owns NAS/transaction/replay behavior.
     """
-    manifest = CreativeVisualPresentationManifest.model_validate(manifest.model_dump(mode="json"))
-    validate_contract("creative-visual-presentation-v1", manifest.model_dump(mode="json"))
+    schema_ref = visual_presentation_schema_ref(manifest)
+    manifest = read_visual_presentation_manifest(manifest.model_dump(mode="json"), schema_ref)
     if content_sha256(canonical.model_dump(mode="json")) != manifest.canonical_content.sha256:
         raise ValueError("CREATIVE_VISUAL_PUBLICATION_SOURCE_MISMATCH")
     expected = {visual.canonical_block_id for visual in manifest.visuals}
@@ -121,7 +125,7 @@ def publish_creative_visual_presentation(
                 manifest_path,
                 sha256_bytes(manifest_payload),
                 len(manifest_payload),
-                VISUAL_PRESENTATION_SCHEMA_REF,
+                schema_ref,
                 "application/json",
             ),
         ]
@@ -140,7 +144,11 @@ def publish_creative_visual_presentation(
                     path,
                     visual.sha256,
                     visual.content_length,
-                    WHOLE_SOURCE_PNG_SCHEMA_REF,
+                    (
+                        "eom://schemas/external-item/source-bitmap-region-png/1.0"
+                        if isinstance(manifest, CreativeBitmapPresentationManifest)
+                        else WHOLE_SOURCE_PNG_SCHEMA_REF
+                    ),
                     "image/png",
                 )
             )

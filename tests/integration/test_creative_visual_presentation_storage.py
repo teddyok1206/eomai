@@ -13,15 +13,19 @@ from eom_orchestrator.models import JobRecord
 from sqlalchemy.orm import Session
 
 from tests.integration.test_creative_visual_publication_storage import _publisher
+from tests.unit.test_creative_bitmap_presentation import as_bitmap_manifest
 from tests.unit.test_creative_visual_presentation_publication import publication_fixture
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
 
+@pytest.mark.parametrize("bitmap_region", [False, True])
 def test_concurrent_original_image_renditions_commit_one_identified_revision(
-    creative_engine, tmp_path
+    creative_engine, tmp_path, bitmap_region
 ):
-    arguments = publication_fixture(tmp_path)
+    arguments = publication_fixture(tmp_path, variant="7" if bitmap_region else "5")
+    if bitmap_region:
+        arguments["manifest"] = as_bitmap_manifest(arguments["manifest"])
     publisher = _publisher(creative_engine, tmp_path)
     barrier = Barrier(2)
 
@@ -37,10 +41,13 @@ def test_concurrent_original_image_renditions_commit_one_identified_revision(
     assert replay == results[0]
 
 
+@pytest.mark.parametrize("bitmap_region", [False, True])
 def test_interrupted_original_image_rendition_resumes_the_same_identity(
-    creative_engine, tmp_path, monkeypatch
+    creative_engine, tmp_path, monkeypatch, bitmap_region
 ):
-    arguments = publication_fixture(tmp_path, variant="6")
+    arguments = publication_fixture(tmp_path, variant="8" if bitmap_region else "6")
+    if bitmap_region:
+        arguments["manifest"] = as_bitmap_manifest(arguments["manifest"])
     identity = arguments["identity"]
     publisher = _publisher(creative_engine, tmp_path)
     original = artifact_owner.commit_file_set_artifact

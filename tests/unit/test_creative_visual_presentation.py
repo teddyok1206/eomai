@@ -367,7 +367,11 @@ def read_fixture(monkeypatch, tmp_path):
         manifest=dict(
             primary_file="assessment-item-content.json",
             files=[
-                dict(file_name=VISUAL_PRESENTATION_MEMBER, sha256=view.recovery_manifest.sha256)
+                dict(
+                    file_name=VISUAL_PRESENTATION_MEMBER,
+                    sha256=view.recovery_manifest.sha256,
+                    schema_ref=VISUAL_PRESENTATION_SCHEMA_REF,
+                )
             ],
         ),
     )

@@ -3,7 +3,7 @@
 from eom_identifiers import content_sha256
 
 from eom_catalog_contracts.assessment_item import AssessmentItemContent, ImageBlock
-from eom_catalog_contracts.creative_visual_presentation import CreativeVisualPresentationManifest
+from eom_catalog_contracts.creative_bitmap_presentation import VisualPresentationManifest
 
 
 def nonvisual_item_content_sha256(content: AssessmentItemContent) -> str:
@@ -17,7 +17,7 @@ def nonvisual_item_content_sha256(content: AssessmentItemContent) -> str:
 
 def derive_creative_visual_content(
     canonical: AssessmentItemContent,
-    manifest: CreativeVisualPresentationManifest,
+    manifest: VisualPresentationManifest,
     *,
     artifact_id: str,
     artifact_revision_id: str,

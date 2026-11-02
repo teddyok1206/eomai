@@ -15,6 +15,9 @@ VISUAL_PRESENTATION_PROFILE: Final[Literal["WHOLE_HANCOM_SOURCE_IMAGES_V1"]] = (
 )
 VISUAL_PRESENTATION_ARTIFACT_TYPE = "control_creative_source_visual_presentation"
 VISUAL_PRESENTATION_SCHEMA_REF = "eom://schemas/external-item/creative-visual-presentation/1.0"
+VISUAL_PRESENTATION_SCHEMA_REFS = frozenset(
+    (VISUAL_PRESENTATION_SCHEMA_REF, "eom://schemas/external-item/creative-visual-presentation/1.1")
+)
 VISUAL_PRESENTATION_CONTENT_SCHEMA_REF = "eom://schemas/item-registry/assessment-item-content-v1"
 VISUAL_PRESENTATION_MEMBER = "visual-presentation.json"
 VISUAL_PRESENTATION_CONTENT_MEMBER: Final[Literal["assessment-item-content.json"]] = (
@@ -90,20 +93,42 @@ class CreativeVisualPresentationManifest(FrozenModel):
         original = tuple(visual.canonical_block_id for visual in self.visuals)
         displayed = tuple(visual.display_block_id for visual in self.visuals)
         value = self.model_dump(mode="json")
-        if (
-            len(original) != len(set(original))
-            or len(displayed) != len(set(displayed))
-            or set(original) & set(displayed)
-            or self.canonical_content.media_type != "application/json"
-            or self.source_document.media_type
-            not in {"application/vnd.hancom.hwp", "application/vnd.hancom.hwpx"}
-            or self.source_pdf.media_type != "application/pdf"
-            or self.role_result.media_type != "application/json"
-            or self.manifest_sha256
-            != content_sha256({k: v for k, v in value.items() if k != "manifest_sha256"})
-        ):
-            raise ValueError("CREATIVE_VISUAL_PRESENTATION_MANIFEST_INVALID")
+        validate_visual_presentation_references(
+            original,
+            displayed,
+            self.canonical_content,
+            self.source_document,
+            self.source_pdf,
+            self.role_result,
+            self.manifest_sha256,
+            content_sha256({k: v for k, v in value.items() if k != "manifest_sha256"}),
+        )
         return self
+
+
+def validate_visual_presentation_references(
+    original: tuple[str, ...],
+    displayed: tuple[str, ...],
+    canonical_content: ArtifactMemberPointer,
+    source_document: ArtifactMemberPointer,
+    source_pdf: ArtifactMemberPointer,
+    role_result: ArtifactMemberPointer,
+    expected_hash: str,
+    actual_hash: str,
+) -> None:
+    """One identity rule shared by whole-image and explicit source-region renditions."""
+    if (
+        len(original) != len(set(original))
+        or len(displayed) != len(set(displayed))
+        or set(original) & set(displayed)
+        or canonical_content.media_type != "application/json"
+        or source_document.media_type
+        not in {"application/vnd.hancom.hwp", "application/vnd.hancom.hwpx"}
+        or source_pdf.media_type != "application/pdf"
+        or role_result.media_type != "application/json"
+        or expected_hash != actual_hash
+    ):
+        raise ValueError("CREATIVE_VISUAL_PRESENTATION_MANIFEST_INVALID")
 
 
 class ItemVisualPresentationQuery(FrozenModel):
@@ -128,7 +153,7 @@ class ItemVisualPresentation(FrozenModel):
             or (
                 self.recovery_manifest is not None
                 and (
-                    self.recovery_manifest.schema_ref != VISUAL_PRESENTATION_SCHEMA_REF
+                    self.recovery_manifest.schema_ref not in VISUAL_PRESENTATION_SCHEMA_REFS
                     or self.recovery_manifest.member_path != VISUAL_PRESENTATION_MEMBER
                     or self.recovery_manifest.artifact_id != self.display_content.artifact_id
                     or self.recovery_manifest.artifact_revision_id
