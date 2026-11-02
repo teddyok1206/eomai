@@ -84,6 +84,7 @@ export function createItemDbSimilarityList({document, searches, previewSelection
 
   function controls() {
     $("#item-db-similarity-run").disabled = !owner || !draft.size || busy || !searches;
+    $("#item-db-similarity-run").textContent = current?.status === "READY" ? "새 검색 시작" : "검색 시작";
     $("#item-db-similarity-refresh").disabled = !current || busy;
     $("#item-db-similarity-top-k").disabled = busy;
     $("#item-db-similarity-draft-count").textContent = `${draft.size}문항`;
@@ -191,7 +192,7 @@ export function createItemDbSimilarityList({document, searches, previewSelection
     try {
       const record = validRecord(await searches.read(searchId), searchId);
       if (request !== generation || capturedEpoch !== epoch) return;
-      current = record; ordinal = 0; displayKey = null;
+      current = record; ordinal = 0; displayKey = null; pendingIntent = null;
       // Reopening history reauthorizes the canonical read; same-page confirmation stays local.
       for (const key of results.keys()) if (key.startsWith(`${searchId}:`)) results.delete(key);
       view.reset();
@@ -236,7 +237,8 @@ export function createItemDbSimilarityList({document, searches, previewSelection
     if (!Number.isInteger(topK) || topK < 1 || topK > 64) {message("결과 개수는 1~64개로 정해 주세요.", true); return;}
     const selections = [...draft.values()].map(entry => entry.selection.pointer);
     const fingerprint = intentKey(selections, topK);
-    if (current && fingerprint === intentKey(current.selections, current.top_k)) {activate("similarity"); return check();}
+    if (current && ["PREPARING", "PENDING"].includes(current.status)
+      && fingerprint === intentKey(current.selections, current.top_k)) {activate("similarity"); return check();}
     if (!pendingIntent || pendingIntent.fingerprint !== fingerprint) pendingIntent = {fingerprint, key: `studio:db-similarity:${crypto.randomUUID()}`};
     const request = ++generation, capturedEpoch = epoch;
     stopPolling(); busy = true; controls();
@@ -244,7 +246,7 @@ export function createItemDbSimilarityList({document, searches, previewSelection
       const record = validRecord(await searches.submit(selections, topK, pendingIntent.key));
       if (request !== generation || capturedEpoch !== epoch) return;
       if (intentKey(record.selections, record.top_k) !== fingerprint) throw new Error("다른 문항 목록의 검색이 반환됐습니다.");
-      current = record; ordinal = 0; renderAnchors(); activate("similarity");
+      current = record; ordinal = 0; pendingIntent = null; renderAnchors(); activate("similarity");
       await selectAnchor();
     } catch (error) {
       if (request === generation && capturedEpoch === epoch) message(`검색 시작 실패: ${error.message}`, true);

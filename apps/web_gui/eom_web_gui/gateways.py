@@ -740,7 +740,7 @@ class ApplicationGateway(Protocol):
     ) -> ItemDbSearchHistory: ...
 
     async def item_db_similarity_list_check(
-        self, session: WebSession, search_id: str
+        self, session: WebSession, search_id: str, idempotency_key: str
     ) -> ItemDbSearchView: ...
 
     async def item_db_similarity_list_read(
@@ -1530,12 +1530,13 @@ class HttpApplicationGateway:
             raise GatewayError(status=502, code="ITEM_DB_SIMILARITY_RESPONSE_INVALID") from None
 
     async def item_db_similarity_list_check(
-        self, session: WebSession, search_id: str
+        self, session: WebSession, search_id: str, idempotency_key: str
     ) -> ItemDbSearchView:
         response = await self._authorized(
             session,
             "POST",
             f"/api/v1/item-db/similarity/searches/{quote(search_id, safe='')}/check",
+            headers={"Idempotency-Key": idempotency_key},
             timeout=120.0,
         )
         try:

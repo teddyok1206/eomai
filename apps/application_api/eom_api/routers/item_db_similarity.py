@@ -102,9 +102,20 @@ async def read_search(
     dependencies=[Depends(require_permission(PermissionKey.WORKFLOW_START, fresh=True))],
 )
 async def check_search(
-    request: Request, response: Response, search_id: SearchId, authentication: Auth
+    request: Request,
+    response: Response,
+    search_id: SearchId,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
 ) -> SingleResponse[ItemDbSimilaritySearchView]:
     del authentication
+    if idempotency_key != search_id:
+        raise ApiError(
+            409,
+            "ITEM_DB_SIMILARITY_REQUEST_CONFLICT",
+            "Search check differs",
+            "The check key must identify the existing owned search.",
+        )
     result = await run_in_threadpool(
         request.app.state.services.item_db_similarity_searches.check,
         get_request_context(request),
