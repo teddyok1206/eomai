@@ -1,5 +1,27 @@
 # 공통 풀이 GPU 재임베딩 실행 체크포인트
 
+## 실제 CUDA 재개·새 인덱스 등록·GUI 요청 대기 — 2026-11-02 05:37 UTC
+
+- 재개 후 parent `job_e7328cacef4b4de9abca634caaabd06a`가 CUDA ROUTED/BOUND에 도달했다.
+  allocation `embeddingallocation_e71c696226944f008e04d1f5a34c5380`의 실제 native PID3286929가
+  GPU memory2,488MiB를 사용했고 native/root unit 모두 exit0으로 종료됐다. planning parent
+  SUCCEEDED만으로 numerical 성공을 주장하지 않고 별도 physical 상태와 coordinator를 읽었다.
+- child `workflow_69846ee309654c5992be9fbff316f5a6`는 released coordinator4의 INDEX_PREPARED와
+  REGISTERED까지 진행했다.05:31:45 UTC 등록된 index revision은
+  `embeddingindexrev_9f85c3bdfde00f4936cc024eb8153c7d`, binding312/eligible1,003이다.
+  이는 해당 인덱스의 coverage이며 frozen 기출520 집계나 모든 view의 완료 수가 아니다.
+ 05:36 관측의 native coordinator는 COMMITTING, Workflow/step은 아직 RUNNING이다.
+  원 CPU 결과·현재 실행·520 정본·보고서·FAILED·구 vector는 그대로다. 재시작/삭제0이다.
+-05:37 실제 HTTP journal의 해당 route와 최근 QUERY metadata를 다시 읽었다. API schema68
+  배포 이후 유사도 HTTP 요청/새 parent는 없다. 최신 QUERY는 여전히04:21 실패 원인 확인에
+  쓴 원 Workflow다. 테스트·health·새 DOCUMENT 인덱스를 GUI QUERY 성공으로 대체하지 않는다.
+- 세 차례 연속 목표 turn에서 동일한 post-deploy GUI 요청 부재를 확인했다. 실제 사용자의
+  새 요청 또는 정상 인증된 검증 브라우저가 있어야 결과 목록→DB 열기→same-key replay를
+  수행할 수 있다. 인증 우회·다른 계정/세션 사용·old failure 자동 재실행은 하지 않는다.
+  이 사용자 입력 의존성 때문에 목표를 BLOCKED로 기록하되 GPU owner PID3284474와
+  기존30분 observer timer는 중단하지 않는다. 다음 timer는06:00 UTC다. 사용자가 새로고침 후
+ 10321 검색을 시작하면 그 정확한 요청부터 이어간다. 남은 목표 범위는 줄이지 않는다.
+
 ## INDEX coordinator4 readback 수정 운영 반영 — 2026-11-02 05:21 UTC
 
 - main84d8b18d의 completed-reader 수정만 actual INDEX fb0ab555 baseline에 반영한 release는
