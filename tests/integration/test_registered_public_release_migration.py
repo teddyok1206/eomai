@@ -19,9 +19,14 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture
-def release_case(guarded_engine, tmp_path, monkeypatch):
+def release_case(guarded_engine, tmp_path, monkeypatch, request):
     from eom_api import build_info
-    from eom_orchestrator import database, settings
+    from eom_orchestrator import database, migration, settings
+
+    original_head = head(guarded_engine)
+    target = getattr(request, "param", "20261031_0066")
+    version = {"20261031_0066": "1.14", "20261102_0068": "1.15"}[target]
+    monkeypatch.setattr(migration, "CURRENT_MIGRATION_REVISION", target)
 
     # Only this marker-checked disposable owner URL reaches native Alembic,
     # including after the operator deliberately clears the caller's DB env.
@@ -46,8 +51,8 @@ def release_case(guarded_engine, tmp_path, monkeypatch):
         tmp_path / "synthetic-runtime",
         "sha256:" + "e" * 64,
         tuple(operator.WheelPin("synthetic.whl", "sha256:" + "f" * 64) for _ in range(3)),
-        schema_version="release-operator-context/1.14",
-        migration_revision="20261031_0066",
+        schema_version="release-operator-context/" + version,
+        migration_revision=target,
     )
     monkeypatch.setattr(build_info, "get_build_info", lambda: context)
     config = Config(str(source / "alembic.ini"))
@@ -56,7 +61,7 @@ def release_case(guarded_engine, tmp_path, monkeypatch):
     yield tmp_path, context, config, guarded_engine
     # Each case leaves the empty disposable schema compatible for subsequent
     # fixtures. No successor history exists in these DDL-only cases.
-    command.upgrade(config, "20261031_0066")
+    command.upgrade(config, original_head)
 
 
 def head(engine):

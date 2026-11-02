@@ -206,7 +206,8 @@ class WorkflowStepRunRecord(Base):
             "(result_schema = 'embedding-private-chat-query-result@1.0' "
             "AND step_key = 'encode_private_chat_query' AND attempt = 1) OR "
             "(result_schema = 'embedding-reference-query-result@2.0' "
-            "AND step_key = 'encode_private_chat_query' AND attempt = 1))))",
+            "AND step_key IN ('encode_private_chat_query','encode_reference_query') "
+            "AND attempt = 1))))",
             name="ck_workflow_step_runs_local_embedding",
         ),
     )
