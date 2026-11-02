@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import logging
+import re
+from contextlib import suppress
 from dataclasses import dataclass
 from threading import Lock, Thread
 from typing import TYPE_CHECKING, Literal
@@ -26,6 +29,33 @@ if TYPE_CHECKING:
 type NativeQueryDriveOutcome = Literal[
     "PROCESSED", "NO_READY_COMMAND", "UNAVAILABLE", "START_FAILED"
 ]
+
+_LOGGER = logging.getLogger(__name__)
+
+
+def _record_driver_failure(mode: Literal["ROUTED", "WORKFLOW"], error: BaseException) -> None:
+    """Record code locations only, never exception prose, captures, locals or a traceback."""
+    sites: list[str] = []
+    frame = error.__traceback__
+    for _ in range(64):
+        if frame is None:
+            break
+        module = frame.tb_frame.f_globals.get("__name__")
+        if type(module) is str and re.fullmatch(r"eom_[a-z0-9_.]{1,120}", module):
+            sites = [*sites[-1:], f"{module}:{frame.tb_lineno}"]
+        frame = frame.tb_next
+    name = type(error).__name__
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", name) is None:
+        name = "Exception"
+    # A broken diagnostic sink must not expose the original private error
+    # through threading.excepthook or leave the actual handle falsely busy.
+    with suppress(Exception):
+        _LOGGER.warning(
+            "REFERENCE_QUERY_DRIVER_STOPPED mode=%s error_type=%s sites=%s",
+            mode,
+            name,
+            ",".join(sites),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -132,10 +162,11 @@ class NativeQueryPrepareDriver:
             outcome: NativeQueryDriveOutcome = (
                 "PROCESSED" if observed.state == "READY" else "UNAVAILABLE"
             )
-        except BaseException:
+        except BaseException as error:
             # The original preparation/claim may already exist. No retained
             # exception/capture, automatic retry, fresh identity or CPU fallback.
             outcome = "UNAVAILABLE"
+            _record_driver_failure("ROUTED", error)
         with self._lock:
             self._outcome = outcome
 
@@ -180,12 +211,13 @@ class NativeQueryPrepareDriver:
             outcome: NativeQueryDriveOutcome = (
                 "NO_READY_COMMAND" if command is None else "PROCESSED"
             )
-        except BaseException:
+        except BaseException as error:
             # The durable claim/Job may already exist. Never retry here, change
             # the row, retain an exception/traceback or infer Workflow failure.
             # A cancelled child is unknown too; do not disclose private input
             # through the process-wide thread exception hook.
             outcome = "UNAVAILABLE"
+            _record_driver_failure("WORKFLOW", error)
         with self._lock:
             self._outcome = outcome
         # Retain the actual Thread handle until it is no longer alive, not an
