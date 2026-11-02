@@ -81,6 +81,9 @@ PDF_REVIEW_CONTENT_PATH = re.compile(
     r"sets/docreviewset_[0-9a-f]{32}/documents/(?:QUESTION|SOLUTION)/content"
     r")$"
 )
+ITEM_DB_INLINE_PDF_PATH = re.compile(
+    r"^/studio/api/v1/item-db/external-sources/extitem_[0-9a-f]{32}/editions/[1-3]/preview\.pdf$"
+)
 
 
 class LoginPayload(BaseModel):
@@ -149,20 +152,30 @@ def create_app(
                 response = _problem(413, "WEB_BODY_TOO_LARGE", request_id)
             else:
                 response = await call_next(request)
+        # The source preview may be embedded only by this same Studio. Keep
+        # login/admin pages, errors and arbitrary downloads non-frameable.
+        inline_pdf = (
+            request.method == "GET"
+            and response.status_code == 200
+            and response.headers.get("content-type", "").split(";", 1)[0] == "application/pdf"
+            and ITEM_DB_INLINE_PDF_PATH.fullmatch(request.url.path) is not None
+        )
+        frame_ancestors = "'self'" if inline_pdf else "'none'"
         response.headers.update(
             {
                 "Cache-Control": "no-store",
                 "Content-Security-Policy": (
                     "default-src 'self'; script-src 'self'; style-src 'self'; "
                     "img-src 'self' data:; "
-                    "connect-src 'self'; font-src 'self'; frame-ancestors 'none'; base-uri 'none'; "
+                    f"connect-src 'self'; font-src 'self'; frame-ancestors {frame_ancestors}; "
+                    "base-uri 'none'; "
                     "form-action 'self'; object-src 'none'"
                 ),
                 "Cross-Origin-Opener-Policy": "same-origin",
                 "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
                 "Referrer-Policy": "no-referrer",
                 "X-Content-Type-Options": "nosniff",
-                "X-Frame-Options": "DENY",
+                "X-Frame-Options": "SAMEORIGIN" if inline_pdf else "DENY",
                 "X-Request-ID": request_id,
             }
         )

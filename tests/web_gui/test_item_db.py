@@ -112,9 +112,36 @@ def test_db_pdf_preview_preparation_needs_csrf_and_download_is_inline() -> None:
     assert pdf.status_code == 200
     assert pdf.content == b"%PDF-1.7\n%%EOF"
     assert pdf.headers["content-disposition"].startswith("inline;")
+    assert pdf.headers["X-Frame-Options"] == "SAMEORIGIN"
+    assert "frame-ancestors 'self'" in pdf.headers["Content-Security-Policy"]
     assert "PDF 미리보기 준비" in (ROOT / "apps/web_gui/eom_web_gui/static/item-db.js").read_text(
         encoding="utf-8"
     )
+
+
+def test_only_authorized_pdf_preview_can_be_framed_by_the_same_studio() -> None:
+    client, _gateway = make_client()
+    prefix = "/studio/api/v1/item-db/external-sources/extitem_" + "1" * 32
+    params = {"source_revision_id": "extitemrev_" + "2" * 32}
+    with client:
+        anonymous = client.get(prefix + "/editions/3/preview.pdf", params=params)
+        assert anonymous.status_code == 401
+        assert anonymous.headers["X-Frame-Options"] == "DENY"
+        login(client)
+        pdf = client.get(prefix + "/editions/3/preview.pdf", params=params)
+        assert pdf.status_code == 200
+        assert pdf.headers["X-Frame-Options"] == "SAMEORIGIN"
+        assert "frame-ancestors 'self'" in pdf.headers["Content-Security-Policy"]
+        assert "frame-ancestors *" not in pdf.headers["Content-Security-Policy"]
+        for path in (
+            "/studio/",
+            prefix + "/editions/3/download",
+            prefix + "/editions/4/preview.pdf",
+            prefix + "/editions/3/preview.pdf/extra",
+        ):
+            response = client.get(path, params=params)
+            assert response.headers["X-Frame-Options"] == "DENY"
+            assert "frame-ancestors 'none'" in response.headers["Content-Security-Policy"]
 
 
 def test_db_excel_export_uses_same_filter_and_csrf_boundary() -> None:
