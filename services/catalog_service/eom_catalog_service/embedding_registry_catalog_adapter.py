@@ -601,6 +601,9 @@ class CatalogEmbeddingRegistryVerifier:
             if window is not None
             else artifact_reader
             if artifact_reader is not None
+            else PinnedArtifactReadContext.for_session(session, self.settings)
+            if isinstance(intent.namespace, PublicSolutionIndexNamespace)
+            and type(caller) is EmbeddingRegistryCaller
             else PinnedArtifactReadContext(session, self.settings)
         )
         reader.require_session(session)
@@ -2358,6 +2361,43 @@ class CatalogEmbeddingRegistryVerifier:
                 legacy_previous = (previous[0], previous[1])
             # Recheck current caller/policy after filesystem reads; no corpus recapture.
             return PreparedEmbeddingIndexBasis(plan, rows, shards, legacy_previous, version)
+
+        return self._guard(resolve)
+
+    def validate_public_query_manifest(
+        self,
+        session: Session,
+        caller: EmbeddingRegistryCaller,
+        intent: EmbeddingRegistryRead,
+        registered: RegisteredEmbeddingIndexRead,
+    ) -> SupportedEmbeddingIndex:
+        """Pin exact public manifest bytes; population/vector fences stay in final ranking."""
+        self._require_similarity_root(session)
+
+        def resolve() -> SupportedEmbeddingIndex:
+            if (
+                type(caller) is not EmbeddingRegistryCaller
+                or self._indexing_source_authority is not None
+                or session.get_bind() is not self.engine
+                or not isinstance(intent.scope.namespace, PublicSolutionIndexNamespace)
+                or not isinstance(
+                    intent.selection, PublicSolutionSimilarityView | PublicSolutionSimilarityViewV4
+                )
+                or intent.selection.index is None
+            ):
+                raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+            self.authorize_scope(session, caller, intent.scope)
+            validate_registered_embedding_index_read(intent, registered)
+            reader = PinnedArtifactReadContext.for_session(session, self.settings)
+            pin = intent.selection.index
+            index = self._read_index(reader, pin.index_manifest)
+            _validate_similarity_manifest(intent.selection, pin.index_manifest, index)
+            validate_registered_embedding_index_manifest(registered, index)
+            if index.space != self.configuration.space or index.recipe != self.configuration.recipe:
+                raise ValueError("public index differs from the configured numerical namespace")
+            reader.revalidate_provenance()
+            self.authorize_scope(session, caller, intent.scope)
+            return index
 
         return self._guard(resolve)
 

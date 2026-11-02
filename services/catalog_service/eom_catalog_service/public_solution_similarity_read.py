@@ -46,6 +46,7 @@ from eom_catalog_service.embedding_registry_ports import (
     SelectedEmbeddingSources,
 )
 from eom_catalog_service.embedding_registry_repository import EmbeddingRegistryRepository
+from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.public_solution_similarity_service import (
     PreparedPublicSolutionQuerySource,
     VerifiedPublicSolutionQueryRead,
@@ -275,10 +276,44 @@ class CatalogPublicSolutionSimilarityRead:
         caller: EmbeddingRegistryCaller,
         request: SupportedPublicSolutionSimilarityRequest,
     ) -> PreparedPublicSolutionQuerySource:
-        """Materialize the original pinned QUERY text; never discover another head."""
-        captured, document = self._read_pinned_request(session, caller, request)
+        """Read only the pinned anchor; full DOCUMENT validation remains in final ranking."""
+        self._require_root(session)
+        request = parse_supported_public_solution_similarity_request(request)
+        config, view = self.catalog.configuration, request.views[0]
+        if (
+            type(caller) is not EmbeddingRegistryCaller
+            or request.source_classes != config.source_classes
+            or view.recipe != config.recipe
+            or view.index.spaces.document != config.space
+            or view.index.storage_partition != config.namespace.storage_partition
+        ):
+            raise SimilarityContextReadError("AUTHORITY_UNAVAILABLE")
+        scope = EmbeddingRegistryLookup(
+            config.corpus_id,
+            config.namespace,
+            request.graph_snapshot,
+            request.policy_revision_id,
+            request.policy_sha256,
+            request.maximum_sources,
+        )
+        self.catalog.authorize_scope(session, caller, scope)
+        intent = EmbeddingRegistryRead(scope, view)
+        registered = validate_registered_embedding_index_read(
+            intent,
+            EmbeddingRegistryRepository(session).read_pinned_revision(
+                view.index.index_id, view.index.index_revision_id
+            ),
+        )
+        self.catalog.validate_public_query_manifest(session, caller, intent, registered)
+        selection = SelectedEmbeddingSources(scope, (request.anchor.source.item_revision_id,))
+        captured = self.catalog.resolve_selected_sources(session, caller, selection)
         result = prepare_public_solution_query_source(request, captured)
-        self._reauthorize_pinned_read(session, caller, document, captured)
+        if self.catalog.resolve_selected_sources(session, caller, selection) != captured:
+            raise SimilarityContextReadError("SOURCE_REVOKED")
+        PinnedArtifactReadContext.for_session(
+            session, self.catalog.settings
+        ).revalidate_provenance()
+        self.catalog.authorize_scope(session, caller, scope)
         return result
 
     def _read_pinned_request(

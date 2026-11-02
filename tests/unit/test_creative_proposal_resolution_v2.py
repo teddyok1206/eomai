@@ -6,6 +6,8 @@ from unittest.mock import Mock
 import pytest
 from eom_catalog_service import creative_learning_proposal as resolution
 from eom_catalog_service.creative_learning_proposal import CreativeLearningProposalError
+from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
+from eom_catalog_service.settings import CatalogSettings
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.models import ArtifactRevisionRecord, JobRecord
@@ -134,6 +136,37 @@ def test_exact_v2_proposal_uses_the_existing_source_and_artifact_read_contract(m
     assert result.role.output.learning_result.solution_report.answer_labels == ("2",)
     assert result.work == value.resolved.work
     assert result.pointer == value.resolved.pointer
+
+
+def test_repeated_creative_reads_reuse_immutable_decode_but_reload_current_rows(
+    monkeypatch, tmp_path
+):
+    value = _case(monkeypatch)
+    decoder = PinnedArtifactReadContext(value.session, CatalogSettings(nas_artifact_root=tmp_path))
+    artifacts = NS(
+        load_json_revision=value.artifacts.load_json_revision,
+        decode_model_value=decoder.decode_model_value,
+    )
+    role_decoder = Mock(wraps=resolution._decode_creative_role)
+    request_decoder = Mock(wraps=resolution._decode_creative_request)
+    monkeypatch.setattr(resolution, "_decode_creative_role", role_decoder)
+    monkeypatch.setattr(resolution, "_decode_creative_request", request_decoder)
+    first = resolution.resolve_completed_creative_learning_proposal(
+        value.session, artifacts, value.selection
+    )
+    calls = value.session.get.call_count
+    second = resolution.resolve_completed_creative_learning_proposal(
+        value.session, artifacts, value.selection
+    )
+    assert second == first and second.role is first.role
+    assert role_decoder.call_count == 1 and request_decoder.call_count == 1
+    assert value.session.get.call_count == calls * 2
+    assert artifacts.load_json_revision.call_count == 2
+    value.workflow.request_payload = value.workflow.request_payload | {"request_name": "WRONG"}
+    with pytest.raises(ValueError):
+        resolution.resolve_completed_creative_learning_proposal(
+            value.session, artifacts, value.selection
+        )
 
 
 @pytest.mark.parametrize(

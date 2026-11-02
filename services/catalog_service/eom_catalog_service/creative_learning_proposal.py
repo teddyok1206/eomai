@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 
 from eom_catalog_contracts.assessment_item import ImageBlock
@@ -27,13 +28,14 @@ from eom_workflow.models import (
     ExternalItemLearningRoleResult,
     ExternalItemLearningRoleResultV2,
     ExternalItemLearningWorkerRequest,
+    WorkflowRequest,
 )
 from eom_workflow.schemas import validate_role_result
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from eom_workflow_runner.repository import load_persisted_workflow_request
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.artifacts import CatalogJsonRevisionReader
+from eom_catalog_service.artifacts import CatalogJsonRevisionReader, CatalogModelValueDecoder
 from eom_catalog_service.creative_proposal_read_set import CreativeProposalReadSet
 
 
@@ -52,6 +54,19 @@ class ResolvedCreativeLearningProposal:
     work: ExternalItemLearningWorkInput
     role: ExternalItemLearningRoleResult | ExternalItemLearningRoleResultV2
     pointer: ArtifactMemberPointer
+
+
+def _decode_creative_request(_schema: str, raw: bytes) -> WorkflowRequest:
+    return load_persisted_workflow_request(json.loads(raw))
+
+
+def _decode_creative_role(
+    schema: str, raw: bytes
+) -> ExternalItemLearningRoleResult | ExternalItemLearningRoleResultV2:
+    role = validate_role_result(json.loads(raw), "support", schema)
+    if not isinstance(role, (ExternalItemLearningRoleResult, ExternalItemLearningRoleResultV2)):
+        raise CreativeLearningProposalError("CREATIVE_LEARNING_RESULT_POINTER_INVALID")
+    return role
 
 
 def resolve_completed_creative_learning_proposal(
@@ -96,7 +111,20 @@ def resolve_completed_creative_learning_proposal(
         or step.result_schema != profile.result_schema
     ):
         raise CreativeLearningProposalError("CREATIVE_LEARNING_PROPOSAL_NOT_COMPLETED")
-    initial = load_persisted_workflow_request(workflow.initial_request)
+    if isinstance(artifacts, CatalogModelValueDecoder):
+        initial = artifacts.decode_model_value(
+            "catalog-creative-workflow-request/1.0",
+            workflow.initial_request,
+            decoder=_decode_creative_request,
+        )
+        current_request = artifacts.decode_model_value(
+            "catalog-creative-workflow-request/1.0",
+            workflow.request_payload,
+            decoder=_decode_creative_request,
+        )
+    else:
+        initial = load_persisted_workflow_request(workflow.initial_request)
+        current_request = load_persisted_workflow_request(workflow.request_payload)
     try:
         profile = creative_learning_profile_for_preset(
             workflow.definition_version, initial.execution_preset_key or ""
@@ -105,7 +133,7 @@ def resolve_completed_creative_learning_proposal(
         raise CreativeLearningProposalError("CREATIVE_LEARNING_INPUT_MISMATCH") from exc
     request = initial.worker_request()
     if (
-        initial != load_persisted_workflow_request(workflow.request_payload)
+        initial != current_request
         or initial.execution_preset_key != profile.preset_key
         or not isinstance(request, ExternalItemLearningWorkerRequest)
         or request.work_input.request_sha256 != selection.work_input_sha256
@@ -188,7 +216,11 @@ def resolve_completed_creative_learning_proposal(
         content_hash=pointer.sha256,
         max_bytes=4 * 1024 * 1024,
     )
-    role = validate_role_result(raw, "support", step.result_schema)
+    role = (
+        artifacts.decode_model_value(step.result_schema, raw, decoder=_decode_creative_role)
+        if isinstance(artifacts, CatalogModelValueDecoder)
+        else validate_role_result(raw, "support", step.result_schema)
+    )
     if not isinstance(role, (ExternalItemLearningRoleResult, ExternalItemLearningRoleResultV2)):
         raise CreativeLearningProposalError("CREATIVE_LEARNING_RESULT_POINTER_INVALID")
     if (

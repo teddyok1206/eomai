@@ -61,6 +61,90 @@ def test_same_decoder_reused_but_every_read_revalidates_member(tmp_path, monkeyp
     assert reader._decoded_bytes == 11 and len(reader._decoded) == 1
 
 
+def test_bounded_pages_share_only_immutable_decoding_not_member_or_metadata_reads(
+    tmp_path, monkeypatch
+):
+    parent, pointer, session = context_case(tmp_path)
+    decoder = Mock(side_effect=decode)
+    resolve = Mock(wraps=module._resolve_pinned_artifact_member)
+    monkeypatch.setattr(module, "_resolve_pinned_artifact_member", resolve)
+    values = []
+    for _ in range(64):
+        page = PinnedArtifactReadContext(
+            cast(Session, session), parent.settings, decoding_context=parent
+        )
+        page.prefetch(((pointer.artifact_id, pointer.artifact_revision_id),))
+        values.append(page.read_model_member(pointer, expected_bytes=11, decoder=decoder))
+        assert len(page._metadata) == len(page._members) == 1
+        assert not page._decoded and page._decoded_bytes == 0
+    assert all(value is values[0] for value in values)
+    assert decoder.call_count == 1 and resolve.call_count == 64
+    assert len(parent._decoded) == 1 and parent._decoded_bytes == 11
+
+
+@pytest.mark.parametrize("fault", ["approval", "producer", "revision", "physical_bytes"])
+def test_page_decode_reuse_cannot_hide_current_provenance_or_physical_change(tmp_path, fault):
+    parent, pointer, session = context_case(tmp_path)
+    parent.read_model_member(pointer, expected_bytes=11, decoder=decode)
+    revision = session.get(ArtifactRevisionRecord, pointer.artifact_revision_id)
+    if fault == "approval":
+        session.get(ArtifactRecord, pointer.artifact_id).approved = False
+    elif fault == "producer":
+        session.get(JobRecord, revision.job_id).status = "RUNNING"
+    elif fault == "revision":
+        revision.content_hash = "sha256:" + "f" * 64
+    else:
+        (Path(revision.nas_path) / pointer.member_path).write_bytes(b'{"value":2}')
+    page = PinnedArtifactReadContext(
+        cast(Session, session), parent.settings, decoding_context=parent
+    )
+    page.prefetch(((pointer.artifact_id, pointer.artifact_revision_id),))
+    with pytest.raises(PinnedArtifactResolutionError):
+        page.read_model_member(pointer, expected_bytes=11, decoder=decode)
+
+
+@pytest.mark.parametrize("fault", ["session", "settings", "chain", "root", "thread", "type"])
+def test_page_decoding_parent_requires_same_live_root_session_thread_and_settings(
+    tmp_path, monkeypatch, fault
+):
+    from dataclasses import replace
+
+    parent, _pointer, session = context_case(tmp_path)
+    settings = parent.settings
+    selected = parent
+    if fault == "session":
+        session = MetadataSession(*session.records.values())
+    elif fault == "settings":
+        settings = replace(settings, nas_artifact_root=tmp_path / "foreign")
+    elif fault == "chain":
+        selected = PinnedArtifactReadContext(
+            cast(Session, session), settings, decoding_context=parent
+        )
+    elif fault == "root":
+        session.root.is_active = False
+    elif fault == "thread":
+        monkeypatch.setattr(module, "get_ident", lambda: -1)
+    else:
+        selected = object()
+    with pytest.raises(PinnedArtifactResolutionError):
+        PinnedArtifactReadContext(cast(Session, session), settings, decoding_context=selected)
+
+
+def test_page_decoders_have_one_shared_root_eviction_budget(tmp_path, monkeypatch):
+    parent, _pointer, session = context_case(tmp_path)
+    monkeypatch.setattr(parent, "MAX_DECODED_MEMBERS", 2)
+    decoder = Mock(side_effect=decode)
+    for value in (1, 2, 3, 1):
+        page = PinnedArtifactReadContext(
+            cast(Session, session), parent.settings, decoding_context=parent
+        )
+        assert (
+            page.decode_model_value("fixture/1", {"value": value}, decoder=decoder).value == value
+        )
+        assert len(parent._decoded) <= 2 and not page._decoded
+    assert decoder.call_count == 4
+
+
 @pytest.mark.parametrize("fault", ["approval", "producer", "revision", "root", "thread"])
 def test_decoded_hit_never_bypasses_mutable_provenance_checks(tmp_path, monkeypatch, fault):
     reader, pointer, session = context_case(tmp_path)

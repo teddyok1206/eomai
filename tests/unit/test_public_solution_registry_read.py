@@ -474,7 +474,7 @@ def test_public_query_source_preparation_reauthorizes_after_text_materialization
             "request_sha256",
         )
     )
-    original = value.verifier.resolve_lookup
+    original = value.verifier.resolve_selected_sources
     calls = []
 
     def changed(*args):
@@ -482,7 +482,7 @@ def test_public_query_source_preparation_reauthorizes_after_text_materialization
         calls.append(current)
         return current if len(calls) == 1 else replace(current, truncated=not current.truncated)
 
-    monkeypatch.setattr(value.verifier, "resolve_lookup", changed)
+    monkeypatch.setattr(value.verifier, "resolve_selected_sources", changed)
     with pytest.raises(SimilarityContextReadError, match="SOURCE_REVOKED"):
         CatalogPublicSolutionSimilarityRead(value.verifier).prepare_query_in_session(
             value.session,
@@ -490,3 +490,91 @@ def test_public_query_source_preparation_reauthorizes_after_text_materialization
             request,
         )
     assert len(calls) == 2
+
+
+@pytest.mark.parametrize("public_read", [None, "registered"], indirect=True)
+def test_query_text_matches_full_capture_without_reading_document_vectors(public_read, monkeypatch):
+    from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityRequest
+    from eom_catalog_contracts.registered_public_solution_embedding import (
+        RegisteredPublicSolutionEmbeddingEntry,
+    )
+    from eom_catalog_contracts.registered_public_solution_similarity import (
+        PublicSolutionSimilarityRequestV4,
+        public_solution_reference_for_entry,
+    )
+    from eom_catalog_service import public_solution_similarity_read as reads
+    from eom_catalog_service.public_solution_similarity_service import (
+        prepare_public_solution_query_source,
+    )
+
+    value = public_read
+    registered = value.intent.selection.index.index_manifest.schema_ref.endswith("/4.0")
+    body = value.original_request.model_dump(mode="json") | {
+        "views": [value.intent.selection.model_dump(mode="json")]
+    }
+    if registered:
+        body["schema_version"] = "system-rag-similarity-request/4.0"
+        entry = next(
+            entry
+            for entry in value.entries
+            if isinstance(entry, RegisteredPublicSolutionEmbeddingEntry)
+        )
+        body["anchor"] = public_solution_reference_for_entry(entry).model_dump(mode="json")
+    model = PublicSolutionSimilarityRequestV4 if registered else PublicSolutionSimilarityRequest
+    request = model.model_validate(seal(body, "request_sha256"))
+    caller = EmbeddingRegistryCaller("operator_" + "1" * 32)
+    expected = prepare_public_solution_query_source(
+        request, value.verifier.resolve_lookup(value.session, caller, value.intent.scope)
+    )
+    numerical = Mock(side_effect=AssertionError("QUERY text must not materialize DOCUMENT vectors"))
+    population = Mock(side_effect=AssertionError("QUERY text must not capture unrelated documents"))
+    selected = Mock(wraps=value.verifier.resolve_selected_sources)
+    monkeypatch.setattr(reads, "read_pinned_embedding_index", numerical)
+    monkeypatch.setattr(value.verifier, "resolve_lookup", population)
+    monkeypatch.setattr(value.verifier, "resolve_selected_sources", selected)
+    actual = reads.CatalogPublicSolutionSimilarityRead(value.verifier).prepare_query_in_session(
+        value.session, caller, request
+    )
+    assert actual == expected
+    assert selected.call_count == 2
+    assert all(
+        call.args[2].source_revision_ids == (request.anchor.source.item_revision_id,)
+        for call in selected.call_args_list
+    )
+    numerical.assert_not_called()
+    population.assert_not_called()
+
+
+@pytest.mark.parametrize("fault", ["missing_index", "manifest_bytes", "manifest_revoked"])
+def test_query_input_preparation_keeps_exact_manifest_fences(public_read, monkeypatch, fault):
+    from eom_catalog_contracts.public_solution_similarity import PublicSolutionSimilarityRequest
+    from eom_catalog_service.public_solution_similarity_read import (
+        CatalogPublicSolutionSimilarityRead,
+    )
+
+    value = public_read
+    request = PublicSolutionSimilarityRequest.model_validate(
+        seal(
+            value.original_request.model_dump(mode="json")
+            | {"views": [value.intent.selection.model_dump(mode="json")]},
+            "request_sha256",
+        )
+    )
+    if fault == "missing_index":
+        monkeypatch.setattr(
+            "eom_catalog_service.embedding_registry_repository.EmbeddingRegistryRepository.read_pinned_revision",
+            lambda *_args: None,
+        )
+    elif fault == "manifest_bytes":
+        (
+            value.root
+            / value.index_member.artifact_id
+            / value.index_member.artifact_revision_id
+            / value.index_member.member_path
+        ).write_bytes(b"{}")
+    else:
+        value.session.get(ArtifactRecord, value.index_member.artifact_id).approved = False
+    with pytest.raises(EmbeddingRegistryError):
+        CatalogPublicSolutionSimilarityRead(value.verifier).prepare_query_in_session(
+            value.session, EmbeddingRegistryCaller("operator_" + "1" * 32), request
+        )
