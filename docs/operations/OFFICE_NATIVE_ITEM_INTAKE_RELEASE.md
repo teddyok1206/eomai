@@ -193,3 +193,26 @@ disposable PostgreSQL에서 새 provenance의 실제 저장·중단 후 재개·
 application으로만 재개한다. 원래 FAILED Job/Workflow와 source/plan/preset pins를 유지하고
 source 등록 business key로 중복 Item/Graph를 막는다. 일반적인 content/worker 실패 전체를
 자동 재실행하거나 새 identity로 무관한 작업을 만드는 허용이 아니다.
+
+### 21:09 UTC 운영 인계 결과
+
+- API·Catalog·QUERY metadata receiver·공유 runner·creative owner: `31073cb4` 설치.
+  Web `e22ca6e0`은 PID/Invocation과 파일을 유지했다. 보호된 operator의 migration71
+  upgrade/verify와 ownership5 초기화·조회 검증을 완료했다.
+- 진행 중 마지막 slot04 Job는 21:04 UTC 정상 성공 후 교체했다. 초기 배포의 protocol
+  초기화 호출에 root transaction이 빠져 guard가 거부했다. 설치/설정 교체 전임을 확인하고
+  기존 실패 기록과 wheel/config 백업을 보존한 명시적 resume으로 배포를 마쳤다.
+- 8건 prelaunch 실패는 원래 target/preset/plan으로 successor 준비와 동일 요청 재전송을
+  확인했다. 원래 FAILED는 그대로다. 21:09 UTC 새 successor에서 실제 03/04/05/06
+  lease 4개를 재확인했다. 실행 창 8 source와 실제 모델 동시 실행 4개는 다른 수다.
+- INDEX metadata owner도 `31073cb4` identity/config로 인계해 재개했다. 수치 controller
+  `a70cd434`와 GPU 환경·모델·space·기존 벡터는 유지했다. CPU fallback의 metadata
+  preparer만 association5를 읽는 설치본으로 선택했다. QUERY의 수치 preparer는 유지했다.
+- 새 설치본의 실제 API identity에서 11744·11745 Preview/PNG bytes·크기·SHA·재조회가
+  다시 PASS했다. 새로운 HWPX 빌드는 제출하지 않았다.
+- 공개 풀이·검색 계열 회귀 1,119 PASS. native head5 발행 뒤 두 번째 discovery에서
+  같은 head를 재사용하는 successor reader의 경계도 추가 점검했다. 이 후속 수정은
+  기존 refresh application의 버전 판별만 정렬하며 새 queue/DB/수치 실행은 만들지 않는다.
+
+현재 INDEX는 새 보고서 읽기 단계를 통과해 처리 중이다. 이 체크포인트는 native source의
+벡터·binding 등록 완료를 주장하지 않는다. 그 실제 완료 증거는 후속 기록으로 닫는다.

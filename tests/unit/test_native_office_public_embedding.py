@@ -118,6 +118,35 @@ def test_native_plan_index_reuses_past_creative_and_registered_rows_without_reen
     native = next(b for b in built.index.bindings if b.schema_version.endswith("/5.0"))
     assert native.profile.schema_ref.endswith("/3.0")
     assert native.evidence.role_result.schema_ref == "external-item-learning-result@3.0"
+    from eom_catalog_service.embedding_index_refresh_plan import (
+        registered_public_index_membership_refresh_reason,
+    )
+
+    pointer = type(_pointer).model_validate(
+        _pointer.model_dump(mode="json")
+        | {
+            "schema_ref": "eom://schemas/knowledge/embedding-index-manifest/5.0",
+            "sha256": content_sha256(built.index.model_dump(mode="json")),
+        }
+    )
+    # A second discovery must reuse the published head, not reject schema5 or
+    # launch the same numerical work again. A real membership withdrawal differs.
+    assert (
+        registered_public_index_membership_refresh_reason(
+            eligible_sources=tuple(e.source for e in captured),
+            available_bindings=built.index.bindings[::-1],
+            previous=(pointer, built.index),
+        )
+        is None
+    )
+    assert (
+        registered_public_index_membership_refresh_reason(
+            eligible_sources=tuple(e.source for e in captured),
+            available_bindings=built.index.bindings[:1],
+            previous=(pointer, built.index),
+        )
+        == "INDEX_MEMBERSHIP_CHANGED"
+    )
 
 
 @pytest.mark.parametrize(

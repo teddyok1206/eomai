@@ -235,7 +235,7 @@ def registered_public_index_membership_refresh_reason(
     ]
     | None,
 ) -> Literal["MISSING_NAMESPACE_INDEX", "INDEX_MEMBERSHIP_CHANGED"] | None:
-    """Explicit 3→4 reader; identical rows do not imply identical source-proof envelopes."""
+    """Explicit 3/4/5 reader; identical rows do not imply identical source-proof envelopes."""
     return _public_index_membership_refresh_reason(
         eligible_sources=eligible_sources,
         available_bindings=available_bindings,
@@ -277,7 +277,9 @@ def _public_index_membership_refresh_reason(
             )
         )
         if metadata_version == "3.0" and any(
-            not isinstance(binding, PublicSolutionEmbeddingSourceBinding) for binding in bindings
+            not isinstance(binding, PublicSolutionEmbeddingSourceBinding)
+            or binding.schema_version != "embedding-source-binding/3.0"
+            for binding in bindings
         ):
             raise IndexRefreshContractError()
         if (
@@ -291,10 +293,10 @@ def _public_index_membership_refresh_reason(
             pointer = ArtifactMemberPointer.model_validate(
                 raw_similarity_contract_value(previous[0])
             )
-            registered = (
-                metadata_version == "4.0"
-                and pointer.schema_ref == REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF
-            )
+            registered = metadata_version == "4.0" and pointer.schema_ref in {
+                REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+                "eom://schemas/knowledge/embedding-index-manifest/5.0",
+            }
             index = (
                 PublicSolutionEmbeddingIndexV4.model_validate(
                     raw_similarity_contract_value(previous[1])
@@ -308,7 +310,7 @@ def _public_index_membership_refresh_reason(
                 pointer.member_path != "index.json"
                 or pointer.schema_ref
                 != (
-                    REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF
+                    "eom://schemas/knowledge/" + index.schema_version
                     if registered
                     else PUBLIC_SOLUTION_INDEX_SCHEMA_REF
                 )
