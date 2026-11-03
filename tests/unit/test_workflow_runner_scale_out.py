@@ -117,6 +117,8 @@ def test_scale_out_script_pins_deployment_fenced_unit_family() -> None:
     assert '_systemctl("start", name)' in source
     assert '_systemctl("stop", name)' in source
     assert "eom-workflow-runner-accelerator-2.service" in deployment
+    assert "eom-workflow-runner-accelerator-3.service" in deployment
+    assert "WORKFLOW_RUNNER_THIRD_ACCELERATOR_RUNTIME_UNIT" in deployment
     assert '"eom-workflow-runner-*.service"' in source
 
 
@@ -178,9 +180,10 @@ def test_active_transient_inventory_is_closed(monkeypatch: pytest.MonkeyPatch) -
         module._active_transient_units()
 
 
-def test_start_three_workers_uses_two_fixed_consumers_and_is_idempotent(monkeypatch):
+@pytest.mark.parametrize("workers", [3, 4])
+def test_start_workers_uses_exact_fixed_consumers_and_is_idempotent(monkeypatch, workers):
     module = _load()
-    names = [name for name, _ in module.ACCELERATORS]
+    names = [name for name, _ in module.ACCELERATORS[: workers - 1]]
     status = iter(
         (
             {"active_transient_units": []},
@@ -198,16 +201,16 @@ def test_start_three_workers_uses_two_fixed_consumers_and_is_idempotent(monkeypa
         module, "_publish_drop_in", lambda path: operations.append(("drop-in", path))
     )
     monkeypatch.setattr(module, "_systemctl", lambda *args: operations.append(args))
-    result = module._start(workers=3)
-    assert result["workers"] == 3 and result["action"] == "STARTED"
+    result = module._start(workers=workers)
+    assert result["workers"] == workers and result["action"] == "STARTED"
     assert [args[1] for args in operations if args[0] == "start"] == names
-    assert len([args for args in operations if args[0] == "publish"]) == 2
+    assert len([args for args in operations if args[0] == "publish"]) == workers - 1
     prior = len(operations)
-    assert module._start(workers=3)["action"] == "ADOPTED_ACTIVE"
+    assert module._start(workers=workers)["action"] == "ADOPTED_ACTIVE"
     assert len(operations) == prior
 
 
-@pytest.mark.parametrize("workers", (0, 1, 4, 100))
+@pytest.mark.parametrize("workers", (0, 1, 5, 100))
 def test_count_outside_closed_bound_is_rejected_before_mutation(monkeypatch, workers):
     module = _load()
     monkeypatch.setattr(module.os, "geteuid", lambda: 0)

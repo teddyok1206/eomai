@@ -23,6 +23,9 @@
    필요한 DB 변경은 기존 capacity CHECK에 이 정확한 successor 분기만 추가하는 migration이다.
    pool child CHECK의 상한도 4로 넓히되, 과거 parent의 host/knowledge 상한과 기존
    typed pool 상한 3은 유지한다. 과거 정책으로 네 번째 claim을 얻을 수 없다.
+   실제 command runner도 기존 scale-out 관리자의 고정 accelerator3 하나를 추가해
+   4 process로 맞춘다. 같은 queue/claim/lease이고 새 scheduler나 worker protocol은 없다.
+   향후 shared release는 기존 active-unit glob과 staged accelerator3 검사로 차단된다.
 9. **의존 방향:** contracts → domain capacity/continuation → 기존 application owners →
    PostgreSQL/systemd/파일 adapter. worker의 DB/NAS 권한은 추가하지 않는다.
 10. **실패/재개/멱등:** 진행 중 문항은 기존 핀으로 완료한다. 이후 신규 source만 native

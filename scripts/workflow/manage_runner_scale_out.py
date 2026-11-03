@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Materialize at most two exact accelerators over the existing command queue."""
+"""Materialize at most three exact accelerators over the existing command queue."""
 
 from __future__ import annotations
 
@@ -24,6 +24,10 @@ ACCELERATORS = (
     (
         "eom-workflow-runner-accelerator-2.service",
         Path("/run/systemd/system/eom-workflow-runner-accelerator-2.service"),
+    ),
+    (
+        "eom-workflow-runner-accelerator-3.service",
+        Path("/run/systemd/system/eom-workflow-runner-accelerator-3.service"),
     ),
 )
 SIMILARITY_DROP_IN = Path(
@@ -530,16 +534,24 @@ def _status() -> dict[str, object]:
     }
 
 
+def _active_names(status: dict[str, object]) -> frozenset[str]:
+    values = status.get("active_transient_units")
+    if not isinstance(values, list) or any(not isinstance(value, str) for value in values):
+        raise ScaleOutError("Workflow runner active inventory is invalid")
+    return frozenset(values)
+
+
 def _start(*, workers: int = 2) -> dict[str, object]:
     if os.geteuid() != 0:
         raise ScaleOutError("Scale-out mutation requires root")
     before = _status()
-    if workers not in (2, 3):
+    if workers not in (2, 3, 4):
         raise ScaleOutError("Workflow runner count is outside the bound")
     required = frozenset(name for name, _ in ACCELERATORS[: workers - 1])
-    if frozenset(before["active_transient_units"]) == required:
+    active = _active_names(before)
+    if active == required:
         return before | {"action": "ADOPTED_ACTIVE"}
-    if not frozenset(before["active_transient_units"]).issubset(required):
+    if not active.issubset(required):
         raise ScaleOutError("Stop excess accelerators before reducing capacity")
     for _name, path in ACCELERATORS[: workers - 1]:
         publish_runtime_unit(BASE_UNIT_PATH, path, expected_sha256=EXPECTED_UNIT_SHA256)
@@ -548,7 +560,7 @@ def _start(*, workers: int = 2) -> dict[str, object]:
     for name, _path in ACCELERATORS[: workers - 1]:
         _systemctl("start", name)
     after = _status()
-    if frozenset(after["active_transient_units"]) != required:
+    if _active_names(after) != required:
         raise ScaleOutError("Workflow runner accelerator did not become active")
     return after | {"action": "STARTED", "workers": workers}
 
@@ -586,7 +598,7 @@ def _stop() -> dict[str, object]:
 def main() -> int:
     parser = argparse.ArgumentParser(prog="manage-runner-scale-out")
     parser.add_argument("action", choices=("status", "start", "stop"))
-    parser.add_argument("--workers", type=int, choices=(2, 3), default=2)
+    parser.add_argument("--workers", type=int, choices=(2, 3, 4), default=2)
     arguments = parser.parse_args()
     try:
         result = (

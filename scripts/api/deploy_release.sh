@@ -23,6 +23,7 @@ SHARED_RUNTIME_TRANSIENT_PATTERNS=(
 )
 WORKFLOW_RUNNER_ACCELERATOR_RUNTIME_UNIT="/run/systemd/system/eom-workflow-runner-accelerator.service"
 WORKFLOW_RUNNER_SECOND_ACCELERATOR_RUNTIME_UNIT="/run/systemd/system/eom-workflow-runner-accelerator-2.service"
+WORKFLOW_RUNNER_THIRD_ACCELERATOR_RUNTIME_UNIT="/run/systemd/system/eom-workflow-runner-accelerator-3.service"
 UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/eom-api.service"
 UNIT_TARGET="/etc/systemd/system/eom-api.service"
 WORKFLOW_RUNNER_UNIT_SOURCE="${REPOSITORY_ROOT}/infra/systemd/${WORKFLOW_RUNNER_SERVICE}"
@@ -2909,7 +2910,11 @@ require_no_staged_workflow_runner_accelerator() {
     ! -e "${WORKFLOW_RUNNER_ACCELERATOR_RUNTIME_UNIT}.d" && \
     ! -L "${WORKFLOW_RUNNER_ACCELERATOR_RUNTIME_UNIT}.d" && \
     ! -e "${WORKFLOW_RUNNER_SECOND_ACCELERATOR_RUNTIME_UNIT}.d" && \
-    ! -L "${WORKFLOW_RUNNER_SECOND_ACCELERATOR_RUNTIME_UNIT}.d" ]] || \
+    ! -L "${WORKFLOW_RUNNER_SECOND_ACCELERATOR_RUNTIME_UNIT}.d" && \
+    ! -e "${WORKFLOW_RUNNER_THIRD_ACCELERATOR_RUNTIME_UNIT}" && \
+    ! -L "${WORKFLOW_RUNNER_THIRD_ACCELERATOR_RUNTIME_UNIT}" && \
+    ! -e "${WORKFLOW_RUNNER_THIRD_ACCELERATOR_RUNTIME_UNIT}.d" && \
+    ! -L "${WORKFLOW_RUNNER_THIRD_ACCELERATOR_RUNTIME_UNIT}.d" ]] || \
     fail "staged Workflow runner accelerator or drop-in must be removed before release"
 }
 
