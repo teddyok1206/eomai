@@ -5,6 +5,7 @@ sandbox. Codex execution is exclusively the existing Orchestrator queue/lease.
 """
 
 from collections.abc import Callable
+from functools import partial
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from uuid import NAMESPACE_URL, uuid5
@@ -36,6 +37,11 @@ from eom_orchestrator.external_item_learning_page_render import render_external_
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.preset_model_selection import validated_preset
 from eom_orchestrator.settings import Settings
+from eom_orchestrator.worker_registry import WorkerRegistry, WorkerSlot
+from eom_orchestrator.worker_systemd import (
+    inspect_worker_systemd_contract,
+    inspect_worker_unit_activity,
+)
 from eom_workflow.control_plane import ExecutionPresetRevision
 from eom_workflow.models import ExternalItemLearningWorkerRequest
 from eom_workflow_runner.external_item_learning_preparation import (
@@ -43,6 +49,7 @@ from eom_workflow_runner.external_item_learning_preparation import (
     prepare_external_item_learning_workflow,
 )
 from eom_workflow_runner.external_item_learning_recovery import (
+    prepare_failed_launch_external_item_learning_recovery,
     prepare_invalid_result_external_item_learning_recovery,
     prepare_unstarted_external_item_learning_recovery,
     resolve_external_item_learning_recovery,
@@ -311,6 +318,28 @@ class CreativeCohortPreparationService:
     def recover_invalid_result(self, workflow_id: str) -> ExternalItemLearningRoleSelection:
         """Explicit terminal validation recovery; the Workflow owner proves no commit."""
         return self._recover(workflow_id, prepare_invalid_result_external_item_learning_recovery)
+
+    def recover_failed_launch(self, workflow_id: str) -> ExternalItemLearningRoleSelection:
+        """Reauthorize one known prelaunch failure under its original scope/pins."""
+        slots: dict[str, WorkerSlot] = {
+            slot.slot_id: slot
+            for slot in WorkerRegistry.load(self.settings.worker_config).config.slots
+        }
+
+        def confirm_unit_absent(slot_id: str, job_id: str) -> bool:
+            slot = slots[slot_id]
+            if not inspect_worker_systemd_contract(slot).ready:
+                raise ValueError("CREATIVE_LAUNCH_RECOVERY_RUNTIME_UNAVAILABLE")
+            activity = inspect_worker_unit_activity(slot, job_id)
+            return activity.state == "ABSENT" and activity.exit_code is None
+
+        return self._recover(
+            workflow_id,
+            partial(
+                prepare_failed_launch_external_item_learning_recovery,
+                confirm_unit_absent=confirm_unit_absent,
+            ),
+        )
 
     def _recover(
         self, workflow_id: str, prepare_recovery: Callable[..., PreparedExternalItemLearning]

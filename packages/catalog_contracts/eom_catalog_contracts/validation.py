@@ -184,6 +184,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:1daa230e38e0ce21ab164c4263a2cd2975145e1e6ab736a9af43330e4ada3535",
         ),
+        "creative-launch-recovery-v1": CatalogSchemaResource(
+            "schemas/external-item/creative-launch-recovery-v1.schema.json",
+            "resources/external-item/creative-launch-recovery-v1.schema.json",
+            "1.0",
+            "sha256:aac85b8e85c6e19e910ad3fa770cb654b375cc0b2aeffce8878055da0c1c3206",
+        ),
         "creative-result-recovery-v1": CatalogSchemaResource(
             "schemas/external-item/creative-result-recovery-v1.schema.json",
             "resources/external-item/creative-result-recovery-v1.schema.json",

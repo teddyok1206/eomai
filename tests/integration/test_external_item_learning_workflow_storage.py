@@ -13,7 +13,8 @@ from uuid import uuid4
 
 import pytest
 from eom_identifiers import content_sha256
-from eom_workflow.control_plane import ResolvedExecutionPlanV27
+from eom_workflow.compiler import compile_definition
+from eom_workflow.control_plane import ResolvedExecutionPlanV27, ResolvedExecutionPlanV32
 from eom_workflow.models import WorkflowRequest
 from eom_workflow_runner import external_item_learning_preparation as preparation
 from eom_workflow_runner import external_item_learning_recovery as recovery
@@ -34,16 +35,21 @@ from tests.unit.test_external_item_learning_execution_plan import _plan
 from tests.unit.test_external_item_learning_workflow_admission import (
     OPERATOR,
     OTHER_OPERATOR,
+    ROOT,
     _definition,
     _owner,
     _request,
 )
+from tests.unit.test_office_item_learning import office_case
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
 
-def _unique_request() -> WorkflowRequest:
+def _unique_request(*, native: bool = False) -> WorkflowRequest:
     value = _request().model_dump(mode="json")
+    if native:
+        value["external_item_learning_work"] = office_case()[0].model_dump(mode="json")
+        value["execution_preset_key"] = "creative-office-learning"
     work = value["external_item_learning_work"]
     work["request_id"] = "extlearnreq_" + uuid4().hex
     work["page_artifact"]["artifact_revision_id"] = "rev_" + uuid4().hex
@@ -53,8 +59,22 @@ def _unique_request() -> WorkflowRequest:
     return WorkflowRequest.model_validate(value)
 
 
-def _seed(session: Session) -> WorkflowDefinitionRecord:
+def _seed(session: Session, *, native: bool = False) -> WorkflowDefinitionRecord:
     candidate = _definition()
+    if native:
+        compiled = compile_definition(
+            ROOT / "config/workflows/external-item-learning.v3.yaml", {"support"}
+        )
+        candidate = WorkflowDefinitionRecord(
+            definition_id="wfdef_" + uuid4().hex,
+            definition_key="external-item-learning",
+            definition_version="3.0.0",
+            schema_version="1.0",
+            canonical_definition=compiled.as_dict(),
+            definition_hash=compiled.sha256,
+            source_path=compiled.source_path,
+            active=True,
+        )
     # The control-owner test can already have imported this immutable definition
     # with its real ID. Resolve the unique family/version, not this fixture's ID.
     existing = session.scalar(
@@ -188,23 +208,36 @@ def _preparation_ports(monkeypatch):
         raw["workflow_id"] = kwargs["workflow_id"]
         raw["workflow_definition_sha256"] = kwargs["workflow_definition_sha256"]
         raw["work_input"] = kwargs["work"].model_dump(mode="json")
+        if raw["work_input"]["schema_version"] == "external-item-learning-work-input/2.0":
+            raw.update(
+                schema_version="resolved-execution-plan/32.0",
+                workflow_definition_version="3.0.0",
+                resolver_version="32.0.0",
+            )
         raw["plan_sha256"] = content_sha256(
             {key: value for key, value in raw.items() if key != "plan_sha256"}
         )
-        return ResolvedExecutionPlanV27.model_validate(raw)
+        return (
+            ResolvedExecutionPlanV32
+            if raw["schema_version"] == "resolved-execution-plan/32.0"
+            else ResolvedExecutionPlanV27
+        ).model_validate(raw)
 
     monkeypatch.setattr(preparation, "resolve_external_item_learning_plan", resolve)
     monkeypatch.setattr(preparation, "read_external_item_learning_page_artifact", lambda *_: None)
+    monkeypatch.setattr(preparation, "read_office_picture_catalog", lambda *_, **__: None)
 
 
-def _failed_before_job(creative_engine, monkeypatch):
+def _failed_before_job(creative_engine, monkeypatch, *, native=False):
     """Synthetic failure fixture, never a mutation of production/historical data."""
     _preparation_ports(monkeypatch)
-    request = _unique_request()
+    request = _unique_request(native=native)
     with Session(creative_engine) as session, session.begin():
+        definition = _seed(session, native=native)
+        definition_sha256 = definition.definition_hash
         prepared = preparation.prepare_external_item_learning_workflow(
             session,
-            definition=_seed(session),
+            definition=definition,
             work=request.external_item_learning_work,
             operator_id=OPERATOR,
             idempotency_key="synthetic-no-job-predecessor-" + uuid4().hex,
@@ -226,7 +259,7 @@ def _failed_before_job(creative_engine, monkeypatch):
         return preparation.resolve_external_item_learning_plan(
             None,
             workflow_id=workflow_id,
-            workflow_definition_sha256=_definition().definition_hash,
+            workflow_definition_sha256=definition_sha256,
             work=request.work_input,
         )
 
@@ -234,13 +267,13 @@ def _failed_before_job(creative_engine, monkeypatch):
     return request, prepared.selection, preset
 
 
-def _failed_after_result(creative_engine, monkeypatch):
+def _failed_after_result(creative_engine, monkeypatch, *, native=False):
     from eom_orchestrator.models import JobRecord
     from eom_orchestrator.repository import ensure_protocol_version
     from eom_workflow.schemas import role_schema_bundle_hash
     from eom_workflow_runner.role_job_identity import role_job_idempotency_key
 
-    request, selection, preset = _failed_before_job(creative_engine, monkeypatch)
+    request, selection, preset = _failed_before_job(creative_engine, monkeypatch, native=native)
     with Session(creative_engine) as session, session.begin():
         workflow = session.get(WorkflowInstanceRecord, selection.workflow_id)
         step = session.get(WorkflowStepRunRecord, selection.step_run_id)
@@ -271,6 +304,93 @@ def _failed_after_result(creative_engine, monkeypatch):
         step.platform_job_id = job_id
         workflow.failure_code = step.error_code = "WORKER_RESULT_INVALID"
     return request, selection, preset
+
+
+def _failed_launch(creative_engine, monkeypatch):
+    from eom_orchestrator.models import JobRecord, WorkerSlotRecord
+
+    value = _failed_after_result(creative_engine, monkeypatch, native=True)
+    with Session(creative_engine) as session, session.begin():
+        workflow = session.get(WorkflowInstanceRecord, value[1].workflow_id)
+        step = session.get(WorkflowStepRunRecord, value[1].step_run_id)
+        if session.get(WorkerSlotRecord, "03") is None:
+            session.add(
+                WorkerSlotRecord(
+                    slot_id="03", linux_user="eom-worker-03", role="support", enabled=True
+                )
+            )
+            session.flush()
+        job = session.get(JobRecord, step.platform_job_id)
+        workflow.failure_code = step.error_code = job.error_code = "WORKER_UNAVAILABLE"
+        job.worker_slot_id = "03"
+        job.error_message = "worker timeout does not match fixed unit contract"
+    return value
+
+
+@pytest.mark.parametrize("interrupted", [False, True])
+def test_native_failed_launch_concurrency_and_rollback(creative_engine, monkeypatch, interrupted):
+    request, predecessor, preset = _failed_launch(creative_engine, monkeypatch)
+
+    def prepare(session):
+        return recovery.prepare_failed_launch_external_item_learning_recovery(
+            session,
+            predecessor_workflow_id=predecessor.workflow_id,
+            definition=_seed(session, native=True),
+            work=request.external_item_learning_work,
+            operator_id=OPERATOR,
+            source_authorizer=_owner(request),
+            page_publisher=None,
+            expected_preset=preset,
+            confirm_unit_absent=lambda *_: True,
+        )
+
+    if interrupted:
+        with (
+            pytest.raises(RuntimeError, match="synthetic interruption"),
+            Session(creative_engine) as session,
+            session.begin(),
+        ):
+            prepare(session)
+            raise RuntimeError("synthetic interruption")
+        with Session(creative_engine) as session:
+            old = session.get(WorkflowInstanceRecord, predecessor.workflow_id)
+            assert recovery.resolve_external_item_learning_recovery(session, old) is old
+
+    barrier = Barrier(2)
+
+    def concurrent(_index):
+        with Session(creative_engine) as session, session.begin():
+            barrier.wait(timeout=10)
+            return prepare(session)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        rows = tuple(pool.map(concurrent, range(2)))
+    assert rows[0].selection == rows[1].selection
+    assert sum(row.workflow_created for row in rows) == 1
+    with Session(creative_engine) as session, session.begin():
+        assert prepare(session).selection == rows[0].selection
+        old = session.get(WorkflowInstanceRecord, predecessor.workflow_id)
+        step = session.get(WorkflowStepRunRecord, predecessor.step_run_id)
+        from eom_orchestrator.models import JobRecord
+
+        job = session.get(JobRecord, step.platform_job_id)
+        assert old.state == step.state == job.status == "FAILED"
+        assert old.failure_code == step.error_code == job.error_code == "WORKER_UNAVAILABLE"
+        assert (
+            recovery.resolve_external_item_learning_recovery(session, old).workflow_id
+            == rows[0].selection.workflow_id
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(WorkflowEventRecord)
+                .where(
+                    WorkflowEventRecord.workflow_id == predecessor.workflow_id,
+                    WorkflowEventRecord.event_type == recovery.LAUNCH_RECOVERY_EVENT,
+                )
+            )
+            == 1
+        )
 
 
 @pytest.mark.parametrize("failure", ["NO_JOB", "INVALID_RESULT"])

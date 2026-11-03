@@ -70,6 +70,15 @@ readiness는 새 unit의 SHA/ownership을 확인하고, 중단 후 실행 조회
 호환 설치 때 진행 중 worker가 없음을 확인한다. 이 오류의 기존 FAILED source/job는
 보존하고 supported preexecution recovery 경계에서만 재개 가능 여부를 판단한다.
 
+이 실패는 Job가 이미 있으므로 기존 `NO_PLATFORM_JOB_CREATED` 복구로 가장하지 않는다.
+기존 명시적 successor 복구 owner에 `creative-launch-recovery/1.0` 한 종류를 추가한다.
+Workflow3/Office Work2·slot03·정확한 trusted timeout-contract 오류·terminal Job·출력/commit
+없음·활성 command/lease 없음이 모두 확인된 경우만 새 실행을 준비한다. 원래 제출자의
+현재 권한·원본/plan/preset pins를 재검증하고 기존 parent lock·unique workflow key·
+append-only event로 동시 요청과 재전송을 수렴한다. parent/Job의 FAILED는 보존한다.
+새 성공은 같은 source 등록 business key에 연결하며 Item/Graph를 중복 만들지 않는다.
+단순 대안인 FAILED row 변경이나 다른 namespace의 무관한 새 작업은 사용하지 않는다.
+
 ## 실제 원본에서 확인한 일반 회색조
 
 ### 4건 Graph publication의 실제 중단 수정
