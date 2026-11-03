@@ -217,3 +217,113 @@ INDEX PID `3284474`와 고정 설치/설정은 두 번의 릴리스 전후 동�
 현재 복구는 원본을 직접 대조한 operator-assisted 정비 경로다. 이후 신규 등록을
 무검수로 자동 추출·교체하는 기능을 활성화했다고 주장하지 않는다. Graph/RAG의 과거
 근거 재생은 기존 pinned history를 유지하며, 문항의 표시용 read와 정본 read를 구분한다.
+
+## 향후 한글 문항 신규 입력 설계
+
+2026-11-03 UTC 사용자 결정. **설계 확정, 신규 입력 경로의 구현·배포·활성화는 아직 아니다.**
+이번 333문항 복구에서 검증한 원본 이미지 우선 방식을 이후 HWP/HWPX 문항 입력에
+적용한다. 신규 문항은 처음부터 정확한 그림 pointer를 canonical Item에 등록한다.
+잘린 그림으로 먼저 등록한 뒤 모든 문항에 별도 복구 Artifact를 붙이는 방식을 기본으로
+만들지 않는다. 기존 333문항의 표시용 복구와 역사적 참조는 그대로 보존한다.
+
+### 입력에서 등록까지
+
+```text
+고정 원본 HWP/HWPX와 실제 사용자 권한 확인
+  → 격리 adapter: 원본 내장 이미지 + 실제 사용 개체/배치 추출
+  → 기존 분석 worker: 문항 구성 해석 + 본문 그림 개체 선택
+  → Orchestrator: 선택·잘림·라벨·출처 검증 및 이미지 Artifact commit
+  → 기존 Catalog 등록: 검증된 이미지 pointer를 canonical Item에 연결
+  → 같은 그림 pointer를 Preview·HWPX·문항 읽기에서 사용
+```
+
+PDF는 전체 문서 열람·페이지 의미 파악·분석 worker 입력에 계속 사용한다. 다만 HWP/HWPX
+본문 그림의 정본을 만들기 위해 PDF 페이지를 캡처하거나 모델이 추정한 사각형을
+잘라 저장하는 경로를 기본으로 쓰지 않는다. PDF만 받은 입력은 별도 기존 정책이며,
+이 설계를 핑계로 원본 Office가 존재한다고 가정하거나 기출·교과서 전체를 재처리하지 않는다.
+
+### 원본 그림 선택 규칙
+
+1. **실제 형식:** 확장자가 아니라 파일 signature로 HWP5/HWPX를 판별한다.
+   `.hwp`라는 이름의 실제 HWPX도 같은 지원 경계로 처리한다.
+2. **이미지와 사용 개체 분리:** 이미지 member는 원본 bytes이고, 사용 개체는 본문/참고란에
+   놓인 위치·표시 영역·회전 등을 갖는다. 같은 member를 두 곳에서 쓰는 경우 본문의
+   사용 개체를 선택한다. 참고란과 member가 같다는 이유만으로 정상 본문 그림을 버리거나,
+   같은 모양이라는 이유로 참고란의 다른 개체를 대신 선택하지 않는다.
+3. **참고 자료 제외:** 우측 하단 원본 기출·해설은 보통 별도 첨부 영역이지만, 좌우 위치만으로
+   판정하지 않는다. 대상 문항의 실제 페이지·구성요소·개체 참조를 확인한다. 두 페이지 문서의
+   오른쪽 본문을 참고란으로 오인하지 않는다.
+4. **표시 영역:** 원본 전체 bitmap은 보존한다. 실제 본문 개체가 하나의 복합 bitmap 중 일부만
+   사용하는 경우 그 native viewport 또는 검증된 panel 영역만 선택하고 정확한 pixel box를
+   기록한다. 전체 문항 screenshot이나 발문·보기까지 그림으로 넣지 않는다. 두 panel을
+   무조건 이미지의 가운데에서 자르는 식의 추정도 사용하지 않는다.
+5. **과학 표기:** 축·수치·단위·화살표·A/B 같은 표기가 별도 원본 개체라면 도식과의 관계를
+   함께 보존한다. PNG가 하나 추출됐거나 SHA가 맞는 것만으로 그림이 완전하다고 보지 않는다.
+   원본의 orientation과 좌표계 변환을 명시하고, 근거 없는 bbox 확장/축소로 처리하지 않는다.
+6. **문항 구성:** 하나의 그림은 불필요한 두 번째 칸이나 panel label 없이 배치한다.
+   두 그림은 서로 다른 올바른 component를 순서대로 연결하고, 원본의 native `(가)/(나)`
+   같은 panel caption은 가능한 한 편집 가능한 text로 유지한다. 원래 bitmap에 들어 있는
+   글자를 임의로 지우거나, 두 block에 같은 복합 그림 전체를 중복해서 넣지 않는다.
+7. **표·수식 예외:** 원본이 native table/equation이면 기존 문항의 표·수식 표현을 먼저 쓴다.
+   정확한 변환이 안 되면 사유와 원본 pointer를 남긴다. 다른 기출의 그림을 빌리거나 수식
+   기호를 추측해 채우지 않는다. 긴 그림 설명은 접근성 alt로 유지하고 Preview 아래에
+   본문처럼 반복 출력하지 않는다.
+
+### 기존 모듈에 넣을 책임
+
+- Catalog의 기존 source/권한 resolver가 실제 operator, 고정 원본 revision·hash,
+  원본-PDF 변환 lineage와 lifecycle을 확인한다. 파일 경로나 worker가 주장한 권한을
+  source identity로 쓰지 않는다.
+- 기존 `office_embedded_images` adapter를 재사용해 격리된 local workspace에서 추출한다.
+  다음 구현은 **native 사용 개체와 배치의 제품 경로 지원**을 보완해야 한다. 현재 whole-image
+  추출 함수나 정비용 staging script가 이를 이미 자동 제공한다고 간주하지 않는다.
+- Orchestrator가 추출 manifest를 검증·발행하고 필요한 local source-image catalog를
+  기존 worker materialization에 전달한다. worker는 실제 제공된 개체 ID를 선택하고
+  문항 구성·본문/참고 구분을 설명한다. 임의 NAS 경로·새 Artifact pointer를 발행하지 않는다.
+- `creative_item_registration`의 기존 `_prepare_successor_content`/공식 publication 경계에서
+  새 입력 계약을 선택하고, 검증된 `ImageBlock` pointer를 기존 materializer에 넘긴다.
+  현재 V2의 PDF crop 동작을 모든 역사적 실행에서 제자리 교체하지 않는다.
+- Preview·HWPX·문항/Graph 소비자는 등록된 같은 component를 읽는다. 이미지 수정을 이유로
+  풀이보고서·Graph 의미·공개 풀이 입력을 재작성하거나 임베딩을 다시 만들지 않는다.
+
+### 포인터·자료구조·트랜잭션
+
+원본 document revision/hash → embedded member/hash → native picture-use ID/viewport →
+선택된 문항 component/출력 hash → 등록된 Artifact pointer로 추적한다. 작은 출처·선택 정보는
+typed manifest에 두며 PNG와 원본 파일을 DB나 worker 메시지에 반복 복사하지 않는다.
+한 member에 여러 사용 개체가 있을 수 있으므로 파일명이나 그림 hash 하나를 use ID로 삼지 않는다.
+
+member/use/region은 각각 keyed map, 중복·참조 검증은 set, 문항과 그림의 순서는 immutable
+sequence로 처리한다. metadata의 매핑·검증은 O(member 수 + use 수 + binding 수), byte 작업은
+실제 추출한 member/pixel 크기에 비례한다. 정상 매핑에 corpus 전체 유사 이미지 검색이나
+매번 후보끼리의 pixel 비교를 추가하지 않는다. 새 DB·별도 queue·검색 엔진은 필요하지 않다.
+
+parse/선택 중 DB lock을 유지하지 않는다. 이미지 Artifact commit이 확인된 뒤 Item pointer를
+등록하고, 같은 원본·추출 profile·분석 결과·선택 계획의 재전송은 같은 산출물을 재사용한다.
+추출/commit 중단은 기존 owner의 지원된 resume으로 처리한다. FAILED 이력을 바꾸거나 다른
+문항의 그림으로 성공을 꾸미지 않는다. source/권한/hash가 바뀌면 다음 mutation 전에 멈춘다.
+
+### 예외 처리와 구현 순서
+
+그림 예외를 전체 자료 접수·메타데이터·풀이보고서 소실이나 다른 문항 처리 중단으로
+확대하지 않는다. 해당 문항의 기존 content-unavailable/오류 격리 경계를 재사용하고,
+불완전한 그림이 필요한 산출물을 정상 Preview·HWPX 완료로 승격하지 않는다. 검증하지 않은
+새 상태나 관리자 화면을 별도로 늘리지 않는다. 현재 6개 예외도 정상 복구 수에 섞지 않는다.
+
+1. native image-use/worker binding/publication의 필요한 successor를 JSON Schema 2020-12와
+   Pydantic으로 먼저 정의한다. 기존 추출 manifest·ImageBlock·1.0/1.1 출처 값은 재사용하고,
+   released schema bytes·과거 실행 핀은 보존한다. 문서만으로 새 protocol version을 발급하지 않는다.
+2. HWP DocInfo의 BinData 참조와 실제 storage ID, HWPX의 binary-item 참조·viewport·회전·group을
+   기존 adapter에서 해석한다. 원본 기출과 본문이 같은 member를 재사용하는 fixture를 포함한다.
+3. 기존 Orchestrator materialization → 분석 worker 선택 → publication → Catalog 등록에
+   연결한다. 사람의 매 문항 수동 매핑이나 사후 복구를 정상 경로의 필수 절차로 만들지 않는다.
+4. source/선택/해시 불일치, external link·unsafe ZIP/OLE·oversize, native label 누락, 전체 문항
+   bitmap 혼입, 잘못된 panel 순서/중복, 그림 0·1·2개, 표만 있는 경우를 집중 검증한다.
+   concurrency·중단·재전송 검사는 disposable PostgreSQL에서 수행한다.
+5. 호환 release 후 새 HWP5·HWPX·확장자 위장 표본에서 실제 등록 → Preview/media → HWPX
+   embedding/download를 확인하고 나서 새 입력 경로를 활성화한다. 333건의 과거 복구 성공이나
+   unit PASS로 이 활성화를 대체하지 않는다. 기존 전체 자료 재등록·Graph 재생성·GPU 재시작은 없다.
+
+새 의존성·추가 GPU·별도 모델 실행 framework를 선행 도입하지 않는다. 더 단순한
+‘PDF bbox를 조금 넓혀 다시 crop’ 방식은 잘린 라벨·참고란 혼입·복합 panel 중복을
+구조적으로 막지 못하므로, 신규 한글 입력의 기본 방식으로 채택하지 않는다.

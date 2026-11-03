@@ -25,6 +25,11 @@ REFERENCE_ORIGINAL은 어느 필드에도 허용하지 않는다. 출제의도�
 원문 편집 답안이라고 선언한 EDITORIAL_SOURCE에는 여전히 최소 한 개의 실제 editorial
 정답 근거가 필요하다. 필드별 허용 role 표가 이 추가 조건을 대체하지 않는다.
 
+향후 HWP/HWPX 그림 입력은 region 분류에 더해 실제 embedded picture-use/viewport를
+검증하는 [원본 이미지 우선 신규 입력 설계](CREATIVE_SOURCE_VISUAL_RECOVERY.md#향후-한글-문항-신규-입력-설계)를 따른다.
+같은 binary member를 본문과 참고란이 재사용할 수 있으므로 사용 개체를 구분한다.
+이 설계 참조는 현재 crop 계약을 변경하거나 아직 구현하지 않은 입력 경로를 활성화하지 않는다.
+
 U10317의 같은 실패 body를 끝까지 재검증하자, 독립 답안의 `answer_labels`에 실제 선택지
 기호가 아닌 “제시된 선택지 없음” 문장이 들어간 것도 확인됐다. 이를 유효한 선택지로
 허용하거나 이전 모델 판단을 자동 수정하지 않는다. 유일한 제시 선택지를 확정할 수 없으면

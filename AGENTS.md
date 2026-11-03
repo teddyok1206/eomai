@@ -60,6 +60,20 @@ These rules apply to all future Codex and automation work in `/home/eom/EOM`.
   Durable design and current implementation/activation scope:
   `docs/architecture/GENERAL_CHAT_TEXTBOOK_RAG_DESIGN.md`.
 
+## Hancom Item Visual Intake
+
+- For new HWP/HWPX item-import development, extract embedded source images and bind the
+  actual main-body picture use, including its viewport, orientation, scientific labels and order.
+  Do not use a guessed PDF page rectangle as the normal source of a registered item figure.
+- Distinguish picture uses from binary members: the same embedded member can be used in the
+  main question and a reference attachment. Exclude reference/solution uses, not every use of a
+  shared member. Do not assume that the right side of every page is a reference attachment.
+- Keep native tables/equations native when accurately representable; record unresolved visuals
+  explicitly instead of publishing clipped, unrelated or invented replacements.
+- Future intake design and activation boundary:
+  `docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md#향후-한글-문항-신규-입력-설계`.
+  This guidance does not activate an unreleased workflow or reinterpret historical contracts.
+
 ## Pointer-Oriented Data and Artifact Design
 
 In these rules, a pointer is a validated identity or reference. It is not a C or C++ raw memory
