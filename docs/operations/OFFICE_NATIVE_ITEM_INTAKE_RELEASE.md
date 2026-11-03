@@ -34,6 +34,9 @@ Workflow1/2·Pack1.0/1.1은 제자리 변경하지 않는다. 새 DB·migration�
    `/opt/eom/office-image-tools/<source-commit>/site-packages`에 설치·검증한다.
    HWP OLE 읽기는 이미 채택한 optional `olefile==0.47`만 사용한다. CUDA나
    INDEX/QUERY 수치 실행환경에는 설치하지 않는다.
+   실행 Python은 같은 tool release의 `runtime/bin/python`이다. root 소유의
+   system Python 기반 CPU venv에 기존 Pillow/jsonschema/Pydantic/olefile만
+   설치한다. 개발자가 소유한 HWPX Conda Python을 운영 기본값으로 쓰지 않는다.
 3. 새 입력을 준비하는 owner에 `EOM_OFFICE_IMAGE_TOOL_ROOT`로 그 **정확한 prefix**를
    지정한다. 해석은 기존 eom-image systemd sandbox에서만 수행한다.
 4. 기존 `eomctl creative-learning prepare` application 경계에
@@ -92,3 +95,11 @@ rollback은 보관된 호환 wheel/config로 서비스 설치를 복원하는 �
 `DEPLOYMENT=PENDING`, `NEW_INTAKE_PREVIEW_HWPX=PENDING`.
 최종 source/설치/활성화와 신규 입력 identity·원본 use·Preview/media·HWPX 증거는
 실제 실행이 끝난 후 기록한다.
+
+### 추가 승인된 후속 범위
+
+사용자는 2026-11-03 사용량 리셋 후, 위 경로 완료 다음 **4개 슬롯**으로 원문 풀이·
+Graph 등록을 계속하고 새 등록 문항이 기존 공통 임베딩에 연결되는 것까지 목표에
+추가했다. 과거의 purpose-limited 3슬롯 계약을 바꾸지 않고 명시적 4슬롯 successor를
+기존 capacity/claim/lease/순차 owner 안에 추가한다. 진행 중 문항은 완료를 기다린다.
+GPU INDEX를 재시작하거나 이미 만들어진 보고서·벡터를 다시 만드는 요구가 아니다.

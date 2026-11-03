@@ -172,6 +172,52 @@ def test_canonical_registration_uses_original_member_without_pdf_crop(monkeypatc
     crop.assert_not_called()
 
 
+def test_extraction_uses_the_pinned_cpu_interpreter_not_developer_conda(monkeypatch, tmp_path):
+    import stat
+    from pathlib import Path
+
+    from eom_orchestrator import office_picture_use_extraction as extraction
+
+    work, _result, _catalog, _selection, extracted = publication_case(tmp_path)
+    tool = Path("/opt/eom/office-image-tools/" + "a" * 40 + "/site-packages")
+    original_stat = Path.stat
+
+    def metadata(path, *args, **kwargs):
+        if path == tool:
+            return SimpleNamespace(st_mode=stat.S_IFDIR | 0o755, st_uid=0)
+        return original_stat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "stat", metadata)
+    python = tool.parent / "runtime/bin/python"
+    trusted = Mock(return_value=python)
+    monkeypatch.setattr(extraction, "_trusted_executable", trusted)
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w", compression=zipfile.ZIP_STORED) as output:
+        for member in extracted.members:
+            output.writestr(member, (extracted.workspace / member).read_bytes())
+    runner = Mock(return_value=archive.getvalue())
+    # The fixture source hash deliberately stands for unparsed synthetic input.
+    source = b"synthetic original for adapter trust test"
+    monkeypatch.setattr(
+        extraction,
+        "sha256_bytes",
+        lambda raw: work.source.preview_manifest.source_sha256
+        if raw == source
+        else sha256_bytes(raw),
+    )
+    result = extraction.extract_office_picture_use_input(
+        source,
+        expected_sha256=work.source.preview_manifest.source_sha256,
+        tool_root=tool,
+        workspace=tmp_path / "cpu-output",
+        run=runner,
+    )
+    trusted.assert_called_once_with(python)
+    assert runner.call_args.args[0] == python
+    assert runner.call_args.args[1][:2] == ("-I", "-B")
+    assert result.catalog == extracted.catalog
+
+
 def test_incomplete_publication_uses_supported_resume_but_terminal_failure_is_not_reinterpreted(
     monkeypatch, tmp_path
 ):

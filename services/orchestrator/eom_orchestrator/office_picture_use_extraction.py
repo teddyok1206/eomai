@@ -37,7 +37,7 @@ def extract_office_picture_use_input(
     expected_sha256: str,
     tool_root: Path,
     workspace: Path,
-    python: Path = Path("/srv/eom/conda/envs/eom-hwpx/bin/python"),
+    python: Path | None = None,
     run: PdfToolRunner = _run_isolated,
 ) -> ExtractedOfficePictureUses:
     """Read authorization belongs to the caller; parsing never runs as its UID.
@@ -60,7 +60,9 @@ def extract_office_picture_use_input(
     metadata = tool_root.stat()
     if not stat.S_ISDIR(metadata.st_mode) or metadata.st_uid != 0 or metadata.st_mode & 0o022:
         raise ValueError("OFFICE_PICTURE_TOOL_ROOT_UNTRUSTED")
-    executable = _trusted_executable(python)
+    # The interpreter belongs to the pinned CPU tool release. A developer-owned
+    # HWPX Conda environment is not an executable production trust boundary.
+    executable = _trusted_executable(python or tool_root.parent / "runtime/bin/python")
     bootstrap = (
         "import sys;sys.path.insert(0," + json.dumps(str(tool_root)) + ");"
         "from eom_image_provider.office_picture_uses import main;raise SystemExit(main())"
