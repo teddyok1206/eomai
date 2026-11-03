@@ -19,6 +19,7 @@ from eom_image_contracts.office_picture_uses import (
     OfficeNativeObjectKind,
     OfficeObjectLocator,
     OfficePictureGeometry,
+    OfficePicturePlacement,
     OfficePictureUse,
     UnresolvedPictureReason,
     office_object_id,
@@ -106,6 +107,9 @@ def _shape_geometry(shape: bytes, picture: bytes) -> OfficePictureGeometry | Non
     initial_width, initial_height, current_width, current_height, flags = struct.unpack_from(
         "<5I", shape, offset + 12
     )
+    # High editing/reserved bits are present in ordinary Hancom originals.
+    # Only the specified flip bits affect this view; the actual linear
+    # rendering matrices below independently reject unsupported transforms.
     angle = struct.unpack_from("<H", shape, offset + 32)[0]
     count = struct.unpack_from("<H", shape, offset + 42)[0]
     if (
@@ -113,7 +117,6 @@ def _shape_geometry(shape: bytes, picture: bytes) -> OfficePictureGeometry | Non
         or not 0 < initial_height <= 1_000_000_000
         or not 0 < current_width <= 1_000_000_000
         or not 0 < current_height <= 1_000_000_000
-        or flags & ~3
         or angle % 90
         or not 1 <= count <= 32
         or offset + 92 + count * 96 > len(shape)
@@ -138,10 +141,19 @@ def _shape_geometry(shape: bytes, picture: bytes) -> OfficePictureGeometry | Non
         if _rotation_quarter_turn(rotate) != (angle // 90) % 4:
             return None
     points = struct.unpack_from("<8i", picture, 12)
-    # The picture rectangle itself is authoritative source-image geometry, not
-    # assumed DPI or a resized shape's current dimensions.
-    width, height = points[2], points[5]
-    if points != (0, 0, width, 0, width, height, 0, height) or width <= 0 or height <= 0:
+    rectangle_width, rectangle_height = points[2], points[5]
+    if points != (0, 0, rectangle_width, 0, rectangle_width, rectangle_height, 0, rectangle_height):
+        return None
+    # Hancom revision 1.3 table 116: reference image dimensions follow the
+    # effects record. They are NOT the edited picture rectangle (table 107).
+    # With unknown effects/version tails, do not guess an original extent.
+    if len(picture) == 91 and struct.unpack_from("<I", picture, 78)[0] == 0:
+        width, height = struct.unpack_from("<2I", picture, 82)
+    elif len(picture) == 78:
+        width, height = rectangle_width, rectangle_height
+    else:
+        return None
+    if width <= 0 or height <= 0:
         return None
     viewport = struct.unpack_from("<4i", picture, 44)
     if viewport == (0, 0, 0, 0):
@@ -175,11 +187,17 @@ def _section_objects(
     stack: list[HwpRecord] = []
     shapes: list[HwpRecord] = []
     groups: list[HwpRecord] = []
+    controls: list[HwpRecord] = []
+    paragraphs: list[HwpRecord] = []
     uses: list[OfficePictureUse] = []
     objects: list[OfficeNativeObject] = []
     for record in hwp_records(raw):
         while stack and stack[-1].level >= record.level:
             previous = stack.pop()
+            if previous.tag == 71:
+                controls.pop()
+            elif previous.tag == 66:
+                paragraphs.pop()
             if previous.tag == 76:
                 shapes.pop()
                 if b"noc$" in previous.body[:8]:
@@ -209,7 +227,11 @@ def _section_objects(
                 reasons.append("GEOMETRY_UNRESOLVED")
             if group_id is not None:
                 reasons.append("GROUP_COMPOSITION_REQUIRED")
-            if record.body[68:71] != b"\0\0\0":
+            if (
+                record.body[68:71] != b"\0\0\0"
+                or (len(record.body) >= 82 and struct.unpack_from("<I", record.body, 78)[0] != 0)
+                or (len(record.body) == 91 and record.body[90] != 0)
+            ):
                 reasons.append("IMAGE_EFFECT_UNSUPPORTED")
             proof = record.body + (b"" if shape is None else shape.body)
             uses.append(
@@ -220,6 +242,10 @@ def _section_objects(
                     native_sha256=_sha(proof),
                     group_id=group_id,
                     geometry=geometry,
+                    placement=_placement(
+                        controls[-1] if controls else None,
+                        paragraphs[-1].ordinal if paragraphs else None,
+                    ),
                     unresolved_reasons=tuple(sorted(reasons)),
                 )
             )
@@ -243,6 +269,10 @@ def _section_objects(
                 )
             )
         stack.append(record)
+        if record.tag == 71:
+            controls.append(record)
+        elif record.tag == 66:
+            paragraphs.append(record)
         if record.tag == 76:
             shapes.append(record)
             if kind == "GROUP":
@@ -250,6 +280,32 @@ def _section_objects(
         if len(uses) > 2048 or len(objects) > 4096:
             raise OfficeEmbeddedImageError("OFFICE_PICTURE_OBJECT_LIMIT")
     return uses, objects
+
+
+def _placement(control: HwpRecord | None, anchor: int | None) -> OfficePicturePlacement | None:
+    if control is None or control.body[:4] != b" osg" or len(control.body) < 28:
+        return None
+    flags, vertical, horizontal, width, height, z_order = struct.unpack_from(
+        "<IiiIIi", control.body, 4
+    )
+    vertical_relative = (flags >> 3) & 3
+    if vertical_relative > 2:
+        return None
+    try:
+        return OfficePicturePlacement.model_validate(
+            {
+                "horizontal_offset": horizontal,
+                "vertical_offset": vertical,
+                "horizontal_relative": ("PAPER", "PAGE", "COLUMN", "PARA")[(flags >> 8) & 3],
+                "vertical_relative": ("PAPER", "PAGE", "PARA")[vertical_relative],
+                "width": width,
+                "height": height,
+                "z_order": z_order,
+                "anchor_ordinal": anchor,
+            }
+        )
+    except ValueError:
+        return None
 
 
 def read_hwp_picture_uses(

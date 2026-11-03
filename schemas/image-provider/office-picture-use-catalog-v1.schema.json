@@ -40,7 +40,7 @@
     },
     "pictureUse": {
       "type": "object", "additionalProperties": false,
-      "required": ["use_id", "locator", "source_member", "native_sha256", "group_id", "geometry", "unresolved_reasons"],
+      "required": ["use_id", "locator", "source_member", "native_sha256", "group_id", "geometry", "placement", "unresolved_reasons"],
       "properties": {
         "use_id": {"$ref": "#/$defs/objectId"},
         "locator": {"$ref": "#/$defs/locator"},
@@ -48,10 +48,25 @@
         "native_sha256": {"$ref": "#/$defs/sha256"},
         "group_id": {"$ref": "#/$defs/nullableObjectId"},
         "geometry": {"oneOf": [{"$ref": "#/$defs/geometry"}, {"type": "null"}]},
+        "placement": {"oneOf": [{"$ref": "#/$defs/placement"}, {"type": "null"}]},
         "unresolved_reasons": {
           "type": "array", "uniqueItems": true, "maxItems": 8,
           "items": {"enum": ["EXTERNAL_IMAGE", "UNSUPPORTED_IMAGE", "GEOMETRY_UNRESOLVED", "NON_ORTHOGONAL_TRANSFORM", "GROUP_COMPOSITION_REQUIRED", "IMAGE_EFFECT_UNSUPPORTED", "MISSING_IMAGE"]}
         }
+      }
+    },
+    "placement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["horizontal_offset", "vertical_offset", "horizontal_relative", "vertical_relative", "width", "height", "z_order", "anchor_ordinal"],
+      "properties": {
+        "horizontal_offset": {"type": "integer", "minimum": -2147483648, "maximum": 2147483647},
+        "vertical_offset": {"type": "integer", "minimum": -2147483648, "maximum": 2147483647},
+        "horizontal_relative": {"enum": ["PAPER", "PAGE", "COLUMN", "PARA"]},
+        "vertical_relative": {"enum": ["PAPER", "PAGE", "PARA"]},
+        "width": {"type": "integer", "minimum": 1, "maximum": 1000000000},
+        "height": {"type": "integer", "minimum": 1, "maximum": 1000000000},
+        "z_order": {"type": "integer", "minimum": 0, "maximum": 2147483647},
+        "anchor_ordinal": {"type": ["integer", "null"], "minimum": 0, "maximum": 100000}
       }
     },
     "pictureView": {

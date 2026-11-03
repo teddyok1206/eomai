@@ -15,6 +15,7 @@ from eom_image_contracts.office_picture_uses import (
     OfficeNativeObjectKind,
     OfficeObjectLocator,
     OfficePictureGeometry,
+    OfficePicturePlacement,
     OfficePictureUse,
     UnresolvedPictureReason,
     office_object_id,
@@ -103,9 +104,18 @@ def _geometry(node: ET.Element) -> OfficePictureGeometry | None:
             )
             for i in range(4)
         )
-        width, height = points[2]
-        if points != ((0, 0), (width, 0), (width, height), (0, height)):
+        rectangle_width, rectangle_height = points[2]
+        if points != (
+            (0, 0),
+            (rectangle_width, 0),
+            (rectangle_width, rectangle_height),
+            (0, rectangle_height),
+        ):
             return None
+        # imgClip is expressed in imgDim's original-image coordinates. Hancom
+        # can retain a different imgRect/orgSz after replacing/resizing a bitmap.
+        dimensions = _one(node, HP + "imgDim")
+        width, height = _number(dimensions, "dimwidth"), _number(dimensions, "dimheight")
         clip = _one(node, HP + "imgClip")
         viewport = (
             _number(clip, "left"),
@@ -164,7 +174,8 @@ def _member(href: str) -> str | None:
         or href.startswith("/")
     ):
         return None
-    parts: list[str] = ["Contents"]
+    # Hancom uses both package-root-qualified and OPF-relative references.
+    parts: list[str] = [] if href.startswith("BinData/") else ["Contents"]
     for part in href.split("/"):
         if part == "..":
             if not parts:
@@ -176,6 +187,30 @@ def _member(href: str) -> str | None:
             parts.append(part)
     candidate = str(PurePosixPath(*parts))
     return candidate if re.fullmatch(r"BinData/[^/\\]+", candidate) else None
+
+
+def _placement(node: ET.Element, anchor: int | None) -> OfficePicturePlacement | None:
+    try:
+        position, size = _one(node, HP + "pos"), _one(node, HP + "sz")
+        x, y = _number(position, "horzOffset"), _number(position, "vertOffset")
+        if x >= 2**31:
+            x -= 2**32
+        if y >= 2**31:
+            y -= 2**32
+        return OfficePicturePlacement.model_validate(
+            {
+                "horizontal_offset": x,
+                "vertical_offset": y,
+                "horizontal_relative": position.get("horzRelTo"),
+                "vertical_relative": position.get("vertRelTo"),
+                "width": _number(size, "width"),
+                "height": _number(size, "height"),
+                "z_order": _number(node, "zOrder"),
+                "anchor_ordinal": anchor,
+            }
+        )
+    except ValueError:
+        return None
 
 
 def read_hwpx_picture_uses(
@@ -205,10 +240,10 @@ def read_hwpx_picture_uses(
             root = _xml(package.read(member))
             native_hashes = _native_hashes(root)
             # Preorder and a carried parent-group ID give O(nodes) traversal.
-            stack: list[tuple[ET.Element, str | None]] = [(root, None)]
+            stack: list[tuple[ET.Element, str | None, int | None]] = [(root, None, None)]
             ordinal = 0
             while stack:
-                node, group_id = stack.pop()
+                node, group_id, anchor = stack.pop()
                 locator = OfficeObjectLocator(member_path=member, ordinal=ordinal)
                 ordinal += 1
                 identifier = office_object_id(source_sha256, locator)
@@ -230,6 +265,7 @@ def read_hwpx_picture_uses(
                         images[0].get("bright", "0") != "0"
                         or images[0].get("contrast", "0") != "0"
                         or images[0].get("effect", "REAL_PIC") != "REAL_PIC"
+                        or images[0].get("alpha", "0") != "0"
                         or any(len(effect) for effect in node.findall(HP + "effects"))
                     ):
                         reasons.append("IMAGE_EFFECT_UNSUPPORTED")
@@ -241,6 +277,7 @@ def read_hwpx_picture_uses(
                             native_sha256=native_hashes[node],
                             group_id=group_id,
                             geometry=geometry,
+                            placement=_placement(node, anchor),
                             unresolved_reasons=tuple(sorted(reasons)),
                         )
                     )
@@ -256,7 +293,8 @@ def read_hwpx_picture_uses(
                         )
                     )
                 child_group = identifier if kind == "GROUP" else group_id
-                stack.extend((child, child_group) for child in reversed(node))
+                child_anchor = locator.ordinal if node.tag == HP + "p" else anchor
+                stack.extend((child, child_group, child_anchor) for child in reversed(node))
                 if len(uses) > 2048 or len(objects) > 4096:
                     raise OfficeEmbeddedImageError("OFFICE_PICTURE_OBJECT_LIMIT")
         return uses, objects

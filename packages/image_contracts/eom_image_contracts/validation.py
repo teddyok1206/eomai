@@ -443,7 +443,7 @@ SCHEMA_FILES = {
 }
 SCHEMA_SHA256 = {
     "office-picture-use-catalog": (
-        "sha256:1b2a07991f8942a71792883656ed25d56df042f58a3c60d285db87f278e055d9"
+        "sha256:da22b21dcc393f27cc6d0a499a9e93d750471b31238b359218b21732c709c6d8"
     ),
     "office-embedded-image-set": (
         "sha256:f3fd7bd660783fe4c82b5d96d3c3057bb3f041f7261b8ba15734417649bbf27a"

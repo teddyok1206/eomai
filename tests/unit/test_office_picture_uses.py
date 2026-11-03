@@ -39,6 +39,7 @@ def picture(
         <hp:imgRect><hc:pt0 x="0" y="0"/><hc:pt1 x="1900" y="0"/>
           <hc:pt2 x="1900" y="1300"/><hc:pt3 x="0" y="1300"/></hp:imgRect>
         <hp:imgClip {clip}/><hp:rotationInfo angle="{angle}"/>
+        <hp:imgDim dimwidth="1900" dimheight="1300"/>
         <hp:flip horizontal="0" vertical="0"/>
         <hp:renderingInfo><hc:transMatrix e1="1" e2="0" e3="0" e4="0" e5="1" e6="0"/>
           <hc:scaMatrix e1="1" e2="0" e3="0" e4="0" e5="1" e6="0"/>
@@ -153,6 +154,37 @@ def test_table_only_and_equation_stay_native_without_rasters(tmp_path: Path) -> 
     assert [obj.kind for obj in result.native_objects] == ["TABLE", "EQUATION"]
 
 
+def test_replaced_bitmap_crop_coordinates_use_imgdim_not_the_edited_rectangle(
+    tmp_path: Path,
+) -> None:
+    body = picture().replace(
+        'dimwidth="1900" dimheight="1300"', 'dimwidth="19000" dimheight="13000"'
+    )
+    body = body.replace('right="1900" bottom="1300"', 'right="19000" bottom="13000"')
+    manifest = (
+        f'<opf:package xmlns:opf="{OPF}"><opf:item id="image1" href="BinData/a.png"/></opf:package>'
+    )
+    result = extracted(tmp_path, source(tmp_path, body, manifest=manifest))
+    use = result.picture_uses[0]
+    assert use.unresolved_reasons == () and use.geometry.original_extent == (19000, 13000)
+    assert use.geometry.pixel_box(width=19, height=13) == (0, 0, 19, 13)
+    assert result.rendered_uses[0].member_path == result.embedded_images.images[0].member_path
+
+
+def test_hwp_native_reference_extent_and_reserved_edit_flags_are_preserved():
+    from eom_image_provider.office_picture_records import _shape_geometry
+
+    shape = bytearray(hwp_shape())
+    struct.pack_into("<I", shape, 8 + 28, 0x24080000)
+    picture = bytearray(hwp_picture())
+    struct.pack_into("<2I", picture, 82, 19000, 13000)
+    struct.pack_into("<4i", picture, 44, 0, 0, 19000, 13000)
+    geometry = _shape_geometry(bytes(shape), bytes(picture))
+    assert geometry is not None
+    assert geometry.original_extent == (19000, 13000)
+    assert geometry.pixel_box(width=19, height=13) == (0, 0, 19, 13)
+
+
 @pytest.mark.parametrize(
     "case", ["outside-clip", "zero-clip", "missing-geometry", "arbitrary-rotation", "shear", "nan"]
 )
@@ -228,6 +260,7 @@ def hwp_picture(*, binding: int = 1) -> bytes:
     struct.pack_into("<8i", raw, 12, 0, 0, 1900, 0, 1900, 1300, 0, 1300)
     struct.pack_into("<4i", raw, 44, 0, 0, 1900, 1300)
     struct.pack_into("<H", raw, 71, binding)
+    struct.pack_into("<2I", raw, 82, 1900, 1300)
     return bytes(raw)
 
 

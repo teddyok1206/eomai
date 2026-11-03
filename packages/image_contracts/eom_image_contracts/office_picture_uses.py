@@ -75,6 +75,17 @@ class OfficePictureGeometry(FrozenModel):
         )
 
 
+class OfficePicturePlacement(FrozenModel):
+    horizontal_offset: int = Field(strict=True, ge=-(2**31), lt=2**31)
+    vertical_offset: int = Field(strict=True, ge=-(2**31), lt=2**31)
+    horizontal_relative: Literal["PAPER", "PAGE", "COLUMN", "PARA"]
+    vertical_relative: Literal["PAPER", "PAGE", "PARA"]
+    width: PositiveNativeUnit
+    height: PositiveNativeUnit
+    z_order: int = Field(strict=True, ge=0, lt=2**31)
+    anchor_ordinal: int | None = Field(strict=True, ge=0, le=100000)
+
+
 class OfficePictureUse(FrozenModel):
     use_id: OfficeObjectId
     locator: OfficeObjectLocator
@@ -82,6 +93,7 @@ class OfficePictureUse(FrozenModel):
     native_sha256: Sha256
     group_id: OfficeObjectId | None
     geometry: OfficePictureGeometry | None
+    placement: OfficePicturePlacement | None
     unresolved_reasons: tuple[UnresolvedPictureReason, ...] = Field(max_length=8)
 
     @model_validator(mode="after")
