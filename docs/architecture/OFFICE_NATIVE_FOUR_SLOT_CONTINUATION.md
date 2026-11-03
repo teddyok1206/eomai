@@ -65,6 +65,8 @@ capacity/claim이 용도 권한을 확인하며, 새 unit 자체는 동일 user/
 readiness는 새 unit의 SHA/ownership을 확인하고, 중단 후 실행 조회는 기본/분석 unit을
 모두 본다. 동시에 둘 다 있으면 UNKNOWN으로 둔다. Polkit은 workflow runner의 정확한
 03/04 분석 unit StartUnit만 허용하며 restart·다른 slot·임의 unit은 허용하지 않는다.
+03 grant는 `48-eom-native-office-report-worker.rules`에 한정한다. GPU/CPU 수치
+실행환경이 pin한 기존 `50-eom-worker-units.rules` bytes와 그 검증 hash는 바꾸지 않는다.
 호환 설치 때 진행 중 worker가 없음을 확인한다. 이 오류의 기존 FAILED source/job는
 보존하고 supported preexecution recovery 경계에서만 재개 가능 여부를 판단한다.
 

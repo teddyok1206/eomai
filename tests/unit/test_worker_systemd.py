@@ -1577,27 +1577,6 @@ def test_polkit_rule_has_no_external_execution_or_cached_authorization() -> None
             "yes",
         ),
         (
-            "eom-workflow-runner",
-            "org.freedesktop.systemd1.manage-units",
-            f"eom-worker-analysis-03@{JOB_ID}.service",
-            "start",
-            "yes",
-        ),
-        (
-            "eom",
-            "org.freedesktop.systemd1.manage-units",
-            f"eom-worker-analysis-03@{JOB_ID}.service",
-            "start",
-            "no",
-        ),
-        (
-            "eom-workflow-runner",
-            "org.freedesktop.systemd1.manage-units",
-            f"eom-worker-analysis-03@{JOB_ID}.service",
-            "restart",
-            "no",
-        ),
-        (
             "eom",
             "org.freedesktop.systemd1.manage-units",
             f"eom-worker-analysis-04@{JOB_ID}.service",

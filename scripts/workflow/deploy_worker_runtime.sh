@@ -108,6 +108,7 @@ SOURCES=(
   "${REPOSITORY}/infra/systemd/eom-worker-support-06@.service"
   "${REPOSITORY}/infra/systemd/eom-worker-document-review-06@.service"
   "${REPOSITORY}/infra/polkit/50-eom-worker-units.rules"
+  "${REPOSITORY}/infra/polkit/48-eom-native-office-report-worker.rules"
   "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_exec.py"
   "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_auth_exec.py"
   "${REPOSITORY}/services/orchestrator/eom_orchestrator/worker_device_login_exec.py"
@@ -188,6 +189,9 @@ if [[ ${ACTION} == install ]]; then
   install -o root -g root -m 0644 \
     "${REPOSITORY}/infra/polkit/50-eom-worker-units.rules" \
     "${POLKIT_ROOT}/50-eom-worker-units.rules"
+  install -o root -g root -m 0644 \
+    "${REPOSITORY}/infra/polkit/48-eom-native-office-report-worker.rules" \
+    "${POLKIT_ROOT}/48-eom-native-office-report-worker.rules"
   for slot in 01 02 03 04 05 06; do
     install -o root -g root -m 0644 \
       "${REPOSITORY}/infra/systemd/eom-worker-${slot}@.service" \
@@ -265,6 +269,9 @@ require_regular "${UNIT_ROOT}/${BROKER_SERVICE}" root:root:644
 cmp -s "${REPOSITORY}/infra/systemd/${BROKER_SERVICE}" \
   "${UNIT_ROOT}/${BROKER_SERVICE}" || fail "Codex auth broker unit source drift"
 require_regular "${POLKIT_ROOT}/50-eom-worker-units.rules" root:root:644
+require_regular "${POLKIT_ROOT}/48-eom-native-office-report-worker.rules" root:root:644
+cmp -s "${REPOSITORY}/infra/polkit/48-eom-native-office-report-worker.rules" \
+  "${POLKIT_ROOT}/48-eom-native-office-report-worker.rules" || fail "native Office report polkit source drift"
 cmp -s "${REPOSITORY}/infra/polkit/50-eom-worker-units.rules" \
   "${POLKIT_ROOT}/50-eom-worker-units.rules" || fail "worker polkit source drift"
 for slot in 01 02 03 04 05 06; do

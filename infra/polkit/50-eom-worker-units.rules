@@ -1,7 +1,7 @@
 /* EOM fixed worker and HWPX StartUnit boundary. Installed root-owned; no transient units. */
 polkit.addRule(function(action, subject) {
     var workerUnit = /^eom-worker-(01|02|03|04|05|06)@job_[0-9a-f]{32}\.service$/;
-    var creativeReportWorkerUnit = /^eom-worker-analysis-(03|04)@job_[0-9a-f]{32}\.service$/;
+    var creativeReportWorkerUnit = /^eom-worker-analysis-04@job_[0-9a-f]{32}\.service$/;
     var supportWorkerUnit = /^eom-worker-support-06@job_[0-9a-f]{32}\.service$/;
     var documentReviewWorkerUnit = /^eom-worker-document-review-06@job_[0-9a-f]{32}\.service$/;
     var probeUnit = /^eom-worker-probe-(01|02|03|04|05|06)@probe_[0-9a-f]{32}\.service$/;
