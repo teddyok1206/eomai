@@ -216,3 +216,21 @@ source 등록 business key로 중복 Item/Graph를 막는다. 일반적인 conte
 
 현재 INDEX는 새 보고서 읽기 단계를 통과해 처리 중이다. 이 체크포인트는 native source의
 벡터·binding 등록 완료를 주장하지 않는다. 그 실제 완료 증거는 후속 기록으로 닫는다.
+
+### 21:24 UTC 실제 GPU·native 인덱스 증거
+
+신규 수치 Job 4개가 실제 `CUDA`에서 SUCCEEDED이며 종료 시각은 21:14:54 UTC다.
+21:23:46 UTC 설치된 Catalog Artifact reader로 committed index5 member의 SHA와
+닫힌 schema를 다시 검증했다. 해당 CUDA view의 binding 528개 중 native binding5가
+3개이며 각 profile3 → role result@3.0 → 기존 encoding ledger의 space/text SHA 및
+row index 연결이 일치했다. 이것은 전체 corpus 문항 수가 아니라 해당 view/index의 수다.
+
+- index revision: `embeddingindexrev_0531f24dbaa062374b102de34ac17b0f`
+- committed member SHA: `dcf124e8d63830bdfb54c3062f271707780f22b1051d84aefae7e84522cfac05`
+- 원본 그림 등록 → 공개 풀이 출처 → 실제 CUDA vector → native binding: **3건 PASS**.
+
+이후 동일 head5의 증분 discovery/reuse 수정 후보 `fd3f0622`도 비편집 설치 패키지
+검증과 집중 회귀 31 PASS를 마쳤다. 기존 실행은 끊지 않고 마지막 application commit/
+receipt를 마칠 때까지 유지한다. 수정 후보 INDEX-only identity/config는 미리 준비했으며,
+현재 실행의 quiescence와 정확한 담당 오류를 확인한 뒤만 인계한다. 공유 API/4슬롯,
+물리 GPU·모델·space·벡터는 이 후속 인계에서 다시 교체하지 않는다.
