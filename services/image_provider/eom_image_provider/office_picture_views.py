@@ -1,4 +1,4 @@
-"""Lossless integer viewport/quarter-turn views of extracted original PNGs."""
+"""Native integer viewport, quarter-turn and explicit grayscale source views."""
 
 from __future__ import annotations
 
@@ -11,13 +11,17 @@ from pathlib import Path
 
 from eom_image_contracts.office_embedded_images import OfficeEmbeddedImageSet
 from eom_image_contracts.office_picture_uses import OfficePictureUse, OfficePictureView
-from PIL import Image
+from PIL import Image, ImageOps
 
 from eom_image_provider.office_embedded_images import OfficeEmbeddedImageError
 
 
 def render_office_picture_views(
-    embedded: OfficeEmbeddedImageSet, uses: Sequence[OfficePictureUse], *, workspace: Path
+    embedded: OfficeEmbeddedImageSet,
+    uses: Sequence[OfficePictureUse],
+    *,
+    workspace: Path,
+    grayscale_uses: frozenset[str] = frozenset(),
 ) -> tuple[OfficePictureView, ...]:
     """No PDF pixels, guessed boxes, resizing, white-margin trimming or label erasure.
 
@@ -25,6 +29,8 @@ def render_office_picture_views(
     Whole unchanged uses reference the existing canonical local member directly.
     """
     images = {image.source_member: image for image in embedded.images}
+    if not grayscale_uses.issubset({use.use_id for use in uses}):
+        raise OfficeEmbeddedImageError("OFFICE_PICTURE_EFFECT_USE_MISSING")
     grouped: dict[str, list[OfficePictureUse]] = {}
     for use in uses:
         if not use.unresolved_reasons:
@@ -64,12 +70,13 @@ def render_office_picture_views(
                     geometry.clockwise_quarter_turns,
                     geometry.flip_horizontal,
                     geometry.flip_vertical,
+                    use.use_id in grayscale_uses,
                 )
                 previous = cache.get(recipe)
                 if previous is not None:
                     rendered[use.use_id] = previous.model_copy(update={"use_id": use.use_id})
                     continue
-                if recipe == (0, 0, image.width_px, image.height_px, 0, False, False):
+                if recipe == (0, 0, image.width_px, image.height_px, 0, False, False, False):
                     view = OfficePictureView(
                         use_id=use.use_id,
                         member_path=image.member_path,
@@ -86,6 +93,13 @@ def render_office_picture_views(
                         cropped = cropped.transpose(Image.Transpose.FLIP_TOP_BOTTOM)
                     for _ in range(geometry.clockwise_quarter_turns):
                         cropped = cropped.transpose(Image.Transpose.ROTATE_270)
+                    if use.use_id in grayscale_uses:
+                        # Deterministic luma, no threshold/dither, original alpha
+                        # and every spatial pixel preserved. The source remains
+                        # intact in images/, and this distinct view is hash-named.
+                        rgba = cropped.convert("RGBA")
+                        cropped = ImageOps.grayscale(rgba.convert("RGB")).convert("RGBA")
+                        cropped.putalpha(rgba.getchannel("A"))
                     total_pixels += cropped.width * cropped.height
                     if total_pixels > 100_000_000:
                         raise OfficeEmbeddedImageError("OFFICE_PICTURE_VIEW_PIXEL_LIMIT")

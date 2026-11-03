@@ -214,7 +214,7 @@ def _placement(node: ET.Element, anchor: int | None) -> OfficePicturePlacement |
 
 
 def read_hwpx_picture_uses(
-    payload: bytes, *, source_sha256: str
+    payload: bytes, *, source_sha256: str, grayscale_uses: set[str] | None = None
 ) -> tuple[list[OfficePictureUse], list[OfficeNativeObject]]:
     # Full ZIP path/expansion validation is performed by the shared whole-image
     # extractor before this read; no paths are extracted to the filesystem.
@@ -261,14 +261,18 @@ def read_hwpx_picture_uses(
                         reasons.append("GEOMETRY_UNRESOLVED")
                     if group_id is not None:
                         reasons.append("GROUP_COMPOSITION_REQUIRED")
+                    gray = images[0].get("effect") == "GRAY_SCALE" and grayscale_uses is not None
                     if (
                         images[0].get("bright", "0") != "0"
                         or images[0].get("contrast", "0") != "0"
-                        or images[0].get("effect", "REAL_PIC") != "REAL_PIC"
+                        or (images[0].get("effect", "REAL_PIC") != "REAL_PIC" and not gray)
                         or images[0].get("alpha", "0") != "0"
                         or any(len(effect) for effect in node.findall(HP + "effects"))
                     ):
                         reasons.append("IMAGE_EFFECT_UNSUPPORTED")
+                    if gray:
+                        assert grayscale_uses is not None
+                        grayscale_uses.add(identifier)
                     uses.append(
                         OfficePictureUse(
                             use_id=identifier,

@@ -105,6 +105,46 @@ def test_same_member_has_distinct_main_and_reference_use_ids(tmp_path: Path) -> 
     )
 
 
+def test_grayscale_use_keeps_original_color_member_and_distinct_display_pixels(
+    tmp_path: Path,
+) -> None:
+    from PIL import ImageOps
+
+    gray = picture().replace('effect="REAL_PIC"', 'effect="GRAY_SCALE"')
+    result = extracted(tmp_path, source(tmp_path, gray + picture()))
+    first, second = result.picture_uses
+    assert first.source_member == second.source_member
+    assert first.unresolved_reasons == second.unresolved_reasons == ()
+    gray_view, original_view = result.rendered_uses
+    original_member = result.embedded_images.images[0].member_path
+    assert original_view.member_path == original_member
+    assert gray_view.member_path != original_member
+    with Image.open(tmp_path / "output" / original_member) as original:
+        rgba = original.convert("RGBA")
+        expected = ImageOps.grayscale(rgba.convert("RGB")).convert("RGBA")
+        expected.putalpha(rgba.getchannel("A"))
+        with Image.open(tmp_path / "output" / gray_view.member_path) as displayed:
+            assert displayed.size == original.size
+            assert displayed.convert("RGBA").tobytes() == expected.tobytes()
+
+
+@pytest.mark.parametrize(
+    "change", ['bright="1"', 'contrast="-1"', 'alpha="100"', 'effect="BLACK_WHITE"']
+)
+def test_grayscale_does_not_silently_ignore_other_effects(tmp_path: Path, change: str) -> None:
+    body = picture().replace('effect="REAL_PIC"', 'effect="GRAY_SCALE"')
+    key = change.split("=")[0]
+    if key == "alpha":
+        body = body.replace('effect="GRAY_SCALE"', 'effect="GRAY_SCALE" ' + change)
+    else:
+        import re
+
+        body = re.sub(key + r'="[^"]*"', change, body)
+    result = extracted(tmp_path, source(tmp_path, body))
+    assert result.picture_uses[0].unresolved_reasons == ("IMAGE_EFFECT_UNSUPPORTED",)
+    assert not result.rendered_uses
+
+
 @pytest.mark.parametrize("angle", [0, 90, 180, 270])
 def test_native_crop_and_rotation_never_use_a_pdf_rectangle(tmp_path: Path, angle: int) -> None:
     result = extracted(
@@ -255,12 +295,13 @@ def record(tag: int, level: int, body: bytes) -> bytes:
     return struct.pack("<I", tag | level << 10 | len(body) << 20) + body
 
 
-def hwp_picture(*, binding: int = 1) -> bytes:
+def hwp_picture(*, binding: int = 1, tone: int = 0) -> bytes:
     raw = bytearray(91)
     struct.pack_into("<8i", raw, 12, 0, 0, 1900, 0, 1900, 1300, 0, 1300)
     struct.pack_into("<4i", raw, 44, 0, 0, 1900, 1300)
     struct.pack_into("<H", raw, 71, binding)
     struct.pack_into("<2I", raw, 82, 1900, 1300)
+    raw[70] = tone
     return bytes(raw)
 
 
@@ -273,8 +314,9 @@ def hwp_shape() -> bytes:
     )
 
 
+@pytest.mark.parametrize("tone", [0, 1, 2])
 def test_hwp_bindata_index_is_not_the_storage_number(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, tone: int
 ) -> None:
     # The first DocInfo entry names storage 8, not BIN0001. This occurs in real
     # edited Hancom files and must not be inferred from the picture's index.
@@ -283,7 +325,7 @@ def test_hwp_bindata_index_is_not_the_storage_number(
     bindings = record(18, 0, struct.pack("<HHH", 1, 8, 3) + extension)
     section = (
         record(76, 2, hwp_shape())
-        + record(85, 3, hwp_picture())
+        + record(85, 3, hwp_picture(tone=tone))
         + record(76, 2, hwp_shape())
         + record(85, 3, hwp_picture())
         + record(77, 1, b"table")
@@ -332,9 +374,16 @@ def test_hwp_bindata_index_is_not_the_storage_number(
         == "BinData/BIN0008.bmp"
     )
     assert result.picture_uses[0].use_id != result.picture_uses[1].use_id
-    assert all(
-        use.geometry is not None and use.unresolved_reasons == () for use in result.picture_uses
-    )
+    assert all(use.geometry is not None for use in result.picture_uses)
+    assert result.picture_uses[1].unresolved_reasons == ()
+    if tone == 2:
+        assert result.picture_uses[0].unresolved_reasons == ("IMAGE_EFFECT_UNSUPPORTED",)
+        assert len(result.rendered_uses) == 1
+    else:
+        assert result.picture_uses[0].unresolved_reasons == ()
+        assert len(result.rendered_uses) == 2
+        if tone == 1:
+            assert result.rendered_uses[0].sha256 != result.rendered_uses[1].sha256
     assert [obj.kind for obj in result.native_objects] == ["TABLE", "EQUATION"]
 
 

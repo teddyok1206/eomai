@@ -36,10 +36,15 @@ def extract_office_picture_uses(
     embedded = _extract_office_image_payload(
         payload, expected_sha256=expected_sha256, workspace=workspace
     )
+    grayscale_uses: set[str] = set()
     if embedded.source_format == "HWP5":
-        uses, objects = read_hwp_picture_uses(payload, source_sha256=expected_sha256)
+        uses, objects = read_hwp_picture_uses(
+            payload, source_sha256=expected_sha256, grayscale_uses=grayscale_uses
+        )
     else:
-        uses, objects = read_hwpx_picture_uses(payload, source_sha256=expected_sha256)
+        uses, objects = read_hwpx_picture_uses(
+            payload, source_sha256=expected_sha256, grayscale_uses=grayscale_uses
+        )
     images = {image.source_member for image in embedded.images}
     unsupported = set(embedded.unsupported_members)
     checked = []
@@ -57,7 +62,9 @@ def extract_office_picture_uses(
         "picture_uses": [use.model_dump(mode="json") for use in checked],
         "rendered_uses": [
             view.model_dump(mode="json")
-            for view in render_office_picture_views(embedded, checked, workspace=workspace)
+            for view in render_office_picture_views(
+                embedded, checked, workspace=workspace, grayscale_uses=frozenset(grayscale_uses)
+            )
         ],
         "native_objects": [obj.model_dump(mode="json") for obj in objects],
     }
