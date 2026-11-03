@@ -430,7 +430,15 @@ class CatalogRoutedReferenceQuerySelection:
                 for row in group
             )
             body = dict(
-                schema_version=BATCH_PLAN_V15_PROTOCOL if registered else BATCH_PLAN_V14_PROTOCOL,
+                schema_version="embedding-batch-plan/1.9"
+                if any(
+                    row.schema_version == "system-rag-similarity-request/5.0"
+                    for group in contexts
+                    for row in group
+                )
+                else BATCH_PLAN_V15_PROTOCOL
+                if registered
+                else BATCH_PLAN_V14_PROTOCOL,
                 message_type="SELECTION",
                 purpose="REFERENCE_QUERY",
                 scope=scope_body,
@@ -707,7 +715,9 @@ class CatalogRoutedReferenceQuerySelection:
                 )
                 self._require_requested_selection(current.selection, requests)
             body = dict(
-                schema_version="reference-query-routed-preparation/3.0"
+                schema_version="reference-query-routed-preparation/4.0"
+                if parent.schema_version == "embedding-batch-plan/1.9"
+                else "reference-query-routed-preparation/3.0"
                 if isinstance(parent, EmbeddingBatchPlanRequestV15)
                 else "reference-query-routed-preparation/2.0"
                 if isinstance(first, PublicQuerySourceSelection)

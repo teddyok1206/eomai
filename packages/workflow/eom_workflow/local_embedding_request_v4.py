@@ -28,15 +28,27 @@ LOCAL_EMBEDDING_REQUEST_V4_SCHEMA_REF = (
 
 class LocalEmbeddingWorkflowRequestV4(PublicSolutionWorkflowRequestBody):
     _source_plan_schema_ref: ClassVar[str] = LOCAL_EMBEDDING_SOURCE_PLAN_V4_SCHEMA_REF
-    schema_version: Literal["local-embedding-workflow-request/4.0"] = (
-        "local-embedding-workflow-request/4.0"
-    )
+    schema_version: Literal[
+        "local-embedding-workflow-request/4.0", "local-embedding-workflow-request/5.0"
+    ] = "local-embedding-workflow-request/4.0"
+
+    def source_plan_member_schema_ref(self) -> str:
+        return (
+            "eom://schemas/workflow/local-embedding-source-plan/"
+            + self.schema_version.rsplit("/", 1)[1]
+        )
 
 
 def parse_local_embedding_workflow_request_v4(value: object) -> LocalEmbeddingWorkflowRequestV4:
     try:
         document = raw_public_solution_contract_value(value)
-        validate_local_embedding_admission_message("registered-public-request", document)
+        validate_local_embedding_admission_message(
+            "native-office-public-request"
+            if isinstance(document, dict)
+            and document.get("schema_version") == "local-embedding-workflow-request/5.0"
+            else "registered-public-request",
+            document,
+        )
         return LocalEmbeddingWorkflowRequestV4.model_validate(document)
     except Exception:
         raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_CONTRACT_INVALID") from None

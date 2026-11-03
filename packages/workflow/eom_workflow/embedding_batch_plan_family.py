@@ -66,14 +66,16 @@ from eom_workflow.embedding_batch_plan_v14 import (
 from eom_workflow.embedding_batch_plan_v15 import (
     BATCH_PLAN_V15_PROTOCOL,
     BATCH_PLAN_V15_SCHEMA_SHA256,
-    BATCH_SELECTION_V15_SCHEMA_REF,
+    NATIVE_OFFICE_QUERY_BATCH_PROTOCOL,
+    NATIVE_OFFICE_QUERY_BATCH_SCHEMA_SHA256,
     EmbeddingBatchPlanRequestV15,
     EmbeddingBatchSelectionV15,
 )
 from eom_workflow.embedding_batch_plan_v16 import (
     BATCH_PLAN_V16_PROTOCOL,
     BATCH_PLAN_V16_SCHEMA_SHA256,
-    BATCH_SELECTION_V16_SCHEMA_REF,
+    NATIVE_OFFICE_INDEX_BATCH_PROTOCOL,
+    NATIVE_OFFICE_INDEX_BATCH_SCHEMA_SHA256,
     EmbeddingBatchPlanRequestV16,
     EmbeddingBatchSelectionV16,
 )
@@ -137,9 +139,9 @@ def parse_embedding_batch_plan_request(value: object) -> SupportedEmbeddingBatch
         return EmbeddingBatchPlanRequestV13.model_validate(document)
     if version == BATCH_PLAN_V14_PROTOCOL:
         return EmbeddingBatchPlanRequestV14.model_validate(document)
-    if version == BATCH_PLAN_V15_PROTOCOL:
+    if version in {BATCH_PLAN_V15_PROTOCOL, NATIVE_OFFICE_QUERY_BATCH_PROTOCOL}:
         return EmbeddingBatchPlanRequestV15.model_validate(document)
-    if version == BATCH_PLAN_V16_PROTOCOL:
+    if version in {BATCH_PLAN_V16_PROTOCOL, NATIVE_OFFICE_INDEX_BATCH_PROTOCOL}:
         return EmbeddingBatchPlanRequestV16.model_validate(document)
     if version == BATCH_PLAN_V17_PROTOCOL:
         return EmbeddingBatchPlanRequestV17.model_validate(document)
@@ -171,9 +173,9 @@ def parse_embedding_batch_selection(value: object) -> SupportedEmbeddingBatchSel
         return EmbeddingBatchSelectionV13.model_validate(document)
     if version == BATCH_PLAN_V14_PROTOCOL:
         return EmbeddingBatchSelectionV14.model_validate(document)
-    if version == BATCH_PLAN_V15_PROTOCOL:
+    if version in {BATCH_PLAN_V15_PROTOCOL, NATIVE_OFFICE_QUERY_BATCH_PROTOCOL}:
         return EmbeddingBatchSelectionV15.model_validate(document)
-    if version == BATCH_PLAN_V16_PROTOCOL:
+    if version in {BATCH_PLAN_V16_PROTOCOL, NATIVE_OFFICE_INDEX_BATCH_PROTOCOL}:
         return EmbeddingBatchSelectionV16.model_validate(document)
     if version == BATCH_PLAN_V17_PROTOCOL:
         return EmbeddingBatchSelectionV17.model_validate(document)
@@ -188,16 +190,24 @@ def embedding_batch_plan_schema_identity(
         and request.schema_version == BATCH_PLAN_V17_PROTOCOL
     ):
         return BATCH_PLAN_V17_PROTOCOL, BATCH_PLAN_V17_SCHEMA_SHA256
-    if (
-        type(request) is EmbeddingBatchPlanRequestV16
-        and request.schema_version == BATCH_PLAN_V16_PROTOCOL
-    ):
-        return BATCH_PLAN_V16_PROTOCOL, BATCH_PLAN_V16_SCHEMA_SHA256
-    if (
-        type(request) is EmbeddingBatchPlanRequestV15
-        and request.schema_version == BATCH_PLAN_V15_PROTOCOL
-    ):
-        return BATCH_PLAN_V15_PROTOCOL, BATCH_PLAN_V15_SCHEMA_SHA256
+    if type(request) is EmbeddingBatchPlanRequestV16 and request.schema_version in {
+        BATCH_PLAN_V16_PROTOCOL,
+        NATIVE_OFFICE_INDEX_BATCH_PROTOCOL,
+    }:
+        return (
+            (NATIVE_OFFICE_INDEX_BATCH_PROTOCOL, NATIVE_OFFICE_INDEX_BATCH_SCHEMA_SHA256)
+            if request.schema_version == NATIVE_OFFICE_INDEX_BATCH_PROTOCOL
+            else (BATCH_PLAN_V16_PROTOCOL, BATCH_PLAN_V16_SCHEMA_SHA256)
+        )
+    if type(request) is EmbeddingBatchPlanRequestV15 and request.schema_version in {
+        BATCH_PLAN_V15_PROTOCOL,
+        NATIVE_OFFICE_QUERY_BATCH_PROTOCOL,
+    }:
+        return (
+            (NATIVE_OFFICE_QUERY_BATCH_PROTOCOL, NATIVE_OFFICE_QUERY_BATCH_SCHEMA_SHA256)
+            if request.schema_version == NATIVE_OFFICE_QUERY_BATCH_PROTOCOL
+            else (BATCH_PLAN_V15_PROTOCOL, BATCH_PLAN_V15_SCHEMA_SHA256)
+        )
     if (
         type(request) is EmbeddingBatchPlanRequestV14
         and request.schema_version == BATCH_PLAN_V14_PROTOCOL
@@ -229,16 +239,16 @@ def embedding_batch_selection_schema_ref(selection: SupportedEmbeddingBatchSelec
         and selection.schema_version == BATCH_PLAN_V17_PROTOCOL
     ):
         return BATCH_SELECTION_V17_SCHEMA_REF
-    if (
-        type(selection) is EmbeddingBatchSelectionV16
-        and selection.schema_version == BATCH_PLAN_V16_PROTOCOL
-    ):
-        return BATCH_SELECTION_V16_SCHEMA_REF
-    if (
-        type(selection) is EmbeddingBatchSelectionV15
-        and selection.schema_version == BATCH_PLAN_V15_PROTOCOL
-    ):
-        return BATCH_SELECTION_V15_SCHEMA_REF
+    if type(selection) is EmbeddingBatchSelectionV16 and selection.schema_version in {
+        BATCH_PLAN_V16_PROTOCOL,
+        NATIVE_OFFICE_INDEX_BATCH_PROTOCOL,
+    }:
+        return "eom://schemas/workflow/" + selection.schema_version + "#/$defs/selection"
+    if type(selection) is EmbeddingBatchSelectionV15 and selection.schema_version in {
+        BATCH_PLAN_V15_PROTOCOL,
+        NATIVE_OFFICE_QUERY_BATCH_PROTOCOL,
+    }:
+        return "eom://schemas/workflow/" + selection.schema_version + "#/$defs/selection"
     if (
         type(selection) is EmbeddingBatchSelectionV14
         and selection.schema_version == BATCH_PLAN_V14_PROTOCOL
@@ -271,7 +281,13 @@ def embedding_batch_selection_read_maximum(request: SupportedEmbeddingBatchReque
     protocol, _sha = embedding_batch_plan_schema_identity(request)
     return (
         MAX_BULK_BATCH_SELECTION_BYTES
-        if protocol in {BATCH_PLAN_V11_PROTOCOL, BATCH_PLAN_V13_PROTOCOL, BATCH_PLAN_V16_PROTOCOL}
+        if protocol
+        in {
+            BATCH_PLAN_V11_PROTOCOL,
+            BATCH_PLAN_V13_PROTOCOL,
+            BATCH_PLAN_V16_PROTOCOL,
+            NATIVE_OFFICE_INDEX_BATCH_PROTOCOL,
+        }
         else MAX_BATCH_PLAN_BYTES
     )
 

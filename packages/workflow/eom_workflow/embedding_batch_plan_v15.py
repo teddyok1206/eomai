@@ -42,20 +42,37 @@ BATCH_PLAN_V15_SCHEMA_SHA256 = (
     "sha256:b5eb531bfb9011ec88d80076c92ae2ea4e6e659842608d7a81fc8557e0306bee"
 )
 BATCH_SELECTION_V15_SCHEMA_REF = BATCH_PLAN_V15_SCHEMA_REF + "#/$defs/selection"
+NATIVE_OFFICE_QUERY_BATCH_PROTOCOL = "embedding-batch-plan/1.9"
+NATIVE_OFFICE_QUERY_BATCH_SCHEMA_SHA256 = (
+    "sha256:0161f51e8b60de74b522b5c9834edcbf1626eeed1434f72a25b8d1e428f71070"
+)
 
 
-def embedding_batch_registered_public_query_plan_schema() -> dict[str, Any]:
+def embedding_batch_registered_public_query_plan_schema(native: bool = False) -> dict[str, Any]:
     with (
         files("eom_workflow")
-        .joinpath("resources/embedding-batch-plan-v1.5.schema.json")
+        .joinpath(
+            "resources/embedding-batch-plan-v1.9.schema.json"
+            if native
+            else "resources/embedding-batch-plan-v1.5.schema.json"
+        )
         .open("rb") as stream
     ):
         raw = stream.read(MAX_BATCH_PLAN_BYTES + 1)
     require(
-        0 < len(raw) <= MAX_BATCH_PLAN_BYTES and sha256_bytes(raw) == BATCH_PLAN_V15_SCHEMA_SHA256
+        0 < len(raw) <= MAX_BATCH_PLAN_BYTES
+        and sha256_bytes(raw)
+        == (NATIVE_OFFICE_QUERY_BATCH_SCHEMA_SHA256 if native else BATCH_PLAN_V15_SCHEMA_SHA256)
     )
     schema = json.loads(raw)
-    require(schema.get("$id") == BATCH_PLAN_V15_SCHEMA_REF)
+    require(
+        schema.get("$id")
+        == (
+            "eom://schemas/workflow/embedding-batch-plan/1.9"
+            if native
+            else BATCH_PLAN_V15_SCHEMA_REF
+        )
+    )
     Draft202012Validator.check_schema(schema)
     return dict(schema)
 
@@ -68,21 +85,25 @@ def embedding_batch_registered_public_query_plan_schema_registry() -> Registry[A
                 BATCH_PLAN_V15_SCHEMA_REF,
                 Resource.from_contents(embedding_batch_registered_public_query_plan_schema()),
             ),
+            (
+                "eom://schemas/workflow/embedding-batch-plan/1.9",
+                Resource.from_contents(embedding_batch_registered_public_query_plan_schema(True)),
+            ),
         )
     )
 
 
-@lru_cache(maxsize=1)
-def _validator() -> Draft202012Validator:
+@lru_cache(maxsize=2)
+def _validator(native: bool = False) -> Draft202012Validator:
     return Draft202012Validator(
-        embedding_batch_registered_public_query_plan_schema(),
+        embedding_batch_registered_public_query_plan_schema(native),
         registry=embedding_batch_registered_public_query_plan_schema_registry(),
         format_checker=FormatChecker(),
     )
 
 
 class _RegisteredPublicQueryPlanMessage(EmbeddingBatchPlanValue):
-    schema_version: Literal["embedding-batch-plan/1.5"]
+    schema_version: Literal["embedding-batch-plan/1.5", "embedding-batch-plan/1.9"]
 
     @model_validator(mode="before")
     @classmethod
@@ -90,7 +111,9 @@ class _RegisteredPublicQueryPlanMessage(EmbeddingBatchPlanValue):
         try:
             document = raw_similarity_contract_value(value)
             require(len(canonical_json_bytes(document)) <= MAX_BATCH_PLAN_BYTES)
-            _validator().validate(document)
+            _validator(
+                document.get("schema_version") == NATIVE_OFFICE_QUERY_BATCH_PROTOCOL
+            ).validate(document)
             return document
         except Exception:
             raise ValueError("EMBEDDING_BATCH_PLAN_INVALID") from None
@@ -152,3 +175,6 @@ class EmbeddingBatchPlanRequestV15(
 ):
     selection_schema_ref: ClassVar[str] = BATCH_SELECTION_V15_SCHEMA_REF
     purpose: Literal["REFERENCE_QUERY"]
+
+    def selection_member_schema_ref(self) -> str:
+        return "eom://schemas/workflow/" + self.schema_version + "#/$defs/selection"

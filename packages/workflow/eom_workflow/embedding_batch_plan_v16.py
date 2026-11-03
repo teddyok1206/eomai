@@ -40,22 +40,38 @@ BATCH_PLAN_V16_SCHEMA_SHA256 = (
     "sha256:dbf2c1cd06f69074ba4247da3765838c5bbe8605cf41a616ebca2d76cf9392a6"
 )
 BATCH_SELECTION_V16_SCHEMA_REF = BATCH_PLAN_V16_SCHEMA_REF + "#/$defs/selection"
+NATIVE_OFFICE_INDEX_BATCH_PROTOCOL = "embedding-batch-plan/1.8"
+NATIVE_OFFICE_INDEX_BATCH_SCHEMA_SHA256 = (
+    "sha256:0d74013e892c832f0fe58ecb064cb72597efa95bee7e5d70661a4ec11745ef75"
+)
 
 
-@lru_cache(maxsize=1)
-def _validator() -> Draft202012Validator:
+@lru_cache(maxsize=2)
+def _validator(native: bool = False) -> Draft202012Validator:
     with (
         files("eom_workflow")
-        .joinpath("resources/embedding-batch-plan-v1.6.schema.json")
+        .joinpath(
+            "resources/embedding-batch-plan-v1.8.schema.json"
+            if native
+            else "resources/embedding-batch-plan-v1.6.schema.json"
+        )
         .open("rb") as stream
     ):
         raw = stream.read(MAX_BULK_BATCH_SELECTION_BYTES + 1)
     require(
         0 < len(raw) <= MAX_BULK_BATCH_SELECTION_BYTES
-        and sha256_bytes(raw) == BATCH_PLAN_V16_SCHEMA_SHA256
+        and sha256_bytes(raw)
+        == (NATIVE_OFFICE_INDEX_BATCH_SCHEMA_SHA256 if native else BATCH_PLAN_V16_SCHEMA_SHA256)
     )
     schema = json.loads(raw)
-    require(schema.get("$id") == BATCH_PLAN_V16_SCHEMA_REF)
+    require(
+        schema.get("$id")
+        == (
+            "eom://schemas/workflow/embedding-batch-plan/1.8"
+            if native
+            else BATCH_PLAN_V16_SCHEMA_REF
+        )
+    )
     Draft202012Validator.check_schema(schema)
     registry = local_embedding_admission_schema_registry().with_resource(
         BATCH_PLAN_SCHEMA_REF, Resource.from_contents(embedding_batch_plan_schema())
@@ -64,7 +80,7 @@ def _validator() -> Draft202012Validator:
 
 
 class _RegisteredPublicIndexPlanMessage(EmbeddingBatchPlanValue):
-    schema_version: Literal["embedding-batch-plan/1.6"]
+    schema_version: Literal["embedding-batch-plan/1.6", "embedding-batch-plan/1.8"]
 
     @model_validator(mode="before")
     @classmethod
@@ -77,7 +93,9 @@ class _RegisteredPublicIndexPlanMessage(EmbeddingBatchPlanValue):
                 else MAX_BATCH_PLAN_BYTES
             )
             require(len(canonical_json_bytes(document)) <= maximum)
-            _validator().validate(document)
+            _validator(
+                document.get("schema_version") == NATIVE_OFFICE_INDEX_BATCH_PROTOCOL
+            ).validate(document)
             return document
         except Exception:
             raise ValueError("EMBEDDING_BATCH_PLAN_INVALID") from None
@@ -114,3 +132,6 @@ class EmbeddingBatchPlanRequestV16(
     selection_schema_ref: ClassVar[str] = BATCH_SELECTION_V16_SCHEMA_REF
     purpose: Literal["INDEX"]
     child_selection_sha256s: tuple[Sha256, ...] = Field(min_length=1, max_length=1)
+
+    def selection_member_schema_ref(self) -> str:
+        return "eom://schemas/workflow/" + self.schema_version + "#/$defs/selection"

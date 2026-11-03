@@ -308,6 +308,11 @@ def local_embedding_launch_protocol(request: SupportedLocalEmbeddingRequest) -> 
     """Actual native metadata Job protocol; not the numerical execution channel."""
     checked = parse_supported_local_embedding_request(request)
     if isinstance(checked, LocalEmbeddingWorkflowRequestV4):
+        if checked.schema_version == "local-embedding-workflow-request/5.0":
+            return (
+                "embedding-encoding-ownership/5.0",
+                "sha256:9e3f45b6d69d6bcf33447008b91bb4ef29763db4d613627bb70326d9c778a1c2",
+            )
         return "embedding-encoding-ownership/4.0", EMBEDDING_ENCODING_OWNERSHIP_V4_SCHEMA_SHA256
     if isinstance(checked, LocalEmbeddingWorkflowRequestV3):
         return "embedding-encoding-ownership/3.0", EMBEDDING_ENCODING_OWNERSHIP_V3_SCHEMA_SHA256

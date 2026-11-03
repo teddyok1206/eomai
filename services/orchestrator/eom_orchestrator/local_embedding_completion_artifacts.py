@@ -67,7 +67,11 @@ class NativeEmbeddingCompletionPublisher:
     ) -> SupportedLocalEmbeddingStepOutput:
         receipt = parse_supported_local_embedding_workflow_receipt(receipt)
         output_type = local_embedding_step_output_type_for_receipt(receipt)
-        schema_ref = output_type.model_fields["receipt_schema"].default
+        schema_ref = (
+            "eom://schemas/workflow/" + receipt.schema_version
+            if receipt.schema_version == "local-embedding-workflow-receipt/5.0"
+            else output_type.model_fields["receipt_schema"].default
+        )
         identity = ControlFileSetIdentity(
             identity.job_id, identity.artifact_id, identity.artifact_revision_id
         )

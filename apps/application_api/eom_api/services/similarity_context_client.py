@@ -116,7 +116,7 @@ class CatalogSimilarityContextClient:
     ) -> SupportedPublicSolutionSimilarityContext:
         try:
             request = SimilarityContextReadRequestV4(
-                schema_version="system-rag-similarity-read-request/4.0",
+                schema_version="system-rag-similarity-read-request/5.0",
                 operation="READ_SIMILARITY_CONTEXT",
                 actor_id=actor_id,
                 selection=selection,

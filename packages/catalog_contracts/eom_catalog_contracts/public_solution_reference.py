@@ -59,6 +59,15 @@ class PublicSolutionSourceReference(FrozenModel):
             and self.source.source_class != "APPROVED_ITEM"
         ):
             raise ValueError("PUBLIC_SOLUTION_REFERENCE_INVALID")
+        native = (
+            self.profile.schema_ref == "eom://schemas/knowledge/public-solution-embedding-entry/3.0"
+        )
+        if (native and isinstance(self.evidence, AcceptedPublicSolutionEvidence)) or (
+            not isinstance(self.evidence, AcceptedPublicSolutionEvidence)
+            and native
+            != (self.evidence.role_result.schema_ref == "external-item-learning-result@3.0")
+        ):
+            raise ValueError("PUBLIC_SOLUTION_REFERENCE_REPORT_FAMILY_MISMATCH")
         return self
 
     @classmethod

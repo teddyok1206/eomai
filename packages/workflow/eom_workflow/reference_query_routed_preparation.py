@@ -95,15 +95,23 @@ def _public_validator() -> Draft202012Validator:
     )
 
 
-@lru_cache(maxsize=1)
-def _registered_public_validator() -> Draft202012Validator:
+@lru_cache(maxsize=2)
+def _registered_public_validator(native: bool = False) -> Draft202012Validator:
     with (
         files("eom_workflow")
-        .joinpath("resources/reference-query-routed-preparation-v3.schema.json")
+        .joinpath(
+            "resources/reference-query-routed-preparation-v4.schema.json"
+            if native
+            else "resources/reference-query-routed-preparation-v3.schema.json"
+        )
         .open("rb") as stream
     ):
         raw = stream.read(MAX_ROUTED_QUERY_PREPARATION_BYTES + 1)
-    if sha256_bytes(raw) != REGISTERED_PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_SHA256:
+    if sha256_bytes(raw) != (
+        "sha256:48483f607dafaeb720c3b40b7d8b05659b59d7d077bec2fd6ec6e3bf8d2eae9f"
+        if native
+        else REGISTERED_PUBLIC_ROUTED_QUERY_PREPARATION_SCHEMA_SHA256
+    ):
         raise ValueError("REFERENCE_QUERY_ROUTED_PREPARATION_SCHEMA_INVALID")
     schema = json.loads(raw)
     Draft202012Validator.check_schema(schema)
@@ -183,7 +191,9 @@ class PublicRoutedReferenceQueryPreparation(_RoutedPreparationFields):
 
 
 class RegisteredPublicRoutedReferenceQueryPreparation(_RoutedPreparationFields):
-    schema_version: Literal["reference-query-routed-preparation/3.0"]
+    schema_version: Literal[
+        "reference-query-routed-preparation/3.0", "reference-query-routed-preparation/4.0"
+    ]
     parent: EmbeddingBatchPlanRequestV15
 
     @model_validator(mode="before")
@@ -193,7 +203,9 @@ class RegisteredPublicRoutedReferenceQueryPreparation(_RoutedPreparationFields):
             document = raw_similarity_contract_value(value)
             if len(canonical_json_bytes(document)) > MAX_ROUTED_QUERY_PREPARATION_BYTES:
                 raise ValueError("REFERENCE_QUERY_ROUTED_PREPARATION_INVALID")
-            _registered_public_validator().validate(document)
+            _registered_public_validator(
+                document.get("schema_version") == "reference-query-routed-preparation/4.0"
+            ).validate(document)
             return document
         except Exception:
             raise ValueError("REFERENCE_QUERY_ROUTED_PREPARATION_INVALID") from None
@@ -215,9 +227,10 @@ def validate_supported_routed_reference_query_preparation(
     value: object,
 ) -> SupportedRoutedReferenceQueryPreparation:
     document = raw_similarity_contract_value(value)
-    if isinstance(document, dict) and document.get("schema_version") == (
-        "reference-query-routed-preparation/3.0"
-    ):
+    if isinstance(document, dict) and document.get("schema_version") in {
+        "reference-query-routed-preparation/3.0",
+        "reference-query-routed-preparation/4.0",
+    }:
         return RegisteredPublicRoutedReferenceQueryPreparation.model_validate(document)
     if isinstance(document, dict) and document.get("schema_version") == (
         "reference-query-routed-preparation/2.0"

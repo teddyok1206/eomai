@@ -58,7 +58,9 @@ type NativeCoordinatorPayloadV4 = (
 
 
 class NativeEmbeddingCoordinatorCheckpointV4(NativeEmbeddingContract):
-    schema_version: Literal["native-embedding-coordinator/4.0"] = "native-embedding-coordinator/4.0"
+    schema_version: Literal[
+        "native-embedding-coordinator/4.0", "native-embedding-coordinator/5.0"
+    ] = "native-embedding-coordinator/4.0"
     record_type: NativeCoordinatorPhase
     native_launch_job_id: JobId
     intent_sha256: Sha256
@@ -85,7 +87,13 @@ def parse_native_embedding_coordinator_checkpoint_v4(
     value: object,
 ) -> NativeEmbeddingCoordinatorCheckpointV4:
     document = raw_public_solution_contract_value(value)
-    validate_local_embedding_admission_message("registered-public-coordinator", document)
+    validate_local_embedding_admission_message(
+        "native-office-public-coordinator"
+        if isinstance(document, dict)
+        and document.get("schema_version") == "native-embedding-coordinator/5.0"
+        else "registered-public-coordinator",
+        document,
+    )
     return NativeEmbeddingCoordinatorCheckpointV4.model_validate(document)
 
 
@@ -96,7 +104,9 @@ def native_coordinator_checkpoint_v4(
 ) -> NativeEmbeddingCoordinatorCheckpointV4:
     intent = LocalEmbeddingLaunchIntentV4.model_validate(raw_public_solution_contract_value(intent))
     body = {
-        "schema_version": "native-embedding-coordinator/4.0",
+        "schema_version": "native-embedding-coordinator/5.0"
+        if intent.source_plan.schema_ref.endswith("/5.0")
+        else "native-embedding-coordinator/4.0",
         "record_type": phase,
         "native_launch_job_id": intent.native_launch_job_id,
         "intent_sha256": intent.intent_sha256,

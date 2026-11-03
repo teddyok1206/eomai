@@ -495,7 +495,9 @@ class LocalEmbeddingServicePreparation:
             )
         authorization_audit = supported_local_indexing_authorization_audit_sha256(controls.grant)
         body = {
-            "schema_version": "local-embedding-workflow-request/4.0"
+            "schema_version": "local-embedding-workflow-request/5.0"
+            if isinstance(plan, LocalEmbeddingSourcePlanV4) and plan.schema_version.endswith("/5.0")
+            else "local-embedding-workflow-request/4.0"
             if public and public_plan_version == "4.0"
             else "local-embedding-workflow-request/3.0"
             if public

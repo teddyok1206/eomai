@@ -77,9 +77,9 @@ class PublicSolutionReferenceMaterial(_MaterialValue):
 
 
 class PublicSolutionSimilarityMaterials(_MaterialValue):
-    schema_version: Literal["system-rag-similarity-materials/3.0"] = (
-        "system-rag-similarity-materials/3.0"
-    )
+    schema_version: Literal[
+        "system-rag-similarity-materials/3.0", "system-rag-similarity-materials/4.0"
+    ] = "system-rag-similarity-materials/3.0"
     request_sha256: Sha256
     context_sha256: Sha256
     anchor: PublicSolutionReferenceMaterial
@@ -94,8 +94,14 @@ class PublicSolutionSimilarityMaterials(_MaterialValue):
     @model_validator(mode="before")
     @classmethod
     def schema_first(cls, value: object) -> object:
+        value = raw_similarity_contract_value(value)
         return similarity_contract_document(
-            value, PUBLIC_SIMILARITY_MATERIALS_SCHEMA, MAX_SIMILARITY_MATERIALS_BYTES
+            value,
+            "system-rag-similarity-materials-v4"
+            if isinstance(value, dict)
+            and value.get("schema_version") == "system-rag-similarity-materials/4.0"
+            else PUBLIC_SIMILARITY_MATERIALS_SCHEMA,
+            MAX_SIMILARITY_MATERIALS_BYTES,
         )
 
     @model_validator(mode="after")
@@ -152,7 +158,9 @@ def build_public_similarity_materials(
     entries: tuple[PublicSolutionReferenceMaterial, ...],
 ) -> PublicSolutionSimilarityMaterials:
     body = {
-        "schema_version": "system-rag-similarity-materials/3.0",
+        "schema_version": "system-rag-similarity-materials/4.0"
+        if context.schema_version == "system-rag-similarity-context/5.0"
+        else "system-rag-similarity-materials/3.0",
         "request_sha256": context.request.request_sha256,
         "context_sha256": context.context_sha256,
         "anchor": raw_similarity_contract_value(anchor),

@@ -149,7 +149,7 @@ class EmbeddingBatchPlanRequestValues(EmbeddingBatchPlanValue):
     @model_validator(mode="after")
     def exact_request(self) -> Self:
         for pointer, member, schema in (
-            (self.selection_manifest, "selection.json", self.selection_schema_ref),
+            (self.selection_manifest, "selection.json", self.selection_member_schema_ref()),
             (self.routing_policy, "policy.json", EMBEDDING_DEVICE_ROUTING_SCHEMA_REF),
         ):
             require_embedding_batch_plan_value(
@@ -162,3 +162,6 @@ class EmbeddingBatchPlanRequestValues(EmbeddingBatchPlanValue):
         )
         validate_embedding_batch_value_hash(self, "request_sha256")
         return self
+
+    def selection_member_schema_ref(self) -> str:
+        return self.selection_schema_ref

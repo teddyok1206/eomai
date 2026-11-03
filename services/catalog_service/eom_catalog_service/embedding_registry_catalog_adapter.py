@@ -342,6 +342,7 @@ def _decode_index_manifest(schema_ref: str, payload: bytes) -> SupportedEmbeddin
         MIXED_EMBEDDING_INDEX_SCHEMA_REF,
         PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
         REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+        "eom://schemas/knowledge/embedding-index-manifest/5.0",
     ):
         raise ValueError("foreign index schema")
     index = parse_supported_embedding_index(_document(payload))
@@ -758,6 +759,7 @@ class CatalogEmbeddingRegistryVerifier:
                 MIXED_EMBEDDING_INDEX_SCHEMA_REF,
                 PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
                 REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+                "eom://schemas/knowledge/embedding-index-manifest/5.0",
             )
             or pointer.member_path != EMBEDDING_INDEX_PRIMARY_MEMBER
             or pointer.media_type != "application/json"

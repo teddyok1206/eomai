@@ -47,7 +47,7 @@ type ReadReply = (
 
 def _reply_family(request: ReadRequest | None) -> tuple[str, type[ReadReply]]:
     if isinstance(request, SimilarityContextReadRequestV4):
-        return "4.0", SimilarityContextReadReplyV4
+        return request.schema_version.rsplit("/", 1)[1], SimilarityContextReadReplyV4
     if isinstance(request, SimilarityContextReadRequestV3):
         return "3.0", SimilarityContextReadReplyV3
     if isinstance(request, SimilarityContextReadRequestV2):
@@ -93,6 +93,7 @@ def dispatch_similarity_read_frame(
             "system-rag-similarity-read-request/2.0": SimilarityContextReadRequestV2,
             "system-rag-similarity-read-request/3.0": SimilarityContextReadRequestV3,
             "system-rag-similarity-read-request/4.0": SimilarityContextReadRequestV4,
+            "system-rag-similarity-read-request/5.0": SimilarityContextReadRequestV4,
         }
         request_type = request_types.get(version, SimilarityContextReadRequest)
         request = request_type.model_validate(value)

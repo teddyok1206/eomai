@@ -72,6 +72,7 @@ REFERENCE_QUERY_REQUEST_VERSIONS: Final = (
     "reference-query-workflow-request/2.0",
     "reference-query-workflow-request/3.0",
     "reference-query-workflow-request/4.0",
+    "reference-query-workflow-request/5.0",
 )
 _BINARY_REF = "eom://schemas/knowledge/embedding-f32le-l2-row-major/1.0"
 
@@ -89,6 +90,7 @@ def parse_supported_reference_query_context(value: object) -> SupportedReference
     if isinstance(document, dict) and document.get("schema_version") in {
         "system-rag-similarity-request/3.0",
         "system-rag-similarity-request/4.0",
+        "system-rag-similarity-request/5.0",
     }:
         return parse_supported_public_solution_similarity_request(document)
     return parse_supported_similarity_context_request(document)
@@ -245,9 +247,9 @@ class ReferenceQueryWorkflowRequestV4(FrozenModel):
     """New closed source-proof carrier; numerical input/output and definition stay2."""
 
     model_config = ConfigDict(revalidate_instances="always")
-    schema_version: Literal["reference-query-workflow-request/4.0"] = (
-        "reference-query-workflow-request/4.0"
-    )
+    schema_version: Literal[
+        "reference-query-workflow-request/4.0", "reference-query-workflow-request/5.0"
+    ] = "reference-query-workflow-request/4.0"
     request_name: Literal["REFERENCE_QUERY_WORKFLOW_REQUEST"] = "REFERENCE_QUERY_WORKFLOW_REQUEST"
     purpose: Literal["REFERENCE_QUERY"] = "REFERENCE_QUERY"
     workflow_definition_key: Literal["local-embedding-reference-query"] = (
@@ -571,7 +573,7 @@ def parse_supported_reference_query_workflow_request(
                 return parse_reference_query_workflow_request_v2(document)
             case "reference-query-workflow-request/3.0":
                 return parse_reference_query_workflow_request_v3(document)
-            case "reference-query-workflow-request/4.0":
+            case "reference-query-workflow-request/4.0" | "reference-query-workflow-request/5.0":
                 return parse_reference_query_workflow_request_v4(document)
     raise ReferenceQueryContractError("REFERENCE_QUERY_CONTRACT_INVALID")
 

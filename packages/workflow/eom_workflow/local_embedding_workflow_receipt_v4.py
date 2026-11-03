@@ -56,10 +56,19 @@ class ResolvedNativeIndexCoverageV4:
 
 class LocalEmbeddingStepOutputV4(PublicSolutionStepOutputBody):
     _receipt_schema_ref: ClassVar[str] = LOCAL_EMBEDDING_WORKFLOW_RECEIPT_V4_SCHEMA_REF
-    schema_version: Literal["local-embedding-step-output/4.0"] = "local-embedding-step-output/4.0"
-    receipt_schema: Literal["eom://schemas/workflow/local-embedding-workflow-receipt/4.0"] = (
-        "eom://schemas/workflow/local-embedding-workflow-receipt/4.0"
-    )
+    schema_version: Literal[
+        "local-embedding-step-output/4.0", "local-embedding-step-output/5.0"
+    ] = "local-embedding-step-output/4.0"
+    receipt_schema: Literal[
+        "eom://schemas/workflow/local-embedding-workflow-receipt/4.0",
+        "eom://schemas/workflow/local-embedding-workflow-receipt/5.0",
+    ] = "eom://schemas/workflow/local-embedding-workflow-receipt/4.0"
+
+    def receipt_member_schema_ref(self) -> str:
+        return (
+            "eom://schemas/workflow/local-embedding-workflow-receipt/"
+            + self.schema_version.rsplit("/", 1)[1]
+        )
 
 
 class LocalEmbeddingWorkflowReceiptV4(
@@ -68,15 +77,27 @@ class LocalEmbeddingWorkflowReceiptV4(
     ]
 ):
     _source_plan_schema_ref: ClassVar[str] = LOCAL_EMBEDDING_SOURCE_PLAN_V4_SCHEMA_REF
-    schema_version: Literal["local-embedding-workflow-receipt/4.0"] = (
-        "local-embedding-workflow-receipt/4.0"
-    )
+    schema_version: Literal[
+        "local-embedding-workflow-receipt/4.0", "local-embedding-workflow-receipt/5.0"
+    ] = "local-embedding-workflow-receipt/4.0"
+
+    def source_plan_member_schema_ref(self) -> str:
+        return (
+            "eom://schemas/workflow/local-embedding-source-plan/"
+            + self.schema_version.rsplit("/", 1)[1]
+        )
 
 
 def parse_local_embedding_workflow_receipt_v4(value: object) -> LocalEmbeddingWorkflowReceiptV4:
     try:
         document = raw_public_solution_contract_value(value)
-        validate_local_embedding_admission_message("registered-public-completion", document)
+        validate_local_embedding_admission_message(
+            "native-office-public-completion"
+            if isinstance(document, dict)
+            and document.get("schema_version") == "local-embedding-workflow-receipt/5.0"
+            else "registered-public-completion",
+            document,
+        )
         return LocalEmbeddingWorkflowReceiptV4.model_validate(document)
     except Exception:
         raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_CONTRACT_INVALID") from None
@@ -85,7 +106,13 @@ def parse_local_embedding_workflow_receipt_v4(value: object) -> LocalEmbeddingWo
 def parse_local_embedding_step_output_v4(value: object) -> LocalEmbeddingStepOutputV4:
     try:
         document = raw_public_solution_contract_value(value)
-        validate_local_embedding_admission_message("registered-public-completion", document)
+        validate_local_embedding_admission_message(
+            "native-office-public-completion"
+            if isinstance(document, dict)
+            and document.get("schema_version") == "local-embedding-step-output/5.0"
+            else "registered-public-completion",
+            document,
+        )
         return LocalEmbeddingStepOutputV4.model_validate(document)
     except Exception:
         raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_CONTRACT_INVALID") from None

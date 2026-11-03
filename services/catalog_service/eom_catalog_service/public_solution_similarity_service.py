@@ -295,7 +295,9 @@ def compose_public_solution_similarity(
         limitations.append("BOUNDED_SCOPE_TRUNCATED")
     scored = len(bindings) - int(request.anchor.source.item_revision_id in bindings)
     body = dict(
-        schema_version="system-rag-similarity-context/4.0"
+        schema_version="system-rag-similarity-context/5.0"
+        if request.schema_version == "system-rag-similarity-request/5.0"
+        else "system-rag-similarity-context/4.0"
         if isinstance(request, PublicSolutionSimilarityRequestV4)
         else "system-rag-similarity-context/3.0",
         request=request.model_dump(mode="json"),

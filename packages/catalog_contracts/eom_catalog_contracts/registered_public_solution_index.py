@@ -23,6 +23,7 @@ from eom_catalog_contracts.models import FrozenModel, Sha256, UtcDatetime
 from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingRecipe
 from eom_catalog_contracts.public_solution_embedding_index import (
     MAX_PUBLIC_SOLUTION_SOURCES,
+    NATIVE_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
     PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
     PublicSolutionEmbeddingSourceBinding,
     validate_public_solution_binding_identity,
@@ -50,7 +51,12 @@ class _RegisteredPublicIndexValue(FrozenModel):
         if not isinstance(document, dict) or len(canonical_json_bytes(document)) > 64 * 1024**2:
             raise ValueError("REGISTERED_PUBLIC_INDEX_METADATA_INVALID")
         try:
-            validate_contract(REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA, document)
+            validate_contract(
+                "public-solution-embedding-index-v5"
+                if document.get("schema_version") == "embedding-index-manifest/5.0"
+                else REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA,
+                document,
+            )
         except JsonSchemaValidationError:
             raise ValueError("REGISTERED_PUBLIC_INDEX_SCHEMA_INVALID") from None
         return document
@@ -115,7 +121,9 @@ type PublicSolutionBindingV4 = Annotated[
 
 
 class PublicSolutionEmbeddingIndexV4(_RegisteredPublicIndexValue):
-    schema_version: Literal["embedding-index-manifest/4.0"] = "embedding-index-manifest/4.0"
+    schema_version: Literal["embedding-index-manifest/4.0", "embedding-index-manifest/5.0"] = (
+        "embedding-index-manifest/4.0"
+    )
     index_id: str = Field(pattern=r"^embeddingindex_[0-9a-f]{32}$")
     index_revision_id: str = Field(pattern=r"^embeddingindexrev_[0-9a-f]{32}$")
     previous_manifest: ArtifactMemberPointer | None
@@ -139,6 +147,11 @@ class PublicSolutionEmbeddingIndexV4(_RegisteredPublicIndexValue):
             previous_schema_refs=(
                 PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
                 REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+            )
+            + (
+                (NATIVE_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,)
+                if self.schema_version.endswith("/5.0")
+                else ()
             ),
             storage_partition=self.storage_partition,
             space=self.space,

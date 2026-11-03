@@ -137,10 +137,10 @@ def parse_supported_local_embedding_request(value: object) -> SupportedLocalEmbe
     """One closed request family dispatch; source/service/runtime authority is separate."""
     try:
         document = raw_similarity_contract_value(value)
-        if (
-            isinstance(document, dict)
-            and document.get("schema_version") == "local-embedding-workflow-request/4.0"
-        ):
+        if isinstance(document, dict) and document.get("schema_version") in {
+            "local-embedding-workflow-request/4.0",
+            "local-embedding-workflow-request/5.0",
+        }:
             return parse_local_embedding_workflow_request_v4(document)
         if (
             isinstance(document, dict)

@@ -104,7 +104,7 @@ class PublicSolutionStepOutputBody(NativeEmbeddingContract):
     def exact_carrier(self) -> Self:
         if (
             self.receipt.member_path != "receipt.json"
-            or self.receipt.schema_ref != self._receipt_schema_ref
+            or self.receipt.schema_ref != self.receipt_member_schema_ref()
             or self.receipt.media_type != "application/json"
         ):
             raise ValueError("native completion receipt member differs")
@@ -112,6 +112,9 @@ class PublicSolutionStepOutputBody(NativeEmbeddingContract):
             self, "output_sha256", MAX_LOCAL_EMBEDDING_STEP_OUTPUT_BYTES
         )
         return self
+
+    def receipt_member_schema_ref(self) -> str:
+        return self._receipt_schema_ref
 
 
 class LocalEmbeddingStepOutputV3(PublicSolutionStepOutputBody):
@@ -152,7 +155,7 @@ class PublicSolutionWorkflowReceiptBody[
     def exact_historical_observation(self) -> Self:
         if (
             self.source_plan.member_path != "source-plan.json"
-            or self.source_plan.schema_ref != self._source_plan_schema_ref
+            or self.source_plan.schema_ref != self.source_plan_member_schema_ref()
             or self.source_plan.media_type != "application/json"
             or (self.native_launch_job_id is None) != (self.launch_association_sha256 is None)
         ):
@@ -181,6 +184,9 @@ class PublicSolutionWorkflowReceiptBody[
             self, "receipt_sha256", MAX_LOCAL_EMBEDDING_WORKFLOW_RECEIPT_BYTES
         )
         return self
+
+    def source_plan_member_schema_ref(self) -> str:
+        return self._source_plan_schema_ref
 
 
 class LocalEmbeddingWorkflowReceiptV3(

@@ -5,7 +5,10 @@ from typing import Annotated, Literal
 from eom_identifiers import content_sha256
 from pydantic import ConfigDict, Field, model_validator
 
-from eom_catalog_contracts.embedding_reference_query import similarity_contract_document
+from eom_catalog_contracts.embedding_reference_query import (
+    raw_similarity_contract_value,
+    similarity_contract_document,
+)
 from eom_catalog_contracts.models import FrozenModel, Sha256
 from eom_catalog_contracts.registered_public_solution_similarity import (
     SupportedPublicSolutionSimilarityContext,
@@ -23,24 +26,31 @@ class _RegisteredPublicReadValue(FrozenModel):
     @model_validator(mode="before")
     @classmethod
     def schema_first(cls, value: object) -> object:
+        value = raw_similarity_contract_value(value)
         return similarity_contract_document(
-            value, "system-rag-similarity-read-v4", MAX_SIMILARITY_READ_FRAME_BYTES - 1
+            value,
+            "system-rag-similarity-read-v5"
+            if isinstance(value, dict)
+            and value.get("schema_version")
+            in {"system-rag-similarity-read-request/5.0", "system-rag-similarity-read-reply/5.0"}
+            else "system-rag-similarity-read-v4",
+            MAX_SIMILARITY_READ_FRAME_BYTES - 1,
         )
 
 
 class SimilarityContextReadRequestV4(_RegisteredPublicReadValue):
-    schema_version: Literal["system-rag-similarity-read-request/4.0"] = (
-        "system-rag-similarity-read-request/4.0"
-    )
+    schema_version: Literal[
+        "system-rag-similarity-read-request/4.0", "system-rag-similarity-read-request/5.0"
+    ] = "system-rag-similarity-read-request/4.0"
     operation: Literal["READ_SIMILARITY_CONTEXT"] = "READ_SIMILARITY_CONTEXT"
     actor_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
     selection: CompletedSimilarityQuerySelection
 
 
 class SimilarityContextReadReplyV4(_RegisteredPublicReadValue):
-    schema_version: Literal["system-rag-similarity-read-reply/4.0"] = (
-        "system-rag-similarity-read-reply/4.0"
-    )
+    schema_version: Literal[
+        "system-rag-similarity-read-reply/4.0", "system-rag-similarity-read-reply/5.0"
+    ] = "system-rag-similarity-read-reply/4.0"
     operation: Literal["READ_SIMILARITY_CONTEXT"] = "READ_SIMILARITY_CONTEXT"
     status: Literal["SUCCESS", "FAILED"]
     actor_id: str | None = Field(pattern=r"^operator_[0-9a-f]{32}$")

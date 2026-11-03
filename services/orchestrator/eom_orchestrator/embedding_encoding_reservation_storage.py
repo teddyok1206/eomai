@@ -210,6 +210,15 @@ class EmbeddingEncodingReservationStorage:
         )
 
     @staticmethod
+    def prepare_native_office_public_ownership_protocol(session: Session) -> None:
+        """Explicit schema-owner preparation; no claim or numerical protocol change."""
+        EmbeddingEncodingReservationStorage._prepare_protocol(
+            session,
+            "embedding-encoding-ownership/5.0",
+            "sha256:9e3f45b6d69d6bcf33447008b91bb4ef29763db4d613627bb70326d9c778a1c2",
+        )
+
+    @staticmethod
     def prepare_recovery_protocol(session: Session) -> None:
         """Explicit schema-owner deployment preparation, not runtime bootstrap."""
         EmbeddingEncodingReservationStorage._prepare_protocol(
@@ -325,6 +334,18 @@ class EmbeddingEncodingReservationStorage:
             ProtocolVersionRecord, "embedding-encoding-ownership/4.0", populate_existing=True
         )
         if record is None or record.schema_sha256 != EMBEDDING_ENCODING_OWNERSHIP_V4_SCHEMA_SHA256:
+            raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE")
+
+    @staticmethod
+    def require_native_office_public_ownership_protocol(session: Session) -> None:
+        record = session.get(
+            ProtocolVersionRecord, "embedding-encoding-ownership/5.0", populate_existing=True
+        )
+        if (
+            record is None
+            or record.schema_sha256
+            != "sha256:9e3f45b6d69d6bcf33447008b91bb4ef29763db4d613627bb70326d9c778a1c2"
+        ):
             raise EmbeddingEncodingReservationError("EMBEDDING_ENCODING_PROTOCOL_UNAVAILABLE")
 
     @staticmethod

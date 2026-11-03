@@ -23,9 +23,6 @@ from eom_catalog_contracts.public_solution_embedding_index import (
     MAX_PUBLIC_SOLUTION_SOURCES,
     PublicSolutionIndexNamespace,
 )
-from eom_catalog_contracts.registered_public_solution_index import (
-    REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
-)
 from eom_catalog_contracts.validation import validate_contract
 
 REGISTERED_PUBLIC_SOLUTION_REGISTRY_SCHEMA = "public-solution-embedding-registry-v4"
@@ -41,16 +38,25 @@ class _RegisteredPublicRegistryValue(FrozenModel):
         if not isinstance(document, dict):
             raise ValueError("REGISTERED_PUBLIC_REGISTRATION_INVALID")
         try:
-            validate_contract(REGISTERED_PUBLIC_SOLUTION_REGISTRY_SCHEMA, document)
+            validate_contract(
+                "public-solution-embedding-registry-v5"
+                if document.get("schema_version")
+                in {
+                    "embedding-registry-registration-command/5.0",
+                    "embedding-registry-registration-result/5.0",
+                }
+                else REGISTERED_PUBLIC_SOLUTION_REGISTRY_SCHEMA,
+                document,
+            )
         except JsonSchemaValidationError:
             raise ValueError("REGISTERED_PUBLIC_REGISTRATION_SCHEMA_INVALID") from None
         return document
 
 
 class RegisterPublicSolutionIndexCommandV4(_RegisteredPublicRegistryValue):
-    schema_version: Literal["embedding-registry-registration-command/4.0"] = (
-        "embedding-registry-registration-command/4.0"
-    )
+    schema_version: Literal[
+        "embedding-registry-registration-command/4.0", "embedding-registry-registration-command/5.0"
+    ] = "embedding-registry-registration-command/4.0"
     operation: Literal["REGISTER_EMBEDDING_INDEX"] = "REGISTER_EMBEDDING_INDEX"
     operation_key: EmbeddingRegistrationOperationKey
     corpus_id: str = Field(pattern=r"^corpus_[0-9a-f]{32}$")
@@ -75,7 +81,10 @@ class RegisterPublicSolutionIndexCommandV4(_RegisteredPublicRegistryValue):
     def exact_intent(self) -> Self:
         PublicSolutionIndexNamespace.model_validate(self.namespace.model_dump(mode="json"))
         validate_embedding_manifest_pointer(
-            self.index_manifest, REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF, "index.json"
+            self.index_manifest,
+            "eom://schemas/knowledge/embedding-index-manifest/"
+            + self.schema_version.rsplit("/", 1)[1],
+            "index.json",
         )
         validate_embedding_registration_head(
             graph_snapshot=self.graph_snapshot,
@@ -90,9 +99,9 @@ class RegisterPublicSolutionIndexCommandV4(_RegisteredPublicRegistryValue):
 
 
 class PublicSolutionIndexRegistrationResultV4(_RegisteredPublicRegistryValue):
-    schema_version: Literal["embedding-registry-registration-result/4.0"] = (
-        "embedding-registry-registration-result/4.0"
-    )
+    schema_version: Literal[
+        "embedding-registry-registration-result/4.0", "embedding-registry-registration-result/5.0"
+    ] = "embedding-registry-registration-result/4.0"
     operation_key: EmbeddingRegistrationOperationKey
     request_sha256: Sha256
     index_id: EmbeddingIndexId
@@ -111,7 +120,10 @@ class PublicSolutionIndexRegistrationResultV4(_RegisteredPublicRegistryValue):
     @model_validator(mode="after")
     def exact_receipt(self) -> Self:
         validate_embedding_manifest_pointer(
-            self.index_manifest, REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF, "index.json"
+            self.index_manifest,
+            "eom://schemas/knowledge/embedding-index-manifest/"
+            + self.schema_version.rsplit("/", 1)[1],
+            "index.json",
         )
         validate_embedding_registration_receipt_head(
             index_revision_id=self.index_revision_id,

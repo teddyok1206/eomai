@@ -402,7 +402,9 @@ class NativeEmbeddingIndexCompletion:
                     else RegisterEmbeddingIndexCommand
                 )
                 body = {
-                    "schema_version": command_type.model_fields["schema_version"].default,
+                    "schema_version": "embedding-registry-registration-command/5.0"
+                    if request.schema_version == "local-embedding-workflow-request/5.0"
+                    else command_type.model_fields["schema_version"].default,
                     "operation": "REGISTER_EMBEDDING_INDEX",
                     "operation_key": native_embedding_index_registration_key(
                         coordinator.intent, index_id, revision_id
@@ -555,7 +557,9 @@ class NativeEmbeddingIndexCompletion:
                 else LocalEmbeddingWorkflowReceipt
             )
             body = {
-                "schema_version": receipt_type.model_fields["schema_version"].default,
+                "schema_version": "local-embedding-workflow-receipt/5.0"
+                if request.schema_version == "local-embedding-workflow-request/5.0"
+                else receipt_type.model_fields["schema_version"].default,
                 "purpose": "LOCAL_EMBEDDING",
                 "workflow_id": workflow.workflow_id,
                 "workflow_definition_sha256": request.workflow_definition_sha256,

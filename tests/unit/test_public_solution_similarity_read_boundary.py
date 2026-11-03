@@ -134,7 +134,7 @@ def test_dispatch_and_api_client_keep_public_family_and_actual_caller(monkeypatc
     service.read.assert_called_once_with(request)
     service.read.reset_mock()
     current = SimilarityContextReadRequestV4(
-        schema_version="system-rag-similarity-read-request/4.0",
+        schema_version="system-rag-similarity-read-request/5.0",
         operation="READ_SIMILARITY_CONTEXT",
         actor_id=request.actor_id,
         selection=request.selection,
@@ -168,7 +168,7 @@ def test_public_full_population_deadline_is_finite_without_retry_or_legacy_fallb
         CatalogSimilarityContextClient(endpoint).read_public(request.actor_id, request.selection)
     assert exchange.call_count == 1
     assert exchange.call_args.kwargs["timeout"] == 180.0
-    assert exchange.call_args.args[1]["schema_version"] == "system-rag-similarity-read-request/4.0"
+    assert exchange.call_args.args[1]["schema_version"] == "system-rag-similarity-read-request/5.0"
 
 
 @pytest.mark.parametrize("missing", (True, False))

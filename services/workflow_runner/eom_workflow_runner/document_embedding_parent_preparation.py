@@ -193,7 +193,9 @@ def prepare_document_embedding_parent(
         public = isinstance(pair.namespace, PublicSolutionIndexNamespace)
         registered_public = isinstance(request, LocalEmbeddingWorkflowRequestV4)
         protocol = (
-            BATCH_PLAN_V16_PROTOCOL
+            "embedding-batch-plan/1.8"
+            if request.schema_version == "local-embedding-workflow-request/5.0"
+            else BATCH_PLAN_V16_PROTOCOL
             if registered_public
             else BATCH_PLAN_V13_PROTOCOL
             if public

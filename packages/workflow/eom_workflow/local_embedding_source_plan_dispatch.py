@@ -37,6 +37,6 @@ def parse_supported_local_embedding_source_plan(value: object) -> SupportedLocal
                 return parse_local_embedding_source_plan_v2(document)
             case "local-embedding-source-plan/3.0":
                 return parse_local_embedding_source_plan_v3(document)
-            case "local-embedding-source-plan/4.0":
+            case "local-embedding-source-plan/4.0" | "local-embedding-source-plan/5.0":
                 return parse_local_embedding_source_plan_v4(document)
     raise ValueError("LOCAL_EMBEDDING_SOURCE_PLAN_FAMILY_MISMATCH")

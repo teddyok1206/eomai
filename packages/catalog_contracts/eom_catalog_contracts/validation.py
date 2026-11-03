@@ -160,6 +160,42 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "3.0",
             "sha256:a7097861a77dfa1b012c9f22088a97dfed47e0a3df4cdcd7137aecd828f4ee68",
         ),
+        "system-rag-similarity-read-v5": CatalogSchemaResource(
+            "schemas/knowledge/system-rag-similarity-read-v5.schema.json",
+            "resources/knowledge/system-rag-similarity-read-v5.schema.json",
+            "5.0",
+            "sha256:0b0aa1c61dbd1ee632916d26386f0bbf574c6a55e370ddf33a909ba2afa21f23",
+        ),
+        "public-solution-embedding-entry-v3": CatalogSchemaResource(
+            "schemas/knowledge/public-solution-embedding-entry-v3.schema.json",
+            "resources/knowledge/public-solution-embedding-entry-v3.schema.json",
+            "3.0",
+            "sha256:4b713bb884319aef4d4a48d1ddfa9c258f16ad9e7e62d6c5a0cf436a41e7038c",
+        ),
+        "public-solution-embedding-index-v5": CatalogSchemaResource(
+            "schemas/knowledge/public-solution-embedding-index-v5.schema.json",
+            "resources/knowledge/public-solution-embedding-index-v5.schema.json",
+            "5.0",
+            "sha256:c44aa93c88a1dbc3454e85d53bae624884182b625bdb4c0b2aea8a4b93d79eab",
+        ),
+        "public-solution-embedding-registry-v5": CatalogSchemaResource(
+            "schemas/knowledge/public-solution-embedding-registry-v5.schema.json",
+            "resources/knowledge/public-solution-embedding-registry-v5.schema.json",
+            "5.0",
+            "sha256:f7a3fd5fe995f3a7d53aea9fcaf72e68690edb7cd383d8048259136455215c10",
+        ),
+        "public-solution-similarity-v5": CatalogSchemaResource(
+            "schemas/knowledge/public-solution-similarity-v5.schema.json",
+            "resources/knowledge/public-solution-similarity-v5.schema.json",
+            "5.0",
+            "sha256:6253b87380a97ebcb113bfa659db107133e001ef7eb4bc58401ac917c97c1711",
+        ),
+        "system-rag-similarity-materials-v4": CatalogSchemaResource(
+            "schemas/knowledge/system-rag-similarity-materials-v4.schema.json",
+            "resources/knowledge/system-rag-similarity-materials-v4.schema.json",
+            "4.0",
+            "sha256:7bcb6fff45e5994e155976522c6664471c2a2db3a2057178ec29685f47b9ac7f",
+        ),
         "public-solution-embedding-index-v4": CatalogSchemaResource(
             "schemas/knowledge/public-solution-embedding-index-v4.schema.json",
             "resources/knowledge/public-solution-embedding-index-v4.schema.json",
@@ -699,6 +735,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/system-rag-reference-query-prepare-v4.schema.json",
             "4.0",
             "sha256:fdd2cd340ef9bab72ea95452484a9a4cd4f2308a70acdaa373072db642682418",
+        ),
+        "system-rag-reference-query-prepare-v6": CatalogSchemaResource(
+            "schemas/knowledge/system-rag-reference-query-prepare-v6.schema.json",
+            "resources/knowledge/system-rag-reference-query-prepare-v6.schema.json",
+            "6.0",
+            "sha256:c306392c2ebdfd8d090b096b2fc036d6995ed26014f2cafcc3ad756eef31761d",
         ),
         "system-rag-reference-query-prepare-v5": CatalogSchemaResource(
             "schemas/knowledge/system-rag-reference-query-prepare-v5.schema.json",

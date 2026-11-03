@@ -68,10 +68,13 @@ class PublicSolutionLaunchIntentBody(NativeEmbeddingContract):
     @model_validator(mode="after")
     def exact_intent(self) -> Self:
         validate_embedding_encoding_member(
-            self.source_plan, "source-plan.json", self._source_plan_schema_ref
+            self.source_plan, "source-plan.json", self.source_plan_member_schema_ref()
         )
         validate_embedding_encoding_metadata(self, "intent_sha256")
         return self
+
+    def source_plan_member_schema_ref(self) -> str:
+        return self._source_plan_schema_ref
 
 
 class LocalEmbeddingLaunchIntentV3(PublicSolutionLaunchIntentBody):

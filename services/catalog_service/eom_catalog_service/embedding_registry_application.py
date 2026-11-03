@@ -387,6 +387,8 @@ def _receipt(
         is_current=head.current_index_revision_id == row.index_revision_id,
         registered_at=row.created_at,
     ).model_dump(mode="json", exclude={"result_sha256"})
+    if command.schema_version == "embedding-registry-registration-command/5.0":
+        body["schema_version"] = "embedding-registry-registration-result/5.0"
     result = result_type.model_validate(body | {"result_sha256": content_sha256(body)})
     if isinstance(command, RegisterPublicSolutionIndexCommandV4):
         assert isinstance(result, PublicSolutionIndexRegistrationResultV4)
@@ -883,7 +885,14 @@ def _validate_pinned_read_intent(intent: EmbeddingRegistryRead) -> EmbeddingRegi
     ):
         _fail("EMBEDDING_REGISTRY_REQUEST_INVALID")
     family = "2.0" if mixed else "1.0"
-    public_family = "4.0" if isinstance(intent.selection, PublicSolutionSimilarityViewV4) else "3.0"
+    public_family = (
+        "5.0"
+        if isinstance(intent.selection, PublicSolutionSimilarityViewV4)
+        and intent.selection.index.index_manifest.schema_ref.endswith("/5.0")
+        else "4.0"
+        if isinstance(intent.selection, PublicSolutionSimilarityViewV4)
+        else "3.0"
+    )
     Draft202012Validator(
         {
             "$ref": f"eom://schemas/knowledge/public-solution-similarity/{public_family}#/$defs/view"

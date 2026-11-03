@@ -198,7 +198,7 @@ def test_closed_family_dispatch_preserves_each_original_envelope_and_rejects_unk
         (parse_supported_public_solution_similarity_request, new_request.model_dump(mode="json")),
         (parse_supported_public_solution_similarity_context, new_context.model_dump(mode="json")),
     ):
-        document["schema_version"] = document["schema_version"].replace("/4.0", "/5.0")
+        document["schema_version"] = document["schema_version"].replace("/4.0", "/6.0")
         with pytest.raises(ValueError, match="FAMILY_UNSUPPORTED"):
             parse(document)
 

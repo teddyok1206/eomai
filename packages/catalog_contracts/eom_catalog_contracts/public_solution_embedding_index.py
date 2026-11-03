@@ -20,6 +20,7 @@ from eom_catalog_contracts.knowledge import (
 )
 from eom_catalog_contracts.models import FrozenModel, Sha256, UtcDatetime
 from eom_catalog_contracts.public_solution_embedding import (
+    NATIVE_PUBLIC_SOLUTION_SCHEMA_REF,
     PUBLIC_SOLUTION_EMBEDDING_SCHEMA_REF,
     AcceptedPublicSolutionEvidence,
     PublicSolutionEmbeddingEntry,
@@ -31,6 +32,7 @@ from eom_catalog_contracts.validation import validate_contract
 PUBLIC_SOLUTION_INDEX_SCHEMA = "public-solution-embedding-index-v3"
 PUBLIC_SOLUTION_INDEX_SCHEMA_REF = "eom://schemas/knowledge/embedding-index-manifest/3.0"
 PUBLIC_SOLUTION_BINDING_SCHEMA_REF = "eom://schemas/knowledge/embedding-source-binding/3.0"
+NATIVE_PUBLIC_SOLUTION_INDEX_SCHEMA_REF = "eom://schemas/knowledge/embedding-index-manifest/5.0"
 MAX_PUBLIC_SOLUTION_SOURCES = 16384
 
 
@@ -65,9 +67,10 @@ class PublicSolutionProfilePointer(FrozenModel):
     profile_id: str = Field(pattern=r"^inferenceprofile_[0-9a-f]{32}$")
     profile_revision_id: str = Field(pattern=r"^inferenceprofilerev_[0-9a-f]{32}$")
     profile_sha256: Sha256
-    schema_ref: Literal["eom://schemas/knowledge/public-solution-embedding-entry/1.0"] = (
-        PUBLIC_SOLUTION_EMBEDDING_SCHEMA_REF
-    )
+    schema_ref: Literal[
+        "eom://schemas/knowledge/public-solution-embedding-entry/1.0",
+        "eom://schemas/knowledge/public-solution-embedding-entry/3.0",
+    ] = PUBLIC_SOLUTION_EMBEDDING_SCHEMA_REF
 
     @classmethod
     def from_entry(cls, entry: PublicSolutionEmbeddingEntry) -> Self:
@@ -79,6 +82,11 @@ class PublicSolutionProfilePointer(FrozenModel):
             profile_id="inferenceprofile_" + logical[7:39],
             profile_revision_id="inferenceprofilerev_" + entry.entry_sha256[7:39],
             profile_sha256=entry.entry_sha256,
+            schema_ref=(
+                NATIVE_PUBLIC_SOLUTION_SCHEMA_REF
+                if entry.schema_version == "public-solution-embedding-entry/3.0"
+                else PUBLIC_SOLUTION_EMBEDDING_SCHEMA_REF
+            ),
         )
 
 
@@ -105,12 +113,19 @@ class _PublicSolutionIndexValue(FrozenModel):
         value = raw_similarity_contract_value(value)
         if not isinstance(value, dict) or len(canonical_json_bytes(value)) > 64 * 1024**2:
             raise ValueError("PUBLIC_SOLUTION_INDEX_METADATA_INVALID")
-        validate_contract(PUBLIC_SOLUTION_INDEX_SCHEMA, value)
+        validate_contract(
+            "public-solution-embedding-index-v5"
+            if value.get("schema_version") == "embedding-source-binding/5.0"
+            else PUBLIC_SOLUTION_INDEX_SCHEMA,
+            value,
+        )
         return value
 
 
 class PublicSolutionEmbeddingSourceBinding(_PublicSolutionIndexValue):
-    schema_version: Literal["embedding-source-binding/3.0"] = "embedding-source-binding/3.0"
+    schema_version: Literal["embedding-source-binding/3.0", "embedding-source-binding/5.0"] = (
+        "embedding-source-binding/3.0"
+    )
     source: PopulationSource
     base_analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
     profile: PublicSolutionProfilePointer
@@ -128,6 +143,13 @@ class PublicSolutionEmbeddingSourceBinding(_PublicSolutionIndexValue):
     @model_validator(mode="after")
     def exact_binding(self) -> Self:
         validate_public_solution_binding_identity(self.model_dump(mode="json"))
+        native = self.schema_version == "embedding-source-binding/5.0"
+        if native != (self.profile.schema_ref == NATIVE_PUBLIC_SOLUTION_SCHEMA_REF) or (
+            not isinstance(self.evidence, AcceptedPublicSolutionEvidence)
+            and native
+            != (self.evidence.role_result.schema_ref == "external-item-learning-result@3.0")
+        ):
+            raise ValueError("PUBLIC_SOLUTION_BINDING_REPORT_FAMILY_MISMATCH")
         if isinstance(self.evidence, AcceptedPublicSolutionEvidence):
             if self.base_analysis_run_id != self.evidence.solution.base_analysis_run_id:
                 raise ValueError("PUBLIC_SOLUTION_BASE_ANALYSIS_MISMATCH")

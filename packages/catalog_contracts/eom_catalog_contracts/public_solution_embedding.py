@@ -22,6 +22,9 @@ PUBLIC_SOLUTION_EMBEDDING_SCHEMA_REF: Literal[
     "eom://schemas/knowledge/public-solution-embedding-entry/1.0"
 ] = "eom://schemas/knowledge/public-solution-embedding-entry/1.0"
 PUBLIC_SOLUTION_PROJECTION_VERSION = "public-solution-text/1.0"
+NATIVE_PUBLIC_SOLUTION_SCHEMA_REF: Literal[
+    "eom://schemas/knowledge/public-solution-embedding-entry/3.0"
+] = "eom://schemas/knowledge/public-solution-embedding-entry/3.0"
 
 
 class PublicSolutionEmbeddingRecipe(FrozenModel):
@@ -68,7 +71,11 @@ class CreativePublicSolutionEvidence(FrozenModel):
             or self.lineage.media_type != "application/json"
             or self.role_result.member_path != "result.json"
             or self.role_result.schema_ref
-            not in {"external-item-learning-result@1.0", "external-item-learning-result@2.0"}
+            not in {
+                "external-item-learning-result@1.0",
+                "external-item-learning-result@2.0",
+                "external-item-learning-result@3.0",
+            }
             or self.role_result.media_type != "application/json"
         ):
             raise ValueError("PUBLIC_SOLUTION_CREATIVE_MEMBERS_INVALID")
@@ -86,9 +93,10 @@ class PublicSolutionEmbeddingEntry(FrozenModel):
 
     model_config = ConfigDict(revalidate_instances="always", hide_input_in_errors=True)
 
-    schema_version: Literal["public-solution-embedding-entry/1.0"] = (
-        "public-solution-embedding-entry/1.0"
-    )
+    # One internal reader; each serialized family retains its own closed schema.
+    schema_version: Literal[
+        "public-solution-embedding-entry/1.0", "public-solution-embedding-entry/3.0"
+    ] = "public-solution-embedding-entry/1.0"
     source: PopulationSource
     base_analysis_run_id: str = Field(pattern=r"^analysisrun_[0-9a-f]{32}$")
     graph_snapshot: KnowledgeGraphSnapshotPointer
@@ -102,7 +110,12 @@ class PublicSolutionEmbeddingEntry(FrozenModel):
     @model_validator(mode="after")
     def exact_entry(self) -> Self:
         document = self.model_dump(mode="json")
-        validate_contract(PUBLIC_SOLUTION_EMBEDDING_SCHEMA, document)
+        validate_contract(
+            "public-solution-embedding-entry-v3"
+            if self.schema_version == "public-solution-embedding-entry/3.0"
+            else PUBLIC_SOLUTION_EMBEDDING_SCHEMA,
+            document,
+        )
         # Frozen instances may be forged with model_copy/model_construct. Close
         # nested semantic hashes as well as their JSON shapes before projection.
         PublicSolutionText.model_validate(document["public_solution"])

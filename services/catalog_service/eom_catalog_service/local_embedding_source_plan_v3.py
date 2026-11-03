@@ -62,7 +62,16 @@ def build_local_embedding_source_plan_v4(
     target_revision_ids: tuple[str, ...],
 ) -> LocalEmbeddingSourcePlanV4:
     value = _build_public_solution_source_plan(
-        query, resolved, target_revision_ids=target_revision_ids, plan_version="4.0"
+        query,
+        resolved,
+        target_revision_ids=target_revision_ids,
+        plan_version="5.0"
+        if any(
+            isinstance(entry, PublicSolutionEmbeddingEntry)
+            and entry.schema_version == "public-solution-embedding-entry/3.0"
+            for entry in resolved.entries
+        )
+        else "4.0",
     )
     assert isinstance(value, LocalEmbeddingSourcePlanV4)
     return value
@@ -73,7 +82,7 @@ def _build_public_solution_source_plan(
     resolved: ResolvedEmbeddingLookup,
     *,
     target_revision_ids: tuple[str, ...],
-    plan_version: Literal["3.0", "4.0"],
+    plan_version: Literal["3.0", "4.0", "5.0"],
 ) -> LocalEmbeddingSourcePlanV3 | LocalEmbeddingSourcePlanV4:
     """No IO/authority/claim. Missing reports and unavailable text stay explicit."""
     if (

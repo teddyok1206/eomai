@@ -229,10 +229,10 @@ type SupportedLocalEmbeddingWorkflowReceipt = (
 
 def parse_supported_local_embedding_step_output(value: object) -> SupportedLocalEmbeddingStepOutput:
     document = raw_similarity_contract_value(value)
-    if (
-        isinstance(document, dict)
-        and document.get("schema_version") == "local-embedding-step-output/4.0"
-    ):
+    if isinstance(document, dict) and document.get("schema_version") in {
+        "local-embedding-step-output/4.0",
+        "local-embedding-step-output/5.0",
+    }:
         return parse_local_embedding_step_output_v4(document)
     if (
         isinstance(document, dict)
@@ -251,10 +251,10 @@ def parse_supported_local_embedding_workflow_receipt(
     value: object,
 ) -> SupportedLocalEmbeddingWorkflowReceipt:
     document = raw_similarity_contract_value(value)
-    if (
-        isinstance(document, dict)
-        and document.get("schema_version") == "local-embedding-workflow-receipt/4.0"
-    ):
+    if isinstance(document, dict) and document.get("schema_version") in {
+        "local-embedding-workflow-receipt/4.0",
+        "local-embedding-workflow-receipt/5.0",
+    }:
         return parse_local_embedding_workflow_receipt_v4(document)
     if (
         isinstance(document, dict)
@@ -313,7 +313,9 @@ def build_supported_local_embedding_step_output(
     receipt = parse_supported_local_embedding_workflow_receipt(receipt)
     model = local_embedding_step_output_type_for_receipt(receipt)
     body = {
-        "schema_version": model.model_fields["schema_version"].default,
+        "schema_version": "local-embedding-step-output/5.0"
+        if receipt.schema_version == "local-embedding-workflow-receipt/5.0"
+        else model.model_fields["schema_version"].default,
         "purpose": "LOCAL_EMBEDDING",
         **{
             field: getattr(receipt, field)
@@ -327,7 +329,9 @@ def build_supported_local_embedding_step_output(
                 "receipt_sha256",
             )
         },
-        "receipt_schema": model.model_fields["receipt_schema"].default,
+        "receipt_schema": "eom://schemas/workflow/local-embedding-workflow-receipt/5.0"
+        if receipt.schema_version == "local-embedding-workflow-receipt/5.0"
+        else model.model_fields["receipt_schema"].default,
         "receipt": pointer.model_dump(mode="json"),
     }
     output = parse_supported_local_embedding_step_output(

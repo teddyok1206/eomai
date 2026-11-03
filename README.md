@@ -48,7 +48,7 @@
 | 영역 | 상태와 확인할 기록 |
 | --- | --- |
 | 창작 문항 그림 복구 | HWP/HWPX 본문에 실제 쓰인 내장 이미지로 333문항·362그림을 복구하고 운영 조회·해시·재조회를 확인했습니다. 우측 참고 기출 그림은 제외했으며, 이미지가 아닌 표·수식 등 6문항은 미복구 예외로 남겼습니다. Preview 아래 긴 이미지 설명도 숨겼습니다. [범위·예외·운영 기록](docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md) |
-| 한글 원본 그림 신규 입력 | 새 HWP/HWPX 입력도 PDF crop 대신 본문 내장 그림의 실제 사용 개체·viewport·회전을 등록에 연결하도록 배포했습니다. 신규 6문항 등록과 2문항의 실제 서비스 그림 조회를 확인했습니다. 4슬롯 처리는 재개했으며 실제 연속 처리·임베딩을 관측 중입니다. 가져온 가변 구조 정본의 직접 HWPX 출력은 초기 고정형 템플릿과 호환되지 않아 아직 미완료입니다. [운영 결과·남은 경계](docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md) |
+| 한글 원본 그림 신규 입력 | 새 HWP/HWPX 입력도 PDF crop 대신 본문 내장 그림의 실제 사용 개체·viewport·회전을 등록에 연결하도록 배포했습니다. 신규 6문항 등록과 2문항의 실제 서비스 그림 조회, 03–06 네 슬롯의 실제 동시 실행을 확인했습니다. 새 출처 형식의 임베딩 호환 수정은 검증 후 운영 인계 중입니다. 가져온 가변 구조 정본의 직접 HWPX 출력 확장은 사용자 선택에 따라 후속 범위로 분리했습니다. [운영 결과·남은 경계](docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md) |
 | 생성 문항 → GraphRAG·증분 임베딩 | 실제 검색·결과 조회·같은 요청 재전송 검증 완료. [운영 검증](docs/operations/REGISTERED_REVIEW_INCREMENTAL_ACCEPTANCE_2026-10-20.md) |
 | 일반 채팅 | 부가 알림 호환 수정 배포 및 새 메시지의 실제 답변·완료 상태 확인. [배포 기록](docs/operations/GENERAL_CHAT_MODERATION_METADATA_FIX_2026-10-24.md) |
 | 문항 DB | 원본 조회·다중 조건 검색·엑셀 저장·교정본 다운로드·PDF 준비·조립 순서 저장과 재열기를 지원합니다. 표/상세 분할 화면은 운영 배포했고, 원본 전용 편집 합본의 활성화는 별도 범위입니다. [운영 기록](docs/operations/ITEM_DB_CURATED_ASSEMBLY_RELEASE_2026-10-27.md) |

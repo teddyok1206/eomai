@@ -377,8 +377,13 @@ class CatalogPublicSolutionSourceCapture:
             total_bytes += 0 if text.text is None else len(text.text.encode("utf-8"))
             if total_bytes > MAX_PUBLIC_SOLUTION_CAPTURE_BYTES:
                 raise ValueError("PUBLIC_SOLUTION_CAPTURE_BUDGET_EXCEEDED")
+            native = isinstance(evidence, CreativePublicSolutionEvidence) and (
+                evidence.role_result.schema_ref == "external-item-learning-result@3.0"
+            )
             body = {
-                "schema_version": "public-solution-embedding-entry/2.0"
+                "schema_version": "public-solution-embedding-entry/3.0"
+                if native
+                else "public-solution-embedding-entry/2.0"
                 if isinstance(evidence, RegisteredPublicSolutionEvidence)
                 else "public-solution-embedding-entry/1.0",
                 "source": candidate.source,

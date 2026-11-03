@@ -159,7 +159,7 @@ def parse_public_solution_encoding_entry(value: object) -> PublicSolutionEncodin
     document = raw_similarity_contract_value(value)
     if isinstance(document, dict):
         match document.get("schema_version"):
-            case "public-solution-embedding-entry/1.0":
+            case "public-solution-embedding-entry/1.0" | "public-solution-embedding-entry/3.0":
                 return PublicSolutionEmbeddingEntry.model_validate(document)
             case "public-solution-embedding-entry/2.0":
                 return RegisteredPublicSolutionEmbeddingEntry.model_validate(document)

@@ -127,6 +127,8 @@ def assemble_public_solution_binding(
         "schema_version": (
             "embedding-source-binding/4.0"
             if isinstance(entry, RegisteredPublicSolutionEmbeddingEntry)
+            else "embedding-source-binding/5.0"
+            if entry.schema_version == "public-solution-embedding-entry/3.0"
             else "embedding-source-binding/3.0"
         ),
         "source": entry.source,
@@ -202,7 +204,9 @@ def assemble_registered_public_solution_index(
         index_revision_id=index_revision_id,
         previous_manifest=previous_manifest,
         created_at=created_at,
-        version="4.0",
+        version="5.0"
+        if any(entry.schema_version == "public-solution-embedding-entry/3.0" for entry in entries)
+        else "4.0",
     )
     assert isinstance(result, AssembledRegisteredPublicSolutionIndex)
     return result
@@ -219,7 +223,7 @@ def _assemble_public_solution_entries(
     index_revision_id: str,
     previous_manifest: ArtifactMemberPointer | None,
     created_at: datetime,
-    version: Literal["3.0", "4.0"],
+    version: Literal["3.0", "4.0", "5.0"],
 ) -> AssembledPublicSolutionIndex | AssembledRegisteredPublicSolutionIndex:
     """O(entries + rows), plus canonical ordering; no fake rows for missing input.
 
@@ -363,6 +367,9 @@ def _assemble_public_solution_plan(
         body = {
             "schema_version": "embedding-source-binding/4.0"
             if isinstance(demand.evidence, RegisteredPublicSolutionEvidence)
+            else "embedding-source-binding/5.0"
+            if demand.profile.schema_ref
+            == "eom://schemas/knowledge/public-solution-embedding-entry/3.0"
             else "embedding-source-binding/3.0",
             "source": sources[demand.source_revision_id],
             "base_analysis_run_id": demand.base_analysis_run_id,
@@ -402,7 +409,7 @@ def _assemble_public_solution_plan(
         index_revision_id=index_revision_id,
         previous_manifest=previous_manifest,
         created_at=created_at,
-        version="4.0" if isinstance(plan, LocalEmbeddingSourcePlanV4) else "3.0",
+        version=plan.schema_version.rsplit("/", 1)[1],
     )
 
 
@@ -419,7 +426,7 @@ def _assemble_public_solution_manifest(
     index_revision_id: str,
     previous_manifest: ArtifactMemberPointer | None,
     created_at: datetime,
-    version: Literal["3.0", "4.0"],
+    version: str,
 ) -> AssembledPublicSolutionIndex | AssembledRegisteredPublicSolutionIndex:
     body = {
         "schema_version": "embedding-index-manifest/" + version,
@@ -434,7 +441,7 @@ def _assemble_public_solution_manifest(
         "bindings": bindings,
         "created_at": created_at.isoformat().replace("+00:00", "Z"),
     }
-    if version == "4.0":
+    if version in {"4.0", "5.0"}:
         return AssembledRegisteredPublicSolutionIndex(
             PublicSolutionEmbeddingIndexV4.model_validate(
                 body | {"index_sha256": content_sha256(body)}

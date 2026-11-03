@@ -170,3 +170,26 @@ INDEX의 PID·InvocationID·수치 prefix는 모든 단계에서 보존한다.
 동일 claim replay를 확인했고, 기존 3슬롯 테스트도 유지했다. 원본 Work2를 plan32에서
 참조할 때 schema registry가 빠져 있던 오류를 재현·수정했다. 이 연결 검사는 실제
 등록 전에 실행되며, source test PASS와 실제 신규 문항 acceptance는 구분한다.
+
+## 원본 그림·4슬롯·임베딩 우선 범위의 후속 체크포인트
+
+사용자가 `그림 등록·4슬롯·임베딩 우선`을 선택했다. 가변 구조 정본의 신규 HWPX
+renderer 확장은 후속 과제이며 이번 완료 조건에 다시 추가하지 않는다. 위의 실패 build는
+보존한다. 2026-11-03 19:42:04 UTC 실제 03/04/05/06 일반 작업 lease 4개와 이후 각
+슬롯의 성공을 확인했다. API·Catalog·runner의 설치 source는 `20ad28d3`, Web은
+`e22ca6e0`을 유지했다. slot03의 7,200초 고정 실행 unit을 용도 한정으로 추가했고
+기존 GPU/CPU가 pin한 Polkit50 bytes·모델·벡터는 바꾸지 않았다.
+
+INDEX는 새 native result@3 출처를 구 Entry1의 allow-list에서 거부했다. 이 실패를
+성공으로 바꾸지 않는다. 후속 후보는 Entry3/index5/metadata5와 QUERY metadata successor로
+실제 출처를 전달한다. 내부 풀이 텍스트·recipe·encoding identity·numeric INDEX1/QUERY2·
+물리 GPU batch2는 동일하다. 기존 수치 입력에 native PNG나 편집 설명을 추가하지 않는다.
+disposable PostgreSQL에서 새 provenance의 실제 저장·중단 후 재개·동시 등록 재전송이
+통과했다. migration71은 manifest schema allow-list 3개 CHECK만 확장하며 새5 history가
+존재하면 downgrade를 거부한다. 새 table/index/권한·queue·모델 의존성은 없다.
+
+위 후속 후보의 운영 설치·INDEX 실제 처리 결과는 아직 PENDING이며 아래에 따로 기록한다.
+모델 호출 전 slot03 unit 불일치로 실패했던 8건은 `aa145e10`의 명시적 launch recovery
+application으로만 재개한다. 원래 FAILED Job/Workflow와 source/plan/preset pins를 유지하고
+source 등록 business key로 중복 Item/Graph를 막는다. 일반적인 content/worker 실패 전체를
+자동 재실행하거나 새 identity로 무관한 작업을 만드는 허용이 아니다.

@@ -601,6 +601,11 @@ REFERENCE_QUERY_REQUEST_V4_SCHEMA_RESOURCE = (
     "eom://schemas/workflow/reference-query-workflow-request/4.0",
     "sha256:133f561b4a9f6508654e06fe48ee8f7a7719b261d1aa9e8413cbbbad54314702",
 )
+REFERENCE_QUERY_REQUEST_V5_SCHEMA_RESOURCE = (
+    "reference-query-workflow-request-v5.schema.json",
+    "eom://schemas/workflow/reference-query-workflow-request/5.0",
+    "sha256:7970c7c9b42a96fb0f416ce7c501d27d17fadc31517369243f3585e704742352",
+)
 type ReferenceQueryMessageName = Literal[
     "definition", "request", "policy", "launch", "receipt", "step-output"
 ]
@@ -647,6 +652,11 @@ def _reference_query_request_v2_schema() -> dict[str, Any]:
 @cache
 def _reference_query_request_v4_schema() -> dict[str, Any]:
     return _load_pinned_reference_query_schema(REFERENCE_QUERY_REQUEST_V4_SCHEMA_RESOURCE)
+
+
+@cache
+def _reference_query_request_v5_schema() -> dict[str, Any]:
+    return _load_pinned_reference_query_schema(REFERENCE_QUERY_REQUEST_V5_SCHEMA_RESOURCE)
 
 
 def load_reference_query_request_v11_schema() -> dict[str, Any]:
@@ -777,7 +787,14 @@ def validate_reference_query_request_v2(value: object) -> None:
 
 def validate_reference_query_request_v4(value: object) -> None:
     """Registered source proof metadata only; numerical QUERY and receipt remain2."""
-    _validate_reference_query_request_successor(value, REFERENCE_QUERY_REQUEST_V4_SCHEMA_RESOURCE)
+    document = raw_similarity_contract_value(value)
+    _validate_reference_query_request_successor(
+        document,
+        REFERENCE_QUERY_REQUEST_V5_SCHEMA_RESOURCE
+        if isinstance(document, dict)
+        and document.get("schema_version") == "reference-query-workflow-request/5.0"
+        else REFERENCE_QUERY_REQUEST_V4_SCHEMA_RESOURCE,
+    )
 
 
 def _validate_reference_query_request_successor(
@@ -791,6 +808,7 @@ def _validate_reference_query_request_successor(
             REFERENCE_QUERY_REQUEST_V11_SCHEMA_RESOURCE: _reference_query_request_v11_schema,
             REFERENCE_QUERY_REQUEST_V2_SCHEMA_RESOURCE: _reference_query_request_v2_schema,
             REFERENCE_QUERY_REQUEST_V4_SCHEMA_RESOURCE: _reference_query_request_v4_schema,
+            REFERENCE_QUERY_REQUEST_V5_SCHEMA_RESOURCE: _reference_query_request_v5_schema,
         }[resource]()
         Draft202012Validator(
             {"$ref": resource[1]},
@@ -897,6 +915,36 @@ PUBLIC_NATIVE_WORKFLOW_SCHEMA_RESOURCES = (
         "sha256:1c1a2db1ae0643e1e8843d9866fe789b9877e06cabbb9cc9a798d2e82335b8d7",
     ),
     (
+        "native-office-public-source-plan",
+        "local-embedding-source-plan-v5.schema.json",
+        "eom://schemas/workflow/local-embedding-source-plan/5.0",
+        "sha256:e701e1e945932f226f8bc7541deeaacbbcdc8e47ffad95f58586828b9d1d9c8e",
+    ),
+    (
+        "native-office-public-request",
+        "local-embedding-workflow-request-v5.schema.json",
+        "eom://schemas/workflow/local-embedding-workflow-request/5.0",
+        "sha256:73be079a18c574040863fd8feb5a6f0ee8b37010614b80387f738e53c0e18f99",
+    ),
+    (
+        "native-office-public-ownership",
+        "embedding-encoding-ownership-v5.schema.json",
+        "eom://schemas/workflow/embedding-encoding-ownership/5.0",
+        "sha256:9e3f45b6d69d6bcf33447008b91bb4ef29763db4d613627bb70326d9c778a1c2",
+    ),
+    (
+        "native-office-public-completion",
+        "local-embedding-completion-v5.schema.json",
+        "eom://schemas/workflow/local-embedding-completion/5.0",
+        "sha256:891588e6e1fa34c851d6640ed40d3fcd719667f7a8497fe46a9fdfc545968af9",
+    ),
+    (
+        "native-office-public-coordinator",
+        "native-embedding-coordinator-v5.schema.json",
+        "eom://schemas/workflow/native-embedding-coordinator/5.0",
+        "sha256:57c5907ab9eb0dd89a45872778ddd350dd9d9ca32e05fe8d23225e6d589f36fc",
+    ),
+    (
         "public-completion",
         "local-embedding-completion-v3.schema.json",
         "eom://schemas/workflow/local-embedding-completion/3.0",
@@ -992,6 +1040,11 @@ EMBEDDING_BENCHMARK_LAUNCH_CONTROL_SCHEMA_RESOURCE = (
     "sha256:2ceb6cb0150ffc64f2b4e94fed17cff36181b486885c8f78d8e6c0cd4c34de27",
 )
 type LocalEmbeddingSchemaName = Literal[
+    "native-office-public-source-plan",
+    "native-office-public-request",
+    "native-office-public-ownership",
+    "native-office-public-completion",
+    "native-office-public-coordinator",
     "private-chat-publication-v2",
     "private-chat-runner-v2",
     "private-chat-public-execution",
@@ -1179,6 +1232,9 @@ def validate_local_embedding_admission_message(
                 "registered-public-completion",
                 "public-coordinator",
                 "registered-public-coordinator",
+                "native-office-public-request",
+                "native-office-public-completion",
+                "native-office-public-coordinator",
                 "mixed-completion",
                 "definition-v2",
                 "execution-policy",

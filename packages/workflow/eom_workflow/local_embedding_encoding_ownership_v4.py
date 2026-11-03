@@ -47,9 +47,19 @@ EMBEDDING_ENCODING_OWNERSHIP_V4_SCHEMA_SHA256 = (
 class LocalEmbeddingLaunchIntentV4(PublicSolutionLaunchIntentBody):
     _source_plan_schema_ref: ClassVar[str] = LOCAL_EMBEDDING_SOURCE_PLAN_V4_SCHEMA_REF
 
+    def source_plan_member_schema_ref(self) -> str:
+        if self.source_plan.schema_ref not in {
+            LOCAL_EMBEDDING_SOURCE_PLAN_V4_SCHEMA_REF,
+            "eom://schemas/workflow/local-embedding-source-plan/5.0",
+        }:
+            raise ValueError("NATIVE_OFFICE_SOURCE_PLAN_FAMILY_MISMATCH")
+        return self.source_plan.schema_ref
+
 
 class LocalEmbeddingLaunchAssociationV4(NativeEmbeddingContract):
-    schema_version: Literal["embedding-encoding-ownership/4.0"] = "embedding-encoding-ownership/4.0"
+    schema_version: Literal[
+        "embedding-encoding-ownership/4.0", "embedding-encoding-ownership/5.0"
+    ] = "embedding-encoding-ownership/4.0"
     record_type: Literal["LAUNCH_ASSOCIATION"] = "LAUNCH_ASSOCIATION"
     intent: LocalEmbeddingLaunchIntentV4
     owned_jobs: tuple[LocalEmbeddingOwnedJob, ...] = Field(min_length=1, max_length=1024)
@@ -66,7 +76,9 @@ class LocalEmbeddingLaunchAssociationV4(NativeEmbeddingContract):
 
 
 class EmbeddingEncodingAttachedEventV4(NativeEmbeddingContract):
-    schema_version: Literal["embedding-encoding-ownership/4.0"] = "embedding-encoding-ownership/4.0"
+    schema_version: Literal[
+        "embedding-encoding-ownership/4.0", "embedding-encoding-ownership/5.0"
+    ] = "embedding-encoding-ownership/4.0"
     record_type: Literal["ATTACHED"] = "ATTACHED"
     owned_job: LocalEmbeddingOwnedJob
     intent: LocalEmbeddingLaunchIntentV4
@@ -81,7 +93,9 @@ class EmbeddingEncodingAttachedEventV4(NativeEmbeddingContract):
 
 
 class EmbeddingEncodingCompletedEventV4(NativeEmbeddingContract):
-    schema_version: Literal["embedding-encoding-ownership/4.0"] = "embedding-encoding-ownership/4.0"
+    schema_version: Literal[
+        "embedding-encoding-ownership/4.0", "embedding-encoding-ownership/5.0"
+    ] = "embedding-encoding-ownership/4.0"
     record_type: Literal["COMPLETED"] = "COMPLETED"
     owned_job: LocalEmbeddingOwnedJob
     intent: LocalEmbeddingLaunchIntentV4
@@ -97,7 +111,9 @@ class EmbeddingEncodingCompletedEventV4(NativeEmbeddingContract):
 
 
 class EmbeddingEncodingReadResultV4(NativeEmbeddingContract):
-    schema_version: Literal["embedding-encoding-ownership/4.0"] = "embedding-encoding-ownership/4.0"
+    schema_version: Literal[
+        "embedding-encoding-ownership/4.0", "embedding-encoding-ownership/5.0"
+    ] = "embedding-encoding-ownership/4.0"
     record_type: Literal["READ_RESULT"] = "READ_RESULT"
     owned_job: LocalEmbeddingOwnedJob
     owner_intent: LocalEmbeddingLaunchIntentV4
@@ -129,7 +145,13 @@ _ADAPTER: TypeAdapter[EmbeddingEncodingOwnershipMessageV4] = TypeAdapter(
 def parse_embedding_encoding_ownership_v4(value: object) -> EmbeddingEncodingOwnershipMessageV4:
     try:
         document = raw_public_solution_contract_value(value)
-        validate_local_embedding_admission_message("registered-public-ownership", document)
+        validate_local_embedding_admission_message(
+            "native-office-public-ownership"
+            if isinstance(document, dict)
+            and document.get("schema_version") == "embedding-encoding-ownership/5.0"
+            else "registered-public-ownership",
+            document,
+        )
         return _ADAPTER.validate_python(document)
     except Exception:
         raise LocalEmbeddingAdmissionContractError("LOCAL_EMBEDDING_CONTRACT_INVALID") from None

@@ -65,7 +65,6 @@ from eom_workflow.local_embedding_source_plan_v3 import (
     parse_local_embedding_source_plan_v3,
 )
 from eom_workflow.local_embedding_source_plan_v4 import (
-    LOCAL_EMBEDDING_SOURCE_PLAN_V4_SCHEMA_REF,
     LocalEmbeddingSourcePlanV4,
     parse_local_embedding_source_plan_v4,
 )
@@ -371,7 +370,7 @@ class LocalEmbeddingControlArtifactPublisher:
             raw=canonical_json_bytes(checked.model_dump(mode="json")),
             semantic_sha256=checked.plan_sha256,
             member="source-plan.json",
-            schema=LOCAL_EMBEDDING_SOURCE_PLAN_V4_SCHEMA_REF,
+            schema="eom://schemas/workflow/" + checked.schema_version,
             artifact_type=SOURCE_PLAN_ARTIFACT_TYPE,
             idempotency_key=idempotency_key,
             created_at=ControlPublicationTime.FIRST_OBSERVATION,

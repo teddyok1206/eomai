@@ -221,7 +221,10 @@ def parse_supported_embedding_message(value: object) -> SupportedEmbeddingMessag
             return parse_embedding_encoding_ownership_v2(document)
         if document.get("schema_version") == "embedding-encoding-ownership/3.0":
             return parse_embedding_encoding_ownership_v3(document)
-        if document.get("schema_version") == "embedding-encoding-ownership/4.0":
+        if document.get("schema_version") in {
+            "embedding-encoding-ownership/4.0",
+            "embedding-encoding-ownership/5.0",
+        }:
             return parse_embedding_encoding_ownership_v4(document)
     raise ValueError("LOCAL_EMBEDDING_CONTRACT_INVALID")
 
@@ -236,7 +239,10 @@ def parse_supported_embedding_intent(value: object) -> SupportedEmbeddingIntent:
             return LocalEmbeddingLaunchIntentV2.model_validate(document)
         if schema == "eom://schemas/workflow/local-embedding-source-plan/3.0":
             return LocalEmbeddingLaunchIntentV3.model_validate(document)
-        if schema == "eom://schemas/workflow/local-embedding-source-plan/4.0":
+        if schema in {
+            "eom://schemas/workflow/local-embedding-source-plan/4.0",
+            "eom://schemas/workflow/local-embedding-source-plan/5.0",
+        }:
             return LocalEmbeddingLaunchIntentV4.model_validate(document)
     raise ValueError("LOCAL_EMBEDDING_CONTRACT_INVALID")
 
@@ -254,6 +260,9 @@ def embedding_ownership_version(intent: SupportedEmbeddingIntent) -> str:
         ),
         "eom://schemas/workflow/local-embedding-source-plan/4.0": (
             "embedding-encoding-ownership/4.0"
+        ),
+        "eom://schemas/workflow/local-embedding-source-plan/5.0": (
+            "embedding-encoding-ownership/5.0"
         ),
     }[checked.source_plan.schema_ref]
 

@@ -166,6 +166,9 @@ def build_local_indexing_service_runtime(
                 EmbeddingEncodingReservationStorage.require_registered_public_ownership_protocol(
                     session
                 )
+                EmbeddingEncodingReservationStorage.require_native_office_public_ownership_protocol(
+                    session
+                )
         verifier = FixedIndexingRuntimeVerification(selection.runtime_verifier)
         launcher = FixedNativeIndexLauncher(
             selection.cpu_environment_raw_sha256.removeprefix("sha256:"),

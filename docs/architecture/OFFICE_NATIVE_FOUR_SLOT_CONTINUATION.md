@@ -44,6 +44,33 @@ continuation의 실제 4개 slot claim/진행을 확인하고, 새 문항의 풀
 전체 잔여 corpus가 며칠 걸리더라도 서비스를 계속 돌도록 남기며, 단순 READY나 unit
 개수만으로 실제 4슬롯/Graph/임베딩 성공을 주장하지 않는다.
 
+### 사용자 확정 범위 (2026-11-03)
+
+사용자가 `그림 등록·4슬롯·임베딩 우선`을 선택했다. 가져온 canonical1 문항의 가변 구조를
+새 HWPX로 재출력하는 renderer 확장은 후속 과제로 분리한다. 기존 실패 build를 보존하며
+현재 목표의 완료 조건에 이 확장을 다시 추가하지 않는다.
+
+### 원본 그림 보고서의 증분 임베딩 출처 연결
+
+실제 INDEX는 외부 분석 result@3의 출처 포인터를 구 Entry1의 @1/@2 허용 목록에서
+거부했다. 내부 풀이보고서 V2와 `public-solution-text/1.0`, recipe2, encoding identity,
+기존 모델·CPU/GPU 수치 실행환경·shard는 변경하지 않는다. 수치 입력은 계속 검증된
+`EmbeddingTextInput`이며 원본 그림 bytes를 임베딩에 섞지 않는다.
+
+새 provenance에는 Entry3 및 metadata5 successor를 사용한다. 공개한 predecessor schema
+bytes는 보존하며, 기존 담당 계약 parser가 각 명시적 버전의 JSON Schema와 hash를 검증한다.
+기존 버전의 tag로 새 포인터를 위장하지 않는다. INDEX2 application DAG·queue·claim,
+DB table/열·권한 정책은 그대로이며 읽기/저장/재전송 경계만 새 출처 형식을 지원한다.
+
+정본은 승인된 source/lineage/result Artifact다. logical Item과 revision·Artifact·content hash는
+분리한다. map/set 및 indexed revision lookup으로 source/demand를 연결하고 정렬된 immutable
+manifest를 만든다 (N개에 O(N log N), 공간 O(N)). 기존 source lock·CAS head·unique encoding
+key가 동시성/재전송을 보호한다. 새 table/index/queue/모델 의존성은 없다. 실제 disposable
+저장에서 발견한 기존 manifest schema allow-list 3개 CHECK만 migration71로 확장한다.
+rollback은 새5 metadata가 있으면 거부하며, 데이터 삭제나 과거 vector 재계산은 없다. 실패한 owner 실행과
+벡터는 보존하고, 인계 시 실행 중 numerical child가 없는지 확인한다. 단순히 old enum을
+넓히는 대안은 released bytes와 실제 출처를 바꾸므로 사용하지 않는다.
+
 ## 관측된 과거 실패의 처리
 
 새 입력 파일럿의 모집단 조회에서 과거 COMPLETED 및 FAILED Workflow가 함께 확인됐다.

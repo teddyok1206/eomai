@@ -4,11 +4,6 @@ import importlib.util
 from pathlib import Path
 
 import pytest
-from eom_catalog_service.embedding_registry_models import (
-    EmbeddingIndexRevisionRecord,
-    EmbeddingSourceBindingRecord,
-)
-from sqlalchemy import CheckConstraint
 
 from tests.unit.test_local_embedding_stage_migration import RecordingOperations
 
@@ -31,12 +26,11 @@ def test_three_check_successor_matches_orm_and_frozen_predecessor(monkeypatch):
 
     module = registered_public_migration()
     assert module.revision == "20261031_0066" and module.down_revision == "20261031_0065"
-    current = {
-        (model.__tablename__, value.name): str(value.sqltext)
-        for model in (EmbeddingSourceBindingRecord, EmbeddingIndexRevisionRecord)
-        for value in model.__table__.constraints
-        if isinstance(value, CheckConstraint)
-    }
+    # ORM now admits native Office metadata5. Compare this frozen predecessor
+    # with migration71's exact predecessor, not with today's mutable ORM.
+    from tests.unit.test_native_office_embedding_migration import migration
+
+    current = {(table, name): value for table, name, value in migration()._PREVIOUS_CHECKS}
     old = {(table, name): value for table, name, value in public_solution_migration()._CHECKS}
     assert len(module._CHECKS) == len(module._PREVIOUS_CHECKS) == 3
     assert all(current[(table, name)] == value for table, name, value in module._CHECKS)

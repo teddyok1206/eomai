@@ -138,6 +138,7 @@ class PublicSolutionSimilarityIndexPinV4(_RegisteredSimilarityValue):
             schema_refs=(
                 PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
                 REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+                "eom://schemas/knowledge/embedding-index-manifest/5.0",
             ),
         )
         return self
@@ -150,9 +151,9 @@ class PublicSolutionSimilarityViewV4(_RegisteredSimilarityValue):
 
 
 class PublicSolutionSimilarityRequestV4(_RegisteredSimilarityValue):
-    schema_version: Literal["system-rag-similarity-request/4.0"] = (
-        "system-rag-similarity-request/4.0"
-    )
+    schema_version: Literal[
+        "system-rag-similarity-request/4.0", "system-rag-similarity-request/5.0"
+    ] = "system-rag-similarity-request/4.0"
     request_id: str = Field(pattern=r"^similarityrequest_[0-9a-f]{32}$")
     consumer_purpose: PublicSolutionSimilarityPurpose
     anchor: PublicSolutionReferenceV4
@@ -170,8 +171,14 @@ class PublicSolutionSimilarityRequestV4(_RegisteredSimilarityValue):
     @model_validator(mode="before")
     @classmethod
     def schema_first(cls, value: object) -> object:
+        value = raw_similarity_contract_value(value)
         return similarity_contract_document(
-            value, REGISTERED_PUBLIC_SIMILARITY_SCHEMA, MAX_SIMILARITY_CONTEXT_BYTES
+            value,
+            "public-solution-similarity-v5"
+            if isinstance(value, dict)
+            and value.get("schema_version") == "system-rag-similarity-request/5.0"
+            else REGISTERED_PUBLIC_SIMILARITY_SCHEMA,
+            MAX_SIMILARITY_CONTEXT_BYTES,
         )
 
     @model_validator(mode="after")
@@ -189,9 +196,9 @@ class RegisteredPublicSolutionSimilarityCandidate(RegisteredPublicSolutionSource
 
 
 class PublicSolutionSimilarityContextV4(_RegisteredSimilarityValue):
-    schema_version: Literal["system-rag-similarity-context/4.0"] = (
-        "system-rag-similarity-context/4.0"
-    )
+    schema_version: Literal[
+        "system-rag-similarity-context/4.0", "system-rag-similarity-context/5.0"
+    ] = "system-rag-similarity-context/4.0"
     request: PublicSolutionSimilarityRequestV4
     status: Literal["READY", "PARTIAL", "EMPTY", "FAILED"]
     population: PublicSolutionSimilarityPopulation | None
@@ -206,8 +213,14 @@ class PublicSolutionSimilarityContextV4(_RegisteredSimilarityValue):
     @model_validator(mode="before")
     @classmethod
     def schema_first(cls, value: object) -> object:
+        value = raw_similarity_contract_value(value)
         return similarity_contract_document(
-            value, REGISTERED_PUBLIC_SIMILARITY_SCHEMA, MAX_SIMILARITY_CONTEXT_BYTES
+            value,
+            "public-solution-similarity-v5"
+            if isinstance(value, dict)
+            and value.get("schema_version") == "system-rag-similarity-context/5.0"
+            else REGISTERED_PUBLIC_SIMILARITY_SCHEMA,
+            MAX_SIMILARITY_CONTEXT_BYTES,
         )
 
     @model_validator(mode="after")
@@ -232,7 +245,7 @@ def parse_supported_public_solution_similarity_request(
         match document.get("schema_version"):
             case "system-rag-similarity-request/3.0":
                 return PublicSolutionSimilarityRequest.model_validate(document)
-            case "system-rag-similarity-request/4.0":
+            case "system-rag-similarity-request/4.0" | "system-rag-similarity-request/5.0":
                 return PublicSolutionSimilarityRequestV4.model_validate(document)
     raise ValueError("PUBLIC_SOLUTION_SIMILARITY_FAMILY_UNSUPPORTED")
 
@@ -245,6 +258,6 @@ def parse_supported_public_solution_similarity_context(
         match document.get("schema_version"):
             case "system-rag-similarity-context/3.0":
                 return PublicSolutionSimilarityContext.model_validate(document)
-            case "system-rag-similarity-context/4.0":
+            case "system-rag-similarity-context/4.0" | "system-rag-similarity-context/5.0":
                 return PublicSolutionSimilarityContextV4.model_validate(document)
     raise ValueError("PUBLIC_SOLUTION_SIMILARITY_FAMILY_UNSUPPORTED")

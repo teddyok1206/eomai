@@ -6,6 +6,7 @@ from eom_catalog_contracts.reference_query_prepare import (
     ReferenceQueryPrepareReplyV3,
     ReferenceQueryPrepareReplyV4,
     ReferenceQueryPrepareReplyV5,
+    ReferenceQueryPrepareReplyV6,
     ReferenceQueryPrepareRequestV3,
     ReferenceQueryPrepareRequestV4,
     SingleReferenceQueryPrepareRequest,
@@ -75,11 +76,17 @@ class RoutedNativeReferenceQueryPreparation:
             )
             for child in observed.children
         ]
-        registered = prepared.manifest.schema_ref == (
+        native = (
+            prepared.manifest.schema_ref
+            == "eom://schemas/workflow/reference-query-routed-preparation/4.0"
+        )
+        registered = native or prepared.manifest.schema_ref == (
             "eom://schemas/workflow/reference-query-routed-preparation/3.0"
         )
         reply_type = (
-            ReferenceQueryPrepareReplyV5
+            ReferenceQueryPrepareReplyV6
+            if native
+            else ReferenceQueryPrepareReplyV5
             if registered
             else ReferenceQueryPrepareReplyV4
             if isinstance(request, ReferenceQueryPrepareRequestV4)
@@ -87,7 +94,9 @@ class RoutedNativeReferenceQueryPreparation:
         )
         reply = reply_type.model_validate(
             dict(
-                schema_version="system-rag-reference-query-prepare-reply/5.0"
+                schema_version="system-rag-reference-query-prepare-reply/6.0"
+                if native
+                else "system-rag-reference-query-prepare-reply/5.0"
                 if registered
                 else "system-rag-reference-query-prepare-reply/4.0"
                 if isinstance(request, ReferenceQueryPrepareRequestV4)

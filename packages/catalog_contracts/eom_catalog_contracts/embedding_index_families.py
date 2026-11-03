@@ -42,7 +42,6 @@ from eom_catalog_contracts.mixed_embedding_registry import MixedEmbeddingIndexNa
 from eom_catalog_contracts.public_solution_embedding import PublicSolutionEmbeddingEntry
 from eom_catalog_contracts.public_solution_embedding_index import (
     MAX_PUBLIC_SOLUTION_SOURCES,
-    PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
     PublicSolutionEmbeddingIndex,
     PublicSolutionEmbeddingSourceBinding,
     PublicSolutionIndexNamespace,
@@ -52,7 +51,6 @@ from eom_catalog_contracts.registered_public_solution_embedding import (
     RegisteredPublicSolutionEmbeddingEntry,
 )
 from eom_catalog_contracts.registered_public_solution_index import (
-    REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
     PublicSolutionEmbeddingIndexV4,
     RegisteredPublicSolutionProfilePointer,
     RegisteredPublicSolutionSourceBinding,
@@ -106,7 +104,9 @@ def parse_supported_embedding_namespace(value: object) -> SupportedEmbeddingName
 
 def parse_supported_embedding_index(value: object) -> SupportedEmbeddingIndex:
     if isinstance(value, PublicSolutionEmbeddingIndexV4) or (
-        isinstance(value, dict) and value.get("schema_version") == "embedding-index-manifest/4.0"
+        isinstance(value, dict)
+        and value.get("schema_version")
+        in {"embedding-index-manifest/4.0", "embedding-index-manifest/5.0"}
     ):
         return PublicSolutionEmbeddingIndexV4.model_validate(
             raw_public_solution_contract_value(value)
@@ -127,10 +127,10 @@ def parse_supported_embedding_binding(value: object) -> SupportedEmbeddingBindin
         and document.get("schema_version") == "embedding-source-binding/4.0"
     ):
         return RegisteredPublicSolutionSourceBinding.model_validate(document)
-    if (
-        isinstance(document, dict)
-        and document.get("schema_version") == "embedding-source-binding/3.0"
-    ):
+    if isinstance(document, dict) and document.get("schema_version") in {
+        "embedding-source-binding/3.0",
+        "embedding-source-binding/5.0",
+    }:
         return PublicSolutionEmbeddingSourceBinding.model_validate(document)
     return parse_legacy_binding(document)
 
@@ -142,10 +142,10 @@ def parse_supported_embedding_entry(value: object) -> SupportedEmbeddingEntry:
         and document.get("schema_version") == "public-solution-embedding-entry/2.0"
     ):
         return RegisteredPublicSolutionEmbeddingEntry.model_validate(document)
-    if (
-        isinstance(document, dict)
-        and document.get("schema_version") == "public-solution-embedding-entry/1.0"
-    ):
+    if isinstance(document, dict) and document.get("schema_version") in {
+        "public-solution-embedding-entry/1.0",
+        "public-solution-embedding-entry/3.0",
+    }:
         return PublicSolutionEmbeddingEntry.model_validate(document)
     return parse_legacy_entry(document)
 
@@ -193,9 +193,7 @@ def validate_supported_embedding_index_references(
                 raise ValueError("PUBLIC_SOLUTION_INDEX_PREDECESSOR_INVALID")
             validate_embedding_manifest_pointer(
                 previous[0],
-                REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF
-                if isinstance(previous[1], PublicSolutionEmbeddingIndexV4)
-                else PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+                "eom://schemas/knowledge/" + previous[1].schema_version,
                 "index.json",
             )
         validate_embedding_index_reference_layout(index, shards, previous)

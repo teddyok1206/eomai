@@ -324,7 +324,9 @@ def _start_with_pinned_context(
                 raise ValueError("REFERENCE_QUERY_INITIAL_NAMESPACE_MISMATCH")
         policy, bundle = read_pinned_reference_query_controls(reader, config)
         body = {
-            "schema_version": "reference-query-workflow-request/4.0"
+            "schema_version": "reference-query-workflow-request/5.0"
+            if context.schema_version == "system-rag-similarity-request/5.0"
+            else "reference-query-workflow-request/4.0"
             if isinstance(context, PublicSolutionSimilarityRequestV4)
             else "reference-query-workflow-request/3.0"
             if isinstance(context, PublicSolutionSimilarityRequest)

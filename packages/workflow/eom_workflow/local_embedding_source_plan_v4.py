@@ -71,7 +71,9 @@ class PublicSolutionEncodingDemandV4(FrozenModel):
 
 class LocalEmbeddingSourcePlanV4(FrozenModel):
     model_config = ConfigDict(revalidate_instances="always", hide_input_in_errors=True)
-    schema_version: Literal["local-embedding-source-plan/4.0"] = "local-embedding-source-plan/4.0"
+    schema_version: Literal[
+        "local-embedding-source-plan/4.0", "local-embedding-source-plan/5.0"
+    ] = "local-embedding-source-plan/4.0"
     corpus_id: str = Field(pattern=r"^corpus_[0-9a-f]{32}$")
     graph_snapshot: KnowledgeGraphSnapshotPointer
     access_policy_revision_id: str = Field(pattern=r"^accessrev_[0-9a-f]{32}$")
@@ -99,7 +101,13 @@ class LocalEmbeddingSourcePlanV4(FrozenModel):
     @classmethod
     def schema_first(cls, value: object) -> object:
         document = raw_public_solution_contract_value(value)
-        validate_local_embedding_admission_message("registered-public-source-plan", document)
+        validate_local_embedding_admission_message(
+            "native-office-public-source-plan"
+            if isinstance(document, dict)
+            and document.get("schema_version") == "local-embedding-source-plan/5.0"
+            else "registered-public-source-plan",
+            document,
+        )
         return document
 
     @model_validator(mode="after")

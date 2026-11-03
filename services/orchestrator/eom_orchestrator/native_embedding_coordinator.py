@@ -165,10 +165,18 @@ class NativeEmbeddingCoordinator:
 
     def _checkpoint_protocol(self) -> tuple[str, str]:
         if isinstance(self.intent, LocalEmbeddingLaunchIntentV4):
-            return "native-embedding-coordinator/4.0", next(
+            native = self.intent.source_plan.schema_ref.endswith("/5.0")
+            return (
+                "native-embedding-coordinator/5.0" if native else "native-embedding-coordinator/4.0"
+            ), next(
                 row[3]
                 for row in PUBLIC_NATIVE_WORKFLOW_SCHEMA_RESOURCES
-                if row[0] == "registered-public-coordinator"
+                if row[0]
+                == (
+                    "native-office-public-coordinator"
+                    if native
+                    else "registered-public-coordinator"
+                )
             )
         if isinstance(self.intent, LocalEmbeddingLaunchIntentV3):
             return "native-embedding-coordinator/3.0", next(

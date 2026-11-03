@@ -205,9 +205,15 @@ def execution(
     request: pytest.FixtureRequest,
 ):
     execution_mode = getattr(request, "param", "operator")
-    registered_public_mode = execution_mode == "registered_public"
-    public_mode = execution_mode in {"public", "registered_public"}
-    service_mode = execution_mode in {"service", "public", "registered_public"}
+    native_office_mode = execution_mode == "native_office_public"
+    registered_public_mode = execution_mode in {"registered_public", "native_office_public"}
+    public_mode = execution_mode in {"public", "registered_public", "native_office_public"}
+    service_mode = execution_mode in {
+        "service",
+        "public",
+        "registered_public",
+        "native_office_public",
+    }
     cuda_mode = execution_mode in {"cuda", "cuda_bulk", "cuda_deferred"}
     cpu_fallback = execution_mode in {"cpu_fallback", "cpu_fallback_catchup"}
     addfinalizer = request.addfinalizer
@@ -315,6 +321,21 @@ def execution(
                     )
                 )
             entries = tuple(registered_entries)
+            if native_office_mode:
+                native_entries = []
+                for original_entry in entries:
+                    value = original_entry.model_dump(mode="json")
+                    value.update(
+                        schema_version="public-solution-embedding-entry/3.0",
+                        evidence=public_entry(creative=True).model_dump(mode="json")["evidence"],
+                    )
+                    value["evidence"]["role_result"]["schema_ref"] = (
+                        "external-item-learning-result@3.0"
+                    )
+                    native_entries.append(
+                        PublicSolutionEmbeddingEntry.model_validate(seal(value, "entry_sha256"))
+                    )
+                entries = tuple(native_entries)
             capture = replace(capture, sources=tuple(entry.source for entry in entries))
         recipe = entries[0].recipe
         namespace = PublicSolutionIndexNamespace(
@@ -415,7 +436,9 @@ def execution(
     )
     if service_mode:
         body.update(
-            schema_version="local-embedding-workflow-request/4.0"
+            schema_version="local-embedding-workflow-request/5.0"
+            if native_office_mode
+            else "local-embedding-workflow-request/4.0"
             if registered_public_mode
             else "local-embedding-workflow-request/3.0"
             if public_mode
@@ -651,6 +674,10 @@ def execution(
                 EmbeddingEncodingReservationStorage.prepare_registered_public_ownership_protocol(
                     session
                 )
+                if native_office_mode:
+                    EmbeddingEncodingReservationStorage.prepare_native_office_public_ownership_protocol(
+                        session
+                    )
             else:
                 EmbeddingEncodingReservationStorage.prepare_public_ownership_protocol(session)
         ensure_protocol_version(
@@ -1075,6 +1102,72 @@ def test_registered_public_native_interruption_reuses_original_numeric_result(
     execution, monkeypatch, phase
 ):
     test_actual_interruption_resumes_same_outputs_without_reencoding(execution, monkeypatch, phase)
+
+
+@pytest.mark.parametrize("execution", ["native_office_public"], indirect=True)
+@pytest.mark.parametrize("phase", [None, "encoding_complete", "REGISTERED"])
+def test_native_office_report_commits_and_resumes_without_duplicate_encoding(
+    execution, monkeypatch, phase
+):
+    if phase is not None:
+        test_actual_interruption_resumes_same_outputs_without_reencoding(
+            execution, monkeypatch, phase
+        )
+        return
+    started = execution.start()
+    assert execution.advance(*started) is True
+    execution.finish(*started)
+    assert execution.launcher.forwards == 1
+    with execution.sessions.begin() as session:
+        workflow = session.get(WorkflowInstanceRecord, started[0].workflow_id)
+        assert workflow.state == "COMPLETED"
+        assert workflow.initial_request["schema_version"] == "local-embedding-workflow-request/5.0"
+        bindings = tuple(
+            session.scalars(
+                select(EmbeddingSourceBindingRecord).where(
+                    EmbeddingSourceBindingRecord.item_revision_id.in_(
+                        tuple(s.item_revision_id for s in execution.plan.sources)
+                    )
+                )
+            )
+        )
+        assert len(bindings) == len(execution.plan.sources)
+        assert all(
+            b.binding_manifest_schema_ref == "eom://schemas/knowledge/embedding-index-manifest/5.0"
+            for b in bindings
+        )
+        event = session.scalar(
+            select(JobEventRecord)
+            .join(JobRecord, JobRecord.job_id == JobEventRecord.job_id)
+            .where(
+                JobRecord.task_type == "native_embedding_launch",
+                JobRecord.request["request_sha256"].astext == execution.request.request_sha256,
+                JobEventRecord.event == "EMBEDDING_NATIVE_INDEX_PREPARED",
+            )
+        )
+        from eom_catalog_contracts.registered_public_solution_registry import (
+            RegisterPublicSolutionIndexCommandV4,
+        )
+
+        command = RegisterPublicSolutionIndexCommandV4.model_validate(
+            event.data["payload"]["registration_command"]
+        )
+    from eom_catalog_service.embedding_registry_application import register_embedding_index
+
+    barrier = Barrier(2)
+    caller = execution.owner.registry_caller(execution.request)
+
+    def replay(_index):
+        with execution.sessions.begin() as session:
+            barrier.wait(timeout=10)
+            return register_embedding_index(session, caller, command, execution.owner.catalog)
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        replies = tuple(pool.map(replay, range(2)))
+    assert all(reply.replayed for reply in replies)
+    assert len({reply.current_index_revision_id for reply in replies}) == 1
+    assert len({reply.current_lock_version for reply in replies}) == 1
+    assert execution.launcher.forwards == 1
 
 
 @pytest.mark.parametrize("execution", ["public"], indirect=True)

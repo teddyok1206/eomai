@@ -92,7 +92,11 @@ def build_routed_reference_query_context(
         top_k=query.top_k,
     )
     if isinstance(selection, EmbeddingBatchSelectionV15):
-        body["schema_version"] = "system-rag-similarity-request/4.0"
+        body["schema_version"] = (
+            "system-rag-similarity-request/5.0"
+            if selection.schema_version == "embedding-batch-plan/1.9"
+            else "system-rag-similarity-request/4.0"
+        )
     elif isinstance(selection, EmbeddingBatchSelectionV14):
         body["schema_version"] = "system-rag-similarity-request/3.0"
     else:

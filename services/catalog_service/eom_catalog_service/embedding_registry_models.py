@@ -139,7 +139,8 @@ class EmbeddingSourceBindingRecord(Base):
             "('eom://schemas/knowledge/embedding-index-manifest/1.0',"
             "'eom://schemas/knowledge/embedding-index-manifest/2.0',"
             "'eom://schemas/knowledge/embedding-index-manifest/3.0',"
-            "'eom://schemas/knowledge/embedding-index-manifest/4.0') AND "
+            "'eom://schemas/knowledge/embedding-index-manifest/4.0',"
+            "'eom://schemas/knowledge/embedding-index-manifest/5.0') AND "
             "binding_manifest_media_type = 'application/json' AND "
             "((evidence_kind = 'ACCEPTED_SOLUTION_ANALYSIS' AND "
             "binding_manifest_schema_ref IN "
@@ -149,7 +150,8 @@ class EmbeddingSourceBindingRecord(Base):
             "binding_manifest_schema_ref = 'eom://schemas/knowledge/embedding-index-manifest/2.0') "
             "OR (evidence_kind = 'PUBLIC_SOLUTION_REPORT' AND "
             "binding_manifest_schema_ref IN ('eom://schemas/knowledge/embedding-index-manifest/3.0',"
-            "'eom://schemas/knowledge/embedding-index-manifest/4.0')))",
+            "'eom://schemas/knowledge/embedding-index-manifest/4.0',"
+            "'eom://schemas/knowledge/embedding-index-manifest/5.0')))",
             name="ck_embedding_binding_member",
         ),
         ForeignKeyConstraint(
@@ -384,7 +386,8 @@ class EmbeddingIndexRevisionRecord(Base):
             "binding_count >= 1 AND eligible_source_count >= binding_count AND "
             "eligible_source_count <= CASE WHEN manifest_schema_ref IN "
             "('eom://schemas/knowledge/embedding-index-manifest/3.0',"
-            "'eom://schemas/knowledge/embedding-index-manifest/4.0') "
+            "'eom://schemas/knowledge/embedding-index-manifest/4.0',"
+            "'eom://schemas/knowledge/embedding-index-manifest/5.0') "
             "THEN 16384 ELSE 1024 END",
             name="ck_embedding_index_revision_coverage",
         ),
@@ -393,7 +396,8 @@ class EmbeddingIndexRevisionRecord(Base):
             "manifest_schema_ref IN ('eom://schemas/knowledge/embedding-index-manifest/1.0',"
             "'eom://schemas/knowledge/embedding-index-manifest/2.0',"
             "'eom://schemas/knowledge/embedding-index-manifest/3.0',"
-            "'eom://schemas/knowledge/embedding-index-manifest/4.0') AND "
+            "'eom://schemas/knowledge/embedding-index-manifest/4.0',"
+            "'eom://schemas/knowledge/embedding-index-manifest/5.0') AND "
             "manifest_media_type = 'application/json'",
             name="ck_embedding_index_revision_member",
         ),

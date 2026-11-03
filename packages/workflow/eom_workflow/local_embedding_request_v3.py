@@ -71,7 +71,7 @@ class PublicSolutionWorkflowRequestBody(NativeEmbeddingContract):
     def exact_request(self) -> Self:
         validate_local_embedding_request_control_values(
             source_plan=self.source_plan,
-            source_plan_schema_ref=self._source_plan_schema_ref,
+            source_plan_schema_ref=self.source_plan_member_schema_ref(),
             native_execution_policy=self.native_execution_policy,
             policy_schema_ref=LOCAL_EMBEDDING_SERVICE_POLICY_SCHEMA_REF,
             graph_snapshot=self.graph_snapshot,
@@ -81,6 +81,9 @@ class PublicSolutionWorkflowRequestBody(NativeEmbeddingContract):
         )
         validate_local_embedding_request_hash(self, self.request_sha256)
         return self
+
+    def source_plan_member_schema_ref(self) -> str:
+        return self._source_plan_schema_ref
 
 
 class LocalEmbeddingWorkflowRequestV3(PublicSolutionWorkflowRequestBody):

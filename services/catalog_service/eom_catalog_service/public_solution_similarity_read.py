@@ -188,12 +188,11 @@ class CatalogPublicSolutionSimilarityRead:
         if current is None:
             raise SimilarityContextReadError("INDEX_POINTER_INVALID")
         registered, _version = current
-        registered_source = (
-            registered.index_manifest.schema_ref == REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF
-            or any(
-                isinstance(value, RegisteredPublicSolutionEmbeddingEntry)
-                for value in entries.values()
-            )
+        registered_source = registered.index_manifest.schema_ref in {
+            REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
+            "eom://schemas/knowledge/embedding-index-manifest/5.0",
+        } or any(
+            isinstance(value, RegisteredPublicSolutionEmbeddingEntry) for value in entries.values()
         )
         view_type = (
             PublicSolutionSimilarityViewV4 if registered_source else PublicSolutionSimilarityView
@@ -220,7 +219,13 @@ class CatalogPublicSolutionSimilarityRead:
         # Full population/binding/vector checks remain in the actual batch owner.
         self.catalog.validate_initial_public_query_index(session, caller, intent, registered)
         body = dict(
-            schema_version="system-rag-similarity-request/4.0"
+            schema_version="system-rag-similarity-request/5.0"
+            if registered.index_manifest.schema_ref.endswith("/5.0")
+            or any(
+                value.schema_version == "public-solution-embedding-entry/3.0"
+                for value in entries.values()
+            )
+            else "system-rag-similarity-request/4.0"
             if registered_source
             else "system-rag-similarity-request/3.0",
             consumer_purpose=preparation.consumer_purpose,

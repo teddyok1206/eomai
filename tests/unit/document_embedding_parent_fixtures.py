@@ -34,7 +34,8 @@ from tests.unit.test_local_embedding_source_plan_v4 import plan_value
 
 
 @pytest.fixture
-def parent_case(routed, monkeypatch):
+def parent_case(routed, monkeypatch, request):
+    native_office = getattr(request, "param", False) is True
     sources = routed.build()
     pair = sources.namespaces[0]
     base = service_fixture()
@@ -73,6 +74,15 @@ def parent_case(routed, monkeypatch):
             )
         )
         registered_sources = tuple(entry.source for entry in entries)
+        if native_office:
+            from tests.unit.test_native_office_public_embedding import native_entry
+
+            entries = tuple(
+                native_entry(entry)
+                if entry.evidence.kind == "REGISTERED_CREATIVE_SOURCE_REPORT"
+                else entry
+                for entry in entries
+            )
         recipe = entries[0].recipe
     captured = ResolvedEmbeddingLookup(
         query.corpus_id,
@@ -108,7 +118,9 @@ def parent_case(routed, monkeypatch):
     with routed.publisher.sessions.begin() as session:
         controls = pair.cuda.owner.resolve_reconciliation_controls(session, query, gpu)
     body = base.request.model_dump(mode="json") | dict(
-        schema_version="local-embedding-workflow-request/4.0"
+        schema_version="local-embedding-workflow-request/5.0"
+        if native_office
+        else "local-embedding-workflow-request/4.0"
         if registered
         else "local-embedding-workflow-request/3.0"
         if public
