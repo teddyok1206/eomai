@@ -8,6 +8,7 @@ import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from eom_catalog_service.creative_cohort_execution import CREATIVE_TERMINAL_SOURCE_CODES
 from eom_catalog_service.creative_learning_runner import (
     MAX_STATUS_BYTES,
     STATE_ROOT,
@@ -73,7 +74,11 @@ def read_observation(root: Path, cohort_id: str) -> dict[str, object]:
             or not isinstance(entry[0], str)
             or re.fullmatch(r"[0-9]{5}", entry[0]) is None
             or entry[1]
-            not in {"OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING", CREATIVE_CONTENT_UNAVAILABLE_CODE}
+            not in {
+                "OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING",
+                CREATIVE_CONTENT_UNAVAILABLE_CODE,
+                *CREATIVE_TERMINAL_SOURCE_CODES,
+            }
             for entry in blocked
         )
         or len({entry[0] for entry in blocked}) != len(blocked)

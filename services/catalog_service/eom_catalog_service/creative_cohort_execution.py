@@ -87,6 +87,11 @@ class CreativeSourceExecution:
     state: str = "PREPARING"
 
 
+CREATIVE_TERMINAL_SOURCE_CODES = frozenset(
+    {"CREATIVE_COHORT_EXTRACTION_TERMINAL_FAILURE", "CREATIVE_COHORT_ANALYSIS_TERMINAL_FAILURE"}
+)
+
+
 class CreativeSourceTerminalFailure(ValueError):
     """One proven terminal source, not a permission/hash/Graph failure to suppress."""
 
@@ -96,6 +101,8 @@ class CreativeSourceTerminalFailure(ValueError):
         selection: ExternalItemLearningRoleSelection,
         code: str,
     ) -> None:
+        if code not in CREATIVE_TERMINAL_SOURCE_CODES:
+            raise ValueError("CREATIVE_TERMINAL_SOURCE_CODE_INVALID")
         self.target, self.selection, self.code = target, selection, code
         super().__init__(code)
 

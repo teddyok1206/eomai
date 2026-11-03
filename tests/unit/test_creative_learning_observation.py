@@ -59,7 +59,16 @@ def test_stale_status_is_not_reported_as_recent_progress(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize(
-    "fault", [None, "missing_content", "duplicate", "unknown_error", "overcount"]
+    "fault",
+    [
+        None,
+        "missing_content",
+        "extraction_failed",
+        "analysis_failed",
+        "duplicate",
+        "unknown_error",
+        "overcount",
+    ],
 )
 def test_deferred_sources_are_counted_separately_without_becoming_completed(tmp_path, fault):
     root = tmp_path / "status"
@@ -67,6 +76,10 @@ def test_deferred_sources_are_counted_separately_without_becoming_completed(tmp_
     blocked = [["11400", "OFFICE_DOCUMENT_CONVERSION_OUTPUT_MISSING"]]
     if fault == "missing_content":
         blocked = [["11416", "CREATIVE_SOURCE_ITEM_UNREADABLE"]]
+    elif fault == "extraction_failed":
+        blocked = [["11741", "CREATIVE_COHORT_EXTRACTION_TERMINAL_FAILURE"]]
+    elif fault == "analysis_failed":
+        blocked = [["11742", "CREATIVE_COHORT_ANALYSIS_TERMINAL_FAILURE"]]
     if fault == "duplicate":
         blocked *= 2
     elif fault == "unknown_error":
@@ -81,7 +94,7 @@ def test_deferred_sources_are_counted_separately_without_becoming_completed(tmp_
             "blocked_sources": blocked,
         },
     )
-    if fault in (None, "missing_content"):
+    if fault in (None, "missing_content", "extraction_failed", "analysis_failed"):
         result = observation.read_observation(root, COHORT_ID)
         assert result["verified_count"] == 2 and result["blocked_source_count"] == 1
         assert "blocked_sources" not in result
