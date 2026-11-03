@@ -1,0 +1,81 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/image-provider/office-picture-use-catalog/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "extractor_profile", "embedded_images", "picture_uses", "rendered_uses", "native_objects", "manifest_sha256"],
+  "properties": {
+    "schema_version": {"const": "office-picture-use-catalog/1.0"},
+    "extractor_profile": {"const": "HANCOM_NATIVE_PICTURE_USES_V1"},
+    "embedded_images": {"$ref": "eom://schemas/image-provider/office-embedded-image-set/1.0"},
+    "picture_uses": {"type": "array", "maxItems": 2048, "items": {"$ref": "#/$defs/pictureUse"}},
+    "rendered_uses": {"type": "array", "maxItems": 2048, "items": {"$ref": "#/$defs/pictureView"}},
+    "native_objects": {"type": "array", "maxItems": 4096, "items": {"$ref": "#/$defs/nativeObject"}},
+    "manifest_sha256": {"$ref": "#/$defs/sha256"}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "objectId": {"type": "string", "pattern": "^officeobj_[0-9a-f]{32}$"},
+    "nullableObjectId": {"oneOf": [{"$ref": "#/$defs/objectId"}, {"type": "null"}]},
+    "locator": {
+      "type": "object", "additionalProperties": false,
+      "required": ["member_path", "ordinal"],
+      "properties": {
+        "member_path": {"type": "string", "pattern": "^(BodyText/Section[0-9]+|Contents/section[0-9]+\\.xml)$", "maxLength": 128},
+        "ordinal": {"type": "integer", "minimum": 0, "maximum": 100000}
+      }
+    },
+    "pair": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "integer", "minimum": 1, "maximum": 1000000000}},
+    "box": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "integer", "minimum": 0, "maximum": 1000000000}},
+    "geometry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["original_extent", "viewport", "clockwise_quarter_turns", "flip_horizontal", "flip_vertical"],
+      "properties": {
+        "original_extent": {"$ref": "#/$defs/pair"},
+        "viewport": {"$ref": "#/$defs/box"},
+        "clockwise_quarter_turns": {"type": "integer", "minimum": 0, "maximum": 3},
+        "flip_horizontal": {"type": "boolean"},
+        "flip_vertical": {"type": "boolean"}
+      }
+    },
+    "pictureUse": {
+      "type": "object", "additionalProperties": false,
+      "required": ["use_id", "locator", "source_member", "native_sha256", "group_id", "geometry", "unresolved_reasons"],
+      "properties": {
+        "use_id": {"$ref": "#/$defs/objectId"},
+        "locator": {"$ref": "#/$defs/locator"},
+        "source_member": {"type": ["string", "null"], "pattern": "^BinData/[^/\\\\]+$", "maxLength": 256},
+        "native_sha256": {"$ref": "#/$defs/sha256"},
+        "group_id": {"$ref": "#/$defs/nullableObjectId"},
+        "geometry": {"oneOf": [{"$ref": "#/$defs/geometry"}, {"type": "null"}]},
+        "unresolved_reasons": {
+          "type": "array", "uniqueItems": true, "maxItems": 8,
+          "items": {"enum": ["EXTERNAL_IMAGE", "UNSUPPORTED_IMAGE", "GEOMETRY_UNRESOLVED", "NON_ORTHOGONAL_TRANSFORM", "GROUP_COMPOSITION_REQUIRED", "IMAGE_EFFECT_UNSUPPORTED", "MISSING_IMAGE"]}
+        }
+      }
+    },
+    "pictureView": {
+      "type": "object", "additionalProperties": false,
+      "required": ["use_id", "member_path", "sha256", "width_px", "height_px", "content_length"],
+      "properties": {
+        "use_id": {"$ref": "#/$defs/objectId"},
+        "member_path": {"type": "string", "pattern": "^(images|uses)/[0-9a-f]{64}\\.png$"},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "width_px": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "height_px": {"type": "integer", "minimum": 1, "maximum": 10000},
+        "content_length": {"type": "integer", "minimum": 24, "maximum": 67108864}
+      }
+    },
+    "nativeObject": {
+      "type": "object", "additionalProperties": false,
+      "required": ["object_id", "locator", "kind", "group_id", "native_sha256"],
+      "properties": {
+        "object_id": {"$ref": "#/$defs/objectId"},
+        "locator": {"$ref": "#/$defs/locator"},
+        "kind": {"enum": ["TABLE", "EQUATION", "DRAWING", "TEXT_BOX", "GROUP"]},
+        "group_id": {"$ref": "#/$defs/nullableObjectId"},
+        "native_sha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

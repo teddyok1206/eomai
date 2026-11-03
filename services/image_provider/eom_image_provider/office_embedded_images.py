@@ -186,17 +186,10 @@ def _normalize_raster(payload: bytes) -> tuple[bytes, str, str, int, int] | None
     return result, pixel_sha256, source_format, width, height
 
 
-def extract_office_embedded_images(
-    source: Path, *, expected_sha256: str, workspace: Path
-) -> OfficeEmbeddedImageSet:
-    """Run inside the existing isolated document/image workspace, with no GPU claim.
-
-    The complete source is materialized once; each embedded raster is decoded one
-    at a time. Deduplicated output keys are immutable PNG hashes, never filenames
-    supplied by the document. This adapter writes only its new local workspace.
-    """
-    if not source.is_absolute() or not workspace.is_absolute() or os.path.lexists(workspace):
-        raise OfficeEmbeddedImageError("OFFICE_EMBEDDED_WORKSPACE_INVALID")
+def read_verified_office_source(source: Path, *, expected_sha256: str) -> bytes:
+    """One bounded, hash-verified materialization shared by pixels and native records."""
+    if not source.is_absolute():
+        raise OfficeEmbeddedImageError("OFFICE_EMBEDDED_SOURCE_INVALID")
     descriptor = os.open(source, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
     with os.fdopen(descriptor, "rb") as stream:
         before = os.fstat(stream.fileno())
@@ -211,6 +204,25 @@ def extract_office_embedded_images(
         or _sha(payload) != expected_sha256
     ):
         raise OfficeEmbeddedImageError("OFFICE_EMBEDDED_SOURCE_HASH_MISMATCH")
+    return payload
+
+
+def extract_office_embedded_images(
+    source: Path, *, expected_sha256: str, workspace: Path
+) -> OfficeEmbeddedImageSet:
+    """Extract complete source pixels in the isolated local document workspace."""
+    if not source.is_absolute() or not workspace.is_absolute() or os.path.lexists(workspace):
+        raise OfficeEmbeddedImageError("OFFICE_EMBEDDED_WORKSPACE_INVALID")
+    payload = read_verified_office_source(source, expected_sha256=expected_sha256)
+    return _extract_office_image_payload(
+        payload, expected_sha256=expected_sha256, workspace=workspace
+    )
+
+
+def _extract_office_image_payload(
+    payload: bytes, *, expected_sha256: str, workspace: Path
+) -> OfficeEmbeddedImageSet:
+    """Internal pixel half of the same verified Office materialization."""
     if payload.startswith(b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1"):
         source_format: Literal["HWP5", "HWPX"] = "HWP5"
         members = _hwp_members(payload)
