@@ -92,9 +92,58 @@ rollback은 보관된 호환 wheel/config로 서비스 설치를 복원하는 �
 
 ## 실제 완료 기록
 
-`DEPLOYMENT=PENDING`, `NEW_INTAKE_PREVIEW_HWPX=PENDING`.
-최종 source/설치/활성화와 신규 입력 identity·원본 use·Preview/media·HWPX 증거는
-실제 실행이 끝난 후 기록한다.
+2026-11-03 19:18 UTC 체크포인트. **배포·등록·그림 조회와 HWPX 출력 성공은 다르다.**
+
+| 경계 | 실제 결과 |
+| --- | --- |
+| API/Web/Catalog/Workflow/HWPX queue 호환 설치 | `e22ca6e0af37d383daab24d24b3f3b796ebaedd3`, migration `20261103_0070` |
+| CPU Office parser | 보호된 CPU prefix `6e3b5860497d2106ed529cb78bf9ff8e526b4978`; 실제 HWP/HWPX 6건 추출 PASS, 일반 회색조 원본 2건 추가 PASS |
+| 신규 Workflow3 등록 | 원본 번호 11744–11749, 6건 실제 등록. 완료 보고서를 새 identity로 재생성하지 않음 |
+| 실제 API 서비스 identity → Catalog 그림 조회 | 11744·11745의 Preview/content/PNG SHA·크기·재조회 PASS. 원본 이미지 목록 Artifact의 동일 member를 재사용 |
+| 신규 HWPX 출력 | **PENDING / 실제 canary 2건 FAILED 보존.** 아래 확인된 출력 경계 참조 |
+| creative continuation | `creative-learning-continuation/1.2`, `rev_a6fe27b5036d4595833680588c01b634`, original target set 1,053 유지 |
+| 4슬롯 모델 호환성 | 01–06 기존 7개 model/effort 조합과 03 xhigh 추가 조합의 실제 8회 PASS. 이전 scope를 무근거 복사하지 않고 새 committed proof로 모두 재확인 |
+| Graph publication owner | `8d19ae309ba6609516bb22efbdb5c4e8d95e8cde` 설치·재개. 실제 4건 publication/4개 동시 일반 작업/새 임베딩 capture는 관측 중 |
+
+그림 조회 canary는 이전 복구 override가 아니라 신규 정본 자체를 읽었다.
+11744는 `itemrev_945f90d669784350b3bfba838ba63f71`, 11745는
+`itemrev_9672ead850d0493c8af2282199e3011e`다. service identity의 실제 bytes를 읽어
+등록된 member SHA·PNG header 크기와 대조했다. 이 기록은 브라우저 또는 Hancom 수동
+육안 PASS를 주장하지 않는다.
+
+4슬롯 공식 호환성 보고서는 `artifact_d35dbfb821144414b8117fabe415efc0` /
+`rev_866ba6c9b1714316b450973418aa2460` / `report.json`, SHA
+`62bae4c766f7f50f761cc91d7484cc90c63e504a0b9809748ed3fa4ce26f6fe1`이다.
+03의 물리 image role은 유지하며 해당 보고서의 xhigh support 용도만 허용했다.
+첫 진단의 4개 PASS checkpoint는 OBSERVE가 다른 binding version을 갱신해 후속
+검사와 연결되지 못했다. 그 checkpoint를 고치지 않고 정기 관측 담당을 잠깐 멈춘
+새 진단 8회로 전체를 재확인했다. 정기 관측 담당은 다시 시작했다. 총 실제 진단
+추론은 12회이며, 준비/빈 디렉터리 오류 두 번은 모델 호출이 아니다.
+
+### 확인된 HWPX 출력 경계 — 미완료
+
+가져온 창작 정본은 가변 paragraph/table/image의 `assessment-item-content/1.0`이다.
+기존 auto delivery는 이 schema를 초기 `eom-question-template-v1`에 보냈다. 이 renderer는
+고정된 6 block, 2×3 표, 800×500 PNG 1개만 지원하므로 실제 native 원본 크기·가변
+그림 수의 문항을 처리할 수 없다. 11744·11745를 실제 요청해 확인했으며, 그림 bytes를
+줄이거나 빈 표를 만들어 그 계약에 억지로 맞추지 않았다.
+
+실패 build `hwpxbuild_0fe59152f8cf400e9da662b2e2ce907b` 및
+`hwpxbuild_d5c5fa44505b4cb6b20047034599ce01`은 그대로 FAILED다. canary 요청의
+item_number 기본값 누락도 있었으며, 고정형 projector를 따로 호출했을 때 실제 콘텐츠가
+지원 범위 밖임을 확인했다. 따라서 단순 item_number 보충만으로 HWPX 성공이라 할 수 없다.
+기존 AI content-team V2/V3 renderer나 원본 다운로드의 성공을 이 신규 정본 출력 성공으로
+대체하지 않는다. 기존 정본과 실패를 유지하며 이 출력 경계는 아직 닫지 않았다.
+
+### INDEX reader의 안전한 호환 인계
+
+기존 INDEX coordinator `aac48433`은 Workflow3 source lineage를 읽지 못한다. 현재
+finite command가 끝나도록 main에 정상 종료 신호를 주고, 실제 inactive/exit0·자식
+수치 실행 없음·기존 작업 완료를 확인했다. 이후 기존 release/identity/activation
+application으로 reader `6e3b5860`을 선택해 재개했다. 수치 controller `a70cd434`,
+CPU/GPU 모델·환경·bundle·이미 만들어진 벡터는 바꾸거나 지우지 않았다. **coordinator
+PID까지 불변이라는 뜻은 아니다.** 새 coordinator의 실제 등록 보고서 capture/임베딩
+연결은 별도로 확인 중이다.
 
 ### 추가 승인된 후속 범위
 
