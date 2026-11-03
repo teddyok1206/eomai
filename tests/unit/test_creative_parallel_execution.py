@@ -176,3 +176,46 @@ def test_parallel_driver_rejects_unadmitted_serial_scope(monkeypatch):
     with pytest.raises(ValueError, match="PARALLEL_CONTINUATION_REQUIRED"):
         CreativeCohortParallelExecutionService(case.owner, verified_limit=12)
     case.driver.close()
+
+
+@pytest.mark.parametrize("native", [False, True])
+def test_only_native_successor_continues_past_a_proven_terminal_source(monkeypatch, native):
+    from eom_catalog_service.creative_cohort_execution import CreativeSourceTerminalFailure
+
+    from tests.unit.test_office_creative_continuation import office_continuation_case
+
+    case = driver_case(monkeypatch, count=12)
+    if native:
+        previous, _, continuation = office_continuation_case()
+        case.owner.scope = CreativeLearningExecutionScope(previous.cohort, continuation, previous)
+    original = case.owner.advance_report.side_effect
+
+    def advance(source):
+        if source.target == case.targets[0]:
+            raise CreativeSourceTerminalFailure(
+                source.target, source.selection, "CREATIVE_COHORT_EXTRACTION_TERMINAL_FAILURE"
+            )
+        original(source)
+
+    case.owner.advance_report.side_effect = advance
+    if native:
+        progress = case.driver.advance_once()
+        assert progress.blocked_sources == (
+            (case.targets[0].external_number, "CREATIVE_COHORT_EXTRACTION_TERMINAL_FAILURE"),
+        )
+        assert len(case.visited) == 5 and case.driver.verified_count == 0
+        assert case.targets[0].source_id not in case.driver.window
+    else:
+        with pytest.raises(CreativeSourceTerminalFailure):
+            case.driver.advance_once()
+        assert not case.driver.blocked
+    case.driver.close()
+
+
+def test_unclassified_source_error_still_stops_instead_of_being_hidden(monkeypatch):
+    case = driver_case(monkeypatch)
+    case.owner.advance_report.side_effect = ValueError("CREATIVE_COHORT_WORKFLOW_POLICY_MISMATCH")
+    with pytest.raises(ValueError, match="POLICY_MISMATCH"):
+        case.driver.advance_once()
+    assert not case.driver.blocked and case.driver.verified_count == 0
+    case.driver.close()

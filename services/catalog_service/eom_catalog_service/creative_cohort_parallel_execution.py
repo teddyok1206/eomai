@@ -9,6 +9,7 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import replace
 
 from eom_catalog_contracts.creative_learning_continuation import (
+    CreativeLearningOfficeContinuation,
     ParallelReportContinuation,
 )
 
@@ -16,6 +17,7 @@ from eom_catalog_service.creative_cohort_execution import (
     CreativeCohortExecutionService,
     CreativeCohortProgress,
     CreativeSourceExecution,
+    CreativeSourceTerminalFailure,
 )
 from eom_catalog_service.creative_item_registration import CreativeItemContentUnavailable
 from eom_catalog_service.creative_preview_preparation import CreativeSourcePreviewDeferred
@@ -78,6 +80,18 @@ class CreativeCohortParallelExecutionService:
                 except CreativeItemContentUnavailable as error:
                     if error.target != source.target or error.selection != source.selection:
                         raise ValueError("CREATIVE_CONTENT_RESULT_IDENTITY_MISMATCH") from error
+                    self.blocked[source_id] = (source.target.external_number, error.code)
+                    del self.window[source_id]
+                except CreativeSourceTerminalFailure as error:
+                    # Only the explicit native successor continues past a proven
+                    # historical failure. Old drivers still stop; no retry or
+                    # successful registration is inferred from this scheduling.
+                    if not isinstance(
+                        self.owner.scope.continuation, CreativeLearningOfficeContinuation
+                    ):
+                        raise
+                    if error.target != source.target or error.selection != source.selection:
+                        raise ValueError("CREATIVE_TERMINAL_RESULT_IDENTITY_MISMATCH") from error
                     self.blocked[source_id] = (source.target.external_number, error.code)
                     del self.window[source_id]
         ready = tuple(

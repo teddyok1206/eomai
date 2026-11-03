@@ -87,6 +87,19 @@ class CreativeSourceExecution:
     state: str = "PREPARING"
 
 
+class CreativeSourceTerminalFailure(ValueError):
+    """One proven terminal source, not a permission/hash/Graph failure to suppress."""
+
+    def __init__(
+        self,
+        target: CreativeCohortTarget,
+        selection: ExternalItemLearningRoleSelection,
+        code: str,
+    ) -> None:
+        self.target, self.selection, self.code = target, selection, code
+        super().__init__(code)
+
+
 def pending_first_targets(
     targets: tuple[CreativeCohortTarget, ...], published_keys: frozenset[str]
 ) -> tuple[CreativeCohortTarget, ...]:
@@ -301,7 +314,9 @@ class CreativeCohortExecutionService:
                 raise ValueError("CREATIVE_COHORT_WORKFLOW_MISSING")
             state = workflow.state
         if state in {"FAILED", "CANCELLED"}:
-            raise ValueError("CREATIVE_COHORT_EXTRACTION_TERMINAL_FAILURE")
+            raise CreativeSourceTerminalFailure(
+                target, selection, "CREATIVE_COHORT_EXTRACTION_TERMINAL_FAILURE"
+            )
         if state != "COMPLETED":
             if not current.started:
                 with self.sessions.begin() as session:
@@ -325,7 +340,9 @@ class CreativeCohortExecutionService:
                 if run is None:
                     raise ValueError("CREATIVE_COHORT_ANALYSIS_MISSING")
                 if run.state in {"FAILED", "REJECTED", "CANCELLED"}:
-                    raise ValueError("CREATIVE_COHORT_ANALYSIS_TERMINAL_FAILURE")
+                    raise CreativeSourceTerminalFailure(
+                        target, selection, "CREATIVE_COHORT_ANALYSIS_TERMINAL_FAILURE"
+                    )
                 if run.state not in {"ACCEPTED", "NEEDS_REVIEW", "VALIDATING"}:
                     workflow = session.get(WorkflowInstanceRecord, run.workflow_id)
                     if workflow is not None and workflow.state not in {
@@ -342,7 +359,9 @@ class CreativeCohortExecutionService:
         )
         current.analysis = progress
         if progress.analysis_state in {"FAILED", "REJECTED", "CANCELLED"}:
-            raise ValueError("CREATIVE_COHORT_ANALYSIS_TERMINAL_FAILURE")
+            raise CreativeSourceTerminalFailure(
+                target, selection, "CREATIVE_COHORT_ANALYSIS_TERMINAL_FAILURE"
+            )
         current.state = "READY_TO_PUBLISH" if progress.analysis_state == "ACCEPTED" else "ANALYZING"
 
     def publish_sources(self, sources: tuple[CreativeSourceExecution, ...]) -> None:

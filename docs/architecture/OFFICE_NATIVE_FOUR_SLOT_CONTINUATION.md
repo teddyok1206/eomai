@@ -40,3 +40,12 @@ continuation의 실제 4개 slot claim/진행을 확인하고, 새 문항의 풀
 공통 임베딩 대상 수록/처리를 관측한다. 기존 성공·실패와 GPU INDEX pin/PID를 보존한다.
 전체 잔여 corpus가 며칠 걸리더라도 서비스를 계속 돌도록 남기며, 단순 READY나 unit
 개수만으로 실제 4슬롯/Graph/임베딩 성공을 주장하지 않는다.
+
+## 관측된 과거 실패의 처리
+
+새 입력 파일럿의 모집단 조회에서 과거 COMPLETED 및 FAILED Workflow가 함께 확인됐다.
+`1.2` 병렬 driver에 한해, application이 정확한 target/selection의 terminal source failure를
+확인하면 기존 `blocked_sources`에 기록하고 다른 문항을 처리한다. 과거 serial/3슬롯
+driver의 중단 의미는 유지한다. 권한·hash·정책·Graph publication 오류나 분류되지 않은
+예외는 계속 전체 중단한다. source별 실패는 등록/검증 완료 수에 포함하지 않고, 새
+identity를 만들어 자동 재실행하거나 과거 FAILED를 성공으로 바꾸지 않는다.
