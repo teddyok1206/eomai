@@ -220,7 +220,12 @@ INDEX PID `3284474`와 고정 설치/설정은 두 번의 릴리스 전후 동�
 
 ## 향후 한글 문항 신규 입력 설계
 
-2026-11-03 UTC 사용자 결정. **설계 확정, 신규 입력 경로 구현·검증 중이며 운영 활성화는 아직 아니다.**
+2026-11-03 UTC 사용자 결정. **신규 원본 그림 등록 경로는 운영 배포·실제 등록 검증을 마쳤다.**
+후속 확인 질문에서 사용자가 `그림 등록·4슬롯·임베딩 우선`을 선택했으므로, 가변 구조
+정본의 신규 HWPX 재출력 renderer 확장은 명시적으로 후속 범위로 분리한다. 원래 아래의
+전체 소비 경로 설계는 보존하며, 이를 HWPX 출력 성공으로 보고하지 않는다. 최신 설치·
+원본 형식별 실제 증거·남은 검증은
+[신규 입력 운영 기록](../operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md)을 기준으로 본다.
 이번 333문항 복구에서 검증한 원본 이미지 우선 방식을 이후 HWP/HWPX 문항 입력에
 적용한다. 신규 문항은 처음부터 정확한 그림 pointer를 canonical Item에 등록한다.
 잘린 그림으로 먼저 등록한 뒤 모든 문항에 별도 복구 Artifact를 붙이는 방식을 기본으로
@@ -339,4 +344,7 @@ Artifact에 존재하더라도 일반 문항 media 조회는 등록된 본문 bl
 풀이·원문 분석은 기존 result `2.0`을 그대로 재사용하고 새 outer role result에 Office 그림
 binding만 추가한다. 신규 일괄 접수는 기존 target/policy cohort metadata를 보존하는 `2.0`
 실행 binding으로 시작한다. 기존 cohort/continuation 및 진행 중 작업의 실행 핀은 바꾸지 않는다.
-새 DB·queue·Graph layer·임베딩 형식은 추가하지 않는다.
+새 DB·queue·Graph layer·수치 임베딩 형식은 추가하지 않는다. 이후 실제 native role@3
+출처를 구 provenance allow-list가 거부한 경계에는 Entry3/index5 metadata successor와
+manifest allow-list 3개 CHECK만 추가했다. 공개 풀이 텍스트·recipe·encoding identity·
+모델·space·기존 벡터는 그대로이며, 그 운영·검증 기록은 위 릴리스 문서에 구분한다.

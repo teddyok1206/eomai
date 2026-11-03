@@ -147,6 +147,19 @@ def test_native_plan_index_reuses_past_creative_and_registered_rows_without_reen
         )
         == "INDEX_MEMBERSHIP_CHANGED"
     )
+    continued = assemble_registered_public_solution_index_revision(
+        current,
+        available_rows=rows,
+        shards=shards,
+        index_id=built.index.index_id,
+        index_revision_id="embeddingindexrev_" + "8" * 32,
+        previous_manifest=pointer,
+        created_at=old_index.created_at,
+    )
+    assert continued.index.previous_manifest == pointer
+    assert continued.index.bindings == built.index.bindings
+    assert continued.shards == built.shards
+    assert parse_supported_embedding_index(continued.index) == continued.index
 
 
 @pytest.mark.parametrize(
