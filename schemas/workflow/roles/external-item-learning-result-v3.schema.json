@@ -1,0 +1,95 @@
+{
+  "$defs": {
+    "artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "file_name": {
+          "const": "result.json"
+        },
+        "logical_artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        }
+      },
+      "required": [
+        "logical_artifact_id",
+        "revision_id",
+        "file_name",
+        "media_type"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "https://eom.local/schemas/workflow/roles/external-item-learning-result-v3.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "artifact": {
+      "$ref": "#/$defs/artifact"
+    },
+    "completed_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "job_id": {
+      "pattern": "^job_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "output": {
+      "additionalProperties": false,
+      "properties": {
+        "learning_result": {
+          "$ref": "eom://schemas/external-item/learning-result/2.0"
+        },
+        "office_visuals": {
+          "$ref": "eom://schemas/external-item/office-visual-bindings/1.0"
+        }
+      },
+      "required": [
+        "learning_result",
+        "office_visuals"
+      ],
+      "type": "object"
+    },
+    "protocol_version": {
+      "const": "workflow-role/1.36.0"
+    },
+    "role": {
+      "const": "support"
+    },
+    "schema_version": {
+      "const": "1.0"
+    },
+    "status": {
+      "const": "ok"
+    },
+    "step_run_id": {
+      "pattern": "^steprun_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_version",
+    "protocol_version",
+    "job_id",
+    "workflow_id",
+    "step_run_id",
+    "status",
+    "artifact",
+    "completed_at",
+    "role",
+    "output"
+  ],
+  "type": "object"
+}

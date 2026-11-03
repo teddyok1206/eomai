@@ -10,7 +10,10 @@ from eom_workflow.control_plane import (
     ExecutionPresetEvaluationReport,
     ExecutionPresetRevision,
 )
-from eom_workflow.creative_learning_profile import creative_learning_profile
+from eom_workflow.creative_learning_profile import (
+    CreativeLearningProfile,
+    creative_learning_profile,
+)
 from eom_workflow.schemas import load_role_input_schema, role_schema_bundle_hash
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -28,6 +31,7 @@ from eom_orchestrator.control_service import (
     resolve_released_instruction_bundle,
 )
 from eom_orchestrator.external_item_learning_controls import (
+    CREATIVE_OFFICE_INSTRUCTION_BUNDLE_KEY,
     CREATIVE_SOURCE_INSTRUCTION_BUNDLE_KEY,
     publish_external_item_learning_instruction_bundle,
 )
@@ -54,12 +58,14 @@ def _instruction(
     operator_id: str,
     source_commit: str,
     authorize: Callable[[str], None],
+    bundle_key: str = CREATIVE_SOURCE_INSTRUCTION_BUNDLE_KEY,
+    reviewed_at: datetime | None = None,
 ) -> BundleRevisionPointer:
     """Replay a published exact two-layer bundle, not its mutable current meaning."""
     with sessions() as session:
         logical = session.scalar(
             select(ExecutionBundleRecord).where(
-                ExecutionBundleRecord.bundle_key == CREATIVE_SOURCE_INSTRUCTION_BUNDLE_KEY,
+                ExecutionBundleRecord.bundle_key == bundle_key,
                 ExecutionBundleRecord.bundle_kind == "INSTRUCTION",
             )
         )
@@ -105,9 +111,9 @@ def _instruction(
         role_payload=role,
         operator_id=operator_id,
         source_commit=source_commit,
-        created_at=datetime.now(UTC),
+        created_at=reviewed_at or datetime.now(UTC),
         authorize_control_change=authorize,
-        bundle_key=CREATIVE_SOURCE_INSTRUCTION_BUNDLE_KEY,
+        bundle_key=bundle_key,
     )
 
 
@@ -160,7 +166,96 @@ def release_creative_source_controls(
             raise ControlPlaneError(
                 "CONTROL_CREATIVE_SOURCE_BASE_INVALID", "source baseline differs"
             )
-    profile = creative_learning_profile("2.0.0")
+    return _release_source_family(
+        sessions,
+        publisher,
+        baseline=baseline,
+        capacity_revision_id=capacity_revision_id,
+        platform_payload=platform_payload,
+        role_payload=role_payload,
+        operator_id=operator_id,
+        source_commit=source_commit,
+        authorize=authorize,
+        profile=creative_learning_profile("2.0.0"),
+        bundle_key=CREATIVE_SOURCE_INSTRUCTION_BUNDLE_KEY,
+    )
+
+
+def release_creative_office_controls(
+    sessions: sessionmaker[Session],
+    publisher: ControlArtifactPublisher,
+    *,
+    baseline_revision_id: str,
+    capacity_revision_id: str,
+    platform_payload: bytes,
+    role_payload: bytes,
+    operator_id: str,
+    source_commit: str,
+    authorize: Callable[[str], None],
+    reviewed_at: datetime,
+) -> ExecutionPresetRevision:
+    """Native Office successor; inherit exact released support capacity and model policy."""
+    authorize(operator_id)
+    with sessions() as session:
+        row = session.get(ExecutionPresetRevisionRecord, baseline_revision_id)
+        baseline = validated_preset(row) if row else None
+        logical = session.get(ExecutionPresetRecord, baseline.preset_id) if baseline else None
+        capacity = resolve_released_capacity_policy(session, capacity_revision_id)
+        if (
+            not isinstance(baseline, ExecutionPresetRevision)
+            or baseline.state != "RELEASED"
+            or logical is None
+            or logical.state != "ACTIVE"
+            or logical.preset_key
+            not in {"creative-source-learning", "creative-source-learning-parallel"}
+            or baseline.compatible_workflow_protocols != ("workflow-role/1.34.0",)
+            or baseline.capacity_policy_revision_id != capacity_revision_id
+            or baseline.general_knowledge_policy != "DENY"
+            or len(baseline.role_policies) != 1
+            or baseline.role_policies[0].role != "support"
+            or baseline.role_policies[0].worker_pool_key != "support"
+            or baseline.role_policies[0].network != "disabled"
+            or baseline.role_policies[0].sandbox != "read-only"
+            or baseline.role_policies[0].reference_bundle is not None
+            or not any(
+                pool.pool_key == "support" and pool.max_active >= 1 for pool in capacity.pools
+            )
+        ):
+            raise ControlPlaneError(
+                "CONTROL_CREATIVE_OFFICE_BASE_INVALID", "released source-analysis baseline differs"
+            )
+    return _release_source_family(
+        sessions,
+        publisher,
+        baseline=baseline,
+        capacity_revision_id=capacity_revision_id,
+        platform_payload=platform_payload,
+        role_payload=role_payload,
+        operator_id=operator_id,
+        source_commit=source_commit,
+        authorize=authorize,
+        profile=creative_learning_profile("3.0.0"),
+        bundle_key=CREATIVE_OFFICE_INSTRUCTION_BUNDLE_KEY,
+        reviewed_at=reviewed_at,
+    )
+
+
+def _release_source_family(
+    sessions: sessionmaker[Session],
+    publisher: ControlArtifactPublisher,
+    *,
+    baseline: ExecutionPresetRevision,
+    capacity_revision_id: str,
+    platform_payload: bytes,
+    role_payload: bytes,
+    operator_id: str,
+    source_commit: str,
+    authorize: Callable[[str], None],
+    profile: CreativeLearningProfile,
+    bundle_key: str,
+    reviewed_at: datetime | None = None,
+) -> ExecutionPresetRevision:
+    """One owner for the shared draft/evaluation/release and replay transaction."""
     load_role_input_schema("support", profile.role_protocol)
     instruction = _instruction(
         sessions,
@@ -170,6 +265,8 @@ def release_creative_source_controls(
         operator_id=operator_id,
         source_commit=source_commit,
         authorize=authorize,
+        bundle_key=bundle_key,
+        reviewed_at=reviewed_at,
     )
     policies = [
         baseline.role_policies[0]
@@ -228,8 +325,12 @@ def release_creative_source_controls(
             else create_execution_preset_draft(
                 session,
                 preset_key=profile.preset_key,
-                display_name="창작 원문 그림·풀이 분석",
-                description="원문 영역 추출과 독립 풀이, support05 동시1",
+                display_name="한글 원본 그림·풀이 분석"
+                if profile.definition_version == "3.0.0"
+                else "창작 원문 그림·풀이 분석",
+                description="원본 그림 사용 개체 선택과 독립 풀이, 기존 support 정책 유지"
+                if profile.definition_version == "3.0.0"
+                else "원문 영역 추출과 독립 풀이, support05 동시1",
                 role_policies=policies,
                 capacity_policy_revision_id=capacity_revision_id,
                 general_knowledge_policy="DENY",
@@ -250,9 +351,13 @@ def release_creative_source_controls(
                 "CONTROL_CREATIVE_SOURCE_PRESET_INVALID", "source draft differs"
             )
     cases = (
-        "SOURCE_VISUAL_ROLE_SCHEMA",
+        "OFFICE_NATIVE_ROLE_SCHEMA"
+        if profile.definition_version == "3.0.0"
+        else "SOURCE_VISUAL_ROLE_SCHEMA",
         "EXACT_BASELINE_MODEL_AND_ISOLATION",
-        "SLOT05_ONLY",
+        "BASELINE_SUPPORT_CAPACITY_UNCHANGED"
+        if profile.definition_version == "3.0.0"
+        else "SLOT05_ONLY",
         *non_live_invocation_cases(draft),
     )
     now = datetime.now(UTC)

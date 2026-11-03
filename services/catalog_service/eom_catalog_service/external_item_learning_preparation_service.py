@@ -12,6 +12,10 @@ from uuid import NAMESPACE_URL, uuid5
 
 from eom_api_contracts.external_item_learning_start import ExternalItemLearningStartV1
 from eom_catalog_contracts.external_item_learning_work import ExternalItemLearningWorkInput
+from eom_catalog_contracts.office_item_learning import (
+    OfficeItemLearningWorkInput,
+    parse_creative_learning_work,
+)
 from eom_identifiers import content_sha256, sha256_bytes
 from eom_operator_identity import ActorContext
 from eom_orchestrator.control_artifacts import ControlArtifactPublisher
@@ -39,6 +43,7 @@ from eom_orchestrator.external_item_learning_page_render import (
 from eom_orchestrator.external_item_learning_policy_preparation import (
     ExternalItemLearningControlInputs,
     prepare_external_item_learning_execution_policy,
+    prepare_office_item_learning_execution_policy,
 )
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.preset_model_selection import validated_preset
@@ -71,6 +76,7 @@ from eom_catalog_service.external_creative_learning_source import (
 from eom_catalog_service.external_item_preview_projection import (
     ExternalItemPreviewProjectionService,
 )
+from eom_catalog_service.office_item_learning_input import prepare_office_item_learning_input
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,14 +196,26 @@ class ExternalItemLearningPreparationService:
                         actor=self.actor_provider(),
                         **self._source_arguments(selection),
                     )
-                policy = prepare_external_item_learning_execution_policy(
-                    self.sessions,
-                    self.controls,
-                    inputs=command.controls,
-                    operator_id=operator,
-                    authorize_control_change=self._authorize_owner,
-                )
-                preset = policy.preset
+                definition_version = command.controls.definition.definition.definition_version
+                if definition_version == "3.0.0":
+                    preset = prepare_office_item_learning_execution_policy(
+                        self.sessions,
+                        self.controls,
+                        inputs=command.controls,
+                        operator_id=operator,
+                        authorize_control_change=self._authorize_owner,
+                    )
+                elif definition_version == "1.0.0":
+                    policy = prepare_external_item_learning_execution_policy(
+                        self.sessions,
+                        self.controls,
+                        inputs=command.controls,
+                        operator_id=operator,
+                        authorize_control_change=self._authorize_owner,
+                    )
+                    preset = policy.preset
+                else:
+                    raise ValueError("CREATIVE_SINGLE_PREPARATION_FAMILY_UNSUPPORTED")
                 if self.pdf_tools is None:
                     rendered = render_external_item_learning_pages(
                         source.source, source.pdf_bytes, workspace=local / "rendered"
@@ -222,7 +240,30 @@ class ExternalItemLearningPreparationService:
                         mode="json"
                     ),
                 }
-                work = ExternalItemLearningWorkInput.model_validate(
+                if definition_version == "3.0.0":
+
+                    def authorize_source() -> None:
+                        self._authorize_owner(operator)
+                        with self.sessions() as session:
+                            if (
+                                self.source_authorizer.reauthorize(
+                                    session, operator_id=operator, source=source.source
+                                )
+                                != source.source
+                            ):
+                                raise ValueError("CREATIVE_SOURCE_CHANGED")
+
+                    office_artifact = prepare_office_item_learning_input(
+                        self.pages.engine,
+                        source=source.source,
+                        publisher=self.pages,
+                        settings=self.settings,
+                        source_commit=command.controls.source_commit,
+                        authorize_source=authorize_source,
+                    )
+                    value["schema_version"] = "external-item-learning-work-input/2.0"
+                    value["office_artifact"] = office_artifact.model_dump(mode="json")
+                work = parse_creative_learning_work(
                     {**value, "request_sha256": content_sha256(value)}
                 )
             self._authorize_owner(operator)
@@ -232,7 +273,9 @@ class ExternalItemLearningPreparationService:
                 )
             with self.sessions.begin() as session:
                 definition = admitted_workflow_definition(
-                    session, definition_key="external-item-learning", definition_version="1.0.0"
+                    session,
+                    definition_key="external-item-learning",
+                    definition_version=command.controls.definition.definition.definition_version,
                 )
                 if (
                     definition is None
@@ -335,7 +378,9 @@ class ExternalItemLearningPreparationService:
         workflow: WorkflowInstanceRecord,
         operator: str,
         command: PrepareExternalItemLearningCommand,
-    ) -> tuple[ExternalItemLearningWorkInput, ExecutionPresetRevision]:
+    ) -> tuple[
+        ExternalItemLearningWorkInput | OfficeItemLearningWorkInput, ExecutionPresetRevision
+    ]:
         request = load_persisted_workflow_request(workflow.initial_request)
         if not isinstance(request, WorkflowRequest):
             raise ValueError("creative stored request type differs")

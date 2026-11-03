@@ -12,6 +12,7 @@ from pydantic import Field, model_validator
 from eom_catalog_contracts.creative_learning_cohort import (
     CreativeCohortPresetPin,
     CreativeLearningCohort,
+    OfficeCreativeLearningCohort,
 )
 from eom_catalog_contracts.models import FrozenModel, Sha256
 from eom_catalog_contracts.validation import validate_contract
@@ -207,6 +208,29 @@ class CreativeLearningExecutionScope:
         if self.continuation is not None:
             return (self, CreativeLearningExecutionScope(self.cohort))
         return (self,)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CreativeOfficeExecutionScope(CreativeLearningExecutionScope):
+    """A native Office cohort uses the same source queue, not a parallel runner."""
+
+    office: OfficeCreativeLearningCohort
+
+    def __post_init__(self) -> None:
+        if (
+            self.continuation is not None
+            or self.predecessor_scope is not None
+            or self.cohort != self.office.cohort
+        ):
+            raise ValueError("CREATIVE_OFFICE_COHORT_SCOPE_MISMATCH")
+
+    @property
+    def workflow_definition_version(self) -> str:
+        return self.office.workflow_definition_version
+
+    @property
+    def extraction_preset_key(self) -> str:
+        return self.office.extraction_preset_key
 
 
 def validate_creative_parallel_predecessor(

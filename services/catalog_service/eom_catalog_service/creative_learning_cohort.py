@@ -7,7 +7,9 @@ from tempfile import TemporaryDirectory
 
 from eom_catalog_contracts.creative_learning_cohort import (
     CREATIVE_COHORT_SCHEMA_REF,
+    OFFICE_CREATIVE_COHORT_SCHEMA_REF,
     CreativeLearningCohort,
+    OfficeCreativeLearningCohort,
 )
 from eom_catalog_contracts.creative_learning_continuation import (
     CREATIVE_CONTINUATION_REF,
@@ -15,12 +17,15 @@ from eom_catalog_contracts.creative_learning_continuation import (
     CreativeLearningContinuation,
     CreativeLearningExecutionScope,
     CreativeLearningParallelContinuation,
+    CreativeOfficeExecutionScope,
     validate_creative_continuation_parent,
     validate_creative_parallel_predecessor,
 )
+from eom_catalog_contracts.creative_source_lineage import creative_registration_key
 from eom_catalog_contracts.external_item_learning_authorization import (
     ExternalItemLearningRoleSelection,
 )
+from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInput
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_identity_service.repository import effective_permissions
 from eom_operator_identity import ActorContext, PermissionKey
@@ -42,7 +47,6 @@ from eom_workflow.control_plane import ExecutionPresetRevision, ExecutionPresetR
 from sqlalchemy import Engine, select, text
 
 from eom_catalog_service.artifacts import CatalogArtifactService
-from eom_catalog_service.creative_item_registration import creative_registration_key
 from eom_catalog_service.creative_learning_proposal import (
     resolve_completed_creative_learning_proposal,
 )
@@ -98,6 +102,18 @@ def read_creative_execution_scope(
     )
     if published.primary_file == "cohort.json":
         return CreativeLearningExecutionScope(_read_base_cohort(artifacts, published)), published
+    if published.primary_file == "office-cohort.json":
+        payload = artifacts.read_member(
+            artifact_id=published.artifact_id,
+            revision_id=published.artifact_revision_id,
+            member_path=published.primary_file,
+            sha256=published.primary_sha256,
+            schema_ref=OFFICE_CREATIVE_COHORT_SCHEMA_REF,
+            media_type="application/json",
+            max_bytes=16 * 1024 * 1024,
+        )
+        office = OfficeCreativeLearningCohort.model_validate_json(payload)
+        return CreativeOfficeExecutionScope(office.cohort, office=office), published
     if published.primary_file == "parallel-continuation.json":
         payload = artifacts.read_member(
             artifact_id=published.artifact_id,
@@ -199,6 +215,7 @@ def admit_creative_cohort(
         session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
         session.execute(text("SET TRANSACTION READ ONLY"))
         seed = resolve_completed_creative_learning_proposal(session, artifacts, seed_selection)
+        native_office = isinstance(seed.work, OfficeItemLearningWorkInput)
         if seed.operator_id != operator_id or seed.work.source.import_id != import_id:
             raise ValueError("CREATIVE_COHORT_SEED_MISMATCH")
         registered = session.scalar(
@@ -285,37 +302,67 @@ def admit_creative_cohort(
             "access_policy_sha256": policy.content_sha256,
             "registration_policy": "PRESERVE_SOURCE_WITH_REVIEW_WARNINGS_V1",
         }
-    identity = content_sha256({key: value for key, value in body.items() if key != "source_commit"})
+    identity_values = {key: value for key, value in body.items() if key != "source_commit"}
+    if native_office:
+        identity_values["native_office_profile"] = "3.0.0"
+    identity = content_sha256(identity_values)
     key = "creative-cohort:" + identity[7:]
     if owner() != operator_id:
         raise ValueError("CREATIVE_COHORT_OWNER_CHANGED")
     previous = publisher.find_published(idempotency_key=key, artifact_type=COHORT_ARTIFACT_TYPE)
     if previous is not None:
+        if native_office:
+            scope, published = read_creative_execution_scope(
+                artifacts, publisher, previous.artifact_revision_id
+            )
+            if not isinstance(scope, CreativeOfficeExecutionScope):
+                raise ValueError("CREATIVE_OFFICE_COHORT_REPLAY_MISMATCH")
+            return scope.cohort, published
         return read_creative_cohort(artifacts, publisher, previous.artifact_revision_id)
     body.update(
         cohort_id="creativecohort_" + identity[7:39],
         created_at=datetime.now(UTC).isoformat().replace("+00:00", "Z"),
     )
     cohort = CreativeLearningCohort.model_validate({**body, "cohort_sha256": content_sha256(body)})
-    payload = canonical_json_bytes(cohort.model_dump(mode="json"))
+    document = cohort.model_dump(mode="json")
+    primary_file = "cohort.json"
+    schema_ref = CREATIVE_COHORT_SCHEMA_REF
+    manifest_version: str = cohort.schema_version
+    if native_office:
+        wrapper = {
+            "schema_version": "creative-learning-cohort/2.0",
+            "cohort": document,
+            "workflow_definition_version": "3.0.0",
+            "extraction_preset_key": "creative-office-learning",
+        }
+        office = OfficeCreativeLearningCohort.model_validate(
+            {**wrapper, "manifest_sha256": content_sha256(wrapper)}
+        )
+        document = office.model_dump(mode="json")
+        primary_file, schema_ref, manifest_version = (
+            "office-cohort.json",
+            OFFICE_CREATIVE_COHORT_SCHEMA_REF,
+            office.schema_version,
+        )
+    payload = canonical_json_bytes(document)
     with TemporaryDirectory(prefix="creative-cohort-", dir=settings.staging_root) as raw:
-        path = Path(raw) / "cohort.json"
+        path = Path(raw) / primary_file
         path.write_bytes(payload)
         path.chmod(0o400)
         published = publisher.publish(
             members=(
                 ControlFileSetMember(
-                    "cohort.json",
+                    primary_file,
                     path,
                     sha256_bytes(payload),
                     len(payload),
-                    CREATIVE_COHORT_SCHEMA_REF,
+                    schema_ref,
                     "application/json",
                 ),
             ),
-            primary_file="cohort.json",
+            primary_file=primary_file,
             artifact_type=COHORT_ARTIFACT_TYPE,
-            manifest_version=cohort.schema_version,
+            manifest_version=manifest_version,
             idempotency_key=key,
             source_commit=source_commit,
             created_at=cohort.created_at,

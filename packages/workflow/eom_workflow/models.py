@@ -20,7 +20,6 @@ from eom_catalog_contracts import (
     EducationalRetrievalRequirementV2,
     EquationBlock,
     ExternalItemLearningResult,
-    ExternalItemLearningWorkInput,
     IntegratedScienceCurriculumScope,
     ItemScore,
     ItemSolution,
@@ -61,6 +60,10 @@ from eom_catalog_contracts.external_item_learning_result_v2 import ExternalItemL
 from eom_catalog_contracts.inference_transfer_pair_result_v11 import PairComparisonResultV11
 from eom_catalog_contracts.item_inference_transfer import PairComparisonResult
 from eom_catalog_contracts.mock_exam_production_plan import ContentTeamMockExamSlotV1
+from eom_catalog_contracts.office_item_learning import (
+    CreativeLearningWorkInput,
+    OfficeVisualBindings,
+)
 from eom_identifiers import content_sha256
 from eom_image_contracts import sanitize_svg_overlay
 from pydantic import (
@@ -230,7 +233,7 @@ class LegacyItemExtractionWorkerRequest(FrozenModel):
 
 class ExternalItemLearningWorkerRequest(FrozenModel):
     request_name: Literal["EXTERNAL_ITEM_LEARNING_REQUEST"] = "EXTERNAL_ITEM_LEARNING_REQUEST"
-    work_input: ExternalItemLearningWorkInput
+    work_input: CreativeLearningWorkInput
 
 
 class LegacyItemEditorialCompatibilityWorkerRequest(FrozenModel):
@@ -511,7 +514,7 @@ class WorkflowRequest(FrozenModel):
         | None
     ) = None
     legacy_extraction_request: LegacyItemExtractionRequest | None = None
-    external_item_learning_work: ExternalItemLearningWorkInput | None = None
+    external_item_learning_work: CreativeLearningWorkInput | None = None
     legacy_editorial_compatibility_request: LegacyItemEditorialCompatibilityRequest | None = None
     customer_support_case: CustomerSupportCase | None = None
     pdf_document_review_request: PdfDocumentReviewRequest | None = None
@@ -1117,6 +1120,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.33.0",
         "workflow-role/1.34.0",
         "workflow-role/1.35.0",
+        "workflow-role/1.36.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1306,6 +1310,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.33.0",
         "workflow-role/1.34.0",
         "workflow-role/1.35.0",
+        "workflow-role/1.36.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -2924,6 +2929,17 @@ class ExternalItemLearningRoleResultV2(RoleResultBase):
     output: ExternalItemLearningOutputV2
 
 
+class OfficeItemLearningOutput(FrozenModel):
+    learning_result: ExternalItemLearningResultV2
+    office_visuals: OfficeVisualBindings
+
+
+class ExternalItemLearningRoleResultV3(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.36.0"] = "workflow-role/1.36.0"
+    role: Literal["support"] = "support"
+    output: OfficeItemLearningOutput
+
+
 class LegacyItemEditorialCompatibilityOutput(FrozenModel):
     proposal: LegacyItemEditorialCompatibilityProposal
 
@@ -3090,6 +3106,7 @@ RoleResult = (
     | LegacyItemExtractionRoleResult
     | ExternalItemLearningRoleResult
     | ExternalItemLearningRoleResultV2
+    | ExternalItemLearningRoleResultV3
     | LegacyItemEditorialCompatibilityRoleResult
     | CustomerSupportRoleResult
     | InferenceTransferPairRoleResult

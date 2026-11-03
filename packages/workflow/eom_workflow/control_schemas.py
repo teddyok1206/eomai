@@ -29,6 +29,12 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "resolved-execution-plan-v32": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v32.schema.json",
+            "resources/control-plane/resolved-execution-plan-v32.schema.json",
+            "32.0",
+            "sha256:337a03c4cd28ec3f3a486f1b0d99d4cd934fbac0a9887304a1c7efa182a8cac3",
+        ),
         "resolved-execution-plan-v30": ControlSchemaResource(
             "schemas/workflow/control-plane/resolved-execution-plan-v30.schema.json",
             "resources/control-plane/resolved-execution-plan-v30.schema.json",

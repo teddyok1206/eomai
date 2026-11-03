@@ -12,6 +12,7 @@ from eom_catalog_contracts.external_item_learning_source import ExternalItemLear
 from eom_catalog_contracts.external_item_learning_work import (
     EXTERNAL_ITEM_LEARNING_WORK_INPUT_SCHEMA,
 )
+from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInput
 from eom_catalog_contracts.validation import validate_contract
 from eom_identifiers import content_sha256
 from eom_workflow.compiler import compile_definition_data
@@ -112,7 +113,15 @@ def validate_external_item_learning_submission(
         work = checked.external_item_learning_work
         if work is None:
             raise ValueError("missing creative work input")
-        validate_contract(EXTERNAL_ITEM_LEARNING_WORK_INPUT_SCHEMA, work.model_dump(mode="json"))
+        office = profile.definition_version == "3.0.0"
+        if office != isinstance(work, OfficeItemLearningWorkInput):
+            raise ValueError("creative work input and Workflow family differ")
+        validate_contract(
+            "external-item-learning-work-input-v2"
+            if office
+            else EXTERNAL_ITEM_LEARNING_WORK_INPUT_SCHEMA,
+            work.model_dump(mode="json"),
+        )
         validate_external_item_learning_definition(definition)
     except (ValueError, JsonSchemaValidationError) as exc:
         raise WorkflowError(

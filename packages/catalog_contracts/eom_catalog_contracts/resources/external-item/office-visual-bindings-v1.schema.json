@@ -1,0 +1,53 @@
+{
+  "$defs": {
+    "officeBinding": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "pattern": "^block_[a-z][a-z0-9_]{0,63}$",
+          "type": "string"
+        },
+        "picture_use_id": {
+          "pattern": "^officeobj_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "selection_reason": {
+          "maxLength": 1500,
+          "minLength": 1,
+          "type": "string"
+        },
+        "source_region_id": {
+          "$ref": "eom://schemas/external-item/learning-result/1.0#/$defs/regionId"
+        }
+      },
+      "required": [
+        "block_id",
+        "picture_use_id",
+        "source_region_id",
+        "selection_reason"
+      ],
+      "type": "object"
+    }
+  },
+  "$id": "eom://schemas/external-item/office-visual-bindings/1.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "bindings": {
+      "items": {
+        "$ref": "#/$defs/officeBinding"
+      },
+      "maxItems": 64,
+      "type": "array"
+    },
+    "office_catalog_sha256": {
+      "$ref": "eom://schemas/external-item/learning-result/1.0#/$defs/sha256"
+    }
+  },
+  "required": [
+    "office_catalog_sha256",
+    "bindings"
+  ],
+  "title": "Original Office picture-use bindings for an unchanged source analysis",
+  "type": "object"
+}

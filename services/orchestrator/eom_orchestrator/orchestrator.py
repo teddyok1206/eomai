@@ -52,6 +52,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV17,
     ResolvedExecutionPlanV27,
     ResolvedExecutionPlanV28,
+    ResolvedExecutionPlanV32,
 )
 from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequest,
@@ -85,6 +86,7 @@ from eom_workflow.models import (
     CustomerSupportWorkerRequest,
     ExternalItemLearningRoleResult,
     ExternalItemLearningRoleResultV2,
+    ExternalItemLearningRoleResultV3,
     ExternalItemLearningWorkerRequest,
     GeneratedVectorDrawingV6,
     InferenceTransferPairRoleResult,
@@ -710,7 +712,9 @@ class Orchestrator:
         if (prompt_path is None) == (prompt_text is None):
             raise ValueError("exactly one workflow prompt source is required")
         is_creative = isinstance(request, ExternalItemLearningWorkerRequest)
-        creative_plan: ResolvedExecutionPlanV27 | ResolvedExecutionPlanV28 | None = None
+        creative_plan: (
+            ResolvedExecutionPlanV27 | ResolvedExecutionPlanV28 | ResolvedExecutionPlanV32 | None
+        ) = None
         if is_creative and external_item_learning is None:
             raise ControlPlaneError(
                 "CONTROL_CREATIVE_LEARNING_NOT_ACTIVATED",
@@ -721,7 +725,11 @@ class Orchestrator:
                 not isinstance(request, ExternalItemLearningWorkerRequest)
                 or role != "support"
                 or result_schema
-                not in {"external-item-learning-result@1.0", "external-item-learning-result@2.0"}
+                not in {
+                    "external-item-learning-result@1.0",
+                    "external-item-learning-result@2.0",
+                    "external-item-learning-result@3.0",
+                }
                 or upstream_artifacts
                 or execution_tier != "PRIMARY"
                 or similarity_context is not None
@@ -1185,7 +1193,12 @@ class Orchestrator:
                     "workflow worker result identifiers do not match input",
                 )
             if isinstance(
-                result, (ExternalItemLearningRoleResult, ExternalItemLearningRoleResultV2)
+                result,
+                (
+                    ExternalItemLearningRoleResult,
+                    ExternalItemLearningRoleResultV2,
+                    ExternalItemLearningRoleResultV3,
+                ),
             ):
                 if not isinstance(worker_input.request, ExternalItemLearningWorkerRequest):
                     raise PlatformError(
@@ -1197,6 +1210,13 @@ class Orchestrator:
                         result.output.learning_result,
                         worker_input.request.work_input,
                     )
+                    if isinstance(result, ExternalItemLearningRoleResultV3):
+                        assert external_item_learning is not None
+                        external_item_learning.verify_office_result(
+                            worker_input.request,
+                            result=result.output.learning_result,
+                            selection=result.output.office_visuals,
+                        )
                 except ValueError as exc:
                     raise PlatformError(
                         ErrorCode.WORKER_RESULT_INVALID,

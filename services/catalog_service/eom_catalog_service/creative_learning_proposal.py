@@ -13,6 +13,7 @@ from eom_catalog_contracts.external_item_learning_result import (
     validate_external_item_learning_result_for_source,
 )
 from eom_catalog_contracts.external_item_learning_work import ExternalItemLearningWorkInput
+from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInput
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.external_item_learning_execution import (
     validate_external_item_learning_execution_plan,
@@ -27,6 +28,7 @@ from eom_workflow.creative_learning_profile import (
 from eom_workflow.models import (
     ExternalItemLearningRoleResult,
     ExternalItemLearningRoleResultV2,
+    ExternalItemLearningRoleResultV3,
     ExternalItemLearningWorkerRequest,
     WorkflowRequest,
 )
@@ -51,8 +53,12 @@ class ResolvedCreativeLearningProposal:
 
     selection: ExternalItemLearningRoleSelection
     operator_id: str
-    work: ExternalItemLearningWorkInput
-    role: ExternalItemLearningRoleResult | ExternalItemLearningRoleResultV2
+    work: ExternalItemLearningWorkInput | OfficeItemLearningWorkInput
+    role: (
+        ExternalItemLearningRoleResult
+        | ExternalItemLearningRoleResultV2
+        | ExternalItemLearningRoleResultV3
+    )
     pointer: ArtifactMemberPointer
 
 
@@ -62,9 +68,20 @@ def _decode_creative_request(_schema: str, raw: bytes) -> WorkflowRequest:
 
 def _decode_creative_role(
     schema: str, raw: bytes
-) -> ExternalItemLearningRoleResult | ExternalItemLearningRoleResultV2:
+) -> (
+    ExternalItemLearningRoleResult
+    | ExternalItemLearningRoleResultV2
+    | ExternalItemLearningRoleResultV3
+):
     role = validate_role_result(json.loads(raw), "support", schema)
-    if not isinstance(role, (ExternalItemLearningRoleResult, ExternalItemLearningRoleResultV2)):
+    if not isinstance(
+        role,
+        (
+            ExternalItemLearningRoleResult,
+            ExternalItemLearningRoleResultV2,
+            ExternalItemLearningRoleResultV3,
+        ),
+    ):
         raise CreativeLearningProposalError("CREATIVE_LEARNING_RESULT_POINTER_INVALID")
     return role
 
@@ -221,7 +238,14 @@ def resolve_completed_creative_learning_proposal(
         if isinstance(artifacts, CatalogModelValueDecoder)
         else validate_role_result(raw, "support", step.result_schema)
     )
-    if not isinstance(role, (ExternalItemLearningRoleResult, ExternalItemLearningRoleResultV2)):
+    if not isinstance(
+        role,
+        (
+            ExternalItemLearningRoleResult,
+            ExternalItemLearningRoleResultV2,
+            ExternalItemLearningRoleResultV3,
+        ),
+    ):
         raise CreativeLearningProposalError("CREATIVE_LEARNING_RESULT_POINTER_INVALID")
     if (
         (role.job_id, role.workflow_id, role.step_run_id)

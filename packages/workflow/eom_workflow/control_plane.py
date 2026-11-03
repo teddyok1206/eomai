@@ -28,6 +28,7 @@ from eom_catalog_contracts import (
     RegisteredItemSolutionBasePointer,
     ReviewTextbookEvidence,
 )
+from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInput
 from eom_identifiers import content_sha256
 from pydantic import (
     AfterValidator,
@@ -1297,14 +1298,45 @@ class ResolvedExecutionPlanV28(FrozenModel):
         return self
 
 
+class ResolvedExecutionPlanV32(FrozenModel):
+    """Office-use input successor; V27/V28 keep their exact historical meaning."""
+
+    schema_version: Literal["resolved-execution-plan/32.0"] = "resolved-execution-plan/32.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    workflow_id: WorkflowId
+    workload_class: Literal["KNOWLEDGE_ANALYSIS"] = "KNOWLEDGE_ANALYSIS"
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_sha256: Sha256
+    workflow_definition_key: Literal["external-item-learning"] = "external-item-learning"
+    workflow_definition_version: Literal["3.0.0"] = "3.0.0"
+    workflow_definition_sha256: Sha256
+    work_input: OfficeItemLearningWorkInput
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    steps: tuple[ResolvedStepExecution, ...] = Field(min_length=1, max_length=1)
+    resolver_version: Literal["32.0.0"] = "32.0.0"
+    resolved_at: UtcDatetime
+    plan_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_creative_support_step_and_hash(self) -> ResolvedExecutionPlanV32:
+        _validate_creative_support_step(self.steps[0])
+        if self.plan_sha256 != content_sha256(
+            self.model_dump(mode="json", exclude={"plan_sha256"})
+        ):
+            raise ValueError("Office learning plan hash differs")
+        return self
+
+
 CreativeLearningExecutionPlan = Annotated[
-    ResolvedExecutionPlanV27 | ResolvedExecutionPlanV28, Field(discriminator="schema_version")
+    ResolvedExecutionPlanV27 | ResolvedExecutionPlanV28 | ResolvedExecutionPlanV32,
+    Field(discriminator="schema_version"),
 ]
 
 
 def parse_creative_learning_execution_plan(
     value: object,
-) -> ResolvedExecutionPlanV27 | ResolvedExecutionPlanV28:
+) -> ResolvedExecutionPlanV27 | ResolvedExecutionPlanV28 | ResolvedExecutionPlanV32:
     return TypeAdapter(CreativeLearningExecutionPlan).validate_python(value)
 
 

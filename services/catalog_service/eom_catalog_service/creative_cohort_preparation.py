@@ -17,8 +17,8 @@ from eom_catalog_contracts.creative_learning_continuation import CreativeLearnin
 from eom_catalog_contracts.external_item_learning_authorization import (
     ExternalItemLearningRoleSelection,
 )
-from eom_catalog_contracts.external_item_learning_work import ExternalItemLearningWorkInput
 from eom_catalog_contracts.external_item_media import ExternalItemDocumentMediaQuery
+from eom_catalog_contracts.office_item_learning import parse_creative_learning_work
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import (
     ExecutionPresetRevisionRecord,
@@ -63,6 +63,7 @@ from eom_catalog_service.external_item_preview_projection import (
     ExternalItemPreviewProjectionService,
     ExternalItemPreviewUnavailable,
 )
+from eom_catalog_service.office_item_learning_input import prepare_office_item_learning_input
 from eom_catalog_service.settings import CatalogSettings
 
 
@@ -246,9 +247,29 @@ class CreativeCohortPreparationService:
                     mode="json"
                 ),
             }
-            work = ExternalItemLearningWorkInput.model_validate(
-                {**body, "request_sha256": content_sha256(body)}
-            )
+            if self.scope.workflow_definition_version == "3.0.0":
+
+                def authorize_source() -> None:
+                    with self.sessions() as session:
+                        current = self.source.reauthorize(
+                            session,
+                            operator_id=self.cohort.requested_by_operator_id,
+                            source=resolved.source,
+                        )
+                        if current != resolved.source:
+                            raise ValueError("CREATIVE_COHORT_SOURCE_MISMATCH")
+
+                office = prepare_office_item_learning_input(
+                    self.engine,
+                    source=resolved.source,
+                    publisher=self.pages,
+                    settings=self.settings,
+                    source_commit=self.scope.source_commit,
+                    authorize_source=authorize_source,
+                )
+                body["schema_version"] = "external-item-learning-work-input/2.0"
+                body["office_artifact"] = office.model_dump(mode="json")
+            work = parse_creative_learning_work({**body, "request_sha256": content_sha256(body)})
             with self.sessions.begin() as session:
                 definition = admitted_workflow_definition(
                     session,

@@ -13,11 +13,13 @@ from eom_catalog_contracts.external_item_learning_authorization import (
     ExternalItemLearningRoleSelection,
 )
 from eom_catalog_contracts.external_item_learning_work import ExternalItemLearningWorkInput
+from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInput
 from eom_orchestrator.execution_resolver import resolve_external_item_learning_plan
 from eom_orchestrator.external_item_learning_page_publication import (
     read_external_item_learning_page_artifact,
 )
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+from eom_orchestrator.office_picture_use_publication import read_office_picture_catalog
 from eom_workflow.control_plane import ExecutionPresetRevision
 from eom_workflow.creative_learning_profile import (
     creative_learning_profile,
@@ -54,7 +56,7 @@ def prepare_external_item_learning_workflow(
     session: Session,
     *,
     definition: WorkflowDefinitionRecord,
-    work: ExternalItemLearningWorkInput,
+    work: ExternalItemLearningWorkInput | OfficeItemLearningWorkInput,
     operator_id: str,
     idempotency_key: str,
     source_authorizer: ExternalItemLearningSourceAuthorizer,
@@ -94,6 +96,12 @@ def prepare_external_item_learning_workflow(
             session, request=request, operator_id=operator_id, source_authorizer=source_authorizer
         )
         read_external_item_learning_page_artifact(page_publisher, work.page_artifact)
+        if isinstance(work, OfficeItemLearningWorkInput):
+            read_office_picture_catalog(
+                page_publisher,
+                work.office_artifact,
+                expected_source_sha256=work.source.preview_manifest.source_sha256,
+            )
         workflow, created = create_workflow_instance(
             session,
             definition=definition,

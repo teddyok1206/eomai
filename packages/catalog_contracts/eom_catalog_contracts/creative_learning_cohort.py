@@ -12,6 +12,7 @@ from eom_catalog_contracts.models import FrozenModel, Sha256, UtcDatetime
 from eom_catalog_contracts.validation import validate_contract
 
 CREATIVE_COHORT_SCHEMA_REF = "eom://schemas/external-item/creative-learning-cohort/1.0"
+OFFICE_CREATIVE_COHORT_SCHEMA_REF = "eom://schemas/external-item/creative-learning-cohort/2.0"
 
 
 class CreativeCohortTarget(FrozenModel):
@@ -69,4 +70,24 @@ class CreativeLearningCohort(FrozenModel):
             {key: value for key, value in document.items() if key != "cohort_sha256"}
         ):
             raise ValueError("creative cohort hash differs")
+        return self
+
+
+class OfficeCreativeLearningCohort(FrozenModel):
+    """Explicit native-use execution binding; the original metadata remains unchanged."""
+
+    schema_version: Literal["creative-learning-cohort/2.0"] = "creative-learning-cohort/2.0"
+    cohort: CreativeLearningCohort
+    workflow_definition_version: Literal["3.0.0"] = "3.0.0"
+    extraction_preset_key: Literal["creative-office-learning"] = "creative-office-learning"
+    manifest_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_native_binding(self) -> Self:
+        value = self.model_dump(mode="json")
+        validate_contract("creative-learning-cohort-v2", value)
+        if self.manifest_sha256 != content_sha256(
+            {key: field for key, field in value.items() if key != "manifest_sha256"}
+        ):
+            raise ValueError("CREATIVE_OFFICE_COHORT_HASH_MISMATCH")
         return self

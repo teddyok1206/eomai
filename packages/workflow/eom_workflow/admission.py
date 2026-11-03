@@ -52,6 +52,7 @@ _ADMISSIONS = (
     WorkflowAdmission("legacy-item-extraction", "1.0.0", "workflow-role/1.14.0"),
     WorkflowAdmission("external-item-learning", "1.0.0", "workflow-role/1.33.0"),
     WorkflowAdmission("external-item-learning", "2.0.0", "workflow-role/1.34.0"),
+    WorkflowAdmission("external-item-learning", "3.0.0", "workflow-role/1.36.0"),
     WorkflowAdmission(
         "legacy-item-editorial-compatibility",
         "1.0.0",

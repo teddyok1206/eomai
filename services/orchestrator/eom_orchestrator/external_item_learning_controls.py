@@ -48,6 +48,7 @@ from eom_orchestrator.preset_model_selection import (
 
 CREATIVE_INSTRUCTION_BUNDLE_KEY = "external-item-learning-instructions"
 CREATIVE_SOURCE_INSTRUCTION_BUNDLE_KEY = "creative-source-learning-instructions"
+CREATIVE_OFFICE_INSTRUCTION_BUNDLE_KEY = "creative-office-learning-instructions"
 
 
 def resolve_external_item_learning_control_policy(
@@ -120,7 +121,11 @@ def publish_external_item_learning_instruction_bundle(
     them on a later permission/control failure and replay with the same pins.
     """
 
-    if bundle_key not in {CREATIVE_INSTRUCTION_BUNDLE_KEY, CREATIVE_SOURCE_INSTRUCTION_BUNDLE_KEY}:
+    if bundle_key not in {
+        CREATIVE_INSTRUCTION_BUNDLE_KEY,
+        CREATIVE_SOURCE_INSTRUCTION_BUNDLE_KEY,
+        CREATIVE_OFFICE_INSTRUCTION_BUNDLE_KEY,
+    }:
         raise ValueError("creative instruction purpose is unsupported")
     authorize_control_change(operator_id)
     TypeAdapter(UtcDatetime).validate_python(created_at)

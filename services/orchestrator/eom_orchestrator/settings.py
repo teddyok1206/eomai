@@ -69,6 +69,7 @@ class Settings:
     nas_artifact_root: Path = Path("/mnt/nas/eom/artifacts")
     image_reference_workspace_root: Path = Path("/srv/eom/image-reference-workspaces")
     image_reference_provider_group: str = "eom-image-reference"
+    office_image_tool_root: Path | None = None
     runtime_source_commit: str | None = None
     codex_binary: Path = Path("/usr/local/bin/codex")
     codex_capability_policy: Path = DEFAULT_CODEX_CAPABILITY_POLICY
@@ -110,6 +111,11 @@ class Settings:
             ),
             image_reference_provider_group=os.environ.get(
                 "EOM_IMAGE_REFERENCE_PROVIDER_GROUP", "eom-image-reference"
+            ),
+            office_image_tool_root=(
+                Path(os.environ["EOM_OFFICE_IMAGE_TOOL_ROOT"])
+                if os.environ.get("EOM_OFFICE_IMAGE_TOOL_ROOT")
+                else None
             ),
             runtime_source_commit=runtime_source_commit,
             codex_binary=Path(os.environ.get("EOM_CODEX_BINARY", "/usr/local/bin/codex")),

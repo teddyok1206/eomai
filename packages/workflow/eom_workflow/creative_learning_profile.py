@@ -34,6 +34,15 @@ _PROFILES = (
         "resolved-execution-plan-v28",
         "28.0.0",
     ),
+    CreativeLearningProfile(
+        "3.0.0",
+        "workflow-role/1.36.0",
+        "external-item-learning-result@3.0",
+        "creative-office-learning",
+        "resolved-execution-plan/32.0",
+        "resolved-execution-plan-v32",
+        "32.0.0",
+    ),
 )
 _BY_DEFINITION = MappingProxyType({profile.definition_version: profile for profile in _PROFILES})
 _BY_PROTOCOL = MappingProxyType({profile.role_protocol: profile for profile in _PROFILES})

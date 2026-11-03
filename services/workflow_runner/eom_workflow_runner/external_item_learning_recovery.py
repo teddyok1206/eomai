@@ -7,7 +7,7 @@ from eom_catalog_contracts.creative_result_recovery import CreativeResultRecover
 from eom_catalog_contracts.external_item_learning_authorization import (
     ExternalItemLearningRoleSelection,
 )
-from eom_catalog_contracts.external_item_learning_work import ExternalItemLearningWorkInput
+from eom_catalog_contracts.office_item_learning import CreativeLearningWorkInput
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord, WorkerLeaseRecord
 from eom_orchestrator.external_item_learning_execution import (
@@ -46,7 +46,7 @@ RecoveryRecord = CreativePreexecutionRecovery | CreativeResultRecovery
 
 def _failed_input(
     session: Session, workflow: WorkflowInstanceRecord
-) -> tuple[ExternalItemLearningWorkInput, WorkflowStepRunRecord]:
+) -> tuple[CreativeLearningWorkInput, WorkflowStepRunRecord]:
     profile = creative_learning_profile(workflow.definition_version)
     original = load_persisted_workflow_request(workflow.initial_request)
     worker = original.worker_request()
@@ -116,7 +116,7 @@ def _failed_input(
 
 def _failed_result_input(
     session: Session, workflow: WorkflowInstanceRecord
-) -> tuple[ExternalItemLearningWorkInput, WorkflowStepRunRecord]:
+) -> tuple[CreativeLearningWorkInput, WorkflowStepRunRecord]:
     """A known terminal validation failure, with no commit and no executable work."""
     profile = creative_learning_profile(workflow.definition_version)
     original = load_persisted_workflow_request(workflow.initial_request)
@@ -274,7 +274,7 @@ def prepare_unstarted_external_item_learning_recovery(
     *,
     predecessor_workflow_id: str,
     definition: WorkflowDefinitionRecord,
-    work: ExternalItemLearningWorkInput,
+    work: CreativeLearningWorkInput,
     operator_id: str,
     source_authorizer: ExternalItemLearningSourceAuthorizer,
     page_publisher: ControlFileSetPublisher,
@@ -300,7 +300,7 @@ def prepare_invalid_result_external_item_learning_recovery(
     *,
     predecessor_workflow_id: str,
     definition: WorkflowDefinitionRecord,
-    work: ExternalItemLearningWorkInput,
+    work: CreativeLearningWorkInput,
     operator_id: str,
     source_authorizer: ExternalItemLearningSourceAuthorizer,
     page_publisher: ControlFileSetPublisher,
@@ -326,14 +326,14 @@ def _prepare_recovery(
     *,
     predecessor_workflow_id: str,
     definition: WorkflowDefinitionRecord,
-    work: ExternalItemLearningWorkInput,
+    work: CreativeLearningWorkInput,
     operator_id: str,
     source_authorizer: ExternalItemLearningSourceAuthorizer,
     page_publisher: ControlFileSetPublisher,
     expected_preset: ExecutionPresetRevision,
     proof: Callable[
         [Session, WorkflowInstanceRecord],
-        tuple[ExternalItemLearningWorkInput, WorkflowStepRunRecord],
+        tuple[CreativeLearningWorkInput, WorkflowStepRunRecord],
     ],
     record_type: type[CreativePreexecutionRecovery] | type[CreativeResultRecovery],
 ) -> PreparedExternalItemLearning:

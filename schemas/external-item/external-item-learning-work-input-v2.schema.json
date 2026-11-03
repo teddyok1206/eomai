@@ -1,0 +1,130 @@
+{
+  "$defs": {
+    "office_artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_type": {
+          "const": "control_office_picture_use_catalog"
+        },
+        "file_set_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "member_path": {
+          "const": "picture-use-catalog.json"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/image-provider/office-picture-use-catalog/1.0"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "artifact_type",
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256",
+        "file_set_manifest_sha256"
+      ],
+      "type": "object"
+    },
+    "page_artifact": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "type": "string"
+        },
+        "artifact_type": {
+          "const": "control_external_item_learning_pages"
+        },
+        "file_set_manifest_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "media_type": {
+          "const": "application/json"
+        },
+        "member_path": {
+          "const": "page-set-manifest.json"
+        },
+        "schema_ref": {
+          "const": "eom://schemas/external-item/learning-page-set/1.0"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      },
+      "required": [
+        "artifact_type",
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256",
+        "file_set_manifest_sha256"
+      ],
+      "type": "object"
+    },
+    "sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "$id": "eom://schemas/external-item/learning-work-input/2.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "office_artifact": {
+      "$ref": "#/$defs/office_artifact"
+    },
+    "page_artifact": {
+      "$ref": "#/$defs/page_artifact"
+    },
+    "page_set": {
+      "$ref": "eom://schemas/external-item/learning-page-set/1.0"
+    },
+    "request_id": {
+      "pattern": "^extlearnreq_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "request_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "schema_version": {
+      "const": "external-item-learning-work-input/2.0"
+    },
+    "source": {
+      "$ref": "eom://schemas/external-item/learning-source/1.0"
+    }
+  },
+  "required": [
+    "schema_version",
+    "request_id",
+    "source",
+    "page_set",
+    "page_artifact",
+    "request_sha256",
+    "office_artifact"
+  ],
+  "title": "Office-native Item learning input with exact picture-use Artifact",
+  "type": "object"
+}

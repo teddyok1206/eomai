@@ -29,6 +29,7 @@ from eom_catalog_contracts import (
     LegacyItemExtractionRequest,
     ReviewTextbookEvidence,
 )
+from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInput
 from eom_identifiers import content_sha256, new_execution_plan_id
 from eom_workflow.control_plane import (
     ExecutionPresetRevision,
@@ -58,6 +59,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV27,
     ResolvedExecutionPlanV28,
     ResolvedExecutionPlanV29,
+    ResolvedExecutionPlanV32,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
@@ -2209,11 +2211,11 @@ def resolve_external_item_learning_plan(
     workflow_id: str,
     workflow_definition_sha256: str,
     workflow_role_schema_version: str,
-    work: ExternalItemLearningWorkInput,
+    work: ExternalItemLearningWorkInput | OfficeItemLearningWorkInput,
     resolved_at: datetime | None = None,
     expected_preset: ExecutionPresetRevision | None = None,
     execution_preset_key: str | None = None,
-) -> ResolvedExecutionPlanV27 | ResolvedExecutionPlanV28:
+) -> ResolvedExecutionPlanV27 | ResolvedExecutionPlanV28 | ResolvedExecutionPlanV32:
     """Pin creative source instructions to the existing bounded support pool.
 
     This resolver only records policy and input identity. Its caller must reauthorize

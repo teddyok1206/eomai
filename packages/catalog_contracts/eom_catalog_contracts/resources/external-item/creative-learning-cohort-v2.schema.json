@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/external-item/creative-learning-cohort/2.0",
+  "title": "Office-native execution binding over an immutable creative source cohort",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "cohort", "workflow_definition_version", "extraction_preset_key", "manifest_sha256"],
+  "properties": {
+    "schema_version": {"const": "creative-learning-cohort/2.0"},
+    "cohort": {"$ref": "eom://schemas/external-item/creative-learning-cohort/1.0"},
+    "workflow_definition_version": {"const": "3.0.0"},
+    "extraction_preset_key": {"const": "creative-office-learning"},
+    "manifest_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+  }
+}

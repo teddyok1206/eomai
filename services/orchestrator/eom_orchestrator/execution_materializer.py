@@ -33,6 +33,7 @@ from eom_catalog_contracts import (
     ReviewTextbookEvidence,
 )
 from eom_catalog_contracts import validate_contract as validate_catalog_contract
+from eom_catalog_contracts.creative_source_visuals import CREATIVE_SOURCE_VISUAL_IMAGE_REF
 from eom_catalog_contracts.external_item_learning_pages import (
     EXTERNAL_ITEM_LEARNING_PAGE_IMAGE_SCHEMA_REF,
     EXTERNAL_ITEM_LEARNING_PAGE_SET_SCHEMA,
@@ -40,7 +41,10 @@ from eom_catalog_contracts.external_item_learning_pages import (
     ExternalItemLearningPageSet,
 )
 from eom_catalog_contracts.external_item_learning_work import ExternalItemLearningWorkInput
+from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInput
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
+from eom_image_contracts.office_embedded_images import OfficeEmbeddedImage
+from eom_image_contracts.office_picture_uses import OfficePictureView
 from eom_workflow import (
     CodexAssessmentImageInputManifest,
     CodexCreativeImageInputManifest,
@@ -74,6 +78,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV27,
     ResolvedExecutionPlanV28,
     ResolvedExecutionPlanV29,
+    ResolvedExecutionPlanV32,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
     parse_creative_learning_execution_plan,
@@ -128,6 +133,7 @@ from eom_orchestrator.external_item_learning_page_publication import (
 )
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
+from eom_orchestrator.office_picture_use_publication import read_office_picture_catalog
 from eom_orchestrator.public_similarity_materialization import (
     PUBLIC_SIMILARITY_ROLE_CONTRACT,
     PublicSimilarityMaterializationContext,
@@ -259,6 +265,7 @@ def materialize_execution_step(
         "resolved-execution-plan/26.0",
         "resolved-execution-plan/27.0",
         "resolved-execution-plan/28.0",
+        "resolved-execution-plan/32.0",
         "resolved-execution-plan/14.0",
         "resolved-execution-plan/15.0",
     }
@@ -281,6 +288,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV26
         | ResolvedExecutionPlanV27
         | ResolvedExecutionPlanV28
+        | ResolvedExecutionPlanV32
         | ResolvedExecutionPlanV14
         | ResolvedExecutionPlanV15
         | ResolvedExecutionPlanV16
@@ -321,7 +329,11 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV25.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/26.0":
         plan = ResolvedExecutionPlanV26.model_validate(plan_record.canonical_document)
-    elif plan_schema_version in {"resolved-execution-plan/27.0", "resolved-execution-plan/28.0"}:
+    elif plan_schema_version in {
+        "resolved-execution-plan/27.0",
+        "resolved-execution-plan/28.0",
+        "resolved-execution-plan/32.0",
+    }:
         plan = parse_creative_learning_execution_plan(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/14.0":
         plan = ResolvedExecutionPlanV14.model_validate(plan_record.canonical_document)
@@ -352,7 +364,9 @@ def materialize_execution_step(
         raise ControlPlaneError("CONTROL_PLAN_STEP_MISSING", "resolved execution step is missing")
     step = matching[0]
     if (
-        isinstance(plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28))
+        isinstance(
+            plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28, ResolvedExecutionPlanV32)
+        )
         and creative_page_publisher is None
     ):
         raise ControlPlaneError(
@@ -360,7 +374,9 @@ def materialize_execution_step(
             "creative page materialization requires its pinned publication owner",
         )
     if (
-        isinstance(plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28))
+        isinstance(
+            plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28, ResolvedExecutionPlanV32)
+        )
         and sum(page.content_length for page in plan.work_input.page_set.pages) > 128 * 1024 * 1024
     ):
         raise ControlPlaneError(
@@ -670,7 +686,9 @@ def materialize_execution_step(
         _require_total_size(total_bytes, analysis=True)
         source_artifact_revision_id = plan.item_source.artifact_member.artifact_revision_id
         source_sha256 = plan.item_source.artifact_member.sha256
-    elif isinstance(plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28)):
+    elif isinstance(
+        plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28, ResolvedExecutionPlanV32)
+    ):
         assert creative_page_publisher is not None
         page_bytes, page_members = materialize_external_item_learning_pages(
             session,
@@ -850,7 +868,9 @@ def materialize_execution_step(
             group_id=worker_group_id,
         )
         image_input_manifest_sha256 = image_manifest.manifest_sha256
-    elif isinstance(plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28)):
+    elif isinstance(
+        plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28, ResolvedExecutionPlanV32)
+    ):
         image_manifest_document = {
             "schema_version": "codex-image-input-manifest/4.0",
             "plan_id": plan.plan_id,
@@ -1111,6 +1131,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV26
             | ResolvedExecutionPlanV27
             | ResolvedExecutionPlanV28
+            | ResolvedExecutionPlanV32
             | ResolvedExecutionPlanV14
             | ResolvedExecutionPlanV15
             | ResolvedExecutionPlanV16
@@ -1152,6 +1173,7 @@ def authorized_execution_artifact_revisions(
     elif plan_record.canonical_document.get("schema_version") in {
         "resolved-execution-plan/27.0",
         "resolved-execution-plan/28.0",
+        "resolved-execution-plan/32.0",
     }:
         plan = parse_creative_learning_execution_plan(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/14.0":
@@ -1309,8 +1331,12 @@ def authorized_execution_artifact_revisions(
                 plan.textbook_evidence.publication.context_artifact.artifact_revision_id,
             }
         )
-    elif isinstance(plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28)):
+    elif isinstance(
+        plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28, ResolvedExecutionPlanV32)
+    ):
         revision_ids.add(plan.work_input.page_artifact.artifact_revision_id)
+        if isinstance(plan, ResolvedExecutionPlanV32):
+            revision_ids.add(plan.work_input.office_artifact.artifact_revision_id)
     elif isinstance(plan, ResolvedExecutionPlanV14):
         revision_ids.update(
             value.document.source_pdf.artifact_revision_id for value in plan.documents
@@ -1965,7 +1991,7 @@ def _materialize_analysis_document_source(
 def materialize_external_item_learning_pages(
     session: Session,
     *,
-    work: ExternalItemLearningWorkInput,
+    work: ExternalItemLearningWorkInput | OfficeItemLearningWorkInput,
     workspace: Path,
     artifact_root: Path,
     worker_group_id: int,
@@ -2049,7 +2075,72 @@ def materialize_external_item_learning_pages(
             raise ControlPlaneError(
                 "CONTROL_POINTER_SIZE_INVALID", "creative page set exceeds its byte bound"
             )
-    return total_bytes, len(work.page_set.pages) + 1
+    member_count = len(work.page_set.pages) + 1
+    if isinstance(work, OfficeItemLearningWorkInput):
+        office_artifact = work.office_artifact
+        if office_artifact.artifact_revision_id not in authorized_artifact_revision_ids:
+            raise ControlPlaneError(
+                "CONTROL_POINTER_PERMISSION_DENIED", "Office catalog is not authorized"
+            )
+        catalog = read_office_picture_catalog(
+            publisher,
+            office_artifact,
+            expected_source_sha256=work.source.preview_manifest.source_sha256,
+        )
+        manifest_pointer = OriginArtifactMemberPointer(
+            artifact_id=office_artifact.artifact_id,
+            artifact_revision_id=office_artifact.artifact_revision_id,
+            member_path=office_artifact.member_path,
+            schema_ref=office_artifact.schema_ref,
+            media_type="application/json",
+            sha256=office_artifact.sha256,
+        )
+        payload = _materialize_assessment_member(
+            session,
+            pointer=manifest_pointer,
+            relative_path="source/office/picture-use-catalog.json",
+            workspace=workspace,
+            artifact_root=root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            maximum_bytes=8 * 1024 * 1024,
+        )
+        total_bytes += len(payload)
+        member_count += 1
+        images: dict[str, OfficeEmbeddedImage | OfficePictureView] = {
+            image.member_path: image for image in catalog.embedded_images.images
+        }
+        images.update({view.member_path: view for view in catalog.rendered_uses})
+        for name, image in images.items():
+            pointer = OriginArtifactMemberPointer(
+                artifact_id=office_artifact.artifact_id,
+                artifact_revision_id=office_artifact.artifact_revision_id,
+                member_path=name,
+                schema_ref=CREATIVE_SOURCE_VISUAL_IMAGE_REF,
+                media_type="image/png",
+                sha256=image.sha256,
+            )
+            payload = _materialize_assessment_member(
+                session,
+                pointer=pointer,
+                relative_path="source/office/" + name,
+                workspace=workspace,
+                artifact_root=root,
+                worker_group_id=worker_group_id,
+                authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+                maximum_bytes=64 * 1024 * 1024,
+            )
+            if len(payload) != image.content_length:
+                raise ControlPlaneError(
+                    "CONTROL_POINTER_SIZE_INVALID", "Office picture size differs"
+                )
+            _validate_png_payload(
+                payload, expected_width=image.width_px, expected_height=image.height_px
+            )
+            total_bytes += len(payload)
+            member_count += 1
+            _require_total_size(total_bytes, analysis=True)
+    return total_bytes, member_count
 
 
 def _materialize_legacy_extraction_source(

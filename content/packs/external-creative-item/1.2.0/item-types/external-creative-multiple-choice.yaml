@@ -1,0 +1,8 @@
+schema_version: "1.0"
+item_type:
+  key: "external-creative-multiple-choice"
+  display_name: "가져온 창작 문항"
+  required_components:
+    - "ITEM_CONTENT"
+    - "SOURCE_REFERENCE"
+    - "REVIEW_REPORT"

@@ -22,6 +22,7 @@ from eom_catalog_contracts.external_item_learning_authorization import (
 )
 from eom_catalog_contracts.external_item_learning_result_v2 import ExternalItemLearningResultV2
 from eom_catalog_contracts.external_item_preview import EXTERNAL_ITEM_PREVIEW_PDF_SCHEMA_REF
+from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInput
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_identity_service.repository import effective_permissions
 from eom_item_registry import ComponentPointer, RegistrationRequest
@@ -33,7 +34,9 @@ from eom_orchestrator.file_set_control_artifacts import (
     ControlFileSetPublisher,
     PublishedControlFileSet,
 )
+from eom_orchestrator.office_picture_use_publication import resolve_office_source_images
 from eom_workflow.creative_learning_profile import creative_learning_profile_for_protocol
+from eom_workflow.models import ExternalItemLearningRoleResultV3
 from sqlalchemy import Engine, func, select
 from sqlalchemy.orm import Session
 
@@ -430,6 +433,18 @@ class CreativeItemRegistrationService:
     ) -> CreativeSourceContent:
         result = resolved.role.output.learning_result
         assert isinstance(result, ExternalItemLearningResultV2)
+        if isinstance(resolved.work, OfficeItemLearningWorkInput):
+            if not isinstance(resolved.role, ExternalItemLearningRoleResultV3):
+                raise CreativeItemRegistrationError("CREATIVE_REGISTRATION_OFFICE_ROLE_MISMATCH")
+            images = resolve_office_source_images(
+                self.publisher,
+                work=resolved.work,
+                result=result,
+                selection=resolved.role.output.office_visuals,
+            )
+            return materialize_creative_source_content_v2(result, resolved_images=images)
+        if isinstance(resolved.role, ExternalItemLearningRoleResultV3):
+            raise CreativeItemRegistrationError("CREATIVE_REGISTRATION_OFFICE_WORK_REQUIRED")
         if result.proposal is None:
             raise CreativeItemRegistrationError(CREATIVE_CONTENT_UNAVAILABLE_CODE)
         if not any(isinstance(block, SourceImageBlock) for block in result.proposal.content.body):

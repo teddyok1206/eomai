@@ -6,7 +6,7 @@ permission for a worker to read Catalog/NAS directly.
 
 from __future__ import annotations
 
-from typing import Literal, Self
+from typing import TYPE_CHECKING, Literal, Self
 
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from pydantic import Field, model_validator
@@ -22,6 +22,9 @@ from eom_catalog_contracts.external_item_learning_result import (
 from eom_catalog_contracts.external_item_learning_result_v2 import ExternalItemLearningResultV2
 from eom_catalog_contracts.external_item_learning_source import ExternalItemLearningSource
 from eom_catalog_contracts.models import FrozenModel, Sha256
+
+if TYPE_CHECKING:
+    from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInput
 
 EXTERNAL_ITEM_LEARNING_WORK_INPUT_SCHEMA = "external-item-learning-work-input-v1"
 EXTERNAL_ITEM_LEARNING_WORK_INPUT_SCHEMA_REF = "eom://schemas/external-item/learning-work-input/1.0"
@@ -44,6 +47,18 @@ class ExternalItemLearningPageArtifact(FrozenModel):
     file_set_manifest_sha256: Sha256
 
 
+def validate_external_item_learning_page_binding(
+    source: ExternalItemLearningSource,
+    pages: ExternalItemLearningPageSet,
+    artifact: ExternalItemLearningPageArtifact,
+) -> None:
+    """The historical and Office-native inputs share one page identity rule."""
+    validate_external_item_learning_page_set_for_source(pages, source)
+    primary_sha256 = sha256_bytes(canonical_json_bytes(pages.model_dump(mode="json")))
+    if artifact.sha256 != primary_sha256:
+        raise ValueError("creative learning page Artifact differs from its manifest")
+
+
 class ExternalItemLearningWorkInput(FrozenModel):
     """One exact visual/extraction input; retry never resolves a new page set."""
 
@@ -58,10 +73,7 @@ class ExternalItemLearningWorkInput(FrozenModel):
 
     @model_validator(mode="after")
     def exact_source_and_page_artifact(self) -> Self:
-        validate_external_item_learning_page_set_for_source(self.page_set, self.source)
-        primary_sha256 = sha256_bytes(canonical_json_bytes(self.page_set.model_dump(mode="json")))
-        if self.page_artifact.sha256 != primary_sha256:
-            raise ValueError("creative learning page Artifact differs from its manifest")
+        validate_external_item_learning_page_binding(self.source, self.page_set, self.page_artifact)
         if self.request_sha256 != content_sha256(
             self.model_dump(mode="json", exclude={"request_sha256"})
         ):
@@ -71,7 +83,7 @@ class ExternalItemLearningWorkInput(FrozenModel):
 
 def validate_external_item_learning_result_for_work(
     result: ExternalItemLearningResult | ExternalItemLearningResultV2,
-    work: ExternalItemLearningWorkInput,
+    work: ExternalItemLearningWorkInput | OfficeItemLearningWorkInput,
 ) -> None:
     """Close worker output over one exact source and its staged visual pages."""
 

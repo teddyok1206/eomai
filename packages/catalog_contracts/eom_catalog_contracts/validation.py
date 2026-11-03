@@ -34,6 +34,24 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "creative-learning-cohort-v2": CatalogSchemaResource(
+            "schemas/external-item/creative-learning-cohort-v2.schema.json",
+            "resources/external-item/creative-learning-cohort-v2.schema.json",
+            "2.0",
+            "sha256:29a683abfe1b2ca22d9a9550ce51646ac10d0eb50a3a46ffc2104e00cddd3f0e",
+        ),
+        "office-visual-bindings-v1": CatalogSchemaResource(
+            "schemas/external-item/office-visual-bindings-v1.schema.json",
+            "resources/external-item/office-visual-bindings-v1.schema.json",
+            "1.0",
+            "sha256:51d172dd763837a4e02436bfbeee31ffb0dbe697201c6699859da2b1a16021fd",
+        ),
+        "external-item-learning-work-input-v2": CatalogSchemaResource(
+            "schemas/external-item/external-item-learning-work-input-v2.schema.json",
+            "resources/external-item/external-item-learning-work-input-v2.schema.json",
+            "2.0",
+            "sha256:04cddba506e1f035ec9a57873b7cbdf5583bcf95dc3d51dd2fcf72e5b2460c86",
+        ),
         "creative-visual-presentation-v1-1": CatalogSchemaResource(
             "schemas/external-item/creative-visual-presentation-v1-1.schema.json",
             "resources/external-item/creative-visual-presentation-v1-1.schema.json",

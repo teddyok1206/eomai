@@ -220,7 +220,7 @@ INDEX PID `3284474`와 고정 설치/설정은 두 번의 릴리스 전후 동�
 
 ## 향후 한글 문항 신규 입력 설계
 
-2026-11-03 UTC 사용자 결정. **설계 확정, 신규 입력 경로의 구현·배포·활성화는 아직 아니다.**
+2026-11-03 UTC 사용자 결정. **설계 확정, 신규 입력 경로 구현·검증 중이며 운영 활성화는 아직 아니다.**
 이번 333문항 복구에서 검증한 원본 이미지 우선 방식을 이후 HWP/HWPX 문항 입력에
 적용한다. 신규 문항은 처음부터 정확한 그림 pointer를 canonical Item에 등록한다.
 잘린 그림으로 먼저 등록한 뒤 모든 문항에 별도 복구 Artifact를 붙이는 방식을 기본으로
@@ -327,3 +327,16 @@ parse/선택 중 DB lock을 유지하지 않는다. 이미지 Artifact commit이
 새 의존성·추가 GPU·별도 모델 실행 framework를 선행 도입하지 않는다. 더 단순한
 ‘PDF bbox를 조금 넓혀 다시 crop’ 방식은 잘린 라벨·참고란 혼입·복합 panel 중복을
 구조적으로 막지 못하므로, 신규 한글 입력의 기본 방식으로 채택하지 않는다.
+
+### 신규 입력 구현의 구체화
+
+원본 이미지 catalog는 기존 Orchestrator의 비공개 입력 Artifact로 한 번 발행한다.
+분석자는 그 catalog의 **사용 개체**를 선택하고, 등록은 같은 Artifact의 검증된 PNG member를
+직접 참조한다. 선택 결과용 PNG를 다시 복사·발행하지 않는다. 비선택 참고 이미지가 입력
+Artifact에 존재하더라도 일반 문항 media 조회는 등록된 본문 block의 정확한 member만 허용한다.
+
+새 실행은 Workflow `3.0.0` / role `1.36.0` / plan `32.0` / work input `2.0`으로 분리한다.
+풀이·원문 분석은 기존 result `2.0`을 그대로 재사용하고 새 outer role result에 Office 그림
+binding만 추가한다. 신규 일괄 접수는 기존 target/policy cohort metadata를 보존하는 `2.0`
+실행 binding으로 시작한다. 기존 cohort/continuation 및 진행 중 작업의 실행 핀은 바꾸지 않는다.
+새 DB·queue·Graph layer·임베딩 형식은 추가하지 않는다.

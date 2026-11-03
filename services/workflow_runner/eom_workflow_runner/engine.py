@@ -489,7 +489,7 @@ class PlatformRoleJobExecutor:
             prompt_text is None
             and isinstance(request, ExternalItemLearningWorkerRequest)
             and creative_learning_profile(workflow.definition_version).result_schema
-            == "external-item-learning-result@2.0"
+            in {"external-item-learning-result@2.0", "external-item-learning-result@3.0"}
         ):
             # The installed V1 placeholder explicitly requests result@1.0.
             # Preserve those historical bytes; the V2 instruction bundle owns
@@ -512,13 +512,20 @@ class PlatformRoleJobExecutor:
                 "answer_labels only and accepted_answers=[]. For constructed_response use "
                 "accepted_answers only, leaving correct_choice_ids/answer_labels empty. "
                 "For UNDETERMINED leave both independent answer arrays empty. "
-                "Return only schema-valid external-item-learning-result@2.0 JSON; "
+                "Return only schema-valid "
+                f"{creative_learning_profile(workflow.definition_version).result_schema} JSON; "
                 "the Orchestrator, not the worker, stamps result_sha256. "
                 "Do not access the network, database, NAS or other workers. "
                 + INDEPENDENT_SOURCE_SOLUTION_GUIDANCE
                 + " "
                 + CREATIVE_SOURCE_STATEMENT_GUIDANCE
             )
+            if workflow.definition_version == "3.0.0":
+                from eom_catalog_contracts.office_item_learning import (
+                    OFFICE_VISUAL_BINDING_GUIDANCE,
+                )
+
+                prompt_text += " " + OFFICE_VISUAL_BINDING_GUIDANCE
         prompt_path = (
             None
             if prompt_text is not None

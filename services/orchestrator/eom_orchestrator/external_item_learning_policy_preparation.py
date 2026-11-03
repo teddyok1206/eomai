@@ -28,6 +28,78 @@ from eom_orchestrator.preset_model_selection import validated_preset
 from eom_orchestrator.repository import ensure_protocol_version
 
 
+def prepare_office_item_learning_execution_policy(
+    sessions: sessionmaker[Session],
+    publisher: ControlArtifactPublisher,
+    *,
+    inputs: ExternalItemLearningControlInputs,
+    operator_id: str,
+    authorize_control_change: Callable[[str], None],
+) -> ExecutionPresetRevision:
+    """New purpose only: pin an existing released source-analysis policy, never edit it."""
+    from eom_workflow_runner.external_item_learning_admission import (
+        validate_external_item_learning_definition,
+    )
+    from eom_workflow_runner.repository import import_workflow_definition
+
+    from eom_orchestrator.creative_source_controls import release_creative_office_controls
+
+    authorize_control_change(operator_id)
+    if (
+        inputs.definition.definition.definition_key,
+        inputs.definition.definition.definition_version,
+    ) != ("external-item-learning", "3.0.0"):
+        raise ControlPlaneError(
+            "CONTROL_CREATIVE_OFFICE_DEFINITION_INVALID", "Office definition differs"
+        )
+    with sessions.begin() as session:
+        session.execute(select(func.pg_advisory_xact_lock(LEGACY_ITEM_LEARNING_CONTROL_LOCK_ID)))
+        definition, _created = import_workflow_definition(session, inputs.definition)
+        validate_external_item_learning_definition(definition)
+        baseline = None
+        for key in ("creative-source-learning-parallel", "creative-source-learning"):
+            logical = session.scalar(
+                select(ExecutionPresetRecord).where(ExecutionPresetRecord.preset_key == key)
+            )
+            if logical is not None and logical.state == "ACTIVE" and logical.current_revision_id:
+                row = session.get(ExecutionPresetRevisionRecord, logical.current_revision_id)
+                baseline = validated_preset(row) if row else None
+                break
+        if (
+            not isinstance(baseline, ExecutionPresetRevision)
+            or baseline.state != "RELEASED"
+            or len(baseline.role_policies) != 1
+            or baseline.role_policies[0].model_candidates[0] != inputs.candidate
+            or baseline.capacity_policy_revision_id != inputs.capacity_revision_id
+        ):
+            raise ControlPlaneError(
+                "CONTROL_CREATIVE_OFFICE_BASE_INVALID", "reviewed model/capacity baseline differs"
+            )
+    preset = release_creative_office_controls(
+        sessions,
+        publisher,
+        baseline_revision_id=baseline.preset_revision_id,
+        capacity_revision_id=inputs.capacity_revision_id,
+        platform_payload=inputs.platform_payload,
+        role_payload=inputs.role_payload,
+        operator_id=operator_id,
+        source_commit=inputs.source_commit,
+        authorize=authorize_control_change,
+        reviewed_at=inputs.reviewed_at,
+    )
+    with sessions() as session:
+        from eom_orchestrator.control_service import resolve_released_instruction_bundle
+
+        instruction = resolve_released_instruction_bundle(
+            session, preset.role_policies[0].instruction_bundle
+        )
+        if instruction.created_at != inputs.reviewed_at:
+            raise ControlPlaneError(
+                "CONTROL_CREATIVE_OFFICE_BASE_INVALID", "reviewed instruction timestamp differs"
+            )
+    return preset
+
+
 @dataclass(frozen=True, slots=True)
 class ExternalItemLearningControlInputs:
     definition: CompiledWorkflowDefinition

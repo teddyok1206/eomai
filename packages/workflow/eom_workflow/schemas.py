@@ -95,6 +95,7 @@ from eom_workflow.models import (
     CustomerSupportRoleResult,
     ExternalItemLearningRoleResult,
     ExternalItemLearningRoleResultV2,
+    ExternalItemLearningRoleResultV3,
     ExternalItemLearningWorkerRequest,
     GeneratedAuthoringRoleResult,
     GeneratedAuthoringRoleResultV4,
@@ -244,6 +245,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "legacy-item-extraction-result@1.0",
             "external-item-learning-result@1.0",
             "external-item-learning-result@2.0",
+            "external-item-learning-result@3.0",
             "legacy-item-editorial-compatibility-result@1.0",
             "customer-support-result@1.0",
             "pdf-document-review-result@1.0",
@@ -323,6 +325,7 @@ RESULT_SCHEMA_FILES = {
     "legacy-item-extraction-result@1.0": "legacy-item-extraction-result-v1.schema.json",
     "external-item-learning-result@1.0": "external-item-learning-result-v1.schema.json",
     "external-item-learning-result@2.0": "external-item-learning-result-v2.schema.json",
+    "external-item-learning-result@3.0": "external-item-learning-result-v3.schema.json",
     "legacy-item-editorial-compatibility-result@1.0": (
         "legacy-item-editorial-compatibility-result-v1.schema.json"
     ),
@@ -377,6 +380,7 @@ INPUT_SCHEMA_FILES_V1_32 = {"support": "paired-document-review-input-v4.schema.j
 INPUT_SCHEMA_FILES_V1_33 = {"support": "external-item-learning-input-v1.schema.json"}
 INPUT_SCHEMA_FILES_V1_34 = {"support": "external-item-learning-input-v2.schema.json"}
 INPUT_SCHEMA_FILES_V1_35 = {"support": "knowledge-analysis-input-v11.schema.json"}
+INPUT_SCHEMA_FILES_V1_36 = {"support": "external-item-learning-input-v3.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -425,6 +429,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "legacy-item-extraction-result@1.0": "workflow-role/1.14.0",
     "external-item-learning-result@1.0": "workflow-role/1.33.0",
     "external-item-learning-result@2.0": "workflow-role/1.34.0",
+    "external-item-learning-result@3.0": "workflow-role/1.36.0",
     "authoring-result@7.0": "workflow-role/1.15.0",
     "review-result@7.0": "workflow-role/1.15.0",
     "registration-result@7.0": "workflow-role/1.15.0",
@@ -487,6 +492,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.33.0": INPUT_SCHEMA_FILES_V1_33,
     "workflow-role/1.34.0": INPUT_SCHEMA_FILES_V1_34,
     "workflow-role/1.35.0": INPUT_SCHEMA_FILES_V1_35,
+    "workflow-role/1.36.0": INPUT_SCHEMA_FILES_V1_36,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -525,6 +531,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.33.0",
     "workflow-role/1.34.0",
     "workflow-role/1.35.0",
+    "workflow-role/1.36.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -559,6 +566,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_31.values(),
             *INPUT_SCHEMA_FILES_V1_32.values(),
             *INPUT_SCHEMA_FILES_V1_33.values(),
+            *INPUT_SCHEMA_FILES_V1_36.values(),
         }
     )
 )
@@ -1787,6 +1795,7 @@ def _role_input_schema(role: str, protocol_version: str = "workflow-role/1.0.1")
             "workflow-role/1.31.0",
             "workflow-role/1.32.0",
             "workflow-role/1.33.0",
+            "workflow-role/1.36.0",
         },
     )
 
@@ -1820,6 +1829,7 @@ def _role_result_schema(schema_id: str) -> dict[str, Any]:
             "legacy-item-extraction-result@1.0",
             "external-item-learning-result@1.0",
             "external-item-learning-result@2.0",
+            "external-item-learning-result@3.0",
             "legacy-item-editorial-compatibility-result@1.0",
             "item-inference-transfer-pair-result@1.0",
             "item-inference-transfer-pair-result@1.1",
@@ -2071,7 +2081,10 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
         canonical_value = _canonicalize_legacy_item_extraction_result(value)
     elif schema_id == "external-item-learning-result@1.0" and role == "support":
         canonical_value = _canonicalize_external_item_learning_result(value)
-    elif schema_id == "external-item-learning-result@2.0" and role == "support":
+    elif (
+        schema_id in {"external-item-learning-result@2.0", "external-item-learning-result@3.0"}
+        and role == "support"
+    ):
         canonical_value = _canonicalize_external_item_learning_result_v2(value)
     elif schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
         canonical_value = _canonicalize_legacy_editorial_compatibility_result(value)
@@ -2233,6 +2246,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return ExternalItemLearningRoleResult.model_validate(canonical_value)
         if schema_id == "external-item-learning-result@2.0" and role == "support":
             return ExternalItemLearningRoleResultV2.model_validate(canonical_value)
+        if schema_id == "external-item-learning-result@3.0" and role == "support":
+            return ExternalItemLearningRoleResultV3.model_validate(canonical_value)
         if schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
             return LegacyItemEditorialCompatibilityRoleResult.model_validate(canonical_value)
         if schema_id == "customer-support-result@1.0" and role == "support":
@@ -3260,14 +3275,18 @@ def constrained_result_schema(
                 analysis_request,
             )
             _prune_unreferenced_definitions(schema)
-    if schema_id in {"external-item-learning-result@1.0", "external-item-learning-result@2.0"}:
+    if schema_id in {
+        "external-item-learning-result@1.0",
+        "external-item-learning-result@2.0",
+        "external-item-learning-result@3.0",
+    }:
         if not isinstance(worker_input.request, ExternalItemLearningWorkerRequest):
             raise WorkflowSchemaError("creative learning result requires its pinned work input")
         work = worker_input.request.work_input
         result = _mapping(
             definitions,
             "ExternalItemLearningResultV2"
-            if schema_id.endswith("@2.0")
+            if schema_id != "external-item-learning-result@1.0"
             else "ExternalItemLearningResult",
         )
         result_properties = _mapping(result, "properties")
@@ -3282,6 +3301,19 @@ def constrained_result_schema(
         _mapping(_mapping(region, "properties"), "physical_page")["maximum"] = len(
             work.page_set.pages
         )
+        if schema_id == "external-item-learning-result@3.0":
+            from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInput
+
+            if not isinstance(work, OfficeItemLearningWorkInput):
+                raise WorkflowSchemaError("Office result requires its native-use input")
+            binding_properties = _mapping(
+                _mapping(definitions, "OfficeVisualBindings"), "properties"
+            )
+            _bind_result_string_const(
+                schema,
+                _mapping(binding_properties, "office_catalog_sha256"),
+                work.office_artifact.sha256,
+            )
     if schema_id == "legacy-item-extraction-result@1.0":
         if not isinstance(worker_input.request, LegacyItemExtractionWorkerRequest):
             raise WorkflowSchemaError("legacy extraction result requires its typed worker request")
@@ -4466,7 +4498,7 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
     if schema_id == "external-item-learning-result@1.0":
         _project_external_item_learning_codex_contract(schema)
         _prune_unreferenced_definitions(schema)
-    if schema_id == "external-item-learning-result@2.0":
+    if schema_id in {"external-item-learning-result@2.0", "external-item-learning-result@3.0"}:
         _project_external_item_learning_codex_contract(
             schema, result_definition="ExternalItemLearningResultV2"
         )
@@ -5356,8 +5388,27 @@ def _inline_catalog_schema(
     creative_result = "eom://schemas/external-item/learning-result/1.0"
     if creative_input in json.dumps(bundled, ensure_ascii=True):
         bundled = _inline_external_item_learning_contract(bundled, result=False)
+    if "eom://schemas/external-item/learning-work-input/2.0" in json.dumps(
+        bundled, ensure_ascii=True
+    ):
+        bundled = _inline_external_item_learning_contract(bundled, result=False, office=True)
     if creative_result in json.dumps(bundled, ensure_ascii=True):
         bundled = _inline_external_item_learning_contract(bundled, result=True)
+    if "eom://schemas/external-item/office-visual-bindings/1.0" in json.dumps(
+        bundled, ensure_ascii=True
+    ):
+        from eom_catalog_contracts import load_schema as load_catalog_schema
+
+        bundled = _inline_contract_sources(
+            bundled,
+            (
+                (
+                    "eom://schemas/external-item/office-visual-bindings/1.0",
+                    "OfficeVisualBindings",
+                    copy.deepcopy(load_catalog_schema("office-visual-bindings-v1")),
+                ),
+            ),
+        )
     if "eom://schemas/external-item/learning-result/2.0" in json.dumps(bundled, ensure_ascii=True):
         bundled = _inline_external_item_learning_result_v2_contract(bundled)
     Draft202012Validator.check_schema(bundled)
@@ -5396,7 +5447,7 @@ def _inline_legacy_assessment_contract(
 
 
 def _inline_external_item_learning_contract(
-    schema: dict[str, Any], *, result: bool
+    schema: dict[str, Any], *, result: bool, office: bool = False
 ) -> dict[str, Any]:
     """Close only the source/page or result/Item references used by one role."""
 
@@ -5418,9 +5469,13 @@ def _inline_external_item_learning_contract(
         if result
         else (
             (
-                "eom://schemas/external-item/learning-work-input/1.0",
-                "external-item-learning-work-input-v1",
-                "ExternalItemLearningWorkInput",
+                "eom://schemas/external-item/learning-work-input/2.0"
+                if office
+                else "eom://schemas/external-item/learning-work-input/1.0",
+                "external-item-learning-work-input-v2"
+                if office
+                else "external-item-learning-work-input-v1",
+                "OfficeItemLearningWorkInput" if office else "ExternalItemLearningWorkInput",
             ),
             (
                 "eom://schemas/external-item/learning-source/1.0",
