@@ -108,6 +108,7 @@ def test_public_runtime_preserves_six_legacy_namespaces_with_separate_recipe_pin
     namespace = Mock(side_effect=lambda pair, *_args: pair)
     public_protocol = Mock()
     registered_protocol = Mock()
+    native_protocol = Mock()
     monkeypatch.setattr(runtime, "build_routed_indexing_sources", sources)
     monkeypatch.setattr(runtime, "RoutedLocalIndexingNamespaceRuntime", namespace)
     monkeypatch.setattr(
@@ -119,6 +120,11 @@ def test_public_runtime_preserves_six_legacy_namespaces_with_separate_recipe_pin
         runtime.EmbeddingEncodingReservationStorage,
         "require_registered_public_ownership_protocol",
         registered_protocol,
+    )
+    monkeypatch.setattr(
+        runtime.EmbeddingEncodingReservationStorage,
+        "require_native_office_public_ownership_protocol",
+        native_protocol,
     )
     value = runtime.build_local_indexing_service_runtime(case.capture, case.pin)
     assert len(value.namespaces) == 7
@@ -132,12 +138,17 @@ def test_public_runtime_preserves_six_legacy_namespaces_with_separate_recipe_pin
     )
     public_protocol.assert_called_once()
     registered_protocol.assert_called_once()
+    native_protocol.assert_called_once()
     assert case.owners == []
 
 
 @pytest.mark.parametrize(
     "missing",
-    ("require_public_ownership_protocol", "require_registered_public_ownership_protocol"),
+    (
+        "require_public_ownership_protocol",
+        "require_registered_public_ownership_protocol",
+        "require_native_office_public_ownership_protocol",
+    ),
 )
 def test_public_missing_protocol_rejects_before_sources_launcher_or_queue(monkeypatch, missing):
     case = compose(monkeypatch)
@@ -153,6 +164,7 @@ def test_public_missing_protocol_rejects_before_sources_launcher_or_queue(monkey
     for method in (
         "require_public_ownership_protocol",
         "require_registered_public_ownership_protocol",
+        "require_native_office_public_ownership_protocol",
     ):
         check = Mock()
         if method == missing:
