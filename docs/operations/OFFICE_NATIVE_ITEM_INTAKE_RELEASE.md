@@ -4,6 +4,26 @@
 [창작 원문 이미지 복구](../architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md)의
 ‘향후 한글 문항 신규 입력 설계’다. 기존 333문항 복구와 다른 **새 입력 경로**다.
 
+## 현재 사용자 선택 범위와 운영 결론
+
+사용자가 확정한 범위는 **원본 그림 등록·4슬롯 풀이/Graph 등록·증분 임베딩 우선**이다.
+가변 구조 창작 정본의 HWPX 재출력 renderer 확장은 후속 과제다. 아래 시간순 기록에
+남은 HWPX 출력 PENDING/FAILED를 이번 우선 범위의 미완료로 다시 편입하지 않는다.
+
+- 실제 HWP 본문 그림의 신규 정본 등록·API 서비스 identity의 Preview/media/재조회가
+  성공했다. 새 등록 문항은 기존 333문항 복구 override에 의존하지 않는다.
+- 실제 HWPX 11931도 등록됐다. 본문은 native 표이며, 원본 페이지와 내장 PNG 2개를
+  직접 대조해 두 이미지가 **참고 기출·그 해설**임을 확인했다. 본문 image block 0개가
+  올바른 결과다. 이를 HWPX 본문 PNG 전달 성공으로 확대하지 않는다.
+- 03/04/05/06의 실제 일반 작업 lease 4개 동시 실행과 새 native 출처 3건의 실제
+  CUDA encoding/committed index5 binding을 확인했다. INDEX-only 연속 reader도 인계했다.
+- 전체 1,053개 처리·전수 임베딩 완료는 주장하지 않는다. 기존 순차 owner와 INDEX,
+  두 개의 30분 관측 timer를 계속 유지한다. 원본 해석/변환 실패는 별도 예외로 보존한다.
+
+현재 설치는 shared API/Catalog/runner/creative/QUERY metadata `31073cb4`, INDEX metadata
+`fd3f0622`, Web `e22ca6e0`, 물리 수치 controller `a70cd434`, DB head
+`20261103_0071`이다. Git의 이후 test/docs commit과 실제 설치 source를 구분한다.
+
 ## 범위와 소유자
 
 기존 source 권한/원본 resolver → 격리된 HWP5/HWPX 사용 개체 추출 →
@@ -38,7 +58,8 @@ Workflow1/2·Pack1.0/1.1은 제자리 변경하지 않는다. 새 DB·migration�
    system Python 기반 CPU venv에 기존 Pillow/jsonschema/Pydantic/olefile만
    설치한다. 개발자가 소유한 HWPX Conda Python을 운영 기본값으로 쓰지 않는다.
 3. 새 입력을 준비하는 owner에 `EOM_OFFICE_IMAGE_TOOL_ROOT`로 그 **정확한 prefix**를
-   지정한다. 해석은 기존 eom-image systemd sandbox에서만 수행한다.
+   지정한다. 값은 release 상위 폴더가 아니라 `/opt/eom/office-image-tools/<commit>/site-packages`
+   전체 경로다. 해석은 기존 eom-image systemd sandbox에서만 수행한다.
 4. 기존 `eomctl creative-learning prepare` application 경계에
    `config/workflows/external-item-learning.v3.yaml`과
    `config/control-plane/creative-office-learning-v1`를 전달한다.
@@ -84,8 +105,10 @@ HWP 원본/reference image extent, HWPX `imgDim` 기준이며 편집된 border �
 
 ## 배포/rollback 불변식
 
-INDEX PID·InvocationID·고정 prefix/설정, 현재 풀이보고서/Graph, 기존 Item과 과거
-실패 이력을 보존한다. 소비자 QUERY는 유효 작업과 실제 실행이 없는 시점에만
+진행 중인 수치 실행의 PID·InvocationID·고정 실행환경, 현재 풀이보고서/Graph,
+기존 Item과 과거 실패 이력을 보존한다. metadata owner의 호환 인계는 해당 finite
+Workflow가 완료되고 실제 수치 자식도 없는 경계에서만 한다. coordinator PID까지
+영구 고정한다는 뜻은 아니다. 소비자 QUERY는 유효 작업과 실제 실행이 없는 시점에만
 호환 application release로 맞추며 numerical runtime pin은 바꾸지 않는다.
 rollback은 보관된 호환 wheel/config로 서비스 설치를 복원하는 것이며 새 Artifact나
 과거 실패를 삭제·성공 재해석하는 것이 아니다.
@@ -164,7 +187,8 @@ claim/lease를 사용해 실행한다. 별도 worker/queue나 가짜 Studio sess
 정확한 successor 준비 → 기존 owner 설정의 revision/tool prefix 갱신 → 재개다.
 새 capacity history가 생기면 downgrade는 거부한다. rollback은 successor claim을 멈추고
 호환 code를 유지/복구하는 것이며 정책·실패 history를 지워서 schema를 되돌리지 않는다.
-INDEX의 PID·InvocationID·수치 prefix는 모든 단계에서 보존한다.
+실행 중인 INDEX 수치 작업의 PID·InvocationID·수치 prefix는 보존한다. metadata reader의
+추가 호환 인계는 아래 별도 기록처럼 작업 종료 경계에서만 한다.
 
 추가 회귀에서는 실제 disposable PostgreSQL에서 동시 4claim/각 1lease/5번째 거부와
 동일 claim replay를 확인했고, 기존 3슬롯 테스트도 유지했다. 원본 Work2를 plan32에서
@@ -234,3 +258,116 @@ row index 연결이 일치했다. 이것은 전체 corpus 문항 수가 아니�
 receipt를 마칠 때까지 유지한다. 수정 후보 INDEX-only identity/config는 미리 준비했으며,
 현재 실행의 quiescence와 정확한 담당 오류를 확인한 뒤만 인계한다. 공유 API/4슬롯,
 물리 GPU·모델·space·벡터는 이 후속 인계에서 다시 교체하지 않는다.
+
+### 21:59 UTC 연속 갱신 reader 인계 확인
+
+원래 `31073cb4`의 CUDA Workflow `workflow_f603cafaeb714aba87e92cbdb7e8ae0e`와
+CPU Workflow `workflow_00f89196fcda40b0bc05f84187df69b7`가 모두 정상 완료한 뒤
+coordinator가 exit0으로 종료했다. 같은 원래 작업을 실패/성공으로 재해석하거나
+수치 프로세스를 죽이지 않았다. 이후 기존 identity/config publication 경계로 INDEX-only
+`fd3f0622`를 활성화했다. API/Catalog/QUERY/4슬롯의 `31073cb4`와 Web `e22ca6e0`은
+다시 교체하지 않았다.
+
+새 설치본이 실제 committed CPU index5(binding 504)와 CUDA index5(binding 528)를
+각각 hash/schema 검증해 읽고, 같은 membership을 두 번 제공해 모두 추가 refresh가
+없음을 확인했다. 이 검사는 새 모델 실행 0회이며 기존 수치 Job 재실행도 아니다.
+두 장치 각각 native binding5 3개가 기존 ledger에 연결돼 있다. 두 view의 수를 합쳐
+문항 수로 보고하지 않는다. 30분 관측 timer 두 개의 실행 결과도 success다.
+
+native5 history가 생긴 이후에는 schema71과 이를 읽는 호환 release를 유지한다.
+보관된 `20ad28d3` wheel이 있다는 이유만으로 전체 설치를 그 버전으로 되돌리지 않는다.
+문제가 생기면 신규 claim을 제한하고 호환 reader를 유지한 채 해당 담당만 수정한다.
+native history·벡터를 삭제해서 downgrade 조건을 맞추는 작업은 하지 않는다.
+
+### 최종 입력 형식 점검 — HWPX 등록·표 전용 Preview·참고란 제외
+
+초기 등록 11744–11749의 원본 catalog를 다시 읽으니 6개 모두 실제 HWP5다.
+따라서 이를 HWPX 신규 등록 성공으로 확대하지 않았다. 실제 HWPX 11763은 기존
+source-unreadable 예외를 보존한다. 동일하게 승인된 1,053 target 안의 HWPX 11931을
+같은 cohort source key·preset·4슬롯 claim 경로로 한 건만 먼저 확인했다. 별도
+모집단이나 source identity를 추가하지 않으며, 나중의 순차 처리도 같은 Workflow/등록
+결과를 찾는다. pipeline 구현을 하나 더 만든 것이 아니라 기존 per-source application의
+제한된 실제 검증이다.
+
+실제 catalog에서 HWPX·사용 개체 2개·rendered use 2개·미해결 picture use 0과 06번
+슬롯의 실제 Job 실행을 확인했다. Workflow `workflow_ed94ef76b73b4ca390d5449c6465012b`의
+완료 결과를 `itemrev_0ceaca52c7cb4611ba909a62206aece2`로 등록했다. 원본 페이지와 두
+PNG의 실제 픽셀을 직접 보니 본문에는 표만 있고 두 bitmap은 참고 원본 기출/그 해설이다.
+따라서 `paragraph → table → paragraph → statement_set`, image block 0과 empty native
+bindings가 정확하다. API identity의 Preview·재조회 PASS, PNG delivery는 **NOT_REQUIRED**다.
+참고란 그림을 억지로 넣어 HWPX 본문 그림 성공 표본을 만드는 작업은 하지 않았다.
+
+일회성 검증 helper는 일반 서비스의 inline 환경을 자동 상속하지 않는다. 초기 tool 경로
+설정 오류 두 건은 모델 전에 거부됐다. 이후 모델 Workflow는 한 번만 실행했고, 검증
+helper의 Catalog staging 설정 누락으로 등록이 거부된 호출은 `EOM_CATALOG_STAGING_ROOT`
+설정 후 같은 완료 Workflow/target key에서 이어갔다. 표 전용 문항에도 PNG가 있어야
+한다는 helper의 잘못된 검증 전제도 원본 대조 후 0개 기대값으로 정정했다. 서비스의
+정본·worker 결과·과거 실패를 바꾸거나 보고서를 새로 생성하지 않았다.
+
+22:38:26 UTC 같은 표본의 Graph 등록과 공식 권한 기반 풀이보고서 read도 **VERIFIED**다.
+Graph revision은 `graphrev_07bea638dc22d977f574a747350895b6`이다. 첫 일회성 Graph 반영은
+정상 순차 owner의 동시 갱신에 대해 `KNOWLEDGE_GRAPH_STALE_CURRENT`로 거부됐다.
+해당 기록을 보존하고 같은 이미 accepted된 분석·Item·원본 핀에서 명시적으로 한 번
+재조회/반영했다. worker 풀이·source Workflow·정본을 재생성하지 않았으며 일반 순차
+owner나 GPU 작업을 중지하지 않았다. 다음 모집단 순회도 같은 등록 business key와
+원래 풀이/Graph 관계를 재사용한다.
+
+### 최종 설계 대비 검토와 검증 환경
+
+| 처음 설계한 불변식 | 실제 확인/남은 한계 |
+| --- | --- |
+| signature로 HWP5/HWPX 분기, 확장자 위장 지원 | 격리 원본 추출·signature 회귀 및 실제 HWP5/HWPX 입력 확인 |
+| binary member가 아닌 실제 본문 picture use 선택 | native locator/viewport/회전·반전·회색조·본문 region binding 검증, 동일 member의 별도 사용 개체 테스트 |
+| 참고 원본/해설 제외, 표·수식 유지 | HWPX 11931 실제 표 전용 문항에서 참고 bitmap 2개 제외, native table 유지 |
+| canonical PNG pointer 재사용 | HWP 11744·11745 실제 API content=display content, PNG SHA/크기·동일 조회 재실행 PASS |
+| 불명확한 group/라벨·해석 실패를 허위 승인하지 않음 | 명시적 unresolved/content-unavailable/source 예외 유지. 모든 원본의 정확한 native 합성을 지원한다는 주장은 없음 |
+| 기존 owner·worker 격리·Graph·풀이 의미 보존 | 기존 Orchestrator/Catalog/4-slot claim·lease 사용, worker NAS/DB 권한 확대 없음, 내부 공개 풀이 V2/text/recipe·수치 identity 유지 |
+| 새 문항이 실제 임베딩까지 연결 | native role@3 → profile3 → 실제 CUDA ledger/index5 3건과 CPU/CUDA 각 두 번 재사용 확인 |
+| 중단·동시성·재전송 및 설치 검증 | disposable DB 검증/정리, non-editable wheel·RECORD·OpenAPI, native head5→5 predecessor 재사용 회귀 PASS |
+| Preview/HWPX 동일 그림 | Preview/media는 실제 확인. 가변 구조 HWPX 재출력은 사용자 확정 후속 범위이며 기존 실패 2건 보존 |
+
+마지막 Office interface 검사는 API Conda의 기존 SQLAlchemy와 별도 HWPX Conda의 기존
+Pillow 경로를 **테스트 프로세스에서만** 조합해 79 PASS, 순수 parser는 HWPX Conda에서
+57 PASS였다. 처음 HWPX Conda로 전체 interface 검사를 호출한 collection 오류는 해당
+환경의 SQLAlchemy 부재였다. 제품 결함으로 해석해 운영 환경에 의존성을 추가하지 않았다.
+공개 풀이/검색 회귀는 1,119 PASS이며 기존 Starlette/httpx 경고 1개는 그대로 기록했다.
+새 schema·기존 released bytes·동시성/수치 입력 경계의 집중 검증과 실제 운영 증거를
+서로 대체하지 않는다. 이번 실제 사용자 브라우저/Hancom 수동 육안 검토는 NOT_RECORDED다.
+
+최종 변경 Python 91개는 ruff/format 검사가 통과했고, 명시적 기존 Pillow 경로와
+`--follow-imports=silent`를 사용한 집중 production mypy는 67개 파일 PASS다.
+확대된 파일 전체 type-check가 무오류였다고 주장하지 않는다. 이 과정에서는 이번에 바꾸지
+않은 PDF request union 분기와 10월의 generic `_message` 반환 타입, optional `olefile`
+typing 문제가 함께 나타났다. 해당 기존 구간은 Git blame으로 구분했고 이번 입력/4슬롯
+기능에 무관한 type 정리를 추가 배포하지 않았다. 첫 API 단독 호출의 Pillow 부재와,
+전역 `import-untyped` 비활성화가 만든 unused-ignore도 환경/호출 문제로 구분했다.
+
+## 우선 범위 완료 기록과 계속 실행할 작업
+
+2026-11-03 22:39 UTC 관측에서 API READY·실제 HTTPS Studio 200, creative owner·INDEX·
+QUERY·Web active를 확인했다. 현재 재개된 순회의 검증 수는 16이며, 추가 HWPX 11931
+canary는 같은 1,053 target 안에서 별도로 VERIFIED다. 이 수를 전체 corpus 등록 수나
+완료율로 해석하지 않는다. 22:28 UTC에는 일반 03/04/05/06 lease 4개를 다시 확인했다.
+22:39에는 일부 문항이 Graph 반영을 기다리는 동안 3개가 실행 중이었다. 4는 동시 실행
+상한이며 항상 네 슬롯에 불필요한 새 작업을 넣는다는 뜻이 아니다.
+
+전체 원본 처리와 GPU 증분 임베딩은 현재 owner·같은 모집단·기존 30분 timer로 계속한다.
+현재 순회가 별도로 기록한 16개 해석/변환/추출 실패는 성공 수에 섞지 않는다. 신규로
+발견된 11791의 `WORKER_RESULT_INVALID`도 해당 실패 Workflow/Job를 그대로 보존한다.
+과거 333문항 복구의 미복구 6개와 이 순차 입력의 예외 집합은 다른 모집단이다.
+
+이번 우선 범위의 체크 18개와 실제 조회·슬롯·CPU/CUDA index·HWPX 표본·회귀/설치
+증거 파일 17개는 기존 Orchestrator file-set publisher로 NAS에 보관했다. 그림 사본이나
+worker 전체 결과를 다시 발행하지 않았고 긴 로그/binary를 PostgreSQL에 넣지 않았다.
+감사 schema는 이 file set에 동봉한 사후 검증용이며 새 worker protocol/권한 활성화가 아니다.
+
+- Artifact: `artifact_938713f6ddda4cda9a703c54167cfc7b`
+- Revision: `rev_425ba3acd9744d1cad12c9e3ad35dd29`
+- `report.json` SHA: `sha256:b73dd057ccdf37f6ede596c5bbefc4d62de8537ecf8e04d35e90a1b7c9451a2c`
+- [NAS 검증 보고서](/mnt/nas/eom/artifacts/artifact_938713f6ddda4cda9a703c54167cfc7b/rev_425ba3acd9744d1cad12c9e3ad35dd29/report.json)
+- 같은 publication을 재전송해 같은 Job/Artifact/revision을 재사용했고, 실제 committed
+  member readback/schema/hash도 PASS했다. 과거 실패 로그는 원래 의미로 함께 보존했다.
+
+**사용자 확정 우선 범위는 완료**다. 전체 1,053개 처리·전수 벡터 완료, 모든 native
+group/수식 합성 지원, 가변 구조 HWPX 재출력 및 새 Hancom 수동 검수를 완료했다고
+주장하지 않는다. 후속 작업에서 이 구분과 기존 정본·실패 이력·수치 실행 핀을 유지한다.
