@@ -30,6 +30,7 @@ from eom_workflow import (
     WorkerCapacityPolicyV3,
     WorkerCapacityPolicyV4,
     WorkerCapacityPolicyV5,
+    WorkerCapacityPolicyV6,
     WorkerLeaseView,
     validate_control_contract,
 )
@@ -150,6 +151,7 @@ def _validated_document(
         | WorkerCapacityPolicyV3
         | WorkerCapacityPolicyV4
         | WorkerCapacityPolicyV5
+        | WorkerCapacityPolicyV6
         | ExecutionPresetRevision
         | ExecutionPresetRevisionV2
         | ResolvedExecutionPlan
@@ -172,6 +174,7 @@ def _validated_document(
     | WorkerCapacityPolicyV3
     | WorkerCapacityPolicyV4
     | WorkerCapacityPolicyV5
+    | WorkerCapacityPolicyV6
     | ExecutionPresetRevision
     | ExecutionPresetRevisionV2
     | ResolvedExecutionPlan
@@ -524,6 +527,10 @@ def record_capacity_policy_revision(
         model, normalized = _validated_document(
             "worker-capacity-policy-v5", document, WorkerCapacityPolicyV5
         )
+    elif schema_version == "worker-capacity-policy/1.5":
+        model, normalized = _validated_document(
+            "worker-capacity-policy-v6", document, WorkerCapacityPolicyV6
+        )
     else:
         raise ControlPlaneError(
             "CONTROL_DOCUMENT_INVALID", "worker capacity schema version is unsupported"
@@ -536,6 +543,7 @@ def record_capacity_policy_revision(
             WorkerCapacityPolicyV3,
             WorkerCapacityPolicyV4,
             WorkerCapacityPolicyV5,
+            WorkerCapacityPolicyV6,
         ),
     ):
         raise AssertionError("validated capacity model has the wrong type")
@@ -595,7 +603,7 @@ def record_capacity_policy_revision(
         actual_roles: set[str] = set()
         for key in pool.slot_keys:
             native_role = configured_slots[key.removeprefix("slot")].role
-            if isinstance(model, WorkerCapacityPolicyV5):
+            if isinstance(model, (WorkerCapacityPolicyV5, WorkerCapacityPolicyV6)):
                 try:
                     native_role = model.execution_role_for_slot(
                         pool_key=pool.pool_key, slot_key=key, native_role=native_role
@@ -1428,12 +1436,19 @@ def capacity_worker_role_clause(
 ) -> ColumnElement[bool]:
     """Translate only an exact released capacity's explicit native-role grant."""
     native_role_clause = WorkerSlotRecord.role == execution_role
-    if policy.schema_version != "worker-capacity-policy/1.4":
+    if policy.schema_version not in {"worker-capacity-policy/1.4", "worker-capacity-policy/1.5"}:
         return native_role_clause
-    value, normalized = _validated_document(
-        "worker-capacity-policy-v5", policy.canonical_document, WorkerCapacityPolicyV5
+    model_type = (
+        WorkerCapacityPolicyV6 if policy.schema_version.endswith("/1.5") else WorkerCapacityPolicyV5
     )
-    assert isinstance(value, WorkerCapacityPolicyV5)
+    value, normalized = _validated_document(
+        "worker-capacity-policy-v6"
+        if model_type is WorkerCapacityPolicyV6
+        else "worker-capacity-policy-v5",
+        policy.canonical_document,
+        model_type,
+    )
+    assert isinstance(value, (WorkerCapacityPolicyV5, WorkerCapacityPolicyV6))
     _require_declared_hash(normalized, "content_sha256")
     if (
         value.capacity_policy_revision_id != policy.capacity_policy_revision_id

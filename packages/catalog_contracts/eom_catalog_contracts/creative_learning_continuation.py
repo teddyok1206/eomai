@@ -21,6 +21,7 @@ CREATIVE_CONTINUATION_REF = "eom://schemas/external-item/creative-learning-conti
 CREATIVE_PARALLEL_CONTINUATION_REF = (
     "eom://schemas/external-item/creative-learning-continuation/1.1"
 )
+CREATIVE_OFFICE_CONTINUATION_REF = "eom://schemas/external-item/creative-learning-continuation/1.2"
 
 
 class CreativeLearningContinuation(FrozenModel):
@@ -108,12 +109,57 @@ class CreativeLearningParallelContinuation(FrozenModel):
         return self
 
 
+class CreativeOfficeCapacityPin(FrozenModel):
+    capacity_policy_id: str = Field(pattern=r"^capacity_[0-9a-f]{32}$")
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    schema_ref: Literal["eom://schemas/workflow/worker-capacity-policy/1.5"]
+    sha256: Sha256
+
+
+class CreativeLearningOfficeContinuation(FrozenModel):
+    schema_version: Literal["creative-learning-continuation/1.2"]
+    cohort_id: str = Field(pattern=r"^creativecohort_[0-9a-f]{32}$")
+    parent_cohort: ArtifactMemberPointer
+    predecessor_execution: ArtifactMemberPointer
+    requested_by_operator_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
+    target_set_sha256: Sha256
+    source_commit: str = Field(pattern=r"^[0-9a-f]{40}$")
+    workflow_definition_version: Literal["3.0.0"]
+    workflow_definition_sha256: Sha256
+    content_pack_release_id: str = Field(pattern=r"^packrel_[0-9a-f]{32}$")
+    extraction_preset: CreativeCohortPresetPin
+    analysis_preset: CreativeCohortPresetPin
+    extraction_preset_key: Literal["creative-office-learning-four"]
+    analysis_preset_key: Literal["creative-knowledge-analysis-office-four"]
+    capacity_policy: CreativeOfficeCapacityPin
+    max_in_flight_sources: Literal[8]
+    max_report_workers: Literal[4]
+    graph_publication_batch_size: Literal[4]
+    continuation_reason: Literal["NATIVE_OFFICE_FOUR_SLOT_SUCCESSOR"]
+    cohort_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_hash(self) -> Self:
+        document = self.model_dump(mode="json")
+        validate_contract("creative-learning-office-continuation-v1", document)
+        if self.cohort_sha256 != content_sha256(
+            {key: value for key, value in document.items() if key != "cohort_sha256"}
+        ):
+            raise ValueError("CREATIVE_OFFICE_CONTINUATION_HASH_MISMATCH")
+        return self
+
+
+ParallelReportContinuation = (
+    CreativeLearningParallelContinuation | CreativeLearningOfficeContinuation
+)
+
+
 @dataclass(frozen=True, slots=True)
 class CreativeLearningExecutionScope:
     """Ephemeral composition; the original targets remain a single canonical value."""
 
     cohort: CreativeLearningCohort
-    continuation: CreativeLearningContinuation | CreativeLearningParallelContinuation | None = None
+    continuation: CreativeLearningContinuation | ParallelReportContinuation | None = None
     predecessor_scope: CreativeLearningExecutionScope | None = None
 
     def __post_init__(self) -> None:
@@ -137,6 +183,12 @@ class CreativeLearningExecutionScope:
             validate_creative_parallel_predecessor(
                 self.continuation, previous, self.continuation.predecessor_execution
             )
+        elif isinstance(self.continuation, CreativeLearningOfficeContinuation):
+            if self.predecessor_scope is None or self.predecessor_scope.cohort != self.cohort:
+                raise ValueError("CREATIVE_OFFICE_CONTINUATION_PARENT_MISMATCH")
+            validate_creative_office_predecessor(
+                self.continuation, self.predecessor_scope, self.continuation.predecessor_execution
+            )
         elif self.predecessor_scope is not None:
             raise ValueError("CREATIVE_CONTINUATION_PARENT_MISMATCH")
 
@@ -154,7 +206,7 @@ class CreativeLearningExecutionScope:
 
     @property
     def workflow_definition_version(self) -> str:
-        return "2.0.0" if self.continuation else "1.0.0"
+        return self.continuation.workflow_definition_version if self.continuation else "1.0.0"
 
     @property
     def workflow_definition_sha256(self) -> str:
@@ -168,7 +220,7 @@ class CreativeLearningExecutionScope:
     def analysis_preset(self) -> CreativeCohortPresetPin:
         return (
             self.continuation.analysis_preset
-            if isinstance(self.continuation, CreativeLearningParallelContinuation)
+            if isinstance(self.continuation, ParallelReportContinuation)
             else self.cohort.analysis_preset
         )
 
@@ -176,7 +228,7 @@ class CreativeLearningExecutionScope:
     def capacity_policy_revision_id(self) -> str:
         return (
             self.continuation.capacity_policy.capacity_policy_revision_id
-            if isinstance(self.continuation, CreativeLearningParallelContinuation)
+            if isinstance(self.continuation, ParallelReportContinuation)
             else self.cohort.capacity_policy_revision_id
         )
 
@@ -184,25 +236,25 @@ class CreativeLearningExecutionScope:
     def max_in_flight_sources(self) -> int:
         return (
             self.continuation.max_in_flight_sources
-            if isinstance(self.continuation, CreativeLearningParallelContinuation)
+            if isinstance(self.continuation, ParallelReportContinuation)
             else 1
         )
 
     @property
     def extraction_preset_key(self) -> str:
-        if isinstance(self.continuation, CreativeLearningParallelContinuation):
+        if isinstance(self.continuation, ParallelReportContinuation):
             return self.continuation.extraction_preset_key
         return "creative-source-learning" if self.continuation else "external-item-learning"
 
     @property
     def analysis_preset_key(self) -> str:
-        if isinstance(self.continuation, CreativeLearningParallelContinuation):
+        if isinstance(self.continuation, ParallelReportContinuation):
             return self.continuation.analysis_preset_key
         return "creative-knowledge-analysis"
 
     @property
     def history_scopes(self) -> tuple[CreativeLearningExecutionScope, ...]:
-        """Newest first, at most three exact admitted scopes; no latest lookup."""
+        """Newest first, at most four exact admitted scopes; no latest lookup."""
         if self.predecessor_scope is not None:
             return (self, *self.predecessor_scope.history_scopes)
         if self.continuation is not None:
@@ -231,6 +283,27 @@ class CreativeOfficeExecutionScope(CreativeLearningExecutionScope):
     @property
     def extraction_preset_key(self) -> str:
         return self.office.extraction_preset_key
+
+
+def validate_creative_office_predecessor(
+    continuation: CreativeLearningOfficeContinuation,
+    predecessor: CreativeLearningExecutionScope,
+    actual_predecessor: ArtifactMemberPointer,
+) -> None:
+    previous = predecessor.continuation
+    if (
+        not isinstance(previous, CreativeLearningParallelContinuation)
+        or continuation.predecessor_execution != actual_predecessor
+        or continuation.parent_cohort != previous.parent_cohort
+        or continuation.requested_by_operator_id != predecessor.cohort.requested_by_operator_id
+        or continuation.target_set_sha256 != predecessor.cohort.target_set_sha256
+        or continuation.cohort_id in {scope.cohort_id for scope in predecessor.history_scopes}
+        or continuation.capacity_policy.capacity_policy_revision_id
+        == predecessor.capacity_policy_revision_id
+        or continuation.extraction_preset.preset_id == predecessor.extraction_preset.preset_id
+        or continuation.analysis_preset.preset_id == predecessor.analysis_preset.preset_id
+    ):
+        raise ValueError("CREATIVE_OFFICE_CONTINUATION_PARENT_MISMATCH")
 
 
 def validate_creative_parallel_predecessor(

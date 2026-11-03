@@ -19,6 +19,7 @@ from eom_workflow import (
     WorkerCapacityPolicyV3,
     WorkerCapacityPolicyV4,
     WorkerCapacityPolicyV5,
+    WorkerCapacityPolicyV6,
     validate_control_contract,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -51,6 +52,7 @@ Capacity = (
     | WorkerCapacityPolicyV3
     | WorkerCapacityPolicyV4
     | WorkerCapacityPolicyV5
+    | WorkerCapacityPolicyV6
 )
 _CAPACITY_MODELS: dict[str, tuple[str, type[Capacity]]] = {
     "worker-capacity-policy/1.0": ("worker-capacity-policy", WorkerCapacityPolicy),
@@ -58,6 +60,7 @@ _CAPACITY_MODELS: dict[str, tuple[str, type[Capacity]]] = {
     "worker-capacity-policy/1.2": ("worker-capacity-policy-v3", WorkerCapacityPolicyV3),
     "worker-capacity-policy/1.3": ("worker-capacity-policy-v4", WorkerCapacityPolicyV4),
     "worker-capacity-policy/1.4": ("worker-capacity-policy-v5", WorkerCapacityPolicyV5),
+    "worker-capacity-policy/1.5": ("worker-capacity-policy-v6", WorkerCapacityPolicyV6),
 }
 _EXECUTION_EFFORTS = frozenset(str(effort) for effort in ReasoningEffort)
 
@@ -439,7 +442,7 @@ def _available_capacity_models(
             if slot.slot_id not in members:
                 continue
             role = str(slot.role)
-            if isinstance(capacity_model, WorkerCapacityPolicyV5):
+            if isinstance(capacity_model, (WorkerCapacityPolicyV5, WorkerCapacityPolicyV6)):
                 try:
                     role = capacity_model.execution_role_for_slot(
                         pool_key=pool_key, slot_key=f"slot{slot.slot_id}", native_role=role

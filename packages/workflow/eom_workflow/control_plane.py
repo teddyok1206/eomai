@@ -2475,6 +2475,65 @@ class WorkerCapacityPolicyV5(FrozenModel):
         return native_role
 
 
+class OfficeReportSlotRoleDelegation(FrozenModel):
+    pool_key: Literal["support"]
+    slot_key: Literal["slot03", "slot04"]
+    native_role: Literal["image", "item_management"]
+    execution_role: Literal["support"]
+
+
+class OfficeReportCapacityPool(FrozenModel):
+    pool_key: Literal["support"]
+    roles: tuple[Literal["support"]]
+    slot_keys: tuple[Literal["slot03"], Literal["slot04"], Literal["slot05"], Literal["slot06"]]
+    max_active: Literal[4]
+
+
+class WorkerCapacityPolicyV6(FrozenModel):
+    """Four reports for native Office intake; predecessor host policies stay unchanged."""
+
+    schema_version: Literal["worker-capacity-policy/1.5"] = "worker-capacity-policy/1.5"
+    capacity_policy_id: str = Field(pattern=r"^capacity_[0-9a-f]{32}$")
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    revision_number: Literal[1] = 1
+    state: RevisionState
+    purpose: Literal["OFFICE_CREATIVE_REPORT_BACKFILL"] = "OFFICE_CREATIVE_REPORT_BACKFILL"
+    max_configured_slots: Literal[6] = 6
+    max_active_codex: Literal[4] = 4
+    max_active_per_slot: Literal[1] = 1
+    max_active_gpu: Literal[1] = 1
+    max_active_knowledge_analysis: Literal[4] = 4
+    pools: tuple[OfficeReportCapacityPool]
+    delegated_slot_roles: tuple[OfficeReportSlotRoleDelegation, ...] = Field(
+        min_length=2, max_length=2
+    )
+    content_sha256: Sha256
+    created_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def exact_office_report_purpose(self) -> WorkerCapacityPolicyV6:
+        pool = self.pools[0]
+        if (pool.pool_key, pool.roles, pool.slot_keys, pool.max_active) != (
+            "support",
+            ("support",),
+            ("slot03", "slot04", "slot05", "slot06"),
+            4,
+        ) or tuple((grant.slot_key, grant.native_role) for grant in self.delegated_slot_roles) != (
+            ("slot03", "image"),
+            ("slot04", "item_management"),
+        ):
+            raise ValueError("Office report capacity differs from its reviewed purpose")
+        return self
+
+    def execution_role_for_slot(self, *, pool_key: str, slot_key: str, native_role: str) -> str:
+        for grant in self.delegated_slot_roles:
+            if pool_key == grant.pool_key and slot_key == grant.slot_key:
+                if native_role != grant.native_role:
+                    raise ValueError("delegated physical slot default role differs")
+                return grant.execution_role
+        return native_role
+
+
 class WorkerLeaseView(FrozenModel):
     schema_version: Literal["worker-lease-view/1.0"] = "worker-lease-view/1.0"
     lease_id: str = Field(pattern=r"^workerlease_[0-9a-f]{32}$")

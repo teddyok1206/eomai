@@ -13,12 +13,15 @@ from eom_catalog_contracts.creative_learning_cohort import (
 )
 from eom_catalog_contracts.creative_learning_continuation import (
     CREATIVE_CONTINUATION_REF,
+    CREATIVE_OFFICE_CONTINUATION_REF,
     CREATIVE_PARALLEL_CONTINUATION_REF,
     CreativeLearningContinuation,
     CreativeLearningExecutionScope,
+    CreativeLearningOfficeContinuation,
     CreativeLearningParallelContinuation,
     CreativeOfficeExecutionScope,
     validate_creative_continuation_parent,
+    validate_creative_office_predecessor,
     validate_creative_parallel_predecessor,
 )
 from eom_catalog_contracts.creative_source_lineage import creative_registration_key
@@ -114,6 +117,38 @@ def read_creative_execution_scope(
         )
         office = OfficeCreativeLearningCohort.model_validate_json(payload)
         return CreativeOfficeExecutionScope(office.cohort, office=office), published
+    if published.primary_file == "office-continuation.json":
+        payload = artifacts.read_member(
+            artifact_id=published.artifact_id,
+            revision_id=published.artifact_revision_id,
+            member_path=published.primary_file,
+            sha256=published.primary_sha256,
+            schema_ref=CREATIVE_OFFICE_CONTINUATION_REF,
+            media_type="application/json",
+            max_bytes=64 * 1024,
+        )
+        office_continuation = CreativeLearningOfficeContinuation.model_validate_json(payload)
+        previous = publisher.read_published_revision(
+            artifact_revision_id=office_continuation.predecessor_execution.artifact_revision_id,
+            artifact_type=COHORT_ARTIFACT_TYPE,
+        )
+        if previous.primary_file != "parallel-continuation.json":
+            raise ValueError("CREATIVE_OFFICE_CONTINUATION_PARENT_MISMATCH")
+        actual_predecessor = ArtifactMemberPointer(
+            artifact_id=previous.artifact_id,
+            artifact_revision_id=previous.artifact_revision_id,
+            member_path=previous.primary_file,
+            sha256=previous.primary_sha256,
+            schema_ref=CREATIVE_PARALLEL_CONTINUATION_REF,
+            media_type="application/json",
+        )
+        predecessor, _ = read_creative_execution_scope(
+            artifacts, publisher, actual_predecessor.artifact_revision_id
+        )
+        validate_creative_office_predecessor(office_continuation, predecessor, actual_predecessor)
+        return CreativeLearningExecutionScope(
+            predecessor.cohort, office_continuation, predecessor
+        ), published
     if published.primary_file == "parallel-continuation.json":
         payload = artifacts.read_member(
             artifact_id=published.artifact_id,

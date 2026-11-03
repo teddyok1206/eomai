@@ -8,7 +8,7 @@ from eom_catalog_contracts.creative_learning_cohort import (
 )
 from eom_catalog_contracts.creative_learning_continuation import (
     CreativeLearningExecutionScope,
-    CreativeLearningParallelContinuation,
+    ParallelReportContinuation,
 )
 from eom_catalog_contracts.creative_source_lineage import creative_registration_key
 from eom_catalog_contracts.external_item_learning_authorization import (
@@ -163,14 +163,14 @@ class CreativeCohortExecutionService:
         with self.sessions() as session:
             for scope in self.scope.history_scopes:
                 self._require_scope_pins(session, scope)
-            if isinstance(self.scope.continuation, CreativeLearningParallelContinuation):
+            if isinstance(self.scope.continuation, ParallelReportContinuation):
                 pin = self.scope.continuation.capacity_policy
                 capacity = resolve_released_capacity_policy(
                     session, pin.capacity_policy_revision_id
                 )
                 if (
                     capacity.capacity_policy_id != pin.capacity_policy_id
-                    or capacity.schema_version != "worker-capacity-policy/1.4"
+                    or "eom://schemas/workflow/" + capacity.schema_version != pin.schema_ref
                     or capacity.content_sha256 != pin.sha256
                 ):
                     raise ValueError("CREATIVE_COHORT_PRESET_PIN_MISMATCH")

@@ -19,6 +19,7 @@ from eom_workflow.control_plane import (
     ExecutionPresetEvaluationReport,
     ExecutionPresetRevision,
     WorkerCapacityPolicyV5,
+    WorkerCapacityPolicyV6,
 )
 from eom_workflow.schemas import load_role_input_schema
 from sqlalchemy import func, select
@@ -112,17 +113,18 @@ def _release_preset(
     publisher: ControlArtifactPublisher,
     *,
     baseline: ExecutionPresetRevision,
-    purpose: Literal["source", "analysis"],
-    capacity: WorkerCapacityPolicyV5,
+    purpose: Literal["source", "analysis", "office-source", "office-analysis"],
+    capacity: WorkerCapacityPolicyV5 | WorkerCapacityPolicyV6,
     operator_id: str,
     source_commit: str,
     authorize: Callable[[str], None],
 ) -> ExecutionPresetRevision:
-    key = (
-        "creative-source-learning-parallel"
-        if purpose == "source"
-        else "creative-knowledge-analysis-parallel"
-    )
+    key = {
+        "source": "creative-source-learning-parallel",
+        "analysis": "creative-knowledge-analysis-parallel",
+        "office-source": "creative-office-learning-four",
+        "office-analysis": "creative-knowledge-analysis-office-four",
+    }[purpose]
     policies = parallel_role_policies(baseline)
 
     def check(row: ExecutionPresetRevisionRecord | None) -> ExecutionPresetRevision:
@@ -172,9 +174,11 @@ def _release_preset(
             else create_execution_preset_draft(
                 session,
                 preset_key=key,
-                display_name="창작 문항 3슬롯 "
-                + ("원문·풀이" if purpose == "source" else "Graph 분석"),
-                description="고정된 기존 지침·모델·격리, 창작 보고서 전용 동시 3",
+                display_name=f"창작 문항 {capacity.max_active_codex}슬롯 "
+                + ("원문·풀이" if purpose in {"source", "office-source"} else "Graph 분석"),
+                description=(
+                    f"고정된 기존 지침·모델·격리, 창작 보고서 전용 동시 {capacity.max_active_codex}"
+                ),
                 role_policies=policies,
                 capacity_policy_revision_id=capacity.capacity_policy_revision_id,
                 general_knowledge_policy=baseline.general_knowledge_policy,
@@ -188,7 +192,9 @@ def _release_preset(
         load_role_input_schema("support", protocol)
     cases = (
         "EXACT_BASELINE_INSTRUCTIONS_MODEL_AND_ISOLATION",
-        "CREATIVE_REPORTS_SLOT04_05_06_ONLY",
+        "OFFICE_REPORTS_SLOT03_04_05_06_ONLY"
+        if isinstance(capacity, WorkerCapacityPolicyV6)
+        else "CREATIVE_REPORTS_SLOT04_05_06_ONLY",
         "ROLE_SCHEMA_RESOLVED",
         *non_live_invocation_cases(draft),
     )

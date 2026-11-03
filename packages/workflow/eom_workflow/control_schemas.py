@@ -812,6 +812,12 @@ CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType
             "1.4",
             "sha256:e739d0d4085146919a4dc6eea678b4e6e06ec801cebcfd0796fc2793e530eb04",
         ),
+        "worker-capacity-policy-v6": ControlSchemaResource(
+            "schemas/workflow/control-plane/worker-capacity-policy-v6.schema.json",
+            "resources/control-plane/worker-capacity-policy-v6.schema.json",
+            "1.5",
+            "sha256:520468dbb9d3c7baef26102f000a854f64dc8da5aea922a0d578c437b439318a",
+        ),
         "worker-slot-inventory-v2": ControlSchemaResource(
             "schemas/workflow/control-plane/worker-slot-inventory-v2.schema.json",
             "resources/control-plane/worker-slot-inventory-v2.schema.json",
@@ -921,6 +927,7 @@ def _control_schema_registry() -> Registry[Any]:
         "legacy-assessment-types",
         "legacy-item-extraction-request",
         "external-item-learning-work-input-v1",
+        "external-item-learning-work-input-v2",
         "external-item-learning-source-v1",
         "external-item-learning-page-set-v1",
         "external-item-preview-manifest-v1",

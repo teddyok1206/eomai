@@ -103,3 +103,21 @@ Graph 등록을 계속하고 새 등록 문항이 기존 공통 임베딩에 연
 추가했다. 과거의 purpose-limited 3슬롯 계약을 바꾸지 않고 명시적 4슬롯 successor를
 기존 capacity/claim/lease/순차 owner 안에 추가한다. 진행 중 문항은 완료를 기다린다.
 GPU INDEX를 재시작하거나 이미 만들어진 보고서·벡터를 다시 만드는 요구가 아니다.
+
+이 후속 범위만 `20261103_0070` migration을 사용한다. 과거 parent capacity ceiling은
+3으로 유지하고 정확한 `worker-capacity-policy/1.5`만 4를 허용한다. 기존 parallel
+continuation을 `prepare_creative_office_continuation` application으로 읽어 원래 제출자의
+현재 권한을 재확인하고, `creative-learning-continuation/1.2`에 Workflow3/Pack1.2와
+slot03·04·05·06 설정을 pin한다. 기존 `creative_learning_runner`가 동일 모집단 잠금과
+claim/lease를 사용해 실행한다. 별도 worker/queue나 가짜 Studio session은 만들지 않는다.
+
+운영 순서는 보호된 release operator의 `MIGRATION_UPGRADE_0070` → 호환 wheel 설치 →
+정확한 successor 준비 → 기존 owner 설정의 revision/tool prefix 갱신 → 재개다.
+새 capacity history가 생기면 downgrade는 거부한다. rollback은 successor claim을 멈추고
+호환 code를 유지/복구하는 것이며 정책·실패 history를 지워서 schema를 되돌리지 않는다.
+INDEX의 PID·InvocationID·수치 prefix는 모든 단계에서 보존한다.
+
+추가 회귀에서는 실제 disposable PostgreSQL에서 동시 4claim/각 1lease/5번째 거부와
+동일 claim replay를 확인했고, 기존 3슬롯 테스트도 유지했다. 원본 Work2를 plan32에서
+참조할 때 schema registry가 빠져 있던 오류를 재현·수정했다. 이 연결 검사는 실제
+등록 전에 실행되며, source test PASS와 실제 신규 문항 acceptance는 구분한다.

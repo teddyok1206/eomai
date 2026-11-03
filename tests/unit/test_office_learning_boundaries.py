@@ -155,6 +155,9 @@ def test_completed_native_proposal_resolves_exact_workflow_plan_and_role_family(
         work_input=work.model_dump(mode="json"),
     )
     raw["plan_sha256"] = content_sha256({k: v for k, v in raw.items() if k != "plan_sha256"})
+    from eom_workflow.control_schemas import validate_control_contract
+
+    validate_control_contract("resolved-execution-plan-v32", raw)
     plan = parse_creative_learning_execution_plan(raw)
     case.row.plan_sha256, case.row.resolver_version = plan.plan_sha256, plan.resolver_version
     case.selection = case.selection.model_copy(

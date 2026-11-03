@@ -30,6 +30,7 @@ from eom_orchestrator.control_service import (
     terminalize_worker_lease,
 )
 from eom_orchestrator.execution_resolver import ExecutionStepRequirement, resolve_execution_plan
+from eom_orchestrator.migration import CURRENT_MIGRATION_REVISION
 from eom_orchestrator.models import WorkerSlotRecord
 from eom_workflow.control_plane import WorkerRole
 from sqlalchemy import select
@@ -46,15 +47,24 @@ pytestmark = pytest.mark.integration
 
 
 @pytest.fixture
-def capacity_case(guarded_engine):
+def capacity_case(guarded_engine, request):  # noqa: F811 - imported pytest fixture
+    workers = getattr(request, "param", 3)
     with Session(guarded_engine) as session, session.begin():
         original, _, _ = fixture._complete_control_plane(
-            session, roles=(WorkerRole.SUPPORT, WorkerRole.ITEM_MANAGEMENT)
+            session,
+            roles=(WorkerRole.SUPPORT, WorkerRole.ITEM_MANAGEMENT, WorkerRole.IMAGE)
+            if workers == 4
+            else (WorkerRole.SUPPORT, WorkerRole.ITEM_MANAGEMENT),
         )
         fixture._complete_control_plane(
             session, roles=(WorkerRole.SUPPORT,), slot_id_by_role={WorkerRole.SUPPORT: "06"}
         )
-        capacity = capacity_value()
+        if workers == 4:
+            from tests.unit.test_office_report_capacity import capacity_value as office_capacity
+
+            capacity = office_capacity()
+        else:
+            capacity = capacity_value()
         identity = uuid4().hex
         capacity.update(
             capacity_policy_id="capacity_" + identity,
@@ -96,7 +106,7 @@ def capacity_case(guarded_engine):
             session, preset_id=stored.preset_id, preset_revision_id=stored.preset_revision_id
         )
         requests = []
-        for _ in range(4):
+        for _ in range(workers + 1):
             workflow = fixture._workflow(session)
             dependencies = ResolvedPlanDependencyEvidence(
                 workflow_id=workflow.workflow_id,
@@ -180,6 +190,27 @@ def test_three_concurrent_claims_use_distinct_fixed_identities_and_replay(capaci
         claim(capacity_case, 3)
     assert captured.value.code == "CONTROL_CAPACITY_EXHAUSTED"
     with Session(capacity_case.engine) as session:
+        assert session.get(WorkerSlotRecord, "04").role == "item_management"
+
+
+@pytest.mark.parametrize("capacity_case", [4], indirect=True)
+def test_four_native_office_claims_have_one_lease_each_and_fifth_is_denied(capacity_case):
+    gate = Barrier(4)
+
+    def submit(index):
+        gate.wait(timeout=15)
+        return claim(capacity_case, index)
+
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        claims = tuple(executor.map(submit, range(4)))
+    assert {slot for _, slot in claims} == {"03", "04", "05", "06"}
+    assert len({lease for lease, _ in claims}) == 4
+    assert claim(capacity_case, 0) == claims[0]
+    with pytest.raises(ControlPlaneError) as captured:
+        claim(capacity_case, 4)
+    assert captured.value.code == "CONTROL_CAPACITY_EXHAUSTED"
+    with Session(capacity_case.engine) as session:
+        assert session.get(WorkerSlotRecord, "03").role == "image"
         assert session.get(WorkerSlotRecord, "04").role == "item_management"
 
 
@@ -277,7 +308,7 @@ def test_three_report_history_prevents_destructive_schema_downgrade(capacity_cas
             migration.downgrade()
         assert (
             connection.exec_driver_sql("SELECT version_num FROM alembic_version").scalar_one()
-            == "20261030_0064"
+            == CURRENT_MIGRATION_REVISION
         )
 
 

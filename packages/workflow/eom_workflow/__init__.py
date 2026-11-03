@@ -110,6 +110,7 @@ from eom_workflow.control_plane import (
     WorkerCapacityPolicyV3,
     WorkerCapacityPolicyV4,
     WorkerCapacityPolicyV5,
+    WorkerCapacityPolicyV6,
     WorkerLeaseView,
     parse_creative_learning_execution_plan,
 )
@@ -649,6 +650,7 @@ __all__ = [
     "WorkerCapacityPolicyV3",
     "WorkerCapacityPolicyV4",
     "WorkerCapacityPolicyV5",
+    "WorkerCapacityPolicyV6",
     "WorkerLeaseView",
     "WorkerRequest",
     "WorkflowAdmission",

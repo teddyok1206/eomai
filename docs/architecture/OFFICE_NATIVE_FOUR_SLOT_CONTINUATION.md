@@ -1,0 +1,42 @@
+# 원본 그림 입력을 이용한 4슬롯 창작 등록 계속 처리
+
+2026-11-03 UTC 사용자 추가 승인. 기존 그림 입력 구현을 마친 뒤 4개 슬롯으로
+풀이·Graph 등록을 계속하고 공통 임베딩까지 연결한다. 새 queue/Graph layer는 만들지 않는다.
+
+1. **경계/책임:** 현재 creative cohort owner가 준비·등록·Graph publication을,
+   Orchestrator가 실제 worker claim/lease와 Artifact commit을 맡는다. INDEX는 기존 owner다.
+2. **정본:** 이미 사용자가 접수한 원본 source revisions, 기존 모집단과 seed의 승인된
+   owner/target pins. 과거 보고서·등록 문항은 재생성하지 않는다.
+3. **식별:** 기존 immutable 모집단의 별도 실행 continuation을 발행한다. 원본/문항 ID와
+   history를 유지하고 새 Workflow3/Pack1.2/4슬롯 설정만 후속 실행에 pin한다.
+4. **포인터:** parent cohort와 정확한 기존 parallel continuation, 원본 revision/hash,
+   preset/capacity/policy/Graph/분석 Artifact를 기존 resolver로 확인한다. latest 대체는 없다.
+5. **접근 패턴:** indexed pending membership, unique concurrent claim, bounded ordered
+   source window, 한 번의 Graph batch commit, incremental embedding 대상 추가다.
+6. **구조/인덱스:** 기존 queue·held-slot/job unique index·host advisory lock·source registration
+   business-key fence를 재사용한다. source/window는 map, 중복은 set, history는 bounded chain이다.
+7. **규모/복잡도:** 현재 1,053 eligible source 중 이미 등록된 것은 재사용한다. source당
+   indexed lookup + 실제 문서 크기에 선형인 추출, 창은 최대 8 source, worker는 최대 4다.
+8. **트랜잭션/동시성:** 새 capacity `worker-capacity-policy/1.5`는 정확히 slot03/04/05/06만
+   support로 실행한다. 03(image)·04(item_management)의 물리 역할은 바꾸지 않는다.
+   host/knowledge ceiling은 이 목적만 4, 슬롯당 1, GPU 1을 유지한다. 과거 정책 ceiling은 3이다.
+   필요한 DB 변경은 기존 capacity CHECK에 이 정확한 successor 분기만 추가하는 migration이다.
+   pool child CHECK의 상한도 4로 넓히되, 과거 parent의 host/knowledge 상한과 기존
+   typed pool 상한 3은 유지한다. 과거 정책으로 네 번째 claim을 얻을 수 없다.
+9. **의존 방향:** contracts → domain capacity/continuation → 기존 application owners →
+   PostgreSQL/systemd/파일 adapter. worker의 DB/NAS 권한은 추가하지 않는다.
+10. **실패/재개/멱등:** 진행 중 문항은 기존 핀으로 완료한다. 이후 신규 source만 native
+    그림 입력을 사용한다. 실패·content-unavailable 기록은 보존하고 다른 문항은 계속한다.
+    재시작은 같은 source/selection/Artifact를 조회한다. 새 등록은 기존 INDEX가 incrementally
+    받는 accepted report 경계에 연결하며 전체 INDEX 재시작/벡터 삭제는 하지 않는다.
+11. **단순 대안:** 기존 3슬롯 policy의 숫자를 덮어쓰거나 Orchestrator 밖에서 네 번째
+    worker를 띄우면 과거 계약과 중복 실행 방지가 깨진다. 새 purpose-limited capacity와
+    기존 continuation/parallel driver 확장이 가장 작은 안전한 변경이다.
+
+## 완료 기준
+
+원본 그림 신규 입력의 실제 등록·Preview/media·HWPX 검증을 먼저 닫는다. 이후 새
+continuation의 실제 4개 slot claim/진행을 확인하고, 새 문항의 풀이·Graph 등록 및
+공통 임베딩 대상 수록/처리를 관측한다. 기존 성공·실패와 GPU INDEX pin/PID를 보존한다.
+전체 잔여 corpus가 며칠 걸리더라도 서비스를 계속 돌도록 남기며, 단순 READY나 unit
+개수만으로 실제 4슬롯/Graph/임베딩 성공을 주장하지 않는다.

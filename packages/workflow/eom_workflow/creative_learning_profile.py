@@ -51,7 +51,11 @@ _PARALLEL_PROFILE = replace(
     preset_key="creative-source-learning-parallel",
 )
 CREATIVE_LEARNING_PRESET_KEYS = frozenset(
-    (*[profile.preset_key for profile in _PROFILES], _PARALLEL_PROFILE.preset_key)
+    (
+        *[profile.preset_key for profile in _PROFILES],
+        _PARALLEL_PROFILE.preset_key,
+        "creative-office-learning-four",
+    )
 )
 
 
@@ -78,4 +82,6 @@ def creative_learning_profile_for_preset(
         return profile
     if definition_version == "2.0.0" and preset_key == _PARALLEL_PROFILE.preset_key:
         return _PARALLEL_PROFILE
+    if definition_version == "3.0.0" and preset_key == "creative-office-learning-four":
+        return replace(profile, preset_key=preset_key)
     raise ValueError("creative preset and Workflow family differ")

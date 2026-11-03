@@ -2,14 +2,14 @@
 
 There are no worker subprocesses or persistent queues here. A single Graph future
 keeps expensive publication off the source-submission loop; Orchestrator owns all
-three actual model claims. Restart reconstructs state from original immutable pins.
+purpose-bounded model claims. Restart reconstructs state from original immutable pins.
 """
 
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import replace
 
 from eom_catalog_contracts.creative_learning_continuation import (
-    CreativeLearningParallelContinuation,
+    ParallelReportContinuation,
 )
 
 from eom_catalog_service.creative_cohort_execution import (
@@ -24,7 +24,7 @@ from eom_catalog_service.creative_preview_preparation import CreativeSourcePrevi
 class CreativeCohortParallelExecutionService:
     def __init__(self, owner: CreativeCohortExecutionService, *, verified_limit: int) -> None:
         continuation = owner.scope.continuation
-        if not isinstance(continuation, CreativeLearningParallelContinuation):
+        if not isinstance(continuation, ParallelReportContinuation):
             raise ValueError("CREATIVE_PARALLEL_CONTINUATION_REQUIRED")
         if not 1 <= verified_limit <= len(owner.targets):
             raise ValueError("CREATIVE_COHORT_EXECUTION_LIMIT_INVALID")

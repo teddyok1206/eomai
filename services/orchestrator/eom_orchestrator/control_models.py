@@ -154,11 +154,14 @@ class WorkerCapacityPolicyRevisionRecord(Base):
             name="ck_capacity_policy_revisions_state",
         ),
         CheckConstraint(
-            "max_configured_slots BETWEEN 1 AND 6 AND max_active_codex BETWEEN 1 AND 3 "
+            "(max_configured_slots BETWEEN 1 AND 6 AND max_active_codex BETWEEN 1 AND 3 "
             "AND max_active_codex <= max_configured_slots AND max_active_per_slot = 1 "
             "AND max_active_gpu = 1 AND (max_active_knowledge_analysis BETWEEN 1 AND 2 "
             "OR (schema_version = 'worker-capacity-policy/1.4' "
-            "AND max_active_knowledge_analysis = 3))",
+            "AND max_active_knowledge_analysis = 3))) OR "
+            "(schema_version = 'worker-capacity-policy/1.5' AND max_configured_slots = 6 "
+            "AND max_active_codex = 4 AND max_active_per_slot = 1 AND max_active_gpu = 1 "
+            "AND max_active_knowledge_analysis = 4)",
             name="ck_capacity_policy_host_limits",
         ),
         CheckConstraint("revision_number >= 1", name="ck_capacity_policy_revision_number_value"),
@@ -201,7 +204,7 @@ class WorkerCapacityPolicyRevisionRecord(Base):
 class WorkerCapacityPoolRecord(Base):
     __tablename__ = "worker_capacity_pools"
     __table_args__ = (
-        CheckConstraint("max_active BETWEEN 1 AND 3", name="ck_worker_capacity_pool_limit"),
+        CheckConstraint("max_active BETWEEN 1 AND 4", name="ck_worker_capacity_pool_limit"),
     )
 
     capacity_policy_revision_id: Mapped[str] = mapped_column(
