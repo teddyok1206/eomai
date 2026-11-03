@@ -53,6 +53,21 @@ driver의 중단 의미는 유지한다. 권한·hash·정책·Graph publication
 예외는 계속 전체 중단한다. source별 실패는 등록/검증 완료 수에 포함하지 않고, 새
 identity를 만들어 자동 재실행하거나 과거 FAILED를 성공으로 바꾸지 않는다.
 
+## 네 번째 슬롯의 고정 실행 시간 경계
+
+실제 신규 작업에서 slot03의 기본 image unit(1,800초)과 source/report 실행(7,200초)이
+맞지 않아 모델 호출 전에 WORKER_UNAVAILABLE가 발생했다. slot04에서 이미 사용하던
+purpose-specific fixed unit을 같은 방식으로 03에 확장한다. 기본 image unit·물리 role·
+worker 실행 helper·인증·프로토콜은 바꾸지 않는다. 정확한 (03,image,7200) 조합만 새
+root-owned `eom-worker-analysis-03@job_<ID>.service`를 선택한다. 기존 Orchestrator의
+capacity/claim이 용도 권한을 확인하며, 새 unit 자체는 동일 user/group/파일 격리다.
+
+readiness는 새 unit의 SHA/ownership을 확인하고, 중단 후 실행 조회는 기본/분석 unit을
+모두 본다. 동시에 둘 다 있으면 UNKNOWN으로 둔다. Polkit은 workflow runner의 정확한
+03/04 분석 unit StartUnit만 허용하며 restart·다른 slot·임의 unit은 허용하지 않는다.
+호환 설치 때 진행 중 worker가 없음을 확인한다. 이 오류의 기존 FAILED source/job는
+보존하고 supported preexecution recovery 경계에서만 재개 가능 여부를 판단한다.
+
 ## 실제 원본에서 확인한 일반 회색조
 
 ### 4건 Graph publication의 실제 중단 수정

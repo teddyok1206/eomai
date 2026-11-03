@@ -103,6 +103,7 @@ runuser -u eom-workflow-runner -g eom -- \
 SOURCES=(
   "${APPARMOR_SOURCE}"
   "${REPOSITORY}/infra/systemd/eom-workflow-runner.service"
+  "${REPOSITORY}/infra/systemd/eom-worker-analysis-03@.service"
   "${REPOSITORY}/infra/systemd/eom-worker-analysis-04@.service"
   "${REPOSITORY}/infra/systemd/eom-worker-support-06@.service"
   "${REPOSITORY}/infra/systemd/eom-worker-document-review-06@.service"
@@ -161,6 +162,9 @@ if [[ ${ACTION} == install ]]; then
     "${REPOSITORY}/infra/systemd/eom-worker-support-06@.service" \
     "${UNIT_ROOT}/eom-worker-support-06@.service"
   install -o root -g root -m 0644 \
+    "${REPOSITORY}/infra/systemd/eom-worker-analysis-03@.service" \
+    "${UNIT_ROOT}/eom-worker-analysis-03@.service"
+  install -o root -g root -m 0644 \
     "${REPOSITORY}/infra/systemd/eom-worker-analysis-04@.service" \
     "${UNIT_ROOT}/eom-worker-analysis-04@.service"
   install -o root -g root -m 0644 \
@@ -215,6 +219,7 @@ require_regular "${WORKER_CONFIG_TARGET}" root:eom:640
 cmp -s "${WORKER_CONFIG_SOURCE}" "${WORKER_CONFIG_TARGET}" || \
   fail "worker inventory source drift"
 systemd-analyze verify "${UNIT_ROOT}/eom-workflow-runner.service" \
+  "${UNIT_ROOT}/eom-worker-analysis-03@.service" \
   "${UNIT_ROOT}/eom-worker-analysis-04@.service" \
   "${UNIT_ROOT}/${BROKER_SERVICE}" \
   "${UNIT_ROOT}/eom-worker-support-06@.service" \
@@ -229,6 +234,10 @@ require_regular "${UNIT_ROOT}/eom-workflow-runner.service" root:root:644
 cmp -s "${REPOSITORY}/infra/systemd/eom-workflow-runner.service" \
   "${UNIT_ROOT}/eom-workflow-runner.service" || fail "workflow runner unit source drift"
 require_regular "${UNIT_ROOT}/eom-worker-support-06@.service" root:root:644
+require_regular "${UNIT_ROOT}/eom-worker-analysis-03@.service" root:root:644
+cmp -s "${REPOSITORY}/infra/systemd/eom-worker-analysis-03@.service" \
+  "${UNIT_ROOT}/eom-worker-analysis-03@.service" || \
+  fail "native Office report worker unit source drift"
 require_regular "${UNIT_ROOT}/eom-worker-analysis-04@.service" root:root:644
 cmp -s "${REPOSITORY}/infra/systemd/eom-worker-analysis-04@.service" \
   "${UNIT_ROOT}/eom-worker-analysis-04@.service" || \
@@ -338,6 +347,8 @@ if [[ ${ACTION} == install ]]; then
     printf 'runner_unit_sha256=%s\n' "$(sha256sum "${UNIT_ROOT}/eom-workflow-runner.service" | cut -d' ' -f1)"
     printf 'creative_report_worker_unit_sha256=%s\n' \
       "$(sha256sum "${UNIT_ROOT}/eom-worker-analysis-04@.service" | cut -d' ' -f1)"
+    printf 'office_report_worker_unit_sha256=%s\n' \
+      "$(sha256sum "${UNIT_ROOT}/eom-worker-analysis-03@.service" | cut -d' ' -f1)"
     printf 'pdf_document_review_worker_unit_sha256=%s\n' \
       "$(sha256sum "${UNIT_ROOT}/eom-worker-document-review-06@.service" | cut -d' ' -f1)"
     printf 'worker_exec_sha256=%s\n' "$(sha256sum "${LIBEXEC_ROOT}/eom-worker-exec" | cut -d' ' -f1)"
