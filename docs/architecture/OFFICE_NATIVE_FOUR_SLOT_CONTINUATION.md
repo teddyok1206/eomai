@@ -55,6 +55,15 @@ identity를 만들어 자동 재실행하거나 과거 FAILED를 성공으로 �
 
 ## 실제 원본에서 확인한 일반 회색조
 
+### 4건 Graph publication의 실제 중단 수정
+
+새 continuation은 4건 publication을 요청하지만 기존 application의 내부 batch guard가
+3건까지만 허용해 실제 등록 후 중단됐다. 이 guard를 4로 정렬한다. 기존 3슬롯 계약의
+batch 크기는 그대로이며 새 queue/Graph/preset 재선택은 없다. publication은 분석 preset을
+선택하지 않고 각 accepted analysis의 정본·권한·source hash를 검증하므로 과거·신규
+분석을 같은 기존 Graph publisher로 묶어도 된다. 4건을 한 번에 publish하고 5건은 I/O 전에
+거부하는 회귀 검증을 추가한다. 과거 FAILED와 미등록 상태를 성공으로 덮어쓰지 않는다.
+
 새 파일럿 11763(HWPX)·11743(HWP)의 본문 그림은 특수 효과가 아니라 각각
 `GRAY_SCALE`, picture-info byte70=1을 사용했다. [한컴 공식 5.0 revision1.3 표32](https://cdn.hancom.com/link/docs/%ED%95%9C%EA%B8%80%EB%AC%B8%EC%84%9C%ED%8C%8C%EC%9D%BC%ED%98%95%EC%8B%9D_5.0_revision1.3.pdf)의
 일반 회색조 모드다. decoder가 이를 모든 특수 효과와 함께 거부했던 범위를 보완한다.

@@ -230,7 +230,7 @@ class CreativeItemGraphLearningService:
     ) -> tuple[CreativeGraphLearningProgress, ...]:
         """One bounded publication; exact source and accepted analyses remain authoritative."""
         if (
-            not 1 <= len(progress) <= 3
+            not 1 <= len(progress) <= 4
             or len({entry.item_revision_id for entry in progress}) != len(progress)
             or len({entry.analysis_run_id for entry in progress}) != len(progress)
             or any(entry.analysis_state != "ACCEPTED" for entry in progress)
