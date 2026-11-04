@@ -14,9 +14,14 @@ from pathlib import Path
 from threading import Event
 from uuid import uuid4
 
-from eom_orchestrator.database import build_engine
+from eom_orchestrator.background_storage import (
+    BackgroundStoragePressure,
+    require_background_write_capacity,
+)
+from eom_orchestrator.database import build_engine, recoverable_database_error_code
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.settings import Settings
+from sqlalchemy.exc import DBAPIError
 
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.creative_cohort_execution import CreativeCohortExecutionService
@@ -163,9 +168,35 @@ def main() -> None:
             if scope.max_in_flight_sources > 1
             else owner
         )
-        previous = None
+        previous: tuple[object, ...] | None = None
         while not stopped.is_set():
-            progress = service.advance_once()
+            try:
+                require_background_write_capacity(STATE_ROOT)
+                progress = service.advance_once()
+            except (BackgroundStoragePressure, DBAPIError) as error:
+                code = (
+                    error.code
+                    if isinstance(error, BackgroundStoragePressure)
+                    else recoverable_database_error_code(error)
+                )
+                if code is None:
+                    raise
+                status = {
+                    "cohort_id": scope.cohort_id,
+                    "target_count": len(cohort.targets),
+                    "verified_count": 0,
+                    **status,
+                    "state": "WAITING_FOR_RESOURCES",
+                    "error_code": code,
+                    "exception_type": type(error).__name__,
+                }
+                write_status(STATE_ROOT, scope.cohort_id, status)
+                wait_marker = ("WAITING_FOR_RESOURCES", code)
+                if wait_marker != previous:
+                    print(json.dumps(status, ensure_ascii=False, sort_keys=True), flush=True)
+                    previous = wait_marker
+                stopped.wait(60)
+                continue
             status = asdict(progress)
             status["cohort_revision_id"] = arguments.cohort_revision_id
             status["verified_limit"] = arguments.verified_limit

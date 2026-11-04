@@ -6,6 +6,7 @@ from dataclasses import replace
 
 from eom_catalog_contracts.public_solution_embedding_index import PublicSolutionIndexNamespace
 from eom_identity_service import PostgresLocalIndexingServiceFence
+from eom_orchestrator.host_package_maintenance import require_host_package_maintenance_idle
 from eom_orchestrator.native_embedding_index_systemd import FixedNativeIndexLauncher
 from eom_workflow.local_embedding_request_v2 import (
     SupportedLocalEmbeddingRequest,
@@ -151,6 +152,9 @@ class RoutedLocalIndexingNamespaceRuntime:
             # Another original intent is not adopted or replaced just because its
             # source request happens to be semantically equivalent.
             return observed
+        # Source preparation can outlive an OS maintenance transition. The
+        # candidate is not a claimed allocation yet; defer before physical IPC.
+        require_host_package_maintenance_idle()
         outcome = drive_routed_document_embedding_parent_once(
             parent, self.pair, request, self.launcher
         )

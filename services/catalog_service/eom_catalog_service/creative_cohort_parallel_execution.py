@@ -12,6 +12,9 @@ from eom_catalog_contracts.creative_learning_continuation import (
     CreativeLearningOfficeContinuation,
     ParallelReportContinuation,
 )
+from eom_orchestrator.background_storage import BackgroundStoragePressure
+from eom_orchestrator.database import recoverable_database_error_code
+from sqlalchemy.exc import DBAPIError
 
 from eom_catalog_service.creative_cohort_execution import (
     CreativeCohortExecutionService,
@@ -49,7 +52,20 @@ class CreativeCohortParallelExecutionService:
     def advance_once(self) -> CreativeCohortProgress:
         completed: CreativeSourceExecution | None = None
         if self.publication is not None and self.publication.done():
-            self.publication.result()  # failure is explicit; never mark a source verified
+            try:
+                self.publication.result()
+            except (BackgroundStoragePressure, DBAPIError) as error:
+                if not isinstance(
+                    error, BackgroundStoragePressure
+                ) and not recoverable_database_error_code(error):
+                    raise
+                # Publication may have committed before the connection failed.
+                # Same accepted sources reenter membership/authorization checks;
+                # never regenerate reports or count partial verification success.
+                for source in self.publishing:
+                    source.state = "READY_TO_PUBLISH"
+                self.publication, self.publishing = None, ()
+                raise
             for source in self.publishing:
                 if source.state != "VERIFIED":
                     raise ValueError("CREATIVE_COHORT_PUBLICATION_MISMATCH")

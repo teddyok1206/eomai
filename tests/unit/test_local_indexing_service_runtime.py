@@ -40,6 +40,10 @@ from sqlalchemy import create_engine
 
 @pytest.fixture(autouse=True)
 def synthetic_queue_read(monkeypatch):
+    from eom_orchestrator import background_storage, host_package_maintenance
+
+    monkeypatch.setattr(background_storage, "require_background_write_capacity", Mock())
+    monkeypatch.setattr(host_package_maintenance, "require_host_package_maintenance_idle", Mock())
     read = Mock(return_value=False)
     monkeypatch.setattr(scheduling, "should_defer_background_cpu_claim", read)
     return read

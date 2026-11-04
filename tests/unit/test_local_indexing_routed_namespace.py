@@ -23,6 +23,7 @@ from tests.unit.test_local_indexing_routed_sources import routed_publisher as ro
 @pytest.fixture
 def service(parent_case, monkeypatch):
     case = parent_case
+    monkeypatch.setattr(namespace, "require_host_package_maintenance_idle", Mock())
     runner = Mock()
     factory = Mock(return_value=runner)
     monkeypatch.setattr(namespace, "build_local_indexing_workflow_runner", factory)

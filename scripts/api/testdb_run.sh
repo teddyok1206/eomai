@@ -479,6 +479,7 @@ fi
 
 if [[ "${action}" == "creative-graph-tests" ]]; then
   export EOM_RUN_INTEGRATION=1
+  export EOM_API_TEST_STATE="${state_directory}"
   # This cohort uses the admitted base V2 analysis path. Historical document
   # creation fixtures pin intentionally retired Workflow versions and are a
   # separate compatibility audit, not a reason to reopen those admissions.
@@ -488,7 +489,8 @@ if [[ "${action}" == "creative-graph-tests" ]]; then
     tests/integration/test_knowledge_analysis_service.py::test_concurrent_analysis_create_is_single_and_retry_replays \
     tests/integration/test_knowledge_analysis_service.py::test_incompatible_proposal_ontology_fails_before_acceptance \
     tests/integration/test_knowledge_analysis_service.py::test_knowledge_analysis_acceptance_review_and_retry_are_pointer_only \
-    tests/integration/test_knowledge_analysis_service.py::test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently
+    tests/integration/test_knowledge_analysis_service.py::test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently \
+    tests/integration/test_background_database_resource_recovery.py
   exit 0
 fi
 

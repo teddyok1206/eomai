@@ -7,9 +7,31 @@ from contextlib import contextmanager
 
 from sqlalchemy import Engine, create_engine
 from sqlalchemy.engine import make_url
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session, sessionmaker
 
 from eom_orchestrator.settings import database_url
+
+
+def recoverable_database_error_code(error: BaseException) -> str | None:
+    """Small safe reason for replay-capable owners, never SQL or exception prose.
+
+    This classifies transport/transaction/resource failures only. The caller
+    must own idempotent replay and a fresh rolled-back transaction boundary.
+    """
+    if not isinstance(error, DBAPIError):
+        return None
+    state = getattr(error.orig, "sqlstate", None)
+    if state == "53100":
+        return "BACKGROUND_DATABASE_STORAGE_EXHAUSTED"
+    if isinstance(state, str):
+        return (
+            "BACKGROUND_DATABASE_RETRY_REQUIRED"
+            if state.startswith("08")
+            or state in {"40001", "40P01", "55P03", "53200", "53300", "57P01", "57P02", "57P03"}
+            else None
+        )
+    return "BACKGROUND_DATABASE_RETRY_REQUIRED" if error.connection_invalidated else None
 
 
 def build_engine(url: str | None = None) -> Engine:

@@ -109,6 +109,9 @@ def _failure_detail(error: Exception) -> dict[str, str | int | None]:
 
 def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> None:
     """Round-robin exact namespaces; each drains its queue before new discovery."""
+    from eom_orchestrator.background_storage import require_background_write_capacity
+    from eom_orchestrator.host_package_maintenance import require_host_package_maintenance_idle
+
     from eom_workflow_runner.native_cpu_scheduling_read import (
         NativeCpuSchedulingReadUnavailable,
         should_defer_background_cpu_claim,
@@ -119,6 +122,8 @@ def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> N
     cursor = 0
     deferred: str | None = None
     while not stop.is_set():
+        require_background_write_capacity(Path("/var/lib/eom-local-indexing"))
+        require_host_package_maintenance_idle()
         try:
             reason = "ACTIVE_QUERY" if should_defer_background_cpu_claim(runtime.engine) else None
         except NativeCpuSchedulingReadUnavailable:
@@ -182,6 +187,31 @@ def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> N
         stop.wait(min(5.0, max(0.1, min(deadlines) - time.monotonic())))
 
 
+def serve_with_resource_recovery(runtime: LocalIndexingServiceRuntime, stop: Event) -> None:
+    """A live owner keeps its exact runtime and original replay-capable requests."""
+    from eom_orchestrator.background_storage import BackgroundStoragePressure
+    from eom_orchestrator.database import recoverable_database_error_code
+    from eom_orchestrator.host_package_maintenance import HostPackageMaintenancePending
+    from sqlalchemy.exc import DBAPIError
+
+    waiting: str | None = None
+    while not stop.is_set():
+        try:
+            serve_local_indexing(runtime, stop)
+        except (BackgroundStoragePressure, HostPackageMaintenancePending, DBAPIError) as error:
+            code = (
+                error.code
+                if isinstance(error, (BackgroundStoragePressure, HostPackageMaintenancePending))
+                else recoverable_database_error_code(error)
+            )
+            if code is None:
+                raise
+            if code != waiting:
+                _emit("LOCAL_INDEXING_RESOURCE_DEFERRED", code=code)
+                waiting = code
+            stop.wait(60)
+
+
 def main() -> int:
     capture = None
     runtime = None
@@ -217,7 +247,7 @@ def main() -> int:
         configure_read_stage_logging()
         runtime = build_local_indexing_service_runtime(capture, pin)
         _emit("LOCAL_INDEXING_SERVICE_STARTED", pid=os.getpid())
-        serve_local_indexing(runtime, stop)
+        serve_with_resource_recovery(runtime, stop)
         return 0
     except Exception as error:
         code = getattr(error, "code", None)
