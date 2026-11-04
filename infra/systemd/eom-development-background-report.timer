@@ -1,0 +1,10 @@
+[Unit]
+Description=User-requested ten-minute development Slack summary
+
+[Timer]
+OnCalendar=*-*-* *:00/10:20 UTC
+AccuracySec=1s
+Unit=eom-development-background-report.service
+
+[Install]
+WantedBy=timers.target

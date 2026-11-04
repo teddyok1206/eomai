@@ -1,0 +1,17 @@
+[Unit]
+Description=Temporary EOM development slot and GPU Slack summary
+After=network-online.target eom-creative-learning-observe.service eom-unified-embedding-observe.service
+
+[Service]
+Type=oneshot
+ExecStart=/srv/eom/conda/envs/eom-api/bin/python -I -B /usr/local/libexec/eom-development-background-report.py
+TimeoutStartSec=90
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadOnlyPaths=/etc/eom/secrets/dev-slack.env
+InaccessiblePaths=-/mnt/nas -/home/eom/EOM -/root/.codex -/srv/eom/workers
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+
