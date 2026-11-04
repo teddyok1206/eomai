@@ -240,3 +240,61 @@ publication 8). publication 검사는 실제 Job/Artifact owner와 임시 local 
 권한의 실제 검사, migration 72와 호환 runtime 배포, 인증된 saved-assembly 제작·정식
 Artifact commit·실제 다운로드 SHA다. 운영 migration/API/Web/HWPX 교체는 아직 하지
 않았고 전체 목표는 ACTIVE다. 기존 슬롯·정본·실패 이력·벡터를 삭제/재생성하지 않았다.
+
+## 호환 운영 배포 체크포인트 — 실제 합본 acceptance는 미완료
+
+위 절의 미배포 상태 이후 다음 설치·활성화를 수행했다. 전체 목표는 계속 ACTIVE이며,
+이 절은 파일을 실제 내려받았다는 완료 증거가 아니다.
+
+| component | 실제 설치 source / 증거 |
+| --- | --- |
+| Builder·HWPX contracts | `836b6527e501e5b799b4786f97163c0443e24839`; 두 wheel 전체 member bytes 대조, 별도 `eom-hwpx` identity의 새 CLI 확인 |
+| API·공유 Platform·API contracts | `9370519199ad8c69df95e23194b0c8f6b39073cf`; clean archive build·RECORD·설치 파일 대조 |
+| Catalog·QUERY metadata owner | 위 release의 보호된 비편집 설치 prefix; 실제 API provider 코드 hash와 설정 hash를 함께 갱신 |
+| Web 최초 연결 | `93705191`; 서비스 identity의 설치 검증 55 files, HTTPS READY와 실제 delivery JS SHA 일치 |
+| DB | `20261104_0072`; 보호된 release operator `1.19`의 ADMIT·정확한 71→72 upgrade·verify 통과 |
+
+API/Catalog/HWPX runtime DB role을 기존 공식 bootstrap으로 reconcile했다. 실제 Catalog 및
+Manager identity의 read-only 권한 검사가 통과했고, Manager는 새 queue UPDATE만 허용되고
+INSERT는 거부됨을 확인했다. 실제 PID를 subject로 하는 polkit 검사에서도 Manager의 새
+curated unit start는 허용, Workflow identity의 같은 start는 거부됐다. 이 권한 검사는
+unit을 실행하거나 가짜 build row를 만들지 않는다.
+
+진행 중인 4개 worker를 중단하지 않기 위해 창작 producer만 지원된 graceful stop으로
+새 투입을 멈췄다. 기존 worker lease·shared command·QUERY/Builder 실행이 모두 0으로
+정상 종료한 시점에 공유 서비스를 교체했다. 이후 창작 producer와 기존 runner들을
+재개했다. INDEX PID `2473213`·InvocationID·고정 수치 환경·원본 설정 hash는 전후 같았다.
+기출/창작 원본·Graph·실패 기록·기존 벡터의 삭제나 새 모델 실행은 없었다.
+재개 직후 producer의 `verified_count`는 이번 프로세스의 재확인 수이며, 기존 등록 수를
+삭제하거나 0으로 수정한 것이 아니다. 운영 관측은 정본 acceptance와 구별한다.
+
+Builder wheel 설치 후 owner용 layout checker가 private operator stage를 읽지 못하는
+배포 스크립트 오류가 한 번 있었다. 실제 wheel bytes와 기존 rollback archive를 먼저
+확인하고, credential이 없는 checker만 root-owned libexec로 설치해 정규화 단계부터
+재개했다. wheel을 다시 설치하지 않았고, private stage 접근 권한을 완화하지 않았다.
+API/Web 활성화 전 이 설치 검증과 unit 설치를 완료했다. 실패 로그도 보존한다.
+
+기출 선택의 후속 화면 검사에서 예전 `hwpx_exam_eligible`가 새 curated 합본 선택까지
+막고 있음을 확인했다. 그 값은 기존 생산/시험지 계약 그대로 유지하고, DB의 조립
+선택에서만 예전 flag를 입장권으로 쓰지 않도록 했다. 선택은 Catalog가 pin하고 실제
+파일/schema/표현의 제작 가능 여부는 새 delivery owner가 검증한다. 예전 flag=false인
+기출 fixture로도 실제 Chromium에서 담기·저장을 확인했으며 관련 14 tests가 PASS다.
+해당 Web 후속 source는 `098ef841a2765d70939cc6573a4fa848d69fc55c`다. 이 wheel도 별도
+설치 simulation과 service identity 55-file 검증 후 Web만 교체했다. API/QUERY pin과
+실행 중인 INDEX/worker는 이 화면 수정 때문에 다시 바꾸거나 재시작하지 않았다.
+
+증거 위치(비밀값이나 전체 문항을 이 문서에 복사하지 않음):
+
+- `/var/lib/eom-curated72-release-20261104/`: 보호된 이전 설정·rollback·배포 기록.
+- `/var/lib/eom-curated72-builder-20261104/installed.json`: Builder wheel/unit hash와 보존한 실행 identity.
+- `/tmp/eom-curated72-installed-verify-20261104-01.log`: 실제 role·polkit·설치 source·INDEX 보존 검사.
+- `/tmp/eom-curated72-release-activate-20261104-01.log`: 정확한 migration/role callback과 활성화 결과.
+- `/tmp/eom-curated-web-build-20261104-02.log`: 후속 Web wheel 및 별도 설치 simulation.
+- `/tmp/eom-curated72-testdb-cleanup-20261104-01.log`: disposable DB cleanup PASS; 운영 DB/자료 삭제 없음.
+
+아직 남은 gate는 실제 HTTPS guiadmin session으로 저장된 원본 10310·10318 조립과
+기출·창작 원본·AI 혼합 조립을 제작하고, Runner→고정 Builder→독립 검증→정식 Artifact
+commit→같은 SHA의 다운로드까지 확인하는 것이다. 동일 key 재전송·완료 재조회가
+새 render를 만들지 않는지도 실제 build identity로 확인한다. 인증 입력은 tmux `EOM`
+`hwpx-check` 창에 준비했고 세션은 검증 프로세스 메모리에만 유지한다. 인증 성공,
+실제 파일 생성·저장·다운로드나 Hancom 육안 확인을 아직 PASS로 적지 않는다.

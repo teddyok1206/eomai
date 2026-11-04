@@ -81,6 +81,9 @@ API는 `curated_delivery_gateway.py`를 통해 Catalog authorization/pin RPC만 
 `curated_document_assemblies.py`와 Web `item-db-delivery.js`가 저장된 순서에서 제작·조회·
 다운로드를 연결한다. download/2.0만 256MiB를 허용하며 구 1.0의 64MiB는 그대로다.
 코드 존재·fixture PASS와 새 설치본/운영 활성화를 구분하고 체크포인트의 남은 gate를 확인한다.
+DB의 선택 담기는 예전 `hwpx_exam_eligible`로 막지 않는다. 그 flag는 기존 production/exam
+계약의 의미이고, 새 curated 조립의 입력 저장과 실제 제작 admission은 각 Catalog/Manager
+owner가 검증한다. 예전 시험지 flag=false인 canonical 기출도 선택 가능해야 한다.
 
 ## 먼저 열 파일
 

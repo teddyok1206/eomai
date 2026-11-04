@@ -11,7 +11,7 @@
 | 자료 검토 | PDF·HWP·HWPX를 검토합니다. 문제지·해설지 분리 입력, 지적 위치 표시와 주석 PDF 다운로드를 지원합니다. |
 | HWPX 제작 | 문항·표·수식·그림을 편집 가능한 문서로 출력합니다. 선택 가능한 HWPX 교정에서는 원본을 보존하고 수정 글자를 빨간색으로 표시합니다. |
 | 근거·유사도 검색 | GraphRAG와 로컬 임베딩으로 기출·등록 문항·풀이보고서의 관련 근거를 찾습니다. |
-| 문항 DB | 메타데이터 표와 선택 문항 상세를 나란히 보고, 여러 조건으로 검색·엑셀 저장·원본 다운로드·PDF 미리보기·조립 순서 저장을 합니다. 원본 전용 문항의 편집 가능한 합본 출력은 아직 지원하지 않습니다. |
+| 문항 DB | 메타데이터 표와 선택 문항 상세를 나란히 보고, 여러 조건으로 검색·엑셀 저장·원본 다운로드·PDF 미리보기·조립 순서 저장을 합니다. 배치의 저장한 순서에서 편집 가능한 HWPX 합본 제작·상태 확인·다운로드를 연결했으며, 운영 실제 파일 검증은 아래 체크포인트에서 구분합니다. |
 | 내부 자료 대화 | 일반 → ChatGPT에서 전용 Codex 슬롯으로 대화하고, 허용된 내부 검색 도구로 자료를 참고합니다. |
 | 시험지 제작 | 25문항 생산과 검토를 관리하고, 문항들을 묶은 시험지 HWPX를 만듭니다. |
 
@@ -48,11 +48,11 @@
 | 영역 | 상태와 확인할 기록 |
 | --- | --- |
 | 창작 문항 그림 복구 | HWP/HWPX 본문에 실제 쓰인 내장 이미지로 333문항·362그림을 복구하고 운영 조회·해시·재조회를 확인했습니다. 우측 참고 기출 그림은 제외했으며, 이미지가 아닌 표·수식 등 6문항은 미복구 예외로 남겼습니다. Preview 아래 긴 이미지 설명도 숨겼습니다. [범위·예외·운영 기록](docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md) |
-| 한글 원본 그림 신규 입력 | 새 HWP/HWPX 입력은 PDF crop 대신 본문 내장 그림의 실제 사용 개체·viewport·회전을 등록에 연결합니다. HWP 본문 그림 조회와 HWPX 표 전용 문항의 참고란 제외를 검증했습니다. 이후 발생한 Graph 동시 반영 충돌과 선택 문항의 임베딩 plan 버전 오판을 수정·배포했고, 03–06 실제 동시 실행·새 Graph 등록·새 CUDA 인덱스 저장과 재사용을 확인했습니다. 전체 1,053개 처리와 임베딩은 백그라운드 작업이며, 원본 변환·추출 예외는 별도로 보존합니다. 가변 구조 정본의 직접 HWPX 재출력은 사용자 선택에 따라 후속 범위입니다. [입력·운영 기록](docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md) · [11월 4일 복구·실제 실행 증거](docs/operations/BACKGROUND_NATIVE_RECOVERY_2026-11-04.md) · [자원 부족 대기·복구 운영 기록](docs/operations/BACKGROUND_RESOURCE_RECOVERY_2026-11-04.md) |
+| 한글 원본 그림 신규 입력 | 새 HWP/HWPX 입력은 PDF crop 대신 본문 내장 그림의 실제 사용 개체·viewport·회전을 등록에 연결합니다. HWP 본문 그림 조회와 HWPX 표 전용 문항의 참고란 제외를 검증했습니다. 이후 발생한 Graph 동시 반영 충돌과 선택 문항의 임베딩 plan 버전 오판을 수정·배포했고, 03–06 실제 동시 실행·새 Graph 등록·새 CUDA 인덱스 저장과 재사용을 확인했습니다. 전체 1,053개 처리와 임베딩은 백그라운드 작업이며, 원본 변환·추출 예외는 별도로 보존합니다. 보류했던 가변 구조의 HWPX 출력 확장은 아래 합본 경로에서 진행합니다. [입력·운영 기록](docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md) · [11월 4일 복구·실제 실행 증거](docs/operations/BACKGROUND_NATIVE_RECOVERY_2026-11-04.md) · [자원 부족 대기·복구 운영 기록](docs/operations/BACKGROUND_RESOURCE_RECOVERY_2026-11-04.md) |
 | 생성 문항 → GraphRAG·증분 임베딩 | 실제 검색·결과 조회·같은 요청 재전송 검증 완료. [운영 검증](docs/operations/REGISTERED_REVIEW_INCREMENTAL_ACCEPTANCE_2026-10-20.md) |
 | 일반 채팅 | 부가 알림 호환 수정 배포 및 새 메시지의 실제 답변·완료 상태 확인. [배포 기록](docs/operations/GENERAL_CHAT_MODERATION_METADATA_FIX_2026-10-24.md) |
-| 문항 DB | 원본 조회·다중 조건 검색·엑셀 저장·교정본 다운로드·PDF 준비·조립 순서 저장과 재열기를 지원합니다. 표/상세 분할 화면은 운영 배포했고, 원본 전용 편집 합본의 활성화는 별도 범위입니다. [운영 기록](docs/operations/ITEM_DB_CURATED_ASSEMBLY_RELEASE_2026-10-27.md) |
-| 편집 가능한 합본 개발 | 원본 HWP/HWPX·가변 정본·콘텐츠팀 문항의 혼합 출력을 실제 Office 읽기로 확인했습니다. 예정 identity를 유지하는 Artifact 저장·중단 복구·다운로드는 임시 DB에서 검증했고, DB 배치의 제작·상태 확인·다운로드 API와 화면을 연결했습니다. 현재는 소스 후보이며, 새 설치본·권한·호환 운영 배포와 실제 인증된 합본 다운로드는 아직 완료 전입니다. [설계·완료 조건](docs/architecture/CURATED_EDITABLE_HWPX_DELIVERY_PLAN.md) · [검증 체크포인트](docs/operations/CURATED_EDITABLE_NATIVE_CHECKPOINT_2026-11-04.md) |
+| 문항 DB | 원본 조회·다중 조건 검색·엑셀 저장·교정본 다운로드·PDF 준비·조립 순서 저장과 재열기를 지원합니다. 표/상세 분할 화면과 배치의 HWPX 제작 버튼을 운영 반영했습니다. [기존 운영 기록](docs/operations/ITEM_DB_CURATED_ASSEMBLY_RELEASE_2026-10-27.md) · [합본 배포·남은 검증](docs/operations/CURATED_EDITABLE_NATIVE_CHECKPOINT_2026-11-04.md) |
+| 편집 가능한 합본 | 원본 HWP/HWPX·가변 정본·콘텐츠팀 문항의 혼합 출력을 실제 Office 읽기로 확인했습니다. 중단 복구·발행은 임시 DB에서 검증했고, Builder·API·Catalog·Manager·Web과 migration 72를 호환 배포했습니다. 설치본·실제 권한·HTTPS 준비 상태는 PASS이며, 인증된 저장 순서의 실제 제작·정식 Artifact·다운로드 검증은 아직 진행 중입니다. [설계·완료 조건](docs/architecture/CURATED_EDITABLE_HWPX_DELIVERY_PLAN.md) · [검증 체크포인트](docs/operations/CURATED_EDITABLE_NATIVE_CHECKPOINT_2026-11-04.md) |
 | DB 유사도 목록·기록 | 1–32문항과 문항별 상위 결과 수를 고르고, 기준 문항 미리보기·사용자별 최근 기록·완료 결과 읽기를 분리한 API/Catalog/Web을 호환 배포했습니다. 실제 신규 다문항 검색·기록·중복 계산 없는 재열람 검증은 아직 진행 중입니다. [운영 체크포인트](docs/operations/ITEM_DB_SIMILARITY_LIST_RELEASE_2026-11-02.md) |
 | 창작 문항 등록·Graph | 2026-10-30 18:17 UTC 관측 기준 98/1,053건 등록·공식 조회 검증 완료입니다. 서로 다른 출처의 공통 용어 유형 충돌을 수정해 10413을 원래 풀이보고서로 복구했습니다. 당시 기출·교과서 node 17,000개/edge 40,652개와 기존 source hash 변경 0을 확인했습니다. 이후 3슬롯 운영 활성화와 실제 실행을 확인했으며, 최신 처리·배포 대기 상태는 [공통 전환 체크포인트](docs/operations/UNIFIED_ITEM_EMBEDDING_GPU_CHECKPOINT_2026-10-31.md)를 기준으로 봅니다. [등록 복구 기록](docs/operations/CREATIVE_INCREMENTAL_EMBEDDING_ACTIVATION_2026-10-30.md) · [3슬롯 설계](docs/architecture/CREATIVE_COHORT_THREE_SLOT_CONTINUATION.md) |
 | 풀이 양식과 임베딩 | 기출·창작·AI의 공개 풀이를 같은 입력 규칙으로 맞추는 GPU 재임베딩 목표가 진행 중입니다. 기출520 대상을 고정했고 INDEX를 공통 형식 우선으로 전환했습니다. 새 결과·검색 전환을 검증한 뒤 구형 벡터를 삭제합니다. 전체 완료·구 벡터 삭제는 아직 아닙니다. [전환 목표](docs/architecture/UNIFIED_ITEM_EMBEDDING_GPU_MIGRATION_GOAL_2026-10-31.md) · [운영 체크포인트](docs/operations/UNIFIED_ITEM_EMBEDDING_GPU_CHECKPOINT_2026-10-31.md) · [기존 복구 기록](docs/operations/PUBLIC_SOLUTION_EMBEDDING_CONNECTION_2026-10-29.md) |
