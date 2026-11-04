@@ -3,6 +3,10 @@
 from datetime import datetime
 from typing import Any
 
+from eom_catalog_service.curated_document_assembly_models import (
+    CuratedDocumentAssemblyRevisionRecord,
+)
+from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.models import Base
 from sqlalchemy import (
     CheckConstraint,
@@ -26,8 +30,8 @@ class HwpxCuratedBuildRecord(Base):
         ForeignKeyConstraint(
             ["assembly_id", "assembly_revision_id"],
             [
-                "curated_document_assembly_revisions.assembly_id",
-                "curated_document_assembly_revisions.assembly_revision_id",
+                CuratedDocumentAssemblyRevisionRecord.__table__.c.assembly_id,
+                CuratedDocumentAssemblyRevisionRecord.__table__.c.assembly_revision_id,
             ],
             name="fk_hwpx_curated_assembly_revision",
             ondelete="RESTRICT",
@@ -103,7 +107,7 @@ class HwpxCuratedBuildRecord(Base):
     request_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(128), nullable=False)
     created_by_operator_id: Mapped[str] = mapped_column(
-        ForeignKey("operators.operator_id", ondelete="RESTRICT"),
+        ForeignKey(OperatorRecord.__table__.c.operator_id, ondelete="RESTRICT"),
         nullable=False,
     )
     # Planned identities are persisted before dispatch, but are not dangling FKs:
