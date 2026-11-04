@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/hwpx/native-hwp-evidence/1.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "source_sha256", "candidate_sha256", "section_count", "paragraph_sha256", "table_sha256", "equation_sha256", "binary_sha256", "shape_counts"],
+  "properties": {
+    "schema_version": {"const": "native-hwp-conversion-evidence/1.0"},
+    "source_sha256": {"$ref": "#/$defs/hash"},
+    "candidate_sha256": {"$ref": "#/$defs/hash"},
+    "section_count": {"type": "integer", "minimum": 1, "maximum": 10000},
+    "paragraph_sha256": {"type": "array", "minItems": 1, "maxItems": 100000, "items": {"$ref": "#/$defs/hash"}},
+    "table_sha256": {"type": "array", "maxItems": 10000, "items": {"$ref": "#/$defs/hash"}},
+    "equation_sha256": {"type": "array", "maxItems": 10000, "items": {"$ref": "#/$defs/hash"}},
+    "binary_sha256": {"type": "array", "maxItems": 10000, "items": {"$ref": "#/$defs/hash"}},
+    "shape_counts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["pic", "container", "rect", "ellipse", "arc", "polygon", "curve", "line", "connectLine"],
+      "properties": {
+        "pic": {"$ref": "#/$defs/count"}, "container": {"$ref": "#/$defs/count"},
+        "rect": {"$ref": "#/$defs/count"}, "ellipse": {"$ref": "#/$defs/count"},
+        "arc": {"$ref": "#/$defs/count"}, "polygon": {"$ref": "#/$defs/count"},
+        "curve": {"$ref": "#/$defs/count"}, "line": {"$ref": "#/$defs/count"},
+        "connectLine": {"$ref": "#/$defs/count"}
+      }
+    }
+  },
+  "$defs": {
+    "hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "count": {"type": "integer", "minimum": 0, "maximum": 10000}
+  }
+}

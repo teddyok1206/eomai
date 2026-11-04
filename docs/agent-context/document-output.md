@@ -27,12 +27,27 @@ PDF·HWP·HWPX 입력을 검증하고, Office 입력에는 앞단 변환을 붙�
 단순 COMPLETE 플래그가 모든 과학적 판단이나 실제 출판 품질의 증명은 아니다.
 worker 결과 스키마 검증 실패와 변환 결과 없음, 페이지 투영 실패, 주석 저장 실패는 다른 경계다.
 
+## DB 조립의 native 출력
+
+`curated_document_assembly_service.py`는 혼합 원본·등록 문항의 ordered input manifest를
+저장한다. 입력 저장을 HWPX 제작 완료로 해석하지 않는다. `curated_renderer.py`의 V1은
+HWPX 전용이고 V2는 고정된 HWP 변환 bundle을 명시적으로 pin한다. native merger는 문서별
+resource·binary·object ID를 먼저 map으로 할당한 뒤 역매핑으로 XML과 media를 확인한다.
+
+HWP 변환은 `native_hwp_converter.py`가 보호된 설치 JAR/Java identity와 소스/후보 hash를
+검사하고, `native_hwp_preservation.py`가 문단·표·수식·binary·도형 evidence를 대조한다.
+`hwp_conversion_package.py`는 고정 writer의 빈 style name·동일 크기 0 축약·ZIP만 정규화한다.
+페이지 PNG 대체나 원본 덮어쓰기는 하지 않는다. 이 코드·설치본 검증을 운영 GUI 활성화로
+간주하지 말고 아래 현재 체크포인트와 실제 release를 대조한다.
+
 ## 먼저 열 파일
 
 - `apps/web_gui/eom_web_gui/static/item-preview.js`
 - `apps/web_gui/eom_web_gui/item_preview_projection.py`
 - `services/hwpx_manager/eom_hwpx_manager/application_service.py`
 - `services/hwpx_builder/eom_hwpx_builder`
+- `packages/hwpx_contracts/eom_hwpx_contracts/curated_document.py`
+- `services/hwpx_builder/eom_hwpx_builder/curated_renderer.py`
 - `services/catalog_service/eom_catalog_service/office_document_converter.py`
 - `services/catalog_service/eom_catalog_service/office_document_review_intake.py`
 - `services/catalog_service/eom_catalog_service/document_review_pdf_annotation_service.py`
@@ -47,3 +62,5 @@ worker 결과 스키마 검증 실패와 변환 결과 없음, 페이지 투영 
 - `docs/architecture/HWPX_APPLICATION_API_V0.md`
 - `docs/architecture/PDF_DOCUMENT_REVIEW_V1_IMPLEMENTATION_PLAN.md`
 - `docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md`: 가변 구조 원본의 HWPX 재출력 후속 범위.
+- `docs/architecture/CURATED_EDITABLE_HWPX_DELIVERY_PLAN.md`
+- `docs/operations/CURATED_EDITABLE_NATIVE_CHECKPOINT_2026-11-04.md`

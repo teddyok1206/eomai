@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/hwpx/curated-render/2.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "build_id", "assembly_revision_id", "assembly_manifest_sha256", "profile", "segments", "converter"],
+  "properties": {
+    "schema_version": {"const": "curated-hwpx-render-request/2.0"},
+    "build_id": {"type": "string", "pattern": "^hwpxbuild_[0-9a-f]{32}$"},
+    "assembly_revision_id": {"type": "string", "pattern": "^assemblyrev_[0-9a-f]{32}$"},
+    "assembly_manifest_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "profile": {"const": "NATIVE_EDITABLE_PRESERVATION_V2"},
+    "segments": {
+      "type": "array", "minItems": 1, "maxItems": 200,
+      "items": {"$ref": "#/$defs/segment"}
+    },
+    "converter": {"anyOf": [{"$ref": "#/$defs/converter"}, {"type": "null"}]}
+  },
+  "$defs": {
+    "segment": {
+      "type": "object", "additionalProperties": false,
+      "required": ["position", "local_file", "source_format", "sha256", "size_bytes"],
+      "properties": {
+        "position": {"type": "integer", "minimum": 1, "maximum": 200},
+        "local_file": {"type": "string", "pattern": "^inputs/[0-9]{3}\\.(hwpx|hwp)$"},
+        "source_format": {"enum": ["HWP", "HWPX"]},
+        "sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+        "size_bytes": {"type": "integer", "minimum": 1, "maximum": 52428800}
+      }
+    },
+    "converter": {
+      "type": "object", "additionalProperties": false,
+      "required": ["profile", "source_commit", "bundle_sha256"],
+      "properties": {
+        "profile": {"const": "HWP2HWPX_NATIVE_V1"},
+        "source_commit": {"const": "62d95b980a4e3a6766877dd3fb6f7f45f4afcf3d"},
+        "bundle_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    }
+  },
+  "allOf": [{
+    "if": {"properties": {"segments": {"contains": {"properties": {"source_format": {"const": "HWP"}}, "required": ["source_format"]}}}},
+    "then": {"properties": {"converter": {"$ref": "#/$defs/converter"}}},
+    "else": {"properties": {"converter": {"type": "null"}}}
+  }]
+}

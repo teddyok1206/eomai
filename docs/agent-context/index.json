@@ -92,14 +92,16 @@
         "apps/web_gui/eom_web_gui/item_preview_projection.py",
         "services/hwpx_manager/eom_hwpx_manager/application_service.py",
         "services/hwpx_builder/eom_hwpx_builder",
+        "packages/hwpx_contracts/eom_hwpx_contracts/curated_document.py",
+        "services/hwpx_builder/eom_hwpx_builder/curated_renderer.py",
         "services/catalog_service/eom_catalog_service/office_document_converter.py",
         "services/catalog_service/eom_catalog_service/office_document_review_intake.py",
         "services/catalog_service/eom_catalog_service/document_review_pdf_annotation_service.py",
         "services/catalog_service/eom_catalog_service/document_review_hwpx_correction_service.py",
         "services/catalog_service/eom_catalog_service/review_textbook_evidence_service.py"
       ],
-      "test_paths": ["tests/api/test_hwpx_download_boundary.py", "tests/unit/test_document_review_pdf_annotation.py", "tests/unit/test_single_document_review_textbook_v5.py"],
-      "reference_paths": ["docs/architecture/HWPX_APPLICATION_API_V0.md", "docs/architecture/PDF_DOCUMENT_REVIEW_V1_IMPLEMENTATION_PLAN.md", "docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md"]
+      "test_paths": ["tests/api/test_hwpx_download_boundary.py", "tests/unit/test_document_review_pdf_annotation.py", "tests/unit/test_single_document_review_textbook_v5.py", "tests/hwpx/test_curated_native_v2.py", "tests/hwpx/test_native_hwp_preservation.py"],
+      "reference_paths": ["docs/architecture/HWPX_APPLICATION_API_V0.md", "docs/architecture/PDF_DOCUMENT_REVIEW_V1_IMPLEMENTATION_PLAN.md", "docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md", "docs/architecture/CURATED_EDITABLE_HWPX_DELIVERY_PLAN.md", "docs/operations/CURATED_EDITABLE_NATIVE_CHECKPOINT_2026-11-04.md"]
     },
     {
       "id": "chat-identity-slots",

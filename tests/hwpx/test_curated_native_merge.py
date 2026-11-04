@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 from eom_hwpx_builder.curated_package_merge import merge_native_hwpx
 from eom_hwpx_builder.curated_resources import (
+    ObjectRelocation,
     catalog_rows,
     merge_resources,
     relocate_tree,
@@ -223,7 +224,9 @@ def test_output_is_never_overwritten_and_symlink_source_is_not_followed(tmp_path
 
 def test_resource_verifier_detects_changed_definitions_and_forward_cycles() -> None:
     originals = tuple(parse_xml(header(font), "header").root for font in ("A", "B"))
-    merged, plans = merge_resources(originals, ({}, {}), ({}, {}))
+    merged, plans = merge_resources(
+        originals, ({}, {}), (ObjectRelocation({}), ObjectRelocation({}))
+    )
     verify_resource_relocation(originals, merged, plans)
     changed = copy.deepcopy(merged)
     catalog_rows(changed)["font:HANGUL"]["1"].set("face", "Wrong font")

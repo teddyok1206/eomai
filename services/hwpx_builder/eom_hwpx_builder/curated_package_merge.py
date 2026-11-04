@@ -11,12 +11,16 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
+from eom_hwpx_contracts.curated_document import CuratedHwpxWarning
 from lxml import etree  # type: ignore[import-untyped]
 
 from eom_hwpx_builder.analyzer import analyze_package, resolve_part
 from eom_hwpx_builder.archive import FIXED_ZIP_TIMESTAMP, SafePackage, read_package
 from eom_hwpx_builder.curated_resources import (
     OBJECTS,
+    NativeMergeProfile,
+    ObjectRelocation,
+    ResourceRelocation,
     attribute,
     fail,
     merge_resources,
@@ -68,6 +72,7 @@ class CuratedMergeReport:
     section_source_positions: tuple[int, ...]
     binary_count: int
     output_sha256: str
+    warnings: tuple[CuratedHwpxWarning, ...] = ()
 
 
 def _xml(root: etree._Element) -> bytes:
@@ -140,7 +145,11 @@ def _document(package: SafePackage) -> NativeDocument:
     )
 
 
-def _settings_identity(document: NativeDocument, member: str) -> tuple[object, ...] | None:
+def _settings_identity(
+    document: NativeDocument,
+    member: str,
+    profile: NativeMergeProfile = NativeMergeProfile.STRICT_V1,
+) -> tuple[object, ...] | None:
     entry = document.package.by_name().get(member)
     if entry is None:
         return None
@@ -149,19 +158,65 @@ def _settings_identity(document: NativeDocument, member: str) -> tuple[object, .
         for node in tuple(root):
             if local_name(node.tag) == "CaretPosition":
                 root.remove(node)
+            elif profile == NativeMergeProfile.EDITABLE_V2 and _default_print_settings(node):
+                # A package has one application print setting, not one per section.
+                # Only the known neutral settings may be absent in another source.
+                root.remove(node)
     else:
         # Producer version is document metadata, not a resource/layout definition.
         for name in ("application", "appVersion"):
             root.attrib.pop(name, None)
+        if profile == NativeMergeProfile.EDITABLE_V2 and local_name(root.tag) == "HCFVersion":
+            if root.get("xmlVersion") not in {"1.4", "1.5"} or (
+                root.get("major"),
+                root.get("minor"),
+            ) != ("5", "1"):
+                fail("curated document format version is unsupported")
+            root.attrib.update({"xmlVersion": "1.5", "micro": "1", "buildNumber": "0"})
     return tree_value(root)
 
 
-def _object_maps(documents: tuple[NativeDocument, ...]) -> tuple[dict[str, str], ...]:
+def _default_print_settings(root: etree._Element) -> bool:
+    config = "{urn:oasis:names:tc:opendocument:xmlns:config:1.0}"
+    if root.tag != config + "config-item-set" or dict(root.attrib) != {"name": "PrintInfo"}:
+        return False
+    defaults = {
+        "PrintAutoFootNote": ("boolean", "false"),
+        "PrintAutoHeadNote": ("boolean", "false"),
+        "PrintMethod": ("short", "0"),
+        "OverlapSize": ("short", "0"),
+        "PrintCropMark": ("short", "0"),
+        "BinderHoleType": ("short", "0"),
+        "ZoomX": ("short", "100"),
+        "ZoomY": ("short", "100"),
+    }
+    seen: set[str] = set()
+    for child in root:
+        name, kind = child.get("name"), child.get("type")
+        if (
+            child.tag != config + "config-item"
+            or name is None
+            or name in seen
+            or set(child.attrib) != {"name", "type"}
+            or len(child)
+            or defaults.get(name) != (kind, child.text or "")
+        ):
+            return False
+        seen.add(name)
+    return True
+
+
+def _object_maps(
+    documents: tuple[NativeDocument, ...], profile: NativeMergeProfile
+) -> tuple[ObjectRelocation, ...]:
     next_id = 1
     result = []
     for document in documents:
         mapping = {}
-        for _name, section in document.sections:
+        anonymous = {}
+        attributes = {}
+        for section_ordinal, (_name, section) in enumerate(document.sections):
+            anonymous_ordinal = 0
             for node in section.iter():
                 if local_name(node.tag) in {"ole", "video"}:
                     fail("active/compound objects require a successor merge profile")
@@ -169,11 +224,30 @@ def _object_maps(documents: tuple[NativeDocument, ...]) -> tuple[dict[str, str],
                     continue
                 identifier = attribute(node, "id")
                 if identifier:
-                    if identifier in mapping:
-                        fail("curated source repeats a document object ID")
-                    mapping[identifier] = str(next_id)
-                    next_id += 1
-        result.append(mapping)
+                    if (
+                        identifier == "0"
+                        and local_name(node.tag) != "fieldBegin"
+                        and profile == NativeMergeProfile.EDITABLE_V2
+                    ):
+                        # Native converters use zero for anonymous grouped shapes.
+                        # A zero is not a resolvable field/link target. Preserve
+                        # every use separately, never collapse them into one ID.
+                        replacement = str(next_id)
+                        anonymous[section_ordinal, anonymous_ordinal] = replacement
+                        anonymous_ordinal += 1
+                        next_id += 1
+                    else:
+                        if identifier in mapping:
+                            fail("curated source repeats a document object ID")
+                        replacement = str(next_id)
+                        mapping[identifier] = replacement
+                        next_id += 1
+                    if profile == NativeMergeProfile.EDITABLE_V2:
+                        for name, value in node.attrib.items():
+                            alias = local_name(name).casefold()
+                            if alias in {"instid", "fieldid"}:
+                                attributes[alias, identifier, replacement] = (value, replacement)
+        result.append(ObjectRelocation(mapping, anonymous, attributes))
     return tuple(result)
 
 
@@ -201,7 +275,12 @@ def write_native_package(payloads: dict[str, bytes], output: Path) -> None:
         temporary.unlink()
 
 
-def merge_native_hwpx(sources: tuple[Path, ...], output: Path) -> CuratedMergeReport:
+def merge_native_hwpx(
+    sources: tuple[Path, ...],
+    output: Path,
+    *,
+    profile: NativeMergeProfile = NativeMergeProfile.STRICT_V1,
+) -> CuratedMergeReport:
     if not 1 <= len(sources) <= 200 or output.exists() or output.is_symlink():
         fail("curated input count or output is invalid")
     documents_list = []
@@ -218,7 +297,8 @@ def merge_native_hwpx(sources: tuple[Path, ...], output: Path) -> CuratedMergeRe
     first = documents[0]
     for member in ("settings.xml", "version.xml"):
         if any(
-            _settings_identity(document, member) != _settings_identity(first, member)
+            _settings_identity(document, member, profile)
+            != _settings_identity(first, member, profile)
             for document in documents[1:]
         ):
             fail("curated document global settings differ: " + member)
@@ -238,10 +318,12 @@ def merge_native_hwpx(sources: tuple[Path, ...], output: Path) -> CuratedMergeRe
             mapping[identifier] = new_id
             payloads[new_member] = entries[member].data
         binary_maps.append(mapping)
+    object_maps = _object_maps(documents, profile)
     header, plans = merge_resources(
         tuple(document.header for document in documents),
         tuple(binary_maps),
-        _object_maps(documents),
+        object_maps,
+        profile=profile,
     )
     content = copy.deepcopy(first.content)
     manifest = next(node for node in content.iter() if local_name(node.tag) == "manifest")
@@ -274,9 +356,9 @@ def merge_native_hwpx(sources: tuple[Path, ...], output: Path) -> CuratedMergeRe
                 f"BinData/curated-{position:03d}-{ordinal:04d}{Path(member).suffix.lower()}"
             )
             add_item(plan.binaries[identifier], new_member, media)
-        for _original_name, original in document.sections:
+        for section_ordinal, (_original_name, original) in enumerate(document.sections):
             section = copy.deepcopy(original)
-            relocate_tree(section, plan)
+            relocate_tree(section, plan, section_ordinal=section_ordinal)
             identifier = f"section{len(section_positions)}"
             member = f"Contents/{identifier}.xml"
             payloads[member] = _xml(section)
@@ -288,6 +370,11 @@ def merge_native_hwpx(sources: tuple[Path, ...], output: Path) -> CuratedMergeRe
     set_attribute(header, "secCnt", str(len(section_positions)))
     payloads[HEADER] = _xml(header)
     payloads[CONTENT] = _xml(content)
+    if profile == NativeMergeProfile.EDITABLE_V2 and "version.xml" in payloads:
+        version = parse_xml(payloads["version.xml"], "version.xml").root
+        if local_name(version.tag) == "HCFVersion":
+            version.attrib.update({"xmlVersion": "1.5", "micro": "1", "buildNumber": "0"})
+            payloads["version.xml"] = _xml(version)
     payloads["Preview/PrvText.txt"] = b"\n".join(
         document.package.by_name()["Preview/PrvText.txt"].data
         for document in documents
@@ -339,7 +426,27 @@ def merge_native_hwpx(sources: tuple[Path, ...], output: Path) -> CuratedMergeRe
         tuple(section_positions),
         sum(map(len, binary_maps)),
         sha256_file(output),
+        _merge_warnings(documents, plans, profile),
     )
+
+
+def _merge_warnings(
+    documents: tuple[NativeDocument, ...],
+    plans: tuple[ResourceRelocation, ...],
+    profile: NativeMergeProfile,
+) -> tuple[CuratedHwpxWarning, ...]:
+    if profile == NativeMergeProfile.STRICT_V1:
+        return ()
+    warnings: list[CuratedHwpxWarning] = []
+    if any(
+        _settings_identity(document, "settings.xml")
+        != _settings_identity(documents[0], "settings.xml")
+        for document in documents[1:]
+    ):
+        warnings.append("FIRST_DOCUMENT_PRINT_SETTINGS")
+    if any(plan.style_names for plan in plans):
+        warnings.append("STYLE_NAMES_RELOCATED")
+    return tuple(warnings)
 
 
 def _rebuild_section_rdf(payloads: dict[str, bytes], count: int) -> None:

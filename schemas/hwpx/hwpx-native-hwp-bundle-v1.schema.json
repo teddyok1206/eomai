@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/hwpx/native-hwp-bundle/1.0",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "source_commit", "java_sha256", "files", "bundle_sha256"],
+  "properties": {
+    "schema_version": {"const": "native-hwp-converter-bundle/1.0"},
+    "source_commit": {"const": "62d95b980a4e3a6766877dd3fb6f7f45f4afcf3d"},
+    "java_sha256": {"$ref": "#/$defs/hash"},
+    "bundle_sha256": {"$ref": "#/$defs/hash"},
+    "files": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["filename", "sha256", "size_bytes"],
+        "properties": {
+          "filename": {"enum": ["converter.jar", "hwplib-1.1.10.jar", "hwpxlib-1.0.9.jar"]},
+          "sha256": {"$ref": "#/$defs/hash"},
+          "size_bytes": {"type": "integer", "minimum": 1, "maximum": 16777216}
+        }
+      }
+    }
+  },
+  "$defs": {"hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}
+}

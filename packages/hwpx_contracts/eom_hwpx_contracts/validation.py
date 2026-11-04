@@ -12,6 +12,10 @@ from jsonschema import Draft202012Validator, FormatChecker
 SCHEMA_FILES = {
     "curated-render-request": "hwpx-curated-render-v1.schema.json",
     "curated-render-result": "hwpx-curated-render-result-v1.schema.json",
+    "curated-render-request-v2": "hwpx-curated-render-v2.schema.json",
+    "curated-render-result-v2": "hwpx-curated-render-result-v2.schema.json",
+    "native-hwp-evidence": "hwpx-native-hwp-evidence-v1.schema.json",
+    "native-hwp-bundle": "hwpx-native-hwp-bundle-v1.schema.json",
     "content-team-editorial-question": "hwpx-content-team-editorial-question-v1.schema.json",
     "content-team-editorial-question-v2": "hwpx-content-team-editorial-question-v2.schema.json",
     "content-team-render-request": "hwpx-content-team-render-request-v1.schema.json",
@@ -77,8 +81,14 @@ def parse_contract_json(
 ) -> dict[str, Any]:
     """Parse one untrusted JSON object once, rejecting duplicate keys before validation."""
 
+    value = parse_json_object(payload)
+    validate_contract(name, value, definition=definition)
+    return value
+
+
+def parse_json_object(payload: bytes | str) -> dict[str, Any]:
+    """Decode once with unique keys; callers must validate their selected wire schema."""
     value: Any = json.loads(payload, object_pairs_hook=_unique_object)
     if not isinstance(value, dict):
         raise ValueError("HWPX contract payload must be a JSON object")
-    validate_contract(name, value, definition=definition)
     return value
