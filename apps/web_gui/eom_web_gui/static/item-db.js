@@ -463,7 +463,6 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       selectItem("GRAPH_ITEM", entry);
       section.append(metadataList([["교육과정 단원", entry.curriculum_units.map((unit) => unit.label).join(" · ")]],
         "item-db-detail-summary"));
-      if (!entry.hwpx_exam_eligible) return;
       const add = node(document, "button", "button secondary", "등록 문항을 조립 목록에 담기");
       add.type = "button";
       add.addEventListener("click", () => addToDraft({

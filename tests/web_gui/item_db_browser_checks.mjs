@@ -67,7 +67,11 @@ async function api(path, options = {}) {
     if (options.body.cursor) return {values: [{source: entry('10319'), registration: null}], has_more: false, next_cursor: null};
     return {values: [entry('10310'), entry('10318')].map(source => ({source, registration: null})), has_more: true, next_cursor: 'next-page'};
   }
-  if (path.startsWith('/item-db/registrations/')) return null;
+  if (path.startsWith('/item-db/registrations/')) return fixture.enableRegisteredGraph ? {
+    ...graph, source_class: 'APPROVED_ITEM', past_exam_context: null,
+    item_id: 'item_' + '1'.repeat(32), item_revision_id: 'itemrev_' + '2'.repeat(32),
+    item_manifest_sha256: 'sha256:' + '3'.repeat(64),
+  } : null;
   if (path.startsWith('/item-db/graph-items?')) {
     const params = new URL('https://fixture' + path).searchParams;
     if (params.has('item_number') && params.get('item_number') !== '17') return {values: [], has_more: false, next_cursor: null};
@@ -235,14 +239,19 @@ try {
 
   // Category never encodes approval; the same original metadata and file tools remain.
   assert.deepEqual(await page.locator('#item-db-source option').allTextContents(), ['창작', '기출', 'AI']);
+  await page.evaluate(() => {window.dbFixture.enableRegisteredGraph = true;});
   await page.locator('#item-db-approval').selectOption('APPROVED');
   await page.waitForFunction(() => document.querySelector('#item-db-result-count').textContent === '1개 표시');
   assert.equal(await page.locator('#item-db-source-filters').isVisible(), true);
   assert.match(await rows.first().innerText(), /10310[\s\S]*승인 완료/);
   await rows.first().getByRole('button').click();
   await page.getByRole('button', {name: '등록 문항 미리보기', exact: true}).waitFor();
+  await page.getByRole('button', {name: '등록 문항을 조립 목록에 담기', exact: true}).waitFor();
+  assert.equal(await page.getByRole('button', {name: '등록 문항을 조립 목록에 담기', exact: true}).isEnabled(), true,
+    'legacy exam eligibility must not hide registered-item curated selection');
   assert.match(await page.locator('#item-db-detail').innerText(), /출제 의도[\s\S]*자료 해석/);
   assert.equal(await page.locator('.item-db-edition.is-final').count(), 1);
+  await page.evaluate(() => {window.dbFixture.enableRegisteredGraph = false;});
   await page.locator('#item-db-source').selectOption('AI');
   await page.waitForFunction(() => document.querySelector('#item-db-results').textContent.includes('AI 생성 문항'));
   await rows.first().getByRole('button').click();
