@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from enum import StrEnum
 
 from eom_catalog_contracts import (
     INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
@@ -33,6 +34,11 @@ class CuratedDocumentAssemblyItemError(ValueError):
         self.code = code
 
 
+class _GraphAdmission(StrEnum):
+    CURRENT_SELECTION = "CURRENT_SELECTION"
+    PINNED_DELIVERY = "PINNED_DELIVERY"
+
+
 def resolve_curated_registered_items(
     session: Session,
     selections: tuple[RegisteredItemPlacement | PastExamItemPlacement, ...],
@@ -44,6 +50,27 @@ def resolve_curated_registered_items(
     eligibility remains a separate Builder-admission decision.
     """
 
+    return _resolve_registered_items(session, selections, _GraphAdmission.CURRENT_SELECTION)
+
+
+def reauthorize_curated_registered_items(
+    session: Session,
+    selections: tuple[RegisteredItemPlacement | PastExamItemPlacement, ...],
+) -> tuple[CuratedRegisteredItemPlacement | CuratedPastExamItemPlacement, ...]:
+    """Reauthorize the saved published Graph, not a later corpus head.
+
+    A saved assembly is reproducible while its pinned snapshot and sources remain
+    admissible. Publishing an unrelated new snapshot must not change that input.
+    Delivery reads use no row locks or mutation privilege on Catalog tables.
+    """
+    return _resolve_registered_items(session, selections, _GraphAdmission.PINNED_DELIVERY)
+
+
+def _resolve_registered_items(
+    session: Session,
+    selections: tuple[RegisteredItemPlacement | PastExamItemPlacement, ...],
+    admission: _GraphAdmission,
+) -> tuple[CuratedRegisteredItemPlacement | CuratedPastExamItemPlacement, ...]:
     if not selections:
         return ()
     revisions = {row.item_revision_id for row in selections}
@@ -53,15 +80,17 @@ def resolve_curated_registered_items(
     revision_ids = tuple(sorted(revisions))
     node_keys = tuple("item-revision:" + revision_id for revision_id in revision_ids)
     snapshot_id = next(iter(snapshot_ids))
-    corpus = session.scalar(
-        select(KnowledgeCorpusRecord)
-        .where(
-            KnowledgeCorpusRecord.corpus_key == INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
-            KnowledgeCorpusRecord.lifecycle_state == "ACTIVE",
-        )
-        .with_for_update(read=True, of=KnowledgeCorpusRecord)
+    corpus_query = select(KnowledgeCorpusRecord).where(
+        KnowledgeCorpusRecord.corpus_key == INTEGRATED_SCIENCE_TEXTBOOK_CORPUS_KEY,
+        KnowledgeCorpusRecord.lifecycle_state == "ACTIVE",
     )
-    if corpus is None or corpus.current_graph_snapshot_revision_id != snapshot_id:
+    if admission is _GraphAdmission.CURRENT_SELECTION:
+        corpus_query = corpus_query.with_for_update(read=True, of=KnowledgeCorpusRecord)
+    corpus = session.scalar(corpus_query)
+    if corpus is None or (
+        admission is _GraphAdmission.CURRENT_SELECTION
+        and corpus.current_graph_snapshot_revision_id != snapshot_id
+    ):
         raise CuratedDocumentAssemblyItemError("CURATED_GRAPH_SNAPSHOT_STALE")
     snapshot = session.get(KnowledgeGraphSnapshotRecord, snapshot_id)
     if (
@@ -73,13 +102,15 @@ def resolve_curated_registered_items(
     ):
         raise CuratedDocumentAssemblyItemError("CURATED_GRAPH_SNAPSHOT_INVALID")
 
-    item_rows = session.execute(
+    item_query = (
         select(ItemRevisionRecord, ItemRecord)
         .join(ItemRecord, ItemRecord.item_id == ItemRevisionRecord.item_id)
         .where(ItemRevisionRecord.item_revision_id.in_(revision_ids))
         .order_by(ItemRecord.item_id)
-        .with_for_update(read=True, of=ItemRecord)
-    ).all()
+    )
+    if admission is _GraphAdmission.CURRENT_SELECTION:
+        item_query = item_query.with_for_update(read=True, of=ItemRecord)
+    item_rows = session.execute(item_query).all()
     by_revision = {revision.item_revision_id: (revision, item) for revision, item in item_rows}
     if len(by_revision) != len(revisions):
         raise CuratedDocumentAssemblyItemError("CURATED_ITEM_REVISION_INVALID")

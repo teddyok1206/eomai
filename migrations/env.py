@@ -17,6 +17,7 @@ import eom_catalog_service.legacy_item_learning_models
 import eom_catalog_service.legacy_usage_models
 import eom_catalog_service.models
 import eom_catalog_service.pdf_learning_completion_models  # noqa: F401
+import eom_hwpx_manager.curated_build_models
 import eom_hwpx_manager.models  # noqa: F401
 import eom_identity_service.local_indexing_service_models
 import eom_identity_service.models  # noqa: F401

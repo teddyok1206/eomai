@@ -10,9 +10,14 @@ from eom_catalog_contracts import (
     CuratedDocumentAssemblyListEntryV1,
     CuratedDocumentAssemblyManifestV1,
     CuratedExternalDocumentPlacement,
+    CuratedPastExamItemPlacement,
     validate_contract,
 )
-from eom_catalog_contracts.curated_document_assembly_draft import CuratedDocumentAssemblyDraftV1
+from eom_catalog_contracts.curated_document_assembly_draft import (
+    CuratedDocumentAssemblyDraftV1,
+    PastExamItemPlacement,
+    RegisteredItemPlacement,
+)
 from eom_identifiers import content_sha256
 from eom_identity_service.models import OperatorRecord
 from eom_identity_service.repository import effective_permissions
@@ -23,6 +28,9 @@ from sqlalchemy import Engine, func, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from eom_catalog_service.curated_document_assembly_item import (
+    reauthorize_curated_registered_items,
+)
 from eom_catalog_service.curated_document_assembly_models import (
     CuratedDocumentAssemblyPlacementRecord,
     CuratedDocumentAssemblyRecord,
@@ -30,6 +38,9 @@ from eom_catalog_service.curated_document_assembly_models import (
 )
 from eom_catalog_service.curated_document_assembly_resolution import (
     resolve_curated_document_assembly_manifest,
+)
+from eom_catalog_service.curated_document_assembly_source import (
+    reauthorize_curated_external_documents,
 )
 from eom_catalog_service.external_item_document_media import ExternalItemDocumentMediaService
 
@@ -185,6 +196,96 @@ class CuratedDocumentAssemblyService:
             ):
                 raise CuratedDocumentAssemblyError("CURATED_SOURCE_PERMISSION_DENIED")
             return manifest
+
+    def read_for_delivery(
+        self,
+        assembly_id: str,
+        *,
+        assembly_revision_id: str,
+        manifest_sha256: str,
+        actor: ActorContext,
+    ) -> CuratedDocumentAssemblyManifestV1:
+        """Read/status/download permission, distinct from permission to build."""
+        return self._authorize_delivery(
+            assembly_id,
+            assembly_revision_id=assembly_revision_id,
+            manifest_sha256=manifest_sha256,
+            actor=actor,
+            permission=PermissionKey.HWPX_READ,
+        )
+
+    def authorize_delivery_build(
+        self,
+        assembly_id: str,
+        *,
+        assembly_revision_id: str,
+        manifest_sha256: str,
+        actor: ActorContext,
+    ) -> CuratedDocumentAssemblyManifestV1:
+        """Admit or execute a durable build with the initiator's current authority."""
+        return self._authorize_delivery(
+            assembly_id,
+            assembly_revision_id=assembly_revision_id,
+            manifest_sha256=manifest_sha256,
+            actor=actor,
+            permission=PermissionKey.HWPX_BUILD_CREATE,
+        )
+
+    def _authorize_delivery(
+        self,
+        assembly_id: str,
+        *,
+        assembly_revision_id: str,
+        manifest_sha256: str,
+        actor: ActorContext,
+        permission: PermissionKey,
+    ) -> CuratedDocumentAssemblyManifestV1:
+        """Authorize one exact saved input with bounded metadata reads.
+
+        No file materialization or render is performed by a status/replay read.
+        The original published Graph remains pinned when the corpus head advances.
+        Source revocation, changed source pointers and operator permissions are
+        still checked; none of them is repaired by resolving an implicit latest.
+        """
+        manifest = self.read(assembly_id, actor=actor)
+        if (
+            manifest.assembly_revision_id != assembly_revision_id
+            or manifest.manifest_sha256 != manifest_sha256
+        ):
+            raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_POINTER_INVALID")
+        with self.sessions() as session:
+            authorized = self._authorized_actor(session, actor)
+            required = {PermissionKey.ITEM_READ, permission}
+            if not required <= authorized.permissions:
+                raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_PERMISSION_DENIED")
+            external = tuple(
+                row
+                for row in manifest.placements
+                if isinstance(row, CuratedExternalDocumentPlacement)
+            )
+            if external and PermissionKey.CONTENT_INTAKE_READ not in authorized.permissions:
+                raise CuratedDocumentAssemblyError("CURATED_SOURCE_PERMISSION_DENIED")
+            reauthorize_curated_external_documents(session, external)
+            selections: list[RegisteredItemPlacement | PastExamItemPlacement] = []
+            for row in manifest.placements:
+                if isinstance(row, CuratedExternalDocumentPlacement):
+                    continue
+                model = (
+                    PastExamItemPlacement
+                    if isinstance(row, CuratedPastExamItemPlacement)
+                    else RegisteredItemPlacement
+                )
+                selections.append(
+                    model.model_validate({name: getattr(row, name) for name in model.model_fields})
+                )
+            resolved = reauthorize_curated_registered_items(session, tuple(selections))
+            if resolved != tuple(
+                row
+                for row in manifest.placements
+                if not isinstance(row, CuratedExternalDocumentPlacement)
+            ):
+                raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_POINTER_INVALID")
+        return manifest
 
     def list_recent(
         self, *, actor: ActorContext, limit: int = 20, cursor: str | None = None

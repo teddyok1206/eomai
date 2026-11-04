@@ -7,6 +7,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from xml.etree import ElementTree
 
 import pytest
 from eom_hwpx_contracts import (
@@ -285,6 +286,18 @@ class _FakeContentTeamBuilderAdapter(_FakeBuilderAdapter):
         output_root = workspace / "output"
         output_root.mkdir()
         output = output_root / "content-team-item.hwpx"
+        # This persistence double models the declared text-only Item. A random
+        # sentence no longer satisfies the independent output acceptance check.
+        draft = parse_content_team_markdown(
+            (workspace / request["source"]["markdown_file"]).read_bytes()
+        )
+        assert draft.visual_layout == "NONE" and not draft.equation_sources
+        section = ElementTree.Element("sec")
+        paragraph = ElementTree.SubElement(section, "p")
+        run = ElementTree.SubElement(paragraph, "run")
+        ElementTree.SubElement(run, "t").text = serialize_content_team_markdown(draft).decode(
+            "utf-8"
+        )
         with zipfile.ZipFile(output, "x", allowZip64=False) as archive:
             archive.writestr(
                 "mimetype",
@@ -302,12 +315,13 @@ class _FakeContentTeamBuilderAdapter(_FakeBuilderAdapter):
                 ("Contents/header.xml", b"<head/>"),
                 (
                     "Contents/content.hpf",
-                    b'<package><manifest><item id="section0" href="section0.xml"/>'
+                    b'<package xmlns="http://www.idpf.org/2007/opf/">'
+                    b'<manifest><item id="section0" href="section0.xml"/>'
                     b'</manifest><spine><itemref idref="section0"/></spine></package>',
                 ),
                 (
                     "Contents/section0.xml",
-                    b"<sec><p><run><t>validated integration fixture</t></run></p></sec>",
+                    ElementTree.tostring(section, encoding="utf-8"),
                 ),
             ):
                 archive.writestr(name, payload, compress_type=zipfile.ZIP_DEFLATED)
@@ -484,7 +498,16 @@ def test_hwpx_service_build_validates_commits_and_reuses_idempotent_result(
     template_root = tmp_path / "template-artifact"
     template_root.mkdir()
     (template_root / "template.hwpx").write_bytes(b"SYNTHETIC_TEMPLATE")
-    (template_root / "template-bindings.json").write_text("{}", encoding="utf-8")
+    bindings = {
+        "manifest_version": "1.0",
+        "template_id": "hwpxtpl_" + "9" * 32,
+        "template_revision_id": "hwpxrev_" + "a" * 32,
+        "template_sha256": sha256_file(template_root / "template.hwpx"),
+        "bindings": [],
+        "warnings": [],
+    }
+    bindings["binding_manifest_sha256"] = content_sha256(bindings)
+    (template_root / "template-bindings.json").write_text(json.dumps(bindings), encoding="utf-8")
     source_job = _artifact_job(
         db_session,
         "hwpx-service-template-artifact-test",
@@ -506,7 +529,7 @@ def test_hwpx_service_build_validates_commits_and_reuses_idempotent_result(
         source_artifact_id=source_job.logical_artifact_id,
         source_artifact_revision_id=source_job.revision_id,
         source_sha256=source_revision.content_hash,
-        binding_manifest_sha256="sha256:" + "b" * 64,
+        binding_manifest_sha256=bindings["binding_manifest_sha256"],
         owpml_version="synthetic-poc",
         hancom_version="TEST_ONLY",
         package_profile={"synthetic": True},
@@ -585,14 +608,15 @@ def test_hwpx_service_build_validates_commits_and_reuses_idempotent_result(
     assert adapter.run_count == 1
 
     (template_root / "template-bindings.json").unlink()
-    with pytest.raises(OSError):
+    with pytest.raises(HwpxManagerError) as missing:
         service.build(revision.template_revision_id, document_path, "hwpx-staging-failure-key")
+    assert missing.value.code.value == "HWPX_RESULT_MISSING"
     failed = db_session.scalar(
         select(HwpxBuildRecord).where(HwpxBuildRecord.idempotency_key == "hwpx-staging-failure-key")
     )
     assert failed is not None
     assert failed.status == "FAILED"
-    assert failed.failure_code == "HWPX_BUILDER_FAILED"
+    assert failed.failure_code == "HWPX_RESULT_MISSING"
     failed_job = db_session.get(JobRecord, failed.platform_job_id)
     assert failed_job is not None
     assert failed_job.status == "FAILED"
@@ -920,25 +944,24 @@ def test_question_template_service_resolves_canonical_content_and_commits_output
 
     template_id = "hwpxtpl_" + "1" * 32
     template_revision_id = "hwpxrev_" + "2" * 32
-    binding_identity = "sha256:" + "3" * 64
     template_root = tmp_path / "question-template"
     template_root.mkdir()
     template_path = template_root / "template.hwpx"
     template_path.write_bytes(b"SYNTHETIC_TEMPLATE")
     template_sha = sha256_file(template_path)
+    bindings = {
+        "manifest_version": "1.0",
+        "template_id": template_id,
+        "template_revision_id": template_revision_id,
+        "template_sha256": template_sha,
+        "bindings": [],
+        "warnings": [],
+    }
+    binding_identity = content_sha256(bindings)
+    bindings["binding_manifest_sha256"] = binding_identity
     binding_path = template_root / "template-bindings.json"
     binding_path.write_text(
-        json.dumps(
-            {
-                "manifest_version": "1.0",
-                "template_id": template_id,
-                "template_revision_id": template_revision_id,
-                "template_sha256": template_sha,
-                "binding_manifest_sha256": binding_identity,
-                "bindings": [],
-                "warnings": [],
-            }
-        ),
+        json.dumps(bindings),
         encoding="utf-8",
     )
     template_job = _artifact_job(

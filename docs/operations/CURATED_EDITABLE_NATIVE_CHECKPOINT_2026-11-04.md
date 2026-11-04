@@ -49,7 +49,8 @@ metadata 표의 `해설` 두 글자 위치 차이가 남아 있다. 본문·그�
 HWPX 전체와 dependency boundary·개발 문맥 검사는 397개 통과했다. 기존 opt-in root
 ownership 검사 1개는 기본 실행에서 제외됐으며, 이번 새 변환 경로는 위 실제 격리 계정
 설치본 실행으로 별도 확인했다. 변경 Python 16개 파일의 formatter·ruff, 핵심 source
-11개 파일의 mypy가 통과했다. DB schema와 영속 build는 아직 변경하지 않았다.
+11개 파일의 mypy가 통과했다. 이 native 변환 단계에서는 DB schema와 영속 build를
+변경하지 않았다. 이후 영속 제작 단계의 소스·임시 DB 증거는 아래에 별도로 기록한다.
 
 격리 실행 결과는 `/tmp/eom-curated-installed-probe-20261104-03.jsonl`, 결과 파일은
 `/tmp/eom-curated-installed-result-20261104-03/`에 있다. 이는 개발 검증용 local 산출물이며
@@ -92,3 +93,41 @@ owner는 10:33 UTC `EMBEDDING_BENCHMARK_CHANNEL_EOF`로 종료된 상태였다. 
 native 수치 unit이 없음을 확인한 뒤 같은 설치본의 공식 INDEX owner를 한 번 시작했다.
 12:50 관측에서는 해당 owner가 실행 중이었다. 새 벡터 완료 증거는 아직 이 체크포인트에
 없으며 이전 FAILED 기록, native runtime/model pin과 네 슬롯 설정은 변경하지 않았다.
+
+## 저장된 조립의 영속 제작 경계
+
+소스에 `curated-hwpx-build-input/1.0`, `HwpxCuratedBuildRecord`,
+`CuratedHwpxApplicationService`와 migration `20261104_0072`를 추가했다. 원본-only 조립에
+가짜 Item/시험 Assembly FK를 만들지 않는다. ordered pointer snapshot과 hash, 실제 initiator의
+credential 없는 식별 metadata, 예정 Job/Artifact/revision identity를 실행 전에 저장한다.
+FIFO claim은 외부 실행 전에 commit하며 같은 build의 dispatch/recovery는 autocommit DB
+연결의 nonblocking advisory lock으로 직렬화한다. 상태 조회·같은 요청 replay는 제작을
+다시 호출하지 않는다. FAILED와 source snapshot은 DB trigger에서도 불변이다.
+
+Catalog의 제작/조회 권한을 분리하고 저장된 exact published Graph를 재확인한다. 새 Graph
+head가 나왔다고 이전 조립을 latest로 바꾸지 않는다. 철회·변경된 source는 명시적으로
+거부한다. 최대 200개 원본의 재확인은 한 source/edition join으로 처리하며 Item/Graph도
+기존 batch 조회를 재사용한다. status poll에서 원본 문서를 다시 열지 않는다.
+
+guarded disposable PostgreSQL에서 migration upgrade/downgrade/upgrade가 통과했고,
+기존 HWPX persistence 6개와 새 queue/recovery 11개가 함께 통과했다. 새 검사는 동시 요청
+단일 build, SKIP LOCKED claim, render 후 중단·같은 identity 복구, active unit 대기,
+advisory 중복 복구 거부, 조회/replay의 재계산 없음, 실행 중 source 철회의 commit 차단,
+실패 불변, NULL 성공
+증거 거부, binary DB 값 없음과 partial FIFO query plan을 포함한다. renderer port는 이
+DB 검사에서 file-free double이며 실제 한글 파일 생성의 대체 증거가 아니다.
+
+기존 persistence fixture 세 건은 빈 binding manifest/가짜 self-hash, 내용과 무관한 출력,
+이전 예외 타입을 사용해 현행 검증과 맞지 않았다. fixture를 정확한 self-hash와 선언된
+text-only native XML, 현재 stable error로 수정했으며 운영 검증 규칙을 완화하지 않았다.
+
+source/API/BFF/릴리스 경계 집중 검사 228개와 HWPX/정본/문맥 회귀 425개가 통과했다.
+후자의 기존 root ownership opt-in 1개는 제외됐다. 별도 source-head 검사 6개는 고정 숫자
+문자열을 찾던 오래된 fixture를 현재 archive-data→installed 비교 경계에 맞춰 검증했다.
+이 수들은 중복을 포함하므로 합산하지 않는다. 변경 핵심 source 6개의 mypy도 통과했다.
+
+release operator에 `1.19`/`0072` successor를 추가해 `0071→0072`만 업그레이드하고 같은
+head에서는 재실행 없이 검증하게 했다. predecessor schema·callback 의미는 보존한다.
+이 체크포인트에서는 **운영 migration/서비스 교체를 하지 않았다**. 실제 Builder/Artifact
+commit adapter, API/BFF/DB 배치 화면의 제작·복구·다운로드 연결과 호환 배포·인증된 실제
+합본 다운로드 검증은 아직 남아 있으므로 전체 목표는 ACTIVE다.

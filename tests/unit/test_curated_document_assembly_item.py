@@ -12,6 +12,7 @@ from eom_api_contracts.curated_document_assembly import (
 )
 from eom_catalog_service.curated_document_assembly_item import (
     CuratedDocumentAssemblyItemError,
+    reauthorize_curated_registered_items,
     resolve_curated_registered_item,
     resolve_curated_registered_items,
 )
@@ -121,6 +122,31 @@ def test_curated_item_rejects_stale_graph_or_item() -> None:
     with pytest.raises(CuratedDocumentAssemblyItemError) as changed:
         resolve_curated_registered_item(session, selection)  # type: ignore[arg-type]
     assert changed.value.code == "CURATED_ITEM_REVISION_INVALID"
+
+
+def test_delivery_reauthorizes_original_published_graph_after_head_advances() -> None:
+    selection = _selection()
+    session = _Session(selection)
+    session.corpus.current_graph_snapshot_revision_id = "graphrev_" + "f" * 32
+    result = reauthorize_curated_registered_items(session, (selection,))  # type: ignore[arg-type]
+    assert result[0].graph_snapshot_revision_id == selection.graph_snapshot_revision_id
+    assert session.item_statement._for_update_arg is None
+    assert session.execute_calls == 2
+
+
+@pytest.mark.parametrize("mutation", ["revoked", "hash", "item"])
+def test_delivery_does_not_accept_revoked_or_changed_pinned_sources(mutation: str) -> None:
+    selection = _selection()
+    session = _Session(selection)
+    session.corpus.current_graph_snapshot_revision_id = "graphrev_" + "f" * 32
+    if mutation == "revoked":
+        session.snapshot.state = "RETIRED"
+    elif mutation == "hash":
+        session.snapshot.snapshot_sha256 = "sha256:" + "f" * 64
+    else:
+        session.item.lifecycle_state = "DELETED"
+    with pytest.raises(CuratedDocumentAssemblyItemError):
+        reauthorize_curated_registered_items(session, (selection,))  # type: ignore[arg-type]
 
 
 def test_curated_item_rejects_ambiguous_class_and_wrong_exam_context() -> None:

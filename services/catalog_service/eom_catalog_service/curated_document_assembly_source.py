@@ -6,10 +6,12 @@ member without promoting the source-only row to a canonical Item.
 
 from __future__ import annotations
 
+from typing import cast
+
 from eom_catalog_contracts import CuratedExternalDocumentPlacement, OriginArtifactMemberPointer
 from eom_catalog_contracts.curated_document_assembly_draft import ExternalSourcePlacement
 from eom_catalog_contracts.external_item_media import ExternalItemDocumentMediaQuery
-from sqlalchemy import select
+from sqlalchemy import select, tuple_
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.external_item_document_media import ExternalItemDocumentMediaService
@@ -34,6 +36,14 @@ _READY_STATES = frozenset(
     }
 )
 
+type _SourceDocumentRow = tuple[
+    ExternalItemSourceRecord,
+    ExternalItemSourceRevisionRecord,
+    ExternalItemImportRecord,
+    ExternalItemEditionDocumentRecord,
+    ContentIntakeSourceFileRecord,
+]
+
 
 class CuratedDocumentAssemblySourceError(ValueError):
     def __init__(self, code: str) -> None:
@@ -53,7 +63,60 @@ def resolve_curated_external_document(
     privilege on this read-only Catalog runtime boundary.
     """
 
-    row = session.execute(
+    resolved = _resolve_external_metadata(session, (selection,))[0]
+    opened = media.open(
+        ExternalItemDocumentMediaQuery(
+            source_id=resolved.source_id,
+            source_revision_id=resolved.source_revision_id,
+            edition=resolved.edition,
+        )
+    )
+    try:
+        pointer = resolved.document_artifact
+        if (
+            opened.source_file_id != resolved.source_file_id
+            or opened.artifact_id != pointer.artifact_id
+            or opened.artifact_revision_id != pointer.artifact_revision_id
+            or opened.member_path != pointer.member_path
+            or opened.media_type != pointer.media_type
+            or opened.member.sha256 != pointer.sha256
+            or opened.member.content_length != resolved.document_size_bytes
+        ):
+            raise CuratedDocumentAssemblySourceError("CURATED_SOURCE_POINTER_INVALID")
+        return resolved
+    finally:
+        opened.member.stream.close()
+
+
+def reauthorize_curated_external_documents(
+    session: Session,
+    placements: tuple[CuratedExternalDocumentPlacement, ...],
+) -> None:
+    """Batch-check saved pointer metadata; bytes are checked at staging/download.
+
+    A status poll must not reopen and rehash every source document. This read is
+    bounded to one indexed source/edition join for the complete selection.
+    """
+    selections = tuple(
+        ExternalSourcePlacement.model_validate(
+            {name: getattr(row, name) for name in ExternalSourcePlacement.model_fields}
+        )
+        for row in placements
+    )
+    if _resolve_external_metadata(session, selections) != placements:
+        raise CuratedDocumentAssemblySourceError("CURATED_SOURCE_POINTER_INVALID")
+
+
+def _resolve_external_metadata(
+    session: Session,
+    selections: tuple[ExternalSourcePlacement, ...],
+) -> tuple[CuratedExternalDocumentPlacement, ...]:
+    if not selections:
+        return ()
+    keys = {(row.source_id, row.edition) for row in selections}
+    if len(keys) != len(selections) or len(selections) > 200:
+        raise CuratedDocumentAssemblySourceError("CURATED_SOURCE_SELECTION_INVALID")
+    rows = session.execute(
         select(
             ExternalItemSourceRecord,
             ExternalItemSourceRevisionRecord,
@@ -81,17 +144,32 @@ def resolve_curated_external_document(
             == ExternalItemEditionDocumentRecord.source_file_id,
         )
         .where(
-            ExternalItemSourceRecord.source_id == selection.source_id,
-            ExternalItemSourceRecord.current_revision_id == selection.source_revision_id,
-            ExternalItemEditionDocumentRecord.edition == selection.edition,
+            tuple_(
+                ExternalItemSourceRecord.source_id,
+                ExternalItemEditionDocumentRecord.edition,
+            ).in_(tuple(sorted(keys))),
         )
-    ).one_or_none()
-    if row is None:
+    ).all()
+    by_key = {
+        (row[0].source_id, row[3].edition): cast(_SourceDocumentRow, tuple(row)) for row in rows
+    }
+    if len(rows) != len(keys) or set(by_key) != keys:
         raise CuratedDocumentAssemblySourceError("CURATED_SOURCE_STALE")
+    return tuple(
+        _validated_placement(by_key[(selection.source_id, selection.edition)], selection)
+        for selection in selections
+    )
+
+
+def _validated_placement(
+    row: _SourceDocumentRow,
+    selection: ExternalSourcePlacement,
+) -> CuratedExternalDocumentPlacement:
     source, revision, imported, binding, document = row
+    if source.current_revision_id != selection.source_revision_id:
+        raise CuratedDocumentAssemblySourceError("CURATED_SOURCE_STALE")
     if (
-        source.current_revision_id != selection.source_revision_id
-        or revision.source_id != source.source_id
+        revision.source_id != source.source_id
         or revision.observation_sha256 != selection.observation_sha256
         or revision.external_number != source.external_number
         or revision.import_id != imported.import_id
@@ -106,42 +184,22 @@ def resolve_curated_external_document(
     ):
         raise CuratedDocumentAssemblySourceError("CURATED_SOURCE_POINTER_INVALID")
 
-    resolved = media.open(
-        ExternalItemDocumentMediaQuery(
-            source_id=source.source_id,
-            source_revision_id=revision.revision_id,
-            edition=selection.edition,
-        )
+    return CuratedExternalDocumentPlacement(
+        position=selection.position,
+        source_id=source.source_id,
+        source_revision_id=revision.revision_id,
+        external_number=source.external_number,
+        observation_sha256=revision.observation_sha256,
+        edition=selection.edition,
+        source_format=selection.source_format,
+        source_file_id=document.source_file_id,
+        document_artifact=OriginArtifactMemberPointer(
+            artifact_id=document.artifact_id,
+            artifact_revision_id=document.artifact_revision_id,
+            member_path=document.relative_path,
+            schema_ref="eom://schemas/content-intake/source-file/1.0",
+            media_type=document.media_type,
+            sha256=document.sha256,
+        ),
+        document_size_bytes=document.size_bytes,
     )
-    try:
-        if (
-            resolved.source_file_id != document.source_file_id
-            or resolved.artifact_id != document.artifact_id
-            or resolved.artifact_revision_id != document.artifact_revision_id
-            or resolved.member_path != document.relative_path
-            or resolved.media_type != document.media_type
-            or resolved.member.sha256 != document.sha256
-            or resolved.member.content_length != document.size_bytes
-        ):
-            raise CuratedDocumentAssemblySourceError("CURATED_SOURCE_POINTER_INVALID")
-        return CuratedExternalDocumentPlacement(
-            position=selection.position,
-            source_id=source.source_id,
-            source_revision_id=revision.revision_id,
-            external_number=source.external_number,
-            observation_sha256=revision.observation_sha256,
-            edition=selection.edition,
-            source_format=selection.source_format,
-            source_file_id=document.source_file_id,
-            document_artifact=OriginArtifactMemberPointer(
-                artifact_id=document.artifact_id,
-                artifact_revision_id=document.artifact_revision_id,
-                member_path=document.relative_path,
-                schema_ref="eom://schemas/content-intake/source-file/1.0",
-                media_type=document.media_type,
-                sha256=document.sha256,
-            ),
-            document_size_bytes=document.size_bytes,
-        )
-    finally:
-        resolved.member.stream.close()

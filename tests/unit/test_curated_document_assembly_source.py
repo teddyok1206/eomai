@@ -10,6 +10,7 @@ import pytest
 from eom_api_contracts.curated_document_assembly import ExternalSourcePlacement
 from eom_catalog_service.curated_document_assembly_source import (
     CuratedDocumentAssemblySourceError,
+    reauthorize_curated_external_documents,
     resolve_curated_external_document,
 )
 
@@ -83,6 +84,9 @@ class _Session:
     def one_or_none(self) -> tuple[SimpleNamespace, ...] | None:
         return self.row
 
+    def all(self) -> list[tuple[SimpleNamespace, ...]]:
+        return [] if self.row is None else [self.row]
+
 
 class _Media:
     def __init__(self, row: tuple[SimpleNamespace, ...]) -> None:
@@ -123,6 +127,72 @@ def test_curated_source_resolves_current_final_edition_and_detected_format() -> 
     assert resolved.source_format == "HWPX"
     assert resolved.document_artifact.media_type == "application/vnd.hancom.hwpx"
     assert resolved.document_artifact.member_path == "source/10310.hwp"
+
+
+def test_delivery_source_reauthorization_checks_pinned_metadata_without_opening_bytes() -> None:
+    row = _rows()
+    session = _Session(row)
+    placement = resolve_curated_external_document(session, _Media(row), _selection())  # type: ignore[arg-type]
+    reauthorize_curated_external_documents(session, (placement,))  # type: ignore[arg-type]
+    assert not session.locked
+
+    row[4].sha256 = "sha256:" + "a" * 64
+    row[3].document_sha256 = row[4].sha256
+    with pytest.raises(CuratedDocumentAssemblySourceError, match="CURATED_SOURCE_POINTER_INVALID"):
+        reauthorize_curated_external_documents(session, (placement,))  # type: ignore[arg-type]
+
+
+def test_delivery_source_does_not_substitute_changed_revision() -> None:
+    row = _rows()
+    session = _Session(row)
+    placement = resolve_curated_external_document(session, _Media(row), _selection())  # type: ignore[arg-type]
+    row[0].current_revision_id = "extitemrev_" + "f" * 32
+    with pytest.raises(CuratedDocumentAssemblySourceError, match="CURATED_SOURCE_STALE"):
+        reauthorize_curated_external_documents(session, (placement,))  # type: ignore[arg-type]
+
+
+def test_maximum_source_selection_reauthorizes_in_one_indexed_query() -> None:
+    row = _rows()
+    initial = resolve_curated_external_document(_Session(row), _Media(row), _selection())  # type: ignore[arg-type]
+    placements = []
+    rows = []
+    for index in range(1, 201):
+        current = _rows()
+        source_id, revision_id = f"extitem_{index:032x}", f"extitemrev_{index:032x}"
+        number = f"{10000 + index:05d}"
+        current[0].source_id = current[1].source_id = source_id
+        current[0].current_revision_id = current[1].revision_id = revision_id
+        current[3].source_revision_id = revision_id
+        current[0].external_number = current[1].external_number = number
+        rows.append(current)
+        placements.append(
+            initial.model_copy(
+                update={
+                    "position": index,
+                    "source_id": source_id,
+                    "source_revision_id": revision_id,
+                    "external_number": number,
+                }
+            )
+        )
+
+    class BatchSession(_Session):
+        calls = 0
+
+        def execute(self, statement: Any) -> BatchSession:
+            self.calls += 1
+            self.statement = statement
+            super().execute(statement)
+            return self
+
+        def all(self) -> list[tuple[SimpleNamespace, ...]]:
+            return rows
+
+    session = BatchSession(None)
+    reauthorize_curated_external_documents(session, tuple(placements))  # type: ignore[arg-type]
+    assert session.calls == 1 and not session.locked
+    assert "external_item_sources.source_id" in str(session.statement)
+    assert "content_intake_source_files" in str(session.statement)
 
 
 def test_curated_source_rejects_stale_or_changed_pointer_before_build() -> None:

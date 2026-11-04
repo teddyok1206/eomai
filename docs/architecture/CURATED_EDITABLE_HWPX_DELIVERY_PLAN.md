@@ -54,6 +54,24 @@ transaction/row lock 원칙을 사용하고 외부 실행 전 commit한다. 중�
 FAILED는 FAILED로 남기며 지원된 별도 재시도만 허용한다. 완료 조회·다운로드는 계산을
 다시 실행하지 않는다. 권한은 요청 시와 output 접근 시 다시 확인한다.
 
+curated delivery는 `hwpx_curated_builds`에 actor+key unique, REQUESTED partial FIFO,
+RUNNING/VALIDATING partial recovery index와 exact assembly revision FK를 둔다. source body가
+아닌 `curated-hwpx-build-input/1.0` pointer snapshot과 hash를 저장하며 Job·Artifact·Artifact
+revision 예정 identity는 dispatch 전에 pin한다. 실제 output FK는 commit 이후에만 채운다.
+저장된 실제 initiator의 request/session **식별 metadata**만 durable command에 보존하며
+비밀번호·cookie·access/refresh token은 저장하지 않는다. background 실행은 그 사용자의
+현재 ACTIVE 상태와 권한을 다시 조회한다. 저장된 permissions는 실행 권한으로 사용하지
+않고 비워 둔다. 이 metadata는 로그인 세션을 연장하거나 다른 사용자를 가장하는 수단이 아니다.
+
+같은 build의 dispatch·recovery는 전용 DB 연결의 nonblocking advisory lock으로 직렬화하고
+finally에서 해제한다. FIFO row claim transaction은 외부 실행 전에 commit한다. lock 소유자나
+고정 Builder unit이 살아 있으면 같은 실행을 기다리며, 관찰 timeout을 새 실행 사유로 삼지
+않는다. 입력 snapshot/예정 identity와 terminal 상태는 DB에서도 불변으로 보호한다.
+published Graph head가 앞으로 이동하는 것은 저장된 snapshot의 폐기가 아니므로 기존
+선택 admission은 current-head로 유지하고, delivery reauthorization만 exact published pin을
+읽는다. status/replay 권한 검사는 한 번의 source join과 batched Item/Graph 조회로 수행하며
+원본 전체를 매 poll마다 다시 hash하지 않는다. bytes는 명시적인 staging/검증 경계에서 읽는다.
+
 변환 손실은 원인별로 분류한다. 구조상 ID 재배정과 실제 본문/도형 손실을 같은 경고로
 취급하지 않는다. HWP source-proven picture placement 복원은 재사용하지만 그것만으로
 다른 control 손실이나 전체 레이아웃을 승인하지 않는다. 미지원 문서의 위치와 이유를

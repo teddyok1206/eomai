@@ -46,6 +46,7 @@ MIGRATION_REVISION_0068 = "20261102_0068"
 MIGRATION_REVISION_0069 = "20261102_0069"
 MIGRATION_REVISION_0070 = "20261103_0070"
 MIGRATION_REVISION_0071 = "20261103_0071"
+MIGRATION_REVISION_0072 = "20261104_0072"
 POSTGRES_ENV = "/etc/eom/secrets/postgres.env"
 API_PREFIX = Path("/srv/eom/conda/envs/eom-api")
 API_NATIVE_MEMBER = Path("lib/python3.12/site-packages/pymupdf/_extra.so")
@@ -76,6 +77,7 @@ _SCHEMA_V1_15_SHA256 = "sha256:e598a0e122f1bdf546bb95094eda196e29c53d5b68adcb6e2
 _SCHEMA_V1_16_SHA256 = "sha256:53fbd80a3a9484cc9f967244e46a9967caa33499cdbf465e32315480ee580bcf"
 _SCHEMA_V1_17_SHA256 = "sha256:f58f75aa55ab068615903aa8db7fdae89b94c2e2ee528da30900bb134bc333e9"
 _SCHEMA_V1_18_SHA256 = "sha256:4f71c2cbd231f108ce0a9a46b5497762167bec08cbca88f7faeaf5004d0140a4"
+_SCHEMA_V1_19_SHA256 = "sha256:7a60df5bdd510c6feb72cb54ec38b1a01914edb6b04427a6d3359ce082c17179"
 ERROR_CODES = frozenset(
     {
         "RELEASE_OPERATOR_ROOT_REQUIRED",
@@ -157,6 +159,8 @@ class Callback(StrEnum):
     MIGRATION_UPGRADE_0070 = "MIGRATION_UPGRADE_0070"
     MIGRATION_VERIFY_0071 = "MIGRATION_VERIFY_0071"
     MIGRATION_UPGRADE_0071 = "MIGRATION_UPGRADE_0071"
+    MIGRATION_VERIFY_0072 = "MIGRATION_VERIFY_0072"
+    MIGRATION_UPGRADE_0072 = "MIGRATION_UPGRADE_0072"
     API_ROLE_BOOTSTRAP = "API_ROLE_BOOTSTRAP"
     CATALOG_ROLE_RECONCILE = "CATALOG_ROLE_RECONCILE"
     HWPX_ROLE_RECONCILE = "HWPX_ROLE_RECONCILE"
@@ -211,6 +215,8 @@ _MIGRATION_CALLBACKS = MappingProxyType(
         Callback.MIGRATION_UPGRADE_0070: (MIGRATION_REVISION_0070, MIGRATION_REVISION_0069),
         Callback.MIGRATION_VERIFY_0071: (MIGRATION_REVISION_0071, None),
         Callback.MIGRATION_UPGRADE_0071: (MIGRATION_REVISION_0071, MIGRATION_REVISION_0070),
+        Callback.MIGRATION_VERIFY_0072: (MIGRATION_REVISION_0072, None),
+        Callback.MIGRATION_UPGRADE_0072: (MIGRATION_REVISION_0072, MIGRATION_REVISION_0071),
         Callback.MIGRATION_UPGRADE_0068_FROM_0066: (
             MIGRATION_REVISION_0068,
             MIGRATION_REVISION_0066,
@@ -408,6 +414,11 @@ def _json(raw: bytes) -> dict[str, Any]:
             "release_operator_context_v1_18.schema.json",
             _SCHEMA_V1_18_SHA256,
         )
+    elif version in ("release-operator-context/1.19", "release-operator-admission/1.19"):
+        schema_name, expected_schema_sha = (
+            "release_operator_context_v1_19.schema.json",
+            _SCHEMA_V1_19_SHA256,
+        )
     else:
         raise OperatorRuntimeError("RELEASE_OPERATOR_JSON_INVALID")
     schema_bytes = read_protected(Path(__file__).with_name(schema_name), maximum=16 * 1024)
@@ -453,6 +464,7 @@ def load_context(path: Path, expected_sha256: str, expected_commit: str) -> Oper
             "release-operator-context/1.16",
             "release-operator-context/1.17",
             "release-operator-context/1.18",
+            "release-operator-context/1.19",
         )
         or value["source_commit"] != expected_commit
     ):
@@ -579,6 +591,11 @@ def _context_migration_revision(context: OperatorContext) -> str:
         MIGRATION_REVISION_0071,
     ):
         return MIGRATION_REVISION_0071
+    if (context.schema_version, context.migration_revision) == (
+        "release-operator-context/1.19",
+        MIGRATION_REVISION_0072,
+    ):
+        return MIGRATION_REVISION_0072
     raise OperatorRuntimeError("RELEASE_OPERATOR_CONTEXT_INVALID")
 
 
@@ -649,6 +666,9 @@ def _admission_document(
     elif revision == MIGRATION_REVISION_0071:
         document["schema_version"] = "release-operator-admission/1.18"
         document["migration_revision"] = MIGRATION_REVISION_0071
+    elif revision == MIGRATION_REVISION_0072:
+        document["schema_version"] = "release-operator-admission/1.19"
+        document["migration_revision"] = MIGRATION_REVISION_0072
     return document
 
 

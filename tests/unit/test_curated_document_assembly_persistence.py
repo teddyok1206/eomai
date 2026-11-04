@@ -82,6 +82,88 @@ def test_curated_storage_has_pinned_revisions_without_binary_payloads() -> None:
     assert "item_revision_id IS NOT NULL" in checks["ck_curated_placement_pointer_shape"]
 
 
+def test_delivery_read_keeps_pins_and_batches_source_reauthorization(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    manifest = CuratedDocumentAssemblyManifestV1.model_validate(_manifest())
+    actor = _actor(
+        PermissionKey.ITEM_READ, PermissionKey.CONTENT_INTAKE_READ, PermissionKey.HWPX_READ
+    )
+    service = object.__new__(CuratedDocumentAssemblyService)
+
+    @contextmanager
+    def session():
+        yield SimpleNamespace()
+
+    service.sessions = session
+    monkeypatch.setattr(service, "read", lambda _identity, *, actor: manifest)
+    monkeypatch.setattr(service, "_authorized_actor", lambda _session, value: value)
+    native, registered = [], []
+    monkeypatch.setattr(
+        service_module,
+        "reauthorize_curated_external_documents",
+        lambda _session, values: native.extend(values),
+    )
+
+    def resolve(_session, values):
+        registered.extend(values)
+        return tuple(
+            row for row in manifest.placements if row.placement_kind != "EXTERNAL_SOURCE_DOCUMENT"
+        )
+
+    monkeypatch.setattr(service_module, "reauthorize_curated_registered_items", resolve)
+    result = service.read_for_delivery(
+        manifest.assembly_id,
+        assembly_revision_id=manifest.assembly_revision_id,
+        manifest_sha256=manifest.manifest_sha256,
+        actor=actor,
+    )
+    assert result is manifest
+    assert len(native) == 1 and len(registered) == 2
+    assert (
+        registered[0].graph_snapshot_revision_id
+        == manifest.placements[1].graph_snapshot_revision_id
+    )
+    assert registered[0].placement_kind == "PAST_EXAM_ITEM_REVISION"
+    with pytest.raises(CuratedDocumentAssemblyError, match="PERMISSION_DENIED"):
+        service.authorize_delivery_build(
+            manifest.assembly_id,
+            assembly_revision_id=manifest.assembly_revision_id,
+            manifest_sha256=manifest.manifest_sha256,
+            actor=actor,
+        )
+    creator = actor.model_copy(
+        update={
+            "permissions": actor.permissions | {PermissionKey.HWPX_BUILD_CREATE},
+        }
+    )
+    assert (
+        service.authorize_delivery_build(
+            manifest.assembly_id,
+            assembly_revision_id=manifest.assembly_revision_id,
+            manifest_sha256=manifest.manifest_sha256,
+            actor=creator,
+        )
+        == manifest
+    )
+
+    with pytest.raises(CuratedDocumentAssemblyError, match="POINTER_INVALID"):
+        service.read_for_delivery(
+            manifest.assembly_id,
+            assembly_revision_id="assemblyrev_" + "f" * 32,
+            manifest_sha256=manifest.manifest_sha256,
+            actor=actor,
+        )
+    denied = actor.model_copy(update={"permissions": frozenset({PermissionKey.ITEM_READ})})
+    with pytest.raises(CuratedDocumentAssemblyError, match="PERMISSION_DENIED"):
+        service.read_for_delivery(
+            manifest.assembly_id,
+            assembly_revision_id=manifest.assembly_revision_id,
+            manifest_sha256=manifest.manifest_sha256,
+            actor=denied,
+        )
+
+
 class _Session:
     def __init__(self, rows: tuple[CuratedDocumentAssemblyPlacementRecord, ...]) -> None:
         self.rows = rows

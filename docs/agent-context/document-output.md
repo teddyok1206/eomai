@@ -47,11 +47,24 @@ effective visual content hash를 분리해 pin하고 그림 use와 binary 파일
 순서·표·수식·uncropped picture 검증이다. content-team/2.0·3.0과 구 고정 예제 profile은
 그대로 남는다. 저장된 배치의 영속 delivery와 API/GUI 연결 여부는 별도로 확인한다.
 
+`curated_application_service.py`는 별도의 `hwpx_curated_builds`에서 actor/key 멱등 요청,
+partial FIFO claim, 같은 build의 advisory lock과 중단 복구를 소유한다. input plan에는
+`curated-hwpx-build-input/1.0`의 source/effective content·handoff·converter pointer만 저장한다.
+예정 Job/Artifact/revision identity를 실행 전에 pin하며 완료 조회는 render를 호출하지 않는다.
+실제 파일 실행·commit·다운로드 adapter와 API/GUI wiring은 이 queue 코드 자체와 구분한다.
+
+Catalog `authorize_delivery_build`와 `read_for_delivery`는 각각 기존 HWPX 제작/조회 권한을
+재확인한다. 선택 시에는 current Graph, 저장된 조립의 delivery에는 그 exact published Graph를
+사용한다. 원본 metadata는 batch join으로 확인하고 status poll에서 모든 파일을 다시 hash하지
+않는다. bytes와 actual visual proof는 명시적인 stage·검증 경계에서 다시 대조해야 한다.
+
 ## 먼저 열 파일
 
 - `apps/web_gui/eom_web_gui/static/item-preview.js`
 - `apps/web_gui/eom_web_gui/item_preview_projection.py`
 - `services/hwpx_manager/eom_hwpx_manager/application_service.py`
+- `services/hwpx_manager/eom_hwpx_manager/curated_application_service.py`
+- `services/hwpx_manager/eom_hwpx_manager/curated_build_models.py`
 - `services/hwpx_builder/eom_hwpx_builder`
 - `packages/hwpx_contracts/eom_hwpx_contracts/curated_document.py`
 - `services/hwpx_builder/eom_hwpx_builder/curated_renderer.py`
