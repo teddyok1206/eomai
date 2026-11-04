@@ -84,6 +84,14 @@ API는 `curated_delivery_gateway.py`를 통해 Catalog authorization/pin RPC만 
 DB의 선택 담기는 예전 `hwpx_exam_eligible`로 막지 않는다. 그 flag는 기존 production/exam
 계약의 의미이고, 새 curated 조립의 입력 저장과 실제 제작 admission은 각 Catalog/Manager
 owner가 검증한다. 예전 시험지 flag=false인 canonical 기출도 선택 가능해야 한다.
+등록 문항 상세의 담기도 같은 규칙이다. 다만 정본 등록/사람 승인과 accepted analysis/
+Graph source membership은 별개다. Graph 후보가 없을 때 후보를 꾸며내지 말고 입력의
+선행조건과 출력기 지원 범위를 구분해 기록한다.
+
+`test_curated_hwpx_publication.py`의 opt-in real-render 검사는 격리 DB·local Artifact store와
+설치된 Builder를 조합한다. 기본 발행 테스트의 가짜 렌더 bytes를 실제 HWPX 증거로
+보고하지 않는다. 잘못된 legacy 그림 dimensions를 전체 시험지 이미지로 강제 대체하지
+않으며 `test_native_item.py`의 관련 회귀를 유지한다.
 
 ## 먼저 열 파일
 

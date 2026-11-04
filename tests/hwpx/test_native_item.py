@@ -199,6 +199,27 @@ def test_changed_image_is_not_replaced_with_placeholder_or_published(tmp_path):
     assert not output.exists()
 
 
+def test_legacy_page_image_cannot_masquerade_as_a_smaller_item_figure(tmp_path):
+    workspace, _content, projection, plan, output = local_render(tmp_path)
+    original = projection.images[0].image
+    payload = image_bytes((900, 1273))
+    digest = sha256_bytes(payload)
+    replacement = original.model_copy(
+        update={"sha256": digest, "local_file": f"images/{digest[7:]}.png"}
+    )
+    (workspace / replacement.local_file).write_bytes(payload)
+    plan = plan.model_copy(
+        update={
+            "body": tuple(
+                replacement if row.block_id == original.block_id else row for row in plan.body
+            )
+        }
+    )
+    with pytest.raises(HwpxError, match="dimensions differ"):
+        render_native_item_document(workspace, plan, output)
+    assert not output.exists()
+
+
 def test_public_contract_rejects_a_synthetic_template_and_unsafe_image_filename():
     _content, projection, _data = content_and_projection()
     value = projection.document.model_dump(mode="json")

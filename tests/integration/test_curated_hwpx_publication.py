@@ -1,10 +1,15 @@
-"""Real disposable DB/local Artifact publication; local renderer is a test port.
+"""Real disposable DB/local Artifact publication and opt-in installed rendering.
 
 Native bytes and independent acceptance are exercised by tests/hwpx. Here the
 focus is immutable planned IDs, one dispatch, crash recovery and FD download.
+The separate opt-in case uses actual mixed render bytes and independent acceptance.
 No model, GPU, production database or production NAS is used.
 """
 
+import os
+import subprocess
+import zipfile
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock
 from uuid import uuid4
@@ -268,3 +273,80 @@ def test_changed_input_plan_is_rejected_before_dispatch(publication):
     with pytest.raises(HwpxManagerError):
         p.service.finish(p.record, p.inputs, validated=Mock())
     p.adapter.run.assert_not_called()
+
+
+@pytest.mark.skipif(
+    os.environ.get("EOM_RUN_CURATED_REAL_RENDER_INTEGRATION") != "1",
+    reason="Opt-in disposable DB and separately installed Builder are required",
+)
+def test_real_mixed_renderer_independent_acceptance_commit_and_download(
+    publication, tmp_path, monkeypatch
+):
+    """Close the real bytes boundary, not just a renderer-success test port.
+
+    Native, variable canonical and content-team 2/3 inputs are synthetic local
+    fixtures. Only the existing guarded disposable database and local Artifact
+    store are used; no production source, model, GPU or NAS is touched.
+    """
+    from eom_hwpx_builder.content_team_handoff import inspect_content_team_handoff
+    from eom_hwpx_manager.curated_output_acceptance import verify_curated_output
+
+    from tests.hwpx.test_curated_materialization import cohort
+    from tests.hwpx.test_curated_mixed_renderer import HANDOFF
+
+    p = publication
+    builder = Path("/srv/eom/conda/envs/eom-hwpx/bin/python")
+    assert builder.is_file() and HANDOFF.is_file()
+    evidence = inspect_content_team_handoff(HANDOFF)
+    template = next(row for row in evidence.members if row.purpose == "automation-template")
+    with zipfile.ZipFile(HANDOFF) as archive:
+        handoff = HANDOFF.read_bytes(), archive.read(template.archive_member)
+    case = tmp_path / "real-render"
+    case.mkdir()
+    materializer, inputs, workspace, _canonical = cohort(case, handoff)
+    p.record.assembly_id = inputs.assembly_id
+    p.record.assembly_revision_id = inputs.assembly_revision_id
+    p.record.assembly_manifest_sha256 = inputs.assembly_manifest_sha256
+    p.record.input_plan = inputs.model_dump(mode="json")
+    p.record.input_plan_sha256 = content_sha256(p.record.input_plan)
+    p.service.materializer = materializer
+    p.adapter.open_workspace.return_value = workspace
+
+    def render(_workspace, operation, arguments, _log_root):
+        assert _workspace == workspace and operation == "render-curated"
+        run = subprocess.run(
+            [str(builder), "-I", "-B", "-m", "eom_hwpx_builder", operation, *arguments],
+            cwd=workspace,
+            env={"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "TZ": "UTC"},
+            capture_output=True,
+            timeout=90,
+            check=False,
+        )
+        assert run.returncode == 0, "installed Builder must produce a successful real document"
+        return SimpleNamespace(exit_code=run.returncode)
+
+    p.adapter.run.side_effect = render
+    monkeypatch.setattr(
+        "eom_hwpx_manager.curated_service.verify_curated_output", verify_curated_output
+    )
+    first = p.service.finish(p.record, inputs, validated=Mock())
+    again = p.service.finish(p.record, inputs, validated=Mock())
+    assert again == first and p.adapter.run.call_count == 1
+    assert first.section_count == 5
+    assert (
+        first.binary_count > 0 and first.native_table_count > 0 and first.native_equation_count > 0
+    )
+    output = (workspace / "output/assembled.hwpx").read_bytes()
+    downloaded = p.service.secure_download(p.record)
+    assert b"".join(downloaded.iter_chunks()) == output
+    assert downloaded.sha256 == first.output_sha256 == sha256_bytes(output)
+    with build_session_factory(p.engine)() as session:
+        assert session.get(JobRecord, first.job_id).status == "SUCCEEDED"
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(ArtifactRevisionRecord)
+                .where(ArtifactRevisionRecord.job_id == first.job_id)
+            )
+            == 1
+        )

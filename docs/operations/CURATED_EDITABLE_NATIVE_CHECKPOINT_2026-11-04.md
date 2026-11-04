@@ -298,3 +298,98 @@ commit→같은 SHA의 다운로드까지 확인하는 것이다. 동일 key 재
 새 render를 만들지 않는지도 실제 build identity로 확인한다. 인증 입력은 tmux `EOM`
 `hwpx-check` 창에 준비했고 세션은 검증 프로세스 메모리에만 유지한다. 인증 성공,
 실제 파일 생성·저장·다운로드나 Hancom 육안 확인을 아직 PASS로 적지 않는다.
+
+## 실제 HTTPS 합본 발행과 다운로드 — 11월 4일 후속 증거
+
+앞 절의 미검증 상태 이후 두 종류의 실제 저장 순서가 공식 운영 경로를 완주했다.
+실제 guiadmin HTTPS 로그인으로 요청했고, 비밀번호는 입력 직후 폐기했으며 세션은
+검증 프로세스 메모리에만 유지했다. 두 결과 확인 후 이 테스트 세션만 정상 로그아웃했다.
+비밀번호 변경·타인 권한 사용·가짜 DB 입력·모델 추론은 하지 않았다.
+
+| 사례 | build / 실제 내려받은 SHA-256 | 결과 |
+| --- | --- | --- |
+| 원본 10310·10318 HWP | `hwpxbuild_003ef6e2234e48ccb7889eff503fe104` / `sha256:7dcfe3398d1fc5dc667dd95739b5fea1e5a0badecb131486faadbe3ea5521c2a` | SUCCEEDED/PASS; 390,542 bytes; 2 sections; package 내부 binary 4개 |
+| 창작 원본·기출·등록 창작 | `hwpxbuild_ced4c27ad2e44a518ba1fd2d3320b5df` / `sha256:cd5f48de4e5dc2ffedab3acf70484a21d6d7dba4cbe9a6807e78901d46ea0547` | SUCCEEDED/PASS; 269,893 bytes; 3 sections; package 내부 binary 2개 |
+
+두 사례 모두 Manager→고정 Builder→독립 내용/그림/순서 검증→기존 Artifact commit owner를
+거쳤다. HTTPS download bytes와 committed output SHA가 같았다. 같은 idempotency key의
+재전송은 동일 build/SHA를 반환했고, 완료 상태 두 번 재조회와 latest 조회에서도 build와
+resource version이 바뀌지 않았다. 완료 조회를 재제작으로 구현하지 않았다.
+
+이 **실제 다운로드 파일**을 기존 격리 Office 변환기로 읽었다. 원본 합본은 2 pages,
+혼합은 5 pages였다. 후자는 native 원본 1쪽 뒤 기출 문제/해설, 등록 창작 문제/해설이
+순서대로 읽혔고 native 표·텍스트가 보였다. 원본의 편집/참고 자료란도 원본 문서 그대로
+보존했다. 이것은 Office 읽기/페이지 확인이지 Hancom 수동 편집 품질 PASS가 아니다.
+`MANUAL_HANCOM_REVIEW=NOT_RECORDED`로 유지한다.
+
+### 실제 실행에서 수정한 두 경계
+
+- 좁은 API import graph에서 curated queue의 FK 대상 Table이 빠졌다. 실 Table/column을
+  직접 참조하도록 고쳐 subprocess cold-import 회귀로 고정했다. DDL/schema bytes는
+  바뀌지 않았다. source `fd658b03da05959cf2860e9d5a30797ae2c3a3ca`다.
+- Manager가 저장된 placement를 재인가할 때 필요한 SELECT가 role matrix에서 빠졌다.
+  `curated_document_assembly_placements`의 SELECT만 기존 공식 role bootstrap으로
+  reconcile했다. 새 INSERT/UPDATE·credential 권한이나 migration은 추가하지 않았다.
+  원래 RUNNING build가 **같은 identity**로 복구돼 위 원본 합본으로 발행됐다.
+
+API에 별도 `PYTHONPATH` drop-in을 붙이는 초기 설치 시도는 QUERY provider의 기존
+`DropInPaths` 검증과 호환되지 않았다. 이를 철회하고 원래 호환 shared release 경로를
+사용했다. 검증기를 완화하지 않았으며 실패/철회 기록도 보존했다. 공유 배포는 기존
+작업의 정상 drain 뒤 수행했고 INDEX identity와 수치 runtime은 바꾸지 않았다.
+
+최종 확인된 component 조합은 API/공유 Platform/API contracts `fd658b03`, 보호된
+Catalog/QUERY metadata owner `93705191`, Builder/HWPX contracts `836b6527`, Web
+`00e7f41564403cd170cdcf3c26f4bf7725d78f0b`, Manager role 설정 `8bc4936f`다. DB head는
+`20261104_0072`다. Web 후속 수정에서는 등록 문항 상세의 예전 exam eligibility 제한도
+제거했다. AI/창작을 포함한 **실제 Graph 후보**의 조립 담기는 같은 새 delivery admission을
+쓰며 옛 시험지 eligibility 값을 새 합본의 입장권으로 쓰지 않는다. Chromium fixture와
+BFF 집중 13 tests, 설치 wheel/RECORD와 Web identity의 55 files 확인 후 Web만 배포했다.
+이 Web 배포 전후 API·창작 producer·INDEX PID/InvocationID는 같았다.
+
+### 입력 문제와 남은 AI 운영 검증
+
+첫 혼합 build `hwpxbuild_b631876174334129a9b51d5185c9d3ca`는 FAILED로 보존했다.
+선택한 기출의 canonical 그림에는 500×230이 기록돼 있지만 exact PNG bytes는 시험지
+전체 페이지인 1653×2337이었다. 공식 Preview/media 읽기로 확인한 인접 세 기출도 같은
+종류의 불일치가 있었다. 실제 Builder는 두 번째 입력에서 이를 거부했다. 원본·Graph·
+그림 metadata를 고치거나 전체 페이지를 문제 그림으로 강제 변환하지 않았다.
+
+정상 입력인 다섯 번째 기출을 **명시적으로 별도 선택**해 위 성공 혼합을 만들었다.
+원 실패의 identity/상태를 바꾸지 않았고, 성공 사례를 모든 기출의 그림 정합성이
+보장된다는 증거로 확대하지 않는다. 정확한 그림과 다른 페이지 이미지를 묵인하지 않는
+회귀도 추가했다. 이 legacy 입력 정비는 출력기의 그림 검사 완화와 다른 작업이다.
+
+현재 일반 AI 목록의 정본은 두 개다. 하나는 승인 전 @12, 다른 하나는 승인된 @10이며
+둘 다 실제 knowledge-analysis run이 없다. 현재 Graph 후보에도 포함되지 않는다.
+읽기 전용 metadata 확인과 실제 operator의 공식 등록→Graph 조회가 일치했다.
+따라서 **AI를 넣은 운영 저장 순서/합본의 실증은 아직 미완료**다. 새 분석·Graph 출판,
+기존 승인 상태 변경이나 노드 위조를 HWPX 검증 편의상 실행하지 않았다.
+
+AI에서 쓰는 콘텐츠팀 2/3의 파일 출력 자체는 구분해 검증했다. opt-in guarded PostgreSQL
+테스트가 native·가변 canonical·콘텐츠팀 2/3의 실제 materialization→설치된 격리 Builder→
+Manager 독립 acceptance→임시 Artifact store의 실제 commit→FD download를 완주했다.
+같은 identity 재호출에서 render 1회/Artifact revision 1개였고 표·수식·embedded binary가
+있는 5 sections였다. 이 테스트의 source는 합성 fixture이며 운영 AI 문항으로 표현하지
+않는다. 기존 중단/발행 suite와 합쳐 9 PASS였고 disposable DB는 정리했다. native/mixed
+파일 회귀 35 PASS도 별도 확인했다. production DB에는 pytest를 실행하지 않았다.
+
+### 완료 판정과 증거 위치
+
+전체 목표는 ACTIVE다. 실제 저장 순서 발행·다운로드 gate는 위 두 사례에서 PASS지만,
+기존 체크포인트가 명시한 AI 포함 운영 사례는 선행 Graph source가 없어 아직 닫지 않는다.
+AI용 새 분석·정식 Graph 등록을 이 목표에 추가할지 범위를 정한 뒤 해당 실증을 이어간다.
+지원하지 않는 source를 다른 종류로 이름만 바꾸거나 가짜 Graph를 만들지 않는다.
+
+- `/tmp/eom-curated72-https-20261104/acceptance.json`: 원본 실제 발행/재조회 증거.
+- `/tmp/eom-curated72-https-20261104/verified-mixed-acceptance.json`: 실제 혼합 발행 증거.
+- `/tmp/eom-curated72-https-20261104/past-input-observations.json`: 내용 없는 그림 metadata 예외.
+- `/tmp/eom-curated72-live-office-20261104/`: 위 실제 다운로드의 Office PDF/페이지 진단.
+- `/var/lib/eom-curated72-cold-release-20261104/activated.json`: 호환 shared rollout.
+- `/var/lib/eom-curated72-role-monitor-8bc4936f-20261104/applied.json`: 최소 role/누적 보고 수정.
+- `/var/lib/eom-curated72-web-registration-20261104/activated.json`: 후속 Web-only 배포와 보존 identity.
+- `/tmp/eom-curated72-real-render-testdb-20261104-01.log`: 9 PASS, migration 왕복; 첫 cleanup invocation 오류도 보존.
+- `/tmp/eom-curated72-real-render-cleanup-20261104-01.log`: 정확한 disposable DB만 cleanup PASS.
+
+슬롯/GPU의 10분 보고는 계속 유지한다. 누적 Graph는 current snapshot의 accepted source
+membership에서 계산하며 재시작별 확인 수를 누적으로 보이지 않는다. INDEX가 active인
+것과 실제 GPU 연산 중인 것은 별개이며, 기출 binding 진행과 순간 GPU 사용률을 따로 보고한다.
