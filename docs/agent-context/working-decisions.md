@@ -33,6 +33,16 @@
   가정하지 않는다. 520 기출 기준선과 다른 모집단을 억지로 같은 숫자로 맞추지 않는다.
 - 새 벡터와 모든 consumer 전환 검증 전에 구형 벡터를 지우지 않는다.
 
+## 공유 설치본 교체
+
+- 현재 `installed_owner_session_provider.py`는 API의 고정 unit과 비어 있는 `DropInPaths`를
+  검사한다. 보호된 wheel이라도 API에 임의 `PYTHONPATH` drop-in을 붙이는 방식은 이
+  계약에 맞지 않는다. 검증을 느슨하게 하지 말고 기존 호환 release set으로 반영한다.
+  API restart가 `Requires`로 연결된 QUERY owner에도 영향을 주는지 함께 확인한다.
+- SQLAlchemy FK owner의 import를 전체 테스트의 fixture 순서에 의존하지 않는다.
+  실제 owner column을 참조하고 새 subprocess의 cold import/DDL 검사를 포함한다.
+  관련 실제 발견과 배포 경계는 `CURATED_EDITABLE_NATIVE_CHECKPOINT_2026-11-04.md`에 기록한다.
+
 ## 기억을 관리하는 방식
 
 새로운 durable 판단은 적절한 ADR/설계/운영 문서에 먼저 남기고 여기에는 탐색 포인터만 둔다.

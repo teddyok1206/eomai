@@ -29,6 +29,7 @@ def test_manager_privilege_matrix_matches_owned_access_patterns() -> None:
         "hwpx_curated_builds",
         "curated_document_assemblies",
         "curated_document_assembly_revisions",
+        "curated_document_assembly_placements",
         "content_intake_source_files",
         "external_item_sources",
         "external_item_source_revisions",

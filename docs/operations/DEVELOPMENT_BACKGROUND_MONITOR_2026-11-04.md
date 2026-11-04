@@ -32,3 +32,21 @@ owner를 확인했다. reporter는 순간 GPU 0%뿐 아니라 INDEX owner active
 `10-development-cadence.conf` drop-in만 제거하면 원래 30분 cadence로 복구할 수 있다.
 INDEX·창작 처리 서비스나 정본은 삭제/중지하지 않는다. 원래 helper는 위 설치 기록의
 backup pointer로 복구 가능하다. GPU observer가 transient인 점은 유지했다.
+
+## 누적 등록 수와 실행별 카운터 구분
+
+초기 reporter는 producer의 `verified_count`를 누적으로 잘못 표시했다. 이 값은 재시작 때
+초기화되는 실행별 확인 수이며, 새 실행에서 0/2/6으로 보인 것은 정본 삭제가 아니다.
+11월 4일 18:10 UTC에 frozen 1,053개 원본의 정식 등록 키와 현재 published Graph를
+읽기 전용으로 대조했다. Graph 687개·문항 등록 690개였고, 배포 전 Graph 681개 중
+현재 Graph에서 빠진 키는 0개였다. 이것은 해당 시각의 실제 DB 검사이지 미래의 고정 수가 아니다.
+
+주기 보고는 기존 GPU metadata observer의 같은 read-only DB adapter를 확장해, 현재
+published Graph·accepted analysis·creative-source-lineage component가 연결된 고유 문항을
+집계한다. 원본 파일이나 모델 결과를 읽거나 복제하지 않으며 DB/권한/worker 변경이 없다.
+고유 Item ID 집계와 indexed Graph/source/component join을 사용한다. 매 10분의 bounded
+metadata query이며 카운터를 DB에 저장하지 않는다. scope는 현재 Graph 전체 창작 문항으로,
+특정 cohort의 1,053개 분모와 섞지 않고 `창작 Graph 누적 N건`으로 표시한다.
+조회 실패는 `누적 확인 필요`이며 실행별 숫자나 0으로 대체하지 않는다. 기존 GPU 집계는
+이 부가 조회가 실패해도 보존한다. JSON observer의 추가 field는 개발 보고용 파생 값이지
+worker 계약·원본 acceptance·완료 판정의 권한이 아니다. 새 서비스/queue/cache는 만들지 않는다.

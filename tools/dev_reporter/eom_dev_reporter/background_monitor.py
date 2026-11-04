@@ -84,10 +84,15 @@ def summary_line(creative: dict[str, Any], embedding: dict[str, Any], gpu: str) 
         if isinstance(slots, list) and "slot_jobs" in embedding
         else "슬롯 실행 수 확인 불가"
     )
+    cumulative = embedding.get("creative_graph_registered_items")
+    graph_text = (
+        f"창작 Graph 누적 {cumulative}건"
+        if type(cumulative) is int and 0 <= cumulative <= 1000000
+        else "창작 Graph 누적 확인 필요"
+    )
     return (
         "슬롯·GPU 작업을 점검했습니다. "
-        f"풀이·Graph {creative_state} {_count(creative.get('verified_count'))}"
-        f"/{_count(creative.get('target_count'))}"
+        f"{graph_text} · 등록 작업 {creative_state}"
         f"(원본 보류 {_count(creative.get('blocked_source_count'))}) · {slot_text} · "
         f"GPU 기출 임베딩 {_count(embedding.get('gpu_registered_targets'))}"
         f"/{_count(embedding.get('target_count'))} · {gpu}"
