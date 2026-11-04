@@ -190,7 +190,17 @@ def test_creative_owner_waits_then_finishes_without_rebuilding_service_or_restar
         cohort=NS(cohort_id=cohort_id, targets=(object(),)),
         max_in_flight_sources=1,
     )
-    progress = CreativeCohortProgress(cohort_id, "VERIFIED", 1, 1, None, None, None, None, None)
+    progress = CreativeCohortProgress(
+        cohort_id=cohort_id,
+        target_count=1,
+        verified_count=1,
+        external_number=None,
+        state="VERIFIED",
+        workflow_id=None,
+        item_revision_id=None,
+        analysis_run_id=None,
+        graph_snapshot_revision_id=None,
+    )
     owner = Mock()
     owner.advance_once.side_effect = (
         [db_error("53100"), progress] if fault == "database" else [progress]
