@@ -50,3 +50,29 @@ metadata query이며 카운터를 DB에 저장하지 않는다. scope는 현재 
 조회 실패는 `누적 확인 필요`이며 실행별 숫자나 0으로 대체하지 않는다. 기존 GPU 집계는
 이 부가 조회가 실패해도 보존한다. JSON observer의 추가 field는 개발 보고용 파생 값이지
 worker 계약·원본 acceptance·완료 판정의 권한이 아니다. 새 서비스/queue/cache는 만들지 않는다.
+
+## 실제 슬롯 사용과 관측 시각
+
+RUNNING Job만으로 슬롯을 사용 중이라고 세지 않는다. 같은 Job/slot의 ACTIVE 또는
+RECONCILING lease가 현재 시각보다 뒤에 만료될 때만 기존 metadata observer에서 읽는다.
+held-slot/held-job partial unique index와 Job PK join으로 현재 소수 슬롯만 확인한다.
+기존 Catalog SELECT 권한을 사용하며 Job·lease·worker 상태와 DB 권한은 바꾸지 않는다.
+쿼리 정본은 개발 reporter의 `ACTIVE_SLOT_JOBS_SQL`; 설치 시 같은 SELECT를 기존 root-owned
+observer에 넣고 reporter 자체의 DB/credential 접근은 계속 금지한다.
+
+실제 재조회는 누적 Graph 701·활성 slot lease 0·기출 GPU binding 271/520이었다.
+등록 담당은 Graph alignment 범위 오류로 중단돼 있었고, 만료된 두 Job 기록을 현재 사용
+중인 슬롯으로 잘못 세던 것을 구분했다. INDEX 재시작도 없다. 설치 감사는
+`/var/lib/eom/development-background-monitor/20261104-held-slot-leases/applied.json`이다.
+
+중단된 producer의 `observed_at`은 마지막 상태 기록 시각이다. 이를 새 진척인 것처럼
+현재 시각으로 바꾸지 않고 journal envelope의 실제 점검 시각과 별도로 검사한다.
+새 점검이 중단/오래된 기록을 읽은 경우 이를 명시하면서 독립적으로 신선한 Graph/GPU
+수치를 숨기지 않는다. 점검 자체가 오래됐으면 계속 거부한다. 최신 실패는 `등록 작업 중단`이다.
+
+집중 6 tests는 만료/해제/누락/다른 slot lease, 유효 reconciliation과 경계 시각,
+fresh observer/old producer 및 반대 경우를 구분한다. 관계 조건은 in-memory SQLite
+fixture이지 PostgreSQL migration/권한 검증이 아니다. 실제 제한 role의 read-only PostgreSQL
+조회도 통과했다. 보고 helper 감사는
+`/var/lib/eom/development-background-monitor/20261104-observation-clock/applied.json`이다.
+새 Slack 한 줄은 누적 701·등록 중단·슬롯 0·기출 271/520을 구분해 HTTP 200/SENT였다.

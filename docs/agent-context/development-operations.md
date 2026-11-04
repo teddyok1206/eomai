@@ -49,6 +49,12 @@ creative/INDEX driver가 최근 자원 복구의 시작점이다. source-level g
 환경 race를 없앴다고 주장하지 않는다. 살아 있는 서비스뿐 아니라 실제 완료/저장과 다음
 처리를 확인한다. 기존 정기 관측이 있으면 중복된 빠른 monitor를 추가하지 않는다.
 
+개발 reporter의 활성 슬롯은 Job 상태뿐 아니라 같은 Job/slot의 유효 lease로 확인한다.
+producer 기록 시각과 observer 점검 시각도 구분한다. 중단된 producer의 오래된 기록이
+신선한 Graph/GPU 관측 전체를 가리게 하지 않는다. optional query/표현의 소유자는
+`tools/dev_reporter/eom_dev_reporter/background_monitor.py`이며 운영 상세는
+`docs/operations/DEVELOPMENT_BACKGROUND_MONITOR_2026-11-04.md`를 본다.
+
 ## 파일 정리
 
 cache와 완료된 build source/설치 시뮬레이션은 실제 실행 참조·정확한 target identity·

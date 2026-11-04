@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import subprocess
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Final
 from zoneinfo import ZoneInfo
 
 from eom_dev_reporter.sender import load_reporter_config, send_webhook
@@ -18,6 +18,20 @@ OBSERVERS = (
     "eom-creative-learning-observe.service",
     "eom-unified-embedding-observe.service",
 )
+
+# The separate root-owned metadata observer embeds this read-only query at
+# installation. This reporter still has no database or credential access.
+ACTIVE_SLOT_JOBS_SQL: Final = """
+SELECT job.worker_slot_id AS slot_id, job.status, count(*) AS count
+FROM app.jobs job
+JOIN app.worker_leases lease
+  ON lease.job_id = job.job_id AND lease.worker_slot_id = job.worker_slot_id
+WHERE job.worker_slot_id IS NOT NULL
+  AND job.status IN ('CLAIMED', 'RUNNING', 'VALIDATING_RESULT', 'COMMITTING')
+  AND lease.state IN ('ACTIVE', 'RECONCILING')
+  AND lease.expires_at > clock_timestamp()
+GROUP BY job.worker_slot_id, job.status
+"""
 
 
 def _run(arguments: list[str]) -> str:
@@ -39,20 +53,36 @@ def _snapshot(unit: str) -> dict[str, Any]:
             "40",
             "--no-pager",
             "-o",
-            "cat",
+            "json",
         ]
     )
     for line in reversed(output.splitlines()):
-        if not line.startswith("{"):
-            continue
         try:
-            value = json.loads(line)
-        except ValueError:
+            envelope = json.loads(line)
+            if not isinstance(envelope, dict) or not isinstance(envelope.get("MESSAGE"), str):
+                continue
+            value = json.loads(envelope["MESSAGE"])
+        except (TypeError, ValueError):
             continue
         if isinstance(value, dict) and isinstance(value.get("observed_at"), str):
-            age = (datetime.now(UTC) - datetime.fromisoformat(value["observed_at"])).total_seconds()
+            try:
+                checked_at = datetime.fromtimestamp(
+                    int(envelope["__REALTIME_TIMESTAMP"]) / 1_000_000, UTC
+                )
+                source_at = datetime.fromisoformat(value["observed_at"])
+                if source_at.tzinfo is None:
+                    raise ValueError("producer observation needs an explicit timezone")
+            except (KeyError, TypeError, ValueError, OverflowError, OSError):
+                raise ValueError("BACKGROUND_MONITOR_SNAPSHOT_TIME_INVALID") from None
+            age = (datetime.now(UTC) - checked_at).total_seconds()
             if not 0 <= age <= 20 * 60:
                 raise ValueError("BACKGROUND_MONITOR_SNAPSHOT_STALE")
+            # A fresh read can correctly observe a stopped producer's old status.
+            # Keep its original timestamp and mark it stale, rather than hide the
+            # independent fresh Graph/GPU counts or invent fresh producer progress.
+            source_age = (datetime.now(UTC) - source_at).total_seconds()
+            if not 0 <= source_age <= 20 * 60:
+                value = {**value, "check": "ATTENTION_REQUIRED", "status_stale": True}
             return value
     raise ValueError("BACKGROUND_MONITOR_SNAPSHOT_MISSING")
 
@@ -70,7 +100,9 @@ def summary_line(creative: dict[str, Any], embedding: dict[str, Any], gpu: str) 
         if creative.get("check") == "RESOURCE_WAIT"
         else "점검 필요"
     )
-    if state == "COMPLETED":
+    if state == "STOPPED_TECHNICAL_FAILURE" and creative.get("service_active") == "failed":
+        creative_state = "중단"
+    elif state == "COMPLETED" and not creative.get("status_stale"):
         creative_state = "완료"
     slots = embedding.get("slot_jobs", [])
     busy = {

@@ -394,7 +394,7 @@ AI용 새 분석·정식 Graph 등록을 이 목표에 추가할지 범위를 �
 membership에서 계산하며 재시작별 확인 수를 누적으로 보이지 않는다. INDEX가 active인
 것과 실제 GPU 연산 중인 것은 별개이며, 기출 binding 진행과 순간 GPU 사용률을 따로 보고한다.
 
-## 후속 배점 표시 수정 후보 — 아직 운영 반영 전
+## 후속 배점 표시 수정과 호환 운영 반영
 
 실제 혼합 파일의 기출 발문에는 원문에 이미 있는 `[2점]` 뒤에 출력기가 배점을 다시
 붙인 부분이 보였다. 정본을 고치지 않고 `native_item_format.py`의 기존 publication 표현
@@ -403,7 +403,41 @@ membership에서 계산하며 재시작별 확인 수를 누적으로 보이지 
 완성된 기존 build bytes·identity는 바꾸지 않는다. 새 의존성/schema/DB 변경은 없다.
 
 보통/공백 포함/줄바꿈 포함 원문 suffix의 실제 native 렌더, 배점 충돌 거부를 추가해
-native/mixed/materialization 39 tests가 통과했다. 핵심 pure 함수의 mypy와 lint/format도
-PASS다. 이 함수는 Builder와 Manager의 독립 acceptance가 공유하므로 두 설치본의
-동일 후보를 함께 검증·반영해야 한다. source PASS만으로 현재 운영 파일에서 고쳐졌다고
-기록하지 않으며, 다음 호환 release 전에 한쪽만 교체하지 않는다.
+native/mixed/materialization 39 tests와 독립 acceptance 9 tests가 통과했다. 핵심 pure
+함수의 mypy와 lint/format도 PASS다. Builder와 Manager가 공유하는 함수여서 두 wheel의
+실제 코드 bytes와 전체 RECORD를 대조한 뒤 함께 반영했다.
+
+API·공유 Platform·API contracts와 Builder/HWPX contracts의 source
+`c0b9d0b57b31f7de408e83ff365e147b6766ca33`을 호환 배포했다. Web은 `00e7f415`, 보호된
+Catalog/QUERY metadata owner는 `93705191`, migration은 `20261104_0072` 그대로다.
+유효 lease·처리 중 command·실제 worker/Builder unit이 모두 없음을 확인하고 교체했다.
+INDEX의 PID/InvocationID·설정·수치 환경은 같았다. 창작 producer는 배포 **전부터**
+`AUTOMATIC_ALIGNMENT_NEIGHBORHOOD_TOO_LARGE`로 중단돼 있었고 그 실패 상태도 보존했다.
+새 migration·DB 상태 직접 변경·계정 인증 변경·새 모델 실행은 없다.
+
+동일한 실제 입력 세 개를 새 local probe identity로 stage해 설치된 고정 unit에서 출력했다.
+Manager 독립 검증 PASS, 3 sections·native table 8·수식 4·binary 2, 269,889 bytes,
+SHA `sha256:6b31275a2c08926c5b14a229f4d56453afccd9c9a77ad5eb616dc832505ab922`였다.
+해당 문제 section의 `[2점]`은 두 번에서 한 번이 됐다. 원래 성공 파일의 SHA는 그대로였다.
+이 probe는 DB/NAS 발행이 없으며 새 인증된 HTTPS delivery라고 표현하지 않는다.
+실제 API local READY·HTTPS live·QUERY/Manager active도 배포 후 확인했다.
+
+증거: `/var/lib/eom-curated-score-release-20261104/activated.json`, 같은 디렉터리의
+`fixed-real-input-probe.json`, `/tmp/eom-curated-score-compatible-release-20261104-01.log`,
+`/tmp/eom-curated-score-fixed-input-probe-20261104-01.log`.
+
+### 목표 종료 감사
+
+| 요구 | 현재 판정 |
+| --- | --- |
+| HWP/HWPX 원본의 편집 가능한 병합 | 실제 원본 변환·native 역검증·원본 합본 HTTPS 발행 PASS; page PNG 대체 없음 |
+| 가변 글·표·수식·그림·해설과 순서 | 실제 기출/등록 창작 합본·설치 고정 unit·canonical/CTI2/3 렌더 및 독립 검증 PASS |
+| 영속 발행·복구·멱등·다운로드 | disposable PostgreSQL, 실제 같은 build 복구, 정식 Artifact/download SHA 및 재조회 PASS |
+| 설치본·권한·API/BFF·GUI | 호환 wheel/RECORD·role·fixed unit·Chromium와 실제 HTTPS 발행 PASS |
+| 정본·실패 이력·INDEX 보존 | 기존 SHA/실패와 INDEX PID/Invocation/config 보존 PASS |
+| 실제 AI를 포함한 운영 합본 | **미완료**: 현재 AI 두 개 모두 accepted analysis/Graph source 없음; 합성 CTI 테스트로 대체하지 않음 |
+
+최종 read-only 재조회도 같은 AI 선행조건을 확인했다
+(`/tmp/eom-curated-score-ai-prerequisites-20261104-01.log`). 새 AI 분석·정식 Graph 등록의
+추가 범위와 실제 관리자 인증 확인이 필요하다. 다른 사용자의 세션을 가져오거나 가짜
+Graph를 만들지 않으며 전체 목표를 완료로 판정하지 않는다.
