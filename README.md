@@ -88,6 +88,7 @@ Scientific Studio → Application API → Catalog / Workflow Runner / Orchestrat
 ## 개발·운영 문서
 
 - [개발 규칙과 검토 체크리스트](AGENTS.md)
+- [개발 에이전트용 코드 문맥과 탐색 지도](docs/agent-context/README.md)
 - [모듈 경계와 의존 방향](docs/architecture/MODULE_BOUNDARIES.md)
 - [GraphRAG 구조](docs/architecture/EDUCATION_KNOWLEDGE_ITEM_GRAPHRAG.md)
 - [유사도·증분 임베딩 통합 설계](docs/architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md)

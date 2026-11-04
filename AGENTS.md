@@ -286,3 +286,15 @@ the existing rules.
 Record durable decisions in the appropriate ADR, architecture document, operations runbook, or
 schema documentation. Keep `AGENTS.md` focused on enforceable rules and checklists rather than
 duplicating feature implementation details.
+
+## Developer Code Context
+
+- When present, start codebase navigation at `docs/agent-context/README.md` and its topic index.
+  Read only relevant topic notes, then inspect their linked current code and tests.
+- These notes are developer retrieval aids, not runtime authority or proof of current activation.
+  Actual code/contracts and installed release records take precedence; verify relevant changes
+  since the recorded source baseline before relying on a note.
+- Update the affected note/index when module ownership, a public flow, or its validation boundary
+  materially changes. Do not duplicate long designs, logs, prompts, item contents or binary files.
+- Never store credentials, authentication captures, session material or mutable user data there.
+  Keep this optional development context outside runtime packages and worker inputs.

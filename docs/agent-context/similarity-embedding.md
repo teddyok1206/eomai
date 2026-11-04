@@ -1,0 +1,63 @@
+# 유사도 검색과 증분 임베딩
+
+## 정본과 검색 후보
+
+GraphRAG는 출처·개념 관계·접근 권한을, 벡터는 후보 순위화를 돕는다. 벡터로 Graph를
+대체하거나 별도 source DB를 만들지 않는다. 기출·창작·AI의 공개 풀이와 내용/metadata를
+어떤 view/profile로 입력하는지는 정본 projection과 source binding으로 확인한다.
+입력 텍스트·profile·view·model/runtime space가 다르면 같은 문항도 같은 벡터가 아니다.
+
+공개 풀이보고서의 관계/판단 근거를 쓰되, 단순히 공통 과목·유형이 같다는 것과 실제
+풀이 착상이 가깝다는 것을 구분한다. 유사도는 풀이 동일성의 확률이나 표절 판정이 아니다.
+필요한 설명은 `docs/architecture/ITEM_INFERENCE_TRANSFER_DESIGN_ORIGINAL.md`와
+`SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md`에서 확인한다.
+
+## 두 독립 실행 경로
+
+INDEX는 eligible source와 공개 풀이를 capture해 delta를 계산하고, 기존 encoding을
+재사용하거나 CPU/CUDA 수치 실행 뒤 shard/binding/index head를 commit한다.
+QUERY는 사용자가 선택한 기준 문항과 고정한 Graph/policy/index 범위를 받아 검색한다.
+전체 INDEX 완료를 기다리지 않고 준비된 subset을 검색할 수 있어야 한다.
+
+CPU와 CUDA의 space identity를 섞지 않는다. GPU가 잠시 idle이어도 source 준비·인덱스
+저장·다른 device namespace 처리가 진행 중일 수 있다. 모델 연산 성공과 인덱스 commit,
+Workflow COMPLETED는 각각 확인한다. 같은 encoding의 재사용과 최신 Graph membership의
+새 binding/index 반영도 서로 다르다.
+
+## DB 화면의 실제 검색 경로
+
+조회에서 기준 문항을 골라 유사도 탭으로 넘기고, 기준 목록·상위 결과 수·요청 identity를
+보존한다. 목록 검색은 API의 `item_db_similarity_searches.py`, 개별 요청은
+`item_db_similarity.py`에서 시작한다. 준비 → 실행 → 결과 조회를 각각 추적한다.
+완료 결과 확인과 최근 기록 열기는 새 검색 생성이 아니다. 로그인 복귀·head 이동·늦은
+응답 때문에 원래 pin을 잃고 새 계산을 제출하지 않도록 한다. 결과 문항은 정본 revision으로
+DB 조회와 조립 선택에 돌아가야 한다.
+
+## 먼저 열 파일
+
+- `apps/application_api/eom_api/services/item_db_similarity_searches.py`
+- `apps/application_api/eom_api/services/item_db_similarity.py`
+- `apps/web_gui/eom_web_gui/static/item-db-similarity-list.js`
+- `apps/web_gui/eom_web_gui/static/item-db-similarity.js`
+- `services/workflow_runner/eom_workflow_runner/local_indexing_service_entry.py`
+- `services/workflow_runner/eom_workflow_runner/local_indexing_routed_namespace.py`
+- `services/workflow_runner/eom_workflow_runner/reference_query_prepare_application.py`
+- `services/catalog_service/eom_catalog_service/public_solution_source_capture.py`
+- `services/catalog_service/eom_catalog_service/embedding_registry_models.py`
+
+## 고장이 났을 때
+
+QUERY의 실패 단계와 같은 요청의 실제 상태를 먼저 본다. API READY/테스트 PASS를
+GUI 결과 목록 성공으로 대체하지 않는다. `결과 확인`의 부작용, CSRF/session 갱신,
+stale pin, 결과 materialization을 구분한다. 새로운 key로 우회하기 전에 원래 요청을 읽는다.
+
+구형 벡터는 모든 참조 전환과 새 검색 검증 전에는 지우지 않는다. 기존 520개 기출 모집단,
+승인 Item 수, view별 binding 수, 재시작 후 traversal 수는 다른 분모다.
+
+## 검증과 근거
+
+- `tests/api/test_item_db_similarity_searches.py`
+- `tests/unit/test_native_office_public_embedding.py`
+- `tests/unit/test_background_resource_recovery.py`
+- `docs/operations/ITEM_DB_SIMILARITY_LIST_RELEASE_2026-11-02.md`
+- `docs/operations/BACKGROUND_RESOURCE_RECOVERY_2026-11-04.md`

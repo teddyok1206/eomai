@@ -1,0 +1,149 @@
+{
+  "schema_version": "code-context-index/1.0",
+  "purpose": "DEVELOPER_NAVIGATION_NOT_RUNTIME_AUTHORITY",
+  "reviewed_source_commit": "b875b807d41e5d835455137dacee85e9e3ca5aee",
+  "topics": [
+    {
+      "id": "system-map",
+      "note": "system-map.md",
+      "keywords": ["구조", "모듈", "책임", "architecture", "dependency", "Catalog", "Orchestrator", "Runner"],
+      "source_paths": [
+        "pyproject.toml",
+        "apps/application_api/eom_api/app.py",
+        "apps/application_api/eom_api/lifespan.py",
+        "apps/web_gui/eom_web_gui/app.py",
+        "services/catalog_service/eom_catalog_service/application_runner.py",
+        "services/workflow_runner/eom_workflow_runner/engine.py"
+      ],
+      "test_paths": ["tests/unit/test_dependency_boundaries.py"],
+      "reference_paths": ["docs/architecture/MODULE_BOUNDARIES.md", "README.md"]
+    },
+    {
+      "id": "authoring-review",
+      "note": "authoring-review.md",
+      "keywords": ["출제", "검토", "3교", "피드백", "프리셋", "승인", "authoring", "rework", "correction", "control", "preset"],
+      "source_paths": [
+        "services/workflow_runner/eom_workflow_runner/engine.py",
+        "packages/workflow/eom_workflow/review_rework.py",
+        "packages/workflow/eom_workflow/review_correction.py",
+        "services/catalog_service/eom_catalog_service/workflow_catalog.py",
+        "apps/application_api/eom_api/services/item_approval_service.py",
+        "apps/application_api/eom_api/services/hwpx_item_revision_resolver.py",
+        "config/workflows",
+        "config/control-plane",
+        "content/packs"
+      ],
+      "test_paths": ["tests/unit/test_workflow_state_machine.py", "tests/unit/test_authoring_reference_boundary.py"],
+      "reference_paths": ["docs/architecture/CONTENT_TEAM_AUTHORING_PROMPT_V5_DESIGN.md", "docs/architecture/HWPX_APPLICATION_API_V0.md"]
+    },
+    {
+      "id": "item-db-graph",
+      "note": "item-db-graph.md",
+      "keywords": ["DB", "창작", "기출", "등록", "고유번호", "원본", "그림", "잘림", "Graph", "cohort", "picture", "lineage"],
+      "source_paths": [
+        "apps/application_api/eom_api/routers/item_db.py",
+        "apps/application_api/eom_api/services/external_item_db_read.py",
+        "apps/web_gui/eom_web_gui/static/item-db.js",
+        "services/catalog_service/eom_catalog_service/external_item_read_service.py",
+        "services/catalog_service/eom_catalog_service/external_item_models.py",
+        "services/catalog_service/eom_catalog_service/creative_cohort_execution.py",
+        "services/catalog_service/eom_catalog_service/creative_cohort_parallel_execution.py",
+        "services/catalog_service/eom_catalog_service/creative_item_graph_learning.py",
+        "services/catalog_service/eom_catalog_service/curated_document_assembly_service.py",
+        "services/orchestrator/eom_orchestrator/office_picture_use_publication.py"
+      ],
+      "test_paths": [
+        "tests/unit/test_creative_item_graph_learning.py",
+        "tests/unit/test_creative_parallel_execution.py",
+        "tests/unit/test_office_picture_use_publication.py",
+        "tests/unit/test_external_item_preview_projection.py"
+      ],
+      "reference_paths": ["docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md", "docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md", "docs/operations/ITEM_DB_REGISTRATION_PARITY_RELEASE_2026-10-31.md"]
+    },
+    {
+      "id": "similarity-embedding",
+      "note": "similarity-embedding.md",
+      "keywords": ["유사도", "임베딩", "벡터", "검색", "풀이보고서", "similarity", "embedding", "GPU", "CUDA", "CPU", "INDEX", "QUERY", "재조회", "최근 기록"],
+      "source_paths": [
+        "apps/application_api/eom_api/services/item_db_similarity_searches.py",
+        "apps/application_api/eom_api/services/item_db_similarity.py",
+        "apps/web_gui/eom_web_gui/static/item-db-similarity-list.js",
+        "apps/web_gui/eom_web_gui/static/item-db-similarity.js",
+        "services/workflow_runner/eom_workflow_runner/local_indexing_service_entry.py",
+        "services/workflow_runner/eom_workflow_runner/local_indexing_routed_namespace.py",
+        "services/workflow_runner/eom_workflow_runner/reference_query_prepare_application.py",
+        "services/catalog_service/eom_catalog_service/public_solution_source_capture.py",
+        "services/catalog_service/eom_catalog_service/embedding_registry_models.py"
+      ],
+      "test_paths": ["tests/api/test_item_db_similarity_searches.py", "tests/unit/test_native_office_public_embedding.py", "tests/unit/test_background_resource_recovery.py"],
+      "reference_paths": [
+        "docs/architecture/ITEM_INFERENCE_TRANSFER_DESIGN_ORIGINAL.md",
+        "docs/architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md",
+        "docs/operations/ITEM_DB_SIMILARITY_LIST_RELEASE_2026-11-02.md",
+        "docs/operations/BACKGROUND_RESOURCE_RECOVERY_2026-11-04.md"
+      ]
+    },
+    {
+      "id": "document-output",
+      "note": "document-output.md",
+      "keywords": ["HWPX", "HWP", "PDF", "그림", "미리보기", "자료 검토", "문서 검토", "주석", "합본", "출력", "다운로드", "annotation", "preview", "Builder"],
+      "source_paths": [
+        "apps/web_gui/eom_web_gui/static/item-preview.js",
+        "apps/web_gui/eom_web_gui/item_preview_projection.py",
+        "services/hwpx_manager/eom_hwpx_manager/application_service.py",
+        "services/hwpx_builder/eom_hwpx_builder",
+        "services/catalog_service/eom_catalog_service/office_document_converter.py",
+        "services/catalog_service/eom_catalog_service/office_document_review_intake.py",
+        "services/catalog_service/eom_catalog_service/document_review_pdf_annotation_service.py",
+        "services/catalog_service/eom_catalog_service/document_review_hwpx_correction_service.py",
+        "services/catalog_service/eom_catalog_service/review_textbook_evidence_service.py"
+      ],
+      "test_paths": ["tests/api/test_hwpx_download_boundary.py", "tests/unit/test_document_review_pdf_annotation.py", "tests/unit/test_single_document_review_textbook_v5.py"],
+      "reference_paths": ["docs/architecture/HWPX_APPLICATION_API_V0.md", "docs/architecture/PDF_DOCUMENT_REVIEW_V1_IMPLEMENTATION_PLAN.md", "docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md"]
+    },
+    {
+      "id": "chat-identity-slots",
+      "note": "chat-identity-slots.md",
+      "keywords": ["ChatGPT", "대화", "대화 삭제", "Markdown", "로그인", "계정", "비밀번호", "인증", "슬롯", "사용량", "slot", "quota", "capability", "session", "CSRF"],
+      "source_paths": [
+        "apps/web_gui/eom_web_gui/static/general-chat.js",
+        "apps/web_gui/eom_web_gui/static/chat-markdown.js",
+        "apps/application_api/eom_api/services/general_chat_service.py",
+        "services/orchestrator/eom_orchestrator/general_chat_owner.py",
+        "services/orchestrator/eom_orchestrator/general_chat_tool_broker.py",
+        "apps/application_api/eom_api/services/auth_service.py",
+        "services/identity_service/eom_identity_service/auth_service.py",
+        "services/orchestrator/eom_orchestrator/worker_usage.py",
+        "services/orchestrator/eom_orchestrator/auth_enrollment_capabilities.py"
+      ],
+      "test_paths": ["tests/unit/test_private_chat_document_read.py", "tests/unit/test_postgres_local_indexing_fence.py"],
+      "reference_paths": ["docs/architecture/GENERAL_CHAT_TEXTBOOK_RAG_DESIGN.md", "docs/operations/CODEX_AUTH_AUTOMATIC_MODEL_VERIFICATION_RELEASE.md", "docs/operations/GENERAL_CHAT_MODERATION_METADATA_FIX_2026-10-24.md"]
+    },
+    {
+      "id": "development-operations",
+      "note": "development-operations.md",
+      "keywords": ["테스트", "배포", "운영", "장애", "정리", "디스크", "migration", "disposable", "rollback", "runtime", "lease", "RECORD", "mypy", "ruff"],
+      "source_paths": [
+        "pyproject.toml",
+        "scripts/api/deploy_release.sh",
+        "scripts/api/testdb_prepare.sh",
+        "scripts/api/testdb_run.sh",
+        "scripts/api/testdb_cleanup.sh",
+        "scripts/web_gui/build_release.sh",
+        "services/orchestrator/eom_orchestrator/background_storage.py",
+        "services/orchestrator/eom_orchestrator/database.py",
+        "services/orchestrator/eom_orchestrator/host_package_maintenance.py"
+      ],
+      "test_paths": ["tests/unit/test_dependency_boundaries.py", "tests/unit/test_background_resource_recovery.py"],
+      "reference_paths": ["docs/operations/API_INTEGRATION_TEST_DATABASE.md", "docs/operations/RELEASE_OPERATOR_RUNTIME.md", "docs/operations/BACKGROUND_RESOURCE_RECOVERY_2026-11-04.md", "docs/operations/LOCAL_FILE_CLEANUP_2026-11-04.md"]
+    },
+    {
+      "id": "working-decisions",
+      "note": "working-decisions.md",
+      "keywords": ["판단", "주의", "금지", "재발", "실패 이력", "정본", "pin", "pointer", "idempotency", "동시성", "cache"],
+      "source_paths": ["AGENTS.md", "pyproject.toml", "services/workflow_runner/eom_workflow_runner/engine.py"],
+      "test_paths": ["tests/unit/test_dependency_boundaries.py", "tests/unit/test_inference_transfer_design_boundaries.py"],
+      "reference_paths": ["docs/architecture/MODULE_BOUNDARIES.md", "docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md", "docs/operations/BACKGROUND_NATIVE_RECOVERY_2026-11-04.md", "docs/operations/BACKGROUND_RESOURCE_RECOVERY_2026-11-04.md", "docs/operations/ITEM_DB_SIMILARITY_LIST_RELEASE_2026-11-02.md"]
+    }
+  ]
+}
