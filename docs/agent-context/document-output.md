@@ -58,6 +58,11 @@ Catalog `authorize_delivery_build`와 `read_for_delivery`는 각각 기존 HWPX 
 사용한다. 원본 metadata는 batch join으로 확인하고 status poll에서 모든 파일을 다시 hash하지
 않는다. bytes와 actual visual proof는 명시적인 stage·검증 경계에서 다시 대조해야 한다.
 
+이 Python use case의 존재는 private Catalog RPC 활성화 증거가 아니다. API 쪽 연결은
+기존 `catalog_application_client.py`/Catalog `application_server.py` 경계를 유지한다.
+API의 입력 pinning 때문에 NAS 접근·native 변환 dependency를 API에 추가하지 않는다.
+실제 mixed-render adapter와 RPC/API/Web wiring의 남은 범위는 체크포인트에 기록한다.
+
 ## 먼저 열 파일
 
 - `apps/web_gui/eom_web_gui/static/item-preview.js`

@@ -105,7 +105,7 @@
         "services/catalog_service/eom_catalog_service/document_review_hwpx_correction_service.py",
         "services/catalog_service/eom_catalog_service/review_textbook_evidence_service.py"
       ],
-      "test_paths": ["tests/api/test_hwpx_download_boundary.py", "tests/unit/test_document_review_pdf_annotation.py", "tests/unit/test_single_document_review_textbook_v5.py", "tests/hwpx/test_curated_native_v2.py", "tests/hwpx/test_native_hwp_preservation.py"],
+      "test_paths": ["tests/api/test_hwpx_download_boundary.py", "tests/unit/test_document_review_pdf_annotation.py", "tests/unit/test_single_document_review_textbook_v5.py", "tests/hwpx/test_curated_native_v2.py", "tests/hwpx/test_native_hwp_preservation.py", "tests/unit/test_curated_hwpx_build.py", "tests/integration/test_curated_hwpx_delivery.py"],
       "reference_paths": ["docs/architecture/HWPX_APPLICATION_API_V0.md", "docs/architecture/PDF_DOCUMENT_REVIEW_V1_IMPLEMENTATION_PLAN.md", "docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md", "docs/architecture/CURATED_EDITABLE_HWPX_DELIVERY_PLAN.md", "docs/operations/CURATED_EDITABLE_NATIVE_CHECKPOINT_2026-11-04.md"]
     },
     {

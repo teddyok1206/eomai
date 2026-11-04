@@ -131,3 +131,13 @@ head에서는 재실행 없이 검증하게 했다. predecessor schema·callback
 이 체크포인트에서는 **운영 migration/서비스 교체를 하지 않았다**. 실제 Builder/Artifact
 commit adapter, API/BFF/DB 배치 화면의 제작·복구·다운로드 연결과 호환 배포·인증된 실제
 합본 다운로드 검증은 아직 남아 있으므로 전체 목표는 ACTIVE다.
+
+영속 제작 소스는 `fa5e16dd`로 commit/push했다. 해당 commit의 clean Git archive에서
+platform wheel을 만들고 기존 RECORD verifier를 통과했다. wheel SHA는
+`eaf5b20e23ad8b3f22a8f022899ae0b6f22bfeb70b12a1753872891fbc8605fa`다.
+별도 non-editable 설치본은 `python -I`로 저장소 경로 없이 새 공개 use case와 schema,
+metadata DDL·head 0072를 읽었고 설치 RECORD 2,386개 파일의 bytes를 확인했다. 이는
+운영 service identity·실제 Builder/HTTPS canary의 대체 증거가 아니다.
+
+검사에만 사용한 guarded 임시 DB는 공식 cleanup으로 제거했다. 운영 DB·NAS 정본은
+변경하지 않았고, 기존 창작/INDEX owner의 실행 PID도 이 단계에서 바꾸지 않았다.
