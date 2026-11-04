@@ -176,6 +176,59 @@ def test_table_only_is_native_and_has_no_image_binary_or_empty_visual_frame(tmp_
     assert not any(kind == "image" for kind, _value in events)
 
 
+@pytest.mark.parametrize("suffix", ["[3점]", "[ 3 점 ]", "[3점]\n"])
+def test_source_score_is_not_duplicated_and_original_text_is_unchanged(tmp_path, suffix):
+    from eom_hwpx_contracts.native_item import NativeItemParagraph
+
+    workspace, _content, _projection, plan, output = local_render(tmp_path)
+    last_paragraph = next(
+        block for block in reversed(plan.body) if isinstance(block, NativeItemParagraph)
+    )
+    text = last_paragraph.text + " " + suffix
+    plan = plan.model_copy(
+        update={
+            "body": tuple(
+                block.model_copy(update={"text": text}) if block is last_paragraph else block
+                for block in plan.body
+            )
+        }
+    )
+    source = plan.model_dump_json()
+    render_native_item_document(workspace, plan, output)
+    document = parse_native_document(read_package(output))
+    entries = document.package.by_name()
+    hashes = {
+        key: sha256_bytes(entries[member].data)
+        for key, (member, _media) in document.binaries.items()
+    }
+    events = native_item_section_events(entries["Contents/section0.xml"].data, hashes)
+    assert sum(value.count(suffix.rstrip()) for kind, value in events if kind == "text") == 1
+    assert not any("[3점] [3점]" in value for kind, value in events if kind == "text")
+    assert plan.model_dump_json() == source
+
+
+def test_source_and_metadata_score_conflict_is_not_published(tmp_path):
+    from eom_hwpx_contracts.native_item import NativeItemParagraph
+
+    workspace, _content, _projection, plan, output = local_render(tmp_path)
+    last_paragraph = next(
+        block for block in reversed(plan.body) if isinstance(block, NativeItemParagraph)
+    )
+    plan = plan.model_copy(
+        update={
+            "body": tuple(
+                block.model_copy(update={"text": block.text + " [2점]"})
+                if block is last_paragraph
+                else block
+                for block in plan.body
+            )
+        }
+    )
+    with pytest.raises(ValueError, match="source score differs"):
+        render_native_item_document(workspace, plan, output)
+    assert not output.exists()
+
+
 def test_repeated_image_uses_preserve_order_but_share_one_embedded_binary(tmp_path):
     workspace, _content, projection, plan, output = local_render(tmp_path, repeated_image=True)
     assert len(projection.images) == 2

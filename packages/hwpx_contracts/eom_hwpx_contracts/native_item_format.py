@@ -17,6 +17,7 @@ from eom_hwpx_contracts.native_item import (
 )
 
 _MATH = re.compile(r"\$\$(?P<display>.+?)\$\$|(?<!\$)\$(?P<inline>[^\n$]+?)\$(?!\$)", re.DOTALL)
+_SCORE_SUFFIX = re.compile(r"\[\s*(?P<points>[0-9]{1,3})\s*점\s*\]\s*$")
 
 
 @dataclass(frozen=True)
@@ -59,6 +60,16 @@ def native_item_equation_script(equation: NativeItemEquation) -> str:
     return project_content_team_equation_script(equation.source)
 
 
+def _with_score(text: str, points: int) -> str:
+    """Preserve a source score once; never silently resolve conflicting scores."""
+    existing = _SCORE_SUFFIX.search(text)
+    if existing is not None:
+        if int(existing.group("points")) != points:
+            raise ValueError("native publication source score differs from Item score")
+        return text
+    return text + f" [{points}점]" if points else text
+
+
 def native_item_publication_elements(
     request: NativeItemRenderRequest,
 ) -> tuple[NativePublicationElement, ...]:
@@ -78,8 +89,8 @@ def native_item_publication_elements(
     for index, block in enumerate(request.body):
         if isinstance(block, NativeItemParagraph):
             text = (f"{request.item_number}. " if index == 0 else "") + block.text
-            if index == score_index and request.points:
-                text += f" [{request.points}점]"
+            if index == score_index:
+                text = _with_score(text, request.points)
             result.append(NativeItemText(text, "stem" if block.purpose == "stem" else "body"))
         else:
             result.append(block)

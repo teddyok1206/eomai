@@ -393,3 +393,17 @@ AI용 새 분석·정식 Graph 등록을 이 목표에 추가할지 범위를 �
 슬롯/GPU의 10분 보고는 계속 유지한다. 누적 Graph는 current snapshot의 accepted source
 membership에서 계산하며 재시작별 확인 수를 누적으로 보이지 않는다. INDEX가 active인
 것과 실제 GPU 연산 중인 것은 별개이며, 기출 binding 진행과 순간 GPU 사용률을 따로 보고한다.
+
+## 후속 배점 표시 수정 후보 — 아직 운영 반영 전
+
+실제 혼합 파일의 기출 발문에는 원문에 이미 있는 `[2점]` 뒤에 출력기가 배점을 다시
+붙인 부분이 보였다. 정본을 고치지 않고 `native_item_format.py`의 기존 publication 표현
+함수에서 동일 배점 suffix는 그대로 한 번만 사용하도록 수정했다. 원문 표기와 정본
+배점이 다르면 어느 쪽을 임의 채택하지 않고 명시적으로 거부한다. 내부 source text와
+완성된 기존 build bytes·identity는 바꾸지 않는다. 새 의존성/schema/DB 변경은 없다.
+
+보통/공백 포함/줄바꿈 포함 원문 suffix의 실제 native 렌더, 배점 충돌 거부를 추가해
+native/mixed/materialization 39 tests가 통과했다. 핵심 pure 함수의 mypy와 lint/format도
+PASS다. 이 함수는 Builder와 Manager의 독립 acceptance가 공유하므로 두 설치본의
+동일 후보를 함께 검증·반영해야 한다. source PASS만으로 현재 운영 파일에서 고쳐졌다고
+기록하지 않으며, 다음 호환 release 전에 한쪽만 교체하지 않는다.
