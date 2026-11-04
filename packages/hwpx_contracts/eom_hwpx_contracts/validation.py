@@ -16,6 +16,8 @@ SCHEMA_FILES = {
     "curated-render-result-v2": "hwpx-curated-render-result-v2.schema.json",
     "native-hwp-evidence": "hwpx-native-hwp-evidence-v1.schema.json",
     "native-hwp-bundle": "hwpx-native-hwp-bundle-v1.schema.json",
+    "native-item-render-request": "hwpx-native-item-render-request-v1.schema.json",
+    "native-item-render-result": "hwpx-native-item-render-result-v1.schema.json",
     "content-team-editorial-question": "hwpx-content-team-editorial-question-v1.schema.json",
     "content-team-editorial-question-v2": "hwpx-content-team-editorial-question-v2.schema.json",
     "content-team-render-request": "hwpx-content-team-render-request-v1.schema.json",

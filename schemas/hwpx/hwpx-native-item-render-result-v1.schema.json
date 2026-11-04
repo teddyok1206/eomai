@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/hwpx/native-item-render-result/1.0",
+  "title": "Native editable Item render result",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "profile", "build_id", "item_revision_id", "request_sha256", "source_sha256", "effective_content_sha256", "status", "output_sha256", "output_size_bytes", "native_equation_count", "content_table_count", "image_count", "failure_code"],
+  "properties": {
+    "schema_version": {"const": "native-item-render-result/1.0"},
+    "profile": {"const": "CANONICAL_ITEM_NATIVE_V1"},
+    "build_id": {"type": "string", "pattern": "^hwpxbuild_[0-9a-f]{32}$"},
+    "item_revision_id": {"type": "string", "pattern": "^itemrev_[0-9a-f]{32}$"},
+    "request_sha256": {"$ref": "#/$defs/sha256"},
+    "source_sha256": {"$ref": "#/$defs/sha256"},
+    "effective_content_sha256": {"$ref": "#/$defs/sha256"},
+    "status": {"enum": ["SUCCEEDED", "FAILED"]},
+    "output_sha256": {"anyOf": [{"$ref": "#/$defs/sha256"}, {"type": "null"}]},
+    "output_size_bytes": {"type": ["integer", "null"], "minimum": 1, "maximum": 67108864},
+    "native_equation_count": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "content_table_count": {"type": "integer", "minimum": 0, "maximum": 100},
+    "image_count": {"type": "integer", "minimum": 0, "maximum": 100},
+    "failure_code": {"enum": [null, "HWPX_NATIVE_ITEM_INPUT_INVALID", "HWPX_NATIVE_ITEM_RENDER_FAILED", "HWPX_NATIVE_ITEM_PRESERVATION_FAILED"]}
+  },
+  "allOf": [{"if": {"properties": {"status": {"const": "SUCCEEDED"}}}, "then": {"properties": {"output_sha256": {"$ref": "#/$defs/sha256"}, "output_size_bytes": {"type": "integer"}, "failure_code": {"const": null}}}, "else": {"properties": {"output_sha256": {"const": null}, "output_size_bytes": {"const": null}, "native_equation_count": {"const": 0}, "content_table_count": {"const": 0}, "image_count": {"const": 0}, "failure_code": {"type": "string"}}}}],
+  "$defs": {"sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}
+}

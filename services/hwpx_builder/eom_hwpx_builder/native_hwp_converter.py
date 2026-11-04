@@ -17,7 +17,7 @@ from eom_hwpx_builder.hwp_conversion_package import (
     normalize_hwp_conversion_package,
 )
 from eom_hwpx_builder.native_hwp_preservation import verify_native_hwp_candidate
-from eom_hwpx_builder.util import sha256_bytes, sha256_file
+from eom_hwpx_builder.util import read_stable_local_file, sha256_bytes, sha256_file
 
 _TOOL_ROOT = Path("/srv/eom/vendor/hwp2hwpx")
 _JAVA = Path("/usr/lib/jvm/java-21-openjdk-amd64/bin/java")
@@ -35,34 +35,6 @@ def _protected_path(path: Path, *, directory: bool = False) -> None:
         fail("native converter installation is not protected")
 
 
-def read_native_conversion_file(path: Path, limit: int) -> bytes:
-    descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
-    try:
-        before = os.fstat(descriptor)
-        if not stat.S_ISREG(before.st_mode) or not 1 <= before.st_size <= limit:
-            fail("native conversion file boundary is invalid")
-        with os.fdopen(os.dup(descriptor), "rb") as stream:
-            payload = stream.read(limit + 1)
-        after = os.fstat(descriptor)
-        if (
-            before.st_dev,
-            before.st_ino,
-            before.st_size,
-            before.st_mtime_ns,
-            before.st_ctime_ns,
-        ) != (
-            after.st_dev,
-            after.st_ino,
-            after.st_size,
-            after.st_mtime_ns,
-            after.st_ctime_ns,
-        ) or len(payload) != before.st_size:
-            fail("native conversion file changed during read")
-        return payload
-    finally:
-        os.close(descriptor)
-
-
 class NativeHwpConverter:
     """Verify one installed bundle per build; never accept executable paths from input."""
 
@@ -72,7 +44,7 @@ class NativeHwpConverter:
             _protected_path(parent, directory=True)
         manifest = root / "manifest.json"
         _protected_path(manifest)
-        value = parse_json_object(read_native_conversion_file(manifest, 16 * 1024))
+        value = parse_json_object(read_stable_local_file(manifest, max_bytes=16 * 1024))
         validate_contract("native-hwp-bundle", value)
         bundle = NativeHwpConverterBundle.model_validate(value)
         if (
@@ -89,7 +61,8 @@ class NativeHwpConverter:
             _protected_path(path)
             if (
                 path.stat().st_size != file.size_bytes
-                or sha256_bytes(read_native_conversion_file(path, 16 * 1024 * 1024)) != file.sha256
+                or sha256_bytes(read_stable_local_file(path, max_bytes=16 * 1024 * 1024))
+                != file.sha256
             ):
                 fail("native converter installed file differs")
             files.append(str(path))
@@ -132,7 +105,7 @@ class NativeHwpConverter:
             fail("native HWP converter failed or its source changed")
         verify_native_hwp_candidate(
             candidate,
-            read_native_conversion_file(evidence, 16 * 1024 * 1024),
+            read_stable_local_file(evidence, max_bytes=16 * 1024 * 1024),
             source_sha256=source_sha256,
         )
         return normalize_hwp_conversion_package(candidate, output)

@@ -111,6 +111,28 @@ fingerprint와 도형 개수는 로컬 schema-valid evidence로 다시 대조한
 순서와 실제 합본 배치는 별도 검증한다. 지원하지 않는 source control과 active/linked
 binary는 손실을 숨기는 성공 경로가 아니라 위치를 가진 명시적 실패다.
 
+## 가변 정본 문항 전달
+
+가변 canonical `assessment-item-content/1.0`은 Manager의 `project_native_item`에서
+`native-item-render-request/1.0`으로 투영한다. 이는 기존 정본을 교체하는 모델이 아니라
+격리 Builder의 명시적 local materialization 입력이다. 원래 content SHA와 Preview의
+effective content SHA를 구분하고 body 순서·그림 use·해설을 고정한다. 본문 JSON을 DB에
+추가 저장하거나 Catalog/Graph 검색을 Builder로 옮기지 않는다.
+
+`CANONICAL_ITEM_NATIVE_V1`은 고정 template hash에서 글꼴을 가져오되 free-flow 문단
+속성을 별도로 할당한다. 그림은 content-addressed file로 한 번만 stage하고 모든 use의
+pointer는 먼저 검사한다. native picture 생성과 native package merger는 기존 구현을
+재사용한다. 순서·텍스트·표 cell·수식 script·실제 picture bytes/viewport는 순수 계약
+검증기로 출력 XML에서 독립적으로 읽어 대조한다. 임의 크기 그림과 표-only에 고정 PNG나
+빈 visual frame을 만들지 않고 내부 alt description도 학생용 글자로 출력하지 않는다.
+지원하지 않는 LaTeX는 기존 검증된 수식 grammar에서 명시적으로 실패한다.
+
+`version.xml`의 제작 OS·응용프로그램 차이는 새 native merge V2에서 producer metadata로
+구분한다. version 5.1, XML 1.4/1.5, 실제 layout compatibility와 section/resource 검증은
+유지한다. OS 필드의 upstream 정의는
+[VersionXMLFile](https://github.com/neolord0/hwpxlib/blob/main/src/main/java/kr/dogfoot/hwpxlib/object/root/VersionXMLFile.java)에
+있다. 구 native merge V1의 의미와 schema bytes는 바꾸지 않는다.
+
 ## 관련 근거
 
 - [혼합 문항 입력·조립 설계](NOTION_ITEM_ARCHIVE_IMPORT_PLAN_2026-10-27.md)

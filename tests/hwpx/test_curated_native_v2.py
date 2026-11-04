@@ -38,6 +38,17 @@ PRINT = b"""<config:config-item-set name="PrintInfo"><config:config-item
     name="ZoomX" type="short">100</config:config-item></config:config-item-set>"""
 
 
+def test_windows_and_mac_producer_metadata_can_share_native_v2_but_not_v1(tmp_path):
+    first = office_source(tmp_path, "windows.hwpx")
+    second = office_source(tmp_path, "mac.hwpx", version=VERSION.replace(b'os="1"', b'os="10"'))
+    before = first.read_bytes(), second.read_bytes()
+    report = merge_native_hwpx((first, second), tmp_path / "combined.hwpx", profile=PROFILE)
+    assert report.section_source_positions == (1, 2)
+    assert (first.read_bytes(), second.read_bytes()) == before
+    with pytest.raises(HwpxError, match="global settings differ"):
+        merge_native_hwpx((first, second), tmp_path / "v1.hwpx")
+
+
 def office_source(tmp_path: Path, name: str, *, version=VERSION, settings=b"", changes=None):
     def transform(parts):
         parts = [

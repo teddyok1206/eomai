@@ -81,7 +81,7 @@ def _xml(root: etree._Element) -> bytes:
     )
 
 
-def _document(package: SafePackage) -> NativeDocument:
+def parse_native_document(package: SafePackage) -> NativeDocument:
     entries = package.by_name()
     for name in entries:
         if name not in GLOBAL_PARTS and not (
@@ -173,6 +173,9 @@ def _settings_identity(
             ) != ("5", "1"):
                 fail("curated document format version is unsupported")
             root.attrib.update({"xmlVersion": "1.5", "micro": "1", "buildNumber": "0"})
+            # Windows/Mac is producer metadata like appVersion. Font resources,
+            # section geometry and actual layout compatibility remain verified.
+            root.attrib.pop("os", None)
     return tree_value(root)
 
 
@@ -292,7 +295,7 @@ def merge_native_hwpx(
         remaining -= sum(len(entry.data) for entry in package.entries)
         if remaining <= 0:
             fail("curated input byte budget exceeded")
-        documents_list.append(_document(package))
+        documents_list.append(parse_native_document(package))
     documents = tuple(documents_list)
     first = documents[0]
     for member in ("settings.xml", "version.xml"):
@@ -385,7 +388,7 @@ def merge_native_hwpx(
         fail("curated output byte budget exceeded")
     write_native_package(payloads, output)
     try:
-        candidate = _document(read_package(output, OUTPUT_LIMITS))
+        candidate = parse_native_document(read_package(output, OUTPUT_LIMITS))
         verify_resource_relocation(
             tuple(document.header for document in documents), candidate.header, plans
         )

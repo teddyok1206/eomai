@@ -1,4 +1,4 @@
-# 편집 가능한 HWP 합본의 설치본 검증
+# 편집 가능한 HWPX 출력 검증
 
 2026-11-04 UTC. DB 조립 출력의 native 변환·병합 단계에 대한 체크포인트다.
 운영 GUI의 합본 제작·다운로드는 아직 연결 전이며 전체 목표는 진행 중이다.
@@ -55,10 +55,40 @@ ownership 검사 1개는 기본 실행에서 제외됐으며, 이번 새 변환 
 `/tmp/eom-curated-installed-result-20261104-03/`에 있다. 이는 개발 검증용 local 산출물이며
 사용자에게 발행한 NAS Artifact가 아니다. 기존 실패 진단은 같은 이름의 01·02 기록이다.
 
-이 체크포인트 이후 가변 canonical Item 출력, curated delivery의 영속 build·claim·중단
-복구·Artifact commit, API/BFF·DB 배치 화면·인증 다운로드를 연결한다. DB 검사는 임시
+구현한 가변 canonical Item 출력과 native merger를 curated delivery의 영속 build·claim·중단
+복구·Artifact commit, API/BFF·DB 배치 화면·인증 다운로드에 연결한다. DB 검사는 임시
 PostgreSQL에서 수행하고, 호환 운영 배포 후 저장된 조립으로 실제 다운로드를 검증해야
 전체 목표를 종료할 수 있다.
 
 - [전체 설계와 완료 조건](../architecture/CURATED_EDITABLE_HWPX_DELIVERY_PLAN.md)
 - [기존 native 합본 체크포인트](CURATED_NATIVE_HWPX_CHECKPOINT_2026-10-31.md)
+
+## 가변 정본 문항 출력
+
+실제 고정 EOM template와 합성 canonical Item을 사용해 표-only, 표·그림·수식·보기,
+같은 그림의 두 use, JPEG 서답형 네 형식을 생성했다. 모두 기존 Office sandbox에서
+PDF로 열렸다. PNG는 321×189, JPEG는 177×301로 예전 800×500 제약을 쓰지 않았다.
+실제 PDF picture use는 첫 페이지에 각각 0·1·2·1개, 해설 페이지에는 0개였다.
+같은 그림 두 use는 HWPX 내부 binary 하나를 공유한다. 이 합성 입력은 출제 품질 평가나
+실제 등록 문항 생성 실행이 아니다.
+
+가변 출력 추가 후 HWPX 전체·의존 경계·개발 문맥·정본 콘텐츠 검사는 422개 통과했고
+기존 opt-in root ownership 검사 1개는 기본 실행에서 제외됐다. 이후 추가한 handoff·재실행·
+부분 출력 실패 guard까지 포함한 집중 회귀 70개도 통과했다. 두 수는 중복을 포함한다.
+
+첫 시각 렌더에서 marker 문단의 들여쓰기와 고정 cell 높이 때문에 보기 마지막 줄이
+잘렸다. 새 출력 profile에 한정한 local paragraph 속성과 글자 높이 기반 cell 여유를
+적용한 뒤 네 형식을 다시 열어 세 진술이 모두 표시됨을 확인했다. 기존 template나
+content-team released 출력의 문단/그림 크기는 바꾸지 않았다.
+
+격리 wheel 설치본에서 `render-native-item`이 SUCCEEDED였다. RECORD 91개 파일과
+소스에서 검증한 결과와의 output SHA 일치를 확인했다. 수식 3개·content table 1개·그림
+1개가 native로 남았다. local 결과는 `/tmp/eom-native-item-installed-20261104-01/`,
+Office 검사는 `/tmp/eom-native-item-office-20261104-02/`에 있다. Hancom 수동 확인과
+운영 DB 배치 화면의 제작·다운로드 완료로 확대 해석하지 않는다.
+
+12:39 UTC 보존 점검에서 창작 네 슬롯의 유효 lease를 확인했다. 별도로 INDEX metadata
+owner는 10:33 UTC `EMBEDDING_BENCHMARK_CHANNEL_EOF`로 종료된 상태였다. 실행 중인
+native 수치 unit이 없음을 확인한 뒤 같은 설치본의 공식 INDEX owner를 한 번 시작했다.
+12:50 관측에서는 해당 owner가 실행 중이었다. 새 벡터 완료 증거는 아직 이 체크포인트에
+없으며 이전 FAILED 기록, native runtime/model pin과 네 슬롯 설정은 변경하지 않았다.

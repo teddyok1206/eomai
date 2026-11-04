@@ -7,8 +7,7 @@ import os
 import stat
 from pathlib import Path
 
-from eom_hwpx_builder.native_hwp_converter import read_native_conversion_file
-from eom_hwpx_builder.util import sha256_bytes, sha256_file
+from eom_hwpx_builder.util import read_stable_local_file, sha256_bytes, sha256_file
 from eom_hwpx_contracts.native_conversion import NativeHwpConverterBundle
 from eom_hwpx_contracts.validation import parse_json_object, validate_contract
 
@@ -19,7 +18,7 @@ JAVA = Path("/usr/lib/jvm/java-21-openjdk-amd64/bin/java")
 def install(source: Path, expected_sha256: str) -> Path:
     if os.geteuid() != 0 or not source.is_absolute() or source.resolve(strict=True) != source:
         raise ValueError("installation requires root and an explicit regular source directory")
-    payload = read_native_conversion_file(source / "manifest.json", 16 * 1024)
+    payload = read_stable_local_file(source / "manifest.json", max_bytes=16 * 1024)
     value = parse_json_object(payload)
     validate_contract("native-hwp-bundle", value)
     bundle = NativeHwpConverterBundle.model_validate(value)
@@ -36,7 +35,7 @@ def install(source: Path, expected_sha256: str) -> Path:
     target = ROOT / expected_sha256.removeprefix("sha256:")
     payloads = {"manifest.json": payload}
     for file in bundle.files:
-        data = read_native_conversion_file(source / file.filename, 16 * 1024 * 1024)
+        data = read_stable_local_file(source / file.filename, max_bytes=16 * 1024 * 1024)
         if len(data) != file.size_bytes or sha256_bytes(data) != file.sha256:
             raise ValueError("installation source file differs")
         payloads[file.filename] = data
@@ -51,7 +50,7 @@ def install(source: Path, expected_sha256: str) -> Path:
                 not stat.S_ISREG(metadata.st_mode)
                 or metadata.st_uid != 0
                 or metadata.st_mode & 0o022
-                or read_native_conversion_file(path, 16 * 1024 * 1024) != data
+                or read_stable_local_file(path, max_bytes=16 * 1024 * 1024) != data
             ):
                 raise ValueError("existing installed bundle differs; never overwrite it")
             path.chmod(0o444)

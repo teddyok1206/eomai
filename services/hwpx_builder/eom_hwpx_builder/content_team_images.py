@@ -48,8 +48,18 @@ def _dimensions(data: bytes) -> tuple[int, int, int, int]:
     return original_width, original_height, display_width, display_height
 
 
-def _picture(*, binary_id: str, object_id: int, image: bytes) -> etree._Element:
-    original_width, original_height, width, height = _dimensions(image)
+def native_picture_element(
+    *,
+    binary_id: str,
+    object_id: int,
+    original_width: int,
+    original_height: int,
+    width: int,
+    height: int,
+) -> etree._Element:
+    """One uncropped native picture geometry for fixed and variable Item renderers."""
+    if min(original_width, original_height, width, height) <= 0:
+        raise HwpxError(HwpxErrorCode.HWPX_IMAGE_BINDING_FAILED, "picture dimensions are invalid")
     picture = etree.Element(
         HP + "pic",
         {
@@ -173,6 +183,18 @@ def _picture(*, binary_id: str, object_id: int, image: bytes) -> etree._Element:
         picture, HP + "outMargin", {"left": "0", "right": "0", "top": "0", "bottom": "0"}
     )
     return picture
+
+
+def _picture(*, binary_id: str, object_id: int, image: bytes) -> etree._Element:
+    original_width, original_height, width, height = _dimensions(image)
+    return native_picture_element(
+        binary_id=binary_id,
+        object_id=object_id,
+        original_width=original_width,
+        original_height=original_height,
+        width=width,
+        height=height,
+    )
 
 
 def _next_object_id(section: etree._Element) -> int:

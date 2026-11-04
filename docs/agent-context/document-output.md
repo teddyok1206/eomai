@@ -40,6 +40,13 @@ HWP 변환은 `native_hwp_converter.py`가 보호된 설치 JAR/Java identity와
 페이지 PNG 대체나 원본 덮어쓰기는 하지 않는다. 이 코드·설치본 검증을 운영 GUI 활성화로
 간주하지 말고 아래 현재 체크포인트와 실제 release를 대조한다.
 
+가변 canonical Item/1.0은 Manager `native_item_projection.py` → local
+`native-item-render-request/1.0` → Builder `native_item_renderer.py`로 투영한다. 원본 content와
+effective visual content hash를 분리해 pin하고 그림 use와 binary 파일을 구분한다.
+계약의 `native_item_format.py`/`native_item_semantics.py`는 저장소나 DB에 접근하지 않는
+순서·표·수식·uncropped picture 검증이다. content-team/2.0·3.0과 구 고정 예제 profile은
+그대로 남는다. 저장된 배치의 영속 delivery와 API/GUI 연결 여부는 별도로 확인한다.
+
 ## 먼저 열 파일
 
 - `apps/web_gui/eom_web_gui/static/item-preview.js`
