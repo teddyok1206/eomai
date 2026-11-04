@@ -33,7 +33,7 @@ function detail(number) {
 const graph = {source_class: 'PAST_EXAM', source_display_label: '합성 시험 17번',
   item_id: 'item_' + 'b'.repeat(32), item_revision_id: 'itemrev_' + 'c'.repeat(32),
   item_manifest_sha256: 'sha256:' + 'd'.repeat(64), graph_snapshot_revision_id: 'graphrev_' + 'e'.repeat(32),
-  snapshot_sha256: 'sha256:' + 'f'.repeat(64), item_revision_state: 'APPROVED', hwpx_exam_eligible: true,
+  snapshot_sha256: 'sha256:' + 'f'.repeat(64), item_revision_state: 'APPROVED', hwpx_exam_eligible: false,
   past_exam_context: {occurrence_display_label: '합성 시험', administration_year: 2026,
     administration_month: 6, item_number: 17},
   curriculum_units: [{key:'unit-one', unit_code: '1-1', label:'물질의 규칙성'}]};

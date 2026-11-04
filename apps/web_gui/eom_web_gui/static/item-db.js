@@ -436,7 +436,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       [context ? `${context.administration_year}년 ${context.administration_month}월 · ${context.item_number}번`
         : entry.curriculum_units.map((unit) => unit.label).join(" · "),
         entry.item_revision_state === "APPROVED" ? "승인 완료" : "이전 승인 버전",
-        entry.hwpx_exam_eligible ? "가능" : "대상 아님"],
+        "제작 시 확인"],
       (row) => openGraphDetail(entry, row));
   }
 
@@ -505,15 +505,15 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
         ["시험", entry.past_exam_context.occurrence_display_label],
         ["문항 번호", `${entry.past_exam_context.item_number}번`],
       ] : []),
-      ["HWPX 조립", entry.hwpx_exam_eligible ? "가능" : "대상 아님"],
+      ["HWPX 조립", "제작 시 확인"],
     ], "item-db-detail-summary"));
     const button = node(document, "button", "button secondary", "문항 미리보기");
     button.type = "button";
     button.addEventListener("click", () => openRegisteredItem(entry));
     const select = node(document, "button", "button quiet", "조립 목록에 담기");
     select.type = "button";
-    select.disabled = !entry.hwpx_exam_eligible;
-    if (select.disabled) select.title = "이 문항 버전은 현재 HWPX 조립 대상이 아닙니다.";
+    // The released exam flag does not admit the new editable curated profile.
+    // Catalog pins selections; the delivery owner validates actual render inputs.
     select.addEventListener("click", () => addToDraft({
       placement_kind: entry.source_class === "PAST_EXAM"
         ? "PAST_EXAM_ITEM_REVISION" : "REGISTERED_ITEM_REVISION",
