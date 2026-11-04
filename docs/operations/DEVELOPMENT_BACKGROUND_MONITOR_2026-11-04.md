@@ -22,6 +22,12 @@ NAS·저장소·worker home에 접근할 수 없고 journal의 bounded JSON만 �
 Office PDF 변환 결과 없음 5였다. 원본 손상으로 확정하거나 완료에 더하지 않는다.
 이 기록은 해당 시점의 분류이며 이후 상태는 timer 관측으로 확인한다.
 
+후속 점검에서 INDEX owner가 `EMBEDDING_BENCHMARK_CHANNEL_EOF`로 13:44 UTC 종료한
+사실을 확인했다. 실행 중 수치 unit이 없음을 확인한 뒤 동일한 기존 owner unit을 공식
+start로 재개했다. 새 계획/재임베딩/벡터 삭제는 없고 실제 기존 PID가 아닌 새 살아 있는
+owner를 확인했다. reporter는 순간 GPU 0%뿐 아니라 INDEX owner active/MainPID도 확인해
+계산 대기와 관리 프로세스 중단을 구분한다. 재개가 새 벡터 완료의 증명은 아니다.
+
 중지: `eom-development-background-report.timer`를 stop/disable하고 두 observer timer의
 `10-development-cadence.conf` drop-in만 제거하면 원래 30분 cadence로 복구할 수 있다.
 INDEX·창작 처리 서비스나 정본은 삭제/중지하지 않는다. 원래 helper는 위 설치 기록의

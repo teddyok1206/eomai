@@ -110,6 +110,21 @@ def main() -> None:
             gpu = f"GPU {'연산 중' if utilization else '현재 대기'} {utilization}%/{memory}MiB"
         except (ValueError, IndexError, OSError, subprocess.TimeoutExpired):
             gpu = "GPU 사용률 확인 불가"
+        try:
+            properties = _run(
+                [
+                    "/usr/bin/systemctl",
+                    "show",
+                    "eom-embedding-index-owner.service",
+                    "--property=ActiveState",
+                    "--property=MainPID",
+                ]
+            )
+            owner = dict(row.split("=", 1) for row in properties.splitlines() if "=" in row)
+            if owner.get("ActiveState") != "active" or int(owner.get("MainPID", "0")) <= 0:
+                gpu += " · 임베딩 담당 작업 중단(점검 필요)"
+        except (ValueError, OSError, subprocess.TimeoutExpired):
+            gpu += " · 임베딩 담당 상태 확인 불가"
         line = summary_line(creative, embedding, gpu)
     except (ValueError, OSError, subprocess.TimeoutExpired):
         line = "슬롯·GPU 관측 결과를 확인하지 못해 점검이 필요합니다."
