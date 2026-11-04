@@ -207,3 +207,117 @@ def test_graph_batch_rejects_ambiguous_or_unaccepted_members_before_any_io(monke
         )
     value.service.automatic.publish.assert_not_called()
     value.service.analyses.create_with_pinned_preset.assert_not_called()
+
+
+def test_stale_graph_retries_same_accepted_analysis_with_explicit_new_base(monkeypatch):
+    value = case(monkeypatch, "ACCEPTED")
+    from eom_catalog_service.knowledge_graph_publication_service import (
+        KnowledgeGraphPublicationError,
+    )
+
+    next_graph = "graphrev_" + "b" * 32
+    value.service.publication.current_structure_context.side_effect = (
+        NS(graph_snapshot_revision_id=value.graph_id, accepted_analysis_run_ids=()),
+        NS(graph_snapshot_revision_id=next_graph, accepted_analysis_run_ids=()),
+    )
+    success = value.service.automatic.publish.return_value
+    value.service.automatic.publish.side_effect = (
+        KnowledgeGraphPublicationError(
+            "KNOWLEDGE_GRAPH_STALE_CURRENT", "synthetic competing append"
+        ),
+        success,
+    )
+    result = value.service.advance(
+        item_revision_id=value.item_revision,
+        requested_by_operator_id=value.lineage.requested_by_operator_id,
+    )
+    calls = value.service.automatic.publish.call_args_list
+    assert result.graph_snapshot_revision_id == "graphrev_" + "a" * 32
+    assert [call.args[0][0].graph_snapshot_revision_id for call in calls] == [
+        value.graph_id,
+        next_graph,
+    ]
+    assert all(call.args[0][0].analysis_run_id == value.run_id for call in calls)
+    assert value.service.analyses.create_with_pinned_preset.call_count == 1
+    assert value.service.source.reauthorize.call_count == 3
+
+
+def test_racing_writer_already_published_exact_analysis_is_reused(monkeypatch):
+    value = case(monkeypatch, "ACCEPTED")
+    from eom_catalog_service.knowledge_graph_publication_service import (
+        KnowledgeGraphPublicationError,
+    )
+
+    next_graph = "graphrev_" + "b" * 32
+    value.service.publication.current_structure_context.side_effect = (
+        NS(graph_snapshot_revision_id=value.graph_id, accepted_analysis_run_ids=()),
+        NS(graph_snapshot_revision_id=next_graph, accepted_analysis_run_ids=(value.run_id,)),
+    )
+    value.service.automatic.publish.side_effect = KnowledgeGraphPublicationError(
+        "KNOWLEDGE_GRAPH_STALE_CURRENT", "synthetic existing publication"
+    )
+    result = value.service.advance(
+        item_revision_id=value.item_revision,
+        requested_by_operator_id=value.lineage.requested_by_operator_id,
+    )
+    assert result.graph_snapshot_revision_id == next_graph
+    assert value.service.automatic.publish.call_count == 1
+    assert value.service.analyses.create_with_pinned_preset.call_count == 1
+
+
+@pytest.mark.parametrize(
+    "code,expected_attempts",
+    [("KNOWLEDGE_GRAPH_STALE_CURRENT", 3), ("KNOWLEDGE_GRAPH_HASH_MISMATCH", 1)],
+)
+def test_publication_retry_is_bounded_and_only_for_exact_cas_conflict(
+    monkeypatch, code, expected_attempts
+):
+    value = case(monkeypatch, "ACCEPTED")
+    from eom_catalog_service.knowledge_graph_publication_service import (
+        KnowledgeGraphPublicationError,
+    )
+
+    value.service.automatic.publish.side_effect = KnowledgeGraphPublicationError(
+        code, "synthetic failure"
+    )
+    with pytest.raises(KnowledgeGraphPublicationError) as failure:
+        value.service.advance(
+            item_revision_id=value.item_revision,
+            requested_by_operator_id=value.lineage.requested_by_operator_id,
+        )
+    assert failure.value.code == code
+    assert value.service.automatic.publish.call_count == expected_attempts
+    assert value.service.analyses.create_with_pinned_preset.call_count == 1
+
+
+@pytest.mark.parametrize("fault", ["permission", "source_hash"])
+def test_stale_retry_reauthorizes_and_stops_on_new_source_or_permission_failure(monkeypatch, fault):
+    value = case(monkeypatch, "ACCEPTED")
+    from eom_catalog_service.knowledge_graph_publication_service import (
+        KnowledgeGraphPublicationError,
+    )
+
+    value.service.automatic.publish.side_effect = KnowledgeGraphPublicationError(
+        "KNOWLEDGE_GRAPH_STALE_CURRENT", "synthetic race"
+    )
+    if fault == "permission":
+        monkeypatch.setattr(
+            learning,
+            "effective_permissions",
+            Mock(side_effect=(learning._PERMISSIONS, learning._PERMISSIONS, frozenset())),
+        )
+        code = "PERMISSION_DENIED"
+    else:
+        value.service.source.reauthorize.side_effect = (
+            None,
+            None,
+            ValueError("SOURCE_HASH_MISMATCH"),
+        )
+        code = "SOURCE_HASH_MISMATCH"
+    with pytest.raises(ValueError, match=code):
+        value.service.advance(
+            item_revision_id=value.item_revision,
+            requested_by_operator_id=value.lineage.requested_by_operator_id,
+        )
+    assert value.service.automatic.publish.call_count == 1
+    assert value.service.analyses.create_with_pinned_preset.call_count == 1

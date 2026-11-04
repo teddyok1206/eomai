@@ -46,7 +46,10 @@ from eom_catalog_service.knowledge_graph_projection import (
     CURRENT_ITEM_GRAPH_PUBLISHER_VERSION,
     AcceptedAnalysisProposal,
 )
-from eom_catalog_service.knowledge_graph_publication_service import KnowledgeGraphPublicationService
+from eom_catalog_service.knowledge_graph_publication_service import (
+    KnowledgeGraphPublicationError,
+    KnowledgeGraphPublicationService,
+)
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalApplicationService
 from eom_catalog_service.models import ItemRecord, ItemRevisionRecord
 from eom_catalog_service.settings import CatalogSettings
@@ -228,7 +231,7 @@ class CreativeItemGraphLearningService:
         *,
         requested_by_operator_id: str,
     ) -> tuple[CreativeGraphLearningProgress, ...]:
-        """One bounded publication; exact source and accepted analyses remain authoritative."""
+        """Rebase only a raced Graph append, never the accepted reports or authority."""
         if (
             not 1 <= len(progress) <= 4
             or len({entry.item_revision_id for entry in progress}) != len(progress)
@@ -236,6 +239,25 @@ class CreativeItemGraphLearningService:
             or any(entry.analysis_state != "ACCEPTED" for entry in progress)
         ):
             raise ValueError("CREATIVE_GRAPH_ANALYSIS_INVALID")
+        for attempt in range(3):
+            try:
+                return self._publish_accepted_once(
+                    progress, requested_by_operator_id=requested_by_operator_id
+                )
+            except KnowledgeGraphPublicationError as error:
+                if error.code != "KNOWLEDGE_GRAPH_STALE_CURRENT" or attempt == 2:
+                    raise
+                # Another legitimate writer changed the append base. Repeat the
+                # original source/permission/membership checks with an explicit
+                # new expected-current; old requests and failures stay immutable.
+        raise AssertionError("bounded Graph publication did not terminate")
+
+    def _publish_accepted_once(
+        self,
+        progress: tuple[CreativeGraphLearningProgress, ...],
+        *,
+        requested_by_operator_id: str,
+    ) -> tuple[CreativeGraphLearningProgress, ...]:
         expected = {entry.analysis_run_id: entry.item_revision_id for entry in progress}
         # Reauthorize every member even when all Graph memberships already exist.
         with self.sessions() as session:

@@ -60,18 +60,29 @@ def build_local_embedding_source_plan_v4(
     resolved: ResolvedEmbeddingLookup,
     *,
     target_revision_ids: tuple[str, ...],
+    plan_version: Literal["4.0", "5.0"] | None = None,
 ) -> LocalEmbeddingSourcePlanV4:
+    """Select a new envelope, or rebuild the explicitly pinned original family.
+
+    Discovery may see native reports outside this selected batch; admission sees
+    only that batch. Revalidation must preserve the request's released family
+    rather than derive a different envelope from the smaller capture.
+    """
     value = _build_public_solution_source_plan(
         query,
         resolved,
         target_revision_ids=target_revision_ids,
-        plan_version="5.0"
-        if any(
-            isinstance(entry, PublicSolutionEmbeddingEntry)
-            and entry.schema_version == "public-solution-embedding-entry/3.0"
-            for entry in resolved.entries
-        )
-        else "4.0",
+        plan_version=plan_version
+        if plan_version is not None
+        else (
+            "5.0"
+            if any(
+                isinstance(entry, PublicSolutionEmbeddingEntry)
+                and entry.schema_version == "public-solution-embedding-entry/3.0"
+                for entry in resolved.entries
+            )
+            else "4.0"
+        ),
     )
     assert isinstance(value, LocalEmbeddingSourcePlanV4)
     return value

@@ -358,7 +358,14 @@ class CatalogLocalEmbeddingOwnerAdmission:
         rebuilt: SupportedLocalEmbeddingSourcePlan
         if isinstance(request, LocalEmbeddingWorkflowRequestV4):
             rebuilt = build_local_embedding_source_plan_v4(
-                query, current, target_revision_ids=targets
+                query,
+                current,
+                target_revision_ids=targets,
+                plan_version=(
+                    "5.0"
+                    if request.schema_version == "local-embedding-workflow-request/5.0"
+                    else "4.0"
+                ),
             )
         elif isinstance(request, LocalEmbeddingWorkflowRequestV3):
             rebuilt = build_local_embedding_source_plan_v3(
