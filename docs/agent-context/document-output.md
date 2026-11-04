@@ -47,6 +47,18 @@ effective visual content hash를 분리해 pin하고 그림 use와 binary 파일
 순서·표·수식·uncropped picture 검증이다. content-team/2.0·3.0과 구 고정 예제 profile은
 그대로 남는다. 저장된 배치의 영속 delivery와 API/GUI 연결 여부는 별도로 확인한다.
 
+local `curated-hwpx-render-request/3.0`은 원본 문서·canonical Item/1.0·content-team/2.0·3.0을
+한 순서로 섞는다. `curated_materialization.py`는 exact source/effective/recovery pointer를
+읽고 기존 공개 `ContentTeamHwpxService.resolve_members`의 batch 경계를 재사용한다.
+각 그림 포인터를 확인한 뒤 같은 SHA의 local PNG만 공유한다. 원본 content를 예전
+고정형 출력으로 재해석하거나 rendered segment를 개별 NAS Artifact로 만들지 않는다.
+
+`curated_mixed_renderer.py`는 handoff/runtime과 generic template를 합본에서 한 번 준비하고
+기존 개별 출력기와 native merger를 사용한다. 새 profile의 `curated_editorial_layout.py`만
+고정 template의 중복 번호·중첩 표 폭·내용에 비해 낮은 cell 높이를 조정하고 line cache를
+제거한다. 텍스트·수식·그림 viewport는 전후 비교하며 원본 HWP/HWPX와 기존 released
+single/exam 경로의 geometry는 바꾸지 않는다. native table 수에는 layout table도 포함된다.
+
 `curated_application_service.py`는 별도의 `hwpx_curated_builds`에서 actor/key 멱등 요청,
 partial FIFO claim, 같은 build의 advisory lock과 중단 복구를 소유한다. input plan에는
 `curated-hwpx-build-input/1.0`의 source/effective content·handoff·converter pointer만 저장한다.
@@ -70,6 +82,10 @@ API의 입력 pinning 때문에 NAS 접근·native 변환 dependency를 API에 �
 - `services/hwpx_manager/eom_hwpx_manager/application_service.py`
 - `services/hwpx_manager/eom_hwpx_manager/curated_application_service.py`
 - `services/hwpx_manager/eom_hwpx_manager/curated_build_models.py`
+- `services/hwpx_manager/eom_hwpx_manager/curated_materialization.py`
+- `packages/hwpx_contracts/eom_hwpx_contracts/curated_mixed.py`
+- `services/hwpx_builder/eom_hwpx_builder/curated_mixed_renderer.py`
+- `services/hwpx_builder/eom_hwpx_builder/curated_editorial_layout.py`
 - `services/hwpx_builder/eom_hwpx_builder`
 - `packages/hwpx_contracts/eom_hwpx_contracts/curated_document.py`
 - `services/hwpx_builder/eom_hwpx_builder/curated_renderer.py`

@@ -46,6 +46,22 @@ index를 사용한다. 조회 O(log n), 해석·병합 O(XML 노드+고유 media
 제한된 staged input/output 크기에 비례한다. resource/object ID relocation은 map, 중복과
 target 존재 검사는 set을 사용한다. 반복 파일 hash와 N+1 해석을 피한다.
 
+Manager materialization은 기존 content-team Artifact member resolver의 batch 조회를
+공개 경계로 재사용한다. nested member는 root 안의 regular file이고 symlink가 없을 때만
+허용한다. canonical Item/1.0의 기존 `MediaArtifactPointer`에는 schema가 없으므로 그
+image/png·image/jpeg 포인터에 한해서만 schema를 꾸며내지 않고 기존 media/hash 계약을
+따른다. 문서·content·Markdown·복원 증거의 schema 검사는 생략하지 않는다. source/effective
+content와 복원 manifest를 검증한 뒤 각 picture use를 확인하고, 검증된 동일 SHA의 local
+image 파일만 공유한다. 긴 본문/PNG는 build row가 아니라 단일 workspace에서만 materialize한다.
+
+실제 application 연결에서 최초 input pin은 Catalog 소유의 metadata batch 연산으로 한다.
+저장한 조립을 재인가한 뒤 exact Item component와 source-bound visual publication의
+Job/Artifact/revision·member descriptor로 source/effective/recovery/Markdown pointer를
+고정한다. 이 때문에 API에 NAS 권한을 주거나 status poll마다 `load_item_content`·
+전체 그림 복원을 호출하지 않는다. 실제 원본/복원 manifest의 내용과 derivation·PNG 검사는
+Manager materialization과 commit 직전 재인가에서 수행한다. exact SUPERSEDED revision을
+implicit latest나 현재 Preview의 APPROVED-only 규칙으로 바꾸지 않는다.
+
 ## 트랜잭션과 실패
 
 actor+key+정확한 요청 해시는 동시 요청을 단일 build로 묶는다. claim은 기존 Manager의
@@ -130,6 +146,18 @@ fingerprint와 도형 개수는 로컬 schema-valid evidence로 다시 대조한
 binary는 손실을 숨기는 성공 경로가 아니라 위치를 가진 명시적 실패다.
 
 ## 가변 정본 문항 전달
+
+혼합 local 실행은 `curated-hwpx-render-request/3.0`의 ordered discriminated segments를
+사용한다. 원본 HWP/HWPX, canonical Item/1.0 blueprint, 콘텐츠팀 Item/2.0·3.0을 구분하며
+가짜 시험 Assembly/placement identity를 만들지 않는다. 원본 content hash, local blueprint
+hash와 rendered segment hash는 각각 다른 값이다. 같은 request의 정확한 source/segment
+chain과 section별 원래 position을 결과에 기록한다. 기존 local V1/V2 schema 의미는 유지한다.
+
+공통 handoff archive/runtime/template은 한 번만 검증·준비한다. generated 이미지의 기존
+binding은 유지하되 실제 staged file은 content-addressed `images/`로 한 번만 materialize한다.
+중간 segment는 검증·복구용 workspace 결과이며 별도 per-item delivery나 NAS 정본으로
+자동 등록하지 않는다. 파일·XML·총 입력/output byte budget과 local path를 제한한다.
+canonical 문항은 선택 순서로 번호를 표시하고 원본 native 문서의 번호·내용은 바꾸지 않는다.
 
 가변 canonical `assessment-item-content/1.0`은 Manager의 `project_native_item`에서
 `native-item-render-request/1.0`으로 투영한다. 이는 기존 정본을 교체하는 모델이 아니라

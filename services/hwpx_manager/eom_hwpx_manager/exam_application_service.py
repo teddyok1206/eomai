@@ -362,7 +362,7 @@ class ExamHwpxApplicationService:
                     source=source,
                     images=tuple(
                         ContentTeamImageSource.model_validate(value)
-                        for value in HwpxApplicationService._content_team_image_sources(revision)
+                        for value in HwpxApplicationService.content_team_image_sources(revision)
                     ),
                 )
             )

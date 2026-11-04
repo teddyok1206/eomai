@@ -230,7 +230,7 @@ class HwpxApplicationService:
                 "editorial_markdown_member": markdown_member,
                 "editorial_markdown_sha256": markdown_sha256,
                 "handoff": handoff_snapshot.model_dump(mode="json"),
-                "content_team_images": self._content_team_image_sources(revision),
+                "content_team_images": self.content_team_image_sources(revision),
             }
             if material_requirement is not None:
                 normalized_options["material_requirement"] = material_requirement.model_dump(
@@ -618,7 +618,7 @@ class HwpxApplicationService:
             ) from exc
 
     @staticmethod
-    def _content_team_image_sources(revision: dict[str, Any]) -> list[dict[str, Any]]:
+    def content_team_image_sources(revision: dict[str, Any]) -> list[dict[str, Any]]:
         components = revision.get("components", [])
         candidates = tuple(
             component

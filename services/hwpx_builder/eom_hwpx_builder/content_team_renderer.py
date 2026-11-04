@@ -12,6 +12,7 @@ import zipfile
 from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path, PurePosixPath
 from typing import Any
@@ -23,6 +24,7 @@ from eom_hwpx_contracts import (
     ContentTeamEditorialDraft,
     ContentTeamEditorialDraftContract,
     ContentTeamEditorialDraftV2,
+    ContentTeamHandoffSnapshot,
     ContentTeamRenderRequest,
     ContentTeamRenderRequestV2,
     ContentTeamRenderRequestV3,
@@ -226,7 +228,38 @@ def _extract_runtime(
     return runtime / "templates/automation.hwpx"
 
 
-def _load_draft(raw: bytes, *, source_schema_ref: str) -> ContentTeamEditorialDraftContract:
+@dataclass(frozen=True)
+class ContentTeamRenderRuntime:
+    runtime: Path
+    template: Path
+
+
+def prepare_content_team_runtime(
+    workspace: Path,
+    handoff: ContentTeamHandoffSnapshot,
+) -> ContentTeamRenderRuntime:
+    """Validate and extract one reviewed runtime for a single Item or many segments."""
+    archive = _workspace_path(workspace, handoff.archive_file)
+    _read_regular(archive, max_bytes=64 * 1024 * 1024, expected_sha256=handoff.archive_sha256)
+    evidence = inspect_content_team_handoff(archive)
+    if (
+        evidence.entry_count != handoff.entry_count
+        or evidence.uncompressed_bytes != handoff.uncompressed_bytes
+        or tuple((row.purpose, row.sha256, row.size) for row in evidence.members)
+        != tuple((row.purpose, row.sha256, row.size) for row in handoff.members)
+        or {row.purpose: row.sha256 for row in evidence.members} != dict(EXPECTED_MEMBER_HASHES)
+    ):
+        raise HwpxError(
+            HwpxErrorCode.HWPX_TEMPLATE_HASH_MISMATCH,
+            "content-team handoff differs from its reviewed snapshot",
+        )
+    runtime = _workspace_path(workspace, "runtime", must_exist=False)
+    return ContentTeamRenderRuntime(runtime, _extract_runtime(archive, evidence, runtime))
+
+
+def load_content_team_draft(
+    raw: bytes, *, source_schema_ref: str
+) -> ContentTeamEditorialDraftContract:
     try:
         value: object = json.loads(raw.decode("utf-8"))
         expected_version = {
@@ -1193,7 +1226,7 @@ def _assert_exact_content_team_equations(
     return len(observed)
 
 
-def _external_render(
+def render_content_team_document(
     runtime: Path,
     template: Path,
     markdown: bytes,
@@ -1442,7 +1475,6 @@ def render_content_team_workspace(
 
     source_json = _workspace_path(workspace, request.source.json_file)
     source_markdown = _workspace_path(workspace, request.source.markdown_file)
-    handoff_archive = _workspace_path(workspace, request.handoff.archive_file)
     json_bytes = _read_regular(
         source_json, max_bytes=MAX_JSON_BYTES, expected_sha256=request.source.json_sha256
     )
@@ -1451,12 +1483,7 @@ def render_content_team_workspace(
         max_bytes=MAX_MARKDOWN_BYTES,
         expected_sha256=request.source.markdown_sha256,
     )
-    _read_regular(
-        handoff_archive,
-        max_bytes=64 * 1024 * 1024,
-        expected_sha256=request.handoff.archive_sha256,
-    )
-    draft = _load_draft(json_bytes, source_schema_ref=request.source.schema_ref)
+    draft = load_content_team_draft(json_bytes, source_schema_ref=request.source.schema_ref)
     if serialize_content_team_markdown(draft) != markdown_bytes:
         raise HwpxError(
             HwpxErrorCode.HWPX_TEMPLATE_HASH_MISMATCH,
@@ -1472,32 +1499,19 @@ def render_content_team_workspace(
             HwpxErrorCode.HWPX_TEMPLATE_HASH_MISMATCH,
             "content-team Markdown hash differs from its parsed identity",
         )
-    evidence = inspect_content_team_handoff(handoff_archive)
-    actual_members = tuple(
-        (member.purpose, member.sha256, member.size) for member in evidence.members
-    )
-    declared_members = tuple(
-        (member.purpose, member.sha256, member.size) for member in request.handoff.members
-    )
-    if (
-        evidence.entry_count != request.handoff.entry_count
-        or evidence.uncompressed_bytes != request.handoff.uncompressed_bytes
-        or actual_members != declared_members
-        or {member.purpose: member.sha256 for member in evidence.members}
-        != dict(EXPECTED_MEMBER_HASHES)
-    ):
-        raise HwpxError(
-            HwpxErrorCode.HWPX_TEMPLATE_HASH_MISMATCH,
-            "content-team handoff evidence differs from the request snapshot",
-        )
-    runtime = _workspace_path(workspace, "runtime", must_exist=False)
-    template = _extract_runtime(handoff_archive, evidence, runtime)
+    prepared = prepare_content_team_runtime(workspace, request.handoff)
     output_dir = _workspace_path(workspace, request.output_directory, must_exist=False)
     if output_dir.exists():
         raise HwpxError(HwpxErrorCode.HWPX_PACKAGE_BUILD_FAILED, "output must be fresh")
     output_dir.mkdir(mode=0o700)
     output = output_dir / "content-team-item.hwpx"
-    report = _external_render(runtime, template, markdown_bytes, output, draft)
+    report = render_content_team_document(
+        prepared.runtime,
+        prepared.template,
+        markdown_bytes,
+        output,
+        draft,
+    )
     image_set_sha256 = sha256_bytes(canonical_json_bytes([]))
     embedded_image_count = 0
     if isinstance(request, ContentTeamRenderRequestV2 | ContentTeamRenderRequestV3):

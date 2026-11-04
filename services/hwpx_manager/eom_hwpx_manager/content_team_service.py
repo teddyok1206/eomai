@@ -6,8 +6,10 @@ import json
 import logging
 import re
 import stat
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from eom_catalog_contracts import (
     AssessmentItemContentV2,
@@ -105,7 +107,9 @@ class ArtifactMemberPointer:
     member_name: str
     expected_sha256: str
     media_type: str
-    schema_ref: str
+    # Canonical Item/1.0 MediaArtifactPointer predates image schema references.
+    # None is permitted only for those media pointers, never for content/documents.
+    schema_ref: str | None
     max_bytes: int
 
 
@@ -551,7 +555,7 @@ class ContentTeamHwpxService:
             revision = session.get(ArtifactRevisionRecord, revision_id)
         return self._materialized_member_path(pointer, artifact, revision)
 
-    def _resolve_members(
+    def resolve_members(
         self,
         pointers: tuple[ArtifactMemberPointer, ...],
     ) -> tuple[Path, ...]:
@@ -583,20 +587,41 @@ class ContentTeamHwpxService:
                 HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
                 "artifact member pointer set is incomplete",
             )
-        return tuple(
-            self._materialized_member_path(
-                pointer,
-                artifacts.get(pointer.artifact_id),
-                revisions.get(pointer.revision_id),
-            )
-            for pointer in pointers
-        )
+        resolved: dict[ArtifactMemberPointer, Path] = {}
+        member_indexes = {
+            revision_id: self._manifest_member_index(revision)
+            for revision_id, revision in revisions.items()
+        }
+        for pointer in pointers:
+            if pointer not in resolved:
+                resolved[pointer] = self._materialized_member_path(
+                    pointer,
+                    artifacts.get(pointer.artifact_id),
+                    revisions.get(pointer.revision_id),
+                    member_index=member_indexes[pointer.revision_id],
+                )
+        return tuple(resolved[pointer] for pointer in pointers)
+
+    @staticmethod
+    def _manifest_member_index(
+        revision: ArtifactRevisionRecord | None,
+    ) -> dict[str, tuple[dict[str, Any], ...]]:
+        files = revision.manifest.get("files") if revision is not None else None
+        groups: dict[str, list[dict[str, Any]]] = {}
+        for entry in files if isinstance(files, list) else ():
+            if isinstance(entry, dict) and isinstance(name := entry.get("file_name"), str):
+                groups.setdefault(name, []).append(entry)
+        # Keep duplicates so the leaf rejects ambiguity; a dict must not silently
+        # select the last member when an untrusted manifest repeats its name.
+        return {name: tuple(entries) for name, entries in groups.items()}
 
     @staticmethod
     def _materialized_member_path(
         pointer: ArtifactMemberPointer,
         artifact: ArtifactRecord | None,
         revision: ArtifactRevisionRecord | None,
+        *,
+        member_index: Mapping[str, tuple[dict[str, Any], ...]] | None = None,
     ) -> Path:
         relative = Path(pointer.member_name)
         if relative.is_absolute() or ".." in relative.parts or "\\" in pointer.member_name:
@@ -604,16 +629,14 @@ class ContentTeamHwpxService:
                 HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
                 "artifact member pointer is unsafe",
             )
-        files = revision.manifest.get("files") if revision is not None else None
-        entries = (
-            [
-                entry
-                for entry in files
-                if isinstance(entry, dict) and entry.get("file_name") == pointer.member_name
-            ]
-            if isinstance(files, list)
-            else []
-        )
+        if pointer.schema_ref is None and pointer.media_type not in {"image/png", "image/jpeg"}:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
+                "only existing canonical image pointers may omit a schema reference",
+            )
+        if member_index is None:
+            member_index = ContentTeamHwpxService._manifest_member_index(revision)
+        entries = member_index.get(pointer.member_name, ())
         if (
             artifact is None
             or revision is None
@@ -623,7 +646,10 @@ class ContentTeamHwpxService:
             or len(entries) != 1
             or entries[0].get("sha256") != pointer.expected_sha256
             or entries[0].get("media_type") != pointer.media_type
-            or entries[0].get("schema_ref") != pointer.schema_ref
+            or (
+                pointer.schema_ref is not None
+                and entries[0].get("schema_ref") != pointer.schema_ref
+            )
             or not isinstance(entries[0].get("bytes"), int)
             or not 0 < entries[0]["bytes"] <= pointer.max_bytes
         ):
@@ -647,7 +673,7 @@ class ContentTeamHwpxService:
             metadata = candidate.lstat()
             if (
                 not stat.S_ISREG(metadata.st_mode)
-                or candidate.resolve(strict=True).parent != resolved_root
+                or not candidate.resolve(strict=True).is_relative_to(resolved_root)
                 or metadata.st_size != expected_size
                 or sha256_file(candidate) != pointer.expected_sha256
             ):

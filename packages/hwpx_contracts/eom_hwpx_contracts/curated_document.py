@@ -158,7 +158,13 @@ def parse_curated_render_request(
     payload: bytes,
 ) -> CuratedHwpxRenderRequest | CuratedHwpxRenderRequestV2:
     """Select an explicitly released profile without reinterpreting historical V1."""
-    value = parse_json_object(payload)
+    return parse_curated_render_value(parse_json_object(payload))
+
+
+def parse_curated_render_value(
+    value: dict[str, object],
+) -> CuratedHwpxRenderRequest | CuratedHwpxRenderRequestV2:
+    """Validate an already decoded object without parsing the same bytes twice."""
     if value.get("schema_version") == "curated-hwpx-render-request/2.0":
         validate_contract("curated-render-request-v2", value)
         return CuratedHwpxRenderRequestV2.model_validate(value)

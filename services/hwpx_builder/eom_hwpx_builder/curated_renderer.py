@@ -11,9 +11,10 @@ from eom_hwpx_contracts.curated_document import (
     CuratedHwpxRenderRequestV2,
     CuratedHwpxRenderResult,
     CuratedHwpxRenderResultV2,
-    parse_curated_render_request,
+    parse_curated_render_value,
 )
-from eom_hwpx_contracts.validation import validate_contract
+from eom_hwpx_contracts.curated_mixed import CuratedMixedRenderRequest, CuratedMixedRenderResult
+from eom_hwpx_contracts.validation import parse_json_object, validate_contract
 
 from eom_hwpx_builder.curated_package_merge import merge_native_hwpx
 from eom_hwpx_builder.curated_resources import NativeMergeProfile, fail
@@ -22,14 +23,14 @@ from eom_hwpx_builder.native_hwp_converter import NativeHwpConverter
 from eom_hwpx_builder.util import canonical_json_bytes, sha256_bytes, sha256_file
 
 
-def _read_request(path: Path) -> bytes:
+def _read_request(path: Path, *, maximum: int = 256 * 1024) -> bytes:
     descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
     try:
         before = os.fstat(descriptor)
-        if not stat.S_ISREG(before.st_mode) or not 1 <= before.st_size <= 256 * 1024:
+        if not stat.S_ISREG(before.st_mode) or not 1 <= before.st_size <= maximum:
             fail("curated request file is invalid")
         with os.fdopen(os.dup(descriptor), "rb") as stream:
-            data = stream.read(256 * 1024 + 1)
+            data = stream.read(maximum + 1)
         after = os.fstat(descriptor)
 
         def identity(value: os.stat_result) -> tuple[int, ...]:
@@ -49,12 +50,19 @@ def _read_request(path: Path) -> bytes:
         os.close(descriptor)
 
 
-def _result_file(path: Path, result: CuratedHwpxRenderResult | CuratedHwpxRenderResultV2) -> None:
+def _result_file(
+    path: Path,
+    result: CuratedHwpxRenderResult | CuratedHwpxRenderResultV2 | CuratedMixedRenderResult,
+) -> None:
     value = result.model_dump(mode="json")
     schema = (
-        "curated-render-result-v2"
-        if isinstance(result, CuratedHwpxRenderResultV2)
-        else "curated-render-result"
+        "curated-render-result-v3"
+        if isinstance(result, CuratedMixedRenderResult)
+        else (
+            "curated-render-result-v2"
+            if isinstance(result, CuratedHwpxRenderResultV2)
+            else "curated-render-result"
+        )
     )
     validate_contract(schema, value)
     descriptor = os.open(
@@ -66,7 +74,7 @@ def _result_file(path: Path, result: CuratedHwpxRenderResult | CuratedHwpxRender
 
 def render_curated_workspace(
     request_path: Path, result_path: Path
-) -> CuratedHwpxRenderResult | CuratedHwpxRenderResultV2:
+) -> CuratedHwpxRenderResult | CuratedHwpxRenderResultV2 | CuratedMixedRenderResult:
     """No DB, network, NAS, arbitrary executable/output path or original-file write."""
     workspace = request_path.absolute().parent
     if (
@@ -77,7 +85,25 @@ def render_curated_workspace(
         or result_path.is_symlink()
     ):
         fail("curated fixed workspace boundary is invalid")
-    request = parse_curated_render_request(_read_request(request_path))
+    payload = _read_request(request_path, maximum=1024 * 1024)
+    value = parse_json_object(payload)
+    if value.get("schema_version") == "curated-hwpx-render-request/3.0":
+        from eom_hwpx_builder.curated_mixed_renderer import render_mixed_curated_document
+
+        validate_contract("curated-render-request-v3", value)
+        mixed = CuratedMixedRenderRequest.model_validate(value)
+        rendered = render_mixed_curated_document(workspace, mixed)
+        _result_file(result_path, rendered.result)
+        if rendered.result.status == "SUCCEEDED":
+            finalize_success_handoff(
+                workspace, result_path, output_file_names=rendered.handoff_files
+            )
+        else:
+            finalize_failure_result(workspace, result_path)
+        return rendered.result
+    if len(payload) > 256 * 1024:
+        fail("historical curated request byte budget exceeded")
+    request = parse_curated_render_value(value)
     request_sha = sha256_bytes(canonical_json_bytes(request.model_dump(mode="json")))
     inputs = workspace / "inputs"
     if inputs.is_symlink() or not inputs.is_dir():

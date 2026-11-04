@@ -8,6 +8,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
+from unittest.mock import Mock
 
 import pytest
 from eom_catalog_contracts import (
@@ -571,7 +572,7 @@ def test_content_team_image_components_become_ordered_pinned_sources() -> None:
         },
     }
 
-    sources = HwpxApplicationService._content_team_image_sources({"components": [image]})
+    sources = HwpxApplicationService.content_team_image_sources({"components": [image]})
 
     assert sources == [
         {
@@ -590,7 +591,7 @@ def test_content_team_image_components_become_ordered_pinned_sources() -> None:
         }
     ]
     with pytest.raises(HwpxManagerError, match="ordinals are ambiguous"):
-        HwpxApplicationService._content_team_image_sources({"components": [image, image]})
+        HwpxApplicationService.content_team_image_sources({"components": [image, image]})
 
 
 def test_content_team_material_requirement_is_loaded_from_exact_component_metadata() -> None:
@@ -1006,7 +1007,10 @@ def test_content_team_completed_v3_build_replays_exact_typed_receipt() -> None:
     assert error.value.code == HwpxManagerErrorCode.HWPX_RESULT_INVALID
 
 
-def test_content_team_batch_member_resolver_uses_two_indexed_queries(tmp_path: Path) -> None:
+@pytest.mark.parametrize("nested", [False, True])
+def test_content_team_batch_member_resolver_uses_two_indexed_queries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, nested: bool
+) -> None:
     files: list[Path] = []
     artifacts: list[SimpleNamespace] = []
     revisions: list[SimpleNamespace] = []
@@ -1014,7 +1018,9 @@ def test_content_team_batch_member_resolver_uses_two_indexed_queries(tmp_path: P
     for index in (1, 2):
         root = tmp_path / str(index)
         root.mkdir()
-        member = root / f"member-{index}.json"
+        relative = f"images/member-{index}.json" if nested else f"member-{index}.json"
+        member = root / relative
+        member.parent.mkdir(exist_ok=True)
         member.write_text(f'{{"index":{index}}}', encoding="utf-8")
         digest = sha256_file(member)
         artifact_id = f"artifact_{index:032x}"
@@ -1030,7 +1036,7 @@ def test_content_team_batch_member_resolver_uses_two_indexed_queries(tmp_path: P
                 manifest={
                     "files": [
                         {
-                            "file_name": member.name,
+                            "file_name": relative,
                             "sha256": digest,
                             "media_type": "application/json",
                             "schema_ref": "eom.test/member/1.0",
@@ -1044,7 +1050,7 @@ def test_content_team_batch_member_resolver_uses_two_indexed_queries(tmp_path: P
             ArtifactMemberPointer(
                 artifact_id=artifact_id,
                 revision_id=revision_id,
-                member_name=member.name,
+                member_name=relative,
                 expected_sha256=digest,
                 media_type="application/json",
                 schema_ref="eom.test/member/1.0",
@@ -1069,8 +1075,57 @@ def test_content_team_batch_member_resolver_uses_two_indexed_queries(tmp_path: P
     service = object.__new__(ContentTeamHwpxService)
     service.sessions = lambda: session  # type: ignore[assignment]
 
-    assert service._resolve_members(tuple(pointers)) == tuple(files)
+    hashed = Mock(wraps=sha256_file)
+    monkeypatch.setattr("eom_hwpx_manager.content_team_service.sha256_file", hashed)
+    assert service.resolve_members((*pointers, pointers[0])) == (*files, files[0])
     assert session.calls == 2
+    assert hashed.call_count == 2
+
+
+@pytest.mark.parametrize("media", ["image/png", "image/jpeg", "application/json"])
+def test_schema_less_member_compatibility_is_limited_to_existing_canonical_media(
+    tmp_path: Path, media: str
+) -> None:
+    # This checks pointer metadata compatibility, not image decoding. The pinned
+    # media's actual format and dimensions are checked at the Builder boundary.
+    member = tmp_path / "legacy-image"
+    member.write_bytes(b"bounded immutable media fixture")
+    artifact_id, revision_id = "artifact_" + "1" * 32, "rev_" + "2" * 32
+    pointer = ArtifactMemberPointer(
+        artifact_id=artifact_id,
+        revision_id=revision_id,
+        member_name=member.name,
+        expected_sha256=sha256_file(member),
+        media_type=media,
+        schema_ref=None,
+        max_bytes=1024,
+    )
+    artifact = SimpleNamespace(approved=True)
+    revision = SimpleNamespace(
+        approved=True,
+        logical_artifact_id=artifact_id,
+        nas_path=str(tmp_path),
+        manifest={
+            "files": [
+                {
+                    "file_name": member.name,
+                    "sha256": pointer.expected_sha256,
+                    "media_type": media,
+                    "bytes": member.stat().st_size,
+                }
+            ]
+        },
+    )
+    if media == "application/json":
+        with pytest.raises(HwpxManagerError, match="only existing canonical image"):
+            ContentTeamHwpxService._materialized_member_path(pointer, artifact, revision)
+    else:
+        assert (
+            ContentTeamHwpxService._materialized_member_path(pointer, artifact, revision) == member
+        )
+        revision.manifest["files"] *= 2
+        with pytest.raises(HwpxManagerError, match="stale or invalid"):
+            ContentTeamHwpxService._materialized_member_path(pointer, artifact, revision)
 
 
 def test_runner_fails_closed_before_queue_access_when_manager_privileges_are_missing(

@@ -30,6 +30,7 @@ from PIL import Image
 
 from eom_hwpx_builder.archive import read_package
 from eom_hwpx_builder.curated_package_merge import (
+    NativeDocument,
     merge_native_hwpx,
     parse_native_document,
     write_native_package,
@@ -71,23 +72,38 @@ def _images(
     return result
 
 
-def render_native_item_document(
-    workspace: Path, request: NativeItemRenderRequest, output: Path
-) -> tuple[int, int, int]:
-    """Materialize one local segment; no registration, DB, source mutation or model work."""
-    expected_events = expected_native_item_events(request)
-    template = workspace / "template.hwpx"
+def prepare_native_item_template(template: Path, expected_sha256: str) -> NativeDocument:
+    """Capture the reviewed immutable template once for a multi-item render."""
     if (
         sha256_bytes(read_stable_local_file(template, max_bytes=50 * 1024 * 1024))
-        != request.template_sha256
+        != expected_sha256
     ):
         fail("native Item template hash differs")
     package = read_package(template)
-    if package.package_sha256 != request.template_sha256:
+    if package.package_sha256 != expected_sha256:
         fail("native Item template changed during read")
     document = parse_native_document(package)
     if len(document.sections) != 1 or document.binaries:
         fail("native Item template shape differs from the reviewed release")
+    return document
+
+
+def render_native_item_document(
+    workspace: Path,
+    request: NativeItemRenderRequest,
+    output: Path,
+    *,
+    prepared_template: NativeDocument | None = None,
+) -> tuple[int, int, int]:
+    """Materialize one local segment; no registration, DB, source mutation or model work."""
+    expected_events = expected_native_item_events(request)
+    document = prepared_template or prepare_native_item_template(
+        workspace / "template.hwpx",
+        request.template_sha256,
+    )
+    if document.package.package_sha256 != request.template_sha256:
+        fail("native Item prepared template identity differs")
+    package = document.package
     original_section = document.sections[0][1]
     header = copy.deepcopy(document.header)
     nodes = NativeItemNodes(original_section, header)
@@ -175,7 +191,7 @@ def render_native_item_document(
     payloads["Preview/PrvText.txt"] = "\r\n".join(
         value for kind, value in expected_events if kind == "text"
     ).encode()
-    candidate = workspace / "native-item.candidate.hwpx"
+    candidate = workspace / f"native-item-{request.item_number:03d}.candidate.hwpx"
     write_native_package(payloads, candidate)
     # Reuse the native package/reference/relocation checks, not a parallel ZIP assembler.
     merge_native_hwpx((candidate,), output, profile=NativeMergeProfile.EDITABLE_V2)

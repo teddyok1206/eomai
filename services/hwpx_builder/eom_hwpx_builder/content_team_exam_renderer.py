@@ -36,20 +36,16 @@ from pydantic import ValidationError
 
 from eom_hwpx_builder.analyzer import analyze_package, resolve_part
 from eom_hwpx_builder.archive import FIXED_ZIP_TIMESTAMP, SafePackage, read_package
-from eom_hwpx_builder.content_team_handoff import (
-    EXPECTED_MEMBER_HASHES,
-    inspect_content_team_handoff,
-)
 from eom_hwpx_builder.content_team_images import inject_content_team_images
 from eom_hwpx_builder.content_team_renderer import (
     MAX_IMAGE_BYTES,
     MAX_JSON_BYTES,
     MAX_MARKDOWN_BYTES,
-    _external_render,
-    _extract_runtime,
-    _load_draft,
     _read_regular,
     _workspace_path,
+    load_content_team_draft,
+    prepare_content_team_runtime,
+    render_content_team_document,
 )
 from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
 from eom_hwpx_builder.handoff import (
@@ -884,26 +880,7 @@ def render_content_team_exam_workspace(
             "exam render request is invalid",
         ) from exc
 
-    handoff_archive = _workspace_path(workspace, request.handoff.archive_file)
-    _read_regular(
-        handoff_archive,
-        max_bytes=MAX_HANDOFF_BYTES,
-        expected_sha256=request.handoff.archive_sha256,
-    )
-    evidence = inspect_content_team_handoff(handoff_archive)
-    if (
-        evidence.entry_count != request.handoff.entry_count
-        or evidence.uncompressed_bytes != request.handoff.uncompressed_bytes
-        or tuple((row.purpose, row.sha256, row.size) for row in evidence.members)
-        != tuple((row.purpose, row.sha256, row.size) for row in request.handoff.members)
-        or {row.purpose: row.sha256 for row in evidence.members} != dict(EXPECTED_MEMBER_HASHES)
-    ):
-        raise HwpxError(
-            HwpxErrorCode.HWPX_TEMPLATE_HASH_MISMATCH,
-            "content-team handoff evidence differs from the exam request",
-        )
-    runtime = _workspace_path(workspace, "runtime", must_exist=False)
-    template = _extract_runtime(handoff_archive, evidence, runtime)
+    prepared = prepare_content_team_runtime(workspace, request.handoff)
     item_output_root = _workspace_path(workspace, "item-output", must_exist=False)
     item_output_root.mkdir(mode=0o700)
     item_outputs: list[Path] = []
@@ -927,7 +904,7 @@ def render_content_team_exam_workspace(
             if isinstance(item, ContentTeamExamItemSourceV3)
             else "eom.assessment.item-content/2.0"
         )
-        draft = _load_draft(json_bytes, source_schema_ref=source_schema_ref)
+        draft = load_content_team_draft(json_bytes, source_schema_ref=source_schema_ref)
         if serialize_content_team_markdown(draft) != markdown_bytes:
             raise HwpxError(
                 HwpxErrorCode.HWPX_TEMPLATE_HASH_MISMATCH,
@@ -953,9 +930,9 @@ def render_content_team_exam_workspace(
         elif isinstance(item, ContentTeamExamItemSourceV2):
             rendered_score_display = _PLANNED_SCORE_DISPLAY[item.points_milli]
         output = item_output_root / f"item-{item.position:03d}.hwpx"
-        report = _external_render(
-            runtime,
-            template,
+        report = render_content_team_document(
+            prepared.runtime,
+            prepared.template,
             markdown_bytes,
             output,
             draft,

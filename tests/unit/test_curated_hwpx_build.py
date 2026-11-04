@@ -12,6 +12,9 @@ from eom_catalog_contracts import (
     CuratedDocumentAssemblyManifestV1,
     CuratedExternalDocumentPlacement,
 )
+from eom_catalog_service.curated_document_assembly_models import (
+    CuratedDocumentAssemblyRevisionRecord,
+)
 from eom_hwpx_contracts import (
     CONTENT_TEAM_HANDOFF_MEMBERS,
     ContentTeamHandoffSnapshot,
@@ -253,6 +256,10 @@ def test_receipt_rejects_a_different_execution_or_incomplete_output(
 
 def test_curated_storage_has_real_assembly_fk_unique_keys_and_partial_indexes() -> None:
     table = HwpxCuratedBuildRecord.__table__
+    assert (
+        table.metadata.tables["curated_document_assembly_revisions"]
+        is CuratedDocumentAssemblyRevisionRecord.__table__
+    )
     ddl = str(CreateTable(table).compile(dialect=postgresql.dialect()))
     assert "BYTEA" not in ddl and "item_revisions" not in ddl
     assert any(

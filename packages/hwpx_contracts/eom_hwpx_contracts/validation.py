@@ -15,6 +15,8 @@ SCHEMA_FILES = {
     "curated-render-result": "hwpx-curated-render-result-v1.schema.json",
     "curated-render-request-v2": "hwpx-curated-render-v2.schema.json",
     "curated-render-result-v2": "hwpx-curated-render-result-v2.schema.json",
+    "curated-render-request-v3": "hwpx-curated-render-v3.schema.json",
+    "curated-render-result-v3": "hwpx-curated-render-result-v3.schema.json",
     "native-hwp-evidence": "hwpx-native-hwp-evidence-v1.schema.json",
     "native-hwp-bundle": "hwpx-native-hwp-bundle-v1.schema.json",
     "native-item-render-request": "hwpx-native-item-render-request-v1.schema.json",

@@ -333,3 +333,11 @@ class FixedContentTeamBuilderAdapter(_FixedApplicationBuilderAdapter):
     operation = "render-content-team"
     unit_template = "eom-hwpx-content-team"
     log_name = "hwpx-render-content-team"
+
+
+class FixedCuratedBuilderAdapter(_FixedApplicationBuilderAdapter):
+    """Execute a saved mixed-source assembly in its own fixed file-only unit."""
+
+    operation = "render-curated"
+    unit_template = "eom-hwpx-curated"
+    log_name = "hwpx-render-curated"

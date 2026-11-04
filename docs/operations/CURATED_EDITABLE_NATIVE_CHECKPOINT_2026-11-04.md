@@ -141,3 +141,56 @@ metadata DDL·head 0072를 읽었고 설치 RECORD 2,386개 파일의 bytes를 �
 
 검사에만 사용한 guarded 임시 DB는 공식 cleanup으로 제거했다. 운영 DB·NAS 정본은
 변경하지 않았고, 기존 창작/INDEX owner의 실행 PID도 이 단계에서 바꾸지 않았다.
+
+## 원본·가변 정본·콘텐츠팀 문항의 실제 혼합 출력
+
+local successor `curated-hwpx-render-request/3.0`과 result/3.0은 native 문서,
+canonical Item/1.0, content-team Item/2.0·3.0을 순서대로 함께 받는다. JSON Schema를 먼저
+추가하고 같은 bytes를 Builder wheel resource에 둔다. source와 rendered segment SHA를
+분리하며 input-plan SHA, 표·수식 수, 실패 placement를 보고한다. 기존 V1/V2의 schema와
+의미는 그대로다. 새 private application RPC를 활성화한 것은 아니다.
+
+Manager `CuratedInputMaterializer`는 source/effective/recovery·Markdown과 실제 Item Revision
+component를 대조하고 원본/JSON과 그림을 두 단계의 batch member 조회로 읽는다.
+각 pointer를 확인한 뒤 같은 local PNG만 공유한다. 공개 source/effective derivation을 다시
+대조하고, registered schema 2/3을 generic/1로 재해석하지 않는다. source JSON을 build row에
+넣지 않는다. 초기 구현의 반복된 포인터 hash는 map으로 한 번만 처리하며 nested member는
+root 내부·symlink 없는 경우만 허용한다. schema 없는 옛 canonical image pointer는 기존
+media/hash 계약을 유지하고 문서/JSON에서 schema 검사를 생략하지 않는다.
+
+실제 원본 10310·10318 HWP와 합성 canonical 두 형식·content-team 두 형식을 합쳐
+6입력/6section HWPX를 생성했다. 입력 순서는 1–6이며 수식 18개·native tbl 25개·binary
+8개다. tbl 수에는 layout table이 포함되며 25개 콘텐츠 표라는 뜻이 아니다. 원본 hash는
+변경되지 않았다. handoff/runtime과 generic template는 각 합본에서 한 번 준비했다.
+
+첫 혼합 output은 별도 Office sandbox에서 열렸지만 시각 확인에서 고정 template의 `1.`과
+새 번호가 겹치고 nested table의 전체 폭·낮은 label cell 때문에 일부 텍스트가 가려졌다.
+새 mixed profile의 `curated_editorial_layout.py`에서만 고정 prefix를 제거하고 width를
+바깥 cell 안으로 맞추며 shared row-span grid의 높이를 내용·그림에서 계산했다. derived
+line cache도 제거했다. 전후 비교는 텍스트·수식·image viewport와 비-layout 속성을
+보존한다. 기존 single/exam renderer와 원본 HWP/HWPX의 geometry는 바꾸지 않았다.
+
+수정 후 동일 입력의 HWPX SHA는
+`sha256:c3e55322993c6737faf672680e660ce434d817082dd0410cf0135cd13b4544ba`,
+size 427,858 bytes다. 현재 Office sandbox에서도 8page로 열렸고 page 6의 3열 header·
+전체 데이터, page 7의 별도 두 그림과 편집 가능한 `(가)/(나)`가 보인다. 두 중복 번호도
+없다. PDF 확인은 Hancom 수동 검수·교육 품질 승인·HTTPS 다운로드의 대체 증거가 아니다.
+
+local 실행 증거는 `/tmp/eom-curated-mixed-native-20261104-u37o_3wm/`, Office PDF/PNG는
+`/tmp/eom-mixed-native-office-20261104-02/`다. 첫 결과와 시각 오류 진단도 각각
+`/tmp/eom-curated-mixed-native-20261104-yxq2l2ma/`,
+`/tmp/eom-mixed-native-office-20261104-01/`에 남겼다. 이 파일들은 개발 진단이며 정식
+사용자 NAS delivery가 아니다. 새 모델 추론·문항 생성·운영 migration/restart는 없었다.
+
+혼합 출력과 materialization 집중 검사 19개가 통과했다. native/canonical/CTI와 Manager,
+영속 metadata·의존·문맥을 포함한 회귀 503개도 통과했다. 기존 opt-in root ownership 1개는
+기본 실행에서 제외했다. 추가 member-index 변경은 관련 Manager 회귀로 별도 확인한다.
+좁은 module graph에서 빠졌던
+DDL test의 실제 FK target import를 명시해 test-order 의존을 제거했다. 테스트용 가짜 FK를
+만들거나 운영 DDL을 완화하지 않았다. 같은 입력 re-render의 SHA 동일, replay 재실행 거부,
+손상된 blueprint·image·Markdown·symlink의 실패 위치와 부분 성공 미발행을 확인했다.
+
+여전히 남은 범위는 durable queue의 실제 Builder dispatch·중단 결과 복구·Artifact commit
+adapter, Catalog application/API/BFF·DB 배치 탭의 제작·상태·다운로드 연결, fixed unit·권한·
+설치본·호환 운영 배포와 인증된 실제 saved-assembly build/download다. 이 단계의 port와
+local 파일 검증을 전체 기능 완료로 간주하지 않으며 목표는 ACTIVE다.

@@ -308,9 +308,7 @@ class ContentTeamExamHwpxService(ContentTeamHwpxService):
                 )
                 for image in item.images
             )
-        resolved_members = self._resolve_members(
-            tuple(pointer for _key, pointer in member_requests)
-        )
+        resolved_members = self.resolve_members(tuple(pointer for _key, pointer in member_requests))
         member_paths = {
             key: path
             for (key, _pointer), path in zip(member_requests, resolved_members, strict=True)
