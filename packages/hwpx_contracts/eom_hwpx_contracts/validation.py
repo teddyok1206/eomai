@@ -44,6 +44,7 @@ SCHEMA_FILES = {
     "kordoc-build-result": "hwpx-kordoc-build-result-v1.schema.json",
     "kordoc-bridge-report": "hwpx-kordoc-bridge-report-v1.schema.json",
     "manager-download": "hwpx-manager-download-v1.schema.json",
+    "manager-download-v2": "hwpx-manager-download-v2.schema.json",
 }
 
 

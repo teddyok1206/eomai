@@ -1,0 +1,34 @@
+[Unit]
+Description=EOM isolated editable mixed HWPX renderer workspace %i
+After=local-fs.target
+
+[Service]
+Type=oneshot
+User=eom-hwpx
+Group=eom-hwpx
+WorkingDirectory=/srv/eom/hwpx-workspaces/%i
+Environment=HOME=/var/lib/eom-hwpx
+ExecStart=/srv/eom/conda/envs/eom-hwpx/bin/eom-hwpx render-curated --request request.json --result result.json
+
+NoNewPrivileges=true
+PrivateNetwork=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+CapabilityBoundingSet=
+UMask=0077
+
+InaccessiblePaths=/mnt/nas /root/.codex /srv/eom/worker-homes /var/run/docker.sock
+InaccessiblePaths=/etc/eom /home/eom/EOM /home/eom/EOMIS /usr/local/bin/codex
+ReadWritePaths=/srv/eom/hwpx-workspaces/%i
+
+MemoryMax=2G
+CPUQuota=200%
+TasksMax=64
+TimeoutStartSec=900

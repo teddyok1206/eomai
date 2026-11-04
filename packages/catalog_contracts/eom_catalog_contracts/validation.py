@@ -322,6 +322,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:87c66631c2bc6474ec1a58f24b76d8b46764b201a75e91fc217c137d38a0d680",
         ),
+        "catalog-curated-document-delivery-request-v1": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-curated-document-delivery-request-v1.schema.json",
+            "resources/catalog-application/catalog-curated-document-delivery-request-v1.schema.json",
+            "1.0",
+            "sha256:6f52f298965d797a624bc4dd28bd0cd1dbc352e684d7f2f8d847ec59fc653f9b",
+        ),
+        "catalog-curated-document-delivery-response-v1": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-curated-document-delivery-response-v1.schema.json",
+            "resources/catalog-application/catalog-curated-document-delivery-response-v1.schema.json",
+            "1.0",
+            "sha256:c1398657c32010b9665134c635c825e6945cecc216506af892b0f2d9120cd6cf",
+        ),
         "catalog-curated-document-assembly-read-response-v1": CatalogSchemaResource(
             "schemas/catalog-application/catalog-curated-document-assembly-read-response-v1.schema.json",
             "resources/catalog-application/catalog-curated-document-assembly-read-response-v1.schema.json",

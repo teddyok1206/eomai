@@ -16,6 +16,10 @@ from eom_hwpx_contracts import (
     HwpxManagerDownloadResponse,
     validate_contract,
 )
+from eom_hwpx_contracts.curated_download import (
+    CuratedManagerDownloadRequest,
+    CuratedManagerDownloadResponse,
+)
 from eom_hwpx_manager.download_server import MANAGER_SOCKET, MAX_HEADER_BYTES
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -56,9 +60,18 @@ class HwpxDownloadClient:
         self.socket_path = socket_path
 
     def download(self, build_id: str) -> ProxiedHwpxDownload:
-        request = HwpxManagerDownloadRequest(build_id=build_id)
+        return self._download(HwpxManagerDownloadRequest(build_id=build_id))
+
+    def download_curated(self, build_id: str) -> ProxiedHwpxDownload:
+        return self._download(CuratedManagerDownloadRequest(build_id=build_id))
+
+    def _download(
+        self, request: HwpxManagerDownloadRequest | CuratedManagerDownloadRequest
+    ) -> ProxiedHwpxDownload:
+        curated = isinstance(request, CuratedManagerDownloadRequest)
+        contract = "manager-download-v2" if curated else "manager-download"
         payload = request.model_dump(mode="json")
-        validate_contract("manager-download", payload, definition="request")
+        validate_contract(contract, payload, definition="request")
         try:
             metadata = self.socket_path.lstat()
         except OSError as exc:
@@ -81,8 +94,10 @@ class HwpxDownloadClient:
             value: Any = json.loads(raw)
             if not isinstance(value, dict):
                 raise ValueError
-            validate_contract("manager-download", value, definition="response")
-            response = HwpxManagerDownloadResponse.model_validate(value)
+            validate_contract(contract, value, definition="response")
+            response = (
+                CuratedManagerDownloadResponse if curated else HwpxManagerDownloadResponse
+            ).model_validate(value)
             if response.status == "ERROR":
                 self._raise_manager_error(response.error_code)
             assert response.filename is not None

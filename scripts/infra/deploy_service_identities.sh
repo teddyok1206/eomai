@@ -125,7 +125,7 @@ done
 if systemctl list-units --no-legend --state=activating,active,deactivating \
   'eom-worker-*@*.service' 'eom-worker-auth-*.service' \
   'eom-hwpx-kordoc@*.service' 'eom-hwpx-builder@*.service' \
-  'eom-hwpx-content-team@*.service' | grep -q .; then
+  'eom-hwpx-content-team@*.service' 'eom-hwpx-curated@*.service' | grep -q .; then
   fail "a fixed child unit is active"
 fi
 [[ -f ${LEASE_GUARD} && ! -L ${LEASE_GUARD} ]] || fail "worker lease guard is unsafe"
@@ -163,6 +163,9 @@ install -o root -g root -m 0644 \
 install -o root -g root -m 0644 \
   "${REPOSITORY}/infra/systemd/eom-hwpx-content-team@.service" \
   /etc/systemd/system/eom-hwpx-content-team@.service
+install -o root -g root -m 0644 \
+  "${REPOSITORY}/infra/systemd/eom-hwpx-curated@.service" \
+  /etc/systemd/system/eom-hwpx-curated@.service
 "${REPOSITORY}/scripts/catalog/install_office_document_converter.sh"
 install -o root -g root -m 0644 \
   "${REPOSITORY}/infra/systemd/eom-office-converter@.service" \
@@ -174,6 +177,7 @@ systemd-analyze verify \
   "${REPOSITORY}/infra/systemd/eom-catalog-application-runner.service" \
   "${REPOSITORY}/infra/systemd/eom-hwpx-application-runner.service" \
   "${REPOSITORY}/infra/systemd/eom-hwpx-content-team@.service" \
+  "${REPOSITORY}/infra/systemd/eom-hwpx-curated@.service" \
   "${REPOSITORY}/infra/systemd/eom-office-converter@.service"
 
 systemctl daemon-reload
@@ -218,6 +222,9 @@ pkcheck --action-id org.freedesktop.systemd1.manage-units --process "${CATALOG_P
   --detail verb start
 pkcheck --action-id org.freedesktop.systemd1.manage-units --process "${HWPX_PID}" \
   --detail unit eom-hwpx-content-team@hwpxbuild_0123456789abcdef0123456789abcdef.service \
+  --detail verb start
+pkcheck --action-id org.freedesktop.systemd1.manage-units --process "${HWPX_PID}" \
+  --detail unit eom-hwpx-curated@hwpxbuild_0123456789abcdef0123456789abcdef.service \
   --detail verb start
 if pkcheck --action-id org.freedesktop.systemd1.manage-units --process "${WORKFLOW_PID}" \
   --detail unit eom-hwpx-builder@hwpxbuild_0123456789abcdef0123456789abcdef.service \

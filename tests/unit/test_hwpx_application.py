@@ -691,14 +691,14 @@ def test_runner_service_continues_after_one_terminal_build_failure(
             pass
 
     handlers: dict[int, Any] = {}
-    calls: list[bool] = []
+    calls: list[int] = []
 
     def remember_handler(number: int, handler: Any) -> None:
         handlers[number] = handler
 
-    def cycle(*, verify_privileges: bool, prefer_exam: bool) -> int:
+    def cycle(*, verify_privileges: bool, queue_offset: int) -> int:
         assert verify_privileges is False
-        calls.append(prefer_exam)
+        calls.append(queue_offset)
         if len(calls) == 1:
             return 1
         handlers[runner.signal.SIGTERM](runner.signal.SIGTERM, None)
@@ -709,13 +709,25 @@ def test_runner_service_continues_after_one_terminal_build_failure(
     monkeypatch.setattr(runner, "RegistryService", lambda _engine: object())
     monkeypatch.setattr(runner, "HwpxApplicationService", FakeService)
     monkeypatch.setattr(runner, "ExamHwpxApplicationService", FakeExamService)
+    from eom_hwpx_manager.curated_application_service import (
+        CuratedRecoveryResult,
+        CuratedRecoveryState,
+    )
+
+    monkeypatch.setattr(
+        runner,
+        "build_curated_application",
+        lambda _engine: SimpleNamespace(
+            recover_interrupted=lambda: CuratedRecoveryResult(CuratedRecoveryState.NONE)
+        ),
+    )
     monkeypatch.setattr(runner, "HwpxDownloadServer", FakeDownloadServer)
     monkeypatch.setattr(runner, "run_once", cycle)
     monkeypatch.setattr(runner.signal, "signal", remember_handler)
     monkeypatch.setattr(runner.time, "sleep", lambda _seconds: None)
 
     assert runner.serve(0.25) == 0
-    assert calls == [False, True]
+    assert calls == [0, 1]
 
 
 def test_runner_processes_assessment_queue_after_item_queue_is_idle(
@@ -751,6 +763,7 @@ def test_runner_processes_assessment_queue_after_item_queue_is_idle(
     monkeypatch.setattr(runner, "RegistryService", lambda _engine: object())
     monkeypatch.setattr(runner, "HwpxApplicationService", IdleItemService)
     monkeypatch.setattr(runner, "ExamHwpxApplicationService", AssessmentService)
+    monkeypatch.setattr(runner, "build_curated_application", lambda _engine: object())
 
     assert runner.run_once() == 0
     assert "hwpxbuild_" + "1" * 32 + ":SUCCEEDED" in capsys.readouterr().out
@@ -794,12 +807,23 @@ def test_runner_preference_alternates_queue_precedence(
     monkeypatch.setattr(runner, "HwpxApplicationService", ItemService)
     monkeypatch.setattr(runner, "ExamHwpxApplicationService", AssessmentService)
 
-    assert runner.run_once(prefer_exam=False) == 0
+    monkeypatch.setattr(
+        runner,
+        "build_curated_application",
+        lambda _engine: SimpleNamespace(
+            process_next=lambda: SimpleNamespace(
+                build_id="hwpxbuild_" + "3" * 32, state="SUCCEEDED"
+            )
+        ),
+    )
+    assert runner.run_once(queue_offset=0) == 0
     assert calls == ["item"]
     calls.clear()
-    assert runner.run_once(prefer_exam=True) == 0
+    assert runner.run_once(queue_offset=1) == 0
     assert calls == ["assessment"]
     assert "queue=assessment" in capsys.readouterr().out
+    assert runner.run_once(queue_offset=2) == 0
+    assert "queue=curated" in capsys.readouterr().out
 
 
 def test_assessment_build_request_identity_pins_content_team_handoff_revision() -> None:

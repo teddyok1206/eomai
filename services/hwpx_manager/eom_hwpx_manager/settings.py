@@ -35,6 +35,9 @@ class HwpxSettings:
         "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91"
     )
     timeout_seconds: int = 180
+    native_hwp_converter_bundle_sha256: str = (
+        "sha256:dd88564a9f0c569264eb4b87820b7bdf04dcd9b2990c414f3301ec51be9713fb"
+    )
     memory_max: str = "1G"
 
     @classmethod

@@ -18,6 +18,9 @@ from eom_catalog_contracts.curated_document_assembly_draft import (
     PastExamItemPlacement,
     RegisteredItemPlacement,
 )
+from eom_hwpx_contracts.curated_build import CuratedHwpxBuildInput
+from eom_hwpx_contracts.curated_document import CuratedHwpConverterSnapshot
+from eom_hwpx_contracts.models import ContentTeamHandoffSnapshot
 from eom_identifiers import content_sha256
 from eom_identity_service.models import OperatorRecord
 from eom_identity_service.repository import effective_permissions
@@ -28,6 +31,7 @@ from sqlalchemy import Engine, func, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from eom_catalog_service.curated_delivery_inputs import CuratedDeliveryInputs
 from eom_catalog_service.curated_document_assembly_item import (
     reauthorize_curated_registered_items,
 )
@@ -59,6 +63,7 @@ class CuratedDocumentAssemblyService:
     """Persist only pinned inputs; HWPX delivery has its own later admission."""
 
     def __init__(self, engine: Engine, media: ExternalItemDocumentMediaService) -> None:
+        self.engine = engine
         self.sessions = build_session_factory(engine)
         self.media = media
 
@@ -196,6 +201,18 @@ class CuratedDocumentAssemblyService:
             ):
                 raise CuratedDocumentAssemblyError("CURATED_SOURCE_PERMISSION_DENIED")
             return manifest
+
+    def pin_delivery_inputs(
+        self,
+        manifest: CuratedDocumentAssemblyManifestV1,
+        *,
+        actor: ActorContext,
+        handoff: ContentTeamHandoffSnapshot,
+        converter: CuratedHwpConverterSnapshot,
+    ) -> CuratedHwpxBuildInput:
+        return CuratedDeliveryInputs(
+            self.engine, assemblies=self, handoff=handoff, converter=converter
+        ).pin_inputs(manifest, actor=actor)
 
     def read_for_delivery(
         self,

@@ -16,6 +16,7 @@ import unicodedata
 import zipfile
 from collections import Counter
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import NoReturn
 from urllib.parse import urlparse
@@ -99,7 +100,31 @@ class ContentTeamOutputExpectation:
 
 
 @dataclass(frozen=True)
-class _PackageSnapshot:
+class PublicationPackageLimits:
+    max_package_bytes: int = MAX_PACKAGE_BYTES
+    max_entry_count: int = MAX_ENTRY_COUNT
+    max_member_bytes: int = MAX_MEMBER_BYTES
+    max_uncompressed_bytes: int = MAX_UNCOMPRESSED_BYTES
+
+
+EDITORIAL_PUBLICATION_LIMITS = PublicationPackageLimits()
+
+
+class PublicationProfile(StrEnum):
+    EDITORIAL = "EDITORIAL"
+    NATIVE = "NATIVE"
+
+
+CURATED_PUBLICATION_LIMITS = PublicationPackageLimits(
+    max_package_bytes=256 * 1024**2,
+    max_entry_count=10000,
+    max_member_bytes=MAX_MEMBER_BYTES,
+    max_uncompressed_bytes=256 * 1024**2,
+)
+
+
+@dataclass(frozen=True)
+class PublicationPackageSnapshot:
     members: dict[str, bytes]
     names: tuple[str, ...]
     output_sha256: str
@@ -152,7 +177,7 @@ def _stat_identity(value: os.stat_result) -> tuple[int, int, int, int, int, int]
     )
 
 
-def _stable_bytes(path: Path, expected_sha256: str) -> bytes:
+def _stable_bytes(path: Path, expected_sha256: str, limits: PublicationPackageLimits) -> bytes:
     flags = os.O_RDONLY | os.O_CLOEXEC | getattr(os, "O_NOFOLLOW", 0)
     try:
         descriptor = os.open(path, flags)
@@ -163,7 +188,7 @@ def _stable_bytes(path: Path, expected_sha256: str) -> bytes:
         if (
             not stat.S_ISREG(before.st_mode)
             or before.st_nlink != 1
-            or not 0 < before.st_size <= MAX_PACKAGE_BYTES
+            or not 0 < before.st_size <= limits.max_package_bytes
         ):
             _fail("content-team HWPX output metadata is unsafe")
         payload = bytearray()
@@ -199,14 +224,16 @@ def _safe_member_name(name: str) -> None:
         _fail("content-team HWPX contains an unsafe member name")
 
 
-def _read_package(payload: bytes, expected_sha256: str) -> _PackageSnapshot:
+def _read_package(
+    payload: bytes, expected_sha256: str, limits: PublicationPackageLimits
+) -> PublicationPackageSnapshot:
     try:
         archive = zipfile.ZipFile(io.BytesIO(payload))
     except (OSError, zipfile.BadZipFile):
         _fail("content-team HWPX is not a valid ZIP package")
     with archive:
         infos = archive.infolist()
-        if not 6 <= len(infos) <= MAX_ENTRY_COUNT:
+        if not 6 <= len(infos) <= limits.max_entry_count:
             _fail("content-team HWPX entry count is outside the bounded profile")
         names: set[str] = set()
         folded: set[str] = set()
@@ -222,10 +249,10 @@ def _read_package(payload: bytes, expected_sha256: str) -> _PackageSnapshot:
             file_type = stat.S_IFMT(mode)
             if file_type not in {0, stat.S_IFREG, stat.S_IFDIR} or stat.S_ISLNK(mode):
                 _fail("content-team HWPX contains a special archive member")
-            if info.file_size > MAX_MEMBER_BYTES:
+            if info.file_size > limits.max_member_bytes:
                 _fail("content-team HWPX member exceeds its size limit")
             total += info.file_size
-            if total > MAX_UNCOMPRESSED_BYTES:
+            if total > limits.max_uncompressed_bytes:
                 _fail("content-team HWPX exceeds its uncompressed size limit")
             if info.file_size > 1024 and info.file_size / max(info.compress_size, 1) > (
                 MAX_COMPRESSION_RATIO
@@ -245,7 +272,7 @@ def _read_package(payload: bytes, expected_sha256: str) -> _PackageSnapshot:
         actual_sha256 = f"sha256:{hashlib.sha256(payload).hexdigest()}"
         if actual_sha256 != expected_sha256:
             _fail("content-team HWPX snapshot hash changed during package parsing")
-        return _PackageSnapshot(
+        return PublicationPackageSnapshot(
             members=members,
             names=tuple(info.filename for info in infos),
             output_sha256=actual_sha256,
@@ -253,14 +280,46 @@ def _read_package(payload: bytes, expected_sha256: str) -> _PackageSnapshot:
         )
 
 
-def _parse_xml(data: bytes, member_name: str) -> ElementTree.Element:
+def read_publication_package(
+    path: Path,
+    expected_sha256: str,
+    *,
+    limits: PublicationPackageLimits = EDITORIAL_PUBLICATION_LIMITS,
+) -> PublicationPackageSnapshot:
+    """One stable-open package snapshot shared by editorial and native acceptance."""
+    return _read_package(_stable_bytes(path, expected_sha256, limits), expected_sha256, limits)
+
+
+class _PublicationTreeBuilder(ElementTree.TreeBuilder):
+    def __init__(self) -> None:
+        super().__init__()
+        self.depth = 0
+
+    def start(self, tag: str, attrs: dict[str, str]) -> ElementTree.Element:
+        self.depth += 1
+        if self.depth > MAX_XML_DEPTH:
+            _fail("content-team HWPX XML depth exceeds the bounded profile")
+        return super().start(tag, attrs)
+
+    def end(self, tag: str) -> ElementTree.Element:
+        result = super().end(tag)
+        self.depth -= 1
+        return result
+
+    def doctype(self, _name: str, _public: str | None, _system: str | None) -> None:
+        _fail("content-team HWPX XML declares DTD or entities")
+
+
+def parse_publication_xml(data: bytes, member_name: str) -> ElementTree.Element:
     if not data or len(data) > MAX_XML_BYTES:
         _fail("content-team HWPX XML member size is invalid")
     upper = data.upper()
     if b"<!DOCTYPE" in upper or b"<!ENTITY" in upper:
         _fail("content-team HWPX XML declares DTD or entities")
     try:
-        root = ElementTree.fromstring(data)
+        root = ElementTree.fromstring(
+            data, parser=ElementTree.XMLParser(target=_PublicationTreeBuilder())
+        )
     except ElementTree.ParseError:
         _fail(f"content-team HWPX XML is malformed: {member_name}")
     stack: list[tuple[ElementTree.Element, int]] = [(root, 1)]
@@ -272,7 +331,7 @@ def _parse_xml(data: bytes, member_name: str) -> ElementTree.Element:
     return root
 
 
-def _resolve_member(base: str, reference: str) -> str:
+def resolve_publication_member(base: str, reference: str) -> str:
     if not reference or reference.startswith("#"):
         return ""
     parsed = urlparse(reference)
@@ -290,8 +349,10 @@ def _resolve_member(base: str, reference: str) -> str:
     return resolved
 
 
-def _validate_xml_and_references(
-    snapshot: _PackageSnapshot,
+def validate_publication_package(
+    snapshot: PublicationPackageSnapshot,
+    *,
+    profile: PublicationProfile = PublicationProfile.EDITORIAL,
 ) -> tuple[dict[str, ElementTree.Element], tuple[str, ...], dict[str, str]]:
     roots: dict[str, ElementTree.Element] = {}
     names = set(snapshot.names)
@@ -305,7 +366,7 @@ def _validate_xml_and_references(
         if suffix in ACTIVE_SUFFIXES or (data.startswith(b"PK\x03\x04") and name != "mimetype"):
             _fail("content-team HWPX contains active or embedded package content")
         if lower.endswith((".xml", ".hpf")):
-            roots[name] = _parse_xml(data, name)
+            roots[name] = parse_publication_xml(data, name)
 
     generated_image_ids: set[str] = set()
     for name, root in roots.items():
@@ -334,7 +395,7 @@ def _validate_xml_and_references(
                     "url",
                 }:
                     continue
-                target = _resolve_member(name, value)
+                target = resolve_publication_member(name, value)
                 if target and target not in names:
                     _fail("content-team HWPX contains a dangling member reference")
             stack.extend((child, (*ancestors, local)) for child in element)
@@ -366,7 +427,7 @@ def _validate_xml_and_references(
         reference = attributes.get("href")
         if not identifier or not reference or identifier in manifest_by_id:
             _fail("content-team HWPX package manifest identity is invalid")
-        target = _resolve_member("Contents/content.hpf", reference)
+        target = resolve_publication_member("Contents/content.hpf", reference)
         if target not in names:
             _fail("content-team HWPX package manifest target is missing")
         if identifier in generated_image_ids and (
@@ -374,7 +435,11 @@ def _validate_xml_and_references(
             or element.get("id") != identifier
             or not target.startswith("BinData/")
             or element.get("href") != target
-            or element.get("media-type") != "image/png"
+            or (
+                element.get("media-type") != "image/png"
+                if profile is PublicationProfile.EDITORIAL
+                else not element.get("media-type", "").startswith("image/")
+            )
             or element.get("isEmbeded") != "1"
         ):
             # Hancom looks up the manifest href literally in the ZIP; normalization here
@@ -401,7 +466,10 @@ def _validate_xml_and_references(
         if (target := manifest_by_id[str(value)]).startswith("Contents/section")
         and target.endswith(".xml")
     )
-    if sections != tuple(f"Contents/section{index}.xml" for index in range(len(sections))):
+    if len(set(sections)) != len(sections) or (
+        profile is PublicationProfile.EDITORIAL
+        and sections != tuple(f"Contents/section{index}.xml" for index in range(len(sections)))
+    ):
         _fail("content-team HWPX sections are not contiguous and ordered")
     if any(section not in roots for section in sections):
         _fail("content-team HWPX section XML is missing")
@@ -1054,9 +1122,8 @@ def verify_content_team_output(
         _fail("content-team output expectation cardinality is invalid")
     if tuple(value.position for value in expectations) != tuple(range(1, len(expectations) + 1)):
         _fail("content-team output expectations must be contiguous and ordered")
-    payload = _stable_bytes(path, expected_sha256)
-    snapshot = _read_package(payload, expected_sha256)
-    roots, sections, manifest_by_id = _validate_xml_and_references(snapshot)
+    snapshot = read_publication_package(path, expected_sha256)
+    roots, sections, manifest_by_id = validate_publication_package(snapshot)
     if len(sections) != len(expectations):
         _fail("content-team HWPX section count differs from the approved Item set")
     header = roots["Contents/header.xml"]

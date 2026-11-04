@@ -123,6 +123,10 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_catalog_contracts.creative_visual_presentation import ItemVisualPresentation
+from eom_catalog_contracts.curated_document_delivery_application import (
+    CuratedDocumentDeliveryQueryV1,
+    CuratedDocumentDeliveryResponseV1,
+)
 from eom_item_registry import RegistryError, RegistryErrorCode
 from eom_operator_identity import ActorContext
 from eom_workflow import PdfReviewDocumentPointer
@@ -916,6 +920,32 @@ class CatalogApplicationClient:
             raise CatalogApplicationClientError(
                 CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
                 "Catalog external Item preview prepare response is unavailable",
+            ) from exc
+
+    def resolve_curated_document_delivery(
+        self, query: CuratedDocumentDeliveryQueryV1
+    ) -> CuratedDocumentDeliveryResponseV1:
+        payload = query.model_dump(mode="json", exclude_none=True)
+        validate_contract("catalog-curated-document-delivery-request-v1", payload)
+        raw = self._raw_request(payload, timeout_seconds=EVIDENCE_RESPONSE_TIMEOUT_SECONDS)
+        try:
+            validate_contract("catalog-curated-document-delivery-response-v1", raw)
+            result = CuratedDocumentDeliveryResponseV1.model_validate(raw)
+            if result.status == "ERROR":
+                self._raise_remote_error(result.error_code)
+            assert result.manifest is not None
+            if (
+                result.manifest.assembly_id != query.assembly_id
+                or result.manifest.assembly_revision_id != query.assembly_revision_id
+                or result.manifest.manifest_sha256 != query.manifest_sha256
+                or (result.inputs is not None) != (query.purpose == "PIN_INPUTS")
+            ):
+                raise ValueError("Catalog delivery identity or purpose differs")
+            return result
+        except (JsonSchemaValidationError, ValidationError, ValueError) as exc:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog delivery resolution is invalid",
             ) from exc
 
     def create_curated_document_assembly(

@@ -56,6 +56,7 @@ from eom_web_gui.contracts import (
     StudioSelfCredentialUpdate,
     StudioWorkbenchOverview,
 )
+from eom_web_gui.curated_hwpx_contracts import CuratedHwpxSubmission
 from eom_web_gui.gateways import ApplicationGateway, GatewayError, HttpApplicationGateway
 from eom_web_gui.general_chat_contracts import (
     ChatCreateSubmission,
@@ -916,6 +917,63 @@ def create_app(
                 "X-Content-Type-Options": "nosniff",
                 "ETag": value.etag,
                 "X-EOM-Row-Count": str(value.row_count),
+            },
+        )
+
+    @app.post(f"{API_PREFIX}/item-db/assemblies/{{assembly_id}}/hwpx-builds")
+    async def create_curated_hwpx(
+        assembly_id: str,
+        value: CuratedHwpxSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+        idempotency_key: Annotated[
+            str, Header(alias="Idempotency-Key", min_length=16, max_length=128)
+        ],
+    ) -> dict[str, object]:
+        result = await actual.gateway.create_curated_hwpx(
+            session, assembly_id, value, idempotency_key
+        )
+        return result.model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/item-db/assemblies/{{assembly_id}}/hwpx-builds/latest")
+    async def latest_curated_hwpx(
+        assembly_id: str,
+        assembly_revision_id: str,
+        manifest_sha256: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, object] | None:
+        result = await actual.gateway.latest_curated_hwpx(
+            session,
+            assembly_id,
+            CuratedHwpxSubmission(
+                assembly_revision_id=assembly_revision_id, manifest_sha256=manifest_sha256
+            ),
+        )
+        return result.model_dump(mode="json") if result else None
+
+    @app.get(f"{API_PREFIX}/item-db/assemblies/{{assembly_id}}/hwpx-builds/{{build_id}}")
+    async def read_curated_hwpx(
+        assembly_id: str,
+        build_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, object]:
+        result = await actual.gateway.read_curated_hwpx(session, assembly_id, build_id)
+        return result.model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/item-db/assemblies/{{assembly_id}}/hwpx-builds/{{build_id}}/download")
+    async def download_curated_hwpx(
+        assembly_id: str,
+        build_id: str,
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> Response:
+        result = await actual.gateway.download_curated_hwpx(session, assembly_id, build_id)
+        return Response(
+            content=result.content,
+            media_type=result.content_type,
+            headers={
+                "Content-Disposition": result.content_disposition,
+                "Content-Length": str(len(result.content)),
+                "Cache-Control": "private, no-store",
+                "X-Content-Type-Options": "nosniff",
             },
         )
 

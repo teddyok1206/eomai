@@ -1,6 +1,7 @@
 import {createItemDbDraft, selectedFinalSourcePlacement} from "./item-db-draft.js";
 import {itemDbSimilaritySelection} from "./item-db-similarity.js";
 import {createItemDbSimilarityList} from "./item-db-similarity-list.js";
+import {createCuratedDeliveryControl} from "./item-db-delivery.js";
 
 const DB_TABS = Object.freeze({
   search: ["#item-db-search-tab", "#item-db-search-panel"],
@@ -65,6 +66,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   let savedSequence = 0;
   let pendingSave = null;
   let assemblyLoaded = false;
+  const deliveries = new Set();
   const draft = createItemDbDraft();
   const similarity = createItemDbSimilarityList({
     document, searches: similaritySearches, activate: activateTab,
@@ -211,6 +213,8 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     const request = ++savedSequence;
     if (reset) {
       savedCursor = null;
+      for (const delivery of deliveries) delivery.dispose();
+      deliveries.clear();
       $("#item-db-saved-list").replaceChildren();
     }
     const more = $("#item-db-saved-more");
@@ -231,7 +235,9 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
         const open = node(document, "button", "button secondary", "다시 열기");
         open.type = "button";
         open.addEventListener("click", () => openSaved(entry.assembly_id));
-        line.append(label, open);
+        const delivery = createCuratedDeliveryControl({document, api, entry});
+        deliveries.add(delivery);
+        line.append(label, open, delivery.element);
         root.append(line);
       }
       if (!root.children.length) root.append(node(document, "p", "empty-state", "저장한 조립 순서가 없습니다."));

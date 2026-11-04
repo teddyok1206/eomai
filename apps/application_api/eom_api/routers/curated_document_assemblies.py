@@ -4,18 +4,151 @@ from __future__ import annotations
 
 from eom_api_contracts import ListResponse, SingleResponse
 from eom_api_contracts.curated_document_assembly import CuratedDocumentAssemblyDraftV1
+from eom_api_contracts.curated_hwpx import CreateCuratedHwpxBuildRequest, CuratedHwpxBuildView
 from eom_catalog_contracts.curated_document_assembly import CuratedDocumentAssemblyManifestV1
 from eom_catalog_contracts.curated_document_assembly_application import (
     CuratedDocumentAssemblyListEntryV1,
 )
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Path, Query, Request
+from starlette.responses import StreamingResponse
 
 from eom_api.dependencies import Auth, IdempotencyKey, require_permission
 from eom_api.errors import ApiError
 from eom_api.routers.common import many, one
+from eom_api.services.hwpx_projection import project_curated_hwpx_build
 
 router = APIRouter(prefix="/item-db/assemblies", tags=["item-db"])
+
+
+@router.post(
+    "/{assembly_id}/hwpx-builds",
+    status_code=202,
+    operation_id="item_db_curated_hwpx_build_create",
+    response_model=SingleResponse[CuratedHwpxBuildView],
+    dependencies=[Depends(require_permission(PermissionKey.HWPX_BUILD_CREATE))],
+)
+def create_curated_build(
+    request: Request,
+    body: CreateCuratedHwpxBuildRequest,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+    assembly_id: str = Path(pattern=r"^assembly_[0-9a-f]{32}$"),
+) -> SingleResponse[CuratedHwpxBuildView]:
+    record, _created = request.app.state.services.curated_hwpx.request_build(
+        assembly_id,
+        assembly_revision_id=body.assembly_revision_id,
+        manifest_sha256=body.manifest_sha256,
+        actor=request.state.request_context.actor(),
+        idempotency_key=idempotency_key,
+    )
+    request.app.state.services.audit.append(
+        request.state.request_context,
+        event_type="CURATED_HWPX_BUILD_REQUEST_ACCEPTED",
+        operation_id="item_db_curated_hwpx_build_create",
+        outcome="SUCCEEDED",
+        http_status=202,
+        target_type="hwpx_build",
+        target_id=record.build_id,
+    )
+    return one(request, project_curated_hwpx_build(record))
+
+
+@router.get(
+    "/{assembly_id}/hwpx-builds/latest",
+    operation_id="item_db_curated_hwpx_build_latest",
+    response_model=SingleResponse[CuratedHwpxBuildView | None],
+    dependencies=[Depends(require_permission(PermissionKey.HWPX_READ))],
+)
+def latest_curated_build(
+    request: Request,
+    assembly_id: str = Path(pattern=r"^assembly_[0-9a-f]{32}$"),
+    assembly_revision_id: str = Query(pattern=r"^assemblyrev_[0-9a-f]{32}$"),
+    manifest_sha256: str = Query(pattern=r"^sha256:[0-9a-f]{64}$"),
+) -> SingleResponse[CuratedHwpxBuildView | None]:
+    record = request.app.state.services.curated_hwpx.latest_build(
+        assembly_id,
+        assembly_revision_id=assembly_revision_id,
+        manifest_sha256=manifest_sha256,
+        actor=request.state.request_context.actor(),
+    )
+    return one(request, project_curated_hwpx_build(record) if record is not None else None)
+
+
+@router.get(
+    "/{assembly_id}/hwpx-builds/{build_id}",
+    operation_id="item_db_curated_hwpx_build_read",
+    response_model=SingleResponse[CuratedHwpxBuildView],
+    dependencies=[Depends(require_permission(PermissionKey.HWPX_READ))],
+)
+def read_curated_build(
+    request: Request,
+    assembly_id: str = Path(pattern=r"^assembly_[0-9a-f]{32}$"),
+    build_id: str = Path(pattern=r"^hwpxbuild_[0-9a-f]{32}$"),
+) -> SingleResponse[CuratedHwpxBuildView]:
+    record = request.app.state.services.curated_hwpx.get_build(
+        build_id, actor=request.state.request_context.actor()
+    )
+    if record.assembly_id != assembly_id:
+        raise ApiError(
+            404, "HWPX_APPLICATION_BUILD_NOT_FOUND", "Not found", "Assembly build not found"
+        )
+    return one(request, project_curated_hwpx_build(record))
+
+
+@router.get(
+    "/{assembly_id}/hwpx-builds/{build_id}/download",
+    operation_id="item_db_curated_hwpx_build_download",
+    dependencies=[Depends(require_permission(PermissionKey.HWPX_READ))],
+)
+def download_curated_build(
+    request: Request,
+    assembly_id: str = Path(pattern=r"^assembly_[0-9a-f]{32}$"),
+    build_id: str = Path(pattern=r"^hwpxbuild_[0-9a-f]{32}$"),
+) -> StreamingResponse:
+    record = request.app.state.services.curated_hwpx.get_build(
+        build_id, actor=request.state.request_context.actor()
+    )
+    if record.assembly_id != assembly_id:
+        raise ApiError(
+            404, "HWPX_APPLICATION_BUILD_NOT_FOUND", "Not found", "Assembly build not found"
+        )
+    if record.state != "SUCCEEDED" or record.validation_state != "PASS":
+        raise ApiError(
+            409,
+            "HWPX_APPLICATION_DOWNLOAD_UNAVAILABLE",
+            "Not ready",
+            "Validated assembly output is not available",
+        )
+    value = request.app.state.services.hwpx_downloads.download_curated(build_id)
+    if value.sha256 != record.output_sha256 or value.content_length != record.output_size_bytes:
+        value.connection.close()
+        raise ApiError(
+            502,
+            "HWPX_RESULT_INVALID",
+            "Invalid delivery",
+            "Download differs from the committed output",
+        )
+    request.app.state.services.audit.append(
+        request.state.request_context,
+        event_type="CURATED_HWPX_DOWNLOAD_AUTHORIZED",
+        operation_id="item_db_curated_hwpx_build_download",
+        outcome="SUCCEEDED",
+        http_status=200,
+        target_type="hwpx_build",
+        target_id=build_id,
+    )
+    return StreamingResponse(
+        value.iter_chunks(),
+        media_type="application/vnd.hancom.hwpx",
+        headers={
+            "Content-Disposition": f'attachment; filename="{value.filename}"',
+            "Content-Length": str(value.content_length),
+            "Cache-Control": "private, no-store",
+            "X-Content-Type-Options": "nosniff",
+            "ETag": value.sha256,
+        },
+    )
 
 
 @router.get(

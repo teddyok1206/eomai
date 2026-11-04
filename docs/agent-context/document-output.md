@@ -73,7 +73,14 @@ Catalog `authorize_delivery_build`와 `read_for_delivery`는 각각 기존 HWPX 
 이 Python use case의 존재는 private Catalog RPC 활성화 증거가 아니다. API 쪽 연결은
 기존 `catalog_application_client.py`/Catalog `application_server.py` 경계를 유지한다.
 API의 입력 pinning 때문에 NAS 접근·native 변환 dependency를 API에 추가하지 않는다.
-실제 mixed-render adapter와 RPC/API/Web wiring의 남은 범위는 체크포인트에 기록한다.
+`curated_delivery_inputs.py`는 Catalog의 metadata-only pin, `curated_output_acceptance.py`는
+Manager의 독립 package/원문 대조다. `curated_service.py`는 예정 Job identity로 local
+result와 기존 Catalog Artifact commit intent를 복구하며 새 출판 framework를 만들지 않는다.
+API는 `curated_delivery_gateway.py`를 통해 Catalog authorization/pin RPC만 사용한다.
+`curated_composition.py`는 Runner에서만 파일 실행·commit adapter를 구성한다.
+`curated_document_assemblies.py`와 Web `item-db-delivery.js`가 저장된 순서에서 제작·조회·
+다운로드를 연결한다. download/2.0만 256MiB를 허용하며 구 1.0의 64MiB는 그대로다.
+코드 존재·fixture PASS와 새 설치본/운영 활성화를 구분하고 체크포인트의 남은 gate를 확인한다.
 
 ## 먼저 열 파일
 

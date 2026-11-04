@@ -100,7 +100,9 @@ class _Renderer:
         self.unit_active = False
         self.failure = False
 
-    def pin_inputs(self, manifest: CuratedDocumentAssemblyManifestV1) -> CuratedHwpxBuildInput:
+    def pin_inputs(
+        self, manifest: CuratedDocumentAssemblyManifestV1, *, actor: ActorContext
+    ) -> CuratedHwpxBuildInput:
         with self.lock:
             self.pin_calls += 1
         if self.barrier is not None:

@@ -1,0 +1,758 @@
+{
+  "$defs": {
+    "ContentTeamHandoffMember": {
+      "additionalProperties": false,
+      "properties": {
+        "purpose": {
+          "enum": [
+            "automation-template",
+            "equation-prototypes",
+            "visual-slots-left-right",
+            "visual-slots-two-tables",
+            "labeled-data-condition",
+            "table-2-column",
+            "table-3-column",
+            "table-3-column-long-equation",
+            "table-4-column",
+            "inquiry-experiment-box"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size": {
+          "maximum": 26214400,
+          "minimum": 1,
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "purpose",
+        "sha256",
+        "size"
+      ],
+      "title": "ContentTeamHandoffMember",
+      "type": "object"
+    },
+    "ContentTeamHandoffSnapshot": {
+      "additionalProperties": false,
+      "description": "Immutable source/archive identity used by every renderer attempt.",
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[a-f0-9]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[a-f0-9]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "archive_sha256": {
+          "const": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91",
+          "default": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91",
+          "title": "Archive Sha256",
+          "type": "string"
+        },
+        "archive_file": {
+          "const": "input/handoff.zip",
+          "default": "input/handoff.zip",
+          "title": "Archive File",
+          "type": "string"
+        },
+        "entry_count": {
+          "const": 606,
+          "default": 606,
+          "title": "Entry Count",
+          "type": "integer"
+        },
+        "uncompressed_bytes": {
+          "const": 49280719,
+          "default": 49280719,
+          "title": "Uncompressed Bytes",
+          "type": "integer"
+        },
+        "profile_sha256": {
+          "const": "sha256:ce08671ad433026ec51e68ddfc6a4d7ffe33ae8a792c1791dfa26b9b62e78863",
+          "default": "sha256:ce08671ad433026ec51e68ddfc6a4d7ffe33ae8a792c1791dfa26b9b62e78863",
+          "title": "Profile Sha256",
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/ContentTeamHandoffMember"
+          },
+          "maxItems": 10,
+          "minItems": 10,
+          "title": "Members",
+          "type": "array"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "members"
+      ],
+      "title": "ContentTeamHandoffSnapshot",
+      "type": "object"
+    },
+    "CuratedArtifactMember": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "media_type": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Media Type",
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/Sha256"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "CuratedArtifactMember",
+      "type": "object"
+    },
+    "CuratedBuildPlacement": {
+      "discriminator": {
+        "mapping": {
+          "NATIVE_DOCUMENT": "#/$defs/CuratedNativeDocumentInput",
+          "REGISTERED_ITEM": "#/$defs/CuratedRegisteredItemInput"
+        },
+        "propertyName": "kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/CuratedNativeDocumentInput"
+        },
+        {
+          "$ref": "#/$defs/CuratedRegisteredItemInput"
+        }
+      ]
+    },
+    "CuratedDocumentAssemblyManifestV1": {
+      "additionalProperties": false,
+      "description": "One ordered pinned input set, distinct from an HWPX output receipt.",
+      "properties": {
+        "schema_version": {
+          "const": "curated-document-assembly-manifest/1.0",
+          "default": "curated-document-assembly-manifest/1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "assembly_id": {
+          "pattern": "^assembly_[0-9a-f]{32}$",
+          "title": "Assembly Id",
+          "type": "string"
+        },
+        "assembly_revision_id": {
+          "pattern": "^assemblyrev_[0-9a-f]{32}$",
+          "title": "Assembly Revision Id",
+          "type": "string"
+        },
+        "selection_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Selection Sha256",
+          "type": "string"
+        },
+        "placements": {
+          "items": {
+            "$ref": "#/$defs/CuratedResolvedPlacement"
+          },
+          "maxItems": 200,
+          "minItems": 1,
+          "title": "Placements",
+          "type": "array"
+        },
+        "created_by": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$",
+          "title": "Created By",
+          "type": "string"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Manifest Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "assembly_id",
+        "assembly_revision_id",
+        "selection_sha256",
+        "placements",
+        "created_by",
+        "created_at",
+        "manifest_sha256"
+      ],
+      "title": "CuratedDocumentAssemblyManifestV1",
+      "type": "object"
+    },
+    "CuratedExternalDocumentPlacement": {
+      "additionalProperties": false,
+      "properties": {
+        "placement_kind": {
+          "const": "EXTERNAL_SOURCE_DOCUMENT",
+          "default": "EXTERNAL_SOURCE_DOCUMENT",
+          "title": "Placement Kind",
+          "type": "string"
+        },
+        "position": {
+          "maximum": 200,
+          "minimum": 1,
+          "title": "Position",
+          "type": "integer"
+        },
+        "source_id": {
+          "pattern": "^extitem_[0-9a-f]{32}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_revision_id": {
+          "pattern": "^extitemrev_[0-9a-f]{32}$",
+          "title": "Source Revision Id",
+          "type": "string"
+        },
+        "external_number": {
+          "pattern": "^[0-9]{5}$",
+          "title": "External Number",
+          "type": "string"
+        },
+        "observation_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Observation Sha256",
+          "type": "string"
+        },
+        "edition": {
+          "enum": [
+            2,
+            3
+          ],
+          "title": "Edition",
+          "type": "integer"
+        },
+        "source_format": {
+          "enum": [
+            "HWP",
+            "HWPX"
+          ],
+          "title": "Source Format",
+          "type": "string"
+        },
+        "source_file_id": {
+          "pattern": "^sourcefile_[0-9a-f]{32}$",
+          "title": "Source File Id",
+          "type": "string"
+        },
+        "document_artifact": {
+          "$ref": "#/$defs/OriginArtifactMemberPointer"
+        },
+        "document_size_bytes": {
+          "maximum": 104857600,
+          "minimum": 1,
+          "title": "Document Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "position",
+        "source_id",
+        "source_revision_id",
+        "external_number",
+        "observation_sha256",
+        "edition",
+        "source_format",
+        "source_file_id",
+        "document_artifact",
+        "document_size_bytes"
+      ],
+      "title": "CuratedExternalDocumentPlacement",
+      "type": "object"
+    },
+    "CuratedHwpConverterSnapshot": {
+      "additionalProperties": false,
+      "description": "Installed optional tool identity, not an arbitrary executable path.",
+      "properties": {
+        "profile": {
+          "const": "HWP2HWPX_NATIVE_V1",
+          "title": "Profile",
+          "type": "string"
+        },
+        "source_commit": {
+          "const": "62d95b980a4e3a6766877dd3fb6f7f45f4afcf3d",
+          "title": "Source Commit",
+          "type": "string"
+        },
+        "bundle_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Bundle Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profile",
+        "source_commit",
+        "bundle_sha256"
+      ],
+      "title": "CuratedHwpConverterSnapshot",
+      "type": "object"
+    },
+    "CuratedHwpxBuildInput": {
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "curated-hwpx-build-input/1.0",
+          "default": "curated-hwpx-build-input/1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "assembly_id": {
+          "pattern": "^assembly_[0-9a-f]{32}$",
+          "title": "Assembly Id",
+          "type": "string"
+        },
+        "assembly_revision_id": {
+          "pattern": "^assemblyrev_[0-9a-f]{32}$",
+          "title": "Assembly Revision Id",
+          "type": "string"
+        },
+        "assembly_manifest_sha256": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "profile": {
+          "const": "CURATED_EDITABLE_MIXED_V1",
+          "default": "CURATED_EDITABLE_MIXED_V1",
+          "title": "Profile",
+          "type": "string"
+        },
+        "renderer_version": {
+          "const": "1.0.0",
+          "default": "1.0.0",
+          "title": "Renderer Version",
+          "type": "string"
+        },
+        "handoff": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ContentTeamHandoffSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "converter": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CuratedHwpConverterSnapshot"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "placements": {
+          "items": {
+            "$ref": "#/$defs/CuratedBuildPlacement"
+          },
+          "maxItems": 200,
+          "minItems": 1,
+          "title": "Placements",
+          "type": "array"
+        }
+      },
+      "required": [
+        "assembly_id",
+        "assembly_revision_id",
+        "assembly_manifest_sha256",
+        "handoff",
+        "converter",
+        "placements"
+      ],
+      "title": "CuratedHwpxBuildInput",
+      "type": "object"
+    },
+    "CuratedNativeDocumentInput": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "NATIVE_DOCUMENT",
+          "default": "NATIVE_DOCUMENT",
+          "title": "Kind",
+          "type": "string"
+        },
+        "position": {
+          "maximum": 200,
+          "minimum": 1,
+          "title": "Position",
+          "type": "integer"
+        },
+        "source_format": {
+          "enum": [
+            "HWP",
+            "HWPX"
+          ],
+          "title": "Source Format",
+          "type": "string"
+        },
+        "document": {
+          "$ref": "#/$defs/CuratedArtifactMember"
+        },
+        "size_bytes": {
+          "maximum": 104857600,
+          "minimum": 1,
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "position",
+        "source_format",
+        "document",
+        "size_bytes"
+      ],
+      "title": "CuratedNativeDocumentInput",
+      "type": "object"
+    },
+    "CuratedPastExamItemPlacement": {
+      "additionalProperties": false,
+      "properties": {
+        "placement_kind": {
+          "const": "PAST_EXAM_ITEM_REVISION",
+          "default": "PAST_EXAM_ITEM_REVISION",
+          "title": "Placement Kind",
+          "type": "string"
+        },
+        "position": {
+          "maximum": 200,
+          "minimum": 1,
+          "title": "Position",
+          "type": "integer"
+        },
+        "item_id": {
+          "pattern": "^item_[0-9a-f]{32}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "item_revision_id": {
+          "pattern": "^itemrev_[0-9a-f]{32}$",
+          "title": "Item Revision Id",
+          "type": "string"
+        },
+        "item_manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Item Manifest Sha256",
+          "type": "string"
+        },
+        "graph_snapshot_revision_id": {
+          "pattern": "^graphrev_[0-9a-f]{32}$",
+          "title": "Graph Snapshot Revision Id",
+          "type": "string"
+        },
+        "graph_snapshot_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Graph Snapshot Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "position",
+        "item_id",
+        "item_revision_id",
+        "item_manifest_sha256",
+        "graph_snapshot_revision_id",
+        "graph_snapshot_sha256"
+      ],
+      "title": "CuratedPastExamItemPlacement",
+      "type": "object"
+    },
+    "CuratedRegisteredItemInput": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "const": "REGISTERED_ITEM",
+          "default": "REGISTERED_ITEM",
+          "title": "Kind",
+          "type": "string"
+        },
+        "position": {
+          "maximum": 200,
+          "minimum": 1,
+          "title": "Position",
+          "type": "integer"
+        },
+        "item_id": {
+          "pattern": "^item_[0-9a-f]{32}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "item_revision_id": {
+          "pattern": "^itemrev_[0-9a-f]{32}$",
+          "title": "Item Revision Id",
+          "type": "string"
+        },
+        "item_manifest_sha256": {
+          "$ref": "#/$defs/Sha256"
+        },
+        "source_content": {
+          "$ref": "#/$defs/CuratedArtifactMember"
+        },
+        "display_content": {
+          "$ref": "#/$defs/CuratedArtifactMember"
+        },
+        "recovery_manifest": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CuratedArtifactMember"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "editorial_markdown": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CuratedArtifactMember"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "position",
+        "item_id",
+        "item_revision_id",
+        "item_manifest_sha256",
+        "source_content",
+        "display_content",
+        "recovery_manifest",
+        "editorial_markdown"
+      ],
+      "title": "CuratedRegisteredItemInput",
+      "type": "object"
+    },
+    "CuratedRegisteredItemPlacement": {
+      "additionalProperties": false,
+      "properties": {
+        "placement_kind": {
+          "const": "REGISTERED_ITEM_REVISION",
+          "default": "REGISTERED_ITEM_REVISION",
+          "title": "Placement Kind",
+          "type": "string"
+        },
+        "position": {
+          "maximum": 200,
+          "minimum": 1,
+          "title": "Position",
+          "type": "integer"
+        },
+        "item_id": {
+          "pattern": "^item_[0-9a-f]{32}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "item_revision_id": {
+          "pattern": "^itemrev_[0-9a-f]{32}$",
+          "title": "Item Revision Id",
+          "type": "string"
+        },
+        "item_manifest_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Item Manifest Sha256",
+          "type": "string"
+        },
+        "graph_snapshot_revision_id": {
+          "pattern": "^graphrev_[0-9a-f]{32}$",
+          "title": "Graph Snapshot Revision Id",
+          "type": "string"
+        },
+        "graph_snapshot_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Graph Snapshot Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "position",
+        "item_id",
+        "item_revision_id",
+        "item_manifest_sha256",
+        "graph_snapshot_revision_id",
+        "graph_snapshot_sha256"
+      ],
+      "title": "CuratedRegisteredItemPlacement",
+      "type": "object"
+    },
+    "CuratedResolvedPlacement": {
+      "discriminator": {
+        "mapping": {
+          "EXTERNAL_SOURCE_DOCUMENT": "#/$defs/CuratedExternalDocumentPlacement",
+          "PAST_EXAM_ITEM_REVISION": "#/$defs/CuratedPastExamItemPlacement",
+          "REGISTERED_ITEM_REVISION": "#/$defs/CuratedRegisteredItemPlacement"
+        },
+        "propertyName": "placement_kind"
+      },
+      "oneOf": [
+        {
+          "$ref": "#/$defs/CuratedExternalDocumentPlacement"
+        },
+        {
+          "$ref": "#/$defs/CuratedRegisteredItemPlacement"
+        },
+        {
+          "$ref": "#/$defs/CuratedPastExamItemPlacement"
+        }
+      ]
+    },
+    "OriginArtifactMemberPointer": {
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[0-9a-f]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[0-9a-f]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "member_path": {
+          "maxLength": 512,
+          "minLength": 1,
+          "title": "Member Path",
+          "type": "string"
+        },
+        "schema_ref": {
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$",
+          "title": "Schema Ref",
+          "type": "string"
+        },
+        "media_type": {
+          "pattern": "^[a-z0-9][a-z0-9.+-]*/[A-Za-z0-9][A-Za-z0-9.+-]*$",
+          "title": "Media Type",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256"
+      ],
+      "title": "OriginArtifactMemberPointer",
+      "type": "object"
+    },
+    "Sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "operation": {
+      "const": "RESOLVE_CURATED_DOCUMENT_DELIVERY",
+      "default": "RESOLVE_CURATED_DOCUMENT_DELIVERY",
+      "title": "Operation",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "OK",
+        "ERROR"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "manifest": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CuratedDocumentAssemblyManifestV1"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "inputs": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CuratedHwpxBuildInput"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "error_code": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Z][A-Z0-9_]{2,127}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Code"
+    }
+  },
+  "required": [
+    "status"
+  ],
+  "title": "CuratedDocumentDeliveryResponseV1",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/curated-document-delivery-response/1.0"
+}

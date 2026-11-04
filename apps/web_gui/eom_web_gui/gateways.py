@@ -93,6 +93,7 @@ from eom_web_gui.contracts import (
     StudioWorkbenchItem,
     StudioWorkbenchOverview,
 )
+from eom_web_gui.curated_hwpx_contracts import CuratedHwpxSubmission, CuratedHwpxView
 from eom_web_gui.general_chat_contracts import (
     ChatConversation,
     ChatCreateSubmission,
@@ -420,6 +421,26 @@ class RegisteredItemDbPage:
 
 
 class ApplicationGateway(Protocol):
+    async def create_curated_hwpx(
+        self,
+        session: WebSession,
+        assembly_id: str,
+        value: CuratedHwpxSubmission,
+        idempotency_key: str,
+    ) -> CuratedHwpxView: ...
+
+    async def read_curated_hwpx(
+        self, session: WebSession, assembly_id: str, build_id: str
+    ) -> CuratedHwpxView: ...
+
+    async def latest_curated_hwpx(
+        self, session: WebSession, assembly_id: str, value: CuratedHwpxSubmission
+    ) -> CuratedHwpxView | None: ...
+
+    async def download_curated_hwpx(
+        self, session: WebSession, assembly_id: str, build_id: str
+    ) -> HwpxDownload: ...
+
     async def item_db_registration_graph(
         self, session: WebSession, revision_id: str, manifest_sha256: str
     ) -> GraphItemDbEntry | None: ...
@@ -1049,6 +1070,99 @@ class ObserveClient:
 
 
 class HttpApplicationGateway:
+    @staticmethod
+    def _curated_hwpx_view(payload: object, assembly_id: str) -> CuratedHwpxView:
+        try:
+            view = CuratedHwpxView.model_validate(payload)
+            if view.assembly_id != assembly_id:
+                raise ValueError("curated build belongs to a different assembly")
+            return view
+        except ValueError as exc:
+            raise GatewayError(status=502, code="ITEM_DB_ASSEMBLY_BUILD_RESPONSE_INVALID") from exc
+
+    async def create_curated_hwpx(
+        self,
+        session: WebSession,
+        assembly_id: str,
+        value: CuratedHwpxSubmission,
+        idempotency_key: str,
+    ) -> CuratedHwpxView:
+        _require_id(assembly_id, "assembly_")
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/item-db/assemblies/{assembly_id}/hwpx-builds",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+            timeout=135.0,
+        )
+        view = self._curated_hwpx_view(self._data(response), assembly_id)
+        if view.assembly_revision_id != value.assembly_revision_id:
+            raise GatewayError(status=502, code="ITEM_DB_ASSEMBLY_BUILD_RESPONSE_INVALID")
+        return view
+
+    async def read_curated_hwpx(
+        self, session: WebSession, assembly_id: str, build_id: str
+    ) -> CuratedHwpxView:
+        _require_id(assembly_id, "assembly_")
+        _require_id(build_id, "hwpxbuild_")
+        response = await self._authorized(
+            session, "GET", f"/api/v1/item-db/assemblies/{assembly_id}/hwpx-builds/{build_id}"
+        )
+        view = self._curated_hwpx_view(self._data(response), assembly_id)
+        if view.build_id != build_id:
+            raise GatewayError(status=502, code="ITEM_DB_ASSEMBLY_BUILD_RESPONSE_INVALID")
+        return view
+
+    async def latest_curated_hwpx(
+        self, session: WebSession, assembly_id: str, value: CuratedHwpxSubmission
+    ) -> CuratedHwpxView | None:
+        _require_id(assembly_id, "assembly_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/item-db/assemblies/{assembly_id}/hwpx-builds/latest",
+            params=value.model_dump(mode="json"),
+        )
+        payload = response.json().get("data")
+        if payload is None:
+            return None
+        view = self._curated_hwpx_view(payload, assembly_id)
+        if view.assembly_revision_id != value.assembly_revision_id:
+            raise GatewayError(status=502, code="ITEM_DB_ASSEMBLY_BUILD_RESPONSE_INVALID")
+        return view
+
+    async def download_curated_hwpx(
+        self, session: WebSession, assembly_id: str, build_id: str
+    ) -> HwpxDownload:
+        _require_id(assembly_id, "assembly_")
+        _require_id(build_id, "hwpxbuild_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/item-db/assemblies/{assembly_id}/hwpx-builds/{build_id}/download",
+            timeout=135.0,
+        )
+        if (
+            response.headers.get("content-type", "").split(";", 1)[0]
+            != "application/vnd.hancom.hwpx"
+            or not re.fullmatch(
+                r'attachment; filename="[A-Za-z0-9_.-]+\.hwpx"',
+                response.headers.get("content-disposition", ""),
+            )
+            or not 0 < len(response.content) <= 256 * 1024**2
+            or response.headers.get("content-length") != str(len(response.content))
+            or response.headers.get("etag")
+            != "sha256:" + hashlib.sha256(response.content).hexdigest()
+            or not response.content.startswith(b"PK\x03\x04")
+        ):
+            raise GatewayError(status=502, code="HWPX_DOWNLOAD_RESPONSE_INVALID")
+        return HwpxDownload(
+            response.content,
+            response.headers["content-type"],
+            response.headers["content-disposition"],
+        )
+
     async def general_chat_knowledge_search(
         self, session: WebSession, value: ChatKnowledgeRequest
     ) -> ChatKnowledgeSelection:

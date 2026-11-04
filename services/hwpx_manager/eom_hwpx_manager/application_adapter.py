@@ -8,11 +8,20 @@ import os
 import re
 import stat
 import subprocess
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
-from eom_hwpx_manager.adapter import BuilderRun, HwpxBuilderAdapter, copy_stable_regular_file
+from eom_identifiers import canonical_json_bytes, sha256_bytes
+
+from eom_hwpx_manager.adapter import (
+    BuilderRun,
+    HwpxBuilderAdapter,
+    copy_stable_regular_file,
+    hash_stable_regular_file,
+)
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
+from eom_hwpx_manager.settings import HwpxSettings
 
 BUILD_ID = re.compile(r"\Ahwpxbuild_[0-9a-f]{32}\Z", re.ASCII)
 SYSTEMCTL = Path("/usr/bin/systemctl")
@@ -70,6 +79,32 @@ class _FixedApplicationBuilderAdapter(HwpxBuilderAdapter):
                 "invalid HWPX application workspace identifier",
             )
         root = self.settings.workspace_root
+        builder_gid = self._workspace_group()
+        workspace = root / workspace_id
+        try:
+            # The root-owned workspace parent supplies the trusted handoff group.
+            # The hardened Manager cannot create setgid descendants.
+            workspace.mkdir(mode=0o700)
+            self._finalize_directory(workspace, builder_gid)
+        except OSError as exc:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_BUILDER_FAILED,
+                "HWPX application workspace could not be created",
+            ) from exc
+        metadata = workspace.lstat()
+        if (
+            metadata.st_uid != os.geteuid()
+            or metadata.st_gid != builder_gid
+            or stat.S_IMODE(metadata.st_mode) != WORKSPACE_DIRECTORY_MODE
+        ):
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_BUILDER_FAILED,
+                "HWPX application workspace metadata mismatch",
+            )
+        return workspace
+
+    def _workspace_group(self) -> int:
+        root = self.settings.workspace_root
         try:
             root_metadata = root.lstat()
         except OSError as exc:
@@ -89,30 +124,7 @@ class _FixedApplicationBuilderAdapter(HwpxBuilderAdapter):
                 HwpxManagerErrorCode.HWPX_BUILDER_UNAVAILABLE,
                 "HWPX application workspace group boundary is unavailable",
             )
-        workspace = root / workspace_id
-        try:
-            # The root-owned workspace parent supplies the trusted handoff group.
-            # Per-build directories intentionally have no setgid bit because the
-            # hardened Manager service runs with RestrictSUIDSGID=yes.  Descendant
-            # groups are applied explicitly through fd-safe finalization instead.
-            workspace.mkdir(mode=0o700)
-            self._finalize_directory(workspace, builder_gid)
-        except OSError as exc:
-            raise HwpxManagerError(
-                HwpxManagerErrorCode.HWPX_BUILDER_FAILED,
-                "HWPX application workspace could not be created",
-            ) from exc
-        metadata = workspace.lstat()
-        if (
-            metadata.st_uid != os.geteuid()
-            or metadata.st_gid != root_metadata.st_gid
-            or stat.S_IMODE(metadata.st_mode) != WORKSPACE_DIRECTORY_MODE
-        ):
-            raise HwpxManagerError(
-                HwpxManagerErrorCode.HWPX_BUILDER_FAILED,
-                "HWPX application workspace metadata mismatch",
-            )
-        return workspace
+        return builder_gid
 
     @staticmethod
     def _root_contract_ready(
@@ -341,3 +353,126 @@ class FixedCuratedBuilderAdapter(_FixedApplicationBuilderAdapter):
     operation = "render-curated"
     unit_template = "eom-hwpx-curated"
     log_name = "hwpx-render-curated"
+
+    def __init__(self, settings: HwpxSettings) -> None:
+        # A multi-document conversion has its own fixed unit budget. Legacy
+        # single/exam adapters retain their existing timeout policy.
+        super().__init__(replace(settings, timeout_seconds=900))
+
+    def open_workspace(self, build_id: str) -> Path:
+        if BUILD_ID.fullmatch(build_id) is None:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_BUILDER_FAILED, "invalid curated build identity"
+            )
+        group = self._workspace_group()
+        workspace = self.settings.workspace_root / build_id
+        if not workspace.exists() and not workspace.is_symlink():
+            return self.create_workspace(build_id)
+        metadata = workspace.lstat()
+        if (
+            stat.S_ISDIR(metadata.st_mode)
+            and metadata.st_uid == os.geteuid()
+            and metadata.st_gid == group
+            and stat.S_IMODE(metadata.st_mode) == 0o700
+        ):
+            self._finalize_directory(workspace, group)
+        if not self._workspace_ready(workspace):
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_BUILDER_FAILED,
+                "curated recovery workspace identity differs",
+            )
+        return workspace
+
+    def _existing_input(
+        self, workspace: Path, target: Path, *, expected: str, maximum: int
+    ) -> bool:
+        try:
+            metadata = target.lstat()
+        except FileNotFoundError:
+            return False
+        if (
+            not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_uid != os.geteuid()
+            or metadata.st_nlink != 1
+        ):
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_BUILDER_FAILED, "curated staged input identity differs"
+            )
+        if stat.S_IMODE(metadata.st_mode) == 0o600:
+            # A hard stop can leave an unfinished Manager-owned workspace copy.
+            # This is never a source/NAS file or dispatched Builder output.
+            if (
+                metadata.st_size <= 0
+                or metadata.st_size > maximum
+                or hash_stable_regular_file(target, max_bytes=maximum) != expected
+            ):
+                target.unlink()
+                return False
+            self._finalize_file(target, workspace.lstat().st_gid)
+        self._verify_staged_file(workspace, target)
+        if hash_stable_regular_file(target, max_bytes=maximum) != expected:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
+                "immutable staged input differs from its original pin",
+            )
+        return True
+
+    def stage_file(
+        self,
+        workspace: Path,
+        relative_path: str,
+        source: Path,
+        *,
+        expected_sha256: str | None = None,
+    ) -> Path:
+        if expected_sha256 is None:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
+                "curated staging requires an exact hash",
+            )
+        maximum = {
+            ".hwp": 50 * 1024**2,
+            ".hwpx": 50 * 1024**2,
+            ".zip": 64 * 1024**2,
+            ".json": 2 * 1024**2,
+            ".md": 1024**2,
+            ".png": 20 * 1024**2,
+            ".jpg": 20 * 1024**2,
+        }.get(Path(relative_path).suffix)
+        if maximum is None:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
+                "unsupported curated staging member",
+            )
+        target = self._target(workspace, relative_path)
+        self._prepare_parent(workspace, target.parent)
+        if not self._existing_input(workspace, target, expected=expected_sha256, maximum=maximum):
+            copy_stable_regular_file(
+                source, target, expected_sha256=expected_sha256, max_bytes=maximum
+            )
+            self._finalize_file(target, workspace.lstat().st_gid)
+            self._verify_staged_file(workspace, target)
+        return target
+
+    def write_json(self, workspace: Path, relative_path: str, value: dict[str, Any]) -> Path:
+        data = canonical_json_bytes(value) + b"\n"
+        maximum = 1024**2 if relative_path == "request.json" else 2 * 1024**2
+        if len(data) > maximum:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,
+                "curated local JSON exceeds its bound",
+            )
+        target = self._target(workspace, relative_path)
+        self._prepare_parent(workspace, target.parent)
+        if self._existing_input(workspace, target, expected=sha256_bytes(data), maximum=maximum):
+            return target
+        descriptor = os.open(
+            target, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW, 0o600
+        )
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        self._finalize_file(target, workspace.lstat().st_gid)
+        self._verify_staged_file(workspace, target)
+        return target

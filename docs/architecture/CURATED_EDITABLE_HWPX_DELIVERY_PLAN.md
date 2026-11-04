@@ -62,6 +62,12 @@ Job/Artifact/revision·member descriptor로 source/effective/recovery/Markdown p
 Manager materialization과 commit 직전 재인가에서 수행한다. exact SUPERSEDED revision을
 implicit latest나 현재 Preview의 APPROVED-only 규칙으로 바꾸지 않는다.
 
+합본 결과는 Builder의 성공 플래그만으로 commit하지 않는다. Manager는 기존 bounded
+publication ZIP/XML reader를 재사용하고 원본/segment와 합본의 순서·XML 내용·geometry·
+binary bytes를 독립 대조한다. resource/object reference 종류만 작은 불변 contract로
+공유하며 Builder의 ID 할당 코드나 lxml을 Manager에 들여오지 않는다. native section은
+관측한 ordered catalog 구간으로 역대조하고 canonical/CTI 의미 검증도 유지한다.
+
 ## 트랜잭션과 실패
 
 actor+key+정확한 요청 해시는 동시 요청을 단일 build로 묶는다. claim은 기존 Manager의
@@ -178,6 +184,29 @@ pointer는 먼저 검사한다. native picture 생성과 native package merger�
 유지한다. OS 필드의 upstream 정의는
 [VersionXMLFile](https://github.com/neolord0/hwpxlib/blob/main/src/main/java/kr/dogfoot/hwpxlib/object/root/VersionXMLFile.java)에
 있다. 구 native merge V1의 의미와 schema bytes는 바꾸지 않는다.
+
+## 저장·상태·화면의 연결
+
+API는 request-only `CuratedHwpxApplicationService`와 Catalog delivery gateway를 사용한다.
+기존 private Catalog 소켓에 `RESOLVE_CURATED_DOCUMENT_DELIVERY`만 추가하고 실제 operator
+식별·고정 assembly revision/hash를 전달한다. BUILD/READ 재확인은 release를 다시 선택하지
+않는다. 최초 PIN_INPUTS에서만 보호된 설정의 handoff/converter를 선택하며 Catalog가 실제
+권한·Item/Graph·Artifact metadata를 재확인한다. 파일/worker 내용은 이 RPC에 없다.
+
+Runner는 기존 Catalog application과 Registry를 직접 조합해 같은 권한 검사를 수행하고,
+기존 Artifact `commit_file_set` owner로만 NAS를 발행한다. 추가 DB 권한은 큐 상태 변경과
+현재 operator/source의 SELECT다. credentials·worker 권한은 추가하지 않는다. 한 Job의
+예정 identity, 기존 file-set commit intent와 local result를 재사용하며 새 영속 큐나
+Artifact 출판 framework를 만들지 않는다.
+
+단일 문항·시험지·DB 조립 큐는 세 순서를 순환한다. `render-curated`만 고정 unit/900초
+한도를 쓰며 기존 renderer timeout은 그대로다. 큰 합본은 별도 download/2.0에서 최대
+256MiB로 제한한다. 기존 download/1.0의 64MiB와 schema bytes는 변경하지 않는다.
+
+DB 배치의 저장본 행에 제작·상태 확인·다운로드를 연결한다. 최신 제작의 조회, 진행 중
+제작의 반복 조회와 완료 결과 확인은 모두 read-only이며 새 제작을 제출하지 않는다.
+응답을 잃은 생성 요청은 같은 idempotency key를 유지한다. 실패 뒤 다시 제작은 사용자
+버튼으로만 새 요청을 만들고 기존 FAILED를 보존한다. UI의 내부 ID는 표시하지 않는다.
 
 ## 관련 근거
 

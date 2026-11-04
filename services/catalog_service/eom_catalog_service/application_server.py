@@ -112,6 +112,10 @@ from eom_catalog_contracts.chat_ranked_candidate_read import (
     parse_chat_ranked_candidate_read_request,
     validate_chat_ranked_candidate_read_reply,
 )
+from eom_catalog_contracts.curated_document_delivery_application import (
+    CuratedDocumentDeliveryQueryV1,
+    CuratedDocumentDeliveryResponseV1,
+)
 from eom_identifiers import canonical_json_bytes
 from eom_item_registry import RegistryError
 from eom_operator_identity import ActorContext, ActorSource, ActorType
@@ -148,6 +152,7 @@ from eom_catalog_service.chat_knowledge_resolution import (
 )
 from eom_catalog_service.chat_knowledge_search import ChatKnowledgeSearchService
 from eom_catalog_service.chat_rag_resolution import ChatRagResolutionService
+from eom_catalog_service.curated_delivery_inputs import CuratedDeliveryInputError
 from eom_catalog_service.curated_document_assembly_item import CuratedDocumentAssemblyItemError
 from eom_catalog_service.curated_document_assembly_resolution import (
     CuratedDocumentAssemblyResolutionError,
@@ -744,6 +749,21 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     return
                 self._prepare_external_item_preview(preview_command)
                 return
+            if raw_operation == "RESOLVE_CURATED_DOCUMENT_DELIVERY":
+                try:
+                    validate_contract("catalog-curated-document-delivery-request-v1", value)
+                    delivery_query = CuratedDocumentDeliveryQueryV1.model_validate(value)
+                except (JsonSchemaValidationError, ValidationError, ValueError):
+                    self.server.write_curated_document_delivery_response(
+                        self.wfile,
+                        CuratedDocumentDeliveryResponseV1(
+                            status="ERROR",
+                            error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
+                        ),
+                    )
+                    return
+                self._resolve_curated_document_delivery(delivery_query)
+                return
             if raw_operation == "CREATE_CURATED_DOCUMENT_ASSEMBLY":
                 try:
                     validate_contract("catalog-curated-document-assembly-create-request-v1", value)
@@ -1197,6 +1217,65 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
                 )
         self.server.write_external_item_preview_prepare_response(self.wfile, response)
+
+    def _resolve_curated_document_delivery(self, query: CuratedDocumentDeliveryQueryV1) -> None:
+        service = self.server.curated_document_assemblies
+        if service is None:
+            response = CuratedDocumentDeliveryResponseV1(
+                status="ERROR",
+                error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+            )
+        else:
+            actor = ActorContext(
+                actor_type=ActorType.OPERATOR,
+                operator_id=query.actor_id,
+                session_id=query.session_id,
+                request_id=query.request_id,
+                authentication_time=query.authentication_time,
+                permissions=frozenset(),
+                source=ActorSource.APPLICATION_API,
+            )
+            try:
+                authorize = (
+                    service.read_for_delivery
+                    if query.purpose == "AUTHORIZE_READ"
+                    else service.authorize_delivery_build
+                )
+                manifest = authorize(
+                    query.assembly_id,
+                    assembly_revision_id=query.assembly_revision_id,
+                    manifest_sha256=query.manifest_sha256,
+                    actor=actor,
+                )
+                inputs = None
+                if query.purpose == "PIN_INPUTS":
+                    assert query.handoff is not None and query.converter is not None
+                    inputs = service.pin_delivery_inputs(
+                        manifest, actor=actor, handoff=query.handoff, converter=query.converter
+                    )
+                response = CuratedDocumentDeliveryResponseV1(
+                    status="OK", manifest=manifest, inputs=inputs
+                )
+            except (
+                CuratedDocumentAssemblyError,
+                CuratedDocumentAssemblyResolutionError,
+                CuratedDocumentAssemblySourceError,
+                CuratedDocumentAssemblyItemError,
+                CuratedDeliveryInputError,
+                ExternalItemDocumentMediaError,
+            ) as exc:
+                response = CuratedDocumentDeliveryResponseV1(status="ERROR", error_code=exc.code)
+            except Exception as exc:
+                _LOGGER.error(
+                    "curated delivery resolution failed request_id=%s exception=%s",
+                    query.request_id,
+                    type(exc).__name__,
+                )
+                response = CuratedDocumentDeliveryResponseV1(
+                    status="ERROR",
+                    error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
+                )
+        self.server.write_curated_document_delivery_response(self.wfile, response)
 
     def _create_curated_document_assembly(
         self, command: CuratedDocumentAssemblyCreateCommandV1
@@ -2460,6 +2539,19 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
         if len(raw) + 1 > MAX_MESSAGE_BYTES:
             raise RuntimeError("Catalog external Item preview response exceeded its fixed bound")
+        stream.write(raw + b"\n")
+
+    @staticmethod
+    def write_curated_document_delivery_response(
+        stream: Any, value: CuratedDocumentDeliveryResponseV1
+    ) -> None:
+        # The pinned input contains required nullable component pointers. Do not
+        # erase them recursively while shortening an outer response envelope.
+        payload = value.model_dump(mode="json")
+        validate_contract("catalog-curated-document-delivery-response-v1", payload)
+        raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
+        if len(raw) + 1 > MAX_MESSAGE_BYTES:
+            raise RuntimeError("Catalog curated delivery metadata exceeded its fixed bound")
         stream.write(raw + b"\n")
 
     @staticmethod

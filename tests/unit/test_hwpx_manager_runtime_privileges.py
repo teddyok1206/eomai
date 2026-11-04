@@ -26,6 +26,25 @@ def test_manager_privilege_matrix_matches_owned_access_patterns() -> None:
         "assessment_assembly_revisions",
         "hwpx_application_builds",
         "hwpx_assessment_assembly_builds",
+        "hwpx_curated_builds",
+        "curated_document_assemblies",
+        "curated_document_assembly_revisions",
+        "content_intake_source_files",
+        "external_item_sources",
+        "external_item_source_revisions",
+        "external_item_imports",
+        "external_item_edition_documents",
+        "operators",
+        "permissions",
+        "roles",
+        "role_permissions",
+        "operator_role_assignments",
+        "knowledge_corpora",
+        "knowledge_graph_snapshots",
+        "knowledge_nodes",
+        "knowledge_node_source_pointers",
+        "knowledge_snapshot_analyses",
+        "assessment_item_occurrence_references",
         "item_components",
         "item_revisions",
         "items",
@@ -43,10 +62,14 @@ def test_manager_privilege_matrix_matches_owned_access_patterns() -> None:
     assert set(UPDATE_TABLES) == {
         "hwpx_application_builds",
         "hwpx_assessment_assembly_builds",
+        "hwpx_curated_builds",
         "jobs",
     }
     assert "hwpx_application_builds" not in INSERT_TABLES
     assert "hwpx_assessment_assembly_builds" not in INSERT_TABLES
+    assert "hwpx_curated_builds" not in INSERT_TABLES
+    assert "operator_credentials" not in READ_TABLES
+    assert not {"operators", "roles", "operator_role_assignments"} & set(UPDATE_TABLES)
     # Both runtimes append independently owned lifecycle events to the shared Job event stream.
     # No other HWPX-manager insert surface is shared with the API runtime.
     assert set(INSERT_TABLES) & set(API_INSERT_TABLES) == {"job_events"}

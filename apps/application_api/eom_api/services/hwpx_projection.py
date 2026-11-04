@@ -2,13 +2,34 @@
 
 from typing import Literal, cast
 
+from eom_api_contracts.curated_hwpx import CuratedHwpxBuildView
 from eom_api_contracts.hwpx import (
     AssessmentHwpxBuildView,
     HwpxBuildState,
     HwpxBuildView,
     HwpxValidationState,
 )
+from eom_hwpx_manager.curated_build_models import HwpxCuratedBuildRecord
 from eom_hwpx_manager.models import HwpxApplicationBuildRecord, HwpxAssessmentAssemblyBuildRecord
+
+
+def project_curated_hwpx_build(record: HwpxCuratedBuildRecord) -> CuratedHwpxBuildView:
+    return CuratedHwpxBuildView(
+        build_id=record.build_id,
+        assembly_id=record.assembly_id,
+        assembly_revision_id=record.assembly_revision_id,
+        state=HwpxBuildState(record.state),
+        validation_state=HwpxValidationState(record.validation_state),
+        placement_count=record.placement_count,
+        section_count=record.section_count,
+        output_sha256=record.output_sha256,
+        output_size_bytes=record.output_size_bytes,
+        failure_code=record.failure_code,
+        created_at=record.created_at,
+        completed_at=record.completed_at,
+        resource_version=record.resource_version,
+        download_available=record.state == "SUCCEEDED" and record.validation_state == "PASS",
+    )
 
 
 def project_hwpx_build(record: HwpxApplicationBuildRecord) -> HwpxBuildView:

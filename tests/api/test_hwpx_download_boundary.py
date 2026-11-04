@@ -27,6 +27,9 @@ class FixtureDownloadService:
             sha256=sha256_file(self.output),
         )
 
+    def secure_curated_download(self, build_id: str) -> SecureHwpxDownload:
+        return self.secure_download(build_id)
+
 
 def test_application_api_streams_through_private_manager_socket(tmp_path: Path) -> None:
     runtime = tmp_path / "run"
@@ -54,6 +57,32 @@ def test_application_api_streams_through_private_manager_socket(tmp_path: Path) 
         server.server_close()
         thread.join(timeout=5)
     assert not socket_path.exists()
+
+
+def test_curated_v2_socket_preserves_independent_size_and_request_contract(tmp_path: Path) -> None:
+    runtime = tmp_path / "run"
+    runtime.mkdir(mode=0o750)
+    runtime.chmod(0o750)
+    output = tmp_path / "fixture.hwpx"
+    output.write_bytes(b"TEST_ONLY_VALIDATED_CURATED_HWPX")
+    service = FixtureDownloadService(output)
+    server = HwpxDownloadServer(
+        service,
+        socket_path=runtime / "manager.sock",
+        allowed_uid=os.geteuid(),
+        expected_gid=os.getegid(),
+    )
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        download = HwpxDownloadClient(runtime / "manager.sock").download_curated(BUILD_ID)
+        assert b"".join(download.iter_chunks()) == output.read_bytes()
+        assert download.sha256 == sha256_file(output)
+        assert service.requested == [BUILD_ID]
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 def test_download_boundary_has_no_nas_path_or_arbitrary_request_surface() -> None:

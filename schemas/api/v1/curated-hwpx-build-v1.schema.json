@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/curated-hwpx-build/1.0",
+  "$defs": {
+    "request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["assembly_revision_id", "manifest_sha256"],
+      "properties": {
+        "assembly_revision_id": {"type": "string", "pattern": "^assemblyrev_[0-9a-f]{32}$"},
+        "manifest_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+      }
+    },
+    "view": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema_version", "build_id", "assembly_id", "assembly_revision_id", "state", "validation_state", "placement_count", "resource_version", "created_at", "download_available"],
+      "properties": {
+        "schema_version": {"const": "curated-hwpx-build-view/1.0"},
+        "build_id": {"type": "string", "pattern": "^hwpxbuild_[0-9a-f]{32}$"},
+        "assembly_id": {"type": "string", "pattern": "^assembly_[0-9a-f]{32}$"},
+        "assembly_revision_id": {"type": "string", "pattern": "^assemblyrev_[0-9a-f]{32}$"},
+        "state": {"enum": ["REQUESTED", "RUNNING", "VALIDATING", "SUCCEEDED", "FAILED"]},
+        "validation_state": {"enum": ["PENDING", "PASS", "FAIL"]},
+        "placement_count": {"type": "integer", "minimum": 1, "maximum": 200},
+        "section_count": {"type": ["integer", "null"], "minimum": 1, "maximum": 10000},
+        "output_sha256": {"type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$"},
+        "output_size_bytes": {"type": ["integer", "null"], "minimum": 1, "maximum": 268435456},
+        "failure_code": {"type": ["string", "null"], "pattern": "^[A-Z][A-Z0-9_]{0,79}$"},
+        "resource_version": {"type": "integer", "minimum": 1},
+        "created_at": {"type": "string", "format": "date-time"},
+        "completed_at": {"type": ["string", "null"], "format": "date-time"},
+        "download_available": {"type": "boolean"}
+      }
+    }
+  }
+}

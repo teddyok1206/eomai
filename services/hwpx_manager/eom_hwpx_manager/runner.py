@@ -17,6 +17,11 @@ from eom_orchestrator.database import build_engine
 from sqlalchemy import Engine
 
 from eom_hwpx_manager.application_service import HwpxApplicationService, SecureHwpxDownload
+from eom_hwpx_manager.curated_application_service import (
+    CuratedHwpxApplicationService,
+    CuratedRecoveryState,
+)
+from eom_hwpx_manager.curated_composition import build_curated_application
 from eom_hwpx_manager.download_server import HwpxDownloadServer
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
 from eom_hwpx_manager.exam_application_service import (
@@ -56,7 +61,7 @@ def _runtime_staging_ready(path: Path) -> bool:
     )
 
 
-def run_once(*, verify_privileges: bool = True, prefer_exam: bool = False) -> int:
+def run_once(*, verify_privileges: bool = True, queue_offset: int = 0) -> int:
     engine = build_engine()
     try:
         if verify_privileges and not _runtime_privileges_ready(engine):
@@ -78,11 +83,19 @@ def run_once(*, verify_privileges: bool = True, prefer_exam: bool = False) -> in
             registry=registry,
         )
         exam_service = ExamHwpxApplicationService(engine, registry=registry)
-        queues = (
-            (("assessment", exam_service), ("item", item_service))
-            if prefer_exam
-            else (("item", item_service), ("assessment", exam_service))
+        queues: tuple[
+            tuple[
+                str,
+                HwpxApplicationService | ExamHwpxApplicationService | CuratedHwpxApplicationService,
+            ],
+            ...,
+        ] = (
+            ("item", item_service),
+            ("assessment", exam_service),
+            ("curated", build_curated_application(engine)),
         )
+        offset = queue_offset % len(queues)
+        queues = queues[offset:] + queues[:offset]
         for queue_name, service in queues:
             record = service.process_next()
             if record is not None:
@@ -108,7 +121,7 @@ def run_once(*, verify_privileges: bool = True, prefer_exam: bool = False) -> in
 
 def serve(interval_seconds: float) -> int:
     stopping = False
-    prefer_exam = False
+    queue_offset = 0
 
     def stop(_signum: int, _frame: object) -> None:
         nonlocal stopping
@@ -130,6 +143,7 @@ def serve(interval_seconds: float) -> int:
         registry = RegistryService(download_engine)
         item_service = HwpxApplicationService(download_engine, registry=registry)
         exam_service = ExamHwpxApplicationService(download_engine, registry=registry)
+        curated_service = build_curated_application(download_engine)
 
         class DownloadResolver:
             def secure_download(self, build_id: str) -> SecureHwpxDownload:
@@ -140,6 +154,11 @@ def serve(interval_seconds: float) -> int:
                         raise
                 return exam_service.secure_download(build_id)
 
+            def secure_curated_download(self, build_id: str) -> SecureHwpxDownload:
+                # The API authenticates the live requester. The broker also
+                # reauthorizes the persisted initiator and exact saved sources.
+                return curated_service.secure_broker_download(build_id)
+
         download_server = HwpxDownloadServer(DownloadResolver())
         server_thread = threading.Thread(
             target=download_server.serve_forever,
@@ -149,6 +168,12 @@ def serve(interval_seconds: float) -> int:
         server_thread.start()
         recovering_interrupted = True
         while not stopping:
+            curated_recovery = curated_service.recover_interrupted()
+            if curated_recovery.state is CuratedRecoveryState.RECOVERED:
+                assert curated_recovery.record is not None
+                print(
+                    f"hwpx_curated_build={curated_recovery.record.build_id}:{curated_recovery.record.state}"
+                )
             if recovering_interrupted:
                 recovery = exam_service.recover_interrupted()
                 if recovery.state is ExamRecoveryState.ACTIVE:
@@ -163,8 +188,8 @@ def serve(interval_seconds: float) -> int:
                     )
                     continue
                 recovering_interrupted = False
-            result = run_once(verify_privileges=False, prefer_exam=prefer_exam)
-            prefer_exam = not prefer_exam
+            result = run_once(verify_privileges=False, queue_offset=queue_offset)
+            queue_offset = (queue_offset + 1) % 3
             if result == 2:
                 time.sleep(interval_seconds)
             elif result != 0:

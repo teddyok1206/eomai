@@ -7,57 +7,17 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import NoReturn
 
+from eom_hwpx_contracts.native_resource_rules import (
+    CATALOGS,
+    FONT_LANGUAGES,
+    OBJECTS,
+    REFERENCES,
+    ZERO_SENTINELS,
+)
 from lxml import etree  # type: ignore[import-untyped]
 
 from eom_hwpx_builder.errors import HwpxError, HwpxErrorCode
 from eom_hwpx_builder.xmlsafe import local_name
-
-CATALOGS = frozenset(
-    (
-        "borderFills",
-        "charProperties",
-        "tabProperties",
-        "numberings",
-        "bullets",
-        "paraProperties",
-        "styles",
-        "memoProperties",
-    )
-)
-REFERENCES = {
-    "borderfillidref": "borderFills",
-    "charpridref": "charProperties",
-    "parapridref": "paraProperties",
-    "tabpridref": "tabProperties",
-    "styleidref": "styles",
-    "charstyleidref": "styles",
-    "nextstyleidref": "styles",
-    "outlineshapeidref": "numberings",
-    "memoshapeidref": "memoProperties",
-}
-FONT_LANGUAGES = {
-    name.casefold(): name
-    for name in ("HANGUL", "LATIN", "HANJA", "JAPANESE", "OTHER", "SYMBOL", "USER")
-}
-ZERO_SENTINELS = frozenset(("borderFills", "numberings", "bullets", "memoProperties"))
-OBJECTS = frozenset(
-    (
-        "tbl",
-        "pic",
-        "line",
-        "rect",
-        "ellipse",
-        "arc",
-        "polygon",
-        "curve",
-        "ole",
-        "container",
-        "equation",
-        "video",
-        "connectLine",
-        "fieldBegin",
-    )
-)
 
 
 class NativeMergeProfile(StrEnum):

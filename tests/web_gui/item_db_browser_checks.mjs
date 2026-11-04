@@ -5,7 +5,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const staticRoot = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const names = ["index.html", "styles.css", "item-db.js", "item-db-draft.js", "item-db-similarity.js", "item-db-similarity-list.js", "eom-mark.svg"];
+const names = ["index.html", "styles.css", "item-db.js", "item-db-draft.js", "item-db-delivery.js", "item-db-similarity.js", "item-db-similarity-list.js", "eom-mark.svg"];
 const assets = new Map(await Promise.all(names.map(async name => [name, await readFile(new URL(name, staticRoot), "utf8")])));
 
 // Exact repository HTML, CSS and controller; only the existing API and navigation
@@ -43,7 +43,13 @@ async function api(path, options = {}) {
     fixture.hold = null;
     await new Promise(resolve => {fixture.release = resolve;});
   }
-  if (path.startsWith('/item-db/assemblies?')) return {values: [], next_cursor: null};
+  if (path.startsWith('/item-db/assemblies?')) return {values: fixture.saved ? [{assembly_id: 'assembly_' + '1'.repeat(32), assembly_revision_id: 'assemblyrev_' + '2'.repeat(32), manifest_sha256: 'sha256:' + '3'.repeat(64), created_at: '2026-11-04T12:00:00Z', placement_count: fixture.saved.placements.length}] : [], next_cursor: null};
+  if (path.includes('/hwpx-builds/latest?')) return fixture.delivery || null;
+  if (path.endsWith('/hwpx-builds') && options.method === 'POST') {
+    fixture.delivery = {assembly_id: 'assembly_' + '1'.repeat(32), assembly_revision_id: 'assemblyrev_' + '2'.repeat(32), build_id: 'hwpxbuild_' + '4'.repeat(32), state: 'SUCCEEDED', download_available: true};
+    return fixture.delivery;
+  }
+  if (path.includes('/hwpx-builds/hwpxbuild_')) return fixture.delivery;
   if (path === '/item-db/assemblies' && options.method === 'POST') {
     fixture.saved = options.body;
     return {assembly_id: 'assembly_' + '1'.repeat(32), placement_count: options.body.placements.length};
@@ -277,6 +283,11 @@ try {
   assert.equal(saved.placements[0].placement_kind, "EXTERNAL_SOURCE_DOCUMENT");
   assert.equal(saved.placements[1].placement_kind, "PAST_EXAM_ITEM_REVISION");
   assert.ok(saved.placements[1].graph_snapshot_revision_id.startsWith("graphrev_"));
+  await page.getByRole('button', {name: 'HWPX 제작', exact: true}).click();
+  await page.getByRole('link', {name: 'HWPX 다운로드', exact: true}).waitFor();
+  await page.getByRole('button', {name: '상태 확인', exact: true}).click();
+  const deliveryCalls = await page.evaluate(() => window.dbFixture.calls.filter(call => call.path.endsWith('/hwpx-builds') && call.method === 'POST'));
+  assert.equal(deliveryCalls.length, 1, 'completed status reads never resubmit the assembly');
   assert.doesNotMatch(await page.locator('#item-db-detail').innerText(), /itemrev_|graphrev_|extitemrev_/);
 
   // Small screens scroll the table itself, not the entire page, and show details below.

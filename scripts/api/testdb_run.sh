@@ -475,7 +475,8 @@ if [[ "${action}" == "hwpx-tests" ]]; then
   export EOM_RUN_API_INTEGRATION=1
   export EOM_EXTERNAL_ITEM_TEST_STATE="${state_directory}"
   "${PYTHON}" -m pytest -q --tb=short tests/integration/test_hwpx_persistence.py \
-    tests/integration/test_curated_hwpx_delivery.py
+    tests/integration/test_curated_hwpx_delivery.py \
+    tests/integration/test_curated_hwpx_publication.py
   printf 'Disposable HWPX persistence integration tests passed.\n'
   exit 0
 fi

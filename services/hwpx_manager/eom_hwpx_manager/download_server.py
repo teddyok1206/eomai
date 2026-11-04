@@ -18,6 +18,10 @@ from eom_hwpx_contracts import (
     HwpxManagerDownloadResponse,
     validate_contract,
 )
+from eom_hwpx_contracts.curated_download import (
+    CuratedManagerDownloadRequest,
+    CuratedManagerDownloadResponse,
+)
 from jsonschema import ValidationError as JsonSchemaValidationError
 
 from eom_hwpx_manager.application_service import SecureHwpxDownload
@@ -33,6 +37,8 @@ class SecureDownloadResolver(Protocol):
     """Resolve a validated download without exposing storage details to the socket server."""
 
     def secure_download(self, build_id: str) -> SecureHwpxDownload: ...
+
+    def secure_curated_download(self, build_id: str) -> SecureHwpxDownload: ...
 
 
 class _ThreadingUnixServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
@@ -54,17 +60,38 @@ class _DownloadHandler(socketserver.StreamRequestHandler):
             value: Any = json.loads(raw)
             if not isinstance(value, dict):
                 raise ValueError
-            validate_contract("manager-download", value, definition="request")
-            request = HwpxManagerDownloadRequest.model_validate(value)
+            if value.get("schema_version") == "2.0":
+                validate_contract("manager-download-v2", value, definition="request")
+                request: HwpxManagerDownloadRequest | CuratedManagerDownloadRequest = (
+                    CuratedManagerDownloadRequest.model_validate(value)
+                )
+            else:
+                validate_contract("manager-download", value, definition="request")
+                request = HwpxManagerDownloadRequest.model_validate(value)
         except (UnicodeError, ValueError, json.JSONDecodeError, JsonSchemaValidationError):
             self.server.write_error(self.wfile, "HWPX_DOWNLOAD_REQUEST_INVALID")
             return
         try:
-            download = self.server.service.secure_download(request.build_id)
+            download = (
+                self.server.service.secure_curated_download(request.build_id)
+                if isinstance(request, CuratedManagerDownloadRequest)
+                else self.server.service.secure_download(request.build_id)
+            )
         except HwpxManagerError as exc:
-            self.server.write_error(self.wfile, exc.code.value)
+            self.server.write_error(
+                self.wfile,
+                exc.code.value,
+                response_type=CuratedManagerDownloadResponse
+                if isinstance(request, CuratedManagerDownloadRequest)
+                else HwpxManagerDownloadResponse,
+            )
             return
-        header = HwpxManagerDownloadResponse(
+        response_type = (
+            CuratedManagerDownloadResponse
+            if isinstance(request, CuratedManagerDownloadRequest)
+            else HwpxManagerDownloadResponse
+        )
+        header = response_type(
             status="OK",
             filename=download.filename,
             content_length=download.content_length,
@@ -140,17 +167,29 @@ class HwpxDownloadServer(_ThreadingUnixServer):
     @staticmethod
     def write_header(stream: Any, value: HwpxManagerDownloadResponse) -> None:
         payload = value.model_dump(mode="json", exclude_none=True)
-        validate_contract("manager-download", payload, definition="response")
+        validate_contract(
+            "manager-download-v2"
+            if isinstance(value, CuratedManagerDownloadResponse)
+            else "manager-download",
+            payload,
+            definition="response",
+        )
         encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
         if len(encoded) + 1 > MAX_HEADER_BYTES:
             raise RuntimeError("HWPX manager response header exceeded its fixed bound")
         stream.write(encoded + b"\n")
 
     @classmethod
-    def write_error(cls, stream: Any, error_code: str) -> None:
+    def write_error(
+        cls,
+        stream: Any,
+        error_code: str,
+        *,
+        response_type: type[HwpxManagerDownloadResponse] = HwpxManagerDownloadResponse,
+    ) -> None:
         cls.write_header(
             stream,
-            HwpxManagerDownloadResponse(status="ERROR", error_code=error_code),
+            response_type(status="ERROR", error_code=error_code),
         )
 
     def server_close(self) -> None:

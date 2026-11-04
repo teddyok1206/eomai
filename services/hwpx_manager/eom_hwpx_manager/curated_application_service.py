@@ -77,9 +77,13 @@ class CuratedBuildPending(RuntimeError):
     """The same live/uncertain external execution must be observed, not replaced."""
 
 
-class CuratedHwpxRenderer(Protocol):
-    def pin_inputs(self, manifest: CuratedDocumentAssemblyManifestV1) -> CuratedHwpxBuildInput: ...
+class CuratedInputPins(Protocol):
+    def pin_inputs(
+        self, manifest: CuratedDocumentAssemblyManifestV1, *, actor: ActorContext
+    ) -> CuratedHwpxBuildInput: ...
 
+
+class CuratedHwpxRenderer(CuratedInputPins, Protocol):
     def finish(
         self,
         record: HwpxCuratedBuildRecord,
@@ -115,12 +119,25 @@ class CuratedHwpxApplicationService:
         engine: Engine,
         *,
         assemblies: CuratedAssemblyAuthorization,
-        renderer: CuratedHwpxRenderer,
+        renderer: CuratedHwpxRenderer | None = None,
+        input_pins: CuratedInputPins | None = None,
     ) -> None:
         self.engine = engine
         self.sessions = build_session_factory(engine)
         self.assemblies = assemblies
         self.renderer = renderer
+        pins = input_pins if input_pins is not None else renderer
+        if pins is None:
+            raise ValueError("curated admission requires the supported Catalog input port")
+        self.input_pins: CuratedInputPins = pins
+
+    def _runtime_renderer(self) -> CuratedHwpxRenderer:
+        if self.renderer is None:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_BUILDER_UNAVAILABLE,
+                "the request-only composition cannot execute or materialize HWPX",
+            )
+        return self.renderer
 
     def request_build(
         self,
@@ -166,7 +183,7 @@ class CuratedHwpxApplicationService:
                 self._require_replay(existing, request_hash, manifest)
                 session.expunge(existing)
                 return existing, False
-        inputs = self.renderer.pin_inputs(manifest)
+        inputs = self.input_pins.pin_inputs(manifest, actor=actor)
         self._require_inputs(inputs, manifest)
         plan = inputs.model_dump(mode="json")
         validate_contract("curated-build-input", plan)
@@ -304,7 +321,7 @@ class CuratedHwpxApplicationService:
                 return CuratedRecoveryResult(CuratedRecoveryState.NONE)
             session.expunge(record)
         with self._build_lock(record.build_id) as locked:
-            if not locked or self.renderer.build_may_be_active(record.build_id):
+            if not locked or self._runtime_renderer().build_may_be_active(record.build_id):
                 return CuratedRecoveryResult(CuratedRecoveryState.ACTIVE, record)
             current = self._record(record.build_id)
             if current.state not in {"RUNNING", "VALIDATING"}:
@@ -324,7 +341,7 @@ class CuratedHwpxApplicationService:
                 HwpxManagerErrorCode.HWPX_APPLICATION_DOWNLOAD_UNAVAILABLE,
                 "validated curated output is not available",
             )
-        return self.renderer.secure_download(record)
+        return self._runtime_renderer().secure_download(record)
 
     def _record(self, build_id: str) -> HwpxCuratedBuildRecord:
         with self.sessions() as session:
@@ -336,6 +353,18 @@ class CuratedHwpxApplicationService:
                 )
             session.expunge(record)
             return record
+
+    def secure_broker_download(self, build_id: str) -> SecureHwpxDownload:
+        """Reauthorize the stored initiator; no caller-supplied role or file pointer."""
+        if re.fullmatch(r"hwpxbuild_[0-9a-f]{32}", build_id) is None:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_APPLICATION_BUILD_NOT_FOUND,
+                "curated build does not exist",
+            )
+        record = self._record(build_id)
+        return self.secure_download(
+            build_id, actor=ActorContext.model_validate(record.initiator_context)
+        )
 
     def _authorize(
         self,
@@ -353,7 +382,7 @@ class CuratedHwpxApplicationService:
     def _finish(self, record: HwpxCuratedBuildRecord) -> HwpxCuratedBuildRecord:
         try:
             inputs = self._authorize_build(record)
-            receipt = self.renderer.finish(
+            receipt = self._runtime_renderer().finish(
                 record,
                 inputs,
                 validated=lambda job_id: self._validated(record.build_id, job_id),

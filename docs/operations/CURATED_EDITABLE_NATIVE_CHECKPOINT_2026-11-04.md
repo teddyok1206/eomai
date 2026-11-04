@@ -1,7 +1,7 @@
 # 편집 가능한 HWPX 출력 검증
 
 2026-11-04 UTC. DB 조립 출력의 native 변환·병합 단계에 대한 체크포인트다.
-운영 GUI의 합본 제작·다운로드는 아직 연결 전이며 전체 목표는 진행 중이다.
+운영 GUI의 합본 제작·다운로드 활성화는 아직 완료 전이며 전체 목표는 진행 중이다.
 
 ## 실제 입력과 결과
 
@@ -194,3 +194,49 @@ DDL test의 실제 FK target import를 명시해 test-order 의존을 제거했�
 adapter, Catalog application/API/BFF·DB 배치 탭의 제작·상태·다운로드 연결, fixed unit·권한·
 설치본·호환 운영 배포와 인증된 실제 saved-assembly build/download다. 이 단계의 port와
 local 파일 검증을 전체 기능 완료로 간주하지 않으며 목표는 ACTIVE다.
+
+## 영속 제작·발행 adapter와 DB 화면 연결
+
+Manager의 독립 검증은 기존 bounded ZIP/XML reader를 재사용하고 stdlib만 사용한다.
+최종 section 순서와 원문 text·equation·표/그림 geometry, 관측된 resource 대응과 실제
+embedded media bytes를 대조한다. Builder의 allocator나 성공 flag를 그대로 신뢰하지
+않는다. canonical 출판 event와 content-team semantic 검증도 함께 적용한다. 같은
+immutable binary를 문항마다 다시 hash하지 않도록 한 번의 lookup map을 만든다.
+
+실행 전 예정 Job/Artifact/revision을 예약하고 고정 unit의 dispatch observation을 남긴다.
+단위 실행이 아직 살아 있으면 같은 handle을 기다린다. 완성 local result 또는 기존
+file-set commit intent가 있으면 동일 identity로 발행을 복구한다. 결과 없이 종료한
+dispatch와 FAILED는 새 실행으로 바꿔 성공 처리하지 않는다. Artifact 발행은 기존
+Catalog/Orchestrator `commit_file_set`만 사용하며 segment별 복제 Artifact는 만들지 않는다.
+
+새 private RPC는 Catalog의 실제 operator 권한과 고정 revision/hash를 확인하고 metadata만
+반환한다. 최초 pin 이후의 상태/완료 조회는 새 handoff를 고르지 않는다. nullable source
+component를 응답에서 일괄 제거하던 직렬화를 집중 테스트에서 발견해 수정했다. API는
+request-only service이며 NAS/변환/Builder에 접근하지 않는다. Runner composition에만
+실행·발행을 넣고 단일/시험지/조립의 세 큐 순서를 순환한다.
+
+배치의 저장한 조립 순서 행에 제작·상태 확인·다운로드를 추가했다. 요청 응답 손실 때
+동일 key를 재사용하고 상태 재조회는 read-only다. 실패 뒤 다시 제작은 사용자 버튼으로만
+새 요청을 만든다. 출력/commit hash와 broker FD/download hash를 검증하며, 큰 합본만
+download/2.0의 256MiB bound를 사용한다. 구 download/1.0 bytes와 64MiB는 유지했다.
+
+검증: HWPX/Manager·metadata·의존·문맥 회귀 536 PASS, 기존 root ownership opt-in 1 skip.
+별도 guarded PostgreSQL migration 왕복과 persistence/publication 25 PASS(기존 6, queue 11,
+publication 8). publication 검사는 실제 Job/Artifact owner와 임시 local artifact store를
+쓰며 renderer/acceptance는 test port다. 따라서 그 8개가 실제 문서 렌더링을 증명하지는
+않는다. 실제 native/mixed 문서 증거와는 앞 절처럼 별도로 유지한다.
+
+집중 Catalog/API/BFF/DB 화면 검사 35 PASS, 후속 contract·context·정합성 검사 29 PASS,
+기존 identity/worker 권한 회귀 124 PASS였다. 이 수는 중복이 있어 합산하지 않는다.
+별도 실제 Chromium fixture에서 DB 탐색·배치·제작 버튼·완료 다운로드 링크와 완료
+상태 재조회 시 추가 POST 없음, 작은 화면 overflow 없음이 PASS였다. 기존 Playwright
+모듈의 browser binary가 없어 처음 실행은 사전 단계에서 실패했고, 임시 test cache에
+해당 버전 headless binary만 준비해 다시 실행했다. 제품 dependency/운영 browser는
+설치하지 않았다. 이 브라우저의 API는 fixture이며 실제 HTTPS release 증거가 아니다.
+변경 Python 44개 파일의 format/lint와 핵심 application/contract 31개 source의 mypy,
+별도 Builder interpreter 기준 resource-relocation source의 mypy도 PASS였다.
+
+현재 남은 gate는 clean-commit wheel/RECORD·service identity 설치 검증, 새 고정 unit과
+권한의 실제 검사, migration 72와 호환 runtime 배포, 인증된 saved-assembly 제작·정식
+Artifact commit·실제 다운로드 SHA다. 운영 migration/API/Web/HWPX 교체는 아직 하지
+않았고 전체 목표는 ACTIVE다. 기존 슬롯·정본·실패 이력·벡터를 삭제/재생성하지 않았다.

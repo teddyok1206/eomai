@@ -228,6 +228,24 @@ class AppServices:
             self.catalog_application,
         )
         self.hwpx = HwpxApplicationService(engine, registry=self.hwpx_item_revisions)
+        from eom_hwpx_contracts.curated_document import CuratedHwpConverterSnapshot
+        from eom_hwpx_manager.curated_application_service import CuratedHwpxApplicationService
+        from eom_hwpx_manager.settings import HwpxSettings
+
+        from eom_api.services.curated_delivery_gateway import CuratedDeliveryGateway
+
+        curated_gateway = CuratedDeliveryGateway(
+            self.catalog_application,
+            handoff=self.hwpx.content_team_renderer.snapshot(),
+            converter=CuratedHwpConverterSnapshot(
+                profile="HWP2HWPX_NATIVE_V1",
+                source_commit="62d95b980a4e3a6766877dd3fb6f7f45f4afcf3d",
+                bundle_sha256=HwpxSettings.from_environment().native_hwp_converter_bundle_sha256,
+            ),
+        )
+        self.curated_hwpx = CuratedHwpxApplicationService(
+            engine, assemblies=curated_gateway, input_pins=curated_gateway
+        )
         self.item_approvals = ItemApprovalApplicationService(
             hwpx=self.hwpx,
             catalog=self.catalog_application,

@@ -11,6 +11,7 @@ polkit.addRule(function(action, subject) {
     var kordocUnit = /^eom-hwpx-kordoc@hwpxbuild_[0-9a-f]{32}\.service$/;
     var questionTemplateUnit = /^eom-hwpx-builder@hwpxbuild_[0-9a-f]{32}\.service$/;
     var contentTeamUnit = /^eom-hwpx-content-team@hwpxbuild_[0-9a-f]{32}\.service$/;
+    var curatedUnit = /^eom-hwpx-curated@hwpxbuild_[0-9a-f]{32}\.service$/;
     var localImageUnit = /^eom-image-provider@imgreq_[0-9a-f]{32}\.service$/;
     var localImageReferenceProviderUnit = /^eom-image-reference-provider@imgreq_[0-9a-f]{32}\.service$/;
     var localImageReferenceStyleProviderUnit = /^eom-image-reference-style-provider@imgreq_[0-9a-f]{32}\.service$/;
@@ -62,7 +63,7 @@ polkit.addRule(function(action, subject) {
     }
     if (verb === "start" && subject.user === "eom-hwpx-manager"
         && (kordocUnit.test(unit) || questionTemplateUnit.test(unit)
-            || contentTeamUnit.test(unit))) {
+            || contentTeamUnit.test(unit) || curatedUnit.test(unit))) {
         return polkit.Result.YES;
     }
     if (verb === "start" && subject.user === "eom-catalog-manager"

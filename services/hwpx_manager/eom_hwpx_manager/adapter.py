@@ -38,6 +38,7 @@ def copy_stable_regular_file(
     target: Path,
     *,
     expected_sha256: str | None = None,
+    max_bytes: int | None = None,
 ) -> str:
     """Copy one untrusted source through stable fds into one fresh workspace file."""
 
@@ -58,6 +59,8 @@ def copy_stable_regular_file(
         opened = os.fstat(source_fd)
         if not stat.S_ISREG(opened.st_mode):
             raise ValueError("source is not a regular file")
+        if max_bytes is not None and not 0 < opened.st_size <= max_bytes:
+            raise ValueError("source exceeds the accepted copy bound")
         target_fd = os.open(target, write_flags, 0o600)
         target_created = True
         digest = hashlib.sha256()

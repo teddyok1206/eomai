@@ -77,6 +77,7 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "external_item_sources",
     "hwpx_application_builds",
     "hwpx_assessment_assembly_builds",
+    "hwpx_curated_builds",
     "item_components",
     "item_db_similarity_searches",
     "item_events",
@@ -141,6 +142,7 @@ READ_TABLES: Final[tuple[str, ...]] = (
 )
 
 INSERT_TABLES: Final[tuple[str, ...]] = (
+    "hwpx_curated_builds",
     "item_db_similarity_searches",
     "api_audit_events",
     "api_idempotency_records",
