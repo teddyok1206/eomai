@@ -152,20 +152,34 @@ metadata 표의 `해설` 두 글자 위치 차이가 남았다. 본문·그림�
 관측한 상자는 제목/본문 두 글상자와 빈 가장자리 도형을 가진 중첩 container이며 HWP에서 넘어온
 본문 줄 폭 캐시가 변환된 rectangle의 유효 폭보다 컸다. Hancom 재현 완료와 동일시하지 않는다.
 
-기존 HWP→HWPX package 정규화 owner에서 이 구조와 정확한 `출제의도` 제목을 식별해
-본문 문단의 파생 `linesegarray`만 무효화한다. 글·상자 위치/크기·제목·그림·수식·본문의
-다른 표/캐시는 그대로 둔다. 제거한 캐시를 역삽입했을 때 원래 XML과 일치해야 한다.
-신규 DB/프로토콜/변환 bundle과 별도 출력기는 추가하지 않는다. paragraph→ordinal map과
-직접 자식 조회로 시간·일시 공간 O(XML 노드), 동일 입력의 정규화는 결정적이고 멱등이다.
-이 수정의 실제 Hancom 표시 여부는 새 파일의 사용자 검수로 별도 확인한다.
+최초 수정 `2cb256a9`는 본문 줄 배치 캐시만 제거했다. 독립 Office의 세 페이지는
+수정 전후 pixel-equal, 전체 HWPX 검사 431개 통과였지만 사용자는 Hancom에서 여전히
+빈칸이며 Hancom의 PDF 출력에서도 빈칸임을 확인했다. 다시 받은 실제 파일의 SHA가
+확인용 수정본과 일치하므로 잘못된 파일이나 캐시로 설명하지 않는다. 이 시도는 표시 복구
+실패이며 운영에는 배포하지 않았다. 실패한 원인 가설의 코드를 후속 수정에 중첩하지 않는다.
 
-실제 3문항 합본의 확인용 사본에서는 본문 캐시 3곳만 제거됐고, 이를 역삽입한 XML과
-원래 XML이 일치했다. 다른 ZIP member는 byte-equal이며 독립 Office PDF의 세 페이지도
-수정 전후 pixel-equal이다. 집중 회귀와 HWPX 전체 검사 431개가 통과했고 기존 root-only
-검사 1개는 opt-in으로 남겼다. formatter·ruff·mypy도 통과했다. 최초 전체 검사 invocation은
-격리 Builder 환경에 Manager package가 없어 collection에서 종료됐고, 개발 검사에서만
-설치 API package 경로를 명시해 다시 실행했다. 운영 Python 환경은 바꾸지 않았다.
-현재 이 증거는 Hancom 표시 복구 또는 운영 활성화 완료를 의미하지 않는다.
+후속 수정은 기존 HWP→HWPX package 정규화 owner에서 정확한 `출제의도` 제목과
+본문만 있는 inline group을 식별해 해당 장식 영역만 편집 가능한 한 칸 native table로
+교체한다. 제목/본문 문단의 원문과 글자/문단 속성, 원래 inline 크기·위치·바깥 여백을
+가져오고, 같은 상위 cell의 검증된 테두리 정의를 참조한다. 그림·수식·별도 table/control이
+있는 그룹, 다른 제목, 비 inline 구조는 교체하지 않는다. 부모 표·해설·본문·그림·수식은
+바꾸지 않는다. 모양을 PNG로 바꾸거나 전체 문항을 재작성하는 경로가 아니다.
+
+각 교체는 root에서의 child-index path와 원래 subtree를 보존하고 역치환했을 때 다른
+XML이 원본과 정확히 같아야 한다. 원본·확인용 출력은 별도 identity/hash로 유지한다.
+DFS의 경로 깊이는 기존 XML 제한 내로 한정되며 시간·일시 공간은 O(XML 노드), 동일
+입력은 결정적이고 멱등이다. DB·공개 schema·변환 bundle·Manager의 병합 검증은 변경하지
+않는다. 변환 후보의 source evidence 검증 뒤에만 기존 정규화 단계에서 실행한다.
+실제 Hancom 표시 여부는 독립 Office 검사와 분리해 새 파일의 사용자 검수로 확인한다.
+
+후속 확인용 출력은 실제 사용자 반환 파일에서 영역 3곳을 교체했다. 독립 검사에서
+각 제목/본문 문단의 text·run/paragraph 속성과 inline 크기·anchor·바깥 여백을 확인했고,
+해당 subtree를 역치환한 section 및 나머지 ZIP member가 원본과 일치했다. 새 결과는
+package analysis와 현재 Office sandbox 읽기를 통과했으며 3페이지를 유지했다. 상자 내부는
+겹친 제목 도형 대신 표의 제목 문단으로 보인다. 이 부분의 렌더링은 달라지므로 이전
+캐시 제거 시도의 전체-page pixel equality를 이번 증거로 재사용하지 않는다.
+HWPX 회귀 434개 통과, 기존 root-only opt-in 1개 제외, formatter·ruff·핵심 2개 module의
+mypy 통과다. 이 체크포인트에서 Hancom 사용자 확인 및 운영 활성화는 아직 대기 중이다.
 
 변환 input/output hash, native 문단 텍스트 fingerprint, 표 구조, 수식 script, binary
 fingerprint와 도형 개수는 로컬 schema-valid evidence로 다시 대조한다. 문단 fingerprint는

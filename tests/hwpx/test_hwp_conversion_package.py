@@ -150,13 +150,26 @@ def intent_group(*, label="출제 의도", grouped=True):
     </hp:subList></hp:drawText></hp:rect>"""
     if not grouped:
         return body.encode()
-    return (
+    group = (
+        '<hp:container id="200" groupLevel="0">'
         '<hp:container id="0" groupLevel="1">'
         + body
         + '<hp:rect id="0" instid="102" groupLevel="2">'
         '<hp:orgSz width="891" height="5567"/>'
         '<hp:curSz width="860" height="5567"/></hp:rect></hp:container>'
+        '<hp:sz width="30244" height="10603" widthRelTo="ABSOLUTE" '
+        'heightRelTo="ABSOLUTE" protect="0"/>'
+        '<hp:pos treatAsChar="1" vertRelTo="PAPER" horzRelTo="PAPER" '
+        'vertOffset="34467" horzOffset="49425"/>'
+        '<hp:outMargin left="0" right="0" top="0" bottom="0"/>'
+        "</hp:container>"
     ).encode()
+    return (
+        b'<hp:p><hp:run><hp:tbl id="201" rowCnt="1" colCnt="1">'
+        b'<hp:tr><hp:tc borderFillIDRef="1"><hp:subList><hp:p><hp:run>'
+        + group
+        + b"</hp:run></hp:p></hp:subList></hp:tc></hp:tr></hp:tbl></hp:run></hp:p>"
+    )
 
 
 def with_intent_group(tmp_path, *, label="출제 의도", grouped=True):
@@ -181,39 +194,47 @@ def with_intent_group(tmp_path, *, label="출제 의도", grouped=True):
     )
 
 
-def test_only_grouped_intent_body_line_caches_are_invalidated(tmp_path):
+def test_only_grouped_intent_decoration_is_replaced_with_an_editable_native_cell(tmp_path):
     source = with_intent_group(tmp_path)
     before = source.read_bytes()
     output = tmp_path / "intent-normalized.hwpx"
     receipt = normalize_hwp_conversion_package(source, output)
-    assert receipt.invalidated_intent_line_cache_count == 2
+    assert receipt.rebuilt_intent_box_count == 1
     with ZipFile(source) as original, ZipFile(output) as normalized:
         source_root = parse_xml(original.read("Contents/section0.xml"), "source").root
         result_root = parse_xml(normalized.read("Contents/section0.xml"), "result").root
-        source_group = source_root.find(HP + "container")
-        result_group = result_root.find(HP + "container")
-        source_body, source_label, source_mask = source_group.findall(HP + "rect")
-        result_body, result_label, result_mask = result_group.findall(HP + "rect")
-        assert not tuple(result_body.iter(HP + "linesegarray"))
-        assert tree_value(source_label) == tree_value(result_label)
-        assert tree_value(source_mask) == tree_value(result_mask)
-        assert len(tuple(result_label.iter(HP + "linesegarray"))) == 1
-        # Restore only derived caches: every text, equation, style reference,
-        # geometry, other table and image member must be unchanged.
+        source_group = source_root.find(f".//{HP}container[@id='200']")
+        result_table = result_root.find(f".//{HP}tbl[@id='200']")
+        assert result_table is not None
+        assert not tuple(result_table.iter(HP + "container"))
+        assert not tuple(result_table.iter(HP + "drawText"))
+        assert not tuple(result_table.iter(HP + "linesegarray"))
+        assert result_table.find(f"{HP}tr/{HP}tc").get("editable") == "1"
+        for name in ("sz", "pos", "outMargin"):
+            assert tree_value(source_group.find(HP + name)) == tree_value(
+                result_table.find(HP + name)
+            )
+        source_body, source_label = source_group.findall(f".//{HP}drawText/{HP}subList")
+        actual = result_table.findall(f"{HP}tr/{HP}tc/{HP}subList/{HP}p")
+        expected = [*source_label.findall(HP + "p"), *source_body.findall(HP + "p")]
+        assert len(actual) == len(expected) == 3
+        for left, right in zip(expected, actual, strict=True):
+            left = copy.deepcopy(left)
+            for cache in tuple(left.iter(HP + "linesegarray")):
+                cache.getparent().remove(cache)
+            assert tree_value(left) == tree_value(right)
+        # Replace only the known decoration back: every outside text,
+        # equation, style reference, table, geometry and image is unchanged.
         restored = copy.deepcopy(result_root)
-        restored_body = restored.find(HP + "container").find(HP + "rect")
-        for old_p, new_p in zip(
-            source_body.iter(HP + "p"), restored_body.iter(HP + "p"), strict=True
-        ):
-            cache = old_p.find(HP + "linesegarray")
-            new_p.insert(list(old_p).index(cache), copy.deepcopy(cache))
+        restored_table = restored.find(f".//{HP}tbl[@id='200']")
+        restored_table.getparent().replace(restored_table, copy.deepcopy(source_group))
         assert tree_value(restored) == tree_value(source_root)
         for name in original.namelist():
             if name not in {"Contents/header.xml", "Contents/section0.xml"}:
                 assert normalized.read(name) == original.read(name)
     assert source.read_bytes() == before
     again = tmp_path / "intent-again.hwpx"
-    assert normalize_hwp_conversion_package(output, again).invalidated_intent_line_cache_count == 0
+    assert normalize_hwp_conversion_package(output, again).rebuilt_intent_box_count == 0
     assert again.read_bytes() == output.read_bytes()
 
 
@@ -224,6 +245,30 @@ def test_other_text_boxes_and_ungrouped_rectangles_are_untouched(tmp_path, label
     source = with_intent_group(tmp_path, label=label, grouped=grouped)
     output = tmp_path / "other-normalized.hwpx"
     receipt = normalize_hwp_conversion_package(source, output)
-    assert receipt.invalidated_intent_line_cache_count == 0
+    assert receipt.rebuilt_intent_box_count == 0
     with ZipFile(source) as original, ZipFile(output) as normalized:
         assert normalized.read("Contents/section0.xml") == original.read("Contents/section0.xml")
+
+
+@pytest.mark.parametrize("other_object", [b"<hp:pic/>", b"<hp:equation/>", b"<hp:ellipse/>"])
+def test_intent_decoration_with_nontext_objects_is_not_rebuilt(tmp_path, other_object):
+    source = with_intent_group(tmp_path)
+    with ZipFile(source) as archive:
+        parts = [(row.filename, archive.read(row), row.compress_type) for row in archive.infolist()]
+    source = write_hwpx(
+        tmp_path / "other-object.hwpx",
+        [
+            (
+                name,
+                data.replace(b"</hp:container>", other_object + b"</hp:container>", 1)
+                if name == "Contents/section0.xml"
+                else data,
+                method,
+            )
+            for name, data, method in parts
+        ],
+    )
+    output = tmp_path / "untouched.hwpx"
+    assert normalize_hwp_conversion_package(source, output).rebuilt_intent_box_count == 0
+    with ZipFile(source) as old, ZipFile(output) as new:
+        assert old.read("Contents/section0.xml") == new.read("Contents/section0.xml")
