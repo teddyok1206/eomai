@@ -150,6 +150,8 @@ code-member hash만 새 API에 맞췄다. GPU INDEX와 수치 runtime/config는 
 격리, HTTPS 로그인 화면·Web live/ready·미인증 session 조회의 401, dependency check와
 배포 metadata 검사를 통과했다. 실제 사용자 비밀번호를 받아 새 로그인·refresh를 수행한
 인증 smoke나 새 HWPX/검색 계산 acceptance로 확대 해석하지 않는다.
+이후 사용자가 실제 Studio 로그인/기존 화면의 정상 동작과 합본 HWPX의 출제의도 표시를
+확인했다. 이는 해당 사용자 경로의 수동 확인이며 자동 API login/refresh 검사와는 구분한다.
 
 창작 투입기를 멈추는 단계에서 기존 publication 종료 대기가 systemd의 3분 한도를 넘어
 timeout 종료한 이력은 보존했다. 운영 API 교체 전 유효 worker lease·비 INDEX command·
