@@ -58,3 +58,40 @@ release-operator1.20은 정확한72→73과 같은73검증만 추가한다. 이�
 QUERY의 실제 API provider pin갱신 및 원 GPU INDEX/numerical/창작 inputs보존을 검증한 뒤 반영한다.
 새 모델·문항 생성 없이 기존 문항으로 제목 저장/재열기/목록 삭제/선택형 검색을 확인한다.
 완료 검색의 saved ranking 운영 수정은 앞서 별도로 배포했으며 재조회 실측은 독립 기록한다.
+
+## 운영 반영 — 2026-11-05 14:19 UTC
+
+구현 commit `98eea4bdf7cbd72aea4af77c69a80843104a4709`를 push하고 API/platform/API contracts,
+Catalog, Web을 같은 검증 release로 반영했다. 보호된 release-operator1.20의 ADMIT과72→73
+업그레이드/같은73검증이 통과했다. API wheel/installed RECORD와 실제 API·Catalog UID import,
+Web non-editable 설치 검증57파일, 실제 HTTPS ready·로그인 화면·비인증401·API sandbox 검사도 PASS다.
+HTTPS로 제공된 `item-db.js`/`item-db-assembly.js`의 SHA는 source와 일치했다.
+부가 OpenAPI/화면 검사19 PASS, 최종 관련 source196 PASS다. 앞선 수와 중복되므로 합산하지 않는다.
+
+실제 설치: API/Catalog/Web/shared runner/HWPX Manager `98eea4bd`; QUERY owner는 기존
+`7f0566c4`와 기존 모델·수치 runtime을 유지하고, 새 실제 API의 source/wheel/code-member/config
+pin만 공식 codec으로 갱신했다. 새 API process에 대한 provider fence도 통과했다.
+Builder의 한글 합본·사용자가 확인한 출제의도 수정 파일은 바꾸지 않았다.
+
+진행 중인 원 Codex worker에는 신호를 보내지 않았다. creative producer의 기존 SIGINT 처리로
+새 target 접수만 중지하고 유효 lease/처리 command가 모두0이 될 때까지 자연 종료를 기다린 뒤
+짧은 receiver-first 배포를 했다. 같은 cohort/config로 producer를 재개했다. 재개 직후 active는
+확인했지만 아직 worker lease0인 입력 준비 구간이므로 네 슬롯 실제 재실행 PASS로 과장하지 않는다.
+GPU INDEX는 source `1f01f47d`, PID3100607·InvocationID·설정·수치 환경이 전후 같았다.
+
+단계별 보호된 기록·이전 wheel/config는 `/var/lib/eom-assembly-library-release-20261105/`,
+operator stage는 `/var/lib/eom-release-operator-stage.assembly73-k8fu70rb/`, 공식 API deployment
+record는 `/var/lib/eom-api/deployments/98eea4bdf7cbd72aea4af77c69a80843104a4709.json`에 있다.
+API는 실제73을 readiness 기준으로 쓰므로 필요 시73-compatible platform을 보존하고 이전
+API/contracts/Web/Catalog 설정 묶음으로 복구한다. 이 복구 조합의 별도 설치 import도 검사했으며
+실제 rollback을 수행했다는 뜻은 아니다. 사용자 metadata가 있으면 DDL downgrade하지 않는다.
+
+원 완료 검색은 READY·selector SHA동일·native launch1개를 유지한다. 아직 운영 새 결과 GET이 없어
+saved ranking publication과 실제 재조회 시간은 PENDING이다. 최근 완료 기록 열기와 새 화면의
+실제 사용자 확인은 자동/설치 검증과 구별해 후속 기록한다. 성공 인증·실패 이력·정본 변경은 없다.
+
+14:22 UTC 공식 observer는 재개한 producer를 PROCESSING/OK로 읽었다. 누적 Graph 등록은854건,
+별도 GPU 기출 등록 대상은271/520이었다. producer의 이번 실행 verified_count0을 누적 등록0으로
+해석하지 않는다. 이때 유효 worker lease는 아직0이므로 네 worker 동시 재실행 증거는 아니다.
+사용한 guarded 임시 DB와 그 임시 역할·credential state는 공식 cleanup으로 제거했다.
+이는 삭제된 검증용 DB라 복원이 필요하면 새 disposable fixture로 다시 만든다. 운영 데이터는 보존했다.

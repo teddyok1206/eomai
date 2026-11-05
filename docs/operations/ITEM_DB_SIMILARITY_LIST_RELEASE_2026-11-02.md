@@ -322,3 +322,19 @@ DB migration은 없다. release/rollback evidence는
 운영 반영 직후에는 아직 새 completed-result GET이 없어 snapshot publication과 실제
 재조회 시간은 PENDING이다. 기존 기록의 첫 GET으로 한 번 채우고 같은 기록의 다음 GET을
 측정한다. user search를 새로 제출하거나 최초 저장을 별도 모델/GPU 실행으로 세지 않는다.
+
+### 저장 결과 경로 보존·검증 — 2026-11-05 14:22 UTC
+
+뒤이은 조립·필터 release `98eea4bd`의 Catalog에도 같은 saved ranking 경로를 보존했다.
+해당 릴리스에서 기존 QUERY owner `7f0566c4`/모델은 유지하고 새 API provider pin만 갱신했으며,
+INDEX PID3100607과 수치 환경은 그대로다. 원 완료 검색 READY·selector SHA동일·native launch1개도
+보존했다. [조립·필터 실제 설치 기록](ITEM_DB_ASSEMBLY_LIBRARY_2026-11-05.md)과 구별해 본다.
+
+545개 source의 세 번 fresh metadata observation을 포함하는 disposable 검사 시간은 세 case에서
+각각1.497/1.352/1.308초였다. 이는 synthetic PostgreSQL dependency 확인 비용이며 실제 HTTPS
+결과 GET시간이나 전체 결과 읽기 시간을 측정한 값이 아니다. 같은 suite5 PASS로 확인했고
+원본 변화·손상·철회 거부와 concurrent first-fill 불변식을 유지했다. 임시 DB는 검사 후 제거했다.
+
+14:20 관측까지 운영 새 completed-result GET은 없어 saved snapshot 발행과 재조회 실측은
+PENDING이다. 사용자가 최근 완료 기록을 열어 기존 요청을 한 번 채운 뒤 같은 기록을 다시
+여는 검증을 요청했다. 새 검색·모델 호출·실패 성공 재해석으로 대신하지 않는다.
