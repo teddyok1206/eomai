@@ -45,6 +45,7 @@ from eom_workflow.local_embedding_workflow import (
     LOCAL_EMBEDDING_EXECUTION_PROTOCOL,
     LOCAL_EMBEDDING_WORKFLOW_KEY,
 )
+from eom_workflow.material_learning_request import MaterialLearningWorkflowRequest
 from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryWorkflowRequest,
 )
@@ -109,6 +110,13 @@ from eom_workflow_runner.local_embedding_admission import (
     validate_local_embedding_runner_admission,
 )
 from eom_workflow_runner.local_embedding_execution_port import LocalEmbeddingNativeExecutor
+from eom_workflow_runner.material_learning_admission import (
+    MATERIAL_LEARNING_WORKFLOW_KEY,
+    MaterialLearningSourceAuthorizer,
+    material_learning_fingerprint,
+    reauthorize_material_learning_submission,
+    validate_material_learning_submission,
+)
 from eom_workflow_runner.models import (
     ApprovalRequestRecord,
     WorkflowCommandRecord,
@@ -717,6 +725,7 @@ def workflow_business_fingerprint(
 def workflow_request_storage_document(
     request: (
         WorkflowRequest
+        | MaterialLearningWorkflowRequest
         | InferenceTransferWorkflowRequest
         | SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
@@ -724,6 +733,8 @@ def workflow_request_storage_document(
     ),
 ) -> dict[str, Any]:
     """Serialize a request without dropping schema-required nullable values."""
+    if isinstance(request, MaterialLearningWorkflowRequest):
+        return request.model_dump(mode="json")
     if isinstance(request, (PrivateChatQueryWorkflowRequest, PrivateChatQueryWorkflowRequestV2)):
         return parse_supported_private_chat_query_workflow_request(request).model_dump(mode="json")
     if isinstance(request, SupportedReferenceQueryWorkflowRequest):
@@ -762,9 +773,13 @@ def workflow_request_storage_document(
     return document
 
 
-def load_persisted_workflow_request(document: dict[str, Any]) -> WorkflowRequest:
+def load_persisted_workflow_request(
+    document: dict[str, Any],
+) -> WorkflowRequest | MaterialLearningWorkflowRequest:
     """Load persisted requests, repairing only the verified legacy null-omission defect."""
     normalized = dict(document)
+    if normalized.get("request_name") == "MATERIAL_LEARNING_REQUEST":
+        return MaterialLearningWorkflowRequest.model_validate(normalized)
     analysis = normalized.get("analysis_request")
     if (
         normalized.get("request_name") == "KNOWLEDGE_ANALYSIS_REQUEST"
@@ -1078,6 +1093,7 @@ def create_workflow_instance(
     definition: WorkflowDefinitionRecord,
     request: (
         WorkflowRequest
+        | MaterialLearningWorkflowRequest
         | InferenceTransferWorkflowRequest
         | SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
@@ -1097,7 +1113,78 @@ def create_workflow_instance(
     private_chat_query_owner: PrivateChatQueryOwnerAdmission | None = None,
     private_chat_query_executor: PrivateChatQueryNativeExecutor | None = None,
     external_item_learning_authorizer: ExternalItemLearningSourceAuthorizer | None = None,
+    material_learning_authorizer: MaterialLearningSourceAuthorizer | None = None,
 ) -> tuple[WorkflowInstanceRecord, bool]:
+    is_material = isinstance(request, MaterialLearningWorkflowRequest)
+    if is_material or definition.definition_key == MATERIAL_LEARNING_WORKFLOW_KEY:
+        if (
+            not is_material
+            or material_learning_authorizer is None
+            or any(
+                value is not None
+                for value in (
+                    runtime_context,
+                    completed_preset_revision_id,
+                    inference_transfer_context,
+                    local_embedding_owner,
+                    local_embedding_executor,
+                    reference_query_owner,
+                    reference_query_executor,
+                    private_chat_query_context,
+                    private_chat_query_owner,
+                    private_chat_query_executor,
+                    external_item_learning_authorizer,
+                )
+            )
+        ):
+            raise WorkflowError(
+                WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+                "material learning requires only its source owner and exact purpose",
+            )
+        assert isinstance(request, MaterialLearningWorkflowRequest)
+        checked_material = validate_material_learning_submission(
+            definition, request, actor_type=actor_type, actor_id=actor_id
+        )
+        with session.begin_nested():
+            reauthorize_material_learning_submission(
+                session,
+                request=checked_material,
+                operator_id=actor_id,
+                source_authorizer=material_learning_authorizer,
+            )
+            result = _persist_workflow_instance(
+                session,
+                definition=definition,
+                request=checked_material,
+                idempotency_key=idempotency_key,
+                actor_type=actor_type,
+                actor_id=actor_id,
+            )
+            stored, _ = result
+            if (
+                stored.created_actor_type != actor_type
+                or stored.created_actor_id != actor_id
+                or stored.definition_id != definition.definition_id
+                or stored.definition_hash != definition.definition_hash
+                or stored.initial_request != workflow_request_storage_document(checked_material)
+            ):
+                raise WorkflowError(
+                    WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+                    "material replay differs from its owner or immutable input",
+                )
+            reauthorize_material_learning_submission(
+                session,
+                request=checked_material,
+                operator_id=actor_id,
+                source_authorizer=material_learning_authorizer,
+            )
+            return result
+    if material_learning_authorizer is not None:
+        raise WorkflowError(
+            WorkflowErrorCode.WORKFLOW_REQUEST_INVALID,
+            "material source authority cannot admit another Workflow purpose",
+        )
+    assert not isinstance(request, MaterialLearningWorkflowRequest)
     is_creative = (
         isinstance(request, WorkflowRequest)
         and getattr(request, "request_name", None) == "EXTERNAL_ITEM_LEARNING_REQUEST"
@@ -1433,6 +1520,7 @@ def _persist_workflow_instance(
     definition: WorkflowDefinitionRecord,
     request: (
         WorkflowRequest
+        | MaterialLearningWorkflowRequest
         | InferenceTransferWorkflowRequest
         | SupportedLocalEmbeddingRequest
         | SupportedReferenceQueryWorkflowRequest
@@ -1461,7 +1549,9 @@ def _persist_workflow_instance(
         )
     else:
         request_hash = (
-            external_item_learning_fingerprint(definition, request, operator_id=actor_id)
+            material_learning_fingerprint(definition, request, operator_id=actor_id)
+            if isinstance(request, MaterialLearningWorkflowRequest)
+            else external_item_learning_fingerprint(definition, request, operator_id=actor_id)
             if isinstance(request, WorkflowRequest)
             and request.request_name == "EXTERNAL_ITEM_LEARNING_REQUEST"
             else reference_query_business_fingerprint(
@@ -1564,6 +1654,7 @@ def _persist_workflow_instance(
                 "LEGACY_ITEM_EXTRACTION_REQUEST",
                 "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST",
                 "EXTERNAL_ITEM_LEARNING_REQUEST",
+                "MATERIAL_LEARNING_REQUEST",
             }
             else WorkflowStage.AUTHORING.value
         ),

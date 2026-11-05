@@ -4258,9 +4258,11 @@ def test_alembic_head_matches_composed_sqlalchemy_metadata(integration_engine: E
     # Register the two independently composed owners even when this test runs
     # alone, rather than relying on API/Builder tests having imported them first.
     from eom_api.item_db_similarity_models import ItemDbSimilaritySearchRecord
+    from eom_catalog_service.material_learning_models import LearningMaterialRecord
     from eom_hwpx_manager.curated_build_models import HwpxCuratedBuildRecord
 
     assert ItemDbSimilaritySearchRecord.__table__.metadata is Base.metadata
+    assert LearningMaterialRecord.__table__.metadata is Base.metadata
     assert HwpxCuratedBuildRecord.__table__.metadata is Base.metadata
     with integration_engine.connect() as connection:
         context = MigrationContext.configure(connection)

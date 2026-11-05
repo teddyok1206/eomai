@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/run-query/1.0",
+  "title": "EOM material learning run-query 1.0",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "material-learning-run-query/1.0"
+        },
+        "operation": {
+          "const": "LIST_MATERIAL_LEARNING_RUNS"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "actor_id",
+        "limit"
+      ]
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "material-learning-run-query/1.0"
+        },
+        "operation": {
+          "const": "GET_MATERIAL_LEARNING_RUN"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "run_id": {
+          "type": "string",
+          "pattern": "^materialrun_[0-9a-f]{32}$"
+        },
+        "after_ordinal": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "required": [
+        "schema_version",
+        "operation",
+        "actor_id",
+        "run_id",
+        "after_ordinal",
+        "limit"
+      ]
+    }
+  ]
+}

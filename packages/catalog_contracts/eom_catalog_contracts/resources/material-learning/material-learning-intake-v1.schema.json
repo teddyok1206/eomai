@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/intake/1.0",
+  "title": "EOM material learning intake 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-intake/1.0"
+    },
+    "material_id": {
+      "type": "string",
+      "pattern": "^material_[0-9a-f]{32}$"
+    },
+    "material_revision_id": {
+      "type": "string",
+      "pattern": "^materialrev_[0-9a-f]{32}$"
+    },
+    "requested_by": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "request_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "upload": {
+      "$ref": "eom://schemas/material-learning/upload/1.0"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/material-learning/intake-types/1.0#/$defs/selectedSource"
+      },
+      "minItems": 1,
+      "maxItems": 2
+    },
+    "rights_attestation": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    }
+  },
+  "required": [
+    "schema_version",
+    "material_id",
+    "material_revision_id",
+    "requested_by",
+    "request_sha256",
+    "upload",
+    "sources",
+    "rights_attestation"
+  ]
+}

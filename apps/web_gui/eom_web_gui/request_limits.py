@@ -20,7 +20,11 @@ PDF_REVIEW_CONTENT_PATH = re.compile(
 def request_body_limit(method: str, path: str) -> int:
     return (
         MAX_PDF_REVIEW_BODY_BYTES
-        if method == "PUT" and PDF_REVIEW_CONTENT_PATH.fullmatch(path)
+        if method == "PUT"
+        and (
+            PDF_REVIEW_CONTENT_PATH.fullmatch(path)
+            or path == "/studio/api/v1/material-learning/sources"
+        )
         else MAX_BODY_BYTES
     )
 

@@ -31,6 +31,12 @@ PERMITTED_USES = (
 )
 
 
+def require_material_rights_confirmation(value: object) -> object:
+    if value is not True:
+        raise ValueError("MATERIAL_LEARNING_RIGHTS_CONFIRMATION_REQUIRED")
+    return value
+
+
 class MaterialLearningUpload(FrozenModel):
     schema_version: Literal["material-learning-upload/1.0"] = "material-learning-upload/1.0"
     title: str = Field(min_length=1, max_length=200)
@@ -45,9 +51,7 @@ class MaterialLearningUpload(FrozenModel):
     @field_validator("rights_confirmed", mode="before")
     @classmethod
     def explicit_confirmation(cls, value: object) -> object:
-        if value is not True:
-            raise ValueError("MATERIAL_LEARNING_RIGHTS_CONFIRMATION_REQUIRED")
-        return value
+        return require_material_rights_confirmation(value)
 
     @model_validator(mode="after")
     def closed_upload(self) -> Self:
@@ -331,6 +335,14 @@ class MaterialExtractionResult(SourceItemLearningObservation):
     def installed_schema(self) -> Self:
         validate_contract("material-learning-extraction-result-v1", self.model_dump(mode="json"))
         return self
+
+
+MaterialLearningWork = Annotated[
+    MaterialDiscoveryWork | MaterialExtractionWork, Field(discriminator="schema_version")
+]
+MaterialLearningResult = Annotated[
+    MaterialDiscoveryResult | MaterialExtractionResult, Field(discriminator="schema_version")
+]
 
 
 def validate_material_discovery(

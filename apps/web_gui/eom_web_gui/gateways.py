@@ -119,6 +119,13 @@ from eom_web_gui.item_preview_projection import (
     resolve_content_capability,
 )
 from eom_web_gui.knowledge_map_contracts import KnowledgeMapView
+from eom_web_gui.material_learning_contracts import (
+    MaterialLearningAcceptance,
+    MaterialLearningDetail,
+    MaterialLearningRuns,
+    MaterialLearningSourceReceipt,
+    MaterialLearningSubmission,
+)
 from eom_web_gui.redaction import sanitize_mapping
 from eom_web_gui.reference_item_contracts import parse_reference_item_start_reply
 from eom_web_gui.sessions import ApiTokens, WebSession
@@ -425,6 +432,26 @@ class RegisteredItemDbPage:
 
 
 class ApplicationGateway(Protocol):
+    async def material_learning_source(
+        self,
+        session: WebSession,
+        *,
+        original_filename: str,
+        content_length: int,
+        media_type: str,
+        content: AsyncIterator[bytes],
+        idempotency_key: str,
+    ) -> MaterialLearningSourceReceipt: ...
+
+    async def create_material_learning(
+        self, session: WebSession, value: MaterialLearningSubmission
+    ) -> MaterialLearningAcceptance: ...
+
+    async def material_learning_runs(self, session: WebSession) -> MaterialLearningRuns: ...
+
+    async def material_learning_run(
+        self, session: WebSession, run_id: str, *, after_ordinal: int = 0
+    ) -> MaterialLearningDetail: ...
     async def create_curated_hwpx(
         self,
         session: WebSession,
@@ -1104,6 +1131,76 @@ class ObserveClient:
 
 
 class HttpApplicationGateway:
+    async def material_learning_source(
+        self,
+        session: WebSession,
+        *,
+        original_filename: str,
+        content_length: int,
+        media_type: str,
+        content: AsyncIterator[bytes],
+        idempotency_key: str,
+    ) -> MaterialLearningSourceReceipt:
+        response = await self._authorized(
+            session,
+            "PUT",
+            "/api/v1/material-learning/sources",
+            params={"original_filename": original_filename},
+            content=content,
+            headers={
+                "Content-Type": media_type,
+                "Content-Length": str(content_length),
+                "Idempotency-Key": idempotency_key,
+                "X-EOM-Rights-Confirmed": "true",
+            },
+            timeout=self._workflow_start_timeout,
+        )
+        try:
+            return MaterialLearningSourceReceipt.model_validate(self._data(response))
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def create_material_learning(
+        self, session: WebSession, value: MaterialLearningSubmission
+    ) -> MaterialLearningAcceptance:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/material-learning",
+            json=value.model_dump(mode="json", exclude={"idempotency_key"}),
+            headers={"Idempotency-Key": value.idempotency_key},
+            timeout=self._workflow_start_timeout,
+        )
+        try:
+            return MaterialLearningAcceptance.model_validate(self._data(response))
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def material_learning_runs(self, session: WebSession) -> MaterialLearningRuns:
+        response = await self._authorized(session, "GET", "/api/v1/material-learning")
+        try:
+            return MaterialLearningRuns.model_validate(self._data(response))
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def material_learning_run(
+        self, session: WebSession, run_id: str, *, after_ordinal: int = 0
+    ) -> MaterialLearningDetail:
+        _require_id(run_id, "materialrun_")
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/material-learning/{run_id}",
+            params={"after_ordinal": after_ordinal},
+        )
+        try:
+            reply = MaterialLearningDetail.model_validate(self._data(response))
+            if reply.run.run_id != run_id:
+                raise ValueError("Material learning reply identity differs")
+            return reply
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
     @staticmethod
     def _curated_hwpx_view(payload: object, assembly_id: str) -> CuratedHwpxView:
         try:

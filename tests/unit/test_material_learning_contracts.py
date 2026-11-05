@@ -134,7 +134,7 @@ def discovery():
         "units": [
             unit(),
             unit("EXPLANATION", page=31),
-            unit(page=32),
+            {**unit(page=32), "local_key": "context-question"},
             {**unit("EXPLANATION", page=32), "local_key": "context-explanation"},
         ],
         "warnings": [],

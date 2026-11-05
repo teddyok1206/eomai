@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/error/1.0",
+  "title": "EOM material learning error 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-error/1.0"
+    },
+    "status": {
+      "const": "ERROR"
+    },
+    "error_code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]{2,127}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "error_code"
+  ]
+}

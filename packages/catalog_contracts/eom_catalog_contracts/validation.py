@@ -34,6 +34,72 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "material-learning-intake-types-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-intake-types-v1.schema.json",
+            "resources/material-learning/material-learning-intake-types-v1.schema.json",
+            "1.0",
+            "sha256:e1073dc7041e76c7abed1b3c94b7d6239798848c8773ea1f0b5ac5e436ee1262",
+        ),
+        "material-learning-source-upload-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-source-upload-v1.schema.json",
+            "resources/material-learning/material-learning-source-upload-v1.schema.json",
+            "1.0",
+            "sha256:4017242c833b1a8d6c32bb0e55a3c38d701456a8a65ffbd25200e96d67a84e3d",
+        ),
+        "material-learning-source-manifest-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-source-manifest-v1.schema.json",
+            "resources/material-learning/material-learning-source-manifest-v1.schema.json",
+            "1.0",
+            "sha256:0b09bdd907404f06687d0d35beab8131bab910980b37a3cafb84f243ce1c9e40",
+        ),
+        "material-learning-source-receipt-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-source-receipt-v1.schema.json",
+            "resources/material-learning/material-learning-source-receipt-v1.schema.json",
+            "1.0",
+            "sha256:c209178e8f3cd1f18bcbf4baf39487972defb777eca242a016c1ca8f5ca78110",
+        ),
+        "material-learning-create-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-create-v1.schema.json",
+            "resources/material-learning/material-learning-create-v1.schema.json",
+            "1.0",
+            "sha256:eb6ee4bec2d682c958e9829e330a1f7eefeded43f7d608e528c4facecc3981d7",
+        ),
+        "material-learning-intake-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-intake-v1.schema.json",
+            "resources/material-learning/material-learning-intake-v1.schema.json",
+            "1.0",
+            "sha256:bdcc42215dd2b2b107e0aa7206073496f1f79875086d93594ef217bc55a77b5a",
+        ),
+        "material-learning-acceptance-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-acceptance-v1.schema.json",
+            "resources/material-learning/material-learning-acceptance-v1.schema.json",
+            "1.0",
+            "sha256:b9ac41b67d66f739898dd20da20d0bdfeac965d2b957bc2e4a1695fb70432022",
+        ),
+        "material-learning-error-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-error-v1.schema.json",
+            "resources/material-learning/material-learning-error-v1.schema.json",
+            "1.0",
+            "sha256:6dd4724773570e27386e89fbeb6ab41f73058d481bef62fd151bede8d9ca8ab6",
+        ),
+        "material-learning-run-query-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-run-query-v1.schema.json",
+            "resources/material-learning/material-learning-run-query-v1.schema.json",
+            "1.0",
+            "sha256:c60c211a5a75185b1dd5ede27b146ac1a01416310d6f3ce67e860144a0b24547",
+        ),
+        "material-learning-run-list-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-run-list-v1.schema.json",
+            "resources/material-learning/material-learning-run-list-v1.schema.json",
+            "1.0",
+            "sha256:613d9cf901a659b894d871f4787c1db72fa642301f2e6d80763a93d91779f37b",
+        ),
+        "material-learning-run-detail-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-run-detail-v1.schema.json",
+            "resources/material-learning/material-learning-run-detail-v1.schema.json",
+            "1.0",
+            "sha256:6818f880a3abb84de2f526386e0fc45ed00164b2b4462332bf4d5933aa1b710c",
+        ),
         "material-learning-types-v1": CatalogSchemaResource(
             "schemas/material-learning/material-learning-types-v1.schema.json",
             "resources/material-learning/material-learning-types-v1.schema.json",
@@ -74,7 +140,7 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "schemas/material-learning/material-learning-extraction-result-v1.schema.json",
             "resources/material-learning/material-learning-extraction-result-v1.schema.json",
             "1.0",
-            "sha256:08fb7a7baf082afdd15e01e362bbe6e043d5b119e4c26a9fe31c0928b4eb08e3",
+            "sha256:70ebbfde34ee6892b75f0906ec1b7b2e2938d9e021374b91cb9677fdd764d7ad",
         ),
         "knowledge-map-view-v1": CatalogSchemaResource(
             "schemas/knowledge/knowledge-map-view-v1.schema.json",

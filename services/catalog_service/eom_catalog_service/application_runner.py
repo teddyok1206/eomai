@@ -84,6 +84,9 @@ from eom_catalog_service.legacy_item_learning_service import (
 )
 from eom_catalog_service.legacy_item_promotion_service import LegacyItemPromotionService
 from eom_catalog_service.legacy_usage_models import LegacyUsageImportRecord
+from eom_catalog_service.material_learning_intake import MaterialLearningIntakeService
+from eom_catalog_service.material_learning_read import MaterialLearningReadService
+from eom_catalog_service.material_learning_source import MaterialLearningSourceService
 from eom_catalog_service.mock_exam_assembly_service import MockExamAssemblyService
 from eom_catalog_service.mock_exam_item_review_publication_service import (
     MockExamItemReviewPublicationService,
@@ -335,6 +338,9 @@ def serve() -> int:
             mock_exam_assemblies=MockExamAssemblyService(engine),
             pdf_document_review_intake=PdfDocumentReviewIntakeService(engine),
             office_document_review_intake=OfficeDocumentReviewIntakeService(engine),
+            material_learning_sources=MaterialLearningSourceService(engine),
+            material_learning_intake=MaterialLearningIntakeService(engine),
+            material_learning_reads=MaterialLearningReadService(engine),
             document_review_hwpx_corrections=DocumentReviewHwpxCorrectionService(engine),
             document_review_pdf_annotations=DocumentReviewPdfAnnotationService(engine),
             external_item_documents=external_item_documents,

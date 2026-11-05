@@ -55,10 +55,38 @@ class PdfUploadStager:
         source_format: DocumentSourceFormat = "PDF",
         media_type: DocumentSourceMediaType = "application/pdf",
     ) -> AsyncIterator[StagedPdfUpload]:
+        async with self._stage(
+            request,
+            declared_length=declared_length,
+            source_format=source_format,
+            media_type=media_type,
+        ) as staged:
+            yield staged
+
+    @asynccontextmanager
+    async def stage_detected(
+        self, request: Request, *, declared_length: int
+    ) -> AsyncIterator[StagedPdfUpload]:
+        """For material learning, bytes determine type even when suffix is wrong."""
+        async with self._stage(
+            request, declared_length=declared_length, source_format=None, media_type=None
+        ) as staged:
+            yield staged
+
+    @asynccontextmanager
+    async def _stage(
+        self,
+        request: Request,
+        *,
+        declared_length: int,
+        source_format: DocumentSourceFormat | None,
+        media_type: DocumentSourceMediaType | None,
+    ) -> AsyncIterator[StagedPdfUpload]:
         expected_media_type, suffix = {
             "PDF": ("application/pdf", ".pdf"),
             "HWP": ("application/vnd.hancom.hwp", ".hwp"),
             "HWPX": ("application/vnd.hancom.hwpx", ".hwpx"),
+            None: (None, ".bin"),
         }[source_format]
         if media_type != expected_media_type:
             raise ApiError(
@@ -116,7 +144,17 @@ class PdfUploadStager:
                     "PDF upload length differs",
                     "The uploaded PDF does not match the byte count declared by its intent.",
                 )
-            if not self._valid_signature(source_format, bytes(prefix)):
+            if source_format is None:
+                detected = self._detect_signature(bytes(prefix))
+                if detected is None:
+                    raise ApiError(
+                        422,
+                        "MATERIAL_LEARNING_SOURCE_SIGNATURE_INVALID",
+                        "Document signature is invalid",
+                        "Only PDF, HWP and HWPX source bytes are supported.",
+                    )
+                source_format, media_type = detected
+            elif not self._valid_signature(source_format, bytes(prefix)):
                 error_code = (
                     "PDF_DOCUMENT_REVIEW_SIGNATURE_INVALID"
                     if source_format == "PDF"
@@ -128,6 +166,7 @@ class PdfUploadStager:
                     "Document signature is invalid",
                     "The uploaded bytes do not match the declared document format.",
                 )
+            assert source_format is not None and media_type is not None
             await run_in_threadpool(os.fsync, file_descriptor)
             metadata = os.fstat(file_descriptor)
             if (
@@ -194,6 +233,19 @@ class PdfUploadStager:
                 "The private PDF upload area has an unsafe identity.",
             )
         return descriptor
+
+    @staticmethod
+    def _detect_signature(
+        prefix: bytes,
+    ) -> tuple[DocumentSourceFormat, DocumentSourceMediaType] | None:
+        if _PDF_SIGNATURE.fullmatch(prefix):
+            return "PDF", "application/pdf"
+        if prefix == _HWP_SIGNATURE:
+            return "HWP", "application/vnd.hancom.hwp"
+        if prefix.startswith(_HWPX_SIGNATURES):
+            # Container validity is checked by the existing isolated Office owner.
+            return "HWPX", "application/vnd.hancom.hwpx"
+        return None
 
     @staticmethod
     def _valid_signature(source_format: DocumentSourceFormat, prefix: bytes) -> bool:

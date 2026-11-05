@@ -1,0 +1,150 @@
+{
+  "$id": "eom://schemas/workflow/resolved-execution-plan/33.0",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "capacity_policy_revision_id": {
+      "pattern": "^capacityrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "plan_id": {
+      "pattern": "^execplan_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "plan_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "preset_id": {
+      "pattern": "^execpreset_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "preset_revision_id": {
+      "pattern": "^execpresetrev_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "preset_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "resolved_at": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/utcTimestamp"
+    },
+    "resolver_version": {
+      "const": "33.0.0"
+    },
+    "schema_version": {
+      "const": "resolved-execution-plan/33.0"
+    },
+    "steps": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "general_knowledge_mode": {
+            "const": "DENIED"
+          },
+          "instruction_bundle": {
+            "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/bundleRevisionPointer"
+          },
+          "model": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "network": {
+            "const": "disabled"
+          },
+          "reasoning_effort": {
+            "enum": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "reference_bundle": {
+            "type": "null"
+          },
+          "role": {
+            "const": "support"
+          },
+          "sandbox": {
+            "const": "read-only"
+          },
+          "step_key": {
+            "const": "learn"
+          },
+          "timeout_seconds": {
+            "maximum": 7200,
+            "minimum": 30,
+            "type": "integer"
+          },
+          "worker_pool_key": {
+            "const": "support"
+          }
+        },
+        "required": [
+          "step_key",
+          "role",
+          "model",
+          "reasoning_effort",
+          "instruction_bundle",
+          "reference_bundle",
+          "worker_pool_key",
+          "timeout_seconds",
+          "sandbox",
+          "network",
+          "general_knowledge_mode"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "work_input": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/material-learning/discovery-work/1.0"
+        },
+        {
+          "$ref": "eom://schemas/material-learning/extraction-work/1.0"
+        }
+      ]
+    },
+    "workflow_definition_key": {
+      "const": "material-learning"
+    },
+    "workflow_definition_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "workflow_definition_version": {
+      "const": "1.0.0"
+    },
+    "workflow_id": {
+      "pattern": "^workflow_[0-9a-f]{32}$",
+      "type": "string"
+    },
+    "workload_class": {
+      "const": "KNOWLEDGE_ANALYSIS"
+    }
+  },
+  "required": [
+    "schema_version",
+    "plan_id",
+    "workflow_id",
+    "workload_class",
+    "preset_id",
+    "preset_revision_id",
+    "preset_sha256",
+    "workflow_definition_key",
+    "workflow_definition_version",
+    "workflow_definition_sha256",
+    "work_input",
+    "capacity_policy_revision_id",
+    "steps",
+    "resolver_version",
+    "resolved_at",
+    "plan_sha256"
+  ],
+  "title": "Mixed-material sequential learning resolved execution plan V33",
+  "type": "object"
+}

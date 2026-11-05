@@ -120,7 +120,7 @@ legacy extraction은 reviewed exam bundle/occurrence를 전제로 한다. 이 �
 | R2 | 재사용 경계/상태·동시성/복구·확장/실제 배포·검증 설계 검토 | D2 반영 |
 | P1 | JSON Schema 2020-12·Pydantic·pointer·상태/단위 계획 | 기본 입력/발견/문항 추출 계약과 순수 계획 구현·집중 회귀 검증. 문서 등록/공개 진행 계약은 후속 |
 | P2 | 안전한 업로드/준비와 기존 converter·원본 그림 연결 | 미착수 |
-| P3 | 1슬롯 발견/문항/내용 분석·등록·Graph·증분 INDEX 연결 | 미착수 |
+| P3 | 1슬롯 발견/문항/내용 분석·등록·Graph·증분 INDEX 연결 | 순차 task/lease 저장과 전용 Workflow admission·role 계약 구현. 실제 실행/등록 연결은 후속 |
 | P4 | 자료 학습 GUI와 최근 작업·진행·예외·재개/조회 | 미착수 |
 | P5 | unit/schema/security·disposable DB 동시성/중단·browser·wheel 검사 | 미착수 |
 | P6 | 호환 배포·bounded 실제 업로드·Item/Graph/검색 연결·재조회 | 미착수 |
@@ -149,6 +149,13 @@ provider pin과 QUERY/Catalog/runtime 호환 절차를 따르며 INDEX 수치 �
 - **영속성:** 자료 접수/불변 revision, ordered 단위와 child 실행 포인터, append-only
   상태 이벤트만 저장한다. 파일과 긴 결과는 Artifact다. 원본 hash만 같은 다른 사용자의
   자료를 권한 확인 없이 재사용하지 않으며 멱등 key는 실제 actor와 요청 hash에 묶는다.
+  구체적으로 logical 자료, 불변 revision, 처리 run, 순서 있는 task, append-only event의
+  다섯 작은 테이블이다. revision에는 접수 manifest 포인터만, run/task에는 진행과
+  child 포인터만 둔다. 일반 원문/발견 결과/본문/풀이/페이지는 JSONB에 넣지 않는다.
+  actor+idempotency key, revision+run attempt, run+unit+task attempt를 unique로 하고
+  owner recent/상태별 next ordinal/event sequence를 B-tree로 조회한다. 모델 실행 중인
+  자료 task의 partial unique 실행 lane으로 자료 전체에서 AI 작업 한 개만 허용한다.
+  만료된 coordinator lease만으로 살아 있는 child를 재제출하지 않는다.
 - **부분 완료:** `PREPARING → DISCOVERING → PROCESSING → COMPLETED`를 전체 경로로,
   단위는 준비/실행/등록/Graph/임베딩의 별도 상태로 기록한다. 명시적 예외가 남으면
   `COMPLETED_WITH_EXCEPTIONS`다. 학습 슬롯 대기와 임베딩 대기를 실패로 취급하지 않는다.
@@ -187,3 +194,41 @@ provider pin과 QUERY/Catalog/runtime 호환 절차를 따르며 INDEX 수치 �
 업로드/모델/Artifact/Item/Graph 경계별 중단, 구형 Workflow/계약 회귀를 검사한다.
 운영 DB에 mutating pytest를 실행하지 않는다. 실제 canary는 제한된 검증 자료와 공식
 사용자 권한으로 실행하고, 전체 책 재처리나 기존 정본/실패 이력 삭제로 검증하지 않는다.
+
+## 구현 체크포인트 2026-11-05
+
+- 설계/검토와 기본 계약·순수 계획: `679e48c1`; 패키지 발견 및 새 schema 설치 경계:
+  `bdfb23e7`. 후자는 subproject의 옛 `build/`를 Python package로 잘못 포함하는 문제와
+  새 자료 schema resource의 wheel 포함을 검증한 수정이다.
+- `material-learning@1.0.0`, `workflow-role/1.37.0`, plan `33.0`은 현재 **후보**다.
+  정의/입력·출력 schema와 실제 Codex strict-output 형식을 검증했으며, 아직 운영에
+  활성화한 preset이나 실제 새 자료 모델 실행은 없다. 후속 일반 문서 source/공개 진행
+  계약이 완료되기 전 운영 가능하다고 표시하지 않는다.
+- migration `20261105_0074`는 현재 새 다섯 테이블과 보호 trigger의 **개발 후보**다.
+  guarded disposable PostgreSQL에서 upgrade/downgrade/upgrade와 metadata 일치,
+  동시 접수/단일 AI lane/lease 만료/기록 불변성 및 Workflow 재전송/권한 철회를 확인했다.
+  운영 DB head와 설치 서비스는 변경하지 않았다. 최종 배포 전 release-operator의
+  successor context/정확한 head와 API/Catalog/QUERY 호환 set을 함께 준비해야 한다.
+- 큰 원본을 문항마다 복제하지 않는다. 현행 file-set의 member/byte 상한이 있으므로
+  긴 자료의 페이지 리소스는 bounded chunk Artifact로 나누고, 일반 문서 manifest와
+  source successor가 정확한 chunk/member/hash를 pin하도록 구현한다. 기존 교과서
+  source V4의 한 Artifact 가정을 조용히 완화하지 않는다.
+- 19:23 UTC read-only 점검: 기존 유효 슬롯 lease 4개, 원래 creative producer와
+  GPU INDEX의 PID/invocation 유지. 현재 목표의 새 학습 모델 실행·운영 변경은 0이다.
+- 원본 접수·권리 확인·실제 형식 감지·멱등 자료 생성·bounded 진행 조회 및 Web/BFF 화면을
+  연결했다. `PUT /material-learning/sources`, `POST /material-learning`, 최근 목록과 실행
+  상세는 공식 API→Catalog 경로만 사용한다. 원본 Artifact는 한 번 보관하고 intake에는
+  pointer만 둔다. 일반 사용자에게 새 관리자 권한을 부여하지 않는다.
+- 최신 guarded 임시 DB에서 migration 왕복/metadata 일치와 저장·Workflow·원본
+  publication/실제 동시 접수/재조회 **21개 PASS**. 파일 보관의 Pydantic UTC 직렬화
+  (`Z`)와 self-hash 생성의 시간 표기 차이는 이 실제 검사에서 발견해 고쳤다.
+  실패한 첫 검증 기록은 보존했다. 원본에 새 `request`를 붙여 실패 이력을 덮지 않았다.
+- 실제 Chromium에서 본문+별도 해설 입력, 접수 실패 후 **같은 key 재전송·파일 재복사 없음**,
+  진행 표시와 계정 전환 후 늦은 응답 폐기 PASS. 합성 자료/응답을 사용했으므로 이 결과는
+  운영 업로드 또는 Codex·Graph 완료 증거가 아니다.
+- 아직 구현 중: bounded 페이지/일반 문서 source, 실제 Orchestrator 실행/결과 처리,
+  문항·문서·Graph·증분 INDEX와 DB 소비 경로, 운영 호환 배포와 실제 canary.
+  지금의 업로드 접수 성공만으로 학습 완료나 전체 goal 완료를 선언하지 않는다.
+- 20:13 UTC read-only: 기존 creative 실행은 publication 단계이며 당시 active slot lease는
+  0이었다. 기존 producer PID `4175073`/invocation과 GPU INDEX PID `4045657`/invocation은
+  그대로였다. cursor `25`는 재개 구간의 진행값이지 전체 Graph 누적 수가 아니다.

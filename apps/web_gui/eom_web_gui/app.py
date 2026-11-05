@@ -72,6 +72,7 @@ from eom_web_gui.item_db_similarity_contracts import (
 from eom_web_gui.knowledge_map_contracts import EdgeId as MapEdgeId
 from eom_web_gui.knowledge_map_contracts import MapHash
 from eom_web_gui.knowledge_map_contracts import NodeId as MapNodeId
+from eom_web_gui.material_learning_contracts import MaterialLearningSubmission
 from eom_web_gui.request_limits import (
     MAX_PDF_REVIEW_BODY_BYTES,
     RequestBodyLimitMiddleware,
@@ -495,6 +496,60 @@ def create_app(
         session: Annotated[WebSession, Depends(require_session)],
     ) -> dict[str, Any]:
         return (await actual.customer_support_case(session, workflow_id)).model_dump(mode="json")
+
+    @app.put(f"{API_PREFIX}/material-learning/sources", status_code=201)
+    async def upload_material_learning_source(
+        request: Request,
+        session: Annotated[WebSession, Depends(require_admin_csrf)],
+        original_filename: str = Query(min_length=1, max_length=255),
+        content_length: int = Header(ge=8, le=MAX_PDF_REVIEW_BODY_BYTES),
+        idempotency_key: str = Header(
+            alias="Idempotency-Key", pattern=r"^[A-Za-z0-9_.:-]{16,128}$"
+        ),
+        rights_confirmed: str = Header(alias="X-EOM-Rights-Confirmed"),
+    ) -> dict[str, Any]:
+        media_type = request.headers.get("content-type", "").split(";", 1)[0].strip().lower()
+        if media_type not in {
+            "application/octet-stream",
+            "application/pdf",
+            "application/vnd.hancom.hwp",
+            "application/vnd.hancom.hwpx",
+        }:
+            raise GatewayError(status=415, code="MATERIAL_LEARNING_MEDIA_TYPE_INVALID")
+        if rights_confirmed != "true":
+            raise GatewayError(status=422, code="MATERIAL_LEARNING_RIGHTS_CONFIRMATION_REQUIRED")
+        reply = await actual.material_learning_source(
+            session,
+            original_filename=original_filename,
+            content_length=content_length,
+            media_type=media_type,
+            content=request.stream(),
+            idempotency_key=idempotency_key,
+        )
+        return reply.model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/material-learning", status_code=202)
+    async def create_material_learning(
+        body: MaterialLearningSubmission,
+        session: Annotated[WebSession, Depends(require_admin_csrf)],
+    ) -> dict[str, Any]:
+        return (await actual.create_material_learning(session, body)).model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/material-learning")
+    async def list_material_learning(
+        session: Annotated[WebSession, Depends(require_admin_session)],
+    ) -> dict[str, Any]:
+        return (await actual.material_learning_runs(session)).model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/material-learning/{{run_id}}")
+    async def get_material_learning(
+        session: Annotated[WebSession, Depends(require_admin_session)],
+        run_id: str = Path(pattern=r"^materialrun_[0-9a-f]{32}$"),
+        after_ordinal: int = Query(default=0, ge=0, le=1_000_000),
+    ) -> dict[str, Any]:
+        return (
+            await actual.material_learning_run(session, run_id, after_ordinal=after_ordinal)
+        ).model_dump(mode="json")
 
     @app.get(f"{API_PREFIX}/pdf-document-reviews")
     async def pdf_document_reviews(

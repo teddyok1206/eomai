@@ -1,0 +1,332 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/intake-types/1.0",
+  "title": "EOM material learning intake-types 1.0",
+  "$defs": {
+    "sourceMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"
+        },
+        "media_type": {
+          "enum": [
+            "application/pdf",
+            "application/vnd.hancom.hwp",
+            "application/vnd.hancom.hwpx"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 8,
+          "maximum": 268435456
+        }
+      },
+      "required": [
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256",
+        "bytes"
+      ]
+    },
+    "sourceReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "material-learning-source-receipt/1.0"
+        },
+        "manifest": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "original": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "uploaded_by": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "original_filename": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "source_format": {
+          "enum": [
+            "PDF",
+            "HWP",
+            "HWPX"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "manifest",
+        "original",
+        "uploaded_by",
+        "created_at",
+        "original_filename",
+        "source_format"
+      ]
+    },
+    "selectedSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_role": {
+          "enum": [
+            "MAIN",
+            "SOLUTIONS"
+          ]
+        },
+        "source_upload": {
+          "$ref": "eom://schemas/material-learning/intake-types/1.0#/$defs/sourceReceipt"
+        }
+      },
+      "required": [
+        "source_role",
+        "source_upload"
+      ]
+    },
+    "taskCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "enum": [
+            "PENDING",
+            "PREPARING",
+            "READY",
+            "RUNNING",
+            "RESULT_READY",
+            "REGISTERED",
+            "ANALYZING",
+            "PUBLISHING",
+            "GRAPH_READY",
+            "COMPLETED",
+            "EXCEPTION",
+            "FAILED",
+            "CANCELLED"
+          ]
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1000000
+        }
+      },
+      "required": [
+        "state",
+        "count"
+      ]
+    },
+    "runSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "material_id": {
+          "type": "string",
+          "pattern": "^material_[0-9a-f]{32}$"
+        },
+        "material_revision_id": {
+          "type": "string",
+          "pattern": "^materialrev_[0-9a-f]{32}$"
+        },
+        "run_id": {
+          "type": "string",
+          "pattern": "^materialrun_[0-9a-f]{32}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "material_kind": {
+          "enum": [
+            "TEXTBOOK",
+            "REFERENCE_BOOK",
+            "WORKBOOK",
+            "MOCK_EXAM",
+            "OTHER"
+          ]
+        },
+        "state": {
+          "enum": [
+            "RECEIVED",
+            "PREPARING",
+            "DISCOVERING",
+            "PROCESSING",
+            "WAITING_FOR_CAPACITY",
+            "PAUSED",
+            "COMPLETED",
+            "COMPLETED_WITH_EXCEPTIONS",
+            "FAILED",
+            "CANCELLED"
+          ]
+        },
+        "task_counts": {
+          "type": "array",
+          "items": {
+            "$ref": "eom://schemas/material-learning/intake-types/1.0#/$defs/taskCount"
+          },
+          "minItems": 0,
+          "maxItems": 13
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "material_id",
+        "material_revision_id",
+        "run_id",
+        "title",
+        "material_kind",
+        "state",
+        "task_counts",
+        "error_code",
+        "created_at",
+        "updated_at"
+      ]
+    },
+    "taskSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "task_id": {
+          "type": "string",
+          "pattern": "^materialtask_[0-9a-f]{32}$"
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        "task_kind": {
+          "enum": [
+            "DISCOVER",
+            "EXPLANATION",
+            "QUESTION"
+          ]
+        },
+        "state": {
+          "enum": [
+            "PENDING",
+            "PREPARING",
+            "READY",
+            "RUNNING",
+            "RESULT_READY",
+            "REGISTERED",
+            "ANALYZING",
+            "PUBLISHING",
+            "GRAPH_READY",
+            "COMPLETED",
+            "EXCEPTION",
+            "FAILED",
+            "CANCELLED"
+          ]
+        },
+        "workflow_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^workflow_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "item_revision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^itemrev_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "analysis_run_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^analysisrun_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "graph_snapshot_revision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^graphrev_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 3,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "task_id",
+        "ordinal",
+        "task_kind",
+        "state",
+        "workflow_id",
+        "item_revision_id",
+        "analysis_run_id",
+        "graph_snapshot_revision_id",
+        "error_code"
+      ]
+    }
+  }
+}

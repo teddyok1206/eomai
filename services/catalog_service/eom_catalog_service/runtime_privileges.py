@@ -11,6 +11,11 @@ from sqlalchemy.engine import Connection
 TablePrivilege = Literal["SELECT", "INSERT", "UPDATE"]
 
 READ_TABLES: Final[tuple[str, ...]] = (
+    "learning_materials",
+    "learning_material_revisions",
+    "material_learning_runs",
+    "material_learning_tasks",
+    "material_learning_events",
     "alembic_version",
     "approval_requests",
     "assessment_assemblies",
@@ -142,6 +147,11 @@ READ_TABLES: Final[tuple[str, ...]] = (
 )
 
 INSERT_TABLES: Final[tuple[str, ...]] = (
+    "learning_materials",
+    "learning_material_revisions",
+    "material_learning_runs",
+    "material_learning_tasks",
+    "material_learning_events",
     "assessment_assemblies",
     "assessment_assembly_revisions",
     "assessment_form_revisions",
@@ -241,6 +251,9 @@ INSERT_TABLES: Final[tuple[str, ...]] = (
 )
 
 UPDATE_TABLES: Final[tuple[str, ...]] = (
+    "learning_materials",
+    "material_learning_runs",
+    "material_learning_tasks",
     "assessment_assemblies",
     "assessment_occurrences",
     "assessment_source_bundles",

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -196,10 +197,14 @@ def schemas() -> dict[str, dict[str, Any]]:
         schema_version=version("material-learning-extraction-result/1.0"),
         input_sha256=SHA,
         status=enum("PROPOSED", "NEEDS_DECISION"),
-        regions={"$ref": old + "#/properties/regions"},
-        proposal={"$ref": old + "#/properties/proposal"},
+        regions=sequence(
+            {"$ref": "eom://schemas/external-item/learning-result/1.0#/$defs/region"}, 1, 64
+        ),
+        proposal=nullable({"$ref": old + "#/$defs/proposal"}),
         solution_report={"$ref": old + "#/$defs/solutionReport"},
-        conflicts={"$ref": old + "#/properties/conflicts"},
+        conflicts=sequence(
+            {"$ref": "eom://schemas/external-item/learning-result/1.0#/$defs/conflict"}, 0, 32
+        ),
         office_bindings=nullable(
             {"$ref": "eom://schemas/external-item/office-visual-bindings/1.0"}
         ),
@@ -235,6 +240,67 @@ def main() -> None:
             directory.mkdir(parents=True, exist_ok=True)
             (directory / filename).write_bytes(payload)
         print(f"material-learning-{name}-v1 sha256:{hashlib.sha256(payload).hexdigest()}")
+    write_workflow_schemas()
+
+
+def write_workflow_schemas() -> None:
+    """Add a purpose-isolated support protocol, keeping predecessor bytes frozen."""
+    selection = {
+        "oneOf": [
+            {"$ref": BASE + "discovery-work/1.0"},
+            {"$ref": BASE + "extraction-work/1.0"},
+        ]
+    }
+    artifacts: list[tuple[str, str, dict[str, Any]]] = []
+    for kind in ("input", "result"):
+        predecessor = ROOT / f"schemas/workflow/roles/external-item-learning-{kind}-v3.schema.json"
+        document = json.loads(predecessor.read_bytes())
+        stem = f"material-learning-{kind}-v1"
+        document["$id"] = f"https://eom.local/schemas/workflow/roles/{stem}.schema.json"
+        document["properties"]["protocol_version"] = version("workflow-role/1.37.0")
+        if kind == "input":
+            document["properties"]["request"] = record(
+                request_name=version("MATERIAL_LEARNING_REQUEST"),
+                work_input=deepcopy(selection),
+            )
+        else:
+            document["properties"]["output"] = record(
+                learning_result={
+                    "oneOf": [
+                        {"$ref": BASE + "discovery-result/1.0"},
+                        {"$ref": BASE + "extraction-result/1.0"},
+                    ]
+                }
+            )
+        artifacts.append(("roles", stem, document))
+    document = json.loads(
+        (
+            ROOT / "schemas/workflow/control-plane/resolved-execution-plan-v32.schema.json"
+        ).read_bytes()
+    )
+    document.update(
+        title="Mixed-material sequential learning resolved execution plan V33",
+    )
+    document["$id"] = "eom://schemas/workflow/resolved-execution-plan/33.0"
+    document["properties"].update(
+        schema_version=version("resolved-execution-plan/33.0"),
+        workflow_definition_key=version("material-learning"),
+        workflow_definition_version=version("1.0.0"),
+        resolver_version=version("33.0.0"),
+        work_input=deepcopy(selection),
+    )
+    document["properties"]["steps"]["items"]["properties"]["step_key"] = version("learn")
+    artifacts.append(("control-plane", "resolved-execution-plan-v33", document))
+    for directory, stem, document in artifacts:
+        payload = (
+            json.dumps(document, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+        ).encode()
+        for parent in (
+            ROOT / "schemas/workflow",
+            ROOT / "packages/workflow/eom_workflow/resources",
+        ):
+            (parent / directory / (stem + ".schema.json")).write_bytes(payload)
+        print(f"{stem} sha256:{hashlib.sha256(payload).hexdigest()}")
 
 
 if __name__ == "__main__":

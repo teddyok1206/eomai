@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/source-receipt/1.0",
+  "title": "EOM material learning source-receipt 1.0",
+  "$ref": "eom://schemas/material-learning/intake-types/1.0#/$defs/sourceReceipt"
+}

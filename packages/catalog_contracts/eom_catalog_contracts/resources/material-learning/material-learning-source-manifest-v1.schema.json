@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/source-manifest/1.0",
+  "title": "EOM material learning source-manifest 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-source-manifest/1.0"
+    },
+    "uploaded_by": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "original_filename": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "source_format": {
+      "enum": [
+        "PDF",
+        "HWP",
+        "HWPX"
+      ]
+    },
+    "rights_confirmed": {
+      "const": true
+    },
+    "original": {
+      "$ref": "eom://schemas/material-learning/intake-types/1.0#/$defs/sourceMember"
+    }
+  },
+  "required": [
+    "schema_version",
+    "uploaded_by",
+    "original_filename",
+    "source_format",
+    "rights_confirmed",
+    "original"
+  ]
+}

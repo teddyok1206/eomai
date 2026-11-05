@@ -44,6 +44,7 @@ if (($# != 2)) || \
     "$1" != "pdf-review-tests" && "$1" != "external-item-tests" && \
     "$1" != "item-db-search-tests" && \
     "$1" != "creative-registration-tests" && "$1" != "creative-graph-tests" && \
+    "$1" != "material-learning-tests" && \
     "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
     "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
@@ -505,6 +506,19 @@ if [[ "${action}" == "creative-registration-tests" ]]; then
   "${PYTHON}" -m pytest -q tests/integration/test_creative_registration_storage.py \
     tests/integration/test_creative_visual_publication_storage.py \
     tests/integration/test_creative_visual_presentation_storage.py
+  exit 0
+fi
+
+if [[ "${action}" == "material-learning-tests" ]]; then
+  export EOM_RUN_API_INTEGRATION=1
+  export EOM_EXTERNAL_ITEM_TEST_STATE="${state_directory}"
+  export EOM_RUN_INTEGRATION=1
+  "${PYTHON}" -m pytest -q \
+    tests/integration/test_material_learning_storage.py \
+    tests/integration/test_material_learning_workflow_storage.py \
+    tests/integration/test_material_learning_intake_storage.py \
+    tests/integration/test_control_plane_persistence.py::test_alembic_head_matches_composed_sqlalchemy_metadata
+  printf 'Disposable mixed-material learning persistence tests passed.\n'
   exit 0
 fi
 

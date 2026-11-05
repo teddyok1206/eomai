@@ -94,12 +94,16 @@ class RequestBoundaryMiddleware:
         is_pdf_review_upload = method == "PUT" and DOCUMENT_REVIEW_UPLOAD_PATH.fullmatch(
             scope.get("path", "")
         )
+        is_material_upload = (
+            method == "PUT" and scope.get("path") == "/api/v1/material-learning/sources"
+        )
+        is_binary_upload = is_pdf_review_upload or is_material_upload
         content_length = headers.get("content-length")
         has_body = bool(
             (content_length and content_length.isdigit() and int(content_length) > 0)
             or headers.get("transfer-encoding")
         )
-        if is_pdf_review_upload:
+        if is_binary_upload:
             if (
                 headers.get("transfer-encoding")
                 or not content_length
@@ -107,9 +111,10 @@ class RequestBoundaryMiddleware:
             ):
                 await self._send_problem(scope, receive, secured_send, 400, "API_REQUEST_INVALID")
                 return
-            if (
-                headers.get("content-type", "").split(";", 1)[0].strip().lower()
-                not in DOCUMENT_REVIEW_UPLOAD_MEDIA_TYPES
+            if headers.get("content-type", "").split(";", 1)[0].strip().lower() not in (
+                DOCUMENT_REVIEW_UPLOAD_MEDIA_TYPES | {"application/octet-stream"}
+                if is_material_upload
+                else DOCUMENT_REVIEW_UPLOAD_MEDIA_TYPES
             ):
                 await self._send_problem(
                     scope, receive, secured_send, 415, "API_CONTENT_TYPE_UNSUPPORTED"
@@ -124,7 +129,7 @@ class RequestBoundaryMiddleware:
                     scope, receive, secured_send, 415, "API_CONTENT_TYPE_UNSUPPORTED"
                 )
                 return
-        effective_limit = self.pdf_review_upload_limit if is_pdf_review_upload else self.body_limit
+        effective_limit = self.pdf_review_upload_limit if is_binary_upload else self.body_limit
         if content_length and content_length.isdigit() and int(content_length) > effective_limit:
             await self._send_problem(scope, receive, secured_send, 413, "API_BODY_TOO_LARGE")
             return

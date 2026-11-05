@@ -179,13 +179,19 @@ def install_exception_handlers(app: FastAPI) -> None:
         unavailable = exc.code in {
             CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
             CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
+            "MATERIAL_LEARNING_UNAVAILABLE",
         }
         denied = exc.code in {
             "CURATED_ASSEMBLY_PERMISSION_DENIED",
             "CURATED_SOURCE_PERMISSION_DENIED",
+            "MATERIAL_LEARNING_PERMISSION_DENIED",
+            "MATERIAL_LEARNING_SOURCE_OWNER_MISMATCH",
         }
-        missing = exc.code == "CURATED_ASSEMBLY_NOT_FOUND"
-        malformed = exc.code == "CURATED_ASSEMBLY_LIST_INVALID"
+        missing = exc.code in {"CURATED_ASSEMBLY_NOT_FOUND", "MATERIAL_LEARNING_RUN_NOT_FOUND"}
+        malformed = exc.code in {
+            "CURATED_ASSEMBLY_LIST_INVALID",
+            "MATERIAL_LEARNING_REQUEST_INVALID",
+        }
         status = (
             503 if unavailable else 403 if denied else 404 if missing else 400 if malformed else 409
         )

@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/run-list/1.0",
+  "title": "EOM material learning run-list 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-run-list/1.0"
+    },
+    "runs": {
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/material-learning/intake-types/1.0#/$defs/runSummary"
+      },
+      "minItems": 0,
+      "maxItems": 50
+    }
+  },
+  "required": [
+    "schema_version",
+    "runs"
+  ]
+}

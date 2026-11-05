@@ -67,6 +67,7 @@ from eom_workflow.inference_transfer_workflow import (
     InferenceTransferWorkflowRequest,
     InferenceTransferWorkflowRequestV11,
 )
+from eom_workflow.material_learning_request import MaterialLearningWorkerRequest
 from eom_workflow.models import (
     AuthoringRoleResult,
     ContentTeamAuthoringRoleResultV7,
@@ -136,6 +137,7 @@ from eom_workflow.models import (
     LegacyItemEditorialCompatibilityWorkerRequest,
     LegacyItemExtractionRoleResult,
     LegacyItemExtractionWorkerRequest,
+    MaterialLearningRoleResult,
     PairedDocumentReviewRoleResult,
     PairedDocumentReviewRoleResultV3,
     PairedDocumentReviewRoleResultV4,
@@ -246,6 +248,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "external-item-learning-result@1.0",
             "external-item-learning-result@2.0",
             "external-item-learning-result@3.0",
+            "material-learning-result@1.0",
             "legacy-item-editorial-compatibility-result@1.0",
             "customer-support-result@1.0",
             "pdf-document-review-result@1.0",
@@ -326,6 +329,7 @@ RESULT_SCHEMA_FILES = {
     "external-item-learning-result@1.0": "external-item-learning-result-v1.schema.json",
     "external-item-learning-result@2.0": "external-item-learning-result-v2.schema.json",
     "external-item-learning-result@3.0": "external-item-learning-result-v3.schema.json",
+    "material-learning-result@1.0": "material-learning-result-v1.schema.json",
     "legacy-item-editorial-compatibility-result@1.0": (
         "legacy-item-editorial-compatibility-result-v1.schema.json"
     ),
@@ -381,6 +385,7 @@ INPUT_SCHEMA_FILES_V1_33 = {"support": "external-item-learning-input-v1.schema.j
 INPUT_SCHEMA_FILES_V1_34 = {"support": "external-item-learning-input-v2.schema.json"}
 INPUT_SCHEMA_FILES_V1_35 = {"support": "knowledge-analysis-input-v11.schema.json"}
 INPUT_SCHEMA_FILES_V1_36 = {"support": "external-item-learning-input-v3.schema.json"}
+INPUT_SCHEMA_FILES_V1_37 = {"support": "material-learning-input-v1.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -430,6 +435,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "external-item-learning-result@1.0": "workflow-role/1.33.0",
     "external-item-learning-result@2.0": "workflow-role/1.34.0",
     "external-item-learning-result@3.0": "workflow-role/1.36.0",
+    "material-learning-result@1.0": "workflow-role/1.37.0",
     "authoring-result@7.0": "workflow-role/1.15.0",
     "review-result@7.0": "workflow-role/1.15.0",
     "registration-result@7.0": "workflow-role/1.15.0",
@@ -493,6 +499,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.34.0": INPUT_SCHEMA_FILES_V1_34,
     "workflow-role/1.35.0": INPUT_SCHEMA_FILES_V1_35,
     "workflow-role/1.36.0": INPUT_SCHEMA_FILES_V1_36,
+    "workflow-role/1.37.0": INPUT_SCHEMA_FILES_V1_37,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -532,6 +539,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.34.0",
     "workflow-role/1.35.0",
     "workflow-role/1.36.0",
+    "workflow-role/1.37.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -567,6 +575,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_32.values(),
             *INPUT_SCHEMA_FILES_V1_33.values(),
             *INPUT_SCHEMA_FILES_V1_36.values(),
+            *INPUT_SCHEMA_FILES_V1_37.values(),
         }
     )
 )
@@ -1852,6 +1861,7 @@ def _role_input_schema(role: str, protocol_version: str = "workflow-role/1.0.1")
             "workflow-role/1.32.0",
             "workflow-role/1.33.0",
             "workflow-role/1.36.0",
+            "workflow-role/1.37.0",
         },
     )
 
@@ -1886,6 +1896,7 @@ def _role_result_schema(schema_id: str) -> dict[str, Any]:
             "external-item-learning-result@1.0",
             "external-item-learning-result@2.0",
             "external-item-learning-result@3.0",
+            "material-learning-result@1.0",
             "legacy-item-editorial-compatibility-result@1.0",
             "item-inference-transfer-pair-result@1.0",
             "item-inference-transfer-pair-result@1.1",
@@ -2304,6 +2315,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return ExternalItemLearningRoleResultV2.model_validate(canonical_value)
         if schema_id == "external-item-learning-result@3.0" and role == "support":
             return ExternalItemLearningRoleResultV3.model_validate(canonical_value)
+        if schema_id == "material-learning-result@1.0" and role == "support":
+            return MaterialLearningRoleResult.model_validate(canonical_value)
         if schema_id == "legacy-item-editorial-compatibility-result@1.0" and role == "support":
             return LegacyItemEditorialCompatibilityRoleResult.model_validate(canonical_value)
         if schema_id == "customer-support-result@1.0" and role == "support":
@@ -3149,6 +3162,32 @@ def constrained_result_schema(
         resolved_evidence_plan=resolved_evidence_plan,
         material_requirement=material_requirement,
     )
+    if schema_id == "material-learning-result@1.0":
+        if not isinstance(worker_input.request, MaterialLearningWorkerRequest):
+            raise WorkflowSchemaError("material result requires its exact task input")
+        material_work = worker_input.request.work_input
+        output = _mapping(_mapping(properties, "output"), "properties")
+        discovery = material_work.task_kind == "DISCOVER"
+        name = "MaterialDiscoveryResult" if discovery else "MaterialExtractionResult"
+        output["learning_result"] = {"$ref": f"#/$defs/{name}"}
+        result_properties = _mapping(_mapping(definitions, name), "properties")
+        result_properties["input_sha256"] = {"type": "string", "const": material_work.input_sha256}
+        if discovery:
+            coverage = _mapping(result_properties, "coverage")
+            coverage["minItems"] = coverage["maxItems"] = len(material_work.pages)
+            address = _mapping(_mapping(coverage, "items"), "properties")
+            address["physical_page"]["enum"] = sorted(
+                {page.physical_page for page in material_work.pages}
+            )
+            address["source_role"]["enum"] = sorted(
+                {page.source_role for page in material_work.pages}
+            )
+        else:
+            region = _mapping(
+                _mapping(definitions, "ExternalItemLearningResult_region"), "properties"
+            )
+            region["physical_page"]["maximum"] = len(material_work.pages)
+        _prune_unreferenced_definitions(schema)
     if schema_id in {
         "item-inference-transfer-pair-result@1.0",
         "item-inference-transfer-pair-result@1.1",
@@ -4560,6 +4599,15 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
         )
         _project_creative_answer_representations(schema)
         _prune_unreferenced_definitions(schema)
+    if schema_id == "material-learning-result@1.0":
+        _project_external_item_learning_codex_contract(
+            schema, result_definition="ExternalItemLearningResultV2"
+        )
+        _project_creative_answer_representations(schema)
+        result = _mapping(_mapping(_mapping(schema, "properties"), "output"), "properties")
+        variants = _mapping(result, "learning_result")
+        variants["anyOf"] = variants.pop("oneOf")
+        _prune_unreferenced_definitions(schema)
     if schema_id == "legacy-item-editorial-compatibility-result@1.0":
         _project_legacy_editorial_compatibility_codex_contract(schema)
         _prune_unreferenced_definitions(schema)
@@ -5274,6 +5322,29 @@ def _inline_catalog_schema(
         bundled = schema
     else:
         bundled = _inline_assessment_item_schema(schema, reference)
+    if "eom://schemas/material-learning/" in serialized:
+        from eom_catalog_contracts import load_schema as load_material_schema
+
+        material_contracts = (
+            ("material-learning-types-v1", "MaterialLearningTypes"),
+            ("material-learning-discovery-work-v1", "MaterialDiscoveryWork"),
+            ("material-learning-extraction-work-v1", "MaterialExtractionWork"),
+            ("material-learning-discovery-result-v1", "MaterialDiscoveryResult"),
+            ("material-learning-extraction-result-v1", "MaterialExtractionResult"),
+            ("legacy-assessment-types", "MaterialSourceTypes"),
+            ("item-origin-types", "MaterialOriginTypes"),
+        )
+        bundled = _inline_contract_sources(
+            bundled,
+            tuple(
+                (
+                    load_material_schema(name)["$id"],
+                    prefix,
+                    copy.deepcopy(load_material_schema(name)),
+                )
+                for name, prefix in material_contracts
+            ),
+        )
     knowledge_contracts = (
         (
             "eom://schemas/knowledge/review-textbook-evidence/1.0",

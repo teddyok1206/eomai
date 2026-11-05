@@ -143,11 +143,22 @@ from eom_catalog_contracts.curated_document_delivery_application import (
     CuratedDocumentDeliveryQueryV1,
     CuratedDocumentDeliveryResponseV1,
 )
+from eom_catalog_contracts.material_learning_intake import (
+    CreateMaterialLearningCommand,
+    GetMaterialLearningRunQuery,
+    ListMaterialLearningRunsQuery,
+    MaterialLearningAcceptance,
+    MaterialLearningErrorResponse,
+    MaterialLearningRunDetail,
+    MaterialLearningRunList,
+    MaterialSourceUploadCommand,
+    MaterialSourceUploadReceipt,
+)
 from eom_item_registry import RegistryError, RegistryErrorCode
 from eom_operator_identity import ActorContext
 from eom_workflow import PdfReviewDocumentPointer
 from jsonschema import ValidationError as JsonSchemaValidationError
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 CONNECT_TIMEOUT_SECONDS = 5.0
 RESPONSE_TIMEOUT_SECONDS = 30.0
@@ -229,6 +240,125 @@ class CatalogApplicationClient:
         self.socket_path = socket_path
         self.expected_uid = expected_uid
         self.expected_gid = grp.getgrnam("eom-api").gr_gid if expected_gid is None else expected_gid
+
+    def create_material_learning(
+        self, command: CreateMaterialLearningCommand
+    ) -> MaterialLearningAcceptance:
+        return self._material_learning_read(command, MaterialLearningAcceptance)
+
+    def list_material_learning_runs(
+        self, query: ListMaterialLearningRunsQuery
+    ) -> MaterialLearningRunList:
+        return self._material_learning_read(query, MaterialLearningRunList)
+
+    def read_material_learning_run(
+        self, query: GetMaterialLearningRunQuery
+    ) -> MaterialLearningRunDetail:
+        return self._material_learning_read(query, MaterialLearningRunDetail)
+
+    def _material_learning_read[Reply: BaseModel](
+        self,
+        request: CreateMaterialLearningCommand
+        | ListMaterialLearningRunsQuery
+        | GetMaterialLearningRunQuery,
+        reply_type: type[Reply],
+    ) -> Reply:
+        value = self._raw_request(request.model_dump(mode="json"), timeout_seconds=60.0)
+        if value.get("schema_version") == "material-learning-error/1.0":
+            error = MaterialLearningErrorResponse.model_validate(value)
+            raise CatalogApplicationClientError(
+                error.error_code, "Material learning request failed"
+            )
+        return reply_type.model_validate(value)
+
+    def ingest_material_learning_source(
+        self, source: Path, command: MaterialSourceUploadCommand
+    ) -> MaterialSourceUploadReceipt:
+        """Stream one API-private staged input, retaining Catalog as commit owner."""
+        command = MaterialSourceUploadCommand.model_validate(command.model_dump(mode="json"))
+        descriptor = -1
+        connection = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        try:
+            descriptor = os.open(
+                source, os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+            )
+            before = os.fstat(descriptor)
+            if (
+                not stat.S_ISREG(before.st_mode)
+                or before.st_nlink != 1
+                or before.st_size != command.content_length
+                or before.st_uid != os.geteuid()
+                or stat.S_IMODE(before.st_mode) != 0o600
+            ):
+                raise ValueError("Material learning upload file identity is invalid")
+            self._validate_socket()
+            connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+            connection.connect(str(self.socket_path))
+            header = json.dumps(command.model_dump(mode="json"), separators=(",", ":")).encode()
+            if len(header) + 1 > CATALOG_APPLICATION_MAX_MESSAGE_BYTES:
+                raise ValueError("Material learning upload header exceeds its bound")
+            connection.settimeout(180.0)
+            connection.sendall(header + b"\n")
+            digest = hashlib.sha256()
+            remaining = before.st_size
+            while remaining:
+                chunk = os.read(descriptor, min(1024 * 1024, remaining))
+                if not chunk:
+                    raise ValueError("Material learning upload changed while streaming")
+                connection.sendall(chunk)
+                digest.update(chunk)
+                remaining -= len(chunk)
+            after = os.fstat(descriptor)
+            if (
+                before.st_dev,
+                before.st_ino,
+                before.st_size,
+                before.st_mode,
+                before.st_uid,
+                before.st_nlink,
+                before.st_mtime_ns,
+                before.st_ctime_ns,
+            ) != (
+                after.st_dev,
+                after.st_ino,
+                after.st_size,
+                after.st_mode,
+                after.st_uid,
+                after.st_nlink,
+                after.st_mtime_ns,
+                after.st_ctime_ns,
+            ) or "sha256:" + digest.hexdigest() != command.sha256:
+                raise ValueError("Material learning upload changed while streaming")
+            connection.shutdown(socket.SHUT_WR)
+            value = json.loads(self._read_response(connection))
+            if (
+                isinstance(value, dict)
+                and value.get("schema_version") == "material-learning-error/1.0"
+            ):
+                error = MaterialLearningErrorResponse.model_validate(value)
+                raise CatalogApplicationClientError(
+                    error.error_code, "Material learning source upload failed"
+                )
+            reply = MaterialSourceUploadReceipt.model_validate(value)
+            if (
+                reply.uploaded_by != command.actor_id
+                or reply.original.sha256 != command.sha256
+                or reply.original.bytes != command.content_length
+                or reply.original_filename != command.original_filename
+                or reply.source_format != command.source_format
+            ):
+                raise ValueError("Material learning source receipt differs from request")
+            return reply
+        except CatalogApplicationClientError:
+            raise
+        except (OSError, ValueError) as error:
+            raise CatalogApplicationClientError(
+                "MATERIAL_LEARNING_UNAVAILABLE", "Material learning upload boundary is unavailable"
+            ) from error
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+            connection.close()
 
     def import_reviewed(
         self,

@@ -28,6 +28,7 @@ from eom_catalog_contracts import (
     RegisteredItemSolutionBasePointer,
     ReviewTextbookEvidence,
 )
+from eom_catalog_contracts.material_learning import MaterialLearningWork
 from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInput
 from eom_identifiers import content_sha256
 from pydantic import (
@@ -1325,6 +1326,46 @@ class ResolvedExecutionPlanV32(FrozenModel):
             self.model_dump(mode="json", exclude={"plan_sha256"})
         ):
             raise ValueError("Office learning plan hash differs")
+        return self
+
+
+class ResolvedExecutionPlanV33(FrozenModel):
+    """One exact material task using the existing knowledge-analysis capacity class."""
+
+    schema_version: Literal["resolved-execution-plan/33.0"] = "resolved-execution-plan/33.0"
+    plan_id: str = Field(pattern=r"^execplan_[0-9a-f]{32}$")
+    workflow_id: WorkflowId
+    workload_class: Literal["KNOWLEDGE_ANALYSIS"] = "KNOWLEDGE_ANALYSIS"
+    preset_id: str = Field(pattern=r"^execpreset_[0-9a-f]{32}$")
+    preset_revision_id: str = Field(pattern=r"^execpresetrev_[0-9a-f]{32}$")
+    preset_sha256: Sha256
+    workflow_definition_key: Literal["material-learning"] = "material-learning"
+    workflow_definition_version: Literal["1.0.0"] = "1.0.0"
+    workflow_definition_sha256: Sha256
+    work_input: MaterialLearningWork
+    capacity_policy_revision_id: str = Field(pattern=r"^capacityrev_[0-9a-f]{32}$")
+    steps: tuple[ResolvedStepExecution, ...] = Field(min_length=1, max_length=1)
+    resolver_version: Literal["33.0.0"] = "33.0.0"
+    resolved_at: UtcDatetime
+    plan_sha256: Sha256
+
+    @model_validator(mode="after")
+    def exact_material_support_task(self) -> ResolvedExecutionPlanV33:
+        step = self.steps[0]
+        if (
+            step.step_key != "learn"
+            or step.role != WorkerRole.SUPPORT
+            or step.worker_pool_key != "support"
+            or step.reference_bundle is not None
+            or step.sandbox != "read-only"
+            or step.network != "disabled"
+            or step.general_knowledge_mode != "DENIED"
+        ):
+            raise ValueError("material learning requires its source-only isolated support step")
+        if self.plan_sha256 != content_sha256(
+            self.model_dump(mode="json", exclude={"plan_sha256"})
+        ):
+            raise ValueError("material learning plan hash differs")
         return self
 
 

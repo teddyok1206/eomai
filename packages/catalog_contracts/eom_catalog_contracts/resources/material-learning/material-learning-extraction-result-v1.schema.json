@@ -19,16 +19,33 @@
       ]
     },
     "regions": {
-      "$ref": "eom://schemas/external-item/learning-result/2.0#/properties/regions"
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/external-item/learning-result/1.0#/$defs/region"
+      },
+      "minItems": 1,
+      "maxItems": 64
     },
     "proposal": {
-      "$ref": "eom://schemas/external-item/learning-result/2.0#/properties/proposal"
+      "anyOf": [
+        {
+          "$ref": "eom://schemas/external-item/learning-result/2.0#/$defs/proposal"
+        },
+        {
+          "type": "null"
+        }
+      ]
     },
     "solution_report": {
       "$ref": "eom://schemas/external-item/learning-result/2.0#/$defs/solutionReport"
     },
     "conflicts": {
-      "$ref": "eom://schemas/external-item/learning-result/2.0#/properties/conflicts"
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/external-item/learning-result/1.0#/$defs/conflict"
+      },
+      "minItems": 0,
+      "maxItems": 32
     },
     "office_bindings": {
       "anyOf": [

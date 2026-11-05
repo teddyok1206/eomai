@@ -374,6 +374,25 @@
               <h1 id="learning-title">자료 학습</h1>
               <div class="heading-actions"><span id="learning-badge" class="status-badge tone-neutral"><span class="status-icon">■</span> 상태 확인 전</span><button id="learning-refresh" class="button secondary" type="button">새로고침</button></div>
             </div>
+            <section class="panel material-learning-panel" aria-labelledby="material-upload-title">
+              <div class="panel-heading"><h2 id="material-upload-title">새 자료 올리기</h2></div>
+              <form id="material-learning-form" class="material-learning-form">
+                <label>자료 제목<input id="material-title" name="title" maxlength="200" required placeholder="예: 통합과학 실전 문제집"></label>
+                <label>자료 종류<select id="material-kind" name="kind"><option value="WORKBOOK">문제집</option><option value="MOCK_EXAM">모의고사</option><option value="REFERENCE_BOOK">참고서</option><option value="TEXTBOOK">교과서</option><option value="OTHER">기타 자료</option></select></label>
+                <label class="material-wide">출처 설명<input id="material-description" name="description" maxlength="2000" required placeholder="출판사·교재명이나 자료의 출처를 적어 주세요"></label>
+                <label>본문·문제 파일<input id="material-main" name="main" type="file" accept=".pdf,.hwp,.hwpx" required></label>
+                <label>별도 해설 파일 <span class="muted-label">선택</span><input id="material-solutions" name="solutions" type="file" accept=".pdf,.hwp,.hwpx"></label>
+                <label class="material-wide">추가로 참고할 설명 <span class="muted-label">선택</span><textarea id="material-instructions" name="instructions" rows="3" maxlength="8000" placeholder="예: 해설 파일의 장별 번호를 문제집과 맞춰 주세요"></textarea></label>
+                <label class="checkbox-row material-wide"><input id="material-rights" name="rights" type="checkbox" required>이 자료를 내부 학습·문항 등록·검색에 사용할 권한이 있습니다.</label>
+                <div class="material-wide material-learning-actions"><button id="material-learning-start" class="button primary" type="submit">학습 시작</button><span id="material-learning-upload-status" role="status" aria-live="polite"></span></div>
+              </form>
+              <p id="material-learning-message" class="form-message" role="status" aria-live="polite"></p>
+            </section>
+            <section class="panel material-learning-panel" aria-labelledby="material-learning-recent-title">
+              <div class="panel-heading"><h2 id="material-learning-recent-title">올린 자료</h2><button id="material-learning-refresh" class="button quiet" type="button">새로고침</button></div>
+              <div id="material-learning-runs"><p class="empty-state">아직 올린 자료가 없습니다.</p></div>
+              <div id="material-learning-detail" hidden></div>
+            </section>
             <section class="knowledge-boundary" aria-label="자료 학습 증거 정책">
               <strong>이미지 관찰 필수 · OCR 텍스트 보조</strong><span>Graph RAG 누적 경로</span>
             </section>

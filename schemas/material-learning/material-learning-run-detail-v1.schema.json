@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/run-detail/1.0",
+  "title": "EOM material learning run-detail 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-run-detail/1.0"
+    },
+    "run": {
+      "$ref": "eom://schemas/material-learning/intake-types/1.0#/$defs/runSummary"
+    },
+    "tasks": {
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/material-learning/intake-types/1.0#/$defs/taskSummary"
+      },
+      "minItems": 0,
+      "maxItems": 100
+    },
+    "next_ordinal": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000000
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "run",
+    "tasks",
+    "next_ordinal"
+  ]
+}

@@ -76,6 +76,13 @@ from eom_web_gui.gateways import (
     LoginResult,
 )
 from eom_web_gui.knowledge_quality import build_knowledge_quality_report
+from eom_web_gui.material_learning_contracts import (
+    MaterialLearningAcceptance,
+    MaterialLearningDetail,
+    MaterialLearningRuns,
+    MaterialLearningSourceReceipt,
+    MaterialLearningSubmission,
+)
 from eom_web_gui.request_drafts import normalize_request, update_draft, workflow_start_payload
 from eom_web_gui.sessions import SessionStore, WebSession, utc_now
 from eom_web_gui.settings import WebSettings
@@ -87,6 +94,40 @@ class WebServices:
     settings: WebSettings
     gateway: ApplicationGateway
     sessions: SessionStore
+
+    async def material_learning_source(
+        self,
+        session: WebSession,
+        *,
+        original_filename: str,
+        content_length: int,
+        media_type: str,
+        content: AsyncIterator[bytes],
+        idempotency_key: str,
+    ) -> MaterialLearningSourceReceipt:
+        return await self.gateway.material_learning_source(
+            session,
+            original_filename=original_filename,
+            content_length=content_length,
+            media_type=media_type,
+            content=content,
+            idempotency_key=idempotency_key,
+        )
+
+    async def create_material_learning(
+        self, session: WebSession, value: MaterialLearningSubmission
+    ) -> MaterialLearningAcceptance:
+        return await self.gateway.create_material_learning(session, value)
+
+    async def material_learning_runs(self, session: WebSession) -> MaterialLearningRuns:
+        return await self.gateway.material_learning_runs(session)
+
+    async def material_learning_run(
+        self, session: WebSession, run_id: str, *, after_ordinal: int = 0
+    ) -> MaterialLearningDetail:
+        return await self.gateway.material_learning_run(
+            session, run_id, after_ordinal=after_ordinal
+        )
 
     async def login(
         self, username: str, password: str, *, now: datetime | None = None

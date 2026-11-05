@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/source-upload/1.0",
+  "title": "EOM material learning source-upload 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-source-upload/1.0"
+    },
+    "operation": {
+      "const": "INGEST_MATERIAL_LEARNING_SOURCE"
+    },
+    "actor_id": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "original_filename": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "source_format": {
+      "enum": [
+        "PDF",
+        "HWP",
+        "HWPX"
+      ]
+    },
+    "media_type": {
+      "enum": [
+        "application/pdf",
+        "application/vnd.hancom.hwp",
+        "application/vnd.hancom.hwpx"
+      ]
+    },
+    "content_length": {
+      "type": "integer",
+      "minimum": 8,
+      "maximum": 268435456
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "rights_confirmed": {
+      "const": true
+    },
+    "idempotency_key": {
+      "type": "string",
+      "pattern": "^[!-~]{16,128}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "operation",
+    "actor_id",
+    "original_filename",
+    "source_format",
+    "media_type",
+    "content_length",
+    "sha256",
+    "rights_confirmed",
+    "idempotency_key"
+  ]
+}

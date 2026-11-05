@@ -16,6 +16,7 @@ import {
 import {formatEquationSource, orderedItemPreviewBlocks} from "./item-preview.js";
 import {createItemDb} from "./item-db.js";
 import {createKnowledgeMap} from "./knowledge-map.js";
+import {createMaterialLearning} from "./material-learning.js";
 import {renderPreviewText} from "./preview-math.js";
 import {
   applyPermissionVisibility,
@@ -180,6 +181,10 @@ const itemDb = createItemDb({
 const knowledgeMap = createKnowledgeMap({document, api, previewItem: previewRegisteredItem,
   openItem(entry) {showView("item-db"); itemDb.openGraph(entry);},
 });
+const materialLearning = createMaterialLearning({document, api,
+  explainError: (error) => error instanceof StudioApiError
+    ? error.message : errorMessage(error?.code || "APPLICATION_API_REQUEST_FAILED"),
+});
 const presetEditor = createExecutionPresetEditor({
   document, api, isAdmin: hasAdminRole, refresh: loadAdminSettings,
   showMessage, addDetail: addControlDetail,
@@ -211,13 +216,14 @@ function syncUiMode(name) {
 
 async function api(path, options = {}) {
   const headers = {Accept: "application/json", ...(options.headers || {})};
-  if (options.body !== undefined) headers["Content-Type"] = "application/json";
+  const binary = typeof Blob !== "undefined" && options.body instanceof Blob;
+  if (options.body !== undefined && !binary) headers["Content-Type"] = "application/json";
   if (options.mutation) headers["X-CSRF-Token"] = state.csrf;
   const response = await fetch(`${API}${path}`, {
     method: options.method || "GET",
     credentials: "same-origin",
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body: options.body === undefined ? undefined : binary ? options.body : JSON.stringify(options.body),
   });
   if (response.status === 401) {
     state.adminSettingsRequestSequence += 1;
@@ -413,6 +419,8 @@ function showView(name, {history = true, replace = false, route = null} = {}) {
   if (name === "item-db") itemDb.open();
   if (name === "knowledge") knowledgeMap.open();
   else knowledgeMap.close();
+  if (name === "learning") materialLearning.open();
+  else materialLearning.close();
   $$(".view").forEach((element) => element.classList.toggle("active", element.dataset.view === name));
   $$(".nav-item").forEach((element) => element.classList.toggle("active", element.dataset.viewTarget === name));
   syncUiMode(name);
@@ -507,6 +515,7 @@ async function initializeSession() {
   generalChat.setOwner(session.operator.operator_id);
   itemDb.setOwner(session.operator.operator_id);
   knowledgeMap.setOwner(session.operator.operator_id);
+  materialLearning.setOwner(session.operator.operator_id);
   $("#current-user").textContent = session.operator.display_name || session.operator.username || "운영 사용자";
   const roles = Array.isArray(session.operator.roles) ? session.operator.roles : [];
   $("#current-role").textContent = roles.map(roleLabel).join(" · ") || "운영 사용자";
@@ -5473,6 +5482,7 @@ async function logout() {
   generalChat.setOwner(null);
   itemDb.setOwner(null);
   knowledgeMap.setOwner(null);
+  materialLearning.setOwner(null);
   try { await api("/logout", {method: "POST", mutation: true, body: {}}); } finally { window.location.replace("/studio/login"); }
 }
 
@@ -5490,6 +5500,7 @@ async function boot() {
   installMockExamAssembly();
   itemDb.install();
   knowledgeMap.install();
+  materialLearning.install();
   installStructuredImport();
   installHwpx();
   installControlPlane();
