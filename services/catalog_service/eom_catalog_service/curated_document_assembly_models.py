@@ -25,6 +25,29 @@ from sqlalchemy.orm import Mapped, mapped_column
 class CuratedDocumentAssemblyRecord(Base):
     __tablename__ = "curated_document_assemblies"
     __table_args__ = (
+        CheckConstraint("title !~ E'[\\n\\r\\t]'", name="ck_curated_document_title"),
+        CheckConstraint(
+            "(removed_at IS NULL AND removal_idempotency_key IS NULL "
+            "AND removal_request_sha256 IS NULL) OR (removed_at IS NOT NULL "
+            "AND removal_idempotency_key IS NOT NULL AND removal_request_sha256 IS NOT NULL "
+            "AND removal_idempotency_key ~ '^[!-~]{16,128}$' "
+            "AND removal_request_sha256 ~ '^sha256:[0-9a-f]{64}$')",
+            name="ck_curated_document_removal_receipt",
+        ),
+        Index(
+            "uq_curated_document_removal_replay",
+            "created_by",
+            "removal_idempotency_key",
+            unique=True,
+            postgresql_where=text("removed_at IS NOT NULL"),
+        ),
+        Index(
+            "ix_curated_document_active_owner_recent",
+            "created_by",
+            text("created_at DESC"),
+            text("assembly_id DESC"),
+            postgresql_where=text("removed_at IS NULL"),
+        ),
         Index(
             "ix_curated_document_owner_recent",
             "created_by",
@@ -46,6 +69,10 @@ class CuratedDocumentAssemblyRecord(Base):
     assembly_id: Mapped[str] = mapped_column(String(41), primary_key=True)
     current_revision_id: Mapped[str | None] = mapped_column(String(44))
     created_by: Mapped[str] = mapped_column(String(128), nullable=False)
+    title: Mapped[str] = mapped_column(String(200), nullable=False, server_default=text("''"))
+    removed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    removal_idempotency_key: Mapped[str | None] = mapped_column(String(128))
+    removal_request_sha256: Mapped[str | None] = mapped_column(String(71))
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -18,6 +18,12 @@ from eom_catalog_contracts.curated_document_assembly_draft import (
     PastExamItemPlacement,
     RegisteredItemPlacement,
 )
+from eom_catalog_contracts.curated_document_assembly_library import (
+    CuratedDocumentAssemblyDraftV2,
+    CuratedDocumentAssemblyListEntryV2,
+    CuratedDocumentAssemblyRemovalInput,
+    CuratedDocumentAssemblyRemovalReceipt,
+)
 from eom_hwpx_contracts.curated_build import CuratedHwpxBuildInput
 from eom_hwpx_contracts.curated_document import CuratedHwpConverterSnapshot
 from eom_hwpx_contracts.models import ContentTeamHandoffSnapshot
@@ -69,21 +75,27 @@ class CuratedDocumentAssemblyService:
 
     def create(
         self,
-        draft: CuratedDocumentAssemblyDraftV1,
+        draft: CuratedDocumentAssemblyDraftV1 | CuratedDocumentAssemblyDraftV2,
         *,
         actor: ActorContext,
         idempotency_key: str,
     ) -> CuratedDocumentAssemblyManifestV1:
         if re.fullmatch(r"[!-~]{16,128}", idempotency_key) is None:
             raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_IDEMPOTENCY_INVALID")
-        selection_sha256 = content_sha256(draft.model_dump(mode="json"))
-        request_sha256 = content_sha256(
-            {
-                "actor_id": actor.actor_id,
-                "idempotency_key": idempotency_key,
-                "selection_sha256": selection_sha256,
-            }
+        draft = type(draft).model_validate(draft.model_dump(mode="json"))
+        title = draft.title if isinstance(draft, CuratedDocumentAssemblyDraftV2) else ""
+        selection = (
+            draft.selection() if isinstance(draft, CuratedDocumentAssemblyDraftV2) else draft
         )
+        selection_sha256 = content_sha256(selection.model_dump(mode="json"))
+        request_value = {
+            "actor_id": actor.actor_id,
+            "idempotency_key": idempotency_key,
+            "selection_sha256": selection_sha256,
+        }
+        if isinstance(draft, CuratedDocumentAssemblyDraftV2):
+            request_value.update(draft_schema_version=draft.schema_version, title=title)
+        request_sha256 = content_sha256(request_value)
         try:
             with transaction(self.sessions) as session:
                 actor = self._authorized_actor(session, actor)
@@ -94,7 +106,9 @@ class CuratedDocumentAssemblyService:
                     )
                 )
                 if existing is not None:
-                    return self._replay(session, existing, draft, actor, request_sha256)
+                    return self._replay(
+                        session, existing, selection, actor, request_sha256, expected_title=title
+                    )
 
                 identity = {"actor_id": actor.actor_id, "idempotency_key": idempotency_key}
                 assembly_id = _stable_id("assembly_", identity)
@@ -103,7 +117,7 @@ class CuratedDocumentAssemblyService:
                 manifest = resolve_curated_document_assembly_manifest(
                     session,
                     self.media,
-                    draft=draft,
+                    draft=selection,
                     actor=actor,
                     assembly_id=assembly_id,
                     assembly_revision_id=assembly_revision_id,
@@ -115,6 +129,7 @@ class CuratedDocumentAssemblyService:
                         current_revision_id=None,
                         created_by=actor.actor_id,
                         created_at=created_at,
+                        title=title,
                     )
                 )
                 session.flush()
@@ -153,7 +168,9 @@ class CuratedDocumentAssemblyService:
                     )
                 )
                 if existing is not None:
-                    return self._replay(session, existing, draft, actor, request_sha256)
+                    return self._replay(
+                        session, existing, selection, actor, request_sha256, expected_title=title
+                    )
             raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_PERSISTENCE_CONFLICT") from exc
 
     def read(self, assembly_id: str, *, actor: ActorContext) -> CuratedDocumentAssemblyManifestV1:
@@ -307,6 +324,20 @@ class CuratedDocumentAssemblyService:
     def list_recent(
         self, *, actor: ActorContext, limit: int = 20, cursor: str | None = None
     ) -> tuple[tuple[CuratedDocumentAssemblyListEntryV1, ...], str | None]:
+        values, next_cursor = self.list_recent_titled(actor=actor, limit=limit, cursor=cursor)
+        return (
+            tuple(
+                CuratedDocumentAssemblyListEntryV1.model_validate(
+                    row.model_dump(mode="json", exclude={"title"})
+                )
+                for row in values
+            ),
+            next_cursor,
+        )
+
+    def list_recent_titled(
+        self, *, actor: ActorContext, limit: int = 20, cursor: str | None = None
+    ) -> tuple[tuple[CuratedDocumentAssemblyListEntryV2, ...], str | None]:
         """Keyset page over the operator's own pinned assemblies, without copying manifests."""
 
         if not 1 <= limit <= 50:
@@ -337,13 +368,14 @@ class CuratedDocumentAssemblyService:
                     aggregate.assembly_id,
                     aggregate.current_revision_id,
                     aggregate.created_at,
+                    aggregate.title,
                     revision.manifest_sha256,
                     revision.revision_state,
                     revision.created_by,
                     func.jsonb_array_length(revision.canonical_document["placements"]),
                 )
                 .outerjoin(revision, aggregate.current_revision_id == revision.assembly_revision_id)
-                .where(aggregate.created_by == authorized.actor_id)
+                .where(aggregate.created_by == authorized.actor_id, aggregate.removed_at.is_(None))
                 .order_by(aggregate.created_at.desc(), aggregate.assembly_id.desc())
                 .limit(limit + 1)
             )
@@ -352,8 +384,10 @@ class CuratedDocumentAssemblyService:
                     tuple_(aggregate.created_at, aggregate.assembly_id) < boundary
                 )
             rows = session.execute(statement).all()
-            values: list[CuratedDocumentAssemblyListEntryV1] = []
-            for assembly_id, revision_id, created_at, digest, state, owner, count in rows[:limit]:
+            values: list[CuratedDocumentAssemblyListEntryV2] = []
+            for assembly_id, revision_id, created_at, title, digest, state, owner, count in rows[
+                :limit
+            ]:
                 if (
                     revision_id is None
                     or digest is None
@@ -363,10 +397,11 @@ class CuratedDocumentAssemblyService:
                     raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_POINTER_INVALID")
                 try:
                     values.append(
-                        CuratedDocumentAssemblyListEntryV1(
+                        CuratedDocumentAssemblyListEntryV2(
                             assembly_id=assembly_id,
                             assembly_revision_id=revision_id,
                             created_at=created_at,
+                            title=title,
                             placement_count=count,
                             manifest_sha256=digest,
                         )
@@ -381,6 +416,76 @@ class CuratedDocumentAssemblyService:
                 )
                 next_cursor = f"{cursor_micros}|{last.assembly_id}"
             return tuple(values), next_cursor
+
+    def remove_from_list(
+        self,
+        assembly_id: str,
+        selection: CuratedDocumentAssemblyRemovalInput,
+        *,
+        actor: ActorContext,
+        idempotency_key: str,
+    ) -> CuratedDocumentAssemblyRemovalReceipt:
+        """Archive one owned list entry; never delete input revisions or HWPX history."""
+        if re.fullmatch(r"[!-~]{16,128}", idempotency_key) is None:
+            raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_IDEMPOTENCY_INVALID")
+        selection = CuratedDocumentAssemblyRemovalInput.model_validate(selection)
+        digest = content_sha256(
+            dict(
+                purpose="REMOVE_CURATED_DOCUMENT_ASSEMBLY/1.0",
+                actor_id=actor.actor_id,
+                assembly_id=assembly_id,
+                selection=selection.model_dump(mode="json"),
+                idempotency_key=idempotency_key,
+            )
+        )
+        try:
+            with transaction(self.sessions) as session:
+                authorized = self._authorized_actor(session, actor)
+                if (
+                    not {PermissionKey.ITEM_READ, PermissionKey.DELIVERABLE_CREATE}
+                    <= authorized.permissions
+                ):
+                    raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_PERMISSION_DENIED")
+                aggregate = session.scalar(
+                    select(CuratedDocumentAssemblyRecord)
+                    .where(
+                        CuratedDocumentAssemblyRecord.assembly_id == assembly_id,
+                        CuratedDocumentAssemblyRecord.created_by == authorized.actor_id,
+                    )
+                    .with_for_update()
+                )
+                if aggregate is None:
+                    raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_NOT_FOUND")
+                if aggregate.removed_at is not None:
+                    if (
+                        aggregate.removal_idempotency_key != idempotency_key
+                        or aggregate.removal_request_sha256 != digest
+                    ):
+                        raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_IDEMPOTENCY_CONFLICT")
+                else:
+                    revision = session.get(
+                        CuratedDocumentAssemblyRevisionRecord, selection.assembly_revision_id
+                    )
+                    if (
+                        aggregate.current_revision_id != selection.assembly_revision_id
+                        or revision is None
+                        or revision.assembly_id != assembly_id
+                        or revision.created_by != authorized.actor_id
+                        or revision.revision_state != "INPUT_PINNED"
+                        or revision.manifest_sha256 != selection.manifest_sha256
+                    ):
+                        raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_POINTER_INVALID")
+                    aggregate.removed_at = datetime.now(UTC)
+                    aggregate.removal_idempotency_key = idempotency_key
+                    aggregate.removal_request_sha256 = digest
+                return CuratedDocumentAssemblyRemovalReceipt(
+                    assembly_id=assembly_id,
+                    assembly_revision_id=selection.assembly_revision_id,
+                    manifest_sha256=selection.manifest_sha256,
+                    removed_at=aggregate.removed_at,
+                )
+        except IntegrityError as exc:
+            raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_IDEMPOTENCY_CONFLICT") from exc
 
     @staticmethod
     def _authorized_actor(session: Session, actor: ActorContext) -> ActorContext:
@@ -442,6 +547,8 @@ class CuratedDocumentAssemblyService:
         draft: CuratedDocumentAssemblyDraftV1,
         actor: ActorContext,
         request_sha256: str,
+        *,
+        expected_title: str = "",
     ) -> CuratedDocumentAssemblyManifestV1:
         if existing.request_sha256 != request_sha256 or existing.selection_sha256 != content_sha256(
             draft.model_dump(mode="json")
@@ -476,6 +583,7 @@ class CuratedDocumentAssemblyService:
             or existing.revision_state != "INPUT_PINNED"
             or aggregate is None
             or aggregate.created_by != actor.actor_id
+            or aggregate.title != expected_title
             or not CuratedDocumentAssemblyService._placements_match(session, manifest)
         ):
             raise CuratedDocumentAssemblyError("CURATED_ASSEMBLY_REPLAY_POINTER_INVALID")

@@ -123,6 +123,22 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_catalog_contracts.creative_visual_presentation import ItemVisualPresentation
+from eom_catalog_contracts.curated_document_assembly_library import (
+    CuratedAssemblyLibraryRequest,
+    CuratedAssemblyLibraryResponse,
+    CuratedDocumentAssemblyCreateCommandV2,
+    CuratedDocumentAssemblyCreateResponseV2,
+    CuratedDocumentAssemblyDraftV2,
+    CuratedDocumentAssemblyListEntryV2,
+    CuratedDocumentAssemblyListQueryV2,
+    CuratedDocumentAssemblyListResponseV2,
+    CuratedDocumentAssemblyRemovalInput,
+    CuratedDocumentAssemblyRemovalReceipt,
+    CuratedDocumentAssemblyRemoveCommandV1,
+    CuratedDocumentAssemblyRemoveResponseV1,
+    parse_curated_library_request,
+    parse_curated_library_response,
+)
 from eom_catalog_contracts.curated_document_delivery_application import (
     CuratedDocumentDeliveryQueryV1,
     CuratedDocumentDeliveryResponseV1,
@@ -959,13 +975,31 @@ class CatalogApplicationClient:
 
     def create_curated_document_assembly(
         self,
-        draft: CuratedDocumentAssemblyDraftV1,
+        draft: CuratedDocumentAssemblyDraftV1 | CuratedDocumentAssemblyDraftV2,
         *,
         actor: ActorContext,
         idempotency_key: str,
     ) -> CuratedDocumentAssemblyManifestV1:
         if actor.operator_id is None or actor.session_id is None:
             raise ValueError("curated assembly requires one authenticated operator session")
+        if isinstance(draft, CuratedDocumentAssemblyDraftV2):
+            result = self._request_assembly_library(
+                CuratedDocumentAssemblyCreateCommandV2(
+                    actor_id=actor.operator_id,
+                    session_id=actor.session_id,
+                    request_id=actor.request_id,
+                    authentication_time=actor.authentication_time,
+                    idempotency_key=idempotency_key,
+                    draft=draft,
+                )
+            )
+            if (
+                not isinstance(result, CuratedDocumentAssemblyCreateResponseV2)
+                or result.manifest is None
+                or result.manifest.created_by != actor.actor_id
+            ):
+                raise ValueError("titled assembly response identity differs")
+            return result.manifest
         command = CuratedDocumentAssemblyCreateCommandV1(
             actor_id=actor.operator_id,
             session_id=actor.session_id,
@@ -1003,6 +1037,86 @@ class CatalogApplicationClient:
             raise CatalogApplicationClientError(
                 CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
                 "Catalog curated Assembly response is unavailable",
+            ) from exc
+
+    def list_titled_curated_document_assemblies(
+        self, *, actor: ActorContext, limit: int = 20, cursor: str | None = None
+    ) -> tuple[tuple[CuratedDocumentAssemblyListEntryV2, ...], str | None]:
+        if actor.operator_id is None or actor.session_id is None:
+            raise ValueError("titled assembly list requires an authenticated operator")
+        result = self._request_assembly_library(
+            CuratedDocumentAssemblyListQueryV2(
+                actor_id=actor.operator_id,
+                session_id=actor.session_id,
+                request_id=actor.request_id,
+                authentication_time=actor.authentication_time,
+                limit=limit,
+                cursor=cursor,
+            )
+        )
+        if not isinstance(result, CuratedDocumentAssemblyListResponseV2):
+            raise ValueError("titled assembly list response differs")
+        return result.values, result.next_cursor
+
+    def remove_curated_document_assembly(
+        self,
+        assembly_id: str,
+        selection: CuratedDocumentAssemblyRemovalInput,
+        *,
+        actor: ActorContext,
+        idempotency_key: str,
+    ) -> CuratedDocumentAssemblyRemovalReceipt:
+        if actor.operator_id is None or actor.session_id is None:
+            raise ValueError("assembly removal requires an authenticated operator")
+        result = self._request_assembly_library(
+            CuratedDocumentAssemblyRemoveCommandV1(
+                actor_id=actor.operator_id,
+                session_id=actor.session_id,
+                request_id=actor.request_id,
+                authentication_time=actor.authentication_time,
+                idempotency_key=idempotency_key,
+                assembly_id=assembly_id,
+                selection=selection,
+            )
+        )
+        if (
+            not isinstance(result, CuratedDocumentAssemblyRemoveResponseV1)
+            or result.receipt is None
+            or result.receipt.assembly_id != assembly_id
+            or result.receipt.assembly_revision_id != selection.assembly_revision_id
+            or result.receipt.manifest_sha256 != selection.manifest_sha256
+        ):
+            raise ValueError("assembly removal receipt differs")
+        return result.receipt
+
+    def _request_assembly_library(
+        self, command: CuratedAssemblyLibraryRequest
+    ) -> CuratedAssemblyLibraryResponse:
+        payload = parse_curated_library_request(command.model_dump(mode="json"))
+        self._validate_socket()
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+                connection.settimeout(CONNECT_TIMEOUT_SECONDS)
+                connection.connect(str(self.socket_path))
+                encoded = json.dumps(
+                    payload.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":")
+                ).encode("utf-8")
+                if len(encoded) + 1 > CATALOG_APPLICATION_MAX_MESSAGE_BYTES:
+                    raise ValueError("assembly library request exceeds its bound")
+                connection.sendall(encoded + b"\n")
+                connection.settimeout(EVIDENCE_RESPONSE_TIMEOUT_SECONDS)
+                result = parse_curated_library_response(json.loads(self._read_response(connection)))
+            if result.operation != command.operation:
+                raise ValueError("assembly library response operation differs")
+            if result.status == "ERROR":
+                self._raise_remote_error(result.error_code)
+            return result
+        except CatalogApplicationClientError:
+            raise
+        except (OSError, ValueError, JsonSchemaValidationError, ValidationError) as exc:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog assembly library boundary is unavailable",
             ) from exc
 
     def read_curated_document_assembly(

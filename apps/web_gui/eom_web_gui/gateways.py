@@ -40,6 +40,8 @@ from eom_web_gui.contracts import (
     CuratedAssemblyItemPointerView,
     CuratedAssemblyListView,
     CuratedAssemblyReadView,
+    CuratedAssemblyRemovalSubmission,
+    CuratedAssemblyRemovalView,
     CuratedAssemblySaveView,
     CuratedAssemblySourcePointerView,
     CurriculumEditorialOutline,
@@ -67,6 +69,7 @@ from eom_web_gui.contracts import (
     HwpxBuildView,
     HwpxCapability,
     ItemBankEntry,
+    ItemDbFilterOptions,
     ItemPreview,
     ItemRevisionApprovalSubmission,
     KnowledgeAnalysisBatchRangeStatus,
@@ -784,6 +787,8 @@ class ApplicationGateway(Protocol):
         self, session: WebSession, draft: dict[str, object], idempotency_key: str
     ) -> CuratedAssemblySaveView: ...
 
+    async def item_db_filter_options(self, session: WebSession) -> ItemDbFilterOptions: ...
+
     async def list_curated_assemblies(
         self, session: WebSession, limit: int, cursor: str | None
     ) -> CuratedAssemblyListView: ...
@@ -791,6 +796,14 @@ class ApplicationGateway(Protocol):
     async def read_curated_assembly(
         self, session: WebSession, assembly_id: str
     ) -> CuratedAssemblyReadView: ...
+
+    async def remove_curated_assembly(
+        self,
+        session: WebSession,
+        assembly_id: str,
+        value: CuratedAssemblyRemovalSubmission,
+        idempotency_key: str,
+    ) -> CuratedAssemblyRemovalView: ...
 
     async def external_item_db_document_download(
         self, session: WebSession, source_id: str, source_revision_id: str, edition: int
@@ -1572,6 +1585,15 @@ class HttpApplicationGateway:
             raise GatewayError(status=502, code="ITEM_DB_EXPORT_RESPONSE_INVALID")
         return ItemDbExcelDownload(response.content, digest, int(row_count))
 
+    async def item_db_filter_options(self, session: WebSession) -> ItemDbFilterOptions:
+        response = await self._authorized(
+            session, "GET", "/api/v1/item-db/external-sources/filter-options"
+        )
+        try:
+            return ItemDbFilterOptions.model_validate(self._data(response))
+        except (ValueError, TypeError, KeyError):
+            raise GatewayError(status=502, code="ITEM_DB_FILTER_OPTIONS_INVALID") from None
+
     async def save_curated_assembly(
         self, session: WebSession, draft: dict[str, object], idempotency_key: str
     ) -> CuratedAssemblySaveView:
@@ -1718,7 +1740,7 @@ class HttpApplicationGateway:
         if cursor is not None:
             params["cursor"] = cursor
         response = await self._authorized(
-            session, "GET", "/api/v1/item-db/assemblies", params=params
+            session, "GET", "/api/v1/item-db/assemblies/library", params=params
         )
         document = self._document(response)
         if not isinstance(document, dict):
@@ -1733,6 +1755,32 @@ class HttpApplicationGateway:
             return CuratedAssemblyListView(values=data, next_cursor=page["next_cursor"])
         except (KeyError, ValueError, TypeError) as exc:
             raise GatewayError(status=502, code="ITEM_DB_ASSEMBLY_RESPONSE_INVALID") from exc
+
+    async def remove_curated_assembly(
+        self,
+        session: WebSession,
+        assembly_id: str,
+        value: CuratedAssemblyRemovalSubmission,
+        idempotency_key: str,
+    ) -> CuratedAssemblyRemovalView:
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/item-db/assemblies/{assembly_id}/remove",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+        )
+        try:
+            result = CuratedAssemblyRemovalView.model_validate(self._data(response))
+            if (
+                result.assembly_id != assembly_id
+                or result.assembly_revision_id != value.assembly_revision_id
+                or result.manifest_sha256 != value.manifest_sha256
+            ):
+                raise ValueError("assembly removal receipt differs")
+            return result
+        except (ValueError, TypeError, KeyError):
+            raise GatewayError(status=502, code="ITEM_DB_ASSEMBLY_RESPONSE_INVALID") from None
 
     async def read_curated_assembly(
         self, session: WebSession, assembly_id: str

@@ -26,6 +26,7 @@ from eom_web_gui.contracts import (
     CodexAuthChallengeReveal,
     CodexAuthEnrollmentStart,
     ContentTeamMaterialRequirementV2,
+    CuratedAssemblyRemovalSubmission,
     CustomerSupportSubmission,
     DocumentReviewAnnotationSubmission,
     DocumentReviewCorrectionSubmission,
@@ -846,6 +847,13 @@ def create_app(
             "has_more": page.has_more,
         }
 
+    @app.get(f"{API_PREFIX}/item-db/external-sources/filter-options")
+    async def item_db_filter_options(
+        session: Annotated[WebSession, Depends(require_session)],
+    ) -> dict[str, object]:
+        result = await actual.gateway.item_db_filter_options(session)
+        return result.model_dump(mode="json")
+
     @app.get(f"{API_PREFIX}/item-db/external-sources/{{source_id}}")
     async def external_item_db_detail(
         session: Annotated[WebSession, Depends(require_session)],
@@ -992,6 +1000,18 @@ def create_app(
     ) -> dict[str, object]:
         value = await actual.gateway.save_curated_assembly(session, draft, idempotency_key)
         return value.model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/item-db/assemblies/{{assembly_id}}/remove")
+    async def remove_curated_assembly(
+        assembly_id: Annotated[str, Path(pattern=r"^assembly_[0-9a-f]{32}$")],
+        value: CuratedAssemblyRemovalSubmission,
+        session: Annotated[WebSession, Depends(require_csrf)],
+        idempotency_key: Annotated[str, Header(alias="Idempotency-Key")],
+    ) -> dict[str, object]:
+        receipt = await actual.gateway.remove_curated_assembly(
+            session, assembly_id, value, idempotency_key
+        )
+        return receipt.model_dump(mode="json")
 
     @app.post(f"{API_PREFIX}/item-db/similarity")
     async def item_db_similarity_search(

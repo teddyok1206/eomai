@@ -240,13 +240,17 @@ def test_db_assembly_draft_distinguishes_original_files_from_registered_items() 
     html = (ROOT / "apps/web_gui/eom_web_gui/static/index.html").read_text(encoding="utf-8")
     javascript = (ROOT / "apps/web_gui/eom_web_gui/static/item-db.js").read_text(encoding="utf-8")
     draft = (ROOT / "apps/web_gui/eom_web_gui/static/item-db-draft.js").read_text(encoding="utf-8")
+    assembly = (ROOT / "apps/web_gui/eom_web_gui/static/item-db-assembly.js").read_text(
+        encoding="utf-8"
+    )
     assert 'id="item-db-draft-list"' in html
     assert "아직 합본 파일을 만들거나 문항을 승인하지 않습니다." in html
     assert 'placement_kind: "EXTERNAL_SOURCE_DOCUMENT"' in draft
     assert '"PAST_EXAM_ITEM_REVISION" : "REGISTERED_ITEM_REVISION"' in javascript
     assert "source_revision_id: detail.entry.source_revision_id" in draft
     assert "graph_snapshot_revision_id: entry.graph_snapshot_revision_id" in javascript
-    assert "createItemDbDraft()" in javascript
+    assert "createItemDbDraft()" in assembly
+    assert "createItemDbAssembly({document, api, activate: activateTab, message})" in javascript
     assert "const keys = new Set()" in draft
     assert "ordered.splice(index, 1)" in draft
 

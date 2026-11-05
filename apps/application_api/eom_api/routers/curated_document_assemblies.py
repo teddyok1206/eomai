@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 from eom_api_contracts import ListResponse, SingleResponse
-from eom_api_contracts.curated_document_assembly import CuratedDocumentAssemblyDraftV1
+from eom_api_contracts.curated_document_assembly import (
+    CuratedDocumentAssemblyDraftV1,
+    CuratedDocumentAssemblyDraftV2,
+    CuratedDocumentAssemblyRemovalInput,
+    CuratedDocumentAssemblyRemovalReceipt,
+)
 from eom_api_contracts.curated_hwpx import CreateCuratedHwpxBuildRequest, CuratedHwpxBuildView
 from eom_catalog_contracts.curated_document_assembly import CuratedDocumentAssemblyManifestV1
 from eom_catalog_contracts.curated_document_assembly_application import (
     CuratedDocumentAssemblyListEntryV1,
+)
+from eom_catalog_contracts.curated_document_assembly_library import (
+    CuratedDocumentAssemblyListEntryV2,
 )
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Path, Query, Request
@@ -175,6 +183,63 @@ def list_curated_assemblies(
 
 
 @router.get(
+    "/library",
+    operation_id="item_db_curated_assembly_library_list",
+    response_model=ListResponse[CuratedDocumentAssemblyListEntryV2],
+    dependencies=[Depends(require_permission(PermissionKey.ITEM_READ))],
+)
+def list_titled_curated_assemblies(
+    request: Request,
+    limit: int = Query(default=20, ge=1, le=50),
+    cursor: str | None = Query(
+        default=None, max_length=70, pattern=r"^[0-9]{13,20}\|assembly_[0-9a-f]{32}$"
+    ),
+) -> ListResponse[CuratedDocumentAssemblyListEntryV2]:
+    entries, next_cursor = (
+        request.app.state.services.catalog_application.list_titled_curated_document_assemblies(
+            actor=request.state.request_context.actor(), limit=limit, cursor=cursor
+        )
+    )
+    return many(
+        request, entries, limit=limit, next_cursor=next_cursor, has_more=next_cursor is not None
+    )
+
+
+@router.post(
+    "/{assembly_id}/remove",
+    operation_id="item_db_curated_assembly_remove",
+    response_model=SingleResponse[CuratedDocumentAssemblyRemovalReceipt],
+    dependencies=[Depends(require_permission(PermissionKey.DELIVERABLE_CREATE))],
+    openapi_extra={"x-eom-additional-permissions": [PermissionKey.ITEM_READ.value]},
+)
+def remove_curated_assembly(
+    request: Request,
+    body: CuratedDocumentAssemblyRemovalInput,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+    assembly_id: str = Path(pattern=r"^assembly_[0-9a-f]{32}$"),
+) -> SingleResponse[CuratedDocumentAssemblyRemovalReceipt]:
+    if PermissionKey.ITEM_READ not in authentication.permissions:
+        raise ApiError(403, "PERMISSION_DENIED", "Permission denied", "Item read denied")
+    receipt = request.app.state.services.catalog_application.remove_curated_document_assembly(
+        assembly_id,
+        body,
+        actor=request.state.request_context.actor(),
+        idempotency_key=idempotency_key,
+    )
+    request.app.state.services.audit.append(
+        request.state.request_context,
+        event_type="CURATED_DOCUMENT_ASSEMBLY_REMOVED_FROM_LIST",
+        operation_id="item_db_curated_assembly_remove",
+        outcome="SUCCEEDED",
+        http_status=200,
+        target_type="curated_document_assembly",
+        target_id=assembly_id,
+    )
+    return one(request, receipt)
+
+
+@router.get(
     "/{assembly_id}",
     operation_id="item_db_curated_assembly_read",
     response_model=SingleResponse[CuratedDocumentAssemblyManifestV1],
@@ -210,7 +275,7 @@ def read_curated_assembly(
 )
 def create_curated_assembly(
     request: Request,
-    body: CuratedDocumentAssemblyDraftV1,
+    body: CuratedDocumentAssemblyDraftV1 | CuratedDocumentAssemblyDraftV2,
     authentication: Auth,
     idempotency_key: IdempotencyKey,
 ) -> SingleResponse[CuratedDocumentAssemblyManifestV1]:

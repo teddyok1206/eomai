@@ -304,6 +304,24 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:25c13bee6b22bdc4cd63285f62090c0fa193e7ca897de0b9284cb0aeffeb1f41",
         ),
+        "curated-document-assembly-draft-v2": CatalogSchemaResource(
+            "schemas/api/v1/curated-document-assembly-draft-v2.schema.json",
+            "resources/api/curated-document-assembly-draft-v2.schema.json",
+            "2.0",
+            "sha256:a3721b42c9f593416adca4bd0a4714a6bf768257155e1404b76b3bd87dd48a09",
+        ),
+        "external-item-db-filter-options-v1": CatalogSchemaResource(
+            "schemas/api/v1/external-item-db-filter-options-v1.schema.json",
+            "resources/api/external-item-db-filter-options-v1.schema.json",
+            "1.0",
+            "sha256:cf1df0d48180072a932c7f535ff96e4798dac162d30594d45b97861028246051",
+        ),
+        "catalog-curated-document-assembly-library-v1": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-curated-document-assembly-library-v1.schema.json",
+            "resources/catalog-application/catalog-curated-document-assembly-library-v1.schema.json",
+            "1.0",
+            "sha256:4585f02668a3291a2227b20bc40b69bc79503a9f88228d1ae5837223f00e99cc",
+        ),
         "catalog-curated-document-assembly-create-request-v1": CatalogSchemaResource(
             "schemas/catalog-application/catalog-curated-document-assembly-create-request-v1.schema.json",
             "resources/catalog-application/catalog-curated-document-assembly-create-request-v1.schema.json",

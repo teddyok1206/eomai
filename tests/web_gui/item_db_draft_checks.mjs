@@ -52,6 +52,15 @@ assert.equal(draft.move(-1, 0), false);
 assert.equal(draft.remove(5), false);
 assert.equal(draft.replace([{pointer: item, label: "기출"}, {pointer: source, label: "원본"}]), true);
 assert.deepEqual(draft.proposal().placements, [{...item, position: 1}, {...source, position: 2}]);
+// The original target identity, not its old index, owns a pending replacement.
+const otherItem = {...item, item_revision_id: `itemrev_${"0".repeat(32)}`};
+assert.equal(draft.move(0, 1), true);
+assert.equal(draft.replaceOne(item, otherItem, "교체 문항"), "REPLACED");
+assert.deepEqual(draft.proposal().placements, [{...source, position: 1}, {...otherItem, position: 2}]);
+assert.equal(draft.replaceOne(otherItem, source, "중복"), "DUPLICATE");
+assert.equal(draft.replaceOne(item, otherItem, "없는 대상"), "MISSING");
+assert.equal(draft.replaceOne(otherItem, item, "기출"), "REPLACED");
+assert.equal(draft.move(1, 0), true);
 assert.equal(draft.replace([{pointer: item, label: "기출"}, {pointer: item, label: "중복"}]), false);
 assert.deepEqual(draft.proposal().placements, [{...item, position: 1}, {...source, position: 2}]);
 console.log("item_db_draft=PASS");

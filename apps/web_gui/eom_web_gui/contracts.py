@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, datetime
 from enum import StrEnum
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Self
 from urllib.parse import urlsplit
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -1650,6 +1650,31 @@ class ExternalItemDbFilterSubmission(WebModel):
     cursor: str | None = Field(min_length=1, max_length=1024)
 
 
+class ItemDbFieldOptions(WebModel):
+    field: str = Field(pattern=r"^(?:[A-Z]|A[A-F])$")
+    values: tuple[str, ...] = Field(max_length=200)
+    truncated: bool
+
+    @model_validator(mode="after")
+    def bounded_choices(self) -> Self:
+        if len(set(self.values)) != len(self.values) or any(
+            not 1 <= len(value) <= 255 for value in self.values
+        ):
+            raise ValueError("metadata choices are invalid")
+        return self
+
+
+class ItemDbFilterOptions(WebModel):
+    schema_version: Literal["external-item-db-filter-options/1.0"]
+    fields: tuple[ItemDbFieldOptions, ...] = Field(min_length=14, max_length=14)
+
+    @model_validator(mode="after")
+    def unique_fields(self) -> Self:
+        if len({entry.field for entry in self.fields}) != len(self.fields):
+            raise ValueError("metadata choice fields are duplicated")
+        return self
+
+
 class CuratedAssemblySaveView(WebModel):
     """Browser-facing receipt; file pointers remain in the Catalog manifest."""
 
@@ -1662,6 +1687,7 @@ class CuratedAssemblySaveView(WebModel):
 
 
 class CuratedAssemblyListEntryView(WebModel):
+    title: str = Field(default="", max_length=200, pattern=r"^[^\r\n\t]*$")
     assembly_id: str = Field(pattern=r"^assembly_[0-9a-f]{32}$")
     assembly_revision_id: str = Field(pattern=r"^assemblyrev_[0-9a-f]{32}$")
     created_at: datetime
@@ -1672,6 +1698,16 @@ class CuratedAssemblyListEntryView(WebModel):
 class CuratedAssemblyListView(WebModel):
     values: tuple[CuratedAssemblyListEntryView, ...] = Field(max_length=50)
     next_cursor: str | None = Field(default=None, max_length=70)
+
+
+class CuratedAssemblyRemovalSubmission(WebModel):
+    assembly_revision_id: str = Field(pattern=r"^assemblyrev_[0-9a-f]{32}$")
+    manifest_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+
+
+class CuratedAssemblyRemovalView(CuratedAssemblyRemovalSubmission):
+    assembly_id: str = Field(pattern=r"^assembly_[0-9a-f]{32}$")
+    removed_at: datetime
 
 
 class CuratedAssemblySourcePointerView(WebModel):

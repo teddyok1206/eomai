@@ -1,0 +1,484 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/curated-document-assembly-library/1.0",
+  "title": "Owned saved assembly titles and list removal, preserving immutable delivery history",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/create_request"
+    },
+    {
+      "$ref": "#/$defs/list_request"
+    },
+    {
+      "$ref": "#/$defs/remove_request"
+    },
+    {
+      "$ref": "#/$defs/create_response"
+    },
+    {
+      "$ref": "#/$defs/list_response"
+    },
+    {
+      "$ref": "#/$defs/remove_response"
+    }
+  ],
+  "$defs": {
+    "title": {
+      "type": "string",
+      "maxLength": 200,
+      "pattern": "^[^\\r\\n\\t]*$",
+      "not": {
+        "pattern": "[\\r\\n\\t]"
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assembly_revision_id",
+        "manifest_sha256"
+      ],
+      "properties": {
+        "assembly_revision_id": {
+          "type": "string",
+          "pattern": "^assemblyrev_[0-9a-f]{32}$"
+        },
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assembly_id",
+        "assembly_revision_id",
+        "manifest_sha256",
+        "removed_at"
+      ],
+      "properties": {
+        "assembly_id": {
+          "type": "string",
+          "pattern": "^assembly_[0-9a-f]{32}$"
+        },
+        "assembly_revision_id": {
+          "type": "string",
+          "pattern": "^assemblyrev_[0-9a-f]{32}$"
+        },
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "removed_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assembly_id",
+        "assembly_revision_id",
+        "title",
+        "created_at",
+        "placement_count",
+        "manifest_sha256"
+      ],
+      "properties": {
+        "assembly_id": {
+          "type": "string",
+          "pattern": "^assembly_[0-9a-f]{32}$"
+        },
+        "assembly_revision_id": {
+          "type": "string",
+          "pattern": "^assemblyrev_[0-9a-f]{32}$"
+        },
+        "title": {
+          "$ref": "#/$defs/title"
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "placement_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        },
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "create_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "idempotency_key",
+        "draft"
+      ],
+      "properties": {
+        "operation": {
+          "const": "CREATE_CURATED_DOCUMENT_ASSEMBLY_V2"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 128,
+          "pattern": "^[!-~]{16,128}$"
+        },
+        "draft": {
+          "$ref": "eom://schemas/api/curated-document-assembly-draft/2.0"
+        }
+      }
+    },
+    "list_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "limit",
+        "cursor"
+      ],
+      "properties": {
+        "operation": {
+          "const": "LIST_CURATED_DOCUMENT_ASSEMBLIES_V2"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 50
+        },
+        "cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 70,
+          "pattern": "^[0-9]{13,20}\\|assembly_[0-9a-f]{32}$"
+        }
+      }
+    },
+    "remove_request": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "idempotency_key",
+        "assembly_id",
+        "selection"
+      ],
+      "properties": {
+        "operation": {
+          "const": "REMOVE_CURATED_DOCUMENT_ASSEMBLY"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 128,
+          "pattern": "^[!-~]{16,128}$"
+        },
+        "assembly_id": {
+          "type": "string",
+          "pattern": "^assembly_[0-9a-f]{32}$"
+        },
+        "selection": {
+          "$ref": "#/$defs/selection"
+        }
+      }
+    },
+    "create_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "status",
+        "manifest",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "CREATE_CURATED_DOCUMENT_ASSEMBLY_V2"
+        },
+        "status": {
+          "enum": [
+            "OK",
+            "ERROR"
+          ]
+        },
+        "manifest": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/assessment-assembly/curated-document-assembly-manifest/1.0"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Z][A-Z0-9_]{2,127}$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "OK"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "manifest": {
+                "$ref": "eom://schemas/assessment-assembly/curated-document-assembly-manifest/1.0"
+              },
+              "error_code": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "manifest": {
+                "type": "null"
+              },
+              "error_code": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9_]{2,127}$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "remove_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "status",
+        "receipt",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "REMOVE_CURATED_DOCUMENT_ASSEMBLY"
+        },
+        "status": {
+          "enum": [
+            "OK",
+            "ERROR"
+          ]
+        },
+        "receipt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/receipt"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error_code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Z][A-Z0-9_]{2,127}$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "OK"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "receipt": {
+                "$ref": "#/$defs/receipt"
+              },
+              "error_code": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "receipt": {
+                "type": "null"
+              },
+              "error_code": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9_]{2,127}$"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "list_response": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "status",
+        "values",
+        "next_cursor",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "LIST_CURATED_DOCUMENT_ASSEMBLIES_V2"
+        },
+        "status": {
+          "enum": [
+            "OK",
+            "ERROR"
+          ]
+        },
+        "values": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "#/$defs/entry"
+          }
+        },
+        "next_cursor": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 70,
+          "pattern": "^[0-9]{13,20}\\|assembly_[0-9a-f]{32}$"
+        },
+        "error_code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[A-Z][A-Z0-9_]{2,127}$"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "OK"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "error_code": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "values": {
+                "maxItems": 0
+              },
+              "next_cursor": {
+                "type": "null"
+              },
+              "error_code": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9_]{2,127}$"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

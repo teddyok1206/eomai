@@ -44,6 +44,9 @@
         "apps/application_api/eom_api/routers/item_db.py",
         "apps/application_api/eom_api/services/external_item_db_read.py",
         "apps/web_gui/eom_web_gui/static/item-db.js",
+        "apps/web_gui/eom_web_gui/static/item-db-assembly.js",
+        "packages/catalog_contracts/eom_catalog_contracts/curated_document_assembly_library.py",
+        "packages/catalog_contracts/eom_catalog_contracts/external_item_filter_options.py",
         "services/catalog_service/eom_catalog_service/external_item_read_service.py",
         "services/catalog_service/eom_catalog_service/external_item_models.py",
         "services/catalog_service/eom_catalog_service/creative_cohort_execution.py",
@@ -56,7 +59,10 @@
         "tests/unit/test_creative_item_graph_learning.py",
         "tests/unit/test_creative_parallel_execution.py",
         "tests/unit/test_office_picture_use_publication.py",
-        "tests/unit/test_external_item_preview_projection.py"
+        "tests/unit/test_external_item_preview_projection.py",
+        "tests/unit/test_curated_assembly_library.py",
+        "tests/integration/test_curated_assembly_library.py",
+        "tests/integration/test_item_db_filter_options.py"
       ],
       "reference_paths": ["docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md", "docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md", "docs/operations/ITEM_DB_REGISTRATION_PARITY_RELEASE_2026-10-31.md"]
     },

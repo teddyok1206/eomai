@@ -246,7 +246,7 @@ def test_curated_replay_checks_request_permissions_and_placement_projection() ->
         previous_revision_id=None,
     )
     session = _Session(CuratedDocumentAssemblyService._placement_rows(manifest))
-    session.aggregate = SimpleNamespace(created_by=actor.actor_id)
+    session.aggregate = SimpleNamespace(created_by=actor.actor_id, title="")
     assert (
         CuratedDocumentAssemblyService._replay(  # type: ignore[arg-type]
             session, existing, draft, actor, request_sha256
@@ -336,7 +336,7 @@ def test_curated_replay_lookup_needs_no_update_privilege_on_immutable_revision(
     monkeypatch.setattr(
         CuratedDocumentAssemblyService,
         "_replay",
-        staticmethod(lambda *_args: existing),
+        staticmethod(lambda *_args, **_kwargs: existing),
     )
     assert service.create(draft, actor=actor, idempotency_key="curated-replay-key") is existing
     sql = str(statements[0].compile(dialect=postgresql.dialect()))
@@ -433,6 +433,7 @@ def test_curated_recent_list_is_owner_scoped_keyset_and_bounded(
                         manifest.assembly_id,
                         manifest.assembly_revision_id,
                         manifest.created_at,
+                        "",
                         manifest.manifest_sha256,
                         "INPUT_PINNED",
                         actor.actor_id,
@@ -442,6 +443,7 @@ def test_curated_recent_list_is_owner_scoped_keyset_and_bounded(
                         "assembly_" + "f" * 32,
                         "assemblyrev_" + "f" * 32,
                         manifest.created_at,
+                        "",
                         manifest.manifest_sha256,
                         "INPUT_PINNED",
                         actor.actor_id,

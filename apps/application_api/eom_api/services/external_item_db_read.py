@@ -10,6 +10,7 @@ from eom_api_contracts.external_item_db import (
     ExternalItemDbDetailView,
     ExternalItemDbEditionView,
     ExternalItemDbEntryView,
+    ExternalItemDbFilterOptions,
     ExternalItemDbFilterRequest,
 )
 from eom_api_contracts.item_db_registration import CreativeItemDbEntryView, ItemDbRegistrationView
@@ -22,6 +23,7 @@ from eom_catalog_service.external_item_read_service import (
     creative_item_registrations,
     export_external_item_sources,
     list_external_item_sources,
+    read_external_item_filter_options,
     read_external_item_source,
 )
 from eom_catalog_service.item_db_excel_export import (
@@ -80,6 +82,10 @@ class ExternalItemDbReadApplication:
     def __init__(self, engine: Engine, cursor_key: bytes) -> None:
         self.sessions = build_session_factory(engine)
         self.cursors = CursorCodec(cursor_key)
+
+    def filter_options(self) -> ExternalItemDbFilterOptions:
+        with self.sessions() as session:
+            return read_external_item_filter_options(session, source_namespace=_NAMESPACE)
 
     def list(
         self,

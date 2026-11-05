@@ -186,3 +186,108 @@ def test_catalog_reauthorization_denial_maps_to_forbidden() -> None:
         assert response.json()["error_code"] == "CURATED_SOURCE_PERMISSION_DENIED"
     finally:
         services.engine.dispose()
+
+
+def test_titled_save_library_and_remove_preserve_exact_revision_and_retry_key():
+    from eom_catalog_contracts.curated_document_assembly_library import (
+        CuratedDocumentAssemblyDraftV2,
+        CuratedDocumentAssemblyListEntryV2,
+        CuratedDocumentAssemblyRemovalReceipt,
+    )
+
+    from tests.unit.test_curated_assembly_library import titled
+
+    services = disconnected_services()
+    manifest = CuratedDocumentAssemblyManifestV1.model_validate(_manifest())
+    entry = CuratedDocumentAssemblyListEntryV2(
+        assembly_id=manifest.assembly_id,
+        assembly_revision_id=manifest.assembly_revision_id,
+        manifest_sha256=manifest.manifest_sha256,
+        created_at=manifest.created_at,
+        placement_count=len(manifest.placements),
+        title="통합과학 1회",
+    )
+    receipt = CuratedDocumentAssemblyRemovalReceipt(
+        assembly_id=manifest.assembly_id,
+        assembly_revision_id=manifest.assembly_revision_id,
+        manifest_sha256=manifest.manifest_sha256,
+        removed_at=manifest.created_at,
+    )
+    create, listed, remove = (
+        Mock(return_value=manifest),
+        Mock(return_value=((entry,), None)),
+        Mock(return_value=receipt),
+    )
+    services.catalog_application = SimpleNamespace(
+        create_curated_document_assembly=create,
+        list_titled_curated_document_assemblies=listed,
+        remove_curated_document_assembly=remove,
+    )
+    services.audit = SimpleNamespace(append=Mock())
+    app = create_app(services)
+
+    def authenticated(request: Request):
+        value = _authentication(admin=True)
+        request.state.request_context.authentication = value
+        return value
+
+    app.dependency_overrides[get_authentication] = authenticated
+    body = receipt.model_dump(mode="json", exclude={"assembly_id", "removed_at"})
+    try:
+        with TestClient(app, base_url="http://localhost") as client:
+            saved = client.post(
+                "/api/v1/item-db/assemblies",
+                json=titled().model_dump(mode="json"),
+                headers={"Idempotency-Key": "titled-save-http-key-1"},
+            )
+            library = client.get("/api/v1/item-db/assemblies/library")
+            path = "/api/v1/item-db/assemblies/" + manifest.assembly_id + "/remove"
+            missing = client.post(path, json=body)
+            removed = client.post(
+                path, json=body, headers={"Idempotency-Key": "remove-replay-http-key-1"}
+            )
+        assert saved.status_code == 201 and isinstance(
+            create.call_args.args[0], CuratedDocumentAssemblyDraftV2
+        )
+        assert library.status_code == 200 and library.json()["data"][0]["title"] == "통합과학 1회"
+        assert missing.status_code == 400
+        assert removed.status_code == 200 and removed.json()["data"] == receipt.model_dump(
+            mode="json"
+        )
+        assert remove.call_args.args[0] == manifest.assembly_id
+        assert remove.call_args.args[1].assembly_revision_id == manifest.assembly_revision_id
+        assert remove.call_args.kwargs["idempotency_key"] == "remove-replay-http-key-1"
+        assert remove.call_args.kwargs["actor"].actor_id == "operator_" + "6" * 32
+        assert (
+            services.audit.append.call_args.kwargs["event_type"]
+            == "CURATED_DOCUMENT_ASSEMBLY_REMOVED_FROM_LIST"
+        )
+    finally:
+        services.engine.dispose()
+
+
+def test_library_removal_requires_item_read_as_well_as_delivery_permission():
+    services = disconnected_services()
+    remove = Mock()
+    services.catalog_application = SimpleNamespace(remove_curated_document_assembly=remove)
+    app = create_app(services)
+
+    def authenticated(request: Request):
+        original = _authentication(admin=True)
+        value = replace(original, permissions=original.permissions - {PermissionKey.ITEM_READ})
+        request.state.request_context.authentication = value
+        return value
+
+    app.dependency_overrides[get_authentication] = authenticated
+    manifest = _manifest()
+    try:
+        with TestClient(app, base_url="http://localhost") as client:
+            response = client.post(
+                "/api/v1/item-db/assemblies/" + manifest["assembly_id"] + "/remove",
+                json={key: manifest[key] for key in ("assembly_revision_id", "manifest_sha256")},
+                headers={"Idempotency-Key": "remove-denied-http-key-1"},
+            )
+        assert response.status_code == 403
+        remove.assert_not_called()
+    finally:
+        services.engine.dispose()

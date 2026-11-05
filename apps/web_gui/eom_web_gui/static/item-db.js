@@ -1,7 +1,7 @@
-import {createItemDbDraft, selectedFinalSourcePlacement} from "./item-db-draft.js";
+import {selectedFinalSourcePlacement} from "./item-db-draft.js";
+import {createItemDbAssembly} from "./item-db-assembly.js";
 import {itemDbSimilaritySelection} from "./item-db-similarity.js";
 import {createItemDbSimilarityList} from "./item-db-similarity-list.js";
-import {createCuratedDeliveryControl} from "./item-db-delivery.js";
 
 const DB_TABS = Object.freeze({
   search: ["#item-db-search-tab", "#item-db-search-panel"],
@@ -62,12 +62,13 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   let resultCount = 0;
   let selectedRow = null;
   let selectedItem = null;
-  let savedCursor = null;
-  let savedSequence = 0;
-  let pendingSave = null;
   let assemblyLoaded = false;
-  const deliveries = new Set();
-  const draft = createItemDbDraft();
+  let filterChoices = new Map();
+  let filterOptionsSequence = 0;
+  let filterOptionsLoaded = false;
+  let filterOptionsPending = false;
+  const filterControlUpdates = new Set();
+  const assembly = createItemDbAssembly({document, api, activate: activateTab, message});
   const similarity = createItemDbSimilarityList({
     document, searches: similaritySearches, activate: activateTab,
     async previewSelection(pointer, root, isCurrent) {
@@ -102,153 +103,6 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     button.title = similarity.available() ? "선택한 문항과 유사한 문항을 찾습니다." : "유사도 검색 연결을 준비하고 있습니다.";
   }
 
-  function renderDraft() {
-    const root = $("#item-db-draft-list");
-    root.replaceChildren();
-    const entries = draft.entries();
-    $("#item-db-draft-count").textContent = `${entries.length}개`;
-    $("#item-db-tab-count").textContent = String(entries.length);
-    $("#item-db-draft-save").disabled = entries.length === 0;
-    $("#item-db-draft-empty").hidden = entries.length > 0;
-    entries.forEach((selection, index) => {
-      const line = node(document, "li", "item-db-draft-row");
-      const label = node(document, "span", "", selection.label);
-      const actions = node(document, "span", "item-db-draft-actions");
-      for (const [caption, next] of [
-        ["위로", index - 1], ["아래로", index + 1],
-      ]) {
-        const button = node(document, "button", "button quiet", caption);
-        button.type = "button";
-        button.disabled = next < 0 || next >= entries.length;
-        button.addEventListener("click", () => {
-          draft.move(index, next);
-          renderDraft();
-        });
-        actions.append(button);
-      }
-      const remove = node(document, "button", "button quiet", "빼기");
-      remove.type = "button";
-      remove.addEventListener("click", () => {
-        draft.remove(index);
-        renderDraft();
-      });
-      actions.append(remove);
-      line.append(label, actions);
-      root.append(line);
-    });
-  }
-
-  function addToDraft(pointer, label) {
-    const result = draft.add(pointer, label);
-    if (result === "DUPLICATE") {
-      message("이미 조립 목록에 담긴 문항입니다.");
-      return;
-    }
-    if (result === "FULL") {
-      message("조립 초안에는 문항을 최대 200개까지 담을 수 있습니다.", true);
-      return;
-    }
-    renderDraft();
-    message("조립 순서 초안에 담았습니다. 아직 HWPX를 만들지는 않았습니다.");
-  }
-
-  async function saveDraft() {
-    const button = $("#item-db-draft-save");
-    const proposal = draft.proposal();
-    if (!proposal.placements.length) return;
-    const signature = JSON.stringify(proposal);
-    if (!pendingSave || pendingSave.signature !== signature) {
-      pendingSave = {signature, key: `studio:curated-assembly:${crypto.randomUUID()}`};
-    }
-    button.disabled = true;
-    message("조립 순서를 저장하고 있습니다.");
-    try {
-      const receipt = await api("/item-db/assemblies", {
-        method: "POST", mutation: true, body: proposal,
-        headers: {"Idempotency-Key": pendingSave.key},
-      });
-      if (!/^assembly_[0-9a-f]{32}$/.test(receipt.assembly_id)
-        || receipt.placement_count !== proposal.placements.length) {
-        throw new Error("저장 결과를 확인하지 못했습니다.");
-      }
-      message("조립 순서를 저장했습니다. 아래 목록에서 다시 열 수 있습니다.");
-      await loadSaved(true);
-    } catch (error) {
-      message(`조립 순서 저장 실패: ${error.message || "다시 시도해 주세요."}`, true);
-    } finally {
-      button.disabled = draft.entries().length === 0;
-    }
-  }
-
-  function savedLabel(placement) {
-    if (placement.placement_kind === "EXTERNAL_SOURCE_DOCUMENT") {
-      return `창작 원본 ${placement.external_number} · ${placement.edition}교 · ${placement.source_format}`;
-    }
-    return placement.placement_kind === "PAST_EXAM_ITEM_REVISION"
-      ? "기출 문항" : "등록 문항";
-  }
-
-  async function openSaved(assemblyId) {
-    message("저장한 조립 순서를 불러오는 중입니다.");
-    try {
-      const saved = await api(`/item-db/assemblies/${encodeURIComponent(assemblyId)}`);
-      if (saved.assembly_id !== assemblyId || !Array.isArray(saved.placements)) {
-        throw new Error("저장본이 올바르지 않습니다.");
-      }
-      const selections = saved.placements.map((placement) => {
-        const {external_number, ...pointer} = placement;
-        return {pointer, label: savedLabel(placement)};
-      });
-      if (!draft.replace(selections)) throw new Error("저장된 순서를 불러올 수 없습니다.");
-      pendingSave = null;
-      renderDraft();
-      message("저장한 조립 순서를 다시 열었습니다. 바꾼 뒤 저장하면 별도 저장본이 됩니다.");
-      $("#item-db-draft-title").scrollIntoView({block: "start"});
-    } catch (error) {
-      message(`저장본 열기 실패: ${error.message || "다시 시도해 주세요."}`, true);
-    }
-  }
-
-  async function loadSaved(reset = false) {
-    const request = ++savedSequence;
-    if (reset) {
-      savedCursor = null;
-      for (const delivery of deliveries) delivery.dispose();
-      deliveries.clear();
-      $("#item-db-saved-list").replaceChildren();
-    }
-    const more = $("#item-db-saved-more");
-    more.disabled = true;
-    try {
-      const params = new URLSearchParams({limit: "20"});
-      if (savedCursor) params.set("cursor", savedCursor);
-      const page = await api(`/item-db/assemblies?${params.toString()}`);
-      if (request !== savedSequence) return;
-      if (!Array.isArray(page.values)) throw new Error("저장본 목록이 올바르지 않습니다.");
-      const root = $("#item-db-saved-list");
-      for (const entry of page.values) {
-        const line = node(document, "div", "item-db-draft-row");
-        const time = new Intl.DateTimeFormat("ko-KR", {
-          timeZone: "Asia/Seoul", dateStyle: "medium", timeStyle: "short",
-        }).format(new Date(entry.created_at));
-        const label = node(document, "span", "", `${time} · ${entry.placement_count}문항`);
-        const open = node(document, "button", "button secondary", "다시 열기");
-        open.type = "button";
-        open.addEventListener("click", () => openSaved(entry.assembly_id));
-        const delivery = createCuratedDeliveryControl({document, api, entry});
-        deliveries.add(delivery);
-        line.append(label, open, delivery.element);
-        root.append(line);
-      }
-      if (!root.children.length) root.append(node(document, "p", "empty-state", "저장한 조립 순서가 없습니다."));
-      savedCursor = page.next_cursor;
-      more.hidden = !savedCursor;
-    } catch (error) {
-      if (request === savedSequence) message(`저장본 목록 조회 실패: ${error.message || "다시 시도해 주세요."}`, true);
-    } finally {
-      if (request === savedSequence) more.disabled = false;
-    }
-  }
 
   function message(value, error = false) {
     const element = $("#item-db-message");
@@ -267,6 +121,34 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     $("#item-db-filter-empty").hidden = count > 0;
     $("#item-db-filter-clear").hidden = count === 0;
     $("#item-db-filter-add").disabled = count >= 8;
+  }
+
+  function clearFilters() {
+    filterControlUpdates.clear();
+    $("#item-db-filter-rows").replaceChildren();
+    $("#item-db-match-mode").value = "ALL";
+    syncFilterControls();
+  }
+
+  async function loadFilterOptions() {
+    if (!canReadSource() || filterOptionsLoaded || filterOptionsPending) return;
+    const request = ++filterOptionsSequence;
+    filterOptionsPending = true;
+    try {
+      const result = await api("/item-db/external-sources/filter-options");
+      if (request !== filterOptionsSequence) return;
+      if (result.schema_version !== "external-item-db-filter-options/1.0" || !Array.isArray(result.fields)
+        || new Set(result.fields.map(entry => entry.field)).size !== result.fields.length) {
+        throw new Error("선택지 형식이 올바르지 않습니다.");
+      }
+      filterChoices = new Map(result.fields.map(entry => [entry.field, entry]));
+      filterOptionsLoaded = true;
+      for (const update of filterControlUpdates) update();
+    } catch (error) {
+      if (request === filterOptionsSequence) message(`선택지를 불러오지 못했습니다. 값은 직접 입력할 수 있습니다. ${error.message || ""}`, true);
+    } finally {
+      if (request === filterOptionsSequence) filterOptionsPending = false;
+    }
   }
 
   function addFilter(selectedField = "U") {
@@ -290,44 +172,89 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     const status = node(document, "select", "item-db-status-value");
     status.setAttribute("aria-label", "파일 상태");
     for (const [key, label] of Object.entries(MATCH_LABELS)) status.append(option(key, label));
+    const choice = node(document, "select", "item-db-filter-choice");
+    choice.setAttribute("aria-label", "검색할 값 선택");
+    let lastField = null;
+    let choiceSnapshot = null;
+    let operatorTouched = false;
     const remove = node(document, "button", "item-db-filter-remove", "×");
     remove.type = "button";
     remove.setAttribute("aria-label", "이 조건 지우기");
     remove.addEventListener("click", () => {
+      filterControlUpdates.delete(updateControls);
       row.remove();
       syncFilterControls();
       $("#item-db-filter-add").focus();
     });
     function updateControls() {
       const statusField = field.value === "MATCH_STATUS";
+      const options = filterChoices.get(field.value);
+      const changedField = field.value !== lastField;
+      if (changedField) {
+        value.value = "";
+        operatorTouched = false;
+        operator.value = statusField || field.value === "U" || options ? "EQ" : "CONTAINS";
+      } else if (options && options !== choiceSnapshot && !operatorTouched && !value.value) {
+        operator.value = "EQ";
+      }
+      if (changedField || options !== choiceSnapshot) {
+        const previous = changedField ? "" : choice.value;
+        const manual = !changedField && choice.selectedOptions[0]?.dataset.manual === "true";
+        choice.replaceChildren(option("", "값 선택"));
+        for (const raw of options?.values || []) choice.append(option(raw, raw));
+        if (value.value && !(options?.values || []).includes(value.value)) {
+          choice.append(option(value.value, `직접 입력한 값: ${value.value}`));
+        }
+        const manualOption = option("", options?.truncated ? "다른 값 직접 입력" : "직접 입력");
+        manualOption.dataset.manual = "true";
+        choice.append(manualOption);
+        if (previous) choice.value = previous;
+        else if (value.value) choice.value = value.value;
+        else if (manual) manualOption.selected = true;
+        choiceSnapshot = options;
+      }
+      lastField = field.value;
       for (const item of operator.options) {
         item.disabled = statusField && !["EQ", "NE"].includes(item.value)
           || field.value === "U" && item.value.startsWith("IS_");
       }
       if (operator.selectedOptions[0].disabled) operator.value = "EQ";
-      status.hidden = !statusField;
-      status.disabled = !statusField;
-      value.hidden = statusField || operator.value.startsWith("IS_");
+      const empty = operator.value.startsWith("IS_");
+      const categorical = options && ["EQ", "NE"].includes(operator.value);
+      choice.hidden = statusField || empty || !categorical;
+      choice.disabled = choice.hidden;
+      const manual = !choice.hidden && choice.selectedOptions[0]?.dataset.manual === "true";
+      status.hidden = !statusField || empty;
+      status.disabled = status.hidden;
+      value.hidden = statusField || empty || categorical && !manual;
       value.disabled = value.hidden;
-      if (value.hidden) value.value = "";
       value.maxLength = field.value === "U" ? 5 : 255;
       value.inputMode = field.value === "U" ? "numeric" : "text";
       value.placeholder = field.value === "U" ? "예: 10310" : `${CELL_LABELS[field.value] || "내용"} 입력`;
     }
     field.addEventListener("change", updateControls);
-    operator.addEventListener("change", updateControls);
-    row.append(field, operator, value, status, remove);
+    operator.addEventListener("change", () => {operatorTouched = true; updateControls();});
+    choice.addEventListener("change", () => {
+      if (choice.selectedOptions[0]?.dataset.manual !== "true") value.value = choice.value;
+      updateControls();
+    });
+    filterControlUpdates.add(updateControls);
+    const valueBox = node(document, "div", "item-db-filter-value-box");
+    valueBox.append(value, status, choice);
+    row.append(field, operator, valueBox, remove);
     updateControls();
     rows.append(row);
     syncFilterControls();
-    (field.value === "MATCH_STATUS" ? status : value).focus();
+    (field.value === "MATCH_STATUS" ? status : !choice.hidden ? choice : value).focus();
   }
 
   function filters() {
     const conditions = [...$("#item-db-filter-rows").children].map((row) => {
       const field = row.querySelector(".item-db-filter-field").value;
       const operator = row.querySelector(".item-db-filter-operator").value;
+      const choice = row.querySelector(".item-db-filter-choice");
       const value = field === "MATCH_STATUS" ? row.querySelector(".item-db-status-value").value
+        : !choice.hidden && choice.selectedOptions[0]?.dataset.manual !== "true" ? choice.value
         : row.querySelector(".item-db-filter-value").value.trim();
       if (operator !== "IS_EMPTY" && operator !== "IS_NOT_EMPTY" && !value) {
         throw new Error("검색 조건의 값을 입력해 주세요.");
@@ -465,7 +392,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
         "item-db-detail-summary"));
       const add = node(document, "button", "button secondary", "등록 문항을 조립 목록에 담기");
       add.type = "button";
-      add.addEventListener("click", () => addToDraft({
+      add.addEventListener("click", () => assembly.add({
         placement_kind: "REGISTERED_ITEM_REVISION", item_id: entry.item_id,
         item_revision_id: entry.item_revision_id, item_manifest_sha256: entry.item_manifest_sha256,
         graph_snapshot_revision_id: entry.graph_snapshot_revision_id,
@@ -513,7 +440,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     select.type = "button";
     // The released exam flag does not admit the new editable curated profile.
     // Catalog pins selections; the delivery owner validates actual render inputs.
-    select.addEventListener("click", () => addToDraft({
+    select.addEventListener("click", () => assembly.add({
       placement_kind: entry.source_class === "PAST_EXAM"
         ? "PAST_EXAM_ITEM_REVISION" : "REGISTERED_ITEM_REVISION",
       item_id: entry.item_id,
@@ -574,7 +501,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     }
     if (name === "assembly" && !assemblyLoaded) {
       assemblyLoaded = true;
-      loadSaved(true);
+      assembly.open();
       onAssemblyOpen?.();
     }
   }
@@ -712,7 +639,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
         if (chosen) {
           const select = node(document, "button", "button primary", "조립 목록에 담기");
           select.type = "button";
-          select.addEventListener("click", () => addToDraft(placement,
+          select.addEventListener("click", () => assembly.add(placement,
             `창작 원본 ${detail.entry.external_number} · ${chosen.edition}교 · ${chosen.filename}`));
           heading.append(select);
         }
@@ -852,9 +779,24 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   }
 
   return Object.freeze({
-    setOwner: (owner) => similarity.setOwner(owner, canReadSource()),
+    setOwner(owner) {
+      if (assembly.setOwner(owner)) {
+        assemblyLoaded = false;
+        loaded = false;
+        sequence += 1;
+        resetDetail();
+        resultCount = 0;
+        $("#item-db-results").replaceChildren();
+        filterOptionsSequence += 1;
+        filterOptionsLoaded = false;
+        filterOptionsPending = false;
+        filterChoices.clear();
+        clearFilters();
+      }
+      similarity.setOwner(owner, canReadSource());
+    },
     install() {
-      renderDraft();
+      assembly.install();
       similarity.install();
       selectItem(null, null);
       activateTab("search");
@@ -888,20 +830,13 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
         const button = event.target.closest("[data-filter-field]");
         if (button) addFilter(button.dataset.filterField);
       });
-      $("#item-db-filter-clear").addEventListener("click", () => {
-        $("#item-db-filter-rows").replaceChildren();
-        $("#item-db-match-mode").value = "ALL";
-        syncFilterControls();
-      });
+      $("#item-db-filter-clear").addEventListener("click", clearFilters);
       $("#item-db-form").addEventListener("submit", (event) => {
         event.preventDefault();
         load(true);
       });
       $("#item-db-more").addEventListener("click", () => load(false));
       $("#item-db-export").addEventListener("click", exportRows);
-      $("#item-db-draft-save").addEventListener("click", saveDraft);
-      $("#item-db-saved-refresh").addEventListener("click", () => loadSaved(true));
-      $("#item-db-saved-more").addEventListener("click", () => loadSaved(false));
       $("#item-db-detail-close").addEventListener("click", () => {
         const button = selectedRow?.querySelector("button");
         resetDetail();
@@ -910,8 +845,9 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     },
     open() {
       const changed = syncSourceAccess();
+      loadFilterOptions();
       if (changed || !loaded) load(true);
-      if (!$("#item-db-assembly-panel").hidden) loadSaved(true);
+      if (!$("#item-db-assembly-panel").hidden) assembly.refresh();
     },
     setCurriculumUnits(units) {
       const select = $("#item-db-graph-unit");

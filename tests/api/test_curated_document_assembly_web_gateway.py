@@ -7,6 +7,7 @@ from types import MethodType
 
 import httpx
 import pytest
+from eom_web_gui.contracts import CuratedAssemblyRemovalSubmission
 from eom_web_gui.gateways import GatewayError, HttpApplicationGateway
 
 from tests.unit.test_curated_document_assembly_manifest import _manifest
@@ -57,7 +58,7 @@ def test_saved_selection_list_and_reopen_hide_artifact_pointer() -> None:
 
     async def authorized(self, _session, method, path, **kwargs):
         calls.append({"method": method, "path": path, **kwargs})
-        if path == "/api/v1/item-db/assemblies":
+        if path == "/api/v1/item-db/assemblies/library":
             return httpx.Response(
                 200,
                 json={
@@ -65,6 +66,7 @@ def test_saved_selection_list_and_reopen_hide_artifact_pointer() -> None:
                         {
                             "assembly_id": manifest["assembly_id"],
                             "assembly_revision_id": manifest["assembly_revision_id"],
+                            "title": "예시 조립",
                             "created_at": manifest["created_at"],
                             "placement_count": len(manifest["placements"]),
                             "manifest_sha256": manifest["manifest_sha256"],
@@ -79,6 +81,62 @@ def test_saved_selection_list_and_reopen_hide_artifact_pointer() -> None:
     page = asyncio.run(gateway.list_curated_assemblies(None, 20, None))
     reopened = asyncio.run(gateway.read_curated_assembly(None, manifest["assembly_id"]))
     assert page.values[0].assembly_id == manifest["assembly_id"]
+    assert page.values[0].title == "예시 조립"
     assert len(reopened.placements) == 3
     assert "document_artifact" not in reopened.model_dump_json()
     assert calls[0]["params"] == {"limit": "20"}
+
+
+def test_list_removal_passes_only_exact_selection_and_preserves_retry_key():
+    manifest = _manifest()
+    receipt = {
+        key: manifest[key] for key in ("assembly_id", "assembly_revision_id", "manifest_sha256")
+    }
+    receipt["removed_at"] = manifest["created_at"]
+    body = {key: manifest[key] for key in ("assembly_revision_id", "manifest_sha256")}
+    gateway, calls = _gateway(receipt)
+    result = asyncio.run(
+        gateway.remove_curated_assembly(
+            None,
+            manifest["assembly_id"],
+            CuratedAssemblyRemovalSubmission.model_validate(body),
+            "remove-web-1",
+        )
+    )
+    assert result.assembly_id == manifest["assembly_id"]
+    assert calls == [
+        dict(
+            method="POST",
+            path=f"/api/v1/item-db/assemblies/{manifest['assembly_id']}/remove",
+            json=body,
+            headers={"Idempotency-Key": "remove-web-1"},
+        )
+    ]
+
+
+def test_removal_rejects_another_revision_receipt():
+    manifest = _manifest()
+    body = {key: manifest[key] for key in ("assembly_revision_id", "manifest_sha256")}
+    receipt = dict(assembly_id=manifest["assembly_id"], **body, removed_at=manifest["created_at"])
+    receipt["assembly_revision_id"] = "assemblyrev_" + "9" * 32
+    gateway, _ = _gateway(receipt)
+    with pytest.raises(GatewayError):
+        asyncio.run(
+            gateway.remove_curated_assembly(
+                None,
+                manifest["assembly_id"],
+                CuratedAssemblyRemovalSubmission.model_validate(body),
+                "remove-web-1",
+            )
+        )
+
+
+def test_filter_options_gateway_is_bounded_and_preserves_exact_values():
+    from tests.unit.test_item_db_filter_options import options
+
+    value = options()
+    value["fields"][0]["values"] = ["단원 A, B"]
+    gateway, calls = _gateway(value)
+    answer = asyncio.run(gateway.item_db_filter_options(None))
+    assert answer.fields[0].values == ("단원 A, B",)
+    assert calls[0]["path"] == "/api/v1/item-db/external-sources/filter-options"

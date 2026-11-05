@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/external-item-db-filter-options/1.0",
+  "title": "Current original categorical metadata choices, not Graph evidence or source permission",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "fields"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "external-item-db-filter-options/1.0"
+    },
+    "fields": {
+      "type": "array",
+      "minItems": 14,
+      "maxItems": 14,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "field",
+          "values",
+          "truncated"
+        ],
+        "properties": {
+          "field": {
+            "enum": [
+              "Q",
+              "R",
+              "Z",
+              "Y",
+              "V",
+              "O",
+              "G",
+              "H",
+              "T",
+              "W",
+              "X",
+              "AB",
+              "AD",
+              "AE"
+            ]
+          },
+          "values": {
+            "type": "array",
+            "maxItems": 200,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 255
+            }
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}

@@ -4,9 +4,22 @@ from __future__ import annotations
 
 from typing import Literal, Self
 
+from eom_catalog_contracts.external_item_filter_options import ExternalItemDbFilterOptions
 from pydantic import Field, model_validator
 
 from eom_api_contracts.common import ApiModel
+
+__all__ = [
+    "ExternalItemDbCellView",
+    "ExternalItemDbDetailView",
+    "ExternalItemDbEditionView",
+    "ExternalItemDbEntryView",
+    "ExternalItemDbFilterCondition",
+    "ExternalItemDbFilterField",
+    "ExternalItemDbFilterOperator",
+    "ExternalItemDbFilterOptions",
+    "ExternalItemDbFilterRequest",
+]
 
 
 class ExternalItemDbEntryView(ApiModel):
@@ -21,9 +34,17 @@ class ExternalItemDbEntryView(ApiModel):
     grade_label: str | None = Field(default=None, max_length=255)
     author_label: str | None = Field(default=None, max_length=255)
     match_status: Literal[
-        "MATCHED", "MATCHED_DETECTED_HWPX", "MATCHED_IDENTICAL_COPIES",
-        "REJECTED", "REJECTION_AMBIGUOUS", "DRAFT_ONLY", "LINK_UNSUPPORTED",
-        "DOCUMENT_MISSING", "NAME_MISMATCH", "CONTENT_CONFLICT", "FORMAT_MISMATCH",
+        "MATCHED",
+        "MATCHED_DETECTED_HWPX",
+        "MATCHED_IDENTICAL_COPIES",
+        "REJECTED",
+        "REJECTION_AMBIGUOUS",
+        "DRAFT_ONLY",
+        "LINK_UNSUPPORTED",
+        "DOCUMENT_MISSING",
+        "NAME_MISMATCH",
+        "CONTENT_CONFLICT",
+        "FORMAT_MISMATCH",
     ]
     selected_filename: str | None = Field(default=None, max_length=512)
     graph_state: Literal["NOT_PUBLISHED"] = "NOT_PUBLISHED"
@@ -69,9 +90,39 @@ class ExternalItemDbDetailView(ApiModel):
 
 
 ExternalItemDbFilterField = Literal[
-    "MATCH_STATUS", "A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L",
-    "M", "N", "O", "P", "Q", "R", "S", "T", "U", "V", "W", "X", "Y", "Z",
-    "AA", "AB", "AC", "AD", "AE", "AF",
+    "MATCH_STATUS",
+    "A",
+    "B",
+    "C",
+    "D",
+    "E",
+    "F",
+    "G",
+    "H",
+    "I",
+    "J",
+    "K",
+    "L",
+    "M",
+    "N",
+    "O",
+    "P",
+    "Q",
+    "R",
+    "S",
+    "T",
+    "U",
+    "V",
+    "W",
+    "X",
+    "Y",
+    "Z",
+    "AA",
+    "AB",
+    "AC",
+    "AD",
+    "AE",
+    "AF",
 ]
 ExternalItemDbFilterOperator = Literal["EQ", "NE", "CONTAINS", "IS_EMPTY", "IS_NOT_EMPTY"]
 
@@ -88,9 +139,15 @@ class ExternalItemDbFilterCondition(ApiModel):
             raise ValueError("filter operator and value disagree")
         if self.field == "MATCH_STATUS" and self.operator not in ("EQ", "NE"):
             raise ValueError("match status requires an equality operator")
-        if self.field == "U" and self.operator in ("EQ", "NE") and (
-            self.value is None or len(self.value) != 5 or not self.value.isascii()
-            or not self.value.isdecimal()
+        if (
+            self.field == "U"
+            and self.operator in ("EQ", "NE")
+            and (
+                self.value is None
+                or len(self.value) != 5
+                or not self.value.isascii()
+                or not self.value.isdecimal()
+            )
         ):
             raise ValueError("external number equality requires five ASCII digits")
         return self

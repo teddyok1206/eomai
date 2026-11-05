@@ -9,6 +9,7 @@ from eom_api_contracts import ListResponse, SingleResponse
 from eom_api_contracts.external_item_db import (
     ExternalItemDbDetailView,
     ExternalItemDbEntryView,
+    ExternalItemDbFilterOptions,
     ExternalItemDbFilterRequest,
 )
 from eom_api_contracts.item_db_registration import ApprovalState
@@ -62,6 +63,20 @@ def list_external_sources(
         next_cursor=page.next_cursor,
         has_more=page.has_more,
     )
+
+
+@router.get(
+    "/filter-options",
+    operation_id="item_db_external_source_filter_options",
+    response_model=SingleResponse[ExternalItemDbFilterOptions],
+    dependencies=_PERMISSIONS,
+    openapi_extra={"x-eom-additional-permissions": [PermissionKey.CONTENT_INTAKE_READ.value]},
+)
+def external_source_filter_options(
+    request: Request, authentication: Auth
+) -> SingleResponse[ExternalItemDbFilterOptions]:
+    _source_access(authentication)
+    return one(request, request.app.state.services.external_item_db_reads.filter_options())
 
 
 @router.post(

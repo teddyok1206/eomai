@@ -52,6 +52,7 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "static/hwpx-delivery-target.js",
         "static/index.html",
         "static/item-db-draft.js",
+        "static/item-db-assembly.js",
         "static/item-db-delivery.js",
         "static/item-db.js",
         "static/item-db-similarity.js",

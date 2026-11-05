@@ -17,7 +17,14 @@ from eom_catalog_contracts import (
     ExternalItemWorkbookMapping,
 )
 from eom_catalog_contracts.creative_source_lineage import CREATIVE_REGISTRATION_KEY_PREFIX
-from sqlalchemy import Select, and_, literal, or_, select
+from eom_catalog_contracts.external_item_filter_options import (
+    CATEGORICAL_ITEM_METADATA_FIELDS,
+    ITEM_METADATA_OPTION_LIMIT,
+    ExternalItemDbFilterOptions,
+    ItemDbCategoricalFieldOptions,
+)
+from sqlalchemy import Select, and_, case, column, func, literal, or_, select, true
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.external_item_matching import ExternalItemMatchStatus
@@ -214,6 +221,82 @@ def _base_query() -> Select[Any]:
 
 def _literal_pattern(value: str) -> str:
     return value.replace("~", "~~").replace("%", "~%").replace("_", "~_")
+
+
+def read_external_item_filter_options(
+    session: Session, *, source_namespace: str
+) -> ExternalItemDbFilterOptions:
+    """One current-source DISTINCT/window query, not one query per field or Item.
+
+    The original Excel lacks Notion property-type declarations. Only explicit
+    categorical metadata fields are offered; labels/combined values stay exact.
+    Output is bounded independently of corpus size and contains no source bodies.
+    """
+    ExternalItemListFilter(source_namespace=source_namespace)
+    current = (
+        _base_query()
+        .with_only_columns(ExternalItemSourceRevisionRecord.cells, maintain_column_froms=True)
+        .where(ExternalItemSourceRecord.source_namespace == source_namespace)
+        .subquery("current_option_sources")
+    )
+    cells = (
+        func.jsonb_array_elements(current.c.cells).table_valued(column("value", JSONB)).lateral()
+    )
+    field, raw = cells.c.value["column"].astext, cells.c.value["raw_text"].astext
+    distinct_values = (
+        select(field.label("field"), raw.label("raw_value"))
+        .select_from(current)
+        .join(cells, true())
+        .where(field.in_(CATEGORICAL_ITEM_METADATA_FIELDS), raw != "")
+        .distinct()
+        .subquery("distinct_option_values")
+    )
+    ranked = select(
+        distinct_values.c.field,
+        distinct_values.c.raw_value,
+        func.row_number()
+        .over(
+            partition_by=distinct_values.c.field,
+            order_by=distinct_values.c.raw_value.collate("C"),
+        )
+        .label("ordinal"),
+    ).subquery("ranked_option_values")
+    oversized = func.length(ranked.c.raw_value) > 255
+    statement = (
+        select(
+            ranked.c.field,
+            case((~oversized, ranked.c.raw_value), else_=None).label("value"),
+            oversized.label("oversized"),
+            ranked.c.ordinal,
+        )
+        .where(ranked.c.ordinal <= ITEM_METADATA_OPTION_LIMIT + 1)
+        .order_by(ranked.c.field, ranked.c.ordinal)
+        .limit(len(CATEGORICAL_ITEM_METADATA_FIELDS) * (ITEM_METADATA_OPTION_LIMIT + 1))
+    )
+    values: dict[str, list[str]] = {field: [] for field in CATEGORICAL_ITEM_METADATA_FIELDS}
+    truncated = {field: False for field in CATEGORICAL_ITEM_METADATA_FIELDS}
+    for row in session.execute(statement):
+        if row.field not in values or not 1 <= row.ordinal <= ITEM_METADATA_OPTION_LIMIT + 1:
+            raise ExternalItemReadError(
+                "EXTERNAL_ITEM_QUERY_INVALID", "invalid metadata choice row"
+            )
+        if row.oversized or row.ordinal > ITEM_METADATA_OPTION_LIMIT:
+            truncated[row.field] = True
+        elif not isinstance(row.value, str):
+            raise ExternalItemReadError(
+                "EXTERNAL_ITEM_QUERY_INVALID", "invalid metadata choice value"
+            )
+        else:
+            values[row.field].append(row.value)
+    return ExternalItemDbFilterOptions(
+        schema_version="external-item-db-filter-options/1.0",
+        fields=tuple(
+            ItemDbCategoricalFieldOptions(
+                field=field, values=tuple(values[field]), truncated=truncated[field]
+            )
+            for field in CATEGORICAL_ITEM_METADATA_FIELDS
+        ),
+    )
 
 
 def _metadata_condition(value: ExternalItemMetadataPredicate) -> Any:

@@ -268,3 +268,27 @@ def test_preview_prepare_and_download_require_current_source_and_intake_permissi
         assert denied.status_code == 403
     finally:
         denied_services.engine.dispose()
+
+
+def test_categorical_options_use_static_route_before_detail_and_intake_permission():
+    from eom_catalog_contracts.external_item_filter_options import ExternalItemDbFilterOptions
+
+    from tests.unit.test_item_db_filter_options import options
+
+    for allow in (True, False):
+        client, services, reads = _client(allow_intake=allow)
+        reads.filter_options = Mock(
+            return_value=ExternalItemDbFilterOptions.model_validate(options())
+        )
+        try:
+            with client:
+                response = client.get("/api/v1/item-db/external-sources/filter-options")
+            assert response.status_code == (200 if allow else 403)
+            reads.detail.assert_not_called()
+            if allow:
+                assert response.json()["data"]["fields"][0]["field"] == "Q"
+                reads.filter_options.assert_called_once_with()
+            else:
+                reads.filter_options.assert_not_called()
+        finally:
+            services.engine.dispose()

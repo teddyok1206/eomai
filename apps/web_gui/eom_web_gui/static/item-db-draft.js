@@ -51,6 +51,17 @@ export function createItemDbDraft(limit = 200) {
       ordered.splice(index, 1);
       return true;
     },
+    replaceOne(target, pointer, label) {
+      const targetKey = key(target);
+      const index = ordered.findIndex((entry) => key(entry.pointer) === targetKey);
+      if (index < 0) return "MISSING";
+      const identity = key(pointer);
+      if (identity !== targetKey && keys.has(identity)) return "DUPLICATE";
+      ordered[index] = {pointer: Object.freeze({...pointer}), label};
+      keys.delete(targetKey);
+      keys.add(identity);
+      return "REPLACED";
+    },
     replace(selections) {
       if (!Array.isArray(selections) || selections.length > limit) return false;
       const identities = new Set(selections.map(({pointer}) => key(pointer)));

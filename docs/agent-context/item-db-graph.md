@@ -50,6 +50,19 @@ source/operator 권한과 report lineage를 다시 검증한다. publication 후
 `curated_document_assembly_service.py`와 관련 typed manifest를 확인한다. 조립 순서 저장이
 원본-only 문항의 편집 가능한 HWPX 합본 완료를 뜻하지는 않는다.
 
+조립 초안·제목·최근 저장본·목록 삭제의 화면 책임은 `item-db-assembly.js`에 있다.
+제목을 받는 draft V2는 기존 V1 placement selection으로 정규화하며, title은 논리 조립의
+작은 불변 metadata다. 삭제는 소유자의 목록에서 숨기는 공식 명령이다. revision/placement,
+진행 중 제작과 기존 HWPX 참조를 물리 삭제하지 않는다. 삭제 재시도는 exact revision/hash와
+동일 key를 유지한다. `curated_document_assembly_library.py`의 별도 closed RPC와 migration73을
+확인하고 이전 V1 계약을 고치지 않는다. 교체 대상은 가변 행 번호가 아니라 원 pointer다.
+
+선택형 필터 값은 `external_item_filter_options.py`의 명시적 categorical fields와 Catalog의
+`read_external_item_filter_options`를 따른다. 원본 Excel에는 Notion 속성 타입 선언이 없으므로
+이를 복원했다고 주장하지 않는다. namespace의 COMPLETED import/current revision에서 실제
+원문 값을 한 SQL DISTINCT/window 연산으로 최대200개씩 읽는다. 줄글 필드는 그대로 입력하고,
+복합 원문 값을 임의로 분할하지 않는다. 선택지 제한/조회 실패에도 직접 입력 경로는 유지한다.
+
 ## 검증과 근거
 
 - `tests/unit/test_creative_item_graph_learning.py`, `tests/unit/test_creative_parallel_execution.py`

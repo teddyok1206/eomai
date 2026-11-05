@@ -112,6 +112,7 @@ from eom_catalog_contracts.chat_ranked_candidate_read import (
     parse_chat_ranked_candidate_read_request,
     validate_chat_ranked_candidate_read_reply,
 )
+from eom_catalog_contracts.curated_document_assembly_library import LIBRARY_REQUEST_TYPES
 from eom_catalog_contracts.curated_document_delivery_application import (
     CuratedDocumentDeliveryQueryV1,
     CuratedDocumentDeliveryResponseV1,
@@ -154,6 +155,9 @@ from eom_catalog_service.chat_knowledge_search import ChatKnowledgeSearchService
 from eom_catalog_service.chat_rag_resolution import ChatRagResolutionService
 from eom_catalog_service.curated_delivery_inputs import CuratedDeliveryInputError
 from eom_catalog_service.curated_document_assembly_item import CuratedDocumentAssemblyItemError
+from eom_catalog_service.curated_document_assembly_library_dispatch import (
+    dispatch_curated_assembly_library,
+)
 from eom_catalog_service.curated_document_assembly_resolution import (
     CuratedDocumentAssemblyResolutionError,
 )
@@ -763,6 +767,14 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     )
                     return
                 self._resolve_curated_document_delivery(delivery_query)
+                return
+            if isinstance(raw_operation, str) and raw_operation in LIBRARY_REQUEST_TYPES:
+                self.wfile.write(
+                    dispatch_curated_assembly_library(
+                        self.server.curated_document_assemblies, value
+                    )
+                )
+                self.wfile.flush()
                 return
             if raw_operation == "CREATE_CURATED_DOCUMENT_ASSEMBLY":
                 try:

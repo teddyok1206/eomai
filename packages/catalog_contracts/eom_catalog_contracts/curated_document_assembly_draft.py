@@ -41,6 +41,20 @@ type CuratedPlacement = Annotated[
 ]
 
 
+def validate_curated_placements(placements: tuple[CuratedPlacement, ...]) -> None:
+    """Shared ordered-selection invariant; title/version metadata never changes it."""
+    if tuple(row.position for row in placements) != tuple(range(1, len(placements) + 1)):
+        raise ValueError("assembly positions must be contiguous and ordered")
+    keys = tuple(
+        ("EXTERNAL", row.source_id)
+        if isinstance(row, ExternalSourcePlacement)
+        else ("ITEM", row.item_revision_id)
+        for row in placements
+    )
+    if len(keys) != len(set(keys)):
+        raise ValueError("assembly placements must be unique")
+
+
 class CuratedDocumentAssemblyDraftV1(FrozenModel):
     """An ordered, non-authoritative selection requiring server-side reauthorization."""
 
@@ -49,16 +63,5 @@ class CuratedDocumentAssemblyDraftV1(FrozenModel):
 
     @model_validator(mode="after")
     def ordered_unique_placements(self) -> Self:
-        if tuple(row.position for row in self.placements) != tuple(
-            range(1, len(self.placements) + 1)
-        ):
-            raise ValueError("assembly positions must be contiguous and ordered")
-        keys = tuple(
-            ("EXTERNAL", row.source_id)
-            if isinstance(row, ExternalSourcePlacement)
-            else ("ITEM", row.item_revision_id)
-            for row in self.placements
-        )
-        if len(keys) != len(set(keys)):
-            raise ValueError("assembly placements must be unique")
+        validate_curated_placements(self.placements)
         return self
