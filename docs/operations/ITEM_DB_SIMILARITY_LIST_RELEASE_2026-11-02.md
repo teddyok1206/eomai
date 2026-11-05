@@ -338,3 +338,32 @@ INDEX PID3100607과 수치 환경은 그대로다. 원 완료 검색 READY·sele
 14:20 관측까지 운영 새 completed-result GET은 없어 saved snapshot 발행과 재조회 실측은
 PENDING이다. 사용자가 최근 완료 기록을 열어 기존 요청을 한 번 채운 뒤 같은 기록을 다시
 여는 검증을 요청했다. 새 검색·모델 호출·실패 성공 재해석으로 대신하지 않는다.
+
+### 실제 저장·재조회 확인 — 2026-11-05 15:05 UTC
+
+사용자가 기존 완료 기록을 열었고, 첫 저장 조회 뒤 같은 최근 기록을 다시 열어
+목록이 그대로임을 확인했다. 새 검색이나 로그인 재요청으로 대신하지 않았다.
+
+| 실제 결과 GET | 종료 시각(UTC) | 서버 경과 시간 |
+| --- | --- | --- |
+| 예전 완료 기록의 최초 저장 조회 | 14:59:14.915 | 179.877초 |
+| 동일 기록의 저장본 재조회 | 15:00:47.598 | 17.633초 |
+
+각 request ID는 `req_9e337a4fc5c034f8a8dfd0ac21a95734`와
+`req_9aa63c2cf53ad0842db4893e93155e7c`다. 관측된 이 한 사례에서는 약10.2배 빨랐다.
+전체 검색의 지연 보장이나 p95 수치로 일반화하지 않는다. 저장본 재조회도 권한·원 pin·
+source 상태와 DB 표시 metadata를 확인하므로 즉시 응답한다고 주장하지 않는다.
+
+원 검색 `dbsearch_a6b726c8d13db52e3e8b1290eecf31c2`는 READY이며 완료 selector SHA는
+`9cb9123c73de9a2b26ce046c803b0e7f57c7023617cfbe54c7d56f6350b7dca7`로 이전과 같다.
+원 native launch는 여전히1개다. 저장 Job `job_778f8004800d46039c300afb00b59e34`는
+SUCCEEDED/error 없음, Artifact `artifact_68645a3712b24a7da8279c3dcda9b087`과 revision
+`rev_5222e74e74074e43a5778a062fecb9c4`도 재조회 전후 같다. 승인된26,364-byte 저장 Artifact의
+content hash는 `sha256:87f87b6cc557fd35caf9a4a58245ee4e3b38063573d5b5888dd249634ec113ed`,
+manifest hash는 `sha256:d7e0bf69bf14f6f1e6d57085eab3779695f58114ed0eff6dc3a1dc4c2d1ae966`다.
+원 Workflow·실패 이력·source·벡터는 바꾸지 않았다.
+
+이로써 실제 GUI 검색→목록→문항 열기(앞선 사용자 확인)→같은 기록 재조회 경로를 확인했다.
+신규 조립·필터의 범위별 구현/DB/브라우저/설치 및 호환 운영 반영 증거는
+[별도 기록](ITEM_DB_ASSEMBLY_LIBRARY_2026-11-05.md)을 따른다. 새 조립 화면의 사람 사용감과
+교육적 문항 품질을 이 검색 acceptance에 합치지 않는다.

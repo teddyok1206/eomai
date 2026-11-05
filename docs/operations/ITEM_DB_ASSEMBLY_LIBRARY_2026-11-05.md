@@ -95,3 +95,21 @@ saved ranking publication과 실제 재조회 시간은 PENDING이다. 최근 �
 해석하지 않는다. 이때 유효 worker lease는 아직0이므로 네 worker 동시 재실행 증거는 아니다.
 사용한 guarded 임시 DB와 그 임시 역할·credential state는 공식 cleanup으로 제거했다.
 이는 삭제된 검증용 DB라 복원이 필요하면 새 disposable fixture로 다시 만든다. 운영 데이터는 보존했다.
+
+## 최종 경로 대조 — 2026-11-05 15:05 UTC
+
+최종 미검증 경계였던 저장 결과 재조회는 같은 원 요청의 최초179.877초→저장본17.633초,
+native launch1개와 동일 Artifact revision/목록으로 확인했다. 사용자가 같은 목록 표시를
+직접 확인했다. 실제 검색과 문항 열기 증거는 앞선 기록을 보존한다.
+[재조회 시간·identity](ITEM_DB_SIMILARITY_LIST_RELEASE_2026-11-02.md#실제-저장재조회-확인--2026-11-05-1505-utc).
+
+조립 제목/목록 삭제는 HTTP/BFF·동시성·소유자·실패 재전송·immutable history 및 기존 HWPX
+보존 검사를, 세 열 편집/교체와 선택형 필터는 실제 Chromium·표시 필드/원문 값·namespace
+projection 검사를 각각 통과했다. 새 GUI에 대한 사람의 사용감 확인과 자동 기능 검증은 별개다.
+형식·API/DB/화면/설치 검증·호환 운영 반영·실제 유사도 사용자 경로를 범위별로 완료했다.
+
+백그라운드 보존 재확인에서 기존 INDEX PID/InvocationID는 그대로였고, creative는 재개 후
+이번 실행의8개 검증 순회와1개 유효 worker lease가 관측됐다. 당시 phase는 PUBLISHING4,
+READY_TO_PUBLISH3, EXTRACTING1이다. 순회8개를 신규 Graph 등록8개로 합산하지 않는다.
+이는 INDEX 서비스 실행·원 pin 보존의 증거이지 기출 벡터 수 증가의 증거는 아니다.
+사용자가 기출 임베딩 진척 정체의 점검을 별도로 요청했으므로 이후 별도 진단한다.
