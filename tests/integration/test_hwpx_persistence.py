@@ -672,6 +672,15 @@ def test_kordoc_service_pins_source_and_reuses_immutable_result(
 
     assert receipt == duplicate
     assert receipt.status == "SUCCEEDED"
+    assert (
+        service.recover_interrupted_item_result(
+            build_id=receipt.build_id,
+            idempotency_key="kordoc-service-build-key",
+            source_revision_id=pointer.artifact_revision_id,
+            source_sha256=pointer.sha256,
+        )
+        == receipt
+    )
     assert receipt.output_sha256 == sha256_bytes(b"SYNTHETIC_KORDOC_HWPX")
     assert adapter.run_count == 1
     final = nas_root / receipt.artifact_id / receipt.artifact_revision_id
@@ -792,6 +801,15 @@ def test_content_team_service_pins_both_item_members_and_handoff_then_commits(
     )
 
     assert replay == receipt
+    assert (
+        service.recover_interrupted_item_result(
+            build_id=receipt.build_id,
+            idempotency_key="content-team-build",
+            source_revision_id=source.artifact_revision_id,
+            source_sha256=source.json_sha256,
+        )
+        == receipt
+    )
     assert adapter.run_count == 1
     assert receipt.native_equation_count == 0
     assert receipt.native_table_count == 0
@@ -1038,6 +1056,15 @@ def test_question_template_service_resolves_canonical_content_and_commits_output
 
     assert receipt == duplicate
     assert receipt.native_equation_count == 1
+    assert (
+        service.recover_interrupted_item_result(
+            build_id=receipt.build_id,
+            idempotency_key="question-template-integration",
+            source_revision_id=pointer.artifact_revision_id,
+            source_sha256=pointer.sha256,
+        )
+        == receipt
+    )
     assert receipt.native_table_count == 1
     assert receipt.total_native_table_count == 4
     assert adapter.run_count == 1

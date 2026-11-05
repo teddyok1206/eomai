@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
+
 from eom_api_contracts import CommandResult, ListResponse, SingleResponse
 from eom_api_contracts.common import EmptyRequest
 from eom_api_contracts.operators import (
@@ -10,8 +13,10 @@ from eom_api_contracts.operators import (
     ReasonRequest,
     RoleRevocationRequest,
 )
-from eom_identity_service.service import CreateOperatorCommand
+from eom_identity_service.service import CreateOperatorCommand, OperatorService
 from eom_operator_identity import PermissionKey, RoleKey
+from eom_operator_identity.contracts import OperatorStatus
+from eom_operator_identity.errors import IdentityError, IdentityErrorCode
 from fastapi import APIRouter, Depends, Query, Request, Response
 
 from eom_api.dependencies import (
@@ -22,7 +27,7 @@ from eom_api.dependencies import (
     require_permission,
 )
 from eom_api.errors import ApiError
-from eom_api.routers.common import many, one, run_command
+from eom_api.routers.common import many, one, run_operator_command
 
 router = APIRouter(prefix="/operators", tags=["operators"])
 ADMIN_READ = require_permission(PermissionKey.OPERATOR_READ, fresh=True, admin_only=True)
@@ -32,16 +37,20 @@ def _view(projection) -> OperatorView:  # type: ignore[no-untyped-def]
     return OperatorView.model_validate(projection.model_dump(mode="python"))
 
 
-def _require_operator_version(current_version: int, expected_version: int) -> None:
-    """Keep the Operator HTTP precondition at the presentation boundary."""
-
-    if current_version != expected_version:
+@contextmanager
+def _operator_precondition() -> Iterator[None]:
+    """Translate the application-level locked CAS failure into the HTTP precondition."""
+    try:
+        yield
+    except IdentityError as exc:
+        if exc.code is not IdentityErrorCode.OPERATOR_VERSION_CONFLICT:
+            raise
         raise ApiError(
             412,
             "API_PRECONDITION_FAILED",
             "Precondition failed",
             "The resource has changed since it was read.",
-        )
+        ) from exc
 
 
 @router.get(
@@ -57,14 +66,13 @@ def list_operators(
     username_prefix: str | None = Query(default=None, max_length=64),
     limit: int = Query(default=50, ge=1, le=200),
 ) -> ListResponse[OperatorView]:
-    projections = request.app.state.services.operators.list_operators(limit=200)
-    values = tuple(
-        _view(value)
-        for value in projections
-        if (status is None or value.status.value == status)
-        and (role is None or any(item.value == role for item in value.roles))
-        and (username_prefix is None or value.username.startswith(username_prefix))
-    )[:limit]
+    projections = request.app.state.services.operators.list_operators(
+        limit=limit,
+        status=OperatorStatus(status) if status is not None else None,
+        role=RoleKey(role) if role is not None else None,
+        username_prefix=username_prefix,
+    )
+    values = tuple(_view(value) for value in projections)
     return many(request, values, limit=limit)
 
 
@@ -83,8 +91,8 @@ def create_operator(
     authentication: Auth,
     idempotency_key: IdempotencyKey,
 ) -> SingleResponse[CommandResult]:
-    def create() -> CommandResult:
-        projection = request.app.state.services.operators.create_operator(
+    def create(service: OperatorService) -> CommandResult:
+        projection = service.create_operator(
             CreateOperatorCommand(
                 username=body.username,
                 display_name=body.display_name,
@@ -102,7 +110,7 @@ def create_operator(
             status_url=f"/api/v1/operators/{projection.operator_id}",
         )
 
-    result = run_command(
+    result = run_operator_command(
         request,
         raw_key=idempotency_key,
         body={
@@ -153,12 +161,14 @@ def assign_role(
 ) -> SingleResponse[CommandResult]:
     del body, authentication
 
-    def assign() -> CommandResult:
-        current = request.app.state.services.operators.inspect_operator(operator_id)
-        _require_operator_version(current.resource_version, expected_version)
-        projection = request.app.state.services.operators.assign_role(
-            operator_id, role_key, request.state.request_context.actor()
-        )
+    def assign(service: OperatorService) -> CommandResult:
+        with _operator_precondition():
+            projection = service.assign_role(
+                operator_id,
+                role_key,
+                request.state.request_context.actor(),
+                expected_version=expected_version,
+            )
         return CommandResult(
             command_id=f"role-assign-{projection.operator_id}-{projection.resource_version}",
             resource_type="operator",
@@ -168,7 +178,7 @@ def assign_role(
             status_url=f"/api/v1/operators/{projection.operator_id}",
         )
 
-    result = run_command(
+    result = run_operator_command(
         request,
         raw_key=idempotency_key,
         body={"role_key": role_key.value, "expected_resource_version": expected_version},
@@ -196,15 +206,15 @@ def revoke_role(
 ) -> SingleResponse[CommandResult]:
     del authentication
 
-    def revoke() -> CommandResult:
-        current = request.app.state.services.operators.inspect_operator(operator_id)
-        _require_operator_version(current.resource_version, expected_version)
-        projection = request.app.state.services.operators.revoke_role(
-            operator_id,
-            RoleKey(body.role_key),
-            request.state.request_context.actor(),
-            reason=body.reason,
-        )
+    def revoke(service: OperatorService) -> CommandResult:
+        with _operator_precondition():
+            projection = service.revoke_role(
+                operator_id,
+                RoleKey(body.role_key),
+                request.state.request_context.actor(),
+                reason=body.reason,
+                expected_version=expected_version,
+            )
         return CommandResult(
             command_id=f"role-revoke-{projection.operator_id}-{projection.resource_version}",
             resource_type="operator",
@@ -216,7 +226,7 @@ def revoke_role(
 
     return one(
         request,
-        run_command(
+        run_operator_command(
             request,
             raw_key=idempotency_key,
             body={
@@ -237,16 +247,16 @@ def _state_command(
     action: str,
     reason: str | None,
 ) -> CommandResult:
-    def execute() -> CommandResult:
-        current = request.app.state.services.operators.inspect_operator(operator_id)
-        _require_operator_version(current.resource_version, expected_version)
-        service = request.app.state.services.operators
+    def execute(service: OperatorService) -> CommandResult:
         actor = request.state.request_context.actor()
-        projection = (
-            service.disable(operator_id, actor, reason=reason or "")
-            if action == "disable"
-            else service.enable(operator_id, actor)
-        )
+        with _operator_precondition():
+            projection = (
+                service.disable(
+                    operator_id, actor, reason=reason or "", expected_version=expected_version
+                )
+                if action == "disable"
+                else service.enable(operator_id, actor, expected_version=expected_version)
+            )
         return CommandResult(
             command_id=f"operator-{action}-{operator_id}-{projection.resource_version}",
             resource_type="operator",
@@ -256,7 +266,7 @@ def _state_command(
             status_url=f"/api/v1/operators/{operator_id}",
         )
 
-    return run_command(
+    return run_operator_command(
         request,
         raw_key=raw_key,
         body={
@@ -337,24 +347,25 @@ def revoke_sessions(
 ) -> SingleResponse[CommandResult]:
     del body, authentication
 
-    def execute() -> CommandResult:
-        current = request.app.state.services.operators.inspect_operator(operator_id)
-        _require_operator_version(current.resource_version, expected_version)
-        count = request.app.state.services.operators.revoke_sessions(
-            operator_id, request.state.request_context.actor()
-        )
+    def execute(service: OperatorService) -> CommandResult:
+        with _operator_precondition():
+            count = service.revoke_sessions(
+                operator_id,
+                request.state.request_context.actor(),
+                expected_version=expected_version,
+            )
         return CommandResult(
             command_id=f"session-revoke-{operator_id}-{count}",
             resource_type="operator_sessions",
             resource_id=operator_id,
             status="COMPLETED",
-            resource_version=1,
+            resource_version=expected_version + 1,
             status_url=f"/api/v1/operators/{operator_id}",
         )
 
     return one(
         request,
-        run_command(
+        run_operator_command(
             request,
             raw_key=idempotency_key,
             body={
@@ -385,14 +396,14 @@ def delete_operator(
 ) -> SingleResponse[CommandResult]:
     del authentication
 
-    def execute() -> CommandResult:
-        current = request.app.state.services.operators.inspect_operator(operator_id)
-        _require_operator_version(current.resource_version, expected_version)
-        deleted = request.app.state.services.operators.delete(
-            operator_id,
-            request.state.request_context.actor(),
-            reason=body.reason,
-        )
+    def execute(service: OperatorService) -> CommandResult:
+        with _operator_precondition():
+            deleted = service.delete(
+                operator_id,
+                request.state.request_context.actor(),
+                reason=body.reason,
+                expected_version=expected_version,
+            )
         return CommandResult(
             command_id=f"operator-delete-{operator_id}-{deleted.resource_version}",
             resource_type="operator",
@@ -404,7 +415,7 @@ def delete_operator(
 
     return one(
         request,
-        run_command(
+        run_operator_command(
             request,
             raw_key=idempotency_key,
             body={

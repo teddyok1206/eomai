@@ -38,6 +38,7 @@ class CuratedDocumentAssemblyRecord(Base):
                 "curated_document_assembly_revisions.assembly_revision_id",
             ],
             name="fk_curated_document_assembly_current_revision",
+            ondelete="RESTRICT",
             use_alter=True,
         ),
     )

@@ -1562,6 +1562,7 @@ with zipfile.ZipFile(platform_wheel) as archive:
         "eom_hwpx_manager/protocol.py",
         "eom_hwpx_manager/question_template.py",
         "eom_hwpx_manager/question_template_service.py",
+        "eom_hwpx_manager/renderer_recovery.py",
         "eom_hwpx_manager/runner.py",
         "eom_hwpx_manager/runtime_privileges.py",
     }

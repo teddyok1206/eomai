@@ -50,6 +50,7 @@ from eom_hwpx_manager.application_adapter import FixedQuestionTemplateBuilderAda
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
 from eom_hwpx_manager.protocol import HWPX_PROTOCOL_VERSION, hwpx_schema_bundle_hash
 from eom_hwpx_manager.question_template import QUESTION_TEMPLATE_PROFILE, project_question_template
+from eom_hwpx_manager.renderer_recovery import recover_item_renderer_job
 from eom_hwpx_manager.settings import HwpxSettings
 
 QUESTION_TEMPLATE_RENDERER = "eom-template"
@@ -142,6 +143,22 @@ class QuestionTemplateHwpxService:
         self.settings = settings or HwpxSettings.from_environment()
         self.sessions = build_session_factory(engine)
         self.adapter = FixedQuestionTemplateBuilderAdapter(self.settings)
+
+    def build_may_be_active(self, build_id: str) -> bool:
+        return self.adapter.build_may_be_active(build_id)
+
+    def recover_interrupted_item_result(
+        self, *, build_id: str, idempotency_key: str, source_revision_id: str, source_sha256: str
+    ) -> QuestionTemplateBuildReceipt | None:
+        job_id = recover_item_renderer_job(
+            self.sessions,
+            job_key=f"hwpx-question-template:{idempotency_key}",
+            task_type="hwpx-question-template-build",
+            build_id=build_id,
+            source_revision_id=source_revision_id,
+            source_sha256=source_sha256,
+        )
+        return self._completed_receipt(job_id, expected_build_id=build_id) if job_id else None
 
     def snapshot(self) -> QuestionTemplateSnapshot:
         """Return the deployed release pin without resolving an implicit latest revision."""

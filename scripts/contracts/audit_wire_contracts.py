@@ -114,6 +114,8 @@ def _walk_refs(value: Any) -> tuple[str, ...]:
 
     def visit(node: Any) -> None:
         if isinstance(node, dict):
+            if node is not value and "$id" in node:
+                return
             ref = node.get("$ref")
             if isinstance(ref, str):
                 refs.append(ref)
@@ -145,12 +147,35 @@ def _resolve_pointer(value: Any, fragment: str, *, context: str) -> None:
 
 def audit_references(documents: tuple[SchemaDocument, ...]) -> int:
     by_id: dict[str, SchemaDocument] = {}
-    for document in documents:
+    resources: list[SchemaDocument] = []
+
+    def collect(document: SchemaDocument) -> None:
         if document.schema_id in by_id:
             raise ValueError(f"duplicate canonical $id: {document.schema_id}")
         by_id[document.schema_id] = document
-    checked = 0
+        resources.append(document)
+
+        def visit(node: Any) -> None:
+            if isinstance(node, dict):
+                if "$id" in node:
+                    # JSON Schema 2020-12 permits independently addressable resources
+                    # inside $defs. Their fragments resolve against that resource,
+                    # not against the containing file's root.
+                    collect(SchemaDocument(path=document.path, value=node))
+                    return
+                for child in node.values():
+                    visit(child)
+            elif isinstance(node, list):
+                for child in node:
+                    visit(child)
+
+        for child in document.value.values():
+            visit(child)
+
     for document in documents:
+        collect(document)
+    checked = 0
+    for document in resources:
         for ref in _walk_refs(document.value):
             checked += 1
             target_uri, fragment = urldefrag(ref)
@@ -239,6 +264,24 @@ def audit_mirrors() -> int:
             actual = (_sha256(canonical), _sha256(packaged))
             if expected != actual:
                 raise ValueError(f"canonical/package schema bytes drifted: {canonical.name}")
+    # Catalog, Workflow, Identity and other runtime resources keep the original
+    # $id but not necessarily the canonical directory layout. Check identities
+    # rather than inventing a filename mapping or overlooking those wheels.
+    by_id = {document.schema_id: document for document in canonical_documents()}
+    for packaged in sorted(ROOT.glob("packages/*/*/resources/**/*.schema.json")):
+        value = _load(packaged)
+        schema_id = value.get("$id")
+        resource_canonical = by_id.get(schema_id) if isinstance(schema_id, str) else None
+        if resource_canonical is None:
+            raise ValueError(
+                f"packaged schema has no canonical identity: {packaged.relative_to(ROOT)}"
+            )
+        if (
+            resource_canonical.value != value
+            or resource_canonical.path.read_bytes() != packaged.read_bytes()
+        ):
+            raise ValueError(f"canonical/resource schema drifted: {packaged.relative_to(ROOT)}")
+        checked += 1
     return checked
 
 

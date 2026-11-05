@@ -51,7 +51,7 @@ class EducationalQualityReviewPlanRecord(Base):
     item_count: Mapped[int] = mapped_column(Integer, nullable=False)
     secondary_positions: Mapped[list[int]] = mapped_column(JSONB, nullable=False)
     created_by: Mapped[str] = mapped_column(
-        ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
+        String(128), ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -120,7 +120,7 @@ class EducationalQualityReviewSessionRecord(Base):
         nullable=False,
     )
     reviewer_id: Mapped[str] = mapped_column(
-        ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
+        String(128), ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
     )
     reviewer_role: Mapped[str] = mapped_column(String(16), nullable=False)
     state: Mapped[str] = mapped_column(String(16), nullable=False)
@@ -222,7 +222,7 @@ class EducationalQualityReviewResolutionRecord(Base):
     position: Mapped[int] = mapped_column(Integer, primary_key=True)
     chosen_session_id: Mapped[str] = mapped_column(String(47), nullable=False)
     resolved_by: Mapped[str] = mapped_column(
-        ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
+        String(128), ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
     )
     notes: Mapped[str] = mapped_column(Text, nullable=False)
     resolved_at: Mapped[datetime] = mapped_column(

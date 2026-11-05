@@ -56,6 +56,14 @@ def test_runtime_role_bootstrap_revokes_drift_before_exact_grants() -> None:
     assert "job_events" in INSERT_TABLES
     assert "worker_lease_events" in INSERT_TABLES
     assert dict(UPDATE_COLUMN_PRIVILEGES) == {
+        "item_db_similarity_searches": (
+            "pinned_query",
+            "children_json",
+            "state",
+            "device",
+            "error_code",
+            "updated_at",
+        ),
         "jobs": ("completed_at", "status", "updated_at"),
         "worker_leases": ("release_reason", "released_at", "state"),
         "workflow_commands": ("processed_at", "state"),
@@ -313,10 +321,13 @@ def test_disposable_database_runs_hwpx_persistence_without_runtime_reconciliatio
     hwpx_branch = source.index('if [[ "${action}" == "hwpx-tests" ]]')
     branch = source[hwpx_branch : source.index("\nfi", hwpx_branch)]
     assert "runtime.env" not in branch
-    assert '"${PYTHON}" -m pytest -q tests/integration/test_hwpx_persistence.py' in branch
+    assert (
+        '"${PYTHON}" -m pytest -q --tb=short tests/integration/test_hwpx_persistence.py' in branch
+    )
+    assert "tests/integration/test_hwpx_item_recovery.py" in branch
 
 
-def test_disposable_embedding_persistence_requires_owner_guards_but_no_runtime_role() -> None:
+def test_disposable_full_embedding_suite_requires_guarded_runtime_role() -> None:
     source = (REPOSITORY_ROOT / "scripts/api/testdb_run.sh").read_text(encoding="utf-8")
 
     begin = source.index('if [[ "${action}" == "embedding-tests" ]]')
@@ -325,7 +336,6 @@ def test_disposable_embedding_persistence_requires_owner_guards_but_no_runtime_r
     assert source.index('source "${state_directory}/owner.env"') < begin
     assert source.index('manifest = TestDatabaseManifest.load(state / "manifest.json")') < begin
     assert source.index("validate_application_schema_metadata(\n") < begin
-    assert begin < source.index('runtime_environment="${state_directory}/runtime.env"')
     assert "export EOM_RUN_INTEGRATION=1" in branch
     assert 'export EOM_API_TEST_STATE="${state_directory}"' in branch
     assert (
@@ -336,7 +346,8 @@ def test_disposable_embedding_persistence_requires_owner_guards_but_no_runtime_r
     assert "tests/integration/test_embedding_index_artifact_persistence.py" in branch
     assert "tests/integration/test_embedding_registry_application.py" in branch
     assert "exit 0" in branch
-    assert "runtime.env" not in branch
+    assert 'runtime_environment="${state_directory}/runtime.env"' in branch
+    assert "full embedding tests require disposable runtime-role reconciliation first" in branch
     assert "EOM_API_TEST_RUNTIME_ENV" not in branch
     assert "EOM_RUN_API_INTEGRATION" not in branch
 
@@ -385,14 +396,22 @@ def test_disposable_modes_include_separate_opt_in_chat_role_suite() -> None:
         "inspect",
         "migrate",
         "hwpx-tests",
+        "catalog-artifact-tests",
         "embedding-tests",
+        "embedding-registry-tests",
         "embedding-encoding-tests",
         "embedding-stage-tests",
         "private-chat-context-tests",
+        "private-chat-artifact-tests",
         "authenticated-session-tests",
         "local-indexing-service-tests",
+        "registered-solution-tests",
+        "registered-solution-application-tests",
         "pdf-review-tests",
         "external-item-tests",
+        "item-db-search-tests",
+        "creative-registration-tests",
+        "creative-graph-tests",
         "quality-review-tests",
         "chat-tests",
         "chat-role-tests",

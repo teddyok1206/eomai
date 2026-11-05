@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
-from threading import Barrier
+from threading import Barrier, Event
 from typing import cast
 
 import pytest
@@ -46,9 +46,14 @@ from eom_operator_identity.contracts import (
     RoleKey,
 )
 from eom_operator_identity.errors import IdentityError, IdentityErrorCode
-from eom_operator_identity.identifiers import new_api_audit_event_id
+from eom_operator_identity.identifiers import (
+    new_api_audit_event_id,
+    new_credential_id,
+    new_operator_id,
+    new_role_assignment_id,
+)
 from eom_orchestrator.database import build_engine, build_session_factory, transaction
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import delete, event, func, or_, select, text, update
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
@@ -84,6 +89,57 @@ def _actor(authentication: object) -> ActorContext:
         permissions=authentication.permissions,
         source=ActorSource.APPLICATION_API,
     )
+
+
+def _assert_refresh_does_not_invert_rotation_locks(auth: AuthService, engine: object) -> None:
+    from sqlalchemy import Engine
+
+    assert isinstance(engine, Engine)
+    pair = auth.login(
+        username="review01", password=REVIEWER_PASSWORD, client_name="lock-order-review"
+    ).pair
+    session_locked = Event()
+    refresh_waiting_for_session = Event()
+
+    def before_cursor(connection, _cursor, statement, _parameters, _context, _many):
+        if (
+            connection.get_execution_options().get("review_refresh")
+            and "FOR UPDATE" in statement
+            and "api_sessions" in statement
+        ):
+            refresh_waiting_for_session.set()
+
+    def rotate() -> None:
+        with transaction(auth.sessions) as session:
+            session.execute(text("SET LOCAL lock_timeout = '3s'"))
+            session.scalar(
+                select(ApiSessionRecord)
+                .where(ApiSessionRecord.api_session_id == pair.session_id)
+                .with_for_update()
+            )
+            session_locked.set()
+            assert refresh_waiting_for_session.wait(5)
+            auth.tokens.rotate_current_session(
+                session, pair.session_id, password_change_required=True
+            )
+
+    def refresh() -> object:
+        assert session_locked.wait(5)
+        with transaction(auth.sessions) as session:
+            session.connection(execution_options={"review_refresh": True})
+            session.execute(text("SET LOCAL lock_timeout = '3s'"))
+            return auth.tokens.rotate_refresh(session, pair.refresh_token)
+
+    event.listen(engine, "before_cursor_execute", before_cursor)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            rotation = executor.submit(rotate)
+            refreshing = executor.submit(refresh)
+            rotation.result(timeout=10)
+            result = refreshing.result(timeout=10)
+            assert result.error is IdentityErrorCode.AUTH_SESSION_REVOKED
+    finally:
+        event.remove(engine, "before_cursor_execute", before_cursor)
 
 
 def _cleanup(engine: object) -> None:
@@ -135,6 +191,81 @@ def _cleanup(engine: object) -> None:
             )
         )
         session.execute(delete(OperatorRecord).where(OperatorRecord.operator_id.in_(operator_ids)))
+
+
+def test_operator_filters_are_applied_before_the_bounded_list_limit() -> None:
+    _enabled()
+    engine = build_engine()
+    sessions = build_session_factory(engine)
+    ids = [new_operator_id() for _ in range(202)]
+    try:
+        with transaction(sessions) as session:
+            seed_builtin_rbac(session)
+            role = session.scalar(select(RoleRecord).where(RoleRecord.role_key == "EDITOR"))
+            assert role is not None
+            for index, operator_id in enumerate(ids):
+                name = f"filterreview{index:03}" if index < 201 else "zz-filter-target"
+                session.add(
+                    OperatorRecord(
+                        operator_id=operator_id,
+                        username=name,
+                        normalized_username=name,
+                        display_name="조회 검사",
+                        status="ACTIVE" if index < 201 else "DISABLED",
+                        must_change_password=False,
+                        role_version=1,
+                        created_by="test-suite",
+                        lock_version=1,
+                    )
+                )
+            session.flush()
+            for operator_id in ids:
+                session.add(
+                    OperatorCredentialRecord(
+                        operator_credential_id=new_credential_id(),
+                        operator_id=operator_id,
+                        password_hash="synthetic-not-a-login-hash",
+                        password_algorithm="argon2id",
+                        password_version=1,
+                        must_change_password=False,
+                        password_changed_at=datetime.now(UTC),
+                        failed_login_count=0,
+                    )
+                )
+            session.add(
+                OperatorRoleAssignmentRecord(
+                    operator_role_assignment_id=new_role_assignment_id(),
+                    operator_id=ids[-1],
+                    role_id=role.role_id,
+                    assigned_by="test-suite",
+                    assigned_at=datetime.now(UTC),
+                )
+            )
+        operators = OperatorService(engine)
+        from eom_operator_identity.contracts import OperatorStatus
+
+        selected = operators.list_operators(
+            limit=1,
+            status=OperatorStatus.DISABLED,
+            role=RoleKey.EDITOR,
+            username_prefix="zz-filter-",
+        )
+        assert [value.operator_id for value in selected] == [ids[-1]]
+        assert operators.list_operators(username_prefix="filter_") == []
+    finally:
+        with transaction(sessions) as session:
+            session.execute(
+                delete(OperatorRoleAssignmentRecord).where(
+                    OperatorRoleAssignmentRecord.operator_id.in_(ids)
+                )
+            )
+            session.execute(
+                delete(OperatorCredentialRecord).where(
+                    OperatorCredentialRecord.operator_id.in_(ids)
+                )
+            )
+            session.execute(delete(OperatorRecord).where(OperatorRecord.operator_id.in_(ids)))
+        engine.dispose()
 
 
 def test_identity_rbac_session_and_refresh_concurrency() -> None:
@@ -197,6 +328,7 @@ def test_identity_rbac_session_and_refresh_concurrency() -> None:
             ),
             admin_actor,
         )
+        _assert_refresh_does_not_invert_rotation_locks(auth, engine)
         viewer = operators.create_operator(
             CreateOperatorCommand(
                 username="viewer01",
@@ -233,7 +365,45 @@ def test_identity_rbac_session_and_refresh_concurrency() -> None:
         )
         before = auth.authenticate_access(viewer_login.pair.access_token)
         assert PermissionKey.WORKFLOW_START not in before.permissions
-        operators.assign_role(viewer.operator_id, RoleKey.AUTHOR, admin_actor)
+        role_barrier = Barrier(2)
+
+        def assign_same_version() -> object:
+            role_barrier.wait(timeout=5)
+            try:
+                return operators.assign_role(
+                    viewer.operator_id,
+                    RoleKey.AUTHOR,
+                    admin_actor,
+                    expected_version=viewer.resource_version,
+                )
+            except IdentityError as exc:
+                return exc
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            role_results = list(executor.map(lambda _: assign_same_version(), range(2)))
+        role_conflicts = [value for value in role_results if isinstance(value, IdentityError)]
+        assert len(role_conflicts) == 1
+        assert role_conflicts[0].code is IdentityErrorCode.OPERATOR_VERSION_CONFLICT
+        for mutate in (
+            lambda: operators.enable(viewer.operator_id, admin_actor, expected_version=1),
+            lambda: operators.disable(
+                viewer.operator_id, admin_actor, reason="stale test", expected_version=1
+            ),
+            lambda: operators.revoke_role(
+                viewer.operator_id,
+                RoleKey.AUTHOR,
+                admin_actor,
+                reason="stale test",
+                expected_version=1,
+            ),
+            lambda: operators.revoke_sessions(viewer.operator_id, admin_actor, expected_version=1),
+            lambda: operators.delete(
+                viewer.operator_id, admin_actor, reason="stale test", expected_version=1
+            ),
+        ):
+            with pytest.raises(IdentityError) as stale:
+                mutate()
+            assert stale.value.code is IdentityErrorCode.OPERATOR_VERSION_CONFLICT
         after = auth.authenticate_access(viewer_login.pair.access_token)
         assert PermissionKey.WORKFLOW_START in after.permissions
         operators.disable(viewer.operator_id, admin_actor, reason="TEST_ONLY disable")

@@ -282,6 +282,7 @@ class LegacyItemEditorialCompatibilityRunRecord(Base):
     state: Mapped[str] = mapped_column(String(24), nullable=False)
     lock_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     requested_by_operator_id: Mapped[str] = mapped_column(
+        String(128),
         ForeignKey("operators.operator_id", ondelete="RESTRICT"),
         nullable=False,
     )

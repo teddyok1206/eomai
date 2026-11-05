@@ -167,6 +167,10 @@ class BuilderRun:
 
 
 class HwpxBuilderAdapter:
+    def build_may_be_active(self, workspace_id: str) -> bool:
+        # Only the fixed-unit application adapters can prove execution quiescent.
+        return True
+
     def __init__(self, settings: HwpxSettings) -> None:
         self.settings = settings
 

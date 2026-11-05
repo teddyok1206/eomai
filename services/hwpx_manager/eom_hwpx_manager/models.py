@@ -283,6 +283,7 @@ class HwpxAssessmentAssemblyBuildRecord(Base):
             "build_id",
             postgresql_where=text("state = 'REQUESTED'"),
         ),
+        Index("ix_hwpx_assembly_builds_operator", "created_by_operator_id"),
     )
 
     build_id: Mapped[str] = mapped_column(String(42), primary_key=True)
@@ -304,16 +305,18 @@ class HwpxAssessmentAssemblyBuildRecord(Base):
     request_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     idempotency_key: Mapped[str] = mapped_column(String(160), nullable=False)
     created_by_operator_id: Mapped[str] = mapped_column(
-        ForeignKey("operators.operator_id"), nullable=False, index=True
+        ForeignKey("operators.operator_id"), nullable=False
     )
-    state: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
     validation_state: Mapped[str] = mapped_column(String(32), nullable=False)
     item_count: Mapped[int] = mapped_column(Integer, nullable=False)
     section_count: Mapped[int | None] = mapped_column(Integer)
     native_equation_count: Mapped[int | None] = mapped_column(Integer)
     native_table_count: Mapped[int | None] = mapped_column(Integer)
     visual_count: Mapped[int | None] = mapped_column(Integer)
-    platform_job_id: Mapped[str | None] = mapped_column(ForeignKey("jobs.job_id"), unique=True)
+    platform_job_id: Mapped[str | None] = mapped_column(
+        String(37), ForeignKey("jobs.job_id"), unique=True
+    )
     output_artifact_id: Mapped[str | None] = mapped_column(
         ForeignKey("artifacts.logical_artifact_id")
     )

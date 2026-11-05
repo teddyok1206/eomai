@@ -242,7 +242,7 @@ class WebServices:
     ) -> dict[str, Any]:
         draft = self.draft(session, draft_id)
         replay_key = (draft_id, idempotency_key)
-        existing = session.replay_results.get(replay_key)
+        existing = self.sessions.draft_result(session, replay_key)
         if existing is not None:
             if existing.get("draft_spec_sha256") != draft.draft_spec_sha256:
                 raise GatewayError(status=409, code="REQUEST_DRAFT_IDEMPOTENCY_CONFLICT")
@@ -281,7 +281,7 @@ class WebServices:
             "command": command,
             "replayed": False,
         }
-        session.replay_results[replay_key] = result
+        self.sessions.save_draft_result(session, replay_key, result)
         return result
 
     async def create_customer_support_case(

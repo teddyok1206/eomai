@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 from collections.abc import AsyncIterator
@@ -730,6 +731,81 @@ async def test_gateway_refreshes_once_and_preserves_idempotency_key() -> None:
         ("/api/v1/workflows", "stable-key-0000001", 150),
     ]
     assert [item[2] for item in seen if item[0] == "/api/v1/auth/refresh"] == [1]
+    await gateway.close()
+
+
+@pytest.mark.anyio
+async def test_polling_cannot_refresh_a_pair_while_credentials_are_rotating() -> None:
+    changing = asyncio.Event()
+    polling_old_pair = asyncio.Event()
+    refresh_calls = 0
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal refresh_calls
+        if request.url.path == "/api/v1/auth/credentials":
+            changing.set()
+            await polling_old_pair.wait()
+            return httpx.Response(
+                200,
+                json=_single(
+                    {
+                        "operator": {
+                            "schema_version": "auth-current-account/1.0",
+                            "operator_id": "operator_" + "a" * 32,
+                            "username": "renamed",
+                            "display_name": "운영자",
+                            "status": "ACTIVE",
+                            "must_change_password": False,
+                            "roles": ["ADMIN"],
+                            "effective_permissions": [],
+                            "resource_version": 2,
+                            "created_at": NOW.isoformat(),
+                            "updated_at": NOW.isoformat(),
+                        },
+                        "tokens": _token_data("eom_at_TEST_ONLY_CREDENTIALS"),
+                    }
+                ),
+            )
+        if request.url.path == "/api/v1/auth/refresh":
+            refresh_calls += 1
+            return httpx.Response(401, json={"error_code": "AUTH_SESSION_REVOKED"})
+        if request.url.path == "/api/v1/events":
+            if request.headers["authorization"].endswith("OLD"):
+                polling_old_pair.set()
+                return httpx.Response(401, json={"error_code": "AUTH_TOKEN_INVALID"})
+            return httpx.Response(200, json=_list([]))
+        raise AssertionError(request.url.path)
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://127.0.0.1:8765",
+        observability_url="http://127.0.0.1:8780",
+        timeout=1,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    session = _session("eom_at_TEST_ONLY_OLD")
+
+    async def poll() -> httpx.Response:
+        await changing.wait()
+        return await gateway._authorized(session, "GET", "/api/v1/events")
+
+    result, response = await asyncio.wait_for(
+        asyncio.gather(
+            gateway.update_own_credentials(
+                session,
+                StudioSelfCredentialUpdate(
+                    current_password="TEST_ONLY current password",
+                    new_username="renamed",
+                    expected_resource_version=1,
+                ),
+            ),
+            poll(),
+        ),
+        timeout=5,
+    )
+    assert response.status_code == 200 and refresh_calls == 0
+    assert session.tokens == result.tokens
+    assert session.tokens.access_token == "eom_at_TEST_ONLY_CREDENTIALS"
     await gateway.close()
 
 

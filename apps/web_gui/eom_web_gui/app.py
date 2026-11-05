@@ -17,6 +17,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from eom_web_gui.chat_grounding_contracts import ChatGroundedTurnSubmission, ChatGroundingSubmission
 from eom_web_gui.chat_knowledge_contracts import ChatKnowledgeRequest
@@ -67,6 +68,11 @@ from eom_web_gui.item_db_similarity_contracts import (
     ItemDbSimilarityListSubmission,
     ItemDbSimilaritySubmission,
 )
+from eom_web_gui.request_limits import (
+    MAX_PDF_REVIEW_BODY_BYTES,
+    RequestBodyLimitMiddleware,
+    request_body_limit,
+)
 from eom_web_gui.resources import installed_web_source_commit, static_resource
 from eom_web_gui.services import WebServices, build_services, validate_download_request
 from eom_web_gui.sessions import WebSession, utc_now
@@ -74,14 +80,6 @@ from eom_web_gui.settings import WebSecrets, WebSettings, load_secrets, load_set
 
 COOKIE_NAME = "eom_studio_session"
 API_PREFIX = "/studio/api/v1"
-MAX_BODY_BYTES = 262_144
-MAX_PDF_REVIEW_BODY_BYTES = 256 * 1024 * 1024
-PDF_REVIEW_CONTENT_PATH = re.compile(
-    r"^/studio/api/v1/pdf-document-reviews/(?:"
-    r"upload-intents/pdfreviewintent_[0-9a-f]{32}/content|"
-    r"sets/docreviewset_[0-9a-f]{32}/documents/(?:QUESTION|SOLUTION)/content"
-    r")$"
-)
 ITEM_DB_INLINE_PDF_PATH = re.compile(
     r"^/studio/api/v1/item-db/external-sources/extitem_[0-9a-f]{32}/editions/[1-3]/preview\.pdf$"
 )
@@ -133,6 +131,7 @@ def create_app(
         lifespan=lifespan,
     )
     app.state.services = actual
+    app.add_middleware(RequestBodyLimitMiddleware)
     app.mount("/studio/assets", StaticFiles(directory=str(static_resource())), name="studio-assets")
 
     @app.middleware("http")
@@ -144,11 +143,7 @@ def create_app(
             response: Response = _problem(400, "WEB_HOST_INVALID", request_id)
         else:
             content_length = request.headers.get("content-length")
-            body_limit = (
-                MAX_PDF_REVIEW_BODY_BYTES
-                if request.method == "PUT" and PDF_REVIEW_CONTENT_PATH.fullmatch(request.url.path)
-                else MAX_BODY_BYTES
-            )
+            body_limit = request_body_limit(request.method, request.url.path)
             if content_length and content_length.isdigit() and int(content_length) > body_limit:
                 response = _problem(413, "WEB_BODY_TOO_LARGE", request_id)
             else:
@@ -197,6 +192,14 @@ def create_app(
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, _: RequestValidationError) -> JSONResponse:
         return _problem(422, "WEB_REQUEST_INVALID", request.state.request_id)
+
+    @app.exception_handler(StarletteHTTPException)
+    async def http_error(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        if exc.status_code == 413 and exc.detail == "WEB_BODY_TOO_LARGE":
+            return _problem(413, "WEB_BODY_TOO_LARGE", request.state.request_id)
+        return JSONResponse(
+            {"detail": exc.detail}, status_code=exc.status_code, headers=exc.headers
+        )
 
     def require_session(
         session_cookie: Annotated[str | None, Cookie(alias=COOKIE_NAME)] = None,
@@ -251,9 +254,13 @@ def create_app(
         return {"status": "LIVE", "timestamp_utc": datetime.now(UTC).isoformat()}
 
     @app.get(f"{API_PREFIX}/health/ready")
-    async def health_ready() -> dict[str, str]:
+    async def health_ready(response: Response) -> dict[str, str]:
         status = await actual.gateway.health()
-        ready = status.get("application_api") == "ACTIVE"
+        ready = all(
+            status.get(key) == "ACTIVE" for key in ("application_api", "application_api_ready")
+        )
+        if not ready:
+            response.status_code = 503
         return {"status": "READY" if ready else "DEGRADED", **status}
 
     @app.post(f"{API_PREFIX}/session", status_code=201)

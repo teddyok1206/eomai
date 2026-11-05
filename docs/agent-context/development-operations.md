@@ -33,6 +33,18 @@ DB mutation 검사는 `scripts/api/testdb_prepare.sh` → `testdb_run.sh` →
 marker/manifest를 고쳐 통과시키지 않는다. 오류 난 테스트의 invocation/fixture는 수정해
 다시 검증하되 실패 로그와 실제 운영 실패 이력은 보존한다.
 
+`scripts/contracts/audit_wire_contracts.py`는 schema 내부의 독립 `$id`/fragment와 runtime
+resources의 canonical mirror도 검사한다. 기존 schema bytes를 고쳐 audit만 통과시키지 않는다.
+DB 선언 불일치는 released migration의 실제 구조와 비교한다. FK에서 자동 추론한 열 길이,
+index 이름/식, 삭제 정책의 선언 차이라면 운영 DDL을 바꾸기 전에 model을 대조한다.
+`test_alembic_head_matches_composed_sqlalchemy_metadata`는 새 owner model도 명시적으로 등록한다.
+
+현재 admission과 역사적 실행 재현은 다른 검사다. `tests/workflow_admission_fixtures.py`는
+guarded disposable DB에서만 과거의 정확한 policy snapshot을 임시 적용하며 운영 policy,
+immutable definition/active flag를 수정하지 않는다. 현재 policy 거부 검사는 이 fixture 없이
+실행한다. 구 bootstrap V1/V2처럼 같은 logical key의 다른 frozen profile은 새 임시 DB에서
+단독 실행한다. 공유 DB에서 그 history를 덮어써 모든 테스트를 통과시키지 않는다.
+
 ## 배포와 백그라운드
 
 API·Web·Catalog/Runner·INDEX/QUERY·수치 controller는 다른 설치 source일 수 있다.

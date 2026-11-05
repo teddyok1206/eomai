@@ -22,7 +22,10 @@ from sqlalchemy import Engine
 from eom_api.rate_limit import BoundedRateLimiter
 from eom_api.services.audit_service import AuditService
 from eom_api.services.authoring_reference_client import CatalogAuthoringReferenceClient
-from eom_api.services.catalog_application_client import CatalogApplicationClient
+from eom_api.services.catalog_application_client import (
+    DOCUMENT_REVIEW_PROCESSING_LEASE_FLOOR_SECONDS,
+    CatalogApplicationClient,
+)
 from eom_api.services.chat_knowledge_query_adapter import ChatKnowledgeQueryAdapter
 from eom_api.services.chat_knowledge_service import ChatKnowledgeApplicationService
 from eom_api.services.command_adapter import CommandAdapter
@@ -182,19 +185,23 @@ class AppServices:
             settings.pdf_document_review.upload_staging_root,
             maximum_bytes=settings.pdf_document_review.max_upload_bytes,
         )
+        document_processing_lease = max(
+            settings.pdf_document_review.processing_lease_seconds,
+            DOCUMENT_REVIEW_PROCESSING_LEASE_FLOOR_SECONDS,
+        )
         self.pdf_document_reviews = PdfDocumentReviewApplicationService(
             engine,
             catalog=self.catalog_application,
             commands=self.commands,
             intent_ttl_seconds=settings.pdf_document_review.intent_ttl_seconds,
-            processing_lease_seconds=settings.pdf_document_review.processing_lease_seconds,
+            processing_lease_seconds=document_processing_lease,
         )
         self.paired_document_reviews = PairedDocumentReviewApplicationService(
             engine,
             catalog=self.catalog_application,
             commands=self.commands,
             intent_ttl_seconds=settings.pdf_document_review.intent_ttl_seconds,
-            processing_lease_seconds=settings.pdf_document_review.processing_lease_seconds,
+            processing_lease_seconds=document_processing_lease,
         )
         self.document_review_corrections = DocumentReviewCorrectionApplicationService(
             engine,

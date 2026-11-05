@@ -26,6 +26,13 @@ Web session/cookie/CSRF와 API access/refresh/re-authentication 경계는 별개
 토큰·cookie·인증 파일·사용자별 로그인 자료를 넣지 않는다. 실제 인증이 필요하면 기존 공식
 입력 경계와 현재 유효 세션을 재사용하되, 입력하지 않은 인증을 성공한 것으로 꾸미지 않는다.
 
+관리자 변경의 ETag 검사는 Identity application이 target row를 잠근 뒤 수행한다. API의
+`run_operator_command`는 idempotency receipt와 Operator 변경을 한 DB transaction에 묶는다.
+`OperatorService.join_transaction`은 그 한 호출만의 facade이며 공유 service/worker 인증을
+바꾸지 않는다. API token refresh와 자격 변경은 session → token 순서로 잠그며, access도
+session lock을 기다린 뒤 token 철회를 재확인한다. Web의 자격 변경·자동 refresh는 같은
+세션 lock을 공유한다. 실패 이력을 성공 처리하는 복구가 아니라 새 race의 예방이다.
+
 ## 슬롯과 사용량
 
 모델 실행 Job/유효 lease/물리 worker, 계정의 주간 사용량, capability 검증,
@@ -45,6 +52,9 @@ GUI의 네 슬롯 RUNNING만으로 Graph 등록·INDEX가 정상이라고 판정
 - `services/orchestrator/eom_orchestrator/general_chat_tool_broker.py`
 - `apps/application_api/eom_api/services/auth_service.py`
 - `services/identity_service/eom_identity_service/auth_service.py`
+- `services/identity_service/eom_identity_service/tokens.py`
+- `services/identity_service/eom_identity_service/service.py`
+- `apps/application_api/eom_api/services/idempotency_service.py`
 - `services/orchestrator/eom_orchestrator/worker_usage.py`
 - `services/orchestrator/eom_orchestrator/auth_enrollment_capabilities.py`
 
@@ -52,6 +62,10 @@ GUI의 네 슬롯 RUNNING만으로 Graph 등록·INDEX가 정상이라고 판정
 
 - `tests/unit/test_private_chat_document_read.py`
 - `tests/unit/test_postgres_local_indexing_fence.py`
+- `tests/api/test_identity_integration.py`
+- `tests/api/test_api_integration.py`
+- `docs/architecture/API_IDEMPOTENCY.md`
+- `docs/architecture/OPAQUE_TOKEN_SESSIONS.md`
 - `docs/architecture/GENERAL_CHAT_TEXTBOOK_RAG_DESIGN.md`
 - `docs/operations/CODEX_AUTH_AUTOMATIC_MODEL_VERIFICATION_RELEASE.md`
 - `docs/operations/GENERAL_CHAT_MODERATION_METADATA_FIX_2026-10-24.md`

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import AbstractContextManager, nullcontext
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
@@ -26,11 +27,13 @@ from eom_operator_identity.identifiers import (
 from eom_operator_identity.passwords import PasswordService
 from eom_orchestrator.database import build_session_factory, transaction
 from sqlalchemy import Engine, select
+from sqlalchemy.orm import Session
 
 from eom_identity_service.models import (
     OperatorCredentialRecord,
     OperatorRecord,
     OperatorRoleAssignmentRecord,
+    RoleRecord,
 )
 from eom_identity_service.repository import (
     active_admin_count,
@@ -76,12 +79,35 @@ class OperatorService:
         self.engine = engine
         self.sessions = build_session_factory(engine)
         self.passwords = passwords or PasswordService()
+        self._command_session: Session | None = None
+
+    def join_transaction(self, session: Session) -> OperatorService:
+        """Per-command facade for a local application's atomic command/receipt commit."""
+        if session.get_bind().engine is not self.engine:
+            raise ValueError("Operator command must use its own database engine")
+        scoped = OperatorService(self.engine, self.passwords)
+        scoped._command_session = session
+        return scoped
+
+    def _transaction(self) -> AbstractContextManager[Session]:
+        return (
+            nullcontext(self._command_session)
+            if self._command_session is not None
+            else transaction(self.sessions)
+        )
+
+    def _reader(self) -> AbstractContextManager[Session]:
+        return (
+            nullcontext(self._command_session)
+            if self._command_session is not None
+            else self.sessions()
+        )
 
     def bootstrap_admin(self, *, username: str, display_name: str) -> BootstrapResult:
         validate_username(username)
         validate_display_name(display_name)
         temporary_password = self.passwords.generate_temporary_password()
-        with transaction(self.sessions) as session:
+        with self._transaction() as session:
             lock_identity_invariants(session)
             seed_builtin_rbac(session)
             if int(session.scalar(select(OperatorRecord).limit(1)) is not None):
@@ -114,7 +140,7 @@ class OperatorService:
     def create_operator(
         self, command: CreateOperatorCommand, actor: ActorContext
     ) -> OperatorProjection:
-        with transaction(self.sessions) as session:
+        with self._transaction() as session:
             self._require_admin(session, actor)
             # Serialize the indexed pre-check so concurrent admin requests
             # return the stable domain conflict instead of a raw DB error.
@@ -122,31 +148,61 @@ class OperatorService:
             operator = self._create(session, command, actor)
             return operator_projection(session, operator)
 
-    def list_operators(self, *, limit: int = 200) -> list[OperatorProjection]:
-        with self.sessions() as session:
+    def list_operators(
+        self,
+        *,
+        limit: int = 200,
+        status: OperatorStatus | None = None,
+        role: RoleKey | None = None,
+        username_prefix: str | None = None,
+    ) -> list[OperatorProjection]:
+        statement = select(OperatorRecord).where(OperatorRecord.deleted_at.is_(None))
+        if status is not None:
+            statement = statement.where(OperatorRecord.status == status.value)
+        if role is not None:
+            statement = statement.where(
+                select(OperatorRoleAssignmentRecord.operator_role_assignment_id)
+                .join(RoleRecord, RoleRecord.role_id == OperatorRoleAssignmentRecord.role_id)
+                .where(
+                    OperatorRoleAssignmentRecord.operator_id == OperatorRecord.operator_id,
+                    OperatorRoleAssignmentRecord.revoked_at.is_(None),
+                    RoleRecord.role_key == role.value,
+                )
+                .exists()
+            )
+        if username_prefix is not None:
+            statement = statement.where(
+                OperatorRecord.username.startswith(username_prefix, autoescape=True)
+            )
+        with self._reader() as session:
             records = list(
                 session.scalars(
-                    select(OperatorRecord)
-                    .where(OperatorRecord.deleted_at.is_(None))
-                    .order_by(OperatorRecord.created_at, OperatorRecord.operator_id)
-                    .limit(limit)
+                    statement.order_by(OperatorRecord.created_at, OperatorRecord.operator_id).limit(
+                        limit
+                    )
                 )
             )
             return [operator_projection(session, operator) for operator in records]
 
     def inspect_operator(self, operator_id: str) -> OperatorProjection:
-        with self.sessions() as session:
+        with self._reader() as session:
             operator = require_operator(session, operator_id)
             self._require_not_deleted(operator)
             return operator_projection(session, operator)
 
     def assign_role(
-        self, operator_id: str, role_key: RoleKey, actor: ActorContext
+        self,
+        operator_id: str,
+        role_key: RoleKey,
+        actor: ActorContext,
+        *,
+        expected_version: int | None = None,
     ) -> OperatorProjection:
-        with transaction(self.sessions) as session:
+        with self._transaction() as session:
             self._require_admin(session, actor)
             operator = require_operator(session, operator_id, for_update=True)
             self._require_not_deleted(operator)
+            self._require_version(operator, expected_version)
             role = require_role(session, role_key)
             if any(
                 record.role_id == role.role_id
@@ -181,14 +237,16 @@ class OperatorService:
         actor: ActorContext,
         *,
         reason: str,
+        expected_version: int | None = None,
     ) -> OperatorProjection:
         if not reason or len(reason) > 1000:
             raise ValueError("role revocation reason is required")
-        with transaction(self.sessions) as session:
+        with self._transaction() as session:
             lock_identity_invariants(session)
             self._require_admin(session, actor)
             operator = require_operator(session, operator_id, for_update=True)
             self._require_not_deleted(operator)
+            self._require_version(operator, expected_version)
             role = require_role(session, role_key)
             assignment = next(
                 (
@@ -219,14 +277,22 @@ class OperatorService:
             session.flush()
             return operator_projection(session, operator)
 
-    def disable(self, operator_id: str, actor: ActorContext, *, reason: str) -> OperatorProjection:
+    def disable(
+        self,
+        operator_id: str,
+        actor: ActorContext,
+        *,
+        reason: str,
+        expected_version: int | None = None,
+    ) -> OperatorProjection:
         if not reason or len(reason) > 1000:
             raise ValueError("disable reason is required")
-        with transaction(self.sessions) as session:
+        with self._transaction() as session:
             lock_identity_invariants(session)
             self._require_admin(session, actor)
             operator = require_operator(session, operator_id, for_update=True)
             self._require_not_deleted(operator)
+            self._require_version(operator, expected_version)
             if operator.status == OperatorStatus.DISABLED.value:
                 return operator_projection(session, operator)
             has_admin = any(
@@ -252,11 +318,14 @@ class OperatorService:
             session.flush()
             return operator_projection(session, operator)
 
-    def enable(self, operator_id: str, actor: ActorContext) -> OperatorProjection:
-        with transaction(self.sessions) as session:
+    def enable(
+        self, operator_id: str, actor: ActorContext, *, expected_version: int | None = None
+    ) -> OperatorProjection:
+        with self._transaction() as session:
             self._require_admin(session, actor)
             operator = require_operator(session, operator_id, for_update=True)
             self._require_not_deleted(operator)
+            self._require_version(operator, expected_version)
             if operator.status == OperatorStatus.ACTIVE.value:
                 return operator_projection(session, operator)
             now = utc_now()
@@ -269,17 +338,21 @@ class OperatorService:
             session.flush()
             return operator_projection(session, operator)
 
-    def revoke_sessions(self, operator_id: str, actor: ActorContext) -> int:
-        with transaction(self.sessions) as session:
+    def revoke_sessions(
+        self, operator_id: str, actor: ActorContext, *, expected_version: int | None = None
+    ) -> int:
+        with self._transaction() as session:
             self._require_admin(session, actor)
             operator = require_operator(session, operator_id, for_update=True)
             self._require_not_deleted(operator)
+            self._require_version(operator, expected_version)
             count = revoke_operator_sessions(
                 session,
                 operator_id,
                 actor_id=actor.actor_id,
                 reason="ADMIN_REVOKED_SESSIONS",
             )
+            operator.lock_version += 1
             self._event(session, operator, "SESSIONS_REVOKED", actor, {"count": count}, utc_now())
             return count
 
@@ -289,6 +362,7 @@ class OperatorService:
         actor: ActorContext,
         *,
         reason: str,
+        expected_version: int | None = None,
     ) -> DeletedOperatorResult:
         if not reason or len(reason) > 1000:
             raise ValueError("delete reason is required")
@@ -297,11 +371,12 @@ class OperatorService:
                 IdentityErrorCode.OPERATOR_SELF_DELETE_FORBIDDEN,
                 "an Operator cannot delete their own account",
             )
-        with transaction(self.sessions) as session:
+        with self._transaction() as session:
             lock_identity_invariants(session)
             self._require_admin(session, actor)
             operator = require_operator(session, operator_id, for_update=True)
             self._require_not_deleted(operator)
+            self._require_version(operator, expected_version)
             assignments = active_role_assignments(session, operator_id)
             has_admin = any(role.role_key == RoleKey.ADMIN.value for _, role in assignments)
             if (
@@ -365,6 +440,15 @@ class OperatorService:
                 resource_version=operator.lock_version,
                 revoked_sessions=revoked_sessions,
                 revoked_roles=len(assignments),
+            )
+
+    @staticmethod
+    def _require_version(operator: OperatorRecord, expected_version: int | None) -> None:
+        # The row must already be locked by the mutating application transaction.
+        if expected_version is not None and operator.lock_version != expected_version:
+            raise IdentityError(
+                IdentityErrorCode.OPERATOR_VERSION_CONFLICT,
+                "Operator changed since it was read",
             )
 
     def _create(

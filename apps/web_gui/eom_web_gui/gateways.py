@@ -1382,18 +1382,37 @@ class HttpApplicationGateway:
         self, session: WebSession, value: StudioSelfCredentialUpdate
     ) -> LoginResult:
         payload = value.model_dump(mode="json", exclude_none=True)
-        response = await self._authorized(
-            session,
-            "POST",
-            "/api/v1/auth/credentials",
-            json=payload,
-        )
-        data = self._data(response)
-        tokens = data.get("tokens")
-        operator = data.get("operator")
-        if not isinstance(tokens, dict) or not isinstance(operator, dict):
-            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
-        return LoginResult(operator=_operator_view(operator), tokens=_tokens(tokens))
+        # Credential changes rotate the pair too. Hold the same lock as ordinary
+        # refresh from the request through publication of the returned pair.
+        # Calling _authorized here would try to acquire this lock again on 401.
+        async with session.refresh_lock:
+
+            async def send() -> httpx.Response:
+                return await self._application_request(
+                    "POST",
+                    "/api/v1/auth/credentials",
+                    json=payload,
+                    headers={
+                        "Authorization": f"Bearer {session.tokens.access_token}",
+                        "Accept": "application/json",
+                    },
+                )
+
+            response = await send()
+            if response.status_code == 401:
+                await self._refresh_locked(session)
+                response = await send()
+            if response.status_code >= 400:
+                raise _gateway_error(response)
+            data = self._data(response)
+            tokens = data.get("tokens")
+            operator = data.get("operator")
+            if not isinstance(tokens, dict) or not isinstance(operator, dict):
+                raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID")
+            result = LoginResult(operator=_operator_view(operator), tokens=_tokens(tokens))
+            session.operator = result.operator
+            session.tokens = result.tokens
+            return result
 
     async def operators(self, session: WebSession) -> tuple[StudioOperatorView, ...]:
         response = await self._authorized(
@@ -4299,12 +4318,7 @@ class HttpApplicationGateway:
             raise GatewayError(status=401, code="AUTH_REAUTHENTICATION_REQUIRED")
         async with session.refresh_lock:
             if session.tokens.access_token == used_access_token:
-                refresh = await self._request(
-                    "POST",
-                    "/api/v1/auth/refresh",
-                    json={"refresh_token": session.tokens.refresh_token},
-                )
-                session.tokens = _tokens(self._data(refresh))
+                await self._refresh_locked(session)
         response = await self._application_request(
             method,
             path,
@@ -4320,6 +4334,13 @@ class HttpApplicationGateway:
         if response.status_code >= 400:
             raise _gateway_error(response)
         return response
+
+    async def _refresh_locked(self, session: WebSession) -> None:
+        """Caller owns refresh_lock; update only after a valid rotated pair arrives."""
+        refresh = await self._request(
+            "POST", "/api/v1/auth/refresh", json={"refresh_token": session.tokens.refresh_token}
+        )
+        session.tokens = _tokens(self._data(refresh))
 
     async def _request(self, method: str, path: str, *, json: dict[str, object]) -> httpx.Response:
         response = await self._application_request(

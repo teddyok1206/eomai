@@ -64,6 +64,7 @@ from eom_hwpx_manager.protocol import (
     content_team_schema_bundle_hash_v2,
     content_team_schema_bundle_hash_v3,
 )
+from eom_hwpx_manager.renderer_recovery import recover_item_renderer_job
 from eom_hwpx_manager.settings import HwpxSettings
 
 CONTENT_TEAM_RENDERER = "content-team"
@@ -120,6 +121,22 @@ class ContentTeamHwpxService:
         self.settings = settings or HwpxSettings.from_environment()
         self.sessions = build_session_factory(engine)
         self.adapter = FixedContentTeamBuilderAdapter(self.settings)
+
+    def build_may_be_active(self, build_id: str) -> bool:
+        return self.adapter.build_may_be_active(build_id)
+
+    def recover_interrupted_item_result(
+        self, *, build_id: str, idempotency_key: str, source_revision_id: str, source_sha256: str
+    ) -> ContentTeamBuildReceipt | None:
+        job_id = recover_item_renderer_job(
+            self.sessions,
+            job_key=f"hwpx-content-team:{idempotency_key}",
+            task_type="hwpx-content-team-build",
+            build_id=build_id,
+            source_revision_id=source_revision_id,
+            source_sha256=source_sha256,
+        )
+        return self._completed_receipt(job_id, expected_build_id=build_id) if job_id else None
 
     def snapshot(self) -> ContentTeamHandoffSnapshot:
         snapshot = ContentTeamHandoffSnapshot.model_validate(

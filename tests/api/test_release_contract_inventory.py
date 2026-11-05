@@ -448,9 +448,10 @@ def test_actual_installed_admission_comparison_rejects_an_omitted_native_definit
         for node in inner.body
         if isinstance(node, ast.Assign)
         and isinstance(node.targets[0], ast.Name)
-        and node.targets[0].id in {"creative_definition", "creative_source_definition"}
+        and node.targets[0].id
+        in {"creative_definition", "creative_source_definition", "creative_office_definition"}
     ]
-    assert len(derived_definitions) == 2
+    assert len(derived_definitions) == 3
     assignment = next(
         node
         for node in inner.body

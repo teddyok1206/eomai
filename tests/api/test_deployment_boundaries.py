@@ -121,7 +121,7 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
     assert "prepare_runtime_dependencies\n    build_release" in source
     assert "eom-codex-auth identity must be deployed before the API unit" in source
     assert 'source "${RELEASE_OPERATOR_LIBRARY}"' in source
-    assert 'run_release_operator MIGRATION_VERIFY_0063 "${COMMIT}"' in source
+    assert 'run_release_operator MIGRATION_VERIFY_0072 "${COMMIT}"' in source
     catalog = _catalog_resource_inventory(source)
     assert catalog["legacy-assessment/legacy-item-extraction-batch-v2.schema.json"] == (
         "schemas/legacy-assessment/legacy-item-extraction-batch-v2.schema.json"
@@ -414,9 +414,11 @@ def test_api_release_contains_creative_prepare_and_reauthorization_closure() -> 
         "eom_catalog_service/external_item_learning_preparation_service.py",
         "eom_catalog_service/external_item_learning_authorization_service.py",
         "eom_catalog_service/external_item_learning_authorization_dispatch.py",
-        'for name in ("external-item-learning.v1.yaml", "external-item-learning.v2.yaml"):',
+        '"external-item-learning.v1.yaml", "external-item-learning.v2.yaml",',
+        '"external-item-learning.v3.yaml",',
         'compile_definition(creative_definition, {"support"})',
         'compile_definition(creative_source_definition, {"support"})',
+        'compile_definition(creative_office_definition, {"support"})',
         '["content", "external-items", "learning", "prepare", "--help"]',
         'load_role_input_schema("support", "workflow-role/1.33.0")',
         'load_codex_result_schema("external-item-learning-result@1.0")',
@@ -588,7 +590,7 @@ def test_release_migration_wrapper_pins_source_and_database_owner() -> None:
     assert 'MIGRATION_REVISION = "20261010_0051"' in operator
     # Current releases retain independently admitted historical successors;
     # the legacy standalone wrapper still cannot turn into an implicit head upgrade.
-    assert CURRENT_MIGRATION_REVISION == "20261029_0063"
+    assert CURRENT_MIGRATION_REVISION == "20261104_0072"
     assert "target_revision != CURRENT_MIGRATION_REVISION" in operator
     assert 'owner[0] != owner[1] or owner[2] is not True or "app" not in owner[3]' in operator
     assert 'Callback.MIGRATION_UPGRADE_0051: (MIGRATION_REVISION, "20261009_0050")' in operator
@@ -643,6 +645,22 @@ def test_release_operator_boundary_requires_explicit_pins_without_unsafe_fallbac
         "MIGRATION_UPGRADE_0062",
         "MIGRATION_VERIFY_0063",
         "MIGRATION_UPGRADE_0063",
+        "MIGRATION_VERIFY_0064",
+        "MIGRATION_UPGRADE_0064",
+        "MIGRATION_UPGRADE_0064_FROM_0062",
+        "MIGRATION_VERIFY_0066",
+        "MIGRATION_UPGRADE_0066",
+        "MIGRATION_UPGRADE_0066_FROM_0064",
+        "MIGRATION_VERIFY_0068",
+        "MIGRATION_UPGRADE_0068_FROM_0066",
+        "MIGRATION_VERIFY_0069",
+        "MIGRATION_UPGRADE_0069",
+        "MIGRATION_VERIFY_0070",
+        "MIGRATION_UPGRADE_0070",
+        "MIGRATION_VERIFY_0071",
+        "MIGRATION_UPGRADE_0071",
+        "MIGRATION_VERIFY_0072",
+        "MIGRATION_UPGRADE_0072",
         "API_ROLE_BOOTSTRAP",
         "CATALOG_ROLE_RECONCILE",
         "HWPX_ROLE_RECONCILE",
@@ -1073,7 +1091,11 @@ def test_release_packages_curriculum_graph_capability_api_schema() -> None:
     assert "CreateEducationalQualityPlanCommand.__module__" in deployment
     assert "EducationalQualityReviewWorkbenchView.__module__" in deployment
     assert "legacy Graph automation must preserve its local 1..16 batch contract" in deployment
-    assert f'CURRENT_MIGRATION_REVISION != "{CURRENT_MIGRATION_REVISION}"' in deployment
+    assert "CURRENT_MIGRATION_REVISION != expected_migration_revision" in deployment
+    assert (
+        "expected_migration_revision = "
+        'source_migration_revision(Path(os.environ["REPOSITORY_ROOT"]))' in deployment
+    )
     assert "document-review-annotation-v1.schema.json" in expected
     assert "document-review-annotation-v2.schema.json" in expected
     assert "document-review-annotation-v3.schema.json" in expected
@@ -1137,12 +1159,12 @@ def test_release_isolated_verifier_compiles_all_knowledge_analysis_definitions()
     )
     assert (
         "for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4, "
-        "analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10)"
-        in deployment
+        "analysis_v5, analysis_v6, analysis_v7, analysis_v8, "
+        "analysis_v9, analysis_v10, analysis_v11)" in deployment
     )
     assert (
         'analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0", '
-        '"5.0.0", "6.0.0", "7.0.0", "8.0.0", "9.0.0", "10.0.0"}' in deployment
+        '"5.0.0", "6.0.0", "7.0.0", "8.0.0", "9.0.0", "10.0.0", "11.0.0"}' in deployment
     )
     assert 'load_role_input_schema("support", "workflow-role/1.18.0")' in deployment
     assert 'load_role_input_schema("support", "workflow-role/1.21.0")' in deployment

@@ -6,9 +6,11 @@ from collections.abc import Callable
 from typing import Any
 
 from eom_api_contracts import CommandResult, ListResponse, PageMeta, ResponseMeta, SingleResponse
+from eom_identity_service.service import OperatorService
 from fastapi import Request
 
 from eom_api.request_context import RequestContext
+from eom_api.services.idempotency_service import IdempotencyClaim
 
 
 def _domain_error_code(exc: Exception) -> str:
@@ -54,6 +56,67 @@ def run_command(
     resource_type: str,
     callback: Callable[[], CommandResult],
     response_status: int = 200,
+) -> CommandResult:
+    def finalize(claim: IdempotencyClaim, result: CommandResult) -> None:
+        request.app.state.services.idempotency.complete(
+            claim,
+            status=response_status,
+            body=result.model_dump(mode="json"),
+            resource_type=resource_type,
+            resource_id=result.resource_id,
+        )
+
+    return _run_command(
+        request,
+        raw_key=raw_key,
+        body=body,
+        resource_type=resource_type,
+        execute=lambda _claim: callback(),
+        finalize=finalize,
+        response_status=response_status,
+    )
+
+
+def run_operator_command(
+    request: Request,
+    *,
+    raw_key: str,
+    body: dict[str, Any] | None,
+    resource_type: str,
+    callback: Callable[[OperatorService], CommandResult],
+    response_status: int = 200,
+) -> CommandResult:
+    services = request.app.state.services
+
+    def execute(claim: IdempotencyClaim) -> CommandResult:
+        result: CommandResult = services.idempotency.execute_atomic(
+            claim,
+            lambda session: callback(services.operators.join_transaction(session)),
+            status=response_status,
+            resource_type=resource_type,
+        )
+        return result
+
+    return _run_command(
+        request,
+        raw_key=raw_key,
+        body=body,
+        resource_type=resource_type,
+        execute=execute,
+        finalize=None,
+        response_status=response_status,
+    )
+
+
+def _run_command(
+    request: Request,
+    *,
+    raw_key: str,
+    body: dict[str, Any] | None,
+    resource_type: str,
+    execute: Callable[[IdempotencyClaim], CommandResult],
+    finalize: Callable[[IdempotencyClaim, CommandResult], None] | None,
+    response_status: int,
 ) -> CommandResult:
     request_context = context(request)
     authentication = request_context.authentication
@@ -108,7 +171,7 @@ def run_command(
         target_type=resource_type,
     )
     try:
-        result = callback()
+        result = execute(claim)
     except Exception as exc:
         error_code = _domain_error_code(exc)
         services.idempotency.fail_final(claim, str(error_code))
@@ -122,14 +185,10 @@ def run_command(
             target_type=resource_type,
         )
         raise
-    payload = result.model_dump(mode="json")
-    services.idempotency.complete(
-        claim,
-        status=response_status,
-        body=payload,
-        resource_type=resource_type,
-        resource_id=result.resource_id,
-    )
+    if finalize is not None:
+        # RPC/durable-domain commands retain their original separate completion
+        # semantics. A result-storage failure must not reinterpret domain success.
+        finalize(claim, result)
     services.audit.append(
         request_context,
         event_type="DOMAIN_COMMAND_SUCCEEDED",

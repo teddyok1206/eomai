@@ -7,7 +7,13 @@ import pytest
 from eom_web_gui.contracts import ExplorerQuery
 from eom_web_gui.gateways import GatewayError
 from eom_web_gui.services import validate_download_request
-from eom_web_gui.sessions import ApiTokens, SessionStore, WebSession
+from eom_web_gui.sessions import (
+    MAX_REPLAY_BYTES_PER_SESSION,
+    MAX_REPLAY_RESULTS,
+    ApiTokens,
+    SessionStore,
+    WebSession,
+)
 
 
 @pytest.mark.parametrize(
@@ -113,3 +119,30 @@ def test_explorer_contract_has_no_sql_or_join_fields() -> None:
         "cursor",
         "limit",
     }
+
+
+def test_draft_reply_cache_bounds_count_bytes_and_preserves_lru() -> None:
+    now = datetime.now(UTC)
+    store = SessionStore(ttl_seconds=300, maximum_sessions=2, maximum_drafts=2)
+    session = store.create(
+        operator={"roles": ["ADMIN"]},
+        tokens=ApiTokens("TEST_ACCESS", "TEST_REFRESH", now, now + timedelta(hours=1)),
+        now=now,
+    )
+    first = ("draft", "first-key")
+    store.save_draft_result(session, first, {"command": "first"})
+    for index in range(MAX_REPLAY_RESULTS - 1):
+        store.save_draft_result(session, ("draft", str(index)), {"command": str(index)})
+    assert store.draft_result(session, first) == {"command": "first"}
+    store.save_draft_result(session, ("draft", "last-key"), {"command": "last"})
+    assert store.draft_result(session, ("draft", "0")) is None
+    assert store.draft_result(session, first) == {"command": "first"}
+    assert len(session.replay_results) == MAX_REPLAY_RESULTS
+    for index in range(20):
+        store.save_draft_result(session, ("draft", f"large-{index}"), {"value": "가" * 20_000})
+    assert session.replay_result_bytes <= MAX_REPLAY_BYTES_PER_SESSION
+    assert session.replay_result_bytes == sum(map(len, session.replay_results.values()))
+    before = session.replay_result_bytes
+    store.save_draft_result(session, ("draft", "oversize"), {"value": "가" * 30_000})
+    assert session.replay_result_bytes == before
+    assert store.draft_result(session, ("draft", "oversize")) is None

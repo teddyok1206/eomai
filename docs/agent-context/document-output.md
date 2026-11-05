@@ -69,6 +69,12 @@ partial FIFO claim, 같은 build의 advisory lock과 중단 복구를 소유한�
 예정 Job/Artifact/revision identity를 실행 전에 pin하며 완료 조회는 render를 호출하지 않는다.
 실제 파일 실행·commit·다운로드 adapter와 API/GUI wiring은 이 queue 코드 자체와 구분한다.
 
+기존 단일 문항의 startup 복구도 `application_service.py`와 각 renderer port가 소유한다.
+`renderer_recovery.py`는 같은 indexed Job key와 task/source revision/hash, 승인 output pointer를
+대조한다. fixed unit이 살아 있거나 불명확하면 기다리고 새 render는 하지 않는다. 원래
+SUCCEEDED Job의 receipt만 연결하며, 미완료 orphan은 상태기계로 중단 기록을 남긴다.
+`recover_interrupted_item_result`와 whole-exam의 복구 port를 혼동하지 않는다.
+
 Catalog `authorize_delivery_build`와 `read_for_delivery`는 각각 기존 HWPX 제작/조회 권한을
 재확인한다. 선택 시에는 current Graph, 저장된 조립의 delivery에는 그 exact published Graph를
 사용한다. 원본 metadata는 batch join으로 확인하고 status poll에서 모든 파일을 다시 hash하지
@@ -102,6 +108,7 @@ Graph source membership은 별개다. Graph 후보가 없을 때 후보를 꾸�
 - `apps/web_gui/eom_web_gui/static/item-preview.js`
 - `apps/web_gui/eom_web_gui/item_preview_projection.py`
 - `services/hwpx_manager/eom_hwpx_manager/application_service.py`
+- `services/hwpx_manager/eom_hwpx_manager/renderer_recovery.py`
 - `services/hwpx_manager/eom_hwpx_manager/curated_application_service.py`
 - `services/hwpx_manager/eom_hwpx_manager/curated_build_models.py`
 - `services/hwpx_manager/eom_hwpx_manager/curated_materialization.py`
@@ -122,6 +129,7 @@ Graph source membership은 별개다. Graph 후보가 없을 때 후보를 꾸�
 ## 검증과 근거
 
 - `tests/api/test_hwpx_download_boundary.py`
+- `tests/integration/test_hwpx_item_recovery.py`
 - `tests/unit/test_document_review_pdf_annotation.py`
 - `tests/unit/test_single_document_review_textbook_v5.py`
 - `docs/architecture/HWPX_APPLICATION_API_V0.md`

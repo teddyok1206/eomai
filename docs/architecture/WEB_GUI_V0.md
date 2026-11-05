@@ -93,6 +93,13 @@ rendered with `textContent`; the browser receives no artifact bytes or storage p
 The session store is deliberately process-local for V0 and requires one service worker. A durable
 store is a later scaling concern, not a hidden dependency.
 
+The draft replay projection is a bounded LRU, not a second command registry: at most 64 results,
+64 KiB per response and 256 KiB total encoded bytes per session. Lookup/eviction uses OrderedDict
+and a byte counter; encoding/decoding is linear in the bounded result size. Draft eviction removes
+its cached replies too. Eviction/oversize cache misses use the original API idempotency key; they
+never mint another key or replace canonical API state. This avoids unbounded memory from many
+different submission keys on a single draft without adding a shared cache service.
+
 ## Transactions, concurrency, failure, and retry
 
 The BFF owns no production database transaction. Application API commands retain their existing
@@ -100,6 +107,12 @@ transaction and RBAC boundary. Browser mutations require a session CSRF token. W
 and approval carry a stable idempotency key; approval also carries the resource ETag. A refresh-token
 exchange may be attempted once after an expired access token, while the original idempotency key is
 preserved. Other failures return sanitized stable codes and are not retried automatically.
+
+Credential-update publication and automatic token refresh use the same per-session lock. The HTTP
+credential call and returned operator/token swap are inside that critical section, while normal
+read/upload requests remain concurrent. This prevents a polling 401 from refreshing a pair already
+rotated by credential change. Readiness requires both API live and API ready and returns HTTP 503
+when a mandatory dependency is unavailable; optional Observability failure does not block Studio.
 
 SSE is a read-only projection stream. Reconnect uses `Last-Event-ID`; clients fall back to bounded
 polling. Raw shell output, prompt bodies, generated worker bodies, credentials, and chain-of-thought

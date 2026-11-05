@@ -8,6 +8,7 @@ import stat
 from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from enum import StrEnum
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -103,6 +104,12 @@ class ItemRevisionResolver(Protocol):
 class HwpxRenderer(Protocol):
     """Closed renderer port implemented by the isolated Kordoc adapter."""
 
+    def build_may_be_active(self, build_id: str) -> bool: ...
+
+    def recover_interrupted_item_result(
+        self, *, build_id: str, idempotency_key: str, source_revision_id: str, source_sha256: str
+    ) -> KordocBuildReceipt | None: ...
+
     def build(
         self,
         source_path: Path,
@@ -116,6 +123,12 @@ class HwpxRenderer(Protocol):
 
 
 class QuestionTemplateRenderer(Protocol):
+    def build_may_be_active(self, build_id: str) -> bool: ...
+
+    def recover_interrupted_item_result(
+        self, *, build_id: str, idempotency_key: str, source_revision_id: str, source_sha256: str
+    ) -> QuestionTemplateBuildReceipt | None: ...
+
     def snapshot(self) -> QuestionTemplateSnapshot: ...
 
     def build(
@@ -132,6 +145,12 @@ class QuestionTemplateRenderer(Protocol):
 
 
 class ContentTeamRenderer(Protocol):
+    def build_may_be_active(self, build_id: str) -> bool: ...
+
+    def recover_interrupted_item_result(
+        self, *, build_id: str, idempotency_key: str, source_revision_id: str, source_sha256: str
+    ) -> ContentTeamBuildReceipt | None: ...
+
     def snapshot(self) -> ContentTeamHandoffSnapshot: ...
 
     def build(
@@ -161,6 +180,18 @@ class SecureHwpxDownload:
                 yield chunk
         finally:
             os.close(self.fd)
+
+
+class ItemRecoveryState(StrEnum):
+    NONE = "NONE"
+    ACTIVE = "ACTIVE"
+    TERMINALIZED = "TERMINALIZED"
+
+
+@dataclass(frozen=True)
+class ItemRecoveryResult:
+    state: ItemRecoveryState
+    record: HwpxApplicationBuildRecord | None = None
 
 
 class HwpxApplicationService:
@@ -321,6 +352,57 @@ class HwpxApplicationService:
             session.expunge(record)
             return record
 
+    def recover_interrupted(self) -> ItemRecoveryResult:
+        """Startup-only reconciliation; never relaunch or rewrite a terminal build."""
+        with self.sessions() as session:
+            record = session.scalar(
+                select(HwpxApplicationBuildRecord)
+                .where(HwpxApplicationBuildRecord.state.in_(("RUNNING", "VALIDATING")))
+                .order_by(
+                    HwpxApplicationBuildRecord.started_at, HwpxApplicationBuildRecord.build_id
+                )
+                .limit(1)
+            )
+            if record is None:
+                return ItemRecoveryResult(ItemRecoveryState.NONE)
+            session.expunge(record)
+        renderers: dict[str, HwpxRenderer | QuestionTemplateRenderer | ContentTeamRenderer] = {
+            "kordoc": self.renderer,
+            QUESTION_TEMPLATE_RENDERER: self.template_renderer,
+            CONTENT_TEAM_RENDERER: self.content_team_renderer,
+        }
+        renderer = renderers.get(record.renderer)
+        if renderer is None:
+            # An unsupported historical renderer is not proof that it is inactive.
+            return ItemRecoveryResult(ItemRecoveryState.ACTIVE, record)
+        if renderer.build_may_be_active(record.build_id):
+            return ItemRecoveryResult(ItemRecoveryState.ACTIVE, record)
+        try:
+            receipt = renderer.recover_interrupted_item_result(
+                build_id=record.build_id,
+                idempotency_key=record.idempotency_key,
+                source_revision_id=record.source_artifact_revision_id,
+                source_sha256=record.source_sha256,
+            )
+            if receipt is None:
+                raise HwpxManagerError(
+                    HwpxManagerErrorCode.HWPX_BUILD_INTERRUPTED,
+                    "interrupted single-item build has no committed result",
+                )
+            with transaction(self.sessions) as session:
+                current = session.scalar(
+                    select(HwpxApplicationBuildRecord)
+                    .where(HwpxApplicationBuildRecord.build_id == record.build_id)
+                    .with_for_update()
+                )
+                if current is None or current.state not in {"RUNNING", "VALIDATING"}:
+                    return ItemRecoveryResult(ItemRecoveryState.NONE)
+                self._complete_build(current, receipt)
+                session.flush()
+        except Exception as exc:
+            self._fail_build(record.build_id, exc)
+        return ItemRecoveryResult(ItemRecoveryState.TERMINALIZED, self.get_build(record.build_id))
+
     def process_next(self) -> HwpxApplicationBuildRecord | None:
         """Claim and process one FIFO request; never retries a terminal build."""
         with transaction(self.sessions) as session:
@@ -432,27 +514,44 @@ class HwpxApplicationService:
                     "stored HWPX renderer profile is unsupported",
                 )
             with transaction(self.sessions) as session:
-                current = session.get(HwpxApplicationBuildRecord, record.build_id)
+                current = session.scalar(
+                    select(HwpxApplicationBuildRecord)
+                    .where(HwpxApplicationBuildRecord.build_id == record.build_id)
+                    .with_for_update()
+                )
                 if current is None:
                     raise RuntimeError("claimed HWPX application build disappeared")
-                self._transition(current, ApplicationBuildState.VALIDATING)
-                current.platform_job_id = receipt.job_id
-                current.native_equation_count = receipt.native_equation_count
-                current.native_table_count = receipt.native_table_count
-                current.output_artifact_id = receipt.artifact_id
-                current.output_artifact_revision_id = receipt.artifact_revision_id
-                current.output_sha256 = receipt.output_sha256
-                current.output_filename = f"eom-{current.item_id}-{current.item_revision_id}.hwpx"
-                current.validation_state = "PASS"
-                self._transition(current, ApplicationBuildState.SUCCEEDED)
-                current.completed_at = datetime.now(UTC)
-                current.resource_version += 1
+                self._complete_build(current, receipt)
                 session.flush()
                 session.expunge(current)
                 return current
         except Exception as exc:
             self._fail_build(record.build_id, exc)
             raise
+
+    def _complete_build(
+        self,
+        record: HwpxApplicationBuildRecord,
+        receipt: KordocBuildReceipt | QuestionTemplateBuildReceipt | ContentTeamBuildReceipt,
+    ) -> None:
+        if receipt.build_id != record.build_id:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_BUILD_IDEMPOTENCY_CONFLICT,
+                "renderer receipt belongs to a different application build",
+            )
+        if record.state == ApplicationBuildState.RUNNING.value:
+            self._transition(record, ApplicationBuildState.VALIDATING)
+        record.platform_job_id = receipt.job_id
+        record.native_equation_count = receipt.native_equation_count
+        record.native_table_count = receipt.native_table_count
+        record.output_artifact_id = receipt.artifact_id
+        record.output_artifact_revision_id = receipt.artifact_revision_id
+        record.output_sha256 = receipt.output_sha256
+        record.output_filename = f"eom-{record.item_id}-{record.item_revision_id}.hwpx"
+        record.validation_state = "PASS"
+        self._transition(record, ApplicationBuildState.SUCCEEDED)
+        record.completed_at = datetime.now(UTC)
+        record.resource_version += 1
 
     def secure_download(self, build_id: str) -> SecureHwpxDownload:
         record = self.get_build(build_id)
@@ -833,7 +932,11 @@ class HwpxApplicationService:
 
     def _fail_build(self, build_id: str, error: Exception) -> None:
         with transaction(self.sessions) as session:
-            record = session.get(HwpxApplicationBuildRecord, build_id)
+            record = session.scalar(
+                select(HwpxApplicationBuildRecord)
+                .where(HwpxApplicationBuildRecord.build_id == build_id)
+                .with_for_update()
+            )
             if record is None or record.state in {"SUCCEEDED", "FAILED"}:
                 return
             self._transition(record, ApplicationBuildState.FAILED)

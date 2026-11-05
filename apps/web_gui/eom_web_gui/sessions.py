@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import secrets
 import threading
 from collections import OrderedDict
@@ -11,6 +12,10 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from eom_web_gui.contracts import RequestDraft
+
+MAX_REPLAY_RESULTS = 64
+MAX_REPLAY_RESULT_BYTES = 65_536
+MAX_REPLAY_BYTES_PER_SESSION = 262_144
 
 
 @dataclass(frozen=True, slots=True)
@@ -30,7 +35,8 @@ class WebSession:
     created_at: datetime
     expires_at: datetime
     drafts: OrderedDict[str, RequestDraft] = field(default_factory=OrderedDict)
-    replay_results: dict[tuple[str, str], dict[str, Any]] = field(default_factory=dict)
+    replay_results: OrderedDict[tuple[str, str], bytes] = field(default_factory=OrderedDict)
+    replay_result_bytes: int = 0
     refresh_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
 
 
@@ -97,7 +103,36 @@ class SessionStore:
                 removed_id, _ = session.drafts.popitem(last=False)
                 for key in tuple(session.replay_results):
                     if key[0] == removed_id:
-                        session.replay_results.pop(key)
+                        session.replay_result_bytes -= len(session.replay_results.pop(key))
+
+    def draft_result(self, session: WebSession, key: tuple[str, str]) -> dict[str, Any] | None:
+        with self._lock:
+            value = session.replay_results.get(key)
+            if value is None:
+                return None
+            session.replay_results.move_to_end(key)
+            return json.loads(value)  # type: ignore[no-any-return]
+
+    def save_draft_result(
+        self, session: WebSession, key: tuple[str, str], result: dict[str, Any]
+    ) -> None:
+        encoded = json.dumps(result, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+        if len(encoded) > MAX_REPLAY_RESULT_BYTES:
+            # This is only a cache. Same-key replay still resolves the official API
+            # command; skipping/evicting here never creates a new submission key.
+            return
+        with self._lock:
+            previous = session.replay_results.pop(key, None)
+            if previous is not None:
+                session.replay_result_bytes -= len(previous)
+            session.replay_results[key] = encoded
+            session.replay_result_bytes += len(encoded)
+            while (
+                len(session.replay_results) > MAX_REPLAY_RESULTS
+                or session.replay_result_bytes > MAX_REPLAY_BYTES_PER_SESSION
+            ):
+                _, removed = session.replay_results.popitem(last=False)
+                session.replay_result_bytes -= len(removed)
 
     def _prune(self, now: datetime) -> None:
         for key, session in tuple(self._sessions.items()):

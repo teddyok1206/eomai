@@ -66,6 +66,8 @@ def test_admission_matrix_matches_exact_checked_in_definition_protocols() -> Non
     successors = {
         ("external-item-learning", "1.0.0"): "external-item-learning.v1.yaml",
         ("external-item-learning", "2.0.0"): "external-item-learning.v2.yaml",
+        ("external-item-learning", "3.0.0"): "external-item-learning.v3.yaml",
+        ("knowledge-analysis", "11.0.0"): "knowledge-analysis.v11.yaml",
         ("item-inference-transfer-comparison", "1.1.0"): (
             "item-inference-transfer-comparison.v1_1.yaml"
         ),
@@ -75,6 +77,7 @@ def test_admission_matrix_matches_exact_checked_in_definition_protocols() -> Non
     other_native_identities = {
         ("local-embedding-index", "2.0.0"),
         ("local-embedding-reference-query", "1.0.0"),
+        ("local-embedding-reference-query", "2.0.0"),
         ("local-embedding-private-chat-query", "1.0.0"),
     }
     assert set(WORKFLOW_ADMISSION_BY_IDENTITY) == (

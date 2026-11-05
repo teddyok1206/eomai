@@ -38,6 +38,7 @@ from eom_hwpx_manager.adapter import BuilderRun, HwpxBuilderAdapter
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
 from eom_hwpx_manager.logging import log_hwpx_event
 from eom_hwpx_manager.protocol import HWPX_KORDOC_PROTOCOL_VERSION, kordoc_schema_bundle_hash
+from eom_hwpx_manager.renderer_recovery import recover_item_renderer_job
 from eom_hwpx_manager.settings import HwpxSettings
 
 KORDOC_RENDERER_VERSION = "0.1.0"
@@ -67,6 +68,30 @@ class KordocHwpxService:
         self.settings = settings or HwpxSettings.from_environment()
         self.sessions = build_session_factory(engine)
         self.adapter = adapter or HwpxBuilderAdapter(self.settings)
+
+    def build_may_be_active(self, build_id: str) -> bool:
+        return self.adapter.build_may_be_active(build_id)
+
+    def recover_interrupted_item_result(
+        self, *, build_id: str, idempotency_key: str, source_revision_id: str, source_sha256: str
+    ) -> KordocBuildReceipt | None:
+        job_id = recover_item_renderer_job(
+            self.sessions,
+            job_key=f"hwpx-kordoc-build:{idempotency_key}",
+            task_type="hwpx-kordoc-build",
+            build_id=build_id,
+            source_revision_id=source_revision_id,
+            source_sha256=source_sha256,
+        )
+        if job_id is None:
+            return None
+        receipt = self._completed_receipt(job_id)
+        if receipt.build_id != build_id:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_BUILD_IDEMPOTENCY_CONFLICT,
+                "completed Kordoc output belongs to a different application build",
+            )
+        return receipt
 
     def build(
         self,

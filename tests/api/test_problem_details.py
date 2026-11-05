@@ -1,9 +1,28 @@
 from __future__ import annotations
 
+import pytest
 from eom_api.app import create_app
 from fastapi.testclient import TestClient
 
 from tests.api.helpers import disconnected_services
+
+
+@pytest.mark.parametrize("headers", ({}, {"Content-Length": "1"}))
+def test_chunked_or_false_length_limits_report_the_actual_transport_error(
+    headers: dict[str, str],
+) -> None:
+    services = disconnected_services()
+    try:
+        with TestClient(create_app(services), base_url="http://localhost") as client:
+            response = client.post(
+                "/api/v1/auth/login",
+                headers={"Content-Type": "application/json", **headers},
+                content=iter((b'{"username":"', b"x" * 1_048_576, b'"}')),
+            )
+            assert response.status_code == 413
+            assert response.json()["error_code"] == "API_BODY_TOO_LARGE"
+    finally:
+        services.engine.dispose()
 
 
 def test_validation_transport_and_security_headers() -> None:

@@ -129,6 +129,8 @@ def install_exception_handlers(app: FastAPI) -> None:
             code = "API_ROUTE_NOT_FOUND"
         elif exc.status_code == 405:
             code = "API_METHOD_NOT_ALLOWED"
+        elif exc.status_code == 413:
+            code = "API_BODY_TOO_LARGE"
         return problem_response(
             request,
             status=exc.status_code,

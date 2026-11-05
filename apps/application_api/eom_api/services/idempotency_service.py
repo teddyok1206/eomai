@@ -6,15 +6,18 @@ import hashlib
 import hmac
 import json
 import secrets
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, TypeVar
 
+from eom_api_contracts import CommandResult
 from eom_identity_service.models import ApiIdempotencyRecord
 from eom_operator_identity.identifiers import new_idempotency_record_id
 from eom_orchestrator.database import build_session_factory, transaction
 from sqlalchemy import Engine, select
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 from eom_api.errors import ApiError
 
@@ -172,6 +175,59 @@ class IdempotencyService:
         resource_type: str,
         resource_id: str,
     ) -> None:
+        with transaction(self.sessions) as session:
+            record = self._completion_record(session, claim)
+            self._store_result(
+                record,
+                status=status,
+                body=body,
+                resource_type=resource_type,
+                resource_id=resource_id,
+            )
+
+    def execute_atomic(
+        self,
+        claim: IdempotencyClaim,
+        command: Callable[[Session], CommandResult],
+        *,
+        status: int,
+        resource_type: str,
+    ) -> CommandResult:
+        """Commit a local command and its response under one retained claim lock."""
+        with transaction(self.sessions) as session:
+            record = self._completion_record(session, claim)
+            result = command(session)
+            self._store_result(
+                record,
+                status=status,
+                body=result.model_dump(mode="json"),
+                resource_type=resource_type,
+                resource_id=result.resource_id,
+            )
+        return result
+
+    def _completion_record(self, session: Session, claim: IdempotencyClaim) -> ApiIdempotencyRecord:
+        record = session.get(ApiIdempotencyRecord, claim.record_id, with_for_update=True)
+        if record is None:
+            raise RuntimeError("idempotency claim disappeared")
+        if not self._claim_owns_record(record, claim):
+            raise ApiError(
+                409,
+                "API_IDEMPOTENCY_CLAIM_LOST",
+                "Idempotency claim lost",
+                "The request lease was acquired by another attempt; replay the same request.",
+            )
+        return record
+
+    def _store_result(
+        self,
+        record: ApiIdempotencyRecord,
+        *,
+        status: int,
+        body: dict[str, Any],
+        resource_type: str,
+        resource_id: str,
+    ) -> None:
         encoded = json.dumps(body, separators=(",", ":"), sort_keys=True).encode("utf-8")
         if len(encoded) > self._response_limit:
             raise ApiError(
@@ -181,26 +237,16 @@ class IdempotencyService:
                 "The command result cannot be stored safely.",
             )
         now = datetime.now(UTC)
-        with transaction(self.sessions) as session:
-            record = session.get(ApiIdempotencyRecord, claim.record_id, with_for_update=True)
-            if record is None:
-                raise RuntimeError("idempotency claim disappeared")
-            if not self._claim_owns_record(record, claim):
-                raise ApiError(
-                    409,
-                    "API_IDEMPOTENCY_CLAIM_LOST",
-                    "Idempotency claim lost",
-                    "The request lease was acquired by another attempt; replay the same request.",
-                )
-            record.state = "COMPLETED"
-            record.response_status = status
-            record.response_body = body
-            record.resource_type = resource_type
-            record.resource_id = resource_id
-            record.lease_owner = None
-            record.lease_expires_at = None
-            record.updated_at = now
-            record.completed_at = now
+        record.state = "COMPLETED"
+        record.response_status = status
+        record.response_body = body
+        record.resource_type = resource_type
+        record.resource_id = resource_id
+        record.lease_owner = None
+        record.lease_expires_at = None
+        record.updated_at = now
+        record.completed_at = now
+        record.error_code = None
 
     def defer(self, claim: IdempotencyClaim) -> None:
         """Yield a short request lease while its existing asynchronous work is pending.

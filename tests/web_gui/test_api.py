@@ -25,6 +25,49 @@ from tests.web_gui.helpers import (
 )
 
 
+@pytest.mark.parametrize(
+    ("live", "ready", "observe", "expected_status"),
+    (
+        ("ACTIVE", "ACTIVE", "ACTIVE", 200),
+        ("ACTIVE", "ACTIVE", "UNAVAILABLE", 200),
+        ("ACTIVE", "UNAVAILABLE", "ACTIVE", 503),
+        ("UNAVAILABLE", "ACTIVE", "ACTIVE", 503),
+    ),
+)
+def test_web_readiness_requires_ready_api_but_not_optional_observability(
+    live: str, ready: str, observe: str, expected_status: int
+) -> None:
+    class HealthGateway(FakeGateway):
+        async def health(self) -> dict[str, str]:
+            return {
+                "application_api": live,
+                "application_api_ready": ready,
+                "observability": observe,
+            }
+
+    client, _ = make_client(gateway=HealthGateway())
+    with client:
+        response = client.get("/studio/api/v1/health/ready")
+    assert response.status_code == expected_status
+    assert response.json()["status"] == ("READY" if expected_status == 200 else "DEGRADED")
+
+
+@pytest.mark.parametrize("headers", ({}, {"Content-Length": "1"}))
+def test_actual_request_bytes_are_limited_without_trusting_content_length(
+    headers: dict[str, str],
+) -> None:
+    client, _ = make_client()
+    with client:
+        response = client.post(
+            "/studio/api/v1/session",
+            headers={"Content-Type": "application/json", **headers},
+            content=iter((b'{"username":"', b"x" * 262_144, b'"}')),
+        )
+    assert response.status_code == 413
+    assert response.json()["error_code"] == "WEB_BODY_TOO_LARGE"
+    assert response.headers["X-Request-ID"].startswith("webreq_")
+
+
 def test_pdf_document_review_upload_list_detail_and_page_use_authenticated_bff() -> None:
     client, gateway = make_client()
     with client:

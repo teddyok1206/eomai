@@ -49,7 +49,7 @@ class PdfLearningCompletionObservationRecord(Base):
     )
     graph_snapshot_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     requested_by_operator_id: Mapped[str] = mapped_column(
-        ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
+        String(128), ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
     )
     first_observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 

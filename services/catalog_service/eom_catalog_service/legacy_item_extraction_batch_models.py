@@ -85,7 +85,7 @@ class LegacyItemExtractionBatchRecord(Base):
     state: Mapped[str] = mapped_column(String(32), nullable=False)
     total_work_unit_count: Mapped[int] = mapped_column(Integer, nullable=False)
     requested_by_operator_id: Mapped[str] = mapped_column(
-        ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
+        String(128), ForeignKey("operators.operator_id", ondelete="RESTRICT"), nullable=False
     )
     resource_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

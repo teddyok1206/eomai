@@ -102,3 +102,37 @@ validation에서 read-only로만 사용한다. public loader는 deep copy를 반
 큰 분리는 별도 ADR에서 canonical source, pointer, access pattern, index, complexity, transaction과
 rollback을 먼저 정의한다. 단순히 파일을 작게 만들기 위한 wrapper/mixin/새 framework는 만들지
 않는다.
+
+## 2026-11-05 배치 확장 전 경계 검토
+
+다음은 저장소 수정·격리 검증 결과이며 운영 활성화 선언이 아니다. 새 dependency, DB migration,
+queue/framework, worker 권한 또는 released schema/definition bytes 변경은 없다.
+
+| 확인된 문제 | 책임 경계와 조치 |
+| --- | --- |
+| 단일 문항 HWPX의 중단 후 RUNNING 잔류 | Manager startup + renderer port에서 원래 Job/source/output을 확인하고 기존 receipt 연결 또는 중단 기록; 새 render 금지 |
+| refresh와 자격 변경의 잠금 역전, lock 대기 중 access 철회 | Identity에서 session → token 순서를 통일하고 대기 후 token을 다시 확인 |
+| 관리자 ETag의 transaction 밖 선검사 | Identity가 target row lock 안에서 CAS; API는 412로 표현만 변환 |
+| 계정 변경 후 응답 저장 사이 crash window | local Operator command와 bounded idempotency receipt를 동일 transaction으로 commit |
+| Web 자동 refresh와 자격 변경의 token 교체 race | 동일 session lock으로 교체까지 직렬화; 일반 조회는 병렬 유지 |
+| Web readiness·실제 body 크기·무제한 replay cache | mandatory API ready/503, 실제 ASGI byte 제한, bounded LRU; optional observe와 upload 전용 한도 보존 |
+| API의 실제 body 초과가 JSON 오류로 바뀜 | ASGI byte 제한의 HTTP 413과 기존 `API_BODY_TOO_LARGE` 의미를 FastAPI 예외 경계까지 유지 |
+| 200개 선조회 뒤 관리자 필터 적용 | Identity SQL에서 status/active role/literal prefix를 먼저 적용한 뒤 limit |
+| 문서 processing lease와 Catalog 대기창 불일치 | composition에서 connect/upload/response/continuation 예산 이상의 effective lease 사용 |
+| migration과 ORM의 물리 선언 차이 | 기존 열 길이·FK RESTRICT·index 이름/식을 맞춤; DB DDL 변경 없이 compare_metadata 차이 0 |
+| schema 내부 `$id` 오검출·resource mirror 검사 누락 | audit에서 독립 schema resource scope와 package resource identity를 함께 검증 |
+
+자료 검토 이미지의 늦은 load 응답 guard는 기존 코드에 있어 재수정하지 않았다. transport의
+`FAILED_FINAL`/retention은 [idempotency 문서](API_IDEMPOTENCY.md)에 현재 의미를 명시했다.
+historical Workflow/Job 실패나 원본·Graph·벡터·HWPX 결과는 이 작업에서 수정하지 않는다.
+
+검증은 source API, Web/contract/dependency, HWPX output suite와 guarded PostgreSQL의
+중단·동시 claim·같은 요청 replay·stale ETag·refresh/rotation 경합·receipt 직전 fault를 포함한다.
+historical admission fixture는 격리 DB에 한정되며 현재 운영 admission을 넓히지 않는다.
+서로 다른 frozen standard preset을 요구하는 V1/V2 bootstrap은 별도 새 DB에서 단독 PASS했다.
+
+대규모 Catalog intake의 backpressure, 전체 textbook 목록의 query 수와 공통 DB deadline은
+이 검토에서 현재 운영 결함/부하 한계를 재현한 항목이 아니다. 다음 대형 배치의 실제 access
+pattern·query plan·처리량을 확인한 뒤 다룬다. 근거 없이 새 queue, 광범위 cache 또는 전체
+statement/worker timeout 변경을 추가하지 않는다. 실제 browser/Hancom/권한 실험의 opt-in
+skip과 기존 기술 acceptance를 새 source의 운영 PASS로 바꿔 보고하지 않는다.

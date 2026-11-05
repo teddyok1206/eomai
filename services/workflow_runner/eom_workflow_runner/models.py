@@ -102,8 +102,8 @@ class WorkflowInstanceRecord(Base):
         Index(
             PRIVATE_CHAT_QUERY_TURN_INDEX,
             "created_actor_id",
-            text("(runtime_context #>> '{origin,basis,conversation_id}')"),
-            text("(runtime_context #>> '{origin,basis,turn_id}')"),
+            text("(runtime_context #>> '{origin,basis,conversation_id}'::text[])"),
+            text("(runtime_context #>> '{origin,basis,turn_id}'::text[])"),
             unique=True,
             postgresql_where=text("definition_key = 'local-embedding-private-chat-query'"),
         ).ddl_if(dialect="postgresql"),

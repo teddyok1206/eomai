@@ -120,6 +120,8 @@ from sqlalchemy import Engine, func, select, text
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import Session
 
+from tests.workflow_admission_fixtures import historical_document_workflow_policy  # noqa: F401
+
 pytestmark = pytest.mark.integration
 
 NOW = datetime(2026, 8, 23, 12, tzinfo=UTC)
@@ -1039,6 +1041,7 @@ def test_education_graph_access_patterns_have_dedicated_indexes(
         assert set(rows) == expected
 
 
+@pytest.mark.usefixtures("historical_document_workflow_policy")
 def test_document_revision_analysis_create_pins_v4_source_and_v6_plan(
     integration_engine: Engine,
     tmp_path: Path,
@@ -1112,6 +1115,7 @@ def test_document_revision_analysis_create_pins_v4_source_and_v6_plan(
             session.flush()
 
 
+@pytest.mark.usefixtures("historical_document_workflow_policy")
 def test_v6_document_analysis_pins_endpoint_typed_request_and_workflow(
     integration_engine: Engine,
     tmp_path: Path,
@@ -1482,6 +1486,7 @@ def _assert_v8_multimodal_document_analysis_flows_through_graph_and_retrieval(
     assert evidence.state == "PUBLISHED"
 
 
+@pytest.mark.usefixtures("historical_document_workflow_policy")
 def test_reviewed_curriculum_v2_publishes_ranges_and_retrieves_subtree(
     integration_engine: Engine,
     tmp_path: Path,

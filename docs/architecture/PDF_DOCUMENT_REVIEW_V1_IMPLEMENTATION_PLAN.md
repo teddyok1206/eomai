@@ -44,6 +44,14 @@ renderer failure, and partial-commit tests pass in a disposable environment.
 Exit: missing/stale/hash/media/lifecycle/permission negatives, exact replay, concurrent creation,
 lease recovery, and no-binary-in-DB persistence tests pass.
 
+The installed API composition must not give an upload/paired-member processing owner a shorter
+lease than the Catalog adapter's supported connect, upload and response cycle. The effective lease
+is the maximum of the configured lease and that cycle plus metadata-continuation/margin time.
+The 1800-second conversion response window must not coexist with a 300-second owner takeover.
+This changes neither the HTTP wait nor the worker timeout and introduces no scheduler or retry loop.
+Existing row-lock/lease-owner CAS and exact Catalog/workflow idempotency keys remain authoritative.
+An API crash still becomes reclaimable after the bounded lease; FAILED history is not rewritten.
+
 Current repository checkpoint: Slice C is implemented. Durable owner-scoped upload intents use a
 leased transition table and stable domain idempotency; accepted uploads create exactly one pinned
 Workflow. Owner-scoped list/detail projections validate the exact worker input, Job, step, Artifact,

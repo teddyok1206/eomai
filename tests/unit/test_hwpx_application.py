@@ -32,7 +32,11 @@ from eom_hwpx_manager.application_adapter import (
     FixedKordocBuilderAdapter,
     FixedQuestionTemplateBuilderAdapter,
 )
-from eom_hwpx_manager.application_service import HwpxApplicationService
+from eom_hwpx_manager.application_service import (
+    HwpxApplicationService,
+    ItemRecoveryResult,
+    ItemRecoveryState,
+)
 from eom_hwpx_manager.application_state import (
     ApplicationBuildState,
     require_application_transition,
@@ -708,6 +712,12 @@ def test_runner_service_continues_after_one_terminal_build_failure(
     monkeypatch.setattr(runner, "_runtime_privileges_ready", lambda _engine: True)
     monkeypatch.setattr(runner, "RegistryService", lambda _engine: object())
     monkeypatch.setattr(runner, "HwpxApplicationService", FakeService)
+    monkeypatch.setattr(
+        FakeService,
+        "recover_interrupted",
+        staticmethod(lambda: ItemRecoveryResult(ItemRecoveryState.NONE)),
+        raising=False,
+    )
     monkeypatch.setattr(runner, "ExamHwpxApplicationService", FakeExamService)
     from eom_hwpx_manager.curated_application_service import (
         CuratedRecoveryResult,

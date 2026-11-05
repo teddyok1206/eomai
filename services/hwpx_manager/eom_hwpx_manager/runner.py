@@ -16,7 +16,11 @@ from eom_identity_service.models import OperatorRecord
 from eom_orchestrator.database import build_engine
 from sqlalchemy import Engine
 
-from eom_hwpx_manager.application_service import HwpxApplicationService, SecureHwpxDownload
+from eom_hwpx_manager.application_service import (
+    HwpxApplicationService,
+    ItemRecoveryState,
+    SecureHwpxDownload,
+)
 from eom_hwpx_manager.curated_application_service import (
     CuratedHwpxApplicationService,
     CuratedRecoveryState,
@@ -175,6 +179,16 @@ def serve(interval_seconds: float) -> int:
                     f"hwpx_curated_build={curated_recovery.record.build_id}:{curated_recovery.record.state}"
                 )
             if recovering_interrupted:
+                item_recovery = item_service.recover_interrupted()
+                if item_recovery.state is ItemRecoveryState.ACTIVE:
+                    time.sleep(interval_seconds)
+                    continue
+                if item_recovery.state is ItemRecoveryState.TERMINALIZED:
+                    assert item_recovery.record is not None
+                    print(
+                        f"hwpx_item_build={item_recovery.record.build_id}:{item_recovery.record.state}"
+                    )
+                    continue
                 recovery = exam_service.recover_interrupted()
                 if recovery.state is ExamRecoveryState.ACTIVE:
                     assert recovery.record is not None

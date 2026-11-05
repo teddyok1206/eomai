@@ -92,6 +92,24 @@ def test_concurrent_idempotency_claim_has_one_owner() -> None:
             assert completed is not None
             assert completed.state == "COMPLETED"
             assert completed.resource_id == "workflow_" + "a" * 32
+        retained = service.claim(
+            operator_id=bootstrap.operator.operator_id,
+            endpoint_key="test_concurrent_claim",
+            raw_key="concurrent-key-0001",
+            request_sha256="sha256:" + "a" * 64,
+            now=datetime.now(UTC) + timedelta(days=2),
+        )
+        assert retained.replayed
+        assert retained.record_id == winner.record_id
+        with pytest.raises(ApiError) as different:
+            service.claim(
+                operator_id=bootstrap.operator.operator_id,
+                endpoint_key="test_concurrent_claim",
+                raw_key="concurrent-key-0001",
+                request_sha256="sha256:" + "b" * 64,
+                now=datetime.now(UTC) + timedelta(days=2),
+            )
+        assert different.value.error_code == "API_IDEMPOTENCY_CONFLICT"
     finally:
         with transaction(sessions) as session:
             session.execute(

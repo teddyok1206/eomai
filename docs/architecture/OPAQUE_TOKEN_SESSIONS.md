@@ -35,7 +35,16 @@ sequenceDiagram
 The default access TTL is 30 minutes. Refresh and absolute session lifetime are 30 days; idle
 lifetime is 7 days. Refresh does not change `authenticated_at`, so it cannot make a session fresh.
 Every refresh rotates both tokens. The refresh row and session row are locked in one transaction,
-therefore only one concurrent request succeeds and reuse revokes the new pair too.
+therefore only one concurrent request succeeds and reuse revokes the new pair too. Refresh discovers
+the immutable session ID first, then locks **session -> token**, re-reading consumed/revoked state
+under those locks. Credential rotation uses the same order. Reversing it can deadlock when one
+request owns the token while another owns the session; retrying that deadlock is not a substitute
+for a consistent lock order. All lookups use existing indexed selectors/session primary keys, with
+no new tables or credentials. Disposable PostgreSQL tests cover refresh/rotation concurrency.
+Access authentication also re-reads the indexed token after acquiring the session lock. A token
+read before waiting can have been revoked by credential rotation during that wait; session liveness
+alone is not enough to accept it. This adds one bounded primary-key read, not a scan/cache or another
+credential store, and refreshes existing ORM session state under the lock.
 
 Logout revokes the current session; logout-all and admin revoke affect all current sessions.
 Password change revokes other sessions and rotates the current pair. Disable is checked from the

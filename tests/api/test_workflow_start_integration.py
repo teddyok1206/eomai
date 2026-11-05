@@ -37,6 +37,7 @@ from pydantic import SecretStr
 from sqlalchemy import Engine, delete, func, select
 
 from tests.api.helpers import TEST_FINGERPRINT_KEY, TEST_TOKEN_KEY
+from tests.workflow_admission_fixtures import historical_item_workflow_policy  # noqa: F401
 
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 ADMIN_PASSWORD = "TEST_ONLY workflow admin password 84"
@@ -105,6 +106,7 @@ def _cleanup(engine: Engine, definition_id: str | None) -> None:
             )
 
 
+@pytest.mark.usefixtures("historical_item_workflow_policy")
 def test_workflow_start_separates_api_replay_from_failed_resubmission() -> None:
     if os.environ.get("EOM_RUN_API_INTEGRATION") != "1":
         pytest.skip("set EOM_RUN_API_INTEGRATION=1 with an isolated PostgreSQL database")

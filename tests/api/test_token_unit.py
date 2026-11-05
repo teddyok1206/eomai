@@ -6,6 +6,7 @@ from typing import Any, cast
 
 import pytest
 from eom_identity_service.models import (
+    ApiSessionRecord,
     ApiTokenRecord,
     OperatorCredentialRecord,
     OperatorEventRecord,
@@ -78,10 +79,11 @@ class TokenMutationSession(SyntheticSession):
     def scalar(self, query: Any) -> Any:
         model = query.column_descriptions[0]["entity"]
         if model is ApiTokenRecord:
-            self.order.append("ApiTokenRecord")
+            session_lookup = query.column_descriptions[0]["name"] == "api_session_id"
+            self.order.append("REFRESH_SESSION_LOOKUP" if session_lookup else "ApiTokenRecord")
             self.queries.append(query)
             parameters = query.compile().params
-            return next(
+            row = next(
                 (
                     row
                     for row in self.tokens
@@ -92,6 +94,7 @@ class TokenMutationSession(SyntheticSession):
                 ),
                 None,
             )
+            return row.api_session_id if session_lookup and row is not None else row
         if model is OperatorCredentialRecord:
             self.order.append("OperatorCredentialRecord")
             self.queries.append(query)
@@ -189,7 +192,7 @@ def test_legacy_access_denials_keep_exact_errors(
     assert failure.value.code is code
 
 
-def test_legacy_refresh_locks_distinct_refresh_then_session_before_access_revoke(
+def test_refresh_locks_session_then_refresh_before_access_revoke(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = TokenMutationSession()
@@ -209,12 +212,40 @@ def test_legacy_refresh_locks_distinct_refresh_then_session_before_access_revoke
     source.tokens.append(refresh_row)
     outcome = SessionTokenService(source.codec).rotate_refresh(cast(Session, source), refresh.raw)
     assert outcome.pair is not None and outcome.error is None
-    assert source.order[:3] == ["ApiTokenRecord", "ApiSessionRecord", "UPDATE_api_tokens"]
+    assert source.order[:4] == [
+        "REFRESH_SESSION_LOOKUP",
+        "ApiSessionRecord",
+        "ApiTokenRecord",
+        "UPDATE_api_tokens",
+    ]
     assert source.queries[0].compile().params == {"selector_1": refresh.selector}
-    assert source.queries[0]._for_update_arg is not None
+    assert source.queries[0]._for_update_arg is None
+    assert source.queries[1]._for_update_arg is not None
+    assert source.queries[2]._for_update_arg is not None
     assert refresh_row.consumed_at is not None and source.token.revoked_at is not None
     assert (
         refresh_row.replaced_by_token_id is not None and source.api_session.refresh_generation == 2
     )
     reused = SessionTokenService(source.codec).rotate_refresh(cast(Session, source), refresh.raw)
     assert reused.error is IdentityErrorCode.AUTH_REFRESH_TOKEN_REUSED and reused.pair is None
+
+
+def test_access_rechecks_revocation_after_waiting_for_session_lock(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = TokenMutationSession()
+    verified_capture(monkeypatch, source)
+    original = source.scalar
+
+    def rotate_while_waiting(query: Any) -> Any:
+        value = original(query)
+        if query.column_descriptions[0]["entity"] is ApiSessionRecord:
+            source.token.revoked_at = datetime.now(UTC)
+        return value
+
+    monkeypatch.setattr(source, "scalar", rotate_while_waiting)
+    with pytest.raises(IdentityError) as denied:
+        SessionTokenService(source.codec).authenticate_access(
+            cast(Session, source), source.raw_token
+        )
+    assert denied.value.code is IdentityErrorCode.AUTH_TOKEN_INVALID

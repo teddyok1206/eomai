@@ -31,6 +31,15 @@ lock the service counts active Operators with a current ADMIN assignment. Disabl
 ADMIN role from the last one fails with `OPERATOR_LAST_ADMIN`; the partial unique constraint and row
 locks protect the remaining assignment mutations.
 
+Administrator If-Match checks belong inside the mutating Operator application transaction, after
+the target row is locked. A router read before that transaction is not compare-and-swap: different
+commands could both accept the same version. Each HTTP mutation supplies the expected version;
+the application raises `OPERATOR_VERSION_CONFLICT` and the HTTP adapter renders the existing 412
+precondition error. Session revocation also increments the Operator resource version, so two
+commands cannot both mutate the same version. Existing CLI callers may omit a presentation ETag.
+No new schema/table/index is required; lookup remains by the Operator primary key with the existing
+RBAC/advisory-lock protections. Tests use concurrent connections in a disposable database.
+
 Password hashing uses `pwdlib==0.3.1` with its recommended Argon2id hasher. `pwdlib[argon2]` is the
 only new core dependency because both emergency CLI and HTTP login must use one credential rule.
 EOM adds bounded Unicode character and UTF-8 byte length, NUL, identity, and explicit common-value

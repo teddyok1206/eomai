@@ -215,9 +215,21 @@ class SessionTokenService:
             select(ApiSessionRecord)
             .where(ApiSessionRecord.api_session_id == token.api_session_id)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if api_session is None or api_session.revoked_at is not None:
             raise IdentityError(IdentityErrorCode.AUTH_SESSION_REVOKED, "session is revoked")
+        # Rotation can commit while this request waits for the session lock.
+        # Refresh the indexed token row after that wait, not only before it.
+        token = session.scalar(
+            select(ApiTokenRecord)
+            .where(ApiTokenRecord.api_token_id == token.api_token_id)
+            .execution_options(populate_existing=True)
+        )
+        if token is None or token.revoked_at is not None:
+            raise IdentityError(IdentityErrorCode.AUTH_TOKEN_INVALID, "access token is revoked")
+        if token.expires_at <= timestamp:
+            raise IdentityError(IdentityErrorCode.AUTH_TOKEN_EXPIRED, "access token is expired")
         if api_session.absolute_expires_at <= timestamp or api_session.idle_expires_at <= timestamp:
             self._revoke(api_session, "SESSION_EXPIRED", "system", timestamp)
             raise IdentityError(IdentityErrorCode.AUTH_SESSION_REVOKED, "session is expired")
@@ -250,8 +262,27 @@ class SessionTokenService:
         if parsed is None:
             return RefreshOutcome(None, IdentityErrorCode.AUTH_REFRESH_TOKEN_INVALID)
         selector, verifier = parsed
+        # Discover the immutable session identity without a row lock, then acquire
+        # locks in the same session -> token order as credential rotation/revocation.
+        # Re-read the token after the lock; a competing refresh may have consumed it.
+        api_session_id = session.scalar(
+            select(ApiTokenRecord.api_session_id).where(ApiTokenRecord.selector == selector)
+        )
+        if api_session_id is None:
+            return RefreshOutcome(None, IdentityErrorCode.AUTH_REFRESH_TOKEN_INVALID)
+        api_session = session.scalar(
+            select(ApiSessionRecord)
+            .where(ApiSessionRecord.api_session_id == api_session_id)
+            .with_for_update()
+            .execution_options(populate_existing=True)
+        )
+        if api_session is None:
+            return RefreshOutcome(None, IdentityErrorCode.AUTH_REFRESH_TOKEN_INVALID)
         token = session.scalar(
-            select(ApiTokenRecord).where(ApiTokenRecord.selector == selector).with_for_update()
+            select(ApiTokenRecord)
+            .where(ApiTokenRecord.selector == selector)
+            .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if (
             token is None
@@ -259,12 +290,7 @@ class SessionTokenService:
             or not self.codec.matches(verifier, token.verifier_hash)
         ):
             return RefreshOutcome(None, IdentityErrorCode.AUTH_REFRESH_TOKEN_INVALID)
-        api_session = session.scalar(
-            select(ApiSessionRecord)
-            .where(ApiSessionRecord.api_session_id == token.api_session_id)
-            .with_for_update()
-        )
-        if api_session is None:
+        if token.api_session_id != api_session.api_session_id:
             return RefreshOutcome(None, IdentityErrorCode.AUTH_REFRESH_TOKEN_INVALID)
         if token.consumed_at is not None:
             self._revoke(api_session, "REFRESH_TOKEN_REUSED", "system", timestamp)
@@ -334,6 +360,7 @@ class SessionTokenService:
             select(ApiSessionRecord)
             .where(ApiSessionRecord.api_session_id == api_session_id)
             .with_for_update()
+            .execution_options(populate_existing=True)
         )
         if api_session is None or api_session.revoked_at is not None:
             raise IdentityError(IdentityErrorCode.AUTH_SESSION_REVOKED, "session is revoked")

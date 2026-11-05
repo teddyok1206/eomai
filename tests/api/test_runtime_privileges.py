@@ -169,6 +169,14 @@ def test_runtime_privilege_matrix_covers_exact_mock_exam_retirement_dml() -> Non
     assert "workflow_step_runs" not in INSERT_TABLES
     assert "workflow_step_runs" not in UPDATE_TABLES
     assert dict(UPDATE_COLUMN_PRIVILEGES) == {
+        "item_db_similarity_searches": (
+            "pinned_query",
+            "children_json",
+            "state",
+            "device",
+            "error_code",
+            "updated_at",
+        ),
         "jobs": ("completed_at", "status", "updated_at"),
         "worker_leases": ("release_reason", "released_at", "state"),
         "workflow_commands": ("processed_at", "state"),

@@ -17,10 +17,12 @@ from tests.integration.test_knowledge_analysis_service import (
     _assert_v10_multimodal_document_analysis_uses_typed_identity_protocol,
     _assert_v11_multimodal_document_analysis_uses_stable_identity_protocol,
 )
+from tests.workflow_admission_fixtures import historical_document_workflow_policy  # noqa: F401
 
 pytestmark = pytest.mark.integration
 
 
+@pytest.mark.usefixtures("historical_document_workflow_policy")
 def test_knowledge_analysis_protocol_lineage_advances_without_backward_publication(
     integration_engine: Engine,
     tmp_path: Path,

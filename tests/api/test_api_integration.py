@@ -4,6 +4,7 @@ import os
 
 import pytest
 from eom_api.app import create_app
+from eom_api.errors import ApiError
 from eom_api.lifespan import build_services
 from eom_api.settings import ApiSecrets, ApiSettings
 from eom_identity_service.models import (
@@ -85,7 +86,7 @@ def _authorization(token: str) -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_http_auth_rbac_rotation_reuse_and_revocation() -> None:
+def test_http_auth_rbac_rotation_reuse_and_revocation(monkeypatch: pytest.MonkeyPatch) -> None:
     _enabled()
     engine = build_engine()
     sessions = build_session_factory(engine)
@@ -102,6 +103,8 @@ def test_http_auth_rbac_rotation_reuse_and_revocation() -> None:
         ),
     )
     services.audit = NoopAudit()  # type: ignore[assignment]
+    assert services.pdf_document_reviews.processing_lease_seconds > 2100
+    assert services.paired_document_reviews.processing_lease_seconds > 2100
     try:
         with TestClient(create_app(services), base_url="http://localhost") as client:
             unknown = client.post(
@@ -143,6 +146,32 @@ def test_http_auth_rbac_rotation_reuse_and_revocation() -> None:
             admin_pair = changed.json()["data"]
             admin_headers = _authorization(admin_pair["access_token"])
             assert client.get("/api/v1/operators", headers=admin_headers).status_code == 200
+
+            def fail_receipt(*_args: object, **_kwargs: object) -> None:
+                raise ApiError(503, "API_INTERNAL_ERROR", "Injected failure", "Disposable DB only")
+
+            with monkeypatch.context() as mutation:
+                mutation.setattr(services.idempotency, "_store_result", fail_receipt)
+                interrupted = client.post(
+                    "/api/v1/operators",
+                    headers={**admin_headers, "Idempotency-Key": "create-viewer-0001"},
+                    json={
+                        "username": "viewer01",
+                        "display_name": "조회자",
+                        "temporary_password": VIEWER_PASSWORD,
+                        "initial_roles": ["VIEWER"],
+                    },
+                )
+            assert interrupted.status_code == 503
+            with sessions() as session:
+                assert (
+                    session.scalar(
+                        select(func.count())
+                        .select_from(OperatorRecord)
+                        .where(OperatorRecord.username == "viewer01")
+                    )
+                    == 0
+                )
 
             created = client.post(
                 "/api/v1/operators",
@@ -248,6 +277,28 @@ def test_http_auth_rbac_rotation_reuse_and_revocation() -> None:
                 json={},
             )
             assert assigned.status_code == 200
+            assigned_replay = client.post(
+                f"/api/v1/operators/{viewer_id}/roles/AUTHOR",
+                headers={
+                    **admin_headers,
+                    "Idempotency-Key": "assign-author-0001",
+                    "If-Match": detail.headers["ETag"],
+                },
+                json={},
+            )
+            assert assigned_replay.status_code == 200
+            assert assigned_replay.json()["data"] == assigned.json()["data"]
+            stale_admin_change = client.post(
+                f"/api/v1/operators/{viewer_id}/roles/EDITOR",
+                headers={
+                    **admin_headers,
+                    "Idempotency-Key": "assign-editor-stale",
+                    "If-Match": detail.headers["ETag"],
+                },
+                json={},
+            )
+            assert stale_admin_change.status_code == 412
+            assert stale_admin_change.json()["error_code"] == "API_PRECONDITION_FAILED"
             immediate = client.post(
                 "/api/v1/workflows",
                 headers={**viewer_headers, "Idempotency-Key": "viewer-start-0002"},

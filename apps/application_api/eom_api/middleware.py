@@ -10,6 +10,7 @@ from datetime import UTC, datetime
 
 from fastapi import Request
 from starlette.datastructures import Headers, MutableHeaders
+from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -72,8 +73,12 @@ class RequestBoundaryMiddleware:
             user_agent_hash=fingerprint(self.fingerprint_key, headers.get("user-agent")),
         )
 
+        response_started = False
+
         async def secured_send(message: Message) -> None:
+            nonlocal response_started
             if message["type"] == "http.response.start":
+                response_started = True
                 mutable = MutableHeaders(scope=message)
                 for name, value in SECURITY_HEADERS.items():
                     mutable[name] = value
@@ -139,6 +144,8 @@ class RequestBoundaryMiddleware:
         try:
             await self.app(scope, limited_receive, secured_send)
         except BodyTooLarge:
+            if response_started:
+                raise
             await self._send_problem(scope, receive, secured_send, 413, "API_BODY_TOO_LARGE")
         finally:
             logging.getLogger("eom_api").info(
@@ -171,5 +178,8 @@ class RequestBoundaryMiddleware:
         await response(scope, receive, send)
 
 
-class BodyTooLarge(Exception):
-    pass
+class BodyTooLarge(HTTPException):
+    def __init__(self) -> None:
+        # FastAPI otherwise catches receive errors as generic malformed JSON,
+        # losing the transport-level 413 and its stable error code.
+        super().__init__(status_code=413, detail="API_BODY_TOO_LARGE")

@@ -47,8 +47,18 @@ Request validation and enqueue occur in one transaction. A runner claims one `RE
 `FOR UPDATE SKIP LOCKED` and commits `RUNNING` before rendering. Only the runner holding that claim
 may write its terminal state. API idempotency and the build table's derived unique key make equal
 replays return the same build; a different body with the same key is a conflict. V0 does not
-automatically retry terminal failures. A stopped runner leaves an explicit non-terminal row for
-operator diagnosis rather than silently reusing a PID, workspace, source, or output.
+automatically retry terminal failures.
+
+On manager startup, interrupted single-item builds use the same recovery boundary as whole-exam
+builds. The owning renderer first proves its fixed unit inactive; an uncertain/live unit remains
+ACTIVE and is never relaunched. The original indexed renderer-job key, task type and immutable
+source revision/hash must match the application request. A SUCCEEDED job supplies its validated
+receipt; a stranded nonterminal job is explicitly failed through its state machine, never replayed.
+The application row is locked again before accepting the receipt or recording interruption. A
+terminal application/Job failure is preserved. No schema, new queue or binary DB payload is needed.
+Lookup uses existing unique keys, O(log n), and startup iterates only unfinished requests. Blindly
+resetting RUNNING to REQUESTED was rejected because a renderer or canonical commit may already
+have completed, making rerendering or duplicate artifacts unsafe.
 
 ## Dependency direction
 
