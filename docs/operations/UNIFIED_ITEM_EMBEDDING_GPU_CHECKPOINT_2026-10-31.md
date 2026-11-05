@@ -3982,3 +3982,18 @@ INDEX metadata owner만 교체한다. QUERY/API/Web·창작 worker·물리 수�
 운영 오류와 구분해 수정하고 실패 로그를 보존했다. DB/claim/lease/SQL 변경은 없다.
 운영 INDEX의 이전 설치본과 차이를 최소화하도록 같은 선택 수정만 포함한 좁은 successor를
 빌드·설치한다. main의 다른18개 Catalog/Runner 변경을 이번 INDEX 재개에 섞지 않는다.
+
+15:35 UTC 설치 준비 완료: main 수정`23195c62`, 운영용 좁은 successor
+`525ae4726a7c67d3812d7ac70e114250184ac482`를 각각 main/hotfix branch에 push했다.
+이전 운영 wheel과 비교한 실제 runtime 차이는 selection module 한 개뿐이며, main과
+해당 module SHA가 같다. 공식 build-only/RECORD/격리 wheel 검사, 설치본151 PASS 및
+기존 plan family·parent11 PASS를 확인했다. 공유 API/Web/QUERY를 재배포하지 않았다.
+소스164 PASS와 설치본151 PASS는 중복 범위를 포함하므로 합산한 고유 테스트 수가 아니다.
+
+원 INDEX에15:23:59 UTC main-process SIGINT만 보내 현재 묶음의 graceful drain을 요청했다.
+worker/물리 CUDA/창작 슬롯에는 signal0이다. 새 owner 설치와 같은 scope의 service/grant
+staging까지 완료했으며, 기존 owner가 종료하고 원래 수치 실행의 lifetime이 비면 기존
+Identity application의 successor activation을 실행하는 유한 handoff가 대기 중이다.
+보호된 준비/rollback 기록은`/var/lib/eom-index-fair-selection-release-20261105`와
+`/var/lib/eom-index-fair-selection-20261105/drain-requested.json`이다.
+이 시점은 **설치 준비 완료 / 운영 활성화·기출 증가 확인 대기**다.
