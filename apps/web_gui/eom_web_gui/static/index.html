@@ -7,6 +7,7 @@
     <title>EOM Scientific Studio</title>
     <link rel="icon" href="/studio/assets/eom-mark.svg" type="image/svg+xml">
     <link rel="stylesheet" href="/studio/assets/styles.css">
+    <link rel="stylesheet" href="/studio/assets/knowledge-map.css">
   </head>
   <body>
     <div class="app-shell">
@@ -32,13 +33,13 @@
           <button type="button" class="nav-item" data-view-target="pdf-review"><span aria-hidden="true">▦</span> 자료 검토</button>
           <button type="button" class="nav-item" data-view-target="quality-review"><span aria-hidden="true">◎</span> 품질 평가</button>
           <p class="nav-group-label">데이터</p>
+          <button type="button" class="nav-item admin-only" data-view-target="knowledge"><span aria-hidden="true">⌬</span> Map</button>
           <button type="button" class="nav-item" data-view-target="item-db" data-required-permission="item:read"><span aria-hidden="true">▣</span> DB</button>
           <button type="button" class="nav-item admin-only" data-view-target="learning"><span aria-hidden="true">◫</span> 자료 학습</button>
           <button type="button" class="nav-item admin-only" data-view-target="explorer"><span aria-hidden="true">⌘</span> 운영 데이터 조회</button>
           <p class="nav-group-label admin-only">운영 도구</p>
           <button type="button" class="nav-item admin-only" data-view-target="control"><span aria-hidden="true">⚙</span> Codex 실행 관리</button>
           <button type="button" class="nav-item admin-only" data-view-target="admin-settings"><span aria-hidden="true">◇</span> 관리자 설정</button>
-          <button type="button" class="nav-item admin-only" data-view-target="knowledge"><span aria-hidden="true">⌬</span> 교육 지식 맵</button>
           <p class="nav-group-label">시스템</p>
           <button type="button" class="nav-item" data-view-target="account"><span aria-hidden="true">○</span> 내 계정</button>
           <button type="button" class="nav-item" data-view-target="support"><span aria-hidden="true">?</span> 고객센터</button>
@@ -394,8 +395,26 @@
             <p id="learning-message" class="form-message" aria-live="polite"></p>
           </section>
 
-          <section class="view admin-only" data-view="knowledge" aria-labelledby="knowledge-title">
-            <div class="page-heading"><h1 id="knowledge-title">교육 지식 분석 맵</h1><span id="knowledge-quality-badge" class="status-badge tone-neutral"><span class="status-icon">■</span> 분석 작업 선택 필요</span></div>
+          <section class="view admin-only" data-view="knowledge" aria-labelledby="map-title">
+            <div class="page-heading"><h1 id="map-title">Map</h1><button id="map-refresh" class="button quiet" type="button">최신 그래프로 열기</button></div>
+            <section class="panel map-workspace">
+              <form id="map-search" class="map-toolbar">
+                <label class="sr-only" for="map-query">개념 찾기</label><input id="map-query" maxlength="80" placeholder="개념 찾기 · 예: 전자기 유도" autocomplete="off">
+                <button class="button primary" type="submit">찾기</button>
+                <label class="sr-only" for="map-layer">자료 종류</label><select id="map-layer"><option value="">모든 자료</option><option value="TEXTBOOK">교과서</option><option value="PAST_EXAM">기출</option><option value="CREATIVE">창작</option><option value="AI">AI</option></select>
+                <button id="map-fit" class="button quiet" type="button">화면 맞춤</button><span id="map-count" class="muted-label"></span>
+              </form>
+              <p id="map-status" class="form-message" role="status" aria-live="polite"></p>
+              <div class="map-layout">
+                <div class="map-stage"><svg id="map-canvas" viewBox="-550 -370 1100 740" role="group" aria-label="개념과 자료의 연결 그래프"></svg><div class="map-legend" aria-label="자료 종류"><span data-layer="TEXTBOOK">교과서</span><span data-layer="PAST_EXAM">기출</span><span data-layer="CREATIVE">창작</span><span data-layer="AI">AI</span><span>개념·교육과정</span></div><p class="map-hint">점을 눌러 살펴보기 · 두 번 눌러 연결 펼치기 · 드래그로 이동</p></div>
+                <aside id="map-inspector" class="map-inspector" aria-label="선택한 개념과 자료"><h2>연결을 살펴보세요</h2><p class="empty-state">점은 개념이나 자료, 선은 두 점의 관계입니다. 점이나 선을 누르면 여기에서 확인할 수 있습니다.</p></aside>
+              </div>
+              <details class="map-node-list"><summary>현재 화면의 목록으로 보기</summary><div id="map-node-list"></div></details>
+            </section>
+          </section>
+
+          <section class="view admin-only" data-view="knowledge-quality" aria-labelledby="knowledge-title">
+            <div class="page-heading"><h1 id="knowledge-title">학습 범위·품질</h1><span id="knowledge-quality-badge" class="status-badge tone-neutral"><span class="status-icon">■</span> 분석 작업 선택 필요</span></div>
             <section class="knowledge-boundary" aria-label="지식 그래프 경계 설명"><strong>분석 범위 관계도</strong><span>공개된 지식 그래프 버전이 아닙니다.</span></section>
             <section class="panel quality-selector"><div class="panel-heading"><h2>분석 품질 보고서</h2></div><div class="panel-body"><div class="heading-actions"><input id="knowledge-batch-id" class="id-input" placeholder="분석 작업 ID" autocomplete="off" spellcheck="false"><button id="knowledge-quality-load" class="button primary" type="button">범위·품질 보기</button></div><p id="knowledge-quality-message" class="form-message" aria-live="polite"></p></div></section>
             <div class="quality-metric-grid" aria-label="분석 품질 지표"><article><span>관찰 범위</span><strong id="quality-ranges">-</strong></article><article><span>선택 페이지</span><strong id="quality-pages">-</strong></article><article><span>그림 입력 확인</span><strong id="quality-visual-pages">-</strong></article><article><span>분석 완료 페이지</span><strong id="quality-accepted-pages">-</strong></article><article><span>페이지 공백</span><strong id="quality-gaps">-</strong></article><article><span>중복 포함</span><strong id="quality-overlaps">-</strong></article></div>

@@ -15,6 +15,7 @@ import {
 } from "./hwpx-delivery-target.js";
 import {formatEquationSource, orderedItemPreviewBlocks} from "./item-preview.js";
 import {createItemDb} from "./item-db.js";
+import {createKnowledgeMap} from "./knowledge-map.js";
 import {renderPreviewText} from "./preview-math.js";
 import {
   applyPermissionVisibility,
@@ -34,7 +35,7 @@ const HWPX_BUILD_PATTERN = /^hwpxbuild_[a-f0-9]{32}$/;
 const ITEM_REVISION_PATTERN = /^itemrev_[a-f0-9]{32}$/;
 const ANALYSIS_BATCH_PATTERN = /^analysisbatch_[a-f0-9]{32}$/;
 const WEB_REQUEST_ID_PATTERN = /^webreq_[a-f0-9]{24}$/;
-const ADMIN_VIEW_NAMES = new Set(["control", "admin-settings", "learning", "knowledge", "explorer"]);
+const ADMIN_VIEW_NAMES = new Set(["control", "admin-settings", "learning", "knowledge", "knowledge-quality", "explorer"]);
 const state = {
   navigationVersion: 0,
   csrf: "",
@@ -134,6 +135,20 @@ const generalChat = createGeneralChat({
   errorMessage: (error) => error instanceof StudioApiError
     ? error.message : errorMessage(error?.code || "APPLICATION_API_REQUEST_FAILED"),
 });
+async function previewRegisteredItem(pointer, root, isCurrent) {
+  const preview = await api(`/items/${encodeURIComponent(pointer.item_id)}/revisions/${encodeURIComponent(pointer.item_revision_id)}/preview`);
+  if (!isCurrent()) return;
+  if (preview.item_id !== pointer.item_id || preview.item_revision_id !== pointer.item_revision_id || preview.preview_state !== "AVAILABLE") throw new Error("기준 문항 미리보기를 확인하지 못했습니다.");
+  const heading = document.createElement("h3");
+  renderPreviewText(heading, preview.title || "기준 문항");
+  root.replaceChildren(heading);
+  for (const block of orderedItemPreviewBlocks(preview)) root.append(renderPreviewBlock(block));
+  const choices = document.createElement("ol");
+  for (const choice of preview.choices || []) {
+    const row = document.createElement("li"); renderPreviewText(row, `${choice.label} ${choice.text}`); choices.append(row);
+  }
+  root.append(choices);
+}
 const itemDb = createItemDb({
   document,
   api,
@@ -147,20 +162,7 @@ const itemDb = createItemDb({
     recent: () => api("/item-db/similarity/searches"),
     result: (id, ordinal) => api(`/item-db/similarity/searches/${encodeURIComponent(id)}/results/${ordinal}`),
   },
-  previewRegisteredItem: async (pointer, root, isCurrent) => {
-    const preview = await api(`/items/${encodeURIComponent(pointer.item_id)}/revisions/${encodeURIComponent(pointer.item_revision_id)}/preview`);
-    if (!isCurrent()) return;
-    if (preview.item_id !== pointer.item_id || preview.item_revision_id !== pointer.item_revision_id || preview.preview_state !== "AVAILABLE") throw new Error("기준 문항 미리보기를 확인하지 못했습니다.");
-    const heading = document.createElement("h3");
-    renderPreviewText(heading, preview.title || "기준 문항");
-    root.replaceChildren(heading);
-    for (const block of orderedItemPreviewBlocks(preview)) root.append(renderPreviewBlock(block));
-    const choices = document.createElement("ol");
-    for (const choice of preview.choices || []) {
-      const row = document.createElement("li"); renderPreviewText(row, `${choice.label} ${choice.text}`); choices.append(row);
-    }
-    root.append(choices);
-  },
+  previewRegisteredItem,
   canReadSource: () => hasPermission(state.operator, "content_intake:read"),
   openPastExamVariation: async (entry) => beginPastExamVariation({
     ...entry,
@@ -174,6 +176,9 @@ const itemDb = createItemDb({
     showView("item");
     await loadItemPreview();
   },
+});
+const knowledgeMap = createKnowledgeMap({document, api, previewItem: previewRegisteredItem,
+  openItem(entry) {showView("item-db"); itemDb.openGraph(entry);},
 });
 const presetEditor = createExecutionPresetEditor({
   document, api, isAdmin: hasAdminRole, refresh: loadAdminSettings,
@@ -190,6 +195,7 @@ const UI_MODE_BY_VIEW = Object.freeze({
   "admin-settings": "engine",
   learning: "engine",
   knowledge: "engine",
+  "knowledge-quality": "engine",
   explorer: "engine",
   support: "human",
   "pdf-review": "human",
@@ -405,6 +411,8 @@ function showView(name, {history = true, replace = false, route = null} = {}) {
   if (name === "chat") generalChat.open();
   else generalChat.close();
   if (name === "item-db") itemDb.open();
+  if (name === "knowledge") knowledgeMap.open();
+  else knowledgeMap.close();
   $$(".view").forEach((element) => element.classList.toggle("active", element.dataset.view === name));
   $$(".nav-item").forEach((element) => element.classList.toggle("active", element.dataset.viewTarget === name));
   syncUiMode(name);
@@ -485,7 +493,7 @@ function loadGlobalId() {
     loadHwpxBuild();
   } else if (ANALYSIS_BATCH_PATTERN.test(value)) {
     $("#knowledge-batch-id").value = value;
-    showView("knowledge");
+    showView("knowledge-quality");
     loadKnowledgeQuality();
   } else {
     toast("지원되는 문항 제작 진행, 문항, HWPX 제작 또는 분석 작업 ID를 입력하세요.");
@@ -498,6 +506,7 @@ async function initializeSession() {
   state.operator = session.operator;
   generalChat.setOwner(session.operator.operator_id);
   itemDb.setOwner(session.operator.operator_id);
+  knowledgeMap.setOwner(session.operator.operator_id);
   $("#current-user").textContent = session.operator.display_name || session.operator.username || "운영 사용자";
   const roles = Array.isArray(session.operator.roles) ? session.operator.roles : [];
   $("#current-role").textContent = roles.map(roleLabel).join(" · ") || "운영 사용자";
@@ -2895,7 +2904,7 @@ function renderAnalysisBatches(batches) {
     actions.className = "form-actions";
     actions.append(actionButton("범위·품질 보기", () => {
       $("#knowledge-batch-id").value = batch.batch_id;
-      showView("knowledge");
+      showView("knowledge-quality");
       loadKnowledgeQuality();
     }, true));
     card.append(actions);
@@ -5463,6 +5472,7 @@ async function logout() {
   presetEditor.reset();
   generalChat.setOwner(null);
   itemDb.setOwner(null);
+  knowledgeMap.setOwner(null);
   try { await api("/logout", {method: "POST", mutation: true, body: {}}); } finally { window.location.replace("/studio/login"); }
 }
 
@@ -5479,6 +5489,7 @@ async function boot() {
   installItemPreview();
   installMockExamAssembly();
   itemDb.install();
+  knowledgeMap.install();
   installStructuredImport();
   installHwpx();
   installControlPlane();

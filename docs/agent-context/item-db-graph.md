@@ -12,6 +12,15 @@ AI는 EOM에서 생성한 문항이다. 분류에 승인 여부를 섞지 않는
 풀이보고서는 lineage를 통해 연결한다. Graph는 교과서·기출·창작·AI를 공통 개념/관계와
 출처 포인터로 잇는다. layer 구분은 분리된 독립 검색 DB를 만드는 근거가 아니다.
 
+## Map
+
+`데이터 → Map`은 기존 published Graph의 읽기 전용 인접 탐색이다.
+`knowledge_map_read.py`가 snapshot/hash와 노드·관계·출처 메타데이터를 bounded SQL로 읽고,
+`knowledge-map.js`가 표시한다. 기존 학습 범위·품질 보고서는 `knowledge-quality` view에
+보존한다. AI/창작은 origin profile 또는 정확한 과거 등록 Workflow family로 구분하며,
+worker RAG policy나 evidence receipt를 우회하지 않는다. 문항 열기는 동일 Item revision/hash의
+새로운 DB 읽기다. 상세 설계: `docs/architecture/KNOWLEDGE_MAP_READ_DESIGN.md`.
+
 ## 가져오기와 실제 그림
 
 파일 확장자보다 검증한 실제 media/container를 따른다. `.hwp`여도 내용이 HWPX면

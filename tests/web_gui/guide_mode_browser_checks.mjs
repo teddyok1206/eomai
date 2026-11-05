@@ -5,7 +5,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const names = ["index.html", "styles.css", "guide-mode.js", "guide-content.js", "eom-mark.svg"];
+const names = ["index.html", "styles.css", "knowledge-map.css", "guide-mode.js", "guide-content.js", "eom-mark.svg"];
 const assets = new Map(await Promise.all(names.map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const browser = await chromium.launch({headless: true});
 try {

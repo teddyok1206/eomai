@@ -849,6 +849,11 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       if (changed || !loaded) load(true);
       if (!$("#item-db-assembly-panel").hidden) assembly.refresh();
     },
+    openGraph(entry) {
+      activateTab("search");
+      resetDetail();
+      openGraphDetail(entry, null);
+    },
     setCurriculumUnits(units) {
       const select = $("#item-db-graph-unit");
       const selected = select.value;

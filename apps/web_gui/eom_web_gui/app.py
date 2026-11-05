@@ -69,6 +69,9 @@ from eom_web_gui.item_db_similarity_contracts import (
     ItemDbSimilarityListSubmission,
     ItemDbSimilaritySubmission,
 )
+from eom_web_gui.knowledge_map_contracts import EdgeId as MapEdgeId
+from eom_web_gui.knowledge_map_contracts import MapHash
+from eom_web_gui.knowledge_map_contracts import NodeId as MapNodeId
 from eom_web_gui.request_limits import (
     MAX_PDF_REVIEW_BODY_BYTES,
     RequestBodyLimitMiddleware,
@@ -760,6 +763,40 @@ def create_app(
                 "X-Content-Type-Options": "nosniff",
             },
         )
+
+    @app.get(f"{API_PREFIX}/knowledge-map")
+    async def knowledge_map(
+        session: Annotated[WebSession, Depends(require_admin_session)],
+        graph_snapshot_revision_id: str | None = Query(
+            default=None, pattern=r"^graphrev_[0-9a-f]{32}$"
+        ),
+        snapshot_sha256: Annotated[MapHash | None, Query()] = None,
+        query: str = Query(default="", max_length=80),
+        node_id: Annotated[MapNodeId | None, Query()] = None,
+        edge_id: Annotated[MapEdgeId | None, Query()] = None,
+    ) -> dict[str, Any]:
+        value = await actual.gateway.knowledge_map(
+            session,
+            graph_snapshot_revision_id=graph_snapshot_revision_id,
+            snapshot_sha256=snapshot_sha256,
+            query=query,
+            node_id=node_id,
+            edge_id=edge_id,
+        )
+        return value.model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/knowledge-map/items/{{revision_id}}")
+    async def knowledge_map_item(
+        session: Annotated[WebSession, Depends(require_admin_session)],
+        snapshot_sha256: Annotated[MapHash, Query()],
+        manifest_sha256: Annotated[MapHash, Query()],
+        revision_id: str = Path(pattern=r"^itemrev_[0-9a-f]{32}$"),
+        graph_snapshot_revision_id: str = Query(pattern=r"^graphrev_[0-9a-f]{32}$"),
+    ) -> dict[str, Any]:
+        value = await actual.gateway.knowledge_map_item(
+            session, revision_id, graph_snapshot_revision_id, snapshot_sha256, manifest_sha256
+        )
+        return value.model_dump(mode="json")
 
     @app.get(f"{API_PREFIX}/curriculum/editorial-outline")
     async def curriculum_editorial_outline(

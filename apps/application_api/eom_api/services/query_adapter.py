@@ -135,6 +135,7 @@ from eom_catalog_service.knowledge_graph_models import (
     KnowledgeNodeSourcePointerRecord,
     KnowledgeSnapshotAnalysisRecord,
 )
+from eom_catalog_service.knowledge_map_read import KnowledgeMapReadService
 from eom_catalog_service.legacy_assessment_models import (
     AssessmentLayoutObservationRecord,
     AssessmentSourceBundleMemberRecord,
@@ -335,6 +336,7 @@ class QueryAdapter:
         self.sessions = build_session_factory(engine)
         self.cursors = CursorCodec(cursor_key)
         self.catalog_application = catalog_application or CatalogApplicationClient()
+        self.knowledge_map = KnowledgeMapReadService(engine)
 
     def integrated_science_graph_capability(self) -> CurriculumGraphCapabilityView:
         """Verify the current Graph contains the exact reviewed curriculum hierarchy."""

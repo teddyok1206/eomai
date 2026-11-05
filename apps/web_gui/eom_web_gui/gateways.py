@@ -118,6 +118,7 @@ from eom_web_gui.item_preview_projection import (
     project_item_content,
     resolve_content_capability,
 )
+from eom_web_gui.knowledge_map_contracts import KnowledgeMapView
 from eom_web_gui.redaction import sanitize_mapping
 from eom_web_gui.reference_item_contracts import parse_reference_item_start_reply
 from eom_web_gui.sessions import ApiTokens, WebSession
@@ -536,6 +537,26 @@ class ApplicationGateway(Protocol):
     async def curriculum_editorial_outline(
         self, session: WebSession
     ) -> CurriculumEditorialOutline: ...
+
+    async def knowledge_map(
+        self,
+        session: WebSession,
+        *,
+        graph_snapshot_revision_id: str | None,
+        snapshot_sha256: str | None,
+        query: str,
+        node_id: str | None,
+        edge_id: str | None,
+    ) -> KnowledgeMapView: ...
+
+    async def knowledge_map_item(
+        self,
+        session: WebSession,
+        revision_id: str,
+        graph_snapshot_revision_id: str,
+        snapshot_sha256: str,
+        manifest_sha256: str,
+    ) -> GraphItemDbEntry: ...
 
     async def curriculum_graph_corpus_key(self, session: WebSession) -> str | None: ...
 
@@ -2093,6 +2114,56 @@ class HttpApplicationGateway:
                 and source.get("media_type") in {"image/png", "image/jpeg"}
             )
         except (KeyError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def knowledge_map(
+        self,
+        session: WebSession,
+        *,
+        graph_snapshot_revision_id: str | None,
+        snapshot_sha256: str | None,
+        query: str,
+        node_id: str | None,
+        edge_id: str | None,
+    ) -> KnowledgeMapView:
+        response = await self._authorized(
+            session,
+            "GET",
+            "/api/v1/knowledge-map",
+            params={
+                "graph_snapshot_revision_id": graph_snapshot_revision_id,
+                "snapshot_sha256": snapshot_sha256,
+                "query": query,
+                "node_id": node_id,
+                "edge_id": edge_id,
+            },
+        )
+        try:
+            return KnowledgeMapView.model_validate(self._data(response))
+        except ValueError as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def knowledge_map_item(
+        self,
+        session: WebSession,
+        revision_id: str,
+        graph_snapshot_revision_id: str,
+        snapshot_sha256: str,
+        manifest_sha256: str,
+    ) -> GraphItemDbEntry:
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/knowledge-map/items/{revision_id}",
+            params={
+                "graph_snapshot_revision_id": graph_snapshot_revision_id,
+                "snapshot_sha256": snapshot_sha256,
+                "manifest_sha256": manifest_sha256,
+            },
+        )
+        try:
+            return GraphItemDbEntry.model_validate(self._data(response))
+        except ValueError as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 
     async def curriculum_editorial_outline(self, session: WebSession) -> CurriculumEditorialOutline:

@@ -34,6 +34,12 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "knowledge-map-view-v1": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-map-view-v1.schema.json",
+            "resources/knowledge/knowledge-map-view-v1.schema.json",
+            "1.0",
+            "sha256:e841e27aa2e4eb6cc32568313fa0059a6557624e1d86b3bddf124333915af2f8",
+        ),
         "creative-learning-cohort-v2": CatalogSchemaResource(
             "schemas/external-item/creative-learning-cohort-v2.schema.json",
             "resources/external-item/creative-learning-cohort-v2.schema.json",
