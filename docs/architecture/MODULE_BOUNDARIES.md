@@ -136,3 +136,30 @@ historical admission fixture는 격리 DB에 한정되며 현재 운영 admissio
 pattern·query plan·처리량을 확인한 뒤 다룬다. 근거 없이 새 queue, 광범위 cache 또는 전체
 statement/worker timeout 변경을 추가하지 않는다. 실제 browser/Hancom/권한 실험의 opt-in
 skip과 기존 기술 acceptance를 새 source의 운영 PASS로 바꿔 보고하지 않는다.
+
+### 운영 반영 체크포인트
+
+사용자 승인 후 `4013f66b37fd7667bab6b61e0de0a1d9f6cb8cb2`를 main에 push하고
+API·Web·shared platform/runner·HWPX Manager·Catalog 설치본에 반영했다. 설치 wheel의
+실제 파일을 대조했으며 새 dependency 설치나 DB migration은 하지 않았다(`20261104_0072`).
+QUERY owner 코드는 `93705191`을 유지하고 typed configuration의 API provider source/wheel/
+code-member hash만 새 API에 맞췄다. GPU INDEX와 수치 runtime/config는 그대로이며
+동일 INDEX PID/InvocationID를 배포 전후 대조했다. 기존 Builder의 확정 출제의도 수정도 보존했다.
+
+실제 설치 API provider의 process/config/code fence, API service mount namespace/권한
+격리, HTTPS 로그인 화면·Web live/ready·미인증 session 조회의 401, dependency check와
+배포 metadata 검사를 통과했다. 실제 사용자 비밀번호를 받아 새 로그인·refresh를 수행한
+인증 smoke나 새 HWPX/검색 계산 acceptance로 확대 해석하지 않는다.
+
+창작 투입기를 멈추는 단계에서 기존 publication 종료 대기가 systemd의 3분 한도를 넘어
+timeout 종료한 이력은 보존했다. 운영 API 교체 전 유효 worker lease·비 INDEX command·
+실행 가능한 대기 command·HWPX·채팅·query/builder unit이 모두 0임을 별도로 확인했다.
+DB 상태를 보정하지 않고 같은 창작 scope/pin의 공식 service start로 원래 작업을 재개했다.
+투입기의 `close()`가 publication을 기다리는 시간과 운영 stop 한도 정렬은 후속 운영 점검
+항목이다. 무조건 graceful stop에 성공했다거나 모든 미래 중단이 해결됐다고 주장하지 않는다.
+
+정확한 설치·검증·이전 wheel/config pointer와 timeout 기록은
+`/var/lib/eom-system-review-release-20261105/`에 있고, API 배포 정본 기록은
+`/var/lib/eom-api/deployments/4013f66b37fd7667bab6b61e0de0a1d9f6cb8cb2.json`이다.
+기존 read-only observer의 배포 후 조회에서 창작 Graph 누적 806건을 확인했으며, 실행별
+`verified_count` 초기화와 정본 누적 등록 수를 혼동하지 않는다. 이 수는 그 시각의 관측이다.
