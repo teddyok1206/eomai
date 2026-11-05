@@ -1,6 +1,7 @@
 """Same bounded shortest-path ranking without materializing irrelevant final leaves."""
 
 from collections import defaultdict, deque
+from contextlib import contextmanager
 
 import pytest
 from eom_catalog_service.automatic_curriculum_alignment import (
@@ -37,9 +38,8 @@ def oracle(edges, seeds, units, policy):
     return tuple(sorted(ranked[: policy.maximum_units]))
 
 
-@pytest.mark.parametrize("version", ("1.0", "1.1", "1.2"))
-@pytest.mark.parametrize("leaves", (0, 17000))
-def test_last_hop_pruning_preserves_full_bfs_without_relaxing_policy(version, leaves):
+@contextmanager
+def graph_session(edges, seeds, units):
     engine, metadata = create_engine("sqlite+pysqlite:///:memory:"), MetaData()
     nodes = Table(
         "knowledge_nodes",
@@ -67,11 +67,6 @@ def test_last_hop_pruning_preserves_full_bfs_without_relaxing_policy(version, le
         Column("ordinal", Integer),
     )
     metadata.create_all(engine)
-    seeds = ("s_a", "s_b")
-    edges = [("s_a", "h1"), ("s_b", "h1"), ("h1", "h2"), ("h2", "unit_late"), ("s_a", "unit_near")]
-    edges += [("h2", f"dead{index:05d}") for index in range(leaves)]
-    units = {"unit_late": "currunit_" + "a" * 32, "unit_near": "currunit_" + "b" * 32}
-    policy = automatic_item_alignment_policy("integrated-science-auto-alignment/" + version)
     with engine.begin() as connection:
         connection.execute(
             nodes.insert(),
@@ -104,11 +99,53 @@ def test_last_hop_pruning_preserves_full_bfs_without_relaxing_policy(version, le
                 for index, (node, unit) in enumerate(units.items())
             ],
         )
-    with Session(engine) as session:
+    try:
+        with Session(engine) as session:
+            yield session
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.parametrize("version", ("1.0", "1.1", "1.2"))
+@pytest.mark.parametrize("leaves", (0, 17000))
+def test_last_hop_pruning_preserves_full_bfs_without_relaxing_policy(version, leaves):
+    seeds = ("s_a", "s_b")
+    edges = [("s_a", "h1"), ("s_b", "h1"), ("h1", "h2"), ("h2", "unit_late"), ("s_a", "unit_near")]
+    edges += [("h2", f"dead{index:05d}") for index in range(leaves)]
+    units = {"unit_late": "currunit_" + "a" * 32, "unit_near": "currunit_" + "b" * 32}
+    policy = automatic_item_alignment_policy("integrated-science-auto-alignment/" + version)
+    with graph_session(edges, seeds, units) as session:
         assert derive_automatic_item_curriculum_unit_ids(
             session,
             graph_snapshot_revision_id="pinned",
             evidence_node_ids=seeds,
             alignment_policy_version=policy.version,
         ) == oracle(edges, seeds, units, policy)
-    engine.dispose()
+
+
+@pytest.mark.parametrize("version", ("1.0", "1.1", "1.2"))
+@pytest.mark.parametrize("reverse", (False, True))
+def test_final_frontier_unit_does_not_reexpand_non_unit_neighbors(version, reverse):
+    # Both ends of unit/leaf edges are in depth2. The old undirected expansion
+    # adds 151,200 useless leaf/seed associations at depth3 and breaches even1.2.
+    seeds = tuple(f"s{index:02d}" for index in range(28))
+    edges = []
+    for seed in seeds:
+        hub = "hub_" + seed
+        edges.extend(((seed, hub), (hub, "unit")))
+        for index in range(200):
+            leaf = f"leaf_{seed}_{index:03d}"
+            edges.extend(((hub, leaf), ("unit", leaf)))
+    # Also retain a true3-hop unit, an inbound edge, and a cycle.
+    edges.extend((("s00", "bridge"), ("bridge", "far"), ("late_unit", "far"), ("far", "s00")))
+    if reverse:
+        edges = [(right, left) for left, right in edges]
+    units = {"unit": "currunit_" + "a" * 32, "late_unit": "currunit_" + "b" * 32}
+    policy = automatic_item_alignment_policy("integrated-science-auto-alignment/" + version)
+    with graph_session(edges, seeds, units) as session:
+        assert derive_automatic_item_curriculum_unit_ids(
+            session,
+            graph_snapshot_revision_id="pinned",
+            evidence_node_ids=seeds,
+            alignment_policy_version=policy.version,
+        ) == oracle(edges, seeds, units, policy)

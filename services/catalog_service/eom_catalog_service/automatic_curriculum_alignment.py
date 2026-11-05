@@ -11,6 +11,7 @@ from eom_identifiers import content_sha256
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.sql.elements import ColumnElement
+from sqlalchemy.sql.selectable import CompoundSelect, Select
 
 from eom_catalog_service.knowledge_graph_models import (
     CurriculumUnitRecord,
@@ -285,7 +286,8 @@ def derive_automatic_item_curriculum_unit_ids(
 
         outbound: ColumnElement[bool] = KnowledgeEdgeRecord.from_node_id.in_(frontier_node_ids)
         inbound: ColumnElement[bool] = KnowledgeEdgeRecord.to_node_id.in_(frontier_node_ids)
-        if depth == AUTOMATIC_ITEM_ALIGNMENT_MAX_DEPTH - 1:
+        final_hop = depth == AUTOMATIC_ITEM_ALIGNMENT_MAX_DEPTH - 1
+        if final_hop:
             targets = select(CurriculumUnitRecord.node_id).where(
                 CurriculumUnitRecord.graph_snapshot_revision_id == graph_snapshot_revision_id,
                 CurriculumUnitRecord.unit_level == "MINOR",
@@ -294,17 +296,35 @@ def derive_automatic_item_curriculum_unit_ids(
             # Prune before materializing associations, without relaxing the policy bound.
             outbound = outbound & KnowledgeEdgeRecord.to_node_id.in_(targets)
             inbound = inbound & KnowledgeEdgeRecord.from_node_id.in_(targets)
-        rows = tuple(
-            session.execute(
-                select(KnowledgeEdgeRecord.from_node_id, KnowledgeEdgeRecord.to_node_id)
-                .where(
+        edges = select(KnowledgeEdgeRecord.from_node_id, KnowledgeEdgeRecord.to_node_id)
+        statement: Select[tuple[str, str]] | CompoundSelect[tuple[str, str]]
+        if final_hop:
+            # Keep the accepted direction, not merely an edge with one unit endpoint.
+            # Both endpoints can be in the frontier: expanding its reverse again
+            # would count non-unit leaves that cannot contribute any final result.
+            statement = (
+                edges.where(
                     KnowledgeEdgeRecord.graph_snapshot_revision_id == graph_snapshot_revision_id,
-                    outbound | inbound,
+                    outbound,
                 )
-                .order_by(KnowledgeEdgeRecord.edge_id)
-                .limit(policy.maximum_associations + 1)
+                .union_all(
+                    select(
+                        KnowledgeEdgeRecord.to_node_id.label("from_node_id"),
+                        KnowledgeEdgeRecord.from_node_id.label("to_node_id"),
+                    ).where(
+                        KnowledgeEdgeRecord.graph_snapshot_revision_id
+                        == graph_snapshot_revision_id,
+                        inbound,
+                    )
+                )
+                .order_by("from_node_id", "to_node_id")
             )
-        )
+        else:
+            statement = edges.where(
+                KnowledgeEdgeRecord.graph_snapshot_revision_id == graph_snapshot_revision_id,
+                outbound | inbound,
+            ).order_by(KnowledgeEdgeRecord.edge_id)
+        rows = tuple(session.execute(statement.limit(policy.maximum_associations + 1)))
         if len(rows) > policy.maximum_associations:
             raise AutomaticCurriculumAlignmentError(
                 "AUTOMATIC_ALIGNMENT_NEIGHBORHOOD_TOO_LARGE",
@@ -312,10 +332,12 @@ def derive_automatic_item_curriculum_unit_ids(
             )
         next_frontier: dict[str, set[str]] = defaultdict(set)
         for from_node_id, to_node_id in rows:
-            for node_id, neighbor_id in (
-                (from_node_id, to_node_id),
-                (to_node_id, from_node_id),
-            ):
+            directions = (
+                ((from_node_id, to_node_id),)
+                if final_hop
+                else ((from_node_id, to_node_id), (to_node_id, from_node_id))
+            )
+            for node_id, neighbor_id in directions:
                 source_seeds = frontier.get(node_id)
                 if source_seeds is None:
                     continue
