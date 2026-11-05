@@ -50,6 +50,7 @@ eom-catalog-application-runner = "eom_catalog_service.application_runner:main"
 eom-science-assessment-corpus = "eom_catalog_service.science_assessment_web_cli:main"
 
 [tool.setuptools.packages.find]
+exclude = ["build", "build.*"]
 where = [
   "packages/protocol",
   "packages/identifiers",
@@ -85,6 +86,7 @@ eom_workflow = [
   "resources/document-review-presets/*.json",
 ]
 eom_catalog_contracts = [
+  "resources/material-learning/*.json",
   "resources/api/*.json",
   "resources/assessment-assembly/*.json",
   "resources/catalog-application/*.json",
