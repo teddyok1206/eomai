@@ -1,0 +1,320 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/types/1.0",
+  "title": "EOM material learning types 1.0",
+  "$defs": {
+    "artifactMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "^(?!/)(?!.*(?:^|/)\\.{1,2}(?:/|$))(?!.*//)[A-Za-z0-9._()가-힣/-]+$"
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"
+        },
+        "media_type": {
+          "type": "string",
+          "pattern": "^[a-z0-9.+-]+/[A-Za-z0-9.+-]+$"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2147483648
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256",
+        "bytes"
+      ]
+    },
+    "pageAddress": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_role": {
+          "enum": [
+            "MAIN",
+            "SOLUTIONS"
+          ]
+        },
+        "physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        }
+      },
+      "required": [
+        "source_role",
+        "physical_page"
+      ]
+    },
+    "region": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_role": {
+          "enum": [
+            "MAIN",
+            "SOLUTIONS"
+          ]
+        },
+        "physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        },
+        "bounding_box": {
+          "$ref": "eom://schemas/legacy-assessment/legacy-assessment-types/1.0#/$defs/normalizedBoundingBox"
+        }
+      },
+      "required": [
+        "source_role",
+        "physical_page",
+        "bounding_box"
+      ]
+    },
+    "discoveredUnit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "local_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 96,
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,95}$"
+        },
+        "kind": {
+          "enum": [
+            "EXPLANATION",
+            "QUESTION",
+            "SOLUTION",
+            "ANSWER_KEY"
+          ]
+        },
+        "section_path": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "minItems": 0,
+          "maxItems": 12
+        },
+        "printed_label": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "anchors": {
+          "type": "array",
+          "items": {
+            "$ref": "eom://schemas/material-learning/types/1.0#/$defs/region"
+          },
+          "minItems": 1,
+          "maxItems": 32
+        },
+        "continuation": {
+          "enum": [
+            "COMPLETE",
+            "FROM_PREVIOUS",
+            "TO_NEXT",
+            "BOTH"
+          ]
+        },
+        "related_item_labels": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100
+          },
+          "minItems": 0,
+          "maxItems": 64
+        },
+        "summary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "minItems": 0,
+          "maxItems": 16
+        }
+      },
+      "required": [
+        "local_key",
+        "kind",
+        "section_path",
+        "printed_label",
+        "anchors",
+        "continuation",
+        "related_item_labels",
+        "summary",
+        "warnings"
+      ]
+    },
+    "preparedSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source_role": {
+          "enum": [
+            "MAIN",
+            "SOLUTIONS"
+          ]
+        },
+        "actual_format": {
+          "enum": [
+            "PDF",
+            "HWP",
+            "HWPX"
+          ]
+        },
+        "original_filename": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
+        "document_id": {
+          "type": "string",
+          "pattern": "^edudoc_[0-9a-f]{32}$"
+        },
+        "document_revision_id": {
+          "type": "string",
+          "pattern": "^edudocrev_[0-9a-f]{32}$"
+        },
+        "document_manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "original": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "pdf": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "page_bundle": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "office_catalog": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "page_count": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        }
+      },
+      "required": [
+        "source_role",
+        "actual_format",
+        "original_filename",
+        "document_id",
+        "document_revision_id",
+        "document_manifest_sha256",
+        "original",
+        "pdf",
+        "page_bundle",
+        "office_catalog",
+        "page_count"
+      ]
+    },
+    "inputPage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "input_index": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "source_role": {
+          "enum": [
+            "MAIN",
+            "SOLUTIONS"
+          ]
+        },
+        "physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        },
+        "image": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "text": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "width_pixels": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        },
+        "height_pixels": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 16384
+        }
+      },
+      "required": [
+        "input_index",
+        "source_role",
+        "physical_page",
+        "image",
+        "text",
+        "width_pixels",
+        "height_pixels"
+      ]
+    }
+  }
+}

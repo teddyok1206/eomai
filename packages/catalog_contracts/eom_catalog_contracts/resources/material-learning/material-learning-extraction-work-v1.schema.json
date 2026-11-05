@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/extraction-work/1.0",
+  "title": "EOM material learning extraction-work 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-extraction-work/1.0"
+    },
+    "task_kind": {
+      "const": "EXTRACT_ITEM"
+    },
+    "material_id": {
+      "type": "string",
+      "pattern": "^material_[0-9a-f]{32}$"
+    },
+    "material_revision_id": {
+      "type": "string",
+      "pattern": "^materialrev_[0-9a-f]{32}$"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^materialtask_[0-9a-f]{32}$"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/material-learning/types/1.0#/$defs/preparedSource"
+      },
+      "minItems": 1,
+      "maxItems": 2
+    },
+    "rights_attestation": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/material-learning/types/1.0#/$defs/inputPage"
+      },
+      "minItems": 1,
+      "maxItems": 32
+    },
+    "additional_instructions": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 8000
+    },
+    "input_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "unit_key": {
+      "type": "string",
+      "pattern": "^materialunit_[0-9a-f]{32}$"
+    },
+    "question": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/discoveredUnit"
+    },
+    "solutions": {
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/material-learning/types/1.0#/$defs/discoveredUnit"
+      },
+      "minItems": 0,
+      "maxItems": 8
+    }
+  },
+  "required": [
+    "schema_version",
+    "task_kind",
+    "material_id",
+    "material_revision_id",
+    "task_id",
+    "sources",
+    "rights_attestation",
+    "pages",
+    "additional_instructions",
+    "input_sha256",
+    "unit_key",
+    "question",
+    "solutions"
+  ]
+}

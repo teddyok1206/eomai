@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/rights/1.0",
+  "title": "EOM material learning rights 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-rights/1.0"
+    },
+    "material_id": {
+      "type": "string",
+      "pattern": "^material_[0-9a-f]{32}$"
+    },
+    "material_revision_id": {
+      "type": "string",
+      "pattern": "^materialrev_[0-9a-f]{32}$"
+    },
+    "attested_by": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+    },
+    "attested_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "basis": {
+      "const": "UPLOADER_ATTESTED_INTERNAL_PROCESSING"
+    },
+    "source_hashes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^sha256:[0-9a-f]{64}$"
+      },
+      "minItems": 1,
+      "maxItems": 2
+    },
+    "permitted_uses": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "INTERNAL_ANALYSIS",
+          "ITEM_REGISTRATION",
+          "GRAPH_RETRIEVAL",
+          "LOCAL_EMBEDDING"
+        ]
+      },
+      "minItems": 4,
+      "maxItems": 4,
+      "uniqueItems": true
+    },
+    "public_redistribution_permitted": {
+      "const": false
+    },
+    "withdrawal_policy": {
+      "const": "DENY_NEW_RESOLUTION_PRESERVE_PINNED_AUDIT"
+    },
+    "attestation_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "material_id",
+    "material_revision_id",
+    "attested_by",
+    "attested_at",
+    "basis",
+    "source_hashes",
+    "permitted_uses",
+    "public_redistribution_permitted",
+    "withdrawal_policy",
+    "attestation_sha256"
+  ]
+}

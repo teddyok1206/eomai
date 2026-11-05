@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/extraction-result/1.0",
+  "title": "EOM material learning extraction-result 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-extraction-result/1.0"
+    },
+    "input_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "status": {
+      "enum": [
+        "PROPOSED",
+        "NEEDS_DECISION"
+      ]
+    },
+    "regions": {
+      "$ref": "eom://schemas/external-item/learning-result/2.0#/properties/regions"
+    },
+    "proposal": {
+      "$ref": "eom://schemas/external-item/learning-result/2.0#/properties/proposal"
+    },
+    "solution_report": {
+      "$ref": "eom://schemas/external-item/learning-result/2.0#/$defs/solutionReport"
+    },
+    "conflicts": {
+      "$ref": "eom://schemas/external-item/learning-result/2.0#/properties/conflicts"
+    },
+    "office_bindings": {
+      "anyOf": [
+        {
+          "$ref": "eom://schemas/external-item/office-visual-bindings/1.0"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "input_sha256",
+    "status",
+    "regions",
+    "proposal",
+    "solution_report",
+    "conflicts",
+    "office_bindings"
+  ]
+}

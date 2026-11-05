@@ -1,0 +1,189 @@
+# PDF와 한글 자료 통합 학습
+
+2026-11-05 UTC. 설계 D2. 초안 D0 이후 두 차례 코드 대조 설계 검토를 반영했다.
+최종 범위는 사용자의 후속 지시에 따라 **운영 배포와 실제 업로드 처리 확인까지**다.
+초기 goal 카드에 남은 배포 직전 제한은 이 후속 지시로 대체한다.
+
+## 목표와 사용자 흐름
+
+`데이터 → 자료 학습`에서 PDF/HWP/HWPX 자료를 올리면 설명 부분은 원문에 연결된
+지식으로, 문제·정답·해설은 기존 문항 단위로 구조화한다. 문항을 직접 풀어 확인한
+공개 풀이보고서·출제 개념·관계·주의사항을 남기고, 기존 공통 Graph와 증분 임베딩에
+연결한다. 출처와 사람 승인 여부는 별개다. 배치·내부 key는 기본 화면에서 숨긴다.
+
+사용자는 자료 제목·종류·출처 설명과 처리 권한 확인을 입력한다. 선택적으로 별도
+해설 파일과 교과/단원 힌트를 제공한다. 모르는 발행 정보·기출 회차는 만들어 채우지
+않는다. 업로드는 빨리 접수하고, 변환·렌더링·AI 분석은 백그라운드에서 진행한다.
+큰 책을 HTTP 요청 하나 안에서 전부 처리하지 않는다.
+
+```text
+원본 업로드와 권한 확인
+  → 실제 형식 검사 및 원본 Artifact 보존
+  → PDF 관찰 입력과 한글 본문 개체 준비
+  → 작은 페이지 범위별 구성 발견 및 coverage 확인
+  ├─ 설명·정의·표·탐구 → 기존 문서 지식 분석 → accepted analysis
+  └─ 문제·정답·해설 대응 → 문항 추출·독립 풀이 → 기존 Item Registry
+                                                → 공개 풀이·accepted analysis
+  → 기존 공통 Graph의 안전한 증분 등록
+  → 기존 GPU INDEX owner가 준비된 문항을 증분 반영
+  → DB·Map·검색에서 조회
+```
+
+한 번에 학습 AI 작업 하나만 실행한다. 기존 Orchestrator의 실제 슬롯 claim/lease를
+사용하고, 준비/저장 중에는 슬롯을 쥐고 있지 않는다. 고정된 로그인 계정이나 새 worker
+사용자를 만들지 않는다. 실행은 공개된 정확한 preset/definition을 pin한다.
+
+권리 확인은 실제 업로더와 source hash에 묶고, 기존 교과서의 구매·협상 사실을 가정하지
+않는다. 원본·분석 PDF·전체 페이지·picture catalog는 자료별로 한 번 보관하며 문항/단원은
+같은 포인터를 사용한다. 설명과 문제가 혼재한 페이지가 두 채널의 evidence가 되는 것은
+허용하되 같은 문항을 두 번 정본으로 만들지 않는다.
+
+## 현재 코드에서 확인한 재사용 경계
+
+| 책임 | 기존 소유자와 재사용 범위 |
+| --- | --- |
+| 안전한 원본·Artifact | Catalog Intake와 Orchestrator의 file-set commit |
+| PDF/Office 관찰 입력 | `pdf_document_review_intake.py`, `office_document_review_intake.py`, 기존 bounded converter/Poppler |
+| 한글 본문 그림 | `office_picture_use_extraction.py`와 publication: 실제 picture use, viewport, 회전, label과 순서 |
+| 설명 문서 등록 | `educational_document_service.py`의 immutable document/revision·분석 bundle |
+| 지식 분석 | `knowledge_analysis_service.py`, batch service, versioned knowledge-analysis workflow |
+| 문항 추출·원본 대조 | legacy extraction과 external-item learning의 원본 anchor/구조 검증 규칙 |
+| 일반 문항 구조 | `AssessmentItemContent/1.0`: 객관식과 서답형. 생성 문항의 5지선다/고정 템플릿을 강제하지 않음 |
+| 공개 풀이·Graph | 기존 accepted analysis, automatic/shared Graph publication, 공통 개념/출처 연결 |
+| 검색 | 기존 증분 INDEX/QUERY와 공통 공개 풀이 projection. 별도 벡터 DB/검색 엔진 없음 |
+| 실행·복구 | 기존 Workflow/Job/plan/worker lease와 Artifact commit/replay |
+
+등록 계약은 REFERENCE_BOOK을 표현하지만 실제 문서 서비스는 TEXTBOOK만 허용한다.
+external-item 학습은 Notion source/revision/5자리 번호와 2·3교에 결합돼 있다.
+legacy extraction은 reviewed exam bundle/occurrence를 전제로 한다. 이 제약을
+무시하거나 자료를 가짜 교과서·가짜 기출·가짜 엑셀 행으로 만들지 않는다.
+공통 인프라는 재사용하되 혼합 업로드에 필요한 입력·발견 계약을 additive하게 만든다.
+
+## 책임과 정본
+
+1. **시스템 경계:** Web/BFF는 파일 스트리밍·표시, API는 실제 사용자 인증·멱등 접수,
+   Catalog application은 자료·단위·자식 Workflow 연결, Orchestrator는 staged 입력,
+   worker 실행/결과 검증/Artifact commit을 소유한다. worker끼리 통신하지 않는다.
+2. **정본:** 업로드 원본 Artifact와 권리 확인, 불변 자료 revision, 발견/단위 계획,
+   기존 Item/Document/accepted analysis가 정본이다. OCR/페이지 PNG/Office 변환은
+   원본 revision/hash와 도구 identity를 pin한 파생물이다.
+3. **논리·버전:** 자료 logical ID와 source revision을 분리한다. 서로 다른 편집본,
+   문제집 장별 같은 `1번`, 별도 해설의 번호를 하나의 전역 번호로 합치지 않는다.
+   단위 key는 source revision·장/구간·원문 locator를 포함한다.
+4. **포인터:** source, rights, page/picture catalog, extraction plan, Workflow/Job,
+   accepted result, Item/Document, Graph/index의 ID/revision/hash를 유지한다.
+   미디어·schema·권한·lifecycle·실제 hash는 해당 resolver/materialization에서 검증한다.
+5. **주요 접근:** 자료 ID 조회, 소유자별 최근 목록, 자료 내 ordered 단위, 상태별
+   다음 작업, 중복 key/원본 hash 조회, parent-child provenance, Graph 인접 연결이다.
+6. **자료구조·인덱스:** 기존 Artifact/Workflow queue를 재사용한다. 새로운 영속 자료
+   진행 기록은 작은 pointer와 indexed 상태/순서만 저장한다. unique source/단위/key,
+   B-tree FIFO/claim 및 append-only event sequence를 사용한다. 큰 본문·그림·보고서를
+   DB나 다중 서비스 dict에 복제하지 않는다.
+7. **규모:** 긴 책도 bounded page window/한 문항 단위로 처리한다. source/group join은
+   map/set, dependency는 adjacency, canonical 계획은 ordered immutable manifest다.
+   1,000쪽·수천 문항에서 전체 결과를 매 poll마다 읽거나 N+1 조회하지 않는다.
+8. **동시성:** 자료 owner는 작업 하나를 원자적으로 claim하고 긴 파일/모델 작업 동안
+   row lock을 잡지 않는다. 자식 Workflow는 기존 멱등 submission을 사용한다.
+   Graph publication은 기존 공통 writer/CAS를 사용해 현재 창작 등록과 합쳐진다.
+9. **의존 방향:** interfaces → application → contracts/domain; 파일/DB/Codex/변환기는
+   기존 infrastructure adapter다. 도메인이 API·NAS·SQLAlchemy에 의존하지 않는다.
+10. **실패·재개:** 같은 요청의 timeout 후 새 key로 중복 실행하지 않는다. 원본/계획과
+    자식 Workflow/Artifact를 조회해 복구한다. 실패 이력과 이전 attempt는 보존하며,
+    재시도는 공식 successor/attempt다. 일부 단위의 문제 때문에 독립 단위를 멈추지 않는다.
+11. **단순 대안:** 텍스트 전체를 Codex에 한 번에 보내기, 교과서 결과로 모든 문제를
+    대체하기, 각 기능에 별도 파일/queue/Graph를 복제하는 방식은 coverage·시각·풀이·
+    재개·출처를 잃는다. 자료 조정 use case와 필요한 successor만 기존 엔진에 더한다.
+
+## 내용과 문항의 구분
+
+- 구성 발견은 페이지마다 설명/문제/해설/정답표/비내용 및 이어지는 부분을 명시한다.
+  한 페이지의 여러 역할과 페이지를 넘는 문제, 책 끝의 해설, 별도 해설 파일을 허용한다.
+- 모든 페이지가 처리·비내용·불명확 중 하나로 집계돼야 하며 문제/해설을 조용히 누락하지
+  않는다. 번호만 같다는 이유로 장이 다른 문제와 해설을 연결하지 않는다.
+- 원문 오류·정답 충돌은 내용을 고쳐 숨기지 않고 보고서에 남긴다. source-derived와
+  model-solved 정답/풀이를 구분하고, 모델 추론을 원문 인용으로 표시하지 않는다.
+- 불명확한 문제/해설 대응, 읽을 수 없는 원문, 해결하지 못한 그림은 단위별로 보인다.
+  원문을 만들어 채우거나 옆 문항 그림을 가져오지 않는다.
+- 한글은 본문 picture use를 가져온다. 우측 참고 기출/해설에만 쓰인 개체를 제외하되,
+  본문과 공유한 binary member 전체를 삭제하지 않는다. 표·수식은 native로 보존한다.
+- 교과서/참고 내용과 기출/외부 창작/시스템 AI의 provenance를 유지한다. 사설 모의고사를
+  교육청/평가원 기출로 분류하지 않는다. 자료명·폴더명은 확인된 기관/회차를 대체하지 않는다.
+- 참고서는 현행 source-class mapping과 권리·retrieval policy를 확인한다. Graph 등록을
+  특정 worker의 근거 사용 권한이나 사람의 교육 품질 승인과 동일시하지 않는다.
+
+## 구현 및 완료 순서
+
+| 단계 | 산출물과 종료 조건 | 상태 |
+| --- | --- | --- |
+| D0 | 현행 경계와 초안 | 작성 |
+| R1 | 입력/내용·문항 분리/시각·해설 대응/권리·출처 설계 검토 | D1 반영 |
+| R2 | 재사용 경계/상태·동시성/복구·확장/실제 배포·검증 설계 검토 | D2 반영 |
+| P1 | JSON Schema 2020-12·Pydantic·pointer·상태/단위 계획 | 기본 입력/발견/문항 추출 계약과 순수 계획 구현·집중 회귀 검증. 문서 등록/공개 진행 계약은 후속 |
+| P2 | 안전한 업로드/준비와 기존 converter·원본 그림 연결 | 미착수 |
+| P3 | 1슬롯 발견/문항/내용 분석·등록·Graph·증분 INDEX 연결 | 미착수 |
+| P4 | 자료 학습 GUI와 최근 작업·진행·예외·재개/조회 | 미착수 |
+| P5 | unit/schema/security·disposable DB 동시성/중단·browser·wheel 검사 | 미착수 |
+| P6 | 호환 배포·bounded 실제 업로드·Item/Graph/검색 연결·재조회 | 미착수 |
+
+R1과 R2 완료 전에 실행 계약/worker behavior/DB 변경 구현을 시작하지 않는다.
+설계 검토의 발견·변경·잔여 조건은 별도 review 기록에 남긴다. 운영 배포는 기존 API
+provider pin과 QUERY/Catalog/runtime 호환 절차를 따르며 INDEX 수치 환경은 보존한다.
+현재 4슬롯 원래 작업을 강제 종료하지 않는다. 새 자료 학습은 한 번에 한 AI 작업만
+진행하며 기존 전체 동시 실행 상한을 공유한다. 6개 슬롯이 구성돼 있어도 현재 정책의
+전체 동시 실행 상한은 4다. 별도 근거 없이 4+1 실행을 약속하거나 상한을 늘리지 않는다.
+용량 대기는 정상 상태이며 기존 작업이 자연스럽게 자리를 비우면 실행한다.
+
+## D2 구현 경계와 복구 결정
+
+- **계약:** `material-learning/1.0` 계열에 업로드 의도, 원본/분석 입력 포인터,
+  권리 확인, 페이지별 발견 계획, 단위별 추출 입력/결과와 공개 진행 상태를 정의한다.
+  발견과 문항 추출은 서로 다른 task kind다. 기존 Notion·기출 요청은 변경하지 않는다.
+- **문서:** 기존 EducationalDocument owner에 일반 자료 등록을 additive하게 추가한다.
+  기존 TEXTBOOK 전용 bundle/rights bytes를 새 의미로 쓰지 않는다. 일반 page bundle과
+  업로더 권리 확인을 참조하는 source successor만 추가한다. 모르는 출판사·판·교육과정
+  권수는 null/미확인 값이며 구매·협상 사실을 만들어 넣지 않는다.
+- **작업:** 기존 Workflow/Orchestrator의 KNOWLEDGE_ANALYSIS workload와 support role을
+  사용한다. 새 task 요청은 자료 revision, 입력 Artifact와 정확한 원문 범위를 pin한다.
+  새 결과를 받으면 같은 자료 owner가 기존 문서 지식 분석 또는 Item 등록·공개 풀이
+  use case를 호출한다. 새 queue framework, worker role, 로그인 복제는 만들지 않는다.
+- **영속성:** 자료 접수/불변 revision, ordered 단위와 child 실행 포인터, append-only
+  상태 이벤트만 저장한다. 파일과 긴 결과는 Artifact다. 원본 hash만 같은 다른 사용자의
+  자료를 권한 확인 없이 재사용하지 않으며 멱등 key는 실제 actor와 요청 hash에 묶는다.
+- **부분 완료:** `PREPARING → DISCOVERING → PROCESSING → COMPLETED`를 전체 경로로,
+  단위는 준비/실행/등록/Graph/임베딩의 별도 상태로 기록한다. 명시적 예외가 남으면
+  `COMPLETED_WITH_EXCEPTIONS`다. 학습 슬롯 대기와 임베딩 대기를 실패로 취급하지 않는다.
+- **재시도:** child 제출 전 안정된 key를 저장하고 timeout 뒤 같은 identity를 조회한다.
+  실패 실행은 그대로 두고 retry attempt만 새로 만든다. Registry 성공 직후 중단돼도
+  같은 registration key와 정확한 원본/결과 hash를 대조해 기존 Item을 이어받는다.
+  Graph CAS 충돌은 publication만 다시 시도하며 Codex 풀이를 재생성하지 않는다.
+- **출처:** ItemOrigin의 DOCUMENT_REVISION derivation을 재사용할 수 있다. 자료-단위
+  포인터 관계는 새 학습 owner가 보관하되 출처 조직·기출 회차를 추정해 발급하지 않는다.
+  새 내부 권리 정책은 실제 권리 확인에서 만든다. imported provenance와 원문 anchor를
+  유지하며 모델 풀이·경고는 원문 정답과 구분한다.
+- **조회:** 현행 창작 DB 목록은 Notion 행을 전제로 하므로 그 행을 위조하지 않는다.
+  자료에서 등록한 Item을 보여주는 additive 조회 projection을 기존 DB 창작 목록에
+  연결한다. 기존 원본의 메타데이터/선택형 필터는 유지하고, 새 자료명·단위·원문 위치와
+  풀이/Graph/검색 준비 상태를 추가한다. AI 생성 분류로 섞지 않는다.
+- **Graph/INDEX:** 문서 accepted analysis는 기존 공통 Graph publication, Item은 기존
+  automatic Item publication을 사용한다. 출처 정책은 별도 적용한다. Graph 등록 후
+  기존 공통 풀이 projection으로 증분 INDEX에 넘긴다. 전체 기출 INDEX 완료를 기다리지
+  않으며 `GRAPH_READY`와 `EMBEDDING_PENDING/READY`를 구분해 표시한다.
+- **인증/업로드:** 현재 자료 학습 권한을 유지하고 실제 호출자를 검증한다. 짧은 파일
+  접수 이후 변환/모델은 background owner가 담당한다. 브라우저 세션 만료가 접수된
+  작업을 지우지 않는다. 재접속 조회는 현재 권한을 다시 확인하며 관리자 사칭이나
+  worker 권한 부여로 해결하지 않는다.
+- **검증/배포:** 먼저 schema/model, deterministic 계획·포인터·매칭, 격리 worker,
+  disposable PostgreSQL 경합/중단/재전송, 브라우저와 wheel을 검증한다. 이후 실제
+  호환 API/platform/Catalog/QUERY/Web release set을 배포하고 작은 혼합 자료로
+  업로드→Item/내용→Graph→증분 임베딩 handoff와 같은 요청 재조회를 확인한다.
+  현행 INDEX 수치 runtime과 실행 identity는 유지한다. 실제 새 자료 모델 실행은
+  이번 사용자가 승인한 운영 완료 범위 안에서 제한된 검증 자료로 수행한다.
+
+## 필요한 검증
+
+같은 파일·요청 재전송, 이름/확장자와 실제 형식 차이, PDF/HWP/HWPX, native 그림·표·수식,
+한 페이지 복수 문항/다중 페이지 문항, 장별 중복 번호, 별도/책 끝 해설, 설명 전용/문항 전용/
+혼합 자료, 해설 없는 문제, 읽기 불가/원문 오류, 권한 철회·hash 변경, claim 충돌·만료,
+업로드/모델/Artifact/Item/Graph 경계별 중단, 구형 Workflow/계약 회귀를 검사한다.
+운영 DB에 mutating pytest를 실행하지 않는다. 실제 canary는 제한된 검증 자료와 공식
+사용자 권한으로 실행하고, 전체 책 재처리나 기존 정본/실패 이력 삭제로 검증하지 않는다.

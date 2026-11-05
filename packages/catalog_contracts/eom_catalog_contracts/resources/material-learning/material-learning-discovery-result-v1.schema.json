@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/discovery-result/1.0",
+  "title": "EOM material learning discovery-result 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-discovery-result/1.0"
+    },
+    "input_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "coverage": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source_role": {
+            "enum": [
+              "MAIN",
+              "SOLUTIONS"
+            ]
+          },
+          "physical_page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000
+          },
+          "roles": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "EXPLANATION",
+                "QUESTION",
+                "SOLUTION",
+                "ANSWER_KEY",
+                "NON_CONTENT",
+                "UNREADABLE"
+              ]
+            },
+            "minItems": 1,
+            "maxItems": 6
+          },
+          "note": {
+            "type": "string",
+            "minLength": 0,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "source_role",
+          "physical_page",
+          "roles",
+          "note"
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 32
+    },
+    "units": {
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/material-learning/types/1.0#/$defs/discoveredUnit"
+      },
+      "minItems": 0,
+      "maxItems": 128
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2000
+      },
+      "minItems": 0,
+      "maxItems": 32
+    }
+  },
+  "required": [
+    "schema_version",
+    "input_sha256",
+    "coverage",
+    "units",
+    "warnings"
+  ]
+}

@@ -120,17 +120,14 @@ class ExternalItemLearningProposalV2(FrozenModel):
         return self
 
 
-class ExternalItemLearningBodyV2(FrozenModel):
-    """Untrusted worker body, validated before the owner stamps canonical storage."""
+class SourceItemLearningObservation(FrozenModel):
+    """Source draft and independent public solution, without archive identity.
 
-    schema_version: Literal["external-item-learning-result/2.0"] = (
-        "external-item-learning-result/2.0"
-    )
-    result_id: str = Field(pattern=r"^extlearnresult_[0-9a-f]{32}$")
-    input_sha256: Sha256
-    source_id: str = Field(pattern=r"^extitem_[0-9a-f]{32}$")
-    source_revision_id: str = Field(pattern=r"^extitemrev_[0-9a-f]{32}$")
-    external_number: str = Field(pattern=r"^[0-9]{5}$")
+    Both archive and uploaded-material learning use these same closure rules.
+    A source-specific wrapper supplies identity; no synthetic Notion row or
+    five-digit number is needed to validate a general document's Item.
+    """
+
     status: Literal["PROPOSED", "NEEDS_DECISION"]
     regions: tuple[ExternalItemLearningRegion, ...] = Field(min_length=1, max_length=64)
     proposal: ExternalItemLearningProposalV2 | None
@@ -229,6 +226,19 @@ class ExternalItemLearningBodyV2(FrozenModel):
             and editorial == independent
         ):
             raise ValueError("claimed source disagreement actually matches")
+
+
+class ExternalItemLearningBodyV2(SourceItemLearningObservation):
+    """The historical archive envelope keeps its exact closed wire fields."""
+
+    schema_version: Literal["external-item-learning-result/2.0"] = (
+        "external-item-learning-result/2.0"
+    )
+    result_id: str = Field(pattern=r"^extlearnresult_[0-9a-f]{32}$")
+    input_sha256: Sha256
+    source_id: str = Field(pattern=r"^extitem_[0-9a-f]{32}$")
+    source_revision_id: str = Field(pattern=r"^extitemrev_[0-9a-f]{32}$")
+    external_number: str = Field(pattern=r"^[0-9]{5}$")
 
 
 class ExternalItemLearningResultV2(ExternalItemLearningBodyV2):

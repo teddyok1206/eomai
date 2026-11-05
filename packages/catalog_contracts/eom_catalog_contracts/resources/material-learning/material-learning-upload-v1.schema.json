@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/upload/1.0",
+  "title": "EOM material learning upload 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-upload/1.0"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "material_kind": {
+      "enum": [
+        "TEXTBOOK",
+        "REFERENCE_BOOK",
+        "WORKBOOK",
+        "MOCK_EXAM",
+        "OTHER"
+      ]
+    },
+    "source_description": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "additional_instructions": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 8000
+    },
+    "curriculum_unit_hints": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 160
+      },
+      "minItems": 0,
+      "maxItems": 16,
+      "uniqueItems": true
+    },
+    "rights_confirmed": {
+      "const": true
+    }
+  },
+  "required": [
+    "schema_version",
+    "title",
+    "material_kind",
+    "source_description",
+    "additional_instructions",
+    "curriculum_unit_hints",
+    "rights_confirmed"
+  ]
+}
