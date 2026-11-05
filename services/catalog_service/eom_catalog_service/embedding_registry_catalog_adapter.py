@@ -603,14 +603,14 @@ class CatalogEmbeddingRegistryVerifier:
             or (window is not None and artifact_reader is not window.reader)
         ):
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_AUTHORITY_UNAVAILABLE")
+        public_root_reader = isinstance(intent.namespace, PublicSolutionIndexNamespace)
         reader = (
             window.reader
             if window is not None
             else artifact_reader
             if artifact_reader is not None
             else PinnedArtifactReadContext.for_session(session, self.settings)
-            if isinstance(intent.namespace, PublicSolutionIndexNamespace)
-            and type(caller) is EmbeddingRegistryCaller
+            if public_root_reader
             else PinnedArtifactReadContext(session, self.settings)
         )
         reader.require_session(session)
@@ -627,7 +627,7 @@ class CatalogEmbeddingRegistryVerifier:
             else window.source_revision_ids,
             population_read_set=population_read_set,
         )
-        if artifact_reader is not None and window is None:
+        if window is None and (artifact_reader is not None or public_root_reader):
             # Immutable bytes may be reused; current Artifact/producer approval may not.
             # This is three indexed metadata reads, not another physical materialization.
             reader.revalidate_provenance()

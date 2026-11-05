@@ -475,7 +475,7 @@ def test_candidate_membership_inner_node_join_on_fresh_graph(pool_database):
         "knowledge_snapshot_analyses",
     ):
         pool_database.execute(text("ANALYZE pg_temp." + table))
-    for count in (0, 8):
+    for count in (0, 4, 8):
         selected = replace(
             scope,
             source_revision_ids=tuple(
@@ -510,7 +510,7 @@ def test_candidate_membership_inner_node_join_on_fresh_graph(pool_database):
             assert plan["Plan"]["Actual Rows"] == (count or 520)
             assert len(pointer_scans) == len(key_ctes) == 1
             assert pointer_scans[0]["Actual Loops"] == key_ctes[0]["Actual Loops"] == 1
-            assert key_ctes[0]["Actual Rows"] == 520 * 20
+            assert key_ctes[0]["Actual Rows"] == (count or 520) * 20
             assert plan["Execution Time"] < 10000
 
 

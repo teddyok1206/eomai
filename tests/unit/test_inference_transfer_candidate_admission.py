@@ -154,7 +154,12 @@ def test_exact_revision_selection_stays_in_official_prelimit_predicates():
         statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
     )
     assert "knowledge_snapshot_analyses.source_revision_id IN ('" + selected[0] + "')" in sql
-    assert sql.count("knowledge_snapshot_analyses.source_revision_id IN") == 1
+    assert sql.count("knowledge_snapshot_analyses.source_revision_id IN") == 2
+    assert "selected_source_analyses AS MATERIALIZED" in sql
+    assert (
+        "JOIN selected_source_analyses ON selected_source_analyses.analysis_run_id = "
+        "knowledge_node_source_pointers.analysis_run_id"
+    ) in sql
     assert sql.index("knowledge_snapshot_analyses.source_revision_id IN") < sql.index("LIMIT")
     assert "knowledge_nodes.answer_bearing IS false" in sql
     assert "items.lifecycle_state = 'ACTIVE'" in sql

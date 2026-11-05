@@ -312,6 +312,68 @@ def test_actual_public_index_and_shared_numeric_row_keep_distinct_source_proofs(
     assert observed.bindings[0].source != observed.bindings[1].source
 
 
+@pytest.mark.parametrize("fault", (None, "revoked", "tamper"))
+def test_service_public_root_reuses_bytes_but_not_source_or_provenance_checks(
+    public_read, monkeypatch, fault
+):
+    from eom_catalog_contracts.local_indexing_policy import LocalIndexingAccessPolicy
+    from eom_catalog_service.embedding_registry_ports import (
+        EmbeddingRegistryLookup,
+        EmbeddingRegistryServiceCaller,
+    )
+    from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
+        InferenceTransferSessionCapturePhase,
+    )
+    from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactResolutionError
+
+    from tests.unit.test_local_indexing_policy_contracts import policy_document
+
+    value = public_read
+    caller = EmbeddingRegistryServiceCaller(
+        LocalIndexingAccessPolicy.model_validate(policy_document()).service
+    )
+    configuration = value.verifier.configuration
+    lookup = EmbeddingRegistryLookup(
+        configuration.corpus_id,
+        configuration.namespace,
+        value.original_request.graph_snapshot,
+        value.original_request.policy_revision_id,
+        value.original_request.policy_sha256,
+    )
+    # This seam isolates reader lifetime. Actual service authentication/source
+    # admission is covered separately; the reader never supplies that authority.
+    authority = Mock(return_value=object())
+    monkeypatch.setattr(value.verifier, "_capture_source", authority)
+    phase = InferenceTransferSessionCapturePhase.AUTHORIZE_SCOPE
+    first, _ = value.verifier._capture(value.session, caller, lookup, phase)
+    observed = value.verifier._read_index(first, value.index_member)
+    second, _ = value.verifier._capture(value.session, caller, lookup, phase)
+    assert first is second
+    assert value.verifier._read_index(second, value.index_member) is observed
+    assert authority.call_count == 2
+    if fault == "revoked":
+        value.session.get(ArtifactRecord, value.index_member.artifact_id).approved = False
+        with pytest.raises(PinnedArtifactResolutionError):
+            value.verifier._capture(value.session, caller, lookup, phase)
+        assert authority.call_count == 3
+    elif fault == "tamper":
+        (
+            value.root
+            / value.index_member.artifact_id
+            / value.index_member.artifact_revision_id
+            / value.index_member.member_path
+        ).write_bytes(b"changed")
+        # Same-root reuse retains the already hash-validated immutable bytes,
+        # not the subsequently corrupted file. A new root must reopen/reject it.
+        assert value.verifier._read_index(second, value.index_member) is observed
+        value.session.root.is_active = False
+        value.session.root = SimpleNamespace(is_active=True)
+        fresh, _ = value.verifier._capture(value.session, caller, lookup, phase)
+        assert fresh is not second
+        with pytest.raises(PinnedArtifactResolutionError):
+            value.verifier._read_index(fresh, value.index_member)
+
+
 @pytest.mark.parametrize("fault", ("tamper", "revoked", "late_scope"))
 def test_public_document_window_retains_file_lifecycle_and_fresh_scope_fences(
     public_read, monkeypatch, fault

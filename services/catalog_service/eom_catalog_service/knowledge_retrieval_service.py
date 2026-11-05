@@ -1652,6 +1652,23 @@ class KnowledgeRetrievalApplicationService:
             pointer_nodes = pointer_nodes.where(pointer.source_class == "PAST_EXAM")
         if scope.analysis_run_ids:
             pointer_nodes = pointer_nodes.where(pointer.analysis_run_id.in_(scope.analysis_run_ids))
+        if scope.source_revision_ids:
+            # Source validation repeatedly selects a few revisions, not the whole
+            # Graph. Materialize their exact run keys once before touching pointer
+            # rows; a correlated EXISTS can otherwise rescan them per source.
+            selected_runs = (
+                select(association.analysis_run_id)
+                .where(
+                    association.graph_snapshot_revision_id == snapshot_id,
+                    association.source_kind == "APPROVED_ITEM_REVISION",
+                    association.source_revision_id.in_(scope.source_revision_ids),
+                )
+                .cte("selected_source_analyses")
+                .prefix_with("MATERIALIZED", dialect="postgresql")
+            )
+            pointer_nodes = pointer_nodes.join(
+                selected_runs, selected_runs.c.analysis_run_id == pointer.analysis_run_id
+            )
         # Fresh Graph estimates can choose a Graph-only node scan for every
         # pointer. Materialize the exact distinct keys before the two-column
         # node join; anchor duplicates cannot change source existence.

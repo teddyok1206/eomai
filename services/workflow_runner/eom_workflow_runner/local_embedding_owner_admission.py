@@ -329,7 +329,7 @@ class CatalogLocalEmbeddingOwnerAdmission:
         # Current read policy must admit the scope before even metadata-only
         # plan bytes are dereferenced. This public phase performs no source IO.
         self.catalog.authorize_scope(session, caller, query)
-        reader = PinnedArtifactReadContext(session, self.settings)
+        reader = PinnedArtifactReadContext.for_session(session, self.settings)
         reader.prefetch(
             tuple(
                 (pointer.artifact_id, pointer.artifact_revision_id)
