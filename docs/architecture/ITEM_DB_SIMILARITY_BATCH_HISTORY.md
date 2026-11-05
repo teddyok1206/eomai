@@ -11,6 +11,8 @@
 - 포인터: namespace/model space/recipe/partition은 기존 설정 그대로다. 실제 파일·schema·
   hash·현재 권한/승인·source membership은 기존 Catalog 검증을 모두 유지한다. CPU/GPU의
   vector를 서로 섞거나 검색 성공을 위해 Graph/hash 검사를 느슨하게 하지 않는다.
+  장치 pair 검증은 같은 Python manifest 모델이 지원하는 4.0/5.0을 실제 `schema_version`으로
+  구별한다. 모델 클래스 이름만 보고 5.0을 4.0으로 오인하지 않으며 잘못 붙은 schema는 계속 거부한다.
 - 접근/구조: namespace UNIQUE lookup, `(index_id, revision_number)`의 정렬된 역사와
   Graph/policy index join, exact revision 2개 batch read를 쓴다. 같은 head scope는 즉시 재사용한다.
   metadata 조회는 revision 수에 선형/인덱스 기반이며 후보 문항 전체나 vector를 복사하지 않는다.

@@ -73,9 +73,13 @@
         "services/workflow_runner/eom_workflow_runner/local_indexing_routed_namespace.py",
         "services/workflow_runner/eom_workflow_runner/reference_query_prepare_application.py",
         "services/catalog_service/eom_catalog_service/public_solution_source_capture.py",
+        "services/catalog_service/eom_catalog_service/embedding_registry_repository.py",
+        "services/catalog_service/eom_catalog_service/item_db_similarity_selection.py",
+        "services/catalog_service/eom_catalog_service/public_solution_similarity_read.py",
+        "services/catalog_service/eom_catalog_service/embedding_device_index_pair.py",
         "services/catalog_service/eom_catalog_service/embedding_registry_models.py"
       ],
-      "test_paths": ["tests/api/test_item_db_similarity_searches.py", "tests/unit/test_native_office_public_embedding.py", "tests/unit/test_background_resource_recovery.py"],
+      "test_paths": ["tests/api/test_item_db_similarity_searches.py", "tests/unit/test_public_index_scope_selection.py", "tests/unit/test_embedding_device_index_pair.py", "tests/integration/test_public_solution_embedding_registry.py", "tests/unit/test_native_office_public_embedding.py", "tests/unit/test_background_resource_recovery.py"],
       "reference_paths": [
         "docs/architecture/ITEM_INFERENCE_TRANSFER_DESIGN_ORIGINAL.md",
         "docs/architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md",

@@ -18,6 +18,7 @@ from eom_catalog_contracts.mixed_embedding_index import (
     MixedEmbeddingIndexManifest,
 )
 from eom_catalog_contracts.public_solution_embedding_index import (
+    NATIVE_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
     PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
     PublicSolutionEmbeddingIndex,
 )
@@ -101,7 +102,11 @@ def validate_resolved_embedding_index(
     except (ValueError, TypeError, AttributeError, SchemaError):
         raise EmbeddingDeviceIndexPairError("EMBEDDING_DEVICE_INDEX_INVALID") from None
     if isinstance(checked, PublicSolutionEmbeddingIndexV4):
-        expected_schema = REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF
+        expected_schema = (
+            NATIVE_PUBLIC_SOLUTION_INDEX_SCHEMA_REF
+            if checked.schema_version == "embedding-index-manifest/5.0"
+            else REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF
+        )
     elif isinstance(checked, PublicSolutionEmbeddingIndex):
         expected_schema = PUBLIC_SOLUTION_INDEX_SCHEMA_REF
     elif isinstance(checked, MixedEmbeddingIndexManifest):

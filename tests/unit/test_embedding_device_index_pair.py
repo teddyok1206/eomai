@@ -18,11 +18,14 @@ from eom_catalog_contracts.mixed_embedding_index import (
     MixedEmbeddingIndexManifest,
 )
 from eom_catalog_contracts.public_solution_embedding_index import (
+    NATIVE_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
     PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
     PublicSolutionEmbeddingIndex,
 )
+from eom_catalog_contracts.registered_public_solution_index import PublicSolutionEmbeddingIndexV4
 from eom_catalog_service.embedding_device_index_pair import (
     EmbeddingDeviceIndexPairError,
+    choose_public_solution_device_indexes,
     pair_embedding_device_indexes,
 )
 from eom_identifiers import content_sha256
@@ -103,6 +106,50 @@ def public_index(device):
         sha256=content_sha256(index.model_dump(mode="json")),
     )
     return pointer, index
+
+
+@pytest.mark.parametrize("version", ("4.0", "5.0"))
+@pytest.mark.parametrize(
+    "pair", (pair_embedding_device_indexes, choose_public_solution_device_indexes)
+)
+def test_public_device_pair_uses_the_exact_supported_document_version(version, pair):
+    values = []
+    for device in ("CPU", "CUDA"):
+        pointer, original = public_index(device)
+        body = original.model_dump(mode="json") | {
+            "schema_version": "embedding-index-manifest/" + version
+        }
+        index = PublicSolutionEmbeddingIndexV4.model_validate(seal(body, "index_sha256"))
+        member = pointer.model_copy(
+            update={
+                "schema_ref": "eom://schemas/knowledge/embedding-index-manifest/" + version,
+                "sha256": content_sha256(index.model_dump(mode="json")),
+            }
+        )
+        values.append((member, index))
+    result = pair(
+        cpu_member=values[0][0],
+        cpu_index=values[0][1],
+        cuda_member=values[1][0],
+        cuda_index=values[1][1],
+    )
+    assert (
+        result.cpu.manifest.schema_ref
+        == result.cuda.manifest.schema_ref
+        == "eom://schemas/knowledge/embedding-index-manifest/" + version
+    )
+    if version == "5.0":
+        assert result.cpu.manifest.schema_ref == NATIVE_PUBLIC_SOLUTION_INDEX_SCHEMA_REF
+        wrong = values[1][0].model_copy(
+            update={"schema_ref": "eom://schemas/knowledge/embedding-index-manifest/4.0"}
+        )
+        with pytest.raises(EmbeddingDeviceIndexPairError, match="POINTER_MISMATCH"):
+            pair(
+                cpu_member=values[0][0],
+                cpu_index=values[0][1],
+                cuda_member=wrong,
+                cuda_index=values[1][1],
+            )
 
 
 def test_public_report_pair_keeps_source_proofs_and_separates_device_spaces():
