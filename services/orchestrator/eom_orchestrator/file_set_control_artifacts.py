@@ -157,6 +157,31 @@ class ControlFileSetPublisher:
         found = self._find_published_primary(idempotency_key, artifact_type)
         return None if found is None else found[0]
 
+    def publication_state(self, *, idempotency_key: str, artifact_type: str) -> JobState | None:
+        """Original metadata for supported replay, never permission to alter a terminal Job."""
+        if type(idempotency_key) is not str or not 16 <= len(idempotency_key) <= 128:
+            raise ControlPlaneError("CONTROL_FILE_SET_INVALID", "publication key is invalid")
+        with self._publication_lock(idempotency_key), self.sessions() as session:
+            job = session.scalar(
+                select(JobRecord).where(JobRecord.idempotency_key == idempotency_key)
+            )
+            if job is None:
+                return None
+            if (
+                job.task_type != artifact_type
+                or job.protocol_version != CONTROL_FILE_SET_PROTOCOL
+                or job.request_hash
+                != content_sha256(
+                    {
+                        "protocol_version": job.protocol_version,
+                        "task_type": job.task_type,
+                        "request": job.request,
+                    }
+                )
+            ):
+                raise ControlPlaneError("CONTROL_FILE_SET_CONFLICT", "publication identity differs")
+            return JobState(job.status)
+
     def find_published_primary_member(
         self, *, idempotency_key: str, artifact_type: str
     ) -> ArtifactMemberPointer | None:

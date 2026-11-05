@@ -1,5 +1,43 @@
 # DB 유사도 검색: 목록·기록·완료 결과 재열람
 
+## 2026-11-05: 완료 순위의 영속 저장과 빠른 재열람
+
+사용자가 실제 결과 조회·문항 열기를 확인했다. 그러나 완료 GET 두 건이 각각153/151초였고,
+동일 결과를 다시 열어도 전체 DOCUMENT 풀이·벡터의 검증/순위 조합을 반복했다. 다음은 이
+실측 지연을 줄이는 변경이다. 새 검색 엔진, 사용자별 벡터 복사 또는 권한 우회가 아니다.
+
+1. **책임:** Catalog의 기존 completed public QUERY reader에서 검증된 순위 결과를 저장한다.
+   API/Web의 최근 기록·결과 GET 계약은 유지한다. authoring/chat 소비 경로는 확장하지 않는다.
+2. **정본:** 원 QUERY/Graph/policy/index/원본 Artifact가 정본이다. 저장 값은 그 고정 입력에서
+   검증된 후보·점수·버전 참조의 파생 snapshot이다. 본문·그림·풀이·벡터 bytes는 DB에 복제하지 않는다.
+3. **identity:** workflow와 원 request/context SHA로 결과 하나를 구분한다. 고유번호는 표시용이며,
+   실제 키는 immutable Item revision/source pointer다. 번호가 같은 다른 layer를 혼동하지 않는다.
+4. **pointer:** hit도 실제 operator, 원 completed Workflow, 정확한 Graph/policy/index와 source의
+   lifecycle·hash metadata를 다시 확인한다. 권한·source가 철회되면 저장한 결과를 그대로 노출하지 않는다.
+5. **접근:** 완료 Workflow PK lookup, 최대64개 순위의 ordered read, 같은 결과의 concurrent fill이다.
+6. **구조:** 기존 Orchestrator file-set publisher와 Job key UNIQUE/Artifact 저장소를 재사용한다.
+   canonical context는 기존 typed/schema3/4/5를 재사용하고 저장 carrier만 새 schema로 정의한다.
+   Catalog는 validated ranking.json 포인터만 읽으며 새 테이블·migration·권한은 추가하지 않는다.
+7. **규모:** miss는 기존 전체 검증 한 번, hit는 저장한 순위와 batched relational dependency
+   fingerprint를 읽는다. 기존 source keyset page/metadata observation을 재사용해 source별 NAS
+   materialization·풀이 parse·벡터 decode·cosine 정렬을 반복하지 않는다. 고정520개 cap은 두지 않는다.
+8. **동시성:** 원 Workflow별 transaction advisory lock으로 첫 저장을 직렬화한다. 짧은 metadata
+   Artifact receipt만 기존 DB에 남긴다. 중단은 원 publisher/key의 supported replay로 이어가고
+   FAILED를 성공으로 바꾸지 않는다. 다른 검색·INDEX·풀이 슬롯은 잠그지 않는다.
+9. **방향:** 기존 Catalog application → domain/context → ORM/read adapters 순서다. worker에
+   DB/NAS 권한을 주지 않고 별도 queue·cache service·LRU singleton을 만들지 않는다.
+10. **오류/retry:** 처음 완전히 검증된 결과만 저장한다. 저장 전후 dependency observation을 비교한다.
+    hit의 metadata가 달라지거나 snapshot hash가 손상되면 명시적으로 거부하며 latest/recompute로
+    숨기지 않는다. 기존 완료·실패·원 key는 유지한다. 새 index head 전진만으로 원 결과를 바꾸지 않는다.
+11. **대안:** 번호만 browser storage에 두면 재로그인/여러 사용자·버전·권한을 보존할 수 없다.
+    전체 결과를 매번 재구성하거나 무기한 global cache를 쓰는 대신 공식 reader의 작은 영속
+    snapshot과 현재 권한/관계 metadata 확인을 택한다.
+
+검증은 missing/stale/hash/revoked source·다른 사용자·동시 fill·중단/replay를 포함한다.
+PostgreSQL 검사는 disposable DB에서만 한다. 운영에서는 원 완료 요청을 한 번만 채운 뒤,
+같은 결과 재열람의 실제 응답 시간과 native launch 수/완료 selector 불변을 비교한다.
+이전 검색은 snapshot이 없으므로 최초 한 번 기존 검증 비용이 필요하며 새 GPU 계산은 없다.
+
 ## 2026-11-05: 장치별 인덱스 head 진행 차이 복구
 
 - 책임: Catalog의 최초 DB 검색 scope 선택과 public QUERY 인덱스 해석을 수정한다. API의

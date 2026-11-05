@@ -251,3 +251,60 @@ GET `req_dd5dd4472d3c7fed0286340257ca23a0`의 응답 종료는18:07:15 UTC였다
 화면 후속 수정은 `NOT_REGISTERED`/`NOT_INDEXED`만 ‘준비 필요’로 구분하고, 일반 연결 오류는
 ‘연결 확인 필요’로 표시한다. 승인 상태·공개 풀이·벡터 준비를 같은 상태로 설명하지 않는다.
 이 화면 문구와 앞의 PDF header 수정은 별도 Web 배포 후 실제 기록 재열람에서 확인한다.
+
+## 후속 복구 — 2026-11-05 UTC
+
+실제 GUI의 준비 실패는 새 계정/비밀번호 문제가 아니라 CPU/GPU public head가 다른
+Graph에 고정된 조합을 넘긴 것이었다. `e20d72cb`는 최초 요청에서 이미 게시된 공통
+Graph/policy의 exact revision 쌍을 선택하고 public prepare도 그 scope를 읽게 한다.
+역사적 FAILED와 구형 vector, INDEX의 current head는 수정하지 않았다.
+
+사용자의 새 요청이 준비를 통과한 뒤 `EmbeddingDeviceIndexPairError`로 멈췄다.
+`PublicSolutionEmbeddingIndexV4`는 실제로 4.0과 native 5.0을 함께 지원하는데 pair
+검증이 클래스 이름만 보고 4.0 schema로 비교했다. `7f0566c4`는 manifest의 실제 version을
+사용하며 틀린 schema/hash/device는 계속 거부한다. 기존 frozen schema bytes는 바꾸지 않았다.
+
+검증: common-scope focused236 PASS, disposable PostgreSQL10 PASS, schema/device·native
+consumer124+67 PASS, strict mypy·Ruff/format·wheel RECORD PASS. 이 수치를 실제 검색
+목록 성공으로 해석하지 않는다. 테스트 DB는 운영 DB와 분리했다.
+
+운영은 Catalog/QUERY owner만 `7f0566c4`로 교체했다. API/Web은 `4013f66b`, INDEX는
+`1f01f47d`의 동일 PID3100607, creative producer는 동일 PID3675104를 유지했다. API의
+실제 wheel/provider pin과 numerical controller/runtime은 변경하지 않았다. 사용자 세션도
+유지했다. 배포 준비·원 파일 백업·activation evidence는 아래 root-private 위치에 있다.
+
+- `/var/lib/eom-similarity-common-scope-release-20261105/`
+- `/var/lib/eom-similarity-native-pair-release-20261105/`
+
+첫 owner 교체 helper의10초 socket 대기는 기존 약63초 runtime verifier보다 짧아서
+실패했다. 원 설정으로 rollback한 뒤210초의 operator 대기로 다시 활성화했다. 실제
+runtime verification 정책을 완화하거나 실패 evidence를 지운 것은 아니다. native pair
+배포의 첫 idle preflight도 진행 중 Catalog RPC를 감지해 **변경 전에** 멈췄고, RPC가 끝난
+뒤 같은 준비본으로 활성화했다.
+
+11:54 UTC 사용자가 원 요청의 `결과 확인`을 눌렀고, 원 search에 CUDA child Workflow가
+연결돼 RUNNING/유효 command lease로 진행했다. 새 검색 identity나 재임베딩으로 우회하지
+않았다. 이후 Workflow/Job 모두 COMPLETED/SUCCEEDED, GUI 검색 기록 READY를 확인했다.
+사용자가 실제 결과 목록 조회와 문항 열기가 된다고 확인했다. 반복 조회 뒤에도 native
+launch는1개이며 완료 selector SHA는 동일했다. 기존 FAILED 기록도 그대로다.
+
+실제 완료 결과 GET은152.999초와151.072초로 느렸다. 이는 새 GPU 계산이 아니라 매번
+원 DOCUMENT 집합·풀이/벡터를 다시 해석하고 ranking context를 조합하는 경로다. 사용자가
+같은 결과 재조회는 저장한 문항 목록·점수·버전 참조를 읽는 방식으로 빠르게 바꿔 달라고
+요청했다. 이 후속 성능 개선은 아직 완료가 아니며, 원 권한·Graph/policy/source pin을
+유지하는 bounded persisted ranking과 실제 재열람 시간 비교로 검증한다.
+
+### 저장 결과 재사용 후보의 소스 검증
+
+공식 Orchestrator file-set publication에 validated `ranking.json`을 한 번 저장한다.
+새 DB table/migration/queue나 vector 복사 없이 기존 Job UNIQUE key/Artifact를 재사용한다.
+실제 operator/원 QUERY/Graph/policy와 fresh batched SQL dependency observation을 hit마다
+확인하되 전체 풀이/벡터 decode·cosine·순위 조합은 반복하지 않는다. 최초 miss만 기존 read를
+한 번 수행한다. 다른 검색·INDEX·slot 및 API/Web session은 변경하지 않는 Catalog 전용 후보다.
+
+회귀168 PASS, strict focused mypy8 files PASS, Ruff/format PASS. disposable PostgreSQL5
+PASS에는 concurrent first-fill1회, 중단된 원 publication identity의 재전송, 손상된 완료
+Artifact의 거부/terminal history 보존, 반환 목록 밖 source의 lifecycle/component/Artifact
+변화 감지가 포함된다. 이전 read4 고정 기대 테스트2개는 이미 API가 사용하는 read5와
+별도 legacy read4 dispatch를 모두 확인하도록 갱신했다. API의 요청 version은 바꾸지 않았다.
+운영 재열람 시간은 실제 원 요청으로 측정하기 전까지 PENDING이다.

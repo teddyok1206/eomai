@@ -190,6 +190,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "5.0",
             "sha256:6253b87380a97ebcb113bfa659db107133e001ef7eb4bc58401ac917c97c1711",
         ),
+        "completed-public-similarity-ranking-v1": CatalogSchemaResource(
+            "schemas/knowledge/completed-public-similarity-ranking-v1.schema.json",
+            "resources/knowledge/completed-public-similarity-ranking-v1.schema.json",
+            "1.0",
+            "sha256:ecdc52a0a76f93c00733be4568c0ca7004596e44796225cebee623e9d62e3684",
+        ),
         "system-rag-similarity-materials-v4": CatalogSchemaResource(
             "schemas/knowledge/system-rag-similarity-materials-v4.schema.json",
             "resources/knowledge/system-rag-similarity-materials-v4.schema.json",

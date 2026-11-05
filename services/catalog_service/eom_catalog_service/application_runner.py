@@ -10,6 +10,7 @@ import threading
 
 from eom_catalog_contracts import MAX_PDF_LEARNING_ANALYSIS_RECOVERIES
 from eom_identity_service.models import OperatorRecord
+from eom_orchestrator.completed_public_ranking_artifact import CompletedPublicRankingArtifactStore
 from eom_orchestrator.database import build_engine
 from pydantic import ValidationError
 
@@ -98,6 +99,7 @@ from eom_catalog_service.similarity_read_runtime import (
     build_catalog_similarity_context_reads,
     build_catalog_workflow_similarity_reads,
 )
+from eom_catalog_service.similarity_read_service import CatalogSimilarityContextReadService
 
 _RUNTIME_MODEL_TABLES = (
     OperatorRecord.__table__,
@@ -287,6 +289,21 @@ def serve() -> int:
                 mixed_configuration_raw_sha256=mixed_read_pin,
                 public_configuration_raw_sha256=public_read_pin,
             )
+        item_similarity_publications = build_catalog_item_similarity_publications(
+            mode=os.environ.get("EOM_ITEM_SIMILARITY_PUBLICATION_MODE", "DISABLED"),
+            context_reads=similarity_reads,
+            source_commit=os.environ.get("EOM_RUNTIME_SOURCE_COMMIT"),
+        )
+        if similarity_reads is not None and item_similarity_publications is not None:
+            similarity_reads = CatalogSimilarityContextReadService(
+                similarity_reads.owner,
+                mixed_owner=similarity_reads.mixed_owner,
+                public_owner=similarity_reads.public_owner,
+                saved_public_rankings=CompletedPublicRankingArtifactStore(
+                    item_similarity_publications.publisher,
+                    source_commit=item_similarity_publications.source_commit,
+                ),
+            )
         external_item_documents = ExternalItemDocumentMediaService(engine)
         external_item_previews = ExternalItemPreviewProjectionService(engine)
         server = CatalogApplicationServer(
@@ -304,11 +321,7 @@ def serve() -> int:
                 mode=os.environ.get("EOM_EXAM_SIMILARITY_READ_MODE", "DISABLED"),
                 configuration_raw_sha256=os.environ.get("EOM_EXAM_SIMILARITY_READ_CONFIG_SHA256"),
             ),
-            item_similarity_publications=build_catalog_item_similarity_publications(
-                mode=os.environ.get("EOM_ITEM_SIMILARITY_PUBLICATION_MODE", "DISABLED"),
-                context_reads=similarity_reads,
-                source_commit=os.environ.get("EOM_RUNTIME_SOURCE_COMMIT"),
-            ),
+            item_similarity_publications=item_similarity_publications,
             workflow_similarity_reads=build_catalog_workflow_similarity_reads(
                 mode=os.environ.get("EOM_WORKFLOW_SIMILARITY_READ_MODE", "DISABLED"),
                 context_reads=similarity_reads,

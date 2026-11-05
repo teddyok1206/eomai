@@ -2,6 +2,43 @@
 
 2026-11-04 UTC. 구현 계획이며 운영 활성화 증거는 별도 release 기록에 남긴다.
 
+## 조립 제목·목록 삭제·표 편집·선택형 필터 — 2026-11-05 설계
+
+1. **책임:** 기존 Catalog curated assembly application에 제목과 목록 삭제를 추가한다.
+   Web/API는 입력·표시·공식 명령 전달만 한다. Item, Graph, HWPX 병합 규칙을 복제하지 않는다.
+2. **정본:** 저장된 immutable placement manifest와 원본 문항은 그대로다. 제목은 작은
+   논리 조립 metadata이며, 목록 삭제는 그 조립의 목록 노출 종료다. 원본 문항·풀이·Graph·
+   승인/실패·이미 만든 HWPX와 진행 중 제작물을 삭제하거나 바꾸는 의미가 아니다.
+3. **identity:** assembly/revision/hash는 분리한다. 선택을 수정해 다시 저장하면 지금처럼
+   별도 assembly가 된다. draft V2가 제목을 받되 기존 V1/manifest V1 bytes·의미는 보존한다.
+4. **pointer:** 제목은 source 권한이 아니다. 저장·삭제 시 현재 operator 권한과 소유자,
+   삭제 대상의 exact assembly revision/hash를 확인한다. HWPX는 원래 manifest를 계속 pin한다.
+5. **접근:** owner별 최근 목록, actor+key replay, ID lookup, 순서 있는 최대200개 문항 편집,
+   namespace의 categorical metadata 선택지 조회가 주 연산이다.
+6. **구조/index:** 논리 조립에 bounded title과 삭제 receipt metadata만 추가한다. 기존
+   owner/recent index·PK·revision FK를 재사용하고 삭제 key의 owner별 UNIQUE를 둔다.
+   삭제한 조립은 기본 목록에서 제외하되 immutable revision/placement를 물리 삭제하지 않는다.
+7. **규모:** 최근 목록은 indexed keyset O(log N + page), 초안은 tuple/배열과 identity set으로
+   O(M), 선택지는 namespace current source의 필요한 cell들을 한 번의 bounded DISTINCT
+   조회로 모은다. 옵션마다 DB를 조회하거나 브라우저가 전체 문항을 내려받지 않는다.
+8. **동시성:** create의 title은 원 요청 hash에 포함하고 placement selection은 기존 형식으로
+   정규화한다. delete는 짧은 row lock/CAS와 원 key/request hash receipt로 재전송한다.
+   렌더·파일 I/O 동안 lock을 잡지 않는다. 이미 승인된 build의 해석/다운로드는 유지한다.
+9. **방향:** schema2020-12 → typed Catalog/API 계약 → 기존 application → DB adapter →
+   기존 BFF/Web 순서다. 새 registry, queue, generic CRUD framework나 모델 호출은 없다.
+10. **오류/retry:** 다른 소유자·변경된 revision·같은 key의 다른 요청은 거부한다. 실패 이력은
+    보존한다. UI는 저장/삭제 timeout에 같은 key를 유지하며 오래된 응답이 새 초안을 바꾸지
+    않게 한다. 교체 대상은 가변 row index가 아닌 원 placement identity로 추적한다.
+11. **대안:** browser-only 제목/삭제는 재로그인·다중 사용자에서 보존되지 않아 부족하다.
+    manifest 전체 개정이나 물리 cascade 삭제는 불필요하다. 원본 Excel에는 Notion property
+    type 선언이 없으므로 이를 복원했다고 주장하지 않고, 기존 매핑의 단원·분야·분류 등
+    categorical field와 현재 실제 값으로 선택지를 제공한다. 원문 문자열·필터 의미는 보존한다.
+
+화면은 `번호 / 문항 / 동작` 세 열로 바꾸고 위·아래·빼기·교체를 카드 밖 동작 열에 둔다.
+제목 입력은 저장 버튼 옆, 제목은 최근 목록에 표시한다. 삭제 확인은 ‘목록에서 삭제하며
+원본 문항과 이미 만든 파일은 유지’임을 설명한다. 후속 교재 사용 이력 기능은 미리 만들지 않는다.
+운영 유사도 검색의 실제 목록·문항 열기·재조회 복구를 먼저 확인한 다음 이 범위를 활성화한다.
+
 ## 목표와 보존 범위
 
 DB의 저장된 조립 순서에서 기출·창작·AI 문항과 원본 HWP/HWPX를 선택한 순서대로

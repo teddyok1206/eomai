@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/completed-public-similarity-ranking/1.0",
+  "title": "Validated saved DB similarity ranking metadata",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "operator_id",
+    "selection",
+    "context",
+    "dependency_sha256",
+    "snapshot_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "completed-public-similarity-ranking/1.0"
+    },
+    "operator_id": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflow_id",
+        "workflow_request_sha256",
+        "context_request_sha256"
+      ],
+      "properties": {
+        "workflow_id": {
+          "type": "string",
+          "pattern": "^workflow_[0-9a-f]{32}$"
+        },
+        "workflow_request_sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "context_request_sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "context": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/knowledge/public-solution-similarity/3.0#/$defs/context"
+        },
+        {
+          "$ref": "eom://schemas/knowledge/public-solution-similarity/4.0#/$defs/context"
+        },
+        {
+          "$ref": "eom://schemas/knowledge/public-solution-similarity/5.0#/$defs/context"
+        }
+      ]
+    },
+    "dependency_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "snapshot_sha256": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

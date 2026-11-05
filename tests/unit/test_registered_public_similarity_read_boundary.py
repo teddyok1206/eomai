@@ -55,9 +55,22 @@ def test_dispatch_and_api_client_keep_registered_context_and_same_actor(monkeypa
     request, reply = pair(registered=registered)
     validate_similarity_read_reply_v4(request, reply)
     service = SimpleNamespace(read=Mock(return_value=reply.result))
+    # Legacy read4 stays supported, while the installed API now explicitly sends
+    # native Office-compatible read5. Neither may alter the actor/selector.
+    legacy = json.loads(
+        dispatch_similarity_read_frame(
+            service, canonical_json_bytes(request.model_dump(mode="json")) + b"\n"
+        )
+    )
+    assert legacy == reply.model_dump(mode="json")
+    service.read.assert_called_once_with(request)
+    service.read.reset_mock()
+    api_request = request.model_copy(
+        update={"schema_version": "system-rag-similarity-read-request/5.0"}
+    )
 
     def exchange(endpoint, value, **options):
-        assert value == request.model_dump(mode="json")
+        assert value == api_request.model_dump(mode="json")
         assert options["request_limit"] == options["reply_limit"] == 1024 * 1024
         return json.loads(
             dispatch_similarity_read_frame(service, canonical_json_bytes(value) + b"\n")
@@ -68,7 +81,7 @@ def test_dispatch_and_api_client_keep_registered_context_and_same_actor(monkeypa
         ChatSocketEndpoint(Path("/tmp/synthetic-read4.sock"), 42, 43)
     )
     assert client.read_public(request.actor_id, request.selection) == reply.result
-    service.read.assert_called_once_with(request)
+    service.read.assert_called_once_with(api_request)
     with pytest.raises((ValueError, SchemaError)):
         SimilarityContextReadReplyV3.model_validate(reply.model_dump(mode="json"))
 

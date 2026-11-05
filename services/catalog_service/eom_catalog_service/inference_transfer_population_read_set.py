@@ -95,7 +95,7 @@ def _invalid() -> InferenceTransferServiceError:
     return InferenceTransferServiceError("INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH")
 
 
-def _observe(
+def observe_population_dependency(
     session: Session,
     group: str,
     statement: Select[Any],
@@ -178,7 +178,7 @@ def observe_inference_transfer_population(
         order: tuple[str, ...],
         retain: tuple[str, ...] = (),
     ) -> tuple[tuple[Any, ...], ...]:
-        observation, keys = _observe(
+        observation, keys = observe_population_dependency(
             session, group, statement, maximum=bound, order=order, retain=retain
         )
         groups.append(observation)

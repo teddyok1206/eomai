@@ -39,6 +39,13 @@ public prepare는 `public_revision_for_scope`로 그 Graph/policy의 exact revis
 최신 GPU head와 다른 CPU head를 섞거나 Graph/hash 검사를 생략하지 않는다. 이 공통
 게시 범위 밖의 새 source는 준비 필요이며, 이를 모든 GPU binding의 검색 완료로 과장하지 않는다.
 
+DB의 완료 결과 재열람은 `completed_public_ranking_read.py`가 원 QUERY의 검증된 후보·점수와
+exact revision을 작은 immutable `ranking.json`으로 저장해 재사용한다. 기존 Orchestrator
+`ControlFileSetPublisher`와 고유 Job key를 사용하며 새 DB/queue/model service는 없다.
+hit도 실제 사용자·고정 Graph/policy와 fresh SQL dependency fingerprint를 확인한다.
+전체 풀이/NAS 문항/벡터를 다시 decode·순위 계산하지 않으며, 달라진 source나 손상된 저장
+결과를 latest/새 계산으로 숨기지 않는다. 최초 저장은 기존 전체 검증을 한 번 거친다.
+
 ## 먼저 열 파일
 
 - `apps/application_api/eom_api/services/item_db_similarity_searches.py`
@@ -50,6 +57,9 @@ public prepare는 `public_revision_for_scope`로 그 Graph/policy의 exact revis
 - `services/workflow_runner/eom_workflow_runner/reference_query_prepare_application.py`
 - `services/catalog_service/eom_catalog_service/public_solution_source_capture.py`
 - `services/catalog_service/eom_catalog_service/embedding_registry_models.py`
+- `services/catalog_service/eom_catalog_service/completed_public_ranking_read.py`
+- `services/catalog_service/eom_catalog_service/completed_public_ranking_dependencies.py`
+- `services/orchestrator/eom_orchestrator/completed_public_ranking_artifact.py`
 
 ## 고장이 났을 때
 
@@ -65,5 +75,7 @@ stale pin, 결과 materialization을 구분한다. 새로운 key로 우회하기
 - `tests/api/test_item_db_similarity_searches.py`
 - `tests/unit/test_native_office_public_embedding.py`
 - `tests/unit/test_background_resource_recovery.py`
+- `tests/unit/test_completed_public_ranking.py`
+- `tests/integration/test_completed_public_rankings.py`
 - `docs/operations/ITEM_DB_SIMILARITY_LIST_RELEASE_2026-11-02.md`
 - `docs/operations/BACKGROUND_RESOURCE_RECOVERY_2026-11-04.md`

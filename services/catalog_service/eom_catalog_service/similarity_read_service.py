@@ -21,6 +21,7 @@ from eom_catalog_contracts.similarity_read_v2 import SimilarityContextReadReques
 from eom_catalog_contracts.similarity_read_v3 import SimilarityContextReadRequestV3
 from eom_catalog_contracts.similarity_read_v4 import SimilarityContextReadRequestV4
 from eom_identity_service import OperatorAuthorizationFenceError
+from eom_orchestrator.completed_public_ranking_artifact import CompletedPublicRankingArtifactStore
 from eom_orchestrator.database import build_session_factory
 from eom_workflow.reference_query_execution import PublicReferenceQueryWorkflowRequest
 from eom_workflow_runner.errors import WorkflowError
@@ -39,6 +40,7 @@ from eom_workflow_runner.similarity_context_session_reader import (
 )
 from jsonschema.exceptions import ValidationError as SchemaError
 
+from eom_catalog_service.completed_public_ranking_read import read_saved_public_ranking_in_session
 from eom_catalog_service.embedding_registry_ports import (
     EmbeddingRegistryCaller,
     EmbeddingRegistryError,
@@ -64,6 +66,7 @@ class CatalogSimilarityContextReadService:
         *,
         mixed_owner: ReferenceQuerySourceOwner | None = None,
         public_owner: ReferenceQuerySourceOwner | None = None,
+        saved_public_rankings: CompletedPublicRankingArtifactStore | None = None,
     ) -> None:
         if mixed_owner is not None and (
             mixed_owner.catalog.engine is not owner.catalog.engine
@@ -82,6 +85,7 @@ class CatalogSimilarityContextReadService:
         ):
             raise ValueError("public similarity reader composition differs")
         self.public_owner = public_owner
+        self.saved_public_rankings = saved_public_rankings
         self.sessions = build_session_factory(owner.catalog.engine)
 
     def read(
@@ -190,8 +194,15 @@ class CatalogSimilarityContextReadService:
             raise SimilarityContextReadError("QUERY_RESULT_INVALID")
         try:
             with self.sessions.begin() as session, observe_read_failure():
-                result = read_completed_public_solution_similarity_in_session(
-                    session, owner, EmbeddingRegistryCaller(request.actor_id), request.selection
+                caller = EmbeddingRegistryCaller(request.actor_id)
+                result = (
+                    read_completed_public_solution_similarity_in_session(
+                        session, owner, caller, request.selection
+                    )
+                    if self.saved_public_rankings is None
+                    else read_saved_public_ranking_in_session(
+                        session, owner, caller, request.selection, store=self.saved_public_rankings
+                    )
                 )
                 if isinstance(request, SimilarityContextReadRequestV3) and not isinstance(
                     result, PublicSolutionSimilarityContext
