@@ -145,6 +145,28 @@ ZIP mimetype·preview를 정상 포장하고, 변경을 역적용해 다른 XML/
 metadata 표의 `해설` 두 글자 위치 차이가 남았다. 본문·그림과 구분해 기록하고,
 `전체 합본 pixel-equal`이라고 보고하지 않는다.
 
+### 출제의도 글상자의 제한된 호환성 수정 — 2026-11-05 UTC
+
+사용자가 해설 위 출제의도 상자의 본문이 Hancom에서 비어 보인다고 보고했다. 같은
+합본의 텍스트와 독립 Office PDF에는 내용이 남아 있으므로 데이터 누락과 구분한다.
+관측한 상자는 제목/본문 두 글상자와 빈 가장자리 도형을 가진 중첩 container이며 HWP에서 넘어온
+본문 줄 폭 캐시가 변환된 rectangle의 유효 폭보다 컸다. Hancom 재현 완료와 동일시하지 않는다.
+
+기존 HWP→HWPX package 정규화 owner에서 이 구조와 정확한 `출제의도` 제목을 식별해
+본문 문단의 파생 `linesegarray`만 무효화한다. 글·상자 위치/크기·제목·그림·수식·본문의
+다른 표/캐시는 그대로 둔다. 제거한 캐시를 역삽입했을 때 원래 XML과 일치해야 한다.
+신규 DB/프로토콜/변환 bundle과 별도 출력기는 추가하지 않는다. paragraph→ordinal map과
+직접 자식 조회로 시간·일시 공간 O(XML 노드), 동일 입력의 정규화는 결정적이고 멱등이다.
+이 수정의 실제 Hancom 표시 여부는 새 파일의 사용자 검수로 별도 확인한다.
+
+실제 3문항 합본의 확인용 사본에서는 본문 캐시 3곳만 제거됐고, 이를 역삽입한 XML과
+원래 XML이 일치했다. 다른 ZIP member는 byte-equal이며 독립 Office PDF의 세 페이지도
+수정 전후 pixel-equal이다. 집중 회귀와 HWPX 전체 검사 431개가 통과했고 기존 root-only
+검사 1개는 opt-in으로 남겼다. formatter·ruff·mypy도 통과했다. 최초 전체 검사 invocation은
+격리 Builder 환경에 Manager package가 없어 collection에서 종료됐고, 개발 검사에서만
+설치 API package 경로를 명시해 다시 실행했다. 운영 Python 환경은 바꾸지 않았다.
+현재 이 증거는 Hancom 표시 복구 또는 운영 활성화 완료를 의미하지 않는다.
+
 변환 input/output hash, native 문단 텍스트 fingerprint, 표 구조, 수식 script, binary
 fingerprint와 도형 개수는 로컬 schema-valid evidence로 다시 대조한다. 문단 fingerprint는
 공백 차이를 제외한 **multiset**이며 자체로 reading order를 증명하지 않는다. 문서/section

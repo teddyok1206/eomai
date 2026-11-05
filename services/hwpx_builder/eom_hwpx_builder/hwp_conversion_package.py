@@ -3,6 +3,8 @@
 The pinned writer omits empty style names, uses streaming ZIP descriptors and
 writes zero current dimensions when the source current size equals its original
 size. Expand those representations without guessing new geometry or content.
+Invalidate only the known grouped intent body's HWP-derived line-layout cache;
+Hancom must calculate text lines against the converted shape coordinates.
 """
 
 from __future__ import annotations
@@ -10,6 +12,8 @@ from __future__ import annotations
 import copy
 from dataclasses import dataclass
 from pathlib import Path
+
+from lxml import etree  # type: ignore[import-untyped]
 
 from eom_hwpx_builder.archive import read_package
 from eom_hwpx_builder.curated_package_merge import write_native_package
@@ -30,6 +34,47 @@ class HwpConversionPackageReceipt:
     output_sha256: str
     empty_style_attribute_count: int
     expanded_size_attribute_count: int
+    invalidated_intent_line_cache_count: int = 0
+
+
+def _invalidate_intent_line_caches(
+    root: etree._Element,
+) -> list[tuple[int, int, etree._Element]]:
+    """Recognize the title/body intent group, not other tables/text boxes.
+
+    The source's cached HWP lines can be wider than the converted shape's text
+    area. They are derived layout, not text or geometry. Keep the title cache
+    and every other paragraph intact; retain exact removals for inverse proof.
+    """
+    paragraph_ordinals = {node: index for index, node in enumerate(root.iter(HP + "p"))}
+    removed = []
+    for group in root.iter(HP + "container"):
+        bodies = [
+            body
+            for rectangle in group.findall(HP + "rect")
+            if (body := rectangle.find(f"{HP}drawText/{HP}subList")) is not None
+            and any("".join(node.itertext()).strip() for node in body.iter(HP + "t"))
+        ]
+        if len(bodies) != 2:
+            continue
+        labels = [
+            "".join(
+                char
+                for text in body.iter(HP + "t")
+                for char in "".join(text.itertext())
+                if not char.isspace()
+            )
+            for body in bodies
+        ]
+        if labels.count("출제의도") != 1:
+            continue
+        body = bodies[1 - labels.index("출제의도")]
+        for paragraph in body.findall(HP + "p"):
+            for index, child in enumerate(tuple(paragraph)):
+                if child.tag == HP + "linesegarray":
+                    removed.append((paragraph_ordinals[paragraph], index, child))
+                    paragraph.remove(child)
+    return removed
 
 
 def normalize_hwp_conversion_package(candidate: Path, output: Path) -> HwpConversionPackageReceipt:
@@ -66,6 +111,7 @@ def normalize_hwp_conversion_package(candidate: Path, output: Path) -> HwpConver
     payloads = {name: entry.data for name, entry in entries.items()}
     payloads[HEADER] = serialize_xml(header)
     expanded = 0
+    invalidated = 0
     preview: list[str] = []
     for member, entry in entries.items():
         if not (member.startswith("Contents/section") and member.endswith(".xml")):
@@ -87,17 +133,23 @@ def normalize_hwp_conversion_package(candidate: Path, output: Path) -> HwpConver
                     if value.isascii() and value.isdecimal() and 0 < int(value) <= 0xFFFFFFFF:
                         size.set(axis, value)
                         restored_sizes.append((ordinal, axis))
+        removed_caches = _invalidate_intent_line_caches(section.root)
         inverse = copy.deepcopy(section.root)
         inverse_sizes = tuple(inverse.iter(HP + "curSz"))
         for ordinal, axis in restored_sizes:
             inverse_sizes[ordinal].set(axis, "0")
+        inverse_paragraphs = tuple(inverse.iter(HP + "p"))
+        for ordinal, index, cache in removed_caches:
+            inverse_paragraphs[ordinal].insert(index, copy.deepcopy(cache))
         if tree_value(inverse) != tree_value(original_section):
             raise HwpxError(
-                HwpxErrorCode.HWPX_SEMANTIC_MISMATCH, "conversion changed non-size content"
+                HwpxErrorCode.HWPX_SEMANTIC_MISMATCH,
+                "conversion changed unrelated document content",
             )
-        if restored_sizes:
+        if restored_sizes or removed_caches:
             payloads[member] = serialize_xml(section)
         expanded += len(restored_sizes)
+        invalidated += len(removed_caches)
         preview.extend("".join(node.itertext()) for node in section.root.iter(HP + "t"))
     if PREVIEW not in payloads:
         # A generated package preview, not another canonical Item/solution.
@@ -123,5 +175,5 @@ def normalize_hwp_conversion_package(candidate: Path, output: Path) -> HwpConver
         output.unlink()
         raise
     return HwpConversionPackageReceipt(
-        package.package_sha256, sha256_file(output), len(restored), expanded
+        package.package_sha256, sha256_file(output), len(restored), expanded, invalidated
     )
