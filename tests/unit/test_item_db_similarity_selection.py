@@ -190,7 +190,7 @@ def test_pinned_scope_replay_uses_exact_original_graph_and_never_reads_a_new_hea
     repository.assert_not_called()
 
 
-def test_initial_scope_uses_one_gpu_head_without_requiring_cpu_to_publish_the_same_graph(
+def test_initial_scope_pins_the_registered_pair_without_requiring_equal_current_heads(
     monkeypatch,
 ):
     value = selected_case()
@@ -212,7 +212,7 @@ def test_initial_scope_uses_one_gpu_head_without_requiring_cpu_to_publish_the_sa
         policy_revision_id=value.query.policy_revision_id,
         policy_sha256=value.query.policy_sha256,
     )
-    repository = NS(current_namespace_revision=Mock(return_value=(cuda, 2)))
+    repository = NS(common_public_namespace_revisions=Mock(return_value=(cpu, cuda)))
     monkeypatch.setattr(module, "EmbeddingRegistryRepository", lambda _session: repository)
     session = Mock()
     session.get.return_value = NS(
@@ -223,7 +223,9 @@ def test_initial_scope_uses_one_gpu_head_without_requiring_cpu_to_publish_the_sa
     assert scope.policy_revision_id == cuda.policy_revision_id != cpu.policy_revision_id
     assert scope.policy_sha256 == cuda.policy_sha256 != cpu.policy_sha256
     assert digest == value.result.search_snapshot_sha256
-    repository.current_namespace_revision.assert_called_once_with(registry.corpus_id, "cuda")
+    repository.common_public_namespace_revisions.assert_called_once_with(
+        registry.corpus_id, "cpu", "cuda"
+    )
 
 
 @pytest.mark.parametrize("missing", ["owner", "index"])
@@ -231,13 +233,13 @@ def test_missing_gpu_scope_does_not_relabel_a_cpu_or_legacy_index(monkeypatch, m
     value = selected_case()
     service = object.__new__(module.CatalogItemDbSimilaritySelection)
     service.owner = NS(
-        configuration=NS(registry=NS(corpus_id="corpus_" + "1" * 32)),
+        configuration=NS(registry=NS(corpus_id="corpus_" + "1" * 32, namespace="cpu")),
         cuda_owner=None
         if missing == "owner"
         else NS(configuration=NS(registry=NS(namespace="cuda"))),
     )
     service.retrieval = Mock()
-    repository = NS(current_namespace_revision=Mock(return_value=None))
+    repository = NS(common_public_namespace_revisions=Mock(return_value=None))
     monkeypatch.setattr(module, "EmbeddingRegistryRepository", lambda _session: repository)
     with pytest.raises(module.ItemDbSimilaritySelectionError, match="NOT_INDEXED"):
         service._scope(Mock(), value.request)

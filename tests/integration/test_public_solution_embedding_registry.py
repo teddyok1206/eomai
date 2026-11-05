@@ -7,6 +7,7 @@ rollback, CAS and replay are exercised; no encoder, worker, NAS or live DB is us
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from threading import Barrier
+from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
@@ -57,6 +58,10 @@ from sqlalchemy.orm import Session
 
 from tests.integration.test_embedding_registry_application import _artifact, _fixture
 from tests.integration.test_embedding_registry_persistence import (
+    _revision,
+    _seed,
+)
+from tests.integration.test_embedding_registry_persistence import (
     registry_session as registry_session,
 )
 from tests.integration.test_preset_model_validation_persistence import (
@@ -69,6 +74,124 @@ from tests.unit.test_public_solution_encoding import public_entry
 
 pytestmark = pytest.mark.integration
 CALLER = EmbeddingRegistryCaller("operator_" + "1" * 32)
+
+
+def test_independent_device_heads_resolve_the_same_published_scope_without_rebinding(
+    registry_session,
+):
+    """Actual immutable history/SQL; synthetic metadata only, no source/compute grant."""
+    from eom_catalog_service.knowledge_graph_models import (
+        KnowledgeCorpusRevisionRecord,
+        KnowledgeGraphSnapshotRecord,
+    )
+
+    session = registry_session
+    seed = _seed(session)
+    artifacts = (_seed(session), _seed(session))
+    snapshot = session.get(KnowledgeGraphSnapshotRecord, seed["snapshot"])
+    original_corpus = session.get(KnowledgeCorpusRevisionRecord, snapshot.corpus_revision_id)
+    later_corpus_id = "corpusrev_" + uuid4().hex
+    session.add(
+        KnowledgeCorpusRevisionRecord(
+            **{
+                **{
+                    column.name: getattr(original_corpus, column.name)
+                    for column in original_corpus.__table__.columns
+                },
+                "corpus_revision_id": later_corpus_id,
+                "revision_number": 2,
+                "previous_corpus_revision_id": original_corpus.corpus_revision_id,
+            }
+        )
+    )
+    session.flush()
+    later_id = "graphrev_" + uuid4().hex
+    session.add(
+        KnowledgeGraphSnapshotRecord(
+            **{
+                **{
+                    column.name: getattr(snapshot, column.name)
+                    for column in snapshot.__table__.columns
+                },
+                "graph_snapshot_revision_id": later_id,
+                "corpus_revision_id": later_corpus_id,
+                "previous_graph_snapshot_revision_id": snapshot.graph_snapshot_revision_id,
+                "revision_number": 2,
+                "manifest_sha256": "sha256:" + uuid4().hex * 2,
+                "snapshot_sha256": "sha256:" + uuid4().hex * 2,
+            }
+        )
+    )
+    session.flush()
+    cpu_ns = PublicSolutionIndexNamespace(
+        storage_partition="scope-" + uuid4().hex,
+        space_sha256="sha256:" + "1" * 64,
+        recipe_sha256="sha256:" + "2" * 64,
+    )
+    cuda_ns = cpu_ns.model_copy(update={"space_sha256": "sha256:" + "3" * 64})
+    heads = []
+    for namespace in (cpu_ns, cuda_ns):
+        head = EmbeddingIndexRecord(
+            index_id="embeddingindex_" + uuid4().hex,
+            corpus_id=seed["corpus"],
+            **namespace.model_dump(),
+            current_index_revision_id=None,
+            lock_version=1,
+            created_at=NOW,
+            updated_at=NOW,
+        )
+        session.add(head)
+        heads.append(head)
+    session.flush()
+    policy_hash = "sha256:" + "4" * 64
+    schema = "eom://schemas/knowledge/embedding-index-manifest/5.0"
+    cpu = _revision(session, seed, heads[0], manifest_schema_ref=schema, policy_sha256=policy_hash)
+    other = seed | {key: artifacts[0][key] for key in ("artifact", "artifact_revision")}
+    cuda = _revision(
+        session, other, heads[1], manifest_schema_ref=schema, policy_sha256=policy_hash
+    )
+    for head, revision in zip(heads, (cpu, cuda), strict=True):
+        head.current_index_revision_id = revision.index_revision_id
+        head.lock_version = 2
+    session.flush()
+    newer = EmbeddingIndexRevisionRecord(
+        **{
+            **{column.name: getattr(cuda, column.name) for column in cuda.__table__.columns},
+            "index_revision_id": "embeddingindexrev_" + uuid4().hex,
+            "revision_number": 2,
+            "previous_index_revision_id": cuda.index_revision_id,
+            "graph_snapshot_revision_id": later_id,
+            "manifest_artifact_id": artifacts[1]["artifact"],
+            "manifest_artifact_revision_id": artifacts[1]["artifact_revision"],
+            "operation_key": "scope-fixture:" + uuid4().hex,
+            "registration_request_sha256": "sha256:" + uuid4().hex * 2,
+        }
+    )
+    session.add(newer)
+    session.flush()
+    heads[1].current_index_revision_id = newer.index_revision_id
+    heads[1].lock_version = 3
+    session.flush()
+    repository = EmbeddingRegistryRepository(session)
+    selected = repository.common_public_namespace_revisions(seed["corpus"], cpu_ns, cuda_ns)
+    assert selected is not None
+    assert tuple(row.index_revision_id for row in selected) == (
+        cpu.index_revision_id,
+        cuda.index_revision_id,
+    )
+    scope = SimpleNamespace(
+        corpus_id=seed["corpus"],
+        namespace=cuda_ns,
+        graph_snapshot=SimpleNamespace(graph_snapshot_revision_id=seed["snapshot"]),
+        policy_revision_id=seed["policy"],
+        policy_sha256=policy_hash,
+    )
+    assert repository.public_revision_for_scope(scope) == selected[1]
+    assert heads[1].current_index_revision_id == newer.index_revision_id
+    assert (
+        repository.current_namespace_revision(seed["corpus"], cuda_ns)[0].index_revision_id
+        == newer.index_revision_id
+    )
 
 
 class PublicLookupVerifier(SyntheticVerifier):

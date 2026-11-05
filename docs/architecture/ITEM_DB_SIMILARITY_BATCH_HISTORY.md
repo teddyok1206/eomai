@@ -1,5 +1,28 @@
 # DB 유사도 검색: 목록·기록·완료 결과 재열람
 
+## 2026-11-05: 장치별 인덱스 head 진행 차이 복구
+
+- 책임: Catalog의 최초 DB 검색 scope 선택과 public QUERY 인덱스 해석을 수정한다. API의
+  완료 기록/권한, 수치 모델, INDEX 작업 또는 기존 wire/schema bytes는 바꾸지 않는다.
+- 정본/identity: 각 장치의 immutable index revision과 published Graph/policy가 정본이다.
+  GPU head만 고른 뒤 다른 Graph인 CPU head를 같은 검색에 붙이던 것이 실제 실패 원인이다.
+  같은 Graph/policy로 이미 등록된 CPU/GPU revision 쌍을 최초 pin 전에 선택한다. 선택 후에는
+  exact scope에 속한 revision만 해석하고, 완료 결과나 원래 실패를 다른 head로 대체하지 않는다.
+- 포인터: namespace/model space/recipe/partition은 기존 설정 그대로다. 실제 파일·schema·
+  hash·현재 권한/승인·source membership은 기존 Catalog 검증을 모두 유지한다. CPU/GPU의
+  vector를 서로 섞거나 검색 성공을 위해 Graph/hash 검사를 느슨하게 하지 않는다.
+- 접근/구조: namespace UNIQUE lookup, `(index_id, revision_number)`의 정렬된 역사와
+  Graph/policy index join, exact revision 2개 batch read를 쓴다. 같은 head scope는 즉시 재사용한다.
+  metadata 조회는 revision 수에 선형/인덱스 기반이며 후보 문항 전체나 vector를 복사하지 않는다.
+  기존 index로 충분하고 새 DB migration/cache/queue는 없다.
+- transaction: 최초 source latch 이전의 같은 read root에서 쌍을 선택한다. 준비 단계에서도
+  pin된 Graph/policy만 검색한다. 별도로 진행하는 INDEX의 head 전진을 막거나 되돌리지 않는다.
+- 오류/retry: 공통 게시 scope가 없으면 명시적 준비 필요다. 현재 두 장치가 함께 지원하는
+  게시 범위 밖의 새 문항을 준비 완료로 꾸미지 않는다. 기존 FAILED 및 원 요청은 보존한다.
+- 대안: CPU head를 GPU Graph로 거짓 표시하거나 모든 문항을 재임베딩하는 것은 불필요하다.
+  이미 검증된 revision 쌍을 사용하는 것이 작고 재현 가능하다. 순차 검색과 완료 재조회가
+  추가 계산 없이 기존 공식 경로를 쓰는지 회귀/실제 사용자 검색으로 확인한다.
+
 2026-11-02 UTC. 사용자가 기존 결과 문항을 DB 조회에서 여는 데 성공했다고 확인했다.
 그 경로와 원 검색·GPU INDEX를 유지하면서 후속 사용자 기능을 완성한다.
 이 문서는 구현 계획이며, 아래 운영 검증이 끝나기 전에는 완료 상태를 뜻하지 않는다.

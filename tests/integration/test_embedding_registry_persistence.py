@@ -238,6 +238,7 @@ def _revision(
     head: EmbeddingIndexRecord,
     *,
     manifest_schema_ref: str = "eom://schemas/knowledge/embedding-index-manifest/1.0",
+    policy_sha256: str | None = None,
 ) -> EmbeddingIndexRevisionRecord:
     row = EmbeddingIndexRevisionRecord(
         index_revision_id="embeddingindexrev_" + uuid4().hex,
@@ -246,7 +247,7 @@ def _revision(
         previous_index_revision_id=None,
         graph_snapshot_revision_id=seed["snapshot"],
         policy_revision_id=seed["policy"],
-        policy_sha256=sha(),
+        policy_sha256=policy_sha256 or sha(),
         manifest_artifact_id=seed["artifact"],
         manifest_artifact_revision_id=seed["artifact_revision"],
         manifest_member_path="index.json",

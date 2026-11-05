@@ -249,7 +249,7 @@ def test_head_change_after_preparing_uses_real_catalog_pinned_scope(flow, monkey
         policy_revision_id=flow.value.query.policy_revision_id,
         policy_sha256=flow.value.query.policy_sha256,
     )
-    repository = NS(current_namespace_revision=Mock(return_value=(head, 1)))
+    repository = NS(common_public_namespace_revisions=Mock(return_value=(head, head)))
     monkeypatch.setattr(
         selection_module, "EmbeddingRegistryRepository", lambda _session: repository
     )
@@ -270,8 +270,8 @@ def test_head_change_after_preparing_uses_real_catalog_pinned_scope(flow, monkey
         ItemDbSimilarityInput(selection=flow.value.selection),
         idempotency_key=flow.value.key,
     )
-    assert repository.current_namespace_revision.call_count == 1
-    repository.current_namespace_revision.side_effect = AssertionError(
+    assert repository.common_public_namespace_revisions.call_count == 1
+    repository.common_public_namespace_revisions.side_effect = AssertionError(
         "a newer index head must not replace the acknowledged scope"
     )
     result = flow.app.search(
@@ -280,7 +280,7 @@ def test_head_change_after_preparing_uses_real_catalog_pinned_scope(flow, monkey
         idempotency_key=flow.value.key,
     )
     assert result.status == "READY" and result.pinned_query == first.pinned_query
-    assert repository.current_namespace_revision.call_count == 1
+    assert repository.common_public_namespace_revisions.call_count == 1
 
 
 @pytest.mark.parametrize("registered", (False, True))

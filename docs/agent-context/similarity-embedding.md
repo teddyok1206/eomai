@@ -33,6 +33,12 @@ Workflow COMPLETED는 각각 확인한다. 같은 encoding의 재사용과 최�
 응답 때문에 원래 pin을 잃고 새 계산을 제출하지 않도록 한다. 결과 문항은 정본 revision으로
 DB 조회와 조립 선택에 돌아가야 한다.
 
+CPU/GPU head는 다른 Graph까지 진행할 수 있다. 최초 DB 검색은 registry의
+`common_public_namespace_revisions`로 두 장치의 이미 게시된 공통 scope를 고정한다.
+public prepare는 `public_revision_for_scope`로 그 Graph/policy의 exact revision을 읽는다.
+최신 GPU head와 다른 CPU head를 섞거나 Graph/hash 검사를 생략하지 않는다. 이 공통
+게시 범위 밖의 새 source는 준비 필요이며, 이를 모든 GPU binding의 검색 완료로 과장하지 않는다.
+
 ## 먼저 열 파일
 
 - `apps/application_api/eom_api/services/item_db_similarity_searches.py`

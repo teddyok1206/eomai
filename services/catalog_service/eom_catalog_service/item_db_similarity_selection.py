@@ -196,16 +196,16 @@ class CatalogItemDbSimilaritySelection:
             cuda_owner = self.owner.cuda_owner
             if cuda_owner is None:
                 raise ItemDbSimilaritySelectionError("ITEM_DB_SIMILARITY_NOT_INDEXED")
-            cuda = repository.current_namespace_revision(
+            pair = repository.common_public_namespace_revisions(
                 config.corpus_id,
+                config.namespace,
                 cuda_owner.configuration.registry.namespace,
             )
-            if cuda is None:
+            if pair is None:
                 raise ItemDbSimilaritySelectionError("ITEM_DB_SIMILARITY_NOT_INDEXED")
-            # Choose one complete published GPU scope, not a composite of two
-            # independently advancing heads. The QUERY owner still validates
-            # its exact device/index and any permitted CPU fallback separately.
-            registered = cuda[0]
+            # Pin one published scope available to both execution choices before
+            # latching the query. The two heads can advance independently.
+            registered = pair[1]
             snapshot_id = registered.graph_snapshot_revision_id
             policy_id, policy_hash = registered.policy_revision_id, registered.policy_sha256
         else:

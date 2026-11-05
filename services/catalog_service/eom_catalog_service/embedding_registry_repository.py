@@ -23,6 +23,7 @@ from eom_catalog_contracts.public_solution_embedding import AcceptedPublicSoluti
 from eom_catalog_contracts.public_solution_embedding_index import (
     MAX_PUBLIC_SOLUTION_SOURCES,
     PublicSolutionEmbeddingSourceBinding,
+    PublicSolutionIndexNamespace,
 )
 from eom_catalog_contracts.registered_public_solution_embedding import (
     RegisteredPublicSolutionEvidence,
@@ -35,7 +36,7 @@ from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import Select, String, column, exists, select, tuple_, update, values
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.engine import CursorResult
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, aliased
 
 from eom_catalog_service.embedding_incremental_plan import RegisteredEmbeddingRow
 from eom_catalog_service.embedding_registry_models import (
@@ -48,6 +49,7 @@ from eom_catalog_service.embedding_registry_ports import (
     EmbeddingBindingLookupKey,
     EmbeddingBindingOrigin,
     EmbeddingRegistryError,
+    EmbeddingRegistryLookup,
     PublicSolutionEmbeddingBindingLookupKey,
     RegisteredEmbeddingIndexRead,
     RegisteredReviewEmbeddingBindingLookupKey,
@@ -325,6 +327,134 @@ class EmbeddingRegistryRepository:
         if pinned is None or revision is None or revision.revision_number + 1 != version:
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_POINTER_INVALID")
         return pinned, version
+
+    def common_public_namespace_revisions(
+        self,
+        corpus_id: str,
+        cpu_namespace: SupportedEmbeddingNamespace,
+        cuda_namespace: SupportedEmbeddingNamespace,
+    ) -> tuple[RegisteredEmbeddingIndexRead, RegisteredEmbeddingIndexRead] | None:
+        """Choose one already published scope; independently advancing heads are not a pair."""
+        if (
+            not isinstance(cpu_namespace, PublicSolutionIndexNamespace)
+            or not isinstance(cuda_namespace, PublicSolutionIndexNamespace)
+            or cpu_namespace.space_sha256 == cuda_namespace.space_sha256
+            or cpu_namespace.model_dump(exclude={"space_sha256"})
+            != cuda_namespace.model_dump(exclude={"space_sha256"})
+        ):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_REQUEST_INVALID")
+        cpu = self.current_namespace_revision(corpus_id, cpu_namespace)
+        cuda = self.current_namespace_revision(corpus_id, cuda_namespace)
+        if cpu is None or cuda is None:
+            return None
+        left, right = cpu[0], cuda[0]
+        if (
+            left.graph_snapshot_revision_id,
+            left.policy_revision_id,
+            left.policy_sha256,
+        ) == (
+            right.graph_snapshot_revision_id,
+            right.policy_revision_id,
+            right.policy_sha256,
+        ):
+            return left, right
+        # Normal drift is a leading device and a lagging head. Resolve that
+        # exact Graph by its index before considering the bounded history join.
+        matching_cpu = self._public_revision_for_snapshot(
+            left,
+            cpu[1],
+            right.graph_snapshot_revision_id,
+            right.policy_revision_id,
+            right.policy_sha256,
+        )
+        if matching_cpu is not None:
+            return matching_cpu, right
+        matching_cuda = self._public_revision_for_snapshot(
+            right,
+            cuda[1],
+            left.graph_snapshot_revision_id,
+            left.policy_revision_id,
+            left.policy_sha256,
+        )
+        if matching_cuda is not None:
+            return left, matching_cuda
+        cpu_revision = aliased(EmbeddingIndexRevisionRecord)
+        cuda_revision = aliased(EmbeddingIndexRevisionRecord)
+        pair = self.session.execute(
+            select(cpu_revision.index_revision_id, cuda_revision.index_revision_id)
+            .select_from(cuda_revision)
+            .join(
+                cpu_revision,
+                (
+                    cpu_revision.graph_snapshot_revision_id
+                    == cuda_revision.graph_snapshot_revision_id
+                )
+                & (cpu_revision.policy_revision_id == cuda_revision.policy_revision_id)
+                & (cpu_revision.policy_sha256 == cuda_revision.policy_sha256),
+            )
+            .where(
+                cpu_revision.index_id == left.index_id,
+                cuda_revision.index_id == right.index_id,
+                cpu_revision.revision_number < cpu[1],
+                cuda_revision.revision_number < cuda[1],
+            )
+            .order_by(cuda_revision.revision_number.desc(), cpu_revision.revision_number.desc())
+            .limit(1)
+        ).one_or_none()
+        if pair is None:
+            return None
+        keys = ((left.index_id, pair[0]), (right.index_id, pair[1]))
+        values = self.read_pinned_revisions(keys)
+        if set(values) != set(keys):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_POINTER_INVALID")
+        return values[keys[0]], values[keys[1]]
+
+    def public_revision_for_scope(
+        self, scope: EmbeddingRegistryLookup
+    ) -> RegisteredEmbeddingIndexRead | None:
+        """Resolve the requested Graph/policy, never substitute this namespace's newer head."""
+        if not isinstance(scope.namespace, PublicSolutionIndexNamespace):
+            raise EmbeddingRegistryError("EMBEDDING_REGISTRY_REQUEST_INVALID")
+        current = self.current_namespace_revision(scope.corpus_id, scope.namespace)
+        if current is None:
+            return None
+        head, version = current
+        return self._public_revision_for_snapshot(
+            head,
+            version,
+            scope.graph_snapshot.graph_snapshot_revision_id,
+            scope.policy_revision_id,
+            scope.policy_sha256,
+        )
+
+    def _public_revision_for_snapshot(
+        self,
+        head: RegisteredEmbeddingIndexRead,
+        version: int,
+        graph_id: str,
+        policy_revision_id: str,
+        policy_sha256: str,
+    ) -> RegisteredEmbeddingIndexRead | None:
+        if (
+            head.graph_snapshot_revision_id == graph_id
+            and head.policy_revision_id == policy_revision_id
+            and head.policy_sha256 == policy_sha256
+        ):
+            return head
+        revision = EmbeddingIndexRevisionRecord
+        row = self.session.execute(
+            _pinned_revision_select()
+            .where(
+                revision.index_id == head.index_id,
+                revision.graph_snapshot_revision_id == graph_id,
+                revision.policy_revision_id == policy_revision_id,
+                revision.policy_sha256 == policy_sha256,
+                revision.revision_number < version,
+            )
+            .order_by(revision.revision_number.desc())
+            .limit(1)
+        ).one_or_none()
+        return None if row is None else _registered_index_read(row)
 
     def read_pinned_revision(
         self, index_id: str, revision_id: str

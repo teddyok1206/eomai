@@ -182,12 +182,9 @@ class CatalogPublicSolutionSimilarityRead:
             for value in entries.values()
         ):
             raise SimilarityContextReadError("SOURCE_POINTER_INVALID")
-        current = EmbeddingRegistryRepository(session).current_namespace_revision(
-            scope.corpus_id, scope.namespace
-        )
-        if current is None:
+        registered = EmbeddingRegistryRepository(session).public_revision_for_scope(scope)
+        if registered is None:
             raise SimilarityContextReadError("INDEX_POINTER_INVALID")
-        registered, _version = current
         registered_source = registered.index_manifest.schema_ref in {
             REGISTERED_PUBLIC_SOLUTION_INDEX_SCHEMA_REF,
             "eom://schemas/knowledge/embedding-index-manifest/5.0",
