@@ -6,6 +6,7 @@ installed service composition must supply actual current authority and an execut
 
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass, replace
 from enum import StrEnum
 from typing import Literal
@@ -15,6 +16,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingIndexManifest,
     EmbeddingSourceBinding,
 )
+from eom_catalog_contracts.inference_transfer_experiment import PopulationSource
 from eom_catalog_contracts.local_indexing_mixed_policy import (
     LocalIndexingMixedAccessPolicy,
     supported_local_indexing_authorization_audit_sha256,
@@ -140,6 +142,31 @@ def local_embedding_reconciliation_key(request: SupportedLocalEmbeddingRequest) 
     return "local-embedding-reconcile:" + checked.request_sha256.removeprefix("sha256:")
 
 
+def _public_target_revisions(
+    target_ids: set[str], sources: tuple[PopulationSource, ...], maximum_targets: int
+) -> tuple[str, ...]:
+    """A growing registered population must not starve the finite past-exam backlog.
+
+    Interleave source classes before applying the numerical batch bound. Keep
+    canonical revision ordering within each class and in the selected result;
+    this is discovery only, not reinterpretation of a pinned original request.
+    """
+    source_classes = {source.item_revision_id: source.source_class for source in sources}
+    by_class: dict[str, deque[str]] = {}
+    for revision in sorted(target_ids):
+        by_class.setdefault(source_classes[revision], deque()).append(revision)
+    groups = deque(
+        by_class[kind] for kind in sorted(by_class, key=lambda kind: (kind != "PAST_EXAM", kind))
+    )
+    selected: list[str] = []
+    while groups and len(selected) < maximum_targets:
+        group = groups.popleft()
+        selected.append(group.popleft())
+        if group:
+            groups.append(group)
+    return tuple(sorted(selected))
+
+
 class LocalEmbeddingServicePreparation:
     """Source/coverage preparation before physical allocation, without a numerical executor."""
 
@@ -223,6 +250,10 @@ class LocalEmbeddingServicePreparation:
                 or not set(targets).issubset(profile_ids)
             ):
                 raise ValueError("LOCAL_EMBEDDING_RECONCILIATION_SOURCE_MISMATCH")
+            if public and uncached_targets:
+                targets = _public_target_revisions(
+                    uncached_targets, resolved.sources, self.maximum_targets
+                )
             refresh: IndexMembershipRefreshBasis | None = None
             refresh_reason: str | None = None
             if prepared.bindings:
