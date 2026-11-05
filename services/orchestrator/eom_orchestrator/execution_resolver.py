@@ -29,6 +29,7 @@ from eom_catalog_contracts import (
     LegacyItemExtractionRequest,
     ReviewTextbookEvidence,
 )
+from eom_catalog_contracts.material_knowledge_analysis import KnowledgeAnalysisRequestV12
 from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInput
 from eom_identifiers import content_sha256, new_execution_plan_id
 from eom_workflow.control_plane import (
@@ -60,6 +61,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV28,
     ResolvedExecutionPlanV29,
     ResolvedExecutionPlanV32,
+    ResolvedExecutionPlanV34,
     ResolvedStepExecution,
     ResolvedStepExecutionV3,
     ResolvedStepExecutionV12,
@@ -1842,6 +1844,7 @@ def resolve_knowledge_analysis_plan(
         | KnowledgeAnalysisRequestV9
         | KnowledgeAnalysisRequestV10
         | KnowledgeAnalysisRequestV11
+        | KnowledgeAnalysisRequestV12
     ),
     resolved_at: datetime | None = None,
 ) -> (
@@ -1851,8 +1854,18 @@ def resolve_knowledge_analysis_plan(
     | ResolvedExecutionPlanV8
     | ResolvedExecutionPlanV9
     | ResolvedExecutionPlanV29
+    | ResolvedExecutionPlanV34
 ):
     """Resolve one exact released support policy without consulting a mutable latest pointer."""
+
+    if isinstance(request, KnowledgeAnalysisRequestV12) and (
+        workflow_definition_version != "12.0.0"
+        or workflow_role_schema_version != "workflow-role/1.38.0"
+    ):
+        raise ControlPlaneError(
+            "CONTROL_PRESET_INCOMPATIBLE",
+            "uploaded document requires its exact definition/protocol",
+        )
 
     if isinstance(request, KnowledgeAnalysisRequestV11) and (
         workflow_definition_version != "11.0.0"
@@ -1868,6 +1881,24 @@ def resolve_knowledge_analysis_plan(
         )
     )
     if existing is not None:
+        if isinstance(request, KnowledgeAnalysisRequestV12):
+            recovered_material = ResolvedExecutionPlanV34.model_validate(
+                existing.canonical_document
+            )
+            if (
+                recovered_material.workflow_id != workflow_id
+                or recovered_material.preset_id != request.execution_preset_id
+                or recovered_material.preset_revision_id != request.execution_preset_revision_id
+                or recovered_material.preset_sha256 != request.execution_preset_sha256
+                or recovered_material.analysis_request_id != request.analysis_request_id
+                or recovered_material.analysis_request_sha256 != request.request_sha256
+                or recovered_material.document_source != request.source
+                or recovered_material.workflow_definition_sha256 != workflow_definition_sha256
+            ):
+                raise ControlPlaneError(
+                    "CONTROL_PRESET_INCOMPATIBLE", "stored uploaded document plan differs"
+                )
+            return recovered_material
         if isinstance(request, KnowledgeAnalysisRequestV11):
             recovered = ResolvedExecutionPlanV29.model_validate(existing.canonical_document)
             if (
@@ -1965,7 +1996,15 @@ def resolve_knowledge_analysis_plan(
         "resolved_at": actual_resolved_at.isoformat().replace("+00:00", "Z"),
         "plan_sha256": "sha256:" + "0" * 64,
     }
-    if isinstance(request, KnowledgeAnalysisRequestV11):
+    if isinstance(request, KnowledgeAnalysisRequestV12):
+        document.update(
+            {
+                "schema_version": "resolved-execution-plan/34.0",
+                "document_source": request.source.model_dump(mode="json"),
+                "resolver_version": "34.0.0",
+            }
+        )
+    elif isinstance(request, KnowledgeAnalysisRequestV11):
         document.update(
             {
                 "schema_version": "resolved-execution-plan/29.0",
@@ -2031,8 +2070,12 @@ def resolve_knowledge_analysis_plan(
         | ResolvedExecutionPlanV8
         | ResolvedExecutionPlanV9
         | ResolvedExecutionPlanV29
+        | ResolvedExecutionPlanV34
     )
-    if document["schema_version"] == "resolved-execution-plan/29.0":
+    if document["schema_version"] == "resolved-execution-plan/34.0":
+        validate_control_contract("resolved-execution-plan-v34", document)
+        model = ResolvedExecutionPlanV34.model_validate(document)
+    elif document["schema_version"] == "resolved-execution-plan/29.0":
         validate_control_contract("resolved-execution-plan-v29", document)
         model = ResolvedExecutionPlanV29.model_validate(document)
     elif document["schema_version"] == "resolved-execution-plan/9.0":

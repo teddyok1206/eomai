@@ -34,6 +34,30 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "educational-document-knowledge-source-v5": CatalogSchemaResource(
+            "schemas/knowledge/educational-document-knowledge-source-v5.schema.json",
+            "resources/knowledge/educational-document-knowledge-source-v5.schema.json",
+            "5.0",
+            "sha256:2bf9be2f4ac6788ffe19c0bbb059e0b493ab3cca17458284b6db007f6467b0cb",
+        ),
+        "knowledge-analysis-request-v12": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-request-v12.schema.json",
+            "resources/knowledge/knowledge-analysis-request-v12.schema.json",
+            "12.0",
+            "sha256:0c64bc97fe2fc5a4e9b88373f0eae7160ada4da931ace5ddf4d4b280f78fbbf8",
+        ),
+        "knowledge-analysis-proposal-receipt-v11": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-proposal-receipt-v11.schema.json",
+            "resources/knowledge/knowledge-analysis-proposal-receipt-v11.schema.json",
+            "11.0",
+            "sha256:225a4bca29cb788238251473aeaed26fc8fd74eff0eb09e741a0bc4d17ba5150",
+        ),
+        "knowledge-analysis-result-v12": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-analysis-result-v12.schema.json",
+            "resources/knowledge/knowledge-analysis-result-v12.schema.json",
+            "12.0",
+            "sha256:28ff34500558deb0696e60e29c01a68e7d993fdc79ec049ed59680349151e512",
+        ),
         "material-learning-authorization-request-v1": CatalogSchemaResource(
             "schemas/material-learning/material-learning-authorization-request-v1.schema.json",
             "resources/material-learning/material-learning-authorization-request-v1.schema.json",
@@ -172,6 +196,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:56444d1d7a3c5f93b2e0ed6b8322c99b68218127443304415eff1f0db789d88c",
         ),
+        "material-learning-role-receipt-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-role-receipt-v1.schema.json",
+            "resources/material-learning/material-learning-role-receipt-v1.schema.json",
+            "1.0",
+            "sha256:627dcc7b6e21e82ca6b6e212577e7c391b60f765306d0c53dd603f33a45ca044",
+        ),
         "material-learning-rights-v1": CatalogSchemaResource(
             "schemas/material-learning/material-learning-rights-v1.schema.json",
             "resources/material-learning/material-learning-rights-v1.schema.json",
@@ -303,6 +333,24 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/knowledge/private-chat-work-batch-result-v3.schema.json",
             "3.0",
             "sha256:ef0ff8bd3584df05b95b2272529814c71a2abff051c7aa811ab148f6f318df1e",
+        ),
+        "create-material-knowledge-analysis-v1": CatalogSchemaResource(
+            "schemas/knowledge/create-material-knowledge-analysis-v1.schema.json",
+            "resources/knowledge/create-material-knowledge-analysis-v1.schema.json",
+            "1.0",
+            "sha256:9cef7f601079a888e1325d5970e98794b4f40be5c978a01c5f8beced950d32a0",
+        ),
+        "material-learning-item-lineage-v1": CatalogSchemaResource(
+            "schemas/material-learning/item-lineage-v1.schema.json",
+            "resources/material-learning/item-lineage-v1.schema.json",
+            "1.0",
+            "sha256:854591eeba9d663576ad69386d1938a05f651f3d183e370116a4d7953d4ecbe8",
+        ),
+        "knowledge-graph-snapshot-manifest-v10": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-graph-snapshot-manifest-v10.schema.json",
+            "resources/knowledge/knowledge-graph-snapshot-manifest-v10.schema.json",
+            "10.0",
+            "sha256:e31b7b6c2b99c12753af146071098ed5887b8426cab3ddb3499bbedd5a533fcb",
         ),
         "public-solution-similarity-v3": CatalogSchemaResource(
             "schemas/knowledge/public-solution-similarity-v3.schema.json",

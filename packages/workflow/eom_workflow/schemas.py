@@ -30,6 +30,7 @@ from eom_catalog_contracts import (
 )
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.item_inference_transfer import ClaimId
+from eom_catalog_contracts.material_knowledge_analysis import KnowledgeAnalysisRequestV12
 from eom_catalog_contracts.models import FrozenModel
 from eom_catalog_contracts.validation import CatalogSchemaError
 from eom_hwpx_contracts import (
@@ -128,6 +129,7 @@ from eom_workflow.models import (
     KnowledgeAnalysisProposalRoleResultV9,
     KnowledgeAnalysisProposalRoleResultV10,
     KnowledgeAnalysisProposalRoleResultV11,
+    KnowledgeAnalysisProposalRoleResultV12,
     KnowledgeAnalysisWorkerRequest,
     KnowledgeAuthoringRoleResult,
     KnowledgeImageRoleResult,
@@ -244,6 +246,7 @@ ROLE_ALLOWED_RESULT_SCHEMAS: dict[str, frozenset[str]] = {
             "knowledge-analysis-proposal-result@9.0",
             "knowledge-analysis-proposal-result@10.0",
             "knowledge-analysis-proposal-result@11.0",
+            "knowledge-analysis-proposal-result@12.0",
             "legacy-item-extraction-result@1.0",
             "external-item-learning-result@1.0",
             "external-item-learning-result@2.0",
@@ -325,6 +328,7 @@ RESULT_SCHEMA_FILES = {
     "knowledge-analysis-proposal-result@11.0": (
         "knowledge-analysis-proposal-result-v11.schema.json"
     ),
+    "knowledge-analysis-proposal-result@12.0": "knowledge-analysis-proposal-result-v12.schema.json",
     "legacy-item-extraction-result@1.0": "legacy-item-extraction-result-v1.schema.json",
     "external-item-learning-result@1.0": "external-item-learning-result-v1.schema.json",
     "external-item-learning-result@2.0": "external-item-learning-result-v2.schema.json",
@@ -386,6 +390,7 @@ INPUT_SCHEMA_FILES_V1_34 = {"support": "external-item-learning-input-v2.schema.j
 INPUT_SCHEMA_FILES_V1_35 = {"support": "knowledge-analysis-input-v11.schema.json"}
 INPUT_SCHEMA_FILES_V1_36 = {"support": "external-item-learning-input-v3.schema.json"}
 INPUT_SCHEMA_FILES_V1_37 = {"support": "material-learning-input-v1.schema.json"}
+INPUT_SCHEMA_FILES_V1_38 = {"support": "knowledge-analysis-input-v12.schema.json"}
 RESULT_SCHEMA_PROTOCOLS = {
     **{schema_id: "workflow-role/1.0.1" for schema_id in ROLE_RESULT_SCHEMAS.values()},
     **{
@@ -436,6 +441,7 @@ RESULT_SCHEMA_PROTOCOLS = {
     "external-item-learning-result@2.0": "workflow-role/1.34.0",
     "external-item-learning-result@3.0": "workflow-role/1.36.0",
     "material-learning-result@1.0": "workflow-role/1.37.0",
+    "knowledge-analysis-proposal-result@12.0": "workflow-role/1.38.0",
     "authoring-result@7.0": "workflow-role/1.15.0",
     "review-result@7.0": "workflow-role/1.15.0",
     "registration-result@7.0": "workflow-role/1.15.0",
@@ -500,6 +506,7 @@ PROTOCOL_INPUT_SCHEMAS = {
     "workflow-role/1.35.0": INPUT_SCHEMA_FILES_V1_35,
     "workflow-role/1.36.0": INPUT_SCHEMA_FILES_V1_36,
     "workflow-role/1.37.0": INPUT_SCHEMA_FILES_V1_37,
+    "workflow-role/1.38.0": INPUT_SCHEMA_FILES_V1_38,
 }
 WorkflowProtocolVersion = Literal[
     "workflow-role/1.0.1",
@@ -540,6 +547,7 @@ WorkflowProtocolVersion = Literal[
     "workflow-role/1.35.0",
     "workflow-role/1.36.0",
     "workflow-role/1.37.0",
+    "workflow-role/1.38.0",
 ]
 ROLE_SCHEMA_FILES = tuple(
     sorted(
@@ -576,6 +584,7 @@ ROLE_SCHEMA_FILES = tuple(
             *INPUT_SCHEMA_FILES_V1_33.values(),
             *INPUT_SCHEMA_FILES_V1_36.values(),
             *INPUT_SCHEMA_FILES_V1_37.values(),
+            *INPUT_SCHEMA_FILES_V1_38.values(),
         }
     )
 )
@@ -1862,6 +1871,7 @@ def _role_input_schema(role: str, protocol_version: str = "workflow-role/1.0.1")
             "workflow-role/1.33.0",
             "workflow-role/1.36.0",
             "workflow-role/1.37.0",
+            "workflow-role/1.38.0",
         },
     )
 
@@ -1893,6 +1903,7 @@ def _role_result_schema(schema_id: str) -> dict[str, Any]:
             "knowledge-analysis-proposal-result@10.0",
             "knowledge-analysis-proposal-result@11.0",
             "legacy-item-extraction-result@1.0",
+            "knowledge-analysis-proposal-result@12.0",
             "external-item-learning-result@1.0",
             "external-item-learning-result@2.0",
             "external-item-learning-result@3.0",
@@ -2307,6 +2318,8 @@ def validate_role_result(value: object, role: str, schema_id: str) -> RoleResult
             return KnowledgeAnalysisProposalRoleResultV10.model_validate(canonical_value)
         if schema_id == "knowledge-analysis-proposal-result@11.0" and role == "support":
             return KnowledgeAnalysisProposalRoleResultV11.model_validate(canonical_value)
+        if schema_id == "knowledge-analysis-proposal-result@12.0" and role == "support":
+            return KnowledgeAnalysisProposalRoleResultV12.model_validate(canonical_value)
         if schema_id == "legacy-item-extraction-result@1.0" and role == "support":
             return LegacyItemExtractionRoleResult.model_validate(canonical_value)
         if schema_id == "external-item-learning-result@1.0" and role == "support":
@@ -3265,6 +3278,7 @@ def constrained_result_schema(
         "knowledge-analysis-proposal-result@9.0",
         "knowledge-analysis-proposal-result@10.0",
         "knowledge-analysis-proposal-result@11.0",
+        "knowledge-analysis-proposal-result@12.0",
     }:
         if not isinstance(worker_input.request, KnowledgeAnalysisWorkerRequest):
             raise WorkflowSchemaError("knowledge analysis result requires its typed worker request")
@@ -3285,6 +3299,7 @@ def constrained_result_schema(
             "knowledge-analysis-proposal-result@9.0": "KnowledgeAnalysisWorkerProposalV7",
             "knowledge-analysis-proposal-result@10.0": "KnowledgeAnalysisWorkerProposalV8",
             "knowledge-analysis-proposal-result@11.0": "KnowledgeAnalysisWorkerProposalV8",
+            "knowledge-analysis-proposal-result@12.0": "KnowledgeAnalysisWorkerProposalV6",
         }[schema_id]
         if proposal_ref.get("$ref") != f"#/$defs/{proposal_definition_name}":
             raise WorkflowSchemaError("knowledge analysis proposal reference is not projectable")
@@ -3339,6 +3354,7 @@ def constrained_result_schema(
                 KnowledgeAnalysisRequestV6,
                 KnowledgeAnalysisRequestV7,
                 KnowledgeAnalysisRequestV8,
+                KnowledgeAnalysisRequestV12,
             ),
         ):
             assert anchor_properties is not None
@@ -3355,7 +3371,12 @@ def constrained_result_schema(
             )
         if isinstance(
             analysis_request,
-            (KnowledgeAnalysisRequestV6, KnowledgeAnalysisRequestV7, KnowledgeAnalysisRequestV8),
+            (
+                KnowledgeAnalysisRequestV6,
+                KnowledgeAnalysisRequestV7,
+                KnowledgeAnalysisRequestV8,
+                KnowledgeAnalysisRequestV12,
+            ),
         ):
             _bind_page_image_observations(
                 schema,
@@ -4456,7 +4477,10 @@ def _bind_page_image_observations(
     schema: dict[str, Any],
     proposal_properties: dict[str, Any],
     analysis_request: (
-        KnowledgeAnalysisRequestV6 | KnowledgeAnalysisRequestV7 | KnowledgeAnalysisRequestV8
+        KnowledgeAnalysisRequestV6
+        | KnowledgeAnalysisRequestV7
+        | KnowledgeAnalysisRequestV8
+        | KnowledgeAnalysisRequestV12
     ),
 ) -> None:
     """Bind model-visible page attestations to exact immutable request pointers."""
@@ -4576,6 +4600,7 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
         "knowledge-analysis-proposal-result@9.0",
         "knowledge-analysis-proposal-result@10.0",
         "knowledge-analysis-proposal-result@11.0",
+        "knowledge-analysis-proposal-result@12.0",
     }:
         _project_knowledge_analysis_codex_contract(schema, schema_id=schema_id)
     if schema_id in {
@@ -4586,6 +4611,7 @@ def load_codex_result_schema(schema_id: str) -> dict[str, Any]:
         "knowledge-analysis-proposal-result@9.0",
         "knowledge-analysis-proposal-result@10.0",
         "knowledge-analysis-proposal-result@11.0",
+        "knowledge-analysis-proposal-result@12.0",
     }:
         _prune_unreferenced_definitions(schema)
     if schema_id == "legacy-item-extraction-result@1.0":
@@ -5012,6 +5038,7 @@ def _project_knowledge_analysis_codex_contract(schema: dict[str, Any], *, schema
         "knowledge-analysis-proposal-result@7.0",
         "knowledge-analysis-proposal-result@8.0",
         "knowledge-analysis-proposal-result@9.0",
+        "knowledge-analysis-proposal-result@12.0",
     }:
         _project_typed_endpoint_identities(schema)
     _strip_knowledge_analysis_codex_guards(schema)
@@ -5031,6 +5058,7 @@ def _project_knowledge_analysis_codex_contract(schema: dict[str, Any], *, schema
         "knowledge-analysis-proposal-result@7.0": "KnowledgeAnalysisWorkerProposalV5",
         "knowledge-analysis-proposal-result@8.0": "KnowledgeAnalysisWorkerProposalV6",
         "knowledge-analysis-proposal-result@9.0": "KnowledgeAnalysisWorkerProposalV7",
+        "knowledge-analysis-proposal-result@12.0": "KnowledgeAnalysisWorkerProposalV6",
     }[schema_id]
     if proposal_reference != {"$ref": f"#/$defs/{proposal_definition_name}"}:
         raise WorkflowSchemaError("knowledge analysis proposal reference is not projectable")
@@ -5432,6 +5460,11 @@ def _inline_catalog_schema(
             "KnowledgeAnalysisRequestV11",
         ),
         (
+            "eom://schemas/knowledge/knowledge-analysis-request/12.0",
+            "knowledge-analysis-request-v12",
+            "KnowledgeAnalysisRequestV12",
+        ),
+        (
             "eom://schemas/knowledge/knowledge-analysis-worker-proposal/1.0",
             "knowledge-analysis-worker-proposal",
             "KnowledgeAnalysisWorkerProposal",
@@ -5753,6 +5786,19 @@ def _inline_knowledge_contract(
     from eom_catalog_contracts import load_schema
 
     root = copy.deepcopy(load_schema(catalog_name))
+    if catalog_name == "knowledge-analysis-request-v12":
+        root = _inline_contract_sources(
+            root,
+            tuple(
+                (load_schema(name)["$id"], prefix, copy.deepcopy(load_schema(name)))
+                for name, prefix in (
+                    ("educational-document-knowledge-source-v5", "UploadedMaterialSource"),
+                    ("material-learning-types-v1", "UploadedMaterialTypes"),
+                    ("legacy-assessment-types", "UploadedMaterialAssessmentTypes"),
+                    ("item-origin-types", "UploadedMaterialOriginTypes"),
+                )
+            ),
+        )
     solution_types_v2_reference = (
         "eom://schemas/knowledge/knowledge-analysis-solution-types/2.0#/$defs/"
     )

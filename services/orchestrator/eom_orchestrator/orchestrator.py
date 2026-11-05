@@ -14,6 +14,8 @@ from eom_catalog_contracts import ContentTeamMaterialRequirement
 from eom_catalog_contracts.external_item_learning_work import (
     validate_external_item_learning_result_for_work,
 )
+from eom_catalog_contracts.material_knowledge_analysis import KnowledgeAnalysisRequestV12
+from eom_catalog_contracts.material_learning import MaterialLearningRoleReceipt
 from eom_identifiers import (
     content_sha256,
     new_job_id,
@@ -104,6 +106,7 @@ from eom_workflow.models import (
     KnowledgeAnalysisProposalRoleResultV9,
     KnowledgeAnalysisProposalRoleResultV10,
     KnowledgeAnalysisProposalRoleResultV11,
+    KnowledgeAnalysisProposalRoleResultV12,
     KnowledgeAnalysisWorkerRequest,
     LegacyItemEditorialCompatibilityRoleResult,
     LegacyItemEditorialCompatibilityWorkerRequest,
@@ -717,9 +720,47 @@ class Orchestrator:
         | None = None,
         external_item_learning: ExternalItemLearningExecutionContext | None = None,
         material_learning: MaterialLearningExecutionContext | None = None,
+        reauthorize_knowledge_source: Callable[[KnowledgeAnalysisWorkerRequest], None]
+        | None = None,
     ) -> JobRecord:
         if (prompt_path is None) == (prompt_text is None):
             raise ValueError("exactly one workflow prompt source is required")
+        is_uploaded_knowledge = isinstance(request, KnowledgeAnalysisWorkerRequest) and isinstance(
+            request.analysis_request, KnowledgeAnalysisRequestV12
+        )
+
+        def reauthorize_uploaded_knowledge() -> None:
+            if not is_uploaded_knowledge:
+                if reauthorize_knowledge_source is not None:
+                    raise ControlPlaneError(
+                        "CONTROL_MATERIAL_CONTEXT_INVALID",
+                        "unexpected uploaded knowledge authority",
+                    )
+                return
+            if (
+                reauthorize_knowledge_source is None
+                or not isinstance(request, KnowledgeAnalysisWorkerRequest)
+                or role != "support"
+                or step_key != "analyze"
+                or result_schema != "knowledge-analysis-proposal-result@12.0"
+                or upstream_artifacts
+                or execution_tier != "PRIMARY"
+                or external_item_learning is not None
+                or material_learning is not None
+            ):
+                raise ControlPlaneError(
+                    "CONTROL_MATERIAL_SOURCE_AUTHORIZATION_FAILED",
+                    "uploaded knowledge requires its original Catalog authority",
+                )
+            try:
+                reauthorize_knowledge_source(request)
+            except ValueError as error:
+                raise ControlPlaneError(
+                    "CONTROL_MATERIAL_SOURCE_AUTHORIZATION_FAILED",
+                    "uploaded knowledge source authority changed",
+                ) from error
+
+        reauthorize_uploaded_knowledge()
         is_creative = isinstance(request, ExternalItemLearningWorkerRequest)
         is_material = isinstance(request, MaterialLearningWorkerRequest)
         material_plan: ResolvedExecutionPlanV33 | None = None
@@ -1002,6 +1043,7 @@ class Orchestrator:
             before_execute(job_id)
 
         try:
+            reauthorize_uploaded_knowledge()
             if material_learning is not None:
                 assert isinstance(request, MaterialLearningWorkerRequest)
                 material_learning.reauthorize(request)
@@ -1167,7 +1209,12 @@ class Orchestrator:
                                 ),
                             )
                         event_data: dict[str, object] = dict(evidence.event_data())
-                        if not is_transfer and not is_creative and not is_material:
+                        if (
+                            not is_transfer
+                            and not is_creative
+                            and not is_material
+                            and not is_uploaded_knowledge
+                        ):
                             self._transition(
                                 job_id,
                                 JobState.RUNNING,
@@ -1176,7 +1223,7 @@ class Orchestrator:
                             )
                         return evidence
 
-                    if is_transfer or is_creative or is_material:
+                    if is_transfer or is_creative or is_material or is_uploaded_knowledge:
                         # Preparation and materialization cannot have started a process.
                         # Only the actual launch boundary may retain an uncertain lease.
                         prepared_workspace = self.worker_adapter.prepare_structured_workspace(
@@ -1187,7 +1234,9 @@ class Orchestrator:
                             slot=slot,
                         )
                         evidence = materialize(prepared_workspace.workspace)
-                        if isinstance(request, InferenceTransferPairWorkerRequest):
+                        if is_uploaded_knowledge:
+                            reauthorize_uploaded_knowledge()
+                        elif isinstance(request, InferenceTransferPairWorkerRequest):
                             assert reauthorize_transfer_sources is not None
                             self._reauthorize_inference_transfer_sources(
                                 request, reauthorize_transfer_sources
@@ -1421,6 +1470,7 @@ class Orchestrator:
                 "knowledge-analysis-proposal-result@9.0",
                 "knowledge-analysis-proposal-result@10.0",
                 "knowledge-analysis-proposal-result@11.0",
+                "knowledge-analysis-proposal-result@12.0",
             }:
                 expected_result_type = {
                     "knowledge-analysis-proposal-result@1.0": (KnowledgeAnalysisProposalRoleResult),
@@ -1454,6 +1504,9 @@ class Orchestrator:
                     "knowledge-analysis-proposal-result@11.0": (
                         KnowledgeAnalysisProposalRoleResultV11
                     ),
+                    "knowledge-analysis-proposal-result@12.0": (
+                        KnowledgeAnalysisProposalRoleResultV12
+                    ),
                 }[result_schema]
                 if not isinstance(result, expected_result_type) or not isinstance(
                     worker_input.request, KnowledgeAnalysisWorkerRequest
@@ -1470,6 +1523,7 @@ class Orchestrator:
                     revision_id=artifact.revision_id,
                     staging=staging,
                 )
+                reauthorize_uploaded_knowledge()
                 self._transition(job_id, JobState.COMMITTING, "ARTIFACT_COMMIT_STARTED")
                 final_path = commit_file_set_artifact(
                     staged_file_set, self.settings.nas_artifact_root
@@ -1670,6 +1724,13 @@ class Orchestrator:
                 content_bytes = staged.manifest.content_bytes
                 manifest_document = staged.manifest.model_dump(mode="json")
                 database_result = result_document
+                if isinstance(result, MaterialLearningRoleResult):
+                    assert isinstance(worker_input.request, MaterialLearningWorkerRequest)
+                    database_result = MaterialLearningRoleReceipt(
+                        task_kind=worker_input.request.work_input.task_kind,
+                        input_sha256=worker_input.request.work_input.input_sha256,
+                        result_sha256=content_sha256(result_document),
+                    ).model_dump(mode="json")
             with transaction(self.sessions) as session:
                 committing = session.execute(
                     select(JobRecord).where(JobRecord.job_id == job_id).with_for_update()

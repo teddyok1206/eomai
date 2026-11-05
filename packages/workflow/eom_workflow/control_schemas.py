@@ -29,6 +29,12 @@ class ControlSchemaResource:
 
 CONTROL_SCHEMA_RESOURCES: Mapping[str, ControlSchemaResource] = MappingProxyType(
     {
+        "resolved-execution-plan-v34": ControlSchemaResource(
+            "schemas/workflow/control-plane/resolved-execution-plan-v34.schema.json",
+            "resources/control-plane/resolved-execution-plan-v34.schema.json",
+            "34.0",
+            "sha256:df3b271f7aea4c5d0b3b5027d39a7be407183f5c485a5a69e9994fb92a88ca95",
+        ),
         "codex-image-input-manifest-v5": ControlSchemaResource(
             "schemas/workflow/control-plane/codex-image-input-manifest-v5.schema.json",
             "resources/control-plane/codex-image-input-manifest-v5.schema.json",
@@ -926,6 +932,7 @@ def _control_schema_registry() -> Registry[Any]:
     from eom_catalog_contracts import load_schema
 
     for name in (
+        "educational-document-knowledge-source-v5",
         "material-learning-types-v1",
         "material-learning-discovery-work-v1",
         "material-learning-extraction-work-v1",

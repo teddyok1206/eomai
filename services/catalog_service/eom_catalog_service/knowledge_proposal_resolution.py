@@ -27,6 +27,7 @@ from eom_catalog_contracts import (
     KnowledgeAnalysisWorkerProposalV8,
     validate_contract,
 )
+from eom_catalog_contracts.material_knowledge_analysis import KnowledgeAnalysisProposalReceiptV11
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from pydantic import ValidationError
 
@@ -45,6 +46,7 @@ type KnowledgeAnalysisReceipt = (
     | KnowledgeAnalysisProposalReceiptV6
     | KnowledgeAnalysisProposalReceiptV7
     | KnowledgeAnalysisProposalReceiptV8
+    | KnowledgeAnalysisProposalReceiptV11
 )
 
 
@@ -118,7 +120,10 @@ def resolve_knowledge_analysis_proposal(
             if isinstance(receipt, KnowledgeAnalysisProposalReceiptV8)
             else (
                 "knowledge-analysis-worker-proposal/6.0"
-                if isinstance(receipt, KnowledgeAnalysisProposalReceiptV7)
+                if isinstance(
+                    receipt,
+                    (KnowledgeAnalysisProposalReceiptV7, KnowledgeAnalysisProposalReceiptV11),
+                )
                 else (
                     "knowledge-analysis-worker-proposal/5.0"
                     if isinstance(receipt, KnowledgeAnalysisProposalReceiptV6)
@@ -155,7 +160,9 @@ def resolve_knowledge_analysis_proposal(
         )
         if isinstance(receipt, KnowledgeAnalysisProposalReceiptV8):
             proposal = KnowledgeAnalysisWorkerProposalV7.model_validate(proposal_value)
-        elif isinstance(receipt, KnowledgeAnalysisProposalReceiptV7):
+        elif isinstance(
+            receipt, (KnowledgeAnalysisProposalReceiptV7, KnowledgeAnalysisProposalReceiptV11)
+        ):
             proposal = KnowledgeAnalysisWorkerProposalV6.model_validate(proposal_value)
         elif isinstance(receipt, KnowledgeAnalysisProposalReceiptV6):
             proposal = KnowledgeAnalysisWorkerProposalV5.model_validate(proposal_value)
@@ -197,6 +204,7 @@ def resolve_knowledge_analysis_proposal(
             KnowledgeAnalysisProposalReceiptV6,
             KnowledgeAnalysisProposalReceiptV7,
             KnowledgeAnalysisProposalReceiptV8,
+            KnowledgeAnalysisProposalReceiptV11,
         ),
     ):
         actual_counts = (*actual_counts, len(proposal.page_image_observations))

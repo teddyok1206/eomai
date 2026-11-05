@@ -241,6 +241,18 @@ class MaterialLearningTaskRecord(Base):
         ),
         Index("ix_material_learning_next_task", "run_id", "state", "ordinal", "attempt"),
         Index("ix_material_learning_registered_item", "item_revision_id"),
+        Index(
+            "uq_material_learning_child_workflow",
+            "workflow_id",
+            unique=True,
+            postgresql_where=text("workflow_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_material_learning_child_analysis",
+            "analysis_run_id",
+            unique=True,
+            postgresql_where=text("analysis_run_id IS NOT NULL"),
+        ),
     )
 
     task_id: Mapped[str] = mapped_column(String(45), primary_key=True)

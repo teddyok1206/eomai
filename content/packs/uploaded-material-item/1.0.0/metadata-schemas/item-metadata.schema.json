@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://metadata/uploaded-material-item@1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "item_type_key": {"const": "uploaded-material-item"},
+    "source_kind": {"const": "CREATIVE"},
+    "material_id": {"type": "string", "pattern": "^material_[0-9a-f]{32}$"},
+    "material_revision_id": {"type": "string", "pattern": "^materialrev_[0-9a-f]{32}$"},
+    "unit_key": {"type": "string", "minLength": 1, "maxLength": 128},
+    "lineage_sha256": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"},
+    "approval_basis": {"const": "SOURCE_IMPORT_AUTOMATION_NOT_SCIENTIFIC_VERIFICATION"}
+  },
+  "required": ["item_type_key", "source_kind", "material_id", "material_revision_id", "unit_key", "lineage_sha256", "approval_basis"]
+}

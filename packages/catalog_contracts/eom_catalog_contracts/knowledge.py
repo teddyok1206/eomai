@@ -1117,6 +1117,7 @@ class _KnowledgeAnalysisRequestBase(FrozenModel):
                     "knowledge-analysis-request/7.0",
                     "knowledge-analysis-request/8.0",
                     "knowledge-analysis-request/9.0",
+                    "knowledge-analysis-request/12.0",
                 }
                 else KNOWLEDGE_ANALYSIS_OUTPUTS_V2
             )
@@ -2472,6 +2473,31 @@ class KnowledgeAnalysisProposalReceiptV4(_KnowledgeAnalysisProposalReceiptBase):
         return self
 
 
+def validate_multimodal_knowledge_members(
+    members: KnowledgeProposalMembersV2,
+    *,
+    counts: KnowledgeProposalCountsV2,
+    expected_page_count: int,
+    node_schema_ref: str,
+    edge_schema_ref: str,
+) -> None:
+    """Shared normalized member identity rule, independent of original document family."""
+    expected = {
+        "normalized_markdown": "eom://schemas/knowledge/normalized-markdown/1.0",
+        "anchors": "eom://schemas/knowledge/source-anchor/2.0",
+        "nodes": node_schema_ref,
+        "edges": edge_schema_ref,
+        "claims": "eom://schemas/knowledge/proposed-claim/2.0",
+        "component_observations": "eom://schemas/knowledge/component-observation/2.0",
+        "page_image_observations": "eom://schemas/knowledge/page-image-observation/1.0",
+        "unresolved_ambiguities": "eom://schemas/knowledge/ambiguity/3.0",
+    }
+    if any(getattr(members, name).schema_ref != schema for name, schema in expected.items()):
+        raise ValueError("multimodal proposal member schema reference is inconsistent")
+    if counts.page_image_observations != expected_page_count:
+        raise ValueError("multimodal proposal receipt page count differs from its source")
+
+
 class KnowledgeAnalysisProposalReceiptV5(_KnowledgeAnalysisProposalReceiptBase):
     schema_version: Literal["knowledge-analysis-proposal-receipt/5.0"] = (
         "knowledge-analysis-proposal-receipt/5.0"
@@ -2487,10 +2513,11 @@ class KnowledgeAnalysisProposalReceiptV5(_KnowledgeAnalysisProposalReceiptBase):
             "knowledge-analysis-proposal-receipt/6.0",
             "knowledge-analysis-proposal-receipt/7.0",
         }
-        expected_schema_refs = {
-            "normalized_markdown": "eom://schemas/knowledge/normalized-markdown/1.0",
-            "anchors": "eom://schemas/knowledge/source-anchor/2.0",
-            "nodes": (
+        validate_multimodal_knowledge_members(
+            self.members,
+            counts=self.counts,
+            expected_page_count=self.source.page_image_count,
+            node_schema_ref=(
                 "eom://schemas/knowledge/proposed-node/4.0"
                 if schema_version == "knowledge-analysis-proposal-receipt/7.0"
                 else (
@@ -2499,23 +2526,12 @@ class KnowledgeAnalysisProposalReceiptV5(_KnowledgeAnalysisProposalReceiptBase):
                     else "eom://schemas/knowledge/proposed-node/2.0"
                 )
             ),
-            "edges": (
+            edge_schema_ref=(
                 "eom://schemas/knowledge/proposed-edge/4.0"
                 if typed_identities
                 else "eom://schemas/knowledge/proposed-edge/3.0"
             ),
-            "claims": "eom://schemas/knowledge/proposed-claim/2.0",
-            "component_observations": "eom://schemas/knowledge/component-observation/2.0",
-            "page_image_observations": "eom://schemas/knowledge/page-image-observation/1.0",
-            "unresolved_ambiguities": "eom://schemas/knowledge/ambiguity/3.0",
-        }
-        if any(
-            getattr(self.members, name).schema_ref != schema_ref
-            for name, schema_ref in expected_schema_refs.items()
-        ):
-            raise ValueError("multimodal proposal member schema reference is inconsistent")
-        if self.counts.page_image_observations != self.source.page_image_count:
-            raise ValueError("multimodal proposal receipt page count differs from its source")
+        )
         return self
 
 
@@ -3691,11 +3707,18 @@ class KnowledgeGraphSnapshotManifestV4(FrozenModel):
                 "knowledge-graph-snapshot-manifest/7.0",
                 "knowledge-graph-snapshot-manifest/8.0",
                 "knowledge-graph-snapshot-manifest/9.0",
-            } and isinstance(source, EducationalDocumentKnowledgeSourceV4):
+                "knowledge-graph-snapshot-manifest/10.0",
+            } and (
+                isinstance(source, EducationalDocumentKnowledgeSourceV4)
+                or (
+                    str(self.schema_version) == "knowledge-graph-snapshot-manifest/10.0"
+                    and getattr(source, "source_profile", None) == "UPLOADED_MATERIAL_V1"
+                )
+            ):
                 base_key = (
                     *base_key,
-                    source.first_physical_page,
-                    source.last_physical_page,
+                    getattr(source, "first_physical_page", None),
+                    getattr(source, "last_physical_page", None),
                 )
             source_keys.append(base_key)
         result_revisions = [result.artifact_revision_id for result in self.analysis_results]
@@ -3787,7 +3810,8 @@ class KnowledgeGraphSnapshotManifestV8(KnowledgeGraphSnapshotManifestV4):
     def exact_structure_pointer(self) -> KnowledgeGraphSnapshotManifestV8:
         expected_structure_schema = (
             "eom://schemas/knowledge/knowledge-graph-structure-manifest/6.0"
-            if str(self.schema_version) == "knowledge-graph-snapshot-manifest/9.0"
+            if str(self.schema_version)
+            in {"knowledge-graph-snapshot-manifest/9.0", "knowledge-graph-snapshot-manifest/10.0"}
             else "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0"
         )
         if (

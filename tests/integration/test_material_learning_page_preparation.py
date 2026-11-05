@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-from eom_catalog_contracts.material_learning import MaterialDiscoveryWork
+from eom_catalog_contracts.material_learning import MaterialDiscoveryWork, MaterialSourceRegion
 from eom_catalog_contracts.material_learning_intake import (
     CreateMaterialLearningCommand,
     MaterialLearningIntakeManifest,
@@ -19,6 +19,7 @@ from eom_catalog_contracts.material_learning_preparation import (
 )
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.educational_document_service import EducationalDocumentService
+from eom_catalog_service.material_knowledge_source import resolve_material_document_source
 from eom_catalog_service.material_learning_artifacts import read_material_metadata
 from eom_catalog_service.material_learning_authorization import (
     CatalogMaterialLearningSourceAuthorizer,
@@ -231,6 +232,29 @@ def test_prepare_resume_reuses_chunk_and_registers_in_existing_document_owner(
         assert (
             source_owner.reauthorize(session, operator_id=actor, work=discovered_work)
             == discovered_work
+        )
+        knowledge = resolve_material_document_source(
+            session,
+            CatalogArtifactService(creative_engine, settings),
+            document_revision_id=registered.document_revision_id,
+            source_class="INTERNAL_GUIDE",
+            first_physical_page=1,
+            last_physical_page=2,
+            curriculum_unit_keys=(),
+            selected_regions=(
+                MaterialSourceRegion(
+                    source_role="MAIN",
+                    physical_page=1,
+                    bounding_box={"left": 0, "top": 0, "right": 10000, "bottom": 10000},
+                ),
+            ),
+        )
+        assert knowledge.original_source == receipt.original
+        assert len(knowledge.chunk_manifests) == 2
+        assert knowledge.page_image_count == 2
+        assert len(knowledge.materialization_members) == 4
+        assert (
+            knowledge.rights_attestation.schema_ref == "eom://schemas/material-learning/rights/1.0"
         )
     changed = deepcopy(discovered_work.model_dump(mode="json"))
     changed["pages"][0]["image"]["sha256"] = "sha256:" + "0" * 64

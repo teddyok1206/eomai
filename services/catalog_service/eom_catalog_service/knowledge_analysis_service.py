@@ -66,6 +66,13 @@ from eom_catalog_contracts import (
     validate_knowledge_analysis_proposal_ontology,
     validate_knowledge_solution_report_references,
 )
+from eom_catalog_contracts.material_knowledge_analysis import (
+    CreateMaterialKnowledgeAnalysisCommand,
+    EducationalDocumentKnowledgeSourceV5,
+    KnowledgeAnalysisProposalReceiptV11,
+    KnowledgeAnalysisRequestV12,
+    KnowledgeAnalysisResultV12,
+)
 from eom_identifiers import (
     canonical_json_bytes,
     content_sha256,
@@ -124,6 +131,15 @@ from eom_catalog_service.knowledge_proposal_resolution import (
     KnowledgeProposalResolutionError,
     resolve_knowledge_analysis_proposal,
     resolve_knowledge_solution_proposal,
+)
+from eom_catalog_service.material_knowledge_source import (
+    reauthorize_material_document_source,
+    resolve_material_document_source,
+)
+from eom_catalog_service.material_learning_models import LearningMaterialRevisionRecord
+from eom_catalog_service.material_learning_source import (
+    MaterialLearningSourceError,
+    authorize_material_learning,
 )
 from eom_catalog_service.registered_item_solution_base import resolve_registered_item_solution_base
 from eom_catalog_service.settings import CatalogSettings
@@ -306,6 +322,7 @@ type KnowledgeAnalysisRequestContract = (
     | KnowledgeAnalysisRequestV9
     | KnowledgeAnalysisRequestV10
     | KnowledgeAnalysisRequestV11
+    | KnowledgeAnalysisRequestV12
 )
 type KnowledgeAnalysisReceiptContract = (
     KnowledgeAnalysisProposalReceipt
@@ -318,6 +335,7 @@ type KnowledgeAnalysisReceiptContract = (
     | KnowledgeAnalysisProposalReceiptV8
     | KnowledgeAnalysisProposalReceiptV9
     | KnowledgeAnalysisProposalReceiptV10
+    | KnowledgeAnalysisProposalReceiptV11
 )
 type KnowledgeAnalysisResultContract = (
     KnowledgeAnalysisResultV2
@@ -330,12 +348,14 @@ type KnowledgeAnalysisResultContract = (
     | KnowledgeAnalysisResultV9
     | KnowledgeAnalysisResultV10
     | KnowledgeAnalysisResultV11
+    | KnowledgeAnalysisResultV12
 )
 type KnowledgeAnalysisSourceContract = (
     ContentIntakeKnowledgeSourceV2
     | ApprovedItemKnowledgeSourceV2
     | EducationalDocumentKnowledgeSourceV3
     | EducationalDocumentKnowledgeSourceV4
+    | EducationalDocumentKnowledgeSourceV5
     | ApprovedPastExamItemKnowledgeSourceV3
 )
 
@@ -350,6 +370,8 @@ def _utc_json_timestamp(value: datetime) -> str:
 
 def _analysis_request(value: dict[str, Any]) -> KnowledgeAnalysisRequestContract:
     version = value.get("schema_version")
+    if version == "knowledge-analysis-request/12.0":
+        return KnowledgeAnalysisRequestV12.model_validate(value)
     if version == "knowledge-analysis-request/2.0":
         return KnowledgeAnalysisRequestV2.model_validate(value)
     if version == "knowledge-analysis-request/3.0":
@@ -390,9 +412,15 @@ def _document_contract(value: KnowledgeAnalysisRequestContract) -> bool:
             KnowledgeAnalysisRequestV6,
             KnowledgeAnalysisRequestV7,
             KnowledgeAnalysisRequestV8,
+            KnowledgeAnalysisRequestV12,
         ),
     ) and isinstance(
-        value.source, (EducationalDocumentKnowledgeSourceV3, EducationalDocumentKnowledgeSourceV4)
+        value.source,
+        (
+            EducationalDocumentKnowledgeSourceV3,
+            EducationalDocumentKnowledgeSourceV4,
+            EducationalDocumentKnowledgeSourceV5,
+        ),
     )
 
 
@@ -405,6 +433,7 @@ def _endpoint_typed_document_contract(value: KnowledgeAnalysisRequestContract) -
             KnowledgeAnalysisRequestV6,
             KnowledgeAnalysisRequestV7,
             KnowledgeAnalysisRequestV8,
+            KnowledgeAnalysisRequestV12,
         ),
     )
 
@@ -417,13 +446,20 @@ def _integrity_document_contract(value: KnowledgeAnalysisRequestContract) -> boo
             KnowledgeAnalysisRequestV6,
             KnowledgeAnalysisRequestV7,
             KnowledgeAnalysisRequestV8,
+            KnowledgeAnalysisRequestV12,
         ),
     )
 
 
 def _multimodal_document_contract(value: KnowledgeAnalysisRequestContract) -> bool:
     return isinstance(
-        value, (KnowledgeAnalysisRequestV6, KnowledgeAnalysisRequestV7, KnowledgeAnalysisRequestV8)
+        value,
+        (
+            KnowledgeAnalysisRequestV6,
+            KnowledgeAnalysisRequestV7,
+            KnowledgeAnalysisRequestV8,
+            KnowledgeAnalysisRequestV12,
+        ),
     )
 
 
@@ -432,7 +468,7 @@ def _typed_identity_multimodal_contract(value: KnowledgeAnalysisRequestContract)
 
 
 def _stable_identity_multimodal_contract(value: KnowledgeAnalysisRequestContract) -> bool:
-    return isinstance(value, KnowledgeAnalysisRequestV8)
+    return isinstance(value, (KnowledgeAnalysisRequestV8, KnowledgeAnalysisRequestV12))
 
 
 def _visual_item_contract(value: KnowledgeAnalysisRequestContract) -> bool:
@@ -446,6 +482,8 @@ def _solution_contract(value: KnowledgeAnalysisRequestContract) -> bool:
 def _proposal_result_schema(
     value: KnowledgeAnalysisRequestContract, *, workflow_version: str | None = None
 ) -> str:
+    if isinstance(value, KnowledgeAnalysisRequestV12):
+        return "knowledge-analysis-proposal-result@12.0"
     if isinstance(value, KnowledgeAnalysisRequestV11):
         return "knowledge-analysis-proposal-result@11.0"
     if _solution_contract(value):
@@ -472,6 +510,11 @@ def _proposal_result_schema(
 
 
 def _proposal_receipt_schema(value: KnowledgeAnalysisRequestContract) -> tuple[str, str]:
+    if isinstance(value, KnowledgeAnalysisRequestV12):
+        return (
+            "knowledge-analysis-proposal-receipt-v11",
+            "eom://schemas/knowledge/knowledge-analysis-proposal-receipt/11.0",
+        )
     if isinstance(value, KnowledgeAnalysisRequestV11):
         return (
             "knowledge-analysis-proposal-receipt-v10",
@@ -526,6 +569,9 @@ def _proposal_receipt_schema(value: KnowledgeAnalysisRequestContract) -> tuple[s
 def _receipt_contract(
     value: dict[str, Any], request: KnowledgeAnalysisRequestContract
 ) -> KnowledgeAnalysisReceiptContract:
+    if isinstance(request, KnowledgeAnalysisRequestV12):
+        validate_contract("knowledge-analysis-proposal-receipt-v11", value)
+        return KnowledgeAnalysisProposalReceiptV11.model_validate(value)
     if isinstance(request, KnowledgeAnalysisRequestV11):
         try:
             validate_contract("knowledge-analysis-proposal-receipt-v10", value)
@@ -570,6 +616,20 @@ def _receipt_contract(
 
 
 def _catalog_protocol(request: KnowledgeAnalysisRequestContract) -> tuple[str, str]:
+    if isinstance(request, KnowledgeAnalysisRequestV12):
+        protocol = "catalog-material-knowledge/1.0"
+        return protocol, content_sha256(
+            {
+                "protocol": protocol,
+                "contracts": [
+                    "knowledge-analysis-request/12.0",
+                    "knowledge-analysis-proposal-receipt/11.0",
+                    "knowledge-analysis-risk-policy/1.0",
+                    "knowledge-analysis-review-decision/1.0",
+                    "knowledge-analysis-result/12.0",
+                ],
+            }
+        )
     if isinstance(request, KnowledgeAnalysisRequestV11):
         return (
             KNOWLEDGE_ANALYSIS_REGISTERED_SOLUTION_CATALOG_PROTOCOL,
@@ -648,6 +708,12 @@ class KnowledgeAnalysisApplicationService:
         self.artifacts = CatalogArtifactService(engine, self.settings)
 
     def create(self, command: CreateKnowledgeAnalysisCommand) -> KnowledgeAnalysisApplicationResult:
+        return self._create(command, pinned_preset=None)
+
+    def create_material(
+        self, command: CreateMaterialKnowledgeAnalysisCommand
+    ) -> KnowledgeAnalysisApplicationResult:
+        """The ordinary analysis owner, with uploaded rights and exact discovered regions."""
         return self._create(command, pinned_preset=None)
 
     def create_with_pinned_preset(
@@ -1115,7 +1181,7 @@ class KnowledgeAnalysisApplicationService:
 
     def _create(
         self,
-        command: CreateKnowledgeAnalysisCommand,
+        command: CreateKnowledgeAnalysisCommand | CreateMaterialKnowledgeAnalysisCommand,
         *,
         pinned_preset: tuple[str, str] | None,
     ) -> KnowledgeAnalysisApplicationResult:
@@ -1123,6 +1189,10 @@ class KnowledgeAnalysisApplicationService:
         submission_sha256 = content_sha256(submission)
         try:
             with transaction(self.sessions) as session:
+                uploaded_source = None
+                if isinstance(command, CreateMaterialKnowledgeAnalysisCommand):
+                    authorize_material_learning(session, command.requested_by)
+                    uploaded_source = self._resolve_source(session, command)
                 existing = session.scalar(
                     select(KnowledgeAnalysisRunRecord).where(
                         KnowledgeAnalysisRunRecord.idempotency_key == command.idempotency_key
@@ -1139,7 +1209,7 @@ class KnowledgeAnalysisApplicationService:
                         )
                     return self._projection(existing)
 
-                source = self._resolve_source(session, command)
+                source = uploaded_source or self._resolve_source(session, command)
                 predecessor = self.retry_predecessor(session, command, source)
                 policy = self.risk_policy(session, command.risk_policy_revision_id)
                 if pinned_preset is not None:
@@ -1170,8 +1240,21 @@ class KnowledgeAnalysisApplicationService:
                     )
                 is_document_source = isinstance(
                     source,
-                    (EducationalDocumentKnowledgeSourceV3, EducationalDocumentKnowledgeSourceV4),
+                    (
+                        EducationalDocumentKnowledgeSourceV3,
+                        EducationalDocumentKnowledgeSourceV4,
+                        EducationalDocumentKnowledgeSourceV5,
+                    ),
                 )
+                uploaded_material = isinstance(source, EducationalDocumentKnowledgeSourceV5)
+                if (
+                    uploaded_material
+                    and "workflow-role/1.38.0" not in preset_revision.compatible_workflow_protocols
+                ):
+                    raise KnowledgeAnalysisServiceError(
+                        "KNOWLEDGE_ANALYSIS_PRESET_INCOMPATIBLE",
+                        "uploaded material requires its released analysis protocol",
+                    )
                 visual_item = isinstance(source, ApprovedPastExamItemKnowledgeSourceV3)
                 multimodal_document = isinstance(source, EducationalDocumentKnowledgeSourceV4)
                 typed_identity_multimodal = multimodal_document and (
@@ -1205,7 +1288,9 @@ class KnowledgeAnalysisApplicationService:
                 endpoint_typed_document = is_document_source and (
                     "workflow-role/1.6.0" in preset_revision.compatible_workflow_protocols
                 )
-                if visual_item:
+                if uploaded_material:
+                    workflow_version = "12.0.0"
+                elif visual_item:
                     workflow_version = KNOWLEDGE_ANALYSIS_VISUAL_ITEM_WORKFLOW_VERSION
                 elif stable_identity_multimodal:
                     workflow_version = (
@@ -1345,7 +1430,23 @@ class KnowledgeAnalysisApplicationService:
                     }
                 )
                 request: KnowledgeAnalysisRequestContract
-                if visual_item:
+                if uploaded_material:
+                    request_document.update(
+                        schema_version="knowledge-analysis-request/12.0",
+                        worker_proposal_schema_ref="eom://schemas/knowledge/knowledge-analysis-worker-proposal/6.0",
+                        accepted_result_schema_ref="eom://schemas/knowledge/knowledge-analysis-result/12.0",
+                        requested_outputs=list(MULTIMODAL_REQUESTED_OUTPUTS),
+                    )
+                    request_document["request_sha256"] = content_sha256(
+                        {
+                            key: value
+                            for key, value in request_document.items()
+                            if key != "request_sha256"
+                        }
+                    )
+                    validate_contract("knowledge-analysis-request-v12", request_document)
+                    request = KnowledgeAnalysisRequestV12.model_validate(request_document)
+                elif visual_item:
                     validate_contract("knowledge-analysis-request-v9", request_document)
                     request = KnowledgeAnalysisRequestV9.model_validate(request_document)
                 elif stable_identity_multimodal:
@@ -1424,6 +1525,7 @@ class KnowledgeAnalysisApplicationService:
                                 (
                                     EducationalDocumentKnowledgeSourceV3,
                                     EducationalDocumentKnowledgeSourceV4,
+                                    EducationalDocumentKnowledgeSourceV5,
                                 ),
                             )
                             else source.item_revision_id
@@ -1498,7 +1600,7 @@ class KnowledgeAnalysisApplicationService:
                 return self._projection(run)
         except KnowledgeAnalysisServiceError:
             raise
-        except KnowledgeAnalysisSourceError as exc:
+        except (KnowledgeAnalysisSourceError, MaterialLearningSourceError) as exc:
             raise KnowledgeAnalysisServiceError(exc.code, str(exc)) from exc
         except ControlPlaneError as exc:
             raise KnowledgeAnalysisServiceError(
@@ -1715,6 +1817,8 @@ class KnowledgeAnalysisApplicationService:
                 )
             policy = self.risk_policy(session, run.risk_policy_revision_id)
             request = _analysis_request(run.canonical_request)
+            if isinstance(request, KnowledgeAnalysisRequestV12):
+                self._reauthorize_material_source(session, request, run.created_by_operator_id)
             receipt = self._stored_receipt(session, run)
             decided_at = datetime.now(UTC)
             decision_data: dict[str, Any] = {
@@ -1941,6 +2045,8 @@ class KnowledgeAnalysisApplicationService:
             request = _analysis_request(run.canonical_request)
             receipt = self._stored_receipt(session, run)
             proposal_receipt_pointer = self._proposal_receipt_pointer(session, run)
+            if isinstance(request, KnowledgeAnalysisRequestV12):
+                self._reauthorize_material_source(session, request, run.created_by_operator_id)
             policy = self.risk_policy(session, run.risk_policy_revision_id)
             accepted_at = receipt.completed_at
             if acceptance_mode == "HUMAN_APPROVED":
@@ -2071,12 +2177,17 @@ class KnowledgeAnalysisApplicationService:
         ):
             result_data["base_analysis"] = receipt.base_analysis.model_dump(mode="json")
             result_data["solution_counts"] = receipt.solution_counts.model_dump(mode="json")
-        if isinstance(request, KnowledgeAnalysisRequestV11):
+        if isinstance(request, KnowledgeAnalysisRequestV12):
+            result_data["schema_version"] = "knowledge-analysis-result/12.0"
+        elif isinstance(request, KnowledgeAnalysisRequestV11):
             result_data["schema_version"] = "knowledge-analysis-result/11.0"
         result_data["result_sha256"] = content_sha256(
             {key: value for key, value in result_data.items() if key != "result_sha256"}
         )
-        if isinstance(request, KnowledgeAnalysisRequestV11):
+        if isinstance(request, KnowledgeAnalysisRequestV12):
+            result_schema_name = "knowledge-analysis-result-v12"
+            result_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/12.0"
+        elif isinstance(request, KnowledgeAnalysisRequestV11):
             result_schema_name = "knowledge-analysis-result-v11"
             result_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/11.0"
         elif solution:
@@ -2108,7 +2219,9 @@ class KnowledgeAnalysisApplicationService:
             result_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/2.0"
         validate_contract(result_schema_name, result_data)
         result: KnowledgeAnalysisResultContract
-        if isinstance(request, KnowledgeAnalysisRequestV11):
+        if isinstance(request, KnowledgeAnalysisRequestV12):
+            result = KnowledgeAnalysisResultV12.model_validate(result_data)
+        elif isinstance(request, KnowledgeAnalysisRequestV11):
             result = KnowledgeAnalysisResultV11.model_validate(result_data)
         elif solution:
             result = KnowledgeAnalysisResultV10.model_validate(result_data)
@@ -2221,8 +2334,11 @@ class KnowledgeAnalysisApplicationService:
             | type[KnowledgeAnalysisResultV9]
             | type[KnowledgeAnalysisResultV10]
             | type[KnowledgeAnalysisResultV11]
+            | type[KnowledgeAnalysisResultV12]
         )
-        if isinstance(request, KnowledgeAnalysisRequestV11):
+        if isinstance(request, KnowledgeAnalysisRequestV12):
+            result_model = KnowledgeAnalysisResultV12
+        elif isinstance(request, KnowledgeAnalysisRequestV11):
             result_model = KnowledgeAnalysisResultV11
         elif solution:
             result_model = KnowledgeAnalysisResultV10
@@ -2256,6 +2372,7 @@ class KnowledgeAnalysisApplicationService:
                 KnowledgeAnalysisResultV9,
                 KnowledgeAnalysisResultV10,
                 KnowledgeAnalysisResultV11,
+                KnowledgeAnalysisResultV12,
             ),
         )
         if (
@@ -2371,6 +2488,7 @@ class KnowledgeAnalysisApplicationService:
             | KnowledgeAnalysisResultV9
             | KnowledgeAnalysisResultV10
             | KnowledgeAnalysisResultV11
+            | KnowledgeAnalysisResultV12
         ],
         schema_name: str,
     ) -> (
@@ -2385,6 +2503,7 @@ class KnowledgeAnalysisApplicationService:
         | KnowledgeAnalysisResultV9
         | KnowledgeAnalysisResultV10
         | KnowledgeAnalysisResultV11
+        | KnowledgeAnalysisResultV12
     ):
         with self.sessions() as session:
             revision = session.get(ArtifactRevisionRecord, artifact.revision_id)
@@ -2570,8 +2689,29 @@ class KnowledgeAnalysisApplicationService:
         )
 
     def _resolve_source(
-        self, session: Session, command: CreateKnowledgeAnalysisCommand
+        self,
+        session: Session,
+        command: CreateKnowledgeAnalysisCommand | CreateMaterialKnowledgeAnalysisCommand,
     ) -> KnowledgeAnalysisSourceContract:
+        if isinstance(command, CreateMaterialKnowledgeAnalysisCommand):
+            authorize_material_learning(session, command.requested_by)
+            selection = command.source
+            source = resolve_material_document_source(
+                session,
+                self.artifacts,
+                document_revision_id=selection.document_revision_id,
+                source_class=selection.source_class,
+                first_physical_page=selection.first_physical_page,
+                last_physical_page=selection.last_physical_page,
+                selected_regions=selection.selected_regions,
+                curriculum_unit_keys=selection.curriculum_unit_keys,
+            )
+            revision = session.get(LearningMaterialRevisionRecord, source.material_revision_id)
+            if revision is None or revision.created_by != command.requested_by:
+                raise KnowledgeAnalysisSourceError(
+                    "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE", "uploaded source owner differs"
+                )
+            return source
         if isinstance(command.source, ContentIntakeKnowledgeAnalysisSelection):
             return resolve_content_intake_source(
                 session,
@@ -2600,10 +2740,17 @@ class KnowledgeAnalysisApplicationService:
             "KNOWLEDGE_ANALYSIS_SOURCE_INELIGIBLE", "knowledge analysis source kind is invalid"
         )
 
+    def _reauthorize_material_source(
+        self, session: Session, request: KnowledgeAnalysisRequestV12, operator_id: str
+    ) -> None:
+        reauthorize_material_document_source(
+            session, self.artifacts, operator_id=operator_id, source=request.source
+        )
+
     @staticmethod
     def retry_predecessor(
         session: Session,
-        command: CreateKnowledgeAnalysisCommand,
+        command: CreateKnowledgeAnalysisCommand | CreateMaterialKnowledgeAnalysisCommand,
         source: KnowledgeAnalysisSourceContract,
     ) -> KnowledgeAnalysisRunRecord | None:
         predecessor_id = command.predecessor_analysis_run_id

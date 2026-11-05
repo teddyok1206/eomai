@@ -59,6 +59,7 @@ from eom_catalog_contracts import (
 from eom_catalog_contracts.external_item_learning_result_v2 import ExternalItemLearningResultV2
 from eom_catalog_contracts.inference_transfer_pair_result_v11 import PairComparisonResultV11
 from eom_catalog_contracts.item_inference_transfer import PairComparisonResult
+from eom_catalog_contracts.material_knowledge_analysis import KnowledgeAnalysisRequestV12
 from eom_catalog_contracts.material_learning import MaterialLearningResult
 from eom_catalog_contracts.mock_exam_production_plan import ContentTeamMockExamSlotV1
 from eom_catalog_contracts.office_item_learning import (
@@ -225,6 +226,7 @@ class KnowledgeAnalysisWorkerRequest(FrozenModel):
         | KnowledgeAnalysisRequestV9
         | KnowledgeAnalysisRequestV10
         | KnowledgeAnalysisRequestV11
+        | KnowledgeAnalysisRequestV12
     )
 
 
@@ -513,6 +515,7 @@ class WorkflowRequest(FrozenModel):
         | KnowledgeAnalysisRequestV9
         | KnowledgeAnalysisRequestV10
         | KnowledgeAnalysisRequestV11
+        | KnowledgeAnalysisRequestV12
         | None
     ) = None
     legacy_extraction_request: LegacyItemExtractionRequest | None = None
@@ -1124,6 +1127,7 @@ class RoleWorkerInput(FrozenModel):
         "workflow-role/1.35.0",
         "workflow-role/1.36.0",
         "workflow-role/1.37.0",
+        "workflow-role/1.38.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -1208,6 +1212,13 @@ class RoleWorkerInput(FrozenModel):
 
     @model_validator(mode="after")
     def inference_transfer_purpose_matches_protocol(self) -> RoleWorkerInput:
+        is_material_knowledge = isinstance(
+            self.request, KnowledgeAnalysisWorkerRequest
+        ) and isinstance(self.request.analysis_request, KnowledgeAnalysisRequestV12)
+        if is_material_knowledge != (self.protocol_version == "workflow-role/1.38.0") or (
+            is_material_knowledge and (self.role != "support" or self.upstream_artifacts)
+        ):
+            raise ValueError("uploaded knowledge requires its source-only support protocol")
         is_material = isinstance(self.request, MaterialLearningWorkerRequest)
         if is_material != (self.protocol_version == "workflow-role/1.37.0") or (
             is_material and (self.role != "support" or self.upstream_artifacts)
@@ -1324,6 +1335,7 @@ class RoleResultBase(FrozenModel):
         "workflow-role/1.35.0",
         "workflow-role/1.36.0",
         "workflow-role/1.37.0",
+        "workflow-role/1.38.0",
     ] = "workflow-role/1.0.1"
     job_id: JobId
     workflow_id: WorkflowId
@@ -2886,6 +2898,12 @@ class KnowledgeAnalysisProposalRoleResultV8(RoleResultBase):
     output: KnowledgeAnalysisProposalOutputV6
 
 
+class KnowledgeAnalysisProposalRoleResultV12(RoleResultBase):
+    protocol_version: Literal["workflow-role/1.38.0"] = "workflow-role/1.38.0"
+    role: Literal["support"] = "support"
+    output: KnowledgeAnalysisProposalOutputV6
+
+
 class KnowledgeAnalysisProposalOutputV7(FrozenModel):
     proposal: KnowledgeAnalysisWorkerProposalV7
 
@@ -3126,6 +3144,7 @@ RoleResult = (
     | KnowledgeAnalysisProposalRoleResultV9
     | KnowledgeAnalysisProposalRoleResultV10
     | KnowledgeAnalysisProposalRoleResultV11
+    | KnowledgeAnalysisProposalRoleResultV12
     | LegacyItemExtractionRoleResult
     | ExternalItemLearningRoleResult
     | ExternalItemLearningRoleResultV2

@@ -1,0 +1,5 @@
+schema_version: "1.0"
+item_type:
+  key: "uploaded-material-item"
+  display_name: "자료에서 가져온 창작 문항"
+  required_components: ["ITEM_CONTENT", "SOURCE_REFERENCE", "REVIEW_REPORT"]

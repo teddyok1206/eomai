@@ -1,10 +1,8 @@
 """Catalog owns material/source permissions and exact page-to-source membership."""
 
-from bisect import bisect_left
-
+from eom_catalog_contracts.material_knowledge_analysis import KnowledgeAnalysisRequestV12
 from eom_catalog_contracts.material_learning import (
     MaterialArtifactMember,
-    MaterialInputPage,
     MaterialLearningRights,
     MaterialLearningWork,
     material_work_schema_ref,
@@ -16,28 +14,29 @@ from eom_catalog_contracts.material_learning_authorization import (
 from eom_catalog_contracts.material_learning_intake import MaterialLearningIntakeManifest
 from eom_catalog_contracts.material_learning_preparation import (
     MaterialDocumentRevision,
-    MaterialPageBundle,
-    MaterialPageChunk,
-    material_chunk_member,
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.database import build_session_factory
+from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.material_learning_execution import validate_material_learning_execution_plan
 from eom_orchestrator.models import ArtifactRevisionRecord
 from eom_workflow.compiler import compile_definition_data
+from eom_workflow.control_plane import ResolvedExecutionPlanV34
 from eom_workflow.material_learning_request import MaterialLearningWorkflowRequest
+from eom_workflow.models import WorkflowRequest
 from eom_workflow_runner.models import (
     WorkflowDefinitionRecord,
     WorkflowInstanceRecord,
     WorkflowStepRunRecord,
 )
 from eom_workflow_runner.repository import load_persisted_workflow_request
-from sqlalchemy import Engine
+from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.educational_document_service import EducationalDocumentService
+from eom_catalog_service.material_knowledge_source import reauthorize_material_document_source
 from eom_catalog_service.material_learning_artifacts import read_material_metadata
 from eom_catalog_service.material_learning_models import (
     LearningMaterialRecord,
@@ -50,6 +49,7 @@ from eom_catalog_service.material_learning_source import (
     MaterialLearningSourceService,
     authorize_material_learning,
 )
+from eom_catalog_service.material_page_source_read import read_material_source_pages
 from eom_catalog_service.settings import CatalogSettings
 
 
@@ -181,61 +181,18 @@ class CatalogMaterialLearningSourceAuthorizer:
                 or document.source_page_count != source.page_count
             ):
                 raise MaterialLearningSourceError("MATERIAL_LEARNING_DOCUMENT_INPUT_MISMATCH")
-            bundle = read_material_metadata(
-                self.artifacts,
-                source.page_bundle,
-                MaterialPageBundle,
-                schema_ref=source.page_bundle.schema_ref,
-                member_path=source.page_bundle.member_path,
+            requested_pages = tuple(
+                page for page in work.pages if page.source_role == source.source_role
             )
-            if (
-                bundle.document_revision_id != source.document_revision_id
-                or bundle.original != source.original
-                or bundle.pdf != source.pdf
-                or bundle.office_catalog != source.office_catalog
-                or bundle.page_count != source.page_count
-            ):
-                raise MaterialLearningSourceError("MATERIAL_LEARNING_PAGE_BUNDLE_MISMATCH")
-            ends = tuple(chunk.last_physical_page for chunk in bundle.chunks)
-            chunks: dict[int, MaterialPageChunk] = {}
-            for page in work.pages:
-                if page.source_role != source.source_role:
-                    continue
-                index = bisect_left(ends, page.physical_page)
-                reference = bundle.chunks[index]
-                if index not in chunks:
-                    chunk = read_material_metadata(
-                        self.artifacts,
-                        reference.manifest,
-                        MaterialPageChunk,
-                        schema_ref=reference.manifest.schema_ref,
-                        member_path=reference.manifest.member_path,
-                    )
-                    if (
-                        chunk.document_id != source.document_id
-                        or chunk.document_revision_id != source.document_revision_id
-                        or chunk.source_role != source.source_role
-                        or chunk.pdf_sha256 != source.pdf.sha256
-                        or chunk.profile_sha256 != bundle.profile.profile_sha256
-                        or (chunk.first_physical_page, chunk.last_physical_page)
-                        != (
-                            reference.first_physical_page,
-                            reference.last_physical_page,
-                        )
-                    ):
-                        raise MaterialLearningSourceError("MATERIAL_LEARNING_PAGE_CHUNK_MISMATCH")
-                    chunks[index] = chunk
-                chunk = chunks[index]
-                observed = chunk.pages[page.physical_page - chunk.first_physical_page]
-
-                expected = MaterialInputPage(
-                    input_index=page.input_index,
-                    source_role=source.source_role,
-                    physical_page=observed.physical_page,
-                    image=material_chunk_member(reference.manifest, observed.image),
-                    text=material_chunk_member(reference.manifest, observed.text),
-                    width_pixels=observed.width_pixels,
-                    height_pixels=observed.height_pixels,
+            selected_pages = read_material_source_pages(
+                self.artifacts,
+                source,
+                tuple(sorted(page.physical_page for page in requested_pages)),
+            )
+            by_page = {resolved.page.physical_page: resolved for resolved in selected_pages.pages}
+            for page in requested_pages:
+                expected = by_page[page.physical_page].input_page(
+                    input_index=page.input_index, source_role=source.source_role
                 )
                 if page != expected:
                     raise MaterialLearningSourceError("MATERIAL_LEARNING_PAGE_NOT_IN_SOURCE")
@@ -256,6 +213,12 @@ class CatalogMaterialLearningAuthorizationService:
                 WorkflowInstanceRecord, request.workflow_id, populate_existing=True
             )
             step = session.get(WorkflowStepRunRecord, request.step_run_id, populate_existing=True)
+            if (
+                workflow is not None
+                and workflow.definition_key == "knowledge-analysis"
+                and workflow.definition_version == "12.0.0"
+            ):
+                return self._authorize_knowledge(session, request, workflow, step)
             if (
                 workflow is None
                 or step is None
@@ -315,3 +278,103 @@ class CatalogMaterialLearningAuthorizationService:
                 input_sha256=request.input_sha256,
                 error_code=None,
             )
+
+    def _authorize_knowledge(
+        self,
+        session: Session,
+        request: MaterialLearningAuthorizationRequest,
+        workflow: WorkflowInstanceRecord,
+        step: WorkflowStepRunRecord | None,
+    ) -> MaterialLearningAuthorizationReply:
+        if (
+            workflow.created_actor_type != "human"
+            or workflow.role_schema_version != "workflow-role/1.38.0"
+            or step is None
+            or step.workflow_id != workflow.workflow_id
+            or (step.step_key, step.worker_role, step.step_type, step.attempt, step.result_schema)
+            != ("analyze", "support", "agent", 1, "knowledge-analysis-proposal-result@12.0")
+        ):
+            raise ValueError("uploaded knowledge role differs")
+        definition = session.get(WorkflowDefinitionRecord, workflow.definition_id)
+        if (
+            definition is None
+            or compile_definition_data(
+                definition.canonical_definition, definition.source_path, {"support"}
+            ).sha256
+            != workflow.definition_hash
+            or definition.definition_hash != workflow.definition_hash
+        ):
+            raise ValueError("uploaded knowledge definition differs")
+        original = load_persisted_workflow_request(workflow.initial_request)
+        if (
+            not isinstance(original, WorkflowRequest)
+            or not isinstance(original.analysis_request, KnowledgeAnalysisRequestV12)
+            or original != load_persisted_workflow_request(workflow.request_payload)
+        ):
+            raise ValueError("uploaded knowledge original input differs")
+        analysis = original.analysis_request
+        row = session.get(ResolvedExecutionPlanRecord, request.plan_id)
+        if row is None:
+            raise ValueError("uploaded knowledge plan missing")
+        plan = ResolvedExecutionPlanV34.model_validate(row.canonical_document)
+        if (
+            plan.plan_id != row.plan_id
+            or plan.plan_sha256 != row.plan_sha256
+            or plan.plan_sha256 != request.plan_sha256
+            or plan.workflow_id != workflow.workflow_id
+            or row.workflow_id != workflow.workflow_id
+            or row.resolver_version != plan.resolver_version
+            or plan.workflow_definition_sha256 != workflow.definition_hash
+            or plan.analysis_request_sha256 != analysis.request_sha256
+            or analysis.request_sha256 != request.input_sha256
+            or plan.document_source != analysis.source
+            or plan.analysis_request_id != analysis.analysis_request_id
+            or (plan.preset_id, plan.preset_revision_id, plan.preset_sha256)
+            != (
+                analysis.execution_preset_id,
+                analysis.execution_preset_revision_id,
+                analysis.execution_preset_sha256,
+            )
+        ):
+            raise ValueError("uploaded knowledge exact plan differs")
+        run = session.scalar(
+            select(KnowledgeAnalysisRunRecord).where(
+                KnowledgeAnalysisRunRecord.workflow_id == workflow.workflow_id
+            )
+        )
+        task = session.scalar(
+            select(MaterialLearningTaskRecord).where(
+                MaterialLearningTaskRecord.workflow_id == workflow.workflow_id
+            )
+        )
+        parent = (
+            session.get(MaterialLearningRunRecord, task.run_id, populate_existing=True)
+            if task
+            else None
+        )
+        if (
+            run is None
+            or task is None
+            or parent is None
+            or task.task_kind != "EXPLANATION"
+            or parent.created_by != workflow.created_actor_id
+            or parent.state == "CANCELLED"
+            or task.state == "CANCELLED"
+            or task.analysis_run_id != run.analysis_run_id
+            or parent.material_revision_id != analysis.source.material_revision_id
+            or run.created_by_operator_id != workflow.created_actor_id
+            or KnowledgeAnalysisRequestV12.model_validate(run.canonical_request) != analysis
+        ):
+            raise ValueError("uploaded knowledge child/source differs")
+        reauthorize_material_document_source(
+            session,
+            self.source.artifacts,
+            operator_id=workflow.created_actor_id,
+            source=analysis.source,
+        )
+        return MaterialLearningAuthorizationReply(
+            status="SUCCESS",
+            request_sha256=content_sha256(request.model_dump(mode="json")),
+            input_sha256=request.input_sha256,
+            error_code=None,
+        )

@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/role-receipt/1.0",
+  "title": "EOM material learning role-receipt 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-role-receipt/1.0"
+    },
+    "result_schema": {
+      "const": "material-learning-result@1.0"
+    },
+    "task_kind": {
+      "enum": [
+        "DISCOVER",
+        "EXTRACT_ITEM"
+      ]
+    },
+    "input_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "result_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "result_schema",
+    "task_kind",
+    "input_sha256",
+    "result_sha256"
+  ]
+}

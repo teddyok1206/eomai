@@ -1,0 +1,238 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/educational-document-source/5.0",
+  "title": "EOM uploaded material EducationalDocument source V5",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "source_kind": {
+      "const": "DOCUMENT_REVISION"
+    },
+    "source_profile": {
+      "const": "UPLOADED_MATERIAL_V1"
+    },
+    "source_class": {
+      "enum": [
+        "TEXTBOOK",
+        "INTERNAL_GUIDE"
+      ]
+    },
+    "material_id": {
+      "type": "string",
+      "pattern": "^material_[0-9a-f]{32}$"
+    },
+    "material_revision_id": {
+      "type": "string",
+      "pattern": "^materialrev_[0-9a-f]{32}$"
+    },
+    "source_role": {
+      "enum": [
+        "MAIN",
+        "SOLUTIONS"
+      ]
+    },
+    "document_id": {
+      "type": "string",
+      "pattern": "^edudoc_[0-9a-f]{32}$"
+    },
+    "document_revision_id": {
+      "type": "string",
+      "pattern": "^edudocrev_[0-9a-f]{32}$"
+    },
+    "lifecycle_state": {
+      "const": "APPROVED"
+    },
+    "document_manifest": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "original_source": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "artifact_member": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/3.0#/$defs/originalSourceMember"
+    },
+    "analysis_bundle_manifest": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/3.0#/$defs/documentDependencyPointer"
+    },
+    "rights_attestation": {
+      "$ref": "eom://schemas/knowledge/knowledge-analysis-types/3.0#/$defs/documentDependencyPointer"
+    },
+    "first_physical_page": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2000
+    },
+    "last_physical_page": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2000
+    },
+    "selected_regions": {
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/material-learning/types/1.0#/$defs/region"
+      },
+      "minItems": 1,
+      "maxItems": 128
+    },
+    "curriculum_unit_keys": {
+      "type": "array",
+      "maxItems": 16,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^(1-\\([1-4]\\)|2-\\([1-6]\\)|3-\\([1-7]\\)|4-\\([1-7]\\)|5-\\([1-7]\\)|6-\\([1-4]\\))$"
+      }
+    },
+    "chunk_manifests": {
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+      },
+      "minItems": 1,
+      "maxItems": 32
+    },
+    "materialization_members": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "member_kind": {
+            "enum": [
+              "PAGE_TEXT",
+              "PAGE_IMAGE"
+            ]
+          },
+          "physical_page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000
+          },
+          "artifact_id": {
+            "type": "string",
+            "pattern": "^artifact_[0-9a-f]{32}$"
+          },
+          "artifact_revision_id": {
+            "type": "string",
+            "pattern": "^rev_[0-9a-f]{32}$"
+          },
+          "member_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^analysis/(?:pages/page-[0-9]{6}\\.md|images/page-[0-9]{6}\\.png)$"
+          },
+          "materialized_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80,
+            "pattern": "^source/document/(?:pages/page-[0-9]{6}\\.md|images/page-[0-9]{6}\\.png)$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16777216
+          },
+          "schema_ref": {
+            "enum": [
+              "eom://schemas/material-learning/page-text/1.0",
+              "eom://schemas/educational-document/page-image/1.0"
+            ]
+          },
+          "media_type": {
+            "enum": [
+              "text/markdown",
+              "image/png"
+            ]
+          },
+          "logical_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 32,
+            "pattern": "^page-[0-9]{6}\\.(?:md|png)$"
+          },
+          "width_pixels": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "height_pixels": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "member_kind",
+          "physical_page",
+          "artifact_id",
+          "artifact_revision_id",
+          "member_path",
+          "materialized_path",
+          "sha256",
+          "bytes",
+          "schema_ref",
+          "media_type",
+          "logical_name",
+          "width_pixels",
+          "height_pixels"
+        ]
+      },
+      "minItems": 2,
+      "maxItems": 64
+    },
+    "materialization_bytes": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 134217728
+    },
+    "page_image_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 32
+    }
+  },
+  "required": [
+    "source_kind",
+    "source_profile",
+    "source_class",
+    "material_id",
+    "material_revision_id",
+    "source_role",
+    "document_id",
+    "document_revision_id",
+    "lifecycle_state",
+    "document_manifest",
+    "original_source",
+    "artifact_member",
+    "analysis_bundle_manifest",
+    "rights_attestation",
+    "first_physical_page",
+    "last_physical_page",
+    "selected_regions",
+    "curriculum_unit_keys",
+    "chunk_manifests",
+    "materialization_members",
+    "materialization_bytes",
+    "page_image_count"
+  ]
+}

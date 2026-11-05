@@ -12,7 +12,10 @@ from eom_catalog_contracts.creative_source_lineage import (
     CreativeSourceNormalizationAction,
 )
 from eom_catalog_contracts.external_item_learning_result import ExternalItemLearningResult
-from eom_catalog_contracts.external_item_learning_result_v2 import ExternalItemLearningResultV2
+from eom_catalog_contracts.external_item_learning_result_v2 import (
+    ExternalItemLearningResultV2,
+    SourceItemLearningObservation,
+)
 from eom_identifiers import content_sha256
 
 from eom_catalog_service.creative_source_draft_materialization import (
@@ -43,6 +46,13 @@ def materialize_creative_source_content_v2(
 ) -> CreativeSourceContent:
     """Original answer/explanation remain source content, independent work stays separate."""
     result = ExternalItemLearningResultV2.model_validate(result.model_dump(mode="json"))
+    return materialize_source_observation_content(result, resolved_images=resolved_images)
+
+
+def materialize_source_observation_content(
+    result: SourceItemLearningObservation, *, resolved_images: Mapping[str, ImageBlock]
+) -> CreativeSourceContent:
+    """Common source compiler; callers supply an already validated purpose result."""
     if result.proposal is None:
         raise CreativeSourceContentError(CREATIVE_CONTENT_UNAVAILABLE_CODE)
     draft = result.proposal.content

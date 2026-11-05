@@ -74,6 +74,15 @@ source/operator 권한과 report lineage를 다시 검증한다. publication 후
 
 ## 검증과 근거
 
+통합 업로드 학습은 `docs/architecture/MATERIAL_LEARNING_UPLOAD_PIPELINE.md`와 두 번의
+설계 검토 기록을 먼저 읽는다. 현재 구현 후보의 `material_learning_*`는 원래 Notion
+archive 파이프라인과 다른 입력 lineage를 쓰되 기존 Artifact/Document/Registry/Graph
+소유자에 연결한다. `material_page_source_read.py`가 준비·실행 재인가·설명 분석의
+canonical page membership을 함께 검증한다. 일반 설명 source V5/request V12와
+snapshot V10은 구 교과서 계약을 완화한 것이 아니다. source/role receipt, 등록 Pack이
+있다는 사실만으로 전체 coordinator나 운영 활성화가 완료됐다고 추정하지 않는다.
+최신 미완료 항목은 `docs/operations/MATERIAL_LEARNING_IMPLEMENTATION_CHECKPOINT.md`.
+
 - `tests/unit/test_creative_item_graph_learning.py`, `tests/unit/test_creative_parallel_execution.py`
 - `tests/unit/test_office_picture_use_publication.py`, `tests/unit/test_external_item_preview_projection.py`
 - `docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md`

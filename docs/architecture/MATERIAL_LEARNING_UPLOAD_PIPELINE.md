@@ -118,11 +118,11 @@ legacy extraction은 reviewed exam bundle/occurrence를 전제로 한다. 이 �
 | D0 | 현행 경계와 초안 | 작성 |
 | R1 | 입력/내용·문항 분리/시각·해설 대응/권리·출처 설계 검토 | D1 반영 |
 | R2 | 재사용 경계/상태·동시성/복구·확장/실제 배포·검증 설계 검토 | D2 반영 |
-| P1 | JSON Schema 2020-12·Pydantic·pointer·상태/단위 계획 | 기본 입력/발견/문항 추출 계약과 순수 계획 구현·집중 회귀 검증. 문서 등록/공개 진행 계약은 후속 |
-| P2 | 안전한 업로드/준비와 기존 converter·원본 그림 연결 | 미착수 |
-| P3 | 1슬롯 발견/문항/내용 분석·등록·Graph·증분 INDEX 연결 | 순차 task/lease 저장과 전용 Workflow admission·role 계약 구현. 실제 실행/등록 연결은 후속 |
-| P4 | 자료 학습 GUI와 최근 작업·진행·예외·재개/조회 | 미착수 |
-| P5 | unit/schema/security·disposable DB 동시성/중단·browser·wheel 검사 | 미착수 |
+| P1 | JSON Schema 2020-12·Pydantic·pointer·상태/단위 계획 | 입력·준비·발견·문항·출처·진행 및 일반 문서 분석 successor 후보 구현 |
+| P2 | 안전한 업로드/준비와 기존 converter·원본 그림 연결 | 후보 구현. 원본 재사용·page chunk·Office 준비 복구·공식 문서 등록은 임시 DB에서 확인. 실제 운영 업로드는 P6 |
+| P3 | 1슬롯 발견/문항/내용 분석·등록·Graph·증분 INDEX 연결 | 발견/추출 V33와 일반 설명 V34의 실행·source 재인가·기존 Graph projection 연결 후보 구현. 문항 등록/소비 경로·coordinator·control release·실제 실행은 진행 중 |
+| P4 | 자료 학습 GUI와 최근 작업·진행·예외·재개/조회 | 업로드·최근 목록·상세 진행 후보 구현, 브라우저 fixture 확인. 운영 및 재개/재시도 조작은 후속 |
+| P5 | unit/schema/security·disposable DB 동시성/중단·browser·wheel 검사 | 변경 경계별 진행 중. 통과한 fixture/임시 DB와 미실행한 실제 학습을 구분해 checkpoint에 기록 |
 | P6 | 호환 배포·bounded 실제 업로드·Item/Graph/검색 연결·재조회 | 미착수 |
 
 R1과 R2 완료 전에 실행 계약/worker behavior/DB 변경 구현을 시작하지 않는다.
@@ -194,6 +194,70 @@ provider pin과 QUERY/Catalog/runtime 호환 절차를 따르며 INDEX 수치 �
 업로드/모델/Artifact/Item/Graph 경계별 중단, 구형 Workflow/계약 회귀를 검사한다.
 운영 DB에 mutating pytest를 실행하지 않는다. 실제 canary는 제한된 검증 자료와 공식
 사용자 권한으로 실행하고, 전체 책 재처리나 기존 정본/실패 이력 삭제로 검증하지 않는다.
+
+## 일반 자료 설명 지식의 successor 범위
+
+일반 자료는 기존 `knowledge-analysis` application·risk policy·proposal 정규화·accepted
+result·shared Graph writer를 그대로 사용한다. 새 분석 엔진을 따로 만들지 않는다.
+기존 source V4를 완화하지 않고 명시적인 uploaded-material source V5, request/result
+V12, proposal receipt V11, Workflow `12.0.0`/role `1.38.0`, resolved plan V34를 추가한다.
+worker의 안정된 node identity/typed edge/anchor/page 관찰 구조는 기존 proposal V6를
+재사용한다. 새 버전은 아직 후보이며 운영에서 허용됐다는 뜻이 아니다.
+
+- 정본은 이미 등록한 EducationalDocument revision과 실제 업로더의 권리 확인이다.
+  source V5는 일반 자료 revision manifest와 원본 native/PDF 포인터, bounded 선택 영역,
+  정확한 page-chunk 멤버를 함께 pin한다. 텍스트를 기존 교과서 charset/schema로
+  위장하거나 같은 Artifact에 넣기 위해 페이지를 다시 복사하지 않는다.
+- 접근은 document revision key lookup, 선택 페이지 범위 조회와 chunk membership이다.
+  source당 chunk 끝 페이지 tuple을 만들고 이분 탐색하며 같은 chunk는 한 번만 읽는다.
+  complexity는 chunk header 수 + 선택 페이지 수 × log(chunk 수), 공간은 선택 chunk와
+  최대 32페이지의 작은 metadata다. DB index와 기존 분석 queue는 그대로 사용한다.
+- 실제 호출자의 현재 권한과 source-class policy, material/문서 lifecycle, 원본/문서/권리/
+  chunk/member hash를 기존 소유자가 검증한다. 새 source는 TEXTBOOK 또는 INTERNAL_GUIDE로
+  구분하되 구매·협상 사실이나 공식 기출을 만들지 않는다. Graph 등록과 retrieval의
+  허용은 별도이며 기존 released policy를 조용히 넓히지 않는다.
+- 분석 접수·replay·정규화·승인은 기존 transaction/idempotency/risk-policy owner가
+  담당한다. 한 자료 task가 자식 analysis run을 pin하고, 전체 학습 AI lane은 한 개다.
+
+자식 실행은 task의 optional Workflow/analysis ID를 partial unique B-tree로 조회한다.
+Catalog의 runner 전용 재인가 RPC는 저장된 역할에서 실제 업로더를 복원하며,
+발견/문항 추출(V33)뿐 아니라 일반 설명 분석(V34)의 exact source도 검증한다.
+RPC 입력에는 actor/권한을 추가하지 않는다. 실행 직전·결과 commit 직전에 같은
+원본과 권리를 다시 확인하고, 같은 child가 서로 다른 task에 연결되는 것은 DB에서도
+거부한다. 큰 보고서를 매 상태 조회에 읽는 구조는 추가하지 않는다.
+
+새 설명 분석은 기존 구조·projection·공유 writer를 사용하되 uploaded source를 보존하는
+snapshot V10을 발행한다. 구 snapshot bytes는 바꾸지 않는다. 새 원본을 구 교과서
+구매/권리 bundle로 변환하지 않으며, retrieval consumer가 지원하는 source-family와
+access policy도 별도로 확인한 뒤 운영 활성화한다.
+
+## 혼합 자료 문항의 등록·공개 풀이 연결
+
+등록은 기존 Registry와 새 `uploaded-material-item` 등록 Pack을 사용한다. Notion 행,
+5자리 고유번호, 시험 occurrence는 만들지 않는다. 안정된 등록 key는 material revision과
+발견 계획의 source-local unit key에 묶는다. 작은 lineage Artifact는 exact task·실행
+selection·work/role-result 포인터·원문/정규화 content hash·경고·실제 업로더만 pin한다.
+본문은 기존 canonical Item content, 출처는 SOURCE_REFERENCE, 독립 풀이/주의사항은
+원래 REVIEW_REPORT 컴포넌트에 둔다. 본문 그림은 공통 native picture-use resolver를
+사용하고, PDF만 기존 crop renderer의 명시적 derived-image 경계를 사용한다.
+
+원문 내용과 독립 풀이의 정답이 다르면 원문을 고쳐 숨기지 않는다. 등록은 원문 수록
+의미이지 과학적 무오류 인증이 아니다. 이후 기존 registered-Item V2 지식 분석과 V11
+공개 풀이 Workflow를 순차 실행한다. 이렇게 하면 기존 공통 embedding projection과
+현재 numeric INDEX가 지원하는 accepted registered-solution 형식을 재사용할 수 있다.
+추출 단계의 공개 풀이 원본도 보존하며, 이를 가짜 V10/V11 worker 실행으로 포장하지 않는다.
+추가 분석의 비용은 실제 호출로 집계한다. 실행은 여전히 자료 전체 한 AI lane과 기존
+물리 host 상한 안에서 순차다. 기존 GPU INDEX에 새 evidence variant를 억지로 넣거나
+돌고 있는 runtime을 바꾸지 않는다.
+
+원자 경계는 각 기존 application이다. Registry 성공 후 중단되면 같은 key와 content/
+lineage hash를 확인해 재사용하며, accepted analysis/public report의 identity도 저장된
+child 포인터로 복구한다. Graph CAS 재시도는 publication만 반복한다. task의 별도
+solution-analysis pointer는 기존 base analysis와 다른 실행을 명확히 구별한다.
+  실패 이력은 유지하며 Graph 경합으로 모델 분석을 다시 실행하지 않는다.
+- 대안인 TEXTBOOK source V4로 변환/새 파일 복제는 권리와 chunk identity를 잃는다.
+  별도 지식 분석/Graph framework도 불필요하다. 필요한 입력/source successor만 추가해
+  동일 risk·proposal·Graph 경계를 재사용한다.
 
 ## 구현 체크포인트 2026-11-05
 

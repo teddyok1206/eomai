@@ -15,6 +15,7 @@ from eom_catalog_contracts.material_learning_authorization import (
 from eom_catalog_service.application_server import CatalogApplicationServer
 from eom_catalog_service.material_learning_dispatch import dispatch_material_learning
 from eom_identifiers import content_sha256
+from eom_orchestrator import orchestrator as owner_module
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.control_service import ControlPlaneError
 from eom_orchestrator.general_chat_socket import ChatSocketEndpoint
@@ -190,6 +191,16 @@ def test_prepared_material_runs_through_capacity_and_commit_without_codex(monkey
         value.orchestrator.capacity.claim.call_args.args[0].workload_class == "KNOWLEDGE_ANALYSIS"
     )
     value.commit.assert_called_once()
+    stored = owner_module.create_artifact_records.call_args.kwargs["result"]
+    assert stored["schema_version"] == "material-learning-role-receipt/1.0"
+    assert set(stored) == {
+        "schema_version",
+        "result_schema",
+        "task_kind",
+        "input_sha256",
+        "result_sha256",
+    }
+    assert "output" not in stored and "regions" not in stored
     value.orchestrator.capacity.release.assert_called_once()
 
 

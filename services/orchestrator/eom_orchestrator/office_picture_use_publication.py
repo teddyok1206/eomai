@@ -7,12 +7,16 @@ from types import MappingProxyType
 from eom_catalog_contracts.assessment_item import ImageBlock, MediaArtifactPointer
 from eom_catalog_contracts.creative_source_draft import SourceImageBlock
 from eom_catalog_contracts.creative_source_visuals import CREATIVE_SOURCE_VISUAL_IMAGE_REF
-from eom_catalog_contracts.external_item_learning_result_v2 import ExternalItemLearningResultV2
+from eom_catalog_contracts.external_item_learning_result_v2 import (
+    ExternalItemLearningResultV2,
+    SourceItemLearningObservation,
+)
 from eom_catalog_contracts.office_item_learning import (
     OfficeItemLearningWorkInput,
     OfficePictureCatalogArtifact,
     OfficeVisualBindings,
     validate_office_visual_bindings,
+    validate_source_office_visual_bindings,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_image_contracts.office_embedded_images import OfficeEmbeddedImage
@@ -174,6 +178,50 @@ def resolve_office_source_images(
         expected_source_sha256=work.source.preview_manifest.source_sha256,
     )
     validate_office_visual_bindings(selection, result=result, work=work, catalog=catalog)
+    return _office_picture_image_blocks(
+        result=result,
+        selection=selection,
+        catalog=catalog,
+        artifact_id=work.office_artifact.artifact_id,
+        artifact_revision_id=work.office_artifact.artifact_revision_id,
+    )
+
+
+def resolve_material_office_source_images(
+    *,
+    result: SourceItemLearningObservation,
+    selection: OfficeVisualBindings,
+    catalog: OfficePictureUseCatalog,
+    catalog_pointer: ArtifactMemberPointer,
+    expected_source_sha256: str,
+) -> Mapping[str, ImageBlock]:
+    """Reuse exact native USE pointers; caller resolves and authorizes the catalog bytes."""
+    if catalog_pointer.schema_ref != OFFICE_PICTURE_USE_CATALOG_REF:
+        raise ValueError("OFFICE_CATALOG_SCHEMA_INVALID")
+    validate_source_office_visual_bindings(
+        selection,
+        result=result,
+        catalog=catalog,
+        expected_catalog_sha256=catalog_pointer.sha256,
+        expected_source_sha256=expected_source_sha256,
+    )
+    return _office_picture_image_blocks(
+        result=result,
+        selection=selection,
+        catalog=catalog,
+        artifact_id=catalog_pointer.artifact_id,
+        artifact_revision_id=catalog_pointer.artifact_revision_id,
+    )
+
+
+def _office_picture_image_blocks(
+    *,
+    result: SourceItemLearningObservation,
+    selection: OfficeVisualBindings,
+    catalog: OfficePictureUseCatalog,
+    artifact_id: str,
+    artifact_revision_id: str,
+) -> Mapping[str, ImageBlock]:
     views = {view.use_id: view for view in catalog.rendered_uses}
     bindings = {binding.block_id: binding for binding in selection.bindings}
     images: dict[str, ImageBlock] = {}
@@ -189,8 +237,8 @@ def resolve_office_source_images(
                 width_px=view.width_px,
                 height_px=view.height_px,
                 artifact=MediaArtifactPointer(
-                    artifact_id=work.office_artifact.artifact_id,
-                    artifact_revision_id=work.office_artifact.artifact_revision_id,
+                    artifact_id=artifact_id,
+                    artifact_revision_id=artifact_revision_id,
                     artifact_member=view.member_path,
                     sha256=view.sha256,
                     media_type="image/png",

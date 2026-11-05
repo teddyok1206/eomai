@@ -1,0 +1,28 @@
+schema_version: "1.1"
+pack:
+  key: "uploaded-material-item"
+  name: "자료에서 가져온 문항"
+  version: "1.0.0"
+  locale: "ko-KR"
+  domain_key: "general-science"
+  description: "원문과 공개 풀이·주의사항을 구분해 수록하는 일반 자료 문항"
+provenance:
+  mode: "built_in_general_knowledge"
+  intake_batch_ids: []
+  mapping_proposal_ids: []
+compatibility:
+  protocol:
+    minimum: "1.37.0"
+    maximum_exclusive: "1.38.0"
+  workflow_definitions:
+    - key: "material-learning"
+      versions: ["1.0.0"]
+  required_worker_roles: ["support"]
+taxonomies: {}
+item_types:
+  - key: "uploaded-material-item"
+    source: "item-types/uploaded-material-item.yaml"
+profiles: {}
+metadata_schemas:
+  item: "metadata-schemas/item-metadata.schema.json"
+rubrics: {}

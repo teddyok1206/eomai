@@ -135,8 +135,8 @@ _DDL = (
         CONSTRAINT uq_material_learning_task_ordinal UNIQUE (run_id, ordinal),
     CONSTRAINT ck_material_learning_task_counters CHECK (ordinal > 0 AND attempt >
         0),
-    CONSTRAINT ck_material_learning_task_kind CHECK (task_kind IN ('PREPARE','DISCOVER','EXPLANATION',
-        'QUESTION')),
+    CONSTRAINT ck_material_learning_task_kind CHECK (task_kind IN
+        ('PREPARE','DISCOVER','EXPLANATION','QUESTION')),
     CONSTRAINT ck_material_learning_task_state CHECK (state IN ('PENDING','PREPARING',
         'READY','RUNNING','RESULT_READY','REGISTERED','ANALYZING','PUBLISHING','GRAPH_READY',
         'COMPLETED','EXCEPTION','FAILED','CANCELLED')),
@@ -202,6 +202,10 @@ _DDL = (
         WHERE state NOT IN ('COMPLETED','COMPLETED_WITH_EXCEPTIONS','FAILED','CANCELLED')""",
     """CREATE INDEX ix_material_learning_next_task ON material_learning_tasks (run_id, state,
          ordinal, attempt)""",
+    """CREATE UNIQUE INDEX uq_material_learning_child_workflow ON material_learning_tasks
+       (workflow_id) WHERE workflow_id IS NOT NULL""",
+    """CREATE UNIQUE INDEX uq_material_learning_child_analysis ON material_learning_tasks
+       (analysis_run_id) WHERE analysis_run_id IS NOT NULL""",
     """CREATE INDEX ix_material_learning_registered_item ON material_learning_tasks
         (item_revision_id)""",
     """CREATE UNIQUE INDEX uq_material_learning_one_ai ON material_learning_tasks (execution_lane)

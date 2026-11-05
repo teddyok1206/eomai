@@ -217,6 +217,13 @@ def schemas() -> dict[str, dict[str, Any]]:
         "discovery-result": discovery_result,
         "extraction-work": extraction_work,
         "extraction-result": extraction_result,
+        "role-receipt": record(
+            schema_version=version("material-learning-role-receipt/1.0"),
+            result_schema=version("material-learning-result@1.0"),
+            task_kind=enum("DISCOVER", "EXTRACT_ITEM"),
+            input_sha256=SHA,
+            result_sha256=SHA,
+        ),
     }
     return {
         name: {

@@ -90,6 +90,7 @@ from eom_workflow.control_plane import (
     BundleRevisionPointer,
     ControlArtifactPointer,
     ResolvedExecutionPlanV33,
+    ResolvedExecutionPlanV34,
     ResolvedStepExecution,
 )
 from eom_workflow.inference_transfer_control import (
@@ -270,6 +271,7 @@ def materialize_execution_step(
         "resolved-execution-plan/28.0",
         "resolved-execution-plan/32.0",
         "resolved-execution-plan/33.0",
+        "resolved-execution-plan/34.0",
         "resolved-execution-plan/14.0",
         "resolved-execution-plan/15.0",
     }
@@ -294,6 +296,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV28
         | ResolvedExecutionPlanV32
         | ResolvedExecutionPlanV33
+        | ResolvedExecutionPlanV34
         | ResolvedExecutionPlanV14
         | ResolvedExecutionPlanV15
         | ResolvedExecutionPlanV16
@@ -336,6 +339,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV26.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/33.0":
         plan = ResolvedExecutionPlanV33.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/34.0":
+        plan = ResolvedExecutionPlanV34.model_validate(plan_record.canonical_document)
     elif plan_schema_version in {
         "resolved-execution-plan/27.0",
         "resolved-execution-plan/28.0",
@@ -512,7 +517,9 @@ def materialize_execution_step(
         _require_total_size(total_bytes, analysis=True)
         source_artifact_revision_id = plan.source_artifact_revision_id
         source_sha256 = plan.source_sha256
-    elif isinstance(plan, (ResolvedExecutionPlanV4, ResolvedExecutionPlanV5)):
+    elif isinstance(
+        plan, (ResolvedExecutionPlanV4, ResolvedExecutionPlanV5, ResolvedExecutionPlanV34)
+    ):
         document_bytes, document_members = _materialize_analysis_document_source(
             session,
             plan=plan,
@@ -849,7 +856,7 @@ def materialize_execution_step(
     _write_exclusive(agents_path, agents_bytes, group_id=worker_group_id)
 
     image_input_manifest_sha256: str | None = None
-    if isinstance(plan, ResolvedExecutionPlanV5):
+    if isinstance(plan, (ResolvedExecutionPlanV5, ResolvedExecutionPlanV34)):
         image_manifest_document: dict[str, object] = {
             "schema_version": "codex-image-input-manifest/1.0",
             "plan_id": plan.plan_id,
@@ -1164,6 +1171,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV28
             | ResolvedExecutionPlanV32
             | ResolvedExecutionPlanV33
+            | ResolvedExecutionPlanV34
             | ResolvedExecutionPlanV14
             | ResolvedExecutionPlanV15
             | ResolvedExecutionPlanV16
@@ -1204,6 +1212,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV26.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/33.0":
         plan = ResolvedExecutionPlanV33.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/34.0":
+        plan = ResolvedExecutionPlanV34.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") in {
         "resolved-execution-plan/27.0",
         "resolved-execution-plan/28.0",
@@ -1277,7 +1287,9 @@ def authorized_execution_artifact_revisions(
         revision_ids.add(plan.similarity_delivery.context_member.artifact_revision_id)
     if isinstance(plan, ResolvedExecutionPlanV2):
         revision_ids.add(plan.source_artifact_revision_id)
-    elif isinstance(plan, (ResolvedExecutionPlanV4, ResolvedExecutionPlanV5)):
+    elif isinstance(
+        plan, (ResolvedExecutionPlanV4, ResolvedExecutionPlanV5, ResolvedExecutionPlanV34)
+    ):
         # The original PDF, bundle manifest, and rights attestation are pinned
         # provenance. Only the selected Markdown members cross the explicit
         # materialization boundary into the worker workspace. V5 also carries
@@ -1947,7 +1959,7 @@ def _materialize_analysis_source(
 def _materialize_analysis_document_source(
     session: Session,
     *,
-    plan: ResolvedExecutionPlanV4 | ResolvedExecutionPlanV5,
+    plan: ResolvedExecutionPlanV4 | ResolvedExecutionPlanV5 | ResolvedExecutionPlanV34,
     workspace: Path,
     artifact_root: Path,
     worker_group_id: int,

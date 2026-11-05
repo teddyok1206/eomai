@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/resolved-execution-plan/34.0",
+  "title": "EOM uploaded material knowledge analysis resolved plan V34",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "plan_id",
+    "workflow_id",
+    "workload_class",
+    "preset_id",
+    "preset_revision_id",
+    "preset_sha256",
+    "workflow_definition_key",
+    "workflow_definition_version",
+    "workflow_definition_sha256",
+    "analysis_request_id",
+    "analysis_request_sha256",
+    "document_source",
+    "capacity_policy_revision_id",
+    "steps",
+    "resolver_version",
+    "resolved_at",
+    "plan_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "resolved-execution-plan/34.0"
+    },
+    "plan_id": {
+      "type": "string",
+      "pattern": "^execplan_[0-9a-f]{32}$"
+    },
+    "workflow_id": {
+      "type": "string",
+      "pattern": "^workflow_[0-9a-f]{32}$"
+    },
+    "workload_class": {
+      "const": "KNOWLEDGE_ANALYSIS"
+    },
+    "preset_id": {
+      "type": "string",
+      "pattern": "^execpreset_[0-9a-f]{32}$"
+    },
+    "preset_revision_id": {
+      "type": "string",
+      "pattern": "^execpresetrev_[0-9a-f]{32}$"
+    },
+    "preset_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "workflow_definition_key": {
+      "const": "knowledge-analysis"
+    },
+    "workflow_definition_version": {
+      "const": "12.0.0"
+    },
+    "workflow_definition_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "analysis_request_id": {
+      "type": "string",
+      "pattern": "^knowledgeanalysis_[0-9a-f]{32}$"
+    },
+    "analysis_request_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    },
+    "document_source": {
+      "$ref": "eom://schemas/knowledge/educational-document-source/5.0"
+    },
+    "capacity_policy_revision_id": {
+      "type": "string",
+      "pattern": "^capacityrev_[0-9a-f]{32}$"
+    },
+    "steps": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "general_knowledge_mode": {
+            "const": "DENIED"
+          },
+          "instruction_bundle": {
+            "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/bundleRevisionPointer"
+          },
+          "model": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$",
+            "type": "string"
+          },
+          "network": {
+            "const": "disabled"
+          },
+          "reasoning_effort": {
+            "enum": [
+              "minimal",
+              "low",
+              "medium",
+              "high",
+              "xhigh"
+            ]
+          },
+          "reference_bundle": {
+            "type": "null"
+          },
+          "role": {
+            "const": "support"
+          },
+          "sandbox": {
+            "const": "read-only"
+          },
+          "step_key": {
+            "const": "analyze"
+          },
+          "timeout_seconds": {
+            "maximum": 7200,
+            "minimum": 30,
+            "type": "integer"
+          },
+          "worker_pool_key": {
+            "const": "support"
+          }
+        },
+        "required": [
+          "step_key",
+          "role",
+          "model",
+          "reasoning_effort",
+          "instruction_bundle",
+          "reference_bundle",
+          "worker_pool_key",
+          "timeout_seconds",
+          "sandbox",
+          "network",
+          "general_knowledge_mode"
+        ],
+        "type": "object"
+      },
+      "maxItems": 1,
+      "minItems": 1,
+      "type": "array"
+    },
+    "resolver_version": {
+      "const": "34.0.0"
+    },
+    "resolved_at": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/utcTimestamp"
+    },
+    "plan_sha256": {
+      "$ref": "eom://schemas/workflow/control-plane-types-v1#/$defs/sha256"
+    }
+  }
+}

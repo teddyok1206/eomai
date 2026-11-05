@@ -95,6 +95,23 @@ class MaterialArtifactMember(OriginArtifactMemberPointer):
     bytes: int = Field(strict=True, ge=1, le=2 * 1024 * 1024 * 1024)
 
 
+class MaterialLearningRoleReceipt(FrozenModel):
+    """Small DB identity; source text and worker output remain in the Artifact."""
+
+    schema_version: Literal["material-learning-role-receipt/1.0"] = (
+        "material-learning-role-receipt/1.0"
+    )
+    result_schema: Literal["material-learning-result@1.0"] = "material-learning-result@1.0"
+    task_kind: Literal["DISCOVER", "EXTRACT_ITEM"]
+    input_sha256: Sha256
+    result_sha256: Sha256
+
+    @model_validator(mode="after")
+    def installed_receipt(self) -> Self:
+        validate_contract("material-learning-role-receipt-v1", self.model_dump(mode="json"))
+        return self
+
+
 class MaterialPageAddress(FrozenModel):
     source_role: SourceRole
     physical_page: int = Field(strict=True, ge=1, le=2000)

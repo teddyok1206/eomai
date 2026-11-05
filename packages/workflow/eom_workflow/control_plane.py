@@ -28,6 +28,7 @@ from eom_catalog_contracts import (
     RegisteredItemSolutionBasePointer,
     ReviewTextbookEvidence,
 )
+from eom_catalog_contracts.material_knowledge_analysis import EducationalDocumentKnowledgeSourceV5
 from eom_catalog_contracts.material_learning import MaterialLearningWork
 from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInput
 from eom_identifiers import content_sha256
@@ -893,6 +894,27 @@ class ResolvedExecutionPlanV5(ResolvedExecutionPlanV4):
 
     schema_version: Literal["resolved-execution-plan/5.0"] = "resolved-execution-plan/5.0"  # type: ignore[assignment]
     document_source: EducationalDocumentKnowledgeSourceV4  # type: ignore[assignment]
+
+
+class ResolvedExecutionPlanV34(ResolvedExecutionPlanV4):
+    """Uploaded documents retain chunk/rights identity while reusing analyze execution."""
+
+    schema_version: Literal["resolved-execution-plan/34.0"] = "resolved-execution-plan/34.0"  # type: ignore[assignment]
+    workflow_definition_version: Literal["12.0.0"] = "12.0.0"
+    document_source: EducationalDocumentKnowledgeSourceV5  # type: ignore[assignment]
+    resolver_version: Literal["34.0.0"] = "34.0.0"
+
+    @model_validator(mode="after")
+    def source_only_material_knowledge(self) -> ResolvedExecutionPlanV34:
+        step = self.steps[0]
+        if (
+            step.reference_bundle is not None
+            or step.sandbox != "read-only"
+            or step.network != "disabled"
+            or step.general_knowledge_mode != "DENIED"
+        ):
+            raise ValueError("material knowledge analysis requires source-only isolated execution")
+        return self
 
 
 class ResolvedExecutionPlanV6(FrozenModel):

@@ -13,6 +13,7 @@ from typing import Literal, Protocol
 from uuid import uuid4
 
 from eom_catalog_contracts import ContentTeamMaterialRequirement
+from eom_catalog_contracts.material_knowledge_analysis import KnowledgeAnalysisRequestV12
 from eom_operator_identity import PermissionKey
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord, WorkerLeaseRecord
 from eom_orchestrator.database import build_session_factory, transaction
@@ -128,6 +129,7 @@ from eom_workflow_runner.local_embedding_step_execution import (
 )
 from eom_workflow_runner.logging import log_workflow_event, workflow_failure_metadata
 from eom_workflow_runner.material_learning_catalog_client import (
+    prepare_material_knowledge_source_reader,
     prepare_material_learning_execution_context,
 )
 from eom_workflow_runner.models import (
@@ -559,6 +561,14 @@ class PlatformRoleJobExecutor:
         similarity_context = None
         creative_context = None
         material_context = None
+        knowledge_source_reader = None
+        if isinstance(request, KnowledgeAnalysisWorkerRequest) and isinstance(
+            request.analysis_request, KnowledgeAnalysisRequestV12
+        ):
+            with self.sessions() as session:
+                knowledge_source_reader = prepare_material_knowledge_source_reader(
+                    session, workflow=workflow, step=step, request=request
+                )
         if isinstance(request, ExternalItemLearningWorkerRequest):
             with self.sessions() as session:
                 creative_context = prepare_external_item_learning_execution_context(
@@ -603,6 +613,7 @@ class PlatformRoleJobExecutor:
             similarity_context=similarity_context,
             external_item_learning=creative_context,
             material_learning=material_context,
+            reauthorize_knowledge_source=knowledge_source_reader,
             before_execute=bind_platform_job,
             execution_tier=(
                 "ESCALATED"

@@ -5,6 +5,7 @@ import pwd
 from pathlib import Path
 
 from eom_catalog_contracts import CATALOG_APPLICATION_SOCKET_PATH
+from eom_catalog_contracts.material_knowledge_analysis import KnowledgeAnalysisRequestV12
 from eom_catalog_contracts.material_learning import MaterialArtifactMember
 from eom_catalog_contracts.material_learning_authorization import (
     MATERIAL_AUTHORIZATION_MAX_BYTES,
@@ -26,7 +27,9 @@ from eom_orchestrator.material_learning_execution import (
     validate_material_learning_execution_plan,
 )
 from eom_protocol.artifact_members import ArtifactMemberPointer
+from eom_workflow.control_plane import ResolvedExecutionPlanV34
 from eom_workflow.material_learning_request import MaterialLearningWorkerRequest
+from eom_workflow.models import KnowledgeAnalysisWorkerRequest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -37,17 +40,28 @@ class CatalogMaterialLearningSourceReader:
     def __init__(
         self,
         selection: MaterialLearningAuthorizationRequest,
-        original: MaterialLearningWorkerRequest,
+        original: MaterialLearningWorkerRequest | KnowledgeAnalysisWorkerRequest,
         *,
         endpoint: ChatSocketEndpoint | None = None,
     ) -> None:
         self.selection = selection
         self.original = original
         self.endpoint = endpoint
-        if selection.input_sha256 != original.work_input.input_sha256:
+        input_sha = (
+            original.work_input.input_sha256
+            if isinstance(original, MaterialLearningWorkerRequest)
+            else original.analysis_request.request_sha256
+        )
+        if not isinstance(original, MaterialLearningWorkerRequest) and not isinstance(
+            original.analysis_request, KnowledgeAnalysisRequestV12
+        ):
+            raise ValueError("MATERIAL_LEARNING_AUTHORIZATION_PURPOSE_INVALID")
+        if selection.input_sha256 != input_sha:
             raise ValueError("MATERIAL_LEARNING_AUTHORIZATION_INPUT_MISMATCH")
 
-    def __call__(self, request: MaterialLearningWorkerRequest) -> None:
+    def __call__(
+        self, request: MaterialLearningWorkerRequest | KnowledgeAnalysisWorkerRequest
+    ) -> None:
         try:
             if request != self.original:
                 raise ValueError("material source changed")
@@ -79,6 +93,47 @@ class CatalogMaterialLearningSourceReader:
             raise ControlPlaneError(
                 "CONTROL_MATERIAL_SOURCE_AUTHORIZATION_FAILED", "Catalog material reply differs"
             ) from error
+
+
+def prepare_material_knowledge_source_reader(
+    session: Session,
+    *,
+    workflow: WorkflowInstanceRecord,
+    step: WorkflowStepRunRecord,
+    request: KnowledgeAnalysisWorkerRequest,
+) -> CatalogMaterialLearningSourceReader:
+    if (
+        not isinstance(request.analysis_request, KnowledgeAnalysisRequestV12)
+        or step.workflow_id != workflow.workflow_id
+    ):
+        raise ControlPlaneError(
+            "CONTROL_MATERIAL_CONTEXT_INVALID", "uploaded knowledge context differs"
+        )
+    row = session.scalar(
+        select(ResolvedExecutionPlanRecord).where(
+            ResolvedExecutionPlanRecord.workflow_id == workflow.workflow_id
+        )
+    )
+    if row is None:
+        raise ControlPlaneError("CONTROL_PLAN_MISSING", "uploaded knowledge plan missing")
+    plan = ResolvedExecutionPlanV34.model_validate(row.canonical_document)
+    if (
+        plan.analysis_request_sha256 != request.analysis_request.request_sha256
+        or plan.document_source != request.analysis_request.source
+    ):
+        raise ControlPlaneError(
+            "CONTROL_MATERIAL_CONTEXT_INVALID", "uploaded knowledge source differs"
+        )
+    return CatalogMaterialLearningSourceReader(
+        MaterialLearningAuthorizationRequest(
+            workflow_id=workflow.workflow_id,
+            step_run_id=step.step_run_id,
+            plan_id=plan.plan_id,
+            plan_sha256=plan.plan_sha256,
+            input_sha256=request.analysis_request.request_sha256,
+        ),
+        request,
+    )
 
 
 def prepare_material_learning_execution_context(

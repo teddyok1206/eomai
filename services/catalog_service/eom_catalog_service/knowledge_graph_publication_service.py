@@ -81,6 +81,13 @@ from eom_catalog_contracts import (
     PublishKnowledgeGraphSnapshotCommandV6,
     validate_contract,
 )
+from eom_catalog_contracts.material_knowledge_analysis import (
+    EducationalDocumentKnowledgeSourceV5,
+    KnowledgeAnalysisProposalReceiptV11,
+    KnowledgeAnalysisRequestV12,
+    KnowledgeAnalysisResultV12,
+    KnowledgeGraphSnapshotManifestV10,
+)
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_identity_service.models import OperatorRecord
 from eom_item_registry import RegistryError
@@ -149,6 +156,7 @@ from eom_catalog_service.knowledge_proposal_resolution import (
     KnowledgeProposalResolutionError,
     resolve_knowledge_analysis_proposal,
 )
+from eom_catalog_service.material_knowledge_source import resolve_material_document_source
 from eom_catalog_service.models import (
     ItemComponentRecord,
     ItemRecord,
@@ -277,6 +285,7 @@ type KnowledgeAnalysisRequestContract = (
     | KnowledgeAnalysisRequestV7
     | KnowledgeAnalysisRequestV8
     | KnowledgeAnalysisRequestV9
+    | KnowledgeAnalysisRequestV12
 )
 type KnowledgeAnalysisReceiptContract = (
     KnowledgeAnalysisProposalReceipt
@@ -287,6 +296,7 @@ type KnowledgeAnalysisReceiptContract = (
     | KnowledgeAnalysisProposalReceiptV6
     | KnowledgeAnalysisProposalReceiptV7
     | KnowledgeAnalysisProposalReceiptV8
+    | KnowledgeAnalysisProposalReceiptV11
 )
 type KnowledgeGraphSnapshotContract = (
     KnowledgeGraphSnapshotManifestV2
@@ -297,6 +307,7 @@ type KnowledgeGraphSnapshotContract = (
     | KnowledgeGraphSnapshotManifestV7
     | KnowledgeGraphSnapshotManifestV8
     | KnowledgeGraphSnapshotManifestV9
+    | KnowledgeGraphSnapshotManifestV10
 )
 type KnowledgeGraphPublicationCommand = (
     PublishKnowledgeGraphSnapshotCommand
@@ -414,6 +425,7 @@ def _manifest_member_schema_ref(revision: ArtifactRevisionRecord) -> str:
         "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/7.0",
         "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/8.0",
         "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/9.0",
+        "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/10.0",
     }
     if len(matches) != 1 or matches[0].get("schema_ref") not in allowed:
         raise KnowledgeGraphPublicationError(
@@ -428,12 +440,18 @@ def _source_revision_id(
     | ApprovedItemKnowledgeSourceV2
     | ApprovedPastExamItemKnowledgeSourceV3
     | EducationalDocumentKnowledgeSourceV3
-    | EducationalDocumentKnowledgeSourceV4,
+    | EducationalDocumentKnowledgeSourceV4
+    | EducationalDocumentKnowledgeSourceV5,
 ) -> str:
     if isinstance(source, ApprovedItemKnowledgeSourceV2):
         return source.item_revision_id
     if isinstance(
-        source, (EducationalDocumentKnowledgeSourceV3, EducationalDocumentKnowledgeSourceV4)
+        source,
+        (
+            EducationalDocumentKnowledgeSourceV3,
+            EducationalDocumentKnowledgeSourceV4,
+            EducationalDocumentKnowledgeSourceV5,
+        ),
     ):
         return source.document_revision_id
     return source.source_file_id
@@ -445,7 +463,8 @@ def _run_source_identity_matches(
     | ApprovedItemKnowledgeSourceV2
     | ApprovedPastExamItemKnowledgeSourceV3
     | EducationalDocumentKnowledgeSourceV3
-    | EducationalDocumentKnowledgeSourceV4,
+    | EducationalDocumentKnowledgeSourceV4
+    | EducationalDocumentKnowledgeSourceV5,
 ) -> bool:
     """Cross-bind persisted source-family columns to the immutable typed request source."""
 
@@ -462,7 +481,12 @@ def _run_source_identity_matches(
             and run.educational_document_revision_id is None
         )
     if isinstance(
-        source, (EducationalDocumentKnowledgeSourceV3, EducationalDocumentKnowledgeSourceV4)
+        source,
+        (
+            EducationalDocumentKnowledgeSourceV3,
+            EducationalDocumentKnowledgeSourceV4,
+            EducationalDocumentKnowledgeSourceV5,
+        ),
     ):
         return (
             run.educational_document_id == source.document_id
@@ -485,12 +509,14 @@ def _snapshot_source_revision(
     | ApprovedItemKnowledgeSourceV2
     | ApprovedPastExamItemKnowledgeSourceV3
     | EducationalDocumentKnowledgeSourceV3
-    | EducationalDocumentKnowledgeSourceV4,
+    | EducationalDocumentKnowledgeSourceV4
+    | EducationalDocumentKnowledgeSourceV5,
 ) -> (
     ContentIntakeKnowledgeSourceV2
     | ApprovedItemKnowledgeSourceV2
     | EducationalDocumentKnowledgeSourceV3
     | EducationalDocumentKnowledgeSourceV4
+    | EducationalDocumentKnowledgeSourceV5
 ):
     """Store the smallest immutable source identity in a Graph snapshot manifest.
 
@@ -599,7 +625,10 @@ class KnowledgeGraphPublicationService:
                     | KnowledgeGraphSnapshotManifestV8
                     | KnowledgeGraphSnapshotManifestV9
                 )
-                if schema_ref.endswith("/9.0"):
+                if schema_ref.endswith("/10.0"):
+                    validate_contract("knowledge-graph-snapshot-manifest-v10", value)
+                    manifest = KnowledgeGraphSnapshotManifestV10.model_validate(value)
+                elif schema_ref.endswith("/9.0"):
                     validate_contract("knowledge-graph-snapshot-manifest-v9", value)
                     manifest = KnowledgeGraphSnapshotManifestV9.model_validate(value)
                 elif schema_ref.endswith("/8.0"):
@@ -974,10 +1003,19 @@ class KnowledgeGraphPublicationService:
             manifest_value["structure_manifest"] = command.structure_manifest.model_dump(
                 mode="json"
             )
-            manifest = KnowledgeGraphSnapshotManifestV9.model_validate(manifest_value)
-            validate_contract(
-                "knowledge-graph-snapshot-manifest-v9", manifest.model_dump(mode="json")
-            )
+            if any(
+                isinstance(item.source, EducationalDocumentKnowledgeSourceV5)
+                for item in projection.analyses
+            ):
+                manifest = KnowledgeGraphSnapshotManifestV10.model_validate(manifest_value)
+                validate_contract(
+                    "knowledge-graph-snapshot-manifest-v10", manifest.model_dump(mode="json")
+                )
+            else:
+                manifest = KnowledgeGraphSnapshotManifestV9.model_validate(manifest_value)
+                validate_contract(
+                    "knowledge-graph-snapshot-manifest-v9", manifest.model_dump(mode="json")
+                )
         elif isinstance(command, PublishKnowledgeGraphSnapshotCommandV5):
             manifest_value["structure_manifest"] = command.structure_manifest.model_dump(
                 mode="json"
@@ -1200,7 +1238,9 @@ class KnowledgeGraphPublicationService:
         try:
             request_version = run.canonical_request.get("schema_version")
             request: KnowledgeAnalysisRequestContract
-            if request_version == "knowledge-analysis-request/9.0":
+            if request_version == "knowledge-analysis-request/12.0":
+                request = KnowledgeAnalysisRequestV12.model_validate(run.canonical_request)
+            elif request_version == "knowledge-analysis-request/9.0":
                 request = KnowledgeAnalysisRequestV9.model_validate(run.canonical_request)
             elif request_version == "knowledge-analysis-request/8.0":
                 request = KnowledgeAnalysisRequestV8.model_validate(run.canonical_request)
@@ -1298,7 +1338,10 @@ class KnowledgeGraphPublicationService:
                 KnowledgeAnalysisRequestV9,
             ),
         )
-        if visual_item:
+        uploaded_material = isinstance(request, KnowledgeAnalysisRequestV12)
+        if uploaded_material:
+            accepted_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/12.0"
+        elif visual_item:
             accepted_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/9.0"
         elif stable_identity_multimodal:
             accepted_schema_ref = "eom://schemas/knowledge/knowledge-analysis-result/8.0"
@@ -1336,6 +1379,7 @@ class KnowledgeGraphPublicationService:
             | KnowledgeAnalysisResultV7
             | KnowledgeAnalysisResultV8
             | KnowledgeAnalysisResultV9
+            | KnowledgeAnalysisResultV12
         )
         database_accepted: (
             KnowledgeAnalysisResultV2
@@ -1346,9 +1390,17 @@ class KnowledgeGraphPublicationService:
             | KnowledgeAnalysisResultV7
             | KnowledgeAnalysisResultV8
             | KnowledgeAnalysisResultV9
+            | KnowledgeAnalysisResultV12
         )
         try:
-            if visual_item:
+            if uploaded_material:
+                validate_contract("knowledge-analysis-result-v12", accepted_value)
+                accepted = KnowledgeAnalysisResultV12.model_validate(accepted_value)
+                validate_contract("knowledge-analysis-result-v12", accepted_revision.result)
+                database_accepted = KnowledgeAnalysisResultV12.model_validate(
+                    accepted_revision.result
+                )
+            elif visual_item:
                 validate_contract("knowledge-analysis-result-v9", accepted_value)
                 accepted = KnowledgeAnalysisResultV9.model_validate(accepted_value)
                 validate_contract("knowledge-analysis-result-v9", accepted_revision.result)
@@ -1439,7 +1491,16 @@ class KnowledgeGraphPublicationService:
         receipt: KnowledgeAnalysisReceiptContract
         database_receipt: KnowledgeAnalysisReceiptContract
         try:
-            if visual_item:
+            if uploaded_material:
+                validate_contract("knowledge-analysis-proposal-receipt-v11", proposal_receipt_value)
+                receipt = KnowledgeAnalysisProposalReceiptV11.model_validate(proposal_receipt_value)
+                validate_contract(
+                    "knowledge-analysis-proposal-receipt-v11", proposal_revision.result
+                )
+                database_receipt = KnowledgeAnalysisProposalReceiptV11.model_validate(
+                    proposal_revision.result
+                )
+            elif visual_item:
                 validate_contract("knowledge-analysis-proposal-receipt-v8", proposal_receipt_value)
                 receipt = KnowledgeAnalysisProposalReceiptV8.model_validate(proposal_receipt_value)
                 validate_contract(
@@ -1583,8 +1644,20 @@ class KnowledgeGraphPublicationService:
         | ApprovedPastExamItemKnowledgeSourceV3
         | EducationalDocumentKnowledgeSourceV3
         | EducationalDocumentKnowledgeSourceV4
+        | EducationalDocumentKnowledgeSourceV5
     ):
         source = request.source
+        if isinstance(source, EducationalDocumentKnowledgeSourceV5):
+            return resolve_material_document_source(
+                session,
+                self.artifacts,
+                document_revision_id=source.document_revision_id,
+                source_class=source.source_class,
+                first_physical_page=source.first_physical_page,
+                last_physical_page=source.last_physical_page,
+                selected_regions=source.selected_regions,
+                curriculum_unit_keys=source.curriculum_unit_keys,
+            )
         if isinstance(source, ContentIntakeKnowledgeSourceV2):
             return resolve_content_intake_source(
                 session,
@@ -2699,7 +2772,19 @@ class KnowledgeGraphPublicationService:
                 source = Path(raw_directory) / "manifest.json"
                 source.write_bytes(canonical_json_bytes(manifest))
                 source.chmod(0o640)
-                if isinstance(manifest, KnowledgeGraphSnapshotManifestV9):
+                if isinstance(manifest, KnowledgeGraphSnapshotManifestV10):
+                    schema_ref = "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/10.0"
+                    protocol_version = "catalog-material-graph/1.0"
+                    protocol_schema_hash = content_sha256(
+                        {
+                            "protocol": protocol_version,
+                            "contracts": [
+                                "knowledge-graph-snapshot-manifest/10.0",
+                                "knowledge-graph-projection/4.0",
+                            ],
+                        }
+                    )
+                elif isinstance(manifest, KnowledgeGraphSnapshotManifestV9):
                     schema_ref = "eom://schemas/knowledge/knowledge-graph-snapshot-manifest/9.0"
                     protocol_version = KNOWLEDGE_GRAPH_ORIGIN_SCOPED_ITEM_CATALOG_PROTOCOL
                     protocol_schema_hash = KNOWLEDGE_GRAPH_ORIGIN_SCOPED_ITEM_CATALOG_SCHEMA_HASH

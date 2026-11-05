@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/item-lineage/1.0",
+  "title": "EOM uploaded material Item source-fidelity lineage",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-item-lineage/1.0"
+    },
+    "material_id": {
+      "type": "string",
+      "pattern": "^material_[0-9a-f]{32}$"
+    },
+    "material_revision_id": {
+      "type": "string",
+      "pattern": "^materialrev_[0-9a-f]{32}$"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^materialtask_[0-9a-f]{32}$"
+    },
+    "unit_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "selection": {
+      "$ref": "eom://schemas/material-learning/authorization-request/1.0"
+    },
+    "work_input": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "role_result": {
+      "$ref": "eom://schemas/external-item/creative-source-lineage/1.0#/$defs/member"
+    },
+    "input_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "result_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "proposed_content_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "registered_content_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "source_answer_mode": {
+      "enum": [
+        "EDITORIAL_SOURCE",
+        "MODEL_PROPOSAL_UNVERIFIED",
+        "NOT_APPLICABLE"
+      ]
+    },
+    "warning_codes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 128
+      },
+      "minItems": 0,
+      "maxItems": 64
+    },
+    "registration_policy": {
+      "const": "PRESERVE_SOURCE_WITH_REVIEW_WARNINGS_V1"
+    },
+    "requested_by": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "Z$"
+    },
+    "lineage_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "material_id",
+    "material_revision_id",
+    "task_id",
+    "unit_key",
+    "selection",
+    "work_input",
+    "role_result",
+    "input_sha256",
+    "result_sha256",
+    "proposed_content_sha256",
+    "registered_content_sha256",
+    "source_answer_mode",
+    "warning_codes",
+    "registration_policy",
+    "requested_by",
+    "created_at",
+    "lineage_sha256"
+  ]
+}

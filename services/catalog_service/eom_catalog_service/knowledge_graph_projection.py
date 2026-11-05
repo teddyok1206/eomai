@@ -39,6 +39,7 @@ from eom_catalog_contracts import (
     ProposedKnowledgeNode,
     validate_knowledge_edge_endpoint_types,
 )
+from eom_catalog_contracts.material_knowledge_analysis import EducationalDocumentKnowledgeSourceV5
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 
 _LEXICAL_TOKEN = re.compile(r"[0-9A-Za-z가-힣]+")
@@ -198,6 +199,7 @@ class AcceptedAnalysisProposal:
     source: (
         KnowledgeAnalysisSourceV3
         | EducationalDocumentKnowledgeSourceV4
+        | EducationalDocumentKnowledgeSourceV5
         | ApprovedPastExamItemKnowledgeSourceV3
     )
     accepted_result: KnowledgeArtifactMemberPointer
@@ -355,13 +357,19 @@ def _source_revision_id(
     source: (
         KnowledgeAnalysisSourceV3
         | EducationalDocumentKnowledgeSourceV4
+        | EducationalDocumentKnowledgeSourceV5
         | ApprovedPastExamItemKnowledgeSourceV3
     ),
 ) -> str:
     if isinstance(source, ApprovedItemKnowledgeSourceV2):
         return source.item_revision_id
     if isinstance(
-        source, (EducationalDocumentKnowledgeSourceV3, EducationalDocumentKnowledgeSourceV4)
+        source,
+        (
+            EducationalDocumentKnowledgeSourceV3,
+            EducationalDocumentKnowledgeSourceV4,
+            EducationalDocumentKnowledgeSourceV5,
+        ),
     ):
         return source.document_revision_id
     return source.source_file_id
@@ -379,7 +387,10 @@ def _validate_document_page_coverage(analyses: tuple[AcceptedAnalysisProposal, .
     for analysis in analyses:
         source = analysis.source
         if not isinstance(
-            source, EducationalDocumentKnowledgeSourceV3 | EducationalDocumentKnowledgeSourceV4
+            source,
+            EducationalDocumentKnowledgeSourceV3
+            | EducationalDocumentKnowledgeSourceV4
+            | EducationalDocumentKnowledgeSourceV5,
         ):
             continue
         by_revision.setdefault(source.document_revision_id, []).append(
@@ -543,7 +554,10 @@ def _add_reviewed_curriculum_structure(
     expected_bound_runs = {
         analysis.analysis_run_id
         for analysis in analyses
-        if isinstance(analysis.source, EducationalDocumentKnowledgeSourceV4)
+        if isinstance(
+            analysis.source,
+            (EducationalDocumentKnowledgeSourceV4, EducationalDocumentKnowledgeSourceV5),
+        )
         and analysis.source.curriculum_unit_keys
     }
     if set(bindings_by_run) != expected_bound_runs:
@@ -584,7 +598,9 @@ def _add_reviewed_curriculum_structure(
     for run_id, document_binding in bindings_by_run.items():
         analysis = analysis_by_id[run_id]
         source = analysis.source
-        if not isinstance(source, EducationalDocumentKnowledgeSourceV4):
+        if not isinstance(
+            source, (EducationalDocumentKnowledgeSourceV4, EducationalDocumentKnowledgeSourceV5)
+        ):
             raise KnowledgeGraphProjectionError(
                 "KNOWLEDGE_GRAPH_CURRICULUM_SOURCE_INVALID",
                 "reviewed curriculum bindings require a multimodal document source",
@@ -1105,7 +1121,13 @@ def build_education_graph_projection(
                 else (
                     "2.0"
                     if any(
-                        isinstance(analysis.source, EducationalDocumentKnowledgeSourceV3)
+                        isinstance(
+                            analysis.source,
+                            (
+                                EducationalDocumentKnowledgeSourceV3,
+                                EducationalDocumentKnowledgeSourceV5,
+                            ),
+                        )
                         for analysis in analyses
                     )
                     else "1.0"
