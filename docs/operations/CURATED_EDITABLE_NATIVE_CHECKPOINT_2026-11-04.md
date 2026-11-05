@@ -441,3 +441,45 @@ SHA `sha256:6b31275a2c08926c5b14a229f4d56453afccd9c9a77ad5eb616dc832505ab922`였
 (`/tmp/eom-curated-score-ai-prerequisites-20261104-01.log`). 새 AI 분석·정식 Graph 등록의
 추가 범위와 실제 관리자 인증 확인이 필요하다. 다른 사용자의 세션을 가져오거나 가짜
 Graph를 만들지 않으며 전체 목표를 완료로 판정하지 않는다.
+
+## 출제의도 native cell 확정과 Builder-only 운영 반영 — 2026-11-05 UTC
+
+사용자는 `intent-box-table-check.hwpx`에서 해설 위 출제의도 본문이 Hancom에 정상
+표시됨을 확인하고 이 방식을 운영에 반영하도록 승인했다. 이 수동 PASS는 이번 3문항
+샘플의 출제의도 표시 범위이며, 다른 출력·교육 품질·AI 합본 gate의 승인을 대신하지 않는다.
+최초 캐시 제거 파일의 실패 기록과 사용자가 반환한 같은 SHA의 파일은 보존했다.
+
+운영 Builder source는 `ad761dc5cddb829b1df3909389a9ab587466705e`, wheel SHA-256은
+`5925ebd00442728f5088a222f03c9def7a87add7ad94d8e105a9c721d3fafb65`다. 설치 전후 비교에서
+기존 코드 변경은 `hwp_conversion_package.py` 하나, 추가는 `native_intent_box.py` 하나뿐이며
+다른 Builder 코드와 HWPX contracts bytes는 같았다. 계약 package·변환 JAR·Kordoc·API·Web·
+Catalog·Codex·INDEX/QUERY 수치 환경은 설치하거나 교체하지 않았다. 실행 중 Builder가 없는
+시점에 HWPX 제작 관리자만 잠깐 정지하고 기존 owner의 non-editable wheel 설치 및 layout
+검사를 수행했다. API·Web·창작 producer·INDEX·QUERY의 PID/InvocationID와 보호된 설정은
+그대로였고 HWPX 관리자는 다시 active, HTTPS health는 200이었다.
+
+설치된 모듈로 기존 확인용 입력을 다시 처리했을 때 사용자 승인 파일과 동일한 SHA
+`8291f2ba23b48c64b83b571c2cb2c2abc32f812e89b98da3b8580112a7596ec6`가 나왔다. 설치본
+집중 회귀 71개도 통과했다. 실제 원본 HWP 3건을 새 local workspace로 고정해 운영과 같은
+`eom-hwpx-curated@` 격리 unit에서 변환·합쳤고 Manager 독립 package acceptance를 통과했다.
+결과는 3 sections·그림 binary 9·native table 15·수식 53, 출제의도 native cell 3곳이었다.
+이 local probe는 `hwpxbuild_a4d7ecdc95ae5d80ac83aa7adba79cb5`, SHA는
+`a467e6c714ae92c355e57b070e08ad1d46553b67f469408efe49ddd2e51c9d00`다. 문서 내부의
+identity 재배정 때문에 승인 파일과 package SHA가 다르며, 위 설치 모듈의 동일-byte 검사와
+각 입력/출력의 독립 역검증을 각각 기록했다. DB 쓰기·NAS 발행·새 모델 실행은 없다.
+
+첫 설치본 probe는 operator fixture의 `inputs` 디렉터리가 umask로 `0700`이 되어 Builder
+계정이 읽지 못해 입력 단계에서 실패했다. 정식 입력이나 제품 코드를 바꾸지 않고 새
+probe identity의 fixture 디렉터리만 정확한 `0750`으로 준비해 재검증했다. 첫 FAILED local
+결과는 그대로 남겼으며 원래 성공 합본도 같은 SHA로 보존했다.
+
+이후 **새로 제작하는 합본**에서 이 방식이 적용된다. 기존 성공 build·다운로드 bytes는
+불변으로 유지하고 완료 결과 조회·멱등 재전송을 재렌더 경로로 바꾸지 않는다. 원래 파일을
+교체하려면 사용자 액션의 별도 새 제작을 사용한다. 새 DB migration/권한/공개 schema는 없다.
+
+배포·보존·rollback 기록은 `/var/lib/eom-hwpx-intent-native-cell-release-20261105/`의
+`prepared.json`, `installed.json`, `real-input-probe.json`, `activated.json`에 있다. 이전 Builder
+archive와 정확한 이전 wheel을 보관했다. 로컬 검증 기록은
+`/tmp/eom-intent-installed-output-20261105.log`,
+`/tmp/eom-intent-installed-regression-20261105.log`,
+`/tmp/eom-intent-installed-real-input-20261105-02.log`에 있다.

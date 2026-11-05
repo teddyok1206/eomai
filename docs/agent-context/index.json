@@ -104,6 +104,8 @@
         "apps/web_gui/eom_web_gui/static/item-db-delivery.js",
         "services/hwpx_builder/eom_hwpx_builder/curated_mixed_renderer.py",
         "services/hwpx_builder/eom_hwpx_builder/curated_editorial_layout.py",
+        "services/hwpx_builder/eom_hwpx_builder/hwp_conversion_package.py",
+        "services/hwpx_builder/eom_hwpx_builder/native_intent_box.py",
         "services/hwpx_builder/eom_hwpx_builder",
         "packages/hwpx_contracts/eom_hwpx_contracts/curated_document.py",
         "services/hwpx_builder/eom_hwpx_builder/curated_renderer.py",

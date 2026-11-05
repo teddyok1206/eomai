@@ -36,7 +36,11 @@ resource·binary·object ID를 먼저 map으로 할당한 뒤 역매핑으로 XM
 
 HWP 변환은 `native_hwp_converter.py`가 보호된 설치 JAR/Java identity와 소스/후보 hash를
 검사하고, `native_hwp_preservation.py`가 문단·표·수식·binary·도형 evidence를 대조한다.
-`hwp_conversion_package.py`는 고정 writer의 빈 style name·동일 크기 0 축약·ZIP만 정규화한다.
+`hwp_conversion_package.py`는 고정 writer의 빈 style name·동일 크기 0 축약·ZIP을 정규화한다.
+`native_intent_box.py`는 제목/본문만 있는 알려진 inline 출제의도 묶음에 한해 편집 가능한
+native cell로 바꾸고 원래 크기/anchor와 바깥 XML을 역검증한다. 그림·수식이 있는 그룹이나
+다른 글상자는 바꾸지 않는다. 캐시만 제거했던 첫 시도는 Hancom에서 실패했으므로 활성
+방식으로 재사용하지 않는다. 확정 방식과 설치/사용자 확인은 아래 운영 체크포인트를 본다.
 페이지 PNG 대체나 원본 덮어쓰기는 하지 않는다. 이 코드·설치본 검증을 운영 GUI 활성화로
 간주하지 말고 아래 현재 체크포인트와 실제 release를 대조한다.
 
@@ -104,6 +108,8 @@ Graph source membership은 별개다. Graph 후보가 없을 때 후보를 꾸�
 - `packages/hwpx_contracts/eom_hwpx_contracts/curated_mixed.py`
 - `services/hwpx_builder/eom_hwpx_builder/curated_mixed_renderer.py`
 - `services/hwpx_builder/eom_hwpx_builder/curated_editorial_layout.py`
+- `services/hwpx_builder/eom_hwpx_builder/hwp_conversion_package.py`
+- `services/hwpx_builder/eom_hwpx_builder/native_intent_box.py`
 - `services/hwpx_builder/eom_hwpx_builder`
 - `packages/hwpx_contracts/eom_hwpx_contracts/curated_document.py`
 - `services/hwpx_builder/eom_hwpx_builder/curated_renderer.py`

@@ -179,7 +179,9 @@ package analysis와 현재 Office sandbox 읽기를 통과했으며 3페이지�
 겹친 제목 도형 대신 표의 제목 문단으로 보인다. 이 부분의 렌더링은 달라지므로 이전
 캐시 제거 시도의 전체-page pixel equality를 이번 증거로 재사용하지 않는다.
 HWPX 회귀 434개 통과, 기존 root-only opt-in 1개 제외, formatter·ruff·핵심 2개 module의
-mypy 통과다. 이 체크포인트에서 Hancom 사용자 확인 및 운영 활성화는 아직 대기 중이다.
+mypy 통과다. 이후 사용자가 새 native cell 파일의 Hancom 정상 표시를 확인하고 이 방식의
+운영 반영을 승인했다. Builder-only 배포·설치본 검증은 운영 체크포인트의 2026-11-05
+출제의도 수정 절을 따른다. 이전 확인용 파일이나 기존 delivery bytes는 덮어쓰지 않는다.
 
 변환 input/output hash, native 문단 텍스트 fingerprint, 표 구조, 수식 script, binary
 fingerprint와 도형 개수는 로컬 schema-valid evidence로 다시 대조한다. 문단 fingerprint는
