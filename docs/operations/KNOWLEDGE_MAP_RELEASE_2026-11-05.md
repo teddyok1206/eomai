@@ -99,6 +99,9 @@ label a fixture as live acceptance. User-facing visual verification is distinct.
   layers; combined read/handoff check 3.27 seconds; Map model calls zero.
 - Actual HTTPS: ready PASS; Map JS/CSS/application assets match installed SHA;
   unauthenticated Map read denied. Manual user browser verification NOT_RECORDED.
+  Subsequent user feedback, “조회 잘 되네”, closes **MANUAL_MAP_READ=PASS**.
+  This confirms actual screen lookup only, not every interaction/content-quality
+  gate. Appended `manual-map-read.json`; the earlier immutable acceptance stays.
 - Combined focused regression run: 142 PASS; strict targeted mypy, Ruff
   format/lint, wire mirror audit and real Chromium Map/DB/guide/request/preset
   fixtures PASS. A native Hancom/content-quality check is not part of Map.
