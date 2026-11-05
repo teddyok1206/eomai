@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/page-chunk/1.0",
+  "title": "EOM material learning page-chunk 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-page-chunk/1.0"
+    },
+    "document_id": {
+      "type": "string",
+      "pattern": "^edudoc_[0-9a-f]{32}$"
+    },
+    "document_revision_id": {
+      "type": "string",
+      "pattern": "^edudocrev_[0-9a-f]{32}$"
+    },
+    "source_role": {
+      "enum": [
+        "MAIN",
+        "SOLUTIONS"
+      ]
+    },
+    "pdf_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "profile_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "first_physical_page": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2000
+    },
+    "last_physical_page": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2000
+    },
+    "pages": {
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/material-learning/preparation-types/1.0#/$defs/page"
+      },
+      "minItems": 1,
+      "maxItems": 256
+    }
+  },
+  "required": [
+    "schema_version",
+    "document_id",
+    "document_revision_id",
+    "source_role",
+    "pdf_sha256",
+    "profile_sha256",
+    "first_physical_page",
+    "last_physical_page",
+    "pages"
+  ]
+}

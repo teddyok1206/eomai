@@ -35,6 +35,13 @@ class MaterialTaskState(StrEnum):
     CANCELLED = "CANCELLED"
 
 
+class MaterialTaskKind(StrEnum):
+    PREPARE = "PREPARE"
+    DISCOVER = "DISCOVER"
+    EXPLANATION = "EXPLANATION"
+    QUESTION = "QUESTION"
+
+
 _M = MaterialLearningState
 MATERIAL_TRANSITIONS = MappingProxyType(
     {
@@ -84,6 +91,16 @@ TASK_TRANSITIONS = MappingProxyType(
 )
 
 
+# Conversion/rendering is durable CPU work, never a disguised Codex job.
+PREPARATION_TASK_TRANSITIONS = MappingProxyType(
+    {
+        _T.PENDING: frozenset({_T.PREPARING, _T.EXCEPTION, _T.CANCELLED}),
+        _T.PREPARING: frozenset({_T.RESULT_READY, _T.EXCEPTION, _T.FAILED, _T.CANCELLED}),
+        _T.RESULT_READY: frozenset({_T.COMPLETED, _T.EXCEPTION, _T.FAILED}),
+    }
+)
+
+
 def require_material_transition(
     current: MaterialLearningState, target: MaterialLearningState
 ) -> None:
@@ -91,6 +108,11 @@ def require_material_transition(
         raise ValueError("MATERIAL_LEARNING_TRANSITION_INVALID")
 
 
-def require_material_task_transition(current: MaterialTaskState, target: MaterialTaskState) -> None:
-    if target not in TASK_TRANSITIONS[current]:
+def require_material_task_transition(
+    current: MaterialTaskState, target: MaterialTaskState, *, kind: MaterialTaskKind | None = None
+) -> None:
+    transitions = (
+        PREPARATION_TASK_TRANSITIONS if kind is MaterialTaskKind.PREPARE else TASK_TRANSITIONS
+    )
+    if target not in transitions.get(current, frozenset()):
         raise ValueError("MATERIAL_LEARNING_TASK_TRANSITION_INVALID")

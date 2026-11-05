@@ -274,7 +274,7 @@ class MaterialLearningRunSummary(FrozenModel):
 class MaterialLearningTaskSummary(FrozenModel):
     task_id: str = Field(pattern=r"^materialtask_[0-9a-f]{32}$")
     ordinal: int = Field(strict=True, ge=1, le=1_000_000)
-    task_kind: Literal["DISCOVER", "EXPLANATION", "QUESTION"]
+    task_kind: Literal["PREPARE", "DISCOVER", "EXPLANATION", "QUESTION"]
     state: MaterialTaskStateValue
     workflow_id: str | None = Field(pattern=r"^workflow_[0-9a-f]{32}$")
     item_revision_id: str | None = Field(pattern=r"^itemrev_[0-9a-f]{32}$")

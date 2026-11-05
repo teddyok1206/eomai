@@ -517,6 +517,7 @@ if [[ "${action}" == "material-learning-tests" ]]; then
     tests/integration/test_material_learning_storage.py \
     tests/integration/test_material_learning_workflow_storage.py \
     tests/integration/test_material_learning_intake_storage.py \
+    tests/integration/test_material_learning_page_preparation.py \
     tests/integration/test_control_plane_persistence.py::test_alembic_head_matches_composed_sqlalchemy_metadata
   printf 'Disposable mixed-material learning persistence tests passed.\n'
   exit 0

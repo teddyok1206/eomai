@@ -154,7 +154,7 @@ def schemas() -> dict[str, dict[str, Any]]:
     task = record(
         task_id=identifier("materialtask"),
         ordinal=integer(1, 1_000_000),
-        task_kind=enum("DISCOVER", "EXPLANATION", "QUESTION"),
+        task_kind=enum("PREPARE", "DISCOVER", "EXPLANATION", "QUESTION"),
         state=task_state,
         workflow_id=nullable(identifier("workflow")),
         item_revision_id=nullable(identifier("itemrev")),

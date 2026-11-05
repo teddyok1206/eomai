@@ -14,16 +14,19 @@ from eom_catalog_contracts.material_learning_intake import (
     MaterialSourceUploadCommand,
 )
 from eom_catalog_service.material_learning_intake import MaterialLearningIntakeService
+from eom_catalog_service.material_learning_models import MaterialLearningRunRecord
 from eom_catalog_service.material_learning_read import MaterialLearningReadService
 from eom_catalog_service.material_learning_source import (
     MaterialLearningSourceError,
     MaterialLearningSourceService,
 )
+from eom_catalog_service.material_learning_store import transition_material_run
 from eom_catalog_service.settings import CatalogSettings
 from eom_identifiers import sha256_bytes
 from eom_identity_service.models import OperatorRecord, OperatorRoleAssignmentRecord, RoleRecord
 from eom_identity_service.repository import seed_builtin_rbac
 from eom_orchestrator.repository import IdempotencyConflict
+from eom_workflow.material_learning_state import MaterialLearningState
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -78,7 +81,19 @@ def material_intake(creative_engine, tmp_path):
         rights_confirmed=True,
         idempotency_key="material-source-test-" + uuid4().hex,
     )
-    return actor, settings, path, command
+    yield actor, settings, path, command
+    # Keep immutable test evidence, but do not leave this fixture's received
+    # work runnable for later global-queue tests in the same disposable DB.
+    with Session(creative_engine) as session, session.begin():
+        for run in session.scalars(
+            select(MaterialLearningRunRecord)
+            .where(MaterialLearningRunRecord.created_by == actor)
+            .with_for_update()
+        ):
+            if run.state not in {"COMPLETED", "COMPLETED_WITH_EXCEPTIONS", "FAILED", "CANCELLED"}:
+                transition_material_run(
+                    session, run, MaterialLearningState.CANCELLED, now=datetime.now(UTC)
+                )
 
 
 def test_raw_source_receipt_replay_and_exact_resolution(creative_engine, material_intake):

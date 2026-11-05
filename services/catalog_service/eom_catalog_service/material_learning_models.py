@@ -196,7 +196,7 @@ class MaterialLearningTaskRecord(Base):
         UniqueConstraint("run_id", "ordinal", name="uq_material_learning_task_ordinal"),
         CheckConstraint("ordinal > 0 AND attempt > 0", name="ck_material_learning_task_counters"),
         CheckConstraint(
-            "task_kind IN ('DISCOVER','EXPLANATION','QUESTION')",
+            "task_kind IN ('PREPARE','DISCOVER','EXPLANATION','QUESTION')",
             name="ck_material_learning_task_kind",
         ),
         CheckConstraint(

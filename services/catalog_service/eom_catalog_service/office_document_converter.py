@@ -201,14 +201,77 @@ class SystemdOfficeDocumentConverter:
             token_hex=self.token_hex,
         )
 
-    def convert(
-        self, workspace: Path, *, source_format: str
-    ) -> OfficeDocumentReviewConversionIdentity:
+    def get_or_create_workspace(self, instance_id: str) -> Path:
+        """Stable temporary location for a pinned owner task, never canonical identity."""
+        if INSTANCE_PATTERN.fullmatch(instance_id) is None:
+            raise OfficeDocumentConversionError(
+                "OFFICE_DOCUMENT_CONVERTER_INSTANCE_INVALID", "Conversion instance is invalid"
+            )
+        workspace = self.staging_root / CONVERSION_DIRECTORY / instance_id
+        if not os.path.lexists(workspace):
+            return create_office_conversion_workspace(
+                self.staging_root, token_hex=lambda _size: instance_id.removeprefix("officeconv_")
+            )
+        self._require_workspace(workspace)
+        return workspace
+
+    def _require_workspace(self, workspace: Path) -> None:
         if (
             workspace.parent != self.staging_root / CONVERSION_DIRECTORY
             or INSTANCE_PATTERN.fullmatch(workspace.name) is None
-            or source_format not in {"HWP", "HWPX"}
         ):
+            raise OfficeDocumentConversionError(
+                "OFFICE_DOCUMENT_CONVERTER_REQUEST_INVALID", "Conversion workspace is invalid"
+            )
+        parent = workspace.parent
+        parent_metadata = parent.lstat()
+        if (
+            parent.is_symlink()
+            or parent.resolve() != parent
+            or not stat.S_ISDIR(parent_metadata.st_mode)
+            or parent_metadata.st_uid != os.geteuid()
+            or parent_metadata.st_mode & 0o077
+        ):
+            raise OfficeDocumentConversionError(
+                "OFFICE_DOCUMENT_CONVERTER_WORKSPACE_INVALID", "Conversion root is unsafe"
+            )
+        metadata = workspace.lstat()
+        if (
+            workspace.is_symlink()
+            or not stat.S_ISDIR(metadata.st_mode)
+            or metadata.st_uid != os.geteuid()
+            or metadata.st_mode & 0o077
+        ):
+            raise OfficeDocumentConversionError(
+                "OFFICE_DOCUMENT_CONVERTER_WORKSPACE_INVALID", "Conversion workspace is unsafe"
+            )
+
+    def read_completed(
+        self, workspace: Path, *, source_format: str, expected_source_sha256: str
+    ) -> OfficeDocumentReviewConversionIdentity:
+        """Reuse a verified completed conversion without running the converter again."""
+        self._require_workspace(workspace)
+        if source_format not in {"HWP", "HWPX"}:
+            raise OfficeDocumentConversionError(
+                "OFFICE_DOCUMENT_CONVERTER_REQUEST_INVALID", "Conversion source format is invalid"
+            )
+        outcome = self._load_outcome(workspace, source_format=source_format)
+        if outcome.source_sha256 != expected_source_sha256:
+            raise OfficeDocumentConversionError(
+                "OFFICE_DOCUMENT_CONVERSION_SOURCE_INVALID", "Conversion source identity differs"
+            )
+        if outcome.status == "ERROR":
+            raise OfficeDocumentConversionError(
+                outcome.error_code or "OFFICE_DOCUMENT_CONVERSION_OUTCOME_INVALID",
+                "The recorded conversion failed; its history was not changed",
+            )
+        return self._completed_identity(workspace)
+
+    def convert(
+        self, workspace: Path, *, source_format: str
+    ) -> OfficeDocumentReviewConversionIdentity:
+        self._require_workspace(workspace)
+        if source_format not in {"HWP", "HWPX"}:
             raise OfficeDocumentConversionError(
                 "OFFICE_DOCUMENT_CONVERTER_REQUEST_INVALID",
                 "Office conversion request is outside the fixed workspace contract",
@@ -243,6 +306,9 @@ class SystemdOfficeDocumentConverter:
                 "OFFICE_DOCUMENT_CONVERSION_OUTCOME_INVALID",
                 "Office conversion unit status differs from its typed outcome",
             )
+        return self._completed_identity(workspace)
+
+    def _completed_identity(self, workspace: Path) -> OfficeDocumentReviewConversionIdentity:
         output = workspace / "converted/original.pdf"
         try:
             metadata = output.lstat()

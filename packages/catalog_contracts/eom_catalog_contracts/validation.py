@@ -34,11 +34,59 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "material-learning-preparation-types-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-preparation-types-v1.schema.json",
+            "resources/material-learning/material-learning-preparation-types-v1.schema.json",
+            "1.0",
+            "sha256:4181b4a58f91afc374f95188657518ae652035407f1a5e7716e3da8c8aa81cc3",
+        ),
+        "material-learning-preparation-input-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-preparation-input-v1.schema.json",
+            "resources/material-learning/material-learning-preparation-input-v1.schema.json",
+            "1.0",
+            "sha256:17e0aec904154d20ae1891335370c7768fb8a0a37e83ec99dfeef8b9bb266cb6",
+        ),
+        "material-learning-pdf-projection-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-pdf-projection-v1.schema.json",
+            "resources/material-learning/material-learning-pdf-projection-v1.schema.json",
+            "1.0",
+            "sha256:c2f5a472dbf1df5033a9d805d445e302c63b4e04d83ee9da399f54968cc3cf09",
+        ),
+        "material-learning-page-chunk-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-page-chunk-v1.schema.json",
+            "resources/material-learning/material-learning-page-chunk-v1.schema.json",
+            "1.0",
+            "sha256:ed84d789188d4a930bb1b6771d9a297b4d63960180903af09bfbdff7bcf9ae00",
+        ),
+        "material-learning-page-bundle-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-page-bundle-v1.schema.json",
+            "resources/material-learning/material-learning-page-bundle-v1.schema.json",
+            "1.0",
+            "sha256:28fbb8d394d068bc12de6cf146fd56e4c61d1f0d48722eaccc602eb8e102dba0",
+        ),
+        "material-learning-document-revision-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-document-revision-v1.schema.json",
+            "resources/material-learning/material-learning-document-revision-v1.schema.json",
+            "1.0",
+            "sha256:fb5edd26cdb6a229848fb3ab9b9bf7d5448a89417bdb10325f5939933e7ff880",
+        ),
+        "material-learning-document-receipt-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-document-receipt-v1.schema.json",
+            "resources/material-learning/material-learning-document-receipt-v1.schema.json",
+            "1.0",
+            "sha256:1cd775f1d02452e195b50dbf93166bb97dc3a45a11ae475a6f86c5ac40bc3b4f",
+        ),
+        "material-learning-prepared-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-prepared-v1.schema.json",
+            "resources/material-learning/material-learning-prepared-v1.schema.json",
+            "1.0",
+            "sha256:d7d4e1042dce6990cb0254e2dd3c9e83ec9cfcfb2022a9f59166fd7a97d9e327",
+        ),
         "material-learning-intake-types-v1": CatalogSchemaResource(
             "schemas/material-learning/material-learning-intake-types-v1.schema.json",
             "resources/material-learning/material-learning-intake-types-v1.schema.json",
             "1.0",
-            "sha256:e1073dc7041e76c7abed1b3c94b7d6239798848c8773ea1f0b5ac5e436ee1262",
+            "sha256:cf8fe7a164c7fb8d498b7d5772899ff4bf79e024074b76dda2b477f75b1e966e",
         ),
         "material-learning-source-upload-v1": CatalogSchemaResource(
             "schemas/material-learning/material-learning-source-upload-v1.schema.json",

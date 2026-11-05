@@ -1,0 +1,288 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/preparation-types/1.0",
+  "title": "EOM material learning preparation-types 1.0",
+  "$defs": {
+    "pageMember": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "member_path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240,
+          "pattern": "^analysis/(?:pages|images)/page-[0-9]{6}\\.(?:md|png)$"
+        },
+        "schema_ref": {
+          "type": "string",
+          "pattern": "^eom://schemas/[A-Za-z0-9._/-]{1,220}$"
+        },
+        "media_type": {
+          "enum": [
+            "text/markdown",
+            "image/png"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 67108864
+        }
+      },
+      "required": [
+        "member_path",
+        "schema_ref",
+        "media_type",
+        "sha256",
+        "bytes"
+      ]
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        },
+        "text": {
+          "$ref": "eom://schemas/material-learning/preparation-types/1.0#/$defs/pageMember"
+        },
+        "image": {
+          "$ref": "eom://schemas/material-learning/preparation-types/1.0#/$defs/pageMember"
+        },
+        "width_pixels": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "height_pixels": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "render_dpi": {
+          "type": "integer",
+          "minimum": 120,
+          "maximum": 400
+        }
+      },
+      "required": [
+        "physical_page",
+        "text",
+        "image",
+        "width_pixels",
+        "height_pixels",
+        "render_dpi"
+      ]
+    },
+    "extractor": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "implementation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "implementation_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "options_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "implementation",
+        "version",
+        "implementation_sha256",
+        "options_sha256"
+      ]
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "const": "material-learning-preparation-profile/1.0"
+        },
+        "source_commit": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "extractor": {
+          "$ref": "eom://schemas/material-learning/preparation-types/1.0#/$defs/extractor"
+        },
+        "office_tool_source_commit": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[0-9a-f]{40}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "libreoffice_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "h2orestart_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maximum_pages": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        },
+        "maximum_rendered_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 4294967296
+        },
+        "chunk_page_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 256
+        },
+        "chunk_soft_bytes": {
+          "type": "integer",
+          "minimum": 67108864,
+          "maximum": 536870912
+        },
+        "profile_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "schema_version",
+        "source_commit",
+        "extractor",
+        "office_tool_source_commit",
+        "libreoffice_sha256",
+        "h2orestart_sha256",
+        "maximum_pages",
+        "maximum_rendered_bytes",
+        "chunk_page_limit",
+        "chunk_soft_bytes",
+        "profile_sha256"
+      ]
+    },
+    "conversion": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "conversion_kind": {
+          "enum": [
+            "IDENTITY_PDF",
+            "LIBREOFFICE_H2ORESTART_PDF"
+          ]
+        },
+        "review_pdf_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "libreoffice_version": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "libreoffice_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "h2orestart_sha256": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "conversion_kind",
+        "review_pdf_sha256",
+        "libreoffice_version",
+        "libreoffice_sha256",
+        "h2orestart_sha256"
+      ]
+    },
+    "chunkReference": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "manifest": {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        "first_physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        },
+        "last_physical_page": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2000
+        },
+        "content_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1073741824
+        }
+      },
+      "required": [
+        "manifest",
+        "first_physical_page",
+        "last_physical_page",
+        "content_bytes"
+      ]
+    }
+  }
+}

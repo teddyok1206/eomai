@@ -7,11 +7,13 @@ import os
 import re
 import stat
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
 
 from eom_catalog_contracts.material_learning import MaterialArtifactMember
 from eom_catalog_contracts.material_learning_intake import (
     MATERIAL_SOURCE_FORMATS,
+    MaterialSourceFormat,
     MaterialSourceMember,
     MaterialSourceUploadCommand,
     MaterialSourceUploadManifest,
@@ -64,8 +66,19 @@ def authorize_material_learning(session: Session, operator_id: str) -> None:
         raise MaterialLearningSourceError("MATERIAL_LEARNING_PERMISSION_DENIED")
 
 
-def validate_material_source_file(source: Path, command: MaterialSourceUploadCommand) -> None:
+@dataclass(frozen=True, slots=True)
+class MaterialSourceFileFingerprint:
+    source_format: MaterialSourceFormat
+    content_length: int
+    sha256: str
+
+
+def validate_material_source_file(
+    source: Path, command: MaterialSourceUploadCommand | MaterialSourceFileFingerprint
+) -> None:
     """Validate at the private input boundary, never trust a filename or caller hash."""
+    if not 8 <= command.content_length <= 256 * 1024 * 1024:
+        raise MaterialLearningSourceError("MATERIAL_LEARNING_SOURCE_FILE_INVALID")
     descriptor = os.open(
         source, os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
     )

@@ -26,6 +26,10 @@ from eom_catalog_contracts import (
     TextbookPageAnalysisV2,
     validate_contract,
 )
+from eom_catalog_contracts.material_learning_preparation import (
+    MaterialDocumentReceipt,
+    MaterialDocumentRevision,
+)
 from eom_identifiers import (
     canonical_json_bytes,
     content_sha256,
@@ -43,6 +47,10 @@ from sqlalchemy import Engine, or_, select
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifact, CatalogArtifactService
+from eom_catalog_service.educational_material_registration import (
+    MATERIAL_DOCUMENT_SCHEMA,
+    MaterialDocumentRegistrationService,
+)
 from eom_catalog_service.models import (
     EducationalDocumentRecord,
     EducationalDocumentRegistrationRecord,
@@ -254,6 +262,17 @@ class EducationalDocumentService:
         self.settings = settings or CatalogSettings.from_environment()
         self.sessions = build_session_factory(engine)
         self.artifacts = CatalogArtifactService(engine, self.settings)
+        self._material_documents = MaterialDocumentRegistrationService(engine, self.settings)
+
+    def register_material_document(
+        self, revision: MaterialDocumentRevision, *, operator_id: str
+    ) -> MaterialDocumentReceipt:
+        """Generic uploaded documents, without altering licensed textbook contracts."""
+        return self._material_documents.register(revision, operator_id=operator_id)
+
+    def inspect_material_revision(self, revision_id: str) -> MaterialDocumentReceipt:
+        """Read the pinned generic revision, not a substitution with current/latest."""
+        return self._material_documents.inspect_revision(revision_id, verify=False)
 
     def register_textbook(
         self,
@@ -269,7 +288,10 @@ class EducationalDocumentService:
         prepared = self._validate_bundle(analysis_bundle_root, request)
         reservation = self._reserve(request)
         if reservation.state == "COMMITTED":
-            return self._receipt(reservation.document_revision_id, verify=True)
+            existing = self._receipt(reservation.document_revision_id, verify=True)
+            if isinstance(existing, MaterialDocumentReceipt):
+                raise EducationalDocumentError("EDUCATIONAL_DOCUMENT_POINTER_MISMATCH")
+            return existing
 
         try:
             source_artifact = self._publish_source(request, source_path)
@@ -351,7 +373,11 @@ class EducationalDocumentService:
 
     def inspect(
         self, document_id_or_key: str
-    ) -> EducationalDocumentRegistrationReceipt | EducationalDocumentRegistrationReceiptV2:
+    ) -> (
+        EducationalDocumentRegistrationReceipt
+        | EducationalDocumentRegistrationReceiptV2
+        | MaterialDocumentReceipt
+    ):
         with self.sessions() as session:
             document = session.scalar(
                 select(EducationalDocumentRecord).where(
@@ -369,7 +395,10 @@ class EducationalDocumentService:
     def list_current(
         self,
     ) -> tuple[
-        EducationalDocumentRegistrationReceipt | EducationalDocumentRegistrationReceiptV2, ...
+        EducationalDocumentRegistrationReceipt
+        | EducationalDocumentRegistrationReceiptV2
+        | MaterialDocumentReceipt,
+        ...,
     ]:
         with self.sessions() as session:
             revision_ids = tuple(
@@ -1076,7 +1105,11 @@ class EducationalDocumentService:
 
     def _receipt(
         self, document_revision_id: str, *, verify: bool
-    ) -> EducationalDocumentRegistrationReceipt | EducationalDocumentRegistrationReceiptV2:
+    ) -> (
+        EducationalDocumentRegistrationReceipt
+        | EducationalDocumentRegistrationReceiptV2
+        | MaterialDocumentReceipt
+    ):
         with self.sessions() as session:
             revision = session.get(EducationalDocumentRevisionRecord, document_revision_id)
             if revision is None or revision.revision_state != "APPROVED":
@@ -1101,6 +1134,13 @@ class EducationalDocumentService:
                 type[EducationalDocumentRegistrationReceipt]
                 | type[EducationalDocumentRegistrationReceiptV2]
             )
+            if (analysis_schema_ref, revision_schema_ref) == (
+                "eom://schemas/material-learning/page-bundle/1.0",
+                MATERIAL_DOCUMENT_SCHEMA,
+            ):
+                return self._material_documents.inspect_revision(
+                    document_revision_id, verify=verify
+                )
             if (analysis_schema_ref, revision_schema_ref) == (
                 TEXTBOOK_BUNDLE_SCHEMA_REF,
                 REVISION_SCHEMA_REF,

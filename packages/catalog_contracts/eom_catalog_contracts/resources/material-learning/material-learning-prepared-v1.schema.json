@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/prepared/1.0",
+  "title": "EOM material learning prepared 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-prepared/1.0"
+    },
+    "material_id": {
+      "type": "string",
+      "pattern": "^material_[0-9a-f]{32}$"
+    },
+    "material_revision_id": {
+      "type": "string",
+      "pattern": "^materialrev_[0-9a-f]{32}$"
+    },
+    "intake_manifest": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "profile_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/material-learning/types/1.0#/$defs/preparedSource"
+      },
+      "minItems": 1,
+      "maxItems": 2
+    },
+    "prepared_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "material_id",
+    "material_revision_id",
+    "intake_manifest",
+    "profile_sha256",
+    "sources",
+    "prepared_sha256"
+  ]
+}

@@ -237,6 +237,7 @@
         },
         "task_kind": {
           "enum": [
+            "PREPARE",
             "DISCOVER",
             "EXPLANATION",
             "QUESTION"

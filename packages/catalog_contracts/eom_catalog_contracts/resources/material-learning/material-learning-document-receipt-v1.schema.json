@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/document-receipt/1.0",
+  "title": "EOM material learning document-receipt 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-document-receipt/1.0"
+    },
+    "document_id": {
+      "type": "string",
+      "pattern": "^edudoc_[0-9a-f]{32}$"
+    },
+    "document_revision_id": {
+      "type": "string",
+      "pattern": "^edudocrev_[0-9a-f]{32}$"
+    },
+    "revision_number": {
+      "const": 1
+    },
+    "registration_request_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "revision_manifest": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "original": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "source": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "analysis_bundle_manifest": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "rights_attestation": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    }
+  },
+  "required": [
+    "schema_version",
+    "document_id",
+    "document_revision_id",
+    "revision_number",
+    "registration_request_sha256",
+    "revision_manifest",
+    "original",
+    "source",
+    "analysis_bundle_manifest",
+    "rights_attestation"
+  ]
+}

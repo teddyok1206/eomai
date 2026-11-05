@@ -135,7 +135,7 @@ _DDL = (
         CONSTRAINT uq_material_learning_task_ordinal UNIQUE (run_id, ordinal),
     CONSTRAINT ck_material_learning_task_counters CHECK (ordinal > 0 AND attempt >
         0),
-    CONSTRAINT ck_material_learning_task_kind CHECK (task_kind IN ('DISCOVER','EXPLANATION',
+    CONSTRAINT ck_material_learning_task_kind CHECK (task_kind IN ('PREPARE','DISCOVER','EXPLANATION',
         'QUESTION')),
     CONSTRAINT ck_material_learning_task_state CHECK (state IN ('PENDING','PREPARING',
         'READY','RUNNING','RESULT_READY','REGISTERED','ANALYZING','PUBLISHING','GRAPH_READY',

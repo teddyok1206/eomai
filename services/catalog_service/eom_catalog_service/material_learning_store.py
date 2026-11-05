@@ -14,6 +14,7 @@ from uuid import NAMESPACE_URL, uuid4, uuid5
 from eom_catalog_contracts.material_learning import MaterialArtifactMember, MaterialKind
 from eom_workflow.material_learning_state import (
     MaterialLearningState,
+    MaterialTaskKind,
     MaterialTaskState,
     require_material_task_transition,
     require_material_transition,
@@ -369,7 +370,7 @@ def add_material_task(
 ) -> tuple[MaterialLearningTaskRecord, bool]:
     """Stable task identity across coordinator restart; retry has a separate use case."""
     if (
-        task_kind not in {"DISCOVER", "EXPLANATION", "QUESTION"}
+        task_kind not in {"PREPARE", "DISCOVER", "EXPLANATION", "QUESTION"}
         or not 1 <= len(unit_key) <= 128
         or ordinal < 1
     ):
@@ -419,7 +420,9 @@ def transition_material_task(
     if task.run_id != run.run_id:
         raise MaterialLearningStorageError("MATERIAL_LEARNING_TASK_OWNER_MISMATCH")
     prior = task.state
-    require_material_task_transition(MaterialTaskState(prior), target)
+    require_material_task_transition(
+        MaterialTaskState(prior), target, kind=MaterialTaskKind(task.task_kind)
+    )
     if target in _AI_STATES:
         lane_locked = session.scalar(
             text("SELECT pg_try_advisory_xact_lock(:key)"), {"key": _MATERIAL_AI_LANE_LOCK}

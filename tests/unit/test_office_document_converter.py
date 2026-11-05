@@ -215,6 +215,36 @@ def test_catalog_adapter_starts_only_fixed_unit_and_pins_converter_identity(
     ]
     assert identity.conversion_kind == "LIBREOFFICE_H2ORESTART_PDF"
     assert identity.libreoffice_version == "LibreOffice 24.2.7.2"
+    original = workspace / "original.hwpx"
+    replay = converter.read_completed(
+        workspace,
+        source_format="HWPX",
+        expected_source_sha256="sha256:" + hashlib.sha256(original.read_bytes()).hexdigest(),
+    )
+    assert replay == identity
+    assert sum("start" in call for call in calls) == 1
+    with pytest.raises(OfficeDocumentConversionError, match="source identity differs"):
+        converter.read_completed(
+            workspace, source_format="HWPX", expected_source_sha256="sha256:" + "0" * 64
+        )
+
+
+def test_stable_conversion_workspace_is_reused_but_symlink_is_rejected(tmp_path: Path) -> None:
+    converter = SystemdOfficeDocumentConverter(
+        tmp_path,
+        systemctl=Path("/bin/true"),
+        libreoffice=Path("/bin/true"),
+        h2orestart_bundle=Path("/bin/true"),
+    )
+    instance = "officeconv_" + "d" * 32
+    first = converter.get_or_create_workspace(instance)
+    assert converter.get_or_create_workspace(instance) == first
+    linked = first.with_name("officeconv_" + "e" * 32)
+    linked.symlink_to(first)
+    with pytest.raises(OfficeDocumentConversionError, match="workspace is unsafe"):
+        converter.get_or_create_workspace(linked.name)
+    with pytest.raises(OfficeDocumentConversionError, match="instance is invalid"):
+        converter.get_or_create_workspace("../../other")
 
 
 def test_catalog_adapter_returns_exact_typed_converter_failure(tmp_path: Path) -> None:

@@ -1,6 +1,6 @@
 const KINDS = Object.freeze({TEXTBOOK: "교과서", REFERENCE_BOOK: "참고서", WORKBOOK: "문제집", MOCK_EXAM: "모의고사", OTHER: "기타 자료"});
 const STATES = Object.freeze({RECEIVED: "접수됨", PREPARING: "파일 준비 중", DISCOVERING: "자료 구성 확인 중", PROCESSING: "학습 중", WAITING_FOR_CAPACITY: "작업 자리 대기 중", PAUSED: "일시 정지", COMPLETED: "학습 완료", COMPLETED_WITH_EXCEPTIONS: "일부 확인 필요", FAILED: "처리 실패", CANCELLED: "취소됨", PENDING: "대기", READY: "실행 준비됨", RUNNING: "문항 읽는 중", RESULT_READY: "내용 확인 중", REGISTERED: "문항 등록됨", ANALYZING: "풀이·개념 분석 중", PUBLISHING: "그래프 연결 중", GRAPH_READY: "그래프 연결됨", EXCEPTION: "원본 확인 필요"});
-const TASK_KINDS = Object.freeze({DISCOVER: "구성 확인", EXPLANATION: "설명 지식", QUESTION: "문항"});
+const TASK_KINDS = Object.freeze({PREPARE: "파일 준비", DISCOVER: "구성 확인", EXPLANATION: "설명 지식", QUESTION: "문항"});
 const TERMINAL = new Set(["COMPLETED", "COMPLETED_WITH_EXCEPTIONS", "FAILED", "CANCELLED"]);
 const MAX_BYTES = 256 * 1024 * 1024;
 

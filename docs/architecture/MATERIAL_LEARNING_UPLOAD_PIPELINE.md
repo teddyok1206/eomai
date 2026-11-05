@@ -229,6 +229,16 @@ provider pin과 QUERY/Catalog/runtime 호환 절차를 따르며 INDEX 수치 �
 - 아직 구현 중: bounded 페이지/일반 문서 source, 실제 Orchestrator 실행/결과 처리,
   문항·문서·Graph·증분 INDEX와 DB 소비 경로, 운영 호환 배포와 실제 canary.
   지금의 업로드 접수 성공만으로 학습 완료나 전체 goal 완료를 선언하지 않는다.
+- 페이지 준비 후보는 긴 자료를 bounded chunk로 저장하고, PDF 원본을 중복 등록하지
+  않는다. HWP/HWPX는 기존 변환기와 본문 picture-use 추출을 사용하며, 성공한 변환의
+  private workspace와 이미 committed된 page chunk를 중단 후 그대로 이어받는다.
+  일반 문서는 기존 EducationalDocument owner에 등록하되 별도의 새 manifest로
+  업로더 권리 확인을 pin한다. 기존 구매·협상 교과서 source 의미는 바꾸지 않는다.
+- 최신 임시 DB에서 준비 중단→재개→일반 문서 등록과 원본 pointer 재사용을 포함한
+  22개 검사가 통과했고, 같은 DB에서 동일 suite를 다시 실행해도 22개가 통과했다.
+  합성 extractor를 사용한 복구/저장 검사이므로 실제 Codex 분석 또는 운영 Graph
+  등록 완료의 증거는 아니다. 기존 API/GUI/문서 계약 회귀는 87개 PASS이며 browser
+  opt-in 한 건은 별도의 기존 Chromium fixture PASS와 구분한다.
 - 20:13 UTC read-only: 기존 creative 실행은 publication 단계이며 당시 active slot lease는
   0이었다. 기존 producer PID `4175073`/invocation과 GPU INDEX PID `4045657`/invocation은
   그대로였다. cursor `25`는 재개 구간의 진행값이지 전체 Graph 누적 수가 아니다.

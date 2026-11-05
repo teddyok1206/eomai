@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-import tempfile
-from pathlib import Path
-
 from eom_catalog_contracts.material_learning import (
     PERMITTED_USES,
     MaterialArtifactMember,
@@ -15,12 +12,13 @@ from eom_catalog_contracts.material_learning_intake import (
     MaterialLearningAcceptance,
     MaterialLearningIntakeManifest,
 )
-from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
+from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
 from pydantic import BaseModel
 from sqlalchemy import Engine
 
 from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.material_learning_artifacts import publish_material_metadata
 from eom_catalog_service.material_learning_source import (
     MaterialLearningSourceService,
     authorize_material_learning,
@@ -117,32 +115,12 @@ class MaterialLearningIntakeService:
     def _publish_metadata(
         self, model: BaseModel, *, member_path: str, schema_ref: str, idempotency_key: str
     ) -> MaterialArtifactMember:
-        encoded = canonical_json_bytes(model.model_dump(mode="json"))
-        digest = sha256_bytes(encoded)
-        with tempfile.TemporaryDirectory(
-            prefix="material-intake.", dir=self.settings.staging_root
-        ) as temporary:
-            path = Path(temporary) / "metadata.json"
-            with path.open("xb") as stream:
-                stream.write(encoded)
-            artifact = self.artifacts.commit_file_set(
-                files={member_path: path},
-                primary_file=member_path,
-                artifact_type="material-learning-intake",
-                idempotency_key=idempotency_key,
-                request={"schema_ref": schema_ref, "sha256": digest},
-                result={"sha256": digest},
-                file_metadata={
-                    member_path: {"schema_ref": schema_ref, "media_type": "application/json"}
-                },
-                expected_file_sha256={member_path: digest},
-            )
-        return MaterialArtifactMember(
-            artifact_id=artifact.artifact_id,
-            artifact_revision_id=artifact.revision_id,
+        return publish_material_metadata(
+            self.artifacts,
+            self.settings,
+            model,
             member_path=member_path,
             schema_ref=schema_ref,
-            media_type="application/json",
-            sha256=digest,
-            bytes=len(encoded),
+            idempotency_key=idempotency_key,
+            artifact_type="material-learning-intake",
         )

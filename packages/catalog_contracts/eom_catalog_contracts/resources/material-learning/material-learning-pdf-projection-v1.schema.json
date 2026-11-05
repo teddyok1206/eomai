@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/pdf-projection/1.0",
+  "title": "EOM material learning pdf-projection 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-pdf-projection/1.0"
+    },
+    "source_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "profile_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "conversion": {
+      "$ref": "eom://schemas/material-learning/preparation-types/1.0#/$defs/conversion"
+    },
+    "pdf_bytes": {
+      "type": "integer",
+      "minimum": 8,
+      "maximum": 268435456
+    },
+    "office_catalog": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    }
+  },
+  "required": [
+    "schema_version",
+    "source_sha256",
+    "profile_sha256",
+    "conversion",
+    "pdf_bytes",
+    "office_catalog"
+  ]
+}

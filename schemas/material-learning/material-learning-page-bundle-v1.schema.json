@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/page-bundle/1.0",
+  "title": "EOM material learning page-bundle 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-page-bundle/1.0"
+    },
+    "document_id": {
+      "type": "string",
+      "pattern": "^edudoc_[0-9a-f]{32}$"
+    },
+    "document_revision_id": {
+      "type": "string",
+      "pattern": "^edudocrev_[0-9a-f]{32}$"
+    },
+    "source_role": {
+      "enum": [
+        "MAIN",
+        "SOLUTIONS"
+      ]
+    },
+    "original": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "pdf": {
+      "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+    },
+    "conversion": {
+      "$ref": "eom://schemas/material-learning/preparation-types/1.0#/$defs/conversion"
+    },
+    "profile": {
+      "$ref": "eom://schemas/material-learning/preparation-types/1.0#/$defs/profile"
+    },
+    "page_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 2000
+    },
+    "chunks": {
+      "type": "array",
+      "items": {
+        "$ref": "eom://schemas/material-learning/preparation-types/1.0#/$defs/chunkReference"
+      },
+      "minItems": 1,
+      "maxItems": 2000
+    },
+    "office_catalog": {
+      "anyOf": [
+        {
+          "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "document_id",
+    "document_revision_id",
+    "source_role",
+    "original",
+    "pdf",
+    "conversion",
+    "profile",
+    "page_count",
+    "chunks",
+    "office_catalog"
+  ]
+}
