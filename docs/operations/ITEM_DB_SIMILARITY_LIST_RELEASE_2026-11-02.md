@@ -308,3 +308,17 @@ Artifact의 거부/terminal history 보존, 반환 목록 밖 source의 lifecycl
 변화 감지가 포함된다. 이전 read4 고정 기대 테스트2개는 이미 API가 사용하는 read5와
 별도 legacy read4 dispatch를 모두 확인하도록 갱신했다. API의 요청 version은 바꾸지 않았다.
 운영 재열람 시간은 실제 원 요청으로 측정하기 전까지 PENDING이다.
+
+### Catalog 전용 운영 반영 — 2026-11-05 12:53 UTC
+
+소스 `ef14bf472fbe035a81c344007ad4e623e62c346f`를 commit/push하고 wheel RECORD,
+기존 설치 wheel과의 변경 범위, 실제 Catalog service identity의 installed import/schema를
+검증했다. Catalog만 새 immutable installed prefix로 교체했다. API/Web의 세션과 QUERY,
+GPU INDEX·creative producer·workflow runners·HWPX Manager는 같은 PID/config를 유지했다.
+DB migration은 없다. release/rollback evidence는
+`/var/lib/eom-similarity-saved-ranking-release-20261105/`에 보존한다.
+
+원 완료 검색은 READY, 완료 selector hash 동일, native launch1개를 유지한다.
+운영 반영 직후에는 아직 새 completed-result GET이 없어 snapshot publication과 실제
+재조회 시간은 PENDING이다. 기존 기록의 첫 GET으로 한 번 채우고 같은 기록의 다음 GET을
+측정한다. user search를 새로 제출하거나 최초 저장을 별도 모델/GPU 실행으로 세지 않는다.
