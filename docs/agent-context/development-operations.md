@@ -52,6 +52,15 @@ API·Web·Catalog/Runner·INDEX/QUERY·수치 controller는 다른 설치 source
 무조건 같은 HEAD로 재시작하지 않는다. 동작 중인 수치 runtime pin·실행 계획·worker를
 바꾸지 않고, 변경된 owner만 기존 graceful handoff로 교체하는 방법을 먼저 검토한다.
 
+API 업데이트에서는 QUERY unit의 기존 `Requires=eom-api.service`와 provider의
+API commit/wheel/code-member hash pin을 함께 본다. API/Web만 교체하는 것으로
+독립 배포가 된다고 추정하지 않는다. public/private wrapper hash와 Catalog/chat/runtime
+연결은 기존 compatible-set 절차로 갱신하되 frozen INDEX/GPU는 보존한다.
+원래 creative producer의 지원된 SIGINT drain으로 workers와 Graph publication이
+자연 완료한 뒤 교체·재개한다. current-provider의 파일 epoch 검증 때문에 코드 교체 후
+API 시작까지 기존 1.1초 guard를 유지하며, rollback도 프로세스를 먼저 멈춘 다음
+파일을 복구하고 시작한다. 실패한 배포 기록을 지우지 않는다.
+
 정상 입력 뒤의 저장·Graph·검색 실패는 담당 deterministic 코드에서 재현한다. 디스크/DB
 자원 장애, 잘못된 AI 결과, 권한/hash 위반을 분리한다. 안전한 원래 요청 재개와 모든 오류
 무시하기는 다르다. timeout만으로 미실행을 가정하지 않는다.

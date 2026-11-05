@@ -92,3 +92,14 @@ file identity/hash and all live process references before unlinking only those
 files. Active/recent commits, every wheel and all installed prefixes remain.
 Recovery commands/hashes are in the cleanup manifest. No NAS relocation or DB
 change. Combined recovery: 30,741,649,408 bytes (about 28.6 GiB).
+
+Final reachability reconciliation restored 14 reflog-only source archives
+(311,429,120 bytes); net removal is 30,430,220,288 bytes (about 28.3 GiB).
+The remaining removed archives' commits are reachable from retained Git refs.
+
+Deployment discovery: API/Web-only restart is not independently supported by the
+existing API-provider identity pins and systemd QUERY dependency. Use the existing
+compatible release-set rollout, allow creative workers to finish naturally, then
+resume the producer. Do not detach dependencies/weaken source verification to
+make the additive Map endpoint deploy independently. Frozen INDEX/GPU pins and
+processes are preserved; no new runtime framework or migration is introduced.

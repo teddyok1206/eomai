@@ -48,6 +48,7 @@
 
 | 영역 | 상태와 확인할 기록 |
 | --- | --- |
+| Map·로컬 정리 | `데이터 → Map`에서 실제 Graph 탐색·근거 메타데이터·문항 미리보기·DB 열기를 운영 반영했습니다. 동일 문항 버전의 실제 서비스 계정 조회·재조회와 HTTPS 자산을 확인했습니다. 복구 가능한 이전 빌드 약28.3GiB를 정리했고 NAS 이동·DB 필드/원본/벡터 삭제는 없습니다. [검증·호환 릴리스 기록](docs/operations/KNOWLEDGE_MAP_RELEASE_2026-11-05.md) |
 | 창작 문항 그림 복구 | HWP/HWPX 본문에 실제 쓰인 내장 이미지로 333문항·362그림을 복구하고 운영 조회·해시·재조회를 확인했습니다. 우측 참고 기출 그림은 제외했으며, 이미지가 아닌 표·수식 등 6문항은 미복구 예외로 남겼습니다. Preview 아래 긴 이미지 설명도 숨겼습니다. [범위·예외·운영 기록](docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md) |
 | 한글 원본 그림 신규 입력 | 새 HWP/HWPX 입력은 PDF crop 대신 본문 내장 그림의 실제 사용 개체·viewport·회전을 등록에 연결합니다. HWP 본문 그림 조회와 HWPX 표 전용 문항의 참고란 제외를 검증했습니다. 이후 발생한 Graph 동시 반영 충돌과 선택 문항의 임베딩 plan 버전 오판을 수정·배포했고, 03–06 실제 동시 실행·새 Graph 등록·새 CUDA 인덱스 저장과 재사용을 확인했습니다. 전체 1,053개 처리와 임베딩은 백그라운드 작업이며, 원본 변환·추출 예외는 별도로 보존합니다. 보류했던 가변 구조의 HWPX 출력 확장은 아래 합본 경로에서 진행합니다. [입력·운영 기록](docs/operations/OFFICE_NATIVE_ITEM_INTAKE_RELEASE.md) · [11월 4일 복구·실제 실행 증거](docs/operations/BACKGROUND_NATIVE_RECOVERY_2026-11-04.md) · [자원 부족 대기·복구 운영 기록](docs/operations/BACKGROUND_RESOURCE_RECOVERY_2026-11-04.md) |
 | 생성 문항 → GraphRAG·증분 임베딩 | 실제 검색·결과 조회·같은 요청 재전송 검증 완료. [운영 검증](docs/operations/REGISTERED_REVIEW_INCREMENTAL_ACCEPTANCE_2026-10-20.md) |
