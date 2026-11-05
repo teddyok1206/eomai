@@ -22,6 +22,7 @@ from eom_catalog_service.embedding_registry_ports import (
     PublicSolutionEmbeddingBindingLookupKey,
     ResolvedEmbeddingLookup,
 )
+from eom_catalog_service.local_embedding_source_plan_v3 import build_local_embedding_source_plan_v4
 from eom_identifiers import content_sha256, sha256_bytes
 from eom_workflow.embedding_batch_plan_family import (
     embedding_batch_plan_schema_identity,
@@ -101,10 +102,12 @@ def test_registered_original_source_pins_all_three_reports_and_replays_exact_par
 
 
 @pytest.mark.parametrize("routed", ["registered_public"], indirect=True)
+@pytest.mark.parametrize("maximum_targets", (1, 3))
 def test_new_discovery_prepares_request4_and_fences_after_canonical_publication(
-    parent_case, monkeypatch
+    parent_case, monkeypatch, maximum_targets
 ):
     value = parent_case
+    value.pair.cuda.maximum_targets = maximum_targets
     with value.routed.publisher.sessions.begin() as session:
         original = value.pair.cuda.owner.resolve_sources(session, value.request)
     # Matching already exercises actual plan4 construction/publication and final
@@ -161,10 +164,22 @@ def test_new_discovery_prepares_request4_and_fences_after_canonical_publication(
     )
     prepared = value.pair.cuda.prepare_once()
     request = prepared.request
-    assert prepared.observed.selected_target_count == len(captured.sources)
+    assert prepared.observed.selected_target_count == maximum_targets
     assert isinstance(request, LocalEmbeddingWorkflowRequestV4)
     assert request.source_plan.schema_ref.endswith("/4.0")
-    assert request.source_plan_sha256 == value.plan.plan_sha256
+    if maximum_targets == len(captured.sources):
+        assert request.source_plan_sha256 == value.plan.plan_sha256
+    else:
+        past_targets = tuple(
+            source.item_revision_id
+            for source in captured.sources
+            if source.source_class == "PAST_EXAM"
+        )
+        assert len(past_targets) == 1
+        expected = build_local_embedding_source_plan_v4(
+            query, captured, target_revision_ids=past_targets
+        )
+        assert request.source_plan_sha256 == expected.plan_sha256
     original_publish = value.pair.cuda.controls.publish_observed_source_plan_v4
 
     def revoke_after_publication(plan, *, idempotency_key):

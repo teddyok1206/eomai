@@ -3910,3 +3910,75 @@ role input/result11(`workflow-role/1.35.0`), resolved plan29를 별도 후보로
   이는 기존 계산 보존 증거이지 실제 GUI PASS가 아니다. 사용자에게 현재 화면의 `결과 확인`만
   요청했다. 실제 목록 표시→결과 선택→DB 상세 열기와 같은 key 재조회는 아직 확인 대기다.
   구형 벡터는 삭제하지 않았고 전체 목표를 완료로 처리하지 않는다.
+
+## 2026-11-05 15:20 UTC — 기출 GPU 수치 정체의 읽기 전용 진단
+
+DB 유사도·조립·필터 개선과 실제 사용자 재조회 확인을 마친 뒤, 사용자 요청에 따라
+기출 임베딩 진행만 진단했다. 이 진단에서 배포·재시작·새 계산·DB 변경은 하지 않았다.
+
+- 고정된 원래 기출 520개 중 공통 `public-solution-text/1.0` CUDA binding은
+  **271개, 잔여 249개**다. 단순 화면 지연이 아니다. 같은 모집단의 마지막 새 encoding
+  등록은 **2026-11-03 19:10:13.781290 UTC**다. 11월 5일 14:28의 binding 시각은
+  기존 벡터의 새 Graph 연결 시각이므로 새 기출 계산으로 세지 않는다.
+- INDEX owner는 기존 source `1f01f47d`, PID3100607 및 InvocationID
+  `08d4d77b632c45abafbabc419f69a3f1`로 계속 실행 중이다. 관측 당시 GPU는
+  utilization0%, memory2MiB였지만, 이것만으로 서비스 전체가 중단됐다고 판단하지 않았다.
+- 실제 최근 완료 Workflow 8개의 고정 source-plan을 기존 Catalog
+  `PinnedArtifactReadContext`로 hash/provenance 검증하고 schema dispatcher로 읽었다.
+  CPU4개·CUDA4개 묶음이 각각 4문항이며 **모두 APPROVED_ITEM**, PAST_EXAM demand는0이다.
+  공개 풀이 내용이나 worker 결과는 출력하지 않았다. 최근 discovery는 eligible1,374,
+  missing-report0, selected-target4였다.
+- 설치본의 기존 `LocalEmbeddingServicePreparation.prepare_once`는 미계산 후보를 먼저
+  고른 뒤 immutable revision ID 문자열 순으로 `maximum_targets`개를 선택한다.
+  오래 대기한 기출이나 출처별 처리 차례는 보장하지 않는다. 계속 들어오는 창작 후보가
+  선택되고 기출 처리 수는 증가하지 않는 **대상 선택의 기아 현상**을 확인했다.
+- `RoutedLocalIndexingNamespaceRuntime`는 GPU 완료 뒤 CPU standby를 큐에 넣고,
+  같은 owner 실행 흐름의 `run_once`에서 이를 처리한다. 최근 CUDA Workflow는
+  14:21:01→14:48:37, 뒤이은 CPU Workflow는 14:48:51→15:13:41에 완료됐다.
+  encoding 저장은 각각14:28:37,14:55:12였으므로 모든 시간을 GPU 연산 시간으로
+  설명할 수 없다. 전체 source/Graph 재검증·새 binding/index 저장과 CPU standby가
+  다음 GPU 묶음까지의 간격을 늘린다. 최근 admission 조회는 ACTIVE_QUERY 대기가 아니었다.
+- 별도 창작 Graph 등록은 누적854→866으로 증가했다(14:20→15:10 UTC).
+  두 서비스가 모두 멈췄거나 이번 DB 배포가 INDEX를 재시작했다는 증거는 없다.
+
+후속 수정 지점은 기존 INDEX preparation의 미완료 대상 선택과 routed namespace의
+CPU standby 배치 순서다. 기출·창작 모두 처리 차례를 보장하면서 기존 encoding 재사용과
+Graph/권한/hash 검증을 유지해야 한다. 새 queue/framework나 무조건 restart는 답이 아니다.
+이 항목은 **원인 확인 완료 / 수정·복구 미실행**이며 전체 재임베딩 완료가 아니다.
+
+읽기 전용 진단 로그(인증정보·문항 내용 없음):
+`/tmp/eom-embedding-stall-diagnose-20261105-02.log`의 정상 metadata 구간,
+`/tmp/eom-embedding-coverage-read-20261105-02.log`,
+`/tmp/eom-embedding-batch-plan-read-20261105-03.log`.
+앞선 진단 helper의 잘못된 column/import 및 metadata prefetch 누락 오류도 로그를 보존했다.
+이는 운영 owner 실패가 아니라 읽기 전용 진단 invocation 오류이며 수정 후 위 결과를 확인했다.
+
+### 재개 수정의 최소 설계
+
+사용자가 빠른 재개를 승인했다. 기존 INDEX preparation이 소유한 신규 대상 선택만 고친다.
+정본은 같은 accepted source/report·encoding ledger이며 revision/hash·공개 풀이 recipe와
+CPU/CUDA space는 바꾸지 않는다. 검증된 미계산 revision set을 출처별 deque로 나누어
+기출부터 번갈아 선택한다. 현재4개 묶음에서는 두 출처가 모두 남아 있으면 각각2개를
+보장하고, 한 출처가 비면 나머지로 채운다. 한 개 제한에서는 유한 기출 backlog를 우선한다.
+이미 계산한 encoding은 선택 우선순위에 다시 넣지 않으며, 모든 수치 계산이 끝난 뒤의
+기존 membership-only 경로는 그대로 유지한다. 기존 legacy namespace는 순서를 바꾸지 않는다.
+
+접근은 revision map/set·정렬·출처별 FIFO 순회다. n개 후보에 O(n log n) 시간/O(n) 공간으로
+기존 정렬과 같은 차수이며 새 DB/index/queue/worker message/schema/dependency가 없다.
+같은 입력은 같은 순서의 source set이고, canonical source-plan builder가 immutable 순서를
+정규화한다. transaction·claim·reservation·멱등 key·권한/hash 재검증은 기존 owner 그대로다.
+중단 복구는 원래 고정 request를 먼저 읽으며 새 선택 규칙으로 과거 요청을 재해석하지 않는다.
+단순 restart만으로는 같은 ID 정렬 편향이 반복되므로 충분하지 않다.
+
+신속 재개를 위해 CPU standby 비동기화/별도 service 같은 확장은 이번 변경에 넣지 않는다.
+현재 GUI의 CPU/CUDA 공통 게시 범위 선택을 보존하며, 기존 묶음을 graceful drain한 뒤
+INDEX metadata owner만 교체한다. QUERY/API/Web·창작 worker·물리 수치 runtime은 보존한다.
+재개 판정은 service ACTIVE가 아니라 기출 새 CUDA encoding 및271보다 증가한 binding이다.
+
+수정 source의 집중 회귀164 PASS, production module strict mypy 및 Ruff/format PASS다.
+검증에는 출처별 차례·계속 추가되는 창작 후보·한 출처 소진·canonical 순서·대상 제한,
+기존 pinned replay/권한 거부/encoding 재사용/CPU counterpart와 legacy 경로가 포함된다.
+초기 test helper의 union validator 호출과 고정 synthetic admission fixture 재사용 오류는
+운영 오류와 구분해 수정하고 실패 로그를 보존했다. DB/claim/lease/SQL 변경은 없다.
+운영 INDEX의 이전 설치본과 차이를 최소화하도록 같은 선택 수정만 포함한 좁은 successor를
+빌드·설치한다. main의 다른18개 Catalog/Runner 변경을 이번 INDEX 재개에 섞지 않는다.

@@ -24,6 +24,12 @@ CPU와 CUDA의 space identity를 섞지 않는다. GPU가 잠시 idle이어도 s
 Workflow COMPLETED는 각각 확인한다. 같은 encoding의 재사용과 최신 Graph membership의
 새 binding/index 반영도 서로 다르다.
 
+공개 풀이 INDEX의 신규 미계산 대상은 기존 preparation이 출처별로 번갈아 선택한다.
+기출을 먼저 선택하고 같은 출처 안에서는 revision 순서를 유지해, 늘어나는 등록 문항의
+ID prefix가 기출 backlog를 계속 밀지 않게 한다. legacy namespace·고정된 기존 요청·
+이미 계산한 encoding 재사용과 membership-only 규칙은 바꾸지 않는다. CPU standby는
+여전히 같은 owner의 기존 처리 경로이며 별도 병렬 service로 오해하지 않는다.
+
 ## DB 화면의 실제 검색 경로
 
 조회에서 기준 문항을 골라 유사도 탭으로 넘기고, 기준 목록·상위 결과 수·요청 identity를
@@ -75,6 +81,7 @@ stale pin, 결과 materialization을 구분한다. 새로운 key로 우회하기
 - `tests/api/test_item_db_similarity_searches.py`
 - `tests/unit/test_native_office_public_embedding.py`
 - `tests/unit/test_background_resource_recovery.py`
+- `tests/unit/test_public_indexing_target_selection.py`
 - `tests/unit/test_completed_public_ranking.py`
 - `tests/integration/test_completed_public_rankings.py`
 - `docs/operations/ITEM_DB_SIMILARITY_LIST_RELEASE_2026-11-02.md`
