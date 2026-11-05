@@ -345,6 +345,11 @@ MaterialLearningResult = Annotated[
 ]
 
 
+def material_work_schema_ref(work: MaterialLearningWork) -> str:
+    name = "discovery-work" if isinstance(work, MaterialDiscoveryWork) else "extraction-work"
+    return f"eom://schemas/material-learning/{name}/1.0"
+
+
 def validate_material_discovery(
     result: MaterialDiscoveryResult, work: MaterialDiscoveryWork
 ) -> None:

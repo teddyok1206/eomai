@@ -303,6 +303,7 @@ def _load_image_inputs(
             "codex-image-input-manifest/2.0",
             "codex-image-input-manifest/3.0",
             "codex-image-input-manifest/4.0",
+            "codex-image-input-manifest/5.0",
         }
         or document.get("plan_id") != expected_plan_id
         or SHA256_PATTERN.fullmatch(str(document.get("manifest_sha256"))) is None
@@ -314,6 +315,7 @@ def _load_image_inputs(
         "codex-image-input-manifest/2.0": MAX_IMAGE_INPUTS_V2,
         "codex-image-input-manifest/3.0": MAX_IMAGE_INPUTS_V3,
         "codex-image-input-manifest/4.0": MAX_IMAGE_INPUTS_V4,
+        "codex-image-input-manifest/5.0": 32,
     }[str(schema_version)]
     if not isinstance(images, list) or not 1 <= len(images) <= maximum_images:
         raise ValueError("Codex image-input manifest count is invalid")
@@ -332,6 +334,7 @@ def _load_image_inputs(
     page_input_ids: list[str] = []
     source_positions: list[tuple[str, int]] = []
     document_positions: list[tuple[str, int]] = []
+    material_indices: list[int] = []
     total_bytes = 0
     total_pixels = 0
     image_keys = {
@@ -347,6 +350,8 @@ def _load_image_inputs(
         image_keys.update({"page_input_id", "source_role"})
     elif schema_version == "codex-image-input-manifest/3.0":
         image_keys.add("document_role")
+    elif schema_version == "codex-image-input-manifest/5.0":
+        image_keys.update({"source_role", "input_index"})
     for item in images:
         if not isinstance(item, dict) or set(item) != image_keys:
             raise ValueError("Codex image-input entry shape is invalid")
@@ -360,6 +365,7 @@ def _load_image_inputs(
             "codex-image-input-manifest/2.0": 20000,
             "codex-image-input-manifest/3.0": 16384,
             "codex-image-input-manifest/4.0": 2400,
+            "codex-image-input-manifest/5.0": 10000,
         }[str(schema_version)]
         if (
             not isinstance(page, int)
@@ -373,7 +379,8 @@ def _load_image_inputs(
             or not 1 <= width <= maximum_dimension
             or not 1 <= height <= maximum_dimension
             or (
-                schema_version == "codex-image-input-manifest/2.0"
+                schema_version
+                in {"codex-image-input-manifest/2.0", "codex-image-input-manifest/5.0"}
                 and width * height > MAX_ASSESSMENT_IMAGE_PIXELS
             )
             or (
@@ -390,6 +397,21 @@ def _load_image_inputs(
             match = CREATIVE_IMAGE_PATH_PATTERN.fullmatch(relative_path)
             if match is None or not 1 <= page <= 32 or int(match.group(1)) != page:
                 raise ValueError("creative image-input page path is inconsistent")
+        elif schema_version == "codex-image-input-manifest/5.0":
+            source_role = item.get("source_role")
+            index = item.get("input_index")
+            if (
+                source_role not in {"MAIN", "SOLUTIONS"}
+                or type(index) is not int
+                or not 1 <= index <= 32
+                or type(page) is not int
+                or not 1 <= page <= 2000
+                or relative_path
+                != f"source/material/{str(source_role).lower()}/page-{page:06d}.png"
+            ):
+                raise ValueError("material image-input source identity is inconsistent")
+            source_positions.append((str(source_role), page))
+            material_indices.append(index)
         elif schema_version == "codex-image-input-manifest/2.0":
             page_input_id = item.get("page_input_id")
             source_role = item.get("source_role")
@@ -433,6 +455,10 @@ def _load_image_inputs(
         identities_valid = pages == expected_pages
     elif schema_version == "codex-image-input-manifest/4.0":
         identities_valid = pages == list(range(1, len(pages) + 1))
+    elif schema_version == "codex-image-input-manifest/5.0":
+        identities_valid = material_indices == list(range(1, len(images) + 1)) and len(
+            source_positions
+        ) == len(set(source_positions))
     elif schema_version == "codex-image-input-manifest/2.0":
         identities_valid = len(page_input_ids) == len(set(page_input_ids)) and len(
             source_positions
@@ -451,7 +477,7 @@ def _load_image_inputs(
         not identities_valid
         or total_bytes > MAX_IMAGE_TOTAL_BYTES
         or (
-            schema_version == "codex-image-input-manifest/2.0"
+            schema_version in {"codex-image-input-manifest/2.0", "codex-image-input-manifest/5.0"}
             and total_pixels > MAX_ASSESSMENT_IMAGE_TOTAL_PIXELS
         )
         or (

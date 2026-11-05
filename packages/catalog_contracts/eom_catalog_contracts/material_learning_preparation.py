@@ -209,6 +209,17 @@ class MaterialPageChunkReference(FrozenModel):
         return self
 
 
+def material_chunk_member(
+    manifest: MaterialArtifactMember, member: MaterialPageMember
+) -> MaterialArtifactMember:
+    """A chunk member retains its enclosing Artifact identity, never its own copy."""
+    return MaterialArtifactMember(
+        artifact_id=manifest.artifact_id,
+        artifact_revision_id=manifest.artifact_revision_id,
+        **member.model_dump(mode="json"),
+    )
+
+
 class MaterialPageBundle(FrozenModel):
     schema_version: Literal["material-learning-page-bundle/1.0"] = (
         "material-learning-page-bundle/1.0"

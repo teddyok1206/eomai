@@ -242,3 +242,22 @@ provider pin과 QUERY/Catalog/runtime 호환 절차를 따르며 INDEX 수치 �
 - 20:13 UTC read-only: 기존 creative 실행은 publication 단계이며 당시 active slot lease는
   0이었다. 기존 producer PID `4175073`/invocation과 GPU INDEX PID `4045657`/invocation은
   그대로였다. cursor `25`는 재개 구간의 진행값이지 전체 Graph 누적 수가 아니다.
+- 실행 연결 후보: 새 자료의 `learn` step은 기존 Orchestrator의 Job·capacity lease·
+  local worker workspace·result validation·Artifact commit을 사용한다. 전용 source
+  권한 RPC는 저장된 Workflow/step에서 실제 actor를 복원하며 모델이나 브라우저가
+  actor를 지정하지 못한다. 같은 task 입력의 canonical bytes 및 권리·문서·chunk·
+  선택 페이지 소속을 대조한다. 발견은 페이지별 coverage, 문항은 독립 공개 풀이와
+  native picture-use binding을 기존 공통 검증기로 확인한 뒤에만 commit한다.
+- 자료 image manifest V5는 원본 `source_role/physical_page`와 전달 `input_index`를
+  분리한다. 문제지와 해설지의 같은 페이지 번호, 비연속 선택을 원래 위치대로 전달한다.
+  기존 V1–V4의 의미와 파서는 유지한다. worker helper 변경을 포함하므로 최종 배포는
+  진행 중 Codex 프로세스가 자연 종료한 창에서 helper와 관련 Codex driver/runner의
+  설치 wheel/hash를 호환 조합으로 바꿔야 한다. 기존 child의 입력·모델·plan pin은
+  보존하고 numeric GPU INDEX 환경은 변경하지 않는다. 이전 driver의 hash pin과
+  새 helper를 섞어 먼저 활성화하지 않는다.
+- 이 연결의 격리 회귀 196개, 기존 Catalog/Office 경계와 실제 파일 materialization
+  47개 PASS. 임시 DB에서는 실제 업로드/문서/페이지 소속 대조와 단일 READY/command,
+  동시 재전송·늦은 권한 철회의 원자성을 포함해 25개 PASS. command 검사 일부는
+  명시적인 synthetic plan port를 사용하므로 운영 control release/capacity 승인 증거가
+  아니다. 실제 자료 coordinator·일반 설명 지식/문항 등록·Graph·증분 INDEX와 운영
+  canary는 계속 구현 중이다.

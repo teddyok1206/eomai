@@ -79,6 +79,8 @@ from eom_workflow.inference_transfer import (
 from eom_workflow.inference_transfer_workflow import InferenceTransferWorkflowRequest
 from eom_workflow.local_embedding_workflow import LocalEmbeddingWorkflowDefinition
 from eom_workflow.local_embedding_workflow_v2 import LocalEmbeddingWorkflowDefinitionV2
+from eom_workflow.material_learning_prompt import MATERIAL_LEARNING_GUIDANCE
+from eom_workflow.material_learning_request import MaterialLearningWorkerRequest
 from eom_workflow.private_chat_query_execution import (
     PrivateChatQueryWorkflowRequest,
 )
@@ -125,6 +127,9 @@ from eom_workflow_runner.local_embedding_step_execution import (
     complete_local_embedding_terminal,
 )
 from eom_workflow_runner.logging import log_workflow_event, workflow_failure_metadata
+from eom_workflow_runner.material_learning_catalog_client import (
+    prepare_material_learning_execution_context,
+)
 from eom_workflow_runner.models import (
     ApprovalRequestRecord,
     WorkflowCommandRecord,
@@ -356,6 +361,7 @@ def _prompt_name_for_request(
         | KnowledgeAnalysisWorkerRequest
         | LegacyItemExtractionWorkerRequest
         | ExternalItemLearningWorkerRequest
+        | MaterialLearningWorkerRequest
         | LegacyItemEditorialCompatibilityWorkerRequest
         | CustomerSupportWorkerRequest
         | PairedDocumentReviewWorkerRequestV2
@@ -369,6 +375,8 @@ def _prompt_name_for_request(
         return "legacy-item-extraction"
     if worker_role == "support" and isinstance(request, ExternalItemLearningWorkerRequest):
         return "external-item-learning"
+    if worker_role == "support" and isinstance(request, MaterialLearningWorkerRequest):
+        return "material-learning"
     if worker_role == "support" and isinstance(
         request, LegacyItemEditorialCompatibilityWorkerRequest
     ):
@@ -414,6 +422,7 @@ class RoleJobExecutor(Protocol):
             | KnowledgeAnalysisWorkerRequest
             | LegacyItemExtractionWorkerRequest
             | ExternalItemLearningWorkerRequest
+            | MaterialLearningWorkerRequest
             | LegacyItemEditorialCompatibilityWorkerRequest
             | CustomerSupportWorkerRequest
             | PairedDocumentReviewWorkerRequestV2
@@ -468,6 +477,7 @@ class PlatformRoleJobExecutor:
             | KnowledgeAnalysisWorkerRequest
             | LegacyItemExtractionWorkerRequest
             | ExternalItemLearningWorkerRequest
+            | MaterialLearningWorkerRequest
             | LegacyItemEditorialCompatibilityWorkerRequest
             | CustomerSupportWorkerRequest
             | PairedDocumentReviewWorkerRequestV2
@@ -485,6 +495,8 @@ class PlatformRoleJobExecutor:
                 "agent step is missing role contract",
             )
         prompt_name = _prompt_name_for_request(worker_role=step.worker_role, request=request)
+        if isinstance(request, MaterialLearningWorkerRequest):
+            prompt_text = MATERIAL_LEARNING_GUIDANCE
         if (
             prompt_text is None
             and isinstance(request, ExternalItemLearningWorkerRequest)
@@ -546,9 +558,19 @@ class PlatformRoleJobExecutor:
 
         similarity_context = None
         creative_context = None
+        material_context = None
         if isinstance(request, ExternalItemLearningWorkerRequest):
             with self.sessions() as session:
                 creative_context = prepare_external_item_learning_execution_context(
+                    session,
+                    workflow=workflow,
+                    step=step,
+                    request=request,
+                    publisher=self.creative_page_publisher,
+                )
+        if isinstance(request, MaterialLearningWorkerRequest):
+            with self.sessions() as session:
+                material_context = prepare_material_learning_execution_context(
                     session,
                     workflow=workflow,
                     step=step,
@@ -580,6 +602,7 @@ class PlatformRoleJobExecutor:
             material_requirement=material_requirement,
             similarity_context=similarity_context,
             external_item_learning=creative_context,
+            material_learning=material_context,
             before_execute=bind_platform_job,
             execution_tier=(
                 "ESCALATED"
@@ -1505,7 +1528,10 @@ class WorkflowRunner:
                     fenced_transaction=self._fenced_transaction,
                 )
             else:
-                if full_request.content_pack is not None:
+                if (
+                    isinstance(full_request, WorkflowRequest)
+                    and full_request.content_pack is not None
+                ):
                     prepared = self.catalog.prepare_prompt(
                         workflow=workflow,
                         step=self._detached_step(step_run_id),
@@ -1554,9 +1580,12 @@ class WorkflowRunner:
                     upstream=upstream,
                     idempotency_key=idempotency_key,
                     prompt_text=prompt_text,
-                    material_requirement=_authoring_material_requirement(
-                        full_request,
-                        worker_role=definition.worker_role,
+                    material_requirement=(
+                        _authoring_material_requirement(
+                            full_request, worker_role=definition.worker_role
+                        )
+                        if isinstance(full_request, WorkflowRequest)
+                        else None
                     ),
                 )
             if execution.status == "SUCCEEDED" and execution.content_hash is not None:
@@ -3917,6 +3946,7 @@ def _capacity_resume_target(
         "knowledge-analysis",
         "legacy-item-extraction",
         "external-item-learning",
+        "material-learning",
         "legacy-item-editorial-compatibility",
     }:
         return WorkflowState.RUNNING, WorkflowStage.KNOWLEDGE_ANALYSIS

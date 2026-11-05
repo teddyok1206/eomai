@@ -53,6 +53,7 @@ from eom_workflow.control_plane import (
     ResolvedExecutionPlanV27,
     ResolvedExecutionPlanV28,
     ResolvedExecutionPlanV32,
+    ResolvedExecutionPlanV33,
 )
 from eom_workflow.document_review import (
     PairedDocumentReviewWorkerRequest,
@@ -80,6 +81,7 @@ from eom_workflow.inference_transfer_workflow import (
     InferenceTransferWorkflowRequest,
     InferenceTransferWorkflowRequestV11,
 )
+from eom_workflow.material_learning_request import MaterialLearningWorkerRequest
 from eom_workflow.models import (
     ArtifactPointer,
     ContentTeamImageRoleResultV12,
@@ -107,6 +109,7 @@ from eom_workflow.models import (
     LegacyItemEditorialCompatibilityWorkerRequest,
     LegacyItemExtractionRoleResult,
     LegacyItemExtractionWorkerRequest,
+    MaterialLearningRoleResult,
     PairedDocumentReviewRoleResult,
     PairedDocumentReviewRoleResultV3,
     PairedDocumentReviewRoleResultV4,
@@ -171,6 +174,10 @@ from eom_orchestrator.legacy_item_extraction_artifact import (
     stage_legacy_item_extraction_result,
 )
 from eom_orchestrator.logging import log_event
+from eom_orchestrator.material_learning_execution import (
+    MaterialLearningExecutionContext,
+    validate_material_learning_execution_plan,
+)
 from eom_orchestrator.models import JobRecord
 from eom_orchestrator.protocol import protocol_schema_hash
 from eom_orchestrator.public_similarity_materialization import (
@@ -232,6 +239,7 @@ WorkflowRoleRequest = (
     | KnowledgeAnalysisWorkerRequest
     | LegacyItemExtractionWorkerRequest
     | ExternalItemLearningWorkerRequest
+    | MaterialLearningWorkerRequest
     | LegacyItemEditorialCompatibilityWorkerRequest
     | CustomerSupportWorkerRequest
     | PairedDocumentReviewWorkerRequest
@@ -708,10 +716,47 @@ class Orchestrator:
         | PublicSimilarityMaterializationContext
         | None = None,
         external_item_learning: ExternalItemLearningExecutionContext | None = None,
+        material_learning: MaterialLearningExecutionContext | None = None,
     ) -> JobRecord:
         if (prompt_path is None) == (prompt_text is None):
             raise ValueError("exactly one workflow prompt source is required")
         is_creative = isinstance(request, ExternalItemLearningWorkerRequest)
+        is_material = isinstance(request, MaterialLearningWorkerRequest)
+        material_plan: ResolvedExecutionPlanV33 | None = None
+        if is_material and material_learning is None:
+            raise ControlPlaneError(
+                "CONTROL_MATERIAL_LEARNING_NOT_ACTIVATED", "material source owner required"
+            )
+        if material_learning is not None:
+            if (
+                not isinstance(request, MaterialLearningWorkerRequest)
+                or role != "support"
+                or result_schema != "material-learning-result@1.0"
+                or upstream_artifacts
+                or execution_tier != "PRIMARY"
+                or external_item_learning is not None
+                or similarity_context is not None
+                or material_requirement is not None
+                or reauthorize_transfer_sources is not None
+                or transfer_workflow_request is not None
+                or transfer_core_prompt_sha256 is not None
+            ):
+                raise ControlPlaneError(
+                    "CONTROL_MATERIAL_CONTEXT_INVALID", "material execution context differs"
+                )
+            request = MaterialLearningWorkerRequest.model_validate(request.model_dump(mode="json"))
+            material_learning.reauthorize(request)
+            with self.sessions() as session:
+                material_plan = validate_material_learning_execution_plan(
+                    session.scalar(
+                        select(ResolvedExecutionPlanRecord).where(
+                            ResolvedExecutionPlanRecord.workflow_id == workflow_id
+                        )
+                    ),
+                    workflow_id=workflow_id,
+                    step_key=step_key,
+                    request=request,
+                )
         creative_plan: (
             ResolvedExecutionPlanV27 | ResolvedExecutionPlanV28 | ResolvedExecutionPlanV32 | None
         ) = None
@@ -836,6 +881,9 @@ class Orchestrator:
             if external_item_learning is not None:
                 assert isinstance(request, ExternalItemLearningWorkerRequest)
                 external_item_learning.reauthorize_source(request)
+            if material_learning is not None:
+                assert isinstance(request, MaterialLearningWorkerRequest)
+                material_learning.reauthorize(request)
             existing_state = self._resume_pre_execution_job(job_id)
             existing = self.get_job(job_id)
             if existing_state in TERMINAL_STATES:
@@ -926,6 +974,9 @@ class Orchestrator:
                 if external_item_learning is not None:
                     assert isinstance(request, ExternalItemLearningWorkerRequest)
                     external_item_learning.reauthorize_source(request)
+                if material_learning is not None:
+                    assert isinstance(request, MaterialLearningWorkerRequest)
+                    material_learning.reauthorize(request)
                 return self.get_job(job.job_id)
             self._transition(job_id, JobState.VALIDATED, "REQUEST_VALIDATED")
             self._transition(job_id, JobState.QUEUED, "JOB_QUEUED")
@@ -951,6 +1002,9 @@ class Orchestrator:
             before_execute(job_id)
 
         try:
+            if material_learning is not None:
+                assert isinstance(request, MaterialLearningWorkerRequest)
+                material_learning.reauthorize(request)
             if external_item_learning is not None:
                 assert isinstance(request, ExternalItemLearningWorkerRequest)
                 external_item_learning.reauthorize_source(request)
@@ -966,6 +1020,9 @@ class Orchestrator:
                 elif creative_plan is not None:
                     plan_document = creative_plan.model_dump(mode="json")
                     plan_id = creative_plan.plan_id
+                elif material_plan is not None:
+                    plan_document = material_plan.model_dump(mode="json")
+                    plan_id = material_plan.plan_id
                 else:
                     plan_record = session.scalar(
                         select(ResolvedExecutionPlanRecord).where(
@@ -1022,6 +1079,7 @@ class Orchestrator:
                                 "LEGACY_ITEM_EXTRACTION_REQUEST",
                                 "LEGACY_ITEM_EDITORIAL_COMPATIBILITY_REQUEST",
                                 "EXTERNAL_ITEM_LEARNING_REQUEST",
+                                "MATERIAL_LEARNING_REQUEST",
                             }
                             else "CODEX"
                         ),
@@ -1109,7 +1167,7 @@ class Orchestrator:
                                 ),
                             )
                         event_data: dict[str, object] = dict(evidence.event_data())
-                        if not is_transfer and not is_creative:
+                        if not is_transfer and not is_creative and not is_material:
                             self._transition(
                                 job_id,
                                 JobState.RUNNING,
@@ -1118,7 +1176,7 @@ class Orchestrator:
                             )
                         return evidence
 
-                    if is_transfer or is_creative:
+                    if is_transfer or is_creative or is_material:
                         # Preparation and materialization cannot have started a process.
                         # Only the actual launch boundary may retain an uncertain lease.
                         prepared_workspace = self.worker_adapter.prepare_structured_workspace(
@@ -1134,6 +1192,9 @@ class Orchestrator:
                             self._reauthorize_inference_transfer_sources(
                                 request, reauthorize_transfer_sources
                             )
+                        elif isinstance(request, MaterialLearningWorkerRequest):
+                            assert material_learning is not None
+                            material_learning.reauthorize(request)
                         else:
                             assert external_item_learning is not None
                             assert isinstance(request, ExternalItemLearningWorkerRequest)
@@ -1192,6 +1253,21 @@ class Orchestrator:
                     ErrorCode.WORKER_RESULT_INVALID,
                     "workflow worker result identifiers do not match input",
                 )
+            if isinstance(result, MaterialLearningRoleResult):
+                if (
+                    not isinstance(worker_input.request, MaterialLearningWorkerRequest)
+                    or material_learning is None
+                ):
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID, "material result has no pinned request"
+                    )
+                try:
+                    material_learning.validate_result(worker_input.request, result)
+                except ValueError as error:
+                    raise PlatformError(
+                        ErrorCode.WORKER_RESULT_INVALID, "material result differs from its source"
+                    ) from error
+                material_learning.reauthorize(worker_input.request)
             if isinstance(
                 result,
                 (

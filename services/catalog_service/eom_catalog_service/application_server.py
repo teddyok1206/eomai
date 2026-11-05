@@ -15,7 +15,7 @@ import stat
 import struct
 import tempfile
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, BinaryIO, Literal, cast
 
 from eom_catalog_contracts import (
     CATALOG_APPLICATION_MAX_MESSAGE_BYTES,
@@ -232,6 +232,9 @@ from eom_catalog_service.knowledge_retrieval_service import (
     KnowledgeRetrievalApplicationService,
     KnowledgeRetrievalServiceError,
 )
+from eom_catalog_service.material_learning_authorization import (
+    CatalogMaterialLearningAuthorizationService,
+)
 from eom_catalog_service.material_learning_dispatch import (
     MATERIAL_LEARNING_OPERATIONS,
     dispatch_material_learning,
@@ -305,11 +308,12 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
             if isinstance(raw_operation, str) and raw_operation in MATERIAL_LEARNING_OPERATIONS:
                 dispatch_material_learning(
                     value,
-                    self.rfile,
-                    self.wfile,
+                    cast(BinaryIO, self.rfile),
+                    cast(BinaryIO, self.wfile),
                     sources=self.server.material_learning_sources,
                     intake=self.server.material_learning_intake,
                     reads=self.server.material_learning_reads,
+                    authorizations=self.server.material_learning_authorizations,
                 )
                 return
             if raw_operation == "GET_ITEM_VISUAL_PRESENTATION":
@@ -1966,6 +1970,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         material_learning_sources: MaterialLearningSourceService | None = None,
         material_learning_intake: MaterialLearningIntakeService | None = None,
         material_learning_reads: MaterialLearningReadService | None = None,
+        material_learning_authorizations: CatalogMaterialLearningAuthorizationService | None = None,
         document_review_hwpx_corrections: DocumentReviewHwpxCorrectionService | None = None,
         document_review_pdf_annotations: DocumentReviewPdfAnnotationService | None = None,
         document_review_evidence: DocumentReviewEvidenceService | None = None,
@@ -2004,6 +2009,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.material_learning_sources = material_learning_sources
         self.material_learning_intake = material_learning_intake
         self.material_learning_reads = material_learning_reads
+        self.material_learning_authorizations = material_learning_authorizations
         self.document_review_hwpx_corrections = document_review_hwpx_corrections
         self.document_review_pdf_annotations = document_review_pdf_annotations
         self.document_review_evidence = document_review_evidence
@@ -2046,6 +2052,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         if (
             workflow_similarity_reads is not None
             or external_item_learning_authorization is not None
+            or material_learning_authorizations is not None
         ):
             actual_runner_uid = (
                 pwd.getpwnam("eom-workflow-runner").pw_uid
@@ -2118,6 +2125,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
                 (
                     self.workflow_similarity_reads is not None
                     or self.external_item_learning_authorization is not None
+                    or self.material_learning_authorizations is not None
                 )
                 and uid == self.workflow_runner_uid
             )
@@ -2136,6 +2144,11 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         if operation == "AUTHORIZE_EXTERNAL_ITEM_LEARNING_INPUT":
             return (
                 self.external_item_learning_authorization is not None
+                and uid == self.workflow_runner_uid
+            )
+        if operation == "AUTHORIZE_MATERIAL_LEARNING_INPUT":
+            return (
+                self.material_learning_authorizations is not None
                 and uid == self.workflow_runner_uid
             )
         return uid == self.allowed_uid or (

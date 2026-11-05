@@ -41,10 +41,11 @@ from eom_catalog_contracts.external_item_learning_pages import (
     ExternalItemLearningPageSet,
 )
 from eom_catalog_contracts.external_item_learning_work import ExternalItemLearningWorkInput
+from eom_catalog_contracts.material_learning import MaterialArtifactMember, MaterialLearningWork
 from eom_catalog_contracts.office_item_learning import OfficeItemLearningWorkInput
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_image_contracts.office_embedded_images import OfficeEmbeddedImage
-from eom_image_contracts.office_picture_uses import OfficePictureView
+from eom_image_contracts.office_picture_uses import OfficePictureUseCatalog, OfficePictureView
 from eom_workflow import (
     CodexAssessmentImageInputManifest,
     CodexCreativeImageInputManifest,
@@ -88,6 +89,7 @@ from eom_workflow import (
 from eom_workflow.control_plane import (
     BundleRevisionPointer,
     ControlArtifactPointer,
+    ResolvedExecutionPlanV33,
     ResolvedStepExecution,
 )
 from eom_workflow.inference_transfer_control import (
@@ -100,6 +102,7 @@ from eom_workflow.inference_transfer_materialization import (
     validate_inference_transfer_materialization_plan,
     validate_inference_transfer_materialization_plan_v11,
 )
+from eom_workflow.material_learning_images import material_image_manifest, material_page_path
 from eom_workflow.models import RoleWorkerInput
 from eom_workflow.public_similarity_control import (
     PUBLIC_SIMILARITY_PLAN_SCHEMAS,
@@ -266,6 +269,7 @@ def materialize_execution_step(
         "resolved-execution-plan/27.0",
         "resolved-execution-plan/28.0",
         "resolved-execution-plan/32.0",
+        "resolved-execution-plan/33.0",
         "resolved-execution-plan/14.0",
         "resolved-execution-plan/15.0",
     }
@@ -289,6 +293,7 @@ def materialize_execution_step(
         | ResolvedExecutionPlanV27
         | ResolvedExecutionPlanV28
         | ResolvedExecutionPlanV32
+        | ResolvedExecutionPlanV33
         | ResolvedExecutionPlanV14
         | ResolvedExecutionPlanV15
         | ResolvedExecutionPlanV16
@@ -329,6 +334,8 @@ def materialize_execution_step(
         plan = ResolvedExecutionPlanV25.model_validate(plan_record.canonical_document)
     elif plan_schema_version == "resolved-execution-plan/26.0":
         plan = ResolvedExecutionPlanV26.model_validate(plan_record.canonical_document)
+    elif plan_schema_version == "resolved-execution-plan/33.0":
+        plan = ResolvedExecutionPlanV33.model_validate(plan_record.canonical_document)
     elif plan_schema_version in {
         "resolved-execution-plan/27.0",
         "resolved-execution-plan/28.0",
@@ -686,6 +693,18 @@ def materialize_execution_step(
         _require_total_size(total_bytes, analysis=True)
         source_artifact_revision_id = plan.item_source.artifact_member.artifact_revision_id
         source_sha256 = plan.item_source.artifact_member.sha256
+    elif isinstance(plan, ResolvedExecutionPlanV33):
+        source_bytes, source_members = materialize_material_learning_sources(
+            session,
+            work=plan.work_input,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+        )
+        total_bytes += source_bytes
+        member_count += source_members
+        _require_total_size(total_bytes, analysis=True)
     elif isinstance(
         plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28, ResolvedExecutionPlanV32)
     ):
@@ -868,6 +887,18 @@ def materialize_execution_step(
             group_id=worker_group_id,
         )
         image_input_manifest_sha256 = image_manifest.manifest_sha256
+    elif isinstance(plan, ResolvedExecutionPlanV33):
+        material_images = material_image_manifest(plan.plan_id, plan.work_input)
+        image_manifest_bytes = canonical_json_bytes(material_images) + b"\n"
+        total_bytes += len(image_manifest_bytes)
+        member_count += 1
+        _require_total_size(total_bytes, analysis=True)
+        _write_exclusive(
+            workspace / "codex-image-inputs.json",
+            image_manifest_bytes,
+            group_id=worker_group_id,
+        )
+        image_input_manifest_sha256 = material_images.manifest_sha256
     elif isinstance(
         plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28, ResolvedExecutionPlanV32)
     ):
@@ -1132,6 +1163,7 @@ def authorized_execution_artifact_revisions(
             | ResolvedExecutionPlanV27
             | ResolvedExecutionPlanV28
             | ResolvedExecutionPlanV32
+            | ResolvedExecutionPlanV33
             | ResolvedExecutionPlanV14
             | ResolvedExecutionPlanV15
             | ResolvedExecutionPlanV16
@@ -1170,6 +1202,8 @@ def authorized_execution_artifact_revisions(
         plan = ResolvedExecutionPlanV25.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/26.0":
         plan = ResolvedExecutionPlanV26.model_validate(plan_record.canonical_document)
+    elif plan_record.canonical_document.get("schema_version") == "resolved-execution-plan/33.0":
+        plan = ResolvedExecutionPlanV33.model_validate(plan_record.canonical_document)
     elif plan_record.canonical_document.get("schema_version") in {
         "resolved-execution-plan/27.0",
         "resolved-execution-plan/28.0",
@@ -1331,6 +1365,20 @@ def authorized_execution_artifact_revisions(
                 plan.textbook_evidence.publication.context_artifact.artifact_revision_id,
             }
         )
+    elif isinstance(plan, ResolvedExecutionPlanV33):
+        revision_ids.update(page.image.artifact_revision_id for page in plan.work_input.pages)
+        revision_ids.update(
+            page.text.artifact_revision_id
+            for page in plan.work_input.pages
+            if page.text is not None
+        )
+        if plan.work_input.task_kind == "EXTRACT_ITEM":
+            target_roles = {anchor.source_role for anchor in plan.work_input.question.anchors}
+            revision_ids.update(
+                source.office_catalog.artifact_revision_id
+                for source in plan.work_input.sources
+                if source.source_role in target_roles and source.office_catalog is not None
+            )
     elif isinstance(
         plan, (ResolvedExecutionPlanV27, ResolvedExecutionPlanV28, ResolvedExecutionPlanV32)
     ):
@@ -1986,6 +2034,94 @@ def _materialize_analysis_document_source(
             "document analysis materialized byte count differs from the plan",
         )
     return total_bytes, len(source.materialization_members)
+
+
+def materialize_material_learning_sources(
+    session: Session,
+    *,
+    work: MaterialLearningWork,
+    workspace: Path,
+    artifact_root: Path,
+    worker_group_id: int,
+    authorized_artifact_revision_ids: frozenset[str],
+) -> tuple[int, int]:
+    """Only selected page bytes and main-question native uses cross this boundary."""
+    total_bytes, members = 0, 0
+
+    def copy(pointer: MaterialArtifactMember, destination: str, maximum: int) -> bytes:
+        nonlocal total_bytes, members
+        payload = _materialize_assessment_member(
+            session,
+            pointer=pointer,
+            relative_path=destination,
+            workspace=workspace,
+            artifact_root=artifact_root,
+            worker_group_id=worker_group_id,
+            authorized_artifact_revision_ids=authorized_artifact_revision_ids,
+            maximum_bytes=maximum,
+        )
+        if len(payload) != pointer.bytes:
+            raise ControlPlaneError("CONTROL_POINTER_SIZE_INVALID", "material member size differs")
+        total_bytes += len(payload)
+        members += 1
+        _require_total_size(total_bytes, analysis=True)
+        return payload
+
+    for page in work.pages:
+        payload = copy(
+            page.image, material_page_path(page.source_role, page.physical_page), 16 * 1024 * 1024
+        )
+        _validate_png_payload(
+            payload, expected_width=page.width_pixels, expected_height=page.height_pixels
+        )
+        if page.text is not None:
+            text = copy(
+                page.text,
+                material_page_path(page.source_role, page.physical_page, suffix="md"),
+                2 * 1024 * 1024,
+            )
+            try:
+                text.decode("utf-8")
+            except UnicodeError as error:
+                raise ControlPlaneError(
+                    "CONTROL_POINTER_ENCODING_INVALID", "material text is not UTF-8"
+                ) from error
+    if work.task_kind == "EXTRACT_ITEM":
+        target_roles = {anchor.source_role for anchor in work.question.anchors}
+        for source in work.sources:
+            if source.source_role not in target_roles or source.office_catalog is None:
+                continue
+            pointer = source.office_catalog
+            root = f"source/material/{source.source_role.lower()}/office/"
+            payload = copy(pointer, root + "picture-use-catalog.json", 8 * 1024 * 1024)
+            try:
+                catalog = OfficePictureUseCatalog.model_validate_json(payload)
+                if catalog.embedded_images.source_sha256 != source.original.sha256:
+                    raise ValueError("Office source differs")
+            except ValueError as error:
+                raise ControlPlaneError(
+                    "CONTROL_POINTER_MANIFEST_MISMATCH", "material Office catalog differs"
+                ) from error
+            images: dict[str, OfficeEmbeddedImage | OfficePictureView] = {
+                image.member_path: image for image in catalog.embedded_images.images
+            }
+            images.update({view.member_path: view for view in catalog.rendered_uses})
+            # One source-local catalog, not duplicate original files or guessed page crops.
+            for name, image in images.items():
+                image_pointer = MaterialArtifactMember(
+                    artifact_id=pointer.artifact_id,
+                    artifact_revision_id=pointer.artifact_revision_id,
+                    member_path=name,
+                    schema_ref=CREATIVE_SOURCE_VISUAL_IMAGE_REF,
+                    media_type="image/png",
+                    sha256=image.sha256,
+                    bytes=image.content_length,
+                )
+                image_payload = copy(image_pointer, root + name, 64 * 1024 * 1024)
+                _validate_png_payload(
+                    image_payload, expected_width=image.width_px, expected_height=image.height_px
+                )
+    return total_bytes, members
 
 
 def materialize_external_item_learning_pages(

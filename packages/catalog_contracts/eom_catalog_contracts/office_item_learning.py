@@ -10,7 +10,10 @@ from pydantic import Field, TypeAdapter, field_validator, model_validator
 
 from eom_catalog_contracts.creative_source_draft import SourceImageBlock
 from eom_catalog_contracts.external_item_learning_pages import ExternalItemLearningPageSet
-from eom_catalog_contracts.external_item_learning_result_v2 import ExternalItemLearningResultV2
+from eom_catalog_contracts.external_item_learning_result_v2 import (
+    ExternalItemLearningResultV2,
+    SourceItemLearningObservation,
+)
 from eom_catalog_contracts.external_item_learning_source import ExternalItemLearningSource
 from eom_catalog_contracts.external_item_learning_work import (
     ExternalItemLearningPageArtifact,
@@ -128,11 +131,29 @@ def validate_office_visual_bindings(
 ) -> None:
     """Close analysis blocks over source-pinned real uses, never binary hash guesses."""
     validate_external_item_learning_result_for_work(result, work)
+    validate_source_office_visual_bindings(
+        selection,
+        result=result,
+        catalog=catalog,
+        expected_catalog_sha256=work.office_artifact.sha256,
+        expected_source_sha256=work.source.preview_manifest.source_sha256,
+    )
+
+
+def validate_source_office_visual_bindings(
+    selection: OfficeVisualBindings,
+    *,
+    result: SourceItemLearningObservation,
+    catalog: OfficePictureUseCatalog,
+    expected_catalog_sha256: str,
+    expected_source_sha256: str,
+) -> None:
+    """Shared image-use closure for genuine Office observations, not archive envelopes."""
     catalog_sha = sha256_bytes(canonical_json_bytes(catalog.model_dump(mode="json")))
     if (
-        selection.office_catalog_sha256 != work.office_artifact.sha256
-        or catalog_sha != work.office_artifact.sha256
-        or catalog.embedded_images.source_sha256 != work.source.preview_manifest.source_sha256
+        selection.office_catalog_sha256 != expected_catalog_sha256
+        or catalog_sha != expected_catalog_sha256
+        or catalog.embedded_images.source_sha256 != expected_source_sha256
     ):
         raise ValueError("OFFICE_VISUAL_CATALOG_POINTER_MISMATCH")
     blocks = (

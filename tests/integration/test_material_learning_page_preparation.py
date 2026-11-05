@@ -3,29 +3,51 @@
 from __future__ import annotations
 
 import struct
+from copy import deepcopy
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-from eom_catalog_contracts.material_learning_intake import CreateMaterialLearningCommand
+from eom_catalog_contracts.material_learning import MaterialDiscoveryWork
+from eom_catalog_contracts.material_learning_intake import (
+    CreateMaterialLearningCommand,
+    MaterialLearningIntakeManifest,
+)
 from eom_catalog_contracts.material_learning_preparation import (
     MaterialDocumentReceipt,
     MaterialPreparationInput,
 )
+from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.educational_document_service import EducationalDocumentService
+from eom_catalog_service.material_learning_artifacts import read_material_metadata
+from eom_catalog_service.material_learning_authorization import (
+    CatalogMaterialLearningSourceAuthorizer,
+)
 from eom_catalog_service.material_learning_intake import MaterialLearningIntakeService
-from eom_catalog_service.material_learning_models import LearningMaterialRevisionRecord
+from eom_catalog_service.material_learning_models import (
+    LearningMaterialRevisionRecord,
+    MaterialLearningRunRecord,
+)
 from eom_catalog_service.material_learning_pages import MaterialPagePreparationService
 from eom_catalog_service.material_learning_source import (
     MaterialLearningSourceService,
     authorize_material_learning,
 )
 from eom_catalog_service.material_learning_source_projection import MaterialSourceProjectionService
+from eom_catalog_service.material_learning_store import (
+    add_material_task,
+    transition_material_run,
+    transition_material_task,
+)
+from eom_catalog_service.material_learning_work import MaterialLearningWorkService
 from eom_catalog_service.models import EducationalDocumentRevisionRecord
 from eom_identifiers import content_sha256
 from eom_orchestrator.codex_compatibility_probe import synthetic_probe_png
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.settings import Settings
 from eom_textbook_analysis.bundle import ExtractedMultimodalPage, PdfInspection
+from eom_workflow.material_learning_plan import material_discovery_windows
+from eom_workflow.material_learning_state import MaterialLearningState, MaterialTaskState
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -159,3 +181,63 @@ def test_prepare_resume_reuses_chunk_and_registers_in_existing_document_owner(
         )
         assert count == 1
     assert len(tuple(settings.nas_artifact_root.rglob("original.pdf"))) == 1
+    # Continue through the genuine task-input/rights/page-membership owner. The
+    # extractor is synthetic, but these Artifact/Identity/Document reads are real.
+    intake = read_material_metadata(
+        CatalogArtifactService(creative_engine, settings),
+        work.intake_manifest,
+        MaterialLearningIntakeManifest,
+        schema_ref=work.intake_manifest.schema_ref,
+        member_path=work.intake_manifest.member_path,
+    )
+    with Session(creative_engine) as session, session.begin():
+        run = session.get(MaterialLearningRunRecord, accepted.run_id, with_for_update=True)
+        transition_material_run(
+            session, run, MaterialLearningState.PREPARING, now=datetime.now(UTC)
+        )
+        transition_material_run(
+            session, run, MaterialLearningState.DISCOVERING, now=datetime.now(UTC)
+        )
+        task, _ = add_material_task(
+            session, run, task_kind="DISCOVER", unit_key="pages-main-1-3", ordinal=1
+        )
+        transition_material_task(
+            session, run, task, MaterialTaskState.PREPARING, now=datetime.now(UTC)
+        )
+        task_id = task.task_id
+    factory = MaterialLearningWorkService(
+        CatalogArtifactService(creative_engine, settings), settings
+    )
+    discovered_work = factory.discovery(
+        task_id=task_id,
+        prepared=result.prepared,
+        intake=intake,
+        window=material_discovery_windows("MAIN", 3)[0],
+    )
+    pointer = factory.publish(discovered_work, authorize=authorize)
+    with Session(creative_engine) as session, session.begin():
+        run = session.get(MaterialLearningRunRecord, accepted.run_id, with_for_update=True)
+        from eom_catalog_service.material_learning_models import MaterialLearningTaskRecord
+
+        task = session.get(MaterialLearningTaskRecord, task_id)
+        task.input_artifact_id, task.input_artifact_revision_id, task.input_sha256 = (
+            pointer.artifact_id,
+            pointer.artifact_revision_id,
+            pointer.sha256,
+        )
+        transition_material_task(session, run, task, MaterialTaskState.READY, now=datetime.now(UTC))
+    source_owner = CatalogMaterialLearningSourceAuthorizer(creative_engine, settings)
+    with Session(creative_engine) as session:
+        assert (
+            source_owner.reauthorize(session, operator_id=actor, work=discovered_work)
+            == discovered_work
+        )
+    changed = deepcopy(discovered_work.model_dump(mode="json"))
+    changed["pages"][0]["image"]["sha256"] = "sha256:" + "0" * 64
+    changed["input_sha256"] = content_sha256(
+        {key: value for key, value in changed.items() if key != "input_sha256"}
+    )
+    with Session(creative_engine) as session, pytest.raises(ValueError, match="INPUT_CHANGED"):
+        source_owner.reauthorize(
+            session, operator_id=actor, work=MaterialDiscoveryWork.model_validate(changed)
+        )

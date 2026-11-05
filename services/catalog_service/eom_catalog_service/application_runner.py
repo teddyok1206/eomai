@@ -84,6 +84,9 @@ from eom_catalog_service.legacy_item_learning_service import (
 )
 from eom_catalog_service.legacy_item_promotion_service import LegacyItemPromotionService
 from eom_catalog_service.legacy_usage_models import LegacyUsageImportRecord
+from eom_catalog_service.material_learning_authorization import (
+    CatalogMaterialLearningAuthorizationService,
+)
 from eom_catalog_service.material_learning_intake import MaterialLearningIntakeService
 from eom_catalog_service.material_learning_read import MaterialLearningReadService
 from eom_catalog_service.material_learning_source import MaterialLearningSourceService
@@ -95,6 +98,7 @@ from eom_catalog_service.office_document_review_intake import OfficeDocumentRevi
 from eom_catalog_service.pdf_document_review_intake import PdfDocumentReviewIntakeService
 from eom_catalog_service.registry_service import RegistryService
 from eom_catalog_service.runtime_privileges import catalog_runtime_privileges_ready
+from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.similarity_read_runtime import (
     SimilarityReaderRuntimeError,
     build_catalog_exam_similarity_reads,
@@ -341,6 +345,9 @@ def serve() -> int:
             material_learning_sources=MaterialLearningSourceService(engine),
             material_learning_intake=MaterialLearningIntakeService(engine),
             material_learning_reads=MaterialLearningReadService(engine),
+            material_learning_authorizations=CatalogMaterialLearningAuthorizationService(
+                engine, CatalogSettings.from_environment()
+            ),
             document_review_hwpx_corrections=DocumentReviewHwpxCorrectionService(engine),
             document_review_pdf_annotations=DocumentReviewPdfAnnotationService(engine),
             external_item_documents=external_item_documents,

@@ -8,6 +8,11 @@ import tempfile
 from pathlib import Path
 from typing import BinaryIO
 
+from eom_catalog_contracts.material_learning_authorization import (
+    MATERIAL_AUTHORIZATION_MAX_BYTES,
+    MaterialLearningAuthorizationReply,
+    MaterialLearningAuthorizationRequest,
+)
 from eom_catalog_contracts.material_learning_intake import (
     MATERIAL_SOURCE_FORMATS,
     CreateMaterialLearningCommand,
@@ -16,10 +21,13 @@ from eom_catalog_contracts.material_learning_intake import (
     MaterialLearningErrorResponse,
     MaterialSourceUploadCommand,
 )
-from eom_identifiers import canonical_json_bytes
+from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_orchestrator.repository import IdempotencyConflict
 from pydantic import BaseModel, ValidationError
 
+from eom_catalog_service.material_learning_authorization import (
+    CatalogMaterialLearningAuthorizationService,
+)
 from eom_catalog_service.material_learning_intake import MaterialLearningIntakeService
 from eom_catalog_service.material_learning_read import MaterialLearningReadService
 from eom_catalog_service.material_learning_source import (
@@ -34,6 +42,7 @@ MATERIAL_LEARNING_OPERATIONS = frozenset(
         "CREATE_MATERIAL_LEARNING",
         "LIST_MATERIAL_LEARNING_RUNS",
         "GET_MATERIAL_LEARNING_RUN",
+        "AUTHORIZE_MATERIAL_LEARNING_INPUT",
     }
 )
 
@@ -46,13 +55,31 @@ def dispatch_material_learning(
     sources: MaterialLearningSourceService | None,
     intake: MaterialLearningIntakeService | None,
     reads: MaterialLearningReadService | None,
+    authorizations: CatalogMaterialLearningAuthorizationService | None = None,
 ) -> None:
     reply: BaseModel
     try:
         if not isinstance(value, dict):
             raise ValueError("invalid request")
         operation = value.get("operation")
-        if operation == "INGEST_MATERIAL_LEARNING_SOURCE":
+        if operation == "AUTHORIZE_MATERIAL_LEARNING_INPUT":
+            if len(canonical_json_bytes(value)) > MATERIAL_AUTHORIZATION_MAX_BYTES:
+                raise ValueError("oversized material authorization")
+            request = MaterialLearningAuthorizationRequest.model_validate(value)
+            try:
+                if authorizations is None:
+                    raise MaterialLearningSourceError("MATERIAL_LEARNING_AUTHORIZATION_UNAVAILABLE")
+                reply = authorizations.authorize(request)
+            except Exception as error:
+                reply = MaterialLearningAuthorizationReply(
+                    status="FAILED",
+                    request_sha256=content_sha256(request.model_dump(mode="json")),
+                    input_sha256=None,
+                    error_code="MATERIAL_LEARNING_AUTHORIZATION_FAILED"
+                    if isinstance(error, (ValueError, MaterialLearningSourceError))
+                    else "MATERIAL_LEARNING_AUTHORIZATION_UNAVAILABLE",
+                )
+        elif operation == "INGEST_MATERIAL_LEARNING_SOURCE":
             command = MaterialSourceUploadCommand.model_validate(value)
             if sources is None:
                 raise MaterialLearningSourceError("MATERIAL_LEARNING_UNAVAILABLE")
