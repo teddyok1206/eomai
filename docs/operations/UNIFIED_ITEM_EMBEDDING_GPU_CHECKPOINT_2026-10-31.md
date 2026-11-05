@@ -3997,3 +3997,59 @@ Identity application의 successor activation을 실행하는 유한 handoff가 �
 보호된 준비/rollback 기록은`/var/lib/eom-index-fair-selection-release-20261105`와
 `/var/lib/eom-index-fair-selection-20261105/drain-requested.json`이다.
 이 시점은 **설치 준비 완료 / 운영 활성화·기출 증가 확인 대기**다.
+
+15:47 UTC 운영 활성화: 원 GPU Workflow
+`workflow_8b7ae04462574e2bb754ce442c5a97e3`가 자연 완료했다. 종료 직전에 큐에 넣은
+CPU standby 때문에 첫 activation의 quiescence guard가 DB/설정 변경 전에 거부됐다.
+이 실패도 보존했다. 같은 GPU4개 source에 대한 REQUESTED/PENDING·시도0·lease0·step0인
+CPU 보조 Workflow 하나만 기존 `cancel_unstarted_indexing_workflow` application으로
+supersede했다. 실행한 CPU/GPU 작업을 취소하거나 FAILED를 성공으로 바꾸지 않았다.
+이 보조 복제는 원래도 미완료였으며, 전체 CPU standby 완결을 이번 복구로 주장하지 않는다.
+공식 취소 경계의 설치본 unit23 PASS도 확인했다. 취소 receipt는 보호된 release 기록의
+`never-started-standby-superseded.json`이며 SHA는
+`sha256:b50fcc3d3525123ac781193df9d7c125b7d115327e891d1356a03b4822561e63`다.
+
+기존 Identity successor/service grant application으로 같은 corpus/권한/recipe 범위를
+활성화한 후 INDEX source`525ae472`·PID4045657·InvocationID
+`46a57cf5012c49ee9a05405f1eddaf9d`가 시작됐다. 물리 CPU/CUDA/QUERY 환경 파일 hash와
+API/Web/QUERY/창작 producer의 PID·InvocationID는 교체 전과 같다. HTTPS/API READY도 유지된다.
+최신15:48 읽기 전용 수치는 여전히271/520이며, **새 대상 선택·기출 저장 확인은 대기**다.
+원 보고서·정본·벡터·실패 기록·창작 실행은 보존했다.
+
+사용자의 추가 조건인 창작 등록 후 임베딩 지속도 같은 복구 범위다. 15:51 UTC 실제 새
+CUDA Workflow`workflow_ce24f34f0bea43d59aa5244592f4fdfc`의 고정 plan을 Catalog로
+다시 읽어 기출2개·창작2개, evidence kind도 accepted solution2개·creative report2개를
+확인했다. 15:55:37 UTC 이 네 encoding Job은 모두 SUCCEEDED/error-null이다.
+하지만16:00 관측에서 registry 집계는 기출271·등록 문항357이므로 **수치 계산 성공과
+검색 인덱스 등록 완료를 구분해 후자는 아직 대기**한다. 실제 source-plan SHA는
+`sha256:927c7a96c05168857491227ea0a7d27ebe6c14533f9d816f7f2c67cd2c38c6b2`다.
+15:50 공식 관측에서는 누적 창작 Graph874개·03–06 실제 유효 작업 lease4개였으며,
+재개 성공을 창작 전체 임베딩 완료로 확대하지 않는다.
+
+### 16:05 UTC — 기출·창작의 실제 CUDA 저장 증가 확인
+
+읽기 전용 재조회에서 기출은**271→273/520**, 등록 창작은**357→359**로 함께 증가했다.
+선택한 네 source의 evidence kind가 기출 풀이2개·창작 풀이2개이며 네 수치 Job 모두
+SUCCEEDED다. original native launch는1개이고 검증 재조회가 추가 계산을 만들지 않았다.
+
+새 공개 CUDA 인덱스는`embeddingindexrev_e50473d444945f266f976e901e5fc9ca`, 고정 Graph는
+`graphrev_7d00a25ce4481a17d3244d92f69535f2`다. eligible1,394개 중 실제 binding632개
+(기출273·창작359)이며, 전체1,394개 임베딩 완료라는 뜻은 아니다. Catalog의 정식 pinned
+member resolver와 schema dispatcher로 아래 manifest의 hash/schema/media/lifecycle 및
+성공 producer를 확인했다. 값/원문/벡터를 수정하거나 복사하지 않았다.
+
+- Artifact: `artifact_42a2e54051784ab0a2e85b3a8727a996`
+- Revision: `rev_026c6b4ffd924facb7e7ea9f3e18abe3`
+- Manifest SHA: `sha256:4579d3bd35216e908642946881f7924e99146eb435403bbd14bd3460dc060f06`
+- 보호된 검증 기록: `/var/lib/eom-index-fair-selection-release-20261105/accepted-progress.json`
+
+이 확인 시 original Workflow는 아직 RUNNING으로 후속 검증 중이다. 수치 계산·인덱스
+정식 저장·Workflow terminal 완료를 같다고 표시하지 않는다. **이번 수정·운영 재개와 첫
+혼합 CUDA 저장 검증은 완료**이며, 기존 owner가 CPU standby·다음 기출/창작 discovery를
+계속 맡는다. 새 창작 Graph 등록을 멈추거나 기출만 독점하도록 만들지 않았다.
+API/QUERY/창작 producer의 PID와 HTTPS READY를 다시 확인했다. 기존10분 관측·Slack
+report timer도 active이며, 구형 벡터·원본·과거 실패 기록은 삭제하지 않았다.
+
+작업 중 root-only 개발 reporter의 Git 조회가 갱신한 `.git/index` 소유권은 내용 hash를
+보존한 채 workspace owner로 복구했다. 후속 root reporter는 `GIT_OPTIONAL_LOCKS=0`을
+명시해 이 개발용 조회가 Git index를 갱신하지 않도록 한다. 운영 코드/인증 변경은 없다.
