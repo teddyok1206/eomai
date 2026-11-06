@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/visual-set/1.0",
+  "title": "EOM exact PDF material visual derivation; Hancom uses native pictures",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-visual-set/1.0"
+    },
+    "input_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "result_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "role_result": {
+      "$ref": "eom://schemas/external-item/creative-source-lineage/1.0#/$defs/member"
+    },
+    "pdftoppm_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "crops": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source_region_id": {
+            "type": "string",
+            "pattern": "^extregion_[0-9a-f]{32}$"
+          },
+          "input_index": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 32
+          },
+          "source_role": {
+            "enum": [
+              "MAIN",
+              "SOLUTIONS"
+            ]
+          },
+          "physical_page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000
+          },
+          "source_page": {
+            "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+          },
+          "pdf": {
+            "$ref": "eom://schemas/material-learning/types/1.0#/$defs/artifactMember"
+          },
+          "render_dpi": {
+            "type": "integer",
+            "minimum": 120,
+            "maximum": 400
+          },
+          "pixel_box": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "minItems": 4,
+            "maxItems": 4
+          },
+          "member_path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 100,
+            "pattern": "^images/extregion_[0-9a-f]{32}\\.png$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "width_px": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "height_px": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "bytes": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 16777216
+          }
+        },
+        "required": [
+          "source_region_id",
+          "input_index",
+          "source_role",
+          "physical_page",
+          "source_page",
+          "pdf",
+          "render_dpi",
+          "pixel_box",
+          "member_path",
+          "sha256",
+          "width_px",
+          "height_px",
+          "bytes"
+        ]
+      },
+      "minItems": 1,
+      "maxItems": 64
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "input_sha256",
+    "result_sha256",
+    "role_result",
+    "pdftoppm_sha256",
+    "crops",
+    "manifest_sha256"
+  ]
+}

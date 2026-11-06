@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field
 
-from eom_web_gui.contracts import StudioIdempotencyKey, UtcDatetime, WebModel
+from eom_web_gui.contracts import ItemDbRegistration, StudioIdempotencyKey, UtcDatetime, WebModel
 
 _SHA = r"^sha256:[0-9a-f]{64}$"
 MaterialKind = Literal["TEXTBOOK", "REFERENCE_BOOK", "WORKBOOK", "MOCK_EXAM", "OTHER"]
@@ -37,6 +37,32 @@ TaskState = Literal[
     "FAILED",
     "CANCELLED",
 ]
+
+
+class MaterialItemMetadata(WebModel):
+    item_type_key: Literal["uploaded-material-item"]
+    source_kind: Literal["EXTERNAL"]
+    material_id: str = Field(pattern=r"^material_[0-9a-f]{32}$")
+    material_revision_id: str = Field(pattern=r"^materialrev_[0-9a-f]{32}$")
+    unit_key: str = Field(min_length=1, max_length=128)
+    title: str = Field(min_length=1, max_length=512)
+    source_filename: str = Field(min_length=1, max_length=255)
+    printed_label: str | None = Field(min_length=1, max_length=100)
+    section_path: tuple[Annotated[str, Field(min_length=1, max_length=200)], ...] = Field(
+        max_length=12
+    )
+    physical_pages: tuple[Annotated[int, Field(strict=True, ge=1, le=2000)], ...] = Field(
+        min_length=1, max_length=32
+    )
+    lineage_sha256: str = Field(pattern=r"^sha256:[0-9a-f]{64}$")
+    approval_basis: Literal["SOURCE_IMPORT_AUTOMATION_NOT_SCIENTIFIC_VERIFICATION"]
+
+
+class MaterialItemDbEntry(WebModel):
+    schema_version: Literal["material-item-db-entry/1.0"]
+    metadata: MaterialItemMetadata
+    material_title: str = Field(min_length=1, max_length=200)
+    registration: ItemDbRegistration
 
 
 class MaterialLearningArtifactMember(WebModel):

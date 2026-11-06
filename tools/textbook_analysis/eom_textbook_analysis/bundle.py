@@ -101,10 +101,21 @@ class PdfMultimodalExtractor(PdfTextExtractor, Protocol):
     ) -> tuple[ExtractedMultimodalPage, ...]: ...
 
 
+class PdfCommandRunner(Protocol):
+    """Trusted composition chooses isolation; command output is still untrusted."""
+
+    def __call__(
+        self, command: list[str], *, max_output_bytes: int = 4 * 1024 * 1024
+    ) -> subprocess.CompletedProcess[bytes]: ...
+
+
 class PopplerTextExtractor:
     implementation = "poppler-pdftotext"
 
-    def __init__(self, *, pdftotext: Path, pdfinfo: Path) -> None:
+    def __init__(
+        self, *, pdftotext: Path, pdfinfo: Path, run: PdfCommandRunner | None = None
+    ) -> None:
+        self._run = run or _run_bounded
         self._pdftotext = _require_executable(pdftotext)
         self._pdfinfo = _require_executable(pdfinfo)
         self.implementation_sha256 = content_sha256(
@@ -114,7 +125,7 @@ class PopplerTextExtractor:
             }
         )
         self.options_sha256 = content_sha256(_POPPLER_TEXT_OPTIONS)
-        completed = _run_bounded([str(self._pdftotext), "-v"])
+        completed = self._run([str(self._pdftotext), "-v"])
         first_line = completed.stderr.decode("utf-8", errors="replace").splitlines()
         if not first_line or "version" not in first_line[0].casefold():
             raise TextbookBundleBuildError("TEXTBOOK_EXTRACTOR_VERSION_INVALID")
@@ -124,7 +135,7 @@ class PopplerTextExtractor:
         self.version = version
 
     def inspect(self, source_path: Path) -> PdfInspection:
-        completed = _run_bounded([str(self._pdfinfo), str(source_path)])
+        completed = self._run([str(self._pdfinfo), str(source_path)])
         values: dict[str, str] = {}
         for raw_line in completed.stdout.decode("utf-8", errors="strict").splitlines():
             key, separator, value = raw_line.partition(":")
@@ -142,7 +153,7 @@ class PopplerTextExtractor:
     def extract(
         self, source_path: Path, first_physical_page: int, last_physical_page: int
     ) -> tuple[str, ...]:
-        completed = _run_bounded(
+        completed = self._run(
             [
                 str(self._pdftotext),
                 "-f",
@@ -185,6 +196,7 @@ class PopplerTesseractTextExtractor:
         ocr_dpi: int = 180,
         minimum_text_characters: int = 100,
         minimum_hangul_characters: int = 20,
+        run: PdfCommandRunner | None = None,
     ) -> None:
         if ocr_mode not in {"fallback", "all"}:
             raise TextbookBundleBuildError("TEXTBOOK_OCR_MODE_INVALID")
@@ -206,7 +218,8 @@ class PopplerTesseractTextExtractor:
         ):
             raise TextbookBundleBuildError("TEXTBOOK_OCR_LANGUAGE_INVALID")
 
-        self._poppler = PopplerTextExtractor(pdftotext=pdftotext, pdfinfo=pdfinfo)
+        self._run = run or _run_bounded
+        self._poppler = PopplerTextExtractor(pdftotext=pdftotext, pdfinfo=pdfinfo, run=run)
         self._pdftoppm = _require_executable(pdftoppm)
         self._tesseract = _require_executable(tesseract)
         self._tessdata_directory = _require_directory(tessdata_directory)
@@ -216,7 +229,7 @@ class PopplerTesseractTextExtractor:
             )
             for language in languages
         }
-        tesseract_version_result = _run_bounded([str(self._tesseract), "--version"])
+        tesseract_version_result = self._run([str(self._tesseract), "--version"])
         version_lines = tesseract_version_result.stdout.decode(
             "utf-8", errors="replace"
         ).splitlines()
@@ -313,7 +326,7 @@ class PopplerTesseractTextExtractor:
             temporary_directory = Path(temporary)
             temporary_directory.chmod(0o700)
             image_stem = temporary_directory / "page"
-            _run_bounded(
+            self._run(
                 [
                     str(self._pdftoppm),
                     "-f",
@@ -335,7 +348,7 @@ class PopplerTesseractTextExtractor:
             width, height = _png_dimensions(image_bytes)
             text = embedded_text
             if require_ocr:
-                completed = _run_bounded(
+                completed = self._run(
                     [
                         str(self._tesseract),
                         str(image_path),

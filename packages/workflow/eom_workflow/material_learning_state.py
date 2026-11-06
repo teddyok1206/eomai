@@ -100,6 +100,17 @@ PREPARATION_TASK_TRANSITIONS = MappingProxyType(
     }
 )
 
+KNOWLEDGE_TASK_TRANSITIONS = MappingProxyType(
+    {
+        _T.PENDING: frozenset({_T.PREPARING, _T.EXCEPTION, _T.CANCELLED}),
+        _T.PREPARING: frozenset({_T.READY, _T.EXCEPTION, _T.FAILED, _T.CANCELLED}),
+        _T.READY: frozenset({_T.ANALYZING, _T.EXCEPTION, _T.FAILED, _T.CANCELLED}),
+        _T.ANALYZING: frozenset({_T.PUBLISHING, _T.EXCEPTION, _T.FAILED}),
+        _T.PUBLISHING: frozenset({_T.GRAPH_READY, _T.EXCEPTION, _T.FAILED}),
+        _T.GRAPH_READY: frozenset({_T.COMPLETED}),
+    }
+)
+
 
 def require_material_transition(
     current: MaterialLearningState, target: MaterialLearningState
@@ -111,8 +122,10 @@ def require_material_transition(
 def require_material_task_transition(
     current: MaterialTaskState, target: MaterialTaskState, *, kind: MaterialTaskKind | None = None
 ) -> None:
-    transitions = (
-        PREPARATION_TASK_TRANSITIONS if kind is MaterialTaskKind.PREPARE else TASK_TRANSITIONS
-    )
+    specialized = {
+        MaterialTaskKind.PREPARE: PREPARATION_TASK_TRANSITIONS,
+        MaterialTaskKind.EXPLANATION: KNOWLEDGE_TASK_TRANSITIONS,
+    }
+    transitions = specialized.get(kind, TASK_TRANSITIONS) if kind is not None else TASK_TRANSITIONS
     if target not in transitions.get(current, frozenset()):
         raise ValueError("MATERIAL_LEARNING_TASK_TRANSITION_INVALID")

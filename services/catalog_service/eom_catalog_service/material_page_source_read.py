@@ -21,7 +21,7 @@ from eom_catalog_contracts.material_learning_preparation import (
     material_chunk_member,
 )
 
-from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.artifacts import CatalogArtifactReader
 from eom_catalog_service.material_learning_artifacts import read_material_metadata
 from eom_catalog_service.material_learning_source import MaterialLearningSourceError
 
@@ -51,7 +51,7 @@ class ResolvedMaterialPages:
 
 
 def read_material_source_pages(
-    artifacts: CatalogArtifactService,
+    artifacts: CatalogArtifactReader,
     source: MaterialPreparedSource | MaterialDocumentRevision,
     physical_pages: tuple[int, ...],
 ) -> ResolvedMaterialPages:

@@ -146,7 +146,9 @@ def _page_count(pdfinfo: Path, pdf_bytes: bytes, run: PdfToolRunner) -> int:
     return int(count)
 
 
-def _png_dimensions_and_size(path: Path, *, minimum_dimension: int = 64) -> tuple[int, int, int]:
+def _png_dimensions_and_size(
+    path: Path, *, minimum_dimension: int = 64, maximum_dimension: int = 2400
+) -> tuple[int, int, int]:
     try:
         metadata = path.lstat()
         if (
@@ -163,8 +165,8 @@ def _png_dimensions_and_size(path: Path, *, minimum_dimension: int = 64) -> tupl
         raise ValueError("CREATIVE_PAGE_PNG_INVALID")
     width, height = struct.unpack(">II", header[16:24])
     if (
-        not minimum_dimension <= width <= 2400
-        or not minimum_dimension <= height <= 2400
+        not minimum_dimension <= width <= maximum_dimension
+        or not minimum_dimension <= height <= maximum_dimension
         or header[24] != 8
     ):
         raise ValueError("CREATIVE_PAGE_PNG_DIMENSIONS_INVALID")
@@ -457,3 +459,87 @@ def render_creative_source_visuals(
             )
         )
     return tuple(outputs)
+
+
+@dataclass(frozen=True, slots=True)
+class MaterialPdfRenderSource:
+    """One validated materialization shared by all crops of this source PDF."""
+
+    payload: bytes
+    sha256: str
+
+    def __post_init__(self) -> None:
+        if (
+            not 8 <= len(self.payload) <= _MAX_PDF_BYTES
+            or not self.payload.startswith(b"%PDF-")
+            or sha256_bytes(self.payload) != self.sha256
+        ):
+            raise ValueError("MATERIAL_VISUAL_PDF_INVALID")
+
+
+def render_material_pdf_visual(
+    source: MaterialPdfRenderSource,
+    *,
+    physical_page: int,
+    render_dpi: int,
+    pixel_box: tuple[int, int, int, int],
+    output: Path,
+    pdftoppm: Path = Path("/usr/bin/pdftoppm"),
+    run: PdfToolRunner = _run_isolated,
+) -> tuple[str, int]:
+    """Use the prepared page's exact DPI, not the legacy 2400-pixel recipe.
+
+    Source/role/region authorization and the immutable derivation receipt belong
+    to the caller. Parsing stays in the existing no-credentials PDF sandbox.
+    """
+    left, top, right, bottom = pixel_box
+    if (
+        type(physical_page) is not int
+        or not 1 <= physical_page <= 2000
+        or type(render_dpi) is not int
+        or not 120 <= render_dpi <= 400
+        or not 0 <= left < right <= 10000
+        or not 0 <= top < bottom <= 10000
+        or not output.is_absolute()
+        or os.path.lexists(output)
+    ):
+        raise ValueError("MATERIAL_VISUAL_CROP_INPUT_INVALID")
+    executable = _trusted_executable(pdftoppm)
+    raw = run(
+        executable,
+        (
+            "-f",
+            str(physical_page),
+            "-l",
+            str(physical_page),
+            "-r",
+            str(render_dpi),
+            "-gray",
+            "-png",
+            "-singlefile",
+            "-x",
+            str(left),
+            "-y",
+            str(top),
+            "-W",
+            str(right - left),
+            "-H",
+            str(bottom - top),
+            "-",
+        ),
+        source.payload,
+        timeout_seconds=90.0,
+        maximum_stdout=_MAX_PAGE_BYTES,
+    )
+    frames = _split_png_stream(raw, expected_pages=1)
+    descriptor = os.open(output, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(descriptor, "wb") as stream:
+        stream.write(frames[0])
+        stream.flush()
+        os.fsync(stream.fileno())
+    width, height, size = _png_dimensions_and_size(
+        output, minimum_dimension=1, maximum_dimension=10000
+    )
+    if (width, height) != (right - left, bottom - top):
+        raise ValueError("MATERIAL_VISUAL_CROP_DIMENSIONS_MISMATCH")
+    return sha256_bytes(raw), size

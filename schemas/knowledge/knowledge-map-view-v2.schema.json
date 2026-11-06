@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/knowledge/knowledge-map-view/2.0",
+  "title": "Bounded published Graph metadata view",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "graph_snapshot_revision_id",
+    "snapshot_sha256",
+    "nodes",
+    "edges",
+    "sources",
+    "focus_node_id",
+    "selected_edge_id",
+    "truncated",
+    "total_nodes",
+    "total_edges"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "knowledge-map-view/2.0"
+    },
+    "graph_snapshot_revision_id": {
+      "type": "string",
+      "pattern": "^graphrev_[0-9a-f]{32}$"
+    },
+    "snapshot_sha256": {
+      "$ref": "#/$defs/hash"
+    },
+    "nodes": {
+      "type": "array",
+      "maxItems": 120,
+      "items": {
+        "$ref": "#/$defs/node"
+      }
+    },
+    "edges": {
+      "type": "array",
+      "maxItems": 240,
+      "items": {
+        "$ref": "#/$defs/edge"
+      }
+    },
+    "sources": {
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "$ref": "#/$defs/source"
+      }
+    },
+    "focus_node_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/nodeId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "selected_edge_id": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/edgeId"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "truncated": {
+      "type": "boolean"
+    },
+    "total_nodes": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "total_edges": {
+      "type": "integer",
+      "minimum": 0
+    }
+  },
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "nodeId": {
+      "type": "string",
+      "pattern": "^knode_[0-9a-f]{32}(?:[0-9a-f]{32})?$"
+    },
+    "edgeId": {
+      "type": "string",
+      "pattern": "^kedge_[0-9a-f]{32}(?:[0-9a-f]{32})?$"
+    },
+    "layer": {
+      "enum": [
+        "TEXTBOOK",
+        "PAST_EXAM",
+        "CREATIVE",
+        "AI",
+        "CURRICULUM",
+        "GUIDE",
+        "UNKNOWN",
+        "EXTERNAL"
+      ]
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "node_id",
+        "node_type",
+        "label",
+        "layers"
+      ],
+      "properties": {
+        "node_id": {
+          "$ref": "#/$defs/nodeId"
+        },
+        "node_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 48
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "layers": {
+          "type": "array",
+          "uniqueItems": true,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/layer"
+          }
+        }
+      }
+    },
+    "edge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "edge_id",
+        "from_node_id",
+        "to_node_id",
+        "edge_type"
+      ],
+      "properties": {
+        "edge_id": {
+          "$ref": "#/$defs/edgeId"
+        },
+        "from_node_id": {
+          "$ref": "#/$defs/nodeId"
+        },
+        "to_node_id": {
+          "$ref": "#/$defs/nodeId"
+        },
+        "edge_type": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 48
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "source_revision_id",
+        "source_class",
+        "layer",
+        "analysis_run_id",
+        "source_artifact_id",
+        "artifact_revision_id",
+        "source_sha256",
+        "anchor_id",
+        "excerpt_sha256",
+        "available",
+        "title",
+        "item_id",
+        "item_manifest_sha256"
+      ],
+      "properties": {
+        "source_revision_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "source_class": {
+          "enum": [
+            "TEXTBOOK",
+            "PAST_EXAM",
+            "APPROVED_ITEM",
+            "CURRICULUM",
+            "INTERNAL_GUIDE"
+          ]
+        },
+        "layer": {
+          "$ref": "#/$defs/layer"
+        },
+        "analysis_run_id": {
+          "type": "string",
+          "pattern": "^analysisrun_[0-9a-f]{32}$"
+        },
+        "source_artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "source_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "anchor_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "excerpt_sha256": {
+          "$ref": "#/$defs/hash"
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 512
+        },
+        "item_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^item_[0-9a-f]{32}$"
+        },
+        "item_manifest_sha256": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

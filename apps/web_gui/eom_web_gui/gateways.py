@@ -120,6 +120,7 @@ from eom_web_gui.item_preview_projection import (
 )
 from eom_web_gui.knowledge_map_contracts import KnowledgeMapView
 from eom_web_gui.material_learning_contracts import (
+    MaterialItemDbEntry,
     MaterialLearningAcceptance,
     MaterialLearningDetail,
     MaterialLearningRuns,
@@ -426,7 +427,7 @@ class GraphItemDbPage:
 
 @dataclass(frozen=True)
 class RegisteredItemDbPage:
-    values: tuple[CreativeItemDbEntry | AiItemDbEntry, ...]
+    values: tuple[CreativeItemDbEntry | AiItemDbEntry | MaterialItemDbEntry, ...]
     next_cursor: str | None
     has_more: bool
 
@@ -1615,9 +1616,9 @@ class HttpApplicationGateway:
         approval_state: str | None,
         filters: ExternalItemDbFilterSubmission,
     ) -> RegisteredItemDbPage:
-        if kind not in {"CREATIVE", "AI"}:
+        if kind not in {"CREATIVE", "AI", "EXTERNAL"}:
             raise GatewayError(status=422, code="ITEM_DB_SOURCE_INVALID")
-        if kind == "AI" and filters.conditions:
+        if kind != "CREATIVE" and filters.conditions:
             raise GatewayError(status=422, code="ITEM_DB_FILTER_NOT_APPLICABLE")
         if kind == "CREATIVE":
             response = await self._authorized(
@@ -1631,7 +1632,7 @@ class HttpApplicationGateway:
             response = await self._authorized(
                 session,
                 "GET",
-                "/api/v1/item-db/ai",
+                "/api/v1/item-db/materials" if kind == "EXTERNAL" else "/api/v1/item-db/ai",
                 params={
                     "approval_state": approval_state,
                     "limit": filters.limit,
@@ -1649,8 +1650,17 @@ class HttpApplicationGateway:
                 )
             ):
                 raise ValueError("invalid page shape")
-            model = CreativeItemDbEntry if kind == "CREATIVE" else AiItemDbEntry
-            values = tuple(model.model_validate(value) for value in document["data"])
+            values: tuple[CreativeItemDbEntry | AiItemDbEntry | MaterialItemDbEntry, ...]
+            if kind == "CREATIVE":
+                values = tuple(
+                    CreativeItemDbEntry.model_validate(value) for value in document["data"]
+                )
+            elif kind == "EXTERNAL":
+                values = tuple(
+                    MaterialItemDbEntry.model_validate(value) for value in document["data"]
+                )
+            else:
+                values = tuple(AiItemDbEntry.model_validate(value) for value in document["data"])
             if not isinstance(page["has_more"], bool) or (
                 page["has_more"] and not page.get("next_cursor")
             ):

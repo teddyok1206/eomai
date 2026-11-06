@@ -13,6 +13,23 @@ down_revision = "20261105_0073"
 branch_labels = None
 depends_on = None
 
+_CAPACITY_PREDECESSOR = (
+    "(max_configured_slots BETWEEN 1 AND 6 AND max_active_codex BETWEEN 1 AND 3 "
+    "AND max_active_codex <= max_configured_slots AND max_active_per_slot = 1 "
+    "AND max_active_gpu = 1 AND (max_active_knowledge_analysis BETWEEN 1 AND 2 "
+    "OR (schema_version = 'worker-capacity-policy/1.4' "
+    "AND max_active_knowledge_analysis = 3))) OR "
+    "(schema_version = 'worker-capacity-policy/1.5' AND max_configured_slots = 6 "
+    "AND max_active_codex = 4 AND max_active_per_slot = 1 AND max_active_gpu = 1 "
+    "AND max_active_knowledge_analysis = 4)"
+)
+_CAPACITY_SUCCESSOR = (
+    "(" + _CAPACITY_PREDECESSOR + ") OR "
+    "(schema_version = 'worker-capacity-policy/1.6' AND max_configured_slots = 6 "
+    "AND max_active_codex = 4 AND max_active_per_slot = 1 AND max_active_gpu = 1 "
+    "AND max_active_knowledge_analysis = 4)"
+)
+
 # Frozen DDL: this migration never imports a future application model.
 _DDL = (
     """CREATE TABLE learning_materials (
@@ -124,6 +141,7 @@ _DDL = (
     output_sha256 VARCHAR(71),
     item_revision_id VARCHAR(40),
     analysis_run_id VARCHAR(44),
+    solution_analysis_run_id VARCHAR(44),
     graph_snapshot_revision_id VARCHAR(41),
     error_code VARCHAR(128),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT now() NOT NULL,
@@ -168,6 +186,8 @@ _DDL = (
         DELETE RESTRICT,
     FOREIGN KEY(analysis_run_id) REFERENCES knowledge_analysis_runs (analysis_run_id)
         ON DELETE RESTRICT,
+    FOREIGN KEY(solution_analysis_run_id) REFERENCES knowledge_analysis_runs (analysis_run_id)
+        ON DELETE RESTRICT,
     FOREIGN KEY(graph_snapshot_revision_id) REFERENCES knowledge_graph_snapshots
         (graph_snapshot_revision_id)
         ON DELETE RESTRICT
@@ -206,6 +226,8 @@ _DDL = (
        (workflow_id) WHERE workflow_id IS NOT NULL""",
     """CREATE UNIQUE INDEX uq_material_learning_child_analysis ON material_learning_tasks
        (analysis_run_id) WHERE analysis_run_id IS NOT NULL""",
+    """CREATE UNIQUE INDEX uq_material_learning_child_solution ON material_learning_tasks
+       (solution_analysis_run_id) WHERE solution_analysis_run_id IS NOT NULL""",
     """CREATE INDEX ix_material_learning_registered_item ON material_learning_tasks
         (item_revision_id)""",
     """CREATE UNIQUE INDEX uq_material_learning_one_ai ON material_learning_tasks (execution_lane)
@@ -249,11 +271,13 @@ ELSIF TG_ARGV[0] = 'RUN' THEN
 ELSIF TG_ARGV[0] = 'TASK' THEN
     IF (following - ARRAY['state','input_artifact_id','input_artifact_revision_id',
        'input_sha256','workflow_id','output_artifact_id','output_artifact_revision_id',
-       'output_sha256','item_revision_id','analysis_run_id','graph_snapshot_revision_id',
+       'output_sha256','item_revision_id','analysis_run_id','solution_analysis_run_id',
+       'graph_snapshot_revision_id',
        'error_code','updated_at']) IS DISTINCT FROM
        (previous - ARRAY['state','input_artifact_id','input_artifact_revision_id',
        'input_sha256','workflow_id','output_artifact_id','output_artifact_revision_id',
-       'output_sha256','item_revision_id','analysis_run_id','graph_snapshot_revision_id',
+       'output_sha256','item_revision_id','analysis_run_id','solution_analysis_run_id',
+       'graph_snapshot_revision_id',
        'error_code','updated_at'])
        OR (OLD.state IN ('COMPLETED','EXCEPTION','FAILED','CANCELLED')
            AND NEW IS DISTINCT FROM OLD) THEN
@@ -261,7 +285,8 @@ ELSIF TG_ARGV[0] = 'TASK' THEN
     END IF;
     FOREACH pinned IN ARRAY ARRAY['input_artifact_id','input_artifact_revision_id',
         'input_sha256','workflow_id','output_artifact_id','output_artifact_revision_id',
-        'output_sha256','item_revision_id','analysis_run_id','graph_snapshot_revision_id'] LOOP
+        'output_sha256','item_revision_id','analysis_run_id','solution_analysis_run_id',
+        'graph_snapshot_revision_id'] LOOP
         IF previous->pinned <> 'null'::jsonb AND
            following->pinned IS DISTINCT FROM previous->pinned THEN
             RAISE EXCEPTION 'MATERIAL_LEARNING_TASK_PIN_IMMUTABLE' USING ERRCODE='23514';
@@ -283,6 +308,12 @@ _TABLES = (
 
 
 def upgrade() -> None:
+    op.drop_constraint(
+        "ck_capacity_policy_host_limits", "worker_capacity_policy_revisions", type_="check"
+    )
+    op.create_check_constraint(
+        "ck_capacity_policy_host_limits", "worker_capacity_policy_revisions", _CAPACITY_SUCCESSOR
+    )
     for statement in _DDL:
         op.execute(statement)
     op.execute(_HISTORY)
@@ -295,6 +326,13 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     # Reverting code never authorizes throwing away uploaded source lineage/history.
+    if op.get_bind().scalar(
+        text(
+            "SELECT EXISTS (SELECT 1 FROM worker_capacity_policy_revisions "
+            "WHERE schema_version='worker-capacity-policy/1.6')"
+        )
+    ):
+        raise RuntimeError("MATERIAL_LEARNING_CAPACITY_HISTORY_EXISTS")
     for table, _ in _TABLES:
         if op.get_bind().scalar(text(f"SELECT EXISTS (SELECT 1 FROM {table})")):
             raise RuntimeError("MATERIAL_LEARNING_HISTORY_EXISTS")
@@ -304,3 +342,9 @@ def downgrade() -> None:
     for table, _ in reversed(_TABLES):
         op.execute(f"DROP TABLE {table}")
     op.execute("DROP FUNCTION protect_material_learning_history()")
+    op.drop_constraint(
+        "ck_capacity_policy_host_limits", "worker_capacity_policy_revisions", type_="check"
+    )
+    op.create_check_constraint(
+        "ck_capacity_policy_host_limits", "worker_capacity_policy_revisions", _CAPACITY_PREDECESSOR
+    )

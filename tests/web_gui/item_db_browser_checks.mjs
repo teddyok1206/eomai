@@ -80,6 +80,9 @@ async function api(path, options = {}) {
       item_manifest_sha256: 'sha256:' + '3'.repeat(64), approval_state: 'APPROVED',
       difficulty_band: '상', item_type_key: 'external-creative-multiple-choice'};
     if (params.get('kind') === 'AI') return {values: [{registration: {...registration, approval_state: 'IN_REVIEW'}, title: 'AI 생성 문항'}], has_more: false, next_cursor: null};
+    if (params.get('kind') === 'EXTERNAL') return {values: [{schema_version: 'material-item-db-entry/1.0', registration,
+      material_title: '외부 문제집', metadata: {source_kind: 'EXTERNAL', title: '외부 자료 문항',
+        source_filename: '문제.hwpx', printed_label: '12', section_path: ['2장', '실전'], physical_pages: [7, 8]}}], has_more: false, next_cursor: null};
     if (params.get('approval_state') === 'APPROVED') return {values: [{source: entry('10310'), registration}], has_more: false, next_cursor: null};
     const number = options.body.conditions.find(value => value.field === 'U' && value.operator === 'EQ')?.value;
     if (options.body.limit === 1 && number) return {values: [{source: entry(number), registration: null}], has_more: false, next_cursor: null};
@@ -268,7 +271,7 @@ try {
   await page.locator("#item-db-filter-clear").click();
 
   // Category never encodes approval; the same original metadata and file tools remain.
-  assert.deepEqual(await page.locator('#item-db-source option').allTextContents(), ['창작', '기출', 'AI']);
+  assert.deepEqual(await page.locator('#item-db-source option').allTextContents(), ['창작', '기출', '외부', 'AI']);
   await page.evaluate(() => {window.dbFixture.enableRegisteredGraph = true;});
   await page.locator('#item-db-approval').selectOption('APPROVED');
   await page.waitForFunction(() => document.querySelector('#item-db-result-count').textContent === '1개 표시');
@@ -282,6 +285,12 @@ try {
   assert.match(await page.locator('#item-db-detail').innerText(), /출제 의도[\s\S]*자료 해석/);
   assert.equal(await page.locator('.item-db-edition.is-final').count(), 1);
   await page.evaluate(() => {window.dbFixture.enableRegisteredGraph = false;});
+  await page.locator('#item-db-source').selectOption('EXTERNAL');
+  await page.waitForFunction(() => document.querySelector('#item-db-results').textContent.includes('외부 자료 문항'));
+  await rows.first().getByRole('button').click();
+  assert.match(await page.locator('#item-db-detail').innerText(), /문항 종류[\s\S]*외부[\s\S]*외부 문제집[\s\S]*문제.hwpx[\s\S]*12[\s\S]*2장 → 실전[\s\S]*7, 8/);
+  assert.equal(await page.getByRole('button', {name: '등록 문항 미리보기', exact: true}).isVisible(), true);
+  assert.doesNotMatch(await page.locator('#item-db-detail').innerText(), /materialrev_|itemrev_|고유번호 12/);
   await page.locator('#item-db-source').selectOption('AI');
   await page.waitForFunction(() => document.querySelector('#item-db-results').textContent.includes('AI 생성 문항'));
   await rows.first().getByRole('button').click();
@@ -529,6 +538,7 @@ try {
   await page.evaluate(() => {window.dbFixture.allowSource = false; window.dbFixture.controller.open();});
   await page.waitForFunction(() => document.querySelector('#item-db-source').value === 'PAST_EXAM');
   assert.equal(await page.locator('#item-db-source option[value="EXTERNAL_SOURCE"]').evaluate(option => option.disabled), true);
+  assert.equal(await page.locator('#item-db-source option[value="EXTERNAL"]').evaluate(option => option.disabled), true);
   assert.equal(await page.locator('#item-db-similarity-results button').count(), 0, 'permission changes clear previous selections/results');
   assert.equal(await page.locator('#item-db-similarity-tab-progress').isVisible(), false);
   assert.deepEqual(errors, []);

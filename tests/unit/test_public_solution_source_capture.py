@@ -144,7 +144,7 @@ def test_missing_ai_or_past_report_is_missing_not_editorial_or_review_fallback(
     value.batches.assert_not_called()
 
 
-@pytest.mark.parametrize("source_kind", ["AI", "AI_GENERATED", "GENERATED"])
+@pytest.mark.parametrize("source_kind", ["AI", "AI_GENERATED", "GENERATED", "MATERIAL_EXTERNAL"])
 def test_conditional_ai_report_adapter_has_no_source_category_text_prefix(monkeypatch, source_kind):
     # Synthetic V11 read port; actual accepted bytes/receipt validation is covered
     # by the separate disposable registered-solution application suite.
@@ -154,7 +154,11 @@ def test_conditional_ai_report_adapter_has_no_source_category_text_prefix(monkey
         value.source.model_dump(mode="json") | {"source_class": "APPROVED_ITEM"}
     )
     value.candidate.source = source
-    value.revision.metadata_json = {"source_kind": source_kind}
+    value.revision.metadata_json = (
+        {"source_kind": "EXTERNAL", "item_type_key": "uploaded-material-item"}
+        if source_kind == "MATERIAL_EXTERNAL"
+        else {"source_kind": source_kind}
+    )
     pointer_type = type(registered_entry().evidence.solution)
     body = registered_entry().evidence.solution.model_dump(mode="json")
     body["base_analysis_run_id"] = value.candidate.analysis_run_id

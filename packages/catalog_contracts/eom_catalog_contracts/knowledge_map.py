@@ -12,6 +12,29 @@ MapHash = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 MapLayer = Literal["TEXTBOOK", "PAST_EXAM", "CREATIVE", "AI", "CURRICULUM", "GUIDE", "UNKNOWN"]
 
 
+def require_closed_map_neighborhood(
+    node_ids: tuple[str, ...],
+    edge_ids: tuple[str, ...],
+    endpoints: tuple[tuple[str, str], ...],
+    *,
+    focus_node_id: str | None,
+    selected_edge_id: str | None,
+    total_nodes: int,
+    total_edges: int,
+) -> None:
+    nodes, edges = set(node_ids), set(edge_ids)
+    if len(nodes) != len(node_ids) or len(edges) != len(edge_ids):
+        raise ValueError("Graph view has duplicate identities")
+    if any(left not in nodes or right not in nodes for left, right in endpoints):
+        raise ValueError("Graph view has dangling endpoints")
+    if focus_node_id is not None and focus_node_id not in nodes:
+        raise ValueError("focus node must be present")
+    if selected_edge_id is not None and selected_edge_id not in edges:
+        raise ValueError("selected edge must be present")
+    if total_nodes < len(node_ids) or total_edges < len(edge_ids):
+        raise ValueError("Graph counts differ from the snapshot")
+
+
 class KnowledgeMapNode(FrozenModel):
     node_id: MapNodeId
     node_type: str = Field(min_length=1, max_length=48)
@@ -69,18 +92,13 @@ class KnowledgeMapView(FrozenModel):
 
     @model_validator(mode="after")
     def closed_neighborhood(self) -> Self:
-        node_ids = {row.node_id for row in self.nodes}
-        edge_ids = {row.edge_id for row in self.edges}
-        if len(node_ids) != len(self.nodes) or len(edge_ids) != len(self.edges):
-            raise ValueError("Graph view has duplicate identities")
-        if any(
-            row.from_node_id not in node_ids or row.to_node_id not in node_ids for row in self.edges
-        ):
-            raise ValueError("Graph view has dangling endpoints")
-        if self.focus_node_id is not None and self.focus_node_id not in node_ids:
-            raise ValueError("focus node must be present")
-        if self.selected_edge_id is not None and self.selected_edge_id not in edge_ids:
-            raise ValueError("selected edge must be present")
-        if self.total_nodes < len(self.nodes) or self.total_edges < len(self.edges):
-            raise ValueError("Graph counts differ from the snapshot")
+        require_closed_map_neighborhood(
+            tuple(row.node_id for row in self.nodes),
+            tuple(row.edge_id for row in self.edges),
+            tuple((row.from_node_id, row.to_node_id) for row in self.edges),
+            focus_node_id=self.focus_node_id,
+            selected_edge_id=self.selected_edge_id,
+            total_nodes=self.total_nodes,
+            total_edges=self.total_edges,
+        )
         return self

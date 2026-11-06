@@ -7,11 +7,11 @@ from typing import cast
 
 from eom_catalog_contracts.knowledge_map import (
     KnowledgeMapEdge,
-    KnowledgeMapNode,
-    KnowledgeMapSource,
-    KnowledgeMapView,
-    MapLayer,
 )
+from eom_catalog_contracts.knowledge_map_v2 import KnowledgeMapNodeV2 as KnowledgeMapNode
+from eom_catalog_contracts.knowledge_map_v2 import KnowledgeMapSourceV2 as KnowledgeMapSource
+from eom_catalog_contracts.knowledge_map_v2 import KnowledgeMapViewV2 as KnowledgeMapView
+from eom_catalog_contracts.knowledge_map_v2 import MapLayerV2 as MapLayer
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
@@ -55,6 +55,8 @@ def source_layer(
     source_class: str, source_domain: str | None, workflow_key: str | None = None
 ) -> MapLayer:
     if source_class == "APPROVED_ITEM":
+        if workflow_key == "material-learning":
+            return "EXTERNAL"
         if source_domain is None:
             # Exact historical registration families, not an ID/name heuristic.
             if workflow_key == "external-item-learning":

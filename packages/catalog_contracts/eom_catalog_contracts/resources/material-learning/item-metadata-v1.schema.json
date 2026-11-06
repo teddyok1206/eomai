@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/item-metadata/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "item_type_key": {
+      "const": "uploaded-material-item"
+    },
+    "source_kind": {
+      "const": "EXTERNAL"
+    },
+    "material_id": {
+      "type": "string",
+      "pattern": "^material_[0-9a-f]{32}$"
+    },
+    "material_revision_id": {
+      "type": "string",
+      "pattern": "^materialrev_[0-9a-f]{32}$"
+    },
+    "unit_key": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "source_filename": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "printed_label": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "section_path": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "minItems": 0,
+      "maxItems": 12
+    },
+    "physical_pages": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 2000
+      },
+      "minItems": 1,
+      "maxItems": 32,
+      "uniqueItems": true
+    },
+    "lineage_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "approval_basis": {
+      "const": "SOURCE_IMPORT_AUTOMATION_NOT_SCIENTIFIC_VERIFICATION"
+    }
+  },
+  "required": [
+    "item_type_key",
+    "source_kind",
+    "material_id",
+    "material_revision_id",
+    "unit_key",
+    "title",
+    "source_filename",
+    "printed_label",
+    "section_path",
+    "physical_pages",
+    "lineage_sha256",
+    "approval_basis"
+  ]
+}

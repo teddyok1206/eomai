@@ -79,6 +79,19 @@ def test_map_contract_is_schema_first_mirrored_and_bounded():
             KnowledgeMapView.model_validate(invalid)
 
 
+def test_external_layer_uses_a_successor_not_reinterpreted_v1_bytes():
+    from eom_catalog_contracts.knowledge_map_v2 import KnowledgeMapViewV2
+
+    value = view_document()
+    value["nodes"][0]["layers"] = ["EXTERNAL", "TEXTBOOK"]
+    with pytest.raises(ValidationError):
+        KnowledgeMapView.model_validate(value)
+    value["schema_version"] = "knowledge-map-view/2.0"
+    parsed = KnowledgeMapViewV2.model_validate(value)
+    validate_contract("knowledge-map-view-v2", parsed.model_dump(mode="json"))
+    assert parsed.nodes[0].layers == ("EXTERNAL", "TEXTBOOK")
+
+
 @pytest.mark.parametrize(
     ("source", "domain", "workflow", "expected"),
     [
@@ -87,6 +100,7 @@ def test_map_contract_is_schema_first_mirrored_and_bounded():
         ("APPROVED_ITEM", "INTERNAL_EOM", None, "AI"),
         ("APPROVED_ITEM", "EXTERNAL_INDIVIDUAL", None, "CREATIVE"),
         ("APPROVED_ITEM", None, "external-item-learning", "CREATIVE"),
+        ("APPROVED_ITEM", None, "material-learning", "EXTERNAL"),
         ("APPROVED_ITEM", None, "generic-item-development", "AI"),
         ("APPROVED_ITEM", None, "unknown", "UNKNOWN"),
     ],

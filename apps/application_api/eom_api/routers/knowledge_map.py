@@ -4,6 +4,7 @@ from typing import Annotated
 
 from eom_api_contracts import ProductionItemCandidateViewContract, SingleResponse
 from eom_catalog_contracts.knowledge_map import KnowledgeMapView, MapEdgeId, MapHash, MapNodeId
+from eom_catalog_contracts.knowledge_map_v2 import KnowledgeMapViewV2
 from eom_catalog_service.knowledge_map_read import KnowledgeMapReadError
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalServiceError
 from eom_operator_identity import PermissionKey
@@ -51,7 +52,7 @@ def _map_error(exc: KnowledgeMapReadError | KnowledgeRetrievalServiceError) -> A
 @router.get(
     "/knowledge-map",
     operation_id="knowledge_map_read",
-    response_model=SingleResponse[KnowledgeMapView],
+    response_model=SingleResponse[KnowledgeMapView | KnowledgeMapViewV2],
     openapi_extra=MAP_READ_METADATA,
 )
 def read_map(
@@ -61,7 +62,7 @@ def read_map(
     query: str = Query(default="", max_length=80),
     node_id: Annotated[MapNodeId | None, Query()] = None,
     edge_id: Annotated[MapEdgeId | None, Query()] = None,
-) -> SingleResponse[KnowledgeMapView]:
+) -> SingleResponse[KnowledgeMapView | KnowledgeMapViewV2]:
     try:
         value = request.app.state.services.queries.knowledge_map.read(
             graph_snapshot_revision_id=graph_snapshot_revision_id,

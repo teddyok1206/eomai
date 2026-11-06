@@ -71,7 +71,7 @@ from eom_api_contracts.item_bank import (
     ProductionItemContentComponentViewV2,
     ProductionPastExamContextView,
 )
-from eom_api_contracts.item_db_registration import AiItemDbEntryView
+from eom_api_contracts.item_db_registration import AiItemDbEntryView, MaterialItemDbEntryView
 from eom_api_contracts.items import (
     ItemApprovalView,
     ItemComponentView,
@@ -211,6 +211,7 @@ from eom_workflow import (
     ResolvedExecutionPlanV19,
     ReviewTextbookValidationReceipt,
     RoleWorkerInput,
+    WorkflowRequest,
     single_document_review_contract_for_definition,
     validate_paired_document_review_output_against_request,
     validate_paired_document_review_v3_output_against_request,
@@ -960,6 +961,96 @@ class QueryAdapter:
             else None,
             more,
         )
+
+    def material_item_db_entries(
+        self, *, approval_state: str | None, limit: int, cursor: str | None
+    ) -> PageResult[MaterialItemDbEntryView]:
+        """Uploaded external Items in the current shared Graph, not invented Notion rows."""
+        from eom_catalog_contracts.material_item_lineage import MaterialImportedItemMetadata
+        from eom_catalog_service.material_learning_models import (
+            LearningMaterialRecord,
+            LearningMaterialRevisionRecord,
+        )
+
+        from eom_api.services.external_item_db_read import registration_view
+
+        with self.sessions() as session:
+            snapshot_id = self._current_assessment_snapshot_id(session)
+            if snapshot_id is None:
+                return PageResult((), None, False)
+            scope = "material-item-db:" + snapshot_id + ":" + (approval_state or "ALL")
+            membership = (
+                select(KnowledgeSnapshotAnalysisRecord.analysis_run_id)
+                .where(
+                    KnowledgeSnapshotAnalysisRecord.graph_snapshot_revision_id == snapshot_id,
+                    KnowledgeSnapshotAnalysisRecord.source_kind == "APPROVED_ITEM_REVISION",
+                    KnowledgeSnapshotAnalysisRecord.source_revision_id
+                    == ItemRevisionRecord.item_revision_id,
+                )
+                .exists()
+            )
+            conditions = [
+                ItemRevisionRecord.item_type_key == "uploaded-material-item",
+                ItemRevisionRecord.metadata_json["source_kind"].as_string() == "EXTERNAL",
+                ItemRecord.current_revision_id == ItemRevisionRecord.item_revision_id,
+                ItemRecord.lifecycle_state == "ACTIVE",
+                LearningMaterialRecord.lifecycle_state == "ACTIVE",
+                LearningMaterialRecord.current_revision_id
+                == LearningMaterialRevisionRecord.material_revision_id,
+                membership,
+            ]
+            if approval_state is not None:
+                conditions.append(ItemRevisionRecord.revision_state == approval_state)
+            if cursor:
+                created, revision_id = self.cursors.decode(cursor, scope)
+                conditions.append(
+                    or_(
+                        ItemRevisionRecord.created_at < created,
+                        and_(
+                            ItemRevisionRecord.created_at == created,
+                            ItemRevisionRecord.item_revision_id > revision_id,
+                        ),
+                    )
+                )
+            rows = tuple(
+                session.execute(
+                    select(ItemRevisionRecord, LearningMaterialRevisionRecord.title)
+                    .join(ItemRecord, ItemRecord.item_id == ItemRevisionRecord.item_id)
+                    .join(
+                        LearningMaterialRevisionRecord,
+                        LearningMaterialRevisionRecord.material_revision_id
+                        == ItemRevisionRecord.metadata_json["material_revision_id"].as_string(),
+                    )
+                    .join(
+                        LearningMaterialRecord,
+                        LearningMaterialRecord.material_id
+                        == LearningMaterialRevisionRecord.material_id,
+                    )
+                    .where(*conditions)
+                    .order_by(
+                        ItemRevisionRecord.created_at.desc(), ItemRevisionRecord.item_revision_id
+                    )
+                    .limit(limit + 1)
+                ).tuples()
+            )
+            values = tuple(
+                MaterialItemDbEntryView(
+                    metadata=MaterialImportedItemMetadata.model_validate(revision.metadata_json),
+                    material_title=title,
+                    registration=registration_view(revision),
+                )
+                for revision, title in rows[:limit]
+            )
+            more = len(rows) > limit
+            return PageResult(
+                values,
+                self.cursors.encode(
+                    scope, rows[limit - 1][0].created_at, rows[limit - 1][0].item_revision_id
+                )
+                if more
+                else None,
+                more,
+            )
 
     def production_item_candidates(
         self,
@@ -2915,6 +3006,8 @@ class QueryAdapter:
     ) -> CustomerSupportCaseView:
         try:
             request = load_persisted_workflow_request(workflow.initial_request)
+            if not isinstance(request, WorkflowRequest):
+                raise ValueError("stored Workflow purpose differs")
         except ValueError as exc:
             raise ApiError(
                 500,
@@ -3374,6 +3467,8 @@ class QueryAdapter:
     ) -> PdfDocumentReviewRequest:
         try:
             request = load_persisted_workflow_request(workflow.initial_request)
+            if not isinstance(request, WorkflowRequest):
+                raise ValueError("stored Workflow purpose differs")
         except ValueError as exc:
             raise ApiError(
                 500,
@@ -3397,6 +3492,8 @@ class QueryAdapter:
     ) -> PairedDocumentReviewRequestV2 | PairedDocumentReviewRequest:
         try:
             request = load_persisted_workflow_request(workflow.initial_request)
+            if not isinstance(request, WorkflowRequest):
+                raise ValueError("stored Workflow purpose differs")
         except ValueError as exc:
             raise ApiError(
                 500,
@@ -3622,6 +3719,8 @@ class QueryAdapter:
                 ):
                     raise ValueError("textbook review result types differ")
                 stored = load_persisted_workflow_request(workflow.initial_request)
+                if not isinstance(stored, WorkflowRequest):
+                    raise ValueError("stored Workflow purpose differs")
                 binding = stored.document_review_textbook_evidence
                 receipt = ReviewTextbookValidationReceipt.model_validate(
                     event.data.get("review_textbook_validation_receipt")
@@ -4035,6 +4134,8 @@ class QueryAdapter:
                 if not isinstance(result, PairedDocumentReviewRoleResultV4):
                     raise ValueError("paired textbook result type differs")
                 stored = load_persisted_workflow_request(workflow.initial_request)
+                if not isinstance(stored, WorkflowRequest):
+                    raise ValueError("stored Workflow purpose differs")
                 binding = stored.document_review_textbook_evidence
                 textbook_receipt = ReviewTextbookValidationReceipt.model_validate(
                     event.data.get("review_textbook_validation_receipt")

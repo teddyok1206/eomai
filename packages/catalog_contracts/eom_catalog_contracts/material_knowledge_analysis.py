@@ -6,6 +6,9 @@ from pydantic import Field, model_validator
 
 from eom_catalog_contracts.knowledge import (
     EducationalDocumentKnowledgeSourceV4,
+    EvidenceBundleManifestV5,
+    EvidenceBundlePublicationResultV5,
+    EvidenceEntryV5,
     KnowledgeAnalysisDocumentDependencyV3,
     KnowledgeAnalysisOriginalSourceMemberV3,
     KnowledgeAnalysisSourceV3,
@@ -57,6 +60,7 @@ class MaterialKnowledgeAnalysisSelection(FrozenModel):
 
 class CreateMaterialKnowledgeAnalysisCommand(FrozenModel):
     operation: Literal["CREATE_MATERIAL_KNOWLEDGE_ANALYSIS"] = "CREATE_MATERIAL_KNOWLEDGE_ANALYSIS"
+    material_task_id: str = Field(pattern=r"^materialtask_[0-9a-f]{32}$")
     source: MaterialKnowledgeAnalysisSelection
     preset_key: str = Field(pattern=r"^[a-z][a-z0-9-]{2,63}$")
     general_knowledge_mode: Literal["DISABLED"] = "DISABLED"
@@ -294,4 +298,35 @@ class KnowledgeGraphSnapshotManifestV10(KnowledgeGraphSnapshotManifestV9):
     @model_validator(mode="after")
     def exact_uploaded_source_manifest(self) -> Self:
         validate_contract("knowledge-graph-snapshot-manifest-v10", self.model_dump(mode="json"))
+        return self
+
+
+class EvidenceEntryV6(EvidenceEntryV5):
+    """The same ranked evidence, preserving actual uploaded source/rights pointers."""
+
+    source: (
+        KnowledgeAnalysisSourceV3
+        | EducationalDocumentKnowledgeSourceV4
+        | EducationalDocumentKnowledgeSourceV5
+    )  # type: ignore[assignment]
+
+
+class EvidenceBundleManifestV6(EvidenceBundleManifestV5):
+    schema_version: Literal["evidence-bundle-manifest/6.0"] = "evidence-bundle-manifest/6.0"  # type: ignore[assignment]
+    entries: tuple[EvidenceEntryV6, ...] = Field(min_length=1, max_length=128)
+
+    @model_validator(mode="after")
+    def uploaded_evidence(self) -> Self:
+        validate_contract("evidence-bundle-manifest-v6", self.model_dump(mode="json"))
+        return self
+
+
+class EvidenceBundlePublicationResultV6(EvidenceBundlePublicationResultV5):
+    schema_version: Literal["evidence-bundle-publication-result/6.0"] = (
+        "evidence-bundle-publication-result/6.0"  # type: ignore[assignment]
+    )
+
+    @model_validator(mode="after")
+    def uploaded_evidence(self) -> Self:
+        validate_contract("evidence-bundle-publication-result-v6", self.model_dump(mode="json"))
         return self

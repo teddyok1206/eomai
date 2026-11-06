@@ -187,6 +187,20 @@ def schemas() -> dict[str, dict[str, Any]]:
             rights_attestation=reference("artifactMember"),
         ),
         "prepared": prepared,
+        "office-command": record(
+            schema_version=version("material-learning-office-command/1.0"),
+            operation=enum("CREATE", "CONVERT", "READ"),
+            instance_id={**text(43, 43), "pattern": "^officeconv_[0-9a-f]{32}$"},
+            source_format=enum("HWP", "HWPX"),
+            source_sha256=nullable(SHA),
+        ),
+        "office-reply": record(
+            schema_version=version("material-learning-office-reply/1.0"),
+            operation=enum("CREATE", "CONVERT", "READ"),
+            instance_id={**text(43, 43), "pattern": "^officeconv_[0-9a-f]{32}$"},
+            source_sha256=nullable(SHA),
+            conversion=nullable(ref("conversion")),
+        ),
     }
     return {
         name: {

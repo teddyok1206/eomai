@@ -1,6 +1,7 @@
 """Small source-fidelity references for a registered uploaded question."""
 
-from typing import Literal, Self
+from collections.abc import Mapping
+from typing import Annotated, Literal, Self
 
 from eom_identifiers import content_sha256
 from eom_protocol.artifact_members import ArtifactMemberPointer
@@ -16,6 +17,37 @@ from eom_catalog_contracts.validation import validate_contract
 MATERIAL_ITEM_LINEAGE_REF = "eom://schemas/material-learning/item-lineage/1.0"
 MATERIAL_ITEM_TYPE = "uploaded-material-item"
 MATERIAL_ITEM_PACK = "uploaded-material-item"
+
+
+def is_material_item_metadata(metadata: Mapping[str, object]) -> bool:
+    """Select a closed representation family, not source/permission authority."""
+    return metadata.get("item_type_key") == MATERIAL_ITEM_TYPE
+
+
+class MaterialImportedItemMetadata(FrozenModel):
+    item_type_key: Literal["uploaded-material-item"] = "uploaded-material-item"
+    source_kind: Literal["EXTERNAL"] = "EXTERNAL"
+    material_id: str = Field(pattern=r"^material_[0-9a-f]{32}$")
+    material_revision_id: str = Field(pattern=r"^materialrev_[0-9a-f]{32}$")
+    unit_key: str = Field(min_length=1, max_length=128)
+    title: str = Field(min_length=1, max_length=512)
+    source_filename: str = Field(min_length=1, max_length=255)
+    printed_label: str | None = Field(min_length=1, max_length=100)
+    section_path: tuple[str, ...] = Field(max_length=12)
+    physical_pages: tuple[Annotated[int, Field(strict=True, ge=1, le=2000)], ...] = Field(
+        min_length=1, max_length=32
+    )
+    lineage_sha256: Sha256
+    approval_basis: Literal["SOURCE_IMPORT_AUTOMATION_NOT_SCIENTIFIC_VERIFICATION"] = (
+        "SOURCE_IMPORT_AUTOMATION_NOT_SCIENTIFIC_VERIFICATION"
+    )
+
+    @model_validator(mode="after")
+    def declared_metadata(self) -> Self:
+        if len(self.physical_pages) != len(set(self.physical_pages)):
+            raise ValueError("MATERIAL_ITEM_PAGE_DUPLICATE")
+        validate_contract("material-learning-item-metadata-v1", self.model_dump(mode="json"))
+        return self
 
 
 class MaterialItemLineage(FrozenModel):

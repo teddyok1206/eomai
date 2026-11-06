@@ -39,7 +39,7 @@
     {
       "id": "item-db-graph",
       "note": "item-db-graph.md",
-      "keywords": ["DB", "창작", "기출", "등록", "고유번호", "원본", "그림", "잘림", "Graph", "cohort", "picture", "lineage"],
+      "keywords": ["DB", "창작", "외부", "자료 학습", "기출", "등록", "고유번호", "원본", "그림", "잘림", "Graph", "cohort", "picture", "lineage"],
       "source_paths": [
         "apps/application_api/eom_api/routers/item_db.py",
         "apps/application_api/eom_api/services/external_item_db_read.py",
@@ -52,6 +52,10 @@
         "services/catalog_service/eom_catalog_service/creative_cohort_execution.py",
         "services/catalog_service/eom_catalog_service/creative_cohort_parallel_execution.py",
         "services/catalog_service/eom_catalog_service/creative_item_graph_learning.py",
+        "services/catalog_service/eom_catalog_service/material_learning_processing.py",
+        "services/catalog_service/eom_catalog_service/material_learning_coordinator.py",
+        "services/catalog_service/eom_catalog_service/material_item_registration.py",
+        "services/catalog_service/eom_catalog_service/material_graph_learning.py",
         "services/catalog_service/eom_catalog_service/curated_document_assembly_service.py",
         "services/orchestrator/eom_orchestrator/office_picture_use_publication.py"
       ],

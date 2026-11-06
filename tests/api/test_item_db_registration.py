@@ -102,6 +102,42 @@ def test_ai_category_can_show_pending_approval_without_intake_permission():
         services.engine.dispose()
 
 
+def test_material_category_uses_real_metadata_not_notion_or_ai():
+    from eom_api_contracts.item_db_registration import MaterialItemDbEntryView
+
+    from tests.unit.test_material_item_db_contracts import entry
+
+    client, services, _ = _client()
+    services.queries.material_item_db_entries = Mock(
+        return_value=PageResult((MaterialItemDbEntryView.model_validate(entry()),), None, False)
+    )
+    try:
+        with client:
+            response = client.get("/api/v1/item-db/materials?approval_state=APPROVED")
+        assert response.status_code == 200
+        value = response.json()["data"][0]
+        assert value["metadata"]["source_kind"] == "EXTERNAL"
+        assert value["metadata"]["physical_pages"] == [2, 3]
+        assert "source" not in value and "external_number" not in value["metadata"]
+        services.queries.material_item_db_entries.assert_called_once_with(
+            approval_state="APPROVED", limit=50, cursor=None
+        )
+    finally:
+        services.engine.dispose()
+
+
+def test_material_source_metadata_requires_intake_read_permission():
+    client, services, _ = _client(allow_intake=False)
+    services.queries.material_item_db_entries = Mock()
+    try:
+        with client:
+            response = client.get("/api/v1/item-db/materials")
+        assert response.status_code == 403
+        services.queries.material_item_db_entries.assert_not_called()
+    finally:
+        services.engine.dispose()
+
+
 def test_graph_navigation_checks_the_exact_manifest_and_does_not_promote_pending_items():
     client, services, _reads = _client()
     registration = _registration()

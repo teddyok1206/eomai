@@ -132,6 +132,7 @@ def contracts() -> dict[str, tuple[str, dict[str, Any]]]:
             "title": "EOM create uploaded material document knowledge analysis",
             **record(
                 operation=version("CREATE_MATERIAL_KNOWLEDGE_ANALYSIS"),
+                material_task_id=identifier("materialtask"),
                 source=selection,
                 preset_key={**text(3, 64), "pattern": "^[a-z][a-z0-9-]{2,63}$"},
                 general_knowledge_mode=version("DISABLED"),
@@ -160,6 +161,20 @@ def contracts() -> dict[str, tuple[str, dict[str, Any]]]:
         10000,
     )
     values["knowledge-graph-snapshot-manifest-v10"] = ("knowledge", snapshot)
+    evidence = old("evidence-bundle-manifest-v5")
+    evidence["$id"] = KNOWLEDGE + "evidence-bundle-manifest/6.0"
+    evidence["title"] = "EOM evidence with uploaded-material source pointers V6"
+    evidence["properties"]["schema_version"] = version("evidence-bundle-manifest/6.0")
+    previous_source = evidence["$defs"]["entry"]["properties"]["source"]
+    evidence["$defs"]["entry"]["properties"]["source"] = {
+        "anyOf": [previous_source, {"$ref": SOURCE}]
+    }
+    values["evidence-bundle-manifest-v6"] = ("knowledge", evidence)
+    publication = old("evidence-bundle-publication-result-v5")
+    publication["$id"] = KNOWLEDGE + "evidence-bundle-publication-result/6.0"
+    publication["title"] = "EOM uploaded-material evidence publication V6"
+    publication["properties"]["schema_version"] = version("evidence-bundle-publication-result/6.0")
+    values["evidence-bundle-publication-result-v6"] = ("knowledge", publication)
     for name, previous, number in (
         ("request", 8, 12),
         ("proposal-receipt", 7, 11),

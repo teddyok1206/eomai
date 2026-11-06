@@ -103,7 +103,7 @@ def resolve_external_item_learning_control_policy(
     )
 
 
-def publish_external_item_learning_instruction_bundle(
+def publish_source_learning_instruction_bundle(
     sessions: sessionmaker[Session],
     publisher: ControlArtifactPublisher,
     *,
@@ -125,6 +125,8 @@ def publish_external_item_learning_instruction_bundle(
         CREATIVE_INSTRUCTION_BUNDLE_KEY,
         CREATIVE_SOURCE_INSTRUCTION_BUNDLE_KEY,
         CREATIVE_OFFICE_INSTRUCTION_BUNDLE_KEY,
+        "material-learning-instructions-v1",
+        "material-knowledge-instructions-v1",
     }:
         raise ValueError("creative instruction purpose is unsupported")
     authorize_control_change(operator_id)
@@ -186,6 +188,10 @@ def publish_external_item_learning_instruction_bundle(
         created_at=created_at,
     )
     with sessions.begin() as session:
+        # Two publishers may have committed the same immutable members before
+        # either inserts the bundle. Serialize only the existing DB lifecycle,
+        # never the long Artifact writes or worker host-capacity lock.
+        session.execute(select(func.pg_advisory_xact_lock(LEGACY_ITEM_LEARNING_CONTROL_LOCK_ID)))
         authorize_control_change(operator_id)
         record = record_bundle_revision(
             session,
@@ -203,6 +209,32 @@ def publish_external_item_learning_instruction_bundle(
         bundle_revision_id=revision_id,
         manifest_artifact=artifact.pointer,
         manifest_sha256=artifact.pointer.sha256,
+    )
+
+
+def publish_external_item_learning_instruction_bundle(
+    sessions: sessionmaker[Session],
+    publisher: ControlArtifactPublisher,
+    *,
+    platform_payload: bytes,
+    role_payload: bytes,
+    source_commit: str,
+    operator_id: str,
+    created_at: datetime,
+    authorize_control_change: Callable[[str], None],
+    bundle_key: str = CREATIVE_INSTRUCTION_BUNDLE_KEY,
+) -> BundleRevisionPointer:
+    """Preserve the historical public entry point and its exact member layout."""
+    return publish_source_learning_instruction_bundle(
+        sessions,
+        publisher,
+        platform_payload=platform_payload,
+        role_payload=role_payload,
+        source_commit=source_commit,
+        operator_id=operator_id,
+        created_at=created_at,
+        authorize_control_change=authorize_control_change,
+        bundle_key=bundle_key,
     )
 
 

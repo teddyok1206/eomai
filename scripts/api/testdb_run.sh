@@ -18,6 +18,7 @@ SOURCE_PATHS=(
   packages/operator_identity services/identity_service packages/api_contracts packages/image_contracts
   apps/application_api packages/catalog_contracts services/catalog_service apps/eomctl
   tools/dev_reporter
+  tools/textbook_analysis
 )
 python_path=""
 for relative in "${SOURCE_PATHS[@]}"; do
@@ -510,6 +511,7 @@ if [[ "${action}" == "creative-registration-tests" ]]; then
 fi
 
 if [[ "${action}" == "material-learning-tests" ]]; then
+  export EOM_API_TEST_STATE="${state_directory}"
   export EOM_RUN_API_INTEGRATION=1
   export EOM_EXTERNAL_ITEM_TEST_STATE="${state_directory}"
   export EOM_RUN_INTEGRATION=1
@@ -518,6 +520,10 @@ if [[ "${action}" == "material-learning-tests" ]]; then
     tests/integration/test_material_learning_workflow_storage.py \
     tests/integration/test_material_learning_intake_storage.py \
     tests/integration/test_material_learning_page_preparation.py \
+    tests/integration/test_material_learning_controls_storage.py \
+    tests/integration/test_material_learning_coordinator_storage.py \
+    tests/integration/test_material_knowledge_creation_storage.py \
+    tests/integration/test_material_item_registration_storage.py \
     tests/integration/test_control_plane_persistence.py::test_alembic_head_matches_composed_sqlalchemy_metadata
   printf 'Disposable mixed-material learning persistence tests passed.\n'
   exit 0

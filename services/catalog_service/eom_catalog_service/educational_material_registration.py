@@ -28,7 +28,7 @@ from eom_protocol.artifact_members import ArtifactMemberPointer
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.artifacts import CatalogArtifactReader, CatalogArtifactService
 from eom_catalog_service.material_learning_artifacts import (
     pin_material_primary,
     publish_material_metadata,
@@ -319,37 +319,9 @@ class MaterialDocumentRegistrationService:
 
     def inspect_revision(self, revision_id: str, *, verify: bool) -> MaterialDocumentReceipt:
         with self.sessions() as session:
-            row = session.get(EducationalDocumentRevisionRecord, revision_id)
-            if row is None or row.revision_state != "APPROVED":
-                raise MaterialLearningSourceError("MATERIAL_LEARNING_DOCUMENT_NOT_FOUND")
-            artifact = session.get(
-                ArtifactRevisionRecord, row.revision_manifest_artifact_revision_id
+            revision, pointer = read_material_document_revision(
+                session, self.artifacts, revision_id
             )
-            if artifact is None:
-                raise MaterialLearningSourceError("MATERIAL_LEARNING_DOCUMENT_NOT_FOUND")
-            pointer = MaterialArtifactMember(
-                artifact_id=row.revision_manifest_artifact_id,
-                artifact_revision_id=row.revision_manifest_artifact_revision_id,
-                member_path="document/document-revision.json",
-                schema_ref=MATERIAL_DOCUMENT_SCHEMA,
-                media_type="application/json",
-                sha256=row.revision_manifest_sha256,
-                bytes=artifact.content_bytes,
-            )
-            expected = (row.document_id, row.document_revision_id, row.registration_request_sha256)
-        revision = read_material_metadata(
-            self.artifacts,
-            pointer,
-            MaterialDocumentRevision,
-            schema_ref=MATERIAL_DOCUMENT_SCHEMA,
-            member_path="document/document-revision.json",
-        )
-        if (
-            revision.document_id,
-            revision.document_revision_id,
-            revision.registration_request_sha256,
-        ) != expected:
-            raise MaterialLearningSourceError("MATERIAL_LEARNING_DOCUMENT_POINTER_MISMATCH")
         if verify:
             members = (
                 revision.original,
@@ -376,3 +348,42 @@ class MaterialDocumentRegistrationService:
                     max_bytes=selected.bytes,
                 )
         return self._receipt(revision, pointer)
+
+
+def read_material_document_revision(
+    session: Session, artifacts: CatalogArtifactReader, revision_id: str
+) -> tuple[MaterialDocumentRevision, MaterialArtifactMember]:
+    """Shared current-session document owner read, usable by bounded RAG readers."""
+    row = session.get(EducationalDocumentRevisionRecord, revision_id)
+    if row is None or row.revision_state != "APPROVED":
+        raise MaterialLearningSourceError("MATERIAL_LEARNING_DOCUMENT_NOT_FOUND")
+    artifact = session.get(ArtifactRevisionRecord, row.revision_manifest_artifact_revision_id)
+    if artifact is None:
+        raise MaterialLearningSourceError("MATERIAL_LEARNING_DOCUMENT_NOT_FOUND")
+    pointer = MaterialArtifactMember(
+        artifact_id=row.revision_manifest_artifact_id,
+        artifact_revision_id=row.revision_manifest_artifact_revision_id,
+        member_path="document/document-revision.json",
+        schema_ref=MATERIAL_DOCUMENT_SCHEMA,
+        media_type="application/json",
+        sha256=row.revision_manifest_sha256,
+        bytes=artifact.content_bytes,
+    )
+    revision = read_material_metadata(
+        artifacts,
+        pointer,
+        MaterialDocumentRevision,
+        schema_ref=MATERIAL_DOCUMENT_SCHEMA,
+        member_path=pointer.member_path,
+    )
+    if (
+        revision.document_id,
+        revision.document_revision_id,
+        revision.registration_request_sha256,
+    ) != (
+        row.document_id,
+        row.document_revision_id,
+        row.registration_request_sha256,
+    ):
+        raise MaterialLearningSourceError("MATERIAL_LEARNING_DOCUMENT_POINTER_MISMATCH")
+    return revision, pointer

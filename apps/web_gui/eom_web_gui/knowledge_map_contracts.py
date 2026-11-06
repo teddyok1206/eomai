@@ -1,22 +1,24 @@
 """Small BFF validation projection; Catalog owns Graph and source invariants."""
 
-from typing import Annotated, Literal
+from typing import Annotated, Literal, Self
 
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from eom_web_gui.contracts import WebModel
 
 NodeId = Annotated[str, Field(pattern=r"^knode_[0-9a-f]{32}(?:[0-9a-f]{32})?$")]
 EdgeId = Annotated[str, Field(pattern=r"^kedge_[0-9a-f]{32}(?:[0-9a-f]{32})?$")]
 MapHash = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
-MapLayer = Literal["TEXTBOOK", "PAST_EXAM", "CREATIVE", "AI", "CURRICULUM", "GUIDE", "UNKNOWN"]
+MapLayer = Literal[
+    "TEXTBOOK", "PAST_EXAM", "CREATIVE", "EXTERNAL", "AI", "CURRICULUM", "GUIDE", "UNKNOWN"
+]
 
 
 class MapNode(WebModel):
     node_id: NodeId
     node_type: str = Field(min_length=1, max_length=48)
     label: str = Field(min_length=1, max_length=1024)
-    layers: tuple[MapLayer, ...] = Field(max_length=7)
+    layers: tuple[MapLayer, ...] = Field(max_length=8)
 
 
 class MapEdge(WebModel):
@@ -43,7 +45,7 @@ class MapSource(WebModel):
 
 
 class KnowledgeMapView(WebModel):
-    schema_version: Literal["knowledge-map-view/1.0"]
+    schema_version: Literal["knowledge-map-view/1.0", "knowledge-map-view/2.0"]
     graph_snapshot_revision_id: str = Field(pattern=r"^graphrev_[0-9a-f]{32}$")
     snapshot_sha256: MapHash
     nodes: tuple[MapNode, ...] = Field(max_length=120)
@@ -54,3 +56,12 @@ class KnowledgeMapView(WebModel):
     truncated: bool
     total_nodes: int = Field(ge=0)
     total_edges: int = Field(ge=0)
+
+    @model_validator(mode="after")
+    def released_version_scope(self) -> Self:
+        if self.schema_version == "knowledge-map-view/1.0" and (
+            any("EXTERNAL" in node.layers or len(node.layers) > 7 for node in self.nodes)
+            or any(source.layer == "EXTERNAL" for source in self.sources)
+        ):
+            raise ValueError("external provenance requires Map V2")
+        return self

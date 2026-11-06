@@ -16,6 +16,7 @@ from eom_api_contracts.item_db_registration import (
     AiItemDbEntryView,
     ApprovalState,
     CreativeItemDbEntryView,
+    MaterialItemDbEntryView,
 )
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Path, Query, Request
@@ -68,6 +69,32 @@ def ai_item_db_entries(
     cursor: str | None = Query(default=None, min_length=1, max_length=1024),
 ) -> ListResponse[AiItemDbEntryView]:
     page = request.app.state.services.queries.ai_item_db_entries(
+        approval_state=approval_state, limit=limit, cursor=cursor
+    )
+    return many(
+        request, page.data, limit=limit, next_cursor=page.next_cursor, has_more=page.has_more
+    )
+
+
+@router.get(
+    "/item-db/materials",
+    operation_id="item_db_material_list",
+    response_model=ListResponse[MaterialItemDbEntryView],
+    dependencies=[Depends(require_permission(PermissionKey.ITEM_READ))],
+    openapi_extra={
+        "x-eom-additional-permissions": [PermissionKey.CONTENT_INTAKE_READ.value],
+    },
+)
+def material_item_db_entries(
+    request: Request,
+    authentication: Auth,
+    approval_state: Annotated[ApprovalState | None, Query()] = None,
+    limit: int = Query(default=50, ge=1, le=100),
+    cursor: str | None = Query(default=None, min_length=1, max_length=1024),
+) -> ListResponse[MaterialItemDbEntryView]:
+    if PermissionKey.CONTENT_INTAKE_READ not in authentication.permissions:
+        raise ApiError(403, "PERMISSION_DENIED", "Permission denied", "Source read denied")
+    page = request.app.state.services.queries.material_item_db_entries(
         approval_state=approval_state, limit=limit, cursor=cursor
     )
     return many(

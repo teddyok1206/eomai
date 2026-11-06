@@ -282,6 +282,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     const row = node(document, "tr", "");
     const labels = source === "EXTERNAL_SOURCE"
       ? ["고유번호", "분야", "대단원", "소단원", "학년", "출제자", "파일 상태", "승인 상태"]
+      : source === "EXTERNAL" ? ["문항", "자료·위치", "승인 상태", "문항 확인"]
       : source === "AI" ? ["문항", "난이도", "승인 상태", "문항 확인"]
       : ["문항", source === "PAST_EXAM" ? "시험·번호" : "단원", "승인 상태", "HWPX 조립"];
     for (const label of labels) {
@@ -418,6 +419,28 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       });
   }
 
+  function renderMaterialEntry(entry) {
+    const metadata = entry.metadata;
+    const location = `${entry.material_title} · ${metadata.physical_pages.join(", ")}쪽`;
+    return resultRow(entry.registration.item_revision_id, metadata.title,
+      [location, approvalLabel(entry.registration), "문항 정보에서 확인"],
+      (row) => {
+        detailSequence++;
+        selectItem(null, null);
+        focusDetail(row);
+        const root = $("#item-db-detail");
+        root.replaceChildren(node(document, "h3", "", metadata.title));
+        root.append(metadataList([
+          ["문항 종류", "외부"], ["자료", entry.material_title],
+          ["원본 파일", metadata.source_filename],
+          ["자료 내 문항 번호", metadata.printed_label],
+          ["목차 위치", metadata.section_path.join(" → ")],
+          ["원본 페이지", metadata.physical_pages.join(", ")],
+        ], "item-db-detail-summary"));
+        appendRegistration(root, entry.registration);
+      });
+  }
+
   function openGraphDetail(entry, row) {
     detailSequence++;
     selectItem("GRAPH_ITEM", entry);
@@ -508,10 +531,12 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
 
   function syncSourceAccess() {
     const allowed = canReadSource();
-    const option = $("#item-db-source").querySelector('option[value="EXTERNAL_SOURCE"]');
-    option.hidden = !allowed;
-    option.disabled = !allowed;
-    if (!allowed && selectedSource() === "EXTERNAL_SOURCE") $("#item-db-source").value = "PAST_EXAM";
+    for (const value of ["EXTERNAL_SOURCE", "EXTERNAL"]) {
+      const option = $("#item-db-source").querySelector(`option[value="${value}"]`);
+      option.hidden = !allowed;
+      option.disabled = !allowed;
+    }
+    if (!allowed && ["EXTERNAL_SOURCE", "EXTERNAL"].includes(selectedSource())) $("#item-db-source").value = "PAST_EXAM";
     syncSourceControls();
     const changed = lastSourceAccess !== allowed;
     if (lastSourceAccess !== null && changed) similarity.reset();
@@ -555,9 +580,9 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     message("문항을 찾고 있습니다.");
     try {
       const {approval_state, ...filterBody} = parameters;
-      const page = source === "EXTERNAL_SOURCE" || source === "AI"
+      const page = ["EXTERNAL_SOURCE", "AI", "EXTERNAL"].includes(source)
         ? await api(`/item-db/registered/search?${new URLSearchParams({
-          kind: source === "AI" ? "AI" : "CREATIVE", ...(approval ? {approval_state: approval} : {}),
+          kind: source === "EXTERNAL_SOURCE" ? "CREATIVE" : source, ...(approval ? {approval_state: approval} : {}),
         })}`, {
           method: "POST", mutation: true, body: source === "EXTERNAL_SOURCE" ? filterBody
             : {schema_version: "external-item-db-filter/1.0", match_mode: "ALL", conditions: [], limit: 50, cursor},
@@ -575,6 +600,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       const root = $("#item-db-results");
       for (const entry of page.values) root.append(source === "EXTERNAL_SOURCE"
         ? renderEntry({...entry.source, registration: entry.registration})
+        : source === "EXTERNAL" ? renderMaterialEntry(entry)
         : source === "AI" ? renderAiEntry(entry) : renderGraphEntry(entry));
       resultCount += page.values.length;
       if (!resultCount) emptyResults("조건에 맞는 문항이 없습니다.", source);

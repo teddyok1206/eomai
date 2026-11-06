@@ -99,7 +99,11 @@ def progress_poll_delay_seconds(state: str) -> int:
     # VERIFIED already passed the authoritative read boundary. Sleeping after each
     # cached-history reconstruction adds 10 seconds per completed source on restart.
     # Actual pending worker work retains bounded polling and graceful stop checks.
-    return 0 if state == "VERIFIED" else 10
+    if state == "VERIFIED":
+        return 0
+    # Missing source projections are input readiness, not a crashed Codex job.
+    # Keep the owner available without polling or repeating model work rapidly.
+    return 300 if state == "BLOCKED_SOURCES" else 10
 
 
 def main() -> None:
@@ -220,7 +224,8 @@ def main() -> None:
                 print(json.dumps(status, ensure_ascii=False, sort_keys=True), flush=True)
                 previous = marker
             if source_blocked:
-                raise ValueError("CREATIVE_COHORT_SOURCE_PREVIEWS_PENDING")
+                stopped.wait(progress_poll_delay_seconds(progress.state))
+                continue
             if terminal:
                 break
             stopped.wait(progress_poll_delay_seconds(progress.state))

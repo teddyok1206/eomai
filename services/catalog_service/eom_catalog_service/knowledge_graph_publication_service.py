@@ -1822,6 +1822,29 @@ class KnowledgeGraphPublicationService:
 
             base = self.structure_context_for_snapshot(reviewed_base_snapshot_revision_id)
             try:
+                # A document append may inherit the already reviewed framework,
+                # but must be exactly reproducible from accepted source facts.
+                from eom_catalog_service.curriculum_graph_structure import (
+                    extend_integrated_science_structure_with_documents,
+                )
+
+                added_runs = set(structure.source_analysis_run_ids) - set(
+                    base.accepted_analysis_run_ids
+                )
+                if added_runs:
+                    additions = tuple(
+                        self._load_accepted_analysis(session, run_id)
+                        for run_id in sorted(added_runs)
+                    )
+                    if all(
+                        isinstance(entry.source, EducationalDocumentKnowledgeSourceV5)
+                        for entry in additions
+                    ):
+                        expected = extend_integrated_science_structure_with_documents(
+                            base.structure, additions, created_at=structure.created_at
+                        )
+                        if expected == structure:
+                            return
                 validate_inherited_automatic_structure_review(
                     base.structure,
                     structure,

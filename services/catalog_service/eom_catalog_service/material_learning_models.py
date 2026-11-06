@@ -253,6 +253,12 @@ class MaterialLearningTaskRecord(Base):
             unique=True,
             postgresql_where=text("analysis_run_id IS NOT NULL"),
         ),
+        Index(
+            "uq_material_learning_child_solution",
+            "solution_analysis_run_id",
+            unique=True,
+            postgresql_where=text("solution_analysis_run_id IS NOT NULL"),
+        ),
     )
 
     task_id: Mapped[str] = mapped_column(String(45), primary_key=True)
@@ -283,6 +289,9 @@ class MaterialLearningTaskRecord(Base):
         ForeignKey("item_revisions.item_revision_id", ondelete="RESTRICT")
     )
     analysis_run_id: Mapped[str | None] = mapped_column(
+        ForeignKey("knowledge_analysis_runs.analysis_run_id", ondelete="RESTRICT")
+    )
+    solution_analysis_run_id: Mapped[str | None] = mapped_column(
         ForeignKey("knowledge_analysis_runs.analysis_run_id", ondelete="RESTRICT")
     )
     graph_snapshot_revision_id: Mapped[str | None] = mapped_column(

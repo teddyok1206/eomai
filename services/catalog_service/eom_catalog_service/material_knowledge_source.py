@@ -21,14 +21,13 @@ from eom_catalog_contracts.material_learning import (
 )
 from eom_catalog_contracts.material_learning_intake import MaterialLearningIntakeManifest
 from eom_catalog_contracts.material_learning_preparation import (
-    MaterialDocumentRevision,
     material_document_source_class,
 )
 from eom_orchestrator.models import ArtifactRevisionRecord
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.artifacts import CatalogArtifactService
-from eom_catalog_service.educational_document_service import EducationalDocumentService
+from eom_catalog_service.artifacts import CatalogArtifactReader, CatalogArtifactService
+from eom_catalog_service.educational_material_registration import read_material_document_revision
 from eom_catalog_service.material_learning_artifacts import read_material_metadata
 from eom_catalog_service.material_learning_models import (
     LearningMaterialRecord,
@@ -75,7 +74,7 @@ def reauthorize_material_document_source(
 
 def resolve_material_document_source(
     session: Session,
-    artifacts: CatalogArtifactService,
+    artifacts: CatalogArtifactReader,
     *,
     document_revision_id: str,
     source_class: str,
@@ -103,15 +102,8 @@ def resolve_material_document_source(
         or document_row.current_revision_id != row.document_revision_id
     ):
         raise MaterialLearningSourceError("MATERIAL_LEARNING_DOCUMENT_NOT_FOUND")
-    registered = EducationalDocumentService(
-        artifacts.engine, artifacts.settings
-    ).inspect_material_revision(document_revision_id)
-    document = read_material_metadata(
-        artifacts,
-        registered.revision_manifest,
-        MaterialDocumentRevision,
-        schema_ref="eom://schemas/material-learning/document-revision/1.0",
-        member_path="document/document-revision.json",
+    document, revision_manifest = read_material_document_revision(
+        session, artifacts, document_revision_id
     )
     material = session.get(LearningMaterialRecord, document.material_id, populate_existing=True)
     revision = session.get(LearningMaterialRevisionRecord, document.material_revision_id)
@@ -221,7 +213,7 @@ def resolve_material_document_source(
         source_role=document.source_role,
         document_id=document.document_id,
         document_revision_id=document.document_revision_id,
-        document_manifest=registered.revision_manifest,
+        document_manifest=revision_manifest,
         original_source=document.original,
         artifact_member=KnowledgeAnalysisOriginalSourceMemberV3(
             **document.source.model_dump(), logical_name="original.pdf"

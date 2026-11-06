@@ -26,10 +26,19 @@ from eom_workflow_runner.models import (
     WorkflowStepRunRecord,
 )
 from eom_workflow_runner.repository import (
+    CommandType,
+    create_step_run,
     create_workflow_instance,
+    enqueue_command,
     import_workflow_definition,
     load_persisted_workflow_request,
     workflow_request_storage_document,
+)
+from eom_workflow_runner.state_machine import (
+    StepState,
+    WorkflowState,
+    transition_step,
+    transition_workflow,
 )
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -183,6 +192,77 @@ def test_concurrent_material_starts_reuse_original_command(creative_engine, star
     assert len({value.workflow_id for value in results}) == 1
     assert len({value.command_id for value in results}) == 1
     assert sum(value.workflow_created for value in results) == 1
+
+
+def test_start_replay_preserves_completed_terminal_and_advancement_history(
+    creative_engine, start_arguments
+):
+    """A synthetic completed snapshot, using genuine lifecycle/command owners; no worker."""
+    key = "material-terminal-replay-" + uuid4().hex
+    owner = SyntheticMaterialSourceOwner()
+    with Session(creative_engine) as session, session.begin():
+        first = material_learning_start.submit_material_learning_workflow(
+            session, **start_arguments, source_authorizer=owner, idempotency_key=key
+        )
+        transition_workflow(
+            session,
+            first.workflow_id,
+            WorkflowState.RUNNING,
+            "SYNTHETIC_STARTED",
+            actor_type="human",
+            actor_id=OPERATOR,
+            command_id=None,
+        )
+        learn = session.get(WorkflowStepRunRecord, first.step_run_id)
+        transition_step(learn, StepState.RUNNING)
+        transition_step(learn, StepState.SUCCEEDED)
+        terminal = create_step_run(
+            session,
+            workflow_id=first.workflow_id,
+            step_key="complete",
+            step_type="terminal",
+            worker_role=None,
+            result_schema=None,
+            input_pointer_manifest={},
+            max_attempts=1,
+        )
+        transition_step(terminal, StepState.RUNNING)
+        transition_step(terminal, StepState.SUCCEEDED)
+        terminal_step_id = terminal.step_run_id
+        enqueue_command(
+            session,
+            workflow_id=first.workflow_id,
+            command_type=CommandType.ADVANCE_WORKFLOW,
+            payload={},
+            actor_type="system",
+            actor_id="synthetic",
+            source="workflow_runner",
+            idempotency_key="synthetic-advance:" + first.workflow_id,
+        )
+        transition_workflow(
+            session,
+            first.workflow_id,
+            WorkflowState.COMPLETED,
+            "SYNTHETIC_COMPLETED",
+            actor_type="human",
+            actor_id=OPERATOR,
+            command_id=None,
+        )
+    with Session(creative_engine) as session, session.begin():
+        replay = material_learning_start.submit_material_learning_workflow(
+            session, **start_arguments, source_authorizer=owner, idempotency_key=key
+        )
+        assert replay.workflow_id == first.workflow_id and replay.command_id == first.command_id
+        assert session.get(WorkflowStepRunRecord, first.step_run_id).state == "SUCCEEDED"
+        assert session.get(WorkflowStepRunRecord, terminal_step_id).state == "SUCCEEDED"
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(WorkflowStepRunRecord)
+                .where(WorkflowStepRunRecord.workflow_id == first.workflow_id)
+            )
+            == 2
+        )
 
 
 def test_material_workflow_roundtrips_explicit_nulls_and_real_purpose(creative_engine, definition):

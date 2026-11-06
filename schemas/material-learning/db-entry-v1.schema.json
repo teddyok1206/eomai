@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/db-entry/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-item-db-entry/1.0"
+    },
+    "metadata": {
+      "$ref": "eom://schemas/material-learning/item-metadata/1.0"
+    },
+    "material_title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "registration": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "type": "string",
+          "pattern": "^item_[0-9a-f]{32}$"
+        },
+        "item_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "item_manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "approval_state": {
+          "enum": [
+            "DRAFT",
+            "IN_REVIEW",
+            "APPROVED",
+            "REJECTED",
+            "SUPERSEDED",
+            "RETIRED"
+          ]
+        },
+        "difficulty_band": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "item_type_key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "item_id",
+        "item_revision_id",
+        "item_manifest_sha256",
+        "approval_state",
+        "difficulty_band",
+        "item_type_key"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "metadata",
+    "material_title",
+    "registration"
+  ]
+}

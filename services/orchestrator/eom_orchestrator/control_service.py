@@ -31,6 +31,7 @@ from eom_workflow import (
     WorkerCapacityPolicyV4,
     WorkerCapacityPolicyV5,
     WorkerCapacityPolicyV6,
+    WorkerCapacityPolicyV7,
     WorkerLeaseView,
     validate_control_contract,
 )
@@ -530,6 +531,10 @@ def record_capacity_policy_revision(
     elif schema_version == "worker-capacity-policy/1.5":
         model, normalized = _validated_document(
             "worker-capacity-policy-v6", document, WorkerCapacityPolicyV6
+        )
+    elif schema_version == "worker-capacity-policy/1.6":
+        model, normalized = _validated_document(
+            "worker-capacity-policy-v7", document, WorkerCapacityPolicyV7
         )
     else:
         raise ControlPlaneError(
@@ -1436,15 +1441,20 @@ def capacity_worker_role_clause(
 ) -> ColumnElement[bool]:
     """Translate only an exact released capacity's explicit native-role grant."""
     native_role_clause = WorkerSlotRecord.role == execution_role
-    if policy.schema_version not in {"worker-capacity-policy/1.4", "worker-capacity-policy/1.5"}:
+    if policy.schema_version not in {
+        "worker-capacity-policy/1.4",
+        "worker-capacity-policy/1.5",
+        "worker-capacity-policy/1.6",
+    }:
         return native_role_clause
-    model_type = (
-        WorkerCapacityPolicyV6 if policy.schema_version.endswith("/1.5") else WorkerCapacityPolicyV5
-    )
+    profiles: dict[str, tuple[str, type[WorkerCapacityPolicyV5 | WorkerCapacityPolicyV6]]] = {
+        "worker-capacity-policy/1.4": ("worker-capacity-policy-v5", WorkerCapacityPolicyV5),
+        "worker-capacity-policy/1.5": ("worker-capacity-policy-v6", WorkerCapacityPolicyV6),
+        "worker-capacity-policy/1.6": ("worker-capacity-policy-v7", WorkerCapacityPolicyV7),
+    }
+    name, model_type = profiles[policy.schema_version]
     value, normalized = _validated_document(
-        "worker-capacity-policy-v6"
-        if model_type is WorkerCapacityPolicyV6
-        else "worker-capacity-policy-v5",
+        name,
         policy.canonical_document,
         model_type,
     )

@@ -9,6 +9,7 @@ from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Protocol
 
 from eom_catalog_contracts.document_review import OfficeDocumentReviewConversionIdentity
 from eom_catalog_contracts.material_learning import MaterialArtifactMember
@@ -41,13 +42,27 @@ from eom_catalog_service.material_learning_source import (
     MaterialSourceFileFingerprint,
     validate_material_source_file,
 )
-from eom_catalog_service.office_document_converter import SystemdOfficeDocumentConverter
 from eom_catalog_service.settings import CatalogSettings
 
 _PROJECTION_TYPE = "control_material_learning_pdf_projection"
 _PROJECTION_REF = "eom://schemas/material-learning/pdf-projection/1.0"
 _PROJECTION_PATH = "analysis/pdf-projection.json"
 _PDF_REF = "eom://schemas/educational-document/pdf-source/1.0"
+
+
+class MaterialOfficeConverter(Protocol):
+    libreoffice: Path
+    h2orestart_bundle: Path
+
+    def get_or_create_workspace(self, instance_id: str) -> Path: ...
+
+    def convert(
+        self, workspace: Path, *, source_format: str
+    ) -> OfficeDocumentReviewConversionIdentity: ...
+
+    def read_completed(
+        self, workspace: Path, *, source_format: str, expected_source_sha256: str
+    ) -> OfficeDocumentReviewConversionIdentity: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,7 +90,7 @@ class MaterialSourceProjectionService:
         settings: CatalogSettings,
         platform_settings: Settings,
         publisher: ControlFileSetPublisher,
-        converter: SystemdOfficeDocumentConverter | None = None,
+        converter: MaterialOfficeConverter | None = None,
     ) -> None:
         self.sessions = build_session_factory(engine)
         self.settings, self.platform_settings = settings, platform_settings

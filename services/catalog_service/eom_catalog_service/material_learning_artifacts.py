@@ -18,7 +18,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.artifacts import CatalogArtifactReader, CatalogArtifactService
 from eom_catalog_service.material_learning_source import MaterialLearningSourceError
 from eom_catalog_service.settings import CatalogSettings
 
@@ -131,7 +131,7 @@ def publish_material_metadata(
 
 
 def read_material_metadata[Model: BaseModel](
-    artifacts: CatalogArtifactService,
+    artifacts: CatalogArtifactReader,
     pointer: MaterialArtifactMember,
     model: type[Model],
     *,

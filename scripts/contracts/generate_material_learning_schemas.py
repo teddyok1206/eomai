@@ -298,6 +298,14 @@ def write_workflow_schemas() -> None:
     )
     document["properties"]["steps"]["items"]["properties"]["step_key"] = version("learn")
     artifacts.append(("control-plane", "resolved-execution-plan-v33", document))
+    capacity = json.loads(
+        (ROOT / "schemas/workflow/control-plane/worker-capacity-policy-v6.schema.json").read_bytes()
+    )
+    capacity["$id"] = "eom://schemas/workflow/worker-capacity-policy/1.6"
+    capacity["title"] = "EOM mixed-material learning capacity in the shared four-process host"
+    capacity["properties"]["schema_version"] = version("worker-capacity-policy/1.6")
+    capacity["properties"]["purpose"] = version("UPLOADED_MATERIAL_LEARNING")
+    artifacts.append(("control-plane", "worker-capacity-policy-v7", capacity))
     for directory, stem, document in artifacts:
         payload = (
             json.dumps(document, ensure_ascii=False, sort_keys=True, indent=2) + "\n"

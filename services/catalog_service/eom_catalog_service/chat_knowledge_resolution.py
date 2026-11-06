@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from datetime import UTC, datetime
 
+from eom_catalog_contracts.material_item_lineage import is_material_item_metadata
 from eom_identifiers import canonical_json_bytes
 from eom_identity_service.models import OperatorRecord
 from eom_identity_service.repository import effective_permissions
@@ -385,7 +386,9 @@ class ChatKnowledgeResolutionService:
                 by_revision = {entry.source_revision_id: entry for entry in associations}
                 for ref in selection.references:
                     revision = by_id[ref.item_revision_id][1]
-                    if revision.metadata_json.get("source_kind") != "CREATIVE":
+                    if revision.metadata_json.get(
+                        "source_kind"
+                    ) != "CREATIVE" or is_material_item_metadata(revision.metadata_json):
                         continue
                     direct = direct_sources[ref.item_revision_id]
                     creative_base = by_revision.get(ref.item_revision_id)

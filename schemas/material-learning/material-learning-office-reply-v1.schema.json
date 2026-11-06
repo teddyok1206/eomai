@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/office-reply/1.0",
+  "title": "EOM material learning office-reply 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-office-reply/1.0"
+    },
+    "operation": {
+      "enum": [
+        "CREATE",
+        "CONVERT",
+        "READ"
+      ]
+    },
+    "instance_id": {
+      "type": "string",
+      "minLength": 43,
+      "maxLength": 43,
+      "pattern": "^officeconv_[0-9a-f]{32}$"
+    },
+    "source_sha256": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "conversion": {
+      "anyOf": [
+        {
+          "$ref": "eom://schemas/material-learning/preparation-types/1.0#/$defs/conversion"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "operation",
+    "instance_id",
+    "source_sha256",
+    "conversion"
+  ]
+}

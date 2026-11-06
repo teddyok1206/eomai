@@ -1,8 +1,84 @@
 # 자료 학습 구현 checkpoint
 
-2026-11-05 UTC. 사용자의 최종 범위는 운영 배포·제한된 실제 업로드 처리 확인까지다.
+2026-11-06 UTC. 사용자의 최종 범위는 운영 배포·제한된 실제 업로드 처리 확인까지다.
 goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체됐다. 이 문서는 운영 완료
 보고서가 아니며, 후보와 실제 운영을 혼동하지 않기 위한 중간 기록이다.
+
+## 최신 source checkpoint — 아직 운영 완료 아님
+
+- 새 업로드 문항은 사용자 결정대로 **외부 / EXTERNAL**이다. 기존 Notion 창작과
+  기출·AI를 바꾸지 않는다. DB 목록/상세에 자료명·원본 파일·페이지·자료 내 번호·목차를
+  표시하며 가짜 5자리 번호를 만들지 않는다. 같은 Graph의 Map V2가 외부 layer를 표현하고
+  released V1 bytes는 유지한다. BFF는 독립된 작은 DTO로 읽으며 backend package를
+  Web runtime에 추가 의존성으로 넣지 않는다.
+- 완료 role 결과의 실제 Job/Workflow/plan/Artifact closure reader, source-fidelity
+  Registry 등록, PDF 그림과 native picture-use resolver, 별도 실제 base/V11 공개 풀이,
+  document V12→공유 Graph publication과 단일 AI lane coordinator를 연결했다.
+- 자료 설명 source V5는 공식 retrieval owner의 명시적 `create_material_evidence`에서
+  Evidence V6로 읽는다. released 소비자는 V5를 모르는 채 V6를 받지 않는다. 이것은 모든
+  과거 authoring/chat consumer를 자동 업그레이드했다는 뜻이 아니다. 실제 RAG 읽기와
+  소비 가능 범위는 최종 canary에서 구분해 기록한다.
+- control capacity V7은 같은 물리 03–06/host 동시4를 공유한다. 같은 control bundle을
+  동시 최초 등록할 때의 충돌을 실제 임시 DB에서 재현해 lifecycle owner 잠금으로
+  수정했다. explanation 생성도 같은 key를 동시에 보내면 충돌하던 것을 실제 재현한 뒤
+  기존 knowledge-analysis owner에서 key 잠금→원래 자식 재조회로 수정했다.
+- source/권한/그림/계약/API/BFF/기존 공개 풀이 회귀 261 PASS(그 시점 browser opt-in1 skip).
+  후속 소비 경계 suite69 PASS, runtime/control/소비 집중 suite47 PASS. 서로 겹치는 수를
+  합산하지 않는다. 명시적 실제 Chromium의 업로드·재전송·owner 전환과 DB 외부 상세 화면은
+  별도로 PASS다. 주요 새 source17개 mypy PASS, 변경 Python formatter/linter PASS.
+- 새 marker-guarded PostgreSQL에서 candidate0074 upgrade/downgrade/upgrade PASS.
+  최신 저장/Workflow/권한/동시 control release/준비 중단 복구/설명 자식 원자 연결/
+  Registry commit 후 중단·재전송/동시 등록 **32 PASS**. worker 결과·extractor는 명시적
+  합성 port이며 운영 모델 실행이나 전체 실제 source 권한 증거로 확대 해석하지 않는다.
+- source-free platform wheel/resource/RECORD·개발 context suite44 PASS. API OpenAPI를
+  다시 생성했다. 최종 API/Web 호환 release wheel 검증은 마지막 runtime 수정 후 재실행한다.
+
+### 다음 완료 경계
+
+1. 실제 설치 계정·작업 폴더 경계에 runtime composition을 맞춘다. Root producer의
+   Registry staging과 기존 Catalog-manager의 고정 Office converter workspace는 소유자가
+   다르다. 이 차이를 권한 완화/임의 path로 덮지 말고 기존 변환 owner에 제한된 adapter로
+   연결한다. 원본 PDF parser도 기존 격리 실행 경계를 사용해야 한다. 현재 runtime 후보는
+   아직 이 실제 설치 경계 PASS가 아니다.
+2. GUI pause/resume와 실패 단위 successor/attempt 재시도를 마무리한다. 이미 완료한
+   페이지/Item/Graph와 원래 FAILED 이력은 보존하고 책 전체를 새 identity로 재실행하지 않는다.
+3. 실제 worker-facing 입력·결과부터 Registry/Document/공유 Graph/공통 INDEX handoff,
+   공식 RAG 읽기·DB 열람·같은 요청 재조회를 한 bounded 업로드 경로로 검증한다.
+4. 최종 wheel/권한/호환 rollback 검증, 기존 역할 자연 drain, helper와 영향 driver prefix
+   동시 정렬, migration0074/필요한 grants/정책·서비스·API/Web 배포 및 실제 canary가 남았다.
+   이 feature의 운영 migration·배포·실제 모델 실행은 아직0이며 goal은 ACTIVE다.
+5. 완료 뒤에도 기존 창작·임베딩 서비스를 유지한다. 아래 background recovery의 실제
+   수치 진행까지 확인해야 하며 service active만으로 완료하지 않는다.
+
+### 현재 별도 배경 작업
+
+후속 운영 확인: 기존 protected numeric retirement를 직접 확인했다. 원래 numerical unit의
+FAILED retirement가 이미 존재해 새 unit effect 없이 공식
+`recover_retired_indexing_workflow`로 원래 Workflow/native Job/encoding4건의 실패를
+원자적으로 기록했다. SUCCEEDED planning/정본/수치 runtime pin은 그대로다. INDEX owner는
+같은 invocation에서 다시 source 준비를 진행 중이며 새 CUDA 수치 완료는 아직 미확인이다.
+기존 창작 owner는 03:07 UTC에 남은 원본 미리보기 준비 대기(`BLOCKED_SOURCES`)를
+technical failure로 처리해 종료했다. 입력 대기를 worker 성공으로 바꾸지 않고 5분 간격으로
+정상 대기하도록 후보를 수정·검증 중이다. 따라서 아래 02:53의 실행 중 관측을 현재
+슬롯 실행 증거로 재사용하지 않는다. 완료 전 실제 남은 대상/활성 lease를 다시 확인한다.
+
+최신 candidate source gate313 PASS/별도 실제 Chromium PASS, parser command port와
+Office owner schema/adapter 회귀39 PASS, core source51개 mypy PASS. counts는 서로 겹친다.
+PDF parser는 정확한 파일을 기존 eom-image sandbox에 readonly bind하며 root parsing과
+페이지별 전체 원본 재복사를 피한다. 한글은 실제 Catalog-manager helper로 기존 고정
+workspace/converter를 호출한다. 아직 이 adapter의 실제 설치/실행 PASS를 주장하지 않는다.
+
+기존 창작 producer는 같은 PID/invocation으로 계속 실행되며 11월6일02:53 UTC에도 새
+VERIFIED/PROCESSING checkpoint가 관측됐다. GPU INDEX는 11월5일22:24 UTC channel EOF로
+종료돼 있었다. 기존 설정/수치 runtime/요청/실패 이력을 수정하지 않고 기존 INDEX service만
+02:52 UTC에 시작했다. 재기동은 성공했지만 원래 CONCRETE_FACETS Workflow에
+`RECOVERY_REQUIRED`가 남아 있고 GPU compute process는 아직 없다. **연산 복구 완료가
+아니다.** 공식 recovery 확인이 남는다. diagnostic의 가장 안쪽 BlockingIOError만으로
+현재 read-loop 결함을 단정하지 않는다(실제 설치 read-loop에도 해당 예외 처리가 있음).
+
+## 앞선 2026-11-05 기록
+
+아래는 그 시점의 후보/검증/다음 단계다. 최신 미완료 범위와 background 상태는 위를 따른다.
 
 ## 완료한 소스 후보
 

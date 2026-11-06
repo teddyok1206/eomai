@@ -48,6 +48,7 @@ eom-workflow-runner = "eom_workflow_runner.cli:main"
 eom-hwpx-application-runner = "eom_hwpx_manager.runner:main"
 eom-catalog-application-runner = "eom_catalog_service.application_runner:main"
 eom-science-assessment-corpus = "eom_catalog_service.science_assessment_web_cli:main"
+eom-material-learning = "eom_catalog_service.material_learning_runner:main"
 
 [tool.setuptools.packages.find]
 exclude = ["build", "build.*"]

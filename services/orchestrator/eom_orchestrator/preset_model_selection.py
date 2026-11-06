@@ -20,6 +20,7 @@ from eom_workflow import (
     WorkerCapacityPolicyV4,
     WorkerCapacityPolicyV5,
     WorkerCapacityPolicyV6,
+    WorkerCapacityPolicyV7,
     validate_control_contract,
 )
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -61,6 +62,7 @@ _CAPACITY_MODELS: dict[str, tuple[str, type[Capacity]]] = {
     "worker-capacity-policy/1.3": ("worker-capacity-policy-v4", WorkerCapacityPolicyV4),
     "worker-capacity-policy/1.4": ("worker-capacity-policy-v5", WorkerCapacityPolicyV5),
     "worker-capacity-policy/1.5": ("worker-capacity-policy-v6", WorkerCapacityPolicyV6),
+    "worker-capacity-policy/1.6": ("worker-capacity-policy-v7", WorkerCapacityPolicyV7),
 }
 _EXECUTION_EFFORTS = frozenset(str(effort) for effort in ReasoningEffort)
 

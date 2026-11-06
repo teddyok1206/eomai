@@ -34,6 +34,18 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "material-learning-office-command-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-office-command-v1.schema.json",
+            "resources/material-learning/material-learning-office-command-v1.schema.json",
+            "1.0",
+            "sha256:5d7e9ad71983265ee1066ce9ab4c767939b84b7f001e3869f4f611da82ed9275",
+        ),
+        "material-learning-office-reply-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-office-reply-v1.schema.json",
+            "resources/material-learning/material-learning-office-reply-v1.schema.json",
+            "1.0",
+            "sha256:2b541c51ccd6f8d54383d4621c1514f30fe42edd9972fc5b089ccde8efef7da1",
+        ),
         "educational-document-knowledge-source-v5": CatalogSchemaResource(
             "schemas/knowledge/educational-document-knowledge-source-v5.schema.json",
             "resources/knowledge/educational-document-knowledge-source-v5.schema.json",
@@ -63,6 +75,18 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/material-learning/material-learning-authorization-request-v1.schema.json",
             "1.0",
             "sha256:8b626922d873ee2c0df89dfad6579808b1b5665866caf71518092cbb0b2b3e5a",
+        ),
+        "material-learning-item-metadata-v1": CatalogSchemaResource(
+            "schemas/material-learning/item-metadata-v1.schema.json",
+            "resources/material-learning/item-metadata-v1.schema.json",
+            "1.0",
+            "sha256:5037eed61b0f796f43f387c31549ab1417ac0a148cf5e98ecea873a5bcd4f04b",
+        ),
+        "material-learning-db-entry-v1": CatalogSchemaResource(
+            "schemas/material-learning/db-entry-v1.schema.json",
+            "resources/material-learning/db-entry-v1.schema.json",
+            "1.0",
+            "sha256:ce1c06a87a643a542571d0def9a10477924492358a4d06da0cf383f7b98175d8",
         ),
         "material-learning-authorization-reply-v1": CatalogSchemaResource(
             "schemas/material-learning/material-learning-authorization-reply-v1.schema.json",
@@ -238,6 +262,12 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:e841e27aa2e4eb6cc32568313fa0059a6557624e1d86b3bddf124333915af2f8",
         ),
+        "knowledge-map-view-v2": CatalogSchemaResource(
+            "schemas/knowledge/knowledge-map-view-v2.schema.json",
+            "resources/knowledge/knowledge-map-view-v2.schema.json",
+            "2.0",
+            "sha256:f6ad4be191364b7cbb6405c6d255b3c2c0581d74f6d989cbbcb1900b5c5b89e0",
+        ),
         "creative-learning-cohort-v2": CatalogSchemaResource(
             "schemas/external-item/creative-learning-cohort-v2.schema.json",
             "resources/external-item/creative-learning-cohort-v2.schema.json",
@@ -338,13 +368,31 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "schemas/knowledge/create-material-knowledge-analysis-v1.schema.json",
             "resources/knowledge/create-material-knowledge-analysis-v1.schema.json",
             "1.0",
-            "sha256:9cef7f601079a888e1325d5970e98794b4f40be5c978a01c5f8beced950d32a0",
+            "sha256:20c9d1683d1ef9b78abe2f8bace83ee99b3596988fca78ab29a298fc4cda7e58",
         ),
         "material-learning-item-lineage-v1": CatalogSchemaResource(
             "schemas/material-learning/item-lineage-v1.schema.json",
             "resources/material-learning/item-lineage-v1.schema.json",
             "1.0",
             "sha256:854591eeba9d663576ad69386d1938a05f651f3d183e370116a4d7953d4ecbe8",
+        ),
+        "material-learning-visual-set-v1": CatalogSchemaResource(
+            "schemas/material-learning/visual-set-v1.schema.json",
+            "resources/material-learning/visual-set-v1.schema.json",
+            "1.0",
+            "sha256:92446cbcc68dc528ea34346dcb56dcd70092cd4c6744f545c8e4c6f2cb5ee6c1",
+        ),
+        "evidence-bundle-manifest-v6": CatalogSchemaResource(
+            "schemas/knowledge/evidence-bundle-manifest-v6.schema.json",
+            "resources/knowledge/evidence-bundle-manifest-v6.schema.json",
+            "6.0",
+            "sha256:7d04cfb239dae1745146328e5fff4fee5217c261f5aa3854093acbf41347bb5f",
+        ),
+        "evidence-bundle-publication-result-v6": CatalogSchemaResource(
+            "schemas/knowledge/evidence-bundle-publication-result-v6.schema.json",
+            "resources/knowledge/evidence-bundle-publication-result-v6.schema.json",
+            "6.0",
+            "sha256:3b1d36ec534fdbc7ead8b3b88cc31ff062cc2fd5e0ccab55d3ec77868638d91e",
         ),
         "knowledge-graph-snapshot-manifest-v10": CatalogSchemaResource(
             "schemas/knowledge/knowledge-graph-snapshot-manifest-v10.schema.json",

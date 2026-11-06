@@ -21,6 +21,7 @@ from eom_catalog_contracts import (
     KnowledgeGraphStructureManifestV6,
     load_integrated_science_editorial_outline,
 )
+from eom_catalog_contracts.material_knowledge_analysis import EducationalDocumentKnowledgeSourceV5
 from eom_identifiers import content_sha256
 
 from eom_catalog_service.knowledge_graph_projection import AcceptedAnalysisProposal
@@ -185,6 +186,69 @@ def validate_integrated_science_structure_manifest(
         raise CurriculumGraphStructureError(
             "structure manifest differs from the reviewed Integrated Science outline"
         )
+
+
+def extend_integrated_science_structure_with_documents(
+    base: KnowledgeGraphStructureManifestV2,
+    analyses: tuple[AcceptedAnalysisProposal, ...],
+    *,
+    created_at: datetime,
+) -> KnowledgeGraphStructureManifestV2:
+    """Append source membership under the unchanged reviewed curriculum framework.
+
+    This does not assert a person reviewed the new material's scientific quality.
+    Explicit source unit codes map to existing MINOR units; no units are invented.
+    """
+    validate_integrated_science_structure_manifest(base)
+    by_code = {unit.unit_code: unit for unit in base.curriculum_units if unit.unit_level == "MINOR"}
+    old_ids = set(base.source_analysis_run_ids)
+    bindings = list(base.analysis_curriculum_bindings)
+    additions = {analysis.analysis_run_id for analysis in analyses}
+    if not additions or len(additions) != len(analyses) or additions.intersection(old_ids):
+        raise CurriculumGraphStructureError("document extension membership differs")
+    for analysis in analyses:
+        source = analysis.source
+        if not isinstance(
+            source, (EducationalDocumentKnowledgeSourceV4, EducationalDocumentKnowledgeSourceV5)
+        ):
+            raise CurriculumGraphStructureError(
+                "document extension requires accepted document sources"
+            )
+        if source.curriculum_unit_keys:
+            try:
+                unit_ids = tuple(
+                    sorted(by_code[code].curriculum_unit_id for code in source.curriculum_unit_keys)
+                )
+            except KeyError as error:
+                raise CurriculumGraphStructureError(
+                    "document source has an unknown unit"
+                ) from error
+            bindings.append(
+                AnalysisCurriculumBinding(
+                    analysis_run_id=analysis.analysis_run_id,
+                    curriculum_unit_ids=unit_ids,
+                )
+            )
+    value = base.model_dump(mode="json")
+    value.update(
+        source_analysis_run_ids=sorted(old_ids | additions),
+        analysis_curriculum_bindings=[
+            binding.model_dump(mode="json")
+            for binding in sorted(bindings, key=lambda binding: binding.analysis_run_id)
+        ],
+        created_at=created_at.isoformat().replace("+00:00", "Z"),
+    )
+    identity = content_sha256(
+        {
+            "base_structure_sha256": base.manifest_sha256,
+            "document_analysis_run_ids": sorted(additions),
+        }
+    )
+    value["structure_manifest_id"] = "graphstructure_" + identity[7:39]
+    value["manifest_sha256"] = content_sha256(
+        {key: entry for key, entry in value.items() if key != "manifest_sha256"}
+    )
+    return type(base).model_validate(value)
 
 
 def extend_integrated_science_structure_manifest_with_item_alignments(

@@ -716,6 +716,15 @@ class KnowledgeAnalysisApplicationService:
         """The ordinary analysis owner, with uploaded rights and exact discovered regions."""
         return self._create(command, pinned_preset=None)
 
+    def create_material_with_pinned_preset(
+        self,
+        command: CreateMaterialKnowledgeAnalysisCommand,
+        *,
+        preset_id: str,
+        preset_revision_id: str,
+    ) -> KnowledgeAnalysisApplicationResult:
+        return self._create(command, pinned_preset=(preset_id, preset_revision_id))
+
     def create_with_pinned_preset(
         self,
         command: CreateKnowledgeAnalysisCommand,
@@ -734,6 +743,24 @@ class KnowledgeAnalysisApplicationService:
         self, command: CreateKnowledgeSolutionAnalysisCommand
     ) -> KnowledgeAnalysisApplicationResult:
         """Create an additive public solution over one exact accepted Item analysis."""
+
+        return self._create_solution(command, pinned_preset=None)
+
+    def create_solution_with_pinned_preset(
+        self,
+        command: CreateKnowledgeSolutionAnalysisCommand,
+        *,
+        preset_id: str,
+        preset_revision_id: str,
+    ) -> KnowledgeAnalysisApplicationResult:
+        return self._create_solution(command, pinned_preset=(preset_id, preset_revision_id))
+
+    def _create_solution(
+        self,
+        command: CreateKnowledgeSolutionAnalysisCommand,
+        *,
+        pinned_preset: tuple[str, str] | None,
+    ) -> KnowledgeAnalysisApplicationResult:
 
         submission_sha256 = content_sha256(
             command.model_dump(mode="json", exclude={"operation", "idempotency_key"})
@@ -802,7 +829,16 @@ class KnowledgeAnalysisApplicationService:
                     ):
                         return self._projection(successor)
 
-                preset_logical, preset_revision = self.published_preset(session, command.preset_key)
+                preset_logical, preset_revision = (
+                    self.published_preset(session, command.preset_key)
+                    if pinned_preset is None
+                    else self.pinned_preset(
+                        session,
+                        preset_key=command.preset_key,
+                        preset_id=pinned_preset[0],
+                        preset_revision_id=pinned_preset[1],
+                    )
+                )
                 if role_protocol not in preset_revision.compatible_workflow_protocols:
                     raise KnowledgeAnalysisServiceError(
                         "KNOWLEDGE_ANALYSIS_PRESET_INCOMPATIBLE",
@@ -1192,6 +1228,18 @@ class KnowledgeAnalysisApplicationService:
                 uploaded_source = None
                 if isinstance(command, CreateMaterialKnowledgeAnalysisCommand):
                     authorize_material_learning(session, command.requested_by)
+                    # A resumed coordinator can meet the original submission.
+                    # Serialize this command key before the existence check;
+                    # the unique constraint remains the durable final guard.
+                    session.execute(
+                        select(
+                            func.pg_advisory_xact_lock(
+                                func.hashtextextended(
+                                    "material-knowledge-create:" + command.idempotency_key, 0
+                                )
+                            )
+                        )
+                    )
                     uploaded_source = self._resolve_source(session, command)
                 existing = session.scalar(
                     select(KnowledgeAnalysisRunRecord).where(
@@ -1206,6 +1254,19 @@ class KnowledgeAnalysisApplicationService:
                         raise KnowledgeAnalysisServiceError(
                             "KNOWLEDGE_ANALYSIS_IDEMPOTENCY_CONFLICT",
                             "knowledge analysis idempotency key has different input",
+                        )
+                    if isinstance(command, CreateMaterialKnowledgeAnalysisCommand):
+                        from eom_catalog_service.material_knowledge_task_binding import (
+                            bind_material_knowledge_analysis,
+                        )
+
+                        assert isinstance(uploaded_source, EducationalDocumentKnowledgeSourceV5)
+                        bind_material_knowledge_analysis(
+                            session,
+                            self.artifacts,
+                            command=command,
+                            source=uploaded_source,
+                            analysis=existing,
                         )
                     return self._projection(existing)
 
@@ -1553,6 +1614,19 @@ class KnowledgeAnalysisApplicationService:
                 )
                 session.add(run)
                 session.flush()
+                if isinstance(command, CreateMaterialKnowledgeAnalysisCommand):
+                    from eom_catalog_service.material_knowledge_task_binding import (
+                        bind_material_knowledge_analysis,
+                    )
+
+                    assert isinstance(source, EducationalDocumentKnowledgeSourceV5)
+                    bind_material_knowledge_analysis(
+                        session,
+                        self.artifacts,
+                        command=command,
+                        source=source,
+                        analysis=run,
+                    )
                 session.add(
                     KnowledgeAnalysisEventRecord(
                         analysis_run_id=run.analysis_run_id,
@@ -2386,6 +2460,8 @@ class KnowledgeAnalysisApplicationService:
             )
         with transaction(self.sessions) as session:
             run = self._locked_run(session, run_id)
+            if isinstance(request, KnowledgeAnalysisRequestV12):
+                self._reauthorize_material_source(session, request, run.created_by_operator_id)
             if run.state == "ACCEPTED":
                 if run.accepted_result_artifact_revision_id != artifact.revision_id:
                     raise KnowledgeAnalysisServiceError(

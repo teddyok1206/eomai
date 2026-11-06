@@ -8,6 +8,10 @@
     "operation": {
       "const": "CREATE_MATERIAL_KNOWLEDGE_ANALYSIS"
     },
+    "material_task_id": {
+      "type": "string",
+      "pattern": "^materialtask_[0-9a-f]{32}$"
+    },
     "source": {
       "type": "object",
       "additionalProperties": false,
@@ -102,6 +106,7 @@
   },
   "required": [
     "operation",
+    "material_task_id",
     "source",
     "preset_key",
     "general_knowledge_mode",

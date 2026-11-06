@@ -971,7 +971,7 @@ def create_app(
     async def registered_item_db_search(
         filters: ExternalItemDbFilterSubmission,
         session: Annotated[WebSession, Depends(require_csrf)],
-        kind: Literal["CREATIVE", "AI"] = Query(),
+        kind: Literal["CREATIVE", "AI", "EXTERNAL"] = Query(),
         approval_state: Literal[
             "UNREGISTERED", "DRAFT", "IN_REVIEW", "APPROVED", "REJECTED", "SUPERSEDED", "RETIRED"
         ]

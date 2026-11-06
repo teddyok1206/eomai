@@ -124,6 +124,7 @@ def test_create_command_preserves_regions_and_is_not_a_textbook_purchase():
     }
     command = CreateMaterialKnowledgeAnalysisCommand.model_validate(
         {
+            "material_task_id": "materialtask_" + "c" * 32,
             "source": selection,
             "preset_key": "material-knowledge-analysis",
             "risk_policy_revision_id": "analysisriskrev_" + "a" * 32,

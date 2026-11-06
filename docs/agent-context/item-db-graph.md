@@ -83,6 +83,21 @@ snapshot V10은 구 교과서 계약을 완화한 것이 아니다. source/role 
 있다는 사실만으로 전체 coordinator나 운영 활성화가 완료됐다고 추정하지 않는다.
 최신 미완료 항목은 `docs/operations/MATERIAL_LEARNING_IMPLEMENTATION_CHECKPOINT.md`.
 
+새 통합 업로드 문항의 사용자 분류는 외부 / `EXTERNAL`이다. 기존 Notion 창작 /
+`CREATIVE`, 기출, AI를 바꾸지 않는다. `material_item_registration.py`가 원문/그림과
+작은 lineage를 원래 Registry에 등록하고 `material_graph_learning.py`가 실제 base 및
+V11 공개 풀이를 기존 analysis owner로 만든다. `material_learning_processing.py`와
+coordinator가 작은 task checkpoint와 자료 전체 단일 AI lane을 소유한다. 모델 명령·물리
+슬롯·host 동시 제한은 원래 Workflow/Orchestrator의 책임이다. runtime/service 후보가
+존재한다는 사실을 운영 활성화 증거로 쓰지 않는다.
+
+API `GET /item-db/materials`와 DB 외부 분류는 current shared Graph membership을 확인해
+작은 등록 metadata를 읽는다. Notion 행이나 임의 고유번호를 만들지 않는다. Map V2는 같은
+Graph에서 외부 layer를 표시하며 V1 bytes/소비를 보존한다. 새 설명 source V5는 retrieval
+owner의 명시적 material evidence V6 경로로 읽고 구 consumer로 억지 전달하지 않는다.
+`public_solution_source_capture.py`는 source category와 representation을 분리하여 새 외부
+문항을 원래 Notion 보고서로 잘못 해석하지 않고 실제 accepted V11/common projection을 쓴다.
+
 - `tests/unit/test_creative_item_graph_learning.py`, `tests/unit/test_creative_parallel_execution.py`
 - `tests/unit/test_office_picture_use_publication.py`, `tests/unit/test_external_item_preview_projection.py`
 - `docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md`

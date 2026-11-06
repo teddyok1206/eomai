@@ -88,7 +88,11 @@ def submit_material_learning_workflow(
         steps = tuple(
             session.scalars(
                 select(WorkflowStepRunRecord)
-                .where(WorkflowStepRunRecord.workflow_id == workflow.workflow_id)
+                .where(
+                    WorkflowStepRunRecord.workflow_id == workflow.workflow_id,
+                    WorkflowStepRunRecord.step_key == "learn",
+                    WorkflowStepRunRecord.step_type == "agent",
+                )
                 .limit(2)
             )
         )
@@ -130,7 +134,10 @@ def submit_material_learning_workflow(
         commands = tuple(
             session.scalars(
                 select(WorkflowCommandRecord)
-                .where(WorkflowCommandRecord.workflow_id == workflow.workflow_id)
+                .where(
+                    WorkflowCommandRecord.workflow_id == workflow.workflow_id,
+                    WorkflowCommandRecord.command_type == CommandType.START_WORKFLOW.value,
+                )
                 .limit(2)
             )
         )

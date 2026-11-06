@@ -2597,6 +2597,13 @@ class WorkerCapacityPolicyV6(FrozenModel):
         return native_role
 
 
+class WorkerCapacityPolicyV7(WorkerCapacityPolicyV6):
+    """Same shared host ceiling, explicit uploaded-material purpose and one app AI lane."""
+
+    schema_version: Literal["worker-capacity-policy/1.6"] = "worker-capacity-policy/1.6"  # type: ignore[assignment]
+    purpose: Literal["UPLOADED_MATERIAL_LEARNING"] = "UPLOADED_MATERIAL_LEARNING"  # type: ignore[assignment]
+
+
 class WorkerLeaseView(FrozenModel):
     schema_version: Literal["worker-lease-view/1.0"] = "worker-lease-view/1.0"
     lease_id: str = Field(pattern=r"^workerlease_[0-9a-f]{32}$")

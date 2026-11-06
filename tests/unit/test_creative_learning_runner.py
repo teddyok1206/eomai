@@ -92,3 +92,9 @@ def test_actual_pending_work_retains_bounded_observation_delay(state):
 
 def test_verified_history_reconstruction_has_no_per_item_idle_sleep():
     assert runner.progress_poll_delay_seconds("VERIFIED") == 0
+
+
+def test_unready_source_waits_without_fabricating_work_or_crashing_owner():
+    assert runner.progress_poll_delay_seconds("BLOCKED_SOURCES") == 300
+    source = Path(runner.__file__).read_text()
+    assert 'raise ValueError("CREATIVE_COHORT_SOURCE_PREVIEWS_PENDING")' not in source

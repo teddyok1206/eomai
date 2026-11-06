@@ -62,13 +62,15 @@ def material_intake(creative_engine, tmp_path):
                 assigned_at=datetime.now(UTC),
             )
         )
-    staging = tmp_path / "staging"
-    nas = tmp_path / "nas"
+    fixture_root = tmp_path / "material-intake"
+    fixture_root.mkdir()
+    staging = fixture_root / "staging"
+    nas = fixture_root / "nas"
     staging.mkdir()
     nas.mkdir()
     settings = CatalogSettings(staging_root=staging, nas_artifact_root=nas)
     payload = b"%PDF-1.7\nsynthetic source; document parser not invoked in source intake\n"
-    path = tmp_path / "source.pdf"
+    path = fixture_root / "source.pdf"
     path.write_bytes(payload)
     path.chmod(0o600)
     command = MaterialSourceUploadCommand(

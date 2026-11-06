@@ -7,6 +7,7 @@ from eom_catalog_contracts.knowledge import (
     ApprovedItemKnowledgeSourceV2,
     same_approved_item_source_identity,
 )
+from eom_catalog_contracts.material_item_lineage import is_material_item_metadata
 from eom_catalog_contracts.public_solution_embedding import (
     AcceptedPublicSolutionEvidence,
     CreativePublicSolutionEvidence,
@@ -339,7 +340,10 @@ class CatalogPublicSolutionSourceCapture:
         ):
             raise ValueError("PUBLIC_SOLUTION_SOURCE_SET_INVALID")
         creative_keys = tuple(
-            key for key in keys if revisions[key].metadata_json.get("source_kind") == "CREATIVE"
+            key
+            for key in keys
+            if revisions[key].metadata_json.get("source_kind") == "CREATIVE"
+            and not is_material_item_metadata(revisions[key].metadata_json)
         )
         creative_set = frozenset(creative_keys)
         resolved = resolve_solution_evidence_by_base_run(

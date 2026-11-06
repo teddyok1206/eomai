@@ -168,9 +168,45 @@ provider pin과 QUERY/Catalog/runtime 호환 절차를 따르며 INDEX 수치 �
   새 내부 권리 정책은 실제 권리 확인에서 만든다. imported provenance와 원문 anchor를
   유지하며 모델 풀이·경고는 원문 정답과 구분한다.
 - **조회:** 현행 창작 DB 목록은 Notion 행을 전제로 하므로 그 행을 위조하지 않는다.
-  자료에서 등록한 Item을 보여주는 additive 조회 projection을 기존 DB 창작 목록에
+  자료에서 등록한 Item을 보여주는 additive 조회 projection을 기존 DB의 외부 목록에
   연결한다. 기존 원본의 메타데이터/선택형 필터는 유지하고, 새 자료명·단위·원문 위치와
   풀이/Graph/검색 준비 상태를 추가한다. AI 생성 분류로 섞지 않는다.
+
+### 2026-11-06 사용자 분류 확정
+
+이번 통합 업로드로 가져온 문항의 명칭과 `source_kind`는 **외부 / EXTERNAL**이다.
+원래 가져온 Notion 창작 / CREATIVE, 기출 / PAST_EXAM, 시스템 생성 / AI를 변경하지 않는다.
+이하 설계 검토 당시의 ‘새 자료 창작’ 표현은 이 후속 결정으로 대체한다. 과학 개념과
+관계를 연결하는 shared Graph, 공식 APPROVED_ITEM source family와 공통 public solution
+임베딩 형식은 동일하며, 출처 표시를 바꾸기 위해 독립 Graph/벡터를 만들지 않는다.
+
+### 2026-11-06 완료 후에도 유지할 배경 작업
+
+목표를 완료 처리해도 기존 창작 풀이·Graph 등록과 GPU 증분 임베딩 서비스는 계속 실행한다.
+최종 배포 후 실제 producer/INDEX 프로세스와 새 checkpoint 진행을 확인한다. 단순
+`enabled`, health 또는 오래된 상태 파일만으로 실행 중이라고 판정하지 않는다. 사용량과
+전역 동시4·자료 학습 단일 AI lane을 준수하며, 기존 요청/실패 이력·수치 runtime pin을
+보존한다. 진행 중이던 요청을 새 identity로 중복 생성해 속도를 맞추지 않는다. 배포 전부터
+멈춘 작업은 확인된 원인과 공식 recovery 경계로 복구한 뒤 종료 상태를 보고한다.
+goal 카드 종료는 이 운영 서비스들의 stop/disable 사유가 아니다.
+
+### 운영 parser와 한글 변환의 실제 소유 경계
+
+지배적 접근은 고정 도구 실행과 단일 private workspace 조회다. Root 자료 coordinator는
+기존 Orchestrator Artifact publisher/Registry/Workflow를 조합하지만 외부 PDF를 root로
+파싱하지 않는다. 기존 Poppler/Tesseract extractor의 command port에 PDF 격리 adapter를
+주입하고, eom-image sandbox에 정확한 원본 파일 하나를 read-only bind한다. 페이지마다
+원본 전체를 복사하지 않으며 O(원본 보관1개 + chunk 출력) 공간이다. PNG 출력은 해당
+extractor가 방금 만든 임시 디렉터리 하나만 writable이다. NAS/DB/auth/network는 없다.
+
+한글 변환은 기존 Catalog-manager 소유의 고정 office-conversion workspace와 기존
+office-converter systemd unit을 그대로 쓴다. Root staging의 UID 검사를 완화하거나 기존
+폴더를 root로 chown하지 않는다. 작은 schema-first 로컬 command는 instance/format/hash와
+CREATE/CONVERT/READ만 포함하고 arbitrary path/actor/DB 권한을 받지 않는다. 실제
+Catalog-manager helper가 기존 converter를 호출하며 root는 정확한 입력 임시 파일만
+넘기고 기존 완료 결과를 검증해 재사용한다. canonical source/Artifact는 기존 revision이다.
+프로세스 실패는 명시적 오류로 남기고 이미 완료한 변환은 READ로 재조회한다. 새 queue나
+변환 엔진을 만드는 대안보다 기존 보안·권한·변환 의미를 유지하는 이 adapter가 작다.
 - **Graph/INDEX:** 문서 accepted analysis는 기존 공통 Graph publication, Item은 기존
   automatic Item publication을 사용한다. 출처 정책은 별도 적용한다. Graph 등록 후
   기존 공통 풀이 projection으로 증분 INDEX에 넘긴다. 전체 기출 INDEX 완료를 기다리지
