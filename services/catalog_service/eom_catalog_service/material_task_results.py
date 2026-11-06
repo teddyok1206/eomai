@@ -1,6 +1,5 @@
 """Resolve one completed material child through the existing Workflow/Artifact owners."""
 
-import json
 from dataclasses import dataclass
 
 from eom_catalog_contracts.material_learning import (
@@ -17,7 +16,7 @@ from eom_catalog_contracts.material_learning import (
 from eom_catalog_contracts.material_learning_authorization import (
     MaterialLearningAuthorizationRequest,
 )
-from eom_identifiers import content_sha256
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.control_models import ResolvedExecutionPlanRecord
 from eom_orchestrator.material_learning_execution import validate_material_learning_execution_plan
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
@@ -245,18 +244,19 @@ def resolve_completed_material_task(
         task.output_sha256,
     ) != (result_pointer.artifact_id, result_pointer.artifact_revision_id, result_pointer.sha256):
         raise ValueError("MATERIAL_LEARNING_STORED_RESULT_DIFFERS")
-    raw = artifacts.read_member(
+    # Role jobs publish the Orchestrator's single-primary ArtifactManifest, not
+    # a Catalog file-set member. Reuse its existing verified JSON primary read;
+    # the exact Workflow/Job closure above and typed role below own the schema.
+    payload = artifacts.load_json_revision(
         artifact_id=result_pointer.artifact_id,
         revision_id=result_pointer.artifact_revision_id,
-        member_path=result_pointer.member_path,
-        sha256=result_pointer.sha256,
-        schema_ref=result_pointer.schema_ref,
-        media_type=result_pointer.media_type,
+        content_hash=result_pointer.sha256,
         max_bytes=4 * 1024 * 1024,
     )
-    if len(raw) != revision.content_bytes:
+    raw = canonical_json_bytes(payload)
+    if len(raw) != revision.content_bytes or sha256_bytes(raw) != result_pointer.sha256:
         raise ValueError("MATERIAL_LEARNING_RESULT_SIZE_DIFFERS")
-    role = validate_role_result(json.loads(raw), "support", "material-learning-result@1.0")
+    role = validate_role_result(payload, "support", "material-learning-result@1.0")
     if not isinstance(role, MaterialLearningRoleResult) or (
         role.workflow_id,
         role.step_run_id,

@@ -47,6 +47,13 @@ immutable definition/active flag를 수정하지 않는다. 현재 policy 거부
 
 ## 배포와 백그라운드
 
+자료 학습0074는 기존 protected release operator의 context/admission1.21과 정확한
+`MIGRATION_UPGRADE_0074`/`MIGRATION_VERIFY_0074`를 사용한다. 기존 schema/callback을
+재해석하지 않는다. API·control 반영과 새 coordinator의 enable/start를 구분하고, 새
+Graph10을 모르는 INDEX source는 현재 numerical/preparation 작업을 자연 완료시킨 뒤
+호환 인계한다. 운영 사실·부분 canary·남은 경계는
+`docs/operations/MATERIAL_LEARNING_RELEASE_2026-11-06.md`와 실제 installed 기록을 확인한다.
+
 API·Web·Catalog/Runner·INDEX/QUERY·수치 controller는 다른 설치 source일 수 있다.
 서로 지원하는 contracts와 wheel/RECORD를 맞춘 release set으로 배포한다. 모든 component를
 무조건 같은 HEAD로 재시작하지 않는다. 동작 중인 수치 runtime pin·실행 계획·worker를

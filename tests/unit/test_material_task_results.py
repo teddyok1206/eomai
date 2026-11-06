@@ -1,5 +1,6 @@
 """Typed child-result resolution with synthetic owner ports, not a live authorization proof."""
 
+from contextlib import nullcontext
 from types import SimpleNamespace
 
 import pytest
@@ -159,12 +160,22 @@ def case(monkeypatch):
     reads = []
 
     def read_member(**pointer):
+        assert pointer["member_path"] == "material/work.json"
         reads.append(pointer["member_path"])
-        data = work_raw if pointer["member_path"] == "material/work.json" else raw
+        data = work_raw
         assert sha256_bytes(data) == pointer["sha256"]
         return data
 
-    artifacts = SimpleNamespace(engine=None, settings=None, read_member=read_member)
+    def load_json_revision(**pointer):
+        assert pointer["artifact_id"] == logical.logical_artifact_id
+        assert pointer["revision_id"] == revision.revision_id
+        assert pointer["content_hash"] == sha256_bytes(raw)
+        reads.append("result.json")
+        return role.model_dump(mode="json")
+
+    artifacts = SimpleNamespace(
+        engine=None, settings=None, read_member=read_member, load_json_revision=load_json_revision
+    )
     return SimpleNamespace(
         session=session,
         artifacts=artifacts,
@@ -189,6 +200,45 @@ def test_completed_result_reads_canonical_members_not_the_small_db_receipt(monke
     assert result.role == value.role
     assert value.reads == ["material/work.json", "result.json"]
     assert "output" not in value.revision.result
+
+
+def test_actual_orchestrator_single_primary_manifest_is_read_without_inventing_files(
+    monkeypatch, tmp_path
+):
+    """Synthetic source/DB authorization ports, real writer and verified primary reader."""
+    from eom_catalog_service.artifacts import CatalogArtifactService
+    from eom_catalog_service.settings import CatalogSettings
+    from eom_orchestrator.artifacts import commit_artifact, stage_structured_artifact
+
+    value = case(monkeypatch)
+    root = tmp_path / "nas"
+    root.mkdir()
+    staged = stage_structured_artifact(
+        result=value.role.model_dump(mode="json"),
+        job_id=value.job.job_id,
+        logical_artifact_id=value.logical.logical_artifact_id,
+        revision_id=value.revision.revision_id,
+        staging=tmp_path / "staged-role",
+        worker_slot="03",
+    )
+    directory = commit_artifact(staged, root)
+    value.revision.manifest = staged.manifest.model_dump(mode="json")
+    value.revision.manifest_hash = staged.manifest_hash
+    value.revision.nas_path = str(directory)
+    assert "files" not in value.revision.manifest
+    metadata = SimpleNamespace(
+        execute=lambda _query: SimpleNamespace(all=lambda: [(value.revision, value.logical)])
+    )
+    reader = CatalogArtifactService(None, CatalogSettings(nas_artifact_root=root))
+    reader.sessions = lambda: nullcontext(metadata)
+    value.artifacts.load_json_revision = reader.load_json_revision
+    resolved = owner.resolve_completed_material_task(
+        value.session, value.artifacts, task_id=value.task.task_id, operator_id=value.actor
+    )
+    assert resolved.role == value.role
+    assert resolved.result_bytes == staged.manifest.content_bytes
+    assert resolved.result_pointer.sha256 == staged.content_hash
+    assert "files" not in value.revision.manifest
 
 
 @pytest.mark.parametrize(

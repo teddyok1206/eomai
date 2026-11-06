@@ -15,6 +15,22 @@ DB의 출처 Layer(교과서·기출·창작·AI·외부)를 쉽게 볼 수 있�
 
 ## 최신 source checkpoint — 아직 운영 완료 아님
 
+### 2026-11-06 운영 단계 갱신
+
+API·Web·Catalog·global Runner와 창작 producer는 `e1df5c8f`로 호환 배포했고 production
+head0074와 공식 control release까지 반영했다. 실제2쪽 canary 접수·재전송·페이지 준비와
+typed read는 PASS, 실제 DISCOVER가03번 slot의 Job/lease를 받아 RUNNING이다. 아직
+INDEX source 인계·coordinator 자동 활성화·문항/설명 Graph·임베딩 handoff 완주는 남았다.
+따라서 아래 ‘production 변경0’ 문구는 **이전 source checkpoint 당시**의 기록이다.
+현재 상태와 정확한 설치/복구 증거는
+[운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을 우선한다. 목표는 계속ACTIVE다.
+
+후속 실제 결과: INDEX는 자연 종료→공식 후속 identity/config→e1df5c8f 기동을 완료했다.
+DISCOVER 모델도 실제 성공했지만 기존 file-set 전용 포트를 잘못 사용한 결과 reader가
+single-primary Artifact를 읽지 못했다. 기존 verified JSON primary 포트 재사용으로 수정하고
+실제 writer/reader 회귀70 PASS·임시 DB41 PASS를 확인했다. material owner만 후속 호환
+prefix로 반영해 같은 성공 Artifact를 재조회한다. 기존 API/Web/QUERY/INDEX는 유지한다.
+
 ### 공식 배포 경계 누락 보완
 
 최종 8b4632d8 API/Web source-free wheel과 보호된 후보 prefix 준비는 PASS다. 운영
