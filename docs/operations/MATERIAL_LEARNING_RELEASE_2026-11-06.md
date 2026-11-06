@@ -1,8 +1,44 @@
 # 자료 학습 운영 반영 — 단계별 증거
 
-기준: 2026-11-06 06:12 UTC. **전체 목표의 완료 보고서가 아니다.**
+기준: 2026-11-06 06:58 UTC. **전체 목표의 완료 보고서가 아니다.**
 사용자 지정 순서는 자료 학습의 운영 반영·실제 처리 확인을 완료한 뒤 Map의 Layer
 표시 개선에 착수하는 것이다. Map은 아직 시작하지 않았다.
+
+## 06:58 UTC 후속 확인
+
+- material coordinator64bcc2fa를 전용 prefix로 활성화했다. 기존 실제 DISCOVER 결과를
+  재사용해 다음 문항 child로 진행했으며 API/Web/QUERY/INDEX를 이 reader 수정 때문에
+  다시 설치하지 않았다.
+- 실행 helper 교체 뒤 reviewed Codex compatibility가 이전 helper hash를 pin해 슬롯이
+  DEGRADED로 관측된 원인을 확인했다. 계정/사용량 소진이나 새 로그인이 필요한 문제가
+  아니었다. 기존8개 slot/model/effort 조합을 현재e1 실행 환경에서 실제 검증했다:
+  **8/8 PASS, 실제 model calls8, verify97.7초**. 공식 committed report와 policy installer로
+  반영한 뒤 지원된 OBSERVE로6개 슬롯 모두 READY를 확인했다. 인증 파일은 불변이다.
+- 자동 관측 및 readiness probe가 request resource version과 경합했다. 앞선 preflight
+  실패들은 모델 호출0이며 보존했다. 실제 실행 중 command/worker lease가 없는 것을
+  확인한 뒤 main/maintenance와 당시 active였던 accelerator3개만 짧게 중지·원래대로
+  복구했다. INDEX를 이 점검을 위해 중지하지 않았다. 앞으로 helper 교체를 포함한
+  배포는 CLI version뿐 아니라 이 compatibility runtime 일치를 확인해야 한다.
+- INDEX는 첫 새 CUDA 묶음 `CONCRETE_FACETS`, selected targets4를 완료하고 CPU standby
+  후보의 readiness에서 종료됐다. 기존 완료와 실패 이력을 보존하고 같은 설치/설정으로
+  재개했다. 실제 INDEX mount namespace에서 보호된 CPU verifier PASS와 active를 확인했다.
+  일반 host namespace의 진단에서는 고정 loader-cache bind가 없어 MOUNT_INVALID가
+  발생하므로, 그 결과를 실제 service의 실패 원인으로 오인하지 않는다. 후속 진행을
+  계속 관측하며 아직 모든 미래 readiness 오류가 해결됐다고 주장하지 않는다.
+- 실제 문항 추출 child는 `content_region_map`에 `solution` 부모만 넣고 기존 필수인
+  `solution.explanation`/`solution.correct_choice_ids` leaf를 빠뜨려 거부됐다. 기존 typed
+  검증은 유지한다. 새로운 V2 지침 보완을 별도 immutable instruction/preset successor로
+  발행하고, 기존 source/run/성공한 단위는 보존한 공식 실패 단위 retry로 확인한다.
+  원래 V1 prompt bytes·FAILED Job을 변경하거나 잘못된 결과를 정규화해 성공시키지 않는다.
+- 독립 설명 단위의 실제 분석은 ACCEPTED에 이르러 공유 Graph publication 단계다.
+  문항 등록·공개 풀이·공유 Graph/INDEX handoff는 여전히 확인 중이며 Map은 대기다.
+
+재검증 증거:
+`/var/lib/eom-material-codex-revalidation-20261106-accelerator-window-2`,
+`/tmp/material-learning-codex-revalidation-20261106-5.log`,
+`/tmp/material-learning-supported-observe-20261106-1.log`,
+`/tmp/material-learning-index-resume-read-20261106-1.log`.
+외부에 공유하는 보고에는 자격 증명·원문·worker 결과를 넣지 않는다.
 
 ## 최신 인계·실제 결과 확인
 
