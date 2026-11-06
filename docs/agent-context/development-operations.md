@@ -91,6 +91,13 @@ staging 원본·실패 로그·인증·설치 runtime·구형 벡터를 지우�
 mount는 일반 임시 파일과 구분한다. 큰 산출물과 정리 감사 manifest는 NAS의 기존
 Orchestrator Artifact commit 경계로 보관하며 Git에는 넣지 않는다.
 
+사용자의 명시적 EOMIS 퇴역 작업에서는 source/data와 보안 차단용 빈 경로를 구분한다.
+`InaccessiblePaths=/home/eom/EOMIS`가 해당 경로의 존재를 요구하므로 옛 repository가
+없다는 이유로 빈 guard까지 지우지 않는다. 초기 legacy Git-root/baseline 검사는 퇴역
+후 그대로 적용할 수 없다. 범위·암호화 백업·검증은
+`docs/operations/LEGACY_MODEL_CACHE_RETIREMENT_2026-11-06.md`를 확인한다. HuggingFace의
+home cache와 현재 protected model payload도 별개이며 cache root에는 인증 파일이 있다.
+
 ## 근거
 
 - `docs/operations/API_INTEGRATION_TEST_DATABASE.md`
