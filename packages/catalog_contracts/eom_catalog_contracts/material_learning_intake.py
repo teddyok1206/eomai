@@ -257,6 +257,8 @@ class MaterialLearningRunSummary(FrozenModel):
     material_revision_id: str = Field(pattern=r"^materialrev_[0-9a-f]{32}$")
     run_id: str = Field(pattern=r"^materialrun_[0-9a-f]{32}$")
     title: str = Field(min_length=1, max_length=200)
+    attempt: int = Field(default=1, strict=True, ge=1, le=32)
+    predecessor_run_id: str | None = Field(default=None, pattern=r"^materialrun_[0-9a-f]{32}$")
     material_kind: MaterialKind
     state: MaterialRunState
     task_counts: tuple[MaterialTaskCount, ...] = Field(max_length=13)
@@ -357,4 +359,75 @@ class MaterialLearningControlResult(FrozenModel):
     @model_validator(mode="after")
     def closed_reply(self) -> Self:
         validate_contract("material-learning-control-result-v1", self.model_dump(mode="json"))
+        return self
+
+
+class RetryMaterialLearningRunCommand(FrozenModel):
+    schema_version: Literal["material-learning-retry/1.0"] = "material-learning-retry/1.0"
+    operation: Literal["RETRY_MATERIAL_LEARNING_RUN"] = "RETRY_MATERIAL_LEARNING_RUN"
+    actor_id: MaterialOperatorId
+    run_id: str = Field(pattern=r"^materialrun_[0-9a-f]{32}$")
+    expected_updated_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def closed_command(self) -> Self:
+        validate_contract("material-learning-retry-v1", self.model_dump(mode="json"))
+        return self
+
+
+class MaterialLearningRetryResult(FrozenModel):
+    schema_version: Literal["material-learning-retry-result/1.0"] = (
+        "material-learning-retry-result/1.0"
+    )
+    predecessor_run_id: str = Field(pattern=r"^materialrun_[0-9a-f]{32}$")
+    run_id: str = Field(pattern=r"^materialrun_[0-9a-f]{32}$")
+    state: MaterialRunState
+    reused_tasks: int = Field(strict=True, ge=0, le=1_000_000)
+    retried_tasks: int = Field(strict=True, ge=1, le=1_000_000)
+    replayed: bool
+
+    @model_validator(mode="after")
+    def closed_reply(self) -> Self:
+        validate_contract("material-learning-retry-result-v1", self.model_dump(mode="json"))
+        return self
+
+
+class GetMaterialLearningTaskQuery(FrozenModel):
+    schema_version: Literal["material-learning-task-query/1.0"] = "material-learning-task-query/1.0"
+    operation: Literal["GET_MATERIAL_LEARNING_TASK"] = "GET_MATERIAL_LEARNING_TASK"
+    actor_id: MaterialOperatorId
+    run_id: str = Field(pattern=r"^materialrun_[0-9a-f]{32}$")
+    task_id: str = Field(pattern=r"^materialtask_[0-9a-f]{32}$")
+
+    @model_validator(mode="after")
+    def closed_query(self) -> Self:
+        validate_contract("material-learning-task-query-v1", self.model_dump(mode="json"))
+        return self
+
+
+class MaterialTaskSourcePage(FrozenModel):
+    source_role: SourceRole
+    original_filename: str = Field(min_length=1, max_length=255)
+    physical_page: int = Field(strict=True, ge=1, le=2000)
+
+    _text = field_validator("original_filename")(_safe_text)
+
+
+class MaterialLearningTaskDetail(FrozenModel):
+    schema_version: Literal["material-learning-task-detail/1.0"] = (
+        "material-learning-task-detail/1.0"
+    )
+    run_id: str = Field(pattern=r"^materialrun_[0-9a-f]{32}$")
+    task: MaterialLearningTaskSummary
+    attempt: int = Field(strict=True, ge=1, le=32)
+    predecessor_task_id: str | None = Field(pattern=r"^materialtask_[0-9a-f]{32}$")
+    printed_label: str | None = Field(min_length=1, max_length=100)
+    section_path: tuple[Annotated[str, Field(min_length=1, max_length=200)], ...] = Field(
+        max_length=12
+    )
+    source_pages: tuple[MaterialTaskSourcePage, ...] = Field(max_length=64)
+
+    @model_validator(mode="after")
+    def closed_reply(self) -> Self:
+        validate_contract("material-learning-task-detail-v1", self.model_dump(mode="json"))
         return self

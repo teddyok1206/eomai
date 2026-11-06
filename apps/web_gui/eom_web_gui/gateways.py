@@ -125,9 +125,12 @@ from eom_web_gui.material_learning_contracts import (
     MaterialLearningControl,
     MaterialLearningControlReply,
     MaterialLearningDetail,
+    MaterialLearningRetry,
+    MaterialLearningRetryReply,
     MaterialLearningRuns,
     MaterialLearningSourceReceipt,
     MaterialLearningSubmission,
+    MaterialLearningTaskDetail,
 )
 from eom_web_gui.redaction import sanitize_mapping
 from eom_web_gui.reference_item_contracts import parse_reference_item_start_reply
@@ -455,6 +458,14 @@ class ApplicationGateway(Protocol):
     async def control_material_learning(
         self, session: WebSession, run_id: str, value: MaterialLearningControl
     ) -> MaterialLearningControlReply: ...
+
+    async def retry_material_learning(
+        self, session: WebSession, run_id: str, value: MaterialLearningRetry
+    ) -> MaterialLearningRetryReply: ...
+
+    async def material_learning_task(
+        self, session: WebSession, run_id: str, task_id: str
+    ) -> MaterialLearningTaskDetail: ...
 
     async def material_learning_run(
         self, session: WebSession, run_id: str, *, after_ordinal: int = 0
@@ -1224,6 +1235,42 @@ class HttpApplicationGateway:
             reply = MaterialLearningControlReply.model_validate(self._data(response))
             if reply.run_id != run_id:
                 raise ValueError("Material learning reply identity differs")
+            return reply
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def retry_material_learning(
+        self, session: WebSession, run_id: str, value: MaterialLearningRetry
+    ) -> MaterialLearningRetryReply:
+        _require_id(run_id, "materialrun_")
+        key = f"material-retry-v1:{run_id}:{value.expected_updated_at.isoformat()}"
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/material-learning/{run_id}/retry",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": key},
+        )
+        try:
+            reply = MaterialLearningRetryReply.model_validate(self._data(response))
+            if reply.predecessor_run_id != run_id or reply.run_id == run_id:
+                raise ValueError("Material retry identity differs")
+            return reply
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def material_learning_task(
+        self, session: WebSession, run_id: str, task_id: str
+    ) -> MaterialLearningTaskDetail:
+        _require_id(run_id, "materialrun_")
+        _require_id(task_id, "materialtask_")
+        response = await self._authorized(
+            session, "GET", f"/api/v1/material-learning/{run_id}/tasks/{task_id}"
+        )
+        try:
+            reply = MaterialLearningTaskDetail.model_validate(self._data(response))
+            if reply.run_id != run_id or reply.task.task_id != task_id:
+                raise ValueError("Material task identity differs")
             return reply
         except ValueError as error:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error

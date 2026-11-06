@@ -157,6 +157,22 @@
           "minLength": 1,
           "maxLength": 200
         },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32
+        },
+        "predecessor_run_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^materialrun_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "material_kind": {
           "enum": [
             "TEXTBOOK",
@@ -214,6 +230,8 @@
         "material_revision_id",
         "run_id",
         "title",
+        "attempt",
+        "predecessor_run_id",
         "material_kind",
         "state",
         "task_counts",

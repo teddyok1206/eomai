@@ -13,7 +13,7 @@ export function materialLearningProgress(run) {
 export function createMaterialLearning({document, api, explainError = error => error.message}) {
   const $ = selector => document.querySelector(selector);
   let owner = null, active = false, version = 0, timer = null;
-  let selected = null, intent = null, busy = false, receipts = new WeakMap();
+  let selected = null, intent = null, busy = false, receipts = new WeakMap(), detailVersion = 0;
 
   function node(tag, text, className = "") {
     const value = document.createElement(tag);
@@ -34,8 +34,9 @@ export function createMaterialLearning({document, api, explainError = error => e
     selected = runId;
     const result = await api(`/material-learning/${encodeURIComponent(runId)}`);
     if (!active || token !== version || selected !== runId) return;
+    const renderVersion = ++detailVersion;
     const target = $("#material-learning-detail");
-    target.replaceChildren(node("h3", result.run.title));
+    target.replaceChildren(node("h3", `${result.run.title}${result.run.attempt > 1 ? ` · ${result.run.attempt}차 처리` : ""}`));
     target.hidden = false;
     target.append(node("p", STATES[result.run.state] || result.run.state));
     if (["DISCOVERING", "PROCESSING", "WAITING_FOR_CAPACITY", "PAUSED"].includes(result.run.state)) {
@@ -59,9 +60,52 @@ export function createMaterialLearning({document, api, explainError = error => e
       target.append(button);
     }
     if (result.run.error_code) target.append(node("p", `확인 코드: ${result.run.error_code}`, "form-message error"));
+    if (["FAILED", "COMPLETED_WITH_EXCEPTIONS"].includes(result.run.state) && result.run.task_counts.some(value => value.state === "FAILED" && value.count > 0)) {
+      const button = node("button", "오류 난 부분 다시 처리", "button quiet");
+      button.type = "button";
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try {
+          const reply = await api(`/material-learning/${encodeURIComponent(runId)}/retry`, {method: "POST", mutation: true, body: {expected_updated_at: result.run.updated_at}});
+          if (!active || token !== version || selected !== runId) return;
+          selected = reply.run_id;
+          message(`완료한 ${reply.reused_tasks}단계는 그대로 두고, 오류 난 ${reply.retried_tasks}단계를 다시 처리합니다. 이전 기록도 보관됩니다.`);
+          await refresh();
+        } catch (error) {
+          if (active && token === version && selected === runId && renderVersion === detailVersion) {
+            message(`다시 처리하지 못했습니다. ${explainError(error)} 원래 접수 기록은 그대로 보관됩니다.`, true);
+            button.disabled = false;
+          }
+        }
+      });
+      target.append(button);
+    }
     const list = node("ol");
     for (const task of result.tasks) {
-      list.append(node("li", `${TASK_KINDS[task.task_kind]} · ${STATES[task.state] || task.state}${task.error_code ? ` · 확인 코드: ${task.error_code}` : ""}`));
+      const row = node("li", `${TASK_KINDS[task.task_kind]} · ${STATES[task.state] || task.state}${task.error_code ? ` · 확인 코드: ${task.error_code}` : ""}`);
+      if (["FAILED", "EXCEPTION"].includes(task.state)) {
+        const button = node("button", "위치·오류 확인", "button quiet"); button.type = "button";
+        button.addEventListener("click", async () => {
+          button.disabled = true;
+          try {
+            const source = await api(`/material-learning/${encodeURIComponent(runId)}/tasks/${encodeURIComponent(task.task_id)}`);
+            if (!active || token !== version || selected !== runId || renderVersion !== detailVersion) return;
+            const description = node("div");
+            if (source.printed_label) description.append(node("p", `문항 ${source.printed_label}${source.section_path.length ? ` · ${source.section_path.join(" / ")}` : ""}`));
+            if (!source.source_pages.length) description.append(node("p", "아직 원문 페이지를 확인하지 못한 단계입니다."));
+            for (const page of source.source_pages) description.append(node("p", `${page.source_role === "SOLUTIONS" ? "해설 파일" : "본문 파일"} · ${page.original_filename} · ${page.physical_page}쪽`));
+            row.append(description);
+            button.hidden = true;
+          } catch (error) {
+            if (active && token === version && selected === runId && renderVersion === detailVersion) {
+              message(`원문 위치를 불러오지 못했습니다. ${explainError(error)}`, true);
+              button.disabled = false;
+            }
+          }
+        });
+        row.append(button);
+      }
+      list.append(row);
     }
     target.append(list);
     if (result.next_ordinal !== null) target.append(node("p", "앞부분 50단계를 표시했습니다. 전체 진행 상태는 위 목록에서 확인할 수 있습니다.", "muted-label"));
@@ -86,7 +130,7 @@ export function createMaterialLearning({document, api, explainError = error => e
         for (const run of result.runs) {
           const row = node("tr");
           row.setAttribute("aria-selected", String(run.run_id === selected));
-          for (const text of [run.title, KINDS[run.material_kind], STATES[run.state] || run.state, materialLearningProgress(run), date(run.created_at)]) row.append(node("td", text));
+          for (const text of [`${run.title}${run.attempt > 1 ? ` · ${run.attempt}차 처리` : ""}`, KINDS[run.material_kind], STATES[run.state] || run.state, materialLearningProgress(run), date(run.created_at)]) row.append(node("td", text));
           const action = node("td");
           const button = node("button", "상세 보기", "button quiet"); button.type = "button";
           button.addEventListener("click", () => details(run.run_id).catch(error => message(explainError(error), true)));

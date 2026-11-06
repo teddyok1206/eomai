@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/task-detail/1.0",
+  "title": "EOM material learning task-detail 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-task-detail/1.0"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^materialrun_[0-9a-f]{32}$"
+    },
+    "task": {
+      "$ref": "eom://schemas/material-learning/intake-types/1.0#/$defs/taskSummary"
+    },
+    "attempt": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 32
+    },
+    "predecessor_task_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^materialtask_[0-9a-f]{32}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "printed_label": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "section_path": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      },
+      "minItems": 0,
+      "maxItems": 12
+    },
+    "source_pages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "source_role": {
+            "enum": [
+              "MAIN",
+              "SOLUTIONS"
+            ]
+          },
+          "original_filename": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255
+          },
+          "physical_page": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 2000
+          }
+        },
+        "required": [
+          "source_role",
+          "original_filename",
+          "physical_page"
+        ]
+      },
+      "minItems": 0,
+      "maxItems": 64
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "task",
+    "attempt",
+    "predecessor_task_id",
+    "printed_label",
+    "section_path",
+    "source_pages"
+  ]
+}

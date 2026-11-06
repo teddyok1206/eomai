@@ -18,9 +18,11 @@ from eom_catalog_contracts.material_learning_intake import (
     ControlMaterialLearningRunCommand,
     CreateMaterialLearningCommand,
     GetMaterialLearningRunQuery,
+    GetMaterialLearningTaskQuery,
     ListMaterialLearningRunsQuery,
     MaterialLearningErrorResponse,
     MaterialSourceUploadCommand,
+    RetryMaterialLearningRunCommand,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256
 from eom_orchestrator.repository import IdempotencyConflict
@@ -45,6 +47,8 @@ MATERIAL_LEARNING_OPERATIONS = frozenset(
         "GET_MATERIAL_LEARNING_RUN",
         "AUTHORIZE_MATERIAL_LEARNING_INPUT",
         "CONTROL_MATERIAL_LEARNING_RUN",
+        "RETRY_MATERIAL_LEARNING_RUN",
+        "GET_MATERIAL_LEARNING_TASK",
     }
 )
 
@@ -119,6 +123,10 @@ def dispatch_material_learning(
             if intake is None:
                 raise MaterialLearningSourceError("MATERIAL_LEARNING_UNAVAILABLE")
             reply = intake.control(ControlMaterialLearningRunCommand.model_validate(value))
+        elif operation == "RETRY_MATERIAL_LEARNING_RUN":
+            if intake is None:
+                raise MaterialLearningSourceError("MATERIAL_LEARNING_UNAVAILABLE")
+            reply = intake.retry(RetryMaterialLearningRunCommand.model_validate(value))
         elif operation == "LIST_MATERIAL_LEARNING_RUNS":
             list_query = ListMaterialLearningRunsQuery.model_validate(value)
             if reads is None:
@@ -129,6 +137,10 @@ def dispatch_material_learning(
             if reads is None:
                 raise MaterialLearningSourceError("MATERIAL_LEARNING_UNAVAILABLE")
             reply = reads.inspect(read_query)
+        elif operation == "GET_MATERIAL_LEARNING_TASK":
+            if reads is None:
+                raise MaterialLearningSourceError("MATERIAL_LEARNING_UNAVAILABLE")
+            reply = reads.task(GetMaterialLearningTaskQuery.model_validate(value))
         else:
             raise ValueError("unsupported operation")
     except (MaterialLearningSourceError, MaterialLearningStorageError) as error:

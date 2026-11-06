@@ -187,7 +187,11 @@ def install_exception_handlers(app: FastAPI) -> None:
             "MATERIAL_LEARNING_PERMISSION_DENIED",
             "MATERIAL_LEARNING_SOURCE_OWNER_MISMATCH",
         }
-        missing = exc.code in {"CURATED_ASSEMBLY_NOT_FOUND", "MATERIAL_LEARNING_RUN_NOT_FOUND"}
+        missing = exc.code in {
+            "CURATED_ASSEMBLY_NOT_FOUND",
+            "MATERIAL_LEARNING_RUN_NOT_FOUND",
+            "MATERIAL_LEARNING_TASK_NOT_FOUND",
+        }
         malformed = exc.code in {
             "CURATED_ASSEMBLY_LIST_INVALID",
             "MATERIAL_LEARNING_REQUEST_INVALID",

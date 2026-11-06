@@ -11,6 +11,7 @@ from eom_catalog_contracts.material_learning_preparation import (
     material_document_kind,
     material_document_source_class,
 )
+from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_workflow.material_learning_state import MaterialLearningState, MaterialTaskState
 from sqlalchemy import select
 
@@ -31,6 +32,7 @@ from eom_catalog_service.material_learning_models import (
     MaterialLearningRunRecord,
     MaterialLearningTaskRecord,
 )
+from eom_catalog_service.material_learning_source import MaterialLearningSourceError
 from eom_catalog_service.material_learning_store import (
     MaterialRunClaim,
     lock_material_run,
@@ -38,9 +40,17 @@ from eom_catalog_service.material_learning_store import (
     transition_material_run,
     transition_material_task,
 )
+from eom_catalog_service.material_task_history import read_material_task_histories
 
 _ANALYSIS_FAILURES = frozenset({"FAILED", "REJECTED", "CANCELLED"})
 _KNOWLEDGE_COMMAND_REF = "eom://schemas/knowledge/create-material-knowledge-analysis/1.0"
+_TERMINAL_SOURCE_LIMITS = frozenset(
+    {
+        "MATERIAL_LEARNING_PDF_ENCRYPTED",
+        "MATERIAL_LEARNING_SOURCE_PAGE_LIMIT",
+        "MATERIAL_LEARNING_SOURCE_RENDER_LIMIT",
+    }
+)
 
 
 class MaterialLearningProcessingService:
@@ -65,7 +75,37 @@ class MaterialLearningProcessingService:
                 assert run is not None
                 phase = run.state
             if phase in {"RECEIVED", "PREPARING"}:
-                return self.coordinator.prepare(claim)
+                try:
+                    return self.coordinator.prepare(claim)
+                except MaterialLearningSourceError as error:
+                    if error.code not in _TERMINAL_SOURCE_LIMITS:
+                        raise  # Infrastructure/profile/pointer failures are not source quality.
+                    with self.sessions.begin() as session:
+                        run = lock_material_run(session, claim, now=datetime.now(UTC))
+                        task = session.scalar(
+                            select(MaterialLearningTaskRecord).where(
+                                MaterialLearningTaskRecord.run_id == run.run_id,
+                                MaterialLearningTaskRecord.task_kind == "PREPARE",
+                            )
+                        )
+                        if task is None or task.state != "PREPARING":
+                            raise
+                        transition_material_task(
+                            session,
+                            run,
+                            task,
+                            MaterialTaskState.FAILED,
+                            now=datetime.now(UTC),
+                            error_code=error.code,
+                        )
+                        transition_material_run(
+                            session,
+                            run,
+                            MaterialLearningState.FAILED,
+                            now=datetime.now(UTC),
+                            error_code=error.code,
+                        )
+                        return MaterialCoordinatorProgress(run.run_id, task.task_id, "FAILED")
             context = self.coordinator.context(claim)
             if phase == "DISCOVERING":
                 return self.coordinator.discovery_step(claim, context)
@@ -205,7 +245,8 @@ class MaterialLearningProcessingService:
             )
         if task.state == "ANALYZING":
             assert task.item_revision_id is not None
-            if task.analysis_run_id is None and self._paused(claim):
+            base_id, solution_id = self._analysis_pins(task.task_id)
+            if base_id is None and self._paused(claim):
                 return MaterialCoordinatorProgress(claim.run_id, task.task_id, "PAUSED")
             base = self.graph.advance_item_analysis(
                 task_id=task.task_id,
@@ -215,7 +256,7 @@ class MaterialLearningProcessingService:
             self._pin_analysis(claim, task.task_id, base, solution=False)
             if base.state != "ACCEPTED":
                 return self._analysis_progress(claim, task.task_id, base)
-            if task.solution_analysis_run_id is None and self._paused(claim):
+            if solution_id is None and self._paused(claim):
                 return MaterialCoordinatorProgress(claim.run_id, task.task_id, "PAUSED")
             solution = self.graph.advance_item_solution(
                 base_analysis_run_id=base.analysis_run_id,
@@ -228,10 +269,11 @@ class MaterialLearningProcessingService:
             self._set_state(claim, task.task_id, MaterialTaskState.PUBLISHING)
             return MaterialCoordinatorProgress(claim.run_id, task.task_id, "PUBLISHING")
         if task.state == "PUBLISHING":
-            assert task.item_revision_id is not None and task.analysis_run_id is not None
+            base_id, _solution_id = self._analysis_pins(task.task_id)
+            assert task.item_revision_id is not None and base_id is not None
             revision = self.graph.publish_item(
                 task_id=task.task_id,
-                analysis_run_id=task.analysis_run_id,
+                analysis_run_id=base_id,
                 item_revision_id=task.item_revision_id,
                 operator_id=context.operator_id,
             )
@@ -257,12 +299,39 @@ class MaterialLearningProcessingService:
             task = session.get(MaterialLearningTaskRecord, task_id)
             assert task is not None
             previous = task.solution_analysis_run_id if solution else task.analysis_run_id
+            if previous is None and task.predecessor_task_id is not None:
+                history = read_material_task_histories(session, (task,))[task.task_id]
+                owner = history.analysis_owner(solution=solution)
+                inherited = (
+                    (owner.solution_analysis_run_id if solution else owner.analysis_run_id)
+                    if owner
+                    else None
+                )
+                if inherited == analysis.analysis_run_id:
+                    return  # Keep the original unique child owner and exact accepted result.
+                prior = session.get(KnowledgeAnalysisRunRecord, inherited) if inherited else None
+                if prior is not None and prior.state not in _ANALYSIS_FAILURES:
+                    raise ValueError("MATERIAL_LEARNING_ANALYSIS_PIN_CHANGED")
             if previous is not None and previous != analysis.analysis_run_id:
                 raise ValueError("MATERIAL_LEARNING_ANALYSIS_PIN_CHANGED")
             if solution:
                 task.solution_analysis_run_id = analysis.analysis_run_id
             else:
                 task.analysis_run_id = analysis.analysis_run_id
+
+    def _analysis_pins(self, task_id: str) -> tuple[str | None, str | None]:
+        with self.sessions() as session:
+            task = session.get(MaterialLearningTaskRecord, task_id)
+            if task is None:
+                raise ValueError("MATERIAL_LEARNING_TASK_MISSING")
+            if task.predecessor_task_id is None:
+                return task.analysis_run_id, task.solution_analysis_run_id
+            history = read_material_task_histories(session, (task,))[task_id]
+            base, solution = history.analysis_owner(), history.analysis_owner(solution=True)
+            return (
+                base.analysis_run_id if base else None,
+                solution.solution_analysis_run_id if solution else None,
+            )
 
     def _analysis_progress(
         self, claim: MaterialRunClaim, task_id: str, analysis: KnowledgeAnalysisApplicationResult

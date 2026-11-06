@@ -34,6 +34,30 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "material-learning-retry-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-retry-v1.schema.json",
+            "resources/material-learning/material-learning-retry-v1.schema.json",
+            "1.0",
+            "sha256:4c58e96d5e10ff285d562d254b4c7097e4aca3af0b0e9a52f5ca18d7dcced477",
+        ),
+        "material-learning-retry-result-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-retry-result-v1.schema.json",
+            "resources/material-learning/material-learning-retry-result-v1.schema.json",
+            "1.0",
+            "sha256:7b095e325aa98b43017712fed363365f2b7d6bcdd933f8eb44395fc7b4fe4466",
+        ),
+        "material-learning-task-query-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-task-query-v1.schema.json",
+            "resources/material-learning/material-learning-task-query-v1.schema.json",
+            "1.0",
+            "sha256:18dd61408d69b34d7c58e7e9135e56370fad530b247f5f8b9d7bd7346d7a3f61",
+        ),
+        "material-learning-task-detail-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-task-detail-v1.schema.json",
+            "resources/material-learning/material-learning-task-detail-v1.schema.json",
+            "1.0",
+            "sha256:c8068664b9d9edce2fc87e18ce097137149afd9aa392195483783350563d07c3",
+        ),
         "material-learning-control-v1": CatalogSchemaResource(
             "schemas/material-learning/material-learning-control-v1.schema.json",
             "resources/material-learning/material-learning-control-v1.schema.json",
@@ -158,7 +182,7 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "schemas/material-learning/material-learning-intake-types-v1.schema.json",
             "resources/material-learning/material-learning-intake-types-v1.schema.json",
             "1.0",
-            "sha256:cf8fe7a164c7fb8d498b7d5772899ff4bf79e024074b76dda2b477f75b1e966e",
+            "sha256:7304084507d21a86fa943dbbe4a33fefe90d380096bda89cfdbc37287d006ac8",
         ),
         "material-learning-source-upload-v1": CatalogSchemaResource(
             "schemas/material-learning/material-learning-source-upload-v1.schema.json",

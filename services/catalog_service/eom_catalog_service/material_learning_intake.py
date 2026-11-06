@@ -15,6 +15,8 @@ from eom_catalog_contracts.material_learning_intake import (
     MaterialLearningAcceptance,
     MaterialLearningControlResult,
     MaterialLearningIntakeManifest,
+    MaterialLearningRetryResult,
+    RetryMaterialLearningRunCommand,
 )
 from eom_identifiers import content_sha256
 from eom_orchestrator.database import build_session_factory
@@ -29,6 +31,7 @@ from eom_catalog_service.material_learning_models import (
     LearningMaterialRevisionRecord,
     MaterialLearningRunRecord,
 )
+from eom_catalog_service.material_learning_recovery import retry_material_learning_run
 from eom_catalog_service.material_learning_source import (
     MaterialLearningSourceError,
     MaterialLearningSourceService,
@@ -49,6 +52,9 @@ class MaterialLearningIntakeService:
         self.sessions = build_session_factory(engine)
         self.sources = MaterialLearningSourceService(engine, self.settings)
         self.artifacts = CatalogArtifactService(engine, self.settings)
+
+    def retry(self, command: RetryMaterialLearningRunCommand) -> MaterialLearningRetryResult:
+        return retry_material_learning_run(self.sessions, command)
 
     def control(self, command: ControlMaterialLearningRunCommand) -> MaterialLearningControlResult:
         command = ControlMaterialLearningRunCommand.model_validate(command.model_dump(mode="json"))

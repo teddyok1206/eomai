@@ -10,7 +10,7 @@ const assets = new Map(await Promise.all(['index.html', 'styles.css', 'knowledge
 const app = `
 import {createMaterialLearning} from './material-learning.js';
 const runId = 'materialrun_' + '1'.repeat(32);
-const fixture = window.fixture = {calls: [], runs: [], failCreate: true, held: false, release: null};
+const fixture = window.fixture = {calls: [], runs: [], failCreate: true, held: false, release: null, taskState: 'RUNNING'};
 async function api(path, options = {}) {
   fixture.calls.push({path, key: options.headers?.['Idempotency-Key'], body: options.body instanceof File ? options.body.name : options.body});
   if (path.startsWith('/material-learning/sources?')) return {original_filename: options.body.name, source_format: 'PDF'};
@@ -24,8 +24,15 @@ async function api(path, options = {}) {
     fixture.runs[0].state = options.body.action === 'PAUSE' ? 'PAUSED' : 'PROCESSING';
     return {run_id: runId, state: fixture.runs[0].state};
   }
+  if (path.includes('/tasks/')) return {printed_label: '12', section_path: ['1장'], source_pages: [{source_role: 'MAIN', original_filename: '원문<img src=x>.pdf', physical_page: 5}]};
+  if (path.endsWith('/retry')) {
+    const nextId = 'materialrun_' + '2'.repeat(32);
+    fixture.runs = [{...fixture.runs[0], run_id: nextId, state: 'PROCESSING', attempt: 2, predecessor_run_id: runId, task_counts: [{state: 'COMPLETED', count: 2}, {state: 'PENDING', count: 1}]}];
+    fixture.taskState = 'PENDING';
+    return {run_id: nextId, predecessor_run_id: runId, reused_tasks: 2, retried_tasks: 1, replayed: false};
+  }
   if (fixture.held) {fixture.held = false; await new Promise(resolve => fixture.release = resolve);}
-  return {run: fixture.runs[0], tasks: [{task_kind: 'QUESTION', state: 'RUNNING', error_code: null}], next_ordinal: null};
+  return {run: fixture.runs[0], tasks: [{task_id: 'materialtask_' + '3'.repeat(32), task_kind: 'QUESTION', state: fixture.taskState, error_code: fixture.taskState === 'FAILED' ? 'SYNTHETIC_FAILURE' : null}], next_ordinal: null};
 }
 const controller = createMaterialLearning({document, api});
 controller.install(); controller.setOwner('owner'); controller.open(); fixture.controller = controller;
@@ -68,6 +75,24 @@ try {
   const controls = await page.evaluate(() => fixture.calls.filter(call => call.path.endsWith('/control')));
   assert.deepEqual(controls.map(call => call.body.action), ['PAUSE', 'RESUME']);
   assert.ok(controls.every(call => call.body.expected_updated_at === '2026-11-06T00:00:00Z'));
+  await page.evaluate(() => {
+    fixture.runs[0].state = 'COMPLETED_WITH_EXCEPTIONS'; fixture.taskState = 'FAILED';
+    fixture.runs[0].task_counts = [{state: 'COMPLETED', count: 2}, {state: 'FAILED', count: 1}];
+  });
+  await page.locator('#material-learning-refresh').click();
+  await page.getByRole('button', {name: '위치·오류 확인', exact: true}).click();
+  await page.waitForFunction(() => document.querySelector('#material-learning-detail').textContent.includes('5쪽'));
+  assert.match(await page.locator('#material-learning-detail').textContent(), /문항 12.*1장/);
+  assert.match(await page.locator('#material-learning-detail').textContent(), /원문<img src=x>.pdf/);
+  assert.equal(await page.locator('#material-learning-detail img').count(), 0, 'source filename became markup');
+  await page.getByRole('button', {name: '오류 난 부분 다시 처리', exact: true}).click();
+  await page.waitForFunction(() => document.querySelector('#material-learning-message').textContent.includes('오류 난 1단계'));
+  await page.getByRole('button', {name: '잠시 멈추기', exact: true}).waitFor();
+  const retries = await page.evaluate(() => fixture.calls.filter(call => call.path.endsWith('/retry')));
+  assert.match(await page.locator('#material-learning-detail').textContent(), /2차 처리/);
+  assert.equal(retries.length, 1);
+  assert.deepEqual(retries[0].body, {expected_updated_at: '2026-11-06T00:00:00Z'});
+  assert.equal(await page.evaluate(() => fixture.calls.filter(call => call.path.startsWith('/material-learning/sources?')).length), 2, 'unit retry recopied original sources');
   await page.evaluate(() => {fixture.held = true; fixture.release = null;});
   await page.getByRole('button', {name: '상세 보기', exact: true}).click();
   await page.waitForFunction(() => fixture.release !== null);
@@ -76,5 +101,5 @@ try {
   assert.equal(await page.locator('#material-learning-detail').textContent(), '');
   assert.equal(await page.locator('#material-learning-runs').textContent(), '');
   assert.deepEqual(errors, []);
-  console.log('MATERIAL_LEARNING_BROWSER=PASS upload-pair same-request-retry no-source-recopy progress stale-owner live-writes=0');
+  console.log('MATERIAL_LEARNING_BROWSER=PASS upload-pair same-request-retry no-source-recopy progress pause-resume failed-unit-successor source-position safe-text stale-owner live-writes=0');
 } finally {await browser.close(); await new Promise(resolve => server.close(resolve));}

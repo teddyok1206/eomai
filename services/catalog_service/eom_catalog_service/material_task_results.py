@@ -39,6 +39,7 @@ from eom_catalog_service.material_learning_models import (
     MaterialLearningTaskRecord,
 )
 from eom_catalog_service.material_learning_source import authorize_material_learning
+from eom_catalog_service.material_task_history import read_material_task_histories
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,9 +76,14 @@ def resolve_completed_material_task(
         or parent.created_by != operator_id
         or parent.state == "CANCELLED"
         or task.state == "CANCELLED"
-        or task.workflow_id is None
+        or (task.workflow_id is None and task.predecessor_task_id is None)
     ):
         raise ValueError("MATERIAL_LEARNING_TASK_SOURCE_INELIGIBLE")
+    if task.workflow_id is None:
+        history = read_material_task_histories(session, (task,))[task.task_id]
+        task = history.result_task()
+        if task.workflow_id is None:
+            raise ValueError("MATERIAL_LEARNING_TASK_SOURCE_INELIGIBLE")
     workflow = session.get(WorkflowInstanceRecord, task.workflow_id, populate_existing=True)
     steps = tuple(
         session.scalars(

@@ -147,14 +147,18 @@ from eom_catalog_contracts.material_learning_intake import (
     ControlMaterialLearningRunCommand,
     CreateMaterialLearningCommand,
     GetMaterialLearningRunQuery,
+    GetMaterialLearningTaskQuery,
     ListMaterialLearningRunsQuery,
     MaterialLearningAcceptance,
     MaterialLearningControlResult,
     MaterialLearningErrorResponse,
+    MaterialLearningRetryResult,
     MaterialLearningRunDetail,
     MaterialLearningRunList,
+    MaterialLearningTaskDetail,
     MaterialSourceUploadCommand,
     MaterialSourceUploadReceipt,
+    RetryMaterialLearningRunCommand,
 )
 from eom_item_registry import RegistryError, RegistryErrorCode
 from eom_operator_identity import ActorContext
@@ -263,7 +267,9 @@ class CatalogApplicationClient:
         request: CreateMaterialLearningCommand
         | ControlMaterialLearningRunCommand
         | ListMaterialLearningRunsQuery
-        | GetMaterialLearningRunQuery,
+        | GetMaterialLearningRunQuery
+        | GetMaterialLearningTaskQuery
+        | RetryMaterialLearningRunCommand,
         reply_type: type[Reply],
     ) -> Reply:
         value = self._raw_request(request.model_dump(mode="json"), timeout_seconds=60.0)
@@ -278,6 +284,28 @@ class CatalogApplicationClient:
         self, command: ControlMaterialLearningRunCommand
     ) -> MaterialLearningControlResult:
         return self._material_learning_read(command, MaterialLearningControlResult)
+
+    def retry_material_learning_run(
+        self, command: RetryMaterialLearningRunCommand
+    ) -> MaterialLearningRetryResult:
+        reply = self._material_learning_read(command, MaterialLearningRetryResult)
+        if reply.predecessor_run_id != command.run_id or reply.run_id == command.run_id:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Material retry response identity differs",
+            )
+        return reply
+
+    def read_material_learning_task(
+        self, query: GetMaterialLearningTaskQuery
+    ) -> MaterialLearningTaskDetail:
+        reply = self._material_learning_read(query, MaterialLearningTaskDetail)
+        if reply.run_id != query.run_id or reply.task.task_id != query.task_id:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Material task response identity differs",
+            )
+        return reply
 
     def ingest_material_learning_source(
         self, source: Path, command: MaterialSourceUploadCommand

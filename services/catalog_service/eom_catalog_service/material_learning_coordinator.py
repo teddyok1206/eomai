@@ -100,6 +100,51 @@ class MaterialDiscoveryPlan:
     by_task: Mapping[str, DiscoveredMaterialRange]
 
 
+def read_material_discovery_plan(
+    session: Session,
+    artifacts: CatalogArtifactService,
+    *,
+    run_id: str,
+    operator_id: str,
+) -> MaterialDiscoveryPlan:
+    """The same source/coverage plan for execution and explicit exception lookup."""
+    authorize_material_learning(session, operator_id)
+    run = session.get(MaterialLearningRunRecord, run_id)
+    if run is None or run.created_by != operator_id or run.state == "CANCELLED":
+        raise ValueError("MATERIAL_LEARNING_RUN_NOT_FOUND")
+    tasks = tuple(
+        session.scalars(
+            select(MaterialLearningTaskRecord)
+            .where(
+                MaterialLearningTaskRecord.run_id == run_id,
+                MaterialLearningTaskRecord.task_kind == "DISCOVER",
+            )
+            .order_by(MaterialLearningTaskRecord.ordinal)
+        )
+    )
+    if not tasks or any(task.state != "COMPLETED" for task in tasks):
+        raise ValueError("MATERIAL_LEARNING_DISCOVERY_INCOMPLETE")
+    ranges = []
+    for task in tasks:
+        resolved = resolve_completed_material_task(
+            session, artifacts, task_id=task.task_id, operator_id=operator_id
+        )
+        if (
+            not isinstance(resolved.work, MaterialDiscoveryWork)
+            or not isinstance(resolved.role.output.learning_result, MaterialDiscoveryResult)
+            or resolved.work.material_revision_id != run.material_revision_id
+        ):
+            raise ValueError("MATERIAL_LEARNING_DISCOVERY_TYPE_INVALID")
+        ranges.append(DiscoveredMaterialRange(resolved.work, resolved.role.output.learning_result))
+    units = plan_material_learning_units(tuple(ranges))
+    return MaterialDiscoveryPlan(
+        run_id,
+        tuple(ranges),
+        MappingProxyType({unit.unit_key: unit for unit in units}),
+        MappingProxyType({value.work.task_id: value for value in ranges}),
+    )
+
+
 class MaterialLearningCoordinator:
     def __init__(
         self,
@@ -500,40 +545,9 @@ class MaterialLearningCoordinator:
         if self._plan is not None and self._plan.run_id == claim.run_id:
             return self._plan
         with self.sessions() as session:
-            tasks = tuple(
-                session.scalars(
-                    select(MaterialLearningTaskRecord)
-                    .where(
-                        MaterialLearningTaskRecord.run_id == claim.run_id,
-                        MaterialLearningTaskRecord.task_kind == "DISCOVER",
-                    )
-                    .order_by(MaterialLearningTaskRecord.ordinal)
-                )
+            self._plan = read_material_discovery_plan(
+                session, self.artifacts, run_id=claim.run_id, operator_id=context.operator_id
             )
-            if not tasks or any(task.state != "COMPLETED" for task in tasks):
-                raise ValueError("MATERIAL_LEARNING_DISCOVERY_INCOMPLETE")
-            ranges = []
-            for task in tasks:
-                resolved = resolve_completed_material_task(
-                    session,
-                    self.artifacts,
-                    task_id=task.task_id,
-                    operator_id=context.operator_id,
-                )
-                if not isinstance(resolved.work, MaterialDiscoveryWork) or not isinstance(
-                    resolved.role.output.learning_result, MaterialDiscoveryResult
-                ):
-                    raise ValueError("MATERIAL_LEARNING_DISCOVERY_TYPE_INVALID")
-                ranges.append(
-                    DiscoveredMaterialRange(resolved.work, resolved.role.output.learning_result)
-                )
-        units = plan_material_learning_units(tuple(ranges))
-        self._plan = MaterialDiscoveryPlan(
-            claim.run_id,
-            tuple(ranges),
-            MappingProxyType({unit.unit_key: unit for unit in units}),
-            MappingProxyType({value.work.task_id: value for value in ranges}),
-        )
         return self._plan
 
     def discovery_step(

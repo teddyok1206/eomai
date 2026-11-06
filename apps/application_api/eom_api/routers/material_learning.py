@@ -10,14 +10,18 @@ from eom_catalog_contracts.material_learning_intake import (
     ControlMaterialLearningRunCommand,
     CreateMaterialLearningCommand,
     GetMaterialLearningRunQuery,
+    GetMaterialLearningTaskQuery,
     ListMaterialLearningRunsQuery,
     MaterialLearningAcceptance,
     MaterialLearningControlResult,
+    MaterialLearningRetryResult,
     MaterialLearningRunDetail,
     MaterialLearningRunList,
     MaterialLearningSourceSelection,
+    MaterialLearningTaskDetail,
     MaterialSourceUploadCommand,
     MaterialSourceUploadReceipt,
+    RetryMaterialLearningRunCommand,
 )
 from eom_catalog_contracts.models import FrozenModel, UtcDatetime
 from eom_operator_identity import PermissionKey
@@ -40,6 +44,64 @@ class CreateMaterialLearningRequest(FrozenModel):
 class MaterialLearningControlRequest(FrozenModel):
     action: Literal["PAUSE", "RESUME"]
     expected_updated_at: UtcDatetime
+
+
+class MaterialLearningRetryRequest(FrozenModel):
+    expected_updated_at: UtcDatetime
+
+
+@router.post(
+    "/{run_id}/retry",
+    operation_id="material_learning_retry",
+    response_model=SingleResponse[MaterialLearningRetryResult],
+    dependencies=[
+        Depends(require_permission(PermissionKey.KNOWLEDGE_ANALYSIS_CREATE, admin_only=True))
+    ],
+)
+def retry_material_learning(
+    request: Request,
+    body: MaterialLearningRetryRequest,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+    run_id: str = Path(pattern=r"^materialrun_[0-9a-f]{32}$"),
+) -> SingleResponse[MaterialLearningRetryResult]:
+    if idempotency_key != f"material-retry-v1:{run_id}:{body.expected_updated_at.isoformat()}":
+        raise ApiError(
+            422,
+            "MATERIAL_LEARNING_RETRY_KEY_INVALID",
+            "Invalid retry key",
+            "Reuse the exact observed predecessor run state.",
+        )
+    command = RetryMaterialLearningRunCommand(
+        actor_id=authentication.operator.operator_id,
+        run_id=run_id,
+        expected_updated_at=body.expected_updated_at,
+    )
+    return one(
+        request, request.app.state.services.catalog_application.retry_material_learning_run(command)
+    )
+
+
+@router.get(
+    "/{run_id}/tasks/{task_id}",
+    operation_id="material_learning_task_read",
+    response_model=SingleResponse[MaterialLearningTaskDetail],
+    dependencies=[
+        Depends(require_permission(PermissionKey.KNOWLEDGE_ANALYSIS_READ, admin_only=True))
+    ],
+)
+def read_material_learning_task(
+    request: Request,
+    authentication: Auth,
+    run_id: str = Path(pattern=r"^materialrun_[0-9a-f]{32}$"),
+    task_id: str = Path(pattern=r"^materialtask_[0-9a-f]{32}$"),
+) -> SingleResponse[MaterialLearningTaskDetail]:
+    query = GetMaterialLearningTaskQuery(
+        actor_id=authentication.operator.operator_id, run_id=run_id, task_id=task_id
+    )
+    return one(
+        request, request.app.state.services.catalog_application.read_material_learning_task(query)
+    )
 
 
 @router.post(

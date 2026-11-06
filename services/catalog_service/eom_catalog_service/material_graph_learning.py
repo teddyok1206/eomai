@@ -58,6 +58,7 @@ from eom_catalog_service.material_learning_authorization import (
 )
 from eom_catalog_service.material_learning_models import MaterialLearningTaskRecord
 from eom_catalog_service.material_learning_source import authorize_material_learning
+from eom_catalog_service.material_task_history import read_material_task_histories
 from eom_catalog_service.material_task_results import resolve_completed_material_task
 from eom_catalog_service.settings import CatalogSettings
 
@@ -119,6 +120,27 @@ class MaterialGraphLearningService:
             task = session.get(MaterialLearningTaskRecord, task_id)
             if task is None or task.item_revision_id != item_revision_id:
                 raise ValueError("MATERIAL_GRAPH_ITEM_SOURCE_MISMATCH")
+            history = read_material_task_histories(session, (task,))[task.task_id]
+            previous = history.analysis_owner()
+            prior = (
+                session.get(KnowledgeAnalysisRunRecord, previous.analysis_run_id)
+                if previous
+                else None
+            )
+            predecessor = None
+            if prior is not None:
+                assert previous is not None
+                if (
+                    prior.canonical_request.get("source", {}).get("item_revision_id")
+                    != item_revision_id
+                ):
+                    raise ValueError("MATERIAL_GRAPH_ITEM_SOURCE_MISMATCH")
+                if (
+                    prior.state not in {"FAILED", "REJECTED", "CANCELLED"}
+                    or previous.task_id == task.task_id
+                ):
+                    return self._reconcile(prior.analysis_run_id, operator_id)
+                predecessor = prior.analysis_run_id
         preset = self.controls.item
         run = self.analyses.create_with_pinned_preset(
             CreateKnowledgeAnalysisCommand(
@@ -131,6 +153,7 @@ class MaterialGraphLearningService:
                 risk_policy_revision_id=self.controls.risk_policy_revision_id,
                 requested_by=operator_id,
                 idempotency_key="material-base:" + task_id,
+                predecessor_analysis_run_id=predecessor,
             ),
             preset_id=preset.preset_id,
             preset_revision_id=preset.preset_revision_id,
@@ -144,8 +167,29 @@ class MaterialGraphLearningService:
         with self.sessions() as session:
             authorize_material_learning(session, operator_id)
             task = session.get(MaterialLearningTaskRecord, task_id)
-            if task is None or task.analysis_run_id != base_analysis_run_id:
+            if task is None:
                 raise ValueError("MATERIAL_GRAPH_ITEM_SOURCE_MISMATCH")
+            history = read_material_task_histories(session, (task,))[task.task_id]
+            base = history.analysis_owner()
+            if base is None or base.analysis_run_id != base_analysis_run_id:
+                raise ValueError("MATERIAL_GRAPH_ITEM_SOURCE_MISMATCH")
+            previous = history.analysis_owner(solution=True)
+            prior = (
+                session.get(KnowledgeAnalysisRunRecord, previous.solution_analysis_run_id)
+                if previous
+                else None
+            )
+            if (
+                previous is not None
+                and prior is not None
+                and (
+                    prior.state not in {"FAILED", "REJECTED", "CANCELLED"}
+                    or previous.task_id == task.task_id
+                )
+            ):
+                if prior.predecessor_analysis_run_id != base_analysis_run_id:
+                    raise ValueError("MATERIAL_GRAPH_ITEM_SOURCE_MISMATCH")
+                return self._reconcile(prior.analysis_run_id, operator_id)
         run = self.analyses.create_solution_with_pinned_preset(
             CreateKnowledgeSolutionAnalysisCommand(
                 base_analysis_run_id=base_analysis_run_id,
@@ -154,6 +198,16 @@ class MaterialGraphLearningService:
             ),
             preset_id=preset.preset_id,
             preset_revision_id=preset.preset_revision_id,
+        )
+        return self._advance(run, operator_id)
+
+    def _reconcile(
+        self, analysis_run_id: str, operator_id: str
+    ) -> KnowledgeAnalysisApplicationResult:
+        run = self.analyses.reconcile(
+            ReconcileKnowledgeAnalysisCommand(
+                analysis_run_id=analysis_run_id, requested_by=operator_id
+            )
         )
         return self._advance(run, operator_id)
 

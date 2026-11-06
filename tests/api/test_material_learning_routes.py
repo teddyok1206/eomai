@@ -32,6 +32,8 @@ def material_client(tmp_path):
         list_material_learning_runs=Mock(return_value=MaterialLearningRunList(runs=())),
         read_material_learning_run=Mock(),
         control_material_learning_run=Mock(),
+        retry_material_learning_run=Mock(),
+        read_material_learning_task=Mock(),
     )
     services.catalog_application = reads
     services.audit = Mock()
@@ -82,6 +84,108 @@ def test_control_uses_real_actor_and_revision_fence_not_browser_actor(material_c
         headers={"Idempotency-Key": f"material-control-v1:{run_id}:PAUSE:{when.isoformat()}"},
     )
     assert rejected.status_code == 422
+
+
+def test_retry_is_actor_bound_and_uses_exact_predecessor_observation(material_client):
+    from datetime import UTC, datetime
+
+    from eom_catalog_contracts.material_learning_intake import MaterialLearningRetryResult
+
+    client, catalog, _, _ = material_client
+    run_id = "materialrun_" + "1" * 32
+    when = datetime(2026, 11, 6, tzinfo=UTC)
+    catalog.retry_material_learning_run.return_value = MaterialLearningRetryResult(
+        predecessor_run_id=run_id,
+        run_id="materialrun_" + "2" * 32,
+        state="PROCESSING",
+        reused_tasks=10,
+        retried_tasks=1,
+        replayed=False,
+    )
+    path = f"/api/v1/material-learning/{run_id}/retry"
+    body = {"expected_updated_at": "2026-11-06T00:00:00Z"}
+    invalid = client.post(path, json=body, headers={"Idempotency-Key": "wrong-material-retry-1234"})
+    assert invalid.status_code == 422
+    catalog.retry_material_learning_run.assert_not_called()
+    response = client.post(
+        path,
+        json=body,
+        headers={"Idempotency-Key": f"material-retry-v1:{run_id}:{when.isoformat()}"},
+    )
+    assert response.status_code == 200, response.text
+    command = catalog.retry_material_learning_run.call_args.args[0]
+    assert command.actor_id == OPERATOR_ID and command.expected_updated_at == when
+    denied = client.post(
+        path,
+        json=body | {"actor_id": "operator_" + "f" * 32},
+        headers={"Idempotency-Key": f"material-retry-v1:{run_id}:{when.isoformat()}"},
+    )
+    assert denied.status_code == 422
+
+
+def test_task_read_is_bound_to_actual_actor_and_both_server_identities(material_client):
+    from eom_catalog_contracts.material_learning_intake import MaterialLearningTaskDetail
+
+    client, catalog, _, _ = material_client
+    run_id, task_id = "materialrun_" + "1" * 32, "materialtask_" + "2" * 32
+    catalog.read_material_learning_task.return_value = MaterialLearningTaskDetail.model_validate(
+        dict(
+            run_id=run_id,
+            task=dict(
+                task_id=task_id,
+                ordinal=3,
+                task_kind="QUESTION",
+                state="FAILED",
+                workflow_id=None,
+                item_revision_id=None,
+                analysis_run_id=None,
+                graph_snapshot_revision_id=None,
+                error_code="SYNTHETIC_FAILURE",
+            ),
+            attempt=1,
+            predecessor_task_id=None,
+            printed_label="12",
+            section_path=["1장"],
+            source_pages=[dict(source_role="MAIN", original_filename="자료.pdf", physical_page=5)],
+        )
+    )
+    response = client.get(f"/api/v1/material-learning/{run_id}/tasks/{task_id}")
+    assert response.status_code == 200, response.text
+    query = catalog.read_material_learning_task.call_args.args[0]
+    assert (query.actor_id, query.run_id, query.task_id) == (OPERATOR_ID, run_id, task_id)
+    assert response.json()["data"]["source_pages"][0]["physical_page"] == 5
+
+
+def test_catalog_retry_client_rejects_other_predecessor(monkeypatch):
+    from datetime import UTC, datetime
+
+    from eom_api.services.catalog_application_client import (
+        CatalogApplicationClient,
+        CatalogApplicationClientError,
+    )
+    from eom_catalog_contracts.material_learning_intake import RetryMaterialLearningRunCommand
+
+    client = CatalogApplicationClient()
+    command = RetryMaterialLearningRunCommand(
+        actor_id=OPERATOR_ID,
+        run_id="materialrun_" + "1" * 32,
+        expected_updated_at=datetime(2026, 11, 6, tzinfo=UTC),
+    )
+    monkeypatch.setattr(
+        client,
+        "_raw_request",
+        lambda *_args, **_kwargs: dict(
+            schema_version="material-learning-retry-result/1.0",
+            predecessor_run_id="materialrun_" + "2" * 32,
+            run_id="materialrun_" + "3" * 32,
+            state="PROCESSING",
+            reused_tasks=1,
+            retried_tasks=1,
+            replayed=False,
+        ),
+    )
+    with pytest.raises(CatalogApplicationClientError, match="identity differs"):
+        client.retry_material_learning_run(command)
 
 
 def test_upload_uses_authenticated_actor_and_actual_bytes(material_client):

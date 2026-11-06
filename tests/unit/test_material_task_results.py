@@ -53,6 +53,7 @@ def case(monkeypatch):
         state="RESULT_READY",
         task_kind="DISCOVER",
         workflow_id=source.workflow_id,
+        predecessor_task_id=None,
         input_artifact_id="artifact_" + "c" * 32,
         input_artifact_revision_id="rev_" + "d" * 32,
         input_sha256=sha256_bytes(work_raw),

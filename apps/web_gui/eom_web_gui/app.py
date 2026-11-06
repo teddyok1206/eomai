@@ -74,6 +74,7 @@ from eom_web_gui.knowledge_map_contracts import MapHash
 from eom_web_gui.knowledge_map_contracts import NodeId as MapNodeId
 from eom_web_gui.material_learning_contracts import (
     MaterialLearningControl,
+    MaterialLearningRetry,
     MaterialLearningSubmission,
 )
 from eom_web_gui.request_limits import (
@@ -545,6 +546,24 @@ def create_app(
         run_id: str = Path(pattern=r"^materialrun_[0-9a-f]{32}$"),
     ) -> dict[str, Any]:
         return (await actual.control_material_learning(session, run_id, body)).model_dump(
+            mode="json"
+        )
+
+    @app.post(f"{API_PREFIX}/material-learning/{{run_id}}/retry")
+    async def retry_material_learning(
+        body: MaterialLearningRetry,
+        session: Annotated[WebSession, Depends(require_admin_csrf)],
+        run_id: str = Path(pattern=r"^materialrun_[0-9a-f]{32}$"),
+    ) -> dict[str, Any]:
+        return (await actual.retry_material_learning(session, run_id, body)).model_dump(mode="json")
+
+    @app.get(f"{API_PREFIX}/material-learning/{{run_id}}/tasks/{{task_id}}")
+    async def get_material_learning_task(
+        session: Annotated[WebSession, Depends(require_admin_session)],
+        run_id: str = Path(pattern=r"^materialrun_[0-9a-f]{32}$"),
+        task_id: str = Path(pattern=r"^materialtask_[0-9a-f]{32}$"),
+    ) -> dict[str, Any]:
+        return (await actual.material_learning_task(session, run_id, task_id)).model_dump(
             mode="json"
         )
 

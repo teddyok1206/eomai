@@ -125,6 +125,8 @@ class MaterialLearningRun(WebModel):
     material_revision_id: str = Field(pattern=r"^materialrev_[0-9a-f]{32}$")
     run_id: str = Field(pattern=r"^materialrun_[0-9a-f]{32}$")
     title: str = Field(min_length=1, max_length=200)
+    attempt: int = Field(default=1, strict=True, ge=1, le=32)
+    predecessor_run_id: str | None = Field(default=None, pattern=r"^materialrun_[0-9a-f]{32}$")
     material_kind: MaterialKind
     state: RunState
     task_counts: tuple[MaterialLearningTaskCount, ...] = Field(max_length=13)
@@ -168,3 +170,36 @@ class MaterialLearningControlReply(WebModel):
     state: RunState
     updated_at: UtcDatetime
     replayed: bool
+
+
+class MaterialLearningRetry(WebModel):
+    expected_updated_at: UtcDatetime
+
+
+class MaterialLearningRetryReply(WebModel):
+    schema_version: Literal["material-learning-retry-result/1.0"]
+    predecessor_run_id: str = Field(pattern=r"^materialrun_[0-9a-f]{32}$")
+    run_id: str = Field(pattern=r"^materialrun_[0-9a-f]{32}$")
+    state: RunState
+    reused_tasks: int = Field(strict=True, ge=0, le=1_000_000)
+    retried_tasks: int = Field(strict=True, ge=1, le=1_000_000)
+    replayed: bool
+
+
+class MaterialLearningTaskPage(WebModel):
+    source_role: Literal["MAIN", "SOLUTIONS"]
+    original_filename: str = Field(min_length=1, max_length=255)
+    physical_page: int = Field(strict=True, ge=1, le=2000)
+
+
+class MaterialLearningTaskDetail(WebModel):
+    schema_version: Literal["material-learning-task-detail/1.0"]
+    run_id: str = Field(pattern=r"^materialrun_[0-9a-f]{32}$")
+    task: MaterialLearningTask
+    attempt: int = Field(strict=True, ge=1, le=32)
+    predecessor_task_id: str | None = Field(pattern=r"^materialtask_[0-9a-f]{32}$")
+    printed_label: str | None = Field(min_length=1, max_length=100)
+    section_path: tuple[Annotated[str, Field(min_length=1, max_length=200)], ...] = Field(
+        max_length=12
+    )
+    source_pages: tuple[MaterialLearningTaskPage, ...] = Field(max_length=64)

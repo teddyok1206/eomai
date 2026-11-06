@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/retry-result/1.0",
+  "title": "EOM material learning retry-result 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-retry-result/1.0"
+    },
+    "predecessor_run_id": {
+      "type": "string",
+      "pattern": "^materialrun_[0-9a-f]{32}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^materialrun_[0-9a-f]{32}$"
+    },
+    "state": {
+      "enum": [
+        "RECEIVED",
+        "PREPARING",
+        "DISCOVERING",
+        "PROCESSING",
+        "WAITING_FOR_CAPACITY",
+        "PAUSED",
+        "COMPLETED",
+        "COMPLETED_WITH_EXCEPTIONS",
+        "FAILED",
+        "CANCELLED"
+      ]
+    },
+    "reused_tasks": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000000
+    },
+    "retried_tasks": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000000
+    },
+    "replayed": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "predecessor_run_id",
+    "run_id",
+    "state",
+    "reused_tasks",
+    "retried_tasks",
+    "replayed"
+  ]
+}

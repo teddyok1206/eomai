@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/task-query/1.0",
+  "title": "EOM material learning task-query 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-task-query/1.0"
+    },
+    "operation": {
+      "const": "GET_MATERIAL_LEARNING_TASK"
+    },
+    "actor_id": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^materialrun_[0-9a-f]{32}$"
+    },
+    "task_id": {
+      "type": "string",
+      "pattern": "^materialtask_[0-9a-f]{32}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "operation",
+    "actor_id",
+    "run_id",
+    "task_id"
+  ]
+}

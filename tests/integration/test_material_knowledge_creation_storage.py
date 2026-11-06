@@ -61,6 +61,7 @@ def material_knowledge_case(
     creative_engine,
     coordinator_case,
     controls,
+    request,
 ):
     accepted, settings, restart = coordinator_case
     extractor = InterruptibleExtractor()
@@ -104,7 +105,7 @@ def material_knowledge_case(
                 document_revision_id=source.document_revision_id,
                 first_physical_page=1,
                 last_physical_page=1,
-                curriculum_unit_keys=["1-(1)"],
+                curriculum_unit_keys=list(getattr(request, "param", ("1-(1)",))),
                 selected_regions=[
                     dict(
                         source_role="MAIN",

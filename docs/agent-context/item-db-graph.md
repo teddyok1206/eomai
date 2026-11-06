@@ -103,6 +103,19 @@ updated_at CAS로 처리한다. BFF/GUI 버튼은 같은 control을 호출한다
 PDF command port는 기존 sandbox, 한글 conversion port는 기존 Catalog-manager workspace를
 사용한다. 각 adapter의 실제 설치 증거와 후보 상태는 operations checkpoint에서 구분한다.
 
+`material_learning_recovery.py`의 retry는 원래 FAILED run/task를 변경하지 않고 같은 자료
+revision의 successor run과 작은 checkpoint 참조를 만든다. 완료된 준비/추출/등록·accepted
+base는 재사용하며 새 worker가 필요한 실패 단위만 기존 명령으로 다시 제출한다. 부모
+revision→run 잠금과 deterministic successor ID로 동시 재전송을 처리한다. 살아 있는
+Workflow/분석·미정리 worker lease가 있으면 공식 reconcile 전에는 새 시도를 만들지 않는다.
+원본/구조 EXCEPTION은 그대로 보류하고, 준비 전의 원본 문제를 무한 재실행하지 않는다.
+
+`material_task_history.py`는 최대32단계 predecessor를 하나의 indexed recursive query로
+읽는다. 서로 다른 자료·업로더·단위 또는 변경된 input/output은 이어받지 않는다. 전역 unique
+child owner는 원래 task에 남긴다. `material_task_source_read.py`는 명시적인 위치 조회에서만
+source bytes를 읽고, routine progress는 metadata만 조회한다. 추출 입력이 없는 구조 예외는
+coordinator의 같은 `read_material_discovery_plan`을 재사용해 원래 페이지/번호를 보여준다.
+
 API `GET /item-db/materials`와 DB 외부 분류는 current shared Graph membership을 확인해
 작은 등록 metadata를 읽는다. Notion 행이나 임의 고유번호를 만들지 않는다. Map V2는 같은
 Graph에서 외부 layer를 표시하며 V1 bytes/소비를 보존한다. 새 설명 source V5는 retrieval

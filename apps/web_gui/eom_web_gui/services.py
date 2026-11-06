@@ -81,9 +81,12 @@ from eom_web_gui.material_learning_contracts import (
     MaterialLearningControl,
     MaterialLearningControlReply,
     MaterialLearningDetail,
+    MaterialLearningRetry,
+    MaterialLearningRetryReply,
     MaterialLearningRuns,
     MaterialLearningSourceReceipt,
     MaterialLearningSubmission,
+    MaterialLearningTaskDetail,
 )
 from eom_web_gui.request_drafts import normalize_request, update_draft, workflow_start_payload
 from eom_web_gui.sessions import SessionStore, WebSession, utc_now
@@ -128,6 +131,16 @@ class WebServices:
         self, session: WebSession, run_id: str, value: MaterialLearningControl
     ) -> MaterialLearningControlReply:
         return await self.gateway.control_material_learning(session, run_id, value)
+
+    async def retry_material_learning(
+        self, session: WebSession, run_id: str, value: MaterialLearningRetry
+    ) -> MaterialLearningRetryReply:
+        return await self.gateway.retry_material_learning(session, run_id, value)
+
+    async def material_learning_task(
+        self, session: WebSession, run_id: str, task_id: str
+    ) -> MaterialLearningTaskDetail:
+        return await self.gateway.material_learning_task(session, run_id, task_id)
 
     async def material_learning_run(
         self, session: WebSession, run_id: str, *, after_ordinal: int = 0

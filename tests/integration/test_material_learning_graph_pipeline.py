@@ -150,6 +150,7 @@ def _seed_reviewed_textbook_graph(engine, settings, directory, corpus):
     return publication, created, tuple(accepted)
 
 
+@pytest.mark.parametrize("material_knowledge_case", [("1-(1)",), ()], indirect=True)
 def test_uploaded_explanation_joins_reviewed_graph_and_material_evidence_replays(
     creative_engine, material_knowledge_case, tmp_path, monkeypatch
 ):

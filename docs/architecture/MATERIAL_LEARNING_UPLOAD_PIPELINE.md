@@ -202,6 +202,39 @@ provider pin과 QUERY/Catalog/runtime 호환 절차를 따르며 INDEX 수치 �
 전역 동시4·자료 학습 단일 AI lane을 준수하며, 기존 요청/실패 이력·수치 runtime pin을
 보존한다. 진행 중이던 요청을 새 identity로 중복 생성해 속도를 맞추지 않는다. 배포 전부터
 멈춘 작업은 확인된 원인과 공식 recovery 경계로 복구한 뒤 종료 상태를 보고한다.
+
+### 실패 단위 재처리와 예외 열람
+
+- 소유 경계는 기존 material Catalog application이다. 새 queue/worker/Artifact 저장소는
+  만들지 않는다. 원본, 준비 결과와 이미 수락한 Item/분석이 정본이며 실패 run/task도
+  그대로 보존한다. 실제 업로더의 현재 권한과 current material revision을 다시 확인한다.
+- `RETRY_MATERIAL_LEARNING_RUN`은 준비가 완료된 terminal FAILED 또는 일부 확인 필요
+  run에서 새 processing run을 만든다. 기존 run의 상태를 성공으로 바꾸지 않는다.
+  동일 revision의 다음 attempt와 정확한 predecessor를 pin한다. CANCELLED와 원본/구조
+  확인이 필요한 EXCEPTION을 자동 재실행하거나 가짜 성공으로 바꾸지 않는다.
+- 새 run은 완료 task의 작은 checkpoint와 predecessor 참조만 이어받는다. 파일/본문을
+  복제하지 않으며 기존 child Workflow/analysis의 전역 unique owner는 옛 task에 둔다.
+  실패 QUESTION의 추출/등록이 이미 성공했으면 그 결과와 accepted base를 재사용하고,
+  실제 실패한 분석/풀이만 기존 application 명령으로 새 시도한다. 실패 DISCOVER 또는
+  설명 분석은 해당 단위만 다시 실행한다. 재시도 뒤에도 살아 있는 child를 중복 제출하지 않는다.
+- 주 접근은 run PK, revision별 attempt, run별 ordinal, bounded predecessor 조회다.
+  기존 PK/unique/B-tree 인덱스를 사용한다. predecessor 읽기는 최대32단계의 한 번의
+  recursive indexed query로 묶고 cycle/다른 자료·업로더·단위 연결은 명시적으로 거부한다.
+  N개 작은 checkpoint를 선형으로 생성하며 실패 단위 lineage만 추가로 확인한다.
+- transaction은 revision→run 순서로 잠가 같은 자료의 동시 재시도를 직렬화하고 기존
+  live-revision unique 제약으로 보강한다. observed run timestamp로 만든 고정 key와
+  deterministic successor ID를 재사용해 timeout/동시 재전송이 두 run을 만들지 않게 한다.
+- `GET_MATERIAL_LEARNING_TASK`는 사용자가 선택한 한 단위의 실제 파일 역할·페이지·
+  번호·확인 코드를 읽는다. status poll마다 전체 책/풀이/그림을 읽지 않으며, 원본 위치를
+  알 수 없는 단계는 모른다고 표시한다. 임의 filesystem path나 다른 사용자의 Artifact를
+  브라우저 입력으로 받지 않는다. UI는 같은 재처리 명령과 source detail read만 호출한다.
+- 단순 대안인 기존 FAILED row 재개·책 전체 재업로드·완료 child ID 복사는 실패 이력이나
+  중복 방지 경계를 잃는다. 이 변경은 기존 predecessor/attempt 컬럼을 사용하며 새 DB
+  테이블·binary 값·별도 registry를 도입하지 않는다. 기술적 복구와 원문 품질 판정은 분리한다.
+- 준비 단계의 암호화·쪽 수·렌더링 예산 초과는 그 자료의 명시적 실패로 기록해 다음
+  자료가 처리될 수 있게 한다. 일반 예외·profile 불일치·포인터/권한 오류를 이 부류로
+  뭉개지 않는다. 중단된 준비는 원래 checkpoint를 재조회하며, 원본을 고쳐야 하는 실패는
+  같은 실패 파일을 무한 재실행하는 버튼으로 숨기지 않는다.
 goal 카드 종료는 이 운영 서비스들의 stop/disable 사유가 아니다.
 
 ### 운영 parser와 한글 변환의 실제 소유 경계

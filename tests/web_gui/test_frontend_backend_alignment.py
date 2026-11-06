@@ -160,6 +160,27 @@ def _static_string(node: ast.expr) -> str | None:
     return None
 
 
+def _static_path_choices(node: ast.expr) -> set[str] | None:
+    """Audit both literal branch targets; computed alternatives remain unknown."""
+    if isinstance(node, ast.IfExp):
+        left, right = _static_path_choices(node.body), _static_path_choices(node.orelse)
+        return left | right if left is not None and right is not None else None
+    value = _static_string(node)
+    return {value} if value is not None else None
+
+
+def test_alignment_audits_both_literal_paths_but_rejects_computed_branch():
+    assert _static_path_choices(
+        ast.parse("'/api/a' if condition else '/api/b'", mode="eval").body
+    ) == {"/api/a", "/api/b"}
+    assert (
+        _static_path_choices(
+            ast.parse("'/api/a' if condition else calculate_path()", mode="eval").body
+        )
+        is None
+    )
+
+
 def _gateway_application_api_calls() -> set[tuple[str, str]]:
     """Extract every upstream operation and fail if a new dynamic shape is not audited."""
 
@@ -184,9 +205,9 @@ def _gateway_application_api_calls() -> set[tuple[str, str]]:
                 unknown.append(node.lineno)
                 continue
             method = _static_string(node.args[offset])
-            path = _static_string(node.args[offset + 1])
-            if method is not None and path is not None:
-                calls.add((method, path))
+            paths = _static_path_choices(node.args[offset + 1])
+            if method is not None and paths is not None:
+                calls.update((method, path) for path in paths)
                 continue
             if (
                 name == "_authorized"

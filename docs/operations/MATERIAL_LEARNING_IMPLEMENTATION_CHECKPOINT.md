@@ -4,7 +4,49 @@
 goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체됐다. 이 문서는 운영 완료
 보고서가 아니며, 후보와 실제 운영을 혼동하지 않기 위한 중간 기록이다.
 
+## 사용자 지정 후속 순서
+
+현재 자료 학습의 구현·검증·운영 배포와 실제 동작 확인을 먼저 완료한다. 그 뒤에 Map에서
+DB의 출처 Layer(교과서·기출·창작·AI·외부)를 쉽게 볼 수 있도록 개선한다. Map 작업은
+아직 시작하지 않았다. 기존 source layer/색/필터 기반과 클라이언트에 이미 불러온 일부
+노드에만 적용되는 현재 필터의 한계를 확인했으며, 새 독립 Graph나 가짜 등록 노드를
+만들지 않는 기존 read 경계를 유지한다. Graph 미등록 원본과 실제 Graph membership을
+구분한다. 이 후속 작업을 현재 운영 배포보다 먼저 수행하지 않는다.
+
 ## 최신 source checkpoint — 아직 운영 완료 아님
+
+### 실패 단위 복구·위치 조회 — 최신 후보
+
+- 새 retry/task-detail JSON Schema 2020-12와 Pydantic/API/BFF/GUI를 연결했다. 실패한
+  run/task는 그대로 두고 같은 자료 revision의 successor를 만든다. 이미 끝난 준비·문항·
+  추출/등록과 accepted base는 재사용하며, 새 시도가 필요한 단위만 기존 owner로 제출한다.
+  기존 child Workflow/analysis의 unique owner를 복사하거나 실패를 성공으로 바꾸지 않는다.
+- 실제 임시 PostgreSQL에서 동시 retry 한 건 생성·동일 요청 재조회·transaction 중단 후
+  재시도·준비 Artifact 재사용과 다음 READY 입력 생성·현재 actor의 파일/페이지 열람을
+  확인했다. 전역 command 수는 retry 자체로 늘지 않는다. predecessor는 batch 한 번의
+  recursive query로 읽고, 기존 history 변경은 DB trigger와 source read 양쪽에서 거부한다.
+- 조회 화면에서 `오류 난 부분 다시 처리`, `위치·오류 확인`, `2차 처리`를 표시한다.
+  별도 업로드 없이 source 파일·실제 페이지·문항 번호를 읽으며 source filename을 HTML로
+  해석하지 않는다. 완료 task를 routine poll에서 새로 읽거나 source 전체를 재복사하지 않는다.
+- 직접 API 및 BFF actor/CSRF/key·identity 검사, accepted base/공개 풀이 재사용 판단,
+  살아 있는 child/held lease 차단과 dependency/resource/context/alignment 집중 검사
+  **98 PASS**, 확장된 material/source/dependency/alignment suite **284 PASS**.
+  opt-in browser1 skip은 별도 실제 Chromium PASS로 구분한다. 핵심17개
+  source mypy PASS. 최종 source-free wheel은 이 새 diff로 다시 검사한다.
+- 최신 material persistence suite **41 PASS**. 암호화/페이지 제한 자료를 terminal로
+  남긴 뒤 다음 자료 준비가 실제로 진행되며, 단원 힌트가 비어 있는 GUI 기본 입력도
+  같은 공유 Graph/RAG로 연결된다. 검사 로그는
+  `/tmp/material-learning-retry-db-20261106-7.log`,
+  `/tmp/material-learning-retry-final-focused-20261106-3.log`,
+  `/tmp/material-learning-retry-browser-20261106-2.log`다.
+- 준비가 끝나지 않은 원본 문제와 구조 EXCEPTION은 자동 retry 대상이 아니다. 암호화·
+  페이지/렌더링 한도는 해당 자료의 FAILED로 기록하고 다음 자료는 계속 처리한다.
+  profile/hash/권한/일반 코드 오류를 원본 문제로 뭉개지 않는다. 실제 임시 DB의 원본
+  예외 및 다음 자료 진행 회귀와 최신 전체 결과는 최종 release 기록에서 확인한다.
+- 다음은 최종 wheel·권한/호환 release 및 실제 업로드 canary다. 새 Graph V10 활성화
+  전에 INDEX source 소비 경계를 정렬하며 기존 numerical pin/실행은 보존한다. Goal 종료
+  뒤에도 background owner·감시 timer를 유지한다. 아직 production migration/feature 배포/모델
+  canary는0이며 goal은 ACTIVE다. 아래 예전 ‘실패 단위 retry 미구현’ 기록은 이 후보로 대체한다.
 
 ### 가변 자료 배치의 프롬프트 보강
 
@@ -107,13 +149,11 @@ Chromium에서 중단/재개와 원래 업로드 재전송·owner 전환 PASS. s
 GPU runtime/진행 요청은 그대로 두고, 현재 준비/수치 작업의 안전한 경계에서 owner source만
 인계한다. 옛 producer가 새 Graph를 읽을 수 있다고 가정해 먼저 publication하지 않는다.
 
-1. 실제 설치 계정·작업 폴더 경계에 runtime composition을 맞춘다. Root producer의
-   Registry staging과 기존 Catalog-manager의 고정 Office converter workspace는 소유자가
-   다르다. 이 차이를 권한 완화/임의 path로 덮지 말고 기존 변환 owner에 제한된 adapter로
-   연결한다. 원본 PDF parser도 기존 격리 실행 경계를 사용해야 한다. 현재 runtime 후보는
-   아직 이 실제 설치 경계 PASS가 아니다.
-2. GUI pause/resume와 실패 단위 successor/attempt 재시도를 마무리한다. 이미 완료한
-   페이지/Item/Graph와 원래 FAILED 이력은 보존하고 책 전체를 새 identity로 재실행하지 않는다.
+1. 앞서 source897a2468의 실제 격리 PDF·Catalog-owner Office port는 PASS다. 그 이후의
+   복구/조회/Graph 후보를 포함한 최종 installed wheel/RECORD와 runtime/control 조합을
+   다시 확인한다. root/Catalog-manager 소유 경계를 권한 완화/임의 path로 덮지 않는다.
+2. GUI pause/resume와 실패 단위 successor/attempt·예외 위치 조회는 위 최신 후보로
+   완료했다. 최종 운영 설치본에서 실제 role/출처/등록·공개 풀이 흐름을 확인한다.
 3. 실제 worker-facing 입력·결과부터 Registry/Document/공유 Graph/공통 INDEX handoff,
    공식 RAG 읽기·DB 열람·같은 요청 재조회를 한 bounded 업로드 경로로 검증한다.
 4. 최종 wheel/권한/호환 rollback 검증, 기존 역할 자연 drain, helper와 영향 driver prefix
