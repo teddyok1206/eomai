@@ -34,8 +34,9 @@ from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecor
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord
 from jsonschema.exceptions import ValidationError as JsonSchemaValidationError
 from pydantic import BaseModel, ConfigDict, ValidationError
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.orm import Session, aliased
+from sqlalchemy.sql.elements import ColumnElement
 
 from eom_catalog_service.artifacts import CatalogArtifactReader, CatalogModelValueDecoder
 from eom_catalog_service.knowledge_proposal_resolution import (
@@ -46,6 +47,25 @@ from eom_catalog_service.knowledge_proposal_resolution import (
 
 class SolutionEvidenceResolutionError(ValueError):
     """An accepted solution successor or one of its immutable pointers is invalid."""
+
+
+def accepted_public_solution_successor_predicate(
+    base_analysis_run_ids: tuple[str, ...],
+) -> ColumnElement[bool]:
+    """One bounded dependency selection for physical prefetch and fresh observations.
+
+    Registered V11 reports need the same accepted/receipt provenance as past-exam
+    V10 reports. This predicate selects metadata only; it does not admit a source,
+    accept a result or relax either family's exact resolver.
+    """
+    run = KnowledgeAnalysisRunRecord
+    return and_(
+        run.predecessor_analysis_run_id.in_(base_analysis_run_ids),
+        run.state == "ACCEPTED",
+        run.canonical_request["schema_version"].astext.in_(
+            ("knowledge-analysis-request/10.0", "knowledge-analysis-request/11.0")
+        ),
+    )
 
 
 @dataclass(frozen=True, slots=True)

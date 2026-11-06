@@ -87,6 +87,7 @@
         "services/workflow_runner/eom_workflow_runner/local_indexing_routed_namespace.py",
         "services/workflow_runner/eom_workflow_runner/reference_query_prepare_application.py",
         "services/catalog_service/eom_catalog_service/public_solution_source_capture.py",
+        "services/catalog_service/eom_catalog_service/solution_evidence_resolution.py",
         "services/catalog_service/eom_catalog_service/embedding_registry_repository.py",
         "services/catalog_service/eom_catalog_service/item_db_similarity_selection.py",
         "services/catalog_service/eom_catalog_service/public_solution_similarity_read.py",

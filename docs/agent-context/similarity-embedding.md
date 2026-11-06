@@ -24,6 +24,12 @@ CPU와 CUDA의 space identity를 섞지 않는다. GPU가 잠시 idle이어도 s
 Workflow COMPLETED는 각각 확인한다. 같은 encoding의 재사용과 최신 Graph membership의
 새 binding/index 반영도 서로 다르다.
 
+새 등록 문항의 V11 보고서는 직접 공개 조회 성공과 INDEX/QUERY의 strict reader 성공을
+따로 확인한다. `solution_evidence_resolution.accepted_public_solution_successor_predicate`가
+기출 V10과 등록 V11의 accepted successor를 함께 선택한다. source pool의 한정된 bulk
+prefetch와 dependency observation이 같은 조건을 쓴다. 필요한 Artifact가 준비되지 않았을
+때 검증을 생략하거나 문항마다 개별 DB 조회로 우회하지 않는다.
+
 공개 풀이 INDEX의 신규 미계산 대상은 기존 preparation이 출처별로 번갈아 선택한다.
 기출을 먼저 선택하고 같은 출처 안에서는 revision 순서를 유지해, 늘어나는 등록 문항의
 ID prefix가 기출 backlog를 계속 밀지 않게 한다. legacy namespace·고정된 기존 요청·

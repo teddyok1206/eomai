@@ -108,6 +108,9 @@ from eom_catalog_service.segmented_local_indexing_population_read import (
     read_segmented_candidate_source_page,
 )
 from eom_catalog_service.settings import CatalogSettings
+from eom_catalog_service.solution_evidence_resolution import (
+    accepted_public_solution_successor_predicate,
+)
 
 _MAXIMUM_ITEM_MEMBER_BYTES = 16 * 1024**2
 _MAXIMUM_ARTIFACT_BATCH_BYTES = 128 * 1024**2
@@ -637,14 +640,7 @@ class CatalogInferenceTransferSnapshotSourceAdapter:
                     .where(
                         or_(
                             KnowledgeAnalysisRunRecord.analysis_run_id.in_(base_ids),
-                            (KnowledgeAnalysisRunRecord.predecessor_analysis_run_id.in_(base_ids))
-                            & (KnowledgeAnalysisRunRecord.state == "ACCEPTED")
-                            & (
-                                KnowledgeAnalysisRunRecord.canonical_request[
-                                    "schema_version"
-                                ].astext
-                                == "knowledge-analysis-request/10.0"
-                            ),
+                            accepted_public_solution_successor_predicate(base_ids),
                         )
                     )
                     .order_by(KnowledgeAnalysisRunRecord.analysis_run_id)

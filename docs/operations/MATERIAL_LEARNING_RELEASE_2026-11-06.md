@@ -6,6 +6,14 @@
 
 ## 08:30 UTC 실제 등록 완료 및 남은 INDEX gate
 
+후속 source 수정: 기존 source pool prefetch와 관계 dependency 관측이 같은
+`accepted_public_solution_successor_predicate`를 사용한다. 정확한 predecessor·ACCEPTED·
+기출 V10/등록 V11만 선택하며 별도 DB/schema/cache나 문항별 fallback을 추가하지 않는다.
+실제 marker-guarded DB에서 일반/자료 전용 preset 양쪽의 등록→accepted V11→같은 bulk
+선택→strict physical Artifact reader→공통 projection을 확인했다(44 PASS). 집중 source82
+PASS와 dependency/context62 PASS, core3개 type/format/lint PASS다. 검사는 범위가 겹치며
+합산하지 않는다. 후속 설치물에서 같은 운영 canary와 INDEX 재개 확인이 남아 있다.
+
 같은 canary retry run의4개 task와 전체 run이08:18 UTC에 **COMPLETED**됐다. 문항
 Graph는 `graphrev_f8f21cfea70f16464dc7dc26195e7ef4`이고 설명의 이전 Graph도 보존한다.
 실제 V11 풀이 조회·공통 text AVAILABLE, 설치 API의 DB 외부 목록에서 같은 Item이

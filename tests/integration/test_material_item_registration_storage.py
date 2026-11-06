@@ -33,8 +33,10 @@ from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisAppl
 from eom_catalog_service.material_learning_artifacts import publish_material_metadata
 from eom_catalog_service.material_task_results import ResolvedMaterialTask
 from eom_catalog_service.models import ItemRecord, ItemRevisionRecord
+from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.solution_embedding_projection import project_public_solution_text
 from eom_catalog_service.solution_evidence_resolution import (
+    accepted_public_solution_successor_predicate,
     resolve_registered_solution_evidence_by_base_run,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
@@ -59,7 +61,7 @@ from eom_workflow_runner.state_machine import (
     transition_step,
     transition_workflow,
 )
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from tests.integration import test_knowledge_analysis_service as knowledge
@@ -407,6 +409,47 @@ def test_uploaded_item_uses_real_registered_solution_and_common_embedding_projec
     projected = project_public_solution_text(evidence.report)
     assert projected.status == "AVAILABLE" and projected.text
     assert projected == project_public_solution_text(evidence.report)
+    # The INDEX/QUERY reader requires the accepted/receipt Artifact metadata to
+    # be captured in the same transaction. Exercise its actual bulk predicate
+    # and strict physical reader, not only CatalogArtifactService's direct read.
+    with analyses.sessions.begin() as session:
+        dependencies = tuple(
+            session.scalars(
+                select(KnowledgeAnalysisRunRecord).where(
+                    or_(
+                        KnowledgeAnalysisRunRecord.analysis_run_id == base.analysis_run_id,
+                        accepted_public_solution_successor_predicate((base.analysis_run_id,)),
+                    )
+                )
+            )
+        )
+        assert {row.analysis_run_id for row in dependencies} == {
+            base.analysis_run_id,
+            solution.analysis_run_id,
+        }
+        reader = PinnedArtifactReadContext(session, owner.settings)
+        reader.prefetch(
+            tuple(
+                sorted(
+                    {
+                        identity
+                        for row in dependencies
+                        for identity in (
+                            (
+                                row.accepted_result_artifact_id,
+                                row.accepted_result_artifact_revision_id,
+                            ),
+                            (row.proposal_artifact_id, row.proposal_artifact_revision_id),
+                        )
+                    }
+                )
+            )
+        )
+        indexed_evidence = resolve_registered_solution_evidence_by_base_run(
+            session, reader, base_analysis_run_ids=(base.analysis_run_id,)
+        )[base.analysis_run_id]
+        assert project_public_solution_text(indexed_evidence.report) == projected
+        reader.revalidate_provenance()
     assert (
         not create()
         .register_completed(task_id=resolved.task_id, operator_id=resolved.operator_id)

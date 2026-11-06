@@ -47,6 +47,9 @@ from eom_catalog_service.legacy_item_extraction_batch_models import (
 from eom_catalog_service.local_indexing_source_ports import LocalIndexingSourceReadIntent
 from eom_catalog_service.models import ItemComponentRecord, ItemRecord, ItemRevisionRecord
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
+from eom_catalog_service.solution_evidence_resolution import (
+    accepted_public_solution_successor_predicate,
+)
 
 if TYPE_CHECKING:
     from eom_catalog_service.inference_transfer_snapshot_catalog_adapter import (
@@ -288,12 +291,7 @@ def observe_inference_transfer_population(
         select(*run.c).where(
             or_(
                 run.c.analysis_run_id.in_(base_ids),
-                and_(
-                    run.c.predecessor_analysis_run_id.in_(base_ids),
-                    run.c.state == "ACCEPTED",
-                    run.c.canonical_request["schema_version"].astext
-                    == "knowledge-analysis-request/10.0",
-                ),
+                accepted_public_solution_successor_predicate(base_ids),
             )
         ),
         bound=3 * maximum,

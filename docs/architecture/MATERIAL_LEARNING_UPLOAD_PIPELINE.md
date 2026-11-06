@@ -166,6 +166,14 @@ source 단위 중단 회귀로 검증한다. 이미 실행 중인 옛 owner에�
 
 ### 공개 풀이의 내부 전용 preset 선택
 
+등록 문항의 공개 풀이 V11도 기존 기출 V10처럼, strict INDEX/QUERY reader가 사용하기
+전에 accepted/receipt Artifact를 같은 root transaction의 bounded bulk query로 준비한다.
+`accepted_public_solution_successor_predicate`를 prefetch와 dependency 관측이 공유하며,
+원래 base PK/predecessor·ACCEPTED·정확한 두 released request family만 선택한다. 출처
+인가·schema/hash/실제 bytes·현재 provenance 검증을 유지한다. 별도 캐시/queue/schema나
+문항별 fallback query를 만들지 않으며 기존 O(N) bounded metadata 집합과 batch 수를
+유지한다. 원래 모델 결과·등록·Graph는 재생성하지 않는다.
+
 외부에 공개된 `CreateKnowledgeSolutionAnalysisCommand`는 기존 `knowledge-analysis`
 literal을 그대로 유지한다. material owner는 같은 등록 문항 풀이 엔진의 명시적인 내부
 `create_material_solution_with_pinned_preset`을 사용해 `material-item-solution` logical key와

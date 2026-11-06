@@ -162,6 +162,21 @@ def test_fixed_named_groups_are_frozen_and_use_narrow_streaming_core_queries():
     assert all(result.closed and result.batch_size == 128 for result in session.results)
 
 
+def test_dependency_observation_tracks_both_accepted_public_solution_families():
+    session = PrimitiveSession()
+    observe(session)
+    statements = [
+        str(statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}))
+        for statement, _options in session.statements
+    ]
+    selected = [sql for sql in statements if "predecessor_analysis_run_id IN" in sql]
+    assert len(selected) == 1
+    assert "knowledge-analysis-request/10.0" in selected[0]
+    assert "knowledge-analysis-request/11.0" in selected[0]
+    assert "knowledge-analysis-request/12.0" not in selected[0]
+    assert "state = 'ACCEPTED'" in selected[0]
+
+
 @pytest.mark.parametrize("table,group", TABLE_GROUPS)
 def test_every_explicit_dependency_digest_changes_the_corresponding_observation(table, group):
     session = PrimitiveSession()
