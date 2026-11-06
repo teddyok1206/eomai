@@ -7,6 +7,7 @@ every use is reauthorized. Model commands remain with the existing runner.
 """
 
 from collections.abc import Mapping
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
@@ -42,6 +43,7 @@ from sqlalchemy import Engine, select
 from sqlalchemy.orm import Session
 
 from eom_catalog_service.artifacts import CatalogArtifactService
+from eom_catalog_service.material_claim_renewal import maintain_material_claim
 from eom_catalog_service.material_learning_artifacts import (
     publish_material_metadata,
     read_material_metadata,
@@ -186,6 +188,9 @@ class MaterialLearningCoordinator:
                 and row.lease_expires_at > now
             ):
                 release_material_claim(session, claim, now=now)
+
+    def maintain_claim(self, claim: MaterialRunClaim) -> AbstractContextManager[None]:
+        return maintain_material_claim(self.sessions, claim, lease_duration=_LEASE)
 
     def authorize(self, claim: MaterialRunClaim) -> None:
         with self.sessions.begin() as session:

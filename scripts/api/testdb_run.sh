@@ -522,6 +522,7 @@ if [[ "${action}" == "material-learning-tests" ]]; then
     tests/integration/test_material_learning_page_preparation.py \
     tests/integration/test_material_learning_controls_storage.py \
     tests/integration/test_material_learning_coordinator_storage.py \
+    tests/integration/test_material_claim_renewal_storage.py \
     tests/integration/test_material_knowledge_creation_storage.py \
     tests/integration/test_material_learning_graph_pipeline.py \
     tests/integration/test_material_learning_recovery_storage.py \

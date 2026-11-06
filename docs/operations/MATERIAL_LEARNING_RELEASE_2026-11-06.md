@@ -40,6 +40,32 @@
 `/tmp/material-learning-index-resume-read-20261106-1.log`.
 외부에 공유하는 보고에는 자격 증명·원문·worker 결과를 넣지 않는다.
 
+## 실제 설명 등록 및 실패 문항의 한정 재시도
+
+설명 분석은 실제 ACCEPTED 및 공유 Graph publication을 완료했다. 저장이15분 coordinator
+lease보다 길어져 옛 owner는 `MATERIAL_LEARNING_COORDINATOR_LEASE_STALE`로 종료됐고,
+기존 restart/replay가 이미 등록된 Graph를 재사용해 설명 task COMPLETED와 원 run의
+COMPLETED_WITH_EXCEPTIONS를 확인했다. 이 실패를 숨기거나 현재 lease를 직접 연장하지
+않았다. 새 claim renewal 후보는 Graph 저장 두 호출만 감싸 기존 owner/token을30초마다
+갱신하고 종료 시 다시 fence한다. 원래15분 값은 coordinator 한 곳에서 전달한다.
+집중 source61 PASS·임시 PostgreSQL43 PASS·core3개 mypy/format/lint PASS. source 검사는
+각기 겹치는 범위이며 합산하지 않는다. 실제 긴 작업과 운영 반영 검증은 후속이다.
+
+지침 보완은 cd3fe05b의 작은 addendum을 원래 역할 지침에 결합해 기존 bundle owner의
+정확한 predecessor CAS로 인접한 immutable revision을 발행했다. 기존 platform component는
+새 복사 없이 pointer를 재사용했다. 같은 `material-learning` logical preset의 공식
+draft→evaluation→release successor를 만들었으며 모델·격리·용량·wire schema는 불변이다.
+다른 서비스의 설치물/인증/수치 환경을 바꾸지 않고 material 환경의 learning preset pin만
+`execpresetrev_863b1dc8cfa3449eb64e90de337ac7dd`로 선택했다.
+
+공식 retry는 원 source와 성공한3개 task를 재사용하고 실패한 QUESTION만 successor로
+처리한다. 같은 retry command 재전송에서 동일 run/중복0을 확인했다. 첫 FAILED Job과
+run은 보존한다. 새 run은 `materialrun_581cc9a2d0895f06a430740ee5a5a2c2`이며 실제 child가
+RUNNING이다. 아직 문항 등록과 공개 풀이·Graph/INDEX 완료의 증거로 해석하지 않는다.
+근거: `/var/lib/eom-material-source-map-v2-20261106`,
+`/tmp/material-learning-retry-canary-20261106-1.log`,
+`/tmp/material-learning-claim-renewal-db-20261106-2.log`.
+
 ## 최신 인계·실제 결과 확인
 
 기존 INDEX는 지원된 main stop Event로 현재 묶음을 자연 종료했다(`Result=success`).

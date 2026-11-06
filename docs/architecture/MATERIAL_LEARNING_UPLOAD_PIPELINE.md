@@ -149,6 +149,21 @@ provider pin과 QUERY/Catalog/runtime 호환 절차를 따르며 INDEX 수치 �
 
 ## D2 구현 경계와 복구 결정
 
+### 장시간 Graph 저장의 기존 claim 유지
+
+실제 공유 Graph 저장이 짧은 coordinator lease보다 길어질 수 있으므로, 문항/설명
+publication 두 호출에 동일한 `material_claim_renewal` 범위를 사용한다. 정본은 기존
+run의 owner/token/expiry이며 새 queue·schema·identity·권한은 만들지 않는다.
+15분 lease를 30초마다 동일 run PK/정확한 token으로만 갱신하고, 긴 원문/Graph 작업 중
+DB row lock을 유지하지 않는다. 갱신 transaction의 lock/query 대기는 유한하다.
+범위 종료 시 갱신 thread를 먼저 끝내고 기존 claim을 다시 확인한 뒤 task를 갱신한다.
+만료·교체된 token은 부활시키지 않으며, 갱신 실패는 완료로 바꾸지 않는다. 원래 작업
+오류를 heartbeat 오류로 덮어쓰지 않는다. 호출마다 O(1) 상태/PK 조회, 단일 thread와
+상수 공간이며 별도 영속 자료가 없다. 단순 TTL 상향만으로 긴 문서의 유효성을
+보장할 수 없어 기존 claim 갱신을 사용한다. 실제 PostgreSQL의 경쟁 claim/만료·재소유와
+source 단위 중단 회귀로 검증한다. 이미 실행 중인 옛 owner에는 코드 주입/직접 lease
+수정을 하지 않고, 자연 종료 후 호환 owner successor로 원래 checkpoint를 이어간다.
+
 - **계약:** `material-learning/1.0` 계열에 업로드 의도, 원본/분석 입력 포인터,
   권리 확인, 페이지별 발견 계획, 단위별 추출 입력/결과와 공개 진행 상태를 정의한다.
   발견과 문항 추출은 서로 다른 task kind다. 기존 Notion·기출 요청은 변경하지 않는다.

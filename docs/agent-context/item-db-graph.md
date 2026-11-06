@@ -1,5 +1,11 @@
 # 문항 DB와 Graph 등록
 
+자료 학습의 문항/설명 Graph publication은
+`services/catalog_service/eom_catalog_service/material_claim_renewal.py`로 기존
+coordinator claim을 유지한다. 이 범위는 새 실행 권한/queue가 아니며 만료·교체된
+token을 부활시키지 않는다. task 완료는 범위 종료 후 기존 row/token fence로 기록한다.
+실제 의미와 운영 반영 여부는 자료 학습 설계/운영 기록에서 확인한다.
+
 ## 출처와 상태를 분리
 
 사용자 분류는 기출·창작·AI이며 교과서는 별도 근거 출처다. 창작은 가져온 기존 제작 문항,

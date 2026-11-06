@@ -54,6 +54,7 @@
         "services/catalog_service/eom_catalog_service/creative_item_graph_learning.py",
         "services/catalog_service/eom_catalog_service/material_learning_processing.py",
         "services/catalog_service/eom_catalog_service/material_learning_coordinator.py",
+        "services/catalog_service/eom_catalog_service/material_claim_renewal.py",
         "services/catalog_service/eom_catalog_service/material_learning_recovery.py",
         "services/catalog_service/eom_catalog_service/material_task_history.py",
         "services/catalog_service/eom_catalog_service/material_task_source_read.py",

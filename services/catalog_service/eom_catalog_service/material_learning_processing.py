@@ -271,12 +271,13 @@ class MaterialLearningProcessingService:
         if task.state == "PUBLISHING":
             base_id, _solution_id = self._analysis_pins(task.task_id)
             assert task.item_revision_id is not None and base_id is not None
-            revision = self.graph.publish_item(
-                task_id=task.task_id,
-                analysis_run_id=base_id,
-                item_revision_id=task.item_revision_id,
-                operator_id=context.operator_id,
-            )
+            with self.coordinator.maintain_claim(claim):
+                revision = self.graph.publish_item(
+                    task_id=task.task_id,
+                    analysis_run_id=base_id,
+                    item_revision_id=task.item_revision_id,
+                    operator_id=context.operator_id,
+                )
             self._set_state(
                 claim, task.task_id, MaterialTaskState.GRAPH_READY, graph_revision=revision
             )
@@ -471,9 +472,10 @@ class MaterialLearningProcessingService:
             return MaterialCoordinatorProgress(claim.run_id, task.task_id, "PUBLISHING")
         if task.state == "PUBLISHING":
             assert task.analysis_run_id is not None
-            revision = self.graph.publish_document(
-                analysis_run_id=task.analysis_run_id, operator_id=context.operator_id
-            )
+            with self.coordinator.maintain_claim(claim):
+                revision = self.graph.publish_document(
+                    analysis_run_id=task.analysis_run_id, operator_id=context.operator_id
+                )
             self._set_state(
                 claim, task.task_id, MaterialTaskState.GRAPH_READY, graph_revision=revision
             )
