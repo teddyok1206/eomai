@@ -28,3 +28,13 @@ def test_release_simulation_stages_and_loads_each_exact_creative_successor() -> 
     assert 'compile_definition(creative_source_definition, {"support"})' in source
     assert 'compile_definition(creative_office_definition, {"support"})' in source
     assert "WORKFLOW_ADMISSION_BY_IDENTITY.items()" in source
+
+
+def test_uploaded_material_is_in_the_actual_installed_definition_gate() -> None:
+    script = (ROOT / "scripts/api/deploy_release.sh").read_text()
+    assert script.count('"material-learning.v1.yaml"') >= 2
+    source = script.split("    check = r'''", 1)[1].split("'''", 1)[0]
+    ast.parse(source)
+    assert 'compile_definition(material_definition, {"support"})' in source
+    assert 'load_role_input_schema("support", "workflow-role/1.37.0")' in source
+    assert 'load_codex_result_schema("material-learning-result@1.0")' in source

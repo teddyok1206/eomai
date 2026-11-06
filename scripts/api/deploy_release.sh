@@ -1854,6 +1854,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
     for name in (
         "external-item-learning.v1.yaml", "external-item-learning.v2.yaml",
         "external-item-learning.v3.yaml",
+        "material-learning.v1.yaml",
     ):
         (root / name).write_bytes(
             (Path(os.environ["REPOSITORY_ROOT"]) / "config/workflows" / name).read_bytes()
@@ -2067,6 +2068,7 @@ from typer.testing import CliRunner
 creative_definition = Path(legacy_definition).with_name("external-item-learning.v1.yaml")
 creative_source_definition = Path(legacy_definition).with_name("external-item-learning.v2.yaml")
 creative_office_definition = Path(legacy_definition).with_name("external-item-learning.v3.yaml")
+material_definition = Path(legacy_definition).with_name("material-learning.v1.yaml")
 
 spec = importlib.util.find_spec("eom_workflow")
 if (
@@ -2281,6 +2283,8 @@ load_role_input_schema("support", "workflow-role/1.34.0")
 load_codex_result_schema("external-item-learning-result@2.0")
 load_role_input_schema("support", "workflow-role/1.36.0")
 load_codex_result_schema("external-item-learning-result@3.0")
+load_role_input_schema("support", "workflow-role/1.37.0")
+load_codex_result_schema("material-learning-result@1.0")
 load_role_input_schema("support", "workflow-role/1.28.0")
 load_role_input_schema("support", "workflow-role/1.29.0")
 load_role_input_schema("support", "workflow-role/1.30.0")
@@ -2443,6 +2447,7 @@ admitted_definitions = (
     compile_definition(creative_definition, {"support"}),
     compile_definition(creative_source_definition, {"support"}),
     compile_definition(creative_office_definition, {"support"}),
+    compile_definition(material_definition, {"support"}),
     compile_definition(Path(editorial_definition), {"support"}),
     compile_definition(Path(customer_support_definition), {"support"}),
     compile_definition(Path(pdf_document_review_definition_v1), {"support"}),
