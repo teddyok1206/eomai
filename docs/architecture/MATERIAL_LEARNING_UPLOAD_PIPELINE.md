@@ -221,6 +221,20 @@ coordinator는 짧은 claim으로 원래 자식 상태를 읽고 다음 checkpoi
 모델이 응답하는 동안 자료 run lease나 HTTP 요청을 붙들지 않는다. 이로써 pause와 여러
 자료의 파일 준비도 긴 모델 호출에 종속되지 않는다. 기존 단일 AI lane/전역 동시4가
 각자의 DB·host lock에서 그대로 강제된다.
+
+### 통합 검사에서 확인한 설명 append 계약 보정
+
+실제 임시 DB에서 교과서의 reviewed structure V2→일반 자료 설명 source V5를 append하자
+자료 owner가 publication V6/structure V6를 고정해 거부했다. V6에는 실제 기출 placement와
+origin-scoped Item alignment가 필요하므로 교과서-only Graph를 그 형태로 위장하지 않는다.
+정본은 원래 reviewed structure와 accepted source이며, 새 설명은 기존 구조의 실제
+schema/version에 대응하는 공식 publication V2–V6로 제출한다. 신규 snapshot V10만
+structured pointer V2–V6를 명시적으로 지원한다. released publication/structure/snapshot
+V1–V9의 bytes와 과거 요청 해석은 바꾸지 않는다. 새 source가 없는 기존 publication은
+동일한 구 snapshot 계열을 사용한다. 새 source가 있으면 그 exact 구조를 pin한 V10을
+반환한다. 타입 선택은 작은 immutable map(O(1)), 발행·재조회는 기존 writer/CAS와
+Artifact resolver가 소유한다. 새 Graph나 DB schema·권한 확대는 없다. 임의 최신 구조로
+교체하거나 가짜 기출/Item을 넣는 대안은 출처와 검토 의미를 깨므로 허용하지 않는다.
 - **Graph/INDEX:** 문서 accepted analysis는 기존 공통 Graph publication, Item은 기존
   automatic Item publication을 사용한다. 출처 정책은 별도 적용한다. Graph 등록 후
   기존 공통 풀이 projection으로 증분 INDEX에 넘긴다. 전체 기출 INDEX 완료를 기다리지

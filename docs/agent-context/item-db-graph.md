@@ -83,6 +83,12 @@ snapshot V10은 구 교과서 계약을 완화한 것이 아니다. source/role 
 있다는 사실만으로 전체 coordinator나 운영 활성화가 완료됐다고 추정하지 않는다.
 최신 미완료 항목은 `docs/operations/MATERIAL_LEARNING_IMPLEMENTATION_CHECKPOINT.md`.
 
+자료 설명 append는 기존 structured Graph V2–V6에 해당하는 공식 publication을 선택한다.
+미출시 snapshot V10이 일반 자료 source를 보존하며, 설명을 추가하려고 기존 교과서
+Graph에 가짜 기출/문항 placement나 구조 V6를 강제하지 않는다. 실제 임시 DB 경로는
+`tests/integration/test_material_learning_graph_pipeline.py`, 일반형 등록 문항의 base/V11
+공개 풀이·공통 embedding text 경계는 `test_material_item_registration_storage.py`를 본다.
+
 새 통합 업로드 문항의 사용자 분류는 외부 / `EXTERNAL`이다. 기존 Notion 창작 /
 `CREATIVE`, 기출, AI를 바꾸지 않는다. `material_item_registration.py`가 원문/그림과
 작은 lineage를 원래 Registry에 등록하고 `material_graph_learning.py`가 실제 base 및

@@ -64,7 +64,13 @@
               "const": "evidence/graph-structure-manifest.json"
             },
             "schema_ref": {
-              "const": "eom://schemas/knowledge/knowledge-graph-structure-manifest/6.0"
+              "enum": [
+                "eom://schemas/knowledge/knowledge-graph-structure-manifest/2.0",
+                "eom://schemas/knowledge/knowledge-graph-structure-manifest/3.0",
+                "eom://schemas/knowledge/knowledge-graph-structure-manifest/4.0",
+                "eom://schemas/knowledge/knowledge-graph-structure-manifest/5.0",
+                "eom://schemas/knowledge/knowledge-graph-structure-manifest/6.0"
+              ]
             }
           }
         }

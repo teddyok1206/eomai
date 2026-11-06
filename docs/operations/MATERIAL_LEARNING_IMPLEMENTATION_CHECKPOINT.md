@@ -6,6 +6,34 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 
 ## 최신 source checkpoint — 아직 운영 완료 아님
 
+### 실제 저장소 통합 검사 — 2026-11-06 후속
+
+- marker-guarded 임시 PostgreSQL에서 실제 원본 접수·Document 등록·분석 수락·공유
+  Graph append·RAG evidence 생성과 같은 요청 재전송까지 확인했다. 합성인 것은
+  모델 응답이며, Graph/Artifact/권한/분석 수락을 가짜 객체로 대체하지 않았다.
+- 이 검사로 교과서 전용 구조 V2에 설명을 추가할 때 무조건 구조 V6 publication을
+  요청하던 실제 불일치를 발견했다. 미출시 snapshot V10은 정확한 기존 구조 V2–V6를
+  보존하고 해당 공식 publication을 선택한다. 가짜 기출·문항 placement를 만들거나
+  구 snapshot/structure bytes를 변경하지 않는다. 이전 snapshot의 source membership도
+  그대로 읽히는 것을 확인했다.
+- 새 일반형 `assessment-item-content/1.0` 문항을 실제 Registry에 등록하고, 실제 base
+  accepted analysis → 별도 V11 공개 풀이 수락 → 공통 public-solution-text projection까지
+  확인했다. 원문 정답·문항을 덮지 않고 같은 등록·풀이 명령은 기존 결과를 재사용한다.
+  등록 입력의 완료 role/source port는 명시적 합성 fixture이므로 실제 worker/원본 권한
+  검증 전체나 수치 GPU 임베딩 완료로 확대 해석하지 않는다.
+- 현재 material persistence suite **35 PASS**, Graph/source/RAG/공개 풀이/context 집중
+  unit suite **77 PASS**, 별도 설치 resource·구 계약·runtime/창작 대기 회귀 **82 PASS**,
+  수정한 핵심 세 모듈 mypy PASS. 범위가 겹치므로 합산하지 않는다. 최신 로그는
+  `/tmp/material-learning-graph-db-20261106-10.log`,
+  `/tmp/material-graph-final-unit-20261106-1.log`,
+  `/tmp/material-graph-final-contracts-20261106-1.log`다. 테스트 fixture의 초기 오류·실패 로그도
+  보존하며 운영 DB를 테스트 대상으로 쓰지 않았다.
+- 다음은 실패 단위의 공식 retry/예외 조회와 최종 설치본·runtime/control 호환 배포다.
+  기존 INDEX source 소비 경계가 새 Graph V10을 이해하게 정렬되기 전에는 새 Graph를
+  운영에 publish하지 않는다. 운영 migration/feature 배포/실제 학습 canary는 아직0이다.
+- 사용자 추가 지시대로 목표 완료 뒤에도 배경 owner와 감시 timer를 유지한다. 처리할
+  자료가 없는 슬롯은 점유하지 않으며, 원본 보류를 작업 성공이나 실행 중으로 표시하지 않는다.
+
 ### 설치본 실행 확인 — source `897a2468`
 
 - API full source-free wheel/RECORD·모든 historical Workflow/신규 material/knowledge12

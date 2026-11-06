@@ -12,7 +12,8 @@ from eom_catalog_contracts.knowledge import (
     KnowledgeAnalysisDocumentDependencyV3,
     KnowledgeAnalysisOriginalSourceMemberV3,
     KnowledgeAnalysisSourceV3,
-    KnowledgeGraphSnapshotManifestV9,
+    KnowledgeArtifactMemberPointer,
+    KnowledgeGraphSnapshotManifestV4,
     KnowledgeProposalCountsV2,
     KnowledgeProposalMembersV2,
     _KnowledgeAnalysisProposalReceiptBase,
@@ -282,12 +283,14 @@ class KnowledgeAnalysisResultV12(_KnowledgeAnalysisResultBase):
         return self
 
 
-class KnowledgeGraphSnapshotManifestV10(KnowledgeGraphSnapshotManifestV9):
+class KnowledgeGraphSnapshotManifestV10(KnowledgeGraphSnapshotManifestV4):
     """Same shared Graph/projections/structure; an explicit new source family."""
 
     schema_version: Literal["knowledge-graph-snapshot-manifest/10.0"] = (
         "knowledge-graph-snapshot-manifest/10.0"  # type: ignore[assignment]
     )
+    ontology_version: Literal["education-knowledge-graph/1.1"] = "education-knowledge-graph/1.1"  # type: ignore[assignment]
+    structure_manifest: KnowledgeArtifactMemberPointer
     source_revisions: tuple[
         KnowledgeAnalysisSourceV3
         | EducationalDocumentKnowledgeSourceV4
@@ -298,6 +301,8 @@ class KnowledgeGraphSnapshotManifestV10(KnowledgeGraphSnapshotManifestV9):
     @model_validator(mode="after")
     def exact_uploaded_source_manifest(self) -> Self:
         validate_contract("knowledge-graph-snapshot-manifest-v10", self.model_dump(mode="json"))
+        if self.projections.curriculum_closure is None:
+            raise ValueError("material graph requires the pinned curriculum closure")
         return self
 
 

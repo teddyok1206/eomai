@@ -624,6 +624,7 @@ class KnowledgeGraphPublicationService:
                     | KnowledgeGraphSnapshotManifestV7
                     | KnowledgeGraphSnapshotManifestV8
                     | KnowledgeGraphSnapshotManifestV9
+                    | KnowledgeGraphSnapshotManifestV10
                 )
                 if schema_ref.endswith("/10.0"):
                     validate_contract("knowledge-graph-snapshot-manifest-v10", value)
@@ -999,23 +1000,30 @@ class KnowledgeGraphPublicationService:
             "created_at": command.requested_at,
         }
         manifest: KnowledgeGraphSnapshotContract
-        if isinstance(command, PublishKnowledgeGraphSnapshotCommandV6):
+        if any(
+            isinstance(item.source, EducationalDocumentKnowledgeSourceV5)
+            for item in projection.analyses
+        ):
+            if command.structure_manifest is None:
+                raise KnowledgeGraphPublicationError(
+                    "KNOWLEDGE_GRAPH_FRAMEWORK_INVALID",
+                    "uploaded material requires an exact reviewed structure",
+                )
             manifest_value["structure_manifest"] = command.structure_manifest.model_dump(
                 mode="json"
             )
-            if any(
-                isinstance(item.source, EducationalDocumentKnowledgeSourceV5)
-                for item in projection.analyses
-            ):
-                manifest = KnowledgeGraphSnapshotManifestV10.model_validate(manifest_value)
-                validate_contract(
-                    "knowledge-graph-snapshot-manifest-v10", manifest.model_dump(mode="json")
-                )
-            else:
-                manifest = KnowledgeGraphSnapshotManifestV9.model_validate(manifest_value)
-                validate_contract(
-                    "knowledge-graph-snapshot-manifest-v9", manifest.model_dump(mode="json")
-                )
+            manifest = KnowledgeGraphSnapshotManifestV10.model_validate(manifest_value)
+            validate_contract(
+                "knowledge-graph-snapshot-manifest-v10", manifest.model_dump(mode="json")
+            )
+        elif isinstance(command, PublishKnowledgeGraphSnapshotCommandV6):
+            manifest_value["structure_manifest"] = command.structure_manifest.model_dump(
+                mode="json"
+            )
+            manifest = KnowledgeGraphSnapshotManifestV9.model_validate(manifest_value)
+            validate_contract(
+                "knowledge-graph-snapshot-manifest-v9", manifest.model_dump(mode="json")
+            )
         elif isinstance(command, PublishKnowledgeGraphSnapshotCommandV5):
             manifest_value["structure_manifest"] = command.structure_manifest.model_dump(
                 mode="json"

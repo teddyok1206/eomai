@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Barrier
+from types import SimpleNamespace
 
 import pytest
 from eom_catalog_contracts import ReconcileKnowledgeAnalysisCommand
@@ -55,7 +56,8 @@ pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def test_actual_material_knowledge_creation_binds_one_child_and_replays_concurrently(
+@pytest.fixture
+def material_knowledge_case(
     creative_engine,
     coordinator_case,
     controls,
@@ -137,39 +139,17 @@ def test_actual_material_knowledge_creation_binds_one_child_and_replays_concurre
             session, run, task, MaterialTaskState.ANALYZING, now=datetime.now(UTC)
         )
     service = KnowledgeAnalysisApplicationService(creative_engine, settings)
-    barrier = Barrier(2)
-
-    def create(_):
-        barrier.wait(timeout=10)
-        return service.create_material_with_pinned_preset(
-            command,
-            preset_id=presets.document.preset_id,
-            preset_revision_id=presets.document.preset_revision_id,
-        )
-
     try:
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            first, second = pool.map(create, range(2))
-        assert (
-            first.analysis_run_id == second.analysis_run_id
-            and first.workflow_id == second.workflow_id
+        yield SimpleNamespace(
+            accepted=accepted,
+            settings=settings,
+            processing=processing,
+            presets=presets,
+            command=command,
+            service=service,
+            actor=actor,
+            task_id=task_id,
         )
-        with Session(creative_engine) as session:
-            task = session.get(MaterialLearningTaskRecord, task_id)
-            assert task.analysis_run_id == first.analysis_run_id
-            assert task.workflow_id == first.workflow_id
-            assert (
-                session.scalar(
-                    select(func.count())
-                    .select_from(KnowledgeAnalysisRunRecord)
-                    .where(KnowledgeAnalysisRunRecord.idempotency_key == command.idempotency_key)
-                )
-                == 1
-            )
-            assert (
-                session.get(WorkflowInstanceRecord, first.workflow_id).role_schema_version
-                == "workflow-role/1.38.0"
-            )
     finally:
         # No worker was executed. Close only these synthetic pending commands
         # through their lifecycle owners so fixture cleanup leaves no live lane.
@@ -177,7 +157,8 @@ def test_actual_material_knowledge_creation_binds_one_child_and_replays_concurre
             task = session.get(MaterialLearningTaskRecord, task_id)
             workflow_id = task.workflow_id
             analysis_id = task.analysis_run_id
-            if workflow_id:
+            workflow = session.get(WorkflowInstanceRecord, workflow_id) if workflow_id else None
+            if workflow is not None and workflow.state not in {"COMPLETED", "FAILED", "CANCELLED"}:
                 for pending in session.scalars(
                     select(WorkflowCommandRecord).where(
                         WorkflowCommandRecord.workflow_id == workflow_id,
@@ -201,11 +182,50 @@ def test_actual_material_knowledge_creation_binds_one_child_and_replays_concurre
         with Session(creative_engine) as session, session.begin():
             run = session.get(MaterialLearningRunRecord, accepted.run_id, with_for_update=True)
             task = session.get(MaterialLearningTaskRecord, task_id)
-            transition_material_task(
-                session,
-                run,
-                task,
-                MaterialTaskState.FAILED,
-                now=datetime.now(UTC),
-                error_code="SYNTHETIC_MATERIAL_TEST_FINISHED",
+            if task.state not in {"COMPLETED", "FAILED", "CANCELLED", "EXCEPTION"}:
+                transition_material_task(
+                    session,
+                    run,
+                    task,
+                    MaterialTaskState.FAILED,
+                    now=datetime.now(UTC),
+                    error_code="SYNTHETIC_MATERIAL_TEST_FINISHED",
+                )
+
+
+def test_actual_material_knowledge_creation_binds_one_child_and_replays_concurrently(
+    creative_engine, material_knowledge_case
+):
+    case = material_knowledge_case
+    barrier = Barrier(2)
+
+    def create(_):
+        barrier.wait(timeout=10)
+        return case.service.create_material_with_pinned_preset(
+            case.command,
+            preset_id=case.presets.document.preset_id,
+            preset_revision_id=case.presets.document.preset_revision_id,
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = pool.map(create, range(2))
+    assert (
+        first.analysis_run_id == second.analysis_run_id and first.workflow_id == second.workflow_id
+    )
+    with Session(creative_engine) as session:
+        task = session.get(MaterialLearningTaskRecord, case.task_id)
+        assert (
+            task.analysis_run_id == first.analysis_run_id and task.workflow_id == first.workflow_id
+        )
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(KnowledgeAnalysisRunRecord)
+                .where(KnowledgeAnalysisRunRecord.idempotency_key == case.command.idempotency_key)
             )
+            == 1
+        )
+        assert (
+            session.get(WorkflowInstanceRecord, first.workflow_id).role_schema_version
+            == "workflow-role/1.38.0"
+        )

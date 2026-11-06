@@ -1,7 +1,9 @@
 """Connect uploaded material tasks to the existing analysis and shared Graph owners."""
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from types import MappingProxyType
 
 from eom_catalog_contracts import (
     ApprovedItemKnowledgeAnalysisSelection,
@@ -9,6 +11,11 @@ from eom_catalog_contracts import (
     CreateKnowledgeAnalysisCommand,
     CreateKnowledgeSolutionAnalysisCommand,
     KnowledgeAnalysisApplicationResult,
+    PublishKnowledgeGraphSnapshotCommand,
+    PublishKnowledgeGraphSnapshotCommandV2,
+    PublishKnowledgeGraphSnapshotCommandV3,
+    PublishKnowledgeGraphSnapshotCommandV4,
+    PublishKnowledgeGraphSnapshotCommandV5,
     PublishKnowledgeGraphSnapshotCommandV6,
     ReconcileKnowledgeAnalysisCommand,
 )
@@ -53,6 +60,19 @@ from eom_catalog_service.material_learning_models import MaterialLearningTaskRec
 from eom_catalog_service.material_learning_source import authorize_material_learning
 from eom_catalog_service.material_task_results import resolve_completed_material_task
 from eom_catalog_service.settings import CatalogSettings
+
+_STRUCTURE_PUBLICATION: Mapping[str, type[PublishKnowledgeGraphSnapshotCommand]] = MappingProxyType(
+    {
+        f"eom://schemas/knowledge/knowledge-graph-structure-manifest/{version}.0": model
+        for version, model in (
+            (2, PublishKnowledgeGraphSnapshotCommandV2),
+            (3, PublishKnowledgeGraphSnapshotCommandV3),
+            (4, PublishKnowledgeGraphSnapshotCommandV4),
+            (5, PublishKnowledgeGraphSnapshotCommandV5),
+            (6, PublishKnowledgeGraphSnapshotCommandV6),
+        )
+    }
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -264,7 +284,8 @@ class MaterialGraphLearningService:
                 reviewed_base_snapshot_revision_id=context.graph_snapshot_revision_id,
             )
             value = dict(
-                schema_version="knowledge-graph-publication/6.0",
+                schema_version="knowledge-graph-publication/"
+                + structure.schema_version.rsplit("/", 1)[1],
                 corpus_key=context.corpus_key,
                 display_name=context.display_name,
                 accepted_analysis_run_ids=list(structure.source_analysis_run_ids),
@@ -281,7 +302,10 @@ class MaterialGraphLearningService:
                 )[7:],
                 requested_at=structure.created_at.isoformat().replace("+00:00", "Z"),
             )
-            command = PublishKnowledgeGraphSnapshotCommandV6.model_validate(
+            publication_type = _STRUCTURE_PUBLICATION.get(pointer.schema_ref)
+            if publication_type is None:
+                raise ValueError("MATERIAL_GRAPH_STRUCTURE_UNSUPPORTED")
+            command = publication_type.model_validate(
                 {
                     **value,
                     "request_sha256": content_sha256(value),

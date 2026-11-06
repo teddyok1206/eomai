@@ -160,6 +160,9 @@ def contracts() -> dict[str, tuple[str, dict[str, Any]]]:
         1,
         10000,
     )
+    snapshot["properties"]["structure_manifest"]["allOf"][1]["properties"]["schema_ref"] = enum(
+        *(KNOWLEDGE + f"knowledge-graph-structure-manifest/{version}.0" for version in range(2, 7))
+    )
     values["knowledge-graph-snapshot-manifest-v10"] = ("knowledge", snapshot)
     evidence = old("evidence-bundle-manifest-v5")
     evidence["$id"] = KNOWLEDGE + "evidence-bundle-manifest/6.0"

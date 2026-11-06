@@ -36,6 +36,7 @@ from eom_workflow.schemas import (
     validate_role_input,
     validate_role_result,
 )
+from jsonschema.exceptions import ValidationError as SchemaValidationError
 from pydantic import ValidationError
 
 from tests.unit.test_knowledge_analysis_document_contracts import (
@@ -192,7 +193,10 @@ def test_uploaded_explanation_projects_through_existing_graph_identity_owner():
     assert serialized.members["projections/nodes.jsonl"]
 
 
-def test_shared_snapshot_keeps_uploaded_source_without_licensed_textbook_coercion():
+@pytest.mark.parametrize("structure_version", range(2, 7))
+def test_shared_snapshot_keeps_uploaded_source_without_licensed_textbook_coercion(
+    structure_version,
+):
     def pointer(path, media="application/x-ndjson"):
         return dict(
             artifact_id="artifact_" + "8" * 32,
@@ -205,7 +209,9 @@ def test_shared_snapshot_keeps_uploaded_source_without_licensed_textbook_coercio
         )
 
     structure = pointer("evidence/graph-structure-manifest.json", "application/json")
-    structure["schema_ref"] = "eom://schemas/knowledge/knowledge-graph-structure-manifest/6.0"
+    structure["schema_ref"] = (
+        f"eom://schemas/knowledge/knowledge-graph-structure-manifest/{structure_version}.0"
+    )
     value = dict(
         graph_id="graph_" + "7" * 32,
         graph_snapshot_revision_id="graphrev_" + "8" * 32,
@@ -233,6 +239,12 @@ def test_shared_snapshot_keeps_uploaded_source_without_licensed_textbook_coercio
     bad["counts"]["source_revisions"] = 2
     with pytest.raises(ValueError, match="unique"):
         KnowledgeGraphSnapshotManifestV10.model_validate(bad)
+    unsupported = parsed.model_dump(mode="json")
+    unsupported["structure_manifest"]["schema_ref"] = (
+        "eom://schemas/knowledge/knowledge-graph-structure-manifest/7.0"
+    )
+    with pytest.raises(SchemaValidationError, match="is not one of"):
+        KnowledgeGraphSnapshotManifestV10.model_validate(unsupported)
 
 
 def test_multichunk_source_preserves_actual_schema_and_original_pdf():

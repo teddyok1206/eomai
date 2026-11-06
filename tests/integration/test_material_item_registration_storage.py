@@ -4,7 +4,7 @@ Completed worker/source authorization is tested by separate role/page owners.
 This suite does not claim source rights, model execution or scientific validation.
 """
 
-import os
+import json
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import replace
 from datetime import UTC, datetime
@@ -15,6 +15,13 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
+from eom_catalog_contracts import (
+    CreateKnowledgeAnalysisCommand,
+    CreateKnowledgeSolutionAnalysisCommand,
+    KnowledgeAnalysisRequestV2,
+    KnowledgeAnalysisWorkerProposal,
+    ReconcileKnowledgeAnalysisCommand,
+)
 from eom_catalog_contracts.material_learning import MaterialExtractionWork
 from eom_catalog_contracts.material_learning_authorization import (
     MaterialLearningAuthorizationRequest,
@@ -22,11 +29,17 @@ from eom_catalog_contracts.material_learning_authorization import (
 from eom_catalog_service import material_item_registration as owner
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.content_pack_service import ContentPackService
+from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
 from eom_catalog_service.material_learning_artifacts import publish_material_metadata
 from eom_catalog_service.material_task_results import ResolvedMaterialTask
 from eom_catalog_service.models import ItemRecord, ItemRevisionRecord
-from eom_identifiers import canonical_json_bytes, sha256_bytes
+from eom_catalog_service.solution_embedding_projection import project_public_solution_text
+from eom_catalog_service.solution_evidence_resolution import (
+    resolve_registered_solution_evidence_by_base_run,
+)
+from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
+from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.settings import Settings
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.compiler import compile_definition
@@ -46,9 +59,15 @@ from eom_workflow_runner.state_machine import (
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from tests.integration import test_knowledge_analysis_service as knowledge
+from tests.integration import test_registered_item_solution_application as solutions
 from tests.integration.test_material_learning_intake_storage import (
     material_intake as material_intake,
 )
+from tests.integration.test_preset_model_validation_persistence import (
+    guarded_engine as guarded_engine,
+)
+from tests.integration.test_registered_item_solution_application import controls as controls
 from tests.unit.test_material_learning_contracts import extraction_result, extraction_work, rehash
 from tests.unit.test_material_learning_role_contracts import worker_input
 
@@ -57,11 +76,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.fixture
-def registration_case(creative_engine, material_intake, tmp_path, monkeypatch):
+def registration_case(creative_engine, material_intake, controls, tmp_path, monkeypatch):
     actor, settings, _, _ = material_intake
-    artifact_root = Path(os.environ["EOM_API_TEST_STATE"]) / "material-registry-artifacts"
-    artifact_root.mkdir(exist_ok=True)
-    settings = replace(settings, nas_artifact_root=artifact_root)
+    settings = replace(settings, nas_artifact_root=controls[1].nas_artifact_root)
     settings.staging_root.chmod(0o750)
     for directory in (settings.content_pack_staging_root, settings.registry_staging_root):
         directory.mkdir(mode=0o750)
@@ -261,3 +278,104 @@ def test_concurrent_material_registry_writes_create_one_revision(
         first, second = pool.map(submit, range(2))
     assert first.item_revision_id == second.item_revision_id and first.lineage == second.lineage
     assert sum((first.created, second.created)) == 1
+
+
+def test_uploaded_item_uses_real_registered_solution_and_common_embedding_projection(
+    creative_engine, registration_case, tmp_path
+):
+    """Real source/analysis/report chain; only the worker response is synthetic."""
+    create, resolved = registration_case
+    owner = create()
+    item = owner.register_completed(task_id=resolved.task_id, operator_id=resolved.operator_id)
+    analyses = KnowledgeAnalysisApplicationService(creative_engine, owner.settings)
+    command = CreateKnowledgeAnalysisCommand.model_validate(
+        dict(
+            source=dict(
+                source_kind="APPROVED_ITEM_REVISION",
+                source_class="APPROVED_ITEM",
+                item_revision_id=item.item_revision_id,
+            ),
+            preset_key="knowledge-analysis",
+            general_knowledge_mode="DISABLED",
+            risk_policy_revision_id=knowledge.POLICY_ID,
+            requested_by=resolved.operator_id,
+            idempotency_key="material-registered-base:" + uuid4().hex,
+        )
+    )
+    base = analyses.create(command)
+    with analyses.sessions() as session:
+        request = KnowledgeAnalysisRequestV2.model_validate(
+            session.get(KnowledgeAnalysisRunRecord, base.analysis_run_id).canonical_request
+        )
+    pointer = request.source.artifact_member
+    assert pointer.schema_ref == "eom.assessment.item-content/1.0"
+    content = json.loads(
+        owner.artifacts.read_member(
+            artifact_id=pointer.artifact_id,
+            revision_id=pointer.artifact_revision_id,
+            member_path=pointer.member_path,
+            schema_ref=pointer.schema_ref,
+            media_type=pointer.media_type,
+            sha256=pointer.sha256,
+            max_bytes=pointer.bytes,
+        )
+    )
+    # Reuse the registered-solution fixture's exact reference node identities,
+    # but pin anchors to the general Item's real fields, not editorial V3 paths.
+    proposal = solutions._base_proposal(
+        request,
+        {
+            "stem": json.dumps(content["body"], ensure_ascii=False),
+            "explanations": {"correct_answer": content["solution"]},
+        },
+    ).model_dump(mode="json")
+    proposal["anchors"][0]["locator"] = "/body"
+    proposal["anchors"][0]["excerpt_sha256"] = content_sha256(content["body"])
+    proposal["anchors"][1]["locator"] = "/solution"
+    knowledge._complete_proposal(
+        creative_engine,
+        owner.settings,
+        run_id=base.analysis_run_id,
+        staging_root=tmp_path / "material-base-response",
+        proposal_override=KnowledgeAnalysisWorkerProposal.model_validate(proposal),
+    )
+    base = analyses.reconcile(
+        ReconcileKnowledgeAnalysisCommand(
+            analysis_run_id=base.analysis_run_id, requested_by=resolved.operator_id
+        )
+    )
+    assert base.state == "ACCEPTED"
+    solution_command = CreateKnowledgeSolutionAnalysisCommand(
+        base_analysis_run_id=base.analysis_run_id,
+        requested_by=resolved.operator_id,
+        idempotency_key="material-registered-solution:" + uuid4().hex,
+    )
+    solution = analyses.create_solution(solution_command)
+    assert analyses.create_solution(solution_command) == solution
+    solutions._complete_solution(
+        creative_engine,
+        owner.settings,
+        solution.analysis_run_id,
+        tmp_path / "material-solution-response",
+    )
+    solution = analyses.reconcile(
+        ReconcileKnowledgeAnalysisCommand(
+            analysis_run_id=solution.analysis_run_id, requested_by=resolved.operator_id
+        )
+    )
+    assert solution.state == "ACCEPTED"
+    assert analyses.create_solution(solution_command) == solution
+    with analyses.sessions() as session:
+        evidence = resolve_registered_solution_evidence_by_base_run(
+            session, owner.artifacts, base_analysis_run_ids=(base.analysis_run_id,)
+        )[base.analysis_run_id]
+    assert evidence.source.item_revision_id == item.item_revision_id
+    assert evidence.pointer.solution_analysis_run_id == solution.analysis_run_id
+    projected = project_public_solution_text(evidence.report)
+    assert projected.status == "AVAILABLE" and projected.text
+    assert projected == project_public_solution_text(evidence.report)
+    assert (
+        not create()
+        .register_completed(task_id=resolved.task_id, operator_id=resolved.operator_id)
+        .created
+    )

@@ -410,7 +410,7 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "schemas/knowledge/knowledge-graph-snapshot-manifest-v10.schema.json",
             "resources/knowledge/knowledge-graph-snapshot-manifest-v10.schema.json",
             "10.0",
-            "sha256:e31b7b6c2b99c12753af146071098ed5887b8426cab3ddb3499bbedd5a533fcb",
+            "sha256:305f60cd49cc85ce558b4478fdd178bade8132130058868197bf9d744a16b6a6",
         ),
         "public-solution-similarity-v3": CatalogSchemaResource(
             "schemas/knowledge/public-solution-similarity-v3.schema.json",

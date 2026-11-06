@@ -39,6 +39,7 @@ from eom_catalog_contracts import (
     TextbookAnalysisBundleManifestV2,
     validate_contract,
 )
+from eom_catalog_contracts.material_knowledge_analysis import KnowledgeAnalysisRequestV12
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.curriculum_graph_structure import (
     build_integrated_science_structure_manifest,
@@ -114,7 +115,7 @@ from eom_orchestrator.settings import Settings
 from eom_orchestrator.state_machine import JobState, transition_job
 from eom_workflow import ArtifactPointer, compile_definition
 from eom_workflow.schemas import role_schema_bundle_hash
-from eom_workflow_runner.models import WorkflowInstanceRecord
+from eom_workflow_runner.models import WorkflowDefinitionRecord, WorkflowInstanceRecord
 from eom_workflow_runner.repository import import_workflow_definition
 from sqlalchemy import Engine, func, select, text
 from sqlalchemy.exc import DBAPIError
@@ -809,8 +810,11 @@ def _complete_proposal(
             | KnowledgeAnalysisRequestV6
             | KnowledgeAnalysisRequestV7
             | KnowledgeAnalysisRequestV8
+            | KnowledgeAnalysisRequestV12
         )
-        if request_version == "knowledge-analysis-request/8.0":
+        if request_version == "knowledge-analysis-request/12.0":
+            request = KnowledgeAnalysisRequestV12.model_validate(run.canonical_request)
+        elif request_version == "knowledge-analysis-request/8.0":
             request = KnowledgeAnalysisRequestV8.model_validate(run.canonical_request)
         elif request_version == "knowledge-analysis-request/7.0":
             request = KnowledgeAnalysisRequestV7.model_validate(run.canonical_request)
@@ -827,7 +831,11 @@ def _complete_proposal(
         workflow_id = run.workflow_id
         workflow = session.get(WorkflowInstanceRecord, workflow_id)
         assert workflow is not None
-        workflow_version = workflow.definition_version
+        protocol_version = workflow.role_schema_version
+        definition = session.get(WorkflowDefinitionRecord, workflow.definition_id)
+        assert definition is not None
+        steps = {step["key"]: step for step in definition.canonical_definition["steps"]}
+        result_schema = steps["analyze"]["result_schema"]
     job_id = new_job_id()
     artifact_id = new_logical_artifact_id()
     revision_id = new_revision_id()
@@ -845,29 +853,6 @@ def _complete_proposal(
         staging=staging_root,
     )
     with transaction(sessions) as session:
-        protocol_version = (
-            "workflow-role/1.11.0"
-            if isinstance(request, KnowledgeAnalysisRequestV8)
-            else "workflow-role/1.10.0"
-            if isinstance(request, KnowledgeAnalysisRequestV7)
-            else "workflow-role/1.9.0"
-            if isinstance(request, KnowledgeAnalysisRequestV6) and workflow_version == "6.0.0"
-            else "workflow-role/1.8.0"
-            if isinstance(request, KnowledgeAnalysisRequestV6)
-            else (
-                "workflow-role/1.7.0"
-                if isinstance(request, KnowledgeAnalysisRequestV5)
-                else (
-                    "workflow-role/1.6.0"
-                    if isinstance(request, KnowledgeAnalysisRequestV4)
-                    else (
-                        "workflow-role/1.5.0"
-                        if isinstance(request, KnowledgeAnalysisRequestV3)
-                        else "workflow-role/1.4.0"
-                    )
-                )
-            )
-        )
         ensure_protocol_version(
             session, protocol_version, role_schema_bundle_hash(protocol_version)
         )
@@ -917,29 +902,7 @@ def _complete_proposal(
             logical_artifact_id=artifact_id,
             revision_id=revision_id,
             content_hash=staged.primary_hash,
-            result_schema=(
-                "knowledge-analysis-proposal-result@8.0"
-                if isinstance(request, KnowledgeAnalysisRequestV8)
-                else "knowledge-analysis-proposal-result@7.0"
-                if isinstance(request, KnowledgeAnalysisRequestV7)
-                else "knowledge-analysis-proposal-result@6.0"
-                if isinstance(request, KnowledgeAnalysisRequestV6) and workflow_version == "6.0.0"
-                else "knowledge-analysis-proposal-result@5.0"
-                if isinstance(request, KnowledgeAnalysisRequestV6)
-                else (
-                    "knowledge-analysis-proposal-result@4.0"
-                    if isinstance(request, KnowledgeAnalysisRequestV5)
-                    else (
-                        "knowledge-analysis-proposal-result@3.0"
-                        if isinstance(request, KnowledgeAnalysisRequestV4)
-                        else (
-                            "knowledge-analysis-proposal-result@2.0"
-                            if isinstance(request, KnowledgeAnalysisRequestV3)
-                            else "knowledge-analysis-proposal-result@1.0"
-                        )
-                    )
-                )
-            ),
+            result_schema=result_schema,
         )
         context = dict(workflow.runtime_context)
         context["final_pointer_manifest"] = {
