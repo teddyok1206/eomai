@@ -208,7 +208,11 @@ def resolve_registered_item_solution_base(
         or accepted.counts != receipt.counts
         or receipt.analysis_request_id != request.analysis_request_id
         or receipt.source != request.source
-        or _read_json(artifacts, receipt_pointer) != receipt.model_dump(mode="json")
+        # The canonical writer retains six UTC fractional digits; Pydantic's
+        # JSON display omits zero microseconds. Compare validated values after
+        # the Artifact reader has checked the exact stored bytes and hash.
+        or KnowledgeAnalysisProposalReceipt.model_validate(_read_json(artifacts, receipt_pointer))
+        != receipt
     ):
         raise ValueError("registered solution accepted base content differs")
     proposal = resolve_knowledge_analysis_proposal(artifacts, receipt)

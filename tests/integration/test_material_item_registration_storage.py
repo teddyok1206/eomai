@@ -337,6 +337,9 @@ def test_uploaded_item_uses_real_registered_solution_and_common_embedding_projec
     proposal["anchors"][0]["locator"] = "/body"
     proposal["anchors"][0]["excerpt_sha256"] = content_sha256(content["body"])
     proposal["anchors"][1]["locator"] = "/solution"
+    # Exercise the real canonical writer's .000000Z representation, which
+    # differs from Pydantic's JSON display but not from the typed UTC instant.
+    proposal["completed_at"] = "2026-11-06T07:22:50.000000Z"
     knowledge._complete_proposal(
         creative_engine,
         owner.settings,

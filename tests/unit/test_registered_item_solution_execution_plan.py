@@ -198,7 +198,7 @@ def test_old_definition_or_protocol_is_rejected_before_any_plan_lookup(field, va
     session.scalar.assert_not_called()
 
 
-def base_files(tmp_path: Path):
+def base_files(tmp_path: Path, *, canonical_receipt: bool = False):
     root, workspace = tmp_path / "artifacts", tmp_path / "workspace"
     root.mkdir(parents=True)
     workspace.mkdir(mode=0o750)
@@ -317,7 +317,10 @@ def base_files(tmp_path: Path):
             completed_at=NOW,
         )
     )
-    store(base["proposal_receipt"], canonical_json_bytes(receipt.model_dump(mode="json")))
+    store(
+        base["proposal_receipt"],
+        canonical_json_bytes(receipt if canonical_receipt else receipt.model_dump(mode="json")),
+    )
     accepted = result_value()
     accepted.pop("base_analysis")
     accepted.pop("solution_counts")

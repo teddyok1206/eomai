@@ -117,6 +117,22 @@ DB/NAS 덮어쓰기·예외 무시는 없다.
 
 ## 실제 운영에 반영한 범위
 
+### 공개 풀이 연결의 실제 canary 보완
+
+실제 재처리 문항은 원래 Registry에 등록됐고 기본 분석도 ACCEPTED다. 새 전용
+`material-item-solution` preset을 기존 공개 command의 literal과 혼동하던 문제는
+내부 purpose 경계로 수정해 `55d1c599` material owner에만 반영했다. 공개 wire/RPC나
+원래 preset 의미를 넓히지 않았다. 관련 실제 임시 DB44 PASS를 확인했다.
+
+그 후 같은 accepted base를 재사용하는 실제 호출에서 `KNOWLEDGE_ANALYSIS_BASE_INVALID`를
+확인했다. source/request/receipt pointer/hash/count는 모두 일치했으며, 유일한 차이는
+canonical writer의 `completed_at=...50.000000Z`와 Pydantic 표시의 `...50Z`였다.
+기존 Artifact reader의 byte/hash/schema/lifecycle 검증 뒤 receipt를 원래 typed model로
+비교하도록 보완한다. 시각이 실제로 달라지면 여전히 거부한다. 정본 bytes·기존 FAILED·
+accepted 분석을 수정하거나 문항을 다시 등록하지 않는다. 실제 canonical writer를 쓰는
+임시 DB44 PASS와 source 회귀를 확인했으며, 이 한 모듈의 후속 배포·공개 풀이 실제
+완료 확인은 아직 남아 있다. API/Web/QUERY/INDEX source·설정·현재 실행은 유지한다.
+
 - 설치 source `e1df5c8f9925d977028c66e2b99ad056a1ada583`: API·Web·Catalog·
   global Workflow Runner·채팅 연결 설정·창작 producer/관측 owner.
 - production head `20261105_0074`. 공식 protected release operator context/admission

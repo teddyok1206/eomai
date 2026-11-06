@@ -242,12 +242,12 @@ def test_solution_member_reader_is_shared_and_pins_new_receipt_report_bytes():
     assert reader.read_member.call_args.kwargs["sha256"] == receipt.solution_report.sha256
 
 
-def accepted_chain(tmp_path):
+def accepted_chain(tmp_path, *, canonical_receipt=False):
     from eom_identifiers import sha256_bytes
 
     from tests.unit.test_registered_item_solution_execution_plan import base_files
 
-    fixture = base_files(tmp_path)
+    fixture = base_files(tmp_path, canonical_receipt=canonical_receipt)
     base = fixture.plan.base_analysis
     request = fixture.base_request
 
@@ -281,8 +281,11 @@ def accepted_chain(tmp_path):
     )
 
 
-def test_registered_base_resolver_keeps_distinct_result_self_hash_and_file_hash(tmp_path):
-    fixture = accepted_chain(tmp_path)
+@pytest.mark.parametrize("canonical_receipt", [False, True])
+def test_registered_base_resolver_keeps_distinct_result_self_hash_and_file_hash(
+    tmp_path, canonical_receipt
+):
+    fixture = accepted_chain(tmp_path, canonical_receipt=canonical_receipt)
     # Real base JSONL content is resolved, not substituted by a report summary.
     result = resolve_registered_item_solution_base(
         fixture.fixture.session,
@@ -296,6 +299,24 @@ def test_registered_base_resolver_keeps_distinct_result_self_hash_and_file_hash(
     assert result.reference_index.problem_anchor_ids == ("anchor_problem",)
     assert result.reference_index.answer_explanation_anchor_ids == ("anchor_answer",)
     assert not hasattr(result.base_members, "page_image_observations")
+
+
+def test_registered_base_resolver_rejects_changed_receipt_instead_of_ignoring_comparison(tmp_path):
+    from datetime import timedelta
+
+    fixture = accepted_chain(tmp_path, canonical_receipt=True)
+    changed = fixture.receipt.model_copy(
+        update={"completed_at": fixture.receipt.completed_at + timedelta(seconds=1)}
+    )
+    with pytest.raises(ValueError, match="accepted base content differs"):
+        resolve_registered_item_solution_base(
+            fixture.fixture.session,
+            fixture.reader,
+            run=fixture.run,
+            request=fixture.request,
+            receipt=changed,
+            receipt_pointer=fixture.receipt_pointer,
+        )
 
 
 @pytest.mark.parametrize("change", ["retired", "missing", "different_cache", "stale_hash"])
