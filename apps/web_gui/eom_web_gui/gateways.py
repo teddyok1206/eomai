@@ -592,6 +592,7 @@ class ApplicationGateway(Protocol):
         query: str,
         node_id: str | None,
         edge_id: str | None,
+        layer: str | None = None,
     ) -> KnowledgeMapView: ...
 
     async def knowledge_map_item(
@@ -2305,6 +2306,7 @@ class HttpApplicationGateway:
         query: str,
         node_id: str | None,
         edge_id: str | None,
+        layer: str | None = None,
     ) -> KnowledgeMapView:
         response = await self._authorized(
             session,
@@ -2316,6 +2318,7 @@ class HttpApplicationGateway:
                 "query": query,
                 "node_id": node_id,
                 "edge_id": edge_id,
+                "layer": layer,
             },
         )
         try:

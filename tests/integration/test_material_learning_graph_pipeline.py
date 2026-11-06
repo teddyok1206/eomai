@@ -259,6 +259,45 @@ def test_uploaded_explanation_joins_reviewed_graph_and_material_evidence_replays
     assert set(previous.accepted_analysis_run_ids) == set(baseline)
     assert previous.structure.schema_version == "knowledge-graph-structure-manifest/2.0"
     assert current.structure.schema_version == previous.structure.schema_version
+    # The exact same published metadata is browsable by source layer. Filtering
+    # occurs in SQL before the bounded node slice, not in a prior browser view.
+    from eom_catalog_service import knowledge_map_read
+    from eom_catalog_service.knowledge_graph_models import KnowledgeGraphSnapshotRecord
+    from eom_catalog_service.knowledge_map_read import KnowledgeMapReadService, layer_node_ids
+    from sqlalchemy import text
+
+    monkeypatch.setattr(knowledge_map_read, "CatalogSettings", lambda: case.settings)
+    map_reader = KnowledgeMapReadService(creative_engine)
+    with Session(creative_engine) as session:
+        after_hash = session.get(KnowledgeGraphSnapshotRecord, after).snapshot_sha256
+        before_hash = session.get(
+            KnowledgeGraphSnapshotRecord, before.graph_snapshot.graph_snapshot_revision_id
+        ).snapshot_sha256
+    pins = dict(graph_snapshot_revision_id=after, snapshot_sha256=after_hash)
+    guide = map_reader.read(**pins, layer="GUIDE", query="material")
+    assert guide.nodes and all("GUIDE" in node.layers for node in guide.nodes)
+    guide_detail = map_reader.read(**pins, layer="GUIDE", node_id=guide.nodes[0].node_id)
+    assert guide_detail.sources and all(source.layer == "GUIDE" for source in guide_detail.sources)
+    assert map_reader.read(**pins, layer="GUIDE", query="material") == guide
+    assert map_reader.read(**pins, layer="TEXTBOOK").nodes
+    assert not map_reader.read(**pins, layer="AI").nodes
+    assert not map_reader.read(
+        graph_snapshot_revision_id=before.graph_snapshot.graph_snapshot_revision_id,
+        snapshot_sha256=before_hash,
+        layer="GUIDE",
+        query="material",
+    ).nodes
+    statement = layer_node_ids(after, "GUIDE").order_by("node_id").limit(20)
+    with Session(creative_engine) as session:
+        sql = str(
+            statement.compile(
+                dialect=creative_engine.dialect, compile_kwargs={"literal_binds": True}
+            )
+        )
+        plan = session.scalar(text("EXPLAIN (FORMAT JSON) " + sql))
+    assert "knowledge_node_source_pointers" in str(plan)
+    # A small fixture can correctly choose a seq scan; do not force an index or
+    # claim its plan proves performance at production corpus scale.
     value = dict(
         operation="CREATE_EVIDENCE_BUNDLE",
         graph_snapshot_revision_id=after,

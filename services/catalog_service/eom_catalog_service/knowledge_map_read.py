@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from typing import cast
+from typing import get_args
 
 from eom_catalog_contracts.knowledge_map import (
     KnowledgeMapEdge,
@@ -31,6 +31,12 @@ from eom_catalog_service.knowledge_graph_models import (
     KnowledgeSnapshotAnalysisRecord,
 )
 from eom_catalog_service.knowledge_graph_projection import knowledge_node_terms
+from eom_catalog_service.knowledge_map_layers import (
+    PRIMARY_MAP_LAYERS,
+    source_classes_for_layer,
+    source_layer,
+    source_layer_expression,
+)
 from eom_catalog_service.knowledge_retrieval_service import KnowledgeRetrievalApplicationService
 from eom_catalog_service.models import (
     EducationalDocumentRecord,
@@ -51,29 +57,39 @@ class KnowledgeMapReadError(ValueError):
         self.code = code
 
 
-def source_layer(
-    source_class: str, source_domain: str | None, workflow_key: str | None = None
-) -> MapLayer:
-    if source_class == "APPROVED_ITEM":
-        if workflow_key == "material-learning":
-            return "EXTERNAL"
-        if source_domain is None:
-            # Exact historical registration families, not an ID/name heuristic.
-            if workflow_key == "external-item-learning":
-                return "CREATIVE"
-            if workflow_key == "generic-item-development":
-                return "AI"
-            return "UNKNOWN"
-        return "AI" if source_domain == "INTERNAL_EOM" else "CREATIVE"
-    return cast(
-        MapLayer,
-        {
-            "TEXTBOOK": "TEXTBOOK",
-            "PAST_EXAM": "PAST_EXAM",
-            "CURRICULUM": "CURRICULUM",
-            "INTERNAL_GUIDE": "GUIDE",
-        }.get(source_class, "UNKNOWN"),
+def layer_node_ids(snapshot_id: str, layer: MapLayer) -> Select[tuple[str]]:
+    """Snapshot/source-class index, then exact origin/Workflow PK joins.
+
+    Matching occurs before the caller's LIMIT; no bounded client neighborhood is
+    mistaken for the complete layer. No Artifact or report bytes are read.
+    """
+    pointer = KnowledgeNodeSourcePointerRecord
+    statement = (
+        select(pointer.node_id)
+        .outerjoin(
+            ItemOriginProfileRecord,
+            ItemOriginProfileRecord.item_revision_id == pointer.source_revision_id,
+        )
+        .outerjoin(
+            ItemRevisionRecord, ItemRevisionRecord.item_revision_id == pointer.source_revision_id
+        )
+        .outerjoin(
+            WorkflowInstanceRecord,
+            WorkflowInstanceRecord.workflow_id == ItemRevisionRecord.workflow_id,
+        )
+        .where(
+            pointer.graph_snapshot_revision_id == snapshot_id,
+            source_layer_expression(
+                pointer.source_class,
+                ItemOriginProfileRecord.source_domain,
+                WorkflowInstanceRecord.definition_key,
+            )
+            == layer,
+        )
+        .distinct()
     )
+    classes = source_classes_for_layer(layer)
+    return statement.where(pointer.source_class.in_(classes)) if classes else statement
 
 
 def neighborhood_edges(snapshot_id: str, seeds: set[str]) -> Select[tuple[KnowledgeEdgeRecord]]:
@@ -141,11 +157,14 @@ class KnowledgeMapReadService:
         query: str = "",
         node_id: str | None = None,
         edge_id: str | None = None,
+        layer: MapLayer | None = None,
     ) -> KnowledgeMapView:
         if (graph_snapshot_revision_id is None) != (snapshot_sha256 is None):
             raise KnowledgeMapReadError("KNOWLEDGE_MAP_PIN_REQUIRED")
         if (node_id and edge_id) or ((node_id or edge_id) and graph_snapshot_revision_id is None):
             raise KnowledgeMapReadError("KNOWLEDGE_MAP_PIN_REQUIRED")
+        if layer is not None and layer not in get_args(MapLayer):
+            raise KnowledgeMapReadError("KNOWLEDGE_MAP_LAYER_INVALID")
         with self.sessions() as session:
             session.execute(text("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ, READ ONLY"))
             session.execute(text("SET LOCAL statement_timeout = '8s'"))
@@ -164,7 +183,7 @@ class KnowledgeMapReadService:
             assert snapshot is not None
             if snapshot_sha256 is not None and snapshot.snapshot_sha256 != snapshot_sha256:
                 raise KnowledgeMapReadError("KNOWLEDGE_MAP_STALE")
-            seeds = self._seeds(session, snapshot_id, query, node_id, edge_id)
+            seeds = self._seeds(session, snapshot_id, query, node_id, edge_id, layer)
             edges = list(session.scalars(neighborhood_edges(snapshot_id, seeds))) if seeds else []
             truncated = len(edges) > MAX_EDGES
             edges = edges[:MAX_EDGES]
@@ -200,7 +219,7 @@ class KnowledgeMapReadService:
             if len(nodes) != len(visible):
                 raise KnowledgeMapReadError("KNOWLEDGE_MAP_STALE")
             layers = self._layers(session, snapshot_id, visible)
-            sources, more_sources = self._sources(session, snapshot_id, node_id, edge_id)
+            sources, more_sources = self._sources(session, snapshot_id, node_id, edge_id, layer)
             return KnowledgeMapView(
                 graph_snapshot_revision_id=snapshot_id,
                 snapshot_sha256=snapshot.snapshot_sha256,
@@ -232,7 +251,12 @@ class KnowledgeMapReadService:
 
     @staticmethod
     def _seeds(
-        session: Session, snapshot_id: str, query: str, node_id: str | None, edge_id: str | None
+        session: Session,
+        snapshot_id: str,
+        query: str,
+        node_id: str | None,
+        edge_id: str | None,
+        layer: MapLayer | None = None,
     ) -> set[str]:
         if node_id:
             if session.get(KnowledgeNodeRecord, (snapshot_id, node_id)) is None:
@@ -257,7 +281,30 @@ class KnowledgeMapReadService:
                 .order_by(KnowledgeNodeTermRecord.node_id)
                 .limit(20)
             )
+            if layer is not None:
+                statement = statement.where(
+                    KnowledgeNodeTermRecord.node_id.in_(layer_node_ids(snapshot_id, layer))
+                )
+        elif layer is not None:
+            return set(
+                session.scalars(
+                    layer_node_ids(snapshot_id, layer)
+                    .order_by(KnowledgeNodeSourcePointerRecord.node_id)
+                    .limit(20)
+                )
+            )
         else:
+            # One shared Graph: show a small sample from each real layer rather
+            # than only curriculum roots. The fixed five reads are not N+1 IO.
+            seeds = {
+                node_id
+                for source_layer_key in PRIMARY_MAP_LAYERS
+                for node_id in session.scalars(
+                    layer_node_ids(snapshot_id, source_layer_key)
+                    .order_by(KnowledgeNodeSourcePointerRecord.node_id)
+                    .limit(2)
+                )
+            }
             statement = (
                 select(KnowledgeNodeRecord.node_id)
                 .where(
@@ -265,8 +312,9 @@ class KnowledgeMapReadService:
                     KnowledgeNodeRecord.node_type == "CURRICULUM_UNIT",
                 )
                 .order_by(KnowledgeNodeRecord.stable_key)
-                .limit(20)
+                .limit(10)
             )
+            return seeds | set(session.scalars(statement))
         return set(session.scalars(statement))
 
     @staticmethod
@@ -304,7 +352,11 @@ class KnowledgeMapReadService:
 
     @staticmethod
     def _sources(
-        session: Session, snapshot_id: str, node_id: str | None, edge_id: str | None
+        session: Session,
+        snapshot_id: str,
+        node_id: str | None,
+        edge_id: str | None,
+        layer: MapLayer | None = None,
     ) -> tuple[tuple[KnowledgeMapSource, ...], bool]:
         if node_id is None and edge_id is None:
             return (), False
@@ -381,6 +433,15 @@ class KnowledgeMapReadService:
             )
             .limit(MAX_SOURCES + 1)
         )
+        if layer is not None:
+            statement = statement.where(
+                source_layer_expression(
+                    pointer.source_class,
+                    ItemOriginProfileRecord.source_domain,
+                    WorkflowInstanceRecord.definition_key,
+                )
+                == layer
+            )
         rows = list(session.execute(statement))
         values: list[KnowledgeMapSource] = []
         for row in rows[:MAX_SOURCES]:

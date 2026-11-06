@@ -70,7 +70,7 @@ from eom_web_gui.item_db_similarity_contracts import (
     ItemDbSimilaritySubmission,
 )
 from eom_web_gui.knowledge_map_contracts import EdgeId as MapEdgeId
-from eom_web_gui.knowledge_map_contracts import MapHash
+from eom_web_gui.knowledge_map_contracts import MapHash, MapLayer
 from eom_web_gui.knowledge_map_contracts import NodeId as MapNodeId
 from eom_web_gui.material_learning_contracts import (
     MaterialLearningControl,
@@ -861,6 +861,7 @@ def create_app(
         query: str = Query(default="", max_length=80),
         node_id: Annotated[MapNodeId | None, Query()] = None,
         edge_id: Annotated[MapEdgeId | None, Query()] = None,
+        layer: Annotated[MapLayer | None, Query()] = None,
     ) -> dict[str, Any]:
         value = await actual.gateway.knowledge_map(
             session,
@@ -869,6 +870,7 @@ def create_app(
             query=query,
             node_id=node_id,
             edge_id=edge_id,
+            layer=layer,
         )
         return value.model_dump(mode="json")
 

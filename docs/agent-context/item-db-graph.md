@@ -27,6 +27,12 @@ AI는 EOM에서 생성한 문항이다. 분류에 승인 여부를 섞지 않는
 worker RAG policy나 evidence receipt를 우회하지 않는다. 문항 열기는 동일 Item revision/hash의
 새로운 DB 읽기다. 상세 설계: `docs/architecture/KNOWLEDGE_MAP_READ_DESIGN.md`.
 
+Map의 선택적 `layer` query는 기존 Map V2/출처 enum을 그대로 쓰고 서버에서 seed 제한
+전에 source membership과 교차한다. `knowledge_map_layers.py`의 작은 불변 rule tuple이
+표시와 SQL 분류를 함께 소유한다. 처음 열 때 다섯 출처를 조금씩 선택하며, Layer 변경은
+같은 snapshot pin을 유지한다. 화면의 현재 노드만 숨기는 필터가 아니다. 선택한 점의
+근거도 같은 Layer로 제한하고, 공통 개념은 복제하지 않고 여러 색으로 표시한다.
+
 ## 가져오기와 실제 그림
 
 파일 확장자보다 검증한 실제 media/container를 따른다. `.hwp`여도 내용이 HWPX면

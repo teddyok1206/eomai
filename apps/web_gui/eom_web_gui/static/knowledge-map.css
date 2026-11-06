@@ -17,13 +17,18 @@
 .map-node:hover circle.map-node-hit, .map-node:focus circle.map-node-hit, .map-node.selected circle.map-node-hit { stroke: none; }
 .map-node text { fill: var(--eom-graphite); font-size: 12px; paint-order: stroke; stroke: #ffffffed; stroke-width: 4px; stroke-linejoin: round; }
 .map-node.selected text { fill: var(--eom-ink); font-weight: 650; }
-.map-node[data-layer="TEXTBOOK"] { --map-color: #4f46e5; }
-.map-node[data-layer="PAST_EXAM"] { --map-color: #368493; }
-.map-node[data-layer="CREATIVE"] { --map-color: #b98132; }
-.map-node[data-layer="EXTERNAL"] { --map-color: #528667; }
-.map-node[data-layer="AI"] { --map-color: #9b63ba; }
+.map-node[data-layer="TEXTBOOK"], .map-layer-ring[data-layer="TEXTBOOK"] { --map-color: #4f46e5; }
+.map-node[data-layer="PAST_EXAM"], .map-layer-ring[data-layer="PAST_EXAM"] { --map-color: #368493; }
+.map-node[data-layer="CREATIVE"], .map-layer-ring[data-layer="CREATIVE"] { --map-color: #b98132; }
+.map-node[data-layer="EXTERNAL"], .map-layer-ring[data-layer="EXTERNAL"] { --map-color: #528667; }
+.map-node[data-layer="AI"], .map-layer-ring[data-layer="AI"] { --map-color: #9b63ba; }
+.map-node circle.map-layer-ring { fill: none; stroke: var(--map-color); stroke-width: 3; pointer-events: none; }
 .map-legend { display: flex; flex-wrap: wrap; gap: 12px; padding: 0 20px 10px; font-size: 13px; color: var(--eom-text-muted); }
-.map-legend span::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: #8b8b9b; }
+.map-legend span::before, .map-legend button:not([data-layer=""])::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 5px; border-radius: 50%; background: #8b8b9b; }
+.map-legend { align-items: center; gap: 7px; }
+.map-legend button { font: inherit; color: var(--eom-text-muted); background: transparent; border: 1px solid transparent; border-radius: 999px; padding: 6px 10px; cursor: pointer; }
+.map-legend button:hover, .map-legend button:focus-visible { background: var(--eom-porcelain); }
+.map-legend button[aria-pressed="true"] { color: var(--eom-ink); background: var(--eom-surface); border-color: var(--eom-border); font-weight: 600; }
 .map-legend [data-layer="TEXTBOOK"]::before { background: #4f46e5; }
 .map-legend [data-layer="PAST_EXAM"]::before { background: #368493; }
 .map-legend [data-layer="CREATIVE"]::before { background: #b98132; }

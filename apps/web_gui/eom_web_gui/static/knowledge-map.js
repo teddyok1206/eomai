@@ -47,6 +47,7 @@ export function createKnowledgeMap({document, api, openItem, previewItem}) {
   const $ = selector => document.querySelector(selector);
   let owner = null, active = false, loaded = false, sequence = 0, detailSequence = 0;
   let view = null, selected = null, nodes = new Map(), edges = new Map(), positions = new Map();
+  let displayedLayer = "";
   let box = [...INITIAL_BOX], pan = null;
   const svgElement = (tag, attributes) => {
     const value = document.createElementNS("http://www.w3.org/2000/svg", tag);
@@ -70,24 +71,30 @@ export function createKnowledgeMap({document, api, openItem, previewItem}) {
   async function load({fresh = false} = {}) {
     const request = ++sequence;
     ++detailSequence;
-    message("그래프를 불러오고 있습니다.");
+    const requestedLayer = $("#map-layer").value;
+    message(requestedLayer ? `${LAYERS[requestedLayer]} 연결을 불러오고 있습니다.` : "그래프를 불러오고 있습니다.");
     try {
       const params = fresh ? new URLSearchParams({query: $("#map-query").value.trim()}) : pinQuery({query: $("#map-query").value.trim()});
+      if (requestedLayer) params.set("layer", requestedLayer);
       const value = await api(`/knowledge-map?${params}`);
       if (!active || request !== sequence) return;
+      if (!fresh && view && (value.graph_snapshot_revision_id !== view.graph_snapshot_revision_id || value.snapshot_sha256 !== view.snapshot_sha256)) throw new Error("조회하던 그래프 버전과 다릅니다.");
+      displayedLayer = requestedLayer;
       view = value; loaded = true; selected = null;
+      ++detailSequence;
       nodes = new Map(value.nodes.map(node => [node.node_id, node]));
       edges = new Map(value.edges.map(edge => [edge.edge_id, edge]));
       positions = mapPositions(value.nodes, value.edges, value.focus_node_id);
       emptyInspector(); fit(); render();
-      message(value.nodes.length ? value.truncated ? "연결 일부를 표시했습니다. 점을 선택해 주변 연결을 펼쳐보세요." : "점을 누르면 관련 자료를 확인할 수 있습니다." : "해당 개념을 찾지 못했습니다. 짧은 핵심 단어로 찾아보세요.");
+      message(value.nodes.length ? value.truncated ? "연결 일부를 표시했습니다. 점을 선택해 주변 연결을 펼쳐보세요." : "점을 누르면 관련 자료를 확인할 수 있습니다." : requestedLayer ? `${LAYERS[requestedLayer]}에서 해당 연결을 찾지 못했습니다.` : "해당 개념을 찾지 못했습니다. 짧은 핵심 단어로 찾아보세요.");
     } catch (error) {
       if (active && request === sequence) message(`그래프 조회 실패: ${error.message}`, true);
     }
   }
   function fit() { box = [...INITIAL_BOX]; $("#map-canvas").setAttribute("viewBox", box.join(" ")); }
   function render() {
-    const svg = $("#map-canvas"), layer = $("#map-layer").value;
+    const svg = $("#map-canvas"), layer = displayedLayer;
+    for (const button of document.querySelectorAll("#map-layer-controls button[data-layer]")) button.setAttribute("aria-pressed", String(button.dataset.layer === $("#map-layer").value));
     svg.replaceChildren();
     const visible = new Set([...nodes.values()].filter(node => !layer || !node.layers.length || node.layers.includes(layer)).map(node => node.node_id));
     for (const edge of edges.values()) {
@@ -109,8 +116,13 @@ export function createKnowledgeMap({document, api, openItem, previewItem}) {
       const group = svgElement("g", {transform: `translate(${position.x} ${position.y})`, class: `map-node${selected === node.node_id ? " selected" : ""}`, "data-node-id": node.node_id, "data-layer": layer && node.layers.includes(layer) ? layer : node.layers[0] || "CURRICULUM", tabindex: "0", role: "button", "aria-label": `${TYPES[node.node_type] || node.node_type}: ${node.label}`});
       const hit = svgElement("circle", {r: "19", fill: "transparent", class: "map-node-hit"});
       const circle = svgElement("circle", {r: node.node_type.includes("CURRICULUM") ? 10 : 7});
-      const title = svgElement("title", {}); title.textContent = node.label;
+      const title = svgElement("title", {}); title.textContent = `${node.label}${node.layers.length ? ` · ${node.layers.map(key => LAYERS[key]).join(" · ")}` : ""}`;
       group.append(hit, circle, title);
+      const sharedLayers = node.layers.filter(key => ["TEXTBOOK", "PAST_EXAM", "CREATIVE", "EXTERNAL", "AI"].includes(key));
+      if (!layer && sharedLayers.length > 1) {
+        const circumference = Math.PI * 22, segment = circumference / sharedLayers.length;
+        sharedLayers.forEach((key, index) => group.append(svgElement("circle", {r: "11", class: "map-layer-ring", "data-layer": key, "stroke-dasharray": `${segment - 2} ${circumference - segment + 2}`, "stroke-dashoffset": -index * segment, transform: "rotate(-90)"})));
+      }
       if (visible.size <= 45 || selected === node.node_id || node.node_type === "CURRICULUM_UNIT") {
         const label = svgElement("text", {x: "0", y: "25", "text-anchor": "middle"});
         label.textContent = node.label.length > 20 ? `${node.label.slice(0, 20)}…` : node.label;
@@ -138,7 +150,7 @@ export function createKnowledgeMap({document, api, openItem, previewItem}) {
     const state = element(document, "p", "연결 근거를 확인하고 있습니다.", "muted-label"); pane.append(state);
     const isCurrent = () => active && current === sequence && request === detailSequence;
     try {
-      const value = await api(`/knowledge-map?${pinQuery({[kind === "node" ? "node_id" : "edge_id"]: id})}`);
+      const value = await api(`/knowledge-map?${pinQuery({[kind === "node" ? "node_id" : "edge_id"]: id, ...(displayedLayer ? {layer: displayedLayer} : {})})}`);
       if (!isCurrent()) return;
       if (value.graph_snapshot_revision_id !== view.graph_snapshot_revision_id || value.snapshot_sha256 !== view.snapshot_sha256) throw new Error("조회하던 그래프 버전과 다릅니다.");
       if (expand) replaceNeighborhood(value);
@@ -194,7 +206,11 @@ export function createKnowledgeMap({document, api, openItem, previewItem}) {
       $("#map-search").addEventListener("submit", event => {event.preventDefault(); load();});
       $("#map-refresh").addEventListener("click", () => load({fresh: true}));
       $("#map-fit").addEventListener("click", fit);
-      $("#map-layer").addEventListener("change", render);
+      $("#map-layer").addEventListener("change", () => load());
+      for (const button of document.querySelectorAll("#map-layer-controls button[data-layer]")) button.addEventListener("click", () => {
+        $("#map-layer").value = button.dataset.layer;
+        load();
+      });
       const svg = $("#map-canvas");
       svg.addEventListener("wheel", event => {
         event.preventDefault();
@@ -220,6 +236,8 @@ export function createKnowledgeMap({document, api, openItem, previewItem}) {
       owner = value; ++sequence; ++detailSequence; view = null; loaded = false;
       nodes.clear(); edges.clear(); selected = null;
       $("#map-query").value = ""; $("#map-layer").value = "";
+      displayedLayer = "";
+      for (const button of document.querySelectorAll("#map-layer-controls button[data-layer]")) button.setAttribute("aria-pressed", String(button.dataset.layer === ""));
       $("#map-canvas").replaceChildren(); $("#map-node-list").replaceChildren(); emptyInspector(); message("");
     },
     open() {active = true; if (!loaded) load();},

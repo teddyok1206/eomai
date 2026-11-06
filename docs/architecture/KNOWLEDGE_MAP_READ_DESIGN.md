@@ -74,6 +74,52 @@ bounded indexed adjacency and deterministic results; no mutation/model calls;
 rapid selection/account changes; browser node/edge inspection and DB handoff.
 Deploy API/Web as a compatible set, keeping background process IDs and pins.
 
+## 2026-11-06: source layers across the pinned Graph
+
+The old dropdown only hides already loaded nodes. Selecting a layer that is not
+in the current bounded neighborhood can incorrectly look like an empty DB.
+Keep the existing published Graph and Map V2 response; add one optional `layer`
+query parameter using the existing closed `MapLayerV2` enum in API/BFF OpenAPI
+(JSON Schema 2020-12). No new response version, worker protocol or DB migration.
+
+- **Owner/canonical identity:** the same Catalog read use case and exact published
+  snapshot/hash remain authoritative. Registry-only files not yet in this Graph
+  are not invented as nodes. Source kind and approval remain separate.
+- **Pointers/checks:** preserve snapshot resolution, permission checks, source
+  availability, node/edge identity and exact Item handoff. Changing a layer or
+  lexical search retains the current pin; only explicit refresh resolves current.
+- **Access/structures:** use snapshot/source-class/node indexes and the existing
+  origin/Workflow PK joins to select matching node IDs before the seed limit.
+  Use one ordered immutable classification rule table for Python presentation and
+  SQL predicate generation, so imported, material and AI categories cannot drift.
+- **Bounds/scale:** filtered lexical terms intersect layer membership in SQL;
+  unfiltered opening samples at most two seeds per primary source layer plus ten
+  curriculum seeds. There are at most twenty seeds,120 nodes,240 edges,20 source
+  pointers; adjacency and client maps/sets retain their existing bounds. Work is
+  indexed snapshot-local membership/term selection, not an all-Graph JSON load.
+  Check the actual plan/timing before introducing any index or persistent cache.
+  DB membership work scales with matching snapshot-local provenance rows (and
+  distinct/sort work); a small response is not a promise of constant query cost.
+  Visible adjacency/layout stays O(V+E) with the fixed node/edge bounds.
+- **Transaction/concurrency:** the same read-only repeatable-read transaction and
+  finite statement timeout; no claim, publication, write or model/GPU invocation.
+  Existing creative recovery/registration and frozen INDEX keep their own owners.
+- **Dependency/failure:** Web → authenticated API → existing Catalog application.
+  Missing/stale pins and invalid layers remain explicit. A failed layer load keeps
+  the last valid drawing; account changes and late responses cannot replace it.
+- **UI:** the five real source categories remain visible, with clickable color
+  labels synchronized to the selector. Multi-layer concepts have multiple color
+  markers, not cloned independent nodes. Sources/DB opening keep exact references.
+- **Simpler alternative:** client-only filtering does not search the Graph; adding
+  another Graph, full download, new cache or vector lookup is unnecessary. Reuse
+  the existing DTO and one additive query instead.
+
+Acceptance: API/BFF enum and pin propagation; SQL/Python classification parity;
+layer match before LIMIT; absent/unknown layers; bounded mixed seeds; real
+disposable-DB reads/query plans; browser switching/late replies/account reset;
+installed API/Web/provider alignment. No future textbook layout or educational
+quality guarantee is implied by a metadata map.
+
 ## Local cleanup
 
 The user clarified **no NAS relocation**. Remove only recoverable obsolete

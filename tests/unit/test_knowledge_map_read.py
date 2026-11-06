@@ -12,13 +12,16 @@ from eom_catalog_service.knowledge_graph_models import (
     KnowledgeGraphSnapshotRecord,
     KnowledgeNodeRecord,
 )
+from eom_catalog_service.knowledge_map_layers import source_layer_expression
 from eom_catalog_service.knowledge_map_read import (
     KnowledgeMapReadError,
     KnowledgeMapReadService,
+    layer_node_ids,
     neighborhood_edges,
     source_layer,
 )
 from pydantic import ValidationError
+from sqlalchemy import create_engine, literal, select
 from sqlalchemy.dialects import postgresql
 
 SNAPSHOT = "graphrev_" + "a" * 32
@@ -118,6 +121,103 @@ def test_adjacency_is_snapshot_scoped_stable_and_bounded():
     assert SNAPSHOT in sql and NODE in sql
     assert "from_node_id IN" in sql and "to_node_id IN" in sql
     assert "ORDER BY knowledge_edges.edge_id" in sql and "LIMIT 241" in sql
+
+
+def test_layer_selection_and_display_share_one_rule_table():
+    engine = create_engine("sqlite://")
+    try:
+        with engine.connect() as connection:
+            for source in (
+                "TEXTBOOK",
+                "PAST_EXAM",
+                "APPROVED_ITEM",
+                "INTERNAL_GUIDE",
+                "CURRICULUM",
+                "UNKNOWN",
+            ):
+                for domain in (
+                    None,
+                    "INTERNAL_EOM",
+                    "EXTERNAL_INDIVIDUAL",
+                    "EXTERNAL_ORGANIZATION",
+                ):
+                    for workflow in (
+                        None,
+                        "material-learning",
+                        "external-item-learning",
+                        "generic-item-development",
+                        "unrecognized",
+                    ):
+                        expression = source_layer_expression(
+                            literal(source), literal(domain), literal(workflow)
+                        )
+                        assert connection.scalar(select(expression)) == source_layer(
+                            source, domain, workflow
+                        )
+    finally:
+        engine.dispose()
+
+
+def test_layer_membership_filters_published_snapshot_before_limit():
+    statement = layer_node_ids(SNAPSHOT, "EXTERNAL").order_by("node_id").limit(20)
+    sql = str(
+        statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+    )
+    assert SNAPSHOT in sql and "material-learning" in sql and "= 'EXTERNAL'" in sql
+    assert "source_class IN ('APPROVED_ITEM')" in sql
+    assert "DISTINCT" in sql and "LIMIT 20" in sql
+    assert sql.index("= 'EXTERNAL'") < sql.index("LIMIT 20")
+
+
+def test_layer_search_is_not_limited_to_existing_client_nodes():
+    session = Mock()
+    session.scalars.return_value = (NODE,)
+    assert KnowledgeMapReadService._seeds(session, SNAPSHOT, "운동", None, None, "AI") == {NODE}
+    statement = session.scalars.call_args.args[0]
+    sql = str(
+        statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+    )
+    assert "knowledge_node_terms" in sql and "knowledge_node_source_pointers" in sql
+    assert "= 'AI'" in sql and "LIMIT 20" in sql
+
+
+def test_default_seeds_sample_all_primary_layers_with_fixed_budget():
+    session = Mock()
+    session.scalars.side_effect = [(f"knode_{index:032x}",) for index in range(6)]
+    seeds = KnowledgeMapReadService._seeds(session, SNAPSHOT, "", None, None)
+    assert len(seeds) == 6 and session.scalars.call_count == 6
+    queries = [
+        str(
+            call.args[0].compile(
+                dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True}
+            )
+        )
+        for call in session.scalars.call_args_list
+    ]
+    assert all("LIMIT 2" in query for query in queries[:5])
+    assert "LIMIT 10" in queries[-1]
+
+
+def test_invalid_layer_fails_before_any_database_read():
+    service, session = reader()
+    with pytest.raises(KnowledgeMapReadError, match="LAYER_INVALID"):
+        service.read(layer="NOT_A_LAYER")
+    session.execute.assert_not_called()
+
+
+def test_selected_layer_sources_are_filtered_before_the_source_bound():
+    session = Mock()
+    session.execute.return_value = []
+    assert KnowledgeMapReadService._sources(session, SNAPSHOT, NODE, None, "EXTERNAL") == (
+        (),
+        False,
+    )
+    statement = session.execute.call_args.args[0]
+    sql = str(
+        statement.compile(dialect=postgresql.dialect(), compile_kwargs={"literal_binds": True})
+    )
+    assert "= 'EXTERNAL'" in sql and "LIMIT 21" in sql
+    assert sql.index("= 'EXTERNAL'") < sql.index("LIMIT 21")
 
 
 def reader():

@@ -67,6 +67,7 @@ def test_map_returns_exact_read_model_without_creating_work(setup):
         query="운동",
         node_id=None,
         edge_id=None,
+        layer=None,
     )
     operation = app.openapi()["paths"]["/api/v1/knowledge-map"]["get"]
     assert operation["x-eom-permission"] == "knowledge_graph:read"
@@ -84,6 +85,29 @@ def test_map_rejects_missing_authority_before_read(setup):
     app.dependency_overrides[get_authentication] = authenticated
     assert client.get("/api/v1/knowledge-map").status_code == 403
     owner.read.assert_not_called()
+
+
+def test_map_layer_is_a_closed_additive_query_and_retains_pins(setup):
+    client, app, owner = setup
+    value = view_document()
+    pins = {
+        "graph_snapshot_revision_id": value["graph_snapshot_revision_id"],
+        "snapshot_sha256": value["snapshot_sha256"],
+    }
+    assert (
+        client.get("/api/v1/knowledge-map", params=pins | {"layer": "EXTERNAL"}).status_code == 200
+    )
+    assert owner.read.call_args.kwargs["layer"] == "EXTERNAL"
+    assert owner.read.call_args.kwargs["snapshot_sha256"] == pins["snapshot_sha256"]
+    owner.reset_mock()
+    assert client.get("/api/v1/knowledge-map", params={"layer": "NOT_A_LAYER"}).status_code == 422
+    owner.read.assert_not_called()
+    parameter = next(
+        row
+        for row in app.openapi()["paths"]["/api/v1/knowledge-map"]["get"]["parameters"]
+        if row["name"] == "layer"
+    )
+    assert parameter["required"] is False and "EXTERNAL" in str(parameter["schema"])
 
 
 def test_map_followup_passes_both_immutable_pins(setup):
