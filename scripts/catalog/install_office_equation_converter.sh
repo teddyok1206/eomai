@@ -7,7 +7,7 @@ readonly PROVENANCE=${REPOSITORY}/third_party/h2orestart/0.7.14-eom.2
 readonly TARGET=/srv/eom/vendor/h2orestart/0.7.14-eom.2
 readonly BUNDLE_SHA256=50d8cf433f12270b5ee44fa974993bc36b5804ef550f0ce09b39266305b1b2cb
 readonly UNIT=eom-office-equation-converter@.service
-readonly RULE=55-eom-office-equations.rules
+readonly RULE=45-eom-office-equations.rules
 readonly DROPIN_DIRECTORY=/etc/systemd/system/eom-office-equation-converter@.service.d
 readonly DROPIN=${DROPIN_DIRECTORY}/42-eom-equation-installed-release.conf
 readonly TEMPLATE=${REPOSITORY}/infra/systemd/eom-office-equation-installed-release.conf.in
@@ -57,6 +57,14 @@ if [[ "${verify_only}" == false ]]; then
   done
   install -o root -g root -m 0644 "${REPOSITORY}/infra/systemd/${UNIT}" "/etc/systemd/system/${UNIT}"
   install -o root -g root -m 0644 "${REPOSITORY}/infra/polkit/${RULE}" "/etc/polkit-1/rules.d/${RULE}"
+  # An unreleased candidate used 55, which the shared 50 rule denied first.
+  # Remove only those exact reviewed bytes, never an unrelated local rule.
+  retired_rule=/etc/polkit-1/rules.d/55-eom-office-equations.rules
+  if [[ -e "${retired_rule}" || -L "${retired_rule}" ]]; then
+    [[ -f "${retired_rule}" && ! -L "${retired_rule}" && "$(stat -c '%U:%G:%a' "${retired_rule}")" == root:root:644 ]] || fail "retired equation rule metadata differs"
+    [[ "$(sha256sum "${retired_rule}" | cut -d' ' -f1)" == fb0c80fa403a222a42ea94755b7661845684485709ea3d35fa6bb70674794423 ]] || fail "retired equation rule bytes differ"
+    rm -- "${retired_rule}"
+  fi
   install -d -o root -g root -m 0755 "${DROPIN_DIRECTORY}"
   install -o root -g root -m 0644 "${unit_candidate}" "${DROPIN}"
   systemctl daemon-reload

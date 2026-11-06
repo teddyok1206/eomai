@@ -1,3 +1,4 @@
+// Evaluate before 50-eom-worker-units.rules' final owner deny.
 // Only the existing Catalog converter owner may start the fixed equation profile.
 polkit.addRule(function(action, subject) {
     if (action.id === "org.freedesktop.systemd1.manage-units"

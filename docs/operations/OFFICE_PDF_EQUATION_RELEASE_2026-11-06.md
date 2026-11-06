@@ -50,6 +50,10 @@
   frozen learning authorization에는 독립 legacy 인스턴스를 주도록 보완하고 회귀를 추가했다.
   이 보완 후 기존 창작 source/claim authorization 검사를 포함한238개가 PASS했다.
   API/Catalog의 preview·peer socket 회귀3개도 별도로 통과했다.
+- 최종 Catalog 설치본의 첫 실제 private client 호출에서는 수식 변환 전 실행이 거부됐다.
+  새polkit55 규칙보다 shared50의 명시적 owner 거부가 먼저 적용되는 문제였다. 공유 규칙의
+  권한을 넓히지 않고 exact Catalog/start/unit 허용을45로 앞당겼다. 실제 권한 판정과 동일
+  원본의 변환·다운로드·재전송을 다시 확인하며, 처음 실패한 검증 로그는 보존한다.
 
 임시 검증 DB와 로컬 수치/시각 자료는 최종 evidence 보관·해시 확인 뒤 정리한다.
 실제 자료 내용·PDF·PNG·OXT·긴 로그·인증 자료는 Git에 넣지 않는다.

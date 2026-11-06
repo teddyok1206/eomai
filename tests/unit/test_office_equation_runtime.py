@@ -37,7 +37,9 @@ def test_corrected_unit_keeps_the_legacy_sandbox_and_uses_a_fixed_profile() -> N
 
 
 def test_new_profile_rule_does_not_change_the_shared_worker_allowlist() -> None:
-    rule = (ROOT / "infra/polkit/55-eom-office-equations.rules").read_text()
+    rule_path = ROOT / "infra/polkit/45-eom-office-equations.rules"
+    rule = rule_path.read_text()
+    assert rule_path.name < "50-eom-worker-units.rules"
     assert 'subject.user === "eom-catalog-manager"' in rule
     assert 'action.lookup("verb") === "start"' in rule
     assert r"^eom-office-equation-converter@officeconv_[0-9a-f]{32}\.service$" in rule
