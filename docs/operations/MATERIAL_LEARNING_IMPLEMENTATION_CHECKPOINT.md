@@ -6,6 +6,27 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 
 ## 최신 source checkpoint — 아직 운영 완료 아님
 
+### 설치본 실행 확인 — source `897a2468`
+
+- API full source-free wheel/RECORD·모든 historical Workflow/신규 material/knowledge12
+  admission 검사 PASS. Web wheel 실제 설치 simulation PASS(62파일).
+- 새 root-owned 후보 prefix에서 실제 eom-image systemd sandbox로 synthetic PDF의
+  page inspect/text/PNG/OCR PASS(180dpi,1페이지). root로 PDF를 파싱하거나 NAS에
+  원본 사본을 추가하지 않았다. 임시 입력의 권한만 정확한 read-only bind용으로 넘겼다.
+- 실제 Catalog-manager UID와 고정 Office unit으로 staging의 기존 HWPX→PDF PASS.
+  완료 결과 재조회도 동일 identity이며 원본 hash는 불변이다. 첫 시도에서 새 prefix의
+  부모가 root umask 때문에0700이던 release staging 문제를 확인해 그 새 directory만
+ 0755로 바로잡았다. 기존 converter/staging 권한 검사를 완화하지 않았다. 실패 로그 보존.
+- 위 검증은 production application 배포/자료학습 모델 실행이 아니다(둘 다 아직0).
+  기존 서비스/수치 runtime 설정은 변경하지 않고 새 prefix·wheel만 보호 저장소에 준비했다.
+- 중단/재개를 포함한 실제 임시 DB33 PASS, 관련 source319 PASS, 별도 BFF/브라우저와
+  installed version gate49 PASS를 참고한다. 중복 범위는 합산하지 않는다.
+
+다음은 final runtime/control pin preflight→0074/권한·호환 API/Web/runner 배포→공식
+실제 업로드의 Item/설명·공유 Graph/INDEX handoff다. 새 Graph10을 모르는 기존 INDEX
+entry의 source 소비 경계도 수치 작업의 안전한 인계 시점에 정렬해야 한다. 단순 서비스
+READY를 이 마지막 사용자 경로 성공 증거로 쓰지 않는다.
+
 - 새 업로드 문항은 사용자 결정대로 **외부 / EXTERNAL**이다. 기존 Notion 창작과
   기출·AI를 바꾸지 않는다. DB 목록/상세에 자료명·원본 파일·페이지·자료 내 번호·목차를
   표시하며 가짜 5자리 번호를 만들지 않는다. 같은 Graph의 Map V2가 외부 layer를 표현하고
