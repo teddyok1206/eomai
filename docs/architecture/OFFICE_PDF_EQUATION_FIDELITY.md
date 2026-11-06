@@ -67,7 +67,8 @@ Catalog use case가 current source를 재인가·검증하고 local workspace에
 
 Profile/번역은 저장소·DB에 의존하지 않고, unit/글꼴/PDF는 infrastructure adapter가 소유한다.
 CLI/GUI에 수식 규칙을 복제하지 않는다. 새 unit도 기존 sandbox/고정 경로·polkit allowlist만
-사용한다. rollback은 API composition/profile을 이전 compatible release로 복구하며 새/옛
+사용한다. 새 polkit 허용은 shared50의 명시적 owner 거부보다 앞선45에서 exact unit/start/owner만
+허용한다. rollback은 Catalog composition/profile을 이전 compatible release로 복구하며 새/옛
 Artifact·원본·Graph를 삭제하지 않는다.
 
 ## 단계와 완료 gate
