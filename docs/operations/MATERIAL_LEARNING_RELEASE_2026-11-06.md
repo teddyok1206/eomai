@@ -4,6 +4,44 @@
 사용자 지정 순서는 자료 학습의 운영 반영·실제 처리 확인을 완료한 뒤 Map의 Layer
 표시 개선에 착수하는 것이다. Map은 아직 시작하지 않았다.
 
+## 08:30 UTC 실제 등록 완료 및 남은 INDEX gate
+
+같은 canary retry run의4개 task와 전체 run이08:18 UTC에 **COMPLETED**됐다. 문항
+Graph는 `graphrev_f8f21cfea70f16464dc7dc26195e7ef4`이고 설명의 이전 Graph도 보존한다.
+실제 V11 풀이 조회·공통 text AVAILABLE, 설치 API의 DB 외부 목록에서 같은 Item이
+표시됨, 설명 RAG V6와 문항 주제 RAG V2의 동일 요청 replay/정확한 source 포함까지
+확인했다. 실제 권한을 확인한 owner 호출이지 HTTPS 로그인/사람 검수 증거는 아니다.
+
+마지막 실제 INDEX source capture에서 **추가로 닫아야 할 결함**을 확인했다. 원래 bounded
+source pool의 successor metadata prefetch/관계 관측이 V10만 선택해, 새 등록 문항의
+V11 accepted/proposal Artifact가 strict reader에 준비되지 않는다. 직접 Catalog 공개
+보고서 읽기는 성공하지만 공통 INDEX용 `PinnedArtifactReadContext`에서는
+`pinned Artifact metadata was not captured`로 거부된다. 검증을 완화하거나 별도 파일
+reader로 우회하지 않는다. 기존 bulk predecessor query와 관계 관측에 실제 지원하는
+V11 family를 포함하고 실제 임시 DB 및 같은 canary capture로 검증한 뒤 안전한 runtime
+경계에서 반영해야 한다. 아직 전체 goal 완료/Map 착수로 표시하지 않는다.
+
+현재 확인 근거는 `/tmp/material-learning-actual-read-evidence-20261106-9.log`와
+`/tmp/material-learning-postdeploy-read-20261106-28.log`다. 한글 편집 가능한 HWPX 재출력은
+사용자가 이번 목표에서 제외한 후속 기능이며, 이 INDEX gate를 그것으로 바꾸지 않는다.
+
+### 관측 복구와 로컬 공간
+
+observer35267c85를 실제 반영했고,17:19 한국시간 Slack의 정상1줄 보고까지 확인했다.
+창작 원본 대기를 모르는 관측기가 전체 보고를 실패로 뭉치던 오류는 수정됐다. GPU 관측기는
+그동안에도 정상 동작했으며293/520·CPU 원래 작업 실행 중·GPU 현재0%를 보고했다.
+producer/INDEX/API/Web/QUERY/자료 coordinator PID와 인증/수치 환경은 교체하지 않았다.
+
+이어서 여유 공간 약9.2GiB가 기존10GiB guard를 넘지 못해 창작 producer가 실제
+`WAITING_FOR_RESOURCES/BACKGROUND_LOCAL_STORAGE_LOW`로 기다리는 것도 확인했다.
+검증된 기존 일회성 cleanup을 재사용해 고정 목록의 완료 API source 복사본10개만
+정리했다. 같은 source.tar·wheel·Git commit·설치본·rollback·원본·NAS·모델은 보존했고
+실행 중 argv/cwd/exe/FD 참조와 활성 commit은 제외했다. 약1,294,733,312 bytes를
+확보해 여유11,128,094,720 bytes를 확인했다. 원래 archive/wheel로 복구할 수 있다.
+운영 DB/모델 실행/서비스 재시작은0이다.
+고정 plan/report는 `/tmp/eom-material-source-copy-cleanup-plan-20261106.json`,
+`/tmp/eom-material-source-copy-cleanup-report-20261106.json`이다.
+
 ## 08:01 UTC 실제 canary checkpoint
 
 | 경계 | 실제 결과 |
