@@ -356,7 +356,10 @@ def serve() -> int:
             external_item_documents=external_item_documents,
             external_item_previews=external_item_previews,
             external_item_learning_authorization=CatalogExternalItemLearningAuthorizationService(
-                engine, external_item_previews
+                # Existing creative plans pin the legacy PDF generation. Current
+                # UI previews must not change their late source authorization.
+                engine,
+                ExternalItemPreviewProjectionService(engine),
             ),
             curated_document_assemblies=CuratedDocumentAssemblyService(
                 engine, external_item_documents

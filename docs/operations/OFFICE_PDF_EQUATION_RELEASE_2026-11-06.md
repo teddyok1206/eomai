@@ -43,6 +43,13 @@
 - 확대한 배포 소비자 검사에서 현재 migration0074/analysis12와 오래된 test 기대값의
   차이를 발견해 test inventory만 현재 released source에 맞췄다. 실제 migration·정책·workflow는
   수정하지 않았다. 최종174 PASS는 이 보정 후 결과다.
+- 첫 Catalog 후보의 연결 검토에서, 현재 UI preview 인스턴스를 기존 creative late authorization에도
+  공유하던 composition을 발견했다. 기존 실행은 legacy PDF를 pin하므로 Catalog 선택을 즉시
+  이전0373ef48로 복구했다. 후보710d4748·설치·rollback 기록은 보존한다. 새로운 풀이/Graph/
+  임베딩은 시작하지 않았고 기존 실패를 성공으로 바꾸지 않았다. UI에는 corrected profile,
+  frozen learning authorization에는 독립 legacy 인스턴스를 주도록 보완하고 회귀를 추가했다.
+  이 보완 후 기존 창작 source/claim authorization 검사를 포함한238개가 PASS했다.
+  API/Catalog의 preview·peer socket 회귀3개도 별도로 통과했다.
 
 임시 검증 DB와 로컬 수치/시각 자료는 최종 evidence 보관·해시 확인 뒤 정리한다.
 실제 자료 내용·PDF·PNG·OXT·긴 로그·인증 자료는 Git에 넣지 않는다.

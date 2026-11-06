@@ -55,3 +55,24 @@ def test_installer_pins_bundle_source_and_does_not_restart_other_services() -> N
     assert "systemctl restart" not in script and "systemctl stop" not in script
     assert "-I -B -c" in template and "is_relative_to" in template
     assert "@EOM_EQUATION_SOURCE@" in template and "--equations-v2 %i" in template
+
+
+def test_current_ui_preview_does_not_reinterpret_frozen_learning_inputs() -> None:
+    import ast
+
+    source = (
+        ROOT / "services/catalog_service/eom_catalog_service/application_runner.py"
+    ).read_text()
+    tree = ast.parse(source)
+    authorization = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "CatalogExternalItemLearningAuthorizationService"
+    )
+    assert isinstance(authorization.args[1], ast.Call)
+    assert isinstance(authorization.args[1].func, ast.Name)
+    assert authorization.args[1].func.id == "ExternalItemPreviewProjectionService"
+    assert not authorization.args[1].keywords  # Frozen learning keeps the legacy default.
+    assert "engine, profile=EQUATION_OFFICE_PROFILE" in source
