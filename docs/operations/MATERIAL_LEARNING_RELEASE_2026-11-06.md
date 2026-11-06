@@ -39,6 +39,17 @@ INDEX는 기존 CUDA/CPU 묶음을 실제로 완료하고 다음 원래 CPU stan
 `/tmp/material-learning-postdeploy-read-20261106-22.log`.
 아래 시간별 기록의 ‘미배포/실행 전’ 표현은 해당 과거 단계의 상태다.
 
+### 배경 감시의 원본 대기 표시
+
+08:10 UTC 기존 창작 producer는 실제 status에서1013/1053 확인 완료·40개 원본 보류인
+`BLOCKED_SOURCES`였다. producer는 계속 실행되며 원본 준비를5분마다 다시 확인한다.
+별도10분 observer가 이 상태를 모르는 allowed-state 목록 때문에
+`CREATIVE_OBSERVATION_STATUS_INVALID`로 종료하는 불일치를 발견했다. observer의 기존
+검증·freshness·실제 service 상태를 유지해 명시적 `SOURCE_WAIT`로 표시하고, 선택적
+Slack reporter는 ‘원본 확인 대기’라고 구분한다. 보류를 성공으로 바꾸거나 슬롯이 바쁘다고
+표시하지 않는다. 집중26 PASS·core2개 type/format/lint PASS. 실제 producer/INDEX/자료
+등록 실행은 멈추지 않고 observer/선택적 reporter만 후속 설치한다.
+
 ## 06:58 UTC 후속 확인
 
 - material coordinator64bcc2fa를 전용 prefix로 활성화했다. 기존 실제 DISCOVER 결과를

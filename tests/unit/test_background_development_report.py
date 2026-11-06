@@ -40,6 +40,17 @@ def test_unknown_slot_observation_is_not_reported_idle_or_healthy():
     assert "창작 Graph 누적 확인 필요" in line
 
 
+def test_source_wait_is_distinct_from_progress_failure_and_resource_pressure():
+    line = summary_line(
+        {"state": "BLOCKED_SOURCES", "check": "SOURCE_WAIT", "blocked_source_count": 40},
+        {"creative_graph_registered_items": 1013, "slot_jobs": []},
+        "GPU 현재 대기",
+    )
+    assert "원본 확인 대기" in line and "원본 보류 40" in line
+    assert "슬롯 작업 0개" in line
+    assert "등록 작업 진행" not in line and "점검 필요" not in line and "완료" not in line
+
+
 def test_process_restart_cannot_reset_canonical_graph_count():
     embedding = {"creative_graph_registered_items": 687}
     for process_count in (120, 2, 6, 0):

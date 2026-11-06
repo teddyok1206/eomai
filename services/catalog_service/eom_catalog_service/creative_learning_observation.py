@@ -49,6 +49,7 @@ def read_observation(root: Path, cohort_id: str) -> dict[str, object]:
             "ANALYZING",
             "PROCESSING",
             "WAITING_FOR_RESOURCES",
+            "BLOCKED_SOURCES",
             "VERIFIED",
             "CANARY_VERIFIED",
             "COMPLETED",
@@ -128,10 +129,13 @@ def main() -> None:
             "PROCESSING",
             "VERIFIED",
             "WAITING_FOR_RESOURCES",
+            "BLOCKED_SOURCES",
         }
     )
     check = (
-        "RESOURCE_WAIT"
+        "SOURCE_WAIT"
+        if healthy and result["state"] == "BLOCKED_SOURCES"
+        else "RESOURCE_WAIT"
         if healthy and result["state"] == "WAITING_FOR_RESOURCES"
         else "OK"
         if healthy

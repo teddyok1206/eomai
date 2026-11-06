@@ -9,7 +9,9 @@ from eom_catalog_service.creative_learning_runner import write_status
 COHORT_ID = "creativecohort_" + "a" * 32
 
 
-@pytest.mark.parametrize("state", ("ANALYZING", "PROCESSING", "WAITING_FOR_RESOURCES"))
+@pytest.mark.parametrize(
+    "state", ("ANALYZING", "PROCESSING", "WAITING_FOR_RESOURCES", "BLOCKED_SOURCES")
+)
 def test_observer_returns_only_bounded_metadata_not_arbitrary_saved_values(tmp_path, state):
     root = tmp_path / "status"
     root.mkdir(mode=0o750)
@@ -56,6 +58,42 @@ def test_stale_status_is_not_reported_as_recent_progress(tmp_path, monkeypatch):
 
     monkeypatch.setattr(observation, "datetime", Clock)
     assert observation.read_observation(root, COHORT_ID)["status_stale"]
+
+
+@pytest.mark.parametrize("active,stale", [("active", False), ("inactive", False), ("active", True)])
+def test_source_wait_is_not_an_unknown_failure_or_a_completion(monkeypatch, capsys, active, stale):
+    import json
+    from types import SimpleNamespace
+
+    monkeypatch.setattr(
+        observation,
+        "read_observation",
+        lambda *_args: dict(
+            state="BLOCKED_SOURCES",
+            verified_count=1013,
+            target_count=1053,
+            blocked_source_count=40,
+            status_stale=stale,
+        ),
+    )
+    monkeypatch.setattr(
+        observation.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(
+            returncode=0,
+            stdout=f"ActiveState={active}\nSubState=running\nResult=success\n".encode(),
+        ),
+    )
+    if active == "active" and not stale:
+        observation.main()
+    else:
+        with pytest.raises(SystemExit):
+            observation.main()
+    result = json.loads(capsys.readouterr().out)
+    assert result["check"] == (
+        "SOURCE_WAIT" if active == "active" and not stale else "ATTENTION_REQUIRED"
+    )
+    assert result["state"] == "BLOCKED_SOURCES" and result["verified_count"] == 1013
 
 
 @pytest.mark.parametrize(

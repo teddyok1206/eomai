@@ -96,6 +96,8 @@ def summary_line(creative: dict[str, Any], embedding: dict[str, Any], gpu: str) 
     creative_state = (
         "진행"
         if creative.get("check") == "OK"
+        else "원본 확인 대기"
+        if creative.get("check") == "SOURCE_WAIT"
         else "자원 대기"
         if creative.get("check") == "RESOURCE_WAIT"
         else "점검 필요"
