@@ -1,5 +1,25 @@
 # Protected release-operator adapter
 
+## 2026-11-06 material-learning successor
+
+`release-operator-context/1.21` and its admission receipt pin migration
+`20261105_0074`. The two new closed callbacks are `MIGRATION_VERIFY_0074` and
+`MIGRATION_UPGRADE_0074`; only the exact predecessor `20261105_0073` may upgrade,
+and an already applied 0074 is an idempotent read-only replay. A predecessor
+context/callback cannot be relabeled as 0074. Released schema bytes are unchanged.
+
+This reuses the eleven-point boundary below: canonical Git/archive/wheel hashes,
+immutable context/receipt, fixed enum lookup, existing Alembic transaction and
+existing role bootstrap owners. It adds no registry, queue, runtime service or
+dependency. Lookup and three-wheel validation costs are unchanged. Unknown heads,
+changed files and unsuccessful migrations fail before receipt acceptance; no
+automatic downgrade, direct row repair or worker privilege expansion is allowed.
+Calling Alembic directly from a mutable checkout would be shorter but bypass the
+already installed protected operator boundary. The production release manifest
+must distinguish source admission, DDL application and actual feature activation.
+After material records or new capacity policies exist, a wheel rollback is not
+permission to drop their 0074 schema; preserve that additive history.
+
 Status as of 2026-10-10 16:12 UTC: source and synthetic/source validation completed;
 the protected operator adapter and compatible shared release were exercised for
 `ad3ed8caf43f3a4ece5abce25b9b59801451803e`. Exact migration 0051, all seven closed

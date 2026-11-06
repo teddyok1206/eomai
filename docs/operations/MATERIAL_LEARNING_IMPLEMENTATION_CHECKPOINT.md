@@ -15,6 +15,15 @@ DB의 출처 Layer(교과서·기출·창작·AI·외부)를 쉽게 볼 수 있�
 
 ## 최신 source checkpoint — 아직 운영 완료 아님
 
+### 공식 배포 경계 누락 보완
+
+최종 8b4632d8 API/Web source-free wheel과 보호된 후보 prefix 준비는 PASS다. 운영
+migration 0074의 임시 DB 검사는 통과했지만 기존 release operator는 0073까지만 허용함을
+배포 전 발견했다. 새 context/admission 1.21·0073→0074 고정 callback을 schema-first로
+추가하고 이전 schema/callback은 보존한다. 관련 회귀102 PASS, type/lint/shell parsing
+PASS다. 이 후속 변경을 포함한 최종 commit/wheel을 새로 고정하며, 8b 후보를 최종 운영
+release로 잘못 표시하지 않는다. 실제 운영은 아직0073이고 feature 활성화·모델 canary는0이다.
+
 ### 실패 단위 복구·위치 조회 — 최신 후보
 
 - 새 retry/task-detail JSON Schema 2020-12와 Pydantic/API/BFF/GUI를 연결했다. 실패한
