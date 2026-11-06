@@ -338,6 +338,45 @@ def test_transfer_owner_api_contract_dependency_is_optional() -> None:
     assert not any(name.startswith("eom-api-contracts") for name in metadata["dependencies"])
 
 
+def test_installed_historical_analysis_version_comparison_includes_current_successor() -> None:
+    inner = ast.parse(installed_workflow_inspector_source())
+    assignment = next(
+        node
+        for node in inner.body
+        if isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "analysis_versions"
+    )
+    comparison = next(
+        node
+        for node in inner.body
+        if isinstance(node, ast.If) and "analysis_versions" in ast.unparse(node.test)
+    )
+    names = {
+        node.id
+        for node in ast.walk(assignment)
+        if isinstance(node, ast.Name) and re.fullmatch(r"analysis_v[0-9]+", node.id)
+    }
+    namespace = {
+        "Path": Path,
+        "compile_definition": compile_definition,
+        **{
+            name: str(
+                ROOT
+                / f"config/workflows/knowledge-analysis.v{name.removeprefix('analysis_v')}.yaml"
+            )
+            for name in names
+        },
+    }
+    exec(
+        compile(
+            ast.Module(body=[assignment, comparison], type_ignores=[]), "analysis versions", "exec"
+        ),
+        namespace,
+    )
+    assert "12.0.0" in namespace["analysis_versions"]
+
+
 def test_installed_support_admission_covers_materialized_workflow_contracts() -> None:
     outer = ast.parse(release_inspector_source())
     fixed_families = {

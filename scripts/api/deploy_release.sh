@@ -2385,7 +2385,7 @@ analysis_versions = {
     compile_definition(Path(path), {"support"}).definition.definition_version
     for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, analysis_v11, analysis_v12)
 }
-if analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0", "5.0.0", "6.0.0", "7.0.0", "8.0.0", "9.0.0", "10.0.0", "11.0.0"}:
+if analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0", "5.0.0", "6.0.0", "7.0.0", "8.0.0", "9.0.0", "10.0.0", "11.0.0", "12.0.0"}:
     raise SystemExit("knowledge analysis workflow definition mismatch")
 legacy = compile_definition(Path(legacy_definition), {"support"}).definition
 if (
