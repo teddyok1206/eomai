@@ -1,8 +1,43 @@
 # 자료 학습 운영 반영 — 단계별 증거
 
-기준: 2026-11-06 06:58 UTC. **전체 목표의 완료 보고서가 아니다.**
+기준: 2026-11-06 08:01 UTC. **전체 목표의 완료 보고서가 아니다.**
 사용자 지정 순서는 자료 학습의 운영 반영·실제 처리 확인을 완료한 뒤 Map의 Layer
 표시 개선에 착수하는 것이다. Map은 아직 시작하지 않았다.
+
+## 08:01 UTC 실제 canary checkpoint
+
+| 경계 | 실제 결과 |
+| --- | --- |
+| API/Web/Catalog/Runner 및 migration | e1df5c8f 호환 배포, head0074 |
+| 자료 학습 전용 coordinator | 493144f8, enabled/active |
+| 원본 업로드·준비·동일 명령 재전송 | PASS, 원본/준비 포인터 재사용 |
+| 실제 발견·문항 추출 | 실제 Codex Workflow/Job 성공, 최초 실패 이력 보존 |
+| 문항 Registry 및 base 분석 | 등록·exact content read·ACCEPTED |
+| 문항 공개 풀이 | 실제 Workflow/Job 성공·accepted V11 공개 조회 PASS |
+| 공통 임베딩 입력 | 실제 공개 보고서로 public-solution-text AVAILABLE |
+| 설명 분석·공유 Graph·공식 RAG | ACCEPTED·Graph 등록·evidence V6 read/replay PASS |
+| 문항 공유 Graph | PUBLISHING, 완료를 기다리는 중 |
+| 설치 API의 DB 외부 목록 | 호출 PASS, Graph 반영 전 canary 미포함은 예상 상태 |
+| 실제 HTTPS 인증 사용자 화면 | NOT_RECORDED, owner application을 로그인 증거로 확대하지 않음 |
+
+실제 root owner application에서 원래 guiadmin의 현재 role/permission을 확인했다.
+RAG의 Graph·policy·source pin은 고정했으며 같은 요청은 기존 evidence Artifact를
+재사용했다. 원문/worker 내용을 Slack에 노출하거나 권한을 WORKER/ADMIN으로 위조하지
+않았다. 공개 풀이 수정은 한 모듈만 배포했고 API/Web/QUERY/INDEX의 PID/invocation·
+설정·수치 runtime·Codex 인증/helper/capability policy는 인계 전후 불변이다.
+원래 문항/accepted base/성공 child를 재생성하지 않았고 동일 solution intent만 이어갔다.
+
+소스46 PASS·material 임시 PostgreSQL44 PASS·type/format/lint·source-free wheel/RECORD
+PASS는 해당 결함의 회귀 증거이며 실제 canary 성공과 별도로 기록한다.
+INDEX는 기존 CUDA/CPU 묶음을 실제로 완료하고 다음 원래 CPU standby를 처리 중이다.
+새 자료의 전체 임베딩/검색 준비나 기존 corpus 전체 완료를 주장하지 않는다.
+
+추가 근거:
+`/var/lib/eom-material-owner-493144f8-20261106`,
+`/tmp/material-learning-receipt-owner-release-20261106-1.log`,
+`/tmp/material-learning-actual-read-evidence-20261106-2.log`,
+`/tmp/material-learning-postdeploy-read-20261106-22.log`.
+아래 시간별 기록의 ‘미배포/실행 전’ 표현은 해당 과거 단계의 상태다.
 
 ## 06:58 UTC 후속 확인
 

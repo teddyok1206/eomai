@@ -15,6 +15,14 @@ DB의 출처 Layer(교과서·기출·창작·AI·외부)를 쉽게 볼 수 있�
 
 ## 최신 source checkpoint — 아직 운영 완료 아님
 
+08:01 UTC: 기존 compatible API/Web/Runner와 head0074, material 전용493144f8은 실제
+운영 반영됐다. 실제 canary에서 발견·문항 Registry·base 분석·V11 공개 풀이 및 공통
+embedding text AVAILABLE을 확인했다. 설명은 공유 Graph 및 공식 RAG evidence V6
+조회/동일 요청 replay까지 PASS다. 문항은 공유 Graph PUBLISHING이며, DB 목록/INDEX
+최종 연결 확인은 아직 남았다. 실제 HTTPS 인증 사용자의 육안 확인은 미기록이다.
+Map은 사용자 지정 순서대로 계속 대기한다. 아래는 시간순 과거 구현 기록이며 최신
+설치물/실제 결과는 운영 반영 문서를 우선한다.
+
 ### 2026-11-06 운영 단계 갱신
 
 API·Web·Catalog·global Runner와 창작 producer는 `e1df5c8f`로 호환 배포했고 production
