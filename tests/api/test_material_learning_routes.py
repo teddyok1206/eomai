@@ -31,6 +31,7 @@ def material_client(tmp_path):
         create_material_learning=Mock(),
         list_material_learning_runs=Mock(return_value=MaterialLearningRunList(runs=())),
         read_material_learning_run=Mock(),
+        control_material_learning_run=Mock(),
     )
     services.catalog_application = reads
     services.audit = Mock()
@@ -47,6 +48,40 @@ def material_client(tmp_path):
     with TestClient(app, base_url="http://localhost") as client:
         yield client, reads, app, tmp_path
     services.engine.dispose()
+
+
+def test_control_uses_real_actor_and_revision_fence_not_browser_actor(material_client):
+    from datetime import UTC, datetime
+
+    from eom_catalog_contracts.material_learning_intake import MaterialLearningControlResult
+
+    client, catalog, _, _ = material_client
+    run_id = "materialrun_" + "1" * 32
+    when = datetime(2026, 11, 6, tzinfo=UTC)
+    catalog.control_material_learning_run.return_value = MaterialLearningControlResult(
+        run_id=run_id,
+        state="PAUSED",
+        updated_at=when,
+        replayed=False,
+    )
+    response = client.post(
+        f"/api/v1/material-learning/{run_id}/control",
+        json=dict(action="PAUSE", expected_updated_at="2026-11-06T00:00:00Z"),
+        headers={"Idempotency-Key": f"material-control-v1:{run_id}:PAUSE:{when.isoformat()}"},
+    )
+    assert response.status_code == 200, response.text
+    command = catalog.control_material_learning_run.call_args.args[0]
+    assert command.actor_id == OPERATOR_ID and command.expected_updated_at == when
+    rejected = client.post(
+        f"/api/v1/material-learning/{run_id}/control",
+        json=dict(
+            action="PAUSE",
+            expected_updated_at="2026-11-06T00:00:00Z",
+            actor_id="operator_" + "f" * 32,
+        ),
+        headers={"Idempotency-Key": f"material-control-v1:{run_id}:PAUSE:{when.isoformat()}"},
+    )
+    assert rejected.status_code == 422
 
 
 def test_upload_uses_authenticated_actor_and_actual_bytes(material_client):

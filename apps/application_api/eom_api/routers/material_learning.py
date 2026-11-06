@@ -2,22 +2,24 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Literal
 
 from eom_api_contracts import SingleResponse
 from eom_catalog_contracts.material_learning import MaterialLearningUpload
 from eom_catalog_contracts.material_learning_intake import (
+    ControlMaterialLearningRunCommand,
     CreateMaterialLearningCommand,
     GetMaterialLearningRunQuery,
     ListMaterialLearningRunsQuery,
     MaterialLearningAcceptance,
+    MaterialLearningControlResult,
     MaterialLearningRunDetail,
     MaterialLearningRunList,
     MaterialLearningSourceSelection,
     MaterialSourceUploadCommand,
     MaterialSourceUploadReceipt,
 )
-from eom_catalog_contracts.models import FrozenModel
+from eom_catalog_contracts.models import FrozenModel, UtcDatetime
 from eom_operator_identity import PermissionKey
 from fastapi import APIRouter, Depends, Header, Path, Query, Request
 from pydantic import Field
@@ -33,6 +35,48 @@ router = APIRouter(prefix="/material-learning", tags=["material-learning"])
 class CreateMaterialLearningRequest(FrozenModel):
     upload: MaterialLearningUpload
     sources: tuple[MaterialLearningSourceSelection, ...] = Field(min_length=1, max_length=2)
+
+
+class MaterialLearningControlRequest(FrozenModel):
+    action: Literal["PAUSE", "RESUME"]
+    expected_updated_at: UtcDatetime
+
+
+@router.post(
+    "/{run_id}/control",
+    operation_id="material_learning_control",
+    response_model=SingleResponse[MaterialLearningControlResult],
+    dependencies=[
+        Depends(require_permission(PermissionKey.KNOWLEDGE_ANALYSIS_CREATE, admin_only=True))
+    ],
+)
+def control_material_learning(
+    request: Request,
+    body: MaterialLearningControlRequest,
+    authentication: Auth,
+    idempotency_key: IdempotencyKey,
+    run_id: str = Path(pattern=r"^materialrun_[0-9a-f]{32}$"),
+) -> SingleResponse[MaterialLearningControlResult]:
+    expected_key = (
+        f"material-control-v1:{run_id}:{body.action}:{body.expected_updated_at.isoformat()}"
+    )
+    if idempotency_key != expected_key:
+        raise ApiError(
+            422,
+            "MATERIAL_LEARNING_CONTROL_KEY_INVALID",
+            "Invalid control key",
+            "Reuse the exact observed run state and action.",
+        )
+    command = ControlMaterialLearningRunCommand(
+        actor_id=authentication.operator.operator_id,
+        run_id=run_id,
+        action=body.action,
+        expected_updated_at=body.expected_updated_at,
+    )
+    return one(
+        request,
+        request.app.state.services.catalog_application.control_material_learning_run(command),
+    )
 
 
 @router.put(

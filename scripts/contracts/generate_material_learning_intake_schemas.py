@@ -208,6 +208,21 @@ def schemas() -> dict[str, dict[str, Any]]:
             tasks=sequence(intake_ref("taskSummary"), 0, 100),
             next_ordinal=nullable(integer(1, 1_000_000)),
         ),
+        "control": record(
+            schema_version=version("material-learning-control/1.0"),
+            operation=version("CONTROL_MATERIAL_LEARNING_RUN"),
+            actor_id=_ACTOR,
+            run_id=identifier("materialrun"),
+            action=enum("PAUSE", "RESUME"),
+            expected_updated_at=_TIME,
+        ),
+        "control-result": record(
+            schema_version=version("material-learning-control-result/1.0"),
+            run_id=identifier("materialrun"),
+            state=run_state,
+            updated_at=_TIME,
+            replayed={"type": "boolean"},
+        ),
     }
     return {
         name: {

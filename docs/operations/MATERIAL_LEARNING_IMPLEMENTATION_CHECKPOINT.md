@@ -35,6 +35,19 @@ goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체�
 
 ### 다음 완료 경계
 
+후속 후보: GUI pause/resume→BFF→API→Catalog 실제 control을 연결했다. updated_at fence와
+동시 pause·같은 action 재조회·오래된 반대 action 거부를 임시 DB에서 검증했다(최신33 PASS).
+자료 owner는 별도 WorkflowRuntime을 만들지 않고 운영 global Runner를 사용한다. 실제
+Chromium에서 중단/재개와 원래 업로드 재전송·owner 전환 PASS. source 회귀319 PASS 및
+추가 BFF/설치 gate 회귀111 PASS(범위 중복/브라우저 별도). installed API build에서 실제로
+드러난 신규 material/knowledge12 정의 staging 누락도 기존 release inspector에서 수정했다.
+이후 실제 role/registry/public solution/Graph/INDEX canary와 최종 운영 배포가 남는다.
+
+현재 INDEX producer entry525ae472의 설치본은 새 Graph10/material source를 아직 모른다.
+새 Graph를 활성화하기 전에 이 소비 경계도 호환 prefix로 정렬해야 한다. 기존 numerical
+GPU runtime/진행 요청은 그대로 두고, 현재 준비/수치 작업의 안전한 경계에서 owner source만
+인계한다. 옛 producer가 새 Graph를 읽을 수 있다고 가정해 먼저 publication하지 않는다.
+
 1. 실제 설치 계정·작업 폴더 경계에 runtime composition을 맞춘다. Root producer의
    Registry staging과 기존 Catalog-manager의 고정 Office converter workspace는 소유자가
    다르다. 이 차이를 권한 완화/임의 path로 덮지 말고 기존 변환 owner에 제한된 adapter로

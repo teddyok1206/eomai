@@ -341,9 +341,11 @@ def transition_material_run(
             raise MaterialLearningStorageError("MATERIAL_LEARNING_COVERAGE_NOT_FINISHED")
         if bool(issues) != (target == MaterialLearningState.COMPLETED_WITH_EXCEPTIONS):
             raise MaterialLearningStorageError("MATERIAL_LEARNING_COMPLETION_ISSUES_MISMATCH")
-    if target == MaterialLearningState.WAITING_FOR_CAPACITY:
+    if target == MaterialLearningState.PAUSED:
+        run.phase_before_wait = run.phase_before_wait if prior == "WAITING_FOR_CAPACITY" else prior
+    elif target == MaterialLearningState.WAITING_FOR_CAPACITY:
         run.phase_before_wait = prior
-    elif prior == MaterialLearningState.WAITING_FOR_CAPACITY:
+    elif prior in {"WAITING_FOR_CAPACITY", "PAUSED"}:
         if (
             target not in {MaterialLearningState.PAUSED, MaterialLearningState.CANCELLED}
             and target != run.phase_before_wait

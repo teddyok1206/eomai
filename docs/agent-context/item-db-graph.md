@@ -91,6 +91,12 @@ coordinator가 작은 task checkpoint와 자료 전체 단일 AI lane을 소유�
 슬롯·host 동시 제한은 원래 Workflow/Orchestrator의 책임이다. runtime/service 후보가
 존재한다는 사실을 운영 활성화 증거로 쓰지 않는다.
 
+`MaterialLearningIntakeService.control`은 기존 run의 pause/resume를 actual actor와
+updated_at CAS로 처리한다. BFF/GUI 버튼은 같은 control을 호출한다. 자료 coordinator는
+별도 모델 Runner를 만들지 않으며 원래 global Workflow Runner가 자식 command를 실행한다.
+PDF command port는 기존 sandbox, 한글 conversion port는 기존 Catalog-manager workspace를
+사용한다. 각 adapter의 실제 설치 증거와 후보 상태는 operations checkpoint에서 구분한다.
+
 API `GET /item-db/materials`와 DB 외부 분류는 current shared Graph membership을 확인해
 작은 등록 metadata를 읽는다. Notion 행이나 임의 고유번호를 만들지 않는다. Map V2는 같은
 Graph에서 외부 layer를 표시하며 V1 bytes/소비를 보존한다. 새 설명 source V5는 retrieval

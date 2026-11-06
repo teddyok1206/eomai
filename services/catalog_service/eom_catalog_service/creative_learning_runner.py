@@ -225,6 +225,10 @@ def main() -> None:
                 previous = marker
             if source_blocked:
                 stopped.wait(progress_poll_delay_seconds(progress.state))
+                if not stopped.is_set() and isinstance(
+                    service, CreativeCohortParallelExecutionService
+                ):
+                    service.refresh_blocked_source_readiness()
                 continue
             if terminal:
                 break

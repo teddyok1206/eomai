@@ -34,6 +34,18 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "material-learning-control-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-control-v1.schema.json",
+            "resources/material-learning/material-learning-control-v1.schema.json",
+            "1.0",
+            "sha256:38c7cc698c75675bec4fd8eb3211016b9564976cce7850b5a4be1368e9412fca",
+        ),
+        "material-learning-control-result-v1": CatalogSchemaResource(
+            "schemas/material-learning/material-learning-control-result-v1.schema.json",
+            "resources/material-learning/material-learning-control-result-v1.schema.json",
+            "1.0",
+            "sha256:923ebe869da804985cd163390963eb7d182e738d38b777575f3cf43d5f94e049",
+        ),
         "material-learning-office-command-v1": CatalogSchemaResource(
             "schemas/material-learning/material-learning-office-command-v1.schema.json",
             "resources/material-learning/material-learning-office-command-v1.schema.json",

@@ -51,10 +51,9 @@ def main() -> None:
                 if marker != previous:
                     print(json.dumps(asdict(progress), sort_keys=True), flush=True)
                     previous = marker
-                # A concrete child is authorized by its persisted actual actor.
-                # Never claim unrelated queued production work from this loop.
-                if progress.workflow_to_drive is not None and not stopped.is_set():
-                    runtime.workflow.runner.run_once(progress.workflow_to_drive)
+                # Child commands are driven by the installed global Workflow
+                # Runner. This loop never becomes a parallel model executor or
+                # blocks the durable material lease while a Codex turn runs.
                 stopped.wait(
                     10
                     if progress.phase

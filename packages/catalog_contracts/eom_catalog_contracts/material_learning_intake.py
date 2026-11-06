@@ -329,3 +329,32 @@ class MaterialLearningRunDetail(FrozenModel):
     def closed_reply(self) -> Self:
         validate_contract("material-learning-run-detail-v1", self.model_dump(mode="json"))
         return self
+
+
+class ControlMaterialLearningRunCommand(FrozenModel):
+    schema_version: Literal["material-learning-control/1.0"] = "material-learning-control/1.0"
+    operation: Literal["CONTROL_MATERIAL_LEARNING_RUN"] = "CONTROL_MATERIAL_LEARNING_RUN"
+    actor_id: MaterialOperatorId
+    run_id: str = Field(pattern=r"^materialrun_[0-9a-f]{32}$")
+    action: Literal["PAUSE", "RESUME"]
+    expected_updated_at: UtcDatetime
+
+    @model_validator(mode="after")
+    def closed_command(self) -> Self:
+        validate_contract("material-learning-control-v1", self.model_dump(mode="json"))
+        return self
+
+
+class MaterialLearningControlResult(FrozenModel):
+    schema_version: Literal["material-learning-control-result/1.0"] = (
+        "material-learning-control-result/1.0"
+    )
+    run_id: str = Field(pattern=r"^materialrun_[0-9a-f]{32}$")
+    state: MaterialRunState
+    updated_at: UtcDatetime
+    replayed: bool
+
+    @model_validator(mode="after")
+    def closed_reply(self) -> Self:
+        validate_contract("material-learning-control-result-v1", self.model_dump(mode="json"))
+        return self

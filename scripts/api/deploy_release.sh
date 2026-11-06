@@ -1835,7 +1835,7 @@ with tempfile.TemporaryDirectory(prefix="eom-workflow-wheel-check.") as temporar
         )
         definitions.append(definition)
     analysis_definitions = []
-    for version in ("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"):
+    for version in ("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"):
         definition = root / f"knowledge-analysis.v{version}.yaml"
         definition.write_bytes(
             (
@@ -2015,7 +2015,7 @@ from pydantic import TypeAdapter
 
 installed_root = Path(sys.argv[1]).resolve()
 expected_migration_revision = sys.argv.pop()
-repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, definition_v1_15, definition_v1_16, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, analysis_v11, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, pdf_document_review_definition_v1_3, pdf_document_review_definition_v1_4, pdf_document_review_definition_v1_5, inference_transfer_definition, inference_transfer_definition_v1_1, local_embedding_definition, local_embedding_definition_v2, reference_query_definition, reference_query_definition_v2, private_chat_query_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256, expected_catalog_resources_json = sys.argv[2:]
+repository, definition_v1_1, definition_v1_2, definition_v1_3, definition_v1_4, definition_v1_5, definition_v1_6, definition_v1_7, definition_v1_8, definition_v1_9, definition_v1_10, definition_v1_11, definition_v1_12, definition_v1_13, definition_v1_14, definition_v1_15, definition_v1_16, analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, analysis_v11, analysis_v12, legacy_definition, editorial_definition, customer_support_definition, pdf_document_review_definition_v1, pdf_document_review_definition_v1_1, pdf_document_review_definition_v1_2, pdf_document_review_definition_v1_3, pdf_document_review_definition_v1_4, pdf_document_review_definition_v1_5, inference_transfer_definition, inference_transfer_definition_v1_1, local_embedding_definition, local_embedding_definition_v2, reference_query_definition, reference_query_definition_v2, private_chat_query_definition, worker_config, staging, workspace_root, codex_binary, expected_commit, expected_tree, expected_archive_sha256, expected_catalog_resources_json = sys.argv[2:]
 sys.path.insert(0, str(installed_root))
 os.environ["EOM_WORKER_CONFIG"] = worker_config
 os.environ["EOM_STAGING_ROOT"] = staging
@@ -2383,7 +2383,7 @@ if compiled_versions != {"1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "
     raise SystemExit("generic workflow definition versions mismatch")
 analysis_versions = {
     compile_definition(Path(path), {"support"}).definition.definition_version
-    for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, analysis_v11)
+    for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4, analysis_v5, analysis_v6, analysis_v7, analysis_v8, analysis_v9, analysis_v10, analysis_v11, analysis_v12)
 }
 if analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0", "5.0.0", "6.0.0", "7.0.0", "8.0.0", "9.0.0", "10.0.0", "11.0.0"}:
     raise SystemExit("knowledge analysis workflow definition mismatch")
@@ -2443,6 +2443,7 @@ admitted_definitions = (
     compile_definition(Path(analysis_v9), {"support"}),
     compile_definition(Path(analysis_v10), {"support"}),
     compile_definition(Path(analysis_v11), {"support"}),
+    compile_definition(Path(analysis_v12), {"support"}),
     compile_definition(Path(legacy_definition), {"support"}),
     compile_definition(creative_definition, {"support"}),
     compile_definition(creative_source_definition, {"support"}),

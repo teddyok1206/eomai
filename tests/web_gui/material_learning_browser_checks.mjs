@@ -16,10 +16,14 @@ async function api(path, options = {}) {
   if (path.startsWith('/material-learning/sources?')) return {original_filename: options.body.name, source_format: 'PDF'};
   if (path === '/material-learning' && options.method === 'POST') {
     if (fixture.failCreate) { fixture.failCreate = false; throw new Error('일시적인 접수 오류'); }
-    fixture.runs = [{run_id: runId, title: options.body.upload.title, material_kind: 'WORKBOOK', state: 'PROCESSING', task_counts: [{state: 'COMPLETED', count: 2}, {state: 'RUNNING', count: 1}], created_at: '2026-11-05T20:00:00Z'}];
+    fixture.runs = [{run_id: runId, title: options.body.upload.title, material_kind: 'WORKBOOK', state: 'PROCESSING', task_counts: [{state: 'COMPLETED', count: 2}, {state: 'RUNNING', count: 1}], created_at: '2026-11-05T20:00:00Z', updated_at: '2026-11-06T00:00:00Z'}];
     return {run_id: runId};
   }
   if (path === '/material-learning') return {runs: fixture.runs};
+  if (path.endsWith('/control')) {
+    fixture.runs[0].state = options.body.action === 'PAUSE' ? 'PAUSED' : 'PROCESSING';
+    return {run_id: runId, state: fixture.runs[0].state};
+  }
   if (fixture.held) {fixture.held = false; await new Promise(resolve => fixture.release = resolve);}
   return {run: fixture.runs[0], tasks: [{task_kind: 'QUESTION', state: 'RUNNING', error_code: null}], next_ordinal: null};
 }
@@ -57,6 +61,13 @@ try {
   assert.match(await page.locator('#material-learning-runs').textContent(), /2\/3 단계/);
   await page.getByRole('button', {name: '상세 보기', exact: true}).click();
   assert.match(await page.locator('#material-learning-detail').textContent(), /문항 읽는 중/);
+  await page.getByRole('button', {name: '잠시 멈추기', exact: true}).click();
+  await page.getByRole('button', {name: '계속 학습하기', exact: true}).waitFor();
+  await page.getByRole('button', {name: '계속 학습하기', exact: true}).click();
+  await page.getByRole('button', {name: '잠시 멈추기', exact: true}).waitFor();
+  const controls = await page.evaluate(() => fixture.calls.filter(call => call.path.endsWith('/control')));
+  assert.deepEqual(controls.map(call => call.body.action), ['PAUSE', 'RESUME']);
+  assert.ok(controls.every(call => call.body.expected_updated_at === '2026-11-06T00:00:00Z'));
   await page.evaluate(() => {fixture.held = true; fixture.release = null;});
   await page.getByRole('button', {name: '상세 보기', exact: true}).click();
   await page.waitForFunction(() => fixture.release !== null);

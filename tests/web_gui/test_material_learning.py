@@ -2,6 +2,7 @@
 
 from eom_identifiers import sha256_bytes
 from eom_web_gui.material_learning_contracts import (
+    MaterialLearningControlReply,
     MaterialLearningRuns,
     MaterialLearningSourceReceipt,
 )
@@ -18,6 +19,16 @@ class LearningGateway(FakeGateway):
     async def material_learning_runs(self, session):
         self.learning_calls.append("list")
         return MaterialLearningRuns(schema_version="material-learning-run-list/1.0", runs=())
+
+    async def control_material_learning(self, session, run_id, value):
+        self.learning_calls.append((run_id, value.action))
+        return MaterialLearningControlReply(
+            schema_version="material-learning-control-result/1.0",
+            run_id=run_id,
+            state="PAUSED",
+            updated_at=value.expected_updated_at,
+            replayed=False,
+        )
 
     async def material_learning_source(self, session, **kwargs):
         data = b"".join([chunk async for chunk in kwargs.pop("content")])
@@ -87,6 +98,22 @@ def test_material_upload_stream_uses_binary_limit_and_exact_consent():
         assert response.json()["original"]["sha256"] == sha256_bytes(body)
         assert gateway.learning_calls[0][1] == body
         assert gateway.learning_calls[0][0]["content_length"] == len(body)
+
+
+def test_learning_control_preserves_csrf_and_actual_bff_forwarding():
+    gateway = LearningGateway()
+    client, _ = make_client(gateway=gateway)
+    run_id = "materialrun_" + "a" * 32
+    with client:
+        session = login(client)
+        body = dict(action="PAUSE", expected_updated_at="2026-11-06T00:00:00Z")
+        path = f"/studio/api/v1/material-learning/{run_id}/control"
+        assert client.post(path, json=body).status_code == 403
+        assert not gateway.learning_calls
+        response = client.post(path, json=body, headers={"X-CSRF-Token": session["csrf_token"]})
+        assert response.status_code == 200, response.text
+        assert response.json()["state"] == "PAUSED"
+        assert gateway.learning_calls == [(run_id, "PAUSE")]
 
 
 def test_material_learning_browser_replay_and_owner_reset():

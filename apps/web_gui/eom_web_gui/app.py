@@ -72,7 +72,10 @@ from eom_web_gui.item_db_similarity_contracts import (
 from eom_web_gui.knowledge_map_contracts import EdgeId as MapEdgeId
 from eom_web_gui.knowledge_map_contracts import MapHash
 from eom_web_gui.knowledge_map_contracts import NodeId as MapNodeId
-from eom_web_gui.material_learning_contracts import MaterialLearningSubmission
+from eom_web_gui.material_learning_contracts import (
+    MaterialLearningControl,
+    MaterialLearningSubmission,
+)
 from eom_web_gui.request_limits import (
     MAX_PDF_REVIEW_BODY_BYTES,
     RequestBodyLimitMiddleware,
@@ -534,6 +537,16 @@ def create_app(
         session: Annotated[WebSession, Depends(require_admin_csrf)],
     ) -> dict[str, Any]:
         return (await actual.create_material_learning(session, body)).model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/material-learning/{{run_id}}/control")
+    async def control_material_learning(
+        body: MaterialLearningControl,
+        session: Annotated[WebSession, Depends(require_admin_csrf)],
+        run_id: str = Path(pattern=r"^materialrun_[0-9a-f]{32}$"),
+    ) -> dict[str, Any]:
+        return (await actual.control_material_learning(session, run_id, body)).model_dump(
+            mode="json"
+        )
 
     @app.get(f"{API_PREFIX}/material-learning")
     async def list_material_learning(

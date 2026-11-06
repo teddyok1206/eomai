@@ -122,6 +122,8 @@ from eom_web_gui.knowledge_map_contracts import KnowledgeMapView
 from eom_web_gui.material_learning_contracts import (
     MaterialItemDbEntry,
     MaterialLearningAcceptance,
+    MaterialLearningControl,
+    MaterialLearningControlReply,
     MaterialLearningDetail,
     MaterialLearningRuns,
     MaterialLearningSourceReceipt,
@@ -449,6 +451,10 @@ class ApplicationGateway(Protocol):
     ) -> MaterialLearningAcceptance: ...
 
     async def material_learning_runs(self, session: WebSession) -> MaterialLearningRuns: ...
+
+    async def control_material_learning(
+        self, session: WebSession, run_id: str, value: MaterialLearningControl
+    ) -> MaterialLearningControlReply: ...
 
     async def material_learning_run(
         self, session: WebSession, run_id: str, *, after_ordinal: int = 0
@@ -1197,6 +1203,26 @@ class HttpApplicationGateway:
         try:
             reply = MaterialLearningDetail.model_validate(self._data(response))
             if reply.run.run_id != run_id:
+                raise ValueError("Material learning reply identity differs")
+            return reply
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def control_material_learning(
+        self, session: WebSession, run_id: str, value: MaterialLearningControl
+    ) -> MaterialLearningControlReply:
+        _require_id(run_id, "materialrun_")
+        key = f"material-control-v1:{run_id}:{value.action}:{value.expected_updated_at.isoformat()}"
+        response = await self._authorized(
+            session,
+            "POST",
+            f"/api/v1/material-learning/{run_id}/control",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": key},
+        )
+        try:
+            reply = MaterialLearningControlReply.model_validate(self._data(response))
+            if reply.run_id != run_id:
                 raise ValueError("Material learning reply identity differs")
             return reply
         except ValueError as error:

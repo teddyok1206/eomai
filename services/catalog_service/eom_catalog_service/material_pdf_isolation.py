@@ -25,6 +25,25 @@ def _regular_local(path: str) -> Path:
     return value
 
 
+def _expose_readonly_input(source: Path) -> None:
+    """Grant the parser group read access to this private workspace copy only."""
+    account = pwd.getpwnam("eom-image")
+    info, parent = source.stat(), source.parent.stat()
+    if info.st_uid == account.pw_uid:
+        return  # A PNG created by this same isolated extractor.
+    if (
+        info.st_uid != 0
+        or not source.parent.name.startswith("material-pdf-input.")
+        or parent.st_uid != 0
+        or stat.S_IMODE(parent.st_mode) != 0o700
+    ):
+        raise ValueError("MATERIAL_PDF_SANDBOX_INPUT_OWNER_INVALID")
+    # The root-only parent remains private; only the exact file is bind-mounted.
+    # Never change ownership/mode on the canonical NAS Artifact or its directory.
+    os.chown(source, 0, account.pw_gid)
+    source.chmod(0o440)
+
+
 class MaterialPdfSandboxRunner:
     """Reuse the existing PDF sandbox, with one exact read-only input bind.
 
@@ -32,6 +51,9 @@ class MaterialPdfSandboxRunner:
     host directory is a fresh extractor-owned temporary PNG workspace. No DB,
     NAS, auth file or inherited environment is available to parsing subprocesses.
     """
+
+    def __init__(self, *, output_root: Path = Path("/tmp")) -> None:
+        self.output_root = output_root
 
     def __call__(
         self, command: list[str], *, max_output_bytes: int = 4 * 1024 * 1024
@@ -56,6 +78,7 @@ class MaterialPdfSandboxRunner:
             if not 0 <= source_index < len(arguments):
                 raise ValueError("MATERIAL_PDF_SANDBOX_COMMAND_INVALID")
             source = _regular_local(arguments[source_index])
+            _expose_readonly_input(source)
             properties += [
                 "TemporaryFileSystem=/run/eom-material-pdf:ro",
                 f"BindReadOnlyPaths={source}:/run/eom-material-pdf/input",
@@ -68,7 +91,7 @@ class MaterialPdfSandboxRunner:
                 account = pwd.getpwnam("eom-image")
                 if (
                     destination.name != "page"
-                    or parent.parent != Path("/tmp")
+                    or parent.parent != self.output_root
                     or not parent.name.startswith("eom-textbook-ocr-")
                     or parent.resolve() != parent
                     or not stat.S_ISDIR(metadata.st_mode)

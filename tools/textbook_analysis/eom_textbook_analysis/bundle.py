@@ -197,6 +197,7 @@ class PopplerTesseractTextExtractor:
         minimum_text_characters: int = 100,
         minimum_hangul_characters: int = 20,
         run: PdfCommandRunner | None = None,
+        temporary_root: Path | None = None,
     ) -> None:
         if ocr_mode not in {"fallback", "all"}:
             raise TextbookBundleBuildError("TEXTBOOK_OCR_MODE_INVALID")
@@ -219,6 +220,7 @@ class PopplerTesseractTextExtractor:
             raise TextbookBundleBuildError("TEXTBOOK_OCR_LANGUAGE_INVALID")
 
         self._run = run or _run_bounded
+        self._temporary_root = temporary_root
         self._poppler = PopplerTextExtractor(pdftotext=pdftotext, pdfinfo=pdfinfo, run=run)
         self._pdftoppm = _require_executable(pdftoppm)
         self._tesseract = _require_executable(tesseract)
@@ -322,7 +324,9 @@ class PopplerTesseractTextExtractor:
         require_ocr: bool,
         embedded_text: str,
     ) -> ExtractedMultimodalPage:
-        with tempfile.TemporaryDirectory(prefix="eom-textbook-ocr-") as temporary:
+        with tempfile.TemporaryDirectory(
+            prefix="eom-textbook-ocr-", dir=self._temporary_root
+        ) as temporary:
             temporary_directory = Path(temporary)
             temporary_directory.chmod(0o700)
             image_stem = temporary_directory / "page"

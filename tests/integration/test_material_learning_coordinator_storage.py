@@ -172,3 +172,54 @@ def test_paused_material_without_active_child_does_not_claim_or_execute(
     assert owner.advance_once().phase == "IDLE"
     owner.registration.register_completed.assert_not_called()
     owner.graph.advance_item_analysis.assert_not_called()
+
+
+def test_control_pause_resume_replay_and_stale_command_preserve_original_preparation(
+    creative_engine, coordinator_case
+):
+    from concurrent.futures import ThreadPoolExecutor
+
+    from eom_catalog_contracts.material_learning_intake import ControlMaterialLearningRunCommand
+    from eom_catalog_service.material_learning_source import MaterialLearningSourceError
+
+    accepted, settings, restart = coordinator_case
+    extractor = InterruptibleExtractor()
+    extractor.interrupt = False
+    owner = restart(extractor)
+    assert owner.advance_once().phase == "PREPARED"
+    with Session(creative_engine) as session:
+        row = session.get(MaterialLearningRunRecord, accepted.run_id)
+        actor, updated, prepared = row.created_by, row.updated_at, row.prepared_artifact_revision_id
+    service = MaterialLearningIntakeService(creative_engine, settings)
+    pause = ControlMaterialLearningRunCommand(
+        actor_id=actor, run_id=accepted.run_id, action="PAUSE", expected_updated_at=updated
+    )
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        outcomes = tuple(pool.map(service.control, (pause, pause)))
+    assert sorted(value.replayed for value in outcomes) == [False, True]
+    assert all(value.state == "PAUSED" for value in outcomes)
+    assert owner.advance_once().phase == "IDLE"
+    resumed = service.control(
+        ControlMaterialLearningRunCommand(
+            actor_id=actor,
+            run_id=accepted.run_id,
+            action="RESUME",
+            expected_updated_at=outcomes[0].updated_at,
+        )
+    )
+    assert resumed.state == "DISCOVERING" and not resumed.replayed
+    with pytest.raises(MaterialLearningSourceError, match="STATE_STALE"):
+        service.control(pause)
+    with Session(creative_engine) as session:
+        row = session.get(MaterialLearningRunRecord, accepted.run_id)
+        assert row.state == "DISCOVERING" and row.phase_before_wait is None
+        assert row.prepared_artifact_revision_id == prepared
+        assert (
+            session.scalar(
+                select(MaterialLearningTaskRecord.workflow_id).where(
+                    MaterialLearningTaskRecord.run_id == row.run_id,
+                    MaterialLearningTaskRecord.task_kind == "DISCOVER",
+                )
+            )
+            is None
+        )

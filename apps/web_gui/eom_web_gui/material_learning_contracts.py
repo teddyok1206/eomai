@@ -155,3 +155,16 @@ class MaterialLearningDetail(WebModel):
     run: MaterialLearningRun
     tasks: tuple[MaterialLearningTask, ...] = Field(max_length=100)
     next_ordinal: int | None = Field(strict=True, ge=1, le=1_000_000)
+
+
+class MaterialLearningControl(WebModel):
+    action: Literal["PAUSE", "RESUME"]
+    expected_updated_at: UtcDatetime
+
+
+class MaterialLearningControlReply(WebModel):
+    schema_version: Literal["material-learning-control-result/1.0"]
+    run_id: str = Field(pattern=r"^materialrun_[0-9a-f]{32}$")
+    state: RunState
+    updated_at: UtcDatetime
+    replayed: bool

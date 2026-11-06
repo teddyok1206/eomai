@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/control-result/1.0",
+  "title": "EOM material learning control-result 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-control-result/1.0"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^materialrun_[0-9a-f]{32}$"
+    },
+    "state": {
+      "enum": [
+        "RECEIVED",
+        "PREPARING",
+        "DISCOVERING",
+        "PROCESSING",
+        "WAITING_FOR_CAPACITY",
+        "PAUSED",
+        "COMPLETED",
+        "COMPLETED_WITH_EXCEPTIONS",
+        "FAILED",
+        "CANCELLED"
+      ]
+    },
+    "updated_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "replayed": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "schema_version",
+    "run_id",
+    "state",
+    "updated_at",
+    "replayed"
+  ]
+}

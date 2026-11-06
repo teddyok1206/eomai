@@ -207,6 +207,20 @@ Catalog-manager helper가 기존 converter를 호출하며 root는 정확한 입
 넘기고 기존 완료 결과를 검증해 재사용한다. canonical source/Artifact는 기존 revision이다.
 프로세스 실패는 명시적 오류로 남기고 이미 완료한 변환은 READ로 재조회한다. 새 queue나
 변환 엔진을 만드는 대안보다 기존 보안·권한·변환 의미를 유지하는 이 adapter가 작다.
+
+중단/재개 command는 기존 run row의 key lookup과 짧은 FOR UPDATE를 사용한다. 실제
+업로더·현재 자료 revision을 재인가하고 화면이 읽은 updated_at으로 optimistic fence를
+건다. PAUSED에서도 이미 실행 중인 자식의 완료는 회수하지만 새 모델 작업은 시작하지
+않는다. 같은 중단/재개 재전송은 부작용 없는 현재 상태를 반환한다. 상태가 바뀐 뒤의
+오래된 다른 action은 STALE로 거부한다. 기존 append-only event와 phase_before_wait를
+재사용하며 새 queue/테이블/lease 취소나 실패 성공 재해석은 하지 않는다.
+
+자료 coordinator는 별도 WorkflowRuntime/model executor를 만들지 않는다. 기존 application
+create가 만든 Workflow command를 이미 운영 중인 global Workflow Runner가 실행한다.
+coordinator는 짧은 claim으로 원래 자식 상태를 읽고 다음 checkpoint를 연결할 뿐이며,
+모델이 응답하는 동안 자료 run lease나 HTTP 요청을 붙들지 않는다. 이로써 pause와 여러
+자료의 파일 준비도 긴 모델 호출에 종속되지 않는다. 기존 단일 AI lane/전역 동시4가
+각자의 DB·host lock에서 그대로 강제된다.
 - **Graph/INDEX:** 문서 accepted analysis는 기존 공통 Graph publication, Item은 기존
   automatic Item publication을 사용한다. 출처 정책은 별도 적용한다. Graph 등록 후
   기존 공통 풀이 projection으로 증분 INDEX에 넘긴다. 전체 기출 INDEX 완료를 기다리지

@@ -44,6 +44,7 @@ def test_pdf_tool_uses_readonly_bind_and_fixed_unprivileged_identity(tmp_path, m
     source = tmp_path / "source.pdf"
     source.write_bytes(b"%PDF-1.7\nfixture")
     monkeypatch.setattr(pdf.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(pdf, "_expose_readonly_input", lambda _path: None)
     calls = []
 
     def run(command, **kwargs):

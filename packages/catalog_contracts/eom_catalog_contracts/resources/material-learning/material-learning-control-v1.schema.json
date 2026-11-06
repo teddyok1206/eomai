@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/material-learning/control/1.0",
+  "title": "EOM material learning control 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "material-learning-control/1.0"
+    },
+    "operation": {
+      "const": "CONTROL_MATERIAL_LEARNING_RUN"
+    },
+    "actor_id": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^materialrun_[0-9a-f]{32}$"
+    },
+    "action": {
+      "enum": [
+        "PAUSE",
+        "RESUME"
+      ]
+    },
+    "expected_updated_at": {
+      "type": "string",
+      "format": "date-time"
+    }
+  },
+  "required": [
+    "schema_version",
+    "operation",
+    "actor_id",
+    "run_id",
+    "action",
+    "expected_updated_at"
+  ]
+}

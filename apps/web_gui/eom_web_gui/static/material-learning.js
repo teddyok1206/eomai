@@ -38,6 +38,26 @@ export function createMaterialLearning({document, api, explainError = error => e
     target.replaceChildren(node("h3", result.run.title));
     target.hidden = false;
     target.append(node("p", STATES[result.run.state] || result.run.state));
+    if (["DISCOVERING", "PROCESSING", "WAITING_FOR_CAPACITY", "PAUSED"].includes(result.run.state)) {
+      const action = result.run.state === "PAUSED" ? "RESUME" : "PAUSE";
+      const button = node("button", action === "PAUSE" ? "잠시 멈추기" : "계속 학습하기", "button quiet");
+      button.type = "button";
+      button.addEventListener("click", async () => {
+        button.disabled = true;
+        try {
+          await api(`/material-learning/${encodeURIComponent(runId)}/control`, {method: "POST", mutation: true, body: {action, expected_updated_at: result.run.updated_at}});
+          if (!active || token !== version || selected !== runId) return;
+          message(action === "PAUSE" ? "지금 시작된 작업까지만 마친 뒤 기다립니다. 완료한 내용은 그대로 보관합니다." : "완료한 부분은 유지하고 남은 학습을 이어갑니다.");
+          await refresh();
+        } catch (error) {
+          if (active && token === version && selected === runId) {
+            message(`학습 상태를 바꾸지 못했습니다. ${explainError(error)} 진행 상태를 새로 확인해 주세요.`, true);
+            button.disabled = false;
+          }
+        }
+      });
+      target.append(button);
+    }
     if (result.run.error_code) target.append(node("p", `확인 코드: ${result.run.error_code}`, "form-message error"));
     const list = node("ol");
     for (const task of result.tasks) {

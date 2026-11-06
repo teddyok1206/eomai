@@ -39,6 +39,7 @@ class CreativeCohortParallelExecutionService:
             if verified_limit == len(owner.targets)
             else owner.targets[:verified_limit]
         )
+        self._targets_by_id = {target.source_id: target for target in self.targets}
         self.window_limit = continuation.max_in_flight_sources
         self.batch_size = continuation.graph_publication_batch_size
         self.next_target = 0
@@ -141,6 +142,18 @@ class CreativeCohortParallelExecutionService:
             state, representative, self.verified_count, active_sources=activities
         )
         return replace(progress, blocked_sources=tuple(self.blocked.values()))
+
+    def refresh_blocked_source_readiness(self) -> None:
+        """Recheck only original held sources; never reset/recreate failed children.
+
+        The caller waits between checks. Completed targets are not replayed and
+        accepted reports retain their canonical pointers and verification count.
+        """
+        if self.window or self.publication is not None or self.next_target != len(self.targets):
+            raise ValueError("CREATIVE_COHORT_SOURCE_REFRESH_NOT_QUIESCENT")
+        self.targets = tuple(self._targets_by_id[source_id] for source_id in self.blocked)
+        self.next_target = 0
+        self.blocked.clear()
 
     def close(self) -> None:
         # Never release the cohort fence while a canonical publication is still

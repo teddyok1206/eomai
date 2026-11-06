@@ -103,6 +103,23 @@ def driver_case(monkeypatch, *, count=12, limit=None):
     return NS(**locals())
 
 
+def test_readiness_refresh_only_rechecks_original_held_sources(monkeypatch):
+    case = driver_case(monkeypatch, count=3)
+    driver = case.driver
+    retained = driver.targets[2]
+    driver.verified_count = 2
+    driver.next_target = len(driver.targets)
+    driver.blocked[retained.source_id] = (retained.external_number, "SOURCE_NOT_READY")
+    driver.refresh_blocked_source_readiness()
+    assert driver.targets == (retained,) and driver.verified_count == 2
+    assert driver.next_target == 0 and driver.blocked == {}
+    driver.advance_once()
+    assert case.visited == [retained.source_id]
+    with pytest.raises(ValueError, match="NOT_QUIESCENT"):
+        driver.refresh_blocked_source_readiness()
+    driver.close()
+
+
 def test_graph_publication_does_not_block_other_reports_or_expand_the_six_source_window(
     monkeypatch,
 ):

@@ -20,7 +20,6 @@ from eom_orchestrator.preset_model_selection import (
 from eom_orchestrator.settings import Settings
 from eom_textbook_analysis.bundle import PopplerTesseractTextExtractor
 from eom_workflow.control_plane import ExecutionPresetRevision, WorkerCapacityPolicyV7
-from eom_workflow_runner.composition import WorkflowRuntime, build_workflow_runtime
 from eom_workflow_runner.models import WorkflowDefinitionRecord
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import Engine
@@ -62,7 +61,6 @@ class MaterialLearningRuntimePins(BaseModel):
 @dataclass(frozen=True, slots=True)
 class MaterialLearningRuntime:
     processing: MaterialLearningProcessingService
-    workflow: WorkflowRuntime
 
 
 def build_material_learning_runtime(
@@ -119,7 +117,8 @@ def build_material_learning_runtime(
         tesseract=Path("/usr/bin/tesseract"),
         tessdata_directory=Path("/usr/share/tesseract-ocr/5/tessdata"),
         ocr_mode="fallback",
-        run=MaterialPdfSandboxRunner(),
+        run=MaterialPdfSandboxRunner(output_root=catalog.staging_root),
+        temporary_root=catalog.staging_root,
     )
     converter = CatalogOwnerMaterialOfficeConverter()
     if platform.office_image_tool_root is None:
@@ -189,7 +188,4 @@ def build_material_learning_runtime(
             ),
         ),
     )
-    return MaterialLearningRuntime(
-        processing,
-        build_workflow_runtime(engine=engine, platform_settings=platform, catalog_settings=catalog),
-    )
+    return MaterialLearningRuntime(processing)

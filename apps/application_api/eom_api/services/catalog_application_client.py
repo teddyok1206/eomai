@@ -144,10 +144,12 @@ from eom_catalog_contracts.curated_document_delivery_application import (
     CuratedDocumentDeliveryResponseV1,
 )
 from eom_catalog_contracts.material_learning_intake import (
+    ControlMaterialLearningRunCommand,
     CreateMaterialLearningCommand,
     GetMaterialLearningRunQuery,
     ListMaterialLearningRunsQuery,
     MaterialLearningAcceptance,
+    MaterialLearningControlResult,
     MaterialLearningErrorResponse,
     MaterialLearningRunDetail,
     MaterialLearningRunList,
@@ -259,6 +261,7 @@ class CatalogApplicationClient:
     def _material_learning_read[Reply: BaseModel](
         self,
         request: CreateMaterialLearningCommand
+        | ControlMaterialLearningRunCommand
         | ListMaterialLearningRunsQuery
         | GetMaterialLearningRunQuery,
         reply_type: type[Reply],
@@ -270,6 +273,11 @@ class CatalogApplicationClient:
                 error.error_code, "Material learning request failed"
             )
         return reply_type.model_validate(value)
+
+    def control_material_learning_run(
+        self, command: ControlMaterialLearningRunCommand
+    ) -> MaterialLearningControlResult:
+        return self._material_learning_read(command, MaterialLearningControlResult)
 
     def ingest_material_learning_source(
         self, source: Path, command: MaterialSourceUploadCommand

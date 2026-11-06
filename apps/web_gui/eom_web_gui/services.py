@@ -78,6 +78,8 @@ from eom_web_gui.gateways import (
 from eom_web_gui.knowledge_quality import build_knowledge_quality_report
 from eom_web_gui.material_learning_contracts import (
     MaterialLearningAcceptance,
+    MaterialLearningControl,
+    MaterialLearningControlReply,
     MaterialLearningDetail,
     MaterialLearningRuns,
     MaterialLearningSourceReceipt,
@@ -121,6 +123,11 @@ class WebServices:
 
     async def material_learning_runs(self, session: WebSession) -> MaterialLearningRuns:
         return await self.gateway.material_learning_runs(session)
+
+    async def control_material_learning(
+        self, session: WebSession, run_id: str, value: MaterialLearningControl
+    ) -> MaterialLearningControlReply:
+        return await self.gateway.control_material_learning(session, run_id, value)
 
     async def material_learning_run(
         self, session: WebSession, run_id: str, *, after_ordinal: int = 0
