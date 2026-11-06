@@ -8,6 +8,11 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from eom_catalog_service.office_conversion_profiles import (
+    EQUATION_OFFICE_PROFILE,
+    LEGACY_OFFICE_PROFILE,
+    OfficeConversionProfile,
+)
 from eom_catalog_service.office_converter_worker import (
     H2ORESTART_BUNDLE,
     H2ORESTART_BUNDLE_SHA256,
@@ -159,8 +164,17 @@ def test_shared_office_source_validation_rejects_unsafe_hwpx_before_conversion(
         validate_office_source(source, "HWPX", source.stat().st_uid)
 
 
+@pytest.mark.parametrize(
+    ("profile", "unit_prefix"),
+    [
+        (LEGACY_OFFICE_PROFILE, "eom-office-converter"),
+        (EQUATION_OFFICE_PROFILE, "eom-office-equation-converter"),
+    ],
+)
 def test_catalog_adapter_starts_only_fixed_unit_and_pins_converter_identity(
     tmp_path: Path,
+    profile: OfficeConversionProfile,
+    unit_prefix: str,
 ) -> None:
     staging_root = tmp_path / "staging"
     staging_root.mkdir(mode=0o700)
@@ -197,6 +211,7 @@ def test_catalog_adapter_starts_only_fixed_unit_and_pins_converter_identity(
 
     converter = SystemdOfficeDocumentConverter(
         staging_root,
+        profile=profile,
         systemctl=Path("/bin/true"),
         libreoffice=Path("/bin/true"),
         h2orestart_bundle=Path("/bin/true"),
@@ -211,7 +226,7 @@ def test_catalog_adapter_starts_only_fixed_unit_and_pins_converter_identity(
 
     assert calls[0][-2:] == [
         "start",
-        "eom-office-converter@officeconv_33333333333333333333333333333333.service",
+        unit_prefix + "@officeconv_33333333333333333333333333333333.service",
     ]
     assert identity.conversion_kind == "LIBREOFFICE_H2ORESTART_PDF"
     assert identity.libreoffice_version == "LibreOffice 24.2.7.2"

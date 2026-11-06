@@ -1,0 +1,6 @@
+diff --git a/source/soffice/ConvEquation.java b/source/soffice/ConvEquation.java
+--- a/source/soffice/ConvEquation.java
++++ b/source/soffice/ConvEquation.java
+@@ -343 +343 @@ public class ConvEquation {
+-		return retString;
++		return HancomEquationStyle.prepare(retString);

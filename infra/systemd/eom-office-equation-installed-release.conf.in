@@ -1,0 +1,5 @@
+# source_commit=@EOM_EQUATION_SOURCE@
+# Pin only this deterministic converter; do not replace the shared API/worker installation.
+[Service]
+ExecStart=
+ExecStart=/srv/eom/conda/envs/eom-api/bin/python -I -B -c "import pathlib,sys; sys.path.insert(0,'/opt/eom/embedding-owner-releases/@EOM_EQUATION_SOURCE@/site-packages'); import eom_catalog_service.office_converter_worker as worker; assert pathlib.Path(worker.__file__).resolve().is_relative_to('/opt/eom/embedding-owner-releases/@EOM_EQUATION_SOURCE@/site-packages'); raise SystemExit(worker.main())" --equations-v2 %i

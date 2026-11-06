@@ -8,6 +8,7 @@ import os
 import shutil
 from dataclasses import dataclass
 from pathlib import Path
+from threading import RLock
 
 from eom_catalog_contracts.external_item_media import ExternalItemDocumentMediaQuery
 from eom_catalog_contracts.external_item_preview import (
@@ -18,6 +19,7 @@ from eom_catalog_contracts.external_item_preview import (
 )
 from eom_catalog_contracts.validation import validate_contract
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_file
+from eom_orchestrator.artifact_publication_lock import artifact_publication_lock
 from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from jsonschema import ValidationError as JsonSchemaValidationError
@@ -32,6 +34,11 @@ from eom_catalog_service.artifacts import (
 from eom_catalog_service.external_item_document_media import (
     ExternalItemDocumentMediaService,
     ResolvedExternalItemDocumentMedia,
+)
+from eom_catalog_service.office_conversion_profiles import (
+    LEGACY_OFFICE_PROFILE,
+    OfficeConversionProfile,
+    require_supported_office_profile,
 )
 from eom_catalog_service.office_converter_worker import INSTANCE_PATTERN
 from eom_catalog_service.office_document_converter import (
@@ -61,8 +68,16 @@ class ResolvedExternalItemPreview:
     artifact_revision_id: str
 
 
-def _idempotency_key(query: ExternalItemDocumentMediaQuery) -> str:
-    return f"external-item-preview-v1:{query.source_revision_id}:{query.edition}"
+def _idempotency_key(
+    query: ExternalItemDocumentMediaQuery,
+    profile: OfficeConversionProfile = LEGACY_OFFICE_PROFILE,
+) -> str:
+    legacy = f"external-item-preview-v1:{query.source_revision_id}:{query.edition}"
+    return (
+        legacy
+        if profile == LEGACY_OFFICE_PROFILE
+        else legacy + ":" + profile.key + ":" + profile.h2orestart_sha256
+    )
 
 
 def _copy_verified_source(source: ResolvedExternalItemDocumentMedia, target: Path) -> None:
@@ -94,6 +109,8 @@ def _copy_verified_source(source: ResolvedExternalItemDocumentMedia, target: Pat
 class ExternalItemPreviewProjectionService:
     """Build a PDF-only Artifact; never recommit the original Office document."""
 
+    profile: OfficeConversionProfile = LEGACY_OFFICE_PROFILE
+
     def __init__(
         self,
         engine: Engine,
@@ -102,7 +119,12 @@ class ExternalItemPreviewProjectionService:
         source_media: ExternalItemDocumentMediaService | None = None,
         artifacts: CatalogArtifactService | None = None,
         converter: SystemdOfficeDocumentConverter | None = None,
+        profile: OfficeConversionProfile = LEGACY_OFFICE_PROFILE,
     ) -> None:
+        require_supported_office_profile(profile)
+        self.profile = profile
+        self.engine = engine
+        self._render_lock = RLock()
         self.settings = settings or CatalogSettings.from_environment()
         self.source_media = source_media or ExternalItemDocumentMediaService(engine)
         self.artifacts = artifacts or CatalogArtifactService(engine, self.settings)
@@ -118,7 +140,7 @@ class ExternalItemPreviewProjectionService:
             job = session.scalar(
                 select(JobRecord).where(
                     JobRecord.idempotency_key
-                    == normalize_catalog_idempotency_key(_idempotency_key(query))
+                    == normalize_catalog_idempotency_key(_idempotency_key(query, self.profile))
                 )
             )
             if job is None:
@@ -211,6 +233,10 @@ class ExternalItemPreviewProjectionService:
             raw_manifest = json.loads(manifest_bytes)
             validate_contract(EXTERNAL_ITEM_PREVIEW_MANIFEST_SCHEMA, raw_manifest)
             manifest = ExternalItemPreviewManifest.model_validate(raw_manifest)
+            if self.profile != LEGACY_OFFICE_PROFILE and (
+                manifest.conversion.h2orestart_sha256 != "sha256:" + self.profile.h2orestart_sha256
+            ):
+                raise ValueError("preview converter differs from the selected generation")
             if (
                 manifest.source_id != query.source_id
                 or manifest.source_revision_id != query.source_revision_id
@@ -251,10 +277,64 @@ class ExternalItemPreviewProjectionService:
         )
 
     def build(self, query: ExternalItemDocumentMediaQuery) -> CatalogArtifact:
+        """Serialize this exact generation; replay reads rather than rerunning LibreOffice."""
+        with artifact_publication_lock(
+            self.engine,
+            namespace="eom:external-item-preview-render",
+            idempotency_key=_idempotency_key(query, self.profile),
+            local_lock=self._render_lock,
+        ):
+            try:
+                completed = self.open(query)
+            except ExternalItemPreviewUnavailable as error:
+                if error.code != "EXTERNAL_ITEM_PREVIEW_NOT_READY":
+                    raise
+            else:
+                completed.member.stream.close()
+                return self._read_existing_publication(completed)
+            return self._build_once(query)
+
+    def _read_existing_publication(self, preview: ResolvedExternalItemPreview) -> CatalogArtifact:
+        """Return small metadata for the exact already-validated revision, never latest."""
+        with self.sessions() as session:
+            revision = session.get(ArtifactRevisionRecord, preview.artifact_revision_id)
+            logical = session.get(ArtifactRecord, preview.artifact_id)
+            job = session.get(JobRecord, revision.job_id) if revision is not None else None
+            if (
+                revision is None
+                or logical is None
+                or job is None
+                or not revision.approved
+                or not logical.approved
+                or job.status != "SUCCEEDED"
+                or revision.logical_artifact_id != preview.artifact_id
+                or job.revision_id != preview.artifact_revision_id
+                or job.logical_artifact_id != preview.artifact_id
+                or not isinstance(revision.manifest, dict)
+                or revision.manifest_hash != content_sha256(revision.manifest)
+                or not isinstance(revision.result, dict)
+                or revision.result.get("manifest_sha256") != preview.manifest.manifest_sha256
+                or revision.result.get("pdf_sha256") != preview.manifest.pdf_sha256
+            ):
+                raise ExternalItemPreviewUnavailable("EXTERNAL_ITEM_PREVIEW_POINTER_INVALID")
+            return CatalogArtifact(
+                job_id=job.job_id,
+                artifact_id=preview.artifact_id,
+                revision_id=preview.artifact_revision_id,
+                content_hash=revision.content_hash,
+                manifest_hash=revision.manifest_hash,
+                content_bytes=revision.content_bytes,
+                nas_path=revision.nas_path,
+                manifest=revision.manifest,
+            )
+
+    def _build_once(self, query: ExternalItemDocumentMediaQuery) -> CatalogArtifact:
         source = self.source_media.open(query)
         source_format = "HWPX" if source.media_type.endswith("hwpx") else "HWP"
         try:
-            converter = self.converter or SystemdOfficeDocumentConverter(self.settings.staging_root)
+            converter = self.converter or SystemdOfficeDocumentConverter(
+                self.settings.staging_root, profile=self.profile
+            )
             workspace = converter.create_workspace()
             if (
                 workspace.parent != self.settings.staging_root / CONVERSION_DIRECTORY
@@ -269,6 +349,10 @@ class ExternalItemPreviewProjectionService:
             input_file = workspace / f"original.{source_format.casefold()}"
             _copy_verified_source(source, input_file)
             conversion = converter.convert(workspace, source_format=source_format)
+            if self.profile != LEGACY_OFFICE_PROFILE and (
+                conversion.h2orestart_sha256 != "sha256:" + self.profile.h2orestart_sha256
+            ):
+                raise ValueError("preview conversion differs from the selected generation")
             pdf = workspace / "converted/original.pdf"
             pdf_bytes = pdf.stat().st_size
             manifest_value: dict[str, object] = {
@@ -304,7 +388,7 @@ class ExternalItemPreviewProjectionService:
                 files={_MANIFEST_MEMBER: manifest_file, _PDF_MEMBER: pdf},
                 primary_file=_MANIFEST_MEMBER,
                 artifact_type=_ARTIFACT_TYPE,
-                idempotency_key=_idempotency_key(query),
+                idempotency_key=_idempotency_key(query, self.profile),
                 request={
                     "source_id": query.source_id,
                     "source_revision_id": query.source_revision_id,

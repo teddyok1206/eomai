@@ -1,0 +1,10 @@
+// Only the existing Catalog converter owner may start the fixed equation profile.
+polkit.addRule(function(action, subject) {
+    if (action.id === "org.freedesktop.systemd1.manage-units"
+        && subject.user === "eom-catalog-manager"
+        && action.lookup("verb") === "start"
+        && /^eom-office-equation-converter@officeconv_[0-9a-f]{32}\.service$/.test(action.lookup("unit") || "")) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

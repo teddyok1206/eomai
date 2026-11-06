@@ -82,8 +82,31 @@ from tests.unit.test_external_item_learning_page_render import (
 pytestmark = [pytest.mark.integration, pytest.mark.api_integration]
 
 
+@pytest.fixture
+def external_learning_test_inventory(creative_engine: Engine):
+    """Do not inherit synthetic roles left by unrelated tests in the disposable DB."""
+    sessions = build_session_factory(creative_engine)
+    previous = {}
+    with sessions.begin() as session:
+        for pool in _capacity().pools:
+            for key in pool.slot_keys:
+                slot_id = key.removeprefix("slot")
+                row = session.get(WorkerSlotRecord, slot_id)
+                if row is not None:
+                    previous[slot_id] = row.role
+                    row.role = str(pool.roles[0])
+    try:
+        yield
+    finally:
+        with sessions.begin() as session:
+            for slot_id, role in previous.items():
+                row = session.get(WorkerSlotRecord, slot_id)
+                assert row is not None
+                row.role = role
+
+
 def test_controls_and_authenticated_source_prepare_without_start(
-    creative_engine: Engine, tmp_path, monkeypatch
+    creative_engine: Engine, tmp_path, monkeypatch, external_learning_test_inventory
 ):
     sessions = build_session_factory(creative_engine)
     nas = tmp_path / "artifacts"

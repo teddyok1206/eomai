@@ -141,6 +141,8 @@
         "services/hwpx_builder/eom_hwpx_builder/native_item_renderer.py",
         "services/hwpx_manager/eom_hwpx_manager/native_item_projection.py",
         "services/catalog_service/eom_catalog_service/office_document_converter.py",
+        "services/catalog_service/eom_catalog_service/office_conversion_profiles.py",
+        "services/catalog_service/eom_catalog_service/office_pdf_quality.py",
         "services/catalog_service/eom_catalog_service/office_document_review_intake.py",
         "services/catalog_service/eom_catalog_service/document_review_pdf_annotation_service.py",
         "services/catalog_service/eom_catalog_service/document_review_hwpx_correction_service.py",

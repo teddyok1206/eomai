@@ -119,7 +119,7 @@ def test_build_commits_only_derivative_pdf_and_pinned_manifest(tmp_path: Path) -
     service.source_media = SimpleNamespace(open=Mock(return_value=source))
     service.converter = FakeConverter()
     service.artifacts = SimpleNamespace(commit_file_set=Mock(side_effect=commit))
-    result = service.build(
+    result = service._build_once(
         ExternalItemDocumentMediaQuery(
             source_id="extitem_" + "1" * 32,
             source_revision_id="extitemrev_" + "2" * 32,
@@ -142,7 +142,7 @@ def test_build_rejects_workspace_outside_converter_boundary(tmp_path: Path) -> N
     service.converter = SimpleNamespace(create_workspace=lambda: tmp_path)
     service.artifacts = SimpleNamespace(commit_file_set=Mock())
     with pytest.raises(ValueError, match="outside the fixed boundary"):
-        service.build(
+        service._build_once(
             ExternalItemDocumentMediaQuery(
                 source_id="extitem_" + "1" * 32,
                 source_revision_id="extitemrev_" + "2" * 32,

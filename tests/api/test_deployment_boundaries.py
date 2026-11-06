@@ -121,7 +121,7 @@ def test_deploy_release_uses_only_noninteractive_sudo() -> None:
     assert "prepare_runtime_dependencies\n    build_release" in source
     assert "eom-codex-auth identity must be deployed before the API unit" in source
     assert 'source "${RELEASE_OPERATOR_LIBRARY}"' in source
-    assert 'run_release_operator MIGRATION_VERIFY_0072 "${COMMIT}"' in source
+    assert 'run_release_operator MIGRATION_VERIFY_0074 "${COMMIT}"' in source
     catalog = _catalog_resource_inventory(source)
     assert catalog["legacy-assessment/legacy-item-extraction-batch-v2.schema.json"] == (
         "schemas/legacy-assessment/legacy-item-extraction-batch-v2.schema.json"
@@ -590,7 +590,7 @@ def test_release_migration_wrapper_pins_source_and_database_owner() -> None:
     assert 'MIGRATION_REVISION = "20261010_0051"' in operator
     # Current releases retain independently admitted historical successors;
     # the legacy standalone wrapper still cannot turn into an implicit head upgrade.
-    assert CURRENT_MIGRATION_REVISION == "20261104_0072"
+    assert CURRENT_MIGRATION_REVISION == "20261105_0074"
     assert "target_revision != CURRENT_MIGRATION_REVISION" in operator
     assert 'owner[0] != owner[1] or owner[2] is not True or "app" not in owner[3]' in operator
     assert 'Callback.MIGRATION_UPGRADE_0051: (MIGRATION_REVISION, "20261009_0050")' in operator
@@ -661,6 +661,10 @@ def test_release_operator_boundary_requires_explicit_pins_without_unsafe_fallbac
         "MIGRATION_UPGRADE_0071",
         "MIGRATION_VERIFY_0072",
         "MIGRATION_UPGRADE_0072",
+        "MIGRATION_VERIFY_0073",
+        "MIGRATION_UPGRADE_0073",
+        "MIGRATION_VERIFY_0074",
+        "MIGRATION_UPGRADE_0074",
         "API_ROLE_BOOTSTRAP",
         "CATALOG_ROLE_RECONCILE",
         "HWPX_ROLE_RECONCILE",
@@ -1160,11 +1164,11 @@ def test_release_isolated_verifier_compiles_all_knowledge_analysis_definitions()
     assert (
         "for path in (analysis_v1, analysis_v2, analysis_v3, analysis_v4, "
         "analysis_v5, analysis_v6, analysis_v7, analysis_v8, "
-        "analysis_v9, analysis_v10, analysis_v11)" in deployment
+        "analysis_v9, analysis_v10, analysis_v11, analysis_v12)" in deployment
     )
     assert (
         'analysis_versions != {"1.0.0", "2.0.0", "3.0.0", "4.0.0", '
-        '"5.0.0", "6.0.0", "7.0.0", "8.0.0", "9.0.0", "10.0.0", "11.0.0"}' in deployment
+        '"5.0.0", "6.0.0", "7.0.0", "8.0.0", "9.0.0", "10.0.0", "11.0.0", "12.0.0"}' in deployment
     )
     assert 'load_role_input_schema("support", "workflow-role/1.18.0")' in deployment
     assert 'load_role_input_schema("support", "workflow-role/1.21.0")' in deployment

@@ -17,12 +17,21 @@ from typing import Final
 from eom_catalog_contracts import OfficeDocumentConversionOutcome
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_file
 
+from eom_catalog_service.office_conversion_profiles import (
+    EQUATION_OFFICE_PROFILE,
+    LEGACY_OFFICE_PROFILE,
+)
+from eom_catalog_service.office_pdf_quality import (
+    OfficePdfMathQualityError,
+    require_office_pdf_math_quality,
+)
+
 CONVERSION_ROOT: Final = Path("/var/lib/eom-catalog-api/staging/office-conversion")
 LIBREOFFICE: Final = Path("/usr/bin/libreoffice")
 LIBREOFFICE_MATH_COMPONENT: Final = Path("/usr/lib/libreoffice/program/libsmlo.so")
 UNOPKG: Final = Path("/usr/bin/unopkg")
-H2ORESTART_BUNDLE: Final = Path("/srv/eom/vendor/h2orestart/0.7.14-eom.1/H2Orestart.oxt")
-H2ORESTART_BUNDLE_SHA256: Final = "2b3ead8f1c782ba47cdc800262e99196850b525347843f0bd9b76e8431a7de96"
+H2ORESTART_BUNDLE: Final = LEGACY_OFFICE_PROFILE.h2orestart_bundle
+H2ORESTART_BUNDLE_SHA256: Final = LEGACY_OFFICE_PROFILE.h2orestart_sha256
 MAX_SOURCE_BYTES: Final = 256 * 1024 * 1024
 MAX_OUTPUT_BYTES: Final = 256 * 1024 * 1024
 MAX_HWPX_MEMBERS: Final = 4096
@@ -163,6 +172,7 @@ def convert_workspace(
     unopkg: Path = UNOPKG,
     h2orestart_bundle: Path = H2ORESTART_BUNDLE,
     h2orestart_bundle_sha256: str = H2ORESTART_BUNDLE_SHA256,
+    pdf_quality_validator: Callable[[Path], None] | None = None,
     run: Callable[..., subprocess.CompletedProcess[bytes]] = subprocess.run,
 ) -> Path:
     """Convert the one fixed source member in an already staged private workspace."""
@@ -332,6 +342,15 @@ def convert_workspace(
                 stage="OUTPUT_VALIDATION",
             )
     output.chmod(0o600)
+    if pdf_quality_validator is not None:
+        try:
+            pdf_quality_validator(output)
+        except OfficePdfMathQualityError as exc:
+            raise OfficeConverterError(
+                str(exc),
+                code="OFFICE_DOCUMENT_CONVERSION_OUTPUT_INVALID",
+                stage="OUTPUT_VALIDATION",
+            ) from exc
     return output
 
 
@@ -415,13 +434,26 @@ def _write_outcome(
 
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
+    profile = LEGACY_OFFICE_PROFILE
+    if len(arguments) == 2 and arguments[0] == "--equations-v2":
+        profile = EQUATION_OFFICE_PROFILE
+        arguments = arguments[1:]
     if len(arguments) != 1:
         return 64
+    bundle = profile.h2orestart_bundle
     try:
-        convert_workspace(arguments[0])
+        if profile == LEGACY_OFFICE_PROFILE:
+            convert_workspace(arguments[0])
+        else:
+            convert_workspace(
+                arguments[0],
+                h2orestart_bundle=bundle,
+                h2orestart_bundle_sha256=profile.h2orestart_sha256,
+                pdf_quality_validator=require_office_pdf_math_quality,
+            )
     except OfficeConverterError as exc:
         with suppress(OSError, ValueError, OfficeConverterError):
-            _write_outcome(arguments[0], error=exc)
+            _write_outcome(arguments[0], error=exc, h2orestart_bundle=bundle)
         return 1
     except (OSError, RuntimeError, ValueError):
         error = OfficeConverterError(
@@ -430,10 +462,10 @@ def main(argv: list[str] | None = None) -> int:
             stage="LIBREOFFICE_EXECUTION",
         )
         with suppress(OSError, ValueError, OfficeConverterError):
-            _write_outcome(arguments[0], error=error)
+            _write_outcome(arguments[0], error=error, h2orestart_bundle=bundle)
         return 1
     try:
-        _write_outcome(arguments[0], error=None)
+        _write_outcome(arguments[0], error=None, h2orestart_bundle=bundle)
     except (OSError, ValueError, OfficeConverterError):
         return 1
     return 0

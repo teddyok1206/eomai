@@ -19,8 +19,12 @@ from eom_catalog_contracts import (
 from eom_identifiers import sha256_file
 from jsonschema import ValidationError as JsonSchemaValidationError
 
+from eom_catalog_service.office_conversion_profiles import (
+    LEGACY_OFFICE_PROFILE,
+    OfficeConversionProfile,
+    require_supported_office_profile,
+)
 from eom_catalog_service.office_converter_worker import (
-    H2ORESTART_BUNDLE,
     INSTANCE_PATTERN,
     LIBREOFFICE,
     MAX_OUTPUT_BYTES,
@@ -184,14 +188,19 @@ class SystemdOfficeDocumentConverter:
         *,
         systemctl: Path = SYSTEMCTL,
         libreoffice: Path = LIBREOFFICE,
-        h2orestart_bundle: Path = H2ORESTART_BUNDLE,
+        h2orestart_bundle: Path | None = None,
+        profile: OfficeConversionProfile = LEGACY_OFFICE_PROFILE,
         run: CommandRunner = _run_command,
         token_hex: Callable[[int], str] = secrets.token_hex,
     ) -> None:
+        require_supported_office_profile(profile)
+        self.profile = profile
         self.staging_root = staging_root
         self.systemctl = _require_root_file(systemctl, executable=True)
         self.libreoffice = _require_root_file(libreoffice, executable=True)
-        self.h2orestart_bundle = _require_root_file(h2orestart_bundle, executable=False)
+        self.h2orestart_bundle = _require_root_file(
+            h2orestart_bundle or profile.h2orestart_bundle, executable=False
+        )
         self.run = run
         self.token_hex = token_hex
 
@@ -276,7 +285,7 @@ class SystemdOfficeDocumentConverter:
                 "OFFICE_DOCUMENT_CONVERTER_REQUEST_INVALID",
                 "Office conversion request is outside the fixed workspace contract",
             )
-        unit = f"eom-office-converter@{workspace.name}.service"
+        unit = self.profile.unit_template.format(instance=workspace.name)
         try:
             completed = self.run(
                 [str(self.systemctl), "start", unit],

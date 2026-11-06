@@ -17,6 +17,16 @@ binary/relationship → authenticated download bytes 순으로 본다. PNG가 pa
 
 ## 자료 검토
 
+원본 Office PDF의 현재/역사적 변환기는 `office_conversion_profiles.py`의 닫힌 profile로
+구분한다. legacy bundle/unit/key를 덮어쓰지 않고, 현재 DB PDF와 새 Office 검토 입력은
+수식 호환 profile을 선택한다. `external_item_preview_projection.py`의 새 파생물 key는
+source revision/edition/profile/bundle SHA를 포함하며 같은 key의 준비는 기존 publication
+lock으로 직렬화한다. 재조회는 변환하지 않는다. `office_pdf_quality.py`는 알려진 Math
+오류 표시만 bounded 검사하며 모든 수학적 정확성이나 한글 배치 일치를 보장하지 않는다.
+새 변환기의 고정 unit은 보호된 설치 source에 pin하고 공용 API/기존 학습 runtime을
+교체하지 않는 경계를 우선한다. 설계와 활성화 범위는
+`docs/architecture/OFFICE_PDF_EQUATION_FIDELITY.md`와 설치 기록을 확인한다.
+
 PDF·HWP·HWPX 입력을 검증하고, Office 입력에는 앞단 변환을 붙여 검토용 PDF/페이지를
 사용한다. 문제지·해설지는 각 역할과 source/page identity를 유지한다. 원본 PDF 자체는
 고치지 않는다. 위치 표시와 annotation/comment-panel PDF는 별도 파생 결과다. HWPX 교정은

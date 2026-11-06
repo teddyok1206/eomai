@@ -464,7 +464,10 @@ def test_durable_office_intake_retains_source_before_converter_dependency_resolu
     source = tmp_path / "durable-unavailable.hwpx"
     source.write_bytes(_hwpx_bytes())
 
-    def unavailable_converter(_staging_root: Path) -> object:
+    def unavailable_converter(_staging_root: Path, *, profile: object) -> object:
+        from eom_catalog_service.office_conversion_profiles import EQUATION_OFFICE_PROFILE
+
+        assert profile == EQUATION_OFFICE_PROFILE
         raise OfficeDocumentConversionError(
             "OFFICE_DOCUMENT_CONVERTER_UNAVAILABLE",
             "synthetic missing dependency",
