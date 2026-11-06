@@ -164,6 +164,18 @@ DB row lock을 유지하지 않는다. 갱신 transaction의 lock/query 대기�
 source 단위 중단 회귀로 검증한다. 이미 실행 중인 옛 owner에는 코드 주입/직접 lease
 수정을 하지 않고, 자연 종료 후 호환 owner successor로 원래 checkpoint를 이어간다.
 
+### 공개 풀이의 내부 전용 preset 선택
+
+외부에 공개된 `CreateKnowledgeSolutionAnalysisCommand`는 기존 `knowledge-analysis`
+literal을 그대로 유지한다. material owner는 같은 등록 문항 풀이 엔진의 명시적인 내부
+`create_material_solution_with_pinned_preset`을 사용해 `material-item-solution` logical key와
+정확한 released ID/revision을 대조한다. 새 RPC/worker schema·권한·queue가 아니며 원래
+source/operator, accepted base, protocol/hash/idempotency 검증을 공유한다. 기출 V9 base를
+이 경로로 채택하지 않는다. 공개 command의 literal을 넓히거나 다른 purpose의 preset으로
+대체하지 않는다. 일반/자료 전용 preset 양쪽을 실제 임시 DB의 V11 보고서와 공통 텍스트
+projection까지 실행해 경계 조합을 검증한다. 모델 결과 fixture만 쓰는 테스트가 실제
+material preset 연결을 대체하지 않도록 한다.
+
 - **계약:** `material-learning/1.0` 계열에 업로드 의도, 원본/분석 입력 포인터,
   권리 확인, 페이지별 발견 계획, 단위별 추출 입력/결과와 공개 진행 상태를 정의한다.
   발견과 문항 추출은 서로 다른 task kind다. 기존 Notion·기출 요청은 변경하지 않는다.

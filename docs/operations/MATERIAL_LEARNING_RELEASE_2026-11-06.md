@@ -66,6 +66,33 @@ RUNNING이다. 아직 문항 등록과 공개 풀이·Graph/INDEX 완료의 증�
 `/tmp/material-learning-retry-canary-20261106-1.log`,
 `/tmp/material-learning-claim-renewal-db-20261106-2.log`.
 
+## 문항 등록 후 공개 풀이 admission 수정
+
+V2 지침으로 재처리한 실제 추출 Job은 SUCCEEDED이고 문항
+`itemrev_4043e2e3e95b4474a1b1ef6231e8847a`가 Registry에 등록됐다. base 분석도
+`analysisrun_13e816fc93dd46dcad05c0382b441608` ACCEPTED다. claim 갱신 owner41147228은
+07:22 UTC 전용 prefix로 운영 활성화했으며 API/Web/QUERY/INDEX PID·설정, Codex helper/
+capability policy는 그 인계 동안 불변이었다.
+
+다음 단계에서 기존 공개 solution command의 `knowledge-analysis` literal과 material 전용
+preset logical key를 동일시해 `KNOWLEDGE_ANALYSIS_PRESET_INCOMPATIBLE`가 발생했다.
+아직 solution run이 만들어지지 않은 admission 단계이며 모델 결과 오류가 아니다.
+coordinator만 지원된 stop으로 멈춰 반복 재시작을 중단했다. 등록 문항·accepted base·
+원래 작업·실패 로그·INDEX는 보존했다.
+
+수정 후보는 기존 분석 서비스의 명시적인 내부
+`create_material_solution_with_pinned_preset`에서 정확한 material key/ID/revision을
+검증하게 한다. 공개 command/schema literal, RPC와 worker 프로토콜은 넓히지 않는다.
+같은 V11 엔진의 source/operator·accepted base·protocol/hash·멱등 규칙을 공유하고
+일반 기출 base를 이 전용 경로로 채택하지 않는다. 실제 material preset 조합을 쓰는
+임시 DB 회귀를 추가해 일반/전용 양쪽의 accepted V11 보고서→공통 임베딩 텍스트를
+검증했다: 집중33 PASS, material 임시 PostgreSQL44 PASS, core2개 mypy/format/lint PASS.
+다음 전용 owner 인계 뒤 같은 문항·base·동일 solution 의도로 이어가며 재등록하지 않는다.
+
+재개한 INDEX에서 위 첫 CUDA workflow와 그 원래 CPU standby workflow
+`workflow_b3f529a5fa5f40229c64eca61d78c42a` 모두 COMPLETED/SUCCEEDED를 확인했다.
+실제 저장 완료를 health/active로 대체하지 않는다. 전체 corpus 완결과는 별개다.
+
 ## 최신 인계·실제 결과 확인
 
 기존 INDEX는 지원된 main stop Event로 현재 묶음을 자연 종료했다(`Result=success`).

@@ -5,12 +5,15 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from eom_catalog_contracts import CreateKnowledgeSolutionAnalysisCommand
 from eom_catalog_service import material_graph_learning as owner
+from eom_catalog_service.knowledge_analysis_service import KnowledgeAnalysisApplicationService
 from eom_catalog_service.material_learning_models import MaterialLearningTaskRecord
 from eom_catalog_service.material_learning_recovery import _quiescent_failed_workflows
 from eom_catalog_service.material_learning_source import MaterialLearningSourceError
 from eom_catalog_service.material_task_history import MaterialTaskHistory
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
+from pydantic import ValidationError
 
 from tests.unit.test_material_learning_contracts import extraction_work
 
@@ -18,6 +21,30 @@ ITEM = "itemrev_" + "1" * 32
 BASE = "analysisrun_" + "2" * 32
 SOLUTION = "analysisrun_" + "3" * 32
 ACTOR = "operator_" + "4" * 32
+
+
+def test_material_solution_uses_internal_purpose_without_relaxing_public_command():
+    command = CreateKnowledgeSolutionAnalysisCommand(
+        base_analysis_run_id=BASE,
+        requested_by=ACTOR,
+        idempotency_key="material-solution-purpose-regression",
+    )
+    service = Mock(spec=KnowledgeAnalysisApplicationService)
+    KnowledgeAnalysisApplicationService.create_material_solution_with_pinned_preset(
+        service,
+        command,
+        preset_id="preset",
+        preset_revision_id="revision",
+    )
+    assert service._create_solution.call_args.args == (command,)
+    assert service._create_solution.call_args.kwargs == {
+        "pinned_preset": ("preset", "revision"),
+        "pinned_preset_key": "material-item-solution",
+    }
+    with pytest.raises(ValidationError):
+        CreateKnowledgeSolutionAnalysisCommand.model_validate(
+            {**command.model_dump(mode="json"), "preset_key": "material-item-solution"}
+        )
 
 
 def case(monkeypatch, *, base_state="ACCEPTED", solution_state="FAILED"):
@@ -110,17 +137,17 @@ def test_retry_creates_only_failed_base_successor_and_keeps_old_failure(monkeypa
 @pytest.mark.parametrize("state", ["ACCEPTED", "FAILED"])
 def test_solution_retry_reuses_base_and_never_rewrites_failed_report(monkeypatch, state):
     graph, task, old, _base, solution = case(monkeypatch, solution_state=state)
-    graph.analyses.create_solution_with_pinned_preset.return_value = SimpleNamespace(
+    graph.analyses.create_material_solution_with_pinned_preset.return_value = SimpleNamespace(
         state="QUEUED", analysis_run_id="analysisrun_" + "8" * 32
     )
     result = graph.advance_item_solution(
         base_analysis_run_id=BASE, task_id=task.task_id, operator_id=ACTOR
     )
     if state == "ACCEPTED":
-        graph.analyses.create_solution_with_pinned_preset.assert_not_called()
+        graph.analyses.create_material_solution_with_pinned_preset.assert_not_called()
         assert result.analysis_run_id == SOLUTION
     else:
-        command = graph.analyses.create_solution_with_pinned_preset.call_args.args[0]
+        command = graph.analyses.create_material_solution_with_pinned_preset.call_args.args[0]
         assert command.base_analysis_run_id == BASE
         assert command.idempotency_key == "material-solution:" + task.task_id
     assert solution.state == state and old.solution_analysis_run_id == SOLUTION

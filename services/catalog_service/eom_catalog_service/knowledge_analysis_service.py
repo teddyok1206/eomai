@@ -755,11 +755,33 @@ class KnowledgeAnalysisApplicationService:
     ) -> KnowledgeAnalysisApplicationResult:
         return self._create_solution(command, pinned_preset=(preset_id, preset_revision_id))
 
+    def create_material_solution_with_pinned_preset(
+        self,
+        command: CreateKnowledgeSolutionAnalysisCommand,
+        *,
+        preset_id: str,
+        preset_revision_id: str,
+    ) -> KnowledgeAnalysisApplicationResult:
+        """Internal material owner uses its exact released purpose, not a broader wire command.
+
+        The historical public command keeps its knowledge-analysis literal. This
+        server-owned entry point selects only material-item-solution; ordinary
+        source/operator, base, protocol and immutable preset checks remain shared.
+        """
+        return self._create_solution(
+            command,
+            pinned_preset=(preset_id, preset_revision_id),
+            pinned_preset_key="material-item-solution",
+        )
+
     def _create_solution(
         self,
         command: CreateKnowledgeSolutionAnalysisCommand,
         *,
         pinned_preset: tuple[str, str] | None,
+        pinned_preset_key: Literal[
+            "knowledge-analysis", "material-item-solution"
+        ] = "knowledge-analysis",
     ) -> KnowledgeAnalysisApplicationResult:
 
         submission_sha256 = content_sha256(
@@ -803,6 +825,11 @@ class KnowledgeAnalysisApplicationService:
                         "KNOWLEDGE_ANALYSIS_BASE_INVALID",
                         "solution analysis requires an accepted exam or registered Item base",
                     )
+                if pinned_preset_key == "material-item-solution" and not registered:
+                    raise KnowledgeAnalysisServiceError(
+                        "KNOWLEDGE_ANALYSIS_BASE_INVALID",
+                        "material solution requires a registered Item base",
+                    )
                 successor_version = "11.0" if registered else "10.0"
                 role_protocol = "workflow-role/1.35.0" if registered else "workflow-role/1.21.0"
                 existing_successors = session.scalars(
@@ -834,7 +861,7 @@ class KnowledgeAnalysisApplicationService:
                     if pinned_preset is None
                     else self.pinned_preset(
                         session,
-                        preset_key=command.preset_key,
+                        preset_key=pinned_preset_key,
                         preset_id=pinned_preset[0],
                         preset_revision_id=pinned_preset[1],
                     )

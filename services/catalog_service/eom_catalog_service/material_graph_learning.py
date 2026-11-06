@@ -190,7 +190,7 @@ class MaterialGraphLearningService:
                 if prior.predecessor_analysis_run_id != base_analysis_run_id:
                     raise ValueError("MATERIAL_GRAPH_ITEM_SOURCE_MISMATCH")
                 return self._reconcile(prior.analysis_run_id, operator_id)
-        run = self.analyses.create_solution_with_pinned_preset(
+        run = self.analyses.create_material_solution_with_pinned_preset(
             CreateKnowledgeSolutionAnalysisCommand(
                 base_analysis_run_id=base_analysis_run_id,
                 requested_by=operator_id,

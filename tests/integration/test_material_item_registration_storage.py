@@ -38,8 +38,11 @@ from eom_catalog_service.solution_evidence_resolution import (
     resolve_registered_solution_evidence_by_base_run,
 )
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_bytes
+from eom_orchestrator.control_artifacts import ControlArtifactPublisher
+from eom_orchestrator.database import build_session_factory
 from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
+from eom_orchestrator.material_learning_controls import release_material_learning_controls
 from eom_orchestrator.settings import Settings
 from eom_protocol.artifact_members import ArtifactMemberPointer
 from eom_workflow.compiler import compile_definition
@@ -61,6 +64,7 @@ from sqlalchemy.orm import Session
 
 from tests.integration import test_knowledge_analysis_service as knowledge
 from tests.integration import test_registered_item_solution_application as solutions
+from tests.integration.test_material_learning_controls_storage import material_control_arguments
 from tests.integration.test_material_learning_intake_storage import (
     material_intake as material_intake,
 )
@@ -280,8 +284,9 @@ def test_concurrent_material_registry_writes_create_one_revision(
     assert sum((first.created, second.created)) == 1
 
 
+@pytest.mark.parametrize("material_purpose", [False, True])
 def test_uploaded_item_uses_real_registered_solution_and_common_embedding_projection(
-    creative_engine, registration_case, tmp_path
+    creative_engine, registration_case, tmp_path, controls, material_purpose
 ):
     """Real source/analysis/report chain; only the worker response is synthetic."""
     create, resolved = registration_case
@@ -350,8 +355,33 @@ def test_uploaded_item_uses_real_registered_solution_and_common_embedding_projec
         requested_by=resolved.operator_id,
         idempotency_key="material-registered-solution:" + uuid4().hex,
     )
-    solution = analyses.create_solution(solution_command)
-    assert analyses.create_solution(solution_command) == solution
+    if material_purpose:
+        publisher = ControlArtifactPublisher(
+            creative_engine,
+            Settings(
+                staging_root=owner.settings.staging_root,
+                nas_artifact_root=owner.settings.nas_artifact_root,
+            ),
+        )
+        presets = release_material_learning_controls(
+            build_session_factory(creative_engine),
+            publisher,
+            **material_control_arguments(controls[2]),
+        )
+
+        def create_solution():
+            return analyses.create_material_solution_with_pinned_preset(
+                solution_command,
+                preset_id=presets.solution.preset_id,
+                preset_revision_id=presets.solution.preset_revision_id,
+            )
+    else:
+
+        def create_solution():
+            return analyses.create_solution(solution_command)
+
+    solution = create_solution()
+    assert create_solution() == solution
     solutions._complete_solution(
         creative_engine,
         owner.settings,
@@ -364,7 +394,7 @@ def test_uploaded_item_uses_real_registered_solution_and_common_embedding_projec
         )
     )
     assert solution.state == "ACCEPTED"
-    assert analyses.create_solution(solution_command) == solution
+    assert create_solution() == solution
     with analyses.sessions() as session:
         evidence = resolve_registered_solution_evidence_by_base_run(
             session, owner.artifacts, base_analysis_run_ids=(base.analysis_run_id,)

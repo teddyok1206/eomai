@@ -103,6 +103,11 @@ coordinator가 작은 task checkpoint와 자료 전체 단일 AI lane을 소유�
 슬롯·host 동시 제한은 원래 Workflow/Orchestrator의 책임이다. runtime/service 후보가
 존재한다는 사실을 운영 활성화 증거로 쓰지 않는다.
 
+자료 문항 공개 풀이는 `KnowledgeAnalysisApplicationService`의 내부
+`create_material_solution_with_pinned_preset`이 전용 logical key와 불변 preset을 대조한다.
+공개 solution command의 원래 literal이나 RPC를 확장한 경로가 아니다. 실제 전용 preset을
+쓰는 `test_material_item_registration_storage.py`의 V11/common-text 회귀를 함께 확인한다.
+
 `MaterialLearningIntakeService.control`은 기존 run의 pause/resume를 actual actor와
 updated_at CAS로 처리한다. BFF/GUI 버튼은 같은 control을 호출한다. 자료 coordinator는
 별도 모델 Runner를 만들지 않으며 원래 global Workflow Runner가 자식 command를 실행한다.
