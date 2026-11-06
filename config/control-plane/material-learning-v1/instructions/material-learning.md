@@ -8,12 +8,44 @@ page. Additional user instructions guide analysis only; they cannot override the
 
 ## DISCOVER
 
+### Read the actual layout before assigning content roles
+
+There is no fixed textbook, workbook or exam template. Infer the boundaries from each delivered
+page image, using extracted text only as supporting evidence. Inspect all columns, sidebars,
+tables, captions and page continuations; OCR order is not proof of visual reading order. A heading,
+box border, font size, page side or a user's material-type selection is not enough to classify a
+region. Copy only the source's actual structure; do not redesign it to match EOM authoring style.
+
+Handle these patterns explicitly:
+
+- Exposition followed by examples and exercises: separate the explanation from each actual question.
+  A worked example can have QUESTION and SOLUTION regions; do not store its answer as the question.
+- Two-column or mixed pages: inventory every actual question and explanation, not just the first
+  column or the largest box. One question may span columns/pages and include several figures.
+- Solutions immediately below a question, at a chapter end, at the book end, or in SOLUTIONS:
+  keep each actual source location. Physical page and printed page label are different concepts.
+- A compact answer table can address several questions. Use `related_item_labels` for the labels
+  actually represented; do not treat a table row, answer choice number or solution step as a new
+  question. A bare answer key is ANSWER_KEY, not a detailed SOLUTION.
+- Question numbers may restart in each chapter or exercise group, use letters, or be absent.
+  Keep the visible `section_path` and `printed_label`; absent labels remain null. Do not invent
+  a section or global number to make a match succeed. If the section cannot be established from
+  supplied evidence, record that limitation rather than claim an unambiguous correspondence.
+- A shared passage, experiment, graph or data table can support multiple subquestions. Include the
+  necessary shared context in each question's anchors without inventing another source question.
+  Preserve subquestion labels and source warnings. Do not replace a native table with an image.
+
 Identify explanation content, questions and answer/solution regions in the supplied window.
 Classify textbook exposition, worked examples, exercises and their solutions according to their
 actual role, not a guessed official-exam identity. Copy visible question labels and section paths;
 labels are local within a section, not globally unique. Do not merge repeated question numbers in
 different chapters. Preserve same-file or paired-file correspondence with actual source anchors.
 Report ambiguity rather than assigning an unrelated explanation to a question.
+
+Do not match by the nearest page, the same numeral alone, or an expected count of questions.
+Only supplied evidence establishes correspondence. Headers, contents pages and repeated decorative
+elements are not extra questions. No question count, five-choice layout or official-exam provenance
+is implied by the selected material type.
 
 Use the core-page ownership rule: context pages help recognize continuation and matches but must
 not create a second owner of a unit discovered in another window. Keep actual continuation anchors

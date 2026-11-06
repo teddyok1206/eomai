@@ -191,6 +191,34 @@ def test_ambiguous_same_section_answers_remain_visible_not_first_match_wins():
     assert plan[0].issue_codes == ("AMBIGUOUS_SOURCE_SOLUTION",)
 
 
+def test_answer_table_and_detailed_solution_remain_separate_matched_source_units():
+    key = answer()
+    key.update(kind="ANSWER_KEY", local_key="answer-table", related_item_labels=["1", "2"])
+    plan = plan_material_learning_units(
+        (discovered([question(), question(label="2", top=200), key, answer(top=300)]),)
+    )
+    by_key = {entry.unit_key: entry for entry in plan}
+    questions = {entry.unit.printed_label: entry for entry in plan if entry.unit.kind == "QUESTION"}
+    assert {by_key[matched].unit.kind for matched in questions["1"].solution_unit_keys} == {
+        "ANSWER_KEY",
+        "SOLUTION",
+    }
+    assert [by_key[matched].unit.kind for matched in questions["2"].solution_unit_keys] == [
+        "ANSWER_KEY"
+    ]
+    assert all(not entry.issue_codes for entry in questions.values())
+
+
+def test_missing_section_does_not_make_repeated_numbers_unambiguous():
+    values = [question(), answer(), answer(top=300)]
+    for value in values:
+        value["section_path"] = []
+    plan = plan_material_learning_units((discovered(values),))
+    target = next(entry for entry in plan if entry.unit.kind == "QUESTION")
+    assert target.solution_unit_keys == ()
+    assert target.issue_codes == ("AMBIGUOUS_SOURCE_SOLUTION",)
+
+
 def test_unmatched_section_is_not_fuzzy_number_only_pairing():
     plan = plan_material_learning_units((discovered([question(section="A"), answer(section="B")]),))
     assert plan[0].solution_unit_keys == ()

@@ -12,6 +12,11 @@ PNG, and preserve exact input observation identities/order. Use only selected ex
 as scientific evidence. A question/solution elsewhere on the same delivered page is context, not
 permission to duplicate it as a textbook explanation or change the selection.
 
+Scientific exposition may be prose, a native data table, an equation, a figure/caption or an inquiry
+procedure. Do not prefer prose or assume a boxed region is an exercise. Preserve the actual stated
+conditions and relationships across these representations. Question answers and worked solutions
+are not general textbook claims merely because they appear beside the selected explanation.
+
 Extract scientific concepts, observables, processes, formulas and relations supported by the actual
 exposition. Use curriculum hints only when they fit the content. Missing hints are not a reason to
 invent a unit. Link to existing scientific meaning through stable typed keys, not book/file names

@@ -10,6 +10,7 @@ from eom_identifiers import content_sha256
 from eom_workflow.compiler import compile_definition
 from eom_workflow.control_plane import ResolvedExecutionPlanV33
 from eom_workflow.control_schemas import validate_control_contract
+from eom_workflow.material_learning_prompt import MATERIAL_LEARNING_GUIDANCE
 from eom_workflow.material_learning_request import MaterialLearningWorkflowRequest
 from eom_workflow.models import MaterialLearningRoleResult
 from eom_workflow.schemas import (
@@ -159,6 +160,25 @@ def test_definition_uses_one_existing_support_step_and_frozen_role_protocol():
     compiled = compile_definition(ROOT / "config/workflows/material-learning.v1.yaml", {"support"})
     assert compiled.definition.definition_key == "material-learning"
     assert result_schema_protocol("material-learning-result@1.0") == "workflow-role/1.37.0"
+
+
+def test_worker_guidance_reads_variable_layout_without_changing_source_identity():
+    """Prompt regression only; not proof of live model layout accuracy."""
+    for requirement in (
+        "not a fixed book template or OCR reading order",
+        "all columns, sidebars, shared passages",
+        "chapter/book end or in SOLUTIONS",
+        "Missing labels stay null",
+        "unobserved section stays unknown",
+        "Do not force five options",
+        "native tables/equations",
+    ):
+        assert requirement in MATERIAL_LEARNING_GUIDANCE
+    layer = (
+        ROOT / "config/control-plane/material-learning-v1/instructions/material-learning.md"
+    ).read_text()
+    for pattern in ("Two-column", "ANSWER_KEY", "worked example", "section_path", "printed_label"):
+        assert pattern in layer
 
 
 @pytest.mark.parametrize(
