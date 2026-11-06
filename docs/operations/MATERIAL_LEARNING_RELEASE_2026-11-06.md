@@ -1,8 +1,82 @@
 # 자료 학습 운영 반영 — 단계별 증거
 
-기준: 2026-11-06 08:01 UTC. **전체 목표의 완료 보고서가 아니다.**
+기준: 2026-11-06 09:08 UTC. **구현·호환 운영 배포·제한된 실제 처리 검증 완료.**
+전 corpus 수치 계산 완료, 모든 책의 레이아웃 정확도나 교육 품질 승인은 뜻하지 않는다.
+아래 시간별 기록은 그 시점의 증거다.
 사용자 지정 순서는 자료 학습의 운영 반영·실제 처리 확인을 완료한 뒤 Map의 Layer
 표시 개선에 착수하는 것이다. Map은 아직 시작하지 않았다.
+
+## 최종 판정과 계속 실행할 작업
+
+- 설계 초안 뒤 서로 다른 초점의 두 차례 검토, schema-first 구현·source/임시 DB·
+  브라우저 fixture·설치본 검사, 기존 호환 릴리스 절차와 실제 canary를 완료했다.
+- 같은 실제 source의 준비·구성 발견·문항/설명 처리4 task와 run COMPLETED, 문항 Registry·
+  accepted base/V11 풀이·공유 Graph·DB 외부 목록·공식 RAG 및 멱등 재조회 PASS다.
+- 새 INDEX source에서 strict 공통 입력을 확인했고,09:07:59 UTC metadata에서 새 CUDA
+  `workflow_322c3516a2b448dfaa0bfd243aaf801f` / `wfcmd_bd16d3b306f6447ea614383985cefd5f`가
+  실제 **RUNNING / PROCESSING, error 없음**이다. 단순 health/READY만으로 인계를 판정하지
+  않았다. finite GPU unit의 정상 종료와 상위 Workflow의 최종 저장 완료는 다른 상태이며,
+  이 문서는 아직 상위 request COMPLETED를 주장하지 않는다.
+- INDEX·자료 coordinator·창작 producer와 기존10분 관측/Slack timer는 계속 유지한다.
+  그 시점에 슬롯0은 원본 확인 대기40건 때문이며 사용량 소진/4슬롯 실행 중으로 꾸미지 않는다.
+  마지막 관측 기출 GPU binding293/520과 창작 Graph1013은 각자 다른 분모다.
+- 현재 목표의 개발/배포 완료와 전체 background backlog 완료를 분리한다. Map Layer
+  개선은 사용자 지정된 다음 작업이며 이번 목표에 미리 섞어 구현하지 않았다.
+
+남겨 둔 사람 확인은 실제 로그인한 `데이터 → 자료 학습`에서 업로드/진행/단위 위치를
+읽고 `DB → 외부`의 문항을 열어보는 사용성 확인이다. 실제 HTTPS 로그인 페이지200과
+owner application의 현재 권한 검증은 완료했지만, 이를 사용자 인증 브라우저의 육안
+확인으로 바꾸어 기록하지 않는다. 별도 교육 품질/다양한 실제 교재 표본 평가는 미실시다.
+
+최종 추가 증거: `/tmp/material-learning-index-batch-checkpoint-20261106-2.log`,
+`/tmp/material-learning-postdeploy-read-20261106-33.log`,
+`/var/lib/eom-api/deployments/fedb975085d88978e2b468d51ca0f13ddd598d49.json`.
+추가 점검용 helper의 첫 SQL column 오타는 읽기 전용 진단 실패로 보존했다. 다음 진단에서
+실제 Workflow timestamp 열로 고쳤으며 운영 schema나 실행 상태를 바꾸지 않았다.
+
+## 09:01 UTC 호환 운영 반영과 관측 복구
+
+`fedb975085d88978e2b468d51ca0f13ddd598d49`를 API·platform·Catalog·global Runner 및
+QUERY provider에 반영했다. 공개 API/UI 계약이 바뀌지 않아 기존 Web `e1df5c8f`의
+정확한 wheel을 재사용했다. QUERY 수치 owner `7f0566c4`, material 전용 `493144f8`,
+창작 producer `e1df5c8f`는 각자의 불변 설치물을 유지한다. migration은0074 그대로다.
+설치 wheel/RECORD, 실제 서비스 계정의 패키지 읽기, API READY와 HTTPS 로그인 페이지
+200을 확인했다. 새 비밀번호·인증/worker helper·Codex compatibility policy는 변경하지 않았다.
+
+같은 운영 canary를 재조회해 문항·설명·공개 풀이·공유 Graph·DB 외부 목록·공식 RAG
+V2/V6와 같은 명령 replay를 다시 확인했다. V11을 포함한 strict public source capture와
+실제 설치 recipe의 GPU encoding 입력 준비도 PASS다. 정본/Graph/모델 결과를 재생성하거나
+검증을 우회하지 않았다. 실제 operator 권한의 owner 호출이며 **인증 브라우저 수동 검수,
+전 corpus 수치 계산 완료나 교육 품질 승인으로 확대하지 않는다.**
+
+기존 INDEX 요청이 모두 terminal이고 native lifetime이 drained임을 확인한 뒤 공식
+identity/grant successor와 exact configuration으로 새 source를 선택했다.08:58:19 UTC
+동일 INDEX unit을 한 번 시작했으며, 모델·CPU/CUDA environment·recipe·namespace·범위는
+원래 값 그대로다. 이전 완료 vector와 실패 Workflow는 보존한다. 새 프로세스가 실제
+public report/provenance 준비를 통과하며 다음 증분 처리를 준비 중이다. 전체 backlog
+완료를 기다리거나 기존 실패를 성공으로 바꾸지 않는다.
+
+관측 실패 원인은 producer의 정상 `BLOCKED_SOURCES` 상태를 observer가 몰라 전체
+Slack을 ‘확인 불가’로 표시하던 것이다. 이 누락은35267c85로 고쳤고,09:00 UTC 자동
+관측과 Slack **HTTP200/SENT**에서 원본 대기40·창작 Graph1013·활성 슬롯0·기출 GPU
+binding293/520을 구분해 보고했다. GPU0%/2MiB는 그 순간 수치 연산 전 준비 중이라는
+뜻이지 GPU에서 계속 연산 중이라는 뜻이 아니다. 기존10분 timer는 계속 active다.
+
+첫 호환 rollout은 새 API wheel 상위 directory의 root umask 때문에 installer 계정이
+읽지 못해 기존 정상 wheel/config로 자동 rollback했다. 실패/rollback 기록은 보존했다.
+정확한 새 directory 두 곳만0755로 수정하고 실제 installer UID의 wheel 읽기를 사전
+검사한 별도 v2 rollout이 통과했다. 권한 검증 완화·인증 변경·DB 수정은 없었다.
+추가로 완료 source 복사본2개만 같은 감사 cleanup으로 정리했으며 wheel/archive와
+설치/rollback은 보존했다. 앞선10개를 포함해 약1.57GB를 확보했고 원본/NAS 이동은 없다.
+
+설치 및 canary 증거:
+
+- `/var/lib/eom-material-public-compatible-fedb9750-v2-20261106/activated.json`
+- `/var/lib/eom-material-public-index-fedb9750-20261106/selected.json` 및 `started.json`
+- `/var/lib/eom-material-public-compatible-fedb9750-20261106/activation-failed.json` 및 `rollback-completed.json`
+- `/tmp/material-learning-actual-read-evidence-20261106-11.log`
+- `/tmp/material-learning-public-stage-access-20261106-1.log`
+- `/tmp/material-learning-postdeploy-read-20261106-30.log`
 
 ## 08:30 UTC 실제 등록 완료 및 남은 INDEX gate
 

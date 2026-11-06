@@ -1,8 +1,9 @@
 # 자료 학습 구현 checkpoint
 
 2026-11-06 UTC. 사용자의 최종 범위는 운영 배포·제한된 실제 업로드 처리 확인까지다.
-goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체됐다. 이 문서는 운영 완료
-보고서가 아니며, 후보와 실제 운영을 혼동하지 않기 위한 중간 기록이다.
+goal 카드의 초기 배포 금지 문구는 후속 사용자 지시로 대체됐다. 구현 중간 기록은 보존하며,
+최종 운영 결과와 검증 한계는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을
+우선한다. 전 corpus의 임베딩 완료를 뜻하지 않는다.
 
 ## 사용자 지정 후속 순서
 
@@ -13,7 +14,24 @@ DB의 출처 Layer(교과서·기출·창작·AI·외부)를 쉽게 볼 수 있�
 만들지 않는 기존 read 경계를 유지한다. Graph 미등록 원본과 실제 Graph membership을
 구분한다. 이 후속 작업을 현재 운영 배포보다 먼저 수행하지 않는다.
 
-## 최신 source checkpoint — 아직 운영 완료 아님
+## 최신 운영 checkpoint
+
+09:08 UTC: 새 CUDA 요청 `workflow_322c3516a2b448dfaa0bfd243aaf801f`와 command
+`wfcmd_bd16d3b306f6447ea614383985cefd5f`가 실제 RUNNING/PROCESSING이고 error는 없다.
+자료 학습 구현·호환 운영 배포·제한된 실제 canary·INDEX handoff 검증을 완료한다.
+전체 임베딩과 원본 보류 재확인은 기존 서비스/10분 timer로 계속하며 Map은 별도 후속이다.
+
+09:01 UTC: 실제 작은 PDF의 전체 run·문항/설명 task가 COMPLETED이고, 문항 Registry·
+accepted base/V11 풀이·공유 Graph·DB 외부 목록·공식 문항/설명 RAG 및 동일 요청
+replay를 확인했다. V11 metadata bulk prefetch 결함도 수정해 같은 운영 문항의 strict
+public capture·공통 GPU encoding 입력 준비가 PASS다. API/platform/Catalog/QUERY
+provider의 fedb9750 호환 배포와 INDEX의 공식 source successor 인계를 완료했다.
+Web은 공개 계약/asset이 같은 e1df5c8f를 재사용했으며 material/창작 process는 보존했다.
+INDEX는 active로 다음 source 준비를 진행 중이고10분 관측·Slack 정상 전송을 확인했다.
+전체 corpus vector 완료나 인증 브라우저/교육 품질 수동 확인을 주장하지 않는다.
+최종 실제 실행 상태는 [운영 반영 기록](MATERIAL_LEARNING_RELEASE_2026-11-06.md)을 우선한다.
+
+### 08:01 UTC 과거 source checkpoint
 
 08:01 UTC: 기존 compatible API/Web/Runner와 head0074, material 전용493144f8은 실제
 운영 반영됐다. 실제 canary에서 발견·문항 Registry·base 분석·V11 공개 풀이 및 공통

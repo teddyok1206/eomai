@@ -132,12 +132,12 @@ legacy extraction은 reviewed exam bundle/occurrence를 전제로 한다. 이 �
 | D0 | 현행 경계와 초안 | 작성 |
 | R1 | 입력/내용·문항 분리/시각·해설 대응/권리·출처 설계 검토 | D1 반영 |
 | R2 | 재사용 경계/상태·동시성/복구·확장/실제 배포·검증 설계 검토 | D2 반영 |
-| P1 | JSON Schema 2020-12·Pydantic·pointer·상태/단위 계획 | 입력·준비·발견·문항·출처·진행 및 일반 문서 분석 successor 후보 구현 |
-| P2 | 안전한 업로드/준비와 기존 converter·원본 그림 연결 | 후보 구현. 원본 재사용·page chunk·Office 준비 복구·공식 문서 등록은 임시 DB에서 확인. 실제 운영 업로드는 P6 |
-| P3 | 1슬롯 발견/문항/내용 분석·등록·Graph·증분 INDEX 연결 | 발견/추출 V33와 일반 설명 V34의 실행·source 재인가·기존 Graph projection 연결 후보 구현. 문항 등록/소비 경로·coordinator·control release·실제 실행은 진행 중 |
-| P4 | 자료 학습 GUI와 최근 작업·진행·예외·재개/조회 | 업로드·최근 목록·상세 진행 후보 구현, 브라우저 fixture 확인. 운영 및 재개/재시도 조작은 후속 |
-| P5 | unit/schema/security·disposable DB 동시성/중단·browser·wheel 검사 | 변경 경계별 진행 중. 통과한 fixture/임시 DB와 미실행한 실제 학습을 구분해 checkpoint에 기록 |
-| P6 | 호환 배포·bounded 실제 업로드·Item/Graph/검색 연결·재조회 | 미착수 |
+| P1 | JSON Schema 2020-12·Pydantic·pointer·상태/단위 계획 | 구현·계약 검사 및0074 운영 반영 |
+| P2 | 안전한 업로드/준비와 기존 converter·원본 그림 연결 | 원본 재사용·복구 임시 DB, 실제 격리 PDF와 한글 변환 설치본 검사, 실제 PDF 접수/준비 PASS |
+| P3 | 1슬롯 발견/문항/내용 분석·등록·Graph·증분 INDEX 연결 | 실제 발견·문항 등록·base/V11 공개 풀이·설명·공유 Graph·strict 공통 임베딩 입력 PASS. 기존 INDEX에 successor 인계 |
+| P4 | 자료 학습 GUI와 최근 작업·진행·예외·재개/조회 | API/BFF/GUI·실제 Chromium fixture와 복구/동시성 검사 PASS. 실제 운영 owner 조회/같은 요청 replay PASS. 인증 브라우저 수동 확인은 미기록 |
+| P5 | unit/schema/security·disposable DB 동시성/중단·browser·wheel 검사 | 경계별 source·실제 임시 PostgreSQL44·설치 wheel/RECORD PASS. 각 검사 범위가 겹치므로 합산하지 않음 |
+| P6 | 호환 배포·bounded 실제 업로드·Item/Graph/검색 연결·재조회 | 운영 canary4 task/run COMPLETED, DB·RAG read/replay PASS. INDEX source 인계 후 새 CUDA 요청 RUNNING/PROCESSING 확인. 전 corpus 계산은 백그라운드에서 계속 |
 
 R1과 R2 완료 전에 실행 계약/worker behavior/DB 변경 구현을 시작하지 않는다.
 설계 검토의 발견·변경·잔여 조건은 별도 review 기록에 남긴다. 운영 배포는 기존 API
@@ -348,7 +348,9 @@ result·shared Graph writer를 그대로 사용한다. 새 분석 엔진을 따�
 기존 source V4를 완화하지 않고 명시적인 uploaded-material source V5, request/result
 V12, proposal receipt V11, Workflow `12.0.0`/role `1.38.0`, resolved plan V34를 추가한다.
 worker의 안정된 node identity/typed edge/anchor/page 관찰 구조는 기존 proposal V6를
-재사용한다. 새 버전은 아직 후보이며 운영에서 허용됐다는 뜻이 아니다.
+재사용한다. 처음 설계 당시에는 후보였으며, 후속 실제 활성화·검증 범위는
+`docs/operations/MATERIAL_LEARNING_RELEASE_2026-11-06.md`를 확인한다. 버전의 존재만으로
+모든 runtime의 활성화를 추정하지 않는다.
 
 - 정본은 이미 등록한 EducationalDocument revision과 실제 업로더의 권리 확인이다.
   source V5는 일반 자료 revision manifest와 원본 native/PDF 포인터, bounded 선택 영역,
