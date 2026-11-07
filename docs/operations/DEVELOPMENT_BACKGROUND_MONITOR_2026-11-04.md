@@ -14,6 +14,19 @@ GPU 순간 사용률을 구분한다. 과거 실패를 현재 장애로 세거�
 표시하지 않는다. 관측 누락·오래된 결과는 확인 불가로 보고한다. 사용자 내용·인증·
 worker 결과는 Slack에 보내지 않으며 기존 개발 reporter의 비밀값·전송 adapter를 쓴다.
 
+2026-11-07 사용자 요청으로 GPU 표시는 `GPU 현재 사용률 N% · VRAM NMiB`로
+통일한다. 각 보고 실행에서 `nvidia-smi utilization.gpu`를 새로 읽으며, 대기 비율이나
+10분간 평균·임베딩 진행률이 아니다. 0%도 사용률 0%로 그대로 표시한다.
+측정 불가·잘못된 수치는 `GPU 현재 사용률 확인 불가`로 구분한다. 슬롯/임베딩
+관측이 누락되어도 독립적으로 측정한 GPU 사용률은 보고한다. 기존 10분 주기와
+INDEX/worker 실행은 변경하지 않는다.
+
+같은 날 16:44 UTC 운영 reporter만 교체했고, 실제 한 줄의 `GPU 현재 사용률 0% ·
+VRAM 2MiB` 전송이 HTTP 200/SENT였다. 57개 focused tests와 Ruff/mypy PASS.
+기존 10분 timer·API/Web·창작/QUERY/INDEX 실행 identity 보존을 확인했다.
+복구용 이전 reporter와 감사 기록은
+`/var/lib/eom/development-background-monitor/20261107-current-gpu-utilization`에 있다.
+
 설치 기록: `/var/lib/eom/development-background-monitor/20261104T160748Z/manifest.json`.
 최초 실제 보고는 HTTP 200/SENT, 이후 10분 예약 timer active를 확인했다. 보고 프로세스는
 NAS·저장소·worker home에 접근할 수 없고 journal의 bounded JSON만 읽는다.

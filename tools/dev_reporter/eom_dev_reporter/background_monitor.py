@@ -133,22 +133,28 @@ def summary_line(creative: dict[str, Any], embedding: dict[str, Any], gpu: str) 
     )
 
 
+def current_gpu_usage() -> str:
+    """One current device sample, not idle percentage or embedding progress."""
+    try:
+        output = _run(
+            [
+                "/usr/bin/nvidia-smi",
+                "--query-gpu=utilization.gpu,memory.used",
+                "--format=csv,noheader,nounits",
+            ]
+        )
+        utilization, memory = (int(field.strip()) for field in output.splitlines()[0].split(","))
+        if not 0 <= utilization <= 100 or memory < 0:
+            raise ValueError("BACKGROUND_MONITOR_GPU_SAMPLE_INVALID")
+        return f"GPU 현재 사용률 {utilization}% · VRAM {memory}MiB"
+    except (ValueError, IndexError, OSError, subprocess.TimeoutExpired):
+        return "GPU 현재 사용률 확인 불가"
+
+
 def main() -> None:
+    gpu = current_gpu_usage()
     try:
         creative, embedding = (_snapshot(unit) for unit in OBSERVERS)
-        try:
-            output = _run(
-                [
-                    "/usr/bin/nvidia-smi",
-                    "--query-gpu=utilization.gpu,memory.used",
-                    "--format=csv,noheader,nounits",
-                ]
-            )
-            fields = output.splitlines()[0].split(",")
-            utilization, memory = (int(field.strip()) for field in fields)
-            gpu = f"GPU {'연산 중' if utilization else '현재 대기'} {utilization}%/{memory}MiB"
-        except (ValueError, IndexError, OSError, subprocess.TimeoutExpired):
-            gpu = "GPU 사용률 확인 불가"
         try:
             properties = _run(
                 [
@@ -166,7 +172,7 @@ def main() -> None:
             gpu += " · 임베딩 담당 상태 확인 불가"
         line = summary_line(creative, embedding, gpu)
     except (ValueError, OSError, subprocess.TimeoutExpired):
-        line = "슬롯·GPU 관측 결과를 확인하지 못해 점검이 필요합니다."
+        line = f"슬롯·임베딩 관측 결과를 확인하지 못해 점검이 필요합니다. {gpu}"
     timestamp = datetime.now(ZoneInfo("Asia/Seoul")).strftime("%m/%d %H:%M")
     text = f"{line} ({timestamp} 한국시간)"
     delivery = send_webhook({"text": text, "blocks": []}, load_reporter_config())
