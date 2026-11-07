@@ -988,6 +988,17 @@ def create_app(
         value = await actual.gateway.external_item_db_detail(session, source_id)
         return value.model_dump(mode="json")
 
+    @app.get(f"{API_PREFIX}/item-db/registrations/{{revision_id}}/source")
+    async def item_db_registration_source(
+        session: Annotated[WebSession, Depends(require_session)],
+        revision_id: str = Path(pattern=r"^itemrev_[0-9a-f]{32}$"),
+        manifest_sha256: str = Query(pattern=r"^sha256:[0-9a-f]{64}$"),
+    ) -> dict[str, object] | None:
+        value = await actual.gateway.item_db_registration_source(
+            session, revision_id, manifest_sha256
+        )
+        return value.model_dump(mode="json") if value is not None else None
+
     @app.get(f"{API_PREFIX}/item-db/registrations/{{revision_id}}/graph")
     async def item_db_registration_graph(
         revision_id: str,

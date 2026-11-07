@@ -272,6 +272,76 @@ def test_registered_creative_status_keeps_metadata_filters_and_pinned_sources(
     assert result.entries == ()
 
 
+def test_registration_source_reads_pinned_units_after_current_source_moves(
+    source_session: Session,
+) -> None:
+    from eom_catalog_service.external_item_read_service import (
+        ExternalItemReadError,
+        read_creative_registration_source,
+    )
+
+    suffix = f"{1:032x}"
+    item_id, revision_id = "item_" + suffix, "itemrev_" + suffix
+    digest = "sha256:" + "a" * 64
+    source_session.execute(
+        text(
+            "INSERT INTO items(item_id,current_revision_id,lifecycle_state) "
+            "VALUES (:item,:revision,'ACTIVE')"
+        ),
+        {"item": item_id, "revision": revision_id},
+    )
+    source_session.execute(
+        text(
+            "INSERT INTO item_revisions(item_id,item_revision_id,revision_state,manifest_sha256,"
+            "metadata_json,registration_key) "
+            "VALUES (:item,:revision,'APPROVED',:hash,CAST(:metadata AS jsonb),:key)"
+        ),
+        {
+            "item": item_id,
+            "revision": revision_id,
+            "hash": digest,
+            "key": "creative-source:extitem_" + suffix,
+            "metadata": json.dumps(
+                {
+                    "source_kind": "CREATIVE",
+                    "source_id": "extitem_" + suffix,
+                    "source_revision_id": "extitemrev_" + suffix,
+                    "external_number": "00001",
+                    "import_id": "extimport_" + "1" * 32,
+                }
+            ),
+        },
+    )
+    arguments = dict(
+        item_revision_id=revision_id,
+        manifest_sha256=digest,
+        source_namespace="notion-integrated-science",
+    )
+    result = read_creative_registration_source(source_session, **arguments)
+    assert result is not None and result.major_unit == "물질의 상태"
+    # The immutable source relationship is not replaced by a later source head.
+    source_session.execute(
+        text("UPDATE external_item_sources SET current_revision_id=:other WHERE source_id=:source"),
+        {"other": "extitemrev_" + f"{2:032x}", "source": "extitem_" + suffix},
+    )
+    assert read_creative_registration_source(source_session, **arguments) == result
+    with pytest.raises(ExternalItemReadError, match="manifest"):
+        read_creative_registration_source(
+            source_session, **(arguments | {"manifest_sha256": "sha256:" + "b" * 64})
+        )
+    source_session.execute(
+        text(
+            "UPDATE item_revisions SET metadata_json=jsonb_set(metadata_json, "
+            "'{source_revision_id}', to_jsonb(CAST(:other AS text))) "
+            "WHERE item_revision_id=:revision"
+        ),
+        {"other": "extitemrev_" + f"{2:032x}", "revision": revision_id},
+    )
+    source_session.expire_all()
+    with pytest.raises(ExternalItemReadError, match="source unavailable"):
+        read_creative_registration_source(source_session, **arguments)
+
+
 def test_ai_category_uses_authoring_provenance_and_status_scoped_keyset(
     source_session: Session,
 ) -> None:

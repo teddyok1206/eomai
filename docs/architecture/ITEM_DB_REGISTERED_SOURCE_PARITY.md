@@ -56,3 +56,32 @@ Filtering a downloaded page in JavaScript loses matching results and breaks
 pagination. Copying original metadata into Item rows creates a second authority.
 Both are rejected. Existing production-candidate wire contracts remain unchanged;
 the DB-specific wrapper is additive, schema-first and independently testable.
+
+## Original unit in Item details
+
+The detail panel shows only the original source's Q/R major/minor units, never
+`curriculum_units` inferred by Graph alignment. Source-less Items explicitly have
+no recorded original unit; read failure and missing permission are not that state.
+
+The additive read `GET /item-db/registrations/{revision_id}/source?manifest_sha256=…`
+reuses the existing JSON Schema 2020-12 `external-item-db-view/1.0` entry (or null)
+and its API/Web typed models. It requires both ITEM_READ and CONTENT_INTAKE_READ.
+Catalog resolves the exact Item revision/manifest and its creative registration
+key, source ID/revision, external number and completed import. It reads the pinned
+source revision, not a later current source. Non-creative Items return null;
+broken creative lineage, inactive Items and manifest mismatch fail explicitly.
+
+This is a bounded metadata read through the existing Catalog read adapter, API and
+BFF, with no new storage, worker, Graph publication or binary materialization.
+Access is indexed Item/source revision lookup and one join, O(log N) lookup with
+constant output for thousands of Items; no list scan or per-result N+1 hydration.
+No write, queue or idempotency key is needed. Repeat reads retain the same pins;
+UI selection generation prevents an old reply replacing a newly selected Item.
+Copying units into Graph candidates or guessing a source from a display label
+would either duplicate authority or lose exact source identity, so is not used.
+
+Validation (2026-11-07 UTC, source candidate): 134 focused API/Web/repository tests,
+one guarded disposable PostgreSQL pinned-source read test, and the opt-in Chromium
+table/detail/navigation suite passed. Ruff and focused mypy passed. The browser
+uses synthetic API adapters, not a production user session; live activation is
+not asserted by these results. No Graph/embedding migration or recomputation occurs.

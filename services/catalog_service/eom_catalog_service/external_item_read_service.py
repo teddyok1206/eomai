@@ -414,6 +414,54 @@ def creative_item_registrations(
     return result
 
 
+def read_creative_registration_source(
+    session: Session,
+    *,
+    item_revision_id: str,
+    manifest_sha256: str,
+    source_namespace: str,
+) -> ExternalItemListEntry | None:
+    """Resolve original metadata through exact registration, never Graph alignment."""
+    row = session.execute(
+        select(ItemRevisionRecord, ItemRecord.lifecycle_state)
+        .join(ItemRecord, ItemRecord.item_id == ItemRevisionRecord.item_id)
+        .where(ItemRevisionRecord.item_revision_id == item_revision_id)
+    ).one_or_none()
+    if row is None:
+        raise ExternalItemReadError("ITEM_DB_SOURCE_NOT_FOUND", "Item revision not found")
+    item, lifecycle = row
+    if item.manifest_sha256 != manifest_sha256:
+        raise ExternalItemReadError("ITEM_DB_SOURCE_STALE", "Pinned Item manifest differs")
+    if lifecycle != "ACTIVE" or item.revision_state == "RETIRED":
+        raise ExternalItemReadError("ITEM_DB_SOURCE_STALE", "Item is no longer available")
+    creative_key = (item.registration_key or "").startswith(CREATIVE_REGISTRATION_KEY_PREFIX)
+    if item.metadata_json.get("source_kind") != "CREATIVE":
+        if creative_key:
+            raise ExternalItemReadError("ITEM_DB_SOURCE_STALE", "Creative lineage differs")
+        return None
+    source, revision = ExternalItemSourceRecord, ExternalItemSourceRevisionRecord
+    value = session.execute(
+        select(*_list_columns())
+        .join(revision, revision.source_id == source.source_id)
+        .join(ItemRevisionRecord, creative_registration_source_condition())
+        .join(ExternalItemImportRecord, ExternalItemImportRecord.import_id == revision.import_id)
+        .outerjoin(
+            ContentIntakeSourceFileRecord,
+            ContentIntakeSourceFileRecord.source_file_id == revision.selected_source_file_id,
+        )
+        .where(
+            ItemRevisionRecord.item_revision_id == item_revision_id,
+            ItemRevisionRecord.manifest_sha256 == manifest_sha256,
+            ItemRevisionRecord.metadata_json["import_id"].as_string() == revision.import_id,
+            source.source_namespace == source_namespace,
+            ExternalItemImportRecord.state == "COMPLETED",
+        )
+    ).one_or_none()
+    if value is None:
+        raise ExternalItemReadError("ITEM_DB_SOURCE_STALE", "Pinned creative source unavailable")
+    return ExternalItemListEntry(*value)
+
+
 def list_external_item_sources(
     session: Session, query: ExternalItemListFilter
 ) -> ExternalItemListPage:

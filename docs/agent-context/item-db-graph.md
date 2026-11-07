@@ -18,6 +18,11 @@ AI는 EOM에서 생성한 문항이다. 분류에 승인 여부를 섞지 않는
 풀이보고서는 lineage를 통해 연결한다. Graph는 교과서·기출·창작·AI를 공통 개념/관계와
 출처 포인터로 잇는다. layer 구분은 분리된 독립 검색 DB를 만드는 근거가 아니다.
 
+DB 문항 정보의 소속 단원은 원본 Q/R만 표시한다. Graph 후보에서 열어도
+`item-db/registrations/{revision_id}/source`가 exact Item manifest와 등록 당시 source
+revision을 Catalog에서 조회한다. Graph 자동 연결 단원으로 빈 원본 값을 대신하지 않는다.
+원본 조회 권한·오류·정보 없음은 구분하며, Graph/임베딩 자체의 연결은 그대로 유지한다.
+
 ## Map
 
 `데이터 → Map`은 기존 published Graph의 읽기 전용 인접 탐색이다.

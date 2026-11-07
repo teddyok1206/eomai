@@ -427,6 +427,9 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .item-db-result-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .item-db-detail-heading { margin-bottom: 18px; flex-wrap: wrap; }
 .item-db-detail-heading h3 { margin: 0; font-size: 22px; }
+.item-db-original-unit { margin: 0 0 18px; padding: 16px; border-left: 3px solid var(--eom-ink); border-radius: var(--eom-radius-card); background: var(--eom-porcelain); }
+.item-db-original-unit h4 { margin: 0 0 6px; font-size: var(--eom-type-label); color: var(--eom-text-muted); }
+.item-db-original-unit p { margin: 0; font-size: 17px; font-weight: 650; line-height: 1.6; overflow-wrap: anywhere; }
 .item-db-detail-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 0 0 22px; padding: 14px; border-radius: var(--eom-radius-card); background: var(--eom-porcelain); }
 .item-db-detail-summary dt { margin-bottom: 4px; color: var(--eom-text-muted); font-size: var(--eom-type-label); }
 .item-db-detail-summary dd { margin: 0; overflow-wrap: anywhere; font-weight: 600; }

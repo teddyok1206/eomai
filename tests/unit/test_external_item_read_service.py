@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
@@ -11,10 +12,97 @@ from eom_catalog_service.external_item_read_service import (
     ExternalItemReadError,
     export_external_item_sources,
     list_external_item_sources,
+    read_creative_registration_source,
 )
 from sqlalchemy.dialects import postgresql
 
 from tests.unit.test_external_item_import_contract import _manifest
+
+
+def _registered_source_session():
+    session = MagicMock()
+    item = SimpleNamespace(
+        manifest_sha256="sha256:" + "a" * 64,
+        revision_state="APPROVED",
+        registration_key="creative-source:extitem_" + "1" * 32,
+        metadata_json={"source_kind": "CREATIVE"},
+    )
+    value = (
+        "extitem_" + "1" * 32,
+        "extitemrev_" + "2" * 32,
+        "00042",
+        "sha256:" + "3" * 64,
+        "원본 대단원",
+        "원본 소단원",
+        "물리",
+        "고1",
+        "출제자",
+        "MATCHED",
+        "문항_00042.hwp",
+        "sourcefile_" + "4" * 32,
+    )
+    session.execute.return_value.one_or_none.side_effect = [(item, "ACTIVE"), value]
+    return session, item, value
+
+
+def _read_registered_source(session):
+    return read_creative_registration_source(
+        session,
+        item_revision_id="itemrev_" + "5" * 32,
+        manifest_sha256="sha256:" + "a" * 64,
+        source_namespace="notion-integrated-science",
+    )
+
+
+def test_registered_source_reads_original_revision_without_graph_or_current_fallback():
+    session, _, _ = _registered_source_session()
+    result = _read_registered_source(session)
+    assert (result.major_unit, result.minor_unit) == ("원본 대단원", "원본 소단원")
+    assert session.execute.call_count == 2
+    compiled = session.execute.call_args.args[0].compile(dialect=postgresql.dialect())
+    sql = str(compiled)
+    assert "current_revision_id" not in sql and "knowledge_edges" not in sql
+    assert "external_item_sources.source_id = external_item_source_revisions.source_id" in sql or (
+        "external_item_source_revisions.source_id = external_item_sources.source_id" in sql
+    )
+    assert "external_item_imports.state" in sql
+    assert "item_revisions.manifest_sha256" in sql
+    assert {"source_revision_id", "source_id", "external_number", "import_id"}.issubset(
+        set(compiled.params.values())
+    )
+
+
+@pytest.mark.parametrize("kind", ["AI", "EXTERNAL", None])
+def test_noncreative_source_is_absent_not_an_inferred_unit(kind):
+    session, item, _ = _registered_source_session()
+    item.metadata_json = {"source_kind": kind}
+    item.registration_key = "another-registration"
+    assert _read_registered_source(session) is None
+    assert session.execute.call_count == 1
+
+
+@pytest.mark.parametrize(
+    "failure", ["missing", "hash", "retired", "lifecycle", "metadata", "dangling"]
+)
+def test_registered_source_missing_stale_or_broken_pointers_fail_explicitly(failure):
+    session, item, _ = _registered_source_session()
+    if failure == "missing":
+        session.execute.return_value.one_or_none.side_effect = [None]
+    elif failure == "hash":
+        item.manifest_sha256 = "sha256:" + "b" * 64
+    elif failure == "retired":
+        item.revision_state = "RETIRED"
+    elif failure == "lifecycle":
+        session.execute.return_value.one_or_none.side_effect = [(item, "RETIRED")]
+    elif failure == "metadata":
+        item.metadata_json = {}
+    elif failure == "dangling":
+        session.execute.return_value.one_or_none.side_effect = [(item, "ACTIVE"), None]
+    with pytest.raises(ExternalItemReadError) as exc:
+        _read_registered_source(session)
+    assert exc.value.code == (
+        "ITEM_DB_SOURCE_NOT_FOUND" if failure == "missing" else "ITEM_DB_SOURCE_STALE"
+    )
 
 
 def test_source_list_uses_current_revision_completed_import_and_keyset() -> None:

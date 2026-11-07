@@ -11,6 +11,20 @@ from tests.web_gui.helpers import login, make_client
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def test_registered_source_read_requires_session_and_preserves_original_units() -> None:
+    client, _gateway = make_client()
+    path = "/studio/api/v1/item-db/registrations/itemrev_" + "2" * 32 + "/source"
+    params = {"manifest_sha256": "sha256:" + "3" * 64}
+    with client:
+        assert client.get(path, params=params).status_code == 401
+        login(client)
+        response = client.get(path, params=params)
+        assert response.status_code == 200
+        assert response.json()["minor_unit"] == "원소"
+        assert "curriculum_units" not in response.json()
+        assert client.get(path, params={"manifest_sha256": "bad"}).status_code == 422
+
+
 def test_db_list_and_detail_are_available_to_a_logged_in_operator() -> None:
     client, _gateway = make_client()
     with client:

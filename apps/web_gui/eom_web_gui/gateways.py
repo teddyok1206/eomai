@@ -494,6 +494,10 @@ class ApplicationGateway(Protocol):
         self, session: WebSession, revision_id: str, manifest_sha256: str
     ) -> GraphItemDbEntry | None: ...
 
+    async def item_db_registration_source(
+        self, session: WebSession, revision_id: str, manifest_sha256: str
+    ) -> ExternalItemDbEntry | None: ...
+
     async def registered_item_db_entries(
         self,
         session: WebSession,
@@ -1680,6 +1684,21 @@ class HttpApplicationGateway:
             ):
                 raise ValueError("pinned Item differs")
             return candidate
+        except (KeyError, TypeError, ValueError) as exc:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
+
+    async def item_db_registration_source(
+        self, session: WebSession, revision_id: str, manifest_sha256: str
+    ) -> ExternalItemDbEntry | None:
+        response = await self._authorized(
+            session,
+            "GET",
+            f"/api/v1/item-db/registrations/{revision_id}/source",
+            params={"manifest_sha256": manifest_sha256},
+        )
+        try:
+            value = self._document(response)["data"]
+            return ExternalItemDbEntry.model_validate(value) if value is not None else None
         except (KeyError, TypeError, ValueError) as exc:
             raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from exc
 

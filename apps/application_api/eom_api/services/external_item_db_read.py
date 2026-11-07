@@ -23,6 +23,7 @@ from eom_catalog_service.external_item_read_service import (
     creative_item_registrations,
     export_external_item_sources,
     list_external_item_sources,
+    read_creative_registration_source,
     read_external_item_filter_options,
     read_external_item_source,
 )
@@ -86,6 +87,22 @@ class ExternalItemDbReadApplication:
     def filter_options(self) -> ExternalItemDbFilterOptions:
         with self.sessions() as session:
             return read_external_item_filter_options(session, source_namespace=_NAMESPACE)
+
+    def registration_source(
+        self, revision_id: str, manifest_sha256: str
+    ) -> ExternalItemDbEntryView | None:
+        try:
+            with self.sessions() as session:
+                entry = read_creative_registration_source(
+                    session,
+                    item_revision_id=revision_id,
+                    manifest_sha256=manifest_sha256,
+                    source_namespace=_NAMESPACE,
+                )
+        except ExternalItemReadError as exc:
+            status = 404 if exc.code == "ITEM_DB_SOURCE_NOT_FOUND" else 409
+            raise ApiError(status, exc.code, "Original source unavailable", str(exc)) from exc
+        return _entry(entry) if entry is not None else None
 
     def list(
         self,

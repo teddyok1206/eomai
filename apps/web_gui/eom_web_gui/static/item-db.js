@@ -389,8 +389,6 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
         throw new Error("등록 문항의 연결 정보가 바뀌었습니다. 다시 조회해 주세요.");
       }
       selectItem("GRAPH_ITEM", entry);
-      section.append(metadataList([["교육과정 단원", entry.curriculum_units.map((unit) => unit.label).join(" · ")]],
-        "item-db-detail-summary"));
       const add = node(document, "button", "button secondary", "등록 문항을 조립 목록에 담기");
       add.type = "button";
       add.addEventListener("click", () => assembly.add({
@@ -441,21 +439,52 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       });
   }
 
+  function originalUnitPanel(source = null) {
+    const section = node(document, "section", "item-db-original-unit");
+    section.append(node(document, "h4", "", "소속 단원"));
+    const units = [source?.major_unit, source?.minor_unit].filter(value => value?.trim());
+    section.append(node(document, "p", "", units.join(" → ") || "소속 단원 정보 없음"));
+    return section;
+  }
+
+  async function loadOriginalUnit(entry, section) {
+    if (entry.source_class !== "APPROVED_ITEM") return;
+    const value = section.querySelector("p");
+    if (!canReadSource()) {
+      value.textContent = "원본 정보 조회 권한이 없습니다.";
+      return;
+    }
+    const request = detailSequence;
+    value.textContent = "소속 단원을 불러오는 중입니다.";
+    try {
+      const source = await api(`/item-db/registrations/${encodeURIComponent(entry.item_revision_id)}/source?`
+        + new URLSearchParams({manifest_sha256: entry.item_manifest_sha256}));
+      if (request !== detailSequence) return;
+      const resolved = originalUnitPanel(source);
+      section.replaceChildren(...Array.from(resolved.children));
+    } catch (error) {
+      if (request !== detailSequence) return;
+      value.textContent = "소속 단원을 불러오지 못했습니다.";
+      message(`원본 단원 조회 실패: ${error.message || "다시 시도해 주세요."}`, true);
+    }
+  }
+
   function openGraphDetail(entry, row) {
     detailSequence++;
     selectItem("GRAPH_ITEM", entry);
     focusDetail(row);
     const root = $("#item-db-detail");
-    root.replaceChildren(node(document, "h3", "", graphLabel(entry)), metadataList([
+    const units = originalUnitPanel();
+    root.replaceChildren(node(document, "h3", "", graphLabel(entry)), units, metadataList([
       ["문항 종류", entry.source_class === "PAST_EXAM" ? "기출" : "등록 문항"],
       ["승인 상태", entry.item_revision_state === "APPROVED" ? "승인 완료" : "이전 승인 버전"],
-      ["단원", entry.curriculum_units.map((unit) => unit.label).join(" · ")],
       ...(entry.past_exam_context ? [
         ["시험", entry.past_exam_context.occurrence_display_label],
         ["문항 번호", `${entry.past_exam_context.item_number}번`],
       ] : []),
       ["HWPX 조립", "제작 시 확인"],
     ], "item-db-detail-summary"));
+    loadOriginalUnit(entry, units);
     const button = node(document, "button", "button secondary", "문항 미리보기");
     button.type = "button";
     button.addEventListener("click", () => openRegisteredItem(entry));
@@ -670,9 +699,9 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
           heading.append(select);
         }
       }
-      root.append(heading, metadataList([
+      root.append(heading, originalUnitPanel(detail.entry), metadataList([
         ["승인 상태", approvalLabel(registration)],
-        ["대단원", cellValue("Q")], ["소단원", cellValue("R")], ["분야", cellValue("Z")],
+        ["분야", cellValue("Z")],
         ["문항 분류", cellValue("Y")], ["난이도", cellValue("J")], ["배점", cellValue("H")],
         ["학년", cellValue("O")], ["교재 분류", cellValue("V")],
         ["출제자", cellValue("AD")], ["출제일", cellValue("AC")],

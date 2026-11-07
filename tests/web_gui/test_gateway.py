@@ -207,6 +207,46 @@ def _session(access: str = "eom_at_TEST_ONLY_ACCESS") -> WebSession:
 
 
 @pytest.mark.anyio
+@pytest.mark.parametrize("reply_kind", ("source", "absent", "invalid"))
+async def test_original_unit_gateway_preserves_manifest_and_validates_source(reply_kind):
+    from tests.api.test_external_item_db_routes import _entry
+
+    revision, digest = "itemrev_" + "2" * 32, "sha256:" + "3" * 64
+    value = _entry().model_dump(mode="json")
+    value.update(major_unit="원본 대단원", minor_unit="원본 소단원")
+    if reply_kind == "invalid":
+        value["source_revision_id"] = "invalid"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.method == "GET"
+        assert request.url.path == f"/api/v1/item-db/registrations/{revision}/source"
+        assert request.url.params["manifest_sha256"] == digest
+        assert request.headers["authorization"] == "Bearer eom_at_TEST_ONLY_ACCESS"
+        return httpx.Response(200, json={"data": None if reply_kind == "absent" else value})
+
+    gateway = HttpApplicationGateway(
+        application_api_url="http://app.test",
+        observability_url="http://observe.test",
+        timeout=5,
+        observability_access_token=None,
+        transport=httpx.MockTransport(handler),
+    )
+    try:
+        if reply_kind == "invalid":
+            with pytest.raises(GatewayError) as exc:
+                await gateway.item_db_registration_source(_session(), revision, digest)
+            assert exc.value.code == "APPLICATION_API_RESPONSE_INVALID"
+        else:
+            result = await gateway.item_db_registration_source(_session(), revision, digest)
+            if reply_kind == "absent":
+                assert result is None
+            else:
+                assert result is not None and result.minor_unit == "원본 소단원"
+    finally:
+        await gateway.close()
+
+
+@pytest.mark.anyio
 async def test_account_gateway_rotates_self_session_and_sends_versioned_admin_commands() -> None:
     requests: list[httpx.Request] = []
 

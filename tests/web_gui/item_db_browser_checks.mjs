@@ -89,6 +89,10 @@ async function api(path, options = {}) {
     if (options.body.cursor) return {values: [{source: entry('10319'), registration: null}], has_more: false, next_cursor: null};
     return {values: [entry('10310'), entry('10318')].map(source => ({source, registration: null})), has_more: true, next_cursor: 'next-page'};
   }
+  if (path.startsWith('/item-db/registrations/') && path.includes('/source?')) {
+    if (fixture.sourceReadFailed) throw new Error('합성 원본 조회 오류');
+    return fixture.noOriginalUnits ? null : entry('10310');
+  }
   if (path.startsWith('/item-db/registrations/')) return fixture.enableRegisteredGraph ? {
     ...graph, source_class: 'APPROVED_ITEM', past_exam_context: null,
     item_id: 'item_' + '1'.repeat(32), item_revision_id: 'itemrev_' + '2'.repeat(32),
@@ -158,6 +162,7 @@ const controller = createItemDb({document, api, openRegisteredItem: entry => fix
 controller.install(); controller.setOwner('operator_' + '1'.repeat(32)); controller.open();
 document.querySelectorAll('.view').forEach(view => view.classList.toggle('active', view.dataset.view === 'item-db'));
 fixture.controller = controller;
+fixture.graph = graph;
 fixture.ready = true;
 `;
 
@@ -198,6 +203,7 @@ try {
   await rows.first().getByRole("button").click();
   await page.locator(".item-db-detail-heading h3").waitFor();
   assert.match(await page.locator("#item-db-detail").innerText(), /고유번호 10310/);
+  assert.match(await page.locator('.item-db-original-unit').innerText(), /소속 단원[\s\S]*변화와 다양성 → 지질 시대의 환경과 생물/u);
   assert.equal(await rows.first().getByRole("button").getAttribute("aria-pressed"), "true");
   assert.equal(await page.locator(".item-db-edition.is-final").count(), 1);
   assert.match(await page.locator(".item-db-edition.is-final").innerText(), /3교[\s\S]*최종본/);
@@ -283,6 +289,8 @@ try {
   assert.equal(await page.getByRole('button', {name: '등록 문항을 조립 목록에 담기', exact: true}).isEnabled(), true,
     'legacy exam eligibility must not hide registered-item curated selection');
   assert.match(await page.locator('#item-db-detail').innerText(), /출제 의도[\s\S]*자료 해석/);
+  assert.doesNotMatch(await page.locator('#item-db-detail').innerText(), /교육과정 단원|물질의 규칙성/u);
+  assert.match(await page.locator('.item-db-original-unit').innerText(), /변화와 다양성 → 지질 시대의 환경과 생물/u);
   assert.equal(await page.locator('.item-db-edition.is-final').count(), 1);
   await page.evaluate(() => {window.dbFixture.enableRegisteredGraph = false;});
   await page.locator('#item-db-source').selectOption('EXTERNAL');
@@ -535,12 +543,41 @@ try {
   assert.match(await page.locator("#item-db-results").innerText(), /다시 조회/);
   await page.evaluate(() => window.dbFixture.controller.open());
   await page.waitForFunction(() => document.querySelectorAll('#item-db-results [data-selection-key]').length === 2);
+
+  // Graph navigation hydrates the exact registered source, not inferred unit labels.
+  const openRegistered = async () => page.evaluate(() => window.dbFixture.controller.openGraph({
+    ...window.dbFixture.graph, source_class: 'APPROVED_ITEM', past_exam_context: null,
+  }));
+  await openRegistered();
+  await page.waitForFunction(() => document.querySelector('.item-db-original-unit')?.textContent.includes('지질 시대의 환경과 생물'));
+  assert.doesNotMatch(await page.locator('#item-db-detail').innerText(), /물질의 규칙성/u);
+  const originalRead = await page.evaluate(() => window.dbFixture.calls.findLast(call => call.path.includes('/source?')).path);
+  assert.match(originalRead, /itemrev_c{32}\/source\?manifest_sha256=sha256%3Ad{64}$/u);
+  await page.evaluate(() => {window.dbFixture.noOriginalUnits = true;});
+  await openRegistered();
+  await page.waitForFunction(() => document.querySelector('.item-db-original-unit')?.textContent.includes('소속 단원 정보 없음'));
+  await page.evaluate(() => {window.dbFixture.noOriginalUnits = false; window.dbFixture.sourceReadFailed = true;});
+  await openRegistered();
+  await page.waitForFunction(() => document.querySelector('.item-db-original-unit')?.textContent.includes('불러오지 못했습니다'));
+  assert.doesNotMatch(await page.locator('#item-db-detail').innerText(), /정보 없음|물질의 규칙성/u);
+  await page.evaluate(path => {window.dbFixture.sourceReadFailed = false; window.dbFixture.hold = path; window.dbFixture.release = null;}, originalRead);
+  await openRegistered();
+  await page.waitForFunction(() => typeof window.dbFixture.release === 'function');
+  await page.evaluate(() => window.dbFixture.controller.openGraph(window.dbFixture.graph));
+  await page.evaluate(() => window.dbFixture.release());
+  assert.match(await page.locator('.item-db-original-unit').innerText(), /정보 없음/u);
+  assert.doesNotMatch(await page.locator('#item-db-detail').innerText(), /지질 시대의 환경과 생물|물질의 규칙성/u);
+
   await page.evaluate(() => {window.dbFixture.allowSource = false; window.dbFixture.controller.open();});
   await page.waitForFunction(() => document.querySelector('#item-db-source').value === 'PAST_EXAM');
   assert.equal(await page.locator('#item-db-source option[value="EXTERNAL_SOURCE"]').evaluate(option => option.disabled), true);
   assert.equal(await page.locator('#item-db-source option[value="EXTERNAL"]').evaluate(option => option.disabled), true);
   assert.equal(await page.locator('#item-db-similarity-results button').count(), 0, 'permission changes clear previous selections/results');
   assert.equal(await page.locator('#item-db-similarity-tab-progress').isVisible(), false);
+  const sourceReads = await page.evaluate(() => window.dbFixture.calls.filter(call => call.path.includes('/source?')).length);
+  await openRegistered();
+  assert.match(await page.locator('.item-db-original-unit').innerText(), /조회 권한이 없습니다/u);
+  assert.equal(await page.evaluate(() => window.dbFixture.calls.filter(call => call.path.includes('/source?')).length), sourceReads);
   assert.deepEqual(errors, []);
   assert.deepEqual(unexpected, []);
   console.log("item_db_browser=PASS live_writes=0");

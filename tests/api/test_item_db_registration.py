@@ -29,6 +29,58 @@ def _filters():
     }
 
 
+def test_registration_source_uses_pinned_revision_and_original_metadata():
+    client, services, reads = _client()
+    registration = _registration()
+    original = _entry().model_copy(
+        update={"major_unit": "원본 대단원", "minor_unit": "원본 소단원"}
+    )
+    reads.registration_source = Mock(return_value=original)
+    try:
+        with client:
+            response = client.get(
+                f"/api/v1/item-db/registrations/{registration.item_revision_id}/source",
+                params={"manifest_sha256": registration.item_manifest_sha256},
+            )
+        assert response.status_code == 200
+        assert response.json()["data"]["minor_unit"] == "원본 소단원"
+        assert "curriculum_units" not in response.json()["data"]
+        reads.registration_source.assert_called_once_with(
+            registration.item_revision_id, registration.item_manifest_sha256
+        )
+    finally:
+        services.engine.dispose()
+
+
+def test_registration_source_requires_intake_permission_before_resolving():
+    client, services, reads = _client(allow_intake=False)
+    reads.registration_source = Mock()
+    try:
+        with client:
+            response = client.get(
+                f"/api/v1/item-db/registrations/{_registration().item_revision_id}/source",
+                params={"manifest_sha256": _registration().item_manifest_sha256},
+            )
+        assert response.status_code == 403
+        reads.registration_source.assert_not_called()
+    finally:
+        services.engine.dispose()
+
+
+def test_registration_without_original_source_returns_null_not_graph_units():
+    client, services, reads = _client()
+    reads.registration_source = Mock(return_value=None)
+    try:
+        with client:
+            response = client.get(
+                f"/api/v1/item-db/registrations/{_registration().item_revision_id}/source",
+                params={"manifest_sha256": _registration().item_manifest_sha256},
+            )
+        assert response.status_code == 200 and response.json()["data"] is None
+    finally:
+        services.engine.dispose()
+
+
 def test_creative_search_retains_metadata_and_independent_approval_filter():
     client, services, reads = _client()
     reads.creative_list = Mock(

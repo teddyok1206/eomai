@@ -1473,6 +1473,19 @@ class FakeGateway:
             return ExternalItemDbPage((), None, False)
         return ExternalItemDbPage((entry,), None, False)
 
+    async def item_db_registration_source(
+        self, session: WebSession, revision_id: str, manifest_sha256: str
+    ) -> ExternalItemDbEntry | None:
+        page = await self.external_item_db_entries(
+            session,
+            exact_number=None,
+            major_unit=None,
+            field_label=None,
+            match_status=None,
+            cursor=None,
+        )
+        return page.values[0]
+
     async def external_item_db_detail(
         self, session: WebSession, source_id: str
     ) -> ExternalItemDbDetail:

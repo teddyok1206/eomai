@@ -11,7 +11,7 @@ from eom_api_contracts import (
     ProductionItemCandidateViewContract,
     SingleResponse,
 )
-from eom_api_contracts.external_item_db import ExternalItemDbFilterRequest
+from eom_api_contracts.external_item_db import ExternalItemDbEntryView, ExternalItemDbFilterRequest
 from eom_api_contracts.item_db_registration import (
     AiItemDbEntryView,
     ApprovalState,
@@ -189,6 +189,31 @@ def production_item_candidates(
         limit=limit,
         next_cursor=page.next_cursor,
         has_more=page.has_more,
+    )
+
+
+@router.get(
+    "/item-db/registrations/{revision_id}/source",
+    operation_id="item_db_registration_source",
+    response_model=SingleResponse[ExternalItemDbEntryView | None],
+    dependencies=[Depends(require_permission(PermissionKey.ITEM_READ))],
+    openapi_extra={
+        "x-eom-additional-permissions": [PermissionKey.CONTENT_INTAKE_READ.value],
+    },
+)
+def registration_source(
+    request: Request,
+    authentication: Auth,
+    revision_id: Annotated[str, Path(pattern=r"^itemrev_[0-9a-f]{32}$")],
+    manifest_sha256: str = Query(pattern=r"^sha256:[0-9a-f]{64}$"),
+) -> SingleResponse[ExternalItemDbEntryView | None]:
+    if PermissionKey.CONTENT_INTAKE_READ not in authentication.permissions:
+        raise ApiError(403, "PERMISSION_DENIED", "Permission denied", "Source read denied")
+    return one(
+        request,
+        request.app.state.services.external_item_db_reads.registration_source(
+            revision_id, manifest_sha256
+        ),
     )
 
 
