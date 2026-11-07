@@ -1,0 +1,16 @@
+diff --git a/source/soffice/ConvTable.java b/source/soffice/ConvTable.java
+--- a/source/soffice/ConvTable.java
++++ b/source/soffice/ConvTable.java
+@@ -1227,0 +1228,12 @@
++                    if (paraShapeTemp != null && cell.paras.size() == 1
++                            && para.p.size() <= 3 && para.p.stream().allMatch(
++                            c -> c instanceof ParaText || (c instanceof Ctrl_Character
++                                && ((Ctrl_Character)c).ctrlChar == Ctrl_Character.CtrlCharType.PARAGRAPH_BREAK))) {
++                        String marker = para.p.stream().filter(c -> c instanceof ParaText)
++                                .map(c -> ((ParaText)c).text).collect(Collectors.joining());
++                        paraShapeTemp.marginLeft = HancomChoiceCellLayout.fitLeftMargin(
++                                marker, cell.width, charShapeTemp.height, paraShapeTemp.marginLeft,
++                                paraShapeTemp.marginRight, paraShapeTemp.indent);
++                    }
++
++

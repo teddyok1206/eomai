@@ -18,9 +18,9 @@ StarMath에 전달된다. Math 패키지 누락/버전 차이는 아니며 글�
 - HWP/HWPX parser→StarMath 번역은 기존 H2Orestart `ConvEquation`의 책임이다.
   검증한 upstream v0.7.14와 기존 그림 crop 호환 패치를 유지하고 수식 호환 패치만 추가한다.
   별도 Python 수식 해석기, 페이지 raster 대체, 원본/정본 덮어쓰기는 만들지 않는다.
-- 기존 converter adapter에 두 개의 닫힌 불변 profile을 둔다. legacy는 기존 unit/bundle/
-  key를 그대로 사용하고, corrected profile은 별도의 고정 unit과 새 bundle/hash를 사용한다.
-  현재 API의 DB PDF와 새 Office 자료 검토 입력은 corrected profile을 명시적으로 선택한다.
+- 기존 converter adapter의 legacy와 수식 보존 profile은 각각 기존 unit/bundle/key를 보존한다.
+  선택지 칸 보정은 별도 고정 unit과 새 bundle/hash를 가진 후속 profile이다. 현재 DB PDF와
+  새 Office 자료 검토 입력만 후속 profile을 선택하며 기존 학습 입력은 바꾸지 않는다.
 - 배포는 기존 private Catalog 설치 prefix와 새 고정 converter source pin을 우선한다.
   공개 RPC/HTTP schema가 바뀌지 않으므로 API/Web·QUERY provider·INDEX/슬롯의 공용
   설치본을 불필요하게 재설치하지 않는다. 실제 compatible-set/RECORD/권한 조회 검증은 유지한다.
@@ -86,3 +86,29 @@ Artifact·원본·Graph를 삭제하지 않는다.
 
 이전 bundle을 덮어 바꾸고 동일 key로 새 PDF를 밀어 넣는 방식이 더 짧지만,
 pin된 학습 입력과 역사적 receipt의 재현성을 깨므로 선택하지 않는다.
+
+## 2026-11-07 선택지 번호 칸 후속 보정
+
+10321의 ①–⑤는 본문과 분리된 작은 표의 왼쪽 칸이다. 셀 폭1252 HWP unit에
+글꼴 높이1150과 왼쪽 문단 여백2300(문단 여백은 두 배 단위)을 적용해 번호가
+옆 칸의 수식에 겹쳤다. 수식 글리프 변환과 별개의 배치 문제다. 기존 PDF에서
+다섯 번호 모두 실제 bounding box가 수식과 겹침을 확인했다.
+
+담당은 기존 H2Orestart `ConvTable`이다. 단일 문단·최대3개의 단순 텍스트/문단끝
+control·전체 내용이 정확히①–⑤ 하나인 셀에만 적용한다. 비영(非零) 들여쓰기,
+다른 개체/내용, 불명확한 크기는 그대로 둔다. 문단 style을 clone한 기존 위치에서
+한 글꼴 em을 남길 수 있도록 과도한 왼쪽 여백만 줄인다. 표·셀 폭이나 문항/수식/
+그림 데이터, 공유 원본 style을 수정하지 않는다. 적은 control의 bounded scan과
+64-bit 크기 계산을 사용해 split-run 문단의 반복 전체 스캔이나 overflow를 피한다.
+
+DB/schema/worker message와 공개 RPC는 변경하지 않는다. legacy-v1·equations-v2는
+남기고 `choice-layout-v3`의 bundle SHA를 기존 generation key와 변환 receipt에
+포함한다. 기존 잠금·정확한 publication·재조회 경계를 사용한다. CLI·worker가
+실행 파일이나 profile 경로를 임의로 정할 수 없으며 trusted composition과 고정
+unit만 새 profile을 선택한다. native 변환 후 PDF를 덧그리거나 페이지를 그림으로
+바꾸는 방식은 사용하지 않는다. 이를 위해 새 DB나 일반 레이아웃 framework는 필요 없다.
+
+설치기는 두 개의 명시적인 후속 profile만 닫힌 분기로 다루며 기존 sandbox와
+45번 exact-unit polkit 경계를 유지한다. 롤백은 Catalog의 이전 설치 선택을 복구하고
+모든 이전 bundle/PDF를 보존한다. 현재 공유 API·GPU·슬롯 설치를 바꿀 필요는 없다.
+운영 증거: `docs/operations/OFFICE_PDF_CHOICE_LABEL_RELEASE_2026-11-07.md`.

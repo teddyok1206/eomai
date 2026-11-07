@@ -1,0 +1,10 @@
+// Evaluate before the shared owner deny; no arbitrary unit or verb is admitted.
+polkit.addRule(function(action, subject) {
+    if (action.id === "org.freedesktop.systemd1.manage-units"
+        && subject.user === "eom-catalog-manager"
+        && action.lookup("verb") === "start"
+        && /^eom-office-choice-converter@officeconv_[0-9a-f]{32}\.service$/.test(action.lookup("unit") || "")) {
+        return polkit.Result.YES;
+    }
+    return polkit.Result.NOT_HANDLED;
+});

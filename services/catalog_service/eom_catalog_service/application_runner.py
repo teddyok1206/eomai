@@ -94,7 +94,7 @@ from eom_catalog_service.mock_exam_assembly_service import MockExamAssemblyServi
 from eom_catalog_service.mock_exam_item_review_publication_service import (
     MockExamItemReviewPublicationService,
 )
-from eom_catalog_service.office_conversion_profiles import EQUATION_OFFICE_PROFILE
+from eom_catalog_service.office_conversion_profiles import CHOICE_LAYOUT_OFFICE_PROFILE
 from eom_catalog_service.office_document_review_intake import OfficeDocumentReviewIntakeService
 from eom_catalog_service.pdf_document_review_intake import PdfDocumentReviewIntakeService
 from eom_catalog_service.registry_service import RegistryService
@@ -314,7 +314,7 @@ def serve() -> int:
             )
         external_item_documents = ExternalItemDocumentMediaService(engine)
         external_item_previews = ExternalItemPreviewProjectionService(
-            engine, profile=EQUATION_OFFICE_PROFILE
+            engine, profile=CHOICE_LAYOUT_OFFICE_PROFILE
         )
         server = CatalogApplicationServer(
             StructuredItemContentImportService(engine),

@@ -7,7 +7,7 @@ from typing import Literal
 
 @dataclass(frozen=True, slots=True)
 class OfficeConversionProfile:
-    key: Literal["legacy-v1", "equations-v2"]
+    key: Literal["legacy-v1", "equations-v2", "choice-layout-v3"]
     unit_template: str
     h2orestart_bundle: Path
     h2orestart_sha256: str
@@ -27,6 +27,18 @@ EQUATION_OFFICE_PROFILE = OfficeConversionProfile(
 )
 
 
+CHOICE_LAYOUT_OFFICE_PROFILE = OfficeConversionProfile(
+    key="choice-layout-v3",
+    unit_template="eom-office-choice-converter@{instance}.service",
+    h2orestart_bundle=Path("/srv/eom/vendor/h2orestart/0.7.14-eom.3/H2Orestart.oxt"),
+    h2orestart_sha256="1aaabf0114d6ec1cee130c9f5b01d756a321ba0525d0ea211cccec01acfeb99a",
+)
+
+
 def require_supported_office_profile(profile: OfficeConversionProfile) -> None:
-    if profile not in (LEGACY_OFFICE_PROFILE, EQUATION_OFFICE_PROFILE):
+    if profile not in (
+        LEGACY_OFFICE_PROFILE,
+        EQUATION_OFFICE_PROFILE,
+        CHOICE_LAYOUT_OFFICE_PROFILE,
+    ):
         raise ValueError("OFFICE_DOCUMENT_CONVERTER_PROFILE_UNSUPPORTED")

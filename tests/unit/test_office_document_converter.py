@@ -9,6 +9,7 @@ from typing import Any
 
 import pytest
 from eom_catalog_service.office_conversion_profiles import (
+    CHOICE_LAYOUT_OFFICE_PROFILE,
     EQUATION_OFFICE_PROFILE,
     LEGACY_OFFICE_PROFILE,
     OfficeConversionProfile,
@@ -169,6 +170,7 @@ def test_shared_office_source_validation_rejects_unsafe_hwpx_before_conversion(
     [
         (LEGACY_OFFICE_PROFILE, "eom-office-converter"),
         (EQUATION_OFFICE_PROFILE, "eom-office-equation-converter"),
+        (CHOICE_LAYOUT_OFFICE_PROFILE, "eom-office-choice-converter"),
     ],
 )
 def test_catalog_adapter_starts_only_fixed_unit_and_pins_converter_identity(

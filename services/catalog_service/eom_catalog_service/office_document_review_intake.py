@@ -31,7 +31,7 @@ from eom_orchestrator.errors import PlatformError
 from sqlalchemy import Engine
 
 from eom_catalog_service.artifacts import CatalogArtifact, CatalogArtifactService
-from eom_catalog_service.office_conversion_profiles import EQUATION_OFFICE_PROFILE
+from eom_catalog_service.office_conversion_profiles import CHOICE_LAYOUT_OFFICE_PROFILE
 from eom_catalog_service.office_converter_worker import (
     HWP_SIGNATURE,
     OfficeConverterError,
@@ -276,7 +276,7 @@ class OfficeDocumentReviewIntakeService:
                 if converter is None:
                     try:
                         converter = SystemdOfficeDocumentConverter(
-                            self.settings.staging_root, profile=EQUATION_OFFICE_PROFILE
+                            self.settings.staging_root, profile=CHOICE_LAYOUT_OFFICE_PROFILE
                         )
                     except OfficeDocumentConversionError as exc:
                         raise OfficeDocumentReviewIntakeError(exc.code, str(exc)) from exc

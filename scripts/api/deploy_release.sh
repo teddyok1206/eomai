@@ -2956,6 +2956,7 @@ install_service() {
   id eom-api >/dev/null 2>&1 || fail "eom-api system user is absent"
   sudo -n "${OFFICE_CONVERTER_INSTALLER}"
   sudo -n bash "${OFFICE_EQUATION_CONVERTER_INSTALLER}" --verify
+  sudo -n bash "${OFFICE_EQUATION_CONVERTER_INSTALLER}" --choices-v3 --verify
   sudo -n install -d -o eom-api -g eom-api -m 0700 \
     /var/lib/eom-api/pdf-review-uploads
   systemd-analyze verify \
@@ -2997,6 +2998,7 @@ verify_service() {
   local consumer
   sudo -n "${OFFICE_CONVERTER_INSTALLER}" --verify
   sudo -n bash "${OFFICE_EQUATION_CONVERTER_INSTALLER}" --verify
+  sudo -n bash "${OFFICE_EQUATION_CONVERTER_INSTALLER}" --choices-v3 --verify
   # Standalone verification validates the embedded typed resource without
   # claiming that the checkout still denotes the installed release.
   verify_install_mode validated-resource-only

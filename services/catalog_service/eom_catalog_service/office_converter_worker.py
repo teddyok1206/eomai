@@ -18,6 +18,7 @@ from eom_catalog_contracts import OfficeDocumentConversionOutcome
 from eom_identifiers import canonical_json_bytes, content_sha256, sha256_file
 
 from eom_catalog_service.office_conversion_profiles import (
+    CHOICE_LAYOUT_OFFICE_PROFILE,
     EQUATION_OFFICE_PROFILE,
     LEGACY_OFFICE_PROFILE,
 )
@@ -435,8 +436,14 @@ def _write_outcome(
 def main(argv: list[str] | None = None) -> int:
     arguments = list(sys.argv[1:] if argv is None else argv)
     profile = LEGACY_OFFICE_PROFILE
-    if len(arguments) == 2 and arguments[0] == "--equations-v2":
-        profile = EQUATION_OFFICE_PROFILE
+    if len(arguments) == 2:
+        profiles = {
+            "--equations-v2": EQUATION_OFFICE_PROFILE,
+            "--choices-v3": CHOICE_LAYOUT_OFFICE_PROFILE,
+        }
+        if arguments[0] not in profiles:
+            return 64
+        profile = profiles[arguments[0]]
         arguments = arguments[1:]
     if len(arguments) != 1:
         return 64

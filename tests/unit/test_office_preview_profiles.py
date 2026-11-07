@@ -13,6 +13,7 @@ from eom_catalog_service.external_item_preview_projection import (
     _idempotency_key,
 )
 from eom_catalog_service.office_conversion_profiles import (
+    CHOICE_LAYOUT_OFFICE_PROFILE,
     EQUATION_OFFICE_PROFILE,
     LEGACY_OFFICE_PROFILE,
     OfficeConversionProfile,
@@ -34,6 +35,22 @@ def test_exact_legacy_key_and_distinct_current_generation() -> None:
         legacy + ":equations-v2:" + EQUATION_OFFICE_PROFILE.h2orestart_sha256
     )
     assert LEGACY_OFFICE_PROFILE.h2orestart_bundle != EQUATION_OFFICE_PROFILE.h2orestart_bundle
+    assert _idempotency_key(QUERY, CHOICE_LAYOUT_OFFICE_PROFILE) == (
+        legacy + ":choice-layout-v3:" + CHOICE_LAYOUT_OFFICE_PROFILE.h2orestart_sha256
+    )
+    assert (
+        len(
+            {
+                _idempotency_key(QUERY, profile)
+                for profile in (
+                    LEGACY_OFFICE_PROFILE,
+                    EQUATION_OFFICE_PROFILE,
+                    CHOICE_LAYOUT_OFFICE_PROFILE,
+                )
+            }
+        )
+        == 3
+    )
 
 
 def test_arbitrary_converter_profile_is_not_an_execution_grant() -> None:
