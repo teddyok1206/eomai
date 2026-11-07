@@ -45,3 +45,36 @@ DB migration은 변경하지 않는다.
 
 이 문서의 위 항목은 소스 검증/안전한 기존 작업 종료 증거다. 새 release의 설치·활성화,
 실제 CUDA commit과 CPU/GPU 진행 중첩 증거는 후속 체크포인트에 따로 기록한다.
+
+## 운영 반영 — 08:30 UTC
+
+- source/설치 release: `11a75c955183523348bb3063a3e0929661101110`, `origin/main` push 완료.
+- immutable owner wheel의 RECORD와 API contracts 설치 검증 PASS. 비편집 설치본으로
+  scheduler/namespace/runtime 51개 PASS. CUDA 수치 worker와 CPU 수치 환경은 교체하지 않았다.
+- 기존 INDEX가 정상 종료한 후 기존 공식 service identity/grant publication 경계로
+  successor를 선택했다. 출처 scope·routing·CPU/CUDA runtime profile의 동등성을 확인했다.
+  기록: `/var/lib/eom-index-overlap-release-11a75c95-20261107`.
+- 새 INDEX PID `2717326`, invocation `a1c97c53ec5847d989e76e88a8b26469`.
+  08:27:04 시작, 08:27:26 `LOCAL_INDEXING_CPU_OVERLAP_ENABLED(maximum_cpu_calls=1)`과
+  첫 `CONCRETE_FACETS` reconciliation 진입을 확인했다.
+- 08:30 관측에서 NRestarts=0, 새 실패 없음. GPU/CPU/QUERY environment bytes와 수치 profile
+  불변, API/Web/QUERY/창작/자료 학습의 PID 및 invocation 불변을 확인했다.
+- disposable DB는 공식 cleanup으로 삭제 완료. 운영 DB에 pytest를 실행하지 않았다.
+- 최초 protected installer 호출은 파일이 executable이 아니어서 거부됐다. 뒤따른 설치본
+  테스트/PREPARE도 실제 설치 전 import 단계에서 거부됐고 활성화는 없었다. 보호된
+  스크립트를 `/bin/bash`로 실행한 뒤 설치·검증·PREPARE/PUBLISH/ACTIVATE를 정상 완료했다.
+  보호 권한을 변경하거나 실패 기록을 삭제하지 않았다.
+
+이 시각에는 첫 source 검증이 진행 중이다. **새 CUDA commit/실제 CPU와 GPU의 중첩 완료는
+아직 관측하지 않았다.** source/설치 테스트 PASS와 service 기동을 그 증거로 확대하지 않는다.
+기출 등록은 337/520, 잔여 183으로 기존 누적값을 유지하며 기존 10분 관측·Slack timer도 유지한다.
+
+## 실제 처리 재개 — 08:33 UTC
+
+새 release가 준비 단계만 반복하는지 별도로 대조했다. 08:31:50에 생성한 CUDA
+`workflow_a6d5489790c9476cb6517a7228164a40` /
+`wfcmd_f373266464134cb4903a20ae99d6db13`이 실제 RUNNING/PROCESSING이며,
+attempts=1, lease_generation=1, heartbeat에 따른 lease 갱신과 failure/error_code=null을
+08:33:53에 확인했다. 이것은 실제 원래 application 경로의 처리 재개 증거이며,
+GPU 수치 완료·index commit·CPU와 다음 GPU 작업의 실제 중첩 완료 증거는 아니다.
+재계산/재시작 없이 이 요청을 계속 처리한다.
