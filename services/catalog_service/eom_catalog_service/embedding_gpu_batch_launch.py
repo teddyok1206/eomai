@@ -9,7 +9,7 @@ from pathlib import Path
 from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
 
 GPU_BATCH_TEMPLATE = "eom-embedding-native-gpu-batch@.service"
-GPU_BATCH_SERVICE_SHA256 = "sha256:1357002595b4ac5bca8460f02f75833cce5904db8dc75f70548daf1b205a7000"
+GPU_BATCH_SERVICE_SHA256 = "sha256:46172dacbe10a120ac132c25a2f41d55becd309712c22f78de3793665ee3a9ec"
 GPU_BATCH_SOCKET_TEMPLATE = "eom-embedding-native-gpu-batch@.socket"
 GPU_BATCH_RUNTIME_ROOT = Path("/run/eom-native-embedding-gpu-batch")
 _FIELDS = (

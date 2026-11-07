@@ -35,11 +35,11 @@ ROOT = Path(__file__).resolve().parents[2]
 
 @pytest.mark.parametrize("numeric", (1, 30, 180))
 def test_total_window_adds_bounded_control_allowance_without_raising_compute_limit(numeric):
-    assert embedding_gpu_allocation_window_seconds(numeric) == 240 + numeric
+    assert embedding_gpu_allocation_window_seconds(numeric) == 600 + numeric
     assert MAX_EMBEDDING_WORK_BATCH_SECONDS == 180
-    assert MAX_EMBEDDING_GPU_ALLOCATION_SECONDS == 420
-    assert EMBEDDING_GPU_WORKER_UNIT_SECONDS == 480
-    assert EMBEDDING_GPU_CONTROLLER_UNIT_SECONDS == 540
+    assert MAX_EMBEDDING_GPU_ALLOCATION_SECONDS == 780
+    assert EMBEDDING_GPU_WORKER_UNIT_SECONDS == 840
+    assert EMBEDDING_GPU_CONTROLLER_UNIT_SECONDS == 900
 
 
 @pytest.mark.parametrize("numeric", (0, -1, 181, True, 180.0, "180"))
@@ -48,7 +48,7 @@ def test_bad_or_unbounded_numerical_budget_is_not_a_longer_compute_grant(numeric
         embedding_gpu_allocation_window_seconds(numeric)
 
 
-@pytest.mark.parametrize("seconds", (5, 180, 420))
+@pytest.mark.parametrize("seconds", (5, 180, 420, 780))
 def test_explicit_request_deadline_survives_legacy_decode_and_current_checks(monkeypatch, seconds):
     now = 10**12
     request = control_case(expires_ns=now + seconds * 10**9)[0]
@@ -67,7 +67,7 @@ def test_explicit_request_deadline_survives_legacy_decode_and_current_checks(mon
     assert embedding_gpu_control_bytes(request) == original
 
 
-@pytest.mark.parametrize("delta", (0, -1, 420 * 10**9 + 1))
+@pytest.mark.parametrize("delta", (0, -1, 780 * 10**9 + 1))
 def test_workspace_rejects_expired_or_overlong_window_before_file_materialization(
     monkeypatch, delta
 ):

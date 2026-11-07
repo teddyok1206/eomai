@@ -38,7 +38,11 @@ def ports(monkeypatch, cuda_descriptors):
     # Real process-default timer/termination is tested in isolated child processes.
     @contextmanager
     def synthetic_compute_deadline(_seconds):
-        yield
+        events.append("compute-timer-start")
+        try:
+            yield
+        finally:
+            events.append("compute-timer-stop")
 
     monkeypatch.setattr(worker, "_hard_compute_deadline", synthetic_compute_deadline)
     batch, backend, scope, resources, life, descriptors = cuda_descriptors
@@ -183,6 +187,9 @@ def test_worker_connects_original_lease_ready_grant_fd_work_ack_then_local_clean
                 pass
             assert not future.done() and life == expected_life
             assert "device-close" not in events and "worker-lease-close" not in events
+            assert events.count("compute-timer-start") == 1
+            assert events.count("compute-timer-stop") == 1
+            assert events.index("compute-timer-start") < events.index("model-scope")
             raw = (tmp_path / "result.json").read_bytes()
             assert sha256_bytes(raw) == claim.result_raw_sha256
 
@@ -233,6 +240,41 @@ def test_busy_never_reads_numeric_input_opens_device_or_constructs_model(ports, 
             == (tmp_path / "vectors.f32").read_bytes()
             == b""
         )
+
+
+def test_lost_final_ack_preserves_output_but_fails_after_compute_timer_is_disarmed(ports):
+    batch, backend, resources, _life, descriptors, events, _ = ports
+    with endpoints(requested=False, ready=False, granted=False, bound=False, batch=batch) as (
+        root,
+        native,
+        case,
+        *_,
+    ):
+        root.send_request()
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(
+                worker.run_native_embedding_gpu_batch_worker,
+                native,
+                descriptors,
+                expected_backend=pins(case[0]),
+                resources=resources,
+                maximum_total_output_bytes=64 * 1024**2,
+            )
+            root.receive_allocation()
+            root.send_grant(case[3])
+            root.bind_batch(
+                batch, input_raw_sha256=sha256_bytes(case[7]), input_byte_count=len(case[7])
+            )
+            while root.authorize_next(lambda _: None) is None:
+                pass
+            assert events.count("compute-timer-stop") == 1
+            assert os.fstat(descriptors.result).st_size > 0
+            assert os.fstat(descriptors.vectors).st_size > 0
+            root.close()
+            with pytest.raises(NativeEmbeddingHandoffError):
+                future.result(timeout=2)
+        assert len(backend.calls) == 2
+        assert events[-3:] == ["device-close", "capture-close", "worker-lease-close"]
 
 
 def test_configuration_mismatch_is_failure_before_claim_not_busy_fallback(ports):

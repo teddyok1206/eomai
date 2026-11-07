@@ -98,7 +98,7 @@ def test_legacy_and_separate_control_allowance_cross_same_original_activation_fd
 
 def test_activation_rejects_overlong_window_before_accepting_socket(listener):
     server, _client, peer, _case = listener
-    case = control_case(expires_ns=time.monotonic_ns() + 421 * 10**9)
+    case = control_case(expires_ns=time.monotonic_ns() + 781 * 10**9)
     with pytest.raises(ValueError):
         activation.capture_embedding_gpu_batch_worker_channel(
             case[0],

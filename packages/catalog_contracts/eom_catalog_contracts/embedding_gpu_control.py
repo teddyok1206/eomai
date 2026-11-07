@@ -31,7 +31,9 @@ MAX_EMBEDDING_GPU_CONTROL_BYTES = 32 * 1024
 MAX_EMBEDDING_GPU_FENCES = 256
 # Allocation includes current-source preparation and result settlement. Numerical
 # execution retains its separate work-batch clock; no original expiry is renewed.
-EMBEDDING_GPU_CONTROL_OVERHEAD_SECONDS = 240
+# Source preparation and result settlement share this finite allowance. The
+# numerical backend keeps its independent 180-second maximum, including cleanup.
+EMBEDDING_GPU_CONTROL_OVERHEAD_SECONDS = 600
 MAX_EMBEDDING_GPU_ALLOCATION_SECONDS = (
     EMBEDDING_GPU_CONTROL_OVERHEAD_SECONDS + MAX_EMBEDDING_WORK_BATCH_SECONDS
 )

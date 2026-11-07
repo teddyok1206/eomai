@@ -41,6 +41,11 @@ service/queue가 아니며, CPU-only 구버전은 순차 동작을 유지한다.
 서로 다른 space, 정확한 공통 published scope는 그대로다. 설계는
 `docs/architecture/LOCAL_INDEXING_CPU_GPU_OVERLAP.md`를 참고한다.
 
+GPU allocation의 준비·완료 확인 시간과 모델 계산 제한은 다르다. 새 allocation은
+유한 control allowance를 포함하지만 기존 absolute expiry를 갱신하지 않는다. worker의
+kernel timer는 backend lifetime을 감싸며 출력 ACK에는 원 allocation deadline을 적용한다.
+실측 실패와 호환 배포 경계는 `docs/architecture/EMBEDDING_ALLOCATION_SETTLEMENT_BUDGET.md`다.
+
 ## DB 화면의 실제 검색 경로
 
 조회에서 기준 문항을 골라 유사도 탭으로 넘기고, 기준 목록·상위 결과 수·요청 identity를

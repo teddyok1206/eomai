@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from eom_catalog_contracts.embedding_gpu_control import EmbeddingGpuAllocationBusy
     from eom_catalog_contracts.embedding_work_batch_result import SupportedEmbeddingWorkBatchResult
 
+    from eom_catalog_service.embedding_execution_ports import NativeEmbeddingBackend
     from eom_catalog_service.embedding_gpu_control_channel import EmbeddingGpuControlChannel
     from eom_catalog_service.embedding_native_backend_pins import NativeEmbeddingBackendPins
     from eom_catalog_service.embedding_native_stdio import NativeEmbeddingDescriptors
@@ -169,21 +170,32 @@ def run_native_embedding_gpu_batch_worker(
                 )
                 channel.send_allocation(ready)
                 channel.receive_grant()
-                with _hard_compute_deadline(resources.timeout_seconds):
-                    files.assert_unchanged()
-                    captured.assert_current()
-                    with open_cuda_probe_device_access(captured) as ownership:
-                        return run_granted_supported_embedding_gpu_batch_descriptors(
-                            descriptors,
-                            lambda: native_cuda_backend_scope(
+                files.assert_unchanged()
+                captured.assert_current()
+                with open_cuda_probe_device_access(captured) as ownership:
+
+                    @contextmanager
+                    def compute_backend() -> Iterator[NativeEmbeddingBackend]:
+                        # Model load/encode/cleanup stay kernel-bounded. Result
+                        # publication and ACK retain the original allocation
+                        # deadline, not an almost-spent numerical timer.
+                        with (
+                            _hard_compute_deadline(resources.timeout_seconds),
+                            native_cuda_backend_scope(
                                 configuration,
                                 receipt_raw_sha256=request.receipt_raw_sha256,
                                 ownership=ownership,
-                            ),
-                            resources=resources,
-                            maximum_total_output_bytes=maximum_total_output_bytes,
-                            channel=channel,
-                        )
+                            ) as backend,
+                        ):
+                            yield backend
+
+                    return run_granted_supported_embedding_gpu_batch_descriptors(
+                        descriptors,
+                        compute_backend,
+                        resources=resources,
+                        maximum_total_output_bytes=maximum_total_output_bytes,
+                        channel=channel,
+                    )
     finally:
         if type(channel) is EmbeddingGpuControlChannel:
             channel.close()
