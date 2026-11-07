@@ -346,11 +346,16 @@ class CreativeCohortExecutionService:
                 run = session.get(KnowledgeAnalysisRunRecord, current.analysis.analysis_run_id)
                 if run is None:
                     raise ValueError("CREATIVE_COHORT_ANALYSIS_MISSING")
-                if run.state in {"FAILED", "REJECTED", "CANCELLED"}:
-                    raise CreativeSourceTerminalFailure(
-                        target, selection, "CREATIVE_COHORT_ANALYSIS_TERMINAL_FAILURE"
-                    )
-                if run.state not in {"ACCEPTED", "NEEDS_REVIEW", "VALIDATING"}:
+                # A failed original may have a supported retry. Let the analysis
+                # owner resolve that exact link before classifying this source.
+                if run.state not in {
+                    "ACCEPTED",
+                    "NEEDS_REVIEW",
+                    "VALIDATING",
+                    "FAILED",
+                    "REJECTED",
+                    "CANCELLED",
+                }:
                     workflow = session.get(WorkflowInstanceRecord, run.workflow_id)
                     if workflow is not None and workflow.state not in {
                         "COMPLETED",

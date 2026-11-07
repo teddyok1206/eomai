@@ -133,6 +133,31 @@ def test_historical_worker_failure_is_not_accepted_or_recreated(monkeypatch):
     case.service.registration.register_completed.assert_not_called()
 
 
+@pytest.mark.parametrize("recovered", [True, False])
+def test_cached_failed_analysis_is_resolved_before_classifying_source(monkeypatch, recovered):
+    from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
+
+    case = execution_case(monkeypatch)
+    failed = NS(state="FAILED", analysis_run_id="analysisrun_" + "a" * 32)
+    case.rows[KnowledgeAnalysisRunRecord] = failed
+    case.service.current = execution.CreativeSourceExecution(
+        case.cohort.targets[0],
+        selection=case.resolved.selection,
+        registered=case.registered,
+        analysis=NS(analysis_run_id=failed.analysis_run_id),
+    )
+    if recovered:
+        assert case.service.advance_once().state == "VERIFIED"
+    else:
+        case.service.learning.advance_analysis.return_value.analysis_state = "FAILED"
+        with pytest.raises(execution.CreativeSourceTerminalFailure):
+            case.service.advance_once()
+        case.service.learning.publish_accepted.assert_not_called()
+    assert failed.state == "FAILED"
+    case.service.learning.advance_analysis.assert_called_once()
+    case.start.assert_not_called()
+
+
 def test_registered_source_is_reauthorized_and_reused_without_new_extraction(monkeypatch):
     case = execution_case(monkeypatch)
     case.service.registration.find_registered_source.return_value = case.registered

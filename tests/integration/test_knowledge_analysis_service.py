@@ -1941,6 +1941,122 @@ def test_concurrent_analysis_create_is_single_and_retry_replays(
         )
 
 
+def test_creative_retry_read_follows_concurrent_link_and_preserves_failed_history(
+    integration_engine: Engine, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from eom_catalog_service import knowledge_analysis_service as analysis_module
+    from eom_operator_identity import PermissionKey
+
+    # This test proves PostgreSQL lineage/concurrency, not production RBAC.
+    monkeypatch.setattr(
+        analysis_module,
+        "effective_permissions",
+        lambda *_: {PermissionKey.KNOWLEDGE_ANALYSIS_CREATE},
+    )
+    settings, catalog = _settings(tmp_path)
+    _ensure_dependencies(integration_engine, settings)
+    intake_id, source_id = _source(integration_engine, catalog, tmp_path)
+    service = KnowledgeAnalysisApplicationService(integration_engine, catalog)
+    original = service.create(
+        _command(
+            intake_id,
+            source_id,
+            source_class="TEXTBOOK",
+            idempotency_key="retry-read-root:" + uuid4().hex,
+        )
+    )
+    with Session(integration_engine) as session, session.begin():
+        row = session.get(KnowledgeAnalysisRunRecord, original.analysis_run_id)
+        workflow = session.get(WorkflowInstanceRecord, row.workflow_id)
+        workflow.state, workflow.failure_code = "FAILED", "WORKER_EXEC_FAILED"
+    failed = service.reconcile(
+        ReconcileKnowledgeAnalysisCommand(
+            analysis_run_id=original.analysis_run_id,
+            requested_by=OPERATOR_ID,
+        )
+    )
+    assert failed.state == "FAILED"
+    retry_command = _command(
+        intake_id,
+        source_id,
+        source_class="TEXTBOOK",
+        idempotency_key="retry-read-child:" + uuid4().hex,
+        predecessor=original.analysis_run_id,
+    )
+    barrier = Barrier(2)
+
+    def retry():
+        barrier.wait(timeout=10)
+        return service.create(retry_command)
+
+    def read():
+        barrier.wait(timeout=10)
+        return service.resolve_retry(
+            analysis_run_id=original.analysis_run_id, requested_by=OPERATOR_ID
+        )
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        pending = executor.submit(retry)
+        observed = executor.submit(read).result(timeout=30)
+        successor = pending.result(timeout=30)
+    assert observed.analysis_run_id in {original.analysis_run_id, successor.analysis_run_id}
+    assert (
+        service.resolve_retry(analysis_run_id=original.analysis_run_id, requested_by=OPERATOR_ID)
+        == successor
+    )
+    assert service.create(retry_command) == successor
+    _complete_proposal(
+        integration_engine,
+        catalog,
+        run_id=successor.analysis_run_id,
+        staging_root=tmp_path / "proposal-retry-read",
+    )
+    accepted = service.reconcile(
+        ReconcileKnowledgeAnalysisCommand(
+            analysis_run_id=successor.analysis_run_id,
+            requested_by=OPERATOR_ID,
+        )
+    )
+    assert accepted.state == "ACCEPTED"
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        results = tuple(
+            executor.map(
+                lambda _: service.resolve_retry(
+                    analysis_run_id=original.analysis_run_id, requested_by=OPERATOR_ID
+                ),
+                range(8),
+            )
+        )
+    assert all(result == accepted for result in results)
+    with Session(integration_engine) as session:
+        root = session.get(KnowledgeAnalysisRunRecord, original.analysis_run_id)
+        assert root.state == "FAILED" and root.lock_version == failed.resource_version
+        assert root.accepted_result_artifact_revision_id is None
+        assert (
+            session.scalar(
+                select(func.count())
+                .select_from(KnowledgeAnalysisRunRecord)
+                .where(
+                    KnowledgeAnalysisRunRecord.predecessor_analysis_run_id == root.analysis_run_id
+                )
+            )
+            == 1
+        )
+        session.execute(text("SET LOCAL enable_seqscan=off"))
+        plan = (
+            session.execute(
+                text(
+                    "EXPLAIN SELECT analysis_run_id FROM app.knowledge_analysis_runs "
+                    "WHERE predecessor_analysis_run_id=:parent LIMIT 2"
+                ),
+                {"parent": root.analysis_run_id},
+            )
+            .scalars()
+            .all()
+        )
+        assert any("Index" in line for line in plan)
+
+
 def test_incompatible_proposal_ontology_fails_before_acceptance(
     integration_engine: Engine,
     tmp_path: Path,

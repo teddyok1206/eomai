@@ -49,6 +49,7 @@ from eom_workflow_runner.external_item_learning_preparation import (
     prepare_external_item_learning_workflow,
 )
 from eom_workflow_runner.external_item_learning_recovery import (
+    prepare_failed_execution_external_item_learning_recovery,
     prepare_failed_launch_external_item_learning_recovery,
     prepare_invalid_result_external_item_learning_recovery,
     prepare_unstarted_external_item_learning_recovery,
@@ -318,6 +319,28 @@ class CreativeCohortPreparationService:
     def recover_invalid_result(self, workflow_id: str) -> ExternalItemLearningRoleSelection:
         """Explicit terminal validation recovery; the Workflow owner proves no commit."""
         return self._recover(workflow_id, prepare_invalid_result_external_item_learning_recovery)
+
+    def recover_failed_execution(self, workflow_id: str) -> ExternalItemLearningRoleSelection:
+        """An operator-requested retry after exact worker termination is proven."""
+        slots: dict[str, WorkerSlot] = {
+            slot.slot_id: slot
+            for slot in WorkerRegistry.load(self.settings.worker_config).config.slots
+        }
+
+        def confirm_unit_terminal(slot_id: str, job_id: str) -> bool:
+            slot = slots[slot_id]
+            if not inspect_worker_systemd_contract(slot).ready:
+                raise ValueError("CREATIVE_EXECUTION_RECOVERY_RUNTIME_UNAVAILABLE")
+            activity = inspect_worker_unit_activity(slot, job_id)
+            return activity.state == "ABSENT" and activity.exit_code != 0
+
+        return self._recover(
+            workflow_id,
+            partial(
+                prepare_failed_execution_external_item_learning_recovery,
+                confirm_unit_terminal=confirm_unit_terminal,
+            ),
+        )
 
     def recover_failed_launch(self, workflow_id: str) -> ExternalItemLearningRoleSelection:
         """Reauthorize one known prelaunch failure under its original scope/pins."""

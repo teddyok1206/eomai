@@ -4,6 +4,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
+from eom_catalog_contracts.creative_execution_recovery import CreativeExecutionRecovery
 from eom_catalog_contracts.creative_launch_recovery import CreativeLaunchRecovery
 from eom_catalog_contracts.creative_preexecution_recovery import CreativePreexecutionRecovery
 from eom_catalog_contracts.creative_result_recovery import CreativeResultRecovery
@@ -48,9 +49,17 @@ from eom_workflow_runner.state_machine import record_workflow_event
 RECOVERY_EVENT = "CREATIVE_PREEXECUTION_SUCCESSOR_PREPARED"
 RESULT_RECOVERY_EVENT = "CREATIVE_INVALID_RESULT_SUCCESSOR_PREPARED"
 LAUNCH_RECOVERY_EVENT = "CREATIVE_FIXED_LAUNCH_SUCCESSOR_PREPARED"
-RecoveryRecord = CreativePreexecutionRecovery | CreativeResultRecovery | CreativeLaunchRecovery
+RecoveryRecord = (
+    CreativePreexecutionRecovery
+    | CreativeResultRecovery
+    | CreativeLaunchRecovery
+    | CreativeExecutionRecovery
+)
 RecoveryType = (
-    type[CreativePreexecutionRecovery] | type[CreativeResultRecovery] | type[CreativeLaunchRecovery]
+    type[CreativePreexecutionRecovery]
+    | type[CreativeResultRecovery]
+    | type[CreativeLaunchRecovery]
+    | type[CreativeExecutionRecovery]
 )
 
 
@@ -65,6 +74,13 @@ class _RecoveryRoute:
 
 _RECOVERY_ROUTES: Mapping[RecoveryType, _RecoveryRoute] = MappingProxyType(
     {
+        CreativeExecutionRecovery: _RecoveryRoute(
+            "creative-execution-recovery/1.0",
+            "TERMINAL_WORKER_EXECUTION_CONFIRMED",
+            "CREATIVE_TERMINAL_EXECUTION_SUCCESSOR_PREPARED",
+            "creative_execution_recovery",
+            "creative-terminal-execution-recovery:",
+        ),
         CreativePreexecutionRecovery: _RecoveryRoute(
             "creative-preexecution-recovery/1.0",
             "NO_PLATFORM_JOB_CREATED",
@@ -184,6 +200,23 @@ def _failed_launch_input(
     return work, step
 
 
+def _failed_execution_input(
+    session: Session, workflow: WorkflowInstanceRecord
+) -> tuple[CreativeLearningWorkInput, WorkflowStepRunRecord]:
+    if workflow.failure_code not in {"WORKER_EXEC_FAILED", "WORKFLOW_STEP_FAILED"}:
+        raise ValueError("CREATIVE_EXECUTION_RECOVERY_NOT_ELIGIBLE")
+    work, step, job = _failed_job_input(session, workflow, failure_code=workflow.failure_code)
+    # A historical runner abort may leave RUNNING metadata after its process
+    # disappeared. Preparation additionally proves all fixed units absent;
+    # neither that Job nor the failed Workflow is rewritten as successful.
+    orphaned = workflow.failure_code == "WORKFLOW_STEP_FAILED"
+    if job.worker_slot_id is None or (
+        job.worker_exit_code is not None if orphaned else job.worker_exit_code in {None, 0}
+    ):
+        raise ValueError("CREATIVE_EXECUTION_RECOVERY_NOT_ELIGIBLE")
+    return work, step
+
+
 def _failed_job_input(
     session: Session, workflow: WorkflowInstanceRecord, *, failure_code: str
 ) -> tuple[CreativeLearningWorkInput, WorkflowStepRunRecord, JobRecord]:
@@ -232,8 +265,8 @@ def _failed_job_input(
         or step.superseded_by_step_run_id is not None
         or job is None
         or step.platform_job_id != job.job_id
-        or job.status != "FAILED"
-        or job.error_code != failure_code
+        or job.status != ("RUNNING" if failure_code == "WORKFLOW_STEP_FAILED" else "FAILED")
+        or job.error_code != (None if failure_code == "WORKFLOW_STEP_FAILED" else failure_code)
     ):
         raise ValueError("CREATIVE_RESULT_RECOVERY_NOT_ELIGIBLE")
     for statement in (
@@ -299,6 +332,7 @@ def resolve_external_item_learning_recovery(
         if record is None:
             return workflow
         proof = {
+            CreativeExecutionRecovery: _failed_execution_input,
             CreativeResultRecovery: _failed_result_input,
             CreativePreexecutionRecovery: _failed_input,
             CreativeLaunchRecovery: _failed_launch_input,
@@ -312,7 +346,10 @@ def resolve_external_item_learning_recovery(
             or record.definition_sha256 != workflow.definition_hash
             or record.work_input_sha256 != work.request_sha256
             or (
-                isinstance(record, (CreativeResultRecovery, CreativeLaunchRecovery))
+                isinstance(
+                    record,
+                    (CreativeResultRecovery, CreativeLaunchRecovery, CreativeExecutionRecovery),
+                )
                 and record.predecessor_job_id != step.platform_job_id
             )
             or successor is None
@@ -381,6 +418,48 @@ def prepare_invalid_result_external_item_learning_recovery(
         expected_preset=expected_preset,
         proof=_failed_result_input,
         record_type=CreativeResultRecovery,
+    )
+
+
+def prepare_failed_execution_external_item_learning_recovery(
+    session: Session,
+    *,
+    predecessor_workflow_id: str,
+    definition: WorkflowDefinitionRecord,
+    work: CreativeLearningWorkInput,
+    operator_id: str,
+    source_authorizer: ExternalItemLearningSourceAuthorizer,
+    page_publisher: ControlFileSetPublisher,
+    expected_preset: ExecutionPresetRevision,
+    confirm_unit_terminal: Callable[[str, str], bool],
+) -> PreparedExternalItemLearning:
+    """One explicit retry of a proven failed process, not a quota retry loop."""
+
+    def prove(
+        session: Session, workflow: WorkflowInstanceRecord
+    ) -> tuple[CreativeLearningWorkInput, WorkflowStepRunRecord]:
+        original, step = _failed_execution_input(session, workflow)
+        assert step.platform_job_id is not None
+        job = session.get(JobRecord, step.platform_job_id)
+        if (
+            job is None
+            or job.worker_slot_id is None
+            or not confirm_unit_terminal(job.worker_slot_id, job.job_id)
+        ):
+            raise ValueError("CREATIVE_EXECUTION_RECOVERY_UNIT_UNCERTAIN")
+        return original, step
+
+    return _prepare_recovery(
+        session,
+        predecessor_workflow_id=predecessor_workflow_id,
+        definition=definition,
+        work=work,
+        operator_id=operator_id,
+        source_authorizer=source_authorizer,
+        page_publisher=page_publisher,
+        expected_preset=expected_preset,
+        proof=prove,
+        record_type=CreativeExecutionRecovery,
     )
 
 

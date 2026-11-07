@@ -45,6 +45,7 @@ def case(monkeypatch, state="RUNNING", replay=False):
     service.analyses = Mock()
     run = NS(analysis_run_id=run_id, state=state)
     service.analyses.create_with_pinned_preset.return_value = run
+    service.analyses.resolve_retry.return_value = run
     service.analyses.reconcile.return_value = run
     service.analyses.accept_validated_without_review.return_value = run
     service.publication = Mock()
@@ -131,6 +132,30 @@ def test_revoked_source_permission_prevents_new_analysis(monkeypatch):
             requested_by_operator_id=value.lineage.requested_by_operator_id,
         )
     value.service.analyses.create_with_pinned_preset.assert_not_called()
+
+
+def test_failed_original_follows_accepted_retry_and_reuses_its_graph_membership(monkeypatch):
+    value = case(monkeypatch, "FAILED")
+    successor = "analysisrun_" + "d" * 32
+    value.service.analyses.resolve_retry.return_value = NS(
+        analysis_run_id=successor, state="ACCEPTED"
+    )
+    value.service.publication.current_structure_context.return_value = NS(
+        graph_snapshot_revision_id=value.graph_id, accepted_analysis_run_ids=(successor,)
+    )
+    result = value.service.advance(
+        item_revision_id=value.item_revision,
+        requested_by_operator_id=value.lineage.requested_by_operator_id,
+    )
+    assert (
+        result.analysis_run_id == successor and result.graph_snapshot_revision_id == value.graph_id
+    )
+    assert value.run.state == "FAILED"
+    value.service.analyses.resolve_retry.assert_called_once_with(
+        analysis_run_id=value.run_id, requested_by=value.lineage.requested_by_operator_id
+    )
+    value.service.automatic.publish.assert_not_called()
+    value.service.analyses.reconcile.assert_not_called()
 
 
 def test_retired_item_is_not_reactivated_or_scheduled_again(monkeypatch):

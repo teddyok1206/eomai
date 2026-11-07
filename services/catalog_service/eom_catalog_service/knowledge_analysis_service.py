@@ -739,6 +739,101 @@ class KnowledgeAnalysisApplicationService:
             pinned_preset=(preset_id, preset_revision_id),
         )
 
+    def resolve_retry(
+        self, *, analysis_run_id: str, requested_by: str
+    ) -> KnowledgeAnalysisApplicationResult:
+        """Read an explicitly linked retry, without retrying or rewriting its predecessor.
+
+        Callers retain their source authorization. Only same-owner, same-input
+        retry links are usable; an additive solution or a newer unrelated run
+        is not a recovery. The indexed predecessor lookup is bounded to 32 hops.
+        """
+        with self.sessions() as session:
+            run = session.get(KnowledgeAnalysisRunRecord, analysis_run_id)
+            if run is None:
+                raise KnowledgeAnalysisServiceError(
+                    "KNOWLEDGE_ANALYSIS_RUN_NOT_FOUND", "knowledge analysis run does not exist"
+                )
+            if (
+                run.created_by_operator_id != requested_by
+                or PermissionKey.KNOWLEDGE_ANALYSIS_CREATE
+                not in effective_permissions(session, requested_by)
+            ):
+                raise KnowledgeAnalysisServiceError(
+                    "KNOWLEDGE_ANALYSIS_PERMISSION_DENIED", "analysis retry owner is unavailable"
+                )
+            seen: set[str] = set()
+            for _ in range(32):
+                if run.analysis_run_id in seen:
+                    raise KnowledgeAnalysisServiceError(
+                        "KNOWLEDGE_ANALYSIS_RETRY_INVALID", "analysis retry chain contains a cycle"
+                    )
+                seen.add(run.analysis_run_id)
+                request_hash = content_sha256(
+                    {
+                        key: value
+                        for key, value in run.canonical_request.items()
+                        if key != "request_sha256"
+                    }
+                )
+                if (
+                    request_hash != run.request_sha256
+                    or run.canonical_request.get("request_sha256", run.request_sha256)
+                    != run.request_sha256
+                ):
+                    raise KnowledgeAnalysisServiceError(
+                        "KNOWLEDGE_ANALYSIS_RETRY_INVALID", "analysis retry request hash differs"
+                    )
+                if run.state not in {"FAILED", "REJECTED", "CANCELLED"}:
+                    return self._projection(run)
+                successors = tuple(
+                    session.scalars(
+                        select(KnowledgeAnalysisRunRecord)
+                        .where(
+                            KnowledgeAnalysisRunRecord.predecessor_analysis_run_id
+                            == run.analysis_run_id
+                        )
+                        .limit(2)
+                    )
+                )
+                if not successors:
+                    return self._projection(run)
+                if len(successors) != 1:
+                    raise KnowledgeAnalysisServiceError(
+                        "KNOWLEDGE_ANALYSIS_RETRY_AMBIGUOUS",
+                        "analysis retry branches are ambiguous",
+                    )
+                successor = successors[0]
+                if any(
+                    getattr(successor, field) != getattr(run, field)
+                    for field in (
+                        "created_by_operator_id",
+                        "source_kind",
+                        "source_revision_id",
+                        "source_artifact_id",
+                        "source_artifact_revision_id",
+                        "source_sha256",
+                        "preset_id",
+                        "preset_revision_id",
+                        "risk_policy_revision_id",
+                    )
+                ) or any(
+                    successor.canonical_request.get(field) != run.canonical_request.get(field)
+                    for field in (
+                        "schema_version",
+                        "source",
+                        "general_knowledge_mode",
+                        "risk_policy_revision_id",
+                    )
+                ):
+                    raise KnowledgeAnalysisServiceError(
+                        "KNOWLEDGE_ANALYSIS_RETRY_INVALID", "analysis retry dependencies differ"
+                    )
+                run = successor
+            raise KnowledgeAnalysisServiceError(
+                "KNOWLEDGE_ANALYSIS_RETRY_INVALID", "analysis retry chain exceeds the bound"
+            )
+
     def create_solution(
         self, command: CreateKnowledgeSolutionAnalysisCommand
     ) -> KnowledgeAnalysisApplicationResult:

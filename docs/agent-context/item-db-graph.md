@@ -56,6 +56,13 @@ source/operator 권한과 report lineage를 다시 검증한다. publication 후
 저장된 경고/이상 기록까지 보이는지 확인한다. 내용상 문제를 기록하는 것과 기술적 실패를
 성공으로 꾸미는 것은 다르다. 기존 FAILED는 보존하고 지원된 reconcile/retry만 쓴다.
 
+분석의 최초 멱등 key가 FAILED를 가리켜도 `KnowledgeAnalysisApplicationService.resolve_retry`
+가 명시적 predecessor chain의 같은 source/operator/preset/hash만 따라간다. cohort의
+cached failed 분석도 이 owner에서 확인한 뒤 보류를 판정한다. terminal worker 실패와
+process가 없는 고아 실행의 명시적 successor는 기존 `external_item_learning_recovery.py`의
+별도 execution-proof route다. 살아 있는 unit/lease·commit 이력이 있으면 실행하지 않는다.
+설계·검증 경계는 `CREATIVE_COHORT_RECOVERY_CONTINUITY.md`를 참고한다.
+
 ## 먼저 열 파일
 
 - `apps/application_api/eom_api/routers/item_db.py`

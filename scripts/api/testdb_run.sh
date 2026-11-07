@@ -494,6 +494,7 @@ if [[ "${action}" == "creative-graph-tests" ]]; then
     tests/integration/test_knowledge_analysis_service.py::test_knowledge_analysis_history_access_patterns_have_dedicated_indexes \
     tests/integration/test_knowledge_analysis_service.py::test_education_graph_access_patterns_have_dedicated_indexes \
     tests/integration/test_knowledge_analysis_service.py::test_concurrent_analysis_create_is_single_and_retry_replays \
+    tests/integration/test_knowledge_analysis_service.py::test_creative_retry_read_follows_concurrent_link_and_preserves_failed_history \
     tests/integration/test_knowledge_analysis_service.py::test_incompatible_proposal_ontology_fails_before_acceptance \
     tests/integration/test_knowledge_analysis_service.py::test_knowledge_analysis_acceptance_review_and_retry_are_pointer_only \
     tests/integration/test_knowledge_analysis_service.py::test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently \

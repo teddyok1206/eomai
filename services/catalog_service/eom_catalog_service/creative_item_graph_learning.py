@@ -213,6 +213,10 @@ class CreativeItemGraphLearningService:
             preset_id=self.preset_id,
             preset_revision_id=self.preset_revision_id,
         )
+        if run.state in {"FAILED", "REJECTED", "CANCELLED"}:
+            run = self.analyses.resolve_retry(
+                analysis_run_id=run.analysis_run_id, requested_by=requested_by_operator_id
+            )
         if run.state in {"VALIDATING", "NEEDS_REVIEW"}:
             run = self.analyses.accept_validated_without_review(
                 analysis_run_id=run.analysis_run_id, requested_by=requested_by_operator_id
