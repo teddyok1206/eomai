@@ -58,9 +58,9 @@ parser 지원 경계이며 같은 모델 요청을 반복하는 것으로 해결
 
 ## 검증
 
-- focused source tests: retry read·cohort cached failure·successor proof·과거 recovery·정기 관측·schema resource.
+- focused source tests **190 PASS**: retry read·cohort cached failure·successor proof·과거 recovery·정기 관측·schema resource.
 - disposable PostgreSQL: 같은 원 run의 concurrent retry 생성/조회, accepted 재조회,
-  original FAILED/version 불변, 단일 successor, predecessor index EXPLAIN 및 기존 Graph/DB 회귀 PASS.
+  original FAILED/version 불변, 단일 successor, predecessor index EXPLAIN 및 기존 Graph/DB 회귀 **10 PASS**.
 - formatter/linter, 변경 6 module의 mypy `--follow-imports=silent`, canonical/mirror schema audit PASS.
   일반 follow-imports에서는 기존 material request union 관련 6개 오류가 다른 3개 모듈에서
   보였다. 이를 이번 수정의 오류로 숨기거나 무관한 코드를 같이 변경하지 않았다.
@@ -68,6 +68,13 @@ parser 지원 경계이며 같은 모델 요청을 반복하는 것으로 해결
 - 4개 실제 Codex process와 같은 Job/slot의 유효 lease 확인. 전체 처리/교육 품질 승인은 별도다.
 
 ## 감사와 rollback
+
+설치본의 5개 원래 요청을 실제로 재조회해 같은 successor만 반환하고 추가 start를 하지
+않는 것을 확인했다. 원 Workflow 5개는 모두 FAILED를 유지했고 successor link는 각 1개였다.
+원본 작업 기록과 실제 활성 lease, 배포 전후 상태를 기존 Orchestrator로 NAS에 보관했다:
+`artifact_25215590a47c45ea81ca6587d65c24c7` /
+`rev_fe99ac6db1b542d49599a89906179bfb`, `report.json` SHA
+`104bb0cbe8a2a160f66ab678e4c9458761d8592fef28abd906e685ea6b8c6ea6`.
 
 운영 원본 기록: `/var/lib/eom-creative-recovery-20261107/`의 `before.json`,
 `creative.service.before`, `staged.json`, `preflight.json`, `intent.json`, `applied.json`.
