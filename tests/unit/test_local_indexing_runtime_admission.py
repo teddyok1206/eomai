@@ -7,11 +7,13 @@ import hashlib
 import os
 import pickle
 import stat
+import subprocess
 import time
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
+from unittest.mock import Mock
 
 import pytest
 from eom_identity_service import local_indexing_runtime as runtime
@@ -333,6 +335,74 @@ def test_unit_observation_is_fixed_bounded_and_not_caller_supplied(
         output = raw
         with pytest.raises(ValueError):
             runtime._unit()
+
+
+@pytest.mark.parametrize("timeouts", [1, 2])
+def test_unit_observation_retries_only_delayed_read_without_caching(monkeypatch, timeouts):
+    output = "\n".join(name + "=synthetic" for name in sorted(runtime._PROPERTIES)).encode()
+    response = SimpleNamespace(returncode=0, stdout=output, stderr=b"")
+    run = Mock(side_effect=[subprocess.TimeoutExpired("systemctl", 2)] * timeouts + [response] * 2)
+    monkeypatch.setattr(runtime.subprocess, "run", run)
+    assert set(runtime._unit()) == runtime._PROPERTIES
+    assert [call.kwargs["timeout"] for call in run.call_args_list] == [2, 5, 10][: timeouts + 1]
+    assert all(call.args == run.call_args_list[0].args for call in run.call_args_list)
+    assert set(runtime._unit()) == runtime._PROPERTIES
+    assert run.call_count == timeouts + 2 and run.call_args.kwargs["timeout"] == 2
+
+
+def test_persistent_unit_timeout_remains_bounded_and_denied(monkeypatch):
+    run = Mock(side_effect=subprocess.TimeoutExpired("systemctl", 2, output=b"partial secret"))
+    monkeypatch.setattr(runtime.subprocess, "run", run)
+    with pytest.raises(runtime.IndexingRuntimeAdmissionError, match="UNAVAILABLE") as caught:
+        runtime._unit()
+    assert [call.kwargs["timeout"] for call in run.call_args_list] == [2, 5, 10]
+    assert str(caught.value) == "LOCAL_INDEXING_RUNTIME_UNAVAILABLE"
+
+
+@pytest.mark.parametrize("fault", ["exit", "stderr", "partial", "os_error"])
+def test_retry_does_not_ignore_invalid_or_denied_unit_observation(monkeypatch, fault):
+    output = "\n".join(name + "=synthetic" for name in sorted(runtime._PROPERTIES)).encode()
+    response = SimpleNamespace(returncode=0, stdout=output, stderr=b"")
+    if fault == "exit":
+        response.returncode = 1
+    elif fault == "stderr":
+        response.stderr = b"denied"
+    elif fault == "partial":
+        response.stdout = b"MainPID=123"
+    run = Mock(
+        side_effect=[
+            subprocess.TimeoutExpired("systemctl", 2),
+            OSError("denied") if fault == "os_error" else response,
+        ]
+    )
+    monkeypatch.setattr(runtime.subprocess, "run", run)
+    with pytest.raises((runtime.IndexingRuntimeAdmissionError, OSError)):
+        runtime._unit()
+    assert run.call_count == 2
+
+
+@pytest.mark.parametrize("changed", [False, True])
+def test_capture_revalidates_identity_after_recovered_unit_timeout(installed, monkeypatch, changed):
+    capture = runtime.capture_local_indexing_runtime(installed["pin"])
+    # Preserve the fixture's OS seams while exercising the real subprocess reader
+    # inside the captured invocation fence, without granting the test real authority.
+    original = installed["unit"].copy()
+    if changed:
+        original["InvocationID"] = "b" * 32
+    response = SimpleNamespace(
+        returncode=0,
+        stderr=b"",
+        stdout="\n".join(f"{key}={value}" for key, value in original.items()).encode(),
+    )
+    run = Mock(side_effect=[subprocess.TimeoutExpired("systemctl", 2), response])
+    monkeypatch.setattr(runtime.subprocess, "run", run)
+    monkeypatch.setattr(runtime, "_self_unit", lambda: (runtime._unit(), installed["started"]))
+    if changed:
+        with pytest.raises(runtime.IndexingRuntimeAdmissionError, match="CHANGED"):
+            check(capture, installed["pin"])
+    else:
+        check(capture, installed["pin"])
+    assert run.call_count == 2
 
 
 @pytest.mark.parametrize(

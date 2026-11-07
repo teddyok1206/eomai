@@ -52,6 +52,10 @@ _PROPERTIES = frozenset(
     }
 )
 _ENV = {"PATH": "/usr/bin:/bin", "LANG": "C.UTF-8", "LC_ALL": "C", "TZ": "UTC"}
+# Only retry the side-effect-free OS observation, never an indexing operation.
+# A delayed systemd reply is not evidence of changed identity; every successful
+# reply still passes the original process/file fences. Persistent failure denies.
+_UNIT_OBSERVATION_TIMEOUTS = (2, 5, 10)
 _SEAL = object()
 
 
@@ -190,21 +194,28 @@ class _ProtectedFiles:
 
 
 def _unit() -> dict[str, str]:
-    result = subprocess.run(
-        (
-            "/usr/bin/systemctl",
-            "--no-pager",
-            "--timestamp=us",
-            "show",
-            _UNIT_NAME,
-            *("--property=" + name for name in sorted(_PROPERTIES)),
-        ),
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        check=False,
-        timeout=2,
-        env=_ENV,
-    )
+    for timeout in _UNIT_OBSERVATION_TIMEOUTS:
+        try:
+            result = subprocess.run(
+                (
+                    "/usr/bin/systemctl",
+                    "--no-pager",
+                    "--timestamp=us",
+                    "show",
+                    _UNIT_NAME,
+                    *("--property=" + name for name in sorted(_PROPERTIES)),
+                ),
+                stdin=subprocess.DEVNULL,
+                capture_output=True,
+                check=False,
+                timeout=timeout,
+                env=_ENV,
+            )
+            break
+        except subprocess.TimeoutExpired:
+            continue
+    else:
+        raise _unavailable()
     if result.returncode or result.stderr or len(result.stdout) > 8192:
         raise _unavailable()
     values: dict[str, str] = {}

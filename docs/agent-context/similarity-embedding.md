@@ -46,6 +46,12 @@ GPU allocation의 준비·완료 확인 시간과 모델 계산 제한은 다르
 kernel timer는 backend lifetime을 감싸며 출력 ACK에는 원 allocation deadline을 적용한다.
 실측 실패와 호환 배포 경계는 `docs/architecture/EMBEDDING_ALLOCATION_SETTLEMENT_BUDGET.md`다.
 
+INDEX의 OS 상태 조회는 Identity `local_indexing_runtime._unit`에서 timeout만
+2/5/10초로 제한 재시도한다. 임베딩 submit/commit이나 전체 workflow 재실행이 아니다.
+응답을 얻으면 기존 invocation/파일 검사를 그대로 수행하고, 실제 변경·잘못된 응답과
+지속된 조회 불가는 거부한다. 복구 근거는
+`docs/operations/INDEX_UNIT_OBSERVATION_RECOVERY_2026-11-07.md`를 확인한다.
+
 ## DB 화면의 실제 검색 경로
 
 조회에서 기준 문항을 골라 유사도 탭으로 넘기고, 기준 목록·상위 결과 수·요청 identity를
