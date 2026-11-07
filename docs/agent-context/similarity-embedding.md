@@ -34,7 +34,12 @@ prefetch와 dependency observation이 같은 조건을 쓴다. 필요한 Artifac
 기출을 먼저 선택하고 같은 출처 안에서는 revision 순서를 유지해, 늘어나는 등록 문항의
 ID prefix가 기출 backlog를 계속 밀지 않게 한다. legacy namespace·고정된 기존 요청·
 이미 계산한 encoding 재사용과 membership-only 규칙은 바꾸지 않는다. CPU standby는
-여전히 같은 owner의 기존 처리 경로이며 별도 병렬 service로 오해하지 않는다.
+같은 owner의 기존 queue/Runner를 사용한다. routed owner의 `local_indexing_cpu_lane`은
+outstanding 호출 하나만 별도 thread에서 실행해 GPU discovery를 막지 않는다. 별도
+service/queue가 아니며, CPU-only 구버전은 순차 동작을 유지한다. stop/failure 시 이미
+시작한 호출을 drain한 뒤 runtime capture/Engine을 닫는다. QUERY 우선과 두 장치의
+서로 다른 space, 정확한 공통 published scope는 그대로다. 설계는
+`docs/architecture/LOCAL_INDEXING_CPU_GPU_OVERLAP.md`를 참고한다.
 
 ## DB 화면의 실제 검색 경로
 
@@ -65,6 +70,7 @@ hit도 실제 사용자·고정 Graph/policy와 fresh SQL dependency fingerprint
 - `apps/web_gui/eom_web_gui/static/item-db-similarity-list.js`
 - `apps/web_gui/eom_web_gui/static/item-db-similarity.js`
 - `services/workflow_runner/eom_workflow_runner/local_indexing_service_entry.py`
+- `services/workflow_runner/eom_workflow_runner/local_indexing_cpu_lane.py`
 - `services/workflow_runner/eom_workflow_runner/local_indexing_routed_namespace.py`
 - `services/workflow_runner/eom_workflow_runner/reference_query_prepare_application.py`
 - `services/catalog_service/eom_catalog_service/public_solution_source_capture.py`
@@ -88,6 +94,8 @@ stale pin, 결과 materialization을 구분한다. 새로운 key로 우회하기
 - `tests/unit/test_native_office_public_embedding.py`
 - `tests/unit/test_background_resource_recovery.py`
 - `tests/unit/test_public_indexing_target_selection.py`
+- `tests/unit/test_local_indexing_cpu_overlap.py`
+- `tests/integration/test_local_embedding_runner.py`
 - `tests/unit/test_completed_public_ranking.py`
 - `tests/integration/test_completed_public_rankings.py`
 - `docs/operations/ITEM_DB_SIMILARITY_LIST_RELEASE_2026-11-02.md`

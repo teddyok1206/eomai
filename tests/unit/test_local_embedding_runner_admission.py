@@ -5,7 +5,7 @@ from __future__ import annotations
 import ast
 from dataclasses import replace
 from pathlib import Path
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 import pytest
 from eom_catalog_contracts.inference_transfer_embedding import embedding_input_set_sha256
@@ -38,8 +38,10 @@ from tests.unit.local_embedding_admission_fixtures import member, native_fixture
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def scope_fixture() -> tuple[ResolvedLocalEmbeddingAdmission, CompiledWorkflowDefinition]:
-    fixture = native_fixture()
+def scope_fixture(
+    *, device: Literal["CPU", "CUDA"] = "CPU"
+) -> tuple[ResolvedLocalEmbeddingAdmission, CompiledWorkflowDefinition]:
+    fixture = native_fixture(device=device)
     definition = LocalEmbeddingWorkflowDefinition(
         limits=WorkflowLimits(max_rework_cycles=0, max_step_attempts=1),
         steps=(

@@ -9,9 +9,11 @@ is deleted or marked successful for convenience. No Job, NAS, model or GPU is us
 from __future__ import annotations
 
 import multiprocessing
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Barrier
 from typing import Any, cast
 from unittest.mock import Mock
 from uuid import uuid4
@@ -59,6 +61,7 @@ from tests.integration.test_inference_transfer_stage_migration import (
     stage_owner_connection as stage_owner_connection,
 )
 from tests.unit.inference_transfer_embedding_fixtures import seal
+from tests.unit.local_embedding_admission_fixtures import native_fixture
 from tests.unit.local_embedding_service_fixtures import service_fixture
 from tests.unit.test_local_embedding_runner_admission import scope_fixture
 
@@ -307,6 +310,97 @@ def test_actual_independent_processes_claim_once(claim_fixture: ClaimFixture) ->
                 child.terminate()
                 child.join(timeout=5)
         queue.close()
+
+
+def test_same_owner_threads_claim_distinct_commands_without_shared_session_or_replay(
+    claim_fixture: ClaimFixture,
+) -> None:
+    """The overlapped owner shares a pool, never a SQL Session or command lease.
+
+    Numerical/source callbacks are synthetic. These two original commands only
+    exercise the actual indexed claim boundary in the disposable PostgreSQL DB.
+    """
+    request = claim_fixture.owner.scope.request
+    actor_type, actor_id = local_embedding_request_actor(request)
+    second_scope, compiled = scope_fixture(device="CUDA")
+    if actor_type == "local_indexing_service":
+        native = service_fixture(
+            base=native_fixture(device="CUDA"),
+            service=LocalIndexingServiceReference.model_validate(
+                request.actor_context.model_dump(
+                    include={"service_id", "service_revision_id", "service_identity_sha256"}
+                )
+            ),
+            workflow_definition_sha256=compiled.sha256,
+        )
+        second_scope = ResolvedLocalEmbeddingAdmission(
+            native.request, native.base.plan, native.policy
+        )
+    else:
+        body = second_scope.request.model_dump(mode="json")
+        body["actor_context"]["operator_id"] = actor_id
+        second_scope = ResolvedLocalEmbeddingAdmission(
+            LocalEmbeddingWorkflowRequestV11.model_validate(seal(body, "request_sha256")),
+            second_scope.plan,
+            second_scope.policy,
+        )
+    assert second_scope.request.namespace != request.namespace
+    second_owner = SyntheticOwner(second_scope)
+    with claim_fixture.sessions.begin() as session:
+        original = session.get(WorkflowInstanceRecord, claim_fixture.workflow_id)
+        assert original is not None
+        definition = session.get(WorkflowDefinitionRecord, original.definition_id)
+        assert definition is not None
+        submitted = start_local_embedding_in_session(
+            session,
+            definition=definition,
+            request=second_scope.request,
+            idempotency_key="synthetic-overlapped-index:" + uuid4().hex,
+            actor_type=actor_type,
+            actor_id=actor_id,
+            owner=second_owner,
+            executor=claim_fixture.executor,
+        )
+        assert isinstance(submitted, LocalEmbeddingWorkflowSubmitted)
+        second_workflow = submitted.workflow.workflow_id
+        assert submitted.workflow_created and second_workflow != claim_fixture.workflow_id
+    with claim_fixture.sessions() as session:
+        second = peek_command_candidate(
+            session,
+            family=CommandExecutionFamily.LOCAL_EMBEDDING,
+            workflow_id=second_workflow,
+        )
+    assert second is not None
+    first = claim_fixture.peek()
+    barrier = Barrier(2)
+
+    def claim(candidate):
+        with claim_fixture.sessions.begin() as session:
+            claimed = claim_command_candidate(
+                session,
+                candidate,
+                runner_id="synthetic-overlap-" + candidate.command_id,
+                lease_seconds=60,
+                local_embedding_owner=claim_fixture.owner if candidate is first else second_owner,
+                local_embedding_executor=claim_fixture.executor,
+            )
+            assert claimed is not None
+            # Both real transactions must hold their distinct claims together;
+            # no owner-wide lock may serialize independent namespaces/commands.
+            barrier.wait(timeout=10)
+            return claimed.command_id
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [executor.submit(claim, candidate) for candidate in (first, second)]
+        assert {future.result(timeout=15) for future in futures} == {
+            first.command_id,
+            second.command_id,
+        }
+    for candidate in (first, second):
+        with claim_fixture.sessions.begin() as session:
+            assert claim_fixture.claim(session, candidate) is None
+            saved = session.get(WorkflowCommandRecord, candidate.command_id)
+            assert saved.lease_generation == saved.attempts == 1 and saved.state == "LEASED"
 
 
 def test_actual_expired_native_command_cannot_restart_without_recovery(

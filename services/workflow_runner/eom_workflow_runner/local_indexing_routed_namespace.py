@@ -168,8 +168,8 @@ class RoutedLocalIndexingNamespaceRuntime:
             } or outcome.command_state in {"FAILED", "CANCELLED"}
             if completed and outcome.device == "CUDA":
                 # Queue bounded standby coverage after the real GPU completion.
-                # The existing CPU Runner drains it on its normal next turn; no
-                # second model runs inside this GPU allocation or SQL root.
+                # The bounded CPU lane drains the existing queue independently;
+                # no second model runs inside this GPU allocation or SQL root.
                 self._queue_cpu_standby(request)
             return replace(
                 observed,

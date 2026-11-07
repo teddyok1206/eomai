@@ -10,13 +10,16 @@ import signal
 import stat
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime
 from pathlib import Path
 from threading import Event
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from eom_workflow_runner.local_indexing_cpu_lane import LocalIndexingCpuLane
     from eom_workflow_runner.local_indexing_service_runtime import LocalIndexingServiceRuntime
+    from eom_workflow_runner.models import WorkflowCommandRecord
 
 _RELEASES = Path("/opt/eom/embedding-owner-releases")
 _RUNTIME_CONFIGURATION = Path("/etc/eom/local-indexing-runtime.json")
@@ -108,7 +111,50 @@ def _failure_detail(error: Exception) -> dict[str, str | int | None]:
 
 
 def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> None:
-    """Round-robin exact namespaces; each drains its queue before new discovery."""
+    """Keep original CPU queues without making them a barrier to GPU progress."""
+    from eom_workflow_runner.local_indexing_cpu_lane import LocalIndexingCpuLane
+    from eom_workflow_runner.local_indexing_routed_namespace import (
+        RoutedLocalIndexingNamespaceRuntime,
+    )
+
+    routed = tuple(
+        namespace
+        for namespace in runtime.namespaces
+        if isinstance(namespace, RoutedLocalIndexingNamespaceRuntime)
+    )
+    if not routed:
+        _serve_namespaces(runtime, stop, None)
+        return
+    if len(routed) != len(runtime.namespaces):
+        raise ValueError("LOCAL_INDEXING_SERVICE_NAMESPACE_MISMATCH")
+    _emit("LOCAL_INDEXING_CPU_OVERLAP_ENABLED", maximum_cpu_calls=1)
+    with ThreadPoolExecutor(max_workers=1, thread_name_prefix="index-cpu-standby") as executor:
+        cpu = LocalIndexingCpuLane(executor, routed, stop, _observe_cpu_command)
+        try:
+            _serve_namespaces(runtime, stop, cpu)
+        finally:
+            # Existing command/numerical work is not cancelled. The capture and
+            # Engine stay alive until the original CPU call finishes, even when
+            # the GPU lane fails or the operator requests a graceful handoff.
+            cpu.drain()
+
+
+def _observe_cpu_command(view: str, command: WorkflowCommandRecord, elapsed_ms: int) -> None:
+    _emit(
+        "LOCAL_INDEXING_COMMAND_OBSERVED",
+        workflow_id=command.workflow_id,
+        command_id=command.command_id,
+        state=command.state,
+        view=view,
+        device="CPU",
+        elapsed_ms=elapsed_ms,
+    )
+
+
+def _serve_namespaces(
+    runtime: LocalIndexingServiceRuntime, stop: Event, cpu: LocalIndexingCpuLane | None
+) -> None:
+    """Round-robin GPU discovery; legacy CPU-only owners remain sequential."""
     from eom_orchestrator.background_storage import require_background_write_capacity
     from eom_orchestrator.host_package_maintenance import require_host_package_maintenance_idle
 
@@ -122,6 +168,8 @@ def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> N
     cursor = 0
     deferred: str | None = None
     while not stop.is_set():
+        if cpu is not None:
+            cpu.poll()
         require_background_write_capacity(Path("/var/lib/eom-local-indexing"))
         require_host_package_maintenance_idle()
         try:
@@ -140,20 +188,23 @@ def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> N
         index = cursor
         cursor = (cursor + 1) % len(runtime.namespaces)
         namespace = runtime.namespaces[index]
-        command = namespace.run_once()
-        if command is not None:
-            _emit(
-                "LOCAL_INDEXING_COMMAND_OBSERVED",
-                workflow_id=command.workflow_id,
-                command_id=command.command_id,
-                state=command.state,
-                view=namespace.namespace.view,
-            )
-            continue
+        if cpu is None:
+            started = time.monotonic()
+            command = namespace.run_once()
+            if command is not None:
+                _observe_cpu_command(
+                    namespace.namespace.view, command, int((time.monotonic() - started) * 1000)
+                )
+                continue
+        else:
+            cpu.start_next()
         if stop.is_set():
             break
         now = time.monotonic()
         if now >= deadlines[index]:
+            if cpu is not None:
+                _emit("LOCAL_INDEXING_RECONCILIATION_STARTED", view=namespace.namespace.view)
+            started = time.monotonic()
             observed = namespace.reconcile_once()
             signature = (
                 observed.state,
@@ -177,6 +228,7 @@ def serve_local_indexing(runtime: LocalIndexingServiceRuntime, stop: Event) -> N
                     workflow_id=observed.workflow_id,
                     command_id=observed.command_id,
                     view=namespace.namespace.view,
+                    elapsed_ms=int((time.monotonic() - started) * 1000),
                 )
                 last[index] = signature
             deadlines[index] = time.monotonic() + runtime.configuration.poll_interval_seconds
