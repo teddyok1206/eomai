@@ -78,3 +78,18 @@ attempts=1, lease_generation=1, heartbeat에 따른 lease 갱신과 failure/erro
 08:33:53에 확인했다. 이것은 실제 원래 application 경로의 처리 재개 증거이며,
 GPU 수치 완료·index commit·CPU와 다음 GPU 작업의 실제 중첩 완료 증거는 아니다.
 재계산/재시작 없이 이 요청을 계속 처리한다.
+
+## 후속 실제 관측 — 부분 성공과 새 중단, 13:59 UTC 확인
+
+- 첫 CUDA Workflow는 09:01:22 BATCH_COMPLETED이며 command SUCCEEDED. 기출 등록은
+  337→339/520으로 증가했다. 한 batch의 4 targets와 기출만의 증가량 2는 다른 분모다.
+- 09:02:22 다음 GPU 준비와 CPU standby가 실제 중첩됐으며 CPU
+  `workflow_090b1c121e6b49c99c4e2e24ce36e485`는 09:32:08 COMPLETED/SUCCEEDED였다.
+- 다음 CUDA `workflow_bfb8b5f72e4544b8b9f644f3407bab4a`는 channel의
+  `EMBEDDING_BENCHMARK_CHANNEL_EXPIRED`로 owner가 09:32:09 종료했다. CPU drain은 완료됐다.
+  13:59 관측에서 실제 worker/controller lifetime는 전부 drained지만 해당 Workflow는
+  RUNNING, command PROCESSING/만료된 lease로 남아 있다. 운영 정상 진행으로 세지 않는다.
+- 두 device의 중첩 자체와 첫 commit은 확인됐지만 **전체 연속 처리 안정성은 미완료**다.
+  유한 allocation 시간 안에 들어가는 실제 source/owner 검증 비용과 completion 증거를
+  추가로 확인해야 한다. 만료된 권한을 연장·재사용하거나 row를 직접 성공 처리하지 않는다.
+  이번 슬롯 재개 작업에서는 GPU 재시작·다른 key의 재계산을 제출하지 않았다.

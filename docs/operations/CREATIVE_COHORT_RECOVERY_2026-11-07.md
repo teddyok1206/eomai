@@ -83,3 +83,22 @@ parser 지원 경계이며 같은 모델 요청을 반복하는 것으로 해결
 rollback은 새 creative owner를 정상 drain한 뒤 보관된 이전 unit bytes를 복원하고
 daemon-reload/start하는 범위다. 원본/새 Workflow·분석/accepted Artifact/실패 이력과
 기존 GPU 실행은 삭제하거나 되돌리지 않는다. 진행 중 worker는 기존 queue/owner가 소유한다.
+
+## 사용자 추가 재개 — 13:59 UTC
+
+앞선 5개 successor 중 11737/11741/11742/11829는 완료되어 누적 Graph가 1,034가 됐다.
+11828은 worker exit=0이지만 `WORKER_RESULT_INVALID`였다. 저장 결과를 현재 설치 계약으로
+read-only 재검증한 원인은 `independent solution cites an unrelated source`다. 사용량 소진이나
+실제 worker가 아직 동작하는 상태가 아니다. 원래 결과/실패를 수정하지 않았다.
+
+사용자의 계속 진행 요청에 따라 같은 cohort/source/preset과 설치 `6272329a`의
+`CreativeCohortPreparationService.recover_invalid_result` 및 원래 start application을
+한 번 실행했다. 새 Workflow `workflow_4ee7a2237b7043f296c3f4ce4409987b`,
+Job `job_565abf1fc5464eb48599eb1df0a0ff28`가 14:00:37에 03 슬롯에서 실제 unit RUNNING,
+Job RUNNING 및 유효 lease로 관측됐다. 원 Workflow는 FAILED를 유지한다.
+감사 intent/applied: `/var/lib/eom-creative-11828-continue-20261107`.
+
+현재 1,034 완료 + 재처리 1 + 입력 보류 18 = 1,053이다. 네 슬롯의 binding은 READY이지만
+네 개를 채울 준비된 입력이 있다는 뜻이 아니다. 18개를 같은 모델 요청으로 반복하지 않는다.
+창작 owner/공유 API/QUERY/INDEX의 설치·설정·프로세스는 이 재개 작업에서 변경하지 않았다.
+새 1건의 Graph 등록 완료는 아직 관측 전이며 기존 10분 관측을 유지한다.
