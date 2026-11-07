@@ -95,3 +95,16 @@ API/Web/QUERY/creative/material 서비스 PID·invocation과 CPU/CUDA 환경 has
 Catalog→Orchestrator commit 경계로 NAS에 보관하고 모두 읽기/hash 대조했다.
 감사 Artifact: `artifact_3fb442fffc264d8eb614b07c311e8ea5`,
 revision: `rev_4f85697905944df3849fd3d8dd15df81`.
+
+### 새 수정본의 실제 CUDA 실행
+
+17:46:09 UTC 새 finite GPU unit `06c58ab046f8484696ed66361478c592`가 시작됐다.
+새 service revision의 `workflow_a0a65996377e473d84dbd1f44860490a`에서
+17:49:26 UTC `result.json` 5,042 bytes와 `vectors.f32` 16,384 bytes(4개 벡터)가
+생성됐고, finite GPU unit은 exit 0으로 정상 종료했다. GPU memory 사용도 관측했다.
+17:49:53 UTC INDEX PID 3424739는 계속 active였고 새 Workflow는 RUNNING으로
+정식 저장·검증을 진행 중이었다. 새 전체 Workflow 완료/전체 corpus 완료와 구분한다.
+
+이 새 관측만 별도 Artifact `artifact_922b4295b3c147dab8200c1d84a67400`,
+revision `rev_e45fedff88604ad0892c97f411aea543`에 보관하고 readback을 확인했다.
+이전 감사 Artifact를 참조하며 이전 로그를 다시 복사하지 않았다.
