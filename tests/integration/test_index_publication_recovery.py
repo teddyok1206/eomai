@@ -206,6 +206,26 @@ def test_exact_publication_fence_rejects_parallel_owner_and_wrong_hash(interrupt
 
 
 @pytest.mark.parametrize("execution", ["native_office_public"], indirect=True)
+def test_recovery_fence_is_admitted_in_root_then_retained_across_savepoints(interrupted):
+    case, _started, fence = interrupted
+    with case.sessions.begin() as session:
+        with session.begin_nested(), pytest.raises(ValueError, match="SCOPE_INVALID"):
+            fence(session)
+        fence(session)
+        nested = session.begin_nested()
+        fence(session)
+        nested.rollback()
+        fence(session)
+    with (
+        case.sessions.begin() as session,
+        session.begin_nested(),
+        pytest.raises(ValueError, match="SCOPE_INVALID"),
+    ):
+        fence(session)
+    assert case.launcher.forwards == 1
+
+
+@pytest.mark.parametrize("execution", ["native_office_public"], indirect=True)
 def test_failed_history_is_never_reinterpreted(interrupted):
     case, started, fence = interrupted
     # Isolated negative fixture only; never mutate a production failure.
@@ -316,6 +336,15 @@ def test_newer_publication_recovery_preserves_rows_and_replays(interrupted, monk
             case.owner.catalog,
         )
     before_launches = case.launcher.forwards
+    original_registration = case.owner.catalog.resolve_registration
+
+    def fenced_registration(session, caller, command):
+        # The real Catalog rechecks maintenance authority inside the Registry's
+        # uniqueness savepoint, after admission in the outer transaction.
+        fence(session)
+        return original_registration(session, caller, command)
+
+    monkeypatch.setattr(case.owner.catalog, "resolve_registration", fenced_registration)
     executor = recovery.PreparedIndexPublicationExecutor(case.owner, case.publisher, fence)
     monkeypatch.setattr(successor, "build_publication_recovery_executor", lambda *a, **kw: executor)
     monkeypatch.setattr(

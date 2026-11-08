@@ -109,16 +109,25 @@ class PreparedIndexRecoveryFence:
     def __call__(self, session: Session) -> None:
         _require(os.getresuid() == (0, 0, 0))
         root = session.get_transaction()
-        _require(root is not None and root.is_active and not session.in_nested_transaction())
+        _require(root is not None and root.is_active)
         assert root is not None
         prior = self._roots.get(root)
         if prior is None:
+            # Admission locks must belong to the outer transaction, not to a
+            # savepoint that can roll back independently. Registry may recheck
+            # that same admitted root inside its uniqueness savepoint.
+            _require(not session.in_nested_transaction())
             require_native_workflow_maintenance_owner(session, ALLOCATED_MAINTENANCE_TABLES)
             lock_current_local_indexing_service_metadata(session, self.command.current_service)
+            self.original(session)
             self._roots[root] = (ref(session), get_ident())
         else:
             _require(prior[0]() is session and prior[1] == get_ident())
-        self.original(session)
+            # Original native-launch reads require the outer owner transaction.
+            # Its retained locks protect the already checked identity while the
+            # Registry uses a savepoint solely for its own uniqueness writes.
+            if not session.in_nested_transaction():
+                self.original(session)
 
     def original(
         self, session: Session

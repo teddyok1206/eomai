@@ -63,3 +63,16 @@ Artifact commit 후 SQL 실패 시 같은 계획으로 replay한다. 다른 head
 수치 계산 실패가 아니라 원래 index publication이 대체됐다는 이력이다. SUCCEEDED encoding
 4개는 변경하지 않으며 새 registry receipt와 대체 사유를 함께 기록한다. 기존 성공/실패 이력과
 동시 GPU/QUERY 실행은 보존한다. 새 queue/DB/migration/API는 없다.
+
+### Registry 저장점과 유지보수 권한
+
+첫 successor 시도는 Artifact commit 뒤 Registry의 중복 방지 savepoint에서 유지보수
+fence가 재호출되어 거부됐다. DB 등록/종료는 함께 rollback됐고 Artifact는 동일 계획의
+재사용 대상으로 남았다. 임시 PostgreSQL에서 같은 오류를 재현했다. 최초 권한 확인과
+잠금은 반드시 outer transaction에서 하며, 동일 root/session/thread로 이미 확인된 경우에만
+savepoint 안의 재검사를 허용한다. 최초 savepoint admission, 다른 root/session/thread는
+허용하지 않는다. 운영 서비스 권한·검증 조건을 완화하지 않는다.
+
+추가 검증: focused unit와 disposable PostgreSQL 188 PASS, Ruff format/check 및
+focused mypy PASS. 실제 Registry savepoint에서 권한을 다시 확인하도록 fixture를 보강했고,
+savepoint rollback/새 root 거부와 Artifact commit 뒤 SQL rollback 후 같은 계획 재실행을 확인했다.
