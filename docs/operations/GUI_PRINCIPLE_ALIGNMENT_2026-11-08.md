@@ -56,3 +56,34 @@ runtime pin을 보존한다. 완료 결과는 이 문서 아래에 덧붙인다.
 표현 사전 schema는 optional `material_learning` domain만 추가했다. API/worker protocol과
 영속 schema는 바뀌지 않는다. shared CSS 기본값을 추가하고 기존 component rule을 직접
 수정했으며, 별도 theme override 파일이나 중복 스타일 계층을 만들지 않았다.
+
+## 운영 반영
+
+- 주 변경 commit `3c9e30d79a5e5a0d1c1b50c045c95c76076abf6c`, 모바일 동의란 정렬 후속
+  `264d71d9affb6598c48a8ea881d531466884aeb1`. 두 commit 모두 main에 push.
+- 최종 Web wheel SHA-256:
+  `f6e99e2d99fff75bcb4f996bfe9069672a38f8508de238bd9a0a364cff3f4ee5`.
+  non-editable 설치 시뮬레이션·실제 `eom-web` identity에서 62개 파일/RECORD 검증.
+- 마지막 모바일 정렬은 관련 31 tests와 17화면/34 viewport 검사를 다시 통과.
+- 이전 Web `9810efd6` 대비 runtime 변경은 static 파일 8개와 build metadata/RECORD뿐이다.
+  Python BFF, API 계약·권한·세션 정책·DB·worker·검색 계산은 변경하지 않았다.
+- 실제 HTTPS login 200, ready READY, 배포한 public assets와 wheel bytes 일치.
+  실제 Chromium HTTPS 로그인 화면 PC/모바일 검사 및 anonymous session 401 확인.
+  비밀번호 입력·실패 로그인·사용자 mutation은 수행하지 않았다.
+- API/Catalog/QUERY/INDEX/creative/material/chat/HWPX의 PID와 InvocationID 보존.
+  Web만 stop → 검증된 wheel 설치 → start 했으며 다른 서비스를 재시작하지 않았다.
+- 보호된 배포/rollback 기록: `/var/lib/eom-gui-principles-release-20261108`,
+  `/var/lib/eom-gui-principles-final-release-20261108`.
+
+화면 interaction 검증은 합성 API 기반이며, 운영 로그인 뒤 개별 사용자 업무를 새로
+실행했다는 의미는 아니다. UI 변경으로 실제 문항·검색·학습 작업을 생성하지 않았다.
+기존 개인정보나 문항 본문이 없는 합성 화면과 로그인 화면만 검수/감사 자료로 남긴다.
+
+최종 활성화: **2026-11-08 18:22:55 UTC**. NAS 감사 Artifact:
+`artifact_5f691d3113514993bf5c64b3bd71de2a` /
+`rev_614196429b5040e8ac6df7ea1074300e` — 21 members, 기존 Catalog→Orchestrator
+commit owner로 저장하고 전 member hash/byte 재읽기 PASS. 해당 note의 hash는
+`sha256:ff96e835acbedffbd56368fe3adc994f5a54ff4d030956e3e7be5b0319532073`이며
+이 자기참조 감사 위치 문단을 덧붙이기 전의 기록이다.
+첫 감사 스크립트의 선택적 Pillow import는 미설치 환경에서 멈췄고 저장 전이었다.
+기존 PNG 감사 형식을 재사용해 다시 저장했으며, 의존성 추가나 운영 변경은 없었다.
