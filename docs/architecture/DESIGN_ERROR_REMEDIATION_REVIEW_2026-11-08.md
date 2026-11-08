@@ -344,3 +344,25 @@ Q 항목은 수정 완료로 가장하지 않으며 **이번 릴리스 필수 �
   한 차례 suite 파일명 오기(`test_catalog_api_boundary.py`)는 수집 실패였으며
   올바른 `test_catalog_application_boundary.py`로 위 focused suite를 다시 실행했다.
 - 운영 DB에는 pytest를 실행하지 않았다. 설치·배포·운영 상태는 후속 증거로 별도 기록한다.
+
+### 종료 검증의 최종 보강
+
+마지막 완료 기준 대조에서 기존 Graph replay 검사만으로는 DB commit 직전·직후 중단을
+직접 재현한 증거가 부족함을 확인했다. production 코드를 추가로 바꾸지 않고
+`test_graph_publication_interruption.py`를 기존 disposable `creative-graph-tests`에 연결했다.
+
+- Artifact 작성 전, Artifact 작성 후/Graph DB 작업 전, DB commit 직전, commit 후/응답 전
+  네 지점에 한정한 예외를 주입했다. 새 application instance가 같은 요청으로 복구한다.
+- commit 전에는 Graph corpus/publication row가 남지 않고, commit 후에는 하나의 정본이
+  이미 존재한다. accepted 분석·workflow·worker job identity는 유지되며 모델 재실행이 없다.
+- 이미 작성된 Artifact는 재사용한다. 복구 후 같은 요청 재조회에서도 publication 1개이고
+  Artifact/Job/analysis row가 추가되지 않는다.
+- shared Graph publication의 기존 V1 격리 fixture로 실제 PostgreSQL transaction을 검사한
+  것이며, 운영 창작 문항을 재생성하거나 새 V11 결과를 모델에 요구한 검사가 아니다.
+  창작 accepted membership 재사용은 기존 application unit tests가 별도로 보호한다.
+- 보강 suite **14 PASS**. 최초 세 번의 실행은 새 fixture의 UTC 직렬화, 생성 전/승인 후
+  job baseline 시점, surrogate PK 조회 오류로 실패했다. 모두 test-only 수정이며 실패 로그를
+  보존했다. 운영 코드 오류로 분류하거나 최초부터 PASS였다고 보고하지 않는다.
+
+실제 서비스 인계와 설치 후 검증은
+[운영 릴리스 기록](../operations/ARCHITECTURE_REMEDIATION_RELEASE_2026-11-08.md)을 참조한다.

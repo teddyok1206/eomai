@@ -498,6 +498,7 @@ if [[ "${action}" == "creative-graph-tests" ]]; then
     tests/integration/test_knowledge_analysis_service.py::test_incompatible_proposal_ontology_fails_before_acceptance \
     tests/integration/test_knowledge_analysis_service.py::test_knowledge_analysis_acceptance_review_and_retry_are_pointer_only \
     tests/integration/test_knowledge_analysis_service.py::test_accepted_analysis_publishes_immutable_graph_and_replays_idempotently \
+    tests/integration/test_graph_publication_interruption.py \
     tests/integration/test_background_database_resource_recovery.py
   exit 0
 fi
