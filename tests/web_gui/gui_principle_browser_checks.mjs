@@ -38,6 +38,11 @@ try {
       assert.ok(layout.scroll <= width + 1, `${view} at ${width}: page width ${layout.scroll}`);
       const active = page.locator('.view.active');
       assert.equal(await active.locator('h1').count(), 1, `${view}: one page title`);
+      if (view === 'learning') {
+        const box = await page.locator('#material-rights').boundingBox();
+        const text = await page.locator('#material-rights + span').boundingBox();
+        assert.ok(text.x >= box.x + box.width && Math.abs(text.y - box.y) < 5, 'consent stays beside its checkbox');
+      }
       if (process.env.EOM_GUI_SCREENSHOT_DIR && ['learning', 'knowledge', 'chat', 'item-db'].includes(view)) {
         await mkdir(process.env.EOM_GUI_SCREENSHOT_DIR, {recursive: true});
         await page.screenshot({path: `${process.env.EOM_GUI_SCREENSHOT_DIR}/${view}-${width}.png`, fullPage: true});

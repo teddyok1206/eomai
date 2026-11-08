@@ -944,7 +944,7 @@ html[data-ui-mode="engine"] .nav-group-label { font-family: "JetBrains Mono", "S
 .material-learning-form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; padding: 20px; }
 .material-learning-form > label { display: flex; min-width: 0; flex-direction: column; gap: 6px; font-size: var(--eom-type-label); color: var(--eom-graphite); }
 .material-learning-form .material-wide { grid-column: 1 / -1; }
-.material-learning-form .checkbox-row { flex-direction: row; align-items: flex-start; }
+.material-learning-form .checkbox-row { flex-direction: row; flex-wrap: nowrap; align-items: flex-start; }
 .material-learning-form .checkbox-row input { flex: 0 0 16px; width: 16px; height: 16px; margin-top: 3px; accent-color: var(--eom-primary); }
 .material-learning-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .material-learning-panel > .form-message:not(:empty) { margin: 0 20px 20px; }
