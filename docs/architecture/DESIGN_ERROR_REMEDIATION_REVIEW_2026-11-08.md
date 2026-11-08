@@ -1,5 +1,9 @@
 # EOM 설계 원칙과 오류 기반 수정 목록
 
+최종 후속 상태(2026-11-08 18:01 UTC): **R01–R05 구현·검증·호환 운영 반영 완료**.
+아래 OPEN/STRUCTURAL_FOLLOWUP은 최초 검토 시점의 분류다. 실제 결과는 이 문서의
+수정 작업 기록과 [운영 릴리스 기록](../operations/ARCHITECTURE_REMEDIATION_RELEASE_2026-11-08.md)을 따른다.
+
 기준: 2026-11-08 UTC, Git `8b5848dfa864aa1c13e0347ab5a2867d1ecac4c0`.
 검토 목적은 OOP·캡슐화·책임 분리의 유지 여부와 국소적인 오류 대응이 남긴 복잡성을 확인하는 것이다.
 이 목록은 구현·배포 결과가 아니다. 운영 코드, DB, 실행 중 작업, 원본, 실패 이력은 변경하지 않았다.
@@ -281,7 +285,7 @@ production DB·모델·GPU·운영 unit 실행은 없었다.
    AST graph traversal, fresh process의 metadata FK 해석이다.
 6. 기존 Event/Future·cohort flock·dict/set·SQL batch와 FK를 재사용한다.
    새 queue/cache/index/registry를 만들지 않는다.
-7. navigation은 최대 64개 입력에 O(n) map, 후보 SQL 호출 1회다. 의존 검사는 O(V+E),
+7. navigation은 최대 64개 입력에 O(n) map, 기존 후보 batch 조회 호출 1회다. 의존 검사는 O(V+E),
    원인 전달은 O(1)이며 기존 파일 검증 비용을 늘리지 않는다.
 8. stop 시 신규 advance/publication을 막고 이미 시작한 발행을 join한 뒤 fence를 해제한다.
    DB commit·unique/CAS·재조회·replay는 원래 소유 서비스가 계속 담당한다.
@@ -305,7 +309,7 @@ production DB·모델·GPU·운영 unit 실행은 없었다.
 - R03: 실제 Python package만 탐색해 CLI도 포함하고 egg-info를 제외한다.
   dotted/relative import를 정규화하며 기존 service SCC 외 순환 의존을 검출한다.
 - R04: `item_candidate_navigation.py`로 exact 결과→문항 검증만 이동했다.
-  기존 SQL adapter·permission·필터·batch limit은 그대로이고 SQL 호출 수는 1회다.
+  기존 SQL adapter·permission·필터·batch limit은 그대로이고 후보 batch 조회 호출 수는 1회다.
   순서 유지·중복/누락 거부·canonical alias 회귀 검사를 추가했다. 속도 향상을 주장하지 않는다.
 - R05: 독립 API/Catalog/Runner/Manager import 검사에서 Runner/Manager의 occurrence
   FK 정의 누락을 실제 재현했다(첫 실행 96 PASS, 2 FAIL). 두 composition에 정확한
@@ -366,3 +370,27 @@ Q 항목은 수정 완료로 가장하지 않으며 **이번 릴리스 필수 �
 
 실제 서비스 인계와 설치 후 검증은
 [운영 릴리스 기록](../operations/ARCHITECTURE_REMEDIATION_RELEASE_2026-11-08.md)을 참조한다.
+
+### R04 전후 조회 비용 대조
+
+17:36 UTC, 최초 기준 `8b5848df`의 두 navigation 메서드와 설치된 `b9007cbd` 메서드를
+동일 read-only adapter·실제 승인 문항 3개로 비교했다. 기존 메서드 추출은 개발 검증
+harness에만 사용했으며 운영 package가 Git/source를 읽게 만들지 않았다.
+
+- 전후 결과/순서와 실행된 SQL statement 목록 동일. 각 요청 SQL **7회**.
+- 전: 8.8ms / 7.0ms, 후: 7.1ms / 7.0ms. 작은 read-only 표본이며 속도 향상 주장이 아니다.
+- 앞서 쓴 ‘SQL 1회’는 후보 batch application 호출 1회와 혼동한 표현이어서 바로잡았다.
+  문항별 N+1 호출은 추가하지 않았다. 전체 ranking/GUI 지연을 이 측정으로 대신하지 않는다.
+- 첫 비교 harness는 제거된 import(`TypeAdapter`)를 주입하지 않아 실패했다. 검증 도구만
+  수정하고 같은 읽기 검사를 완료했으며 운영 source/DB/모델 실행은 바꾸지 않았다.
+
+### 최종 판정
+
+R01–R05는 source와 설치 검증을 거쳐 기존 담당 서비스에 반영했다. INDEX는 실행 중이던
+CPU/CUDA 요청 두 건을 정상 완료시킨 뒤 인계했다. 진행 중 요청의 pin을 바꾸거나 결과를
+재작성하지 않았다. 종료 직전 생성된 미실행 CPU standby 1건은 기존
+`local-indexing-unstarted-cancellation/1.0`의 무시도·무lease·무step 검증과 취소 영수증으로
+정리했다. 직접 row 변경, 실행된 계산 취소, 실패→성공 변환은 없다.
+
+Q01–Q05의 확인 결과와 한계는 위 판정을 유지한다. 특히 긴 source reconciliation의
+단계별 성능 개선은 별도 측정 대상이지 이번 구조 변경으로 해결됐다고 주장하지 않는다.

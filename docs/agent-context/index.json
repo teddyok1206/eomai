@@ -193,10 +193,11 @@
         "scripts/web_gui/build_release.sh",
         "services/orchestrator/eom_orchestrator/background_storage.py",
         "services/orchestrator/eom_orchestrator/database.py",
-        "services/orchestrator/eom_orchestrator/host_package_maintenance.py"
+        "services/orchestrator/eom_orchestrator/host_package_maintenance.py",
+        "services/workflow_runner/eom_workflow_runner/local_indexing_unstarted_cancellation.py"
       ],
-      "test_paths": ["tests/unit/test_dependency_boundaries.py", "tests/unit/test_background_resource_recovery.py"],
-      "reference_paths": ["docs/operations/API_INTEGRATION_TEST_DATABASE.md", "docs/operations/RELEASE_OPERATOR_RUNTIME.md", "docs/operations/BACKGROUND_RESOURCE_RECOVERY_2026-11-04.md", "docs/operations/LOCAL_FILE_CLEANUP_2026-11-04.md"]
+      "test_paths": ["tests/unit/test_dependency_boundaries.py", "tests/unit/test_background_resource_recovery.py", "tests/integration/test_graph_publication_interruption.py"],
+      "reference_paths": ["docs/operations/API_INTEGRATION_TEST_DATABASE.md", "docs/operations/RELEASE_OPERATOR_RUNTIME.md", "docs/operations/BACKGROUND_RESOURCE_RECOVERY_2026-11-04.md", "docs/operations/LOCAL_FILE_CLEANUP_2026-11-04.md", "docs/operations/ARCHITECTURE_REMEDIATION_RELEASE_2026-11-08.md"]
     },
     {
       "id": "working-decisions",

@@ -78,6 +78,12 @@ INDEX readiness의 `LOCAL_EMBEDDING_READINESS_FAILED reason=...`은 제한된 �
 남긴다. timeout·파일 변경·control 불일치를 구분하되 원문 stderr나 환경값을 출력하지
 않는다. 사용자 오류 코드와 실패 판정은 유지하며 이 진단 자체가 자동 retry 권한은 아니다.
 
+INDEX 인계에서는 exit 0 이후에도 완료 중인 CUDA가 생성한 미실행 CPU standby가 남을 수
+있다. 원 요청의 성공·남은 queue를 따로 확인한다. 정확한 무시도·무lease·무step 요청만
+기존 `local_indexing_unstarted_cancellation` 배포-owner 계약으로 정리할 수 있으며,
+실행 중/실패한 요청을 일괄 취소하거나 DB row를 직접 고치지 않는다. 관련 절차·증거는
+`docs/operations/ARCHITECTURE_REMEDIATION_RELEASE_2026-11-08.md`를 참고한다.
+
 정상 입력 뒤의 저장·Graph·검색 실패는 담당 deterministic 코드에서 재현한다. 디스크/DB
 자원 장애, 잘못된 AI 결과, 권한/hash 위반을 분리한다. 안전한 원래 요청 재개와 모든 오류
 무시하기는 다르다. timeout만으로 미실행을 가정하지 않는다.
