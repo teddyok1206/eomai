@@ -273,7 +273,7 @@ class CatalogLocalEmbeddingOwnerAdmission:
         profile: LocalEmbeddingRuntimeProfile,
     ) -> ServiceReconciliationControls:
         authority = self._service_authority().source_authority
-        caller = EmbeddingRegistryServiceCaller(authority.authority.service_fence.pin.service)
+        caller = EmbeddingRegistryServiceCaller(authority.authority.service_reference)
         config = self.configuration
         grant = authority.authorize_scope(session, caller, query, config.registry)
         self.catalog.authorize_scope(session, caller, query)

@@ -20,11 +20,18 @@ from eom_catalog_contracts.segmented_local_indexing_policy import (
     SegmentedLocalIndexingAccessPolicy,
 )
 from eom_identity_service import LocalIndexingFenceError, PostgresLocalIndexingServiceFence
-from eom_operator_identity import LocalIndexingServiceIdentity, local_indexing_service_reference
+from eom_operator_identity import (
+    LocalIndexingServiceIdentity,
+    LocalIndexingServiceReference,
+    local_indexing_service_reference,
+)
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
+from eom_catalog_service.index_publication_recovery_authority import (
+    IndexPublicationRecoveryAuthority,
+)
 from eom_catalog_service.knowledge_graph_models import (
     KnowledgeCorpusRecord,
     KnowledgeGraphPublicationRecord,
@@ -48,15 +55,34 @@ class CatalogLocalIndexingSourceAuthority:
     def __init__(
         self,
         retrieval: KnowledgeRetrievalApplicationService,
-        service_fence: PostgresLocalIndexingServiceFence,
+        service_fence: PostgresLocalIndexingServiceFence | IndexPublicationRecoveryAuthority,
     ) -> None:
-        if type(service_fence) is not PostgresLocalIndexingServiceFence:
+        if type(service_fence) not in (
+            PostgresLocalIndexingServiceFence,
+            IndexPublicationRecoveryAuthority,
+        ):
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_UNAVAILABLE")
         self.retrieval, self.service_fence = retrieval, service_fence
+
+    @property
+    def service_reference(self) -> LocalIndexingServiceReference:
+        if isinstance(self.service_fence, IndexPublicationRecoveryAuthority):
+            return self.service_fence.original_service
+        return self.service_fence.pin.service
 
     def _current_policy(
         self, session: Session, revision_id: str, sha256: str
     ) -> SupportedLocalIndexingAccessPolicy:
+        policy: SupportedLocalIndexingAccessPolicy
+        if isinstance(self.service_fence, IndexPublicationRecoveryAuthority):
+            policy = self.service_fence.policy(session, self.retrieval, revision_id, sha256)
+            source_policy = self.retrieval.resolve_access_policy(
+                session,
+                policy.source_access_policy_revision_id,
+                sha256=policy.source_access_policy_sha256,
+            )
+            require_local_indexing_source_policy(policy, source_policy)
+            return policy
         identity = self.service_fence.fence_current_service(session)
         policy = self.retrieval.resolve_local_indexing_access_policy(
             session, revision_id, sha256=sha256
@@ -73,6 +99,8 @@ class CatalogLocalIndexingSourceAuthority:
     def _current_segmented_policy(
         self, session: Session, revision_id: str, sha256: str
     ) -> SegmentedLocalIndexingAccessPolicy:
+        if isinstance(self.service_fence, IndexPublicationRecoveryAuthority):
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_FORBIDDEN")
         identity = self.service_fence.fence_current_service(session)
         policy = self.retrieval.resolve_segmented_local_indexing_access_policy(
             session, revision_id, sha256=sha256
@@ -88,6 +116,8 @@ class CatalogLocalIndexingSourceAuthority:
         policy: _IndexingPolicy,
         identity: LocalIndexingServiceIdentity,
     ) -> None:
+        if isinstance(self.service_fence, IndexPublicationRecoveryAuthority):
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_FORBIDDEN")
         source_policy = self.retrieval.resolve_access_policy(
             session,
             policy.source_access_policy_revision_id,
@@ -104,6 +134,8 @@ class CatalogLocalIndexingSourceAuthority:
         self, session: Session, revision_id: str, sha256: str
     ) -> tuple[SupportedLocalIndexingAccessPolicy, KnowledgeGraphSnapshotPointer | None]:
         """Authenticate before discovering a head; saved work never calls latest."""
+        if isinstance(self.service_fence, IndexPublicationRecoveryAuthority):
+            raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_FORBIDDEN")
         try:
             policy = self._current_policy(session, revision_id, sha256)
             corpus = session.scalar(
@@ -176,6 +208,8 @@ class CatalogLocalIndexingSourceAuthority:
             raise LocalIndexingSourceError("LOCAL_INDEXING_SOURCE_SCOPE_INVALID")
         try:
             intent.__post_init__()
+            if isinstance(self.service_fence, IndexPublicationRecoveryAuthority):
+                self.service_fence.require_scope(intent)
             try:
                 policy = policy_reader(
                     session, intent.service_policy_revision_id, intent.service_policy_sha256

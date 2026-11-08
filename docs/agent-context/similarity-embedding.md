@@ -52,6 +52,13 @@ INDEX의 OS 상태 조회는 Identity `local_indexing_runtime._unit`에서 timeo
 지속된 조회 불가는 거부한다. 복구 근거는
 `docs/operations/INDEX_UNIT_OBSERVATION_RECOVERY_2026-11-07.md`를 확인한다.
 
+숫자 계산과 encoding commit은 성공했지만 INDEX_PREPARED 이후 릴리스가 바뀐 CPU
+요청은 `index_publication_recovery`의 명시적 root/schema-owner 유지보수로만 이어간다.
+정확한 원래 request/intent/registration hash와 현행 동등 source grant를 확인한다.
+새 source discovery·submit·수치 실행을 할 수 없는 executor가 기존 Runner와 Catalog/
+Orchestrator publication을 재사용하며, 일반 서비스 권한이나 GPU PID는 바꾸지 않는다.
+설계·실제 완료 여부는 `docs/operations/RETIRED_INDEX_PUBLICATION_RECOVERY.md`를 참조한다.
+
 ## DB 화면의 실제 검색 경로
 
 조회에서 기준 문항을 골라 유사도 탭으로 넘기고, 기준 목록·상위 결과 수·요청 identity를

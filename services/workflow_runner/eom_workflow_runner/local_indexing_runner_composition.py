@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from typing import Protocol
+
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
+from eom_orchestrator.file_set_control_artifacts import ControlFileSetPublisher
 
 from eom_workflow_runner.actor_authorization_adapters import (
     OperatorIdentityWorkflowActorAuthorizer,
     SqlAlchemyOperatorActorSource,
 )
 from eom_workflow_runner.engine import WorkflowRunner
-from eom_workflow_runner.local_embedding_native_executor import CatalogNativeEmbeddingExecutor
+from eom_workflow_runner.local_embedding_execution_port import LocalEmbeddingNativeExecutor
+from eom_workflow_runner.local_embedding_owner_admission import CatalogLocalEmbeddingOwnerAdmission
 from eom_workflow_runner.readiness import (
     ReadinessStatus,
     RuntimeReadinessCheck,
@@ -35,8 +39,13 @@ class IndexingRoleExecutionDisabled:
         )
 
 
+class IndexingRunnerExecutor(LocalEmbeddingNativeExecutor, Protocol):
+    owner: CatalogLocalEmbeddingOwnerAdmission
+    publisher: ControlFileSetPublisher
+
+
 def build_local_indexing_workflow_runner(
-    executor: CatalogNativeEmbeddingExecutor, selection: NativeCommandActorSelection
+    executor: IndexingRunnerExecutor, selection: NativeCommandActorSelection
 ) -> WorkflowRunner:
     return WorkflowRunner(
         executor.publisher.engine,

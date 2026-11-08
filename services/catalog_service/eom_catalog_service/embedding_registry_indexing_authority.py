@@ -85,7 +85,7 @@ class CatalogIndexingRegistrySourceAuthority:
     ) -> LocalIndexingSourceReadIntent:
         """Exact immutable selection only, never current authorization."""
         validate_embedding_registry_actor(caller)
-        if caller.service != self.authority.service_fence.pin.service:
+        if caller.service != self.authority.service_reference:
             raise EmbeddingRegistryError("EMBEDDING_REGISTRY_FORBIDDEN")
         if source_revision_ids and isinstance(
             intent,
@@ -173,7 +173,7 @@ class CatalogIndexingRegistrySourceAuthority:
             policy.source_access_policy_sha256,
             self.maximum_sources,
         )
-        caller = EmbeddingRegistryServiceCaller(self.authority.service_fence.pin.service)
+        caller = EmbeddingRegistryServiceCaller(self.authority.service_reference)
         self.authorize_scope(session, caller, query, configuration)
         return query
 

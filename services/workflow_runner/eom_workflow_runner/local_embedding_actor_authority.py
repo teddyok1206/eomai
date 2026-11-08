@@ -107,7 +107,7 @@ class ServiceLocalEmbeddingActorAuthority:
         service = supported_local_embedding_request_service(checked)
         caller = EmbeddingRegistryServiceCaller(service)
         if (
-            caller.service != gate.authority.service_fence.pin.service
+            caller.service != gate.authority.service_reference
             or audit.service_policy_revision_id != gate.service_policy_revision_id
             or audit.service_policy_sha256 != gate.service_policy_sha256
             or checked.native_execution_policy_sha256 != gate.native_execution_policy_sha256

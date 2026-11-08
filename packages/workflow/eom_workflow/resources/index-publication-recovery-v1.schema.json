@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/workflow/index-publication-recovery/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "workflow_id", "workflow_request_sha256", "native_intent_sha256", "registration_request_sha256", "current_service", "current_policy_revision_id", "current_policy_sha256", "command_sha256"],
+  "properties": {
+    "schema_version": {"const": "index-publication-recovery/1.0"},
+    "workflow_id": {"type": "string", "pattern": "^workflow_[0-9a-f]{32}$"},
+    "workflow_request_sha256": {"$ref": "#/$defs/hash"},
+    "native_intent_sha256": {"$ref": "#/$defs/hash"},
+    "registration_request_sha256": {"$ref": "#/$defs/hash"},
+    "current_policy_revision_id": {"type": "string", "pattern": "^accessrev_[0-9a-f]{32}$"},
+    "current_policy_sha256": {"$ref": "#/$defs/hash"},
+    "command_sha256": {"$ref": "#/$defs/hash"},
+    "current_service": {
+      "type": "object", "additionalProperties": false,
+      "required": ["service_id", "service_revision_id", "service_identity_sha256"],
+      "properties": {
+        "service_id": {"type": "string", "pattern": "^localindexservice_[0-9a-f]{32}$"},
+        "service_revision_id": {"type": "string", "pattern": "^localindexservicerev_[0-9a-f]{32}$"},
+        "service_identity_sha256": {"$ref": "#/$defs/hash"}
+      }
+    }
+  },
+  "$defs": {"hash": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}}
+}
