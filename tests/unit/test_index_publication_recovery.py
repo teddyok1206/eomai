@@ -1,6 +1,7 @@
 """Publication-only recovery guard contracts; synthetic source/OS seams, no live writes."""
 
 from dataclasses import replace
+from pathlib import Path
 from unittest.mock import Mock
 
 import pytest
@@ -81,6 +82,14 @@ def test_hash_and_schema_roundtrip():
     ):
         with pytest.raises(ValueError):
             IndexPublicationRecoveryCommand.model_validate(command.model_dump(mode="json") | change)
+
+
+def test_packaged_schema_matches_canonical_source():
+    root = Path(__file__).resolve().parents[2]
+    name = "index-publication-recovery-v1.schema.json"
+    assert (root / "schemas/workflow" / name).read_bytes() == (
+        root / "packages/workflow/eom_workflow/resources" / name
+    ).read_bytes()
 
 
 def test_recovery_requires_actual_root_before_source_read(gate, monkeypatch):
