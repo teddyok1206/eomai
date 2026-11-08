@@ -76,3 +76,52 @@ savepoint 안의 재검사를 허용한다. 최초 savepoint admission, 다른 r
 추가 검증: focused unit와 disposable PostgreSQL 188 PASS, Ruff format/check 및
 focused mypy PASS. 실제 Registry savepoint에서 권한을 다시 확인하도록 fixture를 보강했고,
 savepoint rollback/새 root 거부와 Artifact commit 뒤 SQL rollback 후 같은 계획 재실행을 확인했다.
+
+운영 재시도 중 별도 INDEX owner가 2026-11-08 15:46:49 UTC에 자체 종료한 사실을 확인했다.
+직전 CUDA Workflow는 COMPLETED였으며, 다음 CPU command readiness의
+`WorkflowRuntimeNotReady`가 원인으로 기록됐다. 복구 helper가 서비스 상태 차이를 탐지해
+자동 진행을 거부했다. 기존 baseline을 덮지 않고, 같은 invocation의 failed/PID 0과
+QUERY·원래 CPU unit 불변을 확인한 별도 `successor-runtime-before.json`을 기록했다.
+publication 복구는 이 중단된 상태를 그대로 보존한다. 서비스 재개는 별도 사전 점검 후 수행한다.
+
+## 실제 publication 복구 완료
+
+2026-11-08 16:05:41 UTC, installed recovery source
+`538678a18a6e530173add50f93005a308ddebfc0`에서 등록과 원래 실행 종료가 함께 commit됐다.
+원래 publication plan의 source `933c2bca89793836f5c11ecad48dd225443cac56`, 시각,
+Artifact identity는 첫 시도 그대로 재사용했다. 새 수치 실행은 0회다.
+
+- CPU index binding: 832 → 836, 기존 832개 보존 + 누락 encoding 4개 반영.
+- 새 index revision: `embeddingindexrev_7a5fa5757f5cd0b02be742fe0a43e129`, lock 184.
+- index hash: `sha256:973dae169a4fa5d8152b2f4a26aef714ffdbd97e1959e57dce67ce84d57a279b`.
+- Artifact: `artifact_7a5fa5757f5cd0b02be742fe0a43e129`,
+  revision `rev_7a5fa5757f5cd0b02be742fe0a43e129`, member `index.json`.
+- 원래 Workflow/command/step/native coordinator는 publication 대체 사유로 종료했다.
+  원래 encoding 4개는 SUCCEEDED 상태를 보존한다.
+- 16:06:32 UTC 동일 계획 replay는 같은 registration을 반환했다. 재계산·새 등록 없이
+  기존 종료/encoding 상태를 확인했다. QUERY PID/invocation은 변하지 않았다.
+
+이 836개는 CPU namespace의 전체 binding 수이며 기출 GPU 395/520과 다른 분모다.
+GPU 관리 서비스 재개/다음 묶음 성공은 이 publication 완료와 구분한다.
+
+## 백그라운드 INDEX 재개
+
+현재 설치본의 CPU verifier를 같은 서비스 사용자와 read-only loader-cache bind 안에서
+실행해 PASS를 확인했다(모델 forward 없음). 일반 shell의 mount 없는 실행은 의도대로
+`HOST_CONFIGURATION_MOUNT_INVALID`로 거부되므로 운영 실패 재현으로 해석하지 않는다.
+이후 현행 service revision에 속한 대기 요청 1건의 space/runtime/resource/native policy가
+실제 설정과 일치함을 확인했다. 예전 service revision의 대기 기록은 대상에서 제외해 보존했다.
+
+16:08:35 UTC 원래 installed source `1083b89f`의 INDEX owner를 재개했다.
+PID `774682`, invocation `bae83e900f544d4e99976b8a54f7cc41`.
+동시 실행 중인 native unit이 없음을 확인했고, API/Web/QUERY/creative/material 서비스와
+설정·수치 runtime hash는 그대로다. DB/Artifact/실패 기록을 고치거나 새 요청으로 우회하지 않았다.
+
+15:46의 readiness 실패는 새 설치환경 검사에서 재현되지 않았다. 정확한 하위 사유는
+당시 로그에 보존되지 않아 확정하지 않는다. 이번 publication 복구의 savepoint 결함 수정과
+구분하며, 재개 직후 READY만으로 새 GPU 묶음 완료를 주장하지 않는다.
+
+복구 command/plan, 완료·replay, 사전 검사와 서비스 재개, 테스트·실패·빌드 로그 등
+30개 파일을 기존 Catalog→Orchestrator Artifact 경계로 보관하고 전체 readback/hash를 확인했다.
+감사 Artifact `artifact_d9a1aaa742004d83a5a8f638dd4e9beb`,
+revision `rev_61278f01c08546319e241dadc35beb79`.
