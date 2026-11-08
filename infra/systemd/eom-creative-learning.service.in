@@ -14,7 +14,9 @@ ExecStart=@PYTHON@ -I -B -c "import sys; sys.path.insert(0, '@PREFIX@/site-packa
 Restart=on-failure
 RestartPreventExitStatus=78
 RestartSec=30
-TimeoutStopSec=180
+# Stop admitting work immediately; let the one in-flight Graph publication and
+# readback finish before releasing the cohort fence. Hung work remains bounded.
+TimeoutStopSec=1800
 UMask=0027
 NoNewPrivileges=true
 PrivateTmp=true

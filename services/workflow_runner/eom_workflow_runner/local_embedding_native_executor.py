@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 
 from eom_catalog_contracts.inference_transfer_embedding import (
@@ -84,6 +85,7 @@ from eom_workflow_runner.local_embedding_publications import (
     native_embedding_publications,
     new_native_artifact_producer,
 )
+from eom_workflow_runner.local_indexing_runtime_verification import indexing_runtime_failure_reason
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from eom_workflow_runner.readiness import (
     ReadinessStatus,
@@ -201,12 +203,18 @@ class CatalogNativeEmbeddingExecutor:
                 "LOCAL_EMBEDDING_READY",
                 "exact selected document controls are available",
             )
-        except (ValueError, OSError):
+        except (ValueError, OSError) as error:
+            reason = indexing_runtime_failure_reason(error)
+            # The owner reports a generic WorkflowRuntimeNotReady later. Preserve
+            # only this closed reason here, never raw verifier/SQL/process text.
+            logging.getLogger(__name__).warning(
+                "LOCAL_EMBEDDING_READINESS_FAILED reason=%s", reason.value
+            )
             check = RuntimeReadinessCheck(
                 "native_document_index",
                 ReadinessStatus.FAIL,
                 "LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE",
-                "configured document boundary is unavailable",
+                reason.value,
             )
         return RuntimeReadinessReport((check,))
 

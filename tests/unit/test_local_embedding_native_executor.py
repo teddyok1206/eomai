@@ -86,6 +86,43 @@ def test_wrong_configured_controls_fail_before_model_or_scope_mutation(executor,
     owner.identity.fence_current_operator.assert_not_called()
 
 
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "RUNTIME_FILES_CHANGED",
+        "RUNTIME_VERIFIER_TIMEOUT",
+        "RUNTIME_VERIFIER_EXECUTION_FAILED",
+        "RUNTIME_VERIFIER_REJECTED",
+    ],
+)
+def test_readiness_retains_closed_verifier_reason_without_child_output(executor, caplog, reason):
+    from eom_workflow_runner.local_indexing_runtime_verification import (
+        IndexingRuntimeFailureReason,
+        IndexingRuntimeVerificationError,
+    )
+    from eom_workflow_runner.readiness import WorkflowRuntimeNotReady
+
+    fixture, service, launcher, owner = executor
+    launcher.assert_current_runtime.side_effect = IndexingRuntimeVerificationError(
+        IndexingRuntimeFailureReason(reason)
+    )
+    report = service.evaluate(fixture.request)
+    assert not report.ready and report.checks[0].detail == reason
+    assert report.failed_codes == ("LOCAL_EMBEDDING_EXECUTION_UNAVAILABLE",)
+    assert "LOCAL_EMBEDDING_READINESS_FAILED reason=" + reason in caplog.text
+    assert reason not in str(WorkflowRuntimeNotReady(report))
+    launcher.run.assert_not_called()
+    owner.identity.fence_current_operator.assert_not_called()
+
+
+def test_readiness_does_not_log_untrusted_exception_message(executor, caplog):
+    fixture, service, launcher, _ = executor
+    launcher.assert_current_runtime.side_effect = ValueError("SECRET credential and path")
+    report = service.evaluate(fixture.request)
+    assert report.checks[0].detail == "RUNTIME_BOUNDARY_REJECTED"
+    assert "SECRET" not in repr(report) + caplog.text
+
+
 def _execute_before_source_admission(service, request, *, key=None):
     workflow_id = "workflow_" + "a" * 32
     transaction = Mock(side_effect=AssertionError("source mutation must not start"))

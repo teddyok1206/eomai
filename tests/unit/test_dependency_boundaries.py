@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import ast
-from collections import defaultdict
+from importlib.util import resolve_name
 from pathlib import Path
+
+import pytest
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[2]
 SOURCE_KINDS = ("packages", "services", "apps")
@@ -23,8 +25,20 @@ def _imports(root: Path) -> set[str]:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 imported.update(alias.name for alias in node.names)
-            elif isinstance(node, ast.ImportFrom) and node.module:
-                imported.add(node.module)
+            elif isinstance(node, ast.ImportFrom):
+                if node.level:
+                    parts: list[str] = []
+                    parent = path.parent
+                    while (parent / "__init__.py").is_file():
+                        parts.append(parent.name)
+                        parent = parent.parent
+                    imported.add(
+                        resolve_name(
+                            "." * node.level + (node.module or ""), ".".join(reversed(parts))
+                        )
+                    )
+                elif node.module:
+                    imported.add(node.module)
     return imported
 
 
@@ -37,13 +51,33 @@ def _assert_prefixes_absent(imported: set[str], forbidden: tuple[str, ...]) -> N
     assert violations == []
 
 
-def _first_party_roots() -> dict[str, tuple[str, Path]]:
+def _first_party_roots(
+    repository_root: Path = REPOSITORY_ROOT,
+) -> dict[str, tuple[str, Path]]:
     roots: dict[str, tuple[str, Path]] = {}
     for kind in SOURCE_KINDS:
-        for path in sorted((REPOSITORY_ROOT / kind).glob("*/eom_*")):
-            if path.is_dir():
+        for path in sorted((repository_root / kind).glob("*/*")):
+            if path.name.isidentifier() and (path / "__init__.py").is_file():
+                assert path.name not in roots, f"ambiguous package root: {path.name}"
                 roots[path.name] = (kind, path)
     return roots
+
+
+def _package_edges(roots: dict[str, tuple[str, Path]]) -> dict[str, set[str]]:
+    return {
+        source: {
+            target
+            for imported in _imports(path)
+            if (target := imported.split(".", 1)[0]) in roots and target != source
+        }
+        for source, (_kind, path) in roots.items()
+    }
+
+
+def _assert_reviewed_cycles(roots: dict[str, tuple[str, Path]]) -> None:
+    cycles = _strongly_connected_components(_package_edges(roots))
+    assert all(cycle <= RUNTIME_COMPOSITION_CLUSTER for cycle in cycles), cycles
+    assert all(all(roots[name][0] == "services" for name in cycle) for cycle in cycles), cycles
 
 
 def _strongly_connected_components(edges: dict[str, set[str]]) -> tuple[frozenset[str], ...]:
@@ -132,13 +166,57 @@ def test_services_never_depend_on_application_entrypoints() -> None:
 
 
 def test_first_party_cycles_cannot_expand_beyond_the_reviewed_composition_cluster() -> None:
-    roots = _first_party_roots()
-    edges: dict[str, set[str]] = defaultdict(set)
-    for source, (_kind, path) in roots.items():
-        edges[source].update(target for target in _imports(path) if target in roots)
-    cycles = _strongly_connected_components(edges)
-    assert all(cycle <= RUNTIME_COMPOSITION_CLUSTER for cycle in cycles), cycles
-    assert all(all(roots[name][0] == "services" for name in cycle) for cycle in cycles), cycles
+    _assert_reviewed_cycles(_first_party_roots())
+
+
+def test_package_discovery_includes_cli_and_excludes_build_metadata(tmp_path: Path) -> None:
+    cli = tmp_path / "apps" / "eomctl" / "eomctl"
+    cli.mkdir(parents=True)
+    (cli / "__init__.py").write_text("")
+    (cli.parent / "eom_platform.egg-info").mkdir()
+    assert _first_party_roots(tmp_path) == {"eomctl": ("apps", cli)}
+    assert "eomctl" in _first_party_roots()
+
+
+@pytest.mark.parametrize("syntax", ["import {other}.model", "from {other}.model import Record"])
+def test_cycle_gate_rejects_dotted_imports_outside_reviewed_cluster(
+    tmp_path: Path, syntax: str
+) -> None:
+    for name, other in (("first", "second"), ("second", "first")):
+        path = tmp_path / "services" / name / name
+        path.mkdir(parents=True)
+        (path / "__init__.py").write_text("")
+        (path / "model.py").write_text(syntax.format(other=other))
+    roots = _first_party_roots(tmp_path)
+    assert _package_edges(roots) == {"first": {"second"}, "second": {"first"}}
+    with pytest.raises(AssertionError):
+        _assert_reviewed_cycles(roots)
+
+
+def test_relative_imports_resolve_to_their_actual_package(tmp_path: Path) -> None:
+    package = tmp_path / "feature"
+    nested = package / "nested"
+    nested.mkdir(parents=True)
+    (package / "__init__.py").write_text("")
+    (nested / "__init__.py").write_text("")
+    (nested / "adapter.py").write_text(
+        "from ..model import Record\nfrom . import helper\nfrom .. import root_helper\n"
+    )
+    assert _imports(package) == {"feature.model", "feature.nested", "feature"}
+
+
+def test_cycle_gate_accepts_only_reviewed_service_cluster(tmp_path: Path) -> None:
+    names = ("eom_catalog_service", "eom_orchestrator")
+    for name, other in (names, tuple(reversed(names))):
+        path = tmp_path / "services" / name / name
+        path.mkdir(parents=True)
+        (path / "__init__.py").write_text(f"from {other}.models import Record\n")
+    roots = _first_party_roots(tmp_path)
+    assert _strongly_connected_components(_package_edges(roots)) == (frozenset(names),)
+    _assert_reviewed_cycles(roots)
+    roots[names[0]] = ("apps", roots[names[0]][1])
+    with pytest.raises(AssertionError):
+        _assert_reviewed_cycles(roots)
 
 
 def test_production_runtime_does_not_import_dev_reporter_or_observer() -> None:

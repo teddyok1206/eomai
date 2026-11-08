@@ -8,6 +8,7 @@ from uuid import uuid4
 from eom_catalog_service.inference_transfer_catalog_adapter import (
     CatalogInferenceTransferSourceAdapter,
 )
+from eom_catalog_service.item_origin_models import AssessmentOccurrenceRevisionRecord
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.workflow_catalog import WorkflowCatalogService
 from eom_orchestrator.auth_enrollment_processor import CodexAuthEnrollmentProcessor
@@ -39,6 +40,10 @@ from eom_workflow_runner.similarity_role_catalog_client import (
     CatalogSocketSimilarityRoleContextProvider,
 )
 from eom_workflow_runner.similarity_role_context import SimilarityRoleContextProvider
+
+# The narrow runner must resolve the legacy bundle/Graph occurrence FK without
+# depending on an API process having imported Catalog's origin application first.
+_RUNTIME_MODEL_TABLES = (AssessmentOccurrenceRevisionRecord.__table__,)
 
 
 @dataclass(frozen=True)

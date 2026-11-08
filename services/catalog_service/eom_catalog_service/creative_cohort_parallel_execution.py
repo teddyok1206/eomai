@@ -5,6 +5,7 @@ keeps expensive publication off the source-submission loop; Orchestrator owns al
 purpose-bounded model claims. Restart reconstructs state from original immutable pins.
 """
 
+from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import replace
 
@@ -27,13 +28,20 @@ from eom_catalog_service.creative_preview_preparation import CreativeSourcePrevi
 
 
 class CreativeCohortParallelExecutionService:
-    def __init__(self, owner: CreativeCohortExecutionService, *, verified_limit: int) -> None:
+    def __init__(
+        self,
+        owner: CreativeCohortExecutionService,
+        *,
+        verified_limit: int,
+        stop_requested: Callable[[], bool] = lambda: False,
+    ) -> None:
         continuation = owner.scope.continuation
         if not isinstance(continuation, ParallelReportContinuation):
             raise ValueError("CREATIVE_PARALLEL_CONTINUATION_REQUIRED")
         if not 1 <= verified_limit <= len(owner.targets):
             raise ValueError("CREATIVE_COHORT_EXECUTION_LIMIT_INVALID")
         self.owner = owner
+        self.stop_requested = stop_requested
         self.targets = (
             owner.pending_first_targets()
             if verified_limit == len(owner.targets)
@@ -73,7 +81,11 @@ class CreativeCohortParallelExecutionService:
                 completed = self.window.pop(source.target.source_id)
                 self.verified_count += 1
             self.publication, self.publishing = None, ()
-        while len(self.window) < self.window_limit and self.next_target < len(self.targets):
+        while (
+            not self.stop_requested()
+            and len(self.window) < self.window_limit
+            and self.next_target < len(self.targets)
+        ):
             target = self.targets[self.next_target]
             if target.source_id in self.window:
                 raise ValueError("CREATIVE_COHORT_TARGET_REPEATED")
@@ -81,6 +93,8 @@ class CreativeCohortParallelExecutionService:
             self.next_target += 1
         publishing_ids = {source.target.source_id for source in self.publishing}
         for source_id, source in tuple(self.window.items()):
+            if self.stop_requested():
+                break
             if source_id not in publishing_ids and source.state != "READY_TO_PUBLISH":
                 try:
                     self.owner.advance_report(source)
@@ -118,6 +132,7 @@ class CreativeCohortParallelExecutionService:
         )
         if (
             self.publication is None
+            and not self.stop_requested()
             and ready
             and (len(ready) >= self.batch_size or len(ready) == len(self.window))
         ):

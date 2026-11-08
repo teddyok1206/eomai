@@ -224,7 +224,6 @@ from eom_workflow_runner.models import (
     WorkflowStepRunRecord,
 )
 from eom_workflow_runner.repository import load_persisted_workflow_request
-from pydantic import TypeAdapter
 from sqlalchemy import Engine, Select, and_, func, literal, or_, select
 from sqlalchemy.orm import Session
 
@@ -236,6 +235,7 @@ from eom_api.pdf_document_review_models import (
 )
 from eom_api.services.catalog_application_client import CatalogApplicationClient
 from eom_api.services.hwpx_projection import project_hwpx_build
+from eom_api.services.item_candidate_navigation import read_selected_item_candidates
 from eom_api.services.pagination import CursorCodec, PageResult
 
 _LEGACY_ITEM_CONTENT_SCHEMA_REFS = frozenset(
@@ -1606,64 +1606,21 @@ class QueryAdapter:
         immutable Item/hash in the current Graph so existing assembly admission works.
         Absence or a different revision is explicit, not a latest Item substitution.
         """
-        pins: tuple[PopulationSource, ...] = TypeAdapter(
-            tuple[PopulationSource, ...]
-        ).validate_python(selections)
-        if not 1 <= len(pins) <= 64 or len({pin.item_revision_id for pin in pins}) != len(pins):
-            raise ValueError("selected Item revisions must be bounded and unique")
-        page = self.production_item_candidates(
-            curriculum_unit_key=None,
-            source_class=None,
-            content_profile=None,
-            eligible=None,
-            item_type_key=None,
-            difficulty_band=None,
-            limit=len(pins),
-            cursor=None,
-            selected_item_revisions=pins,
-        )
-        by_revision = {row.item_revision_id: row for row in page.data}
-        if (
-            len(by_revision) != len(page.data)
-            or set(by_revision) != {pin.item_revision_id for pin in pins}
-            or any(
-                by_revision[pin.item_revision_id].item_id != pin.item_id
-                or by_revision[pin.item_revision_id].source_class != pin.source_class
-                or not self._candidate_content_matches_source(
-                    by_revision[pin.item_revision_id], pin
-                )
-                for pin in pins
-            )
-        ):
-            raise ApiError(
-                409,
-                "ITEM_DB_SIMILARITY_RESULT_STALE",
-                "Item navigation unavailable",
-                "An exact search candidate is no longer available in the current Graph.",
-            )
-        return tuple(by_revision[pin.item_revision_id] for pin in pins)
-
-    @staticmethod
-    def _candidate_content_matches_source(
-        candidate: ProductionItemCandidateViewContract,
-        source: PopulationSource,
-    ) -> bool:
-        component, member = candidate.content_component, source.artifact_member
-        return component is not None and (
-            component.artifact_id,
-            component.artifact_revision_id,
-            component.sha256,
-            component.schema_ref,
-            component.media_type,
-            component.logical_name,
-        ) == (
-            member.artifact_id,
-            member.artifact_revision_id,
-            member.sha256,
-            member.schema_ref,
-            member.media_type,
-            # Analysis logical_name is the staged worker alias, not the NAS member.
-            member.member_path,
+        return read_selected_item_candidates(
+            selections,
+            lambda pins: (
+                self.production_item_candidates(
+                    curriculum_unit_key=None,
+                    source_class=None,
+                    content_profile=None,
+                    eligible=None,
+                    item_type_key=None,
+                    difficulty_band=None,
+                    limit=len(pins),
+                    cursor=None,
+                    selected_item_revisions=pins,
+                ).data
+            ),
         )
 
     @staticmethod

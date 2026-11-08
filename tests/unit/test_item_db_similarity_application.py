@@ -406,6 +406,34 @@ def test_navigation_compares_canonical_member_path_not_worker_input_alias(flow):
     adapter.production_item_candidates.assert_called_once()
 
 
+def test_selected_navigation_keeps_rank_order_with_one_batch_for_multiple_sources(flow):
+    first = flow.value.context.candidates[0].source
+    second = first.model_copy(
+        update={"item_id": "item_" + "e" * 32, "item_revision_id": "itemrev_" + "e" * 32}
+    )
+    values = (candidate_view(first), candidate_view(second))
+    adapter = object.__new__(QueryAdapter)
+    adapter.production_item_candidates = Mock(return_value=PageResult(values, None, False))
+    assert adapter.selected_production_item_candidates((second, first)) == tuple(reversed(values))
+    adapter.production_item_candidates.assert_called_once()
+    assert adapter.production_item_candidates.call_args.kwargs["limit"] == 2
+
+
+@pytest.mark.parametrize("case", ["empty", "duplicate", "missing", "repeated_result"])
+def test_selected_navigation_rejects_bad_membership_without_per_item_fallback(flow, case):
+    source = flow.value.context.candidates[0].source
+    view = candidate_view(source)
+    adapter = object.__new__(QueryAdapter)
+    result = () if case == "missing" else (view, view)
+    adapter.production_item_candidates = Mock(return_value=PageResult(result, None, False))
+    selections = () if case == "empty" else (source, source) if case == "duplicate" else (source,)
+    with pytest.raises(ValueError if case in {"empty", "duplicate"} else ApiError):
+        adapter.selected_production_item_candidates(selections)
+    assert adapter.production_item_candidates.call_count == (
+        0 if case in {"empty", "duplicate"} else 1
+    )
+
+
 @pytest.mark.parametrize(
     "field,value",
     (

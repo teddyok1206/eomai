@@ -128,6 +128,7 @@ def main() -> None:
     signal.signal(signal.SIGINT, lambda *_: stopped.set())
     descriptor = -1
     owns_lock = False
+    failed = False
     cohort = None
     scope = None
     status: dict[str, object] = {}
@@ -168,7 +169,11 @@ def main() -> None:
             engine, cohort=cohort, settings=settings, catalog_settings=catalog_settings, scope=scope
         )
         service = (
-            CreativeCohortParallelExecutionService(owner, verified_limit=arguments.verified_limit)
+            CreativeCohortParallelExecutionService(
+                owner,
+                verified_limit=arguments.verified_limit,
+                stop_requested=stopped.is_set,
+            )
             if scope.max_in_flight_sources > 1
             else owner
         )
@@ -234,8 +239,9 @@ def main() -> None:
                 break
             stopped.wait(progress_poll_delay_seconds(progress.state))
         if stopped.is_set():
-            write_status(STATE_ROOT, scope.cohort_id, {**status, "state": "STOPPED"})
+            write_status(STATE_ROOT, scope.cohort_id, {**status, "state": "DRAINING"})
     except Exception as error:
+        failed = True
         code = stable_error_code(error)
         safe = {
             **status,
@@ -253,6 +259,8 @@ def main() -> None:
             if service is not None:
                 try:
                     service.close()
+                    if stopped.is_set() and not failed and scope is not None and owns_lock:
+                        write_status(STATE_ROOT, scope.cohort_id, {**status, "state": "STOPPED"})
                 except Exception as error:
                     safe = {
                         **status,

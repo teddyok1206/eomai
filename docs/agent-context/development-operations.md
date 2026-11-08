@@ -68,6 +68,16 @@ API commit/wheel/code-member hash pin을 함께 본다. API/Web만 교체하는 
 API 시작까지 기존 1.1초 guard를 유지하며, rollback도 프로세스를 먼저 멈춘 다음
 파일을 복구하고 시작한다. 실패한 배포 기록을 지우지 않는다.
 
+creative 종료 요청은 새 source advance/publication을 멈추고, 이미 실행한 publication의
+close가 끝나기 전까지 cohort fence와 `DRAINING` 상태를 유지한다. service template의
+30분 한도는 유한 운영 종료 예산이지 모든 NAS/DB 지연의 성공 보장이 아니다. 배포는
+먼저 SIGINT drain을 요청하고 실제 작업 종료를 확인한다. 시간 초과·실패는 원래 scope의
+멱등 복구 경계를 따르며 성공으로 바꾸지 않는다.
+
+INDEX readiness의 `LOCAL_EMBEDDING_READINESS_FAILED reason=...`은 제한된 원인 코드만
+남긴다. timeout·파일 변경·control 불일치를 구분하되 원문 stderr나 환경값을 출력하지
+않는다. 사용자 오류 코드와 실패 판정은 유지하며 이 진단 자체가 자동 retry 권한은 아니다.
+
 정상 입력 뒤의 저장·Graph·검색 실패는 담당 deterministic 코드에서 재현한다. 디스크/DB
 자원 장애, 잘못된 AI 결과, 권한/hash 위반을 분리한다. 안전한 원래 요청 재개와 모든 오류
 무시하기는 다르다. timeout만으로 미실행을 가정하지 않는다.

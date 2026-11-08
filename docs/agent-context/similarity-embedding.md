@@ -72,6 +72,12 @@ INDEX/QUERY 경로와 encoding 성공 이력은 바꾸지 않고 같은 복구 �
 응답 때문에 원래 pin을 잃고 새 계산을 제출하지 않도록 한다. 결과 문항은 정본 revision으로
 DB 조회와 조립 선택에 돌아가야 한다.
 
+검색 결과의 exact Item 해석은 API `item_candidate_navigation.py`가 담당한다.
+`QueryAdapter.selected_production_item_candidates()`는 공개 진입점을 유지하며 기존
+후보 조회를 한 번만 호출한다. canonical artifact member와 worker staging alias는
+서로 다른 값이며, revision/hash/schema/media를 검사한 뒤 요청 순서로 돌려준다.
+문항마다 다시 조회하거나 latest로 대체하지 않는다.
+
 CPU/GPU head는 다른 Graph까지 진행할 수 있다. 최초 DB 검색은 registry의
 `common_public_namespace_revisions`로 두 장치의 이미 게시된 공통 scope를 고정한다.
 public prepare는 `public_revision_for_scope`로 그 Graph/policy의 exact revision을 읽는다.
@@ -89,6 +95,7 @@ hit도 실제 사용자·고정 Graph/policy와 fresh SQL dependency fingerprint
 
 - `apps/application_api/eom_api/services/item_db_similarity_searches.py`
 - `apps/application_api/eom_api/services/item_db_similarity.py`
+- `apps/application_api/eom_api/services/item_candidate_navigation.py`
 - `apps/web_gui/eom_web_gui/static/item-db-similarity-list.js`
 - `apps/web_gui/eom_web_gui/static/item-db-similarity.js`
 - `services/workflow_runner/eom_workflow_runner/local_indexing_service_entry.py`

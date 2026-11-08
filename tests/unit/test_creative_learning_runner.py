@@ -2,9 +2,12 @@
 
 import json
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from eom_catalog_service import creative_learning_runner as runner
+from eom_catalog_service.creative_cohort_execution import CreativeCohortProgress
 
 COHORT_ID = "creativecohort_" + "a" * 32
 
@@ -83,6 +86,94 @@ def test_owner_template_pins_installed_code_and_cannot_read_worker_auth():
     assert "/srv/eom/worker-homes" in unit and "/etc/eom/secrets/api.env" in unit
     assert "IPAddressDeny=any" in unit and "RestartPreventExitStatus=78" in unit
     assert "EOM_DATABASE_URL" not in unit and "auth.json" not in unit
+    assert "TimeoutStopSec=1800" in unit
+
+
+def test_stop_status_is_written_only_after_publication_drain():
+    # Actual future waiting is covered by the parallel driver's stop tests.
+    # Keep this thin adapter's derived status ordered around the application close.
+    source = Path(runner.__file__).read_text()
+    assert source.index('"state": "DRAINING"') < source.index("service.close()")
+    assert source.index("service.close()") < source.index('"state": "STOPPED"')
+
+
+@pytest.mark.parametrize("failure", [None, "advance", "close"])
+def test_runner_keeps_fence_until_close_and_never_overwrites_failure(
+    tmp_path, monkeypatch, failure
+):
+    root = state_root(tmp_path)
+    scope = SimpleNamespace(
+        cohort=SimpleNamespace(cohort_id=COHORT_ID, targets=(object(),)),
+        cohort_id=COHORT_ID,
+        max_in_flight_sources=1,
+    )
+    events, signals = [], {}
+    engine, owner = Mock(), Mock()
+    monkeypatch.setattr(runner, "STATE_ROOT", root)
+    monkeypatch.setattr(
+        "sys.argv", ["runner", "--cohort-revision-id", "rev_" + "a" * 32, "--verified-limit", "1"]
+    )
+    monkeypatch.setattr(runner.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(
+        runner.os, "fstat", lambda fd: SimpleNamespace(st_mode=0o100600, st_uid=0, st_nlink=1)
+    )
+    monkeypatch.setattr(runner, "validate_state_root", lambda _: None)
+    monkeypatch.setattr(runner.Settings, "from_environment", Mock())
+    monkeypatch.setattr(runner.CatalogSettings, "from_environment", Mock())
+    monkeypatch.setattr(runner, "build_engine", lambda: engine)
+    monkeypatch.setattr(runner, "CatalogArtifactService", Mock())
+    monkeypatch.setattr(runner, "ControlFileSetPublisher", Mock())
+    monkeypatch.setattr(runner, "read_creative_execution_scope", lambda *args: (scope, None))
+    monkeypatch.setattr(runner, "CreativeCohortExecutionService", Mock(return_value=owner))
+    monkeypatch.setattr(runner, "require_background_write_capacity", lambda _: None)
+    monkeypatch.setattr(
+        runner.signal, "signal", lambda number, handler: signals.update({number: handler})
+    )
+    monkeypatch.setattr(
+        runner, "write_status", lambda root, cohort, status: events.append(status["state"])
+    )
+    original_close = runner.os.close
+
+    def release_fence(fd):
+        events.append("FENCE_RELEASED")
+        original_close(fd)
+
+    monkeypatch.setattr(runner.os, "close", release_fence)
+
+    def advance():
+        signals[runner.signal.SIGTERM](None, None)
+        if failure == "advance":
+            raise ValueError("CREATIVE_COHORT_SOURCE_MISMATCH")
+        return CreativeCohortProgress(
+            cohort_id=COHORT_ID,
+            state="PROCESSING",
+            verified_count=0,
+            target_count=1,
+            external_number=None,
+            workflow_id=None,
+            item_revision_id=None,
+            analysis_run_id=None,
+            graph_snapshot_revision_id=None,
+        )
+
+    def close():
+        events.append("CLOSE")
+        assert "FENCE_RELEASED" not in events
+        if failure == "close":
+            raise ValueError("KNOWLEDGE_GRAPH_STALE_CURRENT")
+
+    owner.advance_once.side_effect, owner.close.side_effect = advance, close
+    if failure:
+        with pytest.raises(SystemExit) as error:
+            runner.main()
+        assert error.value.code == 78
+        assert "STOPPED" not in events
+        assert "STOPPED_TECHNICAL_FAILURE" in events
+    else:
+        runner.main()
+        assert events[-4:] == ["DRAINING", "CLOSE", "STOPPED", "FENCE_RELEASED"]
+    assert events[-1] == "FENCE_RELEASED"
+    engine.dispose.assert_called_once()
 
 
 @pytest.mark.parametrize("state", ["EXTRACTING", "ANALYZING", "STARTING", "UNKNOWN"])

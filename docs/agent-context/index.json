@@ -87,6 +87,7 @@
       "source_paths": [
         "apps/application_api/eom_api/services/item_db_similarity_searches.py",
         "apps/application_api/eom_api/services/item_db_similarity.py",
+        "apps/application_api/eom_api/services/item_candidate_navigation.py",
         "apps/web_gui/eom_web_gui/static/item-db-similarity-list.js",
         "apps/web_gui/eom_web_gui/static/item-db-similarity.js",
         "services/workflow_runner/eom_workflow_runner/local_indexing_service_entry.py",

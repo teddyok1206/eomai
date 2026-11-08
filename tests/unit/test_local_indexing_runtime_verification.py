@@ -44,17 +44,31 @@ def test_fixed_verifier_keeps_credentials_out_and_has_no_cached_success(verifier
     assert options["timeout"] == 60
 
 
-@pytest.mark.parametrize("fault", ["exit", "timeout", "changed"])
-def test_verifier_failure_never_becomes_runtime_ready(verifier, fault):
+@pytest.mark.parametrize(
+    ("fault", "reason"),
+    [
+        ("exit", "RUNTIME_VERIFIER_REJECTED"),
+        ("timeout", "RUNTIME_VERIFIER_TIMEOUT"),
+        ("changed", "RUNTIME_FILES_CHANGED"),
+        ("os", "RUNTIME_VERIFIER_EXECUTION_FAILED"),
+        ("unexpected", "RUNTIME_UNEXPECTED_FAILURE"),
+    ],
+)
+def test_verifier_failure_never_becomes_runtime_ready(verifier, fault, reason):
     value, files, run = verifier
     if fault == "exit":
         run.return_value.returncode = 1
     elif fault == "timeout":
         run.side_effect = TimeoutError("sensitive child detail")
-    else:
+    elif fault == "changed":
         files.assert_unchanged.side_effect = ValueError("sensitive filesystem detail")
-    with pytest.raises(ValueError) as error:
+    elif fault == "os":
+        run.side_effect = OSError("sensitive execution detail")
+    else:
+        run.side_effect = RuntimeError("sensitive unexpected detail")
+    with pytest.raises(verification.IndexingRuntimeVerificationError) as error:
         value.assert_current()
     assert str(error.value) == "LOCAL_INDEXING_NUMERICAL_RUNTIME_UNAVAILABLE"
+    assert error.value.reason == reason
     if fault == "changed":
         run.assert_not_called()

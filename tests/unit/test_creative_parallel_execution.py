@@ -1,7 +1,8 @@
 """Bounded driver concurrency is application scheduling, not live worker acceptance."""
 
-from concurrent.futures import Future
+from concurrent.futures import Future, ThreadPoolExecutor
 from dataclasses import replace
+from threading import Event
 from types import SimpleNamespace as NS
 from unittest.mock import Mock
 
@@ -118,6 +119,98 @@ def test_readiness_refresh_only_rechecks_original_held_sources(monkeypatch):
     with pytest.raises(ValueError, match="NOT_QUIESCENT"):
         driver.refresh_blocked_source_readiness()
     driver.close()
+
+
+def test_stop_during_report_does_not_submit_the_rest_or_a_new_publication(monkeypatch):
+    case = driver_case(monkeypatch)
+    stopping = False
+
+    def advance(source):
+        nonlocal stopping
+        case.visited.append(source.target.source_id)
+        source.state = "READY_TO_PUBLISH"
+        stopping = True
+
+    case.owner.advance_report.side_effect = advance
+    case.driver.stop_requested = lambda: stopping
+    case.driver.advance_once()
+    assert len(case.visited) == 1
+    assert case.executor.calls == 0
+    case.driver.close()
+    case.owner.publish_sources.assert_not_called()
+
+
+def test_stop_harvests_existing_publication_without_refill_or_duplicate_work(monkeypatch):
+    case = driver_case(monkeypatch)
+    case.driver.advance_once()
+    original = case.driver.publishing
+    case.driver.stop_requested = lambda: True
+    case.executor.complete()
+    result = case.driver.advance_once()
+    assert result.verified_count == len(original)
+    assert len(case.visited) == 6 and case.executor.calls == 1
+    case.driver.close()
+    case.owner.publish_sources.assert_called_once_with(original)
+
+
+def test_stop_before_admission_has_no_work_or_empty_publication(monkeypatch):
+    case = driver_case(monkeypatch)
+    case.driver.stop_requested = lambda: True
+    case.driver.advance_once()
+    assert case.driver.next_target == 0 and not case.driver.window
+    case.driver.close()
+    case.owner.advance_report.assert_not_called()
+    case.owner.publish_sources.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", [False, True])
+def test_close_drains_inflight_publication_and_preserves_its_outcome(monkeypatch, failure):
+    case = driver_case(monkeypatch)
+    started, release, closing, closed = Event(), Event(), Event(), Event()
+    case.driver.executor = ThreadPoolExecutor(max_workers=1)
+
+    def publish(sources):
+        started.set()
+        assert release.wait(5)
+        if failure:
+            raise ValueError("KNOWLEDGE_GRAPH_STALE_CURRENT")
+        for source in sources:
+            source.state = "VERIFIED"
+
+    def close():
+        closing.set()
+        try:
+            case.driver.close()
+        finally:
+            closed.set()
+
+    case.owner.publish_sources.side_effect = publish
+    case.driver.advance_once()
+    try:
+        assert started.wait(5)
+        case.driver.stop_requested = lambda: True
+        with ThreadPoolExecutor(max_workers=1) as closer:
+            future = closer.submit(close)
+            try:
+                assert closing.wait(5)
+                assert not closed.wait(0.05)
+            finally:
+                release.set()
+            if failure:
+                with pytest.raises(ValueError, match="STALE_CURRENT"):
+                    future.result(timeout=5)
+            else:
+                future.result(timeout=5)
+    finally:
+        release.set()
+        case.driver.executor.shutdown(wait=True)
+    assert closed.is_set()
+    assert len(case.visited) == 6
+    case.owner.publish_sources.assert_called_once()
+    assert all(
+        source.state == ("READY_TO_PUBLISH" if failure else "VERIFIED")
+        for source in case.driver.publishing
+    )
 
 
 def test_graph_publication_does_not_block_other_reports_or_expand_the_six_source_window(

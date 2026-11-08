@@ -52,6 +52,9 @@
 
 ## 관련 근거
 
+- [설계 원칙·실제 오류·단순화 수정 목록](../architecture/DESIGN_ERROR_REMEDIATION_REVIEW_2026-11-08.md):
+  미수정 결함, 이미 해결된 오류의 구조 후속, 인과 미확인 후보를 구분한다. 다음 수정 전에
+  현재 source와 대조하며, 목록 자체를 운영 변경 권한이나 현재 장애 판정으로 쓰지 않는다.
 - `AGENTS.md`
 - `docs/architecture/MODULE_BOUNDARIES.md`
 - `docs/architecture/CREATIVE_SOURCE_VISUAL_RECOVERY.md`
