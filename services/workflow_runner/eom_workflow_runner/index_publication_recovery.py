@@ -34,6 +34,7 @@ from eom_orchestrator.native_embedding_coordinator import (
     NativeEmbeddingCoordinator,
     NativeEmbeddingCoordinatorHistory,
 )
+from eom_orchestrator.native_embedding_index_handoff import materialize_prepared_index_publication
 from eom_orchestrator.native_embedding_launch_identity import (
     read_native_embedding_launch,
     read_native_embedding_launch_association,
@@ -61,6 +62,7 @@ from sqlalchemy.orm import Session, SessionTransaction
 
 from eom_workflow_runner.document_embedding_execution import OwnedDocumentEmbedding
 from eom_workflow_runner.local_embedding_encoding_admission import CatalogEncodingOwnerAdmission
+from eom_workflow_runner.local_embedding_execution_context import native_embedding_registry_scope
 from eom_workflow_runner.local_embedding_execution_port import NativeFencedRunnerTransaction
 from eom_workflow_runner.local_embedding_index_completion import NativeEmbeddingIndexCompletion
 from eom_workflow_runner.local_embedding_owner_admission import (
@@ -280,18 +282,27 @@ class PreparedIndexPublicationExecutor:
                     command_lease=command_lease,
                     output=completed.output,
                 )
-        return self.completion.publish(
-            workflow,
-            step,
-            request,
-            command_lease,
-            self.owner.registry_caller(request),
-            coordinator,
-            allocation,
-            (),
-            fenced_transaction,
-            native_embedding_publications(self.publisher, allocation.source_commit),
-        )
+        prepared = history.records[1].payload
+        assert isinstance(prepared, NativeCoordinatorIndexPreparedV4)
+        publications = native_embedding_publications(self.publisher, allocation.source_commit)
+        with materialize_prepared_index_publication(
+            coordinator.intent.native_launch_job_id.removeprefix("job_"),
+            prepared.registration_command.index_manifest.sha256,
+        ) as (workspace, index):
+            publications.artifacts.stage_index_manifest(index=index, workspace=workspace)
+            return self.completion.publish(
+                workflow,
+                step,
+                request,
+                command_lease,
+                self.owner.registry_caller(request),
+                coordinator,
+                allocation,
+                (),
+                fenced_transaction,
+                publications,
+                workspace=workspace,
+            )
 
     def validate_completion(
         self,
@@ -398,8 +409,19 @@ def recover_prepared_index_publication(
     with publisher.sessions.begin() as session:
         principal = require_native_workflow_maintenance_owner(session, ALLOCATED_MAINTENANCE_TABLES)
         executor.fence(session)
-        request, _, _, _, _ = executor.fence.original(session)
+        request, _, _, _, history = executor.fence.original(session)
         executor.owner.resolve_submission(session, request)
+        if len(history.records) == 2:
+            prepared = history.records[1].payload
+            assert isinstance(prepared, NativeCoordinatorIndexPreparedV4)
+            previous = executor.owner.catalog.resolve_indexing_namespace_predecessor(
+                session,
+                executor.owner.registry_caller(request),
+                native_embedding_registry_scope(request),
+            )
+            selected = None if previous is None else previous[1].index_revision_id
+            if selected != prepared.registration_command.expected_current_index_revision_id:
+                raise ValueError("INDEX_PUBLICATION_SUPERSEDED_REQUIRES_SUCCESSOR")
         event = session.scalar(
             select(WorkflowEventRecord).where(
                 WorkflowEventRecord.workflow_id == command.workflow_id,

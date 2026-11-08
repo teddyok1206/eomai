@@ -40,3 +40,26 @@ disposable PostgreSQL의 중단 후 publication·원래 command 재claim·termin
 별도 immutable installed wheel에서 실행한다. 운영 성공은 실제 원래 index 등록,
 Workflow COMPLETED, 같은 요청 replay, 숫자 worker 시작 횟수 증가 0 및 GPU 계속
 진행을 확인한 뒤에만 기록한다.
+
+운영 첫 publication 시도에서 기존 fixed-owner workspace가 root 유지보수를 거부했다.
+수치 실행이나 index 등록 전에 중단됐으며 원래 command의 lease 만료 뒤 같은 요청만
+이어간다. 일반 owner UID 검사를 완화하지 않는다. 별도 root-only materialization이
+원래 owner의 staged index.json을 retained FD·소유자·mode·고정 hash로 검증하고,
+publication 동안만 root 소유 임시 workspace에 전달한다. 원래 폴더의 소유자나 파일은
+바꾸지 않고 vector bytes도 복사하지 않는다. 임시 DB 검사는 이 실제 경계도 통과한다.
+
+### 이미 다른 INDEX가 앞서 등록된 경우
+
+운영 재조회에서 CPU head가 159→183으로 전진했고, 남은 4개 encoding은 현재 832개
+binding에 포함되지 않았음이 확인됐다. 원래 prepared revision을 head로 덮어쓰거나
+동일 revision의 bytes를 바꾸지 않는다. 명시적으로 고정한 현재 index revision/hash와
+원래 복구 command를 입력으로 기존 Catalog assembler/registry를 통해 successor를 만든다.
+현재 reusable rows와 원래 SUCCEEDED receipts의 rows만 합치며 새로운 수치 실행은 없다.
+원래 Graph·namespace·source grant를 유지하고 현행 전체 source 검증과 head CAS를 적용한다.
+successor index/Artifact/producer identity는 새로 생성하고 원래 prepared checkpoint는 남긴다.
+동일 계획의 identity/time은 고정한다. 등록과 원래 실행 종료는 한 SQL transaction이며,
+Artifact commit 후 SQL 실패 시 같은 계획으로 replay한다. 다른 head면 자동 latest 재시도하지 않는다.
+성공 후 원래 실행은 `EMBEDDING_INDEX_PUBLICATION_REPLACED`로 FAILED 종료한다. 이는
+수치 계산 실패가 아니라 원래 index publication이 대체됐다는 이력이다. SUCCEEDED encoding
+4개는 변경하지 않으며 새 registry receipt와 대체 사유를 함께 기록한다. 기존 성공/실패 이력과
+동시 GPU/QUERY 실행은 보존한다. 새 queue/DB/migration/API는 없다.

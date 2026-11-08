@@ -111,6 +111,15 @@ def test_normal_owner_cannot_execute_root_prepare(staged: handoff.PreparedNative
         handoff.prepare_native_index_handoff(staged.execution_id)
 
 
+def test_normal_owner_cannot_read_prepared_recovery(staged: handoff.PreparedNativeIndex) -> None:
+    assert os.getresuid() != (0, 0, 0)
+    with (
+        pytest.raises(ValueError, match="ROOT_REQUIRED"),
+        handoff.materialize_prepared_index_publication(staged.execution_id, "sha256:" + "0" * 64),
+    ):
+        pytest.fail("maintenance input is root only")
+
+
 def test_valid_result_materializes_once_and_same_output_can_replay(
     staged: handoff.PreparedNativeIndex,
     monkeypatch: pytest.MonkeyPatch,

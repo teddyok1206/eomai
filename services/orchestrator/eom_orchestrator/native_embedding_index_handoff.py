@@ -6,10 +6,17 @@ import argparse
 import json
 import os
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import TemporaryDirectory
 from typing import Any
 
+from eom_catalog_contracts.embedding_index_families import (
+    SupportedEmbeddingIndex,
+    parse_supported_embedding_index,
+)
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
 from eom_catalog_contracts.embedding_vector_binary import read_unit_vectors
 from eom_catalog_contracts.inference_transfer_embedding import (
@@ -135,6 +142,37 @@ def ensure_native_index_owner_workspace(execution_id: str) -> Path:
     """Durable owner-local workspace; canonical bytes still belong to Artifact storage."""
     execution_id = validate_native_index_execution_id(execution_id)
     return ensure_protected_cpu_owner_workspace(OWNER_ROOT, execution_id, owner=_owner())
+
+
+@contextmanager
+def materialize_prepared_index_publication(
+    execution_id: str, expected_sha256: str
+) -> Iterator[tuple[Path, SupportedEmbeddingIndex]]:
+    """Root maintenance input boundary: exact staged metadata, no vectors or launch.
+
+    The application must authorize the original prepared checkpoint first. Never
+    chown its retained workspace or weaken the ordinary fixed-owner boundary.
+    """
+    if os.getresuid() != (0, 0, 0):
+        raise NativeIndexHandoffError("NATIVE_INDEX_ROOT_REQUIRED")
+    execution_id = validate_native_index_execution_id(execution_id)
+    owner = fixed_owner_identity()
+    with protected_cpu_handoff_directory(
+        OWNER_ROOT / execution_id, owner=owner, uid=owner.owner_uid, gid=owner.owner_gid, mode=0o700
+    ) as directory:
+        raw = read_protected_cpu_handoff_member(
+            directory,
+            "index.json",
+            uid=owner.owner_uid,
+            gid=owner.owner_gid,
+            mode=0o600,
+            maximum_bytes=64 * 1024**2,
+        )
+    if sha256_bytes(raw) != expected_sha256:
+        raise NativeIndexHandoffError("NATIVE_INDEX_PREPARED_HASH_MISMATCH")
+    index = parse_supported_embedding_index(_canonical_value(raw))
+    with TemporaryDirectory(prefix="eom-prepared-index-publication-", dir="/var/lib") as name:
+        yield Path(name), index
 
 
 def stage_native_index(prepared: PreparedNativeIndex) -> None:

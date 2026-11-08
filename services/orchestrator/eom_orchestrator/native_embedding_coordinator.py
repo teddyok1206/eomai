@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import cast
 
 from eom_catalog_contracts.embedding_reference_query import raw_similarity_contract_value
+from eom_catalog_contracts.registered_public_solution_registry import (
+    PublicSolutionIndexRegistrationResultV4,
+)
 from eom_identifiers import content_sha256
 from eom_workflow.embedding_cpu_failure_recovery import CpuEmbeddingFailureRecoveryCommand
 from eom_workflow.embedding_cpu_preparation_failure import CpuPreparationFailureRecoveryCommand
@@ -121,6 +125,37 @@ class NativeEmbeddingCoordinator:
         if isinstance(self.intent, LocalEmbeddingLaunchIntentV2):
             return parse_native_embedding_coordinator_checkpoint_v2(value)
         return parse_native_embedding_coordinator_checkpoint(value)
+
+    def retire_replaced_publication(
+        self, session: Session, replacement: PublicSolutionIndexRegistrationResultV4
+    ) -> None:
+        """Root maintenance closes only the old coordinator, never successful encodings.
+
+        The application verifies current source admission, original completed rows,
+        successor registry receipt and expired command before this owner mutation.
+        """
+        replacement = PublicSolutionIndexRegistrationResultV4.model_validate(replacement)
+        history = self.read(session)
+        if (
+            os.getresuid() != (0, 0, 0)
+            or history.state != "VALIDATING_RESULT"
+            or len(history.records) != 2
+        ):
+            raise ValueError("EMBEDDING_PUBLICATION_REPLACEMENT_INVALID")
+        prepared = history.records[1].payload
+        if (
+            not isinstance(prepared, NativeCoordinatorIndexPreparedV4)
+            or replacement.index_revision_id == prepared.registration_command.index_revision_id
+        ):
+            raise ValueError("EMBEDDING_PUBLICATION_REPLACEMENT_INVALID")
+        job = transition_job(
+            session,
+            self.intent.native_launch_job_id,
+            JobState.FAILED,
+            "EMBEDDING_INDEX_PUBLICATION_REPLACED",
+            data={"replacement": replacement.model_dump(mode="json")},
+        )
+        job.error_code = "EMBEDDING_INDEX_PUBLICATION_REPLACED"
 
     def checkpoint(
         self, phase: NativeCoordinatorPhase, payload: NativeEmbeddingContract

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 
 from eom_catalog_contracts.embedding_registry import (
     RegisterEmbeddingIndexCommand,
@@ -219,6 +220,8 @@ class NativeEmbeddingIndexCompletion:
         readings: tuple[SupportedEmbeddingReadResult, ...],
         fenced_transaction: NativeFencedRunnerTransaction,
         publications: NativeEmbeddingPublications,
+        *,
+        workspace: Path | None = None,
     ) -> SupportedLocalEmbeddingStepOutput:
         with fenced_transaction() as session:
             sources = self._current(
@@ -229,9 +232,10 @@ class NativeEmbeddingIndexCompletion:
                 lease=lease,
             )
             history = coordinator.read(session)
-            workspace = ensure_native_index_owner_workspace(
-                coordinator.intent.native_launch_job_id.removeprefix("job_")
-            )
+            if workspace is None:
+                workspace = ensure_native_index_owner_workspace(
+                    coordinator.intent.native_launch_job_id.removeprefix("job_")
+                )
             if len(history.records) == 1:
                 basis: (
                     PreparedEmbeddingIndexBasis

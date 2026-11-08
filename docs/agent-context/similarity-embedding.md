@@ -58,6 +58,10 @@ INDEX의 OS 상태 조회는 Identity `local_indexing_runtime._unit`에서 timeo
 새 source discovery·submit·수치 실행을 할 수 없는 executor가 기존 Runner와 Catalog/
 Orchestrator publication을 재사용하며, 일반 서비스 권한이나 GPU PID는 바꾸지 않는다.
 설계·실제 완료 여부는 `docs/operations/RETIRED_INDEX_PUBLICATION_RECOVERY.md`를 참조한다.
+기존 prepared head가 이미 앞선 경우 원래 revision의 등록을 강행하지 않는다.
+`index_publication_successor`는 명시적으로 pin한 새 predecessor와 성공한 encoding을
+검증해 새 index만 등록하며, 원래 요청은 publication 대체 사유로 종료한다. 일반
+INDEX/QUERY 경로와 encoding 성공 이력은 바꾸지 않고 같은 복구 계획은 재사용한다.
 
 ## DB 화면의 실제 검색 경로
 
