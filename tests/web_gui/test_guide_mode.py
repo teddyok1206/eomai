@@ -55,8 +55,10 @@ const source = fs.readFileSync(process.argv[2], 'utf8').replace('export function
 const context = {};vm.createContext(context);
 vm.runInContext(source+'\nthis.views=views;this.controls=controls;this.fields=fields;'+
  'this.actions=actions;this.lists=lists;this.formActions=formActions;',context);
-const names = new Set([...html.matchAll(/data-view-target="([a-z-]+)"/g)].map(v=>v[1]));
+// Diagnostic subviews can be opened from a parent without a sidebar entry.
+const names = new Set([...html.matchAll(/data-view="([a-z-]+)"/g)].map(v=>v[1]));
 assert.equal(context.views.size,names.size);
+for(const [, name] of html.matchAll(/data-view-target="([a-z-]+)"/g)) assert.ok(names.has(name));
 for(const name of names){
  const value=context.views.get(name);
  assert.ok(value && value.title.length>0 && value.description.length>40,name);
@@ -76,6 +78,12 @@ assert.doesNotMatch(context.views.get('request').description,/요청 분석/);
 assert.doesNotMatch(context.controls.get('request-text').description,/요청 분석/);
 assert.equal(context.controls.has('draft-analyze'),false);
 assert.equal(context.controls.get('draft-save').title,'초안 저장');
+for(const id of ['material-title','material-main','material-learning-start','map-query',
+ 'map-fit','item-db-assembly-name','item-db-similarity-top-k']) {
+ assert.ok(context.controls.has(id),id);
+}
+assert.match(context.views.get('learning').description,/PDF나 한글/);
+assert.doesNotMatch(context.controls.get('pdf-review-annotation-submit').description,/빨간/);
 assert.match(context.controls.get('draft-save').description,/저장만으로 문항 제작이 시작되지는/);
 for(const removed of ['subject','language','choice_count','equation_required','quality_profile']){
  assert.equal(context.fields.get('draft-form').has(removed),false,

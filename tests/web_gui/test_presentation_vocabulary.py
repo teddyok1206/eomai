@@ -13,6 +13,7 @@ from eom_web_gui.contracts import (
     KnowledgeAnalysisBatchStatus,
     KnowledgeAnalysisQualityReport,
 )
+from eom_web_gui.material_learning_contracts import RunState, TaskState
 from eom_workflow_runner.state_machine import WorkflowState
 from jsonschema import Draft202012Validator
 
@@ -31,6 +32,16 @@ def test_presentation_vocabulary_matches_its_draft_2020_12_contract() -> None:
     vocabulary = _vocabulary()
     Draft202012Validator.check_schema(schema)
     Draft202012Validator(schema).validate(vocabulary)
+
+
+def test_material_learning_uses_one_vocabulary_and_covers_typed_states() -> None:
+    states = _vocabulary()["domains"]["material_learning"]["states"]
+    assert set(states) == set(get_args(RunState)) | set(get_args(TaskState))
+    module = (VOCABULARY_PATH.parent / "material-learning.js").read_text()
+    assert "const STATES" not in module
+    assert 'setStateStatus(badge, "material_learning", value)' in module
+    assert states["COMPLETED_WITH_EXCEPTIONS"]["tone"] == "warning"
+    assert states["WAITING_FOR_CAPACITY"]["tone"] != "danger"
 
 
 def test_domain_specific_states_are_human_readable() -> None:

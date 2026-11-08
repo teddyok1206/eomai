@@ -26,7 +26,7 @@ async function check(navigate, admin, expected) {
   const state = {navigationVersion:0, operator:{password_change_required:false},
     currentView:'dashboard'};
   const context = {state, document:{}, window:{location:{}}, generalChat:{install(){}},
-    itemDb:{install(){}}, knowledgeMap:{install(){}},
+    itemDb:{install(){}}, knowledgeMap:{install(){}}, materialLearning:{install(){}},
     studioRouteFromLocation:()=>({view:'chat'}), syncUiMode(){},
     loadPresentationVocabulary:async()=>{}, initializeSession:async()=>{},
     loadCurriculumOutline:async()=>{reached(); await pending;},

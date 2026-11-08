@@ -184,7 +184,7 @@ export function createKnowledgeMap({document, api, openItem, previewItem}) {
             finally {preview.disabled = false;}
           }); card.append(preview, root);
         }
-        const technical = element(document, "details", undefined, "technical-disclosure");
+        const technical = element(document, "details", undefined, "technical-details");
         technical.append(element(document, "summary", "자료 연결 정보"));
         const data = element(document, "dl");
         for (const [label, value] of [["원본 버전", source.source_revision_id], ["분석 기록", source.analysis_run_id], ["위치 참조", source.anchor_id], ["원본 검증값", source.source_sha256], ["발췌 검증값", source.excerpt_sha256]]) data.append(element(document, "dt", label), element(document, "dd", value));

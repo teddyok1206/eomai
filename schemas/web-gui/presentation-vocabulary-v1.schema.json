@@ -40,6 +40,7 @@
         "generic": {"$ref": "#/$defs/domain"},
         "workflow": {"$ref": "#/$defs/domain"},
         "knowledge_analysis": {"$ref": "#/$defs/domain"},
+        "material_learning": {"$ref": "#/$defs/domain"},
         "hwpx_build": {"$ref": "#/$defs/domain"},
         "hwpx_capability": {"$ref": "#/$defs/domain"},
         "item_revision": {"$ref": "#/$defs/domain"},

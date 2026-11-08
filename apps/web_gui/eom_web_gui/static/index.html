@@ -381,8 +381,8 @@
                 <label>자료 종류<select id="material-kind" name="kind"><option value="WORKBOOK">문제집</option><option value="MOCK_EXAM">모의고사</option><option value="REFERENCE_BOOK">참고서</option><option value="TEXTBOOK">교과서</option><option value="OTHER">기타 자료</option></select></label>
                 <label class="material-wide">출처 설명<input id="material-description" name="description" maxlength="2000" required placeholder="출판사·교재명이나 자료의 출처를 적어 주세요"></label>
                 <label>본문·문제 파일<input id="material-main" name="main" type="file" accept=".pdf,.hwp,.hwpx" required></label>
-                <label>별도 해설 파일 <span class="muted-label">선택</span><input id="material-solutions" name="solutions" type="file" accept=".pdf,.hwp,.hwpx"></label>
-                <label class="material-wide">추가로 참고할 설명 <span class="muted-label">선택</span><textarea id="material-instructions" name="instructions" rows="3" maxlength="8000" placeholder="예: 해설 파일의 장별 번호를 문제집과 맞춰 주세요"></textarea></label>
+                <label><span>별도 해설 파일 <span class="muted-label">선택</span></span><input id="material-solutions" name="solutions" type="file" accept=".pdf,.hwp,.hwpx"></label>
+                <label class="material-wide"><span>추가로 참고할 설명 <span class="muted-label">선택</span></span><textarea id="material-instructions" name="instructions" rows="3" maxlength="8000" placeholder="예: 해설 파일의 장별 번호를 문제집과 맞춰 주세요"></textarea></label>
                 <label class="checkbox-row material-wide"><input id="material-rights" name="rights" type="checkbox" required>이 자료를 내부 학습·문항 등록·검색에 사용할 권한이 있습니다.</label>
                 <div class="material-wide material-learning-actions"><button id="material-learning-start" class="button primary" type="submit">학습 시작</button><span id="material-learning-upload-status" role="status" aria-live="polite"></span></div>
               </form>
@@ -393,18 +393,15 @@
               <div id="material-learning-runs"><p class="empty-state">아직 올린 자료가 없습니다.</p></div>
               <div id="material-learning-detail" hidden></div>
             </section>
-            <section class="knowledge-boundary" aria-label="자료 학습 증거 정책">
-              <strong>이미지 관찰 필수 · OCR 텍스트 보조</strong><span>Graph RAG 누적 경로</span>
-            </section>
             <div class="quality-metric-grid learning-metric-grid" aria-label="자료 학습 지표">
               <article><span>원본 PDF</span><strong id="learning-source-pdf-count">-</strong></article>
               <article><span>시험 회차</span><strong id="learning-exam-count">-</strong></article>
               <article><span>승인 문항</span><strong id="learning-accepted-count">-</strong></article>
-              <article><span>현재 Graph 문항</span><strong id="learning-graph-count">-</strong></article>
+              <article><span>연결된 문항</span><strong id="learning-graph-count">-</strong></article>
               <article><span>상세 풀이보고서</span><strong id="learning-solution-report-count">-</strong></article>
-              <article><span>코퍼스 갱신</span><strong id="learning-updated-at">-</strong></article>
+              <article><span>최근 갱신</span><strong id="learning-updated-at">-</strong></article>
             </div>
-            <details class="technical-details inline-technical-details learning-technical-details"><summary>학습 기술 정보</summary><dl class="inspector-list"><dt>Graph 버전</dt><dd id="learning-graph-revision">-</dd></dl></details>
+            <details class="technical-details inline-technical-details learning-technical-details"><summary>학습 기술 정보</summary><p>자료는 원문 이미지를 확인해 학습하며, 추출한 글자는 보조 자료로 사용합니다.</p><dl class="inspector-list"><dt>Graph 버전</dt><dd id="learning-graph-revision">-</dd></dl></details>
             <div>
               <section class="panel">
                 <div class="panel-heading"><h2>시험 회차별 승인 문항</h2></div>
@@ -452,7 +449,7 @@
 
           <section class="view" data-view="quality-review" aria-labelledby="quality-review-title">
             <div class="page-heading">
-              <div><h1 id="quality-review-title">시험지 품질 평가</h1><p>완성된 시험지의 과학 정확성, 정답, 근거, 시각 자료와 편집 시간을 문항별로 기록합니다.</p></div>
+              <h1 id="quality-review-title">시험지 품질 평가</h1>
               <button id="quality-review-refresh" class="button quiet" type="button">평가 현황 새로고침</button>
             </div>
             <div class="quality-review-layout">
@@ -593,7 +590,7 @@
                   </div>
                 </section>
                 <section id="pdf-review-annotation" class="pdf-review-correction" hidden>
-                  <div class="panel-heading"><h3>위치 표시 PDF</h3><span class="muted-label">원본 보존 · 빨간 번호 상자 · 주석 패널</span></div>
+                  <div class="panel-heading"><h3>위치 표시 PDF</h3><span class="muted-label">원본 보존 · 위치 표시 · 주석 패널</span></div>
                   <p id="pdf-review-annotation-message" class="form-message" aria-live="polite"></p>
                   <div id="pdf-review-annotation-actions" class="pdf-review-correction-actions">
                     <button id="pdf-review-annotation-submit" class="button primary" type="button">주석 PDF 만들기</button>

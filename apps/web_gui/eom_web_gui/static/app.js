@@ -181,7 +181,7 @@ const itemDb = createItemDb({
 const knowledgeMap = createKnowledgeMap({document, api, previewItem: previewRegisteredItem,
   openItem(entry) {showView("item-db"); itemDb.openGraph(entry);},
 });
-const materialLearning = createMaterialLearning({document, api,
+const materialLearning = createMaterialLearning({document, api, setStateStatus,
   explainError: (error) => error instanceof StudioApiError
     ? error.message : errorMessage(error?.code || "APPLICATION_API_REQUEST_FAILED"),
 });

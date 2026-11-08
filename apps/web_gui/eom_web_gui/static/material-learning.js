@@ -1,5 +1,4 @@
 const KINDS = Object.freeze({TEXTBOOK: "교과서", REFERENCE_BOOK: "참고서", WORKBOOK: "문제집", MOCK_EXAM: "모의고사", OTHER: "기타 자료"});
-const STATES = Object.freeze({RECEIVED: "접수됨", PREPARING: "파일 준비 중", DISCOVERING: "자료 구성 확인 중", PROCESSING: "학습 중", WAITING_FOR_CAPACITY: "작업 자리 대기 중", PAUSED: "일시 정지", COMPLETED: "학습 완료", COMPLETED_WITH_EXCEPTIONS: "일부 확인 필요", FAILED: "처리 실패", CANCELLED: "취소됨", PENDING: "대기", READY: "실행 준비됨", RUNNING: "문항 읽는 중", RESULT_READY: "내용 확인 중", REGISTERED: "문항 등록됨", ANALYZING: "풀이·개념 분석 중", PUBLISHING: "그래프 연결 중", GRAPH_READY: "그래프 연결됨", EXCEPTION: "원본 확인 필요"});
 const TASK_KINDS = Object.freeze({PREPARE: "파일 준비", DISCOVER: "구성 확인", EXPLANATION: "설명 지식", QUESTION: "문항"});
 const TERMINAL = new Set(["COMPLETED", "COMPLETED_WITH_EXCEPTIONS", "FAILED", "CANCELLED"]);
 const MAX_BYTES = 256 * 1024 * 1024;
@@ -10,7 +9,7 @@ export function materialLearningProgress(run) {
   return total ? `${counters.get("COMPLETED") || 0}/${total} 단계` : "파일 준비 대기";
 }
 
-export function createMaterialLearning({document, api, explainError = error => error.message}) {
+export function createMaterialLearning({document, api, setStateStatus, explainError = error => error.message}) {
   const $ = selector => document.querySelector(selector);
   let owner = null, active = false, version = 0, timer = null;
   let selected = null, intent = null, busy = false, receipts = new WeakMap(), detailVersion = 0;
@@ -27,6 +26,11 @@ export function createMaterialLearning({document, api, explainError = error => e
     value.textContent = text;
   }
   function key() { return `material-${globalThis.crypto.randomUUID()}`; }
+  function status(value) {
+    const badge = node("span", undefined, "status-badge");
+    setStateStatus(badge, "material_learning", value);
+    return badge;
+  }
   function stopTimer() { if (timer !== null) clearTimeout(timer); timer = null; }
   function date(value) { return new Date(value).toLocaleString("ko-KR", {timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit"}); }
 
@@ -38,7 +42,7 @@ export function createMaterialLearning({document, api, explainError = error => e
     const target = $("#material-learning-detail");
     target.replaceChildren(node("h3", `${result.run.title}${result.run.attempt > 1 ? ` · ${result.run.attempt}차 처리` : ""}`));
     target.hidden = false;
-    target.append(node("p", STATES[result.run.state] || result.run.state));
+    target.append(status(result.run.state));
     if (["DISCOVERING", "PROCESSING", "WAITING_FOR_CAPACITY", "PAUSED"].includes(result.run.state)) {
       const action = result.run.state === "PAUSED" ? "RESUME" : "PAUSE";
       const button = node("button", action === "PAUSE" ? "잠시 멈추기" : "계속 학습하기", "button quiet");
@@ -80,9 +84,11 @@ export function createMaterialLearning({document, api, explainError = error => e
       });
       target.append(button);
     }
-    const list = node("ol");
+    const list = node("ol", undefined, "material-learning-steps");
     for (const task of result.tasks) {
-      const row = node("li", `${TASK_KINDS[task.task_kind]} · ${STATES[task.state] || task.state}${task.error_code ? ` · 확인 코드: ${task.error_code}` : ""}`);
+      const row = node("li");
+      row.append(node("span", `${TASK_KINDS[task.task_kind] || "알 수 없는 단계"} · `), status(task.state));
+      if (task.error_code) row.append(node("span", ` · 확인 코드: ${task.error_code}`, "form-message error"));
       if (["FAILED", "EXCEPTION"].includes(task.state)) {
         const button = node("button", "위치·오류 확인", "button quiet"); button.type = "button";
         button.addEventListener("click", async () => {
@@ -124,13 +130,18 @@ export function createMaterialLearning({document, api, explainError = error => e
       else {
         const table = node("table", undefined, "material-learning-table");
         const header = node("tr");
-        for (const label of ["자료", "종류", "진행 상태", "완료 단계", "올린 시각", ""]) header.append(node("th", label));
+        table.setAttribute("aria-label", "올린 자료의 학습 상태");
+        for (const label of ["자료", "종류", "진행 상태", "완료 단계", "올린 시각", "열기"]) {
+          const cell = node("th", label); cell.setAttribute("scope", "col"); header.append(cell);
+        }
         const head = node("thead"); head.append(header); table.append(head);
         const body = node("tbody");
         for (const run of result.runs) {
           const row = node("tr");
           row.setAttribute("aria-selected", String(run.run_id === selected));
-          for (const text of [`${run.title}${run.attempt > 1 ? ` · ${run.attempt}차 처리` : ""}`, KINDS[run.material_kind], STATES[run.state] || run.state, materialLearningProgress(run), date(run.created_at)]) row.append(node("td", text));
+          row.append(node("td", `${run.title}${run.attempt > 1 ? ` · ${run.attempt}차 처리` : ""}`), node("td", KINDS[run.material_kind] || "알 수 없는 종류"));
+          const stateCell = node("td"); stateCell.append(status(run.state)); row.append(stateCell);
+          row.append(node("td", materialLearningProgress(run)), node("td", date(run.created_at)));
           const action = node("td");
           const button = node("button", "상세 보기", "button quiet"); button.type = "button";
           button.addEventListener("click", () => details(run.run_id).catch(error => message(explainError(error), true)));

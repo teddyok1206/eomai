@@ -7,8 +7,14 @@ const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL('../../apps/web_gui/eom_web_gui/static/', import.meta.url);
 const assets = new Map(await Promise.all(['index.html', 'styles.css', 'knowledge-map.css', 'material-learning.js', 'eom-mark.svg'].map(async name => [name, await readFile(new URL(name, root), 'utf8')])));
+const presentationApp = await readFile(new URL('app.js', root), 'utf8');
+const vocabulary = await readFile(new URL('presentation-vocabulary.ko-KR.json', root), 'utf8');
+// Run the production presenter, not a second translation table in the test.
+const presenters = presentationApp.slice(presentationApp.indexOf('function setStatus('), presentationApp.indexOf('function stageLabel('));
 const app = `
 import {createMaterialLearning} from './material-learning.js';
+const state = {presentationVocabulary: ${vocabulary}};
+${presenters}
 const runId = 'materialrun_' + '1'.repeat(32);
 const fixture = window.fixture = {calls: [], runs: [], failCreate: true, held: false, release: null, taskState: 'RUNNING'};
 async function api(path, options = {}) {
@@ -34,7 +40,7 @@ async function api(path, options = {}) {
   if (fixture.held) {fixture.held = false; await new Promise(resolve => fixture.release = resolve);}
   return {run: fixture.runs[0], tasks: [{task_id: 'materialtask_' + '3'.repeat(32), task_kind: 'QUESTION', state: fixture.taskState, error_code: fixture.taskState === 'FAILED' ? 'SYNTHETIC_FAILURE' : null}], next_ordinal: null};
 }
-const controller = createMaterialLearning({document, api});
+const controller = createMaterialLearning({document, api, setStateStatus});
 controller.install(); controller.setOwner('owner'); controller.open(); fixture.controller = controller;
 document.querySelectorAll('.view').forEach(view => view.classList.toggle('active', view.dataset.view === 'learning'));
 `;
@@ -66,6 +72,7 @@ try {
   assert.equal(submissions.length, 2);
   assert.deepEqual(submissions[0].body, submissions[1].body, 'retry changed the durable request');
   assert.match(await page.locator('#material-learning-runs').textContent(), /2\/3 단계/);
+  assert.equal(await page.locator('#material-learning-runs [data-raw-state="PROCESSING"]').getAttribute('data-presentation-known'), 'true');
   await page.getByRole('button', {name: '상세 보기', exact: true}).click();
   assert.match(await page.locator('#material-learning-detail').textContent(), /문항 읽는 중/);
   await page.getByRole('button', {name: '잠시 멈추기', exact: true}).click();
@@ -93,6 +100,11 @@ try {
   assert.equal(retries.length, 1);
   assert.deepEqual(retries[0].body, {expected_updated_at: '2026-11-06T00:00:00Z'});
   assert.equal(await page.evaluate(() => fixture.calls.filter(call => call.path.startsWith('/material-learning/sources?')).length), 2, 'unit retry recopied original sources');
+  await page.evaluate(() => {fixture.taskState = 'FUTURE_STATE';});
+  await page.locator('#material-learning-refresh').click();
+  await page.waitForFunction(() => document.querySelector('#material-learning-detail [data-raw-state="FUTURE_STATE"]'));
+  assert.match(await page.locator('#material-learning-detail').innerText(), /알 수 없는 상태/);
+  assert.doesNotMatch(await page.locator('#material-learning-detail').innerText(), /FUTURE_STATE/);
   await page.evaluate(() => {fixture.held = true; fixture.release = null;});
   await page.getByRole('button', {name: '상세 보기', exact: true}).click();
   await page.waitForFunction(() => fixture.release !== null);

@@ -19,8 +19,10 @@ const assert = require('node:assert/strict');
 const source = fs.readFileSync(process.argv[1], 'utf8');
 const transport = source.slice(source.indexOf('async function api(path, options = {}) {'),
  source.indexOf('\nclass StudioApiError'));
-const binding = source.slice(source.indexOf('similaritySearches: ')+'similaritySearches: '.length,
- source.indexOf('\n  previewRegisteredItem:')).trim().replace(/,$/, '');
+const start = source.indexOf('similaritySearches: ')+'similaritySearches: '.length;
+const end = source.indexOf('\n  },', start);
+assert.ok(start > 0 && end > start, 'production binding must have a bounded source slice');
+const binding = source.slice(start, end + '\n  }'.length).trim();
 const selection = {kind:'EXTERNAL_SOURCE', source_id:'extitem_a',
  source_revision_id:'extitemrev_a'};
 const calls=[];

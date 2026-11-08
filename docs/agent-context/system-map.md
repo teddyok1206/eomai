@@ -50,3 +50,12 @@ worker는 local staging만 읽고 local 결과를 내며 정본 commit은 기존
 - `pyproject.toml`: package 경로·entrypoint·resource packaging·테스트 환경.
 - `docs/architecture/MODULE_BOUNDARIES.md`: 기존 의존 구조와 분리 기준.
 - `README.md`: 사용자 기능 지도. 운영 활성 판정은 연결된 기록과 현재 설치 상태로 확인한다.
+
+## GUI 표현 유지
+
+초기 표현 원칙은 `docs/product/EOM_SCIENTIFIC_WORKBENCH_DESIGN_SYSTEM.md`다.
+후속 폼도 `static/styles.css`의 낮은 specificity 입력 기본값과 기존 semantic token을
+사용한다. 상태는 `presentation-vocabulary.ko-KR.json`, 도움말은 `guide-content.js`가
+담당하며 화면 표시가 원본 상태/권한을 바꾸지 않는다. 자료 학습도 공통 상태 presenter를
+주입받는다. `tests/web_gui/test_gui_principle_alignment.py`와 실제 Chromium suite는
+전체 화면/모바일 기준을 검사한다. 등록·검색 등 동작 검증은 기존 feature suite를 같이 쓴다.

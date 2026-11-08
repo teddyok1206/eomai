@@ -270,6 +270,18 @@ New GUI work should extend these components instead of creating a parallel visua
 8. Test mode mapping, safe DOM rendering, reduced motion, responsive behavior, and presentation-only
    boundaries.
 
+The shared low-specificity form baseline also applies to later Material Learning, Map and chat
+reference controls. Specialized composed inputs can override it; checkboxes/radios/hidden fields are
+not text inputs. New ordinary actions retain the 40px target and tokenized control radius, including
+filter and layer buttons. Keep optional field annotations inline so paired uploads align.
+
+Material Learning uses the existing presentation vocabulary/presenter through the optional
+`material_learning` domain in the GUI-only schema. Original run/task enums, actions, errors and
+polling conditions are unchanged. Unknown values retain their technical state but display an explicit
+unknown label. Add specific guide copy for new user actions rather than relying only on page help;
+guide mode remains OFF on load. Whole-shell Chromium checks cover all 17 views at desktop/mobile
+widths, while per-feature browser fixtures check populated interaction and request preservation.
+
 ## 9. Deliberate non-goals
 
 This design phase does not add or change an API, workflow, DB schema, model provider, worker prompt,
