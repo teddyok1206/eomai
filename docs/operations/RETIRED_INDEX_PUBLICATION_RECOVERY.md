@@ -125,3 +125,7 @@ PID `774682`, invocation `bae83e900f544d4e99976b8a54f7cc41`.
 30개 파일을 기존 Catalog→Orchestrator Artifact 경계로 보관하고 전체 readback/hash를 확인했다.
 감사 Artifact `artifact_d9a1aaa742004d83a5a8f638dd4e9beb`,
 revision `rev_61278f01c08546319e241dadc35beb79`.
+
+16:10 UTC 기존 read-only 관측에서 원래 대기 CPU 요청이 RUNNING으로 전환한 것을 확인했다.
+기출 GPU 등록은 395/520이며 새 GPU 대상 reconciliation이 진행 중이다. 숫자 GPU 실행 및
+다음 index 완료는 아직 별도 확인 대상이다. 기존 10분 관측 timer는 유지했다.
