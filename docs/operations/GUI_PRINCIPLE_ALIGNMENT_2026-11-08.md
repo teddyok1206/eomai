@@ -127,3 +127,22 @@ API `87a78e54`, QUERY, INDEX, creative worker는 설치·재시작하지 않는�
 `c4f7b7f69e69445ed3f6c1beaff01061db66aef7a2568a28d5729ffc8f3b30ea`를 확인했다.
 Web 세션은 메모리 기반이므로 재시작 후 재로그인이 필요할 수 있다. 배포 결과는
 아래에 별도 기록하며 소스/합성 브라우저 PASS를 운영 로그인 acceptance로 간주하지 않는다.
+
+### 후속 운영 반영 결과
+
+- 활성화: **2026-11-09 18:16:29 UTC**. source
+  `098d7d5c684a12f29c0217e284daa98ae94d04b2`, Web wheel SHA-256
+  `65e6613a96a71bb6fa78419c3152d922718ae4e3c3fbdad81acb410e10c82bfa`.
+- wheel inventory/RECORD, 전용 Web interpreter import, non-editable 설치 시뮬레이션,
+  실제 `eom-web` identity에서 **72개 package member 검증 PASS**.
+- 기존 installer로 Web만 stop/install/start. 운영 변경 구간 18:16:26–18:16:29 UTC.
+  Web PID `2639649` → `2857633`, 실제 live/ready 및 HTTPS 로그인 HTTP 200.
+- API `2638304`, QUERY `2638500`, INDEX `2719114`, creative `2639715`의 PID와
+  InvocationID 모두 보존. migration·정본·모델·GPU 실행 변경 없음.
+- 실제 HTTPS에서 index/login/styles/Excel CSS·JS/app/기존 preset JS 7개가 wheel bytes와
+  정확히 일치했다. anonymous session은 401, 실제 Chromium의 HTTPS 로그인 화면
+  1440/390px 모두 정상이며 JS 오류/가로 넘침 없음.
+- 보호된 실행/rollback 기록: `/var/lib/eom-gui-workbench-release-20261109`.
+  rollback wheel은 보존했고 rollback은 실행하지 않았다.
+- 개별 업무 interaction은 앞선 합성 API 브라우저 회귀로 검증했다. 배포 확인을 위해
+  실제 사용자 문항·검색·편성·로그인을 생성하거나 기존 실패 이력을 바꾸지 않았다.
