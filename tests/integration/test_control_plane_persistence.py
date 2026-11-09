@@ -4255,13 +4255,23 @@ def test_pdf_document_review_v2_bootstrap_advances_exact_v1_predecessor(
 
 
 def test_alembic_head_matches_composed_sqlalchemy_metadata(integration_engine: Engine) -> None:
-    # Register the two independently composed owners even when this test runs
+    # Register independently composed owners even when this test runs
     # alone, rather than relying on API/Builder tests having imported them first.
     from eom_api.item_db_similarity_models import ItemDbSimilaritySearchRecord
+    from eom_catalog_service import (
+        content_delivery_models,
+        content_planning_models,
+        content_print_models,
+        curated_document_slot_models,
+    )
     from eom_catalog_service.material_learning_models import LearningMaterialRecord
     from eom_hwpx_manager.curated_build_models import HwpxCuratedBuildRecord
 
     assert ItemDbSimilaritySearchRecord.__table__.metadata is Base.metadata
+    assert content_delivery_models.Base.metadata is Base.metadata
+    assert content_planning_models.Base.metadata is Base.metadata
+    assert content_print_models.Base.metadata is Base.metadata
+    assert curated_document_slot_models.Base.metadata is Base.metadata
     assert LearningMaterialRecord.__table__.metadata is Base.metadata
     assert HwpxCuratedBuildRecord.__table__.metadata is Base.metadata
     with integration_engine.connect() as connection:

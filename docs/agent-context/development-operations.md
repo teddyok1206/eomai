@@ -47,6 +47,13 @@ immutable definition/active flag를 수정하지 않는다. 현재 policy 거부
 
 ## 배포와 백그라운드
 
+Excel 콘텐츠 편성0075/0076은 같은 protected operator의 context/admission1.22를 사용한다.
+정확한0074 predecessor부터 `MIGRATION_UPGRADE_0076_FROM_0074`로 이동하며 기존 migration은
+재해석하지 않는다. 새 head에서 옛 API의 exact-head readiness는 통과하지 않으므로,
+배포 전 fallback도 해당 additive schema와 호환되어야 한다. 새 편성/인쇄 이력이 생긴 뒤
+옛 기능으로 후퇴하거나 DDL을 제거하지 않는다. 실제 release와 사용자 경로 증거는
+`docs/operations/EXCEL_CONTENT_PLACEMENT_IMPLEMENTATION_2026-11-09.md`를 확인한다.
+
 자료 학습0074는 기존 protected release operator의 context/admission1.21과 정확한
 `MIGRATION_UPGRADE_0074`/`MIGRATION_VERIFY_0074`를 사용한다. 기존 schema/callback을
 재해석하지 않는다. API·control 반영과 새 coordinator의 enable/start를 구분하고, 새

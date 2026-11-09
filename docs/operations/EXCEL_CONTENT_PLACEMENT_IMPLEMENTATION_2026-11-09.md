@@ -1,7 +1,8 @@
 # Excel 콘텐츠 편성 구현 체크포인트
 
 승인된 목표는 `docs/architecture/EXCEL_CONTENT_PLACEMENT_DESIGN.md`의 **구현·반복 검증·운영 배포**다.
-이 문서는 개발 기록이며 운영 활성화 증거가 아니다. 기존 슬롯/GPU/문항/벡터/실패 이력은 변경하지 않았다.
+이 문서는 소스 검증·운영 설치·사용자 경로 증거를 구분한다. 2026-11-09 호환 운영 설치를
+완료했으며, 실제 로그인 사용자 경로는 최종 검증 중이다. 기존 문항/벡터/실패 이력은 보존했다.
 
 ## 현재 단계
 
@@ -12,9 +13,9 @@
 | I03 application 저장·복사 | source + disposable PASS | 실제 권한·포인터 재인가, 같은 transaction의 저장/복사/이력/멱등, bounded 읽기 |
 | I04 사용 이력·중복 | source + disposable PASS | 같은 current/print projection으로 사용처·교차 중복·연도 USED/UNUSED를 조회. 이전 ledger는 연도를 추정하지 않는 별도 읽기 |
 | I05 인쇄 use case | source + disposable PASS | 사용자 기록·동시 최초 기록·재인쇄·정정·취소 및 해당 구간 변경 판정. 출력 이력은 정확한 scope로 별도 보존하며 인쇄 사실을 자동 생성하지 않음 |
-| I06 API/BFF/GUI | source/fixture PASS | 콘텐츠·판·회차·DB 선택·편성·사용 이력·인쇄·출력 UI. 운영 미노출 |
-| I07 HWPX 전 경계 확장 | source 통합 PASS / 설치본 대기 | 새 1,200자리 입력·반복 occurrence·범위 준비/출력 이력/API·기존 제작 UI 연결. 실제 303문항 합본과 독립 검증 PASS |
-| I08 운영 배포·실사용 | 미실행 | source 테스트나 임시 DB를 운영 PASS로 확대하지 않음 |
+| I06 API/BFF/GUI | source/fixture PASS / 운영 설치 PASS | 콘텐츠·판·회차·DB 선택·편성·사용 이력·인쇄·출력 UI. HTTPS 사용자 검증 진행 |
+| I07 HWPX 전 경계 확장 | source·설치본 통합 PASS | 새 1,200자리 입력·반복 occurrence·범위 준비/출력 이력/API·기존 제작 UI 연결. 실제 303문항 합본과 독립 검증 PASS. 운영 사용자 출력 별도 확인 |
+| I08 운영 배포·실사용 | 호환 배포 PASS / 사용자 경로 PENDING | source 테스트나 READY를 실제 배치·출력 성공으로 확대하지 않음 |
 
 Source baseline: `844a8eec40be1eda9771fb8fe00854007ea660e1`.
 별도 세션의 INDEX publication recovery 변경은 이 작업과 구분하고 수정하지 않았다.
@@ -151,3 +152,41 @@ protected operator1.22/정확한0076 callback·API read권한·Catalog write권�
   HWPX dependency 경로를 명시했다. 순수 Builder의 non-editable 설치 검증과 혼동하지 않는다.
 - 실패한 초회 검사는 test fixture constructor/empty-section 기대값/필수 revision 누락 등과
   생성 합본 header byte budget을 분리해 수정했다. 운영 데이터/실패 기록 변경 없음.
+
+## 운영 설치 체크포인트 — 2026-11-09 13:14 UTC
+
+- 구현 commit `91a14bb695d1aad8a102306b74329cda135cd83d`와 Web 패키지 목록 보완
+  `8677b4ef346bff936b90f767ff045c04fb3c0225`를 main에 push했다.
+- API/platform/Catalog/Manager source `91a14bb6`, Web `8677b4ef`, Builder `91a14bb6`.
+  수치 INDEX/QUERY의 독립 설치본은 교체하지 않았다. QUERY의 API provider hash만
+  해당 API 설치본과 맞춘 기존 호환 설정으로 갱신했다.
+- protected operator1.22: ADMIT, 정확한 `0074 → 0076`, VERIFY, API/Catalog/HWPX 역할
+  reconcile PASS. 운영 DB에서 pytest를 실행하거나 application row를 직접 고치지 않았다.
+- 설치 wheel/RECORD 및 서비스 identity PASS. HTTPS `/studio/api/v1/health/ready` READY.
+  완료 작업/유효 lease/비동기 출력이 비어 있음을 확인한 뒤 원래 creative producer를
+  지원된 SIGINT로 drain하고, 호환 설치 뒤 원래 서비스로 재개했다.
+- 설치된 Builder/contract와 API/Manager를 사용하는 합본·native 회귀 **31 PASS**
+  (46.51초, 303 occurrence 합본 포함). source package 경로를 주입하지 않고 설치된
+  non-editable packages를 사용했다. Pydantic2.11의 기존 `exclude_if` 경고 6개와
+  pytest JUnit property 경고 1개는 오류 없이 기록됐으며 dependency 변경은 하지 않았다.
+  공개 HTTPS의 새 Web asset 5개 SHA도 wheel bytes와 일치했다.
+- INDEX PID와 InvocationID가 배포 전후 동일하며 material coordinator/config,
+  native-intent-cell 코드, 원본 converter, Codex 인증 및 GPU configuration hash를 보존했다.
+- root-owned 복구/설치 기록:
+  `/var/lib/eom-excel-compatible-release-20261109`,
+  `/var/lib/eom-excel-compatible-rollback-20261109`,
+  `/var/lib/eom-excel-builder-release-20261109`,
+  `/var/lib/eom-release-operator-stage.excel76-p2rbra27`.
+- 롤백 후보 `6b3c77d75f7ee7e9f4eb342b0e1f6686d1bdb8e9`는 b900의 기존 기능과
+  새 schema76 head를 호환시키는 **노출 전 전용** 별도 branch다. 실제 rollback은 없었다.
+  새 편성 이력이 생성된 뒤 이 후보로 기능을 숨기거나 DB를 downgrade하지 않는다.
+- 최종 임시 DB 대조에서 독립 model import가 누락된 global metadata fixture를 보강했다.
+  실제 migration와 전체 composed metadata 일치 및 기존 저장 primitive **6 PASS**,
+  복구 후보의 기존 저장 primitive **5 PASS**. DB DDL 차이가 아니라 fixture 등록 누락이었다.
+- 빌드 준비 중 Web의 신규 4개 asset/module이 inventory에 없어 거부된 것을 명시적 목록에
+  추가·재검증했다. Builder 복구용 contract는 초기836이 아닌 실제 설치 bytes와 일치하는
+  ad761dc5 wheel로 고정했다. 이 사전 실패는 운영 설치 전에 발생했다.
+
+남은 gate는 실제 HTTPS 브라우저의 콘텐츠 생성→DB 문항 선택→반복 배치 저장→복사→
+이력 조회→선택 회차 HWPX 제작→다운로드 및 동일 요청 재조회다. READY/소스 PASS만으로
+이 gate를 닫지 않으며, 원본 지구과학 Excel 자체를 운영 통합과학 DB로 import하지 않는다.

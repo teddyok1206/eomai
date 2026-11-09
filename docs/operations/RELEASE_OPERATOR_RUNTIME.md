@@ -1,6 +1,6 @@
 # Protected release-operator adapter
 
-## 2026-11-09 Excel content-planning successor (source candidate)
+## 2026-11-09 Excel content-planning successor
 
 Context/admission 1.22 pins `20261109_0076`, including the additive 0075 tables.
 `MIGRATION_UPGRADE_0076_FROM_0074` accepts the exact live predecessor 0074;
@@ -13,6 +13,13 @@ new content/scope history exists; roll back compatible wheels while retaining DD
 API gets read-only content membership tables. Catalog owns writes and only mutable
 edition/product heads get UPDATE; snapshots/receipts/print facts remain insert-only.
 Installed acceptance and production activation are separate evidence.
+The 91a14bb6 API/platform set and 8677b4ef Web were deployed using this operator
+on 2026-11-09. Exact DDL 0074→0076, role reconciliation and installed records
+passed; INDEX kept its running process/configuration. The b900-based schema76
+fallback 6b3c77d7 was prepared for a pre-exposure failure only. It is not a safe
+way to hide new Excel history after users start writing it. See the
+[Excel checkpoint](EXCEL_CONTENT_PLACEMENT_IMPLEMENTATION_2026-11-09.md)
+for actual user-path acceptance, separately from service readiness.
 
 ## 2026-11-06 material-learning successor
 
