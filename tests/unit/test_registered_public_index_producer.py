@@ -102,6 +102,25 @@ def test_registered_original_source_pins_all_three_reports_and_replays_exact_par
 
 
 @pytest.mark.parametrize("routed", ["registered_public"], indirect=True)
+@pytest.mark.parametrize("parent_case", ["legacy_subset"], indirect=True)
+def test_cpu_counterpart_preserves_request5_for_selected_legacy_only_subset(
+    parent_case, monkeypatch
+):
+    value = parent_case
+    assert value.request.schema_version == "local-embedding-workflow-request/5.0"
+    monkeypatch.setattr(
+        preparation,
+        "admitted_workflow_definition",
+        lambda *_args, **_kwargs: SimpleNamespace(definition_hash="sha256:" + "9" * 64),
+    )
+    matched = value.pair.cpu.prepare_matching(value.pair.cuda, value.request)
+    assert matched.schema_version == value.request.schema_version
+    assert matched.source_plan.schema_ref.endswith("/5.0")
+    assert matched.space.runtime.device == "CPU"
+    assert matched.graph_snapshot == value.request.graph_snapshot
+
+
+@pytest.mark.parametrize("routed", ["registered_public"], indirect=True)
 @pytest.mark.parametrize("maximum_targets", (1, 3))
 def test_new_discovery_prepares_request4_and_fences_after_canonical_publication(
     parent_case, monkeypatch, maximum_targets

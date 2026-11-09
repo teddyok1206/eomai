@@ -1,6 +1,7 @@
 """Disposable PostgreSQL original-publication/replay; synthetic source and numerical leaves."""
 
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from tempfile import TemporaryDirectory
 from unittest.mock import Mock
@@ -15,7 +16,7 @@ from eom_catalog_service.embedding_registry_application import register_embeddin
 from eom_catalog_service.public_solution_index_assembly import (
     assemble_registered_public_solution_index_revision,
 )
-from eom_identifiers import content_sha256
+from eom_identifiers import content_sha256, sha256_bytes
 from eom_identity_service import activate_local_indexing_service, register_local_indexing_service
 from eom_identity_service.local_indexing_service_models import (
     LocalIndexingServiceRecord,
@@ -27,8 +28,12 @@ from eom_orchestrator.embedding_artifact_store import EmbeddingIndexPublicationS
 from eom_orchestrator.models import JobRecord
 from eom_orchestrator.native_embedding_coordinator import NativeEmbeddingCoordinator
 from eom_orchestrator.native_embedding_launch_identity import read_native_embedding_launch
-from eom_workflow.index_publication_recovery import IndexPublicationRecoveryCommand
+from eom_workflow.index_publication_recovery import (
+    IndexPublicationRecoveryCommand,
+    UnpreparedIndexPublicationRecoveryCommand,
+)
 from eom_workflow.local_embedding_request_v2 import supported_local_embedding_request_service
+from eom_workflow.local_embedding_source_plan_v4 import parse_local_embedding_source_plan_v4
 from eom_workflow_runner import index_publication_recovery as recovery
 from eom_workflow_runner import index_publication_successor as successor
 from eom_workflow_runner.local_embedding_execution_context import native_embedding_registry_scope
@@ -54,13 +59,35 @@ pytestmark = pytest.mark.integration
 @pytest.fixture
 def interrupted(execution, monkeypatch, tmp_path):
     started = execution.start()
+    unprepared = execution.request.schema_version == "local-embedding-workflow-request/4.0"
+    if unprepared:
+        # Reproduce the live drift: selected request4, whole population index5.
+        original_basis = execution.owner.catalog.prepare_registered_public_index_basis
+
+        def upgraded_basis(*args, **kwargs):
+            basis = original_basis(*args, **kwargs)
+            body = basis.full_plan.model_dump(mode="json", exclude={"plan_sha256"})
+            body["schema_version"] = "local-embedding-source-plan/5.0"
+            plan = parse_local_embedding_source_plan_v4(
+                body | {"plan_sha256": content_sha256(body)}
+            )
+            return replace(basis, full_plan=plan)
+
+        monkeypatch.setattr(
+            execution.owner.catalog, "prepare_registered_public_index_basis", upgraded_basis
+        )
     original = execution.owner.catalog.resolve_optional_index_publication
     monkeypatch.setattr(
         execution.owner.catalog,
         "resolve_optional_index_publication",
         Mock(side_effect=RuntimeError("publication interrupted")),
     )
-    with pytest.raises(RuntimeError, match="publication interrupted"):
+    error_type, message = (
+        (ValueError, "REGISTERED_PUBLIC_REGISTRATION_SCHEMA_INVALID")
+        if unprepared
+        else (RuntimeError, "publication interrupted")
+    )
+    with pytest.raises(error_type, match=message):
         execution.advance(*started)
     monkeypatch.setattr(execution.owner.catalog, "resolve_optional_index_publication", original)
     service = supported_local_embedding_request_service(execution.request)
@@ -99,22 +126,36 @@ def interrupted(execution, monkeypatch, tmp_path):
             step_run_id=step.step_run_id,
         )
         history = NativeEmbeddingCoordinator(launch.intent, execution.request).read(session)
-        assert len(history.records) == 2
+        assert len(history.records) == (1 if unprepared else 2)
         body = dict(
-            schema_version="index-publication-recovery/1.0",
+            schema_version="index-publication-recovery/2.0"
+            if unprepared
+            else "index-publication-recovery/1.0",
             workflow_id=started[0].workflow_id,
             workflow_request_sha256=execution.request.request_sha256,
             native_intent_sha256=launch.intent.intent_sha256,
-            registration_request_sha256=history.records[
-                1
-            ].payload.registration_command.request_sha256,
             current_service=current.model_dump(mode="json"),
             current_policy_revision_id="accessrev_" + "1" * 32,
             current_policy_sha256="sha256:" + "1" * 64,
         )
-    command = IndexPublicationRecoveryCommand.model_validate(
-        body | {"command_sha256": content_sha256(body)}
+        if unprepared:
+            staged = (
+                handoff.OWNER_ROOT
+                / launch.intent.native_launch_job_id.removeprefix("job_")
+                / "index.json"
+            )
+            body.update(
+                allocation_checkpoint_sha256=history.records[0].checkpoint_sha256,
+                staged_index_member_sha256=sha256_bytes(staged.read_bytes()),
+            )
+        else:
+            body["registration_request_sha256"] = history.records[
+                1
+            ].payload.registration_command.request_sha256
+    command_type = (
+        UnpreparedIndexPublicationRecoveryCommand if unprepared else IndexPublicationRecoveryCommand
     )
+    command = command_type.model_validate(body | {"command_sha256": content_sha256(body)})
     monkeypatch.setattr(recovery.os, "getresuid", lambda: (0, 0, 0))
     # Isolated filesystem root only. Recovery must traverse the actual staged
     # metadata boundary, not the service-owned workspace creation function.
@@ -183,7 +224,7 @@ def test_recovery_materialization_is_exact_temporary_and_preserves_original(inte
     assert case.launcher.forwards == 1
 
 
-@pytest.mark.parametrize("execution", ["native_office_public"], indirect=True)
+@pytest.mark.parametrize("execution", ["native_office_public", "registered_public"], indirect=True)
 def test_exact_publication_fence_rejects_parallel_owner_and_wrong_hash(interrupted):
     case, _started, fence = interrupted
     with case.sessions.begin() as session:
@@ -195,15 +236,13 @@ def test_exact_publication_fence_rejects_parallel_owner_and_wrong_hash(interrupt
 
         with ThreadPoolExecutor(max_workers=1) as pool, pytest.raises(DBAPIError):
             pool.submit(competitor).result(timeout=15)
-    body = fence.command.model_dump(mode="json") | {
-        "registration_request_sha256": "sha256:" + "e" * 64
-    }
+    unprepared = isinstance(fence.command, UnpreparedIndexPublicationRecoveryCommand)
+    field = "allocation_checkpoint_sha256" if unprepared else "registration_request_sha256"
+    body = fence.command.model_dump(mode="json") | {field: "sha256:" + "e" * 64}
     body["command_sha256"] = content_sha256(
         {k: v for k, v in body.items() if k != "command_sha256"}
     )
-    wrong = recovery.PreparedIndexRecoveryFence(
-        IndexPublicationRecoveryCommand.model_validate(body)
-    )
+    wrong = recovery.PreparedIndexRecoveryFence(type(fence.command).model_validate(body))
     with case.sessions.begin() as session, pytest.raises(ValueError, match="SCOPE_INVALID"):
         wrong(session)
     assert case.launcher.forwards == 1
@@ -229,7 +268,7 @@ def test_recovery_fence_is_admitted_in_root_then_retained_across_savepoints(inte
     assert case.launcher.forwards == 1
 
 
-@pytest.mark.parametrize("execution", ["native_office_public"], indirect=True)
+@pytest.mark.parametrize("execution", ["native_office_public", "registered_public"], indirect=True)
 def test_failed_history_is_never_reinterpreted(interrupted):
     case, started, fence = interrupted
     # Isolated negative fixture only; never mutate a production failure.
@@ -277,7 +316,7 @@ def test_original_expired_command_reclaim_terminal_and_same_operation_replay(
     assert case.launcher.forwards == 1
 
 
-@pytest.mark.parametrize("execution", ["native_office_public"], indirect=True)
+@pytest.mark.parametrize("execution", ["native_office_public", "registered_public"], indirect=True)
 def test_newer_publication_recovery_preserves_rows_and_replays(interrupted, monkeypatch, tmp_path):
     case, started, fence = interrupted
     # A competing owner publishes a real partial index after the old owner's
@@ -286,18 +325,57 @@ def test_newer_publication_recovery_preserves_rows_and_replays(interrupted, monk
     with case.sessions.begin() as session:
         fence(session)
         request, _, _, coordinator, history = fence.original(session)
-        command = history.records[1].payload.registration_command
+        unprepared = isinstance(fence.command, UnpreparedIndexPublicationRecoveryCommand)
+        command = None if unprepared else history.records[1].payload.registration_command
         workspace = handoff.OWNER_ROOT / coordinator.intent.native_launch_job_id.removeprefix(
             "job_"
         )
         original = publications.artifacts.read_staged_registered_public_index(
-            workspace=workspace, expected_sha256=command.index_manifest.sha256
+            workspace=workspace,
+            expected_sha256=fence.command.staged_index_member_sha256
+            if unprepared
+            else command.index_manifest.sha256,
         )
         caller = case.owner.registry_caller(request)
-        resolved = case.owner.catalog.resolve_prepared_index(session, caller, command, original)
         basis = case.owner.catalog.prepare_registered_public_index_basis(
             session, caller, native_embedding_registry_scope(request)
         )
+        if unprepared:
+            from eom_protocol.artifact_members import ArtifactMemberPointer
+
+            allocation = history.records[0].payload
+            value = dict(
+                schema_version="embedding-registry-registration-command/5.0",
+                operation="REGISTER_EMBEDDING_INDEX",
+                operation_key="test:prepared:" + uuid4().hex,
+                corpus_id=request.corpus_id,
+                namespace=request.namespace.model_dump(mode="json"),
+                index_id=original.index_id,
+                index_revision_id=original.index_revision_id,
+                index_manifest=ArtifactMemberPointer(
+                    artifact_id=allocation.index_producer.artifact_id,
+                    artifact_revision_id=allocation.index_producer.artifact_revision_id,
+                    member_path="index.json",
+                    media_type="application/json",
+                    schema_ref="eom://schemas/knowledge/embedding-index-manifest/5.0",
+                    sha256=fence.command.staged_index_member_sha256,
+                ).model_dump(mode="json"),
+                index_sha256=original.index_sha256,
+                graph_snapshot=request.graph_snapshot.model_dump(mode="json"),
+                policy_revision_id=request.access_policy_revision_id,
+                policy_sha256=request.access_policy_sha256,
+                expected_current_index_revision_id=None,
+                expected_lock_version=basis.expected_lock_version,
+                source_set_sha256=basis.full_plan.source_set_sha256,
+                binding_set_sha256=content_sha256([b.binding_sha256 for b in original.bindings]),
+                eligible_source_count=len(basis.full_plan.sources),
+                binding_count=len(original.bindings),
+                requested_at=allocation.created_at.isoformat().replace("+00:00", "Z"),
+            )
+            command = RegisterPublicSolutionIndexCommandV4.model_validate(
+                value | {"request_sha256": content_sha256(value)}
+            )
+        resolved = case.owner.catalog.resolve_prepared_index(session, caller, command, original)
         subset = assemble_registered_public_solution_index_revision(
             basis.full_plan,
             available_rows=(
@@ -377,15 +455,16 @@ def test_newer_publication_recovery_preserves_rows_and_replays(interrupted, monk
     wrong = plan.model_copy(update={"expected_index_sha256": "sha256:" + "0" * 64})
     with pytest.raises(ValueError, match="SUCCESSOR_INVALID"):
         successor.publish_recovered_index_successor(case.publisher, wrong)
-    retire = NativeEmbeddingCoordinator.retire_replaced_publication
+    retirement = "retire_unprepared_publication" if unprepared else "retire_replaced_publication"
+    retire = getattr(NativeEmbeddingCoordinator, retirement)
     monkeypatch.setattr(
         NativeEmbeddingCoordinator,
-        "retire_replaced_publication",
+        retirement,
         Mock(side_effect=RuntimeError("after index registration")),
     )
     with pytest.raises(RuntimeError, match="after index registration"):
         successor.publish_recovered_index_successor(case.publisher, plan)
-    monkeypatch.setattr(NativeEmbeddingCoordinator, "retire_replaced_publication", retire)
+    monkeypatch.setattr(NativeEmbeddingCoordinator, retirement, retire)
     # Artifact commit may survive; index head/old workflow must roll back together.
     with case.sessions.begin() as session:
         assert session.get(WorkflowInstanceRecord, started[0].workflow_id).state == "RUNNING"

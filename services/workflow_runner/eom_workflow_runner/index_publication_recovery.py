@@ -25,6 +25,7 @@ from eom_catalog_service.local_embedding_completion_artifacts import (
 )
 from eom_catalog_service.local_indexing_source_authority import CatalogLocalIndexingSourceAuthority
 from eom_catalog_service.settings import CatalogSettings
+from eom_identifiers import content_sha256
 from eom_identity_service import lock_current_local_indexing_service_metadata
 from eom_orchestrator.embedding_encoding_reservation_storage import (
     EmbeddingEncodingReservationStorage,
@@ -39,7 +40,12 @@ from eom_orchestrator.native_embedding_launch_identity import (
     read_native_embedding_launch,
     read_native_embedding_launch_association,
 )
-from eom_workflow.index_publication_recovery import IndexPublicationRecoveryCommand
+from eom_workflow.index_publication_recovery import (
+    IndexPublicationRecoveryCommand,
+    SupportedIndexPublicationRecovery,
+    UnpreparedIndexPublicationRecoveryCommand,
+    parse_index_publication_recovery,
+)
 from eom_workflow.local_embedding_encoding_dispatch import SupportedEmbeddingIntent
 from eom_workflow.local_embedding_request_v2 import (
     SupportedLocalEmbeddingRequest,
@@ -100,8 +106,8 @@ def _require(condition: bool) -> None:
 class PreparedIndexRecoveryFence:
     """Actual OS/schema-owner admission and original checkpoint lock, per SQL root."""
 
-    def __init__(self, command: IndexPublicationRecoveryCommand) -> None:
-        self.command = IndexPublicationRecoveryCommand.model_validate(command)
+    def __init__(self, command: SupportedIndexPublicationRecovery) -> None:
+        self.command = parse_index_publication_recovery(command)
         self._roots: WeakKeyDictionary[SessionTransaction, tuple[ReferenceType[Session], int]] = (
             WeakKeyDictionary()
         )
@@ -152,7 +158,12 @@ class PreparedIndexRecoveryFence:
         assert isinstance(request, LocalEmbeddingWorkflowRequestV4)
         service = supported_local_embedding_request_service(request)
         _require(
-            request.schema_version == "local-embedding-workflow-request/5.0"
+            request.schema_version
+            == (
+                "local-embedding-workflow-request/4.0"
+                if isinstance(command, UnpreparedIndexPublicationRecoveryCommand)
+                else "local-embedding-workflow-request/5.0"
+            )
             and request.space.runtime.device == request.resource_profile.device
             and request.space.runtime.device in {"CPU", "CUDA"}
             and request.request_sha256 == command.workflow_request_sha256
@@ -181,16 +192,44 @@ class PreparedIndexRecoveryFence:
         assert launch is not None
         coordinator = NativeEmbeddingCoordinator(launch.intent, request)
         history = coordinator.read(session)
-        _require(
-            history.state in {"VALIDATING_RESULT", "COMMITTING", "SUCCEEDED"}
-            and 2 <= len(history.records) <= 4
-        )
-        prepared = history.records[1].payload
-        _require(isinstance(prepared, NativeCoordinatorIndexPreparedV4))
-        assert isinstance(prepared, NativeCoordinatorIndexPreparedV4)
-        _require(
-            prepared.registration_command.request_sha256 == command.registration_request_sha256
-        )
+        if isinstance(command, UnpreparedIndexPublicationRecoveryCommand):
+            _require(
+                history.state == "RUNNING"
+                and len(history.records) == 1
+                and workflow.state == step.state == "RUNNING"
+                and history.records[0].checkpoint_sha256 == command.allocation_checkpoint_sha256
+            )
+            allocation = history.records[0].payload
+            _require(isinstance(allocation, NativeCoordinatorAllocation))
+            assert isinstance(allocation, NativeCoordinatorAllocation)
+            with materialize_prepared_index_publication(
+                launch.intent.native_launch_job_id.removeprefix("job_"),
+                command.staged_index_member_sha256,
+            ) as (_, staged):
+                producer = allocation.index_producer.model_dump(mode="json")
+                _require(
+                    staged.schema_version == "embedding-index-manifest/5.0"
+                    and staged.created_at == allocation.created_at
+                    and staged.index_revision_id
+                    == "embeddingindexrev_"
+                    + content_sha256({"purpose": "NATIVE_INDEX_REVISION", "producer": producer})[
+                        -32:
+                    ]
+                    and staged.space == request.space
+                    and staged.view == request.namespace.view
+                    and staged.storage_partition == request.namespace.storage_partition
+                )
+        else:
+            _require(
+                history.state in {"VALIDATING_RESULT", "COMMITTING", "SUCCEEDED"}
+                and 2 <= len(history.records) <= 4
+            )
+            prepared = history.records[1].payload
+            _require(isinstance(prepared, NativeCoordinatorIndexPreparedV4))
+            assert isinstance(prepared, NativeCoordinatorIndexPreparedV4)
+            _require(
+                prepared.registration_command.request_sha256 == command.registration_request_sha256
+            )
         association = read_native_embedding_launch_association(session, launch.intent, request)
         _require(association is not None and 1 <= len(association.owned_jobs) <= 4)
         assert association is not None
@@ -338,7 +377,7 @@ class PreparedIndexPublicationExecutor:
 
 def build_publication_recovery_executor(
     publisher: ControlFileSetPublisher,
-    command: IndexPublicationRecoveryCommand,
+    command: SupportedIndexPublicationRecovery,
     *,
     settings: CatalogSettings | None = None,
 ) -> PreparedIndexPublicationExecutor:

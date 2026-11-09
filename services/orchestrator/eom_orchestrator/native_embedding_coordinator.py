@@ -157,6 +157,34 @@ class NativeEmbeddingCoordinator:
         )
         job.error_code = "EMBEDDING_INDEX_PUBLICATION_REPLACED"
 
+    def retire_unprepared_publication(
+        self,
+        session: Session,
+        replacement: PublicSolutionIndexRegistrationResultV4,
+        *,
+        allocation_checkpoint_sha256: str,
+    ) -> None:
+        """Close only the exact allocated parent after the application published its rows."""
+        replacement = PublicSolutionIndexRegistrationResultV4.model_validate(replacement)
+        history = self.read(session)
+        if (
+            os.getresuid() != (0, 0, 0)
+            or self.request.schema_version != "local-embedding-workflow-request/4.0"
+            or replacement.schema_version != "embedding-registry-registration-result/5.0"
+            or history.state != "RUNNING"
+            or len(history.records) != 1
+            or history.records[0].checkpoint_sha256 != allocation_checkpoint_sha256
+        ):
+            raise ValueError("EMBEDDING_PUBLICATION_REPLACEMENT_INVALID")
+        job = transition_job(
+            session,
+            self.intent.native_launch_job_id,
+            JobState.FAILED,
+            "EMBEDDING_INDEX_PUBLICATION_REPLACED",
+            data={"replacement": replacement.model_dump(mode="json")},
+        )
+        job.error_code = "EMBEDDING_INDEX_PUBLICATION_REPLACED"
+
     def checkpoint(
         self, phase: NativeCoordinatorPhase, payload: NativeEmbeddingContract
     ) -> SupportedNativeCoordinatorCheckpoint:

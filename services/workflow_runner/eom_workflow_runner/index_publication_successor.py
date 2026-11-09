@@ -37,7 +37,10 @@ from eom_orchestrator.models import JobRecord
 from eom_orchestrator.native_embedding_launch_identity import (
     read_native_embedding_launch_association,
 )
-from eom_workflow.index_publication_recovery import IndexPublicationRecoveryCommand
+from eom_workflow.index_publication_recovery import (
+    SupportedIndexPublicationRecovery,
+    UnpreparedIndexPublicationRecoveryCommand,
+)
 from pydantic import Field
 from sqlalchemy import func, select
 
@@ -71,7 +74,7 @@ EVENT = "EMBEDDING_INDEX_PUBLICATION_REPLACED"
 class PreparedIndexSuccessorPlan(FrozenModel):
     """Application-local pinned selection; uses existing registry/artifact wire contracts."""
 
-    recovery: IndexPublicationRecoveryCommand
+    recovery: SupportedIndexPublicationRecovery
     expected_index_revision_id: EmbeddingIndexRevisionId
     expected_index_sha256: Sha256
     created_at: UtcDatetime
@@ -159,7 +162,8 @@ def publish_recovered_index_successor(
         principal = require_native_workflow_maintenance_owner(session, ALLOCATED_MAINTENANCE_TABLES)
         executor.fence(session)
         request, workflow, step, coordinator, history = executor.fence.original(session)
-        _require(len(history.records) == 2)
+        unprepared = isinstance(plan.recovery, UnpreparedIndexPublicationRecoveryCommand)
+        _require(len(history.records) == (1 if unprepared else 2))
         commands = tuple(
             session.scalars(
                 select(WorkflowCommandRecord)
@@ -279,7 +283,14 @@ def publish_recovered_index_successor(
         verify_embedding_index_registration_observation(
             session, caller, registration_command, result, executor.owner.catalog
         )
-        coordinator.retire_replaced_publication(session, result)
+        if isinstance(plan.recovery, UnpreparedIndexPublicationRecoveryCommand):
+            coordinator.retire_unprepared_publication(
+                session,
+                result,
+                allocation_checkpoint_sha256=plan.recovery.allocation_checkpoint_sha256,
+            )
+        else:
+            coordinator.retire_replaced_publication(session, result)
         transition_command(command, CommandState.FAILED)
         command.error_code = EVENT
         transition_step(step, StepState.FAILED)

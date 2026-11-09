@@ -35,7 +35,8 @@ from tests.unit.test_local_embedding_source_plan_v4 import plan_value
 
 @pytest.fixture
 def parent_case(routed, monkeypatch, request):
-    native_office = getattr(request, "param", False) is True
+    selected_legacy_only = getattr(request, "param", False) == "legacy_subset"
+    native_office = getattr(request, "param", False) is True or selected_legacy_only
     sources = routed.build()
     pair = sources.namespaces[0]
     base = service_fixture()
@@ -97,6 +98,14 @@ def parent_case(routed, monkeypatch, request):
         else (),
     )
     targets = tuple(s.item_revision_id for s in captured.sources)
+    selected_entries = captured.entries
+    if selected_legacy_only:
+        selected_entries = tuple(
+            entry
+            for entry in captured.entries
+            if entry.evidence.kind != "REGISTERED_CREATIVE_SOURCE_REPORT"
+        )
+        targets = tuple(entry.source.item_revision_id for entry in selected_entries)
     build_plan = (
         build_local_embedding_source_plan_v4
         if registered
@@ -168,9 +177,12 @@ def parent_case(routed, monkeypatch, request):
             captured.corpus_id,
             pair.cpu.runtime_profile.space,
             captured.recipe,
-            captured.sources,
-            captured.entries,
-            base_analysis_run_ids=captured.base_analysis_run_ids,
+            tuple(entry.source for entry in selected_entries),
+            selected_entries,
+            base_analysis_run_ids=tuple(
+                (entry.source.item_revision_id, entry.base_analysis_run_id)
+                for entry in selected_entries
+            ),
         )
 
     monkeypatch.setattr(CatalogLocalEmbeddingOwnerAdmission, "resolve_sources", resolve)

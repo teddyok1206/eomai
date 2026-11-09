@@ -9,7 +9,11 @@ from eom_catalog_contracts.public_solution_indexing_policy import PublicSolution
 from eom_catalog_service import index_publication_recovery_authority as admission
 from eom_catalog_service.local_indexing_source_authority import CatalogLocalIndexingSourceAuthority
 from eom_identifiers import content_sha256
-from eom_workflow.index_publication_recovery import IndexPublicationRecoveryCommand
+from eom_workflow.index_publication_recovery import (
+    IndexPublicationRecoveryCommand,
+    UnpreparedIndexPublicationRecoveryCommand,
+    parse_index_publication_recovery,
+)
 from eom_workflow_runner.index_publication_recovery import (
     NoNumericalRecoveryExecution,
     PreparedIndexRecoveryFence,
@@ -84,12 +88,35 @@ def test_hash_and_schema_roundtrip():
             IndexPublicationRecoveryCommand.model_validate(command.model_dump(mode="json") | change)
 
 
-def test_packaged_schema_matches_canonical_source():
+@pytest.mark.parametrize("version", (1, 2))
+def test_packaged_schema_matches_canonical_source(version):
     root = Path(__file__).resolve().parents[2]
-    name = "index-publication-recovery-v1.schema.json"
+    name = f"index-publication-recovery-v{version}.schema.json"
     assert (root / "schemas/workflow" / name).read_bytes() == (
         root / "packages/workflow/eom_workflow/resources" / name
     ).read_bytes()
+
+
+def test_unprepared_recovery_pins_both_allocation_and_staged_bytes_without_v1_reinterpretation():
+    body = recovery_command().model_dump(mode="json")
+    body.pop("registration_request_sha256")
+    body.pop("command_sha256")
+    body.update(
+        schema_version="index-publication-recovery/2.0",
+        allocation_checkpoint_sha256="sha256:" + "4" * 64,
+        staged_index_member_sha256="sha256:" + "5" * 64,
+    )
+    command = UnpreparedIndexPublicationRecoveryCommand.model_validate(
+        body | {"command_sha256": content_sha256(body)}
+    )
+    assert parse_index_publication_recovery(command) == command
+    with pytest.raises(ValueError):
+        IndexPublicationRecoveryCommand.model_validate(command.model_dump(mode="json"))
+    for field in ("allocation_checkpoint_sha256", "staged_index_member_sha256"):
+        with pytest.raises(ValueError):
+            parse_index_publication_recovery(
+                command.model_copy(update={field: "sha256:" + "0" * 64})
+            )
 
 
 def test_recovery_requires_actual_root_before_source_read(gate, monkeypatch):

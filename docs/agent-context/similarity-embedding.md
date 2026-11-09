@@ -73,6 +73,12 @@ Orchestrator publication을 재사용하며, 일반 서비스 권한이나 GPU P
 검증해 새 index만 등록하며, 원래 요청은 publication 대체 사유로 종료한다. 일반
 INDEX/QUERY 경로와 encoding 성공 이력은 바꾸지 않고 같은 복구 계획은 재사용한다.
 
+CPU counterpart 준비는 선택한 일부 자료의 세대가 아니라 원 요청의 public envelope를
+유지한다. 전체 population이 5.0인데 선택분이 구형이라고 request4로 낮추지 않는다.
+이 차이로 INDEX_PREPARED 전에 중단된 과거 요청은 recovery2의 allocation checkpoint와
+staged member hash를 함께 고정해 같은 successor 경계에서만 복구한다.
+`docs/operations/INDEX_COUNTERPART_ENVELOPE_RECOVERY_2026-11-09.md`에 재현·검증을 기록한다.
+
 ## DB 화면의 실제 검색 경로
 
 조회에서 기준 문항을 골라 유사도 탭으로 넘기고, 기준 목록·상위 결과 수·요청 identity를

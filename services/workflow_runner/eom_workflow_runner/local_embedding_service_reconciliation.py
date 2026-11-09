@@ -445,7 +445,9 @@ class LocalEmbeddingServicePreparation:
                 selected,
                 targets,
                 None,
-                public_plan_version="4.0"
+                public_plan_version="5.0"
+                if request.schema_version == "local-embedding-workflow-request/5.0"
+                else "4.0"
                 if isinstance(request, LocalEmbeddingWorkflowRequestV4)
                 else "3.0",
             )
@@ -461,7 +463,7 @@ class LocalEmbeddingServicePreparation:
         targets: tuple[str, ...],
         refresh: IndexMembershipRefreshBasis | None,
         *,
-        public_plan_version: Literal["3.0", "4.0"] = "4.0",
+        public_plan_version: Literal["3.0", "4.0", "5.0"] = "4.0",
     ) -> SupportedLocalEmbeddingRequest:
         owner, runtime_profile = self.owner, self.runtime_profile
         mixed = isinstance(query.namespace, MixedEmbeddingIndexNamespace)
@@ -487,12 +489,20 @@ class LocalEmbeddingServicePreparation:
             | LocalEmbeddingSourcePlanV4
         )
         if public:
-            build_public_plan = (
-                build_local_embedding_source_plan_v4
-                if public_plan_version == "4.0"
-                else build_local_embedding_source_plan_v3
-            )
-            plan = build_public_plan(query, resolved, target_revision_ids=targets)
+            if public_plan_version == "3.0":
+                plan = build_local_embedding_source_plan_v3(
+                    query, resolved, target_revision_ids=targets
+                )
+            else:
+                # A device counterpart sees only this batch, while publication
+                # merges the full pinned population. Never downgrade its envelope
+                # just because this subset contains no native-office entry.
+                plan = build_local_embedding_source_plan_v4(
+                    query,
+                    resolved,
+                    target_revision_ids=targets,
+                    plan_version="5.0" if public_plan_version == "5.0" else None,
+                )
         elif mixed:
             plan = build_local_embedding_source_plan_v2(
                 query,
