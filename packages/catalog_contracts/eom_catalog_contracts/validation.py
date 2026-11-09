@@ -3506,9 +3506,17 @@ def catalog_schema_registry() -> Registry[Any]:
     return _catalog_schema_registry()
 
 
-def validate_contract(name: str, value: dict[str, Any]) -> None:
-    Draft202012Validator(
+@lru_cache(maxsize=len(CATALOG_SCHEMA_RESOURCES))
+def _contract_validator(name: str) -> Draft202012Validator:
+    # Installed schemas and their registry are already hash-pinned and cached.
+    # Reuse their compiled resolver, never a validation result or caller payload.
+    # Otherwise every nested model rebuilds the entire Catalog registry union.
+    return Draft202012Validator(
         load_schema(name),
         format_checker=FormatChecker(),
         registry=_catalog_schema_registry(),
-    ).validate(value)
+    )
+
+
+def validate_contract(name: str, value: dict[str, Any]) -> None:
+    _contract_validator(name).validate(value)

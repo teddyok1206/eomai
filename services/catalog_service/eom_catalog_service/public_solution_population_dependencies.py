@@ -11,9 +11,10 @@ from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecor
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from sqlalchemy import Select, select, tuple_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, SessionTransaction
 
 from eom_catalog_service.inference_transfer_population_read_set import (
+    observe_indexing_population_in_transaction,
     observe_inference_transfer_population,
     observe_population_dependency,
 )
@@ -34,8 +35,11 @@ from eom_catalog_service.models import ItemComponentRecord
 class PublicSolutionDependencyObserver:
     """Stream bounded SQL digests, never canonical reports or a permission grant."""
 
-    def __init__(self, session: Session) -> None:
+    def __init__(
+        self, session: Session, *, index_transaction: SessionTransaction | None = None
+    ) -> None:
         self.session = session
+        self.index_transaction = index_transaction
         self.observations: list[tuple[str, int, str]] = []
 
     def observe(
@@ -127,9 +131,19 @@ class PublicSolutionDependencyObserver:
             selected = tuple(value[0] for value in page.members)
             current_scope = replace(page_scope, source_revision_ids=selected)
             if selected:
-                original = observe_inference_transfer_population(
-                    session, current_scope, artifact_identities=()
-                )
+                if self.index_transaction is None:
+                    original = observe_inference_transfer_population(
+                        session, current_scope, artifact_identities=()
+                    )
+                else:
+                    if not isinstance(current_scope, LocalIndexingSourceReadIntent):
+                        raise ValueError("PUBLIC_SOLUTION_INDEX_TRANSACTION_INVALID")
+                    original = observe_indexing_population_in_transaction(
+                        session,
+                        current_scope,
+                        transaction=self.index_transaction,
+                        artifact_identities=(),
+                    )
                 self.observations.extend(
                     (value.group, value.row_count, value.sha256) for value in original.groups
                 )
@@ -212,4 +226,36 @@ def observe_public_solution_population_dependencies(
 ) -> str:
     observer = PublicSolutionDependencyObserver(session)
     pages = observer.population(scope, maximum_sources)
+    return content_sha256({"pages": pages, "dependencies": observer.observations})
+
+
+@observe_read_stage(InferenceTransferReadStage.PUBLIC_POPULATION_REVALIDATION)
+def observe_public_solution_index_dependencies(
+    session: Session,
+    scope: LocalIndexingSourceReadIntent,
+    maximum_sources: int,
+    *,
+    transaction: SessionTransaction,
+) -> str:
+    """Same source closure for INDEX, pinned to the caller's exact clean frame."""
+    root = session.get_transaction()
+
+    def require_frame() -> None:
+        if (
+            not isinstance(scope, LocalIndexingSourceReadIntent)
+            or root is None
+            or session.get_transaction() is not root
+            or not root.is_active
+            or not transaction.is_active
+            or (session.get_nested_transaction() or root) is not transaction
+            or session.new
+            or session.dirty
+            or session.deleted
+        ):
+            raise ValueError("PUBLIC_SOLUTION_INDEX_TRANSACTION_INVALID")
+
+    require_frame()
+    observer = PublicSolutionDependencyObserver(session, index_transaction=transaction)
+    pages = observer.population(scope, maximum_sources)
+    require_frame()
     return content_sha256({"pages": pages, "dependencies": observer.observations})

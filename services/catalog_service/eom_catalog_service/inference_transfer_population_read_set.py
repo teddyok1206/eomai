@@ -17,7 +17,7 @@ from eom_catalog_contracts.inference_transfer_experiment import ExperimentViewRe
 from eom_orchestrator.knowledge_analysis_models import KnowledgeAnalysisRunRecord
 from eom_orchestrator.models import ArtifactRecord, ArtifactRevisionRecord, JobRecord
 from sqlalchemy import Select, Text, and_, func, or_, select, tuple_
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, SessionTransaction
 
 from eom_catalog_service.inference_transfer_service import InferenceTransferServiceError
 from eom_catalog_service.knowledge_analysis_sources import (
@@ -170,6 +170,58 @@ def observe_inference_transfer_population(
         or not 1 <= scope.maximum_candidates <= 1024
     ):
         raise _invalid()
+    return _observe_population_rows(
+        session,
+        scope,
+        artifact_identities=artifact_identities,
+        layout_observation_ids=layout_observation_ids,
+    )
+
+
+def observe_indexing_population_in_transaction(
+    session: Session,
+    scope: LocalIndexingSourceReadIntent,
+    *,
+    transaction: SessionTransaction,
+    artifact_identities: tuple[tuple[str, str], ...],
+) -> InferenceTransferPopulationObservation:
+    """Fresh INDEX metadata in one exact clean root or registration savepoint.
+
+    The human/QUERY observer above deliberately remains root-only. This entry
+    observes the same rows but cannot move a capture across savepoint boundaries.
+    It provides neither source admission nor permission to publish an index.
+    """
+    root = session.get_transaction()
+
+    def require_frame() -> None:
+        if (
+            not isinstance(scope, LocalIndexingSourceReadIntent)
+            or root is None
+            or session.get_transaction() is not root
+            or not root.is_active
+            or not transaction.is_active
+            or (session.get_nested_transaction() or root) is not transaction
+            or session.new
+            or session.dirty
+            or session.deleted
+            or not 1 <= scope.maximum_candidates <= 1024
+        ):
+            raise _invalid()
+
+    require_frame()
+    value = _observe_population_rows(session, scope, artifact_identities=artifact_identities)
+    require_frame()
+    return value
+
+
+def _observe_population_rows(
+    session: Session,
+    scope: ReadOnlyCandidatePoolScope | LocalIndexingSourceReadIntent,
+    *,
+    artifact_identities: tuple[tuple[str, str], ...],
+    layout_observation_ids: tuple[str, ...] = (),
+) -> InferenceTransferPopulationObservation:
+    """One SQL closure shared by the two explicit transaction admission boundaries."""
     maximum = scope.maximum_candidates
     groups = []
 

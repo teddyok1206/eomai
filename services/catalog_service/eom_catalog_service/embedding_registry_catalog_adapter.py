@@ -38,6 +38,7 @@ from eom_catalog_contracts.inference_transfer_embedding import (
     EmbeddingSpace,
     EmbeddingVectorRowRef,
     EmbeddingVectorShardManifest,
+    IncrementalEmbeddingResult,
     parse_embedding_shard,
     parse_incremental_embedding_result,
     validate_embedding_source_bindings,
@@ -349,6 +350,18 @@ def _decode_index_manifest(schema_ref: str, payload: bytes) -> SupportedEmbeddin
     if schema_ref != "eom://schemas/knowledge/" + index.schema_version:
         raise ValueError("index pointer and document schema differ")
     return index
+
+
+def _decode_shard_manifest(schema_ref: str, payload: bytes) -> EmbeddingVectorShardManifest:
+    if schema_ref != SHARD_SCHEMA_REF:
+        raise ValueError("foreign shard schema")
+    return parse_embedding_shard(_document(payload))
+
+
+def _decode_incremental_result(schema_ref: str, payload: bytes) -> IncrementalEmbeddingResult:
+    if schema_ref != RESULT_SCHEMA_REF:
+        raise ValueError("foreign numerical result schema")
+    return parse_incremental_embedding_result(_document(payload))
 
 
 class CatalogEmbeddingRegistryVerifier:
@@ -817,15 +830,14 @@ class CatalogEmbeddingRegistryVerifier:
                 or pointer.media_type != "application/json"
             ):
                 raise ValueError("foreign shard pointer")
-            shard = parse_embedding_shard(
-                _document(
-                    reader.read_pinned(
-                        **pointer.model_dump(mode="python"),
-                        expected_artifact_types=("control_incremental_embedding",),
-                        expected_primary_file="result.json",
-                        max_bytes=MAX_EMBEDDING_INPUT_BYTES,
-                    ).payload
-                )
+            shard_raw = reader.read_pinned(
+                **pointer.model_dump(mode="python"),
+                expected_artifact_types=("control_incremental_embedding",),
+                expected_primary_file="result.json",
+                max_bytes=MAX_EMBEDDING_INPUT_BYTES,
+            ).payload
+            shard = reader.read_model_member(
+                pointer, expected_bytes=len(shard_raw), decoder=_decode_shard_manifest
             )
             reader.require_file_set(
                 pointer.artifact_id,
@@ -841,15 +853,18 @@ class CatalogEmbeddingRegistryVerifier:
                 schema_ref=RESULT_SCHEMA_REF,
                 media_type="application/json",
             )
-            result = parse_incremental_embedding_result(
-                _document(
-                    reader.read_pinned(
-                        **result_pointer.model_dump(mode="python"),
-                        expected_artifact_types=("control_incremental_embedding",),
-                        expected_primary_file="result.json",
-                        max_bytes=MAX_EMBEDDING_INPUT_BYTES,
-                    ).payload
-                )
+            result_raw = reader.read_pinned(
+                **result_pointer.model_dump(mode="python"),
+                expected_artifact_types=("control_incremental_embedding",),
+                expected_primary_file="result.json",
+                max_bytes=MAX_EMBEDDING_INPUT_BYTES,
+            ).payload
+            # The reader retains only immutable interpretation in this root.
+            # Pointer/file-set/provenance checks and finite/L2 vector checks still run.
+            result = reader.read_model_member(
+                result_pointer,
+                expected_bytes=len(result_raw),
+                decoder=_decode_incremental_result,
             )
             if result.shard != shard or shard.space != self.configuration.space:
                 raise ValueError("native result and exact configured shard differ")

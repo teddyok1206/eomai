@@ -1230,10 +1230,14 @@ def test_pinned_read_uses_read_scope_without_publish_and_one_read_per_unique_mem
         command.index_manifest.artifact_revision_id,
         command.index_manifest.member_path,
     )
-    # Structural closure and typed interpretation each revalidate the index;
-    # those two logical reads still share one immutable physical materialization.
+    # Structural closure and typed interpretation each revalidate JSON members;
+    # those logical reads still share one immutable physical materialization.
     assert len(counts) == 4 and counts[index_key] == 2
-    assert {count for key, count in counts.items() if key != index_key} == {1}
+    assert {key[2]: count for key, count in counts.items() if key != index_key} == {
+        "shard.json": 2,
+        "result.json": 2,
+        "vectors.f32": 1,
+    }
     assert len(streams.opened) == 4 and set(streams.opened.values()) == {1}
     assert streams.closed == streams.opened and not streams.active
     assert streams.payload_bytes == {path: member_sizes[path] for path in streams.opened}
@@ -1453,7 +1457,7 @@ def test_shared_shard_is_materialized_once_and_unadmitted_binding_is_not_disclos
         == (2 if admit_second else 1)
     )
     assert len(result.numerical_rows) == 1
-    assert counts == {"index.json": 2, "shard.json": 1, "result.json": 1, "vectors.f32": 1}
+    assert counts == {"index.json": 2, "shard.json": 2, "result.json": 2, "vectors.f32": 1}
     assert len(streams.opened) == 4 and set(streams.opened.values()) == {1}
     assert streams.closed == streams.opened and not streams.active
     assert streams.payload_bytes == {path: member_sizes[path] for path in streams.opened}

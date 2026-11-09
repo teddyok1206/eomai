@@ -1,7 +1,9 @@
 """Real disposable SQL closure; synthetic materialization, no model/NAS/production."""
 
+from concurrent.futures import ThreadPoolExecutor
 from types import SimpleNamespace as NS
 from unittest.mock import Mock
+from uuid import uuid4
 
 import pytest
 from eom_catalog_contracts.public_solution_indexing_policy import PublicSolutionIndexingAccessPolicy
@@ -12,6 +14,7 @@ from eom_catalog_service.public_solution_index_read_set import (
     capture_public_solution_index_population,
 )
 from eom_catalog_service.public_solution_population_dependencies import (
+    observe_public_solution_index_dependencies,
     observe_public_solution_population_dependencies,
 )
 from eom_catalog_service.settings import CatalogSettings
@@ -132,9 +135,9 @@ def test_real_registration_savepoint_commit_and_rollback_are_not_cache_rejection
     with case.session.begin_nested():
         case.run()
         case.run()
-    assert case.build.call_count == 3
+    assert case.build.call_count == 2
     case.run()
-    assert case.build.call_count == 4
+    assert case.build.call_count == 3
     nested = case.session.begin_nested()
     case.run()
     case.session.execute(
@@ -143,12 +146,92 @@ def test_real_registration_savepoint_commit_and_rollback_are_not_cache_rejection
             "WHERE item_id='item_'||lpad('545',32,'0')"
         )
     )
-    # SQL observation is deliberately not used in Registry's savepoint. The
-    # original strict materializer remains responsible for source validation.
-    case.run()
+    with pytest.raises(ValueError, match="POPULATION_CHANGED"):
+        case.run()
     nested.rollback()
     case.run()
-    assert case.build.call_count == 7
+    assert case.build.call_count == 5
+
+
+def test_index_nested_observer_keeps_human_root_only_contract(captured):
+    case = captured
+    original = observe_public_solution_population_dependencies(case.session, case.intent, 16384)
+    with case.session.begin_nested() as nested:
+        with pytest.raises(ValueError, match="INFERENCE_TRANSFER_SOURCE_PIN_MISMATCH"):
+            observe_public_solution_population_dependencies(case.session, case.scope, 16384)
+        assert (
+            observe_public_solution_index_dependencies(
+                case.session, case.intent, 16384, transaction=nested
+            )
+            == original
+        )
+        with pytest.raises(ValueError, match="INDEX_TRANSACTION_INVALID"):
+            observe_public_solution_index_dependencies(
+                case.session, case.intent, 16384, transaction=case.session.get_transaction()
+            )
+    with pytest.raises(ValueError, match="INDEX_TRANSACTION_INVALID"):
+        observe_public_solution_index_dependencies(
+            case.session, case.intent, 16384, transaction=nested
+        )
+
+
+def test_registration_repeated_reads_have_one_strict_capture_per_savepoint(captured):
+    case = captured
+    with case.session.begin_nested():
+        first = case.run()
+        for _ in range(9):
+            assert case.run() is first
+        assert case.build.call_count == 1
+        assert case.reauthorize.call_count == 10
+        with case.session.begin_nested():
+            case.run()
+            case.run()
+        case.run()
+        assert case.build.call_count == 3
+    with case.session.begin_nested():
+        case.run()
+        case.run()
+    assert case.build.call_count == 4
+
+
+def test_concurrent_committed_source_change_rejects_nested_capture(captured):
+    """Share only a synthetic table; the guarded fixture proves disposable DB identity."""
+    case = captured
+    connection = case.session.connection()
+    engine = connection.engine
+    schema = "index_capture_test_" + uuid4().hex
+    with engine.begin() as writer:
+        writer.exec_driver_sql(f"CREATE SCHEMA {schema}")
+        writer.exec_driver_sql(
+            f"CREATE TABLE {schema}.items AS SELECT * FROM app.items WITH NO DATA"
+        )
+        writer.exec_driver_sql(
+            f"INSERT INTO {schema}.items(item_id,lifecycle_state) "
+            "SELECT 'item_'||lpad(i::text,32,'0'),'ACTIVE' FROM generate_series(1,545) i"
+        )
+    try:
+        case.session.execute(text(f"SET LOCAL search_path TO {schema}, pg_temp, app"))
+        with case.session.begin_nested():
+            case.run()
+
+            def change_source():
+                with engine.begin() as writer:
+                    writer.exec_driver_sql("SET LOCAL lock_timeout='3s'")
+                    writer.exec_driver_sql(
+                        f"UPDATE {schema}.items SET lifecycle_state='RETIRED' "
+                        "WHERE item_id='item_'||lpad('545',32,'0')"
+                    )
+
+            with ThreadPoolExecutor(max_workers=1) as workers:
+                workers.submit(change_source).result(timeout=10)
+            with pytest.raises(ValueError, match="POPULATION_CHANGED"):
+                case.run()
+            assert case.build.call_count == 1
+    finally:
+        # Release the SELECT lock before dropping this exact disposable schema.
+        case.session.rollback()
+        with engine.begin() as cleanup:
+            cleanup.exec_driver_sql(f"DROP SCHEMA {schema} CASCADE")
 
 
 @pytest.mark.parametrize(

@@ -35,9 +35,16 @@ INDEX의 같은 DB root에서 반복하는 전체 풀이 해석은 `public_solut
 유지한다. `public_solution_population_dependencies`는 저장된 검색 결과와 INDEX가 함께
 쓰는 bounded SQL 의존관계 관측이며, 권한 cache가 아니다. root가 바뀌면 원본 파일과
 보고서를 다시 strict capture한다. 완성 vector/report나 입력 text는 수정하지 않는다.
-Registry의 정상 savepoint와 dirty session에서는 재사용하지 않고 기존 strict capture를
-수행한다. 이 저장 경계는 오류가 아니며, rollback된 capture를 outer root로 가져오지 않는다.
+Registry의 clean savepoint에서는 그 정확한 transaction frame 안에서만 capture를 재사용한다.
+frame 진입·종료·rollback·형제 전환 및 dirty session은 strict capture로 돌아간다.
+rollback된 capture를 outer root로 가져오지 않는다. 사람/QUERY 관측의 clean-root 조건은
+그대로다. INDEX의 별도 frame 검사 진입점이 같은 SQL closure 구현을 사용한다.
 설계와 측정 범위는 `docs/architecture/PUBLIC_SOLUTION_INDEX_CAPTURE_REUSE.md`를 참고한다.
+
+후속 비용 개선은 `docs/architecture/INDEX_PUBLICATION_READ_COST.md`에 기록한다.
+Catalog의 hash-pinned schema별 validator/resolver와 root-local 불변 shard/result 해석을
+재사용하지만, 각 payload 검증·source 권한·현재 provenance·벡터 finite/L2 검사는 유지한다.
+입력 text/모델/space/수치 batch size는 바꾸지 않는다. 실제 운영 선택은 release 기록으로 확인한다.
 
 공개 풀이 INDEX의 신규 미계산 대상은 기존 preparation이 출처별로 번갈아 선택한다.
 기출을 먼저 선택하고 같은 출처 안에서는 revision 순서를 유지해, 늘어나는 등록 문항의
