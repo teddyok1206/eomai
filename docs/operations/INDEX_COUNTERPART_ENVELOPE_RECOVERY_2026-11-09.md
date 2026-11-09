@@ -92,3 +92,56 @@ disposable PostgreSQL 검사로 확인한다. 기존 released schema와 수치 �
 0074 불일치로 시작을 거부했다. 운영 DB를 변경하지 않았고, pinned2229937a source archive에
 이 두 보정 파일만 materialize한 별도 테스트 snapshot에서 재검사한다. 메인 migration은
 가져오거나 되돌리지 않는다.
+
+## 운영 복구 완료
+
+2026-11-09 10:32:18 UTC publication-only 복구가 commit됐다. 최초 plan의 identity/time과
+source2229937a를 그대로 재사용했고, operator 구현은 보정된
+`4babca4a04fc920c2bdad1b25fe2bd9f3cf094a1` 설치본이다. 보정 후 disposable12 PASS,
+설치 wheel unit17 PASS와 실제 interpreter import PASS를 확인했다. INDEX daemon의
+정상 경로는 원인 수정이 반영된2229937a다. 수치 runtime/API/Web/QUERY는 교체하지 않았다.
+
+- CPU index896 → 900. 재계산0, 원래 encoding4건 SUCCEEDED 보존.
+- index revision `embeddingindexrev_88757f984fcd2752f5778fa8e0852f35`.
+- index SHA-256 `04f0f076eb20c20b7b442363e69e207519d450c5e657956bd31e984ac1727485`.
+- 같은 계획 replay는10:34:11에 같은 registration을 반환했다. 새 등록·계산 없음.
+- 원래 미완료 parent만 `EMBEDDING_INDEX_PUBLICATION_REPLACED`로 종료했다.
+  과거 FAILED 이력을 성공으로 바꾸지 않았다.
+- 기존 encoding4,974 / binding133,558 / index revision582 / accepted analysis2,883 /
+  registered report1,038의 **변경·누락0**. 새 registry encoding4, binding4, index1을 추가했다.
+  encoding row의 추가는 이미 저장돼 있던 numerical receipt의 registry 등록이지 새 forward가 아니다.
+
+보존 검증 후 INDEX 자동 처리를 시작했다. PID2098975,
+invocation`463f9401dce340a9a67b963e3daa0c8d`다. API855959/Web969034/QUERY856231/
+creative861953와 각각의 invocation은 그대로다. 실제 다음 묶음 실행은 아래에서 별도 확인한다.
+
+## 자동 GPU 처리 재개 확인
+
+2026-11-09 10:44:43 UTC 읽기 전용 조회에서 새 CUDA 요청
+`workflow_14edcb66d99f4ae99433dd92cc6faa69`의 실제 numerical 결과를 확인했다.
+
+- 요청은 `local-embedding-workflow-request/5.0`, device는 CUDA이며 새 command의
+  attempts는 1이다. 이전 요청을 새 계산으로 재실행하지 않았다.
+- finite GPU batch `fcd958332765401a841ebb6e6aea88f6`가 exit status 0으로 종료했다.
+  GPU numerical unit의 CPU time은 84.296초, host memory peak는 6.0GiB다.
+  이것은 GPU kernel 소요시간이나 GPU 메모리 사용량이 아니다.
+- coordinator `job_66bde13f9f7343ab9218d5372fcb485a` workspace에 CUDA 결과
+  4 rows × 1,024 dimensions, `vectors.f32` 16,384 bytes가 만들어졌다.
+  result SHA-256은
+  `4f1684d9a826a7b95875bf69e116353ff1f7df9a4931890aab4260308b07893c`다.
+- 같은 시점 Workflow/native coordinator는 RUNNING이며 error_code는 없다.
+  새 index publication과 전체 Workflow COMPLETED는 아직 관측하지 않았다.
+  수치 계산 종료 후 GPU 사용률 0%는 이 후처리 단계와 구분한다.
+- INDEX는 위 invocation으로 계속 active/running이며, API/Web/QUERY/creative의
+  PID·invocation은 보존됐다. 새 계산 결과의 등록과 다음 묶음은 기존 자동 처리에 맡긴다.
+- 임시 PostgreSQL은 공식 cleanup으로 제거했다. 운영 DB migration은 실행하지 않았다.
+
+운영 진단 증거는 `/tmp/eom-index-envelope-new-work4-20261109.json`과
+`/tmp/eom-index-envelope-native-final-20261109.log`이며, 복구·재전송·원본 보존 증거는
+위 protected release/audit 디렉터리에 있다. 전체 corpus 완료나 후속 CPU counterpart의
+live 완료를 이번 재개 증거로 확대 해석하지 않는다.
+
+메인 Excel 작업에는 소스 수정 2개 commit만 독립적으로 추가했고 그 작업의 dirty 파일,
+0075 migration, API/Web 설치본은 건드리지 않았다. 후속 배포에서도 실행 중인 INDEX의
+2229937a identity와 수치 runtime pin을 임의 교체하지 않는다. 4babca4a는 같은 원인 수정에
+복구 transaction 검증 비용 보정을 더한 소스이며 이번 root 유지보수에만 선택해 사용했다.
