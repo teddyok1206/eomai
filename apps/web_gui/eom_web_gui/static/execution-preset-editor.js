@@ -196,19 +196,6 @@ export function candidateOptionValue(model, reasoningEffort) {
   return `${encodeURIComponent(model)}::${reasoningEffort}`;
 }
 
-export function candidateFromOptionValue(value) {
-  if (typeof value !== "string") throw new Error("PRESET_MODEL_CANDIDATE_INVALID");
-  const separator = value.lastIndexOf("::");
-  if (separator < 1) throw new Error("PRESET_MODEL_CANDIDATE_INVALID");
-  let model;
-  try {
-    model = decodeURIComponent(value.slice(0, separator));
-  } catch (_) {
-    throw new Error("PRESET_MODEL_CANDIDATE_INVALID");
-  }
-  return cloneCandidate({model, reasoning_effort: value.slice(separator + 2)});
-}
-
 export function reviewedPresetDraft(baseDraft, edits) {
   const isV2 = baseDraft.target_revision_schema_version === "execution-preset-revision/2.0";
   if (edits.general_knowledge_policy !== baseDraft.general_knowledge_policy) {

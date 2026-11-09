@@ -138,7 +138,6 @@ def test_guided_editor_preserves_pointers_and_requires_a_new_review(tmp_path: Pa
     )
     script = f"""
 import {{
-  candidateFromOptionValue,
   candidateOptionValue,
   guidedPresetBases,
   reviewedPresetDraft,
@@ -155,10 +154,17 @@ if (base.draft.role_policies[0].instruction_bundle.bundle_revision_id !==
     "instrrev_" + "5".repeat(32)) {{
   throw new Error("INSTRUCTION_POINTER_NOT_PRESERVED");
 }}
-const encoded = candidateOptionValue("gpt-5.6-sol", "xhigh");
-const decoded = candidateFromOptionValue(encoded);
-if (decoded.model !== "gpt-5.6-sol" || decoded.reasoning_effort !== "xhigh") {{
-  throw new Error("CANDIDATE_OPTION_ROUNDTRIP_FAILED");
+const selected = {{model: "gpt-5.6-sol", reasoning_effort: "xhigh"}};
+if (candidateOptionValue(selected.model, selected.reasoning_effort) !== "gpt-5.6-sol::xhigh"
+    || candidateOptionValue("model:local", "high") !== "model%3Alocal::high") {{
+  throw new Error("CANDIDATE_OPTION_KEY_INVALID");
+}}
+for (const [model, effort] of [["model with spaces", "high"], ["model-a", "unsupported"]]) {{
+  let rejected = false;
+  try {{ candidateOptionValue(model, effort); }} catch (error) {{
+    rejected = error.message === "PRESET_MODEL_CANDIDATE_INVALID";
+  }}
+  if (!rejected) throw new Error("INVALID_CANDIDATE_OPTION_NOT_REJECTED");
 }}
 const draft = reviewedPresetDraft(base.draft, {{
   display_name: "표준 문항 제작 · 고정",
@@ -166,7 +172,7 @@ const draft = reviewedPresetDraft(base.draft, {{
   general_knowledge_policy: base.draft.general_knowledge_policy,
   role_policies: [{{
     role: "authoring",
-    model_candidates: [decoded, {{model: "gpt-5.6-sol", reasoning_effort: "high"}}],
+    model_candidates: [selected, {{model: "gpt-5.6-sol", reasoning_effort: "high"}}],
     timeout_seconds: 1800,
   }}],
 }});
@@ -189,7 +195,7 @@ try {{ reviewedPresetDraft(base.draft, {{
   general_knowledge_policy: base.draft.general_knowledge_policy,
   role_policies: [{{
     role: "authoring",
-    model_candidates: [decoded, decoded],
+    model_candidates: [selected, selected],
     timeout_seconds: 1800,
   }}],
 }}); }} catch (error) {{

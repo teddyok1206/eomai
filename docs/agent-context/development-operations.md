@@ -108,6 +108,13 @@ producer 기록 시각과 observer 점검 시각도 구분한다. 중단된 prod
 
 ## 파일 정리
 
+초기 합성 CPU probe `run_local_embedding_probe.py`와 EOMIS Git 저장소 존재를 요구하던
+`check_repository_boundaries.sh`는 호출자 없는 퇴역 도구로 소스에서 제거했다. 과거 보고와
+Git 이력은 보존한다. 현행 실험 CLI·설치/복구·schema 생성기나 EOMIS의 빈 sandbox guard를
+같은 이유로 지우지 않는다. QUERY는 routed/batch 경로의 공통 START를 유지하며, 현재
+모델 선택 UI는 모델·추론 강도의 개별 입력을 사용한다. 이전의 호출 없는 중복 wrapper나
+결합 문자열 역변환 함수를 다시 추가하지 않는다.
+
 cache와 완료된 build source/설치 시뮬레이션은 실제 실행 참조·정확한 target identity·
 복구용 wheel/archive/Git을 확인해 정리한다. 이름이 오래됐다는 이유로 released schema,
 staging 원본·실패 로그·인증·설치 runtime·구형 벡터를 지우지 않는다. 소켓과 symlink,

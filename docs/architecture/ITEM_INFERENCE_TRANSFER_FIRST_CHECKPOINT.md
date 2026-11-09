@@ -2,6 +2,12 @@
 
 2026-10-10 UTC. Source candidate 기록이며 운영 검색 활성화·교육적 품질 승인이 아니다.
 
+2026-11-09 정리 안내: 이 기록의 초기 6사례 합성 실험 스크립트
+`scripts/embedding/run_local_embedding_probe.py`는 운영·테스트·설치 경로에 호출자가 없어
+제거했다. 아래의 과거 결과와 Git 이력은 보존한다. 이후 실험은 검증된 request/result
+계약을 사용하는 `scripts/embedding/run_inference_transfer_experiment.py`와 기존
+공식 INDEX/QUERY 경로를 사용하며, 이 합성 실험을 운영 acceptance로 다시 해석하지 않는다.
+
 ## 보존·구현
 
 - [설계 원문](ITEM_INFERENCE_TRANSFER_DESIGN_ORIGINAL.md)은 그대로 보존했다. 원문 파일 SHA-256: `f4adc8c7cf8197f3d310f8bb3463b79b54229dae6e2257b0b1c39005c7632e4a`.

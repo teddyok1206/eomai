@@ -22,7 +22,6 @@ from eom_catalog_service.embedding_registry_ports import (
 from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadContext
 from eom_catalog_service.public_solution_similarity_read import (
     CatalogPublicSolutionSimilarityRead,
-    PublicSolutionSimilarityPreparation,
 )
 from eom_catalog_service.reference_query_context_preparation import (
     validate_reference_query_context_preparation,
@@ -206,54 +205,6 @@ def _prepare_selected_reference_query(
     )
 
 
-def prepare_and_start_public_solution_query_selection_in_session(
-    session: Session,
-    *,
-    caller: EmbeddingRegistryCaller,
-    preparation: PublicSolutionSimilarityPreparation,
-    idempotency_key: str,
-    owner: CatalogReferenceQueryOwnerAdmission,
-    executor: ReferenceQueryNativeExecutor,
-) -> ReferenceQueryWorkflowSubmitted:
-    """Official source/index selection → the same atomic QUERY Workflow/START owner."""
-    _require_preparation_root(session, owner, caller)
-    original = _current_query_request(session, owner, caller, idempotency_key)
-    if original is None:
-        context = CatalogPublicSolutionSimilarityRead(owner.catalog).prepare_in_session(
-            session, caller, preparation
-        )
-    else:
-        if not isinstance(original, PublicReferenceQueryWorkflowRequest):
-            raise ValueError("REFERENCE_QUERY_PREPARATION_REPLAY_MISMATCH")
-        context = original.context_request
-        scope = preparation.selection.scope
-        preparation.selection.__post_init__()
-        if (
-            preparation.request_id != context.request_id
-            or preparation.consumer_purpose != context.consumer_purpose
-            or preparation.top_k != context.top_k
-            or preparation.spaces != context.views[0].index.spaces
-            or preparation.selection.source_revision_ids
-            != (context.anchor.source.item_revision_id,)
-            or scope.graph_snapshot != context.graph_snapshot
-            or scope.policy_revision_id != context.policy_revision_id
-            or scope.policy_sha256 != context.policy_sha256
-            or scope.maximum_sources != context.maximum_sources
-            or scope.namespace != owner.configuration.registry.namespace
-            or scope.corpus_id != owner.configuration.registry.corpus_id
-        ):
-            raise ValueError("REFERENCE_QUERY_PREPARATION_REPLAY_MISMATCH")
-    return _start_with_pinned_context(
-        session,
-        caller=caller,
-        context=context,
-        original=original,
-        idempotency_key=idempotency_key,
-        owner=owner,
-        executor=executor,
-    )
-
-
 def prepare_and_start_reference_query_in_session(
     session: Session,
     *,
@@ -266,7 +217,7 @@ def prepare_and_start_reference_query_in_session(
     """Own request construction from existing pins, without index selection or model use.
 
     Repeated keys retain the original audit/pins and reauthorize through existing
-    atomic admission. Both preparation entrypoints share this single start path.
+    atomic admission. Selected-source preparation and routed execution share this start path.
     """
     _require_preparation_root(session, owner, caller)
     context = parse_supported_reference_query_context(context)

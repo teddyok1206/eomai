@@ -2,6 +2,12 @@
 
 Generated at: `2026-08-14T04:27:16Z`
 
+Current note (2026-11-09): this is a historical bootstrap report. The retired
+`check_repository_boundaries.sh` was removed after EOMIS retirement; its historical
+PASS below is not a current runtime gate. The independent EOM repository and the
+empty EOMIS sandbox guard remain unchanged. See
+[retirement evidence](../operations/LEGACY_MODEL_CACHE_RETIREMENT_2026-11-06.md).
+
 ## 1. Executive Summary
 
 Overall status: `PASS_WITH_MANUAL_ACTION`.
