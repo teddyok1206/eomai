@@ -202,23 +202,28 @@ class PreparedIndexRecoveryFence:
             allocation = history.records[0].payload
             _require(isinstance(allocation, NativeCoordinatorAllocation))
             assert isinstance(allocation, NativeCoordinatorAllocation)
-            with materialize_prepared_index_publication(
-                launch.intent.native_launch_job_id.removeprefix("job_"),
-                command.staged_index_member_sha256,
-            ) as (_, staged):
-                producer = allocation.index_producer.model_dump(mode="json")
-                _require(
-                    staged.schema_version == "embedding-index-manifest/5.0"
-                    and staged.created_at == allocation.created_at
-                    and staged.index_revision_id
-                    == "embeddingindexrev_"
-                    + content_sha256({"purpose": "NATIVE_INDEX_REVISION", "producer": producer})[
-                        -32:
-                    ]
-                    and staged.space == request.space
-                    and staged.view == request.namespace.view
-                    and staged.storage_partition == request.namespace.storage_partition
-                )
+            # This pinned metadata is input proof, not the bytes we publish.
+            # Repeated Registry fences retain outer-root locks and recheck SQL
+            # identities; parse the full staged index only on root admission.
+            # A new transaction must read/hash/parse the original again.
+            if session.get_transaction() not in self._roots:
+                with materialize_prepared_index_publication(
+                    launch.intent.native_launch_job_id.removeprefix("job_"),
+                    command.staged_index_member_sha256,
+                ) as (_, staged):
+                    producer = allocation.index_producer.model_dump(mode="json")
+                    _require(
+                        staged.schema_version == "embedding-index-manifest/5.0"
+                        and staged.created_at == allocation.created_at
+                        and staged.index_revision_id
+                        == "embeddingindexrev_"
+                        + content_sha256(
+                            {"purpose": "NATIVE_INDEX_REVISION", "producer": producer}
+                        )[-32:]
+                        and staged.space == request.space
+                        and staged.view == request.namespace.view
+                        and staged.storage_partition == request.namespace.storage_partition
+                    )
         else:
             _require(
                 history.state in {"VALIDATING_RESULT", "COMMITTING", "SUCCEEDED"}

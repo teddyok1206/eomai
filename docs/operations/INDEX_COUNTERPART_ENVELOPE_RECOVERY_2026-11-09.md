@@ -45,3 +45,50 @@ FAILED 이력 거부, Artifact commit 후 SQL rollback, 같은 successor plan re
 좁은 commit을 Git archive로 분리해 INDEX owner wheel만 빌드하고, 기존 owner-pair RECORD
 검증·immutable installer를 사용한다. API/Web 릴리스나 migration을 실행하지 않는다.
 운영 INDEX 전환, 새 binding 및 처리 재개는 아래에 별도 기록한다.
+
+## 설치와 복구 진행
+
+- 변경 source: `2229937a37777eeb4b2905d5e38a98fd959ff4a8`.
+- 추가 dependency/coordinator/cancellation unit 74 PASS, 개발 문맥 13 PASS.
+- 기존 unstarted cancellation disposable DB 32 PASS(다른 제한 계정 설정을 필요로 하는
+  nonowner 2건은 이번 수정 경계 밖이므로 제외). 복구 suite 11 PASS와 별도다.
+- immutable 설치 wheel 직접 unit 28 PASS 및 실제 numerical-owner interpreter import PASS.
+  최초 수동 import 검사는 존재하지 않는 `local_indexing_service_daemon` 이름을 사용해
+  실패했고, 실제 `local_indexing_service_entry/runtime`로 검사하여 통과했다.
+- platform wheel SHA-256 `32a604ec680306c40fd413dbd6adeb9cd47563cb68b949ec6bd9990afe0fe60b`.
+- API contracts wheel SHA-256 `cb228997bb1e96abcb3fa653224d667fab641438a3220bce1d6266960ea9afb1`.
+- 기존 설치본 대비 runtime Python 5개와 새 recovery schema1개만 다르다. 기존 JSON
+  contract bytes는 전부 보존하고, API contracts의 모든 wheel member는 byte-identical이다.
+- 수치 runtime source `c915281ea3acda63ea066ba9de397f7bbc335295`와 장치·모델·routing은 그대로다.
+- release/rollback 증거: `/var/lib/eom-index-envelope-release-20261109`.
+  완료 데이터 대조: `/var/lib/eom-index-envelope-audit-20261109`.
+- 변경 전 보존 기준: encoding4,974, binding133,558, index revision582,
+  accepted analysis2,883, registered report1,038. 이는 현재 문항 수가 아니라 과거 revision을
+  포함한 각 정본 관계의 분모다.
+
+원래 요청 `workflow_b6e9f8ff3a2845099009a1b2e7401204`의 수치 encoding4건은
+SUCCEEDED다. 새 service activation 전에 별도의 미실행 standby
+`workflow_2df06cb6dc6c46f9bf636f29db93135b`만 공식 cancellation/replay로 종료했다.
+CPU head896과 staging900의 차이4건을 고정한 successor publication을 실행 중이다.
+이 시점에는 INDEX daemon을 아직 시작하지 않았으며 API/Web/QUERY/creative invocation은
+유지했다. 성공 여부와 새 일반 batch 진행은 이후 증거로 구분한다.
+
+### 복구 검증 보정
+
+첫 publication-only 시도에서 같은 root transaction의 source/Registry fence마다
+900-binding staged manifest를 반복 검증하는 비용을 확인했다. Registry의 binding 검증
+중에 이 operator 실행만 SIGINT로 중단했고, SQL rollback 후 CPU head896/원 Workflow
+RUNNING/encoding4건 SUCCEEDED가 그대로임을 읽기 전용으로 확인했다. 이미 게시된
+candidate Artifact는 같은 고정 plan의 재사용 대상이며 삭제하지 않는다.
+
+staged metadata는 원 충돌의 입력 증거이며 새로 게시하는 bytes는 canonical receipts로
+조립한다. 최초 outer-root admission에서만 staging hash·schema·allocation 일치를 확인하고,
+동일 root/session/thread에 보유한 잠금 하에서는 기존 SQL identity/encoding 검증을 계속한다.
+다른 transaction은 반드시 다시 읽는다. 새 cache/전역 상태/지속성은 만들지 않았다.
+합성 반복 fence25회에서 staged parse1회, 다음 root에서 추가1회와 잘못된 hash 거부를
+disposable PostgreSQL 검사로 확인한다. 기존 released schema와 수치 실행은 그대로다.
+
+메인 Excel 개발이 shared source의 migration head를 0075로 바꾸는 도중 임시 DB 검사가
+0074 불일치로 시작을 거부했다. 운영 DB를 변경하지 않았고, pinned2229937a source archive에
+이 두 보정 파일만 materialize한 별도 테스트 snapshot에서 재검사한다. 메인 migration은
+가져오거나 되돌리지 않는다.

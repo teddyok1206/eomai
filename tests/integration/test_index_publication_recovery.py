@@ -278,6 +278,30 @@ def test_failed_history_is_never_reinterpreted(interrupted):
         fence(session)
 
 
+@pytest.mark.parametrize("execution", ["registered_public"], indirect=True)
+def test_unprepared_stage_is_parsed_once_per_locked_root_not_per_registry_fence(
+    interrupted, monkeypatch
+):
+    case, _, fence = interrupted
+    materialize = Mock(wraps=recovery.materialize_prepared_index_publication)
+    monkeypatch.setattr(recovery, "materialize_prepared_index_publication", materialize)
+    with case.sessions.begin() as session:
+        fence(session)
+        for _ in range(12):
+            fence(session)
+            fence.original(session)
+        with session.begin_nested():
+            fence(session)
+        assert materialize.call_count == 1
+    # Root-local admission is not a cross-transaction cache or retry bypass.
+    with case.sessions.begin() as session:
+        fence(session)
+        assert materialize.call_count == 2
+    materialize.side_effect = ValueError("NATIVE_INDEX_PREPARED_HASH_MISMATCH")
+    with case.sessions.begin() as session, pytest.raises(ValueError, match="HASH_MISMATCH"):
+        fence(session)
+
+
 @pytest.mark.parametrize("execution", ["native_office_public"], indirect=True)
 def test_original_expired_command_reclaim_terminal_and_same_operation_replay(
     interrupted, monkeypatch
