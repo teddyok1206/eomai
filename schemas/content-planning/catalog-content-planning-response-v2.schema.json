@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog/content-planning-response/2.0",
+  "oneOf": [
+    {
+      "$ref": "eom://schemas/catalog/content-planning-response/1.0"
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "CONTENT_PLANNING_LIFECYCLE"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "$ref": "eom://schemas/content-planning/lifecycle-result/1.0"
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "CONTENT_PLANNING_LIFECYCLE"
+        },
+        "status": {
+          "const": "ERROR"
+        },
+        "result": {
+          "type": "null"
+        },
+        "error_code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{2,127}$"
+        }
+      }
+    }
+  ]
+}

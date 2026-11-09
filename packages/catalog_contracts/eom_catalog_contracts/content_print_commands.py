@@ -16,8 +16,7 @@ PrintRecordId = Annotated[str, Field(pattern=r"^print_[0-9a-f]{32}$")]
 PrintNote = Annotated[str, Field(max_length=2000, pattern=r"^[^\x00-\x08\x0b\x0c\x0e-\x1f\x7f]*$")]
 
 
-class RecordContentPrint(FrozenModel):
-    command_kind: Literal["RECORD_PRINT"]
+class _RecordPrintFields(FrozenModel):
     edition_id: EditionId
     revision_id: DeliverableRevisionId
     composition_sha256: Sha256
@@ -38,6 +37,19 @@ class RecordContentPrint(FrozenModel):
         return self
 
 
+class RecordContentPrint(_RecordPrintFields):
+    command_kind: Literal["RECORD_PRINT"]
+
+
+class RecordContentPrintWithOutput(_RecordPrintFields):
+    command_kind: Literal["RECORD_PRINT_WITH_OUTPUT"]
+    output_build_id: str = Field(pattern=r"^hwpxbuild_[0-9a-f]{32}$")
+    output_sha256: Sha256
+
+
+type ContentRecordPrintCommand = RecordContentPrint | RecordContentPrintWithOutput
+
+
 class VoidContentPrint(FrozenModel):
     command_kind: Literal["VOID_PRINT"]
     edition_id: EditionId
@@ -53,13 +65,14 @@ class VoidContentPrint(FrozenModel):
 
 
 type ContentPrintCommand = Annotated[
-    RecordContentPrint | VoidContentPrint, Field(discriminator="command_kind")
+    RecordContentPrint | RecordContentPrintWithOutput | VoidContentPrint,
+    Field(discriminator="command_kind"),
 ]
 _COMMAND: TypeAdapter[ContentPrintCommand] = TypeAdapter(ContentPrintCommand)
 
 
 def parse_content_print_command(value: dict[str, object]) -> ContentPrintCommand:
-    validate_contract("content-print-command-v1", value)
+    validate_contract("content-print-command-v2", value)
     return _COMMAND.validate_python(value)
 
 

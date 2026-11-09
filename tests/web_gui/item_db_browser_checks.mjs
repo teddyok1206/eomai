@@ -5,7 +5,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const staticRoot = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const names = ["index.html", "styles.css", "knowledge-map.css", "content-planning.css", "item-db.js", "item-db-assembly.js", "item-db-draft.js", "item-db-delivery.js", "item-db-similarity.js", "item-db-similarity-list.js", "eom-mark.svg"];
+const names = ["index.html", "styles.css", "knowledge-map.css", "content-planning.css", "content-planning-draft.js", "item-db.js", "item-db-assembly.js", "item-db-draft.js", "item-db-delivery.js", "item-db-similarity.js", "item-db-similarity-list.js", "eom-mark.svg"];
 const assets = new Map(await Promise.all(names.map(async name => [name, await readFile(new URL(name, staticRoot), "utf8")])));
 
 // Exact repository HTML, CSS and controller; only the existing API and navigation
@@ -156,6 +156,12 @@ const searches = {
   },
 };
 const controller = createItemDb({document, api, openRegisteredItem: entry => fixture.opened.push(entry),
+  planningSelectionHint: () => fixture.planningTarget ? '합성 교재 · 1회차' : null,
+  onPlanningSelections: entries => {
+    fixture.planningImports = structuredClone(entries);
+    if (fixture.rejectPlanning) return false;
+    fixture.planningTarget = false; return true;
+  },
   openPastExamVariation: entry => fixture.variations.push(entry),
   canReadSource: () => fixture.allowSource, similaritySearches: searches,
   previewRegisteredItem: async (_pointer, root) => {root.textContent = '합성 기준 문항 미리보기';}});
@@ -344,6 +350,20 @@ try {
   await page.getByRole('button', {name: '교체 취소', exact: true}).click();
   assert.equal(await page.locator('#item-db-replacement').isVisible(), false);
   await page.getByRole('tab', {name: /배치/}).click();
+  const callsBeforeImport = await page.evaluate(() => dbFixture.calls.filter(call => call.mutation).length);
+  await page.locator('#item-db-draft-to-excel').click();
+  assert.equal(await page.evaluate(() => dbFixture.planningImports), undefined, 'imported without a target');
+  await page.evaluate(() => {dbFixture.planningTarget = true; dbFixture.controller.open();});
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '0개');
+  assert.equal(await page.locator('#item-db-draft-save').isDisabled(), true);
+  await page.getByRole('button', {name: '기존 조립 초안 가져오기', exact: true}).click();
+  await page.locator('#item-db-draft-to-excel').click();
+  assert.equal(await page.evaluate(() => dbFixture.calls.filter(call => call.mutation).length), callsBeforeImport, 'selection handoff performed API mutation');
+  const imported = await page.evaluate(() => dbFixture.planningImports);
+  assert.equal(imported.length, 2);
+  assert.equal(imported[0].pointer.placement_kind, 'EXTERNAL_SOURCE_DOCUMENT');
+  assert.equal(imported[1].pointer.placement_kind, 'PAST_EXAM_ITEM_REVISION');
+  assert.equal(await draftRows.count(), 2, 'copy removed original DB draft');
   await page.locator('#item-db-assembly-name').fill('통합과학 시범 조립');
   await page.locator("#item-db-draft-save").click();
   await page.waitForFunction(() => window.dbFixture.saved?.placements.length === 2);
@@ -578,6 +598,80 @@ try {
   await openRegistered();
   assert.match(await page.locator('.item-db-original-unit').innerText(), /조회 권한이 없습니다/u);
   assert.equal(await page.evaluate(() => window.dbFixture.calls.filter(call => call.path.includes('/source?')).length), sourceReads);
+
+  // Excel collects occurrences, not unique private-assembly targets. The same
+  // DB controller accepts 301 repetitions and hands the whole list over once.
+  await page.evaluate(() => {
+    dbFixture.allowSource = true;
+    dbFixture.controller.setOwner('operator_' + '2'.repeat(32));
+    dbFixture.controller.openGraph(dbFixture.graph);
+  });
+  await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).click();
+  await page.getByRole('tab', {name: /배치/}).click();
+  await page.locator('#item-db-assembly-name').fill('보존할 개인 초안');
+  await page.evaluate(() => {dbFixture.planningTarget = true; dbFixture.controller.open();});
+  assert.equal(await page.locator('#item-db-draft-title').innerText(), 'Excel에 담을 문항');
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '0개');
+  await page.getByRole('tab', {name: '조회', exact: true}).click();
+  await page.evaluate(() => dbFixture.controller.openGraph(dbFixture.graph));
+  const mutationsBeforeCollector = await page.evaluate(() => dbFixture.calls.filter(call => call.mutation).length);
+  await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).evaluate(button => {
+    for (let index = 0; index < 301; index += 1) button.click();
+  });
+  await page.getByRole('tab', {name: /배치/}).click();
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '301개');
+  assert.equal(await draftRows.count(), 100, 'collector materialized unbounded DOM rows');
+  assert.equal(await draftRows.first().locator('th').innerText(), '1번');
+  await page.getByRole('button', {name: '다음 100개', exact: true}).click();
+  await page.getByRole('button', {name: '다음 100개', exact: true}).click();
+  await page.getByRole('button', {name: '다음 100개', exact: true}).click();
+  assert.equal(await draftRows.count(), 1);
+  assert.equal(await draftRows.first().locator('th').innerText(), '301번');
+  await draftRows.first().getByRole('button', {name: '교체', exact: true}).click();
+  await page.evaluate(() => dbFixture.controller.openGraph({...dbFixture.graph,
+    source_display_label: '대체 문항', item_id: 'item_' + '7'.repeat(32), item_revision_id: 'itemrev_' + '7'.repeat(32)}));
+  await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).click();
+  assert.match(await draftRows.first().locator('.item-db-draft-card').innerText(), /대체 문항/u);
+  await draftRows.first().getByRole('button', {name: '위로', exact: true}).click();
+  assert.match(await draftRows.first().locator('.item-db-draft-card').innerText(), /합성 시험 17번/u);
+  await draftRows.first().getByRole('button', {name: '빼기', exact: true}).click();
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '300개');
+  assert.equal(await draftRows.last().locator('th').innerText(), '300번');
+  assert.match(await draftRows.last().locator('.item-db-draft-card').innerText(), /대체 문항/u);
+  await page.getByRole('tab', {name: '조회', exact: true}).click();
+  await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).click();
+  await page.getByRole('tab', {name: /배치/}).click();
+  assert.equal(await page.locator('#item-db-draft-save').isDisabled(), true);
+  await page.locator('#item-db-draft-save').dispatchEvent('click');
+  assert.equal(await page.evaluate(() => dbFixture.calls.filter(call => call.mutation).length), mutationsBeforeCollector,
+    'occurrence collection invoked legacy private SAVE');
+  await page.evaluate(() => {dbFixture.rejectPlanning = true;});
+  await page.locator('#item-db-draft-to-excel').click();
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '301개', 'rejected handoff lost selections');
+  const rejected = await page.evaluate(() => dbFixture.planningImports);
+  assert.equal(new Set(rejected.map(value => value.placementId)).size, 301);
+  assert.equal(rejected.filter(value => value.pointer.item_id === 'item_' + 'b'.repeat(32)).length, 299);
+  assert.equal(rejected.filter(value => value.pointer.item_id === 'item_' + '7'.repeat(32)).length, 2);
+  await page.evaluate(() => {dbFixture.rejectPlanning = false;});
+  await page.locator('#item-db-draft-to-excel').click();
+  assert.deepEqual(await page.evaluate(() => dbFixture.planningImports), rejected, 'handoff changed occurrence order/identity');
+  assert.equal(await page.locator('#item-db-draft-title').innerText(), '조립 순서 초안');
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '1개');
+  assert.equal(await page.locator('#item-db-assembly-name').inputValue(), '보존할 개인 초안');
+  assert.match(await draftRows.first().locator('.item-db-draft-card').innerText(), /합성 시험 17번/u);
+  await page.evaluate(() => {dbFixture.planningTarget = true; dbFixture.controller.open();});
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '0개', 'successful handoff left stale selections');
+  await page.evaluate(() => {dbFixture.savedRemoved = false;});
+  await page.locator('#item-db-saved-refresh').click();
+  await page.getByRole('button', {name: '다시 열기', exact: true}).click();
+  await page.waitForFunction(() => document.querySelector('#item-db-draft-count').textContent === '2개');
+  assert.equal(await page.locator('#item-db-assembly-name').inputValue(), '보존할 개인 초안');
+  await page.evaluate(() => {dbFixture.planningTarget = false; dbFixture.controller.open();});
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '1개', 'opening saved assembly replaced private draft');
+  await page.evaluate(() => {dbFixture.planningTarget = true; dbFixture.controller.open();});
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '2개', 'switching modes discarded collector');
+  await page.evaluate(() => dbFixture.controller.setOwner('operator_' + '3'.repeat(32)));
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '0개', 'collector leaked across owners');
   assert.deepEqual(errors, []);
   assert.deepEqual(unexpected, []);
   console.log("item_db_browser=PASS live_writes=0");

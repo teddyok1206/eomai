@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/lifecycle-result/1.0",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_kind",
+        "entry",
+        "events"
+      ],
+      "properties": {
+        "result_kind": {
+          "const": "LIFECYCLE_VIEW"
+        },
+        "entry": {
+          "$ref": "eom://schemas/content-planning/lifecycle-values/1.0#/$defs/entry"
+        },
+        "events": {
+          "type": "array",
+          "maxItems": 50,
+          "items": {
+            "$ref": "eom://schemas/content-planning/lifecycle-values/1.0#/$defs/event"
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_kind",
+        "rows",
+        "next_id"
+      ],
+      "properties": {
+        "result_kind": {
+          "const": "LIFECYCLE_LIST"
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "eom://schemas/content-planning/lifecycle-values/1.0#/$defs/entry"
+          }
+        },
+        "next_id": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^(deliverable|edition)_[0-9a-f]{32}$"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_kind",
+        "entry",
+        "replayed",
+        "disposition"
+      ],
+      "properties": {
+        "result_kind": {
+          "const": "LIFECYCLE_MUTATION"
+        },
+        "entry": {
+          "$ref": "eom://schemas/content-planning/lifecycle-values/1.0#/$defs/entry"
+        },
+        "replayed": {
+          "type": "boolean"
+        },
+        "disposition": {
+          "enum": [
+            "CHANGED",
+            "NO_CHANGE"
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,135 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/lifecycle-values/1.0",
+  "$defs": {
+    "target": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "target_kind",
+            "target_id"
+          ],
+          "properties": {
+            "target_kind": {
+              "const": "CONTENT"
+            },
+            "target_id": {
+              "type": "string",
+              "pattern": "^deliverable_[0-9a-f]{32}$"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "target_kind",
+            "target_id"
+          ],
+          "properties": {
+            "target_kind": {
+              "const": "EDITION"
+            },
+            "target_id": {
+              "type": "string",
+              "pattern": "^edition_[0-9a-f]{32}$"
+            }
+          }
+        }
+      ]
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "target",
+        "deliverable_id",
+        "title",
+        "lifecycle_state",
+        "version",
+        "current_revision_id",
+        "parent_archived"
+      ],
+      "properties": {
+        "target": {
+          "$ref": "#/$defs/target"
+        },
+        "deliverable_id": {
+          "type": "string",
+          "pattern": "^deliverable_[0-9a-f]{32}$"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "lifecycle_state": {
+          "enum": [
+            "ACTIVE",
+            "ARCHIVED"
+          ]
+        },
+        "version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "current_revision_id": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^delivrev_[0-9a-f]{32}$"
+            }
+          ]
+        },
+        "parent_archived": {
+          "type": "boolean"
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sequence",
+        "prior_state",
+        "new_state",
+        "actor_id",
+        "created_at",
+        "reason"
+      ],
+      "properties": {
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "prior_state": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "new_state": {
+          "type": "string",
+          "maxLength": 32
+        },
+        "actor_id": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "reason": {
+          "type": "string",
+          "maxLength": 2000
+        }
+      }
+    }
+  },
+  "$ref": "#/$defs/entry"
+}

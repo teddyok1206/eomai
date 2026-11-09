@@ -162,11 +162,14 @@ def _static_string(node: ast.expr) -> str | None:
 
 def test_content_planning_closed_bff_routes_match_registered_operations():
     calls = _frontend_api_calls((STATIC_ROOT / "content-planning.js").read_text())
+    calls |= _frontend_api_calls((STATIC_ROOT / "content-planning-lifecycle.js").read_text())
     assert calls == {
         ("POST", "/content-planning/query"),
         ("POST", "/content-planning/commands"),
         ("POST", "/content-planning/prints"),
         ("POST", "/content-planning/deliveries"),
+        ("POST", "/content-planning/lifecycle"),
+        ("POST", "/content-planning/lifecycle/query"),
     }
     assert calls <= _bff_routes()
 

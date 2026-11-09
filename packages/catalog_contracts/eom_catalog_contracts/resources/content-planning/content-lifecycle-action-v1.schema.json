@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/lifecycle-action/1.0",
+  "$defs": {
+    "read": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action_kind",
+        "target"
+      ],
+      "properties": {
+        "action_kind": {
+          "const": "READ_LIFECYCLE"
+        },
+        "target": {
+          "$ref": "eom://schemas/content-planning/lifecycle-values/1.0#/$defs/target"
+        }
+      }
+    },
+    "list": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action_kind",
+        "target_kind",
+        "deliverable_id",
+        "lifecycle_state",
+        "after_id",
+        "limit"
+      ],
+      "properties": {
+        "action_kind": {
+          "const": "LIST_LIFECYCLE"
+        },
+        "target_kind": {
+          "enum": [
+            "CONTENT",
+            "EDITION"
+          ]
+        },
+        "deliverable_id": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^deliverable_[0-9a-f]{32}$"
+            }
+          ]
+        },
+        "lifecycle_state": {
+          "enum": [
+            "ALL",
+            "ACTIVE",
+            "ARCHIVED"
+          ]
+        },
+        "after_id": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "string",
+              "pattern": "^(deliverable|edition)_[0-9a-f]{32}$"
+            }
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    },
+    "change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "action_kind",
+        "target",
+        "expected_state",
+        "expected_version",
+        "desired_state",
+        "reason"
+      ],
+      "properties": {
+        "action_kind": {
+          "const": "CHANGE_LIFECYCLE"
+        },
+        "target": {
+          "$ref": "eom://schemas/content-planning/lifecycle-values/1.0#/$defs/target"
+        },
+        "expected_state": {
+          "enum": [
+            "ACTIVE",
+            "ARCHIVED"
+          ]
+        },
+        "expected_version": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "desired_state": {
+          "enum": [
+            "ACTIVE",
+            "ARCHIVED"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "^[^\\u0000-\\u0008\\u000b\\u000c\\u000e-\\u001f\\u007f]*$"
+        }
+      }
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/read"
+    },
+    {
+      "$ref": "#/$defs/list"
+    },
+    {
+      "$ref": "#/$defs/change"
+    }
+  ]
+}

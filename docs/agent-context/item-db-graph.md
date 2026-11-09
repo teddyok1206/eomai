@@ -68,15 +68,16 @@ process가 없는 고아 실행의 명시적 successor는 기존 `external_item_
 별도 execution-proof route다. 살아 있는 unit/lease·commit 이력이 있으면 실행하지 않는다.
 설계·검증 경계는 `CREATIVE_COHORT_RECOVERY_CONTINUITY.md`를 참고한다.
 
-## Excel 콘텐츠 편성 (구현 중, 아직 운영 미활성화)
+## Excel 콘텐츠 편성
 
 `docs/architecture/EXCEL_CONTENT_PLACEMENT_DESIGN.md`가 승인된 설계다. 기존 Deliverable과
 Form, curated Assembly를 확장하며 별도 문항/파일 registry를 만들지 않는다.
 `content_planning.py`/`curated_document_slots.py`가 판·구간·빈 자리·반복 occurrence 계약,
 `content_planning_layout.py`가 순수 이동/복사/번호·인쇄 범위 계산을 소유한다.
 `content_planning_models.py`, `content_print_models.py`, `curated_document_slot_models.py`가
-indexed 소속·읽기·불변 이력 저장을 담당한다. migration `20261109_0075`/`0076`은 현재 개발 후보다.
-source 존재나 임시 DB PASS를 운영 설치로 해석하지 않는다. 진행·검증 경계는
+indexed 소속·읽기·불변 이력 저장을 담당한다. migration `20261109_0075`/`0076`의 실제 적용과
+후속 복구·복사·인쇄 연결 기능의 설치 여부는 분리한다. source 존재나 임시 DB PASS를
+운영 설치로 해석하지 않는다. 진행·검증 경계는
 `docs/operations/EXCEL_CONTENT_PLACEMENT_IMPLEMENTATION_2026-11-09.md`를 확인한다.
 
 새 V3 draft/V2 manifest는 placement ID가 고유하며 Item 반복·빈칸·200 초과를 허용한다.
@@ -86,6 +87,23 @@ source 존재나 임시 DB PASS를 운영 설치로 해석하지 않는다. 진�
 공유한다. `creative_source_registration.py`의 공식 lineage만 원본과 등록 Item을 연결하며
 숫자/제목의 유사함으로 합치지 않는다. `content_prior_usage_read.py`는 연도 없는 옛 ledger를
 별도 읽는다. 필터는 pagination 전에 적용하며 이력 조회로 새 인쇄 사실을 만들지 않는다.
+
+Web의 `content-planning-location.js`는 exact 콘텐츠/판/revision/구간 URL만 검증하고,
+`content-planning-pending.js`는 제출된 요청의 owner별 key/body를 복구한다. 브라우저 상태는
+권한이나 정본이 아니며 기존 Catalog 읽기/멱등 저장에서 재검증한다. `content-planning-copy.js`는
+저장본의 선택 범위를 작은 provenance 포함 슬롯으로 읽어 기존 SAVE_SECTIONS에 전달한다.
+현재 배포 경계와 설계는 `EXCEL_BROWSER_RECOVERY_BOUNDARY.md`,
+`EXCEL_SELECTED_COPY_BOUNDARY.md` 및 위 운영 checkpoint를 확인한다.
+
+Excel로 문항을 고르는 동안 `item-db-assembly.js`는 기존 `createPlanningDraft`의
+ordered occurrence를 임시 선택 목록으로 재사용한다. 개인 조립의 200개·고유 문항 계약을
+확장하거나 개인 초안을 덮어쓰지 않는다. 100행씩 표시하고 반복 포함 전체를 한 번에
+전달한다. `EXCEL_DB_SELECTION_BOUNDARY.md`와 실제 DB browser 회귀를 함께 확인한다.
+
+보관/복원은 `content_lifecycle_service.py`가 기존 Product/Edition 상태와 이벤트를 사용한다.
+정본 revision이나 사용·인쇄 이력을 삭제하지 않는다. 편집은 Product 공유 잠금 이후 Edition
+잠금, 보관은 Product 배타 잠금으로 순서를 통일한다. `EXCEL_LIFECYCLE_BOUNDARY.md`와
+`test_content_lifecycle.py`의 실제 동시성/멱등 검사를 따른다.
 
 ## 먼저 열 파일
 

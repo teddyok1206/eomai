@@ -108,19 +108,28 @@ def plan_slot_changes(
 
 
 def copy_assembly_slots(
-    source: CuratedDocumentAssemblyManifestV2, new_placement_ids: tuple[str, ...]
+    source: CuratedDocumentAssemblyManifestV2,
+    new_placement_ids: tuple[str, ...],
+    *,
+    selected_placement_ids: tuple[str, ...] | None = None,
 ) -> tuple[CuratedSlot, ...]:
     """Copy only pinned values. UUID generation belongs to the application owner."""
 
     old_ids = {slot.placement_id for slot in source.placements}
+    selected = old_ids if selected_placement_ids is None else set(selected_placement_ids)
+    if selected_placement_ids is not None and (
+        not selected or len(selected) != len(selected_placement_ids) or not selected <= old_ids
+    ):
+        raise ContentPlanningConflict("CONTENT_COPY_SELECTION_INVALID")
+    slots = tuple(slot for slot in source.placements if slot.placement_id in selected)
     if (
-        len(new_placement_ids) != len(source.placements)
+        len(new_placement_ids) != len(slots)
         or len(set(new_placement_ids)) != len(new_placement_ids)
         or old_ids & set(new_placement_ids)
     ):
         raise ContentPlanningConflict("CONTENT_COPY_PLACEMENT_ID_INVALID")
     result: list[CuratedSlot] = []
-    for slot, new_id in zip(source.placements, new_placement_ids, strict=True):
+    for position, (slot, new_id) in enumerate(zip(slots, new_placement_ids, strict=True), 1):
         origin = SlotCopyOrigin(
             assembly_id=source.assembly_id,
             assembly_revision_id=source.assembly_revision_id,
@@ -132,6 +141,7 @@ def copy_assembly_slots(
                 {
                     **slot.selection().model_dump(mode="json"),
                     "placement_id": new_id,
+                    "position": position,
                     "copied_from": origin.model_dump(mode="json"),
                 }
             )

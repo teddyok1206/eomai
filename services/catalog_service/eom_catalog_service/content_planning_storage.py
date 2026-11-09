@@ -39,8 +39,28 @@ def new_content_id(prefix: str) -> str:
 
 
 def load_content_edition(
-    session: Session, edition_id: str, *, for_update: bool = False
+    session: Session,
+    edition_id: str,
+    *,
+    for_update: bool = False,
+    include_archived: bool = False,
 ) -> ContentEditionRecord:
+    if for_update and include_archived:
+        raise ValueError("archived content may be loaded only for read")
+    if for_update:
+        # All existing edit/print/delivery callers take the shared Product lock
+        # first. Shelving takes it exclusively; different editions stay parallel.
+        product = session.scalar(
+            select(DeliverableRecord)
+            .join(
+                ContentEditionRecord,
+                ContentEditionRecord.deliverable_id == DeliverableRecord.deliverable_id,
+            )
+            .where(ContentEditionRecord.edition_id == edition_id)
+            .with_for_update(read=True, of=DeliverableRecord)
+        )
+        if product is None or product.lifecycle_state in {"CANCELLED", "ARCHIVED"}:
+            raise ContentPlanningError("CONTENT_EDITION_NOT_FOUND")
     statement = (
         select(ContentEditionRecord)
         .join(
@@ -49,13 +69,15 @@ def load_content_edition(
         )
         .where(
             ContentEditionRecord.edition_id == edition_id,
-            DeliverableRecord.lifecycle_state.not_in(("CANCELLED", "ARCHIVED")),
+            DeliverableRecord.lifecycle_state.not_in(
+                ("CANCELLED",) if include_archived else ("CANCELLED", "ARCHIVED")
+            ),
         )
     )
     if for_update:
         statement = statement.with_for_update(of=ContentEditionRecord)
     edition = session.scalar(statement)
-    if edition is None or edition.lifecycle_state != "ACTIVE":
+    if edition is None or (edition.lifecycle_state != "ACTIVE" and not include_archived):
         raise ContentPlanningError("CONTENT_EDITION_NOT_FOUND")
     return edition
 

@@ -79,7 +79,9 @@ def read_content_delivery(
     if row is None or row.assembly_id != assembly_id:
         raise ContentPlanningError("CONTENT_DELIVERY_NOT_FOUND")
     scope = ContentPrintScopeV1.model_validate(row.canonical_scope)
-    edition = load_content_edition(session, row.edition_id)
+    edition = load_content_edition(
+        session, row.edition_id, include_archived=permission is PermissionKey.HWPX_READ
+    )
     composition = read_edition_revision(session, edition, row.deliverable_revision_id)
     if (
         scope != select_print_scope(composition, tuple(form.section_id for form in scope.forms))

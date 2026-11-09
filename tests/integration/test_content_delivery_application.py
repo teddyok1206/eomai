@@ -15,6 +15,7 @@ from eom_catalog_service.content_print_models import ContentPrintRecord
 from eom_catalog_service.curated_document_assembly_service import CuratedDocumentAssemblyService
 from eom_hwpx_contracts.curated_occurrences import CuratedHwpxBuildInputV2
 from eom_hwpx_manager.curated_application_service import CuratedHwpxApplicationService
+from eom_hwpx_manager.curated_build_models import HwpxCuratedBuildRecord
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -64,8 +65,27 @@ def manifest(engine, prepared, actor):
     )
 
 
+@pytest.fixture
+def admitted_build_cleanup(creative_engine):
+    """An admission-only synthetic request must not enter another test's FIFO.
+
+    creative_engine permits only the guarded disposable owner database. Remove
+    only the exact never-dispatched rows returned by this fixture's test; a Job,
+    terminal fact or unrelated queue entry is not cleanup authority.
+    """
+    identities = []
+    yield identities
+    with Session(creative_engine) as session, session.begin():
+        for build_id in identities:
+            row = session.get(HwpxCuratedBuildRecord, build_id)
+            assert row is not None and row.state == "REQUESTED"
+            assert row.platform_job_id is None and row.started_at is None
+            assert row.output_artifact_id is None and row.output_artifact_revision_id is None
+            session.delete(row)
+
+
 def test_scope_1200_positions_same_source_is_one_input_not_a_private_assembly(
-    creative_engine, planning
+    creative_engine, planning, admitted_build_cleanup
 ):
     saved = filled(planning, creative_engine, 600)
     service = ContentDeliveryService(creative_engine)
@@ -106,6 +126,7 @@ def test_scope_1200_positions_same_source_is_one_input_not_a_private_assembly(
         actor=planning.editor,
         idempotency_key=request_key,
     )
+    admitted_build_cleanup.append(record.build_id)
     same, repeated = queue.request_build(
         pinned.assembly_id,
         assembly_revision_id=pinned.assembly_revision_id,

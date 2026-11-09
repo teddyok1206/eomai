@@ -225,6 +225,19 @@ def test_content_planning_browser_and_pure_draft():
     )
     assert check.returncode == 0, check.stderr
     assert "content_planning_draft=PASS" in check.stdout
+    pending = subprocess.run(
+        [
+            node,
+            "--experimental-default-type=module",
+            str(root / "content_planning_pending_checks.mjs"),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert pending.returncode == 0, pending.stderr
+    assert "content_planning_pending=PASS" in pending.stdout
     if not os.environ.get("EOM_WEB_PLAYWRIGHT_MODULE"):
         pytest.skip("Actual browser check requires the existing opt-in Playwright environment")
     check = subprocess.run(

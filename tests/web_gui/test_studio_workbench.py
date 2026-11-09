@@ -266,6 +266,10 @@ def test_route_and_permission_modules_fail_closed_and_round_trip(tmp_path: Path)
     route_module.write_bytes(
         (ROOT / "apps/web_gui/eom_web_gui/static/studio-route.js").read_bytes()
     )
+    (tmp_path / "content-planning-location.js").write_bytes(
+        (ROOT / "apps/web_gui/eom_web_gui/static/content-planning-location.js").read_bytes()
+    )
+    (tmp_path / "package.json").write_text('{"type":"module"}', encoding="utf-8")
     permission_module.write_bytes(
         (ROOT / "apps/web_gui/eom_web_gui/static/studio-permissions.js").read_bytes()
     )

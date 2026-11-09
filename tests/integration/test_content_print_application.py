@@ -185,3 +185,104 @@ def test_correction_interrupt_rolls_back_new_fact_and_terminal_event(
         request, actor=planning.editor, idempotency_key=request_key
     )
     assert result.disposition == "RECORDED" and not result.replayed
+
+
+def output_selection(planning, engine, monkeypatch):
+    from eom_catalog_contracts.content_delivery import PrepareContentDelivery
+    from eom_catalog_contracts.content_print_commands import RecordContentPrintWithOutput
+    from eom_catalog_service import content_print_output
+    from eom_catalog_service.curated_output_publication import CuratedCommittedOutput
+
+    from tests.integration.test_content_delivery_application import filled as both_filled
+    from tests.unit.content_planning_fixtures import SHA
+
+    saved = both_filled(planning, engine, 2)
+    prepared = planning.service.deliveries.prepare(
+        PrepareContentDelivery(
+            edition_id=saved.edition_id,
+            revision_id=saved.deliverable_revision_id,
+            composition_sha256=saved.composition_sha256,
+            section_ids=(saved.sections[0].section_id,),
+        ),
+        actor=planning.editor,
+        idempotency_key=key(),
+    )
+    output = CuratedCommittedOutput(
+        build_id=ident("hwpxbuild"),
+        assembly_id=prepared.assembly_id,
+        assembly_revision_id=prepared.assembly_revision_id,
+        assembly_manifest_sha256=prepared.manifest_sha256,
+        input_plan_sha256=SHA,
+        profile="CURATED_EDITABLE_OCCURRENCES_V2",
+        job_id=ident("job"),
+        artifact_id=ident("artifact"),
+        artifact_revision_id=ident("rev"),
+        artifact_sha256=SHA,
+        output_sha256=SHA,
+        output_size_bytes=17,
+        section_count=2,
+        binary_count=1,
+        native_table_count=1,
+        native_equation_count=1,
+    )
+    # Artifact owner validation is exercised against real committed metadata in
+    # test_curated_hwpx_publication. Here only that adapter is substituted.
+    monkeypatch.setattr(content_print_output, "read_curated_committed_output", lambda *_: output)
+    request = RecordContentPrintWithOutput.model_validate(
+        {
+            **command(saved).model_dump(mode="json"),
+            "command_kind": "RECORD_PRINT_WITH_OUTPUT",
+            "output_build_id": output.build_id,
+            "output_sha256": SHA,
+        }
+    )
+    return saved, request, output
+
+
+def test_print_exact_output_pointer_is_immutable_and_same_request_replays(
+    creative_engine, planning, monkeypatch
+):
+    saved, request, output = output_selection(planning, creative_engine, monkeypatch)
+    request_key = key()
+    first = planning.service.prints.execute(
+        request, actor=planning.editor, idempotency_key=request_key
+    )
+    replay = planning.service.prints.execute(
+        request, actor=planning.editor, idempotency_key=request_key
+    )
+    assert replay.replayed and replay.record == first.record
+    assert first.record.output.hwpx_build_id == output.build_id
+    assert first.record.output.artifact_revision_id == output.artifact_revision_id
+    assert first.record.output.scope_sha256 == first.record.scope.scope_sha256
+    assert len(history(planning, saved).rows) == 1
+    conflict = request.model_copy(update={"output_sha256": "sha256:" + "f" * 64})
+    with pytest.raises(ContentPlanningError, match="CONTENT_IDEMPOTENCY_CONFLICT"):
+        planning.service.prints.execute(
+            conflict, actor=planning.editor, idempotency_key=request_key
+        )
+
+
+@pytest.mark.parametrize("defect", ["whole_scope", "other_revision", "wrong_hash"])
+def test_print_rejects_partial_or_stale_output_without_creating_fact(
+    creative_engine, planning, monkeypatch, defect
+):
+    saved, request, _ = output_selection(planning, creative_engine, monkeypatch)
+    if defect == "whole_scope":
+        request = request.model_copy(
+            update={"section_ids": tuple(s.section_id for s in saved.sections)}
+        )
+    elif defect == "other_revision":
+        changed = planning.service.execute(
+            change(saved, {1: slots(1)}), actor=planning.editor, idempotency_key=key()
+        ).composition
+        request = request.model_copy(
+            update={
+                "revision_id": changed.deliverable_revision_id,
+                "composition_sha256": changed.composition_sha256,
+            }
+        )
+    else:
+        request = request.model_copy(update={"output_sha256": "sha256:" + "f" * 64})
+    with pytest.raises(ContentPlanningError, match="CONTENT_PRINT_OUTPUT_SCOPE_MISMATCH"):
+        planning.service.prints.execute(request, actor=planning.editor, idempotency_key=key())
+    assert history(planning, saved).rows == ()

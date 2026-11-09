@@ -159,6 +159,10 @@ const itemDb = createItemDb({
     if (!contentPlanning.acceptSelection(pointer, label)) return false;
     showView("excel"); return true;
   },
+  onPlanningSelections: selections => {
+    if (!contentPlanning.acceptSelections(selections)) return false;
+    showView("excel"); return true;
+  },
   similaritySearches: {
     submit: (selections, topK, key) => api("/item-db/similarity/searches", {
       method: "POST", mutation: true, headers: {"Idempotency-Key": key},
@@ -188,6 +192,9 @@ const contentPlanning = createContentPlanning({document, api,
   can: permission => hasPermission(state.operator, permission),
   openItemDb: () => showView("item-db"),
   openTarget: pointer => {showView("item-db"); itemDb.openPlacement(pointer);},
+  onSelectionChange: route => {
+    if (state.currentView === "excel") updateStudioHistory(window, route, {replace: true});
+  },
 });
 const knowledgeMap = createKnowledgeMap({document, api, previewItem: previewRegisteredItem,
   openItem(entry) {showView("item-db"); itemDb.openGraph(entry);},
@@ -418,7 +425,7 @@ function showView(name, {history = true, replace = false, route = null} = {}) {
   if (!UI_MODE_BY_VIEW[name]) name = "dashboard";
   if (state.operator?.password_change_required && name !== "account") name = "account";
   if (ADMIN_VIEW_NAMES.has(name) && state.operator && !hasAdminRole()) name = "dashboard";
-  let historyRoute = route || {view: name};
+  let historyRoute = route || (name === "excel" ? contentPlanning.locationRoute() : {view: name});
   if (state.currentView !== "support" && name === "support") {
     state.lastNonSupportRoute = history
       ? supportContextRoute(studioRouteFromLocation(window.location))
@@ -605,6 +612,7 @@ async function restoreStudioRoute(route) {
     selectHwpxDeliveryTarget(hwpxTargetFromAdminRevision(route.item_revision_id));
   }
   showView(view, {history: false});
+  if (view === "excel") await contentPlanning.restoreLocation(route);
   if (view === "workflow" && route.workflow_id) await loadWorkflow();
   if (view === "item" && route.item_id && route.item_revision_id) await loadItemPreview();
   if (view === "hwpx" && route.hwpx_build_id) await loadHwpxBuild();

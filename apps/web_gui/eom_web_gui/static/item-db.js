@@ -51,7 +51,7 @@ function node(document, tag, className, value) {
   return element;
 }
 
-export function createItemDb({document, api, openRegisteredItem, openPastExamVariation, onAssemblyOpen, canReadSource, similaritySearches, previewRegisteredItem, planningSelectionHint = () => null, onPlanningSelection = () => false}) {
+export function createItemDb({document, api, openRegisteredItem, openPastExamVariation, onAssemblyOpen, canReadSource, similaritySearches, previewRegisteredItem, planningSelectionHint = () => null, onPlanningSelection = () => false, onPlanningSelections = () => false}) {
   const $ = (selector) => document.querySelector(selector);
   let cursor = null;
   let query = "";
@@ -68,7 +68,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   let filterOptionsLoaded = false;
   let filterOptionsPending = false;
   const filterControlUpdates = new Set();
-  const assembly = createItemDbAssembly({document, api, activate: activateTab, message});
+  const assembly = createItemDbAssembly({document, api, activate: activateTab, message, planningSelectionHint, onPlanningSelections});
   const similarity = createItemDbSimilarityList({
     document, searches: similaritySearches, activate: activateTab,
     async previewSelection(pointer, root, isCurrent) {
@@ -571,6 +571,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       $(tab).classList.toggle("is-active", selected);
       $(tab).tabIndex = selected ? 0 : -1;
     }
+    if (name === "assembly") assembly.refreshMode();
     if (name === "assembly" && !assemblyLoaded) {
       assemblyLoaded = true;
       assembly.open();
@@ -930,6 +931,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       });
     },
     open() {
+      assembly.refreshMode();
       document.querySelectorAll("[data-excel-selection]").forEach(button => {button.hidden = !planningSelectionHint();});
       const changed = syncSourceAccess();
       loadFilterOptions();

@@ -484,8 +484,7 @@ class UsageSummary(WebModel):
     rows: tuple[UsageCount, ...] = Field(max_length=100)
 
 
-class RecordPrint(WebModel):
-    command_kind: Literal["RECORD_PRINT"]
+class _RecordPrintFields(WebModel):
     edition_id: EditionId
     revision_id: RevisionId
     composition_sha256: Sha
@@ -496,6 +495,16 @@ class RecordPrint(WebModel):
     note: Note
 
 
+class RecordPrint(_RecordPrintFields):
+    command_kind: Literal["RECORD_PRINT"]
+
+
+class RecordPrintWithOutput(_RecordPrintFields):
+    command_kind: Literal["RECORD_PRINT_WITH_OUTPUT"]
+    output_build_id: str = Field(pattern=r"^hwpxbuild_[0-9a-f]{32}$")
+    output_sha256: Sha
+
+
 class VoidPrint(WebModel):
     command_kind: Literal["VOID_PRINT"]
     edition_id: EditionId
@@ -504,7 +513,9 @@ class VoidPrint(WebModel):
     reason: Note = Field(min_length=1)
 
 
-PrintCommand = Annotated[RecordPrint | VoidPrint, Field(discriminator="command_kind")]
+PrintCommand = Annotated[
+    RecordPrint | RecordPrintWithOutput | VoidPrint, Field(discriminator="command_kind")
+]
 
 
 class PrintResult(WebModel):

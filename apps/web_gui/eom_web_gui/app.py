@@ -21,6 +21,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from eom_web_gui.chat_grounding_contracts import ChatGroundedTurnSubmission, ChatGroundingSubmission
 from eom_web_gui.chat_knowledge_contracts import ChatKnowledgeRequest
+from eom_web_gui.content_lifecycle_contracts import ChangeLifecycle, LifecycleQuery
 from eom_web_gui.content_planning_contracts import (
     PlanningCommand,
     PlanningQuery,
@@ -559,6 +560,25 @@ def create_app(
             idempotency_key=idempotency_key,
         )
         return reply.model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/content-planning/lifecycle/query")
+    async def content_planning_lifecycle_query(
+        body: LifecycleQuery,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return (await actual.gateway.content_planning_lifecycle(session, body)).model_dump(
+            mode="json"
+        )
+
+    @app.post(f"{API_PREFIX}/content-planning/lifecycle")
+    async def content_planning_lifecycle_change(
+        body: ChangeLifecycle,
+        session: Annotated[WebSession, Depends(require_csrf)],
+        idempotency_key: Annotated[StudioIdempotencyKey, Header(alias="Idempotency-Key")],
+    ) -> dict[str, Any]:
+        return (
+            await actual.gateway.content_planning_lifecycle(session, body, idempotency_key)
+        ).model_dump(mode="json")
 
     @app.post(f"{API_PREFIX}/content-planning/commands")
     async def content_planning_write(

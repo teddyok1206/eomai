@@ -13,6 +13,15 @@ from eom_catalog_contracts.content_delivery import (
     PrepareContentDelivery,
     ReadContentDeliveries,
 )
+from eom_catalog_contracts.content_lifecycle import (
+    ChangeContentLifecycle,
+    ContentLifecycleAction,
+    ContentLifecycleList,
+    ContentLifecycleMutation,
+    ContentLifecycleResult,
+    ContentLifecycleView,
+    ListContentLifecycle,
+)
 from eom_catalog_contracts.content_planning_commands import (
     ContentPlanningCommand,
     ContentPlanningWriteResult,
@@ -28,6 +37,7 @@ from eom_catalog_contracts.content_planning_queries import (
 from eom_catalog_contracts.content_print_commands import (
     ContentPrintCommand,
     ContentPrintMutationResult,
+    RecordContentPrintWithOutput,
     VoidContentPrint,
 )
 from eom_catalog_contracts.content_print_views import ContentPrintList, ReadContentPrints
@@ -48,6 +58,7 @@ CONTENT_PLANNING_OPERATIONS = frozenset(
         "CONTENT_PLANNING_QUERY",
         "CONTENT_PLANNING_PRINT",
         "CONTENT_PLANNING_DELIVERY",
+        "CONTENT_PLANNING_LIFECYCLE",
     }
 )
 
@@ -82,12 +93,25 @@ class ContentPlanningDeliveryRequest(_ApiIdentity):
     command: PrepareContentDelivery
 
 
+class ContentPlanningLifecycleRequest(_ApiIdentity):
+    operation: Literal["CONTENT_PLANNING_LIFECYCLE"] = "CONTENT_PLANNING_LIFECYCLE"
+    action: ContentLifecycleAction
+    idempotency_key: str | None = Field(default=None, pattern=r"^[!-~]{16,128}$")
+
+    @model_validator(mode="after")
+    def write_key_only(self) -> Self:
+        if isinstance(self.action, ChangeContentLifecycle) != (self.idempotency_key is not None):
+            raise ValueError("lifecycle writes require a key; reads must not have one")
+        return self
+
+
 class ContentPlanningReply(FrozenModel):
     operation: Literal[
         "CONTENT_PLANNING_WRITE",
         "CONTENT_PLANNING_QUERY",
         "CONTENT_PLANNING_PRINT",
         "CONTENT_PLANNING_DELIVERY",
+        "CONTENT_PLANNING_LIFECYCLE",
     ]
     status: Literal["OK", "ERROR"]
     result: (
@@ -95,6 +119,7 @@ class ContentPlanningReply(FrozenModel):
         | ContentPlanningQueryResult
         | ContentPrintMutationResult
         | ContentDeliveryPrepared
+        | ContentLifecycleResult
         | None
     ) = None
     error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
@@ -119,6 +144,13 @@ class ContentPlanningReply(FrozenModel):
                 (self.operation == "CONTENT_PLANNING_DELIVERY")
                 != isinstance(self.result, ContentDeliveryPrepared)
             )
+            or (
+                (self.operation == "CONTENT_PLANNING_LIFECYCLE")
+                != isinstance(
+                    self.result,
+                    (ContentLifecycleView, ContentLifecycleList, ContentLifecycleMutation),
+                )
+            )
         ):
             raise ValueError("planning reply result does not match the operation")
         return self
@@ -128,19 +160,20 @@ type ContentPlanningRequest = Annotated[
     ContentPlanningWriteRequest
     | ContentPlanningQueryRequest
     | ContentPlanningPrintRequest
-    | ContentPlanningDeliveryRequest,
+    | ContentPlanningDeliveryRequest
+    | ContentPlanningLifecycleRequest,
     Field(discriminator="operation"),
 ]
 _REQUEST: TypeAdapter[ContentPlanningRequest] = TypeAdapter(ContentPlanningRequest)
 
 
 def parse_content_planning_request(value: dict[str, object]) -> ContentPlanningRequest:
-    validate_contract("catalog-content-planning-request-v1", value)
+    validate_contract("catalog-content-planning-request-v2", value)
     return _REQUEST.validate_python(value)
 
 
 def parse_content_planning_reply(value: dict[str, object]) -> ContentPlanningReply:
-    validate_contract("catalog-content-planning-response-v1", value)
+    validate_contract("catalog-content-planning-response-v2", value)
     return ContentPlanningReply.model_validate(value)
 
 
@@ -162,6 +195,36 @@ def check_content_planning_reply(
     if reply.operation != request.operation:
         raise ValueError("content response operation differs")
     if reply.status == "ERROR":
+        return
+    if isinstance(request, ContentPlanningLifecycleRequest):
+        action, result = request.action, reply.result
+        if isinstance(action, ListContentLifecycle):
+            if not isinstance(result, ContentLifecycleList) or any(
+                row.target.target_kind != action.target_kind
+                or (
+                    action.deliverable_id is not None
+                    and row.deliverable_id != action.deliverable_id
+                )
+                or (
+                    action.lifecycle_state != "ALL"
+                    and row.lifecycle_state != action.lifecycle_state
+                )
+                for row in result.rows
+            ):
+                raise ValueError("lifecycle list response scope differs")
+        elif (
+            not isinstance(result, (ContentLifecycleView, ContentLifecycleMutation))
+            or result.entry.target != action.target
+            or (
+                isinstance(action, ChangeContentLifecycle)
+                != isinstance(result, ContentLifecycleMutation)
+            )
+            or (
+                isinstance(action, ChangeContentLifecycle)
+                and result.entry.lifecycle_state != action.desired_state
+            )
+        ):
+            raise ValueError("lifecycle target response differs")
         return
     if isinstance(request, ContentPlanningDeliveryRequest):
         if not isinstance(reply.result, ContentDeliveryPrepared) or (
@@ -186,6 +249,16 @@ def check_content_planning_reply(
             or reply.result.record.record_sha256 != request.command.record_sha256
         ):
             raise ValueError("print response record differs")
+        if (
+            isinstance(request.command, RecordContentPrintWithOutput)
+            and reply.result.disposition == "RECORDED"
+            and (
+                reply.result.record.output is None
+                or reply.result.record.output.hwpx_build_id != request.command.output_build_id
+                or reply.result.record.output.output_sha256 != request.command.output_sha256
+            )
+        ):
+            raise ValueError("print response output differs")
         return
     if isinstance(request, ContentPlanningWriteRequest):
         if not isinstance(reply.result, ContentPlanningWriteResult):

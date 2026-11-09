@@ -70,7 +70,9 @@ def query_content_planning(
         case ListContentEditions():
             result = _editions(session, query)
         case ReadContentEdition():
-            edition = load_content_edition(session, query.edition_id)
+            edition = load_content_edition(
+                session, query.edition_id, include_archived=query.revision_id is not None
+            )
             revision_id = query.revision_id or edition.current_revision_id
             if revision_id is None or edition.current_revision_id is None:
                 raise ContentPlanningError("CONTENT_REVISION_NOT_FOUND")
@@ -81,7 +83,7 @@ def query_content_planning(
         case ReadContentSection():
             result = _section(session, query, authorized)
         case ReadContentHistory():
-            load_content_edition(session, query.edition_id)
+            load_content_edition(session, query.edition_id, include_archived=True)
             result = _history(session, query)
         case ReadContentPrints():
             result = read_content_prints(session, query)
@@ -179,7 +181,7 @@ def _editions(session: Session, query: ListContentEditions) -> ContentEditionLis
 def _section(
     session: Session, query: ReadContentSection, actor: ActorContext
 ) -> ContentSectionPage:
-    edition = load_content_edition(session, query.edition_id)
+    edition = load_content_edition(session, query.edition_id, include_archived=True)
     composition = read_edition_revision(session, edition, query.revision_id)
     if composition.composition_sha256 != query.composition_sha256:
         raise ContentPlanningError("CONTENT_EDITION_REVISION_STALE")

@@ -5,7 +5,8 @@ const LABELS = Object.freeze({
 });
 
 export function createCuratedDeliveryControl({document, api, entry, setTimer = globalThis.setTimeout,
-  clearTimer = globalThis.clearTimeout, storage = globalThis.sessionStorage, canCreate = true}) {
+  clearTimer = globalThis.clearTimeout, storage = globalThis.sessionStorage, canCreate = true,
+  onCompleted = () => {}}) {
   const root = document.createElement("span");
   root.className = "item-db-delivery";
   const action = document.createElement("button");
@@ -47,6 +48,9 @@ export function createCuratedDeliveryControl({document, api, entry, setTimer = g
     action.textContent = value.state === "FAILED" && canCreate ? "다시 제작" : "상태 확인";
     download.hidden = !(value.state === "SUCCEEDED" && value.download_available === true);
     if (!download.hidden) download.href = `/studio/api/v1${base}/${encodeURIComponent(value.build_id)}/download`;
+    if (!download.hidden && value.validation_state === "PASS" && /^sha256:[0-9a-f]{64}$/.test(value.output_sha256 || "")) {
+      onCompleted(value);
+    }
     root.setAttribute("aria-busy", String(!["SUCCEEDED", "FAILED"].includes(value.state)));
     if (!["SUCCEEDED", "FAILED"].includes(value.state) && !disposed) {
       if (timer !== null) clearTimer(timer);

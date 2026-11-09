@@ -694,6 +694,42 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "1.0",
             "sha256:ff611fa2faae17645aa096a14cfe66c9d50f8d2250a84808f7fcb2156cef702e",
         ),
+        "content-print-command-v2": CatalogSchemaResource(
+            "schemas/content-planning/content-print-command-v2.schema.json",
+            "resources/content-planning/content-print-command-v2.schema.json",
+            "2.0",
+            "sha256:d21c6227066f00727339bf2a4fd209b6bf2aa553cd2aa884169eb5077c26f3e4",
+        ),
+        "catalog-content-planning-request-v2": CatalogSchemaResource(
+            "schemas/content-planning/catalog-content-planning-request-v2.schema.json",
+            "resources/content-planning/catalog-content-planning-request-v2.schema.json",
+            "2.0",
+            "sha256:dc88d8c58607e1dfb7a92c094708ce7810a44ce8fcd3c3fd4ac66b57d6585051",
+        ),
+        "catalog-content-planning-response-v2": CatalogSchemaResource(
+            "schemas/content-planning/catalog-content-planning-response-v2.schema.json",
+            "resources/content-planning/catalog-content-planning-response-v2.schema.json",
+            "2.0",
+            "sha256:d4fd887abfc67eed274bd578fd995b8e4c8adc17eee1ced4b40f4e5d2a227021",
+        ),
+        "content-lifecycle-action-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-lifecycle-action-v1.schema.json",
+            "resources/content-planning/content-lifecycle-action-v1.schema.json",
+            "1.0",
+            "sha256:3c4110b20173455412be5b799e256da620702b62dfd524266e5c07d932f115a1",
+        ),
+        "content-lifecycle-result-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-lifecycle-result-v1.schema.json",
+            "resources/content-planning/content-lifecycle-result-v1.schema.json",
+            "1.0",
+            "sha256:891d4af63b77d64b8ee4003e894151cff81378242f6bb0f02e3fc6ed0734fdd9",
+        ),
+        "content-lifecycle-values-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-lifecycle-values-v1.schema.json",
+            "resources/content-planning/content-lifecycle-values-v1.schema.json",
+            "1.0",
+            "sha256:a2a1c61f9ec9753299cfdf110fcc26f25dfef02e00b48d74bc3a4f2308b6420c",
+        ),
         "content-print-command-v1": CatalogSchemaResource(
             "schemas/content-planning/content-print-command-v1.schema.json",
             "resources/content-planning/content-print-command-v1.schema.json",

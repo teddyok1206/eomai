@@ -91,6 +91,14 @@
                 <div id="excel-sections" class="excel-list" aria-label="회차 목록"></div>
               </aside>
               <div class="panel excel-main">
+                <details id="excel-lifecycle-panel"><summary>콘텐츠·판 보관함</summary>
+                  <div class="excel-section-fields"><label>대상<select id="excel-lifecycle-target"><option value="EDITION">현재 판</option><option value="CONTENT">현재 콘텐츠</option></select></label><button id="excel-lifecycle-read" class="button quiet" type="button">상태 확인</button><span id="excel-lifecycle-status" role="status"></span></div>
+                  <div class="excel-section-fields"><label>보관·복원 이유<input id="excel-lifecycle-reason" maxlength="2000" placeholder="예: 다음 판으로 전환"></label><button id="excel-lifecycle-change" class="button quiet" type="button">보관하기</button></div>
+                  <details><summary>보관·복원 이력</summary><div id="excel-lifecycle-events"></div></details>
+                  <div class="excel-section-fields"><label>목록<select id="excel-lifecycle-list-kind"><option value="CONTENT">보관한 콘텐츠</option><option value="EDITION">선택한 콘텐츠의 보관한 판</option></select></label><button id="excel-lifecycle-list" class="button quiet" type="button">보관 목록 조회</button></div>
+                  <p id="excel-lifecycle-list-title" role="status"></p><p id="excel-lifecycle-message" class="form-message" role="status"></p>
+                  <div id="excel-lifecycle-rows"></div><button id="excel-lifecycle-more" class="button quiet" type="button" hidden>더 보기</button>
+                </details>
                 <div id="excel-empty" class="empty-state">콘텐츠를 선택하거나 새로 만들어 주세요.</div>
                 <div id="excel-editor" hidden>
                   <div class="excel-heading"><h2 id="excel-content-title"></h2><span id="excel-version" class="status-badge tone-neutral"></span></div>
@@ -115,6 +123,16 @@
                       <button id="excel-section-remove" type="button" class="button quiet">선택한 구성 삭제</button>
                     </form>
                   </details>
+                  <details id="excel-copy-panel"><summary>문항·구간 복사</summary>
+                    <div class="excel-toolbar"><button id="excel-copy-section" class="button quiet" type="button">현재 구간 복사</button><button id="excel-copy-selected" class="button quiet" type="button">선택한 문항 복사</button><span id="excel-copy-selected-count"></span></div>
+                    <p id="excel-copy-source" role="status">복사할 구간이나 문항을 골라 주세요.</p>
+                    <form id="excel-paste-form" class="excel-section-fields">
+                      <label>붙여넣기<select id="excel-paste-mode"><option value="INSERT">번호 위치에 끼워 넣기</option><option value="REPLACE">선택한 자리 대신 넣기</option></select></label>
+                      <label id="excel-paste-position-field">몇 번째에 넣을까요?<input id="excel-paste-position" type="number" min="1" max="1" value="1" required></label>
+                      <button id="excel-paste" class="button secondary" type="submit">현재 회차에 붙여넣기</button>
+                      <button id="excel-copy-clear" class="button quiet" type="button">복사 선택 비우기</button>
+                    </form>
+                  </details>
                   <div class="excel-heading"><h3 id="excel-section-title"></h3><span id="excel-usage-status" role="status"></span><span id="excel-draft-state" role="status"></span></div>
                   <div class="excel-table-scroll"><table class="excel-table" aria-label="문항 배치"><thead><tr><th scope="col">번호</th><th scope="col">문항</th><th scope="col">배점</th><th scope="col">메모</th><th scope="col">편집·조회</th></tr></thead><tbody id="excel-rows"></tbody></table></div>
                   <div class="excel-toolbar"><button id="excel-prev-page" type="button" class="button quiet">이전</button><span id="excel-page"></span><button id="excel-next-page" type="button" class="button quiet">다음</button></div>
@@ -127,6 +145,7 @@
                     <form id="excel-print-form" class="excel-fields">
                       <div id="excel-print-sections" class="excel-checks" aria-label="인쇄한 회차 선택"></div>
                       <div class="excel-inline"><label>인쇄일<input id="excel-print-date" type="date"></label><label>메모<input id="excel-print-note" maxlength="2000"></label></div>
+                      <label>완성 HWPX 연결 (선택)<select id="excel-print-output"><option value="">파일 연결 없이 기록</option></select></label>
                       <button type="submit" class="button secondary">선택한 회차 인쇄 완료 기록</button>
                     </form>
                     <button id="excel-print-refresh" type="button" class="button quiet">기록 조회</button>
@@ -348,6 +367,7 @@
               <p class="item-db-draft-note">선택한 문항과 순서를 저장합니다. 아직 합본 파일을 만들거나 문항을 승인하지 않습니다.</p>
               <div class="item-db-table-wrap item-db-draft-table-wrap"><table class="item-db-table item-db-draft-table" aria-label="선택한 문항 순서"><thead><tr><th scope="col">번호</th><th scope="col">문항</th><th scope="col">편집</th></tr></thead><tbody id="item-db-draft-list"></tbody></table></div>
               <p id="item-db-draft-empty" class="empty-state">문항을 조회해 조립 목록에 담아 주세요.</p>
+              <button id="item-db-draft-to-excel" class="button secondary" type="button" disabled>이 목록을 Excel에 배치</button>
               <div class="form-actions item-db-draft-save-actions"><label for="item-db-assembly-name">조립 제목<input id="item-db-assembly-name" type="text" maxlength="200" placeholder="예: 3월 모의고사 1회"></label><button id="item-db-draft-save" class="button primary" type="button" disabled>조립 순서 저장</button></div>
               <h3>저장한 조립 순서</h3>
               <div id="item-db-saved-list" class="item-db-saved-results"><p class="empty-state">저장본을 불러오는 중입니다.</p></div>

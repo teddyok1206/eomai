@@ -9,7 +9,8 @@ from eom_catalog_contracts.application import CATALOG_APPLICATION_MAX_MESSAGE_BY
 from eom_catalog_contracts.content_print_commands import (
     ContentPrintCommand,
     ContentPrintMutationResult,
-    RecordContentPrint,
+    ContentRecordPrintCommand,
+    RecordContentPrintWithOutput,
     VoidContentPrint,
     parse_content_print_command,
 )
@@ -43,8 +44,20 @@ from eom_catalog_service.content_print_models import (
     ContentPrintRecord,
     ContentPrintScopeRecord,
 )
+from eom_catalog_service.content_print_output import resolve_content_print_output
 from eom_catalog_service.curated_document_slot_resolution import resolve_curated_slots
 from eom_catalog_service.curated_document_slot_store import read_curated_slot_revisions
+
+
+def _authorize_print(
+    session: Session, actor: ActorContext, command: ContentPrintCommand
+) -> ActorContext:
+    authorized = authorize_content_planning(session, actor, PermissionKey.USAGE_FULFILL_PLAN)
+    if isinstance(command, RecordContentPrintWithOutput) and (
+        PermissionKey.HWPX_READ not in authorized.permissions
+    ):
+        raise ContentPlanningError("CONTENT_PLANNING_PERMISSION_DENIED")
+    return authorized
 
 
 def read_print_record(session: Session, print_id: str, edition_id: str) -> ContentPrintRecordV1:
@@ -76,7 +89,7 @@ def parse_stored_print_record(row: ContentPrintRecord) -> ContentPrintRecordV1:
 
 def read_content_prints(session: Session, query: ReadContentPrints) -> ContentPrintList:
     """Caller already authorized; batched record/event reads, no per-record DB lookup."""
-    edition = load_content_edition(session, query.edition_id)
+    edition = load_content_edition(session, query.edition_id, include_archived=True)
     if edition.current_revision_id is None:
         raise ContentPlanningError("CONTENT_REVISION_NOT_FOUND")
     current = read_edition_revision(session, edition, edition.current_revision_id)
@@ -175,9 +188,7 @@ class ContentPrintService:
         digest = content_sha256(command.model_dump(mode="json"))
         try:
             with transaction(self.sessions) as session:
-                authorized = authorize_content_planning(
-                    session, actor, PermissionKey.USAGE_FULFILL_PLAN
-                )
+                authorized = _authorize_print(session, actor, command)
                 # One Edition lock orders save/print/void/correct. No renderer or file I/O in TX.
                 load_content_edition(session, command.edition_id, for_update=True)
                 replay = self._replay(session, command, actor.actor_id, idempotency_key, digest)
@@ -185,7 +196,7 @@ class ContentPrintService:
                     return replay
                 result = (
                     self._record(session, command, authorized)
-                    if isinstance(command, RecordContentPrint)
+                    if not isinstance(command, VoidContentPrint)
                     else self._void(session, command, authorized)
                 )
                 if (
@@ -212,7 +223,7 @@ class ContentPrintService:
                 return result
         except IntegrityError as exc:
             with self.sessions() as session:
-                authorize_content_planning(session, actor, PermissionKey.USAGE_FULFILL_PLAN)
+                _authorize_print(session, actor, command)
                 replay = self._replay(session, command, actor.actor_id, idempotency_key, digest)
                 if replay is not None:
                     return replay
@@ -241,13 +252,18 @@ class ContentPrintService:
 
     @staticmethod
     def _record(
-        session: Session, command: RecordContentPrint, actor: ActorContext
+        session: Session, command: ContentRecordPrintCommand, actor: ActorContext
     ) -> ContentPrintMutationResult:
         edition = load_content_edition(session, command.edition_id)
         composition = read_edition_revision(session, edition, command.revision_id)
         if composition.composition_sha256 != command.composition_sha256:
             raise ContentPlanningError("CONTENT_EDITION_REVISION_STALE")
         scope = select_print_scope(composition, command.section_ids)
+        output = (
+            resolve_content_print_output(session, command, scope, actor)
+            if isinstance(command, RecordContentPrintWithOutput)
+            else None
+        )
         manifests = read_curated_slot_revisions(session, tuple(form.form for form in scope.forms))
         slots = tuple(
             slot
@@ -303,7 +319,7 @@ class ContentPrintService:
             recorded_at=now.isoformat().replace("+00:00", "Z"),
             recorded_by=actor.actor_id,
             note=command.note,
-            output=None,
+            output=None if output is None else output.model_dump(mode="json"),
         )
         record = ContentPrintRecordV1.model_validate(
             {**value, "record_sha256": content_sha256(value)}

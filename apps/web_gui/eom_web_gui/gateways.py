@@ -20,6 +20,11 @@ from eom_web_gui.chat_grounding_contracts import (
 )
 from eom_web_gui.chat_knowledge_contracts import ChatKnowledgeRequest, ChatKnowledgeSelection
 from eom_web_gui.chat_rag_contracts import ChatGroundingViewsV2
+from eom_web_gui.content_lifecycle_contracts import (
+    LIFECYCLE_RESULT,
+    LifecycleAction,
+    LifecycleResult,
+)
 from eom_web_gui.content_planning_contracts import (
     PLANNING_RESULT,
     PlanningCommand,
@@ -449,6 +454,10 @@ class RegisteredItemDbPage:
 
 
 class ApplicationGateway(Protocol):
+    async def content_planning_lifecycle(
+        self, session: WebSession, value: LifecycleAction, idempotency_key: str | None = None
+    ) -> LifecycleResult: ...
+
     async def content_planning_delivery(
         self, session: WebSession, value: PrepareDelivery, idempotency_key: str
     ) -> PreparedDelivery: ...
@@ -1188,6 +1197,58 @@ class ObserveClient:
 
 
 class HttpApplicationGateway:
+    async def content_planning_lifecycle(
+        self, session: WebSession, value: LifecycleAction, idempotency_key: str | None = None
+    ) -> LifecycleResult:
+        changing = value.action_kind == "CHANGE_LIFECYCLE"
+        if changing != (idempotency_key is not None):
+            raise GatewayError(status=422, code="CONTENT_PLANNING_REQUEST_INVALID")
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/content-planning/lifecycle"
+            if changing
+            else "/api/v1/content-planning/lifecycle/query",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key} if idempotency_key else None,
+        )
+        try:
+            result = LIFECYCLE_RESULT.validate_python(self._data(response))
+            expected_kind = {
+                "READ_LIFECYCLE": "LIFECYCLE_VIEW",
+                "LIST_LIFECYCLE": "LIFECYCLE_LIST",
+                "CHANGE_LIFECYCLE": "LIFECYCLE_MUTATION",
+            }[value.action_kind]
+            if result.result_kind != expected_kind:
+                raise ValueError("different lifecycle result kind")
+            if value.action_kind == "LIST_LIFECYCLE":
+                if result.result_kind != "LIFECYCLE_LIST" or any(
+                    row.target.target_kind != value.target_kind
+                    or (
+                        value.deliverable_id is not None
+                        and row.deliverable_id != value.deliverable_id
+                    )
+                    or (
+                        value.lifecycle_state != "ALL"
+                        and row.lifecycle_state != value.lifecycle_state
+                    )
+                    for row in result.rows
+                ):
+                    raise ValueError("different lifecycle list scope")
+                prefix = "deliverable_" if value.target_kind == "CONTENT" else "edition_"
+                if result.next_id and not result.next_id.startswith(prefix):
+                    raise ValueError("different lifecycle cursor")
+            elif result.result_kind == "LIFECYCLE_LIST" or result.entry.target != value.target:
+                raise ValueError("different lifecycle target")
+            elif (
+                value.action_kind == "CHANGE_LIFECYCLE"
+                and result.entry.lifecycle_state != value.desired_state
+            ):
+                raise ValueError("different lifecycle mutation state")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
     async def content_planning_delivery(
         self, session: WebSession, value: PrepareDelivery, idempotency_key: str
     ) -> PreparedDelivery:

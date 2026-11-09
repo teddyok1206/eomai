@@ -1,5 +1,6 @@
 import {createItemDbDraft} from "./item-db-draft.js";
 import {createCuratedDeliveryControl} from "./item-db-delivery.js";
+import {createPlanningDraft} from "./content-planning-draft.js";
 
 function node(document, tag, className, value) {
   const element = document.createElement(tag);
@@ -9,7 +10,7 @@ function node(document, tag, className, value) {
 }
 
 // Own only draft/list/delivery presentation. The Catalog retains all save/delete rules.
-export function createItemDbAssembly({document, api, activate, message}) {
+export function createItemDbAssembly({document, api, activate, message, planningSelectionHint = () => null, onPlanningSelections = () => false}) {
   const $ = (selector) => document.querySelector(selector);
   let owner = null;
   let savedCursor = null;
@@ -23,17 +24,65 @@ export function createItemDbAssembly({document, api, activate, message}) {
   const deliveries = new Set();
   const pendingRemovals = new Map();
   const draft = createItemDbDraft();
+  // A DB selection is not a saved private assembly. Reuse Excel's occurrence
+  // model without changing the historical private draft's 200/unique contract.
+  const collector = createPlanningDraft(), labels = new Map();
+  const collectorSection = "db-selection";
+  const pageSize = 100;
+  let excelMode = false, pageIndex = 0, selectionTools = null;
+  collector.load(collectorSection, []);
+
+  function entries() {
+    return excelMode ? collector.rows(collectorSection).map(row => ({
+      placementId: row.placement_id, pointer: row.target, label: labels.get(row.placement_id),
+    })) : draft.entries();
+  }
+
+  function refreshMode() {
+    const next = Boolean(owner && planningSelectionHint());
+    if (next === excelMode) return;
+    excelMode = next;
+    pageIndex = 0;
+    cancelReplacement();
+    renderDraft();
+  }
+
+  function appendSelections(selections) {
+    const ids = collector.addMany(collectorSection, selections.map(selection => selection.pointer));
+    ids.forEach((id, index) => labels.set(id, selections[index].label));
+  }
+
+  function resetCollector() {
+    collector.reset(); collector.load(collectorSection, []); labels.clear(); pageIndex = 0;
+  }
 
   function renderDraft() {
     draftSequence += 1;
     const root = $("#item-db-draft-list");
     root.replaceChildren();
-    const entries = draft.entries();
-    $("#item-db-draft-count").textContent = `${entries.length}개`;
-    $("#item-db-tab-count").textContent = String(entries.length);
-    $("#item-db-draft-save").disabled = saving || entries.length === 0;
-    $("#item-db-draft-empty").hidden = entries.length > 0;
-    entries.forEach((selection, index) => {
+    const values = entries(), mode = excelMode, generation = ownerGeneration;
+    const current = () => generation === ownerGeneration && mode === excelMode
+      && mode === Boolean(owner && planningSelectionHint());
+    $("#item-db-draft-title").textContent = excelMode ? "Excel에 담을 문항" : "조립 순서 초안";
+    $("#item-db-draft-count").textContent = `${values.length}개`;
+    $("#item-db-tab-count").textContent = String(values.length);
+    $("#item-db-draft-save").disabled = excelMode || saving || values.length === 0;
+    $("#item-db-assembly-name").disabled = excelMode;
+    $("#item-db-draft-to-excel").disabled = saving || values.length === 0;
+    $("#item-db-draft-empty").hidden = values.length > 0;
+    const pageCount = Math.max(1, Math.ceil(values.length / pageSize));
+    pageIndex = Math.min(pageIndex, pageCount - 1);
+    if (selectionTools) {
+      selectionTools.root.hidden = !excelMode;
+      selectionTools.previous.disabled = pageIndex === 0;
+      selectionTools.next.disabled = pageIndex + 1 >= pageCount;
+      selectionTools.page.textContent = `${pageIndex + 1} / ${pageCount}쪽`;
+      selectionTools.importDraft.disabled = !draft.entries().length || saving;
+    }
+    const offset = excelMode ? pageIndex * pageSize : 0;
+    const visible = excelMode ? values.slice(offset, offset + pageSize) : values;
+    visible.forEach((selection, localIndex) => {
+      const index = offset + localIndex;
       const line = node(document, "tr", "");
       const number = node(document, "th", "", `${index + 1}번`);
       number.scope = "row";
@@ -48,9 +97,11 @@ export function createItemDbAssembly({document, api, activate, message}) {
       ]) {
         const button = node(document, "button", "button quiet", caption);
         button.type = "button";
-        button.disabled = next < 0 || next >= entries.length;
+        button.disabled = next < 0 || next >= values.length;
         button.addEventListener("click", () => {
-          draft.move(index, next);
+          if (!current()) return;
+          if (excelMode) collector.move(collectorSection, selection.placementId, collectorSection, next);
+          else draft.move(index, next);
           renderDraft();
         });
         actions.append(button);
@@ -58,14 +109,17 @@ export function createItemDbAssembly({document, api, activate, message}) {
       const remove = node(document, "button", "button quiet", "빼기");
       remove.type = "button";
       remove.addEventListener("click", () => {
-        if (selection.pointer === replacementTarget) cancelReplacement();
-        draft.remove(index);
+        if (!current()) return;
+        if ((excelMode ? selection.placementId : selection.pointer) === replacementTarget) cancelReplacement();
+        if (excelMode) {collector.remove(collectorSection, selection.placementId); labels.delete(selection.placementId);}
+        else draft.remove(index);
         renderDraft();
       });
       const replace = node(document, "button", "button quiet", "교체");
       replace.type = "button";
       replace.addEventListener("click", () => {
-        replacementTarget = selection.pointer;
+        if (!current()) return;
+        replacementTarget = excelMode ? selection.placementId : selection.pointer;
         $("#item-db-replacement-label").textContent = `${index + 1}번 문항 교체: 조회에서 바꿀 문항을 골라 ‘조립 목록에 담기’를 누르세요.`;
         $("#item-db-replacement").hidden = false;
         activate("search");
@@ -85,7 +139,22 @@ export function createItemDbAssembly({document, api, activate, message}) {
   }
 
   function addToDraft(pointer, label) {
+    refreshMode();
+    if (!owner) return;
     const replacing = replacementTarget !== null;
+    if (excelMode) {
+      try {
+        if (replacing) {
+          collector.update(collectorSection, replacementTarget, {target: pointer});
+          labels.set(replacementTarget, label);
+        } else appendSelections([{pointer, label}]);
+      } catch (error) {message(error.message, true); return;}
+      if (replacing) cancelReplacement();
+      renderDraft();
+      if (replacing) activate("assembly");
+      message(replacing ? "선택한 자리의 문항을 교체했습니다." : "Excel에 담을 목록에 추가했습니다. 같은 문항도 여러 자리에 배치할 수 있습니다.");
+      return;
+    }
     const result = replacing ? draft.replaceOne(replacementTarget, pointer, label) : draft.add(pointer, label);
     if (result === "DUPLICATE") {
       message("이미 조립 목록에 담긴 문항입니다.");
@@ -107,7 +176,8 @@ export function createItemDbAssembly({document, api, activate, message}) {
   }
 
   async function saveDraft() {
-    if (saving || !owner) return;
+    refreshMode();
+    if (excelMode || saving || !owner) return;
     const button = $("#item-db-draft-save");
     const name = $("#item-db-assembly-name");
     if (!name.reportValidity()) return;
@@ -141,7 +211,7 @@ export function createItemDbAssembly({document, api, activate, message}) {
     } finally {
       if (generation === ownerGeneration) {
         saving = false;
-        button.disabled = draft.entries().length === 0;
+        renderDraft();
       }
     }
   }
@@ -155,12 +225,14 @@ export function createItemDbAssembly({document, api, activate, message}) {
   }
 
   async function openSaved(entry) {
+    refreshMode();
+    const mode = excelMode;
     const assemblyId = entry.assembly_id;
     const request = ++draftSequence;
     message("저장한 조립 순서를 불러오는 중입니다.");
     try {
       const saved = await api(`/item-db/assemblies/${encodeURIComponent(assemblyId)}`);
-      if (request !== draftSequence) return;
+      if (request !== draftSequence || mode !== Boolean(owner && planningSelectionHint())) return;
       if (saved.assembly_id !== assemblyId || saved.assembly_revision_id !== entry.assembly_revision_id
         || saved.manifest_sha256 !== entry.manifest_sha256 || !Array.isArray(saved.placements)) {
         throw new Error("저장본이 올바르지 않습니다.");
@@ -169,12 +241,15 @@ export function createItemDbAssembly({document, api, activate, message}) {
         const {external_number, ...pointer} = placement;
         return {pointer, label: savedLabel(placement)};
       });
-      if (!draft.replace(selections)) throw new Error("저장된 순서를 불러올 수 없습니다.");
+      if (excelMode) {resetCollector(); appendSelections(selections);}
+      else {
+        if (!draft.replace(selections)) throw new Error("저장된 순서를 불러올 수 없습니다.");
+        $("#item-db-assembly-name").value = entry.title || "";
+        pendingSave = null;
+      }
       cancelReplacement();
-      $("#item-db-assembly-name").value = entry.title || "";
-      pendingSave = null;
       renderDraft();
-      message("저장한 조립 순서를 다시 열었습니다. 바꾼 뒤 저장하면 별도 저장본이 됩니다.");
+      message(excelMode ? "저장한 순서를 Excel 선택 목록으로 가져왔습니다. 기존 조립 초안은 유지됩니다." : "저장한 조립 순서를 다시 열었습니다. 바꾼 뒤 저장하면 별도 저장본이 됩니다.");
       $("#item-db-draft-title").scrollIntoView({block: "start"});
     } catch (error) {
       if (request === draftSequence) message(`저장본 열기 실패: ${error.message || "다시 시도해 주세요."}`, true);
@@ -268,8 +343,35 @@ export function createItemDbAssembly({document, api, activate, message}) {
   return Object.freeze({
     add: addToDraft,
     install() {
+      const root = node(document, "div", "form-actions");
+      root.id = "item-db-excel-selection-tools";
+      const previous = node(document, "button", "button quiet", "이전 100개");
+      const next = node(document, "button", "button quiet", "다음 100개");
+      const page = node(document, "span", "", "");
+      const importDraft = node(document, "button", "button secondary", "기존 조립 초안 가져오기");
+      for (const button of [previous, next, importDraft]) button.type = "button";
+      previous.addEventListener("click", () => {if (excelMode && pageIndex > 0) {pageIndex -= 1; renderDraft();}});
+      next.addEventListener("click", () => {if (excelMode) {pageIndex += 1; renderDraft();}});
+      importDraft.addEventListener("click", () => {
+        refreshMode();
+        if (!excelMode || saving || !draft.entries().length) return;
+        try {appendSelections(draft.entries()); renderDraft();}
+        catch (error) {message(error.message, true);}
+      });
+      root.append(previous, page, next, importDraft);
+      $("#item-db-draft-to-excel").before(root);
+      selectionTools = {root, previous, next, page, importDraft};
       renderDraft();
       $("#item-db-draft-save").addEventListener("click", saveDraft);
+      $("#item-db-draft-to-excel").addEventListener("click", () => {
+        if (saving || !owner) return;
+        refreshMode();
+        if (!planningSelectionHint()) {message("Excel에서 배치할 회차를 고르고 ‘DB에서 문항 선택’을 눌러 주세요."); return;}
+        const values = entries();
+        if (!values.length) return;
+        if (!onPlanningSelections(values)) message("Excel의 선택한 회차에 배치하지 못했습니다. 한 자리 교체에는 문항 하나만 선택해 주세요.", true);
+        else {resetCollector(); refreshMode(); renderDraft();}
+      });
       $("#item-db-assembly-name").addEventListener("input", () => {draftSequence += 1;});
       $("#item-db-replacement-cancel").addEventListener("click", cancelReplacement);
       $("#item-db-saved-refresh").addEventListener("click", () => loadSaved(true));
@@ -290,16 +392,20 @@ export function createItemDbAssembly({document, api, activate, message}) {
       for (const delivery of deliveries) delivery.dispose();
       deliveries.clear();
       draft.replace([]);
+      resetCollector();
+      excelMode = Boolean(owner && planningSelectionHint());
       renderDraft();
       $("#item-db-saved-list").replaceChildren();
       return true;
     },
     open() {
+      refreshMode();
       if (!loaded && owner) {
         loaded = true;
         loadSaved(true);
       }
     },
+    refreshMode,
     refresh: () => loadSaved(true),
   });
 }

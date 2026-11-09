@@ -7,6 +7,13 @@ Excel 편성 successor는 `curated_occurrences.py`의 build-input2/render4/nativ
 refList를 매 문항 복사하지 않고 작은 옵션만 비교한다. 원본 XML 한도는 유지하며 생성한
 합본만 기존 총 출력 예산 내에서 허용한다. 운영 활성화 여부는 Excel 구현 체크포인트를 본다.
 
+완성 합본의 committed artifact 해석은 Catalog Artifact adapter
+`curated_output_publication.read_curated_committed_output`을 Manager 복구와
+`content_print_output.resolve_content_print_output`이 공유한다. Catalog가 Manager private
+table/API를 직접 읽지 않는다. 선택적 인쇄 파일 연결은 exact scope/revision/출력 hash를
+검증하며 파일 제작만으로 인쇄 사실을 만들지 않는다. `EXCEL_PRINT_OUTPUT_LINK.md`와
+`test_content_print_output.py`를 함께 확인한다.
+
 ## 세 경로를 혼동하지 않기
 
 Item Preview는 정본 content/image pointer의 읽기 투영이다. 원본 문항 파일의 PDF 미리보기는

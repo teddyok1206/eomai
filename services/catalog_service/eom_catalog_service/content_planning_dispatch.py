@@ -6,11 +6,13 @@ import logging
 
 from eom_catalog_contracts.application import CATALOG_APPLICATION_MAX_MESSAGE_BYTES
 from eom_catalog_contracts.content_delivery import ContentDeliveryPrepared
+from eom_catalog_contracts.content_lifecycle import ContentLifecycleResult
 from eom_catalog_contracts.content_planning_commands import ContentPlanningWriteResult
 from eom_catalog_contracts.content_planning_queries import ContentPlanningQueryResult
 from eom_catalog_contracts.content_planning_rpc import (
     CONTENT_PLANNING_OPERATIONS,
     ContentPlanningDeliveryRequest,
+    ContentPlanningLifecycleRequest,
     ContentPlanningPrintRequest,
     ContentPlanningReply,
     ContentPlanningWriteRequest,
@@ -66,6 +68,7 @@ def dispatch_content_planning(
                     | ContentPlanningQueryResult
                     | ContentPrintMutationResult
                     | ContentDeliveryPrepared
+                    | ContentLifecycleResult
                 )
                 if isinstance(request, ContentPlanningWriteRequest):
                     result = service.execute(
@@ -78,6 +81,10 @@ def dispatch_content_planning(
                 elif isinstance(request, ContentPlanningDeliveryRequest):
                     result = service.deliveries.prepare(
                         request.command, actor=actor, idempotency_key=request.idempotency_key
+                    )
+                elif isinstance(request, ContentPlanningLifecycleRequest):
+                    result = service.lifecycle.execute(
+                        request.action, actor=actor, idempotency_key=request.idempotency_key
                     )
                 else:
                     result = service.query(request.query, actor=actor)

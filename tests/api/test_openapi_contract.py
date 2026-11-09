@@ -27,6 +27,8 @@ AUTH_MUTATIONS = {
     "codex_auth_challenge_reveal",
 }
 READ_ONLY_POSTS = {
+    "content_planning_query",
+    "content_planning_lifecycle_query",
     "item_db_creative_search",
     "item_db_external_source_search",
     "item_db_external_source_export",

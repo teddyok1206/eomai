@@ -1,3 +1,5 @@
+import {readContentPlanningLocation, writeContentPlanningLocation} from "./content-planning-location.js";
+
 const VIEW_NAMES = new Set([
   "dashboard", "workflow", "request", "item", "item-db", "hwpx",
   "pdf-review", "quality-review", "control", "admin-settings", "learning",
@@ -22,6 +24,7 @@ export function studioRouteFromLocation(location) {
     const value = parameters.get(name);
     if (value && pattern.test(value)) route[name] = value;
   }
+  if (route.view === "excel") Object.assign(route, readContentPlanningLocation(parameters));
   return Object.freeze(route);
 }
 
@@ -34,6 +37,7 @@ export function studioRouteUrl(route) {
     const value = route?.[name];
     if (typeof value === "string" && pattern.test(value)) parameters.set(name, value);
   }
+  if (view === "excel") writeContentPlanningLocation(parameters, route);
   const query = parameters.toString();
   return `/studio/${query ? `?${query}` : ""}`;
 }

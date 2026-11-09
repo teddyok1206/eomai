@@ -123,6 +123,13 @@ from eom_catalog_contracts import (
     validate_contract,
 )
 from eom_catalog_contracts.content_delivery import ContentDeliveryPrepared, PrepareContentDelivery
+from eom_catalog_contracts.content_lifecycle import (
+    ContentLifecycleAction,
+    ContentLifecycleList,
+    ContentLifecycleMutation,
+    ContentLifecycleResult,
+    ContentLifecycleView,
+)
 from eom_catalog_contracts.content_planning_commands import (
     ContentPlanningCommand,
     ContentPlanningWriteResult,
@@ -133,6 +140,7 @@ from eom_catalog_contracts.content_planning_queries import (
 )
 from eom_catalog_contracts.content_planning_rpc import (
     ContentPlanningDeliveryRequest,
+    ContentPlanningLifecycleRequest,
     ContentPlanningPrintRequest,
     ContentPlanningQueryRequest,
     ContentPlanningReply,
@@ -1310,9 +1318,41 @@ class CatalogApplicationClient:
         )
         if reply.result is None or isinstance(
             reply.result,
-            (ContentPlanningWriteResult, ContentPrintMutationResult, ContentDeliveryPrepared),
+            (
+                ContentPlanningWriteResult,
+                ContentPrintMutationResult,
+                ContentDeliveryPrepared,
+                ContentLifecycleView,
+                ContentLifecycleList,
+                ContentLifecycleMutation,
+            ),
         ):
             raise ValueError("content query response differs")
+        return reply.result
+
+    def content_planning_lifecycle(
+        self,
+        action: ContentLifecycleAction,
+        *,
+        actor: ActorContext,
+        idempotency_key: str | None = None,
+    ) -> ContentLifecycleResult:
+        if actor.operator_id is None or actor.session_id is None:
+            raise ValueError("content lifecycle requires an authenticated operator")
+        reply = self._request_content_planning(
+            ContentPlanningLifecycleRequest(
+                actor_id=actor.operator_id,
+                session_id=actor.session_id,
+                request_id=actor.request_id,
+                authentication_time=actor.authentication_time,
+                action=action,
+                idempotency_key=idempotency_key,
+            )
+        )
+        if not isinstance(
+            reply.result, (ContentLifecycleView, ContentLifecycleList, ContentLifecycleMutation)
+        ):
+            raise ValueError("content lifecycle response differs")
         return reply.result
 
     def record_content_print(

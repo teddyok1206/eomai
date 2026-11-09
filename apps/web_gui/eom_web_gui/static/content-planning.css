@@ -22,6 +22,7 @@
 .excel-table th, .excel-table td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--eom-border); vertical-align: top; }
 .excel-table thead { position: sticky; top: 0; background: var(--eom-surface-muted); z-index: 1; }
 .excel-table input { width: 100%; min-width: 65px; }
+.excel-table .excel-copy-check { width: 18px; min-width: 18px; }
 .excel-table td:first-child { min-width: 85px; width: 90px; }
 .excel-table td:nth-child(2) { min-width: 180px; }
 .excel-table td:nth-child(3) { width: 85px; }

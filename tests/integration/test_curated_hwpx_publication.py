@@ -196,6 +196,21 @@ def test_publication_uses_planned_ids_once_and_downloads_verified_fd(publication
         )
 
 
+def test_shared_print_output_read_reuses_successful_publication_without_render(publication):
+    from eom_catalog_service.curated_output_publication import read_curated_committed_output
+
+    p = publication
+    receipt = p.service.finish(p.record, p.inputs, validated=Mock())
+    with build_session_factory(p.engine)() as session:
+        output = read_curated_committed_output(session, p.record.build_id)
+        repeated = read_curated_committed_output(session, p.record.build_id)
+    assert output == repeated
+    assert output.artifact_revision_id == receipt.artifact_revision_id
+    assert output.output_sha256 == receipt.output_sha256
+    assert output.assembly_revision_id == p.record.assembly_revision_id
+    assert p.adapter.run.call_count == p.materializer.stage.call_count == 1
+
+
 def test_crash_after_render_reuses_local_result_without_second_dispatch(publication):
     p = publication
     with pytest.raises(_Crash):

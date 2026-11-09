@@ -20,7 +20,7 @@ from eom_catalog_service.curated_document_assembly_models import (
 
 def read_content_deliveries(session: Session, query: ReadContentDeliveries) -> ContentDeliveryList:
     """Caller has content read authority. Each build action reauthorizes exact source pins."""
-    edition = load_content_edition(session, query.edition_id)
+    edition = load_content_edition(session, query.edition_id, include_archived=True)
     scope, revision, assembly = (
         ContentDeliveryScopeRecord,
         ContentEditionRevisionRecord,

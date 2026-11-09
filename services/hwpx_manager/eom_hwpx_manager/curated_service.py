@@ -8,6 +8,21 @@ from collections.abc import Callable
 from eom_catalog_contracts.curated_document_slots import CuratedDeliveryManifest
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.curated_delivery_inputs import CuratedDeliveryInputs
+from eom_catalog_service.curated_output_publication import (
+    CURATED_ARTIFACT_TYPE as ARTIFACT_TYPE,
+)
+from eom_catalog_service.curated_output_publication import (
+    CURATED_OUTPUT_MEDIA as OUTPUT_MEDIA,
+)
+from eom_catalog_service.curated_output_publication import (
+    CURATED_OUTPUT_MEMBER as OUTPUT_MEMBER,
+)
+from eom_catalog_service.curated_output_publication import (
+    CURATED_OUTPUT_SCHEMA as OUTPUT_SCHEMA,
+)
+from eom_catalog_service.curated_output_publication import (
+    read_curated_committed_output,
+)
 from eom_hwpx_contracts.curated_mixed import CuratedMixedRenderResult
 from eom_hwpx_contracts.curated_occurrences import (
     CuratedBuildInput,
@@ -19,8 +34,6 @@ from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext
 from eom_orchestrator.database import build_session_factory, transaction
 from eom_orchestrator.models import (
-    ArtifactRecord,
-    ArtifactRevisionRecord,
     JobEventRecord,
     JobRecord,
 )
@@ -39,10 +52,6 @@ from eom_hwpx_manager.curated_output_acceptance import verify_curated_output
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
 from eom_hwpx_manager.protocol import curated_protocol_identity
 
-ARTIFACT_TYPE = "hwpx-curated-build"
-OUTPUT_MEMBER = "assembled.hwpx"
-OUTPUT_SCHEMA = "eom://schemas/hwpx/curated-editable-document/1.0"
-OUTPUT_MEDIA = "application/hwp+zip"
 DISPATCH_EVENT = "HWPX_CURATED_DISPATCHED"
 
 
@@ -288,69 +297,33 @@ class CuratedHwpxService:
 
     def _completed(self, record: HwpxCuratedBuildRecord) -> CuratedBuildReceipt:
         with self.sessions() as session:
-            row = session.execute(
-                select(JobRecord, ArtifactRecord, ArtifactRevisionRecord)
-                .join(ArtifactRecord, ArtifactRecord.job_id == JobRecord.job_id)
-                .join(ArtifactRevisionRecord, ArtifactRevisionRecord.job_id == JobRecord.job_id)
-                .where(
-                    JobRecord.job_id == record.planned_job_id,
-                )
-            ).one_or_none()
-            if row is None:
-                raise _invalid("curated committed publication is missing")
-            job, artifact, revision = row
+            try:
+                output = read_curated_committed_output(session, record.build_id)
+            except ValueError as exc:
+                raise _invalid(str(exc)) from exc
             if (
-                job.status != JobState.SUCCEEDED.value
-                or not artifact.approved
-                or not revision.approved
-                or artifact.logical_artifact_id != record.planned_artifact_id
-                or artifact.artifact_type != ARTIFACT_TYPE
-                or revision.logical_artifact_id != artifact.logical_artifact_id
-                or revision.revision_id != record.planned_artifact_revision_id
-                or revision.manifest_hash != content_sha256(revision.manifest)
-                or revision.manifest.get("job_id") != record.planned_job_id
-                or revision.manifest.get("logical_artifact_id") != record.planned_artifact_id
-                or revision.manifest.get("revision_id") != record.planned_artifact_revision_id
-                or revision.manifest.get("primary_file") != OUTPUT_MEMBER
-                or job.request != record.input_plan
+                output.job_id != record.planned_job_id
+                or output.artifact_id != record.planned_artifact_id
+                or output.artifact_revision_id != record.planned_artifact_revision_id
+                or output.input_plan_sha256 != record.input_plan_sha256
+                or content_sha256(record.input_plan) != record.input_plan_sha256
+                or output.assembly_id != record.assembly_id
+                or output.assembly_revision_id != record.assembly_revision_id
+                or output.assembly_manifest_sha256 != record.assembly_manifest_sha256
             ):
-                raise _invalid("curated committed publication pointer differs")
-            result = parse_mixed_render_result(revision.result)
-            expected_profile = record.input_plan["profile"]
-            if result.profile != expected_profile:
-                raise _invalid("committed curated result profile differs")
-            members = [
-                member
-                for member in revision.manifest.get("files", [])
-                if member.get("file_name") == OUTPUT_MEMBER
-            ]
-            if len(members) != 1 or (
-                members[0].get("sha256") != result.output_sha256
-                or members[0].get("bytes") != result.output_size_bytes
-                or members[0].get("schema_ref") != OUTPUT_SCHEMA
-                or members[0].get("media_type") != OUTPUT_MEDIA
-                or result.build_id != record.build_id
-                or result.assembly_revision_id != record.assembly_revision_id
-                or result.assembly_manifest_sha256 != record.assembly_manifest_sha256
-                or result.input_plan_sha256 != record.input_plan_sha256
-                or result.status != "SUCCEEDED"
-                or revision.content_hash != result.output_sha256
-                or revision.content_bytes != result.output_size_bytes
-            ):
-                raise _invalid("curated committed output member or result differs")
-            assert result.output_sha256 is not None and result.output_size_bytes is not None
+                raise _invalid("curated publication differs from the reserved build")
             return CuratedBuildReceipt(
-                record.build_id,
-                record.input_plan_sha256,
-                job.job_id,
-                artifact.logical_artifact_id,
-                revision.revision_id,
-                result.output_sha256,
-                result.output_size_bytes,
-                len(result.section_source_positions),
-                result.binary_count,
-                result.native_table_count,
-                result.native_equation_count,
+                output.build_id,
+                output.input_plan_sha256,
+                output.job_id,
+                output.artifact_id,
+                output.artifact_revision_id,
+                output.output_sha256,
+                output.output_size_bytes,
+                output.section_count,
+                output.binary_count,
+                output.native_table_count,
+                output.native_equation_count,
             )
 
     def secure_download(self, record: HwpxCuratedBuildRecord) -> SecureHwpxDownload:

@@ -264,7 +264,8 @@ def test_db_assembly_draft_distinguishes_original_files_from_registered_items() 
     assert "source_revision_id: detail.entry.source_revision_id" in draft
     assert "graph_snapshot_revision_id: entry.graph_snapshot_revision_id" in javascript
     assert "createItemDbDraft()" in assembly
-    assert "createItemDbAssembly({document, api, activate: activateTab, message})" in javascript
+    assert "createItemDbAssembly({document, api, activate: activateTab, message," in javascript
+    assert "planningSelectionHint, onPlanningSelections" in javascript
     assert "const keys = new Set()" in draft
     assert "ordered.splice(index, 1)" in draft
 

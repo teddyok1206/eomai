@@ -45,6 +45,31 @@ export function createPlanningDraft() {
         target: slotSelection(target), points_milli: null, display_number: null, note: "", copied_from: null};
       list.push(row); changed.add(id); return row.placement_id;
     },
+    addMany(id, targets) {
+      const list = rows(id);
+      if (!Array.isArray(targets) || targets.length === 0) throw new Error("가져올 문항을 먼저 골라 주세요.");
+      if (targets.length + list.length > 100000) throw new Error("한 회차의 문항 수가 너무 많습니다.");
+      // Prepare the entire ordered value before changing the draft: a malformed
+      // selection must not leave half of an import in the user's unsaved work.
+      const additions = targets.map((target, index) => ({
+        placement_id: newPlanningId("placement"), position: list.length + index + 1,
+        target: slotSelection(target), points_milli: null, display_number: null, note: "", copied_from: null,
+      }));
+      for (const row of additions) list.push(row);
+      changed.add(id);
+      return additions.map(row => row.placement_id);
+    },
+    setRows(id, values) {
+      rows(id);
+      if (!Array.isArray(values) || values.length > 100000) throw new Error("회차의 문항 목록을 확인해 주세요.");
+      const identities = new Set();
+      const next = values.map((row, index) => {
+        if (!row?.placement_id || identities.has(row.placement_id)) throw new Error("문항 자리 정보가 중복되었습니다.");
+        identities.add(row.placement_id);
+        return {...row, position: index + 1, target: slotSelection(row.target)};
+      });
+      sections.set(id, next); changed.add(id);
+    },
     update(id, placementId, values) {
       const list = rows(id), index = list.findIndex(row => row.placement_id === placementId);
       if (index < 0) throw new Error("편집할 자리가 없어졌습니다.");

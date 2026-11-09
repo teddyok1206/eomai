@@ -2,7 +2,9 @@
 
 승인된 목표는 `docs/architecture/EXCEL_CONTENT_PLACEMENT_DESIGN.md`의 **구현·반복 검증·운영 배포**다.
 이 문서는 소스 검증·운영 설치·사용자 경로 증거를 구분한다. 2026-11-09 호환 운영 설치를
-완료했으며, 실제 로그인 사용자 경로는 최종 검증 중이다. 기존 문항/벡터/실패 이력은 보존했다.
+완료했으며, 실제 로그인 사용자 경로는 최종 검증 중이다. 마지막 설계 대조에서 발견한
+복구·부분 복사·선택 출력 연결·보관 경로 보완은 **아직 별도 운영 반영 전**이다.
+기존 문항/벡터/실패 이력은 보존했다.
 
 ## 현재 단계
 
@@ -19,8 +21,8 @@
 
 Source baseline: `844a8eec40be1eda9771fb8fe00854007ea660e1`.
 별도 세션의 INDEX publication recovery 변경은 이 작업과 구분하고 수정하지 않았다.
-새 migration 및 runtime migration-head 변경은 **개발 후보**이므로 호환 릴리스 전체 검증 전
-다른 기능의 운영 릴리스에 섞지 않는다.
+`20261109_0076`까지 호환 릴리스로 운영 적용했다. 후속 보완은 현재 DB schema를 재사용하며
+임의로 별도 기능의 운영 릴리스에 섞지 않는다.
 
 ## 구현한 주요 경계
 
@@ -190,3 +192,51 @@ protected operator1.22/정확한0076 callback·API read권한·Catalog write권�
 남은 gate는 실제 HTTPS 브라우저의 콘텐츠 생성→DB 문항 선택→반복 배치 저장→복사→
 이력 조회→선택 회차 HWPX 제작→다운로드 및 동일 요청 재조회다. READY/소스 PASS만으로
 이 gate를 닫지 않으며, 원본 지구과학 Excel 자체를 운영 통합과학 DB로 import하지 않는다.
+
+## 최종 설계 대조 보완 — 2026-11-09 13:38 UTC
+
+운영 설치 후 원설계를 다시 항목별로 대조했다. 위 설치본을 전체 목표 완료로 처리하지 않는다.
+
+- DB 임시 배치의 여러 pinned 문항을 한 번에 Excel에 가져오기, exact URL 위치 복원,
+  제출 후 세션 만료 시 같은 요청 key/body 복구를 추가했다. 다른 owner의 요청은 표시·
+  실행하지 않는다. timeout과 확정된 편집 충돌을 구별하고 편집은 사용자가 버리기 전 보존한다.
+- 전체 판 복사 외에 저장 구간/선택 자리의 삽입·교체 복사를 기존 SAVE_SECTIONS에 연결했다.
+  새 endpoint/DB 없이 provenance와 새 placement ID를 보존한다.
+- 완료 HWPX를 인쇄 기록에 선택적으로 연결하는 successor와 공식 보관/복원 경로는
+  별도 보완 중이다. 기존 인쇄·사용 기록이 있다는 사실로 이 선택 기능까지 완료라 하지 않는다.
+- 실제 workbook을 다시 읽은 순수 구조 검증 **9 PASS**. 동일 workbook opt-in을 켠
+  guarded disposable DB 저장·동시성·선택 복사·인쇄·이력 **47 PASS**, 운영 DB 사용 없음.
+- Web/API focused **32 PASS**, 실제 Chromium DB 목록 handoff와 Excel
+  1,200자리/재인증 replay/선택 복사·삽입·교체/충돌 편집 보존/owner race/mobile PASS.
+- INDEX는 기존 PID·InvocationID 그대로 active, creative coordinator도 active다.
+  실제 HTTPS 사용자 canary는 준비된 로그인 입력을 기다리고 있다. 새 입력창을 만들거나
+  기존 계정·비밀번호를 변경하지 않았다.
+
+이 후속 소스는 아직 미커밋·미배포이며, 모듈별 증거를 합친 뒤 같은 호환 릴리스로 반영한다.
+
+## 후속 통합 검증 — 2026-11-09 13:56 UTC
+
+- 위 보완의 구현을 마쳤다. 새 lifecycle/인쇄 출력 연결은 명시적 successor 계약이며
+  기존 V1 schema bytes와 schema76은 변경하지 않았다. Catalog 역할에는 기존
+  `deliverable_events`의 SELECT/INSERT만 추가한다. sequence 권한은 기존 reconciler가 관리한다.
+- 실제 Excel을 다시 참조한 guarded PostgreSQL 검사 **62 PASS**: 편집과 보관의 잠금 순서,
+  같은 요청의 동시 재전송, 별도 판의 병렬 편집, 선택 복사와 출력 연결을 포함한다.
+  이어서 같은 임시 DB에서 HWPX persistence/복구 검사 **31 PASS, 1 SKIP**.
+  SKIP은 opt-in 설치 Builder 실제 렌더이며 위 13:14의 설치본 렌더 증거와 구분한다.
+- Web/API/계약/원본 Excel/OpenAPI 및 실제 Chromium 통합 **201 PASS, 0 SKIP**.
+  DB에서 반복 문항 301개 선택, 100행 표시, 한 번에 전달, 기존 개인 초안 보존을 확인했다.
+  요청 복구는 계정 A의 충돌 판정이 계정 B의 요청에 남지 않으며, 보관 충돌은 실제 거부된
+  대상의 상태를 다시 읽는다. 현재 선택한 다른 판을 대신 읽지 않는다.
+- 한글을 문자 수로 세어 4MiB 전송 한도를 넘던 요청은 UTF-8 바이트 기준으로 제출 전에
+  거부한다. 미확인 요청이 아닌 로컬 입력 오류이므로 초안을 유지하고 수정 후 저장할 수 있다.
+- 기존 OpenAPI 읽기 전용 POST 테스트 목록의 새 query 두 항목 누락은 fixture에 추가했다.
+  초회 실패 로그를 보존했고 런타임 장애로 분류하지 않았다.
+- wire audit: canonical schemas 1,350 / mirrors 1,008 / references 11,573 PASS.
+  변경 core Python 24개 type check와 개발 문맥 13건 PASS.
+- 다음 배포는 현재 91a API/platform + 8677 Web에서 후속 호환 묶음으로 갱신한다.
+  DB migration·Builder 설치·INDEX 재시작·인증 변경은 하지 않는다. 현재 설치본을 복구
+  기준으로 사용하며 노출 전용 구 6b3c77d7 fallback은 사용하지 않는다.
+
+실제 HTTPS 검증은 기존 `EOM → 4번 excel-check`의 Studio 로그인 입력을 기다린다.
+Linux sudo 입력 성공과 Studio 로그인 성공을 혼동하지 않는다. 테스트 PASS만으로
+실제 사용자 경로 또는 전체 goal을 완료 처리하지 않는다.
