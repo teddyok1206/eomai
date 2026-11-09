@@ -240,3 +240,27 @@ protected operator1.22/정확한0076 callback·API read권한·Catalog write권�
 실제 HTTPS 검증은 기존 `EOM → 4번 excel-check`의 Studio 로그인 입력을 기다린다.
 Linux sudo 입력 성공과 Studio 로그인 성공을 혼동하지 않는다. 테스트 PASS만으로
 실제 사용자 경로 또는 전체 goal을 완료 처리하지 않는다.
+
+## DB에서 시작하는 배치 동선 최종 대조 — 2026-11-09 14:24 UTC
+
+- 후속 API/platform 후보 `031a4d280e654fad430d5337c913477c53952de6`는 커밋·푸시 및
+  wheel 검증을 마쳤으나 아직 운영 설치하지 않았다. 아래 Web 보완과 호환 묶음으로 반영한다.
+- 설계 §5/§18.4에 있던 **DB에서 먼저 문항 선택 → 콘텐츠/판/회차/삽입·교체 위치 선택**을
+  실제 UI에 연결했다. 기존 LIST_CONTENTS/LIST_EDITIONS/READ_EDITION/READ_SECTION과
+  SAVE_SECTIONS만 사용하며 API·DB·worker 계약을 추가하지 않았다.
+- 목적지 선택은 읽기 전용이다. 현재 저장본의 정확한 revision/hash와 행을 확인한 뒤
+  임시 초안을 만들어 적용한다. 취소·조회 실패·사용자/문항/메뉴 변경 시 기존 미저장
+  초안을 보존한다. 개인 조립 초안과 제목도 유지하고, 저장 버튼 전에는 DB 쓰기가 없다.
+- 사용 이력의 편성 열기는 exact revision의 section/placement/position까지 확인한다.
+  두 번째 회차의 201번 문항을 선택했을 때 그 페이지로 이동하는 실제 Chromium 회귀를 넣었다.
+- 실제 앱 함수와 controller/picker를 함께 검증했다. 2문항 중간 삽입, 단일 교체 시 자리 ID
+  보존, 명시 저장, 취소/실패/늦은 응답의 초안 보존, 권한, 페이지 이동, 모바일을 포함한
+  Web·계약 정렬·원본 workbook·개발 문맥 검증 **79 PASS, 0 SKIP**.
+  원본 workbook 단독 읽기 검사도 별도 **9 PASS**다. 초회 전체 화면 fixture에서 빠졌던
+  `content-planning.css` 제공 목록을 보완하고 재검증했으며 최초 실패 로그는 보존했다.
+- 이번 변경은 Web만이며 기존 disposable DB 62 PASS 및 HWPX 31 PASS 증거의 경계를
+  다시 바꾸지 않는다. API/platform은 031a, Web만 이 보완을 담은 successor로 빌드한다.
+- 실제 HTTPS 사용자 canary는 아직 로그인 입력 전이다. `EOM:4 excel-check`는 Studio,
+  `EOM:6 excel-release`는 Linux sudo 입력이며 서로 바꾸어 해석하지 않는다. 기존 입력
+  프로세스를 유지하고 계정·비밀번호·인증 파일은 변경하지 않았다. INDEX/슬롯 service도
+  이번 소스 검증 중 재시작하지 않았다.

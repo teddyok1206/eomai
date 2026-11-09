@@ -45,17 +45,18 @@ export function createPlanningDraft() {
         target: slotSelection(target), points_milli: null, display_number: null, note: "", copied_from: null};
       list.push(row); changed.add(id); return row.placement_id;
     },
-    addMany(id, targets) {
+    addMany(id, targets, index = rows(id).length) {
       const list = rows(id);
       if (!Array.isArray(targets) || targets.length === 0) throw new Error("가져올 문항을 먼저 골라 주세요.");
+      if (!Number.isInteger(index) || index < 0 || index > list.length) throw new Error("삽입할 위치를 확인해 주세요.");
       if (targets.length + list.length > 100000) throw new Error("한 회차의 문항 수가 너무 많습니다.");
       // Prepare the entire ordered value before changing the draft: a malformed
       // selection must not leave half of an import in the user's unsaved work.
-      const additions = targets.map((target, index) => ({
-        placement_id: newPlanningId("placement"), position: list.length + index + 1,
+      const additions = targets.map((target, offset) => ({
+        placement_id: newPlanningId("placement"), position: index + offset + 1,
         target: slotSelection(target), points_milli: null, display_number: null, note: "", copied_from: null,
       }));
-      for (const row of additions) list.push(row);
+      sections.set(id, [...list.slice(0, index), ...additions, ...list.slice(index)].map((row, offset) => ({...row, position: offset + 1})));
       changed.add(id);
       return additions.map(row => row.placement_id);
     },

@@ -5,7 +5,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const names = ["index.html", "styles.css", "content-planning.css", "content-planning.js", "content-planning-draft.js", "content-planning-location.js", "content-planning-pending.js", "content-planning-copy.js", "content-planning-lifecycle.js", "item-db-delivery.js", "knowledge-map.css", "eom-mark.svg"];
+const names = ["index.html", "styles.css", "content-planning.css", "content-planning.js", "content-planning-draft.js", "content-planning-location.js", "content-planning-pending.js", "content-planning-copy.js", "content-planning-lifecycle.js", "content-planning-destination.js", "item-db-delivery.js", "knowledge-map.css", "eom-mark.svg"];
 const assets = new Map(await Promise.all(names.map(async name => [name, await readFile(new URL(name, root), "utf8")])));
 const app = `
 import {createContentPlanning} from './content-planning.js';
@@ -77,9 +77,13 @@ async function api(path, options = {}) {
     f.printed.push(b); return {result_kind: 'PRINT_MUTATION', disposition: 'RECORDED', replayed: false};
   }
   if (b.query_kind === 'LIST_CONTENTS') return {result_kind: 'CONTENTS', rows: f.composition ? [{deliverable_id: f.composition.deliverable_id, title: f.composition.content_title, content_type: 'OTHER', edition_count: 1}] : [], next_id: null};
-  if (b.query_kind === 'LIST_EDITIONS') return {result_kind: 'EDITIONS', rows: [{edition_id: f.composition.edition_id, edition_label: f.composition.edition_label}], next_id: null};
+  if (b.query_kind === 'LIST_EDITIONS') return {result_kind: 'EDITIONS', rows: [{deliverable_id: f.composition.deliverable_id,
+    edition_id: f.composition.edition_id, edition_label: f.composition.edition_label,
+    revision_id: f.composition.deliverable_revision_id, composition_sha256: f.composition.composition_sha256,
+    academic_year: f.composition.academic_year, revision_number: f.composition.revision_number}], next_id: null};
   if (b.query_kind === 'READ_EDITION') return {result_kind: 'COMPOSITION', composition: structuredClone(f.composition), current_revision_id: f.composition.deliverable_revision_id};
   if (b.query_kind === 'READ_SECTION') {
+    if (f.failSection) {f.failSection = false; throw new Error('합성 회차 조회 실패');}
     const all = f.rows.get(b.section_id) || [], rows = all.slice(b.after_position, b.after_position + b.limit);
     return {result_kind: 'SECTION', edition_id: b.edition_id, revision_id: b.revision_id,
       composition_sha256: b.composition_sha256, section_id: b.section_id,
@@ -87,7 +91,7 @@ async function api(path, options = {}) {
       rows, total: all.length, next_position: b.after_position + rows.length < all.length ? b.after_position + rows.length : null};
   }
   if (b.query_kind === 'PRINTS') return {result_kind: 'PRINTS', rows: [], next_id: null};
-  if (b.query_kind === 'USAGE') return {result_kind: 'USAGE', total_locations: 0, rows: [], next_after: null};
+  if (b.query_kind === 'USAGE') return {result_kind: 'USAGE', total_locations: f.usageRows?.length || 0, rows: f.usageRows || [], next_after: null};
   if (b.query_kind === 'USAGE_SUMMARY') return {result_kind: 'USAGE_SUMMARY', query_sha256: sha, coverage: 'ACCESSIBLE_CONTENTS', rows: b.targets.map((_, i) => ({target_index: i, total_locations: 0, edition_locations: 0, other_locations: 0}))};
   if (b.query_kind === 'HISTORY') return {result_kind: 'HISTORY', rows: [], next_sequence: null};
   throw new Error('Unexpected ' + b.query_kind);
@@ -152,6 +156,34 @@ try {
   await page.waitForFunction(() => document.querySelectorAll("#excel-rows tr").length === 3);
   await page.locator("#excel-rows tr").nth(1).getByRole("button", {name: "사용 이력", exact: true}).click();
   await page.waitForFunction(() => document.querySelector("#excel-inspect-title").textContent.includes('사용 이력'));
+  // Usage opens the exact saved section and position, not the previously selected section/page.
+  const usageLocation = await page.evaluate(() => {
+    const value = fixture.composition, second = value.sections[1];
+    const rows = Array.from({length: 201}, (_, i) => ({placement_id: 'placement_' + (i + 5000).toString(16).padStart(32, '0'),
+      position: i + 1, target: fixture.target, points_milli: null, display_number: null, note: '', copied_from: null}));
+    fixture.rows.set(second.section_id, rows); second.form.placement_count = rows.length;
+    const location = {target_index: 0, deliverable_id: value.deliverable_id, edition_id: value.edition_id,
+      revision_id: value.deliverable_revision_id, content_title: value.content_title, edition_label: value.edition_label,
+      academic_year: value.academic_year, section_id: second.section_id, section_label: second.label,
+      placement_id: rows[200].placement_id, position: 201, currently_placed: true, print_count: 0};
+    fixture.usageRows = [location]; return location;
+  });
+  await page.locator('#excel-rows tr').nth(1).getByRole('button', {name: '사용 이력', exact: true}).click();
+  await page.locator('#excel-inspect-body').getByRole('button', {name: '편성 열기', exact: true}).click();
+  await page.waitForFunction(() => document.querySelector('#excel-section-title').textContent === '2회차'
+    && document.querySelector('#excel-page').textContent.includes('201–201 / 201문항'));
+  assert.equal(await page.locator('#excel-rows tr').count(), 1);
+  await page.getByRole('textbox', {name: '201번 표시 번호', exact: true}).waitFor();
+  const usageReads = await page.evaluate(() => ({edition: fixture.calls.filter(c => c.body?.query_kind === 'READ_EDITION').at(-1).body,
+    section: fixture.calls.filter(c => c.body?.query_kind === 'READ_SECTION').at(-1).body}));
+  assert.equal(usageReads.edition.edition_id, usageLocation.edition_id);
+  assert.equal(usageReads.edition.revision_id, usageLocation.revision_id);
+  assert.equal(usageReads.section.section_id, usageLocation.section_id);
+  assert.equal(usageReads.section.revision_id, usageLocation.revision_id);
+  assert.equal(usageReads.section.after_position, 200);
+  await page.evaluate(() => {fixture.usageRows = []; fixture.rows.set(fixture.composition.sections[1].section_id, []); fixture.composition.sections[1].form.placement_count = 0;});
+  await page.locator('#excel-sections button').first().click();
+  await page.waitForFunction(() => document.querySelector('#excel-section-title').textContent === '1회차' && document.querySelectorAll('#excel-rows tr').length === 3);
   await page.evaluate(() => {
     const first = fixture.composition.sections[0];
     fixture.rows.set(first.section_id, Array.from({length: 1200}, (_, i) => ({placement_id: 'placement_' + (i+1).toString(16).padStart(32,'0'), position: i+1, target: fixture.target, points_milli: null, display_number: null, note: '', copied_from: null})));
@@ -315,6 +347,92 @@ try {
   assert.equal(await page.locator('#excel-create button').isDisabled(), false, 'prior owner recovery error blocked a clean owner');
   await page.evaluate(() => fixture.controller.open());
   assert.equal(await page.locator('#excel-create button').isDisabled(), false);
+  // DB-first placement uses the real picker/controller, with only API I/O faked.
+  if (!await page.locator('#excel-create-panel').evaluate(el => el.open)) await page.locator('#excel-create-panel summary').click();
+  await page.locator('#excel-name').fill('DB에서 배치 통합 검증');
+  await page.locator('#excel-edition-name').fill('2029 초판');
+  await page.locator('#excel-year').fill('2029');
+  await page.locator('#excel-rounds').fill('2');
+  await page.locator('#excel-create button').click();
+  await page.waitForFunction(() => document.querySelector('#excel-content-title').textContent.includes('DB에서 배치 통합 검증') && !document.querySelector('#excel-empty-slot').disabled);
+  for (let i = 0; i < 3; i++) await page.locator('#excel-empty-slot').click();
+  await page.locator('#excel-save').click();
+  await page.waitForFunction(() => document.querySelector('#excel-draft-state').textContent === '저장됨' && !document.querySelector('#excel-empty-slot').disabled);
+  const originalSlots = await page.evaluate(() => structuredClone(fixture.rows.get(fixture.composition.sections[0].section_id)));
+  const incoming = await page.evaluate(() => [
+    {pointer: fixture.target, label: 'DB에서 고른 첫 문항'},
+    {pointer: {...fixture.target, source_id: 'extitem_' + '5'.repeat(32), source_revision_id: 'extitemrev_' + '6'.repeat(32)}, label: 'DB에서 고른 둘째 문항'},
+  ]);
+  async function startDbPlacement(values) {
+    await page.evaluate(selections => {
+      fixture.planResult = null; fixture.planError = null; fixture.sourceCurrent = true;
+      fixture.controller.close();
+      void fixture.controller.placeSelections(selections, () => fixture.sourceCurrent).then(value => {
+        fixture.planResult = value; if (value) fixture.controller.open();
+      }).catch(error => {fixture.planError = error.message;});
+    }, values);
+    await page.locator('#excel-destination-dialog').waitFor();
+  }
+  async function chooseDbDestination(index, mode, position) {
+    const target = await page.evaluate(n => ({content: fixture.composition.deliverable_id,
+      edition: fixture.composition.edition_id, section: fixture.composition.sections[n].section_id}), index);
+    await page.locator('#excel-destination-content').selectOption(target.content);
+    await page.locator('#excel-destination-edition').selectOption(target.edition);
+    await page.locator('#excel-destination-section').selectOption(target.section);
+    await page.locator('#excel-destination-mode').selectOption(mode);
+    await page.locator('#excel-destination-position').fill(String(position));
+    await page.locator('#excel-destination-dialog').getByRole('button', {name: '여기에 배치', exact: true}).click();
+  }
+  const beforeDbWrites = await page.evaluate(() => fixture.calls.filter(c => c.path.endsWith('/commands')).length);
+  await startDbPlacement(incoming);
+  await chooseDbDestination(0, 'INSERT', 2);
+  await page.waitForFunction(() => fixture.planResult === true);
+  assert.equal(await page.locator('#excel-rows tr').count(), 5);
+  assert.equal(await page.evaluate(() => fixture.calls.filter(c => c.path.endsWith('/commands')).length), beforeDbWrites, 'choosing a destination submitted a save');
+  await page.locator('#excel-save').click();
+  await page.waitForFunction(() => document.querySelector('#excel-draft-state').textContent === '저장됨');
+  const inserted = await page.evaluate(() => structuredClone(fixture.rows.get(fixture.composition.sections[0].section_id)));
+  assert.deepEqual(inserted.map(row => row.position), [1, 2, 3, 4, 5]);
+  assert.deepEqual([inserted[0], inserted[3], inserted[4]].map(row => row.placement_id), originalSlots.map(row => row.placement_id));
+  assert.deepEqual(inserted.slice(1, 3).map(row => row.target), incoming.map(row => row.pointer));
+  const replacement = {...incoming[0], label: '교체 문항', pointer: {...incoming[0].pointer, source_id: 'extitem_' + '7'.repeat(32)}};
+  await startDbPlacement([replacement]);
+  await chooseDbDestination(0, 'REPLACE', 4);
+  await page.waitForFunction(() => fixture.planResult === true);
+  await page.locator('#excel-save').click();
+  await page.waitForFunction(() => document.querySelector('#excel-draft-state').textContent === '저장됨');
+  const replacedFromDb = await page.evaluate(() => structuredClone(fixture.rows.get(fixture.composition.sections[0].section_id)));
+  assert.deepEqual(replacedFromDb.map(row => row.placement_id), inserted.map(row => row.placement_id), 'DB replacement changed occurrence identity');
+  assert.deepEqual(replacedFromDb[3].target, replacement.pointer);
+  assert.deepEqual(replacedFromDb.filter((_, i) => i !== 3), inserted.filter((_, i) => i !== 3), 'DB replacement modified another occurrence');
+
+  await page.locator('#excel-empty-slot').click();
+  await page.getByRole('textbox', {name: '6번 메모', exact: true}).fill('보존할 미저장 메모');
+  await page.getByRole('textbox', {name: '6번 메모', exact: true}).dispatchEvent('change');
+  const dirtySnapshot = await page.locator('#excel-rows input').evaluateAll(inputs => inputs.map(input => [input.getAttribute('aria-label'), input.value]));
+  const writesBeforeCancel = await page.evaluate(() => fixture.calls.filter(c => c.path.endsWith('/commands')).length);
+  async function assertDirtyPreserved() {
+    assert.equal(await page.locator('#excel-draft-state').textContent(), '저장하지 않은 배치');
+    assert.deepEqual(await page.locator('#excel-rows input').evaluateAll(inputs => inputs.map(input => [input.getAttribute('aria-label'), input.value])), dirtySnapshot);
+    assert.equal(await page.evaluate(() => fixture.calls.filter(c => c.path.endsWith('/commands')).length), writesBeforeCancel);
+    assert.deepEqual(await page.evaluate(() => structuredClone(fixture.rows.get(fixture.composition.sections[0].section_id))), replacedFromDb);
+  }
+  await startDbPlacement([replacement]);
+  await page.locator('#excel-destination-dialog').getByRole('button', {name: '취소', exact: true}).click();
+  await page.waitForFunction(() => fixture.planResult === false);
+  await assertDirtyPreserved();
+  await startDbPlacement([replacement]);
+  await page.evaluate(() => {fixture.failSection = true;});
+  await chooseDbDestination(1, 'INSERT', 1);
+  await page.waitForFunction(() => fixture.planError === '합성 회차 조회 실패');
+  await assertDirtyPreserved();
+  await startDbPlacement([replacement]);
+  await page.evaluate(() => {fixture.release = null; fixture.held = 'READ_SECTION';});
+  await chooseDbDestination(1, 'INSERT', 1);
+  await page.waitForFunction(() => typeof fixture.release === 'function');
+  await page.evaluate(() => {fixture.sourceCurrent = false; fixture.release();});
+  await page.waitForFunction(() => fixture.planResult === false);
+  await assertDirtyPreserved();
   assert.deepEqual(errors, []);
-  console.log("CONTENT_PLANNING_BROWSER=PASS desktop/mobile/create/1200/replay/copy-insert-replace/archive-restore/owner-race live_writes=0");
+  console.log("CONTENT_PLANNING_BROWSER=PASS desktop/mobile/create/1200/replay/exact-usage-location/copy-insert-replace/archive-restore/owner-race/db-first-insert-replace-cancel-read-failure-stale live_writes=0");
 } finally {await browser.close(); server.close();}

@@ -151,18 +151,21 @@ async function previewRegisteredItem(pointer, root, isCurrent) {
   }
   root.append(choices);
 }
+async function placeDbSelections(selections, isCurrent = () => true) {
+  const owner = state.operator?.operator_id, navigation = state.navigationVersion;
+  const current = () => state.operator?.operator_id === owner
+    && navigation === state.navigationVersion && isCurrent();
+  if (!owner || !current() || !await contentPlanning.placeSelections(selections, current)) return false;
+  if (!current()) return false;
+  showView("excel"); return true;
+}
 const itemDb = createItemDb({
   document,
   api,
+  canPlan: () => hasPermission(state.operator, "deliverable:read") && hasPermission(state.operator, "deliverable:update"),
   planningSelectionHint: () => contentPlanning.selectionHint(),
-  onPlanningSelection: (pointer, label) => {
-    if (!contentPlanning.acceptSelection(pointer, label)) return false;
-    showView("excel"); return true;
-  },
-  onPlanningSelections: selections => {
-    if (!contentPlanning.acceptSelections(selections)) return false;
-    showView("excel"); return true;
-  },
+  onPlanningSelection: (pointer, label, isCurrent) => placeDbSelections([{pointer, label}], isCurrent),
+  onPlanningSelections: placeDbSelections,
   similaritySearches: {
     submit: (selections, topK, key) => api("/item-db/similarity/searches", {
       method: "POST", mutation: true, headers: {"Idempotency-Key": key},

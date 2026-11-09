@@ -266,6 +266,15 @@ def test_db_assembly_draft_distinguishes_original_files_from_registered_items() 
     assert "createItemDbDraft()" in assembly
     assert "createItemDbAssembly({document, api, activate: activateTab, message," in javascript
     assert "planningSelectionHint, onPlanningSelections" in javascript
+    assert "canPlan = () => false" in javascript
+    assert "await onPlanningSelection(pointer, label, current)" in javascript
+    assert "await onPlanningSelections(values, current)" in assembly
+    assert "if (mode) resetCollector();" in assembly
+    app = (ROOT / "apps/web_gui/eom_web_gui/static/app.js").read_text(encoding="utf-8")
+    assert 'hasPermission(state.operator, "deliverable:read")' in app
+    assert 'hasPermission(state.operator, "deliverable:update")' in app
+    assert "await contentPlanning.placeSelections(selections, current)" in app
+    assert "navigation === state.navigationVersion && isCurrent()" in app
     assert "const keys = new Set()" in draft
     assert "ordered.splice(index, 1)" in draft
 

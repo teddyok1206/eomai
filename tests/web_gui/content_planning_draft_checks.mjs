@@ -38,5 +38,11 @@ assert.deepEqual(draft.rows(b).slice(-3).map(r => r.target.source_id), [target.s
 assert.equal(draft.duplicateCounts(b).get(targetIdentity(target)), 3);
 assert.throws(() => draft.addMany(b, Array(100000).fill(target)), /너무 많/);
 assert.equal(draft.rows(b).length, 4, "over-budget import partially changed the draft");
+const originalPositions = draft.rows(b).map(row => row.placement_id);
+const inserted = draft.addMany(b, [target, target], 1);
+assert.deepEqual(draft.rows(b).map(row => row.placement_id), [originalPositions[0], ...inserted, ...originalPositions.slice(1)]);
+assert.deepEqual(draft.rows(b).map(row => row.position), [1, 2, 3, 4, 5, 6]);
+assert.throws(() => draft.addMany(b, [target], -1), /삽입할 위치/);
+assert.throws(() => draft.addMany(b, [target], 7), /삽입할 위치/);
 draft.reset(); assert.equal(draft.dirty(), false); assert.equal(draft.loaded(a), false);
 console.log("content_planning_draft=PASS");

@@ -28,3 +28,20 @@
 검증: `tests/web_gui/item_db_browser_checks.mjs`는 실제 HTML/controller에서 301회 반복 선택,
 100행 paging, occurrence 교체·이동·삭제, 일괄 handoff, 실패 후 재전달, 개인 초안 보존,
 구 SAVE 호출 부재와 owner 변경 정리를 확인한다. 기존 private draft 회귀도 유지한다.
+
+## DB에서 먼저 시작하는 선택
+
+DB 상세 또는 개인 배치 목록의 `Excel에 배치`는 Excel에서 미리 회차를 고르지 않았어도
+기존 편성 읽기·수정 권한으로 사용할 수 있다. `content-planning-destination.js`의 작은
+선택창이 기존 LIST_CONTENTS/LIST_EDITIONS/READ_EDITION을 읽어 콘텐츠·판·회차와 삽입
+위치를 받는다. 단일 선택은 특정 자리 교체도 가능하다. 새 검색·저장 API는 만들지 않는다.
+
+선택 결과는 exact composition/revision과 위치 값이며 권한이 아니다. 화면 controller가
+같은 owner/선택 generation을 확인하고 해당 저장본의 문항을 읽은 뒤 기존 draft에 반영한다.
+조회 실패·취소에서는 이전 초안/DB 목록을 바꾸지 않는다. 다른 owner로 전환하면 선택창을
+닫고 늦은 응답을 버린다. 실제 저장은 사용자가 기존 `배치 저장`을 눌렀을 때만 수행한다.
+
+개인 배치 목록의 기존 한도는 이력과 함께 보존한다. Excel에서 시작한 대량 선택은 위
+occurrence collector를 그대로 사용한다. 두 진입 방향을 하나의 새 목록 저장소로 합치지 않는다.
+목록은 50개 단위 pagination, 선택 대상의 배열 삽입은 O(n+m)이며 반복 splice/행별 요청을 하지 않는다.
+한글 파일·Graph·벡터를 복사하지 않고 작은 typed pointer 배열만 넘긴다.

@@ -10,7 +10,7 @@ function node(document, tag, className, value) {
 }
 
 // Own only draft/list/delivery presentation. The Catalog retains all save/delete rules.
-export function createItemDbAssembly({document, api, activate, message, planningSelectionHint = () => null, onPlanningSelections = () => false}) {
+export function createItemDbAssembly({document, api, activate, message, canPlan = () => false, planningSelectionHint = () => null, onPlanningSelections = () => false}) {
   const $ = (selector) => document.querySelector(selector);
   let owner = null;
   let savedCursor = null;
@@ -21,6 +21,7 @@ export function createItemDbAssembly({document, api, activate, message, planning
   let ownerGeneration = 0;
   let draftSequence = 0;
   let saving = false;
+  let planning = false;
   const deliveries = new Set();
   const pendingRemovals = new Map();
   const draft = createItemDbDraft();
@@ -40,7 +41,7 @@ export function createItemDbAssembly({document, api, activate, message, planning
 
   function refreshMode() {
     const next = Boolean(owner && planningSelectionHint());
-    if (next === excelMode) return;
+    if (next === excelMode) {syncPlanningControl(entries().length); return;}
     excelMode = next;
     pageIndex = 0;
     cancelReplacement();
@@ -56,6 +57,11 @@ export function createItemDbAssembly({document, api, activate, message, planning
     collector.reset(); collector.load(collectorSection, []); labels.clear(); pageIndex = 0;
   }
 
+  function syncPlanningControl(count) {
+    $("#item-db-draft-to-excel").hidden = !canPlan();
+    $("#item-db-draft-to-excel").disabled = saving || planning || count === 0 || !canPlan();
+  }
+
   function renderDraft() {
     draftSequence += 1;
     const root = $("#item-db-draft-list");
@@ -68,7 +74,7 @@ export function createItemDbAssembly({document, api, activate, message, planning
     $("#item-db-tab-count").textContent = String(values.length);
     $("#item-db-draft-save").disabled = excelMode || saving || values.length === 0;
     $("#item-db-assembly-name").disabled = excelMode;
-    $("#item-db-draft-to-excel").disabled = saving || values.length === 0;
+    syncPlanningControl(values.length);
     $("#item-db-draft-empty").hidden = values.length > 0;
     const pageCount = Math.max(1, Math.ceil(values.length / pageSize));
     pageIndex = Math.min(pageIndex, pageCount - 1);
@@ -363,14 +369,21 @@ export function createItemDbAssembly({document, api, activate, message, planning
       selectionTools = {root, previous, next, page, importDraft};
       renderDraft();
       $("#item-db-draft-save").addEventListener("click", saveDraft);
-      $("#item-db-draft-to-excel").addEventListener("click", () => {
-        if (saving || !owner) return;
+      $("#item-db-draft-to-excel").addEventListener("click", async () => {
+        if (saving || planning || !owner || !canPlan()) return;
         refreshMode();
-        if (!planningSelectionHint()) {message("Excel에서 배치할 회차를 고르고 ‘DB에서 문항 선택’을 눌러 주세요."); return;}
         const values = entries();
         if (!values.length) return;
-        if (!onPlanningSelections(values)) message("Excel의 선택한 회차에 배치하지 못했습니다. 한 자리 교체에는 문항 하나만 선택해 주세요.", true);
-        else {resetCollector(); refreshMode(); renderDraft();}
+        const generation = ownerGeneration, mode = excelMode;
+        planning = true; renderDraft(); const request = draftSequence;
+        const current = () => generation === ownerGeneration && mode === excelMode && request === draftSequence && canPlan();
+        try {
+          const accepted = await onPlanningSelections(values, current);
+          if (!current() || !accepted) return;
+          if (mode) resetCollector();
+          refreshMode();
+        } catch (error) {if (current()) message(`Excel 배치 준비 실패: ${error.message || "다시 시도해 주세요."}`, true);}
+        finally {if (generation === ownerGeneration) {planning = false; renderDraft();}}
       });
       $("#item-db-assembly-name").addEventListener("input", () => {draftSequence += 1;});
       $("#item-db-replacement-cancel").addEventListener("click", cancelReplacement);
@@ -386,6 +399,7 @@ export function createItemDbAssembly({document, api, activate, message, planning
       savedCursor = null;
       pendingSave = null;
       saving = false;
+      planning = false;
       pendingRemovals.clear();
       $("#item-db-assembly-name").value = "";
       cancelReplacement();

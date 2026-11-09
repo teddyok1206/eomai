@@ -99,6 +99,11 @@ Excel로 문항을 고르는 동안 `item-db-assembly.js`는 기존 `createPlann
 ordered occurrence를 임시 선택 목록으로 재사용한다. 개인 조립의 200개·고유 문항 계약을
 확장하거나 개인 초안을 덮어쓰지 않는다. 100행씩 표시하고 반복 포함 전체를 한 번에
 전달한다. `EXCEL_DB_SELECTION_BOUNDARY.md`와 실제 DB browser 회귀를 함께 확인한다.
+DB에서 먼저 선택한 문항은 `content-planning-destination.js`의 읽기 전용 선택창에서
+콘텐츠·판·회차·삽입 위치를 고른다. `content-planning.js`가 정확한 저장본의 슬롯을 읽고
+임시 초안을 검증한 뒤 현재 초안에 반영한다. 취소·조회 실패 때 기존 초안은 보존하며
+저장은 기존 SAVE_SECTIONS만 사용한다. 사용 이력의 편성 열기는 해당 revision뿐 아니라
+section/placement/position을 확인해 그 문항이 있는 페이지로 이동한다.
 
 보관/복원은 `content_lifecycle_service.py`가 기존 Product/Edition 상태와 이벤트를 사용한다.
 정본 revision이나 사용·인쇄 이력을 삭제하지 않는다. 편집은 Product 공유 잠금 이후 Edition

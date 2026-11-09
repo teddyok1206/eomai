@@ -4,6 +4,7 @@ import {contentPlanningLocation} from "./content-planning-location.js";
 import {createPlanningPendingStore} from "./content-planning-pending.js";
 import {loadPlanningCopy, pastePlanningCopy} from "./content-planning-copy.js";
 import {createContentPlanningLifecycle} from "./content-planning-lifecycle.js";
+import {createPlanningDestinationPicker} from "./content-planning-destination.js";
 
 const PAGE_SIZE = 50;
 const CONTENT_TYPES = Object.freeze({MOCK_EXAM: "모의고사", TEXTBOOK: "교재", WEEKLY: "주간지", OTHER: "기타"});
@@ -12,6 +13,7 @@ const CHANGE_LABELS = Object.freeze({CREATE_CONTENT: "콘텐츠 생성", CREATE_
 export function createContentPlanning({document, api, can, openItemDb, openTarget, storage = globalThis.sessionStorage, onSelectionChange = () => {}, confirm = text => globalThis.confirm(text), prompt = text => globalThis.prompt(text)}) {
   const $ = selector => document.querySelector(selector), draft = createPlanningDraft();
   const pendingStore = createPlanningPendingStore(storage);
+  let destinationBusy = false;
   let owner = null, ownerEpoch = 0, active = false, selectionEpoch = 0, contentEpoch = 0;
   let productId = null, selected = null, currentRevision = null, loaded = false, page = 0;
   let contents = [], editions = [], contentCursor = null, editionCursor = null, printCursor = null;
@@ -30,10 +32,11 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
   function button(text, action, disabled = false) {const n = node("button", text, "button quiet"); n.type = "button"; n.disabled = disabled; n.addEventListener("click", action); return n;}
   function message(text, error = false) {const n = $("#excel-message"); n.textContent = text; n.className = `form-message${error ? " error" : ""}`;}
   const query = body => api("/content-planning/query", {method: "POST", mutation: true, body});
+  const destinationPicker = createPlanningDestinationPicker({document, query});
   const comp = () => draft.composition();
   const labelKey = target => JSON.stringify(slotSelection(target));
   const section = () => comp()?.sections.find(value => value.section_id === selected);
-  const locked = () => busy || pending !== null || loadingSection || recoveryError || copyBusy;
+  const locked = () => busy || pending !== null || loadingSection || recoveryError || copyBusy || destinationBusy;
   const editable = () => can("deliverable:update") && comp()?.deliverable_revision_id === currentRevision && !locked() && !lifecycle.selectionArchived();
   const dateText = value => new Date(value).toLocaleString("ko-KR", {timeZone: "Asia/Seoul", month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit"});
   const lifecycle = createContentPlanningLifecycle({document, api, can, commit, confirm,
@@ -208,13 +211,18 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
           || value.deliverable_revision_id !== location.deliverable_revision_id) {
           throw new Error("주소에 지정된 콘텐츠 저장본과 조회 결과가 다릅니다. 콘텐츠와 판을 다시 선택해 주세요.");
         }
-        if (location.section_id && !value.sections.some(s => s.section_id === location.section_id)) {
+        const destination = value.sections.find(s => s.section_id === location.section_id);
+        if (location.section_id && !destination) {
           throw new Error("주소에 지정된 회차가 이 저장본에 없습니다. 콘텐츠와 판을 다시 선택해 주세요.");
+        }
+        if (location.position !== undefined && (!Number.isSafeInteger(location.position) || location.position < 1
+            || destination?.kind !== "FORM" || location.position > destination.form.placement_count)) {
+          throw new Error("사용 이력의 문항 위치가 이 저장본에 없습니다.");
         }
         selected = location.section_id || null;
       }
       applyComposition(data.composition, data.current_revision_id); message("");
-      if (selected) await chooseSection(selected);
+      if (selected) await chooseSection(selected, location);
       else rememberLocation();
     } catch (error) {if (actor === ownerEpoch && epoch === selectionEpoch) message(`편성 조회 실패: ${error.message}`, true);}
   }
@@ -232,28 +240,46 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
     clearDeliveries();
     renderComposition(); renderRows();
   }
-  async function ensureSection(id, epoch) {
-    if (draft.loaded(id)) return;
-    const value = comp(), rows = []; let after = 0;
+  async function readSectionRows(value, id, isCurrent) {
+    const rows = [], titles = new Map(); let after = 0;
     do {
       const result = await query({query_kind: "READ_SECTION", edition_id: value.edition_id,
         revision_id: value.deliverable_revision_id, composition_sha256: value.composition_sha256,
         section_id: id, after_position: after, limit: 200});
-      if (epoch !== selectionEpoch || comp() !== value) return;
+      if (!isCurrent()) return null;
       rows.push(...result.rows);
-      const titles = new Map((result.labels || []).map(value => [value.placement_id, value.title]));
-      for (const row of result.rows) if (titles.has(row.placement_id)) labels.set(labelKey(row.target), titles.get(row.placement_id));
+      const pageTitles = new Map((result.labels || []).map(row => [row.placement_id, row.title]));
+      for (const row of result.rows) if (pageTitles.has(row.placement_id)) titles.set(labelKey(row.target), pageTitles.get(row.placement_id));
       if (result.next_position !== null && result.next_position <= after) throw new Error("문항 목록의 다음 위치가 올바르지 않습니다.");
       after = result.next_position;
     } while (after !== null);
-    remember(rows); draft.load(id, rows);
+    return {rows, titles};
   }
-  async function chooseSection(id) {
+  async function ensureSection(id, epoch) {
+    if (draft.loaded(id)) return;
+    const value = comp();
+    const result = await readSectionRows(value, id, () => epoch === selectionEpoch && comp() === value);
+    if (!result) return;
+    for (const [key, title] of result.titles) labels.set(key, title);
+    remember(result.rows); draft.load(id, result.rows);
+  }
+  async function chooseSection(id, location = null) {
     if (busy || pending) return;
     const epoch = ++selectionEpoch, actor = ownerEpoch;
     selected = id; page = 0; selectionTarget = null; renderComposition();
     loadingSection = section()?.kind === "FORM"; renderRows(); sync();
-    try {if (loadingSection) await ensureSection(id, epoch); if (epoch === selectionEpoch && actor === ownerEpoch) rememberLocation();}
+    try {
+      if (loadingSection) await ensureSection(id, epoch);
+      if (epoch !== selectionEpoch || actor !== ownerEpoch) return;
+      if (location?.position !== undefined) {
+        const row = draft.rows(id)[location.position - 1];
+        if (row?.position !== location.position || row.placement_id !== location.placement_id) {
+          throw new Error("사용 이력의 문항 위치가 저장본과 일치하지 않습니다.");
+        }
+        page = Math.floor((location.position - 1) / PAGE_SIZE);
+      }
+      rememberLocation();
+    }
     catch (error) {if (epoch === selectionEpoch && actor === ownerEpoch) message(`문항 조회 실패: ${error.message}`, true);}
     finally {if (epoch === selectionEpoch && actor === ownerEpoch) {loadingSection = false; renderRows(); sync();}}
   }
@@ -344,6 +370,41 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
     } catch (error) {message(error.message, true); return false;}
     selectionTarget = null; renderComposition(); renderRows(); sync();
     message(`${selections.length}문항을 순서대로 배치했습니다. 배치 저장을 눌러 확정해 주세요.`); return true;
+  }
+  async function placeSelections(selections, isSourceCurrent = () => true) {
+    if (!isSourceCurrent()) return false;
+    if (selectionTarget) return acceptSelections(selections);
+    if (!owner || !can("deliverable:read") || !can("deliverable:update") || !mayLeave()) return false;
+    if (!Array.isArray(selections) || !selections.length) return false;
+    const incoming = selections.map(value => ({pointer: slotSelection(value.pointer), label: value.label}));
+    const actor = ownerEpoch, epoch = selectionEpoch;
+    const current = () => actor === ownerEpoch && epoch === selectionEpoch
+      && isSourceCurrent() && can("deliverable:read") && can("deliverable:update");
+    destinationBusy = true; sync();
+    try {
+      const target = await destinationPicker.choose({selectionCount: incoming.length});
+      if (!target || !current()) return false;
+      const value = target.composition, form = value.sections.find(row => row.section_id === target.sectionId);
+      if (value.deliverable_revision_id !== target.currentRevisionId || form?.kind !== "FORM") throw new Error("현재 편집할 회차를 다시 골라 주세요.");
+      const result = await readSectionRows(value, target.sectionId, current);
+      if (!result || !current()) return false;
+      // Prepare independently: cancellation/read errors must preserve the old draft.
+      const prepared = createPlanningDraft(); prepared.reset(value); prepared.load(target.sectionId, result.rows);
+      if (target.replacePosition !== null) {
+        const row = result.rows[target.replacePosition - 1];
+        if (incoming.length !== 1 || row?.position !== target.replacePosition) throw new Error("교체할 문항 위치를 다시 확인해 주세요.");
+        prepared.update(target.sectionId, row.placement_id, {target: incoming[0].pointer});
+      } else prepared.addMany(target.sectionId, incoming.map(row => row.pointer), target.index);
+      const nextRows = prepared.rows(target.sectionId);
+      selectionEpoch++; selected = target.sectionId;
+      applyComposition(value, target.currentRevisionId); draft.load(selected, result.rows); draft.setRows(selected, nextRows);
+      for (const [key, title] of result.titles) labels.set(key, title);
+      for (const row of incoming) labels.set(labelKey(row.pointer), row.label);
+      page = Math.floor((target.replacePosition === null ? target.index : target.replacePosition - 1) / PAGE_SIZE);
+      renderComposition(); renderRows();
+      message(`${incoming.length}문항을 배치했습니다. 배치 저장을 눌러 확정해 주세요.`);
+      return true;
+    } finally {if (actor === ownerEpoch) {destinationBusy = false; sync(); renderRows();}}
   }
   async function moveToSection(row) {
     const forms = comp().sections.filter(s => s.kind === "FORM" && s.section_id !== selected);
@@ -458,7 +519,10 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
       if (!result.rows.length && after === null) root.append(node("p", "저장된 편성·인쇄 이력이 없습니다. 현재 초안은 저장 후 집계됩니다."));
       for (const row of result.rows) {
         const card = node("div", undefined, "excel-record"); card.append(node("p", `${row.content_title} · ${row.edition_label} · ${row.section_label} · ${row.position}번`),
-          node("p", `${row.currently_placed ? "배치 중" : "현재 배치에서 제외"}${row.print_count ? ` · 인쇄 ${row.print_count}회` : " · 인쇄 전"}`), button("편성 열기", () => loadEdition(row.edition_id, row.revision_id))); root.append(card);
+          node("p", `${row.currently_placed ? "배치 중" : "현재 배치에서 제외"}${row.print_count ? ` · 인쇄 ${row.print_count}회` : " · 인쇄 전"}`), button("편성 열기", () => loadEdition(row.edition_id, row.revision_id, {
+            deliverable_id: row.deliverable_id, edition_id: row.edition_id, deliverable_revision_id: row.revision_id,
+            section_id: row.section_id, position: row.position, placement_id: row.placement_id,
+          }))); root.append(card);
       }
       moreInspect = result.next_after ? () => showUsage(target, result.next_after) : null; $("#excel-inspect-more").hidden = !moreInspect;
     } catch (error) {if (epoch === selectionEpoch && actor === ownerEpoch) message(`사용 이력 조회 실패: ${error.message}`, true);}
@@ -563,7 +627,17 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
       ...(output ? {output_build_id: outputId, output_sha256: output.sha256} : {})}, "prints");
   }
   return {
-    setOwner(value) {if (owner === value) return; clearDeliveries(); usageEpoch++; usageKey = null; usageCounts.clear(); owner = value; ownerEpoch++; selectionEpoch++; contentEpoch++; draft.reset(); labels.clear(); loaded = false; selected = null; productId = null; currentRevision = null; pending = null; pendingRejected = false; recoveryError = false; selectionTarget = null; busy = false; loadingSection = false; contents = []; editions = []; contentCursor = null; editionCursor = null; printCursor = null; moreInspect = null; $("#excel-editor").hidden = true; $("#excel-empty").hidden = false; $("#excel-sections").replaceChildren(); $("#excel-editions").replaceChildren(); $("#excel-rows").replaceChildren(); $("#excel-prints").replaceChildren(); $("#excel-inspect-body").replaceChildren(); $("#excel-create").reset(); $("#excel-find").reset(); $("#excel-print-form").reset(); message(""); renderContents(); sync();},
+    setOwner(value) {
+      if (owner === value) return;
+      destinationBusy = false; destinationPicker.setOwner(value);
+      clearDeliveries(); usageEpoch++; usageKey = null; usageCounts.clear(); owner = value; ownerEpoch++; selectionEpoch++; contentEpoch++;
+      draft.reset(); labels.clear(); loaded = false; selected = null; productId = null; currentRevision = null;
+      pending = null; pendingRejected = false; recoveryError = false; selectionTarget = null; busy = false; loadingSection = false;
+      contents = []; editions = []; contentCursor = null; editionCursor = null; printCursor = null; moreInspect = null;
+      $("#excel-editor").hidden = true; $("#excel-empty").hidden = false;
+      for (const id of ["sections", "editions", "rows", "prints", "inspect-body"]) $("#excel-" + id).replaceChildren();
+      $("#excel-create").reset(); $("#excel-find").reset(); $("#excel-print-form").reset(); message(""); renderContents(); sync();
+    },
     open() {
       active = true;
       lifecycle.open();
@@ -580,6 +654,7 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
     selectionHint: () => selectionTarget && !locked() ? `${comp().content_title} · ${comp().sections.find(s => s.section_id === selectionTarget.sectionId).label}` : null,
     acceptSelection,
     acceptSelections,
+    placeSelections,
     install() {
       lifecycle.install();
       $("#excel-find").addEventListener("submit", event => {event.preventDefault(); refreshContents();});

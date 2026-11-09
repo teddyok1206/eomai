@@ -51,7 +51,7 @@ function node(document, tag, className, value) {
   return element;
 }
 
-export function createItemDb({document, api, openRegisteredItem, openPastExamVariation, onAssemblyOpen, canReadSource, similaritySearches, previewRegisteredItem, planningSelectionHint = () => null, onPlanningSelection = () => false, onPlanningSelections = () => false}) {
+export function createItemDb({document, api, openRegisteredItem, openPastExamVariation, onAssemblyOpen, canReadSource, similaritySearches, previewRegisteredItem, canPlan = () => false, planningSelectionHint = () => null, onPlanningSelection = () => false, onPlanningSelections = () => false}) {
   const $ = (selector) => document.querySelector(selector);
   let cursor = null;
   let query = "";
@@ -67,8 +67,9 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   let filterOptionsSequence = 0;
   let filterOptionsLoaded = false;
   let filterOptionsPending = false;
+  let planningRequest = null;
   const filterControlUpdates = new Set();
-  const assembly = createItemDbAssembly({document, api, activate: activateTab, message, planningSelectionHint, onPlanningSelections});
+  const assembly = createItemDbAssembly({document, api, activate: activateTab, message, canPlan, planningSelectionHint, onPlanningSelections});
   const similarity = createItemDbSimilarityList({
     document, searches: similaritySearches, activate: activateTab,
     async previewSelection(pointer, root, isCurrent) {
@@ -103,12 +104,24 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     button.title = similarity.available() ? "선택한 문항과 유사한 문항을 찾습니다." : "유사도 검색 연결을 준비하고 있습니다.";
   }
 
+  function syncPlanningActions() {
+    document.querySelectorAll("[data-excel-selection]").forEach(button => {
+      button.hidden = !canPlan(); button.disabled = planningRequest !== null;
+    });
+  }
+
   function planningAction(root, pointer, label) {
     const action = node(document, "button", "button secondary", "Excel에 배치");
     action.type = "button"; action.dataset.excelSelection = "true";
-    action.hidden = !planningSelectionHint();
-    action.addEventListener("click", () => {
-      if (!planningSelectionHint() || !onPlanningSelection(pointer, label)) message("Excel에서 배치할 회차를 먼저 골라 주세요.", true);
+    action.hidden = !canPlan(); action.disabled = planningRequest !== null;
+    const detail = detailSequence;
+    const current = () => detail === detailSequence && action.isConnected && canPlan();
+    action.addEventListener("click", async () => {
+      if (planningRequest !== null || !current()) return;
+      const request = {}; planningRequest = request; syncPlanningActions();
+      try {await onPlanningSelection(pointer, label, current);}
+      catch (error) {if (current()) message(`Excel 배치 준비 실패: ${error.message || "다시 시도해 주세요."}`, true);}
+      finally {if (planningRequest === request) {planningRequest = null; syncPlanningActions();}}
     });
     root.append(action);
   }
@@ -868,6 +881,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
   return Object.freeze({
     setOwner(owner) {
       if (assembly.setOwner(owner)) {
+        planningRequest = null;
         assemblyLoaded = false;
         loaded = false;
         sequence += 1;
@@ -932,7 +946,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     },
     open() {
       assembly.refreshMode();
-      document.querySelectorAll("[data-excel-selection]").forEach(button => {button.hidden = !planningSelectionHint();});
+      syncPlanningActions();
       const changed = syncSourceAccess();
       loadFilterOptions();
       if (changed || !loaded) load(true);

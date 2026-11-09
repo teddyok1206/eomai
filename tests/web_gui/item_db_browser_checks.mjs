@@ -12,7 +12,7 @@ const assets = new Map(await Promise.all(names.map(async name => [name, await re
 // adapters are fixtures. No production credentials, DB or model calls are used.
 const fixtureApp = `
 import {createItemDb} from './item-db.js';
-const fixture = window.dbFixture = {calls: [], similarCalls: [], similarChecks: [], similarReads: [], records: [], opened: [], variations: [], allowSource: true, hold: null, release: null, releaseSimilar: {}};
+const fixture = window.dbFixture = {calls: [], similarCalls: [], similarChecks: [], similarReads: [], records: [], opened: [], variations: [], allowSource: true, allowPlanning: true, planningCalls: 0, planningNavigations: 0, hold: null, release: null, releaseSimilar: {}};
 const columns = Array.from({length: 26}, (_, index) => String.fromCharCode(65 + index)).concat(['AA','AB','AC','AD','AE','AF']);
 function entry(number) {
   return {source_id: 'extitem_' + number.padStart(32, '0'), source_revision_id: 'extitemrev_' + number.padStart(32, '0'),
@@ -155,13 +155,20 @@ const searches = {
       candidates: value.candidates.slice(0, record.top_k)};
   },
 };
+function plan(entries, isCurrent) {
+  fixture.planningCalls++; fixture.planningImports = structuredClone(entries);
+  const finish = () => {
+    if (fixture.rejectPlanning || !isCurrent()) return false;
+    fixture.planningTarget = false; fixture.planningNavigations++; return true;
+  };
+  if (fixture.holdPlanning) return new Promise(resolve => {fixture.releasePlanning = () => resolve(finish());});
+  return finish();
+}
 const controller = createItemDb({document, api, openRegisteredItem: entry => fixture.opened.push(entry),
+  canPlan: () => fixture.allowPlanning,
   planningSelectionHint: () => fixture.planningTarget ? '합성 교재 · 1회차' : null,
-  onPlanningSelections: entries => {
-    fixture.planningImports = structuredClone(entries);
-    if (fixture.rejectPlanning) return false;
-    fixture.planningTarget = false; return true;
-  },
+  onPlanningSelection: (pointer, label, isCurrent) => plan([{pointer, label}], isCurrent),
+  onPlanningSelections: plan,
   openPastExamVariation: entry => fixture.variations.push(entry),
   canReadSource: () => fixture.allowSource, similaritySearches: searches,
   previewRegisteredItem: async (_pointer, root) => {root.textContent = '합성 기준 문항 미리보기';}});
@@ -223,6 +230,32 @@ try {
   await page.getByRole("button", {name: "조립 목록에 담기", exact: true}).click();
   assert.equal(await page.locator("#item-db-draft-count").innerText(), "1개");
   assert.equal(await page.locator("#item-db-tab-count").innerText(), "1");
+
+  // DB-first placement is available without a prior Excel destination; cancellation
+  // leaves this detail intact, and a late chooser cannot navigate a different detail.
+  const planOne = page.locator('#item-db-detail [data-excel-selection]').last();
+  assert.equal(await planOne.isVisible(), true);
+  await page.evaluate(() => {dbFixture.rejectPlanning = true;});
+  await planOne.click();
+  assert.equal(await page.evaluate(() => dbFixture.planningCalls), 1);
+  assert.match(await page.locator('#item-db-detail').innerText(), /고유번호 10310/u);
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '1개');
+  await page.evaluate(() => {dbFixture.rejectPlanning = false; dbFixture.holdPlanning = true;});
+  await planOne.evaluate(button => {button.click(); button.click();});
+  await page.waitForFunction(() => typeof dbFixture.releasePlanning === 'function');
+  assert.equal(await page.evaluate(() => dbFixture.planningCalls), 2, 'double click opened another chooser');
+  await rows.nth(1).getByRole('button').click();
+  await page.waitForFunction(() => document.querySelector('.item-db-detail-heading h3')?.textContent === '고유번호 10318');
+  await page.evaluate(() => {dbFixture.releasePlanning(); dbFixture.holdPlanning = false;});
+  await page.waitForFunction(() => !document.querySelector('#item-db-detail [data-excel-selection]').disabled);
+  assert.equal(await page.evaluate(() => dbFixture.planningNavigations), 0, 'late chooser changed the selected detail');
+  await page.evaluate(() => {dbFixture.allowPlanning = false; dbFixture.controller.open();});
+  assert.equal(await page.locator('#item-db-detail [data-excel-selection]').last().isVisible(), false);
+  assert.equal(await page.locator('#item-db-draft-to-excel').isVisible(), false);
+  await page.locator('#item-db-detail [data-excel-selection]').last().dispatchEvent('click');
+  await page.locator('#item-db-draft-to-excel').dispatchEvent('click');
+  assert.equal(await page.evaluate(() => dbFixture.planningCalls), 2, 'permission-hidden action remained executable');
+  await page.evaluate(() => {dbFixture.allowPlanning = true; dbFixture.controller.open();});
 
   // Slow A must never replace B, and closing/resetting a detail invalidates its reply.
   await page.evaluate(() => {window.dbFixture.hold = '/item-db/external-sources/extitem_' + '10310'.padStart(32, '0');});
@@ -351,8 +384,16 @@ try {
   assert.equal(await page.locator('#item-db-replacement').isVisible(), false);
   await page.getByRole('tab', {name: /배치/}).click();
   const callsBeforeImport = await page.evaluate(() => dbFixture.calls.filter(call => call.mutation).length);
+  await page.locator('#item-db-assembly-name').fill('취소 후 보존할 초안');
+  await page.evaluate(() => {dbFixture.rejectPlanning = true;});
   await page.locator('#item-db-draft-to-excel').click();
-  assert.equal(await page.evaluate(() => dbFixture.planningImports), undefined, 'imported without a target');
+  assert.equal((await page.evaluate(() => dbFixture.planningImports)).length, 2, 'DB-first list did not open destination chooser');
+  assert.equal(await draftRows.count(), 2, 'cancellation removed private draft');
+  assert.equal(await page.locator('#item-db-assembly-name').inputValue(), '취소 후 보존할 초안');
+  await page.evaluate(() => {dbFixture.rejectPlanning = false;});
+  await page.locator('#item-db-draft-to-excel').click();
+  assert.equal(await draftRows.count(), 2, 'successful DB-first handoff removed private draft');
+  assert.equal(await page.locator('#item-db-assembly-name').inputValue(), '취소 후 보존할 초안');
   await page.evaluate(() => {dbFixture.planningTarget = true; dbFixture.controller.open();});
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '0개');
   assert.equal(await page.locator('#item-db-draft-save').isDisabled(), true);
@@ -670,8 +711,25 @@ try {
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '1개', 'opening saved assembly replaced private draft');
   await page.evaluate(() => {dbFixture.planningTarget = true; dbFixture.controller.open();});
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '2개', 'switching modes discarded collector');
+  await page.evaluate(() => {dbFixture.holdPlanning = true; dbFixture.releasePlanning = null;});
+  const beforeDelayedList = await page.evaluate(() => dbFixture.planningCalls);
+  await page.locator('#item-db-draft-to-excel').evaluate(button => {button.click(); button.click();});
+  await page.waitForFunction(() => typeof dbFixture.releasePlanning === 'function');
+  assert.equal(await page.evaluate(() => dbFixture.planningCalls), beforeDelayedList + 1, 'duplicate list click opened another chooser');
+  await page.evaluate(() => {dbFixture.planningTarget = false; dbFixture.controller.open(); dbFixture.releasePlanning();});
+  await page.waitForFunction(() => !document.querySelector('#item-db-draft-to-excel').disabled);
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '1개', 'late handoff replaced private draft');
+  assert.equal(await page.locator('#item-db-assembly-name').inputValue(), '보존할 개인 초안');
+  await page.evaluate(() => {dbFixture.planningTarget = true; dbFixture.controller.open(); dbFixture.releasePlanning = null;});
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '2개', 'late mode-changed handoff erased collector');
+  await page.locator('#item-db-draft-to-excel').click();
+  await page.waitForFunction(() => typeof dbFixture.releasePlanning === 'function');
   await page.evaluate(() => dbFixture.controller.setOwner('operator_' + '3'.repeat(32)));
   assert.equal(await page.locator('#item-db-draft-count').innerText(), '0개', 'collector leaked across owners');
+  await page.evaluate(() => dbFixture.controller.openGraph(dbFixture.graph));
+  await page.getByRole('button', {name: '조립 목록에 담기', exact: true}).click();
+  await page.evaluate(() => {dbFixture.releasePlanning(); dbFixture.holdPlanning = false;});
+  assert.equal(await page.locator('#item-db-draft-count').innerText(), '1개', 'old owner completion erased new owner selections');
   assert.deepEqual(errors, []);
   assert.deepEqual(unexpected, []);
   console.log("item_db_browser=PASS live_writes=0");

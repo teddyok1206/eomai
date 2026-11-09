@@ -49,6 +49,7 @@
         "apps/web_gui/eom_web_gui/static/content-planning-pending.js",
         "apps/web_gui/eom_web_gui/static/content-planning-copy.js",
         "apps/web_gui/eom_web_gui/static/content-planning-lifecycle.js",
+        "apps/web_gui/eom_web_gui/static/content-planning-destination.js",
         "services/catalog_service/eom_catalog_service/content_lifecycle_service.py",
         "apps/web_gui/eom_web_gui/static/knowledge-map.js",
         "services/catalog_service/eom_catalog_service/knowledge_map_read.py",

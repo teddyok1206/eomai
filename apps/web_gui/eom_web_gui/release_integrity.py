@@ -62,6 +62,7 @@ REQUIRED_RUNTIME_FILES = frozenset(
         "static/content-planning-copy.js",
         "static/content-planning-location.js",
         "static/content-planning-lifecycle.js",
+        "static/content-planning-destination.js",
         "static/content-planning-pending.js",
         "static/content-planning.css",
         "static/content-planning.js",
