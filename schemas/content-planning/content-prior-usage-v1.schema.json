@@ -1,0 +1,182 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/prior-usage/1.0",
+  "$ref": "#/$defs/query",
+  "$defs": {
+    "cursor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ledger",
+        "usage_record_id"
+      ],
+      "properties": {
+        "ledger": {
+          "enum": [
+            "USAGE",
+            "LEGACY_USAGE_V1"
+          ]
+        },
+        "usage_record_id": {
+          "type": "string",
+          "pattern": "^usagerecord_[0-9a-f]{32}$"
+        }
+      }
+    },
+    "query": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_kind",
+        "targets",
+        "academic_year",
+        "after",
+        "limit"
+      ],
+      "properties": {
+        "query_kind": {
+          "const": "PRIOR_USAGE"
+        },
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "oneOf": [
+              {
+                "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/external"
+              },
+              {
+                "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/item"
+              }
+            ]
+          }
+        },
+        "academic_year": {
+          "const": "ALL"
+        },
+        "after": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/cursor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        }
+      }
+    },
+    "result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_kind",
+        "query_sha256",
+        "coverage",
+        "rows",
+        "next_after"
+      ],
+      "properties": {
+        "result_kind": {
+          "const": "PRIOR_USAGE"
+        },
+        "query_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "coverage": {
+          "const": "PRIOR_LEDGER_WITHOUT_ACADEMIC_YEAR"
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "ledger",
+              "usage_record_id",
+              "deliverable_id",
+              "deliverable_revision_id",
+              "title",
+              "section",
+              "position",
+              "target",
+              "recorded_at",
+              "publication_revision_id"
+            ],
+            "properties": {
+              "ledger": {
+                "enum": [
+                  "USAGE",
+                  "LEGACY_USAGE_V1"
+                ]
+              },
+              "usage_record_id": {
+                "type": "string",
+                "pattern": "^usagerecord_[0-9a-f]{32}$"
+              },
+              "deliverable_id": {
+                "type": "string",
+                "pattern": "^deliverable_[0-9a-f]{32}$"
+              },
+              "deliverable_revision_id": {
+                "type": "string",
+                "pattern": "^delivrev_[0-9a-f]{32}$"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "section": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "position": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "target": {
+                "$ref": "eom://schemas/item-origin/item-origin-types/1.0#/$defs/itemRevisionPointer"
+              },
+              "recorded_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "publication_revision_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^publicationrev_[0-9a-f]{32}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "next_after": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/cursor"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

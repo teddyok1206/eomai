@@ -1,5 +1,19 @@
 # Protected release-operator adapter
 
+## 2026-11-09 Excel content-planning successor (source candidate)
+
+Context/admission 1.22 pins `20261109_0076`, including the additive 0075 tables.
+`MIGRATION_UPGRADE_0076_FROM_0074` accepts the exact live predecessor 0074;
+`MIGRATION_UPGRADE_0076` supports an already applied 0075. Both use the existing
+transactional Alembic owner, and `MIGRATION_VERIFY_0076` is read-only. Already-0076
+replay does not reapply DDL. Old schema/callback bytes retain their meaning.
+The eleven boundary decisions below are unchanged; no new release service or
+privileged command surface is introduced. Migration rollback is forbidden once
+new content/scope history exists; roll back compatible wheels while retaining DDL.
+API gets read-only content membership tables. Catalog owns writes and only mutable
+edition/product heads get UPDATE; snapshots/receipts/print facts remain insert-only.
+Installed acceptance and production activation are separate evidence.
+
 ## 2026-11-06 material-learning successor
 
 `release-operator-context/1.21` and its admission receipt pin migration

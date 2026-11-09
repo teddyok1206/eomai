@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/delivery-prepared/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "edition_id",
+    "revision_id",
+    "composition_sha256",
+    "scope_sha256",
+    "assembly_id",
+    "assembly_revision_id",
+    "manifest_sha256",
+    "placement_count",
+    "created_at",
+    "replayed"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "content-delivery-prepared/1.0"
+    },
+    "edition_id": {
+      "type": "string",
+      "pattern": "^edition_[0-9a-f]{32}$"
+    },
+    "revision_id": {
+      "type": "string",
+      "pattern": "^delivrev_[0-9a-f]{32}$"
+    },
+    "composition_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "scope_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "assembly_id": {
+      "type": "string",
+      "pattern": "^assembly_[0-9a-f]{32}$"
+    },
+    "assembly_revision_id": {
+      "type": "string",
+      "pattern": "^assemblyrev_[0-9a-f]{32}$"
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "placement_count": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "replayed": {
+      "type": "boolean"
+    }
+  }
+}

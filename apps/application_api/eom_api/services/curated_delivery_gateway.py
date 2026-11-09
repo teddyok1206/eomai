@@ -2,13 +2,13 @@
 
 from typing import Literal
 
-from eom_catalog_contracts import CuratedDocumentAssemblyManifestV1
 from eom_catalog_contracts.curated_document_delivery_application import (
-    CuratedDocumentDeliveryQueryV1,
-    CuratedDocumentDeliveryResponseV1,
+    CuratedDocumentDeliveryQueryV2,
+    CuratedDocumentDeliveryResponseV2,
 )
-from eom_hwpx_contracts.curated_build import CuratedHwpxBuildInput
+from eom_catalog_contracts.curated_document_slots import CuratedDeliveryManifest
 from eom_hwpx_contracts.curated_document import CuratedHwpConverterSnapshot
+from eom_hwpx_contracts.curated_occurrences import CuratedBuildInput
 from eom_hwpx_contracts.models import ContentTeamHandoffSnapshot
 from eom_operator_identity import ActorContext
 
@@ -33,11 +33,11 @@ class CuratedDeliveryGateway:
         manifest_sha256: str,
         actor: ActorContext,
         purpose: Literal["AUTHORIZE_READ", "AUTHORIZE_BUILD", "PIN_INPUTS"],
-    ) -> CuratedDocumentDeliveryResponseV1:
+    ) -> CuratedDocumentDeliveryResponseV2:
         if actor.operator_id is None or actor.session_id is None:
             raise ValueError("curated delivery requires an authenticated operator")
-        return self.client.resolve_curated_document_delivery(
-            CuratedDocumentDeliveryQueryV1(
+        result = self.client.resolve_curated_document_delivery(
+            CuratedDocumentDeliveryQueryV2(
                 actor_id=actor.operator_id,
                 session_id=actor.session_id,
                 request_id=actor.request_id,
@@ -50,6 +50,9 @@ class CuratedDeliveryGateway:
                 converter=self.converter if purpose == "PIN_INPUTS" else None,
             )
         )
+        if not isinstance(result, CuratedDocumentDeliveryResponseV2):
+            raise ValueError("Catalog delivery contract version differs")
+        return result
 
     def authorize_delivery_build(
         self,
@@ -58,7 +61,7 @@ class CuratedDeliveryGateway:
         assembly_revision_id: str,
         manifest_sha256: str,
         actor: ActorContext,
-    ) -> CuratedDocumentAssemblyManifestV1:
+    ) -> CuratedDeliveryManifest:
         result = self._resolve(
             assembly_id,
             assembly_revision_id=assembly_revision_id,
@@ -76,7 +79,7 @@ class CuratedDeliveryGateway:
         assembly_revision_id: str,
         manifest_sha256: str,
         actor: ActorContext,
-    ) -> CuratedDocumentAssemblyManifestV1:
+    ) -> CuratedDeliveryManifest:
         result = self._resolve(
             assembly_id,
             assembly_revision_id=assembly_revision_id,
@@ -88,8 +91,8 @@ class CuratedDeliveryGateway:
         return result.manifest
 
     def pin_inputs(
-        self, manifest: CuratedDocumentAssemblyManifestV1, *, actor: ActorContext
-    ) -> CuratedHwpxBuildInput:
+        self, manifest: CuratedDeliveryManifest, *, actor: ActorContext
+    ) -> CuratedBuildInput:
         result = self._resolve(
             manifest.assembly_id,
             assembly_revision_id=manifest.assembly_revision_id,

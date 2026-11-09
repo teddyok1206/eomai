@@ -68,6 +68,25 @@ process가 없는 고아 실행의 명시적 successor는 기존 `external_item_
 별도 execution-proof route다. 살아 있는 unit/lease·commit 이력이 있으면 실행하지 않는다.
 설계·검증 경계는 `CREATIVE_COHORT_RECOVERY_CONTINUITY.md`를 참고한다.
 
+## Excel 콘텐츠 편성 (구현 중, 아직 운영 미활성화)
+
+`docs/architecture/EXCEL_CONTENT_PLACEMENT_DESIGN.md`가 승인된 설계다. 기존 Deliverable과
+Form, curated Assembly를 확장하며 별도 문항/파일 registry를 만들지 않는다.
+`content_planning.py`/`curated_document_slots.py`가 판·구간·빈 자리·반복 occurrence 계약,
+`content_planning_layout.py`가 순수 이동/복사/번호·인쇄 범위 계산을 소유한다.
+`content_planning_models.py`, `content_print_models.py`, `curated_document_slot_models.py`가
+indexed 소속·읽기·불변 이력 저장을 담당한다. migration `20261109_0075`/`0076`은 현재 개발 후보다.
+source 존재나 임시 DB PASS를 운영 설치로 해석하지 않는다. 진행·검증 경계는
+`docs/operations/EXCEL_CONTENT_PLACEMENT_IMPLEMENTATION_2026-11-09.md`를 확인한다.
+
+새 V3 draft/V2 manifest는 placement ID가 고유하며 Item 반복·빈칸·200 초과를 허용한다.
+구 V1/V2 draft와 V1 manifest 의미를 바꾸지 않는다. 개인 조립과 콘텐츠 Form 조립의 권한은
+별도이며 `content_delivery_service.py`가 선택 scope를 기존 curated 출력에 연결한다.
+`content_usage_projection.py`의 current/print membership을 이력·summary·연도별 사용 필터가
+공유한다. `creative_source_registration.py`의 공식 lineage만 원본과 등록 Item을 연결하며
+숫자/제목의 유사함으로 합치지 않는다. `content_prior_usage_read.py`는 연도 없는 옛 ledger를
+별도 읽는다. 필터는 pagination 전에 적용하며 이력 조회로 새 인쇄 사실을 만들지 않는다.
+
 ## 먼저 열 파일
 
 - `apps/application_api/eom_api/routers/item_db.py`

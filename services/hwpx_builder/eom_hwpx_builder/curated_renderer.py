@@ -13,7 +13,11 @@ from eom_hwpx_contracts.curated_document import (
     CuratedHwpxRenderResultV2,
     parse_curated_render_value,
 )
-from eom_hwpx_contracts.curated_mixed import CuratedMixedRenderRequest, CuratedMixedRenderResult
+from eom_hwpx_contracts.curated_mixed import CuratedMixedRenderResult
+from eom_hwpx_contracts.curated_occurrences import (
+    CuratedOccurrenceRenderResult,
+    parse_mixed_render_request,
+)
 from eom_hwpx_contracts.validation import parse_json_object, validate_contract
 
 from eom_hwpx_builder.curated_package_merge import merge_native_hwpx
@@ -56,7 +60,9 @@ def _result_file(
 ) -> None:
     value = result.model_dump(mode="json")
     schema = (
-        "curated-render-result-v3"
+        "curated-render-result-v4"
+        if isinstance(result, CuratedOccurrenceRenderResult)
+        else "curated-render-result-v3"
         if isinstance(result, CuratedMixedRenderResult)
         else (
             "curated-render-result-v2"
@@ -85,13 +91,20 @@ def render_curated_workspace(
         or result_path.is_symlink()
     ):
         fail("curated fixed workspace boundary is invalid")
-    payload = _read_request(request_path, maximum=1024 * 1024)
+    payload = _read_request(request_path, maximum=16 * 1024 * 1024)
     value = parse_json_object(payload)
-    if value.get("schema_version") == "curated-hwpx-render-request/3.0":
+    if value.get("schema_version") in {
+        "curated-hwpx-render-request/3.0",
+        "curated-hwpx-render-request/4.0",
+    }:
         from eom_hwpx_builder.curated_mixed_renderer import render_mixed_curated_document
 
-        validate_contract("curated-render-request-v3", value)
-        mixed = CuratedMixedRenderRequest.model_validate(value)
+        if (
+            value["schema_version"] == "curated-hwpx-render-request/3.0"
+            and len(payload) > 1024 * 1024
+        ):
+            fail("historical mixed request byte budget exceeded")
+        mixed = parse_mixed_render_request(value)
         rendered = render_mixed_curated_document(workspace, mixed)
         _result_file(result_path, rendered.result)
         if rendered.result.status == "SUCCEEDED":

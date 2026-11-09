@@ -122,6 +122,30 @@ from eom_catalog_contracts import (
     catalog_application_schema_route,
     validate_contract,
 )
+from eom_catalog_contracts.content_delivery import ContentDeliveryPrepared, PrepareContentDelivery
+from eom_catalog_contracts.content_planning_commands import (
+    ContentPlanningCommand,
+    ContentPlanningWriteResult,
+)
+from eom_catalog_contracts.content_planning_queries import (
+    ContentPlanningQuery,
+    ContentPlanningQueryResult,
+)
+from eom_catalog_contracts.content_planning_rpc import (
+    ContentPlanningDeliveryRequest,
+    ContentPlanningPrintRequest,
+    ContentPlanningQueryRequest,
+    ContentPlanningReply,
+    ContentPlanningRequest,
+    ContentPlanningWriteRequest,
+    check_content_planning_reply,
+    parse_content_planning_reply,
+    parse_content_planning_request,
+)
+from eom_catalog_contracts.content_print_commands import (
+    ContentPrintCommand,
+    ContentPrintMutationResult,
+)
 from eom_catalog_contracts.creative_visual_presentation import ItemVisualPresentation
 from eom_catalog_contracts.curated_document_assembly_library import (
     CuratedAssemblyLibraryRequest,
@@ -140,8 +164,11 @@ from eom_catalog_contracts.curated_document_assembly_library import (
     parse_curated_library_response,
 )
 from eom_catalog_contracts.curated_document_delivery_application import (
-    CuratedDocumentDeliveryQueryV1,
+    CuratedDeliveryQuery,
+    CuratedDeliveryResponse,
     CuratedDocumentDeliveryResponseV1,
+    CuratedDocumentDeliveryResponseV2,
+    delivery_contract_version,
 )
 from eom_catalog_contracts.material_learning_intake import (
     ControlMaterialLearningRunCommand,
@@ -1114,14 +1141,20 @@ class CatalogApplicationClient:
             ) from exc
 
     def resolve_curated_document_delivery(
-        self, query: CuratedDocumentDeliveryQueryV1
-    ) -> CuratedDocumentDeliveryResponseV1:
+        self, query: CuratedDeliveryQuery
+    ) -> CuratedDeliveryResponse:
         payload = query.model_dump(mode="json", exclude_none=True)
-        validate_contract("catalog-curated-document-delivery-request-v1", payload)
+        version = delivery_contract_version(query)
+        validate_contract(f"catalog-curated-document-delivery-request-{version}", payload)
         raw = self._raw_request(payload, timeout_seconds=EVIDENCE_RESPONSE_TIMEOUT_SECONDS)
         try:
-            validate_contract("catalog-curated-document-delivery-response-v1", raw)
-            result = CuratedDocumentDeliveryResponseV1.model_validate(raw)
+            validate_contract(f"catalog-curated-document-delivery-response-{version}", raw)
+            response_type = (
+                CuratedDocumentDeliveryResponseV2
+                if version == "v2"
+                else CuratedDocumentDeliveryResponseV1
+            )
+            result = response_type.model_validate(raw)
             if result.status == "ERROR":
                 self._raise_remote_error(result.error_code)
             assert result.manifest is not None
@@ -1223,6 +1256,103 @@ class CatalogApplicationClient:
         if not isinstance(result, CuratedDocumentAssemblyListResponseV2):
             raise ValueError("titled assembly list response differs")
         return result.values, result.next_cursor
+
+    def prepare_content_delivery(
+        self, command: PrepareContentDelivery, *, actor: ActorContext, idempotency_key: str
+    ) -> ContentDeliveryPrepared:
+        if actor.operator_id is None or actor.session_id is None:
+            raise ValueError("content delivery requires an authenticated operator")
+        reply = self._request_content_planning(
+            ContentPlanningDeliveryRequest(
+                actor_id=actor.operator_id,
+                session_id=actor.session_id,
+                request_id=actor.request_id,
+                authentication_time=actor.authentication_time,
+                command=command,
+                idempotency_key=idempotency_key,
+            )
+        )
+        assert isinstance(reply.result, ContentDeliveryPrepared)
+        return reply.result
+
+    def write_content_planning(
+        self, command: ContentPlanningCommand, *, actor: ActorContext, idempotency_key: str
+    ) -> ContentPlanningWriteResult:
+        if actor.operator_id is None or actor.session_id is None:
+            raise ValueError("content editing requires an authenticated operator")
+        reply = self._request_content_planning(
+            ContentPlanningWriteRequest(
+                actor_id=actor.operator_id,
+                session_id=actor.session_id,
+                request_id=actor.request_id,
+                authentication_time=actor.authentication_time,
+                idempotency_key=idempotency_key,
+                command=command,
+            )
+        )
+        if not isinstance(reply.result, ContentPlanningWriteResult):
+            raise ValueError("content write response differs")
+        return reply.result
+
+    def query_content_planning(
+        self, query: ContentPlanningQuery, *, actor: ActorContext
+    ) -> ContentPlanningQueryResult:
+        if actor.operator_id is None or actor.session_id is None:
+            raise ValueError("content read requires an authenticated operator")
+        reply = self._request_content_planning(
+            ContentPlanningQueryRequest(
+                actor_id=actor.operator_id,
+                session_id=actor.session_id,
+                request_id=actor.request_id,
+                authentication_time=actor.authentication_time,
+                query=query,
+            )
+        )
+        if reply.result is None or isinstance(
+            reply.result,
+            (ContentPlanningWriteResult, ContentPrintMutationResult, ContentDeliveryPrepared),
+        ):
+            raise ValueError("content query response differs")
+        return reply.result
+
+    def record_content_print(
+        self, command: ContentPrintCommand, *, actor: ActorContext, idempotency_key: str
+    ) -> ContentPrintMutationResult:
+        if actor.operator_id is None or actor.session_id is None:
+            raise ValueError("content printing requires an authenticated operator")
+        reply = self._request_content_planning(
+            ContentPlanningPrintRequest(
+                actor_id=actor.operator_id,
+                session_id=actor.session_id,
+                request_id=actor.request_id,
+                authentication_time=actor.authentication_time,
+                idempotency_key=idempotency_key,
+                command=command,
+            )
+        )
+        if not isinstance(reply.result, ContentPrintMutationResult):
+            raise ValueError("content print response differs")
+        return reply.result
+
+    def _request_content_planning(self, request: ContentPlanningRequest) -> ContentPlanningReply:
+        payload = request.model_dump(mode="json")
+        parse_content_planning_request(payload)
+        try:
+            reply = parse_content_planning_reply(
+                self._raw_request(payload, timeout_seconds=EVIDENCE_RESPONSE_TIMEOUT_SECONDS)
+            )
+            check_content_planning_reply(request, reply)
+        except (ValueError, JsonSchemaValidationError) as exc:
+            raise CatalogApplicationClientError(
+                CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE,
+                "Catalog content-planning response is invalid",
+            ) from exc
+        if reply.status == "ERROR":
+            raise CatalogApplicationClientError(
+                reply.error_code or "CATALOG_APPLICATION_UNAVAILABLE",
+                "Catalog content-planning operation failed",
+            )
+        return reply
 
     def remove_curated_document_assembly(
         self,

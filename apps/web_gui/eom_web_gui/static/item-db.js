@@ -51,7 +51,7 @@ function node(document, tag, className, value) {
   return element;
 }
 
-export function createItemDb({document, api, openRegisteredItem, openPastExamVariation, onAssemblyOpen, canReadSource, similaritySearches, previewRegisteredItem}) {
+export function createItemDb({document, api, openRegisteredItem, openPastExamVariation, onAssemblyOpen, canReadSource, similaritySearches, previewRegisteredItem, planningSelectionHint = () => null, onPlanningSelection = () => false}) {
   const $ = (selector) => document.querySelector(selector);
   let cursor = null;
   let query = "";
@@ -101,6 +101,16 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     const button = $("#item-db-similarity-start");
     button.disabled = !selectedItem || !similarity.available();
     button.title = similarity.available() ? "선택한 문항과 유사한 문항을 찾습니다." : "유사도 검색 연결을 준비하고 있습니다.";
+  }
+
+  function planningAction(root, pointer, label) {
+    const action = node(document, "button", "button secondary", "Excel에 배치");
+    action.type = "button"; action.dataset.excelSelection = "true";
+    action.hidden = !planningSelectionHint();
+    action.addEventListener("click", () => {
+      if (!planningSelectionHint() || !onPlanningSelection(pointer, label)) message("Excel에서 배치할 회차를 먼저 골라 주세요.", true);
+    });
+    root.append(action);
   }
 
 
@@ -398,6 +408,11 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
         graph_snapshot_sha256: entry.snapshot_sha256,
       }, `등록 문항 · ${approvalLabel(registration)}`));
       section.append(add);
+      planningAction(section, {
+        placement_kind: "REGISTERED_ITEM_REVISION", item_id: entry.item_id,
+        item_revision_id: entry.item_revision_id, item_manifest_sha256: entry.item_manifest_sha256,
+        graph_snapshot_revision_id: entry.graph_snapshot_revision_id, graph_snapshot_sha256: entry.snapshot_sha256,
+      }, root.querySelector("h3")?.textContent || "등록 문항");
     }).catch((error) => {
       if (request === detailSequence) message(`Graph 연결 조회 실패: ${error.message}`, true);
     });
@@ -503,6 +518,11 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     }, graphLabel(entry)));
     const actions = node(document, "div", "item-db-result-actions");
     actions.append(button, select);
+    planningAction(actions, {
+      placement_kind: entry.source_class === "PAST_EXAM" ? "PAST_EXAM_ITEM_REVISION" : "REGISTERED_ITEM_REVISION",
+      item_id: entry.item_id, item_revision_id: entry.item_revision_id, item_manifest_sha256: entry.item_manifest_sha256,
+      graph_snapshot_revision_id: entry.graph_snapshot_revision_id, graph_snapshot_sha256: entry.snapshot_sha256,
+    }, graphLabel(entry));
     if (entry.past_exam_context) {
       const variation = node(document, "button", "button secondary", "1:1 기출변형");
       variation.type = "button";
@@ -573,6 +593,12 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     return changed;
   }
 
+  function usageFilter() {
+    const state = $("#item-db-usage-state")?.value;
+    const year = $("#item-db-usage-year")?.value;
+    return state ? {usage_state: state, ...(year ? {usage_year: year} : {})} : {};
+  }
+
   async function load(reset = false) {
     const source = selectedSource();
     let parameters;
@@ -590,8 +616,9 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     }
     const approval = $("#item-db-approval").value;
     parameters.approval_state = approval;
+    const usage = usageFilter();
     const request = ++sequence;
-    const key = JSON.stringify(parameters);
+    const key = JSON.stringify([parameters, usage]);
     if (reset || key !== query) {
       query = key;
       cursor = null;
@@ -612,12 +639,14 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       const page = ["EXTERNAL_SOURCE", "AI", "EXTERNAL"].includes(source)
         ? await api(`/item-db/registered/search?${new URLSearchParams({
           kind: source === "EXTERNAL_SOURCE" ? "CREATIVE" : source, ...(approval ? {approval_state: approval} : {}),
+          ...usage,
         })}`, {
           method: "POST", mutation: true, body: source === "EXTERNAL_SOURCE" ? filterBody
             : {schema_version: "external-item-db-filter/1.0", match_mode: "ALL", conditions: [], limit: 50, cursor},
         })
         : await api(`/item-db/graph-items?${new URLSearchParams({
           source_class: source,
+          ...usage,
           ...(approval ? {approval_state: approval} : {}),
           ...(parameters.curriculum_unit_key ? {curriculum_unit_key: parameters.curriculum_unit_key} : {}),
           ...(parameters.administration_year ? {administration_year: parameters.administration_year} : {}),
@@ -697,6 +726,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
           select.addEventListener("click", () => assembly.add(placement,
             `창작 원본 ${detail.entry.external_number} · ${chosen.edition}교 · ${chosen.filename}`));
           heading.append(select);
+          planningAction(heading, placement, `고유번호 ${detail.entry.external_number} · ${chosen.filename}`);
         }
       }
       root.append(heading, originalUnitPanel(detail.entry), metadataList([
@@ -810,8 +840,9 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
     message("검색 결과를 엑셀로 준비하고 있습니다.");
     try {
       const approval = $("#item-db-approval").value;
+      const query = new URLSearchParams({...usageFilter(), ...(approval ? {approval_state: approval} : {})});
       const blob = await api("/item-db/external-sources/export"
-        + (approval ? `?approval_state=${encodeURIComponent(approval)}` : ""), {
+        + (query.size ? `?${query}` : ""), {
         method: "POST", mutation: true, body: parameters, binary: true,
       });
       if (blob.type !== "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet") {
@@ -899,6 +930,7 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       });
     },
     open() {
+      document.querySelectorAll("[data-excel-selection]").forEach(button => {button.hidden = !planningSelectionHint();});
       const changed = syncSourceAccess();
       loadFilterOptions();
       if (changed || !loaded) load(true);
@@ -908,6 +940,11 @@ export function createItemDb({document, api, openRegisteredItem, openPastExamVar
       activateTab("search");
       resetDetail();
       openGraphDetail(entry, null);
+    },
+    openPlacement(pointer) {
+      activateTab("search"); resetDetail();
+      if (pointer.placement_kind === "EXTERNAL_SOURCE_DOCUMENT") openDetail(pointer.source_id, null, pointer.source_revision_id);
+      else openRegisteredItem(pointer);
     },
     setCurriculumUnits(units) {
       const select = $("#item-db-graph-unit");

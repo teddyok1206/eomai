@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/print-record/1.0",
+  "title": "User recorded printing, not inferred from build or download",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "print_record_id",
+    "deliverable_revision_id",
+    "composition_sha256",
+    "scope",
+    "origin",
+    "intent",
+    "predecessor_print_record_id",
+    "printed_on",
+    "recorded_at",
+    "recorded_by",
+    "note",
+    "output",
+    "record_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "content-print-record/1.0"
+    },
+    "print_record_id": {
+      "type": "string",
+      "pattern": "^print_[0-9a-f]{32}$"
+    },
+    "deliverable_revision_id": {
+      "type": "string",
+      "pattern": "^delivrev_[0-9a-f]{32}$"
+    },
+    "composition_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "scope": {
+      "$ref": "eom://schemas/content-planning/print-scope/1.0"
+    },
+    "origin": {
+      "const": "USER_RECORDED"
+    },
+    "intent": {
+      "enum": [
+        "INITIAL",
+        "REPRINT",
+        "CORRECTION"
+      ]
+    },
+    "predecessor_print_record_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^print_[0-9a-f]{32}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "printed_on": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "date"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "recorded_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(Z|\\+00:00)$"
+    },
+    "recorded_by": {
+      "type": "string",
+      "pattern": "^operator_[0-9a-f]{32}$"
+    },
+    "note": {
+      "type": "string",
+      "maxLength": 2000,
+      "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]*$"
+    },
+    "output": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/output"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "record_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "intent": {
+            "const": "INITIAL"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "predecessor_print_record_id": {
+            "type": "null"
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "predecessor_print_record_id": {
+            "type": "string",
+            "pattern": "^print_[0-9a-f]{32}$"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "hwpx_build_id",
+        "scope_sha256",
+        "artifact_id",
+        "artifact_revision_id",
+        "artifact_sha256",
+        "output_sha256"
+      ],
+      "properties": {
+        "hwpx_build_id": {
+          "type": "string",
+          "pattern": "^hwpxbuild_[0-9a-f]{32}$"
+        },
+        "scope_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "artifact_id": {
+          "type": "string",
+          "pattern": "^artifact_[0-9a-f]{32}$"
+        },
+        "artifact_revision_id": {
+          "type": "string",
+          "pattern": "^rev_[0-9a-f]{32}$"
+        },
+        "artifact_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "output_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}

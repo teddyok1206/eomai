@@ -94,3 +94,97 @@ def test_new_catalog_schema_is_exactly_mirrored():
             / "packages/catalog_contracts/eom_catalog_contracts/resources/catalog-application"
             / name
         ).read_bytes()
+
+
+@pytest.mark.parametrize("purpose", ["PIN_INPUTS", "AUTHORIZE_BUILD", "AUTHORIZE_READ"])
+def test_occurrence_transport_preserves_pins_and_refuses_cross_family(purpose):
+    import json
+
+    from eom_api.services.catalog_application_client import CatalogApplicationClient
+    from eom_catalog_contracts.curated_document_delivery_application import (
+        CuratedDocumentDeliveryQueryV2,
+        CuratedDocumentDeliveryResponseV2,
+    )
+    from eom_catalog_contracts.curated_document_slots import CuratedDocumentAssemblyManifestV2
+    from eom_hwpx_contracts.curated_occurrences import CuratedHwpxBuildInputV2
+    from eom_identifiers import content_sha256
+
+    from tests.unit.content_planning_fixtures import identifier, slot
+
+    legacy = build_manifest()
+    # The registered example below reuses the exact pointer family, not its text.
+    selected = next(
+        row for row in legacy.placements if row.placement_kind == "REGISTERED_ITEM_REVISION"
+    )
+    target = selected.model_dump(mode="json")
+    target.pop("position")
+    slots = [slot(i, target=target) for i in range(1, 301)]
+    value = {
+        **legacy.model_dump(mode="json"),
+        "schema_version": "curated-document-assembly-manifest/2.0",
+        "previous_revision_id": None,
+        "revision_number": 1,
+        "placements": slots,
+    }
+    value.pop("manifest_sha256")
+    manifest = CuratedDocumentAssemblyManifestV2.model_validate(
+        {**value, "manifest_sha256": content_sha256(value)}
+    )
+    old_input = build_inputs(legacy)
+    selected_input = next(row for row in old_input.placements if row.kind == "REGISTERED_ITEM")
+    inputs = CuratedHwpxBuildInputV2(
+        assembly_id=manifest.assembly_id,
+        assembly_revision_id=manifest.assembly_revision_id,
+        assembly_manifest_sha256=manifest.manifest_sha256,
+        handoff=old_input.handoff,
+        converter=None,
+        placements=tuple(
+            {
+                **selected_input.model_dump(mode="json"),
+                "position": i,
+                "placement_id": identifier("placement", i),
+            }
+            for i in range(1, 301)
+        ),
+    )
+    request = CuratedDocumentDeliveryQueryV2.model_validate(
+        {
+            **query(purpose).model_dump(mode="json"),
+            "operation": "RESOLVE_CURATED_DOCUMENT_DELIVERY_V2",
+            "manifest_sha256": manifest.manifest_sha256,
+        }
+    )
+    validate_contract(
+        "catalog-curated-document-delivery-request-v2", request.model_dump(mode="json")
+    )
+    service = Mock()
+    service.authorize_delivery_build.return_value = service.read_for_delivery.return_value = (
+        manifest
+    )
+    service.pin_delivery_inputs.return_value = inputs
+    handler = object.__new__(_CatalogApplicationHandler)
+    handler.server = SimpleNamespace(
+        curated_document_assemblies=service,
+        write_curated_document_delivery_response=CatalogApplicationServer.write_curated_document_delivery_response,
+    )
+    handler.wfile = BytesIO()
+    handler._resolve_curated_document_delivery(request)
+    reply = CuratedDocumentDeliveryResponseV2.model_validate_json(handler.wfile.getvalue())
+    assert reply.status == "OK" and reply.manifest == manifest
+    client = CatalogApplicationClient()
+    client._raw_request = Mock(return_value=json.loads(handler.wfile.getvalue()))
+    assert client.resolve_curated_document_delivery(request) == reply
+    with pytest.raises(SchemaError):
+        validate_contract(
+            "catalog-curated-document-delivery-response-v1", reply.model_dump(mode="json")
+        )
+    if purpose == "PIN_INPUTS":
+        assert reply.inputs == inputs
+        with pytest.raises(ValidationError, match="family"):
+            CuratedDocumentDeliveryResponseV2(
+                status="OK",
+                manifest=legacy,
+                inputs=inputs.model_copy(
+                    update={"assembly_manifest_sha256": legacy.manifest_sha256}
+                ),
+            )

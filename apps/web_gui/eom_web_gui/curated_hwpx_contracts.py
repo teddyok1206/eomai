@@ -13,13 +13,13 @@ class CuratedHwpxSubmission(WebModel):
 
 
 class CuratedHwpxView(WebModel):
-    schema_version: Literal["curated-hwpx-build-view/1.0"]
+    schema_version: Literal["curated-hwpx-build-view/1.0", "curated-hwpx-build-view/2.0"]
     build_id: str = Field(pattern=r"^hwpxbuild_[0-9a-f]{32}$")
     assembly_id: str = Field(pattern=r"^assembly_[0-9a-f]{32}$")
     assembly_revision_id: str = Field(pattern=r"^assemblyrev_[0-9a-f]{32}$")
     state: Literal["REQUESTED", "RUNNING", "VALIDATING", "SUCCEEDED", "FAILED"]
     validation_state: Literal["PENDING", "PASS", "FAIL"]
-    placement_count: int = Field(ge=1, le=200)
+    placement_count: int = Field(ge=1, le=100000)
     section_count: int | None = Field(default=None, ge=1, le=10000)
     output_sha256: str | None = Field(default=None, pattern=r"^sha256:[0-9a-f]{64}$")
     output_size_bytes: int | None = Field(default=None, ge=1, le=256 * 1024**2)
@@ -31,6 +31,8 @@ class CuratedHwpxView(WebModel):
 
     @model_validator(mode="after")
     def verified_download(self) -> "CuratedHwpxView":
+        if self.schema_version == "curated-hwpx-build-view/1.0" and self.placement_count > 200:
+            raise ValueError("legacy curated view exceeds its released position bound")
         success = self.state == "SUCCEEDED" and self.validation_state == "PASS"
         if self.download_available != success or (
             success

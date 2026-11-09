@@ -756,6 +756,9 @@ class DeliverableRevisionRecord(Base):
     __tablename__ = "deliverable_revisions"
     __table_args__ = (
         UniqueConstraint(
+            "deliverable_revision_id", "deliverable_id", name="uq_deliverable_revision_owner"
+        ),
+        UniqueConstraint(
             "deliverable_id", "revision_number", name="uq_deliverable_revision_number"
         ),
         CheckConstraint("revision_number > 0", name="ck_deliverable_revision_number_positive"),

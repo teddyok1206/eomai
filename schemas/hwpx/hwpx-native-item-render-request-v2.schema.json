@@ -1,0 +1,399 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/hwpx/native-item-render-request/2.0",
+  "title": "Native editable canonical Item publication plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "profile",
+    "build_id",
+    "item_revision_id",
+    "source_sha256",
+    "effective_content_sha256",
+    "template_sha256",
+    "item_number",
+    "title",
+    "points",
+    "body",
+    "choices",
+    "accepted_answers",
+    "correct_choice_id",
+    "authoring_intent",
+    "explanation",
+    "statement_explanations"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "native-item-render-request/2.0"
+    },
+    "profile": {
+      "const": "CANONICAL_ITEM_NATIVE_V2"
+    },
+    "build_id": {
+      "type": "string",
+      "pattern": "^hwpxbuild_[0-9a-f]{32}$"
+    },
+    "item_revision_id": {
+      "type": "string",
+      "pattern": "^itemrev_[0-9a-f]{32}$"
+    },
+    "source_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "effective_content_sha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "template_sha256": {
+      "const": "sha256:22ded5c8de95a8c9659544749fd21a109f40a1c7b5963e123887c0d9ca51a687"
+    },
+    "item_number": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100000
+    },
+    "title": {
+      "$ref": "#/$defs/text"
+    },
+    "points": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "body": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100,
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/paragraph"
+          },
+          {
+            "$ref": "#/$defs/equation"
+          },
+          {
+            "$ref": "#/$defs/table"
+          },
+          {
+            "$ref": "#/$defs/image"
+          },
+          {
+            "$ref": "#/$defs/statements"
+          }
+        ]
+      }
+    },
+    "choices": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "$ref": "#/$defs/choice"
+      }
+    },
+    "accepted_answers": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/text"
+      }
+    },
+    "correct_choice_id": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "pattern": "^choice_[a-z0-9][a-z0-9_]{0,31}$"
+    },
+    "authoring_intent": {
+      "$ref": "#/$defs/text"
+    },
+    "explanation": {
+      "$ref": "#/$defs/text"
+    },
+    "statement_explanations": {
+      "type": "array",
+      "maxItems": 10,
+      "items": {
+        "$ref": "#/$defs/statement"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "choices": {
+            "minItems": 1
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "choices": {
+            "minItems": 2
+          },
+          "correct_choice_id": {
+            "type": "string"
+          },
+          "accepted_answers": {
+            "maxItems": 0
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "correct_choice_id": {
+            "type": "null"
+          },
+          "accepted_answers": {
+            "minItems": 1
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 20000
+    },
+    "blockId": {
+      "type": "string",
+      "pattern": "^block_[a-z][a-z0-9_]{0,63}$"
+    },
+    "statement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "statement_id",
+        "label",
+        "text"
+      ],
+      "properties": {
+        "statement_id": {
+          "type": "string",
+          "pattern": "^statement_[a-z][a-z0-9_]{0,31}$"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16
+        },
+        "text": {
+          "$ref": "#/$defs/text"
+        }
+      }
+    },
+    "choice": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "choice_id",
+        "label",
+        "text"
+      ],
+      "properties": {
+        "choice_id": {
+          "type": "string",
+          "pattern": "^choice_[a-z0-9][a-z0-9_]{0,31}$"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16
+        },
+        "text": {
+          "$ref": "#/$defs/text"
+        }
+      }
+    },
+    "paragraph": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "block_id",
+        "purpose",
+        "text"
+      ],
+      "properties": {
+        "type": {
+          "const": "paragraph"
+        },
+        "block_id": {
+          "$ref": "#/$defs/blockId"
+        },
+        "purpose": {
+          "enum": [
+            "stem",
+            "prompt",
+            "context"
+          ]
+        },
+        "text": {
+          "$ref": "#/$defs/text"
+        }
+      }
+    },
+    "equation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "block_id",
+        "notation",
+        "source"
+      ],
+      "properties": {
+        "type": {
+          "const": "equation"
+        },
+        "block_id": {
+          "$ref": "#/$defs/blockId"
+        },
+        "notation": {
+          "enum": [
+            "latex",
+            "hancom-equation-script"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        }
+      }
+    },
+    "table": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "block_id",
+        "caption",
+        "headers",
+        "rows"
+      ],
+      "properties": {
+        "type": {
+          "const": "table"
+        },
+        "block_id": {
+          "$ref": "#/$defs/blockId"
+        },
+        "caption": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 500
+        },
+        "headers": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 20,
+          "items": {
+            "type": "string",
+            "maxLength": 500
+          }
+        },
+        "rows": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 20,
+            "items": {
+              "type": "string",
+              "maxLength": 1000
+            }
+          }
+        }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "block_id",
+        "ordinal",
+        "local_file",
+        "sha256",
+        "media_type",
+        "width_px",
+        "height_px"
+      ],
+      "properties": {
+        "type": {
+          "const": "image"
+        },
+        "block_id": {
+          "$ref": "#/$defs/blockId"
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "local_file": {
+          "type": "string",
+          "pattern": "^images/[0-9a-f]{64}\\.(png|jpg)$"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "media_type": {
+          "enum": [
+            "image/png",
+            "image/jpeg"
+          ]
+        },
+        "width_px": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "height_px": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        }
+      }
+    },
+    "statements": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "block_id",
+        "statements"
+      ],
+      "properties": {
+        "type": {
+          "const": "statement_set"
+        },
+        "block_id": {
+          "$ref": "#/$defs/blockId"
+        },
+        "statements": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 10,
+          "items": {
+            "$ref": "#/$defs/statement"
+          }
+        }
+      }
+    }
+  }
+}

@@ -17,6 +17,7 @@ import {formatEquationSource, orderedItemPreviewBlocks} from "./item-preview.js"
 import {createItemDb} from "./item-db.js";
 import {createKnowledgeMap} from "./knowledge-map.js";
 import {createMaterialLearning} from "./material-learning.js";
+import {createContentPlanning} from "./content-planning.js";
 import {renderPreviewText} from "./preview-math.js";
 import {
   applyPermissionVisibility,
@@ -153,6 +154,11 @@ async function previewRegisteredItem(pointer, root, isCurrent) {
 const itemDb = createItemDb({
   document,
   api,
+  planningSelectionHint: () => contentPlanning.selectionHint(),
+  onPlanningSelection: (pointer, label) => {
+    if (!contentPlanning.acceptSelection(pointer, label)) return false;
+    showView("excel"); return true;
+  },
   similaritySearches: {
     submit: (selections, topK, key) => api("/item-db/similarity/searches", {
       method: "POST", mutation: true, headers: {"Idempotency-Key": key},
@@ -178,6 +184,11 @@ const itemDb = createItemDb({
     await loadItemPreview();
   },
 });
+const contentPlanning = createContentPlanning({document, api,
+  can: permission => hasPermission(state.operator, permission),
+  openItemDb: () => showView("item-db"),
+  openTarget: pointer => {showView("item-db"); itemDb.openPlacement(pointer);},
+});
 const knowledgeMap = createKnowledgeMap({document, api, previewItem: previewRegisteredItem,
   openItem(entry) {showView("item-db"); itemDb.openGraph(entry);},
 });
@@ -195,6 +206,7 @@ const UI_MODE_BY_VIEW = Object.freeze({
   request: "human",
   item: "human",
   "item-db": "human",
+  excel: "human",
   hwpx: "human",
   control: "engine",
   "admin-settings": "engine",
@@ -421,6 +433,8 @@ function showView(name, {history = true, replace = false, route = null} = {}) {
   else knowledgeMap.close();
   if (name === "learning") materialLearning.open();
   else materialLearning.close();
+  if (name === "excel") contentPlanning.open();
+  else contentPlanning.close();
   $$(".view").forEach((element) => element.classList.toggle("active", element.dataset.view === name));
   $$(".nav-item").forEach((element) => element.classList.toggle("active", element.dataset.viewTarget === name));
   syncUiMode(name);
@@ -516,6 +530,7 @@ async function initializeSession() {
   itemDb.setOwner(session.operator.operator_id);
   knowledgeMap.setOwner(session.operator.operator_id);
   materialLearning.setOwner(session.operator.operator_id);
+  contentPlanning.setOwner(session.operator.operator_id);
   $("#current-user").textContent = session.operator.display_name || session.operator.username || "운영 사용자";
   const roles = Array.isArray(session.operator.roles) ? session.operator.roles : [];
   $("#current-role").textContent = roles.map(roleLabel).join(" · ") || "운영 사용자";
@@ -5483,6 +5498,7 @@ async function logout() {
   itemDb.setOwner(null);
   knowledgeMap.setOwner(null);
   materialLearning.setOwner(null);
+  contentPlanning.setOwner(null);
   try { await api("/logout", {method: "POST", mutation: true, body: {}}); } finally { window.location.replace("/studio/login"); }
 }
 
@@ -5501,6 +5517,7 @@ async function boot() {
   itemDb.install();
   knowledgeMap.install();
   materialLearning.install();
+  contentPlanning.install();
   installStructuredImport();
   installHwpx();
   installControlPlane();

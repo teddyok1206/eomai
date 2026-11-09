@@ -26,6 +26,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 class AssessmentFormRecord(Base):
     __tablename__ = "assessment_forms"
     __table_args__ = (
+        UniqueConstraint("assessment_form_id", "deliverable_id", name="uq_assessment_form_owner"),
         UniqueConstraint("deliverable_id", "form_key", name="uq_assessment_form_product_key"),
         CheckConstraint(
             "lifecycle_state IN ('ACTIVE','RETIRED')", name="ck_assessment_forms_state"
@@ -55,6 +56,11 @@ class AssessmentFormRevisionRecord(Base):
     __tablename__ = "assessment_form_revisions"
     __table_args__ = (
         UniqueConstraint(
+            "assessment_form_revision_id",
+            "assessment_form_id",
+            name="uq_assessment_form_revision_owner",
+        ),
+        UniqueConstraint(
             "assessment_form_id", "revision_number", name="uq_assessment_form_revision_number"
         ),
         CheckConstraint("revision_number > 0", name="ck_assessment_form_revision_number"),
@@ -79,7 +85,7 @@ class AssessmentFormRevisionRecord(Base):
         ForeignKey("deliverable_revisions.deliverable_revision_id"), nullable=False
     )
     ordinal: Mapped[int] = mapped_column(Integer, nullable=False)
-    display_label: Mapped[str] = mapped_column(String(128), nullable=False)
+    display_label: Mapped[str] = mapped_column(String(200), nullable=False)
     assessment_assembly_revision_id: Mapped[str | None] = mapped_column(
         ForeignKey(
             "assessment_assembly_revisions.assessment_assembly_revision_id",

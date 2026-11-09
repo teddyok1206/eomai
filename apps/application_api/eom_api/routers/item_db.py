@@ -20,6 +20,7 @@ from fastapi.responses import Response, StreamingResponse
 from eom_api.dependencies import Auth, IdempotencyKey, require_permission
 from eom_api.errors import ApiError
 from eom_api.routers.common import many, one
+from eom_api.routers.content_usage_filter import UsageFilter
 
 router = APIRouter(prefix="/item-db/external-sources", tags=["item-db"])
 _PERMISSIONS = [Depends(require_permission(PermissionKey.ITEM_READ))]
@@ -126,14 +127,15 @@ def export_external_sources(
     request: Request,
     authentication: Auth,
     filters: ExternalItemDbFilterRequest,
+    usage_filter: UsageFilter,
     approval_state: Annotated[ApprovalState | None, Query()] = None,
 ) -> Response:
     _source_access(authentication)
     reads = request.app.state.services.external_item_db_reads
-    result = (
-        reads.export(filters, approval_state=approval_state)
-        if approval_state
-        else reads.export(filters)
+    result = reads.export(
+        filters,
+        **({"approval_state": approval_state} if approval_state else {}),
+        **({"usage_filter": usage_filter} if usage_filter else {}),
     )
     request.app.state.services.audit.append(
         request.state.request_context,

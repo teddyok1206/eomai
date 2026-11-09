@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/write-result/1.0",
+  "title": "Original committed composition and separately observed current head",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "disposition",
+    "replayed",
+    "composition",
+    "current_revision_id"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "content-planning-write-result/1.0"
+    },
+    "disposition": {
+      "enum": [
+        "SAVED",
+        "NO_CHANGE"
+      ]
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "composition": {
+      "$ref": "eom://schemas/content-planning/edition-composition/1.0"
+    },
+    "current_revision_id": {
+      "type": "string",
+      "pattern": "^delivrev_[0-9a-f]{32}$"
+    }
+  }
+}

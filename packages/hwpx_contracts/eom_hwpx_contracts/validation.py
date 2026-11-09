@@ -10,6 +10,10 @@ from typing import Any
 from jsonschema import Draft202012Validator, FormatChecker
 
 SCHEMA_FILES = {
+    "curated-build-input-v2": "hwpx-curated-build-input-v2.schema.json",
+    "curated-render-request-v4": "hwpx-curated-render-v4.schema.json",
+    "curated-render-result-v4": "hwpx-curated-render-result-v4.schema.json",
+    "native-item-render-request-v2": "hwpx-native-item-render-request-v2.schema.json",
     "curated-build-input": "hwpx-curated-build-input-v1.schema.json",
     "curated-render-request": "hwpx-curated-render-v1.schema.json",
     "curated-render-result": "hwpx-curated-render-result-v1.schema.json",

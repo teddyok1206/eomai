@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/usage-filter/1.0",
+  "title": "Academic-year content usage filter",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "state",
+    "academic_year"
+  ],
+  "properties": {
+    "state": {
+      "enum": [
+        "USED",
+        "UNUSED"
+      ]
+    },
+    "academic_year": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 1900,
+      "maximum": 3000
+    }
+  }
+}

@@ -161,8 +161,27 @@ def test_catalog_runtime_grants_only_its_application_boundary() -> None:
     assert immutable_legacy_assessment_tables.isdisjoint(UPDATE_TABLES)
     assert "assessment_source_bundles" in UPDATE_TABLES
     assert {"deliverables", "deliverable_revisions"} <= set(READ_TABLES)
-    assert {"deliverables", "deliverable_revisions"}.isdisjoint(INSERT_TABLES)
-    assert {"deliverables", "deliverable_revisions"}.isdisjoint(UPDATE_TABLES)
+    # Excel's Catalog application now owns shared Product/Edition creation.
+    assert {"deliverables", "deliverable_revisions"} <= set(INSERT_TABLES)
+    assert "deliverables" in UPDATE_TABLES
+    assert "deliverable_revisions" not in UPDATE_TABLES
+    immutable_content = {
+        "content_edition_revisions",
+        "content_form_memberships",
+        "content_form_revision_compositions",
+        "content_edition_revision_forms",
+        "content_planning_events",
+        "content_planning_command_receipts",
+        "content_delivery_scopes",
+        "content_print_records",
+        "content_print_scopes",
+        "content_print_events",
+        "curated_document_assembly_slots_v2",
+    }
+    assert immutable_content | {"content_editions"} <= set(READ_TABLES)
+    assert immutable_content | {"content_editions"} <= set(INSERT_TABLES)
+    assert immutable_content.isdisjoint(UPDATE_TABLES)
+    assert "content_editions" in UPDATE_TABLES
     assert "api_sessions" not in READ_TABLES
     assert "api_tokens" not in READ_TABLES
     assert "operator_credentials" not in READ_TABLES

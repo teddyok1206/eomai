@@ -25,7 +25,11 @@ ROLE = "eom_catalog_manager_runtime"
 LEGACY_ROLE = "eom_api_runtime"
 
 sys.path.insert(0, str(REPOSITORY / "services/catalog_service"))
-from eom_catalog_service.runtime_privileges import INSERT_TABLES, TABLE_PRIVILEGES  # noqa: E402
+from eom_catalog_service.runtime_privileges import (  # noqa: E402
+    EXTRA_SEQUENCES,
+    INSERT_TABLES,
+    TABLE_PRIVILEGES,
+)
 
 
 def fail(message: str) -> NoReturn:
@@ -271,6 +275,7 @@ def main() -> None:
             (list(INSERT_TABLES),),
         )
         sequences = tuple((str(schema), str(name)) for schema, name in cursor.fetchall())
+        sequences += tuple(("app", name) for name in EXTRA_SEQUENCES)
         if sequences:
             cursor.execute(
                 sql.SQL("GRANT USAGE ON SEQUENCE {} TO {}").format(

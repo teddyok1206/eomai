@@ -50,6 +50,38 @@ def build_manifest() -> CuratedDocumentAssemblyManifestV1:
     return CuratedDocumentAssemblyManifestV1.model_validate(_manifest())
 
 
+def test_input_metadata_budget_rejects_before_queue_write(monkeypatch):
+    from types import SimpleNamespace
+    from unittest.mock import MagicMock
+
+    from eom_hwpx_manager import curated_application_service as application
+
+    from tests.unit.test_curated_document_assembly_resolution import _actor
+
+    manifest = build_manifest()
+    assemblies = Mock()
+    assemblies.authorize_delivery_build.return_value = manifest
+    pins = Mock()
+    pins.pin_inputs.return_value = build_inputs(manifest)
+    service = CuratedHwpxApplicationService(Mock(), assemblies=assemblies, input_pins=pins)
+    session = MagicMock()
+    session.__enter__.return_value.scalar.return_value = None
+    service.sessions = Mock(return_value=session)
+    # Byte budget, not character count: represent a large valid metadata input
+    # without building hundreds of expensive artifact fixtures in this unit test.
+    monkeypatch.setattr(application, "json", SimpleNamespace(dumps=lambda *a, **k: "가" * 174763))
+    with pytest.raises(HwpxManagerError, match="metadata budget"):
+        service.request_build(
+            manifest.assembly_id,
+            assembly_revision_id=manifest.assembly_revision_id,
+            manifest_sha256=manifest.manifest_sha256,
+            actor=_actor(),
+            idempotency_key="metadata-budget-test-001",
+        )
+    assert service.sessions.call_count == 1
+    session.__enter__.return_value.add.assert_not_called()
+
+
 def build_inputs(manifest: CuratedDocumentAssemblyManifestV1) -> CuratedHwpxBuildInput:
     placements = []
     for row in manifest.placements:
@@ -288,7 +320,21 @@ def test_frozen_migration_matches_orm_and_refuses_to_delete_build_history(
     spec.loader.exec_module(module)
     assert module.revision == "20261104_0072" and module.down_revision == "20261103_0071"
     table = HwpxCuratedBuildRecord.__table__
-    assert " ".join(module._DDL[0].split()) == " ".join(
+    # Migration 0076 changes exactly these two bounds for the occurrence successor.
+    # All other released table columns/constraints remain byte-equivalent after whitespace.
+    checks = {c.name: str(c.sqltext) for c in table.constraints if isinstance(c, CheckConstraint)}
+    historical = " ".join(module._DDL[0].split())
+    for name, old in {
+        "ck_hwpx_curated_count": "placement_count BETWEEN 1 AND 200 AND resource_version > 0",
+        "ck_hwpx_curated_metadata_budget": (
+            "jsonb_typeof(input_plan) = 'object' AND octet_length(input_plan::text) <= 524288 AND "
+            "jsonb_typeof(initiator_context) = 'object' "
+            "AND octet_length(initiator_context::text) <= 4096"
+        ),
+    }.items():
+        assert old in historical
+        historical = historical.replace(old, checks[name])
+    assert historical == " ".join(
         str(CreateTable(table).compile(dialect=postgresql.dialect())).split()
     )
     assert "HWPX_CURATED_BUILD_TERMINAL_IMMUTABLE" in module._DDL[-2]

@@ -24,6 +24,7 @@ from fastapi import APIRouter, Depends, Path, Query, Request
 from eom_api.dependencies import Auth, require_permission
 from eom_api.errors import ApiError
 from eom_api.routers.common import many, one
+from eom_api.routers.content_usage_filter import UsageFilter
 
 router = APIRouter(tags=["item-bank"])
 
@@ -42,11 +43,14 @@ def creative_item_db_search(
     request: Request,
     authentication: Auth,
     filters: ExternalItemDbFilterRequest,
+    usage_filter: UsageFilter,
     approval_state: Annotated[ApprovalState | None, Query()] = None,
 ) -> ListResponse[CreativeItemDbEntryView]:
     if PermissionKey.CONTENT_INTAKE_READ not in authentication.permissions:
         raise ApiError(403, "PERMISSION_DENIED", "Permission denied", "Source read denied")
-    page = request.app.state.services.external_item_db_reads.creative_list(filters, approval_state)
+    page = request.app.state.services.external_item_db_reads.creative_list(
+        filters, approval_state, **({"usage_filter": usage_filter} if usage_filter else {})
+    )
     return many(
         request,
         page.data,
@@ -64,12 +68,16 @@ def creative_item_db_search(
 )
 def ai_item_db_entries(
     request: Request,
+    usage_filter: UsageFilter,
     approval_state: Annotated[ApprovalState | None, Query()] = None,
     limit: int = Query(default=50, ge=1, le=100),
     cursor: str | None = Query(default=None, min_length=1, max_length=1024),
 ) -> ListResponse[AiItemDbEntryView]:
     page = request.app.state.services.queries.ai_item_db_entries(
-        approval_state=approval_state, limit=limit, cursor=cursor
+        approval_state=approval_state,
+        limit=limit,
+        cursor=cursor,
+        **({"usage_filter": usage_filter} if usage_filter else {}),
     )
     return many(
         request, page.data, limit=limit, next_cursor=page.next_cursor, has_more=page.has_more
@@ -88,6 +96,7 @@ def ai_item_db_entries(
 def material_item_db_entries(
     request: Request,
     authentication: Auth,
+    usage_filter: UsageFilter,
     approval_state: Annotated[ApprovalState | None, Query()] = None,
     limit: int = Query(default=50, ge=1, le=100),
     cursor: str | None = Query(default=None, min_length=1, max_length=1024),
@@ -95,7 +104,10 @@ def material_item_db_entries(
     if PermissionKey.CONTENT_INTAKE_READ not in authentication.permissions:
         raise ApiError(403, "PERMISSION_DENIED", "Permission denied", "Source read denied")
     page = request.app.state.services.queries.material_item_db_entries(
-        approval_state=approval_state, limit=limit, cursor=cursor
+        approval_state=approval_state,
+        limit=limit,
+        cursor=cursor,
+        **({"usage_filter": usage_filter} if usage_filter else {}),
     )
     return many(
         request, page.data, limit=limit, next_cursor=page.next_cursor, has_more=page.has_more
@@ -156,6 +168,7 @@ def item_bank_entries(
 )
 def production_item_candidates(
     request: Request,
+    usage_filter: UsageFilter,
     curriculum_unit_key: str | None = Query(default=None, pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$"),
     source_class: Literal["APPROVED_ITEM", "PAST_EXAM"] | None = Query(default=None),
     content_profile: Annotated[ProductionContentProfileV2 | None, Query()] = None,
@@ -182,6 +195,7 @@ def production_item_candidates(
         administration_month=administration_month,
         item_number=item_number,
         **({"approval_state": approval_state} if approval_state else {}),
+        **({"usage_filter": usage_filter} if usage_filter else {}),
     )
     return many(
         request,

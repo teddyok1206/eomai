@@ -112,7 +112,9 @@ from eom_catalog_contracts import (
     TextbookGroundedPairedReviewResultMemberPointer,
     load_integrated_science_mock_exam_policy,
 )
+from eom_catalog_contracts.content_usage_filter import ContentUsageFilter
 from eom_catalog_contracts.inference_transfer_experiment import PopulationSource
+from eom_catalog_service.content_usage_filter import content_usage_condition
 from eom_catalog_service.curriculum_graph_structure import (
     integrated_science_curriculum_units,
 )
@@ -902,7 +904,12 @@ class QueryAdapter:
             return PageResult(tuple(values), next_cursor, has_more)
 
     def ai_item_db_entries(
-        self, *, approval_state: str | None, limit: int, cursor: str | None
+        self,
+        *,
+        approval_state: str | None,
+        limit: int,
+        cursor: str | None,
+        usage_filter: ContentUsageFilter | None = None,
     ) -> PageResult[AiItemDbEntryView]:
         """Canonical current generated Items, including pending human approval."""
         from eom_workflow_runner.models import WorkflowInstanceRecord
@@ -910,11 +917,15 @@ class QueryAdapter:
         from eom_api.services.external_item_db_read import registration_view
 
         scope = "ai-item-db:" + (approval_state or "ALL")
+        if usage_filter is not None:
+            scope += ":" + usage_filter.model_dump_json()
         conditions = [
             WorkflowInstanceRecord.definition_key == "generic-item-development",
             ItemRecord.current_revision_id == ItemRevisionRecord.item_revision_id,
             ItemRecord.lifecycle_state == "ACTIVE",
         ]
+        if usage_filter is not None:
+            conditions.append(content_usage_condition(usage_filter, target_kind="ITEM"))
         if approval_state is not None:
             conditions.append(ItemRevisionRecord.revision_state == approval_state)
         if cursor:
@@ -963,7 +974,12 @@ class QueryAdapter:
         )
 
     def material_item_db_entries(
-        self, *, approval_state: str | None, limit: int, cursor: str | None
+        self,
+        *,
+        approval_state: str | None,
+        limit: int,
+        cursor: str | None,
+        usage_filter: ContentUsageFilter | None = None,
     ) -> PageResult[MaterialItemDbEntryView]:
         """Uploaded external Items in the current shared Graph, not invented Notion rows."""
         from eom_catalog_contracts.material_item_lineage import MaterialImportedItemMetadata
@@ -979,6 +995,8 @@ class QueryAdapter:
             if snapshot_id is None:
                 return PageResult((), None, False)
             scope = "material-item-db:" + snapshot_id + ":" + (approval_state or "ALL")
+            if usage_filter is not None:
+                scope += ":" + usage_filter.model_dump_json()
             membership = (
                 select(KnowledgeSnapshotAnalysisRecord.analysis_run_id)
                 .where(
@@ -999,6 +1017,8 @@ class QueryAdapter:
                 == LearningMaterialRevisionRecord.material_revision_id,
                 membership,
             ]
+            if usage_filter is not None:
+                conditions.append(content_usage_condition(usage_filter, target_kind="ITEM"))
             if approval_state is not None:
                 conditions.append(ItemRevisionRecord.revision_state == approval_state)
             if cursor:
@@ -1069,6 +1089,7 @@ class QueryAdapter:
         selected_item_revisions: tuple[PopulationSource, ...] | None = None,
         selected_revision_id: str | None = None,
         approval_state: str | None = None,
+        usage_filter: ContentUsageFilter | None = None,
     ) -> PageResult[ProductionItemCandidateViewContract]:
         """List Graph-accepted Item revisions without inventing examination placement data."""
 
@@ -1082,6 +1103,7 @@ class QueryAdapter:
             "administration_year": administration_year,
             "administration_month": administration_month,
             "item_number": item_number,
+            **({"usage_filter": usage_filter.model_dump(mode="json")} if usage_filter else {}),
             **({"selected_revision_id": selected_revision_id} if selected_revision_id else {}),
             **({"approval_state": approval_state} if approval_state else {}),
         }
@@ -1119,6 +1141,8 @@ class QueryAdapter:
                 KnowledgeSnapshotAnalysisRecord.source_kind == "APPROVED_ITEM_REVISION",
                 source_pointer_exists,
             ]
+            if usage_filter is not None:
+                conditions.append(content_usage_condition(usage_filter, target_kind="ITEM"))
             if selected_item_revisions is not None:
                 if not 1 <= len(selected_item_revisions) <= 64 or len(
                     {pin.item_revision_id for pin in selected_item_revisions}

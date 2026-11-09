@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import re
 from collections import Counter
-from copy import deepcopy
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import NoReturn
@@ -20,6 +19,7 @@ from eom_hwpx_contracts.curated_mixed import (
     CuratedMixedRenderResult,
     CuratedNativeSegment,
 )
+from eom_hwpx_contracts.curated_occurrences import CuratedOccurrenceRenderRequest
 from eom_hwpx_contracts.native_item_semantics import (
     expected_native_item_events,
     native_item_section_events,
@@ -58,20 +58,25 @@ def _attr(node: ET.Element, name: str) -> str:
 
 
 def _header_options(header: ET.Element) -> tuple[object, ...]:
-    header = deepcopy(header)
-    header.attrib.pop("secCnt", None)
-    if "version" in header.attrib:
-        if header.attrib["version"] not in {"1.4", "1.5"}:
+    attributes = dict(header.attrib)
+    attributes.pop("secCnt", None)
+    if "version" in attributes:
+        if attributes["version"] not in {"1.4", "1.5"}:
             _fail("curated header version differs from the supported native profile")
-        header.attrib["version"] = "1.5"
-    for node in tuple(header):
-        if _local(node.tag) == "refList" or (
-            _local(node.tag) == "trackchageConfig"
-            and node.attrib == {"flags": "56"}
-            and not len(node)
-            and not (node.text or "").strip()
-        ):
-            header.remove(node)
+        attributes["version"] = "1.5"
+    children = tuple(
+        node
+        for node in header
+        if not (
+            _local(node.tag) == "refList"
+            or (
+                _local(node.tag) == "trackchageConfig"
+                and node.attrib == {"flags": "56"}
+                and not len(node)
+                and not (node.text or "").strip()
+            )
+        )
+    )
 
     def value(node: ET.Element) -> tuple[object, ...]:
         return (
@@ -82,7 +87,13 @@ def _header_options(header: ET.Element) -> tuple[object, ...]:
             tuple(value(child) for child in node),
         )
 
-    return value(header)
+    return (
+        header.tag,
+        tuple(sorted(attributes.items())),
+        header.text or "",
+        header.tail or "",
+        tuple(value(child) for child in children),
+    )
 
 
 def _catalogs(header: ET.Element) -> dict[str, tuple[ET.Element, ...]]:
@@ -119,10 +130,16 @@ class _Document:
     catalogs: dict[str, tuple[ET.Element, ...]]
 
 
-def _document(path: Path, sha256: str) -> _Document:
-    package = read_publication_package(path, sha256, limits=CURATED_PUBLICATION_LIMITS)
+def _document(path: Path, sha256: str, *, aggregate_xml_bytes: int = 10 * 1024**2) -> _Document:
+    limits = replace(
+        CURATED_PUBLICATION_LIMITS,
+        max_member_bytes=max(CURATED_PUBLICATION_LIMITS.max_member_bytes, aggregate_xml_bytes),
+    )
+    package = read_publication_package(path, sha256, limits=limits)
     roots, sections, manifest = validate_publication_package(
-        package, profile=PublicationProfile.NATIVE
+        package,
+        profile=PublicationProfile.NATIVE,
+        max_xml_bytes=aggregate_xml_bytes,
     )
     if not sections or set(sections) != {
         name for name in roots if re.fullmatch(r"Contents/section[0-9]+\.xml", name)
@@ -233,6 +250,7 @@ def verify_curated_output(
     )
     if (
         result.status != "SUCCEEDED"
+        or result.profile != request.profile
         or result.build_id != request.build_id
         or result.assembly_revision_id != request.assembly_revision_id
         or result.assembly_manifest_sha256 != request.assembly_manifest_sha256
@@ -246,7 +264,13 @@ def verify_curated_output(
         _fail("curated Builder result differs from its pinned request")
     assert result.output_sha256 is not None
     final_path = workspace / "output/assembled.hwpx"
-    final = _document(final_path, result.output_sha256)
+    final = _document(
+        final_path,
+        result.output_sha256,
+        aggregate_xml_bytes=256 * 1024**2
+        if isinstance(request, CuratedOccurrenceRenderRequest)
+        else 10 * 1024**2,
+    )
     if final.sections != tuple(f"Contents/section{i}.xml" for i in range(len(final.sections))):
         _fail("curated final section order is not contiguous")
     offsets: Counter[str] = Counter()
@@ -255,6 +279,9 @@ def verify_curated_output(
     seen_objects: set[str] = set()
     canonical = {item.item_number: item for item in materialization.canonical_items}
     editorial = {item.position: item for item in materialization.editorial_items}
+    # Resource relocation enlarges the final header with every occurrence. Its
+    # non-resource options are immutable, so inspecting them once avoids quadratic work.
+    final_options = _header_options(final.roots["Contents/header.xml"])
     # Hash each immutable embedded member once, not once per canonical Item.
     binary_hashes = (
         {
@@ -278,9 +305,7 @@ def verify_curated_output(
         ):
             _fail("curated native HWPX source hash changed")
         source = _document(path, segment_sha)
-        if _header_options(source.roots["Contents/header.xml"]) != _header_options(
-            final.roots["Contents/header.xml"]
-        ):
+        if _header_options(source.roots["Contents/header.xml"]) != final_options:
             _fail("curated document options changed outside resource relocation")
         rows: dict[str, dict[str, str]] = {}
         targets: dict[str, tuple[ET.Element, ...]] = {}

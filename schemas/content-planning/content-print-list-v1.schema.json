@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/print-list/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "result_kind",
+    "edition_id",
+    "current_revision_id",
+    "rows",
+    "next_id"
+  ],
+  "properties": {
+    "result_kind": {
+      "const": "PRINTS"
+    },
+    "edition_id": {
+      "type": "string",
+      "pattern": "^edition_[0-9a-f]{32}$"
+    },
+    "current_revision_id": {
+      "type": "string",
+      "pattern": "^delivrev_[0-9a-f]{32}$"
+    },
+    "rows": {
+      "type": "array",
+      "maxItems": 100,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "record",
+          "state",
+          "replacement_print_record_id",
+          "reason",
+          "matches_current_scope"
+        ],
+        "properties": {
+          "record": {
+            "$ref": "eom://schemas/content-planning/print-record/1.0"
+          },
+          "state": {
+            "enum": [
+              "ACTIVE",
+              "VOIDED",
+              "CORRECTED"
+            ]
+          },
+          "replacement_print_record_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^print_[0-9a-f]{32}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2000
+          },
+          "matches_current_scope": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "next_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^print_[0-9a-f]{32}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  }
+}

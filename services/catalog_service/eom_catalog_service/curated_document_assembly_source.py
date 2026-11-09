@@ -6,6 +6,7 @@ member without promoting the source-only row to a canonical Item.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import cast
 
 from eom_catalog_contracts import CuratedExternalDocumentPlacement, OriginArtifactMemberPointer
@@ -17,12 +18,13 @@ from sqlalchemy.orm import Session
 from eom_catalog_service.external_item_document_media import ExternalItemDocumentMediaService
 from eom_catalog_service.external_item_matching import ExternalItemMatchStatus
 from eom_catalog_service.external_item_models import (
+    USABLE_EXTERNAL_ITEM_INTAKE_STATES,
     ExternalItemEditionDocumentRecord,
     ExternalItemImportRecord,
     ExternalItemSourceRecord,
     ExternalItemSourceRevisionRecord,
 )
-from eom_catalog_service.models import ContentIntakeSourceFileRecord
+from eom_catalog_service.models import ContentIntakeBatchRecord, ContentIntakeSourceFileRecord
 
 _SOURCE_MEDIA = {
     "HWP": "application/vnd.hancom.hwp",
@@ -49,6 +51,22 @@ class CuratedDocumentAssemblySourceError(ValueError):
     def __init__(self, code: str) -> None:
         super().__init__(code)
         self.code = code
+
+
+class _SourceAdmission(StrEnum):
+    CURRENT_SELECTION = "CURRENT_SELECTION"
+    PINNED_REVISION = "PINNED_REVISION"
+
+
+def resolve_pinned_curated_external_documents(
+    session: Session, selections: tuple[ExternalSourcePlacement, ...]
+) -> tuple[CuratedExternalDocumentPlacement, ...]:
+    """Resolve exact Intake metadata for a versioned content placement/copy.
+
+    This never opens files. The output/materialization owner verifies bytes when
+    they are actually used. Released private V1 still requires the current source.
+    """
+    return _resolve_external_metadata(session, selections, _SourceAdmission.PINNED_REVISION)
 
 
 def resolve_curated_external_document(
@@ -110,13 +128,14 @@ def reauthorize_curated_external_documents(
 def _resolve_external_metadata(
     session: Session,
     selections: tuple[ExternalSourcePlacement, ...],
+    admission: _SourceAdmission = _SourceAdmission.CURRENT_SELECTION,
 ) -> tuple[CuratedExternalDocumentPlacement, ...]:
     if not selections:
         return ()
-    keys = {(row.source_id, row.edition) for row in selections}
+    keys = {(row.source_id, row.source_revision_id, row.edition) for row in selections}
     if len(keys) != len(selections) or len(selections) > 200:
         raise CuratedDocumentAssemblySourceError("CURATED_SOURCE_SELECTION_INVALID")
-    rows = session.execute(
+    statement = (
         select(
             ExternalItemSourceRecord,
             ExternalItemSourceRevisionRecord,
@@ -127,7 +146,9 @@ def _resolve_external_metadata(
         .join(
             ExternalItemSourceRevisionRecord,
             ExternalItemSourceRevisionRecord.revision_id
-            == ExternalItemSourceRecord.current_revision_id,
+            == ExternalItemSourceRecord.current_revision_id
+            if admission is _SourceAdmission.CURRENT_SELECTION
+            else ExternalItemSourceRevisionRecord.source_id == ExternalItemSourceRecord.source_id,
         )
         .join(
             ExternalItemImportRecord,
@@ -146,17 +167,33 @@ def _resolve_external_metadata(
         .where(
             tuple_(
                 ExternalItemSourceRecord.source_id,
+                ExternalItemSourceRevisionRecord.revision_id,
                 ExternalItemEditionDocumentRecord.edition,
             ).in_(tuple(sorted(keys))),
         )
-    ).all()
+    )
+    if admission is _SourceAdmission.PINNED_REVISION:
+        statement = statement.join(
+            ContentIntakeBatchRecord,
+            ContentIntakeBatchRecord.intake_batch_id
+            == ContentIntakeSourceFileRecord.intake_batch_id,
+        ).where(
+            ContentIntakeBatchRecord.state.in_(tuple(USABLE_EXTERNAL_ITEM_INTAKE_STATES)),
+            ContentIntakeSourceFileRecord.declared_role == "DATA",
+        )
+    rows = session.execute(statement).all()
     by_key = {
-        (row[0].source_id, row[3].edition): cast(_SourceDocumentRow, tuple(row)) for row in rows
+        (row[0].source_id, row[1].revision_id, row[3].edition): cast(_SourceDocumentRow, tuple(row))
+        for row in rows
     }
     if len(rows) != len(keys) or set(by_key) != keys:
         raise CuratedDocumentAssemblySourceError("CURATED_SOURCE_STALE")
     return tuple(
-        _validated_placement(by_key[(selection.source_id, selection.edition)], selection)
+        _validated_placement(
+            by_key[(selection.source_id, selection.source_revision_id, selection.edition)],
+            selection,
+            admission,
+        )
         for selection in selections
     )
 
@@ -164,12 +201,17 @@ def _resolve_external_metadata(
 def _validated_placement(
     row: _SourceDocumentRow,
     selection: ExternalSourcePlacement,
+    admission: _SourceAdmission = _SourceAdmission.CURRENT_SELECTION,
 ) -> CuratedExternalDocumentPlacement:
     source, revision, imported, binding, document = row
-    if source.current_revision_id != selection.source_revision_id:
+    if (
+        admission is _SourceAdmission.CURRENT_SELECTION
+        and source.current_revision_id != selection.source_revision_id
+    ):
         raise CuratedDocumentAssemblySourceError("CURATED_SOURCE_STALE")
     if (
-        revision.source_id != source.source_id
+        revision.revision_id != selection.source_revision_id
+        or revision.source_id != source.source_id
         or revision.observation_sha256 != selection.observation_sha256
         or revision.external_number != source.external_number
         or revision.import_id != imported.import_id

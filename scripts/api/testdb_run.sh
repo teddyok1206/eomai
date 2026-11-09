@@ -45,7 +45,7 @@ if (($# != 2)) || \
     "$1" != "pdf-review-tests" && "$1" != "external-item-tests" && \
     "$1" != "item-db-search-tests" && \
     "$1" != "creative-registration-tests" && "$1" != "creative-graph-tests" && \
-    "$1" != "material-learning-tests" && \
+    "$1" != "material-learning-tests" && "$1" != "content-planning-tests" && \
     "$1" != "quality-review-tests" && "$1" != "chat-tests" && \
     "$1" != "chat-role-tests" && "$1" != "chat-knowledge-tests" && "$1" != "tests" ]]; then
   printf '%s\n' \
@@ -509,6 +509,20 @@ if [[ "${action}" == "creative-registration-tests" ]]; then
   "${PYTHON}" -m pytest -q tests/integration/test_creative_registration_storage.py \
     tests/integration/test_creative_visual_publication_storage.py \
     tests/integration/test_creative_visual_presentation_storage.py
+  exit 0
+fi
+
+if [[ "${action}" == "content-planning-tests" ]]; then
+  export EOM_API_TEST_STATE="${state_directory}"
+  export EOM_RUN_API_INTEGRATION=1
+  export EOM_EXTERNAL_ITEM_TEST_STATE="${state_directory}"
+  "${PYTHON}" -m pytest -q tests/integration/test_content_planning_storage.py \
+    tests/integration/test_content_planning_application.py \
+    tests/integration/test_content_print_application.py \
+    tests/integration/test_content_delivery_application.py \
+    tests/integration/test_content_usage_read.py \
+    tests/integration/test_content_planning_runtime_role.py
+  printf 'Disposable content planning persistence tests passed.\n'
   exit 0
 fi
 

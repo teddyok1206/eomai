@@ -13,6 +13,14 @@ ColumnPrivilege = tuple[str, tuple[str, ...]]
 UpdateColumnPrivilege = ColumnPrivilege
 
 READ_TABLES: Final[tuple[str, ...]] = (
+    "content_editions",
+    "content_edition_revisions",
+    "content_form_revision_compositions",
+    "content_edition_revision_forms",
+    "content_print_records",
+    "content_print_scopes",
+    "content_print_events",
+    "curated_document_assembly_slots_v2",
     "alembic_version",
     "api_audit_events",
     "api_idempotency_records",

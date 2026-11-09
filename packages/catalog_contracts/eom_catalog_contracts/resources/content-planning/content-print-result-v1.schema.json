@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/print-result/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "result_kind",
+    "disposition",
+    "replayed",
+    "record"
+  ],
+  "properties": {
+    "result_kind": {
+      "const": "PRINT_MUTATION"
+    },
+    "disposition": {
+      "enum": [
+        "RECORDED",
+        "ALREADY_RECORDED",
+        "VOIDED"
+      ]
+    },
+    "replayed": {
+      "type": "boolean"
+    },
+    "record": {
+      "$ref": "eom://schemas/content-planning/print-record/1.0"
+    }
+  }
+}

@@ -1,5 +1,12 @@
 # 문서 미리보기와 출력과 자료 검토
 
+Excel 편성 successor는 `curated_occurrences.py`의 build-input2/render4/native-item2를
+기존 Catalog→Manager→Builder 경로에 명시적으로 dispatch한다. 구 계약의 200개·고유 target
+의미는 유지하고 새 occurrence만 반복 문항·200개 초과를 허용한다. 범위 준비는
+`content_delivery_service.py`, 권한은 Catalog가 소유한다. 합본 acceptance는 header의
+refList를 매 문항 복사하지 않고 작은 옵션만 비교한다. 원본 XML 한도는 유지하며 생성한
+합본만 기존 총 출력 예산 내에서 허용한다. 운영 활성화 여부는 Excel 구현 체크포인트를 본다.
+
 ## 세 경로를 혼동하지 않기
 
 Item Preview는 정본 content/image pointer의 읽기 투영이다. 원본 문항 파일의 PDF 미리보기는

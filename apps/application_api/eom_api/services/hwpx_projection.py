@@ -2,7 +2,11 @@
 
 from typing import Literal, cast
 
-from eom_api_contracts.curated_hwpx import CuratedHwpxBuildView
+from eom_api_contracts.curated_hwpx import (
+    CuratedHwpxBuildView,
+    CuratedHwpxBuildViewV2,
+    CuratedHwpxView,
+)
 from eom_api_contracts.hwpx import (
     AssessmentHwpxBuildView,
     HwpxBuildState,
@@ -13,8 +17,13 @@ from eom_hwpx_manager.curated_build_models import HwpxCuratedBuildRecord
 from eom_hwpx_manager.models import HwpxApplicationBuildRecord, HwpxAssessmentAssemblyBuildRecord
 
 
-def project_curated_hwpx_build(record: HwpxCuratedBuildRecord) -> CuratedHwpxBuildView:
-    return CuratedHwpxBuildView(
+def project_curated_hwpx_build(record: HwpxCuratedBuildRecord) -> CuratedHwpxView:
+    view_type = (
+        CuratedHwpxBuildViewV2
+        if record.input_plan.get("schema_version") == "curated-hwpx-build-input/2.0"
+        else CuratedHwpxBuildView
+    )
+    return view_type(
         build_id=record.build_id,
         assembly_id=record.assembly_id,
         assembly_revision_id=record.assembly_revision_id,

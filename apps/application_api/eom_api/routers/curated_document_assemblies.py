@@ -9,7 +9,7 @@ from eom_api_contracts.curated_document_assembly import (
     CuratedDocumentAssemblyRemovalInput,
     CuratedDocumentAssemblyRemovalReceipt,
 )
-from eom_api_contracts.curated_hwpx import CreateCuratedHwpxBuildRequest, CuratedHwpxBuildView
+from eom_api_contracts.curated_hwpx import CreateCuratedHwpxBuildRequest, CuratedHwpxView
 from eom_catalog_contracts.curated_document_assembly import CuratedDocumentAssemblyManifestV1
 from eom_catalog_contracts.curated_document_assembly_application import (
     CuratedDocumentAssemblyListEntryV1,
@@ -33,7 +33,7 @@ router = APIRouter(prefix="/item-db/assemblies", tags=["item-db"])
     "/{assembly_id}/hwpx-builds",
     status_code=202,
     operation_id="item_db_curated_hwpx_build_create",
-    response_model=SingleResponse[CuratedHwpxBuildView],
+    response_model=SingleResponse[CuratedHwpxView],
     dependencies=[Depends(require_permission(PermissionKey.HWPX_BUILD_CREATE))],
 )
 def create_curated_build(
@@ -42,7 +42,7 @@ def create_curated_build(
     authentication: Auth,
     idempotency_key: IdempotencyKey,
     assembly_id: str = Path(pattern=r"^assembly_[0-9a-f]{32}$"),
-) -> SingleResponse[CuratedHwpxBuildView]:
+) -> SingleResponse[CuratedHwpxView]:
     record, _created = request.app.state.services.curated_hwpx.request_build(
         assembly_id,
         assembly_revision_id=body.assembly_revision_id,
@@ -65,7 +65,7 @@ def create_curated_build(
 @router.get(
     "/{assembly_id}/hwpx-builds/latest",
     operation_id="item_db_curated_hwpx_build_latest",
-    response_model=SingleResponse[CuratedHwpxBuildView | None],
+    response_model=SingleResponse[CuratedHwpxView | None],
     dependencies=[Depends(require_permission(PermissionKey.HWPX_READ))],
 )
 def latest_curated_build(
@@ -73,7 +73,7 @@ def latest_curated_build(
     assembly_id: str = Path(pattern=r"^assembly_[0-9a-f]{32}$"),
     assembly_revision_id: str = Query(pattern=r"^assemblyrev_[0-9a-f]{32}$"),
     manifest_sha256: str = Query(pattern=r"^sha256:[0-9a-f]{64}$"),
-) -> SingleResponse[CuratedHwpxBuildView | None]:
+) -> SingleResponse[CuratedHwpxView | None]:
     record = request.app.state.services.curated_hwpx.latest_build(
         assembly_id,
         assembly_revision_id=assembly_revision_id,
@@ -86,14 +86,14 @@ def latest_curated_build(
 @router.get(
     "/{assembly_id}/hwpx-builds/{build_id}",
     operation_id="item_db_curated_hwpx_build_read",
-    response_model=SingleResponse[CuratedHwpxBuildView],
+    response_model=SingleResponse[CuratedHwpxView],
     dependencies=[Depends(require_permission(PermissionKey.HWPX_READ))],
 )
 def read_curated_build(
     request: Request,
     assembly_id: str = Path(pattern=r"^assembly_[0-9a-f]{32}$"),
     build_id: str = Path(pattern=r"^hwpxbuild_[0-9a-f]{32}$"),
-) -> SingleResponse[CuratedHwpxBuildView]:
+) -> SingleResponse[CuratedHwpxView]:
     record = request.app.state.services.curated_hwpx.get_build(
         build_id, actor=request.state.request_context.actor()
     )

@@ -182,17 +182,24 @@ def install_exception_handlers(app: FastAPI) -> None:
             "MATERIAL_LEARNING_UNAVAILABLE",
         }
         denied = exc.code in {
+            "CONTENT_PLANNING_PERMISSION_DENIED",
             "CURATED_ASSEMBLY_PERMISSION_DENIED",
             "CURATED_SOURCE_PERMISSION_DENIED",
             "MATERIAL_LEARNING_PERMISSION_DENIED",
             "MATERIAL_LEARNING_SOURCE_OWNER_MISMATCH",
         }
         missing = exc.code in {
+            "CONTENT_EDITION_NOT_FOUND",
+            "CONTENT_REVISION_NOT_FOUND",
+            "CONTENT_SECTION_NOT_FOUND",
+            "CONTENT_ASSEMBLY_NOT_FOUND",
             "CURATED_ASSEMBLY_NOT_FOUND",
             "MATERIAL_LEARNING_RUN_NOT_FOUND",
             "MATERIAL_LEARNING_TASK_NOT_FOUND",
         }
         malformed = exc.code in {
+            "CONTENT_PLANNING_REQUEST_INVALID",
+            "CONTENT_IDEMPOTENCY_KEY_INVALID",
             "CURATED_ASSEMBLY_LIST_INVALID",
             "MATERIAL_LEARNING_REQUEST_INVALID",
         }

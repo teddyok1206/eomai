@@ -14,6 +14,7 @@ from eom_catalog_contracts import (
     StatementSetBlock,
     TableBlock,
 )
+from eom_hwpx_contracts.curated_occurrences import NativeItemRenderRequestV2
 from eom_hwpx_contracts.native_item import (
     NativeItemBlock,
     NativeItemChoice,
@@ -50,6 +51,7 @@ def project_native_item(
     source_sha256: str,
     effective_content_sha256: str,
     item_number: int = 1,
+    document_type: type[NativeItemRenderRequest] = NativeItemRenderRequest,
 ) -> NativeItemProjection:
     """Preserve body order without imposing the old fixed table/image/equation template."""
     blocks: list[NativeItemBlock] = []
@@ -105,7 +107,7 @@ def project_native_item(
         if isinstance(content.interaction, SingleChoiceInteraction)
         else ()
     )
-    document = NativeItemRenderRequest(
+    document = document_type(
         build_id=build_id,
         item_revision_id=item_revision_id,
         source_sha256=source_sha256,
@@ -128,5 +130,10 @@ def project_native_item(
             for row in content.solution.statement_explanations
         ),
     )
-    validate_contract("native-item-render-request", document.model_dump(mode="json"))
+    validate_contract(
+        "native-item-render-request-v2"
+        if isinstance(document, NativeItemRenderRequestV2)
+        else "native-item-render-request",
+        document.model_dump(mode="json"),
+    )
     return NativeItemProjection(document, tuple(images))

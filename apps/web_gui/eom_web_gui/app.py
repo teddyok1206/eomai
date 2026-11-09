@@ -9,7 +9,7 @@ import secrets
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, TypedDict
 from urllib.parse import urlsplit
 
 from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Path, Query, Request, Response
@@ -21,6 +21,12 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from eom_web_gui.chat_grounding_contracts import ChatGroundedTurnSubmission, ChatGroundingSubmission
 from eom_web_gui.chat_knowledge_contracts import ChatKnowledgeRequest
+from eom_web_gui.content_planning_contracts import (
+    PlanningCommand,
+    PlanningQuery,
+    PrepareDelivery,
+    PrintCommand,
+)
 from eom_web_gui.contracts import (
     CodexAccountAdminCommand,
     CodexAuthChallengeReveal,
@@ -49,6 +55,7 @@ from eom_web_gui.contracts import (
     RequestDraftInput,
     RequestDraftUpdate,
     StructuredItemImportRequest,
+    StudioIdempotencyKey,
     StudioOperatorCreate,
     StudioOperatorReasonCommand,
     StudioOperatorRoleAssignment,
@@ -98,6 +105,27 @@ class LoginPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     username: str = Field(min_length=3, max_length=64)
     password: SecretStr = Field(min_length=1, max_length=128)
+
+
+class _ItemDbOptionalFilters(TypedDict, total=False):
+    usage_state: str
+    usage_year: int | None
+
+
+class _ItemDbApprovalFilter(TypedDict, total=False):
+    approval_state: str
+
+
+def _item_db_optional_filters(
+    usage_state: str | None, usage_year: int | None
+) -> _ItemDbOptionalFilters:
+    result: _ItemDbOptionalFilters = {}
+    if usage_state:
+        result["usage_state"] = usage_state
+        result["usage_year"] = usage_year
+    elif usage_year is not None:
+        raise GatewayError(status=422, code="CONTENT_USAGE_FILTER_INVALID")
+    return result
 
 
 def create_app(
@@ -532,6 +560,43 @@ def create_app(
         )
         return reply.model_dump(mode="json")
 
+    @app.post(f"{API_PREFIX}/content-planning/commands")
+    async def content_planning_write(
+        body: PlanningCommand,
+        session: Annotated[WebSession, Depends(require_csrf)],
+        idempotency_key: Annotated[StudioIdempotencyKey, Header(alias="Idempotency-Key")],
+    ) -> dict[str, Any]:
+        return (
+            await actual.gateway.content_planning_write(session, body, idempotency_key)
+        ).model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/content-planning/query")
+    async def content_planning_query(
+        body: PlanningQuery,
+        session: Annotated[WebSession, Depends(require_csrf)],
+    ) -> dict[str, Any]:
+        return (await actual.gateway.content_planning_query(session, body)).model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/content-planning/prints")
+    async def content_planning_print(
+        body: PrintCommand,
+        session: Annotated[WebSession, Depends(require_csrf)],
+        idempotency_key: Annotated[StudioIdempotencyKey, Header(alias="Idempotency-Key")],
+    ) -> dict[str, Any]:
+        return (
+            await actual.gateway.content_planning_print(session, body, idempotency_key)
+        ).model_dump(mode="json")
+
+    @app.post(f"{API_PREFIX}/content-planning/deliveries")
+    async def content_planning_delivery(
+        body: PrepareDelivery,
+        session: Annotated[WebSession, Depends(require_csrf)],
+        idempotency_key: Annotated[StudioIdempotencyKey, Header(alias="Idempotency-Key")],
+    ) -> dict[str, Any]:
+        return (
+            await actual.gateway.content_planning_delivery(session, body, idempotency_key)
+        ).model_dump(mode="json")
+
     @app.post(f"{API_PREFIX}/material-learning", status_code=202)
     async def create_material_learning(
         body: MaterialLearningSubmission,
@@ -921,6 +986,8 @@ def create_app(
     @app.get(f"{API_PREFIX}/item-db/graph-items")
     async def graph_item_db_entries(
         session: Annotated[WebSession, Depends(require_session)],
+        usage_state: Literal["USED", "UNUSED"] | None = Query(default=None),
+        usage_year: int | None = Query(default=None, ge=1900, le=3000),
         source_class: Literal["APPROVED_ITEM", "PAST_EXAM"] = Query(),
         curriculum_unit_key: str | None = Query(
             default=None, pattern=r"^[a-z0-9][a-z0-9._:-]{0,191}$"
@@ -934,6 +1001,9 @@ def create_app(
         ]
         | None = Query(default=None),
     ) -> dict[str, object]:
+        approval: _ItemDbApprovalFilter = (
+            {"approval_state": approval_state} if approval_state else {}
+        )
         page = await actual.gateway.graph_item_db_entries(
             session,
             source_class=source_class,
@@ -942,7 +1012,8 @@ def create_app(
             administration_year=administration_year,
             administration_month=administration_month,
             item_number=item_number,
-            **({"approval_state": approval_state} if approval_state else {}),
+            **approval,
+            **_item_db_optional_filters(usage_state, usage_year),
         )
         return {
             "values": tuple(value.model_dump(mode="json") for value in page.values),
@@ -1017,13 +1088,19 @@ def create_app(
         filters: ExternalItemDbFilterSubmission,
         session: Annotated[WebSession, Depends(require_csrf)],
         kind: Literal["CREATIVE", "AI", "EXTERNAL"] = Query(),
+        usage_state: Literal["USED", "UNUSED"] | None = Query(default=None),
+        usage_year: int | None = Query(default=None, ge=1900, le=3000),
         approval_state: Literal[
             "UNREGISTERED", "DRAFT", "IN_REVIEW", "APPROVED", "REJECTED", "SUPERSEDED", "RETIRED"
         ]
         | None = Query(default=None),
     ) -> dict[str, object]:
         page = await actual.gateway.registered_item_db_entries(
-            session, kind, approval_state, filters
+            session,
+            kind,
+            approval_state,
+            filters,
+            **_item_db_optional_filters(usage_state, usage_year),
         )
         return {
             "values": tuple(value.model_dump(mode="json") for value in page.values),
@@ -1047,17 +1124,21 @@ def create_app(
     async def external_item_db_export(
         filters: ExternalItemDbFilterSubmission,
         session: Annotated[WebSession, Depends(require_csrf)],
+        usage_state: Literal["USED", "UNUSED"] | None = Query(default=None),
+        usage_year: int | None = Query(default=None, ge=1900, le=3000),
         approval_state: Literal[
             "UNREGISTERED", "DRAFT", "IN_REVIEW", "APPROVED", "REJECTED", "SUPERSEDED", "RETIRED"
         ]
         | None = Query(default=None),
     ) -> Response:
-        value = (
-            await actual.gateway.external_item_db_export(
-                session, filters, approval_state=approval_state
-            )
-            if approval_state
-            else await actual.gateway.external_item_db_export(session, filters)
+        approval: _ItemDbApprovalFilter = (
+            {"approval_state": approval_state} if approval_state else {}
+        )
+        value = await actual.gateway.external_item_db_export(
+            session,
+            filters,
+            **approval,
+            **_item_db_optional_filters(usage_state, usage_year),
         )
         return Response(
             content=value.content,

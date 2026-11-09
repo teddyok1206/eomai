@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/assessment-assembly/curated-document-assembly-manifest/2.0",
+  "title": "Revisioned curated manifest with resolved occurrence targets",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "assembly_id",
+    "assembly_revision_id",
+    "revision_number",
+    "previous_revision_id",
+    "selection_sha256",
+    "placements",
+    "created_by",
+    "created_at",
+    "manifest_sha256"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "curated-document-assembly-manifest/2.0"
+    },
+    "assembly_id": {
+      "type": "string",
+      "pattern": "^assembly_[0-9a-f]{32}$"
+    },
+    "assembly_revision_id": {
+      "type": "string",
+      "pattern": "^assemblyrev_[0-9a-f]{32}$"
+    },
+    "revision_number": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "previous_revision_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^assemblyrev_[0-9a-f]{32}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "selection_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "placements": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/resolved_slot"
+      }
+    },
+    "created_by": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "(Z|\\+00:00)$"
+    },
+    "manifest_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    }
+  }
+}

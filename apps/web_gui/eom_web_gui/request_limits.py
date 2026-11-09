@@ -18,6 +18,9 @@ PDF_REVIEW_CONTENT_PATH = re.compile(
 
 
 def request_body_limit(method: str, path: str) -> int:
+    if method == "POST" and path == "/studio/api/v1/content-planning/commands":
+        # Large final arrays contain only small pointers, never uploaded files.
+        return 4 * 1024 * 1024
     return (
         MAX_PDF_REVIEW_BODY_BYTES
         if method == "PUT"

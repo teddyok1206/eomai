@@ -4,15 +4,16 @@ from typing import Literal, Self
 
 from eom_hwpx_contracts.curated_build import CuratedHwpxBuildInput
 from eom_hwpx_contracts.curated_document import CuratedHwpConverterSnapshot
+from eom_hwpx_contracts.curated_occurrences import CuratedBuildInput
 from eom_hwpx_contracts.models import ContentTeamHandoffSnapshot
 from pydantic import Field, model_validator
 
 from eom_catalog_contracts.curated_document_assembly import CuratedDocumentAssemblyManifestV1
+from eom_catalog_contracts.curated_document_slots import CuratedDeliveryManifest
 from eom_catalog_contracts.models import FrozenModel, UtcDatetime
 
 
-class CuratedDocumentDeliveryQueryV1(FrozenModel):
-    operation: Literal["RESOLVE_CURATED_DOCUMENT_DELIVERY"] = "RESOLVE_CURATED_DOCUMENT_DELIVERY"
+class _DeliveryQuery(FrozenModel):
     purpose: Literal["AUTHORIZE_READ", "AUTHORIZE_BUILD", "PIN_INPUTS"]
     actor_id: str = Field(pattern=r"^operator_[0-9a-f]{32}$")
     session_id: str = Field(pattern=r"^apisession_[0-9a-f]{32}$")
@@ -32,6 +33,16 @@ class CuratedDocumentDeliveryQueryV1(FrozenModel):
         elif self.handoff is not None or self.converter is not None:
             raise ValueError("reauthorization must not resolve a new renderer release")
         return self
+
+
+class CuratedDocumentDeliveryQueryV1(_DeliveryQuery):
+    operation: Literal["RESOLVE_CURATED_DOCUMENT_DELIVERY"] = "RESOLVE_CURATED_DOCUMENT_DELIVERY"
+
+
+class CuratedDocumentDeliveryQueryV2(_DeliveryQuery):
+    operation: Literal["RESOLVE_CURATED_DOCUMENT_DELIVERY_V2"] = (
+        "RESOLVE_CURATED_DOCUMENT_DELIVERY_V2"
+    )
 
 
 class CuratedDocumentDeliveryResponseV1(FrozenModel):
@@ -59,3 +70,42 @@ class CuratedDocumentDeliveryResponseV1(FrozenModel):
         ):
             raise ValueError("delivery input pins differ from the authorized assembly")
         return self
+
+
+class CuratedDocumentDeliveryResponseV2(FrozenModel):
+    operation: Literal["RESOLVE_CURATED_DOCUMENT_DELIVERY_V2"] = (
+        "RESOLVE_CURATED_DOCUMENT_DELIVERY_V2"
+    )
+    status: Literal["OK", "ERROR"]
+    manifest: CuratedDeliveryManifest | None = None
+    inputs: CuratedBuildInput | None = None
+    error_code: str | None = Field(default=None, pattern=r"^[A-Z][A-Z0-9_]{2,127}$")
+
+    @model_validator(mode="after")
+    def exact_result(self) -> Self:
+        if self.status == "ERROR":
+            if not self.error_code or self.manifest is not None or self.inputs is not None:
+                raise ValueError("delivery error must not contain authorized metadata")
+        elif self.error_code is not None or self.manifest is None:
+            raise ValueError("authorized delivery requires its exact assembly manifest")
+        if (
+            self.inputs is not None
+            and self.manifest is not None
+            and (
+                self.inputs.assembly_id != self.manifest.assembly_id
+                or self.inputs.assembly_revision_id != self.manifest.assembly_revision_id
+                or self.inputs.assembly_manifest_sha256 != self.manifest.manifest_sha256
+                or self.inputs.schema_version.rsplit("/", 1)[1]
+                != self.manifest.schema_version.rsplit("/", 1)[1]
+            )
+        ):
+            raise ValueError("delivery input pins or contract family differ")
+        return self
+
+
+type CuratedDeliveryQuery = CuratedDocumentDeliveryQueryV1 | CuratedDocumentDeliveryQueryV2
+type CuratedDeliveryResponse = CuratedDocumentDeliveryResponseV1 | CuratedDocumentDeliveryResponseV2
+
+
+def delivery_contract_version(value: CuratedDeliveryQuery | CuratedDeliveryResponse) -> str:
+    return "v2" if value.operation == "RESOLVE_CURATED_DOCUMENT_DELIVERY_V2" else "v1"

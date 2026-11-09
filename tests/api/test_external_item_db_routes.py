@@ -36,7 +36,7 @@ def _entry() -> ExternalItemDbEntryView:
     )
 
 
-def _client(*, allow_intake: bool = True):
+def _client(*, allow_intake: bool = True, allow_planning: bool = True):
     services = disconnected_services()
     reads = SimpleNamespace(
         list=Mock(return_value=PageResult((_entry(),), None, False)),
@@ -53,6 +53,8 @@ def _client(*, allow_intake: bool = True):
                 value,
                 permissions=value.permissions - {PermissionKey.CONTENT_INTAKE_READ},
             )
+        if not allow_planning:
+            value = replace(value, permissions=value.permissions - {PermissionKey.DELIVERABLE_READ})
         request.state.request_context.authentication = value
         return value
 

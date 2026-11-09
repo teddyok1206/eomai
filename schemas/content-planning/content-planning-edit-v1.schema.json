@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/edit-input/1.0",
+  "title": "Content planning change inputs, exact expected revision and final changed arrays",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/save_sections"
+    },
+    {
+      "$ref": "#/$defs/save_structure"
+    }
+  ],
+  "$defs": {
+    "section_draft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section_id",
+        "parent_id",
+        "kind",
+        "ordinal",
+        "label",
+        "numbering"
+      ],
+      "properties": {
+        "section_id": {
+          "type": "string",
+          "pattern": "^section_[0-9a-f]{32}$"
+        },
+        "parent_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^section_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "kind": {
+          "enum": [
+            "GROUP",
+            "FORM"
+          ]
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+        },
+        "numbering": {
+          "enum": [
+            "RESET_PER_SECTION",
+            "CONTINUE_WITHIN_GROUP"
+          ]
+        }
+      }
+    },
+    "section_change": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "section_id",
+        "before_assembly_revision_id",
+        "before_manifest_sha256",
+        "placements"
+      ],
+      "properties": {
+        "section_id": {
+          "type": "string",
+          "pattern": "^section_[0-9a-f]{32}$"
+        },
+        "before_assembly_revision_id": {
+          "type": "string",
+          "pattern": "^assemblyrev_[0-9a-f]{32}$"
+        },
+        "before_manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "placements": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/slot"
+          }
+        }
+      }
+    },
+    "save_sections": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "change_kind",
+        "expected_revision_id",
+        "expected_sha256",
+        "changes"
+      ],
+      "properties": {
+        "change_kind": {
+          "const": "SAVE_SECTIONS"
+        },
+        "expected_revision_id": {
+          "type": "string",
+          "pattern": "^delivrev_[0-9a-f]{32}$"
+        },
+        "expected_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "changes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10000,
+          "items": {
+            "$ref": "#/$defs/section_change"
+          }
+        }
+      }
+    },
+    "save_structure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "change_kind",
+        "expected_revision_id",
+        "expected_sha256",
+        "edition_label",
+        "academic_year",
+        "sections",
+        "confirmed_removed_sections"
+      ],
+      "properties": {
+        "change_kind": {
+          "const": "SAVE_STRUCTURE"
+        },
+        "expected_revision_id": {
+          "type": "string",
+          "pattern": "^delivrev_[0-9a-f]{32}$"
+        },
+        "expected_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "edition_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+        },
+        "academic_year": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1900,
+              "maximum": 3000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sections": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "$ref": "#/$defs/section_draft"
+          }
+        },
+        "confirmed_removed_sections": {
+          "type": "array",
+          "maxItems": 10000,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^section_[0-9a-f]{32}$"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,394 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/assessment-assembly/curated-slot/2.0",
+  "title": "Stable curated placement occurrences, including explicit empty positions",
+  "$ref": "#/$defs/slot",
+  "$defs": {
+    "empty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "placement_kind"
+      ],
+      "properties": {
+        "placement_kind": {
+          "const": "EMPTY"
+        }
+      }
+    },
+    "external": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "placement_kind",
+        "source_id",
+        "source_revision_id",
+        "observation_sha256",
+        "edition",
+        "source_format"
+      ],
+      "properties": {
+        "placement_kind": {
+          "const": "EXTERNAL_SOURCE_DOCUMENT"
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^extitem_[0-9a-f]{32}$"
+        },
+        "source_revision_id": {
+          "type": "string",
+          "pattern": "^extitemrev_[0-9a-f]{32}$"
+        },
+        "observation_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "edition": {
+          "type": "integer",
+          "enum": [
+            2,
+            3
+          ]
+        },
+        "source_format": {
+          "enum": [
+            "HWP",
+            "HWPX"
+          ]
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "placement_kind",
+        "item_id",
+        "item_revision_id",
+        "item_manifest_sha256",
+        "graph_snapshot_revision_id",
+        "graph_snapshot_sha256"
+      ],
+      "properties": {
+        "placement_kind": {
+          "enum": [
+            "REGISTERED_ITEM_REVISION",
+            "PAST_EXAM_ITEM_REVISION"
+          ]
+        },
+        "item_id": {
+          "type": "string",
+          "pattern": "^item_[0-9a-f]{32}$"
+        },
+        "item_revision_id": {
+          "type": "string",
+          "pattern": "^itemrev_[0-9a-f]{32}$"
+        },
+        "item_manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "graph_snapshot_revision_id": {
+          "type": "string",
+          "pattern": "^graphrev_[0-9a-f]{32}$"
+        },
+        "graph_snapshot_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "resolved_external": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "placement_kind",
+        "source_id",
+        "source_revision_id",
+        "observation_sha256",
+        "edition",
+        "source_format",
+        "external_number",
+        "source_file_id",
+        "document_artifact",
+        "document_size_bytes"
+      ],
+      "properties": {
+        "placement_kind": {
+          "const": "EXTERNAL_SOURCE_DOCUMENT"
+        },
+        "source_id": {
+          "type": "string",
+          "pattern": "^extitem_[0-9a-f]{32}$"
+        },
+        "source_revision_id": {
+          "type": "string",
+          "pattern": "^extitemrev_[0-9a-f]{32}$"
+        },
+        "observation_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "edition": {
+          "type": "integer",
+          "enum": [
+            2,
+            3
+          ]
+        },
+        "source_format": {
+          "enum": [
+            "HWP",
+            "HWPX"
+          ]
+        },
+        "external_number": {
+          "type": "string",
+          "pattern": "^[0-9]{5}$"
+        },
+        "source_file_id": {
+          "type": "string",
+          "pattern": "^sourcefile_[0-9a-f]{32}$"
+        },
+        "document_artifact": {
+          "$ref": "eom://schemas/assessment-assembly/curated-document-assembly-manifest/1.0#/$defs/document_artifact"
+        },
+        "document_size_bytes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 104857600
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "source_format": {
+                "const": "HWP"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "document_artifact": {
+                "properties": {
+                  "media_type": {
+                    "const": "application/vnd.hancom.hwp"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "source_format": {
+                "const": "HWPX"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "document_artifact": {
+                "properties": {
+                  "media_type": {
+                    "const": "application/vnd.hancom.hwpx"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "target": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/empty"
+        },
+        {
+          "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/external"
+        },
+        {
+          "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/item"
+        }
+      ]
+    },
+    "resolved_target": {
+      "oneOf": [
+        {
+          "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/empty"
+        },
+        {
+          "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/resolved_external"
+        },
+        {
+          "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/item"
+        }
+      ]
+    },
+    "copy_origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "assembly_id",
+        "assembly_revision_id",
+        "manifest_sha256",
+        "placement_id"
+      ],
+      "properties": {
+        "assembly_id": {
+          "type": "string",
+          "pattern": "^assembly_[0-9a-f]{32}$"
+        },
+        "assembly_revision_id": {
+          "type": "string",
+          "pattern": "^assemblyrev_[0-9a-f]{32}$"
+        },
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "placement_id": {
+          "type": "string",
+          "pattern": "^placement_[0-9a-f]{32}$"
+        }
+      }
+    },
+    "slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "placement_id",
+        "position",
+        "target",
+        "points_milli",
+        "display_number",
+        "note",
+        "copied_from"
+      ],
+      "properties": {
+        "placement_id": {
+          "type": "string",
+          "pattern": "^placement_[0-9a-f]{32}$"
+        },
+        "position": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "target": {
+          "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/target"
+        },
+        "points_milli": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "display_number": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 2000,
+          "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]*$"
+        },
+        "copied_from": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/copy_origin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "resolved_slot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "placement_id",
+        "position",
+        "target",
+        "points_milli",
+        "display_number",
+        "note",
+        "copied_from"
+      ],
+      "properties": {
+        "placement_id": {
+          "type": "string",
+          "pattern": "^placement_[0-9a-f]{32}$"
+        },
+        "position": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100000
+        },
+        "target": {
+          "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/resolved_target"
+        },
+        "points_milli": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "display_number": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 32,
+              "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "note": {
+          "type": "string",
+          "maxLength": 2000,
+          "pattern": "^[^\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]*$"
+        },
+        "copied_from": {
+          "anyOf": [
+            {
+              "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/copy_origin"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

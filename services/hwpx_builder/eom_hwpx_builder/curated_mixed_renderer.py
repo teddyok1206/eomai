@@ -12,12 +12,20 @@ from eom_hwpx_contracts.curated_document import CuratedHwpxFailure
 from eom_hwpx_contracts.curated_mixed import (
     CuratedCanonicalSegment,
     CuratedEditorialSegment,
-    CuratedMixedRenderRequest,
     CuratedMixedRenderResult,
     CuratedNativeSegment,
 )
-from eom_hwpx_contracts.native_item import NativeItemImage, NativeItemRenderRequest
-from eom_hwpx_contracts.validation import parse_json_object, validate_contract
+from eom_hwpx_contracts.curated_occurrences import (
+    MAX_OCCURRENCES,
+    CuratedOccurrenceRenderRequest,
+    CuratedOccurrenceRenderResult,
+    CuratedRenderRequest,
+    CuratedRenderResult,
+    NativeItemRenderRequestV2,
+    parse_native_item_render,
+)
+from eom_hwpx_contracts.native_item import NativeItemImage
+from eom_hwpx_contracts.validation import parse_json_object
 
 from eom_hwpx_builder.archive import read_package
 from eom_hwpx_builder.content_team_images import inject_content_team_images
@@ -28,6 +36,7 @@ from eom_hwpx_builder.content_team_renderer import (
 )
 from eom_hwpx_builder.curated_editorial_layout import reflow_curated_editorial_document
 from eom_hwpx_builder.curated_package_merge import (
+    OCCURRENCE_OUTPUT_LIMITS,
     OUTPUT_LIMITS,
     merge_native_hwpx,
     parse_native_document,
@@ -45,7 +54,7 @@ from eom_hwpx_builder.xmlsafe import local_name
 
 @dataclass(frozen=True)
 class MixedRenderedOutput:
-    result: CuratedMixedRenderResult
+    result: CuratedRenderResult
     handoff_files: tuple[str, ...]
 
 
@@ -88,7 +97,7 @@ class _Inputs:
 
 def render_mixed_curated_document(
     workspace: Path,
-    request: CuratedMixedRenderRequest,
+    request: CuratedRenderRequest,
 ) -> MixedRenderedOutput:
     """Produce local candidates only. The Manager owns authorization and Artifact commit."""
     output = workspace / "output/assembled.hwpx"
@@ -102,6 +111,9 @@ def render_mixed_curated_document(
     }
     failure: CuratedHwpxFailure = "HWPX_CURATED_PRESERVATION_FAILED"
     position: int | None = None
+    occurrence_profile = isinstance(request, CuratedOccurrenceRenderRequest)
+    result_type = CuratedOccurrenceRenderResult if occurrence_profile else CuratedMixedRenderResult
+    maximum_sources = MAX_OCCURRENCES if occurrence_profile else 200
     inputs = _Inputs(workspace)
     handoff_files: list[str] = ["assembled.hwpx", "preservation.json"]
     try:
@@ -147,8 +159,9 @@ def render_mixed_curated_document(
                     2 * 1024 * 1024,
                 )
                 value = parse_json_object(raw)
-                validate_contract("native-item-render-request", value)
-                item = NativeItemRenderRequest.model_validate(value)
+                item = parse_native_item_render(value)
+                if isinstance(item, NativeItemRenderRequestV2) != occurrence_profile:
+                    raise _InputError("HWPX_CURATED_INPUT_CHANGED")
                 if (
                     item.build_id != request.build_id
                     or item.item_number != position
@@ -204,6 +217,7 @@ def render_mixed_curated_document(
                     candidate,
                     draft,
                     item_number_override=position,
+                    maximum_item_number=maximum_sources,
                 )
                 inject_content_team_images(candidate, payloads)
                 reflow_curated_editorial_document(candidate, item_number=position)
@@ -216,16 +230,22 @@ def render_mixed_curated_document(
             sources.append(candidate)
         position = None
         failure = "HWPX_CURATED_PRESERVATION_FAILED"
-        report = merge_native_hwpx(tuple(sources), output, profile=NativeMergeProfile.EDITABLE_V2)
+        report = merge_native_hwpx(
+            tuple(sources),
+            output,
+            profile=NativeMergeProfile.EDITABLE_V2,
+            maximum_sources=maximum_sources,
+        )
         if report.source_sha256 != tuple(segment_hashes):
             raise _InputError("HWPX_CURATED_INPUT_CHANGED")
-        document = parse_native_document(read_package(output, OUTPUT_LIMITS))
+        limits = OCCURRENCE_OUTPUT_LIMITS if occurrence_profile else OUTPUT_LIMITS
+        document = parse_native_document(read_package(output, limits), limits)
         counts = {"equation": 0, "tbl": 0}
         for _name, section in document.sections:
             for node in section.iter():
                 if isinstance(node.tag, str) and (name := local_name(node.tag)) in counts:
                     counts[name] += 1
-        result = CuratedMixedRenderResult(
+        result = result_type(
             **common,
             status="SUCCEEDED",
             source_sha256=tuple(original_hashes),
@@ -247,7 +267,7 @@ def render_mixed_curated_document(
         # Only this fresh invocation's final output is removed. Original inputs
         # and private intermediate diagnostics remain available for investigation.
         output.unlink(missing_ok=True)
-        result = CuratedMixedRenderResult(
+        result = result_type(
             **common,
             status="FAILED",
             source_sha256=(),

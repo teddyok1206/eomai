@@ -1,0 +1,498 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/query-result/1.0",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/contents"
+    },
+    {
+      "$ref": "#/$defs/editions"
+    },
+    {
+      "$ref": "#/$defs/composition"
+    },
+    {
+      "$ref": "#/$defs/section"
+    },
+    {
+      "$ref": "#/$defs/history"
+    },
+    {
+      "$ref": "eom://schemas/content-planning/print-list/1.0"
+    },
+    {
+      "$ref": "eom://schemas/content-planning/usage/1.0#/$defs/result"
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_kind",
+        "edition_id",
+        "rows",
+        "next_id"
+      ],
+      "properties": {
+        "result_kind": {
+          "const": "DELIVERIES"
+        },
+        "edition_id": {
+          "type": "string",
+          "pattern": "^edition_[0-9a-f]{32}$"
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "prepared",
+              "section_labels",
+              "section_count",
+              "matches_current_revision"
+            ],
+            "properties": {
+              "prepared": {
+                "$ref": "eom://schemas/content-planning/delivery-prepared/1.0"
+              },
+              "section_labels": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200
+                }
+              },
+              "section_count": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 10000
+              },
+              "matches_current_revision": {
+                "type": "boolean"
+              }
+            }
+          }
+        },
+        "next_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^assemblyrev_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_kind",
+        "query_sha256",
+        "coverage",
+        "rows"
+      ],
+      "properties": {
+        "result_kind": {
+          "const": "USAGE_SUMMARY"
+        },
+        "query_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "coverage": {
+          "const": "ACCESSIBLE_CONTENTS"
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "target_index",
+              "total_locations",
+              "edition_locations",
+              "other_locations"
+            ],
+            "properties": {
+              "target_index": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 99
+              },
+              "total_locations": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "edition_locations": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "other_locations": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "$ref": "eom://schemas/content-planning/prior-usage/1.0#/$defs/result"
+    }
+  ],
+  "$defs": {
+    "contents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_kind",
+        "rows",
+        "next_id"
+      ],
+      "properties": {
+        "result_kind": {
+          "const": "CONTENTS"
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "deliverable_id",
+              "title",
+              "content_type",
+              "edition_count"
+            ],
+            "properties": {
+              "deliverable_id": {
+                "type": "string",
+                "pattern": "^deliverable_[0-9a-f]{32}$"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "content_type": {
+                "enum": [
+                  "MOCK_EXAM",
+                  "TEXTBOOK",
+                  "WEEKLY",
+                  "OTHER"
+                ]
+              },
+              "edition_count": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        },
+        "next_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^deliverable_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "editions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_kind",
+        "rows",
+        "next_id"
+      ],
+      "properties": {
+        "result_kind": {
+          "const": "EDITIONS"
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "edition_id",
+              "deliverable_id",
+              "revision_id",
+              "composition_sha256",
+              "edition_label",
+              "academic_year",
+              "section_count"
+            ],
+            "properties": {
+              "edition_id": {
+                "type": "string",
+                "pattern": "^edition_[0-9a-f]{32}$"
+              },
+              "deliverable_id": {
+                "type": "string",
+                "pattern": "^deliverable_[0-9a-f]{32}$"
+              },
+              "revision_id": {
+                "type": "string",
+                "pattern": "^delivrev_[0-9a-f]{32}$"
+              },
+              "composition_sha256": {
+                "type": "string",
+                "pattern": "^sha256:[0-9a-f]{64}$"
+              },
+              "edition_label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "academic_year": {
+                "anyOf": [
+                  {
+                    "type": "integer",
+                    "minimum": 1900,
+                    "maximum": 3000
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "section_count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              }
+            }
+          }
+        },
+        "next_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^edition_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "composition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_kind",
+        "composition",
+        "current_revision_id"
+      ],
+      "properties": {
+        "result_kind": {
+          "const": "COMPOSITION"
+        },
+        "composition": {
+          "$ref": "eom://schemas/content-planning/edition-composition/1.0"
+        },
+        "current_revision_id": {
+          "type": "string",
+          "pattern": "^delivrev_[0-9a-f]{32}$"
+        }
+      }
+    },
+    "section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_kind",
+        "edition_id",
+        "revision_id",
+        "composition_sha256",
+        "section_id",
+        "form",
+        "rows",
+        "labels",
+        "next_position",
+        "total"
+      ],
+      "properties": {
+        "result_kind": {
+          "const": "SECTION"
+        },
+        "edition_id": {
+          "type": "string",
+          "pattern": "^edition_[0-9a-f]{32}$"
+        },
+        "revision_id": {
+          "type": "string",
+          "pattern": "^delivrev_[0-9a-f]{32}$"
+        },
+        "composition_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "section_id": {
+          "type": "string",
+          "pattern": "^section_[0-9a-f]{32}$"
+        },
+        "form": {
+          "$ref": "eom://schemas/content-planning/edition-composition/1.0#/$defs/form_pointer"
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/resolved_slot"
+          }
+        },
+        "labels": {
+          "type": "array",
+          "maxItems": 200,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "placement_id",
+              "title",
+              "external_number"
+            ],
+            "properties": {
+              "placement_id": {
+                "type": "string",
+                "pattern": "^placement_[0-9a-f]{32}$"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "external_number": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^[0-9]{5}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "next_position": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "total": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        }
+      }
+    },
+    "history": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "result_kind",
+        "edition_id",
+        "rows",
+        "next_sequence"
+      ],
+      "properties": {
+        "result_kind": {
+          "const": "HISTORY"
+        },
+        "edition_id": {
+          "type": "string",
+          "pattern": "^edition_[0-9a-f]{32}$"
+        },
+        "rows": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "sequence",
+              "command_kind",
+              "before_revision_id",
+              "after_revision_id",
+              "created_by",
+              "created_at"
+            ],
+            "properties": {
+              "sequence": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "command_kind": {
+                "type": "string",
+                "maxLength": 64
+              },
+              "before_revision_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^delivrev_[0-9a-f]{32}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "after_revision_id": {
+                "type": "string",
+                "pattern": "^delivrev_[0-9a-f]{32}$"
+              },
+              "created_by": {
+                "type": "string",
+                "pattern": "^operator_[0-9a-f]{32}$"
+              },
+              "created_at": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "(Z|\\+00:00)$"
+              }
+            }
+          }
+        },
+        "next_sequence": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

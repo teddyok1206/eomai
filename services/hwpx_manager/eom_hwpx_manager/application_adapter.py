@@ -457,6 +457,11 @@ class FixedCuratedBuilderAdapter(_FixedApplicationBuilderAdapter):
     def write_json(self, workspace: Path, relative_path: str, value: dict[str, Any]) -> Path:
         data = canonical_json_bytes(value) + b"\n"
         maximum = 1024**2 if relative_path == "request.json" else 2 * 1024**2
+        if (relative_path, value.get("schema_version")) in {
+            ("request.json", "curated-hwpx-render-request/4.0"),
+            ("input-plan.json", "curated-hwpx-build-input/2.0"),
+        }:
+            maximum = 16 * 1024**2
         if len(data) > maximum:
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_KORDOC_SOURCE_INVALID,

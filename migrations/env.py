@@ -5,7 +5,11 @@ from logging.config import fileConfig
 import eom_api.educational_quality_models
 import eom_api.item_db_similarity_models
 import eom_api.pdf_document_review_models  # noqa: F401
+import eom_catalog_service.content_delivery_models
+import eom_catalog_service.content_planning_models
+import eom_catalog_service.content_print_models
 import eom_catalog_service.curated_document_assembly_models
+import eom_catalog_service.curated_document_slot_models
 import eom_catalog_service.embedding_registry_models
 import eom_catalog_service.external_item_models
 import eom_catalog_service.item_origin_models

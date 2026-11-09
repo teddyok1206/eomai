@@ -130,6 +130,9 @@ class RequestBoundaryMiddleware:
                 )
                 return
         effective_limit = self.pdf_review_upload_limit if is_binary_upload else self.body_limit
+        if method == "POST" and scope.get("path") == "/api/v1/content-planning/commands":
+            # Final ordered pointer arrays may exceed the normal small command budget.
+            effective_limit = 4 * 1024 * 1024
         if content_length and content_length.isdigit() and int(content_length) > effective_limit:
             await self._send_problem(scope, receive, secured_send, 413, "API_BODY_TOO_LARGE")
             return

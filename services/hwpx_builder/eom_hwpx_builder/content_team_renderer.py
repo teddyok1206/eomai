@@ -1235,6 +1235,7 @@ def render_content_team_document(
     *,
     item_number_override: int | None = None,
     score_display_override: str | None = None,
+    maximum_item_number: int = 200,
 ) -> dict[str, Any]:
     handoff_value = draft.model_dump(mode="json")
     handoff_value["stem"] = _project_general_stem_for_handoff(draft.stem)
@@ -1252,12 +1253,17 @@ def render_content_team_document(
     rendered_score_display = (
         handoff_draft.score_display if score_display_override is None else score_display_override
     )
-    if not 1 <= rendered_item_number <= 200 or rendered_score_display not in {
-        "1.5",
-        "2",
-        "2.5",
-        "3",
-    }:
+    if (
+        not 1 <= maximum_item_number <= 100000
+        or not 1 <= rendered_item_number <= maximum_item_number
+        or rendered_score_display
+        not in {
+            "1.5",
+            "2",
+            "2.5",
+            "3",
+        }
+    ):
         raise HwpxError(
             HwpxErrorCode.HWPX_REFERENCE_UNSAFE,
             "exam presentation values are outside the reviewed policy",

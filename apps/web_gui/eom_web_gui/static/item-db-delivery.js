@@ -5,13 +5,13 @@ const LABELS = Object.freeze({
 });
 
 export function createCuratedDeliveryControl({document, api, entry, setTimer = globalThis.setTimeout,
-  clearTimer = globalThis.clearTimeout, storage = globalThis.sessionStorage}) {
+  clearTimer = globalThis.clearTimeout, storage = globalThis.sessionStorage, canCreate = true}) {
   const root = document.createElement("span");
   root.className = "item-db-delivery";
   const action = document.createElement("button");
   action.type = "button";
   action.className = "button secondary";
-  action.textContent = "HWPX 제작";
+  action.textContent = canCreate ? "HWPX 제작" : "제작 결과 확인";
   const status = document.createElement("span");
   status.className = "item-db-delivery-status";
   status.setAttribute("aria-live", "polite");
@@ -44,7 +44,7 @@ export function createCuratedDeliveryControl({document, api, entry, setTimer = g
     }
     view = value;
     status.textContent = LABELS[value.state] + (value.failure_code ? ` · ${value.failure_code}` : "");
-    action.textContent = value.state === "FAILED" ? "다시 제작" : "상태 확인";
+    action.textContent = value.state === "FAILED" && canCreate ? "다시 제작" : "상태 확인";
     download.hidden = !(value.state === "SUCCEEDED" && value.download_available === true);
     if (!download.hidden) download.href = `/studio/api/v1${base}/${encodeURIComponent(value.build_id)}/download`;
     root.setAttribute("aria-busy", String(!["SUCCEEDED", "FAILED"].includes(value.state)));
@@ -61,7 +61,7 @@ export function createCuratedDeliveryControl({document, api, entry, setTimer = g
     if (busy || disposed) return;
     busy = true;
     action.disabled = true;
-    try { const value = await work(); if (!disposed) show(value); }
+    try { const value = await work(); if (!disposed && value !== null) show(value); }
     catch (error) {
       if (!disposed) status.textContent = `제작 상태 확인 필요: ${error.message || "다시 눌러 확인해 주세요."}`;
       // Keep the same build/key. Observation failure never creates another build.
@@ -74,13 +74,14 @@ export function createCuratedDeliveryControl({document, api, entry, setTimer = g
   }
 
   action.addEventListener("click", () => {
-    if (view && view.state !== "FAILED") return refresh();
+    if (view && (view.state !== "FAILED" || !canCreate)) return refresh();
     const retry = view?.state === "FAILED";
     return guarded(async () => {
       if (!retry) {
         const previous = await api(`${base}/latest?${new URLSearchParams(input)}`);
         if (previous) return previous;
       }
+      if (!canCreate) {status.textContent = "아직 제작된 파일이 없습니다."; return null;}
       status.textContent = "제작 요청을 보내고 있습니다.";
       return api(base, {method: "POST", mutation: true, body: input,
         headers: {"Idempotency-Key": key(retry)}});

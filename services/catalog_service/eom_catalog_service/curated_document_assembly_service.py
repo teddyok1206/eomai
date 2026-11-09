@@ -24,8 +24,9 @@ from eom_catalog_contracts.curated_document_assembly_library import (
     CuratedDocumentAssemblyRemovalInput,
     CuratedDocumentAssemblyRemovalReceipt,
 )
-from eom_hwpx_contracts.curated_build import CuratedHwpxBuildInput
+from eom_catalog_contracts.curated_document_slots import CuratedDeliveryManifest
 from eom_hwpx_contracts.curated_document import CuratedHwpConverterSnapshot
+from eom_hwpx_contracts.curated_occurrences import CuratedBuildInput
 from eom_hwpx_contracts.models import ContentTeamHandoffSnapshot
 from eom_identifiers import content_sha256
 from eom_identity_service.models import OperatorRecord
@@ -37,6 +38,9 @@ from sqlalchemy import Engine, func, select, tuple_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from eom_catalog_service.content_delivery_models import ContentDeliveryScopeRecord
+from eom_catalog_service.content_delivery_service import read_content_delivery
+from eom_catalog_service.content_planning_models import ContentFormMembershipRecord
 from eom_catalog_service.curated_delivery_inputs import CuratedDeliveryInputs
 from eom_catalog_service.curated_document_assembly_item import (
     reauthorize_curated_registered_items,
@@ -221,12 +225,12 @@ class CuratedDocumentAssemblyService:
 
     def pin_delivery_inputs(
         self,
-        manifest: CuratedDocumentAssemblyManifestV1,
+        manifest: CuratedDeliveryManifest,
         *,
         actor: ActorContext,
         handoff: ContentTeamHandoffSnapshot,
         converter: CuratedHwpConverterSnapshot,
-    ) -> CuratedHwpxBuildInput:
+    ) -> CuratedBuildInput:
         return CuratedDeliveryInputs(
             self.engine, assemblies=self, handoff=handoff, converter=converter
         ).pin_inputs(manifest, actor=actor)
@@ -238,7 +242,7 @@ class CuratedDocumentAssemblyService:
         assembly_revision_id: str,
         manifest_sha256: str,
         actor: ActorContext,
-    ) -> CuratedDocumentAssemblyManifestV1:
+    ) -> CuratedDeliveryManifest:
         """Read/status/download permission, distinct from permission to build."""
         return self._authorize_delivery(
             assembly_id,
@@ -255,7 +259,7 @@ class CuratedDocumentAssemblyService:
         assembly_revision_id: str,
         manifest_sha256: str,
         actor: ActorContext,
-    ) -> CuratedDocumentAssemblyManifestV1:
+    ) -> CuratedDeliveryManifest:
         """Admit or execute a durable build with the initiator's current authority."""
         return self._authorize_delivery(
             assembly_id,
@@ -273,7 +277,7 @@ class CuratedDocumentAssemblyService:
         manifest_sha256: str,
         actor: ActorContext,
         permission: PermissionKey,
-    ) -> CuratedDocumentAssemblyManifestV1:
+    ) -> CuratedDeliveryManifest:
         """Authorize one exact saved input with bounded metadata reads.
 
         No file materialization or render is performed by a status/replay read.
@@ -281,6 +285,23 @@ class CuratedDocumentAssemblyService:
         Source revocation, changed source pointers and operator permissions are
         still checked; none of them is repaired by resolving an implicit latest.
         """
+        with self.sessions() as session:
+            schema = session.scalar(
+                select(CuratedDocumentAssemblyRevisionRecord.manifest_schema_version).where(
+                    CuratedDocumentAssemblyRevisionRecord.assembly_id == assembly_id,
+                    CuratedDocumentAssemblyRevisionRecord.assembly_revision_id
+                    == assembly_revision_id,
+                )
+            )
+            if schema == "curated-document-assembly-manifest/2.0":
+                return read_content_delivery(
+                    session,
+                    assembly_id,
+                    assembly_revision_id,
+                    manifest_sha256,
+                    actor=actor,
+                    permission=permission,
+                )[1]
         manifest = self.read(assembly_id, actor=actor)
         if (
             manifest.assembly_revision_id != assembly_revision_id
@@ -375,7 +396,16 @@ class CuratedDocumentAssemblyService:
                     func.jsonb_array_length(revision.canonical_document["placements"]),
                 )
                 .outerjoin(revision, aggregate.current_revision_id == revision.assembly_revision_id)
-                .where(aggregate.created_by == authorized.actor_id, aggregate.removed_at.is_(None))
+                .where(
+                    aggregate.created_by == authorized.actor_id,
+                    aggregate.removed_at.is_(None),
+                    ~select(ContentFormMembershipRecord.assessment_form_id)
+                    .where(ContentFormMembershipRecord.assembly_id == aggregate.assembly_id)
+                    .exists(),
+                    ~select(ContentDeliveryScopeRecord.assembly_id)
+                    .where(ContentDeliveryScopeRecord.assembly_id == aggregate.assembly_id)
+                    .exists(),
+                )
                 .order_by(aggregate.created_at.desc(), aggregate.assembly_id.desc())
                 .limit(limit + 1)
             )

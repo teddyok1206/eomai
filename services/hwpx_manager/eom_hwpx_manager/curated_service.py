@@ -5,12 +5,16 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 
-from eom_catalog_contracts import CuratedDocumentAssemblyManifestV1
+from eom_catalog_contracts.curated_document_slots import CuratedDeliveryManifest
 from eom_catalog_service.artifacts import CatalogArtifactService
 from eom_catalog_service.curated_delivery_inputs import CuratedDeliveryInputs
-from eom_hwpx_contracts.curated_build import CuratedHwpxBuildInput
 from eom_hwpx_contracts.curated_mixed import CuratedMixedRenderResult
-from eom_hwpx_contracts.validation import parse_json_object, validate_contract
+from eom_hwpx_contracts.curated_occurrences import (
+    CuratedBuildInput,
+    CuratedHwpxBuildInputV2,
+    parse_mixed_render_result,
+)
+from eom_hwpx_contracts.validation import parse_json_object
 from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext
 from eom_orchestrator.database import build_session_factory, transaction
@@ -33,7 +37,7 @@ from eom_hwpx_manager.curated_build_models import HwpxCuratedBuildRecord
 from eom_hwpx_manager.curated_materialization import CuratedInputMaterializer
 from eom_hwpx_manager.curated_output_acceptance import verify_curated_output
 from eom_hwpx_manager.errors import HwpxManagerError, HwpxManagerErrorCode
-from eom_hwpx_manager.protocol import HWPX_CURATED_PROTOCOL_VERSION, curated_schema_bundle_hash
+from eom_hwpx_manager.protocol import curated_protocol_identity
 
 ARTIFACT_TYPE = "hwpx-curated-build"
 OUTPUT_MEMBER = "assembled.hwpx"
@@ -70,8 +74,8 @@ class CuratedHwpxService:
         self.artifacts = artifacts
 
     def pin_inputs(
-        self, manifest: CuratedDocumentAssemblyManifestV1, *, actor: ActorContext
-    ) -> CuratedHwpxBuildInput:
+        self, manifest: CuratedDeliveryManifest, *, actor: ActorContext
+    ) -> CuratedBuildInput:
         return self.pins.pin_inputs(manifest, actor=actor)
 
     def build_may_be_active(self, build_id: str) -> bool:
@@ -82,14 +86,13 @@ class CuratedHwpxService:
         return "hwpx-curated:" + record.build_id
 
     def _reserve(self, record: HwpxCuratedBuildRecord) -> JobState:
+        protocol, schema_hash = curated_protocol_identity(record.input_plan["schema_version"])
         with transaction(self.sessions) as session:
-            ensure_protocol_version(
-                session, HWPX_CURATED_PROTOCOL_VERSION, curated_schema_bundle_hash()
-            )
+            ensure_protocol_version(session, protocol, schema_hash)
             job, _created = submit_structured_job(
                 session,
                 job_id=record.planned_job_id,
-                protocol_version=HWPX_CURATED_PROTOCOL_VERSION,
+                protocol_version=protocol,
                 idempotency_key=self._key(record),
                 task_type=ARTIFACT_TYPE,
                 request=record.input_plan,
@@ -101,7 +104,7 @@ class CuratedHwpxService:
                 or job.logical_artifact_id != record.planned_artifact_id
                 or job.revision_id != record.planned_artifact_revision_id
                 or content_sha256(job.request) != record.input_plan_sha256
-                or job.protocol_version != HWPX_CURATED_PROTOCOL_VERSION
+                or job.protocol_version != protocol
                 or job.task_type != ARTIFACT_TYPE
             ):
                 raise _invalid("curated publication Job differs from its reserved identity")
@@ -135,7 +138,7 @@ class CuratedHwpxService:
     def finish(
         self,
         record: HwpxCuratedBuildRecord,
-        inputs: CuratedHwpxBuildInput,
+        inputs: CuratedBuildInput,
         *,
         validated: Callable[[str], None],
     ) -> CuratedBuildReceipt:
@@ -180,9 +183,11 @@ class CuratedHwpxService:
                 else:
                     if run.exit_code != 0 and not result_path.is_file():
                         raise _invalid("curated fixed-unit execution produced no result")
-            raw = parse_json_object(read_stable_regular_file(result_path, max_bytes=1024 * 1024))
-            validate_contract("curated-render-result-v3", raw)
-            result = CuratedMixedRenderResult.model_validate(raw)
+            maximum = 16 * 1024**2 if isinstance(inputs, CuratedHwpxBuildInputV2) else 1024**2
+            raw = parse_json_object(read_stable_regular_file(result_path, max_bytes=maximum))
+            result = parse_mixed_render_result(raw)
+            if result.profile != inputs.profile:
+                raise _invalid("curated result profile differs from its input")
             if result.status != "SUCCEEDED":
                 self._record_failure(record, result)
                 raise _invalid(
@@ -205,13 +210,14 @@ class CuratedHwpxService:
         }
         expected = {
             name: hash_stable_regular_file(
-                path, max_bytes=256 * 1024**2 if name == OUTPUT_MEMBER else 1024 * 1024
+                path, max_bytes=256 * 1024**2 if name == OUTPUT_MEMBER else maximum
             )
             for name, path in files.items()
         }
         if expected[OUTPUT_MEMBER] != accepted.sha256:
             raise _invalid("curated output changed before Artifact staging")
         try:
+            protocol, schema_hash = curated_protocol_identity(inputs.schema_version)
             artifact = self.artifacts.commit_file_set(
                 files=files,
                 primary_file=OUTPUT_MEMBER,
@@ -219,21 +225,21 @@ class CuratedHwpxService:
                 idempotency_key=self._key(record),
                 request=record.input_plan,
                 result=result.model_dump(mode="json"),
-                protocol_version=HWPX_CURATED_PROTOCOL_VERSION,
-                protocol_schema_hash=curated_schema_bundle_hash(),
+                protocol_version=protocol,
+                protocol_schema_hash=schema_hash,
                 expected_file_sha256=expected,
                 file_metadata={
                     OUTPUT_MEMBER: {"schema_ref": OUTPUT_SCHEMA, "media_type": OUTPUT_MEDIA},
                     "input-plan.json": {
-                        "schema_ref": "eom://schemas/hwpx/curated-hwpx-build-input/1.0",
+                        "schema_ref": f"eom://schemas/hwpx/{inputs.schema_version}",
                         "media_type": "application/json",
                     },
                     "render-request.json": {
-                        "schema_ref": "eom://schemas/hwpx/curated-hwpx-render-request/3.0",
+                        "schema_ref": f"eom://schemas/hwpx/{staged.request.schema_version}",
                         "media_type": "application/json",
                     },
                     "render-result.json": {
-                        "schema_ref": "eom://schemas/hwpx/curated-hwpx-render-result/3.0",
+                        "schema_ref": f"eom://schemas/hwpx/{result.schema_version}",
                         "media_type": "application/json",
                     },
                 },
@@ -309,8 +315,10 @@ class CuratedHwpxService:
                 or job.request != record.input_plan
             ):
                 raise _invalid("curated committed publication pointer differs")
-            validate_contract("curated-render-result-v3", revision.result)
-            result = CuratedMixedRenderResult.model_validate(revision.result)
+            result = parse_mixed_render_result(revision.result)
+            expected_profile = record.input_plan["profile"]
+            if result.profile != expected_profile:
+                raise _invalid("committed curated result profile differs")
             members = [
                 member
                 for member in revision.manifest.get("files", [])

@@ -1,0 +1,132 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog/content-planning-response/1.0",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "CONTENT_PLANNING_WRITE"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "$ref": "eom://schemas/content-planning/write-result/1.0"
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "CONTENT_PLANNING_QUERY"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "$ref": "eom://schemas/content-planning/query-result/1.0"
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "enum": [
+            "CONTENT_PLANNING_QUERY",
+            "CONTENT_PLANNING_WRITE",
+            "CONTENT_PLANNING_PRINT",
+            "CONTENT_PLANNING_DELIVERY"
+          ]
+        },
+        "status": {
+          "const": "ERROR"
+        },
+        "result": {
+          "type": "null"
+        },
+        "error_code": {
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9_]{2,127}$"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "CONTENT_PLANNING_PRINT"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "$ref": "eom://schemas/content-planning/print-result/1.0"
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "status",
+        "result",
+        "error_code"
+      ],
+      "properties": {
+        "operation": {
+          "const": "CONTENT_PLANNING_DELIVERY"
+        },
+        "status": {
+          "const": "OK"
+        },
+        "result": {
+          "$ref": "eom://schemas/content-planning/delivery-prepared/1.0"
+        },
+        "error_code": {
+          "type": "null"
+        }
+      }
+    }
+  ]
+}

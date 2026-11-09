@@ -160,6 +160,17 @@ def _static_string(node: ast.expr) -> str | None:
     return None
 
 
+def test_content_planning_closed_bff_routes_match_registered_operations():
+    calls = _frontend_api_calls((STATIC_ROOT / "content-planning.js").read_text())
+    assert calls == {
+        ("POST", "/content-planning/query"),
+        ("POST", "/content-planning/commands"),
+        ("POST", "/content-planning/prints"),
+        ("POST", "/content-planning/deliveries"),
+    }
+    assert calls <= _bff_routes()
+
+
 def _static_path_choices(node: ast.expr) -> set[str] | None:
     """Audit both literal branch targets; computed alternatives remain unknown."""
     if isinstance(node, ast.IfExp):

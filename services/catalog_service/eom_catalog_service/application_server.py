@@ -112,10 +112,16 @@ from eom_catalog_contracts.chat_ranked_candidate_read import (
     parse_chat_ranked_candidate_read_request,
     validate_chat_ranked_candidate_read_reply,
 )
+from eom_catalog_contracts.content_planning_rpc import CONTENT_PLANNING_OPERATIONS
 from eom_catalog_contracts.curated_document_assembly_library import LIBRARY_REQUEST_TYPES
 from eom_catalog_contracts.curated_document_delivery_application import (
+    CuratedDeliveryQuery,
+    CuratedDeliveryResponse,
     CuratedDocumentDeliveryQueryV1,
+    CuratedDocumentDeliveryQueryV2,
     CuratedDocumentDeliveryResponseV1,
+    CuratedDocumentDeliveryResponseV2,
+    delivery_contract_version,
 )
 from eom_identifiers import canonical_json_bytes
 from eom_item_registry import RegistryError
@@ -153,6 +159,10 @@ from eom_catalog_service.chat_knowledge_resolution import (
 )
 from eom_catalog_service.chat_knowledge_search import ChatKnowledgeSearchService
 from eom_catalog_service.chat_rag_resolution import ChatRagResolutionService
+from eom_catalog_service.content_planning_access import ContentPlanningError
+from eom_catalog_service.content_planning_dispatch import dispatch_content_planning
+from eom_catalog_service.content_planning_layout import ContentPlanningConflict
+from eom_catalog_service.content_planning_service import ContentPlanningService
 from eom_catalog_service.curated_delivery_inputs import CuratedDeliveryInputError
 from eom_catalog_service.curated_document_assembly_item import CuratedDocumentAssemblyItemError
 from eom_catalog_service.curated_document_assembly_library_dispatch import (
@@ -304,6 +314,10 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 raise ValueError
             raw_operation = value.get("operation")
             if not self.server.peer_can_operate(self.request, raw_operation):
+                return
+            if isinstance(raw_operation, str) and raw_operation in CONTENT_PLANNING_OPERATIONS:
+                self.wfile.write(dispatch_content_planning(self.server.content_planning, value))
+                self.wfile.flush()
                 return
             if isinstance(raw_operation, str) and raw_operation in MATERIAL_LEARNING_OPERATIONS:
                 dispatch_material_learning(
@@ -774,14 +788,30 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     return
                 self._prepare_external_item_preview(preview_command)
                 return
-            if raw_operation == "RESOLVE_CURATED_DOCUMENT_DELIVERY":
+            if raw_operation in (
+                "RESOLVE_CURATED_DOCUMENT_DELIVERY",
+                "RESOLVE_CURATED_DOCUMENT_DELIVERY_V2",
+            ):
+                delivery_version = "v2" if raw_operation.endswith("_V2") else "v1"
+                query_type = (
+                    CuratedDocumentDeliveryQueryV2
+                    if delivery_version == "v2"
+                    else CuratedDocumentDeliveryQueryV1
+                )
+                response_type = (
+                    CuratedDocumentDeliveryResponseV2
+                    if delivery_version == "v2"
+                    else CuratedDocumentDeliveryResponseV1
+                )
                 try:
-                    validate_contract("catalog-curated-document-delivery-request-v1", value)
-                    delivery_query = CuratedDocumentDeliveryQueryV1.model_validate(value)
+                    validate_contract(
+                        f"catalog-curated-document-delivery-request-{delivery_version}", value
+                    )
+                    delivery_query = query_type.model_validate(value)
                 except (JsonSchemaValidationError, ValidationError, ValueError):
                     self.server.write_curated_document_delivery_response(
                         self.wfile,
-                        CuratedDocumentDeliveryResponseV1(
+                        response_type(
                             status="ERROR",
                             error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_REQUEST_INVALID.value,
                         ),
@@ -1251,10 +1281,15 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 )
         self.server.write_external_item_preview_prepare_response(self.wfile, response)
 
-    def _resolve_curated_document_delivery(self, query: CuratedDocumentDeliveryQueryV1) -> None:
+    def _resolve_curated_document_delivery(self, query: CuratedDeliveryQuery) -> None:
+        response_type = (
+            CuratedDocumentDeliveryResponseV2
+            if isinstance(query, CuratedDocumentDeliveryQueryV2)
+            else CuratedDocumentDeliveryResponseV1
+        )
         service = self.server.curated_document_assemblies
         if service is None:
-            response = CuratedDocumentDeliveryResponseV1(
+            response = response_type(
                 status="ERROR",
                 error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_UNAVAILABLE.value,
             )
@@ -1286,8 +1321,12 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                     inputs = service.pin_delivery_inputs(
                         manifest, actor=actor, handoff=query.handoff, converter=query.converter
                     )
-                response = CuratedDocumentDeliveryResponseV1(
-                    status="OK", manifest=manifest, inputs=inputs
+                response = response_type.model_validate(
+                    {
+                        "status": "OK",
+                        "manifest": manifest.model_dump(mode="json"),
+                        "inputs": inputs.model_dump(mode="json") if inputs is not None else None,
+                    }
                 )
             except (
                 CuratedDocumentAssemblyError,
@@ -1296,15 +1335,17 @@ class _CatalogApplicationHandler(socketserver.StreamRequestHandler):
                 CuratedDocumentAssemblyItemError,
                 CuratedDeliveryInputError,
                 ExternalItemDocumentMediaError,
+                ContentPlanningError,
+                ContentPlanningConflict,
             ) as exc:
-                response = CuratedDocumentDeliveryResponseV1(status="ERROR", error_code=exc.code)
+                response = response_type(status="ERROR", error_code=exc.code)
             except Exception as exc:
                 _LOGGER.error(
                     "curated delivery resolution failed request_id=%s exception=%s",
                     query.request_id,
                     type(exc).__name__,
                 )
-                response = CuratedDocumentDeliveryResponseV1(
+                response = response_type(
                     status="ERROR",
                     error_code=CatalogApplicationErrorCode.CATALOG_APPLICATION_INTERNAL_ERROR.value,
                 )
@@ -1977,6 +2018,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         external_item_documents: ExternalItemDocumentMediaService | None = None,
         external_item_previews: ExternalItemPreviewProjectionService | None = None,
         curated_document_assemblies: CuratedDocumentAssemblyService | None = None,
+        content_planning: ContentPlanningService | None = None,
         chat_knowledge: ChatKnowledgeResolutionService | None = None,
         chat_rag: ChatRagResolutionService | None = None,
         inference_transfer_metadata: CatalogInferenceTransferMetadataService | None = None,
@@ -2016,6 +2058,7 @@ class CatalogApplicationServer(_ThreadingUnixServer):
         self.external_item_documents = external_item_documents
         self.external_item_previews = external_item_previews
         self.curated_document_assemblies = curated_document_assemblies
+        self.content_planning = content_planning
         self.chat_knowledge = chat_knowledge
         self.chat_rag = chat_rag
         self.inference_transfer_metadata = inference_transfer_metadata
@@ -2591,12 +2634,15 @@ class CatalogApplicationServer(_ThreadingUnixServer):
 
     @staticmethod
     def write_curated_document_delivery_response(
-        stream: Any, value: CuratedDocumentDeliveryResponseV1
+        stream: Any, value: CuratedDeliveryResponse
     ) -> None:
         # The pinned input contains required nullable component pointers. Do not
         # erase them recursively while shortening an outer response envelope.
         payload = value.model_dump(mode="json")
-        validate_contract("catalog-curated-document-delivery-response-v1", payload)
+        validate_contract(
+            f"catalog-curated-document-delivery-response-{delivery_contract_version(value)}",
+            payload,
+        )
         raw = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("ascii")
         if len(raw) + 1 > MAX_MESSAGE_BYTES:
             raise RuntimeError("Catalog curated delivery metadata exceeded its fixed bound")

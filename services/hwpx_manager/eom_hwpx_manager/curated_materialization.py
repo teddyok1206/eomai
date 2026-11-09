@@ -17,7 +17,6 @@ from eom_hwpx_contracts import (
 )
 from eom_hwpx_contracts.curated_build import (
     CuratedArtifactMember,
-    CuratedHwpxBuildInput,
     CuratedNativeDocumentInput,
     CuratedRegisteredItemInput,
 )
@@ -28,8 +27,20 @@ from eom_hwpx_contracts.curated_mixed import (
     CuratedMixedRenderRequest,
     CuratedNativeSegment,
 )
+from eom_hwpx_contracts.curated_occurrences import (
+    CuratedBuildInput,
+    CuratedCanonicalOccurrenceSegment,
+    CuratedEditorialOccurrenceSegment,
+    CuratedHwpxBuildInputV2,
+    CuratedNativeOccurrenceSegment,
+    CuratedOccurrenceRenderRequest,
+    CuratedRenderRequest,
+    NativeItemRenderRequestV2,
+    parse_curated_build_input,
+    parse_mixed_render_request,
+)
 from eom_hwpx_contracts.native_item import NativeItemRenderRequest
-from eom_hwpx_contracts.validation import parse_json_object, validate_contract
+from eom_hwpx_contracts.validation import parse_json_object
 from eom_identifiers import content_sha256, sha256_bytes
 from eom_protocol.artifact_members import ArtifactMemberPointer as SourceMember
 
@@ -53,7 +64,7 @@ class CuratedArtifactMembers(Protocol):
 
 @dataclass(frozen=True)
 class CuratedMaterialization:
-    request: CuratedMixedRenderRequest
+    request: CuratedRenderRequest
     canonical_items: tuple[NativeItemRenderRequest, ...]
     editorial_items: tuple[ContentTeamOutputExpectation, ...]
 
@@ -110,19 +121,30 @@ class CuratedInputMaterializer:
         self.adapter = adapter
 
     def stage(
-        self, workspace: Path, *, build_id: str, inputs: CuratedHwpxBuildInput
+        self, workspace: Path, *, build_id: str, inputs: CuratedBuildInput
     ) -> CuratedMaterialization:
-        validate_contract("curated-build-input", inputs.model_dump(mode="json"))
+        parse_curated_build_input(inputs.model_dump(mode="json"))
+        occurrences = isinstance(inputs, CuratedHwpxBuildInputV2)
+        native_type = CuratedNativeOccurrenceSegment if occurrences else CuratedNativeSegment
+        canonical_type = (
+            CuratedCanonicalOccurrenceSegment if occurrences else CuratedCanonicalSegment
+        )
+        editorial_type = (
+            CuratedEditorialOccurrenceSegment if occurrences else CuratedEditorialSegment
+        )
+        request_type = CuratedOccurrenceRenderRequest if occurrences else CuratedMixedRenderRequest
         items = tuple(
             row for row in inputs.placements if isinstance(row, CuratedRegisteredItemInput)
         )
         revisions = (
-            self.registry.inspect_revisions(tuple(row.item_revision_id for row in items))
+            self.registry.inspect_revisions(
+                tuple(dict.fromkeys(row.item_revision_id for row in items))
+            )
             if items
             else ()
         )
         by_id = {row["item_revision_id"]: row for row in revisions}
-        if len(by_id) != len(items):
+        if len(by_id) != len({row.item_revision_id for row in items}):
             _invalid("curated Item Revision set is incomplete or repeated")
         pointers: list[ArtifactMemberPointer] = []
         for placement in inputs.placements:
@@ -200,7 +222,7 @@ class CuratedInputMaterializer:
                 if target.stat().st_size != placement.size_bytes:
                     _invalid("native source size differs from its saved input")
                 segments.append(
-                    CuratedNativeSegment(
+                    native_type(
                         position=position,
                         local_file=name,
                         source_format=placement.source_format,
@@ -226,6 +248,9 @@ class CuratedInputMaterializer:
                     source_sha256=placement.source_content.sha256,
                     effective_content_sha256=placement.display_content.sha256,
                     item_number=position,
+                    document_type=NativeItemRenderRequestV2
+                    if occurrences
+                    else NativeItemRenderRequest,
                 )
                 canonical.append(projection.document)
                 name = f"input/items/{position:03d}/native-item.json"
@@ -234,7 +259,7 @@ class CuratedInputMaterializer:
                 )
                 raw = read_stable_regular_file(target, max_bytes=2 * 1024 * 1024)
                 segments.append(
-                    CuratedCanonicalSegment(
+                    canonical_type(
                         position=position,
                         item_revision_id=placement.item_revision_id,
                         source_sha256=placement.source_content.sha256,
@@ -340,7 +365,7 @@ class CuratedInputMaterializer:
             placement = segment.placement
             assert placement.editorial_markdown is not None
             finished.append(
-                CuratedEditorialSegment(
+                editorial_type(
                     position=placement.position,
                     item_revision_id=placement.item_revision_id,
                     source_schema_ref=(
@@ -364,16 +389,18 @@ class CuratedInputMaterializer:
                     ),
                 )
             )
-        request = CuratedMixedRenderRequest(
-            build_id=build_id,
-            assembly_revision_id=inputs.assembly_revision_id,
-            assembly_manifest_sha256=inputs.assembly_manifest_sha256,
-            input_plan_sha256=content_sha256(inputs.model_dump(mode="json")),
-            segments=tuple(finished),
-            handoff=inputs.handoff,
-            converter=inputs.converter,
+        request = request_type.model_validate(
+            dict(
+                build_id=build_id,
+                assembly_revision_id=inputs.assembly_revision_id,
+                assembly_manifest_sha256=inputs.assembly_manifest_sha256,
+                input_plan_sha256=content_sha256(inputs.model_dump(mode="json")),
+                segments=tuple(finished),
+                handoff=inputs.handoff,
+                converter=inputs.converter,
+            )
         )
-        validate_contract("curated-render-request-v3", request.model_dump(mode="json"))
+        parse_mixed_render_request(request.model_dump(mode="json"))
         return CuratedMaterialization(request, tuple(canonical), tuple(editorial))
 
     @staticmethod

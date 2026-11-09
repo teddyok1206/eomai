@@ -16,6 +16,7 @@ from eom_catalog_contracts import (
     ExternalItemRowObservation,
     ExternalItemWorkbookMapping,
 )
+from eom_catalog_contracts.content_usage_filter import ContentUsageFilter
 from eom_catalog_contracts.creative_source_lineage import CREATIVE_REGISTRATION_KEY_PREFIX
 from eom_catalog_contracts.external_item_filter_options import (
     CATEGORICAL_ITEM_METADATA_FIELDS,
@@ -23,10 +24,14 @@ from eom_catalog_contracts.external_item_filter_options import (
     ExternalItemDbFilterOptions,
     ItemDbCategoricalFieldOptions,
 )
-from sqlalchemy import Select, and_, case, column, func, literal, or_, select, true
+from sqlalchemy import Select, and_, case, column, func, or_, select, true
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session
 
+from eom_catalog_service.content_usage_filter import content_usage_condition
+from eom_catalog_service.creative_source_registration import (
+    creative_registration_source_condition as creative_registration_source_condition,
+)
 from eom_catalog_service.external_item_matching import ExternalItemMatchStatus
 from eom_catalog_service.external_item_models import (
     ExternalItemEditionDocumentRecord,
@@ -89,6 +94,7 @@ class ExternalItemListFilter:
     match_mode: str = "ALL"
     conditions: tuple[ExternalItemMetadataPredicate, ...] = ()
     approval_state: str | None = None
+    usage_filter: ContentUsageFilter | None = None
 
     def __post_init__(self) -> None:
         if (
@@ -325,6 +331,10 @@ def _filtered_query(statement: Select[Any], query: ExternalItemListFilter) -> Se
     source = ExternalItemSourceRecord
     revision = ExternalItemSourceRevisionRecord
     statement = statement.where(source.source_namespace == query.source_namespace)
+    if query.usage_filter is not None:
+        statement = statement.where(
+            content_usage_condition(query.usage_filter, target_kind="SOURCE")
+        )
     if query.approval_state is not None:
         registered = (
             select(ItemRevisionRecord.item_revision_id)
@@ -357,19 +367,6 @@ def _filtered_query(statement: Select[Any], query: ExternalItemListFilter) -> Se
             and_(*expressions) if query.match_mode == "ALL" else or_(*expressions)
         )
     return statement
-
-
-def creative_registration_source_condition() -> Any:
-    """Correlate canonical registration to this exact source, never a filename/latest guess."""
-    metadata = ItemRevisionRecord.metadata_json
-    return and_(
-        ItemRevisionRecord.registration_key
-        == literal(CREATIVE_REGISTRATION_KEY_PREFIX) + ExternalItemSourceRecord.source_id,
-        metadata["source_kind"].as_string() == "CREATIVE",
-        metadata["source_id"].as_string() == ExternalItemSourceRecord.source_id,
-        metadata["source_revision_id"].as_string() == ExternalItemSourceRevisionRecord.revision_id,
-        metadata["external_number"].as_string() == ExternalItemSourceRecord.external_number,
-    )
 
 
 class CreativeSourceIdentity(Protocol):

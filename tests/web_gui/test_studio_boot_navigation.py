@@ -27,6 +27,7 @@ async function check(navigate, admin, expected) {
     currentView:'dashboard'};
   const context = {state, document:{}, window:{location:{}}, generalChat:{install(){}},
     itemDb:{install(){}}, knowledgeMap:{install(){}}, materialLearning:{install(){}},
+    contentPlanning:{install(){}},
     studioRouteFromLocation:()=>({view:'chat'}), syncUiMode(){},
     loadPresentationVocabulary:async()=>{}, initializeSession:async()=>{},
     loadCurriculumOutline:async()=>{reached(); await pending;},

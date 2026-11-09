@@ -4,10 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, NoReturn
 
-from eom_catalog_contracts import (
-    CuratedDocumentAssemblyManifestV1,
-    CuratedExternalDocumentPlacement,
-)
 from eom_catalog_contracts.creative_visual_presentation import (
     VISUAL_PRESENTATION_ARTIFACT_TYPE,
     VISUAL_PRESENTATION_CONTENT_MEMBER,
@@ -16,6 +12,13 @@ from eom_catalog_contracts.creative_visual_presentation import (
     VISUAL_PRESENTATION_SCHEMA_REFS,
     visual_presentation_key,
 )
+from eom_catalog_contracts.curated_document_slots import (
+    CuratedDeliveryManifest,
+    CuratedDocumentAssemblyManifestV2,
+    RegisteredSlotTarget,
+    ResolvedExternalSlotTarget,
+    iter_curated_delivery_positions,
+)
 from eom_hwpx_contracts.curated_build import (
     CuratedArtifactMember,
     CuratedHwpxBuildInput,
@@ -23,8 +26,14 @@ from eom_hwpx_contracts.curated_build import (
     CuratedRegisteredItemInput,
 )
 from eom_hwpx_contracts.curated_document import CuratedHwpConverterSnapshot
+from eom_hwpx_contracts.curated_occurrences import (
+    CuratedBuildInput,
+    CuratedHwpxBuildInputV2,
+    CuratedNativeOccurrenceInput,
+    CuratedRegisteredOccurrenceInput,
+    parse_curated_build_input,
+)
 from eom_hwpx_contracts.models import ContentTeamHandoffSnapshot
-from eom_hwpx_contracts.validation import validate_contract
 from eom_identifiers import content_sha256
 from eom_operator_identity import ActorContext
 from eom_orchestrator.database import build_session_factory
@@ -82,8 +91,8 @@ class CuratedDeliveryInputs:
         self.converter = converter
 
     def pin_inputs(
-        self, manifest: CuratedDocumentAssemblyManifestV1, *, actor: ActorContext
-    ) -> CuratedHwpxBuildInput:
+        self, manifest: CuratedDeliveryManifest, *, actor: ActorContext
+    ) -> CuratedBuildInput:
         authorized = self.assemblies.authorize_delivery_build(
             manifest.assembly_id,
             assembly_revision_id=manifest.assembly_revision_id,
@@ -92,12 +101,9 @@ class CuratedDeliveryInputs:
         )
         if authorized != manifest:
             _invalid()
-        selected = tuple(
-            row
-            for row in manifest.placements
-            if not isinstance(row, CuratedExternalDocumentPlacement)
-        )
-        ids = tuple(row.item_revision_id for row in selected)
+        positions = tuple(iter_curated_delivery_positions(manifest))
+        selected = tuple(row for _, _, row in positions if isinstance(row, RegisteredSlotTarget))
+        ids = tuple(dict.fromkeys(row.item_revision_id for row in selected))
         with self.sessions() as session:
             rows = (
                 session.execute(
@@ -161,8 +167,8 @@ class CuratedDeliveryInputs:
             if len(publications) != len(visual_jobs):
                 _invalid()
             identities = {(row.artifact_id, row.artifact_revision_id) for row in components}
-            for row in manifest.placements:
-                if isinstance(row, CuratedExternalDocumentPlacement):
+            for _, _, row in positions:
+                if isinstance(row, ResolvedExternalSlotTarget):
                     identities.add(
                         (
                             row.document_artifact.artifact_id,
@@ -231,8 +237,19 @@ class CuratedDeliveryInputs:
                     groups.setdefault(name, []).append(entry)
                 members[revision_id] = {name: tuple(values) for name, values in groups.items()}
             placements: list[CuratedNativeDocumentInput | CuratedRegisteredItemInput] = []
-            for row in manifest.placements:
-                if isinstance(row, CuratedExternalDocumentPlacement):
+            for position, placement_id, row in positions:
+                occurrence = {} if placement_id is None else {"placement_id": placement_id}
+                native_type = (
+                    CuratedNativeDocumentInput
+                    if placement_id is None
+                    else CuratedNativeOccurrenceInput
+                )
+                item_type = (
+                    CuratedRegisteredItemInput
+                    if placement_id is None
+                    else CuratedRegisteredOccurrenceInput
+                )
+                if isinstance(row, ResolvedExternalSlotTarget):
                     if row.document_size_bytes > 50 * 1024 * 1024:
                         raise CuratedDeliveryInputError("CURATED_DELIVERY_DOCUMENT_TOO_LARGE")
                     pointer = CuratedArtifactMember.model_validate(
@@ -245,11 +262,14 @@ class CuratedDeliveryInputs:
                         expected_size=row.document_size_bytes,
                     )
                     placements.append(
-                        CuratedNativeDocumentInput(
-                            position=row.position,
-                            source_format=row.source_format,
-                            document=pointer,
-                            size_bytes=row.document_size_bytes,
+                        native_type.model_validate(
+                            dict(
+                                **occurrence,
+                                position=position,
+                                source_format=row.source_format,
+                                document=pointer,
+                                size_bytes=row.document_size_bytes,
+                            )
                         )
                     )
                     continue
@@ -331,15 +351,18 @@ class CuratedDeliveryInputs:
                     )
                     self._require_member(recovery, members, max_bytes=256 * 1024)
                 placements.append(
-                    CuratedRegisteredItemInput(
-                        position=row.position,
-                        item_id=row.item_id,
-                        item_revision_id=row.item_revision_id,
-                        item_manifest_sha256=row.item_manifest_sha256,
-                        source_content=source,
-                        display_content=display,
-                        recovery_manifest=recovery,
-                        editorial_markdown=markdown,
+                    item_type.model_validate(
+                        dict(
+                            **occurrence,
+                            position=position,
+                            item_id=row.item_id,
+                            item_revision_id=row.item_revision_id,
+                            item_manifest_sha256=row.item_manifest_sha256,
+                            source_content=source,
+                            display_content=display,
+                            recovery_manifest=recovery,
+                            editorial_markdown=markdown,
+                        )
                     )
                 )
             if selected:
@@ -355,20 +378,27 @@ class CuratedDeliveryInputs:
                     members,
                     max_bytes=64 * 1024 * 1024,
                 )
-            result = CuratedHwpxBuildInput(
-                assembly_id=manifest.assembly_id,
-                assembly_revision_id=manifest.assembly_revision_id,
-                assembly_manifest_sha256=manifest.manifest_sha256,
-                handoff=self.handoff if selected else None,
-                converter=self.converter
-                if any(
-                    isinstance(row, CuratedNativeDocumentInput) and row.source_format == "HWP"
-                    for row in placements
-                )
-                else None,
-                placements=tuple(placements),
+            result_type = (
+                CuratedHwpxBuildInputV2
+                if isinstance(manifest, CuratedDocumentAssemblyManifestV2)
+                else CuratedHwpxBuildInput
             )
-            validate_contract("curated-build-input", result.model_dump(mode="json"))
+            result = result_type.model_validate(
+                dict(
+                    assembly_id=manifest.assembly_id,
+                    assembly_revision_id=manifest.assembly_revision_id,
+                    assembly_manifest_sha256=manifest.manifest_sha256,
+                    handoff=self.handoff if selected else None,
+                    converter=self.converter
+                    if any(
+                        isinstance(row, CuratedNativeDocumentInput) and row.source_format == "HWP"
+                        for row in placements
+                    )
+                    else None,
+                    placements=tuple(placements),
+                )
+            )
+            parse_curated_build_input(result.model_dump(mode="json"))
             return result
 
     @staticmethod

@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog/content-planning-request/1.0",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "idempotency_key",
+        "command"
+      ],
+      "properties": {
+        "operation": {
+          "const": "CONTENT_PLANNING_WRITE"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 128,
+          "pattern": "^[!-~]{16,128}$"
+        },
+        "command": {
+          "$ref": "eom://schemas/content-planning/command/1.0"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "query"
+      ],
+      "properties": {
+        "operation": {
+          "const": "CONTENT_PLANNING_QUERY"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "query": {
+          "$ref": "eom://schemas/content-planning/query/1.0"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "idempotency_key",
+        "command"
+      ],
+      "properties": {
+        "operation": {
+          "const": "CONTENT_PLANNING_PRINT"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 128,
+          "pattern": "^[!-~]{16,128}$"
+        },
+        "command": {
+          "$ref": "eom://schemas/content-planning/print-command/1.0"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operation",
+        "actor_id",
+        "session_id",
+        "request_id",
+        "authentication_time",
+        "idempotency_key",
+        "command"
+      ],
+      "properties": {
+        "operation": {
+          "const": "CONTENT_PLANNING_DELIVERY"
+        },
+        "actor_id": {
+          "type": "string",
+          "pattern": "^operator_[0-9a-f]{32}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^apisession_[0-9a-f]{32}$"
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 128,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$"
+        },
+        "authentication_time": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "(Z|\\+00:00)$"
+        },
+        "idempotency_key": {
+          "type": "string",
+          "minLength": 16,
+          "maxLength": 128,
+          "pattern": "^[!-~]{16,128}$"
+        },
+        "command": {
+          "$ref": "eom://schemas/content-planning/delivery-command/1.0"
+        }
+      }
+    }
+  ]
+}

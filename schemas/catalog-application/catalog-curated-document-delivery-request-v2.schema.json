@@ -1,0 +1,223 @@
+{
+  "$defs": {
+    "ContentTeamHandoffMember": {
+      "additionalProperties": false,
+      "properties": {
+        "purpose": {
+          "enum": [
+            "automation-template",
+            "equation-prototypes",
+            "visual-slots-left-right",
+            "visual-slots-two-tables",
+            "labeled-data-condition",
+            "table-2-column",
+            "table-3-column",
+            "table-3-column-long-equation",
+            "table-4-column",
+            "inquiry-experiment-box"
+          ],
+          "title": "Purpose",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size": {
+          "maximum": 26214400,
+          "minimum": 1,
+          "title": "Size",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "purpose",
+        "sha256",
+        "size"
+      ],
+      "title": "ContentTeamHandoffMember",
+      "type": "object"
+    },
+    "ContentTeamHandoffSnapshot": {
+      "additionalProperties": false,
+      "description": "Immutable source/archive identity used by every renderer attempt.",
+      "properties": {
+        "artifact_id": {
+          "pattern": "^artifact_[a-f0-9]{32}$",
+          "title": "Artifact Id",
+          "type": "string"
+        },
+        "artifact_revision_id": {
+          "pattern": "^rev_[a-f0-9]{32}$",
+          "title": "Artifact Revision Id",
+          "type": "string"
+        },
+        "archive_sha256": {
+          "const": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91",
+          "default": "sha256:dc1c9e254a31fc235824eddbb366a5fac52a4d03e3b334bd5e325fb52391ea91",
+          "title": "Archive Sha256",
+          "type": "string"
+        },
+        "archive_file": {
+          "const": "input/handoff.zip",
+          "default": "input/handoff.zip",
+          "title": "Archive File",
+          "type": "string"
+        },
+        "entry_count": {
+          "const": 606,
+          "default": 606,
+          "title": "Entry Count",
+          "type": "integer"
+        },
+        "uncompressed_bytes": {
+          "const": 49280719,
+          "default": 49280719,
+          "title": "Uncompressed Bytes",
+          "type": "integer"
+        },
+        "profile_sha256": {
+          "const": "sha256:ce08671ad433026ec51e68ddfc6a4d7ffe33ae8a792c1791dfa26b9b62e78863",
+          "default": "sha256:ce08671ad433026ec51e68ddfc6a4d7ffe33ae8a792c1791dfa26b9b62e78863",
+          "title": "Profile Sha256",
+          "type": "string"
+        },
+        "members": {
+          "items": {
+            "$ref": "#/$defs/ContentTeamHandoffMember"
+          },
+          "maxItems": 10,
+          "minItems": 10,
+          "title": "Members",
+          "type": "array"
+        }
+      },
+      "required": [
+        "artifact_id",
+        "artifact_revision_id",
+        "members"
+      ],
+      "title": "ContentTeamHandoffSnapshot",
+      "type": "object"
+    },
+    "CuratedHwpConverterSnapshot": {
+      "additionalProperties": false,
+      "description": "Installed optional tool identity, not an arbitrary executable path.",
+      "properties": {
+        "profile": {
+          "const": "HWP2HWPX_NATIVE_V1",
+          "title": "Profile",
+          "type": "string"
+        },
+        "source_commit": {
+          "const": "62d95b980a4e3a6766877dd3fb6f7f45f4afcf3d",
+          "title": "Source Commit",
+          "type": "string"
+        },
+        "bundle_sha256": {
+          "pattern": "^sha256:[0-9a-f]{64}$",
+          "title": "Bundle Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "profile",
+        "source_commit",
+        "bundle_sha256"
+      ],
+      "title": "CuratedHwpConverterSnapshot",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "operation": {
+      "const": "RESOLVE_CURATED_DOCUMENT_DELIVERY_V2",
+      "default": "RESOLVE_CURATED_DOCUMENT_DELIVERY_V2",
+      "type": "string"
+    },
+    "purpose": {
+      "enum": [
+        "AUTHORIZE_READ",
+        "AUTHORIZE_BUILD",
+        "PIN_INPUTS"
+      ],
+      "title": "Purpose",
+      "type": "string"
+    },
+    "actor_id": {
+      "pattern": "^operator_[0-9a-f]{32}$",
+      "title": "Actor Id",
+      "type": "string"
+    },
+    "session_id": {
+      "pattern": "^apisession_[0-9a-f]{32}$",
+      "title": "Session Id",
+      "type": "string"
+    },
+    "request_id": {
+      "maxLength": 128,
+      "minLength": 3,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]+$",
+      "title": "Request Id",
+      "type": "string"
+    },
+    "authentication_time": {
+      "format": "date-time",
+      "title": "Authentication Time",
+      "type": "string"
+    },
+    "assembly_id": {
+      "pattern": "^assembly_[0-9a-f]{32}$",
+      "title": "Assembly Id",
+      "type": "string"
+    },
+    "assembly_revision_id": {
+      "pattern": "^assemblyrev_[0-9a-f]{32}$",
+      "title": "Assembly Revision Id",
+      "type": "string"
+    },
+    "manifest_sha256": {
+      "pattern": "^sha256:[0-9a-f]{64}$",
+      "title": "Manifest Sha256",
+      "type": "string"
+    },
+    "handoff": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ContentTeamHandoffSnapshot"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "converter": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CuratedHwpConverterSnapshot"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "purpose",
+    "actor_id",
+    "session_id",
+    "request_id",
+    "authentication_time",
+    "assembly_id",
+    "assembly_revision_id",
+    "manifest_sha256"
+  ],
+  "title": "CuratedDocumentDeliveryQueryV1",
+  "type": "object",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/catalog-application/curated-document-delivery-request/2.0"
+}

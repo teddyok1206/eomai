@@ -20,6 +20,17 @@ from eom_web_gui.chat_grounding_contracts import (
 )
 from eom_web_gui.chat_knowledge_contracts import ChatKnowledgeRequest, ChatKnowledgeSelection
 from eom_web_gui.chat_rag_contracts import ChatGroundingViewsV2
+from eom_web_gui.content_planning_contracts import (
+    PLANNING_RESULT,
+    PlanningCommand,
+    PlanningQuery,
+    PlanningResult,
+    PreparedDelivery,
+    PrepareDelivery,
+    PrintCommand,
+    PrintResult,
+    WriteResult,
+)
 from eom_web_gui.contracts import (
     AiItemDbEntry,
     AssessmentLearningBatchStatus,
@@ -438,6 +449,22 @@ class RegisteredItemDbPage:
 
 
 class ApplicationGateway(Protocol):
+    async def content_planning_delivery(
+        self, session: WebSession, value: PrepareDelivery, idempotency_key: str
+    ) -> PreparedDelivery: ...
+
+    async def content_planning_write(
+        self, session: WebSession, value: PlanningCommand, idempotency_key: str
+    ) -> WriteResult: ...
+
+    async def content_planning_query(
+        self, session: WebSession, value: PlanningQuery
+    ) -> PlanningResult: ...
+
+    async def content_planning_print(
+        self, session: WebSession, value: PrintCommand, idempotency_key: str
+    ) -> PrintResult: ...
+
     async def material_learning_source(
         self,
         session: WebSession,
@@ -504,6 +531,9 @@ class ApplicationGateway(Protocol):
         kind: str,
         approval_state: str | None,
         filters: ExternalItemDbFilterSubmission,
+        *,
+        usage_state: str | None = None,
+        usage_year: int | None = None,
     ) -> RegisteredItemDbPage: ...
 
     async def general_chat_knowledge_search(
@@ -798,6 +828,8 @@ class ApplicationGateway(Protocol):
         administration_month: int | None = None,
         item_number: int | None = None,
         approval_state: str | None = None,
+        usage_state: str | None = None,
+        usage_year: int | None = None,
     ) -> GraphItemDbPage: ...
 
     async def external_item_db_entries(
@@ -852,6 +884,8 @@ class ApplicationGateway(Protocol):
         filters: ExternalItemDbFilterSubmission,
         *,
         approval_state: str | None = None,
+        usage_state: str | None = None,
+        usage_year: int | None = None,
     ) -> ItemDbExcelDownload: ...
 
     async def save_curated_assembly(
@@ -1154,6 +1188,135 @@ class ObserveClient:
 
 
 class HttpApplicationGateway:
+    async def content_planning_delivery(
+        self, session: WebSession, value: PrepareDelivery, idempotency_key: str
+    ) -> PreparedDelivery:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/content-planning/deliveries",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+            timeout=self._workflow_start_timeout,
+        )
+        try:
+            result = PreparedDelivery.model_validate(self._data(response))
+            if any(
+                getattr(result, name) != getattr(value, name)
+                for name in (
+                    "edition_id",
+                    "revision_id",
+                    "composition_sha256",
+                )
+            ):
+                raise ValueError("different content delivery scope")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def content_planning_write(
+        self, session: WebSession, value: PlanningCommand, idempotency_key: str
+    ) -> WriteResult:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/content-planning/commands",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+            timeout=self._workflow_start_timeout,
+        )
+        try:
+            result = WriteResult.model_validate(self._data(response))
+            if (
+                value.command_kind == "EDIT_EDITION"
+                and result.composition.edition_id != value.edition_id
+            ):
+                raise ValueError("different content edition")
+            if (
+                value.command_kind == "CREATE_EDITION"
+                and result.composition.deliverable_id != value.deliverable_id
+            ):
+                raise ValueError("different content")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def content_planning_query(
+        self, session: WebSession, value: PlanningQuery
+    ) -> PlanningResult:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/content-planning/query",
+            json=value.model_dump(mode="json"),
+        )
+        try:
+            result = PLANNING_RESULT.validate_python(self._data(response))
+            expected_kind = {
+                "LIST_CONTENTS": "CONTENTS",
+                "LIST_EDITIONS": "EDITIONS",
+                "READ_EDITION": "COMPOSITION",
+                "READ_SECTION": "SECTION",
+            }.get(value.query_kind, value.query_kind)
+            if result.result_kind != expected_kind:
+                raise ValueError("different content result kind")
+            if value.query_kind == "READ_EDITION":
+                if (
+                    result.result_kind != "COMPOSITION"
+                    or result.composition.edition_id != value.edition_id
+                    or (
+                        value.revision_id is not None
+                        and result.composition.deliverable_revision_id != value.revision_id
+                    )
+                ):
+                    raise ValueError("different pinned edition")
+            elif value.query_kind == "READ_SECTION":
+                if result.result_kind != "SECTION" or any(
+                    getattr(result, name) != getattr(value, name)
+                    for name in ("edition_id", "revision_id", "composition_sha256", "section_id")
+                ):
+                    raise ValueError("different pinned section")
+            elif (
+                value.query_kind in ("HISTORY", "PRINTS", "DELIVERIES")
+                and getattr(result, "edition_id", None) != value.edition_id
+            ):
+                raise ValueError("different content history")
+            elif value.query_kind == "LIST_EDITIONS" and (
+                result.result_kind != "EDITIONS"
+                or any(row.deliverable_id != value.deliverable_id for row in result.rows)
+            ):
+                raise ValueError("different content edition list")
+            elif value.query_kind == "USAGE_SUMMARY" and (
+                result.result_kind != "USAGE_SUMMARY"
+                or tuple(row.target_index for row in result.rows)
+                != tuple(range(len(value.targets)))
+            ):
+                raise ValueError("different content usage summary targets")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
+    async def content_planning_print(
+        self, session: WebSession, value: PrintCommand, idempotency_key: str
+    ) -> PrintResult:
+        response = await self._authorized(
+            session,
+            "POST",
+            "/api/v1/content-planning/prints",
+            json=value.model_dump(mode="json"),
+            headers={"Idempotency-Key": idempotency_key},
+        )
+        try:
+            result = PrintResult.model_validate(self._data(response))
+            if result.record.scope.edition_id != value.edition_id or (
+                value.command_kind == "VOID_PRINT"
+                and result.record.print_record_id != value.print_record_id
+            ):
+                raise ValueError("different print record")
+            return result
+        except ValueError as error:
+            raise GatewayError(status=502, code="APPLICATION_API_RESPONSE_INVALID") from error
+
     async def material_learning_source(
         self,
         session: WebSession,
@@ -1708,6 +1871,9 @@ class HttpApplicationGateway:
         kind: str,
         approval_state: str | None,
         filters: ExternalItemDbFilterSubmission,
+        *,
+        usage_state: str | None = None,
+        usage_year: int | None = None,
     ) -> RegisteredItemDbPage:
         if kind not in {"CREATIVE", "AI", "EXTERNAL"}:
             raise GatewayError(status=422, code="ITEM_DB_SOURCE_INVALID")
@@ -1718,7 +1884,14 @@ class HttpApplicationGateway:
                 session,
                 "POST",
                 "/api/v1/item-db/creative/search",
-                params={"approval_state": approval_state},
+                params={
+                    "approval_state": approval_state,
+                    **(
+                        {"usage_state": usage_state, "usage_year": usage_year}
+                        if usage_state
+                        else {}
+                    ),
+                },
                 json=filters.model_dump(mode="json"),
             )
         else:
@@ -1730,6 +1903,11 @@ class HttpApplicationGateway:
                     "approval_state": approval_state,
                     "limit": filters.limit,
                     "cursor": filters.cursor,
+                    **(
+                        {"usage_state": usage_state, "usage_year": usage_year}
+                        if usage_state
+                        else {}
+                    ),
                 },
             )
         document = self._document(response)
@@ -1779,12 +1957,17 @@ class HttpApplicationGateway:
         filters: ExternalItemDbFilterSubmission,
         *,
         approval_state: str | None = None,
+        usage_state: str | None = None,
+        usage_year: int | None = None,
     ) -> ItemDbExcelDownload:
         response = await self._authorized(
             session,
             "POST",
             "/api/v1/item-db/external-sources/export",
-            params={"approval_state": approval_state},
+            params={
+                "approval_state": approval_state,
+                **({"usage_state": usage_state, "usage_year": usage_year} if usage_state else {}),
+            },
             json=filters.model_dump(mode="json"),
             headers={"Accept": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
         )
@@ -3887,6 +4070,8 @@ class HttpApplicationGateway:
         administration_month: int | None = None,
         item_number: int | None = None,
         approval_state: str | None = None,
+        usage_state: str | None = None,
+        usage_year: int | None = None,
     ) -> GraphItemDbPage:
         if source_class not in {"APPROVED_ITEM", "PAST_EXAM"}:
             raise GatewayError(status=422, code="ITEM_DB_GRAPH_SOURCE_INVALID")
@@ -3903,6 +4088,7 @@ class HttpApplicationGateway:
                 "approval_state": approval_state,
                 "limit": 50,
                 "cursor": cursor,
+                **({"usage_state": usage_state, "usage_year": usage_year} if usage_state else {}),
             },
         )
         document = self._document(response)

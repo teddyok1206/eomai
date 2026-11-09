@@ -5,7 +5,7 @@ import {createRequire} from "node:module";
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const staticRoot = new URL("../../apps/web_gui/eom_web_gui/static/", import.meta.url);
-const names = ["index.html", "styles.css", "knowledge-map.css", "item-db.js", "item-db-assembly.js", "item-db-draft.js", "item-db-delivery.js", "item-db-similarity.js", "item-db-similarity-list.js", "eom-mark.svg"];
+const names = ["index.html", "styles.css", "knowledge-map.css", "content-planning.css", "item-db.js", "item-db-assembly.js", "item-db-draft.js", "item-db-delivery.js", "item-db-similarity.js", "item-db-similarity-list.js", "eom-mark.svg"];
 const assets = new Map(await Promise.all(names.map(async name => [name, await readFile(new URL(name, staticRoot), "utf8")])));
 
 // Exact repository HTML, CSS and controller; only the existing API and navigation

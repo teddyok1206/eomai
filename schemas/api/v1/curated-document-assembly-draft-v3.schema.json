@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/api/curated-document-assembly-draft/3.0",
+  "title": "Occurrence-oriented curated draft; repeated Items are valid",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "title",
+    "placements"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "curated-document-assembly-draft/3.0"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 0,
+      "maxLength": 200,
+      "pattern": "^[^\\x00-\\x1f\\x7f]*$"
+    },
+    "placements": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/slot"
+      }
+    }
+  }
+}

@@ -82,6 +82,24 @@ class CuratedDocumentAssemblyRevisionRecord(Base):
     __tablename__ = "curated_document_assembly_revisions"
     __table_args__ = (
         UniqueConstraint(
+            "assembly_revision_id",
+            "manifest_schema_version",
+            name="uq_curated_revision_profile",
+        ),
+        UniqueConstraint(
+            "assembly_id",
+            "assembly_revision_id",
+            "manifest_sha256",
+            name="uq_curated_revision_exact_pointer",
+        ),
+        CheckConstraint(
+            "manifest_schema_version IN ('curated-document-assembly-manifest/1.0',"
+            "'curated-document-assembly-manifest/2.0') AND "
+            "(manifest_schema_version <> 'curated-document-assembly-manifest/2.0' OR "
+            "COALESCE(canonical_document->>'schema_version' = manifest_schema_version, false))",
+            name="ck_curated_revision_profile",
+        ),
+        UniqueConstraint(
             "assembly_id", "revision_number", name="uq_curated_document_assembly_revision"
         ),
         UniqueConstraint(
@@ -116,6 +134,11 @@ class CuratedDocumentAssemblyRevisionRecord(Base):
         ForeignKey("curated_document_assembly_revisions.assembly_revision_id", ondelete="RESTRICT")
     )
     revision_state: Mapped[str] = mapped_column(String(16), nullable=False)
+    manifest_schema_version: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        server_default=text("'curated-document-assembly-manifest/1.0'"),
+    )
     selection_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     request_sha256: Mapped[str] = mapped_column(String(71), nullable=False)
     manifest_sha256: Mapped[str] = mapped_column(String(71), nullable=False)

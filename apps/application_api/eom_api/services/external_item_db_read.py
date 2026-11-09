@@ -14,6 +14,7 @@ from eom_api_contracts.external_item_db import (
     ExternalItemDbFilterRequest,
 )
 from eom_api_contracts.item_db_registration import CreativeItemDbEntryView, ItemDbRegistrationView
+from eom_catalog_contracts.content_usage_filter import ContentUsageFilter
 from eom_catalog_service.external_item_models import ExternalItemSourceRecord
 from eom_catalog_service.external_item_read_service import (
     ExternalItemListEntry,
@@ -115,6 +116,7 @@ class ExternalItemDbReadApplication:
         cursor: str | None,
         advanced: ExternalItemDbFilterRequest | None = None,
         approval_state: str | None = None,
+        usage_filter: ContentUsageFilter | None = None,
     ) -> PageResult[ExternalItemDbEntryView]:
         scope = hashlib.sha256(
             json.dumps(
@@ -130,6 +132,11 @@ class ExternalItemDbReadApplication:
                         else []
                     ),
                     **({"approval_state": approval_state} if approval_state is not None else {}),
+                    **(
+                        {"usage_filter": usage_filter.model_dump(mode="json")}
+                        if usage_filter
+                        else {}
+                    ),
                 },
                 sort_keys=True,
                 separators=(",", ":"),
@@ -150,6 +157,7 @@ class ExternalItemDbReadApplication:
                 match_mode=advanced.match_mode if advanced else "ALL",
                 conditions=_conditions(advanced),
                 approval_state=approval_state,
+                usage_filter=usage_filter,
                 limit=limit,
                 after_number=last_number,
             )
@@ -168,7 +176,11 @@ class ExternalItemDbReadApplication:
         )
 
     def creative_list(
-        self, filters: ExternalItemDbFilterRequest, approval_state: str | None
+        self,
+        filters: ExternalItemDbFilterRequest,
+        approval_state: str | None,
+        *,
+        usage_filter: ContentUsageFilter | None = None,
     ) -> PageResult[CreativeItemDbEntryView]:
         page = self.list(
             exact_number=None,
@@ -179,6 +191,7 @@ class ExternalItemDbReadApplication:
             cursor=filters.cursor,
             advanced=filters,
             approval_state=approval_state,
+            usage_filter=usage_filter,
         )
         # Resolve all selected source identities in one query, not an N+1 detail loop.
         with self.sessions() as session:
@@ -213,7 +226,11 @@ class ExternalItemDbReadApplication:
         return PageResult(values, page.next_cursor, page.has_more)
 
     def export(
-        self, filters: ExternalItemDbFilterRequest, *, approval_state: str | None = None
+        self,
+        filters: ExternalItemDbFilterRequest,
+        *,
+        approval_state: str | None = None,
+        usage_filter: ContentUsageFilter | None = None,
     ) -> ItemDbRenderedXlsx:
         if filters.cursor is not None:
             raise ApiError(
@@ -226,6 +243,7 @@ class ExternalItemDbReadApplication:
                 conditions=_conditions(filters),
                 limit=100,
                 approval_state=approval_state,
+                usage_filter=usage_filter,
             )
             with self.sessions() as session:
                 snapshot = export_external_item_sources(session, query)

@@ -1,0 +1,190 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/command/1.0",
+  "title": "Typed content planning application commands; operator authority is outside the payload",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/create_content"
+    },
+    {
+      "$ref": "#/$defs/create_edition"
+    },
+    {
+      "$ref": "#/$defs/copy_edition"
+    },
+    {
+      "$ref": "#/$defs/edit_edition"
+    }
+  ],
+  "$defs": {
+    "create_content": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command_kind",
+        "content_title",
+        "content_type",
+        "edition_label",
+        "academic_year",
+        "sections"
+      ],
+      "properties": {
+        "command_kind": {
+          "const": "CREATE_CONTENT"
+        },
+        "content_title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+        },
+        "content_type": {
+          "enum": [
+            "MOCK_EXAM",
+            "TEXTBOOK",
+            "WEEKLY",
+            "OTHER"
+          ]
+        },
+        "edition_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+        },
+        "academic_year": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1900,
+              "maximum": 3000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sections": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "$ref": "eom://schemas/content-planning/edit-input/1.0#/$defs/section_draft"
+          }
+        }
+      }
+    },
+    "create_edition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command_kind",
+        "deliverable_id",
+        "edition_label",
+        "academic_year",
+        "sections"
+      ],
+      "properties": {
+        "command_kind": {
+          "const": "CREATE_EDITION"
+        },
+        "deliverable_id": {
+          "type": "string",
+          "pattern": "^deliverable_[0-9a-f]{32}$"
+        },
+        "edition_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+        },
+        "academic_year": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1900,
+              "maximum": 3000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sections": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "$ref": "eom://schemas/content-planning/edit-input/1.0#/$defs/section_draft"
+          }
+        }
+      }
+    },
+    "copy_edition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command_kind",
+        "source_edition_id",
+        "source_revision_id",
+        "source_sha256",
+        "edition_label",
+        "academic_year"
+      ],
+      "properties": {
+        "command_kind": {
+          "const": "COPY_EDITION"
+        },
+        "source_edition_id": {
+          "type": "string",
+          "pattern": "^edition_[0-9a-f]{32}$"
+        },
+        "source_revision_id": {
+          "type": "string",
+          "pattern": "^delivrev_[0-9a-f]{32}$"
+        },
+        "source_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "edition_label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "^[^\\x00-\\x1f\\x7f]+$"
+        },
+        "academic_year": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1900,
+              "maximum": 3000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "edit_edition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command_kind",
+        "edition_id",
+        "edit"
+      ],
+      "properties": {
+        "command_kind": {
+          "const": "EDIT_EDITION"
+        },
+        "edition_id": {
+          "type": "string",
+          "pattern": "^edition_[0-9a-f]{32}$"
+        },
+        "edit": {
+          "$ref": "eom://schemas/content-planning/edit-input/1.0"
+        }
+      }
+    }
+  }
+}

@@ -47,7 +47,9 @@ class HwpxCuratedBuildRecord(Base):
             "validation_state IN ('PENDING','PASS','FAIL')", name="ck_hwpx_curated_validation"
         ),
         CheckConstraint(
-            "placement_count BETWEEN 1 AND 200 AND resource_version > 0",
+            "placement_count >= 1 AND resource_version > 0 AND placement_count <= "
+            "CASE input_plan->>'schema_version' WHEN 'curated-hwpx-build-input/1.0' THEN 200 "
+            "WHEN 'curated-hwpx-build-input/2.0' THEN 100000 ELSE 0 END",
             name="ck_hwpx_curated_count",
         ),
         CheckConstraint(
@@ -58,7 +60,9 @@ class HwpxCuratedBuildRecord(Base):
         ),
         CheckConstraint(
             "jsonb_typeof(input_plan) = 'object' AND "
-            "octet_length(input_plan::text) <= 524288 AND "
+            "octet_length(input_plan::text) <= CASE input_plan->>'schema_version' "
+            "WHEN 'curated-hwpx-build-input/1.0' THEN 524288 "
+            "WHEN 'curated-hwpx-build-input/2.0' THEN 16777216 ELSE 0 END AND "
             "jsonb_typeof(initiator_context) = 'object' AND "
             "octet_length(initiator_context::text) <= 4096",
             name="ck_hwpx_curated_metadata_budget",

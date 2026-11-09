@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/delivery-command/1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "command_kind",
+    "edition_id",
+    "revision_id",
+    "composition_sha256",
+    "section_ids"
+  ],
+  "properties": {
+    "command_kind": {
+      "const": "PREPARE_DELIVERY"
+    },
+    "edition_id": {
+      "type": "string",
+      "pattern": "^edition_[0-9a-f]{32}$"
+    },
+    "revision_id": {
+      "type": "string",
+      "pattern": "^delivrev_[0-9a-f]{32}$"
+    },
+    "composition_sha256": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "section_ids": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 10000,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^section_[0-9a-f]{32}$"
+      }
+    }
+  }
+}

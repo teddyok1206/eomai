@@ -1,0 +1,326 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "eom://schemas/content-planning/query/1.0",
+  "oneOf": [
+    {
+      "$ref": "#/$defs/list_contents"
+    },
+    {
+      "$ref": "#/$defs/list_editions"
+    },
+    {
+      "$ref": "#/$defs/read_edition"
+    },
+    {
+      "$ref": "#/$defs/read_section"
+    },
+    {
+      "$ref": "#/$defs/history"
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_kind",
+        "edition_id",
+        "before_id",
+        "limit"
+      ],
+      "properties": {
+        "query_kind": {
+          "const": "PRINTS"
+        },
+        "edition_id": {
+          "type": "string",
+          "pattern": "^edition_[0-9a-f]{32}$"
+        },
+        "before_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^print_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    },
+    {
+      "$ref": "eom://schemas/content-planning/usage/1.0#/$defs/query"
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_kind",
+        "edition_id",
+        "before_id",
+        "limit"
+      ],
+      "properties": {
+        "query_kind": {
+          "const": "DELIVERIES"
+        },
+        "edition_id": {
+          "type": "string",
+          "pattern": "^edition_[0-9a-f]{32}$"
+        },
+        "before_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^assemblyrev_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_kind",
+        "targets",
+        "academic_year",
+        "edition_id"
+      ],
+      "properties": {
+        "query_kind": {
+          "const": "USAGE_SUMMARY"
+        },
+        "targets": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "items": {
+            "$ref": "eom://schemas/assessment-assembly/curated-slot/2.0#/$defs/target"
+          }
+        },
+        "academic_year": {
+          "anyOf": [
+            {
+              "const": "ALL"
+            },
+            {
+              "type": "integer",
+              "minimum": 1900,
+              "maximum": 3000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "edition_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^edition_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "$ref": "eom://schemas/content-planning/prior-usage/1.0#/$defs/query"
+    }
+  ],
+  "$defs": {
+    "list_contents": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_kind",
+        "text",
+        "limit",
+        "after_id"
+      ],
+      "properties": {
+        "query_kind": {
+          "const": "LIST_CONTENTS"
+        },
+        "text": {
+          "type": "string",
+          "maxLength": 200
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "after_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^deliverable_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "list_editions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_kind",
+        "deliverable_id",
+        "limit",
+        "after_id"
+      ],
+      "properties": {
+        "query_kind": {
+          "const": "LIST_EDITIONS"
+        },
+        "deliverable_id": {
+          "type": "string",
+          "pattern": "^deliverable_[0-9a-f]{32}$"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "after_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^edition_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "read_edition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_kind",
+        "edition_id",
+        "revision_id"
+      ],
+      "properties": {
+        "query_kind": {
+          "const": "READ_EDITION"
+        },
+        "edition_id": {
+          "type": "string",
+          "pattern": "^edition_[0-9a-f]{32}$"
+        },
+        "revision_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^delivrev_[0-9a-f]{32}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "read_section": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_kind",
+        "edition_id",
+        "revision_id",
+        "composition_sha256",
+        "section_id",
+        "after_position",
+        "limit"
+      ],
+      "properties": {
+        "query_kind": {
+          "const": "READ_SECTION"
+        },
+        "edition_id": {
+          "type": "string",
+          "pattern": "^edition_[0-9a-f]{32}$"
+        },
+        "revision_id": {
+          "type": "string",
+          "pattern": "^delivrev_[0-9a-f]{32}$"
+        },
+        "composition_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "section_id": {
+          "type": "string",
+          "pattern": "^section_[0-9a-f]{32}$"
+        },
+        "after_position": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 200
+        }
+      }
+    },
+    "history": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "query_kind",
+        "edition_id",
+        "before_sequence",
+        "limit"
+      ],
+      "properties": {
+        "query_kind": {
+          "const": "HISTORY"
+        },
+        "edition_id": {
+          "type": "string",
+          "pattern": "^edition_[0-9a-f]{32}$"
+        },
+        "before_sequence": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100
+        }
+      }
+    }
+  }
+}

@@ -3,8 +3,10 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import pytest
 from eom_api.services.pagination import PageResult
 from eom_api_contracts.item_db_registration import CreativeItemDbEntryView, ItemDbRegistrationView
+from eom_catalog_contracts.content_usage_filter import ContentUsageFilter
 
 from tests.api.test_external_item_db_routes import _client, _entry
 
@@ -27,6 +29,42 @@ def _filters():
         "limit": 50,
         "cursor": None,
     }
+
+
+@pytest.mark.parametrize("allow", [True, False])
+def test_annual_usage_filter_has_independent_permission_and_preserves_db_filters(allow):
+    client, services, reads = _client(allow_planning=allow)
+    reads.creative_list = Mock(return_value=PageResult((), None, False))
+    try:
+        with client:
+            response = client.post(
+                "/api/v1/item-db/creative/search?usage_state=UNUSED&usage_year=2026",
+                json=_filters(),
+            )
+        assert response.status_code == (200 if allow else 403), response.text
+        if allow:
+            assert reads.creative_list.call_args.kwargs["usage_filter"] == ContentUsageFilter(
+                state="UNUSED", academic_year=2026
+            )
+            assert reads.creative_list.call_args.args[0].conditions[0].field == "AD"
+        else:
+            reads.creative_list.assert_not_called()
+    finally:
+        services.engine.dispose()
+
+
+def test_usage_year_without_state_is_rejected_before_list_read():
+    client, services, reads = _client()
+    reads.creative_list = Mock()
+    try:
+        with client:
+            response = client.post(
+                "/api/v1/item-db/creative/search?usage_year=2026", json=_filters()
+            )
+        assert response.status_code == 422
+        reads.creative_list.assert_not_called()
+    finally:
+        services.engine.dispose()
 
 
 def test_registration_source_uses_pinned_revision_and_original_metadata():

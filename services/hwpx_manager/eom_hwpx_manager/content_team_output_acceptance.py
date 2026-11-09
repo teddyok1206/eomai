@@ -310,8 +310,10 @@ class _PublicationTreeBuilder(ElementTree.TreeBuilder):
         _fail("content-team HWPX XML declares DTD or entities")
 
 
-def parse_publication_xml(data: bytes, member_name: str) -> ElementTree.Element:
-    if not data or len(data) > MAX_XML_BYTES:
+def parse_publication_xml(
+    data: bytes, member_name: str, *, max_xml_bytes: int = MAX_XML_BYTES
+) -> ElementTree.Element:
+    if not MAX_XML_BYTES <= max_xml_bytes <= 256 * 1024**2 or not data or len(data) > max_xml_bytes:
         _fail("content-team HWPX XML member size is invalid")
     upper = data.upper()
     if b"<!DOCTYPE" in upper or b"<!ENTITY" in upper:
@@ -353,6 +355,7 @@ def validate_publication_package(
     snapshot: PublicationPackageSnapshot,
     *,
     profile: PublicationProfile = PublicationProfile.EDITORIAL,
+    max_xml_bytes: int = MAX_XML_BYTES,
 ) -> tuple[dict[str, ElementTree.Element], tuple[str, ...], dict[str, str]]:
     roots: dict[str, ElementTree.Element] = {}
     names = set(snapshot.names)
@@ -366,7 +369,7 @@ def validate_publication_package(
         if suffix in ACTIVE_SUFFIXES or (data.startswith(b"PK\x03\x04") and name != "mimetype"):
             _fail("content-team HWPX contains active or embedded package content")
         if lower.endswith((".xml", ".hpf")):
-            roots[name] = parse_publication_xml(data, name)
+            roots[name] = parse_publication_xml(data, name, max_xml_bytes=max_xml_bytes)
 
     generated_image_ids: set[str] = set()
     for name, root in roots.items():

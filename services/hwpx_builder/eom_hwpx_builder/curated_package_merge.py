@@ -12,12 +12,12 @@ from pathlib import Path
 from typing import cast
 
 from eom_hwpx_contracts.curated_document import CuratedHwpxWarning
+from eom_hwpx_contracts.native_resource_rules import OBJECTS
 from lxml import etree  # type: ignore[import-untyped]
 
 from eom_hwpx_builder.analyzer import analyze_package, resolve_part
 from eom_hwpx_builder.archive import FIXED_ZIP_TIMESTAMP, SafePackage, read_package
 from eom_hwpx_builder.curated_resources import (
-    OBJECTS,
     NativeMergeProfile,
     ObjectRelocation,
     ResourceRelocation,
@@ -53,6 +53,10 @@ MAX_TOTAL_BYTES = 256 * 1024 * 1024
 OUTPUT_LIMITS = PackageLimits(
     max_package_bytes=MAX_TOTAL_BYTES, max_entries=10000, max_uncompressed_bytes=MAX_TOTAL_BYTES
 )
+# Only generated aggregates can grow their style catalog; inputs retain old limits.
+OCCURRENCE_OUTPUT_LIMITS = OUTPUT_LIMITS.model_copy(
+    update={"max_member_bytes": MAX_TOTAL_BYTES, "max_xml_bytes": MAX_TOTAL_BYTES}
+)
 
 
 @dataclass(frozen=True)
@@ -81,7 +85,9 @@ def _xml(root: etree._Element) -> bytes:
     )
 
 
-def parse_native_document(package: SafePackage) -> NativeDocument:
+def parse_native_document(
+    package: SafePackage, limits: PackageLimits | None = None
+) -> NativeDocument:
     entries = package.by_name()
     for name in entries:
         if name not in GLOBAL_PARTS and not (
@@ -90,7 +96,7 @@ def parse_native_document(package: SafePackage) -> NativeDocument:
             fail("curated package contains an unsupported part")
     if HEADER not in entries or CONTENT not in entries:
         fail("curated document header/manifest is missing")
-    content = parse_xml(entries[CONTENT].data, CONTENT).root
+    content = parse_xml(entries[CONTENT].data, CONTENT, limits).root
     manifests = [node for node in content.iter() if local_name(node.tag) == "manifest"]
     spines = [node for node in content.iter() if local_name(node.tag) == "spine"]
     if len(manifests) != 1 or len(spines) != 1:
@@ -121,7 +127,7 @@ def parse_native_document(package: SafePackage) -> NativeDocument:
             if target in names:
                 fail("curated spine repeats a section")
             names.add(target)
-            sections.append((target, parse_xml(entries[target].data, target).root))
+            sections.append((target, parse_xml(entries[target].data, target, limits).root))
         elif target != HEADER:
             fail("curated spine contains an unsupported target")
     if not sections:
@@ -139,7 +145,7 @@ def parse_native_document(package: SafePackage) -> NativeDocument:
         content,
         manifest,
         spine,
-        parse_xml(entries[HEADER].data, HEADER).root,
+        parse_xml(entries[HEADER].data, HEADER, limits).root,
         tuple(sections),
         binaries,
     )
@@ -283,10 +289,17 @@ def merge_native_hwpx(
     output: Path,
     *,
     profile: NativeMergeProfile = NativeMergeProfile.STRICT_V1,
+    maximum_sources: int = 200,
 ) -> CuratedMergeReport:
-    if not 1 <= len(sources) <= 200 or output.exists() or output.is_symlink():
+    if (
+        not 1 <= maximum_sources <= 100000
+        or not 1 <= len(sources) <= maximum_sources
+        or output.exists()
+        or output.is_symlink()
+    ):
         fail("curated input count or output is invalid")
     documents_list = []
+    output_limits = OCCURRENCE_OUTPUT_LIMITS if maximum_sources > 200 else OUTPUT_LIMITS
     remaining = MAX_TOTAL_BYTES
     for path in sources:
         if path.is_symlink() or not path.is_file():
@@ -388,7 +401,7 @@ def merge_native_hwpx(
         fail("curated output byte budget exceeded")
     write_native_package(payloads, output)
     try:
-        candidate = parse_native_document(read_package(output, OUTPUT_LIMITS))
+        candidate = parse_native_document(read_package(output, output_limits), output_limits)
         verify_resource_relocation(
             tuple(document.header for document in documents), candidate.header, plans
         )
@@ -413,7 +426,7 @@ def merge_native_hwpx(
                     source_entries[member].data
                 ) != sha256_bytes(candidate_entries[merged_member].data):
                     fail("curated media lineage differs")
-        analysis = analyze_package(output, OUTPUT_LIMITS)
+        analysis = analyze_package(output, output_limits)
         if (
             analysis.mimetype != "application/hwp+zip"
             or analysis.active_content

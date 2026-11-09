@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
@@ -10,15 +11,20 @@ from datetime import UTC, datetime
 from enum import StrEnum
 from typing import Protocol
 
-from eom_catalog_contracts import (
-    CuratedDocumentAssemblyManifestV1,
-    CuratedExternalDocumentPlacement,
+from eom_catalog_contracts.curated_document_slots import (
+    CuratedDeliveryManifest,
+    CuratedDocumentAssemblyManifestV2,
+    ResolvedExternalSlotTarget,
+    iter_curated_delivery_positions,
 )
-from eom_hwpx_contracts import validate_contract
 from eom_hwpx_contracts.curated_build import (
-    CuratedHwpxBuildInput,
     CuratedNativeDocumentInput,
     CuratedRegisteredItemInput,
+)
+from eom_hwpx_contracts.curated_occurrences import (
+    CuratedBuildInput,
+    CuratedHwpxBuildInputV2,
+    parse_curated_build_input,
 )
 from eom_identifiers import (
     content_sha256,
@@ -29,7 +35,7 @@ from eom_identifiers import (
 )
 from eom_operator_identity import ActorContext, ActorSource, ActorType
 from eom_orchestrator.database import build_session_factory, transaction
-from sqlalchemy import Engine, select, text
+from sqlalchemy import Engine, select, text, true
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from eom_hwpx_manager.application_service import SecureHwpxDownload
@@ -46,7 +52,7 @@ class CuratedAssemblyAuthorization(Protocol):
         assembly_revision_id: str,
         manifest_sha256: str,
         actor: ActorContext,
-    ) -> CuratedDocumentAssemblyManifestV1: ...
+    ) -> CuratedDeliveryManifest: ...
 
     def read_for_delivery(
         self,
@@ -55,7 +61,7 @@ class CuratedAssemblyAuthorization(Protocol):
         assembly_revision_id: str,
         manifest_sha256: str,
         actor: ActorContext,
-    ) -> CuratedDocumentAssemblyManifestV1: ...
+    ) -> CuratedDeliveryManifest: ...
 
 
 @dataclass(frozen=True)
@@ -79,15 +85,15 @@ class CuratedBuildPending(RuntimeError):
 
 class CuratedInputPins(Protocol):
     def pin_inputs(
-        self, manifest: CuratedDocumentAssemblyManifestV1, *, actor: ActorContext
-    ) -> CuratedHwpxBuildInput: ...
+        self, manifest: CuratedDeliveryManifest, *, actor: ActorContext
+    ) -> CuratedBuildInput: ...
 
 
 class CuratedHwpxRenderer(CuratedInputPins, Protocol):
     def finish(
         self,
         record: HwpxCuratedBuildRecord,
-        inputs: CuratedHwpxBuildInput,
+        inputs: CuratedBuildInput,
         *,
         validated: Callable[[str], None],
     ) -> CuratedBuildReceipt:
@@ -186,7 +192,14 @@ class CuratedHwpxApplicationService:
         inputs = self.input_pins.pin_inputs(manifest, actor=actor)
         self._require_inputs(inputs, manifest)
         plan = inputs.model_dump(mode="json")
-        validate_contract("curated-build-input", plan)
+        parse_curated_build_input(plan)
+        # Match the JSONB text budget before queue insertion; no partial build row.
+        budget = 16 * 1024 * 1024 if isinstance(inputs, CuratedHwpxBuildInputV2) else 512 * 1024
+        if len(json.dumps(plan, ensure_ascii=False, allow_nan=False).encode("utf-8")) > budget:
+            raise HwpxManagerError(
+                HwpxManagerErrorCode.HWPX_TEMPLATE_CONTENT_INCOMPATIBLE,
+                "Selected scope exceeds the delivery metadata budget; select fewer sections",
+            )
         initiator = actor.model_copy(update={"permissions": frozenset()}).model_dump(mode="json")
         try:
             with transaction(self.sessions) as session:
@@ -241,7 +254,10 @@ class CuratedHwpxApplicationService:
 
     def get_build(self, build_id: str, *, actor: ActorContext) -> HwpxCuratedBuildRecord:
         record = self._record(build_id)
-        if actor.operator_id != record.created_by_operator_id:
+        if (
+            actor.operator_id != record.created_by_operator_id
+            and record.input_plan.get("schema_version") != "curated-hwpx-build-input/2.0"
+        ):
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_APPLICATION_BUILD_NOT_FOUND,
                 "curated build does not exist for this operator",
@@ -268,7 +284,9 @@ class CuratedHwpxApplicationService:
                 select(HwpxCuratedBuildRecord)
                 .where(
                     HwpxCuratedBuildRecord.assembly_revision_id == assembly_revision_id,
-                    HwpxCuratedBuildRecord.created_by_operator_id == actor.operator_id,
+                    true()
+                    if isinstance(manifest, CuratedDocumentAssemblyManifestV2)
+                    else HwpxCuratedBuildRecord.created_by_operator_id == actor.operator_id,
                 )
                 .order_by(
                     HwpxCuratedBuildRecord.created_at.desc(), HwpxCuratedBuildRecord.build_id.desc()
@@ -370,7 +388,7 @@ class CuratedHwpxApplicationService:
         self,
         record: HwpxCuratedBuildRecord,
         actor: ActorContext,
-    ) -> CuratedHwpxBuildInput:
+    ) -> CuratedBuildInput:
         manifest = self.assemblies.read_for_delivery(
             record.assembly_id,
             assembly_revision_id=record.assembly_revision_id,
@@ -433,7 +451,7 @@ class CuratedHwpxApplicationService:
             record.platform_job_id = job_id
             record.resource_version += 1
 
-    def _authorize_build(self, record: HwpxCuratedBuildRecord) -> CuratedHwpxBuildInput:
+    def _authorize_build(self, record: HwpxCuratedBuildRecord) -> CuratedBuildInput:
         initiator = ActorContext.model_validate(record.initiator_context)
         if initiator.operator_id != record.created_by_operator_id or initiator.permissions:
             raise HwpxManagerError(
@@ -511,7 +529,7 @@ class CuratedHwpxApplicationService:
     def _require_replay(
         record: HwpxCuratedBuildRecord,
         request_hash: str,
-        manifest: CuratedDocumentAssemblyManifestV1,
+        manifest: CuratedDeliveryManifest,
     ) -> None:
         if (
             record.request_sha256 != request_hash
@@ -528,10 +546,9 @@ class CuratedHwpxApplicationService:
     @staticmethod
     def _pinned_inputs(
         record: HwpxCuratedBuildRecord,
-        manifest: CuratedDocumentAssemblyManifestV1,
-    ) -> CuratedHwpxBuildInput:
-        validate_contract("curated-build-input", record.input_plan)
-        inputs = CuratedHwpxBuildInput.model_validate(record.input_plan)
+        manifest: CuratedDeliveryManifest,
+    ) -> CuratedBuildInput:
+        inputs = parse_curated_build_input(record.input_plan)
         if record.input_plan_sha256 != content_sha256(record.input_plan):
             raise HwpxManagerError(
                 HwpxManagerErrorCode.HWPX_REFERENCE_MISSING, "curated replay input snapshot differs"
@@ -541,11 +558,13 @@ class CuratedHwpxApplicationService:
 
     @staticmethod
     def _require_inputs(
-        inputs: CuratedHwpxBuildInput,
-        manifest: CuratedDocumentAssemblyManifestV1,
+        inputs: CuratedBuildInput,
+        manifest: CuratedDeliveryManifest,
     ) -> None:
         if (
-            inputs.assembly_id != manifest.assembly_id
+            isinstance(inputs, CuratedHwpxBuildInputV2)
+            != isinstance(manifest, CuratedDocumentAssemblyManifestV2)
+            or inputs.assembly_id != manifest.assembly_id
             or inputs.assembly_revision_id != manifest.assembly_revision_id
             or inputs.assembly_manifest_sha256 != manifest.manifest_sha256
             or len(inputs.placements) != len(manifest.placements)
@@ -554,9 +573,14 @@ class CuratedHwpxApplicationService:
                 HwpxManagerErrorCode.HWPX_REFERENCE_MISSING,
                 "curated render inputs differ from saved assembly",
             )
-        for pinned, source in zip(inputs.placements, manifest.placements, strict=True):
-            matches = pinned.position == source.position
-            if isinstance(source, CuratedExternalDocumentPlacement):
+        for pinned, (position, placement_id, source) in zip(
+            inputs.placements, iter_curated_delivery_positions(manifest), strict=True
+        ):
+            matches = (
+                pinned.position == position
+                and getattr(pinned, "placement_id", None) == placement_id
+            )
+            if isinstance(source, ResolvedExternalSlotTarget):
                 matches = (
                     matches
                     and isinstance(pinned, CuratedNativeDocumentInput)

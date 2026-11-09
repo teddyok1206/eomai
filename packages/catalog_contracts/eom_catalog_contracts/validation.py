@@ -34,6 +34,42 @@ class CatalogSchemaResource:
 
 CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType(
     {
+        "content-prior-usage-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-prior-usage-v1.schema.json",
+            "resources/content-planning/content-prior-usage-v1.schema.json",
+            "1.0",
+            "sha256:12596fac0e9f49c107314ae68a574e859581bf8ed4d3bbe13782aa2a55470888",
+        ),
+        "content-usage-filter-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-usage-filter-v1.schema.json",
+            "resources/content-planning/content-usage-filter-v1.schema.json",
+            "1.0",
+            "sha256:c19869af389f65a2d5ae0f1a084e44eb078bb65d0662517cba6770c74dd0675e",
+        ),
+        "catalog-curated-document-delivery-response-v2": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-curated-document-delivery-response-v2.schema.json",
+            "resources/catalog-application/catalog-curated-document-delivery-response-v2.schema.json",
+            "2.0",
+            "sha256:fab2a813a8473fb34c9a32624a55087b642b82fc1f9f321308b4a92209915ea4",
+        ),
+        "catalog-curated-document-delivery-request-v2": CatalogSchemaResource(
+            "schemas/catalog-application/catalog-curated-document-delivery-request-v2.schema.json",
+            "resources/catalog-application/catalog-curated-document-delivery-request-v2.schema.json",
+            "2.0",
+            "sha256:b776c794ed0b0ecf55cdcc6e98dc08f21ff48f986e4ddf3f3232aec3964b2f73",
+        ),
+        "content-delivery-command-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-delivery-command-v1.schema.json",
+            "resources/content-planning/content-delivery-command-v1.schema.json",
+            "1.0",
+            "sha256:522a123f05f27aa6e41e23ee279be0fd2c3b0984c453e09901e022de0c621173",
+        ),
+        "content-delivery-prepared-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-delivery-prepared-v1.schema.json",
+            "resources/content-planning/content-delivery-prepared-v1.schema.json",
+            "1.0",
+            "sha256:fd4a00bba05b5941b80067b2aeafe6c28abfa9b9793704226af74f47a9b42e0f",
+        ),
         "material-learning-retry-v1": CatalogSchemaResource(
             "schemas/material-learning/material-learning-retry-v1.schema.json",
             "resources/material-learning/material-learning-retry-v1.schema.json",
@@ -609,6 +645,108 @@ CATALOG_SCHEMA_RESOURCES: Mapping[str, CatalogSchemaResource] = MappingProxyType
             "resources/external-item/creative-learning-cohort-v1.schema.json",
             "1.0",
             "sha256:fdecc9a422dbf580070751264a4bf1baf1aa9e7bc49884fbf5d90713163158d3",
+        ),
+        "catalog-content-planning-request-v1": CatalogSchemaResource(
+            "schemas/content-planning/catalog-content-planning-request-v1.schema.json",
+            "resources/content-planning/catalog-content-planning-request-v1.schema.json",
+            "1.0",
+            "sha256:99f7c85c212a0f04d9b6840089d0e81496cb6ee6532d9deca22448d2b5e7779e",
+        ),
+        "catalog-content-planning-response-v1": CatalogSchemaResource(
+            "schemas/content-planning/catalog-content-planning-response-v1.schema.json",
+            "resources/content-planning/catalog-content-planning-response-v1.schema.json",
+            "1.0",
+            "sha256:f03e9115e3bff987d1f28293a494f87e2377bae5a6b1226c87f8708971709d33",
+        ),
+        "content-planning-query-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-planning-query-v1.schema.json",
+            "resources/content-planning/content-planning-query-v1.schema.json",
+            "1.0",
+            "sha256:414cf6d6610ce2dc4257d70ac1467c36a62bc8561dcd6a78fb46dbab6d5e9341",
+        ),
+        "content-planning-query-result-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-planning-query-result-v1.schema.json",
+            "resources/content-planning/content-planning-query-result-v1.schema.json",
+            "1.0",
+            "sha256:acca4aaf9581041d8e2f43d11e7e2bf7644211c6e2c389b7ac2d52a7ca98e4f8",
+        ),
+        "content-planning-command-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-planning-command-v1.schema.json",
+            "resources/content-planning/content-planning-command-v1.schema.json",
+            "1.0",
+            "sha256:0214ecd1e41e17f7cde89985daec7462c07807f81e32f30a2693d336ef99dda1",
+        ),
+        "content-planning-write-result-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-planning-write-result-v1.schema.json",
+            "resources/content-planning/content-planning-write-result-v1.schema.json",
+            "1.0",
+            "sha256:e73fef63d7236dcc4ca2e3d3d133160788384a4d615d90aad98c816c609d148d",
+        ),
+        "content-usage-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-usage-v1.schema.json",
+            "resources/content-planning/content-usage-v1.schema.json",
+            "1.0",
+            "sha256:1a1ac73af513139539c11d46bb64d3730ed6564941bc6410aef7e6187d6fdfaa",
+        ),
+        "content-print-list-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-print-list-v1.schema.json",
+            "resources/content-planning/content-print-list-v1.schema.json",
+            "1.0",
+            "sha256:ff611fa2faae17645aa096a14cfe66c9d50f8d2250a84808f7fcb2156cef702e",
+        ),
+        "content-print-command-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-print-command-v1.schema.json",
+            "resources/content-planning/content-print-command-v1.schema.json",
+            "1.0",
+            "sha256:fd037c6aeab9880e6b77286c9c883d224079e7a4220c0a4f2f878aadeeb3a827",
+        ),
+        "content-print-result-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-print-result-v1.schema.json",
+            "resources/content-planning/content-print-result-v1.schema.json",
+            "1.0",
+            "sha256:291322ea60c86bb15b32bf31bd21dbed1071202db3eb74194a7d544f7d570ff0",
+        ),
+        "content-print-record-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-print-record-v1.schema.json",
+            "resources/content-planning/content-print-record-v1.schema.json",
+            "1.0",
+            "sha256:6b83f609c171566841dc58fd55b305f055753f1c6fc246508b7b782bc1660ea2",
+        ),
+        "content-planning-edit-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-planning-edit-v1.schema.json",
+            "resources/content-planning/content-planning-edit-v1.schema.json",
+            "1.0",
+            "sha256:af05d85205d9b6fae7a72d9e112fabb34bfba69f18223f168939817100768924",
+        ),
+        "curated-slot-v2": CatalogSchemaResource(
+            "schemas/assessment-assembly/curated-slot-v2.schema.json",
+            "resources/assessment-assembly/curated-slot-v2.schema.json",
+            "2.0",
+            "sha256:fa5c6cce261c08e5d492d846cd59e56ae54ddeafc35ba42c64fb44955cc3c461",
+        ),
+        "curated-document-assembly-draft-v3": CatalogSchemaResource(
+            "schemas/api/v1/curated-document-assembly-draft-v3.schema.json",
+            "resources/api/curated-document-assembly-draft-v3.schema.json",
+            "3.0",
+            "sha256:fc00d3031fc309f48f0a9fc45719d7216852c670a3d9d364ef220dcb0147f0b2",
+        ),
+        "curated-document-assembly-manifest-v2": CatalogSchemaResource(
+            "schemas/assessment-assembly/curated-document-assembly-manifest-v2.schema.json",
+            "resources/assessment-assembly/curated-document-assembly-manifest-v2.schema.json",
+            "2.0",
+            "sha256:d119b10e8ead9df3fb71147981faaf6804b5e67dc6080fa4cc2ff408f71d6225",
+        ),
+        "content-edition-composition-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-edition-composition-v1.schema.json",
+            "resources/content-planning/content-edition-composition-v1.schema.json",
+            "1.0",
+            "sha256:3d58448526ff5495a81c7d08623614c5b102a19b56cb01d1e59c47eef92c4b06",
+        ),
+        "content-print-scope-v1": CatalogSchemaResource(
+            "schemas/content-planning/content-print-scope-v1.schema.json",
+            "resources/content-planning/content-print-scope-v1.schema.json",
+            "1.0",
+            "sha256:bc92536974acba0d9fb46103eec559c5def4894b3319d6621ec5304f73d08426",
         ),
         "curated-document-assembly-draft-v1": CatalogSchemaResource(
             "schemas/api/v1/curated-document-assembly-draft-v1.schema.json",

@@ -11,6 +11,18 @@ from sqlalchemy.engine import Connection
 TablePrivilege = Literal["SELECT", "INSERT", "UPDATE"]
 
 READ_TABLES: Final[tuple[str, ...]] = (
+    "content_editions",
+    "content_edition_revisions",
+    "content_form_memberships",
+    "content_form_revision_compositions",
+    "content_edition_revision_forms",
+    "content_planning_events",
+    "content_planning_command_receipts",
+    "content_delivery_scopes",
+    "content_print_records",
+    "content_print_scopes",
+    "content_print_events",
+    "curated_document_assembly_slots_v2",
     "learning_materials",
     "learning_material_revisions",
     "material_learning_runs",
@@ -147,6 +159,20 @@ READ_TABLES: Final[tuple[str, ...]] = (
 )
 
 INSERT_TABLES: Final[tuple[str, ...]] = (
+    "content_editions",
+    "content_edition_revisions",
+    "content_form_memberships",
+    "content_form_revision_compositions",
+    "content_edition_revision_forms",
+    "content_planning_events",
+    "content_planning_command_receipts",
+    "content_delivery_scopes",
+    "content_print_records",
+    "content_print_scopes",
+    "content_print_events",
+    "curated_document_assembly_slots_v2",
+    "deliverables",
+    "deliverable_revisions",
     "learning_materials",
     "learning_material_revisions",
     "material_learning_runs",
@@ -251,6 +277,8 @@ INSERT_TABLES: Final[tuple[str, ...]] = (
 )
 
 UPDATE_TABLES: Final[tuple[str, ...]] = (
+    "content_editions",
+    "deliverables",
     "learning_materials",
     "material_learning_runs",
     "material_learning_tasks",
@@ -289,6 +317,8 @@ TABLE_PRIVILEGES: Final[tuple[tuple[TablePrivilege, tuple[str, ...]], ...]] = (
     ("UPDATE", UPDATE_TABLES),
 )
 
+EXTRA_SEQUENCES: Final[tuple[str, ...]] = ("content_product_revision_number_seq",)
+
 _REQUIRED_PRIVILEGES_JSON: Final[str] = json.dumps(
     [
         {"table_name": table_name, "privilege": privilege}
@@ -307,10 +337,12 @@ def catalog_runtime_privileges_ready(connection: Connection) -> bool:
         text(
             "SELECT COALESCE(bool_and(has_table_privilege("
             "current_user, format('app.%I', required.table_name), required.privilege"
-            ")), false) "
+            ")), false) AND (SELECT COALESCE(bool_and(has_sequence_privilege("
+            "current_user, format('app.%I', sequence_name), 'USAGE')), false) "
+            "FROM jsonb_array_elements_text(CAST(:sequences AS jsonb)) AS names(sequence_name)) "
             "FROM jsonb_to_recordset(CAST(:requirements AS jsonb)) "
             "AS required(table_name text, privilege text)"
         ),
-        {"requirements": _REQUIRED_PRIVILEGES_JSON},
+        {"requirements": _REQUIRED_PRIVILEGES_JSON, "sequences": json.dumps(EXTRA_SEQUENCES)},
     )
     return value is True
