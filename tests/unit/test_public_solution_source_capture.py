@@ -233,3 +233,34 @@ def test_creative_registered_content_hash_must_match_the_actual_graph_source(mon
     value.candidate.source = ApprovedItemKnowledgeSourceV2.model_validate(changed)
     with pytest.raises(ValueError, match="SOURCE_POINTER_MISMATCH"):
         run(value)
+
+
+def test_index_population_composes_existing_capture_and_current_service_authority(monkeypatch):
+    owner = object.__new__(CatalogPublicSolutionSourceCapture)
+    session, reader, authority = Mock(), Mock(), Mock()
+    intent = NS(source_revision_ids=(), analysis_run_ids=())
+    policy = Mock(spec=capture_module.PublicSolutionIndexingAccessPolicy, maximum_sources=16384)
+    authority.authorize_scope.return_value = policy
+    strict = Mock(return_value=object())
+    monkeypatch.setattr(owner, "_capture_population_in_session", strict)
+    read_set = Mock()
+    monkeypatch.setattr(capture_module, "capture_public_solution_index_population", read_set)
+    result = owner.capture_indexing_population_in_session(
+        session,
+        intent,
+        authority=authority,
+        artifact_reader=reader,
+        maximum_population_sources=16384,
+    )
+    assert result is read_set.return_value
+    authority.authorize_scope.assert_called_once_with(session, intent)
+    args, kwargs = read_set.call_args
+    assert args == (session, intent)
+    assert kwargs["reader"] is reader and kwargs["maximum_sources"] == 16384
+    assert kwargs["capture"]() is strict.return_value
+    assert strict.call_args.args == (session, intent)
+    assert strict.call_args.kwargs["artifact_reader"] is reader
+    assert kwargs["reauthorize"]() is intent
+    authority.authorize_scope.return_value = Mock(spec=type(policy))
+    with pytest.raises(ValueError, match="AUTHORITY_CHANGED"):
+        kwargs["reauthorize"]()

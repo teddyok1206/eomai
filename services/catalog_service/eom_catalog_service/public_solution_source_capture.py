@@ -61,6 +61,9 @@ from eom_catalog_service.pinned_artifact_resolution import PinnedArtifactReadCon
 from eom_catalog_service.public_solution_capture_ports import (
     CapturedPublicSolutionSources as CapturedPublicSolutionSources,
 )
+from eom_catalog_service.public_solution_index_read_set import (
+    capture_public_solution_index_population,
+)
 from eom_catalog_service.settings import CatalogSettings
 from eom_catalog_service.solution_embedding_projection import (
     PublicSolutionReport,
@@ -170,16 +173,23 @@ class CatalogPublicSolutionSourceCapture:
                 raise ValueError("PUBLIC_SOLUTION_AUTHORITY_CHANGED")
             return intent
 
-        return self._capture_population_in_session(
+        return capture_public_solution_index_population(
             session,
             intent,
-            artifact_reader=artifact_reader,
-            maximum_population_sources=maximum_population_sources,
-            capture_page=lambda keys, reader: self.capture_indexing_in_session(
+            reader=artifact_reader,
+            maximum_sources=maximum_population_sources,
+            capture=lambda: self._capture_population_in_session(
                 session,
-                replace(intent, source_revision_ids=keys),
-                authority=authority,
-                artifact_reader=reader,
+                intent,
+                artifact_reader=artifact_reader,
+                maximum_population_sources=maximum_population_sources,
+                capture_page=lambda keys, reader: self.capture_indexing_in_session(
+                    session,
+                    replace(intent, source_revision_ids=keys),
+                    authority=authority,
+                    artifact_reader=reader,
+                ),
+                reauthorize=reauthorize,
             ),
             reauthorize=reauthorize,
         )

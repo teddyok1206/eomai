@@ -30,6 +30,13 @@ Workflow COMPLETED는 각각 확인한다. 같은 encoding의 재사용과 최�
 prefetch와 dependency observation이 같은 조건을 쓴다. 필요한 Artifact가 준비되지 않았을
 때 검증을 생략하거나 문항마다 개별 DB 조회로 우회하지 않는다.
 
+INDEX의 같은 DB root에서 반복하는 전체 풀이 해석은 `public_solution_index_read_set`이
+한 번만 수행한다. 매 호출의 현재 service 권한·source 관계·producer provenance 검사는
+유지한다. `public_solution_population_dependencies`는 저장된 검색 결과와 INDEX가 함께
+쓰는 bounded SQL 의존관계 관측이며, 권한 cache가 아니다. root가 바뀌면 원본 파일과
+보고서를 다시 strict capture한다. 완성 vector/report나 입력 text는 수정하지 않는다.
+설계와 측정 범위는 `docs/architecture/PUBLIC_SOLUTION_INDEX_CAPTURE_REUSE.md`를 참고한다.
+
 공개 풀이 INDEX의 신규 미계산 대상은 기존 preparation이 출처별로 번갈아 선택한다.
 기출을 먼저 선택하고 같은 출처 안에서는 revision 순서를 유지해, 늘어나는 등록 문항의
 ID prefix가 기출 backlog를 계속 밀지 않게 한다. legacy namespace·고정된 기존 요청·
@@ -103,6 +110,8 @@ hit도 실제 사용자·고정 Graph/policy와 fresh SQL dependency fingerprint
 - `services/workflow_runner/eom_workflow_runner/local_indexing_routed_namespace.py`
 - `services/workflow_runner/eom_workflow_runner/reference_query_prepare_application.py`
 - `services/catalog_service/eom_catalog_service/public_solution_source_capture.py`
+- `services/catalog_service/eom_catalog_service/public_solution_index_read_set.py`
+- `services/catalog_service/eom_catalog_service/public_solution_population_dependencies.py`
 - `services/catalog_service/eom_catalog_service/embedding_registry_models.py`
 - `services/catalog_service/eom_catalog_service/completed_public_ranking_read.py`
 - `services/catalog_service/eom_catalog_service/completed_public_ranking_dependencies.py`

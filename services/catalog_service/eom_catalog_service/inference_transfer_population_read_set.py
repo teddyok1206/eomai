@@ -149,7 +149,7 @@ def observe_population_dependency(
 
 def observe_inference_transfer_population(
     session: Session,
-    scope: ReadOnlyCandidatePoolScope,
+    scope: ReadOnlyCandidatePoolScope | LocalIndexingSourceReadIntent,
     *,
     artifact_identities: tuple[tuple[str, str], ...],
     layout_observation_ids: tuple[str, ...] = (),

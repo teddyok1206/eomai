@@ -98,6 +98,8 @@
         "services/workflow_runner/eom_workflow_runner/local_indexing_routed_namespace.py",
         "services/workflow_runner/eom_workflow_runner/reference_query_prepare_application.py",
         "services/catalog_service/eom_catalog_service/public_solution_source_capture.py",
+        "services/catalog_service/eom_catalog_service/public_solution_index_read_set.py",
+        "services/catalog_service/eom_catalog_service/public_solution_population_dependencies.py",
         "services/catalog_service/eom_catalog_service/solution_evidence_resolution.py",
         "services/catalog_service/eom_catalog_service/embedding_registry_repository.py",
         "services/catalog_service/eom_catalog_service/item_db_similarity_selection.py",
@@ -113,6 +115,7 @@
         "docs/architecture/ITEM_INFERENCE_TRANSFER_DESIGN_ORIGINAL.md",
         "docs/architecture/SYSTEM_RAG_SIMILARITY_AND_INCREMENTAL_EMBEDDING_DESIGN.md",
         "docs/architecture/LOCAL_INDEXING_CPU_GPU_OVERLAP.md",
+        "docs/architecture/PUBLIC_SOLUTION_INDEX_CAPTURE_REUSE.md",
         "docs/operations/RETIRED_INDEX_PUBLICATION_RECOVERY.md",
         "docs/operations/ITEM_DB_SIMILARITY_LIST_RELEASE_2026-11-02.md",
         "docs/operations/BACKGROUND_RESOURCE_RECOVERY_2026-11-04.md"
