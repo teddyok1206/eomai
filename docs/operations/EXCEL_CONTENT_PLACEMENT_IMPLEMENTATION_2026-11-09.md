@@ -2,8 +2,9 @@
 
 승인된 목표는 `docs/architecture/EXCEL_CONTENT_PLACEMENT_DESIGN.md`의 **구현·반복 검증·운영 배포**다.
 이 문서는 소스 검증·운영 설치·사용자 경로 증거를 구분한다. 2026-11-09 호환 운영 설치를
-완료했으며, 실제 로그인 사용자 경로는 최종 검증 중이다. 마지막 설계 대조에서 발견한
-복구·부분 복사·선택 출력 연결·보관 경로 보완은 **아직 별도 운영 반영 전**이다.
+완료했으며 실제 로그인으로 저장·이력·다음 판 복사·HWPX 다운로드와 재조회를 확인했다.
+마지막 설계 대조의 복구·부분 복사·선택 출력 연결·보관·DB-first 경로 보완도 운영 반영했다.
+최종 Web 배포 후 DB-first 배치·저장·새로고침 유지는 사용자가 직접 확인했다.
 기존 문항/벡터/실패 이력은 보존했다.
 
 ## 현재 단계
@@ -15,9 +16,9 @@
 | I03 application 저장·복사 | source + disposable PASS | 실제 권한·포인터 재인가, 같은 transaction의 저장/복사/이력/멱등, bounded 읽기 |
 | I04 사용 이력·중복 | source + disposable PASS | 같은 current/print projection으로 사용처·교차 중복·연도 USED/UNUSED를 조회. 이전 ledger는 연도를 추정하지 않는 별도 읽기 |
 | I05 인쇄 use case | source + disposable PASS | 사용자 기록·동시 최초 기록·재인쇄·정정·취소 및 해당 구간 변경 판정. 출력 이력은 정확한 scope로 별도 보존하며 인쇄 사실을 자동 생성하지 않음 |
-| I06 API/BFF/GUI | source/fixture PASS / 운영 설치 PASS | 콘텐츠·판·회차·DB 선택·편성·사용 이력·인쇄·출력 UI. HTTPS 사용자 검증 진행 |
-| I07 HWPX 전 경계 확장 | source·설치본 통합 PASS | 새 1,200자리 입력·반복 occurrence·범위 준비/출력 이력/API·기존 제작 UI 연결. 실제 303문항 합본과 독립 검증 PASS. 운영 사용자 출력 별도 확인 |
-| I08 운영 배포·실사용 | 호환 배포 PASS / 사용자 경로 PENDING | source 테스트나 READY를 실제 배치·출력 성공으로 확대하지 않음 |
+| I06 API/BFF/GUI | source/fixture·운영·사용자 PASS | 코어 실제 HTTPS PASS. 최종 Web DB-first 배치·저장·새로고침 사용자 확인 |
+| I07 HWPX 전 경계 확장 | source·설치본·실제 HTTPS PASS | 303문항 설치본 합본, 운영 3자리 반복 합본·다운로드 SHA·재조회 추가 제작 0 확인 |
+| I08 운영 배포·실사용 | 최종 호환 배포·핵심 사용자 경로 PASS | 실제 저장·이력·복사·출력 성공 및 DB-first 사용자 확인. 검사별 범위는 아래 기록과 구분 |
 
 Source baseline: `844a8eec40be1eda9771fb8fe00854007ea660e1`.
 별도 세션의 INDEX publication recovery 변경은 이 작업과 구분하고 수정하지 않았다.
@@ -293,3 +294,73 @@ Linux sudo 입력 성공과 Studio 로그인 성공을 혼동하지 않는다. �
   같은 build의 중단 복구에서 renderer 도달까지 **61 PASS, 2 SKIP**, 단위 **3 PASS**.
   테스트 역할 권한을 복원하고 합성 미실행 큐 항목만 정리했다. 이 결과는 아직 실제
   HWPX 다운로드 성공을 뜻하지 않는다.
+
+## 권한 복구와 최종 호환 배포 — 2026-11-09 15:37 UTC
+
+- 수정 commit `87a78e547ce2646ef4d9abf7b043d0822611c764`를 push하고 기존 protected
+  operator로 ADMIT 및 HWPX_ROLE_RECONCILE을 실행했다. Manager 재시작 반복을 멈춘 뒤
+  기존 역할의 SELECT 목록만 정합화했으며 계정 비밀번호를 교체하지 않았다.
+- 원래 build `hwpxbuild_7d0ff0760a7143419cd891f7b83ebfad`가 지원된 중단 복구로
+  15:34:45 UTC에 SUCCEEDED가 됐다. 새 build 제출·임의 상태 UPDATE·실패 이력 변경은 없다.
+- 실제 HTTPS 다운로드 637,717 bytes의 SHA-256은
+  `b7dda5ce8665b618dd14dbed50a96a7aaee6041b6eb8ac85edd6f9a32b8c1eb9`이며
+  committed output과 일치한다. 출력 목록 새로고침 후 같은 제작 결과를 다시 열어도
+  추가 build POST는 0건이다. 코어 콘텐츠 생성·20회차·반복 포함 3자리·저장·사용/편집 이력·
+  다음 판 복사·HWPX 준비·다운로드의 실제 HTTPS 경로를 확인했다.
+- 공식 native publication validator로 ZIP/core/internal reference를 검사했다. 3개 section,
+  내장 이미지/그림 사용 각 6개, native 표 17개·수식 12개이며 external/dangling reference는 0.
+  출제의도 3곳은 편집 가능한 cell에 비공백 본문이 있고 첫째/셋째 반복 구간의 텍스트와
+  이미지 hash 순서가 같다. 이 검사는 새 한컴 육안 검수나 보호된 원본의 전후 비교가 아니다.
+- 최종 API/platform/Catalog/Manager source는 `87a78e54`, Web은 `3af025f0`이다.
+  Builder/계약은 검증된 `91a14bb6`를 유지했다. DB head `20261109_0076`은 VERIFY만 했으며
+  추가 migration은 없다. QUERY 수치 runtime `c915281e`는 유지하고 API provider pin만
+  호환 설치본으로 갱신했다. 설치 RECORD와 HTTPS Web asset 5개의 wheel byte 일치를 확인했다.
+- root-owned release/rollback 기록: `/var/lib/eom-excel-final-compatible-release-20261109`.
+  031a 후보의 미활성 stage와 첫 drain 기록은 보존했다. 같은 0076과 호환되는
+  91a API/platform·8677 Web rollback bytes를 확보한 상태에서 최종 배포했다.
+- INDEX PID/InvocationID와 material coordinator는 배포 전후 동일하다. 기존 worker를
+  종료하지 않고 자연 완료시킨 creative coordinator는 최종 배포 후 지원된 start로 재개했다.
+- 제한 role suite의 2 SKIP은 원본 workbook 환경변수를 지정하지 않은 매개변수 검사다.
+  `27_모의 배치` 1,120자리와 `27_E기적` 1,200자리이며 앞선 실제 workbook 포함 62 PASS와
+  별도 읽기 9 PASS 증거를 보존한다. 임시 DB의 제한 role 실행·복구 검사는 61 PASS다.
+- Studio 세션은 15:14 정상 로그인 뒤 계속 유지했다. 로그/산출물에 비밀번호·cookie를
+  저장하지 않았으며, 앞선 잘못된 인증 1회를 자동 반복하거나 계정을 변경하지 않았다.
+
+이 시점의 잔여는 새 Web의 DB-first 배치·재열기, 선택 복사, 보관/복원 및 완료 출력의
+인쇄 파일 선택에 대한 동일 세션 실사용 확인이다. 실제 인쇄하지 않은 자료에 인쇄 사실을
+만들지 않으며 인쇄 쓰기·동시성/취소/정정은 기존 disposable DB 증거로 구분한다.
+
+### 최종 Web의 사용자 확인 대기 — 2026-11-09 15:40 UTC
+
+Web의 `SessionStore`는 메모리 어댑터이므로 서비스 재시작 뒤 기존 browser cookie만으로
+로그인을 이어갈 수 없다. 새 Web의 exact revision 열기는 `/studio/login`으로 이동해
+READ_EDITION 대기가 만료됐다. 제품 편성 조회 오류나 앞선 다운로드 실패로 재분류하지 않는다.
+코어 acceptance와 저장본은 보존했고 로그인 실패 반복·인증 우회·새 콘텐츠 생성은 없다.
+새 인증 하네스를 확장하지 않고 사용자에게 DB → Excel에 배치 → 빈 3회차 → 저장 →
+새로고침 확인을 요청했다. 최종 Web의 추가 동선은 현재까지 실제 Chromium fixture의
+79 PASS/통합 201 PASS와 구분하며, 사용자 확인 전 전체 목표 완료를 주장하지 않는다.
+
+## 최종 사용자 확인 및 목표 판정 — 2026-11-09 UTC
+
+사용자가 최종 운영 화면의 **DB → Excel에 배치 → 2027 검증판의 빈 3회차 → 배치 저장 →
+새로고침**을 수행하고 **“저장되고 새로고침해도 보여”**라고 확인했다. 테스트 수나 서비스
+READY를 대신 사용하지 않고 이 수동 확인으로 마지막 DB-first 사용자 경로를 닫는다.
+
+- 설계의 핵심 구현과 호환 운영 배포 목표: **완료**.
+- 운영 source: API/platform/Catalog/Manager `87a78e54`, Web `3af025f0`, Builder `91a14bb6`.
+- 실제 HTTPS 코어 동선·중단된 원래 HWPX 복구·다운로드 SHA·재조회 추가 제작 0: **PASS**.
+- 최종 Web의 DB-first 저장·새로고침: **USER_CONFIRMED_PASS**.
+- 부분 복사·보관/복원·선택 출력의 인쇄 연결: **SOURCE/DISPOSABLE/CHROMIUM_PASS**.
+  이 후속 세 동선을 최신 운영 UI에서 자동 실행했다는 뜻은 아니다. 인쇄 사실을 만들기
+  위해 미인쇄 검증 자료를 인쇄 완료로 기록하지 않았다.
+- 최종 HWPX의 새 Hancom 육안 검수: **NOT_RECORDED**. 내부 이미지·native 요소와 파일
+  무결성 검증은 별도로 PASS이며 기존 Hancom 검수 이력을 이번 출력의 새 검수로 바꾸지 않는다.
+- 운영 검증 콘텐츠는 명확한 검증 제목으로 남겨 동일 출력/이력을 다시 볼 수 있게 했다.
+  실제 원본 Excel의 지구과학 운영 데이터를 자동 이관하지 않았고 기존 문항은 변경하지 않았다.
+- GPU INDEX와 자료 학습 coordinator는 기존 프로세스·설정을 유지했다. 자연 drain한
+  creative coordinator는 지원된 경로로 재개했고 모든 관련 운영 서비스가 active다.
+
+새 인증·새 모델 실행·중복 HWPX 제작은 이 최종 확인을 위해 수행하지 않았다.
+검증에만 쓴 `/tmp/eom-api-testdb-20261109100556_4b9a96dc`의 DB·제한 역할·접속 환경 파일은
+공식 cleanup guard로 제거했다. 운영 DB/산출물은 대상이 아니며 합성 테스트 DB는 fixture로
+다시 준비할 수 있다. 완료된 테스트 브라우저만 닫았고 사용자 브라우저 세션은 건드리지 않았다.

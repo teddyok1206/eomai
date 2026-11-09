@@ -14,6 +14,15 @@ table/API를 직접 읽지 않는다. 선택적 인쇄 파일 연결은 exact sc
 검증하며 파일 제작만으로 인쇄 사실을 만들지 않는다. `EXCEL_PRINT_OUTPUT_LINK.md`와
 `test_content_print_output.py`를 함께 확인한다.
 
+Manager의 PostgreSQL 권한 정본은 `eom_hwpx_manager/runtime_privileges.py` 하나이며,
+`scripts/hwpx/bootstrap_manager_runtime_role.py`와 실행 전 readiness가 같은 목록을 쓴다.
+Excel 출력은 실행·중단 복구 모두 Catalog의 `read_content_delivery`로 exact scope,
+Edition/Form/slot snapshot과 원본 batch lifecycle을 다시 읽으므로 이 읽기 closure의
+SELECT도 필요하다. 콘텐츠 편집·인쇄 기록 쓰기나 credential 읽기 권한은 부여하지 않는다.
+권한이 빠지면 RUNNING claim 뒤 SQL42501로 renderer 진입 전 복구가 반복될 수 있다.
+`test_content_planning_runtime_role.py`는 임시 DB의 실제 Manager table matrix로
+scope 재검증·FIFO·동일 build 복구를 검사한다. API/DB owner 권한의 PASS로 대체하지 않는다.
+
 ## 세 경로를 혼동하지 않기
 
 Item Preview는 정본 content/image pointer의 읽기 투영이다. 원본 문항 파일의 PDF 미리보기는
