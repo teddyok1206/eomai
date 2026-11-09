@@ -115,6 +115,20 @@ Git 이력은 보존한다. 현행 실험 CLI·설치/복구·schema 생성기�
 모델 선택 UI는 모델·추론 강도의 개별 입력을 사용한다. 이전의 호출 없는 중복 wrapper나
 결합 문자열 역변환 함수를 다시 추가하지 않는다.
 
+시스템 전반의 미사용 코드 검토에서는 symbol 참조뿐 아니라 entrypoint·decorator·동적
+callback·설치 스크립트·역사적 조회를 함께 확인한다. 테스트만 호출하는 옛 wrapper를
+제거할 때는 해당 검증을 실제 실행 owner로 옮긴다. 현재 슬롯 관측은
+`ControlPlaneAdapter._observation_views`, worker 시작 명령은 `worker_systemd`, Graph 자동
+정렬 요청은 `automatic_item_graph_publication_service`, 인프라 진단은
+`InfrastructureDoctor`가 담당한다. 이 경로와 별도로 남아 있던 usage-only/argv/retrieval/
+진단 요약 wrapper, 미사용 QUERY reader와 이미지 비교 hash helper는 제거했다.
+
+초기 미설치 초안 `eom-orchestrator.service.example`과 `eom-worker@.service`도 제거했다.
+현재 고정 slot별 unit·설치 절차와 구 generic worker의 실행 중 여부를 확인하는 안전장치는
+보존한다. public parser·serializer·복구 메서드는 정적 호출자가 적다는 이유만으로 삭제하지
+않는다. Git source 정리와 운영 설치본·실행 pin 교체는 별개이며, 삭제한 source는 Git 이력으로
+복원한다. 이 검토가 모든 동적 호출의 부재나 전체 dead code 제거를 증명하는 것은 아니다.
+
 cache와 완료된 build source/설치 시뮬레이션은 실제 실행 참조·정확한 target identity·
 복구용 wheel/archive/Git을 확인해 정리한다. 이름이 오래됐다는 이유로 released schema,
 staging 원본·실패 로그·인증·설치 runtime·구형 벡터를 지우지 않는다. 소켓과 symlink,

@@ -201,12 +201,6 @@ def _read_request(descriptor: int, initial: os.stat_result) -> IncrementalEmbedd
     return _read_canonical_request(descriptor, initial, parse_incremental_embedding_input)
 
 
-def _read_reference_query(
-    descriptor: int, initial: os.stat_result
-) -> EmbeddingReferenceQueryInputV11:
-    return _read_canonical_request(descriptor, initial, parse_embedding_reference_query_input_v11)
-
-
 def _unchanged_input(descriptor: int, initial: os.stat_result) -> None:
     if (
         _epoch(initial) != _epoch(os.fstat(descriptor))

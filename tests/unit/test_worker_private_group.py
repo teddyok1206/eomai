@@ -16,6 +16,7 @@ from eom_orchestrator.worker import CodexWorkerAdapter
 from eom_orchestrator.worker_entry import finalize_result
 from eom_orchestrator.worker_entry import main as worker_entry_main
 from eom_orchestrator.worker_registry import WorkerSlot
+from eom_orchestrator.worker_systemd import systemctl_start_argv, worker_unit_name
 
 
 def _settings(tmp_path: Path) -> Settings:
@@ -113,21 +114,21 @@ def test_workspace_rejects_symlink_and_non_setgid_root(
         adapter._prepare_workspace_document(**arguments)  # type: ignore[arg-type]
 
 
-def test_worker_command_starts_only_fixed_template_instance(tmp_path: Path) -> None:
-    settings = _settings(tmp_path)
-    adapter = CodexWorkerAdapter(settings)
-    argv = adapter._argv(
-        slot=WorkerSlot(slot_id="01", linux_user="eom-cdx-01", role="authoring", enabled=True),
-        job_id="job_0123456789abcdef0123456789abcdef",
+def test_worker_command_starts_only_fixed_template_instance() -> None:
+    argv = systemctl_start_argv(
+        worker_unit_name(
+            WorkerSlot(slot_id="01", linux_user="eom-cdx-01", role="authoring", enabled=True),
+            "job_0123456789abcdef0123456789abcdef",
+        )
     )
 
-    assert argv == [
+    assert argv == (
         "/usr/bin/systemctl",
         "--no-ask-password",
         "--wait",
         "start",
         "eom-worker-01@job_0123456789abcdef0123456789abcdef.service",
-    ]
+    )
     assert "systemd-run" not in argv
     assert not any(value.startswith(("--uid", "--gid", "--property")) for value in argv)
 

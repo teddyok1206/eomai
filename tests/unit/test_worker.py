@@ -20,6 +20,8 @@ from eom_orchestrator.worker_systemd import (
     FixedUnitRun,
     FixedUnitStatus,
     WorkerUnitActivity,
+    systemctl_start_argv,
+    worker_unit_name,
 )
 from eom_protocol import ArtifactSpec, ErrorCode, SmokePayload, WorkerInput
 from jsonschema import Draft202012Validator
@@ -70,11 +72,11 @@ def test_worker_output_schema_constrains_all_input_identifiers() -> None:
 
 
 def test_worker_command_has_no_caller_selected_identity_or_properties() -> None:
-    settings = Settings()
-    adapter = CodexWorkerAdapter(settings)
-    argv = adapter._argv(
-        slot=WorkerSlot(slot_id="01", linux_user="eom-cdx-01", role="authoring", enabled=True),
-        job_id="job_0123456789abcdef0123456789abcdef",
+    argv = systemctl_start_argv(
+        worker_unit_name(
+            WorkerSlot(slot_id="01", linux_user="eom-cdx-01", role="authoring", enabled=True),
+            "job_0123456789abcdef0123456789abcdef",
+        )
     )
     command = " ".join(argv)
     assert "systemd-run" not in command

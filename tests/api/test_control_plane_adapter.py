@@ -97,9 +97,10 @@ def test_usage_result_projection_exposes_only_sanitized_allowance() -> None:
         {key: value for key, value in document.items() if key != "result_sha256"}
     )
 
-    projected = ControlPlaneAdapter._usage_from_result(document)
+    projected, catalog = ControlPlaneAdapter._observation_views(document)
 
     assert projected is not None
+    assert catalog is None
     assert projected.plan_type == "edu"
     assert projected.windows[0].window_duration_minutes == 10080
     serialized = projected.model_dump_json()
@@ -109,7 +110,7 @@ def test_usage_result_projection_exposes_only_sanitized_allowance() -> None:
 
     document["result_sha256"] = "sha256:" + "3" * 64
     with pytest.raises(ValueError, match="result hash differs"):
-        ControlPlaneAdapter._usage_from_result(document)
+        ControlPlaneAdapter._observation_views(document)
 
 
 @pytest.mark.parametrize("available", [True, False])

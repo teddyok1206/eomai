@@ -8,7 +8,6 @@ from eom_catalog_contracts import (
     ApprovedPastExamItemKnowledgeSourceV3,
     AssessmentOccurrenceItemBinding,
     AutomaticItemCurriculumAlignmentBinding,
-    CreateEvidenceBundleCommand,
     KnowledgeAnalysisRequestV2,
     KnowledgeAnalysisRequestV3,
     KnowledgeAnalysisRequestV4,
@@ -29,7 +28,6 @@ from eom_catalog_service.automatic_item_graph_publication_service import (
     INTEGRATED_SCIENCE_CORPUS_KEY,
     AutomaticItemGraphCandidate,
     AutomaticItemGraphPublicationService,
-    build_automatic_item_alignment_retrieval_command,
 )
 from eom_catalog_service.knowledge_graph_models import KnowledgeSnapshotAnalysisRecord
 from eom_catalog_service.knowledge_graph_projection import (
@@ -37,7 +35,6 @@ from eom_catalog_service.knowledge_graph_projection import (
     AcceptedAnalysisProposal,
 )
 from eom_catalog_service.knowledge_graph_publication_service import (
-    CurrentKnowledgeGraphStructure,
     KnowledgeGraphPublicationService,
 )
 from eom_catalog_service.knowledge_retrieval_service import (
@@ -567,23 +564,4 @@ class LegacyItemGraphLearningService:
                     item.item_revision_id,
                 ),
             )
-        )
-
-    def _retrieval_command(
-        self,
-        *,
-        context: CurrentKnowledgeGraphStructure,
-        candidate: LegacyItemGraphCandidate,
-        topic_keys: tuple[str, ...],
-    ) -> CreateEvidenceBundleCommand:
-        return build_automatic_item_alignment_retrieval_command(
-            context=context,
-            candidate=AutomaticItemGraphCandidate(
-                analysis_run_id=candidate.analysis_run_id,
-                requested_by_operator_id=candidate.requested_by_operator_id,
-                graph_snapshot_revision_id=candidate.graph_snapshot_revision_id,
-            ),
-            topic_keys=topic_keys,
-            access_policy_revision_id=self.access_policy_revision_id,
-            idempotency_namespace="legacy-auto-alignment",
         )

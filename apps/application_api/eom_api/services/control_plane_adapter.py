@@ -670,13 +670,6 @@ class ControlPlaneAdapter:
         )
 
     @staticmethod
-    def _usage_from_result(
-        document: dict[str, object] | None,
-    ) -> CodexUsageObservationView | None:
-        usage, _catalog = ControlPlaneAdapter._observation_views(document)
-        return usage
-
-    @staticmethod
     def _observation_views(
         document: dict[str, object] | None,
         *,

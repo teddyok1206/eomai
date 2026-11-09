@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import io
 import json
 import os
@@ -45,10 +44,6 @@ from eom_image_provider.staged_file_io import (
 )
 
 _ERRORS = frozenset(get_args(SdxlProbeErrorCode))
-
-
-def _sha(raw: bytes) -> str:
-    return "sha256:" + hashlib.sha256(raw).hexdigest()
 
 
 def load_sdxl_learned_comparison_command(

@@ -109,20 +109,6 @@ def classify_docker_visibility(
     )
 
 
-def summarize_docker_and_database(docker: DoctorCheck, database_ok: bool) -> DoctorReport:
-    report = DoctorReport()
-    report.checks.append(docker)
-    report.add(
-        "postgres_application_connectivity",
-        CheckStatus.PASS if database_ok else CheckStatus.FAIL,
-        "POSTGRES_APPLICATION_CONNECTED" if database_ok else "POSTGRES_APPLICATION_UNAVAILABLE",
-        "Application database connection succeeded"
-        if database_ok
-        else "Application database connection failed",
-    )
-    return report
-
-
 class InfrastructureDoctor:
     def __init__(self, *, privileged: bool, executor: CommandExecutor | None = None) -> None:
         self.privileged = privileged

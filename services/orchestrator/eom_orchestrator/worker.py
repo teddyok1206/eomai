@@ -22,9 +22,7 @@ from eom_orchestrator.worker_registry import WorkerSlot
 from eom_orchestrator.worker_systemd import (
     inspect_worker_unit_activity,
     launch_worker_unit,
-    systemctl_start_argv,
     validate_job_id,
-    worker_unit_name,
 )
 
 if TYPE_CHECKING:
@@ -156,14 +154,6 @@ class CodexWorkerAdapter:
             os.chown(path, -1, private_group.gr_gid)
             path.chmod(0o640)
         return workspace, schema_path, prompt_path
-
-    def _argv(
-        self,
-        *,
-        slot: WorkerSlot,
-        job_id: str,
-    ) -> list[str]:
-        return list(systemctl_start_argv(worker_unit_name(slot, job_id)))
 
     def run(self, worker_input: WorkerInput, slot: WorkerSlot, staging: Path) -> WorkerRun:
         workspace, schema_path, prompt_path = self._prepare_workspace(worker_input, slot)

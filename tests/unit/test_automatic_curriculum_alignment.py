@@ -20,8 +20,10 @@ from eom_catalog_service.automatic_curriculum_alignment import (
 )
 from eom_catalog_service.automatic_item_graph_publication_service import (
     AutomaticItemGraphCandidate,
+    AutomaticItemGraphPublicationService,
     build_automatic_item_alignment_retrieval_command,
 )
+from eom_catalog_service.knowledge_graph_projection import CURRENT_ITEM_GRAPH_PUBLISHER_VERSION
 from eom_catalog_service.knowledge_graph_publication_service import (
     CurrentKnowledgeGraphStructure,
     KnowledgeGraphPublicationError,
@@ -351,9 +353,40 @@ def test_v12_expands_the_bounded_walk_without_changing_v11_replay() -> None:
     ) == (unit_id,)
 
 
-def test_legacy_graph_retrieval_command_pins_policy_snapshot_and_budget() -> None:
+def test_legacy_graph_publication_delegates_exact_candidates_and_namespaces() -> None:
     service = object.__new__(LegacyItemGraphLearningService)
-    service.access_policy_revision_id = "accessrev_" + "a" * 32
+    publisher = Mock(spec=AutomaticItemGraphPublicationService)
+    service.automatic_publication = publisher
+    published_revision_id = "graphrev_" + "f" * 32
+    publisher.publish.return_value.graph_publication.graph_snapshot.graph_snapshot_revision_id = (
+        published_revision_id
+    )
+    candidate = LegacyItemGraphCandidate(
+        analysis_run_id="analysisrun_" + "c" * 32,
+        requested_by_operator_id="operator_" + "d" * 32,
+        graph_snapshot_revision_id="graphrev_" + "b" * 32,
+    )
+
+    assert service.publish((candidate,)) == published_revision_id
+    publisher.publish.assert_called_once_with(
+        (
+            AutomaticItemGraphCandidate(
+                analysis_run_id=candidate.analysis_run_id,
+                requested_by_operator_id=candidate.requested_by_operator_id,
+                graph_snapshot_revision_id=candidate.graph_snapshot_revision_id,
+            ),
+        ),
+        required_source_class="PAST_EXAM",
+        retrieval_idempotency_namespace="legacy-auto-alignment",
+        publication_idempotency_namespace="legacy-auto-graph",
+        publisher_version=CURRENT_ITEM_GRAPH_PUBLISHER_VERSION,
+        analysis_validator=service._validate_past_exam_analyses,
+        occurrence_binding_resolver=service._assessment_item_occurrence_bindings,
+    )
+
+
+def test_legacy_graph_retrieval_command_pins_policy_snapshot_and_budget() -> None:
+    access_policy_revision_id = "accessrev_" + "a" * 32
     context = CurrentKnowledgeGraphStructure(
         corpus_key="integrated-science-textbooks",
         display_name="통합과학 지식 그래프",
@@ -361,26 +394,34 @@ def test_legacy_graph_retrieval_command_pins_policy_snapshot_and_budget() -> Non
         accepted_analysis_run_ids=(),
         structure=cast(Any, object()),
     )
-    candidate = LegacyItemGraphCandidate(
+    candidate = AutomaticItemGraphCandidate(
         analysis_run_id="analysisrun_" + "c" * 32,
         requested_by_operator_id="operator_" + "d" * 32,
         graph_snapshot_revision_id=context.graph_snapshot_revision_id,
     )
 
-    command = service._retrieval_command(
+    command = build_automatic_item_alignment_retrieval_command(
         context=context,
         candidate=candidate,
         topic_keys=("claim.energy", "concept.energy"),
+        access_policy_revision_id=access_policy_revision_id,
+        idempotency_namespace="legacy-auto-alignment",
     )
-    replay = service._retrieval_command(
+    replay = build_automatic_item_alignment_retrieval_command(
         context=context,
         candidate=candidate,
         topic_keys=("claim.energy", "concept.energy"),
+        access_policy_revision_id=access_policy_revision_id,
+        idempotency_namespace="legacy-auto-alignment",
     )
 
     assert command == replay
     assert command.graph_snapshot_revision_id == context.graph_snapshot_revision_id
-    assert command.access_policy_revision_id == service.access_policy_revision_id
+    assert command.access_policy_revision_id == access_policy_revision_id
+    assert command.requested_by == candidate.requested_by_operator_id
+    assert command.idempotency_key == (
+        f"legacy-auto-alignment:{candidate.analysis_run_id}:{context.graph_snapshot_revision_id}"
+    )
     assert command.evidence_budget.model_dump(mode="json") == (
         AUTOMATIC_ITEM_ALIGNMENT_EVIDENCE_BUDGET
     )
@@ -388,8 +429,7 @@ def test_legacy_graph_retrieval_command_pins_policy_snapshot_and_budget() -> Non
 
 
 def test_legacy_graph_retrieval_rejects_a_stale_candidate_before_writing_evidence() -> None:
-    service = object.__new__(LegacyItemGraphLearningService)
-    service.access_policy_revision_id = "accessrev_" + "a" * 32
+    access_policy_revision_id = "accessrev_" + "a" * 32
     context = CurrentKnowledgeGraphStructure(
         corpus_key="integrated-science-textbooks",
         display_name="통합과학 지식 그래프",
@@ -397,17 +437,19 @@ def test_legacy_graph_retrieval_rejects_a_stale_candidate_before_writing_evidenc
         accepted_analysis_run_ids=(),
         structure=cast(Any, object()),
     )
-    stale = LegacyItemGraphCandidate(
+    stale = AutomaticItemGraphCandidate(
         analysis_run_id="analysisrun_" + "c" * 32,
         requested_by_operator_id="operator_" + "d" * 32,
         graph_snapshot_revision_id="graphrev_" + "e" * 32,
     )
 
     with pytest.raises(ValueError, match="stale"):
-        service._retrieval_command(
+        build_automatic_item_alignment_retrieval_command(
             context=context,
             candidate=stale,
             topic_keys=("concept.energy",),
+            access_policy_revision_id=access_policy_revision_id,
+            idempotency_namespace="legacy-auto-alignment",
         )
 
 

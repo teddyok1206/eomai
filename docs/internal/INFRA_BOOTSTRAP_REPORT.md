@@ -7,6 +7,14 @@ Current note (2026-11-09): this is a historical bootstrap report. The retired
 PASS below is not a current runtime gate. The independent EOM repository and the
 empty EOMIS sandbox guard remain unchanged. See
 [retirement evidence](../operations/LEGACY_MODEL_CACHE_RETIREMENT_2026-11-06.md).
+The two repository-only systemd drafts listed in section 19 were also removed:
+`eom-orchestrator.service.example` referenced an unimplemented module, and
+`eom-worker@.service` only ran `codex exec --help`. Neither draft is installed
+(`eom-orchestrator.service` and `eom-worker@01.service` both reported
+`LoadState=not-found`, `ActiveState=inactive` during the read-only check).
+Current installation scripts select the explicit API, runner and per-slot units;
+the generic worker-name quiescence guard and its regression tests are preserved.
+The historical section below is unchanged; no installed unit or service state was changed.
 
 ## 1. Executive Summary
 
