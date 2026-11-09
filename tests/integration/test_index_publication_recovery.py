@@ -126,11 +126,15 @@ def interrupted(execution, monkeypatch, tmp_path):
     return execution, started, recovery.PreparedIndexRecoveryFence(command)
 
 
-@pytest.mark.parametrize("execution", ["native_office_public"], indirect=True)
+@pytest.mark.parametrize(
+    "execution", ["native_office_public", "native_office_public_cuda"], indirect=True
+)
 def test_same_prepared_publication_completes_and_replays_without_numerical_execution(interrupted):
     case, started, fence = interrupted
     before = case.launcher.forwards
-    owner = recovery.PreparedIndexPublicationExecutor(case.owner, case.publisher, fence)
+    owner = recovery.PreparedIndexPublicationExecutor(
+        case.owner, case.publisher, fence, device=case.request.space.runtime.device
+    )
     assert case.advance(*started, selected_executor=owner)
     case.finish(*started, selected_executor=owner)
     case.finish(*started, selected_executor=owner)

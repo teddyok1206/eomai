@@ -35,6 +35,8 @@ INDEX의 같은 DB root에서 반복하는 전체 풀이 해석은 `public_solut
 유지한다. `public_solution_population_dependencies`는 저장된 검색 결과와 INDEX가 함께
 쓰는 bounded SQL 의존관계 관측이며, 권한 cache가 아니다. root가 바뀌면 원본 파일과
 보고서를 다시 strict capture한다. 완성 vector/report나 입력 text는 수정하지 않는다.
+Registry의 정상 savepoint와 dirty session에서는 재사용하지 않고 기존 strict capture를
+수행한다. 이 저장 경계는 오류가 아니며, rollback된 capture를 outer root로 가져오지 않는다.
 설계와 측정 범위는 `docs/architecture/PUBLIC_SOLUTION_INDEX_CAPTURE_REUSE.md`를 참고한다.
 
 공개 풀이 INDEX의 신규 미계산 대상은 기존 preparation이 출처별로 번갈아 선택한다.
@@ -59,9 +61,10 @@ INDEX의 OS 상태 조회는 Identity `local_indexing_runtime._unit`에서 timeo
 지속된 조회 불가는 거부한다. 복구 근거는
 `docs/operations/INDEX_UNIT_OBSERVATION_RECOVERY_2026-11-07.md`를 확인한다.
 
-숫자 계산과 encoding commit은 성공했지만 INDEX_PREPARED 이후 릴리스가 바뀐 CPU
+숫자 계산과 encoding commit은 성공했지만 INDEX_PREPARED 이후 릴리스가 바뀐
 요청은 `index_publication_recovery`의 명시적 root/schema-owner 유지보수로만 이어간다.
 정확한 원래 request/intent/registration hash와 현행 동등 source grant를 확인한다.
+CPU/CUDA 장치와 모델은 원래 request에 고정하며 계산 실행은 둘 다 금지된다.
 새 source discovery·submit·수치 실행을 할 수 없는 executor가 기존 Runner와 Catalog/
 Orchestrator publication을 재사용하며, 일반 서비스 권한이나 GPU PID는 바꾸지 않는다.
 설계·실제 완료 여부는 `docs/operations/RETIRED_INDEX_PUBLICATION_RECOVERY.md`를 참조한다.

@@ -43,8 +43,19 @@ def capture_public_solution_index_population(
     """
     reader.require_session(session)
     root = session.get_transaction()
-    if root is None or not root.is_active or session.in_nested_transaction():
+    if root is None or not root.is_active:
         raise ValueError("PUBLIC_SOLUTION_READ_SET_INVALID")
+    if session.in_nested_transaction() or session.new or session.dirty or session.deleted:
+        # Registry's uniqueness savepoint and mutating sessions retain the
+        # original strict path. SQL observations are only for clean read roots.
+        session.info.pop(_IndexPopulationReadSet, None)
+        value = capture()
+        if value.scope != intent:
+            raise ValueError("PUBLIC_SOLUTION_READ_SET_INVALID")
+        reader.revalidate_provenance()
+        if reauthorize() != intent:
+            raise ValueError("PUBLIC_SOLUTION_AUTHORITY_CHANGED")
+        return value
     previous = session.info.get(_IndexPopulationReadSet)
     if previous is not None and type(previous) is not _IndexPopulationReadSet:
         raise ValueError("PUBLIC_SOLUTION_READ_SET_INVALID")

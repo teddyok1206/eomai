@@ -126,6 +126,31 @@ def test_change_during_first_strict_capture_does_not_publish_a_read_set(captured
         case.run()
 
 
+def test_real_registration_savepoint_commit_and_rollback_are_not_cache_rejections(captured):
+    case = captured
+    case.run()
+    with case.session.begin_nested():
+        case.run()
+        case.run()
+    assert case.build.call_count == 3
+    case.run()
+    assert case.build.call_count == 4
+    nested = case.session.begin_nested()
+    case.run()
+    case.session.execute(
+        text(
+            "UPDATE pg_temp.items SET lifecycle_state='RETIRED' "
+            "WHERE item_id='item_'||lpad('545',32,'0')"
+        )
+    )
+    # SQL observation is deliberately not used in Registry's savepoint. The
+    # original strict materializer remains responsible for source validation.
+    case.run()
+    nested.rollback()
+    case.run()
+    assert case.build.call_count == 7
+
+
 @pytest.mark.parametrize(
     "table,mutation",
     [

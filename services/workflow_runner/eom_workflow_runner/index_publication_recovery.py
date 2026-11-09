@@ -153,7 +153,8 @@ class PreparedIndexRecoveryFence:
         service = supported_local_embedding_request_service(request)
         _require(
             request.schema_version == "local-embedding-workflow-request/5.0"
-            and request.space.runtime.device == request.resource_profile.device == "CPU"
+            and request.space.runtime.device == request.resource_profile.device
+            and request.space.runtime.device in {"CPU", "CUDA"}
             and request.request_sha256 == command.workflow_request_sha256
             and service.service_id == command.current_service.service_id
             and service.service_revision_id != command.current_service.service_revision_id
@@ -206,12 +207,11 @@ class PreparedIndexRecoveryFence:
         return request, workflow, step, coordinator, history
 
 
+@dataclass(frozen=True, slots=True)
 class NoNumericalRecoveryExecution:
     """Explicitly no model/runtime execution: canonical completed encodings only."""
 
-    @property
-    def device(self) -> Literal["CPU"]:
-        return "CPU"
+    device: Literal["CPU", "CUDA"] = "CPU"
 
     def assert_current_runtime(self, request: SupportedLocalEmbeddingRequest) -> NoReturn:
         raise ValueError("INDEX_PUBLICATION_RECOVERY_NUMERICAL_EXECUTION_FORBIDDEN")
@@ -237,10 +237,12 @@ class PreparedIndexPublicationExecutor:
         owner: CatalogLocalEmbeddingOwnerAdmission,
         publisher: ControlFileSetPublisher,
         fence: PreparedIndexRecoveryFence,
+        *,
+        device: Literal["CPU", "CUDA"] = "CPU",
     ) -> None:
         self.owner, self.publisher, self.fence = owner, publisher, fence
         self.completion = NativeEmbeddingIndexCompletion(
-            owner, publisher, NoNumericalRecoveryExecution()
+            owner, publisher, NoNumericalRecoveryExecution(device)
         )
 
     def evaluate(self, request: SupportedLocalEmbeddingRequest) -> RuntimeReadinessReport:
@@ -388,7 +390,9 @@ def build_publication_recovery_executor(
         source_authority=source,
         settings=settings,
     )
-    return PreparedIndexPublicationExecutor(owner, publisher, fence)
+    return PreparedIndexPublicationExecutor(
+        owner, publisher, fence, device=request.space.runtime.device
+    )
 
 
 @dataclass(frozen=True, slots=True)

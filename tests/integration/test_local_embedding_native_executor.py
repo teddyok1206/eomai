@@ -205,14 +205,16 @@ def execution(
     request: pytest.FixtureRequest,
 ):
     execution_mode = getattr(request, "param", "operator")
-    native_office_mode = execution_mode == "native_office_public"
-    registered_public_mode = execution_mode in {"registered_public", "native_office_public"}
-    public_mode = execution_mode in {"public", "registered_public", "native_office_public"}
+    publication_cuda = execution_mode == "native_office_public_cuda"
+    native_office_mode = execution_mode in {"native_office_public", "native_office_public_cuda"}
+    registered_public_mode = execution_mode == "registered_public" or native_office_mode
+    public_mode = execution_mode == "public" or registered_public_mode
     service_mode = execution_mode in {
         "service",
         "public",
         "registered_public",
         "native_office_public",
+        "native_office_public_cuda",
     }
     cuda_mode = execution_mode in {"cuda", "cuda_bulk", "cuda_deferred"}
     cpu_fallback = execution_mode in {"cpu_fallback", "cpu_fallback_catchup"}
@@ -250,7 +252,8 @@ def execution(
             )
         capture = replace(capture, entries=tuple(entries), sources=tuple(sources))
     native = native_fixture(
-        device="CUDA" if cuda_mode else "CPU", timeout_seconds=180 if cpu_fallback else 300
+        device="CUDA" if cuda_mode or publication_cuda else "CPU",
+        timeout_seconds=180 if cpu_fallback else 300,
     )
     _unused, compiled = scope_fixture()
     if public_mode:
@@ -656,10 +659,52 @@ def execution(
         )
         owner, executor = gpu.child_owner, gpu.executor
     else:
+
+        class SyntheticCudaPublicationInput:
+            # Explicit synthetic numerical leaf only: exercise real CUDA pins,
+            # prepared receipts and DB publication without any physical model.
+            @property
+            def device(self):
+                return "CUDA"
+
+            def __init__(self, launcher):
+                self.launcher = launcher
+
+            def assert_current_runtime(self, request):
+                assert request.space.runtime.device == self.device
+
+            def observe(self, intent):
+                from eom_workflow_runner.document_embedding_execution import DocumentExecutionState
+
+                return (
+                    DocumentExecutionState.SUCCEEDED
+                    if intent.native_launch_job_id.removeprefix("job_") in self.launcher.invocations
+                    else DocumentExecutionState.NOT_STARTED
+                )
+
+            def execute(self, work, *, source, transaction):
+                from eom_workflow_runner.document_embedding_execution import DocumentEmbeddingOutput
+
+                with transaction() as session:
+                    assert (
+                        source.resolve_launch(session, work.association).owned_input == work.request
+                    )
+                execution_id = work.association.intent.native_launch_job_id.removeprefix("job_")
+                prepared = SimpleNamespace(
+                    execution_id=execution_id,
+                    request=work.request,
+                    workspace=handoff.ensure_native_index_owner_workspace(execution_id),
+                )
+                return DocumentEmbeddingOutput(self.launcher.run(prepared), prepared.workspace)
+
         executor = CatalogNativeEmbeddingExecutor(
             owner=owner,
             publisher=publisher,
-            execution_backend=FixedCpuDocumentEmbeddingExecution(launcher),
+            execution_backend=(
+                SyntheticCudaPublicationInput
+                if publication_cuda
+                else FixedCpuDocumentEmbeddingExecution
+            )(launcher),
             runtime_profile=profile,
             source_commit="a" * 40,
         )

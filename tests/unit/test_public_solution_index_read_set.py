@@ -17,10 +17,11 @@ def case(monkeypatch):
     # SQL and IAM are separate leaves here; real PostgreSQL observations have a
     # disposable suite. No synthetic identity is used for production reads.
     scope = NS(scope="exact-service-intent")
-    session = Mock(info={})
+    session = Mock(info={}, new=set(), dirty=set(), deleted=set())
     root = NS(is_active=True)
     session.get_transaction.return_value = root
     session.in_nested_transaction.return_value = False
+    session.get_nested_transaction.return_value = None
     reader = Mock(settings=NS(nas_artifact_root="synthetic"))
     entry = public_entry()
     value = CapturedPublicSolutionSources(
@@ -92,13 +93,11 @@ def test_new_transaction_requires_a_new_strict_capture(case):
     assert case.capture.call_count == 2
 
 
-@pytest.mark.parametrize("fault", ["inactive", "nested", "thread", "reader"])
+@pytest.mark.parametrize("fault", ["inactive", "thread", "reader"])
 def test_invalid_owning_root_or_reader_is_rejected(case, monkeypatch, fault):
     case.run()
     if fault == "inactive":
         case.root.is_active = False
-    elif fault == "nested":
-        case.session.in_nested_transaction.return_value = True
     elif fault == "thread":
         monkeypatch.setattr(module, "get_ident", lambda: -1)
     else:
@@ -106,6 +105,24 @@ def test_invalid_owning_root_or_reader_is_rejected(case, monkeypatch, fault):
     with pytest.raises(ValueError):
         case.run()
     assert case.capture.call_count == 1
+
+
+@pytest.mark.parametrize("boundary", ["savepoint", "new", "dirty", "deleted"])
+def test_registration_and_mutating_contexts_use_original_strict_path(case, boundary):
+    case.run()
+    if boundary == "savepoint":
+        case.session.in_nested_transaction.return_value = True
+    else:
+        setattr(case.session, boundary, {"pending"})
+    case.run()
+    case.run()
+    assert case.capture.call_count == 3
+    assert case.observation.call_count == 2
+    assert not case.session.info
+    case.session.in_nested_transaction.return_value = False
+    case.session.new = case.session.dirty = case.session.deleted = set()
+    case.run()
+    assert case.capture.call_count == 4
 
 
 def test_failed_capture_or_wrong_scope_cannot_seed_reuse(case):

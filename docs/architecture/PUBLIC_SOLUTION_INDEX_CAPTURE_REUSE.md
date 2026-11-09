@@ -23,6 +23,7 @@ swap 사용도 확인했으므로 큰 모델/원문을 더 보관하는 방식�
    source 의존관계 관측을 재사용해 Item·component·원본 기출 provenance·accepted V10/V11·
    창작 Workflow/step/plan·Artifact/job의 현재 digest를 비교한다. missing-report와
    unranked source도 포함한다. 다른 root/thread/설정/scope에는 재사용하지 않는다.
+   savepoint·아직 flush되지 않은 변경이 있는 session에서는 기존 strict 경로를 쓴다.
 5. 접근은 같은 exact 모집단의 반복 읽기와 동등성 검사다. 처음 한 번 strict capture,
    이후 원래 fence마다 indexed/bounded SQL observation을 사용한다. 동일한 capture 전후
    관측도 비교해 중간 변경을 거부한다.
@@ -64,3 +65,29 @@ source 준비/commit/COMPLETED 시간과 GPU 상태를 따로 보고한다. 소�
 - 운영 전 기존 encoding/binding/index revision/accepted analysis/registered report의
   모든 행을 key와 metadata hash로 고정했다. 배포 후 기존 행의 누락·변경이 없음을
   다시 대조한다. 이후 새 완료 행은 허용하며 정본이나 기존 vector를 삭제하지 않는다.
+
+## 실제 저장점 호환성 보정과 준비된 CUDA publication 복구
+
+첫 운영 후보는 Registry가 중복 등록을 보호하는 정상 savepoint를 거부했다. 최초 검증에서
+이 실제 호출 조합을 놓쳤다. 기존 성공 자료는 보존됐으나 새 CUDA 4개는 수치 작업이
+SUCCEEDED이고 INDEX_PREPARED인 채 저장이 중단됐다. 이 실패 로그를 삭제하지 않는다.
+
+read set은 clean outer read transaction에서만 사용한다. 정상 savepoint나 아직 flush되지 않은
+변경이 있는 session에서는 read set을 비우고 기존 strict capture를 그대로 실행한다. 기존 SQL
+observation의 clean-root 조건을 완화하지 않는다. 실제 disposable DB에서 commit/rollback과
+이 경로의 호출을 검사한다. 기존 등록 transaction/CAS는 바꾸지 않는다.
+
+준비된 4개를 재계산하지 않기 위해 기존 `index_publication_recovery`의 publication-only
+경계를 CPU와 CUDA 모두에 적용한다. 기존 JSON Schema 2020-12의 정확한 request/intent/
+prepared command/current service+policy pins를 그대로 사용한다(장치를 CPU로 제한하지 않는
+기존 wire 형식). 장치는 원래 hash-검증된 request에서 읽으며 양쪽 current grant의 모델·장치·
+자료 범위가 동일해야 한다. root/schema-owner의 명시적 유지보수만 가능하며 일반 service
+admission이나 worker 권한을 넓히지 않는다. 새 API·queue·schema·DB migration은 없다.
+
+정본은 기존 immutable numerical receipts·준비된 index와 original Workflow다. indexed ID
+조회와 기존 관계 잠금/registry CAS, 동등 source policy 검사, retained original source pins,
+공식 Runner의 expired command 재claim·completion을 재사용한다. 원래 head가 이동했으면
+거부하며 자동 최신 치환은 없다. `NoNumericalRecoveryExecution`의 모든 실행 메서드는
+여전히 예외를 낸다. CPU/GPU 선택은 계산 권한이 아니다. 실패/완료 이력 재해석 없이
+미완료 publication만 이어간다. 새 모델 실행/기존 vector 재생성보다 이 기존 경계를
+장치에 독립적으로 적용하는 것이 작고 데이터 손실 없는 복구다.

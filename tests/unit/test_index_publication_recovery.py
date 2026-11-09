@@ -157,9 +157,10 @@ def test_other_policy_graph_discovery_and_segmented_reads_forbidden(gate):
             method(Mock(), original.access_policy_revision_id, original.content_sha256)
 
 
-def test_numerical_leaf_always_forbidden():
-    leaf = NoNumericalRecoveryExecution()
-    assert leaf.device == "CPU"
+@pytest.mark.parametrize("device", ["CPU", "CUDA"])
+def test_numerical_leaf_always_forbidden(device):
+    leaf = NoNumericalRecoveryExecution(device)
+    assert leaf.device == device
     with pytest.raises(ValueError, match="NUMERICAL_EXECUTION_FORBIDDEN"):
         leaf.assert_current_runtime(Mock())
     with pytest.raises(ValueError, match="INCOMPLETE_ENCODING"):
