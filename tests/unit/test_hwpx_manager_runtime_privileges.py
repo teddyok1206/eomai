@@ -30,6 +30,16 @@ def test_manager_privilege_matrix_matches_owned_access_patterns() -> None:
         "curated_document_assemblies",
         "curated_document_assembly_revisions",
         "curated_document_assembly_placements",
+        "content_delivery_scopes",
+        "content_editions",
+        "content_edition_revisions",
+        "content_edition_revision_forms",
+        "content_form_revision_compositions",
+        "deliverables",
+        "deliverable_revisions",
+        "assessment_form_revisions",
+        "curated_document_assembly_slots_v2",
+        "content_intake_batches",
         "content_intake_source_files",
         "external_item_sources",
         "external_item_source_revisions",
@@ -70,6 +80,18 @@ def test_manager_privilege_matrix_matches_owned_access_patterns() -> None:
     assert "hwpx_assessment_assembly_builds" not in INSERT_TABLES
     assert "hwpx_curated_builds" not in INSERT_TABLES
     assert "operator_credentials" not in READ_TABLES
+    assert not {
+        "content_delivery_scopes",
+        "content_editions",
+        "content_edition_revisions",
+        "content_edition_revision_forms",
+        "content_form_revision_compositions",
+        "deliverables",
+        "deliverable_revisions",
+        "assessment_form_revisions",
+        "curated_document_assembly_slots_v2",
+        "content_intake_batches",
+    } & (set(INSERT_TABLES) | set(UPDATE_TABLES))
     assert not {"operators", "roles", "operator_role_assignments"} & set(UPDATE_TABLES)
     # Both runtimes append independently owned lifecycle events to the shared Job event stream.
     # No other HWPX-manager insert surface is shared with the API runtime.
@@ -96,6 +118,7 @@ def test_manager_privilege_readiness_is_one_read_only_matrix_query() -> None:
     assert "has_table_privilege" in str(statement)
     assert "protocol_versions" in parameters["requirements"]
     assert "hwpx_application_builds" in parameters["requirements"]
+    assert "content_delivery_scopes" in parameters["requirements"]
 
 
 def test_manager_bootstrap_is_fixed_and_revokes_before_granting() -> None:

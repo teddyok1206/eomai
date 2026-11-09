@@ -264,3 +264,32 @@ Linux sudo 입력 성공과 Studio 로그인 성공을 혼동하지 않는다. �
   `EOM:6 excel-release`는 Linux sudo 입력이며 서로 바꾸어 해석하지 않는다. 기존 입력
   프로세스를 유지하고 계정·비밀번호·인증 파일은 변경하지 않았다. INDEX/슬롯 service도
   이번 소스 검증 중 재시작하지 않았다.
+
+## 실제 HTTPS canary에서 발견한 Manager 권한 누락 — 2026-11-09 15:24 UTC
+
+- 새 정상 로그인 뒤 실제 콘텐츠 생성, DB 문항 10310/10318/10310 선택, 중복 포함 저장,
+  사용·편집 이력, 다음 연도 판 복사와 출력 준비까지 HTTP 200으로 완료했다.
+- CREATE 직후 검증 스크립트가 진행 중 재시도 표시를 실패로 오인했다. 같은 원래 응답의
+  성공 revision을 대조해 이어갔으며 CREATE를 재전송하지 않았다. 이는 제품 저장 실패와
+  구분한다. 최초 canary 중단 기록을 보존했다.
+- HWPX 원래 요청 `hwpxbuild_7d0ff0760a7143419cd891f7b83ebfad`는 RUNNING claim 후
+  Manager 재시작을 반복했다. 실제 Manager role로 읽기 전용 조회했을 때
+  `content_delivery_scopes` SELECT가 SQLSTATE 42501로 거부됐다. 핵심 편성 테이블의
+  Manager SELECT 누락을 확인했으며 렌더 시간이나 GPU 경합으로 해석하지 않는다.
+- 수정 책임은 기존 `eom_hwpx_manager.runtime_privileges.TABLE_PRIVILEGES`다.
+  새 편성의 scope/판/revision/Form/slot 재인가 경로가 실제 읽는 테이블에 SELECT만
+  추가한다. 공식 bootstrap과 시작 preflight가 이 단일 목록을 함께 사용한다.
+  새 DB 테이블·schema·일반 사용자 권한·credential 접근·문항/편성 쓰기 권한은 없다.
+- 같은 고정 build와 assembly/revision을 보존하고 공식 role reconciliation 이후
+  기존 recover_interrupted 경로가 이어받도록 한다. 임의 DB UPDATE, 실패를 성공으로
+  변경, 새 build identity 우회는 하지 않는다. 제한 role의 disposable DB 회귀와
+  설치 후보를 검증한 뒤 적용한다.
+- 배포를 위한 creative coordinator의 공식 drain은 완료했다. 진행 worker에 종료 신호를
+  보내지 않았으며 INDEX와 자료 학습 프로세스는 그대로다. 후보 설치 뒤 지원된 start로
+  coordinator를 복구한다. 운영 배포와 HWPX 다운로드 완료는 아직 미판정이다.
+- 제한된 Manager 역할을 실제로 적용한 disposable DB에서 추가 누락
+  `content_intake_batches`도 재현했다. 최종 변경은 정본 목록의 SELECT 10개뿐이다.
+  원래 API 역할의 넓은 권한을 테스트에 대신 쓰지 않았다. 원본 scope 읽기, FIFO claim,
+  같은 build의 중단 복구에서 renderer 도달까지 **61 PASS, 2 SKIP**, 단위 **3 PASS**.
+  테스트 역할 권한을 복원하고 합성 미실행 큐 항목만 정리했다. 이 결과는 아직 실제
+  HWPX 다운로드 성공을 뜻하지 않는다.

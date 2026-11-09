@@ -20,6 +20,18 @@ READ_TABLES: Final[tuple[str, ...]] = (
     "curated_document_assemblies",
     "curated_document_assembly_revisions",
     "curated_document_assembly_placements",
+    # Excel scope reauthorization reads its exact Edition/Form snapshot before
+    # dispatch and recovery. Manager never edits content or publication history.
+    "content_delivery_scopes",
+    "content_editions",
+    "content_edition_revisions",
+    "content_edition_revision_forms",
+    "content_form_revision_compositions",
+    "deliverables",
+    "deliverable_revisions",
+    "assessment_form_revisions",
+    "curated_document_assembly_slots_v2",
+    "content_intake_batches",
     "content_intake_source_files",
     "external_item_sources",
     "external_item_source_revisions",
