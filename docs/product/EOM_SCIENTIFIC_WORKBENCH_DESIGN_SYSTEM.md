@@ -279,7 +279,7 @@ Material Learning uses the existing presentation vocabulary/presenter through th
 `material_learning` domain in the GUI-only schema. Original run/task enums, actions, errors and
 polling conditions are unchanged. Unknown values retain their technical state but display an explicit
 unknown label. Add specific guide copy for new user actions rather than relying only on page help;
-guide mode remains OFF on load. Whole-shell Chromium checks cover all 17 views at desktop/mobile
+guide mode remains OFF on load. Whole-shell Chromium checks cover all 18 views at desktop/mobile
 widths, while per-feature browser fixtures check populated interaction and request preservation.
 
 ## 9. Deliberate non-goals
@@ -288,3 +288,30 @@ This design phase does not add or change an API, workflow, DB schema, model prov
 item contract, authorization rule, HWPX contract, storage path, or runtime service. It does not add
 gamification, community features, arbitrary themes, or chain-of-thought exposure. Future item library,
 quality-profile, and knowledge-graph editing features require their own protocol-first designs.
+
+## 10. Workbench visual refinement — 2026-11-09
+
+Keep the existing routes, permissions, DOM identities and application requests. This refinement
+changes visual emphasis, not information ownership or the state machine; no migration, model call,
+new UI framework, font download or client persistence is required.
+
+- Put the exact-ID opener in a keyboard-operable native disclosure instead of a dominant search
+  field. Preserve the existing input, Enter action and recovery behavior. Service health stays
+  quiet in normal operation; warning/error text must remain visible, including narrow screens.
+- Use consistent 24-unit line icons in the navigation, retaining text labels and permission gates.
+  Icons are repository-native SVG, not a downloaded icon/font dependency.
+- Give DB results more space by aligning filter controls and the search footer. Keep every filter,
+  selected condition, export action and result/detail interaction available. Neutral filter chips
+  are secondary to the main search action; do not reduce input targets or body text to save space.
+- In Excel, allocate width to item content before row commands. Group reading and editing commands,
+  keep them visible and at least 40 px high, and keep print-selection labels horizontal. Preserve
+  slot numbering, copy/replay, print history and delivery behavior.
+- Retain the shared control/card radii and readable type scale. Use a softer divider for panels
+  and table structure while keeping stronger input boundaries, visible focus and semantic alerts.
+  Publication pages and figures keep their own white/serif presentation.
+
+Validation uses the existing source-backed Chromium fixtures for desktop, intermediate and mobile
+widths, plus populated DB/Excel interaction tests. Verify keyboard access, warning visibility,
+long labels, checked/disabled states, table overflow and unchanged request semantics. A source
+screenshot is design evidence, not proof of live deployment. Release only the compatible Web wheel;
+do not restart API, QUERY, INDEX or creative workers for this presentation-only change.

@@ -6,7 +6,7 @@ import {createRequire} from 'node:module';
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.EOM_WEB_PLAYWRIGHT_MODULE);
 const root = new URL('../../apps/web_gui/eom_web_gui/static/', import.meta.url);
-const assets = new Map(await Promise.all(['index.html', 'styles.css', 'knowledge-map.css', 'knowledge-map.js', 'eom-mark.svg'].map(async name => [name, await readFile(new URL(name, root), 'utf8')])));
+const assets = new Map(await Promise.all(['index.html', 'styles.css', 'knowledge-map.css', 'content-planning.css', 'knowledge-map.js', 'eom-mark.svg'].map(async name => [name, await readFile(new URL(name, root), 'utf8')])));
 const app = `
 import {createKnowledgeMap} from './knowledge-map.js';
 const ids = ['a','b','c','d','5'].map(value => 'knode_' + value.repeat(32));
@@ -43,10 +43,16 @@ try {
   await page.goto('http://127.0.0.1:' + server.address().port + '/studio/');
   await page.waitForFunction(() => document.querySelectorAll('.map-node').length === 4);
   assert.equal(await page.locator('.map-layer-ring').count(), 2);
-  assert.equal(await page.locator('[data-view-target="knowledge"]').textContent().then(value => value.trim()), '⌬ Map');
+  const mapNavigation = page.locator('[data-view-target="knowledge"]');
+  assert.equal(await mapNavigation.textContent().then(value => value.trim()), 'Map');
+  assert.equal(await page.getByRole('button', {name: 'Map', exact: true}).count(), 1);
+  const mapIcon = mapNavigation.locator('svg.nav-icon');
+  assert.equal(await mapIcon.count(), 1);
+  assert.equal(await mapIcon.getAttribute('aria-hidden'), 'true');
+  assert.equal(await mapIcon.getAttribute('viewBox'), '0 0 24 24');
   const navLabels = await page.locator('.nav-group-label, .nav-item').allTextContents();
-  assert(navLabels.findIndex(value => value.trim() === '⌬ Map') > navLabels.findIndex(value => value.trim() === '데이터'));
-  assert(navLabels.findIndex(value => value.trim() === '⌬ Map') < navLabels.findIndex(value => value.trim() === '운영 도구'));
+  assert(navLabels.findIndex(value => value.trim() === 'Map') > navLabels.findIndex(value => value.trim() === '데이터'));
+  assert(navLabels.findIndex(value => value.trim() === 'Map') < navLabels.findIndex(value => value.trim() === '운영 도구'));
   await page.locator('.map-node').first().click();
   await page.getByRole('button', {name: 'DB에서 문항 열기', exact: true}).waitFor();
   await page.getByRole('button', {name: '미리보기', exact: true}).click();

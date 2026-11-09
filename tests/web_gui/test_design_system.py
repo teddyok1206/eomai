@@ -137,9 +137,9 @@ def test_content_first_visual_system_is_consistent_and_restrained() -> None:
 
 def test_chat_navigation_uses_a_stable_conversation_icon() -> None:
     assert HTML.count('data-view-target="chat"') == 1
-    assert '<svg class="nav-chat-icon" aria-hidden="true" viewBox="0 0 24 24"' in HTML
+    assert '<svg class="nav-icon nav-chat-icon" aria-hidden="true" viewBox="0 0 24 24"' in HTML
     assert "◌" not in HTML
-    assert ".nav-item.active .nav-chat-icon { color: var(--eom-action-teal); }" in CSS
+    assert ".nav-item.active .nav-icon { color: var(--eom-action-teal); }" in CSS
 
 
 def test_technical_details_are_progressively_disclosed_without_hiding_recovery() -> None:

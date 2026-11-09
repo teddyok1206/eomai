@@ -188,10 +188,10 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
       if (s.kind === "GROUP") parents.append(option(s.section_id, s.label));
       else {
         const wrap = node("label"), input = node("input"); input.type = "checkbox"; input.value = s.section_id; input.checked = s.section_id === selected;
-        wrap.append(input, document.createTextNode(s.label)); print.append(wrap);
+        wrap.append(input, node("span", s.label)); print.append(wrap);
         const outputWrap = node("label"), outputInput = node("input");
         outputInput.type = "checkbox"; outputInput.value = s.section_id; outputInput.checked = s.section_id === selected;
-        outputWrap.append(outputInput, document.createTextNode(s.label)); output.append(outputWrap);
+        outputWrap.append(outputInput, node("span", s.label)); output.append(outputWrap);
       }
     }
     const chosen = section();
@@ -296,11 +296,11 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
         const check = node("input", undefined, "excel-copy-check"); check.type = "checkbox"; check.checked = checkedPlacements.has(row.placement_id); check.disabled = locked();
         check.setAttribute("aria-label", `${row.position}번 복사·교체 선택`);
         check.addEventListener("change", () => {if (check.checked) checkedPlacements.add(row.placement_id); else checkedPlacements.delete(row.placement_id); sync();});
-        numberCell.append(check);
+        const copyChoice = node("label", undefined, "excel-copy-choice"); copyChoice.append(check); numberCell.append(copyChoice);
       }
       const number = node("input"); number.value = row.display_number || ""; number.placeholder = `${row.position}번`; number.maxLength = 32; number.setAttribute("aria-label", `${row.position}번 표시 번호`);
       number.addEventListener("change", () => {draft.update(selected, row.placement_id, {display_number: number.value.trim() || null}); sync();}); numberCell.append(number);
-      item.append(node("div", label(row.target)));
+      item.append(node("div", label(row.target), "excel-item-title"));
       item.dataset.usageTarget = labelKey(row.target);
       const count = duplicates.get(targetIdentity(row.target)) || 0;
       item.dataset.localCount = String(count);
@@ -315,12 +315,18 @@ export function createContentPlanning({document, api, can, openItemDb, openTarge
       const note = node("input"); note.value = row.note; note.maxLength = 2000; note.setAttribute("aria-label", `${row.position}번 메모`); note.addEventListener("change", () => {draft.update(selected, row.placement_id, {note: note.value}); sync();}); noteCell.append(note);
       for (const input of [number, points, note]) input.disabled = !editable();
       const change = fn => () => {if (!editable()) return; fn(); renderRows(); sync();};
-      actions.append(button("↑", change(() => draft.move(selected, row.placement_id, selected, row.position - 2)), !editable() || row.position === 1),
+      if (row.target.placement_kind !== "EMPTY") {
+        const reading = node("div", undefined, "excel-row-reading"), open = button("문항 열기", () => openTarget(row.target));
+        open.className = "button secondary";
+        reading.append(open, button("사용 이력", () => showUsage(row.target))); actions.append(reading);
+      }
+      const editing = node("div", undefined, "excel-row-editing");
+      editing.append(button("↑", change(() => draft.move(selected, row.placement_id, selected, row.position - 2)), !editable() || row.position === 1),
         button("↓", change(() => draft.move(selected, row.placement_id, selected, row.position)), !editable() || row.position === rows.length),
         button("교체", () => beginSelection(row.placement_id), !editable()),
         button("빼기", change(() => draft.remove(selected, row.placement_id)), !editable()),
         button("다른 회차로", () => moveToSection(row), !editable()));
-      if (row.target.placement_kind !== "EMPTY") actions.append(button("문항 열기", () => openTarget(row.target)), button("사용 이력", () => showUsage(row.target)));
+      actions.append(editing);
       actionsCell.append(actions); tr.append(numberCell, item, pointsCell, noteCell, actionsCell); root.append(tr);
     }
       if (!rows.length) {const tr = node("tr"), td = node("td", loadingSection ? "문항을 불러오는 중입니다." : s?.kind === "GROUP" ? "왼쪽에서 이 그룹의 회차를 골라 주세요." : "DB에서 문항을 선택하거나 빈 자리를 추가해 주세요.", "empty-state"); td.colSpan = 5; tr.append(td); root.append(tr);}

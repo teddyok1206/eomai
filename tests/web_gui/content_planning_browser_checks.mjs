@@ -134,6 +134,25 @@ try {
   await page.evaluate(() => fixture.controller.acceptSelection(fixture.target, '고유번호 10321'));
   assert.equal(await page.locator("#excel-rows tr").count(), 3);
   assert.equal(await page.locator("#excel-rows .excel-duplicate").count(), 2);
+  // Presentation keeps every action while prioritizing reading and fitting the usual desktop.
+  await page.setViewportSize({width: 1440, height: 1050});
+  const rowLayout = await page.locator('#excel-rows tr').nth(1).evaluate(row => ({
+    widths: [...row.cells].map(cell => cell.getBoundingClientRect().width),
+    actions: [...row.querySelectorAll('button')].map(button => ({text: button.textContent,
+      width: button.getBoundingClientRect().width, height: button.getBoundingClientRect().height})),
+    itemFont: parseFloat(getComputedStyle(row.querySelector('.excel-item-title')).fontSize),
+    readingFirst: row.querySelector('.excel-row-actions').firstElementChild.classList.contains('excel-row-reading'),
+    tableFits: row.closest('.excel-table-scroll').scrollWidth <= row.closest('.excel-table-scroll').clientWidth + 1,
+  }));
+  assert.equal(rowLayout.readingFirst, true);
+  assert.deepEqual(rowLayout.actions.map(action => action.text), ['문항 열기', '사용 이력', '↑', '↓', '교체', '빼기', '다른 회차로']);
+  assert(rowLayout.actions.every(action => action.width >= 40 && action.height >= 40), 'row action target below 40px');
+  assert(rowLayout.widths[1] > rowLayout.widths[0] * 2 && rowLayout.widths[1] > rowLayout.widths[3], 'item content lost width priority');
+  assert(rowLayout.widths[0] <= 80 && rowLayout.widths[2] <= 90 && rowLayout.widths[3] <= 140);
+  assert(rowLayout.itemFont >= 14 && rowLayout.tableFits, 'normal desktop requires horizontal scrolling');
+  await page.evaluate(() => {document.querySelector('#excel-create-panel').open = false; window.scrollTo(0, 0);});
+  await page.screenshot({path: '/tmp/eom-excel-layout-desktop.png', fullPage: true});
+  await page.setViewportSize({width: 1600, height: 1050});
   await page.evaluate(() => fixture.fail = true);
   await page.locator("#excel-save").click();
   await page.locator("#excel-retry-button").waitFor();
@@ -205,6 +224,17 @@ try {
   assert.equal(await page.evaluate(() => fixture.buildSubmissions), 1, 'history lookup resubmitted build');
   await page.locator('#excel-print-panel summary').click();
   await page.waitForFunction(() => document.querySelector('#excel-print-output').options.length === 2);
+  const checkboxLayout = async () => page.locator('.excel-checks > label').evaluateAll(labels => labels.map(label => ({
+    display: getComputedStyle(label).display,
+    height: label.getBoundingClientRect().height,
+    inputWidth: label.querySelector('input').getBoundingClientRect().width,
+    textHeight: label.querySelector('span').getBoundingClientRect().height,
+    lineHeight: parseFloat(getComputedStyle(label.querySelector('span')).lineHeight),
+  })));
+  let checkboxes = await checkboxLayout();
+  assert.equal(checkboxes.length, 40);
+  assert(checkboxes.every(label => ['flex', 'inline-flex'].includes(label.display) && label.height >= 40
+    && label.inputWidth === 18 && label.textHeight <= label.lineHeight + 1), 'round label or checkbox collapsed');
   const printedOutput = await page.evaluate(() => ({build: fixture.build.build_id, hash: fixture.build.output_sha256}));
   await page.locator('#excel-print-output').selectOption(printedOutput.build);
   await page.locator('#excel-print-form button[type="submit"]').click();
@@ -216,9 +246,19 @@ try {
   await page.screenshot({path: '/tmp/eom-excel-browser-desktop.png', fullPage: true});
   await page.setViewportSize({width: 390, height: 844});
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, "mobile page overflow");
+  checkboxes = await checkboxLayout();
+  assert(checkboxes.every(label => label.height >= 40 && label.inputWidth === 18 && label.textHeight <= label.lineHeight + 1), 'mobile round label wrapped vertically');
   await page.screenshot({path: '/tmp/eom-excel-browser-mobile.png', fullPage: true});
+  // Arbitrary user labels may wrap naturally, without breaking the page or growing checkboxes.
+  const longLabel = page.locator('#excel-print-sections label').first();
+  const originalLabel = await longLabel.locator('span').textContent();
+  await longLabel.locator('span').evaluate(span => span.textContent = '매우 긴 맞춤형 학교별 시험지 회차 이름 '.repeat(10));
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'long round label overflow');
+  assert.equal(await longLabel.locator('input').evaluate(input => input.getBoundingClientRect().width), 18);
+  await longLabel.locator('span').evaluate((span, text) => span.textContent = text, originalLabel);
   await page.setViewportSize({width: 1600, height: 1050});
   await page.locator('#excel-copy-panel summary').click();
+  assert(await page.locator('.excel-copy-choice').evaluateAll(labels => labels.every(label => label.getBoundingClientRect().width >= 40 && label.getBoundingClientRect().height >= 40)));
   await page.getByRole('checkbox', {name: '52번 복사·교체 선택', exact: true}).check();
   await page.getByRole('checkbox', {name: '51번 복사·교체 선택', exact: true}).check();
   await page.locator('#excel-copy-selected').click();

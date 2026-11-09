@@ -20,32 +20,32 @@
         <nav class="navigation">
           <p class="nav-group-label">일반</p>
           <button type="button" class="nav-item" data-view-target="chat" data-required-permission="general_chat:read">
-            <svg class="nav-chat-icon" aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <svg class="nav-icon nav-chat-icon" aria-hidden="true" viewBox="0 0 24 24">
               <path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H7l-3 2v-5.3a7.5 7.5 0 1 1 16-4.2Z"/>
               <path d="m12 7.5.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8Z"/>
             </svg>
             ChatGPT
           </button>
           <p class="nav-group-label">문항 제작</p>
-          <button type="button" class="nav-item" data-view-target="workflow"><span aria-hidden="true">▤</span> 문항 제작 진행</button>
-          <button type="button" class="nav-item" data-view-target="request"><span aria-hidden="true">＋</span> 새 문항 요청</button>
-          <button type="button" class="nav-item" data-view-target="item"><span aria-hidden="true">▧</span> 완성 문항</button>
-          <button type="button" class="nav-item" data-view-target="hwpx"><span aria-hidden="true">▱</span> HWPX·문항 승인</button>
-          <button type="button" class="nav-item" data-view-target="pdf-review"><span aria-hidden="true">▦</span> 자료 검토</button>
-          <button type="button" class="nav-item" data-view-target="quality-review"><span aria-hidden="true">◎</span> 품질 평가</button>
+          <button type="button" class="nav-item" data-view-target="workflow"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 8h8M8 12h5M8 16h3"/></svg> 문항 제작 진행</button>
+          <button type="button" class="nav-item" data-view-target="request"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M12 8v8m-4-4h8"/></svg> 새 문항 요청</button>
+          <button type="button" class="nav-item" data-view-target="item"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9l-6-6Zm0 0v6h6M8 15l3 3 5-6"/></svg> 완성 문항</button>
+          <button type="button" class="nav-item" data-view-target="hwpx"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3v12m-4-4 4 4 4-4M4 16v4a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-4"/></svg> HWPX·문항 승인</button>
+          <button type="button" class="nav-item" data-view-target="pdf-review"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M11 21H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v5M8 7h6M8 11h3m8 8 3 3"/><circle cx="16" cy="16" r="4"/></svg> 자료 검토</button>
+          <button type="button" class="nav-item" data-view-target="quality-review"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12 3 3 5-6"/></svg> 품질 평가</button>
           <p class="nav-group-label">데이터</p>
-          <button type="button" class="nav-item admin-only" data-view-target="knowledge"><span aria-hidden="true">⌬</span> Map</button>
-          <button type="button" class="nav-item" data-view-target="item-db" data-required-permission="item:read"><span aria-hidden="true">▣</span> DB</button>
-          <button type="button" class="nav-item" data-view-target="excel" data-required-permission="deliverable:read"><span aria-hidden="true">▦</span> Excel</button>
-          <button type="button" class="nav-item admin-only" data-view-target="learning"><span aria-hidden="true">◫</span> 자료 학습</button>
-          <button type="button" class="nav-item admin-only" data-view-target="explorer"><span aria-hidden="true">⌘</span> 운영 데이터 조회</button>
+          <button type="button" class="nav-item admin-only" data-view-target="knowledge"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m7 7 10 1M6 9l3 9m8-7-5 7"/><circle cx="5" cy="6" r="3"/><circle cx="19" cy="8" r="3"/><circle cx="10" cy="21" r="2"/></svg> Map</button>
+          <button type="button" class="nav-item" data-view-target="item-db" data-required-permission="item:read"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M9 9v11M3 14h18"/></svg> DB</button>
+          <button type="button" class="nav-item" data-view-target="excel" data-required-permission="deliverable:read"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 11h18M8 11v10m7-10v10"/></svg> Excel</button>
+          <button type="button" class="nav-item admin-only" data-view-target="learning"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 6C9 4 6 4 3 5v15c3-1 6-1 9 1 3-2 6-2 9-1V5c-3-1-6-1-9 1Zm0 0v15"/></svg> 자료 학습</button>
+          <button type="button" class="nav-item admin-only" data-view-target="explorer"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/></svg> 운영 데이터 조회</button>
           <p class="nav-group-label admin-only">운영 도구</p>
-          <button type="button" class="nav-item admin-only" data-view-target="control"><span aria-hidden="true">⚙</span> Codex 실행 관리</button>
-          <button type="button" class="nav-item admin-only" data-view-target="admin-settings"><span aria-hidden="true">◇</span> 관리자 설정</button>
+          <button type="button" class="nav-item admin-only" data-view-target="control"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg> Codex 실행 관리</button>
+          <button type="button" class="nav-item admin-only" data-view-target="admin-settings"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 3v8m0 4v6M12 3v3m0 4v11M20 3v12m0 4v2"/><circle cx="4" cy="13" r="2"/><circle cx="12" cy="8" r="2"/><circle cx="20" cy="17" r="2"/></svg> 관리자 설정</button>
           <p class="nav-group-label">시스템</p>
-          <button type="button" class="nav-item" data-view-target="account"><span aria-hidden="true">○</span> 내 계정</button>
-          <button type="button" class="nav-item" data-view-target="support"><span aria-hidden="true">?</span> 고객센터</button>
-          <button type="button" class="nav-item active" data-view-target="dashboard"><span aria-hidden="true">⌂</span> 작업함</button>
+          <button type="button" class="nav-item" data-view-target="account"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg> 내 계정</button>
+          <button type="button" class="nav-item" data-view-target="support"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9 9a3 3 0 1 1 4 2.8c-1 .4-1 1.2-1 2.2m0 3h.01"/></svg> 고객센터</button>
+          <button type="button" class="nav-item active" data-view-target="dashboard"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7M5 9v12h5v-7h4v7h5V9"/></svg> 작업함</button>
         </nav>
         <div class="sidebar-session-actions"><button class="button quiet" id="mobile-logout" type="button">로그아웃</button></div>
       </aside>
@@ -55,8 +55,13 @@
         <header class="topbar">
           <div class="command-bar">
             <button class="mobile-menu" id="mobile-menu" type="button" aria-label="메뉴 열기" aria-controls="studio-sidebar" aria-expanded="false">☰</button>
-            <label class="global-search"><span aria-hidden="true">⌕</span><input id="global-id" placeholder="문항 제작, 문항, HWPX ID 검색" autocomplete="off"></label>
-            <button class="button quiet" id="global-load" type="button">열기</button>
+            <details class="global-opener">
+              <summary>ID로 열기</summary>
+              <div class="global-opener-panel">
+                <label class="global-search"><span class="sr-only">문항 제작, 문항, HWPX ID</span><input id="global-id" placeholder="문항 제작, 문항, HWPX ID 검색" autocomplete="off"></label>
+                <button class="button secondary" id="global-load" type="button">열기</button>
+              </div>
+            </details>
           </div>
           <div class="topbar-status" aria-live="polite">
             <button id="guide-mode-toggle" class="button quiet guide-mode-toggle" type="button" role="switch" aria-checked="false"><span>안내 모드</span><span class="guide-mode-switch" aria-hidden="true"></span></button>
@@ -315,15 +320,16 @@
               <form id="item-db-form" class="item-db-search-form">
                 <div class="item-db-search-heading"><label>문항 종류<select id="item-db-source"><option value="EXTERNAL_SOURCE">창작</option><option value="PAST_EXAM">기출</option><option value="EXTERNAL">외부</option><option value="AI">AI</option></select></label><label>승인 상태<select id="item-db-approval"><option value="">전체 상태</option><option value="UNREGISTERED">등록 전</option><option value="DRAFT">초안</option><option value="IN_REVIEW">승인 대기</option><option value="APPROVED">승인 완료</option><option value="REJECTED">반려</option><option value="SUPERSEDED">이전 승인 버전</option><option value="RETIRED">보관 종료</option></select></label><button id="item-db-export" class="button quiet" type="button">엑셀로 저장</button></div>
                 <div id="item-db-source-filters">
-                  <div class="item-db-filter-heading"><h2>필터</h2><label class="item-db-match-mode"><span class="sr-only">검색 조건 결합</span><select id="item-db-match-mode"><option value="ALL">모든 조건에 맞게</option><option value="ANY">하나 이상 맞게</option></select></label><button id="item-db-filter-clear" class="button quiet" type="button" hidden>모두 지우기</button></div>
+                  <div class="item-db-filter-heading"><h2>필터</h2><label class="item-db-match-mode"><span class="sr-only">검색 조건 결합</span><select id="item-db-match-mode"><option value="ALL">모든 조건에 맞게</option><option value="ANY">하나 이상 맞게</option></select></label><button id="item-db-filter-add" class="button quiet" type="button">+ 다른 조건 추가</button><button id="item-db-filter-clear" class="button quiet" type="button" hidden>모두 지우기</button></div>
                   <div id="item-db-filter-quick" class="item-db-filter-quick" aria-label="자주 쓰는 검색 조건"><button class="item-db-filter-chip" data-filter-field="U" type="button">고유번호</button><button class="item-db-filter-chip" data-filter-field="R" type="button">단원</button><button class="item-db-filter-chip" data-filter-field="Z" type="button">분야</button><button class="item-db-filter-chip" data-filter-field="Y" type="button">문항 분류</button><button class="item-db-filter-chip" data-filter-field="AD" type="button">출제자</button><button class="item-db-filter-chip" data-filter-field="J" type="button">난이도</button><button class="item-db-filter-chip" data-filter-field="MATCH_STATUS" type="button">파일 상태</button></div>
                   <div id="item-db-filter-rows" class="item-db-filter-rows" aria-label="문항 검색 조건"></div>
-                  <p id="item-db-filter-empty" class="item-db-filter-empty">전체 문항</p>
-                  <button id="item-db-filter-add" class="button quiet" type="button">+ 다른 조건 추가</button>
+                  <p id="item-db-filter-empty" class="sr-only">전체 문항</p>
                 </div>
                 <div id="item-db-graph-filters" hidden><label>교육과정 단원<select id="item-db-graph-unit"><option value="">전체 단원</option></select></label><label class="item-db-past-exam-filter">시행 연도<input id="item-db-graph-year" type="number" min="1900" max="2200" placeholder="전체"></label><label class="item-db-past-exam-filter">시행 월<select id="item-db-graph-month"><option value="">전체 월</option><option value="4">4월</option><option value="5">5월</option><option value="6">6월</option><option value="7">7월</option><option value="8">8월</option><option value="9">9월</option><option value="10">10월</option><option value="11">11월</option><option value="12">12월</option></select></label><label class="item-db-past-exam-filter">문항 번호<input id="item-db-graph-number" type="number" min="1" max="200" placeholder="전체"></label></div>
-                <details class="item-db-usage-filter"><summary>콘텐츠 사용 여부</summary><div class="form-grid"><label>사용 기록<select id="item-db-usage-state"><option value="">전체</option><option value="USED">저장·인쇄한 문항</option><option value="UNUSED">이 시스템에 사용 기록 없음</option></select></label><label>사용 학년도<input id="item-db-usage-year" type="number" min="1900" max="3000" placeholder="연도 없는 판"></label></div></details>
-                <div class="form-actions"><button id="item-db-search" class="button primary" type="submit">문항 찾기</button></div>
+                <div class="item-db-search-footer">
+                  <details class="item-db-usage-filter"><summary>콘텐츠 사용 여부</summary><div class="form-grid"><label>사용 기록<select id="item-db-usage-state"><option value="">전체</option><option value="USED">저장·인쇄한 문항</option><option value="UNUSED">이 시스템에 사용 기록 없음</option></select></label><label>사용 학년도<input id="item-db-usage-year" type="number" min="1900" max="3000" placeholder="연도 없는 판"></label></div></details>
+                  <button id="item-db-search" class="button primary" type="submit">문항 찾기</button>
+                </div>
               </form>
               <div class="item-db-results-heading"><h2>검색 결과</h2><span id="item-db-result-count" class="status-badge tone-neutral">조회 전</span></div>
               <div class="item-db-table-wrap"><table class="item-db-table" aria-label="문항 검색 결과"><thead id="item-db-table-heading"></thead><tbody id="item-db-results"><tr><td>조건을 정해 문항을 조회하세요.</td></tr></tbody></table></div>

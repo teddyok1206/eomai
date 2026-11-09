@@ -87,3 +87,43 @@ commit owner로 저장하고 전 member hash/byte 재읽기 PASS. 해당 note의
 이 자기참조 감사 위치 문단을 덧붙이기 전의 기록이다.
 첫 감사 스크립트의 선택적 Pillow import는 미설치 환경에서 멈췄고 저장 전이었다.
 기존 PNG 감사 형식을 재사용해 다시 저장했으며, 의존성 추가나 운영 변경은 없었다.
+
+## 2026-11-09 — 시각적 위계와 DB·Excel 여백 개선
+
+기준 source `2ed6df53`. 위의 11월 8일 acceptance를 덮지 않는 후속 표현 개선이다.
+설계 기준은 디자인 시스템 §10이며, 기존 API·권한·요청·정본·수치 계산은 그대로다.
+
+- 상단 ID 열기를 native disclosure로 접고, 정상 상태 표시의 배경/테두리만 줄였다.
+  경고·오류는 작은 화면에서도 숨기지 않는다. 메뉴 17개는 text label과 권한을 유지한
+  로컬 SVG로 통일했다. 다운로드 icon/font/dependency는 없다.
+- DB 필터·검색 footer를 정돈하여 결과를 먼저 볼 수 있게 했다. 선택형 조건·콘텐츠 사용
+  필터·export·조회/배치/유사도 연결은 제거하지 않았다.
+- Excel은 문항 내용 열을 우선하고 행 작업을 조회/편집 두 묶음으로 정돈했다.
+  모든 작업과 40px 클릭 영역을 보존했다. 인쇄/출력 체크박스에 text input 폭이 적용되어
+  회차 글자가 세로로 꺾이던 selector 충돌을 수정했다.
+- 중간 화면 폭 검증에서 완성 문항·자료 검토·품질 평가·고객센터의 최소 grid 폭이
+  가용 너비보다 큰 기존 문제를 찾아, 기존 반응형 규칙에서 한 열 전환 시점을 조정했다.
+  문항의 원본 그림·출판 레이아웃은 변경하지 않았다.
+
+검증:
+
+- 전체 source-backed Web suite **489 PASS**, 실제 Chromium opt-in 포함.
+- 18화면 × 1440/1360/1024/390px = **72개 배치 PASS**. 키보드 ID 열기·접기·포커스,
+  경고/오류 노출, 긴 문항 이름, 안내 모드, 기존 폼과 모바일 넘침 검증.
+- DB 합성 fixture의 필터 form 높이 236px(모바일 282px), 결과 시작 위치 571px
+  (모바일 602px). 실제 데이터/필터 상태에 따라 높이는 달라진다.
+- Excel 1,200문항·동일 요청 재전송·복사·교체·계정 변경 응답 처리 회귀 유지.
+  20개 인쇄/출력 회차와 긴 label, 1440px 문항 열/행 작업 크기 검증.
+- Ruff lint/format, Python test mypy, 변경 JS의 module syntax, diff 검사 PASS.
+- 최초 전체 검사 3건 실패: 기존 guide/request fixture에 Excel CSS가 누락된 2건과
+  Map의 옛 문자 icon 기대값 1건. 실제 CSS 자산을 제공하고 SVG/접근성 이름 검사로
+  갱신한 뒤 전체 suite 재실행 PASS. 오류 무시나 상품 검증 완화는 하지 않았다.
+- 기존 Starlette/httpx deprecation warning 1건은 유지했다. 최초 Node 검사는 ES module을
+  CommonJS로 해석한 invocation 오류였으며 module mode로 다시 검사했다.
+
+운영 계획: 기존 Web `3af025f0`와 같은 BFF/계약을 유지하는 Web-only wheel 배포.
+API `87a78e54`, QUERY, INDEX, creative worker는 설치·재시작하지 않는다.
+이전 Web wheel SHA-256
+`c4f7b7f69e69445ed3f6c1beaff01061db66aef7a2568a28d5729ffc8f3b30ea`를 확인했다.
+Web 세션은 메모리 기반이므로 재시작 후 재로그인이 필요할 수 있다. 배포 결과는
+아래에 별도 기록하며 소스/합성 브라우저 PASS를 운영 로그인 acceptance로 간주하지 않는다.
