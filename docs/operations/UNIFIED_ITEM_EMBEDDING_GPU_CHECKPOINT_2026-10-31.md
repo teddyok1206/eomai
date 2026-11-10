@@ -4053,3 +4053,87 @@ report timer도 active이며, 구형 벡터·원본·과거 실패 기록은 삭
 작업 중 root-only 개발 reporter의 Git 조회가 갱신한 `.git/index` 소유권은 내용 hash를
 보존한 채 workspace owner로 복구했다. 후속 root reporter는 `GIT_OPTIONAL_LOCKS=0`을
 명시해 이 개발용 조회가 Git index를 갱신하지 않도록 한다. 운영 코드/인증 변경은 없다.
+
+## 2026-11-10 — 원 모집단 완료 후 정리·검증 goal
+
+사용자가 요청한 종료 조건은 기출 520개 완료 확인, 불필요한 중간산출물 정리,
+임베딩 무결성 점검, 실제 사용자 GUI 검색·문항 열기·동일 요청 재조회다.
+현재 owner·정본·완료 벡터·실패 이력과 rollback 자료를 보존한다. 구형 벡터는
+모든 참조 전환과 실제 새 검색 검증 전 삭제하지 않는다. 새로운 검색/정리 framework를
+만들지 않고 기존 Catalog reader, Orchestrator publisher와 정리 절차를 재사용한다.
+
+### 17:53 UTC — 519개 부분 무결성 확인, 전체 완료 아님
+
+- 원래 520개 모집단 hash:
+  `sha256:57a227ea705bedb73cc7573b38f1baf995fa3f697f81c323f251cf4e8e228678`.
+- 동일한 520개 Item ID/revision/manifest hash 및 승인·후속 revision 상태를 보존했다.
+- 공개 CUDA 인덱스 `embeddingindexrev_409a7ed328dd882fb456888ed697389f`에
+  기출 519개, 전체 binding 1,124개, shard 251개가 포함돼 있다.
+- 인덱스 hash:
+  `sha256:9f30ccde41a72af58dc05ca9505680e764bf6a7f3e9597139eb8849099fc9419`.
+- 설치된 지원 parser와 pinned Artifact reader로 manifest/schema/media/lifecycle/producer,
+  shard binary hash·길이·차원·finite·단위 정규화, binding/encoding/row 관계를 확인했다.
+  기출 519개는 canonical accepted 풀이보고서를 다시 projection하여 실제 encoder 입력
+  hash·profile hash와 일치함을 확인했다. 다른 출처의 source_kind를 추정해 판정하지 않았다.
+- 검사는 SELECT-only이며 기존 shared canonical read lock을 유지했다.
+  재계산·DB 변경·서비스 재시작은 0회다. 과거 검사 결과를 덮지 않고 새 결과로 보존했다.
+- 보호된 검사 결과:
+  `/var/lib/eom-unified-embedding-migration-20261031/index-integrity-20261110T175345.json`.
+  로컬 요약: `/tmp/eom-public-index-integrity-20261110T1754.log`.
+- source의 현행 index family·수용량 관련 집중 검사 45 PASS는 검사 코드의 보조 증거다.
+  실제 GUI 검색 성공이나 남은 1개의 완료를 대신하지 않는다.
+
+당시 INDEX owner PID3493954 / InvocationID `62cd90e93dfa4b7992fd120681214e40`는
+동일하게 active이며 재시작 0회다. CUDA 원 요청
+`workflow_384a19ad83f44d4cb4ec305c0af0e914`는 `encode_batch`에서 실행 중이고 오류가 없다.
+17:52 UTC 현재 CPU/CUDA head의 Graph/policy scope는 같지만 binding 수는 각각
+1,068/1,124로 다르다. 숫자만으로 모든 문항의 공통 검색 준비 완료를 주장하지 않는다.
+
+완료 후 정리용 exact plan은 `/tmp/eom-post-embedding-cleanup-plan-20261110.json`에
+준비했다. 재생성 가능한 캐시·완료 build 복사본 15개 후보이며 **아직 삭제하지 않았다**.
+실행 직전에 같은 inode/mtime·보존 wheel/archive·현재 프로세스 참조를 다시 검사한다.
+실제 사용자 GUI 검증도 별도 요청했으며 아직 결과를 받지 않았다.
+
+현재 판정: **부분 무결성 PASS / 기출 전체 완료·정리 적용·실제 GUI 검색 검증 대기**.
+
+### 18:01 UTC — 520/520 전체 무결성 PASS 및 정리 적용
+
+18:00 공식 관측의 기출 binding은 **520/520, 잔여 0**이다. 그 뒤 별도 읽기 전용
+전체 검사를 수행해 원 모집단 520개 모두의 풀이보고서·encoder 입력·profile 관계와
+게시 인덱스 membership을 확인했다. frozen target별 중복 binding 0, 정본 변경 0이다.
+
+- 새 인덱스: `embeddingindexrev_78a4ec5ca97a63b599fff99726d54fc3`.
+- 인덱스 hash:
+  `sha256:ddb1c8ef69905e8cd82bdc2249a55efeda0c85f6ef042da1cb61e4368e917435`.
+- 인덱스 전체 1,128 bindings / 252 shards / 1,128 binary rows의 hash·차원·finite·L2
+  검증 PASS. 이 중 기출 520개를 원 모집단과 대조했고 나머지는 등록 문항이다.
+- 모델 `BAAI/bge-m3`, 1,024차원, CUDA, `public-solution-text/1.0`.
+  모델 revision `embeddingmodelrev_2e80889bfe984a4b900d2c5bb7c175df`와
+  앞서 고정한 CUDA space를 그대로 사용한다. 검증을 위한 모델 실행은 0회다.
+- 전체 검사 원본:
+  `/var/lib/eom-unified-embedding-migration-20261031/index-integrity-20261110T180107.json`.
+
+같은 exact plan을 삭제 직전 재검증한 뒤 15개 디렉터리를 정리했다: 개발 cache 3,
+source가 보존된 bytecode cache 1, 완료 API build source 복사본 4,
+Web 설치 시뮬레이션 3, Web staging 복사본 4. 사전 크기 636,018,688 bytes;
+백그라운드 writer를 포함한 파일시스템 여유 증가 618,774,528 bytes(약590MiB)다.
+Git·보존 wheel/source archive로 재생성 가능하며 정본/NAS vector/model/실패/rollback/
+인증/설치본은 삭제하지 않았다. INDEX·API·자료 학습·채팅의 PID/InvocationID는 동일하다.
+
+정리 계획·실행 보고·전체 임베딩 검사 결과를 기존 Orchestrator file-set publisher로
+NAS에 보관하고 Catalog 재조회 hash/bytes 일치를 확인했다.
+
+- Artifact `artifact_f981ebc83ad747dd8585f118184cd7dd` /
+  Revision `rev_1f35c3218a5c42dc84751e6347e7bd1f`.
+- Members: `cleanup-plan.json`, `cleanup-report.json`, `embedding-integrity.json`.
+- Primary SHA:
+  `sha256:bede0c7d5044f650179c2117742d48a559a14e6bfbbed5988a083c6623ac6295`.
+- 첫 감사 등록은 group-writable 콘솔 로그를 입력으로 지정해 file-set 보호 검사가
+  등록 전에 거부했다. 권한 검사를 완화하지 않고 이미 생성된 root-private 검사 정본을
+  사용해 동일 정리 보고의 idempotency key로 등록했다. 실패 로그도 보존했다.
+
+이 시점의 CUDA Workflow는 후속 종료 검증 중일 수 있으며, owner를 중단/재시작하지
+않았다. 기출 등록 완료를 전체 창작 임베딩 완료나 모든 Workflow의 종료로 확대하지 않는다.
+현재 goal은 **정리·전체 무결성 완료 / 실제 사용자 GUI 검색·문항 열기·동일 요청 재조회
+확인 대기**다. 사용자에게 기존 화면에서 기출 한 문항·상위5개 검색을 한 번 요청했으며,
+그 새 요청의 실행·사용 space·저장 ranking·재조회 시 계산 횟수를 추적해야 완료다.
