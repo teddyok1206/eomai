@@ -26,6 +26,10 @@ Web session/cookie/CSRF와 API access/refresh/re-authentication 경계는 별개
 토큰·cookie·인증 파일·사용자별 로그인 자료를 넣지 않는다. 실제 인증이 필요하면 기존 공식
 입력 경계와 현재 유효 세션을 재사용하되, 입력하지 않은 인증을 성공한 것으로 꾸미지 않는다.
 
+관리자 계정 카드의 일반 작업(역할 추가·다시 사용)과 주의 작업은 분리한다. 역할 해제·
+정지·세션 종료는 기본 닫힌 `주의가 필요한 작업` 안에 모으고 영구 삭제는 맨 아래에
+따로 둔다. 사유·삭제 확인·권한·자기 계정 보호는 기존 handler/application 경계를 유지한다.
+
 관리자 변경의 ETag 검사는 Identity application이 target row를 잠근 뒤 수행한다. API의
 `run_operator_command`는 idempotency receipt와 Operator 변경을 한 DB transaction에 묶는다.
 `OperatorService.join_transaction`은 그 한 호출만의 facade이며 공유 service/worker 인증을

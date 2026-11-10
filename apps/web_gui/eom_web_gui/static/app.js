@@ -2200,7 +2200,7 @@ function renderOperatorAccounts(accounts) {
     if (isCurrentOperator) addControlDetail(details, "현재 로그인", "본인 계정");
 
     const reason = document.createElement("input");
-    reason.placeholder = "정지·역할 해제·삭제 사유";
+    reason.placeholder = "역할 해제·정지·삭제 시 입력";
     reason.maxLength = 1000;
     reason.className = "operator-reason";
 
@@ -2208,6 +2208,11 @@ function renderOperatorAccounts(accounts) {
       const roleActions = document.createElement("div");
       roleActions.className = "operator-role-actions";
       const roleSelect = operatorRoleChoices(account.roles);
+      const hasAvailableRole = roleSelect.options.length > 0;
+      if (!hasAvailableRole) roleSelect.append(new Option("추가할 역할 없음", ""));
+      const roleField = document.createElement("label");
+      roleField.textContent = "추가할 역할";
+      roleField.append(roleSelect);
       const assign = operatorActionButton("역할 추가", "operator:assign_role", async () => {
         if (!roleSelect.value) return;
         await assignOperatorRole(
@@ -2215,10 +2220,29 @@ function renderOperatorAccounts(accounts) {
           roleSelect.value,
         );
       });
-      assign.disabled = assign.disabled || roleSelect.options.length === 0;
-      roleActions.append(roleSelect, assign);
+      assign.disabled = assign.disabled || !hasAvailableRole;
+      roleSelect.disabled = !hasAvailableRole;
+      roleActions.append(roleField, assign);
+      card.append(roleActions);
+
+      const caution = document.createElement("details");
+      caution.className = "operator-caution";
+      const summary = document.createElement("summary");
+      summary.textContent = "주의가 필요한 작업";
+      const cautionBody = document.createElement("div");
+      cautionBody.className = "operator-caution-body";
+      const reasonLabel = document.createElement("label");
+      reasonLabel.textContent = "변경 사유";
+      reasonLabel.append(reason);
+      cautionBody.append(reasonLabel);
+
+      const roleRevocations = document.createElement("fieldset");
+      roleRevocations.className = "operator-role-revocations";
+      const roleLegend = document.createElement("legend");
+      roleLegend.textContent = "역할 해제";
+      roleRevocations.append(roleLegend);
       for (const role of account.roles) {
-        roleActions.append(operatorActionButton(`${roleLabel(role)} 해제`, "operator:revoke_role", async () => {
+        roleRevocations.append(operatorActionButton(`${roleLabel(role)} 해제`, "operator:revoke_role", async () => {
           if (!reason.value.trim()) {
             return showMessage($("#operator-message"), "역할 해제 사유를 입력하세요.", "error");
           }
@@ -2229,9 +2253,13 @@ function renderOperatorAccounts(accounts) {
           );
         }, true));
       }
+      if (account.roles.length) cautionBody.append(roleRevocations);
 
-      const accountActions = document.createElement("div");
-      accountActions.className = "form-actions";
+      const accountActions = document.createElement("fieldset");
+      accountActions.className = "operator-security-actions";
+      const securityLegend = document.createElement("legend");
+      securityLegend.textContent = "로그인 관리";
+      accountActions.append(securityLegend);
       if (account.status === "ACTIVE") {
         accountActions.append(operatorActionButton("계정 정지", "operator:disable", async () => {
           if (!reason.value.trim()) {
@@ -2243,11 +2271,14 @@ function renderOperatorAccounts(accounts) {
           );
         }, true));
       } else {
-        accountActions.append(operatorActionButton(
+        const enableActions = document.createElement("div");
+        enableActions.className = "operator-account-actions";
+        enableActions.append(operatorActionButton(
           "계정 다시 사용",
           "operator:enable",
           () => enableOperatorAccount(account),
         ));
+        card.append(enableActions);
       }
       accountActions.append(operatorActionButton(
         "모든 로그인 세션 종료",
@@ -2255,7 +2286,11 @@ function renderOperatorAccounts(accounts) {
         () => revokeOperatorSessions(account),
         true,
       ));
-      accountActions.append(operatorActionButton(
+      const deletion = document.createElement("div");
+      deletion.className = "operator-delete-action";
+      const deleteWarning = document.createElement("p");
+      deleteWarning.textContent = "삭제한 계정의 로그인 정보는 복구할 수 없습니다.";
+      deletion.append(deleteWarning, operatorActionButton(
         "계정 영구 삭제",
         "operator:delete",
         async () => {
@@ -2269,7 +2304,9 @@ function renderOperatorAccounts(accounts) {
         },
         true,
       ));
-      card.append(reason, roleActions, accountActions);
+      cautionBody.append(accountActions, deletion);
+      caution.append(summary, cautionBody);
+      card.append(caution);
     }
     card.append(technicalDisclosure("계정 기술 정보", {
       "사용자 ID": account.operator_id,
