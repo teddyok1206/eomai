@@ -59,6 +59,9 @@ Workflow lease로 위장하지 않는다. API의 `active_chat_count`는 held cha
 `chat_runtime_state`는 heartbeat/admission 관측이다. stale 점유도 계정 변경을 계속 막지만
 읽기 전용 사용량 관측은 허용한다. 실제 활성화는 예약 행과 설치 release를 확인해야 한다.
 설계·운영 경계는 `docs/architecture/GENERAL_CHAT_SLOT06_RESERVATION.md`를 본다.
+예약 전환과 호환성 maintenance의 실행 가능 Job 판정은 `job_execution_queries`를 공유한다.
+정확히 연결된 step·parent가 모두 FAILED/CANCELLED이고 실행 command가 없는 과거
+CLAIMED/RUNNING만 역사로 분류한다. Job 이력을 고치거나 실제 unit·held lease 검사를 생략하지 않는다.
 
 실행 설정 화면은 current released revision과 편집 중인 새 draft만 다룬다. 과거 revision을
 숨기는 UI 정책은 evaluation/실행 plan의 immutable 참조 삭제를 뜻하지 않는다.
@@ -78,6 +81,7 @@ Workflow lease로 위장하지 않는다. API의 `active_chat_count`는 held cha
 - `services/orchestrator/eom_orchestrator/worker_usage.py`
 - `services/orchestrator/eom_orchestrator/auth_enrollment_capabilities.py`
 - `services/orchestrator/eom_orchestrator/chat_slot_reservation.py`
+- `services/orchestrator/eom_orchestrator/job_execution_queries.py`
 - `services/orchestrator/eom_orchestrator/chat_support_routing.py`
 - `apps/application_api/eom_api/services/control_plane_adapter.py`
 

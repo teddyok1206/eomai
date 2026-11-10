@@ -25,6 +25,7 @@ from eom_orchestrator.control_models import (
 )
 from eom_orchestrator.general_chat_models import GeneralChatCapacityRecord, GeneralChatTurnRecord
 from eom_orchestrator.general_chat_state import ChatError
+from eom_orchestrator.job_execution_queries import executable_jobs_exist
 from eom_orchestrator.models import JobRecord, WorkerSlotRecord
 
 # Existing EOMCAP host fence; exported by control_service for historical callers.
@@ -152,7 +153,7 @@ def reserve_chat_slot(session: Session, *, worker_slot_id: str = "06") -> bool:
         )
         or session.scalar(
             select(
-                exists().where(
+                executable_jobs_exist().where(
                     JobRecord.worker_slot_id == worker_slot_id,
                     JobRecord.status.in_(("CLAIMED", "RUNNING", "VALIDATING_RESULT", "COMMITTING")),
                 )

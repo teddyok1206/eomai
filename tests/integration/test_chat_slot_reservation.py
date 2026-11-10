@@ -26,7 +26,10 @@ from eom_orchestrator.control_service import (
 )
 from eom_orchestrator.general_chat_models import GeneralChatTurnRecord
 from eom_orchestrator.general_chat_state import ChatError
+from eom_orchestrator.models import JobRecord
+from eom_orchestrator.state_machine import JobState, transition_job
 from eom_workflow.control_plane import WorkerRole
+from eom_workflow_runner.models import WorkflowInstanceRecord, WorkflowStepRunRecord
 from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError
 
@@ -373,3 +376,42 @@ def test_reservation_activation_and_ordinary_lease_have_one_winner(reserved):
                 released_at=chat.now,
             )
             assert reserve_chat_slot(session)
+
+
+@pytest.mark.parametrize(
+    "job_state,parent_state,step_state,allowed",
+    [
+        ("RUNNING", "FAILED", "FAILED", True),
+        ("CLAIMED", "CANCELLED", "CANCELLED", True),
+        ("RUNNING", "RUNNING", "FAILED", False),
+        ("RUNNING", "FAILED", "RUNNING", False),
+        ("VALIDATING_RESULT", "FAILED", "FAILED", False),
+        ("COMMITTING", "FAILED", "FAILED", False),
+    ],
+)
+def test_reservation_distinguishes_sealed_history_without_rewriting_job(
+    reserved, job_state, parent_state, step_state, allowed
+):
+    chat, _, _, _, job_id = reserved
+    with chat.repository.sessions.begin() as session:
+        # Construct only a disposable historical shape, never repair a runtime row.
+        chat.repository.capacity(session, lock=True).worker_slot_id = None
+        job = session.get(JobRecord, job_id)
+        job.status = job_state
+        job.worker_slot_id = "06"
+        session.get(WorkflowInstanceRecord, job.request["workflow_id"]).state = parent_state
+        session.get(WorkflowStepRunRecord, job.request["step_run_id"]).state = step_state
+        session.flush()
+        before = (job.status, job.request, job.request_hash, job.updated_at)
+    try:
+        with chat.repository.sessions.begin() as session:
+            if allowed:
+                assert reserve_chat_slot(session)
+            else:
+                with pytest.raises(ChatError, match="GENERAL_CHAT_SLOT_BUSY"):
+                    reserve_chat_slot(session)
+            job = session.get(JobRecord, job_id)
+            assert (job.status, job.request, job.request_hash, job.updated_at) == before
+    finally:
+        with chat.repository.sessions.begin() as session:
+            transition_job(session, job_id, JobState.FAILED, "DISPOSABLE_FIXTURE_FINISHED")
