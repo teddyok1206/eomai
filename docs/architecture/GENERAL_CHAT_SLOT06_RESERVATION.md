@@ -4,6 +4,8 @@
 `일반 → ChatGPT`는 기존 6번 슬롯을 상시 전용으로 사용하고 일반 작업은 1~5번을 쓴다.
 빈 슬롯 자동 선택이나 턴 사이에 6번을 일반 작업으로 반환하는 기능은 이번 범위가 아니다.
 이 문서는 설계이며 운영 활성화 증거는 아니다.
+실제 설치·모델 검증·사용자 확인 상태는
+[운영 릴리스 기록](../operations/CHAT_SLOT06_RELEASE_2026-11-10.md)을 따른다.
 
 ## 경계와 정본
 
@@ -37,6 +39,9 @@
    같은 요청 재조회는 기존 committed result/handoff를 사용한다. FAILED 이력은 보존한다.
 6. 기존 reservation 변경은 일반 host claim과 같은 배제 경계 안에서 재검사한다.
    예약 이후 새 ordinary claim은 불가하고 이전 실행이 있으면 전환 자체를 거부한다.
+   실행 가능성은 maintenance와 같은 read predicate를 재사용한다. 정확히 연결된 부모와
+   step이 FAILED/CANCELLED이고 활성 명령도 없는 과거 CLAIMED/RUNNING 기록만 제외한다.
+   lease·물리 실행 검사는 별도로 유지하고 과거 Job 상태를 변경하지 않는다.
 
 ## 실행 및 의존 방향
 
