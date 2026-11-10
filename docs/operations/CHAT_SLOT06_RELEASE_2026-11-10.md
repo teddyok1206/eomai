@@ -4,8 +4,9 @@
 
 ## 운영 반영
 
-- API/platform/Catalog/runner/chat/Web: `0562b78373b64ee29e19d4da4cd110d406f10e46`.
+- 최초 API/platform/Catalog/runner/chat/Web: `0562b78373b64ee29e19d4da4cd110d406f10e46`.
   Source tree: `342d6fd65a4e6528dcfa4ff4f239623b56710abe`.
+  아래 슬롯 조회 회귀 수정 후 현재 호환 release는 `59597100a1ae95936c3934387834794f71f19ea0`이다.
 - DB: additive migration `20261110_0077`. 공식 migration/권한 callbacks 통과.
 - `general_chat_capacity.worker_slot_id=06` 공식 예약 완료. 일반 claim은 06을 제외한다.
 - 채팅은 기존 06 HOME/auth를 사용한다. 인증 복사·비밀번호 변경·외부 API 추가 없음.
@@ -96,3 +97,33 @@ unit·권한·파일 경계를 변경하지 않아 동일 namespace 증거를 �
 필요하며, migration downgrade나 재귀적인 HOME 변경은 복구 방법이 아니다.
 
 설계: [6번 예약 경계](../architecture/GENERAL_CHAT_SLOT06_RESERVATION.md).
+
+## 후속 슬롯 목록 조회 오류 복구 — 07:36 UTC
+
+사용자 보고 `webreq_1d4b4fec7dd4719b581fe0e8` 이후 같은 시간대의 `/codex-accounts`
+실패를 확인했다. API가 새 capacity 전체 ORM 행을 조회했으나 실제 API DB 역할에는
+해당 테이블 권한이 없었다. 이전 최소 권한 검사는 chat owner를 검증했고 API 역할은
+놓쳤다. 권한 예외를 숨기거나 빈 슬롯 목록을 반환하지 않고 실제 read 경계를 수정했다.
+
+- `ControlPlaneAdapter`는 공개 점유 상태 열만 한 번 조회한다. API role은 6개 제어
+  metadata 열만 SELECT한다. claim token·대화·메시지 내용은 계속 접근 불가다.
+- 같은 원인으로 실패할 control/auth 경계의 capacity 잠금도 전체 ORM 행 대신 singleton
+  key만 잠근다. PostgreSQL 잠금에 필요한 key 열 UPDATE만 허용하며 예약·claim·heartbeat
+  변경, INSERT/DELETE는 허용하지 않는다. 기존 잠금 순서와 state machine은 그대로다.
+- source 회귀 70 PASS, 실제 제한 API 역할을 포함한 disposable DB 검사 2 PASS.
+  임시 DB에서 6개 목록·control 잠금 성공 및 private 열/대화/상태 변경 거부를 검증했다.
+- API/Web wheel·RECORD·설치 simulation, formatter/lint/type 검사 PASS.
+  DB head `20261110_0077` 유지, 새 migration·모델 실행·인증 변경 0회.
+- `59597100` API/platform/Catalog/runner/chat/Web 호환 배포 완료. QUERY provider pin을
+  함께 반영했다. 기존 creative producer를 자연 drain 후 재개했으며 GPU INDEX와
+  material 서비스의 PID/InvocationID 및 설정은 위 기준선 그대로다.
+- 실제 설치본을 `eom-api` OS identity와 `eom_api_runtime` DB 역할로 실행하여
+  **6개 슬롯 목록 조회와 06 capacity 잠금 PASS**. 단순 READY 응답과 구분한다.
+  HTTPS ready도 PASS. 사용자 화면 확인은 요청한 상태이며 새 Studio 채팅 답변 확인과도 별개다.
+- 최초 운영 검증 wrapper는 API UID가 protected env 파일을 직접 읽으려 해 거부됐다.
+  파일 권한을 완화하지 않고 실제 서비스와 동일한 systemd EnvironmentFile 주입으로
+  고친 뒤 성공했다. 이 실패는 검증 invocation 실패이며 운영 API 실패가 아니다.
+
+운영 배포 기록: `/var/lib/eom-chat-slot06-release-20261110-59597100a1ae/`.
+`prepared.json`, `installed.json`, `activated.json` 및 이전 설정 bytes를 보존한다.
+기존 FAILED 대화·Job·검증 이력은 재실행/수정하지 않았다.

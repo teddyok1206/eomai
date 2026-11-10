@@ -49,7 +49,7 @@
 
 | 영역 | 상태와 확인할 기록 |
 | --- | --- |
-| ChatGPT 6번 전용·현재 실행 설정 — 운영 반영 | 기존 6번을 채팅 전용으로 예약하고 새 일반 업무는 1~5번을 사용합니다. 과거 실행 설정은 화면에서 숨기되 참조 이력은 보존합니다. API/Web/platform `0562b783`, 실제 06 모델 실행·동시성·격리·HTTPS 검증을 통과했으며 새 Studio 채팅 답변 확인은 대기 중입니다. GPU INDEX는 재시작하지 않았습니다. [운영 증거·남은 확인](docs/operations/CHAT_SLOT06_RELEASE_2026-11-10.md) |
+| ChatGPT 6번 전용·현재 실행 설정 — 운영 반영 | 기존 6번을 채팅 전용으로 예약하고 새 일반 업무는 1~5번을 사용합니다. 과거 실행 설정은 화면에서 숨기되 참조 이력은 보존합니다. API/Web/platform `59597100`에서 슬롯 조회의 API 권한 불일치를 수정하고 실제 제한 계정으로 6개 슬롯 조회·control 잠금을 확인했습니다. 실제 06 모델 실행·동시성·격리 검증은 보존하며 새 Studio 채팅 답변 확인은 대기 중입니다. GPU INDEX는 재시작하지 않았습니다. [운영 증거·남은 확인](docs/operations/CHAT_SLOT06_RELEASE_2026-11-10.md) |
 | DB 간편 출력·Excel 통합 — 운영 반영 | DB에서는 문항 선택 후 한 번에 HWPX를 만들고, 기존 조립·출력 목록과 정식 편성은 Excel로 모았습니다. Web `2e6ec36c` 설치·HTTPS 파일 일치·READY를 확인했고 GPU·검색·슬롯 서비스는 재시작하지 않았습니다. 새 동선의 운영 사용자 확인은 대기 중입니다. 구 모의고사 UI는 제거하되 API·이력은 보존하며, 다문항 AI 생성은 별도 후속 기능입니다. [경계·검증·배포](docs/architecture/DB_QUICK_OUTPUT_EXCEL_CONSOLIDATION.md) |
 | 통합 자료 학습 — 운영 반영 | PDF/HWP/HWPX 업로드·준비/복구·설명/문항 분리를 호환 배포했습니다. 실제 작은 PDF의 문항·설명·공개 풀이·공유 Graph 등록, DB 외부 목록·공식 RAG·동일 요청 재조회와 strict 공통 임베딩 입력을 확인했습니다. INDEX의 V11 입력 연결 수정·공식 source 인계 후 새 CUDA 요청의 RUNNING/PROCESSING까지 확인했으며, 전체 corpus 계산은 계속됩니다. 기존 기출·창작·AI 정본을 보존하고 새 자료 문항은 ‘외부’로 구분합니다. [설계·두 차례 검토](docs/architecture/MATERIAL_LEARNING_UPLOAD_PIPELINE.md) · [실제 운영 증거와 검증 한계](docs/operations/MATERIAL_LEARNING_RELEASE_2026-11-06.md) |
 | Map·출처 Layer — 운영 반영 | 교과서·기출·창작·외부·AI 선택을 서버 조회에 연결했습니다. 현재 화면에 이미 뜬 점만 숨기는 필터가 아니며, 같은 Graph 버전·근거·문항 열기를 유지합니다. 브라우저 fixture와 설치본의 실제 출처별 조회·재조회·상세 읽기를 확인했고, 사용자도 운영 화면 업데이트를 확인했습니다. 검증 당시 Graph에 연결된 AI 근거는 0건입니다. [호환 릴리스·검증 범위](docs/operations/MAP_LAYERS_RELEASE_2026-11-06.md) |

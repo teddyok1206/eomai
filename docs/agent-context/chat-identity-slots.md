@@ -59,6 +59,11 @@ Workflow lease로 위장하지 않는다. API의 `active_chat_count`는 held cha
 `chat_runtime_state`는 heartbeat/admission 관측이다. stale 점유도 계정 변경을 계속 막지만
 읽기 전용 사용량 관측은 허용한다. 실제 활성화는 예약 행과 설치 release를 확인해야 한다.
 설계·운영 경계는 `docs/architecture/GENERAL_CHAT_SLOT06_RESERVATION.md`를 본다.
+슬롯 목록은 capacity 전체 ORM 행이 아니라 공개 점유 상태 열만 한 번 조회한다.
+API 역할의 column grant와 실제 SELECT 열을 함께 검증한다. control의 capacity 잠금도
+singleton key만 SELECT FOR UPDATE 하며, key의 제한된 UPDATE 권한은 PostgreSQL의
+잠금 전제이지 claim·예약·heartbeat 변경 권한이 아니다. 최소 권한 owner 검사만으로
+API 계정의 목록/새로고침이 동작한다고 판단하지 않고 실제 API 역할 DB 검사도 수행한다.
 예약 전환과 호환성 maintenance의 실행 가능 Job 판정은 `job_execution_queries`를 공유한다.
 정확히 연결된 step·parent가 모두 FAILED/CANCELLED이고 실행 command가 없는 과거
 CLAIMED/RUNNING만 역사로 분류한다. Job 이력을 고치거나 실제 unit·held lease 검사를 생략하지 않는다.
