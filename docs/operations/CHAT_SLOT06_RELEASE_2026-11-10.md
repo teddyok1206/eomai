@@ -6,7 +6,8 @@
 
 - 최초 API/platform/Catalog/runner/chat/Web: `0562b78373b64ee29e19d4da4cd110d406f10e46`.
   Source tree: `342d6fd65a4e6528dcfa4ff4f239623b56710abe`.
-  아래 슬롯 조회 회귀 수정 후 현재 호환 release는 `59597100a1ae95936c3934387834794f71f19ea0`이다.
+  슬롯 조회 회귀 수정은 `59597100a1ae95936c3934387834794f71f19ea0`,
+  아래 부분 정책 갱신 회귀 수정 후 현재 호환 release는 `acb834acb99d77cce86b29f2142ae20718ef403a`이다.
 - DB: additive migration `20261110_0077`. 공식 migration/권한 callbacks 통과.
 - `general_chat_capacity.worker_slot_id=06` 공식 예약 완료. 일반 claim은 06을 제외한다.
 - 채팅은 기존 06 HOME/auth를 사용한다. 인증 복사·비밀번호 변경·외부 API 추가 없음.
@@ -36,8 +37,10 @@ CLI `0.162.1`, model call 1회, 이전 실패 대화 재실행 0회.
   `capsnap_2b616c30e7e8440b90fe3324416bf55c`. 운영자 계정 가장이나 auth TTL 연장 없음.
 
 모델 probe PASS는 Studio 채팅 성공과 구분한다.
-**새 Studio 메시지의 실제 답변·COMPLETED 및 화면 확인은 현재 PENDING.**
-사용자에게 새 대화의 짧은 질문 한 번을 요청했다. 기존 실패 대화는 그대로 남는다.
+최초 배포 보고에서는 새 Studio 메시지 확인을 PENDING으로 남겼다. 이후 사용자가
+`채팅은 잘 되는데`라고 실제 응답 성공을 확인했다(`59597100` 반영 이후).
+사용자 답변 확인과 서버 turn의 개별 COMPLETED 기록 대조는 구분한다.
+아래 정책 복구에서 새 메시지나 기존 실패 대화 재실행은 요청하지 않았다.
 
 ## 배포 중 확인하여 수정한 문제
 
@@ -127,3 +130,37 @@ unit·권한·파일 경계를 변경하지 않아 동일 namespace 증거를 �
 운영 배포 기록: `/var/lib/eom-chat-slot06-release-20261110-59597100a1ae/`.
 `prepared.json`, `installed.json`, `activated.json` 및 이전 설정 bytes를 보존한다.
 기존 FAILED 대화·Job·검증 이력은 재실행/수정하지 않았다.
+
+## 후속 1–5번 일부 기능 제한 복구
+
+슬롯 목록 오류가 해결된 뒤 1–5번이 모두 `CAPABILITY_OBSERVATION_FAILED`인 것을
+확인했다. 원인은 사용량이 아니라 단일 슬롯 검증 결과의 정책 반영이었다.
+`render_compatibility_policy`가 scoped predecessor 전체를 제거하여, 06만 검증한
+정책에는 기존 01–05의 `gpt-5.6-terra` scope가 남지 않았다.
+
+- `acb834ac`은 검증한 슬롯의 기존 scoped 모델만 교체한다. 검증하지 않은 V3 슬롯은
+  runtime/binding/assignment/slot/role이 정확히 같을 때만 보존한다. 재검증 실패,
+  계정 변경, runtime 변경에는 과거 PASS를 재사용하지 않는다. 출제·검토 공통 pair 유지.
+- source 회귀 211 PASS, formatter/lint/type, API/Web wheel/RECORD/설치 simulation PASS.
+  전 슬롯 → 06 단독 검증 → 재전송, 실패 재검증, 계정 변경·역할 이동·실행 파일 변경을
+  각각 검증했다. DB schema/state machine/worker protocol 변경은 없다.
+- 보호된 직전 정책 `c4aee306…`과 현재 정책 `6c8e0edf…`, 정본 06 보고서
+  `codexcompat_e4cf4ddeb6e04a35bb5c34c6b82f4d20`의 Artifact/hash를 대조했다.
+  현재 계정 연결과 runtime이 동일함을 확인한 후, 공식 projection/atomic installer로
+  `sha256:d5a537e9ee03bbe6c77daf73762366b655693376f48773dcc895daeb3d1e5b98`를 설치했다.
+  01–05 scope는 직전 정책과 동일하고 06 scope는 현재 정상 채팅 정책과 동일하다.
+- 새 모델 호출 0, 인증 변경 0, DB row 직접 보정 0, FAILED 이력 변경 0.
+  이전 정책 bytes/복구 기록은 보존하며 공식 maintenance가 새 실제 관측을 기록한다.
+- API/platform/Catalog/runner/chat/Web 호환 배포와 QUERY provider pin 갱신 완료.
+  GPU INDEX PID `3493954`, material PID `1049221` 및 InvocationID는 그대로다.
+  실제 API 역할의 슬롯 목록·control 잠금과 HTTPS ready PASS.
+
+배포·정책 복구 기록은 `/var/lib/eom-chat-slot06-release-20261110-acb834acb99d/`의
+`prepared.json`, `installed.json`, `activated.json`, `policy-recovery.json`이다.
+최종 슬롯 상태는 아래 후속 실제 관측으로 확인한다.
+
+08:03 UTC 실제 API 역할 조회에서 **01–06 모두 READY, reason_code=null**을 확인했다.
+01–05의 새 auth/capability 관측은 기존 maintenance가 08:00:21–08:02:26 UTC에
+순차 기록했다. 06은 GENERAL_CHAT/READY를 유지한다. 정책 재적용도 `REPLAYED`이며
+새 모델 실행·상태 강제 변경·파일 내용 변경 없이 같은 SHA가 유지된다.
+이 확인은 정책/인증/조회 복구 증거이며 새 문항 생성 canary를 수행했다는 뜻은 아니다.

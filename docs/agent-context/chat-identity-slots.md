@@ -50,6 +50,14 @@ session lock을 기다린 뒤 token 철회를 재확인한다. Web의 자격 변
 모든 기능의 기술 장애가 아니다. 실행 중이어도 독립 상태·사용량 관측이 동작해야 한다.
 계정 변경 후 이전 계정의 모델 검증 결과를 새 계정의 승인으로 재사용하지 않는다.
 
+모델 허용 정책을 부분 검증 결과로 갱신할 때는 `codex_compatibility_policy`가 검증 대상
+슬롯의 기존 scoped 설정만 교체한다. 검증하지 않은 V3 슬롯은 runtime·binding·assignment·
+slot·role이 모두 그대로일 때만 보존한다. 새 실행 파일이나 다른 계정에 과거 PASS를
+옮기지 않는다. 출제/검토의 공통 모델 조건도 다시 확인한다. 단일 슬롯 검증 결과를
+전체 allowlist로 취급하면 나머지 슬롯이 `CAPABILITY_OBSERVATION_FAILED`가 된다.
+정책 설치 후에는 기존 공식 OBSERVE/maintenance로 실제 상태를 갱신한다. DB의 상태
+문자열을 READY로 직접 바꾸지 않는다. 회귀 검사는 `test_codex_compatibility_policy_install.py`다.
+
 GUI의 네 슬롯 RUNNING만으로 Graph 등록·INDEX가 정상이라고 판정하지 않는다.
 반대로 publication·source 준비 구간에서 슬롯이 잠시 비면 실제 queue/claim을 확인한다.
 

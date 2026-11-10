@@ -200,9 +200,11 @@
         "services/identity_service/eom_identity_service/service.py",
         "apps/application_api/eom_api/services/idempotency_service.py",
         "services/orchestrator/eom_orchestrator/worker_usage.py",
-        "services/orchestrator/eom_orchestrator/auth_enrollment_capabilities.py"
+        "services/orchestrator/eom_orchestrator/auth_enrollment_capabilities.py",
+        "services/orchestrator/eom_orchestrator/codex_compatibility_policy.py",
+        "scripts/workflow/install_codex_compatibility_policy.py"
       ],
-      "test_paths": ["tests/unit/test_private_chat_document_read.py", "tests/unit/test_postgres_local_indexing_fence.py"],
+      "test_paths": ["tests/unit/test_private_chat_document_read.py", "tests/unit/test_postgres_local_indexing_fence.py", "tests/unit/test_codex_compatibility_policy_install.py"],
       "reference_paths": ["docs/architecture/GENERAL_CHAT_TEXTBOOK_RAG_DESIGN.md", "docs/operations/CODEX_AUTH_AUTOMATIC_MODEL_VERIFICATION_RELEASE.md", "docs/operations/GENERAL_CHAT_MODERATION_METADATA_FIX_2026-10-24.md"]
     },
     {
