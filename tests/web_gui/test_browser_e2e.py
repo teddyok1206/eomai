@@ -26,7 +26,7 @@ def test_browser_flow_from_login_to_editorial_preview_and_explorer() -> None:
             "완성 문항에서 선택",
             "기존 제작 결과 불러오기",
             "최근 HWPX 제작 결과",
-            "운영 데이터 조회",
+            "운영 기록",
             "편집 가능한 표",
             "교육과정 범위",
             "대단원 선택",

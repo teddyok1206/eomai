@@ -59,3 +59,7 @@ worker는 local staging만 읽고 local 결과를 내며 정본 commit은 기존
 담당하며 화면 표시가 원본 상태/권한을 바꾸지 않는다. 자료 학습도 공통 상태 presenter를
 주입받는다. `tests/web_gui/test_gui_principle_alignment.py`와 실제 Chromium suite는
 전체 화면/모바일 기준을 검사한다. 등록·검색 등 동작 검증은 기존 feature suite를 같이 쓴다.
+
+관리자 전용 `운영 도구 → 운영 기록`은 기존 `explorer` 화면의 표시 이름·위치다.
+기존 API/Observe의 허용된 기록만 읽으며 문항 DB·Excel 편성과 별개다. 메뉴 이동이
+route/API/권한 변경이나 운영 기록 수정·삭제 기능 추가를 뜻하지 않는다.

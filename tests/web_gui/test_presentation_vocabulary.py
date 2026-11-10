@@ -121,7 +121,7 @@ def test_vocabulary_names_product_surfaces_without_backend_jargon() -> None:
     assert terms["etag"]["label"] == "동시 편집 확인값"
     assert terms["application_api"]["label"] == "핵심 서비스"
     assert terms["observability"]["label"] == "운영 상태"
-    assert terms["database_explorer"]["label"] == "운영 데이터 조회"
+    assert terms["database_explorer"]["label"] == "운영 기록"
 
 
 def test_known_user_errors_have_explanation_and_next_action() -> None:

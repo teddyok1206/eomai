@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 from xml.etree import ElementTree
 
@@ -140,6 +141,34 @@ def test_chat_navigation_uses_a_stable_conversation_icon() -> None:
     assert '<svg class="nav-icon nav-chat-icon" aria-hidden="true" viewBox="0 0 24 24"' in HTML
     assert "◌" not in HTML
     assert ".nav-item.active .nav-icon { color: var(--eom-action-teal); }" in CSS
+
+
+def test_operational_records_live_under_admin_tools_with_consistent_name() -> None:
+    data_start = HTML.index(">데이터</p>")
+    tools_start = HTML.index(">운영 도구</p>")
+    system_start = HTML.index(">시스템</p>")
+    data_navigation = HTML[data_start:tools_start]
+    tools_navigation = HTML[tools_start:system_start]
+    target = 'data-view-target="explorer"'
+
+    assert HTML.count(target) == 1
+    assert target not in data_navigation
+    assert target in tools_navigation
+    menu = next(line for line in tools_navigation.splitlines() if target in line)
+    assert 'class="nav-item admin-only"' in menu
+    assert "> 운영 기록</button>" in menu
+    assert 'data-view="explorer"' in HTML
+    assert '<h1 id="explorer-title">운영 기록</h1>' in HTML
+
+    guide = (STATIC / "guide-content.js").read_text(encoding="utf-8")
+    vocabulary = json.loads(
+        (STATIC / "presentation-vocabulary.ko-KR.json").read_text(encoding="utf-8")
+    )
+    assert 'explorer: guide("운영 기록",' in guide
+    assert vocabulary["terms"]["database_explorer"]["label"] == "운영 기록"
+    assert vocabulary["terms"]["database_explorer"]["audience"] == "ADMIN"
+    assert "운영 데이터 조회" not in HTML
+    assert "운영 데이터 조회" not in guide
 
 
 def test_technical_details_are_progressively_disclosed_without_hiding_recovery() -> None:

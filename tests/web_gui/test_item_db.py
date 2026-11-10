@@ -210,8 +210,8 @@ def test_db_screen_shows_business_number_but_hides_internal_db_ids() -> None:
     assert 'data-view="item-db"' in html
     assert html.index(">데이터</p>") < html.index('data-view-target="item-db"')
     assert html.index('data-view-target="item-db"') < html.index('data-view-target="learning"')
-    assert html.index('data-view-target="learning"') < html.index('data-view-target="explorer"')
-    assert html.index('data-view-target="explorer"') < html.index(">운영 도구</p>")
+    assert html.index('data-view-target="learning"') < html.index(">운영 도구</p>")
+    assert html.index(">운영 도구</p>") < html.index('data-view-target="explorer"')
     assert html.count('data-view-target="item-db"') == 2
     assert 'data-view="item-bank"' not in html
     assert 'id="item-db-search-tab"' in html

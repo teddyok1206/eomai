@@ -205,7 +205,7 @@
     "etag": {"label": "동시 편집 확인값", "audience": "DIAGNOSTIC", "description": "다른 사용자의 변경을 덮어쓰지 않도록 현재 버전을 확인하는 값입니다."},
     "application_api": {"label": "핵심 서비스", "audience": "USER", "description": "문항 제작과 조회 요청을 처리하는 내부 서비스입니다."},
     "observability": {"label": "운영 상태", "audience": "USER", "description": "서비스 상태와 실행 이력을 확인하는 운영 기능입니다."},
-    "database_explorer": {"label": "운영 데이터 조회", "audience": "ADMIN", "description": "허용된 운영 정보만 읽기 전용으로 조회하는 화면입니다."},
+    "database_explorer": {"label": "운영 기록", "audience": "ADMIN", "description": "허용된 운영 정보만 읽기 전용으로 조회하는 화면입니다."},
     "admin_role": {"label": "관리자", "audience": "USER", "description": "계정과 운영 설정을 관리할 수 있는 역할입니다."},
     "editor_role": {"label": "문항 편집자", "audience": "USER", "description": "문항을 작성하고 편집할 수 있는 역할입니다."},
     "reviewer_role": {"label": "검토자", "audience": "USER", "description": "문항 내용을 검토하고 승인할 수 있는 역할입니다."},

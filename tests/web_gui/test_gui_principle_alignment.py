@@ -16,6 +16,7 @@ STATIC = ROOT / "apps/web_gui/eom_web_gui/static"
 def test_later_controls_reuse_workbench_tokens_and_keep_consequences_visible() -> None:
     css = (STATIC / "styles.css").read_text()
     html = (STATIC / "index.html").read_text()
+    guide = (STATIC / "guide-content.js").read_text()
     map_css = (STATIC / "knowledge-map.css").read_text()
     assert ':where(input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])' in css
     assert "var(--line," not in css
@@ -25,7 +26,8 @@ def test_later_controls_reuse_workbench_tokens_and_keep_consequences_visible() -
     assert "원본 보존 · 위치 표시 · 주석 패널" in html
     assert "원본 보존 · 수정 글자 빨간색" in html
     assert "이 자료를 내부 학습·문항 등록·검색에 사용할 권한이 있습니다." in html
-    assert "아직 합본 파일을 만들거나 문항을 승인하지 않습니다." in html
+    assert 'id="item-db-quick-create"' in html
+    assert "이 출력만으로 교재 배치나 인쇄 기록이 생기지는 않습니다." in guide
     assert "<summary>학습 기술 정보</summary>" in html
 
 
