@@ -149,3 +149,81 @@ NativeEmbeddingContract 전체 입력 제한, QUERY 전용 device-index-pair raw
 현재 source-plan4/5와 DOCUMENT INDEX에서는 해당 경로를 호출하지 않는다. 이번 변경은
 공개 인덱스 **manifest**의 크기 규칙을 바로잡는 것이며 구형 workflow 용량 확대나
 QUERY 신규 릴리스로 확대 해석하지 않는다.
+
+### 복구 배포와 진행 확인
+
+- 수정 commit `47fc5366161a6179f9b282b823e86319bc3d9340`.
+- source unit163 PASS, 임시 PostgreSQL의 registry/transaction74 PASS(483.32초).
+  새 DB `eom-api-testdb-20261110032238_fc674cf4`에서만 migration 왕복과 검사를 수행했다.
+- 별도 immutable 설치본의 capacity33 PASS(62.85초). 변경된4모듈이 정확한 설치 source에서
+  로드됨을 확인했고 source package 경로는 제외했다. pytest cache의 `/dev` 쓰기 경고는
+  결과에 영향 없으며 운영 디렉터리나 권한은 바꾸지 않았다.
+- 기존 schema1237개 bytes 보존, wheel/RECORD와 실제 수치-owner interpreter import PASS.
+  설치본에는 앞선 main의 미사용 함수 제거도 포함된다. 기존 numerical runtime과 독립된
+  owner package이며 이 재배포에서 API/QUERY 또는 수치 interpreter를 교체하지 않는다.
+- platform wheel SHA-256
+  `4b6f4a702a88ca84e854d74453d44f06be0882607edfb1d06993163fa7622faf`,
+  API-contracts wheel SHA-256
+  `1b8e812765200a6ef6459dc3d5e4801319e461c49b188a5c2ca1df8e4c2cb83f`.
+- 기존 보호된 owner installer, PREPARE/PUBLISH/ACTIVATE application 경계를 재사용했다.
+  이전 INDEX failed/PID0, native drained, nonterminal0을 확인했고 과거 실패를 재해석하거나
+  진행 중 Workflow를 강제 종료하지 않았다. SOURCE47fc5366/PREVIOUS8c4cf4db,
+  numerical controller `c915281ea3acda63ea066ba9de397f7bbc335295`를 고정했다.
+- 2026-11-10 **03:32:50 UTC** INDEX 자동 처리 시작, PID3462543,
+  invocation`7dd0631b7adf495b8b64079d85eeba92`. 03:33:12에 CPU overlap과 다음
+  CONCRETE_FACETS reconciliation 시작을 실제 관측했다. 아직 새 묶음 완료 판정은 아니다.
+- API2638304/Web2857633/QUERY2638500/creative2639715와 InvocationID 모두 보존.
+  baseline encoding5126/binding133710/index revision620/accepted analysis2883/
+  registered report1038의 기존 identity별 변경·누락0. 새 등록 이후에도 최종 대조한다.
+- 보호된 release/rollback 기록 `/var/lib/eom-index-capacity-release-20261110`,
+  완료 데이터 비교 `/var/lib/eom-index-capacity-audit-20261110`.
+
+실행 중 보정: 첫 도구 호출의 문자열 구문 오류는 실행 전 실패였으며 다시 올바르게
+요청했다. installer 직접 실행은 실행 비트가 없는 보호 파일이라 거부됐고, 기존 방식의
+`bash` 실행으로 설치를 완료했다. 두 실패 모두 runtime 활성화 전이며 기록을 보존했다.
+최종 판단은 아래 실제 신규 등록·고정 기출520 진행 증가로 닫는다.
+
+임시 PostgreSQL은 공식 `testdb_cleanup.sh --confirm`으로 제거했다. 최초 cleanup 호출은
+필수 `--confirm` 누락으로 쓰기 없이 거부됐고, 명시적 대상 재확인 후 정상 제거했다.
+테스트 결과 로그는 유지하며 운영 DB·완료 Artifact는 삭제하지 않았다.
+03:36:51 UTC 개발 Slack `IN_PROGRESS` 전달 성공. source/설치 검증과 실제 다음 묶음의
+등록 완료가 별도임을 보고했으며 목표는 아직 ACTIVE다.
+
+### 첫 재개에서 드러난 pre-grant 실패
+
+03:37:10 UTC 새 owner는 `EMBEDDING_BENCHMARK_CHANNEL_EOF`로 종료했다. 실제 선행 오류는
+root controller의 `INSTALLED_RUNTIME_FILE_UNPROTECTED`다. attempt
+`e8844d6c0955439d8c64788aef6ac0d4`에서 numeric process는 시작됐지만 READY 관측 파일과
+compute grant는 없고 input/result/vector는 비어 있었다. 실패를 모델 계산 성공/실패로
+재해석하지 않는다. root가 numeric unit 시작 후 프로세스 상태를 검사하고, 예외 시 원
+프로세스 종료를 최대60초 기다리는 구조는 실제60초 간격과 일치한다. 과거 로그의 마지막
+두 프레임만으로 실패한 정확한 proc member를 확정할 수는 없다.
+
+별도 실제 Linux child에서 `lstat`와 protected open 사이에 dumpability만 전환하면
+proc leaf 소유자0↔worker가 바뀌고, actual UID/GID와 start ticks는 그대로인데 같은
+`FILE_UNPROTECTED`를 재현했다(stat/status/cgroup 양방향6건). 이것은 확인된 코드 경합
+결함이며, 운영 사건의 정확한 leaf까지 증명한 것은 아니다.
+
+보완 책임은 기존 `read_live_native_process_member`다. 허용된 고정 proc 경로에서 해당
+identity 오류와 실제0↔worker 소유자 전환이 함께 관측될 때만 protected read 전체를
+한 번 재시도한다(O(1), 최초 포함최대2회). 계속 변동하거나 UID/권한/크기/경로가 다른
+경우 거부한다. 일반 설치파일 검증과 caller의 actual UID/GID/birth/cgroup fence는
+유지한다. 새 schema·DB·queue·수치 입력 변경은 없다. 일반 reader 허용 소유자를 넓히는
+대안은 불필요한 범위 확대여서 사용하지 않는다.
+
+새 controller는 기존 INDEX 전용 delegation으로만 선택한다. 공용 c915 bootstrap과
+QUERY 설정은 유지하고, root env의 INDEX release/hash pair와 INDEX owner의
+controller_release만 일치시킨다. owner47fc/runtime grant 및 CPU/CUDA numerical
+installation·정책·모델·space는 보존한다. 이 선택은 아직 검증·설치 후 적용 단계다.
+
+추가 kernel 재현은 lstat 직후와 실제 read 중의 양방향 전환까지12건으로 확장했다.
+기존 kernel/identity/controller/observation 관련398건 PASS(36.29초), 별도 root 진단32건
+PASS(10.08초), Ruff/format/core mypy PASS. 진단은 FILE_UNPROTECTED의 기존 두 위치만
+가장 가까운 호출 모듈과 마지막 검사 함수로 바꿔, 재발 시 caller를 확인할 수 있게 했다.
+예외 문구·파일 경로·내용은 기록하지 않는다. 첫 진단 테스트는 오래된 noneditable 설치본을
+읽어 신규1건이 실패했고, 명시적 source 경로로 재실행해 모두 통과했다.
+
+원 실패의 parent `job_5d73760cf1544b758c05591a97438105`는 CLAIMED/route없음/bound없음이었다.
+보호된 원 allocation과 종료된 두 unit을 official unbound reader로 대조했다. 초기 PREPARE는
+할당 시간이 아직 남아 거부됐으며 DB/Artifact 쓰기는 없었다. 시간이 만료된 뒤 같은 원
+실행의 PREPARE를 완료했고, 원 실패 기록·동일 증거 replay는 기존 application에서 수행한다.

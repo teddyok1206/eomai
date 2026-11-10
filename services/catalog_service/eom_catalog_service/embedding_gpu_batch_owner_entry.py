@@ -175,14 +175,29 @@ def _failure_diagnostic_fields(error: BaseException) -> dict[str, object]:
     ):
         code = None
     sites: list[str] = []
+    caller_site: str | None = None
+    last_module: str | None = None
+    runtime_files_module = "eom_catalog_service.embedding_runtime_files"
     frame = error.__traceback__
     for _ in range(64):
         if frame is None:
             break
         module = frame.tb_frame.f_globals.get("__name__")
         if type(module) is str and re.fullmatch(r"eom_[a-z0-9_.]{1,120}", module):
-            sites = [*sites[-1:], f"{module}:{frame.tb_lineno}"]
+            site = f"{module}:{frame.tb_lineno}"
+            sites = [*sites[-1:], site]
+            last_module = module
+            if module != runtime_files_module:
+                caller_site = site
         frame = frame.tb_next
+    if (
+        code == "INSTALLED_RUNTIME_FILE_UNPROTECTED"
+        and last_module == runtime_files_module
+        and caller_site is not None
+    ):
+        # Two shared helper frames hide which protected read failed. Keep the
+        # nearest application caller, without disclosing paths or exception prose.
+        sites = [caller_site, sites[-1]]
     name = type(error).__name__
     if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]{0,127}", name) is None:
         name = "Exception"

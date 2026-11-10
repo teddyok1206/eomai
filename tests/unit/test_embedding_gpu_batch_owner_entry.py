@@ -417,6 +417,95 @@ def test_root_failure_diagnostic_reports_only_final_two_module_line_sites(monkey
     )
 
 
+@pytest.mark.parametrize(
+    "code, caller_module, expected_sites",
+    (
+        (
+            "INSTALLED_RUNTIME_FILE_UNPROTECTED",
+            "eom_catalog_service.embedding_gpu_batch_controller",
+            [
+                "eom_catalog_service.embedding_gpu_batch_controller:4",
+                "eom_catalog_service.embedding_runtime_files:6",
+            ],
+        ),
+        (
+            "INSTALLED_RUNTIME_FILE_UNPROTECTED",
+            None,
+            [
+                "eom_catalog_service.embedding_runtime_files:4",
+                "eom_catalog_service.embedding_runtime_files:6",
+            ],
+        ),
+        (
+            "INSTALLED_RUNTIME_FILE_UNPROTECTED",
+            "private.invalid-module",
+            [
+                "eom_catalog_service.embedding_runtime_files:4",
+                "eom_catalog_service.embedding_runtime_files:6",
+            ],
+        ),
+        (
+            "INSTALLED_RUNTIME_FILE_CHANGED",
+            "eom_catalog_service.embedding_gpu_batch_controller",
+            [
+                "eom_catalog_service.embedding_runtime_files:4",
+                "eom_catalog_service.embedding_runtime_files:6",
+            ],
+        ),
+    ),
+)
+def test_unprotected_file_diagnostic_keeps_only_nearest_allowed_caller_and_final_helper(
+    monkeypatch, code, caller_module, expected_sites
+):
+    resource = Mock()
+    resource.__enter__ = Mock(return_value=resource)
+    resource.__exit__ = Mock(return_value=False)
+    monkeypatch.setattr(entry.socket, "socket", Mock(return_value=resource))
+
+    class ProtectedReadFailure(ValueError):
+        pass
+
+    ProtectedReadFailure.code = code
+    namespace = {
+        "__name__": "eom_catalog_service.embedding_runtime_files",
+        "ProtectedReadFailure": ProtectedReadFailure,
+    }
+    exec(
+        compile(
+            "def read():\n    protected()\ndef protected():\n    require()\ndef require():\n"
+            "    raise ProtectedReadFailure('password=hidden; private file content')\n",
+            "/private/synthetic-runtime.py",
+            "exec",
+        ),
+        namespace,
+    )
+    invoke = namespace["read"]
+    if caller_module is not None:
+        caller = {"__name__": caller_module, "read": invoke}
+        exec(
+            compile(
+                "def outer():\n    nearest()\ndef nearest():\n    read()\n",
+                "/private/synthetic-caller.py",
+                "exec",
+            ),
+            caller,
+        )
+        invoke = caller["outer"]
+    try:
+        invoke()
+    except ProtectedReadFailure as error:
+        entry._report_root_failure(error)
+    raw, target = resource.sendto.call_args.args
+    assert target == "/dev/log" and len(raw) <= 2048
+    value = json.loads(raw.split(b": ", 1)[1])
+    assert value["sites"] == value["outer"]["sites"] == expected_sites
+    assert len(value["sites"]) == 2 and value["explicit_cause"] is None
+    assert all(
+        word not in raw
+        for word in (b"private", b"synthetic", b"password", b"hidden", b"file content")
+    )
+
+
 def test_failed_diagnostic_transport_preserves_original_exception(monkeypatch):
     monkeypatch.setattr(entry.socket, "socket", Mock(side_effect=OSError("private transport")))
     original = ValueError("private original error")

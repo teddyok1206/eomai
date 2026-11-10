@@ -492,6 +492,30 @@ def read_live_native_process_member(path: Path, *, maximum: int, owner_uid: int)
     )
     leaf_uid = path.lstat().st_uid
     _require(leaf_uid in {0, owner_uid}, "PROCESS_MEMBER_OWNER_INVALID")
-    return read_live_runtime_os_file(
-        path, maximum=maximum, owner_uid=owner_uid, leaf_owner_uid=leaf_uid
-    )
+    first_error: InstalledRuntimeProofError | None = None
+    for attempt in range(2):
+        try:
+            return read_live_runtime_os_file(
+                path, maximum=maximum, owner_uid=owner_uid, leaf_owner_uid=leaf_uid
+            )
+        except InstalledRuntimeProofError as error:
+            if error.code not in {
+                "INSTALLED_RUNTIME_FILE_UNPROTECTED",
+                "INSTALLED_RUNTIME_FILE_CHANGED",
+                "INSTALLED_RUNTIME_ANCESTOR_CHANGED",
+            }:
+                raise
+            if first_error is None:
+                first_error = error
+            if attempt:
+                raise first_error from None
+            try:
+                observed_uid = path.lstat().st_uid
+            except OSError:
+                raise error from None
+            if observed_uid not in {0, owner_uid} or observed_uid == leaf_uid:
+                raise
+            # One legal dumpability transition permits one complete protected reread.
+            # Continued churn fails closed; process credentials/birth stay caller-fenced.
+            leaf_uid = observed_uid
+    raise AssertionError("native process member read did not terminate")
